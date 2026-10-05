@@ -169,3 +169,41 @@ with UI.Theme.spacing = 4px {
 unless (mt -60px).top == -60px { INFO@mark `UI123 a length given to a shorthand is scaled` }
 unless (px 3).top == 0px && (px 3).left == 6px { INFO@mark `UI124 px spaces the top` }
 unless Language.Web.Rules(Geometry.Box(spacing: [pt 5, pt 5])).first.declarations.contains(("padding-top", (20px).amount, "px")) { INFO@mark `UI125 two spacings on one side are not added in CSS` }
+
+narrowed_box := Geometry.Box(){width <= 1240px & height == 120px, overflow == clip}
+unless narrowed_box.constraints.some(.dimension == "x" && .most == 1240px) && narrowed_box.constraints.some(.dimension == "y" && .least == 120px) { INFO@mark `UI126 a narrowing on a shape is not its constraints` }
+unless narrowed_box.overflow == clip { INFO@mark `UI127 a narrowing does not set a shape's field` }
+unless Geometry.Text("a"){font_size == 18px}.font.size == 18px { INFO@mark `UI128 font_size does not size the text` }
+inner_text := Geometry.Text("a")
+solver.solve(Geometry.Box(children: [inner_text]){font_size == 18px})
+unless inner_text.font.size == 18px { INFO@mark `UI129 a box's font_size does not reach the text it holds` }
+unless Geometry.Box(){gap == 6px}.gap == Geometry.Vector(6px, 6px) { INFO@mark `UI130 gap is not narrowed` }
+unless Geometry.Text("a  b").shown == ["a b"] && Geometry.Text("a  b"){white_space == pre}.shown == ["a  b"] { INFO@mark `UI131 white_space does not decide whether spaces collapse` }
+unless Geometry.Box(){min_height == 22px}.constraints.some(.dimension == "y" && .least == 22px) { INFO@mark `UI132 min_height is not a least height` }
+unless Geometry.Box(){transform == translate(x: 10px)}.transform == Geometry.Transform.translate(Geometry.Vector(10px)) { INFO@mark `UI133 transform == translate(…) does not move the shape` }
+unless Geometry.Box(){animated == 0.4 s ease}.transition.duration == 0.4 s { INFO@mark `UI134 animated does not give the shape a transition` }
+unless Geometry.Box(){position == fixed, top == 0}.position.kind == fixed { INFO@mark `UI135 position == fixed is not narrowed` }
+dynamic_style := Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}()
+unless dynamic_style.styles.contains("muted") { INFO@mark `UI136 a dynamic style is not applied` }
+unless dynamic_style.dynamics.some(.target == "class") { INFO@mark `UI137 a dynamic style is not kept for the levels to recompute` }
+unless Language.Web.Rules(dynamic_style).some(.selector == "#" + dynamic_style.id + ".muted") { INFO@mark `UI138 the web level has no rule for a style a dynamic style can switch to` }
+styled_link := UI.Link(to: @/x)
+with UI.Theme.kinds = [(UI.Link, "muted")] {
+  UI.Theme.applied(Geometry.Box(children: [styled_link]))
+  unless styled_link.styles.contains("muted") && styled_link.color == UI.Theme["muted"].color { INFO@mark `UI139 a kind's default style is not applied` }
+}
+search_field := UI.TextField(chosen: Choice(type: String), value: "", placeholder: "Search", placeholder_color: Geometry.Color(1, 2, 3))
+unless search_field.face.text == "Search" && search_field.face.color == Geometry.Color(1, 2, 3) { INFO@mark `UI140 an empty field does not show its placeholder in its colour` }
+unless Language.Web.Rules(search_field).some(.selector == "#" + search_field.id + "::placeholder") { INFO@mark `UI141 the placeholder colour is not CSS` }
+code_area := UI.TextArea(chosen: Choice(type: String{multiline}), value: "x := 1", language: ".ray")
+unless code_area.face.runs.nonempty { INFO@mark `UI142 a text area in a language is not painted` }
+unless Program(code: { code_area }){O: Language.Web.HTML.level}().body.children.first.children.first.tag == "pre" { INFO@mark `UI143 a painted text area has no painted layer under it` }
+red := Geometry.Color(255, 0, 0)
+runs_text := Geometry.Text("ab", runs: [Geometry.Text.Run(0, 1, color: red)], size: Geometry.Vector(16px, 16px))
+with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  runs_grid := Program(code: { runs_text }){O: Language.TUI.Cells}()
+  unless runs_grid.cells[0][0].foreground == red && runs_grid.cells[0][1].foreground != red { INFO@mark `UI144 a painted run does not colour its cells only` }
+}
+unless Language.Web.Pieces(runs_text).first.tag == "span" { INFO@mark `UI145 a painted run is not a span on the web` }
+unless UI.Theme.painted("default", "keyword") == "#6C6783" as Geometry.Color { INFO@mark `UI146 a highlighting style has no colour in the default palette` }
+unless UI.Theme.painted("default", "muted") == UI.Theme["muted"].color { INFO@mark `UI147 a page style is not a highlighting style` }

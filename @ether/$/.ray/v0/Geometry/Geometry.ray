@@ -18,6 +18,9 @@ Geometry := class {
     static rotate (turn: Number, around: Vector = Vector(z: 1)) => Transform(rotation(turn, around))
     static skew (by: Vector) => Transform([[1, by.x, 0, 0], [by.y, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
     compounds * (other: Transform) => Transform(matrix.map(row => columns(other.matrix).map(column => row.zip(column).map(*).sum)))
+    compounds * (factor: Number) => Transform(matrix.map(row => row.map(. * factor)))
+    compounds + (other: Transform) => Transform(matrix.zip(other.matrix).map((a, b) => a.zip(b).map(+)))
+    compounds - (other: Transform) => Transform(matrix.zip(other.matrix).map((a, b) => a.zip(b).map(-)))
     applied (point: Vector) => Vector(matrix[..<3].map(row => row.zip([point.dimensions, 1]).map(*).sum))
     inverse => Transform(inverted(matrix))
     transposed => columns(matrix)
@@ -43,7 +46,8 @@ Geometry := class {
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
     mix (other: Color, by: Probability) => Color(red + (other.red - red) * by, green + (other.green - green) * by, blue + (other.blue - blue) * by, alpha + (other.alpha - alpha) * by)
   }
-  Paint := Color | Gradient | Pattern
+  Paint := Color | Gradient | Pattern | Inherited
+  Inherited := class
   Gradient := class = stops: (at: Probability, color: Color)[], kind: linear | radial | conic = linear, angle: Number = 0 {
     at (position: Probability) => stops.zip(stops.rest){.0.at <= position <= .1.at}.first -- .0.color.mix(.1.color, (position - .0.at) / (.1.at - .0.at))
   }
@@ -57,15 +61,25 @@ Geometry := class {
   Blend := enum normal | multiply | screen | overlay | darken | lighten | difference
   Filter := class = kind: brightness | contrast | grayscale | invert | saturate | sepia | hue, amount: Number
 
-  Font := class = family: String[] = ["sans-serif"], size: Length = 1em, weight: Number{100 <= . <= 900} = 400, style: normal | italic = normal, line_height: Number = 1.2, case: none | upper | lower | title = none, tracking: Length = 0, features: String[] = []
-  Text := class: Shape = text: String, font: Font = Font(), color: Paint?, align: start | center | end | justify = start, wrap: normal | none | anywhere = normal, overflow: clip | ellipsis = clip, direction: left-to-right | right-to-left = left-to-right {
-    shown => font.case.match
-      upper => text.upper_case
-      lower => text.lower_case
-      title => text.title_case
-      * => text
+  Font := class = family: String[] = ["sans-serif"], size: Length = 1em, weight: Number{100 <= . <= 900} = 400, style: normal | italic = normal, line_height: Number = 1.2, case: none | upper | lower | title = none, tracking: Length = 0, features: String[] = [] {
+    merged (other: Font) => Font(Font().fields.map(field => other.`field.name` != field.value ? other.`field.name` : this.`field.name`))
+  }
+  Text := class: Shape = text: String, font: Font = Font(), align: start | center | end | justify = start, wrap: normal | none | anywhere = normal, white_space: normal | nowrap | pre | pre_wrap | pre_line = pre_line, overflow: clip | ellipsis = clip, direction: left-to-right | right-to-left = left-to-right, runs: Run[] = [] {
+    static Run := class = from: Number, to: Number, color: Paint?, fill: Paint?, font: Font?
+    kept_spaces => white_space ==.instance_of (pre | pre_wrap)
+    kept_lines => white_space ==.instance_of (pre | pre_wrap | pre_line)
+    wraps => wrap != none && white_space ==.instance_of (normal | pre_wrap | pre_line)
+    collapsed => (kept_lines ? text.lines : [text.lines.join(" ")]).map(kept_spaces ? . : .words.join(" "))
+    shown => collapsed.map(line => font.case.match
+      upper => line.upper_case
+      lower => line.lower_case
+      title => line.title_case
+      * => line)
     intrinsic (width: Length) => font.size * font.line_height * lines(width).count
-    lines (width: Length) => wrap == none ? shown.lines : shown.lines.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..<-1], acc.last + " " + .) : (acc, .))).flatten
+    lines (width: Length) => wraps ? shown.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..<-1], acc.last + " " + .) : (acc, .))).flatten : shown
+    starts (width: Length) => lines(width).reduce(acc = [0] => [acc, acc.last + .length + 1].flatten)
+    run_at (index: Number) => runs{.from <= index < .to}.last
+    pieces => [0, runs.map(.from, .to).flatten, text.length].flatten.unique.sort -- .zip(.rest).map((from, to) => (text: text[from..<to], run: run_at(from)))
   }
 
   Image := class: Shape = source: Location, alt: String = "", fit: contain | cover | fill | none = contain
@@ -80,10 +94,11 @@ Geometry := class {
   Canvas := class: Shape = draws: Program
 
   Shape := class: Ray = origin: Vector = Vector(), size: Vector = Vector(), position: Position = Position(), transform: Transform = Transform(), children: Shape[] = [],
-    fill: Paint?, stroke: Stroke?, radius: Length[] = [0], effects: Effect[] = [], blend: Blend = normal,
+    fill: Paint?, color: Paint?, font: Font?, stroke: Stroke?, radius: Length[] = [0], effects: Effect[] = [], blend: Blend = normal,
     spacing: Spacing[] = [], constraints: Constraint[] = [], flow: Flow = vertical, gap: Vector = Vector(),
     overflow: visible | clip | scroll = visible, scrollbar: shown | hidden = shown, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
-    animations: Animation[] = [], dynamics: Dynamic[] = [] {
+    cursor: default | pointer | text | grab | grabbing | move | wait | none = default, touch: auto | none | pan_x | pan_y = auto,
+    transition: Transition?, animations: Animation[] = [], dynamics: Dynamic[] = [], styles: String[] = [] {
     static made = 0
     id: String = "s" + ((Shape.made += 1) as String)
     expand => [this], children.map(.expand).flatten(1)
@@ -99,6 +114,10 @@ Geometry := class {
     padding => spacing{.from == border} as Edges
     margin => spacing{.from == shape} as Edges
     outer => size + margin.total
+    narrowed (narrowing: Program) => narrowing{O: Narrowing}().for(this + .) -- this
+    {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
+    texts => expand{==.instance_of Text}
+    shown_transform => animations{.property == "transform"}.last?.value ?? transform
     in_place => children{.position.kind ==.instance_of (flow | sticky | absolute)}
     lifted => expand{.position.kind ==.instance_of (fixed | anchored) && .visible}.sort_by(.layer)
     moved (by: Vector) => (origin = origin + by) -- children.for(.moved(by)) -- this
@@ -202,7 +221,12 @@ Geometry := class {
     ) max (resolved(.least, width) ?? 0) min (resolved(.most, width) ?? ∞))
     height (shape: Shape, content: Length) => shape.constraints{.dimension == "y"}.reduce(acc = content => acc max (resolved(.least, available.y) ?? 0) min (resolved(.most, available.y) ?? ∞))
 
-    solve (shape: Shape) => place(shape, Vector(), available.x) -- (scene => scene.expand{.position.kind == anchored}.for(positioned(., .parent_in(scene))) -- stuck(scene))
+    cascade (shape: Shape, above: (font: Font?, color: Paint?) = (None, None)) => shape -- {
+      font = above.font && font ? above.font.merged(font) : font ?? above.font
+      color = color ==.instance_of Inherited || color == None ? above.color : color
+      children.for(cascade(., (font, color)))
+    }
+    solve (shape: Shape) => place(cascade(shape), Vector(), available.x) -- (scene => scene.expand{.position.kind == anchored}.for(positioned(., .parent_in(scene))) -- stuck(scene))
     place (shape: Shape, from: Vector, width: Length) => shape -- {
       own = length(shape, width - margin.left - margin.right)
       origin = from + margin.start
@@ -255,16 +279,51 @@ Geometry := class {
     )) -- scene
   }
 
-  Animation<T> := class = from: T, to: T, duration: Time, easing: Easing = ease, delay: Time = 0, repeat: Number | ∞ = 1, started: Time = Time.now {
+  Transition := class = duration: Quantity.Temporal, easing: Easing = ease
+  Animation<T> := class = from: T, to: T, duration: Time, easing: Easing = ease, delay: Time = 0, repeat: Number | ∞ = 1, started: Time = Time.now, property: String = "transform" {
     at (time: Time) => from + (to - from) * easing((time - started - delay) / duration min 1 max 0)
     value => dynamically at(Time.now)
   }
-  Dynamic := class = reads: String[], compiled: Program
+  Dynamic := class = reads: String[], compiled: Program, target: String?
   Field := class = applied: (target) => *
   Settings := {
     {a} & {b} => (a, b)
     {a}, {b} => (a, b)
     {literal name} == {value} => Field(target => target.`name` = value)
+  }
+  Narrowing := Settings + {
+    width == {share: Number{0 <= . <= 1} | Interpolated | Steps | Breakpoint[]} => Constraint("x", share: share)
+    width == {length: Length?} => Constraint("x", least: length, most: length)
+    width <= {length: Length} => Constraint("x", most: length)
+    width >= {length: Length} => Constraint("x", least: length)
+    height == {length: Length?} => Constraint("y", least: length, most: length)
+    height <= {length: Length} => Constraint("y", most: length)
+    height >= {length: Length} => Constraint("y", least: length)
+    min_height == {length: Length?} => Constraint("y", least: length)
+    max_width == {length: Length?} => Constraint("x", most: length)
+    aspect == {ratio: Number} => Constraint("x", aspect: ratio)
+    gap == {length: Length} => Field(shape => shape.gap = Vector(length, length))
+    padding == {length: Length} => Spacing(Vector(length, length))
+    padding == ({y: Length}, {x: Length}) => Spacing(Vector(x, y))
+    margin == {length: Length} => Spacing(Vector(length, length), from: shape)
+    margin_block == {length: Length} => Spacing(Vector(0, length), from: shape, sides: vertical)
+    margin_inline == {length: Length} => Spacing(Vector(length, 0), from: shape, sides: horizontal)
+    radius == {length: Length} => Field(shape => shape.radius = [length])
+    font_size == {size: Length} => Field(shape => shape.font = (shape.font ?? Font()) ~~ .size = size)
+    font_weight == {weight: Number} => Field(shape => shape.font = (shape.font ?? Font()) ~~ .weight = weight)
+    white_space == {mode: normal | nowrap | pre | pre_wrap | pre_line} => Field(shape => shape.texts.for(.white_space = mode))
+    wrap == {mode: normal | none | anywhere} => Field(shape => shape.texts.for(.wrap = mode))
+    align == {side: start | center | end | justify} => Field(shape => shape.texts.for(.align = side))
+    transform == translate({offset}) => Field(shape => shape.transform = Transform.translate(Vector(offset.x ?? 0, offset.y ?? 0)))
+    transform == scale({factor: Number}) => Field(shape => shape.transform = Transform.scale(Vector(factor, factor, 1)))
+    animated == {duration: Quantity.Temporal} {easing: Easing} => Field(shape => shape.transition = Transition(duration, easing))
+    animated == {duration: Quantity.Temporal?} => Field(shape => shape.transition = duration ? Transition(duration) : None)
+    position == {kind: flow | sticky | fixed | absolute | anchored} => Field(shape => shape.position.kind = kind)
+    top == {length: Length} => Field(shape => shape.position.top = length)
+    right == {length: Length} => Field(shape => shape.position.right = length)
+    bottom == {length: Length} => Field(shape => shape.position.bottom = length)
+    left == {length: Length} => Field(shape => shape.position.left = length)
+    inset == {length: Length} => Field(shape => shape.position ~~ (.top = length) ~~ (.right = length) ~~ (.bottom = length) ~~ (.left = length) -- (shape.position = .))
   }
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t

@@ -3,7 +3,12 @@ UI := class {
 
   Scene := {
     {text: String} => Geometry.Text(text)
-    {styled: String ^{style}} => Geometry.Text(styled) + Theme[style]
+    {painted: Painted} => Geometry.Text(painted.text, white_space: pre, runs: painted.runs)
+    {styled: * ^{{literal expression}}} => Styled(styled, Program(code: external ** expression))
+    {styled: String ^{style}} => Geometry.Text(styled).styled(style)
+    {styled: Geometry.Shape ^{style}} => styled.styled(style)
+    {{literal narrowing}} {narrowed: Geometry.Shape} => narrowed.narrowed(Program(code: external ** narrowing))
+    {{literal narrowing}} {narrowed: String} => Geometry.Text(narrowed).narrowed(Program(code: external ** narrowing))
     {location: Location{.extension ==.instance_of Image.extensions}} => Geometry.Image(location, alt: location.name)
     {location: Location{.extension ==.instance_of Video.extensions}} => Geometry.Video(location)
     {location: Location{.extension ==.instance_of Audio.extensions}} => Geometry.Audio(location)
@@ -15,6 +20,13 @@ UI := class {
     {lines: \n} => Geometry.Box(flow: vertical, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, constraints: [Geometry.Constraint("x", columns: 2)], children: value.fields.map(.name, .value).flatten)
+  }
+
+  Styled := (value, expression: Program) => (value ==.instance_of String ? Geometry.Text(value) : value) -- (shape =>
+    shape.styled(expression() as String) -- shape.dynamics.push Geometry.Dynamic(reads: expression.reads, compiled: expression, target: "class") -- shape
+  )
+  Painted := class = text: String, spans: (from: Number, to: Number, style: String)[] = [], palette: String = "default" {
+    runs => spans.map(Geometry.Text.Run(.from, .to, color: Theme.painted(palette, .style), font: Theme[.style].font))
   }
 
   Image := class { extensions = "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "avif" }
@@ -34,7 +46,7 @@ UI := class {
     activated => focused && Keyboard.enter.pulsed || hovered && Pointer.released
   }
 
-  Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", disabled: boolean = false {
+  Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", placeholder_color: Geometry.Paint?, disabled: boolean = false {
     static (choosing: Choice) as (=== Input) => choosing.type.match
       String{secret} => Secret(choosing)
       String{multiline} => TextArea(choosing)
@@ -49,9 +61,20 @@ UI := class {
     typed (text: String) => (value = value, text) -- this
     set (text: String) => (value = text) -- this
     erased => (value = value[..<-1]) -- this
+    empty => value == None || (value as String).empty
+    face => Geometry.Text(this.match
+        Checkbox => value ? "[x]" : "[ ]"
+        Slider => (value - chosen.type.least) / (chosen.type.most - chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
+        Select => "‹ ", value as String, " ›"
+        Secret => "•" * (value as String).length
+        * => empty ? placeholder : value as String
+      , origin: origin + padding.start, size: size - padding.total, font: font ?? Geometry.Font(), color: empty ? placeholder_color ?? Theme["muted"].color : color,
+      white_space: this ==.instance_of TextArea ? pre_wrap : nowrap, runs: !empty && this ==.instance_of TextArea && painted ? painted.runs : [])
   }
   TextField := class: Input
-  TextArea := class: Input
+  TextArea := class: Input = language: Language | String | None = None, palette: String = "default" {
+    painted => language && !empty ? (value as String).highlighted(language, palette) : None
+  }
   Secret := class: Input
   NumberField := class: Input
   Checkbox := class: Input {
@@ -240,11 +263,28 @@ UI := class {
       Geometry.Box{activate} => Role.button
       * => Role.region
     label => this ==.instance_of Geometry.Image ? alt : children{==.instance_of Geometry.Text}.text.join(" ")
+    styled (name: String) => (styles.push name) -- Theme[name].fields{.name != "name"}.for(field => field.name.match
+      "font" => font = font ? font.merged(field.value) : field.value
+      "spacing" | "constraints" | "effects" => field.value.for(component => this + component)
+      "wrap" | "white_space" | "align" => texts.for(.`field.name` = field.value)
+      * => this.`field.name` = field.value
+    ) -- this
+    restyled (name: String) => styles -- (own => (styles = []) -- styled(name) -- own.for(styled(.))) -- this
   }
 
   Theme := class {
     static spacing: Geometry.Length = 0.125rem
     static scaled (amount: Number | Geometry.Length) => amount ==.instance_of Number ? spacing * amount : amount
+    static kinds: (kind: *, style: String)[] = []
+    static default (kind, style: String) => kinds.push (kind, style) -- kind
+    static applied (scene: Geometry.Shape) => scene.expand.for(shape => kinds{shape ==.instance_of .kind}.for(shape.restyled(.style))) -- scene
+    static palettes: (name: String, colors: (style: String, color: Geometry.Color)[])[] = [("default", [
+      ("keyword", "#6C6783" as Geometry.Color), ("comment", "#6C6783" as Geometry.Color), ("string", "#FFCC99" as Geometry.Color), ("number", "#FFCC99" as Geometry.Color),
+      ("class", "#9A86FD" as Geometry.Color), ("type", "#9A86FD" as Geometry.Color), ("variable", "#C4B9FE" as Geometry.Color), ("property", "#C4B9FE" as Geometry.Color),
+      ("parameter", "#F2F0FF" as Geometry.Color), ("function", "#97A4BF" as Geometry.Color), ("method", "#97A4BF" as Geometry.Color), ("operator", "#97A4BF" as Geometry.Color),
+      ("punctuation", "#6C6783" as Geometry.Color), ("label", "#A18565" as Geometry.Color), ("external", "#F59E47" as Geometry.Color), ("error", "#CD5C5C" as Geometry.Color)
+    ])]
+    static painted (palette: String, style: String) => palettes{.name == palette}.last?.colors{style == .style || style.starts_with(.style + ".")}.last?.color ?? Theme[style].color
     static styles: (name: String, *)[] = [
       ("italic", font: Geometry.Font(style: italic)),
       ("bold", font: Geometry.Font(weight: 700)),
@@ -256,11 +296,17 @@ UI := class {
     ]
     static [name: String] => styles{.name == name}.last - name ?? ()
   }
+  String &+= {
+    highlighted (language: Language | String, palette: String = "default") => Painted(this, (language ==.instance_of String ? Language.named("." + language) : language).painted(this), palette)
+  }
 
   scene: Geometry.Shape?
   Runtime := class = page: Program, renderer: Language, target: *, running: boolean = false {
     static current: Runtime?
-    solved => page{O: Scene}() -- Geometry.Solver(available: Viewport.size, scrolled: Viewport.scrolled).solve(.) -- (scene = .)
+    solved => page{O: Scene}() -- Theme.applied(.) -- Geometry.Solver(available: Viewport.size, scrolled: Viewport.scrolled).solve(.) -- transitioned(scene, .) -- (scene = .)
+    transitioned (before: Geometry.Shape?, after: Geometry.Shape) => (before?.expand ?? []).zip(after.expand){.1.transition && .0.shown_transform != .1.transform}.for((was, now) =>
+      now.animations.push Geometry.Animation(from: was.shown_transform, to: now.transform, duration: now.transition.duration, easing: now.transition.easing, property: "transform")
+    ) -- after
     frame => solved{O: renderer.level}()
     run => (running = true) -- (Runtime.current = this) -- target.start
       -- ((target.write(frame) -- target.read) while running)

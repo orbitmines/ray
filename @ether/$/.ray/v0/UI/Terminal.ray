@@ -17,20 +17,20 @@ Language.TUI := class: Language {
     shape.contains(shape.transform.inverse.applied(Geometry.Vector((.x - from.x) * px_per_cell.x, (.y - from.y) * px_per_cell.y)))
   })
   Paint := (shape: Geometry.Shape, grid: Grid) => grid -- shape.match
-    Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(column = 0 => {
-      grid.put(At(shape) + Geometry.Vector(column, row), Cell(., foreground: shape.color as Geometry.Color, background: shape.fill as Geometry.Color, bold: shape.font.weight >= 600, italic: shape.font.style == italic))
-      column + .columns
-    }))
+    Geometry.Text => {
+      lines = shape.lines(shape.size.x)
+      starts = shape.starts(shape.size.x)
+      (0..<lines.count).for(row => (0..<lines[row].length).reduce(column = 0 => {
+        run = shape.run_at(starts[row] + .)
+        face = run?.font ?? shape.font
+        grid.put(At(shape) + Geometry.Vector(column, row), Cell(lines[row][.], foreground: (run?.color ?? shape.color) as Geometry.Color, background: (run?.fill ?? shape.fill) as Geometry.Color, bold: face.weight >= 600, italic: face.style == italic))
+        column + lines[row][.].columns
+      }))
+    }
     Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - At(shape), cells(shape.size))))
     Geometry.Canvas => shape.draws{O: Language.Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..<at.y * 4 + 4].map(.[at.x * 2..<at.x * 2 + 2])))))
     UI.Link => Box(shape, grid) -- Area(shape).for(grid.cells[.y][.x] ~~ .link = shape.to)
-    UI.Input => Paint(Geometry.Text(shape.match
-      UI.Checkbox => shape.value ? "[x]" : "[ ]"
-      UI.Slider => (shape.value - shape.chosen.type.least) / (shape.chosen.type.most - shape.chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
-      UI.Select => "‹ ", shape.value as String, " ›"
-      UI.Secret => "•" * (shape.value as String).length
-      * => (shape.value as String) ?? shape.placeholder
-    , origin: shape.origin, size: shape.size), grid) -- Border(shape, grid)
+    UI.Input => Box(shape, grid) -- Paint(shape.face, grid)
     * => Box(shape, grid)
   Box := (shape: Geometry.Shape, grid: Grid) => {
     Area(shape).for(grid.painted(., shape.fill)) if shape.fill

@@ -82,25 +82,31 @@ Language.Web := class: Language {
 
   HTML.level := {
     {page: Geometry.Shape} => HTML.Document(head: Head(), body: HTML.Element("body", children: [page]))
-    {link: UI.Link} => HTML.Element("a", [("id", link.id), ("href", link.to as String), ("target", "_blank") if link.window == new, ("rel", "noopener noreferrer") if link.window == new], link.children)
-    {text: Geometry.Text{role == heading}} => HTML.Element("h" + Heading.level(text), [("id", text.id)], [text.text])
-    {text: Geometry.Text} => HTML.Element(text.wrap == none ? "span" : "p", [("id", text.id), ("dir", text.direction == right-to-left ? "rtl" : "ltr")], [text.text])
-    {image: Geometry.Image} => HTML.Element("img", [("id", image.id), ("src", image.source as String), ("alt", image.alt), ("loading", "lazy")])
-    {video: Geometry.Video} => HTML.Element("video", [("id", video.id), ("src", video.source as String), ("controls", "") if video.controls, ("muted", "") if video.muted, ("loop", "") if video.looping])
-    {audio: Geometry.Audio} => HTML.Element("audio", [("id", audio.id), ("src", audio.source as String), ("controls", "")])
-    {canvas: Geometry.Canvas} => HTML.Element("canvas", [("id", canvas.id), ("width", canvas.size.x as px), ("height", canvas.size.y as px)])
+    {link: UI.Link} => HTML.Element("a", [("id", link.id), ("class", link.styles.join(" ")) if link.styles.nonempty, ("href", link.to as String), ("target", "_blank") if link.window == new, ("rel", "noopener noreferrer") if link.window == new], link.children)
+    {text: Geometry.Text{role == heading}} => HTML.Element("h" + Heading.level(text), [("id", text.id), ("class", text.styles.join(" ")) if text.styles.nonempty], Pieces(text))
+    {text: Geometry.Text} => HTML.Element(text.wrap == none ? "span" : "p", [("id", text.id), ("class", text.styles.join(" ")) if text.styles.nonempty, ("dir", text.direction == right-to-left ? "rtl" : "ltr")], Pieces(text))
+    {image: Geometry.Image} => HTML.Element("img", [("id", image.id), ("class", image.styles.join(" ")) if image.styles.nonempty, ("src", image.source as String), ("alt", image.alt), ("loading", "lazy")])
+    {video: Geometry.Video} => HTML.Element("video", [("id", video.id), ("class", video.styles.join(" ")) if video.styles.nonempty, ("src", video.source as String), ("controls", "") if video.controls, ("muted", "") if video.muted, ("loop", "") if video.looping])
+    {audio: Geometry.Audio} => HTML.Element("audio", [("id", audio.id), ("class", audio.styles.join(" ")) if audio.styles.nonempty, ("src", audio.source as String), ("controls", "")])
+    {canvas: Geometry.Canvas} => HTML.Element("canvas", [("id", canvas.id), ("class", canvas.styles.join(" ")) if canvas.styles.nonempty, ("width", canvas.size.x as px), ("height", canvas.size.y as px)])
     {outline: Geometry.Outline | Geometry.Polygon | Geometry.Ball} => Svg(outline)
-    {form: UI.Form} => HTML.Element("form", [("id", form.id)], form.inputs)
+    {form: UI.Form} => HTML.Element("form", [("id", form.id), ("class", form.styles.join(" ")) if form.styles.nonempty], form.inputs)
     {input: UI.TextField | UI.Secret | UI.NumberField | UI.DateField | UI.ColorField | UI.FileField | UI.Checkbox | UI.Slider} => HTML.Element("input", [
-      ("id", input.id), ("type", InputType[input.static]), ("placeholder", input.placeholder), ("disabled", "") if input.disabled,
+      ("id", input.id), ("class", input.styles.join(" ")) if input.styles.nonempty, ("type", InputType[input.static]), ("placeholder", input.placeholder), ("disabled", "") if input.disabled,
       ("min", input.chosen.type.least as String) if input ==.instance_of UI.Slider, ("max", input.chosen.type.most as String) if input ==.instance_of UI.Slider
     ])
-    {input: UI.TextArea} => HTML.Element("textarea", [("id", input.id), ("placeholder", input.placeholder)])
-    {input: UI.Select} => HTML.Element("select", [("id", input.id)], input.options.map(HTML.Element("option", [("value", . as String)], [. as String])))
-    {box: Geometry.Shape} => HTML.Element(box.activate ? "button" : Landmark[box.role] ?? "div", [("id", box.id), ("role", box.role as String), ("aria-label", box.label) if box.label, ("popover", "manual") if box.position.kind == anchored], box.children)
+    {input: UI.TextArea{language}} => HTML.Element("div", [("id", input.id), ("class", ["painted", input.styles].flatten.join(" "))], [
+      HTML.Element("pre", [("id", input.id + "-paint"), ("aria-hidden", "true")], Pieces(input.face)),
+      HTML.Element("textarea", [("id", input.id + "-text"), ("placeholder", input.placeholder), ("spellcheck", "false")], [input.empty ? "" : input.value as String])
+    ])
+    {input: UI.TextArea} => HTML.Element("textarea", [("id", input.id), ("class", input.styles.join(" ")) if input.styles.nonempty, ("placeholder", input.placeholder)], [input.empty ? "" : input.value as String])
+    {input: UI.Select} => HTML.Element("select", [("id", input.id), ("class", input.styles.join(" ")) if input.styles.nonempty], input.options.map(HTML.Element("option", [("value", . as String)], [. as String])))
+    {box: Geometry.Shape} => HTML.Element(box.activate ? "button" : Landmark[box.role] ?? "div", [("id", box.id), ("class", box.styles.join(" ")) if box.styles.nonempty, ("role", box.role as String), ("aria-label", box.label) if box.label, ("popover", "manual") if box.position.kind == anchored], box.children)
   }
   InputType = { UI.TextField: "text", UI.Secret: "password", UI.NumberField: "number", UI.DateField: "datetime-local", UI.ColorField: "color", UI.FileField: "file", UI.Checkbox: "checkbox", UI.Slider: "range" }
   Landmark = { UI.Role.table: "table", UI.Role.list: "ul", UI.Role.region: "section" }
+  Pieces := (text: Geometry.Text) => text.runs.empty ? [text.text] : text.pieces.map(.run ? HTML.Element("span", [("style", Inline(.run))], [.text]) : .text)
+  Inline := (run: Geometry.Text.Run) => [("color:", Paint(run.color), ";") if run.color, ("background:", Paint(run.fill), ";") if run.fill, ("font-weight:", run.font.weight, ";") if run.font, ("font-style:", run.font.style as String, ";") if run.font].flatten as String
   Heading := class { level (text: Geometry.Text) => text.font.size >= 2em ? 1 : text.font.size >= 1.5em ? 2 : 3 }
   Head := () => [
     HTML.Element("title", children: [UI.Navigation.title]),
@@ -136,6 +142,10 @@ Language.Web := class: Language {
   CSS.level := {
     {page: Geometry.Shape} => CSS.Sheet([
       CSS.Rule("*", [("box-sizing", "border-box"), ("margin", "0")]),
+      CSS.Rule("body", [("font-family", "sans-serif"), ("line-height", "1.2")]),
+      CSS.Rule(".painted", [("display", "grid")]),
+      CSS.Rule(".painted>pre,.painted>textarea", [("grid-area", "1/1"), ("margin", "0"), ("padding", "0"), ("border", "none"), ("font", "inherit"), ("white-space", "pre-wrap"), ("overflow-wrap", "anywhere"), ("overflow", "hidden")]),
+      CSS.Rule(".painted>textarea", [("color", "transparent"), ("caret-color", "currentColor"), ("background", "transparent"), ("resize", "none"), ("outline", "none")]),
       CSS.Rule("*", [("animation", "none"), ("transition", "none")], within: "@media (prefers-reduced-motion:reduce)"),
       CSS.Rule("html.locked", [("overflow", "hidden")]),
       page.expand.map(Rules(.)).flatten,
@@ -189,11 +199,17 @@ Language.Web := class: Language {
         Geometry.Blur => ("filter", "blur(", .radius as px, "px)")
         Geometry.Filter => ("filter", .kind as String, "(", .amount, ")")
       ),
-      (("font-family", shape.font.family.join(",")), ("font-size", shape.font.size as String), ("font-weight", shape.font.weight), ("font-style", shape.font.style as String), ("line-height", shape.font.line_height), ("text-align", shape.align as String), ("text-overflow", shape.overflow as String),
-        ("color", Paint(shape.color)) if shape.color, ("text-transform", { upper: "uppercase", lower: "lowercase", title: "capitalize" }[shape.font.case]) if shape.font.case != none, ("letter-spacing", shape.font.tracking as px, "px") if shape.font.tracking != 0) if shape ==.instance_of Geometry.Text,
+      ("color", Paint(shape.color)) if shape.color,
+      Typeface(shape.font) if shape.font,
+      (("text-align", shape.align as String), ("text-overflow", shape.overflow as String), ("white-space", WhiteSpace[shape.white_space]), ("overflow-wrap", "anywhere") if shape.wrap == anywhere) if shape ==.instance_of Geometry.Text,
       ("object-fit", shape.fit as String) if shape ==.instance_of Geometry.Image,
-      ("cursor", "pointer") if shape.activate
+      ("transition", "all ", shape.transition.duration as ms, "ms ", Timing(shape.transition.easing)) if shape.transition,
+      ("cursor", shape.cursor != default ? shape.cursor as String : "pointer") if shape.cursor != default || shape.activate,
+      ("touch-action", (shape.touch as String).replace("_", "-")) if shape.touch != auto,
+      ("scrollbar-width", "none") if shape.scrollbar == hidden
     ]),
+    CSS.Rule("#" + shape.id + "::placeholder", [("color", Paint(shape.placeholder_color))]) if shape ==.instance_of UI.Input && shape.placeholder_color,
+    UI.Theme.styles.map(style => CSS.Rule("#" + shape.id + "." + style.name, Styling(style.name))) if shape.dynamics.some(.target == "class"),
     CSS.Rule("#" + shape.id + ":focus-visible", [("outline", "2px solid currentColor")]) if shape.focusable,
     shape.constraints{Responsive(.)}.map(constraint => Stops(constraint.share) -- (stops => stops.zip([stops.rest, None]).map((at, next) => CSS.Rule("#" + shape.id,
       [("width", constraint.share ==.instance_of Geometry.Interpolated && next ? Chord(at, next) : (at.share * 100, "%"))],
@@ -201,6 +217,18 @@ Language.Web := class: Language {
     )))).flatten,
     shape.animations.map(animation => CSS.Keyframes(shape.id + "-" + animation.property, [(0, [(animation.property, animation.from as String)]), (1, [(animation.property, animation.to as String)])]))
   ]
+  Typeface := (font: Geometry.Font) => [
+    ("font-family", font.family.join(",")) if font.family != Geometry.Font().family,
+    ("font-size", Measure(font.size)) if font.size != Geometry.Font().size,
+    ("font-weight", font.weight) if font.weight != Geometry.Font().weight,
+    ("font-style", font.style as String) if font.style != normal,
+    ("line-height", font.line_height) if font.line_height != Geometry.Font().line_height,
+    ("text-transform", { upper: "uppercase", lower: "lowercase", title: "capitalize" }[font.case]) if font.case != none,
+    ("letter-spacing", Measure(font.tracking)) if font.tracking != 0
+  ]
+  WhiteSpace = { normal: "normal", nowrap: "nowrap", pre: "pre", pre_wrap: "pre-wrap", pre_line: "pre-line" }
+  Timing := (easing: Geometry.Easing) => easing === Geometry.linear ? "linear" : easing === Geometry.ease_in ? "ease-in" : easing === Geometry.ease_out ? "ease-out" : "ease"
+  Styling := (name: String) => Rules(Geometry.Box()).first.declarations -- (plain => Rules(Geometry.Box().styled(name)).first.declarations{!plain.contains(.)})
   Sides = { all: "", top: "-top", bottom: "-bottom", left: "-left", right: "-right", horizontal: "-inline", vertical: "-block" }
   Paint := (paint: Geometry.Paint) => paint.match
     Geometry.Color => "rgba(", paint.red, ",", paint.green, ",", paint.blue, ",", paint.alpha, ")"
@@ -218,7 +246,10 @@ Language.Web := class: Language {
     {page: Geometry.Shape} => JS.Module([
       Runtime,
       Devices,
-      page.expand.dynamics.flatten.map(JS.Effect(reads: .reads, body: [.compiled{O: JS.expressions}])),
+      page.expand.map(shape => shape.dynamics.map(dynamic => JS.Effect(reads: dynamic.reads, body: [
+        dynamic.target == "class" ? JS.Assign((Element(shape), "className"), dynamic.compiled{O: JS.expressions}) : dynamic.compiled{O: JS.expressions}
+      ]))).flatten,
+      page.expand{==.instance_of UI.TextArea && .language}.map(area => JS.Listen(JS.Call(("document", "getElementById"), [area.id + "-text"]), "input", [JS.Assign((JS.Call(("document", "getElementById"), [area.id + "-paint"]), "textContent"), ("event", "target.value"))])),
       page.expand{.focusable}.map(shape => JS.Listen(Element(shape), "click", [JS.Call(("ray", "activate"), [shape.id])])),
       page.expand{==.instance_of UI.Input}.map(input => JS.Listen(Element(input), "input", [JS.Call(("ray", "set"), [input.id, ("event", "target.value")])])),
       page.expand{==.instance_of Geometry.Canvas}.map(canvas => JS.Effect(reads: canvas.draws.reads, body: [JS.Call(("ray", "draw"), [canvas.id, canvas.draws{O: Language.Direct.level}()])])),
@@ -271,7 +302,7 @@ Language.Web := class: Language {
   }
   level := HTML.level + CSS.level + JS.level + {
     {page: Geometry.Shape} => Package([
-      ("index.html", page{O: HTML.level}()),
+      UI.Theme.applied(page) -- ("index.html", page{O: HTML.level}()),
       ("style.css", page{O: CSS.level}()),
       ("app.js", page{O: JS.level}()),
       page.expand{==.instance_of Geometry.Image | Geometry.Video | Geometry.Audio}.map(.source.name, .source),

@@ -7,14 +7,14 @@ Subversion := class: Language {
   Header := class (key: (!":" && !\n)[], ": ", value: (!\n)[], \n)
   Properties := class (entries: (("K ", length: Decimal, \n, key: Char[]{count == length}, \n, "V ", size: Decimal, \n, value: Char[]{count == size}, \n) | ("D ", length: Decimal, \n, deleted: Char[]{count == length}, \n))[], "PROPS-END", \n) {
     [key: String] => entries.find(.key == key)?.value
-    static of (pairs: (key: String, value: String)[]) => Properties(entries: pairs.map((length: .key.bytes.count, key: .key, size: .value.bytes.count, value: .value)))
+    static (pairs: (key: String, value: String)[]) as (=== Properties) => Properties(entries: pairs.map((length: .key.bytes.count, key: .key, size: .value.bytes.count, value: .value)))
   }
 
   Record := class (headers: Header[]{nonempty}, \n, properties: Properties?, text: Byte[]?, \n[]) {
     [key: String] => headers.find(.key == key)?.value
-    static of (headers: (String, *)[], properties: Properties? = None, text: Byte[]? = None) => (properties as Byte[] ?? []) -- (props => Record(
+    static (given: (headers: (String, *)[], properties: Properties?, text: Byte[]?)) as (=== Record) => given -- ((headers, properties, text) => (properties as Byte[] ?? []) -- (props => Record(
       headers: (headers, [("Prop-content-length", props.count) if properties, ("Text-content-length", text.count) if text, ("Text-content-md5", MD5.write(text) as Byte¹⁶ as Hexadecimal³²) if text, ("Content-length", props.count + (text?.count ?? 0)) if properties || text]).flatten(1).map((key: .0, value: .1 as String)),
-      properties, text))
+      properties, text)))
   }
 
   Dump := class ("SVN-fs-dump-format-version: ", version: Decimal, \n, \n, ("UUID: ", id: UUID, \n, \n)?, records: Record[]) {
@@ -43,20 +43,20 @@ Subversion := class: Language {
   Written := class = history: History, revisions: History.Revision[] {
     number (id) => revisions.index_of(revisions.find(.id == id)) + 1
     nodes (revision: History.Revision) => (revisions.find(.id == revision.parents.first)?.tree ?? Language.Entry()) -- (before => [
-      [Record.of([("Node-path", trunk), ("Node-kind", "dir"), ("Node-action", "add")])] if revision.parents.empty,
-      revision.renames.map(renamed => Record.of([("Node-path", trunk + "/" + renamed.to), ("Node-kind", "file"), ("Node-action", "add"), ("Node-copyfrom-rev", number(revision.parents.first)), ("Node-copyfrom-path", trunk + "/" + renamed.from)])),
-      revision.renames.map(renamed => Record.of([("Node-path", trunk + "/" + renamed.from), ("Node-action", "delete")])),
-      revision.tree.files{file => !revision.renames.some(.to == file.path) && before.at(file.path)?.content != file.content}.map(file => Record.of(
+      [(headers: [("Node-path", trunk), ("Node-kind", "dir"), ("Node-action", "add")]) as Record] if revision.parents.empty,
+      revision.renames.map(renamed => (headers: [("Node-path", trunk + "/" + renamed.to), ("Node-kind", "file"), ("Node-action", "add"), ("Node-copyfrom-rev", number(revision.parents.first)), ("Node-copyfrom-path", trunk + "/" + renamed.from)]) as Record),
+      revision.renames.map(renamed => (headers: [("Node-path", trunk + "/" + renamed.from), ("Node-action", "delete")]) as Record),
+      revision.tree.files{file => !revision.renames.some(.to == file.path) && before.at(file.path)?.content != file.content}.map(file => (headers: 
         [("Node-path", trunk + "/" + file.path), ("Node-kind", "file"), ("Node-action", before.at(file.path) ? "change" : "add")],
-        properties: Properties.of([("svn:executable", "*") if file.mode == Language.Entry.Mode.executable, ("svn:special", "*") if file.mode == Language.Entry.Mode.link]),
-        text: file.content)),
-      before.files{!revision.tree.at(.path) && !revision.renames.some(renamed => renamed.from == .path)}.map(Record.of([("Node-path", trunk + "/" + .path), ("Node-action", "delete")])),
-      [Record.of([("Node-path", trunk), ("Node-kind", "dir"), ("Node-action", "change")], properties: Properties.of([("svn:mergeinfo", "/" + trunk + ":" + revision.parents[1..].map(number(.)).join(","))]))] if revision.parents.count > 1
+        properties: ([("svn:executable", "*") if file.mode == Language.Entry.Mode.executable, ("svn:special", "*") if file.mode == Language.Entry.Mode.link]) as Properties,
+        text: file.content) as Record),
+      before.files{!revision.tree.at(.path) && !revision.renames.some(renamed => renamed.from == .path)}.map((headers: [("Node-path", trunk + "/" + .path), ("Node-action", "delete")]) as Record),
+      [(headers: [("Node-path", trunk), ("Node-kind", "dir"), ("Node-action", "change")], properties: ([("svn:mergeinfo", "/" + trunk + ":" + revision.parents[1..].map(number(.)).join(","))]) as Properties) as Record] if revision.parents.count > 1
     ].flatten)
     dump => Dump(version: 3, id: UUID.v4(), records: [
-      Record.of([("Revision-number", 0)], properties: Properties.of([("svn:date", Time.now as String)])),
+      (headers: [("Revision-number", 0)], properties: ([("svn:date", Time.now as String)]) as Properties) as Record,
       revisions.map(revision => [
-        Record.of([("Revision-number", number(revision.id))], properties: Properties.of([("svn:log", revision.message), ("svn:author", revision.who?.name ?? revision.who as String), ("svn:date", revision.when as String), ("ray:line", revision.recorded) if revision.recorded])),
+        (headers: [("Revision-number", number(revision.id))], properties: ([("svn:log", revision.message), ("svn:author", revision.who?.name ?? revision.who as String), ("svn:date", revision.when as String), ("ray:line", revision.recorded) if revision.recorded]) as Properties) as Record,
         nodes(revision)
       ].flatten)
     ].flatten)

@@ -37,7 +37,15 @@ JSON := class (Blank, root: Value, Blank) => {
     {writing: Language.Writing{value is Iterable}} => "[", writing.value.map((", " if .index > 0), Language.Writing(.)), "]"
     {writing: Language.Writing} => "{", writing.value.fields.map((", " if .index > 0), Language.Writing(.name), ": ", Language.Writing(.value)), "}"
   }
-  static level := { {text: String} => (text as JSON).value }
+  // object, member, array and the literal names (ECMA-404 §5–§8), written in place with Ray values for holes
+  static syntax := Compiler.default + {
+    \{{members: (name: String, value: *)[]}{`}`} => Document(entries: members)
+    {name: String}: {value} => (name: name, value: value)
+    null => None
+  }
+  static level := syntax + {
+    {text: String{. as JSON}} => (text as JSON).value
+  }
   static write (value) => Compiler.reduced(Language.Writing(value), written) as String
   static language = Language(".json", level: level, written: written)
 }

@@ -38,7 +38,7 @@ Pijul := class: Language {
   Replacement := class ("Replacement in ", path: Named, ":", line: Decimal, " ", (!\n)[], \n, (" "[], (!\n)[], \n)[], content: Lines)
 
   Stored := class (version: Binary⁶⁴, hashed: Zstd, unhashed: Zstd, contents: Zstd) {
-    change => (Bincode.read(hashed.bytes) as Change) -- (made => made ~~ (.unhashed = JSON.language.read(unhashed.bytes as String).entries) ~~ (.contents = contents.bytes))
+    change => (hashed.bytes as Bincode<Change>).value -- (made => made ~~ (.unhashed = JSON.language.read(unhashed.bytes as String).entries) ~~ (.contents = contents.bytes))
   }
 
   Store := class = root: Location {
@@ -49,27 +49,35 @@ Pijul := class: Language {
       (history: held.history ~~ .head = commit, commits: (held.commits, {(.id): commit})))).history
   }
 
-  operations (change: Change, history: History, stamp: Stamp) => change.hunks.hunk.map(hunk => history.named(hunk.path ?? hunk.from) -- (known => hunk.match
-    Addition => Operation(Operation.Kind.define, Definition(name: hunk.path, holder: hunk.within, language: Language.for_file(hunk.path)), stamp, change.who, after: Language.for_file(hunk.path).read(hunk.content.added))
-    Deletion => Operation(Operation.Kind.remove, known, stamp, change.who, before: history.code_of(known))
-    Move => Operation(Operation.Kind.rename, known, stamp, change.who, before: hunk.from, after: hunk.to)
-    (Edit | Replacement) => Operation(Operation.Kind.change, known, stamp, change.who, before: history.code_of(known),
-      after: Language.for_file(hunk.path).read(edited(known.language.write(history.code_of(known)), hunk)))))
+  // A hunk read as the operation it is on a definition
+  static Hunked := class = hunk: Hunk, change: Change, history: History, stamp: Stamp {
+    known => history.named(hunk.path ?? hunk.from)
+  }
+  static inferred := {
+    {h: Hunked{hunk is Addition}} => Operation(Operation.Kind.define, Definition(name: h.hunk.path, holder: h.hunk.within, language: Language.for_file(h.hunk.path)), h.stamp, h.change.who, after: Language.for_file(h.hunk.path).read(h.hunk.content.added))
+    {h: Hunked{hunk is Deletion}} => Operation(Operation.Kind.remove, h.known, h.stamp, h.change.who, before: h.history.code_of(h.known))
+    {h: Hunked{hunk is Move}} => Operation(Operation.Kind.rename, h.known, h.stamp, h.change.who, before: h.hunk.from, after: h.hunk.to)
+    {h: Hunked{hunk is (Edit | Replacement)}} => Operation(Operation.Kind.change, h.known, h.stamp, h.change.who, before: h.history.code_of(h.known),
+      after: Language.for_file(h.hunk.path).read(edited(h.known.language.write(h.history.code_of(h.known)), h.hunk)))
+  }
 
   commit_of (change: Change, history: History, commits) => change.dependencies.hash.map(commits[.])# -- (previous => change.recorded
     ? History.committed(change.recorded as History.Line, previous)
-    : History.Commit(who: Character.local(change.who) ?? change.who, value: operations(change, history, history.received(Stamp.at(change.when, node: change.who))),
+    : History.Commit(who: Character.local(change.who) ?? change.who, value: history.received(Stamp.at(change.when, node: change.who)) -- (stamp => change.hunks.hunk.map(Compiler.reduced(Hunked(., change, history, stamp), inferred))),
         when: change.when, message: change.message, previous))
 
   edited (text: String, hunk: Edit | Replacement) => text.lines -- (lines => (lines[..<hunk.line - 1], hunk.content.added.lines, lines[hunk.line - 1 + hunk.content.removed.lines.count..]).flatten.join(\n))
 
-  hunks (commit: History.Commit, history: History) => commit.operations.map(operation => operation.definition.path_in(history.at(commit)) -- (path => operation.kind.match
-    Operation.Kind.define => Addition(path, within: operation.definition.holder ?? "", encoding: "UTF-8", content: Lines(lines: operation.definition.language.write(operation.after).lines.map((sign: "+", text: .))))
-    Operation.Kind.remove => Deletion(path, content: Lines(lines: operation.definition.language.write(operation.before).lines.map((sign: "-", text: .))))
-    Operation.Kind.rename => Move(from: operation.definition.file(operation.before), to: path)
-    Operation.Kind.change => Replacement(path, line: 1, content: Lines(lines: (
-      operation.definition.language.write(operation.before).lines.map((sign: "-", text: .)),
-      operation.definition.language.write(operation.after).lines.map((sign: "+", text: .))).flatten))))
+  // An operation written as the hunk that makes it
+  static Operated := class = operation: Operation, path: String {
+    lines (value, sign: String) => Lines(lines: operation.definition.language.write(value).lines.map((sign: sign, text: .)))
+  }
+  static hunked := {
+    {o: Operated{operation.kind == Operation.Kind.define}} => Addition(o.path, within: o.operation.definition.holder ?? "", encoding: "UTF-8", content: o.lines(o.operation.after, "+"))
+    {o: Operated{operation.kind == Operation.Kind.remove}} => Deletion(o.path, content: o.lines(o.operation.before, "-"))
+    {o: Operated{operation.kind == Operation.Kind.rename}} => Move(from: o.operation.definition.file(o.operation.before), to: o.path)
+    {o: Operated{operation.kind == Operation.Kind.change}} => Replacement(o.path, line: 1, content: Lines(lines: (o.lines(o.operation.before, "-").lines, o.lines(o.operation.after, "+").lines).flatten))
+  }
 
   change (commit: History.Commit, history: History, ids) => Change(
     message: commit.message ?? commit.operations.map(.summary).join("; "),
@@ -77,7 +85,7 @@ Pijul := class: Language {
     authors: [(fields: [(key: "name", value: commit.who?.name ?? commit.who as String)])],
     unhashed: [(key: "ray", value: History.line(commit))],
     dependencies: commit.parents.map((hash: ids[.id])),
-    hunks: hunks(commit, history).map((hunk: .)))
+    hunks: commit.operations.map(Compiler.reduced(Operated(., .definition.path_in(history.at(commit))), hunked)).map((hunk: .)))
 
   static level := {
     {at: Location} => Store(root: IO.listing(at / ".pijul/changes").nonempty ? at / ".pijul" : at)
@@ -91,7 +99,7 @@ Pijul := class: Language {
   }
 
   static stored := {
-    {change: Change} as Byte[] => Stored(version: 6, hashed: change as Bincode as Zstd.language, unhashed: change.unhashed as JSON.language as Zstd.language, contents: change.hunks.hunk.content.lines.flatten.text.join(\n) as Zstd.language) as Byte[]
+    {change: Change} as Byte[] => Stored(version: 6, hashed: change as Bincode.language as Zstd.language, unhashed: change.unhashed as JSON.language as Zstd.language, contents: change.hunks.hunk.content.lines.flatten.text.join(\n) as Zstd.language) as Byte[]
   }
 }
 

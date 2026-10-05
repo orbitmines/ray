@@ -22,7 +22,7 @@ Project := class: Location {
       written ^keyword := line.after("@")
       pinned ^keyword := None
       if (written.contains(" %")) {
-        pinned = Version(number: written.after(" %").as_number)
+        pinned = written.after(" ") as Version
         written = written.before(" %")
       }
       kind ^keyword := Project.Form.user

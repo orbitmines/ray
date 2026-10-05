@@ -1626,14 +1626,3 @@ false := boolean.false
   if condition { kept = None }
   kept
 )
-
-%{from} -> %{to} ({parameters ^parameter}) => {block} ^keyword => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  made ^keyword := Migration(from: Version(number: from), to: Version(number: to))
-  external define made `body{arguments}` {
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  Migration.declare(made)
-)

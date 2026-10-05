@@ -14,56 +14,43 @@ TUI := namespace {
 
   // Shapes onto the grid, back to front. Effects that a cell can't show are approximated by colour (F-D3: one general solution, not special cases).
   Cells := {
-    {page: Geometry.Shape} => Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y) -- page.paint(.)
+    {page: Geometry.Shape} => Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y) -- Paint(page, .)
   }
-  Geometry.Shape &+= {
-    // Where this shape's cells are, after its transform and clipped by its parent.
-    area => (cells(position).y..<cells(position + size).y).map(y => (cells(position).x..<cells(position + size).x).map(x => Geometry.Vector(x, y))).flatten{transform.inverse.applied(. * px_per_cell) -- contains(.)}
-    paint (grid: Grid) => grid -- {
-      area.for(grid.painted(., fill)) if fill
-      Border(this, grid) if stroke
-      effects.for(.match
-        Geometry.Opacity => area.for(grid.cells[.y][.x] ~~ .foreground = .foreground?.mix(.background, 1 - .amount))
-        Geometry.Shadow => area.map(. + cells(.offset)).for(grid.cells[.y][.x] ~~ .background = (.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5))
-        * => None
-      )
-      children.sort_by(.layer).for(.paint(grid)) unless overflow == clip && children.every(!.area.some(area.contains(.)))
-      Scrollbar(this, grid) if overflow == scroll
-      Focus(this, grid) if UI.Focus.current === this
-    }
-  }
-  Geometry.Text &+= {
+  // Where a shape's cells are, after its transform.
+  Area := (shape: Geometry.Shape) => (cells(shape.position).y..<cells(shape.position + shape.size).y).map(y => (cells(shape.position).x..<cells(shape.position + shape.size).x).map(x => Geometry.Vector(x, y))).flatten{shape.transform.inverse.applied(. * px_per_cell) -- shape.contains(.)}
+  // Every shape onto the grid, back to front. Effects a cell can't show are approximated by colour (F-D3: one general solution, not special cases).
+  Paint := (shape: Geometry.Shape, grid: Grid) => grid -- shape.match
     // Glyphs by their columns: wide characters take two cells (X3.4).
-    paint (grid: Grid) => lines(size.x).zip(0..).for((line, row) => #line.reduce(column = 0 => {
-      grid.put(cells(position) + Geometry.Vector(column, row), Cell(., fill as Geometry.Color, bold: font.weight >= 600, italic: font.style == italic))
+    Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(column = 0 => {
+      grid.put(cells(shape.position) + Geometry.Vector(column, row), Cell(., shape.fill as Geometry.Color, bold: shape.font.weight >= 600, italic: shape.font.style == italic))
       column + .columns
     }))
-  }
-  Geometry.Image &+= {
-    // An image is sampled into coloured characters: a luminance ramp and a colour per cell (F-C1). A terminal that shows pixels gets them through its own level.
-    paint (grid: Grid) => area.for(at => grid.put(at, Picture(source).sampled(at - cells(position), cells(size))))
-  }
-  Geometry.Canvas &+= {
+    // An image is sampled into coloured characters (F-C1); a terminal that shows pixels gets them through its own level.
+    Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - cells(shape.position), cells(shape.size))))
     // Drawing on a cell grid: braille dots give 2×4 points per cell.
-    paint (grid: Grid) => draws{O: Direct.level}().pixels -- area.for(at => grid.put(at, Cell(Braille(.[at.y * 4..at.y * 4 + 4].map(.[at.x * 2..at.x * 2 + 2])))))
-  }
-  Geometry.Outline | Geometry.Polygon | Geometry.Ball &+= {
-    paint (grid: Grid) => area.for(grid.put(., Cell(" ", background: fill as Geometry.Color))) -- Border(this, grid) if stroke
-  }
-  UI.Link &+= {
+    Geometry.Canvas => shape.draws{O: Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..at.y * 4 + 4].map(.[at.x * 2..at.x * 2 + 2])))))
     // OSC 8 hyperlinks: the cells carry where they go.
-    paint (grid: Grid) => super.paint(grid) -- area.for(grid.cells[.y][.x] ~~ .link = to)
+    UI.Link => Box(shape, grid) -- Area(shape).for(grid.cells[.y][.x] ~~ .link = shape.to)
+    UI.Input => Paint(Geometry.Text(shape.match
+      UI.Checkbox => shape.value ? "[x]" : "[ ]"
+      UI.Slider => (shape.value - shape.chosen.type.least) / (shape.chosen.type.most - shape.chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
+      UI.Select => "‹ ", shape.value as String, " ›"
+      UI.Secret => "•" * (shape.value as String).length
+      * => (shape.value as String) ?? shape.placeholder
+    , position: shape.position, size: shape.size), grid) -- Border(shape, grid)
+    * => Box(shape, grid)
+  Box := (shape: Geometry.Shape, grid: Grid) => {
+    Area(shape).for(grid.painted(., shape.fill)) if shape.fill
+    Border(shape, grid) if shape.stroke
+    shape.effects.for(.match
+      Geometry.Opacity => Area(shape).for(grid.cells[.y][.x] ~~ .foreground = .foreground?.mix(.background, 1 - .amount))
+      Geometry.Shadow => Area(shape).map(. + cells(.offset)).for(grid.cells[.y][.x] ~~ .background = (.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5))
+      * => None
+    )
+    shape.children.sort_by(.layer).for(Paint(., grid)) if shape.visible
+    Scrollbar(shape, grid) if shape.overflow == scroll
+    Focus(shape, grid) if UI.Focus.current === shape
   }
-  UI.Input &+= {
-    paint (grid: Grid) => grid -- Geometry.Text(this.match
-      UI.Checkbox => value ? "[x]" : "[ ]"
-      UI.Slider => (value - chosen.type.least) / (chosen.type.most - chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
-      UI.Select => "‹ ", value as String, " ›"
-      UI.Secret => "•" * (value as String).length
-      * => (value as String) ?? placeholder
-    , position: position).paint(.) -- Border(this, grid)
-  }
-
   // Box drawing: rounded corners when the shape has a radius.
   Border := (shape: Geometry.Shape, grid: Grid) => {
     corners = shape.radius != [0] ? "╭╮╰╯" : "┌┐└┘"
@@ -75,7 +62,7 @@ TUI := namespace {
     [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].for((at, i) => grid.put(at, style ~~ .glyph = corners[i]))
   }
   Scrollbar := (shape: Geometry.Shape, grid: Grid) => cells(shape.size).y -- (0..<.).for(y => grid.put(cells(shape.position) + Geometry.Vector(cells(shape.size).x - 1, y), Cell(y == shape.scrolled.y * . / shape.content_height ? "┃" : "│")))
-  Focus := (shape: Geometry.Shape, grid: Grid) => shape.area.for(grid.cells[.y][.x] ~~ .underline = true)
+  Focus := (shape: Geometry.Shape, grid: Grid) => Area(shape).for(grid.cells[.y][.x] ~~ .underline = true)
   Sample := (paint: Geometry.Paint, at: Geometry.Vector) => paint.match
     Geometry.Color => paint
     Geometry.Gradient => paint.at(at.x / UI.Viewport.size.x * px_per_cell.x)

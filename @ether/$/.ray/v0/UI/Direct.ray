@@ -2,33 +2,26 @@
 // The same level draws a Canvas everywhere (Web.JS hands its pixels to the canvas; the TUI samples them into braille).
 Direct := namespace {
   level := {
-    {page: Geometry.Shape} => Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px) -- page.rasterised(., Geometry.Transform())
+    {page: Geometry.Shape} => Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px) -- Rasterise(page, ., Geometry.Transform())
   }
 
-  Geometry.Shape &+= {
-    // Back to front: fill, stroke, children, each through this shape's transform and clipped to it when asked; effects composite last.
-    rasterised (raster: Geometry.Raster, outer: Geometry.Transform) => raster -- {
-      placed = outer * Geometry.Transform.translate(position) * transform
-      inside = (0..<size.y as px).map(y => (0..<size.x as px){contains(Geometry.Vector(., y))}.map(x => (x, y))).flatten
-      inside.for((x, y) => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, Fill(fill, x / size.x, y / size.y) ~~ .alpha *= Opacity(effects))) if fill
-      Outline(this).stroked(raster, placed, stroke) if stroke
-      children.sort_by(.layer).for(.rasterised(raster, placed)) unless !visible
-      effects{==.instance_of Geometry.Blur}.for(raster.blurred(inside, .radius as px))
-    }
-  }
-  Geometry.Text &+= {
-    // Glyphs are outlines from the font file, filled like any other shape.
-    rasterised (raster: Geometry.Raster, outer: Geometry.Transform) => raster -- lines(size.x).zip(0..).for((line, row) =>
-      #line.reduce(pen = 0 => Font(font).glyph(.) -- .outline.filled(raster, outer * Geometry.Transform.translate(position + Geometry.Vector(pen, row * font.size * font.line_height)) * Geometry.Transform.scale(Geometry.Vector(font.size / .units, font.size / .units)), fill ?? Geometry.Color(0, 0, 0)) -- pen + .advance * font.size / .units)
-    )
-  }
-  Geometry.Image &+= {
-    rasterised (raster: Geometry.Raster, outer: Geometry.Transform) => raster -- (IO.read(source) as Geometry.Raster) -- (0..<size.y as px).for(y => (0..<size.x as px).for(x =>
-      raster.put((outer * Geometry.Transform.translate(position)).applied(Geometry.Vector(x, y)).x, (outer * Geometry.Transform.translate(position)).applied(Geometry.Vector(x, y)).y, ..at(x * .width / size.x, y * .height / size.y))
-    ))
-  }
-  Geometry.Canvas &+= {
-    rasterised (raster: Geometry.Raster, outer: Geometry.Transform) => draws().for(.rasterised(raster, outer * Geometry.Transform.translate(position)))
+  // Every shape into pixels, back to front: fill, stroke, children, each through its transform; effects composite last.
+  Rasterise := (shape: Geometry.Shape, raster: Geometry.Raster, outer: Geometry.Transform) => raster -- {
+    placed = outer * Geometry.Transform.translate(shape.position) * shape.transform
+    shape.match
+      // Glyphs are outlines from the font file, filled like any other shape.
+      Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(pen = 0 =>
+        Font(shape.font).glyph(.) -- Filled(.outline, raster, placed * Geometry.Transform.translate(Geometry.Vector(pen, row * shape.font.size * shape.font.line_height)) * Geometry.Transform.scale(Geometry.Vector(shape.font.size / .units, shape.font.size / .units)), shape.fill ?? Geometry.Color(0, 0, 0)) -- pen + .advance * shape.font.size / .units
+      ))
+      Geometry.Image => (IO.read(shape.source) as Geometry.Raster) -- (0..<shape.size.y as px).for(y => (0..<shape.size.x as px).for(x => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, ..at(x * ..width / shape.size.x, y * ..height / shape.size.y))))
+      Geometry.Canvas => shape.draws().for(Rasterise(., raster, placed))
+      * => {
+        inside = (0..<shape.size.y as px).map(y => (0..<shape.size.x as px){shape.contains(Geometry.Vector(., y))}.map(x => (x, y))).flatten
+        inside.for((x, y) => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, Fill(shape.fill, x, y) ~~ .alpha *= Opacity(shape.effects))) if shape.fill
+        Stroked(Outline(shape), raster, placed, shape.stroke) if shape.stroke
+        shape.children.sort_by(.layer).for(Rasterise(., raster, placed)) if shape.visible
+        shape.effects{==.instance_of Geometry.Blur}.for(raster.blurred(inside, .radius as px))
+      }
   }
 
   // An outline is filled by scanlines: a point is inside when a ray from it crosses the edges an odd number of times.
@@ -36,27 +29,16 @@ Direct := namespace {
     Geometry.Outline => shape
     Geometry.Polygon => Geometry.Outline(from: shape.points.first, segments: shape.points.rest, closed: true)
     * => Geometry.Outline(from: Geometry.Vector(), segments: [Geometry.Vector(shape.size.x, 0), shape.size, Geometry.Vector(0, shape.size.y)], closed: true)
-  Geometry.Outline &+= {
-    // Curves are flattened into lines before filling or stroking.
-    points => [from, segments.map(.match
-      Geometry.Quadratic => (1..16).map(t => Bezier([previous, .control, .to], t / 16))
-      Geometry.Cubic => (1..16).map(t => Bezier([previous, .first, .second, .to], t / 16))
-      Geometry.Arc => (1..16).map(t => Elliptic(previous, ., t / 16))
-      * => [.]
-    ).flatten]
-    filled (raster: Geometry.Raster, transform: Geometry.Transform, paint: Geometry.Paint) => points.map(transform.applied(.)) -- (.y.min..<.y.max).for(y =>
-      .zip([.rest, .first]){(.0.y <= y) != (.1.y <= y)}.map(.0.x + (y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)).sort.chunk(2).for((a, b) => (a..<b).for(x => raster.put(x, y, Fill(paint, x, y))))
-    )
-    stroked (raster: Geometry.Raster, transform: Geometry.Transform, stroke: Geometry.Stroke) => points.map(transform.applied(.)).zip(points.rest).for((a, b) =>
-      ((b - a).length as px).for(step => a + (b - a) * (step / (b - a).length) -- (-(stroke.width / 2)..stroke.width / 2).for(w => raster.put(.x + w, .y, Fill(stroke.paint, .x, .y))))
-    )
-  }
-  Bezier := (points: Geometry.Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a + (b - a) * t), t)
-  Elliptic := (from: Geometry.Vector, arc: Geometry.Arc, t: Number) => from + (arc.to - from) * t
+  Filled := (outline: Geometry.Outline, raster: Geometry.Raster, transform: Geometry.Transform, paint: Geometry.Paint) => outline.points.map(transform.applied(.)) -- (.y.min..<.y.max).for(y =>
+    .zip([.rest, .first]){(.0.y <= y) != (.1.y <= y)}.map(.0.x + (y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)).sort.chunk(2).for((a, b) => (a..<b).for(x => raster.put(x, y, Fill(paint, x, y))))
+  )
+  Stroked := (outline: Geometry.Outline, raster: Geometry.Raster, transform: Geometry.Transform, stroke: Geometry.Stroke) => outline.points.map(transform.applied(.)) -- .zip(.rest).for((a, b) =>
+    ((b - a).length as px).for(step => a + (b - a) * (step / (b - a).length) -- (-(stroke.width / 2)..stroke.width / 2).for(w => raster.put(.x + w, .y, Fill(stroke.paint, .x, .y))))
+  )
   Fill := (paint: Geometry.Paint, x: Number, y: Number) => paint.match
     Geometry.Color => paint
     Geometry.Gradient => paint.at(x)
-    Geometry.Pattern => paint.shape{O: level}().at(x % paint.repeat.x, y % paint.repeat.y)
+    Geometry.Pattern => Rasterise(paint.shape, Geometry.Raster(paint.repeat.x as px, paint.repeat.y as px), Geometry.Transform()).at(x % paint.repeat.x, y % paint.repeat.y)
   Opacity := (effects: Geometry.Effect[]) => effects{==.instance_of Geometry.Opacity}.amount.product ?? 1
 
   // Fonts are read from their files like any other format (F-C1b): glyph outlines, advances, units per em.

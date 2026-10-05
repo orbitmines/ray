@@ -104,7 +104,17 @@ Geometry := namespace {
   Quadratic := class = control: Vector, to: Vector
   Cubic := class = first: Vector, second: Vector, to: Vector
   Arc := class = radius: Vector, rotation: Number, large: boolean, sweep: boolean, to: Vector
-  Outline := class: Shape = from: Vector, segments: Segment[], closed: boolean = false
+  Outline := class: Shape = from: Vector, segments: Segment[], closed: boolean = false {
+    // Curves flattened into lines: what filling, stroking and hit testing walk.
+    points => [from, segments.map(.match
+      Quadratic => (1..16).map(t => Bezier([.previous, .control, .to], t / 16))
+      Cubic => (1..16).map(t => Bezier([.previous, .first, .second, .to], t / 16))
+      Arc => (1..16).map(t => .previous + (.to - .previous) * (t / 16))
+      * => [.]
+    ).flatten]
+    contains (point: Vector) => Polygon(points: points).contains(point)
+  }
+  Bezier := (points: Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a + (b - a) * t), t)
 
   Flow := enum vertical | inline | grid | layered
   Side := enum all | top | bottom | left | right | horizontal | vertical

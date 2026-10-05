@@ -198,7 +198,3 @@ UI := namespace {
   }
 }
 
-String &+= {
-  italic => this ^italic
-  bold => this ^bold
-}

@@ -86,6 +86,9 @@ String := class: Char[] {
 
   + (other: String) => this, other
   find_all (pattern: String) => (this ~= pattern)#.index
+  // `"…".italic` is the same as `"…" ^italic`: styling runs on highlighting (F-C2, F-C2b).
+  italic => this ^italic
+  bold => this ^bold
   trim (characters: String) => trimmed(characters)
 }
 

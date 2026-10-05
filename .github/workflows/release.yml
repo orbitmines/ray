@@ -3,8 +3,9 @@ name: Release
 # Every push to main builds Ether for every platform, installs it on each with install.sh and install.ps1, packs the npm
 # package (@orbitmines/ether.ray) and installs that on each with npm; when the version in kernel3/language.ts has no
 # release yet, it publishes one (v<version>, the latest: the archives, their SHA256SUMS, both installers) and the npm
-# package (with NPM_TOKEN, or as a trusted publisher when the NPM_TRUSTED_PUBLISHING variable is true). Pull requests
-# build and verify only.
+# package (with NPM_TOKEN, or as a trusted publisher when the NPM_TRUSTED_PUBLISHING variable is true), and the VS Code
+# extension (Ether.ray, orbitmines.ether-ray) to the Visual Studio Marketplace (VSCE_PAT, or Microsoft Entra ID when the
+# AZURE_CLIENT_ID/AZURE_TENANT_ID variables are set) and to Open VSX (OVSX_PAT). Pull requests build and verify only.
 
 on:
   push:
@@ -202,14 +203,128 @@ jobs:
         if: env.TRUSTED != 'true' && env.HAS_TOKEN != 'true'
         run: echo "::warning::Not published to npm - set the NPM_TOKEN secret, or the NPM_TRUSTED_PUBLISHING variable once npm trusts this workflow."
 
+  vscode:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: install @orbitmines/ether.ray, which the extension bundles
+        working-directory: "@ether/$/.ray/v0.ts"
+        run: npm ci
+      - name: package the extension (the Marketplace takes major.minor.patch only, so v0.1.3-E2027.0A.3 is 0.1.3)
+        working-directory: "@ether/$/.ray/ide/vscode"
+        run: |
+          npm ci
+          npm version --no-git-tag-version --allow-same-version "${VERSION%%-*}"
+          mkdir -p "$GITHUB_WORKSPACE/vsix"
+          npx --yes @vscode/vsce package --no-dependencies --out "$GITHUB_WORKSPACE/vsix/ether-ray-${VERSION}.vsix"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vsix
+          path: vsix/
+          if-no-files-found: error
+
+  verify-vscode:
+    needs: vscode
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          name: vsix
+          path: vsix
+      - name: the .vsix installs into VS Code
+        shell: bash
+        run: |
+          npm install --no-save @vscode/test-electron
+          node -e "
+            const {downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath} = require('@vscode/test-electron');
+            const cp = require('child_process'); const fs = require('fs');
+            (async () => {
+              const exe = await downloadAndUnzipVSCode('stable');
+              const [cli, ...args] = resolveCliArgsFromVSCodeExecutablePath(exe);
+              const vsix = 'vsix/' + fs.readdirSync('vsix').find(f => f.endsWith('.vsix'));
+              cp.execFileSync(cli, [...args, '--install-extension', vsix], {stdio: 'inherit', shell: process.platform === 'win32'});
+              const listed = cp.execFileSync(cli, [...args, '--list-extensions'], {encoding: 'utf-8', shell: process.platform === 'win32'});
+              if (!/orbitmines\.ether-ray/i.test(listed)) { console.error(listed); process.exit(1); }
+            })().catch(e => { console.error(e); process.exit(1); });
+          "
+
+  publish-vscode:
+    needs: [build, verify, vscode, verify-vscode]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      HAS_PAT: ${{ secrets.VSCE_PAT != '' }}
+      ENTRA: ${{ vars.AZURE_CLIENT_ID != '' && vars.AZURE_TENANT_ID != '' }}
+      HAS_OVSX: ${{ secrets.OVSX_PAT != '' }}
+      PRE_RELEASE: ${{ vars.VSCE_PRE_RELEASE == 'true' && '--pre-release' || '' }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          name: vsix
+          path: vsix
+      - name: is this version on the Marketplace already
+        id: listed
+        run: |
+          if npx --yes @vscode/vsce show orbitmines.ether-ray --json 2>/dev/null | grep -q "\"version\": *\"${VERSION%%-*}\""; then
+            echo "published=true" >> "$GITHUB_OUTPUT"; echo "orbitmines.ether-ray ${VERSION%%-*} is on the Marketplace already"
+          else echo "published=false" >> "$GITHUB_OUTPUT"; fi
+      - name: sign in to Azure (Microsoft Entra ID, no token kept in the repository)
+        if: steps.listed.outputs.published != 'true' && env.ENTRA == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: publish to the Visual Studio Marketplace, through Entra ID
+        if: steps.listed.outputs.published != 'true' && env.ENTRA == 'true'
+        run: npx --yes @vscode/vsce publish --azure-credential --packagePath vsix/*.vsix $PRE_RELEASE
+      - name: publish to the Visual Studio Marketplace, with a token
+        if: steps.listed.outputs.published != 'true' && env.ENTRA != 'true' && env.HAS_PAT == 'true'
+        run: npx --yes @vscode/vsce publish --packagePath vsix/*.vsix $PRE_RELEASE
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      - name: neither is set up
+        if: env.ENTRA != 'true' && env.HAS_PAT != 'true'
+        run: echo "::warning::Not published to the Visual Studio Marketplace - set the VSCE_PAT secret, or the AZURE_CLIENT_ID and AZURE_TENANT_ID variables."
+      - name: publish to Open VSX (VSCodium, Cursor, Gitpod, …)
+        if: env.HAS_OVSX == 'true'
+        run: npx --yes ovsx publish vsix/*.vsix -p "$OVSX_PAT" $PRE_RELEASE || echo "::warning::Open VSX did not take this version (already published?)"
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
   release:
-    needs: [build, verify]
+    needs: [build, verify, vscode]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
         with:
           name: dist
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: vsix
           path: dist
 
       - uses: softprops/action-gh-release@v2

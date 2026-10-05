@@ -1,18 +1,18 @@
-Skill := class = name: String, quests: *, solved: Solution[] = [], baseline = 0 {
-  static Solution := class = quest: Quest, when: Time = Time.now, used = false
+Skill := class: Nameable = quests: *, baseline = 0 {
+  solved: Quest?
 
   covers (quest: Quest) => quest is quests
-  solve (quest: Quest): static => this ~~ solved.push Solution(quest)
-  recent (within: Quantity.Temporal) => solved{Time.now - .when < within}
+  solve (quest: Quest): static => this ~~ .solved = quest
+  recent (within: Quantity.Temporal) => solved.history{Time.now - .when < within}
   proficiency (within: Quantity.Temporal) => {
     counted = recent(within).count
     counted < baseline ? baseline + (counted - baseline) / 2 : counted
   }
-  settle: static => this ~~ .baseline = solved.count
+  settle: static => this ~~ .baseline = solved.history.count
 }
 
-Mana := class = resource: *, capacity: *, held: Spell? {
-  static measured (resource) => Mana(resource, capacity: IO.os(resource))
+Mana := class = resource: String, capacity: *, held: Spell? {
+  static measured (resource: String) => Mana(resource, capacity: @me/device/os[resource])
 
   cast (spell: Spell) => held = spell
   free: static => this ~~ .held = None
@@ -23,34 +23,18 @@ Spell := class = operation: *, cost: *, progress = 0, interrupt_level = 0 {
   interrupted_by (level) => interrupt_level < level
 }
 
-Presence := enum memory | disk | remote
+Presence := @me/device/memory | @me/device/disk | @remote
 
-Room := class = value: * {
+Room := class: Location = value: * {
   items => value.fields
-  enter (item) => Room(item)
+  enter (item) => (this / item.name) ~~ (.value = item.value)
 }
 
 Onboarding := class {
-  static Purpose := enum everything | tools_only
-  static NetworkMode := enum online | pessimistically_online | invisible | prefer_offline | offline
-  static Look := enum realistic | voxel
-
   language: Language?
-  purpose: Purpose = Purpose.everything
-  network: NetworkMode = NetworkMode.online
-  look: Look = Look.realistic
+  purpose: everything | tools_only = everything
+  network: Accessor.Permission = Accessor.Permission.public
+  look: realistic | voxel = realistic
 
-  choose_language (language: Language): static => this ~~ .language = language
-  choose_purpose (purpose: Purpose): static => this ~~ .purpose = purpose
-  choose_network (network: NetworkMode): static => this ~~ .network = network
-  choose_look (look: Look): static => this ~~ .look = look
-
-  dialogue => purpose == Purpose.everything
-  permission => {
-    NetworkMode.online: Accessor.Permission.public,
-    NetworkMode.pessimistically_online: Accessor.Permission.protected,
-    NetworkMode.invisible: Accessor.Permission.confidential,
-    NetworkMode.prefer_offline: Accessor.Permission.private,
-    NetworkMode.offline: Accessor.Permission.local
-  }[network]
+  dialogue => purpose == everything
 }

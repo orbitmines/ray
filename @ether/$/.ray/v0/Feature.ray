@@ -1,28 +1,17 @@
+Location &+= {
+  normalised => segments{!= "."}.reduce(kept = [] => . == ".." ? kept[..<-1] : (kept, .)).join("/")
+  sandboxed => "instance/" + normalised
+  content => (external io sandboxed None) as String
+  bytes => content.bytes
+}
+
 IO := class {
-  root = "instance"
-  permitted = false
-
-  inside (path) => {
-    parts = path.split("/"){!= "." && !.empty}.reduce([]) (kept, part) => part == ".." ? kept[..<-1] : (kept, part)
-    root + "/" + parts.join("/")
-  }
-  read (path) => (external io inside(path) None) as String
-  write (path, content) => external io inside(path) content
+  read (location) => (location as Location).content
+  write (location, content) => external io (location as Location).sandboxed content
   output (text: String) => external io `/dev/stdout` text
-  host (path) => permitted ? (external io path None) as String : Quest(name: "ask for the host's files", goal: path)
-  field (name: String) => (name + ".ray", name + "/", name).map(read(.)).first(.nonempty) ?? ""
-
-  os (name) => (external os name) as String
-  platform => os(`platform`)
-  architecture => os(`architecture`)
-
-  listing (path) => host(path).lines{!.empty}.map(IO.File(path + "/" + .))
-
-  static File := class = path: String {
-    name => path.split("/").last
-    content => IO.read(path)
-    bytes => content.bytes
-  }
+  host (location) => Run.current.ask(`size`, location) -- (. == true ? (external io location None) as String : .)
+  field (name: String) => (name + (".ray" | "/" | ""))#.map(read(.)).first(.nonempty) ?? ""
+  listing (location) => host(location).lines{.nonempty}.map((location as Location) / .)
 }
 
 Random := class {
@@ -44,65 +33,14 @@ Random := class {
   }
 }
 
-Counted := class = count: Number | Range, kind: * {
-  least => count is Number ? count : count.first
-  most => count is Number ? count : count.last
-  choose => (least + Random.below(most - least + 1)).times.map(kind())
-}
-
-Choice := class = type: *? {
-  chosen: *[] = []
-
-  choose (from) => from.random
-  choose_count (from, count: Number) => count.times.map(from.random)
-  coin => Random.bit
-  unique (from) => {
-    picked = choose(from)
-    chosen.contains(picked) ? unique(from) : chosen.push picked -- picked
-  }
-
-  identities (values) => values.unique(===)
-  subsets (values, count: Number) => {
-    return [[]] if count == 0
-    return [] if values.empty
-    subsets(values[1..], count - 1).map([values.first, .]), subsets(values[1..], count)
-  }
-  orderings (values) => values.count < 2 ? [values] : values.flat_map(held => orderings(values{!== held}).map([held, .]))
-
-  mapped (values, count: Number, step) => Distribution.uniform(
-    subsets(identities(values), count).map(picked => values.map(held => picked.some(=== held) ? step(held) : held))
-  )
-  unordered (values) => Distribution.uniform(orderings(values)).realised
-}
-
-Distribution := class = outcomes: Outcome[] = [], optional = false {
-  static Outcome := class = weight: Number, value: *
-
-  static uniform (values) => values.reduce(Distribution()) (made, value) => made.weighted(1, value)
-  static share (fraction, values) => uniform(values).realised_many(fraction)
-
-  weighted (weight: Number, value): static => this ~~ outcomes.push Outcome(weight, value)
-  total => outcomes.weight.sum
-
-  realised => drawn_from(outcomes, Random.below(1000000) * total / 1000000)
-  static drawn_from (left: Outcome[], drawn: Number) => left.empty ? None
-    : drawn < left.first.weight ? left.first.value
-    : drawn_from(left.rest, drawn - left.first.weight)
-  realised_many (fraction) => outcomes{Random.below(1000000) < fraction * 1000000}.value
-}
-
-Assumption := class = fact: *, verified = false {
-  static assume (fact) => Assumption(fact)
-
-  holds => true
-  quest => Quest(name: "verify the assumption", goal: fact)
-  verify (actual) => verified = actual == fact
-  rolled_back => !verified
-}
+Choice := class = type: *?, value: *?
 
 Proof := class = proposition: *, argument: * {
-  static Proposition := class = holds: boolean {
-    negated => Proposition(holds: !holds)
+  static Proposition := class = holds: boolean = true, fact: *?, verified = false {
+    negated => Proposition(holds: !holds, fact)
+    quest => Quest(name: "verify the assumption", goal: fact)
+    verify (actual) => verified = actual == fact
+    rolled_back => !verified
   }
 
   holds => argument.holds
@@ -110,40 +48,39 @@ Proof := class = proposition: *, argument: * {
   static theorem | lemma | example (proposition, proof) => proof.holds ? true : Quest(name: "prove", goal: proposition)
   static by_contradiction | contradiction (proposition, proof_of_negation) => !proof_of_negation.holds
   static rfl (proposition) => proposition.holds
-  static assume (fact) => fact
   static failed (error) => Quest(name: "fix", goal: error)
 }
 
-Transaction := class = forwards: *?, backwards: *?, applied = false, history: History?, branch: History? {
-  static Inverse := enum plus (of: `+`, is: `-`) | minus (of: `-`, is: `+`) | times (of: `*`, is: `/`) | over (of: `/`, is: `*`)
+! `+` `-`
+! `*` `/`
 
-  static begin (history: History) => Transaction(history, branch: history.fork)
+Transaction := class = forwards: *?, backwards: *? = forwards⁻¹, history: History = History(), applied = false {
+  branch: History = history.fork
 
-  record (who, change, inverse): static => this ~~ branch.commits.push History.Commit(who, what: change, inverse)
-  commit: static => this ~~ (
-    history.merge(branch)
-    .applied = true
-  )
-  abort: static => this ~~ .branch = None
-
-  reversed => Transaction(forwards: backwards, backwards: forwards, applied)
-  mark_applied: static => this ~~ .applied = true
+  record (who, change): static => this ~~ branch.commit(who, change)
+  commit: static => this ~~ history.merge(branch) ~~ (.applied = true)
+  abort: static => this ~~ branch.drop
+  reversed => Transaction(forwards: backwards, backwards: forwards, history, applied)
 }
 
 Network := class {
-  static fetch (from: Location, path: String, version: Version?) => IO.read(from / path, version) ?? IO.read(from / path + (("%", version.number) if version))
+  static fetch (from: Location, path: String, version: Version?) => (IO.read(from / path + (version as String)) if version) ?? IO.read(from / path)
 }
 
 OS := class {
-  static Name := enum linux | macos | windows | ether | unknown
+  [property: String] => (external os property) as String
+  platform => this["platform"]
+  architecture => this["architecture"]
+  name: linux | macos | windows | ether | unknown => { "linux": linux, "darwin": macos, "win32": windows }[platform] ?? unknown
 
-  name => { "linux": Name.linux, "darwin": Name.macos, "win32": Name.windows }[IO.platform] ?? Name.unknown
   static launch (location: Location) => external os `open` (location as String)
 }
 
 Device := class {
   static Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
 
+  os: OS = OS()
+  keyboard: Keyboard = Keyboard()
   capabilities: Capability?
   handheld = false
   clipboard: String | Location = ""
@@ -156,56 +93,37 @@ Device := class {
   fullscreen = false
   printing = false
   opened: Location?
+
+  choose (s) => s#.random
 }
 
-Keyboard := class = keys: Key[] = [] {
-  static Direction := enum up | down | left | right
+Keyboard := class: Location {
   static Modifier := enum shift | control | alt | meta
 
-  static Key := class = name: *, code: Number?, shift = false, control = false, alt = false, meta = false {
+  static Key := class: Nameable = code: Number?, modifiers: Modifier? {
     pressed = false
-    toggled = false
-    presses = 0
-    pressed_at: Time[] = []
 
-    pulsed (max: Number = 0, delay: Quantity.Temporal = 500 ms) => pressed && pressed_at.nonempty && (max == 0 || presses <= max)
-      && (pressed_at.count == 1 || Time.now - pressed_at.last >= delay)
+    presses => pressed.history{.value == true}.count
+    toggled => presses.odd
+    pulsed (max: Number = 0, delay: Quantity.Temporal = 500 ms) => pressed && (max == 0 || presses <= max)
+      && (presses == 1 || Time.now - pressed.history{.value == true}.last.when >= delay)
 
-    press: static => this ~~ (
-      pressed_at.push Time.now
-      .pressed = true
-      .toggled = !toggled
-      .presses += 1
-    )
+    press (modifiers: Modifier? = None): static => this ~~ (.modifiers = modifiers) ~~ (.pressed = true)
     release: static => this ~~ .pressed = false
-    holding (modifier: Modifier) => modifier.match
-      shift => shift
-      control => control
-      alt => alt
-      meta => meta
-
     cycle (iterable) => iterable[presses % iterable.count]
-    holds => pressed
-    as (=== boolean) => pressed
   }
 
-  add (key: Key): static => this ~~ keys.push key
-
-  static f2 = Key(name: "F2")
-  static enter = Key(name: "Enter", code: 13)
-  static tab = Key(name: "Tab", code: 9)
-  static escape = Key(name: "Escape", code: 27)
-  static held: Key[] = [f2, enter, tab, escape]
-  static named (name) => name is Key ? name : held{.name == name}.first ?? (Key(name) ~~ held.push(.))
-  static key (code: Number) => held{.code == code}.first ?? (Key(name: code as Char as String, code) ~~ held.push(.))
-  static press (name, shift = false, control = false, alt = false, meta = false) => named(name) ~~ (.shift = shift) ~~ (.control = control) ~~ (.alt = alt) ~~ (.meta = meta) -- .press
-  static release (name) => named(name).release
-  static pressed (name, modifier: Modifier? = None) => named(name) -- (key => key.pressed && (modifier == None || modifier#.some(key.holding(.))))
+  keys => children{is Key}
+  [name] => keys{.name == name}.first ?? add(Key(name))
+  coded (code: Number) => keys{.code == code}.first ?? add(Key(name: code as Char as String, code))
+  pressed (name, modifier: Modifier? = None) => this[name] -- (key => key.pressed && (!modifier || modifier#.some(key.modifiers ∋ .)))
+  .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : this[name]
 }
 
-Chat := class = messages: Message[] = [] {
-  static Message := class = who: *, text: String
+Chat := class {
+  message: String?
 
-  say (who, text: String): static => this ~~ messages.push Message(who, text)
+  messages => message.history
+  say (who, text: String): static => this ~~ message.history.commit(who, text)
   count => messages.count
 }

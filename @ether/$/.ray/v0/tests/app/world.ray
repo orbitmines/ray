@@ -4,7 +4,7 @@
 mark ^keyword := external global
 
 wg := World(name: "genesis")
-wp := wg.spawn(Player(name: "alice"))
+wp := wg.add(Player(name: "alice"))
 unless wp.name == "alice" { INFO@mark `WO1 spawned player lost its name` }
 unless wg.characters.count == 1 { INFO@mark `WO2 world has other than one character` }
 wq := Quest(name: "find", goal: None)
@@ -35,7 +35,7 @@ unless wr.draft { INFO@mark `RE1 a new reference is no draft` }
 if wr.publish.draft { INFO@mark `RE2 a published reference is still a draft` }
 
 wa := Avatar(character: wp, platform: None)
-unless wp.embody(wa).character.name == "alice" { INFO@mark `PE1 an embodied avatar is not of its character` }
+unless wp.add(wa).character.name == "alice" { INFO@mark `PE1 an embodied avatar is not of its character` }
 unless wp.avatars.count == 1 { INFO@mark `PE2 a character has other than one avatar` }
 
 unless Repository(world: wg).histories.empty { INFO@mark `RP1 a new repository already has histories` }
@@ -57,9 +57,9 @@ if wg == World(name: "other") { INFO@mark `WO13 two worlds are the same world` }
 wi := Item(name: "lamp", issuer: wg)
 unless wi.name == "lamp" { INFO@mark `ITM1 an item lost its name` }
 unless wi.issuer == wg { INFO@mark `ITM2 an item forgot who issued it` }
-unless wi.move(here).location == here { INFO@mark `ITM3 a moved item is not where it was moved` }
+unless (wi ~~ .location = here).location == here { INFO@mark `ITM3 a moved item is not where it was moved` }
 wc := Certificate(issuer: wg, secret: None)
-unless wi.certify(wc).certificate == wc { INFO@mark `ITM4 a certified item does not carry its certificate` }
+unless (wi ~~ .certificate = wc).certificate == wc { INFO@mark `ITM4 a certified item does not carry its certificate` }
 
 unless wp.status == Status.offline { INFO@mark `PE3 a new character is not offline` }
 unless Status.invisible { INFO@mark `STS1 there is no being invisible` }
@@ -90,11 +90,11 @@ past.commit(wp, "first")
 unless past.count == 1 { INFO@mark `HI2 committing does not keep it` }
 past.commit(wp, "second")
 unless past.count == 2 { INFO@mark `HI3 committing twice keeps other than two` }
-unless past.latest.what == "second" { INFO@mark `HI4 the latest is not the last committed` }
+unless past.latest.value == "second" { INFO@mark `HI4 the latest is not the last committed` }
 unless past.latest.who == wp { INFO@mark `HI5 a commit forgot who made it` }
 branched := past.fork
 unless branched.count == 0 { INFO@mark `HI6 a fork starts with commits on it` }
-unless branched.from == past { INFO@mark `HI7 a fork forgot what it came from` }
+unless branched.base === past.last { INFO@mark `HI7 a fork forgot what it came from` }
 
 // What is written down about something read.
 cite := Reference(title: "on rays")
@@ -102,7 +102,7 @@ cite.authors.push wp
 unless cite.draft { INFO@mark `RF1 a new reference is not a draft` }
 if cite.publish.draft { INFO@mark `RF2 publishing does not take it out of draft` }
 unless cite.notes.empty { INFO@mark `RF3 a new reference already has notes` }
-cite.note("a note")
+cite.note = "a note"
 unless cite.notes.count == 1 { INFO@mark `RF4 a note is not kept` }
 unless cite.title == "on rays" { INFO@mark `RF5 a reference forgot its title` }
 
@@ -125,22 +125,22 @@ if Permissions.current.allows(reader, `=`, day_target) { INFO@mark `AC10 a read 
 
 // A quest is what there is to do: the steps it takes, and whether it is done.
 errand := Quest(name: "fetch", goal: wi)
-if errand.completed { INFO@mark `QU1 a new quest is already done` }
+if errand.done { INFO@mark `QU1 a new quest is already done` }
 unless errand.difficulty == 0 { INFO@mark `QU2 a quest with no steps is difficult` }
 errand.step("go")
 errand.step("take")
 unless errand.difficulty == 2 { INFO@mark `QU3 a quest of two steps is not two hard` }
-unless errand.complete.completed { INFO@mark `QU4 completing a quest does not` }
+unless errand.complete.done { INFO@mark `QU4 completing a quest does not` }
 unless errand.goal == wi { INFO@mark `QU5 a quest forgot what it is for` }
 // Posting answers the quest, the way spawning answers the character.
-unless wg.post(errand) == errand { INFO@mark `QU6 posting a quest does not answer it` }
+unless wg.add(errand) == errand { INFO@mark `QU6 posting a quest does not answer it` }
 unless wg.quests.count == 1 { INFO@mark `QU11 posting a quest does not put it in the world` }
 
 // A task is a quest that can be interrupted.
 job := Task(name: "carry", goal: wi)
 if job.interrupted { INFO@mark `QU7 a new task is already interrupted` }
 unless job.interrupt.interrupted { INFO@mark `QU8 interrupting a task does not` }
-if job.completed { INFO@mark `QU9 an interrupted task is done` }
+if job.done { INFO@mark `QU9 an interrupted task is done` }
 unless job.difficulty == 0 { INFO@mark `QU10 a task with no steps is difficult` }
 
 // Where someone is says how they are, and where they are not, what they said
@@ -164,8 +164,8 @@ unless renamed.name == "after" { INFO@mark `WP3 something named is not called th
 // What a world holds, and how many live in it.
 county := World(name: "county")
 unless county.population == 0 { INFO@mark `WP4 an empty world has someone in it` }
-county.spawn(Character(name: "one"))
-county.spawn(Character(name: "two"))
+county.add(Character(name: "one"))
+county.add(Character(name: "two"))
 unless county.population == 2 { INFO@mark `WP5 two who live there do not count two` }
 unless county.items.empty { INFO@mark `WP6 an empty world holds something` }
 county.add(Item(name: "lamp", issuer: county))
@@ -192,29 +192,29 @@ cited := Reference(title: "a paper")
 cited.authors.push 1
 unless cited.draft { INFO@mark `WP16 something written down is not a draft to begin with` }
 if cited.publish.draft { INFO@mark `WP17 something published is still a draft` }
-if cited.link { INFO@mark `WP18 a reference points somewhere it was not pointed` }
+if cited.location { INFO@mark `WP18 a reference points somewhere it was not pointed` }
 unless cited.date { INFO@mark `WP19 a reference says nothing about when` }
-unless cited.note("read it").notes.count == 1 { INFO@mark `WP20 a note taken is not kept` }
+unless (cited ~~ .note = "read it").notes.count == 1 { INFO@mark `WP20 a note taken is not kept` }
 
 // Who belongs to an organization.
 guild := Organization(name: "guild")
 unless guild.members.empty { INFO@mark `WP21 an organization nobody joined has members` }
 unless guild.status == Status.offline { INFO@mark `WP22 an organization is not offline to begin with` }
 
-sited := Reference(title: "t", subtitle: "s", year: "2025", link: @https://a.b, pointer: "p")
+sited := Reference(title: "t", subtitle: "s", date: "2025-01-01" as Time, location: @https://a.b | "p")
 unless sited.subtitle == "s" { INFO@mark `WR1 a reference forgot its subtitle` }
-unless sited.year == "2025" { INFO@mark `WR2 a reference forgot its year` }
-unless sited.link == @https://a.b { INFO@mark `WR3 a reference forgot its link` }
-unless sited.pointer == "p" { INFO@mark `WR4 a reference forgot its pointer` }
+unless sited.year == 2025 { INFO@mark `WR2 a reference forgot its year` }
+unless sited.location ∋ @https://a.b { INFO@mark `WR3 a reference forgot its link` }
+unless sited.location ∋ "p" { INFO@mark `WR4 a reference forgot its pointer` }
 unless Reference(title: "t").authors.empty { INFO@mark `WR5 a new reference already has authors` }
 unless Reference(title: "t").organizations.empty { INFO@mark `WR6 a new reference already has organizations` }
 unless Reference(title: "t").published.empty { INFO@mark `WR7 a new reference is already published somewhere` }
 sited.authors.push wp
 unless sited.authors.count == 1 { INFO@mark `WR8 an author added is not kept` }
 unless sited.authors.first == wp { INFO@mark `WR9 the author kept is not the one added` }
-unless Reference(title: "t").note("n").notes.first.text == "n" { INFO@mark `WR10 a note forgot its text` }
-unless Reference(title: "t").note("n").notes.first.date { INFO@mark `WR11 a note says nothing about when` }
-if Reference(title: "t").remote { INFO@mark `WR12 a new reference has a remote it was not given` }
+unless (Reference(title: "t") ~~ .note = "n").notes.first.value == "n" { INFO@mark `WR10 a note forgot its text` }
+unless (Reference(title: "t") ~~ .note = "n").notes.first.when { INFO@mark `WR11 a note says nothing about when` }
+if Reference(title: "t").location { INFO@mark `WR12 a new reference has a remote it was not given` }
 
 unless Status.idle { INFO@mark `STS2 there is no being idle` }
 unless Status.do_not_disturb { INFO@mark `STS3 there is no being do not disturb` }
@@ -224,11 +224,11 @@ unless Status#.count == 9 { INFO@mark `STS6 there are other than nine statuses` 
 unless Character(name: "p", status: Status.busy).status == Status.busy { INFO@mark `STS7 a character forgot being busy` }
 
 looked := World(name: "looked")
-looked.spawn(Character(name: "Fadi"))
+looked.add(Character(name: "Fadi"))
 unless looked@fadi == looked.characters.first { INFO@mark `LK1 @name does not find a character ignoring case` }
 unless looked.characters.count == 1 { INFO@mark `LK2 the plural is not the collection of that class` }
 inner := World(name: "inner")
-looked.worlds.push inner
+looked.add(inner)
 unless looked#INNER == inner { INFO@mark `LK3 #name does not find a world ignoring case` }
 unless looked@nobody == World.ether@nobody { INFO@mark `LK4 a name not defined here does not fall back to @ether` }
 

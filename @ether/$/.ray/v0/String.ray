@@ -20,9 +20,9 @@ Char := class: Unicode.Scalar {
   swap_case | swapcase => is_lower ? upper_case : lower_case
   fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status ==.instance_of ("C" | "F")}.first?.value ?? this
 
-  as Decimal => this ==.instance_of Digit ? this - "0" : this.lower_case - "a" + 10
+  as (=== Decimal) => this ==.instance_of Digit ? this - "0" : this.lower_case - "a" + 10
   static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
-  static (codepoint: Unicode.Scalar) as Char => codepoint
+  static (codepoint: Unicode.Scalar) as (=== Char) => codepoint
 
   east_asian_width => Unicode.EastAsianWidth[this]?.value ?? "N"
   columns => east_asian_width ==.instance_of ("W" | "F") ? 2 : 1
@@ -51,7 +51,7 @@ Char := class: Unicode.Scalar {
 \" = "\""
 \{ = Escaped(character: "{")
 Escaped := class = character: Char {
-  as String => character
+  as (=== String) => character
 }
 
 "{literal: (\{escape} | !"\"")[]}": String => literal.literal_dedented.interpolated((code) => (inline (external ** code)) as String)
@@ -105,7 +105,7 @@ String := class: Char[] {
   escaped_line => #.map(. == \\ ? "\\\\" : . == \" ? "\\\"" : . == \n ? "\\n" : .) as String
 
   as (base: Number.Base) => #.reduce(0) (acc, current) => acc * base + current as Decimal
-  as Decimal => this as 10
+  as (=== Decimal) => this as 10
 
   compounds + (other: String) => this, other
   bytes => #.map(.octets).flatten

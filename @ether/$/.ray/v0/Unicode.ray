@@ -44,7 +44,7 @@ Unicode := class {
 
   static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
     static CodeUnit: Binary
-    as (:== CodePoint[]): CodePoint[]
+    as (=== CodePoint[]): CodePoint[]
     bytes => endianness == LE ? <-(this as Byte[]) : this as Byte[]
   }
 
@@ -56,7 +56,7 @@ Unicode := class {
     (10₂, U3: Binary⁶) if prefix ⊢1111₂
   )[] {
     static CodeUnit = Binary⁸
-    as (:== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
+    as (=== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
   }
 
   static UTF-16 := class: TF = sequence: (
@@ -66,12 +66,12 @@ Unicode := class {
     (110111₂, U2: Binary¹⁰) if prefix
   )[] {
     static CodeUnit = Binary¹⁶
-    as (:== CodePoint[]) => sequence.map(.prefix ? (.U0 + 1) * 2 ^ 16 + .U1 * 2 ^ 10 + .U2 : .U0 * 2 ^ 12 + .U1)
+    as (=== CodePoint[]) => sequence.map(.prefix ? (.U0 + 1) * 2 ^ 16 + .U1 * 2 ^ 10 + .U2 : .U0 * 2 ^ 12 + .U1)
   }
 
   static UTF-32 := class: TF = Binary³²{⊢(0[]¹¹)}[] {
     static CodeUnit = Binary³²
-    as (:== CodePoint[]) => map(as Number)
+    as (=== CodePoint[]) => map(as Number)
   }
 }
 

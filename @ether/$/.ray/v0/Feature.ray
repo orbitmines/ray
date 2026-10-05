@@ -162,7 +162,7 @@ Keyboard := class = keys: Key[] = [] {
 
     cycle (iterable) => iterable[presses % iterable.count]
     holds => pressed
-    as (:== boolean) => pressed
+    as (=== boolean) => pressed
   }
 
   add (key: Key): static => this ~~ keys.push key

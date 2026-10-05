@@ -4,7 +4,7 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
 
   `quantity: Quantity` => quantities ,= quantity
 
-  as (:== Normalizer) => Unit.Normalizers.modulus(this)
+  as (=== Normalizer) => Unit.Normalizers.modulus(this)
   as (normalizer: Quantity{quantities.every(.quantity == 1)}) => this ~~ .normalizer = normalizer
 
   as (: (operator: (greater_than: > | >=) | < | <=) unit: Unit): static => {
@@ -32,7 +32,7 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
     : ERROR@this `a quantity is multiplied by another only as a rate by what it is per`
   ± | +- (uncertainty: Quantity) => this - uncertainty | this + uncertainty
 
-  as (:== String) => quantities.map((quantity, unit) => (quantity as String) + " " + (unit as String)).join(" ")
+  as (=== String) => quantities.map((quantity, unit) => (quantity as String) + " " + (unit as String)).join(" ")
 
   compounds / (unit: Unit) => Quantity(quantities: quantities.map((quantity, from) => (quantity, from / unit)))
 
@@ -69,12 +69,12 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   static None = Unit(global.None)
   static Temporal => second
 
-  as (:== Quantity) => 1, this
+  as (=== Quantity) => 1, this
   as (other: ==.instance_of Unit) => this as Quantity as other
 
   protected defined_globally = &caller == global
   dynamically assert this as String? != None
-  as (:== String?) => name
+  as (=== String?) => name
     -- #.remove(Unit#{!= this}.name) if defined_globally
 
   protected unit = this
@@ -95,10 +95,10 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
     FromUnit = static
 
     global.Quantity<From>{.unit == this} &+= {
-      as (:== ToUnit): Quantity<To>{unit == ToUnit} => convert(this)
+      as (=== ToUnit): Quantity<To>{unit == ToUnit} => convert(this)
     }
     global.Quantity<To>{.unit == ToUnit} &+= {
-      as (:== FromUnit): Quantity<From>{unit == FromUnit} => convert⁻¹(this)
+      as (=== FromUnit): Quantity<From>{unit == FromUnit} => convert⁻¹(this)
     } if convert⁻¹
   }
 

@@ -18,7 +18,7 @@ Calendar := class {
     within_same_calendar_system = from.calendar.static == to.calendar.static
 
     Time{calendar == from.calendar} &+= {
-      as (:== to.calendar) => {
+      as (=== to.calendar) => {
         if epoch != 0 {
           Time(to.calendar, epoch: epoch as to.calendar) = this (as <= Unit.Temporal if !within_same_calendar_system)
         } else {
@@ -78,7 +78,7 @@ Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
 
   since_calendar_epoch: Time => (this -> .epoch as calendar if .epoch != 0).sum
 
-  as (:== calendar) => this
+  as (=== calendar) => this
 
   chainable == (other: Time) => since_calendar_epoch in second == other.since_calendar_epoch in second
   chainable < (other: Time) => since_calendar_epoch in second < other.since_calendar_epoch in second
@@ -152,7 +152,7 @@ ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
     : day_of_year
   date_known => date != ?
   of_day: Quantity.Temporal => (hour_of_day ?? 0) hours + (minute_of_hour ?? 0) minutes + (second_of_minute ?? 0) seconds
-  as Time => Time(calendar) = (in_year.days_before_year + day_of_year - 1) days + of_day
+  as (=== Time) => Time(calendar) = (in_year.days_before_year + day_of_year - 1) days + of_day
   as_time => this as Time
   chainable == (other: ISO_8601) => date_known && other.date_known ? as_time == other.as_time : of_day == other.of_day
   chainable < (other: ISO_8601) => date_known && other.date_known ? as_time < other.as_time : of_day < other.of_day

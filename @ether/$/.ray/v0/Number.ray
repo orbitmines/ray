@@ -75,8 +75,8 @@ Number := class: Ray {
   }
   ~! (width: Number) => digits(2).padded(width).map(!) as 2
 
-  as (base: Number.Base) as String => digits(base).map(Char.digit) as String
-  as String => this as 10 as String
+  as (base: Number.Base) as (=== String) => digits(base).map(Char.digit) as String
+  as (=== String) => this as 10 as String
 
   static Bases = {
     Binary: Digit = "0" | "1"
@@ -121,12 +121,12 @@ dynamically Number.Bases.for name => {
     << (places: Number) => static(integer: integer, ["0"] * places)
     >> (places: Number) => places >= integer.length ? static(integer: ["0"]) : static(integer: integer[..<-places])
 
-    as Number => integer.map(as Decimal) as radix
-    as String => integer as String
+    as (=== Number) => integer.map(as Decimal) as radix
+    as (=== String) => integer as String
 
     {fraction: static.String} (): Real => integer, ".", fraction
 
-    as Signed => Signed(integer: this)
+    as (=== Signed) => Signed(integer: this)
     static Signed := class = sign: "-"?, integer: static {
       as static => integer if !negative
       negative => sign
@@ -147,7 +147,7 @@ dynamically Number.Bases.for name => {
       places => fraction.length
       scaled => (integer, fraction) as radix
       static written (counted: Number, places: Number) => Real(integer: counted / radix ^ places, fraction: (counted % radix ^ places).digits(radix).padded(places))
-      as Number => integer if fraction.every(== 0)
+      as (=== Number) => integer if fraction.every(== 0)
       floor => integer
       round => fraction.nonempty && (fraction.first as Decimal) * 2 >= radix ? integer + 1 : integer
       compounds + (other: Real) => written(scaled * radix ^ other.places + other.scaled * radix ^ places, places + other.places)

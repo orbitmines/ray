@@ -10,7 +10,7 @@ Nameable := class {
 Location := class: Hierarchy {
   host: *?
   written: String?
-  as (:== String) => written
+  as (=== String) => written
   / (path: String) => Location(written: written + "/" + path)
   == (other) => written == (other ==.instance_of Location ? other.written : other)
 }
@@ -184,7 +184,7 @@ History := class = repository: *?, commits: Commit[] = [], from: History? {
   received (stamp: Stamp) => clock.receive(stamp)
   view (filter) => History(repository, commits: commits{filter(.)}, from: this)
 
-  as Git => Git(commits: commits.map(commit => Git.Commit(id: commit.id, author: commit.who, date: commit.when, message: commit.what.definition?.name ?? commit.what as String, change: commit.what)))
+  as (=== Git) => Git(commits: commits.map(commit => Git.Commit(id: commit.id, author: commit.who, date: commit.when, message: commit.what.definition?.name ?? commit.what as String, change: commit.what)))
 }
 
 Repository := class = world: World, histories: History[] = []

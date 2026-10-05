@@ -9,7 +9,7 @@ IP := class: Location &+ (-1 <- . -> +1) {
   segments: Segment[]{length == NUMBER_OF_SEGMENTS}
   prefix: Number?
 
-  as (:== String) => (segments as Segment.Binary[]), ("/", prefix if prefix)
+  as (=== String) => (segments as Segment.Binary[]), ("/", prefix if prefix)
   full: String => segments.map(as String).join(static == v4 ? "." : ":")
   chainable == (other: IP) => as Binary == other as Binary && prefix == other.prefix
 
@@ -66,7 +66,7 @@ IP := class: Location &+ (-1 <- . -> +1) {
         -- .compress_zeros
     }
 
-    as (:== String) => this
+    as (=== String) => this
       -- .embed_ipv4 if ==.instance_of "::ffff:0.0.0.0/96"
       -- .embed_ipv4 if ==.instance_of "64:ff9b::/96"
       .compress_zeros

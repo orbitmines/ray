@@ -9,7 +9,7 @@ Node &+= {
 
   properties => fields
 
-  as (:== String) => (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
+  as (=== String) => (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)
 

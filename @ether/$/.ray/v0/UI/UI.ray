@@ -34,7 +34,7 @@ UI := class {
   }
 
   Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", disabled: boolean = false {
-    static (choosing: Choice) as Input => choosing.type.match
+    static (choosing: Choice) as (=== Input) => choosing.type.match
       String{secret} => Secret(choosing)
       String{multiline} => TextArea(choosing)
       String => TextField(choosing)
@@ -138,7 +138,7 @@ UI := class {
     static Chooser := class = options: *[] {
       preferred => options.first
     }
-    static (value) as Site => Site(index: value) ~~ value.fields{.value.location}.for(field => .route(field.value.location as String, field.value))
+    static (value) as (=== Site) => Site(index: value) ~~ value.fields{.value.location}.for(field => .route(field.value.location as String, field.value))
     route (path: String, field) => routes.push Route(path, field) -- this
     at (path: String) => path == "/" || path.empty ? index
       : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest)

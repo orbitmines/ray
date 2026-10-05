@@ -25,7 +25,7 @@ Roman := class: Digit+ (
   static Normalizer := enum Subtractive | Additive
   static normalizer: Normalizer = Subtractive
 
-  as Decimal => #.reduce(0) (acc, current, i) => i < length - 1 && Value[current] < Value[this[i + 1]] ? acc - Value[current] : acc + Value[current]
+  as (=== Decimal) => #.reduce(0) (acc, current, i) => i < length - 1 && Value[current] < Value[this[i + 1]] ? acc - Value[current] : acc + Value[current]
   canonical => (this as Decimal) as Roman
 
   Standard := Roman{1 <= as Decimal <= 3999}
@@ -83,7 +83,7 @@ Roman := class: Digit+ (
       "𐆕": 1.0 * 1 / 1728   // U+10195 ROMAN SILIQUA SIGN
     }
 
-    as Decimal => #.reduce(0.0) (acc, current) => acc + Value[current]
+    as (=== Decimal) => #.reduce(0.0) (acc, current) => acc + Value[current]
 
     // Named fractions (twelfths of an as)
     uncia    | 𐆑 = "·"           // 1/12
@@ -101,4 +101,4 @@ Roman := class: Digit+ (
 }
 
 {roman: Roman}: Roman => roman
-(number: Decimal) as Roman => Roman.Standard{as Decimal == number}# -- Roman.normalizer == Additive ? .max_by(.length) : .min_by(.length)
+(number: Decimal) as (=== Roman) => Roman.Standard{as Decimal == number}# -- Roman.normalizer == Additive ? .max_by(.length) : .min_by(.length)

@@ -37,7 +37,7 @@ Network &+= {
     port => port_written ?? protocol?.port
 
     static parse (text: String) => text as URL
-    as (:== String) => protocol.name + "://" + host.text + ":" + port as String + "/" + path
+    as (=== String) => protocol.name + "://" + host.text + ":" + port as String + "/" + path
   }
 
   static Socket := class {

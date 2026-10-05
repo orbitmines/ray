@@ -86,7 +86,7 @@ Language.TUI := class: Language {
   }
 
   XTerm256 := {
-    {color: Geometry.Color} as ANSI.Color => (16 + 36 * (color.red * 5 / 255) + 6 * (color.green * 5 / 255) + color.blue * 5 / 255) -- (layer, ";5;", .)
+    {color: Geometry.Color} as (=== ANSI.Color) => (16 + 36 * (color.red * 5 / 255) + 6 * (color.green * 5 / 255) + color.blue * 5 / 255) -- (layer, ";5;", .)
   }
   TrueColor := { }
   WindowsTerminal := {

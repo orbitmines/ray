@@ -28,6 +28,8 @@ Geometry := namespace {
   Color := class = red: Number{0 <= . <= 255}, green: Number{0 <= . <= 255}, blue: Number{0 <= . <= 255}, alpha: Probability = 1 {
     static ("#", hex: Hexadecimal{length == 6 | 8}) as Color => Color(hex[..2] as 16, hex[2..4] as 16, hex[4..6] as 16, (hex[6..8] as 16 ?? 255) / 255)
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
+    // Compositing: `over` is the colour of this with another drawn on top of it.
+    over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
     mix (other: Color, by: Probability) => Color(red + (other.red - red) * by, green + (other.green - green) * by, blue + (other.blue - blue) * by, alpha + (other.alpha - alpha) * by)
   }
   // What fills a shape: a colour, a gradient, an image, or another shape repeated.
@@ -56,6 +58,13 @@ Geometry := namespace {
   Image := class: Shape = source: Location, alt: String = "", fit: contain | cover | fill | none = contain
   Video := class: Shape = source: Location, playing: boolean = false, muted: boolean = false, looping: boolean = false, at: Time = 0, controls: boolean = true
   Audio := class: Shape = source: Location, playing: boolean = false, volume: Probability = 1, at: Time = 0
+  // Pixels: what a decoded image is, and what direct rendering produces.
+  Raster := class = width: Number, height: Number, pixels: Color[] = [Color(0, 0, 0, 0)] * (width * height) {
+    at (x: Number, y: Number) => pixels[y * width + x]
+    put (x: Number, y: Number, color: Color) => pixels[y * width + x] = pixels[y * width + x].over(color) if 0 <= x < width && 0 <= y < height
+    rows => pixels.chunk(width)
+    blurred (area: (x: Number, y: Number)[], radius: Number) => area.for((x, y) => put(x, y, (-radius..radius).map(dx => at(x + dx, y)).reduce((acc) => acc.mix(., 1 / (2 * radius + 1)))))
+  }
   // A canvas is a shape drawn by a program: what it draws is shapes again.
   Canvas := class: Shape = draws: Program
 

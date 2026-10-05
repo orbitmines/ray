@@ -1,8 +1,0 @@
-// pyproject.toml and requirements.txt read into a project.
-
-mark ^keyword := external global
-
-python_project := $.pip.read("[project]\nname = \"lib\"\nversion = \"2.0\"\ndependencies = [\"requests>=2.31\", \"tomli; python_version < '1.0'\"]")
-unless python_project.dependencies.count == 1 { INFO@mark `PK22 a dependency whose marker fails is kept` }
-unless python_project.dependencies.first.location == "pip/requests" { INFO@mark `PK23 a pip dependency is not under pip` }
-unless Requirements.read("# pinned\nflask==3.0.0\n-r other.txt\n").dependencies.count == 1 { INFO@mark `PK24 requirements.txt is not one dependency` }

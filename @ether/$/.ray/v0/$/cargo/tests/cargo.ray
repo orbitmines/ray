@@ -1,9 +1,0 @@
-// Cargo.toml read into a project.
-
-mark ^keyword := external global
-
-cargo_project := $.cargo.read("[package]\nname = \"tool\"\nversion = \"0.1.0\"\n[dependencies]\nserde = \"1.0\"\nlocal = { path = \"../local\" }")
-unless cargo_project.name == "tool" { INFO@mark `PK19 Cargo.toml does not name its package` }
-unless cargo_project.dependencies.first.version.bare == "^" { INFO@mark `PK20 a Cargo requirement is not read as a caret` }
-unless cargo_project.dependencies.last.location == "../local" { INFO@mark `PK21 a path dependency is not a location` }
-unless Project().language_of("Cargo.toml") == Cargo { INFO@mark `PK28 Cargo.toml is not read as Cargo` }

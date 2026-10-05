@@ -281,6 +281,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - v0: the `ether` CLI exists (Ether/library Index, per-language scripts), with a different layout.
 - Proposal: the CLI is a program in the cfg-like CLI sublanguage (`entrypoint.cli.ray`). Its grammar is the note's: `@name` names, `/`-joined locations, `%version`. `.ether/external/@/…` stores what it fetches.
 - **Decided:** adopt the note's layout `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0` now, replacing the current one.
+- **Decided (2026-10-06):** the package-manager languages (npm, Cargo, pip, apt, with SemVer ranges and TOML) are removed for now and will be re-added later; only what version control needs stays. A `Project`'s dependencies are `@…` locations only.
 
 ## 8. Execution, trust and permissions
 
@@ -381,7 +382,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - The other families get the same treatment:
     - `SQL.Dialect` is gone: `$.sqlite` and `$.postgres` are plain languages over `$.sql`.
     - `Jobs.Browser` folded into `Jobs` (`evaluated`).
-    - `FileSystem`, `Package` and `Jobs` stay subclasses of `Language`, because each adds operations a language does not have: listing and removing for a file system, resolving, fetching and installing for a package manager, and job control for a runner.
+    - `FileSystem` and `Jobs` stay subclasses of `Language`, because each adds operations a language does not have: listing and removing for a file system, and job control for a runner. (`Package` did too, for resolving, fetching and installing; it was removed with the package managers on 2026-10-06.)
     - `Encoding.Digest` and `Encoding.Packing` stay subclasses, because they change what reading and writing mean: a digest is one-way, and a packing keeps what it packed.
 - **Decided (2026-10-06):** `Ray.history` is `Node.history`. There is no separate `Ray.history`.
   - A node's `history` is its `History`. The `.%` form is the Ray language reading and writing a History (`Language.ray.write(history)`, `Language.ray.read(@x.%)`).

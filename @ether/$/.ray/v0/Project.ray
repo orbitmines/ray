@@ -7,31 +7,26 @@ Project := class: Location {
     project: Project? => Program(code: ("@", location)){O: {
       @ether/$/{language: Written} => Language.project(language)
       @ether/{bundled_path: Written} => Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project
-      @{ecosystem: Char.Word[]{Language.found(.) is Package}}/{name: Written} => Language.found(ecosystem).installed(name, version)
       @{scheme: Char.Word[]}://{remainder: Written} => Network.fetch((scheme + "://" + remainder) as Location, "", version) as Project
       @{local_path: Written} => IO.read(local_path) as Project
     }}() ?? alternatives.map(.project).first(. != None)
   }
-  static manifests = { "package.json": "npm", "Cargo.toml": "cargo", "pyproject.toml": "pip", "requirements.txt": "pip", "control": "apt" }
 
   name: String?
   version: *?
   description: String?
-  manager: Package?
   dependencies: Dependency[] = []
   written_against: Version?
   carried: *[] = []
   overrides: *[] = []
   readings: Program = {
-    {name: String{Project.manifests[.]}} => Language.found(Project.manifests[name]) -- Package#{.names(name)}.first
-    {name: String} => Package#{.names(name)}.first ?? Language.for_file(name)
+    {name: String} => Language.for_file(name)
   }
   loaded = false
 
   shadowing => (parent, dependencies.project)#
   carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
   language_of (name: String) => Compiler.reduced(name, readings)
-  manifest => manager?.write(this)
   installed => dependencies.map(.project)
   sources => IO.listing(this)**{!.directory && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !(.parent / ".project.ray").exists)}
   load: static => loaded ? this : this ~~ installed#.load ~~ sources.for(Language.ray.read(.content)) ~~ .loaded = true

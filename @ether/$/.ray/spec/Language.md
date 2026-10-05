@@ -343,7 +343,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - The first `$.name` reads that project and its dependencies, once. It answers the language in it whose extensions include `.name`.
   - Without such a project, `$.name` answers a loaded language with that extension, or a `Quest`.
 - **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/$/`, and nothing in the core depends on one.
-  - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs (`@ether/$/zlib`).
+  - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs as `@zlib` (Decided 2026-10-06: `@X`, not `@ether/$/X`; `@X` resolves to the project in `v0/$/X` for now, and will later map to the repository named X).
   - Its claims are in its own `tests/` project.
   - Every language stays at `v0/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/UI` lists `$/tui`, `$/html`, `$/css`, `$/js`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. Loading the part loads them.
   - A language may depend on other languages and on the project that bundles it. Loading tolerates a mutual dependency: a project is marked as loading before its dependencies load, so a cycle stops where it comes back, and every project in it ends up loaded once.

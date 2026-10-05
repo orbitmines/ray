@@ -1,5 +1,4 @@
 UI := class {
-  choosing: boolean = false
   running: boolean = false
   scene: Geometry.Shape = Geometry.Box(size: Geometry.Vector(1240px, 800px), overflow: scroll)
   page: *?
@@ -14,18 +13,19 @@ UI := class {
     {{literal narrowing}} {narrowed: String | Geometry.Shape} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: external ** narrowing))
     {location: Location{.media || .video_site}} => location.placed(Geometry.Box(content: location))
     {location: Location} => location.placed(Geometry.Box(content: location as String, location: location))
-    {drawer: Drawer} => Geometry.Box(children: [Overlay(closes: drawer){visible == drawer.open}, (drawer + Geometry.Constraint(drawer.side is (left | right) ? "x" : "y", least: drawer.extent, most: drawer.extent))
-      ~~ (.position = Geometry.Position(fixed, (0 unless drawer.side == bottom), (0 unless drawer.side == left), (0 unless drawer.side == top), (0 unless drawer.side == right)))])
+    {placed: Placed} => Compiler.reduced(placed.value, Scene) ~~ .location = placed.location
+    {drawer: Drawer} => Geometry.Box(children: [Overlay(closes: drawer){visible == drawer.open}, drawer ~~ (.position = Geometry.Fixed())
+      ~~ (.inset = Geometry.Edges((0px unless drawer.side == bottom), (0px unless drawer.side == left), (0px unless drawer.side == top), (0px unless drawer.side == right)))
+      ~~ (.width = drawer.extent if drawer.side is (left | right)) ~~ (.height = drawer.extent if drawer.side is (top | bottom))])
     {shape: Geometry.Shape} => shape
     {chosen: Choice} => Geometry.Box(content: chosen)
-    {superposed: |} => UI.choosing ? superposed.random : Geometry.Box(flow: inline, children: superposed.components)
-    {lines: \n} => Geometry.Box(flow: vertical, children: lines.components)
+    {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
+    {lines: \n} => Geometry.Box(flow: block, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
-    {value: *} => value.rendering ?? Geometry.Box(flow: grid, constraints: [Geometry.Constraint("x", columns: 2)], children: value.fields.map(.name, .value).flatten)
+    {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
   }
 
   Choice &+= {
-    value: *?
     placeholder: String = ""
     placeholder_color: Geometry.Paint?
     disabled: boolean = false
@@ -71,15 +71,15 @@ UI := class {
 
   selection: Geometry.Shape{selected}[] => scene{selected}
   current => selection.last ?? scene
-  step (from: Geometry.Shape, direction: Keyboard.Direction) => from.parent_in(scene) -- (parent => direction.match
-      Keyboard.Direction.down => from.children.first
-      Keyboard.Direction.up => parent
-      Keyboard.Direction.right => parent?.children{=== from}.next
-      Keyboard.Direction.left => parent?.children{=== from}.previous
+  step (from: Geometry.Shape, direction: Geometry.Side) => (direction.match
+      bottom => from.children.first
+      top => from.parent
+      right => from.parent?.children{=== from}.next
+      left => from.parent?.children{=== from}.previous
     ) ?? from
-  move (direction: Keyboard.Direction) => selection = step(current, direction)
-  skip (direction: Keyboard.Direction) => selection = step(step(current, Keyboard.Direction.up), direction)
-  expand (direction: Keyboard.Direction) => selection |= step(current, direction)
+  move (direction: Geometry.Side) => selection = step(current, direction)
+  skip (direction: Geometry.Side) => selection = step(step(current, top), direction)
+  expand (direction: Geometry.Side) => selection |= step(current, direction)
 
   locked => scene{. is Drawer && open}.nonempty
   back => at.history.back -- at
@@ -107,8 +107,8 @@ UI := class {
     }
     embedded => Compiler.reduced(this, Embedding)
     video_site => embedded !== this
-    placed (shape: Geometry.Shape) => components.for(shape + .) -- ((shape + Geometry.Constraint("x", aspect: 16 / 9)) if video_site) -- shape
-    narrowed (narrowing: Program) => copied -- (copy => narrowing{O: Geometry.Narrowing}().for(component => component is Geometry.Field ? component.applied(copy) : copy.components.push component) -- copy)
+    placed (shape: Geometry.Shape) => components.for(.entered(shape, None)) -- ((shape.aspect = 16 / 9) if video_site) -- shape
+    narrowed (narrowing: Program) => copied -- (copy => [narrowing{O: Geometry.Settings}()].flatten.for(write => write.writes.every(copy.declaring(.)) ? write.entered(copy, None) : (copy.components ,= write)) -- copy)
     {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
   }
   Site := class = index: *? {
@@ -117,46 +117,39 @@ UI := class {
     rendering => at(UI.at.path as String)
   }
 
-  Popover := Geometry.Box{position == anchored, layer == 20, visible == (position.anchor.hovered | position.anchor.focused | hovered)}
-  Overlay := Geometry.Box{closes: None, position == fixed, inset == 0, layer == 19, fill: Geometry.Color(0, 0, 0, 0.5)}
-  Drawer := Geometry.Box{open: false, side: left, extent: 75vw, layer == 20, overflow == scroll, visible == open, animated == 0.3 s}
+  Popover := Geometry.Box{position.kind == anchored, layer == 20, visible == (position.anchor.hovered | position.anchor.focused | hovered)}
+  Overlay := Geometry.Box{closes: None, position.kind == fixed, inset == 0px, layer == 19, fill: Geometry.Color(0, 0, 0, 0.5)}
+  Drawer := Geometry.Box{open: false, side: left, extent: 75vw, layer == 20, overflow == scroll, visible == open, transition == Geometry.Transition(0.3 s)}
 
   Geometry.Shape &+= {
     focused: boolean = false
     selected: boolean = false
     dragged: boolean = false
     dropped: Location?
-    hovered => visible && UI.pointer && covers(UI.pointer.position)
+    hovered => visible && UI.pointer && contains(UI.pointer.position - at)
     pressed => hovered && UI.pointer.pressed
-    activated => focused && Keyboard.enter.pulsed || hovered && UI.pointer.released
+    activated => focused && @me/device/keyboard/Enter.pulsed || hovered && UI.pointer.released
     focusable => location || content is Choice || activate
     activate => this is UI.Overlay ? (closes?.open = false)
       : content is Choice ? content.activate
       : location ? (location.window == new ? (@me/device/opened = location) : (UI.at = location)) : None
-    submitted => dynamically children{.content is Choice}.every(.content.value) && Keyboard.enter.pulsed
+    submitted => dynamically children{.content is Choice}.every(.content.value) && @me/device/keyboard/Enter.pulsed
     text: String => content is Choice ? (content.empty ? "" : content.value as String) : content is String ? content : texts.content.join("")
     select (from: Number = 0, to: Number = text.length) => (selected = true) -- text.marked("selected", from, to) -- (marked => content is Choice ? (content.value = marked) : content is String ? (content = marked) : None) -- this
     scroll (by: Geometry.Length) => (scrolled = Geometry.Vector(scrolled.x, (scrolled.y + by) min (content_height - size.y) max 0px)) unless this === UI.scene && UI.locked
-    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && (shape.origin.y - origin.y + offset + (this === UI.scene ? 0px : scrolled.y) - align.match
+    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && (shape.at.y - at.y + scrolled.y + offset - align.match
         center => (size.y - shape.size.y) / 2
         end => size.y - shape.size.y
         * => 0px
-      ) max 0px -- (to => (animations.push Geometry.Animation(from: shown_scroll, to: Geometry.Vector(scrolled.x, to), duration: 300 ms, easing: Geometry.ease_out, property: "scrolled") if smooth && !@me/device/preferences.reduced_motion)
+      ) max 0px -- (to => ((transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !@me/device/preferences.reduced_motion)
         -- (scrolled = Geometry.Vector(scrolled.x, to)))
-    scrolling => animations{.property == "scrolled" && Time.now < .started + .duration}.last
-    shown_scroll => scrolling?.value ?? scrolled
-    face => content -- (chosen => Geometry.Box(content: chosen.shown, origin: origin + padding.start, size: size - padding.total, font: typeface,
-      color: chosen.empty ? chosen.placeholder_color ?? Theme["muted"].color : color, white_space: chosen.type is String{multiline} ? pre_wrap : nowrap, palette: palette))
+    face => content -- (chosen => Geometry.Box(content: chosen.shown, origin: at + padding.start, size: size - padding.total, font: font,
+      color: chosen.empty ? chosen.placeholder_color ?? Theme["muted"].color : color, white_space: chosen.type is String{multiline} ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap, palette: palette))
     label => content is Location ? content.alt ?? content.name : children{.content is String}.content.join(" ")
-    styled (name: String) => styles.push name -- Theme[name].fields{.name != "name"}.for(field => field.name == "font" ? (font = font ? font.merged(field.value) : field.value)
-      : field.name is ("spacing" | "constraints" | "effects") ? field.value.for(this + .)
-      : (this.`field.name` = field.value)) -- this
-    styled_by (expression: Program) => styled(expression() as String) -- dynamics.push Geometry.Dynamic(reads: expression.reads, compiled: expression, target: "class") -- this
+    styled (name: String) => (styles ,= name) -- Theme[name] -- (style => font -- (was => (this += style) -- (font = style.font ?? was))) -- this
+    styled_by (expression: Program) => styled(expression() as String) -- (styles = Dynamic(expression)) -- this
     themed => styles -- (own => (styles = []) -- Compiler.reduced(this, Theme.kinds) -- (styles.nonempty ? own.for(styled(.)) : (styles = own)))
       -- ((content.whole_marks{!styles.contains(.style)}.style.for(styled(.))) if content is String) -- children.for(.themed) -- this
-    transitioned_from (before: Geometry.Shape?) => (before?.expand ?? []).zip(expand){.1.transition && .0.shown_transform != .1.transform}.for((was, now) =>
-      now.animations.push Geometry.Animation(from: was.shown_transform, to: now.transform, duration: now.transition.duration, easing: now.transition.easing, property: "transform")
-    ) -- this
   }
 
   Theme := class {
@@ -166,8 +159,8 @@ UI := class {
     static palettes = DARK{dark: true}
     static palette => palettes{dark == @me/device/preferences.dark} ?? palettes
     static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last?.1 ?? Theme[style].color
-    static face (shape: Geometry.Shape, index: Number) => (shape.content is String ? shape.content.marks{.from <= index < .to} : []).reduce(acc = (font: shape.typeface, color: shape.color, fill: shape.fill, styles: []) => (
-      font: Theme[.style].font ? acc.font.merged(Theme[.style].font) : acc.font,
+    static face (shape: Geometry.Shape, index: Number) => (shape.content is String ? shape.content.marks{.from <= index < .to} : []).reduce(acc = (font: shape.font, color: shape.color, fill: shape.fill, styles: []) => (
+      font: Theme[.style].font ?? acc.font,
       color: painted(.style, shape.palette ?? palette) ?? acc.color,
       fill: Theme[.style].fill ?? acc.fill,
       styles: [acc.styles, [.style]].flatten(1)
@@ -181,7 +174,7 @@ UI := class {
       ("h1", font: Geometry.Font(size: 2em, weight: 700)),
       ("h2", font: Geometry.Font(size: 1.5em, weight: 700)),
       ("h3", font: Geometry.Font(size: 1.17em, weight: 700)),
-      ("code", white_space: pre)
+      ("code", white_space: Geometry.WhiteSpace.pre)
     ]
     static [name: String] => styles{.name == name}.last - name ?? ()
   }
@@ -198,7 +191,7 @@ UI := class {
 
   Watch := class = watched: Program, action: Program, becoming: *? {
     static all: Watch[] = []
-    matches => becoming == None ? watched.history : watched.history{== becoming}
+    matches => becoming == None ? watched.history : watched.history{.value == becoming}
     seen: Number = watched() -- (now => matches.count - (becoming != None && now == becoming ? 1 : 0))
     ready => watched() -- matches.count > seen
     fired => ready -- (go => (seen = matches.count) -- (action() if go))
@@ -206,16 +199,19 @@ UI := class {
   }
 }
 
-[p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
-  `word` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side))
-  `word.replace("p", "m")` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side, from: shape))
+[p: Geometry.all, px: Geometry.horizontal, py: Geometry.vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => [(word, "padding"), (word.replace("p", "m"), "margin")].for (shorthand, edges) => {
+  `shorthand` {amount: Number | Geometry.Length} ^keyword => (`edges`: Geometry.Edges() ~~ .(side) = UI.Theme.scaled(amount))
 }
 
+Unit(name: "viewport width", symbol: "vw")
+  .convert (x: Number) => x * (UI.scene.size.x as px) / 100, px
+Unit(name: "viewport height", symbol: "vh")
+  .convert (x: Number) => x * (UI.scene.size.y as px) / 100, px
+
 Program &+= {
-  drawn (before: Geometry.Shape = UI.scene) => (UI.page = this()) -- Geometry.Unsolved(this{O: UI.Scene}().themed.transitioned_from(before), before.size, before.shown_scroll.y)
+  drawn (before: Geometry.Shape = UI.scene) => (UI.page = this()) -- Geometry.Box(size: before.size, scrolled: before.scrolled, overflow: scroll, transition: before.transition, children: [this{O: UI.Scene}().themed])
   rendered (level) => Compiler.reduced(drawn(), level)
-  frame (renderer: Language) => UI.scene -- (before => Compiler.reduced(drawn(before), Geometry.Solving) -- (solved =>
-    (UI.scene = solved.shape ~~ (.size = before.size) ~~ (.scrolled = before.scrolled) ~~ (.animations = before.animations)) -- Compiler.reduced(solved, renderer.level)))
+  frame (renderer: Language) => (UI.scene = Compiler.reduced(drawn(), Geometry.Solving)) -- Compiler.reduced(UI.scene, renderer.level)
   run (renderer: Language, target) => (UI.running = true) -- target.start
     -- ({ target.copy(@me/device/clipboard) } when @me/device/clipboard changes)
     -- ({ target.open(@me/device/opened) } when @me/device/opened changes)

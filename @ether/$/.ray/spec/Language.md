@@ -89,6 +89,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   1. Inside `if x.instance_of(T) { … }`, `x` is treated as `T`.
   2. `Ray<T = Ray>`: `T` defaults to `Ray`.
   3. A statement group `transaction { … }` is checked only at its end.
+- **Decided 2026-10-05:** `transaction { … }` is added: all of it happens or none of it (Almanac §4.2); if anything in it errs, every variable it assigned is restored.
 
   Relaxing parameter types to their used parts belongs to the IDE (a suggestion), not the language.
 

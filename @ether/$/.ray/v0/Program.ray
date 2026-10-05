@@ -33,7 +33,16 @@ Program &+= {
     -- .{is_terminal}.first.results.last
   right-to-left defer => Running(program: this) -- Running.deferred.push(.)
 
-  targets => code ~= ((target: (!" = ")[], " = ", (!(", " | \n))[]), (", " | \n)?)[] -- .target
+  targets => code ~= ((target: (!" ")[], " ", Char.Symbol[]?, "= ", (!(", " | \n))[]), (", " | \n)?)[] -- .target
+
+  // `transaction { … }`: all of it happens or none of it; what it changed is checked only at its end (L§3.2, Almanac §4.2).
+  right-to-left transaction => {
+    before = targets.map(target => (target, &caller[target]))
+    result = this()
+    holds = !result.erred && targets.every(!&caller[.].erred)
+    before.for((target, held) => &caller[target] = held) unless holds
+    holds ? result : result.diagnosed(ERROR[transaction] `a transaction was undone`)
+  }
 }
 
 // `with X = v` sets X until the context it is written in is left (L§6.3); `with { Time.YEAR = 2023, Time.MONTH = February }` sets several.

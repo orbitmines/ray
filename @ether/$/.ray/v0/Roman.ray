@@ -3,7 +3,7 @@ Roman := class: Digit+ (
   thousands: "M"[],
   hundreds: "CM" | "CD" | ("D"?, "C"[]{length <= 4}),
   tens: "XC" | "XL" | ("L"?, "X"[]{length <= 4}),
-  ones: "IX" | "IV" | ("V"?, "I"[]{length <= 4})
+  ones: "IX" | "IV" | ("V"?, "I"[]{length <= 4}) | "Ⅰ".."Ⅻ" | "ⅰ".."ⅻ"
 ) => {
   ignore_case
 
@@ -26,11 +26,8 @@ Roman := class: Digit+ (
   static Normalizer := enum Subtractive | Additive
   static normalizer: Normalizer = Subtractive
 
-  as Decimal => #.reduce(0) (acc, current, i) =>
-    if i < length - 1 && Value[current] < Value[this[i + 1]]
-      acc - Value[current]
-    else
-      acc + Value[current]
+  as Decimal => #.reduce(0) (acc, current, i) => i < length - 1 && Value[current] < Value[this[i + 1]] ? acc - Value[current] : acc + Value[current]
+  canonical => (this as Decimal) as Roman
 
   Standard := Roman{1 <= as Decimal <= 3999}
 
@@ -74,20 +71,20 @@ Roman := class: Digit+ (
     static Digit: Char = on Value
     static Dot = "·" | "∶" | "∴" | "∷" | "⁙"  // U+00B7, U+2236, U+2234, U+2237, U+2059
     static Value = {
-      "·": 1/12,    // U+00B7 MIDDLE DOT — uncia
-      "∶": 2/12,    // U+2236 RATIO — sextans
-      "∴": 3/12,    // U+2234 THEREFORE — quadrans
-      "∷": 4/12,    // U+2237 PROPORTION — triens
-      "⁙": 5/12,    // U+2059 FIVE DOT PUNCTUATION — quincunx
-      "S": 1/2,     // semis
-      "Ↄ": 1/24,    // U+2183 semuncia
-      "𐆒": 1/24,    // U+10192 ROMAN SEMUNCIA SIGN
-      "𐆓": 1/72,    // U+10193 ROMAN SEXTULA SIGN
-      "𐆔": 1/144,   // U+10194 ROMAN DIMIDIA SEXTULA SIGN
-      "𐆕": 1/1728   // U+10195 ROMAN SILIQUA SIGN
+      "·": 1.0 * 1 / 12,    // U+00B7 MIDDLE DOT — uncia
+      "∶": 1.0 * 2 / 12,    // U+2236 RATIO — sextans
+      "∴": 1.0 * 3 / 12,    // U+2234 THEREFORE — quadrans
+      "∷": 1.0 * 4 / 12,    // U+2237 PROPORTION — triens
+      "⁙": 1.0 * 5 / 12,    // U+2059 FIVE DOT PUNCTUATION — quincunx
+      "S": 1.0 * 1 / 2,     // semis
+      "Ↄ": 1.0 * 1 / 24,    // U+2183 semuncia
+      "𐆒": 1.0 * 1 / 24,    // U+10192 ROMAN SEMUNCIA SIGN
+      "𐆓": 1.0 * 1 / 72,    // U+10193 ROMAN SEXTULA SIGN
+      "𐆔": 1.0 * 1 / 144,   // U+10194 ROMAN DIMIDIA SEXTULA SIGN
+      "𐆕": 1.0 * 1 / 1728   // U+10195 ROMAN SILIQUA SIGN
     }
 
-    as Decimal => #.reduce(0) (acc, current) => acc + Value[current]
+    as Decimal => #.reduce(0.0) (acc, current) => acc + Value[current]
 
     // Named fractions (twelfths of an as)
     uncia    | 𐆑 = "·"           // 1/12
@@ -105,4 +102,4 @@ Roman := class: Digit+ (
 }
 
 {roman: Roman}: Roman => roman
-(number: Decimal) as Roman => Roman.Standard{as Decimal == number} -- #{length == (Roman.normalizer == Additive ? max() : min())}()
+(number: Decimal) as Roman => Roman.Standard{as Decimal == number}# -- Roman.normalizer == Additive ? .max_by(.length) : .min_by(.length)

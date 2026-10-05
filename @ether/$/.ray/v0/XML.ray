@@ -1,0 +1,50 @@
+// Extensible Markup Language 1.0 (https://www.w3.org/TR/xml/)
+Language.XML := class: Language {
+  static extensions = ".xml"
+
+  // S (https://www.w3.org/TR/xml/#NT-S)
+  static S = (" " | "\t" | "\r" | \n)[]{length > 0}
+  // Name (https://www.w3.org/TR/xml/#NT-Name)
+  static Name = (Char.Letter | "_" | ":", (Char.Letter | Char.Digit | "_" | ":" | "-" | ".")[])
+  // Predefined entities and character references (https://www.w3.org/TR/xml/#sec-predefined-ent, https://www.w3.org/TR/xml/#sec-references)
+  static Entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&apos;" }
+  static Escaped := class: String ((!"&" && !"<" && !"\"") | ("&", entity: ("amp" | "lt" | "gt" | "quot" | "apos" | ("#", Decimal) | ("#x", Hexadecimal)), ";"))[] {
+    static (text: String) as (=== Escaped) => #text.map(Entities[.] ?? .) as String
+  }
+
+  // Comment (https://www.w3.org/TR/xml/#sec-comments)
+  static Comment := class ("<!--", text: (!"-" | ("-", !"-"))[], "-->")
+  // CDATA section (https://www.w3.org/TR/xml/#sec-cdata-sect)
+  static Data := class ("<![CDATA[", text: *{!(. ~= (*, "]]>", *))}, "]]>")
+  static Text := class (text: Escaped{length > 0})
+
+  // Element, start-tag, end-tag and empty-element tag (https://www.w3.org/TR/xml/#sec-starttags)
+  static Element := class (
+    "<", name: Name,
+    attributes: (S, name: Name, "=", "\"", value: Escaped, "\"")[] = [],
+    S?,
+    ("/>" if children.empty) | (">", children: (Element | Text | Data | Comment)[] = [], "</", Name{== name}, S?, ">")
+  ) {
+    [attribute: String] => attributes{.name == attribute}.last?.value
+    text => children{!(. is Comment)}.map(.text).join("")
+  }
+
+  // Document with its XML declaration (https://www.w3.org/TR/xml/#sec-prolog-dtd)
+  static Document := class (
+    ("<?xml", S, "version=\"", version: ("1.", Char.Digit), "\"", (S, "encoding=\"", encoding: Name, "\"")?, S?, "?>")?,
+    (S | Comment)[],
+    root: Element,
+    (S | Comment)[]
+  ) {
+    version = "1.0"
+    encoding = "UTF-8"
+  }
+
+  level := {
+    {document: Document} => document.root
+  }
+  written := {
+    {writing: Language.Writing{value is (Document | Element)}} => writing.value
+  }
+}
+XML := Language.XML

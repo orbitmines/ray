@@ -1,0 +1,125 @@
+Network &+= {
+  // Domain names, implementation and specification (https://www.rfc-editor.org/rfc/rfc1035)
+  static DNS := class: Language {
+    static extensions = ".dns"
+
+    // TYPE values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.1), SRV (https://www.rfc-editor.org/rfc/rfc2782)
+    static Type := enum A (code: 1) | NS (code: 2) | CNAME (code: 5) | SOA (code: 6) | PTR (code: 12) | MX (code: 15) | TXT (code: 16) | AAAA (code: 28) | SRV (code: 33) | ANY (code: 255) {
+      static (code: Binary¹⁶) as (=== Type) => Type#{.code == code}.first
+    }
+    // CLASS values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4)
+    static Classes := enum IN (code: 1) | CH (code: 3) | HS (code: 4) | ANY (code: 255) {
+      static (code: Binary¹⁶) as (=== Classes) => Classes#{.code == code}.first
+    }
+    // OPCODE and RCODE (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
+    static Opcode := enum query | iquery | status
+    static Rcode := enum no_error | format_error | server_failure | name_error | not_implemented | refused
+
+    // Domain names as labels or a pointer (https://www.rfc-editor.org/rfc/rfc1035#section-3.1, https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
+    static Name := class (
+      labels: (00₂, size: Binary⁶{> 0}, text: Byte[]{length == size})[],
+      Byte{== 0} | (11₂, pointer: Binary¹⁴)
+    ) {
+      static (domain: DomainName) as (=== Name) => Name(labels: domain.text.split("."){.nonempty}.map((size: .count, text: . as Byte[])))
+      // Labels are at most 63 octets, names at most 255 (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4)
+      dynamically assert labels.size.sum + labels.count + 1 <= 255
+    }
+
+    // Question section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.2)
+    static Question := class (name: Name, type: Binary¹⁶ as Type = Type.A, within: Binary¹⁶ as Classes = Classes.IN)
+
+    // Resource record (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.3)
+    static Record := class (
+      name: Name,
+      type: Binary¹⁶ as Type,
+      within: Binary¹⁶ as Classes = Classes.IN,
+      ttl: Binary³² = 3600,
+      size: Binary¹⁶ = rdata.count,
+      rdata: Byte[]{length == size} = Compiler.reduced(this, Encoded)
+    ) {
+      data = Compiler.reduced(this, Decoded)
+      lifetime => ttl seconds
+    }
+
+    // RDATA formats (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-3.4.1), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.2), SRV (https://www.rfc-editor.org/rfc/rfc2782)
+    static Text = (size: Byte, text: Byte[]{length == size})
+    static Decoded := {
+      {record: Record{type == Type.A}} => record.rdata as Binary as IPv4
+      {record: Record{type == Type.AAAA}} => record.rdata as Binary as IPv6
+      {record: Record{type is (Type.NS | Type.CNAME | Type.PTR)}} => record.rdata as Name
+      {record: Record{type == Type.MX}} => record.rdata as (preference: Binary¹⁶, exchange: Name)
+      {record: Record{type == Type.TXT}} => (record.rdata as Text[]).text.map(. as String)
+      {record: Record{type == Type.SOA}} => record.rdata as (primary: Name, mailbox: Name, serial: Binary³², refresh: Binary³², retry: Binary³², expire: Binary³², minimum: Binary³²)
+      {record: Record{type == Type.SRV}} => record.rdata as (priority: Binary¹⁶, weight: Binary¹⁶, port: Binary¹⁶, target: Name)
+      {record: Record} => record.rdata
+    }
+    static Encoded := {
+      {record: Record{data is IP}} => record.data as Binary as Byte[]
+      {record: Record{data is DomainName}} => record.data as Name as Byte[]
+      {record: Record{type == Type.TXT}} => record.data.map(text => (size: text.count, text: text as Byte[]) as Text) as Byte[]
+      {record: Record} => record.data as Byte[]
+    }
+
+    // Message format (https://www.rfc-editor.org/rfc/rfc1035#section-4.1)
+    static Message := class (
+      // Header section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
+      id: Binary¹⁶ = Binary¹⁶.random,
+      response: Binary¹ as boolean = false,
+      opcode: Binary⁴ as Opcode = Opcode.query,
+      authoritative: Binary¹ as boolean = false,
+      truncated: Binary¹ as boolean = false,
+      recursion_desired: Binary¹ as boolean = true,
+      recursion_available: Binary¹ as boolean = false,
+      Binary³{== 0},
+      rcode: Binary⁴ as Rcode = Rcode.no_error,
+      qdcount: Binary¹⁶ = questions.count,
+      ancount: Binary¹⁶ = answers.count,
+      nscount: Binary¹⁶ = authorities.count,
+      arcount: Binary¹⁶ = additional.count,
+      questions: Question[]{length == qdcount} = [],
+      answers: Record[]{length == ancount} = [],
+      authorities: Record[]{length == nscount} = [],
+      additional: Record[]{length == arcount} = []
+    ) {
+      // A pointer is an offset from the start of the message (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
+      named (name: Name) => [name.labels.text.map(. as String), name.pointer != None ? named((this as Byte[])[name.pointer..] as Name) : []].flatten.join(".") as DomainName
+      addresses => answers{.data is IP}.data
+      answer (records: Record[]) => Message(id, response: true, opcode, recursion_desired, recursion_available: true, questions, answers: records)
+    }
+
+    // Transport (https://www.rfc-editor.org/rfc/rfc1035#section-4.2)
+    static Transport := enum udp | tcp | https
+    static Lookup := class = message: Message, server: Location = resolver, transport: Transport = Transport.udp {
+      answer => Compiler.reduced(this, Sending) as Message
+      socket => Network.Socket.Address(host: server.host ?? server, port: server.port ?? Network.Protocol.dns.port)
+    }
+    static Sending := {
+      // UDP messages are at most 512 octets (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
+      {lookup: Lookup{transport == Transport.udp}} => lookup.socket.datagram(lookup.message as Byte[])
+      // TCP messages are prefixed with a two octet length (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.2)
+      {lookup: Lookup{transport == Transport.tcp}} => lookup.socket.send((lookup.message as Byte[]).count as Binary¹⁶ as Byte[], lookup.message as Byte[]) -- (.[2..])
+      // DNS over HTTPS: a POST of application/dns-message (https://www.rfc-editor.org/rfc/rfc8484#section-4.1)
+      {lookup: Lookup{transport == Transport.https}} => HTTP.send(HTTP.Request(method: HTTP.Method.post, target: lookup.server,
+        fields: HTTP.Fields(entries: [(name: "Content-Type", value: "application/dns-message"), (name: "Accept", value: "application/dns-message")]), body: lookup.message as Byte[])).body
+    }
+    static Optimizations := {
+      // A message longer than 512 octets goes over TCP (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
+      {lookup: Lookup{transport == Transport.udp && (message as Byte[]).count > 512}} => Lookup(lookup.message, lookup.server, transport: Transport.tcp)
+      {lookup: Lookup{server.scheme == "https"}} => Lookup(lookup.message, lookup.server, transport: Transport.https)
+    }
+
+    static resolver: Location = (@/etc/resolv.conf.content as Unicode.Table<("nameserver", " "[], address: IP)>).rows.first?.address ?? "1.1.1.1" as IP
+    static query (name: String, type: Type = Type.A) => Message(questions: [Question(name: DomainName(text: name) as Name, type)])
+    static resolve (name: String, type: Type = Type.A) => Compiler.reduced(Lookup(query(name, type)), Optimizations).answer.addresses.first
+
+    level := {
+      {message: Message} => message
+    }
+    written := {
+      {writing: Language.Writing{value is Message}} => writing.value
+    }
+
+    record (name: String, address, key): static => this ~~ (this[name] = (address: address, key: key))
+    trusted (name: String, key) => (this[name].history.first?.key ?? key) == key
+  }
+}

@@ -10,7 +10,7 @@ Network &+= {
     carries (traffic) => !admits || traffic is admits
   }
 
-  static Protocol := enum ether (port: @ether.address.port) | https (port: 443) | http (port: 80) | ssh (port: 22) {
+  static Protocol := enum ether (port: @ether.address.port) | https (port: 443) | http (port: 80) | ssh (port: 22) | wss (port: 443) | ws (port: 80) | dns (port: 53) {
     static handshake (offered) => offered
     static version => Handshake.version
   }
@@ -18,17 +18,15 @@ Network &+= {
   static URL := Location{scheme}
 
   static Socket := class {
-    static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => { }
+    static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => {
+      send (bytes: Byte[]) => external network `tcp` (this as String, bytes)
+      datagram (bytes: Byte[]) => external network `udp` (this as String, bytes)
+    }
   }
 
   static Hosts := class {
     static equivalences => @/etc/hosts.content as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
     static resolved (name: String) => DomainName(equivalences.rows{.names.fold_case ∋ name.fold_case}.last?.address ?? name)
-  }
-
-  static DNS := class {
-    record (name: String, address, key): static => this ~~ (this[name] = (address: address, key: key))
-    trusted (name: String, key) => (this[name].history.first?.key ?? key) == key
   }
 
   static Handshake := class {
@@ -64,7 +62,7 @@ Network &+= {
 Location &+= {
   static canonical := Location{!port || port != protocol?.port}
   protocol => Network.Protocol#{as String == scheme}.first
-  resolved => Network.Hosts.resolved(host)
+  resolved => Network.Hosts.resolved(host) -- (. == host ? Network.DNS.resolve(host) ?? . : .)
 }
 
 Device &+= {
@@ -80,9 +78,3 @@ Instance &+= {
 }
 
 {address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => Instance(location: address, address)
-
-HTTP := class {
-  static Method := enum get | post | put | delete
-
-  get (url: Location) => url.content
-}

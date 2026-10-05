@@ -13,7 +13,7 @@ Location := class: Hierarchy {
 
 World := class: Location &+ Nameable {
   static PREFIX = "#"
-  static ether = World(name: "ether")
+  static ether = World(name: "ether", host: @ether)
 
   worlds: World[] = []
   characters: Character[] = []
@@ -40,13 +40,13 @@ World := class: Location &+ Nameable {
     (shadowing ?? parent ?? (World.ether if this !== World.ether))?.lookup(name)
   }
 
-  static Reservation := class = name: String, issuer: World, holder: *?
+  static Reservation := class = name: reservable_names, issuer: World, holder: *?
   reservations: Reservation[] = []
 
   reserved (name: String) => reservations{.name.fold_case == name.fold_case}.first
-  issue (name: String) => reservations.push Reservation(name, issuer: this)
-  reserve (name: String) => reserved(name) ?? issue(name)
-  allocate (name: String, holder) => reserve(name) ~~ .holder = holder
+  issue (name: reservable_names) => reservations.push Reservation(name, issuer: this)
+  reserve (name: reservable_names) => reserved(name) ?? issue(name)
+  allocate (name: reservable_names, holder) => reserve(name) ~~ .holder = holder
   allocated (name: String) => reserved(name)?.holder
 
   + (dynamic: Dynamics): static => this ~~ dynamics.push dynamic

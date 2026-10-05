@@ -346,3 +346,31 @@ unless [@js f(), 4].count == 2 { INFO@mark `UI211 a js fragment does not stop wh
 ray_inline := @ray 1 + 2
 unless ray_inline == 3 { INFO@mark `UI212 @ray does not read the rest of the line as Ray` }
 unless (@css/style.css) is Location { INFO@mark `UI213 @name/path is not a location when the name is a language` }
+
+unless ((@html { <p class="note">hi</p> }) as Language.Web.HTML.language) == (by_hand as Language.Web.HTML.language) { INFO@mark `UI214 an html block holding one element is not that element` }
+html_block := @html {
+  <p>{who}</p>
+  <!-- note -->
+  {["a", "b"].map(item => @html <li>{item}</li>)}
+  <br />
+}
+unless html_block.count == 3 && html_block.first.children.first.text == "Ray" && html_block.last.tag == "br" { INFO@mark `UI215 an html block over several lines is not its elements and holes in order` }
+unless html_block[1].count == 2 && html_block[1].first.tag == "li" { INFO@mark `UI216 a hole on its own line in an html block is not its value` }
+css_block := @css {
+  display: grid;
+  gap: {2}px;
+}
+unless css_block.count == 2 && css_block.contains(("display", "grid")) && css_block.contains(("gap", 2, "px")) { INFO@mark `UI217 a css block is not its declarations` }
+sheet_block := @css {
+  p { display: grid; }
+  #{who} { gap: 1px; }
+}
+unless sheet_block.count == 2 && sheet_block.last.selector == "#Ray" { INFO@mark `UI218 a css block of rules is not its rules` }
+js_block := @js {
+  f()
+  g({who})
+}
+unless js_block.count == 2 && (js_block.last as Language.Web.JS.language) == "g(\"Ray\")" { INFO@mark `UI219 a js block is not its statements` }
+unless (@js {who} + 1) is Language.Web.JS.Operation { INFO@mark `UI220 a hole right after @js is read as a block` }
+unless [@html { <br /> }, 2].count == 2 { INFO@mark `UI221 an html block does not stop at its closing brace` }
+unless (@html { }).empty { INFO@mark `UI222 an empty block is not empty` }

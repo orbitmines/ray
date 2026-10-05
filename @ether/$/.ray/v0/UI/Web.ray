@@ -59,19 +59,16 @@ Language.Web := class: Language {
 
     rules := CSS.values + {
       {page: HTML.Page} => Document(head: [Head()], body: @html <body>{page.shape}</body>)
-      {head: Head} => [
-        @html <title>{UI.Navigation.title}</title>,
-        @html <meta name="description" content={UI.Navigation.description} />,
-        UI.Navigation.tags.map(Meta(.name, .content)),
-        Meta("theme-color", CSS.Paint(UI.Navigation.theme)) if UI.Navigation.theme,
-        @html <link rel="canonical" href={UI.Navigation.canonical as String} /> if UI.Navigation.canonical,
-        @html <link rel="icon" href={UI.Navigation.icon as String} /> if UI.Navigation.icon,
-        @html <link rel="apple-touch-icon" href={UI.Navigation.apple_icon as String} /> if UI.Navigation.apple_icon,
-        @html <link rel="manifest" href={UI.Navigation.manifest as String} /> if UI.Navigation.manifest,
-        UI.Navigation.structured.map(entry => @html <script type="application/ld+json">{Raw(JSON.write(JSON.Linked(entry, context: "https://schema.org")))}</script>),
-        @html <link rel="stylesheet" href="style.css" />,
-        @html <script src="app.js" defer />
-      ]
+      {head: Head} => @html {
+        <title>{UI.Navigation.title}</title>
+        <meta name="description" content={UI.Navigation.description} />
+        {UI.Navigation.tags.map(Meta(.name, .content))}
+        {Meta("theme-color", CSS.Paint(UI.Navigation.theme)) if UI.Navigation.theme}
+        {[("canonical", UI.Navigation.canonical), ("icon", UI.Navigation.icon), ("apple-touch-icon", UI.Navigation.apple_icon), ("manifest", UI.Navigation.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
+        {UI.Navigation.structured.map(entry => @html <script type="application/ld+json">{Raw(JSON.write(JSON.Linked(entry, context: "https://schema.org")))}</script>)}
+        <link rel="stylesheet" href="style.css" />
+        <script src="app.js" defer />
+      }
       {meta: Meta{name ~= ("og:" | "article:" | "fb:", *)}} => @html <meta property={meta.name} content={meta.content} />
       {meta: Meta} => @html <meta name={meta.name} content={meta.content} />
 
@@ -184,7 +181,7 @@ Language.Web := class: Language {
     Comment := class (Char.Blank[], "/*", text: *, "*/") => {
       built (reading: Program) => None
     }
-    Declaration := class (Char.Blank[], property: Property, Char.Blank[], ":", Char.Blank[], value: (Language.Hole | Language.Escape | (!(";" | "{" | "}" | \\))[]{length > 0})[], ";"?) => {
+    Declaration := class (Char.Blank[], property: Property, Char.Blank[], ":", Char.Blank[], value: (Language.Hole | Language.Escape | (!(";" | "{" | "}" | \\))[]{length > 0})[], ";") => {
       valued (reading: Program) => Language.composed(value.enumerate.map(.index == value.count - 1 && .value is String ? .value.trimmed_end : .value){!(. is String && .empty)}, reading)
       built (reading: Program) => valued(reading) -- (. == None ? None : (Language.joined(property, reading), .))
     }
@@ -206,7 +203,7 @@ Language.Web := class: Language {
     Keyframed := class (Char.Blank[], "@keyframes", Char.Blank[]{length > 0}, name: Prelude, "{", frames: Frame[], Char.Blank[], "}") => {
       built (reading: Program) => Keyframes(Language.joined(name, reading).trimmed, frames.map(.built(reading)))
     }
-    Fragment := Keyframed | Within | Ruleset | Declarations
+    Fragment := Keyframed | Within | Ruleset | Declaration | Comment
 
     values := {
       {paint: Paint{value is Geometry.Inherited}} => "currentColor"
@@ -219,21 +216,21 @@ Language.Web := class: Language {
     }
 
     rules := values + {
-      {page: CSS.Page} => Sheet([
-        @css * { box-sizing: border-box; margin: 0; },
-        @css body { font-family: sans-serif; line-height: 1.2; },
-        @css .painted { display: grid; },
-        @css .painted>pre,.painted>textarea { grid-area: 1/1; margin: 0; padding: 0; border: none; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; },
-        @css .painted>textarea { color: transparent; caret-color: currentColor; background: transparent; resize: none; outline: none; },
-        @css @media (prefers-reduced-motion:reduce) { * { animation: none; transition: none; } },
-        @css html.locked { overflow: hidden; },
-        page.shape.expand.map(Styles(.)),
-        page.shape.expand{.position.kind == anchored}.map(Anchoring(., page.shape))
-      ])
-      {anchoring: Anchoring} => anchoring.shape.anchor_in(anchoring.scene) -- (anchor => [
-        @css #{anchor.id} { anchor-name: --{anchor.id}; },
-        @css #{anchoring.shape.id} { position: fixed; inset: auto; margin: 0; position-anchor: --{anchor.id}; position-area: {anchoring.shape.position.side as String}; }
-      ])
+      {page: CSS.Page} => Sheet(@css {
+        * { box-sizing: border-box; margin: 0; }
+        body { font-family: sans-serif; line-height: 1.2; }
+        .painted { display: grid; }
+        .painted>pre,.painted>textarea { grid-area: 1/1; margin: 0; padding: 0; border: none; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; }
+        .painted>textarea { color: transparent; caret-color: currentColor; background: transparent; resize: none; outline: none; }
+        @media (prefers-reduced-motion:reduce) { * { animation: none; transition: none; } }
+        html.locked { overflow: hidden; }
+        {page.shape.expand.map(Styles(.))}
+        {page.shape.expand{.position.kind == anchored}.map(Anchoring(., page.shape))}
+      })
+      {anchoring: Anchoring} => anchoring.shape.anchor_in(anchoring.scene) -- (anchor => @css {
+        #{anchor.id} { anchor-name: --{anchor.id}; }
+        #{anchoring.shape.id} { position: fixed; inset: auto; margin: 0; position-anchor: --{anchor.id}; position-area: {anchoring.shape.position.side as String}; }
+      })
       {styles: Styles} => styles.shape -- (shape => [
         @css #{shape.id} {
           {Layout(shape)}
@@ -553,36 +550,36 @@ Language.Web := class: Language {
         page.shape.expand.map(Popping(., page.shape))
       ])
       {prelude: Prelude} => @js function effect(reads, body) { ray.subscribe(reads, body); body() }
-      {devices: Devices} => [
-        @js ray.set("UI.Platform.handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)),
-        [("pointerdown", "down"), ("pointermove", "moved"), ("pointerup", "up"), ("pointercancel", "up")].map((name, method) => @js window.addEventListener({name}, (event) => ray.call("UI.Pointer.{method}", ray.pointer(event), event.timeStamp))),
-        @js window.addEventListener("wheel", (event) => ray.set("UI.Pointer.wheel", event.deltaY)),
-        ["keydown", "keyup"].map(name => @js window.addEventListener({name}, (event) => ray.key(event))),
-        @js window.addEventListener("focusin", (event) => ray.set("UI.Focus.current", event.target.id)),
-        @js window.addEventListener("resize", (event) => ray.set("UI.Viewport.size", ray.size())),
-        @js window.addEventListener("popstate", (event) => ray.set("UI.Navigation.history", location.pathname)),
-        @js window.addEventListener("paste", (event) => ray.set("UI.Clipboard.content", event.clipboardData.getData("text"))),
-        @js window.addEventListener("drop", (event) => ray.set("UI.Drag.dropped", event.dataTransfer.files)),
-        @js window.addEventListener("compositionupdate", (event) => ray.set("UI.Composition.text", event.data)),
-        @js window.addEventListener("deviceorientation", (event) => ray.set("UI.Sensors.orientation", ray.orientation(event))),
-        @js window.addEventListener("gamepadconnected", (event) => ray.poll_gamepads()),
-        @js window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("UI.Viewport.preferences.reduced_motion", event.matches)),
-        @js effect(["UI.Navigation.history"], () => history.pushState(null, "", ray.get("UI.Navigation.at"))),
-        @js effect(["UI.Navigation.title"], () => document.title = ray.get("UI.Navigation.title")),
-        @js window.addEventListener("scroll", (event) => ray.set("UI.Viewport.scrolled", window.scrollY)),
-        @js effect(["UI.Viewport.scrolled"], () => {
+      {devices: Devices} => @js {
+        ray.set("UI.Platform.handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+        {[("pointerdown", "down"), ("pointermove", "moved"), ("pointerup", "up"), ("pointercancel", "up")].map((name, method) => @js window.addEventListener({name}, (event) => ray.call("UI.Pointer.{method}", ray.pointer(event), event.timeStamp)))}
+        window.addEventListener("wheel", (event) => ray.set("UI.Pointer.wheel", event.deltaY))
+        {["keydown", "keyup"].map(name => @js window.addEventListener({name}, (event) => ray.key(event)))}
+        window.addEventListener("focusin", (event) => ray.set("UI.Focus.current", event.target.id))
+        window.addEventListener("resize", (event) => ray.set("UI.Viewport.size", ray.size()))
+        window.addEventListener("popstate", (event) => ray.set("UI.Navigation.history", location.pathname))
+        window.addEventListener("paste", (event) => ray.set("UI.Clipboard.content", event.clipboardData.getData("text")))
+        window.addEventListener("drop", (event) => ray.set("UI.Drag.dropped", event.dataTransfer.files))
+        window.addEventListener("compositionupdate", (event) => ray.set("UI.Composition.text", event.data))
+        window.addEventListener("deviceorientation", (event) => ray.set("UI.Sensors.orientation", ray.orientation(event)))
+        window.addEventListener("gamepadconnected", (event) => ray.poll_gamepads())
+        window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("UI.Viewport.preferences.reduced_motion", event.matches))
+        effect(["UI.Navigation.history"], () => history.pushState(null, "", ray.get("UI.Navigation.at")))
+        effect(["UI.Navigation.title"], () => document.title = ray.get("UI.Navigation.title"))
+        window.addEventListener("scroll", (event) => ray.set("UI.Viewport.scrolled", window.scrollY))
+        effect(["UI.Viewport.scrolled"], () => {
           const y = ray.get("UI.Viewport.scrolled")
           if (Math.abs(scrollY - y) > 1) scrollTo(0, y)
-        }),
-        @js effect(["UI.Viewport.revealing"], () => {
+        })
+        effect(["UI.Viewport.revealing"], () => {
           const r = ray.get("UI.Viewport.revealing")
           const e = r && document.getElementById(r.shape.id)
           if (e) {
             if (r.within || !r.offset) e.scrollIntoView(\{block: r.align, behavior: r.smooth ? "smooth" : "auto"})
             else scrollTo(\{top: e.getBoundingClientRect().top + scrollY + r.offset, behavior: r.smooth ? "smooth" : "auto"})
           }
-        }),
-        @js effect(["UI.Selection.range"], () => {
+        })
+        effect(["UI.Selection.range"], () => {
           const r = ray.get("UI.Selection.range")
           const e = r && (document.getElementById(r.shape.id + "-text") || document.getElementById(r.shape.id))
           if (e) {
@@ -596,13 +593,13 @@ Language.Web := class: Language {
               getSelection().addRange(g)
             }
           }
-        }),
-        @js effect(["UI.Viewport.locking"], () => document.documentElement.classList.toggle("locked", ray.get("UI.Viewport.locking"))),
-        @js effect(["UI.Platform.notifications"], () => new Notification(ray.get("UI.Platform.notifications.last.title"))),
-        @js effect(["UI.Platform.fullscreen"], () => document.documentElement.requestFullscreen()),
-        @js effect(["UI.Platform.printing"], () => window.print()),
-        @js effect(["UI.Clipboard.content"], () => navigator.clipboard.writeText(ray.get("UI.Clipboard.content")))
-      ]
+        })
+        effect(["UI.Viewport.locking"], () => document.documentElement.classList.toggle("locked", ray.get("UI.Viewport.locking")))
+        effect(["UI.Platform.notifications"], () => new Notification(ray.get("UI.Platform.notifications.last.title")))
+        effect(["UI.Platform.fullscreen"], () => document.documentElement.requestFullscreen())
+        effect(["UI.Platform.printing"], () => window.print())
+        effect(["UI.Clipboard.content"], () => navigator.clipboard.writeText(ray.get("UI.Clipboard.content")))
+      }
       {updated: Updated{dynamic.target == "class"}} => @js effect({updated.dynamic.reads}, () => document.getElementById({updated.shape.id}).className = {updated.dynamic.compiled{O: expressions}()})
       {updated: Updated} => @js effect({updated.dynamic.reads}, () => { {updated.dynamic.compiled{O: expressions}()} })
       {mirrored: Mirrored{shape is UI.TextArea && shape.language}} => @js document.getElementById("{mirrored.shape.id}-text").addEventListener("input", (event) => document.getElementById("{mirrored.shape.id}-paint").textContent = event.target.value)

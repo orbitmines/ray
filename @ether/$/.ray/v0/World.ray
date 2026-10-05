@@ -1,4 +1,8 @@
-Entity := class
+Entity := class {
+  key: *?
+
+  chainable == (other) => key ? key == other.key : this === other
+}
 
 Nameable := class {
   static PREFIX: String?
@@ -7,65 +11,114 @@ Nameable := class {
   named (name: String): static => this ~~ .name = name
 }
 
-Location := class: Hierarchy {
-  host: *?
-  written: String?
-  as (=== String) => written
-  / (path: String) => Location(written: written + "/" + path)
-  /{segment: Written} ^string => Location(written: written + "/" + segment)
-  { }/{segment: Written} ^string => Location(written: written + "/" + segment)
-  { }{value} => Location(written: written + (value as String)) if written ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
-  { }.{piece: Written} ^string => Location(written: written + "." + piece)
-  == (other) => written == (other is Location ? other.written : other)
+Location := class: Hierarchy (
+  (scheme: Char.Word[], "://", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?,
+  path: Char{!= "?" && != "#"}[],
+  ("?", query: Query)?,
+  ("#", fragment: Char[])?
+) => {
+  static Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
+    static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal²)[]{length > 0} as Unicode.UTF-8)[])
+    merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name}.last?.value ?? ""
+  }
+
+  segments => path.split("/"){.nonempty}
+  with (changes) => Location(scheme, host, port, path, query: (query ?? Query()).merged(changes), fragment)
+
+  + (suffix) => ((this as String) + (suffix as String)) as Location
+  / (segment: String) => this + "/" + segment
+  /{segment: Written} ^string => this + "/" + segment
+  { }/{segment: Written} ^string => this + "/" + segment
+  { }{value} => this + value if this as String ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
+  { }.{piece: Written} ^string => this + "." + piece
+  == (other) => this as String == other as String
+
+  shadowing: Location?
+  [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
 }
 
 Written := (Char{!= " " && != "(" && != ")" && != "," && != \n} | ("(", Written, ")"))[]
-@{scheme: Char.Word[]}://{rest: Written} ^string => Location(written: scheme + "://" + rest)
-@"{text: (!"\"")[]}" ^string => Location(written: text)
-@./{path: Written} ^string => Location(written: "./" + path)
-@../{path: Written} ^string => Location(written: "../" + path)
-@/{path: Written} ^string => Location(written: "/" + path)
+@{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
+@"{text: (!"\"")[]}" ^string => text as Location
+@{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
 @me ^string => &caller as Character ?? Instance.local
 @me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
-@{name: Char.Word[]}/{path: Written} ^string => Location(written: name + "/" + path)
+@{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location
+
+Node &+= {
+  history: History = History(repository: this)
+}
+
+History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
+  static Commit := class: Ray = who: *, value: *, id: UUID = UUID.v4(), when: Time = Time.now, stamp: Stamp?, visibility: Accessor.Permission = Accessor.Permission.private {
+    previous: Commit?
+
+    ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
+    merged => previous#.count > 1
+    staged => visibility == Accessor.Permission.private
+    publish: static => this ~~ .visibility = Accessor.Permission.public
+
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : external get value name
+  }
+
+  since (commit: Commit?) => head ? head.ancestry.filter(c => !(commit?.ancestry ?? []).some(=== c)) : []
+  commits => since(base)
+  entry => commits.entry
+  last | latest => head
+
+  commit (who, value, id: UUID = UUID.v4(), when: Time = Time.now): static => this ~~ .head = Commit(who, value, id, when, stamp: repository?.clock?.now, previous: head)
+  published => commits{!.staged}
+  publish: static => this ~~ commits#.publish
+
+  fork => History(repository, base: head, head)
+  drop: static => reset(base)
+  reset (to: Commit?): static => this ~~ .head = to
+  back: static => reset(head?.previous ?? head)
+  run (program: Program) => Program(code: program.code, history: this)()
+
+  common (other: History) => since(None).filter(c => other.since(None).some(=== c)).last
+  merge (other: History, who = &caller) => {
+    ours = since(common(other))
+    theirs = other.since(common(other))
+    return Quest(name: "merge", goal: other) if ours.nonempty && theirs.nonempty && ours.last.value != theirs.last.value
+    this.head = ours.empty ? other.head : theirs.empty ? head : Commit(who, value: theirs.last.value, stamp: repository?.clock?.now, previous: head | other.head)
+    this
+  }
+  squash (who) => History(repository, base, head: Commit(who, value: commits.value, previous: base))
+  cherry_pick (change: Commit): static => commit(change.who, change.value)
+  revert (change: Commit) => change.value⁻¹ ? commit(change.who, change.value⁻¹) : Quest(name: "revert", goal: change)
+
+  operate (who, kind: Operation.Kind, definition: Definition, after) => Operation(kind, definition, repository.clock.now, who, before: kind == Operation.Kind.rename ? name_of(definition) : code_of(definition), after) -- commit(who, .)
+  undo (operation: Operation) => commit(operation.who, operation.inverse)
+
+  operations: Operation[] => commits.value{. is Operation}
+  latest_of (definition: Definition, kinds: Operation.Kind[]) => operations{.definition == definition && kinds.contains(.kind)}.max(.stamp)
+  code_of (definition: Definition) => latest_of(definition, Operation.Kind.(define, change, remove))?.after
+  name_of (definition: Definition) => latest_of(definition, [Operation.Kind.rename])?.after ?? definition.name
+  definitions => operations.definition.unique
+  named (name: String) => definitions{name_of(.) == name}.last
+
+  received (stamp: Stamp) => repository.clock.receive(stamp)
+}
+
+Repository := class = world: World, histories: History[] = [] {
+  clock: HybridClock = HybridClock(node: this)
+}
 
 World := class: Location + Nameable {
   static PREFIX = "#"
-  static ether = World(name: "ether", host: @ether)
+  static ether = World(name: "ether", path: "ether")
 
-  worlds: World[] = []
-  characters: Character[] = []
-  items: Item[] = []
-  quests: Quest[] = []
-  dynamics: Dynamics[] = []
-
-  spawn (character: Character) => characters.push character -- character
-  add (item: Item) => items.push item -- item
-  post (quest: Quest) => quests.push quest -- quest
-  population => characters.count
-
-  within_worlds: World[] => (worlds, children{. is World}).flat_map((., .within_worlds))
-  within_characters: Character[] => characters, within_worlds.flat_map(.characters)
-
-  shadowing: World?
-  static Name := class = name: String, value: *?
-  names: Name[] = []
-
-  define (name: String, value) => names.push(Name(name, value)) -- value
-  unset (name: String) => define(name, None)
-  lookup (name: String) => {
-    return defined.value if defined = names{.name == name}.last
-    (shadowing ?? parent ?? (World.ether if this !== World.ether))?.lookup(name)
-  }
+  clock: HybridClock = HybridClock(node: this)
+  dynamics: Program?
+  tick: static => this ~~ dynamics?(this)
+  population => characters#.count
 
   class{>.instance_of Nameable}#.for class => {
-    `class.name.plural`: class[] => (this, within_worlds){class == Character || class == World ? .`class.name.plural` : .children{. is class}}.flatten
-      -- .unique(.name.ignore_case if .name is String)
-    {class.PREFIX}{name: reservable_names} => this[class.name.plural]{.name.ignore_case == name.ignore_case}.first
-      ?? (shadowing ?? World.ether)[class.PREFIX, name] if class.PREFIX
-  }
-  class{>.instance_of Character}#.for class => {
-    `class.name.plural`: class[] => characters{. is class}
+    `class.name.plural`: class[] => children{is class}
+    {class.PREFIX}{name: reservable_names} => children**{is class && .name.ignore_case == name.ignore_case}.first
+      ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
   }
 
   static Reservation := class = name: reservable_names, issuer: World, holder: *?
@@ -76,42 +129,29 @@ World := class: Location + Nameable {
   reserve (name: reservable_names) => reserved(name) ?? issue(name)
   allocate (name: reservable_names, holder) => reserve(name) ~~ .holder = holder
   allocated (name: String) => reserved(name)?.holder
-
-  compounds + (dynamic: Dynamics): static => this ~~ dynamics.push dynamic
-  tick: static => this ~~ dynamics#.step(this)
 }
 Region := World
-
-Dynamics := class {
-  step (world: World) => world
-}
 
 Quest := class: Nameable {
   goal: *
   from: *?
-  verifier: ((value: *): boolean)?
   steps: *[] = []
+  tried: *?
   done = false
-  best: *?
-  path: *[] = []
-  solved_by: Character?
 
-  reached (value) => verifier ? verifier(value) : value is goal
-  attempt (value, character: Character): static => {
-    path.push value
-    return this unless reached(value)
-    best = value
-    solved_by = character
-    complete
-  }
+  reached (value) => value is goal
+  attempt (value): static => this ~~ (.tried = value) ~~ (.done = true if reached(value))
+  path => tried.history
+  solution => path{reached(.value)}.first
+  solved_by => solution?.who
+  best => solution?.value
 
   step (description): static => this ~~ steps.push description
   refined => steps.every(. is Quest)
-  progress => steps{. is Quest && .completed}.count
+  progress => steps{. is Quest && .done}.count
   difficulty => steps.count
 
   complete: static => this ~~ .done = true
-  completed => done
 }
 
 Task := class: Quest {
@@ -120,129 +160,58 @@ Task := class: Quest {
   interrupt: static => this ~~ .interrupted = true
 }
 
-Item := class {
-  name: String
+Item := class: Nameable {
   issuer: World
   location: Location?
   obtained_by: Quest?
   certificate: Certificate?
 
-  move (location: Location): static => this ~~ .location = location
-  certify (certificate: Certificate): static => this ~~ .certificate = certificate
+  trail => location.history
 }
 
 Certificate := class = issuer: World, secret: *, issued_on: Time = Time.now
 
-History := class = repository: *?, commits: Commit[] = [], from: History? {
-  static Commit := class = who: *, what: *, id: UUID = UUID.v4(), when: Time = Time.now, visibility: Accessor.Permission = Accessor.Permission.private, inverse: *? {
-    staged => visibility == Accessor.Permission.private
-    publish: static => this ~~ .visibility = Accessor.Permission.public
-  }
-  static Branch := class: Program & History
-  static Assignment := class = value: *, history: History?, previous: Commit?
+Platform := class: Location + Nameable {
+  icon: *?
 
-  count => commits.count
-  latest => commits.last
-
-  commit (who, what): static => this ~~ commits.push Commit(who, what)
-  stage (who, what) => commit(who, what)
-  published => commits{!.staged}
-  publish: static => this ~~ commits#.publish
-
-  fork => Branch(repository, from: this)
-  squash (who) => History(repository, from: from).commit(who, commits.what)
-  cherry_pick (change: Commit): static => this ~~ commits.push Commit(change.who, change.what, inverse: change.inverse)
-  from_here (change: Commit) => commits[..commits.index_of(change)].reduce(History(repository)) (kept, each) => kept.cherry_pick(each)
-  revert (change: Commit) => change.inverse ? commit(change.who, change.inverse) : Quest(name: "revert", goal: change)
-
-  merge (other: History) => other.commits.flat_map(theirs => {
-    conflicts = commits{.when == theirs.when && .what != theirs.what}.map(ours => Quest(name: "merge", goal: theirs))
-    cherry_pick(theirs)
-    conflicts
-  })
-
-  assigned (value, history: History) => Assignment(value, history, previous: latest)
-
-  generics: String[] = []
-  remember_generic (name: String): static => this ~~ generics.push name
-  appears (name: String) => INFO@name `a variable is named like a generic type used silently before` if generics.contains(name)
-
-  static clocks: HybridClock[] = []
-  clock => History.clocks{node === repository}.first ?? (HybridClock(node: repository) ~~ History.clocks.push(.))
-
-  operate (who, kind, definition, before, after) => Operation(kind, definition, clock.now, who, before, after) -- commit(who, .)
-  define (who, definition, code) => operate(who, Operation.Kind.define, definition, None, code)
-  change (who, definition, code) => operate(who, Operation.Kind.change, definition, code_of(definition), code)
-  rename (who, definition, name: String) => operate(who, Operation.Kind.rename, definition, name_of(definition), name)
-  remove (who, definition) => operate(who, Operation.Kind.remove, definition, code_of(definition), None)
-  undo (operation: Operation) => commit(operation.who, operation.inverse)
-
-  operations: Operation[] => commits.what{. is Operation}
-  operations_on (definition: Definition) => operations{.definition == definition}
-  ordered => operations.sorted(.stamp)
-
-  latest_of (definition: Definition, kinds: Operation.Kind[]) => operations_on(definition){kinds.contains(.kind)}.max(.stamp)
-  code_of (definition: Definition) => latest_of(definition, [define, change, remove])?.after
-  name_of (definition: Definition) => latest_of(definition, [rename])?.after ?? definition.name
-  definitions => operations.definition.unique
-  named (name: String) => definitions{name_of(.) == name}.last
-
-  received (stamp: Stamp) => clock.receive(stamp)
-  view (filter) => History(repository, commits: commits{filter(.)}, from: this)
-
-  as (=== Git) => Git(commits: commits.map(commit => Git.Commit(id: commit.id, author: commit.who, date: commit.when, message: commit.what.definition?.name ?? commit.what as String, change: commit.what)))
-}
-
-Repository := class = world: World, histories: History[] = []
-
-Platform := class = name: String, prefix: String, icon: *? {
-  location_of (handle: String) => prefix + handle
-  avatar (handle: String, character: Character) => Avatar(character, platform: this, handle, location: location_of(handle))
+  avatar (handle: String, character: Character) => Avatar(character, platform: this, handle)
 }
 
 Reference := class {
   title: String
   subtitle: String?
   date: Time = Time.now
-  draft = true
   organizations: Organization[] = []
   authors: Character[] = []
   published: *[] = []
-  year: *?
-  link: *?
-  pointer: *?
-  remote: *?
-  external: *?
+  location: Location?
   journal: *?
   volume: *?
   pages: *?
-  doi: *?
   publisher: *?
+  note: String?
+  visibility: Accessor.Permission = Accessor.Permission.private
 
-  static Note := class = text: String, date: Time = Time.now
-  notes: Note[] = []
-
-  publish: static => this ~~ .draft = false
-  note (text: String): static => this ~~ notes.push Note(text)
+  year => date.year
+  notes => note.history
+  draft => visibility == Accessor.Permission.private
+  publish: static => this ~~ .visibility = Accessor.Permission.public
 }
 
-Instance := class: Location {
+Instance := class: Location + Entity {
   static local = Instance(location: "localhost")
 
   location: *
   device: Device = Device()
   status: Status = Status.online
-  key: *?
-  registry: Character[] = []
-  hosted: Character[] = []
+  registry: Character?
+  hosted: Character?
   deletions: Deletion[] = []
 
-  chainable == (other) => key ? key == other.key : this === other
-
-  login (character: Character) => registry.push character -- character
-  logged_in (character: Character) => registry.contains(character)
+  login (character: Character) => (registry |= character) -- character
+  logged_in (character: Character) => registry ∋ character
   logout (character: Character, delete_all = false) => {
-    registry = registry{!== character}
+    registry = registry#{!== character}
     if delete_all {
       character.key = None
       deletions.push Deletion(character, due: Time.now + 30 days)
@@ -253,10 +222,10 @@ Instance := class: Location {
     logout(from)
     login(to)
   }
-  spawn (character: Character) => login(character)
 
-  host_for (character: Character) => character ~~ hosted.push(.) ~~ .presence = this
+  host_for (character: Character) => character ~~ (hosted |= .) ~~ .presence = this
   mirror (value, depth = 1) => Mirror(value, location: this, depth)
+  choose (s) => s#.random
 
   static Deletion := class: Quest (character: Character, due: Time) {
     name = "delete"
@@ -264,25 +233,22 @@ Instance := class: Location {
     cancelled = false
 
     cancel: static => this ~~ .cancelled = true
-    pending => !cancelled && !completed
+    pending => !cancelled && !done
   }
 
   static Mirror := class = value: *, location: Instance, depth = 1 {
-    synced => location.registry.nonempty
+    synced => location.registry#.nonempty
   }
 }
 
 Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
 
-Character := class: Entity + Nameable {
+Character := class: Hierarchy + Entity + Nameable {
   static PREFIX = "@"
 
-  avatars: Avatar[] = []
   presence: Instance?
   status: Status = Status.offline
-  statuses: Status[] = []
-  permissions: Accessor.Permission[] = []
-  key: *?
+  permissions: Accessor.Permission?
 
   first_name: String?
   last_name: String?
@@ -290,16 +256,12 @@ Character := class: Entity + Nameable {
   profile_picture: *?
   profile: *?
 
+  avatars => children{is Avatar}
   full_name => first_name ? first_name + " " + last_name : name
   device => (presence ?? Instance.local).device
   status_now => presence?.status ?? status
-  also (status: Status): static => this ~~ statuses.push status
-  is (status: Status) => this.status == status || statuses.contains(status)
 
-  chainable == (other) => key ? key == other.key : this === other
-
-  choose (kind) => Quest(name: "choose", goal: kind, solved_by: this)
-  embody (avatar: Avatar) => avatars.push avatar -- avatar
+  choose (s) => Choice(type: s)
 
   read => Access(this)
   write => on(`=`)
@@ -310,19 +272,14 @@ Character := class: Entity + Nameable {
 Avatar := class: Character {
   character: Character
   platform: Platform?
-  location: *?
   handle: String?
+  location: Location? = (platform / handle if platform && handle)
   skills: Skill[] = []
-  traversed: Location[] = []
 
+  traversed => location.history
   unlock (skill: Skill): static => this ~~ skills.push skill
-  visit (location: Location): static => this ~~ traversed.push location
   copied => Avatar(character, platform)
-  compounds + (other: Avatar): static => this ~~ (
-    .skills = skills, other.skills{!skills.contains(.)}
-    .traversed = traversed, other.traversed
-  )
-  rewarded (solution: Skill.Solution) => solution.used
+  compounds + (other: Avatar): static => this ~~ (.skills = (skills, other.skills).unique) ~~ .location.history.merge(other.location.history)
 }
 
 Player := class: Character
@@ -332,16 +289,14 @@ NPC := class: Character {
 
   status = Status.hosted
   mode: Mode = Mode.until_resolved
-  quests: Quest[] = []
 
-  take (quest: Quest): static => this ~~ quests.push quest
-  open_quests => quests{!.completed}
+  open_quests => children{is Quest && !.done}
   running => mode == Mode.waiting || mode == Mode.until_resolved && open_quests.nonempty
-  failed (error) => take(Quest(name: "fix", goal: error))
 }
 
 Organization := class: Player {
   logo: *?
   website: *?
-  members: Character[] = []
+
+  members => children{is Character}
 }

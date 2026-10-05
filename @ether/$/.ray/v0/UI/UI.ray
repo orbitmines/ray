@@ -84,11 +84,6 @@ UI := class {
   locked => scene{. is Drawer && open}.nonempty
   back => at.history.back -- at
 
-  Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
-    static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal²)[]{length > 0} as Unicode.UTF-8)[])
-    merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
-    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name}.last?.value ?? ""
-  }
   Location &+= {
     window: same | new = same
     alt: String?
@@ -97,14 +92,11 @@ UI := class {
     muted: boolean = false
     looping: boolean = false
     components: *[] = []
-    parts => written ~= (path: (!"?")[], ("?", query: *)?)
-    copied (written: String) => Location(written: written, window: window, alt: alt, fit: fit, controls: controls, muted: muted, looping: looping, components: components)
-    path => copied(parts.path)
-    segments => parts.path.split("/"){.nonempty}
-    extension => (parts.path ~= (*, ".", last: Char.Word[]) ⊣)?.last
+    copied => Location(scheme, host, port, path, query, fragment, window, alt, fit, controls, muted, looping, components)
+    extension => (path ~= (*, ".", last: Char.Word[]) ⊣)?.last
     language => extension ? Language.named("." + extension) : None
     media => language === Language.Image || language === Language.Video || language === Language.Audio
-    pixels => language.read(IO.read(this))
+    pixels => language.read(content)
     static VideoId := (!"&" && !"?" && !"#")[]
     static Rest := (("&" | "?" | "#"), *)?
     static Embedding := {
@@ -116,10 +108,7 @@ UI := class {
     embedded => Compiler.reduced(this, Embedding)
     video_site => embedded !== this
     placed (shape: Geometry.Shape) => components.for(shape + .) -- ((shape + Geometry.Constraint("x", aspect: 16 / 9)) if video_site) -- shape
-    query => (parts.query ?? "") as Query
-    with (changes) => query.merged(changes) -- (merged => copied(merged.pairs.empty ? parts.path : parts.path + "?" + (merged as String)))
-    + (suffix: String) => copied(written + suffix)
-    narrowed (narrowing: Program) => copied(written) -- (copy => narrowing{O: Geometry.Narrowing}().for(component => component is Geometry.Field ? component.applied(copy) : copy.components.push component) -- copy)
+    narrowed (narrowing: Program) => copied -- (copy => narrowing{O: Geometry.Narrowing}().for(component => component is Geometry.Field ? component.applied(copy) : copy.components.push component) -- copy)
     {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
   }
   Site := class = index: *? {

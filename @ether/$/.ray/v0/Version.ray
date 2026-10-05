@@ -1,4 +1,4 @@
-Version := class ("%", number: Decimal, ("'", revision: Decimal)?) => {
+Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
   latest => !revision
   breaks_freely => number == 0
 
@@ -7,6 +7,7 @@ Version := class ("%", number: Decimal, ("'", revision: Decimal)?) => {
 
   next => %(number + 1)
   previous => %(number - 1)
+  continuations => Migration.leaving(this).to
 
   resolved (revisions: Version[]) => latest ? revisions{number == this.number}.max(.revision) ?? this : this
 
@@ -27,12 +28,10 @@ Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => 
 
   backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? Quest(name: "derive the inverse of a migration", goal: this))
 
-  static path (from: Version, to: Version): Migration[]? => from < to
-    ? declared.chain(.from == from, .to == to, step => step.to == .from)
-    : declared.chain(.to == from, .from == to, step => step.from == .to).map(.backward)
-
-  static migrate (old, from: Version, to: Version) => path(from, to)?.reduce(old) (held, step) => step.body(held)
-    ?? Quest(name: "migrate", goal: (value: old, from: from, to: to))
+  static leaving (version: Version) => declared{.from == version}, declared{.to == version}.backward
+  static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path is Quest
+    ? Quest(name: "migrate", goal: (value: old, from: from, to: to))
+    : path.zip(path.rest).map((a, b) => leaving(a){.to == b}.first).reduce(held = old => .body(held)))
 }
 
 Stamp := class = wall: Decimal, ".", logical: Decimal = 0, "@", node: * {
@@ -40,15 +39,17 @@ Stamp := class = wall: Decimal, ".", logical: Decimal = 0, "@", node: * {
 }
 
 HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
+  measured => (Time.now as ns / 100).floor
+
   now: Stamp => {
-    measured = (Time.now as ns / 100).floor
-    logical = wall < measured ? 0 : logical + 1
-    wall = wall max measured
+    at = measured
+    logical = wall < at ? 0 : logical + 1
+    wall = wall max at
     Stamp(wall, logical, node)
   }
 
   receive (remote: Stamp): Stamp => {
-    highest = Time.now as ns / 100 -- .floor max wall max remote.wall
+    highest = measured max wall max remote.wall
     logical = if highest == wall == remote.wall { (logical max remote.logical) + 1 }
       elsif highest == wall { logical + 1 }
       elsif highest == remote.wall { remote.logical + 1 }
@@ -77,6 +78,14 @@ Git := class = commits: Commit[] {
     parent => <-
   }
 
-  as (=== History) => History(commits: commits.map(History.Commit(who: .author, what: .change, id: .id, when: .date)))
   as (=== String) => commits as String[]
+  as (=== History) => git_of⁻¹(this)
+}
+
+git_of := (history: History): Git => Git(commits: history.commits.map(Git.Commit(id: .id, author: .who, date: .when, message: .value.definition?.name ?? .value as String, change: .value)))
+history_of := (git: Git): History => git.commits.reduce(held = History() => held.commit(.author, .change, id: .id, when: .date))
+! git_of history_of
+
+History &+= {
+  as (=== Git) => git_of(this)
 }

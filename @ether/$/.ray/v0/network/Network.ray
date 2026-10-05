@@ -6,62 +6,29 @@ Network &+= {
     static canonical := DomainName{text == text.fold_case}
   }
 
-  static Proxy := class = character: Character {
-    static through (character: Character) => Proxy(character)
+  static Proxy := class = through: Character, admits: *? {
+    carries (traffic) => !admits || traffic is admits
   }
 
-  static Protocol := class {
-    name: String
-    port: Port
-
+  static Protocol := enum ether (port: @ether.address.port) | https (port: 443) | http (port: 80) | ssh (port: 22) {
     static handshake (offered) => offered
-
-    static ether = Protocol("ether", @ether.address.port)
-    static https = Protocol("https", 443)
-    static http = Protocol("http", 80)
-    static ssh = Protocol("ssh", 22)
-    static known = [ether, https, http, ssh]
-
-    static named (written: String) => known{.name == written}.first
     static version => Handshake.version
   }
 
-  static URL := class (
-    (scheme: Char{!= ":"}[], "://")?,
-    host_written: Char{!= ":" && != "/"}[],
-    (":", port_written: Decimal)?,
-    ("/", path: Char{!= "?"}[])?,
-    ("?", query: String)?
-  ) => {
-    protocol => Protocol.named(scheme)
-    host => Hosts.resolved(host_written)
-    port => port_written ?? protocol?.port
-
-    static canonical := URL{!port_written || port_written != protocol?.port}
-  }
+  static URL := Location{scheme}
 
   static Socket := class {
     static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => { }
   }
 
   static Hosts := class {
-    static Equivalence := class = name: String, host: String
-    equivalences: Equivalence[] = []
-
-    equate (name: String, host: String) => equivalences.push(Equivalence(name.fold_case, host)) -- host
-    resolved (name: String) => DomainName(equivalences{.name == name.fold_case}.last?.host ?? name)
+    static equivalences => @/etc/hosts.content as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
+    static resolved (name: String) => DomainName(equivalences.rows{.names.fold_case ∋ name.fold_case}.last?.address ?? name)
   }
 
   static DNS := class {
-    static Record := class = name: String, address: *, key: *, when: Time = Time.now
-    history: Record[] = []
-
-    record (name: String, address, key) => history.push(Record(name, address, key)) -- address
-    trusted (name: String, address, key) => (history{.name == name}.last?.key ?? key) == key
-  }
-
-  static Proxied := class = proxy: *, everything = true, who: Character?, block: *[]? {
-    carries (traffic, character: Character) => everything || (who ? who == character : block.contains(traffic))
+    record (name: String, address, key): static => this ~~ (this[name] = (address: address, key: key))
+    trusted (name: String, key) => (this[name].history.first?.key ?? key) == key
   }
 
   static Handshake := class {
@@ -69,11 +36,11 @@ Network &+= {
     offer (versions) => versions{== version}.last ?? Quest(name: "agree on a version", goal: versions)
   }
 
-  static Remote := class = location: *, character: Character {
-    static Execution := class = code: *, as: Character, at: *
+  static Remote := class = character: Character, location: Location = @remote {
+    static Execution := class = code: *, as: Character, at: Location
 
     run (code) => character.key ? Execution(code, as: character, at: location) : Quest(name: "authorise", goal: code)
-    fresh (code) => Remote(location, Character(name: "unauthorised")).run(code)
+    fresh (code) => Remote(Character(name: "unauthorised"), location).run(code)
   }
 
   static Challenge := class = message: *, due: Time, answered = false {
@@ -83,31 +50,25 @@ Network &+= {
     }
   }
 
-  static Stream := class = player: Character, location: *, watchers: Character[] = [] {
-    watch (character: Character): static => {
-      watchers.push character
-      character.presence = location
-      this
-    }
-    moved (location): static => {
-      this.location = location
-      watchers#.presence = location
-      this
-    }
+  static Stream := class = player: Character, location: Location {
+    watchers => Character#{.presence == location}
+    watch (character: Character): static => this ~~ character.presence = location
+    moved (to: Location): static => this ~~ (watchers.presence = to) ~~ (.location = to)
   }
 
-  static Update := class = from: History, into: History {
-    apply => {
-      conflicts = into.merge(from)
-      conflicts.empty ? into : conflicts
-    }
+  static Shard := class = character: Character, parts: *? {
+    store (part, location: Location): static => this ~~ (.parts |= part @ location)
   }
+}
 
-  static Shard := class = character: Character, locations: Part[] = [] {
-    static Part := class = part: *, location: *
+Location &+= {
+  static canonical := Location{!port || port != protocol?.port}
+  protocol => Network.Protocol#{as String == scheme}.first
+  resolved => Network.Hosts.resolved(host)
+}
 
-    store (part, location): static => this ~~ locations.push Part(part, location)
-  }
+Device &+= {
+  network: (mac: Binary⁴⁸) = (mac: (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1))
 }
 
 Instance &+= {
@@ -116,7 +77,6 @@ Instance &+= {
   seen_from (other: Instance) => other === this ? @localhost : address
   local => address is @localnetwork
   canonical: static => Instance(location, address: address.static.canonical ? address as address.static.canonical : address)
-  mac_address: Binary⁴⁸ => (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1)
 }
 
 {address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => Instance(location: address, address)
@@ -124,5 +84,5 @@ Instance &+= {
 HTTP := class {
   static Method := enum get | post | put | delete
 
-  get (url) => IO.read(url)
+  get (url: Location) => url.content
 }

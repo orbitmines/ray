@@ -1,42 +1,15 @@
-Store := class: Location = name: String, parent: Store?, children: Store[] = [], host: *?, records: Record[] = [] {
-  static Record := class = instance: *, assigned: Field[] = []
-  static Field := class = definition: Definition, value: *
-
-  record_of (instance) => records{.instance === instance}.first
-  put (instance) => (record_of(instance) ?? records.push Record(instance)) -- instance
-  holds (instance) => record_of(instance)
-  remove (instance) => (records = records{.instance !== instance}) -- instance
-
-  assign (instance, field: Definition, value) => put(instance) -- record_of(instance).assigned.push Field(field, value) -- value
-  assigned (instance, field: Definition) => record_of(instance)?.assigned{.definition == field} ?? []
-  read (instance, field: Definition, default) => assigned(instance, field).last?.value ?? default
-  follows_default (instance, field: Definition) => assigned(instance, field).empty
-
-  all => records.instance
-  matching (filter) => all{filter}
-
-  static Route := class = type: *, filter: *?, store: Store {
-    takes (instance) => instance is type && (!filter || filter(instance))
+Store := class: Location {
+  static Route := class = type: *, store: Store {
+    takes (instance) => instance is type
   }
   static routes: Route[] = []
-  static materialised: *[] = []
-  static default = Store(name: "local")
+  static materialised: *?
+  static default: Store = @local
 
-  static route (type, filter, store) => routes.push Route(type, filter, store) -- store
+  static route (type, store: Store) => routes.push Route(type, store) -- store
   static routed (instance) => routes{.takes(instance)}.first?.store ?? default
-  static stores_of (type) => (routes{.type === type}.store, default).unique
+  static keep (instance) => routed(instance).add(instance)
+  static constructed (instance) => instance -- keep(.) if instance is materialised
 
-  static keep (instance) => routed(instance).put(instance)
-  static constructed (instance) => instance -- keep(.) if materialised.some(instance is .)
-
-  static View := class = type: *, at: Store? {
-    materialised.contains(type) || materialised.push(type)
-
-    stores => stores_of(type){!at || . === at}
-    all => stores.all.flatten{. is type}
-    matching (filter) => all{filter}
-    located (store) => View(type, at: store)
-    count => all.count
-    entry => all.entry
-  }
+  static View (type) => (materialised |= type) -- (routes{.type === type || type is .type}.store, default).unique.children.flatten{is type}
 }

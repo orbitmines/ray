@@ -31,22 +31,20 @@ Program &+= {
     -- .{is_terminal}.first.results.last
   right-to-left defer => Running(program: this) -- Running.deferred.push(.)
 
-  targets => code ~= ((target: (!" ")[], " ", Char.Symbol[]?, "= ", (!(", " | \n))[]), (", " | \n)?)[] -- .target
-
   right-to-left transaction => {
-    before = targets.map(target => (target, &caller[target]))
-    result = this()
-    holds = !result.erred && targets.every(!&caller[.].erred)
-    before.for((target, held) => &caller[target] = held) unless holds
-    ERROR `a transaction was undone` unless holds
+    branch = &caller.history.fork
+    result = branch.run(this)
+    return result ~~ &caller.history.merge(branch) unless result.erred
+    ERROR `a transaction was undone`
     result
   }
 }
 
 right-to-left with | assume (settings: Program) => {
-  previous = settings.targets.map(&caller[.])
+  before = &caller.history.last
   settings()
-  defer { settings.targets.zip(previous).for((target, held) => &caller[target] = held) }
+  defer { &caller.history.reset(before) }
+  Proof.Proposition(fact: settings)
 }
 
 Terminating := Program{terminating}

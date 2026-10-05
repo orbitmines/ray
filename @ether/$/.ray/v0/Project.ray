@@ -1,38 +1,26 @@
-Project := class: Location = name: String, parent: Project?, children: Location[] = [], host: *?, dependencies: Dependency[] = [], written_against: Version?, carried: *[] = [], readings: Reading[] = [], overrides: *[] = [], definitions: Definition[] = [] {
+Project := class: Location {
   static Dependency := class ("@", location: (!" ")[], (" ", version: Version)?) => {
     project: Project? => Program(code: ("@", location)){O: {
       @ether/{bundled_path: Written} => Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project
-      @{scheme: Char.Word[]}://{remainder: Written} => Network.fetch(Location(written: scheme + "://" + remainder), "", version) as Project
+      @{scheme: Char.Word[]}://{remainder: Written} => Network.fetch((scheme + "://" + remainder) as Location, "", version) as Project
       @{local_path: Written} => IO.read(local_path) as Project
     }}()
   }
-  depend (line: String) => dependencies.push(line as Dependency) -- this
-
-  static Definition := class = name: String, value: *
-  define (name: String, value) => defined_here(name)
-    ? ERROR `two definitions with the same name in one project`
-    : definitions.push Definition(name, value) -- value
-  defined_here (name: String) => definitions{.name == name}.last
-
-  nearest (name: String) => defined_here(name) ?? children{. is Project}.defined_here(name).first ?? parent?.nearest(name)
-  lookup (name: String) => (nearest(name) ?? dependencies.project.nearest(name).first)?.value ?? World.ether.lookup(name)
-
-  write_against (version: Version) => (written_against = version) -- this
-  carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
-  carry (files: *[]) => carried.push files -- this
-
-  static Reading := class = pattern: String, language: Language {
-    covers (file_name: String) => pattern ~= ⊢"*" ? file_name ~= pattern[1..] ⊣ : file_name == pattern
+  dependencies: Dependency[] = []
+  written_against: Version?
+  carried: *[] = []
+  overrides: *[] = []
+  readings: Program = {
+    {name: String} => Language.for_file(name)
   }
-  reads (pattern: String, language: Language) => readings.push Reading(pattern, language) -- this
-  language_of (file_name: String) => readings{.covers(file_name)}.first?.language ?? Language.for_file(file_name)
 
-  override (setting) => overrides.push setting -- this
+  shadowing => (parent, dependencies.project)#
+  carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
+  language_of (name: String) => Compiler.reduced(name, readings)
 }
 
-Layout := class {
-  root = ".ether/external/@"
-  checked_out (name: String) => root, "/@", name
-  path (name: String, locations: String[], version: String) => checked_out(name), "/$", locations.map("/@", .), "/%/", version
-  changed (name: String, user: String, branch: String) => checked_out(name), "/$/@", user, "%", branch
+Layout := class = root: Location = @./.ether/external/@ {
+  checked_out (name: String) => root / ("@" + name)
+  path (name: String, locations: String[], version: Version) => locations.reduce(held = checked_out(name) / "$" => held / ("@" + .)) / (version as String)
+  changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)
 }

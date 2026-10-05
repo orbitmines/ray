@@ -1,24 +1,22 @@
-
 mark ^keyword := external global
 
 {a} %+ {b} => true
-
-unless ((true %+ true).holds) { INFO@mark `GR1 a rule written at the top reads at the top` }
+unless true %+ true { INFO@mark `GR1 a rule written at the top reads at the top` }
 
 inside => (
   {a} %+ {b} => false
-  (true %+ true)
+  true %+ true
 )
-if (inside.holds) { INFO@mark `GR2 a rule written in a body overrides the reading in that body` }
-
-unless ((true %+ true).holds) { INFO@mark `GR3 a rule written in a body does not change the reading after it` }
-
-beside => (true %+ true)
-unless (beside.holds) { INFO@mark `GR4 a rule written in one body is not seen in a sibling body` }
+if inside { INFO@mark `GR2 a rule written in a body overrides the reading in that body` }
+unless true %+ true { INFO@mark `GR3 a rule written in a body does not change the reading after it` }
+beside => true %+ true
+unless beside { INFO@mark `GR4 a rule written in one body is not seen in a sibling body` }
 
 {a} %++ {b} => false
 {a} %+++ {b} => true
+if true %++ true { INFO@mark `GR5 the longest declared word wins: %++ is not read as %+ followed by +` }
+unless true %+++ true { INFO@mark `GR6 the longest declared word wins: %+++ is not read as %++ followed by +` }
+unless true %+ true { INFO@mark `GR7 a longer word declared later does not take over the shorter one` }
 
-if ((true %++ true).holds) { INFO@mark `GR5 the longest declared word wins: %++ is not read as %+ followed by +` }
-unless ((true %+++ true).holds) { INFO@mark `GR6 the longest declared word wins: %+++ is not read as %++ followed by +` }
-unless ((true %+ true).holds) { INFO@mark `GR7 a longer word declared later does not take over the shorter one` }
+/* a block comment /* nested */ is nothing */
+unless 5 /* nothing */ + 1 == 6 { INFO@mark `GR8 a block comment between operands is read as something` }

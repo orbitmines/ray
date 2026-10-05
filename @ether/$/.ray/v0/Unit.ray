@@ -1,406 +1,187 @@
-Unit := class {
-  is_base => (.base).not
-  base_unit => if .is_base { this } else { .base.base_unit }
-  is_temporal => (.base_unit == Second)
-  called (singular, several, short) => (
-    this.name = singular
-    this.plural = several
-    this.symbol = short
-    named ^keyword := this
-    Unit.known &= named
-    this
-  )
-  also_called (spelled) => (
-    unless (.aliases) { this.aliases = chain None }
-    .aliases &= spelled
-    this
-  )
-  over (other: Unit) => (
-    walked ^keyword := this
-    times ^keyword := 1
-    reached ^keyword := None
-    while ((walked).and((reached).not)) {
-      if (walked == other) { reached = times }
-      unless (reached) {
-        if walked.is_base { walked = None } else {
-          times = times * walked.ratio
-          walked = walked.base
-        }
+Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Unit.None)[]{length > 0} {
+  // Every part of a quantity like '1d 10h 10ms' is of one equivalence class.
+  dynamically assert quantities.every _, unit => unit == quantities.0.unit
+  // Quantities go from largest to smallest (N2.2).
+  dynamically assert quantities.unit as quantities.0.unit[] -- .sorted(>)
+
+  // `1d 10h 10m 30s`
+  `quantity: Quantity` => quantities ,= quantity
+
+  // `10000000s ~~ normalizer = days hours minutes seconds`
+  as (:== Normalizer) => Unit.Normalizers.modulus(this)
+  // `10000000s as days hours minutes seconds`
+  as (normalizer: Quantity{quantities.every(.quantity == 1)}) => this ~~ .normalizer = normalizer
+
+  as (: (operator: (greater_than: > | >=) | < | <=) unit: Unit): static => {
+    quantities = this.quantities{.unit operator unit}
+    converted_to = quantities.(greater_than ? last : first).unit
+    converted_quantities: Quantity = greater_than ? converted_to -> : <- converted_to
+
+    quantities ~~ .(greater_than ? last : first) += converted_quantities as converted_to
+  }
+
+  // Rates: `GB/s`, `1 / m`, `2/10m` (N2.3)
+  / (unit: Unit) => quantities.quantity, quantities.unit / unit
+}
+
+Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural {
+  static Normalizers := namespace {
+    modulus (order: Quantity) => Quantity.Normalizer = (x) => {
+      result: Quantity?
+      order.quantities.unit.for unit => {
+        quantity = x as unit (-- .floor if !is_last)
+        result ? result quantity : result = quantity
+        x -= quantity
       }
+      result
     }
-    reached
-  )
-  rank => (
-    rank_steps := 0
-    unless .is_base { rank_steps = .base.rank.succ }
-    rank_steps
-  )
+  }
 
-  ratio => (
-    ratio_times := .factor
-    if (.prefix) { ratio_times = .prefix.factor }
-    ratio_times
-  )
-  scale => (
-    scaled := 1
-    unless .is_base { scaled = .ratio * .base.scale }
-    scaled
-  )
+  (static.# ??= []).push this
 
-  shift => (
-    shifted_by := 0
-    if (.offset) { shifted_by = .offset }
-    shifted_by
-  )
-  zero_point => if .is_base { 0 } else { (.shift * .base.scale) + .base.zero_point }
-  shifts => .zero_point.nonzero
+  // `name`; `var: Decimal, ns = 10 ns`
+  caller[name] = this if name
 
-  as (other: Unit) => Quantity(amount: 1, unit: this) as other
-  as (=== boolean) => true
+  reexport => {
+    caller[name] = this
+    defined_globally = true if caller == global
+  }
 
-  multiple (times: Number) => (
-    parent := this
-    Unit(
-      base: parent
-      factor: times
-    )
-  )
-  shifted (by: Number) => (
-    parent := this
-    Unit(
-      base: parent
-      factor: 1
-      offset: by
-    )
-  )
+  static None = Unit(global.None)
 
-  chainable == (other: Unit) => if (.is_base.xnor(other.is_base)) {
-    if .is_base {
-      same_text(.name, other.name)
-    } else {
-      (.ratio == other.ratio).and(.base == other.base)
+  // `year as ns`
+  as (:== Quantity) => 1, this
+  as (other: ==.instance_of Unit) => this as Quantity as other
+
+  protected defined_globally = caller == global
+  // At least one unambiguous name; an ambiguous one (`8m`) superposes, `8 meter | 8 minute`, and is resolved by use (N2.4).
+  dynamically assert this as String? != None
+  as (:== String?) => name
+    -- #.remove(Unit#{!= this}.name) if defined_globally
+
+  protected unit = this
+  // `1m`, `1 m`
+  global.`digits: Decimal.String, " "?, name: unit as String`: Quantity => digits, unit
+  // `1.5m`, `1.5 m`
+  Decimal.Real &+= {
+    `" "?, name: unit as String`: Quantity => this, unit
+  }
+  // `25.years`, `(30).days` (N2.1b)
+  Number &+= {
+    .`name: unit as String`: Quantity => this, unit
+  }
+  // `GB/s`
+  / (other: Unit) => Unit(name: name + "/" + other.name, symbol: symbol)
+    -- .convert x => x * (this as other.static), other.static
+
+  // Reversed automatically when the conversion is (N2.7).
+  convert (convert: (From < Number) => To < Number, ToUnit: Unit) => {
+    FromUnit = static
+
+    global.Quantity<From>{.unit == this} &+= {
+      as (:== ToUnit): Quantity<To>{unit == ToUnit} => convert(this)
     }
-  } else { false }
-  chainable != (other: Unit) => (this == other).not
+    global.Quantity<To>{.unit == ToUnit} &+= {
+      as (:== FromUnit): Quantity<From>{unit == FromUnit} => convert.reverse(this)
+    } if convert.reverse
+  }
 
-  admits (candidate) => (
-    admitted ^keyword := (candidate.base === None).not
-    unless admitted { admitted = (candidate.name === None).not }
-    unless admitted { admitted = (Unit.named(candidate) === None).not }
-    admitted
-  )
-  named (spelled) => (
-    found ^keyword := None
-    Unit.known for {
-      if (it.value.spelled_as(spelled)) {
-        if found { found = found | it.value } else { found = it.value }
-      }
-    }
-    unless found { found = Unit.prefixed_named(spelled) }
-    unless found { found = Unit.rate_named(spelled) }
-    found
-  )
-  spelled_as (spelled) => (
-    spelled_so ^keyword := (.name == spelled).or(.plural == spelled).or(.symbol == spelled)
-    unless spelled_so { if (.aliases) { spelled_so = .aliases some { it.value == spelled } } }
-    spelled_so
-  )
-  prefixed_named (spelled) => (
-    found ^keyword := None
-    Prefix.components for {
-      unless found { found = Unit.with_prefix(spelled, it.value) }
-    }
-    BinaryPrefix.components for {
-      unless found { found = Unit.with_prefix(spelled, it.value) }
-    }
-    found
-  )
-  with_prefix (spelled, prefix) => (
-    found ^keyword := None
-    if (spelled.starts_with(prefix.symbol)) {
-      rest ^keyword := spelled.slice(prefix.symbol.count, spelled.count)
-      if (rest.nonempty) {
-        unprefixed ^keyword := Unit.named(rest)
-        if unprefixed { found = unprefixed prefixed prefix }
-      }
-    }
-    unless found {
-      if (spelled.starts_with(prefix.word)) {
-        rest ^keyword := spelled.slice(prefix.word.count, spelled.count)
-        if (rest.nonempty) {
-          unprefixed ^keyword := Unit.named(rest)
-          if unprefixed { found = unprefixed prefixed prefix }
-        }
-      }
-    }
-    found
-  )
-  rate_named (spelled) => (
-    found ^keyword := None
-    slash ^keyword := spelled.index_of("/")
-    if slash {
-      above ^keyword := Unit.named(spelled.slice(0, slash))
-      below ^keyword := Unit.named(spelled.slice(slash.succ, spelled.count))
-      if (above).and(below) { found = above / below }
-    }
-    found
-  )
-  as (=== String) => if (.name) { .name } else { .symbol }
+  offset (offset: Number, ToUnit: Unit) => convert (x: Number) => x + offset, ToUnit
+  multiple (multiple: Number, ToUnit: Unit) => convert (x: Number) => x * multiple, ToUnit
 
-  compounds / (other: Unit) => (
-    above ^keyword := this
-    below ^keyword := other
-    Rate(numerator: above, denominator: below)
-  )
-  read (spelled) => (
-    reading ^keyword := spelled
-    unless (spelled.base).or(spelled.name) { reading = Unit.named(spelled) }
-    reading
-  )
-
-  prefixed (prefix) => (
-    parent := this
-    Unit(
-      base: parent
-      prefix: prefix
-    )
-  )
+  magnitude (exponent: Number, ToUnit: Unit, Base: Decimal) => {
+    convert (x: Decimal) => Decimal, ToUnit
+      dynamically assert exponent >= 0 | x % 10^-exponent == 0
+      x << exponent
+    convert (x: Decimal.Real) => Decimal.Real, ToUnit
+      if exponent == 0 { x }
+      elsif exponent > 0 { x.integer, x.fraction.0 ?? 0, ".", x.fraction[1..] }
+      else { x.integer[..-1], ".", x.integer[-1] ?? 0, x.fraction }
+  }
 }
 
-Rate := class: Unit {
-  numerator: Unit
-  denominator: Unit
+SI_Unit {symbol: *} {name: *} => {
+  si_name (symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
+  private SI = {
+    -30: si_name "q", "quecto"
+    -27: si_name "r", "ronto"
+    -24: si_name "y", "yocto"
+    -21: si_name "z", "zepto"
+    -18: si_name "a", "atto"
+    -15: si_name "f", "femto"
+    -12: si_name "p", "pico"
+    -9: si_name "n", "nano"
+    -6: si_name "µ", "micro"
+    -3: si_name "m", "milli"
+    -2: si_name "c", "centi"
+    -1: si_name "d", "deci"
+    0: si_name "", ""
+    1: si_name "da", "deka"
+    2: si_name "h", "hecto"
+    3: si_name "k", "kilo"
+    6: si_name "M", "mega"
+    9: si_name "G", "giga"
+    12: si_name "T", "tera"
+    15: si_name "P", "peta"
+    18: si_name "E", "exa"
+    21: si_name "Z", "zetta"
+    24: si_name "Y", "yotta"
+    27: si_name "R", "ronna"
+    30: si_name "Q", "quetta"
+  }
+    .map(magnitude, name => Unit(name: magnitude: magnitude))
+    .reduce(|)
 
-  is_base => .numerator.is_base.and(.denominator.is_base)
-  base_unit => (
-    above ^keyword := .numerator.base_unit
-    below ^keyword := .denominator.base_unit
-    Rate(numerator: above, denominator: below)
-  )
-  scale => .numerator.scale / .denominator.scale
-  rank => .numerator.rank + .denominator.rank
-  over (other: Unit) => None
-  name => .numerator.name + " per " + .denominator.name
-  symbol => .numerator.symbol + "/" + .denominator.symbol
-  is_temporal => false
-  chainable == (other: Unit) => (.numerator == other.numerator).and(.denominator == other.denominator)
+  SI#.for FromUnit => FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
 }
 
-Quantity := class {
+Binary_Unit {symbol: *} {name: *} => {
+  si_name (symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
+  private IEC = {
+    1: si_name "Ki", "kibi"
+    2: si_name "Mi", "mebi"
+    3: si_name "Gi", "gibi"
+    4: si_name "Ti", "tebi"
+    5: si_name "Pi", "pebi"
+    6: si_name "Ei", "exbi"
+    7: si_name "Zi", "zebi"
+    8: si_name "Yi", "yobi"
+    9: si_name "Ri", "robi"
+    10: si_name "Qi", "quebi"
+  }
+    .map(power, name => Unit(name: power: power))
+    .reduce(|)
 
-  as (other: Unit) => (
-    converted ^keyword := None
-    if (.unit.shifts.or(other.shifts)) {
-      converted = (((.amount * .unit.scale) + .unit.zero_point) - other.zero_point) / other.scale
-    } else {
-      down ^keyword := .unit.over(other)
-      if (down) { converted = .amount * down } else {
-        up ^keyword := other.over(.unit)
-        if (up) { converted = .amount / up } else { converted = (.amount * .unit.scale) / other.scale }
-      }
-    }
-    Quantity(
-      amount: converted
-      unit: other
-    )
-  )
-  as (=== boolean) => true
-
-  finer (other: Quantity) => if (other.unit.rank < .unit.rank) { other.unit } else { .unit }
-  chainable == (other: Quantity) => (
-    kind := .finer(other)
-    (this as kind).amount == (other as kind).amount
-  )
-  chainable < (other: Quantity) => (
-    kind := .finer(other)
-    (this as kind).amount < (other as kind).amount
-  )
-  compounds + (other: Quantity) => (
-    kind := .finer(other)
-    total := (this as kind).amount + (other as kind).amount
-    Quantity(
-      amount: total
-      unit: kind
-    )
-  )
-  compounds - (other: Quantity) => (
-    kind := .finer(other)
-    difference := (this as kind).amount - (other as kind).amount
-    Quantity(
-      amount: difference
-      unit: kind
-    )
-  )
-
-  chainable < (other: Number) => ERROR@this `a quantity does not compare with a plain number`
-  chainable > (other: Number) => ERROR@this `a quantity does not compare with a plain number`
-  chainable > (other: Quantity) => other < this
-
-  compounds / (other: Unit) => (
-    held ^keyword := .amount
-    per ^keyword := .unit / other
-    Quantity(amount: held, unit: per)
-  )
-  compounds / (other: Quantity) => (
-    held ^keyword := .amount / other.amount
-    per ^keyword := .unit / other.unit
-    Quantity(amount: held, unit: per)
-  )
-  compounds * (times: Number) => (
-    held ^keyword := .amount * times
-    kind ^keyword := .unit
-    Quantity(amount: held, unit: kind)
-  )
-
-  { }{rest: Quantity ^unit} ^punctuation => .followed_by(Quantity.read(rest))
-  followed_by (rest: Quantity) => (
-    joined ^keyword := None
-    if (rest.unit.scale < .unit.scale) {
-      joined = this + rest
-      joined.parts = chain None
-      if (.parts) { .parts for { joined.parts &= it.value } } else { joined.parts &= this }
-      joined.parts &= rest
-    } else { ERROR@rest `quantities written side by side go from the largest unit to the smallest` }
-    joined
-  )
-  admits (candidate) => (
-    admitted ^keyword := (candidate.unit === None).not
-    unless admitted { admitted = (Quantity.read(candidate) === None).not }
-    admitted
-  )
-  read (spelled) => (
-    found ^keyword := None
-    if ((spelled.unit === None).not) { found = spelled } else {
-      digits_end ^keyword := 0
-      counting ^keyword := true
-      spelled for {
-        if (counting.and(it.value.digit)) { digits_end = digits_end.succ } else { counting = false }
-      }
-      if (digits_end.nonzero.and(digits_end < spelled.count)) {
-        kind ^keyword := Unit.named(spelled.slice(digits_end, spelled.count))
-        if kind { found = Quantity(amount: spelled.slice(0, digits_end).as_number, unit: kind) }
-      }
-    }
-    found
-  )
-
-  broken_into (units) => (
-    pieces ^keyword := chain None
-    left ^keyword := this
-    walker ^keyword := units.head
-    while walker {
-      kind ^keyword := walker.value
-      whole ^keyword := (left as kind).amount
-      if walker.next {
-        piece ^keyword := Quantity(amount: whole, unit: kind)
-        pieces &= piece
-        left = left - piece
-      } else { pieces &= (left as kind) }
-      walker = walker.next
-    }
-    pieces
-  )
-
-  is_temporal => .unit.is_temporal
-  as_seconds => (this as Second).amount
-  as (=== String) => .amount.as(String) + " " + .unit.as(String)
+  IEC#.for FromUnit => FromUnit.multiple 1024^FromUnit.power, global[name]
 }
 
-Measured := class {
-  { }{unit: Unit ^unit} ^punctuation => Quantity(amount: this, unit: Unit.read(unit))
-  {unit: Unit ^unit} ^punctuation => Quantity(amount: this, unit: Unit.read(unit))
-  .{unit: Unit ^unit} ^punctuation => Quantity(amount: this, unit: Unit.read(unit))
-  compounds / (other: Unit) => (
-    held ^keyword := this
-    per ^keyword := Unit.one / other
-    Quantity(amount: held, unit: per)
-  )
-}
-Number.components.hierarchy &= Measured
-Number.Real.components.hierarchy &= Measured
+SI_Unit s "second"
+SI_Unit m "meter"
+SI_Unit g "gram"
+SI_Unit A "ampere"
+SI_Unit K "kelvin"
+SI_Unit mol "mole"
+SI_Unit cd "candela"
 
-Prefix := enum deka (symbol: `da`, word: `deka`, magnitude: 1) | hecto (symbol: `h`, word: `hecto`, magnitude: 2) | kilo (symbol: `k`, word: `kilo`, magnitude: 3) | mega (symbol: `M`, word: `mega`, magnitude: 6) | giga (symbol: `G`, word: `giga`, magnitude: 9) | tera (symbol: `T`, word: `tera`, magnitude: 12) | peta (symbol: `P`, word: `peta`, magnitude: 15) | exa (symbol: `E`, word: `exa`, magnitude: 18) | zetta (symbol: `Z`, word: `zetta`, magnitude: 21) | yotta (symbol: `Y`, word: `yotta`, magnitude: 24) | ronna (symbol: `R`, word: `ronna`, magnitude: 27) | quetta (symbol: `Q`, word: `quetta`, magnitude: 30) | deci (symbol: `d`, word: `deci`, places: 1) | centi (symbol: `c`, word: `centi`, places: 2) | milli (symbol: `m`, word: `milli`, places: 3) | micro (symbol: `µ`, word: `micro`, places: 6) | nano (symbol: `n`, word: `nano`, places: 9) | pico (symbol: `p`, word: `pico`, places: 12) | femto (symbol: `f`, word: `femto`, places: 15) | atto (symbol: `a`, word: `atto`, places: 18) | zepto (symbol: `z`, word: `zepto`, places: 21) | yocto (symbol: `y`, word: `yocto`, places: 24) | ronto (symbol: `r`, word: `ronto`, places: 27) | quecto (symbol: `q`, word: `quecto`, places: 30) {
-  factor => if (.places) { Number.Real.written(1, .places, ten) } else { 10.pow(.magnitude) }
-}
+SI_Unit b "bit"
+SI_Unit B "byte"
+Binary_Unit B "byte"
+byte.multiple 8, bit
 
-BinaryPrefix := enum kibi (symbol: `Ki`, word: `kibi`, power: 1) | mebi (symbol: `Mi`, word: `mebi`, power: 2) | gibi (symbol: `Gi`, word: `gibi`, power: 3) | tebi (symbol: `Ti`, word: `tebi`, power: 4) | pebi (symbol: `Pi`, word: `pebi`, power: 5) | exbi (symbol: `Ei`, word: `exbi`, power: 6) | zebi (symbol: `Zi`, word: `zebi`, power: 7) | yobi (symbol: `Yi`, word: `yobi`, power: 8) | robi (symbol: `Ri`, word: `robi`, power: 9) | quebi (symbol: `Qi`, word: `quebi`, power: 10) {
-  factor => 1024.pow(.power)
-}
+Unit(name: "minute", symbol: "min" | "m").multiple 60, second
+Unit(name: "hour", symbol: "h").multiple 60, minute
+Unit(name: "day", symbol: "d").multiple 24, hour
+Unit(name: "week", symbol: "wk").multiple 7, day
+Unit(name: "year", symbol: "y").multiple 365, day
 
-SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit().called(name, name.plural, symbol)
+Unit(name: "celsius", symbol: "°C").offset 273.15, kelvin
 
-Unit.known = chain None
+// Counts: `1k`, `1M`, `1B`
+Unit(name: "thousand", symbol: "k").multiple 10^3, Unit.None
+Unit(name: "million", symbol: "M").multiple 10^6, Unit.None
+Unit(name: "billion", symbol: "B").multiple 10^9, Unit.None
 
-Bit := Unit().called(`bit`, `bits`, `b`)
-Byte := Unit(base: Bit, factor: 8).called(`byte`, `bytes`, `B`)
-
-Kilobyte := (Byte prefixed Prefix.kilo).called(`kilobyte`, `kilobytes`, `KB`)
-Megabyte := (Byte prefixed Prefix.mega).called(`megabyte`, `megabytes`, `MB`)
-Gigabyte := (Byte prefixed Prefix.giga).called(`gigabyte`, `gigabytes`, `GB`)
-Terabyte := (Byte prefixed Prefix.tera).called(`terabyte`, `terabytes`, `TB`)
-Petabyte := (Byte prefixed Prefix.peta).called(`petabyte`, `petabytes`, `PB`)
-Exabyte := (Byte prefixed Prefix.exa).called(`exabyte`, `exabytes`, `EB`)
-Zettabyte := (Byte prefixed Prefix.zetta).called(`zettabyte`, `zettabytes`, `ZB`)
-Yottabyte := (Byte prefixed Prefix.yotta).called(`yottabyte`, `yottabytes`, `YB`)
-Ronnabyte := (Byte prefixed Prefix.ronna).called(`ronnabyte`, `ronnabytes`, `RB`)
-Quettabyte := (Byte prefixed Prefix.quetta).called(`quettabyte`, `quettabytes`, `QB`)
-
-Kibibyte := (Byte prefixed BinaryPrefix.kibi).called(`kibibyte`, `kibibytes`, `KiB`)
-Mebibyte := (Byte prefixed BinaryPrefix.mebi).called(`mebibyte`, `mebibytes`, `MiB`)
-Gibibyte := (Byte prefixed BinaryPrefix.gibi).called(`gibibyte`, `gibibytes`, `GiB`)
-Tebibyte := (Byte prefixed BinaryPrefix.tebi).called(`tebibyte`, `tebibytes`, `TiB`)
-Pebibyte := (Byte prefixed BinaryPrefix.pebi).called(`pebibyte`, `pebibytes`, `PiB`)
-Exbibyte := (Byte prefixed BinaryPrefix.exbi).called(`exbibyte`, `exbibytes`, `EiB`)
-Zebibyte := (Byte prefixed BinaryPrefix.zebi).called(`zebibyte`, `zebibytes`, `ZiB`)
-Yobibyte := (Byte prefixed BinaryPrefix.yobi).called(`yobibyte`, `yobibytes`, `YiB`)
-Robibyte := (Byte prefixed BinaryPrefix.robi).called(`robibyte`, `robibytes`, `RiB`)
-Quebibyte := (Byte prefixed BinaryPrefix.quebi).called(`quebibyte`, `quebibytes`, `QiB`)
-
-Second := Unit().called(`second`, `seconds`, `s`)
-
-Nanosecond := Unit().called(`nanosecond`, `nanoseconds`, `ns`)
-Minute := (Second multiple (60)).called(`minute`, `minutes`, `min`)
-Hour := (Minute multiple (60)).called(`hour`, `hours`, `h`)
-Day := (Hour multiple 24).called(`day`, `days`, `d`)
-Week := (Day multiple 7).called(`week`, `weeks`, `wk`)
-Year := (Day multiple 365).called(`year`, `years`, `y`)
-
-Minute.also_called(`m`)
-
-Meter := SI_Unit m meter
-Gram := SI_Unit g gram
-Kilogram := (Gram prefixed Prefix.kilo).called(`kilogram`, `kilograms`, `kg`)
-Ampere := SI_Unit A ampere
-Kelvin := SI_Unit K kelvin
-Mole := SI_Unit mol mole
-Candela := SI_Unit cd candela
-Celsius := (Kelvin shifted 273).called(`celsius`, `celsius`, `°C`)
-
-Unit.one = Unit().called(`one`, `ones`, `1`)
-
-Imaginary := Unit().called(`imaginary`, `imaginary`, `i`)
-Complex := class {
-  real: Node
-  imaginary: Node
-
-  compounds + (other: Complex) => (
-    summed_real ^keyword := .real + other.real
-    summed_imaginary ^keyword := .imaginary + other.imaginary
-    Complex(real: summed_real, imaginary: summed_imaginary)
-  )
-  compounds * (other: Complex) => (
-    product_real ^keyword := (.real * other.real) - (.imaginary * other.imaginary)
-    product_imaginary ^keyword := (.real * other.imaginary) + (.imaginary * other.real)
-    Complex(real: product_real, imaginary: product_imaginary)
-  )
-  chainable == (other: Complex) => (.real == other.real).and(.imaginary == other.imaginary)
-  conjugate => (
-    kept ^keyword := .real
-    flipped ^keyword := .imaginary.negated
-    Complex(real: kept, imaginary: flipped)
-  )
-}
-Quantity.components.hierarchy &= class {
-  compounds + (other: Number) => if (.unit == Imaginary) { Complex(real: other, imaginary: .amount) } else { ERROR@other `a quantity does not add to a plain number` }
-  as_complex => if (.unit == Imaginary) { Complex(real: 0, imaginary: .amount) } else { None }
-}
+// `a + b i` (N1.16)
+Unit(name: "imaginary", symbol: "i")
+Complex := Real + Imaginary
+Imaginary := Quantity{unit == i}

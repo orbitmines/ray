@@ -1,196 +1,113 @@
-Network.components.hierarchy &= class {
-  Port := Number{. < 65536}
+Network &+= {
+  static Port = Decimal{< 2^16}
 
-  Protocol := class {
+  static Protocol &+= {
     name: String
-    port: Node
+    port: Port
 
-    ether => Network.Protocol(name: "ether", port: 37839)
-    https => Network.Protocol(name: "https", port: 443)
-    http => Network.Protocol(name: "http", port: 80)
-    ssh => Network.Protocol(name: "ssh", port: 22)
-    known => (
-      all := chain None
-      all &= Network.Protocol.ether
-      all &= Network.Protocol.https
-      all &= Network.Protocol.http
-      all &= Network.Protocol.ssh
-      all
-    )
-    named (written: String) => (
-      found ^keyword := None
-      Network.Protocol.known for { if (it.value.name == written) { found = it.value } }
-      found
-    )
-    version => Network.Handshake.version
+    static ether = Protocol("ether", @ether.address.port)
+    static https = Protocol("https", 443)
+    static http = Protocol("http", 80)
+    static ssh = Protocol("ssh", 22)
+    static known = [ether, https, http, ssh]
+
+    static named (written: String) => known{.name == written}.first
+    static version => Handshake.version
   }
 
-  URL := class {
-    protocol: Node
-    host: Node
-    port: Node
-    path: ""
-    query: ""
+  static URL := class (
+    (scheme: Char{!= ":"}[], "://")?,
+    host_written: Char{!= ":" && != "/"}[],
+    (":", port_written: Decimal)?,
+    ("/", path: Char{!= "?"}[])?,
+    ("?", query: String)?
+  ) => {
+    protocol => Protocol.named(scheme)
+    host => Hosts.resolved(host_written)
+    port => port_written ?? protocol?.port
 
-    parse (text: String) => (
-      scheme := text.before("://")
-      rest ^keyword := text.after("://")
-      if rest.empty { rest = text }
-      found_protocol := Network.Protocol.named(scheme)
-      authority := rest.before("/")
-      path_written := rest.after("/")
-      host_written := authority.before(":")
-      port_written := authority.after(":")
-      chosen_port ^keyword := None
-      if port_written.nonempty { chosen_port = port_written.as_number } elsif (found_protocol === None) { chosen_port = None } else { chosen_port = found_protocol.port }
-      Network.URL(protocol: found_protocol, host: Network.Hosts.resolved(host_written), port: chosen_port, path: path_written.before("?"), query: path_written.after("?"))
-    )
-    as (=== String) => .protocol.name + ("://" + (.host.text + (":" + (.port.as(String) + ("/" + .path)))))
+    static parse (text: String) => text as URL
+    as (:== String) => protocol.name + "://" + host.text + ":" + port as String + "/" + path
   }
 
-  Socket := class {
-    Address := class {
-      host: Node
-      port: Node
-    }
+  static Socket := namespace {
+    static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => { }
   }
 
-  Hosts := class {
-    equivalences: (chain None)
+  static Hosts := namespace {
+    static Equivalence := class = name: String, host: String
+    equivalences: Equivalence[] = []
 
-    equate (name: String, host: String) => (
-      Network.Hosts.equivalences &= Network.Hosts.Equivalence(name: name.fold_case, host: host)
-      host
-    )
-    resolved (name: String) => (
-      found ^keyword := None
-      Network.Hosts.equivalences for { if (it.value.name == name.fold_case) { found = it.value.host } }
-      if (found === None) { Network.DomainName(text: name) } else { Network.DomainName(text: found) }
-    )
-    Equivalence := class {
-      name: String
-      host: String
-    }
+    equate (name: String, host: String) => equivalences.push(Equivalence(name.fold_case, host)).host
+    resolved (name: String) => DomainName(equivalences{.name == name.fold_case}.last?.host ?? name)
   }
 
-  DNS := class {
-    history: (chain None)
+  static DNS := namespace {
+    static Record := class = name: String, address: *, key: *, when: Time = Time.now
+    history: Record[] = []
 
-    record (name: String, address, key) => (
-      Network.DNS.history &= Network.DNS.Record(name: name, address: address, key: key, when: Time.now)
-      address
-    )
-    trusted (name: String, address, key) => (
-      known ^keyword := None
-      Network.DNS.history for { if (it.value.name == name) { known = it.value } }
-      if (known === None) { true } else { known.key == key }
-    )
-    Record := class {
-      name: String
-      address: Node
-      key: Node
-      when: Node
-    }
+    record (name: String, address, key) => history.push(Record(name, address, key)).address
+    trusted (name: String, address, key) => (history{.name == name}.last?.key ?? key) == key
   }
 
-  Proxied := class {
-    proxy: Node
-    everything: true
-    who: None
-    block: None
-
-    carries (traffic, character) => if .everything { true } elsif (.who === None) { .block.contains(traffic) } else { .who == character }
+  static Proxied := class = proxy: *, everything = true, who: Character?, block: *[]? {
+    carries (traffic, character: Character) => everything || (who ? who == character : block.contains(traffic))
   }
 
-  Handshake := class {
+  static Handshake := namespace {
     version => 0
-    offer (versions) => (
-      agreed ^keyword := None
-      versions for { if (it.value == Network.Handshake.version) { agreed = it.value } }
-      if (agreed === None) { Quest(name: "agree on a version", goal: versions) } else { agreed }
-    )
+    offer (versions) => versions{== version}.last ?? Quest(name: "agree on a version", goal: versions)
   }
 
-  Remote := class {
-    location: Node
-    character: Node
+  static Remote := class = location: *, character: Character {
+    static Execution := class = code: *, as: Character, at: *
 
-    run (code) => if (.character.key === None) { Quest(name: "authorise", goal: code) } else { Network.Remote.Execution(code: code, as: .character, at: .location) }
-    fresh (code) => Network.Remote(location: .location, character: Character(name: "unauthorised")).run(code)
-    Execution := class {
-      code: Node
-      as: Node
-      at: Node
+    run (code) => character.key ? Execution(code, as: character, at: location) : Quest(name: "authorise", goal: code)
+    fresh (code) => Remote(location, Character(name: "unauthorised")).run(code)
+  }
+
+  static Challenge := class = message: *, due: Time, answered = false {
+    answer (response) => {
+      answered = response == message if Time.now < due
+      answered
     }
   }
 
-  Challenge := class {
-    message: Node
-    due: Node
-    answered: false
-
-    answer (response) => (
-      if (Time.now < .due) { .answered = response == .message }
-      .answered
-    )
-  }
-
-  Stream := class {
-    player: Node
-    location: Node
-    watchers: (chain None)
-
-    watch (character) => (
-      .watchers &= character
-      character.presence = .location
+  static Stream := class = player: Character, location: *, watchers: Character[] = [] {
+    watch (character: Character): static => {
+      watchers.push character
+      character.presence = location
       this
-    )
-    moved (location) => (
-      .location = location
-      .watchers for { it.value.presence = location }
-      this
-    )
-  }
-
-  Update := class {
-    from: Node
-    into: Node
-
-    apply => (
-      conflicts := .into.merge(.from)
-      if conflicts.empty { .into } else { conflicts }
-    )
-  }
-
-  Shard := class {
-    character: Node
-    locations: (chain None)
-
-    store (part, location) => (
-      .locations &= Network.Shard.Part(part: part, location: location)
-      this
-    )
-    Part := class {
-      part: Node
-      location: Node
     }
+    moved (location): static => {
+      this.location = location
+      watchers#.presence = location
+      this
+    }
+  }
+
+  static Update := class = from: History, into: History {
+    apply => {
+      conflicts = into.merge(from)
+      conflicts.empty ? into : conflicts
+    }
+  }
+
+  static Shard := class = character: Character, locations: Part[] = [] {
+    static Part := class = part: *, location: *
+
+    store (part, location): static => this ~~ locations.push Part(part, location)
   }
 }
 
-Instance.components.hierarchy &= class {
-  address: None
-  localhost => "localhost"
-  seen_from (other) => if (other === this) { .localhost } else { .address }
-  mac_address => (
-    written := external os `mac_address`
-    if written { written } else {
-      octets := Random.number(48)
-      multicast := (octets / 1099511627776) % 2
-      octets + ((1 - multicast) * 1099511627776)
-    }
-  )
+Instance &+= {
+  address: (Network.URL | Network.Socket.Address | IP | Network.DomainName)?
+
+  seen_from (other: Instance) => other === this ? @localhost : address
+  local => address ==.instance_of @localnetwork
+  canonical: static => Instance(location, address: address as String as address.static)
+  // No MAC address: a random one with the multicast bit set (https://datatracker.ietf.org/doc/html/rfc4122#section-4.5)
+  mac_address: Binary⁴⁸ => (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1)
 }
 
-Network.Hosts.equivalences = chain None
-Network.DNS.history = chain None
-Network.Hosts.equate("ether", "ether.orbitmines.com")
+{address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => Instance(location: address, address)

@@ -1,819 +1,191 @@
+// A number is a ray: zero has no next, and every other number is the next of the one before.
 Number := class: Ray {
-  .{fraction: Decimal.String ^number} ^punctuation => (
-    whole_part ^keyword := this
-    Number.Real(integer: whole_part, fraction: digits_selected(fraction), radix: ten)
-  )
-  succ => (
-    succeeded ^keyword := this
-    Number(next: succeeded)
-  )
-  ..<{last} ^punctuation => (
-    stepped ^keyword := chain None
-    at ^keyword := this
-    if (last < this) {
-      while (last < at) {
-        stepped &= at
-        at = at.pred
-      }
-    } else {
-      while (at < last) {
-        stepped &= at
-        at = at.succ
-      }
-    }
-    stepped
-  )
-  ..{last} ^punctuation => (
-    upto ^keyword := last
-    onward ^keyword := None
-    if (last.head) {
-      upto = last.head.value
-      onward = last.head.next
-    }
-    stepped ^keyword := this..<upto
-    stepped &= upto
-    while (onward) {
-      stepped &= onward.value
-      onward = onward.next
-    }
-    stepped
-  )
-
-  bounded => false
-  entry => (
-    lined ^keyword := this
-    Number.Line(value: lined)
-  )
-
-  digits_in (radix: Number) => (
-    counter := chain None
-    counter &= zero
-    rest ^keyword := this
-    while rest.nonzero {
-      digit ^keyword := counter.head
-      carrying ^keyword := true
-      while carrying {
-        digit.value = digit.value.succ
-        if (digit.value == radix) { digit.value = zero } else { carrying = false }
-        if carrying {
-          unless (digit.next) { counter &= zero }
-          digit = digit.next
-        }
-      }
-      rest = rest.pred
-    }
-    out ^keyword := chain None
-    walker ^keyword := counter.tail
-    while (walker) {
-      out &= walker.value
-      walker = walker.previous
-    }
-    out
-  )
-
-  from_digits (radix: Number, spelled) => (
-    total ^keyword := zero
-    spelled for { total = (total * radix) + it.value }
-    total
-  )
-  pred => .next
-
-  is_zero => ((.next === None) as boolean)
-  nonzero => .is_zero.not
-
-  holds => .nonzero
-
-  not => .is_zero
-
-  set => .is_zero.not
-  as (=== boolean) => (.instance.not as boolean).or(.set)
-  and (b) => .set.and(b)
-  or (b) => .set.or(b)
-  nand (b) => .set.nand(b)
-  nor (b) => .set.nor(b)
-  xor (b) => .set.xor(b)
-  xnor (b) => .set.xnor(b)
-
-  chainable < (other: Number) => (
-    mine := this
-    theirs := other
-    while (mine.nonzero.and(theirs.nonzero)) {
-      mine = mine.pred
-      theirs = theirs.pred
-    }
-    mine.is_zero.and(theirs.nonzero)
-  )
-
-  chainable == (other: Number) => (
-    mine := this
-    theirs := other
-    while (mine.nonzero.and(theirs.nonzero)) {
-      mine = mine.pred
-      theirs = theirs.pred
-    }
-    mine.is_zero.and(theirs.is_zero)
-  )
-  chainable != (other: Number) => (this == other).not
-
-  compounds + (other: Number) => (
-    total := this
-    left := other
-    while left {
-      total = total.succ
-      left = left.pred
-    }
-    total
-  )
-
-  compounds - (other: Number) => (
-    rest := this
-    left := other
-    while (left.nonzero.and(rest.nonzero)) {
-      rest = rest.pred
-      left = left.pred
-    }
-    rest
-  )
-
-  compounds * (other: Number) => (
-    multiplied := zero
-    left := other
-    while left {
-      multiplied = multiplied + this
-      left = left.pred
-    }
-    multiplied
-  )
-
-  compounds / (other: Number) => (
-    quotient := zero
-    rest := this
-    step := other
-    while (rest.nonzero.and(other.nonzero)) {
-      rest = rest.pred
-      step = step.pred
-      if step.is_zero {
-        quotient = quotient.succ
-        step = other
-      }
-    }
-    quotient
-  )
-  compounds % (other: Number) => (
-    rest := this
-    step := other
-    while (rest.nonzero.and(other.nonzero)) {
-      rest = rest.pred
-      step = step.pred
-      if step.is_zero { step = other }
-    }
-    if other.is_zero { this } else { other - step }
-  )
-
-  half => (
-    count := zero
-    rest := this
-    while rest {
-      rest = rest.pred
-      if rest.nonzero {
-        rest = rest.pred
-        count = count.succ
-      }
-    }
-    count
-  )
-
-  times (action) => .rounds(action, zero)
-  rounds (action, it: Number) => if .is_zero { this } else {
-    inline action
-
-    this.next.rounds(action, it.succ)
+  succ => Number(next: this)
+  pred => next
+  is_zero => next === None
+  nonzero => !is_zero
+  holds => nonzero
+  as (=== boolean) => nonzero
+  [&&, ||, !&&, !||, x||, x!||].for operator => {
+    `operator` (b) => (this as boolean) operator b
   }
 
-  right-to-left compounds ^ (exponent: Number) => .pow(exponent)
-  pow (exponent: Number) => (
-    power := one
-    left := exponent
-    while left.nonzero {
-      power = power * this
-      left = left.pred
-    }
-    power
-  )
-  squared => this * this
+  == (other: Number) => is_zero ? other.is_zero : other.nonzero && pred == other.pred
+  < (other: Number) => other.nonzero && (is_zero || pred < other.pred)
+  <= (other: Number) => !(other < this)
 
-  factorial => (
-    raised := one
-    left := this
-    while left.nonzero {
-      raised = raised * left
-      left = left.pred
-    }
-    raised
-  )
-  ! => .factorial
+  + (other: Number) => other.is_zero ? this : succ + other.pred
+  - (other: Number) => other.is_zero || is_zero ? this : pred - other.pred
+  * (other: Number) => other.is_zero ? 0 : this * other.pred + this
+  / (other: Number) => this < other ? 0 : (this - other) / other + 1
+  % (other: Number) => other.is_zero || this < other ? this : (this - other) % other
+  right-to-left ^ (exponent: Number) => exponent.is_zero ? 1 : this ^ exponent.pred * this
+  ! => is_zero ? 1 : pred! * this
 
-  gcd (other: Number) => (
-    a := this
-    b := other
-    while b {
-      rest := a % b
-      a = b
-      b = rest
-    }
-    a
-  )
-  lcm (other: Number) => (this * other) / (this.gcd(other))
+  gcd (other: Number) => other.is_zero ? this : other.gcd(this % other)
+  lcm (other: Number) => this * other / gcd(other)
+  divides (other: Number) => other % this == 0
+  coprime (other: Number) => gcd(other) == 1
 
-  divides (other: Number) => (other % this).is_zero
-  coprime (other: Number) => (this.gcd(other)) == one
+  even => is_zero || pred.odd
+  odd => !even
+  half => this / 2
+  squared => this ^ 2
+  min (other: Number) => this < other ? this : other
+  max (other: Number) => this < other ? other : this
+  saturate (limit: Number) => min(limit)
 
-  even => (
-    parity := true
-    rest := this
-    while rest {
-      parity = parity.not
-      rest = rest.pred
-    }
-    parity
-  )
-  odd => .even.not
+  // `1..3`, `3..1` walks down (R4.1); `1..<3`
+  .. (last: Number) => this == last ? [this] : this, (this < last ? succ : pred)..last
+  ..< (last: Number) => this == last ? [] : this, (this < last ? succ : pred)..<last
 
-  percent => this / hundred
+  // A number is iterable: an unbounded line through it.
+  bounded => false
+  entry => (-1 <- this -> +1)
+  ∞ => entry.unbounded
 
-  at_least (other: Number) => (this < other).not
-  min (other: Number) => (
-    smallest_of := other
-    if (this < other) { smallest_of = this }
-    smallest_of
-  )
-  max (other: Number) => (
-    most := this
-    if (this < other) { most = other }
-    most
-  )
+  n.times (block) => (0..<this).for block
 
-  is_natural => true
+  digits (base: Number) => this < base ? [this] : (this / base).digits(base), this % base
+  static (digits: Number[]) as (base: Number) => digits.reduce(0) (acc, current) => acc * base + current
+
+  root (degree: Number) => (0..this){. ^ degree <= this}.last
+  // Irrationals are generators: the digits of a root are computed on demand (N1.4).
+  root_of (degree: Number) => root(degree) ^ degree == this ? root(degree)
+    : Real(integer: root(degree), fraction: (1 -> +1).map(place => (this * 10 ^ (degree * place)).root(degree) % 10))
+
+  // Bitwise operations on bit strings and binary numbers alike (N1.11).
+  bits (other: Number) => digits(2).length max other.digits(2).length -- digits(2).padded(.).zip(other.digits(2).padded(.))
+  [&&, ||, x||, !&&, !||, x!||].for operator => {
+    `"~" + operator` (other: Number) => bits(other).map((a, b) => a operator b) as 2
+  }
+  ~! (width: Number) => digits(2).padded(width).map(!) as 2
 }
 
-zero  := Number()
-one   := zero.succ
-two   := one.succ
-three := two.succ
-four  := three.succ
-five  := four.succ
-six   := five.succ
-seven := six.succ
-eight := seven.succ
-nine  := eight.succ
-ten   := nine.succ
-
+zero := Number()
 0 := zero
-1 := one
 
-hundred  => ten * ten
-thousand => hundred * ten
+Probability := Number{0 <= . <= 1}
 
-Number.Line = class: Ray {
-  value: Number
-  next => (
-    after ^keyword := .value.succ
-    Number.Line(value: after)
-  )
-  previous => if .value.is_zero { None } else {
-    before ^keyword := .value.pred
-    Number.Line(value: before)
+Number &+= {
+  static Bases = {
+    Binary: Digit = "0" | "1"
+    Ternary: Digit = "0".."2"
+    Quaternary: Digit = "0".."3"
+    Quinary: Digit = "0".."4"
+    Senary: Digit = "0".."5"
+    Septenary: Digit = "0".."6"
+    Octal: Digit = "0".."7"
+    Nonary: Digit = "0".."8"
+    Decimal: Digit = "0".."9"
+    Undecimal: Digit = Decimal | ("a" | "A")
+    Duodecimal: Digit = Decimal | ("a" | "A")..("b" | "B")
+    Tridecimal: Digit = Decimal | ("a" | "A")..("c" | "C")
+    Tetradecimal: Digit = Decimal | ("a" | "A")..("d" | "D")
+    Pentadecimal: Digit = Decimal | ("a" | "A")..("e" | "E")
+    Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F")
   }
+  static Base := Number{2 <= .}
 }
 
-Number.Signed = class {
-  sign?: Node
-  integer: Number
+Digit := class: String
 
-  negative => (.sign as boolean)
-  positive => .negative.not
-  is_zero => .integer.is_zero
+dynamically Number.Bases.for name => {
+  internal Base => Number.Bases[name]
 
-  negated => (
-    flipped := None
-    magnitude ^keyword := .integer
-    if .negative { flipped = Number.Signed(integer: magnitude) } else { flipped = Number.Signed(sign: global, integer: magnitude) }
-    flipped
-  )
-  abs => (
-    magnitude ^keyword := .integer
-    Number.Signed(integer: magnitude)
-  )
+  global[name] := class: Number = integer: Base.Digit[]{length >= 1} {
+    static Digit = Base
+    static radix = Base#.count
+    String => this as String
 
-  chainable == (other: Number.Signed) => (.negative.xnor(other.negative)).and(.integer == other.integer)
-  chainable < (other: Number.Signed) => if .negative {
-    if other.negative { other.integer < .integer } else { true }
-  } else {
-    if other.negative { false } else { .integer < other.integer }
-  }
+    as Number => integer.map(as Decimal) as radix
+    as String => integer as String
 
-  compounds + (other: Number.Signed) => (
-    summed := None
-    own_sign ^keyword := .sign
-    magnitude ^keyword := .integer
-    if (.negative.xnor(other.negative)) {
-      summed = Number.Signed(sign: own_sign, integer: magnitude + other.integer)
-    } elsif (other.integer < magnitude) {
-      summed = Number.Signed(sign: own_sign, integer: magnitude - other.integer)
-    } else {
-      summed = Number.Signed(sign: other.sign, integer: other.integer - magnitude)
+    {fraction: static.String} (): Real => integer, ".", fraction
+
+    // A natural is a Signed without its sign, both ways (N1.9).
+    as Signed => Signed(integer: this)
+    static Signed := class = sign: "-"?, integer: static {
+      as static => integer if !negative
+      negative => sign
+      == (other: Signed) => integer == other.integer && (negative == other.negative || integer.is_zero)
+      - => Signed(sign: negative ? None : "-", integer)
+      + (other: Signed) => negative == other.negative ? Signed(sign, integer + other.integer)
+        : integer < other.integer ? Signed(other.sign, other.integer - integer) : Signed(sign, integer - other.integer)
+      - (other: Signed) => this + -other
+      * (other: Signed) => Signed(sign: negative != other.negative ? "-" : None, integer * other.integer)
+      < (other: Signed) => negative ? !other.negative || other.integer < integer : !other.negative && integer < other.integer
     }
-    summed
-  )
-  compounds - (other: Number.Signed) => this + other.negated
-  compounds * (other: Number.Signed) => (
-    multiplied := None
-    product ^keyword := .integer * other.integer
-    if (.negative.xnor(other.negative)) { multiplied = Number.Signed(integer: product) } else { multiplied = Number.Signed(sign: global, integer: product) }
-    multiplied
-  )
-  - => .negated
-}
+    static Real := class = integer: static, ".", fraction: static{unbounded} {
+      static Signed := class = sign: "-"?, real: Real
 
-Number.Real = class {
-  integer: Number
-  fraction: Node
-  radix: Number
+      // `0.5` is `5` counted in `10 ^ places`; division writes its digits on demand (N1.4).
+      places => fraction.length
+      scaled => (integer, fraction) as radix
+      static written (counted: Number, places: Number) => Real(integer: counted / radix ^ places, fraction: (counted % radix ^ places).digits(radix).padded(places))
+      as Number => integer if fraction.every(== 0)
+      + (other: Real) => written(scaled * radix ^ other.places + other.scaled * radix ^ places, places + other.places)
+      * (other: Number | Real) => other ==.instance_of Real ? written(scaled * other.scaled, places + other.places) : written(scaled * other, places)
+      / (other: Number) => Real(integer: scaled / other / radix ^ places, fraction: (1 -> +1).map(place => scaled * radix ^ place / other % radix)[places..])
+      == (other: Real) => scaled * radix ^ other.places == other.scaled * radix ^ places
 
-  places => .fraction.count
-  scale => .radix.pow(.places)
-  numerator => (.integer * .scale) + Number.from_digits(.radix, .fraction)
-  chainable == (other: Number.Real) => (
-    same_digits ^keyword := (.integer == other.integer).and(.places == other.places)
-    mine ^keyword := .fraction.head
-    theirs ^keyword := other.fraction.head
-    while ((mine).and(same_digits)) {
-      unless (mine.value == theirs.value) { same_digits = false }
-      mine = mine.next
-      theirs = theirs.next
+      rational => fraction ==.instance_of (static | static[]{length == ∞})
+      irrational => !rational
     }
-    same_digits
-  )
-  compounds * (other: Number) => Number.Real.written(.numerator * other, .places, .radix)
-  compounds / (other: Number) => Number.Real.written(.numerator / other, .places, .radix)
-  as_number => .numerator / .scale
-
-  written (counted, shown, base) => (
-    unit ^keyword := base.pow(shown)
-    digits_written ^keyword := chain None
-    unless shown.is_zero {
-      below ^keyword := (counted % unit).digits_in(base)
-      missing ^keyword := shown - below.count
-      while missing {
-        digits_written &= zero
-        missing = missing.pred
-      }
-      below for { digits_written &= it.value }
-    }
-    whole ^keyword := counted / unit
-    Number.Real(integer: whole, fraction: digits_written, radix: base)
-  )
-
-  Signed := class {
-    sign?: Node
-    real: Number.Real
-
-    negative => .sign
   }
 
-  rational => (.fraction.nonrepeating).not
-  irrational => .rational.not
+  // Leading zeros are equivalent to the number without them (N1.15).
+  Base{: 0+, number: Base} as (=== Base) => number
 }
 
-Number.Bases = chain None
-selected_digit (selection) => (
-  digit ^keyword := zero
-  before ^keyword := selection.previous
-  while (before) {
-    digit = digit.succ
-    before = before.previous
-  }
-  digit
-)
-digits_selected (selections) => (
-  digits ^keyword := chain None
-  walker ^keyword := selections.head
-  while (walker) {
-    digits &= selected_digit(walker.value)
-    walker = walker.next
-  }
-  digits
-)
-base{ }{size} spelled {spellings} ^keyword => (
-  alternatives ^keyword := spellings
-  made ^keyword := class: Number {
-    integer: Node
-    next => (
-      copied ^keyword := chain None
-      walker ^keyword := .integer.head
-      while (walker) {
-        copied &= walker.value
-        walker = walker.next
-      }
-      at ^keyword := copied.tail
-      borrowing ^keyword := true
-      while (borrowing.and(at)) {
-        if (at.value.previous) {
-          at.value = at.value.previous
-          borrowing = false
-        } else {
-          at.value = alternatives.components.tail
-          at = at.previous
-        }
-      }
-      lowered ^keyword := None
-      unless borrowing { lowered = made(integer: copied) }
-      lowered
-    )
-
-  }
-  made.radix = (size)
-  made.Signed = class: Number.Signed { }
-  made.Real = class: Number.Real { }
-  made.String = alternatives[]
-  Number.Bases &= made
-  made
-)
-
-Binary := base two spelled (`0` | `1`)
-Ternary := base three spelled (`0` | `1` | `2`)
-Quaternary := base four spelled (`0` | `1` | `2` | `3`)
-Quinary := base five spelled (`0` | `1` | `2` | `3` | `4`)
-Senary := base six spelled (`0` | `1` | `2` | `3` | `4` | `5`)
-Septenary := base seven spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6`)
-Octal := base eight spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7`)
-Nonary := base nine spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8`)
-Decimal := base ten spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9`)
-Undecimal := base ten.succ spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`))
-Duodecimal := base (ten + two) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`))
-Tridecimal := base (ten + three) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`))
-Tetradecimal := base (ten + four) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`))
-Pentadecimal := base (ten + five) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`) | (`e` | `E`))
-Hexadecimal := base (ten + six) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`) | (`e` | `E`) | (`f` | `F`))
-
-Decimal.components.hierarchy &= class {
-  percent => this / hundred
+Decimal &+= {
+  % => this / 100
 }
 
-Number.components.hierarchy &= class {
-  signed => (
-    unsigned ^keyword := this
-    Decimal.Signed(integer: unsigned)
-  )
-  as_integer => .signed
+{digits: Decimal.String} => Decimal(integer: digits)
+-{number: Decimal} => Decimal.Signed(sign: "-", integer: number)
+0x{digits: Hexadecimal.String} | 0X{digits: Hexadecimal.String} => Hexadecimal(integer: digits)
+0b{digits: Binary.String} | 0B{digits: Binary.String} => Binary(integer: digits)
+{number: Decimal}.{fraction: Decimal.String} => Decimal.Real(integer: number, fraction: fraction)
 
-  sign => None
-  negative => false
-  positive => true
-  abs => this
-  negated => .signed.negated
+// `u8 = Binary⁸`, `i8 = Binary⁸.Signed` (N1.7)
+u{width: Decimal} => Binary{length == width}
+i{width: Decimal} => Binary{length == width}.Signed
+USize = u8 | u16 | u32 | u64
+
+boolean &+= {
+  as Binary => this ? 1₂ : 0₂
 }
 
-Probability := Number{. < two}
+√{radicand: Number} => radicand.root_of(2)
+∛{radicand: Number} => radicand.root_of(3)
+∜{radicand: Number} => radicand.root_of(4)
+∑ | Σ {summed: Iterable} => summed.sum
+∏ {multiplied: Iterable} => multiplied.product
 
-u{ }{width} ^keyword => Binary{.integer.count < (width).succ}
-i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
-
-{digits: Decimal.String ^number} => Decimal(integer: digits)
-
-0x{digits: Hexadecimal.String ^number} ^number => Hexadecimal(integer: digits)
-0X{digits: Hexadecimal.String ^number} ^number => Hexadecimal(integer: digits)
-0b{digits: Binary.String ^number} ^number => Binary(integer: digits)
-0B{digits: Binary.String ^number} ^number => Binary(integer: digits)
-
-Precedence ^keyword := class { }
-JumpRead ^keyword := class { }
-HeadRead ^keyword := class { }
-head_ends ^keyword := chain None
-joined_points (first, then) => (
-  both ^keyword := chain None
-  first for { both &= it.value }
-  then for { both &= it.value }
-  both
-)
-with_point (points, point) => (
-  both ^keyword := chain None
-  points for { both &= it.value }
-  both &= point
-  both
-)
-precedences ^keyword := chain None
-remembered (cache, place, spelled) => (
-  cached_at ^keyword := cache.head
-  entry_found ^keyword := None
-  while ((cached_at).and((entry_found).not)) {
-    if (same_text(cached_at.value.place, place)) { if (same_text(cached_at.value.spelled, spelled)) { entry_found = cached_at.value } }
-    cached_at = cached_at.next
-  }
-  entry_found
-)
-Program.components.hierarchy &= class {
-
-  begins (statement, wanted) => (
-    point_at ^keyword := wanted.head
-    code_points(statement) for {
-      if (point_at) {
-        if (point_at.value) {
-          if (it.value == point_at.value) { point_at = point_at.next } else { return false }
-        } else { point_at = point_at.next }
-      }
-    }
-    (point_at).not
-  )
-
-  spelled_points (spelled) => (
-    wanted ^keyword := code_points(spelled)
-    wanted &= .middle_point(`x y`)
-    wanted &= None
-    wanted
-  )
-  counted_to (spelled) => (
-    wanted_points ^keyword := .spelled_points(spelled)
-    written_before ^keyword := zero
-    found ^keyword := None
-    rest_after ^keyword := .code
-    statement_at ^keyword := external first rest_after
-    while ((statement_at).and((found).not)) {
-      if (.begins(statement_at, wanted_points)) { found = written_before } elsif (.modified_begins(statement_at, wanted_points)) { found = written_before }
-      written_before = written_before.succ
-      rest_after = external rest rest_after
-      statement_at = external first rest_after
-    }
-    found
-  )
-  written_with (spelled) => .begins(.code, .spelled_points(spelled))
-  modified_begins (statement, wanted) => Modifier.spellings some { .begins(statement, joined_points(with_point(code_points(it.value), .middle_point(`x y`)), wanted)) }
-  is_jump => .written_with(`goto`)
-  middle_point (around) => code_points(around).head.next.value
-  same_points (from, other) => (
-    point_at ^keyword := from
-    other_at ^keyword := other.head
-    same_so_far ^keyword := true
-    while ((other_at).and(same_so_far)) {
-      if (point_at) {
-        unless (point_at.value == other_at.value) { same_so_far = false }
-        point_at = point_at.next
-      } else { same_so_far = false }
-      other_at = other_at.next
-    }
-    same_so_far
-  )
-  is_label => (
-    last ^keyword := code_points(.code).tail
-    labelled ^keyword := false
-    if (last) { labelled = (last.value == .middle_point(`x\y`)) }
-    labelled
-  )
-  jump_read => (
-    name_at ^keyword := code_points(.code).head
-    goto_left ^keyword := 5
-    while ((name_at).and(goto_left.nonzero)) {
-      name_at = name_at.next
-      goto_left = goto_left.pred
-    }
-    name_points ^keyword := chain None
-    space ^keyword := .middle_point(`x y`)
-    ended ^keyword := false
-    while ((name_at).and(ended.not)) {
-      if (name_at.value == space) { ended = true } else {
-        name_points &= name_at.value
-        name_at = name_at.next
-      }
-    }
-    JumpRead(name_points: name_points, conditional: ended)
-  )
-  is_conditional => .is_jump.and(.jump_read.conditional)
-  flow => (
-    steps ^keyword := .written
-    flow_at ^keyword := steps.head
-    while (flow_at) {
-      flow_at.falls_through = true
-      if flow_at.value.is_jump {
-        landing ^keyword := .target_of(flow_at.value)
-        landing_at ^keyword := steps.head
-        while (landing_at) {
-          if (same_text((external where landing_at.value.code), (external where landing))) { flow_at.jumps_to = landing_at }
-          landing_at = landing_at.next
-        }
-        flow_at.falls_through = flow_at.value.is_conditional
-      }
-      flow_at = flow_at.next
-    }
-    steps
-  )
-  jumps_backward => (
-    steps ^keyword := .flow
-    passed ^keyword := chain None
-    backward ^keyword := false
-    steps for {
-      passed &= it
-      if it.jumps_to {
-        landing ^keyword := it.jumps_to
-        passed for { if (it.value === landing) { backward = true } }
-      }
-    }
-    backward
-  )
-  terminating => .jumps_backward.not
-
-  target_of (jump) => (
-    wanted_name ^keyword := jump.jump_read.name_points
-    landing ^keyword := None
-    rest_after ^keyword := .code
-    statement_at ^keyword := external first rest_after
-    while ((statement_at).and((landing).not)) {
-      if Program(code: statement_at).is_label {
-        label_points ^keyword := code_points(statement_at)
-        if ((label_points.count == wanted_name.count.succ).and(.same_points(label_points.head, wanted_name))) { landing = statement_at }
-      }
-      rest_after = external rest rest_after
-      statement_at = external first rest_after
-    }
-    landing
-  )
-
-  head_enders => (
-    if head_ends.empty {
-      head_ends &= .middle_point(`x y`)
-      head_ends &= .middle_point(`x(y`)
-      head_ends &= .middle_point(`x:y`)
-      head_ends &= .middle_point(`x?y`)
-    }
-    head_ends
-  )
-
-  head_read => (
-    enders ^keyword := .head_enders
-    head ^keyword := chain None
-    ending ^keyword := None
-    code_points(.code) for {
-      unless (ending) {
-        if (enders.contains(it.value)) { ending = it.value } else { head &= it.value }
-      }
-    }
-    HeadRead(points: head, ending: ending)
-  )
-
-  required_heads => (
-    reading ^keyword := this
-    enders ^keyword := .head_enders
-    space ^keyword := enders.at(0).value
-    colon ^keyword := enders.at(2).value
-    left_to_say ^keyword := with_point(joined_points(with_point(chain None, space), code_points(`=>`)), space)
-    left_to_say = joined_points(left_to_say, code_points(`TODO`))
-    wanted ^keyword := chain None
-    statement_head ^keyword := None
-    reading.written for {
-      statement_head = it.value.head_read
-      if (statement_head.ending) {
-        if ((statement_head.ending == colon).and(statement_head.points.head.value.as_character.word)) { wanted &= statement_head.points } elsif (reading.begins(it.value, joined_points(statement_head.points, left_to_say))) { wanted &= statement_head.points }
-      }
-    }
-    wanted
-  )
-
-  declares (head) => (
-    reading ^keyword := this
-    enders ^keyword := .head_enders
-    spaced ^keyword := with_point(head, enders.at(0).value)
-    opened ^keyword := with_point(head, enders.at(1).value)
-    typed ^keyword := with_point(head, enders.at(2).value)
-    reading.written some { (reading.begins(it.value, spaced)).or(reading.begins(it.value, opened)).or(reading.begins(it.value, typed)) }
-  )
-  precedence (spelled) => (
-    place_of ^keyword := external where .code
-    kept_entry ^keyword := remembered(precedences, place_of, spelled)
-    unless (kept_entry) {
-      found_count ^keyword := .counted_to(spelled)
-      kept_entry = Precedence(place: place_of, spelled: spelled, answer: found_count, ranked: found_count)
-      precedences &= kept_entry
-    }
-    kept_entry.answer
-  )
+Iterable &+= {
+  ∞ => unbounded
+  // `0..2..1` goes on from where the last range ended.
+  .. (next: Number) => this, (last..next)[1..]
+  padded (width: Number, with = 0) => [with] * (width - length), this
 }
 
+// A program read back as its text: what it jumps to, which heads it requires, and where a spelling is declared.
+Program &+= {
+  is_jump => code ~= ⊢"goto "
+  is_label => code ~= "\" ⊣
+  jump => code ~= (⊢"goto ", name: Char.Word[], (" ", condition: *)?)
+  is_conditional => is_jump && jump.condition
+  target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\"}.first
 
-Number.components.hierarchy &= class {
-  mod (modulus: Number) => this % modulus
-  saturate (limit: Number) => .min(limit)
+  flow => written.map(step => (step, jumps_to: step.is_jump ? target_of(step) : None, falls_through: !step.is_jump || step.is_conditional))
+  jumps_backward => written.some(step => step.is_jump && written.index_of(target_of(step)) <= written.index_of(step))
+  terminating => !jumps_backward
 
-  v (radix: Number) => Number.from_digits(radix, .digits_in(ten))
-
-  root (degree: Number) => (
-    rooted ^keyword := zero
-    while (rooted.succ.pow(degree) < this.succ) { rooted = rooted.succ }
-    rooted
-  )
-  root_of (degree: Number) => (
-    whole ^keyword := .root(degree)
-    held ^keyword := this
-    reached ^keyword := whole
-    if (whole.pow(degree) == this) { reached = whole } else { reached = Number.Real(integer: whole, fraction: Number.RootDigits(radicand: held, degree: degree, place: zero), radix: ten) }
-    reached
-  )
-
-  bit_pairs (other: Number) => (
-    mine ^keyword := .digits_in(two).tail
-    theirs ^keyword := other.digits_in(two).tail
-    pairs ^keyword := chain None
-    while ((mine).or(theirs)) {
-      left_bit ^keyword := false
-      right_bit ^keyword := false
-      if (mine) {
-        left_bit = mine.value.set
-        mine = mine.previous
-      }
-      if (theirs) {
-        right_bit = theirs.value.set
-        theirs = theirs.previous
-      }
-      pairs &= Number.BitPair(left: left_bit, right: right_bit)
-    }
-    pairs
-  )
-  from_bits (bits) => (
-    total ^keyword := zero
-    walker ^keyword := bits.tail
-    while (walker) {
-      total = total + total
-      if (walker.value) { total = total.succ }
-      walker = walker.previous
-    }
-    total
-  )
-  ~&& (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.and(it.value.right) })
-  ~|| (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.or(it.value.right) })
-  ~x|| (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.xor(it.value.right) })
-  ~!&& (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.nand(it.value.right) })
-  ~!|| (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.nor(it.value.right) })
-  ~x!|| (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.xnor(it.value.right) })
-  ~! (width: Number) => (
-    flipped ^keyword := zero
-    place ^keyword := one
-    left ^keyword := width
-    rest ^keyword := this
-    while left {
-      unless (rest % two).nonzero { flipped = flipped + place }
-      rest = rest / two
-      place = place + place
-      left = left.pred
-    }
-    flipped
-  )
+  head => code ~= (⊢ head: (!(" " | "(" | ":" | "?"))[], ending: (" " | "(" | ":" | "?")?)
+  required_heads => written{(.head.ending == ":" && .head.head ~= ⊢Char.Word) || .code ~= (.head.head, " => TODO")}.head.head
+  declares (head: String) => written.some(.code ~= ⊢(head, " " | "(" | ":"))
+  precedence (spelled: String) => written.index_of(written{.code ~= ⊢((Modifier.spellings, " ")?, spelled, " ")}.first)
 }
 
-Number.BitPair = class {
-  left: Node
-  right: Node
-}
-
-Number.RootDigits = class: Ray {
-  radicand: Number
-  degree: Number
-  place: Number
-
-  bounded => false
-  nonrepeating => true
-  value => (
-    shifted ^keyword := .radicand * ten.pow(.degree * .place.succ)
-    shifted.root(.degree) % ten
-  )
-  next => (
-    held_radicand ^keyword := .radicand
-    held_degree ^keyword := .degree
-    after ^keyword := .place.succ
-    Number.RootDigits(radicand: held_radicand, degree: held_degree, place: after)
-  )
-}
-
-boolean.components.hierarchy &= class {
-  as (=== Binary) => if (.holds) { 0b1 } else { 0b0 }
-}
-
-USize => (u8 | u16 | u32 | u64)
-
-√{radicand} ^punctuation => radicand.root_of(2)
-∛{radicand} ^punctuation => radicand.root_of(3)
-∜{radicand} ^punctuation => radicand.root_of(4)
-∑{ }{summed} ^punctuation => summed.sum
-Σ{ }{summed} ^punctuation => summed.sum
-∏{ }{multiplied} ^punctuation => multiplied.product
-
-∞ => zero.entry.terminal
-
-Iterable.components.hierarchy &= class {
-  ∞ => .unbounded
-}
-
-Terminating := class: Program {
-  admits (candidate) => candidate.terminating
-  verify (candidate) => (
-    unless candidate.terminating { ERROR@candidate `may not terminate` }
-    candidate
-  )
-}
+Terminating := Program{terminating}

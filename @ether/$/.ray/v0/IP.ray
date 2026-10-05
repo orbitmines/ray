@@ -1,323 +1,95 @@
-IP := class {
-  segments: Node
+IP := class: Location &+ (-1 <- . -> +1) {
+  static NUMBER_OF_SEGMENTS: Decimal
+  static SEGMENT_LENGTH: Decimal
+  static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
 
-  segment_count => .segments.count
-  segment_length => 8
+  static Segment := class {
+    static Binary := Binary{length == SEGMENT_LENGTH}
+  }
+  segments: Segment[]{length == NUMBER_OF_SEGMENTS}
 
-  bit_count => .segment_count * .segment_length
-  number_of_segments => .segment_count
-  number_of_bits => .bit_count
-
-  separator => U+002E
-  base => 10
-
-  bits => (
-    out := chain None
-    walker ^keyword := .segments.head
-    length := .segment_length
-    while (walker) {
-      bits_of(walker.value, length) for { out &= it.value }
-      walker = walker.next
+  as (:== String) => {
+    prefix_length = NUMBER_OF_BITS - (as Binary ~= ⊢(0 & 1)[] -- .length)
+    if prefix_length != NUMBER_OF_BITS {
+      binary_form = as Binary
+      binary_form[prefix_length..] = 0
+      return recur(binary_form as static), "/", prefix_length
     }
-    out
-  )
 
-  as (=== String) => (
-    parts := chain None
-    walker ^keyword := .segments.head
-    radix := .base
-    while (walker) {
-      parts &= walker.value.spelled_in(radix)
-      walker = walker.next
+    segments as Segment.Binary[]
+  }
+
+  + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
+  - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
+
+  / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => {
+    return this if prefix_length == NUMBER_OF_BITS
+
+    binary_form = as Binary
+    binary_form[prefix_length..] = 0 | 1
+
+    binary_form
+  }
+
+  static v4 := class: IP ({segments.join(".")}) => {
+    static NUMBER_OF_SEGMENTS = 4
+    static SEGMENT_LENGTH = 8
+
+    static Segment: Decimal{< 2^8}
+  }
+
+  static v6 := class: IP (
+    (left: Segment[]).join(":")?,
+    zero_compression: "::" (? if !defined_segments.empty),
+    (right: Segment[]).join(":")?,
+    (":", embedded_ipv4: IPv4)?
+  ) => {
+    static NUMBER_OF_SEGMENTS = 8
+    static SEGMENT_LENGTH = 16
+
+    static Segment: Hexadecimal{length <= 4}
+
+    segments => left, 0[]{length == number_of_compressed_segments}(), right, embedded_ipv4 as Binary
+    defined_segments: Segment[] => left, right, embedded_ipv4 as Binary
+    number_of_compressed_segments => NUMBER_OF_SEGMENTS - defined_segments.length
+
+    // The symbol "::" MUST NOT be used to shorten just one 16-bit 0 field. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.2)
+    dynamically assert defined_segments.length (zero_compression ? < NUMBER_OF_SEGMENTS - 1 : == NUMBER_OF_SEGMENTS)
+    // The longest run of consecutive 16-bit 0 fields MUST be shortened (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
+    dynamically assert left & right ~= 0[] -- .length <= number_of_compressed_segments if zero_compression
+    // When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
+    dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
+
+    compress_zeros: static => {
+      return this if zero_compression
+
+      zeros = left, right ~= 0[] -- #{length == min() & leftmost}
+      return this if zeros.count <= 1
+
+      return (<- zeros), "::", (zeros ->), ":", embedded_ipv4
     }
-    String.joined(parts, .separator)
-  )
 
-  chainable == (other: IP) => .as(String) == other.as(String)
+    embed_ipv4: static => {
+      return this if embedded_ipv4
 
-  next => this + 1
-  previous => this - 1
-
-  parse (text: String) => (
-    slash := text.index_of("/")
-    written ^keyword := text
-    unless (slash === None) { written = text.slice(0, slash) }
-    address ^keyword := None
-    if (written.contains(":")) { address = IP.v6.parse(written) } else { address = IP.v4(segments: IP.read(written, U+002E, 10)) }
-    if (slash === None) { address } else { address / text.slice(slash + 1, text.count).as_number }
-  )
-
-  from_bits (address_bits) => (
-    out := chain None
-    bit_at ^keyword := address_bits.head
-    while (bit_at) {
-      segment_bits := chain None
-      left_in_segment ^keyword := .segment_length
-      while ((bit_at).and(left_in_segment.nonzero)) {
-        segment_bits &= bit_at.value
-        bit_at = bit_at.next
-        left_in_segment = left_in_segment.pred
-      }
-      out &= number_of(segment_bits)
+      segments[..-3], segments[-2..] as Binary as IPv4
+        // Prefer compressed zeros representation when possible (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
+        -- .compress_zeros
     }
-    this.components.hierarchy.head.value(segments: out)
-  )
 
-  compounds + (offset: Number) => .from_bits(IP.sum_of(.bits, bits_of(offset, .bit_count), false))
-  compounds - (offset: Number) => .from_bits(IP.sum_of(.bits, IP.inverted(bits_of(offset, .bit_count)), true))
+    as (:== String) => this
+      // Mixed notation for a well-known IPv4-mapped prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
+      -- .embed_ipv4 if ==.instance_of "::ffff:0.0.0.0/96"
+      // Mixed notation for NAT64 (https://datatracker.ietf.org/doc/html/rfc6052#section-2.1)
+      -- .embed_ipv4 if ==.instance_of "64:ff9b::/96"
+      .compress_zeros
+      // Lowercase hexadecimal (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
+      .lowercase
+  }
 
-  sum_of (left_bits, right_bits, carry_in) => (
-    reversed_bits := chain None
-    carry_on ^keyword := carry_in
-    left_at ^keyword := left_bits.tail
-    right_at ^keyword := right_bits.tail
-    while (left_at) {
-      ones_here ^keyword := 0
-      if left_at.value { ones_here = ones_here.succ }
-      if right_at.value { ones_here = ones_here.succ }
-      if carry_on { ones_here = ones_here.succ }
-      sum_bit ^keyword := 0
-      if ones_here.odd { sum_bit = 1 }
-      reversed_bits &= sum_bit
-      carry_on = 1 < ones_here
-      left_at = left_at.previous
-      right_at = right_at.previous
-    }
-    forwards := chain None
-    walker ^keyword := reversed_bits.tail
-    while (walker) {
-      forwards &= walker.value
-      walker = walker.previous
-    }
-    forwards
-  )
-  inverted (some_bits) => (
-    flipped := chain None
-    some_bits for {
-      flipped_bit ^keyword := 1
-      if it.value { flipped_bit = 0 }
-      flipped &= flipped_bit
-    }
-    flipped
-  )
-
-  compounds / (prefix_length: Number) => (
-    kept_bits ^keyword := prefix_length
-    cleared := chain None
-    bit_at ^keyword := .bits.head
-    while (bit_at) {
-      if kept_bits.is_zero { cleared &= 0 } else {
-        cleared &= bit_at.value
-        kept_bits = kept_bits.pred
-      }
-      bit_at = bit_at.next
-    }
-    this.from_bits(cleared)
-  )
-
-  read (text: String, separator: Char, radix: Number) => (
-    out := chain None
-    text.split(separator) for { out &= it.value.as_number_in(radix) }
-    out
-  )
-}
-
-IP.v4 = class: IP {
-  segment_length => 8
-  separator => U+002E
-  base => 10
-}
-
-IP.v4.Segment = Number{. < 256}
-
-IP.v6 = class: IP {
-  segments: Node
-  left: None
-  right: None
-  embedded: None
-
-  segment_length => 16
-  separator => U+003A
-  base => 16
-
-  parse (text: String) => (
-    gap := text.index_of("::")
-    if (gap === None) {
-      read_left := IP.v6.groups(text)
-      IP.v6(segments: read_left.groups, left: read_left.groups, embedded: read_left.embedded)
-    } else {
-      read_left := IP.v6.groups(text.slice(0, gap))
-      read_right := IP.v6.groups(text.slice(gap + 2, text.count))
-      filled := chain None
-      read_left.groups for { filled &= it.value }
-      missing ^keyword := 8 - (read_left.groups.count + read_right.groups.count)
-      while missing.nonzero {
-        filled &= 0
-        missing = missing.pred
-      }
-      read_right.groups for { filled &= it.value }
-      IP.v6(segments: filled, left: read_left.groups, right: read_right.groups, embedded: read_right.embedded)
-    }
-  )
-
-  groups (text: String) => (
-    read := chain None
-    inside ^keyword := None
-    if text.nonempty {
-      text.split(U+003A) for {
-        piece := it.value
-        if (piece.contains(".")) {
-          inside = IP.v4(segments: IP.read(piece, U+002E, 10))
-          quad := inside.segments
-          read &= (quad.at(0).value * 256) + quad.at(1).value
-          read &= (quad.at(2).value * 256) + quad.at(3).value
-        } else { read &= piece.as_number_in(16) }
-      }
-    }
-    IP.v6.Groups(groups: read, embedded: inside)
-  )
-
-  full => .written(0, .segment_count)
-
-  zero_compression => (.left === None).not.and(.right === None).not
-  defined_segments => (
-    defined := chain None
-    unless (.left === None) { .left for { defined &= it.value } }
-    unless (.right === None) { .right for { defined &= it.value } }
-    defined
-  )
-  number_of_compressed_segments => if .zero_compression { 8 - .defined_segments.count } else { 0 }
-
-  leading_zeros (some) => (
-    counted ^keyword := 0
-    stopped ^keyword := false
-    some for {
-      unless stopped { if it.value.is_zero { counted = counted.succ } else { stopped = true } }
-    }
-    counted
-  )
-  longest_zeros (some) => (
-    best ^keyword := 0
-    run ^keyword := 0
-    some for {
-      if it.value.is_zero {
-        run = run.succ
-        if (best < run) { best = run }
-      } else { run = 0 }
-    }
-    best
-  )
-  valid => (
-    holds ^keyword := true
-    if .zero_compression {
-      unless (.defined_segments.count < 7) { holds = false }
-      if (.number_of_compressed_segments < .longest_zeros(.defined_segments)) { holds = false }
-      if (.longest_zeros(.left) == .number_of_compressed_segments) { holds = false }
-    } else { unless (.segments.count == 8) { holds = false } }
-    holds
-  )
-  checked => dynamically (assert .valid)
-
-  compress_zeros => if .zero_compression { this } else { IP.v6.parse(.compressed) }
-  embed_ipv4 => if (.embedded === None) { IP.v6.parse(.compressed_before_v4 + .tail_v4.as(String)) } else { this }
-  compressed_before_v4 => (
-    first_six := chain None
-    left_to_take ^keyword := 6
-    .segments for {
-      if left_to_take.nonzero { first_six &= it.value }
-      left_to_take = left_to_take.pred
-    }
-    leading := IP.v6(segments: first_six)
-    written := leading.compressed
-    if (written.ends_with(":")) { written } else { written + ":" }
-  )
-  lowercase => .as(String).lower_case
-
-  mapped => (
-    first_five_zero ^keyword := true
-    at ^keyword := 0
-    while (at < 5) {
-      unless .segments.at(at).value.is_zero { first_five_zero = false }
-      at = at.succ
-    }
-    first_five_zero.and(.segments.at(5).value == 65535)
-  )
-  translated => (
-    rest_zero ^keyword := true
-    at ^keyword := 2
-    while (at < 6) {
-      unless .segments.at(at).value.is_zero { rest_zero = false }
-      at = at.succ
-    }
-    (.segments.at(0).value == 100).and(.segments.at(1).value == 65435).and(rest_zero)
-  )
-  tail_v4 => (
-    quad := chain None
-    quad &= .segments.at(6).value / 256
-    quad &= .segments.at(6).value % 256
-    quad &= .segments.at(7).value / 256
-    quad &= .segments.at(7).value % 256
-    IP.v4(segments: quad)
-  )
-
-  as (=== String) => (
-    if .mapped { "::ffff:" + .tail_v4.as(String) }
-    elsif .translated { "64:ff9b::" + .tail_v4.as(String) }
-    else { .compressed }
-  )
-
-  zeros => (
-    best_at ^keyword := 0
-    best_run ^keyword := 0
-    at ^keyword := 0
-    run ^keyword := 0
-    walker ^keyword := .segments.head
-    while (walker) {
-      if walker.value.is_zero {
-        run = run.succ
-        if (best_run < run) {
-          best_run = run
-          best_at = at.succ - run
-        }
-      } else { run = 0 }
-      at = at.succ
-      walker = walker.next
-    }
-    Chain.Run(at: best_at, length: best_run)
-  )
-
-  compressed => (
-    found := .zeros
-    if (found.length < 2) { .full } else {
-      before := .written(0, found.at)
-      after := .written(found.at + found.length, .segment_count)
-      before + ("::" + after)
-    }
-  )
-
-  written (from: Number, until: Number) => (
-    parts := chain None
-    at ^keyword := from
-    radix := .base
-    while (at < until) {
-      parts &= .segments.at(at).value.spelled_in(radix)
-      at = at.succ
-    }
-    String.joined(parts, .separator)
-  )
-}
-
-IP.v6.Segment = Number{. < 65536}
-
-IP.v6.Groups = class {
-  groups: Node
-  embedded: None
-}
-
-Chain.Run = class {
-  at: Number
-  length: Number
 }
 
 IPv4 := IP.v4
 IPv6 := IP.v6
+
+{ip: IP}/{prefix_length: Decimal}: IP => ip / prefix_length

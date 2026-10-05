@@ -1,245 +1,88 @@
-Unicode := class {
+// Unicode is versioned from the start (X3.2); a pinned version is fetched once and kept under @ether (X3.3, X3.7).
+Unicode := namespace %17 {
+  static UCD = @"https://www.unicode.org"/Public/%version/ucd
 
-  scalar (codepoint: Number) => (codepoint < 1114112).and(Unicode.surrogate(codepoint).not)
-  surrogate (codepoint: Number) => (codepoint < 57344).and(codepoint.at_least(Unicode.surrogate_first))
-
-  fits (codepoint: Number, width: Number) => codepoint < (2).pow(width)
-  surrogate_first => 55296
-
-  GeneralCategory := enum letter | number | punctuation | symbol | separator | other
-  category (character: Char) => (
-    if character.letter { Unicode.GeneralCategory.letter }
-    elsif character.digit { Unicode.GeneralCategory.number }
-    elsif character.blank { Unicode.GeneralCategory.separator }
-    elsif (character < 32) { Unicode.GeneralCategory.other }
-    elsif character.is_ascii { Unicode.GeneralCategory.punctuation }
-    else { Unicode.GeneralCategory.symbol }
-  )
-
-  TF := class: Array { }
-
-  UTF8 := class: Unicode.TF {
-
-    as_code_points => code_points(this)
-    encode (codepoint: Number) => (
-      units := chain None
-      if (codepoint < 128) { units &= codepoint }
-      elsif (codepoint < 2048) {
-        units &= 192 + (codepoint / 64)
-        units &= 128 + (codepoint % 64)
-      } elsif (codepoint < 65536) {
-        units &= 224 + (codepoint / 4096)
-        units &= 128 + ((codepoint / 64) % 64)
-        units &= 128 + (codepoint % 64)
-      } else {
-        units &= 240 + (codepoint / 262144)
-        units &= 128 + ((codepoint / 4096) % 64)
-        units &= 128 + ((codepoint / 64) % 64)
-        units &= 128 + (codepoint % 64)
-      }
-      written := chain None
-      units for { bits_of(it.value, 8) for { written &= it.value } }
-      written
-    )
-    decode (bits) => code_points(bits).head.value
+  // A table is read by a class pattern: comments and blank lines between its rows (X3.1).
+  static Table<Row> := class = (("#", *) | (row: Row, (" "[], "#", *)?) | "")[].join("\n") {
+    rows => this.row{!= None}
+    [codepoint: Scalar] => rows{.range.in(codepoint)}.first
+  }
+  static Range := class = (from: Scalar, ("..", to: Scalar)?) {
+    in (codepoint: Scalar) => from <= codepoint <= to ?? from
   }
 
-  UTF16 := class: Unicode.TF {
-    unit => 65536
-    encode (codepoint: Number) => if (Unicode.fits(codepoint, 16)) { bits_of(codepoint, 16) } else {
-      shifted := codepoint - .unit
-      pair := bits_of(Unicode.surrogate_first + (shifted / 1024), 16)
-      bits_of(Unicode.surrogate_first + 1024 + (shifted % 1024), 16) for { pair &= it.value }
-      pair
-    }
-    decode (bits) => (
-      high := number_of(bits.slice_bits(0, 16))
-      if (Unicode.surrogate(high)) {
-        low := number_of(bits.slice_bits(16, 32))
-        .unit + ((high - Unicode.surrogate_first) * 1024) + (low - (Unicode.surrogate_first + 1024))
-      } else { high }
-    )
+  static CodePoint := class: Hexadecimal{length == 1..6}
+  static Scalar := class: CodePoint {
+    dynamically assert this < 0x110000 && !(0xD800 <= this <= 0xDFFF)
+
+    category => GeneralCategory.rows{Data[this].general_category ~= ⊢.short_name}.first
   }
 
-  UTF32 := class: Unicode.TF {
-    encode (codepoint: Number) => bits_of(codepoint, 32)
-    decode (bits) => number_of(bits)
+  static Blocks = UCD/"Blocks.txt" as Table<(range: Range, "; ", value: *)>
+  static Scripts = UCD/"Scripts.txt" as Table<(range: Range, " "[], "; ", value: *)>
+  static EastAsianWidth = UCD/"EastAsianWidth.txt" as Table<(range: Range, " "[], "; ", value: *)>
+  // `ß` folds to `ss` (X1.3)
+  static CaseFolding = UCD/"CaseFolding.txt" as Table<(range: Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
+  static BidiMirroring = UCD/"BidiMirroring.txt" as Table<(range: Range, "; ", value: Scalar)>
+
+  static Data = UCD/"UnicodeData.txt" as Table<(
+    range: Range, ";", name: *, ";", general_category: *, ";", canonical_combining_class: *, ";",
+    bidi_class: *, ";", decomposition_mapping: *, ";", decimal_digit_value: *, ";", digit_value: *, ";",
+    numeric_value: *, ";", bidi_mirrored: "Y" | "N", ";", unicode1_name: *, ";", ISO_10646_comment: *, ";",
+    upper_case: Scalar?, ";", lower_case: Scalar?, ";", title_case: Scalar?
+  )>
+  static UpperCase = Data.rows{.upper_case}.map(.range.from: .upper_case)
+  static LowerCase = Data.rows{.lower_case}.map(.range.from: .lower_case)
+  static Lowercase = Scalar{Data[.].general_category == "Ll"}
+
+  // `Char.Latin`, `Char.Arabic` (X3.5)
+  Scripts.rows.value.unique.for script => static Char.`script` = Char{.script == script}
+
+  static GeneralCategory := class = UCD/"PropertyValueAliases.txt" as Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)> {
+    // `LC` is the cased letters, Lu | Ll | Lt; every other short name prefixes the categories it holds.
+    rows.for category => static `category.name` = Scalar{Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
   }
 
-  tables_at => "https://www.unicode.org/Public/UCD/latest/ucd/"
-  table (name) => external io (.tables_at + name).bits
-
-  version := 15
-
-  Endianness := enum little | big
-
-  ordered (bits, order) => (
-    if (order == Unicode.Endianness.big) { return bits }
-    units := chain None
-    unit ^keyword := chain None
-    left ^keyword := 8
-    bits for {
-      unit &= it.value
-      left = left.pred
-      if left.is_zero {
-        units &= unit
-        unit = chain None
-        left = 8
-      }
-    }
-    out := chain None
-    walker ^keyword := units.tail
-    while (walker) {
-      walker.value for { out &= it.value }
-      walker = walker.previous
-    }
-    out
-  )
-
-  Table := class {
-    name: String
-    row: Node
-    version: Unicode.version
-    latest: false
-
-    source => "https://www.unicode.org/Public/" + (.version.as(String) + (".0.0/ucd/" + .name))
-    cached => "@ether/@https/www.unicode.org/Public/" + (.version.as(String) + ("/" + .name))
-
-    text => (
-      held ^keyword := IO.read(.cached)
-      if (held.empty.or(.latest)) {
-        held = IO.read(.source)
-        IO.write(.cached, held)
-      }
-      held
-    )
-
-    rows => (
-      read := chain None
-      reader := .row
-      .text.lines for {
-        line := it.value.before("#").trimmed
-        if line.nonempty { read &= reader.read(line) }
-      }
-      read
-    )
-
-    at (codepoint: Number) => (
-      found ^keyword := None
-      .rows for {
-        if (found === None) { if (it.value.covers(codepoint)) { found = it.value } }
-      }
-      found
-    )
+  // A transformation format: code units of one width (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G25549)
+  static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
+    static CodeUnit: Binary
+    as (:== CodePoint[]): CodePoint[]
   }
 
-  Range := class {
-    first: Number
-    last: Number
-    value: Node
-
-    covers (codepoint: Number) => codepoint.at_least(.first).and(codepoint < .last.succ)
-
-    read (line: String) => (
-      columns := line.split(U+003B)
-      span := columns.head.value.trimmed
-      first_written := span.before("..")
-      last_written ^keyword := span.after("..")
-      if last_written.empty { last_written = first_written }
-      Unicode.Range(first: first_written.as_number_in(16), last: last_written.as_number_in(16), value: columns.head.next.value.trimmed)
-    )
+  // Endianness is a direction on the bytes: little-endian reads them right-to-left, a single byte is the same either way (X3.6).
+  static Endianness := enum BE | LE
+  static endianness: Endianness = BE
+  TF &+= {
+    bytes => endianness == LE ? <-(this as Byte[]) : this as Byte[]
   }
 
-  Folding := class {
-    code: Number
-    status: String
-    mapping: Node
-
-    covers (codepoint: Number) => codepoint == .code
-
-    read (line: String) => (
-      columns := line.split(U+003B)
-      points := chain None
-      columns.at(2).value.trimmed.split(U+0020) for { if it.value.nonempty { points &= it.value.as_number_in(16).as_character } }
-      Unicode.Folding(code: columns.head.value.trimmed.as_number_in(16), status: columns.at(1).value.trimmed, mapping: points.as(String))
-    )
+  // https://www.unicode.org/versions/latest/core-spec/chapter-3/#G27288
+  static UTF-8 := class: TF = sequence: (
+    prefix: 1[]{length == 0..4},
+    U0: Binary{length == 8 - prefix.length}{⊢0},
+    (10₂, U1: Binary⁶) if prefix ⊢11₂,
+    (10₂, U2: Binary⁶) if prefix ⊢111₂,
+    (10₂, U3: Binary⁶) if prefix ⊢1111₂
+  )[] {
+    static CodeUnit = Binary⁸
+    as (:== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
   }
 
-  EastAsianWidth := Unicode.Table(name: "EastAsianWidth.txt", row: Unicode.Range)
-  Scripts := Unicode.Table(name: "Scripts.txt", row: Unicode.Range)
-  Blocks := Unicode.Table(name: "Blocks.txt", row: Unicode.Range)
-  CaseFolding := Unicode.Table(name: "CaseFolding.txt", row: Unicode.Folding)
+  // https://www.unicode.org/versions/latest/core-spec/chapter-3/#G27792
+  static UTF-16 := class: TF = sequence: (
+    prefix: 110110₂?,
+    U0: Binary⁴,
+    U1: Binary{length == 12 - prefix.length},
+    (110111₂, U2: Binary¹⁰) if prefix
+  )[] {
+    static CodeUnit = Binary¹⁶
+    as (:== CodePoint[]) => sequence.map(.U0 + 1, .U1, .U0)
+  }
 
-  folded (character) => (
-    found ^keyword := None
-    Unicode.CaseFolding.rows for {
-      held := it.value
-      if (held.code == character.codepoint) {
-        if ((held.status == "C").or(held.status == "F")) { found = held.mapping }
-      }
-    }
-    if (found === None) { character.as(String) } else { found }
-  )
+  static UTF-32 := class: TF = Binary³²{⊢(0[]¹¹)}[] {
+    static CodeUnit = Binary³²
+  }
 }
 
-code_points (source) => (
-  points := chain None
-  point := 0
-  ones := 0
-  counting := true
-  leading := true
-  skip := 0
-  position := 0
-  following := 0
-  take (b) => (
-    bit := inline b
-    if counting {
-      if bit { ones = ones.succ } else { counting = false }
-    } elsif skip.nonzero { skip = skip.pred } else {
-      point = point + point
-      if bit { point = point.succ }
-    }
-    position = position.succ
-    if (position == 8) {
-      position = 0
-      if leading {
-        following = if ones.is_zero { 0 } else { ones.pred }
-      } else { following = following.pred }
-      if following.is_zero {
-        points &= point
-        point = 0
-        ones = 0
-        counting = true
-        leading = true
-      } else {
-        leading = false
-        counting = false
-        skip = 2
-      }
-    }
-    points
-  )
-  if (source.head) { source for { take(it.value.holds) } } else { external bits source take }
-  points
-)
-
-Unicode.CodePoint = Hexadecimal{. < 16777216}
-
-Unicode.Scalar = Unicode.CodePoint{Unicode.scalar(this)}
-
-U+{codepoint: Hexadecimal.String ^number} ^number => Hexadecimal(integer: codepoint).as_character
-
-Chain.components.hierarchy &= class {
-  slice_bits (from, to) => (
-    out := chain None
-    walker ^keyword := .at(from)
-    left ^keyword := to - from
-    while (left.nonzero.and(walker)) {
-      out &= walker.value
-      walker = walker.next
-      left = left.pred
-    }
-    out
-  )
-}
-
+// https://www.unicode.org/versions/latest/core-spec/appendix-a/#G7083
+U+{codepoint: Unicode.CodePoint.String}: Unicode.Scalar => codepoint

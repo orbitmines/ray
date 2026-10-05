@@ -3,63 +3,37 @@
 
 mark ^keyword := external global
 
-parts := chain None
-parts &= 1
-parts &= 0
-parts &= 0
-parts &= 12
-address := IPv4(segments: parts)
-unless (address.segment_count == 4) { INFO@mark `IP1 the address has other than four segments` }
-unless (address.bit_count == (4 * 8)) { INFO@mark `IP2 the address is not thirty-two bits` }
-unless (address.as(String) == "1.0.0.12") { INFO@mark `IP3 the address does not write as 1.0.0.12` }
-unless (address.bits.count == (4 * 8)) { INFO@mark `IP4 the address is not thirty-two bits long` }
-unless ((address / (2 * 10 + 4)).as(String) == "1.0.0.0") { INFO@mark `IP31 the network of 1.0.0.12/24 is not 1.0.0.0` }
-unless ((address + 3).as(String) == "1.0.0.15") { INFO@mark `IP32 three past 1.0.0.12 is not 1.0.0.15` }
-unless ((address - 2).as(String) == "1.0.0.10") { INFO@mark `IP33 two before 1.0.0.12 is not 1.0.0.10` }
+address := "1.0.0.12" as IPv4
+unless address.segments.length == 4 { INFO@mark `IP1 the address has other than four segments` }
+unless IPv4.NUMBER_OF_BITS == 32 { INFO@mark `IP2 the address is not thirty-two bits` }
+unless address as String == "1.0.0.12" { INFO@mark `IP3 the address does not write as 1.0.0.12` }
+unless (address as Binary).length == 32 { INFO@mark `IP4 the address is not thirty-two bits long` }
+unless address / 24 as String == "1.0.0.0/24" { INFO@mark `IP31 the network of 1.0.0.12/24 is not 1.0.0.0/24` }
+unless address + 3 as String == "1.0.0.15" { INFO@mark `IP32 three past 1.0.0.12 is not 1.0.0.15` }
+unless address - 2 as String == "1.0.0.10" { INFO@mark `IP33 two before 1.0.0.12 is not 1.0.0.10` }
+unless address == "1.0.0.12" as IPv4 { INFO@mark `IP5 the address read back is another one` }
 
-read_back := IPv4(segments: IP.read("1.0.0.12", U+002E, 10))
-unless (read_back == address) { INFO@mark `IP5 the address read back is another one` }
+wide := "1:0:0:0:0:0:0:2" as IPv6
+unless wide.segments.length == 8 { INFO@mark `IP6 the wide address has other than eight segments` }
+unless wide.zero_compression.not { INFO@mark `IP7 the wide address written in full is read as compressed` }
+unless wide.compress_zeros.number_of_compressed_segments == 6 { INFO@mark `IP8 the run of zeros is not six long` }
+unless wide.compress_zeros.left == 1 { INFO@mark `IP9 the run of zeros does not start after one` }
+unless wide as String == "1::2" { INFO@mark `IP10 the zeros are not written as ::` }
 
-sides := chain None
-sides &= 1
-sides &= 0
-sides &= 0
-sides &= 0
-sides &= 0
-sides &= 0
-sides &= 0
-sides &= 2
-wide := IPv6(segments: sides)
-unless (wide.segment_count == 8) { INFO@mark `IP6 the wide address has other than eight segments` }
-unless (wide.full == "1:0:0:0:0:0:0:2") { INFO@mark `IP7 the wide address writes wrong in full` }
-unless (wide.zeros.length == (4 + 2)) { INFO@mark `IP8 the run of zeros is not six long` }
-unless (wide.zeros.at == 1) { INFO@mark `IP9 the run of zeros does not start at one` }
-unless (wide.compressed == "1::2") { INFO@mark `IP10 the zeros are not written as ::` }
+written := "1.2.3.4" as IP
+unless written.segments.first == 1 { INFO@mark `IP21 the first segment is not one` }
+unless written as String == "1.2.3.4" { INFO@mark `IP22 an address does not read back as it was written` }
+unless written == written { INFO@mark `IP23 an address is not itself` }
+if written == "1.2.3.5" as IP { INFO@mark `IP24 two different addresses are the same` }
 
-// An address read from its text, and told apart from another.
-written := IP(segments: IP.read("1.2.3.4", U+002E, 10))
-unless (written.segment_count == 4) { INFO@mark `IP20 an address read from text has other than four segments` }
-unless (written.segments.head.value == 1) { INFO@mark `IP21 the first segment is not one` }
-unless (written.as(String) == "1.2.3.4") { INFO@mark `IP22 an address does not read back as it was written` }
-unless (written == written) { INFO@mark `IP23 an address is not itself` }
-if (written == IP(segments: IP.read("1.2.3.5", U+002E, 10))) { INFO@mark `IP24 two different addresses are the same` }
+unless IPv4.SEGMENT_LENGTH == 8 { INFO@mark `IP25 a segment of the first kind is other than eight bits` }
+unless IPv6.SEGMENT_LENGTH == 16 { INFO@mark `IP26 a segment of the second kind is other than sixteen bits` }
 
-// What each kind of address is written with: how wide a segment is, what
-// stands between them, and the base they are written in.
-unless (IP.v4.segment_length == 8) { INFO@mark `IP25 a segment of the first kind is other than eight bits` }
-unless (IP.v6.segment_length == 16) { INFO@mark `IP26 a segment of the second kind is other than sixteen bits` }
-unless (IP.v4.base == 10) { INFO@mark `IP27 the first kind is not written in ten` }
-unless (IP.v6.base == 16) { INFO@mark `IP28 the second kind is not written in sixteen` }
-unless (IP.v4.separator == ".".head.value) { INFO@mark `IP29 the first kind is not written with dots` }
-unless (IP.v6.separator == ":".head.value) { INFO@mark `IP30 the second kind is not written with colons` }
-
-// An address read from text in any of its forms, a prefix after a slash, and
-// the address after it.
-unless (IP.parse("10.0.0.5/8").as(String) == "10.0.0.0") { INFO@mark `IP40 a prefix after a slash does not give the network` }
-unless (IP.parse("1::2").as(String) == "1::2") { INFO@mark `IP41 a compressed wide address does not read back as itself` }
-unless (IP.parse("1::2").left.count == 1) { INFO@mark `IP42 what is left of :: is not kept as read` }
-unless (IP.parse("::ffff:1.2.3.4").as(String) == "::ffff:1.2.3.4") { INFO@mark `IP43 a mapped address is not written with its four parts` }
-unless (IP.parse("64:ff9b::1.2.3.4").as(String) == "64:ff9b::1.2.3.4") { INFO@mark `IP44 a translated address is not written with its four parts` }
-unless (IP.parse("::ffff:1.2.3.4").embedded.as(String) == "1.2.3.4") { INFO@mark `IP45 the embedded address is not kept` }
-unless (IP.parse("1.0.0.1").next.as(String) == "1.0.0.2") { INFO@mark `IP46 the address after 1.0.0.1 is not 1.0.0.2` }
-unless (IP.parse("1.0.0.1").previous.as(String) == "1.0.0.0") { INFO@mark `IP47 the address before 1.0.0.1 is not 1.0.0.0` }
+unless "10.0.0.5/8" as IP as String == "10.0.0.0/8" { INFO@mark `IP40 a prefix after a slash does not give the network` }
+unless "1::2" as IP as String == "1::2" { INFO@mark `IP41 a compressed wide address does not read back as itself` }
+unless ("1::2" as IPv6).left.length == 1 { INFO@mark `IP42 what is left of :: is not kept as read` }
+unless "::ffff:1.2.3.4" as IP as String == "::ffff:1.2.3.4" { INFO@mark `IP43 a mapped address is not written with its four parts` }
+unless "64:ff9b::1.2.3.4" as IP as String == "64:ff9b::1.2.3.4" { INFO@mark `IP44 a translated address is not written with its four parts` }
+unless ("::ffff:1.2.3.4" as IPv6).embedded_ipv4 as String == "1.2.3.4" { INFO@mark `IP45 the embedded address is not kept` }
+unless "1.0.0.1" as IP + 1 as String == "1.0.0.2" { INFO@mark `IP46 the address after 1.0.0.1 is not 1.0.0.2` }
+unless "1.0.0.1" as IP - 1 as String == "1.0.0.0" { INFO@mark `IP47 the address before 1.0.0.1 is not 1.0.0.0` }

@@ -1,94 +1,16 @@
-Iterable.components.hierarchy &= class {
-  sort_by (key) => (
-    ordered := chain None
-    this for {
-      held := it.value
-      placed := chain None
-      inserted ^keyword := false
-      ordered for {
-        if (inserted.not.and(key(held) < key(it.value))) {
-          placed &= held
-          inserted = true
-        }
-        placed &= it.value
-      }
-      unless inserted { placed &= held }
-      ordered = placed
-    }
-    ordered
-  )
-  take (count: Number) => (
-    taken := chain None
-    left ^keyword := count
-    this for {
-      if left.nonzero {
-        taken &= it.value
-        left = left.pred
-      }
-    }
-    taken
-  )
-  find (predicate) => (
-    found ^keyword := None
-    this for { if (found === None) { if (predicate(it.value)) { found = it.value } } }
-    found
-  )
-  find_all (predicate) => (
-    found := chain None
-    this for { if (predicate(it.value)) { found &= it.value } }
-    found
-  )
-  shuffled => (
-    left ^keyword := chain None
-    this for { left &= it.value }
-    mixed := chain None
-    while left.nonempty {
-      picked := left.at(Random.below(left.count)).value
-      mixed &= picked
-      rest := chain None
-      dropped ^keyword := false
-      left for { if (dropped.not.and(it.value === picked)) { dropped = true } else { rest &= it.value } }
-      left = rest
-    }
-    mixed
-  )
-  squeeze => (
-    kept := chain None
-    previous ^keyword := None
-    started ^keyword := false
-    this for {
-      unless (started.and(it.value == previous)) { kept &= it.value }
-      previous = it.value
-      started = true
-    }
-    kept
-  )
+Iterable &+= {
+  take (count: Number) => this[..count]
+  find (predicate) => this{predicate}.first
+  find_all (predicate) => this{predicate}
+  shuffled => empty ? [] : (picked = random), this{!== picked}.shuffled
+  squeeze => this{. != .previous}
 }
 
-String.components.hierarchy &= class {
-  find_all (pattern) => (
-    found := chain None
-    at ^keyword := 0
-    while (at < .count) {
-      rest := .slice(at, .count)
-      place := rest.index_of(pattern)
-      if (place === None) { at = .count } else {
-        found &= at + place
-        at = at + place + 1
-      }
-    }
-    found
-  )
-  trim (characters: String) => (
-    start ^keyword := 0
-    finish ^keyword := .count
-    while ((start < finish).and(characters.contains(.at(start).value.as(String)))) { start = start.succ }
-    while ((start < finish).and(characters.contains(.at(finish.pred).value.as(String)))) { finish = finish.pred }
-    .slice(start, finish)
-  )
-  squeeze => .as(Chain).squeeze.as(String)
+String &+= {
+  find_all (pattern: String) => (this ~= pattern)#.index
+  trim (characters: String) => trimmed(characters)
 }
 
-Time.Date.components.hierarchy &= class {
-  long => .month.as(String).title_case + (" " + (.day.as(String) + (", " + .year.as(String))))
+ISO_8601 &+= {
+  long => month, " ", day_of_month, ", ", year
 }

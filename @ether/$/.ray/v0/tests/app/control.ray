@@ -1,150 +1,185 @@
-// `if` evaluates eagerly and inlines the branch it takes, so the chain is
-// the value; a branch nobody takes stays None. `while` and `do` are the
-// same class, instantiated differently.
+// `if` evaluates eagerly and inlines the branch it takes; `while` and `do` are one class.
 
 mark ^keyword := external global
 
 t := if true { true } else { false }
-unless (t) { INFO@mark `CC1 if-true did not take the then branch` }
-
+unless t { INFO@mark `CC1 if-true did not take the then branch` }
 f := if false { true } else { false }
-if (f) { INFO@mark `CC2 if-false took the then branch` }
-
+if f { INFO@mark `CC2 if-false took the then branch` }
 e := if false { true } elsif true { true } else { false }
-unless (e) { INFO@mark `CC3 elsif did not fire` }
-
+unless e { INFO@mark `CC3 elsif did not fire` }
 g := if false { true } elsif false { true } else { true }
-unless (g) { INFO@mark `CC4 else after elsif did not fire` }
-
+unless g { INFO@mark `CC4 else after elsif did not fire` }
 h := if true { true } elsif true { false } else { false }
-unless (h) { INFO@mark `CC5 a later branch overrode the first` }
-
+unless h { INFO@mark `CC5 a later branch overrode the first` }
 n := if false { true }
-if (n) { INFO@mark `CC6 a bare if with a false predicate is not None-like` }
-
+if n { INFO@mark `CC6 a bare if with a false predicate is not None-like` }
 u := unless false { true }
-unless (u) { INFO@mark `CC7 unless did not fire` }
-
-flag ^keyword := true
-while flag { flag = false }
-if (flag) { INFO@mark `CC8 while did not run its body` }
-
-never ^keyword := false
-ran ^keyword := false
-while never { ran = true }
-if (ran) { INFO@mark `CC9 while ran with a false predicate` }
-
-seen ^keyword := false
-do { seen = true } while false
-unless (seen) { INFO@mark `CC10 do-while did not run its body at least once` }
-
-stop ^keyword := true
-do { stop = false } while stop
-if (stop) { INFO@mark `CC11 do-while did not stop` }
-
+unless u { INFO@mark `CC7 unless did not fire` }
 nothing_taken := if false { 1 } else { None }
-if (nothing_taken) { INFO@mark `CC12 an if whose taken branch is None is present` }
+if nothing_taken { INFO@mark `CC12 an if whose taken branch is None is present` }
 something_taken := if true { 1 } else { None }
-unless (something_taken) { INFO@mark `CC13 an if whose taken branch is one is absent` }
+unless something_taken { INFO@mark `CC13 an if whose taken branch is one is absent` }
+nested := if true { if false { 1 } else { 2 } } else { 3 }
+unless nested == 2 { INFO@mark `CF6 a branch inside a branch is not read there` }
+held_something := if 1 { true } else { false }
+unless held_something { INFO@mark `CF7 a number that is there does not hold` }
+held_nothing := if None { true } else { false }
+if held_nothing { INFO@mark `CF8 nothing holds` }
+other_side := unless true { 1 } else { 2 }
+unless other_side == 2 { INFO@mark `CF9 unless has no other side` }
 
-// Only the branch that is taken runs: what the others would have done is not
-// done, and a chain of branches runs exactly one of them.
-counted ^keyword := false
-taken_once ^keyword := if true { true } else {
+// Only the branch that is taken runs
+counted := false
+taken_once := if true { true } else {
   counted = true
   false
 }
-unless (taken_once) { INFO@mark `CF1 a taken branch did not answer` }
-if (counted) { INFO@mark `CF2 the branch nobody took ran anyway` }
+unless taken_once { INFO@mark `CF1 a taken branch did not answer` }
+if counted { INFO@mark `CF2 the branch nobody took ran anyway` }
 
-arms ^keyword := 0
-picked ^keyword := if false {
-  arms = arms.succ
+arms := 0
+picked := if false {
+  arms += 1
   1
 } elsif true {
-  arms = arms.succ
+  arms += 1
   2
 } elsif true {
-  arms = arms.succ
+  arms += 1
   3
 } else {
-  arms = arms.succ
+  arms += 1
   4
 }
-unless (picked == 2) { INFO@mark `CF3 the first holding arm is not what answered` }
-unless (arms == 1) { INFO@mark `CF4 more than one arm of a chain ran` }
+unless picked == 2 { INFO@mark `CF3 the first holding arm is not what answered` }
+unless arms == 1 { INFO@mark `CF4 more than one arm of a chain ran` }
 
-// A branch is a block, so it answers what its last statement does. Statements
-// in a block are told apart by the lines they are written on.
-many ^keyword := if true {
+many := if true {
   1
   2
   3
 } else { None }
-unless (many == 3) { INFO@mark `CF5 a branch does not answer its last statement` }
+unless many == 3 { INFO@mark `CF5 a branch does not answer its last statement` }
 
-// Branches nest, and the inner one is read where it is written.
-nested ^keyword := if true { if false { 1 } else { 2 } } else { 3 }
-unless (nested == 2) { INFO@mark `CF6 a branch inside a branch is not read there` }
+// Loops
+flag := true
+while flag { flag = false }
+if flag { INFO@mark `CC8 while did not run its body` }
 
-// A condition is not only true and false: what is there holds, what is not
-// does not.
-held_something ^keyword := if 1 { true } else { false }
-unless (held_something) { INFO@mark `CF7 a number that is there does not hold` }
-held_nothing ^keyword := if None { true } else { false }
-if (held_nothing) { INFO@mark `CF8 nothing holds` }
+ran := false
+while false { ran = true }
+if ran { INFO@mark `CC9 while ran with a false predicate` }
 
-// `unless` takes the other side too.
-other_side ^keyword := unless true { 1 } else { 2 }
-unless (other_side == 2) { INFO@mark `CF9 unless has no other side` }
+seen := false
+do { seen = true } while false
+unless seen { INFO@mark `CC10 do-while did not run its body at least once` }
 
-// A loop runs as many times as its condition holds.
-left ^keyword := 3
-rounds ^keyword := 0
+stop := true
+do { stop = false } while stop
+if stop { INFO@mark `CC11 do-while did not stop` }
+
+left := 3
+rounds := 0
 while left {
-  rounds = rounds.succ
-  left = left.pred
+  rounds += 1
+  left -= 1
 }
-unless (rounds == 3) { INFO@mark `CF10 a loop ran other than three times` }
-unless (left.is_zero) { INFO@mark `CF11 a loop left its count behind` }
+unless rounds == 3 { INFO@mark `CF10 a loop ran other than three times` }
+unless left == 0 { INFO@mark `CF11 a loop left its count behind` }
 
-// `do` runs once before it asks.
-asked ^keyword := 0
-do { asked = asked.succ } while false
-unless (asked == 1) { INFO@mark `CF12 do ran other than once when it never holds` }
+asked := 0
+do { asked += 1 } while false
+unless asked == 1 { INFO@mark `CF12 do ran other than once when it never holds` }
 
-// A loop inside a loop is its own count.
-outer ^keyword := 2
-pairs ^keyword := 0
-inner ^keyword := 0
+outer := 2
+pairs := 0
 while outer {
-  inner = 3
+  inner := 3
   while inner {
-    pairs = pairs.succ
-    inner = inner.pred
+    pairs += 1
+    inner -= 1
   }
-  outer = outer.pred
+  outer -= 1
 }
-unless (pairs == (2 * 3)) { INFO@mark `CF13 a loop inside a loop does not multiply` }
+unless pairs == 6 { INFO@mark `CF13 a loop inside a loop does not multiply` }
 
-// `;` is a method: what is written after it is read where it is written, and
-// is what the whole answers.
-unless (( 1 ; 2 ) == 2) { INFO@mark `CF14 the semicolon does not answer what is written after it` }
-unless (( 1 ; 2 ; 3 ) == 3) { INFO@mark `CF15 the last of three is not what the whole answers` }
-// Two statements on one line are what `;` is for, and two assignments are two
-// statements: `;` binds looser than `=`, which the entrypoint says by asking
-// for both of them around a shared operand and grouping the assignment first.
-semi_counted ^keyword := 0
-(semi_counted = 1) ; (semi_counted = semi_counted.succ)
-unless (semi_counted == 2) { INFO@mark `CF16 two bracketed statements on one line did not both run` }
-stepped ^keyword := 0
-stepped = 1 ; stepped = stepped.succ
-unless (stepped == 2) { INFO@mark `CF17 two assignments on one line did not both run` }
-here ^keyword := 0
-there ^keyword := 0
+times_ran := 0
+3.times { times_ran += 1 }
+unless times_ran == 3 { INFO@mark `TM1 three times is not three` }
+
+// `;`
+unless (1 ; 2) == 2 { INFO@mark `CF14 the semicolon does not answer what is written after it` }
+unless (1 ; 2 ; 3) == 3 { INFO@mark `CF15 the last of three is not what the whole answers` }
+semi_counted := 0
+(semi_counted = 1) ; (semi_counted += 1)
+unless semi_counted == 2 { INFO@mark `CF16 two bracketed statements on one line did not both run` }
+stepped := 0
+stepped = 1 ; stepped += 1
+unless stepped == 2 { INFO@mark `CF17 two assignments on one line did not both run` }
+here := 0
+there := 0
 here = 1 ; there = 2
-unless (here == 1) { INFO@mark `CF18 the first of two assignments on one line did not run` }
-unless (there == 2) { INFO@mark `CF19 the second of two assignments on one line did not run` }
-declared ^keyword := 0
-declared := 3 ; declared = declared.succ
-unless (declared == 4) { INFO@mark `CF20 a declaration and an assignment on one line did not both run` }
+unless here == 1 { INFO@mark `CF18 the first of two assignments on one line did not run` }
+unless there == 2 { INFO@mark `CF19 the second of two assignments on one line did not run` }
+declared := 3 ; declared += 1
+unless declared == 4 { INFO@mark `CF20 a declaration and an assignment on one line did not both run` }
+
+// A program run as a selection
+counting := Program(code: {
+  1
+  2
+}).running
+unless counting.waiting { INFO@mark `RU1 a program nobody stepped is not waiting` }
+unless counting.next.intermediate { INFO@mark `RU2 one step in is not intermediate` }
+unless counting.waiting { INFO@mark `RU3 stepping a copy moved the original` }
+unless counting.finished.final { INFO@mark `RU4 a program run to its end is not final` }
+unless counting.finished.results.last == 2 { INFO@mark `RU5 a program run to its end did not keep what its last step answered` }
+
+synced := sync {
+  1
+  2
+}
+unless synced == [1, 2] { INFO@mark `CR1 sync does not answer every branch` }
+raced := race {
+  1
+  2
+}
+unless raced == 1 { INFO@mark `CR2 race is not won by the first to finish` }
+waited := branch { 3 }
+unless await waited == 3 { INFO@mark `CR3 awaiting a branch does not answer what it did` }
+
+// Errors
+failing := Error(kind: 1, message: "no")
+unless failing $ 5 == 5 { INFO@mark `ER1 a default does not stand in for an error` }
+unless 7 $ 5 == 7 { INFO@mark `ER2 a default replaced what did not fail` }
+unless failing $? === None { INFO@mark `ER3 an optional error is not None` }
+unless failing $? 6 == 6 { INFO@mark `ER4 an optional error does not fall back` }
+unless failing $ { .message } == "no" { INFO@mark `ER5 the handler does not see the error as its receiver` }
+fatal_one := Error(kind: 1, message: "stop", fatal: true)
+unless (fatal_one $ 5).erred { INFO@mark `ER6 a default caught a fatal error` }
+unless fatal_one $?! === None { INFO@mark `ER7 the catch-all did not catch a fatal error` }
+unless (failing $ ERROR[2] "wrapped").cause === failing { INFO@mark `ER8 a wrapped error forgot its cause` }
+unless (failing & fatal_one).causes.count == 2 { INFO@mark `ER9 an error joined with another does not keep both` }
+if failing { INFO@mark `ER10 an error holds as a condition` }
+
+asserted := dynamically assert {
+  true
+  1 == 1
+}
+unless asserted { INFO@mark `DY1 a dynamic assert of holding conditions fails` }
+
+// A setting changed for a block is back once the block is left
+Setting := class { static level = 1 }
+unless (with Setting.level = 2 { Setting.level }) == 2 { INFO@mark `WI1 a setting is not seen inside the block it is given for` }
+unless Setting.level == 1 { INFO@mark `WI2 a setting outlived its block` }
+unless (assume Setting.level = 3 { Setting.level }) == 3 { INFO@mark `WI3 assume is not with` }
+
+if Never.admits(5) { INFO@mark `NV1 something is of the type that never returns` }
+
+doubling := Program(code: { 2 })
+halving := Program(code: { 1 })
+! doubling halving
+unless doubling⁻¹ === halving { INFO@mark `IV1 the declared inverse is not the inverse` }
+unless halving⁻¹ === doubling { INFO@mark `IV2 the inverse of the inverse is not the function` }
+unless doubling.reversible { INFO@mark `IV3 a function with an inverse is not reversible` }

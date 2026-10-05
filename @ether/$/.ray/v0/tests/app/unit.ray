@@ -1,98 +1,38 @@
 mark ^keyword := external global
 
-if (Byte.is_base) { INFO@mark `U1 a byte is a base unit` }
+unless 1B == 8b { INFO@mark `U8 a byte does not equal eight bits` }
+unless 8 bits as byte == 1 byte { INFO@mark `U6 eight bits are not one byte` }
+unless 1 byte as bit == 8 bits { INFO@mark `U3 a byte does not convert to eight bits` }
+unless 1dab == 10b { INFO@mark `U10 a deka-bit is not ten bits` }
 
-unless (Bit.is_base) { INFO@mark `U2 a bit is not a base unit` }
+unless 2 bits + 3 bits == 5 bits { INFO@mark `U22 two bits and three bits are not five` }
+unless 5 bits - 2 bits == 3 bits { INFO@mark `U23 five bits less two are not three` }
+unless 1 byte + 1 bit == 9 bits { INFO@mark `U25 a byte and a bit are not nine bits` }
+unless 2 bits < 3 bits { INFO@mark `U26 two bits are not fewer than three` }
+if 3 bits < 2 bits { INFO@mark `U27 three bits are fewer than two` }
+unless 2 seconds + 3 seconds == 5 seconds { INFO@mark `U40 two and three seconds is not five seconds` }
+if 2 seconds + 3 seconds < 5 seconds { INFO@mark `U41 two and three seconds is below five seconds` }
 
-unless (Byte.scale == 8) { INFO@mark `U3 a byte does not scale to eight bits` }
+unless 1 minute as seconds == 60 s { INFO@mark `U35 a minute is not sixty seconds` }
+unless 2 hours as minutes == 120 minutes { INFO@mark `U46 two hours are not 120 minutes` }
+unless 1.5 days as hours == 36 h { INFO@mark `U45 1.5 days is not 36 hours` }
+unless 0 °C as kelvin == 273.15 K { INFO@mark `U47 zero celsius is not 273.15 kelvin` }
+unless 273.15 K as celsius == 0 °C { INFO@mark `U48 the offset is not reversed` }
 
-q := 1 byte
-unless (q.unit.symbol) { INFO@mark `U4 a quantity lost its unit` }
+unless bit as String == "bit" { INFO@mark `U36 a bit is not called that` }
+unless 2 hours as String == "2 hours" { INFO@mark `U42 two hours are not written so` }
+unless 3 s == 3 seconds { INFO@mark `U43 three s are not seconds` }
+unless 25.years == 25 years { INFO@mark `U49 a unit is not reachable as a member` }
+unless 8m == 8 meter | 8 minute { INFO@mark `U50 an ambiguous unit does not superpose` }
 
-// A conversion multiplies and divides, and each of those nests about one
-// application of `if` per unit of the divisor; the interpreter allows 64
-// nested applications per statement, so only the conversions that divide by
-// the larger factor are asserted here (`one of Byte as Bit` is 8 / 1).
-eight_bits := 8 bits
-bytes := eight_bits as Byte
-unless (bytes.amount == 1) { INFO@mark `U6 eight bits are not one byte` }
+unless 1 KiB == 1024 B { INFO@mark `UB3 a kibibyte is not 1024 bytes` }
+unless 1 KB == 1000 B { INFO@mark `UB4 a kilobyte is not 1000 bytes` }
+if 1 KiB == 1 KB { INFO@mark `UB5 a kibibyte is a kilobyte` }
+unless 1 MiB == 1024 KiB { INFO@mark `UB7 mebi is not 1024 kibi` }
+unless kibibyte as String == "kibibyte" { INFO@mark `UB10 a kibibyte is not called that` }
+unless 2 KiB as String == "2 kibibytes" { INFO@mark `UB12 two kibibytes are not kibibytes` }
 
-unless ((1 byte) == (8 bits)) { INFO@mark `U8 a byte does not equal eight bits` }
-
-unless (Prefix.deka.factor == 10) { INFO@mark `U9 deka is not ten` }
-
-unless ((Bit prefixed Prefix.deka).ratio == 10) { INFO@mark `U10 a prefixed unit did not take the prefix factor` }
-
-// Where a unit sits: a base unit is at nothing, and each one built on another
-// is a step further off.
-unless (Second.is_base) { INFO@mark `U11 a second is not a base unit` }
-if (Minute.is_base) { INFO@mark `U12 a minute is a base unit` }
-unless (Minute.rank == 1) { INFO@mark `U13 a minute is not one step off its base` }
-unless (Hour.rank == 2) { INFO@mark `U14 an hour is not two steps off its base` }
-
-// A unit built on another counts how many of it, and a unit is what it counts
-// rather than what it is called.
-pair := Bit multiple 2
-unless (pair.scale == 2) { INFO@mark `U15 two bits do not scale to two` }
-if (pair.is_base) { INFO@mark `U16 a multiple of a unit is a base unit` }
-unless (pair.rank == 1) { INFO@mark `U17 a multiple is not one step off its base` }
-unless (pair == (Bit multiple 2)) { INFO@mark `U18 two like multiples are not the same unit` }
-if (pair == Byte) { INFO@mark `U19 two bits are a byte` }
-unless (Bit == Bit) { INFO@mark `U20 a bit is not itself` }
-if (Bit == Byte) { INFO@mark `U21 a bit is a byte` }
-
-// Arithmetic happens in the finer of the two units.
-unless (((2 bits) + (3 bits)).amount == 5) { INFO@mark `U22 two bits and three bits are not five` }
-unless (((5 bits) - (2 bits)).amount == 3) { INFO@mark `U23 five bits less two are not three` }
-unless (((1 byte) + (1 bit)).unit == Bit) { INFO@mark `U24 a sum is not in the finer unit` }
-unless (((1 byte) + (1 bit)).amount == 9) { INFO@mark `U25 a byte and a bit are not nine bits` }
-unless ((2 bits) < (3 bits)) { INFO@mark `U26 two bits are not fewer than three` }
-if ((3 bits) < (2 bits)) { INFO@mark `U27 three bits are fewer than two` }
-
-// Which of two units is the finer.
-unless ((1 byte).finer(1 bit) == Bit) { INFO@mark `U28 a bit is not finer than a byte` }
-unless ((1 bit).finer(1 byte) == Bit) { INFO@mark `U29 asking the other way round answers otherwise` }
-
-// Where a unit's zero sits, and a unit that shifts it.
-unless (Bit.shift.is_zero) { INFO@mark `U30 a unit with no offset sits somewhere else` }
-shifted_bit := Bit shifted 3
-unless (shifted_bit.shift == 3) { INFO@mark `U31 a shifted unit forgot its offset` }
-unless (shifted_bit.scale == 1) { INFO@mark `U32 a shifted unit counts other than one of its base` }
-
-// Time's units are quantities like any other, and know they are of time.
-unless ((1 minute).is_temporal) { INFO@mark `U33 a minute is not of time` }
-if ((1 bit).is_temporal) { INFO@mark `U34 a bit is of time` }
-unless ((1 minute).as_seconds == 60) { INFO@mark `U35 a minute is not sixty seconds` }
-
-// What a unit is called and what it is written as.
-unless (Bit.name.as(String) == "bit") { INFO@mark `U36 a bit is not called that` }
-unless (Bit.symbol.as(String) == "b") { INFO@mark `U37 a bit is not written b` }
-unless (Byte.name.as(String) == "byte") { INFO@mark `U38 a byte is not called that` }
-unless (Minute.base.name.as(String) == "second") { INFO@mark `U39 a minute is not built on the second` }
-
-// Quantities compare after they add.
-unless ((2 seconds) + (3 seconds) == (5 seconds)) { INFO@mark `U40 two and three seconds is not five seconds` }
-if ((2 seconds) + (3 seconds) < (5 seconds)) { INFO@mark `U41 two and three seconds is below five seconds` }
-
-// A number followed by a unit is that many of it, by the unit's name, its
-// plural or its symbol.
-unless ((2 hours).unit == Hour) { INFO@mark `U42 two hours are not hours` }
-unless ((3 s).unit == Second) { INFO@mark `U43 three s are not seconds` }
-unless ((1.5 days).amount == 1.5) { INFO@mark `U44 1.5 days is not one and a half of them` }
-unless (((1.5 days) as Hour).amount.integer == 36) { INFO@mark `U45 1.5 days is not 36 hours` }
-unless (((2 hours) as Minute).amount == 120) { INFO@mark `U46 two hours are not 120 minutes` }
-
-unless (Kibibyte.ratio == 1024) { INFO@mark `UB1 a kibibyte is not 1024 of what it is built on` }
-unless (Kilobyte.ratio == 1000) { INFO@mark `UB2 a kilobyte is not a thousand of what it is built on` }
-unless ((1 kibibyte) == (1024 bytes)) { INFO@mark `UB3 a kibibyte is not 1024 bytes` }
-unless ((1 kilobyte) == (1000 bytes)) { INFO@mark `UB4 a kilobyte is not 1000 bytes` }
-unless (Kibibyte != Kilobyte) { INFO@mark `UB5 a kibibyte is a kilobyte` }
-unless (BinaryPrefix.kibi.factor == 1024) { INFO@mark `UB6 kibi is not 1024` }
-unless (BinaryPrefix.mebi.factor == 1048576) { INFO@mark `UB7 mebi is not 1024 squared` }
-unless (Kibibyte.base == Byte) { INFO@mark `UB8 a kibibyte is not built on a byte` }
-unless (Kilobyte.base == Byte) { INFO@mark `UB9 a kilobyte is not built on a byte` }
-unless (Kibibyte.symbol.as(String) == "KiB") { INFO@mark `UB10 a kibibyte is not written KiB` }
-unless (Kilobyte.symbol.as(String) == "KB") { INFO@mark `UB11 a kilobyte is not written KB` }
-unless ((2 kibibytes).unit == Kibibyte) { INFO@mark `UB12 two kibibytes are not kibibytes` }
-unless ((3 KB).unit == Kilobyte) { INFO@mark `UB13 three KB are not kilobytes` }
-unless ((1 KiB).unit == Kibibyte) { INFO@mark `UB14 one KiB is not a kibibyte` }
+unless 1k == 1000 { INFO@mark `UB15 1k is not a thousand` }
+unless 2 GB/s * 3 s == 6 GB { INFO@mark `U51 a rate times a duration is not an amount` }
+unless 1d 10h 10m 30s as s == 123030 s { INFO@mark `U52 a juxtaposed quantity is not the sum of its parts` }
+unless 10000000 s as days hours minutes seconds == 115d 17h 46m 40s { INFO@mark `U53 a quantity is not normalized into days hours minutes seconds` }

@@ -1,60 +1,43 @@
-// The optimizations are rewrite rules, and a rewrite rule is a rule. What they
-// rewrite still has to answer what it answered before — that is the whole of
-// what an optimization is allowed to do.
-//
-// A level is which rules are in scope while a program is read back, and
-// nothing more: `Program{O: Compiler.default}` is the program read with those.
-// The logic keeps the shape it was written in and the setting sits beside it,
-// which is what lets a program be read back the other way.
+// Optimizations are rewrite rules, and a rewrite answers what the code answered without it.
 
 mark ^keyword := external global
 
-unless ((5 + 0) == 5) { INFO@mark `CO1 five and nothing is not five` }
-unless ((0 + 5) == 5) { INFO@mark `CO2 nothing and five is not five` }
-unless ((5 - 0) == 5) { INFO@mark `CO3 five less nothing is not five` }
-unless ((5 * 0).is_zero) { INFO@mark `CO4 five times nothing is not nothing` }
-unless ((0 * 5).is_zero) { INFO@mark `CO5 nothing times five is not nothing` }
-unless ((5 * 1) == 5) { INFO@mark `CO6 five once is not five` }
-unless ((1 * 5) == 5) { INFO@mark `CO7 once five is not five` }
-unless ((5 / 1) == 5) { INFO@mark `CO8 five shared once is not five` }
-unless ((5 * 2) == 10) { INFO@mark `CO9 five twice is not ten` }
-unless ((3 * 2) == 6) { INFO@mark `CO10 three twice is not six` }
-unless ((0 * 0).is_zero) { INFO@mark `CO11 nothing times nothing is not nothing` }
-unless ((1 * 1) == 1) { INFO@mark `CO12 once once is not one` }
-unless ((0 + 0).is_zero) { INFO@mark `CO13 nothing and nothing is not nothing` }
+unless 5 + 0 == 5 { INFO@mark `CO1 five and nothing is not five` }
+unless 0 + 5 == 5 { INFO@mark `CO2 nothing and five is not five` }
+unless 5 - 0 == 5 { INFO@mark `CO3 five less nothing is not five` }
+unless (5 * 0).is_zero { INFO@mark `CO4 five times nothing is not nothing` }
+unless (0 * 5).is_zero { INFO@mark `CO5 nothing times five is not nothing` }
+unless 5 * 1 == 5 { INFO@mark `CO6 five once is not five` }
+unless 1 * 5 == 5 { INFO@mark `CO7 once five is not five` }
+unless 5 / 1 == 5 { INFO@mark `CO8 five shared once is not five` }
+unless 5 * 2 == 10 { INFO@mark `CO9 five twice is not ten` }
+unless 3 * 2 == 6 { INFO@mark `CO10 three twice is not six` }
+unless (0 * 0).is_zero { INFO@mark `CO11 nothing times nothing is not nothing` }
+unless 1 * 1 == 1 { INFO@mark `CO12 once once is not one` }
+unless (0 + 0).is_zero { INFO@mark `CO13 nothing and nothing is not nothing` }
+unless [1, 2, 1].unique.unique == [1, 2] { INFO@mark `CO26 each once, twice, is not each once` }
+unless [1, 2].reverse.reverse == [1, 2] { INFO@mark `CO27 turned around twice is not as it was` }
+unless [1, None].compact.compact == [1] { INFO@mark `CO28 compacted twice is not compacted once` }
+unless [[1], [2]].flatten.flatten == [1, 2] { INFO@mark `CO29 flattened twice is not flattened once` }
+unless [2, 1].sort.sort == [1, 2] { INFO@mark `CO30 sorted twice is not sorted once` }
+unless !!5 == true { INFO@mark `CO31 not not five is not true` }
 
-// What is not written as one of those is untouched.
-unless ((5 + 2) == 7) { INFO@mark `CO14 five and two is not seven` }
-unless ((5 * 3) == 15) { INFO@mark `CO15 five three times is not fifteen` }
-unless ((6 / 2) == 3) { INFO@mark `CO16 six shared in two is not three` }
-unless ((6 - 2) == 4) { INFO@mark `CO17 six less two is not four` }
+// What is not written as one of those is untouched
+unless 5 + 2 == 7 { INFO@mark `CO14 five and two is not seven` }
+unless 5 * 3 == 15 { INFO@mark `CO15 five three times is not fifteen` }
+unless 6 / 2 == 3 { INFO@mark `CO16 six shared in two is not three` }
+unless 6 - 2 == 4 { INFO@mark `CO17 six less two is not four` }
+none_at_all := 0
+unless 5 + none_at_all == 5 { INFO@mark `CO18 five and a name holding nothing is not five` }
 
-// A rewrite is written about what is written, so a name holding the same value
-// is rewritten too where the name is what is written.
-none_at_all ^keyword := 0
-unless ((5 + none_at_all) == 5) { INFO@mark `CO18 five and a name holding nothing is not five` }
-
-// The levels: a set of rules, named, and a program that says which set it is
-// read with.
-unless (Compiler.none) { INFO@mark `CO19 there is no level that reads a program as it is written` }
-unless (Compiler.default) { INFO@mark `CO20 there is no default level` }
+// A level is which rules are in scope while a program is read back
+unless Compiler.none { INFO@mark `CO19 there is no level that reads a program as it is written` }
+unless Compiler.default { INFO@mark `CO20 there is no default level` }
+unless Compiler.levels.count == 5 { INFO@mark `CO32 there are other than five levels` }
 Optimized := Program{O: Compiler.default}
-unless (Optimized) { INFO@mark `CO21 a program read with a level is nothing` }
-unless (Optimized.O) { INFO@mark `CO22 it does not say which rules it is read with` }
-unless (Optimized.optimizations) { INFO@mark `CO23 O is not what the optimizations are called` }
-
-Written := class {
-  of (code) => code**
-}
-plain := Written.of(5)
-unless (plain.O) { INFO@mark `CO24 a program does not say which rules it is read with` }
-unless (plain() == 5) { INFO@mark `CO25 a program read as it is written does not answer it` }
-
-// spec: none of the claims above can tell whether a rewrite fired. A rewrite
-// that is sound answers what the code answered without it, so the only thing
-// that changes is what it costs — and a claim cannot read that. What they do
-// say is that the rules are sound, which is what an optimization is allowed
-// to be and nothing more. Telling that a level was applied at all wants a
-// level whose rules are deliberately not sound, and a program read with it;
-// what `Program{O: …}` still lacks is the reading — the setting sits on the
-// program and nothing consumes it yet.
+unless Optimized { INFO@mark `CO21 a program read with a level is nothing` }
+unless Optimized.O == Compiler.default { INFO@mark `CO22 it does not say which rules it is read with` }
+unless Optimized.optimizations { INFO@mark `CO23 O is not what the optimizations are called` }
+plain := Program(code: { 5 })
+unless plain.O == Compiler.none { INFO@mark `CO24 a program does not read as written unless told otherwise` }
+unless plain() == 5 { INFO@mark `CO25 a program read as it is written does not answer it` }

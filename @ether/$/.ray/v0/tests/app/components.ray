@@ -1,11 +1,4 @@
-// Components. A value is made of components: `.components` holds the
-// superposed ones, `.components.hierarchy` the class components. Both are
-// chains, `&=` appends to a chain, `|` superposes two values (a copy of the left
-// one whose components gain the right one), and
-// `:` on a value with components adds a class component (so `class: Parent`
-// is `:` applied to the class). Instances refer to their class through the
-// hierarchy rather than copying it, so a class extended later reaches every
-// instance built from it.
+// `.components` holds what a value superposes, `.components.hierarchy` its classes.
 
 mark ^keyword := external global
 
@@ -15,86 +8,67 @@ A := class {
 a := A()
 b := a.mk
 c := b.mk
-
-unless (a.components.hierarchy.tail.value) { INFO@mark `C1 an instance has no class component` }
-unless (c.components.hierarchy.head.value.mk) { INFO@mark `C2 the class component of an instance is not its class` }
-unless (a.components.hierarchy.owner) { INFO@mark `C3 a hierarchy does not know what it belongs to` }
-unless (a.components.hierarchy.count == 1) { INFO@mark `C4 a plain instance has other than one class component` }
+unless a.components.hierarchy.last { INFO@mark `C1 an instance has no class component` }
+unless c.components.hierarchy.first.mk { INFO@mark `C2 the class component of an instance is not its class` }
+unless a.components.hierarchy.owner { INFO@mark `C3 a hierarchy does not know what it belongs to` }
+unless a.components.hierarchy.count == 1 { INFO@mark `C4 a plain instance has other than one class component` }
 
 R := class { }
 S := class: R { s => S(next: this) }
-z := S()
-o := z.s
-t := o.s
-unless (t.s) { INFO@mark `C5 a successor chain through class: Parent broke` }
-unless (S.components.hierarchy.head.value) { INFO@mark `C6 class: Parent did not add a class component` }
-unless (S.super) { INFO@mark `C7 super is missing` }
-unless (Ray.super.count) { INFO@mark `C8 Ray.super does not reach Iterable's count` }
+unless S().s.s.s { INFO@mark `C5 a successor chain through class: Parent broke` }
+unless S.components.hierarchy.first { INFO@mark `C6 class: Parent did not add a class component` }
+unless S.super { INFO@mark `C7 super is missing` }
+unless Ray.super.count { INFO@mark `C8 Ray.super does not reach Iterable's count` }
 
 Greeter := class {
-  greeting => .name
-  twice => .greeting
+  greeting => name
+  twice => greeting
 }
 Loud := class: Greeter {
   greeting => global
-  polite => .super.greeting
+  polite => super.greeting
 }
 loud := Loud(name: global)
-unless (loud.polite) { INFO@mark `C22 super.greeting did not run the parent's method on the instance` }
-unless (loud.super.twice) { INFO@mark `C23 super reaches the parent's other methods` }
+unless loud.polite { INFO@mark `C22 super.greeting did not run the parent's method on the instance` }
+unless loud.super.twice { INFO@mark `C23 super reaches the parent's other methods` }
 
 E := enum p | q | r
-unless (E.components.head.value) { INFO@mark `C9 the first enum member is not the first component` }
-unless (E.components.head.next.next.value) { INFO@mark `C10 enum components are not chained forward` }
-unless (E.components.tail.previous.previous.value) { INFO@mark `C11 enum components are not chained backward` }
-unless (E.components.count == 3) { INFO@mark `C12 an enum of three has other than three components` }
-unless (E.components.first.is_initial) { INFO@mark `C13 a chain is not an Iterable of Rays` }
-unless (E.components.last.value) { INFO@mark `C14 Iterable.last did not reach the last component` }
+unless E#.first == E.p { INFO@mark `C9 the first enum member is not the first written` }
+unless E#.first.next.next == E.r { INFO@mark `C10 enum members are not chained forward` }
+unless E#.last.previous.previous == E.p { INFO@mark `C11 enum members are not chained backward` }
+unless E#.count == 3 { INFO@mark `C12 an enum of three has other than three members` }
+unless E#.first.is_initial { INFO@mark `C13 the members are not an Iterable of Rays` }
+unless E#.last == E.r { INFO@mark `C14 Iterable.last did not reach the last member` }
 
 M := a | b
-unless (M.components.head.value.mk) { INFO@mark `C15 | did not superpose its left side` }
-unless (M.components.tail.value.mk) { INFO@mark `C16 | did not superpose its right side` }
-N := M | c
-unless (N.components.count == 3) { INFO@mark `C17 | on a Many did not append` }
+unless M.components.first.mk { INFO@mark `C15 | did not superpose its left side` }
+unless M.components.last.mk { INFO@mark `C16 | did not superpose its right side` }
+unless (M | c).components.count == 3 { INFO@mark `C17 | on a Many did not append` }
+unless (A() | A()).components.count == 2 { INFO@mark `C31 superposing two does not make two components` }
+lone := A()
+lone | A()
+unless lone.components.count == 0 { INFO@mark `C32 superposing changed the left side` }
 
-k := chain None
-k &= a
-k &= b
-unless (k.head.next) { INFO@mark `C18 a hand-built chain is not linked forward` }
-unless (k.tail.previous) { INFO@mark `C19 a hand-built chain is not linked backward` }
-if (k.head.previous) { INFO@mark `C20 the head of a chain has a previous` }
-unless (k.count == 2) { INFO@mark `C21 a chain of two does not count two` }
+k := [a, b]
+unless k.first.next { INFO@mark `C18 a list is not linked forward` }
+unless k.last.previous { INFO@mark `C19 a list is not linked backward` }
+if k.first.previous { INFO@mark `C20 the first of a list has a previous` }
+unless k.count == 2 { INFO@mark `C21 a list of two does not count two` }
 
-// A class extended later reaches every instance built from it, which is what
-// referring to the class through the hierarchy is for.
-Late ^keyword := class { }
-built_before ^keyword := Late()
-Late.components.hierarchy &= class {
+// A class extended later reaches every instance built from it
+Late := class { }
+built_before := Late()
+Late &+= {
   added => 1
 }
-unless (built_before.added == 1) { INFO@mark `C24 a class extended later does not reach an instance built before` }
-built_after ^keyword := Late()
-unless (built_after.added == 1) { INFO@mark `C25 a class extended later does not reach an instance built after` }
+unless built_before.added == 1 { INFO@mark `C24 a class extended later does not reach an instance built before` }
+unless Late().added == 1 { INFO@mark `C25 a class extended later does not reach an instance built after` }
 
-// What a class is made of, three deep.
-G1 ^keyword := class {
-  depth => 1
-}
-G2 ^keyword := class: G1 {
-  depth => 2
-}
-G3 ^keyword := class: G2 {
-  depth => 3
-}
-unless (G3().depth == 3) { INFO@mark `C26 the nearest class does not answer` }
-unless (G2().depth == 2) { INFO@mark `C27 the middle class answers its parent's` }
-unless (G1().depth == 1) { INFO@mark `C28 the first class answers something else` }
-unless (G3.super) { INFO@mark `C29 a class three deep has no super` }
-unless (G3.super.depth == 2) { INFO@mark `C30 super does not reach the class it is built on` }
-
-// Superposing is a copy: what it is made of gains, and the left side does not.
-first ^keyword := A()
-second ^keyword := A()
-both ^keyword := first | second
-unless (both.components.count == 2) { INFO@mark `C31 superposing two does not make two components` }
-unless (first.components.count.is_zero) { INFO@mark `C32 superposing changed the left side` }
+G1 := class { depth => 1 }
+G2 := class: G1 { depth => 2 }
+G3 := class: G2 { depth => 3 }
+unless G3().depth == 3 { INFO@mark `C26 the nearest class does not answer` }
+unless G2().depth == 2 { INFO@mark `C27 the middle class answers its parent's` }
+unless G1().depth == 1 { INFO@mark `C28 the first class answers something else` }
+unless G3.super { INFO@mark `C29 a class three deep has no super` }
+unless G3.super.depth == 2 { INFO@mark `C30 super does not reach the class it is built on` }

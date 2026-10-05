@@ -1,16 +1,10 @@
-// What a rule that asks for an operator may have in its body. The rule here
-// takes one `-` and answers something of its own, so that what the body does
-// can be seen at all.
+// A rule that asks for an operator runs a body of statements with a name of its own.
 
 mark ^keyword := external global
 
-// A body of statements, and a name of its own among them. A rule of this kind
-// waits on what its pattern asks for — the class saying which operators it
-// takes — and not on what its body writes down; before that, a body that
-// declared anything was held back and the rule never fired at all.
 {left} - {right} => (
-  held ^keyword := 2
-  held.succ
+  held := 2
+  held + 1
 )
-unless ((10 - 3) == 3) { INFO@mark `RW1 a body that declares a name is not run` }
-unless ((1 - 1) == 3) { INFO@mark `RW2 it answers the same wherever it stands` }
+unless 10 - 3 == 3 { INFO@mark `RW1 a body that declares a name is not run` }
+unless 1 - 1 == 3 { INFO@mark `RW2 it answers the same wherever it stands` }

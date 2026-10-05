@@ -5,207 +5,217 @@ mark ^keyword := external global
 
 wg := World(name: "genesis")
 wp := wg.spawn(Player(name: "alice"))
-unless (wp.name == "alice") { INFO@mark `WO1 spawned player lost its name` }
-unless (wg.characters.count == 1) { INFO@mark `WO2 world has other than one character` }
+unless wp.name == "alice" { INFO@mark `WO1 spawned player lost its name` }
+unless wg.characters.count == 1 { INFO@mark `WO2 world has other than one character` }
 wq := Quest(name: "find", goal: None)
-unless (wq.done.not) { INFO@mark `WO3 a new quest is done` }
+if wq.done { INFO@mark `WO3 a new quest is done` }
 wh := History(repository: wg)
-unless (wh.commit(wp, "hello").count == 1) { INFO@mark `WO4 a commit did not add to the history` }
-unless (Network.DomainName(text: "a.b").valid) { INFO@mark `WO7 the domain name a.b is not valid` }
-if (Network.DomainName(text: "").valid) { INFO@mark `WO8 a name of nothing is a valid domain name` }
-unless (Keyboard.Key(name: "a").press.pressed) { INFO@mark `WO9 a pressed key is not pressed` }
-unless (Chat().say(wp, "hi").count == 1) { INFO@mark `WO10 a said message is not in the chat` }
-unless (Proof.theorem(Proof.Proposition(holds: true), Proof(proposition: None, argument: Proof.Proposition(holds: true)))) { INFO@mark `WO11 the theorem does not hold` }
+unless wh.commit(wp, "hello").count == 1 { INFO@mark `WO4 a commit did not add to the history` }
+unless Network.DomainName(text: "a.b").valid { INFO@mark `WO7 the domain name a.b is not valid` }
+if Network.DomainName(text: "").valid { INFO@mark `WO8 a name of nothing is a valid domain name` }
+unless Keyboard.Key(name: "a").press.pressed { INFO@mark `WO9 a pressed key is not pressed` }
+unless Chat().say(wp, "hi").count == 1 { INFO@mark `WO10 a said message is not in the chat` }
+unless Proof.theorem(Proof.Proposition(holds: true), Proof(proposition: None, argument: Proof.Proposition(holds: true))) { INFO@mark `WO11 the theorem does not hold` }
 
 // Locations: what holds what, and how deep that goes.
 here := Location(host: None)
 there := here.holds(Location(host: None))
-unless (here.depth == 0) { INFO@mark `LO1 a location nothing holds is not at zero` }
-unless (there.depth == 1) { INFO@mark `LO2 a held location is not one deep` }
-unless (here.children.count == 1) { INFO@mark `LO3 the holder does not hold one` }
-unless (there.parent) { INFO@mark `LO4 a held location has no parent` }
+unless here.depth == 0 { INFO@mark `LO1 a location nothing holds is not at zero` }
+unless there.depth == 1 { INFO@mark `LO2 a held location is not one deep` }
+unless here.children.count == 1 { INFO@mark `LO3 the holder does not hold one` }
+unless there.parent { INFO@mark `LO4 a held location has no parent` }
 
 // Tasks, references, characters and repositories: what a class says it holds.
 wt := Task(name: "walk", goal: None)
-unless (wt.interrupted.not) { INFO@mark `TA1 a new task is interrupted` }
-unless (wt.interrupt.interrupted) { INFO@mark `TA2 an interrupted task is not interrupted` }
+if wt.interrupted { INFO@mark `TA1 a new task is interrupted` }
+unless wt.interrupt.interrupted { INFO@mark `TA2 an interrupted task is not interrupted` }
 
 wr := Reference(title: "a")
-unless (wr.draft) { INFO@mark `RE1 a new reference is no draft` }
-unless (wr.publish.draft.not) { INFO@mark `RE2 a published reference is still a draft` }
+unless wr.draft { INFO@mark `RE1 a new reference is no draft` }
+if wr.publish.draft { INFO@mark `RE2 a published reference is still a draft` }
 
 wa := Avatar(character: wp, platform: None)
-unless (wp.embody(wa).character.name == "alice") { INFO@mark `PE1 an embodied avatar is not of its character` }
-unless (wp.avatars.count == 1) { INFO@mark `PE2 a character has other than one avatar` }
+unless wp.embody(wa).character.name == "alice" { INFO@mark `PE1 an embodied avatar is not of its character` }
+unless wp.avatars.count == 1 { INFO@mark `PE2 a character has other than one avatar` }
 
-unless (Repository(world: wg).histories.count.is_zero) { INFO@mark `RP1 a new repository already has histories` }
-unless (Region(name: "north").name == "north") { INFO@mark `RG1 a region is not a world by another name` }
-unless (Instance(location: None).status == Status.online) { INFO@mark `IN1 a new instance is not online` }
-unless (here == here) { INFO@mark `LO5 a location is not itself` }
+unless Repository(world: wg).histories.empty { INFO@mark `RP1 a new repository already has histories` }
+unless Region(name: "north").name == "north" { INFO@mark `RG1 a region is not a world by another name` }
+unless Instance(location: None).status == Status.online { INFO@mark `IN1 a new instance is not online` }
+unless here == here { INFO@mark `LO5 a location is not itself` }
 
 // A world is a location: what holds places, and is held.
 realm := World(name: "realm")
 held := realm.holds(Location(host: None))
-unless (held.parent === realm) { INFO@mark `WL1 a place a world holds does not have the world as its parent` }
-unless (realm.children.head.value === held) { INFO@mark `WL2 a world does not hold the place it took` }
-unless (realm.instance_of(Location)) { INFO@mark `WL3 a world is not a location` }
+unless held.parent === realm { INFO@mark `WL1 a place a world holds does not have the world as its parent` }
+unless realm.children.first === held { INFO@mark `WL2 a world does not hold the place it took` }
+unless realm.instance_of(Location) { INFO@mark `WL3 a world is not a location` }
 
-unless (wg == wg) { INFO@mark `WO12 a world is not itself` }
-if (wg == World(name: "other")) { INFO@mark `WO13 two worlds are the same world` }
+unless wg == wg { INFO@mark `WO12 a world is not itself` }
+if wg == World(name: "other") { INFO@mark `WO13 two worlds are the same world` }
 
 // Items: what one is issued by, where it is, and what says so.
 wi := Item(name: "lamp", issuer: wg)
-unless (wi.name == "lamp") { INFO@mark `IT1 an item lost its name` }
-unless (wi.issuer == wg) { INFO@mark `IT2 an item forgot who issued it` }
-unless (wi.move(here).location == here) { INFO@mark `IT3 a moved item is not where it was moved` }
+unless wi.name == "lamp" { INFO@mark `IT1 an item lost its name` }
+unless wi.issuer == wg { INFO@mark `IT2 an item forgot who issued it` }
+unless wi.move(here).location == here { INFO@mark `IT3 a moved item is not where it was moved` }
 wc := Certificate(issuer: wg, secret: None)
-unless (wi.certify(wc).certificate == wc) { INFO@mark `IT4 a certified item does not carry its certificate` }
+unless wi.certify(wc).certificate == wc { INFO@mark `IT4 a certified item does not carry its certificate` }
 
-unless (wp.status == Status.offline) { INFO@mark `PE3 a new character is not offline` }
-unless (Status.invisible) { INFO@mark `ST1 there is no being invisible` }
-unless (Accessor.Permission.public) { INFO@mark `AC1 there is no public permission` }
-if (Accessor.Permission.private == Accessor.Permission.public) { INFO@mark `AC2 private and public are the same` }
+unless wp.status == Status.offline { INFO@mark `PE3 a new character is not offline` }
+unless Status.invisible { INFO@mark `ST1 there is no being invisible` }
+unless Accessor.Permission.public { INFO@mark `AC1 there is no public permission` }
+if Accessor.Permission.private == Accessor.Permission.public { INFO@mark `AC2 private and public are the same` }
 
 // Reserving a name: the world issues it, keeps it, and answers the same
 // reservation to whoever asks for that name again.
 wr := wg.reserve("alice")
-unless (wr.name == "alice") { INFO@mark `RS1 a reservation does not hold the name it was made for` }
-unless (wr.issuer == wg) { INFO@mark `RS2 a reservation forgot which world issued it` }
-unless (wg.reservations.count == 1) { INFO@mark `RS3 the world did not keep what it issued` }
-unless (wg.reserve("alice") == wr) { INFO@mark `RS4 reserving a taken name issues a second one` }
-unless (wg.reservations.count == 1) { INFO@mark `RS5 reserving twice kept two` }
-unless (wg.reserve("bob").name == "bob") { INFO@mark `RS6 another name is not another reservation` }
-unless (wg.reservations.count == 2) { INFO@mark `RS7 the world did not keep both` }
-unless (wg.reserved("alice")) { INFO@mark `RS8 a taken name does not read as taken` }
-if (wg.reserved("carol")) { INFO@mark `RS9 an untaken name reads as taken` }
+unless wr.name == "alice" { INFO@mark `RS1 a reservation does not hold the name it was made for` }
+unless wr.issuer == wg { INFO@mark `RS2 a reservation forgot which world issued it` }
+unless wg.reservations.count == 1 { INFO@mark `RS3 the world did not keep what it issued` }
+unless wg.reserve("alice") == wr { INFO@mark `RS4 reserving a taken name issues a second one` }
+unless wg.reservations.count == 1 { INFO@mark `RS5 reserving twice kept two` }
+unless wg.reserve("bob").name == "bob" { INFO@mark `RS6 another name is not another reservation` }
+unless wg.reservations.count == 2 { INFO@mark `RS7 the world did not keep both` }
+unless wg.reserved("alice") { INFO@mark `RS8 a taken name does not read as taken` }
+if wg.reserved("carol") { INFO@mark `RS9 an untaken name reads as taken` }
 // A name is taken within a world and nowhere else.
-if (World(name: "elsewhere").reserved("alice")) { INFO@mark `RS10 a name reserved in one world is taken in another` }
+if World(name: "elsewhere").reserved("alice") { INFO@mark `RS10 a name reserved in one world is taken in another` }
+unless wg.reserved("ALICE") { INFO@mark `RS11 a reserved name is free again in other letter case` }
 
 // A history keeps what was committed, in the order it was committed.
 repo := Repository(world: wg)
-past := History(repository: repo, commits: (chain None))
-unless (past.count.is_zero) { INFO@mark `HI1 a new history already holds commits` }
+past := History(repository: repo)
+unless past.count == 0 { INFO@mark `HI1 a new history already holds commits` }
 past.commit(wp, "first")
-unless (past.count == 1) { INFO@mark `HI2 committing does not keep it` }
+unless past.count == 1 { INFO@mark `HI2 committing does not keep it` }
 past.commit(wp, "second")
-unless (past.count == 2) { INFO@mark `HI3 committing twice keeps other than two` }
-unless (past.latest.what == "second") { INFO@mark `HI4 the latest is not the last committed` }
-unless (past.latest.who == wp) { INFO@mark `HI5 a commit forgot who made it` }
+unless past.count == 2 { INFO@mark `HI3 committing twice keeps other than two` }
+unless past.latest.what == "second" { INFO@mark `HI4 the latest is not the last committed` }
+unless past.latest.who == wp { INFO@mark `HI5 a commit forgot who made it` }
 branched := past.fork
-unless (branched.count.is_zero) { INFO@mark `HI6 a fork starts with commits on it` }
-unless (branched.from == past) { INFO@mark `HI7 a fork forgot what it came from` }
+unless branched.count == 0 { INFO@mark `HI6 a fork starts with commits on it` }
+unless branched.from == past { INFO@mark `HI7 a fork forgot what it came from` }
 
 // What is written down about something read.
 cite := Reference(title: "on rays")
-cite.authors &= wp
-unless (cite.draft) { INFO@mark `RF1 a new reference is not a draft` }
-unless (cite.publish.draft.not) { INFO@mark `RF2 publishing does not take it out of draft` }
-unless (cite.notes.count.is_zero) { INFO@mark `RF3 a new reference already has notes` }
+cite.authors.push wp
+unless cite.draft { INFO@mark `RF1 a new reference is not a draft` }
+if cite.publish.draft { INFO@mark `RF2 publishing does not take it out of draft` }
+unless cite.notes.empty { INFO@mark `RF3 a new reference already has notes` }
 cite.note("a note")
-unless (cite.notes.count == 1) { INFO@mark `RF4 a note is not kept` }
-unless (cite.title == "on rays") { INFO@mark `RF5 a reference forgot its title` }
+unless cite.notes.count == 1 { INFO@mark `RF4 a note is not kept` }
+unless cite.title == "on rays" { INFO@mark `RF5 a reference forgot its title` }
 
 // Who may see what.
-unless (Accessor.Permission.confidential) { INFO@mark `AC3 there is no confidential permission` }
-unless (Accessor.Permission.components.count == 4) { INFO@mark `AC4 there are other than four permissions` }
-unless (Accessor(level: Accessor.Permission.public).level == Accessor.Permission.public) { INFO@mark `AC5 an accessor forgot its level` }
+unless Accessor.Permission.confidential { INFO@mark `AC3 there is no confidential permission` }
+unless Accessor.Permission#.count == 7 { INFO@mark `AC4 there are other than seven permissions` }
+unless Accessor(level: Accessor.Permission.public).level == Accessor.Permission.public { INFO@mark `AC5 an accessor forgot its level` }
 
 // A quest is what there is to do: the steps it takes, and whether it is done.
 errand := Quest(name: "fetch", goal: wi)
-if (errand.completed) { INFO@mark `QU1 a new quest is already done` }
-unless (errand.difficulty.is_zero) { INFO@mark `QU2 a quest with no steps is difficult` }
+if errand.completed { INFO@mark `QU1 a new quest is already done` }
+unless errand.difficulty == 0 { INFO@mark `QU2 a quest with no steps is difficult` }
 errand.step("go")
 errand.step("take")
-unless (errand.difficulty == 2) { INFO@mark `QU3 a quest of two steps is not two hard` }
-unless (errand.complete.completed) { INFO@mark `QU4 completing a quest does not` }
-unless (errand.goal == wi) { INFO@mark `QU5 a quest forgot what it is for` }
+unless errand.difficulty == 2 { INFO@mark `QU3 a quest of two steps is not two hard` }
+unless errand.complete.completed { INFO@mark `QU4 completing a quest does not` }
+unless errand.goal == wi { INFO@mark `QU5 a quest forgot what it is for` }
 // Posting answers the quest, the way spawning answers the character.
-unless (wg.post(errand) == errand) { INFO@mark `QU6 posting a quest does not answer it` }
-unless (wg.quests.count == 1) { INFO@mark `QU11 posting a quest does not put it in the world` }
+unless wg.post(errand) == errand { INFO@mark `QU6 posting a quest does not answer it` }
+unless wg.quests.count == 1 { INFO@mark `QU11 posting a quest does not put it in the world` }
 
 // A task is a quest that can be interrupted.
 job := Task(name: "carry", goal: wi)
-if (job.interrupted) { INFO@mark `QU7 a new task is already interrupted` }
-unless (job.interrupt.interrupted) { INFO@mark `QU8 interrupting a task does not` }
-if (job.completed) { INFO@mark `QU9 an interrupted task is done` }
-unless (job.difficulty.is_zero) { INFO@mark `QU10 a task with no steps is difficult` }
+if job.interrupted { INFO@mark `QU7 a new task is already interrupted` }
+unless job.interrupt.interrupted { INFO@mark `QU8 interrupting a task does not` }
+if job.completed { INFO@mark `QU9 an interrupted task is done` }
+unless job.difficulty == 0 { INFO@mark `QU10 a task with no steps is difficult` }
 
 // Where someone is says how they are, and where they are not, what they said
 // they were.
 away := Character(name: "away")
-unless (away.status_now == Status.offline) { INFO@mark `PS1 someone with nowhere to be is not offline` }
+unless away.status_now == Status.offline { INFO@mark `PS1 someone with nowhere to be is not offline` }
 somewhere := Instance(location: here)
 present := Character(name: "present", presence: somewhere)
-unless (present.status_now == Status.online) { INFO@mark `PS2 someone somewhere is not as that place is` }
-if (present.status_now == Status.offline) { INFO@mark `PS3 someone somewhere is offline anyway` }
-unless (present.status == Status.offline) { INFO@mark `PS4 what they said they were is not what they said` }
+unless present.status_now == Status.online { INFO@mark `PS2 someone somewhere is not as that place is` }
+if present.status_now == Status.offline { INFO@mark `PS3 someone somewhere is offline anyway` }
+unless present.status == Status.offline { INFO@mark `PS4 what they said they were is not what they said` }
 
 // What a world and a character are written with in front of their names.
-unless ((World(name: "w").prefix).as(String) == "#") { INFO@mark `WP1 a world is not written with a hash` }
-unless ((Character(name: "p").prefix).as(String) == "@") { INFO@mark `WP2 a character is not written with an at sign` }
+unless World(name: "w").PREFIX == "#" { INFO@mark `WP1 a world is not written with a hash` }
+unless Character(name: "p").PREFIX == "@" { INFO@mark `WP2 a character is not written with an at sign` }
 
 // A name given to something is the name it answers to afterwards.
 renamed := Character(name: "before").named("after")
-unless (renamed.name == "after") { INFO@mark `WP3 something named is not called that` }
+unless renamed.name == "after" { INFO@mark `WP3 something named is not called that` }
 
 // What a world holds, and how many live in it.
 county := World(name: "county")
-unless (county.population.is_zero) { INFO@mark `WP4 an empty world has someone in it` }
+unless county.population == 0 { INFO@mark `WP4 an empty world has someone in it` }
 county.spawn(Character(name: "one"))
 county.spawn(Character(name: "two"))
-unless (county.population == 2) { INFO@mark `WP5 two who live there do not count two` }
-unless (county.items.empty) { INFO@mark `WP6 an empty world holds something` }
+unless county.population == 2 { INFO@mark `WP5 two who live there do not count two` }
+unless county.items.empty { INFO@mark `WP6 an empty world holds something` }
 county.add(Item(name: "lamp", issuer: county))
-unless (county.items.count == 1) { INFO@mark `WP7 what was added to a world is not there` }
-if (county.shadowing) { INFO@mark `WP8 a world falls back to another by itself` }
+unless county.items.count == 1 { INFO@mark `WP7 what was added to a world is not there` }
+if county.shadowing { INFO@mark `WP8 a world falls back to another by itself` }
 
 // A name issued in a world is the reservation that took it, and reserving it
 // again is reserving it once.
 taken := county.issue("a")
-unless (taken.name == "a") { INFO@mark `WP9 what was issued does not hold the name` }
-unless (taken.issuer == county) { INFO@mark `WP10 what issued a name is not the world` }
-unless (county.reserve("a") == taken) { INFO@mark `WP11 reserving a taken name takes it again` }
+unless taken.name == "a" { INFO@mark `WP9 what was issued does not hold the name` }
+unless taken.issuer == county { INFO@mark `WP10 what issued a name is not the world` }
+unless county.reserve("a") == taken { INFO@mark `WP11 reserving a taken name takes it again` }
 
 // An item sits somewhere, is obtained by something, and carries what says so.
 lamp := Item(name: "lamp", issuer: county)
-if (lamp.obtained_by) { INFO@mark `WP12 an item nobody has is had by something` }
-if (lamp.certificate) { INFO@mark `WP13 an item carries a certificate it was not given` }
+if lamp.obtained_by { INFO@mark `WP12 an item nobody has is had by something` }
+if lamp.certificate { INFO@mark `WP13 an item carries a certificate it was not given` }
 paper := Certificate(issuer: county, secret: 1)
-unless (lamp.certify(paper).certificate == paper) { INFO@mark `WP14 what an item was given is not what it carries` }
-unless (paper.issued_on) { INFO@mark `WP15 a certificate says nothing about when it was issued` }
+unless lamp.certify(paper).certificate == paper { INFO@mark `WP14 what an item was given is not what it carries` }
+unless paper.issued_on { INFO@mark `WP15 a certificate says nothing about when it was issued` }
 
 // What is written down about something read elsewhere.
 cited := Reference(title: "a paper")
-cited.authors &= 1
-unless (cited.draft) { INFO@mark `WP16 something written down is not a draft to begin with` }
-unless (cited.publish.draft.not) { INFO@mark `WP17 something published is still a draft` }
-if (cited.link) { INFO@mark `WP18 a reference points somewhere it was not pointed` }
-unless (cited.date) { INFO@mark `WP19 a reference says nothing about when` }
-unless (cited.note("read it").notes.count == 1) { INFO@mark `WP20 a note taken is not kept` }
+cited.authors.push 1
+unless cited.draft { INFO@mark `WP16 something written down is not a draft to begin with` }
+if cited.publish.draft { INFO@mark `WP17 something published is still a draft` }
+if cited.link { INFO@mark `WP18 a reference points somewhere it was not pointed` }
+unless cited.date { INFO@mark `WP19 a reference says nothing about when` }
+unless cited.note("read it").notes.count == 1 { INFO@mark `WP20 a note taken is not kept` }
 
 // Who belongs to an organization.
 guild := Organization(name: "guild")
-unless (guild.members.empty) { INFO@mark `WP21 an organization nobody joined has members` }
-unless (guild.status == Status.offline) { INFO@mark `WP22 an organization is not offline to begin with` }
+unless guild.members.empty { INFO@mark `WP21 an organization nobody joined has members` }
+unless guild.status == Status.offline { INFO@mark `WP22 an organization is not offline to begin with` }
 
 sited := Reference(title: "t", subtitle: "s", year: "2025", link: "https://a.b", pointer: "p")
-unless (sited.subtitle == "s") { INFO@mark `WR1 a reference forgot its subtitle` }
-unless (sited.year == "2025") { INFO@mark `WR2 a reference forgot its year` }
-unless (sited.link == "https://a.b") { INFO@mark `WR3 a reference forgot its link` }
-unless (sited.pointer == "p") { INFO@mark `WR4 a reference forgot its pointer` }
-unless (Reference(title: "t").authors.count.is_zero) { INFO@mark `WR5 a new reference already has authors` }
-unless (Reference(title: "t").organizations.count.is_zero) { INFO@mark `WR6 a new reference already has organizations` }
-unless (Reference(title: "t").published.count.is_zero) { INFO@mark `WR7 a new reference is already published somewhere` }
-sited.authors &= wp
-unless (sited.authors.count == 1) { INFO@mark `WR8 an author added is not kept` }
-unless (sited.authors.head.value == wp) { INFO@mark `WR9 the author kept is not the one added` }
-unless (Reference(title: "t").note("n").notes.head.value.text == "n") { INFO@mark `WR10 a note forgot its text` }
-unless (Reference(title: "t").note("n").notes.head.value.date) { INFO@mark `WR11 a note says nothing about when` }
-if (Reference(title: "t").remote) { INFO@mark `WR12 a new reference has a remote it was not given` }
+unless sited.subtitle == "s" { INFO@mark `WR1 a reference forgot its subtitle` }
+unless sited.year == "2025" { INFO@mark `WR2 a reference forgot its year` }
+unless sited.link == "https://a.b" { INFO@mark `WR3 a reference forgot its link` }
+unless sited.pointer == "p" { INFO@mark `WR4 a reference forgot its pointer` }
+unless Reference(title: "t").authors.empty { INFO@mark `WR5 a new reference already has authors` }
+unless Reference(title: "t").organizations.empty { INFO@mark `WR6 a new reference already has organizations` }
+unless Reference(title: "t").published.empty { INFO@mark `WR7 a new reference is already published somewhere` }
+sited.authors.push wp
+unless sited.authors.count == 1 { INFO@mark `WR8 an author added is not kept` }
+unless sited.authors.first == wp { INFO@mark `WR9 the author kept is not the one added` }
+unless Reference(title: "t").note("n").notes.first.text == "n" { INFO@mark `WR10 a note forgot its text` }
+unless Reference(title: "t").note("n").notes.first.date { INFO@mark `WR11 a note says nothing about when` }
+if Reference(title: "t").remote { INFO@mark `WR12 a new reference has a remote it was not given` }
 
-unless (Status.idle) { INFO@mark `ST2 there is no being idle` }
-unless (Status.do_not_disturb) { INFO@mark `ST3 there is no being do not disturb` }
-unless (Status.busy) { INFO@mark `ST4 there is no being busy` }
-if (Status.idle == Status.busy) { INFO@mark `ST5 idle and busy are the same` }
-unless (Status.components.count == 9) { INFO@mark `ST6 there are other than nine statuses` }
-unless (Character(name: "p", status: Status.busy).status == Status.busy) { INFO@mark `ST7 a character forgot being busy` }
+unless Status.idle { INFO@mark `ST2 there is no being idle` }
+unless Status.do_not_disturb { INFO@mark `ST3 there is no being do not disturb` }
+unless Status.busy { INFO@mark `ST4 there is no being busy` }
+if Status.idle == Status.busy { INFO@mark `ST5 idle and busy are the same` }
+unless Status#.count == 9 { INFO@mark `ST6 there are other than nine statuses` }
+unless Character(name: "p", status: Status.busy).status == Status.busy { INFO@mark `ST7 a character forgot being busy` }
+
+looked := World(name: "looked")
+looked.spawn(Character(name: "Fadi"))
+unless looked@fadi == looked.characters.first { INFO@mark `LK1 @name does not find a character ignoring case` }
+unless looked.characters.count == 1 { INFO@mark `LK2 the plural is not the collection of that class` }
+inner := World(name: "inner")
+looked.worlds.push inner
+unless looked#INNER == inner { INFO@mark `LK3 #name does not find a world ignoring case` }
+unless looked@nobody == World.ether@nobody { INFO@mark `LK4 a name not defined here does not fall back to @ether` }

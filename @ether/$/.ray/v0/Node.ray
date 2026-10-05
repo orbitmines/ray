@@ -1,0 +1,20 @@
+Node &+= {
+  // `A & B` holds both at once; on types, an instance of both (A1, T4.3).
+  conjoined => [this]
+  & (other) => class {
+    conjoined => this.conjoined, other
+    holds => conjoined.every(.)
+    admits (candidate) => conjoined.every(candidate ==.instance_of .)
+    contains (x) => conjoined.contains(x)
+  }
+
+  properties => fields
+
+  // `f⁻¹`, `f^-1`, `!f`; `! forward backward` declares two as each other's inverse (L§4.5).
+  inverse: Node?
+  ⁻¹ | ^-1 | ! => inverse
+  reversible => inverse
+  inverted_by (backward) => (inverse = backward) -- backward.inverse = this -- this
+}
+
+!{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)

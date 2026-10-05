@@ -1,75 +1,67 @@
-// Unicode: what fits in how many bits, what is a scalar, and what a character
-// is a kind of.
+// Unicode: what a scalar is, what a character is a kind of, the tables read
+// from unicode.org, and the transformation formats.
 
 mark ^keyword := external global
 
-unless (Unicode.fits(10, 16)) { INFO@mark `UN1 ten does not fit in sixteen bits` }
-if (Unicode.fits(21, 4)) { INFO@mark `UN2 twenty-one fits in four bits` }
-unless (Unicode.scalar(10)) { INFO@mark `UN3 ten is not a scalar` }
-if (Unicode.surrogate(10)) { INFO@mark `UN4 ten is a surrogate` }
+unless 10.instance_of(Unicode.Scalar) { INFO@mark `UN3 ten is not a scalar` }
+unless "a"[0].instance_of(Unicode.Scalar) { INFO@mark `UN1 a is not a scalar` }
+unless "0061".instance_of(Unicode.CodePoint) { INFO@mark `UN2 0061 is not a code point` }
+if "1234567".instance_of(Unicode.CodePoint) { INFO@mark `UN4 seven hexadecimal digits are a code point` }
 
-digit := "1".head.value
-unless (Unicode.category(digit)) { INFO@mark `UN5 a digit has no kind` }
-unless (Unicode.category(digit) == Unicode.GeneralCategory.number) { INFO@mark `UN6 a digit is not a number` }
+unless "1"[0].instance_of(Unicode.GeneralCategory.Number) { INFO@mark `UN6 a digit is not a number` }
+unless "1"[0].instance_of(Unicode.GeneralCategory.Decimal_Number) { INFO@mark `UN5 a digit is not a decimal number` }
+unless " "[0].instance_of(Unicode.GeneralCategory.Separator) { INFO@mark `UN7 a space does not separate` }
+unless " "[0].instance_of(Unicode.GeneralCategory.Space_Separator) { INFO@mark `UN8 a space is not a space separator` }
+unless "a"[0].instance_of(Unicode.GeneralCategory.Letter) { INFO@mark `UN9 a letter is not a letter` }
+if "a"[0].instance_of(Unicode.GeneralCategory.Number) { INFO@mark `UN10 a letter is a number` }
+if "1"[0].instance_of(Unicode.GeneralCategory.Letter) { INFO@mark `UN26 a digit is a letter` }
+if " "[0].instance_of(Unicode.GeneralCategory.Letter) { INFO@mark `UN27 a space is a letter` }
+unless "a"[0].instance_of(Unicode.Lowercase) { INFO@mark `UN11 a is not lowercase` }
+if "A"[0].instance_of(Unicode.Lowercase) { INFO@mark `UN12 A is lowercase` }
 
-space := " ".head.value
-unless (Unicode.category(space) == Unicode.GeneralCategory.separator) { INFO@mark `UN7 a space does not separate` }
+unless "é" as Unicode.UTF-8 as String == "é" { INFO@mark `UN13 é does not come back from UTF-8` }
+unless "\n" as Unicode.UTF-32 as String == "\n" { INFO@mark `UN14 a newline does not come back from UTF-32` }
+unless "\0" as Unicode.UTF-32 as String == "\0" { INFO@mark `UN15 the null character does not come back from UTF-32` }
+unless "\n" as Unicode.UTF-16 as String == "\n" { INFO@mark `UN16 a newline does not come back from UTF-16` }
+unless ("a" as Unicode.UTF-8).bytes.length == 1 { INFO@mark `UN18 a is other than one byte in UTF-8` }
+unless ("é" as Unicode.UTF-8).bytes.length == 2 { INFO@mark `UN19 é is other than two bytes in UTF-8` }
+unless ("一" as Unicode.UTF-8).bytes.length == 3 { INFO@mark `UN20 一 is other than three bytes in UTF-8` }
+unless ("😀" as Unicode.UTF-8).bytes.length == 4 { INFO@mark `UN21 😀 is other than four bytes in UTF-8` }
+unless ("a" as Unicode.UTF-16).bytes.length == 2 { INFO@mark `UN22 a is other than two bytes in UTF-16` }
+unless ("😀" as Unicode.UTF-16).bytes.length == 4 { INFO@mark `UN23 😀 is other than a surrogate pair in UTF-16` }
+unless ("a" as Unicode.UTF-32).bytes.length == 4 { INFO@mark `UN24 a is other than four bytes in UTF-32` }
+unless "😀" as Unicode.UTF-16 as String == "😀" { INFO@mark `UN25 😀 does not come back from UTF-16` }
 
-unless (Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }
-unless (Unicode.category("a".head.value) == Unicode.GeneralCategory.letter) { INFO@mark `UN9 a letter is not a letter` }
+unless Unicode.endianness == Unicode.Endianness.BE { INFO@mark `UN47 the bytes are not big-endian unless told otherwise` }
+big := ("a" as Unicode.UTF-16).bytes
+byte := ("a" as Unicode.UTF-8).bytes
+unless big == (0x00, 0x61) { INFO@mark `UN50 a in big-endian UTF-16 is not 00 61` }
+Unicode.endianness = Unicode.Endianness.LE
+unless ("a" as Unicode.UTF-16).bytes == <-big { INFO@mark `UN48 little-endian does not read the bytes right to left` }
+unless ("a" as Unicode.UTF-8).bytes == byte { INFO@mark `UN49 a single byte is not the same either way` }
+Unicode.endianness = Unicode.Endianness.BE
 
-// What a character is a kind of, told apart from what it is not.
-letter := "a".head.value
-if (Unicode.category(letter) == Unicode.GeneralCategory.number) { INFO@mark `UN10 a letter is a number` }
-if (Unicode.surrogate(10)) { INFO@mark `UN11 ten is a surrogate` }
-if (Unicode.fits(10, 3)) { INFO@mark `UN12 ten fits in three bits` }
-unless (Unicode.UTF8.decode(Unicode.UTF8.encode(15)) == 15) { INFO@mark `UN13 fifteen does not come back from UTF-8` }
+unless (Unicode.UCD as String).starts_with("https://www.unicode.org/Public/") { INFO@mark `UN36 the tables are not read from unicode.org` }
+unless Unicode.version == 17 { INFO@mark `UN40 the Unicode version is not seventeen` }
 
-// UTF-32 is the codepoint written out in thirty-two bits, and reading it back
-// gives what was written. The codepoints asked about here are small on
-// purpose: a number is a walk, so a letter costs its ninety-seven steps and
-// a surrogate half its fifty-five thousand.
-unless (Unicode.UTF32.decode(Unicode.UTF32.encode(10)) == 10) { INFO@mark `UN14 ten does not come back from UTF-32` }
-unless (Unicode.UTF32.decode(Unicode.UTF32.encode(0)).is_zero) { INFO@mark `UN15 zero does not come back from UTF-32` }
-unless (Unicode.UTF16.decode(Unicode.UTF16.encode(10)) == 10) { INFO@mark `UN16 ten does not come back from UTF-16` }
+unless U+4E00.columns == 2 { INFO@mark `UN41 a Han character does not take two columns` }
+unless U+0061.columns == 1 { INFO@mark `UN42 a Latin letter does not take one column` }
+unless U+4E00.east_asian_width == "W" { INFO@mark `UN51 a Han character is not wide` }
+unless U+0061.east_asian_width == "Na" { INFO@mark `UN52 a is not narrow` }
+unless U+0061.script == "Latin" { INFO@mark `UN43 a is not Latin` }
+unless U+0627.script == "Arabic" { INFO@mark `UN44 alef is not Arabic` }
+unless U+0061.instance_of(Char.Latin) { INFO@mark `UN45 a is not a Latin character` }
+if U+0627.instance_of(Char.Latin) { INFO@mark `UN46 alef is a Latin character` }
+unless U+0627.instance_of(Char.Arabic) { INFO@mark `UN53 alef is not an Arabic character` }
+unless U+03B1.instance_of(Char.Greek) { INFO@mark `UN54 alpha is not a Greek character` }
+unless U+0430.instance_of(Char.Cyrillic) { INFO@mark `UN55 a Cyrillic a is not Cyrillic` }
+unless U+4E00.instance_of(Char.Han) { INFO@mark `UN56 a Han character is not Han` }
+unless U+0061.block == "Basic Latin" { INFO@mark `UN57 a is not in Basic Latin` }
+unless U+00E9.block == "Latin-1 Supplement" { INFO@mark `UN58 é is not in Latin-1 Supplement` }
 
-
-// What fits in how many bits: a codepoint fits in as many bits as it takes,
-// and in any more, and in no fewer.
-unless (Unicode.fits(1, 1)) { INFO@mark `UN18 one does not fit in one bit` }
-if (Unicode.fits(2, 1)) { INFO@mark `UN19 two fits in one bit` }
-unless (Unicode.fits(2, 2)) { INFO@mark `UN20 two does not fit in two bits` }
-unless (Unicode.fits(0, 1)) { INFO@mark `UN21 zero does not fit in one bit` }
-
-
-// The kinds a character is told apart from one another.
-if (Unicode.category("1".head.value) == Unicode.GeneralCategory.letter) { INFO@mark `UN26 a digit is a letter` }
-if (Unicode.category(" ".head.value) == Unicode.GeneralCategory.letter) { INFO@mark `UN27 a space is a letter` }
-unless (Unicode.GeneralCategory.components.count == 6) { INFO@mark `UN29 there are other than six kinds` }
-
-// The bits between two places of a chain of bits, counted from zero.
-eight_bits := bits_of(5, 8)
-unless (eight_bits.slice_bits(0, 4).count == 4) { INFO@mark `UN30 four bits taken off eight are other than four` }
-unless (eight_bits.slice_bits(4, 8).count == 4) { INFO@mark `UN31 the four bits after them are other than four` }
-unless (eight_bits.slice_bits(0, 8).count == 8) { INFO@mark `UN32 all of eight bits are other than eight` }
-if (eight_bits.slice_bits(2, 2).nonempty) { INFO@mark `UN33 the bits between a place and itself are something` }
-
-// spec: where the surrogates begin is not claimed here — D800 is fifty-five
-// thousand, and a number is a walk, so building it once costs more than the
-// whole file.
-
-// Where the tables are read from, when they are read.
-unless (Unicode.tables_at.starts_with("https")) { INFO@mark `UN36 the tables are not read over the web` }
-
-// The tables, read from unicode.org once per version and kept under @ether:
-// how wide a character is, which script it is written in, and how it folds.
-unless (Unicode.version == 15) { INFO@mark `UN40 the Unicode version is not fifteen` }
-unless (U+4E00.columns == 2) { INFO@mark `UN41 a Han character does not take two columns` }
-unless (U+0061.columns == 1) { INFO@mark `UN42 a Latin letter does not take one column` }
-unless (U+0061.script == "Latin") { INFO@mark `UN43 a is not Latin` }
-unless (U+0627.script == "Arabic") { INFO@mark `UN44 alef is not Arabic` }
-unless (U+0061.instance_of(Char.Latin)) { INFO@mark `UN45 a is not a Latin character` }
-if (U+0627.instance_of(Char.Latin)) { INFO@mark `UN46 alef is a Latin character` }
-unless ("Straße".fold_case == "strasse") { INFO@mark `UN47 sharp s does not fold to ss` }
-unless (Unicode.ordered(Unicode.UTF16.encode(97), Unicode.Endianness.little) == bits_of(97 * 256, 16)) { INFO@mark `UN48 little-endian does not read the bytes right to left` }
-unless (Unicode.ordered(bits_of(97, 8), Unicode.Endianness.little) == bits_of(97, 8)) { INFO@mark `UN49 a single byte is not the same either way` }
+unless "Straße".fold_case == "strasse" { INFO@mark `UN59 sharp s does not fold to ss` }
+unless Unicode.CaseFolding[U+0041] == U+0061 { INFO@mark `UN60 A does not fold to a` }
+unless Unicode.UpperCase[U+0061] == U+0041 { INFO@mark `UN61 the upper case of a is not A` }
+unless Unicode.LowerCase[U+0041] == U+0061 { INFO@mark `UN62 the lower case of A is not a` }
+unless Unicode.BidiMirroring[U+0028] == U+0029 { INFO@mark `UN63 the mirror of ( is not )` }
+unless U+0061 == "a"[0] { INFO@mark `UN64 U+0061 is not a` }

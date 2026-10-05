@@ -1,0 +1,89 @@
+// A program selected at a step: waiting, intermediate or final (P1.8).
+Running := class = program: Program, at: Program?, started: boolean = false, results: *[] = [] {
+  static branches: Running[] = []
+  static deferred: Running[] = []
+
+  & => results
+  steps | expand => program.written
+  is_initial | waiting => !started
+  is_terminal | final => started && !at
+  intermediate => started && !is_terminal
+  holds => !is_terminal
+
+  stepped => {
+    at = started ? at.next : steps.first
+    started = true
+    results.push at() if at
+  } -- this
+  next => Running(program, at, started, results: [results]).stepped
+  finished => (stepped while holds) -- this
+  cancel => (at, started = None, true) -- this
+
+  static round => branches{holds}.map(.stepped)
+  static until (condition) => (round while !condition() && branches.some(.holds)) -- this
+}
+
+Program &+= {
+  running => Running(program: this)
+  & => running.&
+  expand => written
+  concurrently => written.map(. ==.instance_of Running ? . : Running(program: .))
+}
+
+// Each statement of the block is a branch, as if written in `branch { }`; writing it explicitly is allowed (P4.1, P4.2).
+branch{ }{block} ^class => Running(program: Program(code: external ** block)) -- Running.branches.push(.)
+sync{ }{block} ^class => Program(code: external ** block).concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
+race{ }{block} ^class => Program(code: external ** block).concurrently
+  -- (.map(.stepped) while .every(.holds))
+  -- .{holds}.map(.cancel)
+  -- .{is_terminal}.first.results.last
+rush{ }{block} ^class => Program(code: external ** block).concurrently
+  -- (.map(.stepped) while .every(.holds))
+  -- Running.branches.push(.{holds})
+  -- .{is_terminal}.first.results.last
+defer{ }{block} ^class => Running(program: Program(code: external ** block)) -- Running.deferred.push(.)
+await{ }{awaited} ^class => Running.until(() => awaited && (awaited !=.instance_of Running || awaited.is_terminal))
+  -- awaited ==.instance_of Running ? awaited.results.last : awaited
+pending{ }{name} ^keyword => await name
+
+// An error is a value a call answers; `$` tests for it (P6.1).
+Error := class = kind: *?, message: String?, fatal: boolean = false, cause: Error? {
+  as (=== boolean) => false
+  & (other: Error) => Error(kind, message, fatal: fatal || other.fatal, cause: other)
+  causes => this, cause?.causes ?? []
+}
+Node &+= {
+  erred => this ==.instance_of Error
+  recoverable => erred && !fatal
+}
+
+{call} $ ^punctuation => call
+{call} $ {fallback} ^punctuation => call.recoverable ? fallback : call
+{call} $ return {fallback} ^punctuation => call.recoverable ? &caller.return(fallback) : call
+{call} $ {{handler}} ^punctuation => call.recoverable ? call.satisfies({ inline handler }) : call
+{call} $ ERROR[{kind}] {message} ^punctuation => call.recoverable ? Error(kind, message, cause: call) : call
+{call} $? ^punctuation => call.recoverable ? None : call
+{call} $? {fallback} ^punctuation => (call $?) ?? fallback
+{call} $! ^punctuation => call -- FATAL@. `an error escalated to fatal` if .erred
+{call} $?! ^punctuation => call.erred ? None : call
+{call} $?! {{handler}} ^punctuation => call.erred ? call.satisfies({ inline handler }) : call
+{call}{\n}${kind} {handled} ^punctuation => call.recoverable && call.kind ==.instance_of kind ? handled : call
+{call}{\n}${kind} | ${other} {handled} ^punctuation => call.recoverable && call.kind ==.instance_of (kind | other) ? handled : call
+
+// `dynamically x = …` re-evaluates when what it depends on changes (P5.1, P5.3).
+dynamically {name} = {value} ^keyword => external rule name value
+dynamically {name} := {value} ^keyword => external rule name value
+// Every failing condition is reported together (P5.6).
+dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR@. `assertion failed`) -- .empty
+
+// `with X = v { … }` restores X after the block; `with X = v` until the context is left (L§6.3).
+with{ }{target} = {value} {{body}} ^keyword => (previous = target) -- (target = value) -- (inline (external ** body)) -- (target = previous)
+with{ }{target} = {value} ^keyword => (previous = target) -- defer { target = previous } -- (target = value)
+with{ }{{settings}} ^keyword => inline (external ** settings)
+assume{ }{target} = {value} {{body}} ^keyword => with target = value { inline body }
+assume{ }{target} = {value} ^keyword => with target = value
+
+// `never …` (L§4.1)
+Never := Node{false}
+never return ^keyword => Never
+never{ }{condition} ^keyword => Never -- ERROR@condition `happened, and was said never to` if condition

@@ -1,24 +1,17 @@
-Encoding := class {
+Encoding := namespace {
   Algorithm := enum sha1 | sha256 | sha512 | sha3 | md5 | blowfish | blake3 | base64 | gzip
 
-  Encrypted := class {
-    value: Node
-    key: Node
-    holds_key (location) => if (location == .key) { true } elsif (location === None) { false } elsif (location.key === None) { false } else { location.key == .key }
-    as (location) => if (.key === None) { None } elsif (.holds_key(location)) { .value } else { None }
-    opened (location) => if (.holds_key(location)) { .value } else { Quest(name: "find the key", goal: this) }
-    read_off (location) => if (.holds_key(location)) { Encoding.Encrypted(value: .value, key: location.key) } else { None }
+  // `Encrypted<T>` is readable only at a location holding its key (X4.2, X4.3).
+  Encrypted<T> := class = value: T, key: Key? {
+    // Held at a location, an instance or a character: whatever carries the key.
+    holds_key (holder) => key && holder?.key == key
+    as (holder) => value if holds_key(holder)
+    opened (holder) => holds_key(holder) ? value : Quest(name: "find the key", goal: this)
+    read_off (holder) => Encrypted(value, key: holder.key) if holds_key(holder)
   }
 
-  Hash := class {
-    value: Node
-    algorithm: Encoding.Algorithm
-    chainable == (other: Encoding.Hash) => (.algorithm == other.algorithm).and(.value == other.value)
-  }
-
-  Compressed := class {
-    value: Node
-    algorithm: Encoding.Algorithm
-    as (target) => .value
+  Hash := class = value: *, algorithm: Algorithm
+  Compressed := class = value: *, algorithm: Algorithm {
+    as (target) => value
   }
 }

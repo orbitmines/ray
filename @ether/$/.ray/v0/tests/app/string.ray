@@ -1,289 +1,244 @@
 mark ^keyword := external global
 
-ab := "ab"
-unless (ab.count == 2) { INFO@mark `S1 ab has other than two characters` }
+unless "ab".length == 2 { INFO@mark `S1 ab has other than two characters` }
+unless "ab"[0] == 97 { INFO@mark `S2 a is not codepoint 97` }
+unless "ab"[1] == 98 { INFO@mark `S3 b is not codepoint 98` }
+unless "a" == "a" { INFO@mark `S4 a != a` }
+unless "a" != "b" { INFO@mark `S5 a == b` }
+unless "a" + "b" == "ab" { INFO@mark `S6 a + b != ab` }
+unless "é".length == 1 { INFO@mark `S7 é is not one character` }
+unless ("é" as Unicode.UTF-8).bytes.length == 2 { INFO@mark `S8 é is not two bytes wide` }
+unless "é"[0] == 233 { INFO@mark `S9 é is not codepoint 233` }
 
-unless (ab.head.value.codepoint == 97) { INFO@mark `S2 a is not codepoint 97` }
+unless ("a" as Unicode.UTF-8 as Binary).length == 8 { INFO@mark `T1 a is not eight bits in UTF-8` }
+unless "a" as Unicode.UTF-8 as Binary == 01100001₂ { INFO@mark `T2 a is not 01100001 in UTF-8` }
+unless 01100001₂ as Unicode.UTF-8 as String == "a" { INFO@mark `T4 01100001 is not a in UTF-8` }
+unless "a".length == 1 { INFO@mark `U5 a has other than one character` }
 
-unless (ab.tail.value.codepoint == 98) { INFO@mark `S3 b is not codepoint 98` }
+unless U+0061 == "a"[0] { INFO@mark `W1 U+0061 is not a` }
+unless U+00E9 == "é"[0] { INFO@mark `W2 U+00E9 is not é` }
+unless "ab".upper_case == "AB" { INFO@mark `W3 upper_case failed` }
+unless "Ab".swap_case == "aB" { INFO@mark `W4 swap_case failed` }
+unless "ab".mirrored == "ba" { INFO@mark `W5 mirrored failed` }
+unless "abc".contains("bc") { INFO@mark `W6 contains failed` }
+if "abc".contains("ca") { INFO@mark `W7 contains found ca in abc` }
+unless "a b".words.length == 2 { INFO@mark `W8 words did not split in two` }
+unless "a b".snake_case == "a_b" { INFO@mark `W9 snake_case failed` }
+unless "ab cd".pascal_case == "AbCd" { INFO@mark `W10 pascal_case failed` }
+unless "cat".plural == "cats" { INFO@mark `W11 plural failed` }
+unless ("a" as Unicode.UTF-16 as Binary).length == 16 { INFO@mark `W12 UTF16 of a is not sixteen bits` }
+unless "\n" as Unicode.UTF-32 as String == "\n" { INFO@mark `W13 UTF32 round trip failed` }
+unless "a"[0].instance_of(Unicode.GeneralCategory.Letter) { INFO@mark `W14 a is not a letter` }
+unless "ab" ~= "b" { INFO@mark `W15 the pattern b did not match ab` }
+unless 10.instance_of(Unicode.Scalar) { INFO@mark `W17 ten is not a scalar` }
 
-unless ("a" == "a") { INFO@mark `S4 a != a` }
+unless "ab1"{.instance_of(Char.Letter)}.length == 2 { INFO@mark `S40 selecting letters did not keep two` }
+unless "abc".length == 3 { INFO@mark `S41 a string of three does not count three` }
+unless "f"[0] as Decimal == 15 { INFO@mark `S42 f is not the digit fifteen` }
+unless "1a".instance_of(Hexadecimal.String) { INFO@mark `S44 1a does not spell a hexadecimal number` }
+if "1a".instance_of(Decimal.String) { INFO@mark `S45 1a spells a decimal number` }
+unless "a-b".split(U+002D).length == 2 { INFO@mark `S47 splitting on a dash does not give two parts` }
 
-unless ("a" != "b") { INFO@mark `S5 a == b` }
+unless "ab cd".camel_case == "abCd" { INFO@mark `S48 camel_case is not the first word lower and the rest capitalised` }
+unless "ab".title_case == "Ab" { INFO@mark `S49 title_case does not capitalise` }
+unless "Ab".fold_case == "ab" { INFO@mark `S50 fold_case does not fold` }
 
-unless (("a" + "b") == ab) { INFO@mark `S6 a + b != ab` }
+unless "cats".singular == "cat" { INFO@mark `S51 the singular of cats is not cat` }
+unless "cat".singular == "cat" { INFO@mark `S52 the singular of cat is not cat` }
+unless "cats".plural == "cats" { INFO@mark `S53 the plural of cats is not cats` }
 
-acute := "é"
-unless (acute.count == 1) { INFO@mark `S7 é is not one character` }
+unless "abc".mirrored == "cba" { INFO@mark `S54 abc reversed is not cba` }
+unless "a".mirrored == "a" { INFO@mark `S55 one character reversed is not itself` }
+unless "abc"[..2] == "ab" { INFO@mark `S56 the first two of abc are not ab` }
+unless "abc"[1..] == "bc" { INFO@mark `S57 the last two of abc are not bc` }
+unless "abc"[1..1].empty { INFO@mark `S58 a slice of nothing is not empty` }
 
-unless (acute.head.value.width == 2) { INFO@mark `S8 é is not two bytes wide` }
+unless "abc".index_of("bc") == 1 { INFO@mark `S59 bc does not sit one along in abc` }
+unless "abc".index_of("a") == 0 { INFO@mark `S60 a does not sit at the start of abc` }
+unless "ab" + "c" == "abc" { INFO@mark `S61 ab and c do not make abc` }
+unless "ab".starts_with("a") { INFO@mark `S62 ab does not start with a` }
+if "ab".starts_with("b") { INFO@mark `S63 ab starts with b` }
+unless "ab".ends_with("b") { INFO@mark `S64 ab does not end with b` }
+unless "a b".words as String == "ab" { INFO@mark `S65 joining a and b with nothing between is not ab` }
 
-unless (acute.head.value.codepoint == 233) { INFO@mark `S9 é is not codepoint 233` }
+unless ("a", "b", "c") as String == "abc" { INFO@mark `SJ1 joining a, b and c with nothing between is not abc` }
+unless ("a", "b", "c").join("-") == "a-b-c" { INFO@mark `SJ2 joining a, b and c with a dash is not a-b-c` }
+unless ("a", "b").join(", ") == "a, b" { INFO@mark `SJ3 joining a and b with a comma and space is not a, b` }
+unless "a".words.join("-") == "a" { INFO@mark `SJ4 joining one element with a dash is not that element` }
+unless "a b c".words as String == "abc" { INFO@mark `SJ5 joining the words of a b c is not abc` }
+unless "a b c".words.join("_") == "a_b_c" { INFO@mark `SJ6 joining the words of a b c with an underscore is not a_b_c` }
+unless "".words.join("-").empty { INFO@mark `SJ7 joining no words is not empty` }
+unless "ABC" == ("A", "B", "C") { INFO@mark `SJ8 ABC is not A, B, C` }
 
-octet := chain None
-octet &= 0
-octet &= 1
-octet &= 1
-octet &= 0
-octet &= 0
-octet &= 0
-octet &= 0
-octet &= 1
-unless (octet.count == 8) { INFO@mark `T1 manual bit chain does not count eight` }
-unless (octet.head.value.not) { INFO@mark `T2 first manual bit is not 0` }
-manual := Unicode.UTF8.decode(octet).as_character
-unless (manual.width == 1) { INFO@mark `T3 manual a is not one byte wide` }
-unless (manual.codepoint == 97) { INFO@mark `T4 manual a is not codepoint 97` }
-read := "a".head.value
-unless (read.octets.count == 8) { INFO@mark `T5 read a does not have eight octet` }
-unless (read.octets.head.value.not) { INFO@mark `T6 read a first bit is not 0` }
-unless (read.octets.head.next.value) { INFO@mark `T7 read a second bit is not 1` }
+unless "f" as 16 == 15 { INFO@mark `S66 f is not fifteen in sixteen` }
+unless "12" as 10 == 12 { INFO@mark `S67 12 is not twelve in ten` }
+unless 12 as 10 as String == "12" { INFO@mark `S68 twelve is not spelled 12 in ten` }
+unless 5 as 2 as String == "101" { INFO@mark `S69 five is not spelled 101 in two` }
+unless "ff" as 16 == 255 { INFO@mark `SN1 ff is not 255` }
+unless 255 as 16 as String == "ff" { INFO@mark `SN2 255 is not spelled ff in sixteen` }
+unless "101" as 2 == 5 { INFO@mark `SN3 101 is not five in two` }
+unless "ff" as 16 as 16 as String == "ff" { INFO@mark `SN4 ff does not come back from sixteen` }
 
-lone := "a"
-unless (lone.count == 1) { INFO@mark `U5 a has other than one character` }
-unless (lone.head.value.octets.count == 8) { INFO@mark `U6 the character's octets are not eight` }
+unless "ab".lines.length == 1 { INFO@mark `S70 a text without a newline is other than one line` }
+unless "a\nb".lines.length == 2 { INFO@mark `ST1 a newline does not separate two lines` }
 
-built := U+0061
-unless (built == manual) { INFO@mark `W1 U+0061 is not a` }
-unless (U+00E9 == acute.head.value) { INFO@mark `W2 U+00E9 is not é` }
-unless (ab.upper_case == "AB") { INFO@mark `W3 upper_case failed` }
-unless ("Ab".swap_case == "aB") { INFO@mark `W4 swap_case failed` }
-unless (ab.mirrored == "ba") { INFO@mark `W5 mirrored failed` }
-unless ("abc".contains("bc")) { INFO@mark `W6 contains failed` }
-unless (("abc".contains("ca")).not) { INFO@mark `W7 contains found ca in abc` }
-unless ("a b".words.count == 2) { INFO@mark `W8 words did not split in two` }
-unless ("a b".snake_case == "a_b") { INFO@mark `W9 snake_case failed` }
-unless ("ab cd".pascal_case == "AbCd") { INFO@mark `W10 pascal_case failed` }
-unless ("cat".plural == "cats") { INFO@mark `W11 plural failed` }
-unless (Unicode.UTF16.encode(97).count == 16) { INFO@mark `W12 UTF16 of a is not sixteen bits` }
-unless (Unicode.UTF32.decode(Unicode.UTF32.encode(10)) == 10) { INFO@mark `W13 UTF32 round trip failed` }
-unless (Unicode.category(manual) == Unicode.GeneralCategory.letter) { INFO@mark `W14 a is not a letter` }
-unless (Regex(pattern: "b").matches(ab)) { INFO@mark `W15 regex b did not match ab` }
-unless (("x" * 3) == "xxx") { INFO@mark `W16 repeat failed` }
-unless (Unicode.scalar(10)) { INFO@mark `W17 ten is not a scalar` }
+unless "8"[0].instance_of(Char.Digit) { INFO@mark `S71 8 is not a digit` }
+unless "9"[0].instance_of(Char.Digit) { INFO@mark `S72 9 is not a digit` }
+unless "0"[0].instance_of(Char.Digit) { INFO@mark `S73 0 is not a digit` }
+if ":"[0].instance_of(Char.Digit) { INFO@mark `S74 a colon is a digit` }
+if "a"[0].instance_of(Char.Digit) { INFO@mark `S75 a is a digit` }
+unless "89".instance_of(Decimal.String) { INFO@mark `S77 89 does not spell a number in ten` }
+unless "89" as Decimal == 89 { INFO@mark `S78 89 is not eighty-nine` }
+unless "9"[0] as Decimal == 9 { INFO@mark `S79 9 is not worth nine` }
 
-letters := "ab1"{.letter}
-unless (letters.count == 2) { INFO@mark `S40 selecting letters did not keep two` }
-unless ("abc".count == 3) { INFO@mark `S41 a string of three does not count three` }
-unless ("f".head.value.digit_value == 15) { INFO@mark `S42 f is not the digit fifteen` }
-if ("-".head.value.digit_value) { INFO@mark `S43 a dash has a digit value` }
-unless ("1a".spells_in(16)) { INFO@mark `S44 1a does not spell a hexadecimal number` }
-if ("1a".spells_in(10)) { INFO@mark `S45 1a spells a decimal number` }
+unless "a"[0].upper_case == "A"[0] { INFO@mark `S80 a in upper case is not A` }
+unless "Z"[0].lower_case == "z"[0] { INFO@mark `S81 Z in lower case is not z` }
+unless "a"[0].lower_case == "a"[0] { INFO@mark `S82 a already in lower case is not itself` }
+unless "7"[0].upper_case == "7"[0] { INFO@mark `S83 a digit in upper case is not itself` }
+unless "a"[0].swap_case == "A"[0] { INFO@mark `S84 a swapped is not A` }
+unless "A"[0].swap_case == "a"[0] { INFO@mark `S85 A swapped is not a` }
+unless "7"[0].swap_case == "7"[0] { INFO@mark `S86 a digit swapped is not itself` }
 
-// The dash a text form is written with, which nothing said the value of.
-unless (45 == 45) { INFO@mark `S46 a dash is not forty-five` }
-unless ("a-b".split(U+002D).count == 2) { INFO@mark `S47 splitting on a dash does not give two parts` }
+unless "q"[0].instance_of(Char.Letter) { INFO@mark `S87 q is not a letter` }
+unless "Q"[0].instance_of(Char.Letter) { INFO@mark `S88 Q is not a letter` }
+if "7"[0].instance_of(Char.Letter) { INFO@mark `S89 a digit is a letter` }
+if "_"[0].instance_of(Char.Letter) { INFO@mark `S90 an underscore is a letter` }
+unless "_"[0].instance_of(Char.Word) { INFO@mark `S93 an underscore is not a word character` }
+unless "7"[0].instance_of(Char.Word) { INFO@mark `S94 a digit is not a word character` }
+unless "q"[0].instance_of(Char.Word) { INFO@mark `S95 a letter is not a word character` }
+if " "[0].instance_of(Char.Word) { INFO@mark `S96 a space is a word character` }
+unless " "[0].instance_of(Char.Blank) { INFO@mark `S97 a space is not blank` }
+if "a"[0].instance_of(Char.Blank) { INFO@mark `S98 a is blank` }
+unless "\n"[0].instance_of(Char.Blank) { INFO@mark `S99 a newline is not blank` }
+unless "\t"[0].instance_of(Char.Blank) { INFO@mark `S100 a tab is not blank` }
+unless "-"[0].instance_of(Char.Symbol) { INFO@mark `S101 a dash is not a symbol` }
+if "a"[0].instance_of(Char.Symbol) { INFO@mark `S102 a is a symbol` }
+unless "a"[0].is_ascii { INFO@mark `S103 a is not one byte` }
+if "é"[0].is_ascii { INFO@mark `S147 é is one byte` }
 
-// The cases a name is written in, and the ones that were not asked about yet.
-unless ("ab cd".camel_case == "abCd") { INFO@mark `S48 camel_case is not the first word lower and the rest capitalised` }
-unless ("ab".title_case == "Ab") { INFO@mark `S49 title_case does not capitalise` }
-unless ("Ab".fold_case == "ab") { INFO@mark `S50 fold_case does not fold` }
+unless "abc".length == 3 { INFO@mark `S104 abc is not three long` }
+unless "abc"[1] == "b"[0] { INFO@mark `S105 the second of abc is not b` }
+unless "abcde"[1..4] == "bcd" { INFO@mark `S106 abcde from one to four is not bcd` }
+if "abc".empty { INFO@mark `S107 abc is empty` }
+unless "".empty { INFO@mark `S108 nothing written is not empty` }
+unless "abc" != "abd" { INFO@mark `S109 two different texts are the same` }
+if "abc" != "abc" { INFO@mark `S110 a text is not itself` }
 
-// English by its last letter only.
-unless ("cats".singular == "cat") { INFO@mark `S51 the singular of cats is not cat` }
-unless ("cat".singular == "cat") { INFO@mark `S52 the singular of cat is not cat` }
-unless ("cats".plural == "cats") { INFO@mark `S53 the plural of cats is not cats` }
+unless "abc".every(.instance_of(Char.Letter)) { INFO@mark `S111 abc is not all letters` }
+if "ab3".every(.instance_of(Char.Letter)) { INFO@mark `S112 ab3 is all letters` }
+unless "ab3".some(.instance_of(Char.Digit)) { INFO@mark `S113 ab3 holds no digit` }
+if "abc".some(.instance_of(Char.Digit)) { INFO@mark `S114 abc holds a digit` }
+unless "abc".map(.upper_case) as String == "ABC" { INFO@mark `S115 abc made upper is not ABC` }
 
-// Turning a text around, and taking part of it.
-unless ("abc".mirrored == "cba") { INFO@mark `S54 abc reversed is not cba` }
-unless ("a".mirrored == "a") { INFO@mark `S55 one character reversed is not itself` }
-unless ("abc".slice(0, 2) == "ab") { INFO@mark `S56 the first two of abc are not ab` }
-unless ("abc".slice(1, 3) == "bc") { INFO@mark `S57 the last two of abc are not bc` }
-unless ("abc".slice(1, 1).empty) { INFO@mark `S58 a slice of nothing is not empty` }
+unless "Ab".lowercase == "ab" { INFO@mark `S116 lowercase is not lower_case` }
+unless "Ab".uppercase == "AB" { INFO@mark `S117 uppercase is not upper_case` }
+unless "Ab".swapcase == "aB" { INFO@mark `S118 swapcase is not swap_case` }
+unless "ab cd".titlecase == "Ab Cd" { INFO@mark `S119 titlecase is not title_case` }
+unless "Ab".foldcase == "ab" { INFO@mark `S120 foldcase is not fold_case` }
+unless "ab cd".camelCase == "abCd" { INFO@mark `S121 camelCase is not camel_case` }
+unless "ab cd".PascalCase == "AbCd" { INFO@mark `S122 PascalCase is not pascal_case` }
+unless "ab cd".snakecase == "ab_cd" { INFO@mark `S123 snakecase is not snake_case` }
+unless "ab".^ == "AB" { INFO@mark `SC1 ^ is not upper_case` }
+unless "AB".v == "ab" { INFO@mark `SC2 v is not lower_case` }
+unless "a"[0].^ == "A"[0] { INFO@mark `SC3 a character's ^ is not its upper_case` }
+unless "A"[0].v == "a"[0] { INFO@mark `SC4 a character's v is not its lower_case` }
+unless "ß".fold_case == "ss" { INFO@mark `SC5 ß does not fold to ss` }
+unless "Straße".fold_case == "strasse" { INFO@mark `SC6 Straße does not fold to strasse` }
+unless "AbC".ignore_case == "aBc" { INFO@mark `SC7 ignoring case, AbC is not aBc` }
+if "AbC" == "aBc" { INFO@mark `SC8 minding case, AbC is aBc` }
+unless "é".^ == "É" { INFO@mark `SC9 é in upper case is not É` }
 
-// Where one text sits in another, and what joins two.
-unless ("abc".index_of("bc") == 1) { INFO@mark `S59 bc does not sit one along in abc` }
-unless ("abc".index_of("a").is_zero) { INFO@mark `S60 a does not sit at the start of abc` }
-unless (("ab" + "c") == "abc") { INFO@mark `S61 ab and c do not make abc` }
-unless ("ab".starts_with("a")) { INFO@mark `S62 ab does not start with a` }
-if ("ab".starts_with("b")) { INFO@mark `S63 ab starts with b` }
-unless ("ab".ends_with("b")) { INFO@mark `S64 ab does not end with b` }
-unless (String.joined("a b".words, None) == "ab") { INFO@mark `S65 joining a and b with nothing between is not ab` }
+unless "a-b+c".split(Char.Symbol).length == 3 { INFO@mark `S124 a-b+c cut at its symbols is other than three pieces` }
+unless "ab cd".words.length == 2 { INFO@mark `S125 ab cd is other than two words` }
+unless "ab_cd".words.length == 2 { INFO@mark `S126 ab_cd is other than two words` }
 
-unless (("a", "b", "c").join == "abc") { INFO@mark `SJ1 joining a, b and c with nothing between is not abc` }
-unless (("a", "b", "c").join("-") == "a-b-c") { INFO@mark `SJ2 joining a, b and c with a dash is not a-b-c` }
-unless (("a", "b").join(", ") == "a, b") { INFO@mark `SJ3 joining a and b with a comma and space is not a, b` }
-unless ("a".words.join("-") == "a") { INFO@mark `SJ4 joining one element with a dash is not that element` }
-unless ("a b c".words.join == "abc") { INFO@mark `SJ5 joining the words of a b c is not abc` }
-unless ("a b c".words.join("_") == "a_b_c") { INFO@mark `SJ6 joining the words of a b c with an underscore is not a_b_c` }
-unless ("".words.join("-").empty) { INFO@mark `SJ7 joining no words is not empty` }
+unless "abcd" ~= "bc" { INFO@mark `S127 a pattern does not find what is written in the text` }
+if "abd" ~= "bc" { INFO@mark `S128 a pattern finds what is not there` }
+unless ("abcd" ~= "bc").index == 1 { INFO@mark `S129 what is found is not where it stands` }
+unless "abcd".ignore_case ~= "BC" { INFO@mark `S132 a pattern ignoring case does not find the other case` }
+if "abcd" ~= "BC" { INFO@mark `S133 a pattern minding case finds the other case` }
 
-// A number spelled in a base, and a text read back as one.
-unless ("f".as_number_in(16) == 15) { INFO@mark `S66 f is not fifteen in sixteen` }
-unless ("12".as_number_in(10) == 12) { INFO@mark `S67 12 is not twelve in ten` }
-unless (12.spelled_in(10) == "12") { INFO@mark `S68 twelve is not spelled 12 in ten` }
-unless (5.spelled_in(2) == "101") { INFO@mark `S69 five is not spelled 101 in two` }
+unless Char.digit(0) == "0"[0] { INFO@mark `S138 nothing is not written 0` }
+unless Char.digit(7) == "7"[0] { INFO@mark `S139 seven is not written 7` }
+unless Char.digit(11) == "b"[0] { INFO@mark `S140 eleven is not written b` }
 
-// Lines are what a newline separates.
-unless ("ab".lines.count == 1) { INFO@mark `S70 a text without a newline is other than one line` }
+unless 7 as String == "7" { INFO@mark `S141 seven does not spell 7` }
+unless 12 as String == "12" { INFO@mark `S142 twelve does not spell 12` }
+unless 0 as String == "0" { INFO@mark `S143 nothing does not spell 0` }
 
-// Which characters are digits. Asking that the fifth bit be clear as well as
-// the four leading ones left out `8` and `9`, so neither was a digit and
-// nothing spelled with them was numeric.
-unless ("8".head.value.digit) { INFO@mark `S71 8 is not a digit` }
-unless ("9".head.value.digit) { INFO@mark `S72 9 is not a digit` }
-unless ("0".head.value.digit) { INFO@mark `S73 0 is not a digit` }
-if (":".head.value.digit) { INFO@mark `S74 a colon is a digit` }
-if ("a".head.value.digit) { INFO@mark `S75 a is a digit` }
-unless ("89".is_numeric) { INFO@mark `S76 89 is not numeric` }
-unless ("89".spells_in(10)) { INFO@mark `S77 89 does not spell a number in ten` }
-unless ("89".as_number == 89) { INFO@mark `S78 89 is not eighty-nine` }
-unless ("9".head.value.digit_value == 9) { INFO@mark `S79 9 is not worth nine` }
+unless "\0"[0] == 0 { INFO@mark `S144 the null character is not nothing` }
+unless "\r"[0] == 13 { INFO@mark `S145 the carriage return is not thirteen` }
+unless "a"[0].instance_of(Unicode.Scalar) { INFO@mark `S146 a is not a scalar` }
 
-// Case, one character at a time. The two Latin cases differ in one bit, so
-// `upper` and `lower` clear and set it and leave everything else alone — a
-// character that is neither is itself in both.
-unless ("a".head.value.upper == "A".head.value) { INFO@mark `S80 a in upper case is not A` }
-unless ("Z".head.value.lower == "z".head.value) { INFO@mark `S81 Z in lower case is not z` }
-unless ("a".head.value.lower == "a".head.value) { INFO@mark `S82 a already in lower case is not itself` }
-unless ("7".head.value.upper == "7".head.value) { INFO@mark `S83 a digit in upper case is not itself` }
-unless ("a".head.value.swapped == "A".head.value) { INFO@mark `S84 a swapped is not A` }
-unless ("A".head.value.swapped == "a".head.value) { INFO@mark `S85 A swapped is not a` }
-unless ("7".head.value.swapped == "7".head.value) { INFO@mark `S86 a digit swapped is not itself` }
+unless "AB cd".words.lower_case.join(" ") == "ab cd" { INFO@mark `S152 the words lowered are not ab cd` }
+unless "AB cd".title_case == "Ab Cd" { INFO@mark `S153 the words titled are not Ab Cd` }
 
-// Which characters are which. A letter is either case; a word character is a
-// letter, a digit or an underscore; a blank is the space or one of the
-// controls around a newline.
-unless ("q".head.value.letter) { INFO@mark `S87 q is not a letter` }
-unless ("Q".head.value.letter) { INFO@mark `S88 Q is not a letter` }
-if ("7".head.value.letter) { INFO@mark `S89 a digit is a letter` }
-if ("_".head.value.letter) { INFO@mark `S90 an underscore is a letter` }
-unless ("_".head.value.is_underscore) { INFO@mark `S91 an underscore is not one` }
-if ("a".head.value.is_underscore) { INFO@mark `S92 a is an underscore` }
-unless ("_".head.value.word) { INFO@mark `S93 an underscore is not a word character` }
-unless ("7".head.value.word) { INFO@mark `S94 a digit is not a word character` }
-unless ("q".head.value.word) { INFO@mark `S95 a letter is not a word character` }
-if (" ".head.value.word) { INFO@mark `S96 a space is a word character` }
-unless (" ".head.value.blank) { INFO@mark `S97 a space is not blank` }
-if ("a".head.value.blank) { INFO@mark `S98 a is blank` }
-unless (Char.newline.blank) { INFO@mark `S99 a newline is not blank` }
-unless (Char.tab.blank) { INFO@mark `S100 a tab is not blank` }
-unless (Char.space == " ".head.value) { INFO@mark `S101 the space is not a written space` }
-unless (Char.underscore == "_".head.value) { INFO@mark `S102 the underscore is not a written one` }
-unless ("a".head.value.is_ascii) { INFO@mark `S103 a is not one byte` }
+unless "ab cd".camelcase == "abCd" { INFO@mark `S154 camelcase is not camel_case` }
+unless "ab cd".pascalcase == "AbCd" { INFO@mark `S155 pascalcase is not pascal_case` }
 
-// What a text is, counted and cut. `length` is `count` said the other way,
-// `at` reads one position, and `slice` the stretch between two.
-unless ("abc".length == 3) { INFO@mark `S104 abc is not three long` }
-unless ("abc".at(1).value == "b".head.value) { INFO@mark `S105 the second of abc is not b` }
-unless ("abcde".slice(1, 4) == "bcd") { INFO@mark `S106 abcde from one to four is not bcd` }
-unless ("abc".nonempty) { INFO@mark `S107 abc is empty` }
-if ("".nonempty) { INFO@mark `S108 nothing written is not empty` }
-unless ("abc" != "abd") { INFO@mark `S109 two different texts are the same` }
-if ("abc" != "abc") { INFO@mark `S110 a text is not itself` }
+unless `ab` as String == "ab" { INFO@mark `S158 written text is not read as a string` }
 
-// A block asked of every character, and of some.
-unless ("abc".every { it.value.letter }) { INFO@mark `S111 abc is not all letters` }
-if ("ab3".every { it.value.letter }) { INFO@mark `S112 ab3 is all letters` }
-unless ("ab3".some { it.value.digit }) { INFO@mark `S113 ab3 holds no digit` }
-if ("abc".some { it.value.digit }) { INFO@mark `S114 abc holds a digit` }
-unless ("abc".map { it.value.upper }.as(String) == "ABC") { INFO@mark `S115 abc made upper is not ABC` }
+unless "  a b ".trimmed == "a b" { INFO@mark `ST2 trimmed does not drop the blanks around a b` }
+unless "\t a\n".trimmed == "a" { INFO@mark `ST3 trimmed does not drop a tab and a newline` }
+unless "xxaxx".trimmed("x") == "a" { INFO@mark `ST4 xxaxx trimmed of x is not a` }
+unless "a b".trimmed == "a b" { INFO@mark `ST5 trimmed drops a blank between` }
+unless "a=b".before("=") == "a" { INFO@mark `ST6 before = in a=b is not a` }
+unless "a=b".after("=") == "b" { INFO@mark `ST7 after = in a=b is not b` }
+unless "ab".before("=") == "ab" { INFO@mark `ST8 before what is not there is not the whole text` }
+unless "ab".after("=").empty { INFO@mark `ST9 after what is not there is not nothing` }
+unless "a,b,c".split(",")[1] == "b" { INFO@mark `ST10 the second of a,b,c is not b` }
+unless "  x".indentation == 2 { INFO@mark `ST11 two spaces are not an indentation of two` }
+unless "  a\n    b".dedented == "a\n  b" { INFO@mark `ST12 dedenting does not keep only the difference` }
+unless "a\n  b".dedented == "a\n  b" { INFO@mark `ST13 a text already at no indentation changed` }
 
-// Case over a whole text, by each of its names.
-unless ("Ab".lowercase == "ab") { INFO@mark `S116 lowercase is not lower_case` }
-unless ("Ab".uppercase == "AB") { INFO@mark `S117 uppercase is not upper_case` }
-unless ("Ab".swapcase == "aB") { INFO@mark `S118 swapcase is not swap_case` }
-unless ("ab cd".titlecase == "Ab Cd") { INFO@mark `S119 titlecase is not title_case` }
-unless ("Ab".foldcase == "ab") { INFO@mark `S120 foldcase is not fold_case` }
-unless ("ab cd".camelCase == "abCd") { INFO@mark `S121 camelCase is not camel_case` }
-unless ("ab cd".PascalCase == "AbCd") { INFO@mark `S122 PascalCase is not pascal_case` }
-unless ("ab cd".snakecase == "ab_cd") { INFO@mark `S123 snakecase is not snake_case` }
-
-// The pieces a block cuts a text into, and the words it is written in.
-unless ("a-b".split_by { character == "-".head.value }.count == 2) { INFO@mark `S124 a-b cut at the dash is other than two pieces` }
-unless ("ab cd".words.count == 2) { INFO@mark `S125 ab cd is other than two words` }
-unless ("ab_cd".words.count == 2) { INFO@mark `S126 ab_cd is other than two words` }
-
-// A pattern is what it spells, and reading a text with it is asking where
-// that spelling stands in it. Told to ignore case, both are folded first.
-plain_pattern := Regex(pattern: "bc")
-unless (plain_pattern.matches("abcd")) { INFO@mark `S127 a pattern does not find what is written in the text` }
-if (plain_pattern.matches("abd")) { INFO@mark `S128 a pattern finds what is not there` }
-unless (plain_pattern.find("abcd") == 1) { INFO@mark `S129 what is found is not where it stands` }
-if (plain_pattern.ignoring_case) { INFO@mark `S130 a pattern ignores case it was not told to` }
-folded := Regex(pattern: "BC").with(Regex.Flag.ignore_case)
-unless (folded.ignoring_case) { INFO@mark `S131 a pattern told to ignore case does not` }
-unless (folded.matches("abcd")) { INFO@mark `S132 a pattern ignoring case does not find the other case` }
-if (Regex(pattern: "BC").matches("abcd")) { INFO@mark `S133 a pattern minding case finds the other case` }
-unless (folded.flags.count == 1) { INFO@mark `S134 a pattern given one flag holds other than one` }
-
-// The Latin letters and digits, built from the bits that say which they are.
-unless (Char.latin_upper(1) == "A".head.value) { INFO@mark `S135 the first upper letter is not A` }
-unless (Char.latin_lower(1) == "a".head.value) { INFO@mark `S136 the first lower letter is not a` }
-unless (Char.latin_upper(26) == "Z".head.value) { INFO@mark `S137 the twenty-sixth upper letter is not Z` }
-unless (Char.decimal_digit(0) == "0".head.value) { INFO@mark `S138 nothing is not written 0` }
-unless (Char.decimal_digit(7) == "7".head.value) { INFO@mark `S139 seven is not written 7` }
-unless (Char.decimal_digit(11) == "b".head.value) { INFO@mark `S140 eleven is not written b` }
-
-// What a number spells in ten, read off a counter one unit at a time.
-unless (7.as(String) == "7") { INFO@mark `S141 seven does not spell 7` }
-unless (12.as(String) == "12") { INFO@mark `S142 twelve does not spell 12` }
-unless (0.as(String) == "0") { INFO@mark `S143 nothing does not spell 0` }
-
-// The characters the draft writes with an escape, and what a character says
-// about its own bits.
-unless (Char.null.codepoint.is_zero) { INFO@mark `S144 the null character is not nothing` }
-unless (Char.carriage.codepoint == 13) { INFO@mark `S145 the carriage return is not thirteen` }
-unless ("a".head.value.is_scalar) { INFO@mark `S146 a is not a scalar` }
-
-// A chain of texts, each put in a case.
-cased ^keyword := chain None
-cased &= "AB"
-cased &= "cd"
-unless (cased.each_lower.head.value == "ab") { INFO@mark `S152 the first of them lowered is not ab` }
-unless (cased.each_title.head.value == "Ab") { INFO@mark `S153 the first of them titled is not Ab` }
-
-// The case names the drafts spell without the inner capital.
-unless ("ab cd".camelcase == "abCd") { INFO@mark `S154 camelcase is not camel_case` }
-unless ("ab cd".pascalcase == "AbCd") { INFO@mark `S155 pascalcase is not pascal_case` }
-
-// Text read where a text is asked for.
-unless (`ab`.as(String) == "ab") { INFO@mark `S158 written text is not read as a string` }
-
-quoted_pair := "AB"
-unless (quoted_pair == "AB") { INFO@mark `DQ1 "AB" is not the string AB` }
-quoted_one := "A"
-unless (quoted_one.head.value == U+0041) { INFO@mark `DQ2 the character of "A" is not A` }
-unless (quoted_one.count == 1) { INFO@mark `DQ3 "A" is not a string of one` }
-unless ("hello world".count == 11) { INFO@mark `DQ4 "hello world" does not hold eleven characters` }
+unless "AB" == "AB" { INFO@mark `DQ1 "AB" is not the string AB` }
+unless "A"[0] == U+0041 { INFO@mark `DQ2 the character of "A" is not A` }
+unless "A".length == 1 { INFO@mark `DQ3 "A" is not a string of one` }
+unless "hello world".length == 11 { INFO@mark `DQ4 "hello world" does not hold eleven characters` }
 
 block_text := "
     one
       two
     three
 "
-unless (block_text.lines.count == 3) { INFO@mark `SM1 a block of three lines with a blank first and last is not three lines` }
-unless (block_text.lines.head.value == "one") { INFO@mark `SM2 the least-indented line of a block keeps no indentation` }
-unless (block_text.lines.head.next.value == "  two") { INFO@mark `SM3 a line indented further keeps the difference` }
-unless (block_text.lines.tail.value == "three") { INFO@mark `SM4 the last line of a block is not three` }
+unless block_text.lines.length == 3 { INFO@mark `SM1 a block of three lines with a blank first and last is not three lines` }
+unless block_text.lines[0] == "one" { INFO@mark `SM2 the least-indented line of a block keeps no indentation` }
+unless block_text.lines[1] == "  two" { INFO@mark `SM3 a line indented further keeps the difference` }
+unless block_text.lines[-1] == "three" { INFO@mark `SM4 the last line of a block is not three` }
 
 started_text := "a
     b"
-unless (started_text.lines.tail.value == "    b") { INFO@mark `SM5 a line with content on the opening line holds the least indentation at nothing` }
+unless started_text.lines[-1] == "    b" { INFO@mark `SM5 a line with content on the opening line holds the least indentation at nothing` }
 
-lone_indented := "  x"
-unless (lone_indented == "  x") { INFO@mark `SM6 a text on one line lost its indentation` }
+unless "  x" == "  x" { INFO@mark `SM6 a text on one line lost its indentation` }
 
 gapped_text := "
   a
 
   b
 "
-unless (gapped_text.lines.count == 3) { INFO@mark `SM7 a blank line between two is not kept` }
-unless (gapped_text.lines.head.next.value.empty) { INFO@mark `SM8 the blank line between two is not empty` }
+unless gapped_text.lines.length == 3 { INFO@mark `SM7 a blank line between two is not kept` }
+unless gapped_text.lines[1].empty { INFO@mark `SM8 the blank line between two is not empty` }
 
 doubled_gap := "
 
   a
 "
-unless (doubled_gap.lines.count == 2) { INFO@mark `SM9 only one blank line after the opening quote is dropped` }
-unless (doubled_gap.lines.head.value.empty) { INFO@mark `SM10 the second blank line after the opening quote is not kept` }
-unless (doubled_gap.lines.tail.value == "a") { INFO@mark `SM11 the line after the blank lines keeps its indentation` }
+unless doubled_gap.lines.length == 2 { INFO@mark `SM9 only one blank line after the opening quote is dropped` }
+unless doubled_gap.lines[0].empty { INFO@mark `SM10 the second blank line after the opening quote is not kept` }
+unless doubled_gap.lines[-1] == "a" { INFO@mark `SM11 the line after the blank lines keeps its indentation` }
 
-// Escapes in a written string: a backslash and a letter, or a code point in
-// braces.
-unless ("a\tb".count == 3) { INFO@mark `SE1 a tab escape is not one character` }
-unless ("a\tb".at(1).value == U+0009) { INFO@mark `SE2 a tab escape is not a tab` }
-unless ("\x{41}" == "A") { INFO@mark `SE3 a hexadecimal escape is not its character` }
-unless ("\u{00E9}".head.value == U+00E9) { INFO@mark `SE4 a four-digit escape is not its character` }
-unless ("a\\b".count == 3) { INFO@mark `SE5 an escaped backslash is not one character` }
+unless "a\tb".length == 3 { INFO@mark `SE1 a tab escape is not one character` }
+unless "a\tb"[1] == U+0009 { INFO@mark `SE2 a tab escape is not a tab` }
+unless "\x41" == "A" { INFO@mark `SE3 a hexadecimal escape is not its character` }
+unless "é"[0] == U+00E9 { INFO@mark `SE4 a four-digit escape is not its character` }
+unless "a\\b".length == 3 { INFO@mark `SE5 an escaped backslash is not one character` }
+unless "\U01F600"[0] == U+1F600 { INFO@mark `SE6 a six-digit escape is not its character` }
+unless "\""[0] == U+0022 { INFO@mark `SE7 an escaped quote is not a quote` }
+unless "\n"[0] == U+000A { INFO@mark `SE8 a newline escape is not a newline` }
+unless " "[0].instance_of(\s) { INFO@mark `SE9 a space is not a space escape` }
+if "a"[0].instance_of(\s) { INFO@mark `SE10 a is a space escape` }
+unless "7"[0].instance_of(\d) { INFO@mark `SE11 7 is not a digit escape` }
+unless "a"[0].instance_of(\D) { INFO@mark `SE12 a is not a non-digit escape` }
+unless "_"[0].instance_of(\w) { INFO@mark `SE13 an underscore is not a word escape` }
+unless "-"[0].instance_of(\W) { INFO@mark `SE14 a dash is not a non-word escape` }

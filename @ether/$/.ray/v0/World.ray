@@ -1,524 +1,285 @@
-Nameable := class: Ray {
-  named (name: String) => (
-    .name = name
-    this
-  )
+Entity := class
+
+Nameable := class {
+  static PREFIX: String?
+  name: String?
+
+  named (name: String): static => this ~~ .name = name
 }
-Entity := class: Ray { }
 
 Location := class: Hierarchy {
-  parent?: Node
-  children: (chain None)
-  host?: Node
+  host: *?
 }
 
-World := class: Nameable {
-  prefix => `#`
-  name: String
-  parent?: Node
-  children: (chain None)
-  host?: Node
-  worlds: (chain None)
-  characters: (chain None)
-  items: (chain None)
-  quests: (chain None)
-  reservations: (chain None)
+World := class: Location + Nameable {
+  static PREFIX = "#"
+  static ether = World(name: "ether", host: @ether)
 
-  spawn (character) => (
-    .characters &= character
-    character
-  )
-  add (item) => (
-    .items &= item
-    item
-  )
-  post (quest) => (
-    .quests &= quest
-    quest
-  )
+  worlds: World[] = []
+  characters: Character[] = []
+  items: Item[] = []
+  quests: Quest[] = []
+  dynamics: Dynamics[] = []
 
-  shadowing => None
+  spawn (character: Character) => characters.push character
+  add (item: Item) => items.push item
+  post (quest: Quest) => quests.push quest
+  population => characters.count
 
-  reserve (name: String) => (
-    standing ^keyword := .reserved(name)
-    unless (standing) { standing = .issue(name) }
+  within_worlds: World[] => (worlds, children{==.instance_of World}).flat_map((., .within_worlds))
+  within_characters: Character[] => characters, within_worlds.flat_map(.characters)
 
-    standing
-  )
+  shadowing: World?
+  static Name := class = name: String, value: *?
+  names: Name[] = []
 
-  issue (name: String) => (.reservations &= World.Reservation(name: name, issuer: this)).tail.value
-
-  reserved (name: String) => (
-    holder ^keyword := None
-    walker ^keyword := .reservations.head
-    while (walker) {
-      if (walker.value.name == name) { holder = walker.value }
-      walker = walker.next
-    }
-    holder
-  )
-  Reservation := class: Ray {
-    name: String
-    issuer: Node
-    holder: None
-  }
-  population => .characters.count
-
-  names: (chain None)
-  dynamics: (chain None)
-
-  define (name: String, value) => (
-    .names &= World.Name(name: name, value: value, unset: false)
-    value
-  )
-  unset (name: String) => (
-    .names &= World.Name(name: name, value: None, unset: true)
-    None
-  )
-  lookup (name: String) => (
-    found ^keyword := None
-    .names for { if (it.value.name == name) { found = it.value } }
-    if (found === None) {
-      if .parent { .parent.lookup(name) }
-      elsif (this === World.ether) { None }
-      else { World.ether.lookup(name) }
-    } else { found.value }
-  )
-  Name := class: Ray {
-    name: String
-    value: Node
-    unset: false
+  define (name: String, value) => names.push(Name(name, value)).value
+  unset (name: String) => define(name, None)
+  lookup (name: String) => {
+    return defined.value if defined = names{.name == name}.last
+    (shadowing ?? parent ?? (World.ether if this !== World.ether))?.lookup(name)
   }
 
-  allocate (name: String, holder) => (
-    standing := .reserve(name)
-    standing.holder = holder
-    standing
-  )
-  allocated (name: String) => (
-    standing := .reserved(name)
-    if (standing === None) { None } else { standing.holder }
-  )
+  // `#name` / `@name` per Nameable class, its plural as a collection, falling back to @ether (L§10.7).
+  class{>.instance_of Nameable}#.for class => {
+    `class.name.plural`: class[] => (this, within_worlds){class == Character || class == World ? .`class.name.plural` : .children{==.instance_of class}}.flatten
+      -- .unique(.name.ignore_case if .name ==.instance_of String)
+    {class.PREFIX}{name: reservable_names} => this[class.name.plural]{.name.ignore_case == name.ignore_case}.first
+      ?? (shadowing ?? World.ether)[class.PREFIX, name] if class.PREFIX
+  }
+  class{>.instance_of Character}#.for class => {
+    `class.name.plural`: class[] => characters{==.instance_of class}
+  }
 
-  within_worlds => (
-    found := chain None
-    .worlds for {
-      found &= it.value
-      it.value.within_worlds for { found &= it.value }
-    }
-    .children for {
-      if (it.value.instance_of(World)) {
-        found &= it.value
-        it.value.within_worlds for { found &= it.value }
-      }
-    }
-    found
-  )
-  within_characters => (
-    found := chain None
-    .characters for { found &= it.value }
-    .within_worlds for { it.value.characters for { found &= it.value } }
-    found
-  )
+  static Reservation := class = name: reservable_names, issuer: World, holder: *?
+  reservations: Reservation[] = []
 
-  compounds + (dynamic) => (
-    .dynamics &= dynamic
-    this
-  )
-  tick => (
-    .dynamics for { it.value.step(this) }
-    this
-  )
+  reserved (name: String) => reservations{.name.fold_case == name.fold_case}.first
+  issue (name: reservable_names) => reservations.push Reservation(name, issuer: this)
+  reserve (name: reservable_names) => reserved(name) ?? issue(name)
+  allocate (name: reservable_names, holder) => reserve(name) ~~ .holder = holder
+  allocated (name: String) => reserved(name)?.holder
+
+  + (dynamic: Dynamics): static => this ~~ dynamics.push dynamic
+  tick: static => this ~~ dynamics#.step(this)
 }
-
-World.ether = World(name: "ether")
-
-Dynamics := class: Ray {
-  step (world) => world
-}
-World.components.hierarchy &= Location
 Region := World
 
+Dynamics := class {
+  step (world: World) => world
+}
+
 Quest := class: Nameable {
-  name: String
-  goal: Node
-  steps: (chain None)
-  done: false
-  from: None
-  verifier: None
-  best: None
-  path: (chain None)
-  solved_by: None
+  goal: *
+  from: *?
+  verifier: ((value: *): boolean)?
+  steps: *[] = []
+  done = false
+  best: *?
+  path: *[] = []
+  solved_by: Character?
 
-  reached (value) => if (.verifier === None) { value.instance_of(.goal) } else { .verifier(value) }
-  attempt (value, character) => (
-    .path &= value
-    if (.reached(value)) {
-      .best = value
-      .solved_by = character
-      .complete
-    } else { this }
-  )
-  refined => .steps.every { it.value.instance_of(Quest) }
-  progress => (
-    solved ^keyword := 0
-    .steps for { if (it.value.instance_of(Quest)) { if it.value.completed { solved = solved.succ } } }
-    solved
-  )
+  reached (value) => verifier ? verifier(value) : value ==.instance_of goal
+  attempt (value, character: Character): static => {
+    path.push value
+    return this unless reached(value)
+    best = value
+    solved_by = character
+    complete
+  }
 
-  step (description) => (
-    .steps &= description
-    this
-  )
-  complete => (
-    .done = true
-    this
-  )
-  completed => .done
-  difficulty => .steps.count
+  step (description): static => this ~~ steps.push description
+  refined => steps.every(==.instance_of Quest)
+  progress => steps{==.instance_of Quest && .completed}.count
+  difficulty => steps.count
+
+  complete: static => this ~~ .done = true
+  completed => done
 }
+
 Task := class: Quest {
+  interrupted = false
+
+  interrupt: static => this ~~ .interrupted = true
+}
+
+Item := class {
   name: String
-  goal: Node
-  steps: (chain None)
-  done: false
-  interrupted: false
+  issuer: World
+  location: Location?
+  obtained_by: Quest?
+  certificate: Certificate?
 
-  interrupt => (
-    .interrupted = true
-    this
-  )
+  move (location: Location): static => this ~~ .location = location
+  certify (certificate: Certificate): static => this ~~ .certificate = certificate
 }
 
-Item := class: Ray {
-  name: String
-  issuer: Node
-  location: None
-  obtained_by: None
-  certificate: None
+Certificate := class = issuer: World, secret: *, issued_on: Time = Time.now
 
-  move (location) => (
-    .location = location
-    this
-  )
-  certify (certificate) => (
-    .certificate = certificate
-    this
-  )
-}
-Certificate := class: Ray {
-  issuer: Node
-  secret: Node
-  issued_on: Time.now
-
-}
-
-History := class: Ray {
-  Commit := class: Ray {
-    who: Node
-    what: Node
-    id: UUID.v4
-    when: Time.now
-    visibility: Accessor.Permission.private
-    inverse: None
-
-    publish => (
-      .visibility = Accessor.Permission.public
-      this
-    )
-    staged => .visibility == Accessor.Permission.private
+History := class = repository: *?, commits: Commit[] = [], from: History? {
+  static Commit := class = who: *, what: *, id: UUID = UUID.v4(), when: Time = Time.now, visibility: Accessor.Permission = Accessor.Permission.private, inverse: *? {
+    staged => visibility == Accessor.Permission.private
+    publish: static => this ~~ .visibility = Accessor.Permission.public
   }
-  repository: Node
-  commits: (chain None)
-  from: None
-  generics: (chain None)
+  static Branch := class: History
+  static Assignment := class = value: *, history: History?, previous: Commit?
 
-  commit (who, what) => (
-    .commits &= History.Commit(who: who, what: what)
-    this
-  )
-  stage (who, what) => .commit(who, what)
-  published => (
-    shown := chain None
-    .commits for { unless it.value.staged { shown &= it.value } }
-    shown
-  )
-  publish => (
-    .commits for { it.value.publish }
-    this
-  )
+  count => commits.count
+  latest => commits.last
 
-  squash (who) => (
-    joined := chain None
-    .commits for { joined &= it.value.what }
-    History(repository: .repository, commits: (chain None), from: .from).commit(who, joined)
-  )
-  cherry_pick (commit) => (
-    .commits &= History.Commit(who: commit.who, what: commit.what, inverse: commit.inverse)
-    this
-  )
-  from_here (commit) => (
-    kept := History(repository: .repository, commits: (chain None), from: None)
-    reached ^keyword := false
-    .commits for {
-      unless reached { kept.cherry_pick(it.value) }
-      if (it.value === commit) { reached = true }
-    }
-    kept
-  )
-  revert (commit) => if (commit.inverse === None) { Quest(name: "revert", goal: commit) } else { .commit(commit.who, commit.inverse) }
+  commit (who, what): static => this ~~ commits.push Commit(who, what)
+  stage (who, what) => commit(who, what)
+  published => commits{!.staged}
+  publish: static => this ~~ commits#.publish
 
-  merge (other) => (
-    conflicts := chain None
-    other.commits for {
-      theirs := it.value
-      .commits for { if ((it.value.what == theirs.what).not.and(it.value.when == theirs.when)) { conflicts &= Quest(name: "merge", goal: theirs) } }
-      .cherry_pick(theirs)
-    }
+  fork => Branch(repository, from: this)
+  squash (who) => History(repository, from: from).commit(who, commits.what)
+  cherry_pick (change: Commit): static => this ~~ commits.push Commit(change.who, change.what, inverse: change.inverse)
+  from_here (change: Commit) => commits[..commits.index_of(change) + 1].reduce(History(repository)) (kept, each) => kept.cherry_pick(each)
+  revert (change: Commit) => change.inverse ? commit(change.who, change.inverse) : Quest(name: "revert", goal: change)
+
+  merge (other: History) => other.commits.flat_map(theirs => {
+    conflicts = commits{.when == theirs.when && .what != theirs.what}.map(ours => Quest(name: "merge", goal: theirs))
+    cherry_pick(theirs)
     conflicts
-  )
+  })
 
-  remember_generic (name: String) => (
-    .generics &= name
-    this
-  )
-  appears (name: String) => if (.generics.contains(name)) { INFO@name `a variable is named like a generic type used silently before` } else { None }
+  assigned (value, history: History) => Assignment(value, history, previous: latest)
 
-  Assignment := class: Ray {
-    value: Node
-    history: None
-    previous: None
-  }
-  assigned (value, history) => History.Assignment(value: value, history: history, previous: .latest)
-  count => .commits.count
-  latest => .commits.tail.value
-  fork => History.Branch(repository: .repository, commits: (chain None), from: this)
-
-  Branch := class: History {
-    repository: Node
-    commits: (chain None)
-    from: None
-  }
-}
-Repository := class: Ray {
-  world: Node
-  histories: (chain None)
-
+  generics: String[] = []
+  remember_generic (name: String): static => this ~~ generics.push name
+  appears (name: String) => INFO@name `a variable is named like a generic type used silently before` if generics.contains(name)
 }
 
-Accessor := class: Ray {
-  Permission := enum private | confidential | protected | public | local | localhost | managed
-  level: Node
-  any: true
-  method: None
+Repository := class = world: World, histories: History[] = []
 
-  read => Accessor(level: .level, any: false)
-  write => Accessor(level: .level, any: false, method: `=`)
-  execute => Accessor(level: .level, any: false, method: `()`)
-  on (method) => Accessor(level: .level, any: false, method: method)
-  covers (method) => if .any { true } elsif (.method === None) { (method == `=`).not.and((method == `()`).not) } else { method == .method }
-
-  { }{target} ^punctuation => (
-    target.access = this
-    target
-  )
-  allows (who, method) => if (.covers(method).not) { true } elsif (.level == Accessor.Permission.public) { true } else { who.permissions.contains(.level) }
-  block (values) => (
-    values for { it.value.access = this }
-    values
-  )
-  derived (from) => if (from.access) { from.access } else { this }
-  default_policy => Accessor(level: Visibility.default_privacy_policy)
-  confidential => Accessor.default_policy
-
-  Consistency := class: Ray {
-    replicas: (chain None)
-
-    read (value) => if (.replicas.every { it.value.synced }) { value } else { Quest(name: "wait for the replicas", goal: value) }
-  }
+Platform := class = name: String, prefix: String, icon: *? {
+  location_of (handle: String) => prefix + handle
+  avatar (handle: String, character: Character) => Avatar(character, platform: this, handle, location: location_of(handle))
 }
 
-Platform := class: Ray {
-  name: String
-  prefix: String
-  icon: None
-
-  location_of (handle: String) => .prefix + handle
-  avatar (handle: String, character) => Avatar(character: character, platform: this, handle: handle, location: .location_of(handle))
-}
-
-Reference := class: Ray {
-  Note := class: Ray {
-    date: Time.now
-    text: String
-  }
+Reference := class {
   title: String
-  subtitle: None
-  date: Time.now
-  draft: true
-  organizations: (chain None)
-  authors: (chain None)
-  published: (chain None)
-  year: None
-  link: None
-  pointer: None
-  remote: None
-  notes: (chain None)
-  external: None
-  journal: None
-  volume: None
-  pages: None
-  doi: None
-  publisher: None
+  subtitle: String?
+  date: Time = Time.now
+  draft = true
+  organizations: Organization[] = []
+  authors: Character[] = []
+  published: *[] = []
+  year: *?
+  link: *?
+  pointer: *?
+  remote: *?
+  external: *?
+  journal: *?
+  volume: *?
+  pages: *?
+  doi: *?
+  publisher: *?
 
-  publish => (
-    .draft = false
-    this
-  )
-  note (text: String) => (
-    .notes &= Reference.Note(text: text)
-    this
-  )
+  static Note := class = text: String, date: Time = Time.now
+  notes: Note[] = []
+
+  publish: static => this ~~ .draft = false
+  note (text: String): static => this ~~ notes.push Note(text)
 }
 
-Instance := class: Ray {
-  location: Node
-  status: Status.online
-  key: None
-  registry: (chain None)
-  hosted: (chain None)
-  deletions: (chain None)
-  host: None
+Instance := class: Location {
+  location: *
+  status: Status = Status.online
+  key: *?
+  registry: Character[] = []
+  hosted: Character[] = []
+  deletions: Deletion[] = []
 
-  chainable == (other) => if (.key === None) { this === other } else { .key == other.key }
+  == (other) => key ? key == other.key : this === other
 
-  login (character) => (
-    .registry &= character
-    character
-  )
-  logged_in (character) => .registry.contains(character)
-  logout (character, delete_all) => (
-    kept := chain None
-    .registry for { unless (it.value === character) { kept &= it.value } }
-    .registry = kept
+  login (character: Character) => registry.push character
+  logged_in (character: Character) => registry.contains(character)
+  logout (character: Character, delete_all = false) => {
+    registry = registry{!== character}
     if delete_all {
       character.key = None
-      .deletions &= Instance.Deletion(character: character, due: Time.now + 30 days)
+      deletions.push Deletion(character, due: Time.now + 30 days)
     }
     character
-  )
-  swap (from, to) => (
-    .logout(from, false)
-    .login(to)
-  )
-  spawn (character) => .login(character)
+  }
+  swap (from: Character, to: Character) => {
+    logout(from)
+    login(to)
+  }
+  spawn (character: Character) => login(character)
 
-  host_for (character) => (
-    .hosted &= character
-    character.presence = this
-    character
-  )
+  host_for (character: Character) => hosted.push(character) ~~ .presence = this
+  mirror (value, depth = 1) => Mirror(value, location: this, depth)
 
-  mirror (value, depth) => Instance.Mirror(value: value, location: this, depth: depth)
+  static Deletion := class: Quest (character: Character, due: Time) {
+    name = "delete"
+    goal => character
+    cancelled = false
 
-  Deletion := class: Quest {
-    character: Node
-    due: Node
-    name: "delete"
-    goal: Node
-    cancelled: false
-
-    cancel => (
-      .cancelled = true
-      this
-    )
-    pending => .cancelled.not.and(.completed.not)
+    cancel: static => this ~~ .cancelled = true
+    pending => !cancelled && !completed
   }
 
-  Mirror := class: Ray {
-    value: Node
-    location: Node
-    depth: 1
-
-    synced => .location.registry.nonempty
+  static Mirror := class = value: *, location: Instance, depth = 1 {
+    synced => location.registry.nonempty
   }
-
 }
+
 Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
-Character := class: Nameable {
-  prefix => `@`
-  name: String
-  avatars: (chain None)
-  presence: None
-  status: Status.offline
-  key: None
 
-  first_name: None
-  last_name: None
-  email: None
-  profile_picture: None
-  profile: None
-  full_name => if (.first_name === None) { .name } else { .first_name + (" " + .last_name) }
-  status_now => if (.presence) { .presence.status } else { .status }
-  statuses: (chain None)
-  also (status) => (
-    .statuses &= status
-    this
-  )
-  is (status) => (.status == status).or(.statuses.contains(status))
-  chainable == (other) => if (.key === None) { this === other } else { .key == other.key }
+Character := class: Entity + Nameable {
+  static PREFIX = "@"
+
+  avatars: Avatar[] = []
+  presence: Instance?
+  status: Status = Status.offline
+  statuses: Status[] = []
+  permissions: Accessor.Permission[] = []
+  key: *?
+
+  first_name: String?
+  last_name: String?
+  email: String?
+  profile_picture: *?
+  profile: *?
+
+  full_name => first_name ? first_name + " " + last_name : name
+  status_now => presence?.status ?? status
+  also (status: Status): static => this ~~ statuses.push status
+  is (status: Status) => this.status == status || statuses.contains(status)
+
+  == (other) => key ? key == other.key : this === other
+
   choose (kind) => Quest(name: "choose", goal: kind, solved_by: this)
-  embody (avatar) => (
-    .avatars &= avatar
-    avatar
-  )
+  embody (avatar: Avatar) => avatars.push avatar
 }
+
 Avatar := class: Character {
-  character: Node
-  platform: Node
-  location: None
-  handle: None
-  avatars: (chain None)
-  presence: None
-  status: Status.offline
-
+  character: Character
+  platform: Platform?
+  location: *?
+  handle: String?
 }
-Player := class: Character {
-  name: String
-  avatars: (chain None)
-  presence: None
-  status: Status.offline
 
-}
+Player := class: Character
+
 NPC := class: Character {
-  name: String
-  avatars: (chain None)
-  presence: None
-  status: Status.hosted
-  quests: (chain None)
-  mode: NPC.Mode.until_resolved
+  static Mode := enum until_resolved | waiting | stopping
 
-  Mode := enum until_resolved | waiting | stopping
-  take (quest) => (
-    .quests &= quest
-    this
-  )
-  open_quests => (
-    left := chain None
-    .quests for { unless it.value.completed { left &= it.value } }
-    left
-  )
-  running => if (.mode == NPC.Mode.waiting) { true } elsif (.mode == NPC.Mode.until_resolved) { .open_quests.nonempty } else { false }
-  failed (error) => .take(Quest(name: "fix", goal: error))
+  status = Status.hosted
+  mode: Mode = Mode.until_resolved
+  quests: Quest[] = []
 
+  take (quest: Quest): static => this ~~ quests.push quest
+  open_quests => quests{!.completed}
+  running => mode == Mode.waiting || mode == Mode.until_resolved && open_quests.nonempty
+  failed (error) => take(Quest(name: "fix", goal: error))
 }
-Organization := class: Player {
-  name: String
-  logo: None
-  website: None
-  avatars: (chain None)
-  presence: None
-  status: Status.offline
-  members: (chain None)
 
+Organization := class: Player {
+  logo: *?
+  website: *?
+  members: Character[] = []
 }

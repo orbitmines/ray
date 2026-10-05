@@ -1,78 +1,54 @@
-// A program is what it is written as. `**` reads one off a block handed to a
-// rule, and what it reads is a program in turn — so what holds a program holds
-// programs all the way down.
-//
-// The engine hands over two things and no more: the first statement, and what
-// is left of the program after it. The chain that holds them is built in the
-// language, with the same `chain` and `&=` as everything else, so a program is
-// made of the language rather than of the engine.
+// A program is what it is written as, and what holds a program holds programs all the way down.
 
 mark ^keyword := external global
 
-Written ^keyword := class {
-  of (code) => code**
-}
-taken ^keyword := Written.of({
+taken := Program(code: {
   1
   2
   3
 })
-unless (taken) { INFO@mark `PG1 a block handed to a rule is not read as a program` }
-unless (taken.written) { INFO@mark `PG3 a program is not written as anything` }
-unless (taken.count == 3) { INFO@mark `PG8 a program of three statements does not count three` }
-walked ^keyword := 0
-taken for { walked = walked.succ }
-unless (walked == 3) { INFO@mark `PG9 walking a program of three does not visit three` }
-unless (taken.first.value.written) { INFO@mark `PG5 a statement is not a program in turn` }
-unless (taken.first.value.count == 1) { INFO@mark `PG10 a statement is written as other than one thing` }
+unless taken { INFO@mark `PG1 a block handed to a rule is not read as a program` }
+unless taken.written { INFO@mark `PG3 a program is not written as anything` }
+unless taken.written.count == 3 { INFO@mark `PG8 a program of three statements does not count three` }
+unless taken.expand.count == 3 { INFO@mark `PG9 a program of three does not expand to three` }
+unless taken.written.first.written { INFO@mark `PG5 a statement is not a program in turn` }
+unless taken.written.first.written.count == 1 { INFO@mark `PG10 a statement is written as other than one thing` }
+unless Program(code: { 5 }).written.count == 1 { INFO@mark `PG11 a program of one statement counts other than one` }
+unless taken.O { INFO@mark `PG12 a program does not say which rules it is read with` }
 
-// A program of one statement is written as that one.
-alone ^keyword := Written.of({ 5 })
-unless (alone.count == 1) { INFO@mark `PG11 a program of one statement counts other than one` }
-
-// What it is read with: a level is a set of rules, and a program says which.
-unless (taken.O) { INFO@mark `PG12 a program does not say which rules it is read with` }
-
-// spec: running a program does not answer what it says — `p()` is not how a
-// program is run, and neither is running one of the statements it is written
-// as. What a program is *for* is being read back: `**` is asked for one at
-// every method definition, and what runs is the method.
-
-// A program is walkable as what it does as well as what it is written as:
-// `flow` is the statements in order, where a jump is also an edge to the
-// label it names, and goes on to what is written below it only when it has a
-// condition. A statement is told apart by reading it back as bits.
-// spec: that is the same want as applying a compiler level — the program read
-// back, not just held — and nothing applies one yet.
-
-// A statement is read back as what it is written as, so a jump can be told
-// from anything else, and where it lands can be found.
-jumping ^keyword := Written.of({
+// A statement read back as what it is written as
+jumping := Program(code: {
   goto past if 5
   5
  past\
   6
 })
-landed ^keyword := jumping.written.head.next.next.value
-unless (jumping.first.value.is_jump) { INFO@mark `PG16 a goto is not read as a jump` }
-if (jumping.last.value.is_jump) { INFO@mark `PG17 a value is read as a jump` }
-if (taken.first.value.is_jump) { INFO@mark `PG18 a name is read as a jump` }
-unless (landed.is_label) { INFO@mark `PG19 a label is not read as one` }
-if (jumping.first.value.is_label) { INFO@mark `PG20 a jump is read as a label` }
-unless (jumping.first.value.is_conditional) { INFO@mark `PG21 a jump with a condition is not conditional` }
-unless (same_text((external where jumping.target_of(jumping.first.value)), (external where landed.code))) { INFO@mark `PG22 a jump does not land on its label` }
-always ^keyword := Written.of({
+always := Program(code: {
   goto away
  away\
 })
-if (always.first.value.is_conditional) { INFO@mark `PG23 a jump without a condition is conditional` }
-if (jumping.target_of(always.first.value)) { INFO@mark `PG24 a jump lands on a label it does not name` }
+looping := Program(code: {
+ again\
+  goto again
+})
+landed := jumping.written[2]
+unless jumping.written.first.is_jump { INFO@mark `PG16 a goto is not read as a jump` }
+if jumping.written.last.is_jump { INFO@mark `PG17 a value is read as a jump` }
+if taken.written.first.is_jump { INFO@mark `PG18 a name is read as a jump` }
+unless landed.is_label { INFO@mark `PG19 a label is not read as one` }
+if jumping.written.first.is_label { INFO@mark `PG20 a jump is read as a label` }
+unless jumping.written.first.is_conditional { INFO@mark `PG21 a jump with a condition is not conditional` }
+unless jumping.target_of(jumping.written.first) == landed { INFO@mark `PG22 a jump does not land on its label` }
+if always.written.first.is_conditional { INFO@mark `PG23 a jump without a condition is conditional` }
+if jumping.target_of(always.written.first) { INFO@mark `PG24 a jump lands on a label it does not name` }
+if jumping.jumps_backward { INFO@mark `PG30 a jump forward is read as a jump back` }
+unless looping.jumps_backward { INFO@mark `PG31 a jump back to a label above is not read as one` }
+unless jumping.instance_of(Terminating) { INFO@mark `PG32 a program that only jumps forward does not terminate` }
+if looping.instance_of(Terminating) { INFO@mark `PG33 a program that jumps back terminates` }
+unless Program(code: { x := 1 }).declares("x") { INFO@mark `PG34 a program declaring x does not say so` }
 
-// As what it does: a jump is an edge to where it lands, and only a
-// conditional one also goes on to what is written below it.
-flowing ^keyword := jumping.flow
-unless (flowing.head.jumps_to) { INFO@mark `PG25 a jump is not an edge` }
-unless (same_text((external where flowing.head.jumps_to.value.code), (external where landed.code))) { INFO@mark `PG26 a jump's edge does not reach its label` }
-unless flowing.head.falls_through { INFO@mark `PG27 a conditional jump does not go on below it` }
-unless flowing.head.next.falls_through { INFO@mark `PG28 a value does not go on below it` }
-if always.flow.head.falls_through { INFO@mark `PG29 a jump without a condition goes on below it` }
+// As what it does: a jump is an edge to where it lands
+unless jumping.flow.first.jumps_to == landed { INFO@mark `PG25 a jump's edge does not reach its label` }
+unless jumping.flow.first.falls_through { INFO@mark `PG27 a conditional jump does not go on below it` }
+unless jumping.flow[1].falls_through { INFO@mark `PG28 a value does not go on below it` }
+if always.flow.first.falls_through { INFO@mark `PG29 a jump without a condition goes on below it` }

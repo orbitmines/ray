@@ -1,136 +1,106 @@
-// Types: what a value is built on, and where a type is written. Two things
-// written in one place are one thing, which is what tells one type from
-// another.
+// Types: what a value is built on, and where a type is written.
 
 mark ^keyword := external global
 
 TA := class { }
 TB := class: TA { }
-ta := TA()
-tb := TB()
+unless TA().instance_of(TA) { INFO@mark `TY1 an instance is not an instance of its class` }
+unless TA().instance_of(TB) { INFO@mark `TY2 an instance is not one of a class that requires nothing` }
+unless TB().instance_of(TB) { INFO@mark `TY3 an instance is not an instance of its own class` }
+unless TB().instance_of(TA) { INFO@mark `TY4 an instance is not an instance of what its class is built on` }
+unless 5.instance_of(Number) { INFO@mark `TY5 five is not a Number` }
+unless 5.instance_of(TA) { INFO@mark `TY6 five is not one of a class that requires nothing` }
 
-unless (ta.instance_of(TA)) { INFO@mark `TY1 an instance is not an instance of its class` }
-// What a class is written under does not decide what is one of it: a class
-// that requires nothing is anything's.
-unless (ta.instance_of(TB)) { INFO@mark `TY2 an instance is not one of a class that requires nothing` }
-unless (tb.instance_of(TB)) { INFO@mark `TY3 an instance is not an instance of its own class` }
-unless (tb.instance_of(TA)) { INFO@mark `TY4 an instance is not an instance of what its class is built on` }
-unless (5.instance_of(Number)) { INFO@mark `TY5 five is not a Number` }
-unless (5.instance_of(TA)) { INFO@mark `TY6 five is not one of a class that requires nothing` }
-
-// A class requires the fields it writes with their type; what gives each of
-// them is one of it, whatever it is written under.
+// A class requires the fields it writes with their type
 Needs := class { amount: Number }
 Gives := class { amount => 1 }
 Lacks := class { other => 1 }
-unless (Gives().instance_of(Needs)) { INFO@mark `TY60 what gives every required name is not one` }
-if (Lacks().instance_of(Needs)) { INFO@mark `TY61 what lacks a required name is one` }
-if (5.instance_of(Needs)) { INFO@mark `TY62 a number gives a name it does not have` }
-unless (1.instance_of(Array)) { INFO@mark `TY63 a number is not an array` }
-if (Lacks().instance_of(Array)) { INFO@mark `TY64 what is entered nowhere is an array` }
+unless Gives().instance_of(Needs) { INFO@mark `TY60 what gives every required name is not one` }
+if Lacks().instance_of(Needs) { INFO@mark `TY61 what lacks a required name is one` }
+if 5.instance_of(Needs) { INFO@mark `TY62 a number gives a name it does not have` }
+unless 1.instance_of(Array) { INFO@mark `TY63 a number is not an array` }
+if Lacks().instance_of(Array) { INFO@mark `TY64 what is entered nowhere is an array` }
 
-unless ((external where TA)) { INFO@mark `TY7 a class is written nowhere` }
-if (same_text((external where TA), (external where TB))) { INFO@mark `TY8 two classes are written in one place` }
+unless external where TA { INFO@mark `TY7 a class is written nowhere` }
+if (external where TA) == (external where TB) { INFO@mark `TY8 two classes are written in one place` }
 TC := TA
-unless (same_text((external where TA), (external where TC))) { INFO@mark `TY9 one class under two names is written twice` }
+unless (external where TA) == (external where TC) { INFO@mark `TY9 one class under two names is written twice` }
 
-// What a class built on another is made of: the parent's fields, defaults and
-// methods are the child's, and may be given where it is built.
+// A child is made of its parent's fields, defaults and methods
 Parent := class {
-  named: `p`
+  named: "p"
   flag: false
-  greet => .named
+  greet => named
 }
 Child := class: Parent {
-  extra: `e`
+  extra: "e"
 }
-kid := Child()
-unless (kid.extra) { INFO@mark `TY10 the child's own field is not there` }
-unless (kid.named) { INFO@mark `TY11 the parent's field is not there` }
-unless (kid.greet) { INFO@mark `TY12 the parent's method does not answer` }
-unless (kid.flag.not) { INFO@mark `TY13 the parent's default is not false` }
-unless (Child(named: `q`).named) { INFO@mark `TY14 the parent's field cannot be given` }
+unless Child().extra { INFO@mark `TY10 the child's own field is not there` }
+unless Child().named { INFO@mark `TY11 the parent's field is not there` }
+unless Child().greet == "p" { INFO@mark `TY12 the parent's method does not answer` }
+unless !Child().flag { INFO@mark `TY13 the parent's default is not false` }
+unless Child(named: "q").named == "q" { INFO@mark `TY14 the parent's field cannot be given` }
 
-// spec: a field the parent declares as a thing is one thing for every child
-// instance, because the parent's body is not run per instance (the entrypoint
-// says so where `class: parent` is written). Running what the parent
-// declared in the constructor, before what the class itself declares, was
-// tried on 2026-09-25 and files a hundred and thirty more errors: a stored
-// block inlines its declarations where it is put, but not its `this`. A class
-// declaring the field itself is fine, whether or not a parent named it too,
-// which is why the library declares such fields again in each subclass.
-// Held := class { kept: (chain None) }
-// Holder := class: Held { }
-// one_holder := Holder()
-// one_holder.kept &= `x`
-// unless (Holder().kept.count.is_zero) { INFO@mark `TY15 two children share what their parent declared` }
-
-// A narrowed type is not just what it narrows: being one of a kind asks the
-// constraint as well as what the thing is built on.
+// Narrowings ask the constraint as well as what they narrow
 Small := Number{. < 5}
-unless (3.instance_of(Small)) { INFO@mark `TY16 three is not one of the small` }
-if (7.instance_of(Small)) { INFO@mark `TY17 seven is one of the small` }
-unless (3.instance_of(Number)) { INFO@mark `TY18 three is not a number` }
-// A narrowing of a narrowing asks both: what the one it narrows admits, and
-// its own constraint.
 Tiny := Small{. < 2}
-unless (1.instance_of(Tiny)) { INFO@mark `TY19 one is not tiny` }
-if (3.instance_of(Tiny)) { INFO@mark `TY20 three is tiny` }
-if (7.instance_of(Tiny)) { INFO@mark `TY25 seven is tiny` }
-unless (Tiny.admits(1)) { INFO@mark `TY26 the tiny do not admit one` }
-if (Tiny.admits(3)) { INFO@mark `TY27 the tiny admit three` }
+Even := Number{. % 2 == 0}
+unless 3.instance_of(Small) { INFO@mark `TY16 three is not one of the small` }
+if 7.instance_of(Small) { INFO@mark `TY17 seven is one of the small` }
+unless 3.instance_of(Number) { INFO@mark `TY18 three is not a number` }
+unless 1.instance_of(Tiny) { INFO@mark `TY19 one is not tiny` }
+if 3.instance_of(Tiny) { INFO@mark `TY20 three is tiny` }
+if 7.instance_of(Tiny) { INFO@mark `TY25 seven is tiny` }
+unless Tiny.admits(1) { INFO@mark `TY26 the tiny do not admit one` }
+if Tiny.admits(3) { INFO@mark `TY27 the tiny admit three` }
+unless 4.instance_of(Small & Even) { INFO@mark `TY65 four is not both small and even` }
+if 3.instance_of(Small & Even) { INFO@mark `TY66 three is both small and even` }
+if 6.instance_of(Small & Even) { INFO@mark `TY67 six is both small and even` }
+unless (1 & 2).contains(2) { INFO@mark `TY68 what holds both does not hold the second` }
+unless (1 & 2 & 3).conjoined.count == 3 { INFO@mark `TY69 three held at once are not three` }
 
-// A class built inside a method answers with what that call wrote, and so
-// does a class built on it by another call: what a class is made of tells it
-// nothing about the frame that one was written in.
+// A class built inside a method answers with what that call wrote
 Wrapping := class {
-  with (tag) => class: this {
+  wrapped (tag) => class: this {
     says => tag
   }
 }
-once := Wrapping.with(1)
-twice := once.with(2)
-thrice := twice.with(3)
-unless (once.says == 1) { INFO@mark `TY28 the first wrapping says other than what it was written with` }
-unless (twice.says == 2) { INFO@mark `TY29 a wrapping of a wrapping says its parent's` }
-unless (thrice.says == 3) { INFO@mark `TY30 a third wrapping says an older one's` }
-unless (once.says == 1) { INFO@mark `TY31 building on a class changed what it says` }
+once := Wrapping.wrapped(1)
+twice := once.wrapped(2)
+thrice := twice.wrapped(3)
+unless once.says == 1 { INFO@mark `TY28 the first wrapping says other than what it was written with` }
+unless twice.says == 2 { INFO@mark `TY29 a wrapping of a wrapping says its parent's` }
+unless thrice.says == 3 { INFO@mark `TY30 a third wrapping says an older one's` }
+unless once.says == 1 { INFO@mark `TY31 building on a class changed what it says` }
 
-// A type written as alternatives is any of them, which is what `Type?` spells.
+// `Type?` is the type or nothing
 Either := Parent?
-unless (Child().instance_of(Either)) { INFO@mark `TY21 a child is not one of its parent or nothing` }
-unless (Parent().instance_of(Either)) { INFO@mark `TY22 a parent is not one of itself or nothing` }
-unless (None.instance_of(Either)) { INFO@mark `TY23 nothing is not one of a thing or nothing` }
-if (None.instance_of(Parent)) { INFO@mark `TY24 nothing is one of a thing` }
+unless Child().instance_of(Either) { INFO@mark `TY21 a child is not one of its parent or nothing` }
+unless Parent().instance_of(Either) { INFO@mark `TY22 a parent is not one of itself or nothing` }
+unless None.instance_of(Either) { INFO@mark `TY23 nothing is not one of a thing or nothing` }
+if None.instance_of(Parent) { INFO@mark `TY24 nothing is one of a thing` }
 
-// A class written as a structure: its header is what it is made of, in the
-// order it is written, and each named position is a field of that type.
-Pointed := class: whole: Number, `.`, part: Number {
-  summed => .whole + .part
+// A class written as a structure: each named position a field of that type
+Pointed := class = whole: Number, ".", part: Number {
+  summed => whole + part
 }
-pointed ^keyword := Pointed(whole: 2, part: 3)
-unless (pointed.whole == 2) { INFO@mark `TY32 a structure's first field is not what it was built with` }
-unless (pointed.part == 3) { INFO@mark `TY33 a structure's last field is not what it was built with` }
-unless (pointed.summed == 5) { INFO@mark `TY34 a structure's body does not read its fields` }
-unless (same_text((Pointed.positions.head.next.value), (`.`))) { INFO@mark `TY35 a structure does not keep what is written between its fields` }
+pointed := Pointed(whole: 2, part: 3)
+unless pointed.whole == 2 { INFO@mark `TY32 a structure's first field is not what it was built with` }
+unless pointed.part == 3 { INFO@mark `TY33 a structure's last field is not what it was built with` }
+unless pointed.summed == 5 { INFO@mark `TY34 a structure's body does not read its fields` }
+unless Pointed.positions[1] == "." { INFO@mark `TY35 a structure does not keep what is written between its fields` }
 
-// Text is read by a structure the way it is written: each field by its type,
-// what stands between them as it is written.
-Ranged := class: low: Decimal, `-`, high: Decimal {
-  width => .high - .low
+Ranged := class = low: Decimal, "-", high: Decimal {
+  width => high - low
 }
-range_of{ }{written: Ranged} ^keyword => written
-ranged ^keyword := range_of 2-7
-unless (ranged.low == 2) { INFO@mark `TY36 a structure read from text does not start at what is written first` }
-unless (ranged.high == 7) { INFO@mark `TY37 a structure read from text does not end at what is written last` }
-unless (ranged.width == 5) { INFO@mark `TY38 a structure read from text is not built as one` }
-
-// What is written position by position, in brackets, is the structure a
-// name was declared as.
-positioned: Ranged = (4, `-`, 9)
-unless (positioned.width == 5) { INFO@mark `TY39 positions given to a structure are not built as one` }
-misfit: Ranged = (4, `+`, 9)
-unless (same_text((misfit.head.next.value), (`+`))) { INFO@mark `TY40 positions that do not fit a structure are taken as a structure` }
-// And what is written for it as text is read by that structure.
+range_of{ }{written: Ranged} => written
+ranged := range_of 2-7
+unless ranged.low == 2 { INFO@mark `TY36 a structure read from text does not start at what is written first` }
+unless ranged.high == 7 { INFO@mark `TY37 a structure read from text does not end at what is written last` }
+unless ranged.width == 5 { INFO@mark `TY38 a structure read from text is not built as one` }
+positioned: Ranged = (4, "-", 9)
+unless positioned.width == 5 { INFO@mark `TY39 positions given to a structure are not built as one` }
+misfit: Ranged = (4, "+", 9)
+unless misfit[1] == "+" { INFO@mark `TY40 positions that do not fit a structure are taken as a structure` }
 spanned: Ranged = 3-8
-unless (spanned.width == 5) { INFO@mark `TY41 text given to a structure is not read by it` }
+unless spanned.width == 5 { INFO@mark `TY41 text given to a structure is not read by it` }

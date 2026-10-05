@@ -1,204 +1,67 @@
-Ray.components.hierarchy &= class {
-  continuations => (
-    found := chain None
-    if (.next) { found &= .next }
-    found
-  )
+Ray &+= {
+  continuations => [next]{!= None}
+  reachable => this, continuations.map(.reachable).flatten -- .unique
 
-  reachable => (
-    seen := chain None
-    waiting := chain None
-    waiting &= this
-    while waiting.nonempty {
-      current := waiting.head.value
-      rest := chain None
-      walker ^keyword := waiting.head.next
-      while (walker) {
-        rest &= walker.value
-        walker = walker.next
-      }
-      waiting = rest
-      unless (seen.contains(current)) {
-        seen &= current
-        current.continuations for { waiting &= it.value }
-      }
-    }
-    seen
-  )
+  // All paths, or a quest when there is none (R3.4).
+  path_to | between (target, trail = []) => this === target ? [[trail, this]]
+    : continuations{!trail.contains(.)}.map(.path_to(target, [trail, this])).flatten(1)
+    -- . ?? Quest(name: "find a path", goal: target)
+  shortest_path_to (target) => path_to(target).min(.count)
 
-  path_to (target) => (
-    found := chain None
-    Ray.walked(this, target, chain None, found)
-    if found.empty { Quest(name: "find a path", goal: target) } else { found }
-  )
-  walked (from, target, trail, found) => (
-    extended := chain None
-    trail for { extended &= it.value }
-    extended &= from
-    if (from === target) { found &= extended } else {
-      from.continuations for { unless (extended.contains(it.value)) { Ray.walked(it.value, target, extended, found) } }
-    }
-    found
-  )
-  shortest_path_to (target) => (
-    every_path := .path_to(target)
-    if (every_path.instance_of(Quest)) { return every_path }
-    shortest ^keyword := every_path.head.value
-    every_path for { if (it.value.count < shortest.count) { shortest = it.value } }
-    shortest
-  )
-  between (target) => .path_to(target)
+  complement (selection) => reachable{!selection.contains(.)}
 
-  complement (selection) => (
-    rest := chain None
-    .reachable for { unless (selection.contains(it.value)) { rest &= it.value } }
-    rest
-  )
-
-  remove_preserving => (
-    before := .previous
-    after := .next
-    if before { before.next = after }
-    if after { after.previous = before }
-    .next = None
-    .previous = None
-    this
-  )
-  sever => (
-    if .previous { .previous.next = None }
-    if .next { .next.previous = None }
-    .next = None
-    .previous = None
-    this
-  )
-  move_after (other) => (
-    .remove_preserving
-    following := other.next
+  // Removing a vertex: preserving joins its neighbours, severing leaves them apart (R3.1, R3.11).
+  remove_preserving => {
+    previous?.next = next
+    next?.previous = previous
+    next, previous = None
+  } -- this
+  sever => {
+    previous?.next = None
+    next?.previous = None
+    next, previous = None
+  } -- this
+  move_after (other) => remove_preserving -- {
+    (next, previous) = (other.next, other)
+    other.next?.previous = this
     other.next = this
-    .previous = other
-    .next = following
-    if following { following.previous = this }
-    this
-  )
-}
-
-Graph.Simple = class: Graph {
-  vertices: (chain None)
-  edges: (chain None)
-
-  Edge := class {
-    from: Node
-    to: Node
-  }
-
-  vertex (value) => (
-    unless (.vertices.contains(value)) { .vertices &= value }
-    value
-  )
-  connect (from, to) => (
-    .vertex(from)
-    .vertex(to)
-    .edges &= Graph.Simple.Edge(from: from, to: to)
-    this
-  )
-  connected (from, to) => .edges.some { (it.value.from == from).and(it.value.to == to) }
-  outgoing (vertex) => (
-    found := chain None
-    .edges for { if (it.value.from == vertex) { found &= it.value.to } }
-    found
-  )
-
-  cartesian (other) => (
-    made := Graph.Simple()
-    .vertices for {
-      mine := it.value
-      other.vertices for {
-        theirs := it.value
-        made.vertex((mine, theirs))
-        .outgoing(mine) for { made.connect((mine, theirs), (it.value, theirs)) }
-        other.outgoing(theirs) for { made.connect((mine, theirs), (mine, it.value)) }
-      }
-    }
-    made
-  )
-  tensor (other) => (
-    made := Graph.Simple()
-    .edges for {
-      mine := it.value
-      other.edges for { made.connect((mine.from, it.value.from), (mine.to, it.value.to)) }
-    }
-    made
-  )
-  union (other) => (
-    made := Graph.Simple()
-    .vertices for { made.vertex(it.value) }
-    other.vertices for { made.vertex(it.value) }
-    .edges for { made.connect(it.value.from, it.value.to) }
-    other.edges for { unless (made.connected(it.value.from, it.value.to)) { made.connect(it.value.from, it.value.to) } }
-    made
-  )
-  disjoint_union (other) => (
-    made := Graph.Simple()
-    .vertices for { made.vertex((0, it.value)) }
-    other.vertices for { made.vertex((1, it.value)) }
-    .edges for { made.connect((0, it.value.from), (0, it.value.to)) }
-    other.edges for { made.connect((1, it.value.from), (1, it.value.to)) }
-    made
-  )
-
-  without (vertex) => (
-    made := Graph.Simple()
-    .vertices for { unless (it.value == vertex) { made.vertex(it.value) } }
-    .edges for { unless ((it.value.from == vertex).or(it.value.to == vertex)) { made.connect(it.value.from, it.value.to) } }
-    made
-  )
-  dangling (vertex, kept) => .edges.some { ((it.value.from == vertex).or(it.value.to == vertex)).and((kept.contains(it.value.from).and(kept.contains(it.value.to))).not) }
-
-  Rule := class {
-    left: Node
-    interface: Node
-    right: Node
-    single_pushout: false
-
-    deleted => (
-      gone := chain None
-      .left.vertices for { unless (.interface.vertices.contains(it.value)) { gone &= it.value } }
-      gone
-    )
-    added => (
-      new_ones := chain None
-      .right.vertices for { unless (.interface.vertices.contains(it.value)) { new_ones &= it.value } }
-      new_ones
-    )
-    applies (host) => (
-      present ^keyword := .left.vertices.every { host.vertices.contains(it.value) }
-      if (present.and(.single_pushout.not)) {
-        kept := host.vertices.filtered_out(.deleted)
-        .deleted for { if (host.dangling(it.value, kept.union_with(.left.vertices))) { present = false } }
-      }
-      present
-    )
-    apply (host) => (
-      unless (.applies(host)) { return Quest(name: "rewrite", goal: host) }
-      rewritten ^keyword := host
-      .deleted for { rewritten = rewritten.without(it.value) }
-      .added for { rewritten.vertex(it.value) }
-      .right.edges for { unless (rewritten.connected(it.value.from, it.value.to)) { rewritten.connect(it.value.from, it.value.to) } }
-      rewritten
-    )
   }
 }
 
-Chain.components.hierarchy &= class {
-  filtered_out (removed) => (
-    kept := chain None
-    this for { unless (removed.contains(it.value)) { kept &= it.value } }
-    kept
-  )
-  union_with (other) => (
-    joined := chain None
-    this for { joined &= it.value }
-    other for { unless (joined.contains(it.value)) { joined &= it.value } }
-    joined
-  )
+Graph &+= {
+  static Simple := class: Graph = vertices: *[] = [], edges: Edge[] = [] {
+    static Edge := class = from: *, to: *
+
+    vertex (value) => vertices.contains(value) ? value : vertices.push(value)
+    connect (from, to) => { vertex(from); vertex(to); edges.push Edge(from, to) } -- this
+    connected (from, to) => edges.some(.from == from && .to == to)
+    outgoing (vertex) => edges{.from == vertex}.to
+
+    // Products and unions (R4.3)
+    cartesian (other: Simple) => Simple(
+      vertices: vertices * other.vertices,
+      edges: (edges * other.vertices).map((e, v) => Edge((e.from, v), (e.to, v))), (vertices * other.edges).map((v, e) => Edge((v, e.from), (v, e.to)))
+    )
+    tensor (other: Simple) => Simple(vertices: vertices * other.vertices, edges: (edges * other.edges).map((a, b) => Edge((a.from, b.from), (a.to, b.to))))
+    union (other: Simple) => Simple(vertices: (vertices, other.vertices).unique, edges: (edges, other.edges).unique)
+    disjoint_union (other: Simple) => Simple(
+      vertices: vertices.map((0, .)), other.vertices.map((1, .)),
+      edges: edges.map(Edge((0, .from), (0, .to))), other.edges.map(Edge((1, .from), (1, .to)))
+    )
+
+    without (vertex) => Simple(vertices: vertices{!= vertex}, edges: edges{.from != vertex && .to != vertex})
+    dangling (vertex, kept) => edges.some((.from == vertex || .to == vertex) && !(kept.contains(.from) && kept.contains(.to)))
+
+    // Double- and single-pushout rewriting (R3.11)
+    static Rule := class = left: Simple, interface: Simple, right: Simple, single_pushout: boolean = false {
+      deleted => left.vertices{!interface.vertices.contains(.)}
+      added => right.vertices{!interface.vertices.contains(.)}
+
+      applies (host: Simple) => left.vertices.every(host.vertices.contains(.))
+        && (single_pushout || !deleted.some(host.dangling(., host.vertices{!deleted.contains(.)}, left.vertices)))
+      apply (host: Simple) => applies(host)
+        ? deleted.reduce(acc = host => acc.without(.)) -- added.for(.vertex) -- right.edges{!.connected(.from, .to)}.for(.connect(.from, .to))
+        : Quest(name: "rewrite", goal: host)
+    }
+  }
 }

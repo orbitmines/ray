@@ -1,108 +1,63 @@
 // Roman numerals: what a number is written as, and what a numeral is worth.
-// The numbers are kept small, because a number here is walked.
 
 mark ^keyword := external global
 
-unless (Roman.from(4).text == "IV") { INFO@mark `RO1 four is not written IV` }
-unless (Roman.from(9).text == "IX") { INFO@mark `RO2 nine is not written IX` }
-unless (Roman.from(14).text == "XIV") { INFO@mark `RO3 fourteen is not written XIV` }
-unless (Roman.from(3).text == "III") { INFO@mark `RO4 three is not written III` }
-unless (Roman.from(20).text == "XX") { INFO@mark `RO5 twenty is not written XX` }
+unless 4 as Roman == "IV" { INFO@mark `RO1 four is not written IV` }
+unless 9 as Roman == "IX" { INFO@mark `RO2 nine is not written IX` }
+unless 14 as Roman == "XIV" { INFO@mark `RO3 fourteen is not written XIV` }
+unless 3 as Roman == "III" { INFO@mark `RO4 three is not written III` }
+unless 20 as Roman == "XX" { INFO@mark `RO5 twenty is not written XX` }
+unless 1 as Roman == "I" { INFO@mark `RO14 one is not written I` }
+unless 5 as Roman == "V" { INFO@mark `RO15 five is not written V` }
+unless 10 as Roman == "X" { INFO@mark `RO16 ten is not written X` }
 
-unless (Roman(text: "IV").as_number == 4) { INFO@mark `RO6 IV is not four` }
-unless (Roman(text: "IX").as_number == 9) { INFO@mark `RO7 IX is not nine` }
-unless (Roman(text: "XIV").as_number == 14) { INFO@mark `RO8 XIV is not fourteen` }
-unless (Roman(text: "iv").as_number == 4) { INFO@mark `RO9 iv in lower case is not four` }
+unless "IV" as Roman as Decimal == 4 { INFO@mark `RO6 IV is not four` }
+unless "IX" as Roman as Decimal == 9 { INFO@mark `RO7 IX is not nine` }
+unless "XIV" as Roman as Decimal == 14 { INFO@mark `RO8 XIV is not fourteen` }
+unless "iv" as Roman as Decimal == 4 { INFO@mark `RO9 iv in lower case is not four` }
+unless "VII" as Roman as Decimal == 7 { INFO@mark `RO18 VII is not seven` }
+unless 7 as Roman as Decimal == 7 { INFO@mark `RO12 seven does not come back from what it is written as` }
+unless "Ⅻ" as Roman as Decimal == 12 { INFO@mark `RO19 the precomposed twelve is not twelve` }
+unless "MCMXCIV" as Roman as Decimal == 1994 { INFO@mark `RO22 MCMXCIV is not 1994` }
 
-// The additive form writes fours as IIII.
-unless (Roman.additive(4).text == "IIII") { INFO@mark `RO10 four is not written IIII the additive way` }
-unless (Roman.additive(9).text == "VIIII") { INFO@mark `RO11 nine is not written VIIII the additive way` }
+unless "XIV".instance_of(Roman) { INFO@mark `RO20 XIV is not written with roman digits` }
+if "XQV".instance_of(Roman) { INFO@mark `RO21 XQV is written with roman digits` }
 
-// More of the small numbers. Which ones are asked about is a budget: every
-// numeral is read by walking the number it is worth, so `XL` costs forty
-// steps and a round trip costs them twice.
-unless (Roman.from(1).text == "I") { INFO@mark `RO14 one is not written I` }
-unless (Roman.from(5).text == "V") { INFO@mark `RO15 five is not written V` }
-unless (Roman.from(10).text == "X") { INFO@mark `RO16 ten is not written X` }
-unless (Roman(text: "VII").as_number == 7) { INFO@mark `RO18 VII is not seven` }
-unless (Roman(text: Roman.from(7).text).as_number == 7) { INFO@mark `RO12 seven does not come back from what it is written as` }
+unless "XIV".instance_of(Roman.Standard) { INFO@mark `RO37 fourteen is not a standard numeral` }
+if "".instance_of(Roman.Standard) { INFO@mark `RO39 a numeral with nothing written is standard` }
 
-// What a numeral is made of, and what it is not.
-unless (Roman(text: "XIV").is_valid) { INFO@mark `RO20 XIV is not written with roman digits` }
-if (Roman(text: "XQV").is_valid) { INFO@mark `RO21 XQV is written with roman digits` }
+unless Roman.Value["I"] == 1 { INFO@mark `RO29 I is not one` }
+unless Roman.Value["V"] == 5 { INFO@mark `RO30 V is not five` }
+unless Roman.Value["X"] == 10 { INFO@mark `RO31 X is not ten` }
+unless Roman.Value["L"] == 50 { INFO@mark `RO32 L is not fifty` }
+unless Roman.Value["C"] == 100 { INFO@mark `RO33 C is not a hundred` }
+unless Roman.Value["D"] == 500 { INFO@mark `RO34 D is not five hundred` }
+unless Roman.Value["M"] == 1000 { INFO@mark `RO35 M is not a thousand` }
 
-// The additive form, told apart from the subtractive one.
-unless (Roman.additive(3).text == "III") { INFO@mark `RO24 three is written the same either way` }
-if (Roman.additive(4).text == Roman.from(4).text) { INFO@mark `RO25 the two forms write four the same` }
+unless "V̅" as Roman.Vinculum as Decimal == 5000 { INFO@mark `RO60 an overlined V is not five thousand` }
+unless "CCIↃↃ" as Roman.Apostrophus as Decimal == 10000 { INFO@mark `RO71 CCIↃↃ is not ten thousand` }
 
-// The twelfths a fraction sign spells. What `twelfths` reads is not asked
-// about here: it compares against the codepoints of · ∶ ∴ ∷ ⁙, and a number
-// is a walk, so the smallest of them costs a hundred and eighty-three steps
-// and the rest eight thousand each.
-unless (Roman.Fraction.semis == 6) { INFO@mark `RO27 the semis is not six twelfths` }
-unless (Roman.Fraction.uncia == 1) { INFO@mark `RO28 the uncia is not one twelfth` }
+unless Roman.Fraction.uncia as Decimal == 1/12 { INFO@mark `RO28 the uncia is not one twelfth` }
+unless Roman.Fraction.sextans as Decimal == 2/12 { INFO@mark `RO40 the sextans is not two twelfths` }
+unless Roman.Fraction.quadrans as Decimal == 3/12 { INFO@mark `RO41 the quadrans is not three twelfths` }
+unless Roman.Fraction.triens as Decimal == 4/12 { INFO@mark `RO42 the triens is not four twelfths` }
+unless Roman.Fraction.quincunx as Decimal == 5/12 { INFO@mark `RO43 the quincunx is not five twelfths` }
+unless Roman.Fraction.semis as Decimal == 6/12 { INFO@mark `RO27 the semis is not six twelfths` }
+unless Roman.Fraction.septunx as Decimal == 7/12 { INFO@mark `RO44 the septunx is not seven twelfths` }
+unless Roman.Fraction.bes as Decimal == 8/12 { INFO@mark `RO45 the bes is not eight twelfths` }
+unless Roman.Fraction.dodrans as Decimal == 9/12 { INFO@mark `RO46 the dodrans is not nine twelfths` }
+unless Roman.Fraction.dextans as Decimal == 10/12 { INFO@mark `RO47 the dextans is not ten twelfths` }
+unless Roman.Fraction.deunx as Decimal == 11/12 { INFO@mark `RO48 the deunx is not eleven twelfths` }
 
-// What each digit is worth: a mantissa at a power of ten.
-unless (Roman.Digit.i.value == 1) { INFO@mark `RO29 i is not one` }
-unless (Roman.Digit.v.value == 5) { INFO@mark `RO30 v is not five` }
-unless (Roman.Digit.x.value == 10) { INFO@mark `RO31 x is not ten` }
-unless (Roman.Digit.l.value == 50) { INFO@mark `RO32 l is not fifty` }
-unless (Roman.Digit.c.value == 100) { INFO@mark `RO33 c is not a hundred` }
-// spec: what `d` and `m` are worth is not claimed here — five hundred and a
-// thousand are that many links each, twice over, and the file pays for it.
-
-// A digit standing for a count of ones at the units place.
-unless (Roman.Digit.i.with_value(3).value == 3) { INFO@mark `RO36 three ones are not three` }
-
-// Which numerals the standard form can write: one and up, below four
-// thousand.
-unless (Roman(text: "XIV").is_standard) { INFO@mark `RO37 fourteen is not a standard numeral` }
-if (Roman(text: "").is_standard) { INFO@mark `RO39 a numeral with nothing written is standard` }
-
-// The twelfths, by the names they were counted with.
-unless (Roman.Fraction.sextans == 2) { INFO@mark `RO40 the sextans is not two twelfths` }
-unless (Roman.Fraction.quadrans == 3) { INFO@mark `RO41 the quadrans is not three twelfths` }
-unless (Roman.Fraction.triens == 4) { INFO@mark `RO42 the triens is not four twelfths` }
-unless (Roman.Fraction.quincunx == 5) { INFO@mark `RO43 the quincunx is not five twelfths` }
-unless (Roman.Fraction.septunx == 7) { INFO@mark `RO44 the septunx is not seven twelfths` }
-unless (Roman.Fraction.bes == 8) { INFO@mark `RO45 the bes is not eight twelfths` }
-unless (Roman.Fraction.dodrans == 9) { INFO@mark `RO46 the dodrans is not nine twelfths` }
-unless (Roman.Fraction.dextans == 10) { INFO@mark `RO47 the dextans is not ten twelfths` }
-unless (Roman.Fraction.deunx == 11) { INFO@mark `RO48 the deunx is not eleven twelfths` }
-
-// The letters the numerals are written with.
-unless (Roman.i_digit == "I".head.value) { INFO@mark `RO49 the ones digit is not I` }
-unless (Roman.v_digit == "V".head.value) { INFO@mark `RO50 the fives digit is not V` }
-unless (Roman.x_digit == "X".head.value) { INFO@mark `RO51 the tens digit is not X` }
-unless (Roman.l_digit == "L".head.value) { INFO@mark `RO52 the fifties digit is not L` }
-unless (Roman.c_digit == "C".head.value) { INFO@mark `RO53 the hundreds digit is not C` }
-unless (Roman.d_digit == "D".head.value) { INFO@mark `RO54 the five hundreds digit is not D` }
-unless (Roman.m_digit == "M".head.value) { INFO@mark `RO55 the thousands digit is not M` }
-
-// Which digit a letter stands for, either case, and nothing for a letter that
-// is not one of them.
-unless (Roman.digit_of("X".head.value) == Roman.Digit.x) { INFO@mark `RO56 X does not stand for the tens digit` }
-unless (Roman.digit_of("x".head.value) == Roman.Digit.x) { INFO@mark `RO57 a lower-case x does not stand for it either` }
-unless (Roman.digit_of("I".head.value) == Roman.Digit.i) { INFO@mark `RO58 I does not stand for the ones digit` }
-if (Roman.digit_of("Q".head.value)) { INFO@mark `RO59 Q stands for a roman digit` }
-
-// The vinculum's marks are written by their codepoints: seven hundred and
-// seventy-three is the combining overline.
-unless (Roman.Vinculum.overline.codepoint == 773) { INFO@mark `RO60 the overline is not U+0305` }
-
-unless (Roman(text: "IIII").as_number == 4) { INFO@mark `RO61 IIII is not read as four` }
-unless (Roman(text: "IV").as_number == Roman(text: "IIII").as_number) { INFO@mark `RO62 the two ways of writing four are not the same number` }
-unless (Roman(text: "IIII").canonical.text == "IV") { INFO@mark `RO63 IIII does not normalize to IV` }
-unless (Roman(text: "IV").canonical.text == "IV") { INFO@mark `RO64 IV moved when normalized` }
-unless (Roman.normalizer == Roman.Normalizer.standard) { INFO@mark `RO65 the normalizer is not the standard form to begin with` }
-counted ^keyword := 1
-while (counted < 21) {
-  unless (Roman.from(counted).canonical.as_number == counted) { INFO@mark `RO66 a number does not come back from its canonical form` }
-  unless (Roman.additive(counted).canonical.text == Roman.from(counted).text) { INFO@mark `RO67 an additive numeral does not normalize to the standard one` }
-  counted = counted.succ
+unless "IIII" as Roman as Decimal == 4 { INFO@mark `RO61 IIII is not read as four` }
+unless "IIII" as Roman as Decimal as Roman == "IV" { INFO@mark `RO63 IIII does not normalize to IV` }
+unless Roman.normalizer == Roman.Normalizer.Subtractive { INFO@mark `RO65 the normalizer is not subtractive to begin with` }
+1..20 for (n) => {
+  unless n as Roman as Decimal == n { INFO@mark `RO66 a number does not come back from its roman form` }
 }
-Roman.normalizer = Roman.Normalizer.additive
-unless (Roman.from(4).text == "IIII") { INFO@mark `RO68 four is not written IIII once the normalizer is additive` }
-unless (Roman(text: "IV").canonical.text == "IIII") { INFO@mark `RO69 the canonical form does not follow the normalizer` }
-Roman.normalizer = Roman.Normalizer.standard
-unless (Roman.from(4).text == "IV") { INFO@mark `RO70 four is not written IV once the normalizer is standard again` }
+with Roman.normalizer = Additive {
+  unless 4 as Roman == "IIII" { INFO@mark `RO68 four is not written IIII once the normalizer is additive` }
+  unless 9 as Roman == "VIIII" { INFO@mark `RO11 nine is not written VIIII the additive way` }
+  unless 3 as Roman == "III" { INFO@mark `RO24 three is written the same either way` }
+}
+unless 4 as Roman == "IV" { INFO@mark `RO70 four is not written IV outside the additive normalizer` }

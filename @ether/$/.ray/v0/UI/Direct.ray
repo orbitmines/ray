@@ -53,7 +53,7 @@ Direct := namespace {
     [character: Char] => glyphs{.character == character}.first ~~ .units = units
   }
 
-  // Where the pixels go: a display the platform hands over as a byte stream, or a file in an image format.
+  // Where the pixels go is a location like any other: a framebuffer device, a window the platform offers, or a file in an image format. No external of its own.
   Display := class = target: Location {
     write (raster: Geometry.Raster) => IO.write(target, raster)
   }

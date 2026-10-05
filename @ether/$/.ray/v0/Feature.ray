@@ -141,7 +141,7 @@ Transaction := class = forwards: *?, backwards: *?, applied = false, history: Hi
 }
 
 Network := namespace {
-  static DomainName := class = text: String {
+  static DomainName := class (text: (Char.Letter | Char.Digit | "-" | ".")[]) => {
     valid => 0 < text.count < 2^8
   }
 

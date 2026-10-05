@@ -197,3 +197,8 @@ Answers from 2026-10-05.
   the chain it is the machine. In a session that runs as the user, `@me` is the player, and `@me/device` is
   answered by the computer's `@me`, its answer flattened into the player's. A remote device is
   `@some-remote/device/<…>`. IME composition is not a device field but a String with a `^composing` mark.
+- **W9** `choose` always resolves through `@me.choose`; only who `@me` is differs. A player gets a chooser (a
+  `Choice` over the possibilities); the computer itself picks (weighted at random). Forms: `choose boolean`,
+  `choose 50% boolean` (the first possibility weighted 50%, the rest sharing the remainder), `choose 1 Number`.
+  Rendering a superposition goes the same way. The computer's `choose` is defined once, on its device; an
+  instance flattens its device into itself.

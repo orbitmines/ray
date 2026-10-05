@@ -33,6 +33,9 @@ Random := class {
   }
 }
 
+choose {chance: Probability} {type} ^keyword => @me.choose(type#.map(. ~~ .weight = .index == 0 ? chance : (1 - chance) / (type#.count - 1)).reduce(|))
+choose {count: Number} {type} ^keyword => @me.choose(type#.subsets(count).reduce(|))
+choose {type} ^keyword => @me.choose(type)
 Choice := class = type: *?, value: *?
 
 Proof := class = proposition: *, argument: * {

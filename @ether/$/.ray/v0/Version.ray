@@ -1,4 +1,3 @@
-// `%3` is version 3 (always its latest revision), `%3'2` its second revision; `%0` may break freely (L§7.1).
 Version := class ("%", number: Decimal, ("'", revision: Decimal)?) => {
   latest => !revision
   breaks_freely => number == 0
@@ -11,20 +10,17 @@ Version := class ("%", number: Decimal, ("'", revision: Decimal)?) => {
 
   resolved (revisions: Version[]) => latest ? revisions{number == this.number}.max(.revision) ?? this : this
 
-  // `%[1..5]` (L§10.1 `%`)
   static Range := class ("%[", first: Decimal, "..", last: Decimal, "]") => {
     includes (version: Version) => first <= version.number <= last
     versions => (first..last).map(%.)
   }
 }
 
-// `field %[1..5]`: limits a declaration to those versions, and selects them at a use (L§7.2).
 Versioned<T> := class = value: T, range: Version.Range? {
   at (version: Version) => value if !range || range.includes(version)
   selected (range: Version.Range) => range.versions.map(at(.)){!= None}
 }
 
-// `%4 -> %5 (old) => new`, declared beside what it migrates; they chain, and an inverse is the backward one (L§7.2, L§4.5).
 Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
   static declared: Migration[] = []
   (static.declared ??= []).push this
@@ -39,7 +35,6 @@ Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => 
     ?? Quest(name: "migrate", goal: (value: old, from: from, to: to))
 }
 
-// Hybrid logical clocks: a wall time, a logical count, and the node that stamped it.
 Stamp := class = wall: Decimal, logical: Decimal = 0, node: * {
   chainable < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)
   as (:== String) => wall, ".", logical, "@", node
@@ -64,7 +59,6 @@ HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
   }
 }
 
-// The first milestone of version control: operations over definitions, HLC-stamped; a rename keeps identity (L§9.2).
 Definition := class = id: UUID = choose UUID.v1{unique}, name: String, holder: *? {
   chainable == (other: Definition) => id == other.id
 }

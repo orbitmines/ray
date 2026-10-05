@@ -1,9 +1,7 @@
-// Unicode is versioned from the start (X3.2); a pinned version is fetched once and kept under @ether (X3.3, X3.7).
 Unicode := class {
   static version = %17
   static UCD = @"https://www.unicode.org"/Public/%version/ucd
 
-  // A table is read by a class pattern: comments and blank lines between its rows (X3.1).
   static Table<Row> := class = (("#", *) | (row: Row, (" "[], "#", *)?) | "")[].join("\n") {
     rows => this.row{!= None}
     [codepoint: Scalar] => rows{.range.in(codepoint)}.first
@@ -22,7 +20,6 @@ Unicode := class {
   static Blocks = UCD/"Blocks.txt" as Table<(range: Range, "; ", value: *)>
   static Scripts = UCD/"Scripts.txt" as Table<(range: Range, " "[], "; ", value: *)>
   static EastAsianWidth = UCD/"EastAsianWidth.txt" as Table<(range: Range, " "[], "; ", value: *)>
-  // `ß` folds to `ss` (X1.3)
   static CaseFolding = UCD/"CaseFolding.txt" as Table<(range: Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
   static BidiMirroring = UCD/"BidiMirroring.txt" as Table<(range: Range, "; ", value: Scalar)>
 
@@ -36,26 +33,21 @@ Unicode := class {
   static LowerCase = Data.rows{.lower_case}.map(.range.from: .lower_case)
   static Lowercase = Scalar{Data[.].general_category == "Ll"}
 
-  // `Char.Latin`, `Char.Arabic` (X3.5)
   Scripts.rows.value.unique.for script => static Char.`script` = Char{.script == script}
 
   static GeneralCategory := class = UCD/"PropertyValueAliases.txt" as Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)> {
-    // `LC` is the cased letters, Lu | Ll | Lt; every other short name prefixes the categories it holds.
     rows.for category => static `category.name` = Scalar{Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
   }
 
-  // Endianness is a direction on the bytes: little-endian reads them right-to-left, a single byte is the same either way (X3.6).
   static Endianness := enum BE | LE
   static endianness: Endianness = BE
 
-  // A transformation format: code units of one width (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G25549)
   static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
     static CodeUnit: Binary
     as (:== CodePoint[]): CodePoint[]
     bytes => endianness == LE ? <-(this as Byte[]) : this as Byte[]
   }
 
-  // https://www.unicode.org/versions/latest/core-spec/chapter-3/#G27288
   static UTF-8 := class: TF = sequence: (
     prefix: 1[]{length == 0..4},
     U0: Binary{length == 8 - prefix.length}{⊢0},
@@ -67,7 +59,6 @@ Unicode := class {
     as (:== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
   }
 
-  // https://www.unicode.org/versions/latest/core-spec/chapter-3/#G27792
   static UTF-16 := class: TF = sequence: (
     prefix: 110110₂?,
     U0: Binary⁴,
@@ -84,5 +75,4 @@ Unicode := class {
   }
 }
 
-// https://www.unicode.org/versions/latest/core-spec/appendix-a/#G7083
 U+{codepoint: Hexadecimal.String}: Char => Hexadecimal(integer: codepoint) as Char

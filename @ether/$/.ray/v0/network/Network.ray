@@ -116,7 +116,6 @@ Instance &+= {
   seen_from (other: Instance) => other === this ? @localhost : address
   local => address ==.instance_of @localnetwork
   canonical: static => Instance(location, address: address as String as address.static)
-  // No MAC address: a random one with the multicast bit set (https://datatracker.ietf.org/doc/html/rfc4122#section-4.5)
   mac_address: Binary⁴⁸ => (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1)
 }
 

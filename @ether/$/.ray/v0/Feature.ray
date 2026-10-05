@@ -131,7 +131,6 @@ Transaction := class = forwards: *?, backwards: *?, applied = false, history: Hi
 }
 
 Network := class {
-  // What another instance serves at a path, at a version when one is asked for; kept locally once fetched (X3.3).
   static fetch (from: Location, path: String, version: Version?) => IO.read(from / path, version) ?? IO.read(from / path + (("%", version.number) if version))
 }
 

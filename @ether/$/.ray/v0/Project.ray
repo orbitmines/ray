@@ -1,8 +1,6 @@
-// A project: one name per project, dependency lines, lookup through dependencies to @ether (P8.8, F-C8).
 Project := class: Location = name: String, parent: Project?, children: Location[] = [], host: *?, dependencies: Dependency[] = [], written_against: Version?, carried: *[] = [], readings: Reading[] = [], overrides: *[] = [], definitions: Definition[] = [] {
   static Form := enum ether | relative | upward | absolute | user | remote
 
-  // `@ether/UI`, `@./sibling %3`, `@../up`, `@/absolute`, `@user`, `@https://…`
   static Dependency := class ("@", location: (!" ")[], (" ", version: Version)?) => {
     form: Form => location ~= ⊢"ether/" ? ether
       : location ~= ⊢"./" ? relative
@@ -10,7 +8,6 @@ Project := class: Location = name: String, parent: Project?, children: Location[
       : location ~= ⊢"/" ? absolute
       : location ~= "://" ? remote
       : user
-    // The @ether userspace is filled by the language, which bundles its own .ray files; what it does not bundle comes over the network from @ether.
     project: Project? => form.match
       ether => Language.ray.bundled(location["ether/".length..]) ?? Network.fetch(@ether, location["ether/".length..], version) as Project
       remote => Network.fetch(location as Location, "", version) as Project
@@ -24,11 +21,9 @@ Project := class: Location = name: String, parent: Project?, children: Location[
     : definitions.push Definition(name, value) -- value
   defined_here (name: String) => definitions{.name == name}.last
 
-  // The nearest definition: here, a child project, then up the parents; then the dependencies, then @ether.
   nearest (name: String) => defined_here(name) ?? children{==.instance_of Project}.defined_here(name).first ?? parent?.nearest(name)
   lookup (name: String) => (nearest(name) ?? dependencies.project.nearest(name).first)?.value ?? World.ether.lookup(name)
 
-  // The @ray %N a package was written against; files carried for hosts on another version (L7.5).
   write_against (version: Version) => (written_against = version) -- this
   carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
   carry (files: *[]) => carried.push files -- this
@@ -42,7 +37,6 @@ Project := class: Location = name: String, parent: Project?, children: Location[
   override (setting) => overrides.push setting -- this
 }
 
-// The external layout: `.ether/external/@name/$/@location/%/version` (L6.2)
 Layout := class {
   root = ".ether/external/@"
   checked_out (name: String) => root, "/@", name

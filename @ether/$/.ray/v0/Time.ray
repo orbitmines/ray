@@ -1,4 +1,3 @@
-// `12:00`, `12:00:00`
 {hh: Decimal.String}:{mm: Decimal.String{length == 2}}: Quantity.Temporal => hh hours mm minutes
 {hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{length == 2}}: Quantity.Temporal => hh_mm ss seconds
 
@@ -16,12 +15,10 @@ Calendar := class {
   static segments = static*{==.instance_of Segment}
   protected static TimeDefinition = Time{(-> .epoch).every(.calendar == calendar)}
   static equivalence (from: TimeDefinition) -> (to: TimeDefinition{calendar == this}) => {
-    // Only offset differences, like UTC.
     within_same_calendar_system = from.calendar.static == to.calendar.static
 
     Time{calendar == from.calendar} &+= {
       as (:== to.calendar) => {
-        // Keep the epoch structure: '25 Gregorian years' from '2001-01-01 Gregorian' is 'X Julian years' from 'X Julian' (N4.5).
         if epoch != 0 {
           Time(to.calendar, epoch: epoch as to.calendar) = this (as <= Unit.Temporal if !within_same_calendar_system)
         } else {
@@ -62,7 +59,6 @@ Gregorian := class: Julian {
   is_leap_year => year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
   days_before_year => 365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
 
-  // The reform: the day after 1582-10-04 Julian is 1582-10-15 Gregorian.
   equivalence "1582-10-04" as Julian -> "1582-10-15"
 }
 
@@ -73,7 +69,6 @@ UTC := class: Gregorian (offset: Quantity.Temporal = 0) {
 GMT := UTC
 
 Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
-  // Only equivalent calendars can be compared. `:Time = "2025-01-01", epoch: "2000-01-01"` is `25.years` (N4.5).
   epoch: Time{== calendar} = 0
   = (x) => {
     this -= x
@@ -87,19 +82,16 @@ Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
 
   chainable == (other: Time) => since_calendar_epoch in second == other.since_calendar_epoch in second
   chainable < (other: Time) => since_calendar_epoch in second < other.since_calendar_epoch in second
-  // A time with an unknown date, like `12:00`, compares on the parts it knows: the time of day (N4.3).
   time_of_day: Quantity.Temporal => ((since_calendar_epoch in second) % (Quantity(quantities: [(1, day)]) in second)) seconds
   chainable == (other: Quantity.Temporal) => time_of_day == other
   chainable < (other: Quantity.Temporal) => time_of_day < other
   chainable > (other: Quantity.Temporal) => other < time_of_day
 
-  // `Time.YEAR`, `Time.MONTH` are context values: `with Time.MONTH = February` (N4.4).
   calendar.segments.for segment => dynamically Time.`segment.name.upper_case` = since_calendar_epoch.`segment.name`
   calendar.segments.for segment => `segment.name` => segment.is_recurring ? recur(epoch) : since_calendar_epoch as segment
 
   round (unit: Unit.Temporal) => Time(calendar, epoch: epoch) = (((this as unit).amount.round unit) as finer(Quantity(quantities: [(1, unit)])))
 
-  // `now` is a distribution around the clock's reading, read again every time; a correction narrows it, and times read since jump with it (N4.1, N4.8, N4.10).
   uncertainty: Quantity.Temporal?
   corrected (by: Quantity.Temporal, within: Quantity.Temporal) => Time(calendar, epoch: epoch, uncertainty: within) = this + by
   static now => nondeterministic (external time) ns ± (external time).resolution
@@ -114,11 +106,9 @@ Quantity.Temporal &+= {
   chainable > (other: Time) => other.time_of_day < this
 }
 
-// `1 month` is as many days as the month in context has, January when only the year is set, else 30 (N4.4).
 Unit(name: "month" ("s" + plural: true)?, symbol: "mo")
   .convert (x: Number) => x * (Time.YEAR || Time.MONTH ? (Time.MONTH ?? January).days_in(Gregorian(year: Time.YEAR ?? 1)) : 30), day
 
-// ISO 8601 (https://en.wikipedia.org/wiki/ISO_8601)
 ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
   date: (
     year: Decimal,
@@ -169,11 +159,9 @@ ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
 
   dynamically assert semicolons if offset
   dynamically assert date | time
-  // `12:00` is on every day: the date is unknown, and printing leaves it out (N4.3).
   date ?= ?
 }
 
-// Leap seconds and time zones are read from the system's tz data through io (N4.6, N4.7).
 LeapSeconds := class = IO.read("/usr/share/zoneinfo/leap-seconds.list").lines{!.empty && !.starts_with("#")}
   .map(.split("\t").0 as Decimal seconds as Time(epoch: "1900-01-01"))
 {

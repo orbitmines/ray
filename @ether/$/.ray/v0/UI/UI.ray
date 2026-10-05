@@ -1,10 +1,6 @@
-// A page is a program like any other (F-D1). Rendering it is choosing a Compiler level, and a renderer is a Language whose level that is: `page{O: Language.Web}`, `page{O: Language.TUI}`, `page{O: Language.Direct}` (F-D2).
-// Every level starts from the scene: the program reduced to Geometry's shapes, with the variables its interactions change.
 UI := class {
   choosing: boolean = false
 
-  // The first level: any value reduces to shapes. A value with a rendering of its own uses it; a location renders
-  // as what its extension reads to; anything else renders its fields as a table; a superposition shows all, or one when choosing (F-D4, F-C1b, F-C3).
   Scene := {
     {text: String} => Geometry.Text(text)
     {styled: String ^{style}} => Geometry.Text(styled) + Theme[style]
@@ -24,13 +20,10 @@ UI := class {
   Video := class { extensions = "mp4" | "webm" | "ogv" }
   Audio := class { extensions = "mp3" | "ogg" | "wav" | "flac" }
 
-  // A link is a shape that navigates when activated.
   Link := class: Geometry.Box = to: Location {
     activate => Navigation.go(to)
   }
 
-  // Interaction is variables that change; `dynamically` re-evaluates what depends on them. There are no callbacks (F-D6).
-  // The level's runtime writes these; the program only reads them.
   Interactive := class = shape: Geometry.Shape {
     hovered => Pointer.position.some(scene.at(.).contains(shape))
     pressed => hovered && Pointer.pressed
@@ -40,7 +33,6 @@ UI := class {
     activated => focused && Keyboard.enter.pulsed || hovered && Pointer.released
   }
 
-  // Inputs are values chosen by the user: the type of what is chosen picks the input (F-D4 `choose`).
   Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", disabled: boolean = false {
     static (choosing: Choice) as Input => choosing.type.match
       String{secret} => Secret(choosing)
@@ -71,13 +63,11 @@ UI := class {
   Select := class: Input = options: *[] {
     activate => value = options[(options.index_of(value) + 1) % options.count]
   }
-  // A form is any value whose fields are chosen; submitting it is activating it.
   Form := class: Geometry.Box = value: * {
     inputs => value.fields{.value ==.instance_of Choice}.map(.value as Input)
     submitted => dynamically inputs.every(.value) && Keyboard.enter.pulsed
   }
 
-  // Devices: what the user does, as variables (F-D6, F-D10b).
   Pointer := class {
     Kind := enum mouse | pen | touch
     pointers: (kind: Kind, position: Geometry.Vector, pressure: Probability, tilt: Geometry.Vector, buttons: Number[])[] = []
@@ -92,7 +82,6 @@ UI := class {
     next (scene: Geometry.Shape) => scene.expand{.focusable} -- .[(.index_of(current) + 1) % .count]
     previous (scene: Geometry.Shape) => scene.expand{.focusable} -- .[(.index_of(current) - 1) % .count]
   }
-  // Moving through the scene with the keyboard (F-D10b): arrows move, control skips to the next group, shift expands.
   Selection := class {
     shapes: Geometry.Shape[] = []
     expanded: Geometry.Shape[] = []
@@ -117,7 +106,6 @@ UI := class {
     current: (shape: Geometry.Shape, from: Geometry.Vector)?
     dropped: Location[] = []
   }
-  // Copying writes the platform's clipboard through the running target (Web: navigator.clipboard, TUI: OSC 52).
   Clipboard := class {
     content: String | Location[] = ""
     copy (value) => (content = value) -- Runtime.current?.target.copy(value as String) -- value
@@ -135,7 +123,6 @@ UI := class {
     preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal, focused: boolean) = (false, false, normal, true)
   }
 
-  // Navigation: where the user is, and how they got there (F-A3, F-A4, F-A7).
   Navigation := class {
     history: Location[] = []
     at: Location => history.last ?? "/"
@@ -161,11 +148,9 @@ UI := class {
     static select (values, identity: String) => values{.name == identity} -- .count == 1 ? .first : Chooser(options: .)
   }
 
-  // What a platform can do beyond drawing; each level supplies it in its target, or degrades.
   Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
   Platform := class {
     capabilities: Capability[] = []
-    // A phone or a tablet: the web level reads it from the user agent and touch-only pointers, the terminal leaves it false.
     handheld: boolean = false
     can (capability: Capability) => capabilities.contains(capability)
     notifications: Notification[] = []
@@ -175,9 +160,7 @@ UI := class {
   }
   Notification := class = title: String, body: String
 
-  // Accessibility: roles follow from structure, labels from what is shown (F-D3).
   Role := enum heading | link | button | input | image | list | table | region | text
-  // What the UI adds to every shape: how it is interacted with, and what it is to assistive technology.
   Geometry.Shape &+= {
     interaction => Interactive(this)
     focusable => this ==.instance_of Link || this ==.instance_of Input || activate
@@ -194,8 +177,6 @@ UI := class {
     label => this ==.instance_of Geometry.Image ? alt : children{==.instance_of Geometry.Text}.text.join(" ")
   }
 
-  // Styles are highlighting: `^italic` on text is the same style the editor shows (F-C2).
-  // A style is a partial shape, a name with the fields it sets; styling is adding it, and the later style overrides (T2.1 `+`).
   Theme := class {
     static styles: (name: String, *)[] = [
       ("italic", font: Geometry.Font(style: italic)),
@@ -209,8 +190,6 @@ UI := class {
     static [name: String] => styles{.name == name}.last - name ?? ()
   }
 
-  // Running a page: the renderer's target reads the devices, the scene is re-solved and the frame written, until it stops (F-D10).
-  // A target is where a renderer's frames go and its input comes from: `Language.Web.DOM()`, `Language.TUI.Target()`.
   scene: Geometry.Shape?
   Runtime := class = page: Program, renderer: Language, target: *, running: boolean = false {
     static current: Runtime?

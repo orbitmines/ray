@@ -1,5 +1,4 @@
 Program &+= {
-  // A program read back as its text: what it jumps to, which heads it requires, and where a spelling is declared.
   is_jump => code ~= ⊢"goto "
   is_label => code ~= "\" ⊣
   jump => code ~= (⊢"goto ", name: Char.Word[], (" ", condition: *)?)
@@ -20,7 +19,6 @@ Program &+= {
   expand => written
   concurrently => written.map(. ==.instance_of Running ? . : Running(program: .))
 
-  // Each statement of the block is a branch, as if written in `branch { }`; writing it explicitly is allowed (P4.1, P4.2).
   right-to-left branch => Running(program: this) -- Running.branches.push(.)
   right-to-left sync => concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
   right-to-left race => concurrently
@@ -35,7 +33,6 @@ Program &+= {
 
   targets => code ~= ((target: (!" ")[], " ", Char.Symbol[]?, "= ", (!(", " | \n))[]), (", " | \n)?)[] -- .target
 
-  // `transaction { … }`: all of it happens or none of it; what it changed is checked only at its end (L§3.2, Almanac §4.2).
   right-to-left transaction => {
     before = targets.map(target => (target, &caller[target]))
     result = this()
@@ -45,8 +42,6 @@ Program &+= {
   }
 }
 
-// `with X = v` sets X until the context it is written in is left (L§6.3); `with { Time.YEAR = 2023, Time.MONTH = February }` sets several.
-// It takes one value: in `with X = Y { … }` the block belongs to Y (`X = (Y { … })`, extending Y), not to `with`.
 right-to-left with | assume (settings: Program) => {
   previous = settings.targets.map(&caller[.])
   settings()

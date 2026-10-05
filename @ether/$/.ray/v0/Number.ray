@@ -1,7 +1,5 @@
-// A number is a ray: zero has no next, and every other number is the next of the one before.
 Number := class: Ray {
   succ => Number(next: this)
-  // `3 boolean`: a number called on a value is that many of it.
   { }{value} ^punctuation => [value] * this
   pred => next
   is_zero => next === None
@@ -46,11 +44,9 @@ Number := class: Ray {
   max (other: Number) => this < other ? other : this
   saturate (limit: Number) => min(limit)
 
-  // `1..3`, `3..1` walks down (R4.1); `1..<3`
   .. (last: Number) => this == last ? [this] : this, (this < last ? succ : pred)..last
   ..< (last: Number) => this == last ? [] : this, (this < last ? succ : pred)..<last
 
-  // A number is iterable: an unbounded line through it, starting at zero.
   bounded => false
   entry => Line(value: this)
   static Line := class: Ray = value: Number {
@@ -65,7 +61,6 @@ Number := class: Ray {
   static (digits: Number[]) as (base: Number) => digits.reduce(0) (acc, current) => acc * base + current
 
   root (degree: Number) => (0..this){. ^ degree <= this}.last
-  // Irrationals are generators: the digits of a root are computed on demand (N1.4).
   root_of (degree: Number) => root(degree) ^ degree == this ? root(degree)
     : Real(integer: root(degree), fraction: (1 -> +1).map(place => (this * 10 ^ (degree * place)).root(degree) % 10))
   right-to-left √ => root_of(2)
@@ -74,7 +69,6 @@ Number := class: Ray {
 
   chosen_within (width: Number) => Random.number(width)
 
-  // Bitwise operations on bit strings and binary numbers alike (N1.11).
   bits (other: Number) => digits(2).length max other.digits(2).length -- digits(2).padded(.).zip(other.digits(2).padded(.))
   [&&, ||, x||, !&&, !||, x!||].for operator => {
     `"~" + operator` (other: Number) => bits(other).map((a, b) => a operator b) as 2
@@ -132,7 +126,6 @@ dynamically Number.Bases.for name => {
 
     {fraction: static.String} (): Real => integer, ".", fraction
 
-    // A natural is a Signed without its sign, both ways (N1.9).
     as Signed => Signed(integer: this)
     static Signed := class = sign: "-"?, integer: static {
       as static => integer if !negative
@@ -151,7 +144,6 @@ dynamically Number.Bases.for name => {
     static Real := class = integer: static, ".", fraction: static{unbounded} {
       static Signed := class = sign: "-"?, real: Real
 
-      // `0.5` is `5` counted in `10 ^ places`; division writes its digits on demand (N1.4).
       places => fraction.length
       scaled => (integer, fraction) as radix
       static written (counted: Number, places: Number) => Real(integer: counted / radix ^ places, fraction: (counted % radix ^ places).digits(radix).padded(places))
@@ -171,24 +163,20 @@ dynamically Number.Bases.for name => {
 
   global[name].String = Base[]{length >= 1}
 
-  // Leading zeros are equivalent to the number without them (N1.15).
   Base{: 0+, number: Base} as (=== Base) => number
 }
 
-// `5..` steps on from five, `..5` comes down to five, `..<5` to just before it (R4.1, A2).
 ({from: Number}..) ^punctuation => from -> 1
 {from: Number}..{\n} ^punctuation => from -> 1
 ..{to: Number} ^punctuation => -1 <- to
 ..<{to: Number} ^punctuation => -1 <- (to - 1)
 
-// `1/3` written together is the fraction itself, its digits repeating; `50%` is a half, and `x % y` stays modulo (N1.4, A2, A5).
 {numerator: Decimal.String}/{denominator: Decimal.String} ^number => Decimal.Real(integer: numerator as Decimal, fraction: []) / (denominator as Decimal)
 {amount: Decimal}%{\n} ^number => Decimal.Real(integer: amount, fraction: []) / 100
 ({amount: Decimal}%) ^number => Decimal.Real(integer: amount, fraction: []) / 100
 {amount: Decimal}%,{rest} ^number => Decimal.Real(integer: amount, fraction: []) / 100, rest
 {amount: Decimal}% {of} ^number => (Decimal.Real(integer: amount, fraction: []) / 100) of
 
-// `Binary³²` is `Binary^32`, `10₂` is ten read in base two, `Binary₂` two long; on a base type `^` is its length (N1.12, A5).
 superscripts := "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"
 subscripts := "₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"
 Superscript := "⁰" | "¹" | "²" | "³" | "⁴" | "⁵" | "⁶" | "⁷" | "⁸" | "⁹"
@@ -204,7 +192,6 @@ written_small (digits, among) => digits.reduce(acc = 0 => acc * 10 + among.index
 0b{digits: Binary.String} | 0B{digits: Binary.String} => Binary(integer: digits)
 {number: Decimal}.{fraction: Decimal.String} => Decimal.Real(integer: number, fraction: fraction)
 
-// `u8 = Binary⁸`, `i8 = Binary⁸.Signed` (N1.7)
 u{width: Decimal} => Binary{length <= width}
 i{width: Decimal} => Binary{length <= width}.Signed
 USize = u8 | u16 | u32 | u64

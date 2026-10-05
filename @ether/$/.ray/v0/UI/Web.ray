@@ -1,8 +1,5 @@
-// The web as Compiler levels over the scene (F-D2, F-D7): HTML for structure, CSS for appearance, JS for what changes.
-// `page{O: Language.Web}()` is all three together, a package of files; each is a value until it is written, in its file's language.
 Language.Web := class: Language {
   static extensions = ".web"
-  // HTML, CSS and JS are languages: structures here, text only through their writers (X1.7).
   HTML := class {
     Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | String)[] = [] {
       static made = 0
@@ -34,7 +31,6 @@ Language.Web := class: Language {
       Keyframes => "@keyframes ", node.name, "{", node.frames.map(.at * 100, "%{", .declarations.map(.property, ":", .value, ";"), "}"), "}"
   }
   JS := class {
-    // Enough of JavaScript to say what a page does: variables, effects that re-run when what they read changes, listeners the level writes.
     Module := class = statements: Statement[] = []
     Statement := Let | Assign | Effect | Listen | Call | Function | Return | If
     Let := class = name: String, value: Expression
@@ -63,7 +59,6 @@ Language.Web := class: Language {
       * => node as String
   }
 
-  // Shapes become elements. Every shape gets an id so CSS and JS can reach it.
   HTML.level := {
     {page: Geometry.Shape} => HTML.Document(head: Head(), body: HTML.Element("body", children: [page]))
     {link: UI.Link} => HTML.Element("a", [("id", link.id), ("href", link.to as String)], link.children)
@@ -107,7 +102,6 @@ Language.Web := class: Language {
     ), " Z" if shape.closed)])
   ])
 
-  // Appearance. A constraint CSS can say exactly is translated (flex, grid, max-width, clamp); anything else takes the solver's positions (F-B6b).
   CSS.level := {
     {page: Geometry.Shape} => CSS.Sheet([
       CSS.Rule("*", [("box-sizing", "border-box"), ("margin", "0")]),
@@ -162,7 +156,6 @@ Language.Web := class: Language {
     Geometry.Pattern => "url(#", paint.shape.id, ")"
   Clamp := (interpolated: Geometry.Interpolated) => interpolated.from.share * 100, "% + (100vw - ", interpolated.from.width as px, "px) * ", (interpolated.to.share - interpolated.from.share) * 100 / (interpolated.to.width - interpolated.from.width) as px
 
-  // What changes: the program's variables and `dynamically` effects run in the browser; devices are listeners that write UI's variables (F-D6).
   JS.level := {
     {page: Geometry.Shape} => JS.Module([
       Runtime,
@@ -174,7 +167,6 @@ Language.Web := class: Language {
     ])
   }
   Element := (shape: Geometry.Shape) => JS.Call(("document", "getElementById"), [shape.id])
-  // The Ray program's own expressions, as JavaScript.
   JS.expressions := {
     {a} + {b} => (a, "+", b)
     {a} - {b} => (a, "-", b)
@@ -187,10 +179,8 @@ Language.Web := class: Language {
     {name} = {value} => JS.Assign(("ray", name), value)
     {f}({arguments}) => JS.Call(f, arguments)
   }
-  // The fixed part every page carries: reactive variables, and the devices written by listeners (F-D9b's shim is the development form of this).
   Runtime := JS.Function("effect", ["reads", "body"], [JS.Call(("ray", "subscribe"), ["reads", "body"]), JS.Call("body")])
   Devices := [
-    // Handheld: a phone or tablet user agent, touch-only pointers, or an iPad that reports itself as a Mac.
     JS.Call(("ray", "set"), ["UI.Platform.handheld", (((("/Android|iPhone|iPad|iPod|Mobile/i", "test(navigator.userAgent)"), "||", ("matchMedia(\"(pointer:coarse)\")", "matches&&!matchMedia(\"(pointer:fine)\").matches")), "||", ("navigator", "maxTouchPoints>1&&/Macintosh/.test(navigator.userAgent)"))]),
     ["pointerdown", "pointermove", "pointerup", "pointercancel"].map(event => JS.Listen("window", event, [JS.Call(("ray", "set"), ["UI.Pointer.pointers", JS.Call(("ray", "pointer"), ["event"])])])),
     JS.Listen("window", "wheel", [JS.Call(("ray", "set"), ["UI.Pointer.wheel", ("event", "deltaY")])]),
@@ -212,7 +202,6 @@ Language.Web := class: Language {
     JS.Effect(["UI.Clipboard.content"], [JS.Call(("navigator.clipboard", "writeText"), [JS.Call(("ray", "get"), ["UI.Clipboard.content"])])])
   ].flatten
 
-  // The three together: one package of files (F-D7). Assets are the locations the page reads.
   Package := class = files: (path: String, content: *)[] {
     write (to: Location) => files.for(IO.write(to / .path, .content))
   }
@@ -225,8 +214,6 @@ Language.Web := class: Language {
     ])
   }
 
-  // The development runtime: the interpreter in the browser, reaching the DOM over the byte stream (F-D7b, F-D9b).
-  // What the page listens for comes back as events on the same stream, applied to the scene's shapes by id.
   DOM := class {
     send (message) => external io `dom` (message)
     received => external io `dom` None
@@ -257,7 +244,6 @@ Language.Web := class: Language {
     copy (text: String) => send(line(["clipboard", text.escaped_line]))
   }
 
-  // Browser differences are levels too, composed onto the web level when targeting one; the default code has none (Platforms, F-P1).
   Chromium := { }
   Firefox := { }
   Safari := {

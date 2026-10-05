@@ -1,16 +1,12 @@
-// Direct rendering: the scene rasterised into pixels by Ray itself, with no browser or terminal in between.
-// The same level draws a Canvas everywhere (Language.Web.JS hands its pixels to the canvas; the TUI samples them into braille).
 Language.Direct := class: Language {
   static extensions = ".direct"
   level := {
     {page: Geometry.Shape} => Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px) -- Rasterise(page, ., Geometry.Transform())
   }
 
-  // Every shape into pixels, back to front: fill, stroke, children, each through its transform; effects composite last.
   Rasterise := (shape: Geometry.Shape, raster: Geometry.Raster, outer: Geometry.Transform) => raster -- {
     placed = outer * Geometry.Transform.translate(shape.position) * shape.transform
     shape.match
-      // Glyphs are outlines from the font file, filled like any other shape.
       Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(pen = 0 =>
         Font(shape.font).glyph(.) -- Filled(.outline, raster, placed * Geometry.Transform.translate(Geometry.Vector(pen, row * shape.font.size * shape.font.line_height)) * Geometry.Transform.scale(Geometry.Vector(shape.font.size / .units, shape.font.size / .units)), shape.color ?? Geometry.Color(0, 0, 0)) -- pen + .advance * shape.font.size / .units
       ))
@@ -25,7 +21,6 @@ Language.Direct := class: Language {
       }
   }
 
-  // An outline is filled by scanlines: a point is inside when a ray from it crosses the edges an odd number of times.
   Outline := (shape: Geometry.Shape) => shape.match
     Geometry.Outline => shape
     Geometry.Polygon => Geometry.Outline(from: shape.points.first, segments: shape.points.rest, closed: true)
@@ -42,7 +37,6 @@ Language.Direct := class: Language {
     Geometry.Pattern => Rasterise(paint.shape, Geometry.Raster(paint.repeat.x as px, paint.repeat.y as px), Geometry.Transform()).at(x % paint.repeat.x, y % paint.repeat.y)
   Opacity := (effects: Geometry.Effect[]) => effects{==.instance_of Geometry.Opacity}.amount.product ?? 1
 
-  // Fonts are read from their files like any other format (F-C1b): glyph outlines, advances, units per em.
   Font := class = font: Geometry.Font {
     file => font.family.map(Fonts.located(.)).first
     glyph (character: Char) => (IO.host(file.path) as OpenType)[character]
@@ -54,7 +48,6 @@ Language.Direct := class: Language {
     [character: Char] => glyphs{.character == character}.first ~~ .units = units
   }
 
-  // Where the pixels go is a location like any other: a framebuffer device, a window the platform offers, or a file in an image format. No external of its own.
   Display := class = target: Location {
     write (raster: Geometry.Raster) => IO.write(target, raster)
   }

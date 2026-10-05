@@ -15,7 +15,6 @@ Location := class: Hierarchy {
   == (other) => written == (other ==.instance_of Location ? other.written : other)
 }
 
-// `@https://…`, `@"a b"`, `@./path`, `@../path`, `@/path`, `@ether/UI`: locations written as values (L§6.1, Almanac §3).
 Written := Char{!= " " && != ")" && != "," && != \n}[]
 @{scheme: Char.Word[]}://{rest: Written} ^string => Location(written: scheme + "://" + rest)
 @"{text: (!"\"")[]}" ^string => Location(written: text)
@@ -53,7 +52,6 @@ World := class: Location + Nameable {
     (shadowing ?? parent ?? (World.ether if this !== World.ether))?.lookup(name)
   }
 
-  // `#name` / `@name` per Nameable class, its plural as a collection, falling back to @ether (L§10.7).
   class{>.instance_of Nameable}#.for class => {
     `class.name.plural`: class[] => (this, within_worlds){class == Character || class == World ? .`class.name.plural` : .children{==.instance_of class}}.flatten
       -- .unique(.name.ignore_case if .name ==.instance_of String)

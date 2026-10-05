@@ -238,7 +238,6 @@ do{ }{block}{ }while{ }{cond} ^class => (
 )
 
 loop{ }{block} ^class => while true block
-// `break`/`continue` leave or repeat a loop; `recur(args)` re-enters the method with other arguments, `recur` with the same (P2.1, P2.4).
 break ^keyword => goto break
 recur({given}) ^keyword => (
   arguments = given
@@ -353,7 +352,6 @@ Modifier.spellings &= `left-to-right`
 
 Node := base class {
 
-  // `--` continues on what the line before it is, `~~` likewise but answers that line; declared first, so both take the whole line (A-C5).
   continued_by (call) => Program(code: call).entered(this, None)
   continued_if (call, condition) => Program(code: condition).entered(this, None) ? .continued_by(call) : this
   --{call} ^punctuation => .continued_by(external ** call)
@@ -1499,7 +1497,6 @@ matcher_of (pattern) => ((text, captured) => (
   read
 ))
 
-// A class written with its pattern: `class = a: T, b: U = d { … }`, `class (pattern) => { … }`, `class: Parent (pattern) => { … }`; the named parts are its fields, taken by position or by name (A7, T3.10, T3.15b).
 header_items (written, separator) => (
   items := chain None
   piece := chain None
@@ -1628,7 +1625,6 @@ class:{ }{parent} = {header}{\n} ^keyword => written_class(parent, (external ** 
 class:{ }{parent} ({header}) => {`{`}{members?}{`}`} ^keyword => written_class(parent, (external ** header), (external ** members))
 class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => written_class(parent, (external ** header), (external ** members))
 
-// `static` puts a member on the class, read once when the class is, and shared by its instances (L§2.2, A7).
 static{ }{literal name ^property} := {value} ^keyword => (
   goto shared if static.reading_statics
   goto done

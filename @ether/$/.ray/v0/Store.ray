@@ -15,7 +15,6 @@ Store := class: Location = name: String, parent: Store?, children: Store[] = [],
   all => records.instance
   matching (filter) => all{filter}
 
-  // Where an instance of a type is kept: the first route that takes it, else the default store.
   static Route := class = type: *, filter: *?, store: Store {
     takes (instance) => instance ==.instance_of type && (!filter || filter(instance))
   }

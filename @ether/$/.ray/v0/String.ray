@@ -7,7 +7,6 @@ Char := class: Unicode.Scalar {
 
   codepoint => this
   is_ascii => this < 128
-  // UTF-8 (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G27288)
   octets => this < 128 ? [this]
     : this < 2048 ? [192 + this / 64, 128 + this % 64]
     : this < 65536 ? [224 + this / 4096, 128 + this / 64 % 64, 128 + this % 64]
@@ -19,7 +18,6 @@ Char := class: Unicode.Scalar {
   is_lower => upper_case != this
   mirrored => Unicode.BidiMirroring[this]?.value ?? this
   swap_case | swapcase => is_lower ? upper_case : lower_case
-  // Full folding: the C and F rows, never the S and T ones (X1.3).
   fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status ==.instance_of ("C" | "F")}.first?.value ?? this
 
   as Decimal => this ==.instance_of Digit ? this - "0" : this.lower_case - "a" + 10
@@ -56,10 +54,8 @@ Escaped := class = character: Char {
   as String => character
 }
 
-// `"…"` with the escapes above read inside it, an unknown escape kept as written, dedented; `{expr}` in it is read where the literal is written, `\{` is a brace (L§10.1).
 "{literal: (\{escape} | !"\"")[]}": String => literal.literal_dedented.interpolated((code) => (inline (external ** code)) as String)
 
-// `` ray`…` ``, `` js`…` ``: a literal read by the language whose extension is written before it (P7.1).
 LanguageName := String{Language.named("." + .) != None}
 {extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
 
@@ -71,7 +67,6 @@ String := class: Char[] {
   is_upper => some(.is_upper) && !some(.is_lower)
   is_lower => some(.is_lower) && !some(.is_upper)
   swap_case | swapcase => #.swap_case as String
-  // Full folding: `ß` folds to `ss` (X1.3).
   ignore_case | ignorecase => this++ ~~ .normalizer = (text) => text.fold_case
   fold_case | foldcase => #.fold_case as String
   title_case | titlecase => words.map(.[0].upper_case, .[1..].lower_case).join(" ")
@@ -109,7 +104,6 @@ String := class: Char[] {
   replace (old: String, new: String) => split(old).join(new)
   escaped_line => #.map(. == \\ ? "\\\\" : . == \" ? "\\\"" : . == \n ? "\\n" : .) as String
 
-  // `"1010"` and `1010₂` are one value seen two ways (N1.11).
   as (base: Number.Base) => #.reduce(0) (acc, current) => acc * base + current as Decimal
   as Decimal => this as 10
 
@@ -120,13 +114,11 @@ String := class: Char[] {
   closing_of (at: Number, depth: Number = 1) => this[at] == "}" ? (depth == 1 ? at : closing_of(at + 1, depth - 1))
     : this[at] == "{" ? closing_of(at + 1, depth + 1) : closing_of(at + 1, depth)
   find_all (pattern: String) => (this ~= pattern)#.index
-  // `"…".italic` is the same as `"…" ^italic`: styling runs on highlighting (F-C2, F-C2b).
   italic => this ^italic
   bold => this ^bold
   trim (characters: String) => trimmed(characters)
 }
 
-// `String[] as String` joins without a separator, `.join(sep)` with one (X1.5).
 String[] &+= {
   as (=== String) => this.reduce(,)
   join (separator: String) => this.reduce (acc, current) => acc, separator, current
@@ -134,7 +126,6 @@ String[] &+= {
 
 String{length == 1} as Char => first
 
-// Precedence is the order rules are declared in, deduced from where they are written: the nearest class that declares both first, then the later declaration (G1.2).
 Placement := class = nth_class: Number, written_at: Number {
   chainable <= (other: Placement) => nth_class < other.nth_class || (nth_class == other.nth_class && written_at >= other.written_at)
 }
@@ -146,7 +137,5 @@ Node &+= {
   ? (a.placed(x) <= a.placed(y) ? (a [x] b) [y] c : a [x] (b [y] c))
   : None
 
-// An anonymous function is a value: a parameter list has no `{`, so a rule head like `({expr})` still reads as a rule (B21).
-// Called, its `.` stays the context it is written in; only what enters an element (`~~`, reduce, narrowings) rebinds `.`.
 Parameters := String{!.contains("{")}
 ({parameters: Parameters}) => {block} => Program(code: (external ** block), parameters: (external ** parameters), context: this)

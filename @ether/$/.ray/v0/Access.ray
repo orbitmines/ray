@@ -7,8 +7,6 @@ Access := class = who: *?, method: *?, filter: Program? {
   { }{target} ^punctuation => Permissions.current.grant(this, target)
 }
 
-// A typed permission: a filter on who is granted, checked each time the grant is used; `uses` is how often it was (U6).
-// `@company{now < 2026-12-31}.read { … }`, `@company{&entrypoint.running}.execute { … }`, `@company{uses <= 1}.execute { … }`, `@guests{9:00 <= now <= 17:00}.read { … }`
 {who}{{literal filter}}.read ^keyword => Access(who, filter: Program(code: (external ** filter)))
 {who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (external ** filter)))
 {who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))

@@ -1,9 +1,7 @@
 Encoding := class {
   Algorithm := enum sha1 | sha256 | sha512 | sha3 | md5 | blowfish | blake3 | base64 | gzip
 
-  // `Encrypted<T>` is readable only at a location holding its key (X4.2, X4.3).
   Encrypted<T> := class = value: T, key: Key? {
-    // Held at a location, an instance or a character: whatever carries the key.
     holds_key (holder) => key && holder?.key == key
     as (holder) => value if holds_key(holder)
     opened (holder) => holds_key(holder) ? value : Quest(name: "find the key", goal: this)
@@ -18,7 +16,6 @@ Encoding := class {
   }
 }
 
-// Base64 (https://datatracker.ietf.org/doc/html/rfc4648#section-4): six bits a character, `=` padding to whole groups of three bytes.
 Base64 := class {
   static alphabet = ("A".."Z", "a".."z", "0".."9", "+", "/") as String
   static encoded (bytes: Byte[]) => (bytes.map(.digits(2).padded(8)).flatten.chunk(6).map(alphabet[(., [0] * (6 - .count)) as 2]) as String)

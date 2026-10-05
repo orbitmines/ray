@@ -1,15 +1,10 @@
 Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Unit.None)[]{length > 0} {
-  // Every part of a quantity like '1d 10h 10ms' is of one equivalence class.
   dynamically assert quantities.every _, unit => unit == quantities.0.unit
-  // Quantities go from largest to smallest (N2.2).
   dynamically assert quantities.unit as quantities.0.unit[] -- .sorted(>)
 
-  // `1d 10h 10m 30s`
   `quantity: Quantity` => quantities ,= quantity
 
-  // `10000000s ~~ normalizer = days hours minutes seconds`
   as (:== Normalizer) => Unit.Normalizers.modulus(this)
-  // `10000000s as days hours minutes seconds`
   as (normalizer: Quantity{quantities.every(.quantity == 1)}) => this ~~ .normalizer = normalizer
 
   as (: (operator: (greater_than: > | >=) | < | <=) unit: Unit): static => {
@@ -39,7 +34,6 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
 
   as (:== String) => quantities.map((quantity, unit) => (quantity as String) + " " + (unit as String)).join(" ")
 
-  // Rates: `GB/s`, `1 / m`, `2/10m` (N2.3)
   compounds / (unit: Unit) => Quantity(quantities: quantities.map((quantity, from) => (quantity, from / unit)))
 
   static Temporal = Quantity{unit == Unit.Temporal}
@@ -65,7 +59,6 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
 
   (static.# ??= []).push this
 
-  // `name`; `var: Decimal, ns = 10 ns`
   &caller[name] = this if name
 
   reexport => {
@@ -76,35 +69,28 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   static None = Unit(global.None)
   static Temporal => second
 
-  // `year as ns`
   as (:== Quantity) => 1, this
   as (other: ==.instance_of Unit) => this as Quantity as other
 
   protected defined_globally = &caller == global
-  // At least one unambiguous name; an ambiguous one (`8m`) superposes, `8 meter | 8 minute`, and is resolved by use (N2.4).
   dynamically assert this as String? != None
   as (:== String?) => name
     -- #.remove(Unit#{!= this}.name) if defined_globally
 
   protected unit = this
-  // `1m`, `1 m`
   global.`digits: Decimal.String, " "?, name: unit as String`: Quantity => digits, unit
-  // `1.5m`, `1.5 m`
   Decimal.Real &+= {
     `" "?, name: unit as String`: Quantity => this, unit
   }
-  // `25.years`, `(30).days`, `x minutes` (N2.1b)
   Number &+= {
     .`name: unit as String`: Quantity => this, unit
     `" ", name: unit as String`: Quantity => this, unit
   }
-  // `GB/s`
   compounds / (other: Unit) => Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static
 
   chainable == (other: Unit) => this === other || name == other.name
 
-  // Reversed automatically when the conversion is (N2.7).
   convert (convert: (From < Number) => To < Number, ToUnit: Unit) => {
     FromUnit = static
 
@@ -207,12 +193,10 @@ Unit(name: "year" ("s" + plural: true)?, symbol: "y").multiple 365, day
 
 Unit(name: "celsius", symbol: "°C").offset 273.15, kelvin
 
-// Counts: `1k`, `1M`, `1B`
 Unit(name: "thousand", symbol: "k").multiple 10^3, Unit.None
 Unit(name: "million", symbol: "M").multiple 10^6, Unit.None
 Unit(name: "billion", symbol: "B").multiple 10^9, Unit.None
 
-// `a + b i` (N1.16)
 Unit(name: "imaginary", symbol: "i")
 Complex := Real + Imaginary
 Imaginary := Quantity{unit == i}

@@ -1,4 +1,3 @@
-// A program selected at a step: waiting, intermediate or final (P1.8).
 Running := class = program: Program, at: Program?, started: boolean = false, results: *[] = [] {
   static branches: Running[] = []
   static deferred: Running[] = []
@@ -23,19 +22,15 @@ Running := class = program: Program, at: Program?, started: boolean = false, res
   static until (condition) => (round while !condition() && branches.some(.holds)) -- this
 }
 
-// `dynamically x = …` re-evaluates when what it depends on changes (P5.1, P5.3).
 dynamically {name} = {value} ^keyword => external rule name value
 dynamically {name} := {value} ^keyword => external rule name value
-// `dynamically x` is x read again whenever it is read; `dynamically if c { … }` runs again whenever c changes (P5.1).
 dynamically if{ }{cond}{ }{block} ^keyword => Dynamic(program: () => if cond block)
 dynamically{ }{value} ^keyword => Dynamic(program: Program(code: external ** value))
 Dynamic := class = program: Program {
   .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get program() property
   as (=== boolean) => program() as boolean
 }
-// Every failing condition is reported together (P5.6).
 dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR@. `assertion failed`) -- .empty
 
-// `never …` (L§4.1)
 Never := Node{false}
 never return ^keyword => Never

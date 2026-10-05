@@ -1,9 +1,7 @@
-// The core of every rendering is geometry: shapes in a space, constrained until one layout is left (F-B6, F-B8).
 Point := Ray
 Curve | Line := Array{unbounded}
 
 Geometry := class {
-  // A position or a size in any number of dimensions; lengths are Unit.ray quantities (F-B5).
   Vector := class = x: Length = 0, y: Length = 0, z: Length = 0 {
     compounds + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
     compounds - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
@@ -13,7 +11,6 @@ Geometry := class {
   }
   Length := Quantity{unit ==.instance_of (px | pt | em | rem | % | vw | vh | cell | m)}
 
-  // Affine transforms compose; a shape's place is its transform applied to its parent's.
   Transform := class = matrix: Number[][] = identity {
     static identity = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
     static translate (by: Vector) => Transform([[1, 0, 0, by.x], [0, 1, 0, by.y], [0, 0, 1, by.z], [0, 0, 0, 1]])
@@ -43,20 +40,16 @@ Geometry := class {
   Color := class = red: Number{0 <= . <= 255}, green: Number{0 <= . <= 255}, blue: Number{0 <= . <= 255}, alpha: Probability = 1 {
     static ("#", hex: Hexadecimal{length == 6 | 8}) as Color => Color(hex[..2] as 16, hex[2..4] as 16, hex[4..6] as 16, (hex[6..8] as 16 ?? 255) / 255)
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
-    // Compositing: `over` is the colour of this with another drawn on top of it.
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
     mix (other: Color, by: Probability) => Color(red + (other.red - red) * by, green + (other.green - green) * by, blue + (other.blue - blue) * by, alpha + (other.alpha - alpha) * by)
   }
-  // What fills a shape: a colour, a gradient, an image, or another shape repeated.
   Paint := Color | Gradient | Pattern
   Gradient := class = stops: (at: Probability, color: Color)[], kind: linear | radial | conic = linear, angle: Number = 0 {
     at (position: Probability) => stops.zip(stops.rest){.0.at <= position <= .1.at}.first -- .0.color.mix(.1.color, (position - .0.at) / (.1.at - .0.at))
   }
   Pattern := class = shape: Shape, repeat: Vector
-  // A stroke may run along only some sides: an underline is a stroke on the bottom.
   Stroke := class = paint: Paint, width: Length = 1px, sides: Side = all, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter
 
-  // Effects on a shape and what it holds.
   Effect := Opacity | Shadow | Blur | Blend | Filter
   Opacity := class = amount: Probability
   Shadow := class = offset: Vector, blur: Length = 0, spread: Length = 0, color: Color, inset: boolean = false
@@ -64,9 +57,7 @@ Geometry := class {
   Blend := enum normal | multiply | screen | overlay | darken | lighten | difference
   Filter := class = kind: brightness | contrast | grayscale | invert | saturate | sepia | hue, amount: Number
 
-  // Text is a shape: runs of glyphs in a font, laid out in lines.
   Font := class = family: String[] = ["sans-serif"], size: Length = 1em, weight: Number{100 <= . <= 900} = 400, style: normal | italic = normal, line_height: Number = 1.2, case: none | upper | lower | title = none, tracking: Length = 0, features: String[] = []
-  // A text's colour is its glyphs'; its fill is behind them, like any shape's.
   Text := class: Shape = text: String, font: Font = Font(), color: Paint?, align: start | center | end | justify = start, wrap: normal | none | anywhere = normal, overflow: clip | ellipsis = clip, direction: left-to-right | right-to-left = left-to-right {
     shown => font.case.match
       upper => text.upper_case
@@ -76,21 +67,17 @@ Geometry := class {
     lines (width: Length) => wrap == none ? shown.lines : shown.lines.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..-1], acc.last + " " + .) : (acc, .))).flatten
   }
 
-  // Media are shapes too: their content comes from a location.
   Image := class: Shape = source: Location, alt: String = "", fit: contain | cover | fill | none = contain
   Video := class: Shape = source: Location, playing: boolean = false, muted: boolean = false, looping: boolean = false, at: Time = 0, controls: boolean = true
   Audio := class: Shape = source: Location, playing: boolean = false, volume: Probability = 1, at: Time = 0
-  // Pixels: what a decoded image is, and what direct rendering produces.
   Raster := class = width: Number, height: Number, pixels: Color[] = [Color(0, 0, 0, 0)] * (width * height) {
     at (x: Number, y: Number) => pixels[y * width + x]
     put (x: Number, y: Number, color: Color) => pixels[y * width + x] = pixels[y * width + x].over(color) if 0 <= x < width && 0 <= y < height
     rows => pixels.chunk(width)
     blurred (area: (x: Number, y: Number)[], radius: Number) => area.for((x, y) => put(x, y, (-radius..radius).map(dx => at(x + dx, y)).reduce((acc) => acc.mix(., 1 / (2 * radius + 1)))))
   }
-  // A canvas is a shape drawn by a program: what it draws is shapes again.
   Canvas := class: Shape = draws: Program
 
-  // Every shape: a place, a size, what it holds, how it is painted, how it flows its children, what it clips.
   Shape := class: Ray = position: Vector = Vector(), size: Vector = Vector(), transform: Transform = Transform(), children: Shape[] = [],
     fill: Paint?, stroke: Stroke?, radius: Length[] = [0], effects: Effect[] = [], blend: Blend = normal,
     spacing: Spacing[] = [], constraints: Constraint[] = [], flow: Flow = vertical, gap: Vector = Vector(),
@@ -101,7 +88,6 @@ Geometry := class {
     expand => [this], children.map(.expand).flatten(1)
     parent_in (scene: Shape) => scene.expand{.children.some(. === this)}.first
     content_height => children.map(.position.y + .outer.y).max ?? size.y
-    // Spacing is a component: a ball with padding is still a ball (F-B8b).
     compounds + (component: Spacing | Constraint | Effect) => component.match
       Spacing => spacing.push component
       Constraint => constraints.push component
@@ -109,7 +95,6 @@ Geometry := class {
     -- this
     holding (child: Shape) => children.push child -- this
     outer => size + spacing{.from == border}.amount.reduce(acc = Vector() => acc + . + .)
-    // Hit testing: the shapes under a point, topmost first.
     at (point: Vector) => visible && contains(transform.inverse.applied(point - position))
       ? [children.sort_by(-.layer).map(.at(point - position)).flatten, this]
       : []
@@ -127,13 +112,11 @@ Geometry := class {
     outline (count: Number) => (0..<count).map(Polar(centre, radius, turn: ., of: count)).loop
   }
   Polar := class = centre: Point, radius: Number, turn: Number, of: Number
-  // Paths: lines, curves and arcs between points.
   Segment := Line | Quadratic | Cubic | Arc
   Quadratic := class = control: Vector, to: Vector
   Cubic := class = first: Vector, second: Vector, to: Vector
   Arc := class = radius: Vector, rotation: Number, large: boolean, sweep: boolean, to: Vector
   Outline := class: Shape = from: Vector, segments: Segment[], closed: boolean = false {
-    // Curves flattened into lines: what filling, stroking and hit testing walk.
     points => [from, segments.map(.match
       Quadratic => (1..16).map(t => Bezier([.previous, .control, .to], t / 16))
       Cubic => (1..16).map(t => Bezier([.previous, .first, .second, .to], t / 16))
@@ -151,11 +134,9 @@ Geometry := class {
   Spacing := class = amount: Vector = Vector(), from: From = border, sides: Side = all {
     static From := enum border | shape
   }
-  // Everything is a narrowing on the shape; the solver finds the one layout that satisfies them (F-B6, F-B6b).
   Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated)?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
     admits (length: Length) => (!least || least <= length) && (!most || length <= most)
   }
-  // `md 6 -> lg 4`: a share interpolated between breakpoints (F-B4).
   Breakpoint := class = width: Length, share: Number {
     -> (other: Breakpoint) => Interpolated(from: this, to: other)
   }
@@ -198,12 +179,10 @@ Geometry := class {
     }
   }
 
-  // Anything that changes over time: a property moving between values with an easing (F-D6).
   Animation<T> := class = from: T, to: T, duration: Time, easing: Easing = ease, delay: Time = 0, repeat: Number | ∞ = 1, started: Time = Time.now {
     at (time: Time) => from + (to - from) * easing((time - started - delay) / duration min 1 max 0)
     value => dynamically at(Time.now)
   }
-  // What re-runs when what it reads changes: a `dynamically` of the page, as the web level writes it (F-D6).
   Dynamic := class = reads: String[], compiled: Program
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t
@@ -212,7 +191,6 @@ Geometry := class {
   ease_out: Easing = (t) => t * (2 - t)
 }
 
-// Alignment words keep their block (F-B9): `center { … }` is `{ … }.center`.
 Node &+= {
   right-to-left center ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: center)], children: [this])
   right-to-left right ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: end)], children: [this])
@@ -221,13 +199,11 @@ Node &+= {
   right-to-left middle ^keyword => Geometry.Box(constraints: [Geometry.Constraint("y", align: middle)], children: [this])
 }
 
-// The spacing shorthands: p/m with a side, from the border or from the shape (F-B8c). These stay grammar: `px 5` is padding, `5.px` is the unit.
 [p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
   `word` {amount: Number} ^keyword => Geometry.Spacing(amount: Vector(amount if side != vertical, amount if side != horizontal), sides: side)
   `word.replace("p", "m")` {amount: Number} ^keyword => Geometry.Spacing(amount: Vector(amount if side != vertical, amount if side != horizontal), sides: side, from: shape)
 }
 
-// Breakpoints: `md 6/12` is `(6/12).md`.
 Number &+= {
   right-to-left xs ^keyword => Geometry.Breakpoint(0px, this)
   right-to-left sm ^keyword => Geometry.Breakpoint(576px, this)
@@ -236,7 +212,6 @@ Number &+= {
   right-to-left xl ^keyword => Geometry.Breakpoint(1200px, this)
 }
 
-// The units a rendering is measured in; each platform level says what they are in its target (F-B5).
 Unit(name: "pixel", symbol: "px")
 Unit(name: "point", symbol: "pt").multiple 4 / 3, px
 Unit(name: "em")

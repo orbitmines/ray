@@ -1,17 +1,14 @@
-// A language is a reader and a writer, possibly over another language: `FILE.ext.ray` is `.ext` read over Ray (P7, P8.9).
 Language := class = extensions: String | String[], location: Location[] = [], level: Compiler?, reader: Function?, writer: Function?, of: Language?, version: Version?, versions: Language[] = [], implementations: Implementation[] = [], targets: Language[] = [] {
   static known: Language[] = []
   static register (language: Language) => known.push language -- language
   static named (extension: String) => known{.names(extension)}.first
   static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: outer.level, reader: outer.reader, writer: outer.writer, of: base, version: outer.version)
 
-  // The language a file is written in, by its extension (`$.ext` names one, P7.1); `as String` prints in it (X1.7).
   static for_file (file_name: String) => file_name ~= (*, ".", inner: Char.Word[], ".ray") ⊣
     ? (named("." + inner) ? over(named("." + inner), ray) : ray)
     : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
   static ray => named(".ray")
 
-  // A value printed in Ray: literals as written, lists in brackets, anything else by its fields (X1.6).
   static ray_written (value) => value === None ? "None"
     : value ==.instance_of String ? "\"" + value + "\""
     : value ==.instance_of Number ? value as 10 as String
@@ -19,7 +16,6 @@ Language := class = extensions: String | String[], location: Location[] = [], le
     : "(" + value.fields.map(.name + ": " + ray_written(.value)).join(", ") + ")"
 
   names (extension: String) => extensions == extension
-  // The projects a language ships with: its own .ray files, `@ether/UI` for Ray (P8.8).
   bundled (path: String) => location.map(. / path){IO.read(. / ".project.ray")}.first as Project
 
   read (text) => reader?((of?.read(text)) ?? text) ?? Quest(name: "a reader for the language", goal: this)
@@ -32,14 +28,12 @@ Language := class = extensions: String | String[], location: Location[] = [], le
   backwards_compatible => versions{.version < version}.every(.targeting(this))
   forwards_compatible => versions{.version > version}.every(.targeting(this))
 
-  // Implementations are read as languages: the Library setup (X2, X4.1).
   static Implementation := class = language: Language, written_in: Language, location: Location {
     source => IO.read(location)
     reader => written_in.read(source)
     setup => language.implement(this) -- language.reader ??= reader -- language
   }
 
-  // A sublanguage leaves effects out, and may require termination: the cfg language (P7.4).
   static Sublanguage := class: Language = excluded: Effects.Source[] = [], terminating: boolean = true {
     admits (program: Program) => !Effects.of(program).some(excluded.contains(.)) && (!terminating || program ==.instance_of Terminating)
     read (text) => of.read(text) -- admits(.) ? . : ERROR@text `this file is written in a sublanguage that does not permit what it does`

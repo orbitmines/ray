@@ -1,4 +1,4 @@
-Access := class = who: Character?, method: *? {
+Access := class = who: *?, method: *? {
   static reads (method) => method != `=` && method != `()`
 
   reading => !method
@@ -8,7 +8,10 @@ Access := class = who: Character?, method: *? {
 }
 
 Accessor := class = level: Permission, method: *?, any = true {
-  static Permission := enum private | confidential | protected | public | local | localhost | managed
+  static Permission := enum private (at: @private) | confidential | protected | public (at: @public) | local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed)
+  Permission &+= {
+    reaches (who) => this == confidential ? Visibility.policy.reaches(who) : at && who ==.instance_of at
+  }
 
   static default_policy => Accessor(Visibility.default_privacy_policy)
   static confidential => default_policy
@@ -19,7 +22,7 @@ Accessor := class = level: Permission, method: *?, any = true {
   on (method) => Accessor(level, method, any: false)
 
   covers (called) => any || Access(method: method).allows_method(called)
-  allows (who: Character, called) => !covers(called) || level == Permission.public || who.permissions.contains(level)
+  allows (who: Character, called) => !covers(called) || level.reaches(who) || who.permissions.contains(level)
 
   { }{target} ^punctuation => target ~~ .access = this
   block (values: *[]) => values ~~ #.access = this
@@ -47,13 +50,13 @@ Visibility := namespace {
   mark (value, sources) => value ~~ .access = Accessor(derived(sources))
   local (value) => value ~~ .access = Accessor(Accessor.Permission.local)
   may_leave (value) => of(value) != Accessor.Permission.local
-  readable (item, who: Character) => of(item) == Accessor.Permission.public || who.permissions.contains(of(item))
+  readable (item, who: Character) => of(item).reaches(who) || who.permissions.contains(of(item))
 }
 
 Capability := enum network | io | os | random | time
 
 Grant := class = access: Access, target: * {
-  covers (who: Character, method, target) => access.who == who && access.allows_method(method) && this.target === target
+  covers (who: Character, method, target) => (access.who == who || who ==.instance_of access.who) && access.allows_method(method) && this.target === target
 }
 
 Permissions := class = grants: Grant[] = [] {

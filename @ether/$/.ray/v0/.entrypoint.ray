@@ -1954,6 +1954,10 @@ ERROR{ }{comment ^comment} ^error => ERROR@* comment
  INFO{`@` ^punctuation}{var}{ }{comment ^comment} ^info => report INFO var comment
 DEBUG{`@` ^punctuation}{var}{ }{comment ^comment} ^debug => report DEBUG var comment
 TRACE{`@` ^punctuation}{var}{ }{comment ^comment} ^trace => report TRACE var comment
+ WARN{ }{comment ^comment} ^warn => WARN@* comment
+ INFO{ }{comment ^comment} ^info => INFO@* comment
+DEBUG{ }{comment ^comment} ^debug => DEBUG@* comment
+TRACE{ }{comment ^comment} ^trace => TRACE@* comment
 
 TODO{ }{comment ^comment} ^debug => DEBUG@. comment 
 

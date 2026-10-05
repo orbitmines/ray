@@ -1,15 +1,20 @@
 // A project: one name per project, dependency lines, lookup through dependencies to @ether (P8.8, F-C8).
 Project := class: Location = name: String, parent: Project?, children: Location[] = [], host: *?, dependencies: Dependency[] = [], written_against: Version?, carried: *[] = [], readings: Reading[] = [], overrides: *[] = [], definitions: Definition[] = [] {
-  static Form := enum relative | upward | absolute | user | remote
+  static Form := enum ether | relative | upward | absolute | user | remote
 
-  // `@./sibling %3`, `@../up`, `@/absolute`, `@user`, `@https://…`
+  // `@ether/UI`, `@./sibling %3`, `@../up`, `@/absolute`, `@user`, `@https://…`
   static Dependency := class ("@", location: (!" ")[], (" ", version: Version)?) => {
-    form: Form => location ~= ⊢"./" ? relative
+    form: Form => location ~= ⊢"ether/" ? ether
+      : location ~= ⊢"./" ? relative
       : location ~= ⊢"../" ? upward
       : location ~= ⊢"/" ? absolute
       : location ~= "://" ? remote
       : user
-    project: Project?
+    // The @ether userspace is filled by the language, which bundles its own .ray files; what it does not bundle comes over the network from @ether.
+    project: Project? => form.match
+      ether => Language.ray.bundled(location["ether/".length..]) ?? Network.fetch(@ether, location["ether/".length..], version) as Project
+      remote => Network.fetch(location as Location, "", version) as Project
+      * => IO.read(location) as Project
   }
   depend (line: String) => dependencies.push(line as Dependency) -- this
 

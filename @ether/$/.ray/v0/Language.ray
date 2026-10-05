@@ -12,6 +12,8 @@ Language := class = extensions: String | String[], location: Location[] = [], le
   static ray => named(".ray")
 
   names (extension: String) => extensions == extension
+  // The projects a language ships with: its own .ray files, `@ether/UI` for Ray (P8.8).
+  bundled (path: String) => location.map(. / path){IO.read(. / ".project.ray")}.first as Project
 
   read (text) => reader?((of?.read(text)) ?? text) ?? Quest(name: "a reader for the language", goal: this)
   write (value) => writer ? (of?.write(writer(value)) ?? writer(value)) : Quest(name: "a writer for the language", goal: this)

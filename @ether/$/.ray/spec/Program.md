@@ -207,6 +207,8 @@ Answers from 2026-09-30.
   `prefer`, `allow`, as classes over a search (quests), with constraints as `dynamically assert`.
 - **P8.8** Two definitions with the same name in one project are an error. Across projects, the
   nearest in the project hierarchy and then directory order wins.
+  **Answer 2026-10-05:** a dependency on `@ether/…` (`@ether/UI`) expects the `@ether` userspace to be filled by
+  the language, since its .ray files are bundled; otherwise it defaults to network access to `@ether`.
 - **P8.9** `FILE.ext.ray` is one mechanism: the file is read with `$.ext` over Ray. `.cfg.ray` is the
   cfg sublanguage, and `.js.ray` is JS over Ray.
 - **P2.3** `return x` sets the result and jumps to the function's end label (`&caller.return` = goto the

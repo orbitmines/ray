@@ -123,7 +123,6 @@ UI := class {
   }
 
   Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", placeholder_color: Geometry.Paint?, disabled: boolean = false {
-    static (choosing: Choice) as (=== Input) => Compiler.reduced(choosing, Scene)
     typed (text: String) => (value = value, text) -- this
     set (text: String) => (value = text) -- this
     erased => (value = value[..<-1]) -- this

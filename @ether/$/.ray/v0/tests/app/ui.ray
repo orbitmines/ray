@@ -51,9 +51,9 @@ unless (Geometry.Transform.translate(Geometry.Vector(1, 2)) * Geometry.Transform
 unless (6/12).md.width == 768px { INFO@mark `UI53 md is not the 768px breakpoint` }
 unless ((6/12).md -> (12/12).xs).at(768px) == 6/12 { INFO@mark `UI54 an interpolated share is not its breakpoint's at the breakpoint` }
 
-unless (Choice(type: boolean) as UI.Input) is UI.Checkbox { INFO@mark `UI60 choosing a boolean is not a checkbox` }
-unless (Choice(type: String) as UI.Input) is UI.TextField { INFO@mark `UI61 choosing a string is not a text field` }
-unless (Choice(type: Number{0 <= . <= 10}) as UI.Input) is UI.Slider { INFO@mark `UI62 choosing a bounded number is not a slider` }
+unless Compiler.reduced(Choice(type: boolean), UI.Scene) is UI.Checkbox { INFO@mark `UI60 choosing a boolean is not a checkbox` }
+unless Compiler.reduced(Choice(type: String), UI.Scene) is UI.TextField { INFO@mark `UI61 choosing a string is not a text field` }
+unless Compiler.reduced(Choice(type: Number{0 <= . <= 10}), UI.Scene) is UI.Slider { INFO@mark `UI62 choosing a bounded number is not a slider` }
 UI.Navigation.go(@https://orbitmines.com/profiles)
 unless UI.Navigation.at == @https://orbitmines.com/profiles { INFO@mark `UI63 navigating does not change where the user is` }
 UI.Navigation.back
@@ -190,7 +190,7 @@ unless dynamic_style.dynamics.some(.target == "class") { INFO@mark `UI137 a dyna
 unless css_rules(dynamic_style).some(.selector == "#" + dynamic_style.id + ".muted") { INFO@mark `UI138 the web level has no rule for a style a dynamic style can switch to` }
 styled_link := Geometry.Box(location: @/x)
 with UI.Theme.kinds = [(Geometry.Shape{location}, "muted")] {
-  UI.Theme.applied(Geometry.Box(children: [styled_link]))
+  Compiler.reduced(UI.Unstyled(Geometry.Box(children: [styled_link])), UI.Theming)
   unless styled_link.styles.contains("muted") && styled_link.color == UI.Theme["muted"].color { INFO@mark `UI139 a kind's default style is not applied` }
 }
 search_field := UI.TextField(chosen: Choice(type: String), value: "", placeholder: "Search", placeholder_color: Geometry.Color(1, 2, 3))
@@ -313,7 +313,7 @@ with UI.Viewport.size = Geometry.Vector(64px, 36px) {
 site := UI.Site(index: "home", routes: [UI.Site.Route("/@", [(name: "fadi"), (name: "ether")])])
 unless site.at("/@nobody") == "home" { INFO@mark `UI187 a path nothing matches is not the index` }
 unless site.at("/@fadi").name == "fadi" { INFO@mark `UI188 a path matching one value is not that value` }
-unless UI.Site.select([(name: "a"), (name: "a")], "a") is UI.Site.Chooser { INFO@mark `UI189 two matches are not a chooser` }
+unless (UI.Site(index: None).route("/x/", [(name: "a"), (name: "a")])).at("/x/a") is UI.Site.Chooser { INFO@mark `UI189 two matches are not a chooser` }
 
 who := "Ray"
 by_hand := Language.Web.HTML.Element("p", [("class", "note")], [Language.Web.HTML.Text("hi")])

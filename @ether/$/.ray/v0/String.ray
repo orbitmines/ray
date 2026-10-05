@@ -5,13 +5,17 @@ Char := class: Unicode.Scalar {
   static Word: Char = Letter | Digit | "_"
   static Symbol: Char = Unicode.GeneralCategory.(Punctuation | Symbol)
 
+  codepoint => this
   is_ascii => this < 128
 
-  upper_case | uppercase | ^ => Unicode.UpperCase[this] ?? this
-  lower_case | lowercase | v => Unicode.LowerCase[this] ?? this
+  upper_case | uppercase => Unicode.UpperCase[this] ?? this
+  lower_case | lowercase => Unicode.LowerCase[this] ?? this
+  is_upper => lower_case != this
+  is_lower => upper_case != this
   mirrored => Unicode.BidiMirroring[this]?.value ?? this
-  swap_case | swapcase => this ==.instance_of Unicode.Lowercase ? upper_case : lower_case
-  fold_case | foldcase => Unicode.CaseFolding[this]?.value ?? this
+  swap_case | swapcase => is_lower ? upper_case : lower_case
+  // Full folding: the C and F rows, never the S and T ones (X1.3).
+  fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status ==.instance_of ("C" | "F")}.first?.value ?? this
 
   as Decimal => this ==.instance_of Digit ? this - "0" : this.lower_case - "a" + 10
   static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
@@ -33,6 +37,9 @@ Char := class: Unicode.Scalar {
 \x{codepoint: Hexadecimal{length == 2}}: Char => codepoint
 \u{codepoint: Hexadecimal{length == 4}}: Char => codepoint
 \U{codepoint: Hexadecimal{length == 6}}: Char => codepoint
+\x{`{`}{codepoint: Hexadecimal{length == 1..6}}{`}`}: Char => codepoint
+\u{`{`}{codepoint: Hexadecimal{length == 1..6}}{`}`}: Char => codepoint
+\U{`{`}{codepoint: Hexadecimal{length == 1..6}}{`}`}: Char => codepoint
 \d = Unicode.GeneralCategory.Decimal_Number
 \D = !\d
 \w = Char.Word
@@ -40,15 +47,17 @@ Char := class: Unicode.Scalar {
 \\ = "\"
 \" = "\""
 
-// `"…"` with the escapes above read inside it (L§10.1).
-"{literal: (\{escape} | !"\"")[]}": String => literal
+// `"…"` with the escapes above read inside it, an unknown escape kept as written, and dedented (L§10.1).
+"{literal: (\{escape} | !"\"")[]}": String => literal.literal_dedented
 
 String := class: Char[] {
   () => &caller[this]()
 
-  upper_case | uppercase | ^ => #.upper_case
-  lower_case | lowercase | v => #.lower_case
-  swap_case | swapcase => #.swap_case
+  upper_case | uppercase => #.upper_case as String
+  lower_case | lowercase => #.lower_case as String
+  is_upper => some(.is_upper) && !some(.is_lower)
+  is_lower => some(.is_lower) && !some(.is_upper)
+  swap_case | swapcase => #.swap_case as String
   // Full folding: `ß` folds to `ss` (X1.3).
   ignore_case | ignorecase => this ~ fold_case
   fold_case | foldcase => #.fold_case as String
@@ -78,7 +87,14 @@ String := class: Char[] {
   split (separator: Char | String) => this ~= (*, separator)[] -- #.join(*)
   lines => split(\n)
   indentation => (this ~= ⊢ " "[]).length
-  dedented => lines.map(.[lines{!.trimmed.empty}.indentation.min..]).join(\n)
+  common_indentation => lines{!.trimmed.empty}.map(.indentation).min ?? 0
+  dedented => lines.map(.trimmed.empty ? "" : .[common_indentation..]).join(\n)
+  literal_dedented => lines.count == 1 || !lines.first.trimmed.empty ? this
+    : (lines[1..] -- (.last.trimmed.empty ? .[..-1] : .)).join(\n).dedented
+
+  slice (from: Number, to: Number) => this[from..<to]
+  replace (old: String, new: String) => split(old).join(new)
+  escaped_line => #.map(. == \\ ? "\\\\" : . == \" ? "\\\"" : . == \n ? "\\n" : .) as String
 
   // `"1010"` and `1010₂` are one value seen two ways (N1.11).
   as (base: Number.Base) => #.reduce(0) (acc, current) => acc * base + current as Decimal
@@ -98,10 +114,19 @@ String[] &+= {
   join (separator: String) => this.reduce (acc, current) => acc, separator, current
 }
 
-// Precedence is the order rules are declared in, deduced from where they are written (G1.2).
-{a} [x] {b} [y] {c} => a.written_as.precedence(x) >= a.written_as.precedence(y)
-  ? (a [x] b) [y] c
-  : a [x] (b [y] c)
+String{length == 1} as Char => first
+
+// Precedence is the order rules are declared in, deduced from where they are written: the nearest class that declares both first, then the later declaration (G1.2).
+Placement := class = nth_class: Number, written_at: Number {
+  chainable <= (other: Placement) => nth_class < other.nth_class || (nth_class == other.nth_class && written_at >= other.written_at)
+}
+Node &+= {
+  placed (spelled) => classes.enumerate{.value.written_as.precedence(spelled) != None}.first
+    -- . ? Placement(nth_class: .index, written_at: .value.written_as.precedence(spelled)) : None
+}
+{a} [x] {b} [y] {c} => a.placed(x) && a.placed(y)
+  ? (a.placed(x) <= a.placed(y) ? (a [x] b) [y] c : a [x] (b [y] c))
+  : None
 
 // An anonymous function is a value: a parameter list has no `{`, so a rule head like `({expr})` still reads as a rule (B21).
 // Called, its `.` stays the context it is written in; only what enters an element (`~~`, reduce, narrowings) rebinds `.`.

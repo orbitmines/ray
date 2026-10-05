@@ -187,3 +187,4 @@ Decimal &+= {
 u{width: Decimal} => Binary{length <= width}
 i{width: Decimal} => Binary{length <= width}.Signed
 USize = u8 | u16 | u32 | u64
+Byte = Binary⁸

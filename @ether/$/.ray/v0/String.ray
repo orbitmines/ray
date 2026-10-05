@@ -1,450 +1,113 @@
 Char := class: Unicode.Scalar {
-  codepoint => this
+  static Letter: Char = "a".."z" | "A".."Z"
+  static Digit: Char = "0".."9"
+  static Blank: Char = " " | "\t".."\r"
+  static Word: Char = Letter | Digit | "_"
+  static Symbol: Char = Unicode.GeneralCategory.(Punctuation | Symbol)
 
-  width => if (this < 128) { 1 } elsif (this < 2048) { 2 } elsif (this < 65536) { 3 } else { 4 }
-  octets => Unicode.UTF8.encode(this)
+  // Scripts are narrowings from the tables (X3.5).
+  static Latin = Char{.script == "Latin"}
+  static Arabic = Char{.script == "Arabic"}
+  static Greek = Char{.script == "Greek"}
+  static Cyrillic = Char{.script == "Cyrillic"}
+  static Han = Char{.script == "Han"}
 
   is_ascii => this < 128
-  lower_case => .at_least(97).and(this < 123)
-  upper_case => .at_least(65).and(this < 91)
-  letter => .lower_case.or(.upper_case)
-  digit => .at_least(48).and(this < 58)
-  blank => (this == 32).or(.at_least(9).and(this < 14))
-  is_underscore => this == 95
-  word => .letter.or(.digit).or(.is_underscore)
 
-  upper => if .lower_case { (this - 32).as_character } else { this }
-  lower => if .upper_case { (this + 32).as_character } else { this }
-  swapped => if .lower_case { .upper } elsif .upper_case { .lower } else { this }
+  upper_case | uppercase | ^ => Unicode.UpperCase[this] ?? this
+  lower_case | lowercase | v => Unicode.LowerCase[this] ?? this
+  swap_case | swapcase => this ==.instance_of Unicode.Lowercase ? upper_case : lower_case
+  fold_case | foldcase => Unicode.CaseFolding[this] ?? this
 
-  digit_value => if .digit { this - 48 } elsif .lower_case { this - 87 } elsif .upper_case { this - 55 } else { None }
+  as Decimal => this ==.instance_of Digit ? this - "0" : this.lower_case - "a" + 10
+  static (digit: Decimal) as Char => digit < 10 ? "0" + digit : "a" + digit - 10
 
-  is_scalar => Unicode.scalar(this)
-
-  null => U+0000
-  tab => U+0009
-  newline => U+000A
-  carriage => U+000D
-  space => U+0020
-  underscore => U+005F
-
-  latin_upper (index: Number) => (64 + index).as_character
-  latin_lower (index: Number) => (96 + index).as_character
-  decimal_digit (value: Number) => if (value < 10) { (48 + value).as_character } else { (87 + value).as_character }
+  east_asian_width => Unicode.EastAsianWidth[this] ?? "N"
+  columns => east_asian_width ==.instance_of ("W" | "F") ? 2 : 1
+  script => Unicode.Scripts[this] ?? "Unknown"
+  block => Unicode.Blocks[this] ?? "No_Block"
 }
 
-Number.components.hierarchy &= class {
-  as_character => (
-    held ^keyword := 0 + this
-    external extend held Char
-    held.components.hierarchy &= Char
-    held
-  )
+\0 = U+0000
+\t = U+0009
+\n = U+000A
+\r = U+000D
+\s = Unicode.GeneralCategory.Space_Separator | \t
+\S = !\s
+\R = Unicode.GeneralCategory.Line_Separator
+\x{codepoint: Hexadecimal{length == 2}}: Char => codepoint
+\u{codepoint: Hexadecimal{length == 4}}: Char => codepoint
+\U{codepoint: Hexadecimal{length == 6}}: Char => codepoint
+\d = Unicode.GeneralCategory.Decimal_Number
+\D = !\d
+\w = Char.Word
+\W = !\w
+\\ = "\"
+\" = "\""
+
+// `"…"` with the escapes above read inside it (L§10.1).
+"{literal: (\{escape} | !"\"")[]}": String => literal
+
+String := class: Char[] {
+  () => &caller[this]()
+
+  upper_case | uppercase | ^ => #.upper_case
+  lower_case | lowercase | v => #.lower_case
+  swap_case | swapcase => #.swap_case
+  // Full folding: `ß` folds to `ss` (X1.3).
+  ignore_case | ignorecase => this ~ fold_case
+  fold_case | foldcase => #.fold_case as String
+  title_case | titlecase => words.map(.[0].upper_case, .[1..].lower_case).join(" ")
+
+  words => split(Char.Blank | "_")
+  snake_case | snakecase => words.lower_case.join("_")
+  camel_case | camelcase | camelCase => words[0].lower_case, words[1..].title_case
+  pascal_case | pascalcase | PascalCase => words.title_case as String
+
+  plural => this ~= "s" -- !. ? this + "s" : this
+  singular => this ~= "s" -- . ? this[..-1] : this
+
+  mirrored => <-this
+
+  trimmed => this{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}
+  trimmed (characters: Char[]) => this{!(⊢ characters[] | characters[] ⊣)}
+  before (other: String) => this ~= (before: *, other, *) -- .before ?? this
+  after (other: String) => this ~= (*, other, after: *) -- .after ?? ""
+
+  starts_with (other: String) => this ~= ⊢ other
+  ends_with (other: String) => this ~= other ⊣
+  contains (other: String) => this ~= other
+  index_of (other: String) => (this ~= other)?.index
+
+  split (separator: Char | String) => this ~= (*, separator)[] -- #.join(*)
+  lines => split(\n)
+  indentation => (this ~= ⊢ " "[]).length
+  dedented => lines.map(.[lines{!.trimmed.empty}.indentation.min..]).join(\n)
+
+  // `"1010"` and `1010₂` are one value seen two ways (N1.11).
+  as (base: Number.Base) => #.reduce(0) (acc, current) => acc * base + current as Decimal
+  as Decimal => this as 10
+
+  + (other: String) => this, other
 }
 
-Char.Letter = Char{.letter}
-Char.Digit = Char{.digit}
-Char.Blank = Char{.blank}
-Char.Word = Char{.word}
-
-String := class: Array {
-  entry => if .head { .head } else { code_points(this).map { it.value.as_character }.entry }
-
-  bits => (
-    held_bits := chain None
-    this for { it.value.octets for { held_bits &= it.value.holds } }
-    held_bits
-  )
-
-  lower_case => .map { it.value.lower }.as(String)
-  upper_case => .map { it.value.upper }.as(String)
-  swap_case => .map { it.value.swapped }.as(String)
-  fold_case => .map { Unicode.folded(it.value) }.join
-  title_case => (
-    out := chain None
-    at_start ^keyword := true
-    this for {
-      out &= (if at_start { it.value.upper } else { it.value.lower })
-      at_start = it.value.blank
-    }
-    out.as(String)
-  )
-  lowercase => .lower_case
-  uppercase => .upper_case
-  swapcase => .swap_case
-  titlecase => .title_case
-  foldcase => .fold_case
-
-  words => .split_by { character.blank.or(character.is_underscore) }
-  snake_case => String.joined(.words.each_lower, "_")
-  camel_case => (
-    parts := chain None
-    at_start ^keyword := true
-    this.words for {
-      parts &= (if at_start { it.value.lower_case } else { it.value.title_case })
-      at_start = false
-    }
-    String.joined(parts, None)
-  )
-  pascal_case => String.joined(.words.each_title, None)
-  snakecase => .snake_case
-  camelcase => .camel_case
-  pascalcase => .pascal_case
-  camelCase => .camel_case
-  PascalCase => .pascal_case
-
-  plural => if (.ends_with("s")) { this } else { this + "s" }
-  singular => if (.ends_with("s")) { .slice(0, .count.pred) } else { this }
-
-  mirrored => .reverse.as(String)
-
-  unescaped => (
-    out := chain None
-    walker ^keyword := .head
-    while (walker) {
-      held := walker.value
-      if ((held == U+005C).and(walker.next)) {
-        marked := walker.next.value
-        walker = walker.next
-        if (marked == U+0030) { out &= U+0000 }
-        elsif (marked == U+0074) { out &= U+0009 }
-        elsif (marked == U+006E) { out &= U+000A }
-        elsif (marked == U+0072) { out &= U+000D }
-        elsif (marked == U+005C) { out &= U+005C }
-        elsif (marked == U+0022) { out &= U+0022 }
-        elsif (((marked == U+0078).or(marked == U+0075).or(marked == U+0055)).and(walker.next)) {
-          if (walker.next.value == U+007B) {
-            digits := chain None
-            walker = walker.next.next
-            while ((walker).and(walker.value != U+007D)) {
-              digits &= walker.value
-              walker = walker.next
-            }
-            out &= digits.as(String).as_number_in(16).as_character
-          } else {
-            out &= held
-            out &= marked
-          }
-        } else {
-          out &= held
-          out &= marked
-        }
-      } else { out &= held }
-      if walker { walker = walker.next }
-    }
-    out.as(String)
-  )
-  trimmed => (
-    start ^keyword := 0
-    finish ^keyword := .count
-    while ((start < finish).and(.at(start).value.blank)) { start = start.succ }
-    while ((start < finish).and(.at(finish.pred).value.blank)) { finish = finish.pred }
-    .slice(start, finish)
-  )
-  before (other: String) => (
-    found := .index_of(other)
-    if (found === None) { this } else { .slice(0, found) }
-  )
-  after (other: String) => (
-    found := .index_of(other)
-    if (found === None) { "" } else { .slice(found + other.count, .count) }
-  )
-
-  slice (from, to) => (
-    out := chain None
-    walker ^keyword := .at(from)
-    left ^keyword := to - from
-    while (left.nonzero.and(walker)) {
-      out &= walker.value
-      walker = walker.next
-      left = left.pred
-    }
-    out.as(String)
-  )
-
-  starts_with (other: String) => (
-    mine ^keyword := .head
-    theirs ^keyword := other.head
-    same ^keyword := true
-    while ((theirs).and(mine)) {
-      unless (mine.value == theirs.value) { same = false }
-      mine = mine.next
-      theirs = theirs.next
-    }
-    same.and((theirs).not)
-  )
-  ends_with (other: String) => .mirrored.starts_with(other.mirrored)
-
-  contains (other: String) => (
-    length := .count
-    found ^keyword := false
-    position ^keyword := 0
-    walker ^keyword := .head
-    while (walker) {
-      if (.slice(position, length).starts_with(other)) { found = true }
-      position = position.succ
-      walker = walker.next
-    }
-    found.or(other.empty)
-  )
-  index_of (other: String) => (
-    length := .count
-    found ^keyword := None
-    position ^keyword := 0
-    walker ^keyword := .head
-    while (walker) {
-      unless (found) { if (.slice(position, length).starts_with(other)) { found = position } }
-      position = position.succ
-      walker = walker.next
-    }
-    found
-  )
-
-  split_by (predicate) => (
-    pieces := chain None
-    current ^keyword := chain None
-    this for {
-      character ^keyword := it.value
-      if (inline predicate) {
-        pieces &= current.as(String)
-        current = chain None
-      } else {
-        current &= character
-      }
-    }
-    pieces &= current.as(String)
-    pieces
-  )
-  split (separator: Char) => .split_by { character == separator }
-  lines => .split(Char.newline)
-
-  blank_line => .every { it.value.blank }
-  indentation => (
-    margin ^keyword := 0
-    counting ^keyword := true
-    this for {
-      if (counting.and(it.value.blank)) { margin = margin.succ } else { counting = false }
-    }
-    margin
-  )
-  dedented => (
-    rows := .lines
-    total := rows.count
-    if (total == 1) { return this }
-    unless (rows.head.value.empty) { return this }
-    row_number ^keyword := 0
-    kept ^keyword := chain None
-    rows for {
-      dropped ^keyword := false
-      if (row_number.is_zero) { dropped = it.value.blank_line }
-      if (row_number == total.pred) { if (it.value.blank_line) { dropped = true } }
-      unless dropped { kept &= it.value }
-      row_number = row_number.succ
-    }
-    least ^keyword := 0
-    seeded ^keyword := false
-    kept for {
-      unless it.value.blank_line {
-        if seeded { if (it.value.indentation < least) { least = it.value.indentation } } else { least = it.value.indentation }
-        seeded = true
-      }
-    }
-    out ^keyword := chain None
-    kept for {
-      if it.value.blank_line { out &= "" } else { out &= it.value.slice(least, it.value.count) }
-    }
-    String.joined(out, Char.newline)
-  )
-
-  compounds * (times: Number) => (
-    held := chain None
-    this for { held &= it.value }
-    (held * times).as(String)
-  )
-
-  joined (parts, separator) => (
-    out := chain None
-    at_start ^keyword := true
-    parts for {
-      unless at_start { if (separator.codepoint) { out &= separator } elsif (separator) { separator for { out &= it.value } } }
-      it.value for { out &= it.value }
-      at_start = false
-    }
-    out.as(String)
-  )
-
-  spells_in (radix: Number) => .nonempty.and(.every { if (it.value.digit_value) { it.value.digit_value < radix } else { false } })
-
-  as_number => .as_number_in(10)
-  as_number_in (radix: Number) => (
-    total ^keyword := 0
-    this for { total = (total * radix) + it.value.digit_value }
-    total
-  )
-  is_numeric => .nonempty.and(.every { it.value.digit })
-
-  compounds + (other) => (
-    joined := chain None
-    this for { joined &= it.value }
-    if (other.codepoint) { joined &= other } else { other for { joined &= it.value } }
-    joined.as(String)
-  )
+// `String[] as String` joins without a separator, `.join(sep)` with one (X1.5).
+String[] &+= {
+  as (=== String) => this.reduce(,)
+  join (separator: String) => this.reduce (acc, current) => acc, separator, current
 }
 
-Chain.components.hierarchy &= class {
-  as (=== String) => (
-    held ^keyword := this
-    external extend held String
-    held
-  )
+// Every value prints in the language of the file it is written in (X1.6, X1.7).
+* &+= {
+  as (:== String) => $.ext.print(this)
 }
 
-Node.components.hierarchy &= class {
-  as (=== String) => code_points(this).map { it.value.as_character }.as(String)
-}
-"{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as(String).dedented.unescaped
-
-Number.components.hierarchy &= class {
-  spelled_in (radix: Number) => .digits_in(radix).map { Char.decimal_digit(it.value) }.as(String)
+Number &+= {
+  as (base: Number.Base) as String => digits(base).map(as Char) as String
+  as String => this as 10 as String
 }
 
-Chain.components.hierarchy &= class {
-  join => String.joined([this], None)
-  join (separator) => String.joined([this], separator)
-  each_lower => .map { it.value.lower_case }
-  each_title => .map { it.value.title_case }
-}
-
-bits_of (number, width) => (
-  bits := chain None
-  rest ^keyword := number
-  place ^keyword := (2).pow(width)
-  while (1 < place) {
-    place = place / 2
-    if (rest < place) { bits &= 0 } else {
-      bits &= 1
-      rest = rest - place
-    }
-  }
-  bits
-)
-
-number_of (bits) => (
-  total ^keyword := 0
-  bits for {
-    total = total + total
-    if it.value.holds { total = total.succ }
-  }
-  total
-)
-
-Regex := class {
-  Flag := enum ignore_case | global | unicode
-  pattern: String
-  flags: (chain None)
-  with (flag) => (
-    .flags &= flag
-    this
-  )
-  ignoring_case => .flags some { it.value == Regex.Flag.ignore_case }
-  matches (text: String) => if .ignoring_case { text.fold_case.contains(.pattern.fold_case) } else { text.contains(.pattern) }
-  find (text: String) => if .ignoring_case { text.fold_case.index_of(.pattern.fold_case) } else { text.index_of(.pattern) }
-}
-
-Number.components.hierarchy &= class {
-  as (=== String) => .spelled_in(10)
-}
-
-Placement ^keyword := class { }
-placements ^keyword := chain None
-declared_in (holder, spelled) => (
-  place_of ^keyword := external where holder.written_as.code
-  kept_entry ^keyword := remembered(placements, place_of, spelled)
-  unless (kept_entry) {
-    to_visit ^keyword := chain None
-    to_visit &= holder
-    visiting ^keyword := to_visit.head
-    class_index ^keyword := zero
-    rank_found ^keyword := None
-    while ((visiting).and((rank_found).not)) {
-      in_class ^keyword := visiting.value
-      if ((external first in_class.written_as.code)) {
-        written_at ^keyword := in_class.written_as.precedence(spelled)
-        if (written_at) { rank_found = Placement(nth_class: class_index, written_at: written_at) }
-      }
-      further ^keyword := in_class.components.hierarchy.head
-      while (further) {
-        to_visit &= further.value
-        further = further.next
-      }
-      class_index = class_index.succ
-      visiting = visiting.next
-    }
-    kept_entry = Precedence(place: place_of, spelled: spelled, answer: rank_found, ranked: rank_found)
-    if (rank_found) { placements &= kept_entry }
-  }
-  rank_known ^keyword := None
-  if kept_entry.ranked { rank_known = kept_entry.answer }
-  rank_known
-)
-
-{a} [x] {b} [y] {c} => (
-  held ^keyword := None
-  if (a.written_as.precedence) {
-    place_x ^keyword := declared_in(a, `[x]`)
-    place_y ^keyword := declared_in(a, `[y]`)
-    if ((place_x).and(place_y)) {
-      left_first ^keyword := place_x.nth_class < place_y.nth_class
-      if (place_x.nth_class == place_y.nth_class) { left_first = place_x.written_at.at_least(place_y.written_at) }
-      if left_first { held = ((a[x] b)[y] c) } else { held = (a[x] (b[y] c)) }
-    }
-  }
-  held
-)
-
-Char.components.hierarchy &= class {
-  as (=== String) => (
-    one := chain None
-    one &= this
-    one.as(String)
-  )
-  east_asian_width => (
-    found := Unicode.EastAsianWidth.at(.codepoint)
-    if (found === None) { "N" } else { found.value }
-  )
-  columns => if ((.east_asian_width == "W").or(.east_asian_width == "F")) { 2 } else { 1 }
-  script => (
-    found := Unicode.Scripts.at(.codepoint)
-    if (found === None) { "Unknown" } else { found.value }
-  )
-  block => (
-    found := Unicode.Blocks.at(.codepoint)
-    if (found === None) { "No_Block" } else { found.value }
-  )
-}
-
-Char.Latin = Char{.script == "Latin"}
-Char.Arabic = Char{.script == "Arabic"}
-Char.Greek = Char{.script == "Greek"}
-Char.Cyrillic = Char{.script == "Cyrillic"}
-Char.Han = Char{.script == "Han"}
-
-String.components.hierarchy &= class {
-  padded (width: Number) => (
-    held ^keyword := this
-    while (held.count < width) { held = "0" + held }
-    held
-  )
-  bitwise_width (other: String) => .count.max(other.count)
-  ~&& (other: String) => (.as_number_in(2) ~&& other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
-  ~|| (other: String) => (.as_number_in(2) ~|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
-  ~x|| (other: String) => (.as_number_in(2) ~x|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
-  ~!&& (other: String) => (.as_number_in(2) ~!&& other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
-  ~!|| (other: String) => (.as_number_in(2) ~!|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
-  ~x!|| (other: String) => (.as_number_in(2) ~x!|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
-  ~! => (.as_number_in(2) ~! .count).spelled_in(2).padded(.count)
-}
-
-Number.components.hierarchy &= class {
-  spelled_padded (radix: Number, width: Number) => .spelled_in(radix).padded(width)
-}
+// Precedence is the order rules are declared in, deduced from where they are written (G1.2).
+{a} [x] {b} [y] {c} => a.written_as.precedence(x) >= a.written_as.precedence(y)
+  ? (a [x] b) [y] c
+  : a [x] (b [y] c)

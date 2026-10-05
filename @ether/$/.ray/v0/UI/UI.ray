@@ -250,11 +250,11 @@ UI := class {
     static (value) as (=== Site) => Site(index: value) ~~ value.fields{.value.location}.for(field => .route(field.value.location as String, field.value))
     route (path: String, field) => routes.push Route(path, field) -- this
     at (path: String) => path == "/" || path.empty ? index
-      : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest)
+      : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest, index)
       ?? index
     rendering => at(Navigation.at as String)
     static section (book, slug: String) => book.sections{.slug == slug}.first ?? book
-    static select (values, identity: String) => values{.name == identity} -- .count == 1 ? .first : Chooser(options: .)
+    static select (values, identity: String, otherwise = None) => values{.name == identity} -- .count == 1 ? .first : .empty ? otherwise : Chooser(options: .)
   }
 
   Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech

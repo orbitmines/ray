@@ -303,3 +303,8 @@ with UI.Viewport.size = Geometry.Vector(64px, 36px) {
   Geometry.Solver(available: UI.Viewport.size).solve(Geometry.Box(children: [video]))
   unless Program(code: { video }){O: Language.Direct}().at(1, 1).alpha > 0 { INFO@mark `UI186 an embedded frame leaves no placeholder in a raster` }
 }
+
+site := UI.Site(index: "home", routes: [UI.Site.Route("/@", [(name: "fadi"), (name: "ether")])])
+unless site.at("/@nobody") == "home" { INFO@mark `UI187 a path nothing matches is not the index` }
+unless site.at("/@fadi").name == "fadi" { INFO@mark `UI188 a path matching one value is not that value` }
+unless UI.Site.select([(name: "a"), (name: "a")], "a") ==.instance_of UI.Site.Chooser { INFO@mark `UI189 two matches are not a chooser` }

@@ -1,122 +1,70 @@
-Skill := class: Ray {
-  name: String
-  quests: Node
-  solved: (chain None)
-  baseline: 0
+Skill := class = name: String, quests: *, solved: Solution[] = [], baseline = 0 {
+  static Solution := class = quest: Quest, when: Time = Time.now, used = false
 
-  covers (quest) => quest.instance_of(.quests)
-  solve (quest) => (
-    .solved &= Skill.Solution(quest: quest, when: Time.now)
-    this
-  )
-  recent (within) => (
-    kept := chain None
-    .solved for { if ((Time.now - it.value.when) < within) { kept &= it.value } }
-    kept
-  )
-  proficiency (within) => (
-    counted := .recent(within).count
-    if (counted < .baseline) { .baseline + ((counted - .baseline) / 2) } else { counted }
-  )
-  settle => (
-    .baseline = .solved.count
-    this
-  )
-  Solution := class: Ray {
-    quest: Node
-    when: Node
-    used: false
+  covers (quest: Quest) => quest ==.instance_of quests
+  solve (quest: Quest): static => this ~~ solved.push Solution(quest)
+  recent (within: Quantity.Temporal) => solved{Time.now - .when < within}
+  proficiency (within: Quantity.Temporal) => {
+    counted = recent(within).count
+    counted < baseline ? baseline + (counted - baseline) / 2 : counted
   }
+  settle: static => this ~~ .baseline = solved.count
 }
 
-Avatar.components.hierarchy &= class {
-  skills: (chain None)
-  traversed: (chain None)
+Avatar &+= {
+  skills: Skill[] = []
+  traversed: Location[] = []
 
-  unlock (skill) => (
-    .skills &= skill
-    this
+  unlock (skill: Skill): static => this ~~ skills.push skill
+  visit (location: Location): static => this ~~ traversed.push location
+  copied => Avatar(character, platform)
+  + (other: Avatar): static => this ~~ (
+    .skills = skills, other.skills{!skills.contains(.)}
+    .traversed = traversed, other.traversed
   )
-  visit (location) => (
-    .traversed &= location
-    this
-  )
-  copied => Avatar(character: .character, platform: .platform)
-  compounds + (other) => (
-    other.skills for { unless (.skills.contains(it.value)) { .skills &= it.value } }
-    other.traversed for { .traversed &= it.value }
-    this
-  )
-  rewarded (solution) => solution.used
+  rewarded (solution: Skill.Solution) => solution.used
 }
 
-Mana := class: Ray {
-  resource: Node
-  capacity: Node
-  held: None
+Mana := class = resource: *, capacity: *, held: Spell? {
+  static measured (resource) => Mana(resource, capacity: IO.os(resource))
 
-  measured (resource) => Mana(resource: resource, capacity: IO.os(resource))
-  cast (spell) => (
-    .held = spell
-    spell
-  )
-  free => (
-    .held = None
-    this
-  )
-  concentrating => (.held === None).not
+  cast (spell: Spell) => held = spell
+  free: static => this ~~ .held = None
+  concentrating => held != None
 }
 
-Spell := class: Ray {
-  operation: Node
-  cost: Node
-  progress: 0
-  interrupt_level: 0
-
-  interrupted_by (level) => .interrupt_level < level
+Spell := class = operation: *, cost: *, progress = 0, interrupt_level = 0 {
+  interrupted_by (level) => interrupt_level < level
 }
 
 Presence := enum memory | disk | remote
 
-Room := class: Ray {
-  value: Node
-
-  items => .value.fields
-  enter (item) => Room(value: item)
+Room := class = value: * {
+  items => value.fields
+  enter (item) => Room(item)
 }
 
-Onboarding := class: Ray {
-  Purpose := enum everything | tools_only
-  NetworkMode := enum online | pessimistically_online | invisible | prefer_offline | offline
-  Look := enum realistic | voxel
+Onboarding := class {
+  static Purpose := enum everything | tools_only
+  static NetworkMode := enum online | pessimistically_online | invisible | prefer_offline | offline
+  static Look := enum realistic | voxel
 
-  language: None
-  purpose: Onboarding.Purpose.everything
-  network: Onboarding.NetworkMode.online
-  look: Onboarding.Look.realistic
+  language: Language?
+  purpose: Purpose = Purpose.everything
+  network: NetworkMode = NetworkMode.online
+  look: Look = Look.realistic
 
-  choose_language (language) => (
-    .language = language
-    this
-  )
-  choose_purpose (purpose) => (
-    .purpose = purpose
-    this
-  )
-  choose_network (mode) => (
-    .network = mode
-    this
-  )
-  choose_look (look) => (
-    .look = look
-    this
-  )
-  dialogue => .purpose == Onboarding.Purpose.everything
-  permission => (
-    if (.network == Onboarding.NetworkMode.online) { Accessor.Permission.public }
-    elsif (.network == Onboarding.NetworkMode.pessimistically_online) { Accessor.Permission.protected }
-    elsif (.network == Onboarding.NetworkMode.invisible) { Accessor.Permission.confidential }
-    elsif (.network == Onboarding.NetworkMode.prefer_offline) { Accessor.Permission.private }
-    else { Accessor.Permission.local }
-  )
+  choose_language (language: Language): static => this ~~ .language = language
+  choose_purpose (purpose: Purpose): static => this ~~ .purpose = purpose
+  choose_network (network: NetworkMode): static => this ~~ .network = network
+  choose_look (look: Look): static => this ~~ .look = look
+
+  dialogue => purpose == Purpose.everything
+  permission => {
+    NetworkMode.online: Accessor.Permission.public,
+    NetworkMode.pessimistically_online: Accessor.Permission.protected,
+    NetworkMode.invisible: Accessor.Permission.confidential,
+    NetworkMode.prefer_offline: Accessor.Permission.private,
+    NetworkMode.offline: Accessor.Permission.local
+  }[network]
 }

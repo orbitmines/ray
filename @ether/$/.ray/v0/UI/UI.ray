@@ -100,6 +100,41 @@ UI := class {
     released: boolean = false
     wheel: Geometry.Vector = Geometry.Vector()
     cursor: default | pointer | text | grab | grabbing | move | wait | none = default
+    static Swipe := class = from: Geometry.Vector, to: Geometry.Vector, started: Time, ended: Time, started_on: Geometry.Shape? {
+      distance => to - from
+      duration => ended - started
+    }
+    velocity: Geometry.Vector = Geometry.Vector()
+    swipe: Swipe?
+    pressed_at: (position: Geometry.Vector, time: Time, shape: Geometry.Shape?)?
+    last: (position: Geometry.Vector, time: Time)?
+    down (at: Geometry.Vector, kind: Kind = mouse, time: Time = Time.now) => (pointers = [(kind, at, 1, Geometry.Vector(), [0])])
+      -- (pressed_at = (at, time, scene?.at(at).first)) -- (last = (at, time)) -- (velocity = Geometry.Vector()) -- (released = false) -- (swipe = None)
+    moved (at: Geometry.Vector, time: Time = Time.now) => (velocity = last && time > last.time ? (at - last.position) * (1 / ((time - last.time) as ms)) : velocity)
+      -- (last = (at, time)) -- (pointers = pointers.empty ? [(mouse, at, 0, Geometry.Vector(), [])] : pointers.map(. ~~ .position = at))
+    up (at: Geometry.Vector, time: Time = Time.now) => moved(at, time)
+      -- (swipe = pressed_at ? Swipe(pressed_at.position, at, pressed_at.time, time, pressed_at.shape) : None)
+      -- (pressed_at = None) -- (released = true) -- (pointers = pointers.map(. ~~ (.buttons = []) ~~ (.pressure = 0)))
+  }
+  Keyboard := class: global.Keyboard {
+    static Modifier := enum shift | control | alt | meta
+    static Direction = global.Keyboard.Direction
+    static enter = global.Keyboard.enter
+    static tab = global.Keyboard.tab
+    static escape = global.Keyboard.escape
+    static f2 = global.Keyboard.f2
+    static press (name, shift = false, control = false, alt = false, meta = false) => global.Keyboard.named(name) -- (key => (key.shift = shift) -- (key.control = control) -- (key.alt = alt) -- (key.meta = meta) -- key.press)
+    static release (name) => global.Keyboard.named(name).release
+    static pressed (name, modifier: Modifier? = None) => global.Keyboard.named(name) -- (key => key.pressed && (modifier == None || modifier#.some(key.holding(.))))
+  }
+  global.Keyboard.Key &+= {
+    alt = false
+    meta = false
+    holding (modifier: Keyboard.Modifier) => modifier.match
+      shift => shift
+      control => control
+      alt => alt
+      meta => meta
   }
   Focus := class {
     current: Geometry.Shape?
@@ -109,8 +144,13 @@ UI := class {
   Selection := class {
     shapes: Geometry.Shape[] = []
     expanded: Geometry.Shape[] = []
-    text: String => shapes{==.instance_of Geometry.Text}.text.join("")
+    range: (shape: Geometry.Shape, from: Number, to: Number)?
+    text: String => range ? Content(range.shape)[range.from..<range.to] : shapes{==.instance_of Geometry.Text}.text.join("")
     current => shapes.last ?? scene
+    static Content := (shape: Geometry.Shape) => shape ==.instance_of Input ? (shape.empty ? "" : shape.value as String) : shape.texts.text.join("")
+    static shaped (target) => target ==.instance_of Geometry.Shape ? target : scene?.expand{==.instance_of Input && .chosen === target}.first
+    whole (target) => shaped(target) -- (shape => (range = (shape, 0, Content(shape).length)) -- (shapes = [shape])) if shaped(target)
+    selects (shape: Geometry.Shape, index: Number) => range && range.shape === shape && range.from <= index < range.to
 
     static moved (shape: Geometry.Shape, direction: Keyboard.Direction) => {
       parent = shape.parent_in(scene)

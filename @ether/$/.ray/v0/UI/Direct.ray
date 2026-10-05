@@ -14,6 +14,7 @@ Language.Direct := class: Language {
         (0..<lines.count).for(row => (0..<lines[row].length).reduce(pen = 0 => {
           run = shape.run_at(starts[row] + .)
           face = run?.font ?? shape.font
+          Rasterise(Geometry.Box(origin: Geometry.Vector(pen, row * face.size * face.line_height), size: Geometry.Vector(face.size * 0.6, face.size * face.line_height), fill: Geometry.Color(51, 144, 255, 0.4)), raster, placed) if UI.Selection.selects(shape, starts[row] + .)
           Font(face).glyph(lines[row][.]) -- Filled(.outline, raster, placed * Geometry.Transform.translate(Geometry.Vector(pen, row * face.size * face.line_height)) * Geometry.Transform.scale(Geometry.Vector(face.size / .units, face.size / .units)), run?.color ?? shape.color ?? Geometry.Color(0, 0, 0)) -- pen + .advance * face.size / .units
         }))
       }
@@ -60,6 +61,7 @@ Language.Direct := class: Language {
   Display := class = target: Location, title: String = "" {
     write (raster: Geometry.Raster) => (title = UI.Navigation.title) -- IO.write(target, raster)
     open (to: Location) => UI.Platform.launch(to)
+    read => Language.Web.DOM.Event.parsed(external io `window` None)?.apply
   }
 }
 

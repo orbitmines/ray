@@ -282,7 +282,7 @@ Language.Web := class: Language {
   Runtime := JS.Function("effect", ["reads", "body"], [JS.Call(("ray", "subscribe"), ["reads", "body"]), JS.Call("body")])
   Devices := [
     JS.Call(("ray", "set"), ["UI.Platform.handheld", (((("/Android|iPhone|iPad|iPod|Mobile/i", "test(navigator.userAgent)"), "||", ("matchMedia(\"(pointer:coarse)\")", "matches&&!matchMedia(\"(pointer:fine)\").matches")), "||", ("navigator", "maxTouchPoints>1&&/Macintosh/.test(navigator.userAgent)"))]),
-    ["pointerdown", "pointermove", "pointerup", "pointercancel"].map(event => JS.Listen("window", event, [JS.Call(("ray", "set"), ["UI.Pointer.pointers", JS.Call(("ray", "pointer"), ["event"])])])),
+    [("pointerdown", "down"), ("pointermove", "moved"), ("pointerup", "up"), ("pointercancel", "up")].map((event, method) => JS.Listen("window", event, [JS.Call(("ray", "call"), ["UI.Pointer." + method, JS.Call(("ray", "pointer"), ["event"]), ("event", "timeStamp")])])),
     JS.Listen("window", "wheel", [JS.Call(("ray", "set"), ["UI.Pointer.wheel", ("event", "deltaY")])]),
     ["keydown", "keyup"].map(event => JS.Listen("window", event, [JS.Call(("ray", "key"), ["event"])])),
     JS.Listen("window", "focusin", [JS.Call(("ray", "set"), ["UI.Focus.current", ("event", "target.id")])]),
@@ -299,6 +299,7 @@ Language.Web := class: Language {
     JS.Listen("window", "scroll", [JS.Call(("ray", "set"), ["UI.Viewport.scrolled", ("window", "scrollY")])]),
     JS.Effect(["UI.Viewport.scrolled"], [JS.Raw("const y=ray.get(\"UI.Viewport.scrolled\");if(Math.abs(scrollY-y)>1)scrollTo(0,y)")]),
     JS.Effect(["UI.Viewport.revealing"], [JS.Raw("const r=ray.get(\"UI.Viewport.revealing\");const e=r&&document.getElementById(r.shape.id);if(e){if(r.within||!r.offset)e.scrollIntoView({block:r.align,behavior:r.smooth?\"smooth\":\"auto\"});else scrollTo({top:e.getBoundingClientRect().top+scrollY+r.offset,behavior:r.smooth?\"smooth\":\"auto\"})}")]),
+    JS.Effect(["UI.Selection.range"], [JS.Raw("const r=ray.get(\"UI.Selection.range\");const e=r&&(document.getElementById(r.shape.id+\"-text\")||document.getElementById(r.shape.id));if(e){if(e.setSelectionRange){e.focus();e.setSelectionRange(r.from,r.to)}else{const g=document.createRange();g.selectNodeContents(e);getSelection().removeAllRanges();getSelection().addRange(g)}}")]),
     JS.Effect(["UI.Viewport.locking"], [JS.Call(("document.documentElement.classList", "toggle"), ["locked", JS.Call(("ray", "get"), ["UI.Viewport.locking"])])]),
     JS.Effect(["UI.Platform.notifications"], [JS.Call("new Notification", [JS.Call(("ray", "get"), ["UI.Platform.notifications.last.title"])])]),
     JS.Effect(["UI.Platform.fullscreen"], [JS.Call(("document.documentElement", "requestFullscreen"))]),
@@ -332,19 +333,26 @@ Language.Web := class: Language {
       -- listened(element).for(send(line(["listen", element.id, .])))
       -- element.children.for(. ==.instance_of String ? send(line(["text", element.id, .escaped_line])) : mount(.) -- send(line(["append", element.id, .id])))
     render (page: Program) => send(line(["clear"])) -- mount(page{O: HTML.level}().body) -- send(line(["style", page{O: CSS.level}() as CSS.language]))
-    event => received?.trimmed ~= (id: Char{!= " "}[], " ", kind: Char{!= " "}[], (" ", value: *)?) -- Event(id: .id, kind: .kind, value: .value) if .
+    event => Event.parsed(received)
     static Event := class = id: String, kind: String, value: String? {
+      static parsed (line: String?) => line?.trimmed ~= (id: Char{!= " "}[], " ", kind: Char{!= " "}[], (" ", value: *)?) -- Event(id: .id, kind: .kind, value: .value) if .
+      at => value ~= (x: Decimal, " ", y: Decimal, (" ", time: Decimal)?) -- (position: Geometry.Vector(.x * 1px, .y * 1px), time: .time ? .time * 1 ms : Time.now)
       shape => UI.scene?.expand{.id == id}.first
       apply => kind.match
         "click" => shape?.activate
         "input" => shape?.set(value)
         "focus" => UI.Focus.current = shape
         "scroll" => UI.Viewport.scrolled = (value as Decimal) * 1px
+        "pointerdown" => UI.Pointer.down(at.position, time: at.time)
+        "pointermove" => UI.Pointer.moved(at.position, at.time)
+        "pointerup" | "pointercancel" => UI.Pointer.up(at.position, at.time)
+        "keydown" => value.split(" ") -- UI.Keyboard.press(.first, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
+        "keyup" => UI.Keyboard.release(value.split(" ").first)
         "size" => shape && (value ~= (width: Decimal, " ", height: Decimal)) -- (shape.size = Geometry.Vector(.width * 1px, .height * 1px))
         * => None
     }
 
-    start => send(line(["clear"]))
+    start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
     stop => None
     write (frame) => render(frame)
       -- send(line(["lock", UI.Viewport.locking as String]))

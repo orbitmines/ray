@@ -10,7 +10,9 @@ Encoding := class {
     read_off (holder) => Encrypted(value, key: holder.key) if holds_key(holder)
   }
 
-  Hash := class = value: *, algorithm: Algorithm
+  Hash := class = value: *, algorithm: Algorithm {
+    chainable == (other: Hash) => algorithm == other.algorithm && value == other.value
+  }
   Compressed := class = value: *, algorithm: Algorithm {
     as (target) => value
   }

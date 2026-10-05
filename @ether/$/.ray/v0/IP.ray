@@ -7,29 +7,21 @@ IP := class: Location &+ (-1 <- . -> +1) {
     static Binary := Binary{length == SEGMENT_LENGTH}
   }
   segments: Segment[]{length == NUMBER_OF_SEGMENTS}
+  prefix: Number?
 
-  as (:== String) => {
-    prefix_length = NUMBER_OF_BITS - (as Binary ~= ⊢(0 & 1)[] -- .length)
-    if prefix_length != NUMBER_OF_BITS {
-      binary_form = as Binary
-      binary_form[prefix_length..] = 0
-      return recur(binary_form as static), "/", prefix_length
-    }
-
-    segments as Segment.Binary[]
-  }
+  as (:== String) => (segments as Segment.Binary[]), ("/", prefix if prefix)
+  full: String => segments.map(as String).join(static == v4 ? "." : ":")
+  chainable == (other: IP) => as Binary == other as Binary && prefix == other.prefix
 
   + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
   - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
 
   / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => {
-    return this if prefix_length == NUMBER_OF_BITS
-
     binary_form = as Binary
-    binary_form[prefix_length..] = 0 | 1
-
-    binary_form
+    binary_form[prefix_length..] = 0
+    (binary_form as static) ~~ .prefix = prefix_length
   }
+  hosts => (as Binary)[..prefix], (0 | 1)[]{length == NUMBER_OF_BITS - prefix}
 
   static v4 := class: IP ({segments.join(".")}) => {
     static NUMBER_OF_SEGMENTS = 4
@@ -60,13 +52,14 @@ IP := class: Location &+ (-1 <- . -> +1) {
     // When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
     dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
 
+    // The longest run of two or more zero fields, the leftmost of equal ones (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
     compress_zeros: static => {
       return this if zero_compression
 
-      zeros = left, right ~= 0[] -- #{length == min() & leftmost}
-      return this if zeros.count <= 1
+      run = (segments ~= 0[]{length >= 2} -- #).max_by(.length)
+      return this unless run
 
-      return (<- zeros), "::", (zeros ->), ":", embedded_ipv4
+      (segments[..run.index].join(":"), "::", segments[run.index + run.length..].join(":"), (":", embedded_ipv4 if embedded_ipv4)) as static
     }
 
     embed_ipv4: static => {

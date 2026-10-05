@@ -26,7 +26,7 @@ Set-StrictMode -Version 2.0
 $Repository = if ($env:ETHER_REPOSITORY) { $env:ETHER_REPOSITORY } else { 'orbitmines/ray' }
 $Name = 'ether'
 $Aliases = @('ray', 'orbitmines')
-$Entry = '@ether/$/.ray/v0.ts/src/kernel3/language.ts'
+$Entry = '@ether/$/.ray/v0.ts/src/language.ts'
 $Config = '@ether/$/.ray/v0.ts/deno.npm.json'
 $Includes = @('LICENSE', '@ether/$/.ray/v0', '@ether/$/.ray/v0.ts/javascript.o.ray')
 $Marker = '# Added by the Ether installer'

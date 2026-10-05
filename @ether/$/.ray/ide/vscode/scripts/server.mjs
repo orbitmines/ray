@@ -12,7 +12,7 @@ rmSync(server, { recursive: true, force: true });
 mkdirSync(server, { recursive: true });
 
 await build({
-  entryPoints: { language: join(implementation, 'src', 'kernel4', 'language.ts'), lsp: join(implementation, 'src', 'kernel', 'lsp.ts') },
+  entryPoints: { language: join(implementation, 'src', 'language.ts'), lsp: join(implementation, 'src', 'kernel', 'lsp.ts') },
   outdir: server,
   outExtension: { '.js': '.mjs' },
   bundle: true,

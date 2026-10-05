@@ -1,7 +1,7 @@
 name: Release
 
 # Every push to main builds Ether for every platform, installs it on each with install.sh and install.ps1, packs the npm
-# package (@orbitmines/ether.ray) and installs that on each with npm; when the version in kernel3/language.ts has no
+# package (@orbitmines/ether.ray) and installs that on each with npm; when the version in src/language.ts has no
 # release yet, it publishes one (v<version>, the latest: the archives, their SHA256SUMS, both installers) and the npm
 # package (with NPM_TOKEN, or as a trusted publisher when the NPM_TRUSTED_PUBLISHING variable is true), and the VS Code
 # extension (Ether.ray, orbitmines.ether-ray, with the language bundled: its server, kernel and library under server/) to the Visual Studio Marketplace (VSCE_PAT, or Microsoft Entra ID when the
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: pack @orbitmines/ether.ray (its prepack, scripts/bundle.mjs, bundles kernel3/language.ts and the .ray files)
+      - name: pack @orbitmines/ether.ray (its prepack, scripts/bundle.mjs, bundles src/language.ts and the .ray files)
         working-directory: "@ether/$/.ray/v0.ts"
         run: |
           npm ci

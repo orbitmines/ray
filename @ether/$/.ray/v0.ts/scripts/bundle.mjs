@@ -35,10 +35,10 @@ for (const file of ['README.md', 'LICENSE']) copyFileSync(join('../../../..', fi
 
 writeFileSync('src/bundled.ts', `export const sources: Record<string, string> = ${JSON.stringify(sources)};\nexport const manifest: string[] = Object.keys(sources);\n`);
 
-// The language (kernel3/language.ts), bundled for Node: what the package's bin/ scripts run.
+// The language (src/language.ts), bundled for Node: what the package's bin/ scripts run.
 rmSync('dist', { recursive: true, force: true });
 await build({
-  entryPoints: ['src/kernel3/language.ts'],
+  entryPoints: ['src/language.ts'],
   outfile: 'dist/language.js',
   bundle: true,
   format: 'esm',

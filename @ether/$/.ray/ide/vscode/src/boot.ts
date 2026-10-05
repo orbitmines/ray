@@ -29,7 +29,7 @@ export interface Boot {
 
 const RAY_REPO_MARKER = path.join('@ether', '$', '.ray');
 const RAY_LSP_ENTRY   = path.join('@ether', '$', '.ray', 'v0.ts', 'src', 'lsp', 'index.ts');
-const RAY_DAEMON_ENTRY = path.join('@ether', '$', '.ray', 'v0.ts', 'src', 'kernel4', 'language.ts');
+const RAY_DAEMON_ENTRY = path.join('@ether', '$', '.ray', 'v0.ts', 'src', 'language.ts');
 
 /**
  * Walk up from `start` looking for the marker that identifies a checkout of
@@ -90,7 +90,7 @@ function repoBoot(repoRoot: string): Boot {
   };
   return {
     mode: 'repo',
-    description: daemon ? `repo (${repoRoot}), served by the kernel4 daemon` : `repo (${repoRoot})`,
+    description: daemon ? `repo (${repoRoot}), served by its daemon` : `repo (${repoRoot})`,
     server: { run, debug: { ...run, options: { ...run.options, env: { ...repoEnv, DEBUG: '1' } } } },
   };
 }

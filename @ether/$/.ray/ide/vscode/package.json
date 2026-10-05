@@ -51,7 +51,7 @@
           ],
           "default": "daemon",
           "enumDescriptions": [
-            "Through the kernel4 daemon (`language.ts --lsp`): one warm process shared by every editor and by CLI runs.",
+            "Through the daemon (`src/language.ts --lsp`): one warm process shared by every editor and by CLI runs.",
             "A language server process of its own per window (src/lsp/index.ts)."
           ],
           "description": "How the language server is run in a checkout of orbitmines/ray."

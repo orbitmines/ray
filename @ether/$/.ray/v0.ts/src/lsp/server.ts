@@ -10,12 +10,15 @@ import {
   type InitializeResult,
 } from 'vscode-languageserver/node.js';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Ray } from '../language.ts';
+import * as program from '../language/program.ts';
+import * as interpreter from '../language/interpreter.ts';
 import type { Program } from '../language/program.ts';
 import type { Source } from '../language/text.ts';
 import { toLsp } from './diagnostics.ts';
 import { encode, offset_at, position_of, runs, MODIFIERS } from './semantics.ts';
 import * as features from './features.ts';
+
+const Ray = { ...program, ...interpreter };
 
 /**
  * Boot the LSP over a minimal.ts Program.

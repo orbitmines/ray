@@ -110,6 +110,18 @@ unless cite.title == "on rays" { INFO@mark `RF5 a reference forgot its title` }
 unless Accessor.Permission.confidential { INFO@mark `AC3 there is no confidential permission` }
 unless Accessor.Permission#.count == 7 { INFO@mark `AC4 there are other than seven permissions` }
 unless Accessor(level: Accessor.Permission.public).level == Accessor.Permission.public { INFO@mark `AC5 an accessor forgot its level` }
+reader := Character(name: "reader")
+once_target := "used once"
+reader{uses < 1}.execute once_target
+unless Permissions.current.allows(reader, `()`, once_target) { INFO@mark `AC6 a grant never used before is refused` }
+if Permissions.current.allows(reader, `()`, once_target) { INFO@mark `AC7 a grant for one use allowed a second` }
+day_target := "read by day"
+reader{0:00 <= now}.read day_target
+unless Permissions.current.allows(reader, `size`, day_target) { INFO@mark `AC8 a grant whose filter holds is refused` }
+night_target := "never read"
+reader{now < 0:00}.read night_target
+if Permissions.current.allows(reader, `size`, night_target) { INFO@mark `AC9 a grant whose filter fails is allowed` }
+if Permissions.current.allows(reader, `=`, day_target) { INFO@mark `AC10 a read grant allows writing` }
 
 // A quest is what there is to do: the steps it takes, and whether it is done.
 errand := Quest(name: "fetch", goal: wi)

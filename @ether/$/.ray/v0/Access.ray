@@ -1,4 +1,4 @@
-Access := class = who: *?, method: *? {
+Access := class = who: *?, method: *?, filter: Program? {
   static reads (method) => method != `=` && method != `()`
 
   reading => !method
@@ -7,9 +7,15 @@ Access := class = who: *?, method: *? {
   { }{target} ^punctuation => Permissions.current.grant(this, target)
 }
 
+// A typed permission: a filter on who is granted, checked each time the grant is used; `uses` is how often it was (U6).
+// `@company{now < 2026-12-31}.read { … }`, `@company{&entrypoint.running}.execute { … }`, `@company{uses <= 1}.execute { … }`, `@guests{9:00 <= now <= 17:00}.read { … }`
+{who}{{literal filter}}.read ^keyword => Access(who, filter: Program(code: (external ** filter)))
+{who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (external ** filter)))
+{who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))
+
 Accessor := class = level: Permission, method: *?, any = true {
   static Permission := enum private (at: @private) | confidential | protected | public (at: @public) | local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) {
-    reaches (who) => this == confidential ? Visibility.policy.reaches(who) : at && who ==.instance_of at
+    reaches (who) => this == public || (this == confidential ? Visibility.policy.reaches(who) : at && who ==.instance_of at)
   }
 
   static default_policy => Accessor(Visibility.default_privacy_policy)
@@ -52,10 +58,9 @@ Visibility := class {
   readable (item, who: Character) => of(item).reaches(who) || who.permissions.contains(of(item))
 }
 
-Capability := enum network | io | os | random | time
-
-Grant := class = access: Access, target: * {
+Grant := class = access: Access, target: *, uses: Number = 0 {
   covers (who: Character, method, target) => (access.who == who || who ==.instance_of access.who) && access.allows_method(method) && this.target === target
+    && (!access.filter || access.filter.entered(this, None))
 }
 
 Permissions := class = grants: Grant[] = [] {
@@ -65,7 +70,7 @@ Permissions := class = grants: Grant[] = [] {
     grants.push Grant(access, target)
     target
   }
-  allows (who: Character, method, target) => grants.some(.covers(who, method, target))
+  allows (who: Character, method, target) => grants{.covers(who, method, target)}.first ~~ (.uses += 1 if .)
 }
 
 Run := class = actor: Character?, origin: Character[] = [], settings: Settings? {
@@ -101,7 +106,7 @@ Effects := class {
   static Source := enum io | os | random | time | network
 
   source_of (called) => called.is_external ? {
-    "io": Source.io, "os": Source.os, "random": Source.random, "time": Source.time
+    "io": Source.io, "os": Source.os, "random": Source.random, "time": Source.time, "network": Source.network
   }[called.external_name] : None
 
   of (program, visited: *[] = []) => {

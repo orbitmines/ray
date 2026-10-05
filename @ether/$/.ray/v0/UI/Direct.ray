@@ -1,22 +1,35 @@
 Language.Direct := class: Language {
   static extensions = ".direct"
   level := {
-    {page: Geometry.Shape} => Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px) -- Rasterise(page, ., Geometry.Transform())
+    {page: Geometry.Shape} => Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px) -- Rasterise(page, ., Scrolled()) -- (raster => page.lifted.for(Rasterise(., raster, Scrolled())) -- raster)
   }
+  Scrolled := () => Geometry.Transform.translate(Geometry.Vector(0, -UI.Viewport.scrolled))
 
   Rasterise := (shape: Geometry.Shape, raster: Geometry.Raster, outer: Geometry.Transform) => raster -- {
-    placed = outer * Geometry.Transform.translate(shape.position) * shape.transform
+    placed = outer * Geometry.Transform.translate(shape.origin) * shape.shown_transform
     shape.match
-      Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(pen = 0 =>
-        Font(shape.font).glyph(.) -- Filled(.outline, raster, placed * Geometry.Transform.translate(Geometry.Vector(pen, row * shape.font.size * shape.font.line_height)) * Geometry.Transform.scale(Geometry.Vector(shape.font.size / .units, shape.font.size / .units)), shape.color ?? Geometry.Color(0, 0, 0)) -- pen + .advance * shape.font.size / .units
-      ))
+      Geometry.Text => {
+        lines = shape.lines(shape.size.x)
+        starts = shape.starts(shape.size.x)
+        (0..<lines.count).for(row => (0..<lines[row].length).reduce(pen = 0 => {
+          run = shape.run_at(starts[row] + .)
+          face = run?.font ?? shape.font
+          Rasterise(Geometry.Box(origin: Geometry.Vector(pen, row * face.size * face.line_height), size: Geometry.Vector(face.size * 0.6, face.size * face.line_height), fill: Geometry.Color(51, 144, 255, 0.4)), raster, placed) if UI.Selection.selects(shape, starts[row] + .)
+          Font(face).glyph(lines[row][.]) -- Filled(.outline, raster, placed * Geometry.Transform.translate(Geometry.Vector(pen, row * face.size * face.line_height)) * Geometry.Transform.scale(Geometry.Vector(face.size / .units, face.size / .units)), run?.color ?? shape.color ?? Geometry.Color(0, 0, 0)) -- pen + .advance * face.size / .units
+        }))
+      }
+      UI.Input => Rasterise(Geometry.Box(origin: shape.origin, size: shape.size, fill: shape.fill, stroke: shape.stroke, radius: shape.radius, effects: shape.effects), raster, outer) -- Rasterise(shape.face, raster, outer)
+      Geometry.Image{fill} => (IO.read(shape.source) as Geometry.Raster) -- (0..<shape.size.y as px).for(y => (0..<shape.size.x as px).for(x => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, ((shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)) ~~ .alpha *= ..at(x * ..width / shape.size.x, y * ..height / shape.size.y).alpha)))
       Geometry.Image => (IO.read(shape.source) as Geometry.Raster) -- (0..<shape.size.y as px).for(y => (0..<shape.size.x as px).for(x => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, ..at(x * ..width / shape.size.x, y * ..height / shape.size.y))))
       Geometry.Canvas => shape.draws().for(Rasterise(., raster, placed))
+      Geometry.Frame => Rasterise(Geometry.Box(origin: shape.origin, size: shape.size, fill: Geometry.Color(17, 20, 24), stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
+        Geometry.Text("▶ " + (shape.title.empty ? shape.source as String : shape.title), origin: shape.origin + shape.size * (1 / 2) - Geometry.Vector(0, 8px), size: shape.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
+      ]), raster, outer)
       * => {
         inside = (0..<shape.size.y as px).map(y => (0..<shape.size.x as px){shape.contains(Geometry.Vector(., y))}.map(x => (x, y))).flatten
         inside.for((x, y) => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, Fill(shape.fill, x, y) ~~ .alpha *= Opacity(shape.effects))) if shape.fill
         Stroked(Outline(shape), raster, placed, shape.stroke) if shape.stroke
-        shape.children.sort_by(.layer).for(Rasterise(., raster, placed)) if shape.visible
+        shape.in_place.sort_by(.layer).for(Rasterise(., raster, placed * Geometry.Transform.translate(shape.origin * -1))) if shape.visible
         shape.effects{==.instance_of Geometry.Blur}.for(raster.blurred(inside, .radius as px))
       }
   }
@@ -48,8 +61,10 @@ Language.Direct := class: Language {
     [character: Char] => glyphs{.character == character}.first ~~ .units = units
   }
 
-  Display := class = target: Location {
-    write (raster: Geometry.Raster) => IO.write(target, raster)
+  Display := class = target: Location, title: String = "" {
+    write (raster: Geometry.Raster) => (title = UI.Navigation.title) -- IO.write(target, raster)
+    open (to: Location) => UI.Platform.launch(to)
+    read => Language.Web.DOM.Event.parsed(external io `window` None)?.apply
   }
 }
 

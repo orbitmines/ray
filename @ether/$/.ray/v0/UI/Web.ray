@@ -6,6 +6,7 @@ Language.Web := class: Language {
       id: String = attributes{.name == "id"}.first?.value ?? ("e" + ((Element.made += 1) as String))
       void => tag ==.instance_of ("img" | "input" | "br" | "meta" | "link" | "source")
     }
+    Raw := class = text: String
     Document := class = head: Element[], body: Element, language: String = "en"
     language = Language.register(Language(".html", writer: Writer))
     escaped (text: String) => #text.map(.match
@@ -15,8 +16,9 @@ Language.Web := class: Language {
       "\"" => "&quot;"
       * => .
     ) as String
-    Writer := (node: Document | Element | String) => node.match
+    Writer := (node: Document | Element | Raw | String) => node.match
       String => escaped(node)
+      Raw => node.text
       Document => "<!doctype html><html lang=\"", node.language, "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", node.head.map(Writer), "</head>", Writer(node.body), "</html>"
       Element => "<", node.tag, node.attributes.map(" ", .name, "=\"", escaped(.value), "\""), ">", (node.children.map(Writer), "</", node.tag, ">") unless node.void
   }
@@ -30,9 +32,28 @@ Language.Web := class: Language {
       Rule => (node.within, "{") if node.within, node.selector, "{", node.declarations.map(.property, ":", .value, ";"), "}", "}" if node.within
       Keyframes => "@keyframes ", node.name, "{", node.frames.map(.at * 100, "%{", .declarations.map(.property, ":", .value, ";"), "}"), "}"
   }
+  JSON := class {
+    Object := class = entries: (name: String, value: *)[]
+    escaped (text: String) => #text.map(.match
+      "\"" => "\\\""
+      "\\" => "\\\\"
+      "<" => "\\u003c"
+      \n => "\\n"
+      * => .
+    ) as String
+    Writer := (value) => value.match
+      None => "null"
+      boolean => value ? "true" : "false"
+      Number => value as String
+      String => "\"", escaped(value), "\""
+      Location => Writer(value as String)
+      Object => "{", value.entries{.value != None}.map(Writer(.name), ":", Writer(.value)).join(","), "}"
+      Iterable => "[", value.map(Writer).join(","), "]"
+      * => Writer(Object(value.fields.map((name: .name, value: .value))))
+  }
   JS := class {
     Module := class = statements: Statement[] = []
-    Statement := Let | Assign | Effect | Listen | Call | Function | Return | If
+    Statement := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw
     Let := class = name: String, value: Expression
     Assign := class = target: Expression, value: Expression
     Effect := class = reads: String[], body: Statement[]
@@ -41,7 +62,8 @@ Language.Web := class: Language {
     Function := class = name: String?, parameters: String[], body: Statement[]
     Return := class = value: Expression
     If := class = condition: Expression, then: Statement[], otherwise: Statement[] = []
-    Expression := String | Number | boolean | Call | Function | (object: Expression, member: String) | (left: Expression, operator: String, right: Expression)
+    Raw := class = code: String
+    Expression := String | Number | boolean | Call | Function | Raw | (object: Expression, member: String) | (left: Expression, operator: String, right: Expression)
     language = Language.register(Language(".js", writer: Writer))
     Writer := (node) => node.match
       Module => node.statements.map(Writer, ";")
@@ -52,6 +74,7 @@ Language.Web := class: Language {
       Call => Writer(node.function), "(", node.arguments.map(Writer).join(","), ")"
       Function => "function ", node.name ?? "", "(", node.parameters.join(","), "){", node.body.map(Writer, ";"), "}"
       Return => "return ", Writer(node.value)
+      Raw => node.code
       If => "if(", Writer(node.condition), "){", node.then.map(Writer, ";"), "}else{", node.otherwise.map(Writer, ";"), "}"
       String => "\"", node.escaped_line, "\""
       (object, member) => Writer(node.object), ".", node.member
@@ -61,36 +84,54 @@ Language.Web := class: Language {
 
   HTML.level := {
     {page: Geometry.Shape} => HTML.Document(head: Head(), body: HTML.Element("body", children: [page]))
-    {link: UI.Link} => HTML.Element("a", [("id", link.id), ("href", link.to as String)], link.children)
-    {text: Geometry.Text{role == heading}} => HTML.Element("h" + Heading.level(text), [("id", text.id)], [text.text])
-    {text: Geometry.Text} => HTML.Element(text.wrap == none ? "span" : "p", [("id", text.id), ("dir", text.direction == right-to-left ? "rtl" : "ltr")], [text.text])
-    {image: Geometry.Image} => HTML.Element("img", [("id", image.id), ("src", image.source as String), ("alt", image.alt), ("loading", "lazy")])
-    {video: Geometry.Video} => HTML.Element("video", [("id", video.id), ("src", video.source as String), ("controls", "") if video.controls, ("muted", "") if video.muted, ("loop", "") if video.looping])
-    {audio: Geometry.Audio} => HTML.Element("audio", [("id", audio.id), ("src", audio.source as String), ("controls", "")])
-    {canvas: Geometry.Canvas} => HTML.Element("canvas", [("id", canvas.id), ("width", canvas.size.x as px), ("height", canvas.size.y as px)])
+    {link: UI.Link} => HTML.Element("a", [("id", link.id), ("class", link.styles.join(" ")) if link.styles.nonempty, ("href", link.to as String), ("target", "_blank") if link.window == new, ("rel", "noopener noreferrer") if link.window == new], link.children)
+    {text: Geometry.Text{role == heading}} => HTML.Element("h" + Heading.level(text), [("id", text.id), ("class", text.styles.join(" ")) if text.styles.nonempty], Pieces(text))
+    {text: Geometry.Text} => HTML.Element(text.wrap == none ? "span" : "p", [("id", text.id), ("class", text.styles.join(" ")) if text.styles.nonempty, ("dir", text.direction == right-to-left ? "rtl" : "ltr")], Pieces(text))
+    {image: Geometry.Image{fill}} => HTML.Element("span", [("id", image.id), ("class", image.styles.join(" ")) if image.styles.nonempty, ("role", "img"), ("aria-label", image.alt)])
+    {image: Geometry.Image} => HTML.Element("img", [("id", image.id), ("class", image.styles.join(" ")) if image.styles.nonempty, ("src", image.source as String), ("alt", image.alt), ("loading", "lazy")])
+    {video: Geometry.Video} => HTML.Element("video", [("id", video.id), ("class", video.styles.join(" ")) if video.styles.nonempty, ("src", video.source as String), ("controls", "") if video.controls, ("muted", "") if video.muted, ("loop", "") if video.looping])
+    {audio: Geometry.Audio} => HTML.Element("audio", [("id", audio.id), ("class", audio.styles.join(" ")) if audio.styles.nonempty, ("src", audio.source as String), ("controls", "")])
+    {frame: Geometry.Frame} => HTML.Element("iframe", [("id", frame.id), ("class", frame.styles.join(" ")) if frame.styles.nonempty, ("src", frame.embedded as String), ("title", frame.title), ("allow", frame.allow.join("; ")), ("allowfullscreen", ""), ("loading", "lazy"), ("referrerpolicy", "strict-origin-when-cross-origin")])
+    {canvas: Geometry.Canvas} => HTML.Element("canvas", [("id", canvas.id), ("class", canvas.styles.join(" ")) if canvas.styles.nonempty, ("width", canvas.size.x as px), ("height", canvas.size.y as px)])
     {outline: Geometry.Outline | Geometry.Polygon | Geometry.Ball} => Svg(outline)
-    {form: UI.Form} => HTML.Element("form", [("id", form.id)], form.inputs)
+    {form: UI.Form} => HTML.Element("form", [("id", form.id), ("class", form.styles.join(" ")) if form.styles.nonempty], form.inputs)
     {input: UI.TextField | UI.Secret | UI.NumberField | UI.DateField | UI.ColorField | UI.FileField | UI.Checkbox | UI.Slider} => HTML.Element("input", [
-      ("id", input.id), ("type", InputType[input.static]), ("placeholder", input.placeholder), ("disabled", "") if input.disabled,
+      ("id", input.id), ("class", input.styles.join(" ")) if input.styles.nonempty, ("type", InputType[input.static]), ("placeholder", input.placeholder), ("disabled", "") if input.disabled,
       ("min", input.chosen.type.least as String) if input ==.instance_of UI.Slider, ("max", input.chosen.type.most as String) if input ==.instance_of UI.Slider
     ])
-    {input: UI.TextArea} => HTML.Element("textarea", [("id", input.id), ("placeholder", input.placeholder)])
-    {input: UI.Select} => HTML.Element("select", [("id", input.id)], input.options.map(HTML.Element("option", [("value", . as String)], [. as String])))
-    {box: Geometry.Shape} => HTML.Element(box.activate ? "button" : Landmark[box.role] ?? "div", [("id", box.id), ("role", box.role as String), ("aria-label", box.label) if box.label], box.children)
+    {input: UI.TextArea{language}} => HTML.Element("div", [("id", input.id), ("class", ["painted", input.styles].flatten.join(" "))], [
+      HTML.Element("pre", [("id", input.id + "-paint"), ("aria-hidden", "true")], Pieces(input.face)),
+      HTML.Element("textarea", [("id", input.id + "-text"), ("placeholder", input.placeholder), ("spellcheck", "false")], [input.empty ? "" : input.value as String])
+    ])
+    {input: UI.TextArea} => HTML.Element("textarea", [("id", input.id), ("class", input.styles.join(" ")) if input.styles.nonempty, ("placeholder", input.placeholder)], [input.empty ? "" : input.value as String])
+    {input: UI.Select} => HTML.Element("select", [("id", input.id), ("class", input.styles.join(" ")) if input.styles.nonempty], input.options.map(HTML.Element("option", [("value", . as String)], [. as String])))
+    {box: Geometry.Shape} => HTML.Element(box.activate ? "button" : Landmark[box.role] ?? "div", [("id", box.id), ("class", box.styles.join(" ")) if box.styles.nonempty, ("role", box.role as String), ("aria-label", box.label) if box.label, ("popover", "manual") if box.position.kind == anchored], box.children)
   }
   InputType = { UI.TextField: "text", UI.Secret: "password", UI.NumberField: "number", UI.DateField: "datetime-local", UI.ColorField: "color", UI.FileField: "file", UI.Checkbox: "checkbox", UI.Slider: "range" }
   Landmark = { UI.Role.table: "table", UI.Role.list: "ul", UI.Role.region: "section" }
+  Pieces := (text: Geometry.Text) => text.runs.empty ? [text.text] : text.pieces.map(.run ? HTML.Element("span", [("style", Inline(.run))], [.text]) : .text)
+  Inline := (run: Geometry.Text.Run) => [("color:", Paint(run.color), ";") if run.color, ("background:", Paint(run.fill), ";") if run.fill, ("font-weight:", run.font.weight, ";") if run.font, ("font-style:", run.font.style as String, ";") if run.font].flatten as String
   Heading := class { level (text: Geometry.Text) => text.font.size >= 2em ? 1 : text.font.size >= 1.5em ? 2 : 3 }
   Head := () => [
     HTML.Element("title", children: [UI.Navigation.title]),
     HTML.Element("meta", [("name", "description"), ("content", UI.Navigation.description)]),
-    HTML.Element("meta", [("property", "og:title"), ("content", UI.Navigation.title)]),
-    HTML.Element("meta", [("property", "og:description"), ("content", UI.Navigation.description)]),
-    HTML.Element("meta", [("property", "og:image"), ("content", UI.Navigation.image as String)]) if UI.Navigation.image,
+    UI.Navigation.tags.map(Meta(.name, .content)),
+    Meta("theme-color", Paint(UI.Navigation.theme) as String) if UI.Navigation.theme,
+    HTML.Element("link", [("rel", "canonical"), ("href", UI.Navigation.canonical as String)]) if UI.Navigation.canonical,
     HTML.Element("link", [("rel", "icon"), ("href", UI.Navigation.icon as String)]) if UI.Navigation.icon,
+    HTML.Element("link", [("rel", "apple-touch-icon"), ("href", UI.Navigation.apple_icon as String)]) if UI.Navigation.apple_icon,
+    HTML.Element("link", [("rel", "manifest"), ("href", UI.Navigation.manifest as String)]) if UI.Navigation.manifest,
+    UI.Navigation.structured.map(HTML.Element("script", [("type", "application/ld+json")], [HTML.Raw(JSON.Writer(LinkedData(.)) as String)])),
     HTML.Element("link", [("rel", "stylesheet"), ("href", "style.css")]),
     HTML.Element("script", [("src", "app.js"), ("defer", "")])
-  ]
+  ].flatten
+  Meta := (name: String, content: String) => HTML.Element("meta", [(name ~= ("og:" | "article:" | "fb:", *) ? "property" : "name", name), ("content", content)])
+  LinkedData := (entry) => JSON.Object([("@context", "https://schema.org"), Linked(entry).entries].flatten)
+  Linked := (value) => value.match
+    String | Number | boolean | Location => value
+    None => None
+    Iterable => value.map(Linked)
+    * => JSON.Object(value.fields.map((name: .name == "type" ? "@type" : .name, value: Linked(.value))))
   Svg := (shape: Geometry.Shape) => HTML.Element("svg", [("id", shape.id), ("viewBox", "0 0 ", shape.size.x as px, " ", shape.size.y as px)], [shape.match
     Geometry.Ball => HTML.Element("ellipse", [("cx", "50%"), ("cy", "50%"), ("rx", "50%"), ("ry", "50%")])
     Geometry.Polygon => HTML.Element("polygon", [("points", shape.points.map(.x as px, ",", .y as px).join(" "))])
@@ -105,10 +146,20 @@ Language.Web := class: Language {
   CSS.level := {
     {page: Geometry.Shape} => CSS.Sheet([
       CSS.Rule("*", [("box-sizing", "border-box"), ("margin", "0")]),
+      CSS.Rule("body", [("font-family", "sans-serif"), ("line-height", "1.2")]),
+      CSS.Rule(".painted", [("display", "grid")]),
+      CSS.Rule(".painted>pre,.painted>textarea", [("grid-area", "1/1"), ("margin", "0"), ("padding", "0"), ("border", "none"), ("font", "inherit"), ("white-space", "pre-wrap"), ("overflow-wrap", "anywhere"), ("overflow", "hidden")]),
+      CSS.Rule(".painted>textarea", [("color", "transparent"), ("caret-color", "currentColor"), ("background", "transparent"), ("resize", "none"), ("outline", "none")]),
       CSS.Rule("*", [("animation", "none"), ("transition", "none")], within: "@media (prefers-reduced-motion:reduce)"),
-      page.expand.map(Rules(.)).flatten
+      CSS.Rule("html.locked", [("overflow", "hidden")]),
+      page.expand.map(Rules(.)).flatten,
+      page.expand{.position.kind == anchored}.map(shape => Anchor(shape, page) -- (anchor => [
+        CSS.Rule("#" + anchor.id, [("anchor-name", "--" + anchor.id)]),
+        CSS.Rule("#" + shape.id, [("position", "fixed"), ("inset", "auto"), ("margin", "0"), ("position-anchor", "--" + anchor.id), ("position-area", shape.position.side as String)])
+      ])).flatten
     ])
   }
+  Anchor := (shape: Geometry.Shape, page: Geometry.Shape) => shape.position.anchor ?? shape.parent_in(page)
   Rules := (shape: Geometry.Shape) => [
     CSS.Rule("#" + shape.id, [
       shape.flow.match
@@ -116,18 +167,29 @@ Language.Web := class: Language {
         grid => ("display", "grid"), ("grid-template-columns", "repeat(", shape.constraints.columns.last ?? 1, ",1fr)")
         layered => ("display", "grid"), ("grid-template-areas", "\"layer\"")
         vertical => ("display", "flex"), ("flex-direction", "column")
-      ("gap", shape.gap.y as px, "px ", shape.gap.x as px, "px"),
-      shape.constraints{.dimension == "x"}.map(.match
-        {share: Geometry.Interpolated} => ("width", "clamp(", .share.from.share * 100, "%,", Clamp(.share), ",", .share.to.share * 100, "%)")
-        {share: Number} => ("width", .share * 100, "%")
-        {most} => ("max-width", .most as px, "px")
-        {least} => ("min-width", .least as px, "px")
-        {aspect} => ("aspect-ratio", .aspect)
-        {align: center} => ("margin-inline", "auto")
-        {align: end} => ("margin-inline-start", "auto")
-        {align: between} => ("justify-content", "space-between")
-      ),
-      shape.spacing.map((.from == border ? "padding" : "margin") + Sides[.sides], .amount.y as px, "px ", .amount.x as px, "px"),
+      ("gap", Measure(shape.gap.y), " ", Measure(shape.gap.x)),
+      shape.constraints{.dimension == "x"}.map(constraint => [
+        ("width", constraint.share * 100, "%") if constraint.share ==.instance_of Number,
+        ("width", Stops(constraint.share).first.share * 100, "%") if Responsive(constraint),
+        ("max-width", Measure(constraint.most)) if constraint.most != None,
+        ("min-width", Measure(constraint.least)) if constraint.least != None,
+        ("aspect-ratio", constraint.aspect) if constraint.aspect,
+        constraint.align.match
+          center => ("margin-inline", "auto")
+          end => ("margin-inline-start", "auto")
+          between => ("justify-content", "space-between")
+          * => ()
+      ]).flatten,
+      shape.constraints{.dimension == "y"}.map(constraint => [
+        ("max-height", Measure(constraint.most)) if constraint.most != None,
+        ("min-height", Measure(constraint.least)) if constraint.least != None,
+        ("align-items", "center") if constraint.align == middle
+      ]).flatten,
+      ("container-type", "inline-size") if shape.children.some(.constraints.some(Responsive(.))),
+      [("padding", shape.padding), ("margin", shape.margin)].map((name, edges) => [("top", edges.top), ("right", edges.right), ("bottom", edges.bottom), ("left", edges.left)]{.1 != 0}.map((name + "-" + .0, Measure(.1)))).flatten,
+      ("position", shape.position.kind as String) if shape.position.kind ==.instance_of (sticky | fixed | absolute),
+      ("position", "relative") if shape.position.kind == flow && shape.children.some(.position.kind == absolute),
+      [("top", shape.position.top), ("right", shape.position.right), ("bottom", shape.position.bottom), ("left", shape.position.left)]{.1 != None}.map((.0, Measure(.1))) if shape.position.kind != anchored,
       ("background", Paint(shape.fill)) if shape.fill,
       ("border" + Sides[shape.stroke.sides], shape.stroke.width as px, "px ", shape.stroke.dash.empty ? "solid" : "dashed", " ", Paint(shape.stroke.paint)) if shape.stroke,
       ("border-radius", shape.radius.map(. as px, "px").join(" ")) if shape.radius != [0],
@@ -141,29 +203,71 @@ Language.Web := class: Language {
         Geometry.Blur => ("filter", "blur(", .radius as px, "px)")
         Geometry.Filter => ("filter", .kind as String, "(", .amount, ")")
       ),
-      (("font-family", shape.font.family.join(",")), ("font-size", shape.font.size as String), ("font-weight", shape.font.weight), ("font-style", shape.font.style as String), ("line-height", shape.font.line_height), ("text-align", shape.align as String), ("text-overflow", shape.overflow as String),
-        ("color", Paint(shape.color)) if shape.color, ("text-transform", { upper: "uppercase", lower: "lowercase", title: "capitalize" }[shape.font.case]) if shape.font.case != none, ("letter-spacing", shape.font.tracking as px, "px") if shape.font.tracking != 0) if shape ==.instance_of Geometry.Text,
+      ("color", Paint(shape.color)) if shape.color,
+      Typeface(shape.font) if shape.font,
+      (("text-align", shape.align as String), ("text-overflow", shape.overflow as String), ("white-space", WhiteSpace[shape.white_space]), ("overflow-wrap", "anywhere") if shape.wrap == anywhere) if shape ==.instance_of Geometry.Text,
       ("object-fit", shape.fit as String) if shape ==.instance_of Geometry.Image,
-      ("cursor", "pointer") if shape.activate
+      (("border", "0"), ("aspect-ratio", "16/9"), ("width", "100%")) if shape ==.instance_of Geometry.Frame,
+      (("display", "inline-block"), ("mask", Mask(shape)), ("-webkit-mask", Mask(shape))) if shape ==.instance_of Geometry.Image && shape.fill,
+      ("transition", "all ", shape.transition.duration as ms, "ms ", Timing(shape.transition.easing)) if shape.transition,
+      ("cursor", shape.cursor != default ? shape.cursor as String : "pointer") if shape.cursor != default || shape.activate,
+      ("touch-action", (shape.touch as String).replace("_", "-")) if shape.touch != auto,
+      ("scrollbar-width", "none") if shape.scrollbar == hidden
     ]),
+    CSS.Rule("#" + shape.id + "::placeholder", [("color", Paint(shape.placeholder_color))]) if shape ==.instance_of UI.Input && shape.placeholder_color,
+    UI.Theme.styles.map(style => CSS.Rule("#" + shape.id + "." + style.name, Styling(style.name))) if shape.dynamics.some(.target == "class"),
     CSS.Rule("#" + shape.id + ":focus-visible", [("outline", "2px solid currentColor")]) if shape.focusable,
+    shape.constraints{Responsive(.)}.map(constraint => Stops(constraint.share) -- (stops => stops.zip([stops.rest, None]).map((at, next) => CSS.Rule("#" + shape.id,
+      [("width", constraint.share ==.instance_of Geometry.Interpolated && next ? Chord(at, next) : (at.share * 100, "%"))],
+      within: "@container (min-width:" + Measure(at.width) as String + ")"
+    )))).flatten,
     shape.animations.map(animation => CSS.Keyframes(shape.id + "-" + animation.property, [(0, [(animation.property, animation.from as String)]), (1, [(animation.property, animation.to as String)])]))
   ]
+  Typeface := (font: Geometry.Font) => [
+    ("font-family", font.family.join(",")) if font.family != Geometry.Font().family,
+    ("font-size", Measure(font.size)) if font.size != Geometry.Font().size,
+    ("font-weight", font.weight) if font.weight != Geometry.Font().weight,
+    ("font-style", font.style as String) if font.style != normal,
+    ("line-height", font.line_height) if font.line_height != Geometry.Font().line_height,
+    ("text-transform", { upper: "uppercase", lower: "lowercase", title: "capitalize" }[font.case]) if font.case != none,
+    ("letter-spacing", Measure(font.tracking)) if font.tracking != 0
+  ]
+  WhiteSpace = { normal: "normal", nowrap: "nowrap", pre: "pre", pre_wrap: "pre-wrap", pre_line: "pre-line" }
+  Timing := (easing: Geometry.Easing) => easing === Geometry.linear ? "linear" : easing === Geometry.ease_in ? "ease-in" : easing === Geometry.ease_out ? "ease-out" : "ease"
+  Styling := (name: String) => Rules(Geometry.Box()).first.declarations -- (plain => Rules(Geometry.Box().styled(name)).first.declarations{!plain.contains(.)})
   Sides = { all: "", top: "-top", bottom: "-bottom", left: "-left", right: "-right", horizontal: "-inline", vertical: "-block" }
+  Mask := (image: Geometry.Image) => "url(\"", image.source as String, "\") center/", image.fit == fill ? "100% 100%" : image.fit as String, " no-repeat"
   Paint := (paint: Geometry.Paint) => paint.match
+    Geometry.Inherited => "currentColor"
     Geometry.Color => "rgba(", paint.red, ",", paint.green, ",", paint.blue, ",", paint.alpha, ")"
     Geometry.Gradient => paint.kind as String, "-gradient(", (paint.angle, "turn,") if paint.kind == linear, paint.stops.map(Paint(.color), " ", .at * 100, "%").join(","), ")"
     Geometry.Pattern => "url(#", paint.shape.id, ")"
-  Clamp := (interpolated: Geometry.Interpolated) => interpolated.from.share * 100, "% + (100vw - ", interpolated.from.width as px, "px) * ", (interpolated.to.share - interpolated.from.share) * 100 / (interpolated.to.width - interpolated.from.width) as px
+  Responsive := (constraint: Geometry.Constraint) => constraint.share ==.instance_of (Geometry.Interpolated | Geometry.Steps | Geometry.Breakpoint[])
+  Stops := (share) => share ==.instance_of Geometry.Breakpoint[] ? (share as Geometry.Steps).sorted : share.sorted
+  Chord := (from: Geometry.Breakpoint, to: Geometry.Breakpoint) => "calc(", from.share * (from.width as px), "px + (100cqw - ", from.width as px, "px) * ", (to.share * (to.width as px) - from.share * (from.width as px)) / ((to.width - from.width) as px), ")"
+  Measure := (length: Geometry.Length) => length.match
+    Number => length, "px"
+    {quantities{count > 1}} => "calc(", length.quantities.map(.quantity, .unit.symbol).join(" + "), ")"
+    * => length.amount, length.unit.symbol
 
   JS.level := {
     {page: Geometry.Shape} => JS.Module([
       Runtime,
       Devices,
-      page.expand.dynamics.flatten.map(JS.Effect(reads: .reads, body: [.compiled{O: JS.expressions}])),
+      page.expand.map(shape => shape.dynamics.map(dynamic => JS.Effect(reads: dynamic.reads, body: [
+        dynamic.target == "class" ? JS.Assign((Element(shape), "className"), dynamic.compiled{O: JS.expressions}) : dynamic.compiled{O: JS.expressions}
+      ]))).flatten,
+      UI.Watch.all.map(watch => JS.Call(("ray", "subscribe"), [watch.watched.program.reads, JS.Function(None, [], [watch.action{O: JS.expressions}])])),
+      UI.Timer.all{!.fired}.map(timer => JS.Call("setTimeout", [JS.Function(None, [], [timer.action{O: JS.expressions}]), (timer.due - Time.now) as ms])),
+      page.expand{==.instance_of UI.TextArea && .language}.map(area => JS.Listen(JS.Call(("document", "getElementById"), [area.id + "-text"]), "input", [JS.Assign((JS.Call(("document", "getElementById"), [area.id + "-paint"]), "textContent"), ("event", "target.value"))])),
       page.expand{.focusable}.map(shape => JS.Listen(Element(shape), "click", [JS.Call(("ray", "activate"), [shape.id])])),
       page.expand{==.instance_of UI.Input}.map(input => JS.Listen(Element(input), "input", [JS.Call(("ray", "set"), [input.id, ("event", "target.value")])])),
-      page.expand{==.instance_of Geometry.Canvas}.map(canvas => JS.Effect(reads: canvas.draws.reads, body: [JS.Call(("ray", "draw"), [canvas.id, canvas.draws{O: Language.Direct.level}()])]))
+      page.expand{==.instance_of Geometry.Canvas}.map(canvas => JS.Effect(reads: canvas.draws.reads, body: [JS.Call(("ray", "draw"), [canvas.id, canvas.draws{O: Language.Direct.level}()])])),
+      page.expand{==.instance_of UI.Popover && .trigger != always}.map(popover => Anchor(popover, page) -- (anchor => [
+        ["pointerenter", "focusin"].map(event => JS.Listen(Element(anchor), event, [JS.Call((Element(popover), "showPopover"))])),
+        ["pointerleave", "focusout"].map(event => JS.Listen(Element(anchor), event, [JS.Call((Element(popover), "hidePopover"))]))
+      ])).flatten,
+      page.expand{.position.kind == anchored && .visible && (!=.instance_of UI.Popover || .trigger == always)}.map(JS.Call((Element(.), "showPopover")))
     ])
   }
   Element := (shape: Geometry.Shape) => JS.Call(("document", "getElementById"), [shape.id])
@@ -182,7 +286,7 @@ Language.Web := class: Language {
   Runtime := JS.Function("effect", ["reads", "body"], [JS.Call(("ray", "subscribe"), ["reads", "body"]), JS.Call("body")])
   Devices := [
     JS.Call(("ray", "set"), ["UI.Platform.handheld", (((("/Android|iPhone|iPad|iPod|Mobile/i", "test(navigator.userAgent)"), "||", ("matchMedia(\"(pointer:coarse)\")", "matches&&!matchMedia(\"(pointer:fine)\").matches")), "||", ("navigator", "maxTouchPoints>1&&/Macintosh/.test(navigator.userAgent)"))]),
-    ["pointerdown", "pointermove", "pointerup", "pointercancel"].map(event => JS.Listen("window", event, [JS.Call(("ray", "set"), ["UI.Pointer.pointers", JS.Call(("ray", "pointer"), ["event"])])])),
+    [("pointerdown", "down"), ("pointermove", "moved"), ("pointerup", "up"), ("pointercancel", "up")].map((event, method) => JS.Listen("window", event, [JS.Call(("ray", "call"), ["UI.Pointer." + method, JS.Call(("ray", "pointer"), ["event"]), ("event", "timeStamp")])])),
     JS.Listen("window", "wheel", [JS.Call(("ray", "set"), ["UI.Pointer.wheel", ("event", "deltaY")])]),
     ["keydown", "keyup"].map(event => JS.Listen("window", event, [JS.Call(("ray", "key"), ["event"])])),
     JS.Listen("window", "focusin", [JS.Call(("ray", "set"), ["UI.Focus.current", ("event", "target.id")])]),
@@ -196,6 +300,11 @@ Language.Web := class: Language {
     JS.Listen(("window", "matchMedia(\"(prefers-reduced-motion:reduce)\")"), "change", [JS.Call(("ray", "set"), ["UI.Viewport.preferences.reduced_motion", ("event", "matches")])]),
     JS.Effect(["UI.Navigation.history"], [JS.Call(("history", "pushState"), [None, "", JS.Call(("ray", "get"), ["UI.Navigation.at"])])]),
     JS.Effect(["UI.Navigation.title"], [JS.Assign(("document", "title"), JS.Call(("ray", "get"), ["UI.Navigation.title"]))]),
+    JS.Listen("window", "scroll", [JS.Call(("ray", "set"), ["UI.Viewport.scrolled", ("window", "scrollY")])]),
+    JS.Effect(["UI.Viewport.scrolled"], [JS.Raw("const y=ray.get(\"UI.Viewport.scrolled\");if(Math.abs(scrollY-y)>1)scrollTo(0,y)")]),
+    JS.Effect(["UI.Viewport.revealing"], [JS.Raw("const r=ray.get(\"UI.Viewport.revealing\");const e=r&&document.getElementById(r.shape.id);if(e){if(r.within||!r.offset)e.scrollIntoView({block:r.align,behavior:r.smooth?\"smooth\":\"auto\"});else scrollTo({top:e.getBoundingClientRect().top+scrollY+r.offset,behavior:r.smooth?\"smooth\":\"auto\"})}")]),
+    JS.Effect(["UI.Selection.range"], [JS.Raw("const r=ray.get(\"UI.Selection.range\");const e=r&&(document.getElementById(r.shape.id+\"-text\")||document.getElementById(r.shape.id));if(e){if(e.setSelectionRange){e.focus();e.setSelectionRange(r.from,r.to)}else{const g=document.createRange();g.selectNodeContents(e);getSelection().removeAllRanges();getSelection().addRange(g)}}")]),
+    JS.Effect(["UI.Viewport.locking"], [JS.Call(("document.documentElement.classList", "toggle"), ["locked", JS.Call(("ray", "get"), ["UI.Viewport.locking"])])]),
     JS.Effect(["UI.Platform.notifications"], [JS.Call("new Notification", [JS.Call(("ray", "get"), ["UI.Platform.notifications.last.title"])])]),
     JS.Effect(["UI.Platform.fullscreen"], [JS.Call(("document.documentElement", "requestFullscreen"))]),
     JS.Effect(["UI.Platform.printing"], [JS.Call(("window", "print"))]),
@@ -207,10 +316,11 @@ Language.Web := class: Language {
   }
   level := HTML.level + CSS.level + JS.level + {
     {page: Geometry.Shape} => Package([
-      ("index.html", page{O: HTML.level}()),
+      UI.Theme.applied(page) -- ("index.html", page{O: HTML.level}()),
       ("style.css", page{O: CSS.level}()),
       ("app.js", page{O: JS.level}()),
-      page.expand{==.instance_of Geometry.Image | Geometry.Video | Geometry.Audio}.map(.source.name, .source)
+      page.expand{==.instance_of Geometry.Image | Geometry.Video | Geometry.Audio}.map(.source.name, .source),
+      [UI.Navigation.icon, UI.Navigation.apple_icon, UI.Navigation.manifest]{!= None}.map(.name, .)
     ])
   }
 
@@ -227,21 +337,33 @@ Language.Web := class: Language {
       -- listened(element).for(send(line(["listen", element.id, .])))
       -- element.children.for(. ==.instance_of String ? send(line(["text", element.id, .escaped_line])) : mount(.) -- send(line(["append", element.id, .id])))
     render (page: Program) => send(line(["clear"])) -- mount(page{O: HTML.level}().body) -- send(line(["style", page{O: CSS.level}() as CSS.language]))
-    event => received?.trimmed ~= (id: Char{!= " "}[], " ", kind: Char{!= " "}[], (" ", value: *)?) -- Event(id: .id, kind: .kind, value: .value) if .
+    event => Event.parsed(received)
     static Event := class = id: String, kind: String, value: String? {
+      static parsed (line: String?) => line?.trimmed ~= (id: Char{!= " "}[], " ", kind: Char{!= " "}[], (" ", value: *)?) -- Event(id: .id, kind: .kind, value: .value) if .
+      at => value ~= (x: Decimal, " ", y: Decimal, (" ", time: Decimal)?) -- (position: Geometry.Vector(.x * 1px, .y * 1px), time: .time ? .time * 1 ms : Time.now)
       shape => UI.scene?.expand{.id == id}.first
       apply => kind.match
         "click" => shape?.activate
         "input" => shape?.set(value)
         "focus" => UI.Focus.current = shape
+        "scroll" => UI.Viewport.scrolled = (value as Decimal) * 1px
+        "pointerdown" => UI.Pointer.down(at.position, time: at.time)
+        "pointermove" => UI.Pointer.moved(at.position, at.time)
+        "pointerup" | "pointercancel" => UI.Pointer.up(at.position, at.time)
+        "keydown" => value.split(" ") -- UI.Keyboard.press(.first, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
+        "keyup" => UI.Keyboard.release(value.split(" ").first)
+        "size" => shape && (value ~= (width: Decimal, " ", height: Decimal)) -- (shape.size = Geometry.Vector(.width * 1px, .height * 1px))
         * => None
     }
 
-    start => send(line(["clear"]))
+    start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
     stop => None
     write (frame) => render(frame)
+      -- send(line(["lock", UI.Viewport.locking as String]))
+      -- UI.Viewport.revealing && send(line(["reveal", UI.Viewport.revealing.shape.id, UI.Viewport.revealing.align as String, UI.Viewport.revealing.smooth as String])) -- (UI.Viewport.revealing = None)
     read => event?.apply
     copy (text: String) => send(line(["clipboard", text.escaped_line]))
+    open (to: Location) => send(line(["open", (to as String).escaped_line]))
   }
 
   Chromium := { }

@@ -3,11 +3,17 @@ UI := class {
 
   Scene := {
     {text: String} => Geometry.Text(text)
-    {styled: String ^{style}} => Geometry.Text(styled) + Theme[style]
+    {painted: Painted} => Geometry.Text(painted.text, white_space: pre, runs: painted.runs)
+    {styled: * ^{{literal expression}}} => Styled(styled, Program(code: external ** expression))
+    {styled: String ^{style}} => Geometry.Text(styled).styled(style)
+    {styled: Geometry.Shape ^{style}} => styled.styled(style)
+    {{literal narrowing}} {narrowed: Geometry.Shape} => narrowed.narrowed(Program(code: external ** narrowing))
+    {{literal narrowing}} {narrowed: String} => Geometry.Text(narrowed).narrowed(Program(code: external ** narrowing))
     {location: Location{.extension ==.instance_of Image.extensions}} => Geometry.Image(location, alt: location.name)
     {location: Location{.extension ==.instance_of Video.extensions}} => Geometry.Video(location)
     {location: Location{.extension ==.instance_of Audio.extensions}} => Geometry.Audio(location)
-    {location: Location} => Link(to: location, children: [Geometry.Text(location as String)])
+    {location: Location} => Link(to: location, window: location.window, children: [Geometry.Text(location as String)])
+    {drawer: Drawer} => Geometry.Box(layer: drawer.layer, children: drawer.shown)
     {shape: Geometry.Shape} => shape
     {chosen: Choice} => chosen as Input
     {superposed: |} => UI.choosing ? superposed.random : Geometry.Box(flow: inline, children: superposed.components)
@@ -16,12 +22,19 @@ UI := class {
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, constraints: [Geometry.Constraint("x", columns: 2)], children: value.fields.map(.name, .value).flatten)
   }
 
+  Styled := (value, expression: Program) => (value ==.instance_of String ? Geometry.Text(value) : value) -- (shape =>
+    shape.styled(expression() as String) -- shape.dynamics.push Geometry.Dynamic(reads: expression.reads, compiled: expression, target: "class") -- shape
+  )
+  Painted := class = text: String, spans: (from: Number, to: Number, style: String)[] = [], palette: String = "default" {
+    runs => spans.map(Geometry.Text.Run(.from, .to, color: Theme.painted(palette, .style), font: Theme[.style].font))
+  }
+
   Image := class { extensions = "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "avif" }
   Video := class { extensions = "mp4" | "webm" | "ogv" }
   Audio := class { extensions = "mp3" | "ogg" | "wav" | "flac" }
 
-  Link := class: Geometry.Box = to: Location {
-    activate => Navigation.go(to)
+  Link := class: Geometry.Box = to: Location, window: same | new = same {
+    activate => window == new ? Platform.open(to) : Navigation.go(to)
   }
 
   Interactive := class = shape: Geometry.Shape {
@@ -33,7 +46,7 @@ UI := class {
     activated => focused && Keyboard.enter.pulsed || hovered && Pointer.released
   }
 
-  Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", disabled: boolean = false {
+  Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", placeholder_color: Geometry.Paint?, disabled: boolean = false {
     static (choosing: Choice) as (=== Input) => choosing.type.match
       String{secret} => Secret(choosing)
       String{multiline} => TextArea(choosing)
@@ -48,9 +61,20 @@ UI := class {
     typed (text: String) => (value = value, text) -- this
     set (text: String) => (value = text) -- this
     erased => (value = value[..<-1]) -- this
+    empty => value == None || (value as String).empty
+    face => Geometry.Text(this.match
+        Checkbox => value ? "[x]" : "[ ]"
+        Slider => (value - chosen.type.least) / (chosen.type.most - chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
+        Select => "‹ ", value as String, " ›"
+        Secret => "•" * (value as String).length
+        * => empty ? placeholder : value as String
+      , origin: origin + padding.start, size: size - padding.total, font: font ?? Geometry.Font(), color: empty ? placeholder_color ?? Theme["muted"].color : color,
+      white_space: this ==.instance_of TextArea ? pre_wrap : nowrap, runs: !empty && this ==.instance_of TextArea && painted ? painted.runs : [])
   }
   TextField := class: Input
-  TextArea := class: Input
+  TextArea := class: Input = language: Language | String | None = None, palette: String = "default" {
+    painted => language && !empty ? (value as String).highlighted(language, palette) : None
+  }
   Secret := class: Input
   NumberField := class: Input
   Checkbox := class: Input {
@@ -76,6 +100,41 @@ UI := class {
     released: boolean = false
     wheel: Geometry.Vector = Geometry.Vector()
     cursor: default | pointer | text | grab | grabbing | move | wait | none = default
+    static Swipe := class = from: Geometry.Vector, to: Geometry.Vector, started: Time, ended: Time, started_on: Geometry.Shape? {
+      distance => to - from
+      duration => ended - started
+    }
+    velocity: Geometry.Vector = Geometry.Vector()
+    swipe: Swipe?
+    pressed_at: (position: Geometry.Vector, time: Time, shape: Geometry.Shape?)?
+    last: (position: Geometry.Vector, time: Time)?
+    down (at: Geometry.Vector, kind: Kind = mouse, time: Time = Time.now) => (pointers = [(kind, at, 1, Geometry.Vector(), [0])])
+      -- (pressed_at = (at, time, scene?.at(at).first)) -- (last = (at, time)) -- (velocity = Geometry.Vector()) -- (released = false) -- (swipe = None)
+    moved (at: Geometry.Vector, time: Time = Time.now) => (velocity = last && time > last.time ? (at - last.position) * (1 / ((time - last.time) as ms)) : velocity)
+      -- (last = (at, time)) -- (pointers = pointers.empty ? [(mouse, at, 0, Geometry.Vector(), [])] : pointers.map(. ~~ .position = at))
+    up (at: Geometry.Vector, time: Time = Time.now) => moved(at, time)
+      -- (swipe = pressed_at ? Swipe(pressed_at.position, at, pressed_at.time, time, pressed_at.shape) : None)
+      -- (pressed_at = None) -- (released = true) -- (pointers = pointers.map(. ~~ (.buttons = []) ~~ (.pressure = 0)))
+  }
+  Keyboard := class: global.Keyboard {
+    static Modifier := enum shift | control | alt | meta
+    static Direction = global.Keyboard.Direction
+    static enter = global.Keyboard.enter
+    static tab = global.Keyboard.tab
+    static escape = global.Keyboard.escape
+    static f2 = global.Keyboard.f2
+    static press (name, shift = false, control = false, alt = false, meta = false) => global.Keyboard.named(name) -- (key => (key.shift = shift) -- (key.control = control) -- (key.alt = alt) -- (key.meta = meta) -- key.press)
+    static release (name) => global.Keyboard.named(name).release
+    static pressed (name, modifier: Modifier? = None) => global.Keyboard.named(name) -- (key => key.pressed && (modifier == None || modifier#.some(key.holding(.))))
+  }
+  global.Keyboard.Key &+= {
+    alt = false
+    meta = false
+    holding (modifier: Keyboard.Modifier) => modifier.match
+      shift => shift
+      control => control
+      alt => alt
+      meta => meta
   }
   Focus := class {
     current: Geometry.Shape?
@@ -85,8 +144,13 @@ UI := class {
   Selection := class {
     shapes: Geometry.Shape[] = []
     expanded: Geometry.Shape[] = []
-    text: String => shapes{==.instance_of Geometry.Text}.text.join("")
+    range: (shape: Geometry.Shape, from: Number, to: Number)?
+    text: String => range ? Content(range.shape)[range.from..<range.to] : shapes{==.instance_of Geometry.Text}.text.join("")
     current => shapes.last ?? scene
+    static Content := (shape: Geometry.Shape) => shape ==.instance_of Input ? (shape.empty ? "" : shape.value as String) : shape.texts.text.join("")
+    static shaped (target) => target ==.instance_of Geometry.Shape ? target : scene?.expand{==.instance_of Input && .chosen === target}.first
+    whole (target) => shaped(target) -- (shape => (range = (shape, 0, Content(shape).length)) -- (shapes = [shape])) if shaped(target)
+    selects (shape: Geometry.Shape, index: Number) => range && range.shape === shape && range.from <= index < range.to
 
     static moved (shape: Geometry.Shape, direction: Keyboard.Direction) => {
       parent = shape.parent_in(scene)
@@ -120,18 +184,63 @@ UI := class {
   Viewport := class {
     size: Geometry.Vector = Geometry.Vector(1240px, 800px)
     scale: Number = 1
+    scrolled: Geometry.Length = 0px
+    locked: boolean = false
+    locking => locked || (scene?.expand{==.instance_of Drawer && .open}.nonempty ?? false)
+    scroll (by: Geometry.Length) => (scrolled = (scrolled + by) min ((scene?.content_height ?? size.y) - size.y) max 0px) unless locking
+    motion: Geometry.Animation?
+    revealing: (shape: Geometry.Shape, align: start | center | end, smooth: boolean, offset: Geometry.Length, within: Geometry.Shape?)?
+    height (shape: Geometry.Shape) => shape.size.y
+    measured (shape: Geometry.Shape) => shape.size
+    target (shape: Geometry.Shape, align: start | center | end, offset: Geometry.Length, frame: (origin: Geometry.Vector, size: Geometry.Vector)) => (shape.origin.y - frame.origin.y + offset - align.match
+        center => (frame.size.y - shape.size.y) / 2
+        end => frame.size.y - shape.size.y
+        * => 0px
+      ) max 0px
+    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px, within: Geometry.Shape? = None) => shape && (revealing = (shape, align, smooth, offset, within)) -- (within
+      ? within.scrolled = Geometry.Vector(0, within.scrolled.y + target(shape, align, offset, (within.origin, within.size)))
+      : target(shape, align, offset, (Geometry.Vector(0, 0px), size)) -- (to => smooth && !preferences.reduced_motion ? (motion = Geometry.Animation(from: scrolled, to: to, duration: 300 ms, easing: Geometry.ease_out, property: "scroll")) : (scrolled = to)))
+    step => motion && (scrolled = motion.at(Time.now)) -- ((motion = None) if Time.now >= motion.started + motion.duration)
     preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal, focused: boolean) = (false, false, normal, true)
   }
 
   Navigation := class {
     history: Location[] = []
-    at: Location => history.last ?? "/"
-    go (to: Location) => history.push to
+    at: Location => history.last ?? Location(written: "/")
+    go (to: Location | String) => history.push (to ==.instance_of String ? Location(written: to) : to)
     back => history.pop_back -- at
     title: String = ""
-    icon: Location?
     description: String = ""
     image: Location?
+    icon: Location?
+    apple_icon: Location?
+    manifest: Location?
+    canonical: Location?
+    theme: Geometry.Color?
+    meta: (name: String, content: String)[] = []
+    structured: *[] = []
+    defaults => [("og:title", title), ("og:description", description), ("og:image", image as String) if image]
+    tags => [defaults{!meta.name.contains(.name)}, meta].flatten{.content != None}
+  }
+  Query := class = text: String = "" {
+    static encoded (text: String) => #text.map(. ==.instance_of (Char.Letter | Char.Digit) || "-_.~".contains(.) ? . : .bytes.map("%" + (. as 16 as String).upper_case).join("")) as String
+    static decoded (text: String) => text.replace("+", " ").split("%") -- (.first, .rest.map(((.[..<2] as 16) as Char) + .[2..])).join("")
+    static written (pairs: (name: String, value: String)[]) => pairs.map(encoded(.name) + "=" + encoded(.value)).join("&")
+    pairs => text.split("&"){.nonempty}.map(. ~= (name: (!"=")[], ("=", value: *)?) -- (name: decoded(.name), value: decoded(.value ?? "")))
+    merged (changes) => Query(written([pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten))
+    as (=== String) => text.empty ? "" : "?" + text
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name}.last?.value
+  }
+  Location &+= {
+    window: same | new = same
+    parts => written ~= (path: (!"?")[], ("?", query: *)?)
+    path => Location(written: parts.path, window: window)
+    segments => parts.path.split("/"){.nonempty}
+    query => Query(parts.query ?? "")
+    with (changes) => Location(written: parts.path + (query.merged(changes) as String), window: window)
+    + (suffix: String) => Location(written: written + suffix, window: window)
+    narrowed (narrowing: Program) => Location(written: written, window: window) -- (copy => narrowing{O: Geometry.Settings}().for(.applied(copy)) -- copy)
+    {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
   }
   Site := class = index: *?, routes: Route[] = [] {
     static Route := class = path: String, field: *
@@ -141,11 +250,11 @@ UI := class {
     static (value) as (=== Site) => Site(index: value) ~~ value.fields{.value.location}.for(field => .route(field.value.location as String, field.value))
     route (path: String, field) => routes.push Route(path, field) -- this
     at (path: String) => path == "/" || path.empty ? index
-      : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest)
+      : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest, index)
       ?? index
     rendering => at(Navigation.at as String)
     static section (book, slug: String) => book.sections{.slug == slug}.first ?? book
-    static select (values, identity: String) => values{.name == identity} -- .count == 1 ? .first : Chooser(options: .)
+    static select (values, identity: String, otherwise = None) => values{.name == identity} -- .count == 1 ? .first : .empty ? otherwise : Chooser(options: .)
   }
 
   Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
@@ -157,8 +266,40 @@ UI := class {
     notify (title: String, body: String = "") => notifications.push Notification(title, body) if can(notifications)
     fullscreen: boolean = false
     printing: boolean = false
+    opened: Location[] = []
+    open (location: Location) => opened.push location -- Runtime.current?.target.open(location) -- location
+    static launch (location: Location) => external os `open` (location as String)
   }
   Notification := class = title: String, body: String
+
+  Popover := class: Geometry.Box = anchor: Geometry.Shape?, side: Geometry.Side = bottom, trigger: hover | focus | always = hover {
+    layer = 20
+    position = Geometry.Position.anchored(anchor, side)
+    shown => trigger.match
+      always => true
+      focus => anchor?.interaction.focused || anchor?.interaction.selected
+      * => anchor?.interaction.hovered || anchor?.interaction.focused || interaction.hovered
+    visible => shown
+  }
+  Overlay := class: Geometry.Box = closes: *?, shade: Geometry.Paint = Geometry.Color(0, 0, 0, 0.5) {
+    position = Geometry.Position.inset(fixed)
+    layer = 19
+    fill = shade
+    activate => closes?.close
+  }
+  Drawer := class: Geometry.Box = open: boolean = false, side: left | right | top | bottom = left, extent: Geometry.Length = 75vw {
+    layer = 20
+    panel => Geometry.Box(position: side.match
+        left => Geometry.Position.fixed(top: 0, bottom: 0, left: 0)
+        right => Geometry.Position.fixed(top: 0, bottom: 0, right: 0)
+        top => Geometry.Position.fixed(top: 0, left: 0, right: 0)
+        bottom => Geometry.Position.fixed(bottom: 0, left: 0, right: 0)
+      , layer: layer, fill: fill, overflow: scroll, children: children,
+      constraints: [Geometry.Constraint(side ==.instance_of (left | right) ? "x" : "y", least: extent, most: extent)])
+    shown => open ? [Overlay(closes: this), panel] : []
+    close => open = false
+    toggle => open = !open
+  }
 
   Role := enum heading | link | button | input | image | list | table | region | text
   Geometry.Shape &+= {
@@ -175,9 +316,28 @@ UI := class {
       Geometry.Box{activate} => Role.button
       * => Role.region
     label => this ==.instance_of Geometry.Image ? alt : children{==.instance_of Geometry.Text}.text.join(" ")
+    styled (name: String) => (styles.push name) -- Theme[name].fields{.name != "name"}.for(field => field.name.match
+      "font" => font = font ? font.merged(field.value) : field.value
+      "spacing" | "constraints" | "effects" => field.value.for(component => this + component)
+      "wrap" | "white_space" | "align" => texts.for(.`field.name` = field.value)
+      * => this.`field.name` = field.value
+    ) -- this
+    restyled (name: String) => styles -- (own => (styles = []) -- styled(name) -- own.for(styled(.))) -- this
   }
 
   Theme := class {
+    static spacing: Geometry.Length = 0.125rem
+    static scaled (amount: Number | Geometry.Length) => amount ==.instance_of Number ? spacing * amount : amount
+    static kinds: (kind: *, style: String)[] = []
+    static default (kind, style: String) => kinds.push (kind, style) -- kind
+    static applied (scene: Geometry.Shape) => scene.expand.for(shape => kinds{shape ==.instance_of .kind}.for(shape.restyled(.style))) -- scene
+    static palettes: (name: String, colors: (style: String, color: Geometry.Color)[])[] = [("default", [
+      ("keyword", "#6C6783" as Geometry.Color), ("comment", "#6C6783" as Geometry.Color), ("string", "#FFCC99" as Geometry.Color), ("number", "#FFCC99" as Geometry.Color),
+      ("class", "#9A86FD" as Geometry.Color), ("type", "#9A86FD" as Geometry.Color), ("variable", "#C4B9FE" as Geometry.Color), ("property", "#C4B9FE" as Geometry.Color),
+      ("parameter", "#F2F0FF" as Geometry.Color), ("function", "#97A4BF" as Geometry.Color), ("method", "#97A4BF" as Geometry.Color), ("operator", "#97A4BF" as Geometry.Color),
+      ("punctuation", "#6C6783" as Geometry.Color), ("label", "#A18565" as Geometry.Color), ("external", "#F59E47" as Geometry.Color), ("error", "#CD5C5C" as Geometry.Color)
+    ])]
+    static painted (palette: String, style: String) => palettes{.name == palette}.last?.colors{style == .style || style.starts_with(.style + ".")}.last?.color ?? Theme[style].color
     static styles: (name: String, *)[] = [
       ("italic", font: Geometry.Font(style: italic)),
       ("bold", font: Geometry.Font(weight: 700)),
@@ -189,16 +349,58 @@ UI := class {
     ]
     static [name: String] => styles{.name == name}.last - name ?? ()
   }
+  String &+= {
+    highlighted (language: Language | String, palette: String = "default") => Painted(this, (language ==.instance_of String ? Language.named("." + language) : language).painted(this), palette)
+  }
+
+  Watch := class = watched: Dynamic, action: Program, becoming: *?, last: *?, seen: Number = Runtime.frames {
+    static all: Watch[] = []
+    key => action.code
+    start => Watch.all{.key == key && .seen >= Runtime.frames - 1}.first -- (kept => kept
+      ? (kept.watched = watched) -- (kept.action = action) -- (kept.seen = Runtime.frames) -- kept
+      : (last = watched.program()) -- Watch.all.push this -- this)
+    changed => watched.program() -- (now => (now != last) -- (different => (last = now) -- different && (becoming == None || now == becoming)))
+    fired => action() if changed
+  }
+  Timer := class = due: Time, action: Program, fired: boolean = false, seen: Number = Runtime.frames {
+    static all: Timer[] = []
+    key => action.code
+    start => Timer.all{.key == key && .seen >= Runtime.frames - 1}.first -- (kept => kept
+      ? (kept.action = action) -- (kept.seen = Runtime.frames) -- kept
+      : Timer.all.push this -- this)
+    ready => !fired && Time.now >= due
+    fire => ((fired = true) -- action()) if ready
+  }
 
   scene: Geometry.Shape?
   Runtime := class = page: Program, renderer: Language, target: *, running: boolean = false {
     static current: Runtime?
-    solved => page{O: Scene}() -- Geometry.Solver(available: Viewport.size).solve(.) -- (scene = .)
+    static frames: Number = 0
+    solved => page{O: Scene}() -- Theme.applied(.) -- Geometry.Solver(available: Viewport.size, scrolled: Viewport.scrolled).solve(.) -- transitioned(scene, .) -- (scene = .)
+    transitioned (before: Geometry.Shape?, after: Geometry.Shape) => (before?.expand ?? []).zip(after.expand){.1.transition && .0.shown_transform != .1.transform}.for((was, now) =>
+      now.animations.push Geometry.Animation(from: was.shown_transform, to: now.transform, duration: now.transition.duration, easing: now.transition.easing, property: "transform")
+    ) -- after
     frame => solved{O: renderer.level}()
     run => (running = true) -- (Runtime.current = this) -- target.start
-      -- ((target.write(frame) -- target.read) while running)
+      -- ((target.write(frame) -- target.read -- tick) while running)
       -- target.stop -- this
     stop => running = false
+    tick => Viewport.step -- Watch.all.for(.fired) -- Timer.all.for(.fire)
+      -- (Runtime.frames += 1) -- (Watch.all = Watch.all{.seen >= Runtime.frames - 1}) -- (Timer.all = Timer.all{.seen >= Runtime.frames - 1 && !.fired})
   }
 }
 
+[p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
+  `word` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side))
+  `word.replace("p", "m")` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side, from: shape))
+}
+
+Program &+= {
+  after (delay: Quantity.Temporal) => UI.Timer(Time.now + delay, this).start
+  when (watched: Program, becoming: * = None) => UI.Watch(dynamically watched(), this, becoming).start
+}
+when {value} changes {{action}} ^keyword => Program(code: external ** action).when(Program(code: external ** value))
+{action} when {value} changes ^keyword => Program(code: external ** action).when(Program(code: external ** value))
+{action} when {value} becomes {target} ^keyword => Program(code: external ** action).when(Program(code: external ** value), target)
+after {delay: Quantity.Temporal} {{action}} ^keyword => Program(code: external ** action).after(delay)
+{action} after {delay: Quantity.Temporal} ^keyword => Program(code: external ** action).after(delay)

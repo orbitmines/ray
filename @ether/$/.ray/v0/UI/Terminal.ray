@@ -1,6 +1,6 @@
 Language.TUI := class: Language {
   static extensions = ".tui"
-  Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, link: Location?
+  Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, reverse: boolean = false, link: Location?
   Grid := class = width: Number, height: Number, cells: Cell[][] = (0..<height).map((0..<width).map(Cell())) {
     put (at: Geometry.Vector, cell: Cell) => cells[at.y][at.x] = cell if 0 <= at.x < width && 0 <= at.y < height
     painted (at: Geometry.Vector, paint: Geometry.Paint) => put(at, cells[at.y][at.x] ~~ .background = Sample(paint, at))
@@ -10,24 +10,31 @@ Language.TUI := class: Language {
   cells (length: Geometry.Vector) => Geometry.Vector(length.x / px_per_cell.x, length.y / px_per_cell.y)
 
   Cells := {
-    {page: Geometry.Shape} => Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y) -- Paint(page, .)
+    {page: Geometry.Shape} => Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y) -- Paint(page, .) -- (grid => page.lifted.for(Paint(., grid)) -- grid)
   }
-  Area := (shape: Geometry.Shape) => (cells(shape.position).y..<cells(shape.position + shape.size).y).map(y => (cells(shape.position).x..<cells(shape.position + shape.size).x).map(x => Geometry.Vector(x, y))).flatten{shape.transform.inverse.applied(. * px_per_cell) -- shape.contains(.)}
+  At := (shape: Geometry.Shape) => cells(shape.origin - Geometry.Vector(0, UI.Viewport.scrolled))
+  Area := (shape: Geometry.Shape) => At(shape) -- (from => (from.y..<from.y + cells(shape.size).y).map(y => (from.x..<from.x + cells(shape.size).x).map(x => Geometry.Vector(x, y))).flatten{
+    shape.contains(shape.transform.inverse.applied(Geometry.Vector((.x - from.x) * px_per_cell.x, (.y - from.y) * px_per_cell.y)))
+  })
   Paint := (shape: Geometry.Shape, grid: Grid) => grid -- shape.match
-    Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(column = 0 => {
-      grid.put(cells(shape.position) + Geometry.Vector(column, row), Cell(., foreground: shape.color as Geometry.Color, background: shape.fill as Geometry.Color, bold: shape.font.weight >= 600, italic: shape.font.style == italic))
-      column + .columns
-    }))
-    Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - cells(shape.position), cells(shape.size))))
+    Geometry.Text => {
+      lines = shape.lines(shape.size.x)
+      starts = shape.starts(shape.size.x)
+      (0..<lines.count).for(row => (0..<lines[row].length).reduce(column = 0 => {
+        run = shape.run_at(starts[row] + .)
+        face = run?.font ?? shape.font
+        grid.put(At(shape) + Geometry.Vector(column, row), Cell(lines[row][.], foreground: (run?.color ?? shape.color) as Geometry.Color, background: (run?.fill ?? shape.fill) as Geometry.Color, bold: face.weight >= 600, italic: face.style == italic, reverse: UI.Selection.selects(shape, starts[row] + .)))
+        column + lines[row][.].columns
+      }))
+    }
+    Geometry.Image{fill} => Area(shape).for(at => grid.put(at, Picture(shape.source).tinted(at - At(shape), cells(shape.size), shape.fill as Geometry.Color)))
+    Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - At(shape), cells(shape.size))))
     Geometry.Canvas => shape.draws{O: Language.Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..<at.y * 4 + 4].map(.[at.x * 2..<at.x * 2 + 2])))))
+    Geometry.Frame => Paint(UI.Link(to: shape.source, window: new, origin: shape.origin, size: shape.size, stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
+      Geometry.Text("▶ " + (shape.title.empty ? shape.source as String : shape.title), origin: shape.origin + Geometry.Vector(px_per_cell.x, px_per_cell.y), size: shape.size - px_per_cell * 2)
+    ]), grid)
     UI.Link => Box(shape, grid) -- Area(shape).for(grid.cells[.y][.x] ~~ .link = shape.to)
-    UI.Input => Paint(Geometry.Text(shape.match
-      UI.Checkbox => shape.value ? "[x]" : "[ ]"
-      UI.Slider => (shape.value - shape.chosen.type.least) / (shape.chosen.type.most - shape.chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
-      UI.Select => "‹ ", shape.value as String, " ›"
-      UI.Secret => "•" * (shape.value as String).length
-      * => (shape.value as String) ?? shape.placeholder
-    , position: shape.position, size: shape.size), grid) -- Border(shape, grid)
+    UI.Input => Box(shape, grid) -- Paint(shape.face, grid) -- At(shape.face) -- (from => (UI.Selection.range.from..<UI.Selection.range.to).for(i => grid.cells[from.y][from.x + i] ~~ .reverse = true) if UI.Selection.range?.shape === shape)
     * => Box(shape, grid)
   Box := (shape: Geometry.Shape, grid: Grid) => {
     Area(shape).for(grid.painted(., shape.fill)) if shape.fill
@@ -37,14 +44,14 @@ Language.TUI := class: Language {
       Geometry.Shadow => Area(shape).map(. + cells(.offset)).for(grid.cells[.y][.x] ~~ .background = (.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5))
       * => None
     )
-    shape.children.sort_by(.layer).for(Paint(., grid)) if shape.visible
+    shape.in_place.sort_by(.layer).for(Paint(., grid)) if shape.visible
     Scrollbar(shape, grid) if shape.overflow == scroll
     Focus(shape, grid) if UI.Focus.current === shape
   }
   Border := (shape: Geometry.Shape, grid: Grid) => {
     corners = shape.radius != [0] ? "╭╮╰╯" : "┌┐└┘"
-    from = cells(shape.position)
-    to = cells(shape.position + shape.size) - Geometry.Vector(1, 1)
+    from = At(shape)
+    to = from + cells(shape.size) - Geometry.Vector(1, 1)
     style = Cell(foreground: shape.stroke.paint as Geometry.Color)
     sides = shape.stroke.sides
     (from.x..to.x).for(x => grid.cells[to.y][x] ~~ .underline = true) if sides == bottom
@@ -54,7 +61,7 @@ Language.TUI := class: Language {
     (from.y + 1..<to.y).for(y => grid.put(Geometry.Vector(to.x, y), style ~~ .glyph = "│")) if sides ==.instance_of (all | right | vertical)
     [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].for((at, i) => grid.put(at, style ~~ .glyph = corners[i])) if sides == all
   }
-  Scrollbar := (shape: Geometry.Shape, grid: Grid) => cells(shape.size).y -- (0..<.).for(y => grid.put(cells(shape.position) + Geometry.Vector(cells(shape.size).x - 1, y), Cell(y == shape.scrolled.y * . / shape.content_height ? "┃" : "│")))
+  Scrollbar := (shape: Geometry.Shape, grid: Grid) => cells(shape.size).y -- (0..<.).for(y => grid.put(At(shape) + Geometry.Vector(cells(shape.size).x - 1, y), Cell(y == shape.scrolled.y * . / shape.content_height ? "┃" : "│")))
   Focus := (shape: Geometry.Shape, grid: Grid) => Area(shape).for(grid.cells[.y][.x] ~~ .underline = true)
   Sample := (paint: Geometry.Paint, at: Geometry.Vector) => paint.match
     Geometry.Color => paint
@@ -64,13 +71,16 @@ Language.TUI := class: Language {
   Picture := class = source: Location {
     static ramp = " .:-=+*#%@"
     pixels => IO.read(source) as Geometry.Raster
-    sampled (at: Geometry.Vector, of: Geometry.Vector) => pixels.at(at.x * pixels.width / of.x, at.y * pixels.height / of.y) -- Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
+    pixel (at: Geometry.Vector, of: Geometry.Vector) => pixels.at(at.x * pixels.width / of.x, at.y * pixels.height / of.y)
+    sampled (at: Geometry.Vector, of: Geometry.Vector) => pixel(at, of) -- Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
+    tinted (at: Geometry.Vector, of: Geometry.Vector, ink: Geometry.Color?) => pixel(at, of) -- Cell(ramp[.alpha * (ramp.length - 1)], foreground: ink)
   }
 
-  ANSI := class = previous: Grid? {
+  ANSI := class = previous: Grid?, title: String? {
     escape (code: String) => "\e[", code
-    write (grid: Grid) => (Terminal.emit(grid.changes(previous).map((at, cell) => escape(at.y + 1, ";", at.x + 1, "H"), Style(cell), Hyperlink(cell), cell.glyph)), escape("0m")) -- (previous = grid)
-    Style := (cell: Cell) => escape("0", (";1" if cell.bold), (";2" if cell.dim), (";3" if cell.italic), (";4" if cell.underline), (";9" if cell.strike),
+    write (grid: Grid) => Title(UI.Navigation.title) -- (Terminal.emit(grid.changes(previous).map((at, cell) => escape(at.y + 1, ";", at.x + 1, "H"), Style(cell), Hyperlink(cell), cell.glyph)), escape("0m")) -- (previous = grid)
+    Title := (shown: String) => (Terminal.emit("\e]0;", shown, "\a") -- (title = shown)) if shown != title
+    Style := (cell: Cell) => escape("0", (";1" if cell.bold), (";2" if cell.dim), (";3" if cell.italic), (";4" if cell.underline), (";9" if cell.strike), (";7" if cell.reverse),
       (";", Color(cell.foreground, 38)) if cell.foreground, (";", Color(cell.background, 48)) if cell.background, "m")
     Color := (color: Geometry.Color, layer: Number) => layer, ";2;", color.red, ";", color.green, ";", color.blue
     Hyperlink := (cell: Cell) => cell.link ? ("\e]8;;", cell.link as String, "\e\\") : "\e]8;;\e\\"
@@ -83,6 +93,7 @@ Language.TUI := class: Language {
     write (grid: Grid) => ansi.write(grid)
     read => Language.TUI.read
     copy (text: String) => Terminal.emit("\e]52;c;", Base64.encoded(text.bytes), "\a")
+    open (to: Location) => UI.Platform.launch(to)
   }
 
   XTerm256 := {
@@ -110,8 +121,9 @@ Language.TUI := class: Language {
 
   static read => (Terminal.read ?? "") ~= (events: Event[]) -- .events.for(.apply)
   Event := Key | Mouse | Paste | FocusChange | Resize
-  Key := class ("\e[", (modifiers: "1;", modifier: Decimal)?, code: "A" | "B" | "C" | "D" | "H" | "F" | "Z") | ("\eO", code: "P" | "Q" | "R" | "S") | (code: Char) => {
-    name => code.match
+  Key := class ("\e[", (modifiers: "1;", modifier: Decimal)?, code: "A" | "B" | "C" | "D" | "H" | "F" | "Z") | ("\eO", code: "P" | "Q" | "R" | "S") | ("\e[", page: "5" | "6", "~") | ("\e", alt: Char) | (code: Char) => {
+    lettered => code && (code as Number) < 27 && !(code ==.instance_of ("\r" | "\t"))
+    name => page ? Keyboard.named(page == "5" ? "PageUp" : "PageDown") : alt ? Keyboard.named(alt as String) : lettered ? Keyboard.named(((code as Number) + 96) as Char as String) : code.match
       "A" | "w" => Keyboard.Direction.up
       "B" | "s" => Keyboard.Direction.down
       "C" | "d" => Keyboard.Direction.right
@@ -121,8 +133,9 @@ Language.TUI := class: Language {
       "\t" | "Z" => Keyboard.tab
       * => Keyboard.key(code)
     shift => modifier && (modifier - 1) % 2 == 1
-    control => modifier && (modifier - 1) / 4 % 2 == 1
-    apply => Keyboard.press(name, shift, control) -- {
+    control => modifier && (modifier - 1) / 4 % 2 == 1 || lettered
+    apply => UI.Keyboard.press(name, shift, control, alt != None) -- {
+      UI.Viewport.scroll((page == "5" ? -1 : 1) * UI.Viewport.size.y) if page
       UI.Selection.move(name) if name ==.instance_of Keyboard.Direction && !shift && !control
       UI.Selection.skip(name) if name ==.instance_of Keyboard.Direction && control
       UI.Selection.expand(name) if name ==.instance_of Keyboard.Direction && shift
@@ -133,9 +146,11 @@ Language.TUI := class: Language {
     }
   }
   Mouse := class ("\e[<", button: Decimal, ";", x: Decimal, ";", y: Decimal, state: "M" | "m") => {
-    apply => UI.Pointer.pointers = [(mouse, Geometry.Vector(x - 1, y - 1) * px_per_cell, state == "M" ? 1 : 0, Geometry.Vector(), button < 64 && state == "M" ? [button % 4] : [])]
-      -- (UI.Pointer.wheel = Geometry.Vector(y: button == 64 ? -1 : 1)) if button >= 64
-      -- (UI.Pointer.released = state == "m")
+    position => Geometry.Vector((x - 1) * px_per_cell.x, (y - 1) * px_per_cell.y)
+    apply => button >= 64 ? (UI.Pointer.wheel = Geometry.Vector(y: button == 64 ? -1 : 1)) -- UI.Viewport.scroll(UI.Pointer.wheel.y * 3 * px_per_cell.y)
+      : state == "m" ? UI.Pointer.up(position)
+      : button >= 32 ? UI.Pointer.moved(position)
+      : UI.Pointer.down(position)
   }
   Paste := class ("\e[200~", text: *, "\e[201~") => {
     apply => UI.Clipboard.content = text -- UI.Focus.current?.typed(text)
@@ -152,9 +167,9 @@ Terminal := class {
   emit (bytes) => external io `stdout` (bytes)
   read => external io `stdin` None
   size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
-  raw_mode => emit("\e[?1049h", "\e[?25l", "\e[?1000h", "\e[?1006h", "\e[?2004h", "\e[?1004h")
+  raw_mode => emit("\e[?1049h", "\e[?25l", "\e[?1000h", "\e[?1002h", "\e[?1006h", "\e[?2004h", "\e[?1004h")
   clear => emit("\e[2J", "\e[H")
-  restore => emit("\e[?1004l", "\e[?2004l", "\e[?1006l", "\e[?1000l", "\e[?25h", "\e[?1049l")
+  restore => emit("\e[?1004l", "\e[?2004l", "\e[?1006l", "\e[?1002l", "\e[?1000l", "\e[?25h", "\e[?1049l")
 }
 
 Language.register(Language.TUI)

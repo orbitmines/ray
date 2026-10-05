@@ -216,6 +216,13 @@ Choice := class {
 
 Choice.chosen = chain None
 
+Node.components.hierarchy &= class {
+  chosen_within (width) => .components.random
+}
+Number.components.hierarchy &= class {
+  chosen_within (width: Number) => Random.number(width)
+}
+
 Distribution := class {
   outcomes: (chain None)
   optional: false

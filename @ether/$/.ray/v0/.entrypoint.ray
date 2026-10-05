@@ -678,6 +678,11 @@ Node := base class {
           candidate
         )
         admits (candidate) => if (this.narrows.admits(candidate)) { candidate.satisfies(this.constraint) } else { None }
+        chosen_within (width) => (
+          picked ^keyword := this.narrows.chosen_within(width)
+          if (picked.satisfies(this.constraint)) { picked } else { .chosen_within(width.succ) }
+        )
+        () ^punctuation => .chosen_within(1)
         if (this.instance) { selected.verify(this) }
       }
     }

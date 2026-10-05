@@ -158,3 +158,8 @@ held_key := Keyboard.Key(name: 5).press
 unless (held_key) { INFO@mark `KB16 a pressed key does not hold as a condition` }
 if (held_key.release) { INFO@mark `KB17 a released key holds as a condition` }
 if (Keyboard.Key(name: 6)) { INFO@mark `KB18 a key nobody pressed holds as a condition` }
+
+// Calling a narrowed type chooses a value of it.
+chosen_above := Number{. > 5}()
+unless (chosen_above > 5) { INFO@mark `CN1 a value chosen from a narrowing does not satisfy it` }
+unless (boolean{. == true}() == true) { INFO@mark `CN2 the only member a narrowing admits is not the one chosen` }

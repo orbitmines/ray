@@ -251,3 +251,9 @@ Origin := class = method: Node, arguments: Node {
 // `&` is the context being run and `&name` a member of it: `&caller`, `&entrypoint` (U4, P1.3).
 & ^keyword => external .
 &{literal member ^variable} ^keyword => external get (external .) member
+
+// `~generate()` alone enters this at a label; `x.prop?` is a member named `prop?` when there is one, else `(x.prop)?` (L§4.2, L§10.1).
+~{literal label ^label} ^punctuation => this~label
+Node &+= {
+  .{literal property ^property}? ^punctuation => (external get this (property + "?")) ?? (external get this property)?
+}

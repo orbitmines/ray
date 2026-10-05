@@ -219,3 +219,11 @@ inner := World(name: "inner")
 looked.worlds.push inner
 unless looked#INNER == inner { INFO@mark `LK3 #name does not find a world ignoring case` }
 unless looked@nobody == World.ether@nobody { INFO@mark `LK4 a name not defined here does not fall back to @ether` }
+
+// Locations written as values (L§6.1, A3)
+site := @https://orbitmines.com/archive
+unless site as String == "https://orbitmines.com/archive" { INFO@mark `LC1 @https://… is not a location of what is written` }
+unless @"a location with spaces" as String == "a location with spaces" { INFO@mark `LC2 @"…" does not keep its spaces` }
+unless @./lib/logo.png as String == "./lib/logo.png" { INFO@mark `LC3 @./path is not a relative location` }
+unless @ether/UI as String == "ether/UI" { INFO@mark `LC4 @name/path is not a location under that name` }
+unless (@./lib / "logo.png") == @./lib/logo.png { INFO@mark `LC5 / does not go into a location` }

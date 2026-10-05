@@ -9,7 +9,20 @@ Nameable := class {
 
 Location := class: Hierarchy {
   host: *?
+  written: String?
+  as (:== String) => written
+  / (path: String) => Location(written: written + "/" + path)
+  == (other) => written == (other ==.instance_of Location ? other.written : other)
 }
+
+// `@https://…`, `@"a b"`, `@./path`, `@../path`, `@/path`, `@ether/UI`: locations written as values (L§6.1, Almanac §3).
+Written := Char{!= " " && != ")" && != "," && != \n}[]
+@{scheme: Char.Word[]}://{rest: Written} ^string => Location(written: scheme + "://" + rest)
+@"{text: (!"\"")[]}" ^string => Location(written: text)
+@./{path: Written} ^string => Location(written: "./" + path)
+@../{path: Written} ^string => Location(written: "../" + path)
+@/{path: Written} ^string => Location(written: "/" + path)
+@{name: Char.Word[]}/{path: Written} ^string => Location(written: name + "/" + path)
 
 World := class: Location + Nameable {
   static PREFIX = "#"

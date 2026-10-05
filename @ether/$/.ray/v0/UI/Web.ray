@@ -1,13 +1,14 @@
 Language.Web := class: Language {
   static extensions = ".web"
   HTML := class {
-    Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | Text | Raw)[] = [] {
+    Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | Text | Raw | Comment)[] = [] {
       static made = 0
       id: String = attributes{.name == "id"}.first?.value ?? ("e" + ((Element.made += 1) as String))
       void => tag is ("img" | "input" | "br" | "meta" | "link" | "source")
     }
     Text := class = text: String
     Raw := class = text: String
+    Comment := class = text: String
     Document := class = head: Element[], body: Element, language: String = "en"
 
     Page := class = shape: Geometry.Shape
@@ -27,36 +28,25 @@ Language.Web := class: Language {
 
     Name = (Char.Letter, (Char.Word | "-" | ":" | ".")[])
     Entities = { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
-    Entity := class ("&", name: Char.Letter[]{length > 0}, ";") => {
-      as (=== String) => Entities[name] ?? ("&" + name + ";")
-      built (reading: Program) => this as String
-    }
-    Quoted := class ("\"", parts: (Language.Hole | Language.Escape | Entity | (!("\"" | "{" | "&" | \\))[]{length > 0})[], "\"") => {
-      built (reading: Program) => Language.composed(parts, reading)
-    }
-    Attribute := class (Char.Blank[]{length > 0}, ((name: Name, ("=", value: Quoted | Language.Hole)?) | spread: Language.Hole)) => {
-      built (reading: Program) => spread ? spread.built(reading)
-        : value == None ? (name, "")
-        : value.built(reading) -- (. == None || . == false ? None : . == true ? (name, "") : (name, .))
-    }
-    Words := class (pieces: (Language.Escape | Entity | !("<" | "{" | "&" | \\))[]{length > 0}) => {
-      text => pieces.map(. as String).join("")
-      built (reading: Program) => text.trimmed.empty && text.contains(\n) ? None : text
-    }
-    Comment := class ("<!--", text: *, "-->") => {
-      built (reading: Program) => None
-    }
-    Tag := class ("<", tag: Name, attributes: Attribute[], Char.Blank[], ("/>" | (">", children: (Tag | Comment | Language.Hole | Words)[], "</", closing: Name, Char.Blank[], ">"))) => {
-      dynamically assert closing == None || closing == tag
-      built (reading: Program) => Element(tag, attributes.map(.built(reading)){!= None}, (children ?? []).map(child(.built(reading))).flatten(1))
-    }
-    Fragment := Tag | Comment
-    child (value) => value == None ? []
-      : value is String ? [Text(value)]
+    child (value) => value === None ? []
+      : value is String ? (value.trimmed.empty && value.contains(\n) ? [] : [Text(value)])
       : value is Number ? [Text(value as String)]
-      : value is (Element | Text | Raw) ? [value]
+      : value is (Element | Text | Raw | Comment) ? [value]
       : value is Iterable ? value.map(child).flatten(1)
       : [value]
+    attributed (value) => value === None ? []
+      : value is String ? [(value, "")]
+      : value is Iterable && !(value.first is String) ? value.map(attributed).flatten(1)
+      : [value]
+
+    syntax := Compiler.default + {
+      <!--{literal text}--> => Comment(text)
+      <{tag: Name}{attributes}/> => Element(tag, attributed(attributes))
+      <{tag: Name}{attributes}>{children}</{tag}> => Element(tag, attributed(attributes), child(children))
+      {name: Name}="{value}" => (name, value)
+      {name: Name}={value} => value === None || value == false ? None : value == true ? (name, "") : (name, value)
+      &{name: Char.Letter[]}; => Entities[name] ?? ("&" + name + ";")
+    }
 
     rules := CSS.values + {
       {page: HTML.Page} => Document(head: [Head()], body: @html <body>{page.shape}</body>)
@@ -144,8 +134,9 @@ Language.Web := class: Language {
       {element: Element} => "<", element.tag, element.attributes.map(" ", .name, "=\"", escaped(.value as String), "\""), ">", element.children, "</", element.tag, ">"
       {text: Text} => escaped(text.text)
       {raw: Raw} => raw.text
+      {comment: Comment} => "<!--", comment.text, "-->"
     }
-    language = Language.register(Language(".html", fragment: Fragment, writer: (node) => Compiler.reduced(node, written) as String))
+    language = Language.register(Language(".html", level: syntax, writer: (node) => Compiler.reduced(node, written) as String))
 
     level := UI.Rendering + {
       {solved: Geometry.Solved} => Page(solved.shape)
@@ -153,9 +144,10 @@ Language.Web := class: Language {
   }
 
   CSS := class {
-    Rule := class = selector: String, declarations: (property: String, value: String)[], within: String?
-    Keyframes := class = name: String, frames: (at: Probability, declarations: (property: String, value: String)[])[]
-    Sheet := class = rules: (Rule | Keyframes)[] = []
+    Rule := class = selector: String, declarations: ((property: String, value: String) | Comment)[], within: String?
+    Keyframes := class = name: String, frames: (at: Probability, declarations: ((property: String, value: String) | Comment)[])[]
+    Comment := class = text: String
+    Sheet := class = rules: (Rule | Keyframes | Comment)[] = []
 
     Page := class = shape: Geometry.Shape
     Styles := class = shape: Geometry.Shape
@@ -184,34 +176,17 @@ Language.Web := class: Language {
     Sides = { all: "", top: "-top", bottom: "-bottom", left: "-left", right: "-right", horizontal: "-inline", vertical: "-block" }
     Cases = { upper: "uppercase", lower: "lowercase", title: "capitalize" }
 
-    Prelude = (Language.Hole | Language.Escape | (!("{" | "}" | ";" | \\))[]{length > 0})[]{length > 0}
-    Property = (Language.Hole | (Char.Word | "-")[]{length > 0})[]{length > 0}
-    Comment := class (Char.Blank[], "/*", text: *, "*/") => {
-      built (reading: Program) => None
-    }
-    Declaration := class (Char.Blank[], property: Property, Char.Blank[], ":", Char.Blank[], value: (Language.Hole | Language.Escape | (!(";" | "{" | "}" | \\))[]{length > 0})[], ";") => {
-      valued (reading: Program) => Language.composed(value.enumerate.map(.index == value.count - 1 && .value is String ? .value.trimmed_end : .value){!(. is String && .empty)}, reading)
-      built (reading: Program) => valued(reading) -- (. == None ? None : (Language.joined(property, reading), .))
-    }
-    Declarations := class (Char.Blank[], "{", items: (Declaration | Language.Splice | Comment)[], Char.Blank[], "}") => {
-      built (reading: Program) => items.map(.built(reading)){!= None}
-    }
-    Ruleset := class (Char.Blank[], selector: Prelude, block: Declarations) => {
-      built (reading: Program) => Rule(Language.joined(selector, reading).trimmed, block.built(reading))
-    }
-    Within := class (Char.Blank[], "@", prelude: Prelude, "{", rules: (Ruleset | Comment)[], Char.Blank[], "}") => {
-      dynamically assert !(prelude.first is String && prelude.first.starts_with("keyframes"))
-      built (reading: Program) => ("@" + Language.joined(prelude, reading).trimmed) -- (within => rules.map(.built(reading)){!= None}.map(Rule(.selector, .declarations, within: within)))
+    syntax := Compiler.default + {
+      /*{literal text}*/ => Comment(text)
+      {property}:{value}; => (property as String, value) if value != None
+      {selector}{`{`}{declarations: *[]}{`}`} => Rule((selector as String).trimmed, declarations{!= None})
+      @keyframes {name}{`{`}{frames: *[]}{`}`} => Keyframes((name as String).trimmed, frames)
+      from{`{`}{declarations: *[]}{`}`} => (at: 0, declarations: declarations{!= None})
+      to{`{`}{declarations: *[]}{`}`} => (at: 1, declarations: declarations{!= None})
+      {percent: Decimal}%{`{`}{declarations: *[]}{`}`} => (at: percent / 100, declarations: declarations{!= None})
+      @{prelude}{`{`}{rules: *[]}{`}`} => rules{!= None}.map(. is Rule ? Rule(.selector, .declarations, within: "@" + (prelude as String).trimmed) : .)
         -- (.count == 1 ? .first : .)
     }
-    Frame := class (Char.Blank[], ((at: "from" | "to" | Language.Hole) | (percent: Decimal, "%")), block: Declarations) => {
-      position (reading: Program) => at == "from" ? 0 : at == "to" ? 1 : at ? at.built(reading) : percent / 100
-      built (reading: Program) => (at: position(reading), declarations: block.built(reading))
-    }
-    Keyframed := class (Char.Blank[], "@keyframes", Char.Blank[]{length > 0}, name: Prelude, "{", frames: Frame[], Char.Blank[], "}") => {
-      built (reading: Program) => Keyframes(Language.joined(name, reading).trimmed, frames.map(.built(reading)))
-    }
-    Fragment := Keyframed | Within | Ruleset | Declaration | Comment
 
     values := {
       {paint: Paint{value is Geometry.Inherited}} => "currentColor"
@@ -360,10 +335,11 @@ Language.Web := class: Language {
     written := {
       {sheet: Sheet} => sheet.rules
       {rule: Rule{within}} => rule.within, "{", Rule(rule.selector, rule.declarations), "}"
-      {rule: Rule} => rule.selector, "{", rule.declarations.map(.0, ":", .[1..], ";"), "}"
-      {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations.map(.0, ":", .[1..], ";"), "}"), "}"
+      {rule: Rule} => rule.selector, "{", rule.declarations.map(. is Comment ? . : (.0, ":", .[1..], ";")), "}"
+      {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations.map(. is Comment ? . : (.0, ":", .[1..], ";")), "}"), "}"
+      {comment: Comment} => "/*", comment.text, "*/"
     }
-    language = Language.register(Language(".css", fragment: Fragment, writer: (node) => Compiler.reduced(node, written) as String))
+    language = Language.register(Language(".css", level: syntax, writer: (node) => Compiler.reduced(node, written) as String))
 
     level := UI.Rendering + {
       {solved: Geometry.Solved} => Page(solved.shape)
@@ -398,7 +374,7 @@ Language.Web := class: Language {
 
   JS := class {
     Module := class = statements: Statement[] = []
-    Statement := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | String
+    Statement := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Comment | String
     Let := class = name: String, value: Expression
     Assign := class = target: Expression, value: Expression
     Effect := class = reads: String[], body: Statement[]
@@ -410,6 +386,7 @@ Language.Web := class: Language {
     Return := class = value: Expression
     If := class = condition: Expression, then: Statement[], otherwise: Statement[] = []
     Raw := class = code: String
+    Comment := class = text: String
     Member := class = object: Expression, member: String
     Operation := class = left: Expression, operator: String, right: Expression
     Ternary := class = condition: Expression, then: Expression, otherwise: Expression
@@ -419,108 +396,64 @@ Language.Web := class: Language {
     Literal := class = value: *
     ById := class = id: String
     Expression := String | Number | Call | Function | Raw | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
-    Built := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
+    Built := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Comment | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
 
     spliced (value) => value is Built ? value : Literal(value)
-    Precedence = { "??": 1, "||": 1, "&&": 2, "===": 3, "!==": 3, "==": 3, "!=": 3, "<": 4, ">": 4, "<=": 4, ">=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 }
-    folded (operands, operators) => operators.empty ? operands.first
-      : operators.map(Precedence[.]).min -- (lowest => operators.enumerate{Precedence[.value] == lowest}.last.index)
-        -- (at => Operation(folded(operands[..at], operators[..<at]), operators[at], folded(operands[at + 1..], operators[at + 1..])))
+    statements (value) => value === None ? []
+      : value is Iterable && !(value is (String | Built)) ? value.map(statements).flatten(1)
+      : [spliced(value)]
+    named (parameters: String) => parameters.split(",").map(.trimmed){!.empty}
     called (callee, arguments) => callee is Member && callee.member == "addEventListener" && arguments.count == 2 && arguments.first is Literal && arguments.last is Function
         ? Listen(callee.object, arguments.first.value, arguments.last.statements)
-      : callee == "effect" && arguments.count == 2 && arguments.first is Literal && arguments.last is Function
+      : callee is Raw && callee.code == "effect" && arguments.count == 2 && arguments.first is Literal && arguments.last is Function
         ? Effect(arguments.first.value, arguments.last.statements)
-      : callee is Member && callee.object == "document" && callee.member == "getElementById" && arguments.count == 1 && arguments.first is Literal
+      : callee is Member && callee.object is Raw && callee.object.code == "document" && callee.member == "getElementById" && arguments.count == 1 && arguments.first is Literal
         ? ById(arguments.first.value)
       : Call(callee, arguments)
-    statements (part, reading: Program) => part is Block ? part.built(reading)
-      : part is Language.Hole ? [spliced(part.built(reading))]
-      : [part.built(reading)]
 
     Identifier = (Char.Letter | "_" | "$", (Char.Word | "$")[])
-    Operator = "===" | "!==" | "==" | "!=" | "<=" | ">=" | "&&" | "||" | "??" | "<" | ">" | "+" | "-" | "*" | "/" | "%"
-    Escaped := class (\\, character: Char) => {
-      as (=== String) => character == "n" ? \n : character == "t" ? \t : character
-      built (reading: Program) => this as String
-    }
-    Quote := class ("\"", parts: (Language.Hole | Escaped | (!("\"" | "{" | \\ | \n))[]{length > 0})[], "\"") => {
-      built (reading: Program) => Literal(Language.joined(parts, reading))
-    }
-    Numeral := class (value: Decimal) => {
-      built (reading: Program) => Literal(value)
-    }
-    Pattern := class (written: ("/", (!("/" | \\ | \n) | (\\, Char))[]{length > 0}, "/", Char.Letter[])) => {
-      built (reading: Program) => Raw(written)
-    }
-    Constant := class (word: "null" | "true" | "false") => {
-      built (reading: Program) => Literal(word == "null" ? None : word == "true")
-    }
-    Named := class (name: Identifier) => {
-      built (reading: Program) => name
-    }
-    Paren := class ("(", Char.Blank[], inner: Term, Char.Blank[], ")") => {
-      built (reading: Program) => inner.built(reading)
-    }
-    Item := class (Char.Blank[], spread: "..."?, value: Term, Char.Blank[], ","?) => {
-      built (reading: Program) => value.built(reading) -- (spread && . is Literal && .value is Iterable && !(.value is String) ? .value.map(spliced) : [.])
-    }
-    Listed := class ("[", items: Item[], Char.Blank[], "]") => {
-      built (reading: Program) => items.map(.built(reading)).flatten(1) -- (.every(. is Literal) ? Literal(.map(.value)) : Listing(.))
-    }
-    Keyed := class (Char.Blank[], name: Identifier, Char.Blank[], ":", Char.Blank[], value: Term, Char.Blank[], ","?) => {
-      built (reading: Program) => (name: name, value: value.built(reading))
-    }
-    Recorded := class (\\, "{", entries: Keyed[], Char.Blank[], "}") => {
-      built (reading: Program) => Record(entries.map(.built(reading)))
-    }
-    Arrow := class ((("(", parameters: (!")")[], ")") | parameter: Identifier), Char.Blank[], "=>", Char.Blank[], body: Block | Term) => {
-      named => parameter ? [parameter] : parameters.split(",").map(.trimmed){!.empty}
-      built (reading: Program) => Function(None, named, body is Block ? body.built(reading) : [Return(body.built(reading))])
-    }
-    Atom := Arrow | Paren | Listed | Recorded | Quote | Numeral | Pattern | Constant | Language.Hole | Named
 
-    Dotted := class (".", member: Identifier | Language.Hole) => {
-      applied (object, reading: Program) => Member(object, member is Language.Hole ? member.built(reading) : member)
-    }
-    Arguments := class ("(", items: Item[], Char.Blank[], ")") => {
-      applied (object, reading: Program) => called(object, items.map(.built(reading)).flatten(1))
-    }
-    Prefixing := class (operator: "!" | "-" | "new " | "typeof ", Char.Blank[]) => { }
-    Unit := class (prefixes: Prefixing[], atom: Atom, accesses: (Dotted | Arguments)[]) => {
-      start (reading: Program) => atom is Language.Hole && accesses.empty ? spliced(atom.built(reading)) : atom.built(reading)
-      accessed (reading: Program) => accesses.reduce(start(reading)) (acc, current) => current.applied(acc, reading)
-      prefixed (operators, operand) => operators.empty ? operand : Prefix(operators.first.operator, prefixed(operators[1..], operand))
-      built (reading: Program) => prefixed(prefixes, accessed(reading))
-    }
-    Operated := class (Char.Blank[], operator: Operator, Char.Blank[], operand: Unit) => { }
-    Choosing := class (Char.Blank[], "?", Char.Blank[], then: Term, Char.Blank[], ":", Char.Blank[], otherwise: Term) => { }
-    Assigning := class (Char.Blank[], "=", Char.Blank[], value: Term) => { }
-    Term := class (first: Unit, rest: Operated[], choice: Choosing?, assigned: Assigning?) => {
-      built (reading: Program) => folded([[first], rest.map(.operand)].flatten(1).map(.built(reading)), rest.map(.operator))
-        -- (left => choice ? Ternary(left, choice.then.built(reading), choice.otherwise.built(reading)) : left)
-        -- (left => assigned ? Assign(left, assigned.value.built(reading)) : left)
-    }
-
-    Declared := class (("const" | "let" | "var"), Char.Blank[]{length > 0}, name: Identifier, Char.Blank[], "=", Char.Blank[], value: Term) => {
-      built (reading: Program) => Let(name, value.built(reading))
-    }
-    Returned := class ("return", Char.Blank[]{length > 0}, value: Term) => {
-      built (reading: Program) => Return(value.built(reading))
-    }
-    Branch := class ("if", Char.Blank[], "(", Char.Blank[], condition: Term, Char.Blank[], ")", Char.Blank[], then: Block | Sentence, (Char.Blank[], "else", Char.Blank[], otherwise: Block | Sentence)?) => {
-      built (reading: Program) => If(condition.built(reading), statements(then, reading), otherwise ? statements(otherwise, reading) : [])
-    }
-    Defined := class ("function", Char.Blank[]{length > 0}, name: Identifier, Char.Blank[], "(", parameters: (!")")[], ")", Char.Blank[], body: Block) => {
-      built (reading: Program) => Function(name, parameters.split(",").map(.trimmed){!.empty}, body.built(reading))
-    }
-    Sentence := Declared | Returned | Branch | Defined | Language.Hole | Term
-    Line := class (Char.Blank[], sentence: Sentence, (" " | \t)[], ";"?) => {
-      built (reading: Program) => sentence is Language.Hole
-        ? sentence.built(reading) -- (. is Iterable && !(. is String) ? .map(spliced) : [spliced(.)])
-        : [sentence.built(reading)]
-    }
-    Block := class ("{", lines: Line[], Char.Blank[], "}") => {
-      built (reading: Program) => lines.map(.built(reading)).flatten(1)
+    syntax := Compiler.default + {
+      //{literal text: (!\n)[]} => Comment(text)
+      /*{literal text}*/ => Comment(text)
+      {`{`}{lines}{`}`} => statements(lines)
+      {binding: "const" | "let" | "var"} {name: Identifier} = {value} => Let(name, spliced(value))
+      return {value} => Return(spliced(value))
+      if ({condition}) {then} else {otherwise} => If(spliced(condition), statements(then), statements(otherwise))
+      if ({condition}) {then} => If(spliced(condition), statements(then))
+      function {name: Identifier}({parameters: Parameters}) {body} => Function(name, named(parameters), statements(body))
+      ({parameters: Parameters}) => {body} => Function(None, named(parameters), body is Iterable && !(body is (String | Built)) ? statements(body) : [Return(spliced(body))])
+      {target} = {value} => Assign(spliced(target), spliced(value))
+      {condition} ? {then} : {otherwise} => Ternary(spliced(condition), spliced(then), spliced(otherwise))
+      {left} ?? {right} => Operation(spliced(left), "??", spliced(right))
+      {left} || {right} => Operation(spliced(left), "||", spliced(right))
+      {left} && {right} => Operation(spliced(left), "&&", spliced(right))
+      {left} === {right} => Operation(spliced(left), "===", spliced(right))
+      {left} !== {right} => Operation(spliced(left), "!==", spliced(right))
+      {left} == {right} => Operation(spliced(left), "==", spliced(right))
+      {left} != {right} => Operation(spliced(left), "!=", spliced(right))
+      {left} <= {right} => Operation(spliced(left), "<=", spliced(right))
+      {left} >= {right} => Operation(spliced(left), ">=", spliced(right))
+      {left} < {right} => Operation(spliced(left), "<", spliced(right))
+      {left} > {right} => Operation(spliced(left), ">", spliced(right))
+      {left} + {right} => Operation(spliced(left), "+", spliced(right))
+      {left} - {right} => Operation(spliced(left), "-", spliced(right))
+      {left} * {right} => Operation(spliced(left), "*", spliced(right))
+      {left} / {right} => Operation(spliced(left), "/", spliced(right))
+      {left} % {right} => Operation(spliced(left), "%", spliced(right))
+      !{operand} => Prefix("!", spliced(operand))
+      -{operand} => Prefix("-", spliced(operand))
+      new {operand} => Prefix("new ", spliced(operand))
+      typeof {operand} => Prefix("typeof ", spliced(operand))
+      {function}(...{arguments}) => called(spliced(function), arguments.map(spliced))
+      {function}({arguments: *[]}) => called(spliced(function), arguments.map(spliced))
+      {object}.{member} => Member(spliced(object), member is Raw ? member.code : member)
+      [{elements: *[]}] => elements.map(spliced) -- (.every(. is Literal) ? Literal(.map(.value)) : Listing(.))
+      \{{entries: *[]}{`}`} => Record(entries)
+      {name: Identifier}: {value} => (name: name, value: spliced(value))
+      /{literal pattern}/{flags: Char.Letter[]} => Raw("/" + pattern + "/" + flags)
+      null => Literal(None)
+      {name: Identifier} => Raw(name)
     }
 
     Page := class = shape: Geometry.Shape
@@ -636,6 +569,7 @@ Language.Web := class: Language {
       {returned: Return} => "return ", returned.value
       {branch: If} => "if(", branch.condition, "){", branch.then.map(., ";"), "}else{", branch.otherwise.map(., ";"), "}"
       {raw: Raw} => raw.code
+      {comment: Comment} => "/*", comment.text, "*/"
       {member: Member} => member.object, ".", member.member
       {operation: Operation} => "(", operation.left, operation.operator, operation.right, ")"
       {choice: Ternary} => "(", choice.condition, "?", choice.then, ":", choice.otherwise, ")"
@@ -645,7 +579,7 @@ Language.Web := class: Language {
       {literal: Literal} => JSON.Value(literal.value)
       {found: ById} => "document.getElementById(", JSON.Value(found.id), ")"
     }
-    language = Language.register(Language(".js", fragment: Sentence, writer: (node) => Compiler.reduced(node, written) as String))
+    language = Language.register(Language(".js", level: syntax, writer: (node) => Compiler.reduced(node, written) as String))
 
     level := UI.Rendering + {
       {solved: Geometry.Solved} => Page(solved.shape)
@@ -673,7 +607,7 @@ Language.Web := class: Language {
     received => external io `dom` None
     line (parts: String[]) => parts.join(" "), \n
 
-    Mount := class = node: HTML.Element | HTML.Text | HTML.Raw, parent: String?
+    Mount := class = node: HTML.Element | HTML.Text | HTML.Raw | HTML.Comment, parent: String?
     Listening := class = element: HTML.Element
     protocol := {
       {mount: Mount{node is HTML.Element}} => mount.node -- (element => [
@@ -683,6 +617,7 @@ Language.Web := class: Language {
         element.children.map(Mount(., element.id)),
         line(["append", mount.parent, element.id]) if mount.parent
       ])
+      {mount: Mount{node is HTML.Comment}} => []
       {mount: Mount} => line(["text", mount.parent, mount.node.text.escaped_line])
       {listening: Listening{element.tag is ("a" | "button")}} => [line(["listen", listening.element.id, "click"])]
       {listening: Listening{element.tag is ("input" | "select" | "textarea")}} => [line(["listen", listening.element.id, "input"]), line(["listen", listening.element.id, "focus"])]

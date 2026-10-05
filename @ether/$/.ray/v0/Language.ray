@@ -1,32 +1,13 @@
-Language := class = extensions: String | String[], location: Location[] = [], level: Compiler?, reader: Function?, writer: Function?, fragment: *?, of: Language?, version: Version?, versions: Language[] = [], implementations: Implementation[] = [], targets: Language[] = [] {
+Language := class = extensions: String | String[], location: Location[] = [], level: Compiler?, reader: Function?, writer: Function?, of: Language?, version: Version?, versions: Language[] = [], implementations: Implementation[] = [], targets: Language[] = [] {
   static known: Language[] = []
   static register (language: Language) => known.push language -- language
   static named (extension: String) => known{.names(extension)}.first
-  static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: outer.level, reader: outer.reader, writer: outer.writer, fragment: outer.fragment, of: base, version: outer.version)
+  static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: outer.level, reader: outer.reader, writer: outer.writer, of: base, version: outer.version)
 
   static for_file (file_name: String) => file_name ~= (*, ".", inner: Char.Word[], ".ray") ⊣
     ? (named("." + inner) ? over(named("." + inner), ray) : ray)
     : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
   static ray => named(".ray")
-  static fragment_of (extension: String) => named("." + extension)?.fragment
-  static block_of (extension: String) => fragment_of(extension) -- (fragment => fragment && ("{", Char.Blank, parts: (Char.Blank[], part: fragment | Hole)[], Char.Blank[], "}"))
-
-  static Hole := class ("{", code: Code{nonempty && !(first is Char.Blank)}, "}") => {
-    built (reading: Program) => reading(code)
-  }
-  static Code = (!("{" | "}") | ("{", Code, "}"))[]
-  static Escape := class (\\, character: "{" | "}" | \\) => {
-    as (=== String) => character
-    built (reading: Program) => character
-  }
-  static Splice := class (Char.Blank[], hole: Hole) => {
-    built (reading: Program) => hole.built(reading)
-  }
-  static Line := class (code: (!\n)[]{length > 0}) => {
-    built (reading: Program) => reading(code)
-  }
-  static composed (parts, reading: Program) => parts.map(. is String ? . : .built(reading)) -- (.empty ? "" : .count == 1 ? .first : .reduce(,))
-  static joined (parts, reading: Program) => parts.map(. is String ? . : (.built(reading) as String)).join("")
 
   static ray_written (value) => value === None ? "None"
     : value is String ? "\"" + value + "\""
@@ -62,7 +43,7 @@ Language := class = extensions: String | String[], location: Location[] = [], le
 Library := class: Language
 Tool := class = location: Location[] = []
 
-Language.register(Language(".ray", level: Compiler.default, writer: Language.ray_written, fragment: Language.Line))
+Language.register(Language(".ray", level: Compiler.default, writer: Language.ray_written))
 Language.cfg = Language.register(Language.Sublanguage(extensions: ".cfg", of: Language.ray, excluded: [io, os, random, time, network] as Effects.Source[]))
 Language.regex = Language.register(Language(".regex"))
 

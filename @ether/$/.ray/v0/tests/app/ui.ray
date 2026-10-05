@@ -327,7 +327,8 @@ unless (@html <ul>{["a", "b", "c"].map(item => @html <li>{item}</li>)}</ul>).chi
 unless (@html <p>a \{b}</p>).children.first.text == "a {b}" { INFO@mark `UI195 a backslashed brace is not a literal brace` }
 unless (@html <input disabled={true} />).attributes.contains(("disabled", "")) { INFO@mark `UI196 a true attribute is not present` }
 unless (@html <input disabled={false} />).attributes.empty { INFO@mark `UI197 a false attribute is present` }
-unless (@html <p><!-- note -->a</p>).children.count == 1 { INFO@mark `UI198 an html comment is a child` }
+commented := @html <p><!-- note -->a</p>
+unless commented.children.count == 2 && commented.children.first is Language.Web.HTML.Comment && commented.children.first.text == " note " { INFO@mark `UI198 an html comment is not kept as a child` }
 extent := [@html <br />, 2]
 unless extent.count == 2 && extent.first.tag == "br" && extent.last == 2 { INFO@mark `UI199 an html fragment does not stop where its grammar stops` }
 
@@ -358,8 +359,8 @@ html_block := @html {
   {["a", "b"].map(item => @html <li>{item}</li>)}
   <br />
 }
-unless html_block.count == 3 && html_block.first.children.first.text == "Ray" && html_block.last.tag == "br" { INFO@mark `UI215 an html block over several lines is not its elements and holes in order` }
-unless html_block[1].count == 2 && html_block[1].first.tag == "li" { INFO@mark `UI216 a hole on its own line in an html block is not its value` }
+unless html_block.count == 4 && html_block.first.children.first.text == "Ray" && html_block[1] is Language.Web.HTML.Comment && html_block.last.tag == "br" { INFO@mark `UI215 an html block over several lines is not its elements, comments and holes in order` }
+unless html_block[2].count == 2 && html_block[2].first.tag == "li" { INFO@mark `UI216 a hole on its own line in an html block is not its value` }
 css_block := @css {
   display: grid;
   gap: {2}px;
@@ -378,6 +379,13 @@ unless js_block.count == 2 && (js_block.last as Language.Web.JS.language) == "g(
 unless (@js {who} + 1) is Language.Web.JS.Operation { INFO@mark `UI220 a hole right after @js is read as a block` }
 unless [@html { <br /> }, 2].count == 2 { INFO@mark `UI221 an html block does not stop at its closing brace` }
 unless (@html { }).empty { INFO@mark `UI222 an empty block is not empty` }
+unless (commented as Language.Web.HTML.language) == "<p><!-- note -->a</p>" { INFO@mark `UI236 an html comment is not written into the html` }
+unless ((@css p { /* note */ display: grid; }) as Language.Web.CSS.language) == "p{/* note */display:grid;}" { INFO@mark `UI237 a css comment is not written into the css` }
+js_commented := @js {
+  // note
+  f()
+}
+unless (Language.Web.JS.Module(js_commented) as Language.Web.JS.language) == "/* note*/;f();" { INFO@mark `UI238 a js comment is not written into the js` }
 
 logo := (@./logo.png){alt: "logo", width <= 400px}
 logo_shape := Program(code: { logo }){O: UI.Scene}()

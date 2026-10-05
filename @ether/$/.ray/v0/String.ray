@@ -58,8 +58,7 @@ Escaped := class = character: Char {
 
 LanguageName := String{Language.named("." + .) != None}
 @{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
-@{extension: LanguageName} {fragment: Language.fragment_of(extension)} => fragment.built((code) => inline (external ** code))
-@{extension: LanguageName} {block: Language.block_of(extension)} => block.parts.map(.part.built((code) => inline (external ** code))){!= None} -- (.count == 1 ? .first : .)
+@{extension: LanguageName} {code} => Compiler.reduced(code, Language.named("." + extension).level)
 
 String := class: Char[] {
   () => &caller[this]()

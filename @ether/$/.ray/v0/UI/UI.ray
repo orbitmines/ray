@@ -7,7 +7,7 @@ UI := class {
     {location: Location{.extension ==.instance_of Image.extensions}} => Geometry.Image(location, alt: location.name)
     {location: Location{.extension ==.instance_of Video.extensions}} => Geometry.Video(location)
     {location: Location{.extension ==.instance_of Audio.extensions}} => Geometry.Audio(location)
-    {location: Location} => Link(to: location, children: [Geometry.Text(location as String)])
+    {location: Location} => Link(to: location, window: location.window, children: [Geometry.Text(location as String)])
     {shape: Geometry.Shape} => shape
     {chosen: Choice} => chosen as Input
     {superposed: |} => UI.choosing ? superposed.random : Geometry.Box(flow: inline, children: superposed.components)
@@ -20,8 +20,8 @@ UI := class {
   Video := class { extensions = "mp4" | "webm" | "ogv" }
   Audio := class { extensions = "mp3" | "ogg" | "wav" | "flac" }
 
-  Link := class: Geometry.Box = to: Location {
-    activate => Navigation.go(to)
+  Link := class: Geometry.Box = to: Location, window: same | new = same {
+    activate => window == new ? Platform.open(to) : Navigation.go(to)
   }
 
   Interactive := class = shape: Geometry.Shape {
@@ -125,13 +125,41 @@ UI := class {
 
   Navigation := class {
     history: Location[] = []
-    at: Location => history.last ?? "/"
-    go (to: Location) => history.push to
+    at: Location => history.last ?? Location(written: "/")
+    go (to: Location | String) => history.push (to ==.instance_of String ? Location(written: to) : to)
     back => history.pop_back -- at
     title: String = ""
-    icon: Location?
     description: String = ""
     image: Location?
+    icon: Location?
+    apple_icon: Location?
+    manifest: Location?
+    canonical: Location?
+    theme: Geometry.Color?
+    meta: (name: String, content: String)[] = []
+    structured: *[] = []
+    defaults => [("og:title", title), ("og:description", description), ("og:image", image as String) if image]
+    tags => [defaults{!meta.name.contains(.name)}, meta].flatten{.content != None}
+  }
+  Query := class = text: String = "" {
+    static encoded (text: String) => #text.map(. ==.instance_of (Char.Letter | Char.Digit) || "-_.~".contains(.) ? . : .bytes.map("%" + (. as 16 as String).upper_case).join("")) as String
+    static decoded (text: String) => text.replace("+", " ").split("%") -- (.first, .rest.map(((.[..<2] as 16) as Char) + .[2..])).join("")
+    static written (pairs: (name: String, value: String)[]) => pairs.map(encoded(.name) + "=" + encoded(.value)).join("&")
+    pairs => text.split("&"){.nonempty}.map(. ~= (name: (!"=")[], ("=", value: *)?) -- (name: decoded(.name), value: decoded(.value ?? "")))
+    merged (changes) => Query(written([pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten))
+    as (=== String) => text.empty ? "" : "?" + text
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name}.last?.value
+  }
+  Location &+= {
+    window: same | new = same
+    parts => written ~= (path: (!"?")[], ("?", query: *)?)
+    path => Location(written: parts.path, window: window)
+    segments => parts.path.split("/"){.nonempty}
+    query => Query(parts.query ?? "")
+    with (changes) => Location(written: parts.path + (query.merged(changes) as String), window: window)
+    + (suffix: String) => Location(written: written + suffix, window: window)
+    narrowed (narrowing: Program) => Location(written: written, window: window) -- (copy => narrowing{O: Geometry.Settings}().for(.applied(copy)) -- copy)
+    {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
   }
   Site := class = index: *?, routes: Route[] = [] {
     static Route := class = path: String, field: *
@@ -157,6 +185,9 @@ UI := class {
     notify (title: String, body: String = "") => notifications.push Notification(title, body) if can(notifications)
     fullscreen: boolean = false
     printing: boolean = false
+    opened: Location[] = []
+    open (location: Location) => opened.push location -- Runtime.current?.target.open(location) -- location
+    static launch (location: Location) => external os `open` (location as String)
   }
   Notification := class = title: String, body: String
 

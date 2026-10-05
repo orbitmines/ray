@@ -48,8 +48,9 @@ Language.Direct := class: Language {
     [character: Char] => glyphs{.character == character}.first ~~ .units = units
   }
 
-  Display := class = target: Location {
-    write (raster: Geometry.Raster) => IO.write(target, raster)
+  Display := class = target: Location, title: String = "" {
+    write (raster: Geometry.Raster) => (title = UI.Navigation.title) -- IO.write(target, raster)
+    open (to: Location) => UI.Platform.launch(to)
   }
 }
 

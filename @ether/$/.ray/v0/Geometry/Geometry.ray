@@ -184,6 +184,12 @@ Geometry := class {
     value => dynamically at(Time.now)
   }
   Dynamic := class = reads: String[], compiled: Program
+  Field := class = applied: (target) => *
+  Settings := {
+    {a} & {b} => (a, b)
+    {a}, {b} => (a, b)
+    {literal name} == {value} => Field(target => target.`name` = value)
+  }
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t
   ease: Easing = (t) => t * t * (3 - 2 * t)

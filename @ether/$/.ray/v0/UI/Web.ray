@@ -6,6 +6,7 @@ Language.Web := class: Language {
       id: String = attributes{.name == "id"}.first?.value ?? ("e" + ((Element.made += 1) as String))
       void => tag ==.instance_of ("img" | "input" | "br" | "meta" | "link" | "source")
     }
+    Raw := class = text: String
     Document := class = head: Element[], body: Element, language: String = "en"
     language = Language.register(Language(".html", writer: Writer))
     escaped (text: String) => #text.map(.match
@@ -15,8 +16,9 @@ Language.Web := class: Language {
       "\"" => "&quot;"
       * => .
     ) as String
-    Writer := (node: Document | Element | String) => node.match
+    Writer := (node: Document | Element | Raw | String) => node.match
       String => escaped(node)
+      Raw => node.text
       Document => "<!doctype html><html lang=\"", node.language, "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", node.head.map(Writer), "</head>", Writer(node.body), "</html>"
       Element => "<", node.tag, node.attributes.map(" ", .name, "=\"", escaped(.value), "\""), ">", (node.children.map(Writer), "</", node.tag, ">") unless node.void
   }
@@ -29,6 +31,25 @@ Language.Web := class: Language {
       Sheet => node.rules.map(Writer)
       Rule => (node.within, "{") if node.within, node.selector, "{", node.declarations.map(.property, ":", .value, ";"), "}", "}" if node.within
       Keyframes => "@keyframes ", node.name, "{", node.frames.map(.at * 100, "%{", .declarations.map(.property, ":", .value, ";"), "}"), "}"
+  }
+  JSON := class {
+    Object := class = entries: (name: String, value: *)[]
+    escaped (text: String) => #text.map(.match
+      "\"" => "\\\""
+      "\\" => "\\\\"
+      "<" => "\\u003c"
+      \n => "\\n"
+      * => .
+    ) as String
+    Writer := (value) => value.match
+      None => "null"
+      boolean => value ? "true" : "false"
+      Number => value as String
+      String => "\"", escaped(value), "\""
+      Location => Writer(value as String)
+      Object => "{", value.entries{.value != None}.map(Writer(.name), ":", Writer(.value)).join(","), "}"
+      Iterable => "[", value.map(Writer).join(","), "]"
+      * => Writer(Object(value.fields.map((name: .name, value: .value))))
   }
   JS := class {
     Module := class = statements: Statement[] = []
@@ -61,7 +82,7 @@ Language.Web := class: Language {
 
   HTML.level := {
     {page: Geometry.Shape} => HTML.Document(head: Head(), body: HTML.Element("body", children: [page]))
-    {link: UI.Link} => HTML.Element("a", [("id", link.id), ("href", link.to as String)], link.children)
+    {link: UI.Link} => HTML.Element("a", [("id", link.id), ("href", link.to as String), ("target", "_blank") if link.window == new, ("rel", "noopener noreferrer") if link.window == new], link.children)
     {text: Geometry.Text{role == heading}} => HTML.Element("h" + Heading.level(text), [("id", text.id)], [text.text])
     {text: Geometry.Text} => HTML.Element(text.wrap == none ? "span" : "p", [("id", text.id), ("dir", text.direction == right-to-left ? "rtl" : "ltr")], [text.text])
     {image: Geometry.Image} => HTML.Element("img", [("id", image.id), ("src", image.source as String), ("alt", image.alt), ("loading", "lazy")])
@@ -84,13 +105,23 @@ Language.Web := class: Language {
   Head := () => [
     HTML.Element("title", children: [UI.Navigation.title]),
     HTML.Element("meta", [("name", "description"), ("content", UI.Navigation.description)]),
-    HTML.Element("meta", [("property", "og:title"), ("content", UI.Navigation.title)]),
-    HTML.Element("meta", [("property", "og:description"), ("content", UI.Navigation.description)]),
-    HTML.Element("meta", [("property", "og:image"), ("content", UI.Navigation.image as String)]) if UI.Navigation.image,
+    UI.Navigation.tags.map(Meta(.name, .content)),
+    Meta("theme-color", Paint(UI.Navigation.theme)) if UI.Navigation.theme,
+    HTML.Element("link", [("rel", "canonical"), ("href", UI.Navigation.canonical as String)]) if UI.Navigation.canonical,
     HTML.Element("link", [("rel", "icon"), ("href", UI.Navigation.icon as String)]) if UI.Navigation.icon,
+    HTML.Element("link", [("rel", "apple-touch-icon"), ("href", UI.Navigation.apple_icon as String)]) if UI.Navigation.apple_icon,
+    HTML.Element("link", [("rel", "manifest"), ("href", UI.Navigation.manifest as String)]) if UI.Navigation.manifest,
+    UI.Navigation.structured.map(HTML.Element("script", [("type", "application/ld+json")], [HTML.Raw(JSON.Writer(LinkedData(.)) as String)])),
     HTML.Element("link", [("rel", "stylesheet"), ("href", "style.css")]),
     HTML.Element("script", [("src", "app.js"), ("defer", "")])
-  ]
+  ].flatten
+  Meta := (name: String, content: String) => HTML.Element("meta", [(name ~= ("og:" | "article:" | "fb:", *) ? "property" : "name", name), ("content", content)])
+  LinkedData := (entry) => JSON.Object([("@context", "https://schema.org"), Linked(entry).entries].flatten)
+  Linked := (value) => value.match
+    String | Number | boolean | Location => value
+    None => None
+    Iterable => value.map(Linked)
+    * => JSON.Object(value.fields.map((name: .name == "type" ? "@type" : .name, value: Linked(.value))))
   Svg := (shape: Geometry.Shape) => HTML.Element("svg", [("id", shape.id), ("viewBox", "0 0 ", shape.size.x as px, " ", shape.size.y as px)], [shape.match
     Geometry.Ball => HTML.Element("ellipse", [("cx", "50%"), ("cy", "50%"), ("rx", "50%"), ("ry", "50%")])
     Geometry.Polygon => HTML.Element("polygon", [("points", shape.points.map(.x as px, ",", .y as px).join(" "))])
@@ -210,7 +241,8 @@ Language.Web := class: Language {
       ("index.html", page{O: HTML.level}()),
       ("style.css", page{O: CSS.level}()),
       ("app.js", page{O: JS.level}()),
-      page.expand{==.instance_of Geometry.Image | Geometry.Video | Geometry.Audio}.map(.source.name, .source)
+      page.expand{==.instance_of Geometry.Image | Geometry.Video | Geometry.Audio}.map(.source.name, .source),
+      [UI.Navigation.icon, UI.Navigation.apple_icon, UI.Navigation.manifest]{!= None}.map(.name, .)
     ])
   }
 
@@ -242,6 +274,7 @@ Language.Web := class: Language {
     write (frame) => render(frame)
     read => event?.apply
     copy (text: String) => send(line(["clipboard", text.escaped_line]))
+    open (to: Location) => send(line(["open", (to as String).escaped_line]))
   }
 
   Chromium := { }

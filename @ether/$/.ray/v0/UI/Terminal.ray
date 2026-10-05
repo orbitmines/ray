@@ -67,9 +67,10 @@ Language.TUI := class: Language {
     sampled (at: Geometry.Vector, of: Geometry.Vector) => pixels.at(at.x * pixels.width / of.x, at.y * pixels.height / of.y) -- Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
   }
 
-  ANSI := class = previous: Grid? {
+  ANSI := class = previous: Grid?, title: String? {
     escape (code: String) => "\e[", code
-    write (grid: Grid) => (Terminal.emit(grid.changes(previous).map((at, cell) => escape(at.y + 1, ";", at.x + 1, "H"), Style(cell), Hyperlink(cell), cell.glyph)), escape("0m")) -- (previous = grid)
+    write (grid: Grid) => Title(UI.Navigation.title) -- (Terminal.emit(grid.changes(previous).map((at, cell) => escape(at.y + 1, ";", at.x + 1, "H"), Style(cell), Hyperlink(cell), cell.glyph)), escape("0m")) -- (previous = grid)
+    Title := (shown: String) => (Terminal.emit("\e]0;", shown, "\a") -- (title = shown)) if shown != title
     Style := (cell: Cell) => escape("0", (";1" if cell.bold), (";2" if cell.dim), (";3" if cell.italic), (";4" if cell.underline), (";9" if cell.strike),
       (";", Color(cell.foreground, 38)) if cell.foreground, (";", Color(cell.background, 48)) if cell.background, "m")
     Color := (color: Geometry.Color, layer: Number) => layer, ";2;", color.red, ";", color.green, ";", color.blue
@@ -83,6 +84,7 @@ Language.TUI := class: Language {
     write (grid: Grid) => ansi.write(grid)
     read => Language.TUI.read
     copy (text: String) => Terminal.emit("\e]52;c;", Base64.encoded(text.bytes), "\a")
+    open (to: Location) => UI.Platform.launch(to)
   }
 
   XTerm256 := {

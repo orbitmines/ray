@@ -69,3 +69,40 @@ unless first_box.id == first_box.id { INFO@mark `UI69 a shape's id changes` }
 unless Geometry.Box(children: [first_box]).expand.count == 2 { INFO@mark `UI70 a box holding one shape does not expand to two` }
 unless Base64.encoded("Man".bytes) == "TWFu" { INFO@mark `UI71 Man is not TWFu in Base64` }
 unless Base64.encoded("Ma".bytes) == "TWE=" { INFO@mark `UI72 Ma is not padded to TWE=` }
+
+away := @https://orbitmines.com{window == new}
+unless away.window == new { INFO@mark `UI80 a location narrowed to a new window does not open one` }
+unless (@https://orbitmines.com).window == same { INFO@mark `UI81 a location opens a new window by default` }
+away_html := Program(code: { away }){O: Language.Web.HTML.level}()
+unless away_html.body.children.first.attributes{.name == "target"}.first?.value == "_blank" { INFO@mark `UI82 a link to a new window has no target=_blank` }
+unless away_html.body.children.first.attributes{.name == "rel"}.first?.value == "noopener noreferrer" { INFO@mark `UI83 a link to a new window does not drop the opener` }
+UI.Link(to: away, window: new).activate
+unless UI.Platform.opened.last == away { INFO@mark `UI84 activating a new-window link does not open it` }
+if UI.Navigation.at == away { INFO@mark `UI85 activating a new-window link navigates the page itself` }
+
+searched := @https://orbitmines.com/archive?search=ray&page=2
+unless searched.query.search == "ray" && searched.query.page == "2" { INFO@mark `UI86 a query parameter is not read` }
+unless searched.path == "https://orbitmines.com/archive" { INFO@mark `UI87 a location's path keeps its query` }
+unless searched.with(search: "orbit").query.search == "orbit" && searched.with(search: "orbit").query.page == "2" { INFO@mark `UI88 with does not replace one parameter and keep the rest` }
+if searched.with(search: None).query.search { INFO@mark `UI89 with None does not remove a parameter` }
+unless (@https://orbitmines.com/archive?q=a%20b).query.q == "a b" { INFO@mark `UI90 a query parameter is not decoded` }
+unless (@https://orbitmines.com/archive/on-orbits).segments.last == "on-orbits" { INFO@mark `UI91 a location's last segment is not its name` }
+
+with UI.Navigation.meta = [("og:type", "article"), ("twitter:card", "summary"), ("citation_author", "Shawki, Fadi"), ("citation_author", "Other")] {
+  with UI.Navigation.structured = [(type: "Article", headline: "Ray", author: [(type: "Person", name: "Fadi")])] {
+    with UI.Navigation.manifest = @./manifest.json {
+      head := Language.Web.Head()
+      unless head.some(.tag == "meta" && .attributes.contains(("property", "og:type"))) { INFO@mark `UI92 og:* is not written as a property` }
+      unless head.some(.tag == "meta" && .attributes.contains(("name", "twitter:card"))) { INFO@mark `UI93 twitter:* is not written as a name` }
+      unless head{.tag == "meta" && .attributes.contains(("name", "citation_author"))}.count == 2 { INFO@mark `UI94 repeated citation_* entries are not all written` }
+      ld := head{.tag == "script" && .attributes.contains(("type", "application/ld+json"))}.first
+      unless ld && ld.children.first.text ~= (*, "\"@type\":\"Article\"", *) { INFO@mark `UI95 a structured entry is not JSON-LD with its @type` }
+      unless ld && ld.children.first.text ~= (*, "\"@context\":\"https://schema.org\"", *) { INFO@mark `UI96 JSON-LD has no schema.org context` }
+      unless head.some(.tag == "link" && .attributes.contains(("rel", "manifest"))) { INFO@mark `UI97 the manifest is not linked` }
+    }
+  }
+}
+unless Language.Web.JSON.Writer("</script>") as String == "\"\\u003c/script>\"" { INFO@mark `UI98 JSON text can close the script it is in` }
+with UI.Navigation.title = "Ray" {
+  unless Language.TUI.ANSI().Title("Ray") { INFO@mark `UI99 the terminal title does not follow the page title` }
+}

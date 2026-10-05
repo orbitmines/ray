@@ -5,7 +5,7 @@ Calendar := class {
   static Segment := class {
     static (convert: base ... -> last): Calendar.Segment => &caller.global.Unit(convert)
 
-    static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 0
+    static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 1
 
     is_recurring => this ==.instance_of Ray && this.length#.some(== ∞)
 

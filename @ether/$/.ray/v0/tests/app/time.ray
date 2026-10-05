@@ -74,6 +74,7 @@ if UTC.leap_seconds { INFO@mark `TI41 UTC counts leap seconds` }
 if GMT.leap_seconds { INFO@mark `TI78 the zone without leap seconds has them` }
 unless Julian.week.is_recurring { INFO@mark `TI57 the weekdays do not recur` }
 if Julian.hour.is_recurring { INFO@mark `TI58 an hour of sixty minutes recurs` }
+unless Julian.month.EPOCH == 1 && "2024-01-01" as ISO_8601 .month == January && January.index + 1 == 1 { INFO@mark `TI59 a segment does not start at one: January is not month 1` }
 unless (UTC(offset: 3 seconds) = 0) - (UTC() = 0) == 3 seconds { INFO@mark `TI79 three seconds past the agreed point is not three seconds past the other` }
 
 unless Time.now <= Time.now { INFO@mark `TI86 the clock went back` }

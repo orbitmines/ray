@@ -1,26 +1,37 @@
 Project := class: Location {
-  static Dependency := class ("@", location: (!" ")[], (" ", version: Version)?) => {
+  static Dependency := class ("@", location: (!" ")[], (" ", version: Version | Requirement | Debian.Relation)?) => {
+    kind = "dependencies"
+    alternatives: Dependency[] = []
+    name => location ~= "://" ? location.split("/").last as String : location.after("/")
+
     project: Project? => Program(code: ("@", location)){O: {
       @ether/{bundled_path: Written} => Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project
+      @{ecosystem: Package.Ecosystem}/{name: Written} => Package#{.ecosystem == ecosystem}.first.installed(name, version)
       @{scheme: Char.Word[]}://{remainder: Written} => Network.fetch((scheme + "://" + remainder) as Location, "", version) as Project
       @{local_path: Written} => IO.read(local_path) as Project
-    }}()
+    }}() ?? alternatives.map(.project).first(. != None)
   }
+  name: String?
+  version: (Version | SemVer)?
+  description: String?
+  manager: Package?
   dependencies: Dependency[] = []
   written_against: Version?
   carried: *[] = []
   overrides: *[] = []
   readings: Program = {
-    {name: String} => Language.for_file(name)
+    {name: String} => Package#{.names(name)}.first ?? Language.for_file(name)
   }
 
   shadowing => (parent, dependencies.project)#
   carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
   language_of (name: String) => Compiler.reduced(name, readings)
+  manifest => manager?.write(this)
+  installed => dependencies.map(.project)
 }
 
 Layout := class = root: Location = @./.ether/external/@ {
   checked_out (name: String) => root / ("@" + name)
-  path (name: String, locations: String[], version: Version) => locations.reduce(held = checked_out(name) / "$" => held / ("@" + .)) / (version as String)
+  path (name: String, locations: String[], version) => locations.reduce(held = checked_out(name) / "$" => held / ("@" + .)) / "%" / ((version as String) -- (. ~= ⊢"%" ? .[1..] as String : .))
   changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)
 }

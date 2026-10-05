@@ -1,198 +1,204 @@
-Render := namespace {
-  Box := class: Geometry.Box = value: *, text: String?, style: Style.Name[] = [], link: Location?
-
-  // Styles have a CSS and an ANSI spelling; renderers look them up by name.
-  Style := class = name: String, css: String, ansi: String
-  styles: Style[] = []
-  style (name: String, css: String, ansi: String) => styles.push Style(name, css, ansi) -- name
-  styled_as (name: String) => styles{.name == name}.last
-
-  Image := class = location: Location, alt: String = ""
-  Video := class = location: Location
-  Input := class = value: String = "", focused: boolean = false, placeholder: String = "" {
-    typed (text: String) => (value = value + text) -- this
-    focus => (focused = true) -- this
-  }
-  Head := class = title: String = "", description: String = "", image: Location?, url: Location?, kind: String = "website" {
-    as (:== String) => [
-      "<title>", title.html, "</title>",
-      "<meta name=\"description\" content=\"", description.html, "\">",
-      "<meta property=\"og:title\" content=\"", title.html, "\">",
-      "<meta property=\"og:description\" content=\"", description.html, "\">",
-      "<meta property=\"og:type\" content=\"", kind, "\">",
-      ("<meta property=\"og:image\" content=\"", image, "\">") if image,
-      ("<meta property=\"og:url\" content=\"", url, "\">") if url,
-      "<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"WebPage\",\"name\":\"", title.html, "\"}</script>"
-    ] as String
+// A page is a program like any other (F-D1). Rendering it is choosing a Compiler level: `page{O: Web.level}`, `page{O: TUI.level}`, `page{O: Direct.level}` (F-D2).
+// Every level starts from the scene: the program reduced to Geometry's shapes, with the variables its interactions change.
+UI := namespace {
+  // The first level: any value reduces to shapes. A value with a rendering of its own uses it; a location renders
+  // as what its extension reads to; anything else renders its fields as a table; a superposition shows all, or one when choosing (F-D4, F-C1b, F-C3).
+  Scene := {
+    {text: String} => Geometry.Text(text)
+    {styled: String ^{style}} => Geometry.Text(styled, font: Theme.font(style), fill: Theme.color(style))
+    {location: Location{.extension ==.instance_of Image.extensions}} => Geometry.Image(location, alt: location.name)
+    {location: Location{.extension ==.instance_of Video.extensions}} => Geometry.Video(location)
+    {location: Location{.extension ==.instance_of Audio.extensions}} => Geometry.Audio(location)
+    {location: Location} => Link(to: location, children: [Geometry.Text(location as String)])
+    {shape: Geometry.Shape} => shape
+    {choosing: Choice} => Input.of(choosing)
+    {superposed: |} => choosing ? superposed.random : Geometry.Box(flow: inline, children: superposed.components)
+    {lines: \n} => Geometry.Box(flow: vertical, children: lines.components)
+    {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
+    {value: *} => value.rendering ?? Geometry.Box(flow: grid, constraints: [Geometry.Constraint("x", columns: 2)], children: value.fields.map(.name, .value).flatten)
   }
 
-  image_extensions = "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp"
-  video_extensions = "mp4" | "webm"
+  Image := namespace { extensions = "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "avif" }
+  Video := namespace { extensions = "mp4" | "webm" | "ogv" }
+  Audio := namespace { extensions = "mp3" | "ogg" | "wav" | "flac" }
 
-  // A value with no rendering of its own renders its fields as a table; a superposition shows all, or one when choosing (F-D4).
-  boxed (value) => value.match
-    String => Box(value, text: value)
-    Image => Box(value, link: value.location, text: value.alt, style: ["img"])
-    Video => Box(value, link: value.location, style: ["video"])
-    Input => Box(value, text: value.value, style: ["input"])
-    {location: Location{.extension ==.instance_of image_extensions}} => boxed(Image(value.location))
-    {location: Location{.extension ==.instance_of video_extensions}} => boxed(Video(value.location))
-    {location: Location} => Box(value, text: value as String, link: value.location)
-    {rendering} => boxed(value.rendering)
-    Geometry.Shape => Box(value, children: value.children)
-    * => fields(value)
-  fields (value) => Box(value, flow: vertical, children: value.fields.map(Box(., flow: inline, children: [Box(.name, text: .name), boxed(.value)])))
-  superposed (value, choosing: boolean) => choosing ? boxed(value.random) : Box(value, flow: inline, children: value.components.map(boxed))
-
-  // Renderers are compiler levels over the geometry core (F-P1).
-  Level := class = name: String, width: Number = 80, platform: *? {
-    render (value) => boxed(value) -- Geometry.Solver(available: width).solve(.) -- written(.)
-    written (box: Box) => TODO
+  // A link is a shape that navigates when activated.
+  Link := class: Geometry.Box = to: Location {
+    activate => Navigation.go(to)
   }
 
-  HTML := class: Level = name: "html", width: 1240 {
-    tag (box: Box) => box.link ? "a" : "div"
-    written (box: Box) => "<", tag(box), attributes(box), ">", box.text?.html ?? "", box.children.map(written), "</", tag(box), ">"
-    attributes (box: Box) => " style=\"", css(box), "\"", (" href=\"", box.link, "\"") if box.link
-    css (box: Box) => [("display:flex" if box.flow == inline), "width:", box.size.x, "px", box.style.map(styled_as(.)?.css ?? "")].join(";")
+  // Interaction is variables that change; `dynamically` re-evaluates what depends on them. There are no callbacks (F-D6).
+  // The level's runtime writes these; the program only reads them.
+  Interactive := class = shape: Geometry.Shape {
+    hovered => Pointer.position.some(scene.at(.).contains(shape))
+    pressed => hovered && Pointer.pressed
+    focused => Focus.current === shape
+    selected => Selection.shapes.contains(shape)
+    dragged => Drag.current?.shape === shape
+    activated => focused && Keyboard.enter.pulsed || hovered && Pointer.released
+  }
+  Geometry.Shape &+= {
+    interaction => Interactive(this)
+    focusable => this ==.instance_of Link || this ==.instance_of Input || activate
+    activate => None
   }
 
-  TUI := class: Level = name: "tui", width: 80, selection: Box?, expanded: Box[] = [], toggled: boolean = false, running: boolean = false {
-    written (box: Box) => lines(box).join(\n)
-    lines (box: Box) => (styled(box) if box.text), box.children.map(lines).flatten
-    styled (box: Box) => box.style.map(styled_as(.)?.ansi){!= None}.map(Terminal.escape) -- . ? (., box.text, Terminal.escape("0m")) : box.text
-
-    // ↑/w ↓/s ←/a →/d move, ctrl skips groups, shift expands the selection, enter activates, f2 toggles, q quits (F-D10b).
-    run (value) => {
-      running = true
-      Terminal.raw_mode
-      selection = boxed(value)
-      (Terminal.emit(Terminal.clear, render(value)) -- key(Terminal.read)) while running
-    } -- this
-    key (bytes) => bytes?.match
-      "\r" => activate
-      "\eOQ" => toggled = !toggled
-      "q" => running = false
-      ("\e[1;5", direction: *) => skip(Terminal.decode("\e[" + direction))
-      ("\e[1;2", direction: *) => expand(Terminal.decode("\e[" + direction))
-      * => move(Terminal.decode(bytes)) if Terminal.decode(bytes)
-    activate => selection.value.activate ?? this
-    skip (direction) => (start = selection) -- (move(direction) while selection.parent !== start.parent && selection !== start)
-    expand (direction) => expanded.push(selection) -- move(direction) -- expanded.push(selection)
-    move (direction) => selection = direction.match
-      Keyboard.Direction.down => selection.children.first ?? selection
-      Keyboard.Direction.up => selection.parent ?? selection
-      Keyboard.Direction.right => selection.next ?? selection
-      Keyboard.Direction.left => selection.previous ?? selection
+  // Inputs are values chosen by the user: the type of what is chosen picks the input (F-D4 `choose`).
+  Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", disabled: boolean = false {
+    static of (choosing: Choice) => choosing.type.match
+      String{secret} => Secret(choosing)
+      String{multiline} => TextArea(choosing)
+      String => TextField(choosing)
+      boolean => Checkbox(choosing)
+      Number{least, most} => Slider(choosing)
+      Number => NumberField(choosing)
+      Time => DateField(choosing)
+      Geometry.Color => ColorField(choosing)
+      Location => FileField(choosing)
+      * => Select(choosing, options: choosing.type#)
+    typed (text: String) => (value = value, text) -- this
+    erased => (value = value[..-1]) -- this
+  }
+  TextField := class: Input
+  TextArea := class: Input
+  Secret := class: Input
+  NumberField := class: Input
+  Checkbox := class: Input {
+    activate => value = !value
+  }
+  Slider := class: Input
+  DateField := class: Input
+  ColorField := class: Input
+  FileField := class: Input = accepts: String[] = []
+  Select := class: Input = options: *[] {
+    activate => value = options[(options.index_of(value) + 1) % options.count]
+  }
+  // A form is any value whose fields are chosen; submitting it is activating it.
+  Form := class: Geometry.Box = value: * {
+    inputs => value.fields{.value ==.instance_of Choice}.map(Input.of(.value))
+    submitted => dynamically inputs.every(.value) && Keyboard.enter.pulsed
   }
 
-  // An image in the TUI is ASCII art: a luminance ramp with a colour per cell (F-C1).
-  Picture := class = pixels: Pixel[], width: Number, height: Number {
-    static ramp = " .:-=+*#%@"
-    sampled (columns: Number) => (0..<height).step(width / columns * 2).map(row =>
-      (0..<columns).map(column => pixels[row * width + column * width / columns] -- Terminal.coloured(ramp[.luminance * (ramp.count - 1) / 255], .)) as String
-    ).join(\n)
+  // Devices: what the user does, as variables (F-D6, F-D10b).
+  Pointer := namespace {
+    Kind := enum mouse | pen | touch
+    pointers: (kind: Kind, position: Geometry.Vector, pressure: Probability, tilt: Geometry.Vector, buttons: Number[])[] = []
+    position => pointers.position
+    pressed => pointers.some(.buttons.nonempty || .pressure > 0)
+    released: boolean = false
+    wheel: Geometry.Vector = Geometry.Vector()
+    cursor: default | pointer | text | grab | grabbing | move | wait | none = default
   }
-  Pixel := class = red: Number = 0, green: Number = 0, blue: Number = 0 {
-    luminance => (red * 299 + green * 587 + blue * 114) / 1000
+  Focus := namespace {
+    current: Geometry.Shape?
+    next (scene: Geometry.Shape) => scene.expand{.focusable} -- .[(.index_of(current) + 1) % .count]
+    previous (scene: Geometry.Shape) => scene.expand{.focusable} -- .[(.index_of(current) - 1) % .count]
   }
-}
+  Selection := namespace {
+    shapes: Geometry.Shape[] = []
+    expanded: Geometry.Shape[] = []
+    text: String => shapes{==.instance_of Geometry.Text}.text.join("")
+  }
+  Drag := namespace {
+    current: (shape: Geometry.Shape, from: Geometry.Vector)?
+    dropped: Location[] = []
+  }
+  Clipboard := namespace {
+    content: String | Location[] = ""
+    copy (value) => content = value
+  }
+  Composition := namespace { text: String = "" }
+  Gamepad := namespace { pads: (buttons: boolean[], axes: Number[])[] = [] }
+  Sensors := namespace {
+    orientation: Geometry.Vector?
+    motion: Geometry.Vector?
+    location: (latitude: Number, longitude: Number, accuracy: Geometry.Length)?
+  }
+  Viewport := namespace {
+    size: Geometry.Vector = Geometry.Vector(1240px, 800px)
+    scale: Number = 1
+    preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal) = (false, false, normal)
+  }
 
-// One byte-stream external: raw mode, size, key decoding and ANSI are written on top of it (F-D9).
-Terminal := namespace {
-  Kind := enum xterm_256 | truecolor | windows_terminal | browser
-  kind: Kind = truecolor
-  raw: boolean = false
-
-  escape (code: String) => "\e[", code
-  coloured (text: String, pixel: Render.Pixel) => escape("38;2;", pixel.red, ";", pixel.green, ";", pixel.blue, "m"), text, escape("0m")
-  clear => escape("2J"), escape("H")
-  raw_mode => (raw = true) -- emit(escape("?1049h"))
-  emit (text) => external io `stdout` (text)
-  read => external io `stdin` None
-  size | width => (external os `COLUMNS`) as Decimal
-  os => OS.name
-  decode (bytes) => bytes.match
-    "\e[A" | "w" => Keyboard.Direction.up
-    "\e[B" | "s" => Keyboard.Direction.down
-    "\e[C" | "d" => Keyboard.Direction.right
-    "\e[D" | "a" => Keyboard.Direction.left
-}
-
-Keyboard.Direction = enum up | down | left | right
-
-// The browser reaches the DOM over the same byte stream, through a protocol written here; its side is a fixed shim (F-D9b).
-Browser := namespace {
-  Kind := enum chromium | firefox
-  kind: Kind = chromium
-  runtime: boolean = false
-  width = 1240
-  os: OS.Name = unknown
-
-  send (message) => external io `dom` (message)
-  received => external io `dom` None
-
-  Dom := class = next_id: Number = 0 {
-    made => next_id = next_id + 1
-    line (parts: String[]) => parts.join(" "), \n
-    create (tag: String) => made -- send(line(["create", ., tag]))
-    text (id, content: String) => send(line(["text", id, content.escaped_line]))
-    style (id, css: String) => send(line(["style", id, css.escaped_line]))
-    attribute (id, name: String, value: String) => send(line(["attribute", id, name, value.escaped_line]))
-    append (parent, child) => send(line(["append", parent, child]))
-    listen (id, kind: String) => send(line(["listen", id, kind]))
-    clear => send(line(["clear"]))
-
-    mounted (box: Render.Box) => create(Render.HTML.tag(box)) -- {
-      style(., Render.HTML.css(box))
-      text(., box.text) if box.text
-      attribute(., "href", box.link as String) if box.link
-      box.children.for(append(., mounted(.)))
+  // Navigation: where the user is, and how they got there (F-A3, F-A4, F-A7).
+  Navigation := namespace {
+    history: Location[] = []
+    at: Location => history.last ?? "/"
+    go (to: Location) => history.push to
+    back => history.pop_back
+    title: String = ""
+    icon: Location?
+    description: String = ""
+    image: Location?
+  }
+  Site := class = index: *?, routes: Route[] = [] {
+    static Route := class = path: String, field: *
+    static Chooser := class = options: *[] {
+      preferred => options.first
     }
-    render (value) => clear -- append(0, mounted(Render.boxed(value) -- Geometry.Solver(available: width).solve(.)))
-    event => received?.trimmed ~= (id: Decimal, " ", kind: *) -- Event(.id, .kind)
-  }
-  Event := class = id: Number, kind: String
-  page (value) => Render.HTML().render(value)
-}
-
-// `/profiles/<name>` selects from `profiles` by identity; one answer, or a choice among several (F-A3, F-A5).
-Site := class = index: *?, routes: Route[] = [] {
-  static Route := class = path: String, field: *
-  static Chooser := class = options: *[] {
-    preferred => options.first
+    static of (value) => Site(index: value) -- value.fields{.value.location}.for(.route(.value.location as String, .value))
+    route (path: String, field) => routes.push Route(path, field) -- this
+    at (path: String) => path == "/" || path.empty ? index
+      : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest)
+      ?? index
+    rendering => at(Navigation.at as String)
+    static section (book, slug: String) => book.sections{.slug == slug}.first ?? book
+    static select (values, identity: String) => values{.name == identity} -- .count == 1 ? .first : Chooser(options: .)
   }
 
-  static of (value) => Site(index: value) -- value.fields{.value.location}.for(.route(.value.location as String, .value))
-  route (path: String, field) => routes.push Route(path, field) -- this
-  at (path: String) => path == "/" || path.empty ? index
-    : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest)
-    ?? index
-  static section (book, slug: String) => book.sections{.slug == slug}.first ?? book
-  static select (values, identity: String) => values{.name == identity} -- .count == 1 ? .first : Chooser(options: .)
+  // What a platform can do beyond drawing; each level supplies it in its target, or degrades.
+  Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
+  Platform := namespace {
+    capabilities: Capability[] = []
+    can (capability: Capability) => capabilities.contains(capability)
+    notifications: Notification[] = []
+    notify (title: String, body: String = "") => notifications.push Notification(title, body) if can(notifications)
+    fullscreen: boolean = false
+    printing: boolean = false
+  }
+  Notification := class = title: String, body: String
+
+  // Accessibility: roles follow from structure, labels from what is shown (F-D3).
+  Role := enum heading | link | button | input | image | list | table | region | text
+  Geometry.Shape &+= {
+    role => this.match
+      Link => Role.link
+      Input => Role.input
+      Geometry.Image => Role.image
+      Geometry.Text{font.weight >= 600} => Role.heading
+      Geometry.Text => Role.text
+      Geometry.Box{flow == grid} => Role.table
+      Geometry.Box{activate} => Role.button
+      * => Role.region
+    label => this ==.instance_of Geometry.Image ? alt : children{==.instance_of Geometry.Text}.text.join(" ")
+  }
+
+  // Styles are highlighting: `^italic` on text is the same style the editor shows (F-C2).
+  Theme := namespace {
+    styles: (name: String, font: Geometry.Font?, color: Geometry.Color?)[] = [
+      ("italic", Geometry.Font(style: italic), None),
+      ("bold", Geometry.Font(weight: 700), None),
+      ("muted", None, Geometry.Color(128, 128, 128)),
+      ("disabled", None, Geometry.Color(160, 160, 160)),
+      ("h1", Geometry.Font(size: 2em, weight: 700), None),
+      ("h2", Geometry.Font(size: 1.5em, weight: 700), None),
+      ("h3", Geometry.Font(size: 1.17em, weight: 700), None)
+    ]
+    font (style: String) => styles{.name == style}.first?.font ?? Geometry.Font()
+    color (style: String) => styles{.name == style}.first?.color
+  }
+
+  // Running a page: the level's runtime reads the devices, re-solves what changed and writes the frame, until it stops (F-D10).
+  scene: Geometry.Shape?
+  Runtime := class = page: Program, level: Program, running: boolean = false {
+    solved => page{O: Scene}() -- Geometry.Solver(available: Viewport.size).solve(.) -- (scene = .)
+    frame => solved{O: level}()
+    run => (running = true) -- ((level.write(frame) -- level.read()) while running) -- this
+    stop => running = false
+  }
 }
 
 String &+= {
-  html => #.map(.match
-    "<" => "&lt;"
-    ">" => "&gt;"
-    "&" => "&amp;"
-    * => .
-  ) as String
-  escaped_line => #.map(.match
-    \n => "\\n"
-    "\\" => "\\\\"
-    * => .
-  ) as String
-  styled (style: String) => Render.Box(value: this, text: this, style: [style])
-  italic => styled("italic")
-  bold => styled("bold")
+  italic => this ^italic
+  bold => this ^bold
 }
-
-Render.style("italic", "font-style:italic", "3m")
-Render.style("bold", "font-weight:bold", "1m")
-Render.style("muted", "opacity:0.6", "2m")
-Render.style("disabled", "opacity:0.4", "2m")
-Render.style("h1", "font-size:2em;font-weight:bold", "1m")
-Render.style("h2", "font-size:1.5em;font-weight:bold", "1m")
-Render.style("h3", "font-size:1.17em;font-weight:bold", "1m")

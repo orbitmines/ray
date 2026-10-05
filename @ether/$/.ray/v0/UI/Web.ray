@@ -1,0 +1,241 @@
+// The web as Compiler levels over the scene (F-D2, F-D7): HTML for structure, CSS for appearance, JS for what changes.
+// `page{O: Web.level}()` is all three together, a package of files; each is a value until it is written, in its file's language.
+Web := namespace {
+  // HTML, CSS and JS are languages: structures here, text only through their writers (X1.7).
+  HTML := namespace {
+    Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | String)[] = [] {
+      void => tag ==.instance_of ("img" | "input" | "br" | "meta" | "link" | "source")
+    }
+    Document := class = head: Element[], body: Element, language: String = "en"
+    language = Language.register(Language(".html", writer: Writer))
+    escaped (text: String) => #text.map(.match
+      "<" => "&lt;"
+      ">" => "&gt;"
+      "&" => "&amp;"
+      "\"" => "&quot;"
+      * => .
+    ) as String
+    Writer := (node: Document | Element | String) => node.match
+      String => escaped(node)
+      Document => "<!doctype html><html lang=\"", node.language, "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", node.head.map(Writer), "</head>", Writer(node.body), "</html>"
+      Element => "<", node.tag, node.attributes.map(" ", .name, "=\"", escaped(.value), "\""), ">", (node.children.map(Writer), "</", node.tag, ">") unless node.void
+  }
+  CSS := namespace {
+    Rule := class = selector: String, declarations: (property: String, value: String)[], within: String?
+    Keyframes := class = name: String, frames: (at: Probability, declarations: (property: String, value: String)[])[]
+    Sheet := class = rules: (Rule | Keyframes)[] = []
+    language = Language.register(Language(".css", writer: Writer))
+    Writer := (node: Sheet | Rule | Keyframes) => node.match
+      Sheet => node.rules.map(Writer)
+      Rule => (node.within, "{") if node.within, node.selector, "{", node.declarations.map(.property, ":", .value, ";"), "}", "}" if node.within
+      Keyframes => "@keyframes ", node.name, "{", node.frames.map(.at * 100, "%{", .declarations.map(.property, ":", .value, ";"), "}"), "}"
+  }
+  JS := namespace {
+    // Enough of JavaScript to say what a page does: variables, effects that re-run when what they read changes, listeners the level writes.
+    Module := class = statements: Statement[] = []
+    Statement := Let | Assign | Effect | Listen | Call | Function | Return | If
+    Let := class = name: String, value: Expression
+    Assign := class = target: Expression, value: Expression
+    Effect := class = reads: String[], body: Statement[]
+    Listen := class = target: Expression, event: String, body: Statement[]
+    Call := class = function: Expression, arguments: Expression[] = []
+    Function := class = name: String?, parameters: String[], body: Statement[]
+    Return := class = value: Expression
+    If := class = condition: Expression, then: Statement[], otherwise: Statement[] = []
+    Expression := String | Number | boolean | Call | Function | (object: Expression, member: String) | (left: Expression, operator: String, right: Expression)
+    language = Language.register(Language(".js", writer: Writer))
+    Writer := (node) => node.match
+      Module => node.statements.map(Writer, ";")
+      Let => "let ", node.name, "=", Writer(node.value)
+      Assign => Writer(node.target), "=", Writer(node.value)
+      Effect => "effect([", node.reads.map("\"", ., "\"").join(","), "],()=>{", node.body.map(Writer, ";"), "})"
+      Listen => Writer(node.target), ".addEventListener(\"", node.event, "\",(event)=>{", node.body.map(Writer, ";"), "})"
+      Call => Writer(node.function), "(", node.arguments.map(Writer).join(","), ")"
+      Function => "function ", node.name ?? "", "(", node.parameters.join(","), "){", node.body.map(Writer, ";"), "}"
+      Return => "return ", Writer(node.value)
+      If => "if(", Writer(node.condition), "){", node.then.map(Writer, ";"), "}else{", node.otherwise.map(Writer, ";"), "}"
+      String => "\"", node.escaped_line, "\""
+      (object, member) => Writer(node.object), ".", node.member
+      (left, operator, right) => "(", Writer(node.left), node.operator, Writer(node.right), ")"
+      * => node as String
+  }
+
+  // Shapes become elements. Every shape gets an id so CSS and JS can reach it.
+  HTML.level := {
+    {page: Geometry.Shape} => HTML.Document(head: Head(), body: HTML.Element("body", children: [page]))
+    {link: UI.Link} => HTML.Element("a", [("id", link.id), ("href", link.to as String)], link.children)
+    {text: Geometry.Text{role == heading}} => HTML.Element("h" + Heading.level(text), [("id", text.id)], [text.text])
+    {text: Geometry.Text} => HTML.Element(text.wrap == none ? "span" : "p", [("id", text.id), ("dir", text.direction == right-to-left ? "rtl" : "ltr")], [text.text])
+    {image: Geometry.Image} => HTML.Element("img", [("id", image.id), ("src", image.source as String), ("alt", image.alt), ("loading", "lazy")])
+    {video: Geometry.Video} => HTML.Element("video", [("id", video.id), ("src", video.source as String), ("controls", "") if video.controls, ("muted", "") if video.muted, ("loop", "") if video.looping])
+    {audio: Geometry.Audio} => HTML.Element("audio", [("id", audio.id), ("src", audio.source as String), ("controls", "")])
+    {canvas: Geometry.Canvas} => HTML.Element("canvas", [("id", canvas.id), ("width", canvas.size.x as px), ("height", canvas.size.y as px)])
+    {outline: Geometry.Outline | Geometry.Polygon | Geometry.Ball} => Svg(outline)
+    {form: UI.Form} => HTML.Element("form", [("id", form.id)], form.inputs)
+    {input: UI.TextField | UI.Secret | UI.NumberField | UI.DateField | UI.ColorField | UI.FileField | UI.Checkbox | UI.Slider} => HTML.Element("input", [
+      ("id", input.id), ("type", InputType[input.static]), ("placeholder", input.placeholder), ("disabled", "") if input.disabled,
+      ("min", input.chosen.type.least as String) if input ==.instance_of UI.Slider, ("max", input.chosen.type.most as String) if input ==.instance_of UI.Slider
+    ])
+    {input: UI.TextArea} => HTML.Element("textarea", [("id", input.id), ("placeholder", input.placeholder)])
+    {input: UI.Select} => HTML.Element("select", [("id", input.id)], input.options.map(HTML.Element("option", [("value", . as String)], [. as String])))
+    {box: Geometry.Shape} => HTML.Element(box.activate ? "button" : Landmark[box.role] ?? "div", [("id", box.id), ("role", box.role as String), ("aria-label", box.label) if box.label], box.children)
+  }
+  InputType = { UI.TextField: "text", UI.Secret: "password", UI.NumberField: "number", UI.DateField: "datetime-local", UI.ColorField: "color", UI.FileField: "file", UI.Checkbox: "checkbox", UI.Slider: "range" }
+  Landmark = { UI.Role.table: "table", UI.Role.list: "ul", UI.Role.region: "section" }
+  Heading := namespace { level (text: Geometry.Text) => text.font.size >= 2em ? 1 : text.font.size >= 1.5em ? 2 : 3 }
+  Head := () => [
+    HTML.Element("title", children: [UI.Navigation.title]),
+    HTML.Element("meta", [("name", "description"), ("content", UI.Navigation.description)]),
+    HTML.Element("meta", [("property", "og:title"), ("content", UI.Navigation.title)]),
+    HTML.Element("meta", [("property", "og:description"), ("content", UI.Navigation.description)]),
+    HTML.Element("meta", [("property", "og:image"), ("content", UI.Navigation.image as String)]) if UI.Navigation.image,
+    HTML.Element("link", [("rel", "icon"), ("href", UI.Navigation.icon as String)]) if UI.Navigation.icon,
+    HTML.Element("link", [("rel", "stylesheet"), ("href", "style.css")]),
+    HTML.Element("script", [("src", "app.js"), ("defer", "")])
+  ]
+  Svg := (shape: Geometry.Shape) => HTML.Element("svg", [("id", shape.id), ("viewBox", "0 0 ", shape.size.x as px, " ", shape.size.y as px)], [shape.match
+    Geometry.Ball => HTML.Element("ellipse", [("cx", "50%"), ("cy", "50%"), ("rx", "50%"), ("ry", "50%")])
+    Geometry.Polygon => HTML.Element("polygon", [("points", shape.points.map(.x as px, ",", .y as px).join(" "))])
+    Geometry.Outline => HTML.Element("path", [("d", "M", shape.from.x as px, " ", shape.from.y as px, shape.segments.map(.match
+      Geometry.Quadratic => " Q", .control.x, " ", .control.y, " ", .to.x, " ", .to.y
+      Geometry.Cubic => " C", .first.x, " ", .first.y, " ", .second.x, " ", .second.y, " ", .to.x, " ", .to.y
+      Geometry.Arc => " A", .radius.x, " ", .radius.y, " ", .rotation, " ", .large ? 1 : 0, " ", .sweep ? 1 : 0, " ", .to.x, " ", .to.y
+      * => " L", .x, " ", .y
+    ), " Z" if shape.closed)])
+  ])
+
+  // Appearance. A constraint CSS can say exactly is translated (flex, grid, max-width, clamp); anything else takes the solver's positions (F-B6b).
+  CSS.level := {
+    {page: Geometry.Shape} => CSS.Sheet([
+      CSS.Rule("*", [("box-sizing", "border-box"), ("margin", "0")]),
+      CSS.Rule("*", [("animation", "none"), ("transition", "none")], within: "@media (prefers-reduced-motion:reduce)"),
+      page.expand.map(Rules(.)).flatten
+    ])
+  }
+  Rules := (shape: Geometry.Shape) => [
+    CSS.Rule("#" + shape.id, [
+      shape.flow.match
+        inline => ("display", "flex"), ("flex-wrap", shape.constraints.wrap.last ? "wrap" : "nowrap")
+        grid => ("display", "grid"), ("grid-template-columns", "repeat(", shape.constraints.columns.last ?? 1, ",1fr)")
+        layered => ("display", "grid"), ("grid-template-areas", "\"layer\"")
+        vertical => ("display", "flex"), ("flex-direction", "column")
+      ("gap", shape.gap.y as px, "px ", shape.gap.x as px, "px"),
+      shape.constraints{.dimension == "x"}.map(.match
+        {share: Geometry.Interpolated} => ("width", "clamp(", .share.from.share * 100, "%,", Clamp(.share), ",", .share.to.share * 100, "%)")
+        {share: Number} => ("width", .share * 100, "%")
+        {most} => ("max-width", .most as px, "px")
+        {least} => ("min-width", .least as px, "px")
+        {aspect} => ("aspect-ratio", .aspect)
+        {align: center} => ("margin-inline", "auto")
+        {align: end} => ("margin-inline-start", "auto")
+        {align: between} => ("justify-content", "space-between")
+      ),
+      shape.spacing.map((.from == border ? "padding" : "margin") + Sides[.sides], .amount.y as px, "px ", .amount.x as px, "px"),
+      ("background", Paint(shape.fill)) if shape.fill,
+      ("border", shape.stroke.width as px, "px ", shape.stroke.dash.empty ? "solid" : "dashed", " ", Paint(shape.stroke.paint)) if shape.stroke,
+      ("border-radius", shape.radius.map(. as px, "px").join(" ")) if shape.radius != [0],
+      ("transform", "matrix3d(", shape.transform.matrix.transposed.flatten.join(","), ")") if shape.transform != Geometry.Transform(),
+      ("overflow", shape.overflow == scroll ? "auto" : shape.overflow as String),
+      ("z-index", shape.layer) if shape.layer != 0,
+      ("mix-blend-mode", shape.blend as String) if shape.blend != normal,
+      shape.effects.map(.match
+        Geometry.Opacity => ("opacity", .amount)
+        Geometry.Shadow => ("box-shadow", ("inset " if .inset), .offset.x as px, "px ", .offset.y as px, "px ", .blur as px, "px ", .spread as px, "px ", Paint(.color))
+        Geometry.Blur => ("filter", "blur(", .radius as px, "px)")
+        Geometry.Filter => ("filter", .kind as String, "(", .amount, ")")
+      ),
+      (("font-family", shape.font.family.join(",")), ("font-size", shape.font.size as String), ("font-weight", shape.font.weight), ("font-style", shape.font.style as String), ("line-height", shape.font.line_height), ("text-align", shape.align as String), ("text-overflow", shape.overflow as String)) if shape ==.instance_of Geometry.Text,
+      ("object-fit", shape.fit as String) if shape ==.instance_of Geometry.Image,
+      ("cursor", "pointer") if shape.activate
+    ]),
+    CSS.Rule("#" + shape.id + ":focus-visible", [("outline", "2px solid currentColor")]) if shape.focusable,
+    shape.animations.map(animation => CSS.Keyframes(shape.id + "-" + animation.property, [(0, [(animation.property, animation.from as String)]), (1, [(animation.property, animation.to as String)])]))
+  ]
+  Sides = { all: "", top: "-top", bottom: "-bottom", left: "-left", right: "-right", horizontal: "-inline", vertical: "-block" }
+  Paint := (paint: Geometry.Paint) => paint.match
+    Geometry.Color => "rgba(", paint.red, ",", paint.green, ",", paint.blue, ",", paint.alpha, ")"
+    Geometry.Gradient => paint.kind as String, "-gradient(", (paint.angle, "turn,") if paint.kind == linear, paint.stops.map(Paint(.color), " ", .at * 100, "%").join(","), ")"
+    Geometry.Pattern => "url(#", paint.shape.id, ")"
+  Clamp := (interpolated: Geometry.Interpolated) => interpolated.from.share * 100, "% + (100vw - ", interpolated.from.width as px, "px) * ", (interpolated.to.share - interpolated.from.share) * 100 / (interpolated.to.width - interpolated.from.width) as px
+
+  // What changes: the program's variables and `dynamically` effects run in the browser; devices are listeners that write UI's variables (F-D6).
+  JS.level := {
+    {page: Geometry.Shape} => JS.Module([
+      Runtime,
+      Devices,
+      page.dynamics.map(JS.Effect(reads: .reads, body: [.compiled{O: JS.expressions}])),
+      page.expand{.focusable}.map(shape => JS.Listen(Element(shape), "click", [JS.Call(("ray", "activate"), [shape.id])])),
+      page.expand{==.instance_of UI.Input}.map(input => JS.Listen(Element(input), "input", [JS.Call(("ray", "set"), [input.id, ("event", "target.value")])])),
+      page.expand{==.instance_of Geometry.Canvas}.map(canvas => JS.Effect(reads: canvas.draws.reads, body: [JS.Call(("ray", "draw"), [canvas.id, canvas.draws{O: Direct.level}()])]))
+    ])
+  }
+  Element := (shape: Geometry.Shape) => JS.Call(("document", "getElementById"), [shape.id])
+  // The Ray program's own expressions, as JavaScript.
+  JS.expressions := {
+    {a} + {b} => (a, "+", b)
+    {a} - {b} => (a, "-", b)
+    {a} * {b} => (a, "*", b)
+    {a} / {b} => (a, "/", b)
+    {a} == {b} => (a, "===", b)
+    {a} < {b} => (a, "<", b)
+    {a} && {b} => (a, "&&", b)
+    {a} || {b} => (a, "||", b)
+    {name} = {value} => JS.Assign(("ray", name), value)
+    {f}({arguments}) => JS.Call(f, arguments)
+  }
+  // The fixed part every page carries: reactive variables, and the devices written by listeners (F-D9b's shim is the development form of this).
+  Runtime := JS.Function("effect", ["reads", "body"], [JS.Call(("ray", "subscribe"), ["reads", "body"]), JS.Call("body")])
+  Devices := [
+    ["pointerdown", "pointermove", "pointerup", "pointercancel"].map(event => JS.Listen("window", event, [JS.Call(("ray", "set"), ["UI.Pointer.pointers", JS.Call(("ray", "pointer"), ["event"])])])),
+    JS.Listen("window", "wheel", [JS.Call(("ray", "set"), ["UI.Pointer.wheel", ("event", "deltaY")])]),
+    ["keydown", "keyup"].map(event => JS.Listen("window", event, [JS.Call(("ray", "key"), ["event"])])),
+    JS.Listen("window", "focusin", [JS.Call(("ray", "set"), ["UI.Focus.current", ("event", "target.id")])]),
+    JS.Listen("window", "resize", [JS.Call(("ray", "set"), ["UI.Viewport.size", JS.Call(("ray", "size"))])]),
+    JS.Listen("window", "popstate", [JS.Call(("ray", "set"), ["UI.Navigation.history", ("location", "pathname")])]),
+    JS.Listen("window", "paste", [JS.Call(("ray", "set"), ["UI.Clipboard.content", JS.Call(("event.clipboardData", "getData"), ["text"])])]),
+    JS.Listen("window", "drop", [JS.Call(("ray", "set"), ["UI.Drag.dropped", ("event.dataTransfer", "files")])]),
+    JS.Listen("window", "compositionupdate", [JS.Call(("ray", "set"), ["UI.Composition.text", ("event", "data")])]),
+    JS.Listen("window", "deviceorientation", [JS.Call(("ray", "set"), ["UI.Sensors.orientation", JS.Call(("ray", "orientation"), ["event"])])]),
+    JS.Listen("window", "gamepadconnected", [JS.Call(("ray", "poll_gamepads"))]),
+    JS.Listen(("window", "matchMedia(\"(prefers-reduced-motion:reduce)\")"), "change", [JS.Call(("ray", "set"), ["UI.Viewport.preferences.reduced_motion", ("event", "matches")])]),
+    JS.Effect(["UI.Navigation.history"], [JS.Call(("history", "pushState"), [None, "", JS.Call(("ray", "get"), ["UI.Navigation.at"])])]),
+    JS.Effect(["UI.Navigation.title"], [JS.Assign(("document", "title"), JS.Call(("ray", "get"), ["UI.Navigation.title"]))]),
+    JS.Effect(["UI.Platform.notifications"], [JS.Call("new Notification", [JS.Call(("ray", "get"), ["UI.Platform.notifications.last.title"])])]),
+    JS.Effect(["UI.Platform.fullscreen"], [JS.Call(("document.documentElement", "requestFullscreen"))]),
+    JS.Effect(["UI.Platform.printing"], [JS.Call(("window", "print"))]),
+    JS.Effect(["UI.Clipboard.content"], [JS.Call(("navigator.clipboard", "writeText"), [JS.Call(("ray", "get"), ["UI.Clipboard.content"])])])
+  ].flatten
+
+  // The three together: one package of files (F-D7). Assets are the locations the page reads.
+  Package := class = files: (path: String, content: *)[] {
+    write (to: Location) => files.for(IO.write(to / .path, .content))
+  }
+  level := HTML.level + CSS.level + JS.level + {
+    {page: Geometry.Shape} => Package([
+      ("index.html", page{O: HTML.level}()),
+      ("style.css", page{O: CSS.level}()),
+      ("app.js", page{O: JS.level}()),
+      page.expand{==.instance_of Geometry.Image | Geometry.Video | Geometry.Audio}.map(.source.name, .source)
+    ])
+  }
+
+  // The development runtime: the interpreter in the browser, reaching the DOM over the byte stream (F-D7b, F-D9b).
+  DOM := class {
+    send (message) => external io `dom` (message)
+    received => external io `dom` None
+    line (parts: String[]) => parts.join(" "), \n
+    mount (element: HTML.Element) => send(line(["create", element.id, element.tag]))
+      -- element.attributes.for(send(line(["attribute", element.id, .name, .value.escaped_line])))
+      -- element.children.for(. ==.instance_of String ? send(line(["text", element.id, .escaped_line])) : mount(.) -- send(line(["append", element.id, .id])))
+    render (page: Program) => send(line(["clear"])) -- mount(page{O: HTML.level}().body) -- send(line(["style", page{O: CSS.level}() as CSS.language]))
+    read => received?.trimmed ~= (id: Decimal, " ", kind: *)
+    write (frame) => render(frame)
+  }
+
+  // Browser differences are levels too, composed onto the web level when targeting one; the default code has none (Platforms, F-P1).
+  Chromium := { }
+  Firefox := { }
+  Safari := {
+    {rule: CSS.Rule{declarations.some(.property == "backdrop-filter")}} => rule ~~ .declarations.push ("-webkit-backdrop-filter", rule.declarations{.property == "backdrop-filter"}.first.value)
+  }
+}

@@ -234,11 +234,11 @@ Program := class {
   { }{expr} => this(expr)
 
   entered (element, given) => (
-    closure_code ^keyword := .code
-    closure_parameters ^keyword := .parameters
-    entering ^keyword := chain None
+    closure_code := .code
+    closure_parameters := .parameters
+    entering := chain None
     entering.target = element
-    entered_value ^keyword := None
+    entered_value := None
     if (closure_parameters.not) {
       external define entering.target `closure_entered` { inline closure_code } None
       entered_value = entering.target.closure_entered
@@ -262,22 +262,14 @@ Modifier := class {
     definition
   )
 }
-chainable ^keyword := class: Modifier {
-  chains => TODO
-}
-compounds ^keyword := class: Modifier {
-  compounds => TODO
-}
-right-to-left ^keyword := class: Modifier {
-  reads_right_to_left => TODO
-}
-left-to-right ^keyword := class: Modifier {
-  reads_left_to_right => TODO
-}
+chainable ^keyword := class: Modifier { chains => TODO }
+compounds ^keyword := class: Modifier { compounds => TODO }
+right-to-left ^keyword := class: Modifier { reads_right_to_left => TODO }
+left-to-right ^keyword := class: Modifier { reads_left_to_right => TODO }
 chainable {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
-  defined ^keyword := external define head `{arguments}` {
+  defined := external define head `{arguments}` {
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -286,7 +278,7 @@ chainable {head} ({parameters ^parameter}) => {block} => (
 compounds {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
-  defined ^keyword := external define head `{arguments}` {
+  defined := external define head `{arguments}` {
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -295,7 +287,7 @@ compounds {head} ({parameters ^parameter}) => {block} => (
 right-to-left {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
-  defined ^keyword := external define head `{arguments}` {
+  defined := external define head `{arguments}` {
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -304,7 +296,7 @@ right-to-left {head} ({parameters ^parameter}) => {block} => (
 left-to-right {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
-  defined ^keyword := external define head `{arguments}` {
+  defined := external define head `{arguments}` {
     (inline method_parameters) := arguments
     inline method_written
   } parameters

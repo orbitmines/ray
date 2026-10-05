@@ -46,30 +46,6 @@ await{ }{awaited} ^class => Running.until(() => awaited && (awaited !=.instance_
   -- awaited ==.instance_of Running ? awaited.results.last : awaited
 pending{ }{name} ^keyword => await name
 
-// An error is a value a call answers; `$` tests for it (P6.1).
-Error := class = kind: *?, message: String?, fatal: boolean = false, cause: Error? {
-  as (=== boolean) => false
-  & (other: Error) => Error(kind, message, fatal: fatal || other.fatal, cause: other)
-  causes => this, cause?.causes ?? []
-}
-Node &+= {
-  erred => this ==.instance_of Error
-  recoverable => erred && !fatal
-}
-
-{call} $ ^punctuation => call
-{call} $ {fallback} ^punctuation => call.recoverable ? fallback : call
-{call} $ return {fallback} ^punctuation => call.recoverable ? &caller.return(fallback) : call
-{call} $ {{handler}} ^punctuation => call.recoverable ? call.satisfies({ inline handler }) : call
-{call} $ ERROR[{kind}] {message} ^punctuation => call.recoverable ? Error(kind, message, cause: call) : call
-{call} $? ^punctuation => call.recoverable ? None : call
-{call} $? {fallback} ^punctuation => (call $?) ?? fallback
-{call} $! ^punctuation => call -- FATAL@. `an error escalated to fatal` if .erred
-{call} $?! ^punctuation => call.erred ? None : call
-{call} $?! {{handler}} ^punctuation => call.erred ? call.satisfies({ inline handler }) : call
-{call}{\n}${kind} {handled} ^punctuation => call.recoverable && call.kind ==.instance_of kind ? handled : call
-{call}{\n}${kind} | ${other} {handled} ^punctuation => call.recoverable && call.kind ==.instance_of (kind | other) ? handled : call
-
 // `dynamically x = …` re-evaluates when what it depends on changes (P5.1, P5.3).
 dynamically {name} = {value} ^keyword => external rule name value
 dynamically {name} := {value} ^keyword => external rule name value

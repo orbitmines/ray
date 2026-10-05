@@ -402,7 +402,6 @@ Node := base class {
     external extend this component
     this
   )
-  {this}$ ^punctuation => Store.of(this)
   compounds - (component) => (
     remaining := chain this
     walker := this.components.hierarchy.head
@@ -1508,11 +1507,29 @@ DARK := theme `Ether.ray - Dark` {
 inline DARK
 
 Diagnostic := class {
-  
+  message: Node
+  kind: Node?
+  fatal: Node?
+  cause: Node?
+
+  causes => (
+    all := chain None
+    all &= this
+    if cause { extended_by(all, cause.causes.head) }
+    all
+  )
 }
 
-FATAL{`@`}{var}{ }{comment ^comment} ^fatal => report FATAL var comment
-ERROR{`@`}{var}{ }{comment ^comment} ^error => report ERROR var comment
+FATAL{`@`}{var}{ }{comment ^comment} ^fatal => (
+  report FATAL var comment
+  var.diagnosed(Diagnostic(message: comment, fatal: true))
+)
+ERROR{`@`}{var}{ }{comment ^comment} ^error => (
+  report ERROR var comment
+  var.diagnosed(Diagnostic(message: comment))
+)
+FATAL[{kind}] {message} ^fatal => Diagnostic(kind: kind, message: message, fatal: true)
+ERROR[{kind}] {message} ^error => Diagnostic(kind: kind, message: message)
  WARN{`@`}{var}{ }{comment ^comment} ^warn => report WARN var comment
  INFO{`@`}{var}{ }{comment ^comment} ^info => report INFO var comment
 DEBUG{`@`}{var}{ }{comment ^comment} ^debug => report DEBUG var comment

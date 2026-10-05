@@ -10,11 +10,30 @@ Node &+= {
 
   properties => fields
 
-  // `f⁻¹`, `f^-1`, `!f`; `! forward backward` declares two as each other's inverse (L§4.5).
+  // `f⁻¹`, `f^-1`, `f!`; `! forward backward` declares two as each other's inverse (L§4.5).
   inverse: Node?
   ⁻¹ | ^-1 | ! => inverse
   reversible => inverse
   inverted_by (backward) => (inverse = backward) -- backward.inverse = this -- this
+
+  // A value carries the diagnostics filed on it; `$` reads them (P6.1).
+  diagnostics = []
+  diagnosed (diagnostic: Diagnostic) => this++ ~~ .diagnostics = diagnostics.push(diagnostic)
+  erred => diagnostics.nonempty
+  recoverable => erred && !diagnostics.some(.fatal)
+
+  $ => instance ? this : Store.of(this)
+  $ (fallback) => recoverable ? fallback : this
+  $ (raised: Diagnostic) => recoverable ? diagnosed(raised ~~ .cause = diagnostics.last) : this
+  $ (handler: Program) => recoverable ? handler.entered(diagnostics.last, None) : this
+  $ return {fallback} ^punctuation => recoverable ? &caller.return(fallback) : this
+  $? => recoverable ? None : this
+  $? (fallback) => $? ?? fallback
+  $! => erred ? FATAL@this `an error escalated to fatal` : this
+  $?! => erred ? None : this
+  $?! (handler: Program) => erred ? handler.entered(diagnostics.last, None) : this
+  {\n}${kind} {handled} ^punctuation => recoverable && diagnostics.last.kind ==.instance_of kind ? handled : this
+  {\n}${kind} | ${other} {handled} ^punctuation => recoverable && diagnostics.last.kind ==.instance_of (kind | other) ? handled : this
 }
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)

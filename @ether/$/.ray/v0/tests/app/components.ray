@@ -85,6 +85,8 @@ if ("A" | "B") is 1 ("A" | "B") { INFO@mark `HS8 both possibilities are a counte
 unless ("A" | "B") is 50% ("A" | "B" | "C" | "D") { INFO@mark `HS9 two of four possibilities are not half of them` }
 unless "B" is 0.5 ("A" | "B") { INFO@mark `HS10 half of two possibilities is not one` }
 unless (choose 1 ("A" | "B")) is ("A" | "B") && (choose 1 ("A" | "B"))#.count == 1 { INFO@mark `HS11 choosing a counted type does not resolve to one of its possibilities` }
+unless (33% ("A" | "B" | "C")) is Diagnostic { INFO@mark `HS12 a share that is not a whole number of a discrete structure's possibilities is not a type error` }
+unless 2 seconds is Quantity { INFO@mark `HS13 a count before a unit is read as a count, not a quantity` }
 
 // `&+` and `|+` superpose components; `+` lets the right one override (T2.1, A1)
 unless (true &+ "A").next == false & "B" { INFO@mark `SP1 &+ does not answer with both components` }

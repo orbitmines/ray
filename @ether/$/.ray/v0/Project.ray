@@ -17,7 +17,7 @@ Project := class: Location = name: String, parent: Project?, children: Location[
 
   static Definition := class = name: String, value: *
   define (name: String, value) => defined_here(name)
-    ? ERROR@name `two definitions with the same name in one project`
+    ? ERROR@Duplicate `two definitions with the same name in one project`
     : definitions.push Definition(name, value) -- value
   defined_here (name: String) => definitions{.name == name}.last
 

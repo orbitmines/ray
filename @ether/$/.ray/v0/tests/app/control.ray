@@ -150,16 +150,16 @@ waited := branch { 3 }
 unless await waited == 3 { INFO@mark `CR3 awaiting a branch does not answer what it did` }
 
 // Errors: a value carries its diagnostics, and its type does not see them
-failing := (0).diagnosed(ERROR[1] "no")
+failing := (0).diagnosed(Diagnostic(kind: "Missing", message: "no"))
 unless failing $ 5 == 5 { INFO@mark `ER1 a default does not stand in for an error` }
 unless 7 $ 5 == 7 { INFO@mark `ER2 a default replaced what did not fail` }
 unless failing $? === None { INFO@mark `ER3 an optional error is not None` }
 unless failing $? 6 == 6 { INFO@mark `ER4 an optional error does not fall back` }
 unless failing $ { .message } == "no" { INFO@mark `ER5 the handler does not see the error as its receiver` }
-fatal_one := (0).diagnosed(FATAL[1] "stop")
+fatal_one := (0).diagnosed(Diagnostic(kind: "Stop", message: "stop", fatal: true))
 unless (fatal_one $ 5).erred { INFO@mark `ER6 a default caught a fatal error` }
 unless fatal_one $?! === None { INFO@mark `ER7 the catch-all did not catch a fatal error` }
-unless (failing $ ERROR[2] "wrapped").diagnostics.last.cause === failing.diagnostics.last { INFO@mark `ER8 a wrapped error forgot its cause` }
+unless (failing $ Diagnostic(kind: "Wrapped", message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last { INFO@mark `ER8 a wrapped error forgot its cause` }
 unless failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2 { INFO@mark `ER9 a value given a second diagnostic does not keep both` }
 unless failing ==.instance_of Number { INFO@mark `ER10 a value that erred is no longer of its type` }
 unless failing == 0 { INFO@mark `ER11 a value that erred is not equal to itself without the error` }
@@ -219,6 +219,23 @@ unless from.balance == 10 && to.balance == 10 { INFO@mark `TX1 a transaction tha
 transaction {
   from.balance -= 10
   to.balance += 10
-  to.balance.diagnosed(ERROR[test] `refused`)
+  ERROR@Transaction `refused`
 }
 unless from.balance == 10 && to.balance == 10 { INFO@mark `TX2 a transaction that failed was not undone as a whole` }
+
+missing_file := () => {
+  ERROR@Sublanguage `not here`
+  7
+}
+unless missing_file() == 7 { INFO@mark `ER14 a non-fatal error replaced the value the function answers` }
+unless missing_file().diagnostics.last.kind == "Sublanguage" { INFO@mark `ER15 the value a function answers does not carry its error with its kind` }
+stopping := () => {
+  FATAL@Escalated `cannot go on`
+  7
+}
+unless stopping() ==.instance_of Diagnostic { INFO@mark `ER16 a fatal error is not what the function answers` }
+unless (missing_file()
+  $Sublanguage 8) == 8 { INFO@mark `ER17 a per-kind handler did not take its kind` }
+unless (missing_file()
+  $Duplicate 8) == 7 { INFO@mark `ER18 a per-kind handler took another kind` }
+unless Diagnostic.Kind#.contains(Diagnostic.Kind.TypeMismatch) { INFO@mark `ER19 the language's error kinds are not an enum` }

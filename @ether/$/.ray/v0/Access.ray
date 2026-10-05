@@ -124,7 +124,7 @@ Effects := class {
     holds = claim == `pure` && pure(method)
       || claim == `deterministic` && deterministic(method)
       || claim == `nondeterministic` && nondeterministic(method)
-    ERROR@method `this method is not what it is marked as` unless holds
+    ERROR@Effect `this method is not what it is marked as` unless holds
     holds
   }
 }

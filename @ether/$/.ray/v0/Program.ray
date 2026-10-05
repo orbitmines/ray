@@ -38,7 +38,8 @@ Program &+= {
     result = this()
     holds = !result.erred && targets.every(!&caller[.].erred)
     before.for((target, held) => &caller[target] = held) unless holds
-    holds ? result : result.diagnosed(ERROR[transaction] `a transaction was undone`)
+    ERROR@Transaction `a transaction was undone` unless holds
+    result
   }
 }
 

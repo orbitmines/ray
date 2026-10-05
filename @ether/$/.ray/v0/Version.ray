@@ -204,7 +204,7 @@ HybridClock := class: Ray {
 }
 
 Definition := class: Ray {
-  id: UUID.v1.generate
+  id: choose{unique} UUID.v1~generate()
   name: String
   holder: None
 

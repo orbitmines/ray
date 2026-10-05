@@ -1,177 +1,69 @@
-UUID := class: Hexadecimal {
-  spelled: Node
+// A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
+UUID := class: Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-") {
+  version: Hexadecimal¹ => this[12]
 
-  version => .spelled.head.at(12).value
+  dynamically
+    < v1 if version == 1
+    < v3 if version == 3
+    < v4 if version == 4
+    < v5 if version == 5
 
-  Variant := enum reserved_ncs | rfc_4122 | reserved_microsoft | reserved_future
+  static Variant := enum RESERVED_NCS | RFC_4122 | RESERVED_MICROSOFT | RESERVED_FUTURE
+  variant: ⊢11₂ ? Binary³ : Binary₂ => this[16] as Binary
+  variant as (=== Variant) => .match
+    ⊢0 => Variant.RESERVED_NCS
+    10₂ => Variant.RFC_4122
+    110₂ => Variant.RESERVED_MICROSOFT
+    111₂ => Variant.RESERVED_FUTURE
 
-  variant => (
-    leading := .spelled.head.at(16).value
-    if (leading < 8) { UUID.Variant.reserved_ncs }
-    elsif (leading < 12) { UUID.Variant.rfc_4122 }
-    elsif (leading < 14) { UUID.Variant.reserved_microsoft }
-    else { UUID.Variant.reserved_future }
+  static v1 := class: UUID ~ (
+    (
+      time_low: Hexadecimal⁸,
+      time_mid: Hexadecimal⁴,
+      (version: Hexadecimal¹, time_high: Hexadecimal³) = time_high_and_version: Hexadecimal⁴
+    ),
+    (
+      (
+        variant,
+        clock_seq_high: Binary{length == 8 - variant.length}
+      ) = clock_seq_high_and_reserved: Hexadecimal²,
+      clock_seq_low: Hexadecimal²,
+    ),
+    node: Hexadecimal¹²
+  ) {
+    // The timestamp is a 60-bit count of 100-nanosecond intervals since the Gregorian reform (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
+    (time_high, time_mid, time_low) = time: Binary⁶⁰
+
+    generate\
+      time = Time.NOW(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
+      version = 1
+      variant = 10₂
+      (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random
+      // No MAC address: a random one with the multicast bit set (https://datatracker.ietf.org/doc/html/rfc4122#section-4.5)
+      node = @me.instance#.mac_address | Hexadecimal¹².random ~~ .[1] |= 1
+  }
+
+  static v3 := class: UUID {
+    namespace: UUID
+    name: String
+    dynamically assert version == 3
+  }
+  static v4 := class: UUID = secure Hexadecimal{length == 32}.random ~~ (
+    .version = 4
+    .variant = 10₂
   )
+  static v5 := class: UUID {
+    namespace: UUID
+    name: String
+    dynamically assert version == 5
+  }
 
-  drawn (count: Number) => (
-    out := chain None
-    left ^keyword := count
-    while left {
-      nibble ^keyword := 0
-      bit ^keyword := 4
-      while bit {
-        nibble = nibble + nibble
-        if ((external random)) { nibble = nibble.succ }
-        bit = bit.pred
-      }
-      out &= nibble
-      left = left.pred
-    }
-    out
-  )
-
-  as (=== String) => (
-    out := chain None
-    walker ^keyword := .spelled.head
-
-    dash ^keyword := U+002D
-    groups := chain None
-    groups &= 8
-    groups &= 4
-    groups &= 4
-    groups &= 4
-    groups &= 12
-    groups for {
-      unless (it.value == 8) { out &= dash }
-      left ^keyword := it.value
-      while left {
-        out &= Char.decimal_digit(walker.value)
-        walker = walker.next
-        left = left.pred
-      }
-    }
-    out.as(String)
-  )
-  chainable == (other: UUID) => .as(String) == other.as(String)
-
-  read (text: String) => (
-    out := chain None
-
-    dash ^keyword := U+002D
-    text for {
-      character := it.value
-      unless (character == dash) { out &= character.hexadecimal_digit }
-    }
-
-    read_version := out.head.at(12).value
-    if (read_version == 1) { UUID.v1(spelled: out) }
-    elsif (read_version == 3) { UUID.v3(spelled: out) }
-    elsif (read_version == 4) { UUID.v4(spelled: out) }
-    elsif (read_version == 5) { UUID.v5(spelled: out) }
-    else { UUID(spelled: out) }
-  )
-
-  nibbles_of (number: Number, count: Number) => (
-    reversed := chain None
-    rest ^keyword := number
-    left ^keyword := count
-    while left {
-      reversed &= rest % 16
-      rest = rest / 16
-      left = left.pred
-    }
-    out := chain None
-    walker ^keyword := reversed.tail
-    while (walker) {
-      out &= walker.value
-      walker = walker.previous
-    }
-    out
-  )
-
-  Namespace := class {
-    DNS => UUID.read("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
-    URL => UUID.read("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
-    OID => UUID.read("6ba7b812-9dad-11d1-80b4-00c04fd430c8")
-    X500 => UUID.read("6ba7b814-9dad-11d1-80b4-00c04fd430c8")
+  static Namespace := namespace {
+    DNS: UUID = 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+    URL: UUID = 6ba7b811-9dad-11d1-80b4-00c04fd430c8
+    OID: UUID = 6ba7b812-9dad-11d1-80b4-00c04fd430c8
+    X500: UUID = 6ba7b814-9dad-11d1-80b4-00c04fd430c8
   }
 }
 
-UUID.v1 = class: UUID {
-  gregorian_offset => 122192928000000000
-
-  time => (
-    spelled_time := chain None
-    at ^keyword := 13
-    while (at < 16) {
-      spelled_time &= .spelled.head.at(at).value
-      at = at.succ
-    }
-    at = 8
-    while (at < 12) {
-      spelled_time &= .spelled.head.at(at).value
-      at = at.succ
-    }
-    at = 0
-    while (at < 8) {
-      spelled_time &= .spelled.head.at(at).value
-      at = at.succ
-    }
-    Number.from_digits(16, spelled_time)
-  )
-
-  clock_sequence => (((.spelled.head.at(16).value % 4) * 4096) + (.spelled.head.at(17).value * 256) + (.spelled.head.at(18).value * 16)) + .spelled.head.at(19).value
-
-  node => (
-    spelled_node := chain None
-    at ^keyword := 20
-    while (at < 32) {
-      spelled_node &= .spelled.head.at(at).value
-      at = at.succ
-    }
-    Number.from_digits(16, spelled_node)
-  )
-
-  ticks => ((external time).as(String).as_number / 100) + UUID.v1.gregorian_offset
-
-  generate => (
-    stamp ^keyword := UUID.v1.ticks
-    if (stamp < UUID.v1.latest.succ) { stamp = UUID.v1.latest.succ }
-    UUID.v1.latest = stamp
-    written := chain None
-    UUID.nibbles_of(stamp % 4294967296, 8) for { written &= it.value }
-    UUID.nibbles_of((stamp / 4294967296) % 65536, 4) for { written &= it.value }
-    written &= 1
-    UUID.nibbles_of(stamp / 281474976710656, 3) for { written &= it.value }
-    sequence := Random.number(14)
-    written &= 8 + (sequence / 4096)
-    UUID.nibbles_of(sequence % 4096, 3) for { written &= it.value }
-    node_digits := UUID.nibbles_of(Random.number(48), 12)
-    node_digits.head.next.value = node_digits.head.next.value - (node_digits.head.next.value % 2) + 1
-    node_digits for { written &= it.value }
-    UUID.v1(spelled: written)
-  )
-}
-
-UUID.v1.latest = 0
-
-UUID.v3 = class: UUID {
-  namespace: UUID
-  name: String
-}
-
-UUID.v4 = class: UUID {
-  spelled: UUID.drawn(32) ~~ (
-    .head.at(12).value = 4
-    .head.at(16).value = 8 + (.head.at(16).value % 4)
-  )
-}
-
-UUID.v5 = class: UUID {
-  namespace: UUID
-  name: String
-}
-
-Char.components.hierarchy &= class {
-  hexadecimal_digit => if .digit { .codepoint - 48 } else { .lower.codepoint - 87 }
-}
+{uuid: UUID.String}: UUID => uuid

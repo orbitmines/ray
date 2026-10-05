@@ -45,31 +45,58 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != \n} | ("(", Written,
 @me ^string => &caller as Character ?? Instance.local
 @me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
 @{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location
+@{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => Program(code: external ** block).run_as(Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)
+
+Program &+= {
+  run_as (who: Character) => {
+    with { &caller = who }
+    this()
+  }
+}
 
 Node &+= {
   history: History = History(repository: this)
 }
 
 History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
-  static Commit := class: Ray = who: *, value: *, id: UUID = UUID.v4(), when: Time = Time.now, stamp: Stamp?, visibility: Accessor.Permission = Accessor.Permission.private {
+  static Commit := class: Ray = who: *, value: *, id: UUID = UUID.v4(), when: Time = Time.now, stamp: Stamp?, visibility: Accessor.Permission = Accessor.Permission.private, message: String? {
     previous: Commit?
 
+    parents => previous#
     ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
-    merged => previous#.count > 1
+    merged => parents.count > 1
     staged => visibility == Accessor.Permission.private
     publish: static => this ~~ .visibility = Accessor.Permission.public
+    operations: Operation[] => value is Operation ? [value] : value is Iterable && value.every(. is Operation) ? value : []
+    applied (held) => operations.nonempty || value is Iterable && value.empty
+      ? operations.reduce(state = held ?? {} => state, {(.definition.id): .applied(state[.definition.id])})
+      : value is Program ? held -- value : value
 
     .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : external get value name
   }
+
+  name: String?
+  id => since(None).first?.id
+  location => repository?.location
+  clock => repository?.clock ?? World.ether.clock
+  written_last: Commit?
 
   since (commit: Commit?) => head ? head.ancestry.filter(c => !(commit?.ancestry ?? []).some(=== c)) : []
   commits => since(base)
   entry => commits.entry
   last | latest => head
+  find (label) => since(None).find(.id == label)
+  at (commit) => History(repository, head: commit is Commit ? commit : find(commit))
 
-  commit (who, value, id: UUID = UUID.v4(), when: Time = Time.now): static => this ~~ .head = Commit(who, value, id, when, stamp: repository?.clock?.now, previous: head)
+  commit (who, value, id: UUID = UUID.v4(), when: Time = Time.now, message: String? = None): static => this ~~ .head = Commit(who, value, id, when, stamp: clock.now, message, previous: head)
   published => commits{!.staged}
   publish: static => this ~~ commits#.publish
+
+  ordered => since(None).sort_by(.stamp)
+  value => ordered.reduce(held = None => .applied(held))
+  pinned (label, as_of: Stamp? = None) => since(None).find(c => c.operations.some(.substitutes == label && (as_of === None || .stamp < as_of)))?.id ?? label
+  checkout (label, as_of: Stamp? = None) => at(pinned(label, as_of)).value
+  tree => value -- (held => Backend.Entry.of(definitions{held[.id] != None}.map(d => (path: d.path_in(this), content: d.language.write(held[d.id]) as Byte[]))))
 
   fork => History(repository, base: head, head)
   drop: static => reset(base)
@@ -78,32 +105,42 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   run (program: Program) => Program(code: program.code, history: this)()
 
   common (other: History) => since(None).filter(c => other.since(None).some(=== c)).last
+  conflicts (other: History) => since(common(other)).operations.flatten.pairs(other.since(common(other)).operations.flatten){(a, b) => a.concurrent(b)}
   merge (other: History, who = &caller) => {
     ours = since(common(other))
     theirs = other.since(common(other))
-    return Quest(name: "merge", goal: other) if ours.nonempty && theirs.nonempty && ours.last.value != theirs.last.value
-    this.head = ours.empty ? other.head : theirs.empty ? head : Commit(who, value: theirs.last.value, stamp: repository?.clock?.now, previous: head | other.head)
+    by_operation = ours.operations.flatten.nonempty || theirs.operations.flatten.nonempty
+    return Quest(name: "merge", goal: other) if ours.nonempty && theirs.nonempty && (by_operation ? conflicts(other).nonempty : ours.last.value != theirs.last.value)
+    this.head = ours.empty ? other.head : theirs.empty ? head : Commit(who, value: by_operation ? [] : theirs.last.value, stamp: clock.now, previous: head | other.head)
     this
   }
-  squash (who) => History(repository, base, head: Commit(who, value: commits.value, previous: base))
-  cherry_pick (change: Commit): static => commit(change.who, change.value)
-  revert (change: Commit) => change.value⁻¹ ? commit(change.who, change.value⁻¹) : Quest(name: "revert", goal: change)
+  static global (histories: History[]) => History(head: History.Commit(who: None, value: [], stamp: histories.head#.stamp.max, previous: histories.head#))
+  squash (who) => History(repository, base, head: Commit(who, value: commits.operations.flatten.nonempty ? commits.operations.flatten : commits.last.value, stamp: clock.now, previous: base))
+  cherry_pick (change: Commit): static => commit(change.who, change.value, message: change.message)
+  revert (change: Commit) => change.operations.nonempty
+    ? commit(change.who, change.operations.reverse.map(.inverse))
+    : change.value⁻¹ ? commit(change.who, change.value⁻¹) : Quest(name: "revert", goal: change)
 
-  operate (who, kind: Operation.Kind, definition: Definition, after) => Operation(kind, definition, repository.clock.now, who, before: kind == Operation.Kind.rename ? name_of(definition) : code_of(definition), after) -- commit(who, .)
+  operate (who, kind: Operation.Kind, definition: Definition, after, substitutes: UUID? = None) => Operation(kind, definition, clock.now, who, before: kind == Operation.Kind.rename ? name_of(definition) : code_of(definition), after, substitutes) -- commit(who, .)
+  group (who, operations: Operation[], message: String? = None) => commit(who, operations, message: message)
   undo (operation: Operation) => commit(operation.who, operation.inverse)
 
-  operations: Operation[] => commits.value{. is Operation}
+  operations: Operation[] => commits.operations.flatten
   latest_of (definition: Definition, kinds: Operation.Kind[]) => operations{.definition == definition && kinds.contains(.kind)}.max(.stamp)
-  code_of (definition: Definition) => latest_of(definition, Operation.Kind.(define, change, remove))?.after
+  code_of (definition: Definition) => value?[definition.id]
   name_of (definition: Definition) => latest_of(definition, [Operation.Kind.rename])?.after ?? definition.name
   definitions => operations.definition.unique
   named (name: String) => definitions{name_of(.) == name}.last
 
-  received (stamp: Stamp) => repository.clock.receive(stamp)
+  received (stamp: Stamp) => clock.receive(stamp)
 }
 
-Repository := class = world: World, histories: History[] = [] {
-  clock: HybridClock = HybridClock(node: this)
+Repository := class = world: World?, histories: History[] = [], location: Location? {
+  id: UUID = UUID.v4()
+  clock: HybridClock = HybridClock(node: id)
+
+  branch (name: String) => histories.find(.name == name)
+  global => History.global(histories)
 }
 
 World := class: Location + Nameable {
@@ -245,6 +282,9 @@ Status := enum online | offline | hosted | broadcast | proxy | invisible | idle 
 
 Character := class: Hierarchy + Entity + Nameable {
   static PREFIX = "@"
+  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find(.id == who || .name?.fold_case == (who as String).fold_case)
+
+  id: UUID = UUID.v4()
 
   presence: Instance?
   status: Status = Status.offline

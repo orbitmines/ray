@@ -586,7 +586,7 @@ Node := base class {
           read ^keyword := it.value.head_read
           if (read.ending) {
             if (read.ending == colon) {
-              named ^keyword := read.points.map { it.value.as_character }.as(String)
+              named ^keyword := read.points.as(String)
               found &= Field(name: named, value: (external get holder named))
             }
           }
@@ -826,7 +826,7 @@ Call := class {
         if (it.value == space) { ended = true } else { named &= it.value }
       }
     }
-    named.map { it.value.as_character }.as(String)
+    named.as(String)
   )
   ** => .statement
 }
@@ -1279,7 +1279,7 @@ capture_of (content) => (
     typed = content.slice(colon.succ, content.count)
   }
   name ^keyword := None
-  named.split(Char.space) for {
+  named.split(` `) for {
     word ^keyword := it.value
     unless ((word.empty).or(word.starts_with(`^`)).or(same_text(word, `literal`))) { name = word }
   }
@@ -1288,7 +1288,7 @@ capture_of (content) => (
   if typed {
     written ^keyword := None
     styled ^keyword := false
-    typed.split(Char.space) for {
+    typed.split(` `) for {
       word ^keyword := it.value
       if (word.starts_with(`^`)) { styled = true }
       unless ((styled).or(word.empty)) { if written { written = written + ` ` + word } else { written = word } }

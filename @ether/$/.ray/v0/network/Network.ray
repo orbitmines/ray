@@ -42,7 +42,7 @@ Network.components.hierarchy &= class {
       host_written := authority.before(":")
       port_written := authority.after(":")
       chosen_port ^keyword := None
-      if port_written.nonempty { chosen_port = port_written.as_number } elsif (found_protocol === None) { chosen_port = None } else { chosen_port = found_protocol.port }
+      if port_written.nonempty { chosen_port = port_written as Decimal } elsif (found_protocol === None) { chosen_port = None } else { chosen_port = found_protocol.port }
       Network.URL(protocol: found_protocol, host: Network.Hosts.resolved(host_written), port: chosen_port, path: path_written.before("?"), query: path_written.after("?"))
     )
     as (=== String) => .protocol.name + ("://" + (.host.text + (":" + (.port.as(String) + ("/" + .path)))))

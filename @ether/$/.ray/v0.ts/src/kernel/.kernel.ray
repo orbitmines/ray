@@ -283,7 +283,7 @@ matching (rule, caps, src, pos, limit, frame, receiving, receiver) => (
       if i < 0 { return -1, 0 }
     } elsif p == 0 and receiving and !rule_implicit(rule) {
       if 1 < n and pieces[1].tight and space(src, i) { return -1, 0 }
-      if piece.typed and !receiver_holds(rule, p, receiver) { return -1, 0 }
+      if piece.typed and (!type_known(rule, p) or !receiver_holds(rule, p, receiver)) { return -1, 0 }
     } else {
       i = capturing(rule, caps, p, src, i, limit, frame, receiving, opened)
       if i < 0 { return -1, 0 }
@@ -330,6 +330,7 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
   if piece.undecided and piece.decided != ROOT.declared { if piece.missing == None or missing_declared(piece.missing) { decide(rule, p) } else { piece.decided = ROOT.declared } }
   if piece.undecided { return -1 }
   if next == 0 and !raw and !inside and piece.typed and pieces[p + 1].tight and space(src, end - 1) { return -1 }
+  if piece.typed and !type_known(rule, p) { return -1 }
   if piece.typed and holds(rule, p, src, from, stop - 1) == UNDEF {
     shorter := next >= 0 ? -1 : held_from(rule, p, src, from, from, stop, limit)
     if shorter >= 0 { cap(caps, p, from, shorter) }
@@ -1537,6 +1538,14 @@ holds (rule, p, src, b, e) => (
   if kept == NIL { kept = Held(src: piece.content_src, begin: piece.content_begin, next: text.held); text.held = kept }
   kept.declared = ROOT.declared; kept.value = value; kept.missing = missing
   return value
+)
+// A typed capture whose type asked for names not declared yet holds nothing; once one is, its content is read again.
+type_known (rule, p) => (
+  piece := rule.pieces[p]
+  if piece.missing == None { return global }
+  if piece.decided == ROOT.declared or !missing_declared(piece.missing) { piece.decided = ROOT.declared; return None }
+  decide(rule, p)
+  return piece.typed and piece.missing == None
 )
 // A typed leading capture matched on a receiver: its content read with the receiver bound to its name.
 receiver_holds (rule, p, receiver) => (

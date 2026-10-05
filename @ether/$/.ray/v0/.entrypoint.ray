@@ -612,22 +612,23 @@ Node := base class {
     this
   )
   :{type} ^punctuation => (
+    declared_type := type
     if (external own this) {
-      unless type.instance {
+      unless declared_type.instance {
         if this {
-          if this.instance { type.verify(this) }
-          elsif this.written_body { unless ((this === type) || this.subtype_of(type)) { ERROR `is not of the type it is declared as` } }
-          elsif (this.instance_of(type)) {
-            if type.repeating { external assign this this.instance_of(type) }
-            type.verify(this)
+          if this.instance { declared_type.verify(this) }
+          elsif this.written_body { unless ((this === declared_type) || this.subtype_of(declared_type)) { ERROR `is not of the type it is declared as` } }
+          elsif (this.instance_of(declared_type)) {
+            if declared_type.repeating { external assign this this.instance_of(declared_type) }
+            declared_type.verify(this)
           }
           else { ERROR `is not of the type it is declared as` }
         }
       }
-    } elsif (None.instance_of(type)) { external declare this None }
+    } elsif (None.instance_of(declared_type)) { external declare this None }
     else {
-      external declare this type
-      if type.written_body { external declare this this }
+      external declare this declared_type
+      if declared_type.written_body { external declare this this }
     }
 
     this
@@ -924,7 +925,7 @@ Node := base class {
     superposed.instance = None
     superposed.superposes = global
     superposed.components = chain None
-    if this.components.head { extended_by(superposed.components, this.components.head) } else { superposed.components &= this }
+    if this.superposes { extended_by(superposed.components, this.components.head) } else { superposed.components &= this }
     if other.continues { superposed.components &= other(superposed.components.tail.value) } else { superposed.components &= other }
 
     superposed

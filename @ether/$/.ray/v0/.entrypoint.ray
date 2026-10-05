@@ -434,9 +434,33 @@ Node := base class {
     external declare value x.head
    next\
     goto declared if (name.not)
+    goto spreading if name.value.spreads
     external declare name.value value.value
     name = name.next
     value = value.next
+    goto next
+   spreading\
+    after := 0
+    counting := name.next
+    while counting {
+      after = after.succ
+      counting = counting.next
+    }
+    remaining := 0
+    counting = value
+    while counting {
+      remaining = remaining.succ
+      counting = counting.next
+    }
+    spread := chain None
+    external extend spread Listed
+    while (after < remaining) {
+      spread &= value.value
+      value = value.next
+      remaining = remaining.pred
+    }
+    external declare name.value.of spread
+    name = name.next
     goto next
    declared\
     this
@@ -716,7 +740,7 @@ Node := base class {
 
   satisfies (predicate) => (
     answer := Program(code: (external ** predicate)).entered(this, None)
-    if answer.continues { answer = answer(this) }
+    if (answer.continues || answer.code) { answer = answer(this) }
     if answer.superposed { answer = answer.holds_for(this) }
     answer
   )

@@ -28,7 +28,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   undirected => all.every(.initial === .terminal)
   unidirectional => all.every(!.previous)
 
-  compact => this{!=.instance_of None}
+  compact => this[{!=.instance_of None}]
 
   static boundary := class {
     () => boundary.initial | boundary.terminal
@@ -42,8 +42,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   for <traverse: Traverser = Traverser.default>(yield: (x: Vertex): *) => traverse<.yield: yield<local: &caller, break: return>>(entry) if entry
 
   every (predicate: (x: Vertex): boolean) => map(predicate){== false}.empty
-  some (predicate: (x: Vertex): boolean) => this{predicate}.nonempty
-  filter (predicate: (x: Vertex): boolean) => this{predicate}
+  some (predicate: (x: Vertex): boolean) => this[{predicate}].nonempty
+  filter (predicate: (x: Vertex): boolean) => this[{predicate}]
 
   // `reduce((acc) => …)` seeds with the first element, `reduce(acc = 0 => …)` with what it is given; `.` is the element (R2.4).
   reduce (step: Program) => rest.reduced(first, step)
@@ -58,6 +58,9 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   right-to-left ∏ | product => reduce(total = 1 => total * .)
   min => reduce((acc) => acc < . ? acc : .)
   max => reduce((acc) => acc > . ? acc : .)
+  // `.min(.count)`, `.max(.stamp)`: along a key when given a function of the entry; `2.min(5)` stays Ordered's (R3.10).
+  min (key: Program | Section) => reduce((acc) => key(acc) <= key(.) ? acc : .)
+  max (key: Program | Section) => reduce((acc) => key(acc) >= key(.) ? acc : .)
   count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
   length => paths.length
   paths: Path{.bounded: bounded} => [this]
@@ -65,7 +68,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   rest => entry?.next ?? []
   map (mapping: (x: Vertex): *) => empty ? [] : mapping(first), rest.map(mapping)
   // A filter on map maps only what it selects: `[1, 2, 3].map{choose 1}(*10)` multiplies one chosen element (Almanac).
-  map {selection} (mapping: (x: Vertex): *) => (selected = this{selection}) -- map(x => selected.contains(x) ? mapping(x) : x)
+  map {selection} (mapping: (x: Vertex): *) => (selected = this[{selection}]) -- map(x => selected.contains(x) ? mapping(x) : x)
   reverse => empty ? [] : rest.reverse, first
   sort => empty ? [] : rest{< first}.sort, first, rest{>= first}.sort
   sorted (key) => sort_by(key)
@@ -74,13 +77,13 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   unordered => choose Iterable{.every(this.contains(.)) && .count == count}
 
   contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
-  partition (predicate) => [this{predicate}], [this{!predicate(.)}]
+  partition (predicate) => [this[{predicate}]], [this[{!predicate(.)}]]
   batch | chunk (size: Number) => empty ? [] : [this[..size]], this[size..].chunk(size)
   flatten => reduce(acc = [] => acc, .)
   flatten (levels: Number) => levels == 0 ? this : map(. ==.instance_of Iterable ? .flatten(levels - 1) : [.]).flatten
-  intersection (other: Iterable) => this{other.contains(.)}
+  intersection (other: Iterable) => this[{other.contains(.)}]
   disjoint (other: Iterable) => intersection(other).empty
-  xor | symmetric_difference (other: Iterable) => this{!other.contains(.)}, other{!this.contains(.)}
+  xor | symmetric_difference (other: Iterable) => this[{!other.contains(.)}], other[{!this.contains(.)}]
   split (delimiter) => this ~= (*, delimiter)[] -- #.join(*)
   enumerate => map((x) => (index: x.index, value: x))
   zip (other: Iterable) => empty || other.empty ? [] : [(first, other.first)], rest.zip(other.rest)
@@ -88,10 +91,10 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   random => this[Random.below(count)]
   fill (x) => all = x
   take (count: Number) => this[..count]
-  find (predicate) => this{predicate}.first
-  find_all (predicate) => this{predicate}
-  shuffled => empty ? [] : (picked = random), this{!== picked}.shuffled
-  squeeze => this{. != .previous}
+  find (predicate) => this[{predicate}].first
+  find_all (predicate) => this[{predicate}]
+  shuffled => empty ? [] : (picked = random), this[{!== picked}].shuffled
+  squeeze => this[{. != .previous}]
   padded (width: Number, with = 0) => [with] * (width - length), this
 
   // `0..2..1` goes on from where the last range ended.
@@ -108,9 +111,26 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   ± | +- | -+ (at: Integer) => this[at] | this[-at]
   [at: Integer] => at == 0 ? entry : at > 0 ? rest[at - 1] : reverse[-at - 1]
   [range: Range] => range.map(this[.])
+  // `xs[1..]`, `xs[..2]`, `xs[..-1]`, `xs[1..<3]`: a slice stops before an open end, and a negative end counts back from the last (R4.1).
+  [{from}..] ^punctuation => sliced(from, count)
+  [..{to}] ^punctuation => sliced(0, to)
+  [{from}..<{to}] ^punctuation => sliced(from, to)
+  [{from}..{to}] ^punctuation => sliced(from, to + 1)
+  sliced (from: Integer, to: Integer) => ((from < 0 ? count + from : from)..<(to < 0 ? count + to : to)).map(this[.])
+  // `ray[a..b] = xs` puts xs at each place, or spreads it over them when it is as many as they are (L§1.6).
+  [{from}..] = {value} ^punctuation => assigned_over(from, count, value)
+  [..{to}] = {value} ^punctuation => assigned_over(0, to, value)
+  [{from}..<{to}] = {value} ^punctuation => assigned_over(from, to, value)
+  [{from}..{to}] = {value} ^punctuation => assigned_over(from, to + 1, value)
+  assigned_over (from: Integer, to: Integer, value) => ((from < 0 ? count + from : from)..<(to < 0 ? count + to : to))
+    -- .zip(value ==.instance_of Iterable && value.count == .count && .count > 1 ? value : [value] * .count)
+    -- .for((at, written) => this[at] = written)
+    -- this
+  // `xs[{p}]` keeps the entries p holds of; `xs{p}` narrows the whole (A-C1).
+  [{{literal selection}}] ^punctuation => Filtered(from: entry, keeps: { inline selection })
 
   // `x: String[] = "String", Object, "String", Object`
-  as (: Iterable<R: ?>) => this{==.instance_of R}
+  as (: Iterable<R: ?>) => this[{==.instance_of R}]
 
   == (other: Iterable) => orderless || other.orderless
     ? count == other.count && every(other.contains(.))
@@ -285,7 +305,7 @@ Array := class: Path{acyclic} {
   push_front (x) => x, this
   pop_front => remove(first)
   pop_back => remove(last)
-  remove (x) => this{!= x}
+  remove (x) => this[{!= x}]
   push_after (at, x) => this[..at.index + 1], x, this[at.index + 1..]
   push_before (at, x) => this[..at.index], x, this[at.index..]
   move_after (x, target) => remove(x).push_after(target, x)
@@ -317,3 +337,48 @@ Loop := class: Path = around: Iterable, at: * {
   unrolled_mod => around[at.index..], around[..at.index]
   disallow_loops => around
 }
+
+// `0 -> +2` steps from a value again and again, `-1 <- 0 -> +1` both ways; a number as a step is added: `(0 -> +2)[4] == 8` (A2, L§5.2).
+Node &+= {
+  -> (step = 1) => Stepped(at: this, forward: step)
+  right-to-left <- (base) => base ==.instance_of Stepped ? Stepped(at: base.at, forward: base.forward, backward: this) : Stepped(at: base, backward: this)
+}
+Stepped := class: Ray = at: *, forward: *?, backward: *?, behind: Stepped?, ahead: Stepped? {
+  static stepped (step, from) => step ==.instance_of Number ? from + step : step(from)
+  value => at
+  next => ahead ?? (forward ? Stepped(at: stepped(forward, at), forward, backward, behind: this) : None)
+  previous => behind ?? (backward ? Stepped(at: stepped(backward, at), forward, backward, ahead: this) : None)
+  bounded => false
+  == (other) => at == (other ==.instance_of Stepped ? other.at : other)
+}
+
+// What `xs[{p}]` keeps, found as it is walked, so an unbounded ray can be filtered (A-C1).
+Filtered := class: Ray = from: Ray?, keeps: * {
+  found => from ? (from.satisfies(keeps) ? this : Filtered(from: from.next, keeps).found) : None
+  entry => found
+  value => from.value ?? from
+  next => from?.next ? Filtered(from: from.next, keeps).found : None
+  previous => None
+  == (other) => value == (other ==.instance_of Filtered ? other.value : other)
+}
+
+// `...` is `[]` written before: `middle: ...String`, `first, ...middle, last := xs` (A5, A-C2).
+...{of} ^punctuation => Spread(of: of)
+Spread := class = of: * {
+  spreads => true
+  repeating => true
+  repeats => of
+}
+
+// `{ now } = Time`, `{ false, true } = boolean`: names taken from the members they are named after (T3.14, T4.8).
+{`{`}{ }{names}{ }{`}`} = {source} ^punctuation => (
+  written := header_items((external ** names), `,`)
+  inline (external ** written.map(. + " := source." + .).join("\n"))
+)
+// `(a, b) = pair` assigns each in turn (T4.8).
+Targets := String{.contains(",")}
+({targets: Targets}) = {value} ^punctuation => (
+  held := value
+  written := header_items((external ** targets), `,`)
+  inline (external ** written.enumerate.map(.value + " = held[" + (.index as String) + "]").join("\n"))
+)

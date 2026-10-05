@@ -248,3 +248,57 @@ kept := closed ~~ (
 unless kept === closed { INFO@mark `RD7 ~~ does not answer the value it was given` }
 unless closed.next === a { INFO@mark `RD8 . inside ~~ is not the value` }
 unless closed.previous === c { INFO@mark `RD9 the second line of a ~~ block did not run on the value` }
+
+// `,` and `|` take a function of the element before them (R3.8, A2)
+unless (1, +2, +3, +4) == (1, 3, 6, 10) { INFO@mark `CL1 a section after , is not applied to the element before it` }
+unless (1 | +2 | +3) == (1 | 3 | 6) { INFO@mark `CL2 a section after | is not applied to the value before it` }
+unless (2, *5) == (2, 10) { INFO@mark `CL3 *5 after , does not multiply the element before it` }
+
+// `->` and `<-` step from a value again and again (A2, L§5.2)
+unless (0 -> +2)[4] == 8 { INFO@mark `AR1 the fifth step of 0 -> +2 is not 8` }
+unless (0 -> 1)[3] == 3 { INFO@mark `AR2 a number as a step is not added` }
+both_ways := -1 <- 0 -> +1
+unless both_ways.next == 1 { INFO@mark `AR3 -> on a two-way line does not step forward` }
+unless both_ways.previous == -1 { INFO@mark `AR4 <- on a two-way line does not step back` }
+unless both_ways.next.previous == 0 { INFO@mark `AR5 a step forward and back is not where it started` }
+unless (0 -> +1)[{< 3}][2] == 2 { INFO@mark `AR6 an unbounded line cannot be filtered by its entries` }
+unless (0 ->)[5] == 5 { INFO@mark `AR7 x -> alone does not count on by one` }
+
+// Open ranges and slices (R4.1, L§1.6)
+letters := ["a", "b", "c", "d"]
+unless letters[..2] == ["a", "b"] { INFO@mark `SL1 ..2 does not take the first two` }
+unless letters[1..] == ["b", "c", "d"] { INFO@mark `SL2 1.. does not take from the second on` }
+unless letters[..-1] == ["a", "b", "c"] { INFO@mark `SL3 ..-1 does not leave out the last` }
+unless letters[1..<3] == ["b", "c"] { INFO@mark `SL4 1..<3 does not take the second and third` }
+unless letters[1..2] == ["b", "c"] { INFO@mark `SL5 1..2 does not take both ends` }
+unless letters[-2..] == ["c", "d"] { INFO@mark `SL6 a negative start does not count from the end` }
+zeros := [1, 1, 1, 1]
+zeros[2..] = 0
+unless zeros == [1, 1, 0, 0] { INFO@mark `SL7 assigning a slice does not put the value at each place` }
+spread_over := [0, 0, 0]
+spread_over[..2] = [7, 8]
+unless spread_over == [7, 8, 0] { INFO@mark `SL8 assigning as many as the places does not spread them` }
+unless (5..)[2] == 7 { INFO@mark `OR1 5.. does not go on from five` }
+unless (..5).previous == 4 { INFO@mark `OR2 ..5 does not come down to five` }
+unless [1, 5, 20][{< 10}] == [1, 5] { INFO@mark `OR3 xs[{p}] does not keep the entries p holds of` }
+
+// `...` spreads; destructuring (A5, T3.14, T4.8)
+first, ...middle, last := "A", "B", "C", "D"
+unless middle == ("B", "C") { INFO@mark `SD1 ...middle does not take what is between` }
+unless last == "D" { INFO@mark `SD2 the name after a spread does not take the last` }
+unless ("A", "A") ==.instance_of ...String { INFO@mark `SD3 ...T is not T[]` }
+Clock := class {
+  now => 12
+  zone => 1
+}
+{ now, zone } = Clock
+unless now == 12 && zone == 1 { INFO@mark `SD4 { a, b } = x does not take the members named a and b` }
+swap_a := 1
+swap_b := 2
+(swap_a, swap_b) = (swap_b, swap_a)
+unless swap_a == 2 && swap_b == 1 { INFO@mark `SD5 (a, b) = pair does not assign each in turn` }
+
+// `.min(key)`, `.max(key)` along a function of the entries (R3.10)
+unless ["ccc", "a", "bb"].min(.count) == "a" { INFO@mark `MK1 min along a key does not pick the smallest by it` }
+unless ["ccc", "a", "bb"].max(.count) == "ccc" { INFO@mark `MK2 max along a key does not pick the largest by it` }
+unless 2.min(5) == 2 { INFO@mark `MK3 min of a value is no longer the smaller of the two` }

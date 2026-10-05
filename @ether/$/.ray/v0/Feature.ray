@@ -33,7 +33,6 @@ Random := class {
   }
 }
 
-choose {chance: Probability} {type} ^keyword => @me.choose(type#.map(. ~~ .weight = .index == 0 ? chance : (1 - chance) / (type#.count - 1)).reduce(|))
 choose {type} ^keyword => @me.choose(type)
 Choice := class = type: *?, value: *?
 

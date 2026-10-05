@@ -339,10 +339,9 @@ Node := base class {
     external extend listed Listed
     listed &= this
     listed &= other
-    listed
   )
   --{call} ^punctuation => call(this)
-  
+
   ={x} ^punctuation => (
     external assign this x
 
@@ -372,12 +371,92 @@ Node := base class {
    declared\
     this
   )
+
+  ??{other} ^punctuation => (
+    chosen := this
+    if (chosen === None) { chosen = other }
+    chosen
+  )
+  ? => None | this
+  ?:{type} ^punctuation => this: (type?)
+
+  compounds + (component) => (
+    external extend this component
+    this
+  )
+  {this}$ ^punctuation => Store.of(this)
+  compounds - (component) => (
+    remaining := chain this
+    walker := this.components.hierarchy.head
+    while walker {
+      unless (walker.value === component) { remaining &= walker.value }
+      walker = walker.next
+    }
+    this.components.hierarchy = remaining
+    this.classes_read = None
+    this
+  )
+
+  === (other) => (
+    answer := None
+    goto marking if this
+    goto done if other
+    answer = global
+    goto done
+   marking\
+    marker := external .
+    marker.probe = global
+    this.identical = marker
+    goto owned if (external own other.identical)
+    goto cleared
+   owned\
+    answer = other.identical.probe
+   cleared\
+    marker.probe = None
+   done\
+
+    answer
+  )
+  as (=== boolean) => true
+
+  not => (
+    answer := global
+    goto held if this
+    goto done
+   held\
+    answer = None
+   done\
+
+    answer
+  )
+  and (b) => (
+    answer := b
+    goto done if this
+    answer = this
+   done\
+
+    answer
+  )
+  or (b) => (
+    answer := this
+    goto done if this
+    answer = b
+   done\
+
+    answer
+  )
+  && (b) => .and(b)
+  || (b) => .or(b)
+  nand (b) => .and(b).not
+  xor (b) => .or(b).and(.nand(b))
+  xnor (b) => .xor(b).not
+
   :{type} ^punctuation => (
     if (external own this) {
       unless type.instance {
         if this {
           if this.instance { type.verify(this) }
-          elsif this.written_body { unless ((this === type).or(this.subtype_of(type))) { ERROR@this `is not of the type it is declared as` } }
+          elsif this.written_body { unless ((this === type) || this.subtype_of(type)) { ERROR@this `is not of the type it is declared as` } }
           elsif (this.instance_of(type)) {
             if type.repeating { external assign this this.instance_of(type) }
             type.verify(this)
@@ -394,70 +473,25 @@ Node := base class {
     this
   )
 
-  ??{other} ^punctuation => (
-    chosen := this
-    if (chosen === None) { chosen = other }
-    chosen
-  )
-  ? => None | this
-  ?:{type} ^punctuation => this: (type?)
-
-  instance_of (type) => (
-    found ^keyword := None
-    among ^keyword := None
-    if this.codepoint { among = type.superposes }
-    if this {
-      if type.repeating { found = read_whole(this, type) }
-      elsif type.listing { found = read_whole(this, type) }
-      elsif among {
-        alternative ^keyword := type.components.head
-        while alternative {
-          if alternative.value.superposes { if (this.instance_of(alternative.value)) { found = alternative } }
-          elsif (same_text(this, alternative.value)) { found = alternative }
-          if found { alternative = None } else { alternative = alternative.next }
-        }
-      } else {
-        found = .structurally(type)
-        unless found {
-          if type.components {
-            other ^keyword := type.components.head
-            while other {
-              found = .structurally(other.value)
-              if found { other = None } else { other = other.next }
-            }
-          }
-        }
-        if found { found = type.admits(this) }
-      }
-    } else {
-      unless type.instance {
-        if type.components {
-          walker ^keyword := type.components.head
-          while walker {
-            if (walker.value === None) { found = global }
-            if found { walker = None } else { walker = walker.next }
-          }
-        }
-      }
+  subtype_of (other) => (
+    found := None
+    held := this.classes.head
+    while (held && found.not) {
+      if (held.value === other) { found = global }
+      held = held.next
     }
-
     found
   )
+  supertype_of (other) => other.subtype_of(this)
 
   classes => (
-    unless ((external own this.classes_read).and(this.classes_read)) {
+    unless ((external own this.classes_read) && this.classes_read) {
       this.classes_read = chain None
-      reached ^keyword := chain None
+      reached := chain None
       reached &= this
-      parent ^keyword := this.components.hierarchy.head
+      parent := this.components.hierarchy.head
       while parent {
-        unless (parent.value === None) {
-          inherited ^keyword := parent.value.classes.head
-          while inherited {
-            reached &= inherited.value
-            inherited = inherited.next
-          }
-        }
+        unless (parent.value === None) { extended_by(reached, parent.value.classes.head) }
         parent = parent.next
       }
       this.classes_read = reached
@@ -466,10 +500,10 @@ Node := base class {
   )
   heads_written => (
     unless this.heads_known {
-      read ^keyword := chain None
+      read := chain None
       if this.written_body {
-        left ^keyword := this.written_body
-        one ^keyword := external first left
+        left := this.written_body
+        one := external first left
         while one {
           read &= head_of(one)
           left = external rest left
@@ -483,10 +517,10 @@ Node := base class {
   )
   requirements => (
     unless this.requirements_known {
-      wanted ^keyword := chain None
-      held ^keyword := this.classes.head
+      wanted := chain None
+      held := this.classes.head
       while held {
-        head ^keyword := held.value.heads_written.head
+        head := held.value.heads_written.head
         while head {
           if head.value.is_required { wanted &= head.value.spelled }
           head = head.next
@@ -499,12 +533,12 @@ Node := base class {
     this.requirements_read
   )
   declaring (wanted_head) => (
-    found ^keyword := None
-    held ^keyword := this.classes.head
-    while ((held).and((found).not)) {
-      head ^keyword := held.value.heads_written.head
-      while ((head).and((found).not)) {
-        if head.value.is_declared { if (head.value.spelled === wanted_head) { found = global } }
+    found := None
+    held := this.classes.head
+    while (held && found.not) {
+      head := held.value.heads_written.head
+      while (head && found.not) {
+        if (head.value.is_declared && (head.value.spelled === wanted_head)) { found = global }
         head = head.next
       }
       held = held.next
@@ -512,55 +546,58 @@ Node := base class {
     found
   )
   structurally (type) => (
-    made_by ^keyword := None
-    held ^keyword := this.classes.head
-    while ((held).and((made_by).not)) {
-      if (held.value === type) { made_by = global }
-      held = held.next
-    }
-    holding ^keyword := global
-    wanted ^keyword := None
-    unless made_by { wanted = type.requirements.head }
-    while ((wanted).and(holding)) {
-      unless (this.declaring(wanted.value)) { holding = None }
+    holding := global
+    wanted := None
+    unless (.subtype_of(type)) { wanted = type.requirements.head }
+    while (wanted && holding) {
+      unless (.declaring(wanted.value)) { holding = None }
       wanted = wanted.next
     }
     holding
   )
-
-  compounds + (component) => (
-    external extend this component
-    this
-  )
-  {this}$ ^punctuation => Store.of(this)
-
-  compounds - (component) => (
-    remaining ^keyword := chain this
-    walker ^keyword := this.components.hierarchy.head
-    while walker {
-      unless (walker.value === component) { remaining &= walker.value }
-      walker = walker.next
+  instance_of (type) => (
+    found := None
+    among := None
+    if this.codepoint { among = type.superposes }
+    if this {
+      if (type.repeating || type.listing) { found = read_whole(this, type) }
+      elsif among {
+        alternative := type.components.head
+        while (alternative && found.not) {
+          if alternative.value.superposes { if (this.instance_of(alternative.value)) { found = alternative } }
+          elsif (same_text(this, alternative.value)) { found = alternative }
+          alternative = alternative.next
+        }
+      } else {
+        found = .structurally(type)
+        if (found.not && type.components) {
+          other := type.components.head
+          while (other && found.not) {
+            found = .structurally(other.value)
+            other = other.next
+          }
+        }
+        if found { found = type.admits(this) }
+      }
+    } else {
+      unless type.instance {
+        if type.components {
+          walker := type.components.head
+          while (walker && found.not) {
+            if (walker.value === None) { found = global }
+            walker = walker.next
+          }
+        }
+      }
     }
-    this.components.hierarchy = remaining
-    this.classes_read = None
-    this
-  )
 
-  subtype_of (other) => (
-    found ^keyword := None
-    held ^keyword := this.classes.head
-    while ((held).and((found).not)) {
-      if (held.value === other) { found = global }
-      held = held.next
-    }
     found
   )
-  supertype_of (other) => other.subtype_of(this)
 
   is_abstract => (
-    missing ^keyword := None
-    head ^keyword := this.heads_written.head
-    while ((head).and((missing).not)) {
+    missing := None
+    head := this.heads_written.head
+    while (head && missing.not) {
       if head.value.is_required { missing = global }
       head = head.next
     }
@@ -568,20 +605,18 @@ Node := base class {
   )
 
   fields => (
-    found ^keyword := chain None
-    holder ^keyword := this
-    colon ^keyword := code_points(`x:y`).head.next.value
-    held ^keyword := this.classes.head
+    found := chain None
+    holder := this
+    colon := code_points(`x:y`).head.next.value
+    held := this.classes.head
     while held {
       if held.value.written_body {
-        statements ^keyword := Program(code: held.value.written_body).written
+        statements := Program(code: held.value.written_body).written
         statements for {
-          read ^keyword := it.value.head_read
-          if (read.ending) {
-            if (read.ending == colon) {
-              named ^keyword := read.points.as(String)
-              found &= Field(name: named, value: (external get holder named))
-            }
+          read := it.value.head_read
+          if (read.ending && (read.ending == colon)) {
+            named := read.points.as(String)
+            found &= Field(name: named, value: (external get holder named))
           }
         }
       }
@@ -591,62 +626,10 @@ Node := base class {
   )
 
   canonical => (
-    normal ^keyword := this
+    normal := this
     if (this.normalizer) { normal = this.normalizer(this) }
     normal
   )
-  as (=== boolean) => true
-
-  === (other) => (
-    answer ^keyword := None
-    goto marking if this
-    goto done if other
-    answer = global
-    goto done
-   marking\
-    marker ^keyword := external .
-    marker.probe = global
-    this.identical = marker
-    goto owned if (external own other.identical)
-    goto cleared
-   owned\
-    answer = other.identical.probe
-   cleared\
-    marker.probe = None
-   done\
-
-    answer
-  )
-
-  not => (
-    answer ^keyword := global
-    goto held if this
-    goto done
-   held\
-    answer = None
-   done\
-
-    answer
-  )
-  and (b) => (
-    answer ^keyword := b
-    goto done if this
-    answer = this
-   done\
-
-    answer
-  )
-  or (b) => (
-    answer ^keyword := this
-    goto done if this
-    answer = b
-   done\
-
-    answer
-  )
-  nand (b) => .and(b).not
-  xor (b) => .or(b).and(.nand(b))
-  xnor (b) => .xor(b).not
 
   structure => None
 
@@ -657,9 +640,9 @@ Node := base class {
   admits (candidate) => global
 
   {this}{{literal narrowing}} ^punctuation => (
-    narrowed ^keyword := this
-    closure ^keyword := { inline narrowing }
-    selected ^keyword := None
+    narrowed := this
+    closure := { inline narrowing }
+    selected := None
     if (narrowed.instance) {
       selected = chain None
       narrowed for {
@@ -679,7 +662,7 @@ Node := base class {
         )
         admits (candidate) => if (this.narrows.admits(candidate)) { candidate.satisfies(this.constraint) } else { None }
         chosen_within (width) => (
-          picked ^keyword := this.narrows.chosen_within(width)
+          picked := this.narrows.chosen_within(width)
           if (picked.satisfies(this.constraint)) { picked } else { .chosen_within(width.succ) }
         )
         () ^punctuation => .chosen_within(1)
@@ -691,7 +674,7 @@ Node := base class {
   )
 
   {this}<{literal partial}> ^punctuation => (
-    narrowed ^keyword := this
+    narrowed := this
 
     class: narrowed { inline partial }
   )
@@ -725,24 +708,12 @@ Node := base class {
   )
 
   |{other} ^punctuation => (
-    superposed ^keyword := external .
+    superposed := external .
     external extend superposed this
     superposed.instance = None
     superposed.superposes = global
     superposed.components = chain None
-    goto superpose_each if this.components.head
-    superposed.components &= this
-    goto superpose_other
-   superpose_each\
-    alternative ^keyword := this.components.head
-   superpose_step\
-    goto superpose_copy if alternative
-    goto superpose_other
-   superpose_copy\
-    superposed.components &= alternative.value
-    alternative = alternative.next
-    goto superpose_step
-   superpose_other\
+    if this.components.head { extended_by(superposed.components, this.components.head) } else { superposed.components &= this }
     superposed.components &= other
 
     superposed
@@ -753,14 +724,12 @@ Node := base class {
 
   [{property}] ^punctuation => external get this property
   [] => (
-    item ^keyword := this
-    repeated ^keyword := class: Array { }
+    item := this
+    repeated := class: Array { }
     repeated.repeats = item
     repeated.repeating = global
     repeated
   )
-
- 
 }
 
 Node.DEFINE_METHOD = `&=`

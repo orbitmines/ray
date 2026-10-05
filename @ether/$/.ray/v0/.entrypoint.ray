@@ -1928,7 +1928,7 @@ Diagnostic := class {
   trace: Node?
 
   origin => trace.head.value
-  caught_by (catching) => if type { (type === catching) || type.instance_of(catching) } else { origin === catching }
+  caught_by (catching) => if (type && (type !== *)) { (type === catching) || type.instance_of(catching) } else { origin === catching }
 
   causes => (
     all := chain None
@@ -1938,26 +1938,18 @@ Diagnostic := class {
   )
 }
 
-raise_fatal := {
+FATAL{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^fatal => (
   report FATAL comment comment
   &caller.return(Diagnostic(message: comment, type: type, fatal: true, trace: &caller.trace))
-}
-raise_error := {
+)
+ERROR{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^error => (
   report ERROR comment comment
   raised := Diagnostic(message: comment, type: type, trace: &caller.trace)
   &caller.filed &= raised
   raised
-}
-FATAL{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^fatal => inline raise_fatal
-ERROR{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^error => inline raise_error
-FATAL{ }{comment ^comment} ^fatal => (
-  type := None
-  inline raise_fatal
 )
-ERROR{ }{comment ^comment} ^error => (
-  type := None
-  inline raise_error
-)
+FATAL{ }{comment ^comment} ^fatal => FATAL@* comment
+ERROR{ }{comment ^comment} ^error => ERROR@* comment
  WARN{`@` ^punctuation}{var}{ }{comment ^comment} ^warn => report WARN var comment
  INFO{`@` ^punctuation}{var}{ }{comment ^comment} ^info => report INFO var comment
 DEBUG{`@` ^punctuation}{var}{ }{comment ^comment} ^debug => report DEBUG var comment

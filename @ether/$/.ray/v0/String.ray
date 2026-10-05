@@ -57,7 +57,8 @@ Escaped := class = character: Char {
 "{literal: (\{escape} | !"\"")[]}": String => literal.literal_dedented.interpolated((code) => (inline (external ** code)) as String)
 
 LanguageName := String{Language.named("." + .) != None}
-{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
+@{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
+@{extension: LanguageName} {fragment: Language.fragment_of(extension)} => fragment.built((code) => inline (external ** code))
 
 String := class: Char[] {
   () => &caller[this]()
@@ -83,6 +84,7 @@ String := class: Char[] {
   compounds * (count: Number) => count == 0 ? "" : this, this * (count - 1)
 
   trimmed => this[{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}]
+  trimmed_end => this[{!(Char.Blank[] ⊣)}]
   trimmed (characters: Char[]) => this[{!(⊢ characters[] | characters[] ⊣)}]
   before (other: String) => this ~= (before: *, other, *) -- .before ?? this
   after (other: String) => this ~= (*, other, after: *) -- .after ?? ""

@@ -2,13 +2,13 @@ IO := namespace {
   root = "instance"
   permitted = false
 
-  inside (path: String) => {
+  inside (path) => {
     parts = path.split("/"){!= "." && !.empty}.reduce([]) (kept, part) => part == ".." ? kept[..-1] : (kept, part)
     root + "/" + parts.join("/")
   }
-  read (path: String) => (external io inside(path) None) as String
-  write (path: String, content) => external io inside(path) content
-  host (path: String) => permitted ? (external io path None) as String : Quest(name: "ask for the host's files", goal: path)
+  read (path) => (external io inside(path) None) as String
+  write (path, content) => external io inside(path) content
+  host (path) => permitted ? (external io path None) as String : Quest(name: "ask for the host's files", goal: path)
   field (name: String) => (name + ".ray", name + "/", name).map(read(.)).first(.nonempty) ?? ""
 
   os (name) => (external os name) as String

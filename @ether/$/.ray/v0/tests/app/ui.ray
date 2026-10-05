@@ -310,3 +310,39 @@ site := UI.Site(index: "home", routes: [UI.Site.Route("/@", [(name: "fadi"), (na
 unless site.at("/@nobody") == "home" { INFO@mark `UI187 a path nothing matches is not the index` }
 unless site.at("/@fadi").name == "fadi" { INFO@mark `UI188 a path matching one value is not that value` }
 unless UI.Site.select([(name: "a"), (name: "a")], "a") ==.instance_of UI.Site.Chooser { INFO@mark `UI189 two matches are not a chooser` }
+
+who := "Ray"
+by_hand := Language.Web.HTML.Element("p", [("class", "note")], [Language.Web.HTML.Text("hi")])
+inline_p := @html <p class="note">hi</p>
+unless (inline_p as Language.Web.HTML.language) == (by_hand as Language.Web.HTML.language) { INFO@mark `UI190 an inline html fragment is not the element built by hand` }
+unless inline_p ==.instance_of Language.Web.HTML.Element && inline_p.tag == "p" { INFO@mark `UI191 an inline html fragment is not an element` }
+holed := @html <p id={who}>{who}</p>
+unless holed.id == "Ray" && holed.children.first.text == "Ray" { INFO@mark `UI192 a hole does not splice its value` }
+unless (@html <p id="x-{who}" />).id == "x-Ray" { INFO@mark `UI193 a hole inside a quoted attribute is not spliced into the text` }
+unless (@html <ul>{["a", "b", "c"].map(item => @html <li>{item}</li>)}</ul>).children.count == 3 { INFO@mark `UI194 a list hole does not splice children` }
+unless (@html <p>a \{b}</p>).children.first.text == "a {b}" { INFO@mark `UI195 a backslashed brace is not a literal brace` }
+unless (@html <input disabled={true} />).attributes.contains(("disabled", "")) { INFO@mark `UI196 a true attribute is not present` }
+unless (@html <input disabled={false} />).attributes.empty { INFO@mark `UI197 a false attribute is present` }
+unless (@html <p><!-- note -->a</p>).children.count == 1 { INFO@mark `UI198 an html comment is a child` }
+extent := [@html <br />, 2]
+unless extent.count == 2 && extent.first.tag == "br" && extent.last == 2 { INFO@mark `UI199 an html fragment does not stop where its grammar stops` }
+
+css_rule := @css #{who} { gap: {2}px {3}px; display: grid; }
+unless css_rule ==.instance_of Language.Web.CSS.Rule && css_rule.selector == "#Ray" { INFO@mark `UI200 a css fragment is not a rule with its selector` }
+unless css_rule.declarations.contains(("display", "grid")) && css_rule.declarations.contains(("gap", 2, "px ", 3, "px")) { INFO@mark `UI201 css declarations are not read with their holes` }
+unless (@css p { color: {None}; display: grid; }).declarations.count == 1 { INFO@mark `UI202 a declaration whose value is None is not left out` }
+unless (@css @media print { p { display: none; } }).within == "@media print" { INFO@mark `UI203 a css at-rule does not hold its rule` }
+unless (@css @keyframes spin { from { opacity: 0; } to { opacity: 1; } }).frames.last.at == 1 { INFO@mark `UI204 css keyframes are not read` }
+unless [@css p { display: grid; }, 3].count == 2 { INFO@mark `UI205 a css fragment does not stop where its grammar stops` }
+
+js_listen := @js document.getElementById({who}).addEventListener("click", (event) => ray.activate({who}))
+unless js_listen ==.instance_of Language.Web.JS.Listen && js_listen.event == "click" { INFO@mark `UI206 a js listener fragment is not a Listen` }
+unless js_listen.target ==.instance_of Language.Web.JS.ById && js_listen.target.id == "Ray" { INFO@mark `UI207 a js fragment does not find an element by a held id` }
+unless ((@js f({who})) as Language.Web.JS.language) == "f(\"Ray\")" { INFO@mark `UI208 a string hole in js is not a string literal` }
+unless ((@js ray.set("a", 1 + 2 * 3)) as Language.Web.JS.language) == "ray.set(\"a\",(1+(2*3)))" { INFO@mark `UI209 js operators do not keep their precedence` }
+unless (@js effect(["a"], () => { f() })) ==.instance_of Language.Web.JS.Effect { INFO@mark `UI210 a js effect fragment is not an Effect` }
+unless [@js f(), 4].count == 2 { INFO@mark `UI211 a js fragment does not stop where its grammar stops` }
+
+ray_inline := @ray 1 + 2
+unless ray_inline == 3 { INFO@mark `UI212 @ray does not read the rest of the line as Ray` }
+unless (@css/style.css) ==.instance_of Location { INFO@mark `UI213 @name/path is not a location when the name is a language` }

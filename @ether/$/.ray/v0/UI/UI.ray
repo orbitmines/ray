@@ -4,7 +4,8 @@ UI := class {
   Scene := {
     {text: String} => Geometry.Text(text)
     {painted: Painted} => Geometry.Text(painted.text, white_space: pre, runs: painted.runs)
-    {styled: * ^{{literal expression}}} => Styled(styled, Program(code: external ** expression))
+    {styled: String ^{{literal expression}}} => Geometry.Text(styled).styled_by(Program(code: external ** expression))
+    {styled: Geometry.Shape ^{{literal expression}}} => styled.styled_by(Program(code: external ** expression))
     {styled: String ^{style}} => Geometry.Text(styled).styled(style)
     {styled: Geometry.Shape ^{style}} => styled.styled(style)
     {{literal narrowing}} {narrowed: Geometry.Shape} => narrowed.narrowed(Program(code: external ** narrowing))
@@ -22,9 +23,27 @@ UI := class {
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, constraints: [Geometry.Constraint("x", columns: 2)], children: value.fields.map(.name, .value).flatten)
   }
 
-  Styled := (value, expression: Program) => (value ==.instance_of String ? Geometry.Text(value) : value) -- (shape =>
-    shape.styled(expression() as String) -- shape.dynamics.push Geometry.Dynamic(reads: expression.reads, compiled: expression, target: "class") -- shape
-  )
+  Page := class = program: Program, before: Geometry.Shape?
+  Drawn := class = shape: Geometry.Shape, before: Geometry.Shape?
+  Themed := class = shape: Geometry.Shape, before: Geometry.Shape?
+  Screen := class = layers: Geometry.Shape[], scrolled: Geometry.Length = 0px {
+    offset => Geometry.Transform.translate(Geometry.Vector(0, -scrolled))
+  }
+
+  Drawing := {
+    {page: Page} => Drawn(page.program{O: Scene}(), page.before)
+  }
+  Theming := {
+    {drawn: Drawn} => Themed(Theme.applied(drawn.shape), drawn.before)
+  }
+  Transitions := {
+    {themed: Themed} => Geometry.Unsolved(themed.shape.transitioned_from(themed.before), Viewport.size, Viewport.scrolled)
+  }
+  Rendering := Drawing + Theming + Transitions + Geometry.Solving
+  Scrolling := {
+    {solved: Geometry.Solved} => Screen([solved.shape, solved.shape.lifted].flatten, solved.scrolled)
+  }
+
   Painted := class = text: String, spans: (from: Number, to: Number, style: String)[] = [], palette: String = "default" {
     runs => spans.map(Geometry.Text.Run(.from, .to, color: Theme.painted(palette, .style), font: Theme[.style].font))
   }
@@ -34,6 +53,7 @@ UI := class {
   Audio := class { extensions = "mp3" | "ogg" | "wav" | "flac" }
 
   Link := class: Geometry.Box = to: Location, window: same | new = same {
+    role => Role.link
     activate => window == new ? Platform.open(to) : Navigation.go(to)
   }
 
@@ -62,30 +82,36 @@ UI := class {
     set (text: String) => (value = text) -- this
     erased => (value = value[..<-1]) -- this
     empty => value == None || (value as String).empty
-    face => Geometry.Text(this.match
-        Checkbox => value ? "[x]" : "[ ]"
-        Slider => (value - chosen.type.least) / (chosen.type.most - chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
-        Select => "‹ ", value as String, " ›"
-        Secret => "•" * (value as String).length
-        * => empty ? placeholder : value as String
-      , origin: origin + padding.start, size: size - padding.total, font: font ?? Geometry.Font(), color: empty ? placeholder_color ?? Theme["muted"].color : color,
-      white_space: this ==.instance_of TextArea ? pre_wrap : nowrap, runs: !empty && this ==.instance_of TextArea && painted ? painted.runs : [])
+    role => Role.input
+    text_shown => empty ? placeholder : value as String
+    wrapping => nowrap
+    runs_shown => []
+    face => Geometry.Text(text_shown, origin: origin + padding.start, size: size - padding.total, font: font ?? Geometry.Font(), color: empty ? placeholder_color ?? Theme["muted"].color : color,
+      white_space: wrapping, runs: runs_shown)
   }
   TextField := class: Input
   TextArea := class: Input = language: Language | String | None = None, palette: String = "default" {
     painted => language && !empty ? (value as String).highlighted(language, palette) : None
+    wrapping => pre_wrap
+    runs_shown => !empty && painted ? painted.runs : []
   }
-  Secret := class: Input
+  Secret := class: Input {
+    text_shown => "•" * (value as String).length
+  }
   NumberField := class: Input
   Checkbox := class: Input {
     activate => value = !value
+    text_shown => value ? "[x]" : "[ ]"
   }
-  Slider := class: Input
+  Slider := class: Input {
+    text_shown => (value - chosen.type.least) / (chosen.type.most - chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
+  }
   DateField := class: Input
   ColorField := class: Input
   FileField := class: Input = accepts: String[] = []
   Select := class: Input = options: *[] {
     activate => value = options[(options.index_of(value) + 1) % options.count]
+    text_shown => "‹ ", value as String, " ›"
   }
   Form := class: Geometry.Box = value: * {
     inputs => value.fields{.value ==.instance_of Choice}.map(.value as Input)
@@ -306,15 +332,7 @@ UI := class {
     interaction => Interactive(this)
     focusable => this ==.instance_of Link || this ==.instance_of Input || activate
     activate => None
-    role => this.match
-      Link => Role.link
-      Input => Role.input
-      Geometry.Image => Role.image
-      Geometry.Text{font.weight >= 600} => Role.heading
-      Geometry.Text => Role.text
-      Geometry.Box{flow == grid} => Role.table
-      Geometry.Box{activate} => Role.button
-      * => Role.region
+    role => Role.region
     label => this ==.instance_of Geometry.Image ? alt : children{==.instance_of Geometry.Text}.text.join(" ")
     styled (name: String) => (styles.push name) -- Theme[name].fields{.name != "name"}.for(field => field.name.match
       "font" => font = font ? font.merged(field.value) : field.value
@@ -323,6 +341,19 @@ UI := class {
       * => this.`field.name` = field.value
     ) -- this
     restyled (name: String) => styles -- (own => (styles = []) -- styled(name) -- own.for(styled(.))) -- this
+    styled_by (expression: Program) => styled(expression() as String) -- dynamics.push Geometry.Dynamic(reads: expression.reads, compiled: expression, target: "class") -- this
+    transitioned_from (before: Geometry.Shape?) => (before?.expand ?? []).zip(expand){.1.transition && .0.shown_transform != .1.transform}.for((was, now) =>
+      now.animations.push Geometry.Animation(from: was.shown_transform, to: now.transform, duration: now.transition.duration, easing: now.transition.easing, property: "transform")
+    ) -- this
+  }
+  Geometry.Box &+= {
+    role => flow == grid ? Role.table : activate ? Role.button : Role.region
+  }
+  Geometry.Image &+= {
+    role => Role.image
+  }
+  Geometry.Text &+= {
+    role => font.weight >= 600 ? Role.heading : Role.text
   }
 
   Theme := class {
@@ -376,11 +407,8 @@ UI := class {
   Runtime := class = page: Program, renderer: Language, target: *, running: boolean = false {
     static current: Runtime?
     static frames: Number = 0
-    solved => page{O: Scene}() -- Theme.applied(.) -- Geometry.Solver(available: Viewport.size, scrolled: Viewport.scrolled).solve(.) -- transitioned(scene, .) -- (scene = .)
-    transitioned (before: Geometry.Shape?, after: Geometry.Shape) => (before?.expand ?? []).zip(after.expand){.1.transition && .0.shown_transform != .1.transform}.for((was, now) =>
-      now.animations.push Geometry.Animation(from: was.shown_transform, to: now.transform, duration: now.transition.duration, easing: now.transition.easing, property: "transform")
-    ) -- after
-    frame => solved{O: renderer.level}()
+    solved => Compiler.reduced(Page(page, before: scene), Rendering) -- (solution => (scene = solution.shape) -- solution)
+    frame => Compiler.reduced(solved, renderer.level)
     run => (running = true) -- (Runtime.current = this) -- target.start
       -- ((target.write(frame) -- target.read -- tick) while running)
       -- target.stop -- this
@@ -396,6 +424,7 @@ UI := class {
 }
 
 Program &+= {
+  rendered (level) => Compiler.reduced(UI.Page(this), level)
   after (delay: Quantity.Temporal) => UI.Timer(Time.now + delay, this).start
   when (watched: Program, becoming: * = None) => UI.Watch(dynamically watched(), this, becoming).start
 }

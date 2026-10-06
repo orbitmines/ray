@@ -8,7 +8,7 @@ Node &+= {
 }
 
 Geometry := class {
-  Length := Quantity{unit is (px | pt | em | rem | vw | vh | cell | m)}
+  Length := Quantity{unit is (px | pt | em | rem | vw | vh | column | row | m)}
 
   Metric := (a: Vector, b: Vector): Length
   euclidean: Metric = (a, b) => √(Space.current.between(a, b).map(. ^ 2).sum)
@@ -27,7 +27,7 @@ Geometry := class {
     static screen = Space([Axis(), Axis(orientation: -1)])
     static current: Space = plane
     static grid (extent: Vector, loop: boolean | boolean[] = false) => Space(extent.enumerate.map(Axis(continuous: false, loop: loop is boolean ? loop : loop[.index] ?? false, extent: .value)), graph)
-    static of (structure: Graph) => Space([], graph, Projection.embedding(structure), structure)
+    static (structure: Graph) as (=== Space) => Space([], graph, Projection.embedding(structure), structure)
     static Plane := Space{dimension == 2 && axes.every(.extent == None && !.loop)}
     static Grid := Space{discrete && vertices == None}
     static Cylinder := Space{axes{loop}.count == 1}
@@ -105,16 +105,25 @@ Geometry := class {
   Steps := Stops{easing == step}
   Animated<V> := class: Stops<Time, V> {
     value => at(Time.now)
-    .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get value property
   }
-  Gradient := class: Stops<Probability, Color> = kind: straight | radial | conic = straight, angle: Angle = 0 turn
+  Gradient := class: Stops<Probability, Color> = angle: Angle = 0 turn
+  Radial := class: Gradient
+  Conic := class: Gradient
   Pattern := class = shape: Shape, repeat: Vector
   Stroke := class = paint: Paint, width: Length = 1px, sides: Side = all, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter
 
   Effect := Shadow | Blur | Filter
   Shadow := class = offset: Vector, blur: Length = 0px, spread: Length = 0px, color: Color, inset: boolean = false
   Blur := class = radius: Length
-  Filter := class = kind: brightness | contrast | grayscale | invert | opacity | saturate | sepia | hue, amount: Number
+  Filter := class = amount: Number
+  Brightness := class: Filter
+  Contrast := class: Filter
+  Grayscale := class: Filter
+  Invert := class: Filter
+  Opacity := class: Filter
+  Saturate := class: Filter
+  Sepia := class: Filter
+  Hue := class: Filter
 
   Font := class = family: String[]?, size: Length?, weight: Number{100 <= . <= 900}?, style: (normal | italic)?, line_height: Number?, tracking: Length?, features: String[]? {
     static base = Font(["sans-serif"], 16px, 400, normal, 1.2, 0px, [])
@@ -134,6 +143,7 @@ Geometry := class {
     height => count
     space => Space.grid(Vector(width, height))
     at (x: Number, y: Number) => this[y][x]
+    sampled (at: Vector) => Space.screen.seen(Vector(at.x * width, at.y * height), Vector(width, height), Vector(1, 1)) -- (cell => this.at(cell.x.floor max 0 min width - 1, cell.y.floor max 0 min height - 1))
     put (x: Number, y: Number, color: Color) => (this[y][x] = at(x, y).over(color)) if space.holds(Vector(x, y))
     blurred (area: Vector[], radius: Number) => [Vector(1, 0), Vector(0, 1)].reduce(acc = this => . -- (along => acc.enumerate.map(row => row.value.enumerate.map(pixel =>
       area.contains(Vector(pixel.index, row.index))
@@ -157,19 +167,28 @@ Geometry := class {
   horizontal := left | right
   vertical := top | bottom
   all := Side{axis < Space.current.dimension}#
-  Edges := class = top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px, front: Length? = 0px, back: Length? = 0px, beyond: Length?[] = [] {
-    static (length: Length?) as (=== Edges) => Edges(length, length, length, length, length, length, (6..<2 * Space.current.dimension).map(length))
-    [side: Side] => side.label ? this.`side.label` : beyond[side.ordinal - 6]
-    total => Vector((0..<Space.current.dimension).map(axis => (this[Side(axis, -1)] ?? 0px) + (this[Side(axis, +1)] ?? 0px)))
-    start => Vector((0..<Space.current.dimension).map(this[Side(., -1)] ?? 0px))
-    leading => Vector(left ?? 0px, top ?? 0px)
+  Edges := (Length?)[] + {
+    static (top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px, front: Length? = 0px, back: Length? = 0px) as (=== Edges) => [left, right, bottom, top, front, back][..<2 * Space.current.dimension]
+    static (length: Length?) as (=== Edges) => (0..<2 * Space.current.dimension).map(length)
+    [side: Side] => this[side.ordinal]
+    top => this[Geometry.top]
+    right => this[Geometry.right]
+    bottom => this[Geometry.bottom]
+    left => this[Geometry.left]
+    total => Vector((0..<Space.current.dimension).map(axis => (this[2 * axis] ?? 0px) + (this[2 * axis + 1] ?? 0px)))
+    start => Vector((0..<Space.current.dimension).map(this[2 * .] ?? 0px))
   }
-  Position := class = kind: flow | sticky | fixed | absolute | anchored = flow, anchor: Shape?, side: Side = bottom
-  Flowing := Position{kind is (flow | sticky)}
-  Sticky := Position{kind == sticky}
-  Fixed := Position{kind == fixed}
-  Absolute := Position{kind == absolute}
-  Anchored := Position{kind == anchored}
+  Spacing := Edges + {
+    from: border | itself = border
+    static (edges: Edges, from: border | itself = border) as (=== Spacing) => edges ~~ .from = from
+  }
+  Flow := class
+  Sticky := class
+  Fixed := class
+  Absolute := class
+  Anchored := class = anchor: Shape?, side: Side = bottom
+  Position := Flow | Sticky | Fixed | Absolute | Anchored
+  Flowing := Flow | Sticky
 
   Segment := Vector | Quadratic | Cubic | Arc
   Quadratic := class = control: Vector, to: Vector
@@ -211,7 +230,7 @@ Geometry := class {
     Mesh(simplices(Vector((0..<n).map(. == side.axis && side.toward > 0 ? size[.] : 0)), size, (0..<n){!= side.axis}).map(Facet(.)), rank: n - 1))))
 
   Shape := class: Hierarchy = origin: Vector = Vector(), size: Vector = Vector(), width: (Length | Number | Stops)?, height: (Length | Number | Stops)?, aspect: Number?,
-    position: Position = Position(), inset: Edges = Edges(None, None, None, None, None, None), padding: Edges = Edges(), margin: Edges = Edges(),
+    position: Position = Flow(), spacing: Spacing[] = [],
     transform: Transform = Transform.identity,
     boundary: Shape = space.vertices ? Shape(space: space, rank: 1, cells: space.vertices.edges{cells.at.contains(.from) != cells.at.contains(.to)})
       : space.discrete ? Shape(space: space, rank: rank - 1, cells: cells.∂) : box(size),
@@ -219,29 +238,29 @@ Geometry := class {
     align: (start | center | end | between | around | stretch | middle | justify)? = parent?.align,
     fill: Paint?, color: Paint? = parent?.color, font: Font = parent ? (parent.font ~~ .size = parent.font_size) : Font.base, stroke: Stroke?, radius: (Length | Number)[] = [0px],
     effects: Effect[] = [], holes: Shape[] = [], smoothing: Length = 0px, blend: normal | multiply | screen | overlay | darken | lighten | difference = normal,
-    overflow: visible | clip | scroll = visible, scrollbar: shown | hidden = shown, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
-    cursor: default | pointer | text | grab | grabbing | move | wait | none = default, touch: auto | none | pan_x | pan_y = auto,
-    transition: Transition?, styles: String[] | Dynamic = [], content: * = None, location: Location?, palette: *? = parent?.palette,
-    white_space: WhiteSpace = parent?.white_space ?? WhiteSpace.pre_line, case: Section? = parent?.case,
-    truncate: (clip | ellipsis)? = parent?.truncate, direction: (left-to-right | right-to-left)? = parent?.direction, solved: boolean = false,
+    overflow: visible | clip | scroll = visible, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
+    transition: Transition?, content: * = None, white_space: WhiteSpace = parent?.white_space ?? WhiteSpace.pre_line, solved: boolean = false,
     space: Space = parent?.space ?? Space.current, rank: Integer = space.dimension,
     cells: Chain = space.discrete ? space.positions.filter(p => (0..<space.dimension).every(origin[.] <= p[.] < origin[.] + size[.])).map(Cell(., 0..<space.dimension)) : [] {
     id: Location => parent ? parent.id / (parent.children.enumerate{.value === this}.first.index as String) : @scene
     root => parent?.root ?? this
     em => parent?.font_size ?? Font.base.size
     font_size => with Font.inherited = em { font.size as px }
-    at: Vector => if position.kind {
-      fixed => origin
-      anchored => (position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0))
-      sticky => (parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y)) -- Vector(.x, .y min (root.size.y - (inset.top ?? 0px) - size.y) max parent.at.y)
+    at: Vector => if position {
+      is Fixed => origin
+      is Anchored => (position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0))
+      is Sticky => (parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y)) -- Vector(.x, .y min (root.size.y - (spaced(itself).top ?? 0px) - size.y) max parent.at.y)
     } else {
       parent ? parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y) : origin
     }
-    outer => size + margin.total
-    content_height => children.map(size.y - .origin.y + .margin.bottom).max ?? size.y
+    spaced (from: border | itself) => (0..<2 * space.dimension).map(i => spacing{.from == from}.map(.[i]){!= None} -- (.empty ? None : .sum))
+    inside => spaced(border).map(. ?? 0px)
+    outside => spaced(itself).map(. ?? 0px)
+    outer => size + outside.total
+    content_height => children.map(size.y - .origin.y + .outside.bottom).max ?? size.y
     texts => reachable{.content is String}
-    in_place => children{.position.kind is (flow | sticky | absolute)}
-    lifted => reachable{.position.kind is (fixed | anchored) && .visible}.sort_by(.layer)
+    in_place => children{.position is (Flowing | Absolute)}
+    lifted => reachable{.position is (Fixed | Anchored) && .visible}.sort_by(.layer)
     rectangular => boundary == box(size)
     scale => transform.scaling * (parent?.scale ?? 1)
     facets => children.map(.facets).flatten
@@ -271,6 +290,7 @@ Geometry := class {
     intrinsic (width: Length) => content is String ? font.size * font.line_height * lines(width).count : 0px
 
     compounds + (effect: Effect) => (effects ,= effect) -- this
+    compounds + (spacing: Spacing) => (this.spacing ,= spacing) -- this
     compounds - (hole: Shape) => (holes ,= hole) -- this
     smoothed (radius: Length) => (smoothing = radius) -- this
     narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? writes.for(.entered(this, None)) -- this : reachable.filter(narrowing.entered(., None)))
@@ -282,42 +302,43 @@ Geometry := class {
       fields[along].type -- (length max (share(.least, room) ?? length) min (share(.most, room) ?? length)))
     solve => arranged -- (solved = true) -- this
     laid (room: Length) => with Font.inherited = em {
-      size = Vector(measured("width", room - margin.left - margin.right), size.y)
+      size = Vector(measured("width", room - outside.left - outside.right), size.y)
       arranged
     } -- this
     arranged => with Font.inherited = em {
-      inner = size.x - padding.left - padding.right
+      inner = size.x - inside.left - inside.right
       flowing = children{.position is Flowing}
+      corner = (edges: Edges) => Vector(edges.left, edges.top)
       bottom = if flow {
-        grid => flowing.chunk(columns).reduce(acc = padding.top => .enumerate.for(cell =>
-            cell.value.laid(inner / columns - gap.x) -- (cell.value.origin = Vector(padding.left + cell.index * (inner / columns + gap.x), acc) + cell.value.margin.leading)
+        grid => flowing.chunk(columns).reduce(acc = inside.top => .enumerate.for(cell =>
+            cell.value.laid(inner / columns - gap.x) -- (cell.value.origin = Vector(inside.left + cell.index * (inner / columns + gap.x), acc) + corner(cell.value.outside))
           ) -- acc + .map(.outer.y).max + gap.y)
-        layered => flowing.for(.laid(inner) -- (.origin = padding.leading + .margin.leading)) -- padding.top + flowing.map(.outer.y).max
+        layered => flowing.for(.laid(inner) -- (.origin = corner(inside) + corner(.outside))) -- inside.top + flowing.map(.outer.y).max
       } else {
-        flowing.reduce(acc = (at: padding.leading, row: 0px) => {
+        flowing.reduce(acc = (at: corner(inside), row: 0px) => {
           .laid(inner)
-          continues = flow == inline && (!wrap || acc.at.x + .outer.x <= padding.left + inner)
+          continues = flow == inline && (!wrap || acc.at.x + .outer.x <= inside.left + inner)
           y = continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0px ? gap.y : 0px)
-          x = continues ? acc.at.x : padding.left + (if align
+          x = continues ? acc.at.x : inside.left + (if align
             center => (inner - .outer.x) / 2
             end => inner - .outer.x
             else => 0px
           )
-          .origin = Vector(x, y) + .margin.leading
+          .origin = Vector(x, y) + corner(.outside)
           (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
         }) -- (.at.y + .row)
       }
-      (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? padding.top + intrinsic(inner) : bottom) + padding.bottom))) if parent
+      (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? inside.top + intrinsic(inner) : bottom) + inside.bottom))) if parent
       flowing.for(.origin = Vector(.origin.x, size.y - .origin.y - .size.y))
       children{!(.position is Flowing)}.for(.positioned)
     } -- this
-    positioned => (position.kind == fixed ? root.size : parent.size) -- (frame => {
+    positioned => (position is Fixed ? root.size : parent.size) -- (frame => spaced(itself) -- (inset => {
       laid(inset.left != None && inset.right != None ? frame.x - inset.left - inset.right : frame.x)
       (size = Vector(size.x, frame.y - inset.top - inset.bottom)) if inset.top != None && inset.bottom != None
       origin = Vector(inset.left ?? (inset.right != None ? frame.x - inset.right - size.x : 0px), inset.bottom ?? frame.y - (inset.top ?? 0px) - size.y)
-    }) -- this
+    })) -- this
   }
-  Box := Shape
+  Box := Shape{boundary == box(size)}
   Ball := Shape{boundary == ellipse(size)}
   Curve := class: Shape = segments: Segment[], rank: Integer = 1,
     boundary: Shape = segments is Loop ? Shape(rank: 0) : Shape(rank: 0, cells: [Cell(points.first, [], -1), Cell(points.last, [], 1)]) {
@@ -384,8 +405,6 @@ Edge &+= {
 
 {from} -> {to} over {during: Quantity.Temporal[]} ^keyword => Time.now -- (start => Geometry.Animated([Geometry.Stop(start + during.first, from), Geometry.Stop(start + during.last, to)], Geometry.linear))
 
-currentColor := .color
-
 Node &+= {
   right-to-left {align: start | center | end | between | middle} ^keyword => Geometry.Box(align: align, children: [this])
 }
@@ -405,4 +424,3 @@ Unit(name: "point", symbol: "pt").multiple 4 / 3, px
 Unit(name: "em")
   .convert (x: Number) => x * (Geometry.Font.inherited as px), px
 Unit(name: "rem").multiple 16, px
-Unit(name: "cell")

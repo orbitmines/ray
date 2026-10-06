@@ -122,6 +122,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **From the drafts review (2026-10-06):**
   - **3.5.1 Ordered routes first — Q.** Among conversion routes of equal length, which wins: `Expression[]` reaches `Program` ordered, and the draft prefers `Expression -> Program[] -> Program` (linear) over a superposing route (*`.ray2/Program.ray:408`*). Recommend: prefer the route that keeps order over one that superposes. (The decision above superposes ties; this ranks before it.)
   - **3.5.2 Explicit-only conversions — Q.** The note wants some equivalence edges used only when written (*IDE:164*). Recommend: `explicit as (=== X) => …` is used only by a written `as X`, never by the lookup fallback or by `==` (U9).
+    **Answered (user, 2026-10-06):** no `explicit`: all conversions are implicit but convert only when forced. `20 °C == 68 °F` holds through the equivalence; variables keep their type (unless an optimisation level converts them because the converted form is used). Only the equivalence collapses them.
 
 ### 3.6 Grammar that reads differently per type — *IDE:158–159*
 > Type ? + Error. Grammar would be interpreted differently for different types, so throw an error.
@@ -569,6 +570,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - Super/subscripts as `^`/`v` (`Binary⁸`, `1111₂`): `.ray2/_todo/…/utils/Number.ray:93–107`. Engine (Unicode decomposition).
 - `√ ∛ ∫ lim ∞ ±`: `.ray2/_todo/…/utils/Number.ray:152`, `.ray3/Ray.ray:85`. Library.
 - **From the drafts review (2026-10-06):** **10.1.1 Postfix `?` for whether a property holds — Q.** `x.prop?` as the boolean "this holds", instead of `is_x?` methods (*IDE:829*). It would be a fourth use of `?` beside `T?`, the ternary and unknown, and v0 uses postfix `?` for optional chains (`diagnostics?.nonempty`). Recommend asking how it relates to those; one reading is `x.p != None && x.p as boolean`.
+  **Answered (user, 2026-10-06):** no; `if user.admin` already works (T1.7) and postfix `?` stays optional chaining.
 
 ### 10.2 Types
 - `===`, `!==`, `==<up_to>`, `trivially`: `.ray3/Node.ray:132–150`. Library.

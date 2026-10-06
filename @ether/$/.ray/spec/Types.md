@@ -93,6 +93,7 @@ From the drafts review (2026-10-06).
   on class, which wraps the actual object fully)". **Q** — Recommend the draft: the class's own members (`()`, `name`,
   `#`) are reached on the class value; instance members that collide with them are reached through one default member
   that wraps the instance (`Class~default` / `Class.instance`).
+  **Answered (user, 2026-10-06):** what the value itself declares wins: `Color.red` is the static on the class value; the instance field is reached on an instance. Replaces the per-class `.declaring` guards.
 - **T3.18 `super` with several bases** — *`.ray2/Node.ray:113–116`*: `internal this.super &= constructor<local: this>`,
   `internal this.super[constructor.name] = constructor<local: this> if constructor.name`. With `Test := Super + Super2`
   (L§10.1). **Decided (draft)**: `super` is the superposition of all bases' constructors; `super[Name]` / `super.Name`
@@ -106,6 +107,7 @@ From the drafts review (2026-10-06).
   global value in closures; `#` and `*` are called on this (global), not local. **Q** — Recommend adopting: Node's own
   members (`#`, `##`, `*`, `**`, `%`, `@`) always resolve on `this` (or `global` at the top), never on a local or closure
   frame; closures capture only names defined outside Node. (Also P1.3.)
+  **Answered (user, 2026-10-06):** follows T8.7: names resolve on what declares them; Node's own members never resolve on a local or closure frame.
 - **T3.21 `:{p}` narrows in place** — *`.ray2/Grammar.ray:84`*: "`:{}` without an arg maps to type = type{filter}".
   **Q** — Recommend: `x :{p}` narrows x's declared type in place (`x: (typeof x){p}`). Adopt it or drop it explicitly.
   **Answered (user, 2026-10-06):** `:` already narrows; no `:{p}` form.
@@ -289,6 +291,7 @@ From the drafts review (2026-10-06).
   override the usage of Node so allow any field?"; v0 guards ad hoc with `.declaring(name) ? external get this name : …`.
   **Q** — Recommend: a map literal's keys may shadow Node members for `.key`; Node's member stays reachable with
   `.on(Node).key` (or `x##`). One rule for all maps instead of per-class `.declaring` guards. (T2.8, T6.6, R6.1.)
+  **Answered (user, 2026-10-06):** own key wins: `{ count: 3 }.count` is 3; Node's member stays reachable (`m.on(Node).count`). The per-class `.declaring` guards go.
 - **T8.8 A field read on a list reads its elements** — *`.ray2/Program.ray:417`*: `(Base, unit: Unit = Unit.None)[]`,
   "Should implement `x[0].unit & x.unit` as `|`, because it binds the variable to it." **Q** — Recommend: a field the list
   itself lacks is read on each element and answered as their superposition (`xs.unit` is `xs#.unit` joined with `|`):

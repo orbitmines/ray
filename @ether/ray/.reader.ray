@@ -97,7 +97,7 @@ defining := learned.definer
 {at}.continuation =>
   here := at.next
   more := here.spelled(indent)
-  found := None
+  found := here
   while more
     found = more.end
     more = found.spelled(indent)
@@ -216,11 +216,29 @@ pipe := mark.character
             inside = based.end
         if inside
           deeper = inside.spelled(indent)
+          // G2.13: a line the language's rules continue (`{\n}else …`) goes on with the statement above it
+          unless deeper
+            deeper = inside.continues_statement
         unless deeper
           found = here
           here = None
       if here
         here = here.next
+  found
+
+// Whether a line starting at `at` continues the statement above it (G2.13): it starts with what follows a line end in a rule's
+// head (`{\n}else …`).
+{at}.continues_statement =>
+  found := None
+  continuation := registry.continuations
+  while continuation
+    lit_from := continuation.from
+    lit_to := continuation.to
+    if at.spells(lit_from, lit_to)
+      found = true
+      continuation = None
+    if continuation
+      continuation = continuation.next
   found
 
 // Whether `far` is reached walking from `at` without passing `limit` (what was read from `at` stays inside the statement).
@@ -274,7 +292,11 @@ pipe := mark.character
       if at
         c := at.character
         if c === end
+          // (and the indentation of the line after it)
           far = at.next
+          indented := far.spaces_after
+          if indented
+            far = indented
     if far
       within := at.reaches(far, limit)
       if within
@@ -1635,6 +1657,17 @@ raw_word := external span literal
   registry.latest = made
   if registry.language
     made.language = true
+  // a head starting with a line end continues the statement above (G2.13): what follows it, kept
+  pieces := made.pieces
+  if pieces.line_end
+    following := pieces.next
+    if following
+      if following.literal
+        continuation := external node
+        continuation.from = following.from
+        continuation.to = following.to
+        continuation.next = registry.continuations
+        registry.continuations = continuation
   made
 
 // The seed's rules, taken over once: the top scope's, latest first; the earliest is the first statement's.
@@ -1950,8 +1983,8 @@ registry.sender = sent_rule
 // instance of where the method was written; its parameters bound to its arguments (`(parameters) := arguments`: a name
 // declared with a type takes the next argument given, a bare name the next one left); then the body it was written with, in a
 // frame of its own. A `return` in it ends it.
-running a method =>
-  frame := external .
+// (The frame a method runs in holds its captures: what runs it keeps its own names in a frame of its own.)
+{frame}.method_run =>
   method := frame.rule
   receiver := None
   if frame.has(this)
@@ -1980,6 +2013,9 @@ running a method =>
     if result.program
       result = result.run_in(inner)
   result
+
+running a method =>
+  (external .).method_run
 
 runner := registry.latest
 
@@ -2739,32 +2775,6 @@ registry.language = true
 {x}.{literal member} =>
   x.member(member, None)
 
-// ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
-if {condition} {{yes: Balanced}} =>
-  answer := None
-  if condition.holds_true
-    answer = yes
-  answer
-if {condition} {{yes: Balanced}} else {{no: Balanced}} =>
-  answer := None
-  taken := condition
-  if taken.holds_true
-    answer = yes
-  unless taken.holds_true
-    answer = no
-  answer
-unless {condition} {{yes: Balanced}} =>
-  answer := None
-  unless condition.holds_true
-    answer = yes
-  answer
-while {condition} {{body: Balanced}} =>
-  going := condition.holds_true
-  while going
-    body
-    going = condition.holds_true
-  None
-
 // ---------------------------------------------------------------- what every value has (the base)
 Node := type
   .{literal property} =>
@@ -2911,3 +2921,36 @@ boolean := enum false (holds: None) | true (holds: true) {
 }
 true := boolean.true
 false := boolean.false
+
+// ---------------------------------------------------------------- jumps (R3.1): a program's edges
+goto {literal target} => external goto target
+goto {literal target} if {condition} => external goto target condition
+{literal label}\ => external label label
+
+// ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
+// What `if` answers: whether a block was taken and what it answered; `else` and `elsif` on it, on the same line or the next,
+// choose what the whole answers.
+Branch := class {
+  taken: Node
+  answer: Node
+  else {{otherwise: Balanced}} => taken ? answer : otherwise
+  {\n}else {{otherwise: Balanced}} => taken ? answer : otherwise
+  elsif {condition} {{yes: Balanced}} => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
+  {\n}elsif {condition} {{yes: Balanced}} => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
+}
+if := class {
+  { }{condition} {{yes: Balanced}} => condition ? Branch(true, yes) : Branch(None, None)
+}
+unless := class {
+  { }{condition} {{yes: Balanced}} => condition ? Branch(None, None) : Branch(true, yes)
+}
+while := class {
+  { }{condition} {{body: Balanced}} => (
+   again\
+    goto done if !condition
+    body
+    goto again
+   done\
+    None
+  )
+}

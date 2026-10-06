@@ -432,6 +432,12 @@ Answers from 2026-09-30.
     is met, the event is appended and takes effect after the waiting period unless an old key vetoes it. Guardians never
     hold key material; `@ether` is the default guardian, and any server (one's `@private.managed` ones), friend or printed
     key can be configured instead.
+  - **Signing commits.** One instance key signs all of that instance's commits (Ed25519 is deterministic, RFC 8032, so
+    many signatures do not weaken it; a key per commit would add nothing, since it would itself be certified by a
+    long-lived key). Instance certificates are short-lived (default 30 days) and renewed automatically under `add`, so a
+    stolen key expires on its own. A signature covers the commit's hash, which includes its parents' hashes and the
+    key-log event it relies on: backdating is a fork, rejected (or a merge quest) by anyone holding the history.
+    Per-world instance keys, each certified by the root, are optional, for unlinkability.
   - **Storage.** Private keys are `none`-readable (W5.6), zeroised on logout, never in a history or cache level. The
     algorithms are languages (`$/ed25519`, `$/x25519`, `$/noise`), versioned; changing one is a key event.
 - **W2.4** Spawning, login/logout/swap and deletion with a cancel window are implemented now, from the

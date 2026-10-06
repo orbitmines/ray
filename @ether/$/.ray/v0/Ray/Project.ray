@@ -47,3 +47,41 @@ Layout := class = root: Location = @./.ether/external/@ {
   path (name: String, locations: String[], version) => locations.reduce(held = checked_out(name) / "$" => held / ("@" + .)) / "%" / ((version as String) -- (. ~= ⊢"%" ? .[1..] as String : .))
   changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)
 }
+
+Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
+  latest => !revision
+  breaks_freely => number == 0
+
+  chainable == (other: Version) => number == other.number && revision == other.revision
+  chainable < (other: Version) => number < other.number || number == other.number && revision? < other.revision ?? ∞
+
+  next => %(number + 1)
+  previous => %(number - 1)
+  continuations => Migration.leaving(this).to
+
+  resolved (revisions: Version[]) => latest ? revisions{number == this.number}.max(.revision) ?? this : this
+
+  static Range := class ("%[", first: Decimal, "..", last: Decimal, "]") => {
+    includes (version: Version) => first <= version.number <= last
+    versions => (first..last).map(%.)
+  }
+
+  static Pin := class ("%[", label: UUID | Char.Word[], "]")
+}
+
+Versioned<T> := class = value: T, range: Version.Range? {
+  at (version: Version) => value if !range || range.includes(version)
+  selected (range: Version.Range) => range.versions.map(at(.)){!= None}
+}
+
+Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
+  static declared: Migration[] = []
+  (static.declared ??= []).push this
+
+  backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? Program(name: "derive the inverse of a migration", goal: this))
+
+  static leaving (version: Version) => declared{.from == version}, declared{.to == version}.backward
+  static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path is Abstract
+    ? Program(name: "migrate", goal: (value: old, from: from, to: to))
+    : path.zip(path.rest).map((a, b) => leaving(a){.to == b}.first).reduce(held = old => .body(held)))
+}

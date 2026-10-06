@@ -1,4 +1,55 @@
 Program &+= {
+  who: * = @me
+  name: String?
+  goal: *?
+  from: *?
+  at: Program?
+  started = false
+  stopped = false
+  results: *[] = []
+  tried: *?
+  static branches: Program[] = []
+  static deferred: Program[] = []
+
+  written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
+  defined => global.declaring(head.head)
+  abstract => written{!.defined}
+
+  & => results
+  steps | expand => written
+  is_initial | waiting => !started
+  is_terminal | final => started && !at
+  intermediate => started && !is_terminal
+  holds => !is_terminal && !stopped
+  inputs => steps.zip(results){.0 is Nondeterministic}
+  stepped => {
+    at = started ? at.next : steps.first
+    started = true
+    results.push at() if at
+  } -- this
+  next => copy ~~ (.results = [results]) -- .stepped
+  finished => (stepped while holds) -- this
+  static round => branches{holds}.map(.stepped)
+  static until (condition) => (round while !condition() && branches.some(.holds)) -- this
+
+  reached (value) => goal !== None && value is goal
+  attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
+  running => started && !done
+  done => stopped || is_terminal
+  continuable => done && !(tried**.is_terminal ?? true)
+  path => tried.previous**
+  solution => path{reached(.)}.first
+  solved_by => solution?.who
+  best => solution
+  progress => started ? steps.index_of(at) ?? steps.count : 0
+  difficulty => steps.count
+
+  stop | cancel | complete: static => this ~~ (.stopped = true)
+}
+
+Abstract := Program{abstract.nonempty}
+
+Program &+= {
   is_jump => code ~= ⊢"goto "
   is_label => code ~= "\" ⊣
   jump => code ~= (⊢"goto ", name: Char.Word[], (" ", condition: *)?)
@@ -17,6 +68,7 @@ Program &+= {
   declares (head: String) => written.some(.code ~= ⊢(head, " " | "(" | ":"))
   precedence (spelled: String) => written.index_of(written{.code ~= ⊢((Modifier.spellings, " ")?, spelled, " ")}.first)
 
+  assigns => code ~= ⊢((!" ")[], " "[], "=" | "&=" | "|=" | "+=" | "-=", " ")
   writes (name: String) => written{.code ~= ⊢(name, " "[], (":=" | "=" | "&=" | "|=" | "+=" | "-=" | ":"))}
   depends (name: String, seen: String[] = []) => [[name], writes(name).map(statement => variables{. != name && !seen.contains(.) && statement.mentions(.)}).flatten.unique
     .map(depends(., [seen, [name]].flatten)).flatten].flatten.unique
@@ -38,20 +90,11 @@ Program &+= {
     -- Program.branches.push(.{holds})
     -- .{is_terminal}.first.results.last
   right-to-left defer => copy -- Program.deferred.push(.)
-
-  right-to-left transaction => {
-    branch = &caller.history.fork
-    result = branch.run(this)
-    return result ~~ &caller.history.merge(branch) unless result.erred
-    ERROR `a transaction was undone`
-    result
-  }
 }
 
 right-to-left with | assume (settings: Program) => {
-  before = &caller.history.last
-  settings()
-  defer { &caller.history.reset(before) }
+  set = settings.written.map(statement => statement() -- (. if statement.assigns)).compact
+  defer { set.for(. = .previous) }
   Proof.Proposition(fact: settings)
 }
 

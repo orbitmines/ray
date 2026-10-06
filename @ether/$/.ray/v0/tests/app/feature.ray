@@ -1,16 +1,10 @@
-// Features: what the machine hands over, what is chosen, what is proved, and
-// what a transaction remembers.
+// Features: what the machine hands over, what is chosen, and what is proved.
 
 mark ^keyword := external global
 
 unless Random.bit { INFO@mark `FE1 a bit from the machine is nothing` }
 unless Random.bits(3).count == 3 { INFO@mark `FE2 three bits are not three` }
 unless boolean#.random is boolean { INFO@mark `FE3 a coin comes up with nothing` }
-
-t := Transaction(forwards: 1, backwards: 2)
-unless t.forwards == 1 { INFO@mark `FE4 a transaction forgot the step it takes` }
-unless t.reversed.forwards == 2 { INFO@mark `FE5 a reversed transaction does not swap what it holds` }
-unless t.commit.applied { INFO@mark `FE6 a transaction does not remember being applied` }
 
 unless Proof.rfl(Proof.Proposition(holds: true)) { INFO@mark `FE7 what holds is not proved by itself` }
 if Proof.rfl(Proof.Proposition(holds: false)) { INFO@mark `FE8 what does not hold is proved by itself` }
@@ -67,15 +61,6 @@ unless Proof.theorem(yes, yes) { INFO@mark `PF11 a theorem with a proof that hol
 unless Proof.theorem(yes, no).goal { INFO@mark `PF12 a theorem without a proof is not something to do` }
 unless Proof.theorem(yes, no).goal == yes { INFO@mark `PF13 what there is to do is not proving the proposition` }
 if Proof.theorem(yes, no).completed { INFO@mark `PF14 what there is to do is already done` }
-
-// A step each way, and swapping them.
-step := Transaction(forwards: 1, backwards: 2)
-unless step.forwards == 1 { INFO@mark `TR1 a transaction forgot which way it goes` }
-unless step.reversed.forwards == 2 { INFO@mark `TR2 reversing does not swap the two ways` }
-unless step.reversed.backwards == 1 { INFO@mark `TR3 reversing does not swap the other way` }
-if step.applied { INFO@mark `TR4 a new transaction is already applied` }
-unless step.commit.applied { INFO@mark `TR5 marking it applied does not` }
-unless step.reversed.reversed.forwards == 1 { INFO@mark `TR6 reversing twice does not come back` }
 
 // A key is pressed and released; what it toggles stays.
 key := Keyboard.Key(name: 1)

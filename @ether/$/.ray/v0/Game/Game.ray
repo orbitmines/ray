@@ -3,12 +3,18 @@ Skill := class: Nameable = quests: *, baseline = 0 {
 
   covers (quest: Program) => quest is quests
   solve (quest: Program): static => this ~~ .solved = quest
-  recent (within: Quantity.Temporal) => solved.history{Time.now - .when < within}
+  recent (within: Quantity.Temporal) => solved.previous**{Time.now - .when < within}
   proficiency (within: Quantity.Temporal) => {
     counted = recent(within).count
     counted < baseline ? baseline + (counted - baseline) / 2 : counted
   }
-  settle: static => this ~~ .baseline = solved.history.count
+  settle: static => this ~~ .baseline = solved.previous**.count
+}
+
+Character &+= {
+  skills: Skill[] = []
+
+  unlock (skill: Skill): static => this ~~ skills.push skill
 }
 
 Mana := class = resource: String, capacity: *, held: Spell? {

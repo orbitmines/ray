@@ -1,0 +1,108 @@
+OS &+= {
+  zones: Zones = Zones()
+}
+
+Device := class {
+  static Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
+
+  os: OS = Compiler.reduced(OS(), OS.devices)
+  keyboard: Keyboard = Keyboard()
+  capabilities: Capability?
+  handheld = false
+  clipboard: String | Location = ""
+  pads: (buttons: boolean[], axes: Number[])?
+  orientation: Geometry.Vector?
+  motion: Geometry.Vector?
+  geolocation: (latitude: Number, longitude: Number, accuracy: Geometry.Length)?
+  preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal, focused: boolean) = (false, false, normal, true)
+  notification: (title: String, body: String)?
+  fullscreen = false
+  printing = false
+  opened: Location?
+  memory: Store = Store(at: @"memory")
+  storage: Storage = Storage()
+  quests => Program#{who: this}{running}
+  disk => Disk(device: this, path: "")
+
+  choose (s, n: Number = 1) => Choice.algorithm ? Choice.algorithm(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random
+}
+
+Storage := class: Location {
+  static Entry := class: Nameable = value: String?
+
+  entries => children{is Entry && .value !== None}
+  keys => entries.name
+  entry (key: String) => children{is Entry && .name == key}.first ?? (Entry(name: key) ~~ add(.))
+  [key: String] => entry(key).value
+  [{key}] = {value} ^punctuation => entry(key as String).value = value
+  .{literal name ^property} ^punctuation => this[name]
+  .{literal name ^property} = {value} ^punctuation => this[name] = value
+}
+
+Zones := class: Location {
+  static Answer := class = zone: String, at: Number, offset: String?, abbreviation: String?
+
+  answers: Answer[] = []
+  asked: Answer?
+
+  answer (zone: String, at: Number) => answers{.zone == zone && .at == at}.first ?? (Answer(zone, at) ~~ answers.push .)
+  [zone: String, at: Number] => answer(zone, at) ~~ (asked = . unless .offset) ~~ (await .offset)
+  / (segment: String) => Path(zones: this, segments: [segment])
+  .{literal name ^property} ^punctuation => this / name
+
+  static Path := class = zones: Zones, segments: String[] {
+    / (segment: String) => Path(zones, segments: [segments, segment].flatten)
+    .{literal name ^property} ^punctuation => this / name
+    .{literal at ^property} = {value} ^punctuation => zones.answer(segments.join("/"), at as Number) ~~ (.offset = value.offset) ~~ (.abbreviation = value.abbreviation)
+  }
+}
+
+Device &+= {
+  granted: Grant[] = []
+
+  permission (capability: Capability) => granted{.target == capability}.last -- (. ? .state : Grant.State.prompt)
+  grant (capability: Capability, access: Access = Access(who: Accessor.Permission.localhost)): static => this ~~ granted.push Grant(access, target: capability)
+  allows (capability: Capability) => permission(capability) == Grant.State.granted
+}
+
+Keyboard := class: Location {
+  static Modifier := enum shift | control | alt | meta
+
+  static Key := class: Nameable = code: Number?, modifiers: Modifier? {
+    pressed = false
+
+    presses => pressed.previous**{== true}.count
+    toggled => presses.odd
+    pulsed (max: Number = 0, delay: Quantity.Temporal = 500 ms) => pressed && (max == 0 || presses <= max)
+      && (presses == 1 || Time.now - pressed.previous**{== true}.first.when >= delay)
+
+    press (modifiers: Modifier? = None): static => this ~~ (.modifiers = modifiers) ~~ (.pressed = true)
+    release: static => this ~~ .pressed = false
+    cycle (iterable) => iterable[presses % iterable.count]
+  }
+
+  keys => children{is Key}
+  [name] => keys{.name == name}.first ?? add(Key(name))
+  coded (code: Number) => keys{.code == code}.first ?? add(Key(name: code as Char as String, code))
+  pressed (name, modifier: Modifier? = None) => this[name] -- (key => key.pressed && (!modifier || modifier#.some(. is key.modifiers)))
+  .{literal name ^property} ^punctuation => this[name]
+}
+
+Disk := class: Location = device: Device {
+  local => Instance#{.device === device}.first -- (. && . !== Instance.local ? (.address as String + path) as Location : (path as Location))
+  / (segment: String) => Disk(device, path: (path as String) + "/" + segment)
+  .{literal name ^property} ^punctuation => this / name
+}
+
+FileSystem &+= {
+  static Device := class: FileSystem {
+    on (location: Disk) => Instance#{.device === location.device}.first -- (. && . !== Instance.local ? Remote() : Posix())
+    read (location: Location) => on(location).read(location.local)
+    write (location: Location, content) => on(location).write(location.local, content)
+    listing (location: Location) => on(location).listing(location.local)
+  }
+}
+
+FileOptimizations = {
+  {location: Disk} => FileSystem.Device()
+} + FileOptimizations

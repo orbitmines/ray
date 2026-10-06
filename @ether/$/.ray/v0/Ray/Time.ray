@@ -247,3 +247,30 @@ Earth := Planet(years: year, days: day)
 Unit(name: "sol").multiple 88775, second
 Unit(name: "martian year").multiple 668, sol
 Mars := Planet(years: martian year, days: sol)
+
+Stamp := class = wall: Decimal, ".", logical: Decimal = 0, "@", node: * {
+  chainable < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)
+  when: Time => ((wall * 100) ns) as Time
+  static at (time: Time, node) => Stamp(wall: (time as ns / 100).floor, node)
+}
+
+HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
+  measured => (Time.now as ns / 100).floor
+
+  now: Stamp => {
+    at = measured
+    logical = wall < at ? 0 : logical + 1
+    wall = wall max at
+    Stamp(wall, logical, node)
+  }
+
+  receive (remote: Stamp): Stamp => {
+    highest = measured max wall max remote.wall
+    logical = if highest == wall == remote.wall { (logical max remote.logical) + 1 }
+      elsif highest == wall { logical + 1 }
+      elsif highest == remote.wall { remote.logical + 1 }
+      else { 0 }
+    wall = highest
+    Stamp(wall, logical, node)
+  }
+}

@@ -2,3 +2,4 @@
 @x25519
 @noise
 @sha256
+@ether/Version

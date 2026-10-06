@@ -1,224 +1,15 @@
-Entity := class {
-  key: Encoding.Key?
-
-  sealed (commit: History.Commit) => commit ~~ (.signature = key.signed(.hash) if key)
-}
-
-Nameable := class {
-  static PREFIX: String?
-  name: *?
-
-  named (name): static => this ~~ .name |= name
-}
-
-FullName := class (first: Char.Word[], " ", last: Char.Word[])
-Email := Location{scheme == "mailto"}
-Phone := Location{scheme == "tel"}
-
-// A scheme, then the authority only when "//" follows (https://www.rfc-editor.org/rfc/rfc3986#section-3)
-Location := class: Hierarchy (
-  (scheme: Char.Word[], ":", ("//", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?)?,
-  path: Char{!= "?" && != "#"}[],
-  ("?", query: Query{pairs.nonempty} = Query())?,
-  ("#", fragment: Char[])?
-) => {
-  static Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
-    static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal₂)[]{length > 0} as Unicode.UTF-8)[])
-    merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
-    .{literal name ^property} ^punctuation => pairs{.name == name && .value?.nonempty}.last?.value
-  }
-
-  static current: Location = @local
-  segments => path.split("/"){.nonempty}
-  with (changes) => Location(scheme, host, port, path, query: query.merged(changes), fragment)
-
-  + (suffix) => ((this as String) + (suffix as String)) as Location
-  / (segment: String) => this + "/" + segment ~~ (WARN@Location `text joined into a path may leave it` if segment ~= (*, ".." | "/", *))
-  /{segment: Written} ^string => this + "/" + segment
-  { }/{segment: Written} ^string => this + "/" + segment
-  { }{value} => this + value if this as String ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
-  { }.{piece: Written} ^string => this + "." + piece
-  == (other) => this as String == other as String
-
-  shadowing: Location?
-  [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
-}
-
-Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
-@{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
-@{scheme: "mailto" | "tel"}:{rest: Written} ^string => (scheme + ":" + rest) as Location
-@"{text: (!"\"")[]}" ^string => text as Location
-@{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
-@me ^string => &caller as Character ?? Instance.local
-@me = {who} ^punctuation => &@.may(`@me =`, who) ? &caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
-@me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
-@{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location
-@{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: external ** block)
-@{who: (Char.Word | "-")[] | UUID}~{literal label ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
-  -- (entry => with (@me = entry.of) Program(code: external ** block) ~~ Program(code: entry.following).entered(entry.of, None))
 {f}@{location: Location}({args}) ^punctuation => with (Location.current = location) f(args)
 
 Program &+= {
-  who: * = @me
-  name: String?
-  goal: *?
-  from: *?
-  at: Program?
-  started = false
-  stopped = false
-  results: *[] = []
-  tried: *?
   serving: Location?
   proxying: Network.Proxy?
-  static branches: Program[] = []
-  static deferred: Program[] = []
-
-  written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
-  defined => global.declaring(head.head)
-  abstract => written{!.defined}
-
-  & => results
-  steps | expand => written
-  is_initial | waiting => !started
-  is_terminal | final => started && !at
-  intermediate => started && !is_terminal
-  holds => !is_terminal && !stopped
-  inputs => steps.zip(results){.0 is Nondeterministic}
-  stepped => {
-    at = started ? at.next : steps.first
-    started = true
-    results.push at() if at
-  } -- this
-  next => copy ~~ (.results = [results]) -- .stepped
-  finished => (stepped while holds) -- this
-  static round => branches{holds}.map(.stepped)
-  static until (condition) => (round while !condition() && branches.some(.holds)) -- this
-
-  reached (value) => goal !== None && value is goal
-  attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
-  running => started && !done
-  done => stopped || is_terminal
-  continuable => done && !(tried**.is_terminal ?? true)
-  path => tried.history
-  solution => path{reached(.value)}.first
-  solved_by => solution?.who
-  best => solution?.value
-  progress => started ? steps.index_of(at) ?? steps.count : 0
-  difficulty => steps.count
 
   serves (at: Location) => !done && at is serving
   proxies => !done && proxying !== None
-  stop | cancel | complete: static => this ~~ (.stopped = true)
-
-  run => Run.log.commit(who, this).head -- (logged => with (@me = logged.who) logged.change)
 }
-
-Abstract := Program{abstract.nonempty}
 
 Node &+= {
-  history: History = History(repository: this)
   world => this is World ? this : parent?.world
-}
-
-History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
-  static Label := UUID | Char.Word[]
-
-  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program, from: Label[]?, versions: Label[] = [], relies: Byte[]?, signature: *? {
-    when: Time = stamp?.when ?? Time.now
-    message: String?
-    previous: Commit?
-    line: History?
-
-    parents => previous#
-    next => line?.since(None){.parents.first === this}.first
-    ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
-    merged => parents.count > 1
-    applied (held) => held -- with (@me = who) change
-    rewritten (change: Program) => Commit(id, who, stamp, change, from, versions, relies, signature, when, message, previous, line)
-    expand => change**
-    successors => line?.since(None){.parents.some(=== this)} ?? []
-    branching => successors.count > 1
-    value => line?.at(this).value ?? applied(None)
-    mentions (label) => id == label || versions.contains(label)
-    attributed => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty,
-      ("; relies = ", Language.ray.write(relies)) if relies).join("")
-    settings => (attributed, ("; signature = ", Language.ray.write(signature)) if signature).join("")
-    hash: Byte[] => $.sha256.write([parents.map(.hash), (id, attributed, change as String).join("") as Byte[]].flatten).bytes
-    written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, change as String, \n).join("")
-    static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
-      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from, versions: set.version# ?? [], relies: set.relies, signature: set.signature))
-      : Commit(id: label, change: code))
-
-    .{literal name ^property} ^punctuation => external get value name
-  }
-
-  name: String?
-  id => since(None).first?.id
-  label => name ?? since(None){!(.id is UUID)}.last?.id
-  blank => History(repository, caches)
-  location => repository?.location
-  clock => repository?.clock ?? World.ether.clock
-  written_last: Commit?
-  caches: History[] = []
-
-  since (commit: Commit?) => head ? head.ancestry.filter(c => !(commit?.ancestry ?? []).some(=== c)) : []
-  commits => since(base)
-  entry => commits.entry
-  last | latest => head
-  find (label) => since(None).find(.id == label)
-  at (commit) => History(repository, head: commit is Commit ? commit : find(commit), caches)
-
-  commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
-    change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this) -- (made => who is Entity ? who.sealed(made) : made)
-  extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
-
-  ordered => since(None).sort_by(.stamp)
-  stretches (start: Program, end: Program) => ordered.reduce(acc = (closed: [], open: None) => acc.open
-    ? (end.entered(., None) ? (closed: [acc.closed, [[acc.open, [.]].flatten(1)]].flatten(1), open: None) : (closed: acc.closed, open: [acc.open, [.]].flatten(1)))
-    : start.entered(., None) ? (closed: acc.closed, open: [.]) : acc
-  ) -- [.closed, [.open] if .open].flatten(1)
-  {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: external ** start), Program(code: external ** end))
-  {this}{from {literal start}} ^punctuation => Program(code: external ** start) -- (holds => stretches(holds, Program(code: { !holds.entered(this, None) })))
-  value => ordered.reduce(held = None => .applied(held))
-  pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last?.id ?? label
-  checkout (label, as_of: Stamp? = None) => at(pinned(label, as_of)).value
-  fix (who, label: Label, change) => commit(who, change, versions: [label])
-  tree => value -- (held => Language.Entry.of(held.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[]))))
-
-  fork => History(repository, base: head, head)
-  drop: static => reset(base)
-  reset (to: Commit?): static => this ~~ .head = to
-  back: static => reset(head?.previous ?? head)
-  run (program: Program) => Program(code: program.code, history: this)()
-
-  roots => since(None){.parents.empty}
-  common (other: History) => since(None).filter(c => other.since(None).some(=== c)).last
-  static clashes (base, ours, theirs) => ours == theirs || ours == base || theirs == base ? []
-    : ours.fields.nonempty && theirs.fields.nonempty ? (ours.fields.name, theirs.fields.name).flatten.unique.map(name => clashes(base?[name], ours[name], theirs[name])).flatten
-    : [(ours, theirs)]
-  merge (other: History, who = &caller) => common(other) -- (base => {
-    return Program(name: "merge", goal: other) if clashes(at(base).value, value, other.value).nonempty
-    this.head = since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this)
-    this
-  })
-  + (other: History) => other.since(common(other)).sort_by(.stamp).reduce(held = at(head) => held.commit(.who, .change, message: .message, versions: .versions))
-  | (other: History) => at(head).merge(other)
-  &+ (other: History) => common(other) -- (base => (since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = at(base) => held.extended(.rewritten(.change) ~~ .from = None)))
-  static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
-  squash (who) => History(repository, base, head: Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .change), previous: base))
-  cherry_pick (picked: Commit): static => commit(picked.who, picked.change, message: picked.message)
-  erased => ordered.reduce(held = History(repository) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
-  revert (reverted: Commit) => reverted.change⁻¹ ? commit(reverted.who, reverted.change⁻¹) : Program(name: "revert", goal: reverted)
-
-  received (stamp: Stamp) => clock.receive(stamp)
-}
-
-Repository := class = world: World?, histories: History[] = [], location: Location? {
-  id: UUID = UUID.v4()
-  clock: HybridClock = HybridClock(node: id)
-
-  branch (name: String) => histories.find(.label == name)
-  global => History.global(histories)
 }
 
 World := class: Location + Nameable {
@@ -246,7 +37,7 @@ Item := class: Nameable {
   issuer: World = location?.world ?? World.ether
   obtained_by: Program?
 
-  trail => location.history
+  trail => location.previous**
   shown => name ?? (static.name, (" @ ", location as String) if location).join("")
   move (to: Location): static => {
     transaction { location = to }
@@ -274,7 +65,7 @@ Reference := class {
 
   year => date.year
   claim (who: Character = &caller) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location?.world ?? World.ether)
-  notes => note.history
+  notes => note.previous**
 }
 
 Instance := class: Location + Entity {
@@ -312,7 +103,6 @@ Instance := class: Location + Entity {
     cancel: static => this ~~ .cancelled = true
     pending => !cancelled && !done
     lapsed => pending && World.ether.clock.now.when >= requested.when + window
-    carry_out: static => this ~~ (character.history = character.history.erased if lapsed) ~~ (.complete if lapsed)
   }
 
   static Mirror := class = value: *, location: Instance, depth = 1 {
@@ -321,49 +111,13 @@ Instance := class: Location + Entity {
   }
 }
 
-Character := class: Hierarchy + Entity + Nameable {
-  static PREFIX = "@"
-  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find((who as String).fold_case is .name.fold_case)
-
-  presence: Instance?
-  constraint: *?
-  focus: Program?
-  permissions: Accessor.Permission?
-
-  profile_picture: *?
-  profile: *?
-  skills: Skill[] = []
-
-  avatars => name{is Location && .segments.some(.starts_with("@"))}
-  instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
-  primary => presence
-  session => history.fork
-  keep (session: History) => history.merge(session)
-  device => (presence ?? Instance.local).device
-  quests => Program#{who: this}{running}
-  status => Status#{this is .}
-  .status = {wanted} ^punctuation => constraint = wanted
-  is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
-  as (=== boolean) => this == @me
-  acting => this
-  chainable == (other) => ERROR@Security `comparing characters needs @ether/Security (or @ether/Network)`
-
-  choose (s, n: Number = 1) => Choice(type: s, count: n)
-  unlock (skill: Skill): static => this ~~ skills.push skill
-
-  read => Access(this)
-  write => on(`=`)
-  execute => on(`()`)
-  on (method) => Access(this, method)
-}
-
 Online := Character{presence?.device.network.connected && (. === @me || !(. is Invisible))}
 Offline := Character{!(. is Online)}
 Broadcasting := Character{quests{serves @public}.nonempty}
 Hosting := Character{presence?.hosted#.some(!== this)}
 Proxying := Character{quests{proxies}.nonempty}
 Invisible := Character{constraint is Invisible}
-Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.last?.when >= Time.now - 5 minutes)}
+Idle := Character{presence && !device.keyboard.keys.some(.pressed.previous**{== true}.first?.when >= Time.now - 5 minutes)}
 Busy := Character{focus && !focus.done}
 DoNotDisturb := Character{constraint is DoNotDisturb}
 Status := Online | Offline | Broadcasting | Hosting | Proxying | Invisible | Idle | Busy | DoNotDisturb

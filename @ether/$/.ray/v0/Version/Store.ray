@@ -83,6 +83,11 @@ Store := class: Hierarchy = at: Location = @local, format: Format? {
   }
 }
 
+Node &+= {
+  right-to-left persistent => Store.keep(this)
+  $ ^error => instance ? this : Store.View(type: this)
+}
+
 {type}$ = {literal places} ^keyword => Store.rerouted(type, Program(code: external ** places))
 {type}$ |= {literal places} ^keyword => Store.route(type, Program(code: external ** places))
 

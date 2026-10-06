@@ -1,0 +1,35 @@
+// A scheme, then the authority only when "//" follows (https://www.rfc-editor.org/rfc/rfc3986#section-3)
+Location := class: Hierarchy (
+  (scheme: Char.Word[], ":", ("//", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?)?,
+  path: Char{!= "?" && != "#"}[],
+  ("?", query: Query{pairs.nonempty} = Query())?,
+  ("#", fragment: Char[])?
+) => {
+  static Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
+    static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal₂)[]{length > 0} as Unicode.UTF-8)[])
+    merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
+    .{literal name ^property} ^punctuation => pairs{.name == name && .value?.nonempty}.last?.value
+  }
+
+  static current: Location = @local
+  segments => path.split("/"){.nonempty}
+  with (changes) => Location(scheme, host, port, path, query: query.merged(changes), fragment)
+
+  + (suffix) => ((this as String) + (suffix as String)) as Location
+  / (segment: String) => this + "/" + segment ~~ (WARN@Location `text joined into a path may leave it` if segment ~= (*, ".." | "/", *))
+  /{segment: Written} ^string => this + "/" + segment
+  { }/{segment: Written} ^string => this + "/" + segment
+  { }{value} => this + value if this as String ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
+  { }.{piece: Written} ^string => this + "." + piece
+  == (other) => this as String == other as String
+
+  shadowing: Location?
+  [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
+}
+
+Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
+@{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
+@{scheme: "mailto" | "tel"}:{rest: Written} ^string => (scheme + ":" + rest) as Location
+@"{text: (!"\"")[]}" ^string => text as Location
+@{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
+@{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location

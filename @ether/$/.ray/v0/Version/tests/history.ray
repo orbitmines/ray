@@ -148,3 +148,37 @@ claimed := History()
 claimed.commit(ada, 1, versions: ["fixed"])
 unless (with History.trusted = false { claimed.head.versions }).empty { INFO@mark `FWV1 an untrusted history's claims were believed` }
 unless claimed.head.versions == ["fixed"] { INFO@mark `FWV2 a trusted history's claims were not kept` }
+
+// A transaction happens as a whole or not at all.
+Account := class = balance: Number
+from := Account(20)
+to := Account(0)
+transaction {
+  from.balance -= 10
+  to.balance += 10
+}
+unless from.balance == 10 && to.balance == 10 { INFO@mark `TX1 a transaction that holds did not happen` }
+transaction {
+  from.balance -= 10
+  to.balance += 10
+  ERROR `refused`
+}
+unless from.balance == 10 && to.balance == 10 { INFO@mark `TX2 a transaction that failed was not undone as a whole` }
+
+t := Transaction(forwards: 1, backwards: 2)
+unless t.forwards == 1 { INFO@mark `FE4 a transaction forgot the step it takes` }
+unless t.reversed.forwards == 2 { INFO@mark `FE5 a reversed transaction does not swap what it holds` }
+unless t.commit.applied { INFO@mark `FE6 a transaction does not remember being applied` }
+
+// A step each way, and swapping them.
+step := Transaction(forwards: 1, backwards: 2)
+unless step.forwards == 1 { INFO@mark `TR1 a transaction forgot which way it goes` }
+unless step.reversed.forwards == 2 { INFO@mark `TR2 reversing does not swap the two ways` }
+unless step.reversed.backwards == 1 { INFO@mark `TR3 reversing does not swap the other way` }
+if step.applied { INFO@mark `TR4 a new transaction is already applied` }
+unless step.commit.applied { INFO@mark `TR5 marking it applied does not` }
+unless step.reversed.reversed.forwards == 1 { INFO@mark `TR6 reversing twice does not come back` }
+
+// A rewrite is a commit by its rule; revoking a rule runs on from before it was used (P8.21)
+unless Program(code: { 1 }).rewrites.empty { INFO@mark `FWC1 a program nothing rewrote has rewrites` }
+unless Program(code: { 1 }).revoked(Compiler.folding) { INFO@mark `FWC2 revoking a rule nothing used loses the program` }

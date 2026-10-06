@@ -61,8 +61,6 @@ Grant := class = access: Access, target: * {
     : access.who is Accessor.Permission && access.who.reaches(Run.current.actor) ? State.granted
     : State.prompt
 
-  uses => Permissions.current.allowed.history{=== this}.count
-  once => uses == 0
   names (value) => target === value || target is Program && (target == value || target() === value)
   covers (who: Character, method, target) => (access.who === who || who is access.who) && access.allows(method) && names(target)
     && (!access.filter || access.filter.entered(this, None))
@@ -79,11 +77,6 @@ Permissions := class = grants: Grant[] = [] {
 Run := class = actor: Character?, origin: Character[] = [], settings: Settings? {
   static Mode := enum full | abstract | refused
   static current = Run()
-  static log: History = History()
-  static kept: Quantity.Temporal = 30 days
-
-  static logs => log.since(None){.when >= Time.now - kept}
-  static replay (logged: History.Commit) => with (@me = logged.who) logged.change if logs.some(=== logged)
 
   originating (character: Character) => Run(actor, origin: (origin, character), settings)
   hops | chain => origin.contains(actor) ? origin : (origin, actor)
@@ -134,13 +127,4 @@ Access &+= {
   reads => allows(`read`)
   writes => allows(`=`)
   executes => allows(`()`)
-
-}
-
-Device &+= {
-  granted: Grant[] = []
-
-  permission (capability: Capability) => granted{.target == capability}.last -- (. ? .state : Grant.State.prompt)
-  grant (capability: Capability, access: Access = Access(who: Accessor.Permission.localhost)): static => this ~~ granted.push Grant(access, target: capability)
-  allows (capability: Capability) => permission(capability) == Grant.State.granted
 }

@@ -257,7 +257,7 @@ Geometry := class {
     painted (paint: Paint?) => paint is Section ? paint(this) : paint
     sampled (paint: Paint?, point: Vector) => paint is Pointwise ? paint(point) : painted(paint)
     displayed (name: String) => this.`name` is Animated ? this.`name`.value
-      : transition ? this.`name`.history.last -- (.previous?.value.mix(.value, transition.easing(((Time.now - .when) / transition.duration) min 1)) ?? .value) : this.`name`
+      : transition ? this.`name` -- (now => now.previous?.mix(now, transition.easing(((Time.now - now.when) / transition.duration) min 1)) ?? now) : this.`name`
     projected (by: Projection) => with Space.current = space {
       reachable.map(shape => shape.boundary.facets.map(facet => facet.corners.map(. + shape.at) -- (corners =>
         (depth: corners.map(by.depth(.)).sum / corners.count, corners: corners.map(by.applied(.)), shape: shape)))).flatten(1)

@@ -208,21 +208,6 @@ continued := 5
 unless continued == 10 { INFO@mark `DD5 -- on the next line does not continue the line above` }
 unless (1, 2 ~~ .map(+1)) == (1, 2) { INFO@mark `DD6 ~~ does not answer the whole line before it` }
 
-Account := class = balance: Number
-from := Account(20)
-to := Account(0)
-transaction {
-  from.balance -= 10
-  to.balance += 10
-}
-unless from.balance == 10 && to.balance == 10 { INFO@mark `TX1 a transaction that holds did not happen` }
-transaction {
-  from.balance -= 10
-  to.balance += 10
-  ERROR `refused`
-}
-unless from.balance == 10 && to.balance == 10 { INFO@mark `TX2 a transaction that failed was not undone as a whole` }
-
 missing_file := () => {
   ERROR `not here`
   7

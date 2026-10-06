@@ -81,7 +81,7 @@ UI := class {
   expand (direction: Geometry.Side) => selection |= step(current, direction)
 
   locked => scene{. is Drawer && open}.nonempty
-  back => at.history.back -- at
+  back => at = at.previous
 
   Location &+= {
     window: same | new = same
@@ -201,10 +201,9 @@ UI := class {
 
   Watch := class = watched: Program, action: Program, becoming: *? {
     static all: Watch[] = []
-    matches => becoming == None ? watched.history : watched.history{.value == becoming}
-    seen: Number = watched() -- (now => matches.count - (becoming != None && now == becoming ? 1 : 0))
-    ready => watched() -- matches.count > seen
-    fired => ready -- (go => (seen = matches.count) -- (action() if go))
+    seen: * = watched()
+    ready => watched() -- (now => now != seen && (becoming == None || now == becoming))
+    fired => ready -- (go => (seen = watched()) -- (action() if go))
     start => Watch.all{.action.code == action.code}.first ?? (Watch.all.push this -- this)
   }
 }
@@ -244,7 +243,7 @@ Device &+= {
   location: Location?
 
   free (id: Number.Nat) => !controllers.some(.id == id)
-  reclaimed (held) => controllers.history.map(.value).flatten{.held == held && free(.id)}.last?.id
+  reclaimed (held) => controllers.previous**.flatten{.held == held && free(.id)}.first?.id
   connected (held) => controllers{.held == held}.first ?? (Controller(reclaimed(held) ?? (0..).find(free(.)), held) ~~ controllers.push(.))
   disconnected (held) => controllers = controllers{.held != held}
   keyboards => controllers{.held is Keyboard}.held

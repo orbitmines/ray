@@ -208,7 +208,7 @@ unless Reference(title: "t").published.empty { INFO@mark `WR7 a new reference is
 sited.authors.push wp
 unless sited.authors.count == 1 { INFO@mark `WR8 an author added is not kept` }
 unless sited.authors.first === wp { INFO@mark `WR9 the author kept is not the one added` }
-unless (Reference(title: "t") ~~ .note = "n").notes.first.value == "n" { INFO@mark `WR10 a note forgot its text` }
+unless (Reference(title: "t") ~~ .note = "n").notes.first == "n" { INFO@mark `WR10 a note forgot its text` }
 unless (Reference(title: "t") ~~ .note = "n").notes.first.when { INFO@mark `WR11 a note says nothing about when` }
 if Reference(title: "t").location { INFO@mark `WR12 a new reference has a remote it was not given` }
 

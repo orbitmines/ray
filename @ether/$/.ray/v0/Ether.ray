@@ -1,36 +1,28 @@
-< Character
+reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 
-@ether => @`ether.orbitmines.com:37839`
+World.ether.@ether = @`ether.orbitmines.com:37839`
 
-// from the computers perspective it has a root setup where it is @me, and @player is the player, and @me in a player session is themselves, and @me.device
-@me | @private => global
-@everyone => characters
-@here => characters//TODO Online
+World.ether.@private = => @me
+World.ether.@everyone = => World.ether.characters
+World.ether.@here = => World.ether.characters{is Online}
+World.ether.@local = => @me.presence ?? Instance.local
+World.ether.@anonymous = => ?
 
-@local { @local => @me.//TODO CURRENT .instance }
-@guests.read { @host => // (<- INSTANCE.hierarchy).reduce(|) }
-@host.read { @guests => // (INSTANCE.hierarchy ->).reduce(|) }
+World.ether.@public = => World.ether.@everyone | Instance
+World.ether.@npc = World.ether.@npcs = => @public{is NPC}
+World.ether.@players = => @public{is Player}
 
-// execute elsewhere func@local()
-// @local~{} execute a block elsewhere, generalization of ~, instead of at a location a block execute at that location @local~label{} for executing after a label
+World.ether.@host = => Instance.local.parent**#
+World.ether.@guests = => Instance.local.children**#
+@guests.read { @host }
+@host.read { @guests }
 
-@anonymous => ?
-@public => @ether.@everyone | Instance
-@npc | @npcs => @public{: NPC}
-@players => @public{: Player}
-@localhost => @`127.0.0.1` | @::1
-@localnetwork =>
+World.ether.@localhost = => @`127.0.0.1` | @::1
+World.ether.@localnetwork = =>
   // https://datatracker.ietf.org/doc/html/rfc1918#section-3
   @`10.0.0.0/8` | @`172.16.0.0/12` | @`192.168.0.0/16`
   // https://datatracker.ietf.org/doc/html/rfc4193#section-8
   | @`fc00::/7`
-@{instance: Instance} => instance.canonical //Should also reserve CIDR notation
 
-(@ | #){: UUID}
-
-reservable_names: String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
-
-@guests.read HOST: Character?
-
-Character has a method called .public_key which is a filter on names @me.name{matching public key pattern}
-// We have a public key for general communication without  ahandshake, one for communication/logging in on another machine (like @ether) which is visibility that service,
+@{instance: Instance} ^string => instance.canonical
+{prefix: "@" | "#"}{id: UUID} ^string => World.ether.children**{id is .name}.first

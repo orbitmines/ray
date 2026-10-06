@@ -1,1 +1,1 @@
-< NPC
+@me = NPC(name: @me.name)

@@ -1,10 +1,9 @@
 shadowing = None
 
-reserve @ether => @me
+World.ether.@ether = => @me
 
-reserve @admin => @"allow_{String}"
-reserve @"allow_{String}"
-@me.name = @admin //TODO This should work
+World.ether.@admin = => World.ether.@"allow_{String}"
+@me.name |= @admin
 
-@me.status = Online & Broadcast & @allow_proxy Proxy
-
+@me.status = Online & Broadcasting & Proxying
+@allow_proxy.execute Proxying

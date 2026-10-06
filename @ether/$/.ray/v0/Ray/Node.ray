@@ -27,13 +27,10 @@ Node &+= {
   chosen_within (width) => components.random
   right-to-left choose => chosen_within(1)
 
-  right-to-left persistent => Store.keep(this)
-
   erred => diagnostics?.nonempty ?? false
   as (=== boolean) => !erred
   recoverable => erred && !diagnostics.some(.fatal)
 
-  $ ^error => instance ? this : Store.View(type: this)
   $ (fallback) ^error => recoverable ? fallback : this
   $ (raised: Diagnostic) ^error => recoverable ? diagnosed(raised ~~ .cause = diagnostics.last) : this
   $ (handler: Program) ^error => recoverable ? handler.entered(diagnostics.last, None) : this

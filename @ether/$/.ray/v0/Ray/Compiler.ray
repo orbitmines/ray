@@ -53,34 +53,9 @@ Compiler := class {
     {f: Pure}({arguments}) => f.remembered(arguments)
   }
 
-  formats := {
-    ({kept: Language{fidelity == Language.Fidelity.lossless}} | {other: Language}).read({source}) => kept.read(source)
-    {history: History{location && stored.some(.fidelity == Language.Fidelity.snapshot)}}.checkout({label}) => history.pinned(label) -- (pinned =>
-      history.stored.find(.fidelity == Language.Fidelity.snapshot).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history.at(pinned).value))
-  }
-
-  per_object := {
-    {history: History{(. as Program as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
-    {history: History{(. as Program as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
-  }
-
-  cached := {
-    {history: History}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => c.rewritten(Language.ray.write(history.at(c).value) as Program)) -- (kept =>
-      kept.map(.written(above: kept[.index - 1] if .index > 0)).join(""))) as Byte[])]
-    {history: History{caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned)?.ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
-      ? history.at(pinned).ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.caches.find(.find(hit.id)).at(hit.id).value => .applied(held))
-      : history.at(pinned).value))
-  }
-
-  delta := {
-    {commit: History.Commit{previous && (History.edit(previous.value, value) as String).count < (change as String).count}}.change => History.edit(commit.previous.value, commit.value)
-  }
-
-  stored := formats + per_object + cached + delta
-
   minimising := default + logic
 
-  levels => [none, default, folding, logic, minimising, memoised, formats, per_object, cached, delta, stored]
+  levels => [none, default, folding, logic, minimising, memoised]
 
   static reduced (value, level) => Program(code: { value }){O: level}()
 }
@@ -90,7 +65,4 @@ Program &+= {
   compounds + (other: Program) => Program(code: (code, other.code))
   results: (arguments: *, value: *)[] = []
   remembered (arguments) => (results{.arguments == arguments}.first ?? (results.push (arguments: arguments, value: this(arguments)) -- results.last)).value
-
-  rewrites => history.since(None){.who is Program}
-  revoked (rule: Program) => rewrites{.who === rule}.first -- (used => used ? (history.at(used.previous).value ?? this){O: O - rule} : this)
 }

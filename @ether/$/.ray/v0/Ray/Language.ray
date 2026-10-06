@@ -49,10 +49,10 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
 
   admits (program) => true
   read (source) => level
-    ? Compiler.reduced(source, level + Compiler.stored + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`)
+    ? Compiler.reduced(source, level + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`)
     : Program(name: "a reader for the language", goal: this)
   write (value) => written
-    ? Compiler.reduced(Writing(value, language: this), unwrapped + written + Compiler.stored + (stored ?? Compiler.none)) -- (. is Entry ? . : . as String)
+    ? Compiler.reduced(Writing(value, language: this), unwrapped + written + (stored ?? Compiler.none)) -- (. is Entry ? . : . as String)
     : Program(name: "a writer for the language", goal: this)
   written_to (value, location: Location) => write(value) -- (. is Entry ? .files.for(location / .path = .content) : location.write(.)) -- location
   converted (location, from: Language) => write(from.read(location))
@@ -68,7 +68,7 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
     setup => language ~~ .implementations.push this ~~ .level ??= level
   }
 
-  static ray := Language(".ray", location: [@ether/$/.ray/v0], level: Compiler.default + History.level, written: History.written + ray_written, fidelity: Fidelity.lossless)
+  static ray := Language(".ray", location: [@ether/$/.ray/v0/Ray, @ether/$/.ray/v0], level: Compiler.default, written: ray_written, fidelity: Fidelity.lossless)
   static cfg := Language(".cfg", level: ray.level, written: ray.written, of: ray){admits Program{Pure & Terminating}}
   static regex := Language(".regex")
 }

@@ -26,7 +26,6 @@ Network &+= {
 
   static Names := class {
     record (name: String, address, key): static => this ~~ (this[name] = (address: address, key: key))
-    trusted (name: String, key) => (this[name].history.first?.key ?? key) == key
   }
 
   static Hosts := class {

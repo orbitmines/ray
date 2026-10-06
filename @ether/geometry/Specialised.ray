@@ -1,0 +1,25 @@
+Geometry &+= {
+  static specialised := {
+    {v: Geometry.Vector{length == 2}}.map({f}) => Geometry.Vector(f(v.x), f(v.y))
+    {v: Geometry.Vector{length == 3}}.map({f}) => Geometry.Vector(f(v.x), f(v.y), f(v.z))
+    {a: Geometry.Vector{length == 2}} + {b: Geometry.Vector} => Geometry.Vector(a.x + b.x, a.y + b.y)
+    {a: Geometry.Vector{length == 2}} - {b: Geometry.Vector} => Geometry.Vector(a.x - b.x, a.y - b.y)
+    {a: Geometry.Vector{length == 2}} * {factor: Number} => Geometry.Vector(a.x * factor, a.y * factor)
+    Geometry.euclidean({a: Geometry.Vector{length == 2 && !Geometry.Space.current.axes.some(.loop)}}, {b}) => √((b.x - a.x) ^ 2 + (b.y - a.y) ^ 2)
+    Geometry.graph({a: Geometry.Vector{length == 2 && Geometry.Space.current.vertices == None && !Geometry.Space.current.axes.some(.loop)}}, {b}) => ((b.x - a.x) max (a.x - b.x)) + ((b.y - a.y) max (a.y - b.y))
+    Geometry.Transform{Geometry.Space.current.dimension == 2}.identity => [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    {t: Geometry.Transform{count == 3}}.applied({p}) => Geometry.Vector(t[0][0] * p.x + t[0][1] * p.y + t[0][2], t[1][0] * p.x + t[1][1] * p.y + t[1][2])
+    {facet: Geometry.Facet{corners.count == 2}}.crossing({p}) => facet.corners -- ((a, b) =>
+      (a.y <= p.y) != (b.y <= p.y) && p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y) ? facet.orientation * (b.y > a.y ? 1 : -1) : 0)
+    {shape: Geometry.Shape{space.dimension == 2 && !space.discrete && rectangular && holes.empty}}.contains({p}) => shape.transform.inverse.applied(p) -- (q =>
+      0 <= q.x < shape.size.x && 0 <= q.y < shape.size.y)
+    {shape: Geometry.Shape{space.dimension == 2 && space.discrete && space.vertices == None && holes.empty}}.contains({p}) => shape.transform.inverse.applied(p) -- (q =>
+      shape.origin.x <= q.x < shape.origin.x + shape.size.x && shape.origin.y <= q.y < shape.origin.y + shape.size.y)
+    {edges: Geometry.Edges}[{side: Geometry.Side{label}}] => edges.`side.label`
+    {edges: Geometry.Edges{Geometry.Space.current.dimension == 2}}.total => Geometry.Vector(edges.left + edges.right, edges.top + edges.bottom)
+    {edges: Geometry.Edges{Geometry.Space.current.dimension == 2}}.start => Geometry.Vector(edges.left, edges.bottom)
+    {side: Geometry.Side}.vector(2) => side.axis == 0 ? Geometry.Vector(side.toward, 0) : Geometry.Vector(0, side.toward)
+  }
+}
+
+Compiler.default &= Geometry.specialised

@@ -1,16 +1,10 @@
-// What the host gives the language beside the reader: the platform's `external`s (io, os, time, random, network, where) and the OS
-// project read beside the core. Host configuration, not reading: the kernel only asks the host for a native it does not know.
+// What the host gives the language beside the reader: the platform's `external`s (io, os, time, random, network, where). Host
+// configuration, not reading: the kernel only asks the host for a native it does not know. Which OS project a program uses is
+// the program's to declare (`@ether/os/linux`, …); nothing is read beside the core undeclared.
 
-// The project of the operating system the host runs on, read implicitly beside the core; any other platform reads none (the core then
-// answers with the Ether OS, `@ether/os/ether`).
-export const OS_PROJECTS: Record<string, string> = { linux: 'linux', darwin: 'macos', win32: 'windows', browser: 'browser' };
 export function host_platform(): string {
   const p = (globalThis as any).process;
   return p?.versions?.node !== undefined || (globalThis as any).Deno !== undefined ? p.platform : 'browser';
-}
-export function os_project(platform = host_platform()): string | undefined {
-  const name = OS_PROJECTS[platform];
-  return name === undefined ? undefined : `@ether/os/${name}`;
 }
 
 // How the host sees the reader's values: text and elements of an argument, and answers made of text, records, None and true.

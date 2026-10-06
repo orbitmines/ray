@@ -12,7 +12,7 @@ import { encode, position_of, runs, MODIFIERS } from '../lsp/semantics.ts';
 
 const TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator'];
 const SEVERITY: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warning: 2, info: 3, debug: 4, trace: 4 };
-import { ENTRYPOINT, core, closure, project_of } from './projects.ts';
+import { ENTRYPOINT, ETHER, core, closure, project_of, project_files } from './projects.ts';
 
 type Check = { uri: string; file: string; text: string; version: number };
 type Checked = { uri: string; version: number; paints: { begin: number; end: number; style: string }[]; diagnostics: { level: string; message: string; begin: number; end: number }[] };
@@ -119,8 +119,12 @@ async function read_in_worker() {
     const project = project_of(file);
     if (project === undefined) return [];
     let files = needs.get(project);
-    if (files === undefined) needs.set(project, files = closure(project, new Set(groups.map(g => g.project))).flatMap(g => g.files));
-    return files;
+    if (files === undefined) {
+      // As a run reads it: the declared projects, then the document's own project (not the other files of a project of tests).
+      const tests = path.relative(ETHER, project).split(path.sep).includes('tests');
+      needs.set(project, files = [...closure(project, new Set(groups.map(g => g.project))).flatMap(g => g.files), ...(tests ? [] : project_files(project, project === ETHER))]);
+    }
+    return files.filter(f => f !== path.resolve(file));
   };
   let reading_library = false;
   const enqueue = (files: string[]) => { const fresh = files.filter(f => !queued.has(f)); fresh.forEach(f => queued.add(f)); library.push(...fresh); };

@@ -6,7 +6,7 @@ import { ENTRYPOINT, plan } from './projects.ts';
 // before it (projects.ts), then the file; what it says is its diagnostics. Its streams are the caller's.
 
 export type Out = { out(text: string): unknown; err(text: string): unknown };
-export type Options = { platform?: string; settle?: boolean; verbose?: boolean; with?: string[] };
+export type Options = { settle?: boolean; verbose?: boolean; with?: string[] };
 
 const shown = (at: string) => { const rel = path.relative(process.cwd(), at); return rel.startsWith('..') ? at : rel; };
 const line_col = (text: string, at: number) => { const before = text.slice(0, at), line = before.split('\n').length; return `${line}:${at - before.lastIndexOf('\n')}`; };
@@ -30,7 +30,7 @@ export async function run(file: string, io: Out, options: Options = {}): Promise
   };
   const entry = read(ENTRYPOINT);
   r.settle(entry, texts.get(entry)!.text.length, true);
-  const target = path.resolve(file), { groups, missing } = plan(target, options.platform, options.with);
+  const target = path.resolve(file), { groups, missing } = plan(target, options.with);
   for (const m of missing) io.err(`not here: ${m}\n`);
   const library: number[] = [];
   for (const group of groups) for (const f of group.files) library.push(read(f));

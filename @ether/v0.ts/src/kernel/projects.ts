@@ -1,10 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { reading_order } from './host.ts';
-import { os_project } from './runtime.ts';
 
-// What is read before a file, as the host lays it out (not the reader): the core (`@ether/ray`, its entrypoint first), the project of
-// the platform's operating system, then the projects a file's project declares
+// What is read before a file, as the host lays it out (not the reader): the core (`@ether/ray`, its entrypoint first) — the only
+// project read without being declared — then the projects a file's project declares
 // in its `.project.ray` (`@ether/<path>` a project of Ether, `@<name>` a language project at `@ether/$/<name>`), each after those it
 // declares, then the file's own project, then the file.
 
@@ -55,16 +54,9 @@ export function project_files(dir: string, top_only = false): string[] {
   walk(dir);
   return reading_order(out.map(f => ({ path: f, text: fs.readFileSync(f, 'utf8') })));
 }
-const os_dir = (platform?: string) => { const p = os_project(platform); return p === undefined ? undefined : path.join(REPOSITORY, p); };
-
-// Read before anything else: the core, the operating system's project, and (for whoever serves Ether, the language server) Ether's own
-// files; a file of another project reads Ether's only when its project declares `@ether` or is Ether.
-export function core(platform?: string, ether = true): Group[] {
-  const groups: Group[] = [{ project: LIBRARY, files: project_files(LIBRARY, true) }];
-  const os = os_dir(platform);
-  if (os !== undefined && fs.existsSync(os)) groups.push({ project: os, files: project_files(os) });
-  if (ether && fs.existsSync(path.join(ETHER, '.project.ray')) && ETHER !== LIBRARY) groups.push({ project: ETHER, files: project_files(ETHER, true) });
-  return groups;
+// Read before anything else, undeclared: the core. Every other project (an operating system's, Ether's own) is read only when declared.
+export function core(): Group[] {
+  return [{ project: LIBRARY, files: project_files(LIBRARY, true) }];
 }
 // The projects a project declares, each after the ones it declares (each once), not counting what the core already reads.
 export function closure(dir: string, skip: Set<string>, missing: string[] = []): Group[] {
@@ -82,8 +74,8 @@ export function closure(dir: string, skip: Set<string>, missing: string[] = []):
 }
 // Everything read before a file, in order: the file's own project last, without the file — and without the other files of a project
 // of tests (each test file is a program of its own). `also` are dependency lines read as if the file's project declared them.
-export function plan(file: string, platform?: string, also: string[] = []): { groups: Group[]; missing: string[] } {
-  const project = project_of(file), groups = core(platform, project === ETHER), missing: string[] = [];
+export function plan(file: string, also: string[] = []): { groups: Group[]; missing: string[] } {
+  const project = project_of(file), groups = core(), missing: string[] = [];
   const skip = new Set(groups.map(g => g.project));
   for (const line of also) {
     const dir = dependency_dir(line);

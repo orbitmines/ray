@@ -17,13 +17,22 @@ Nameable := class {
 
 // Kinds of name, told apart by what is written: a name is any of them that matches.
 
-// A person's full name: given names, then a family name, separated by spaces. A part is letters in any script, possibly joined
-// by a hyphen or an apostrophe (Smith-Jones, O'Brien, d'Artagnan), or an initial with a period (J. R. R. Tolkien); given names
-// are capitalised, and lowercase parts before the last one belong to the family name (Ludwig van Beethoven, Juan de la Cruz).
-FullName := class ((given: FullName.Given[]{length > 0}).join(" "), " ", (family: ((FullName.Particle, " ")[], FullName.Given))) => {
+// A person's full name as it is written, in any script (https://www.w3.org/International/questions/qa-personal-names): name
+// parts of letters and marks, separated by spaces or a script's name separator (列奥纳多·达·芬奇, レオナルド・ダ・ヴィンチ), joined
+// inside by hyphens, apostrophes or zero-width (non-)joiners (Smith-Jones, O'Brien, Persian half-spaces), or an initial with a
+// period (J. R. R. Tolkien). Casing is not asked: most scripts have none (محمد بن سلمان, Нгуен, Þórunn Guðmundsdóttir).
+// Which part is given and which family differs by culture — family first in Chinese, Japanese, Korean, Vietnamese, Hungarian;
+// two family names in Spanish; patronymics in Icelandic; none at all for many — so a full name is kept as its parts, not split.
+// One part alone is a full name only in scripts that write names without spaces (毛泽东, 김민준, やまだたろう); a single word in
+// other scripts is a plain name, as one-word names (mononyms) cannot be told apart from handles.
+FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[]{length > 0}) | FullName.Unspaced[]{length > 0}) => {
   static Letter := Unicode.GeneralCategory.(Letter | Mark)
-  static Part := (FullName.Letter[]{length > 0}, (("-" | "'" | "’"), FullName.Letter[]{length > 0})[]) | (FullName.Letter, ".")
-  static Given := FullName.Part{first.is_upper}
+  static Joiner := "-" | "‐" | "'" | "’" | "ʼ" | "‌" | "‍"
+  static Part := (FullName.Letter[]{length > 0}, (FullName.Joiner, FullName.Letter[]{length > 0})[]) | (FullName.Letter, ".")
+  static Separator := Unicode.GeneralCategory.Space_Separator | "·" | "・" | "･"
+  static Unspaced := Char.Han | Char.Hiragana | Char.Katakana | Char.Hangul | Char.Yi | Unicode.GeneralCategory.Mark
+  parts => written.split(FullName.Separator)
+}
   static Particle := FullName.Part{first.is_lower}
   first => given.first
   last => family as String

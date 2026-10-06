@@ -1,0 +1,16 @@
+// SQLite: rows written as upserts.
+
+mark ^keyword := external global
+
+Kept := class = key: *, size: Number
+small := Kept(key: 1, size: 2)
+unless SQLite.write([small as Store.Row]) ~= (*, "ON CONFLICT (id) DO UPDATE", *) { INFO@mark `DB13 a row is not written as an upsert` }
+unless $.sqlite === SQLite { INFO@mark `DB22 $.sqlite is not SQLite` }
+
+kind := "table"
+unless (@sqlite SELECT name FROM sqlite_master WHERE type = {kind}).where.right.value == "table" { INFO@mark `DB25 a single-line sqlite fragment does not read its hole` }
+sqlite_block := @sqlite {
+  UPDATE Kept SET size = {small.size} WHERE id = '1';
+  DELETE FROM Kept WHERE size > 5
+}
+unless sqlite_block.count == 2 && sqlite_block.first is SQL.Update && sqlite_block.first.set.first.value.value == 2 && sqlite_block.last is SQL.Delete { INFO@mark `DB26 an sqlite block is not its statements with the hole's value` }

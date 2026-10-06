@@ -1,0 +1,25 @@
+// SQL text.
+
+mark ^keyword := external global
+
+unless SQL.quoted("it's") == "'it''s'" { INFO@mark `DB14 a quote in SQL text is not doubled` }
+
+id := 7
+who := "Ray"
+selected := @sql SELECT * FROM t WHERE id = {id}
+unless selected is SQL.Select && selected.from == "t" && selected.where.right.value == 7 && (selected as SQL) == "SELECT * FROM t WHERE (id = 7)" { INFO@mark `DB23 a single-line sql fragment is not its statement with the hole's value` }
+sql_block := @sql {
+  -- people, named by a hole
+  CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, name TEXT)
+  INSERT INTO people (id, name) VALUES ('1', {who})
+  SELECT name FROM people WHERE name = {who}
+}
+unless sql_block.count == 4 && sql_block.first is SQL.Comment && sql_block[2].values.first.last.value == "Ray" && sql_block.last.where.right.value == "Ray" { INFO@mark `DB24 an sql block is not its comment and statements in order, with the holes' values` }
+// Keywords are case-insensitive (ISO/IEC 9075-2 §5.2); written back in upper case
+lowered := @sql select * from t where id = {id}
+unless lowered is SQL.Select && lowered.where.right.value == 7 && (lowered as SQL) == (selected as SQL) { INFO@mark `DB29 lower-case keywords do not read as the upper-case statement` }
+mixed := SQL.read("Create Table If Not Exists people (id text Primary Key, name Text)")
+unless mixed is SQL.Create && mixed.exists && mixed.columns.first.key && mixed.columns.first.type == "TEXT" && (mixed as SQL) == "CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, name TEXT)" { INFO@mark `DB30 mixed-case keywords and types are not read, or not written back in upper case` }
+predicates := SQL.read("Select name From people Where name like 'R%' AND note Is Not Null Order By name desc Limit 1")
+unless predicates is SQL.Select && predicates.where.operator == "AND" && predicates.where.left.operator == "LIKE" && predicates.where.right.operator == "IS NOT" && predicates.order.first.descending { INFO@mark `DB31 mixed-case predicates, ORDER BY and LIMIT do not read as their upper-case operators` }
+unless SQL.read("select * from t where c = x'0aFF'").where.right.value == [0x0a, 0xff] && SQL.read("select * from t where a = null").where.right.value === None && SQL.read("select * from t where b = True").where.right.value == true { INFO@mark `DB32 lower-case null, true and a binary string literal x'…' are not read` }

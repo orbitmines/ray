@@ -1,0 +1,15 @@
+// SQLite's command-line shell (https://sqlite.org/cli.html) and database file format (https://www.sqlite.org/fileformat2.html)
+SQLite := Language(".sqlite" | ".sqlite3" | ".db", written: SQL.written, of: SQL){
+  level => SQL.syntax + {
+    {at: Location} => SQL.Database(at: at, dialect: this)
+  }
+  // JSON output mode (https://sqlite.org/cli.html#changing_output_formats)
+  answered (at: Location, text: String) => (Process(command: "sqlite3", arguments: ["-json", at.sandboxed, text]).stdout as JSON).value ?? []
+  sent (at: Location, text: String) => Process(command: "sqlite3", arguments: [at.sandboxed], input: text).stdout
+  // The schema table (https://www.sqlite.org/schematab.html)
+  listing = @sql SELECT name FROM sqlite_master WHERE type = 'table'
+}
+
+SQL.Database &+= {
+  as (=== Byte[]) => @"instance/sqlite/written.db" -- (at => at.remove -- SQLite.read(at).executed(statements) -- at.bytes)
+}

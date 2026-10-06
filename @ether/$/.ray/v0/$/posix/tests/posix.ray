@@ -1,0 +1,20 @@
+// Permission levels written as file mode bits, and read back.
+
+mark ^keyword := external global
+
+opened := [Accessor(Accessor.Permission.public).read, Accessor(Accessor.Permission.private).write, Accessor(Accessor.Permission.private).execute]
+unless opened as POSIX == "744" { INFO@mark `AC11 public read and private write and execute are not mode 744` }
+unless POSIX.mode(opened).group.read { INFO@mark `AC12 what the public reads the group cannot` }
+if POSIX.mode(opened).other.write { INFO@mark `AC13 others may write what only its owner may` }
+unless POSIX.read("750"){.reads}.first.who == Accessor.Permission.protected { INFO@mark `AC14 a group read bit does not read back as protected` }
+unless POSIX.read("750"){.writes}.first.who == Accessor.Permission.private { INFO@mark `AC15 an owner write bit does not read back as private` }
+unless ("-rwsr-xr-x" as POSIX.Symbolic).mode.setuid { INFO@mark `AC16 s in the owner's execute place is not setuid` }
+everyone := POSIX.Triad(true, true, true)
+unless POSIX.Mode(sticky: true, user: everyone, group: everyone, other: everyone) as POSIX.Symbolic as String == "-rwxrwxrwt" { INFO@mark `AC17 a sticky mode is not written with t` }
+unless (@posix 750){.writes}.first.who == Accessor.Permission.private { INFO@mark `AC29 an octal mode written inline does not read as its levels` }
+readers := "rx"
+posix_block := @posix {
+  u=rwx,g={readers},o=
+}
+unless posix_block as POSIX == "750" { INFO@mark `AC30 a symbolic mode block with a hole is not mode 750` }
+unless (@posix u=rw,go=r){.reads}.first.who == Accessor.Permission.public { INFO@mark `AC31 a read for go in a symbolic mode is not public` }

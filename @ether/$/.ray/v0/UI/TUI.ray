@@ -120,6 +120,12 @@ UI.TUI := class {
     open (to: Location) => OS.launch(to)
   }
 
+  Kitty := {
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => { .graphic(shown.paint.at, (shown.paint.shape.content as Location).bytes as $.kitty) }
+  }
+  Sixel := {
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => { .graphic(shown.paint.at, shown.paint.shape.content.pixels as $.sixel) }
+  }
   Browser := {
     {grid: Grid} => UI.HTML.Package([(path: "index.html", content: $.html.Document(head: [], body: $.html.Element("body", [], [$.html.Element("pre", [], [$.html.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
   }

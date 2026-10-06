@@ -194,14 +194,14 @@ TimeZone := class (name: String) {
     )) ~~ call("ucal_close", calendar))
   }
 
-  // ECMA-402 Intl.DateTimeFormat: the offset in force read back from formatToParts with timeZoneName "longOffset" (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts)
+  // ECMA-402 Intl.DateTimeFormat: the offset in force read back from formatToParts with timeZoneName "longOffset" (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts), answered by the page at @me/device/os/zones
   static Intl := class: Source {
-    part (zone: String, time: Time, style: String) => Process(command: "new Intl.DateTimeFormat(\"en-US\", { timeZone: " + $.json.write(zone) + ", timeZoneName: " + $.json.write(style) + " }).formatToParts(" + ((time as s).floor * 1000) as String + ").find(part => part.type === \"timeZoneName\").value").stdout
-    offset (zone: String, time: Time) => (part(zone, time, "longOffset") ~= ("GMT", (sign: "+" | "-", hours: Decimal, ":", minutes: Decimal)?)) -- (.sign ? (.sign == "-" ? -1 : 1) * (.hours hours + .minutes minutes) : 0 seconds)
+    asked (zone: String, time: Time) => @me/device/os/zones[zone, (time as s).floor * 1000]
+    offset (zone: String, time: Time) => (asked(zone, time).offset ~= ("GMT", (sign: "+" | "-", hours: Decimal, ":", minutes: Decimal)?)) -- (.sign ? (.sign == "-" ? -1 : 1) * (.hours hours + .minutes minutes) : 0 seconds)
     at (zone: String, time: Time) => offset(zone, time) -- (in_force => (
       offset: in_force,
       daylight: in_force > offset(zone, time - 182 days).min(offset(zone, time + 182 days)),
-      abbreviation: part(zone, time, "short")
+      abbreviation: asked(zone, time).abbreviation
     ))
   }
 

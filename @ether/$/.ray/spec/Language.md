@@ -321,6 +321,22 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Visibility is itself a value, so it has a visibility. The visibility's visibility is what makes an item *findable*: A can be `@private` while its visibility is `@public`, so others find that A exists but cannot read it.
 - **Decided:** an item inherits its parent's visibility. At the top it falls back to the default privacy policy, which is private.
 
+### 8.4 Processes and jobs
+- **Decided (2026-10-06):** the language makes no process calls. Running anything is running a Program.
+  - There is no `Process`, no `Jobs` runner and no `OS.run`.
+  - A job is a Program at a location. The daemon is Ether's scheduler: it runs Ray Programs as jobs.
+  - Job control is `@me/jobs/<id>`: the job's program and its state (`queued | running | stopping | done | lost`). `@me/jobs/<id>.output` is its output as a history, and `@me/jobs/<id>.stop()` asks it to stop. `@me/jobs` lists the jobs.
+  - Starting a job is `@me/jobs |= program` (or `program.job`, which answers the job). A remote machine's jobs are `@some-remote/jobs`.
+  - What used to be a process is a typed read or write of a location:
+    - the browser's file system is `@me/device/storage/<key>`, which the page keeps in `localStorage`;
+    - a remote file system over HTTP is `$.http` requests: GET reads, PUT writes, DELETE removes and WebDAV's PROPFIND lists (RFC 4918);
+    - the browser's time zones are `@me/device/os/zones`, which the page answers from `Intl.DateTimeFormat`.
+- **Planned (not decided):** other systems are reached by inspecting their binaries.
+  - The containers are `$/elf`, `$/pe`, `$/macho` and `$/wasm`. The code is `$/x86-64`, `$/aarch64` and wasm bytecode.
+  - Inspecting is reading: symbols, imports, strings and the version. A binary's imports are a Project's dependencies.
+  - Using a binary lifts its code into a Ray Program. Its syscalls and imports become effects on Ray locations, checked by Access.
+  - Native execution is an optimisation level, not a process.
+
 ## 9. Data and version control
 
 ### 9.1 Storage apart from shape — *IDE:553–573*
@@ -384,8 +400,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - `Encoding.common` and `Encoding.runs` are the shared byte diff the deltas use.
   - The other families get the same treatment:
     - `SQL.Dialect` is gone: `$.sqlite` and `$.postgres` are plain languages over `$.sql`.
-    - `Jobs.Browser` folded into `Jobs` (`evaluated`).
-    - `FileSystem` and `Jobs` stay subclasses of `Language`, because each adds operations a language does not have: listing and removing for a file system, and job control for a runner. (`Package` did too, for resolving, fetching and installing; it was removed with the package managers on 2026-10-06.)
+    - `FileSystem` stays a subclass of `Language`, because it adds operations a language does not have: listing and removing. (`Package` did too, for resolving, fetching and installing; it was removed with the package managers on 2026-10-06. `Jobs` did, for job control, until processes were removed on 2026-10-06, §8.4.)
     - `Encoding.Digest` and `Encoding.Packing` stay subclasses, because they change what reading and writing mean: a digest is one-way, and a packing keeps what it packed.
 - **Decided (2026-10-06):** `Ray.history` is `Node.history`. There is no separate `Ray.history`.
   - A node's `history` is its `History`. The `.%` form is the Ray language reading and writing a History (`Language.ray.write(history)`, `Language.ray.read(@x.%)`).

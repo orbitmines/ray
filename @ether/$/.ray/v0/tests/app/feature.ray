@@ -130,6 +130,28 @@ unless read_once == read_twice { INFO@mark `IO6 reading a file changed it` }
 read_by_bits := IO.read("@ether/$/.ray/v0/.project.ray".bits)
 unless read_by_bits == read_once { INFO@mark `IO7 a location given as a string's bits is read as another place` }
 
+kept := Storage()
+kept["ray:a/b"] = "x"
+unless kept["ray:a/b"] == "x" { INFO@mark `IO8 what is written to the device's storage is not read back` }
+unless kept.keys == ["ray:a/b"] { INFO@mark `IO9 the device's storage does not list the key written to it` }
+kept["ray:a/b"] = None
+if kept.keys.nonempty { INFO@mark `IO10 a key removed from the device's storage is still listed` }
+unless @me/device/storage is Storage { INFO@mark `IO11 the device has no storage location` }
+unless Compiler.reduced("https://example.org/a" as Location, FileOptimizations) is FileSystem.Remote { INFO@mark `IO12 an http location is not reached over the network` }
+unless $.http.Method.propfind.written == "PROPFIND" { INFO@mark `IO13 WebDAV's listing method is not written PROPFIND` }
+unless $.http.Method.propfind.safe { INFO@mark `IO14 listing a remote collection is not safe` }
+
+jobs := Jobs()
+jobs |= Program(code: "1")
+unless jobs.all.count == 1 { INFO@mark `JB1 a program given to the jobs is not listed` }
+started_job := jobs.all.first
+unless started_job.state == Job.State.queued { INFO@mark `JB2 a new job is not queued` }
+unless jobs[started_job.id] === started_job { INFO@mark `JB3 a job is not found at its id` }
+unless started_job.output is History { INFO@mark `JB4 a job's output is not a history` }
+unless started_job.stop.state == Job.State.stopping { INFO@mark `JB5 stopping a job does not ask it to stop` }
+if started_job.done { INFO@mark `JB6 a job asked to stop is already done` }
+unless @me/jobs is Jobs { INFO@mark `JB7 the machine has no jobs location` }
+
 tapped := Keyboard.Key(name: 2)
 unless tapped.presses == 0 { INFO@mark `KB9 an untouched key has been pressed` }
 tapped.press

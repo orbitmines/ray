@@ -388,9 +388,10 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided:** the first milestone is operations over definitions (functions/fields), HLC-stamped, where a rename keeps identity.
 - **Decided (2026-10-06):** there is one API, `History`: a Ray of commits. Every tool talks to it.
   - Commits are stamped by a hybrid logical clock (`Stamp`).
-  - A commit's value is an `Operation(kind, definition, stamp, who, before, after)`, a group of them, or a plain value.
-  - A `Definition`'s UUID keeps its identity across renames.
+  - A commit holds a `Program`: any Ray, run on the value before it (`.`). A plain value is the program that answers it.
+  - A thing keeps its identity across renames because it is the same node; its history's id is the label of the commit that made it (the `.%` draft's `ORIGINAL-UUID-OF-OBJECT`).
   - A history's value is its ancestry folded in stamp order.
+  - **Superseded (2026-10-06):** the `Operation(kind, definition, …)` commits, the `Definition` record and the `define | change | rename | remove` kinds were a sub-language between the store and Ray. The user: version control exists to carry the full `.ray` language, so a commit is a program and nothing narrower ("avoid creating IRs").
 - **Decided (2026-10-06):** a backend is a Language. Its `level` reads into a `History`, and its `written` writes one out.
   - The backends are `$.git`, `$.mercurial`, `$.fossil`, `$.pijul`, `$.subversion`, and Ray itself (`$.ray`, the `.%` form).
   - Git is just one compile target:
@@ -402,7 +403,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided (2026-10-06):** there is no `Backend` class. A backend is a plain `Language`; what was generic moved to where it belongs.
   - `Language` has `fidelity` (`Language.Fidelity`), `stored` (the language's own storage level), `Language.Entry` (a tree of files, for a language that writes more than one), `written_to`, `converted` and `tree_at`.
   - `Language.write` answers text, or an `Entry` when the language writes files.
-  - `History` has what is about histories: `History.Revision`, `History.revisions`, `History.read_revisions` (inferring operations from successive trees), the rename `similarity` and its `similar` threshold, and `History.read_file`.
+  - `History` has what is about histories: `History.change(before, after)` (the change between two trees, written as Ray: moves `.["b"] = .["a"]`, removals `= None`, assignments), the rename `similarity` and its `similar` threshold, `History.read_file` and `History.valued` (a tree as a value). A backend reads its commits straight into `History.Commit`s; there is no `Revision` record in between.
   - `Encoding.common` and `Encoding.runs` are the shared byte diff the deltas use.
   - The other families get the same treatment:
     - `SQL.Dialect` is gone: `$.sqlite` and `$.postgres` are plain languages over `$.sql`.
@@ -410,53 +411,49 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     - `Encoding.Digest` and `Encoding.Packing` stay subclasses, because they change what reading and writing mean: a digest is one-way, and a packing keeps what it packed.
 - **Decided (2026-10-06):** `Ray.history` is `Node.history`. There is no separate `Ray.history`.
   - A node's `history` is its `History`. The `.%` form is the Ray language reading and writing a History (`Language.ray.write(history)`, `Language.ray.read(@x.%)`).
-  - The `.%` grammar and writer are statics of `History`: `History.Line`, `History.File`, `History.Index`, `History.Cache`, `History.Written`, `History.line` and `History.edit`.
+  - There is no `.%` grammar of its own: `History.Commit`'s class header is its line, so a commit reads and writes itself, and a history is a `Program` (`history as Program`, `program as History`).
 - **Decided (2026-10-06):** each backend declares its fidelity, `lossless | snapshot`.
   - Ray (`.%`) and Pijul are lossless; Git, Mercurial, Fossil and Subversion are snapshot backends.
   - Writing to a snapshot backend:
     - A commit's operations become one tree. Each definition is a `.ray` file written by the Ray writer, and the tree is a Hierarchy.
     - Parents become the commit's `previous`, the author is `who`, and the date is `when`.
-    - The commit's `.%` line is kept beside the commit, so reading our own repository back is exact. Each backend has its own place for it:
+    - The commit's `.%` line (its program) is kept beside the commit, so reading our own repository back is exact. Each backend has its own place for it:
       - Git: notes under `refs/notes/ray`;
       - Mercurial: the changeset extra `ray`;
       - Fossil: a `T +ray` control artifact;
       - Subversion: the revision property `ray:line`.
-  - Reading a foreign repository infers operations by a structural diff of each tree against its first parent.
+  - Reading a foreign repository writes each commit's change against its first parent as a Ray program (`History.change`).
     - A rename comes from the backend's own record where it has one: Mercurial's copy metadata, Fossil's `F` old name, Subversion's copyfrom.
     - Otherwise it comes from line similarity of at least 50%.
     - A tie is `Quest("rename")`.
 - **Decided (2026-10-06):** the `.%` format.
   - The stored form is the program. The working directory holds the resulting value, as in git.
-  - A line is `UUID\ <stamp> @<who> { … }`. The body is the operation as code applied to `.`, the value before.
+  - A line is `UUID\ <stamp> @<who> { … }`. The body is any Ray, applied to `.`, the value before; ` @<who> { … }` is the ordinary run-as-a-character block.
     - The parent is left out when it is the line above.
     - A fork names its one parent: `UUID\ A <stamp> @<who> { … }`.
     - A merge names both: `UUID\ A & B <stamp> @<who> { … }`.
-  - A body:
-    - define or change: the definition's value as Ray code;
-    - rename: `. named "new"`;
-    - remove: `None`.
-    - A line for a whole project writes each part as `.[d] := (…)` (define) or `.[d] = .[d] -- (…)` (everything else).
+  - A body is whatever was run: `+ "B"`, `.x = 1`, `.["b"] = .["a"]; .["a"] = None`, a loop, a class. There are no body forms of its own (the draft: `(&caller = …; 0..100.for this += 1)`).
   - Checking out is running the file up to a label. Committing appends one line and reads nothing back.
   - A label inside a body points at an intermediate result.
-  - `.%/index.ray` maps names to UUIDs, one `name: UUID` per line. It is append-only: the last line for a name wins, and `None` removes it.
+  - There is no `.%/index.ray`: names are in the program itself (`.greet = …`). The draft wanted an index only while UUIDs could not be assigned through an interface.
   - The writer escapes newlines in strings, so a line that starts `UUID\` is always a commit.
   - Any labelled Ray program is a history (`program as History`), and `x.history` is the in-memory view of the same file.
 - **Decided (2026-10-06):** the backend, the storage granularity and the caches are Compiler levels. They are a choice of format, not fixed layout. `Compiler.stored` composes them and every backend read and write uses it.
   - `formats` reads a superposed store from its lossless member, and answers a checkout from a snapshot backend's tree.
   - `per_object`: canonically a repository is one file, `.%/<id>.ray`.
     - Past 1 MiB it is split into one file per object.
-    - The project's lines then become pins, `.[d] = d%[C]`.
-  - `cached` writes `<id>.ray.txt` with `label\ value`, every 64th commit and at the head. A checkout starts from the nearest cached ancestor.
-  - `delta` writes a change as `. edited(from, to, "text")` when that is shorter.
+    - The project's lines then become pins, `.["name"] = @./<id>/<name>.ray%[C]`, and each field's history is its own file.
+  - `cached` writes `<id>.ray.txt`, every 64th commit and at the head: itself a history whose commits are the values (`label\ value`). A checkout starts from the nearest cached ancestor.
+  - `delta` writes a commit's program as `. edited(from, to, "text")` when that is shorter; it is an equivalent program.
   - Each backend's own level is its `stored`, which its reads and writes add: `$.git.stored` (packs with offset deltas), `$.mercurial.stored` and `$.fossil.stored` (deltas), `$.pijul.stored` (the zstd change file). `Compiler.stored` names none of them.
 - **Decided (2026-10-06):** distribution.
   - Stamps give one global order.
   - The STD's and the players' histories are separate commit Rays. `History.global(histories)` joins them under one commit, ordered by stamp.
   - `x%[label]` pins a version.
-  - A STD bug fix is an operation with `substitutes: <old label>`.
+  - A STD bug fix is a commit whose program begins with a rule on mentions of the version it fixes, `{value}%[<old>] => value%[<fix>]` (the draft: "when this version is mentioned, use this version instead"); `history.fix(who, old, change)` writes it.
     - A pin resolved for a line stamped after the fix gets the fix.
     - A line stamped before the fix replays as recorded, and its caches stay.
-  - Concurrent operations that give one definition different results are `Quest("merge")`.
+  - Concurrent commits that leave one field with different values (three-way against their common ancestor, `History.clashes`) are `Quest("merge")`.
 
 ## 10. From the drafts (`.ray2`, `.ray3`) — what v0 doesn't have yet
 

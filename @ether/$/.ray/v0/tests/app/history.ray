@@ -4,33 +4,33 @@ mark ^keyword := external global
 
 ada := Instance.local.login(Character(name: "ada"))
 
-// Operations over definitions: a rename keeps who it is.
+// A commit is any Ray, run on the value before it (`.`).
 vh := History(repository: Repository())
-vd := Definition(name: "greet")
-vh.operate(ada, Operation.Kind.define, vd, "hello")
-unless vh.code_of(vd) == "hello" { INFO@mark `VC1 a defined definition has no code` }
-vh.operate(ada, Operation.Kind.rename, vd, "welcome")
-unless vh.name_of(vd) == "welcome" { INFO@mark `VC2 a renamed definition is not called its new name` }
-unless vh.named("welcome") == vd { INFO@mark `VC3 a rename made another definition` }
-unless vh.code_of(vd) == "hello" { INFO@mark `VC4 a rename changed the code` }
+vh.commit(ada, Program(code: { .greet = "hello" }))
+unless vh.value.greet == "hello" { INFO@mark `VC1 a commit's program did not run on the value` }
+vh.commit(ada, Program(code: { .welcome = .greet; .greet = None }))
+unless vh.value.welcome == "hello" && vh.value.greet == None { INFO@mark `VC2 a renaming program did not rename` }
+vh.commit(ada, Program(code: { .count = 0; (0..<100).for { this.count += 1 } }))
+unless vh.value.count == 100 { INFO@mark `VC3 a loop in a commit did not run` }
+unless vh.at(vh.head.previous).value.count == None { INFO@mark `VC4 an earlier version sees a later change` }
 unless vh.head.previous.stamp < vh.head.stamp { INFO@mark `VC5 a later commit is not stamped later` }
 
 // Running as a character.
 unless (@ada { @me }) == ada { INFO@mark `VC6 a block run as a character does not run as it` }
 
-// `.%`: a line per commit, the program that produces the next version.
-vl := History.line(vh.head, above: vh.head.previous)
+// `.%`: a line per commit, the program that produces the next version, read and written through the commit's header.
+vl := vh.head.written(above: vh.head.previous)
 unless vl ~= ⊢(vh.head.id as String + "\\ ") { INFO@mark `VC7 a line does not begin with its label` }
 unless vl ~= " @ada { " { INFO@mark `VC8 a line does not run as who made the commit` }
-unless vl ~= ". named \"welcome\"" { INFO@mark `VC9 a rename is not written as naming the value` }
+unless vl ~= "(0..<100).for" { INFO@mark `VC9 a line does not hold the program as written` }
 vt := Language.ray.write(vh)
 vf := vt.at(vh.id as String + ".ray").content as String
-unless vf.lines{.nonempty}.count == 2 { INFO@mark `VC10 two commits are other than two lines` }
-unless vt.at("index.ray").content as String ~= ("welcome: ", vd.id as String) { INFO@mark `VC11 the index does not map the name to the definition` }
-vb := History().read(vf as History.File)
+unless vf.lines{.nonempty}.count == 3 { INFO@mark `VC10 three commits are other than three lines` }
+unless !vt.at("index.ray") { INFO@mark `VC11 a history is written with an index beside its program` }
+vb := (vf as Program) as History
 unless vb.head.id == vh.head.id { INFO@mark `VC12 a history read back has other labels` }
-unless vb.count == 2 { INFO@mark `VC13 a history read back has other than its two commits` }
-unless vb.name_of(vb.definitions.first) == "welcome" { INFO@mark `VC14 a history read back forgot the rename` }
+unless vb.count == 3 { INFO@mark `VC13 a history read back has other than its three commits` }
+unless vb.value.welcome == "hello" && vb.value.count == 100 { INFO@mark `VC14 a history read back has another value` }
 unless vb.head.previous.stamp < vb.head.stamp { INFO@mark `VC15 a history read back lost its order` }
 
 // A labelled program is a history of its labels.
@@ -46,43 +46,38 @@ unless (vp as History).count == 2 { INFO@mark `VC16 a labelled program is not a 
 unless Language.ray.fidelity == Language.Fidelity.lossless { INFO@mark `VC17 the .% history is not lossless` }
 unless $.ray === Language.ray { INFO@mark `VC43 $.ray is not the Ray language` }
 
-// A foreign snapshot: operations inferred from successive trees.
+// A foreign snapshot: the change between two trees, written as Ray.
 text := "x := 1\ny := 2\nz := 3" as Byte[]
-vs1 := History.Revision(id: 1, tree: Language.Entry.of([(path: "a.ray", content: text)]), who: "someone", when: Time.now)
-vs2 := History.Revision(id: 2, parents: [1], tree: Language.Entry.of([(path: "b.ray", content: text)]), who: "someone", when: Time.now)
-vi := History.read_revisions([vs1, vs2])
-unless vi.head.operations.first.kind == Operation.Kind.rename { INFO@mark `VC29 a moved file is not read as a rename` }
-unless vi.definitions.count == 1 { INFO@mark `VC30 a rename made a second definition` }
-vt1 := History.Revision(id: 1, tree: Language.Entry.of([(path: "a.ray", content: text), (path: "c.ray", content: text)]), who: "someone", when: Time.now)
-vt2 := History.Revision(id: 2, parents: [1], tree: Language.Entry.of([(path: "b.ray", content: text)]), who: "someone", when: Time.now)
-unless History.read_revisions([vt1, vt2]).head.operations{.definition is Quest}.nonempty { INFO@mark `VC31 a rename two files could have made is not a quest` }
+vs1 := Language.Entry.of([(path: "a.ray", content: text)])
+vs2 := Language.Entry.of([(path: "b.ray", content: text)])
+unless History.change(vs1, vs2) as String == ".[\"b.ray\"] = .[\"a.ray\"]; .[\"a.ray\"] = None" { INFO@mark `VC29 a moved file is not read as a move` }
+unless (History.valued(vs1) -- History.change(vs1, vs2))["b.ray"] == History.valued(vs1)["a.ray"] { INFO@mark `VC30 a move does not keep the value` }
+vt1 := Language.Entry.of([(path: "a.ray", content: text), (path: "c.ray", content: text)])
+unless History.change(vt1, vs2) is Quest { INFO@mark `VC31 a rename two files could have made is not a quest` }
 
-// Merging: concurrent changes to one definition are a quest; to two are not.
+// Merging: concurrent changes to one field are a quest; to two are not.
 vm := History(repository: Repository())
-vx := Definition(name: "x")
-vy := Definition(name: "y")
-vm.operate(ada, Operation.Kind.define, vx, 1)
+vm.commit(ada, Program(code: { .x = 1 }))
 vbranch := vm.fork
-vm.operate(ada, Operation.Kind.change, vx, 2)
-vbranch.operate(ada, Operation.Kind.change, vx, 3)
-unless vm.merge(vbranch) is Quest { INFO@mark `VC32 two changes to one definition merged without asking` }
+vm.commit(ada, Program(code: { .x = 2 }))
+vbranch.commit(ada, Program(code: { .x = 3 }))
+unless vm.merge(vbranch) is Quest { INFO@mark `VC32 two changes to one field merged without asking` }
 vn := History(repository: Repository())
-vn.operate(ada, Operation.Kind.define, vx, 1)
+vn.commit(ada, Program(code: { .x = 1 }))
 vother := vn.fork
-vn.operate(ada, Operation.Kind.change, vx, 2)
-vother.operate(ada, Operation.Kind.define, vy, 5)
+vn.commit(ada, Program(code: { .x = 2 }))
+vother.commit(ada, Program(code: { .y = 5 }))
 vn.merge(vother)
 unless vn.head.merged { INFO@mark `VC33 a merge of two branches does not have both as parents` }
-unless vn.code_of(vx) == 2 && vn.code_of(vy) == 5 { INFO@mark `VC34 a merge lost a change from one side` }
+unless vn.value.x == 2 && vn.value.y == 5 { INFO@mark `VC34 a merge lost a change from one side` }
 
-// Pins, and a fix that substitutes a version.
+// Pins, and a fix that substitutes a version: a rule on mentions of the version it fixes.
 vstd := History(repository: Repository())
-vf1 := Definition(name: "f")
-vstd.operate(ada, Operation.Kind.define, vf1, 1)
+vstd.commit(ada, 1)
 vbug := vstd.head.id
-vstd.operate(ada, Operation.Kind.change, vf1, 2, substitutes: vbug)
-unless vstd.checkout(vbug)[vf1.id] == 2 { INFO@mark `VC35 a pin to a fixed version does not get the fix` }
-unless vstd.checkout(vbug, as_of: vstd.head.previous.stamp)[vf1.id] == 1 { INFO@mark `VC36 what was written before the fix does not replay as recorded` }
+vstd.fix(ada, vbug, 2)
+unless vstd.checkout(vbug) == 2 { INFO@mark `VC35 a pin to a fixed version does not get the fix` }
+unless vstd.checkout(vbug, as_of: vstd.head.previous.stamp) == 1 { INFO@mark `VC36 what was written before the fix does not replay as recorded` }
 
 // One global order over separate histories.
 vglobal := History.global([vstd, vn])
@@ -91,8 +86,8 @@ unless vglobal.head.parents.count == 2 { INFO@mark `VC38 the global history does
 
 // Storage choices are optimisation levels.
 unless Compiler.levels.contains(Compiler.stored) { INFO@mark `VC39 storage is not a compiler level` }
-unless History.Written(history: vh).caches.first.content as String ~= ⊢(vh.head.id as String + "\\ ") { INFO@mark `VC40 the cache does not hold the value at the head` }
-unless History.edit("abcdef", "abXdef") == ". edited(3, 4, \"X\")" { INFO@mark `VC41 a small change is not written as an edit` }
+unless Compiler.reduced(vh, Compiler.cached).cache_files.first.content as String ~= ⊢(vh.head.id as String + "\\ ") { INFO@mark `VC40 the cache does not hold the value at the head` }
+unless History.edit("abcdef", "abXdef") as String == ". edited(3, 4, \"X\")" { INFO@mark `VC41 a small change is not written as an edit` }
 unless "abcdef".edited(3, 4, "X") == "abXdef" { INFO@mark `VC42 an edit does not produce the changed value` }
 
 // A stretch runs from where its start holds to the commit where its end holds; the last may not have ended yet.

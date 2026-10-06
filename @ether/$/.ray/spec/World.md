@@ -214,7 +214,8 @@ Answers from 2026-10-06.
   is a quest.
 - **W3.11b (2026-10-06)** For now, the Mercurial, Fossil, Pijul and Subversion backends, with the languages only they use (SHA3, MD5, BLAKE3, Bincode, Zstd, Base32) the unused SHA-512 and Blowfish, the SARIF, TAP and JUnit report formats (LSP stays), the permission backends (POSIX, ACL, Android, browser permissions; a grant is recorded, not enforced on the platform) with XML, the SQL stores (SQL, SQLite, Postgres) the terminal image protocols (Sixel, Kitty; images are drawn as text) and the shell language (`$/sh`), are on the branch `version-control` for later; main has Git only (with SHA-1, zlib, DEFLATE, and SHA-256 for git's SHA-256 object format).
 - **W3.12** A `.%` history is a program, and its working directory holds the value. A commit is one appended line:
-  `UUID\ [parents] <stamp> @<who> { … }`. `.%/index.ray` maps names to UUIDs, and caches are optimisation levels.
+  `UUID\ [parents] <stamp> @<who> { … }`, with any Ray as its body. Caches are optimisation levels. (The `.%/index.ray`
+  name map was dropped 2026-10-06: names are in the program.)
 - **W3.13** Which backend is used, whether a history is stored per object or per project, and the caches are all
   Compiler levels (`Compiler.stored`).
 - **W3.14** The STD's and the players' histories are separate. They are joined into one global order by stamp, and

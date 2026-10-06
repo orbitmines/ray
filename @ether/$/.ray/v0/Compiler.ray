@@ -56,25 +56,24 @@ Compiler := class {
   formats := {
     ({kept: Language{fidelity == Language.Fidelity.lossless}} | {other: Language}).read({source}) => kept.read(source)
     {history: History{location && stored.some(.fidelity == Language.Fidelity.snapshot)}}.checkout({label}) => history.pinned(label) -- (pinned =>
-      history.stored.find(.fidelity == Language.Fidelity.snapshot).tree_at(history.location, pinned) -- (tree => tree
-        ? history.at(pinned).definitions.map(d => (d.id, History.read_file(tree.at(d.path_in(history.at(pinned))))))#
-        : history.at(pinned).value))
+      history.stored.find(.fidelity == Language.Fidelity.snapshot).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history.at(pinned).value))
   }
 
   per_object := {
-    {written: History.Written{file.content.count > 2^20 && history.definitions.count > 1}}.stored_file => written.referenced
-    {written: History.Written{file.content.count > 2^20 && history.definitions.count > 1}}.object_files => written.objects
+    {history: History{(. as Program as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
+    {history: History{(. as Program as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
   }
 
   cached := {
-    {written: History.Written}.cache_files => written.caches
-    {history: History{cache}}.checkout({label}) => history.pinned(label) -- (pinned => history.cache.nearest(history, pinned) -- (hit => hit
-      ? history.at(pinned).ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.cache[hit.id] => .applied(held))
+    {history: History}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => c.rewritten(Language.ray.write(history.at(c).value) as Program)) -- (kept =>
+      kept.map(.written(above: kept[.index - 1] if .index > 0)).join(""))) as Byte[])]
+    {history: History{caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned)?.ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
+      ? history.at(pinned).ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.caches.find(.find(hit.id)).at(hit.id).value => .applied(held))
       : history.at(pinned).value))
   }
 
   delta := {
-    {body: History.Body{operation.kind == Operation.Kind.change && operation.before != None && History.edit(operation.before, operation.after).count < Language.ray.write(operation.after).count}} => History.edit(body.operation.before, body.operation.after)
+    {commit: History.Commit{previous && (History.edit(previous.value, value) as String).count < (program as String).count}}.program => History.edit(commit.previous.value, commit.value)
   }
 
   stored := formats + per_object + cached + delta

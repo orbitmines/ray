@@ -182,13 +182,14 @@ Git<format: Format = Format.sha1> := class: Language {
       : Language.Entry(name: .name, content: object(.id as Id).content, mode: modes.find(.value == .mode).key)))
     recorded => reference(noted_at) -- (tip => tip ? tree(commit(tip).tree).files.map((target: .path.replace("/", ""), line: .content as String)) : [])
     reachable (ids: Id[]) => ids.map(id => (reachable(commit(id).parents), id)).flatten.unique
-    revisions => reachable(references{.0 != noted_at && .0 != "HEAD"}.map(.1)) -- (ids => ids.map(id => commit(id) -- (made => History.Revision(
-      id, tree: tree(made.tree), parents: made.parents, who: Character.local(made.author.name) ?? made.author.name, when: made.author.when, message: made.message,
-      recorded: recorded.find(.target == id)?.line))))
+    read_commit (id: Id, made, repository: Repository) => commit(id) -- (made_by => (recorded.find(.target == id)?.line as History.Commit ?? History.Commit(
+      stamp: repository.clock.receive(Stamp.at(made_by.author.when, node: made_by.author.name)), who: Character.local(made_by.author.name) ?? made_by.author.name,
+      program: History.change(made_by.parents.first ? tree(commit(made_by.parents.first).tree) : Language.Entry(), tree(made_by.tree)),
+      when: made_by.author.when, message: made_by.message)) ~~ (.previous = made_by.parents.map(made[.])#))
 
-    history => History.reading(revisions) -- (reading => Repository(location: root) -- (repository => repository
-      ~~ (.histories = branches.map(branch => History(repository, head: reading.commits[branch.id], name: branch.name)))
-      -- History(repository, head: reading.commits[head], name: current)))
+    history => Repository(location: root) -- (repository => reachable(references{.0 != noted_at && .0 != "HEAD"}.map(.1)).reduce(made = {} => made, {(.): read_commit(., made, repository)}) -- (made => repository
+      ~~ (.histories = branches.map(branch => History(repository, head: made[branch.id], name: branch.name)))
+      -- History(repository, head: made[head], name: current)))
   }
 
   Remote := class = location: Location {
@@ -202,16 +203,17 @@ Git<format: Format = Format.sha1> := class: Language {
     )
   }
 
-  Written := class = history: History, revisions: History.Revision[] {
+  Written := class = history: History {
     branch => history.name ?? "main"
     objects_in (tree: Language.Entry): Object[] => [tree, tree**].flatten.map(. as Object)
-    commits => revisions.reduce(made = {} => made, {(.id): Object("commit", Commit(
-      tree: (.tree as Object).id, parents: .parents.map(made[.].id),
-      author: (who: .who, when: .when) as Signature, committer: (who: .who, when: .when) as Signature, headers: [], message: .message) as Byte[])})
-    head => commits[revisions.last.id]
-    notes => revisions{.recorded}.map(revision => (path: commits[revision.id].id, content: revision.recorded as Byte[])) -- (noted =>
+    line => history.since(None)
+    commits => line.reduce(made = {} => made, {(.id): Object("commit", Commit(
+      tree: (history.at(.).tree as Object).id, parents: .parents.map(made[.id].id),
+      author: (who: .who, when: .when) as Signature, committer: (who: .who, when: .when) as Signature, headers: [], message: .message ?? .program as String) as Byte[])})
+    head => commits[history.head.id]
+    notes => line.map(commit => (path: commits[commit.id].id, content: commit.written() as Byte[])) -- (noted =>
       Language.Entry.of(noted) -- (tree => (who: history.head?.who, when: Time.now) as Signature -- (signed => [objects_in(tree), Object("commit", Commit(tree: (tree as Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))
-    objects => (revisions.map(objects_in(.tree)).flatten, commits.values, notes).flatten.unique(.id)
+    objects => (line.map(objects_in(history.at(.).tree)).flatten, commits.values, notes).flatten.unique(.id)
     object_files => objects.map((path: .path, content: .loose))
     // A new repository records its object format in its config (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
     files => object_files, [
@@ -232,7 +234,7 @@ Git<format: Format = Format.sha1> := class: Language {
   }
 
   static written := {
-    {writing: Language.Writing{value is History}} => Written(history: writing.value, revisions: History.revisions(writing.value))
+    {writing: Language.Writing{value is History}} => Written(history: writing.value)
     {written: Written} => Language.Entry.of(written.files)
   }
 

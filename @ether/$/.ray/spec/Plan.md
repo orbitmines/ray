@@ -26,6 +26,13 @@ Paths are relative to `@ether/$/.ray/` unless they say otherwise. `ep` = `v0/.en
 4. `ep` in full (`.entrypoint.ray` — `*.ray` globs do not match it, so grep it by name).
 5. The draft you are porting, before you port it. Port in the draft's own style.
 
+## Principle from 2026-10-06: avoid creating IRs
+
+Ray itself is the IR. Never put a sub-language or a vocabulary of record classes between a format and Ray (an
+operation-kind enum, a `Revision`/`Line`/`Index` record, restricted body forms). A format reads straight into Ray values
+(`History`, `Program`, Nodes) and writes them back, through class headers and Compiler levels. The user, on
+`Version.ray`: version control exists to carry the full `.ray` language (L§9.2).
+
 ## Direction from 2026-10-02 (read first; it comes before the 2026-09-30 status below)
 
 Decided on 2026-10-02 (recorded in L§1.2, T4.10, Almanac A7, P2.8, N5.6; open: N5.5, G3.11):

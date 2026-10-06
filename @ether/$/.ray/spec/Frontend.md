@@ -171,6 +171,7 @@ box-sized ellipse, `Space.grid(extent, loop)`, `Curve`, `Polygon`, `Fractal`, `S
   - **Q, F-G3b: which way y points.** The draft's y points up (`up ->> top`); v0's `Side.top` is
     toward −1 (screen coordinates). Recommend: the space's axis states its orientation, and screen
     levels flip y.
+    **Answered (user, 2026-10-06):** each Axis states its orientation; Geometry is y-up, and the screen levels (TUI, HTML) flip y.
 - **F-G4: edge lengths and discretizing.** *Geometry:5–6, 38–41*: edges decorated with length
   (`elementary_length`), `discretized 1 / m`, conflicting information at discretized points, a
   discretized 2D shape renderable in pixels. v0's graph metric is hop count. **Q.** Recommend

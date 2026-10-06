@@ -130,7 +130,7 @@ Node &+= {
 }
 Entry := class = of: Node, at: Program? {
   following => Program(code: of.written_body).written -- .[.index_of(at) + 1..]
-  ({args}) => of.construct(args) ~~ following.for(statement => statement.entered(., None))
+  ({args}) => of.construct(args) ~~ Program(code: following).entered(., None)
 }
 
 {value} @ {location} ^keyword => Placed(value, location)

@@ -23,7 +23,6 @@ Number := class: Ray {
   ! => is_zero ? 1 : pred! * this
   ± | +- (other: Number) => this - other | this + other
 
-  sign => None
   negative => false
   positive => true
   abs => this

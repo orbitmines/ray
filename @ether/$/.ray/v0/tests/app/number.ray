@@ -41,7 +41,6 @@ unless (-2).negative { INFO@mark `N21 negation is not negative` }
 unless (-5).negative { INFO@mark `N47 minus five is not negative` }
 unless !(5 as Decimal.Signed).negative { INFO@mark `N116 five as an integer is negative` }
 if 5.negative { INFO@mark `N88 five is negative` }
-if 5.sign { INFO@mark `N32 a natural number has a sign` }
 unless -2 + 5 == 3 { INFO@mark `N22 -2 + 5 is not 3` }
 unless -2 * -2 == 4 { INFO@mark `N23 -2 * -2 is not 4` }
 unless -2 < 1 { INFO@mark `N24 -2 < 1 is false` }

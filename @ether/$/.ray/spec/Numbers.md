@@ -37,6 +37,17 @@ IDs `N…`. Answers go under **Decided** at the end.
 - **N1.20 Refinement** — *Number:639–642*: a number refined to 64 bits is other code, equivalent where the
   refinement holds (L§3.3).
 
+From the drafts review (2026-10-06).
+
+- **N1.21 Subscript: base or length** — **Q.** *…/Ether/instance/utils/Number.ray:93–101*: `1111₂⁸`; subscript is also used
+  for length, so a number should match the whole string plus subscript rather than `v`. N1.12 leaves this unsettled; A5 makes
+  the superscript on a base type a length. Recommend: a subscript on a written number is its base (`1111₂`); on a type it is
+  a length (`Binary₂`), mirroring A5; `(111₂)₂` reads inner first.
+- **N1.22 `sign` as a function** — **Q.** *…/utils/Number.ray:41*: `.sign` on all numbers so `x.sign ().sum` works, the empty
+  string being `+`. Recommend: drop (the use at *Astronomy.ray:67* is ordinary multiplication by ±1).
+- **N1.23 Digits of every script** — see X3.10 (**Q**): `decimal_digit_value` / `numeric_value` readings as `suggest`
+  equivalences.
+
 ## N2. Units (*Unit.ray*)
 
 - **N2.1 Literal syntax** — `1m`, `1.0m`, `1 m`, `1.m`, `1.0 m`, `1.0.m`, `1 of Byte`. Which of these?
@@ -49,6 +60,17 @@ IDs `N…`. Answers go under **Decided** at the end.
 - **N2.6 Binary prefixes** — `KB = 1000 B`, `KiB = 1024 B`, `MB`, `MiB`; `1k/1M/1B` counts (*ep:1450*).
 - **N2.7 Reversible conversions** — automatic reverses of offset/multiple/magnitude if reversible.
 - **N2.8 Move to geometry** — *Unit:211*: "Move to a geometry file?" (Frontend F-B5 uses Unit.ray units.)
+
+From the drafts review (2026-10-06).
+
+- **N2.9 `x` between quantities** — **Q.** *.ray2/_todo/ray.ray.txt/ProceduralGeneration.ray:12*:
+  `choose Room{4..5m x 5..7m}` ("`.x` on unit brings 2d"). Recommend: `a x b` on quantities is the Geometry extent
+  `Vector(a, b)` (cartesian product of ranges, R3.5); `x` must be spaced.
+- **N2.10 Compound quantities share a dimension** — **Decided (draft).** *…/Ether/instance/utils/Unit.ray:10–11*: every part
+  of a juxtaposed quantity must convert to the first part's unit; `1d 5m` (meter) is an error, `1d 5m` (minute) is read
+  (with N2.4's superposition resolved by this).
+- **N2.11 Bytes as Binary** — **Q.** *…/utils/Number.ray:162–171*: `1000 MB`, `MiB`, `3.2 Kilobyte`, `Unit as Binary`.
+  Recommend: `n B as Binary` is `Binary^(8n)` (`b` is one bit); a fractional byte count is a bit count and must be whole bits.
 
 ## N3. Roman (*Roman.ray*)
 
@@ -73,6 +95,26 @@ IDs `N…`. Answers go under **Decided** at the end.
 - **N4.10 Corrections** — *Time:229*: how to mark a value as possibly up for correction.
 - **N4.11 `.round(seconds)`**, calendar none (just a temporal Quantity), `Calendar#` = all calendars.
 - **N4.12 Termination is temporal** — *Time:371–375*: each step must take finite time; a function drawn as an animation of itself.
+
+From the drafts review (2026-10-06).
+
+- **N4.13 UTC offset bounds** — **Decided (draft).** *…/Ether/instance/utils/Astronomy.ray:32–35*, *…/utils/Time.ray:144*:
+  `UTC.offset` is `Quantity.Temporal{-12:00 <= . <= 14:00}` (default `00:00`); `UTC + h` / `UTC - h` give a UTC with the
+  summed offset within those bounds, and ISO 8601 offsets are checked by them. (v0 `UTC (offset: Quantity.Temporal = 0)` is
+  unbounded.)
+- **N4.14 GMT and leap seconds** — **Q** (conflict). The draft (*Astronomy.ray:31, 39, 44*): `UTC` has
+  `leap_seconds: boolean = false` (true reads them from tzdata) and `GMT = UTC{leap_seconds == false}`. v0 has `GMT := UTC`.
+  Recommend the draft: a `leap_seconds` field on UTC and `GMT := UTC{leap_seconds == false}` (fits N4.6/N4.7).
+- **N4.15 Relativistic time** — **Q.** *…/utils/Time.ray:6* ("Variable relativistic trajectory"). Recommend: later, with
+  Astronomy (N4.9), a Time may carry the trajectory (frame) it is proper time of; converting between frames is an
+  equivalence like a calendar's.
+- **N4.16 Clock sources and sync** — **Q.** *…/utils/Time.ray:94–95, 152*: time syncing with servers; ns precision may call
+  a different routine; NTP when `OS.name == Ether`. Recommend: `now` is read at the precision asked (`Time.now as ns` may use
+  a finer clock); on OS.Ether the clock is kept by `$.ntp` (a language, later), whose corrections narrow the uncertainty
+  (N4.10).
+- **N4.17 ISO 8601 extensions** — **Q.** *…/utils/Time.ray:106–108*: other format orders, week dates (`Www`), time-zone
+  names, and checking against the standard. Recommend: zone names follow RFC 9557's `[Zone/Name]` suffix (IXDTF); other
+  orders stay out until asked; a task to check `ISO_8601` against the standard, with spec-origin comments.
 
 ## N5. boolean (*boolean.ray*)
 

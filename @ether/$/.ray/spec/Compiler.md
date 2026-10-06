@@ -193,3 +193,17 @@ Measured on the pinned library (min/median of 7–9 runs):
 | `` `123` `` read as a decimal string | 1.5–1.8 s | ~0.9 s |
 
 What is left is the applications themselves, ~3–4 µs each: a frame, lazies for captures, places, dereferencing. An `if` is still ~43 applications. The next step is compiling whole applications: inlining nested rule bodies, and eliding frames that nothing observes.
+
+## From the drafts review (2026-10-06)
+
+- **C1 The IR is Ray** — **Q** (conflict). The standing principle is that Ray itself is the IR, with no intermediate record
+  vocabularies (the drafts review removes the `Operation`/`History.Line` records from version control for the same reason).
+  The IR table above is a separate instruction vocabulary (`frame`, `name`, `slot`, `guard`, …). P1.1 decides that a
+  Program is a Ray whose vertices are statements, with sequence and conditional jumps as its edges. Recommend: the recorded
+  graph is a Program value (P1.1), its nodes are statements, and the passes are P8 rewrites as Compiler levels; the table
+  describes the shapes the evaluator recognises, not a second language.
+- **C2 `Compiler.none`** — see P8.20 (**Decided (Almanac)**, *Almanac.tsx:1930–1931*): the empty level. The evaluator with
+  no passes is that level.
+- **C3 Deopt and revoked equivalences** — see P8.21 (**Q**, *journal 2023-01-17.md:12, 16*): if each applied rewrite is a
+  commit labelled with its rule, a failed guard and a revoked equivalence are one mechanism: run on from the last state
+  that did not rely on it.

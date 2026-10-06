@@ -28,6 +28,58 @@ IDs `P…`. Answers go under **Decided** at the end.
   running quest of that function. *ep:1107–1108*: switching the global context to another language
   version; patch existing objects if possible.
 
+From the drafts review (2026-10-06).
+
+- **P1.10 Partial application** — **Q.** *.ray2/Program.ray:122–123, 297–299, 406*: `<{filled_parameters}>` on any
+  expression, even parameterless; a copy on a history branch; `base` is the unfilled original; each filled argument is
+  inserted after that variable's first initialization. Recommend: `f<x: 1>` is f with x filled, a copy of f on a history
+  branch (`++`); `f.base` is the unfilled original; each filled argument binds where its parameter is first initialised.
+- **P1.11 The receiver is a parameter** — **Q.** *.ray2/Program.ray:292* ("from parameters one of which is the instance"),
+  *.ray2/Feature/Proof.ray:5* (a method on `this` is bound to `(this, …)`). Recommend: `this` is the first, unnamed
+  parameter (`x.f(a)` ≡ `f(x, a)`), and `&callee` names it.
+- **P1.12 Void return** — **Decided (draft).** *.ray2/Program.ray:446*: a function whose return type is None answers
+  nothing; its last value is not its result and is not added to lists (T1.3).
+- **P1.13 Sequencing programs** — **Q.** *.ray2/Program.ray:216*: `, (b: Program): Program` must be overridden, since the
+  two programs' states clash. Recommend: `p, q` on Programs is sequencing; the two keep separate contexts, and q's free names
+  read from p's final context.
+- **P1.14 The sequence about one variable** — **Q.** *.ray2/Program.ray:212*: how to make the sequence of operations be
+  only about one variable and what it depends on. Recommend: `x%` is x's own sequence, and `x**` restricted to what x depends
+  on is its slice (`x**.slice`).
+- **P1.15 Saving a running program** — **Decided (draft).** *.ray2/Program.ray:313–315*: `program as Expression` writes
+  the program with its running state (`x**` selected at its step, P1.8), so pausing or saving a game is writing it. With no
+  state changed it writes the original expression.
+- **P1.16 Fields on a slice** — **Decided (draft).** *.ray2/Program.ray:198–200*: a field may be set on a slice
+  (`s[0..2].field = v`); it lives on that subgraph (P1.2), so `s[0..2].field` and `s[3..5].field` differ. Styles and marks
+  on substrings (X3.4 DoNotEmit) are such fields.
+- **P1.17 Selection through nested expansions** — **Q.** *.ray2/_todo/ray.ray.txt/Ether/instance/Expression.ray:45*: a
+  program pointer that `.expand`s into calls needs both "handling this expand" and "here inside it". Recommend: when the
+  running step is a call, `x**`'s selection is a chain, one selection per expanded level (`x**##`), outermost first.
+- **P1.18 A continuation keeps its own context** — **Decided (draft).** *…/Ether/instance/Expression.ray:24–30*: a
+  continuation written in another context (`+ C`) applies to the previous result in *its* context, not the enclosing local
+  one (as G2.13). The draft's `&caller = OBJECT_ID` spelling is `@<uuid> { … }` (L§8.2).
+- **P1.19 Recorded inputs, deterministic replay** — **Q.** *…/Ether/instance/Expression.ray:43*: keep other relevant vars
+  (a random seed) in history so each thread is deterministic, with an option to run again without them. Recommend: a run
+  records its nondeterministic inputs (seed, time, IO answers) in its history, so a branch replays exactly;
+  `rerun(without: …)` replays with them unset.
+- **P1.20 A step is `. = .next`** — **Q.** *journal Ray Calculi & Physics.md:20–25* (paraphrased): running is one
+  instruction, move to `.next`, repeated; parallel running applies it at many places at once; the instruction itself could
+  be another. Recommend: record it as the definition of stepping; `x**.next` (P1.8) is one application, and a Compiler level
+  may replace the stepping rule.
+- **P1.21 `Function`** — **Decided (draft).** *.ray3/Program.ray:28*: `class Program | Function`; `Function` is an alias of
+  Program. (The `_todo` review's structural `Function := Node{(args) => *}`, *.ray2/_todo/ray.ray.txt/ray.ray:119–124*,
+  agrees where every such Node is a Program.)
+- **P1.22 Node's members resolve on `this`** — **Q.** *.ray2/Node.ray:20–22*, *.ray2/Program.ray:104–105*: what is defined
+  on Node isn't put on local unless explicitly accessed; closures get only things defined outside Node; `#`, `*` go on
+  `this`/global. Recommend: Node's own members (`#`, `##`, `*`, `**`, `%`, `@`) always resolve on `this` (or `global` at the
+  top), never on a local or closure frame; closures capture only names defined outside Node. (Also Types T3.)
+- **P1.23 A commit expands to its run** — **Q.** *.ray2/History.ray:6*: evaluation history is a `.expand` on one commit.
+  Recommend: a commit's `.expand` is the evaluation that produced it (its program's steps, P1.8); history is coarse,
+  expanding a commit gives the fine-grained run. (Also World W3.)
+- **P1.24 Effects** — **Q.** *.ray2/Program.ray:26*: a notion of what a function changes, and limiting it with a keyword
+  like `confidential`. Recommend: every Program has an inferred `.effects` (the locations it may write); a parameter may
+  restrict it (`g: Program{effects ⊆ @local}`); passing `confidential` data requires the callee's effects to stay within
+  the data's visibility.
+
 ## P2. `&caller` and control (*ep:1120–1128, 1148, 1168–1185*)
 
 - **P2.1 `&caller`** — L§10.3: the calling context as a value, with return/finally/redo/break/continue
@@ -43,12 +95,30 @@ IDs `P…`. Answers go under **Decided** at the end.
 - **P2.7 Labels as running** — *ep:1485*: a label is true while pending/executing; the same for a
   program instantiation, false when done.
 
+From the drafts review (2026-10-06).
+
+- **P2.9 Full recursion** — **Decided (Almanac).** *Almanac.tsx:1290–1293* (`limited (x) => x + 1/recur`): `recur` used
+  as a value (not as the last call) is the function's result, recursively. It is an unbounded program, evaluated as far as
+  it is read (N1.4).
+- **P2.10 Labels across branches** — **Q.** *.ray2/Program.ray:126*: refer to labelled branches, so labels cross branches.
+  Recommend: a label is visible from every branch of the same program (`A\` from branch B is `A @ B`); `goto` across
+  branches is an error unless the target is in the current branch.
+- **P2.11 `if` as a match** — **Q.** *IDE:855* (paraphrased): write `if` with `==` followed by `,`-separated cases and
+  `0 => …` instead of `match`. Recommend: `if ==` followed by cases is sugar for `x.match` (A7) on the comparison's subject;
+  ask whether `match` alone is enough.
+
 ## P3. Hooks: code between statements (*ep:1080–1083, 1110–1112, 1126, Compiler:75*)
 
 - **P3.1 Before/after each statement** — L§10.3 `<{expression}>`. *ep:1110*: also between recursive
   calls, x levels deep (benchmarking). *ep:1111*: an expression run on each successive call in its
   context, only within that `()`. *ep:1126*: before_each/after_each recursively, with a filter.
   *Compiler:75*: `global**.[INSERT IN BETWEEN EACH STATEMENT DYNAMICALLY]` (a debug timer).
+
+From the drafts review (2026-10-06).
+
+- **P3.2 Injecting events into others' code** — **Q.** *IDE:380* (paraphrased): an event system in which a user injects
+  events into code someone else wrote. Recommend: injection is a Compiler level the user applies (as P3.1), needing an
+  `execute` grant on the target (L§8.2); without one it runs only on the user's own copy.
 
 ## P4. Concurrency (*ep:1089–1093, 1104, 1116–1119, 1137–1138, 1189–1192, 1453–1483*)
 
@@ -68,6 +138,27 @@ IDs `P…`. Answers go under **Decided** at the end.
   out of order.
 - **P4.7 Shaders** — *ep:1137–1138*: parallel iterators; an unrollable loop in the Many iterator.
 
+From the drafts review (2026-10-06).
+
+- **P4.8 A running Program is a Quest** — **Q.** *.ray2/Program.ray:110, 304–305*: coroutines like `race` start a quest
+  that says `function.stop`; schedule on an entity (spawn one if necessary, or use an NPC's quests); `< Quest`, implement
+  `.stop`. Recommend: a running Program is a Quest (`.stop`, `.done`); `race` stops the losers through it;
+  `program.schedule(@npc)` runs it as that entity's quest (a job at its location, W6.12).
+- **P4.9 `Total`, `Decidable`, `Halting`** — **Decided (draft).** *.ray2/Program.ray:308, 317*: `static Total | Decidable |
+  Terminating | Halting`; they are aliases of `Terminating` (P4.5).
+- **P4.10 Awaiting a remote result only when used** — **Q.** *…/Ether/instance/Entity.ray:30*: if the return value is
+  used, it waits (as a quest) on a response. Recommend: a call to a remote location whose result is unused is sent and not
+  awaited; one whose result is used waits on it as a quest (`pending`, P4.2).
+- **P4.11 `sleep`** — **Q.** *…/Ether/instance/utils/Time.ray:8* ("sleep delay"). Recommend: `sleep d` is
+  `await Time.now >= start + d` (waiting on a dynamic value, no new external).
+- **P4.12 A loop fills a lazy value** — **Q.** *IDE:853* (paraphrased): a `while` loop should work as filling a lazy,
+  partial value. Recommend: a value produced by a loop is readable while the loop runs, through `x**.&` (P1.8); reading
+  past what is filled waits, as for `pending` (P4.2).
+- **P4.13 Shader output** — **Q.** *…/Ether/instance/UI/Geometry.ray:1*: translations to GLSL inferred from the types'
+  structure (distance functions); exact vs approximate equivalences. Recommend: later, a `$.glsl` level writes a shape as
+  its signed distance function derived from its structure; an exact SDF is a `force` equivalence, a bound is `approx`
+  (G7.1). Joins P4.7.
+
 ## P5. `dynamically`, speculation, asserts (*ep:561–565, 1517–1535*)
 
 - **P5.1 `dynamically x`** — *ep:562* (spec mark): re-read when what it depends on changes. Needed by
@@ -81,6 +172,13 @@ IDs `P…`. Answers go under **Decided** at the end.
 - **P5.6 Asserts collected** — *ep:1527*: `dynamically assert` checks all conditions and reports them
   together, not throwing at the first. *ep:1516*: asserts are part of the type.
 
+From the drafts review (2026-10-06).
+
+- **P5.7 `dynamically x &= e` keeps one contribution** — **Q.** *.ray2/Feature/Transaction.ray:3–8*: could automatically
+  roll back previous changes of `&=`; `dynamically sub.location &= …` is `dynamically sub.location &= dynamically …`.
+  Recommend: when e recomputes, the previous contribution is removed and the new one added; `dynamically` on a statement
+  also makes its right-hand side dynamic.
+
 ## P6. Errors (*ep:751–756, 1372–1376, 1504–1515*)
 
 - **P6.1 Spelling** — L§10.3: `$` after a call. *ep:1372–1376*: return a value if error; with a default;
@@ -89,6 +187,13 @@ IDs `P…`. Answers go under **Decided** at the end.
 - **P6.3 Wrapping** — *ep:751–756*: wrapping errors with more information; disallowed variables in
   errors are traced and not sent over pipelines that may not see them; auto-return on failure;
   `&:=` to stack errors together; OOM; access the function context of the error.
+
+From the drafts review (2026-10-06).
+
+- **P6.4 `$` on a superposition; `~~ $`** — **Q.** *.ray2/Grammar.ray:338, 353–354*: `if acc1 & acc2 $`,
+  `if acc1 | acc2 $`, `test := func() ~~ $ { ERROR … }`. Recommend: `$` on a superposition handles each branch's error and
+  superposes the results; with `&` the whole errs if any part errs, with `|` only if every part errs. `x ~~ $ { … }` runs
+  the handler for its effect and answers x unchanged (A-C5 `~~`).
 
 ## P7. Languages as mappings (*ep:1193–1212*)
 
@@ -100,6 +205,57 @@ IDs `P…`. Answers go under **Decided** at the end.
 - **P7.4 Translating subexpressions** — *ep:1096–1097*: only translate subexpressions to certain languages;
   superpose implementations and race them.
 - **P7.5 Newline meaning** — *ep:1206*: how a language defines its assumptions (newline = `=>` etc.).
+
+From the drafts review (2026-10-06).
+
+- **P7.6 A language across renames** — **Decided (draft).** *.ray2/Program.ray:343–347*: `class Lang | Language`,
+  `children: Language` in the class hierarchy, `equivalent name` "like Rocq/Coq the name changed". A language keeps its
+  identity across renames: old names are equivalences (`$.coq` ≡ `$.rocq`), as are its several extensions; dialects are its
+  children. (Also L§9.1.)
+- **P7.7 `Program < Language`** — **Q.** *.ray2/Program.ray:367*. P7.1 says a language is a Program level, not the converse.
+  Recommend: every Program is also a Language, reading its arguments' text through its parameter types (T4.10), so a
+  function is a small language.
+- **P7.8 An `as` that depends on its input is a language** — **Q.** *library/Index.ray:782–790*:
+  `FileEncodings => static{Expression ==.instance_of File}`, `UTF-8: Language (i: File): String`, any `as` is a language
+  when it depends on the input. Recommend adding this as P7.3's criterion (P7.3 stays open as research otherwise).
+- **P7.9 Library Project (P8.13), Open** — **Q** for the whole block. Recommend: keep it here as an Open block (or move it to
+  a `Library.md` backlog, as W7 holds the IDE's); nothing in it is implemented now. Sources: *library/Index.ray*,
+  *library/index.ts*, *projects/library/*, and the journal's *2028? Project - Library.md* (paraphrased).
+  - Authors and organisations generated from repository history, per directory (`@"github.com".@USERNAME`)
+    (*library/Index.ray:1*).
+  - Machine targets `.s`/`.o`; object formats × architectures (*library/Index.ray:2*, *Project Index.md:23–47*): add COFF,
+    XCOFF, GOFF, SPIR-V and DXContainer beside L§8.4's planned `$/elf`, `$/pe`, `$/macho`, `$/wasm`.
+  - Implementations × targets, many-to-many (*library/Index.ray:4–30*): the language is the source; the implementation
+    language is what is used in `as Program`; targets are the `as (: Language)` defined;
+    `(Implementation <-)? . (-> Target)?` with location per implementation; implementations needing several languages
+    (`| TypeScript & C`).
+  - Versions, child languages, partial implementations (`set.mm` for SetTheory & Logic), `< SetTheory` starting a branch,
+    flat names when unambiguous, distinguishing which equivalence path was taken (*library/Index.ray:38–47*).
+  - Locations depending on the implementing language (`location &= this<Agda> ? … : …`), archived-version mirrors,
+    `Metamath["set.mm"]` (*library/Index.ray:669, 778–793*).
+  - Index entry shape `namespace X | "Display Name" < Language(".ext") ; location &= "url" & "url"`, `< Tool` / `< Library`;
+    should `$.name` fall back to this index as a fetch Quest? Recommend yes, later (*library/Index.ray*).
+  - Toolchains as a frontend/backend graph; every "place" (official, github, apt snapshots, pacman archive, Koji, brew, git
+    tags) has one shape `list()` / `resolve(version)` / `install`; dpkg version ordering (*library/index.ts*). Conflicts with
+    L§8.4 (no process calls). Recommend restating it in Ray terms: a place is a Language whose level reads a version listing,
+    and installing is reading a location into the store (L§9.1 caches).
+  - Goal: compare languages without manual human labour of specifying their grammars (*projects/library/README.md:22*).
+  - Getting into a first language and from there into the others: OS executables, LLVM or C as starting point; lifting
+    chains binary → LLVM → language / C++ / JS (*journal Library.md:9–27*).
+  - What to extract from software: features as languages, APIs (grammars as types), accounts into the `@`-space, accesses,
+    diffs across versions, injecting features, finding generated code's source, guessing the original language
+    (*journal Library.md:34–57, 69–82; IDE:16–44*).
+  - Comparing languages: every metric is a judgement from a reference frame; fix a universal language as that frame; the
+    measures (verbosity, runtime and parallel complexity, abstraction ceiling, learnability, competence with infinities and
+    time, induction vs deduction cost) (*journal Library.md:84–171; IDE:20–22, 806–820*).
+  - A decentralised index of applications and their functionality, keeping user data apart (*IDE:611, 851*).
+  - First interpretations: WebAssembly, ZX-calculus, category theory / HoTT; a program shown at several levels of
+    description (*journal 2023-09-01.md:28–43*).
+  - When a dependency changes, find the equivalences it breaks and ask a human to approve proposed ones
+    (*journal 2023-09-11.md:2–3*).
+- **P7.10 Models as dependencies** — **Q.** *_todo/_download_dependencies.sh:72–78*: allow any Hugging Face model configured
+  somewhere; what is the default? Recommend: a model is a dependency (`@hf/<org>/<model>`) like `@tzif`, configured in
+  `.cfg.ray`, with no default until asked. (Also L§9.1.)
 
 ## P8. The compiler (*Compiler.ray*)
 
@@ -138,6 +294,36 @@ IDs `P…`. Answers go under **Decided** at the end.
   run from the cache.
 - **P8.17 Resource accounting** — *ep:1175*: calculate the resources used (storage, memory, time, size of the
   Ray). L§10.8.
+
+From the drafts review (2026-10-06).
+
+- **P8.18 More backlog notes (P8.3)** — **Decided (draft)**, kept with P8.3's list:
+  - a value held by several containers is stored once and referenced, deduplicated by a merge level
+    (*.ray2/Compiler/Optimizations.ray:5*);
+  - `xs.all = X` is stored lazily as one fact on the structure (*Optimizations.ray:7*);
+  - predicates on ∞ (`(0 ->).count > n`) are answered symbolically (*Optimizations.ray:24*);
+  - detected cycles are merged into a loop (R5) (*Optimizations.ray:26*);
+  - a dead store (`a = b; a = c`) is dead only if no one reads `a%` (*Optimizations.ray:32*);
+  - random digits that are overwritten (`~~ .version = 4`) are not generated (*…/Ether/instance/utils/UUID.ray:52*);
+  - periodic cases are counted arithmetically, not iterated (leap years) (*…/utils/Astronomy.ray:109*);
+  - multiplying/dividing a Binary by 2ⁿ is a shift (*…/utils/Number.ray:11–12*).
+- **P8.19 An open enum is a datalist** — **Decided (draft).** *.ray2/Language/Program/HTML.ray:14*: an enum with an open
+  member (`C(choose?)`) is an `<input list>` (datalist), suggesting the members but accepting free text (P8.15).
+- **P8.20 `Compiler.none`** — **Decided (Almanac).** *Almanac.tsx:1930–1931* (`slow: Program{O: Compiler.none} = f**`):
+  `Compiler.none` is the empty level, the program run with no rewrites.
+- **P8.21 Reversible rewrites** — **Q.** *journal 2023-01-17.md:12, 16* (paraphrased): record when each reduction was made;
+  if the equivalence it used is later found false in a context, undo it; prefer determinism to speed when uncertain.
+  Recommend: a rewrite applied by a Compiler level is a commit in the program's history (P8.16), labelled with the rule it
+  used; revoking an equivalence in a context re-runs from the last commit that did not use it.
+- **P8.22 Mixes keep their components** — **Q.** *journal 2022-12-10.md:26*, *Gamification.md:485* (paraphrased): keep
+  audio sources unmixed so a layer can be removed later; separating is un-superposing. Recommend: a mixed signal is
+  `a &+ b`; the store keeps the components when it can, and a flattened mix is a lossy optimization level (P8.14).
+- **P8.23 Quests force lazy values and warm caches** — **Q.** *…/Ether/instance/Expression.ray:31–32*. Recommend: forcing a
+  lazy value someone else may compute, and warming a cache of often-read history values, are quests picked up by whoever
+  has capacity (with P8.11).
+- **P8.24 Tests that change externals** — **Q.** *IDE:428* (paraphrased): tests of syntax that alter existing externals.
+  Recommend: such a claim runs in a Program level of its own so the change cannot leak into the suite (as L§6.2's
+  sublanguages).
 
 ---
 

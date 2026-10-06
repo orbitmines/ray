@@ -20,6 +20,21 @@ IDs `X…`. Answers go under **Decided** at the end.
   they are custom. `((` is one.
 - **X1.9 `.[LANG]`** — L§5.8.
 
+From the drafts review (2026-10-06).
+
+- **X1.10 `^`/`v` as case aliases** — **Q.** *.ray2/Language/String/String.ray:14–15*: `lower_case | lowercase | v`,
+  `upper_case | uppercase | ^`. They clash with `^` as power/style (L§5.1, N1.12) and with `^`/`v` for super/subscript.
+  Recommend: drop the `^`/`v` aliases for case.
+- **X1.11 Editor glyph mappings inside strings** — **Q.** *.ray2/Language/String/String.ray:46*: how do escapes (`\n`, `\t`,
+  `\x{}`) conflict with the editor's Unicode mappings for characters. Recommend: editor glyph mappings (`->` → `→`, G7.4)
+  apply only outside string literals and escapes; inside a string the text is what was typed.
+- **X1.12 Custom symbols as a String type** — **Q** (conflict with Decided X1.8, "custom symbols are dropped"). *IDE:665*
+  (paraphrased): extend UTF-8 with custom symbols as a new String type; copied text marks which symbols are custom.
+  Recommend (journal review): a `String` whose characters are `Char | Custom`, written out as plain UTF-8 with a fallback
+  sequence per custom symbol and an inverse reading it back. Either keep X1.8 or reopen it.
+- **X1.13 Fields on substrings** — see P1.16 (**Decided (draft)**): a field set on a slice lives on that subgraph, which is
+  how styles and marks (X3.4 DoNotEmit) sit on substrings.
+
 ## X2. Regex (*String:331–341, 402–410*)
 
 - **X2.1 Regex as a language** — `/pattern/flags`; ASCII vs Unicode mode, `\p`; word border. L§10.5.
@@ -39,6 +54,18 @@ IDs `X…`. Answers go under **Decided** at the end.
 - **X3.6 Endianness** — LE/BE: "the same in isolation, opposites in conjunction".
 - **X3.7 When to refetch** — *Unicode:189*: what decides evaluation, and whether to get a new version of a table.
 
+From the drafts review (2026-10-06).
+
+- **X3.8 `First`/`Last` ranges** — **Decided (draft).** *.ray2/Language/String/Unicode.ray:44–46* ("Todo First, Last in
+  name"): UnicodeData rows named `<…, First>` and `<…, Last>` form one range entry covering every code point between them.
+  (v0's `Unicode.Data` reads one row per code point.)
+- **X3.9 Super- and subscripts from decomposition** — **Decided (draft).** *.ray2/Language/String/Unicode.ray:48–52*:
+  `Unicode.Superscript` / `Unicode.Subscript` are the scalars whose decomposition is tagged `<super>` / `<sub>`, each mapping
+  to its base character. Number's super/subscript readers use these sets, not lists (v0 *Number.ray:98–99*).
+- **X3.10 Digits of every script** — **Q.** *.ray2/Language/String/Unicode.ray:54*: "Adhere to digit/numeric values, and
+  implement them." Recommend: a Decimal digit is any scalar with a `decimal_digit_value` (`٣`, `৩`), and `numeric_value`
+  gives `½`, `Ⅻ`; these readings are `suggest` equivalences, not defaults in code. (Also N1.)
+
 ## X4. Encodings (*Encoding.ray*)
 
 - **X4.1 Scope** — hashes (SHA, MD5, BLAKE3), ciphers, compressors, Base64: each "its own project". Which first? UUID v3/v5
@@ -49,6 +76,12 @@ IDs `X…`. Answers go under **Decided** at the end.
 - **X4.4 Storage encodings** — Fastlanes, ALP, FSST, dict, bitpacked, RLE, delta, PCodec, ZSTD, FFOR, chosen from
   statistics (L§9.1).
 
+From the drafts review (2026-10-06).
+
+- **X4.5 Never decrypted in place** — **Decided (draft).** *.ray2/Language/Encoding.ray:6*: an `Encrypted<T>` is never
+  decrypted where it is stored, only when read off to a location holding the key. (Listed in X4.2, missing from its
+  Decided text.)
+
 ## X5. UUID (*UUID.ray*)
 
 - **X5.1 Draft structure** — directive: follow the draft. `class UUID < Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-")`;
@@ -57,6 +90,22 @@ IDs `X…`. Answers go under **Decided** at the end.
   the multicast bit set. "Make sure each call yields a unique value"; "Say I want a unique value, I don't care how".
 - **X5.3 A secondary implementation** — *UUID:170*: how to mark one that isn't used for reading from a string.
 - **X5.4 Hex-letter round trip** — L§10.2 open bug.
+
+From the drafts review (2026-10-06).
+
+- **X5.5 v1 read back, and its limit** — **Q.** *…/Ether/instance/utils/UUID.ray:1, 26–27*: what if the time exceeds 60
+  bits; the compiler should reverse the time from the other three fields; an OS that allows custom v1 generation overrides
+  it. Recommend: `uuid.time as Time` is the inverse of generation (L§4.5); a stamp past 60 bits (year 5236) is an error; an
+  OS level may supply v1 generation (W6.9).
+- **X5.6 Identity-derived UUIDs** — **Q.** *…/Ether/instance/Entity.ray:91*, *…/Expression.ray:49*: a player's UUID node
+  is generated from its public key and the time is when it joined; a history's UUIDs use a key-derived node and the last
+  edit time. *.%/ORIGINAL-UUID-OF-OBJECT.ray:4*: a project uses the player's/organisation's public key for generating its
+  UUIDs. Two recommendations: (a) a v1 UUID whose node is derived from the key (`_todo` review); (b) a name-based v5 in the
+  namespace of the owner's key, reproducible per owner (misc review). Otherwise keep v4 (v0 `Character.id`). Note X4.1
+  leaves v3/v5 unimplemented.
+- **X5.7 `UUID.version`; `choose{unique}`** — *Almanac.tsx:2345, 2348*. **Decided (Almanac):** a UUID exposes `.version`.
+  **Q** (conflict): the Almanac writes `choose{unique} UUID.v1`, as X5.2 first did; the 2026-10-05 supersession writes
+  `choose UUID.v1{unique}`. Recommend: keep 2026-10-05 and update the Almanac line.
 
 ## X6. IP (*IP.ray*)
 
@@ -67,6 +116,25 @@ IDs `X…`. Answers go under **Decided** at the end.
 - **X6.4 `as String` rules** — RFC 5952: lowercase, longest zero run, mixed notation for `::ffff:0:0/96` and `64:ff9b::/96`.
   "what is super for?" (*Test:261*).
 - **X6.5 CIDR strings** — `"10.0.0.0/8"` read as `ip / prefix_length`.
+
+From the drafts review (2026-10-06).
+
+- **X6.6 CIDR is a superposition** — **Q** (conflict). The draft (*7250308 Test.ray:24–31, 41–48*): `/ prefix_length` sets
+  `binary_form[prefix_length..] = 0 | 1` and answers it, and `as String` prints `…/n` because it detects trailing superposed
+  bits. v0 (*IP.ray:10, 21–26*) stores a `prefix: Number?` field, zeroes the bits and has a separate `hosts`. Decided X6.5
+  only fixes the reading. Recommend the draft (superposition over a flag): `ip / n` is the superposition of every address in
+  the block, printed as CIDR because its low bits are `0 | 1`; no `prefix` field.
+- **X6.7 Well-known prefixes are IP values** — **Decided (draft).** *removed …/Ether/instance/Network.ray:229 (7250308^)*:
+  the test against `::ffff:0:0/96`, `64:ff9b::/96` is `==.instance_of` that IP value (a superposition if X6.6 is adopted), not a text
+  comparison (v0 writes `. is "::ffff:0.0.0.0/96"`). Keep the RFC 5952 / RFC 6052 comments.
+- **X6.8 Choosing among matches; what `~=` leaves** — **Q.** *7250308 Test.ray:89* (`#{length == min() & leftmost}`, "How to
+  iterate over @ like min. and leftmost"); *removed Network.ray:213–214 (7250308^)* ("default functionality of `~=` is
+  removed from surrounding context unless X?"; a match that is itself a superposition). Recommend: inside `#{…}`, `min()` /
+  `leftmost` aggregate over the superposition; `xs.max(by)` is the superposition of the tied ones and `.first`/`.last` picks
+  by position; `x ~= p` answers selections that stay in their context and does not change x (`.remove` on a match removes
+  it); a superposed match is one match, `.expand` unfolds it. (Also R3.10, R3, U9.)
+- **X6.9 IP ranges** — **Q.** *7250308 Test.ray:38* (`//TODO Range`). Recommend: `ip1..ip2` is the range over X6.2's line
+  (R4), with no IP-specific code.
 
 ---
 

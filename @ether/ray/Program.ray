@@ -70,7 +70,6 @@ Program &+= {
     .map(depends(., [seen, [name]].flatten)).flatten].flatten.unique
   slice (name: String) => depends(name) -- (names => written{statement => names.some(writes(.).contains(statement))})
 
-  effects => Effects.of(this)
   schedule (on = @me) => on.quests |= this
 
   right-to-left branch => copy.stepped

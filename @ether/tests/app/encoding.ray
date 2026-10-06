@@ -2,9 +2,9 @@
 
 mark ^keyword := external global
 
-one := Instance(location: None, key: $.x25519.pair())
-two := Instance(location: None, key: $.x25519.pair())
-three := Instance(location: None, key: $.x25519.pair())
+one := Instance(key: $.x25519.pair())
+two := Instance(key: $.x25519.pair())
+three := Instance(key: $.x25519.pair())
 
 locked := Encoding.Encrypted(value: 5, key: one.key)
 unless locked.opened(one) == 5 { INFO@mark `EN1 what is locked does not open with its key` }
@@ -14,16 +14,16 @@ if kept.opened(three) is Abstract { INFO@mark `EN8 what is held is not read back
 unless kept.opened(two) is Abstract { INFO@mark `EN9 it is read back where the key is not` }
 unless kept.opened(three) == 5 { INFO@mark `EN10 what is read back is not what was put in` }
 open_to_none := Encoding.Encrypted(value: 5, key: None)
-unless open_to_none.opened(Instance(location: None)) is Abstract { INFO@mark `EN21 a value held under nothing comes back at nothing` }
+unless open_to_none.opened(Instance()) is Abstract { INFO@mark `EN21 a value held under nothing comes back at nothing` }
 unless open_to_none.opened(one) is Abstract { INFO@mark `EN22 a value held under nothing comes back anywhere` }
 
 seven := $.x25519.pair()
 held_there := Encoding.Encrypted(value: 5, key: seven)
-unless held_there.opened(Instance(location: None, key: seven)) == 5 { INFO@mark `EN30 a value does not open at an instance holding its key` }
-unless held_there.opened(Instance(location: None, key: $.x25519.pair())) is Abstract { INFO@mark `EN31 a value opens at an instance holding another key` }
-unless held_there.opened(Instance(location: None)) is Abstract { INFO@mark `EN32 a value opened without its key does not ask to find it` }
+unless held_there.opened(Instance(key: seven)) == 5 { INFO@mark `EN30 a value does not open at an instance holding its key` }
+unless held_there.opened(Instance(key: $.x25519.pair())) is Abstract { INFO@mark `EN31 a value opens at an instance holding another key` }
+unless held_there.opened(Instance()) is Abstract { INFO@mark `EN32 a value opened without its key does not ask to find it` }
 unless held_there.opened(Character(name: "k", key: seven)) == 5 { INFO@mark `EN33 a value does not open for a character holding its key` }
-unless held_there.opened(Instance(location: None, key: seven)) == 5 { INFO@mark `EN34 a value opened with its key is not what was put in` }
+unless held_there.opened(Instance(key: seven)) == 5 { INFO@mark `EN34 a value opened with its key is not what was put in` }
 
 held := 5 as $.gzip
 unless held as Number == 5 { INFO@mark `EN3 what is compressed does not come back` }

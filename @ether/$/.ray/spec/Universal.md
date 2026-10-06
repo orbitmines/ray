@@ -86,6 +86,14 @@ IDs `U…`. Answers go under **Decided** at the end.
   the calls made so far), intensional by default (control flow, `(2 + 2)** == (2 + 2)**`) at the target's
   level. Labels out of order: `A check\ ==.historical B`.
 
+From the drafts review (2026-10-06).
+
+- **U9.1 Equality by normal form; equality with exceptions** — **Q**. The journal decides two functions equal by compiling both one
+  way to a simplest form and comparing, and wants partial equivalence: one generic rule over several implementations, with the
+  exempt statements noted. Recommend: `==.normal` compares the results of a minimising Compiler level (fewest core steps, not
+  fastest), and partial equivalence is `==<except: …>`, beside `==<in: …>` and `==<Number>`.
+  *`private-journal/year/2022/daily/2022-01-14.md:2`, `2022-03-08.md:11`*
+
 ## U10. Quests and assumptions
 
 - A quest is a function; its return value is the reward.
@@ -103,6 +111,24 @@ IDs `U…`. Answers go under **Decided** at the end.
 - `Point = Ray`, `Loop = Array.Unbounded.loop`,
   `class Circle { outline: Loop{map(to centre -- #.min.length).reduce(==)}, centre: Point, radius: outline to centre -- #.min.length }`.
 
+## U13. Purpose (*from the drafts review, 2026-10-06*)
+
+What the Almanac's introduction states and nothing in the spec records (*ALM:183–295, 2368–2376*, ALM =
+`orbitmines.com/orbitmines.com/src/routes/Almanac.tsx`; also the journal's
+`Software.md:13–46`).
+
+- **U13.1** — **Q**. Recommend recording as **Decided**, since the Almanac is published:
+  - Ray models the semantics of every other language, low to high level; it can serve as an assembly, a systems and an interpreted
+    language. Assembly is valid Ray syntax, and program equivalences lift low-level code to higher levels.
+  - Instead of writing a backend per compiler, decompile the backends compilers already target. Languages interoperate before
+    applications do.
+  - Interoperability goals: (I) use another language's library without a shared library; (II) choose one language's memory model
+    across a language boundary; (III) shared access to a structure without a channel; (IV) mixing languages within and across
+    files (P8.9).
+  - Frontend, compiler and backend are relative terms; any level can serve as the universal one.
+  - Roadmap: the Ether 2027, the Library Project 2028, the physics and game engine 2029, then gamification.
+  - Open item for (II): recommend a memory model is a Program level chosen per boundary.
+
 ---
 
 ## Conflicts to decide
@@ -112,6 +138,12 @@ IDs `U…`. Answers go under **Decided** at the end.
 - **U-C2 `\…\`.** The article uses `\"2"\` for a selection; labels are `name\`.
 - **U-C3 `if assume`.** L§6.3 made `assume` an alias of `with`. The article's `if assume graph.last` is a
   speculative assumption (P5.4 `speculative.if`).
+
+From the drafts review (2026-10-06).
+
+- **U-C4 `never` and `Never`** — **Q**. L§4.1 decided `=> Never` as the type and `never` as the keyword; the Almanac writes
+  `forever (): never => loop { }` (*ALM:1299*). Recommend accepting both: `never` in a type position reads as `Never`, as
+  `boolean` names a type.
 
 ---
 

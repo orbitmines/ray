@@ -26,6 +26,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 ### 1.3 `++` — *IDE:291*
 - Dropped (no longer applies).
+- **From the drafts review (2026-10-06):**
+  - **1.3.1 `x++` as copy — Q (conflict).** The IDE note's `++` is dropped above, but v0 uses `this++` as a copy (`String.ray:70`, `Node.ray:89, 222`) and the draft has `++ | copy` forking a variable's history (*`.ray2/Node.ray:155`*; L§10.3 lists it). Recommend: the drop concerns `++` as concatenation; `x++` (alias `copy`) is a copy whose history is a fork of `x%`.
 
 ### 1.4 Entry and index — *IDE:280*
 > entry is origin no self. .index is from origin.
@@ -71,6 +73,10 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 - **Decided:** an unset field reads the class default *live*: a later change of the default is seen, until the field is assigned. Storage keeps only assigned fields.
 
+### 2.4 Aliases and first assignment (*from the drafts review, 2026-10-06*)
+- **2.4.1 A member that names another variable — Q.** `def primary => location` should not implement `primary`, since `location` is a variable too (*`.ray2/_todo/ray.ray.txt/ray.ray:8`*). Recommend: `a => b` where `b` is a field is a read-only derived member; a two-way alias is the name superposition `a | b: T` (as v0 does for `initial | ⊢`).
+- **2.4.2 First initialisation merges — Q.** The draft's default first initialisation: overwrite if None, else `&=`, else `=` if the class provides one (*`.ray2/_todo/ray.ray.txt/Ether/instance/Expression.ray:17`*). Recommend: not as a default (§2.1 and T1.6 decide declaration); only as a named policy of a location or store, where assigning into a slot that holds a value superposes (`&=`) unless the slot's class defines `=` (what W3.4's merge quests need).
+
 ---
 
 ## 3. Types
@@ -112,6 +118,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - v0: `as (X)` conversions exist on some classes (Unit, Quantity).
 - **Decided:** method lookup falls back to the whole equivalence graph of `as` conversions from the receiver (breadth-first; the nearest conversion that defines the method is used).
 - **Decided:** two conversions at the same distance that both define the method are both used, and the result is their superposition.
+- **From the drafts review (2026-10-06):**
+  - **3.5.1 Ordered routes first — Q.** Among conversion routes of equal length, which wins: `Expression[]` reaches `Program` ordered, and the draft prefers `Expression -> Program[] -> Program` (linear) over a superposing route (*`.ray2/Program.ray:408`*). Recommend: prefer the route that keeps order over one that superposes. (The decision above superposes ties; this ranks before it.)
+  - **3.5.2 Explicit-only conversions — Q.** The note wants some equivalence edges used only when written (*IDE:164*). Recommend: `explicit as (=== X) => …` is used only by a written `as X`, never by the lookup fallback or by `==` (U9).
 
 ### 3.6 Grammar that reads differently per type — *IDE:158–159*
 > Type ? + Error. Grammar would be interpreted differently for different types, so throw an error.
@@ -147,6 +156,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - `Ball = Ball~profile` sets which one is the default; `with Ball = Ball~profile` does so only in a context.
   - `Node~method` names a method as a place, e.g. to insert something after it for precedence ordering.
 - `with X = …` is the general context override of §6.3; `with Ball = Ball~profile` is one use of it.
+- **From the drafts review (2026-10-06):**
+  - **4.2.1 Shared constructor code; renderings — Q.** What runs for every entry, and how a constructor's `return` (a rendering) is reached (*`.ray2/_todo/ray.ray.txt/Ether/instance/UI/Geometry.ray:113, 146`*). Recommend: statements before the first label run for every entry point; a rendering is the entry point's answer (`Ball~profile()` answers its rendering), and the object is still `this`.
 
 ### 4.3 Calling what isn't there yet — *IDE:217*
 > Call something which isn't filled yet lazily, and assume it can only be put there after it's filled.
@@ -164,6 +175,13 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A function's inverse is `f⁻¹`, also written `f^-1` or `f!` (the drafts' postfix `!`: `+! 5 = -5`, `map(f!)`).
   - `f⁻¹ (y) => …` declares it, and `! + -` declares `-` as the reverse of `+`.
   - An inverse is derived when every step of `f` is reversible. A function with some irreversible steps is partially reversible.
+- **From the drafts review (2026-10-06):**
+  - **4.5.1 A leftward step is the inverse — Q.** `-1 <- x -> +1` as the inverse notation for going the other way (*`.ray2/Feature/Transaction.ray:71–72`*). Recommend: `f <- x` steps through `f⁻¹`, so `+1 <- x` ≡ `x -> -1` (with §5.2's `<-`).
+
+### 4.6 Composition and calls (*from the drafts review, 2026-10-06*)
+- **4.6.1 `∘` and `Function` — Decided (draft).** A function is a Node on which `(*) => *` is defined: `Function := Node{(args) => *}` (structural). `f ∘ g` (alias `compose`) is `(args) => f(g(args))`, declared right-to-left (G3.3), so `f ∘ g ∘ h` is `f ∘ (g ∘ h)`. *`.ray2/_todo/ray.ray.txt/ray.ray:119–124`* (L§10.3 listed it.)
+- **4.6.2 Chaining `=>` — Q.** `A => +1 => +3` as successive steps (*`…/ray.ray:117`*). Recommend: `f => g` where `f` is already a function appends a step, `(+3) ∘ (+1) ∘ A`; a body that is not a function stays a plain body (G2.2).
+- **4.6.3 The call is not the text `"()"` — Q.** Calling `()` must not go through a string-named member (*`…/ray.ray:11`*); v0's Access uses the method name `` `()` `` for execute permission. Recommend: the call is the `()` method; looking up a member by the text `"()"` (`x["()"]`) is a field lookup, never the call.
 
 ---
 
@@ -206,11 +224,15 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided:**
   - `/* … */` block comments that nest.
   - Comments follow Markdown rules. Code inside a ```` ```ray ```` fence within a comment is Ray that doesn't run: the editor highlights it as code, but darkened and italic.
+- **From the drafts review (2026-10-06):**
+  - **5.5.1 Indentation — Decided (draft).** A block comment's text is its lines with the common indentation removed (each line's indent equal to the previous one's is stripped). *`.ray3/Node.ray:65–67`*
 
 ### 5.6 Warnings — *IDE:353–355*
 > Warning on a multiline `()` with a `,`: either you want it there or add a newline between the two. Warning when the first statement contains leading whitespace.
 
 - Proposal: both as diagnostics (warnings).
+- **From the drafts review (2026-10-06):**
+  - **5.6.1 Text joined into a path — Q.** Text put into a path that supports `..` may escape it (*`.ray2/_todo/ray.ray.txt/ray.ray:25`*). Recommend: a configurable diagnostic, a warning by default, when a String not proven free of `..`/`/` is joined into a Location (W6.1 sandboxes only the top).
 
 ### 5.7 Mixed right-to-left — *IDE:424*
 - v0: Partly. Directed scanning exists (direction.ray). Spec: a line may switch direction; the engine reads each run in its direction.
@@ -220,6 +242,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 - v0: Done for colours (the `H` theme; `^ {color}` rules paint).
 - Proposal: `` `…`.js `` marks a literal as written in that language, highlighted as it.
+- **From the drafts review (2026-10-06):**
+  - **5.8.1 Literals painted by their type — Decided (draft).** A literal read by a typed capture or declaration (`x: IPv6 = "::1"`) is painted by that type's own rules (segments, `::`), not as a plain string. *`.ray2/Grammar.ray:5`*
+  - **5.8.2 `TODO` — Decided (draft).** `TODO` (in code, as an abstract body, or in a comment) is painted as its own `^todo` group and listed as an info diagnostic. *`.ray2/Program.ray:16`, `.ray2/Grammar.ray:178`*
 
 ---
 
@@ -247,6 +272,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Since `with` takes a program, the block form works too: `with { Time.timezone = X }`.
   - It is defined language-side, not in the engine.
   - Other uses: `with Ball = Ball~profile` (§4.2), and `ClassA{filter}$ = DB` routing (§9.1).
+- **From the drafts review (2026-10-06):**
+  - **6.3.1 Writes inside an override — Q.** What happens to a value changed inside a `with`, and to later changes outside (*`.ray2/_todo/ray.ray.txt/Ether/instance/UI/Geometry.ray:125–126`*). Recommend: a `with` override is a location (T7.1); writes inside it go to the override's branch, and a later write to the original outside is seen inside unless the override changed that field (the shadow rule, §10.6.1).
+  - **6.3.2 `assume` without a value — Decided (journal).** `assume c` with no `= v` is `assume c = true`. **Q:** a file opening with `dynamically { assume … if … }`; recommend no new form: it is a context override for the whole file, re-read when its condition changes. *IDE:836–845*
 
 ---
 
@@ -264,6 +292,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 - **Decided:** the suffix form, `field %1..5`, both on declarations (limits them to those versions) and at uses (selects them).
 - **Decided:** a migration is a function `%4 -> %5 (old) => new`, for now declared beside the thing it migrates (declaring it elsewhere may come later). Migrations chain, so %1 reaches %5, and an inverse (§4.5) is the backward migration.
+- **From the drafts review (2026-10-06):**
+  - **7.2.1 `%1..5` or `%[1..5]` — Q (conflict).** This section decided the suffix `field %1..5`; the 2026-10-05 answers (§10, "`%`") read `%` before a number as modulo and write version ranges `%[1..5]`; the Almanac writes `title %1..5: String` (*ALM:1641*). Recommend keeping the 2026-10-05 answer: rewrite this section to `field %[1..5]` and update the Almanac line.
 
 ### 7.3 Errors carry their version — *IDE:432*
 > error[X] where X is the version the error type got introduced, plus a number.
@@ -274,6 +304,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 > Ship with the implementation of the language spec we depended on; if the interpreter doesn't support that version yet we can still run on older versions (forward compatibility).
 
 - **Decided:** a package records the `@ray %N` it was written against, and carries that version's `v0/*.ray` when the host interpreter lacks it.
+- **From the drafts review (2026-10-06):**
+  - **7.4.1 Externals are the compatibility surface — Decided (draft).** The set of externals is what an interpreter must support: a language version that adds no external runs on an older interpreter by shipping its `v0/*.ray`. *`.ray2/Grammar.ray:7`*
+  - **7.4.2 Declaring the version in a file — Decided (Almanac).** `< @ray %N` at the top of a file declares the Ray version it is written against. *ALM:1709*
 
 ### 7.5 The `ether` command — *IDE:99–141*
 > `ether @c++ %` lists versions; `ether @c++ @` lists locations (@clang/@linux/@apt | @clang/@windows); `ether @c++.ray @clang/@windows/@x86-64 %0.16.0`; `ether @c++ @local`; `ether clone|install|use [--global] @c++`; expects an `entrypoint.cli.ray`; `ether @ray […]`, `ray` maps to `ether @ray`. Layout `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0`, the top-level `@clang` being the checked-out version, changed versions under `$/@<USER>%branch`. `.ray` reserved for the mapping `@ray/@c++`.
@@ -282,6 +315,12 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - Proposal: the CLI is a program in the cfg-like CLI sublanguage (`entrypoint.cli.ray`). Its grammar is the note's: `@name` names, `/`-joined locations, `%version`. `.ether/external/@/…` stores what it fetches.
 - **Decided:** adopt the note's layout `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0` now, replacing the current one.
 - **Decided (2026-10-06):** the package-manager languages (npm, Cargo, pip, apt, with SemVer ranges and TOML) are removed for now and will be re-added later; only what version control needs stays. A `Project`'s dependencies are `@…` locations only.
+- **From the drafts review (2026-10-06):**
+  - **7.5.1 Shell completion — Q.** Marking a variable as a command-line tool should make the shell complete it (*IDE:222*). Recommend: the CLI grammar (`entrypoint.cli.ray`) is a type, so completion reads a prefix against it; writing `$.bash`/`$.zsh` completion scripts is a level, once the shell language is back from the `version-control` branch.
+  - **7.5.2 `.ether/` vs `.project.ray` — Q.** The note gives every project a `.ether` directory for its configuration (*IDE:463*). Recommend: `.project.ray` holds what the project declares; `.ether/` holds what Ether keeps locally for it (fetched externals, caches, `.%` working state).
+
+### 7.6 Distribution (*from the drafts review, 2026-10-06*)
+- **7.6.1 Installing — Decided (Almanac).** Ether installs by download, by `curl -fsSL https://ether.orbitmines.com/install.sh | bash`, by a release installer, or by `git clone …` then `./install.sh --compile`. Editor plugins are named `Ether.ray` in the VS Code and JetBrains marketplaces. *ALM:549–565*
 
 ## 8. Execution, trust and permissions
 
@@ -312,6 +351,11 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - It works only when the character is here: logged in or hosted on the local instance. Otherwise it is an error.
   - `@me { … }` runs as whoever `@me` already is.
   - It replaces the draft's `&caller = <uuid>;`, and every `.%` line is written with it (§9.2).
+- **From the drafts review (2026-10-06):**
+  - **8.2.1 Checking a context checks its program — Decided (draft).** An access check on a context checks the running Program and its `&who` / origin chain, never the frame's data. *`.ray2/Program.ray:247–248`*
+  - **8.2.2 Releasing a derivative — Q.** A permission for whether data and its derivatives may cross the network, or only some derivatives (a count) (*`.ray2/_todo/ray.ray.txt/Ether/instance/Access.ray:1–2`*). Recommend: a grant may name a derivative (`@ether.read (x.count)`) that may leave although x may not; library code runs as `@ether`, which has access on the local instance only.
+  - **8.2.3 One-time and conditional grants — Q.** The note wants a permission for one occasion, or while a condition holds (while an app runs), or conditional on another party's code (*IDE:74, 550*). Recommend: a grant carries a narrowing, `@company may network @x {once}` / `{while app.running}`; the condition is re-read `dynamically` (P5.1), and a one-time grant is consumed by its first use, recorded in the grant's history.
+  - See also World W2.17 (handed-over code runs as its character; run-log retention) and W2.18 (running *at* a location vs `@name { … }`).
 
 ### 8.3 Visibility — *IDE:31, 70, 195, 226, 245*
 > visibility and contract (license); visibility of visibility (can find it in the index but not access it); how to say the parent shouldn't be visible but I should be readable, or the other way — which is the default; @public for streaming.
@@ -320,6 +364,10 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Visibility is a field of each item, `@public | @me | @<group>`, default inherited from the parent.
   - Visibility is itself a value, so it has a visibility. The visibility's visibility is what makes an item *findable*: A can be `@private` while its visibility is `@public`, so others find that A exists but cannot read it.
 - **Decided:** an item inherits its parent's visibility. At the top it falls back to the default privacy policy, which is private.
+- **From the drafts review (2026-10-06):**
+  - **8.3.1 Conditions on the viewer — Q.** Branching on who views (*IDE:630–631*). Recommend: `if @public { … } elsif @me { … }` tests the current viewer's chain (`&@`) against a visibility; a visibility used as a condition answers whether the current reader satisfies it.
+  - **8.3.2 Streamer mode — Decided (journal).** Streaming runs the renderer as an actor whose grants exclude `@me`'s private fields; what it may not read is drawn as absent. *IDE:847*
+  - The clamp on `confidential`, the policy's fixed exceptions and per-entry visibility are World W5.5–W5.7.
 
 ### 8.4 Processes and jobs
 - **Decided (2026-10-06):** the language makes no process calls. Running anything is running a Program.
@@ -336,6 +384,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Inspecting is reading: symbols, imports, strings and the version. A binary's imports are a Project's dependencies.
   - Using a binary lifts its code into a Ray Program. Its syscalls and imports become effects on Ray locations, checked by Access.
   - Native execution is an optimisation level, not a process.
+- **From the drafts review (2026-10-06):**
+  - **8.4.1 Ray as the shell — Q.** The note wants a shell replacing the terminal's, running as Ray (*IDE:849*). Recommend recording it as planned: the REPL over `@me/jobs` and locations is the shell, and `$.sh` is the language that reads existing scripts into it.
 
 ## 9. Data and version control
 
@@ -377,6 +427,11 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - `@name` in code is the project of the dependency declared as `@name` in a loaded project's `.project.ray`, and `@name/path` is a location inside it. Where no loaded project declares `@name`, `@name` keeps its other meanings (`@me`, a character, a relative location).
   - Data a dependency's project names but does not hold, like `@tzif/zoneinfo` (the full IANA database compiled to TZif), is a location like any other. Ether reaches its content through mirrors (World W2.9) and shards (World W2.7, Universal U7), and keeps it through a cache, which is an optimisation level (§9.1, §9.2). This is later work: until then reading such a location answers a `Quest` (`FileSystem.Mirrored`).
   - The OS is its own project, `v0/OS`, which declares `@tzif`. The core does not read it at startup: a device with no host platform takes its OS through the level `OS.devices`, which references `@ether/OS` and answers `OS.Ether`.
+- **From the drafts review (2026-10-06):**
+  - **9.1.1 A language keeps its identity across renames — Decided (draft).** Old names are equivalences (`$.coq` ≡ `$.rocq`), as are its several extensions; dialects are its children in the class hierarchy. *`.ray2/Program.ray:343–347`*
+  - **9.1.2 Recognising a language from content — Q.** Detect a file's language and version from the file itself (*IDE:191*). Recommend: `Language.detect(bytes)` answers the superposition of every loaded language whose reading accepts the content, ranked by how much each reads (§3.6), each carrying its version (`%N`).
+  - **9.1.3 Published packages carry URL caches — Decided (journal)** that publishing requires a cache of every `@https://…` dependency, so the runtime can fall back to it when the source is gone. **Q:** the default visibility of that cache; recommend `@public` when the source was `@public`. *IDE:459*
+  - **9.1.4 Per-file granularity — Decided (draft).** The later-work mirrors and caches above include single files of fetched repositories, not only whole ones. *`_todo/_download_dependencies.sh:3`*
 
 ### 9.2 Version control — *IDE:412–420, 633–641, 732*
 > Hybrid logical clocks / CRDTs; your fork always accessible, can always push; apply a change to all stable versions (respecting their own changes); flag a change as the one that works; group changes; test my changes against the latest instead of merging the latest into mine; label functions inline in `.ray.txt` for non-Ether editors; notify when a monkey-patched function starts being used by a library, or when a renamed parameter breaks a partial call.
@@ -454,6 +509,35 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     - A pin resolved for a line stamped after the fix gets the fix.
     - A line stamped before the fix replays as recorded, and its caches stay.
   - Concurrent commits that leave one field with different values (three-way against their common ancestor, `History.clashes`) are `Quest("merge")`.
+- **From the drafts review (2026-10-06).** ORIG = `@ether/.%/ORIGINAL-UUID-OF-OBJECT.ray`, NEXT = `@ether/.%/NEXT-UUID-OF-OBJECT.ray.txt`; VC*n* are the review's ids.
+  - **9.2.1 Done by 20a1d02.** VC4 (no `Operation` record, no `define | change | rename | remove` kinds: the body is the change), VC5 (no `.%/index.ray`: the draft's index was a bootstrap measure, ORIG:2) and VC6 (a cache is Ray, `label\ value`, read by the Ray reader; no `Cache` record) are resolved by the decisions above. VC1 (a line is a label followed by any Ray) is too, except the time, 9.2.6.
+  - **9.2.2 What "up to a label" means — Decided (draft).** A label names the state *after its own statement*: checking out X runs through X's statement and stops at the next label (ORIG:21). (VC7)
+  - **9.2.3 Labels inside a body; expansion not stored — Decided (draft).** A label may sit on any subexpression, guarded by `if` (`0..100.for (UUID\ if i == 50) this += 1`). Unlabelled per-iteration states are not stored: they are the line's `.expand` (ORIG:14–15, 40–42). (VC8)
+  - **9.2.4 Assigning to a label patches — Decided (draft).** `label\ = value` replaces the subexpression tagged `label\` in later runs: tag `0..(tag\ 100)`, then `tag\ = 99`. This is how the STD is patched without rewriting text (ORIG:37). (VC9)
+  - **9.2.5 Out-of-order lines — Decided (draft).** `A + B + C` evaluated as `A + (B + C)` is written as the lines `B`, `.+ C`, `A + .`: a line starting with an operator or `.` continues on the previous line's result, and a line that needs another receiver names it (ORIG:49–56). **Q:** the draft's own ambiguity ("A" not defined on `B + C`); recommend `.` always be the previous result and every other value be written by name. (VC11)
+  - **9.2.6 Time in the header or in the body — Q (conflict).** Above, a line is `UUID\ <stamp> @<who> { … }`, the stamp a header position. The draft sets time inside the body as a context value, `&Time.NOW = …;`, like `&caller` (ORIG:11). Recommend the draft's form: an HLC `Stamp` is a Time value assigned in the body, so nothing is read beyond what Ray reads. (VC13, and the rest of VC1)
+  - **9.2.7 What `&caller` is — Q (conflict).** §8.2 decided that `@name { … }` replaces the draft's `&caller = <uuid>;` and is how a line says who committed. In the draft `&caller` is the *function* that caused the change: its version, plus the call instance; a function's usages follow from it, and inside a loop the caller may change per iteration (ORIG:42, 58, 67–69). Recommend keeping both: `&caller = <function-version>` inside the `@who { … }` block. (VC2)
+  - **9.2.8 One file per object or per repository — Q (conflict).** Above, a repository is canonically one file, split per object past 1 MiB by `per_object`. The draft names each object's history by its original UUID and writes a change that touches several objects into each object's file, sharing its `&caller`; there is no project-wide line (ORIG:59–66). Recommend: per object is canonical, and joining them into one file is the optimisation level. (VC3)
+  - **9.2.9 STD bug fixes — Q.** Above, a fix is a commit beginning with the rule `{value}%[<old>] => value%[<fix>]`. The draft leaves three options open (substitute when mentioned; but histories may rely on the bug; or generate caches with the bugged version and never call it again) (ORIG:30–34). Recommend also allowing the fix as a `.%` line `OLD-LABEL\ = (fixed)` (9.2.4), with the stamp rule above. Still open from the draft: refusing a history written against a pre-fix version. (VC10)
+  - **9.2.10 Pinning the STD — Q.** Above, `History.global(histories)` joins the STD's and the players' histories. The draft pins the STD inside a history with an ordinary assignment, `global = global%[UUID-VERSION-OF-STD]`, keeps STD and player histories in separate subdirectories, and wants three global orders: STD + player, STD only, player only (ORIG:13, 26–29). Recommend the draft's statement; the three orders are queries over stamps, not stored. (VC12)
+  - **9.2.11 Program labels vs UUID labels — Q.** A program's own labels must not be read as UUIDs, and `\.` in strings must be escaped (ORIG:16–17); above, the writer escapes newlines. Recommend: UUID labels match only the UUID pattern, so word labels never collide. (VC14)
+  - **9.2.12 Reading without trusting a history's claims — Q.** Loading a history while ignoring what it claims (such as implementing another version) (ORIG:6). Recommend a run setting, like `speculate`/`refuse` (§8.1): `with History.trusted = false`. (VC15)
+  - **9.2.13 How commit UUIDs are made — Q.** v0 uses random `UUID.v4` with explicit who and when. The drafts derive them: a v1 UUID whose time is `when` and whose node is the committing character's id (*`.ray2/History.ray:39–48`*); a player's or instance's node derived from its public key (*`.ray2/_todo/ray.ray.txt/Ether/instance/Entity.ray:91`, `…/Expression.ray:49`*); UUIDs made from the player's or organisation's public key (ORIG:4). Recommend keeping random ids with explicit stamps (9.2.6), or, if reproducible ids are wanted, a name-based v5 in the namespace of the owner's public key. (VC16; with Text X5)
+  - **9.2.14 Versions of an operator — Q.** "Specific versions of an operator" (ORIG:10) and UUIDs on sub-expressions (ORIG:24). Recommend: an operator is a definition like any other, so `+%[label]` pins it; sub-expression ids are 9.2.3's labels. (VC17)
+  - **9.2.15 Disconnected branches; `%.fork` — Q.** Different implementations are branches of one history, possibly with no common ancestor; the grammar variants (EBNF, ABNF, …) as branches of BNF's history; `%.fork` with `location &= …` (*`library/Index.ray:10, 22–28, 117`*). Recommend: a history may hold disconnected branches, and a fork is `x%.fork`, an ordinary method. (VC19)
+  - **9.2.16 Commuting changes merge without a quest — Decided (draft):** concurrent changes whose result is the same in either order merge in any order, without a quest (*`.ray2/History.ray:29`*). **Q:** "the same" under which equivalence; the library notes take causal invariance as the merge criterion, with sameness a chosen check (*`projects/library/phases/Project Index.md:259–265`*). Recommend: concurrent lines merge when their results are equal under the chosen `==<in: …>` (U9, R3.14) in every order; a conflict is when they are not. (VC20)
+  - **9.2.17 Open.** Distributed edits, how to split a history, and the cost of large arbitrary graphs (ORIG:12, 19, 23; W3.5, W3.7). (VC18)
+  - **9.2.18 A user's earlier definition keeps working — Decided (journal):** when a later library or language version defines a name the user had already added, the user's definition keeps applying in the user's code, the newer one applies elsewhere, and the user is notified (*IDE:82*; the reverse case is *IDE:636* above). **Q:** the mechanism; recommend the user's pin on the language version (`x%[label]`), so nothing new is needed.
+  - **9.2.19 The central platform is only an index — Q.** Users keep ownership of their data, and the central platform only indexes it, as DNS does (*IDE:253–255*). Recommend: the `@ether` server indexes where histories are, not their content; a history lives at its owner's locations (`@me.managed`, U7), and `@ether` maps names to them (W1.4).
+  - **9.2.20 Trying a change on part of the traffic — Q.** A/B rollouts through a load balancer (*IDE:540, 626*). Recommend: a rollout is a weighted superposition of two pins, `0.1(x%[new]) | 0.9(x%[old])` (U8); each request realises one, and the weights are a setting of the location that serves it.
+  - Commit-level items from the same review are World W3.19–W3.24 (location history, `.expand`, local order, branches and tags, rebase, REPL sessions).
+- **What the `.%` draft writes** (ORIG, NEXT; for reference, 2026-10-06):
+  - `.%/<ORIGINAL-UUID>.ray` is the history of one object, named by its original UUID (the label of its first line). One file answers every version labelled in it (ORIG:9).
+  - `.%/<VERSION-UUID>.ray.txt` is a cache whose whole content is `label\ value`, the value at that label written as Ray (NEXT:1–2).
+  - The `/%/UUID` directory is the canonical shape; storing it more efficiently (database techniques) is an optimisation (ORIG:22).
+  - A line is a Ray statement with a label (`\` is the seeking delimiter, ORIG:16): `ORIGINAL-UUID\ (&caller = …; "A")` sets the initial value, then `UUID\ (&caller = …; + "B")` continues on the value so far; `UUID\ &caller = …; 0..100.for this += 1` is the unparenthesised form, `this` the current value; a `<&caller = …>` angle form also appears (ORIG:42–47, 64).
+  - Commits append; nothing is re-read to write (ORIG:8). Checkout runs the file to the next label (ORIG:21).
+  - Draft TODOs not covered above: a text form for when UUIDs cannot be assigned through an interface (ORIG:1), in-between caches (ORIG:18).
 
 ## 10. From the drafts (`.ray2`, `.ray3`) — what v0 doesn't have yet
 
@@ -481,6 +565,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - Escapes `\0 \t \n \r \x{} \u{} …` and `U+XXXX` literals: `.ray2/Language/String/String.ray:49–65`, `Unicode.ray:101`. Syntax.
 - Super/subscripts as `^`/`v` (`Binary⁸`, `1111₂`): `.ray2/_todo/…/utils/Number.ray:93–107`. Engine (Unicode decomposition).
 - `√ ∛ ∫ lim ∞ ±`: `.ray2/_todo/…/utils/Number.ray:152`, `.ray3/Ray.ray:85`. Library.
+- **From the drafts review (2026-10-06):** **10.1.1 Postfix `?` for whether a property holds — Q.** `x.prop?` as the boolean "this holds", instead of `is_x?` methods (*IDE:829*). It would be a fourth use of `?` beside `T?`, the ternary and unknown, and v0 uses postfix `?` for optional chains (`diagnostics?.nonempty`). Recommend asking how it relates to those; one reading is `x.p != None && x.p as boolean`.
 
 ### 10.2 Types
 - `===`, `!==`, `==<up_to>`, `trivially`: `.ray3/Node.ray:132–150`. Library.
@@ -517,6 +602,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - `#` superposed iteration, `##` components, `###` class components, `@@ (class)`, per-location values `@`: `.ray2/Node.ray:59–93`, `.ray3/Node.ray:217`. Engine.
 - Monkey-patching `Node +=`, `+def`: `.ray2/Node.ray:36`, `.ray2/Feature/Random.ray:2`. Syntax (v0 writes `X.components.hierarchy &= class{…}`).
 - Switching the language version at runtime: `.ray2/Program.ray:144`. Engine; connects to §7.4.
+- **From the drafts review (2026-10-06):** **10.3.1 Injecting events into others' code — Q.** A user injecting events into code someone else wrote (*IDE:380*). Recommend: injection is a Compiler level the user applies (as P3.1 does for timers) and needs an `execute` grant on the target (§8.2); without one it runs only on the user's own copy.
 
 ### 10.4 Rays and graphs
 - `->` / `<-` / `<-->` as Ray constructors (with §5.2's recursive step), boundary operators `⊢ ⊣ ∙ ⊙`: `.ray3/Ray.ray:1–42`. Syntax/library.
@@ -549,6 +635,9 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - Transaction: postfix `!` reverse (`+!`, `map(f!)`), `bidirectional` blocks, partial reversibility: `.ray2/Feature/Transaction.ray:12–72`. **Decided:** `f!` is the same as `f⁻¹` (§4.5).
 - Random: `secure`, `seed`; Choice: `Number{choose}`, `choose 10 Number`, `choose 50%`, `choose{unique}`, `()` on a constrained type chooses; procedural generation `choose Room{4..5m x 5..7m}`: `.ray2/Feature/Random.ray`, `Choice.ray`, `_todo/…/ProceduralGeneration.ray`. Library.
 - Path references within a file `/path/earlier/in/file`: `.ray2/Feature/Choice.ray:27`. Engine.
+- **From the drafts review (2026-10-06):**
+  - **10.6.1 Shadowing — Decided (draft).** `x %= y` (also `x.shadow = y`) makes x a shadow of y: reads fall through to y, writes stay in x. A write by anyone other than x's owner copies-on-write into a new entry for the owner. A commit to y is applied to the shadow too, unless the shadow changed that part (then a merge quest). `x %= None` stops shadowing for that path (`IO /instance/entrypoint/entrypoint.* %= None`). *`.ray2/_todo/ray.ray.txt/ray.ray:20`, `…/Ether/instance/entrypoint/entrypoint.ray:4–7, 34–36`* (v0 `Location.shadowing` is only a read fallback.) **Q:** whether a shadow's version and its customisations are reported upstream (`@ether`) by default; recommend only when the shadow's visibility allows (§8.3). **Q:** the spelling `%=` is also §10.1's compound `{op}=` with `%` as modulo; recommend keeping `.shadow =` as the spelling wherever `%=` could read as modulo-assign.
+  - **10.6.2 `temporary` — Q.** The note is a single word (*IDE:149*). Recommend, if it is a modifier: the opposite of `persistent`, a value never kept in `Class$` nor in history.
 
 ### 10.7 World
 - `#name` / `@name` lookup grammar per class, plural collections, fallback to `@ether`: `.ray2/World.ray:14–36`. Engine.

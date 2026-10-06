@@ -33,7 +33,8 @@ async function reader(read_entrypoint = true) {
 
 export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream }): Promise<void> {
   const r = await reader();
-  const worker = new Worker(new URL(import.meta.url), { workerData: { ray_reader: true }, execArgv: [...process.execArgv.filter(flag => !flag.startsWith('--stack-size')), ...(import.meta.url.endsWith('.ts') ? ['--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : [])], resourceLimits: { stackSizeMb: 256 } });
+  const deno = (globalThis as any).Deno !== undefined, typescript = !deno && import.meta.url.endsWith('.ts');
+  const worker = new Worker(new URL(import.meta.url), { workerData: { ray_reader: true }, execArgv: deno ? undefined : [...process.execArgv.filter(flag => !flag.startsWith('--stack-size')), ...(typescript ? ['--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : [])], resourceLimits: { stackSizeMb: 256 } });
   worker.unref();
 
   const connection = io === undefined ? createConnection(ProposedFeatures.all) : createConnection(ProposedFeatures.all, io.input, io.output);

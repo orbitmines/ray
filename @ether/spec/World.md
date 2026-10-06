@@ -637,6 +637,7 @@ Answers from 2026-09-30.
   per-class location fields (no `Item.location`, `Reference.location`, `Repository.location`, `Instance.Mirror`). A mirror
   is no wrapper: `instance.mirror(x, depth)` places x (and its children to `depth`) at the instance, so its access is the
   value's own, and `instance.synced` says whether someone is logged into it (W4.2's `replicas.every(.synced)`).
+  Access per place (user, 2026-10-06): a grant is a node, so its own location says where it holds: placed at an instance it holds only there, placed nowhere it holds everywhere; `allows(who, called, at)` asks for a place. A mirror can so have permissions of its own (grants placed at the mirroring instance), and otherwise has the value's.
 - **W3.4** Assigning a value that has a history keeps both, linked: the `=` edge carries the value's
   history, and conflicts become merge quests.
 - **W3.7** "An approximate value is fine" is an uncertainty type (`likes: ≈Number`, as N4.10); the store

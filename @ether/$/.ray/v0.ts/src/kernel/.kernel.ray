@@ -268,7 +268,7 @@ matching (rule, caps, src, pos, limit, frame, receiving, receiver) => (
       from := spaces(src, i, limit)
       if piece.tight and !(p > 0 and pieces[p - 1].kind == 0 and lit_ends_line(pieces[p - 1].text)) { from = i }
       if p == 0 and receiving and !rule.defines and opener(lit) { from = i }
-      followed := p + 1 < n and pieces[p + 1].kind == 2 and pieces[p + 1].tight and pieces[p + 1].typed
+      followed := p + 1 < n and pieces[p + 1].kind == 2 and pieces[p + 1].tight and (pieces[p + 1].typed or (pieces[p + 1].piece_raw and p + 2 == n))
       if !spelled(src, from, lit, (piece.tight and p > 0 and from == i) or (p == 0 and receiving and from == pos), followed, limit) { return -1, 0 }
       reach = reach + lit.length
       if opener(lit) { opened = opened + 1 } elsif opened > 0 and closer(lit) { opened = opened - 1 }
@@ -312,6 +312,8 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
     if end > from and p > 0 and raw and !inside and !exact and pieces[p + 1].tight and trimmed_end(src, from, end - 1) >= from and spaced(src, from, trimmed_end(src, from, end - 1)) { end = -1 }
   } elsif raw {
     end = receiving or next >= 0 ? token_end(src, from, limit) : from
+    // a name spelled with operator characters (`r.⊢`)
+    if end == from and receiving and next == -1 and p > 0 and !space(src, from) { end = token(src, from, limit) }
     if !(receiving or next >= 0) { while end < limit and !space(src, end) { end = end + 1 } }
   } elsif next >= 0 or (p > 0 and pieces[p - 1].kind == 1) {
     end = operand_end(src, from, limit)
@@ -344,7 +346,7 @@ first (src, from, lit, limit, raw, inside) => (
   j := from
   while j < limit {
     if spelled(src, j, lit, None, None, limit) { return j }
-    if newline(src, j) and !inside and !(lit.length > 0 and lit.chars[0] == '\n') { return -1 }
+    if newline(src, j) and !inside and !(lit.length > 0 and lit.chars[0] == '\n') and !continues(src, j, from) { return -1 }
     if inside and !raw and (src.chars[j] == ')' or src.chars[j] == ']' or src.chars[j] == '}') { return -1 }
     k := skip(src, j, limit, raw)
     if inside and !raw and k == j + 1 and opening(src.chars[j]) { k = max(k, group_end(src, j, limit)) }
@@ -357,10 +359,19 @@ last (src, from, lit, limit, raw, inside) => (
   j := from
   while j < limit {
     if spelled(src, j, lit, None, None, limit) { found = j }
-    if newline(src, j) and !inside { return found }
+    if newline(src, j) and !inside and !continues(src, j, from) { return found }
     j = skip(src, j, limit, raw)
   }
   return found
+)
+// The indentation of the line holding j.
+indent_of (src, j) => ( b := j; while b > 0 and !newline(src, b - 1) { b = b - 1 }; return spaces(src, b, src.length) - b )
+// Whether the line after the newline at j goes on with what the line holding `from` began (G2.13): indented deeper, and
+// starting with an operator.
+continues (src, j, from) => (
+  if !newline(src, j) { return None }
+  k := spaces(src, j + 1, src.length)
+  return k < src.length and run(src, k) and k - (j + 1) > indent_of(src, from)
 )
 // Past what starts at j: a bracketed group (unless raw), else one character.
 skip (src, j, limit, raw) => ( k := raw ? j : claim(src, j, limit); return k > j ? k : j + 1 )
@@ -375,7 +386,7 @@ operand_end (src, j, limit) => (
 trailing_end (src, j, limit, frame, rule) => (
   spellings := looser(frame, rule)
   from := j
-  while j < limit and !newline(src, j) {
+  while j < limit and (!newline(src, j) or continues(src, j, from)) {
     over := -1
     spellings for spelling => {
       if over < 0 and j > from and spelled(src, j, spelling, None, None, limit) and (space(src, j - 1) or space(src, j + spelling.length)) {

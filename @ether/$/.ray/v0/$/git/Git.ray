@@ -1,11 +1,30 @@
 // Git's formats (https://git-scm.com/docs/gitformat-pack, https://git-scm.com/docs/gitformat-index, https://git-scm.com/docs/gitprotocol-http)
-Git := class: Language {
+// The object format is part of the type: Git reads and writes SHA-1 repositories, Git<Git.sha256> SHA-256 ones (https://git-scm.com/docs/hash-function-transition)
+Git<format: Format = Format.sha1> := class: Language {
   static extensions = ".git"
   static fidelity = Language.Fidelity.snapshot
   static noted_at = "refs/notes/ray"
 
-  Id := Hexadecimal⁴⁰
-  hashed (bytes: Byte[]): Id => SHA1.write(bytes) as Byte²⁰ as Id
+  // The hash naming every object, and the bytes of one name (https://git-scm.com/docs/hash-function-transition#_object_names)
+  static Format := class = name: "sha1" | "sha256", hash: Encoding.Digest, size: 20 | 32 {
+    static sha1 = Format(name: "sha1", hash: SHA1, size: 20)
+    static sha256 = Format(name: "sha256", hash: SHA256, size: 32)
+    // extensions.objectFormat names the format, case-insensitively; any other name is a repository git cannot read (https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionsobjectFormat)
+    static (name: String) as (=== Format) => [sha1, sha256].find(.name == name.fold_case) ?? Quest(name: "an object format by that name", goal: name)
+  }
+  static sha1 = Format.sha1
+  static sha256 = Format.sha256
+  // Compatibility mode, each object named in both formats through a translation table (https://git-scm.com/docs/hash-function-transition#_translation_table, https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionscompatObjectFormat)
+  static compatible = Quest(name: "extensions.compatObjectFormat: every object named in a second format beside the repository's own", goal: Format)
+
+  // An object name written out: two hexadecimal digits a byte, 40 in SHA-1, 64 in SHA-256 (https://git-scm.com/docs/hash-function-transition#_object_names)
+  Id := Hexadecimal{length == format.size * 2}
+  // An object name as bytes, in trees, packs and pack indexes: 20 in SHA-1, 32 in SHA-256 (https://git-scm.com/docs/hash-function-transition#_object_format)
+  Raw := Byte[]{count == format.size}
+  // The name of no object, as a push names a reference not yet there (https://git-scm.com/docs/gitprotocol-pack#_reference_update_request_and_packfile_transfer)
+  zero: Id => "0" * format.size * 2
+  // An object is named by the hash of its type, size and content, in the repository's format (https://git-scm.com/docs/hash-function-transition#_object_format)
+  hashed (bytes: Byte[]): Id => format.hash.write(bytes) as Raw as Id
 
   // CRC-32 of IEEE 802.3, the polynomial reflected
   crc_step (c, byte) => (0..7).reduce(r = c.xor(byte) => r.odd ? (r / 2).floor.xor(0xEDB88320) : (r / 2).floor)
@@ -24,9 +43,10 @@ Git := class: Language {
     object => Object(kind, content)
   }
 
-  Tree := class (entries: (mode: ("0".."7")[], " ", name: (!"\x00")[], "\x00", id: Byte²⁰)[]) {
+  // Each entry names its object in bytes of the repository's format (https://git-scm.com/docs/hash-function-transition#_object_format)
+  Tree := class (entries: (mode: ("0".."7")[], " ", name: (!"\x00")[], "\x00", id: Raw)[]) {
     // Tree entries sort as if a directory's name ended in /
-    static (children: Language.Entry[]) as (=== Tree) => Tree(entries: children.sort_by(.directory ? .name + "/" : .name).map(child => (mode: modes[child.directory ? Language.Entry.Mode.directory : child.mode], name: child.name, id: (child as Object).id as Byte²⁰)))
+    static (children: Language.Entry[]) as (=== Tree) => Tree(entries: children.sort_by(.directory ? .name + "/" : .name).map(child => (mode: modes[child.directory ? Language.Entry.Mode.directory : child.mode], name: child.name, id: (child as Object).id as Raw)))
   }
 
   Signature := class (name: (!"<")[], " <", email: (!">")[], "> ", seconds: Decimal, " ", zone: (("+" | "-"), Decimal.Digit⁴)) {
@@ -34,6 +54,7 @@ Git := class: Language {
     static (signed: (who: *, when: Time)) as (=== Signature) => Signature(name: signed.who?.full_name ?? signed.who as String, email: signed.who?.email ?? (signed.who?.name ?? "someone") + "@ether", seconds: (signed.when as s).floor, zone: "+0000")
   }
 
+  // A commit's tree and parents, and a tag's object, are written as names in the repository's format (https://git-scm.com/docs/hash-function-transition#_object_format)
   Commit := class (
     "tree ", tree: Id, \n,
     parents: ("parent ", Id, \n)[],
@@ -46,10 +67,12 @@ Git := class: Language {
 
   Tag := class ("object ", object: Id, \n, "type ", kind: Char.Letter[], \n, "tag ", name: (!\n)[], \n, ("tagger ", tagger: Signature, \n)?, \n, message: Char[])
 
+  // References hold names in the repository's format (https://git-scm.com/docs/gitrepository-layout#_refs, https://git-scm.com/docs/hash-function-transition#_object_names)
   Reference := class ((("ref: ", symbolic: (!\n)[]) | id: Id), \n)
   PackedReferences := class (("# pack-refs with:", (!\n)[], \n)?, references: (id: Id, " ", name: (!\n)[], \n, ("^", peeled: Id, \n)?)[])
 
-  Pack := class ("PACK", version: Binary³²{== 2 || == 3}, count: Binary³², entries: Entry[]{count == this.count}, checksum: Byte²⁰) {
+  // A reference delta's base and the trailing checksum are hashes of the repository's format (https://git-scm.com/docs/gitformat-pack#_pack_pack_files_have_the_following_format, https://git-scm.com/docs/hash-function-transition#_pack_format)
+  Pack := class ("PACK", version: Binary³²{== 2 || == 3}, count: Binary³², entries: Entry[]{count == this.count}, checksum: Raw) {
     static types = { commit: 1, tree: 2, blob: 3, tag: 4, offset_delta: 6, reference_delta: 7 }
 
     static Size := class (more: Binary¹{== 1}, low: Binary⁷)[], (Binary¹{== 0}, last: Binary⁷) {
@@ -57,7 +80,7 @@ Git := class: Language {
     }
     static Entry := class (
       (continues: Binary¹, type: Binary³, low: Binary⁴), size: (continues ? Size : None),
-      (type == 6 ? (offset: Size = at - base_entry.at) : type == 7 ? base: Byte²⁰ : None),
+      (type == 6 ? (offset: Size = at - base_entry.at) : type == 7 ? base: Raw : None),
       data: Zlib
     ) {
       base_entry: Entry?
@@ -94,26 +117,51 @@ Git := class: Language {
       : [Copy(from: run.from, length: run.count)]).flatten)
   }
 
+  // Version 2: the names and both trailing checksums are hashes of the repository's format (https://git-scm.com/docs/gitformat-pack#_version_2_pack_idx_files_support_packs_larger_than_4_gib_and, https://git-scm.com/docs/hash-function-transition#_pack_index)
+  // Version 3, naming each object in both formats, belongs to compatibility mode (https://git-scm.com/docs/hash-function-transition#_pack_index)
   Index := class (
     0xFF, "tOc", version: Binary³²{== 2},
     fanout: Binary³²[]{count == 256},
-    ids: Byte²⁰[]{count == fanout.last},
+    ids: Raw[]{count == fanout.last},
     crcs: Binary³²[]{count == fanout.last},
     offsets: (large: Binary¹, offset: Binary³¹)[]{count == fanout.last},
     larger: Binary⁶⁴[],
-    pack: Byte²⁰, checksum: Byte²⁰
+    pack: Raw, checksum: Raw
   ) {
-    offset_of (id: Id) => ids.index_of(id as Byte²⁰) -- (at => at === None ? None : offsets[at] -- (.large == 1 ? larger[.offset] : .offset))
+    offset_of (id: Id) => ids.index_of(id as Raw) -- (at => at === None ? None : offsets[at] -- (.large == 1 ? larger[.offset] : .offset))
     static (pack: Pack) as (=== Index) => pack.entries.sort_by(.object(pack, None).id) -- (sorted => Index(version: 2,
       fanout: (0..255).map(byte => sorted{.object(pack, None).id[..1] as Hexadecimal <= byte}.count),
-      ids: sorted.map(.object(pack, None).id as Byte²⁰), crcs: sorted.map(.crc32),
+      ids: sorted.map(.object(pack, None).id as Raw), crcs: sorted.map(.crc32),
       offsets: sorted.map((large: 0, offset: .at)), larger: [], pack: pack.checksum))
   }
 
   Line := class (((length: Hexadecimal⁴{!= "0000" && != "0001" && != "0002"}), payload: Byte[]{count == length - 4}) | flush: "0000" | delimiter: "0001" | end: "0002") {
     static (text: String) as (=== Line) => Line(length: text.count + 4, payload: text as Byte[])
   }
-  Advertised := class (Line("# service=", service: Char[], \n), Line.flush, references: Line(id: Id, " ", name: (!"\x00" && !\n)[], ("\x00", capabilities: (!\n)[])?, \n?)[], Line.flush)
+  // A server names its object format among its capabilities, SHA-1 when it does not, and advertises names in it (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)
+  Advertised := class (Line("# service=", service: Char[], \n), Line.flush, references: Line(id: Hexadecimal{length == Format.sha1.size * 2 || length == Format.sha256.size * 2}, " ", name: (!"\x00" && !\n)[], ("\x00", capabilities: (!\n)[])?, \n?)[], Line.flush) {
+    format: Format => (references.first?.capabilities ?? "").split(" ").find(. ~= ⊢"object-format=") -- (named => named ? named[14..] as Format : Format.sha1)
+  }
+  // A client asks for the format the server named, on its first request line (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)
+  asked: String => format === Format.sha1 ? "" : " object-format=" + format.name
+
+  // A repository's configuration, in git-config's syntax (https://git-scm.com/docs/git-config#_syntax)
+  Config := class (sections: (
+    "[", name: (Char.Letter | Char.Digit | "-" | ".")[], (" \"", subsection: (!"\"" && !\n)[], "\"")?, "]", \n,
+    variables: ((indent: ("\t" | " ")[] = "\t", key: (Char.Letter, (Char.Letter | Char.Digit | "-")[]), (" "[], "=", " "[], value: (!\n)[])?, \n) | (("\t" | " ")[], ("#" | ";"), (!\n)[], \n) | \n)[]
+  )[]) {
+    // Section and variable names are case-insensitive, the last value given wins, and a variable without one is true (https://git-scm.com/docs/git-config#_syntax)
+    value (section: String, key: String) => sections{.name.fold_case == section}.map(.variables{.key}).flatten{.key.fold_case == key}.last -- (found => found ? found.value ?? "true" : None)
+    // Version 0 knows no extensions; version 1 reads them (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/git-config#Documentation/git-config.txt-corerepositoryFormatVersion)
+    version: Decimal => (value("core", "repositoryformatversion") ?? "0") as Decimal
+    // extensions.objectFormat; SHA-1 when absent, or in a version 0 repository (https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionsobjectFormat, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
+    format: Format => version == 1 && value("extensions", "objectformat") ? value("extensions", "objectformat") as Format : Format.sha1
+    // A new repository: version 0 in SHA-1, version 1 naming its extensions.objectFormat otherwise (https://git-scm.com/docs/git-init#Documentation/git-init.txt---object-formatformat, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
+    static (format: Format) as (=== Config) => Config(sections: [
+      (name: "core", variables: [(key: "repositoryformatversion", value: format === Format.sha1 ? "0" : "1"), (key: "filemode", value: "true"), (key: "bare", value: "false")]),
+      (name: "extensions", variables: [(key: "objectFormat", value: format.name)]) if format !== Format.sha1
+    ])
+  }
 
   Store := class = root: Location?, fetched: Pack[] = [], given: (String, Id)[] = [] {
     loose (id: Id) => root ? (root / ("objects/" + id[..1] + "/" + id[2..])).bytes -- (bytes => bytes.nonempty ? ((bytes as Zlib).inflated as Loose).object : None) : None
@@ -127,6 +175,7 @@ Git := class: Language {
     head => reference("HEAD") ?? ((root / "HEAD").content as Reference) -- (head => head.symbolic ? reference(head.symbolic) : head.id)
     branches => references{.0 ~= ⊢"refs/heads/"}.map((name: .0[11..], id: .1))
 
+    config => root ? (root / "config").content as Config : format as Config
     commit (id: Id) => object(id).content as Commit
     tree (id: Id, name: String = ""): Language.Entry => (object(id).content as Tree).entries.reduce(held = Language.Entry(name) => held ~~ .add(.mode == modes.directory
       ? tree(.id as Id, .name)
@@ -143,12 +192,13 @@ Git := class: Language {
   }
 
   Remote := class = location: Location {
-    advertised (service: String) => ((location / "info/refs").with(service: service).content as Advertised).references
-    fetched => advertised("git-upload-pack") -- (offered => ((location / "git-upload-pack") = (
-      offered.map(("want " + .id + \n) as Line), Line.flush, "done\n" as Line
-    )) as Pack -- (pack => Store(fetched: [pack], given: offered.map((.name, .id)))))
+    advertised (service: String) => (location / "info/refs").with(service: service).content as Advertised
+    fetched => advertised("git-upload-pack") -- (offered => Git<offered.format>.Remote(location).fetching(offered))
+    fetching (offered: Advertised) => ((location / "git-upload-pack") = (
+      offered.references.enumerate.map(("want " + .value.id + (.index == 0 ? asked : "") + \n) as Line), Line.flush, "done\n" as Line
+    )) as Pack -- (pack => Store(fetched: [pack], given: offered.references.map((.name, .id as Id))))
     pushed (written: Written, old: Id?) => (location / "git-receive-pack") = (
-      ((old ?? "0" * 40) + " " + written.head.id + " refs/heads/" + written.branch + "\x00report-status\n") as Line, Line.flush, written.objects as Pack
+      ((old ?? zero) + " " + written.head.id + " refs/heads/" + written.branch + "\x00report-status" + asked + "\n") as Line, Line.flush, written.objects as Pack
     )
   }
 
@@ -163,16 +213,21 @@ Git := class: Language {
       Language.Entry.of(noted) -- (tree => (who: history.head?.who, when: Time.now) as Signature -- (signed => [objects_in(tree), Object("commit", Commit(tree: (tree as Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))
     objects => (revisions.map(objects_in(.tree)).flatten, commits.values, notes).flatten.unique(.id)
     object_files => objects.map((path: .path, content: .loose))
+    // A new repository records its object format in its config (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
     files => object_files, [
+      (path: "config", content: format as Config as Byte[]),
       (path: "HEAD", content: ("ref: refs/heads/" + branch + \n) as Byte[]),
       (path: "refs/heads/" + branch, content: (head.id + \n) as Byte[]),
       (path: noted_at, content: (notes.last.id + \n) as Byte[]) if notes.nonempty
     ]
   }
 
+  // A repository on disk is read in the format its config names (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
+  static opened (root: Location) => Git<((root / "config").content as Config).format>.Store(root: root)
+
   static level := {
     {at: Location{scheme ∈ ("https" | "http" | "git" | "ssh")}} => Remote(location: at).fetched
-    {at: Location} => Store(root: (at / ".git/HEAD").content.nonempty ? at / ".git" : at)
+    {at: Location} => opened((at / ".git/HEAD").content.nonempty ? at / ".git" : at)
     {store: Store} => store.history
   }
 
@@ -188,6 +243,8 @@ Git := class: Language {
     ])
   }
 
-  tree_at (location: Location, label) => Store(root: location) -- (store => store.recorded.find(.line ~= ⊢(label as String + "\\")) -- (noted => noted ? store.tree(store.commit(noted.target).tree) : None))
-  push (history: History, remote: Location) => Remote(location: remote).pushed(Compiler.reduced(Language.Writing(history), written), Remote(location: remote).advertised("git-receive-pack").find(.name == "refs/heads/" + (history.name ?? "main"))?.id)
+  tree_at (location: Location, label) => opened(location) -- (store => store.recorded.find(.line ~= ⊢(label as String + "\\")) -- (noted => noted ? store.tree(store.commit(noted.target).tree) : None))
+  // A push writes in the format the server names (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)
+  push (history: History, remote: Location) => Remote(location: remote).advertised("git-receive-pack") -- (offered => Git<offered.format> -- (git =>
+    git.Remote(location: remote).pushed(Compiler.reduced(Language.Writing(history), git.written), offered.references.find(.name == "refs/heads/" + (history.name ?? "main"))?.id)))
 }

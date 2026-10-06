@@ -343,3 +343,8 @@ if [1, 2, 0, 3] ==<up_to: 0> [1, 5, 0, 3] { INFO@mark `EQ2 lists that differ bef
 unless [1, 2, 3] ==<except: [2]> [1, 3] { INFO@mark `EQ3 an exempt element still counts` }
 if [1, 2, 3] ==<except: [2]> [1, 4, 3] { INFO@mark `EQ4 an exception excuses an element that is not exempt` }
 unless [1, 2] == [1, 2] { INFO@mark `EQ5 equality without options is no longer structural` }
+
+// Rotating is shifting bits arranged in a loop: what leaves one end comes back at the other.
+unless ((₂10010011 as Binary₈).loop << 1) as Binary₈ == ₂00100111 { INFO@mark `ROT1 shifting a loop left does not bring the leftmost bit back on the right` }
+unless ((₂10010011 as Binary₈).loop >> 1) as Binary₈ == ₂11001001 { INFO@mark `ROT2 shifting a loop right does not bring the rightmost bit back on the left` }
+unless ((₂10010011 as Binary₈).loop << 8) as Binary₈ == ₂10010011 { INFO@mark `ROT3 a whole turn of a loop changes it` }

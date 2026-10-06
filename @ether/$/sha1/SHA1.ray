@@ -16,7 +16,7 @@ SHA1 := class: Encoding.Digest {
     : 40 <= t < 60 ? (x ~&& y) ~x|| (x ~&& z) ~x|| (y ~&& z)
     : x ~x|| y ~x|| z
   // ROTL (FIPS 180-4 §3.2)
-  static rotl (x, n) => (x * 2 ^ n + (x / 2 ^ (32 - n)).floor) % 2 ^ 32
+  static rotl (x, n) => ((x as Binary₃₂).loop << n) as Number
   // Message schedule (FIPS 180-4 §6.1.2, step 1)
   static schedule (block: Binary₃₂[]) => (16..<80).reduce(w = block => [w, rotl(w[-3] ~x|| w[-8] ~x|| w[-14] ~x|| w[-16], 1)])
   // Eighty steps over a, b, c, d, e, then added to the hash (FIPS 180-4 §6.1.2, steps 2–4)

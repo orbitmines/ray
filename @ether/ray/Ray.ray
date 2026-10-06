@@ -358,6 +358,9 @@ Loop := class: Path = around: Iterable, at: * {
   unrolled => around
   instances (times: Number) => around * times
   unrolled_mod => around[at.index..], around[..<at.index]
+  << (places: Number) => Loop(around, at: around[(at.index + places) % around.count])
+  >> (places: Number) => this << (around.count - places % around.count)
+  as (=== T) => [around[at.index..], around[..<at.index]].flatten as T
 }
 
 Node &+= {

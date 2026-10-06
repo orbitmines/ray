@@ -31,7 +31,10 @@ Network &+= {
 
   static Hosts := class {
     static equivalences => @/etc/hosts.content as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
-    static resolved (name: String) => DomainName(equivalences.rows{.names.fold_case ∋ name.fold_case}.last?.address ?? name)
+    static table: (from: Location, to: Location)[] = []
+    static redirect (from: Location, to: Location) => table.push (from, to) -- to
+    static mapped (name) => table{.from as String ==<in: .fold_case> name as String}.last?.to
+    static resolved (name: String) => mapped(name) ?? DomainName(equivalences.rows{.names.fold_case ∋ name.fold_case}.last?.address ?? name)
   }
 
   static Handshake := class {

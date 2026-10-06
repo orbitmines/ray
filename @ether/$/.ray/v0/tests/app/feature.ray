@@ -200,3 +200,16 @@ cq_open.value = 7
 if cq_open.choosing { INFO@mark `CQ8 an answered choice is still being chosen` }
 unless cq_open.answer == 7 { INFO@mark `CQ9 an answered choice answers its placeholder` }
 if 5.choosing { INFO@mark `CQ10 a plain value is being chosen` }
+
+// The chooser is a setting; a player's answer is a weighted alternative.
+with Choice.algorithm = ((s, n) => "picked") {
+  unless Device().choose(1 | 2) == "picked" { INFO@mark `CHS1 a chooser set with with is not asked` }
+}
+chs := choose? Number ?? 5
+chs.told(3)
+unless chs.value.weight == 1/2 { INFO@mark `CHS2 a player's answer is taken as a certainty` }
+chs.told(4)
+unless chs.value#.count == 2 { INFO@mark `CHS3 a second answer replaced the first instead of joining it` }
+
+// The environment is read through the OS, live.
+unless OS().env.PATH == OS()["PATH"] { INFO@mark `ENV1 the environment is not read through the OS` }

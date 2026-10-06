@@ -26,3 +26,18 @@ if Permissions.current.allows(gx_reader, `secret`, Program(code: { gx.secret }))
 gx_whole := (count: 1)
 gx_reader.read gx_whole
 unless Permissions.current.allows(gx_reader, `size`, gx_whole) { INFO@mark `GX6 a grant naming a value does not cover that value` }
+
+// const is none.write: nobody may write it, and what it holds inherits that.
+cst := const (count: 1)
+unless cst.access.who == Accessor.Permission.none { INFO@mark `CST1 const is not the permission nobody has` }
+if Accessor.Permission.none.reaches(Character(name: "anyone")) { INFO@mark `CST2 the permission nobody has reaches someone` }
+unless Accessor.Permission.none < Accessor.Permission.local { INFO@mark `CST3 the permission nobody has is not the narrowest` }
+
+// A permission's who is any narrowing: a policy by situation is a grant to it.
+nrw_room := Instance(location: "nrw-room")
+nrw_near := Character(name: "near", presence: nrw_room)
+nrw_far := Character(name: "far")
+nrw_target := (lamp: 1)
+Character{presence === nrw_room}.read nrw_target
+unless Permissions.current.allows(nrw_near, `size`, nrw_target) { INFO@mark `NRW1 a grant to a narrowing refuses who satisfies it` }
+if Permissions.current.allows(nrw_far, `size`, nrw_target) { INFO@mark `NRW2 a grant to a narrowing allows who does not satisfy it` }

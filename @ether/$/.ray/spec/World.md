@@ -27,6 +27,7 @@ From the drafts review (2026-10-06).
 - **W1.9 Redirects and dynamic names** — **Q**. In-world redirects (A ⇒ B, as `/etc/hosts`), overwriting a reservation, and a
   name bound to a getter. Recommend: `world.@a = world.@b` makes `@a` an equivalence of `@b`; `reserve` may bind a name to a
   `dynamically` getter, resolved per lookup; overwriting a reservation needs the issuer's write access. *`.ray2/World.ray:29–36`*
+  **Follows (2026-10-06):** `world.@a = world.@b` makes `@a` an equivalence of `@b`; a reservation may hold a parameterless getter, resolved on every lookup (`reservation.redirect(other)`); overwriting a held reservation needs write access from its issuer, and is a quest otherwise, from U9 (equivalences), P5.3 (parameterless functions are dynamic) and W5.1 (writing is access to `=`).
 - **W1.10 The standard `@` names** — **Decided (draft)**; none is defined in v0 (`@localnetwork` is used in
   `network/Network.ray:82`, `reservable_names` in `World.ray:165–175`). *`Ether.ray:3–27`*
   - `@ether` is `` @`ether.orbitmines.com:37839` ``; `@me | @private` is `global` (on a computer the root is `@me`; in a player
@@ -41,6 +42,7 @@ From the drafts review (2026-10-06).
 - **W1.11 Platforms already holding an `@ether` name** — **Q**. Recommend: a platform's `@ether.@name` is one more avatar of it
   (*ALM:1605–1611*, ALM = `orbitmines.com/…/routes/Almanac.tsx`), and `@github.@x == @https://github.com/x` is an
   equivalence (U9). *IDE:185* (IDE = the private journal's `Project - IDE - The Ether (2027->).md`, as in Language.md)
+  **Follows (2026-10-06):** a platform's `@ether.@name` is one more avatar of it, and `@github.@x == @https://github.com/x` is an equivalence (`platform.@x` is `platform / x`), from W2.14 (a name is superposed with its avatars' names) and U9.
 
 ## W2. Entities, instances, personas (*World:208–260, 381–442; Feature:264–340*)
 
@@ -62,9 +64,11 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
 
 - **W2.12 Contact handles** — **Q**. Recommend: phone and email are Locations (`@tel:…`, `@mailto:…`), so
   `Character.email: Location{scheme == "mailto"}`. *`…/instance/UI/Player.ray:1–2`*
+  **Follows (2026-10-06):** phone and email are Locations, `Character.email: Location{scheme == "mailto"}?` and `phone: Location{scheme == "tel"}?`; the authority (`//host`) after a scheme is optional (RFC 3986 §3), from L§6.1 (`@https://…` and the like are location values anywhere).
 - **W2.13 A character on many instances** — **Q**. Recommend: `character.instances` is every instance running it (a
   superposition), and the selected one is where its focus is (`primary`); v0 has one `presence`.
   *`…/instance/Entity.ray:15–27`*
+  **Follows (2026-10-06):** `character.instances` is the superposition of every instance running it (present, logged in or hosted), and the selected one, `primary`, is where its focus is (`presence`), from W2.14 (status is the max over all instances) and superposition over a single field (U1).
 - **W2.14 Status and name over instances and avatars** — **Decided (draft)**. A character's status is the highest over all its
   instances (`instance.status#.max`), and its name is its own name superposed with its avatars' names, so any of them finds it.
   *`.ray2/Character.ray:63, 72`*
@@ -85,6 +89,7 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
 - **W2.16 Values relative to the reader (`invisible`)** — **Q**. Recommend, generally: a field may store an expression evaluated
   per reader (`&@.last`), not when set; `invisible` is `online` to oneself and `offline` to others. Possible spelling: the field
   holds `=> …` (P5.3). *`.ray2/Character.ray:53–55`*
+  **Follows (2026-10-06):** a field may hold `=> …`, evaluated on each read rather than when set, so it may depend on the reader (`&@.last`); `invisible` is `Online` to oneself and `Offline` to others (as v0's `Online` reads it), from P5.3 (parameterless functions are dynamic), `&@` (L§10 answers, 2026-10-05) and the W2.15 answer (`invisible` is a per-reader view). Same as T3.28.
 - **W2.17 Running handed-over code, and run logs** — **Q**. Recommend: a program handed over by a character runs as that
   character by default; run logs are kept 30 days by default (configurable), and within that window a run can be replayed as
   that character (L§8.2). *`.ray2/Character.ray:28–30`*
@@ -105,12 +110,14 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   spawner configures who may access what it spawned; the registry keeps who logged in. **Q:** host-OS access for children:
   the draft defaults to yes; recommend no (W6.1 sandbox), with other OSes via VMs later (W6.14).
   *`…/instance/entrypoint/entrypoint.ray:1–44`, `…/entrypoint/Ether.ray:16–21`, `…/os/OS.ray.txt:2`*
+  **Follows (2026-10-06):** no: a spawned instance has no host-OS access unless it is granted; other OSes later through VMs (W6.14), from W6.1 (the sandbox) and L§8.3 (the default is private).
 - **W2.22 First run** — **Decided (draft)**. With no player, the instance creates one (default name, a certificate issued by the
   instance, at a random `spawn_location` of the local world, W1.8), stores it (`persistent`), and opens onboarding
   (`UI.Welcome`); otherwise it opens the world. *`…/instance/entrypoint/entrypoint.player.ray:1–17`*
 - **W2.23 Deleting an account** — **Q**. Recommend: the deletion window is measured against stamps (L§9.2), not the device clock;
   destroying a history keeps its commits' stamps and UUIDs with values set to `None`, so references fail visibly.
   *`…/instance/Entity.ray:31–34`*
+  **Follows (2026-10-06):** the deletion window is measured against stamps (the clock's `now`, L§9.2), not the device clock; destroying a history keeps its commits' stamps and UUIDs with their values set to `None` (`history.erased`), so references fail visibly, from L§9.2 (stamps) and T1.4 (None slots keep their location).
 - **W2.24 Profile, rejoining and server discovery** — **Q**. The journal wants stored preferences, interests and unlocked
   knowledge, community-run server discovery, rejoining the local server per device, and a "last visited" menu. Recommend:
   fields of `Character` (with Gamification §3), and the last instance per device under `@me/device/<…>/last_instance` (W8).
@@ -124,6 +131,7 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   `reserve @ether => @me`, and `@admin` as the superposition of every `@allow_*` name. *`entrypoint.server.ray:1–9`, `Ether.ray:1`*
 - **W2.27 Mirrors of unknown extent** — **Q**. Recommend: `world.locations` is an unbounded (possibly non-halting) Ray, explored
   as a quest; a mirror's permissions are its own and default to the original's (W2.9). *`.ray2/Character.ray:11–12`*
+  **Follows (2026-10-06):** as recommended: `world.locations` is an unbounded (possibly non-halting) Ray, explored as a quest, and a mirror's permissions are its own, defaulting to the original's, from R3.4 (an unbounded search is a quest) and L§8.3 (permissions are inherited).
 
 ## W3. History and version control (*World:145–180, 294–324*)
 
@@ -149,18 +157,22 @@ UUIDs are made, the `.%` draft) are under L§9.2.
 - **W3.20 A commit expands into its evaluation** — **Q**. Recommend: a commit's `.expand` is the run that produced it (its
   program's steps, P1.8); history is coarse, and expanding gives the fine-grained run. Matches the `.%` draft, where expansions are
   not stored (L§9.2.3). *`.ray2/History.ray:6`*
+  **Follows (2026-10-06):** as recommended: a commit's `.expand` is the run that produced it (`change**`), from L§9.2.3 (expansions are not stored; they are `.expand`) and P1.8. Same as P1.23.
 - **W3.21 Local order vs the global order** — **Q**. Repositories may hold different states and orders yet keep receiving the same
   updates. Recommend: the stamp order (W3.14) is canonical; a local view may keep its own order (its branch), updates apply to
   both, and disagreement shows only where results differ (L§9.2.16). *`.ray2/History.ray:20`*
+  **Follows (2026-10-06):** as recommended: the stamp order is canonical, a local view keeps its own order (its branch), and they disagree only where results differ, from L§9.2 distribution (stamps give one global order) and L§9.2.16.
 - **W3.22 Branches and tags** — **Q**. Recommend: a tag is a label on a commit (`v1\ `); a branch is named by the nearest labelled
   (non-UUID) commit back from its head; `history.blank` starts an empty branch before the first commit; a branch point is a commit
   with several children and a merge one with several parents. *`.ray2/History.ray:55–65`*
+  **Follows (2026-10-06):** as recommended: a tag is a label on a commit, a branch is named by the nearest labelled (non-UUID) commit back from its head (`history.label`), a branch point is a commit with several children and a merge one with several parents; no branch or tag records. Only `history.blank` (an empty branch before the first commit) is new. From labels in `.%` (L§9.2) and "avoid IRs".
 - **W3.23 Rebase** — **Q**. Recommend: `h + other` appends other's commits after h's head (re-stamped); `h | other` merges;
   `h &+ other` interleaves by stamp. *`.ray2/History.ray:67–69`*
   **Answered (user, 2026-10-06):** operators: `h + other` rebases (appends other's commits re-stamped), `h | other` merges (one commit with both heads as parents), `h &+ other` interleaves by stamp.
 - **W3.24 A REPL session commits to the character** — **Q**. The journal wants a REPL session's changes committed to one variable,
   and a setting that makes them permanent on your character. Recommend: a REPL session is a history branch (W6.5); "make
   permanent" merges it into `@me`'s history; committing to one variable is `x @ @me = x`. *IDE:488, 585*
+  **Follows (2026-10-06):** as recommended: a REPL session is a branch of `@me`'s history (`@me.session`), "make permanent" merges it into `@me`'s history (`@me.keep(session)`), and committing to one variable is `x @ @me = x`, from W1.7 (a local override is your own branch) and Almanac A3 (`x @ @me = x`).
 
 ## W4. Quests, items, references (*World:88–144, 186–206, 325–343*)
 
@@ -181,22 +193,28 @@ From the drafts review (2026-10-06).
   quest's world to the solver (`quest.certificate`); a quest is done when its program reaches a terminal with no pending
   continuation, and one that can continue is `done & continuable`; a certificate's secret defaults to `@private` and pairs with a
   public part (X4.3). *`.ray2/Quest.ray:3, 8`, `.ray2/Item.ray:21–25`*
+  **Follows (2026-10-06):** ported from the drafts (`.ray2/Quest.ray`, `.ray2/Item.ray`): completing a quest issues a `Certificate` from the quest's world to the solver (`quest.certificate`); done is P1.8's `x**.is_terminal`, and one that can continue is `done & continuable`; a certificate's secret defaults to `@private` (L§8.3) and pairs with a public part (X4.3).
 - **W4.7 Certificate validity** — **Decided (draft)**. A certificate has `valid: Time..Time?` (a range), and `issuer` defaults to
   the caller. **Q:** the distributed vs central case; recommend verifying by the issuer's public key (W2.1), so no central
   database is needed. *`…/instance/Item.ray:7–11`*
+  **Follows (2026-10-06):** verify a certificate by its issuer's public key, so no central database is needed, from W2.1 (identity is the public key).
 - **W4.8 Item issuer and moving** — **Q**. Recommend: an Item's issuer defaults to the world it was created in, and
   `item.move(location)` is a Transaction (W6.5) that changes its location atomically and appends to `item.trail`.
   *`.ray2/Item.ray:5, 8, 11–12`*
+  **Follows (2026-10-06):** an Item's issuer defaults to the nearest world of where it is (`location.world`), and `item.move(to)` is a `transaction` that changes its location, so the move is in its trail (the location's history), from W1.8 (the issuer is the nearest world), L§3.2 `transaction` and history.
 - **W4.9 Default names** — **Q**. Recommend: an unnamed item gets a generated, replaceable name from its class and location
   (`Item 3 @ room`). *`…/instance/Item.ray:2`*
+  **Follows (2026-10-06):** no generated name is stored: identity is location and history, so an unnamed item is shown by a rendering from its class and location (`Item @ room`), and a name given later replaces nothing, from A7/L§9.2 (identity is location and history, not a name).
 - **W4.10 References derived from history** — **Decided (draft)**. Every Node has `.ref`, a Reference derived from its history:
   the date is the first commit's `when`, the authors are all commits' `who`, it is a draft while its branch is less visible than
   the branch before, and the link is its location (remote once sent). Published = the instances hosting it. Notes are sorted by
   date and may be References. **Q:** claiming a dummy reference's authorship; recommend a quest granted by the reference's issuer.
   *`.ray2/Reference.ray:6–26`*
+  **Follows (2026-10-06):** claiming a dummy reference's authorship is a quest from the reference's issuer (`reference.claim(who)`), from U10 (quests) and W1.8 (issuers).
 - **W4.11 Eventual consistency and distributed runs** — **Q**. Recommend: eventual is the default read, and
   `x @ {replicas.every(.synced)}` (W4.2) asks for strong; a Program may be split over several machines' jobs (`@a/jobs |= …`),
   joined with `sync` (P4.1). *`…/instance/Network.ray:3–4`*
+  **Follows (2026-10-06):** as recommended: eventual is the default read, `x @ {replicas.every(.synced)}` asks for strong, and a Program split over several machines' jobs is joined with `sync`, from L§4.4 (concurrent writes superpose, a read policy resolves them), W4.2, L§8.4 jobs and P4.1 `sync`.
 
 ## W5. Access (*World:182–188, 474–497; Accessor*)
 
@@ -217,20 +235,24 @@ From the drafts review (2026-10-06).
   `@private & encrypted` is data the central server holds but cannot read, nor recover if the key is lost (X4.2). **Q:** policies
   by situation ("close to a player in a world"); recommend a permission's `who` be any narrowing
   (`Character{presence near x}`). *`…/instance/Access.ray:26–41`*
+  **Follows (2026-10-06):** a permission's `who` is any narrowing (`Character{presence near x}`), so a policy by situation is a grant to that narrowing, from the W2.15 answer (statuses are narrowings of a character).
 - **W5.7 Visibility per entry** — **Decided (draft)**. Each entry of a list or superposition has its own visibility; a reader sees
   only the entries it may read, and their count only if the count is visible. *`…/instance/Access.ray:10`*
 - **W5.8 `none` and `const`** — **Decided (draft)**: `none` is the permission no one has, so `none.write x` can't be assigned
   after construction. **Q:** `const`; recommend `const x` = `none.write` on x and, recursively, on children that set no
   permission of their own. *`…/instance/Access.ray:8, 61–64`*
+  **Follows (2026-10-06):** `const x` is `none.write` on x, and children that set no permission of their own inherit it, from W5.8 (`none.write`) and L§8.3 (children inherit permissions).
 - **W5.9 Guests and hosts** — **Decided (draft)**. Guests can read who hosts them (the instance's parents) and the host can read its
   guests (its children): `@guests.read { @host => … }`, `@host.read { @guests => … }`. *`Ether.ray:11–12, 33`*
 - **W5.10 Indexes can be turned off** — **Q**. The journal asks what is indexed (code search, general search, later 3D), and lets a
   repository turn indexing off, losing what relies on it. Recommend: an index is an optimisation level over `T$` queries (P8.3);
   without it a query stays correct but slow, or answers a `Quest`. *IDE:242–245*
+  **Follows (2026-10-06):** as recommended: an index is an optimisation level over `T$` queries (P8.3); turned off, a query stays correct but slow, or answers a `Quest`, from choices being optimisations.
 - **W5.11 Reaching items by presence; stacks of credentials** — **Q**. A stack is any graph of a type (keys, credentials); a graph
   is either walked by a program's cursor or needs a player nearby ("items in this room I can reach now"). Recommend: reachability
   is a grant narrowed by distance, `@x.read item {player.location near item.location}`, and a cursor walking the graph is an actor
   like any other. *IDE:780–785*
+  **Follows (2026-10-06):** as recommended: reaching by presence is a grant narrowed by distance (`@x.read item {player.location near item.location}`), and a cursor walking a graph is an actor like any other, from W5.6 (narrowing grants) and L§8.2 (a cursor is an actor).
 
 ## W6. Features (*Feature.ray*)
 
@@ -264,6 +286,7 @@ From the drafts review (2026-10-06).
   - A failed proof starts a quest (W6.4), except inside `by_contradiction`.
   - A property of an infinite structure is proven coinductively (by a loop).
   - **Q:** is `%%` (the history within the current scope) wanted, or is it `&%`?
+    **Follows (2026-10-06):** `%%` is not needed: `&%` is the history of the current scope, from P1.3 (the context is the state, with history `%`).
 - **W6.17 What a proof is for** — **Q**. The journal frames a proof as how one decides what is worth pursuing: it keeps the route
   and the conclusion, and says something about the space it probed. Recommend: a proof is a Program whose history (the paths it
   explored, P1.3) is kept and reused as an index for later quests. *IDE:479–483*
@@ -275,9 +298,11 @@ From the drafts review (2026-10-06).
 - **W6.20 `localhost` and the hosts table** — **Decided (draft)**: `localhost` is `127.0.0.1 | ::1`, and only `confidential` may
   rewrite it. **Q:** recommend the hosts table maps Locations to Locations, characters included (`@ether -> @me` for an offline
   mirror), and is the world's name table (W1.3, W1.9). *`…/instance/Network.ray:38–45`*
+  **Follows (2026-10-06):** as recommended: the hosts table maps Locations to Locations, characters included (`@ether -> @me` for an offline mirror), and is the world's name table, from W6.6 (hosts as equivalences) and W1.3.
 - **W6.21 Remote values** — **Q**. Recommend: `x @ instance` means x somewhere in that instance (a location narrowing); reading a
   remote x keeps a local mirror (W2.9); asking for a local x never goes remote; a search by structure across unknown instances
   (`T @ *`) is a quest. *`…/instance/Network.ray:63–72`*
+  **Follows (2026-10-06):** as recommended: `x @ instance` is a location narrowing, reading a remote x keeps a local mirror, a local x never goes remote, and `T @ *` is a quest, from T7.1/R7.1 (`x @ loc`), W2.9 (mirrors) and R3.4 (an unbounded search is a quest).
 - **W6.22 Update transfers only what is new** — **Decided (draft)**. `IO / = ETHER@ETHER/instance` transfers only the commits after
   the local head (L§9.2); local edits are kept and merged; offering an update is a quest. *`…/instance/Update.ray:1, 4, 11`*
 
@@ -324,9 +349,11 @@ W8 itself is decided below (devices are locations under `@me/device/<…>`).
 
 - **W8.1 Devices controlled by someone else** — **Q**. Recommend: remote control is a grant of `write` on `@me/device/mouse` (or
   `keyboard`) to another character (L§8.2); the prompt shows its origin chain. *IDE:181*
+  **Follows (2026-10-06):** as recommended: remote control is a grant of `write` on `@me/device/mouse` (or `keyboard`) to another character, and the prompt shows its origin chain, from W8 (devices are locations) and the U6 grants (L§8.2).
 - **W8.2 Environment variables, now or at startup** — **Q**. Recommend: the environment is `@me/device/os/env/<NAME>`, read live;
   its value at startup is the pin `@me/device/os/env/<NAME>%[start]`, where `start` is the label the run's entry sets (L§9.2).
   *IDE:384*
+  **Follows (2026-10-06):** as recommended: the environment is `@me/device/os/env/<NAME>`, read live, and its value at startup is the pin `@me/device/os/env/<NAME>%[start]`, from W8 and `x%[label]` pins (L§9.2).
 
 ## W9. Choice (*from the drafts review, 2026-10-06*)
 
@@ -338,10 +365,12 @@ W9 itself is decided below (`choose` resolves through `@me.choose`).
 - **W9.2 Choosing by an algorithm** — **Q**. Instantiating a type with, e.g., Wave Function Collapse. Recommend: the chooser is a
   `with` setting, `with Choice.algorithm = WaveFunctionCollapse { choose Room }`; the computer's default stays a weighted random
   pick. *IDE:687; ALM:2040*
+  **Follows (2026-10-06):** as recommended: the chooser is a `with` setting (`with Choice.algorithm = WaveFunctionCollapse { choose Room }`), and the default stays a weighted random pick, from L§6.3 `with` and choices being optimisations.
 - **W9.3 A choice put to players carries its reason** — **Q**. The journal attaches an explanation to `@players.choose`, keeps the
   results for later, and treats a human's answer as an untrusted external one with an acceptance weight. Recommend: the doc comment
   above a `choose` is the quest text shown to the player, and a player's answer enters as a weighted alternative (U8), not as a
   certainty. *IDE:666; `private-journal/year/2022/daily/2022-03-08.md:21`*
+  **Follows (2026-10-06):** as recommended: the doc comment above a `choose` is the quest text shown to the player (`choice.reason`), and a player's answer enters as a weighted alternative, not a certainty, from G1.4 (the comment above attaches to the statement) and U-C1/U8 (an answer enters as a weight).
 
 ---
 

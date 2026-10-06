@@ -129,6 +129,7 @@ What the Almanac's introduction states and nothing in the spec records (*ALM:183
   - Frontend, compiler and backend are relative terms; any level can serve as the universal one.
   - Roadmap: the Ether 2027, the Library Project 2028, the physics and game engine 2029, then gamification.
   - Open item for (II): recommend a memory model is a Program level chosen per boundary.
+  **Follows (2026-10-06):** recorded as Decided (Almanac), as listed above, since the Almanac is published and its lines are already taken as "Decided (Almanac)"; for (II), a memory model is a Program level chosen per boundary, from "every translation is a Compiler level" (C1, P8).
 
 ---
 

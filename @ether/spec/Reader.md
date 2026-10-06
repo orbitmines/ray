@@ -82,8 +82,8 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
 - **R3.3 Lowering is a Compiler level** (P8): rewrite rules `{pattern} => replacement` over Programs, reducing every
   construct (classes, frames, superposition, typed captures, `dynamically`) to goto programs over R3.2. The level is a
   scope (`Program{O: Compiler.default}`); optimisations are separate rules in it, removable (2026-09-23).
-- **R3.4 Emission** writes a goto program as native code: the existing goto→JS backend (`js.ts`) with its input changed
-  from `.kernel.ray`'s own language to these Programs.
+- **R3.4 Emission** writes a goto program as JS, in the host's one file (R0.8): every body goes through the goto program
+  first, then to JS; nothing is run any other way.
 
 ## R4. Values, frames, scopes
 
@@ -104,7 +104,7 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
 
 ## R6. Migration (on main, from `b3246d0`)
 
-1. The seed (R0.5) and the lowest layer (R3.1, R3.2): goto, labels, primitive calls as rules; proven end to end on a
+1. The host (R0) and the lowest layer (R3.1, R3.2): goto, labels, primitive calls as rules; proven end to end on a
    small loop (rule → Program → goto program → native → run).
 2. Text and places (R1), then rules and patterns as types (R2), then statements and blocks (R3.1), frames and values
    (R4), classes (R4.4), diagnostics (R5), each in the entrypoint, each read by the layers before it.
@@ -116,7 +116,7 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
 
 - **(2026-10-06, user)** A rule takes effect from the moment it is defined, within the same pass (R0.4.3); the next pass
   picks up what was written later in the file.
-- **(2026-10-06, user)** Native code is rebuilt at every start, not kept on disk (R0.5).
+- **(2026-10-06, user)** Native code is rebuilt at every start, not kept on disk (R0.4).
 - **(2026-10-06, user)** Where a statement ends is learned from the first statement (R0.1), not known by the host; what
   spans more is said by types defined in the entrypoint.
 - **(2026-10-06, user)** No integers among the externals (R0.7).

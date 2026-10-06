@@ -49,7 +49,8 @@ Julian := class: Calendar {
 
   days_in (month: Month) => static.month.length[month.index] in day
   days_in_year => is_leap_year ? 366 : 365
-  weeks_in_year => days_in_year / 7
+  // ISO 8601-1:2019, week-numbering year: a year has 53 weeks when it begins on a Thursday, or is a leap year that begins on a Wednesday
+  weeks_in_year => weekday_of(1) == Thursday || is_leap_year && weekday_of(1) == Wednesday ? 53 : 52
   days_before (month: Month) => Month#[..<Month#.index_of(month)].map(days_in).sum
   days_before_year => 365 * (year - 1) + (year - 1) / 4
   weekday_of (day_of_year: Number) => Weekday#.loop + (days_before_year + day_of_year - 1)
@@ -121,11 +122,12 @@ ISO_8601 := class: Time{calendar is UTC.static} (
     ) | (
       day_of_year: Decimal{1 <= . <= (year as days ~= (days_in_year: *) days).days_in_year}
     ) | (
+      // ISO 8601-1:2019 §5.2.4: a week date, YYYY-Www-D or YYYYWwwD; week 01 is the week holding the year's first Thursday (4 January), so its days may fall in the year before or after
       "W",
-      week_of_year: Decimal{1 <= . <= (year as weeks ~= (weeks_in_year: *) weeks).weeks_in_year},
+      week_of_year: Decimal{length == 2}{1 <= . <= in_year.weeks_in_year},
       (
-        "-",
-        weekday: Weekday#[1 - day_of_week: Decimal{1 <= . <= Weekday#.count}]
+        semicolons: "-"?,
+        weekday: Weekday#[1 - day_of_week: Decimal{length == 1}{1 <= . <= Weekday#.count}]
       )?,
       day_of_year = week_of_year * 7 + Weekday#.index_of(weekday ?? Monday) + 1 - (Weekday#.index_of(in_year.weekday_of(4)) + 4)
     )
@@ -142,7 +144,22 @@ ISO_8601 := class: Time{calendar is UTC.static} (
       offset_hours: Decimal,
       ":",
       offset_minutes: Decimal
-    )
+    ),
+    // RFC 9557 §4.1 (IXDTF): a suffix of an optional time-zone name and tagged annotations, each critical when flagged "!" (https://www.rfc-editor.org/rfc/rfc9557#section-4.1)
+    (
+      "[",
+      zone_critical: "!"?,
+      zone_name: ((Char.Letter | "." | "_", (Char.Letter | "." | "_" | Char.Digit | "-" | "+")[]){!= "." && != ".."})[].join("/"),
+      "]"
+    )?,
+    tags: (
+      "[",
+      critical: "!"?,
+      key: ("a".."z" | "_", ("a".."z" | "_" | Char.Digit | "-")[]),
+      "=",
+      value: (Char.Letter | Char.Digit)[]{length > 0}[].join("-"),
+      "]"
+    )[]
   )?
 ) => {
   calendar += offset_operator offset_hours:offset_minutes
@@ -150,6 +167,9 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   long: String => this as Long as String
 
   in_year => Gregorian(year: year)
+  zone => TimeZone(zone_name) if zone_name
+  // RFC 9557 §3: an elective annotation that is not understood is ignored, and a critical one must be acted on or the timestamp refused; of the registered keys only the calendar (u-ca, BCP 47) is read (https://www.rfc-editor.org/rfc/rfc9557#section-3)
+  understood => !tags.some(.critical && !(.key == "u-ca" && .value is ("gregory" | "iso8601")))
   date_known => date != ?
   of_day: Quantity.Temporal => (hour_of_day ?? 0) hours + (minute_of_hour ?? 0) minutes + (second_of_minute ?? 0) seconds
   as (=== Time) => Time(calendar) = (in_year.days_before_year + day_of_year - 1) days + of_day
@@ -158,6 +178,7 @@ ISO_8601 := class: Time{calendar is UTC.static} (
 
   dynamically assert semicolons if offset
   dynamically assert date | time
+  dynamically assert understood
   date ?= ?
 }
 

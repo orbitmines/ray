@@ -182,3 +182,21 @@ unless (choose 3 boolean).count == 3 { INFO@mark `CN4 choosing three booleans do
 unless (3 boolean).count == 3 { INFO@mark `CN5 three called on boolean is not three of it` }
 unless Number{choose 5}.count == 5 { INFO@mark `CN6 a narrowing by a choice of five is not five` }
 unless [1, 2, 3].map{choose 1}(*10).zip([1, 2, 3]).filter((a, b) => a != b).count == 1 { INFO@mark `CN7 a filtered map changes other than the one it chose` }
+
+// `choose n` chooses n distinct by identity: the same value at two locations is two.
+cx := Character(name: "chosen")
+unless Device().choose((cx, cx, "5"), 2).count == 2 { INFO@mark `CQ1 choosing two did not give two` }
+cq_both := Device().choose(("A" | "B" | "C"), 2)
+unless cq_both.count == 2 && cq_both.first != cq_both.last { INFO@mark `CQ2 choosing two of three gave one of them twice` }
+unless (0..<20).map(i => Device().choose((cx, cx, "5"), 2)).some(.every(=== cx)) { INFO@mark `CQ3 one value written twice is never chosen twice` }
+unless (choose 2 ("A" | "B" | "C")).count == 2 { INFO@mark `CQ4 choose 2 does not choose two` }
+
+// The default of a choose is its placeholder; `choosing` while it is open.
+cq_open := choose? Number ?? 5
+unless cq_open.choosing { INFO@mark `CQ5 an unanswered choice is not being chosen` }
+unless cq_open.placeholder == 5 { INFO@mark `CQ6 the default of a choose is not its placeholder` }
+unless cq_open.answer == 5 { INFO@mark `CQ7 an unanswered choice does not answer its placeholder` }
+cq_open.value = 7
+if cq_open.choosing { INFO@mark `CQ8 an answered choice is still being chosen` }
+unless cq_open.answer == 7 { INFO@mark `CQ9 an answered choice answers its placeholder` }
+if 5.choosing { INFO@mark `CQ10 a plain value is being chosen` }

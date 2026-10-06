@@ -3,7 +3,7 @@ Access := class = who: *?, method: `=` | `()` | * = *, filter: Program? {
 
   allows (called) => called ∈ method
 
-  { }{target} ^punctuation => Permissions.current.grant(this, target)
+  { }{literal target} ^punctuation => Permissions.current.grant(this, Program(code: external ** target))
 }
 
 {who}{{literal filter}}.read ^keyword => Access(who, method: Access.Reading, filter: Program(code: (external ** filter)))
@@ -51,7 +51,8 @@ Grant := class = access: Access, target: * {
     : State.prompt
 
   uses => Permissions.current.allowed.history{=== this}.count
-  covers (who: Character, method, target) => (access.who == who || who is access.who) && access.allows(method) && this.target === target
+  names (value) => target === value || target is Program && (target == value || target() === value)
+  covers (who: Character, method, target) => (access.who == who || who is access.who) && access.allows(method) && names(target)
     && (!access.filter || access.filter.entered(this, None))
 }
 
@@ -66,6 +67,11 @@ Permissions := class = grants: Grant[] = [] {
 Run := class = actor: Character?, origin: Character[] = [], settings: Settings? {
   static Mode := enum full | abstract | refused
   static current = Run()
+  static log: History = History()
+  static kept: Quantity.Temporal = 30 days
+
+  static logs => log.since(None){.when >= Time.now - kept}
+  static replay (logged: History.Commit) => logged.change.run_as(logged.who) if logs.some(=== logged)
 
   originating (character: Character) => Run(actor, origin: (origin, character), settings)
   hops | chain => origin.contains(actor) ? origin : (origin, actor)

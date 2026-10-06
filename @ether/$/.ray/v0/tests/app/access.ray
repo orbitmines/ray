@@ -12,3 +12,17 @@ with Visibility.policy = Accessor.Permission.public {
 with Visibility.policy = Accessor.Permission.local {
   unless Accessor.Permission.confidential.resolved == Accessor.Permission.local { INFO@mark `CK3 confidential is wider than a narrower policy` }
 }
+
+// A grant names an expression: a derivative may be granted where the value it derives from is not.
+gx_reader := Character(name: "reader")
+gx := (count: 3, secret: "s")
+gx_reader.read gx.count
+gx_grant := Permissions.current.grants.last
+unless gx_grant.target is Program { INFO@mark `GX1 a grant took the value of what it names instead of the expression` }
+unless gx_grant.names(Program(code: { gx.count })) { INFO@mark `GX2 a grant does not name the expression it was given` }
+if gx_grant.names(Program(code: { gx.secret })) { INFO@mark `GX3 a grant on one derivative names another` }
+unless Permissions.current.allows(gx_reader, `count`, Program(code: { gx.count })) { INFO@mark `GX4 a granted derivative is refused` }
+if Permissions.current.allows(gx_reader, `secret`, Program(code: { gx.secret })) { INFO@mark `GX5 a grant on a count lets another field leave` }
+gx_whole := (count: 1)
+gx_reader.read gx_whole
+unless Permissions.current.allows(gx_reader, `size`, gx_whole) { INFO@mark `GX6 a grant naming a value does not cover that value` }

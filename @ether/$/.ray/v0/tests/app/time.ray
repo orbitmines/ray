@@ -128,3 +128,23 @@ unless OS.Ether().zoneinfo == @tzif/zoneinfo { INFO@mark `TZ17 the language as t
 if Host("linux").zoneinfo ~= ⊢"tzif" { INFO@mark `TZ18 a host refers to @tzif for its zone data` }
 unless Compiler.reduced(Host("plan9"), TimeZone.sources) is Quest { INFO@mark `TZ19 an operating system without time-zone data does not leave it to be found` }
 unless Compiler.reduced(Host(""), OS.devices) is OS.Ether { INFO@mark `TZ20 a device with no host platform does not run the language as its operating system` }
+
+// ISO 8601 week dates: week 01 holds the year's first Thursday, so a week date may name a day of the year before or after.
+unless "2026-W41-2" as ISO_8601 == "2026-10-06" as ISO_8601 { INFO@mark `WD1 the Tuesday of week 41 of 2026 is not the sixth of October` }
+unless "2026W412" as ISO_8601 == "2026-10-06" as ISO_8601 { INFO@mark `WD2 a week date written without its dashes is another day` }
+unless "2025-W01-1" as ISO_8601 == "2024-12-30" as ISO_8601 { INFO@mark `WD3 the first week of 2025 does not begin in 2024` }
+unless "2026-W53-7" as ISO_8601 == "2027-01-03" as ISO_8601 { INFO@mark `WD4 the last day of week 53 of 2026 is not in 2027` }
+unless Gregorian(year: 2026).weeks_in_year == 53 { INFO@mark `WD5 a year beginning on a Thursday does not have 53 weeks` }
+unless Gregorian(year: 2020).weeks_in_year == 53 { INFO@mark `WD6 a leap year beginning on a Wednesday does not have 53 weeks` }
+if "2027-W53-1" is ISO_8601 { INFO@mark `WD7 a year of 52 weeks has a week 53` }
+if "2026-W41-8" is ISO_8601 { INFO@mark `WD8 a week has an eighth day` }
+unless "2026-W41" as ISO_8601 == "2026-10-05" as ISO_8601 { INFO@mark `WD9 a week without its day is not its Monday` }
+
+// RFC 9557: a time-zone name and tagged annotations after the offset.
+paris := "2026-10-06T12:00:00+02:00[Europe/Paris]" as ISO_8601
+unless paris.zone.name == "Europe/Paris" { INFO@mark `WD10 the zone named in brackets is not read` }
+unless paris == "2026-10-06T10:00:00Z" as ISO_8601 { INFO@mark `WD11 a zone name moved the instant its offset gives` }
+unless "2026-10-06T12:00:00+02:00[!Europe/Paris][u-ca=gregory]" is ISO_8601 { INFO@mark `WD12 a critical zone and a calendar tag are not read` }
+unless "2026-10-06T12:00:00Z[foo=bar]" is ISO_8601 { INFO@mark `WD13 an elective tag nobody understands is refused` }
+if "2026-10-06T12:00:00Z[!foo=bar]" is ISO_8601 { INFO@mark `WD14 a critical tag nobody understands is ignored` }
+if "2026-10-06T12:00:00Z[Foo=bar]" is ISO_8601 { INFO@mark `WD15 a tag key in capitals is read` }

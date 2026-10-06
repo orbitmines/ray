@@ -99,6 +99,15 @@ spelled (src, at, lit, joined, followed, limit) => (
   if !joined and is_run(first) and run(src, at - 1) { return None }
   return followed or !is_run(last) or !run(src, at + n)
 )
+// A literal right after what the previous piece of its rule consumed: only its end is guarded.
+spelled_within (src, at, lit, followed, limit) => (
+  n := lit.length
+  if at + n > limit or !starts(src, at, lit) { return None }
+  if n == 0 { return global }
+  last := lit.chars[n - 1]
+  if !followed and is_word(last) and word(src, at + n) { return None }
+  return followed or !is_run(last) or !run(src, at + n)
+)
 opening (c) => c == '{' or c == '(' or c == '['
 // Where the bracket opening at j closes (just after it); j itself when it does not close by `end`.
 group_end (src, j, end) => (
@@ -269,7 +278,8 @@ matching (rule, caps, src, pos, limit, frame, receiving, receiver) => (
       if piece.tight and !(p > 0 and pieces[p - 1].kind == 0 and lit_ends_line(pieces[p - 1].text)) { from = i }
       if p == 0 and receiving and !rule.defines and opener(lit) { from = i }
       followed := p + 1 < n and pieces[p + 1].kind == 2 and pieces[p + 1].tight and (pieces[p + 1].typed or (pieces[p + 1].piece_raw and p + 2 == n))
-      if !spelled(src, from, lit, (piece.tight and p > 0 and from == i) or (p == 0 and receiving and from == pos), followed, limit) { return -1, 0 }
+      within := piece.tight and p > 0 and from == i
+      if !(within ? spelled_within(src, from, lit, followed, limit) : spelled(src, from, lit, p == 0 and receiving and from == pos, followed, limit)) { return -1, 0 }
       reach = reach + lit.length
       if opener(lit) { opened = opened + 1 } elsif opened > 0 and closer(lit) { opened = opened - 1 }
       i = from + lit.length
@@ -334,7 +344,8 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
   if next == 0 and !raw and !inside and piece.typed and pieces[p + 1].tight and space(src, end - 1) { return -1 }
   if piece.typed and !type_known(rule, p) { return -1 }
   if piece.typed and holds(rule, p, src, from, stop - 1) == UNDEF {
-    shorter := next >= 0 ? -1 : held_from(rule, p, src, from, from, stop, limit)
+    stepwise := next == 2 and pieces[p + 1].tight and pieces[p + 1].typed
+    shorter := next >= 0 and !stepwise ? -1 : held_from(rule, p, src, from, from, stop, limit, stepwise)
     if shorter >= 0 { cap(caps, p, from, shorter) }
     return shorter
   }
@@ -1670,11 +1681,11 @@ still (kept) => (
 )
 missing_declared (missing) => ( missing for name => { if own(global(), name) != UNDEF { return global } }; return None )
 // The ends after j, all found first, then tried from the last: the longest prefix whose text is held.
-held_from (rule, p, src, from, j, last, limit) => (
+held_from (rule, p, src, from, j, last, limit, stepwise) => (
   if j >= last { return -1 }
-  k := max(claim(src, j, limit), token(src, j, limit))
+  k := stepwise and word(src, j) ? j + 1 : max(claim(src, j, limit), token(src, j, limit))
   j = k > j ? k : j + 1
-  deeper := held_from(rule, p, src, from, j, last, limit)
+  deeper := held_from(rule, p, src, from, j, last, limit, stepwise)
   if deeper >= 0 { return deeper }
   return j < last and !space(src, j - 1) and holds(rule, p, src, from, j - 1) != UNDEF ? j : -1
 )

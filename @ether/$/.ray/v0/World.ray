@@ -204,35 +204,49 @@ World := class: Location + Nameable {
 }
 Region := World
 
-Quest := class: Nameable {
-  goal: *
-  from: *?
-  steps: *[] = []
+Quest := class: Program + Location + Nameable = who: * = @me, goal: *?, from: *? {
+  output: History = History(repository: this)
+  cursor: Running = Running(program: this)
   tried: *?
-  done = false
-
+  stopped = false
   certificate: Certificate?
+  serving: Location?
+  proxying: Network.Proxy?
 
-  reached (value) => value is goal
+  written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
+  abstract => written{!.defined}
+
+  reached (value) => goal !== None && value is goal
   attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
+  running => cursor.started && !done
+  done => stopped || certificate !== None || cursor.is_terminal
   continuable => done && !(tried**.is_terminal ?? true)
   path => tried.history
   solution => path{reached(.value)}.first
   solved_by => solution?.who
   best => solution?.value
 
-  step (description): static => this ~~ steps.push description
-  refined => steps.every(. is Quest)
-  progress => steps{. is Quest && .done}.count
-  difficulty => steps.count
+  progress => cursor.started ? written.index_of(cursor.at) ?? written.count : 0
+  difficulty => written.count
 
-  complete: static => this ~~ (.done = true) ~~ (.certificate = Certificate(issuer: parent?.world ?? World.ether, holder: solved_by ?? &caller))
+  serves (at: Location) => !done && serving ∋ at
+  proxies => !done && proxying !== None
+  stop: static => this ~~ (.stopped = true)
+  complete: static => this ~~ (.certificate = Certificate(issuer: parent?.world ?? World.ether, holder: solved_by ?? who))
 }
 
-Task := class: Quest {
-  interrupted = false
+Quests := class: Location {
+  all => children{is Quest}
+  [id] => all{.name as String == id as String}.first
+  started (program: Program) => Quest(code: program.code, who: &caller, name: UUID.v4() as String) ~~ add(.)
+  |= (program: Program): static => this ~~ started(program)
+}
 
-  interrupt: static => this ~~ .interrupted = true
+Program &+= {
+  defined => global.declaring(head.head)
+  quest => @me/quests.started(this)
+  serve (at: Location) => quest ~~ (.serving |= at)
+  proxy (through: Network.Proxy) => quest ~~ (.proxying = through)
 }
 
 Item := class: Nameable {
@@ -337,7 +351,7 @@ Character := class: Hierarchy + Entity + Nameable {
 
   presence: Instance?
   constraint: *?
-  focus: Job?
+  focus: Quest?
   permissions: Accessor.Permission?
 
   first_name: String?
@@ -354,7 +368,7 @@ Character := class: Hierarchy + Entity + Nameable {
   keep (session: History) => history.merge(session)
   full_name => first_name ? first_name + " " + last_name : name
   device => (presence ?? Instance.local).device
-  jobs => device.jobs
+  quests => device.quests
   status => Status#{this is .}
   .status = {wanted} ^punctuation => constraint = wanted
   is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
@@ -370,9 +384,9 @@ Character := class: Hierarchy + Entity + Nameable {
 
 Online := Character{presence?.device.network.connected && (. === @me || !(. is Invisible))}
 Offline := Character{!(. is Online)}
-Broadcasting := Character{jobs{serves @public}.nonempty}
+Broadcasting := Character{quests{serves @public}.nonempty}
 Hosting := Character{presence?.hosted#.some(!== this)}
-Proxying := Character{jobs{proxies}.nonempty}
+Proxying := Character{quests{proxies}.nonempty}
 Invisible := Character{constraint is Invisible}
 Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.last?.when >= Time.now - 5 minutes)}
 Busy := Character{focus && !focus.done}

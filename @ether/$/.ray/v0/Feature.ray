@@ -190,7 +190,7 @@ Device := class {
   opened: Location?
   memory: Store = Store(at: @"memory")
   storage: Storage = Storage()
-  jobs: Jobs = Jobs()
+  quests: Quests = Quests()
   disk => Disk(device: this, path: "")
 
   choose (s, n: Number = 1) => Choice.algorithm ? Choice.algorithm(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random
@@ -224,34 +224,6 @@ Zones := class: Location {
     .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : this / name
     .{literal at ^property} = {value} ^punctuation => zones.answer(segments.join("/"), at as Number) ~~ (.offset = value.offset) ~~ (.abbreviation = value.abbreviation)
   }
-}
-
-Job := class: Location = id: UUID = UUID.v4(), program: Program, by: Character? {
-  static State := enum queued | running | stopping | done | lost
-
-  state: State = State.queued
-  output: History = History(repository: this)
-  serving: Location?
-  proxying: Network.Proxy?
-
-  done => state is (State.done | State.lost)
-  serves (at: Location) => !done && serving ∋ at
-  proxies => !done && proxying !== None
-  stop: static => this ~~ (.state = State.stopping unless done)
-}
-
-Jobs := class: Location {
-  all => children{is Job}
-  [id] => all{.id as String == id as String}.first
-  started (program: Program) => Job(program, by: &caller) ~~ add(.)
-  |= (program: Program): static => this ~~ started(program)
-  .{literal id ^property} ^punctuation => .declaring(id) ? external get this id : this[id]
-}
-
-Program &+= {
-  job => @me/jobs.started(this)
-  serve (at: Location) => job ~~ (.serving |= at)
-  proxy (through: Network.Proxy) => job ~~ (.proxying = through)
 }
 
 Keyboard := class: Location {

@@ -26,9 +26,9 @@ unless here.children.count == 1 { INFO@mark `LO3 the holder does not hold one` }
 unless there.parent { INFO@mark `LO4 a held location has no parent` }
 
 // Tasks, references, characters and repositories: what a class says it holds.
-wt := Task(name: "walk", goal: None)
-if wt.interrupted { INFO@mark `TA1 a new task is interrupted` }
-unless wt.interrupt.interrupted { INFO@mark `TA2 an interrupted task is not interrupted` }
+wt := Quest(name: "walk")
+if wt.stopped { INFO@mark `TA1 a new quest is stopped` }
+unless wt.stop.stopped { INFO@mark `TA2 a stopped quest is not stopped` }
 
 wr := Reference(title: "a")
 unless wr.draft { INFO@mark `RE1 a new reference is no draft` }
@@ -121,25 +121,22 @@ reader{now < 0:00}.read night_target
 if Permissions.current.allows(reader, `size`, night_target) { INFO@mark `AC9 a grant whose filter fails is allowed` }
 if Permissions.current.allows(reader, `=`, day_target) { INFO@mark `AC10 a read grant allows writing` }
 
-// A quest is what there is to do: the steps it takes, and whether it is done.
+// A quest is a program with someone to run it; a step defined nowhere is one they do themselves.
 errand := Quest(name: "fetch", goal: wi)
 if errand.done { INFO@mark `QU1 a new quest is already done` }
-unless errand.difficulty == 0 { INFO@mark `QU2 a quest with no steps is difficult` }
-errand.step("go")
-errand.step("take")
-unless errand.difficulty == 2 { INFO@mark `QU3 a quest of two steps is not two hard` }
+unless errand.abstract.count == 1 { INFO@mark `QU2 a quest given only a name is not one step its runner does` }
+staged := Quest(code: "go(wi)\ntake(wi)", goal: wi)
+unless staged.difficulty == 2 { INFO@mark `QU3 a quest of two steps is not two hard` }
+unless staged.who === @me { INFO@mark `QUW1 a quest is not run by whoever made it` }
 unless errand.complete.done { INFO@mark `QU4 completing a quest does not` }
 unless errand.goal == wi { INFO@mark `QU5 a quest forgot what it is for` }
 // Posting answers the quest, the way spawning answers the character.
 unless wg.add(errand) == errand { INFO@mark `QU6 posting a quest does not answer it` }
 unless wg.quests.count == 1 { INFO@mark `QU11 posting a quest does not put it in the world` }
 
-// A task is a quest that can be interrupted.
-job := Task(name: "carry", goal: wi)
-if job.interrupted { INFO@mark `QU7 a new task is already interrupted` }
-unless job.interrupt.interrupted { INFO@mark `QU8 interrupting a task does not` }
-if job.done { INFO@mark `QU9 an interrupted task is done` }
-unless job.difficulty == 0 { INFO@mark `QU10 a task with no steps is difficult` }
+// A quest can be stopped; a stopped quest is done.
+carrying := Quest(name: "carry", goal: wi)
+unless carrying.stop.done { INFO@mark `QU8 stopping a quest does not end it` }
 
 // Where someone is says how they are, and saying nothing holds them to nothing.
 away := Character(name: "away")
@@ -221,9 +218,9 @@ unless Character(name: "s").status.contains(Offline) { INFO@mark `CS3 a characte
 if Character(name: "s").status.contains(Online) { INFO@mark `CS4 a character nowhere reads as online` }
 if Character(name: "s") is Idle { INFO@mark `CS5 a character nowhere is idle` }
 if Character(name: "s") is Busy { INFO@mark `CS6 a character with nothing to focus on is busy` }
-focused := Character(name: "f", focus: Job(program: Program()))
-unless focused is Busy { INFO@mark `CS7 a character focused on a job is not busy` }
-focused.focus.state = Job.State.done
+focused := Character(name: "f", focus: Quest(name: "focus"))
+unless focused is Busy { INFO@mark `CS7 a character focused on a quest is not busy` }
+focused.focus.stop
 if focused is Busy { INFO@mark `CS8 a character whose focus is done is still busy` }
 quiet := Character(name: "q")
 if quiet is DoNotDisturb { INFO@mark `CS9 a character is not to be disturbed before saying so` }

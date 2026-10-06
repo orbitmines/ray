@@ -379,12 +379,11 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - **8.3.2 Streamer mode — Decided (journal).** Streaming runs the renderer as an actor whose grants exclude `@me`'s private fields; what it may not read is drawn as absent. *IDE:847*
   - The clamp on `confidential`, the policy's fixed exceptions and per-entry visibility are World W5.5–W5.7.
 
-### 8.4 Processes and jobs
+### 8.4 Processes and quests
 - **Decided (2026-10-06):** the language makes no process calls. Running anything is running a Program.
   - There is no `Process`, no `Jobs` runner and no `OS.run`.
-  - A job is a Program at a location. The daemon is Ether's scheduler: it runs Ray Programs as jobs.
-  - Job control is `@me/jobs/<id>`: the job's program and its state (`queued | running | stopping | done | lost`). `@me/jobs/<id>.output` is its output as a history, and `@me/jobs/<id>.stop()` asks it to stop. `@me/jobs` lists the jobs.
-  - Starting a job is `@me/jobs |= program` (or `program.job`, which answers the job). A remote machine's jobs are `@some-remote/jobs`.
+  - **Programs are quests (user, 2026-10-06).** There are no jobs: a running program is a `Quest`, which is a Program with a `who` that runs it. A quest is always a program, never a list of steps; its steps are its statements, and a step calling something defined nowhere is an abstract step its `who` performs. A human quest is structured the same way, and the human runs it. The daemon is Ether's scheduler for the computer's quests.
+  - Quests are at `@me/quests/<id>`: `.output` is a history, `.stop()` ends one, and `done`/`running` follow from its cursor. Starting one is `@me/quests |= program` (or `program.quest`). A remote machine's are `@some-remote/quests`.
   - What used to be a process is a typed read or write of a location:
     - the browser's file system is `@me/device/storage/<key>`, which the page keeps in `localStorage`;
     - a remote file system over HTTP is `$.http` requests: GET reads, PUT writes, DELETE removes and WebDAV's PROPFIND lists (RFC 4918);

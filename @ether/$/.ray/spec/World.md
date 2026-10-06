@@ -80,7 +80,7 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   groups (network, hosting, presence); assigning one replaces only its group's member (`status = offline` keeps `hosted`),
   `status -= broadcast` removes one (T2.4), and a component may carry a grant.
   **Answered (user, 2026-10-06):** neither. A status is a narrowing of a character (`Online := Character{device.network.connected}`,
-  `Broadcasting := Character{jobs{serves @public}.nonempty}`), never an enum member. Any part of a program can be flagged to run only
+  `Broadcasting := Character{quests{serves @public}.nonempty}`), never an enum member. Any part of a program can be flagged to run only
   under one (`serve(@public) if @me is Online`). Reading `@me.status` is inferred: the narrowings `@me` satisfies now. Writing it is a
   **constraint** on what may run (`@me.status = Online & !Broadcasting`, or scoped `with (@me: …) { … }`): flagged parts that contradict
   it do not run, so "do not disturb" suppresses rather than labels. A grant (`@allow_proxy Proxy`) is access on the narrowing;
@@ -212,9 +212,9 @@ From the drafts review (2026-10-06).
   *`.ray2/Reference.ray:6–26`*
   **Follows (2026-10-06):** claiming a dummy reference's authorship is a quest from the reference's issuer (`reference.claim(who)`), from U10 (quests) and W1.8 (issuers).
 - **W4.11 Eventual consistency and distributed runs** — **Q**. Recommend: eventual is the default read, and
-  `x @ {replicas.every(.synced)}` (W4.2) asks for strong; a Program may be split over several machines' jobs (`@a/jobs |= …`),
+  `x @ {replicas.every(.synced)}` (W4.2) asks for strong; a Program may be split over several machines' quests (`@a/quests |= …`),
   joined with `sync` (P4.1). *`…/instance/Network.ray:3–4`*
-  **Follows (2026-10-06):** as recommended: eventual is the default read, `x @ {replicas.every(.synced)}` asks for strong, and a Program split over several machines' jobs is joined with `sync`, from L§4.4 (concurrent writes superpose, a read policy resolves them), W4.2, L§8.4 jobs and P4.1 `sync`.
+  **Follows (2026-10-06):** as recommended: eventual is the default read, `x @ {replicas.every(.synced)}` asks for strong, and a Program split over several machines' quests is joined with `sync`, from L§4.4 (concurrent writes superpose, a read policy resolves them), W4.2, L§8.4 quests and P4.1 `sync`.
 
 ## W5. Access (*World:182–188, 474–497; Accessor*)
 
@@ -502,10 +502,9 @@ Decided 2026-10-06 (history queries).
 
 Decided 2026-10-06 (processes).
 
-- **W6.12** The language makes no process calls; running anything is running a Program (L§8.4). A job is a Program
-  at a location, the daemon is Ether's scheduler, and job control is `@me/jobs/<id>`: its program and state
-  (`queued | running | stopping | done | lost`), `.output` as a history, `.stop()`. `@me/jobs` lists them, and
-  `@me/jobs |= program` starts one.
+- **W6.12** The language makes no process calls; running anything is running a Program (L§8.4). A running program is a
+  quest with a `who` (2026-10-06, replacing jobs): `@me/quests/<id>`, `.output` as a history, `.stop()`; `@me/quests` lists
+  them and `@me/quests |= program` starts one. The daemon is Ether's scheduler for the computer's quests.
 - **W6.13** Like the other device locations (W8), the browser's storage is `@me/device/storage/<key>` (the page keeps it in
   `localStorage`) and the browser's time zones are `@me/device/os/zones` (the page answers from `Intl.DateTimeFormat`).
   A file system over HTTP is `$.http`: GET, PUT, DELETE, and WebDAV's PROPFIND to list.

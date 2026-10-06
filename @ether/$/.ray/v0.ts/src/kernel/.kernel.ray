@@ -1887,6 +1887,8 @@ naming_take (n, frame, name) => (
 rule_from (given, held, frame) => (
   pattern := or_else(written(given), given)
   body := or_else(written(held), held)
+  // A body that is a value, not code (`this` on a receiver written as a name): the name as written.
+  if body != UNDEF and !is_code(body) and !is_place(body) { at := location(held); if at != UNDEF and is_place(at) { body = at } }
   if at_src(pattern) < 0 or at_src(body) < 0 { return UNDEF }
   scope := is_code(pattern) ? code_frame(pattern) : is_place(pattern) ? place_scope(pattern) : frame
   rule := define(at_src(pattern), at_begin(pattern), at_end(pattern), at_src(body), at_begin(body), at_end(body), scope, scope, -1, 0, 0, None, -1, 0, 0)

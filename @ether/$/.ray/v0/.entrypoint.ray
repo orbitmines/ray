@@ -605,6 +605,44 @@ Node := base class {
   xor (b) => .or(b).and(.nand(b))
   xnor (b) => .xor(b).not
 
+  // A field with another name: `initial | (internal right-to-left ⊢) : Boundary = …`; the last word is the other name, the words
+  // before it its modifiers.
+  | ({aliased}) : {type} = {value} ^punctuation => (
+    goto given if external own this
+    external declare this value
+   given\
+    head := external ** aliased
+    modifiers := chain None
+    while (external after head ` `) {
+      modifiers &= external before head ` `
+      head = external after head ` `
+    }
+    defined := external rule head this
+    modifier := modifiers.head
+    while modifier {
+      if ((inline modifier.value) === right-to-left) { right-to-left.modify(defined) }
+      modifier = modifier.next
+    }
+    this
+  )
+  | ({aliased}) : {type} ^punctuation => (
+    goto given if external own this
+    external declare this None
+   given\
+    head := external ** aliased
+    modifiers := chain None
+    while (external after head ` `) {
+      modifiers &= external before head ` `
+      head = external after head ` `
+    }
+    defined := external rule head this
+    modifier := modifiers.head
+    while modifier {
+      if ((inline modifier.value) === right-to-left) { right-to-left.modify(defined) }
+      modifier = modifier.next
+    }
+    this
+  )
   :{type} = {value} ^punctuation => (
     goto given if external own this
     external declare this value

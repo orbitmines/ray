@@ -6,7 +6,7 @@ walk {list} =>
   at := list
   external label again
   say at
-  at := external get at next
+  at = external get at next
   external goto again at
 a := external node
 b := external node

@@ -1,17 +1,17 @@
 say {x} =>
   external io stdout x
 link {x} to {y} =>
-  set x . next to y
-a := node
-b := node
-c := node
+  x.next = y
+a := external node
+b := external node
+c := external node
 link a to b
 link b to c
 at := a
-while at do
+while at
   say at
-  at := at . next
-if a then
-  say yes
-unless nothing then
+  at = at.next
+if a
+  say true
+unless None
   say unless-works

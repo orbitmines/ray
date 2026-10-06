@@ -1,13 +1,13 @@
 say {x} =>
   external io stdout x
 link {x} to {y} =>
-  set x . next to y
-p := node
-q := node
+  x.next = y
+p := external node
+q := external node
 link p to q
 walk {list} =>
   at := list
-  while at do
+  while at
     say at
-    at := at . next
+    at = at.next
 walk p

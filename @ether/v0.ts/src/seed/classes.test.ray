@@ -1,7 +1,7 @@
 say {x} =>
   external io stdout x
 Box := class
-  content := node
+  content := external node
   hello =>
     say this
 b := Box()
@@ -10,4 +10,4 @@ c := b.content
 say c
 b.content = b
 d := b.content
-say (same d b)
+say (d === b)

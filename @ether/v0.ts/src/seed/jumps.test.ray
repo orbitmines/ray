@@ -10,10 +10,10 @@ count {list} =>
   at := list
   again\
   say at
-  at := at . next
+  at = at.next
   goto again if at
   say done
-a := node
-b := node
-set a . next to b
+a := external node
+b := external node
+a.next = b
 count a

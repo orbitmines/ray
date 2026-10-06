@@ -1,7 +1,7 @@
 say {x} =>
   external io stdout x
-a := node
+a := external node
 b := (a)
 say b
-say (same a b)
-say (same (a) (node))
+say (a === b)
+say ((a) === (external node))

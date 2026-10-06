@@ -1,8 +1,8 @@
 say {x} =>
   external io stdout x
-a := node
-b := node
+a := external node
+b := external node
 l := a, b, a
 say l
-f := l . first
+f := l.first
 say f

@@ -7,7 +7,7 @@ both (a, b) =>
   say b
 nothing_given () =>
   say ran
-p := node
+p := external node
 greet(p)
 both(p, p)
 nothing_given()

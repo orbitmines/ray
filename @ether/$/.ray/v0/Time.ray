@@ -161,14 +161,63 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   date ?= ?
 }
 
-LeapSeconds := class = (@/usr/share/zoneinfo/leap-seconds.list as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
+LeapSeconds := class = (((TimeZone.source.directory ?? TimeZone.bundled.directory) / "leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
   .map(.seconds seconds as Time(epoch: "1900-01-01"))
 {
   at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
 }
 
 TimeZone := class (name: String) {
-  data => $.tzif.read((@/usr/share/zoneinfo/{name}).bytes)
+  static Source := class {
+    directory: Location?
+    data (zone: String) => None
+    at (zone: String, time: Time) => Quest(name: "the offset in force in the zone", goal: zone)
+  }
+
+  // IANA tz database compiled to TZif (RFC 8536), one file per zone, read only when that zone is asked for (https://data.iana.org/time-zones/tz-link.html, https://man7.org/linux/man-pages/man5/tzfile.5.html for $TZDIR)
+  static Zoneinfo := class: Source (directory: Location) {
+    data (zone: String) => $.tzif.read((directory / zone).bytes)
+    at (zone: String, time: Time) => data(zone).at(time)
+    version => (directory / "version").content.trimmed
+    zones => (directory / "zones").content.lines{.nonempty}
+  }
+
+  // Windows 10 1703+ ships ICU and its tz data as icu.dll (https://learn.microsoft.com/en-us/windows/win32/intl/international-components-for-unicode--icu-), ucal API (https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/ucal_8h.html)
+  static ICU := class: Source {
+    call (function: String, arguments) => external os `icu` (function, arguments)
+    // a Windows zone id read as its IANA name through CLDR's windowsZones (https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones)
+    iana (zone: String) => call("ucal_getTimeZoneIDForWindowsID", (zone, "001")) ?? zone
+    at (zone: String, time: Time) => call("ucal_open", (iana(zone), "", "UCAL_GREGORIAN")) ~~ call("ucal_setMillis", (., (time as s).floor * 1000)) -- (calendar => call("ucal_inDaylightTime", calendar) as boolean -- (daylight => (
+      offset: ((call("ucal_get", (calendar, "UCAL_ZONE_OFFSET")) + call("ucal_get", (calendar, "UCAL_DST_OFFSET"))) / 1000) seconds,
+      daylight,
+      abbreviation: call("ucal_getTimeZoneDisplayName", (calendar, daylight ? "UCAL_SHORT_DST" : "UCAL_SHORT_STANDARD", "en")) as String
+    )) ~~ call("ucal_close", calendar))
+  }
+
+  // ECMA-402 Intl.DateTimeFormat: the offset in force read back from formatToParts with timeZoneName "longOffset" (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts)
+  static Intl := class: Source {
+    part (zone: String, time: Time, style: String) => Process(command: "new Intl.DateTimeFormat(\"en-US\", { timeZone: " + $.json.write(zone) + ", timeZoneName: " + $.json.write(style) + " }).formatToParts(" + ((time as s).floor * 1000) as String + ").find(part => part.type === \"timeZoneName\").value").stdout
+    offset (zone: String, time: Time) => (part(zone, time, "longOffset") ~= ("GMT", (sign: "+" | "-", hours: Decimal, ":", minutes: Decimal)?)) -- (.sign ? (.sign == "-" ? -1 : 1) * (.hours hours + .minutes minutes) : 0 seconds)
+    at (zone: String, time: Time) => offset(zone, time) -- (in_force => (
+      offset: in_force,
+      daylight: in_force > offset(zone, time - 182 days).min(offset(zone, time + 182 days)),
+      abbreviation: part(zone, time, "short")
+    ))
+  }
+
+  static bundled => Zoneinfo(directory: Language.project("tzif") / "zoneinfo")
+
+  static sources := {
+    {os: OS{name == linux | macos}} => TimeZone.Zoneinfo(directory: (os["TZDIR"] ?? "/usr/share/zoneinfo") as Location)
+    {os: OS{name == windows}} => TimeZone.ICU()
+    {os: OS{name == browser}} => TimeZone.Intl()
+    {os: OS{name == ether}} => TimeZone.bundled
+    {os: OS} => TimeZone.bundled
+  }
+  static source: Source => Compiler.reduced(@me/device/os, sources)
+
+  data => source.data(name)
+  at (time: Time) => source.at(name, time)
 }
 
 Planet := class {

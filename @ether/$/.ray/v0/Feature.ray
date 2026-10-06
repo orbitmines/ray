@@ -65,7 +65,7 @@ FileOptimizations := {
   {location: Disk} => FileSystem.Device()
   {location: Location{scheme && scheme != "file"}} => FileSystem.Remote()
   {location: Location{segments.first == "remote"}} => FileSystem.Remote()
-  {location: Location{OS().name == ether}} => FileSystem.Browser()
+  {location: Location{OS().name == browser}} => FileSystem.Browser()
   {location: Location} => FileSystem.Posix()
 }
 
@@ -136,7 +136,11 @@ OS := class {
   [property: String] => (external os property) as String
   platform => this["platform"]
   architecture => this["architecture"]
-  name: linux | macos | windows | ether | unknown => { "linux": linux, "darwin": macos, "win32": windows }[platform] ?? unknown
+  name: linux | macos | windows | browser | ether | unknown => platform ? { "linux": linux, "darwin": macos, "win32": windows, "browser": browser, "ether": ether }[platform] ?? unknown : ether
+
+  static Ether := class: OS {
+    [property: String] => { "platform": "ether", "architecture": "ray" }[property]
+  }
 
   static launch (location: Location) => external os `open` (location as String)
   static run (command: String, arguments: String[] = []) => Process(command, arguments)

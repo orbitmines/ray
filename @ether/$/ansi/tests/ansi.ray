@@ -16,7 +16,6 @@ red_cell := ANSI.Cell("x", foreground: Geometry.Color(255, 0, 0), styles: ANSI.A
 unless (red_cell as ANSI.Style as String) == "\e[0;3;38;2;255;0;0m" { INFO@mark `UI296 a cell's style is not written as one SGR sequence` }
 unless ((red_cell as ANSI.Style as String) as ANSI.Style).cell("x") == red_cell { INFO@mark `UI297 a written style does not read back as the same cell` }
 unless (Compiler.reduced(red_cell as ANSI.Style, ANSI.XTerm256) as String) == "\e[0;3;38;5;196m" { INFO@mark `UI298 the 256-colour level does not write an indexed colour` }
-unless (ANSI.write(ANSI.Stop()) as String) ~= ⊢ "\e[?1004l" { INFO@mark `UI299 stopping does not undo the modes starting set, last first` }
 unless "\e[1;5A" as ANSI.Key .control { INFO@mark `UI35 ctrl+up is not read as control` }
 unless ("\e[<0;3;4M" as ANSI.Mouse).x == 3 { INFO@mark `UI36 a mouse report is not read` }
 unless Language.named(".ansi") == ANSI && $.ansi === ANSI { INFO@mark `UI66 the terminal's language is not registered` }

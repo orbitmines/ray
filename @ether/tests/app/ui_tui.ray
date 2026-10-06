@@ -10,15 +10,15 @@ with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   grid := page.rendered(UI.TUI.Cells)
   unless grid.width == 80 && grid.height == 24 { INFO@mark `UI30 the terminal grid is not 80 by 24` }
   unless grid.cells[0][0].glyph == "R" { INFO@mark `UI31 the heading's first glyph is not in the first cell` }
-  unless grid.cells[0][0].bold { INFO@mark `UI32 a heading is not bold in the terminal` }
+  unless ANSI.Attribute.bold is grid.cells[0][0].styles { INFO@mark `UI32 a heading is not bold in the terminal` }
   unless grid.cells[1].some(.link) { INFO@mark `UI33 a link's cells do not carry where it goes` }
   unless grid.changes(grid).empty { INFO@mark `UI34 an unchanged frame writes something` }
 }
 with UI.page = (title: "Ray") {
-  unless UI.TUI.Target().framed(UI.TUI.Grid(1, 1)).title == "Ray" { INFO@mark `UI99 the terminal title does not follow the page title` }
+  unless UI.TUI.Grid(1, 1).framed.some(. is ANSI.Title && .text == "Ray") { INFO@mark `UI99 the terminal title does not follow the page title` }
 }
 
-red_bar := Geometry.Box(position: Geometry.Fixed(), inset: Geometry.Edges(0px, None, None, 0px), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px)
+red_bar := Geometry.Box(position: Geometry.Fixed(), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
 scrolled_page := Geometry.Box(height: 2000px, children: [Geometry.Box(height: 1000px), red_bar])
 with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   with UI.scene.scrolled = Geometry.Vector(0, 320px) {
@@ -43,7 +43,7 @@ unless ("\e[<0;3;4M" as ANSI.Mouse).position == Geometry.Vector(16px, UI.scene.s
 selected_text := Geometry.Box(content: "ab", size: Geometry.Vector(16px, 16px))
 selected_text.select
 with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
-  unless Program(code: { selected_text }).rendered(UI.TUI.Cells).cells[0][1].reverse { INFO@mark `UI172 selected text is not shown reversed in the terminal` }
+  unless ANSI.Attribute.negative is Program(code: { selected_text }).rendered(UI.TUI.Cells).cells[0][1].styles { INFO@mark `UI172 selected text is not shown reversed in the terminal` }
 }
 
 solved := (children, scrolled: Geometry.Length = 0px) => Geometry.Box(size: Geometry.Vector(1000px, 800px), scrolled: Geometry.Vector(0px, scrolled), children: children).solve
@@ -57,10 +57,12 @@ with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
 italic_text := Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px))
 with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   italic_grid := Program(code: { italic_text }).rendered(UI.TUI.Cells)
-  unless italic_grid.cells[0][1].italic && !italic_grid.cells[0][0].italic { INFO@mark `UI234 a style on part of a string is not on its cells only` }
+  unless ANSI.Attribute.italic is italic_grid.cells[0][1].styles && !(ANSI.Attribute.italic is italic_grid.cells[0][0].styles) { INFO@mark `UI234 a style on part of a string is not on its cells only` }
 }
 
 top_bar := Geometry.Box(height: 16px, fill: Geometry.Color(255, 0, 0))
 with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   unless Program(code: { top_bar }).rendered(UI.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0) { INFO@mark `YU13 the first shape in a flow is not on the terminal's top row` }
 }
+unless (ANSI.write(Compiler.reduced(UI.TUI.Stop(), UI.TUI.written)) as String) ~= ⊢ "\e[?1004l" { INFO@mark `UI299 stopping does not undo the modes starting set, last first` }
+unless Compiler.reduced(Geometry.Box(content: choose boolean), UI.Lowered).children.first.content == "[ ]" { INFO@mark `UA4 a choice is not lowered to a box showing its face` }

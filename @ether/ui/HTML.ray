@@ -23,12 +23,14 @@ UI.HTML := class {
     tags (page) => [[(name: "og:title", content: page.title), (name: "og:description", content: page.description), (name: "og:image", content: page.image as String) if page.image]{!(page.meta ?? []).name.contains(.name)}, page.meta ?? []].flatten(1){.content != None}
 
     head (page) => @html {
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>{page.title ?? ""}</title>
       <meta name="description" content={page.description ?? ""} />
       {tags(page).map(Compiler.reduced(., meta))}
       {Compiler.reduced((name: "theme-color", content: Compiler.reduced(page.theme, Style.values)), meta) if page.theme}
       {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
-        {(page.structured ?? []).map(entry => $.html.Element("script", [("type", "application/ld+json")], [$.html.Raw($.json.write(JSON.Linked(entry, context: "https://schema.org")))]))}
+      {(page.structured ?? []).map(entry => $.html.Element("script", [("type", "application/ld+json")], [$.html.Raw($.json.write(UI.Linked(entry, context: "https://schema.org").document))]))}
       <link rel="stylesheet" href="style.css" />
       <script src="app.js" defer />
     }
@@ -268,17 +270,8 @@ UI.HTML := class {
   }
 
   Script := class {
-    expressions := {
-      {a} + {b} => @js {a} + {b}
-      {a} - {b} => @js {a} - {b}
-      {a} * {b} => @js {a} * {b}
-      {a} / {b} => @js {a} / {b}
-      {a} == {b} => @js {a} === {b}
-      {a} < {b} => @js {a} < {b}
-      {a} && {b} => @js {a} && {b}
-      {a} || {b} => @js {a} || {b}
+    state := {
       {name} = {value} => @js ray.{name} = {value}
-      {f}({arguments}) => @js {f}(...{arguments})
     }
 
     prelude := @js function effect(reads, body) { ray.subscribe(reads, body); body() }
@@ -332,26 +325,26 @@ UI.HTML := class {
       // Web Storage: localStorage, and the storage event other documents of the origin fire (https://html.spec.whatwg.org/multipage/webstorage.html#the-localstorage-attribute, https://html.spec.whatwg.org/multipage/webstorage.html#the-storageevent-interface)
       Object.keys(localStorage).forEach((key) => ray.set("@me/device/storage/" + key, localStorage.getItem(key)))
       window.addEventListener("storage", (event) => event.key === null
-        ? ray.get("@me/device/storage.keys").forEach((key) => ray.set("@me/device/storage/" + key, null))
+        ? ray.get("@me/device/storage.fields.name").forEach((key) => ray.set("@me/device/storage/" + key, null))
         : ray.set("@me/device/storage/" + event.key, event.newValue))
       effect(["@me/device/storage"], () => {
-        const kept = ray.get("@me/device/storage.entries")
-        Object.keys(localStorage).filter((key) => !kept.some((entry) => entry.name === key)).forEach((key) => localStorage.removeItem(key))
-        kept.forEach((entry) => localStorage.getItem(entry.name) === entry.value || localStorage.setItem(entry.name, entry.value))
+        const kept = ray.get("@me/device/storage.fields")
+        Object.keys(localStorage).filter((key) => !kept.some((field) => field.name === key)).forEach((key) => localStorage.removeItem(key))
+        kept.forEach((field) => localStorage.getItem(field.name) === field.value || localStorage.setItem(field.name, field.value))
       })
       // ECMA-402 Intl.DateTimeFormat formatToParts, the zone's offset ("longOffset") and abbreviation ("short") (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts)
-      effect(["@me/device/os/zones.asked"], () => {
-        const asked = ray.get("@me/device/os/zones.asked")
-        const part = (style) => new Intl.DateTimeFormat("en-US", \{timeZone: asked.zone, timeZoneName: style}).formatToParts(asked.at).find((part) => part.type === "timeZoneName").value
-        if (asked) ray.set("@me/device/os/zones/" + asked.zone + "/" + asked.at, \{offset: part("longOffset"), abbreviation: part("short")})
+      ray.awaited("@me/device/os/zones", (path) => {
+        const [zone, at] = [path.split("/").slice(0, -1).join("/"), Number(path.split("/").at(-1))]
+        const part = (style) => new Intl.DateTimeFormat("en-US", \{timeZone: zone, timeZoneName: style}).formatToParts(at).find((part) => part.type === "timeZoneName").value
+        ray.set("@me/device/os/zones/" + path, \{offset: part("longOffset"), abbreviation: part("short")})
       })
     }
 
     Geometry.Shape &+= {
       scripted => [
         fields{.value is Dynamic}.map(field => field.name == "styles"
-          ? @js effect({field.value.program.reads}, () => document.getElementById({dom}).className = {field.value.program{O: UI.HTML.Script.expressions}()})
-          : @js effect({field.value.program.reads}, () => ray.set({dom + "." + field.name}, {field.value.program{O: UI.HTML.Script.expressions}()}))),
+          ? @js effect({field.value.program.reads}, () => document.getElementById({dom}).className = {field.value.program{O: UI.HTML.Script.state}})
+          : @js effect({field.value.program.reads}, () => ray.set({dom + "." + field.name}, {field.value.program{O: UI.HTML.Script.state}}))),
         @js document.getElementById({dom}).addEventListener("click", (event) => ray.activate({dom})) if focusable,
         @js document.getElementById("{dom}-text").addEventListener("input", (event) => document.getElementById("{dom}-paint").textContent = event.target.value) if content is Choice && content.goal is Language,
         @js document.getElementById({dom}).addEventListener("input", (event) => ray.set({dom}, event.target.value)) if content is Choice,
@@ -366,12 +359,12 @@ UI.HTML := class {
     }
 
     rules := {
-      {page: Geometry.Shape{solved && !parent}} => $.js.Module([
+      {page: Geometry.Shape{solved && !parent}} => [
         prelude,
         devices,
-        Dynamic#{!page.reachable.map(.fields.value).flatten.contains(.)}.map(dynamic => @js effect({dynamic.program.reads}, () => { {dynamic.program{O: expressions}()} })),
+        Dynamic#{!page.reachable.map(.fields.value).flatten.contains(.)}.map(dynamic => @js effect({dynamic.program.reads}, () => { {dynamic.program{O: state}} })),
         page.reachable.map(.scripted)
-      ])
+      ].flatten
     }
 
     level := Geometry.Preparing(1px) + rules

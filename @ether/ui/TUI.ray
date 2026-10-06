@@ -6,7 +6,7 @@ UI.TUI := class {
     put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
     cell (at: Geometry.Vector) => inside(at) ? cells[at.y][at.x] : ANSI.Cell()
     background (at: Geometry.Vector, color: Geometry.Color?) => put(at, cell(at) ~~ .background = color)
-    underlined (at: Geometry.Vector) => put(at, cell(at) ~~ .underline = true)
+    underlined (at: Geometry.Vector) => put(at, cell(at) ~~ .styles |= ANSI.Attribute.underlined)
     linked (at: Geometry.Vector, to: Location) => put(at, cell(at) ~~ .link = to)
     faded (at: Geometry.Vector, amount: Probability) => cell(at) -- (cell => put(at, cell ~~ .foreground = cell.foreground?.mix(cell.background, 1 - amount)))
     shaded (at: Geometry.Vector) => cell(at) -- (cell => put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
@@ -73,7 +73,7 @@ UI.TUI := class {
     {text: Geometry.Shape{content is String}} => text.lines(text.size.x).enumerate.map(row => row.value.enumerate.map(glyph =>
       (UI.Theme.face(text, glyph.value), text.cell_at + Geometry.Vector(row.value[..<glyph.index].map(.columns).sum, row.index)) -- ((look, at) => ANSI.Cell(text.case ? text.case(glyph.value) : glyph.value,
         foreground: text.painted(look.color) as Geometry.Color, background: text.painted(look.fill) as Geometry.Color,
-        bold: look.font.weight >= 600, italic: look.font.style == italic, reverse: look.styles.contains("selected")) -- (written => { .put(at, written) }))
+        styles: (ANSI.Attribute.bold if look.font.weight >= 600) | (ANSI.Attribute.italic if look.font.style == italic) | (ANSI.Attribute.negative if look.styles.contains("selected"))) -- (written => { .put(at, written) }))
     )).flatten
     {canvas: Geometry.Shape{content is Program && !(content is Choice)}} => canvas.content.rendered(Language.Direct.level) -- (rows => canvas.cell_area.map(at => (at - canvas.cell_at) -- (dot =>
       ANSI.Cell(braille(rows[dot.y * 4..<dot.y * 4 + 4].map(.[dot.x * 2..<dot.x * 2 + 2].map(.alpha > 0)))) -- (written => { .put(at, written) })
@@ -86,15 +86,27 @@ UI.TUI := class {
   static braille (dots: boolean[][]) => (0x2800 + [[0, 3], [1, 4], [2, 5], [6, 7]].zip(dots).map((bits, row) => row.zip(bits).map((on, bit) => on ? 2 ^ bit : 0).sum).sum) as Char
   static ramp = " .:-=+*#%@"
 
-  Terminal := class: UI.Interface = written: Compiler = ANSI.written, grid: Grid? {
+  // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
+  Start := class = modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]
+  Stop := class = start: Start = Start()
+  written := {
+    {start: Start} => start.modes, ANSI.Erase(2), ANSI.Move()
+    {stop: Stop} => <-stop.start.modes.map(.flipped)
+  }
+  // Windows Terminal's win32-input-mode, DECSET 9001 (https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
+  WindowsTerminal := {
+    {start: Start{!modes.contains(ANSI.Mode(9001, "h"))}} => Start([start.modes, [ANSI.Mode(9001, "h")]].flatten)
+  }
+
+  Terminal := class: UI.Interface = written: Compiler = UI.TUI.written, grid: Grid? {
     emit (bytes) => external io `stdout` (bytes)
     received => external io `stdin` None
     size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
     emitted (value) => emit(Compiler.reduced(value, written) as String)
-    start => emitted(ANSI.Start())
+    start => emitted(Start())
       -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
       -- ({ OS.launch(@me/device/opened) } when @me/device/opened changes)
-    stop => emitted(ANSI.Stop())
+    stop => emitted(Stop())
     write (drawn: Grid) => (grid = drawn) -- emitted(grid.framed)
     read => (received ?? "") ~= (events: Event[]) -- .events.for(Compiler.reduced(., applied))
   }

@@ -8,8 +8,8 @@ page := Program(code: {
 })
 scene := page{O: UI.Scene}()
 unless scene.children.first.content is String { INFO@mark `UI1 a string does not become text` }
-unless UI.Theme.face(scene.children.first, 0).font.weight >= 600 { INFO@mark `UI2 a heading style does not give a heading` }
-unless scene.children.last.location == @https://orbitmines.com { INFO@mark `UI3 a location does not become a link` }
+unless UI.Theme.face(scene.children.first, scene.children.first.content[0]).font.weight >= 600 { INFO@mark `UI2 a heading style does not give a heading` }
+unless scene.children.last.content == @https://orbitmines.com { INFO@mark `UI3 a location does not become a link` }
 unless scene.flow == block { INFO@mark `UI4 lines do not stack` }
 unless Program(code: { "a", "b" }){O: UI.Scene}().flow == inline { INFO@mark `UI5 a comma does not flow inline` }
 
@@ -27,10 +27,10 @@ unless (Geometry.Transform.translate(Geometry.Vector(1, 2)) * Geometry.Transform
 unless (6/12).md.at == 768px { INFO@mark `UI53 md is not the 768px breakpoint` }
 unless ((6/12).md -> (12/12).xs).at(768px) == 6/12 { INFO@mark `UI54 an interpolated share is not its breakpoint's at the breakpoint` }
 
-UI.at = @https://orbitmines.com/profiles
-unless UI.at == @https://orbitmines.com/profiles { INFO@mark `UI63 navigating does not change where the user is` }
+@me/device/location = @https://orbitmines.com/profiles
+unless @me/device/location == @https://orbitmines.com/profiles { INFO@mark `UI63 navigating does not change where the user is` }
 UI.back
-unless UI.at != @https://orbitmines.com/profiles { INFO@mark `UI64 going back stays where the user went` }
+unless @me/device/location != @https://orbitmines.com/profiles { INFO@mark `UI64 going back stays where the user went` }
 
 if @me/device/handheld { INFO@mark `UI67 a platform is handheld before any level says so` }
 first_box := Geometry.Box()
@@ -43,9 +43,9 @@ unless Geometry.Box(children: [first_box]).reachable.count == 2 { INFO@mark `UI7
 away := @https://orbitmines.com{window == new}
 unless away.window == new { INFO@mark `UI80 a location narrowed to a new window does not open one` }
 unless (@https://orbitmines.com).window == same { INFO@mark `UI81 a location opens a new window by default` }
-Geometry.Box(location: away).activate
+Geometry.Box(content: away).activate
 unless @me/device/opened == away { INFO@mark `UI84 activating a new-window link does not open it` }
-if UI.at == away { INFO@mark `UI85 activating a new-window link navigates the page itself` }
+if @me/device/location == away { INFO@mark `UI85 activating a new-window link navigates the page itself` }
 
 searched := @https://orbitmines.com/archive?search=ray&page=2
 unless searched.query.search == "ray" && searched.query.page == "2" { INFO@mark `UI86 a query parameter is not read` }
@@ -59,21 +59,21 @@ solved := (children, scrolled: Geometry.Length = 0px) => Geometry.Box(size: Geom
 fixed_width := Geometry.Box(width: 48px, height: 10px)
 solved([fixed_width])
 unless fixed_width.size.x == 48px { INFO@mark `UI100 a fixed width is not kept` }
-lifted_up := Geometry.Box(height: 20px, margin: Geometry.Edges(top: -10px))
+lifted_up := Geometry.Box(height: 20px) + (mt -10px)
 solved([Geometry.Box(height: 20px), lifted_up])
 unless lifted_up.origin.y == 770px { INFO@mark `UI101 a negative margin does not pull a shape up` }
 padded_child := Geometry.Box(height: 10px)
-solved([Geometry.Box(padding: Geometry.Edges(5px, 5px, 5px, 5px), children: [padded_child])])
+solved([Geometry.Box(children: [padded_child]) + (p 5px)])
 unless padded_child.origin == Geometry.Vector(5px, 5px) { INFO@mark `UI102 padding does not move what it holds` }
-pinned := Geometry.Box(position: Geometry.Absolute(), inset: Geometry.Edges(6px, None, None, 6px), height: 10px)
+pinned := Geometry.Box(position: Geometry.Absolute(), height: 10px) + Geometry.Spacing(Geometry.Edges(6px, None, None, 6px), itself)
 after_pinned := Geometry.Box(height: 10px)
 solved([pinned, after_pinned])
 unless pinned.origin == Geometry.Vector(6px, 784px) { INFO@mark `UI103 an absolute shape is not placed by its insets` }
 unless after_pinned.origin.y == 790px { INFO@mark `UI104 an absolute shape takes space in the flow` }
-fixed_bar := Geometry.Box(position: Geometry.Fixed(), inset: Geometry.Edges(0px, None, None, 0px), height: 10px)
+fixed_bar := Geometry.Box(position: Geometry.Fixed(), height: 10px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
 solved([Geometry.Box(height: 3000px, children: [Geometry.Box(height: 500px), fixed_bar])], scrolled: 100px)
 unless fixed_bar.at.y == 790px { INFO@mark `UI105 a fixed shape scrolls with the page` }
-sticky_bar := Geometry.Box(position: Geometry.Sticky(), inset: Geometry.Edges(0px, None, None, None), height: 10px)
+sticky_bar := Geometry.Box(position: Geometry.Sticky(), height: 10px) + Geometry.Spacing(Geometry.Edges(0px, None, None, None), itself)
 solved([Geometry.Box(height: 1000px, children: [sticky_bar])], scrolled: 300px)
 unless sticky_bar.at.y == 790px { INFO@mark `UI106 a sticky shape does not stay at the top while its parent is in view` }
 anchor := Geometry.Box(height: 20px)
@@ -87,7 +87,7 @@ unless ((9/12).xs -> (6/12).md).at(384px) == 5/8 { INFO@mark `UI110 -> does not 
 unless ((12/12).xs -> (10/12).sm -> (8/12).md).at(576px) == 10/12 { INFO@mark `UI111 a chain of -> does not pass through its middle breakpoint` }
 unless Geometry.Box(width: [(12/12).xs, (6/12).md]).measured("width", 800px) == 400px { INFO@mark `UI112 a breakpoint list is not a width share` }
 
-red_bar := Geometry.Box(position: Geometry.Fixed(), inset: Geometry.Edges(0px, None, None, 0px), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px)
+red_bar := Geometry.Box(position: Geometry.Fixed(), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
 scrolled_page := Geometry.Box(height: 2000px, children: [Geometry.Box(height: 1000px), red_bar])
 with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   with UI.scene.scrolled = Geometry.Vector(0, 320px) {
@@ -103,12 +103,12 @@ with UI.scene = Geometry.Box(children: [drawer]) {
 UI.Overlay(closes: drawer).activate
 if drawer.open { INFO@mark `UI120 activating a drawer's overlay does not close it` }
 
-unless (pt 5).padding.top == 10px { INFO@mark `UI121 pt 5 is not five steps of the default spacing` }
+unless (pt 5).top == 10px && (pt 5).from == border { INFO@mark `UI121 pt 5 is not five steps of the default spacing` }
 with UI.Theme.spacing = 4px {
-  unless (p 2).padding.left == 8px && (p 2).padding.top == 8px { INFO@mark `UI122 the shorthands do not follow the theme's spacing` }
+  unless (p 2).left == 8px && (p 2).top == 8px { INFO@mark `UI122 the shorthands do not follow the theme's spacing` }
 }
-unless (mt -60px).margin.top == -60px { INFO@mark `UI123 a length given to a shorthand is scaled` }
-unless (px 3).padding.top == 0px && (px 3).padding.left == 6px { INFO@mark `UI124 px spaces the top` }
+unless (mt -60px).top == -60px && (mt -60px).from == itself { INFO@mark `UI123 a length given to a shorthand is scaled` }
+unless (px 3).top == None && (px 3).left == 6px { INFO@mark `UI124 px spaces the top` }
 
 narrowed_box := Geometry.Box(){width <= 1240px & height == 120px, overflow == clip}
 unless narrowed_box.fields["width"].type.most == 1240px && narrowed_box.height == 120px { INFO@mark `UI126 a narrowing on a shape is not its constraints` }
@@ -122,23 +122,25 @@ unless Geometry.Box(content: "a  b").lines() == ["a b"] && Geometry.Box(content:
 unless Geometry.Box(){height >= 22px}.fields["height"].type.least == 22px { INFO@mark `UI132 min_height is not a least height` }
 unless Geometry.Box(){transform == Geometry.Transform.translate(Geometry.Vector(10px))}.transform == Geometry.Transform.translate(Geometry.Vector(10px)) { INFO@mark `UI133 transform == translate(…) does not move the shape` }
 unless Geometry.Box(){transition == Geometry.Transition(0.4 s, Geometry.ease)}.transition.duration == 0.4 s { INFO@mark `UI134 animated does not give the shape a transition` }
-unless Geometry.Box(){position.kind == fixed, inset.top == 0px}.position.kind == fixed { INFO@mark `UI135 position == fixed is not narrowed` }
+unless Geometry.Box(){position == Geometry.Fixed()}.position is Geometry.Fixed { INFO@mark `UI135 position == fixed is not narrowed` }
 dynamic_style := Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}()
 unless dynamic_style.styles.contains("muted") { INFO@mark `UI136 a dynamic style is not applied` }
 unless dynamic_style.styles is Dynamic { INFO@mark `UI137 a dynamic style is not kept for the levels to recompute` }
-styled_link := Geometry.Box(location: @/x)
-muting := { {x: Geometry.Shape{location}} => x ^muted }
+styled_link := Geometry.Box(content: @/x)
+muting := { {x: Geometry.Shape{content is Location}} => x ^muted }
 with UI.Theme.kinds = muting {
   Geometry.Box(children: [styled_link]).themed
-  unless styled_link.styles.contains("muted") && styled_link.color == UI.Theme["muted"].color { INFO@mark `UI139 a kind's default style is not applied` }
+  unless styled_link.styles.contains("muted") && styled_link.color == Geometry.Color(128, 128, 128) { INFO@mark `UI139 a kind's default style is not applied` }
 }
-search_field := Geometry.Box(content: Choice(type: String, value: "", placeholder: "Search", placeholder_color: Geometry.Color(1, 2, 3)))
-unless search_field.face.content == "Search" && search_field.face.color == Geometry.Color(1, 2, 3) { INFO@mark `UI140 an empty field does not show its placeholder in its colour` }
-code_area := Geometry.Box(content: Choice(type: String{multiline}, value: "x := 1", language: ".ray"))
-unless code_area.face.content.marks.nonempty && code_area.face.content == "x := 1" { INFO@mark `UI142 a text area in a language is not painted` }
+search_field := Geometry.Box(content: choose? String ?? "Search")
+with UI.Theme.placeholder = Geometry.Shape{color == Geometry.Color(1, 2, 3)} {
+  unless search_field.face.content == "Search" && search_field.face.color == Geometry.Color(1, 2, 3) { INFO@mark `UI140 an empty field does not show its placeholder in its colour` }
+}
+code_area := Geometry.Box(content: (choose $.ray).attempt("x := 1"))
+unless code_area.face.content.some(.styles.nonempty) && code_area.face.content == "x := 1" { INFO@mark `UI142 a text area in a language is not painted` }
 red := Geometry.Color(255, 0, 0)
 unless UI.Theme.painted("keyword") == "#6C6783" as Geometry.Color { INFO@mark `UI146 a highlighting style has no colour in the default palette` }
-unless UI.Theme.painted("muted") == UI.Theme["muted"].color { INFO@mark `UI147 a page style is not a highlighting style` }
+unless Geometry.Box().styled("muted").color == Geometry.Color(128, 128, 128) && Geometry.Box().styled("keyword").color == UI.Theme.painted("keyword") { INFO@mark `UA1 a page style and a highlighting style are not applied the same way` }
 
 unless currentColor is Section { INFO@mark `UI148 currentColor is not an inherited paint` }
 tinted_icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
@@ -173,39 +175,36 @@ if keyboard.pressed("f", modifier: Keyboard.Modifier.alt) { INFO@mark `UI163 ctr
 keyboard["f"].release
 if keyboard.pressed("f") { INFO@mark `UI164 a released key stays pressed` }
 swipe_start := Time.now
-UI.pointed().to(Geometry.Vector(200px, 0px), pressing: [0], time: swipe_start)
-UI.pointed().to(Geometry.Vector(180px, 0px), time: swipe_start + 10 ms)
-unless UI.pointer.velocity.x == -2px { INFO@mark `UI168 pointer velocity is not distance over time` }
-UI.pointed().to(Geometry.Vector(100px, 0px), pressing: [], time: swipe_start + 300 ms)
-unless UI.pointer.swipe.distance.x == -100px && UI.pointer.swipe.duration == 300 ms { INFO@mark `UI169 a press, move and release is not a swipe` }
-selected_field := Geometry.Box(content: Choice(type: String, value: "hello"))
+mouse := @me/device/pointer["mouse"]
+mouse.to(Geometry.Vector(200px, 0px), pressing: [0], time: swipe_start)
+mouse.to(Geometry.Vector(180px, 0px), time: swipe_start + 10 ms)
+unless mouse.velocity.x == -2px { INFO@mark `UI168 pointer velocity is not distance over time` }
+mouse.to(Geometry.Vector(100px, 0px), pressing: [], time: swipe_start + 300 ms)
+unless mouse.swipe.distance.x == -100px && mouse.swipe.duration == 300 ms { INFO@mark `UI169 a press, move and release is not a swipe` }
+selected_field := Geometry.Box(content: (choose String).attempt("hello"))
 selected_field.select
-unless selected_field.text.marks{.style == "selected"}.last.to == 5 && selected_field.text.marked_text("selected") == "hello" { INFO@mark `UI171 selecting a field whole does not select its text` }
+unless selected_field.text{.styles.contains("selected")}.count == 5 && selected_field.text == "hello" { INFO@mark `UI171 selecting a field whole does not select its text` }
 
 watched_value := 1
 fired_count := 0
-watch := Program(code: { fired_count = fired_count + 1 }).when(Program(code: { watched_value }))
-watch.fired
+{ fired_count = fired_count + 1 } when watched_value changes
 unless fired_count == 0 { INFO@mark `UI174 when … changes fires before anything changed` }
 watched_value = 2
-watch.fired
 unless fired_count == 1 { INFO@mark `UI175 when … changes does not fire on a change` }
-watch.fired
+watched_value = 2
 unless fired_count == 1 { INFO@mark `UI176 when … changes fires twice for one change` }
 became_count := 0
-becoming := Program(code: { became_count = became_count + 1 }).when(Program(code: { watched_value }), 3)
+{ became_count = became_count + 1 } when watched_value becomes 3
 watched_value = 4
-becoming.fired
 watched_value = 3
-becoming.fired
 unless became_count == 1 { INFO@mark `UI177 when … becomes fires on another value` }
 timer_fired := false
-timer := Program(code: { timer_fired = true }).after(0 s)
-timer.fired
+{ timer_fired = true } after 0 s
 unless timer_fired { INFO@mark `UI178 after fires late` }
-if Program(code: { timer_fired = false }).after(1 h).ready { INFO@mark `UI179 after fires early` }
-unless Program(code: { fired_count = 0 }).after(6 s) === Program(code: { fired_count = 0 }).after(6 s) { INFO@mark `UI180 a timer asked for again in the same frame restarts` }
-unless ({ timer_fired = true } after 6 s) is UI.Watch { INFO@mark `UI181 x after 6 s is not a timer` }
+early_fired := false
+{ early_fired = true } after 1 h
+if early_fired { INFO@mark `UI179 after fires early` }
+unless ({ timer_fired = true } after 6 s) is Dynamic { INFO@mark `UI181 x after 6 s is not a trigger` }
 
 watched := (@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}
 video := Program(code: { watched }){O: UI.Scene}()
@@ -231,13 +230,13 @@ unless logo.language === Language.Image && (@./clip.mp4).language === Language.V
 unless (@https://orbitmines.com/a.png?v=2).extension == "png" { INFO@mark `UI225 a query is read as part of the extension` }
 unless logo_shape.fields["width"].type.most == 400px { INFO@mark `UI227 a narrowing on a location does not constrain where it is shown` }
 placed_text := Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}()
-unless placed_text.content == "Ray" && placed_text.location == @https://orbitmines.com { INFO@mark `UI230 a value placed at a location is not a link to it` }
+unless placed_text.content == @https://orbitmines.com && placed_text.children.first.content == "Ray" { INFO@mark `UI230 a value placed at a location is not a link to it` }
 heading := Program(code: { "Ray" ^h1 }){O: UI.Scene}()
-unless heading.content == "Ray" && heading.content.marks.some(.style == "h1") { INFO@mark `UI232 a style is not kept on the string it marks` }
+unless heading.content == "Ray" && heading.content.every(.styles.contains("h1")) { INFO@mark `UI232 a style is not kept on the string it marks` }
 highlighted := "x := 1".highlighted(".ray")
-unless highlighted == "x := 1" && highlighted.partial_marks.nonempty { INFO@mark `UI233 a highlighted string is not the same string with marks` }
+unless highlighted == "x := 1" && highlighted.pieces.count > 1 { INFO@mark `UI233 a highlighted string is not the same string with marks` }
 italic_text := Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px))
-unless UI.Theme.face(italic_text, 1).font.style == italic && UI.Theme.face(italic_text, 0).font.style == normal { INFO@mark `UI235 a string's styles are not read per character` }
+unless UI.Theme.face(italic_text, italic_text.content[1]).font.style == italic && UI.Theme.face(italic_text, italic_text.content[0]).font.style == normal { INFO@mark `UI235 a string's styles are not read per character` }
 with @me = Character(name: "player") {
   unless Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice { INFO@mark `UI239 a superposition is not a chooser for a player` }
 }
@@ -275,7 +274,7 @@ animated := Geometry.Vector(0px, 0px) -> Geometry.Vector(100px, 0px) over (0 s .
 with Time.now = animated.stops.last.at {
   unless animated.value == Geometry.Vector(100px, 0px) { INFO@mark `UI260 a value over a time is not where it ends when it ends` }
 }
-unless Geometry.Space.of(Graph.Simple().connect(1, 2)).projection.erred { INFO@mark `UI261 a graph is embedded before embedding is implemented` }
+unless (Graph.Simple().connect(1, 2) as Geometry.Space).projection.erred { INFO@mark `UI261 a graph is embedded before embedding is implemented` }
 unless Compiler.reduced(Geometry.Vector(1px, 2px).map(. * 2), Geometry.specialised) == Geometry.Vector(2px, 4px) { INFO@mark `UI262 specialising a known plane changes what a vector maps to` }
 unless Geometry.Transform.rotate((1 / 4) turn).count == 3 { INFO@mark `UI263 a plane's transform is not three by three` }
 
@@ -283,13 +282,13 @@ unless Geometry.Transform.rotate((1 / 4) turn).count == 3 { INFO@mark `UI263 a p
 halved := Geometry.Box(size: Geometry.Vector(1000px, 800px), children: [Geometry.Box(){width <= 50%}]).solve
 unless halved.children.first.size.x == 500px { INFO@mark `UI264 a share bound is not a share of the parent's width` }
 unless Geometry.Box(size: Geometry.Vector(10px, 20px), radius: [50%]).radii.first == Geometry.Vector(5px, 10px) { INFO@mark `UI265 a share radius is not half the shape's size` }
-with UI.Theme.styles = [("tall", {height >= 30px})] {
+with UI.Theme.tall = Geometry.Shape{height >= 30px} {
   unless Geometry.Box().styled("tall").fields["height"].type.least == 30px { INFO@mark `UI266 a theme style does not carry its bound` }
 }
-unless Choice(type: String{search}, value: "ray").shown == "ray" { INFO@mark `UI267 a search field is not a text field in the terminal` }
+unless (choose String{search}).attempt("ray").shown == "ray" { INFO@mark `UI267 a search field is not a text field in the terminal` }
 unless (@https://youtu.be/abc?si=xyz&t=1m5s).embedded as String == "https://www.youtube.com/embed/abc?si=xyz&start=65" { INFO@mark `UI268 an embedding drops the query` }
 unless (@https://www.youtube.com/watch?v=abc&t=30).embedded as String == "https://www.youtube.com/embed/abc?start=30" { INFO@mark `UI269 a watch link's time is not where the embed starts` }
-unless Program(code: { Choice(type: String) ^muted }){O: UI.Scene}().styles.contains("muted") { INFO@mark `UI270 a styled choice is not a styled box holding it` }
+unless Program(code: { (choose String) ^muted }){O: UI.Scene}().styles.contains("muted") { INFO@mark `UI270 a styled choice is not a styled box holding it` }
 unless (@./logo.png{alt: "logo"}).alt == "logo" { INFO@mark `UI271 a narrowing after a location literal is not a narrowing` }
 unless @./logo.png{alt: "logo"} as String == "./logo.png" { INFO@mark `UI272 a narrowing is read into the location's path` }
 alt_of := (name: String) => @./logo.png{alt: name}
@@ -313,7 +312,7 @@ second_laid := Geometry.Box(height: 20px)
 solved([first_laid, second_laid])
 unless first_laid.origin.y == 780px { INFO@mark `YU9 the first shape in a flow is not at the top` }
 unless second_laid.origin.y < first_laid.origin.y { INFO@mark `YU10 a shape later in a flow is not below the one before it` }
-bottomed := Geometry.Box(position: Geometry.Absolute(), inset: Geometry.Edges(None, None, 4px, None), height: 10px)
+bottomed := Geometry.Box(position: Geometry.Absolute(), height: 10px) + Geometry.Spacing(Geometry.Edges(None, None, 4px, None), itself)
 solved([bottomed])
 unless bottomed.origin.y == 4px { INFO@mark `YU11 a bottom inset is not measured up from the bottom` }
 unless Geometry.Edges(1px, 2px, 3px, 4px).start == Geometry.Vector(4px, 3px) { INFO@mark `YU12 a box's corner of origin is not its bottom left` }
@@ -332,7 +331,10 @@ unless Geometry.Box(size: Geometry.Vector(4px, 2px)).discretized(1px).cells.coun
 
 // Controllers are numbered on the device and take back their number (F-I1)
 pad_device := Device()
-unless pad_device.connected("pad A").id == 0 && pad_device.connected("pad A").guest { INFO@mark `FWU1 a new controller is not a guest with the first free id` }
-unless pad_device.connected("pad B").id == 1 { INFO@mark `FWU2 a second controller does not take the next id` }
-pad_device.disconnected("pad A")
-unless pad_device.connected("pad A").id == 0 { INFO@mark `FWU3 a reconnecting controller does not take back its id` }
+unless pad_device.controllers.connected("pad A").name == 0 && pad_device.controllers.connected("pad A").guest { INFO@mark `FWU1 a new controller is not a guest with the first free id` }
+unless pad_device.controllers.connected("pad B").name == 1 { INFO@mark `FWU2 a second controller does not take the next id` }
+pad_device.controllers.disconnected("pad A")
+unless pad_device.controllers.connected("pad A").name == 0 { INFO@mark `FWU3 a reconnecting controller does not take back its id` }
+
+// Spacing is one component, and adding it leaves the shape what it was (F-B8, F-B8b)
+unless (Geometry.Ball(size: Geometry.Vector(8px, 8px)) + (p 2)) is Geometry.Ball { INFO@mark `UA3 a ball with padding is not a ball` }

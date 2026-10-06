@@ -50,7 +50,7 @@ Node &+= {
 
 Possibilities := class = values: Iterable {
   entry => values.entry
-  .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : Possibilities(values: values.map(external get . property))
+  .{literal property ^property} ^punctuation => Possibilities(values: values.map(external get . property))
 }
 Possibilities.components.hierarchy &= Iterable
 Possibilities &+= {
@@ -72,7 +72,7 @@ Node &+= {
 #{value} ^punctuation => value#
 
 Composed := class = parts: Node[], joining: Program {
-  .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : parts.map(external get . property).reduce((acc) => joining(acc, .))
+  .{literal property ^property} ^punctuation => parts.map(external get . property).reduce((acc) => joining(acc, .))
 }
 Node &+= {
   &+ (other) => Composed(parts: [this, other], joining: (a, b) => a & b) ~~ .components.hierarchy &= this ~~ .components.hierarchy &= other
@@ -136,7 +136,7 @@ Entry := class = of: Node, at: Program? {
 {value} @ {location} ^keyword => Placed(value, location)
 Placed := class = value: Node, location: Node {
   = (written) => (location[value] = written) -- this
-  .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get value property
+  .{literal property ^property} ^punctuation => external get value property
 }
 
 ? ^keyword => Unknown()
@@ -221,6 +221,8 @@ Node &+= {
 }
 
 print (x) => IO.output(x as String) -- x
+
+Object := * - Node
 
 Origin := class = method: Node, arguments: Node {
   == (other) => other === method || (other is Origin && other.method === method && other.arguments == arguments)

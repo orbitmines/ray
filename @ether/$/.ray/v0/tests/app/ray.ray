@@ -193,6 +193,9 @@ unless ends.last == 3 { INFO@mark `IT37 what was pushed at the back is not last`
 unless ends.pop_front == 1 { INFO@mark `IT38 popping the front does not give the first` }
 unless ends.pop_back == 3 { INFO@mark `IT39 popping the back does not give the last` }
 unless ends.count == 1 { INFO@mark `IT40 two popped off three do not leave one` }
+unknown_end := [1].push_back()
+unless unknown_end.count == 2 { INFO@mark `FWP1 pushing nothing does not make the array one longer` }
+unless unknown_end.last is Unknown { INFO@mark `FWP2 what pushing nothing adds is not unknown` }
 unless ends.first == 2 { INFO@mark `IT41 what is left is not the middle` }
 unless ends == [2] { INFO@mark `IT42 the one left is not all there is` }
 unless [1, 2, 3].remove(1) == [2, 3] { INFO@mark `IT69 removing the first does not leave the other two` }
@@ -318,6 +321,8 @@ unless swap_a == 2 && swap_b == 1 { INFO@mark `SD5 (a, b) = pair does not assign
 unless ["ccc", "a", "bb"].min(.count) == "a" { INFO@mark `MK1 min along a key does not pick the smallest by it` }
 unless ["ccc", "a", "bb"].max(.count) == "ccc" { INFO@mark `MK2 max along a key does not pick the largest by it` }
 unless 2.min(5) == 2 { INFO@mark `MK3 min of a value is no longer the smaller of the two` }
+unless ["ab", "c", "de"].max(.count)#.first == "ab" { INFO@mark `FWT2 the first of the tied longest is not the leftmost` }
+unless ["ab", "c", "de"].max(.count)#.last == "de" { INFO@mark `FWT3 the last of the tied longest is not the rightmost` }
 
 // `split` keeps its delimiters as the edges between the pieces (R3.16)
 unless "a,b,c".split(",") == ["a", "b", "c"] { INFO@mark `SQ1 a,b,c split at its commas is not a, b, c` }

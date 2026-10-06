@@ -27,12 +27,15 @@ From the drafts review (2026-10-06).
 - **R1.9 `relative_context | &&`** — *`.ray2/Ray.ray:86–87`*: `context | & =>`, `relative_context | && => //TODO Perhaps
   just context, relative context = just the ray.` `&&` here clashes with boolean `&&`. **Q** — Recommend dropping
   `relative_context | &&`: the relative context is the ray itself, as the draft suggests, and `&&` stays boolean.
+  **Follows (2026-10-06):** `relative_context | &&` is dropped: the relative context is the ray itself, and `&&` stays the boolean collapse of `&`, from G3.6 and U4 (`&` prefixes the current context).
 - **R1.10 `.value` on a many boundary** — *`.ray2/Ray.ray:44`*: "Setting .value on Many boundary in the case of Edge."
   **Q** — Recommend: setting `.value` on a superposed boundary sets it on each (U1), as R1.5 does for predicates.
+  **Follows (2026-10-06):** setting `.value` on a superposed boundary sets it on each alternative, from R1.4 and R1.5 (operations on a superposition map over it) and U1.
 - **R1.11 `unidirectional`** — *`.ray3/Ray.ray:54–57`*: `unidirectional => return // Tell the compiler links should be
   one-way`, with a `Reverse\` label; v0 (Ray.ray:29) has only the predicate `all.every(!.previous)`. **Q** — Recommend:
   written on a structure, `unidirectional` is an assertion and a compile hint (no `.previous` links are kept), like
   `dynamically assert` (R1.3).
+  **Follows (2026-10-06):** `unidirectional` is the boolean predicate v0 has (`all.every(!.previous)`); written on a structure it is a narrowing / `dynamically assert unidirectional`, which the compiler may also take as the hint to keep no `.previous` links, from R1.3 (structure constraints are `dynamically assert`), T4.11 (answered: booleans are narrowings) and choices being optimisations the compiler makes.
 - **R1.12 `|` inside a list makes branches** — *`Almanac.tsx:893–896`*: `x: Graph = [1, "2a" | "2b", 3]`. **Decided
   (draft, Almanac)**: alternatives written with `|` while building a structure become separate branches of the graph.
 
@@ -64,6 +67,7 @@ From the drafts review (2026-10-06).
   depth-first X levels then breadth". R2.1 decides only the spelling. **Q** — Recommend: `n * T` is n steps of T, `,`
   sequences them, a traverser may be a superposition (probabilistic) or a function of the entry, and a direction filter
   composes with any of them.
+  **Follows (2026-10-06):** `n * T` is n steps of T, `,` sequences traversers, a traverser may be a superposition (weighted for a probabilistic mix) or a function of the entry, and a direction filter composes with any of them; nothing traverser-specific, from R2.1 (the traverser is a context override), R3.9 (`* n` repeats), `,` composition and U-C1 weights.
 - **R2.11 Indexing a recursively defined ray** — *`Almanac.tsx:864–867`*: `(0 -> +2)[4]` is `8`. **Decided (draft,
   Almanac)**: a ray defined by a recursive step is indexed like any iterable; `[n]` applies the step n times.
 
@@ -124,16 +128,19 @@ From the drafts review (2026-10-06).
   side; `[a, b, c].zip` (no argument) zips the lists in the list.
 - **R3.21 `push_back()` with no value** — *`.ray2/_todo/ray.ray.txt/ray.ray:6`*: "push_back(void) should only create the
   array one longer." **Q** — Recommend: `push_back()` adds one entry holding `?` (unknown, T1.6). (R3.2.)
+  **Follows (2026-10-06):** `push_back()` adds one entry holding `?` (the parameter defaults to `?`), from T1.6 and T3.10 (an unset value is `?`).
 - **R3.22 Ties at the extreme** — *`.ray2/_todo/…/instance/Network.ray:113` (before 7250308), `v0/Test.ray:89` (7250308)*:
   `#{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost` (RFC 5952: the longest run of
   zeros, the leftmost of equals). **Q** — Recommend: `xs.max(by)` is the superposition of the tied ones, and `.first` /
   `.last` picks among them by position; inside `#{…}`, `min()` and `leftmost` aggregate over the superposition. (R3.10.)
+  **Follows (2026-10-06):** `xs.max(by)` / `xs.min(by)` is the superposition of the tied ones; `#.first` / `#.last` picks among them by position; inside `#{…}`, `min()` and `leftmost` aggregate over the superposition, from U1 (superposition over flags), R3.4 (`.min` over a superposition of paths) and T2.3 (`#` is the possible values).
 - **R3.23 What `~=` leaves behind** — *`.ray2/_todo/…/instance/Network.ray:114–115` (before 7250308; `:213–214` in the
   removed block)*: "default functionality of ~= is removed from surrounding context unless X?"; "What if the result of ~=
   is another iterable #. … how to know that a group doesnt belong to the iterable. Probably .expand." **Q** — Recommend:
   `x ~= p` answers the matches, a superposition of selections that stay in their context, and does not change x;
   `.remove` on a match removes it from x (R3.1). A match that is itself a superposition is one match; `.expand` unfolds
   it.
+  **Follows (2026-10-06):** `x ~= p` answers the matches, a superposition of selections that stay in their context, and does not change x; `.remove` on a match removes it from x. A match that is itself a superposition is one match; `.expand` unfolds it, from L§1.2 (only an optimisation mutates; the semantics never do) and R3.1 (`.remove` is a separate method).
 
 ## R4. Ranges (*ep:1558–1638; Ray:657–659*)
 
@@ -158,6 +165,7 @@ From the drafts review (2026-10-06).
   (paraphrased)*: an iterable is always finite but carries a "modular" property, so iterating a loop gives finite rays
   together with where they wrap around. **Q** — Recommend: iterating an orbit answers the finite unrolled ray plus a
   terminal boundary joined to its initial one (R5.1 `unrolled_mod`). Ask whether the note is still current.
+  **Follows (2026-10-06):** iterating a loop answers the finite unrolled ray plus a terminal boundary joined to its initial one (`unrolled_mod`); a loop is not ∞, from R5.1 and R5.2.
 
 ## R6. Objects as rays (*Ray:704–728*)
 
@@ -170,10 +178,12 @@ From the drafts review (2026-10-06).
 
 - **R6.4 `x.1` and `x[1]`** — *`.ray2/Ray.ray:48`*: "`.[index]` shouldnt overwrite the '1' without a .1 (needs a special
   rule)". **Q** — Recommend: `x[1]` is the index and `x.1` the member written `1`; `x[1] = v` never creates a member `1`.
+  **Follows (2026-10-06):** `x[1]` is the index and `x.1` the member written `1`; `x[1] = v` never creates a member `1`, from G1.2 (a word is what it spells) and R6.1 (`[…]` selects or indexes, `.name` is a member); `[]` is an ordinary Node method (T4.18 answer).
 - **R6.5 An object's members as a graph** — *`.ray2/Node.ray:1`*: "Functionality for turning the Node structure into a
   Graph (only certain types of methods) and navigating that. Like Saying the hierarchical tree as a Graph." **Q** —
   Recommend: `x as Graph` views an object's members (its fields by default, not methods; others with `<members: …>`) as
   a Graph whose edges are labelled by member name; the hierarchy is that view restricted to `.children`.
+  **Follows (2026-10-06):** `x as Graph` is an ordinary conversion viewing an object's members (its fields by default; others with `<members: …>`) as a Graph whose edges are labelled by member name; the hierarchy is that view restricted to `.children`, from R6.1 (an object is a superposed Ray), Almanac A2 (Array ⊂ Graph structurally) and R7.2 (hierarchy).
 
 ## R7. Hierarchy and Location (*World:17–25, 444–470; ep:279–284*)
 
@@ -198,6 +208,7 @@ From the drafts review (2026-10-06).
   top.left.last go to the topmost/leftmost". **Q** — Recommend: `->` is the next one; `->>` is everything onward to the
   far boundary within the current hierarchy level; `x.hierarchy ->>` ignores levels. Directions compose:
   `top.left.last` is the top-left extreme.
+  **Follows (2026-10-06):** `->` is the next one; `->>` is everything onward to the far boundary within the current hierarchy level; `x.hierarchy ->>` ignores levels; directions compose (`top.left.last` is the top-left extreme), from F-G3 (Decided draft: `<-`/`->` are neighbours, `<<-`/`->>` the far ends) and R7.2.
 
 ---
 

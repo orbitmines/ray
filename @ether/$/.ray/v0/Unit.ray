@@ -170,6 +170,9 @@ SI_Unit b "bit"
 SI_Unit B "byte"
 Binary_Unit B "byte"
 byte.multiple 8, bit
+Quantity{unit == bit} &+= {
+  as (=== Binary) => amount is Integer ? Binary{length == amount} : ERROR `a bit count is whole bits`
+}
 
 Unit(name: "minute" ("s" + plural: true)?, symbol: "min" | "m").multiple 60, second
 Unit(name: "hour" ("s" + plural: true)?, symbol: "h").multiple 60, minute

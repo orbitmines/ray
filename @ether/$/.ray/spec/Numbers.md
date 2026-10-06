@@ -75,6 +75,7 @@ From the drafts review (2026-10-06).
   (with N2.4's superposition resolved by this).
 - **N2.11 Bytes as Binary** — **Q.** *…/utils/Number.ray:162–171*: `1000 MB`, `MiB`, `3.2 Kilobyte`, `Unit as Binary`.
   Recommend: `n B as Binary` is `Binary^(8n)` (`b` is one bit); a fractional byte count is a bit count and must be whole bits.
+  **Follows (2026-10-06):** `n B as Binary` is `Binary₈ₙ`, a length of 8n bits (`b` is one bit), written as a subscript behind, not `Binary^(8n)`: a superscript is always exponentiation (N1.21 answer, which removed A5's "`^` on a base type is length"). A fractional byte count is a bit count and must be whole bits, from N1.21 (answered), A-C6 (answered: length) and N2.5/N2.6 (units and binary prefixes).
 
 ## N3. Roman (*Roman.ray*)
 

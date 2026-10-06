@@ -95,12 +95,12 @@ unless 1 sol == 88775 seconds { INFO@mark `TI88 a sol is not 88775 seconds` }
 Host := class: OS (platform: String)
 unless Compiler.reduced(Host("linux"), TimeZone.sources) is TimeZone.Zoneinfo { INFO@mark `TZ1 linux does not read the host's zoneinfo` }
 unless Compiler.reduced(Host("darwin"), TimeZone.sources) is TimeZone.Zoneinfo { INFO@mark `TZ2 macos does not read the host's zoneinfo` }
-if Compiler.reduced(Host("linux"), TimeZone.sources).directory == TimeZone.downloaded.directory { INFO@mark `TZ3 linux downloads the data instead of reading the host's` }
+if Compiler.reduced(Host("linux"), TimeZone.sources).directory == OS.Ether().zoneinfo { INFO@mark `TZ3 linux downloads the data instead of reading the host's` }
 unless Compiler.reduced(Host("win32"), TimeZone.sources) is TimeZone.ICU { INFO@mark `TZ4 windows does not ask the OS's ICU` }
 unless Compiler.reduced(Host("browser"), TimeZone.sources) is TimeZone.Intl { INFO@mark `TZ5 the browser does not ask Intl` }
-unless Compiler.reduced(OS.Ether(), TimeZone.sources).directory == TimeZone.downloaded.directory { INFO@mark `TZ6 ether does not download the data` }
+unless Compiler.reduced(OS.Ether(), TimeZone.sources).directory == OS.Ether().zoneinfo { INFO@mark `TZ6 ether does not download the data` }
 unless OS.Ether().name == ether { INFO@mark `TZ7 the language as the operating system is not ether` }
-unless TimeZone.downloaded.version == "2026c" { INFO@mark `TZ8 the downloaded data is not tzdata 2026c` }
+unless TimeZone.Zoneinfo(directory: OS.Ether().zoneinfo).version == "2026c" { INFO@mark `TZ8 the downloaded data is not tzdata 2026c` }
 
 summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
 winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
@@ -119,6 +119,8 @@ Counting := class: TimeZone.Zoneinfo {
   asked: String[] = []
   data (zone: String) => (asked.push zone) -- $.tzif.read((directory / zone).bytes)
 }
-counting := Counting(directory: TimeZone.downloaded.directory)
+counting := Counting(directory: OS.Ether().zoneinfo)
 counting.at("Europe/Amsterdam", summer)
 unless counting.asked == ["Europe/Amsterdam"] { INFO@mark `TZ16 reading one zone read others than the one asked for` }
+unless OS.Ether().zoneinfo.kept && (OS.Ether().zoneinfo / "Europe/Amsterdam").kept { INFO@mark `TZ17 the language as the operating system does not download its zone data and keep it` }
+if Host("linux").zoneinfo.kept { INFO@mark `TZ18 a host's own zone data is downloaded` }

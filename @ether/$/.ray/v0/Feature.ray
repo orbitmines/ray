@@ -2,8 +2,12 @@ Location &+= {
   normalised => segments{!= "."}.reduce(kept = [] => . == ".." ? kept[..<-1] : (kept, .)).join("/")
   sandboxed => "instance/" + normalised
   system: FileSystem => Compiler.reduced(this, FileOptimizations)
-  content => system.read(this) as String
-  bytes => (system.read(this) ?? []) as Byte[]
+  kept: boolean = false
+  downloaded: static => this ~~ .kept = true
+  static kept_reads: (at: String, read: *)[] = []
+  read => kept ? (Location.kept_reads{.at == this as String}.last?.read ?? (system.read(this) -- (fetched => (Location.kept_reads.push (at: this as String, read: fetched)) -- fetched))) : system.read(this)
+  content => read as String
+  bytes => (read ?? []) as Byte[]
   listing => system.listing(this)
   exists => system.exists(this)
   write (content): static => this ~~ system.write(., content)
@@ -139,6 +143,7 @@ OS := class {
   zones: Zones = Zones()
   platform => this["platform"]
   architecture => this["architecture"]
+  zoneinfo: Location? => name is (linux | macos) ? (this["TZDIR"] ?? "/usr/share/zoneinfo") as Location : None
   name: linux | macos | windows | browser | ether | unknown => platform ? { "linux": linux, "darwin": macos, "win32": windows, "browser": browser, "ether": ether }[platform] ?? unknown : ether
 
   static launch (location: Location) => external os `open` (location as String)

@@ -1,3 +1,4 @@
 OS.Ether := class: OS {
   [property: String] => { "platform": "ether", "architecture": "ray" }[property]
+  zoneinfo => ($.tzif.repository / "zoneinfo").downloaded
 }

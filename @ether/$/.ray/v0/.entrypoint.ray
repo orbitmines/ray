@@ -1020,7 +1020,7 @@ Node := base class {
     repeated
   )
 
-  ++ => (
+  copy => (
     copy := external .
     external extend copy this
     copy
@@ -1028,7 +1028,7 @@ Node := base class {
 
   diagnostics = None
   diagnosed (diagnostic) => (
-    marked := this++
+    marked := this.copy
     marked.diagnostics = chain None
     if this.diagnostics { extended_by(marked.diagnostics, this.diagnostics.head) }
     marked.diagnostics &= diagnostic

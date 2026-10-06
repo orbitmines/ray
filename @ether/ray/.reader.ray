@@ -188,10 +188,28 @@ captured {pieces} from {at} to {limit} =>
   name := pieces . capture
   rest_pieces := pieces . next
   ends := ends from at to limit
+  // a capture followed by a literal ends only where that literal starts (its first character, or a line end for a space)
+  wanted := nothing
+  if rest_pieces then
+    following := rest_pieces . literal
+    if following then
+      wanted := following . character
   found := nothing
   while ends do
     e := ends . place
-    rest := readings of rest_pieces from e to limit
+    worth := yes
+    if wanted then
+      worth := nothing
+      if e then
+        c := e . character
+        if character c is wanted then
+          worth := yes
+        if character wanted is space then
+          if character c is end then
+            worth := yes
+    rest := nothing
+    if worth then
+      rest := readings of rest_pieces from e to limit
     if rest then
       cap := node
       set cap . name to name
@@ -380,6 +398,97 @@ plan {from} to {to} below {base} in {scope} =>
   first
 
 hand planning over
+
+// ---------------------------------------------------------------- heads read in Ray (R2.2)
+open := learned . open
+close := learned . close
+
+// The place of the bracket that closes one opened just before `at`, or nothing when another opens first or none closes.
+closing from {at} to {limit} =>
+  here := at
+  found := nothing
+  while here do
+    if same here limit then
+      here := nothing
+    if here then
+      c := here . character
+      if character c is open then
+        here := nothing
+      if here then
+        if character c is close then
+          found := here
+          here := nothing
+      if here then
+        here := here . next
+  found
+
+// A piece of a head, added to the chain `into` (a node with `first` and `last`).
+add {kind} piece from {piece_from} to {piece_to} into {into} =>
+  made := node
+  set made . from to piece_from
+  set made . to to piece_to
+  external set made kind yes
+  last := into . last
+  if last then
+    set last . next to made
+  unless last then
+    set into . first to made
+  set into . last to made
+
+// The pieces of a head: a capture is the brackets around a name (its first word), brackets around brackets are literal,
+// the rest is literal. A chain of `literal`/`capture`, each with `from` and `to`.
+pieces of {head_from} to {head_to} =>
+  into := node
+  at := head_from
+  start := head_from
+  while at do
+    if same at head_to then
+      at := nothing
+    if at then
+      c := at . character
+      captured := nothing
+      if character c is open then
+        inner := at . next
+        shut := closing from inner to head_to
+        if shut then
+          unless same inner shut then
+            captured := yes
+      if captured then
+        unless same start at then
+          add literal piece from start to at into into
+        name_end := word end from inner to shut
+        add capture piece from inner to name_end into into
+        at := shut . next
+        start := at
+      unless captured then
+        at := at . next
+  unless same start head_to then
+    add literal piece from start to head_to into into
+  into . first
+
+// Where the word from `at` ends: at a space, or at `limit`.
+word end from {at} to {limit} =>
+  here := at
+  found := limit
+  while here do
+    if same here limit then
+      here := nothing
+    if here then
+      c := here . character
+      if character c is space then
+        found := here
+        here := nothing
+      if here then
+        here := here . next
+  found
+
+// Rules defined from here on are read by their heads in Ray.
+{pattern} => {body} =>
+  where := external span pattern
+  head_from := where . from
+  head_to := where . to
+  pieces := pieces of head_from to head_to
+  external define pattern pieces body
 
 // One statement read at the top: applied in place, or reported. Answers the place after it.
 read statement at {at} =>

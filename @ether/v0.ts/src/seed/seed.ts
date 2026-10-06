@@ -62,11 +62,23 @@ export class Seed {
     this.externals.set('rules', (frame, [of]) => self.rules_of(self.force(of) as Node));
     this.externals.set('apply', (frame, [rule, caps, within]) => self.apply_chain(self.force(rule) as Node, self.force(caps) as Node, self.force(within) as Node));
     this.externals.set('frame', frame => frame.parent ?? frame);
+    // A rule from a head read by the entrypoint's reader: its pieces a chain of `literal` or `capture`, each a span (`from`, `to`).
+    this.externals.set('define', (frame, [pattern, pieces, body]) => {
+      const head = self.code_of(pattern), list: Piece[] = [];
+      for (let p = self.force(pieces) as Node | undefined; p; p = p.members.get('next') as Node | undefined) {
+        const f = self.where.get(p.members.get('from') as Node)!, t = p.members.get('to') as Node | undefined;
+        const text = f.text.s.slice(f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i);
+        list.push(p.members.has('capture') ? { cap: text } : { lit: text });
+      }
+      return self.define(head, self.code_of(body), list);
+    });
+    // Where code is: a node with the place it starts at (`from`) and the place after it (`to`, none at the text's end).
+    this.externals.set('span', (frame, [code]) => { const c = self.code_of(code), n = new Node(); n.members.set('from', self.place(c.text, c.b)); n.members.set('to', c.e >= c.text.s.length ? undefined : self.place(c.text, c.e)); return n; });
     this.externals.set('latest', () => { let last: Rule | undefined; for (const r of self.global.reach()) if (last === undefined || r.order > last.order) last = r; return last; });
     // What no rule reads, from a place to a place (or the text's end): a diagnostic (G1.8).
     this.externals.set('unread', (frame, [from, to]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined; const e = t === undefined ? f.text.s.length : self.where.get(t)!.i; self.say(`Unread \`${f.text.s.slice(f.i, e).slice(0, 60)}\`.`, { text: f.text, b: f.i, e }); return undefined; });
     // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
-    this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); n.members.set('access', self.chain_of(l.access)); return n; });
+    this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); n.members.set('access', self.chain_of(l.access)); n.members.set('open', self.character(l.open)); n.members.set('close', self.character(l.close)); return n; });
     // The head of a rule as a chain, to tell whether two rules are written with the same head.
     this.externals.set('head', (frame, [rule]) => self.chain_of(((self.force(rule) as Node).members.get('rule') as Rule).head.s.trim()));
   }
@@ -190,8 +202,8 @@ export class Seed {
 
   // ---------------------------------------------------------------- rules: defined where their head was written
   code_of(x: unknown): Code { return x instanceof Code ? x : new Code({ name: '?', s: String(x) }, 0, String(x).length, this.global); }
-  define(head: Code, body: Code): Rule {
-    const rule: Rule = { head, pieces: this.pieces(head.s.trim()), body: new Code(body.text, body.b, body.e, body.frame, this.planner), order: this.order++, planner: this.planner };
+  define(head: Code, body: Code, pieces?: Piece[]): Rule {
+    const rule: Rule = { head, pieces: pieces ?? this.pieces(head.s.trim()), body: new Code(body.text, body.b, body.e, body.frame, this.planner), order: this.order++, planner: this.planner };
     head.frame.rules.push(rule);
     this.version++;
     return rule;
@@ -348,9 +360,15 @@ export class Seed {
   }
 
   // The goto program written out as JS: a `switch` over its labels, each step a statement.
-  compiled_code = new Map<Code | string, { version: number; fn: Compiled }>();
+  // A program is the same for the same span, read by the same planner with the same rules in reach: kept by those, not by
+  // the code value (a capture is a new value every time its rule applies).
+  compiled_code = new Map<string, { version: number; fn: Compiled }>();
+  texts_seen = new Map<Text, number>(); scopes_seen = new Map<Node, number>(); planners_seen = new Map<Rule | undefined, number>();
+  id<K>(m: Map<K, number>, k: K) { let n = m.get(k); if (n === undefined) m.set(k, n = m.size); return n; }
   compile(body: Code): Compiled {
-    const kept = this.compiled_code.get(body);
+    let scope: Node | undefined = body.frame; while (scope && scope.rules.length === 0) scope = scope.parent;
+    const key = `${this.id(this.texts_seen, body.text)}:${body.b}:${body.e}:${this.id(this.planners_seen, body.planner)}:${scope ? this.id(this.scopes_seen, scope) : -1}`;
+    const kept = this.compiled_code.get(key);
     if (kept !== undefined && kept.version === this.version) return kept.fn;
     const steps = body.planner ? this.plan_by(body.planner, body) : this.program(body);
     const labels = new Map<string, number>();
@@ -378,7 +396,7 @@ export class Seed {
     }
     lines.push('return r;', '}');
     const fn = new Function('S', 'k', `return function (f) { ${lines.join('\n')} };`)(this, k) as Compiled;
-    this.compiled_code.set(body, { version: this.version, fn });
+    this.compiled_code.set(key, { version: this.version, fn });
     return fn;
   }
   // An argument that names a member of the frame (a capture, a local) is what it names; any other word is code.

@@ -48,6 +48,8 @@ Layout := class = root: Location = @./.ether/external/@ {
   changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)
 }
 
+%{number: Decimal.String} ^number => Version(number: number as Decimal)
+%{number: Decimal.String}'{revision: Decimal.String} ^number => Version(number: number as Decimal, revision: revision as Decimal)
 Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
   latest => !revision
   breaks_freely => number == 0

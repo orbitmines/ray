@@ -10,7 +10,7 @@ Access := class = who: *?, method: `=` | `()` | * = *, filter: Program? {
 {who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (external ** filter)))
 {who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))
 const {target} ^keyword => target ~~ .access = Accessor(who: Accessor.Permission.none, method: `=`)
-[none: Accessor.Permission.none, local: Accessor.Permission.local, confidential: Accessor.Permission.confidential].for (word, level) => {
+[(`none`, Accessor.Permission.none), (`local`, Accessor.Permission.local), (`confidential`, Accessor.Permission.confidential)].for (word, level) => {
   right-to-left `word`.read {target} ^keyword => target ~~ .access = Accessor(who: level, method: Access.Reading)
   right-to-left `word`.write {target} ^keyword => target ~~ .access = Accessor(who: level, method: `=`)
   right-to-left `word`.execute {target} ^keyword => target ~~ .access = Accessor(who: level, method: `()`)
@@ -119,7 +119,7 @@ Nondeterministic := Program{!(. is Deterministic)}
 Effecting := Program{Effects.of(.).some(. is (Effects.Source.io | Effects.Source.os | Effects.Source.network))}
 Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
 
-[pure: Pure, deterministic: Deterministic, nondeterministic: Nondeterministic].for (word, claim) => {
+[(`pure`, Pure), (`deterministic`, Deterministic), (`nondeterministic`, Nondeterministic)].for (word, claim) => {
   right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
 }
 

@@ -18,6 +18,10 @@ with @me/device/os = OS.Ether() {
   unless ("ethertest" as Location).listing == ["ethertest/a" as Location] { INFO@mark `ETH2 a location on ether does not list what was written under it` }
   ("ethertest/a" as Location).remove
   if ("ethertest/a" as Location).exists { INFO@mark `ETH3 a location removed on ether is still there` }
+
+  OS.Ether().sent("ethertest", "a")
+  OS.Ether().sent("ethertest", "b")
+  unless OS.Ether().received("ethertest") == "a" && OS.Ether().received("ethertest") == "b" && OS.Ether().received("ethertest") === None { INFO@mark `ETH9 a stream on ether does not give back what was sent to it, in order, once` }
 }
 Counting := class: TimeZone.Zoneinfo {
   asked: String[] = []

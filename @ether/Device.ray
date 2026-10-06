@@ -21,6 +21,7 @@ Device := class {
   wake_lock = false
   memory: Store = Store(at: @"memory")
   storage: Location = @"storage"
+  streams: Location = @"streams"
   quests => Program#{who: this}{running}
   disk => Disk(device: this, path: "")
 

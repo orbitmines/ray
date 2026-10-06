@@ -6,8 +6,10 @@ OS.Ether := class: OS {
   write (location: Location, content) => @me/device/storage[location.normalised] = content
   listing (location: Location) => @me/device/storage.fields.name{~= ⊢(location.normalised + "/")}
     .map(.after(location.normalised + "/").before("/")).unique.map(location / .)
-  sent (stream: String, content) => ERROR@OS `streams are not written in Ray yet`
-  received (stream: String) => ERROR@OS `streams are not written in Ray yet`
+  // A stream on ether (stdout, stdin, window, dom, …) is a place on the device: what is sent to it waits there, in order, until
+  // it is received; whoever plays the terminal or the window reads and writes the same place.
+  sent (stream: String, content) => @me/device/streams[stream] = [@me/device/streams[stream] ?? [], [content]].flatten(1)
+  received (stream: String) => (@me/device/streams[stream] ?? []) -- (waiting => (@me/device/streams[stream] = waiting.rest) -- waiting.first)
   launch (location: Location) => ERROR@OS `opening a location is not written in Ray yet`
   bit => ERROR@OS `a source of random bits is not written in Ray yet`
   now: Time => ERROR@OS `the clock kept by NTP is not written in Ray yet`

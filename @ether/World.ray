@@ -72,6 +72,7 @@ Location.current = @local
 Character &+= {
   static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find((who as String).fold_case.skeleton is .name.fold_case.skeleton)
 
+  avatars => name{is Location && .segments.some(.starts_with("@"))}
   presence | primary: Instance?
   constraint: *?
   focus: Program?

@@ -44,16 +44,16 @@ unless (vp as History).count == 2 { INFO@mark `VC16 a labelled program is not a 
 unless !Language.cfg.admits(Program(code: { while true { } })) { INFO@mark `VC57 a line's settings may run forever` }
 
 // What the Ray language keeps.
-unless Language.ray.fidelity == Language.Fidelity.lossless { INFO@mark `VC17 the .% history is not lossless` }
+unless Language.ray is Language.Lossless { INFO@mark `VC17 the .% history is not lossless` }
 unless $.ray === Language.ray { INFO@mark `VC43 $.ray is not the Ray language` }
 
 // A foreign snapshot: the change between two trees, written as Ray.
 text := "x := 1\ny := 2\nz := 3" as Byte[]
-vs1 := Language.Entry.of([(path: "a.ray", content: text)])
-vs2 := Language.Entry.of([(path: "b.ray", content: text)])
+vs1 := History.placed([(path: "a.ray", content: text)])
+vs2 := History.placed([(path: "b.ray", content: text)])
 unless History.change(vs1, vs2) as String == ".[\"b.ray\"] = .[\"a.ray\"]; .[\"a.ray\"] = None" { INFO@mark `VC29 a moved file is not read as a move` }
 unless (History.valued(vs1) -- History.change(vs1, vs2))["b.ray"] == History.valued(vs1)["a.ray"] { INFO@mark `VC30 a move does not keep the value` }
-vt1 := Language.Entry.of([(path: "a.ray", content: text), (path: "c.ray", content: text)])
+vt1 := History.placed([(path: "a.ray", content: text), (path: "c.ray", content: text)])
 unless History.change(vt1, vs2) is Abstract { INFO@mark `VC31 a rename two files could have made is not a quest` }
 
 // Merging: concurrent changes to one field are a quest; to two are not.

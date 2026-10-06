@@ -177,7 +177,7 @@ History &+= {
 
   rekeying (who: Character, label, readers = following) => who.policy() -- (policy => policy.cipher.generated() -- (content =>
     [[who], readers].flatten.map(.inboxes()).flatten.unique.map(wrapped(content, label, ., policy)).shuffled))
-  rekeyed (who: Character, readers = following) => choose UUID.v1{unique} -- (label => wrapping(who, rekeying(who, label, readers), id: label))
+  rekeyed (who: Character, readers = following) => UUID.v1() -- (label => wrapping(who, rekeying(who, label, readers), id: label))
 
   // A line that is not public uses its current content key (a first commit brings one of its own); its who signs it
   // before and after the storage levels, so the signature covers the ciphertext (L§9.2).
@@ -185,7 +185,7 @@ History &+= {
     -- (keyed => made ~~ (.wraps = keyed) ~~ (.key = keyed.some(.key == made.id) ? made.id : current_key))
     -- (keyed => keyed.who is Entity ? keyed.who.sealed(keyed.who.sealed(keyed).stored) : keyed.stored)
   // A commit that only carries wraps of content keys (a reader added, a key rotated).
-  wrapping (who, wraps: *[], id: History.Label = choose UUID.v1{unique}) =>
+  wrapping (who, wraps: *[], id: History.Label = UUID.v1()) =>
     this ~~ .head = committed(History.Commit(id, who, stamp: clock.now, change: Program(code: { . }), wraps: wraps, previous: head, line: this))
   // A cache line carries the wraps of its key, so it opens without the line it caches.
   cached_at (commit: History.Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program) ~~ (.wraps = wraps_of(commit.key) if commit.key)

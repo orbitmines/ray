@@ -33,7 +33,7 @@ Store := class: Hierarchy = at: Location = @local, format: Format? {
   static Format := class = language: Language, file = true, versioned = false {
     read (store: Store, type) => (versioned ? language.read(store.at)?.value : file ? language.read(store.at.content) : language.read(store.at)[type.name].map(row => Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
     kept (store: Store, instance) => versioned ? store.history.appended(store.at, language)
-      : file ? store.at.write(language.write(store.children))
+      : file ? (store.at.content = language.write(store.children))
       : language.read(store.at).executed(language.write([instance as Row]))
   }
 

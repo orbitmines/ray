@@ -30,15 +30,9 @@ Character := class: Hierarchy + Entity + Nameable {
   static PREFIX = "@"
   static local (who) => who == "me" ? @me : None
 
-  profile_picture: *?
-  profile: *?
-
-  avatars => name{is Location && .segments.some(.starts_with("@"))}
   quests => Program#{who: this}{running}
   // Without @ether/security a character is only itself; security replaces this with the verified comparison.
   as (=== boolean) => this === @me
   acting => this
   chainable == (other) => ERROR@Security `comparing characters needs @ether/security (or @ether/network)`
-
-  choose (s, n: Number = 1) => Choice(type: s, count: n)
 }

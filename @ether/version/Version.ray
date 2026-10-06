@@ -3,7 +3,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
 
   // A commit is who changed what, when, after what. Signatures, content keys and ciphertext are @ether/security's
   // (it adds them to commits); version control does not import it.
-  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [] {
+  static Commit := class: Ray = id: Label = UUID.v1(), who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [] {
     when: Time = stamp?.when ?? Time.now
     message: String?
     previous: Commit?
@@ -58,7 +58,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   find (label) => since(None).find(.id == label)
   [commit: Commit | Label] => copy ~~ (.head = commit is Commit ? commit : find(commit))
 
-  commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static =>
+  commit (who, change, id: Label = UUID.v1(), when: Time = Time.now, message: String? = None, versions: Label[] = []): static =>
     this ~~ .head = committed(Commit(id, who, stamp: clock.now, change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this))
   // What a commit becomes before it is this line's head: what the storage levels in scope store. Security overrides it (keys, signatures).
   committed (made: Commit) => made.stored
@@ -82,7 +82,8 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last?.id ?? label
   checkout (label, as_of: Stamp? = None) => this[pinned(label, as_of)].value
   fix (who, label: Label, change) => commit(who, change, versions: [label])
-  tree => public ? value -- (held => Language.Entry.of(held.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])))) : Language.Entry.of(files)
+  tree => History.placed(public ? value.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])) : files)
+  static placed (files) => files.reduce(held = Location(path: "") => held.placed(.path, .content))
 
   fork => copy ~~ (.base = head)
   drop: static => reset(base)
@@ -154,12 +155,12 @@ History &+= {
   cached_at (commit: Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program)
 
   static level := {
-    {at: Location{segments.last == ".%"}} => IO.listing(at) -- (files => History.global(files{.name ~= ".ray" ⊣}.map(.content as Program as History))
+    {at: Location{segments.last == ".%"}} => at.listing -- (files => History.global(files{.name ~= ".ray" ⊣}.map(.content as Program as History))
       ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(.content as Program as History))
   }
 
   static written := {
-    {writing: Language.Writing{value is History}} => Language.Entry.of(writing.value.files)
+    {writing: Language.Writing{value is History}} => History.placed(writing.value.files)
   }
 
   static similar: Probability = 50%
@@ -167,15 +168,15 @@ History &+= {
   static similarity (a: Byte[], b: Byte[]) => (a as String).lines -- (left => (b as String).lines -- (right =>
     left.count + right.count == 0 ? 1 : 2 * left{right.contains(.)}.count / (left.count + right.count)))
 
-  static renamed_from (file: Language.Entry, gone: Language.Entry[]) => gone{similarity(.content, file.content) >= similar} -- (close =>
+  static renamed_from (file: Location, gone: Location[]) => gone{similarity(.content, file.content) >= similar} -- (close =>
     close{similarity(.content, file.content) == close.map(similarity(.content, file.content)).max} -- (best =>
       best.count > 1 ? Program(name: "rename", goal: (to: file, from: best)) : best.first))
 
-  static read_file (file: Language.Entry) => Language.for_file(file.name).read(file.content as String)
-  static valued (tree: Language.Entry) => tree.files.reduce(held = {} => held, {(.path): read_file(.)})
+  static read_file (file: Location) => Language.for_file(file.name).read(file.content as String)
+  static valued (tree: Location) => tree.files.reduce(held = {} => held, {(.path): read_file(.)})
 
   static assigned (path: String, to: String) => ".[" + Language.ray.write(path) + "] = " + to
-  static change (before: Language.Entry, after: Language.Entry) => before.files{!after.at(.path)} -- (gone =>
+  static change (before: Location, after: Location) => before.files{!after.at(.path)} -- (gone =>
     after.files{!before.at(.path)}.map(file => (file, from: renamed_from(file, gone))) -- (added => added.find(.from is Abstract)?.from ?? [
       added{.from}.map(assigned(.file.path, ".[" + Language.ray.write(.from.path) + "]")),
       gone.map(assigned(.path, "None")),
@@ -183,7 +184,7 @@ History &+= {
     ].flatten.join("; ") as Program))
 
   stored => Store.routed(this).map(.kept_in?.language).compact
-  lossless => stored.find(.fidelity == Language.Fidelity.lossless)
+  lossless => stored.find(. is Language.Lossless)
 
   append (location: Location) => head -- (commit => {
     location / (id as String + ".ray") += commit.written(above: written_last)
@@ -235,9 +236,9 @@ Access &+= {
 
 Compiler &+= {
   formats := {
-    ({kept: Language{fidelity == Language.Fidelity.lossless}} | {other: Language}).read({source}) => kept.read(source)
-    {history: History{location && stored.some(.fidelity == Language.Fidelity.snapshot)}}.checkout({label}) => history.pinned(label) -- (pinned =>
-      history.stored.find(.fidelity == Language.Fidelity.snapshot).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history[pinned].value))
+    ({kept: Language.Lossless} | {other: Language}).read({source}) => kept.read(source)
+    {history: History{location && stored.some(!(. is Language.Lossless))}}.checkout({label}) => history.pinned(label) -- (pinned =>
+      history.stored.find(!(. is Language.Lossless)).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history[pinned].value))
   }
 
   per_object := {
@@ -274,4 +275,8 @@ Language &+= {
 Language.ray &+= {
   level &+= History.level
   written &+= History.written
+}
+
+Consistency := class = replicas: *[] = [] {
+  read (value) => replicas.every(.synced) ? value : Program(name: "wait for the replicas", goal: value)
 }

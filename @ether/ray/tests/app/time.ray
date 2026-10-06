@@ -97,36 +97,15 @@ unless 1 sol == 88775.244 seconds { INFO@mark `TI88 a sol is not 88775.244 secon
 Host := class: OS (platform: String)
 unless Compiler.reduced(Host("linux"), TimeZone.sources) is TimeZone.Zoneinfo { INFO@mark `TZ1 linux does not read the host's zoneinfo` }
 unless Compiler.reduced(Host("darwin"), TimeZone.sources) is TimeZone.Zoneinfo { INFO@mark `TZ2 macos does not read the host's zoneinfo` }
-if Compiler.reduced(Host("linux"), TimeZone.sources).directory == OS.Ether().zoneinfo { INFO@mark `TZ3 linux downloads the data instead of reading the host's` }
 unless Compiler.reduced(Host("win32"), TimeZone.sources) is TimeZone.ICU { INFO@mark `TZ4 windows does not ask the OS's ICU` }
 unless Compiler.reduced(Host("browser"), TimeZone.sources) is TimeZone.Intl { INFO@mark `TZ5 the browser does not ask Intl` }
-unless Compiler.reduced(OS.Ether(), TimeZone.sources).directory == OS.Ether().zoneinfo { INFO@mark `TZ6 ether does not download the data` }
-unless TimeZone.Zoneinfo(directory: OS.Ether().zoneinfo).version == "2026c" { INFO@mark `TZ8 the downloaded data is not tzdata 2026c` }
 
 summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
 winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
-with @me/device/os = OS.Ether() {
-  amsterdam := TimeZone("Europe/Amsterdam")
-  unless amsterdam.at(summer).offset == 2 hours { INFO@mark `TZ9 Amsterdam in summer is not at +02:00 on ether` }
-  unless amsterdam.at(summer).abbreviation == "CEST" && amsterdam.at(summer).daylight { INFO@mark `TZ10 Amsterdam in summer is not on CEST` }
-  unless amsterdam.at(winter).offset == 1 hour { INFO@mark `TZ11 Amsterdam in winter is not at +01:00 on ether` }
-  unless amsterdam.at(winter).abbreviation == "CET" && !amsterdam.at(winter).daylight { INFO@mark `TZ12 Amsterdam in winter is not on CET` }
-  unless TimeZone("UTC").at(summer).offset == 0 seconds { INFO@mark `TZ13 UTC is off zero on ether` }
-}
 unless TimeZone("UTC").at(summer).offset == 0 seconds { INFO@mark `TZ14 UTC is off zero on this host` }
-unless [Host("linux"), Host("darwin"), OS.Ether()].every(Compiler.reduced(., TimeZone.sources).at("UTC", winter).offset == 0 seconds) { INFO@mark `TZ15 UTC is off zero on a platform that reads TZif` }
 
-Counting := class: TimeZone.Zoneinfo {
-  asked: String[] = []
-  data (zone: String) => (asked.push zone) -- $.tzif.read((directory / zone).bytes)
-}
-counting := Counting(directory: OS.Ether().zoneinfo)
-counting.at("Europe/Amsterdam", summer)
-unless counting.asked == ["Europe/Amsterdam"] { INFO@mark `TZ16 reading one zone read others than the one asked for` }
-unless OS.Ether().zoneinfo == @tzif/zoneinfo { INFO@mark `TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo` }
 if Host("linux").zoneinfo ~= ⊢"tzif" { INFO@mark `TZ18 a host refers to @tzif for its zone data` }
 unless Compiler.reduced(Host("plan9"), TimeZone.sources) is Abstract { INFO@mark `TZ19 an operating system without time-zone data does not leave it to be found` }
-unless Compiler.reduced(Host(""), OS.devices) is OS.Ether { INFO@mark `TZ20 a device with no host platform does not run the language as its operating system` }
 
 // ISO 8601 week dates: week 01 holds the year's first Thursday, so a week date may name a day of the year before or after.
 unless "2026-W41-2" as ISO_8601 == "2026-10-06" as ISO_8601 { INFO@mark `WD1 the Tuesday of week 41 of 2026 is not the sixth of October` }

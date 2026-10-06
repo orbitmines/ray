@@ -221,3 +221,25 @@ crypt_branch.commit(ada, Program(code: { .y = 2 }))
 unless crypt_branch.head.key == crypt.head.key { INFO@mark `CRYPT19 a fork does not keep the content key` }
 crypt.merge(crypt_branch)
 unless crypt.head.merged && crypt.value.x == 1 && crypt.value.y == 2 { INFO@mark `CRYPT20 a reader does not merge two branches of an encrypted history` }
+
+// A stretch bound by a time holds from the commit current at that time; by a label or a commit, from that commit on.
+bnd := History()
+[1, 2, 3].for(bnd.commit(ada, .))
+bnd_middle := bnd.since(None){.value == 2}.first
+unless bnd{from Time.now}.first.value == [3] { INFO@mark `BND1 a stretch from now does not start at the current commit` }
+unless bnd{from bnd_middle.id}.first.value == [2, 3] { INFO@mark `BND2 a stretch from a label does not start at that commit` }
+unless bnd{from bnd_middle}.first.value == [2, 3] { INFO@mark `BND3 a stretch from a commit does not start at that commit` }
+unless History.reached(bnd_middle.when, bnd_middle) && !History.reached(bnd.head.when, bnd_middle) { INFO@mark `BND4 a time is not reached at the commit current then` }
+
+// Going back and forking are copies: access, caches and the repository come along; erasing drops the caches.
+cpy := none.read History(repository: Repository()) ~~ (.caches = [History()])
+cpy.commit(ada, 1)
+cpy.commit(ada, 2)
+cpy_fork := cpy.fork
+cpy_at := cpy.at(cpy.head.previous)
+unless cpy_fork.base === cpy.head && cpy_fork.head === cpy.head { INFO@mark `CPY1 a fork does not start at the head it forked` }
+unless cpy_at.head === cpy.head.previous && cpy_at.value == 1 { INFO@mark `CPY2 going back does not stop at the commit gone back to` }
+unless [cpy_fork, cpy_at, cpy.squash(ada), cpy.blank, cpy.erased].every(Visibility.of(.) == Accessor.Permission.none && .repository === cpy.repository) { INFO@mark `CPY3 a history made from another is readable by more, or kept elsewhere` }
+unless cpy_fork.caches == cpy.caches && cpy_at.caches == cpy.caches { INFO@mark `CPY4 a fork or an earlier version loses the caches` }
+unless cpy.erased.caches.empty { INFO@mark `CPY5 an erased history keeps caches of its values` }
+unless cpy.at(cpy.head.previous.id).head === cpy.head.previous { INFO@mark `CPY6 going back to a label does not find its commit` }

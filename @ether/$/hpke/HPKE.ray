@@ -44,4 +44,10 @@ HPKE := class: Language = kem: Encoding.Agreement = X25519, kdf: Encoding.Digest
   static Sealed := class (enc: Byte₃₂, ciphertext: Byte[])
   sealed (recipient: Encoding.Key, info: Byte[], aad: Byte[], plaintext: Byte[]) => sender(recipient, info) -- (held => Sealed(enc: held.enc, ciphertext: held.context.sealed(aad, plaintext)) as Byte[])
   opened (recipient: Encoding.Key, info: Byte[], aad: Byte[], sealed: Byte[]) => (sealed as Sealed) -- (held => receiver(held.enc, recipient, info).opened(aad, held.ciphertext))
+
+  // A tag only the recipient recomputes, from the shared secret by LabeledExpand over the info (RFC 9180 §4, RFC 5869 §2.3), so a recipient finds its own sealed message among many without opening them
+  tag (shared: Byte[], info: Byte[], length: Number = 16) => expanded(suite, shared, "tag", info, length)
+  tagged (recipient: Encoding.Key, info: Byte[], aad: Byte[], plaintext: Byte[]) => encapsulated(recipient) -- (held =>
+    (tag: tag(held.shared, info), sealed: Sealed(enc: held.enc, ciphertext: scheduled(held.shared, info).sealed(aad, plaintext)) as Byte[]))
+  recognised (recipient: Encoding.Key, info: Byte[], expected: Byte[], sealed: Byte[]) => tag(decapsulated((sealed as Sealed).enc, recipient), info) == expected
 }

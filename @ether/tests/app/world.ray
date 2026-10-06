@@ -271,6 +271,15 @@ here_now := Instance.local.login(Character(name: "local-one"))
 unless Character.local("local-one") === here_now { INFO@mark `WO15 a character logged in here is not here` }
 if Character.local("nobody-here") { INFO@mark `WO16 a character nobody logged in is here` }
 
+// Logging out zeroises every key the character holds, whatever field holds it, and no one else's.
+Keyholder := class: Character { spare: Encoding.Key? }
+zer := Instance.local.login(Keyholder(name: "zer", key: $.ed25519.pair(), spare: $.ed25519.pair()))
+zer_spare := zer.spare
+zer_other := Instance.local.login(Keyholder(name: "zer-other", key: $.ed25519.pair()))
+Instance.local.logout(zer)
+if zer.key || zer_spare.signed([1]).valid == true { INFO@mark `ZER1 a key on a character outlives logging out` }
+unless zer_other.key.signed([1]).valid == true { INFO@mark `ZER2 logging one character out zeroises another's key` }
+
 // Comparing characters is security: without @ether/security (or @ether/network) it is an error, not an answer.
 unless (Character(name: "a") == Character(name: "a")) is Diagnostic { INFO@mark `SEC1 two characters compare without @ether/security` }
 unless Run.kept == 30 days { INFO@mark `HG4 run logs are not kept for thirty days` }

@@ -107,27 +107,33 @@ History &+= {
   sender: Accessor.Permission?
 
   sealed_sender => sender !== None && sender < Visibility.of(this)
-  readers => Visibility.of(this) -- (visible => [Permissions.current.grants{.names(this) && .access.reads}.map(.access.who), @everyone{visible.reaches(.)}].flatten{is Character})
+  covered (grant: Grant) => grant.names(this) ? since(None) : grant.target is Program ? grant.target() -- (got => got is Iterable
+    ? since(None){c => got.some(s => s === c || s is Iterable && s.some(=== c))} : []) : []
+  reaches (grant: Grant) => grant.names(this) || covered(grant).some(=== head)
+  read_grants => Permissions.current.grants{.access.reads && (reaches(.) || covered(.).nonempty)}
+  readers => Visibility.of(this) -- (visible => [read_grants.map(.access.who), @everyone{visible.reaches(.)}].flatten{is Character})
+  following => readers{reader => read_grants{.access.who === reader} -- (granted => granted.empty || granted.some(reaches(.)))}
   holders => [[@me], (Instance.local.registry, Instance.local.hosted)#].flatten{is Character && .inbox}
   rotations => ordered{c => c.wraps.some(.key == c.id)}
   current_key => public ? None : rotations.last?.id
   readable => !current_key || content_key(current_key) is Encoding.Key
+  keys_for (reader: Character) => read_grants{.access.who === reader}.map(covered(.)).flatten(1).map(.key).compact.unique
 
   wrapped (content: Encoding.Key, label, reader: Encoding.Key, policy: Identity) => policy.wrapping(kem: reader.algorithm, kdf: policy.digest, aead: content.algorithm) -- (by =>
-    (key: label, cipher: content.algorithm, reader: reader, by: by, sealed: by.sealed(reader, (label as String).bytes, [], content.secret)))
+    by.tagged(reader, (label as String).bytes, [], content.secret) -- (held => (key: label, cipher: content.algorithm, by: by, tag: held.tag, sealed: held.sealed)))
   wraps_of (label) => since(None).map(.wraps).flatten{.key == label}
-  content_key (label, holders: Character[] = this.holders, wraps = wraps_of(label)) => holders{.inbox}.map(.inbox) -- (inboxes =>
-    wraps.find(w => inboxes.some(== w.reader)) -- (wrap => wrap
-      ? Encoding.Key(algorithm: wrap.cipher, public: [], secret: wrap.by.opened(inboxes.find(== wrap.reader), (label as String).bytes, [], wrap.sealed))
-      : Program(name: "find the key", goal: (history: this, key: label))))
+  content_key (label, holders: Character[] = this.holders, wraps = wraps_of(label)) => (label as String).bytes -- (info => holders{.inbox}.map(.inbox) -- (inboxes =>
+    wraps.map(w => inboxes.find(w.by.recognised(., info, w.tag, w.sealed)) -- (inbox => inbox ? Encoding.Key(algorithm: w.cipher, public: [], secret: w.by.opened(inbox, info, [], w.sealed)) : None)).compact.first
+      ?? Program(name: "find the key", goal: (history: this, key: label))))
 
-  rekeying (who: Character, label, readers = this.readers) => who.policy() -- (policy => policy.cipher.generated() -- (content =>
-    [[who], readers].flatten.map(.inboxes()).flatten.unique.map(wrapped(content, label, ., policy))))
-  rekeyed (who: Character, readers = this.readers) => choose UUID.v1{unique} -- (label => commit(who, Program(code: { . }), id: label, wraps: rekeying(who, label, readers)))
-  shared (reader: Character, who: Character = @me) => Permissions.current.grant(Access(who: reader, method: Access.Reading), this) -- (current_key
-    ? commit(who, Program(code: { . }), wraps: reader.inboxes().map(wrapped(content_key(current_key), current_key, ., who.policy())))
-    : this)
-  unshared (reader: Character, who: Character = @me) => (Permissions.current.grants = Permissions.current.grants{!(.names(this) && .access.who === reader)}) -- rekeyed(who, readers{!== reader})
+  rekeying (who: Character, label, readers = following) => who.policy() -- (policy => policy.cipher.generated() -- (content =>
+    [[who], readers].flatten.map(.inboxes()).flatten.unique.map(wrapped(content, label, ., policy)).shuffled))
+  rekeyed (who: Character, readers = following) => choose UUID.v1{unique} -- (label => commit(who, Program(code: { . }), id: label, wraps: rekeying(who, label, readers)))
+  shared (reader: Character, who: Character = @me) => (Permissions.current.grant(Access(who: reader, method: Access.Reading), this) unless read_grants.some(.access.who === reader))
+    -- keys_for(reader) -- (keys => keys.empty ? this : commit(who, Program(code: { . }),
+      wraps: keys.map(label => reader.inboxes().map(wrapped(content_key(label), label, ., who.policy()))).flatten(1).shuffled))
+  unshared (reader: Character, who: Character = @me) => read_grants{.access.who === reader} -- (theirs => Permissions.current.grants = Permissions.current.grants{g => !theirs.some(=== g)})
+    -- rekeyed(who, following{!== reader})
 }
 
 History &+= {

@@ -599,8 +599,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A line keeps in plaintext what storing, ordering and checking need: its label, parents, stamp, signature and
     which content key it uses (`with (…; key = K₃)`); its change is ciphertext.
   - A history has a symmetric content key, wrapped for each reader's instance key (HPKE, RFC 9180: X25519, HKDF,
-    ChaCha20-Poly1305); readers are whoever its access lets `read`. Adding a reader is a commit wrapping the current key
-    for them; removing one rotates to a new key wrapped for the rest (they keep what they already saw).
+    ChaCha20-Poly1305); readers are whoever its access lets `read`. Adding a reader is a commit wrapping for them the
+    keys their grant covers (below); removing one rotates to a new key wrapped for the rest (they keep what they already saw).
   - The signature covers the hash of the line with its ciphertext, so a server verifies chain and authorship without
     reading; the plaintext change carries its own hash inside, so ciphertexts cannot be swapped between lines.
   - `who` has a visibility like any field, inherited from the history by default (then it is in plaintext). Narrowing
@@ -608,6 +608,25 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     and only readers check authorship.
   - Merging happens on readers' machines (a server keeps both heads); caches are encrypted with the same key or kept
     local; deltas and compression come before encryption; backends (git) carry ciphertext.
+  - **Decided (user, 2026-10-06): logout.** Logging out zeroises every key on the character, without World knowing
+    Security: `character.fields{.value is Encoding.Key}.for(.value.zeroised)` (the instance key, Security's `inbox`,
+    and any key field added later; pseudonyms are derived from the instance key, so they go with it).
+  - **Decided (user, 2026-10-06): copies.** `history.at(commit)` and `history.fork` are copies of the history
+    (`copy ~~ (.head = …)`, `copy ~~ (.base = head)`), so access, `sender`, keys and caches come along; so are `blank`,
+    `squash` and what a history is written as elsewhere. `erased` starts from a blank copy without caches.
+  - **Decided (user, 2026-10-06): what a new reader decrypts is what their grant covers.** A read grant names an
+    expression (§8.2.2), and a history has stretch queries (World W3.17), so sharing (`history.shared(reader)`) wraps
+    for the reader exactly the content keys of the commits their grant's expression covers: `@bob.read history` is
+    every key (the default, like a clone); `@bob.read history{from Time.now}` the current key and later ones;
+    `@bob.read history{from label}` the keys from that commit on; any narrowing works. A time as a stretch bound holds
+    from the commit current at that time; a label or a commit, from that commit on. A rotation wraps the new key for
+    every reader whose grant reaches the head (so covers what follows); a grant whose stretch has closed keeps what it
+    covered and gets no new key.
+  - **Decided (user, 2026-10-06): anonymous recipients.** A wrap carries no recipient key or identifier in
+    plaintext, and a line's wraps are stored in random order. Each wrap has a short tag only its reader recomputes:
+    the HPKE shared secret's labelled expansion over the line's label (RFC 9180 §4, RFC 5869), so a reader finds
+    theirs by the tag instead of opening every wrap. The writer's own wrap is like any other, so a sealed sender
+    stays sealed even when the writer is not a reader.
 
 ## 10. From the drafts (`.ray2`, `.ray3`) — what v0 doesn't have yet
 

@@ -67,6 +67,13 @@ unless idy.policy().certifies(idy.key_in(idy_world).published, World.ether.clock
 vz := Instance.local.login(Character(name: "leaving-keys"))
 Instance.local.logout(vz)
 if vz.key || Instance.local.verified(vz) { INFO@mark `IDY17 a character logged out keeps its key` }
+lgo := Instance.local.login(Character(name: "leaving-inbox"))
+Instance.local.certified(lgo, World(name: "lgo-world"))
+lgo_inbox := lgo.inbox
+lgo_world_key := lgo.world_keys.first.key
+Instance.local.logout(lgo)
+if lgo_inbox.agreed($.x25519.pair().public) is Byte[] { INFO@mark `LGO1 an agreement key outlives logging out` }
+if lgo_world_key.signed([1]).valid == true { INFO@mark `LGO2 a per-world key outlives logging out` }
 if (with (@me = ver_a) { ver_a.key.secret }) is Byte[] { INFO@mark `IDY18 a private key is read by the character's own code` }
 
 // Signed history: one instance key signs every commit, over a hash that chains the parents and the key-log event relied on.
@@ -151,7 +158,7 @@ unless wrp.content_key(wrp_first, [wrp_reader]) is Abstract { INFO@mark `WRAP6 s
 wrp.shared(wrp_reader, wrp_owner)
 unless wrp.readers.some(=== wrp_reader) { INFO@mark `WRAP7 a character given read is not a reader` }
 unless wrp.current_key == wrp_first { INFO@mark `WRAP8 adding a reader rotated the key` }
-unless wrp.head.wraps.some(.reader == wrp_reader.inbox) && wrp.head.wraps.every(.key == wrp_first) { INFO@mark `WRAP9 adding a reader is not a commit wrapping the current key for them` }
+unless wrp.head.wraps.some(w => w.by.recognised(wrp_reader.inbox, (wrp_first as String).bytes, w.tag, w.sealed)) && wrp.head.wraps.every(.key == wrp_first) { INFO@mark `WRAP9 adding a reader is not a commit wrapping the current key for them` }
 unless wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key { INFO@mark `WRAP10 an added reader does not hold the current key` }
 wrp.unshared(wrp_reader, wrp_owner)
 unless wrp.current_key != wrp_first && wrp.current_key == wrp.head.id { INFO@mark `WRAP11 removing a reader does not rotate to a new key` }
@@ -177,3 +184,51 @@ unless sel.value == 2 { INFO@mark `SEAL7 a history with a sealed sender does not
 sel_other := History(repository: Repository()) ~~ (.sender = Accessor.Permission.none)
 sel_other.commit(sel_writer, 1)
 if sel_other.head.who == sel.head.who { INFO@mark `SEAL8 two histories show one pseudonym` }
+
+// A fork and an earlier version are copies: the sealed sender and the content keys come along.
+frk := sel.fork
+unless frk.sealed_sender && frk.current_key == sel.current_key && sel.at(sel.head.previous).sealed_sender { INFO@mark `FRK1 a copy of a sealed history loses its sender or its key` }
+frk.commit(sel_writer, 3)
+unless frk.head.who is Encoding.Key && frk.value == 3 { INFO@mark `FRK2 a commit on a fork of a sealed history names its sender` }
+
+// What a new reader can decrypt is what their read grant covers: the whole history by default, or any narrowing of it; a rotation follows the grants that reach the head.
+grk_owner := Instance.local.login(Character(name: "grk-owner"))
+grk_all := Instance.local.login(Character(name: "grk-all"))
+grk_now := Instance.local.login(Character(name: "grk-now"))
+grk_from := Instance.local.login(Character(name: "grk-from"))
+grk_past := Instance.local.login(Character(name: "grk-past"))
+grk := none.read History(repository: Repository())
+grk.commit(grk_owner, 1)
+grk_first := grk.current_key
+grk.rekeyed(grk_owner)
+grk_second := grk.current_key
+grk.commit(grk_owner, 2)
+grk_label := grk.head.id
+grk.rekeyed(grk_owner)
+grk_third := grk.current_key
+grk.commit(grk_owner, 3)
+grk_now.read grk{from Time.now}
+grk_from.read grk{from grk_label}
+grk_past.read grk{from value == 1 to value == 2}
+grk.shared(grk_all, grk_owner)
+unless [grk_first, grk_second, grk_third].every(grk.content_key(., [grk_all]) is Encoding.Key) { INFO@mark `GRK1 a reader of the whole history does not hold every key` }
+grk.shared(grk_now, grk_owner)
+unless grk.head.wraps.every(.key == grk_third) { INFO@mark `GRK2 sharing from now wraps a key from before now` }
+unless grk.content_key(grk_third, [grk_now]) is Encoding.Key && [grk_first, grk_second].every(grk.content_key(., [grk_now]) is Abstract) { INFO@mark `GRK3 a reader from now does not hold exactly the current key` }
+grk.shared(grk_from, grk_owner)
+unless [grk_second, grk_third].every(grk.content_key(., [grk_from]) is Encoding.Key) && grk.content_key(grk_first, [grk_from]) is Abstract { INFO@mark `GRK4 a reader from a label does not hold exactly the keys from that commit on` }
+grk.shared(grk_past, grk_owner)
+unless [grk_first, grk_second].every(grk.content_key(., [grk_past]) is Encoding.Key) && grk.content_key(grk_third, [grk_past]) is Abstract { INFO@mark `GRK5 a reader of a closed stretch does not hold exactly its keys` }
+unless grk.readers.some(=== grk_past) && !grk.following.some(=== grk_past) { INFO@mark `GRK6 a reader of a closed stretch follows the head` }
+grk.rekeyed(grk_owner)
+unless [grk_owner, grk_all, grk_now, grk_from].every(grk.content_key(grk.current_key, [.]) is Encoding.Key) { INFO@mark `GRK7 a rotation is not wrapped for a reader whose grant reaches the head` }
+unless grk.content_key(grk.current_key, [grk_past]) is Abstract { INFO@mark `GRK8 a rotation is wrapped for a reader whose grant ended` }
+
+// Wraps are anonymous: no recipient key in plaintext, a tag only the recipient recomputes, the writer's own wrap like any other.
+anw := grk.head.wraps
+anw_info := (grk.current_key as String).bytes
+if Language.ray.write(anw) ~= Language.ray.write(grk_all.inbox.published.public) || anw.some(.reader) { INFO@mark `ANW1 a wrap names its recipient` }
+unless anw{w => w.by.recognised(grk_all.inbox, anw_info, w.tag, w.sealed)}.count == 1 { INFO@mark `ANW2 a reader does not find exactly one wrap by its tag` }
+if anw.some(w => w.by.recognised(grk_past.inbox, anw_info, w.tag, w.sealed)) { INFO@mark `ANW3 someone not a reader recognises a wrap` }
+unless anw.every(.tag.count == anw.first.tag.count && .sealed.count == anw.first.sealed.count) { INFO@mark `ANW4 the writer's wrap differs in shape from a reader's` }
+if Language.ray.write(sel.since(None).map(.wraps)) ~= Language.ray.write(sel_writer.inbox.published.public) { INFO@mark `ANW5 a sealed history's wraps name its writer` }

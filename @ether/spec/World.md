@@ -555,7 +555,8 @@ Answers from 2026-09-30.
     stolen key expires on its own. A signature covers the commit's hash, which includes its parents' hashes and the
     key-log event it relies on: backdating is a fork, rejected (or a merge quest) by anyone holding the history.
     Per-world instance keys, each certified by the root, are optional, for unlinkability.
-  - **Storage.** Private keys are `none`-readable (W5.6), zeroised on logout, never in a history or cache level.
+  - **Storage.** Private keys are `none`-readable (W5.6), never in a history or cache level. Logging out zeroises
+    every key on the character, whichever field holds it (Decided, user, 2026-10-06; L§9.2).
   - **Its own project (user, 2026-10-06).** All of this is the project `@ether/security`; `@ether/network` is its own
     project and depends on it. Neither is imported by default, and comparing characters errs in the language unless one
     of them is (`ERROR@Security`); importing it replaces that with the verified comparison above.

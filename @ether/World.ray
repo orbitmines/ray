@@ -106,7 +106,7 @@ Instance := class: Location + Entity {
   logged_in (character: Character) => character is registry
   logout (character: Character, delete_all = false) => {
     registry = registry#{!== character}
-    character.key?.zeroised
+    character.fields{.value is Encoding.Key}.for(.value.zeroised)
     character.key = None
     deletions.push Deletion(character) if delete_all
     character

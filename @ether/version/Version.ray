@@ -38,7 +38,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   name: String?
   id => since(None).first?.id
   label => name ?? since(None){!(.id is UUID)}.last?.id
-  blank => History(repository, caches)
+  blank => copy ~~ (.base = None) ~~ (.head = None) ~~ (.written_last = None)
   location => repository?.location
   clock => repository?.clock ?? World.ether.clock
   written_last: Commit?
@@ -49,7 +49,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   entry => commits.entry
   last | latest => head
   find (label) => since(None).find(.id == label)
-  at (commit) => History(repository, head: commit is Commit ? commit : find(commit), caches)
+  at (commit) => copy ~~ (.head = commit is Commit ? commit : find(commit))
 
   commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = [], wraps: *[] = []): static =>
     (wraps.empty && !public && !current_key && who is Character && who.inbox ? rekeying(who, id) : wraps) -- (keyed => this ~~ .head = Commit(id, who, stamp: clock.now,
@@ -59,19 +59,23 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
 
   ordered => since(None).sort_by(.stamp)
+  static reached (bound, commit: Commit) => bound is Time ? !commit.next || commit.next.when > bound
+    : bound is Commit ? commit.ancestry.some(=== bound)
+    : bound is Label ? commit.ancestry.some(.mentions(bound))
+    : bound
   stretches (start: Program, end: Program) => ordered.reduce(acc = (closed: [], open: None) => acc.open
-    ? (end.entered(., None) ? (closed: [acc.closed, [[acc.open, [.]].flatten(1)]].flatten(1), open: None) : (closed: acc.closed, open: [acc.open, [.]].flatten(1)))
-    : start.entered(., None) ? (closed: acc.closed, open: [.]) : acc
+    ? (reached(end.entered(., None), .) ? (closed: [acc.closed, [[acc.open, [.]].flatten(1)]].flatten(1), open: None) : (closed: acc.closed, open: [acc.open, [.]].flatten(1)))
+    : reached(start.entered(., None), .) ? (closed: acc.closed, open: [.]) : acc
   ) -- [.closed, [.open] if .open].flatten(1)
   {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: external ** start), Program(code: external ** end))
-  {this}{from {literal start}} ^punctuation => Program(code: external ** start) -- (holds => stretches(holds, Program(code: { !holds.entered(this, None) })))
+  {this}{from {literal start}} ^punctuation => Program(code: external ** start) -- (holds => stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
   value => ordered.reduce(held = None => .applied(held))
   pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last?.id ?? label
   checkout (label, as_of: Stamp? = None) => at(pinned(label, as_of)).value
   fix (who, label: Label, change) => commit(who, change, versions: [label])
   tree => public ? value -- (held => Language.Entry.of(held.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])))) : Language.Entry.of(files)
 
-  fork => History(repository, base: head, head)
+  fork => copy ~~ (.base = head)
   drop: static => reset(base)
   reset (to: Commit?): static => this ~~ .head = to
   back: static => reset(head?.previous ?? head)
@@ -91,9 +95,9 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   | (other: History) => at(head).merge(other)
   &+ (other: History) => common(other) -- (base => (since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = at(base) => held.extended(.rewritten(.change) ~~ .from = None)))
   static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
-  squash (who) => History(repository, base, head: Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .opened.change), previous: base))
+  squash (who) => copy ~~ (.head = Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .opened.change), previous: base))
   cherry_pick (picked: Commit): static => picked.opened -- (plain => commit(plain.who, plain.change, message: plain.message))
-  erased => ordered.reduce(held = History(repository) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
+  erased => ordered.reduce(held = blank ~~ (.caches = []) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
   revert (reverted: Commit) => reverted.opened -- (plain => plain.change⁻¹ ? commit(plain.who, plain.change⁻¹) : Program(name: "revert", goal: reverted))
 
   received (stamp: Stamp) => clock.receive(stamp)
@@ -189,7 +193,7 @@ History &+= {
   })
   appended (location: Location, language: Language = Language.ray) => language === Language.ray
     ? append(location)
-    : language.written_to(History(repository, base: head?.previous, head), location)
+    : language.written_to(copy ~~ (.base = head?.previous), location)
 }
 
 History{location ∈ @me}$ = $.ray | $.git

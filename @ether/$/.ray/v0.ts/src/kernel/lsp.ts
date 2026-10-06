@@ -12,7 +12,9 @@ import { encode, position_of, runs, MODIFIERS } from '../lsp/semantics.ts';
 
 const TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator'];
 const SEVERITY: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warning: 2, info: 3, debug: 4, trace: 4 };
-const LIBRARY = process.env.RAY_LIBRARY ? path.resolve(process.env.RAY_LIBRARY) : path.resolve(import.meta.dirname, '../../../v0'), ENTRYPOINT = path.join(LIBRARY, '.entrypoint.ray');
+const LIBRARY = process.env.RAY_LIBRARY ? path.resolve(process.env.RAY_LIBRARY) : path.resolve(import.meta.dirname, '../../../v0/ray'), ENTRYPOINT = path.join(LIBRARY, '.entrypoint.ray');
+// The project the core serves (Ether): its own files are read after the core; its subprojects only when imported.
+const ROOT_PROJECT = path.dirname(LIBRARY);
 
 type Check = { uri: string; file: string; text: string; version: number };
 type Checked = { uri: string; version: number; paints: { begin: number; end: number; style: string }[]; diagnostics: { level: string; message: string; begin: number; end: number }[] };
@@ -166,7 +168,13 @@ async function read_in_worker() {
   const kick = () => { if (!busy) { busy = true; setImmediate(work); } };
   port.on('message', (m: Check | { close: string } | { library: true }) => {
     if ('close' in m) { docs.delete(m.close); return; }
-    if ('library' in m) { const files = fs.readdirSync(LIBRARY).filter(f => f.endsWith('.ray') && !f.startsWith('.')).map(f => path.join(LIBRARY, f)); library.push(...reading_order(files.map(f => ({ path: f, text: fs.readFileSync(f, 'utf8') })))); kick(); return; }
+    if ('library' in m) {
+      const listed = (dir: string) => fs.readdirSync(dir).filter(f => f.endsWith('.ray') && !f.startsWith('.') && !f.startsWith('entrypoint.')).map(f => path.join(dir, f));
+      const order = (files: string[]) => reading_order(files.map(f => ({ path: f, text: fs.readFileSync(f, 'utf8') })));
+      library.push(...order(listed(LIBRARY)));
+      if (fs.existsSync(path.join(ROOT_PROJECT, '.project.ray')) && ROOT_PROJECT !== LIBRARY) library.push(...order(listed(ROOT_PROJECT)));
+      kick(); return;
+    }
     docs.set(m.uri, m);
     if (!asked.includes(m.uri)) asked.push(m.uri);
     kick();

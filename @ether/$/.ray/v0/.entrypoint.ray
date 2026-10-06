@@ -39,6 +39,8 @@ None := external none
 )
 {name} := {value} ^punctuation => external declare name value
 `{literal string ^string}` ^string.punctuation => string
+// An escaped quote is read as one piece, so a written literal does not end at it.
+\{`"`} ^string => `"`
 "{literal string ^string}" ^string.punctuation => string
 \n => `
 `

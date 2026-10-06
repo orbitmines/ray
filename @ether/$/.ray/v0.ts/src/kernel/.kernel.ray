@@ -4,7 +4,7 @@
 // flags; None and global are no and yes; UNDEF is nothing.
 
 // ---------------------------------------------------------------- the root
-Root := { global, blank, none_side, global_side, undef_side, spellings, base, made, order, declared, silent, refused, trying, depth, running, claiming, forced, naming, diagnostics, definitions, missing, written_keys, external, rules_version, brackets_version, brackets_changes, brackets_list, brackets_firsts, unsure, level, epoch, walker, find_epoch, missing_id, missing_epoch, no_more, fuel, budget, chosen_caps, recent, recent_at, serving, bodies, shape_version, stating, stating_src, unplanned, tracing, top_src, top_at, overing, capturing }
+Root := { global, blank, none_side, global_side, undef_side, spellings, base, made, order, declared, silent, refused, trying, depth, running, claiming, forced, naming, diagnostics, definitions, missing, written_keys, external, rules_version, brackets_version, brackets_changes, brackets_list, brackets_firsts, unsure, level, epoch, walker, find_epoch, missing_id, missing_epoch, no_more, fuel, budget, chosen_caps, recent, recent_at, serving, bodies, shape_version, stating, stating_src, unplanned, tracing, top_src, top_at, overing, capturing, spelled_list }
 
 boot () => (
   ROOT.spellings = make(Name); ROOT.spellings.length = 0
@@ -374,7 +374,38 @@ continues (src, j, from) => (
   return k < src.length and run(src, k) and k - (j + 1) > indent_of(src, from)
 )
 // Past what starts at j: a bracketed group (unless raw), else one character.
-skip (src, j, limit, raw) => ( k := raw ? j : claim(src, j, limit); return k > j ? k : j + 1 )
+skip (src, j, limit, raw) => (
+  k := raw ? j : claim(src, j, limit)
+  if run(src, j) { s := spelled_at(src, j, limit); if s > k { k = s } }
+  return k > j ? k : j + 1
+)
+// A rule written only of literals, tight together, starting with an operator character (an escape like `\"`): scans read
+// through it as one piece.
+rule_spelled (rule) => (
+  if rule_count(rule) < 1 or !is_run(rule.pieces[0].text.chars[0]) { return None }
+  n := 0
+  p := 0
+  while p < rule_count(rule) {
+    if rule.pieces[p].kind != 0 or (p > 0 and !rule.pieces[p].tight) { return None }
+    n = n + rule.pieces[p].text.length
+    p = p + 1
+  }
+  return n >= 2
+)
+spelled_at (src, j, limit) => (
+  brackets()
+  end := j
+  ROOT.spelled_list for rule => {
+    at := j
+    p := 0
+    while p >= 0 and p < rule_count(rule) {
+      text := rule.pieces[p].text
+      if at + text.length <= limit and starts(src, at, text) { at = at + text.length; p = p + 1 } else { p = -1 }
+    }
+    if p >= 0 and at > end { end = at }
+  }
+  return end
+)
 operand_end (src, j, limit) => (
   r := j
   while r < limit and run(src, r) { r = r + 1 }
@@ -2353,7 +2384,7 @@ add_rule (scope, rule) => (
   }
   list_unshift(rules, rule)
   ROOT.rules_version = ROOT.rules_version + 1
-  if rule_enclosed(rule) { ROOT.brackets_changes = ROOT.brackets_changes + 1 }
+  if rule_enclosed(rule) or rule_spelled(rule) { ROOT.brackets_changes = ROOT.brackets_changes + 1 }
   if scope.index == None { scope.index = Index(of: scope) }
   scope.index.stale = global
   touched(scope)
@@ -2426,8 +2457,12 @@ rules_of (node) => node.rules
 brackets () => (
   if ROOT.brackets_version == ROOT.brackets_changes { return ROOT.brackets_list }
   if ROOT.brackets_firsts != NIL and ROOT.brackets_firsts != None { ROOT.brackets_firsts for c => { CLASSES[c] = CLASSES[c] - 32 } }
+  found := list_new()
+  brackets_in(global(), found, walk_stamp())
   out := list_new()
-  brackets_in(global(), out, walk_stamp())
+  spelled := list_new()
+  found for rule => { if rule_spelled(rule) { list_push(spelled, rule) } else { list_push(out, rule) } }
+  ROOT.spelled_list = spelled
   firsts := list_new()
   out for rule => {
     text := rule.pieces[0].text
@@ -2442,7 +2477,7 @@ brackets_in (at, out, seen) => (
   if at == -1 or walk_marked(at, seen) { return None }
   walk_mark(at, seen)
   if side_of(at) != ROOT.blank { at.bracketed = ROOT.brackets_changes }
-  rules_of(at) for rule => { if rule_enclosed(rule) { list_push(out, rule) } }
+  rules_of(at) for rule => { if rule_enclosed(rule) or rule_spelled(rule) { list_push(out, rule) } }
   sees_of(at) for x => { brackets_in(x, out, seen) }
   brackets_in(parent(at), out, seen)
 )

@@ -1,11 +1,11 @@
 say {x} =>
   external io stdout x
-Box := class
-  content := external node
-  hello =>
-    say this
+Box := class {
+  content: Node = external node
+  hello => say this
+}
 b := Box()
-b hello
+b.hello
 c := b.content
 say c
 b.content = b

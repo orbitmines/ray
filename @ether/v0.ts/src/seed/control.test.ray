@@ -8,10 +8,10 @@ c := external node
 link a to b
 link b to c
 at := a
-while at
+while at {
   say at
   at = at.next
-if a
-  say true
-unless None
-  say unless-works
+}
+if a { say true }
+unless None { say unless-works }
+if None { say wrong } else { say else-works }

@@ -1,12 +1,4 @@
 say {x} =>
   external io stdout x
-Digit := type
-  0 =>
-    external io stdout zero
-  1 =>
-    external io stdout one
 bit {d: Digit} =>
   d
-bit 1
-bit 0
-bit 2

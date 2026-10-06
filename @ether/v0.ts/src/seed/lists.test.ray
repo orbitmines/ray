@@ -6,3 +6,6 @@ l := a, b, a
 say l
 f := l.first
 say f
+(x, y) := a, b
+say (x === a)
+say (y === b)

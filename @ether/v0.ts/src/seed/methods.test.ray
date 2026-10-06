@@ -11,3 +11,11 @@ p := external node
 greet(p)
 both(p, p)
 nothing_given()
+Counter := class {
+  count: Node
+  bump (by) => say by
+  shown => say count
+}
+k := Counter(external node)
+k.shown
+k.bump(k)

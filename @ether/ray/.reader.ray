@@ -105,8 +105,10 @@ defining := learned.definer
   found
 
 // Characters the reader names are taken from where they are written here.
-written := external span "/()[]{}:.,`\n?
+written := external span "/()[]{}:.,`\n?^
 mark := written.from
+// the text the reader is written in (code written in it reads with the reader's own rules)
+reader_text := mark.text
 quote := mark.character
 mark = mark.next
 slash := mark.character
@@ -136,6 +138,8 @@ mark = mark.next
 letter_n := mark.character
 mark = mark.next
 question := mark.character
+mark = mark.next
+caret := mark.character
 
 // The bracket that closes `c`, or nothing when `c` opens none.
 {c}.closer =>
@@ -411,6 +415,24 @@ question := mark.character
       here = here.next
   here
 
+// The last place from `this` before `limit` holding the character `c`, when it is past a line end; else nothing.
+{this}.last_of({c}, {limit}) =>
+  here := this
+  found := None
+  crossed := None
+  while here
+    if here === limit
+      here = None
+    if here
+      d := here.character
+      if crossed
+        if d === c
+          found = here
+      if d === end
+        crossed = true
+      here = here.next
+  found
+
 // Whether a capture can end at `here` when `wanted` follows it (as `ends` keeps them).
 {here}.can_end({wanted}) =>
   found := true
@@ -502,13 +524,15 @@ question := mark.character
         indexed = true
   unless indexed
     ends = at.ends(limit, wanted, pieces.leading)
-  // read on a receiver, a capture that ends the head reads one operand
+  // read on a receiver, a capture that ends the head reads one operand (from where it starts, after spaces)
+  capture_from := at
   if mode
     unless rest_pieces
       ends = None
       operand_at := at.spaces_after
       unless operand_at
         operand_at = at
+      capture_from = operand_at
       operand := operand_at.operand_end(limit)
       if operand
         ends = external node
@@ -528,11 +552,17 @@ question := mark.character
       unless following
         tail.next = empty
       tail = following
+  // past a line end, the last place the literal after it starts at before `limit` too (a bracket closing on a later line)
+  late := None
+  if wanted
+    unless pieces.leading
+      unless mode
+        late = true
   piece_type := pieces.type
   found := None
   going := true
   while going
-    // the next end: from the chain `ends`, then the places of the wanted character (`same`)
+    // the next end: from the chain `ends`, then the places of the wanted character (`same`), then `late`
     e := None
     worth := None
     if ends
@@ -544,6 +574,12 @@ question := mark.character
         e = same
         worth = true
         same = same.next_same
+    unless worth
+      if late
+        late = None
+        e = at.last_of(wanted, limit)
+        if e
+          worth = true
     unless worth
       going = None
     if worth
@@ -568,7 +604,7 @@ question := mark.character
       raw := pieces.raw
       if raw
         cap.raw = true
-      cap.from = at
+      cap.from = capture_from
       cap.to = e
       earlier := rest.captures
       cap.next = earlier
@@ -585,7 +621,9 @@ top := external .
 
 // The rules in reach of `scope`: each scope's `rules`, nearest scope first (its parents through `parent`), latest first;
 // stopping before the scope `outside` (a value's own rules and its classes', not the top scope's).
-{scope}.rules_in_reach({outside}) =>
+// Code written in the reader's text (`internal`) reads with the reader's own rules, other code with the language's (R4.2b); a
+// rule of both is `shared`.
+{scope}.rules_in_reach({outside}, {internal}) =>
   first := None
   last := None
   here := scope
@@ -594,14 +632,23 @@ top := external .
   while here
     links := here.rules
     while links
-      link := external node
       r := links.rule
-      link.rule = r
-      if last
-        last.next = link
-      unless last
-        first = link
-      last = link
+      keep := true
+      if internal
+        if r.language
+          keep = None
+      unless internal
+        if r.internal
+          unless r.shared
+            keep = None
+      if keep
+        link := external node
+        link.rule = r
+        if last
+          last.next = link
+        unless last
+          first = link
+        last = link
       links = links.next
     here = here.parent
     if here === outside
@@ -780,7 +827,8 @@ top := external .
 // to it (`=>`), otherwise the one declared first reads it (G3.1). The rules come nearest scope first, latest first. Answers
 // a node with the `rule` and its `captures`, or nothing.
 {at}.reading_in({limit}, {scope}) =>
-  rules := scope.rules_in_reach(None)
+  written_here := at.text === reader_text
+  rules := scope.rules_in_reach(None, written_here)
   at.reading(limit, rules)
 
 {at}.reading({limit}, {rules}) =>
@@ -800,14 +848,18 @@ top := external .
         take = pieces.chosen_over(best_pieces, take)
         // the rule that defines rules reads a definition whole, unless the other spells the definer itself (2026-10-06: a
         // method head with parameters is read by the rule written with the definer in it, not as a rule of that name)
-        if rule.alike(definer)
-          take = true
-          if best_pieces.spells_the_definer
-            take = None
-        if best_rule.alike(definer)
-          take = None
-          if pieces.spells_the_definer
+        rule_defines := rule.alike(definer)
+        best_defines := best_rule.alike(definer)
+        if rule_defines
+          unless best_defines
             take = true
+            if best_pieces.spells_the_definer
+              take = None
+        if best_defines
+          unless rule_defines
+            take = None
+            if pieces.spells_the_definer
+              take = true
       if take
         best = r
         best_rule = rule
@@ -1351,6 +1403,8 @@ raw_word := external span literal
   link.next = earlier
   scope.rules = link
   registry.latest = made
+  if registry.language
+    made.language = true
   made
 
 // The seed's rules, taken over once: the top scope's, latest first; the earliest is the first statement's.
@@ -1386,7 +1440,8 @@ external planner plan_rule
 // One statement read at the top: applied in place, or reported. Answers the place after it.
 {given}.read_statement =>
   here := external .
-  scope := here.parent
+  // the scope read in applies the reader
+  scope := here.caller
   at := given.skip_blank(None)
   limit := None
   if at
@@ -1410,7 +1465,7 @@ external reader reader
 // The rules a value is read by (R2.1): its own and its classes' (not the top scope's), then what every value has.
 {value}.reading_rules =>
   top := registry.top
-  rules := value.rules_in_reach(top)
+  rules := value.rules_in_reach(top, None)
   base := registry.base
   base_rules := base.rules
   if rules
@@ -1435,8 +1490,10 @@ external reader reader
   sender := registry.sender
   sender_pieces := sender.pieces
   this_piece := sender_pieces
-  // the first receiver is a place (its code, unread): what it holds is read for its rules only when it holds something
-  current := this
+  // the first receiver is a place (its code, unread, given as a capture is): what it holds is read for its rules only when it
+  // holds something; the receivers after it are values
+  current := None
+  first := true
   value := None
   receiver_at := external span this
   frame := receiver_at.frame
@@ -1459,6 +1516,11 @@ external reader reader
       value = this
   result := current
   going := true
+  // a rest that is only spaces: nothing more to read on it
+  blank := at.spaces_after
+  if blank === rest_to
+    going = None
+    result = this
   while going
     rules := value.reading_rules
     r := at.prefix_reading(rest_to, rules)
@@ -1475,7 +1537,12 @@ external reader reader
       caps := r.captures
       bound := external node
       bound.piece = this_piece
-      bound.value = current
+      if first
+        bound.from = receiver_at.from
+        bound.to = receiver_at.to
+      unless first
+        bound.value = current
+      first = None
       bound.next = caps
       result = external apply rule bound within
       at = r.end
@@ -1487,6 +1554,179 @@ external reader reader
 
 sent_rule := registry.latest
 registry.sender = sent_rule
+
+// ---------------------------------------------------------------- what the language is defined with (the reader's own)
+// Whether `x` has a member `name` of its own (one set there, even to nothing).
+{x}.has({name}) =>
+  external own x name
+
+// Whether `code` is one name as written: a place (what it names is read only when it is wanted, R2.1).
+{code}.is_place =>
+  where := external span code
+  found := None
+  if where
+    from := where.from
+    to := where.to
+    spaced := from.spaces_after
+    if spaced
+      from = spaced
+    c := from.character
+    unless c.closer
+      unless c === quote
+        ends := from.operand_end(to)
+        if ends === to
+          found = true
+  found
+
+// Whether `x` is `scope` or inside it (its parents reach it).
+{x}.inside({scope}) =>
+  here := x
+  found := None
+  while here
+    if here === scope
+      found = true
+      here = None
+    if here
+      here = here.parent
+  found
+
+// The `this` a frame sees: its own, or the nearest frame around it that has one.
+{frame}.this_seen =>
+  here := frame
+  found := None
+  while here
+    if here.has(this)
+      found = here.this
+      here = None
+    if here
+      here = here.parent
+  found
+
+// What `arguments` give, in order (code, read here): a chain of `value`s, or of `item`s (code as written, `,`).
+{arguments}.listed =>
+  written := arguments
+  given := written
+  found := None
+  if given
+    if given.listing
+      found = given.first
+    unless given.listing
+      found = external node
+      found.value = given
+  found
+
+// The value of a link of such a chain.
+{link}.argument =>
+  found := None
+  if link.has(value)
+    found = link.value
+  if link.item
+    item := link.item
+    if item.has(value)
+      found = item.value
+    unless item.has(value)
+      found = item.code
+  found
+
+// Whether arguments are given by name (`x: 1, …`): the first is a name followed by `: `.
+{code}.named =>
+  where := external span code
+  found := None
+  if where
+    from := where.from
+    to := where.to
+    at := from.spaces_after
+    unless at
+      at = from
+    e := at.operand_end(to)
+    if e
+      c := e.character
+      if c === colon
+        n := e.next
+        if n
+          d := n.character
+          if d === space
+            found = true
+  found
+
+// The place a head written from `from` to `to` ends at without its highlighting: a last word `^style` is a mark (R5.2).
+{from}.unstyled({to}) =>
+  here := from
+  found := to
+  last_space := None
+  while here
+    if here === to
+      here = None
+    if here
+      c := here.character
+      if c === space
+        last_space = here
+      here = here.next
+  if last_space
+    mark := last_space.next
+    m := mark.character
+    if m === caret
+      after := mark.next
+      unless after === to
+        a := after.character
+        unless a === space
+          found = last_space
+  found
+
+// ---------------------------------------------------------------- methods (R2.1)
+// What every method runs: `this` (the receiver given, or the `this` its caller sees), its frame inside it when it is an
+// instance of where the method was written; its parameters bound to its arguments (`(parameters) := arguments`: a name
+// declared with a type takes the next argument given, a bare name the next one left); then the body it was written with, in a
+// frame of its own. A `return` in it ends it.
+running a method =>
+  frame := external .
+  method := frame.rule
+  receiver := None
+  if frame.has(this)
+    receiver = frame.this
+  unless frame.has(this)
+    caller := frame.caller
+    receiver = caller.this_seen
+  frame.this = receiver
+  scope := method.scope
+  if receiver
+    if receiver.inside(scope)
+      frame.parent = receiver
+  inner := external node
+  inner.parent = frame
+  parameters := method.parameters
+  if parameters
+    outer := registry.given
+    registry.given = None
+    if frame.has(arguments)
+      registry.given = frame.arguments.listed
+    written_parameters := parameters.code
+    if written_parameters.is_place
+      first_given := registry.given
+      external set inner written_parameters first_given.argument
+    unless written_parameters.is_place
+      bound := external apply written_parameters None inner
+      // the bare names left in a list of them take what is left, in order
+      if bound.listing
+        item := bound.first
+        while item
+          if item.item
+            held := item.item
+            code := held.code
+            if code.is_place
+              left := registry.given
+              if left
+                external set inner code left.argument
+                registry.given = left.next
+          item = item.next
+    registry.given = outer
+  written := method.written
+  body := written.code
+  external apply body None inner
+
+runner := registry.latest
+method_body := runner.body
+this_written := external span this
 
 // ---------------------------------------------------------------- types with a check: characters, repetition (R2.2)
 {check}.checked =>
@@ -1541,12 +1781,14 @@ many_rule := registry.latest
   made := many_rule.checked
   made.item = item
   made
+repeated_rule := registry.latest
 
 // ---------------------------------------------------------------- text written in quotes
 Unquoted := quote.anything_but
 Quoted := Unquoted[]
 "{text: Quoted}" =>
   external span text
+quoted_rule := registry.latest
 
 // ---------------------------------------------------------------- brackets: what they hold is balanced
 // Balanced text: every bracket it opens it closes, in order, and it closes none it did not open; quoted text is skipped.
@@ -1602,11 +1844,278 @@ Balanced := registry.latest.checked
 // A group: what is in brackets is read as itself.
 ({inside: Balanced}) =>
   inside
+group_rule := registry.latest
+
+// ---------------------------------------------------------------- what the language's rules do (the reader's own)
+// `x.name`: the receiver's own member `name` (T8.7: own key wins), else its method of that name applied to it with
+// `arguments` (code, or nothing).
+{this}.member({name}, {arguments}) =>
+  value := this
+  key := name
+  found := None
+  if external own value key
+    found = external get value key
+  unless external own value key
+    method := value.method_named(key)
+    if method
+      found = method.applied_to(value, arguments)
+  found
+
+// The method of a value named as `key` (raw code: its text): a method rule read by the value whose head is that name, and
+// its arguments if any.
+{value}.method_named({key}) =>
+  k := key
+  where := external span k
+  from := where.from
+  to := where.to
+  rules := value.reading_rules
+  found := None
+  while rules
+    r := rules.rule
+    if r.method
+      pieces := r.pieces
+      if pieces.literal
+        if from.spells_word(pieces, to)
+          following := pieces.next
+          fits := true
+          if following
+            unless following.capture
+              fits = None
+          if fits
+            found = r
+            rules = None
+    if rules
+      rules = rules.next
+  found
+
+// A method applied to `receiver` with `arguments` (their value, given as the method's capture).
+{method}.applied_to({receiver}, {arguments}) =>
+  m := method
+  r := receiver
+  given := arguments
+  caps := external node
+  caps.piece = this_written
+  caps.value = r
+  pieces := method.pieces
+  argument_piece := pieces.next
+  if argument_piece
+    if given
+      given_cap := external node
+      given_cap.piece = argument_piece
+      given_cap.value = given
+      caps.next = given_cap
+  here := external .
+  external apply m caps here
+
+// `x := value`: a place declared where it was written; a list of places, each declared with the value in its place.
+{this}.declared({value}) =>
+  found := None
+  if this.is_place
+    written := external ** this
+    place := written.code
+    found = external declare place value
+  unless this.is_place
+    places := this
+    given := value.listed
+    found = places
+    if places.listing
+      item := places.first
+      while item
+        held := item.item
+        code := held.code
+        if given
+          external declare code given.argument
+          given = given.next
+        item = item.next
+  found
+
+// `x = value`: written where the place was declared.
+{this}.assigned({value}) =>
+  found := value
+  if this.is_place
+    written := external ** this
+    place := written.code
+    holder := external declaring place
+    external set holder place found
+  found
+
+// `x: T`, `x: T = default`: a name declared with a type. What is being constructed or called gives it its value: by name (its
+// own member already), or the next given in order; else `default`, else nothing.
+{this}.declared_as({type}, {default}) =>
+  where := external span this
+  frame := where.frame
+  written := external ** this
+  place := written.code
+  naming := registry.naming
+  value := None
+  if naming
+    value = type
+    external set naming place value
+  unless naming
+    given := external own frame place
+    if given
+      value = external get frame place
+    unless given
+      next := registry.given
+      if next
+        value = next.argument
+        registry.given = next.next
+      unless next
+        value = default
+    external declare place value
+  value
+
+// Calling a value: a class makes an instance of itself.
+{this}.called({arguments}) =>
+  value := this
+  found := None
+  if value.class
+    found = value.constructed(arguments)
+  found
+
+// An instance of a class (R4.4): a frame inside it, with the class's block read again there, where a definition is the class's
+// and a field takes what the arguments give it (by name, or in order).
+{static}.constructed({arguments}) =>
+  instance := external node
+  instance.parent = static
+  instance.instance = true
+  instance.this = instance
+  outer_given := registry.given
+  outer_naming := registry.naming
+  registry.given = None
+  registry.naming = None
+  written := arguments
+  if written
+    if written.named
+      where := external span written
+      naming_frame := external node
+      naming_frame.parent = where.frame
+      registry.naming = instance
+      external apply written None naming_frame
+      registry.naming = None
+    unless written.named
+      registry.given = written.listed
+  block := static.written
+  code := block.code
+  external apply code None instance
+  registry.given = outer_given
+  registry.naming = outer_naming
+  instance
+
+// ================================================================ the language
+// The rules so far are the reader's own vocabulary: from here on they are out of reach of a project's files (R4.2b), which are
+// read with the language defined below.
+internal_rules := top.rules
+while internal_rules
+  internal_rule := internal_rules.rule
+  internal_rule.internal = true
+  internal_rules = internal_rules.next
+// what both read with: quoted text, groups, repetition
+quoted_rule.shared = true
+group_rule.shared = true
+repeated_rule.shared = true
+registry.language = true
+
+// Rules defined from here on: a rule written in a class is a method of it (R2.1: what every method runs, with the body written
+// here); one written while an instance is made is the class's already (it is not defined again).
+{pattern} => {body} =>
+  where := external span pattern
+  scope := where.frame
+  made := None
+  unless scope.instance
+    head_from := where.from
+    head_to := head_from.unstyled(where.to)
+    pieces := head_from.pieces(head_to, pattern)
+    if scope.class
+      made = external define pattern pieces method_body
+      made.method = true
+      made.written = external ** body
+    unless scope.class
+      made = external define pattern pieces body
+    made.keep
+  made
+
+// A method with parameters, `name (a, b: T, c: T = d) => body`: read as its name and what follows it, its arguments (one operand,
+// or what brackets hold); applied, the parameters are bound to them as `(parameters) := arguments` (what every method runs).
+{name} ({parameters?}) {`=>`} {body} =>
+  where := external span name
+  scope := where.frame
+  made := None
+  unless scope.instance
+    pieces := external node
+    name_from := where.from
+    name_to := name_from.unstyled(where.to)
+    pieces.add(literal, name_from, name_to)
+    arguments_at := external span arguments
+    arguments_from := arguments_at.from
+    arguments_to := arguments_at.to
+    pieces.add(capture, arguments_from, arguments_to)
+    argument_piece := pieces.last
+    argument_piece.optional = true
+    chain := pieces.first
+    made = external define name chain method_body
+    made.method = true
+    made.written = external ** body
+    written_parameters := external span parameters
+    if written_parameters
+      made.parameters = external ** parameters
+    made.keep
+  made
+
+// ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
+// `name := value`: the value declared where the name was written; a list of names, each with the value in its place.
+{name} := {value} =>
+  name.declared(value)
+// `name: Type = default`, `name: Type`: a name declared with a type, given its value by what is constructed or called.
+{name}: {type} = {default} =>
+  name.declared_as(type, default)
+{name}: {type} =>
+  name.declared_as(type, None)
+// `x.member = value`: the member set.
+{x}.{literal member} = {value} =>
+  external set x member value
+// `name = value`: written where the name was declared.
+{target} = {value} =>
+  target.assigned(value)
+// `a === b`: whether they are the same value (identity).
+{a} === {b} =>
+  external same a b
+// `x.member`, `x.member(arguments)`: its own member, else its method (T8.7).
+{x}.{literal member}({arguments?}) =>
+  x.member(member, arguments)
+{x}.{literal member} =>
+  x.member(member, None)
+
+// ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
+if {condition} {{yes: Balanced}} =>
+  answer := None
+  if condition
+    answer = yes
+  answer
+if {condition} {{yes: Balanced}} else {{no: Balanced}} =>
+  answer := None
+  taken := condition
+  if taken
+    answer = yes
+  unless taken
+    answer = no
+  answer
+unless {condition} {{yes: Balanced}} =>
+  answer := None
+  unless condition
+    answer = yes
+  answer
+while {condition} {{body: Balanced}} =>
+  while condition
+    body
+  None
 
 // ---------------------------------------------------------------- what every value has (the base)
 Node := type
   .{literal property} =>
-    external get this property
+    this.member(property, None)
+  .{literal property}({arguments?}) =>
+    this.member(property, arguments)
   .{literal property} = {value} =>
     external set this property value
   // `,` composes one value, a list (no split, 2026-09-27): `a, b, c` is the list of `a`, `b` and `c`, each as written (a
@@ -1622,79 +2131,35 @@ Node := type
       list = external node
       list.listing = true
       first := external node
-      first_item := external ** this
-      first.item = first_item
+      first.item = external ** this
       list.first = first
       list.last = first
     added := external node
-    other_item := external ** other
-    added.item = other_item
+    added.item = external ** other
     last := list.last
     last.next = added
     list.last = added
     list
+  :={value} =>
+    this.declared(value)
+  ={value} =>
+    this.assigned(value)
+  :{type} =>
+    this.declared_as(type, None)
+  :{type} = {default} =>
+    this.declared_as(type, default)
+  ({arguments?}) =>
+    this.called(arguments)
 registry.base = Node
 
-// ---------------------------------------------------------------- classes
-// A class is the frame its block is read in (its statics and its methods are that frame's); calling it makes an instance: a
-// frame of its own, made by a rule written in the class (so the class is around it), with the block read again in it.
-class {block} =>
-  static := external .
+// ---------------------------------------------------------------- classes (R4.4)
+// A class: the frame its block is read in, inside the frame it was written in; its statics, its fields' defaults and its methods
+// are that frame's. Calling it makes an instance.
+class {{block: Balanced}} =>
+  where := external span block
+  static := external node
+  static.parent = where.frame
+  static.class = true
+  static.written = external ** block
   external apply block None static
-  instance frame =>
-    external .
-  ({args?}) =>
-    instance := instance frame
-    external apply block None instance
-    if args
-      external apply args None instance
-    instance
   static
-
-// ---------------------------------------------------------------- methods: `name (a, b) => body`
-// A method is a rule whose head is its name and its parameters, each a capture: `foo (a, b) => …` is `foo({a}, {b})`, so a call
-// binds each argument to its parameter by reading, as any rule's captures are.
-parentheses := external span ()
-comma_written := external span ,
-{name} ({parameters?}) {`=>`} {body} =>
-  name_at := external span name
-  pieces := external node
-  name_from := name_at.from
-  name_to := name_at.to
-  pieces.add(literal, name_from, name_to)
-  // the brackets as written here
-  open_at := parentheses.from
-  close_at := open_at.next
-  close_end := close_at.next
-  pieces.add(literal, open_at, close_at)
-  parameters_at := external span parameters
-  if parameters_at
-    at := parameters_at.from
-    stop := parameters_at.to
-    start := at
-    while at
-      ending := at === stop
-      unless ending
-        c := at.character
-        if c === comma
-          ending = true
-      if ending
-        pieces.add(capture, start, at)
-        if at === stop
-          at = None
-        if at
-          comma_from := comma_written.from
-          comma_to := comma_written.to
-          pieces.add(literal, comma_from, comma_to)
-          at = at.next
-          spaced := at.spaces_after
-          if spaced
-            pieces.add(gap, at, spaced)
-            at = spaced
-          start = at
-      unless ending
-        at = at.next
-  pieces.add(literal, close_at, close_end)
-  chain := pieces.first
-  made := external define name chain body
-  made.keep

@@ -7,7 +7,8 @@ q := external node
 link p to q
 walk {list} =>
   at := list
-  while at
+  while at {
     say at
     at = at.next
+  }
 walk p

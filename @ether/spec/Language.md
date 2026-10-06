@@ -81,8 +81,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   **Follows (2026-10-06):** not a default. Declaration and assignment are §2.1 and T1.6, and an assignment is checked against the history it writes over, a conflict becoming a quest (W3.4). "Overwrite if None, else `&=`" may be a store's or a location's own policy, nothing more. From §2.1, T1.6, W3.4.
 
 ### 2.5 What an assignment replaces (*user, 2026-10-06*)
-- **Decided:** a program's own graph is its history. An assignment keeps the value it replaces as the new value's `.previous`, so `x.previous**` are the values `x` held before, nearest first; this is Ray structure, not a `History`. The `=` edge carries when it was made, `.when` (W3.4).
-  - The core keeps no history: `with`/`assume` restore what their settings wrote through `.previous`; transitions, key presses, idleness, a quest's attempts, a chat's messages, an item's trail and a reference's notes read `.previous**` and `.when`.
+- **Decided:** a program's own graph is its history. An assignment keeps the value it replaces as the new value's `.previous`, so `x.previous**` are the values `x` held before, nearest first; this is Ray structure, not a `History`. There is no time on that edge: when a value changed comes from version control (a commit's stamp, `x.history`), so anything measured against time imports `@ether/version` (user, 2026-10-06).
+  - The core keeps no history: `with`/`assume` restore what their settings wrote through `.previous`; transitions, key presses, idleness, a quest's attempts, an item's trail and a reference's notes read `.previous**`; what needs time (transitions, pointer velocity, double presses, idleness, recent solves) reads `x.history` with `@ether/version` imported.
   - Commits, repositories, logs of runs, stores and storage levels are `@ether/version` (§9.1).
 
 ---

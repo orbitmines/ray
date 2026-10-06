@@ -301,10 +301,12 @@ rdr_b.holder = 2
 unless rdr.allocated("a") == 2 { INFO@mark `RDR2 a redirected name answers what the other held when it was redirected` }
 unless rdr.allocate("b", 3) is Abstract { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
 
-// Phone and email are locations.
-cth := Character(name: "reachable", email: @mailto:a@b.c, phone: @tel:+31612345678)
-unless cth.email.scheme == "mailto" { INFO@mark `CTH1 an email is not a mailto location` }
-unless cth.phone as String == "tel:+31612345678" { INFO@mark `CTH2 a phone number is not a tel location` }
+// A character's name is every name it goes by, each told apart by its pattern: email and phone are locations.
+cth := Character(name: "reachable" | "Ada Lovelace" | @mailto:a@b.c | @tel:+31612345678)
+unless cth.name{is Email}#.first.scheme == "mailto" { INFO@mark `CTH1 an email is not a mailto location` }
+unless cth.name{is Phone}#.first as String == "tel:+31612345678" { INFO@mark `CTH2 a phone number is not a tel location` }
+unless cth.name{is FullName}#.first.last == "Lovelace" { INFO@mark `CTH4 a full name is not read as first and last` }
+unless Character.local("reachable") === cth || !Instance.local.logged_in(cth) { INFO@mark `CTH5 a character is not found by any of its names` }
 unless (@https://a.b/c).host == "a.b" { INFO@mark `CTH3 a location with an authority lost its host` }
 
 // A character on several instances is on all of them; the one it is at is the primary.

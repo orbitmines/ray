@@ -190,7 +190,7 @@ Device := class {
   opened: Location?
   memory: Store = Store(at: @"memory")
   storage: Storage = Storage()
-  quests => Program#{who ∋ this && running}
+  quests => Program#{who: this}{running}
   disk => Disk(device: this, path: "")
 
   choose (s, n: Number = 1) => Choice.algorithm ? Choice.algorithm(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random

@@ -6,10 +6,14 @@ Entity := class {
 
 Nameable := class {
   static PREFIX: String?
-  name: String?
+  name: *?
 
-  named (name: String): static => this ~~ .name = name
+  named (name): static => this ~~ .name |= name
 }
+
+FullName := class (first: Char.Word[], " ", last: Char.Word[])
+Email := Location{scheme == "mailto"}
+Phone := Location{scheme == "tel"}
 
 // A scheme, then the authority only when "//" follows (https://www.rfc-editor.org/rfc/rfc3986#section-3)
 Location := class: Hierarchy (
@@ -100,7 +104,7 @@ Program &+= {
   progress => started ? steps.index_of(at) ?? steps.count : 0
   difficulty => steps.count
 
-  serves (at: Location) => !done && serving ∋ at
+  serves (at: Location) => !done && at is serving
   proxies => !done && proxying !== None
   stop | cancel | complete: static => this ~~ (.stopped = true)
 
@@ -145,7 +149,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     successors => line?.since(None){.parents.some(=== this)} ?? []
     branching => successors.count > 1
     value => line?.at(this).value ?? applied(None)
-    mentions (label) => id == label || versions ∋ label
+    mentions (label) => id == label || versions.contains(label)
     settings => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty).join("")
     written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, change as String, \n).join("")
     static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
@@ -297,7 +301,7 @@ Reference := class {
   visibility: Accessor.Permission = Accessor.Permission.private
 
   year => date.year
-  claim (who: Character = &caller) => Program(name: "claim the authorship", goal: Reference{authors ∋ who}, from: location?.world ?? World.ether)
+  claim (who: Character = &caller) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location?.world ?? World.ether)
   notes => note.history
   draft => visibility == Accessor.Permission.private
   publish: static => this ~~ .visibility = Accessor.Permission.public
@@ -313,7 +317,7 @@ Instance := class: Location + Entity {
   deletions: Deletion[] = []
 
   login (character: Character) => (registry |= character) -- character
-  logged_in (character: Character) => registry ∋ character
+  logged_in (character: Character) => character is registry
   logout (character: Character, delete_all = false) => {
     registry = registry#{!== character}
     if delete_all {
@@ -350,30 +354,23 @@ Instance := class: Location + Entity {
 
 Character := class: Hierarchy + Entity + Nameable {
   static PREFIX = "@"
-  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find(.id == who || .name?.fold_case == (who as String).fold_case)
-
-  id: UUID = UUID.v4()
+  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find((who as String).fold_case is .name.fold_case)
 
   presence: Instance?
   constraint: *?
   focus: Program?
   permissions: Accessor.Permission?
 
-  first_name: String?
-  last_name: String?
-  email: Location{scheme == "mailto"}?
-  phone: Location{scheme == "tel"}?
   profile_picture: *?
   profile: *?
 
   avatars => children{is Avatar}
-  instances => Instance#{. === presence || .logged_in(this) || .hosted ∋ this}
+  instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
   primary => presence
   session => history.fork
   keep (session: History) => history.merge(session)
-  full_name => first_name ? first_name + " " + last_name : name
   device => (presence ?? Instance.local).device
-  quests => Program#{who ∋ this && running}
+  quests => Program#{who: this}{running}
   status => Status#{this is .}
   .status = {wanted} ^punctuation => constraint = wanted
   is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)

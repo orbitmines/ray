@@ -30,8 +30,6 @@ Character := class: Hierarchy + Entity + Nameable {
   static PREFIX = "@"
   static local (who) => who == "me" ? @me : None
 
-  permissions: Accessor.Permission?
-
   profile_picture: *?
   profile: *?
 
@@ -43,9 +41,4 @@ Character := class: Hierarchy + Entity + Nameable {
   chainable == (other) => ERROR@Security `comparing characters needs @ether/security (or @ether/network)`
 
   choose (s, n: Number = 1) => Choice(type: s, count: n)
-
-  read => Access(this)
-  write => on(`=`)
-  execute => on(`()`)
-  on (method) => Access(this, method)
 }

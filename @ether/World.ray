@@ -1,11 +1,7 @@
-{f}@{location: Location}({args}) ^punctuation => with (Location.current = location) f(args)
+{f}@{location: Location}({args}) ^punctuation => with (Location.current = location) Program(code: { f(args) }, from: location)()
 
 Program &+= {
-  serving: Location?
-  proxying: Network.Proxy?
-
-  serves (at: Location) => !done && at is serving
-  proxies => !done && proxying !== None
+  serves (at: Location) => !done && from is at
 }
 
 Node &+= {
@@ -20,18 +16,16 @@ World := class: Location + Nameable {
   clock: HybridClock = HybridClock(node: this)
   dynamics: Program?
   tick: static => this ~~ dynamics?(this)
-  population => characters#.count
 
   class{>.instance_of Nameable}#.for class => {
     `class.name.plural`: class[] => children{is class}
-    {class.PREFIX}{name: reservable_names} => fields{.name ==<in: .fold_case> class.PREFIX + name}.last?.value
-      ?? children**{is class && .name.ignore_case == name.ignore_case}.first
+    {class.PREFIX}{name: reservable_names} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last?.value
+      ?? children**{is class && .name.fold_case.skeleton == name.fold_case.skeleton}.first
       ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
-    {class.PREFIX}{unique<in: .fold_case> name: reservable_names} = {holder} => fields{.name ==<in: .fold_case> class.PREFIX + name}.last
+    {class.PREFIX}{unique<in: .fold_case.skeleton> name: reservable_names} = {holder} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last
       -- (held => held && !&@.may(`=`, held) ? Program(name: "overwrite a name", goal: held, from: this) : this[held?.name ?? class.PREFIX + name] = holder) if class.PREFIX
   }
 }
-Region := World
 
 Item := class: Nameable {
   location: Location?
@@ -44,10 +38,6 @@ Item := class: Nameable {
     transaction { location = to }
     this
   }
-}
-
-Platform := class: Location + Nameable {
-  icon: *?
 }
 
 Reference := class {
@@ -65,7 +55,7 @@ Reference := class {
   note: String?
 
   year => date.year
-  claim (who: Character = &caller) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location?.world ?? World.ether)
+  claim (who: Character = @me) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location?.world ?? World.ether)
   notes => [note, note.previous**].flatten
 }
 
@@ -79,41 +69,42 @@ Location &+= {
 Location.current = @local
 
 Character &+= {
-  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find((who as String).fold_case is .name.fold_case)
+  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find((who as String).fold_case.skeleton is .name.fold_case.skeleton)
 
-  presence: Instance?
+  presence | primary: Instance?
   constraint: *?
   focus: Program?
 
   instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
-  primary => presence
   device => (presence ?? Instance.local).device
   status => Status#{this is .}
-  .status = {wanted} ^punctuation => constraint = wanted
+  // Saying a status constrains what may run (W2.15); one read off what runs (`Online`, `Broadcasting`) that does not
+  // hold yet is a quest to make it hold, run by the character.
+  .status = {wanted} ^punctuation => (constraint = wanted) -- (Program(name: "become", who: this, goal: wanted).schedule(this) unless this is wanted)
   is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
 }
 
 Instance := class: Location + Entity {
-  static local = Instance(location: "localhost")
+  static local = Instance(host: "localhost")
 
-  location: *
   device: Device = Device()
   registry: Character?
   hosted: Character?
-  deletions: Deletion[] = []
 
   login (character: Character) => (registry |= character) -- character
   logged_in (character: Character) => character is registry
   // Logging out drops every secret on the character, whichever field holds it: each `none.read` field is zeroised and
   // set to None, so the next login makes fresh keys (W2.1 Storage). The entry removed is the character itself, or the one
-  // a verified copy answers for (`answers_for`), never one a claimed character only names.
+  // a verified copy answers for (`answers_for`), never one a claimed character only names. Deleting everything is a
+  // program run as the character once 30 days have passed; stopping it within them cancels it (W2.4).
   logout (character: Character, delete_all = false) => {
     registry = registry#{!(. === character || character.answers_for(.))}
-    character.fields{Visibility.secret(.)}.for(field => {
+    character.fields{.unreadable}.for(field => {
       Instance.keys_in(field.value).for(.zeroised)
       character[field.name] = None
     })
-    deletions.push Deletion(character) if delete_all
+    Program(name: "delete", who: character, goal: character.history.erased, from: World.ether.clock.now.when + 30 days,
+      code: { character.history = character.history.erased }).schedule(character) if delete_all
     character
   }
   // The keys a secret holds: a key, or a list of keys or of tuples holding keys (`world_keys`); never what else a tuple names.
@@ -127,20 +118,9 @@ Instance := class: Location + Entity {
 
   host_for (character: Character) => character ~~ (hosted |= .) ~~ .presence = this
   mirror (value, depth = 1) => Mirror(value, location: this, depth)
-  .{literal name ^property} ^punctuation => external get device name
-
-  static Deletion := class: Program (character: Character, requested: Stamp = World.ether.clock.now, window: Quantity.Temporal = 30 days) {
-    name = "delete"
-    goal => character
-    cancelled = false
-
-    cancel: static => this ~~ .cancelled = true
-    pending => !cancelled && !done
-    lapsed => pending && World.ether.clock.now.when >= requested.when + window
-  }
 
   static Mirror := class = value: *, location: Instance, depth = 1 {
-    access: Accessor? = value?.access
+    access = value?.access
     synced => location.registry#.nonempty
   }
 }
@@ -149,21 +129,23 @@ Online := Character{presence?.device.network.connected}
 Offline := Character{!(. is Online)}
 Broadcasting := Character{quests{serves @public}.nonempty}
 Hosting := Character{presence?.hosted#.some(!.same(this))}
-Proxying := Character{quests{proxies}.nonempty}
-Invisible := Character{constraint is Invisible}
+Proxying := Character{quests{goal is Network.Proxy && !done}.nonempty}
 Idle := Character{presence && !device.keyboard.keys.some([.pressed, .pressed.previous**].flatten{== true}.first?.when >= Time.now - 5 minutes)}
 Busy := Character{focus && !focus.done}
+
+Invisible := Character{constraint is Invisible}
 DoNotDisturb := Character{constraint is DoNotDisturb}
-Status := Online | Offline | Broadcasting | Hosting | Proxying | Invisible | Idle | Busy | DoNotDisturb
+// An NPC runs on its quests: until they are resolved, waiting for more, or stopping with some unfinished.
+Resolving := Character{constraint is Resolving}
+Waiting := Character{constraint is Waiting}
+Stopping := Character{constraint is Stopping}
+NPC := Resolving | Waiting | Stopping
+Player := Character{!(. is NPC)}
 
-Player := class: Character
+Constraint := Invisible | DoNotDisturb | NPC
+Status := Online | Offline | Broadcasting | Hosting | Proxying | Idle | Busy | Invisible | DoNotDisturb
 
-NPC := class: Character
-Waiting := NPC{constraint is Waiting}
-Stopping := NPC{constraint is Stopping}
-Resolving := NPC{quests.nonempty && !(constraint is Waiting | Stopping)}
-
-Organization := class: Player {
+Organization := class: Character {
   logo: *?
   website: *?
 

@@ -8,7 +8,6 @@ Identity := class = keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.
   recover: Identity.Threshold = 2 of [printed_key, guardians].flatten.compact after 7 days vetoable by 1 of keys {
 
   static algorithms = (signing: $.ed25519, agreement: $.x25519, handshake: $.noise, digest: $.sha256, wrapping: $.hpke, cipher: $.chacha20poly1305)
-  static Event := enum revoke | add | rotate
 
   static Threshold := class = count: Number, signers: *[], wait: Quantity.Temporal = 0 seconds, veto: Identity.Threshold? {
     met (event: History.Commit, identity: Identity) => event.signature#{event.covers(.) && identity.counts(.by, signers, event.stamp)}.map(.by).unique.count >= count
@@ -23,18 +22,18 @@ Identity := class = keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.
     : signer is Byte[] ? signer == digest.write(by.public).bytes
     : signer.certified(by, at))
 
-  kind (after: Identity) => after.rules != rules ? Event.rotate
-    : after.keys.every(keys.contains(.)) && after.certificates.every(certificates.contains(.)) ? Event.revoke
-    : keys.every(after.keys.contains(.)) && certificates.every(after.certificates.contains(.)) ? Event.add
-    : Event.rotate
-  threshold (kind: Event) => kind == Event.revoke ? revoke : kind == Event.add ? add : rotate
+  // What a key event needs: only removing is a revocation, only adding an addition; anything else is a rotation.
+  threshold (after: Identity) => after.rules != rules ? rotate
+    : after.keys.every(keys.contains(.)) && after.certificates.every(certificates.contains(.)) ? revoke
+    : keys.every(after.keys.contains(.)) && certificates.every(after.certificates.contains(.)) ? add
+    : rotate
 
   vetoes (event: History.Commit, log: History, at: Stamp?) => recover.veto && log.ordered{event.stamp < .stamp && (at === None || .stamp < at)}
     .some(veto => recover.veto.met(veto, this) && (copy -- veto.change).vetoed.contains(event.hash))
   recovered (event: History.Commit, log: History, at: Stamp?) => recover.met(event, this)
     && (at?.when ?? World.ether.clock.now.when) >= event.when + recover.wait && !vetoes(event, log, at)
-  allows (event: History.Commit, log: History, at: Stamp? = None) => kind(copy -- event.change) -- (kind =>
-    threshold(kind).met(event, this) || kind == Event.rotate && recovered(event, log, at))
+  allows (event: History.Commit, log: History, at: Stamp? = None) => threshold(copy -- event.change) -- (needed =>
+    needed.met(event, this) || needed === rotate && recovered(event, log, at))
 
   static logged (log: History, at: Stamp? = None) => log.ordered{at === None || .stamp < at}.reduce(held = None => . -- (event =>
     held === None ? (None -- event.change) -- (genesis => genesis.add.met(event, genesis) ? genesis : None)
@@ -87,6 +86,25 @@ Character &+= {
   sealed (commit: History.Commit) => commit.who is Encoding.Key ? commit ~~ (.signature = pseudonym(commit.line.id ?? commit.id).signed(.hash))
     : key_in(commit.line?.repository?.world) -- (pair => commit ~~ (.relies = identity?.history.head?.hash) ~~ (.signature = pair.signed(.hash) if pair))
   delegate (to, scope: Access = Access(), until: Time = Time.now + 1 day) => Delegation(from: this, to, scope, until) -- (made => made ~~ .signature = key.signed(made.hash))
+
+  // Recovering a lost root is a program run as the character (W2.1 Recovery handshake): its new root keys are made here,
+  // each guardian is sent only the rotation event's hash, and the event is appended once the `recover` threshold of
+  // their signatures, each bound to a session it was asked on, is met.
+  recovery (sessions: Noise.Session[] = []) => (roots = [policy().signing.pair(), policy().signing.pair()]) -- (made => identity.history -- (log =>
+    History.Commit(who: this, stamp: log.clock.now, change: Program(code: { .keys = made.map(.published) }), previous: log.head, line: log) -- (event =>
+      Program(name: "recover", who: this, goal: event, from: sessions, code: {
+        sessions.for(.sent(event.hash))
+        await Identity.logged(log) -- (policy => policy.recover.met(event, policy))
+        log.extended(event)
+      }))))
+  // A guardian signs the hash only after verifying the person, by its own means.
+  vouching (session: Noise.Session, message: Byte[]) => session.received(message) -- (hash =>
+    Program(name: "verify the person recovering", who: this, goal: hash, code: { key.signed([hash, session.binding].flatten) }))
+}
+
+Program &+= {
+  countersigned (signed: Encoding.Signed): static => this ~~ (goal.signature |= signed
+    if goal is History.Commit && goal.covers(signed) && from#.some(.binding == (signed.value as Byte[])[goal.hash.count..]))
 }
 
 // What security adds to a line: the key-log event it relies on, its signature, its content key with the wraps of it, and
@@ -132,20 +150,23 @@ History.Commit &+= {
 }
 
 History &+= {
-  sender: Accessor.Permission?
+  // Who may read a line's senders: narrower than who may read the line seals them (L§9.2).
+  sender: *?
 
-  sealed_sender => sender !== None && sender < Visibility.of(this)
-  covered (grant: Grant) => grant.names(this) ? since(None) : grant.target is Program && Grant.checkable(grant.target) ? grant.target() -- (got => got is Iterable
-    ? since(None){c => got.some(s => s === c || s is Iterable && s.some(=== c))} : []) : []
-  reaches (grant: Grant) => grant.names(this) || covered(grant).some(=== head)
-  read_grants => Permissions.current.grants{.access.reads && (reaches(.) || covered(.).nonempty)}
-  readers => Visibility.of(this) -- (visible => [read_grants.map(.access.who), @everyone{visible.reaches(.)}].flatten{is Character})
-  following => readers{reader => read_grants{reader.same(.access.who)} -- (granted => granted.empty || granted.some(reaches(.)))}
+  sealed_sender => sender !== None && !visibility#.who.every(. is sender)
+  // What a read grant lets read: the whole line when it is on the line (or what it inherits), else the commits its expression answers.
+  covered (grant: Access) => grant.target === this || visibility#.some(=== grant) ? since(None)
+    : grant.target is Program && Access.checkable(grant.target) ? grant.target() -- (got => got is Iterable
+      ? since(None){c => got.some(s => s === c || s is Iterable && s.some(=== c))} : []) : []
+  reaches (grant: Access) => grant.target === this || covered(grant).some(=== head)
+  read_grants => granted{.reads && (reaches(.) || covered(.).nonempty)}
+  readers => [read_grants.who#, @everyone{reader => read_grants.some(reader is .who)}].flatten{is Character}.unique
+  following => readers{reader => read_grants{reader.same(.who)} -- (granted => granted.empty || granted.some(reaches(.)))}
   holders => [[@me], (Instance.local.registry, Instance.local.hosted)#].flatten{is Character && .inbox}
   rotations => ordered{c => c.wraps.some(.key == c.id)}
   current_key => public ? None : rotations.last?.id
   readable => !current_key || content_key(current_key) is Encoding.Key
-  keys_for (reader: Character) => read_grants{reader.same(.access.who)}.map(covered(.)).flatten(1).map(.key).compact.unique
+  keys_for (reader: Character) => read_grants{reader.same(.who)}.map(covered(.)).flatten(1).map(.key).compact.unique
 
   wrapped (content: Encoding.Key, label, reader: Encoding.Key, policy: Identity) => policy.wrapping(kem: reader.algorithm, kdf: policy.digest, aead: content.algorithm) -- (by =>
     by.tagged(reader, (label as String).bytes, [], content.secret) -- (held => (key: label, cipher: content.algorithm, by: by, tag: held.tag, sealed: held.sealed)))
@@ -167,12 +188,12 @@ History &+= {
   wrapping (who, wraps: *[], id: History.Label = choose UUID.v1{unique}) =>
     this ~~ .head = committed(History.Commit(id, who, stamp: clock.now, change: Program(code: { . }), wraps: wraps, previous: head, line: this))
   // A cache line carries the wraps of its key, so it opens without the line it caches.
-  cached_at (commit: History.Commit) => commit.rewritten(Language.ray.write(at(commit).value) as Program) ~~ (.wraps = wraps_of(commit.key) if commit.key)
-  shared (reader: Character, who: Character = @me) => (Permissions.current.grant(Access(who: reader, method: Access.Reading), this) unless read_grants.some(reader.same(.access.who)))
+  cached_at (commit: History.Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program) ~~ (.wraps = wraps_of(commit.key) if commit.key)
+  shared (reader: Character, who: Character = @me) => (reader.read this unless read_grants.some(reader.same(.who)))
     -- keys_for(reader) -- (keys => keys.empty ? this
       : wrapping(who, keys.map(label => reader.inboxes().map(wrapped(content_key(label), label, ., who.policy()))).flatten(1).shuffled))
   // Revoking compares principals by root (`same`), so a verified copy of the reader revokes the grant made to them.
-  unshared (reader: Character, who: Character = @me) => read_grants{reader.same(.access.who)} -- (theirs => Permissions.current.grants = Permissions.current.grants{g => !theirs.some(=== g)})
+  unshared (reader: Character, who: Character = @me) => read_grants{reader.same(.who) && (.target === this || .target is Program)}.for(.target.access -= .)
     -- rekeyed(who, following{!.same(reader)})
 }
 
@@ -246,28 +267,13 @@ Instance &+= {
 Program &+= {
   delegation: Delegation?
 
-  run => Run.log.commit(who, this).head -- (logged => logged.opened -- (plain => delegation ? with (@me = Instance.local.delegated(delegation)) plain.change
+  run => Program.runs.commit(who, this).head -- (logged => logged.opened -- (plain => delegation ? with (@me = Instance.local.delegated(delegation)) plain.change
     : logged.attested -- (by => by ? with (@me = by) plain.change : plain.change)))
-}
 
-Run &+= {
   // A replay runs as recorded, as of the line's stamp, never with the live permissions of who it replays (W2.1).
-  static replay (logged: History.Commit) => (logged.attested -- (by => by ? with (@me = by) logged.opened.change : logged.opened.change)) if logs.some(=== logged)
+  static replay (logged: History.Commit) => (logged.attested -- (by => by ? with (@me = by) logged.opened.change : logged.opened.change)) if recent.some(=== logged)
 
-  may (method, target) => hops.every(. is Live && Permissions.current.allows(., method, target) && (.proof.delegation?.covers(method, target) ?? true))
-}
-
-Recovery := class = character: Character, sessions: Noise.Session[] = [] {
-  none.read roots: Encoding.Key[] = [character.policy().signing.pair(), character.policy().signing.pair()]
-  log => character.identity.history
-  event: History.Commit = History.Commit(who: character, stamp: log.clock.now, change: Program(code: { .keys = roots.map(.published) }), previous: log.head, line: log)
-
-  asked (session: Noise.Session) => session.sent(event.hash) ~~ sessions.push session
-  static vouched (guardian: Character, session: Noise.Session, message: Byte[]) => session.received(message) -- (hash =>
-    Program(name: "verify the person recovering", who: guardian, goal: hash, code: { guardian.key.signed([hash, session.binding].flatten) }))
-  received (signed: Encoding.Signed): static => this ~~ (event.signature |= signed if event.covers(signed) && sessions.some(.binding == (signed.value as Byte[])[event.hash.count..]))
-  met => Identity.logged(log) -- (policy => policy.recover.met(event, policy))
-  appended: static => this ~~ (log.extended(event) if met)
+  may (method, target) => hops.every(. is Live && target.allows(., method) && (.proof.delegation?.covers(method, target) ?? true))
 }
 
 // A commit is signed by an entity's key, when one is held here.

@@ -1,1 +1,2 @@
-@me = NPC(name: @me.name)
+@me = Instance.local.login(Character(name: @me.name))
+@me.status = Resolving

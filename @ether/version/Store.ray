@@ -26,7 +26,7 @@ Store := class: Hierarchy = at: Location = @local, format: Format? {
   static Row := class = type: String, id: String, fields: (name: String, value: String)[] {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
     static (instance) as (=== Row) => Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
-      fields: instance.fields{!Visibility.secret(.)}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.name{is UUID}#.first : .value))))
+      fields: instance.fields{!.unreadable}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.name{is UUID}#.first : .value))))
     instance => Language.ray.read((type, "(name: ", Language.ray.write(id as UUID), fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String)
   }
 

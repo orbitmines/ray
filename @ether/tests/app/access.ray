@@ -2,51 +2,67 @@
 
 mark ^keyword := external global
 
-unless Device().permission(Device.Capability.camera) == Grant.State.prompt { INFO@mark `AC26 a capability nobody granted is not asked for` }
+unless &@.ask(`()`, @me/device/camera) is Abstract { INFO@mark `AC26 a capability nobody granted is not asked for` }
 
 // confidential follows the policy, but never past @private.managed.
-with Visibility.policy = Accessor.Permission.public {
-  unless Accessor.Permission.confidential.resolved == Accessor.Permission.managed { INFO@mark `CK1 confidential widens with a public policy` }
-  if Accessor.Permission.confidential.reaches(Character(name: "stranger")) { INFO@mark `CK2 confidential reaches a stranger under a public policy` }
+with Node.policy = public {
+  unless confidential is @private.managed { INFO@mark `CK1 confidential widens with a public policy` }
+  if Character(name: "stranger") is confidential { INFO@mark `CK2 confidential reaches a stranger under a public policy` }
 }
-with Visibility.policy = Accessor.Permission.local {
-  unless Accessor.Permission.confidential.resolved == Accessor.Permission.local { INFO@mark `CK3 confidential is wider than a narrower policy` }
+with Node.policy = local {
+  unless confidential is local { INFO@mark `CK3 confidential is wider than a narrower policy` }
 }
 
 // A grant names an expression: a derivative may be granted where the value it derives from is not.
 gx_reader := Character(name: "reader")
 gx := (count: 3, secret: "s")
 gx_reader.read gx.count
-gx_grant := Permissions.current.grants.last
+gx_grant := Program#{.access#.some(.who === gx_reader)}.first?.access
 unless gx_grant.target is Program { INFO@mark `GX1 a grant took the value of what it names instead of the expression` }
-unless gx_grant.names(Program(code: { gx.count })) { INFO@mark `GX2 a grant does not name the expression it was given` }
-if gx_grant.names(Program(code: { gx.secret })) { INFO@mark `GX3 a grant on one derivative names another` }
-unless Permissions.current.allows(gx_reader, `count`, Program(code: { gx.count })) { INFO@mark `GX4 a granted derivative is refused` }
-if Permissions.current.allows(gx_reader, `secret`, Program(code: { gx.secret })) { INFO@mark `GX5 a grant on a count lets another field leave` }
+unless gx_grant.target.names(Program(code: { gx.count })) { INFO@mark `GX2 a grant does not name the expression it was given` }
+if gx_grant.target.names(Program(code: { gx.secret })) { INFO@mark `GX3 a grant on one derivative names another` }
+unless Program(code: { gx.count }).allows(gx_reader, `count`) { INFO@mark `GX4 a granted derivative is refused` }
+if Program(code: { gx.secret }).allows(gx_reader, `secret`) { INFO@mark `GX5 a grant on a count lets another field leave` }
 gx_whole := (count: 1)
 gx_reader.read gx_whole
-unless Permissions.current.allows(gx_reader, `size`, gx_whole) { INFO@mark `GX6 a grant naming a value does not cover that value` }
+unless gx_whole.allows(gx_reader, `size`) { INFO@mark `GX6 a grant naming a value does not cover that value` }
+unless gx_whole.access#.some(.who === gx_reader) { INFO@mark `GACC1 a grant naming a value is not on that value` }
 
 // const is none.write: nobody may write it, and what it holds inherits that.
 cst := const (count: 1)
-unless cst.access.who == Accessor.Permission.none { INFO@mark `CST1 const is not the permission nobody has` }
-if Accessor.Permission.none.reaches(Character(name: "anyone")) { INFO@mark `CST2 the permission nobody has reaches someone` }
-unless Accessor.Permission.none < Accessor.Permission.local { INFO@mark `CST3 the permission nobody has is not the narrowest` }
+unless cst.access#.some(.who === none && .writes) { INFO@mark `CST1 const is not the permission nobody has` }
+if Character(name: "anyone").answers_for(none) { INFO@mark `CST2 the permission nobody has reaches someone` }
+unless none is local { INFO@mark `CST3 the permission nobody has is not the narrowest` }
 
 // A permission's who is any narrowing: a policy by situation is a grant to it.
-nrw_room := Instance(location: "nrw-room")
+nrw_room := Instance(path: "nrw-room")
 nrw_near := Character(name: "near", presence: nrw_room)
 nrw_far := Character(name: "far")
 nrw_target := (lamp: 1)
 Character{presence === nrw_room}.read nrw_target
-unless Permissions.current.allows(nrw_near, `size`, nrw_target) { INFO@mark `NRW1 a grant to a narrowing refuses who satisfies it` }
-if Permissions.current.allows(nrw_far, `size`, nrw_target) { INFO@mark `NRW2 a grant to a narrowing allows who does not satisfy it` }
+unless nrw_target.allows(nrw_near, `size`) { INFO@mark `NRW1 a grant to a narrowing refuses who satisfies it` }
+if nrw_target.allows(nrw_far, `size`) { INFO@mark `NRW2 a grant to a narrowing allows who does not satisfy it` }
 
 // Checking a permission runs no one's code: a grant whose expression or filter has effects is refused when granted, and never run.
 purg_reader := Character(name: "purg-reader")
-purg_count := Permissions.current.grants.count
-unless Permissions.current.grant(Access(who: purg_reader, method: Access.Reading), Program(code: { IO().output("leak") })) is Diagnostic { INFO@mark `PURG1 a grant naming an expression with effects is granted` }
-unless Permissions.current.grant(Access(who: purg_reader, method: Access.Reading, filter: Program(code: { IO().output("leak") })), (lamp: 1)) is Diagnostic { INFO@mark `PURG2 a grant whose filter has effects is granted` }
-unless Permissions.current.grants.count == purg_count { INFO@mark `PURG3 a refused grant is kept` }
-if Grant(Access(who: purg_reader, method: Access.Reading), Program(code: { IO().output("leak") })).names("leak") { INFO@mark `PURG4 checking a grant runs an expression with effects` }
-if Permissions.current.grant(Access(who: purg_reader, method: Access.Reading), Program(code: { Time.now })) is Diagnostic { INFO@mark `PURG5 a grant reading the time is refused` }
+purg_lamp := (lamp: 1)
+unless (purg_reader.read IO().output("leak")) is Diagnostic { INFO@mark `PURG1 a grant naming an expression with effects is granted` }
+unless (purg_reader{IO().output("leak")}.read purg_lamp) is Diagnostic { INFO@mark `PURG2 a grant whose filter has effects is granted` }
+if purg_lamp.access { INFO@mark `PURG3 a refused grant is kept` }
+if Program(code: { IO().output("leak") }).names("leak") { INFO@mark `PURG4 checking a grant runs an expression with effects` }
+if (purg_reader.read Time.now) is Diagnostic { INFO@mark `PURG5 a grant reading the time is refused` }
+
+// Who runs a program is its chain of callers, the origin first; a prompt names them all.
+hop_origin := Program(who: Character(name: "company"))
+hop_run := Program(who: Character(name: "me"), caller: hop_origin)
+unless hop_run.hops.first === hop_origin.who && hop_run.hops.last === hop_run.who { INFO@mark `HOP1 a run's chain is not its origin first and its runner last` }
+unless hop_run.prompt == "@company wants to run this, originating from @me" { INFO@mark `HOP2 a prompt does not name the whole chain` }
+
+// What a program does is what its externals are: io and os are effects, the time is not deterministic.
+unless Program(code: { 1 + 1 }) is Pure { INFO@mark `EFF1 adding numbers is not pure` }
+unless Program(code: { IO().output("x") }) is Effecting { INFO@mark `EFF2 writing out is not an effect` }
+if Program(code: { Time.now }) is Deterministic { INFO@mark `EFF3 reading the time is deterministic` }
+with (Program.refused |= Program(code: { IO().output("x") })) {
+  unless Program(code: { IO().output("x") }) is Refused { INFO@mark `EFF4 a refused program is not refused` }
+}
+unless Program(code: { IO().output("x") }) is Abstracted { INFO@mark `EFF5 an effect nobody speculated runs in full` }

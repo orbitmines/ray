@@ -26,11 +26,11 @@ unless (with (@me = cw) { cw.acting ? true : false }) { INFO@mark `COND1 a verif
 hg_giver := Instance.local.login(Character(name: "giver"))
 hg := Program(code: { @me }, who: hg_giver)
 unless hg.run == hg_giver.acting { INFO@mark `HG1 handed-over code does not run as the character that handed it over` }
-unless Run.log.head.who === hg_giver { INFO@mark `HG2 a run of handed-over code is not logged as its giver` }
-unless Run.replay(Run.log.head) == hg_giver.acting { INFO@mark `HG3 a logged run does not replay as its character` }
-if Run.replay(Run.log.head) is Live { INFO@mark `VER10 a replay is given the live permissions of who it replays` }
-with Run.kept = 0 seconds {
-  if Run.logs.some(=== Run.log.head) { INFO@mark `HG5 a run older than the configured window is kept for replay` }
+unless Program.runs.head.who === hg_giver { INFO@mark `HG2 a run of handed-over code is not logged as its giver` }
+unless Program.replay(Program.runs.head) == hg_giver.acting { INFO@mark `HG3 a logged run does not replay as its character` }
+if Program.replay(Program.runs.head) is Live { INFO@mark `VER10 a replay is given the live permissions of who it replays` }
+with Program.kept = 0 seconds {
+  if Program.recent.some(=== Program.runs.head) { INFO@mark `HG5 a run older than the configured window is kept for replay` }
 }
 
 // The root policy: the first commit of the key log, keys naming their algorithm, and short-lived certificates for instance keys.
@@ -43,8 +43,8 @@ unless idy_policy.certifies(idy.key.published, World.ether.clock.now) { INFO@mar
 if idy_policy.certifies(idy.key.published, World.ether.clock.now, world: World(name: "elsewhere")) { INFO@mark `IDY5 a certificate for no world speaks in a world` }
 if idy_policy.certificates.first.until > Time.now + 30 days { INFO@mark `IDY6 an instance certificate lasts beyond thirty days` }
 unless idy_policy.revoke.count == 1 && idy_policy.recover.wait == 7 days && idy_policy.recover.veto { INFO@mark `IDY7 the default thresholds are not revoke 1, recover after 7 days with a veto` }
-unless idy_policy.kind(idy_policy.copy ~~ .certificates = []) == Identity.Event.revoke { INFO@mark `IDY8 removing a certificate is not a revocation` }
-unless idy_policy.kind(idy_policy.copy ~~ .signing = $.x25519) == Identity.Event.rotate { INFO@mark `IDY9 changing the algorithm is not a rotation` }
+unless idy_policy.threshold(idy_policy.copy ~~ .certificates = []) === idy_policy.revoke { INFO@mark `IDY8 removing a certificate is not a revocation` }
+unless idy_policy.threshold(idy_policy.copy ~~ .signing = $.x25519) === idy_policy.rotate { INFO@mark `IDY9 changing the algorithm is not a rotation` }
 unless (2 of [1, 2] after 7 days vetoable by 1 of [3]).veto.signers == [3] { INFO@mark `IDY10 a threshold does not read its wait and veto` }
 
 // Pre-rotation: the next keys are known by their digests only, and count for a rotation once revealed.
@@ -144,8 +144,9 @@ unless Program(code: { @me }, who: hold_from, delegation: hold).run is Diagnosti
 
 // Recovery: the recovering machine writes the rotation itself; guardians get only its hash and sign it bound to their session.
 rcv_c := Instance.local.login(Character(name: "recovering"))
-rcv := Recovery(character: rcv_c)
-if rcv.log.find(rcv.event.id) { INFO@mark `RCV1 a recovery is in the key log before its guardians signed it` }
+rcv_log := rcv_c.identity.history
+rcv := rcv_c.recovery()
+if rcv_log.find(rcv.goal.id) { INFO@mark `RCV1 a recovery is in the key log before its guardians signed it` }
 rcv_g := Instance.local.login(Character(name: "guardian"))
 rcv_i := Noise.handshake(true, $.x25519.pair())
 rcv_r := Noise.handshake(false, $.x25519.pair())
@@ -154,15 +155,17 @@ rcv_i.read(rcv_r.written())
 rcv_r.read(rcv_i.written())
 rcv_mine := rcv_i.session
 rcv_theirs := rcv_r.session
-rcv_message := rcv.asked(rcv_mine)
-unless Recovery.vouched(rcv_g, rcv_theirs, rcv_message) is Abstract { INFO@mark `RCV2 a guardian signs before verifying the person` }
-rcv_signed := rcv_g.key.signed([rcv.event.hash, rcv_theirs.binding].flatten)
-rcv.received(rcv_signed)
-unless rcv.event.signature#.some(=== rcv_signed) { INFO@mark `RCV3 a guardian's signature over the hash, bound to the session, is not taken` }
-rcv.received(rcv_g.key.signed([rcv.event.hash, [0] * 32].flatten))
-unless rcv.event.signature#.count == 1 { INFO@mark `RCV4 a signature bound to no session of this recovery is taken` }
-if rcv.met { INFO@mark `RCV5 one guardian meets a threshold of two` }
-unless rcv.roots.every(.algorithm === rcv_c.policy().signing) { INFO@mark `RCV6 the new root keys are not of the policy's algorithm` }
+rcv := rcv_c.recovery([rcv_mine])
+rcv_message := rcv_mine.sent(rcv.goal.hash)
+unless rcv_g.vouching(rcv_theirs, rcv_message) is Abstract { INFO@mark `RCV2 a guardian signs before verifying the person` }
+rcv_signed := rcv_g.key.signed([rcv.goal.hash, rcv_theirs.binding].flatten)
+rcv.countersigned(rcv_signed)
+unless rcv.goal.signature#.some(=== rcv_signed) { INFO@mark `RCV3 a guardian's signature over the hash, bound to the session, is not taken` }
+rcv.countersigned(rcv_g.key.signed([rcv.goal.hash, [0] * 32].flatten))
+unless rcv.goal.signature#.count == 1 { INFO@mark `RCV4 a signature bound to no session of this recovery is taken` }
+if rcv_log.find(rcv.goal.id) { INFO@mark `RCV5 one guardian meets a threshold of two` }
+unless rcv_c.roots.every(.algorithm === rcv_c.policy().signing) { INFO@mark `RCV6 the new root keys are not of the policy's algorithm` }
+unless rcv is Program && rcv.who === rcv_c { INFO@mark `RCV7 a recovery is not a program run as the character recovering` }
 
 // Content keys: one per history, wrapped with HPKE for each reader's instance key, found through the reader's key log; readers are whoever its access lets read.
 wrp_owner := Instance.local.login(Character(name: "wrp-owner"))
@@ -191,7 +194,7 @@ unless wrp.head.key == wrp.current_key && wrp.value == 2 { INFO@mark `WRAP15 a c
 
 // Sealed sender: a who narrower than the history moves who and the signature into the ciphertext; the line shows a per-history pseudonymous key.
 sel_writer := Instance.local.login(Character(name: "sel-writer"))
-sel := History(repository: Repository()) ~~ (.sender = Accessor.Permission.none)
+sel := History(repository: Repository()) ~~ (.sender = none)
 sel.commit(sel_writer, 1)
 sel.commit(sel_writer, 2)
 sel_line := sel.head.written(above: sel.head.previous)
@@ -202,13 +205,13 @@ if sel_line ~= "@sel-writer" || sel.head.relies { INFO@mark `SEAL4 a sealed send
 unless sel.head.authentic { INFO@mark `SEAL5 a line is not signed by the pseudonymous key it shows` }
 unless sel.head.opened.who.name == "sel-writer" && sel.head.opened.signature { INFO@mark `SEAL6 a reader does not find who wrote the line and their signature` }
 unless sel.value == 2 { INFO@mark `SEAL7 a history with a sealed sender does not read` }
-sel_other := History(repository: Repository()) ~~ (.sender = Accessor.Permission.none)
+sel_other := History(repository: Repository()) ~~ (.sender = none)
 sel_other.commit(sel_writer, 1)
 if sel_other.head.who == sel.head.who { INFO@mark `SEAL8 two histories show one pseudonym` }
 
 // A fork and an earlier version are copies: the sealed sender and the content keys come along.
 frk := sel.fork
-unless frk.sealed_sender && frk.current_key == sel.current_key && sel.at(sel.head.previous).sealed_sender { INFO@mark `FRK1 a copy of a sealed history loses its sender or its key` }
+unless frk.sealed_sender && frk.current_key == sel.current_key && sel[sel.head.previous].sealed_sender { INFO@mark `FRK1 a copy of a sealed history loses its sender or its key` }
 frk.commit(sel_writer, 3)
 unless frk.head.who is Encoding.Key && frk.value == 3 { INFO@mark `FRK2 a commit on a fork of a sealed history names its sender` }
 
@@ -297,8 +300,7 @@ unless crypt.head.merged && crypt.value.x == 1 && crypt.value.y == 2 { INFO@mark
 // Every private key is a secret (`none.read`): stores skip it whatever it is called, and logging out zeroises and drops all of them, so the next login makes fresh ones.
 sct := Instance.local.login(Character(name: "secret-keeper"))
 Instance.local.certified(sct, World(name: "sct-world"))
-unless ["key", "inbox", "roots", "world_keys"].every(name => sct.fields{.name == name}.every(Visibility.secret(.))) { INFO@mark `SECRET1 a private key is held in a field someone may read` }
-unless Recovery(character: sct).fields{.name == "roots"}.every(Visibility.secret(.)) { INFO@mark `SECRET2 the root keys made for a recovery are held in a field someone may read` }
+unless ["key", "inbox", "roots", "world_keys"].every(name => sct.fields{.name == name}.every(.unreadable)) { INFO@mark `SECRET1 a private key is held in a field someone may read` }
 if (sct as Store.Row).fields.some(.name is ("key" | "inbox" | "roots" | "world_keys")) { INFO@mark `SECRET3 a store writes a private key` }
 sct_root := sct.roots.first
 Instance.local.logout(sct)
@@ -315,7 +317,7 @@ revk := none.read History(repository: Repository())
 revk.commit(revk_owner, 1)
 revk.shared(revk_reader, revk_owner)
 revk.unshared(revk_reader.acting, revk_owner)
-if Permissions.current.grants.some(.target === revk && .access.who === revk_reader) { INFO@mark `REVK1 a reader revoked by a verified copy keeps the grant` }
+if revk.access#.some(.who === revk_reader) { INFO@mark `REVK1 a reader revoked by a verified copy keeps the grant` }
 unless revk.content_key(revk.current_key, [revk_reader]) is Abstract { INFO@mark `REVK2 a reader revoked by a verified copy holds the new key` }
 revk_leaving := Instance.local.login(Character(name: "revk-leaving"))
 Instance.local.logout(revk_leaving.acting)

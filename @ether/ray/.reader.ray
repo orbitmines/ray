@@ -1267,38 +1267,6 @@ read statement at {given} =>
   after
 
 hand reading over
-// Whether code holds something: a name that a frame where it is written holds, or anything that is not one name.
-holds something {code} =>
-  where := external span code
-  from := where . from
-  to := where . to
-  word := yes
-  here := from
-  while here do
-    if same here to then
-      here := nothing
-    if here then
-      c := here . character
-      if character c is space then
-        word := nothing
-      if closer of c then
-        word := nothing
-      if character c is quote then
-        word := nothing
-      here := here . next
-  found := yes
-  if word then
-    found := nothing
-    frame := where . frame
-    while frame do
-      held := external get frame code
-      if held then
-        found := yes
-        frame := nothing
-      if frame then
-        frame := frame . parent
-  found
-
 // The rules a value is read by (R2.1): its own and its classes' (not the top scope's), then what every value has.
 rules of {value} =>
   top := registry . top
@@ -1330,8 +1298,25 @@ sent {this} {rest} =>
   // the first receiver is a place (its code, unread): what it holds is read for its rules only when it holds something
   current := this
   value := nothing
-  if holds something this then
-    value := this
+  receiver_at := external span this
+  frame := receiver_at . frame
+  held := nothing
+  while frame do
+    held := external get frame this
+    if held then
+      frame := nothing
+    if frame then
+      frame := frame . parent
+  if held then
+    value := held
+  unless held then
+    // not a name a frame holds: a group, quoted text, or a name nothing holds yet (a place)
+    first_place := receiver_at . from
+    c := first_place . character
+    if closer of c then
+      value := this
+    if character c is quote then
+      value := this
   result := current
   going := yes
   while going do
@@ -1490,7 +1475,8 @@ Node := type
   // place or a value, read when it is used).
   ,{other} =>
     list := nothing
-    if holds something this then
+    known := external span this
+    unless known then
       list := this
       unless list . listing then
         list := nothing

@@ -103,7 +103,7 @@ export class Seed {
       return n;
     });
     // Where code is: a node with the place it starts at (`from`) and the place after it (`to`, none at the text's end).
-    this.externals.set('span', (frame, [code]) => { if (code === undefined) return undefined; const c = self.written(code), n = new Node(); n.members.set('from', self.place(c.text, c.b)); n.members.set('to', c.e >= c.text.s.length ? undefined : self.place(c.text, c.e)); n.members.set('frame', c.frame); return n; });
+    this.externals.set('span', (frame, [code]) => { if (!(code instanceof Code)) return undefined; const c = self.written(code), n = new Node(); n.members.set('from', self.place(c.text, c.b)); n.members.set('to', c.e >= c.text.s.length ? undefined : self.place(c.text, c.e)); n.members.set('frame', c.frame); return n; });
     // Code from one place to another, read where `like` was written (a capture's type, read once when its rule is defined).
     this.externals.set('read', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.written(like); return self.force(new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner)); });
     this.externals.set('.', frame => frame);

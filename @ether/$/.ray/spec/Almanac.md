@@ -24,8 +24,10 @@ spec files. IDs `A…`. Answers go under **Decided** at the end.
 - `,` is an operator that composes structures and accepts closures on the previous element:
   `1, +2, +3, +4 // 1, 3, 6, 10`. `,` is interchangeable with `&` and `|` (semantic decorators on
   the edge): `1 | +2 | +3 | +4 // 1 | 3 | 6 | 10`.
-- `+1 <- x: "A" -> -1`, `+1 <- numberline -> -1`: a recursive chain from a base, each step from the
-  previous one.
+- `-1 <- x: "A" -> +1`, `-1 <- 0 -> +1` (the number line): a recursive chain from a base, each step
+  from the previous one. (Corrected 2026-10-06 from the drafts review: this entry had the line the
+  other way round, `+1 <- x: "A" -> -1`; the current Almanac, *Almanac.tsx:853–861*, writes
+  `-1 <- x: "A" -> +1` and `-1 <- 0 -> +1`.)
 - `("A" + numberline).next // "B"`; `"ABC".next // "A"`.
 - `##` extracts components: `x## // == [string, equipped_structure]`; or by types:
   `string: String = x`.
@@ -33,6 +35,10 @@ spec files. IDs `A…`. Answers go under **Decided** at the end.
   `x.map(entry => entry.index) // [1, 2, 3]`.
 - A map with a filter (a lens): `[1, 2, 3].map{.index == 2}(*10) // [1, 2, 30]`.
 - Mapping retains structure: `x: Graph = [false, false | true, true]`, `x.map(!) // true, true | false, false`.
+- From the drafts review (2026-10-06), Almanac lines the entries above left out:
+  - A recursively defined ray is indexed like any iterable: `(0 -> +2)[4] // 8` (*Almanac.tsx:864–867*).
+  - Alternatives written with `|` while building a structure become separate branches:
+    `x: Graph = [1, "2a" | "2b", 3]` (*Almanac.tsx:893–896*).
 
 ## A3. Locations and call by value (Almanac §3)
 
@@ -62,6 +68,14 @@ spec files. IDs `A…`. Answers go under **Decided** at the end.
 - Variadics: a function has one argument, described structurally by its parameters in sequence:
   `varargs (a: String, b: Number[], c: String[])`, `varargs("a", 1, 2, 3, part, "c3")`. Ambiguities
   are handled as in types.
+
+From the drafts review (2026-10-06).
+
+- **A5b: a share of what doesn't divide.** *`.ray2/_todo/ray.ray.txt/Ether/instance/UI.ray:12–13`*:
+  `Probability{!= 1} …` "How to say %, what to do in case of non-divisible". **Q.** Recommend (as
+  Decided text): `p X` over n possibilities chooses `round(p * n)` of them; when `p * n` isn't whole it
+  is the superposition of the floor and the ceiling, weighted by the remainder (`50%` of 3 is `1 | 2`,
+  half each). (Also U8.)
 
 ## A6. Equality (Almanac §2.6)
 
@@ -118,6 +132,22 @@ spec files. IDs `A…`. Answers go under **Decided** at the end.
   `1 | +2 | +3` (closure steps with `|`) compatible?
 - **A-C5 `--`.** Not in `Language.md`. It wraps the whole line before it (and conflicts with the spec
   plan's mention of `--` "beside `;` and `~~`").
+
+From the drafts review (2026-10-06).
+
+- **A-C6 Super/subscript on a type: length or count.** A5: on a base type `^` "means length"
+  (`Binary³²`). `.ray2/Ray.ray:201–203` allows `Binary₃₂ = Binary₈[]₄` and "uses count instead of
+  length", since `Graph²²²` reads better as the size of the graph than as each path's length; the
+  standing directive is length ≠ count. **Q.** Recommend following the draft: a type's
+  super/subscript constrains `.count` (the size), which equals the length for chains; `Graph²²²` is a
+  graph of 222 vertices.
+- **A-C7 `never` against `Never`.** The Almanac writes `forever (): never => loop { }`
+  (*Almanac.tsx:1299*); L§4.1 decides `=> Never` as the type and `never` as the keyword. **Q.**
+  Recommend accepting both: `never` in a type position reads as `Never`, as `boolean` names a type.
+- **A-C8 Version range spelling.** The Almanac writes `title %1..5: String` (*Almanac.tsx:1641*);
+  L§7.2 decides the suffix `field %1..5`; the 2026-10-05 answer (Language.md, `%`) reads `%` followed
+  by a number as modulo and spells ranges `%[1..5]`. **Q.** Recommend keeping the 2026-10-05 answer
+  (`field %[1..5]`), rewriting L§7.2, and updating the Almanac line.
 
 ---
 

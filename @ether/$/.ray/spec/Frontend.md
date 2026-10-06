@@ -1,6 +1,8 @@
 # Ray — Frontend language spec (from `orbitmines.com.ray`)
 
-Status legend: **Decided** · **Open** (not answered yet; nothing is built for it).
+Status legend: **Decided** · **Open** (not answered yet; nothing is built for it) · from the drafts
+review (2026-10-06): **Decided (draft)** (the draft is explicit) · **Q** (needs your decision, with a
+recommendation).
 Each item gives its question ID, what the draft writes, and what the question is.
 
 Sources: `../orbitmines.com/orbitmines.com.ray/` (`index.ray`, `organizations.ray`, `Article.ray`,
@@ -34,6 +36,35 @@ follow and are equivalent.
   external needs the user's say.
 - **F-D10: the TUI target.** A static print, or a full-screen interactive program (alternate
   screen, keyboard navigation per the Keyboard draft, *Feature:505–520*)?
+
+From the drafts review (2026-10-06). Sources: `.ray2/_todo/ray.ray.txt/Ether/instance/UI/Geometry.ray`
+and `…/UI.ray`, cited as *Geometry:line* and *UI:line*.
+
+- **F-D11: plugin and browser targets.** *Geometry:99–103*: "What if a plugin, not a website?",
+  `namespace Browser external? url: URL`, direct access to the JavaScript context
+  (`external? javascript`). Partly F-D7, F-D9b. **Q.** Recommend: a browser extension is another
+  HTML platform level; the page's URL is `@me/device/location`; direct JS access is `$.js` code run
+  through the DOM protocol, not an external.
+- **F-D12: knowing a value is being chosen.** *Geometry:105–107, 144, 190*: `if choosing` (this
+  variable is being chosen), `if choosing radius`, a placeholder that is the default but is reset on
+  clicking choose, `Ball(radius: choose? ?? 5m)` ("Choose + default"). Partly W9, v0
+  `Choice.placeholder`. **Q.** Recommend (as Decided text): `x.choosing` is true while x is an open
+  Choice; `choose? ?? d` offers a choice whose unanswered value is `d`, shown as the placeholder.
+- **F-D13: constructor code and renderings.** *Geometry:113, 146*: constructor code you always want
+  to run; "use return in the constructor … the rendering func". Partly L§4.2, F-D5. **Q.** Recommend
+  (as Decided text): statements before the first label run for every entry point (the shared part of
+  the constructor); a rendering is the entry point's answer (`Ball~profile()` answers its rendering),
+  and the object is still `this`.
+- **F-D14: rendering `&`.** *Geometry:150*: how several rendered values are read,
+  `"text in between" & "other text in between"`. Extends F-D4. **Q.** Recommend (as Decided text):
+  `a & b` (both at once) renders both, layered in one place; `a | b` is chosen (F-D4); `a, b` flows
+  (F-B10).
+- **F-D15: a UI library by equivalence.** *UI:1, 4–6*: selecting an Entity filter goes into a
+  library and renders its own way "if there's an equivalence for it to Entity code";
+  `form global.entity.name: String`. **Decided (draft).** A value renders through the first
+  rendering found along its equivalence graph (L§3.5): a narrowing over Entities renders as the
+  library's filter widget. A form is a block of declared, unset fields (`name: String`), each
+  rendered as its Choice. (Extends F-D4; P8.15 narrowings → inputs.)
 
 ## A. The site and routing (*index:1–30*)
 
@@ -98,6 +129,86 @@ follow and are equivalent.
   aliases, and `@"discord.orbitmines.com"`.
 - **F-C8:** the `@` handles (`@fadi`, `@orbitmines`): where they are declared and resolved
   (L§10.7 `@name` lookup, falling back to `@ether`).
+
+From the drafts review (2026-10-06).
+
+- **F-C9: code between rendered text.** *Geometry:179–200*: code in front of a rendering
+  (`{dynamic_id}\ Ball(…)`), `{Ball(radius: 1m) Ball(radius: 0.5m)}text in between`,
+  `{Ball / radius: 1m ; center}`. Partly F-C6, L§10.1 interpolation. **Q.** Recommend: inside page
+  text, `{…}` is code whose value is rendered in place (string interpolation, L§10.1); a label
+  before it (`{id}\`) names that element.
+
+## G. Geometry: shapes and spaces (`v0/Geometry`, F-D8b)
+
+From the drafts review (2026-10-06). Source: *Geometry:line* as above. v0 has `Ball` as a 2D
+box-sized ellipse, `Space.grid(extent, loop)`, `Curve`, `Polygon`, `Fractal`, `Side`, `Shape.fill`.
+
+- **F-G1: n-dimensional Ball and Sphere.** *Geometry:208–236*: `radial_distance`,
+  `static Open => static{- surface}`, `static Closed => Ball`, `delegate in Point => this as Point`,
+  `boundary: Boundary{∙.radial_distance == radius}`, `interior => this{not border}`,
+  `{n}-Ball => Ball{dimensionality == n}`, `{n}-Sphere => {n + 1}-Ball.surface`,
+  `Circle = 2-Ball`. **Decided (draft).** A Ball is the points within `radius` of a `centre` under
+  the space's metric; `n-Ball` fixes the dimension; `n-Sphere` is the surface of the (n+1)-Ball;
+  `Circle := 2-Ball`. `Open`/`Closed` exclude/include the surface; `interior` is the ball without
+  its border. Fields not on the Ball delegate to its points (`Ball.color` → `point.color`).
+  `radius`, `diameter` and `boundary` define each other circularly; setting any one of them breaks
+  the circle (*Geometry:225–226*).
+- **F-G2: named spaces and solids.** *Geometry:24–30, 238–265*: `Path | Curve | Line =
+  Array.Unbounded`, `curvature`, `static Straight`, `Loop = Array.Unbounded.loop(boundaries: false)`,
+  Plane (a square with no boundaries), an `x`D Grid, Euclidean space as a grid with infinite
+  divisibility, effective vs actual dimension per point, Cylinder/Torus/Sphere/Cube/Cone, discrete
+  circles. **Q.** Recommend Decided: `n D Grid` is `Space.grid`; a looped axis gives a cylinder, two a
+  torus; `Plane` is an unbounded 2D space; continuous space is the limit of a grid's divisibility.
+  Solids are Shapes over those spaces. `curvature` and `Straight` are properties of a Curve.
+  Effective dimension is per point (fractals).
+- **F-G3: direction words.** *Geometry:276–292*: per axis `left <<- previous <- horizontal | x ->
+  next ->> right`, `bottom <<- down <- vertical | y -> up ->> top`,
+  `behind <<- backward <- depth | z -> forward ->> in_front`; `Center<D>` as
+  `(<-D).length == (D->).length` (F-B9). **Decided (draft).** `<-`/`->` are the neighbours
+  (`previous`/`next`, `down`/`up`, `backward`/`forward`), `<<-`/`->>` the far ends
+  (`left`/`right`, `bottom`/`top`, `behind`/`in_front`); the axes are named `x | horizontal`,
+  `y | vertical`, `z | depth`.
+  - **Q, F-G3b: which way y points.** The draft's y points up (`up ->> top`); v0's `Side.top` is
+    toward −1 (screen coordinates). Recommend: the space's axis states its orientation, and screen
+    levels flip y.
+- **F-G4: edge lengths and discretizing.** *Geometry:5–6, 38–41*: edges decorated with length
+  (`elementary_length`), `discretized 1 / m`, conflicting information at discretized points, a
+  discretized 2D shape renderable in pixels. v0's graph metric is hop count. **Q.** Recommend
+  Decided: a graph space's edges may carry a length (default 1), which its metric sums.
+  `x discretized (1 / m)` samples a continuous shape on a grid of that resolution; points that sample
+  to the same cell superpose, resolved by the renderer's policy (e.g. coverage).
+- **F-G5: fields over space.** *Geometry:20, 202*: "a point has a color", colour as information of
+  each point, which is an approximation. **Q.** Recommend: a per-point value is a function on the
+  shape's points (`color: (p: Point) => Color`); `fill` is its constant case, Gradient/Pattern are
+  others.
+- **F-G6: holes, smooth unions, connectedness.** *Geometry:34, 204–206*: holes as negative
+  components, `LocallyConnected` (no jumps between neighbourhoods), a smooth join of
+  `Ball - Square` at its boundary. Partly T2.4, v0 winding-number `contains`. **Q.** Recommend
+  Decided: a hole is a subtracted component (`shape - Ball(…)`); `LocallyConnected` is a narrowing
+  on a Space; a smooth join is a component with a blend radius (`a &+ b smoothed r`).
+- **F-G7: shader output.** *Geometry:1*: translations to GLSL inferred from the types' structure
+  (signed distance functions); exact vs approximate equivalences. P4.7 keeps shaders as a note.
+  **Q.** Recommend, later: a `$.glsl` level writes a shape as its signed distance function derived
+  from its structure; an exact SDF is a `force` equivalence, a bound is `approx` (G7.1).
+
+## I. Interfaces and controllers
+
+From the drafts review (2026-10-06).
+
+- **F-I1: interfaces and controllers.** *Geometry:43–61, 85–89*: `class Interface < world: World`,
+  an interface has an extent into a world, `Window | Browser | Document | ?? < Interface & World`;
+  controllers by id (`#{id: Number.Nat}`), a reconnecting device reclaims its id from history unless
+  a new device claimed it; a new controller is a guest not yet associated with a character;
+  `Keyboard.#0.f2`, many keyboards. Partly W8 (devices under `@me/device`), v0 `Device.pads`, one
+  `keyboard`. **Q.** Recommend Decided: an interface is a location with an extent into a world (a
+  window/document is both an Interface and a World). Controllers are
+  `@me/device/controllers/<id>`; a reconnecting device gets back the id its history shows, unless
+  another claimed it. A new controller is a guest until assigned a character. There may be many
+  keyboards: `@me/device/keyboard` is their superposition, `…/keyboard#0` one of them.
+- **F-I2: switching the view of a value.** *private-journal `Project - Controller = Keyboard (2026).md:1–79`*
+  (paraphrased; the rest is W7 backlog): a trigger switches the view between Many, Array, Graph and Tree. **Decided (draft).**
+  That switch is a choice of rendering level over the same Ray, not a change of the value. The rest
+  of the controller design is W7's.
 
 ---
 

@@ -223,11 +223,13 @@ Geometry := class {
     root => parent?.root ?? this
     em => parent?.font_size ?? Font.base.size
     font_size => with Font.inherited = em { font.size as px }
-    at: Vector => if position.kind
+    at: Vector => if position.kind {
       fixed => origin
       anchored => (position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0))
       sticky => (parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y)) -- Vector(.x, .y min (root.size.y - (inset.top ?? 0px) - size.y) max parent.at.y)
-      else => parent ? parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y) : origin
+    } else {
+      parent ? parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y) : origin
+    }
     outer => size + margin.total
     content_height => children.map(size.y - .origin.y + .margin.bottom).max ?? size.y
     texts => reachable{.content is String}
@@ -274,12 +276,13 @@ Geometry := class {
     arranged => with Font.inherited = em {
       inner = size.x - padding.left - padding.right
       flowing = children{.position is Flowing}
-      bottom = if flow
+      bottom = if flow {
         grid => flowing.chunk(columns).reduce(acc = padding.top => .enumerate.for(cell =>
             cell.value.laid(inner / columns - gap.x) -- (cell.value.origin = Vector(padding.left + cell.index * (inner / columns + gap.x), acc) + cell.value.margin.leading)
           ) -- acc + .map(.outer.y).max + gap.y)
         layered => flowing.for(.laid(inner) -- (.origin = padding.leading + .margin.leading)) -- padding.top + flowing.map(.outer.y).max
-        else => flowing.reduce(acc = (at: padding.leading, row: 0px) => {
+      } else {
+        flowing.reduce(acc = (at: padding.leading, row: 0px) => {
           .laid(inner)
           continues = flow == inline && (!wrap || acc.at.x + .outer.x <= padding.left + inner)
           y = continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0px ? gap.y : 0px)
@@ -291,6 +294,7 @@ Geometry := class {
           .origin = Vector(x, y) + .margin.leading
           (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
         }) -- (.at.y + .row)
+      }
       (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? padding.top + intrinsic(inner) : bottom) + padding.bottom))) if parent
       flowing.for(.origin = Vector(.origin.x, size.y - .origin.y - .size.y))
       children{!(.position is Flowing)}.for(.positioned)
@@ -305,11 +309,13 @@ Geometry := class {
   Ball := Shape{boundary == ellipse(size)}
   Curve := class: Shape = segments: Segment[], rank: Integer = 1,
     boundary: Shape = segments is Loop ? Shape(rank: 0) : Shape(rank: 0, cells: [Cell(points.first, [], -1), Cell(points.last, [], 1)]) {
-    points => segments.map(segment => if segment
+    points => segments.map(segment => if segment {
       is Quadratic => (1..16).map(t => Bezier([segment.previous.to, segment.control, segment.to], t / 16))
       is Cubic => (1..16).map(t => Bezier([segment.previous.to, segment.first, segment.second, segment.to], t / 16))
       is Arc => segment.points(segment.previous.to)
-      else => [segment.to]
+    } else {
+      [segment.to]
+    }
     ).flatten
     edges => points -- .zip([.rest, (.first if segments is Loop)].flatten)
     facets => edges.map(Facet([.0, .1]))

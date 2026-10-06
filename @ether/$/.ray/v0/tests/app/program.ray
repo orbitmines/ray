@@ -74,28 +74,32 @@ unless [true, false].map(!) == [false, true] { INFO@mark `OP3 ! alone is not the
 unless [1, 2, 3].reduce((*)) == 6 { INFO@mark `OP4 (*) is not multiplication as a value` }
 unless [1, 5, 20]{< 10}.count == 2 { INFO@mark `OP5 a section in a narrowing is not applied to each` }
 
-// `if x` with one case per line: `==` unless an operator is written, `is` for a type (P2.11)
-described (x) => if x
+// `if x { case => value … } else { … }`: `==` unless an operator is written, `is` for a type (P2.11)
+described (x) => if x {
   is Number => "number"
   "A" => "letter"
-  else => "other"
+} else {
+  "other"
+}
 unless described(5) == "number" { INFO@mark `MA1 an is case does not match an instance of its type` }
 unless described("A") == "letter" { INFO@mark `MA2 a case with no operator is not asked with ==` }
 unless described(true) == "other" { INFO@mark `MA3 the else case does not take what nothing else does` }
-graded (x) => if x
+graded (x) => if x {
   < 10 => "low"
-  else => "high"
+} else {
+  "high"
+}
 unless graded(3) == "low" { INFO@mark `MA4 a case with an operator is not asked with it` }
-first_case (x) => if x
+first_case (x) => if x {
   1 => "one"
   is Number => "number"
-  else => "other"
+} else {
+  "other"
+}
 unless first_case(1) == "one" { INFO@mark `IC1 a later case answers before an earlier one that holds` }
 unless first_case(2) == "number" { INFO@mark `IC2 a case that does not hold answers` }
-unless (if 3
-  != 0 => "nonzero"
-  else => "zero") == "nonzero" { INFO@mark `IC3 if with case lines is not a value where it is written` }
-if (if 0 { "taken" }) { INFO@mark `IC4 if with a block on the same line is read as cases` }
+unless (if 3 { != 0 => "nonzero" } else { "zero" }) == "nonzero" { INFO@mark `IC3 if with cases is not a value where it is written` }
+if (if 0 { "taken" }) { INFO@mark `IC4 an if whose block holds no cases is read as cases` }
 
 // `.( … )` reads among the members of what is before it (A8)
 Grouped := class {

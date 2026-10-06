@@ -108,12 +108,15 @@ Operator := "!" | "&&" | "||" | "!&&" | "!||" | "x||" | "x!||" | "+" | "-" | "/"
 {operator: Operator} ^operator => Section(operator)
 {operator: Operator{!= "-" && != "!" && != "^"} | "*"}{operand} ^operator => Section(operator, operand)
 
+Cases := Program{written.nonempty && written.every(.code ~= (*, " => ", *))}
 if &+= {
-  { }{subject}{\n}{cases} ^class => Compiler.reduced(subject, Program(code: external ** cases) as Compiler)
+  { }{subject} {{cases: Cases}} else {{otherwise}} ^class => Compiler.reduced(subject, (Program(code: external ** cases) as Compiler) + Program(code: external ** otherwise).otherwise)
+  { }{subject} {{cases: Cases}} ^class => Compiler.reduced(subject, Program(code: external ** cases) as Compiler)
 }
 Program &+= {
   as (=== Compiler) => Program(code: external ** written.map(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *))?.type
-    ?? (arm.case == "else" ? "*" : arm.case ~= (Operator, *) ? ("*{", arm.case, "}") : ("*{== ", arm.case, "}")), "} => ", arm.value)).join(\n))
+    ?? (arm.case ~= (Operator, *) ? ("*{", arm.case, "}") : ("*{== ", arm.case, "}")), "} => ", arm.value)).join(\n))
+  otherwise => ("{subject_of_case: *} => (", code, ")") as String as Program as Compiler
 }
 
 Node &+= {

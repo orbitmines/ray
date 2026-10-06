@@ -57,6 +57,7 @@ and `…/UI.ray`, cited as *Geometry:line* and *UI:line*.
   the constructor); a rendering is the entry point's answer (`Ball~profile()` answers its rendering),
   and the object is still `this`.
   **Answered (user, 2026-10-06):** a class body runs like any function: labels are never skipped. A `Component` class adds that the labels inside are not executed, only entered.
+  **Answered (user, 2026-10-06):** later: entering a plain class at a label constructs the whole body, then runs from the label.
 - **F-D14: rendering `&`.** *Geometry:150*: how several rendered values are read,
   `"text in between" & "other text in between"`. Extends F-D4. **Q.** Recommend (as Decided text):
   `a & b` (both at once) renders both, layered in one place; `a | b` is chosen (F-D4); `a, b` flows

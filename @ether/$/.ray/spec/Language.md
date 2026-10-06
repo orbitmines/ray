@@ -162,6 +162,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **From the drafts review (2026-10-06):**
   - **4.2.1 Shared constructor code; renderings — Q.** What runs for every entry, and how a constructor's `return` (a rendering) is reached (*`.ray2/_todo/ray.ray.txt/Ether/instance/UI/Geometry.ray:113, 146`*). Recommend: statements before the first label run for every entry point; a rendering is the entry point's answer (`Ball~profile()` answers its rendering), and the object is still `this`.
     **Answered (user, 2026-10-06):** as F-D13: a class body runs like any function, labels never skipped; a `Component` class adds that its labels are not executed, only entered.
+    **Answered (user, 2026-10-06):** later: entering a plain class at a label constructs the whole body, then runs from the label.
 
 ### 4.3 Calling what isn't there yet — *IDE:217*
 > Call something which isn't filled yet lazily, and assume it can only be put there after it's filled.

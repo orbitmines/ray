@@ -456,8 +456,31 @@ spelled_over (src, from, j, limit, frame) => (
   while at != None and at != NIL { if at.src == src and at.at == from { return -1 }; at = at.next }
   overing := Claim(src: src, at: from, next: ROOT.overing)
   ROOT.overing = overing
-  found, end, reach := best_in(src, from, limit, frame, None, None, 0, frame, 1 + 512, -1, -1, -1, -1) always { ROOT.overing = overing.next }
-  return found != None and end > j and !captured_at(found, src, from, limit, frame, None, None, j) ? end : -1
+  found, end, reach := best_in(src, from, limit, frame, None, None, 0, frame, 1 + 512, -1, -1, -1, -1) catch err { ROOT.overing = overing.next; rethrow(err) }
+  if found != None and end > j and !captured_at(found, src, from, limit, frame, None, None, j) { ROOT.overing = overing.next; return end }
+  ROOT.overing = overing.next
+  return -1
+)
+// Or by a rule read on what is written before it, tight after it (`b.for name => { … }`), that spells it: asked only where a
+// statement's `=>` is weighed against a definition (spelled_inside), not by every capture's scan.
+spelled_over_on (src, from, j, limit, frame) => (
+  over := spelled_over(src, from, j, limit, frame)
+  if over > j { return over }
+  at := ROOT.overing
+  while at != None and at != NIL { if at.src == src and at.at == from { return -1 }; at = at.next }
+  overing := Claim(src: src, at: from, next: ROOT.overing)
+  ROOT.overing = overing
+  // or a rule read on what is written before it, tight after it (`b.for name => { … }`), that spells it
+  k := skip(src, from, j, None)
+  while k < j {
+    if !space(src, k) and !space(src, k - 1) {
+      on, on_end, on_reach := best_target(UNDEF, frame, src, k, limit, UNDEF, 512, None) catch err { ROOT.overing = overing.next; rethrow(err) }
+      if on != None and on_end > j and !captured_at(on, src, k, limit, frame, global, UNDEF, j) { ROOT.overing = overing.next; return on_end }
+    }
+    k = skip(src, k, j, None)
+  }
+  ROOT.overing = overing.next
+  return -1
 )
 // Whether j is inside one of the captures of rule read at pos (or outside what it reads): not one of its own literals.
 captured_at (rule, src, pos, limit, frame, receiving, receiver, j) => (
@@ -912,7 +935,7 @@ first_step (src, pos, limit, frame) => (
     other, other_end, other_reach := best_in(src, start, limit, frame, None, None, 0, frame, 1 + 512, -1, -1, -1, -1)
     if other != None and other_end >= found_end {
       k := split_of(found, src, start, limit, frame)
-      if k >= 0 and !captured_at(other, src, start, limit, frame, None, None, k) { found = other; found_end = other_end; found_reach = other_reach }
+      if k >= 0 and (!captured_at(other, src, start, limit, frame, None, None, k) or spelled_inside(other, src, start, limit, frame, k)) { found = other; found_end = other_end; found_reach = other_reach }
     }
   }
   name := token(src, start, limit)
@@ -974,6 +997,17 @@ overridden (found, named, src, start, name, limit, frame, place) => (
   p := 0
   while p < rule_count(named) {
     if cap_begin(held, p) != -1 and cap_begin(held, p) < k and k < cap_stop(held, p) { return spelled_over(src, cap_begin(held, p), k, limit, frame) > k }
+    p = p + 1
+  }
+  return None
+)
+// Whether the `=>` at k, inside a capture of rule read at pos, is spelled there by a rule that defines nothing (spelled_over).
+spelled_inside (rule, src, pos, limit, frame, k) => (
+  e, r, held := match(rule, src, pos, limit, frame, None, None)
+  if e < 0 { return None }
+  p := 0
+  while p < rule_count(rule) {
+    if cap_begin(held, p) != -1 and cap_begin(held, p) < k and k < cap_stop(held, p) { return spelled_over_on(src, cap_begin(held, p), k, limit, frame) > k }
     p = p + 1
   }
   return None

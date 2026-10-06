@@ -2,7 +2,12 @@ dynamically {name} = {value} ^keyword => external rule name value
 dynamically {name} := {value} ^keyword => external rule name value
 dynamically {name} &= {value} ^keyword => name -- (base => external rule name (base & value))
 dynamically if{ }{cond}{ }{block} ^keyword => Dynamic(program: () => if cond block)
-dynamically{ }{value} ^keyword => Dynamic(program: Program(code: external ** value))
+// Run now, and again while it answers nothing when something is declared (P5.1, `watched` in the entrypoint).
+dynamically {value} ^keyword => (
+  running := None
+  running = watched(Program(code: external ** value, context: external .))
+  Dynamic(program: running)
+)
 Dynamic := class = program: Program {
   .{literal property ^property} ^punctuation => external get program() property
   as (=== boolean) => program() as boolean

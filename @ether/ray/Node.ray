@@ -92,7 +92,6 @@ Superposed := Node{.superposed}
 // An operator missing a side is a section: the function of what it misses (`xs.map(+ 1)`, `xs.sorted(<)`, `xs{> 0}`, `(!)`).
 Section := class = operator, operand? {
   continues => true
-  admits (candidate) => this(candidate)
   (a, b?) => operand != None ? a [operator] operand : b != None ? a [operator] b : a [operator]
 }
 [x] ^operator => Section(operator: [x])

@@ -16,8 +16,8 @@ Noise := class: Language = pattern = XX, dh: Encoding.Agreement = X25519, cipher
   // Noise's HKDF is this with the chaining key as salt and no info (§4.3)
   hmac (key: Byte[], data: Byte[]) => (key.count > hash.block ? hash.write(key).bytes : key) -- (k => [k, [0] * (hash.block - k.count)].flatten) -- (k =>
     hash.write([k.map(. ~x|| 0x5c), hash.write([k.map(. ~x|| 0x36), data].flatten).bytes].flatten).bytes)
-  hkdf (salt: Byte[], ikm: Byte[], info: Byte[] = [], length: Number = 2 * size) => hmac(salt, ikm) -- (prk =>
-    (1..(length / size).ceil).reduce(blocks = [] => [blocks, [hmac(prk, [blocks.last ?? [], info, .].flatten)]].flatten(1)).flatten[..<length])
+  hkdf (salt: Byte[], ikm: Byte[], info: Byte[] = [], length: Number = 2 * size) => expanded(hmac(salt, ikm), info, length)
+  expanded (prk: Byte[], info: Byte[], length: Number) => (1..(length / size).ceil).reduce(blocks = [] => [blocks, [hmac(prk, [blocks.last ?? [], info, .].flatten)]].flatten(1)).flatten[..<length]
 
   // A CipherState: a key and a nonce; with no key yet, text passes as it is (§5.1). ChaChaPoly's nonce is 32 zero bits, then n as 64 bits little-endian (§12.3)
   static Cipher := class = cipher: Language = ChaCha20Poly1305, k: Byte₃₂?, n: Number = 0 {

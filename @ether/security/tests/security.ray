@@ -135,3 +135,45 @@ rcv.received(rcv_g.key.signed([rcv.event.hash, [0] * 32].flatten))
 unless rcv.event.signature#.count == 1 { INFO@mark `RCV4 a signature bound to no session of this recovery is taken` }
 if rcv.met { INFO@mark `RCV5 one guardian meets a threshold of two` }
 unless rcv.roots.every(.algorithm === rcv_c.policy().signing) { INFO@mark `RCV6 the new root keys are not of the policy's algorithm` }
+
+// Content keys: one per history, wrapped with HPKE for each reader's instance key, found through the reader's key log; readers are whoever its access lets read.
+wrp_owner := Instance.local.login(Character(name: "wrp-owner"))
+wrp_reader := Instance.local.login(Character(name: "wrp-reader"))
+wrp := none.read History(repository: Repository())
+wrp.commit(wrp_owner, 1)
+wrp_first := wrp.current_key
+unless wrp_owner.inbox && wrp_owner.inbox.algorithm === wrp_owner.policy().agreement { INFO@mark `WRAP1 an instance's agreement key is not of the policy's algorithm` }
+unless wrp_owner.inboxes().contains(wrp_owner.inbox.published) { INFO@mark `WRAP2 an instance's agreement key is not certified in the key log` }
+if wrp_owner.policy().certifies(wrp_owner.inbox.published, World.ether.clock.now) { INFO@mark `WRAP3 an agreement key is certified to sign` }
+unless wrp.wraps_of(wrp_first).every(.by is HPKE && .by.kem === wrp_owner.policy().agreement && .cipher === wrp_owner.policy().cipher) { INFO@mark `WRAP4 a content key is not wrapped with the algorithms the keys and policy name` }
+unless wrp.content_key(wrp_first, [wrp_owner]) is Encoding.Key { INFO@mark `WRAP5 the writer does not hold the content key` }
+unless wrp.content_key(wrp_first, [wrp_reader]) is Abstract { INFO@mark `WRAP6 someone not let read holds the content key` }
+wrp.shared(wrp_reader, wrp_owner)
+unless wrp.readers.some(=== wrp_reader) { INFO@mark `WRAP7 a character given read is not a reader` }
+unless wrp.current_key == wrp_first { INFO@mark `WRAP8 adding a reader rotated the key` }
+unless wrp.head.wraps.some(.reader == wrp_reader.inbox) && wrp.head.wraps.every(.key == wrp_first) { INFO@mark `WRAP9 adding a reader is not a commit wrapping the current key for them` }
+unless wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key { INFO@mark `WRAP10 an added reader does not hold the current key` }
+wrp.unshared(wrp_reader, wrp_owner)
+unless wrp.current_key != wrp_first && wrp.current_key == wrp.head.id { INFO@mark `WRAP11 removing a reader does not rotate to a new key` }
+unless wrp.content_key(wrp.current_key, [wrp_reader]) is Abstract { INFO@mark `WRAP12 a removed reader holds the new key` }
+unless wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key { INFO@mark `WRAP13 a removed reader lost what they already saw` }
+unless wrp.content_key(wrp.current_key, [wrp_owner]) is Encoding.Key { INFO@mark `WRAP14 the rest do not hold the new key` }
+wrp.commit(wrp_owner, 2)
+unless wrp.head.key == wrp.current_key && wrp.value == 2 { INFO@mark `WRAP15 a commit after a rotation does not use the new key` }
+
+// Sealed sender: a who narrower than the history moves who and the signature into the ciphertext; the line shows a per-history pseudonymous key.
+sel_writer := Instance.local.login(Character(name: "sel-writer"))
+sel := History(repository: Repository()) ~~ (.sender = Accessor.Permission.none)
+sel.commit(sel_writer, 1)
+sel.commit(sel_writer, 2)
+sel_line := sel.head.written(above: sel.head.previous)
+unless sel.sealed_sender { INFO@mark `SEAL1 a who narrower than its history does not seal the sender` }
+if History(repository: Repository()).sealed_sender { INFO@mark `SEAL2 a who whose visibility is inherited is sealed` }
+unless sel.head.who is Encoding.Key && sel.head.who == sel.head.previous.who { INFO@mark `SEAL3 a sealed history's lines do not show one pseudonymous key` }
+if sel_line ~= "@sel-writer" || sel.head.relies { INFO@mark `SEAL4 a sealed sender is named in plaintext` }
+unless sel.head.authentic { INFO@mark `SEAL5 a line is not signed by the pseudonymous key it shows` }
+unless sel.head.opened.who.name == "sel-writer" && sel.head.opened.signature { INFO@mark `SEAL6 a reader does not find who wrote the line and their signature` }
+unless sel.value == 2 { INFO@mark `SEAL7 a history with a sealed sender does not read` }
+sel_other := History(repository: Repository()) ~~ (.sender = Accessor.Permission.none)
+sel_other.commit(sel_writer, 1)
+if sel_other.head.who == sel.head.who { INFO@mark `SEAL8 two histories show one pseudonym` }

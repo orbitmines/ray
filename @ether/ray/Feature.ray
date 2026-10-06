@@ -13,8 +13,8 @@ Location &+= {
 }
 
 FileSystem := class: Language {
-  read (location: Location) => Program(name: "a reader for the location", goal: location)
-  write (location: Location, content) => Program(name: "a writer for the location", goal: location)
+  read (location: Location) => ERROR@FileSystem `no reader for the location`
+  write (location: Location, content) => ERROR@FileSystem `no writer for the location`
   listing (location: Location) => []
   exists (location: Location) => read(location) != None
   removed (location: Location) => write(location, None)
@@ -74,7 +74,7 @@ Proof := class = proposition: *, argument: * {
 ! `*` `/`
 
 OS := class: FileSystem {
-  [property: String] => Program(name: "a property of the operating system", goal: property)
+  [property: String] => ERROR@OS `the operating system has no properties`
   platform => this["platform"]
   architecture => this["architecture"]
   env => Environment(os: this)
@@ -82,14 +82,14 @@ OS := class: FileSystem {
     .{literal name ^property} ^punctuation => os[name]
   }
 
-  running => Program(name: "whether the host runs this operating system", goal: boolean)
+  running => ERROR@OS `the operating system does not say whether the host runs it`
   static current: OS? => OS#.map(.()){running}.first
 
-  sent (stream: String, content) => Program(name: "send on a stream of the operating system", goal: stream)
-  received (stream: String) => Program(name: "receive from a stream of the operating system", goal: stream)
-  launch (location: Location) => Program(name: "open a location", goal: location)
-  bit => Program(name: "a random bit", goal: 0 | 1)
-  now: Time => Program(name: "the time", goal: Time)
-  time_zones: TimeZone.Source => Program(name: "time-zone data", goal: TimeZone.Source)
-  fonts: Location[] => Program(name: "the fonts", goal: Location[])
+  sent (stream: String, content) => ERROR@OS `the operating system has no streams`
+  received (stream: String) => ERROR@OS `the operating system has no streams`
+  launch (location: Location) => ERROR@OS `the operating system opens no locations`
+  bit => ERROR@OS `the operating system has no source of random bits`
+  now: Time => ERROR@OS `the operating system has no clock`
+  time_zones: TimeZone.Source => ERROR@OS `the operating system has no time-zone data`
+  fonts: Location[] => ERROR@OS `the operating system has no fonts`
 }

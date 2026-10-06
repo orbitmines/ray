@@ -26,7 +26,7 @@ Counting := class: TimeZone.Zoneinfo {
 counting := Counting(directory: @tzif/zoneinfo)
 counting.at("Europe/Amsterdam", summer)
 unless counting.asked == ["Europe/Amsterdam"] { INFO@mark `TZ16 reading one zone read others than the one asked for` }
-unless OS.Ether().tls("ether.orbitmines.com:443", ["h2"]) is Abstract { INFO@mark `TLS1 TLS in the language is not a step still to write` }
+unless OS.Ether().tls("ether.orbitmines.com:443", ["h2"]).erred { INFO@mark `TLS2 TLS in the language does not err while it is unwritten` }
 unless OS.Ether()["platform"] == "ether" { INFO@mark `ETH4 the language as the operating system does not name its platform ether` }
 if OS.Ether().mac_address { INFO@mark `ETH5 the language as the operating system has a hardware address` }
-unless [OS.Ether().bit, OS.Ether().now, OS.Ether().fonts, OS.Ether().launch("a" as Location)].every(. is Abstract) { INFO@mark `ETH6 a step the language as the operating system still has to write is not left to write` }
+unless [OS.Ether().bit, OS.Ether().now, OS.Ether().fonts, OS.Ether().launch("a" as Location)].every(.erred) { INFO@mark `ETH8 what the language as the operating system has not written yet does not err` }

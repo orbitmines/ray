@@ -193,7 +193,7 @@ TimeZone := class (name: String) {
   static Source := class {
     directory: Location?
     data (zone: String) => None
-    at (zone: String, time: Time) => Program(name: "the offset in force in the zone", goal: zone)
+    at (zone: String, time: Time) => ERROR@TimeZone `no time-zone data for the zone`
   }
 
   // IANA tz database compiled to TZif (RFC 8536), one file per zone, read only when that zone is asked for (https://data.iana.org/time-zones/tz-link.html)

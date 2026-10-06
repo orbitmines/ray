@@ -40,13 +40,13 @@ Location &+= {
 }
 
 OS &+= {
-  tcp (address: String, bytes: Byte[]) => Program(name: "send over TCP", goal: address)
-  udp (address: String, bytes: Byte[]) => Program(name: "send a datagram", goal: address)
+  tcp (address: String, bytes: Byte[]) => ERROR@OS `the operating system has no TCP`
+  udp (address: String, bytes: Byte[]) => ERROR@OS `the operating system has no UDP`
   // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the
   // connection, and the protocol of `offered` the two sides agreed on.
-  tls (address: String, offered: String[]) => Program(name: "connect over TLS", goal: (connection: address, protocol: offered#))
+  tls (address: String, offered: String[]) => ERROR@OS `the operating system has no TLS`
   mac_address: Binary₄₈? => None
-  connected: boolean => Program(name: "whether the device is on a network", goal: boolean)
+  connected: boolean => ERROR@OS `the operating system does not say whether it is on a network`
 }
 
 Device &+= {

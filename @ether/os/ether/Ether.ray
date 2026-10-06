@@ -6,19 +6,19 @@ OS.Ether := class: OS {
   write (location: Location, content) => @me/device/storage[location.normalised] = content
   listing (location: Location) => @me/device/storage.fields.name{~= ⊢(location.normalised + "/")}
     .map(.after(location.normalised + "/").before("/")).unique.map(location / .)
-  sent (stream: String, content) => Program(name: "a stream in Ray", goal: stream)
-  received (stream: String) => Program(name: "a stream in Ray", goal: stream)
-  launch (location: Location) => Program(name: "open a location in Ray", goal: location)
-  bit => Program(name: "a random bit in Ray", goal: 0 | 1)
-  now: Time => Program(name: "the clock kept by NTP in Ray", goal: Time)
+  sent (stream: String, content) => ERROR@OS `streams are not written in Ray yet`
+  received (stream: String) => ERROR@OS `streams are not written in Ray yet`
+  launch (location: Location) => ERROR@OS `opening a location is not written in Ray yet`
+  bit => ERROR@OS `a source of random bits is not written in Ray yet`
+  now: Time => ERROR@OS `the clock kept by NTP is not written in Ray yet`
   time_zones: TimeZone.Source => TimeZone.Zoneinfo(directory: @tzif/zoneinfo)
-  fonts: Location[] => Program(name: "fonts in Ray", goal: Location[])
+  fonts: Location[] => ERROR@OS `fonts are not written in Ray yet`
 
-  tcp (address: String, bytes: Byte[]) => Program(name: "TCP in Ray", goal: address)
-  udp (address: String, bytes: Byte[]) => Program(name: "UDP in Ray", goal: address)
+  tcp (address: String, bytes: Byte[]) => ERROR@OS `TCP is not written in Ray yet`
+  udp (address: String, bytes: Byte[]) => ERROR@OS `UDP is not written in Ray yet`
   // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301)
-  tls (address: String, offered: String[]) => Program(name: "TLS 1.3 in Ray", goal: (connection: address, protocol: offered#))
+  tls (address: String, offered: String[]) => ERROR@OS `TLS 1.3 is not written in Ray yet`
   mac_address: Binary₄₈? => None
-  connected: boolean => Program(name: "whether the network in Ray is reached", goal: boolean)
+  connected: boolean => ERROR@OS `a network in Ray is not written yet`
 }
 OS |= OS.Ether

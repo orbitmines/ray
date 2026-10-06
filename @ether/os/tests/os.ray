@@ -9,7 +9,7 @@ unless OS.Browser().time_zones is OS.Browser.Intl { INFO@mark `TZ5 the browser d
 unless [OS.Linux(), OS.Macos(), OS.Ether()].every(.time_zones.at("UTC", winter).offset == 0 seconds) { INFO@mark `TZ15 UTC is off zero on a platform that reads TZif` }
 if OS.Linux().time_zones.directory ~= ⊢"tzif" { INFO@mark `TZ18 a host refers to @tzif for its zone data` }
 Plan9 := class: OS
-unless Plan9().time_zones is Abstract { INFO@mark `TZ19 an operating system without time-zone data does not leave it to be found` }
+unless Plan9().time_zones.erred { INFO@mark `TZ21 an operating system without time-zone data does not err` }
 
 unless [OS.Ether, OS.Linux, OS.Macos, OS.Windows, OS.Browser].every(. is OS#) { INFO@mark `OSE1 an os project does not add its operating system to OS` }
 if Plan9 is OS# { INFO@mark `OSE2 a class of OS is one of its members without being added` }

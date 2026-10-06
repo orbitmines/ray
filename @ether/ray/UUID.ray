@@ -24,14 +24,18 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
     ), "-",
     node: Hexadecimal₁₂
   ) {
+    // A 60-bit count of 100-nanosecond intervals since the Gregorian reform, 00:00:00 UTC on 15 October 1582
+    // (https://www.rfc-editor.org/rfc/rfc9562#section-5.1).
     (time_high, time_mid, time_low) = time: Binary₆₀
+    static gregorian_reform: Time = "1582-10-15T00:00:00Z" as ISO_8601 as Time
 
     chosen_within (width) => ~generate()
 
     static clock = HybridClock(node: "UUID.v1")
     generate\
       stamp = clock.now
-      time = stamp.wall + 0x01B21DD213814000
+      // The clock counts the same intervals from its own epoch: counted from the reform instead (a constant, reduced when compiled).
+      time = stamp.wall - Stamp.at(gregorian_reform, None).wall
       version = 1
       variant = ₂10
       (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random + stamp.logical

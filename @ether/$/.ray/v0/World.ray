@@ -21,7 +21,7 @@ Location := class: Hierarchy (
   static Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
     static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal₂)[]{length > 0} as Unicode.UTF-8)[])
     merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
-    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name && .value?.nonempty}.last?.value
+    .{literal name ^property} ^punctuation => pairs{.name == name && .value?.nonempty}.last?.value
   }
 
   static current: Location = @local
@@ -102,7 +102,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
       ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from, versions: set.version# ?? []))
       : Commit(id: label, change: code))
 
-    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : external get value name
+    .{literal name ^property} ^punctuation => external get value name
   }
 
   name: String?
@@ -324,7 +324,7 @@ Instance := class: Location + Entity {
 
   host_for (character: Character) => character ~~ (hosted |= .) ~~ .presence = this
   mirror (value, depth = 1) => Mirror(value, location: this, depth)
-  .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : external get device name
+  .{literal name ^property} ^punctuation => external get device name
 
   static Deletion := class: Quest (character: Character, requested: Stamp = World.ether.clock.now, window: Quantity.Temporal = 30 days) {
     name = "delete"

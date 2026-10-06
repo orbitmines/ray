@@ -47,6 +47,8 @@ type Step =
   | { kind: 'name'; at: Span }
   | { kind: 'unread'; at: Span };
 export type Compiled = (frame: Node) => unknown;
+// A jump to a label (R3.1): raised by `goto`, caught by the program that has the label, with the value read last.
+export class Jump { constructor(public name: string, public value: unknown) {} }
 
 export class Seed {
   learned?: Learned;
@@ -422,18 +424,27 @@ export class Seed {
     let byPlanner = body.of.programs.get(body.planner); if (byPlanner === undefined) body.of.programs.set(body.planner, byPlanner = new Map());
     const kept = byPlanner.get(scope);
     if (kept !== undefined && kept.version === this.version) return kept.fn;
-    const steps = body.planner ? this.plan_by(body.planner, body) : this.program(body);
+    const steps = (body.planner ? this.plan_by(body.planner, body) : this.program(body)).map(st => {
+      // a statement read by a rule whose body is only a label is a label of this body, named by what it captured
+      if (st.kind !== 'apply') return st;
+      const named = this.labelling(st.rule);
+      if (named === undefined) return st;
+      const cap = st.caps.find(([n]) => n === named);
+      return cap ? { kind: 'label', name: cap[1].text.s.slice(cap[1].b, cap[1].e) } as Step : st;
+    });
     const labels = new Map<string, number>();
     steps.forEach(st => { if (st.kind === 'label') labels.set(st.name, labels.size + 1); });
-    const lines: string[] = ['let r, pc = 0;', 'for (;;) switch (pc) {', 'case 0:'];
+    const lines: string[] = ['let r, pc = 0;', `const L = ${JSON.stringify(Object.fromEntries(labels))};`, 'for (;;) { try { switch (pc) {', 'case 0:'];
     const k: unknown[] = [];
     const ref = (x: unknown) => { k.push(x); return `k[${k.length - 1}]`; };
     for (const st of steps) {
       if (st.kind === 'label') { lines.push(`case ${labels.get(st.name)}:`); continue; }
       if (st.kind === 'goto') {
         const to = labels.get(st.name);
-        if (to === undefined) { this.say(`No label \`${st.name}\`.`, st.at); continue; }
-        lines.push(st.when ? `if (S.force(S.arg(f, ${ref(st.when)}, ${ref(body.planner)})) !== undefined) { pc = ${to}; continue; }` : `pc = ${to}; continue;`);
+        const when = st.when ? `S.force(S.arg(f, ${ref(st.when)}, ${ref(body.planner)})) !== undefined` : 'true';
+        // a label of this body: a jump within it; any other (a captured name, a label of a body around it): raised
+        if (to !== undefined) lines.push(`if (${when}) { pc = ${to}; continue; }`);
+        else lines.push(`if (${when}) throw new S.Jump(S.label_name(f, ${ref({ ...st.at, b: st.at.b, e: st.at.e, name: st.name })}), r);`);
         continue;
       }
       if (st.kind === 'name') { lines.push(`r = S.name(f, ${ref(st.at)});`); continue; }
@@ -447,10 +458,28 @@ export class Seed {
       const caps = st.caps.map(([n, sp]) => [n, { ...sp, of: span_of(sp.text, sp.b, sp.e) }] as [string, Span]);
       lines.push(`try { r = S.apply(${ref(st.rule)}, f, ${ref(caps)}, ${ref(body.planner)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
     }
-    lines.push('return r;', '}');
+    lines.push('return r;', '} } catch (x) { if (x instanceof S.Jump && L[x.name] !== undefined) { pc = L[x.name]; r = x.value; continue; } throw x; } }');
     const fn = new Function('S', 'k', `return function (f) { ${lines.join('\n')} };`)(this, k) as Compiled;
     byPlanner.set(scope, { version: this.version, fn });
     return fn;
+  }
+  Jump = Jump;
+  // The label a `goto` names: a captured name's text (`goto {literal target}`), or the word written.
+  label_name(frame: Node, at: { name: string }): string {
+    for (let n: Node | undefined = frame; n; n = n.parent) if (n.members.has(at.name)) { const v = n.members.get(at.name); return v instanceof Code ? v.s.trim() : String(v); }
+    return at.name;
+  }
+  // Whether a rule's body is only a label named by one of its captures: that capture's name.
+  labelled = new Map<Rule, string | null>();
+  labelling(rule: Rule): string | undefined {
+    let n = this.labelled.get(rule);
+    if (n === undefined) {
+      const steps = rule.body.planner ? this.plan_by(rule.body.planner, rule.body) : this.program(rule.body);
+      const caps = rule.pieces.filter(p => 'cap' in p).map(p => (p as { cap: string }).cap);
+      n = steps.length === 1 && steps[0].kind === 'label' && caps.includes(steps[0].name) ? steps[0].name : null;
+      this.labelled.set(rule, n);
+    }
+    return n ?? undefined;
   }
   // An argument that names a member of the frame (a capture, a local) is what it names; any other word is code.
   arg(frame: Node, sp: Span & { of?: SpanOf }, planner?: Rule): unknown {
@@ -466,7 +495,8 @@ export class Seed {
     return undefined;
   }
   // An error in a compiled body, with the statements it was in (innermost first).
-  where_failed(x: unknown, at: Span): Error {
+  where_failed(x: unknown, at: Span): unknown {
+    if (x instanceof Jump) return x;
     const e = x instanceof Error ? x : new Error(String(x));
     const line = at.text.s.slice(0, at.b).split('\n').length;
     (e as any).ray = [...((e as any).ray ?? []), `${at.text.name.split('/').pop()}:${line} ${at.text.s.slice(at.b, at.e).split('\n')[0]}`];
@@ -491,7 +521,7 @@ export class Seed {
       const stop = this.stop(text, p, s.length, '');
       const r = this.reading(this.global, text, p, stop);
       if (r === undefined || r.end !== stop) { this.say(`Unread \`${s.slice(p, stop).slice(0, 60)}\`.`, { text, b: p, e: stop }); p = stop; continue; }
-      this.apply(r.rule, this.global, r.caps, this.planner);
+      try { this.apply(r.rule, this.global, r.caps, this.planner); } catch (x) { if (!(x instanceof Jump)) throw x; }
       p = r.end;
     }
   }

@@ -401,6 +401,12 @@ captured {pieces} from {at} to {limit} =>
       if piece_type then
         unless same at e then
           worth := piece_type holds from at to e
+    // a capture taken as written that ends the head takes one word
+    if worth then
+      if pieces . raw then
+        unless rest_pieces then
+          if spaced from at to e then
+            worth := nothing
     rest := nothing
     if worth then
       rest := readings of rest_pieces from e to limit

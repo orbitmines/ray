@@ -1,0 +1,19 @@
+say {x} =>
+  external io stdout x
+goto {literal target} =>
+  external goto target
+goto {literal target} if {condition} =>
+  external goto target condition
+{literal label}\ =>
+  external label label
+count {list} =>
+  at := list
+  again\
+  say at
+  at := at . next
+  goto again if at
+  say done
+a := node
+b := node
+set a . next to b
+count a

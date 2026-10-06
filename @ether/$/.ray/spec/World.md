@@ -212,7 +212,7 @@ Answers from 2026-10-06.
   Each says whether it is `lossless` or `snapshot`. A snapshot backend keeps the operations beside its commits, so
   our own repositories read back exactly. Foreign ones are read by diffing trees, and a rename that cannot be decided
   is a quest.
-- **W3.11b (2026-10-06)** For now, the Mercurial, Fossil, Pijul and Subversion backends, with the languages only they use (SHA3, MD5, BLAKE3, Bincode, Zstd, Base32) the unused SHA-512 and Blowfish, and the SARIF, TAP and JUnit report formats (LSP stays), are on the branch `version-control` for later; main has Git only (with SHA-1, zlib, DEFLATE, and SHA-256 for git's SHA-256 object format).
+- **W3.11b (2026-10-06)** For now, the Mercurial, Fossil, Pijul and Subversion backends, with the languages only they use (SHA3, MD5, BLAKE3, Bincode, Zstd, Base32) and the unused SHA-512 and Blowfish, are on the branch `version-control` for later; main has Git only (with SHA-1, zlib, DEFLATE, and SHA-256 for git's SHA-256 object format).
 - **W3.12** A `.%` history is a program, and its working directory holds the value. A commit is one appended line:
   `UUID\ [parents] <stamp> @<who> { … }`. `.%/index.ray` maps names to UUIDs, and caches are optimisation levels.
 - **W3.13** Which backend is used, whether a history is stored per object or per project, and the caches are all

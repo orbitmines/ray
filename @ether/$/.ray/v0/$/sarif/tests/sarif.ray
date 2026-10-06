@@ -1,0 +1,21 @@
+// Diagnostics written as a SARIF log.
+
+mark ^keyword := external global
+
+placed := Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)})
+warned := Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)
+sarif := [placed] as SARIF
+unless sarif ~= (*, "\"version\":\"2.1.0\"", *) { INFO@mark `DG8 SARIF is not version 2.1.0` }
+unless sarif ~= (*, "\"level\":\"error\"", *) { INFO@mark `DG9 an error is not a SARIF error` }
+unless sarif ~= (*, "\"startLine\":3,\"startColumn\":5", *) { INFO@mark `DG10 a SARIF region is not one-based` }
+unless [warned] as SARIF ~= (*, "\"level\":\"warning\"", *) { INFO@mark `DG11 a warning is not a SARIF warning` }
+inline_sarif := @sarif {"version": "2.1.0", "runs": [{"results": [{"ruleId": "R1", "level": "warning", "message": {"text": "careful"}, "locations": [{"physicalLocation": {"artifactLocation": {"uri": "file:///a.ray"}, "region": {"startLine": 3, "startColumn": 5}}}]}]}]}
+unless inline_sarif.first.severity == Diagnostic.Severity.warn && inline_sarif.first.at.from == (3, 5) { INFO@mark `DG18 a SARIF log written inline does not read as a warning at its region` }
+said := "no"
+sarif_block := @sarif {
+  {"version": "2.1.0", "runs": [{"results": [
+    {"level": "error", "message": {"text": {said}}, "locations": null}
+  ]}]}
+}
+unless sarif_block.first.message == "no" && sarif_block.first.severity == Diagnostic.Severity.error { INFO@mark `DG19 a SARIF block does not read its hole and its null` }
+unless SARIF.read(sarif).first.at.from == (3, 5) { INFO@mark `DG20 a written SARIF log does not read back` }

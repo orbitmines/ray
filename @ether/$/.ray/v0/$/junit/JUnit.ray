@@ -1,0 +1,31 @@
+// JUnit XML as read by CI tools (https://github.com/testmoapp/junitxml, https://llg.cubic.org/docs/junit/)
+JUnit := class: Language {
+  static extensions = ".junit.xml" | ".junit"
+
+  static attribute (name: String, value) => (name: name, value: value as String as XML.Escaped) if value != None
+  static testcase (claim: Report.Claim, suite: String) => XML.Element(name: "testcase", attributes: [
+    attribute("name", claim.id + " " + claim.message), attribute("classname", suite),
+    attribute("file", claim.at?.file as String if claim.at), attribute("line", claim.at?.from?.line), attribute("time", claim.duration / 1 seconds if claim.duration)
+  ].compact, children: claim.passed ? [] : [XML.Element(name: "failure", attributes: [attribute("message", claim.message), attribute("type", claim.id)], children: [XML.Text(claim.message as XML.Escaped)])])
+
+  syntax := XML.syntax + {
+    // <testsuites> holds the suites (https://github.com/testmoapp/junitxml#basic-junit-xml-structure)
+    {document: XML.Document{root.name == "testsuites"}} => Compiler.reduced(document.root, syntax)
+    {suites: XML.Element{name == "testsuites"}} => suites.children{. is XML.Element}.map(Compiler.reduced(., syntax)).flatten
+    // <testsuite> and its <testcase>s (https://github.com/testmoapp/junitxml#basic-junit-xml-structure)
+    {suite: XML.Element{name == "testsuite"}} => Report(name: suite["name"] ?? "ray", claims: suite.children{. is XML.Element && .name == "testcase"}.map(Compiler.reduced(., syntax)))
+    // A case fails when it holds a <failure> or an <error> (https://github.com/testmoapp/junitxml#basic-junit-xml-structure)
+    {case: XML.Element{name == "testcase"}} => (case["name"] ~= (id: Char.Word[], " ", message: *)) -- (named => Report.Claim(named.id, named.message,
+      passed: !case.children.some(. is XML.Element && .name is ("failure" | "error")),
+      at: case["file"] ? (case["file"] as Location){from == (case["line"] as Decimal ?? 1, 1)} : None,
+      duration: case["time"] ? (case["time"] as Decimal) seconds : None))
+  }
+  level := syntax
+  written := {
+    {writing: Language.Writing{value is Report}} => writing.value -- (report => XML.Document(root: XML.Element(name: "testsuites",
+      attributes: [attribute("name", report.name), attribute("tests", report.claims.count), attribute("failures", report.failures.count)],
+      children: [XML.Element(name: "testsuite",
+        attributes: [attribute("name", report.name), attribute("tests", report.claims.count), attribute("failures", report.failures.count), attribute("errors", 0), attribute("skipped", 0)],
+        children: report.claims.map(testcase(., report.name)))])))
+  }
+}

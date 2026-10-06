@@ -141,7 +141,7 @@ async function read_in_worker() {
       const { src, text, r } = reading;
       r.serve(reading.check !== undefined);
       const at = reading.pos, t0 = performance.now();
-      try { reading.pos = r.safely(() => r.step(src, reading!.pos, text.length)) ?? text.length; } catch { r.kernel('recover'); reading.pos = text.length; }
+      reading.pos = r.step_on(src, at, text.length);
       if (process.env.KLSP_TRACE && performance.now() - t0 > Number(process.env.KLSP_TRACE_MS ?? 200)) trace(`worker: ${Math.round(performance.now() - t0)} ms at ${path.basename(reading?.check?.file ?? '')}${reading?.check ? '' : 'library'} ${at} ${JSON.stringify(text.slice(at, at + 50))}\n`);
       if (reading.pos < text.length) continue;
       if (reading.check !== undefined && r !== library_reader) r.settle(src, text.length, true);

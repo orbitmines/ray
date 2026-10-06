@@ -282,9 +282,20 @@ export class Reader {
   }
   // A whole source, a top-level statement at a time.
   read_all(src: number, end: number) {
-    for (let pos = 0; pos < end;) {
-      try { const at = pos; pos = this.safely(() => this.step(src, at, end)) ?? (this.kernel('next_statement', src, I(at), I(end)) >> 3); }
-      catch (e) { this.kernel('recover'); if (process.env.KERRORS) console.error(e); pos = this.kernel('failed_at', src, I(pos), I(end)) >> 3; }
+    for (let pos = 0; pos < end;) pos = this.step_on(src, pos, end);
+  }
+  // One top-level statement, and where reading goes on: past a statement that kept applying itself (said by recursion_said), or
+  // one the reader failed on (said as a diagnostic), at the next statement.
+  step_on(src: number, at: number, end: number): number {
+    try {
+      const next = this.safely(() => this.step(src, at, end));
+      if (next !== undefined) return next;
+      this.kernel('recover');
+      return this.kernel('next_statement', src, I(at), I(end)) >> 3;
+    } catch (e) {
+      this.kernel('recover');
+      if (process.env.KERRORS) console.error(e);
+      return this.kernel('failed_at', src, I(at), I(end)) >> 3;
     }
   }
   // A source read once more where the first reading left something unresolved (the entrypoint always: what it defines late is

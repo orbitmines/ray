@@ -173,7 +173,7 @@ if ^class := class {
     external extend branch result
    skip\
 
-    branch ^variable
+    ^(`variable`)(branch)
   )
 
   elsif{ }{cond}{ }{taken_block} ^class => (
@@ -196,7 +196,7 @@ if ^class := class {
     external extend branch result
    skip\
 
-    branch ^variable
+    ^(`variable`)(branch)
   )
 
   {\n}elsif{ }{cond}{ }{taken_block} ^class => this elsif cond taken_block
@@ -231,7 +231,7 @@ unless{ }{cond}{ }{taken_block} ^class => (
   external extend branch result
  skip\
 
-  branch ^variable
+  ^(`variable`)(branch)
 )
 
 while ^class := class {
@@ -625,7 +625,7 @@ Node := base class {
           else { ERROR `is not of the type it is declared as` }
         }
       }
-    } elsif (None.instance_of(declared_type)) { external declare this None }
+    } elsif (declared_type.superposes && None.instance_of(declared_type)) { external declare this None }
     else {
       external declare this declared_type
       if declared_type.written_body { external declare this this }
@@ -746,7 +746,7 @@ Node := base class {
       }
     } else {
       unless type.instance {
-        if type.components {
+        if type.superposes {
           walker := type.components.head
           while (walker && found.not) {
             if (walker.value === None) { found = global }

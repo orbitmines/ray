@@ -140,7 +140,7 @@ History &+= {
     Encoding.common(old, new) -- (prefix => Encoding.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
       (". edited(", prefix, ", ", old.count - suffix, ", ", Language.ray.write(new[prefix..<new.count - suffix] as String), ")") as String as Program))))
 
-  file => (path: id as String + ".ray", content: (this as Program) as String as Byte[])
+  file => (path: id as String + ".ray", content: written_as() as String as Byte[])
   stored_file => file
   object_files => []
   cache_files => []
@@ -148,7 +148,7 @@ History &+= {
 
   of (name) => since(None){this[.].value?[name] != this[.previous]?.value?[name]}.reduce(held = History() => held.extended(.rewritten(Language.ray.write(this[.].value?[name]) as Program)))
   object_path (name) => id as String + "/" + name + ".ray"
-  objects => value.fields.name.map(name => (path: object_path(name), content: (of(name) as Program) as String as Byte[]))
+  objects => value.fields.name.map(name => (path: object_path(name), content: of(name).written_as() as String as Byte[]))
   pins (commit: Commit) => value.fields.name{of(.).find(commit.id)}.map(name => ".[" + Language.ray.write(name) + "] = @./" + object_path(name) + "%[" + commit.id + "]").join("; ") as Program
   cached => since(None){.index % 64 == 63 || . === head}
   // A cache line: the value at a commit, written as that commit's change.
@@ -242,8 +242,8 @@ Compiler &+= {
   }
 
   per_object := {
-    {history: History{public && (. as Program as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
-    {history: History{public && (. as Program as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
+    {history: History{public && (written_as() as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
+    {history: History{public && (written_as() as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
   }
 
   cached := {

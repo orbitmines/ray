@@ -47,7 +47,7 @@ Keyboard := class: Location {
     presses => [pressed, pressed.previous**].flatten{== true}.count
     toggled => presses.odd
     pulsed (max: Number = 0, delay: Quantity.Temporal = 500 ms) => pressed && (max == 0 || presses <= max)
-      && (presses == 1 || Time.now - [pressed, pressed.previous**].flatten{== true}.first.when >= delay)
+      && (presses == 1 || Time.now - pressed.history.since(None){.value == true}.last.when >= delay)
 
     press (modifiers: Modifier? = None): static => this ~~ (.modifiers = modifiers) ~~ (.pressed = true)
     release: static => this ~~ .pressed = false

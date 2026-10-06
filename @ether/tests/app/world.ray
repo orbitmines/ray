@@ -209,7 +209,7 @@ sited.authors.push wp
 unless sited.authors.count == 1 { INFO@mark `WR8 an author added is not kept` }
 unless sited.authors.first === wp { INFO@mark `WR9 the author kept is not the one added` }
 unless (Reference(title: "t") ~~ .note = "n").notes.first == "n" { INFO@mark `WR10 a note forgot its text` }
-unless (Reference(title: "t") ~~ .note = "n").notes.first.when { INFO@mark `WR11 a note says nothing about when` }
+unless (Reference(title: "t") ~~ .note = "n").history.last.when { INFO@mark `WR11 a note says nothing about when` }
 if Reference(title: "t").location { INFO@mark `WR12 a new reference has a remote it was not given` }
 
 // A status is what a character is now, read off what it runs; saying one is a
@@ -385,3 +385,11 @@ unless clm_quest.reached(clm) { INFO@mark `CLM3 a claim is not reached once the 
 // A name confusable with a reserved one finds it, and a confusable mixed-script name is not reserved (UTS #39).
 unless wg.@dаwn === wp { INFO@mark `SKL5 a name confusable with a reserved one does not find it` }
 unless (wg.@pаge = 3).erred { INFO@mark `SKL6 a name that mixes scripts and is confusable is reserved` }
+
+// A channel reads as a program first (`Program + History`): its cursor is the program's, and going back in it is indexing the history.
+chn := Channel()
+chn.commit(1, Program(code: { "a" }))
+chn.commit(1, Program(code: { "b" }))
+if chn.at { INFO@mark `CHN1 a channel's cursor is a commit of its history` }
+unless chn[chn.head.previous].head === chn.head.previous { INFO@mark `CHN2 going back in a channel does not stop at the commit gone back to` }
+unless chn.written_as() as String ~= "\"b\"" { INFO@mark `CHN3 a channel is not written as its lines` }

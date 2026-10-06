@@ -367,6 +367,12 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A permission is a `.cfg.ray` rule over `(origin, capability, target)`: `@company may network @https://api.x.com`.
   - Data carries a mark saying its derivatives may not leave (`local`); the engine tracks it through composition, the way `listed_by_separator` is carried.
 - **Decided:** the origin is the whole chain (company ← me ← library). Permissions see every hop, and a prompt says "@company wants to run this, originating from @me".
+- **(2026-10-06)** There is no `Run`: the chain is the running Program's (`&@`, the caller frame's program). A Program has a
+  `caller` (the program that started it) and `hops` (`[caller.hops, who]`, the origin first); `may(method, target)` holds when
+  every hop is allowed by the target, and `ask` answers a quest for the grant when not. `speculate`/`refuse` are the run
+  settings `with (Program.speculated |= x)` / `with (Program.refused |= x)`; `Refused` and `Abstracted` are narrowings of Program.
+  A permission is an `Access` on the node it names (below, §8.3); a capability is a path granted the same way
+  (`@me.execute { @me/device/camera }`, asked with `&@.ask`).
 - **Decided (2026-10-06):** running as a character is `@name { … }`, or `@<uuid> { … }` with the character's UUID.
   - The block runs with `&caller` set to that character, so `@me` inside it is that character.
   - It works only when the character is here: logged in or hosted on the local instance. Otherwise it is an error.
@@ -392,6 +398,13 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Visibility is a field of each item, `@public | @me | @<group>`, default inherited from the parent.
   - Visibility is itself a value, so it has a visibility. The visibility's visibility is what makes an item *findable*: A can be `@private` while its visibility is `@public`, so others find that A exists but cannot read it.
 - **Decided:** an item inherits its parent's visibility. At the top it falls back to the default privacy policy, which is private.
+- **(2026-10-06, one mechanism)** A node's `access` superposition is the only store of who may do what. A grant `{who}.read x`
+  is an `Access(who, method, filter)` placed on what `x` names: on the value or field the expression answers, or on the
+  expression itself when it derives something (`@ether.read x.count`). `x.visibility` is its own access, else its parent's,
+  else `Access(Node.policy)`; `x.allows(who, method)` checks it and the grants on expressions naming `x`. The levels are `who`
+  values: the core has only `none` (no one; `none.read` is a secret, `const` is `none.write`) and `confidential = => Node.policy`;
+  `local`, `localhost`, `private` and `public` are Ether's names for `@local`…, and Ether clamps
+  `confidential = => Node.policy & @private.managed` (W5.5). There is no `Grant`, `Permissions`, `Accessor` or `Visibility`.
 - **(2026-10-06)** That visibility is the node's `access`, the only one: `x.public` is whether it reaches `@public`, and
   `x.publish` makes it public. Commits, references and items have no `visibility`/`draft`/`staged` of their own (World W3.3).
 - **From the drafts review (2026-10-06):**
@@ -770,6 +783,7 @@ Paths are relative to `@ether/`; `ep` = `ray/.entrypoint.ray`. Each line gives w
 ### Answers 2026-10-05, second round
 - **G3.11.** There is no `accepts` and no `alike`. A rule for one operator writes it in the pattern (`{a} - {b} => …`); kinds of operators are what modifiers such as `chainable` say about methods.
 - **`&@`.** The call chain of a run (whose origin chain L§8 keeps): `&@.last` is who runs it now, `&@.first` who started it.
+  **(2026-10-06)** `&@` is the running Program: `&@.who` is who runs it now, `&@.hops.first` who started it, `&@.may`/`&@.ask` check a grant.
 - **Which reading wins.** A longer rule over operators wins over a value's own operator method only where the operators are `chainable`: that is what `chainable` is for. It is not a general rule.
 
 ### Answers 2026-10-05

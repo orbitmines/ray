@@ -132,7 +132,7 @@ Offline := Character{!(. is Online)}
 Broadcasting := Character{quests{serves @public}.nonempty}
 Hosting := Character{presence?.hosted#.some(!.same(this))}
 Proxying := Character{quests{goal is Network.Proxy && !done}.nonempty}
-Idle := Character{presence && !device.keyboard.keys.some([.pressed, .pressed.previous**].flatten{== true}.first?.when >= Time.now - 5 minutes)}
+Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.since(None){.value == true}.last?.when >= Time.now - 5 minutes)}
 Busy := Character{focus && !focus.done}
 
 Invisible := Character{constraint is Invisible}

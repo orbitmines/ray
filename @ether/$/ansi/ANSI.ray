@@ -1,7 +1,7 @@
 // ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
 ANSI := class: Language {
   static extensions = ".ansi"
-  Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, reverse: boolean = false, link: Location?
+  Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, styles: Attribute# = [], link: Location?
 
   // CUP, Cursor Position (ECMA-48 8.3.21)
   Move := class ("\e[", (row: Decimal, ";", column: Decimal)?, "H") {
@@ -17,18 +17,18 @@ ANSI := class: Language {
   Stop := class = start: Start = Start()
 
   // SGR, Select Graphic Rendition (ECMA-48 8.3.117): 1 bold, 2 faint, 3 italic, 4 underlined, 7 negative, 9 crossed-out
-  Attribute := class (code: "1" | "2" | "3" | "4" | "7" | "9")
+  Attribute := enum bold (code: "1") | faint (code: "2") | italic (code: "3") | underlined (code: "4") | negative (code: "7") | crossed_out (code: "9") {
+    static (code: "1" | "2" | "3" | "4" | "7" | "9") as (=== Attribute) => Attribute#{.code == code}.first
+  }
   // SGR 38 and 48, direct colour (";2;r;g;b") or an indexed one (";5;n") (ITU-T T.416 13.1.8; xterm, "Character Attributes")
   Colored := class (layer: "38" | "48", ((";2;", red: Decimal, ";", green: Decimal, ";", blue: Decimal) | (";5;", index: Decimal))) {
     color => index == None ? Geometry.Color(red, green, blue) : Palette[index]
   }
-  Style := class ("\e[0", parameters: (";", parameter: Attribute | Colored)[], "m") {
-    codes => parameters.parameter{. is Attribute}.code
+  Style := class ("\e[0", parameters: (";", parameter: Colored | ("1" | "2" | "3" | "4" | "7" | "9") as Attribute)[], "m") {
     colored (layer: String) => parameters.parameter{. is Colored && .layer == layer}.last?.color
-    cell (glyph: Char = " ") => Cell(glyph, foreground: colored("38"), background: colored("48"),
-      bold: codes.contains("1"), dim: codes.contains("2"), italic: codes.contains("3"), underline: codes.contains("4"), reverse: codes.contains("7"), strike: codes.contains("9"))
+    cell (glyph: Char = " ") => Cell(glyph, foreground: colored("38"), background: colored("48"), styles: parameters.parameter{. is Attribute}#)
     static (cell: Cell) as (=== Style) => Style(parameters: [
-      [("1", cell.bold), ("2", cell.dim), ("3", cell.italic), ("4", cell.underline), ("9", cell.strike), ("7", cell.reverse)]{.1}.map(Attribute(.0)),
+      Attribute#{. is cell.styles},
       [("38", cell.foreground), ("48", cell.background)]{.1}.map(Colored(.0, red: .1.red, green: .1.green, blue: .1.blue))
     ].flatten.map((parameter: .)))
   }

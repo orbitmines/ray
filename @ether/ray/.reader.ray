@@ -1,0 +1,38 @@
+{pattern} => {body} =>
+  external rule pattern body
+{name} := {value} =>
+  external declare name value
+//{comment} =>
+  external none
+
+// Control flow: a block given after a word is a capture like any other, continued on deeper lines.
+if {condition} then {block} =>
+  external goto taken condition
+  external goto done block
+  external label taken
+  block
+  external label done
+unless {condition} then {block} =>
+  external goto done condition
+  block
+  external label done
+while {condition} do {block} =>
+  external label again
+  external goto body condition
+  external goto done block
+  external label body
+  block
+  external goto again block
+  external label done
+
+// Nodes, members, identity. What is declared first binds loosest, so `.` comes after the rules written with it.
+nothing =>
+  external none
+node =>
+  external node
+same {a} {b} =>
+  external same a b
+set {x} . {member} to {value} =>
+  external set x member value
+{x} . {member} =>
+  external get x member

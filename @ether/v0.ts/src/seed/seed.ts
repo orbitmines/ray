@@ -28,6 +28,7 @@ type Step =
   | { kind: 'apply'; rule: Rule; caps: [string, Span][]; at: Span }
   | { kind: 'label'; name: string }
   | { kind: 'goto'; name: string; when?: Span; at: Span }
+  | { kind: 'name'; at: Span }
   | { kind: 'unread'; at: Span };
 export type Compiled = (frame: Node) => unknown;
 
@@ -37,7 +38,6 @@ export class Seed {
   diagnostics: Diagnostic[] = [];
   order = 0;
   version = 0;
-  reader?: (seed: Seed, text: Text, at: number, frame: Node) => number;   // handed over by the entrypoint (R0.6)
   externals = new Map<string, (frame: Node, args: unknown[], at: Span) => unknown>();
   output: (line: string) => void = line => console.log(line);
 
@@ -48,13 +48,78 @@ export class Seed {
     this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); const v = self.force(value); n.frame.members.set(n.s, v); return v; });
     this.externals.set('find', (frame, [name]) => { const n = self.code_of(name); for (let at: Node | undefined = n.frame; at; at = at.parent) if (at.members.has(n.s)) return at.members.get(n.s); return undefined; });
     this.externals.set('node', () => new Node());
+    this.externals.set('none', () => undefined);
     this.externals.set('get', (frame, [of, name]) => (self.force(of) as Node)?.members.get(self.code_of(name).s));
     this.externals.set('set', (frame, [of, name, value]) => { const v = self.force(value); (self.force(of) as Node).members.set(self.code_of(name).s, v); return v; });
     this.externals.set('same', (frame, [a, b]) => self.force(a) === self.force(b) ? true : undefined);
     this.externals.set('print', (frame, args) => { self.output(args.map(a => self.show(self.force(a))).join(' ')); return undefined; });
+    // R0.6: reading handed to a rule of the entrypoint; it is applied to the place where a statement starts and answers the
+    // place after it.
+    this.externals.set('reader', (frame, [rule]) => { self.handed = self.force(rule) as Rule; return self.handed; });
+    // R0.7, R1: a text is a chain of places, each holding a character node (one node per character) and the next place.
+    this.externals.set('rules', (frame, [of]) => self.rules_of(self.force(of) as Node));
+    this.externals.set('apply', (frame, [rule, caps, within]) => self.apply_chain(self.force(rule) as Node, self.force(caps) as Node, self.force(within) as Node));
+    this.externals.set('frame', frame => frame.parent ?? frame);
+    // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
+    this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); return n; });
+    // The head of a rule as a chain, to tell whether two rules are written with the same head.
+    this.externals.set('head', (frame, [rule]) => self.chain_of(((self.force(rule) as Node).members.get('rule') as Rule).head.s.trim()));
   }
 
   say(message: string, at: Span) { this.diagnostics.push({ message, at }); }
+
+  // ---------------------------------------------------------------- R1: text as a chain of places
+  handed?: Rule;
+  characters = new Map<string, Node>();
+  character(c: string): Node { let n = this.characters.get(c); if (n === undefined) this.characters.set(c, n = new Node()); return n; }
+  places = new Map<Text, Node[]>();
+  // The place at `i` in a text: its character and the next place (none at the end). Made once per text.
+  place(text: Text, i: number): Node | undefined {
+    let all = this.places.get(text);
+    if (all === undefined) {
+      all = [];
+      for (let k = 0; k < text.s.length; k++) { const n = new Node(); n.members.set('character', this.character(text.s[k])); all.push(n); }
+      all.forEach((n, k) => { if (k + 1 < all!.length) n.members.set('next', all![k + 1]); this.where.set(n, { text, i: k }); });
+      this.places.set(text, all);
+    }
+    return all[i];
+  }
+  where = new Map<Node, { text: Text; i: number }>();
+  // A literal written in a head, as a chain of places of its own.
+  chain_of(s: string): Node | undefined { return s.length === 0 ? undefined : this.place({ name: 'literal', s }, 0); }
+  // A rule as a node: its pieces in order (`literal`: a chain of places; `capture`: its name), its head and its order.
+  rule_nodes = new Map<Rule, Node>();
+  node_of(rule: Rule): Node {
+    let n = this.rule_nodes.get(rule);
+    if (n !== undefined) return n;
+    n = new Node(); n.members.set('rule', rule);
+    let first: Node | undefined, last: Node | undefined;
+    for (const piece of rule.pieces) {
+      const p = new Node();
+      if ('lit' in piece) p.members.set('literal', this.chain_of(piece.lit)); else p.members.set('capture', piece.cap);
+      if (last) last.members.set('next', p); else first = p;
+      last = p;
+    }
+    n.members.set('pieces', first);
+    this.rule_nodes.set(rule, n);
+    return n;
+  }
+  // The rules in reach of a frame, nearest first, as a chain.
+  rules_of(frame: Node): Node | undefined {
+    let first: Node | undefined, last: Node | undefined;
+    for (const rule of frame.reach()) { const link = new Node(); link.members.set('rule', this.node_of(rule)); if (last) last.members.set('next', link); else first = link; last = link; }
+    return first;
+  }
+  // A rule applied with captures read by the entrypoint's reader: a chain of (name, from, to) where from/to are places.
+  apply_chain(rule: Node, caps: Node | undefined, within: Node): unknown {
+    const r = rule.members.get('rule') as Rule, list: [string, Span][] = [];
+    for (let c = caps; c; c = c.members.get('next') as Node | undefined) {
+      const from = this.where.get(c.members.get('from') as Node)!, to = c.members.get('to') as Node | undefined;
+      const e = to === undefined ? from.text.s.length : this.where.get(to)!.i;
+      list.push([c.members.get('name') as string, { text: from.text, b: from.i, e }]);
+    }
+    return this.apply(r, within, list);
+  }
 
   // ---------------------------------------------------------------- R0.1: the first statement, read by what it says about itself
   // `{pattern} => {body} => external rule pattern body`: the body's words that the head wraps in one pair of characters are
@@ -149,7 +214,12 @@ export class Seed {
       const piece = rule.pieces[i];
       if ('lit' in piece) { const e = this.literal(text, piece.lit, at, limit); if (e >= 0) go(i + 1, e, caps); return; }
       const last = limit;
-      for (let e = last; e > at; e--) { caps.push([piece.cap, { text, b: at, e }]); go(i + 1, e, caps); caps.pop(); }
+      // deeper lines continue what the line above them ends with: a capture that crosses a line end runs to the statement's end
+      const line = text.s.indexOf(this.learned!.end, at);
+      for (let e = last; e > at; e--) {
+        if (line >= 0 && line < e && e !== limit) continue;
+        caps.push([piece.cap, { text, b: at, e }]); go(i + 1, e, caps); caps.pop();
+      }
     };
     go(0, p, []);
     return out;
@@ -226,6 +296,7 @@ export class Seed {
       } else {
         const r = this.reading(body.frame, body.text, p, stop);
         if (r !== undefined && r.end === stop) steps.push({ kind: 'apply', rule: r.rule, caps: r.caps, at });
+        else if (!s.slice(p, stop).includes(space)) steps.push({ kind: 'name', at });
         else steps.push({ kind: 'unread', at });
       }
       p = stop;
@@ -252,6 +323,7 @@ export class Seed {
         lines.push(st.when ? `if (S.force(S.arg(f, ${ref(st.when)})) !== undefined) { pc = ${to}; continue; }` : `pc = ${to}; continue;`);
         continue;
       }
+      if (st.kind === 'name') { lines.push(`r = S.name(f, ${ref(st.at)});`); continue; }
       if (st.kind === 'unread') { lines.push(`S.say(${JSON.stringify('Unread `' + st.at.text.s.slice(st.at.b, st.at.e).slice(0, 60) + '`.')}, ${ref(st.at)});`); continue; }
       if (st.kind === 'external') {
         const ext = this.externals.get(st.name);
@@ -272,6 +344,13 @@ export class Seed {
     for (let at: Node | undefined = frame; at; at = at.parent) if (at.members.has(word)) return at.members.get(word);
     return new Code(sp.text, sp.b, sp.e, frame);
   }
+  // A statement that is one word: the member it names, or nothing and a diagnostic.
+  name(frame: Node, sp: Span): unknown {
+    const word = sp.text.s.slice(sp.b, sp.e);
+    for (let at: Node | undefined = frame; at; at = at.parent) if (at.members.has(word)) return this.force(at.members.get(word));
+    this.say(`Unresolved \`${word}\`.`, sp);
+    return undefined;
+  }
   show(v: unknown): string { return v instanceof Code ? v.s : v instanceof Node ? 'node' : String(v); }
 
   // ---------------------------------------------------------------- R0.3: a text read statement after statement
@@ -280,7 +359,14 @@ export class Seed {
     let p = from;
     while (p < s.length) {
       if (s.startsWith(end, p)) { p += end.length; continue; }
-      if (this.reader) { p = this.reader(this, text, p, this.global); continue; }
+      if (this.handed) {
+        const frame = new Node(this.handed.head.frame);
+        const cap = this.handed.pieces.find(x => 'cap' in x) as { cap: string };
+        frame.members.set(cap.cap, this.place(text, p));
+        const next = this.compiled(this.handed)(frame) as Node | undefined;
+        p = next === undefined ? s.length : this.where.get(next)!.i;
+        continue;
+      }
       const stop = this.stop(text, p, s.length, '');
       const r = this.reading(this.global, text, p, stop);
       if (r === undefined || r.end !== stop) { this.say(`Unread \`${s.slice(p, stop).slice(0, 60)}\`.`, { text, b: p, e: stop }); p = stop; continue; }

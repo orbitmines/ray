@@ -1,0 +1,17 @@
+say {x} =>
+  external print x
+link {x} to {y} =>
+  set x . next to y
+a := node
+b := node
+c := node
+link a to b
+link b to c
+at := a
+while at do
+  say at
+  at := at . next
+if a then
+  say yes
+unless nothing then
+  say unless-works

@@ -69,6 +69,8 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
     r.active!.add(src);
     try { r.safely(() => before === undefined ? r.dry(src) : r.redry(before.src, src, before.text, text)); } catch { r.kernel('recover'); }
     if (before !== undefined) r.drop(before.src);
+    const read = linked.get(uri);
+    if (before !== undefined && read !== undefined) linked.set(uri, { version: read.version, links: shifted(read.links, before.text, text) });
     open.set(uri, { src, text, version });
     repaint(uri);
     if (process.env.KLSP_LOG) connection.console.log(`painted ${path.basename(file)} in ${Math.round(performance.now() - t)} ms`);
@@ -216,6 +218,15 @@ async function read_in_worker() {
     if (!asked.includes(m.uri)) asked.push(m.uri);
     kick();
   });
+}
+
+function shifted(links: Link[], was: string, text: string): Link[] {
+  const m = Math.min(was.length, text.length);
+  let p = 0, s = 0;
+  while (p < m && was.charCodeAt(p) === text.charCodeAt(p)) p++;
+  while (s < m - p && was.charCodeAt(was.length - 1 - s) === text.charCodeAt(text.length - 1 - s)) s++;
+  const delta = text.length - was.length;
+  return links.flatMap(link => link.end < p ? [link] : link.begin >= was.length - s ? [{ ...link, begin: link.begin + delta, end: link.end + delta }] : []);
 }
 
 function nearest(links: Link[], offset: number): Link | undefined {

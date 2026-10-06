@@ -23,3 +23,5 @@ lsp_block := @lsp {
 }
 unless lsp_block.first.message == "no" && lsp_block.first.severity == Diagnostic.Severity.error { INFO@mark `DG16 a publishDiagnostics block does not read its hole and its null` }
 unless LSP.read([placed] as LSP).first.message == "no" { INFO@mark `DG17 written diagnostics do not read back` }
+// Six severities on four: fatal is an error and trace a hint, each read back as the nearest (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
+unless LSP.coded(Diagnostic.Severity.fatal) == 1 && LSP.coded(Diagnostic.Severity.trace) == 4 && LSP.severity(3) == Diagnostic.Severity.info && LSP.severity(4) == Diagnostic.Severity.debug { INFO@mark `LSP1 a severity is not written and read as LSP's four` }

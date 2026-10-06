@@ -9,26 +9,25 @@ LSP &+= {
     "\r\n",
     content: Byte[]{length == size}
   )
-  // DiagnosticSeverity (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
-  Severities = { fatal: 1, error: 1, warn: 2, info: 3, debug: 4, trace: 4 }
-  severity (code: Decimal) => Diagnostic.Severity#{Severities[.name] == code}.last
+  // DiagnosticSeverity: 1 error, 2 warning, 3 information, 4 hint, Ray's severities from error down; fatal is written as an error and trace as a hint (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
+  coded (severity: Diagnostic.Severity) => (5 - severity.index) max 1 min 4
+  severity (code: Decimal{1 <= . <= 4}) => Diagnostic.Severity[5 - code]
   // Positions are zero-based; columns count code points under the utf-32 position encoding (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#positionEncodingKind)
   position (at: (line: Decimal, column: Decimal)?) => (line: (at?.line ?? 1) - 1, character: (at?.column ?? 1) - 1)
   range (at: Location?) => (start: position(at?.from), end: position(at?.to))
   // Location (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#location)
   located (uri: String, range) => (uri as Location){from == (range["start"]["line"] + 1, range["start"]["character"] + 1), to == (range["end"]["line"] + 1, range["end"]["character"] + 1)}
 
-  Published := class = file: Location?, diagnostics: Diagnostic[]
+  Published := class = file: Location?, diagnostics: Diagnostic[], source: String?
 
-  syntax := JSON.syntax + {
+  level := JSON.level + {
     // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
     {message: *{.["method"] == "textDocument/publishDiagnostics"}} => message["params"] -- (params => params["diagnostics"].map(diagnostic =>
       // Diagnostic and DiagnosticRelatedInformation (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic)
       <-(diagnostic["relatedInformation"] ?? []).reduce(cause = None => Diagnostic(message: .["message"], at: located(.["location"]["uri"], .["location"]["range"]), cause: cause)) -- (cause =>
         Diagnostic(message: diagnostic["message"], severity: severity(diagnostic["severity"] ?? 1), at: located(params["uri"], diagnostic["range"]), cause: cause))))
-    {wire: Wire} => Compiler.reduced((wire.content as Unicode.UTF-8 as String as JSON).value, syntax)
+    {wire: Wire} => Compiler.reduced(JSON.read(wire.content as Unicode.UTF-8 as String), level)
   }
-  level := syntax
   written := {
     {writing: Language.Writing{value is Diagnostic}} => Published(writing.value.at?.file, [writing.value])
     {writing: Language.Writing{value is Diagnostic[]}} => writing.value.map(.at?.file).unique.map(file => Published(file, writing.value{.at?.file == file}))
@@ -38,9 +37,9 @@ LSP &+= {
       // Diagnostic (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic)
       diagnostics: published.diagnostics.map(diagnostic => (
         range: range(diagnostic.at),
-        severity: Severities[diagnostic.severity.name],
+        severity: coded(diagnostic.severity),
         code: diagnostic.code,
-        source: "ray",
+        source: published.source,
         message: diagnostic.message as String,
         relatedInformation: diagnostic.related.map(cause => (location: (uri: cause.at?.file as String, range: range(cause.at)), message: cause.message as String)) -- (. if .nonempty)
       ))

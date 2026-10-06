@@ -20,13 +20,17 @@ unless vgh.value.welcome == "hello" && vgh.value.greet == None { INFO@mark `VC27
 unless Git.Object("blob", "hello\n" as Byte[]).id == "ce013625030ba8dba906f756967f9e9ca394464a" { INFO@mark `VC28 a git blob is not named by the hash git gives it` }
 
 // Object formats (https://git-scm.com/docs/hash-function-transition, https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionsobjectFormat)
-unless Git<Git.sha256>.Object("blob", "hello\n" as Byte[]).id == "2cf8d83d9ee29543b34a87727421fdecb7e3f3a183d337639025de576db9ebb4" { INFO@mark `VC50 a git blob in a sha256 repository is not named by the hash git gives it` }
+unless Git<SHA256>.Object("blob", "hello\n" as Byte[]).id == "2cf8d83d9ee29543b34a87727421fdecb7e3f3a183d337639025de576db9ebb4" { INFO@mark `VC50 a git blob in a sha256 repository is not named by the hash git gives it` }
 unless Git.Object("tree", []).id == "4b825dc642cb6eb9a060e54bf8d69288fbee4904" { INFO@mark `VC51 git's empty tree is not named as git names it` }
-unless Git<Git.sha256>.Object("tree", []).id == "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321" { INFO@mark `VC52 git's empty tree in a sha256 repository is not named as git names it` }
-unless ("[core]\n\trepositoryformatversion = 1\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === Git.sha256 { INFO@mark `VC53 a sha256 repository's config does not read as sha256` }
-unless Git<Git.sha256>.Object("blob", "hello\n" as Byte[]).id.count == 64 && Git.Object("blob", "hello\n" as Byte[]).id.count == 40 { INFO@mark `VC54 an object's id is not 64 hexadecimal digits in sha256 and 40 in sha1` }
-unless (([Language.Entry(name: "hello", content: "hello\n" as Byte[])] as Git<Git.sha256>.Tree).entries.first.id as Byte[]).count == 32 { INFO@mark `VC55 a tree entry's id is not 32 bytes in sha256` }
-unless Git.format === Git.sha1 && ("" as Git.Config).format === Git.sha1 && ("[core]\n\trepositoryformatversion = 0\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === Git.sha1 { INFO@mark `VC56 the object format is not sha1 by default` }
-unless (Git<Git.sha256>.write(vh).at("config").content as Git.Config).format === Git.sha256 { INFO@mark `VC57 a history written as sha256 git does not name its object format in its config` }
-vgs := Git.read(Git<Git.sha256>.written_to(vh, @./history-test-sha256))
+unless Git<SHA256>.Object("tree", []).id == "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321" { INFO@mark `VC52 git's empty tree in a sha256 repository is not named as git names it` }
+unless ("[core]\n\trepositoryformatversion = 1\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === SHA256 { INFO@mark `VC53 a sha256 repository's config does not read as sha256` }
+unless Git<SHA256>.Object("blob", "hello\n" as Byte[]).id.count == 64 && Git.Object("blob", "hello\n" as Byte[]).id.count == 40 { INFO@mark `VC54 an object's id is not 64 hexadecimal digits in sha256 and 40 in sha1` }
+unless (([Language.Entry(name: "hello", content: "hello\n" as Byte[])] as Git<SHA256>.Tree).entries.first.id as Byte[]).count == 32 { INFO@mark `VC55 a tree entry's id is not 32 bytes in sha256` }
+unless Git.hash === SHA1 && ("" as Git.Config).format === SHA1 && ("[core]\n\trepositoryformatversion = 0\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === SHA1 { INFO@mark `VC56 the object format is not sha1 by default` }
+unless (Git<SHA256>.write(vh).at("config").content as Git.Config).format === SHA256 { INFO@mark `VC57 a history written as sha256 git does not name its object format in its config` }
+vgs := Git.read(Git<SHA256>.written_to(vh, @./history-test-sha256))
 unless vgs.head.id == vh.head.id { INFO@mark `VC58 a history written as sha256 git and read back has other labels` }
+// Modes and pack object types are read and written by the header (https://git-scm.com/docs/gitformat-index#_index_entry, https://git-scm.com/docs/gitformat-pack#_object_types)
+unless "100755" as Git.Mode == Git.Mode.executable && Git.Mode.directory.code == "40000" && Git.Mode.link.entry == Language.Entry.Mode.link { INFO@mark `GIT1 a tree entry's mode is not read by its octal code` }
+unless Git.Pack.Kind.reference_delta.code == 7 && 2 as Git.Pack.Kind == Git.Pack.Kind.tree { INFO@mark `GIT2 a pack entry's type is not read by its number` }
+unless Git.formatted("SHA256") === SHA256 && Git.formatted("md5") is Abstract && Git<SHA256>.format_name == "sha256" { INFO@mark `GIT3 an object format is not named by its digest` }

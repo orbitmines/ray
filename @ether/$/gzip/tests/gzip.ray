@@ -1,0 +1,12 @@
+// GZIP members read and written (https://www.rfc-editor.org/rfc/rfc1952).
+
+mark ^keyword := external global
+
+// "hello" as another gzip writes it: no name, mtime 0, XFL 2, OS 3 (Unix), then CRC-32 3610a686 and ISIZE 5 (https://www.rfc-editor.org/rfc/rfc1952#section-2.3)
+hello_gz := [0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x86, 0xa6, 0x10, 0x36, 0x05, 0x00, 0x00, 0x00]
+unless Gzip.read(hello_gz) as String == "hello" { INFO@mark `GZ1 a gzip member does not inflate to its data` }
+unless Gzip.read([hello_gz, hello_gz].flatten) as String == "hellohello" { INFO@mark `GZ2 two members do not read as their data joined` }
+unless Gzip.read(Gzip.write(("ray " * 32).bytes) as Byte[]) == ("ray " * 32).bytes { INFO@mark `GZ3 written bytes do not read back` }
+unless (Gzip.write("hello".bytes) as Byte[])[..<3] == [0x1f, 0x8b, 0x08] && (Gzip.write("hello".bytes) as Byte[])[-8..<-4] == [0x86, 0xa6, 0x10, 0x36] { INFO@mark `GZ4 a written member does not start with ID1 ID2 CM or end with its CRC-32, least significant byte first` }
+unless Gzip.read([hello_gz[..<17], [0x00, 0xa6, 0x10, 0x36], hello_gz[21..]].flatten) is Diagnostic { INFO@mark `GZ5 a member whose CRC-32 does not match its data reads` }
+unless $.gzip === Gzip && Language.named(".gz") === Gzip { INFO@mark `GZ6 $.gzip is not Gzip` }

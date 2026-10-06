@@ -4,3 +4,4 @@ mark ^keyword := external global
 
 unless "Man".bytes as Base64 as String == "TWFu" { INFO@mark `UI71 Man is not TWFu in Base64` }
 unless "Ma".bytes as Base64 as String == "TWE=" { INFO@mark `UI72 Ma is not padded to TWE=` }
+unless Base64.read("TWFu") == "Man".bytes && $.base64 === Base64 { INFO@mark `BASE1 Base64 text does not read back as its bytes, or $.base64 is not Base64` }

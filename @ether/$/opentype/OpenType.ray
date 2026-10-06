@@ -1,7 +1,10 @@
 // OpenType specification (https://learn.microsoft.com/en-us/typography/opentype/spec/)
 // The table directory (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
-OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Char₄, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
-  static language = Language(".otf" | ".ttf" | ".opentype", level: { {font: OpenType} => font })
+OpenType := class: Language (sfnt_version: U32, count: U16, U16, U16, U16, records: (tag: Char₄, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
+  static extensions = ".otf" | ".ttf" | ".opentype"
+  static level := {
+    {font: OpenType} => font
+  }
   static Glyph := class = outlines: Geometry.Curve[], advance: Number, units: Number, ascender: Number
   // Data types (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#data-types)
   static U8 = Binary₈
@@ -44,13 +47,13 @@ OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Cha
     delta => short ? (same ? magnitude : -magnitude) : same ? 0 : value.signed
   }
   static Point := class = at: Geometry.Vector, on: boolean
-  static Step := class = from: Point, to: Point
-  static contoured := {
-    {step: Step{from.on && to.on}} => step.to.at
-    {step: Step{to.on}} => Geometry.Quadratic(step.from.at, step.to.at)
-    {step: Step{from.on}} => []
-    {step: Step} => Geometry.Quadratic(step.from.at, (step.from.at + step.to.at) * (1 / 2))
+  // Consecutive points of a contour: two off-curve points imply an on-curve one between them, an off-curve point is a quadratic's control, and on-curve to on-curve is a line
+  static Step := class = from: Point, to: Point {
+    segment => Geometry.Quadratic(from.at, (from.at + to.at) * (1 / 2))
   }
+  static Line := Step{from.on && to.on} { segment => to.at }
+  static Curving := Step{to.on && !from.on} { segment => Geometry.Quadratic(from.at, to.at) }
+  static Leaving := Step{from.on && !to.on} { segment => [] }
   static Simple := class = (
     contours: U16{< 2 ^ 15}, I16, I16, I16, I16,
     ends: U16[]{length == contours},
@@ -99,7 +102,7 @@ OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Cha
   outline (points: Point[]) => (points.some(.on)
     ? points.index_of(points{.on}.first) -- (start => [points[start..], points[..start]].flatten)
     : Point((points.first.at + points.last.at) * (1 / 2), true) -- (start => [start, points, start].flatten)
-  ) -- (ring => Geometry.Curve([ring.first.at, Compiler.reduced(ring.zip(ring.rest).map(Step(.0, .1)), contoured)].flatten.loop))
+  ) -- (ring => Geometry.Curve([ring.first.at, ring.zip(ring.rest).map(Step(.0, .1).segment)].flatten.loop))
   outlines (glyph: Number) => contours(glyph).map(outline(.))
   [character: Char] => cmap[character as Number] -- (glyph => Glyph(outlines(glyph), hmtx[glyph], head.units, hhea.ascender.signed))
 }

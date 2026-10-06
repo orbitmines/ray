@@ -1,5 +1,5 @@
 // GZIP file format specification version 4.3 (https://www.rfc-editor.org/rfc/rfc1952)
-Gzip := class (
+Gzip := class: Language (
   // ID1, ID2, and CM 8 for deflate (https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1)
   0x1F, 0x8B,
   method: Byte{== 8} = 8,
@@ -19,19 +19,21 @@ Gzip := class (
   (name: Byte{!= 0}[], 0) if named,
   (comment: Byte{!= 0}[], 0) if commented,
   (header_crc: <-Byte₂) if checked,
-  deflated: $.deflate.Stream,
-  crc: <-Byte₄ = crc32(inflated),
+  deflated: Deflate.Stream,
+  // CRC-32 and ISIZE of the uncompressed data (https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1, https://www.rfc-editor.org/rfc/rfc1952#section-8)
+  crc: <-Byte₄ = inflated as CRC32 as Binary₃₂,
   isize: <-Byte₄ = inflated.count % 2 ^ 32
 ) {
-  inflated: Byte[] => deflated.bytes
-  dynamically assert crc == crc32(inflated) && isize == inflated.count % 2 ^ 32
+  static extensions = ".gz" | ".gzip"
 
-  // CRC-32 with the reflected polynomial 0xEDB88320 (https://www.rfc-editor.org/rfc/rfc1952#section-8)
-  static crc32 (bytes: Byte[]) => bytes.reduce(c = 0xFFFFFFFF => step(c, .)) ~x|| 0xFFFFFFFF
-  static step (c, byte: Byte) => (0..7).reduce(r = c ~x|| byte => r.odd ? (r / 2).floor ~x|| 0xEDB88320 : (r / 2).floor)
+  inflated: Byte[] => deflated.bytes
+  dynamically assert crc == inflated as CRC32 as Binary₃₂ && isize == inflated.count % 2 ^ 32
 
   // A file is one or more members, read as their data joined (https://www.rfc-editor.org/rfc/rfc1952#section-2.2)
-  static language = Language(".gz" | ".gzip",
-    level: { {members: Gzip[]{length > 0}} => members.inflated.flatten },
-    written: { {writing: Language.Writing} => Gzip(deflated: $.deflate.write(writing.value as Byte[])) })
+  static level := {
+    {members: Gzip[]{length > 0}} => members.inflated.flatten
+  }
+  static written := {
+    {writing: Language.Writing} => Gzip(deflated: Deflate.write(writing.value as Byte[]))
+  }
 }

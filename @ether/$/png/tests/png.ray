@@ -1,0 +1,15 @@
+// PNG images read into rasters and written back (https://www.w3.org/TR/png-3/).
+
+mark ^keyword := external global
+
+// One red pixel, 8-bit truecolour with alpha, filter type 0, as another encoder writes it (5.2, 11.2.1, 11.2.4, 11.2.5)
+red_png := [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89,
+  0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x1f, 0x00, 0x05, 0x00, 0x01, 0xff, 0x89, 0x99, 0x3d, 0x1d, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]
+red := PNG.read(red_png)
+unless red.width == 1 && red.height == 1 && red[0][0] == Geometry.Color(255, 0, 0, 1) { INFO@mark `PNG1 one red pixel is not read as a red raster` }
+unless PNG.read(PNG.write(red) as Byte[])[0][0] == Geometry.Color(255, 0, 0, 1) { INFO@mark `PNG2 a written raster does not read back` }
+unless (PNG.write(red) as Byte[])[-12..] == [0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82] { INFO@mark `PNG3 a written image does not end with IEND and its CRC` }
+unless PNG.read([red_png[..<29], [0x00, 0x15, 0xc4, 0x89], red_png[33..]].flatten) is Diagnostic { INFO@mark `PNG4 a chunk whose CRC does not match reads` }
+// Filter types 1–4 predict from the left, above, their average, and Paeth (9.2, 9.4)
+unless ([2, 10] as PNG.Scanline).predicted(3, 7, 5) == 7 && ([4, 10] as PNG.Scanline).predicted(3, 7, 5) == 5 && ([0, 10] as PNG.Scanline).predicted(3, 7, 5) == 0 { INFO@mark `PNG5 a filter type does not predict as 9.2 and 9.4 say` }
+unless $.png === PNG { INFO@mark `PNG6 $.png is not PNG` }

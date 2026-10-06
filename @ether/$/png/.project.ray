@@ -1,2 +1,4 @@
 @ether/ui
+@ether/geometry
 @zlib
+@crc32

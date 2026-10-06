@@ -1,0 +1,12 @@
+// ZLIB streams read and written (https://www.rfc-editor.org/rfc/rfc1950).
+
+mark ^keyword := external global
+
+// "hello" as another zlib writes it: CMF 0x78, FLG 0x9c, then its Adler-32 062c0215 (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
+hello_z := [0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15]
+unless Zlib.read(hello_z) as String == "hello" { INFO@mark `ZL1 a zlib stream does not inflate to its data` }
+unless Zlib.adler32("hello".bytes) == 0x062c0215 { INFO@mark `ZL2 the Adler-32 of hello is not 062c0215` }
+unless Zlib.read(Zlib.write(("ray " * 32).bytes) as Byte[]) == ("ray " * 32).bytes { INFO@mark `ZL3 written bytes do not read back` }
+unless (Zlib.write("hello".bytes) as Byte[])[..<2] -- ((.0 * 256 + .1) % 31 == 0) { INFO@mark `ZL4 a written header is not a multiple of 31` }
+unless Zlib.read([hello_z[..<9], [0x06, 0x2c, 0x02, 0x16]].flatten) is Diagnostic { INFO@mark `ZL5 a stream whose Adler-32 does not match its data reads` }
+unless $.zlib === Zlib { INFO@mark `ZL6 $.zlib is not Zlib` }

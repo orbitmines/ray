@@ -160,7 +160,7 @@ export class env {
   static get root(): string {
     if (env._root) return env._root;
     const { fs, path } = env;
-    const root = ['@ether']
+    const root = ['@ether', 'ray', '.entrypoint.ray']
     const language_dir = (dir: string) => path.join(dir, ...root);
     // A checkout enclosing the working directory: walk up to the marker.
     let dir = process.cwd();

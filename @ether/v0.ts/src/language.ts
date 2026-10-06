@@ -2,7 +2,7 @@ import { sources } from './bundled.ts';
 
 export const NAME = 'Ether' as const
 export const ALIASES = ['ray', 'orbitmines'] as const;
-export const ROOT = ['@ether']
+export const ROOT = ['@ether', 'ray', '.entrypoint.ray']
 export const version:
   [major: number, releaseDate: string, index: number] =
   [0, '2027-01-01', 4];

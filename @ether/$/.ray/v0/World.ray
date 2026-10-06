@@ -248,7 +248,6 @@ Instance := class: Location + Entity {
 
   location: *
   device: Device = Device()
-  status: Status = Status.online
   registry: Character?
   hosted: Character?
   deletions: Deletion[] = []
@@ -286,8 +285,6 @@ Instance := class: Location + Entity {
   }
 }
 
-Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
-
 Character := class: Hierarchy + Entity + Nameable {
   static PREFIX = "@"
   static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find(.id == who || .name?.fold_case == (who as String).fold_case)
@@ -295,7 +292,8 @@ Character := class: Hierarchy + Entity + Nameable {
   id: UUID = UUID.v4()
 
   presence: Instance?
-  status: Status = Status.offline
+  constraint: *?
+  focus: Job?
   permissions: Accessor.Permission?
 
   first_name: String?
@@ -308,7 +306,9 @@ Character := class: Hierarchy + Entity + Nameable {
   full_name => first_name ? first_name + " " + last_name : name
   device => (presence ?? Instance.local).device
   jobs => device.jobs
-  status_now => presence?.status ?? status
+  status => Status#{this is .}
+  .status = {wanted} ^punctuation => constraint = wanted
+  is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
 
   choose (s) => Choice(type: s)
 
@@ -317,6 +317,17 @@ Character := class: Hierarchy + Entity + Nameable {
   execute => on(`()`)
   on (method) => Access(this, method)
 }
+
+Online := Character{presence?.device.network.connected && (. === @me || !(. is Invisible))}
+Offline := Character{!(. is Online)}
+Broadcasting := Character{jobs{serves @public}.nonempty}
+Hosting := Character{presence?.hosted#.some(!== this)}
+Proxying := Character{jobs{proxies}.nonempty}
+Invisible := Character{constraint is Invisible}
+Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.last?.when >= Time.now - 5 minutes)}
+Busy := Character{focus && !focus.done}
+DoNotDisturb := Character{constraint is DoNotDisturb}
+Status := Online | Offline | Broadcasting | Hosting | Proxying | Invisible | Idle | Busy | DoNotDisturb
 
 Avatar := class: Character {
   character: Character
@@ -336,7 +347,6 @@ Player := class: Character
 NPC := class: Character {
   static Mode := enum until_resolved | waiting | stopping
 
-  status = Status.hosted
   mode: Mode = Mode.until_resolved
 
   open_quests => children{is Quest && !.done}

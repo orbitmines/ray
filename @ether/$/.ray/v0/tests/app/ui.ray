@@ -61,25 +61,25 @@ solved([fixed_width])
 unless fixed_width.size.x == 48px { INFO@mark `UI100 a fixed width is not kept` }
 lifted_up := Geometry.Box(height: 20px, margin: Geometry.Edges(top: -10px))
 solved([Geometry.Box(height: 20px), lifted_up])
-unless lifted_up.origin.y == 10px { INFO@mark `UI101 a negative margin does not pull a shape up` }
+unless lifted_up.origin.y == 770px { INFO@mark `UI101 a negative margin does not pull a shape up` }
 padded_child := Geometry.Box(height: 10px)
 solved([Geometry.Box(padding: Geometry.Edges(5px, 5px, 5px, 5px), children: [padded_child])])
 unless padded_child.origin == Geometry.Vector(5px, 5px) { INFO@mark `UI102 padding does not move what it holds` }
 pinned := Geometry.Box(position: Geometry.Absolute(), inset: Geometry.Edges(6px, None, None, 6px), height: 10px)
 after_pinned := Geometry.Box(height: 10px)
 solved([pinned, after_pinned])
-unless pinned.origin == Geometry.Vector(6px, 6px) { INFO@mark `UI103 an absolute shape is not placed by its insets` }
-unless after_pinned.origin.y == 0px { INFO@mark `UI104 an absolute shape takes space in the flow` }
+unless pinned.origin == Geometry.Vector(6px, 784px) { INFO@mark `UI103 an absolute shape is not placed by its insets` }
+unless after_pinned.origin.y == 790px { INFO@mark `UI104 an absolute shape takes space in the flow` }
 fixed_bar := Geometry.Box(position: Geometry.Fixed(), inset: Geometry.Edges(0px, None, None, 0px), height: 10px)
 solved([Geometry.Box(height: 3000px, children: [Geometry.Box(height: 500px), fixed_bar])], scrolled: 100px)
-unless fixed_bar.at.y == 0px { INFO@mark `UI105 a fixed shape scrolls with the page` }
+unless fixed_bar.at.y == 790px { INFO@mark `UI105 a fixed shape scrolls with the page` }
 sticky_bar := Geometry.Box(position: Geometry.Sticky(), inset: Geometry.Edges(0px, None, None, None), height: 10px)
 solved([Geometry.Box(height: 1000px, children: [sticky_bar])], scrolled: 300px)
-unless sticky_bar.at.y == 0px { INFO@mark `UI106 a sticky shape does not stay at the top while its parent is in view` }
+unless sticky_bar.at.y == 790px { INFO@mark `UI106 a sticky shape does not stay at the top while its parent is in view` }
 anchor := Geometry.Box(height: 20px)
 tip := UI.Popover(position: Geometry.Anchored(anchor: anchor), height: 10px)
 solved([anchor, tip])
-unless tip.at.y == 20px { INFO@mark `UI107 a popover is not placed below its anchor` }
+unless tip.at.y == 770px { INFO@mark `UI107 a popover is not placed below its anchor` }
 if tip.visible { INFO@mark `UI108 a popover shows before its anchor is hovered or focused` }
 
 unless Geometry.Steps([(9/12).xs, (6/12).md]).at(700px) == 9/12 && Geometry.Steps([(9/12).xs, (6/12).md]).at(800px) == 6/12 { INFO@mark `UI109 breakpoints written as a list do not jump` }
@@ -164,7 +164,7 @@ unless scroller.scrolled.y == 1000px { INFO@mark `UI158 revealing within a conta
 unless revealed.size.y == 100px { INFO@mark `UI159 a shape's height cannot be measured` }
 scrolled_child := Geometry.Box(height: 10px)
 solved([Geometry.Box(scrolled: Geometry.Vector(0, 50px), overflow: scroll, children: [scrolled_child])])
-unless scrolled_child.at.y == -50px { INFO@mark `UI160 a scrolled container does not move what it holds` }
+unless scrolled_child.at.y == 840px { INFO@mark `UI160 a scrolled container does not move what it holds` }
 
 keyboard := @me/device/keyboard
 keyboard["f"].press(Keyboard.Modifier.control)
@@ -245,7 +245,7 @@ with @me = Instance.local {
   if Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice { INFO@mark `UI240 the computer asks someone to choose instead of picking` }
 }
 
-unless Geometry.left.vector(2) == Geometry.Vector(-1, 0) && Geometry.bottom.vector(2) == Geometry.Vector(0, 1) { INFO@mark `UI241 a side is not its axis and direction` }
+unless Geometry.left.vector(2) == Geometry.Vector(-1, 0) && Geometry.bottom.vector(2) == Geometry.Vector(0, -1) { INFO@mark `UI241 a side is not its axis and direction` }
 unless Geometry.all.count == 4 && Geometry.horizontal#.count == 2 { INFO@mark `UI242 a plane does not have four sides` }
 unless Geometry.Edges(1px, 2px, 3px, 4px)[Geometry.left] == 4px && Geometry.Edges(1px, 2px, 3px, 4px).total == Geometry.Vector(6px, 4px) { INFO@mark `UI243 edges are not read by side` }
 unless (Geometry.Edges() ~~ .(Geometry.horizontal) = 5px).total == Geometry.Vector(10px, 0px) { INFO@mark `UI244 a superposed side does not set both edges` }
@@ -267,7 +267,7 @@ with Geometry.Space.current = Geometry.Space.grid(Geometry.Vector(10, 10), loop:
   unless Geometry.euclidean(Geometry.Vector(1, 0), Geometry.Vector(9, 0)) == 2 { INFO@mark `UI254 a looping axis does not wrap around` }
 }
 unless Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(5, 6)) { INFO@mark `UI255 a triangle does not wind around its centre` }
-if Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(1, 1)) { INFO@mark `UI256 a triangle winds around a point outside it` }
+if Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(1, 9)) { INFO@mark `UI256 a triangle winds around a point outside it` }
 unless Geometry.Sierpinski(size: Geometry.Vector(2px, 2px)).dimension.erred { INFO@mark `UI257 a fractal's dimension is measured before it is implemented` }
 unless Compiler.reduced(Geometry.Sierpinski(size: Geometry.Vector(2px, 2px)), Geometry.Approximating(4px)).children.empty { INFO@mark `UI258 a copy smaller than the resolution is divided` }
 unless Compiler.reduced(Geometry.Sierpinski(size: Geometry.Vector(16px, 16px)), Geometry.Approximating(4px)).children.count == 3 { INFO@mark `UI259 a fractal larger than the resolution is not its copies` }
@@ -298,3 +298,22 @@ unless (@https://orbitmines.com/archive?search=).query.search == None { INFO@mar
 unless (@https://orbitmines.com/archive?page=2).query.search == None { INFO@mark `UI275 a missing query parameter is not None` }
 unless ((@https://orbitmines.com/archive).query.search ?? "all") == "all" { INFO@mark `UI276 a location without a query has no parameter to default` }
 unless (@https://orbitmines.com/archive).with(search: None) as String == "https://orbitmines.com/archive" { INFO@mark `UI277 an empty query is written` }
+
+// Geometry's y points up; a screen's points down, and its levels flip what they are given.
+unless Geometry.Space.plane.axes[1].orientation == +1 { INFO@mark `YU1 the plane's y does not point up` }
+unless Geometry.Space.screen.axes[1].orientation == -1 { INFO@mark `YU2 a screen's y does not point down` }
+unless Geometry.top.vector(2) == Geometry.Vector(0, 1) { INFO@mark `YU3 top is not up` }
+unless Geometry.top.label == "top" && Geometry.bottom.label == "bottom" { INFO@mark `YU4 a side is not called what it is` }
+unless Geometry.Space.screen.seen(Geometry.Vector(3px, 10px), Geometry.Vector(100px, 100px)) == Geometry.Vector(3px, 90px) { INFO@mark `YU5 a point is not flipped onto a screen` }
+unless Geometry.Space.screen.seen(Geometry.Vector(0px, 80px), Geometry.Vector(100px, 100px), Geometry.Vector(10px, 20px)) == Geometry.Vector(0px, 0px) { INFO@mark `YU6 a box at the top is not at the top of a screen` }
+unless Geometry.Space.screen.seen(Geometry.Vector(2px, 3px)) == Geometry.Vector(2px, -3px) { INFO@mark `YU7 a displacement up is not one up a screen` }
+if Geometry.Space.plane.seen(Geometry.Vector(3px, 10px), Geometry.Vector(100px, 100px)) != Geometry.Vector(3px, 10px) { INFO@mark `YU8 the plane flips what it is given` }
+first_laid := Geometry.Box(height: 20px)
+second_laid := Geometry.Box(height: 20px)
+solved([first_laid, second_laid])
+unless first_laid.origin.y == 780px { INFO@mark `YU9 the first shape in a flow is not at the top` }
+unless second_laid.origin.y < first_laid.origin.y { INFO@mark `YU10 a shape later in a flow is not below the one before it` }
+bottomed := Geometry.Box(position: Geometry.Absolute(), inset: Geometry.Edges(None, None, 4px, None), height: 10px)
+solved([bottomed])
+unless bottomed.origin.y == 4px { INFO@mark `YU11 a bottom inset is not measured up from the bottom` }
+unless Geometry.Edges(1px, 2px, 3px, 4px).start == Geometry.Vector(4px, 3px) { INFO@mark `YU12 a box's corner of origin is not its bottom left` }

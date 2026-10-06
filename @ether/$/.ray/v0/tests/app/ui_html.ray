@@ -99,3 +99,6 @@ UI.HTML.DOM.dispatched("window keydown q")
 unless @me/device/keyboard["q"].pressed { INFO@mark `UI284 a key pressed on the web is not pressed on the device keyboard` }
 UI.HTML.DOM.dispatched("window keyup q")
 if @me/device/keyboard["q"].pressed { INFO@mark `UI285 a key released on the web stays pressed` }
+
+pointed_up := Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10px, 10px)), size: Geometry.Vector(10px, 10px))
+unless Program(code: { pointed_up }).rendered(UI.HTML.Markup.level).body.children.first.children.first.attributes.contains(("points", "5,0 10,10 0,10")) { INFO@mark `YU14 a triangle pointing up is not drawn pointing up on the web` }

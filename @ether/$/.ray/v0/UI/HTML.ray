@@ -1,6 +1,6 @@
 // The web renderer: a scene written as HTML, a document with its CSS stylesheet and JS script
 UI.HTML := class {
-  static space = Geometry.Space.plane
+  static space = Geometry.Space.screen
   Geometry.Shape &+= {
     dom => id.segments.join("-")
   }
@@ -51,10 +51,10 @@ UI.HTML := class {
       {canvas: Geometry.Shape{content is Program}} => @html <canvas {Named(canvas)} width={canvas.size.x as px} height={canvas.size.y as px} />
       {ball: Geometry.Ball} => @html <span {Named(ball)} {Described(ball)} role="presentation" />
       {polygon: Geometry.Polygon{!rectangular}} => @html <svg {Named(polygon)} viewBox="0 0 {polygon.size.x as px} {polygon.size.y as px}">
-        <polygon points={polygon.boundary.points.map(.x as px, ",", .y as px).join(" ")} />
+        <polygon points={polygon.boundary.points.map(UI.HTML.space.seen(., polygon.size)).map(.x as px, ",", .y as px).join(" ")} />
       </svg>
       {outlined: Geometry.Shape{!rectangular && boundary is Geometry.Curve}} => @html <svg {Named(outlined)} viewBox="0 0 {outlined.size.x as px} {outlined.size.y as px}">
-        <path d="{outlined.boundary.segments.map(Path(.))}{" Z" if outlined.boundary.segments is Loop}" />
+        <path transform="matrix(1,0,0,-1,0,{outlined.size.y as px})" d="{outlined.boundary.segments.map(Path(.))}{" Z" if outlined.boundary.segments is Loop}" />
       </svg>
       // SVG path data (https://www.w3.org/TR/SVG2/paths.html#PathData)
       {path: Path{segment is Geometry.Quadratic}} => path.segment -- (" Q", .control.x, " ", .control.y, " ", .to.x, " ", .to.y)
@@ -186,7 +186,7 @@ UI.HTML := class {
           background: {Paint(shape.fill) if shape.fill};
           {Bordered(shape)}
           border-radius: {shape.radius.map(. is Number ? Share(.) : Measure(.)).join(" ") if shape.radius != [0px]};
-          transform: {Transformed(shape.transform) if shape.transform != Geometry.Transform.identity};
+          transform: {Transformed(Geometry.Transform.scale(Geometry.Vector(1, -1, 1)) -- (. * shape.transform * .)) if shape.transform != Geometry.Transform.identity};
           overflow: {shape.overflow == scroll ? "auto" : shape.overflow as String};
           z-index: {shape.layer if shape.layer != 0};
           mix-blend-mode: {(shape.blend as String) if shape.blend != normal};
@@ -248,7 +248,7 @@ UI.HTML := class {
       })
 
       // box-shadow (https://www.w3.org/TR/css-backgrounds-3/#box-shadow), filter functions (https://www.w3.org/TR/filter-effects-1/#filter-functions)
-      {effected: Effected{effect is Geometry.Shadow}} => effected.effect -- (shadow => ("inset " if shadow.inset), Measure(shadow.offset.x), " ", Measure(shadow.offset.y), " ", Measure(shadow.blur), " ", Measure(shadow.spread), " ", Paint(shadow.color))
+      {effected: Effected{effect is Geometry.Shadow}} => effected.effect -- (shadow => ("inset " if shadow.inset), UI.HTML.space.seen(shadow.offset) -- (offset => (Measure(offset.x), " ", Measure(offset.y))), " ", Measure(shadow.blur), " ", Measure(shadow.spread), " ", Paint(shadow.color))
       {effected: Effected{effect is Geometry.Blur}} => "blur(", Measure(effected.effect.radius), ")"
       {effected: Effected{effect is Geometry.Filter{kind == hue}}} => "hue-rotate(", effected.effect.amount, "turn)"
       {effected: Effected{effect is Geometry.Filter}} => effected.effect.kind as String, "(", effected.effect.amount, ")"
@@ -480,7 +480,7 @@ UI.HTML := class {
     Scroll := class: Event (id: Id, " scroll ", y: Decimal)
     Pointer := class: Event (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
       pointed => UI.pointed(device ?? "mouse", number ?? 0)
-      position => Geometry.Vector(x * 1px, y * 1px)
+      position => UI.HTML.space.seen(Geometry.Vector(x * 1px, y * 1px), UI.scene.size)
       time => stamp ? stamp * 1 ms : Time.now
     }
     Keystroke := class: Event (id: Id, " ", kind: "keydown" | "keyup", " ", key: Id, modifiers: (" ", held: "shift" | "control" | "alt" | "meta")[])

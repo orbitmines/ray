@@ -3,3 +3,12 @@
 mark ^keyword := external global
 
 unless Device().permission(Device.Capability.camera) == Grant.State.prompt { INFO@mark `AC26 a capability nobody granted is not asked for` }
+
+// confidential follows the policy, but never past @private.managed.
+with Visibility.policy = Accessor.Permission.public {
+  unless Accessor.Permission.confidential.resolved == Accessor.Permission.managed { INFO@mark `CK1 confidential widens with a public policy` }
+  if Accessor.Permission.confidential.reaches(Character(name: "stranger")) { INFO@mark `CK2 confidential reaches a stranger under a public policy` }
+}
+with Visibility.policy = Accessor.Permission.local {
+  unless Accessor.Permission.confidential.resolved == Accessor.Permission.local { INFO@mark `CK3 confidential is wider than a narrower policy` }
+}

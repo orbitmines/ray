@@ -1,182 +1,178 @@
-Network &+= {
-  // Domain names, implementation and specification (https://www.rfc-editor.org/rfc/rfc1035)
-  static DNS := class: Language {
-    static extensions = ".dns"
+// Domain names, implementation and specification (https://www.rfc-editor.org/rfc/rfc1035)
+DNS := class: Language {
+  static extensions = ".dns"
 
-    // TYPE values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.1), SRV (https://www.rfc-editor.org/rfc/rfc2782)
-    static Type := enum A (code: 1) | NS (code: 2) | CNAME (code: 5) | SOA (code: 6) | PTR (code: 12) | MX (code: 15) | TXT (code: 16) | AAAA (code: 28) | SRV (code: 33) | ANY (code: 255) {
-      static (code: Binary₁₆) as (=== Type) => Type#{.code == code}.first
-    }
-    // CLASS values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4)
-    static Classes := enum IN (code: 1) | CH (code: 3) | HS (code: 4) | ANY (code: 255) {
-      static (code: Binary₁₆) as (=== Classes) => Classes#{.code == code}.first
-    }
-    // OPCODE and RCODE (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
-    static Opcode := enum query | iquery | status
-    static Rcode := enum no_error | format_error | server_failure | name_error | not_implemented | refused
+  // TYPE values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.1), SRV (https://www.rfc-editor.org/rfc/rfc2782)
+  static Type := enum A (code: 1) | NS (code: 2) | CNAME (code: 5) | SOA (code: 6) | PTR (code: 12) | MX (code: 15) | TXT (code: 16) | AAAA (code: 28) | SRV (code: 33) | ANY (code: 255) {
+    static (code: Binary₁₆) as (=== Type) => Type#{.code == code}.first
+  }
+  // CLASS values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4)
+  static Classes := enum IN (code: 1) | CH (code: 3) | HS (code: 4) | ANY (code: 255) {
+    static (code: Binary₁₆) as (=== Classes) => Classes#{.code == code}.first
+  }
+  // OPCODE and RCODE (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
+  static Opcode := enum query | iquery | status
+  static Rcode := enum no_error | format_error | server_failure | name_error | not_implemented | refused
 
-    // Domain names as labels or a pointer (https://www.rfc-editor.org/rfc/rfc1035#section-3.1, https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
-    static Name := class (
-      labels: (₂00, size: Binary₆{> 0}, text: Byte[]{length == size})[],
-      Byte{== 0} | (₂11, pointer: Binary₁₄)
-    ) {
-      static (domain: DomainName) as (=== Name) => Name(labels: domain.text.split("."){.nonempty}.map((size: .count, text: . as Byte[])))
-      // Labels are at most 63 octets, names at most 255 (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4)
-      dynamically assert labels.size.sum + labels.count + 1 <= 255
-    }
+  // Domain names as labels or a pointer (https://www.rfc-editor.org/rfc/rfc1035#section-3.1, https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
+  static Name := class (
+    labels: (₂00, size: Binary₆{> 0}, text: Byte[]{length == size})[],
+    Byte{== 0} | (₂11, pointer: Binary₁₄)
+  ) {
+    static (domain: Network.DomainName) as (=== Name) => Name(labels: domain.text.split("."){.nonempty}.map((size: .count, text: . as Byte[])))
+    // Labels are at most 63 octets, names at most 255 (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4)
+    dynamically assert labels.size.sum + labels.count + 1 <= 255
+  }
+  static text (name: Name) => name.labels.text.map(. as String).join(".")
 
-    // Question section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.2)
-    static Question := class (name: Name, type: Binary₁₆ as Type = Type.A, within: Binary₁₆ as Classes = Classes.IN)
+  // Question section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.2)
+  static Question := class (name: Name, type: Binary₁₆ as Type = Type.A, within: Binary₁₆ as Classes = Classes.IN)
 
-    // Resource record (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.3)
-    static Record := class (
-      name: Name,
-      type: Binary₁₆ as Type,
-      within: Binary₁₆ as Classes = Classes.IN,
-      ttl: Binary₃₂ = 3600,
-      size: Binary₁₆ = rdata.count,
-      rdata: Byte[]{length == size} = Compiler.reduced(this, Encoded)
-    ) {
-      data = Compiler.reduced(this, Decoded)
-      lifetime => ttl seconds
-    }
+  // Resource record (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.3): its RDATA on the wire and in a zone file are given by the narrowing of its type below, and a value read in one form is written in the other field by field
+  static Record := class (
+    name: Name,
+    type: Binary₁₆ as Type,
+    within: Binary₁₆ as Classes = Classes.IN,
+    ttl: Binary₃₂ = 3600,
+    size: Binary₁₆ = rdata.count,
+    rdata: Byte[]{length == size} = data as Data as Byte[]
+  ) {
+    static Data = Byte[]
+    static Presentation = (!\n)[]
+    data = rdata as Data
+    presented => data as Presentation as String
+    lifetime => ttl seconds
+  }
+  // RDATA formats (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-3.4.1), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.2, https://www.rfc-editor.org/rfc/rfc3596#section-2.4), SRV (https://www.rfc-editor.org/rfc/rfc2782)
+  static A := Record{type == Type.A} {
+    static Data = Binary₃₂ as IPv4
+    static Presentation = IPv4
+  }
+  static AAAA := Record{type == Type.AAAA} {
+    static Data = Binary₁₂₈ as IPv6
+    static Presentation = IPv6
+  }
+  static Named := Record{type is (Type.NS | Type.CNAME | Type.PTR)} {
+    static Data = Name
+    static Presentation = Domain
+  }
+  static MX := Record{type == Type.MX} {
+    static Data = (preference: Binary₁₆, exchange: Name)
+    static Presentation = (preference: Decimal, Blank, exchange: Domain)
+  }
+  // <character-string>: its length, then its bytes; in a zone file quoted, or a run without blanks (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static TXT := Record{type == Type.TXT} {
+    static Data = (size: Byte = text.count, text: Byte[]{length == size} as String)[]
+    static Presentation = (("\"", text: (!"\"")[], "\"") | text: (!" " && !"\t")[]{length > 0})[].join(Blank)
+  }
+  static SOA := Record{type == Type.SOA} {
+    static Data = (primary: Name, mailbox: Name, serial: Binary₃₂, refresh: Binary₃₂, retry: Binary₃₂, expire: Binary₃₂, minimum: Binary₃₂)
+    static Presentation = (primary: Domain, Blank, mailbox: Domain, Blank, serial: Decimal, Blank, refresh: Decimal, Blank, retry: Decimal, Blank, expire: Decimal, Blank, minimum: Decimal)
+  }
+  static SRV := Record{type == Type.SRV} {
+    static Data = (priority: Binary₁₆, weight: Binary₁₆, port: Binary₁₆, target: Name)
+    static Presentation = (priority: Decimal, Blank, weight: Decimal, Blank, port: Decimal, Blank, target: Domain)
+  }
 
-    // RDATA formats (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-3.4.1), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.2), SRV (https://www.rfc-editor.org/rfc/rfc2782)
-    static Text = (size: Byte, text: Byte[]{length == size})
-    static Decoded := {
-      {record: Record{type == Type.A}} => record.rdata as Binary as IPv4
-      {record: Record{type == Type.AAAA}} => record.rdata as Binary as IPv6
-      {record: Record{type is (Type.NS | Type.CNAME | Type.PTR)}} => record.rdata as Name
-      {record: Record{type == Type.MX}} => record.rdata as (preference: Binary₁₆, exchange: Name)
-      {record: Record{type == Type.TXT}} => (record.rdata as Text[]).text.map(. as String)
-      {record: Record{type == Type.SOA}} => record.rdata as (primary: Name, mailbox: Name, serial: Binary₃₂, refresh: Binary₃₂, retry: Binary₃₂, expire: Binary₃₂, minimum: Binary₃₂)
-      {record: Record{type == Type.SRV}} => record.rdata as (priority: Binary₁₆, weight: Binary₁₆, port: Binary₁₆, target: Name)
-      {record: Record} => record.rdata
-    }
-    static Encoded := {
-      {record: Record{data is IP}} => record.data as Binary as Byte[]
-      {record: Record{data is DomainName}} => record.data as Name as Byte[]
-      {record: Record{type == Type.TXT}} => record.data.map(text => (size: text.count, text: text as Byte[]) as Text) as Byte[]
-      {record: Record} => record.data as Byte[]
-    }
+  // Message format (https://www.rfc-editor.org/rfc/rfc1035#section-4.1)
+  static Message := class (
+    // Header section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
+    id: Binary₁₆ = Binary₁₆.random,
+    response: Binary₁ as boolean = false,
+    opcode: Binary₄ as Opcode = Opcode.query,
+    authoritative: Binary₁ as boolean = false,
+    truncated: Binary₁ as boolean = false,
+    recursion_desired: Binary₁ as boolean = true,
+    recursion_available: Binary₁ as boolean = false,
+    Binary₃{== 0},
+    rcode: Binary₄ as Rcode = Rcode.no_error,
+    qdcount: Binary₁₆ = questions.count,
+    ancount: Binary₁₆ = answers.count,
+    nscount: Binary₁₆ = authorities.count,
+    arcount: Binary₁₆ = additional.count,
+    questions: Question[]{length == qdcount} = [],
+    answers: Record[]{length == ancount} = [],
+    authorities: Record[]{length == nscount} = [],
+    additional: Record[]{length == arcount} = []
+  ) {
+    // A pointer is an offset from the start of the message (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
+    named (name: Name) => [name.labels.text.map(. as String), name.pointer != None ? named((this as Byte[])[name.pointer..] as Name) : []].flatten.join(".") as Network.DomainName
+    addresses => answers{.data is IP}.data
+    answer (records: Record[]) => Message(id, response: true, opcode, recursion_desired, recursion_available: true, questions, answers: records)
+  }
 
-    // Message format (https://www.rfc-editor.org/rfc/rfc1035#section-4.1)
-    static Message := class (
-      // Header section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
-      id: Binary₁₆ = Binary₁₆.random,
-      response: Binary₁ as boolean = false,
-      opcode: Binary₄ as Opcode = Opcode.query,
-      authoritative: Binary₁ as boolean = false,
-      truncated: Binary₁ as boolean = false,
-      recursion_desired: Binary₁ as boolean = true,
-      recursion_available: Binary₁ as boolean = false,
-      Binary₃{== 0},
-      rcode: Binary₄ as Rcode = Rcode.no_error,
-      qdcount: Binary₁₆ = questions.count,
-      ancount: Binary₁₆ = answers.count,
-      nscount: Binary₁₆ = authorities.count,
-      arcount: Binary₁₆ = additional.count,
-      questions: Question[]{length == qdcount} = [],
-      answers: Record[]{length == ancount} = [],
-      authorities: Record[]{length == nscount} = [],
-      additional: Record[]{length == arcount} = []
-    ) {
-      // A pointer is an offset from the start of the message (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
-      named (name: Name) => [name.labels.text.map(. as String), name.pointer != None ? named((this as Byte[])[name.pointer..] as Name) : []].flatten.join(".") as DomainName
-      addresses => answers{.data is IP}.data
-      answer (records: Record[]) => Message(id, response: true, opcode, recursion_desired, recursion_available: true, questions, answers: records)
-    }
+  // Transport (https://www.rfc-editor.org/rfc/rfc1035#section-4.2)
+  static Transport := enum udp | tcp | https
+  static Lookup := class = message: Message, server: Location = resolver, transport: Transport = Transport.udp {
+    answer => Compiler.reduced(this, Sending) as Message
+    socket => Network.Socket.Address(host: server.host ?? server, port: server.port ?? Network.Protocol.dns.port)
+  }
+  static Sending := {
+    // UDP messages are at most 512 octets (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
+    {lookup: Lookup{transport == Transport.udp}} => lookup.socket.datagram(lookup.message as Byte[])
+    // TCP messages are prefixed with a two octet length (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.2)
+    {lookup: Lookup{transport == Transport.tcp}} => lookup.socket.send((lookup.message as Byte[]).count as Binary₁₆ as Byte[], lookup.message as Byte[]) -- (.[2..])
+    // DNS over HTTPS: a POST of application/dns-message (https://www.rfc-editor.org/rfc/rfc8484#section-4.1)
+    {lookup: Lookup{transport == Transport.https}} => HTTP.send(HTTP.Request(method: HTTP.Method.post, target: lookup.server,
+      fields: HTTP.Fields(entries: [(name: "Content-Type", value: "application/dns-message"), (name: "Accept", value: "application/dns-message")]), body: lookup.message as Byte[])).body
+  }
+  static Optimizations := {
+    // A message longer than 512 octets goes over TCP (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
+    {lookup: Lookup{transport == Transport.udp && (message as Byte[]).count > 512}} => Lookup(lookup.message, lookup.server, transport: Transport.tcp)
+    {lookup: Lookup{server.scheme == "https"}} => Lookup(lookup.message, lookup.server, transport: Transport.https)
+  }
 
-    // Transport (https://www.rfc-editor.org/rfc/rfc1035#section-4.2)
-    static Transport := enum udp | tcp | https
-    static Lookup := class = message: Message, server: Location = resolver, transport: Transport = Transport.udp {
-      answer => Compiler.reduced(this, Sending) as Message
-      socket => Network.Socket.Address(host: server.host ?? server, port: server.port ?? Network.Protocol.dns.port)
-    }
-    static Sending := {
-      // UDP messages are at most 512 octets (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
-      {lookup: Lookup{transport == Transport.udp}} => lookup.socket.datagram(lookup.message as Byte[])
-      // TCP messages are prefixed with a two octet length (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.2)
-      {lookup: Lookup{transport == Transport.tcp}} => lookup.socket.send((lookup.message as Byte[]).count as Binary₁₆ as Byte[], lookup.message as Byte[]) -- (.[2..])
-      // DNS over HTTPS: a POST of application/dns-message (https://www.rfc-editor.org/rfc/rfc8484#section-4.1)
-      {lookup: Lookup{transport == Transport.https}} => HTTP.send(HTTP.Request(method: HTTP.Method.post, target: lookup.server,
-        fields: HTTP.Fields(entries: [(name: "Content-Type", value: "application/dns-message"), (name: "Accept", value: "application/dns-message")]), body: lookup.message as Byte[])).body
-    }
-    static Optimizations := {
-      // A message longer than 512 octets goes over TCP (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
-      {lookup: Lookup{transport == Transport.udp && (message as Byte[]).count > 512}} => Lookup(lookup.message, lookup.server, transport: Transport.tcp)
-      {lookup: Lookup{server.scheme == "https"}} => Lookup(lookup.message, lookup.server, transport: Transport.https)
-    }
+  static resolver: Location = (@/etc/resolv.conf.content as Unicode.Table<("nameserver", " "[], address: IP)>).rows.first?.address ?? "1.1.1.1" as IP
+  static query (name: String, type: Type = Type.A) => Message(questions: [Question(name: Network.DomainName(text: name) as Name, type)])
+  static resolve (name: String, type: Type = Type.A) => Compiler.reduced(Lookup(query(name, type)), Optimizations).answer.addresses.first
 
-    static resolver: Location = (@/etc/resolv.conf.content as Unicode.Table<("nameserver", " "[], address: IP)>).rows.first?.address ?? "1.1.1.1" as IP
-    static query (name: String, type: Type = Type.A) => Message(questions: [Question(name: DomainName(text: name) as Name, type)])
-    static resolve (name: String, type: Type = Type.A) => Compiler.reduced(Lookup(query(name, type)), Optimizations).answer.addresses.first
+  // Zone files: the master file format (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static Blank = (" " | "\t")[]{length > 0}
+  // A name in a zone file is relative to $ORIGIN unless it ends in "."; "@" is the origin; written absolute (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static origin: String?
+  static absolute (name: String, origin: String?) => Network.DomainName(text: name == "@" ? origin?.trimmed(".") ?? "" : name ~= "." ⊣ ? name[..<-1] : origin ? name + "." + origin.trimmed(".") : name)
+  static Domain := class (text: (!" " && !"\t" && !\n)[]{length > 0}) {
+    as (=== Name) => absolute(text, DNS.origin) as Name
+    static (name: Name) as (=== Domain) => Domain(text: DNS.text(name) + ".")
+  }
 
-    // Zone files: the master file format (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
-    static Comment := class = text: String
-    static Origin := class = name: String
-    static Lifetime := class = ttl: Decimal
-    static Line := class = owner: String?, ttl: Decimal?, within: Classes?, type: Type, data: * {
-      // Names are relative to $ORIGIN unless they end in "."; "@" is the origin; a blank owner is the one above; a missing TTL the last given (https://www.rfc-editor.org/rfc/rfc1035#section-5.1, https://www.rfc-editor.org/rfc/rfc2308#section-4)
-      record (above: *[]) => above{. is Origin}.last?.name -- (origin => Record(
-        name: absolute(owner ?? above{. is Line && .owner}.last?.owner ?? "@", origin) as Name,
-        type: type,
-        within: within ?? Classes.IN,
-        ttl: ttl ?? above{. is Lifetime}.last?.ttl ?? above{. is Line && .ttl}.last?.ttl ?? 3600,
-        data: Compiler.reduced(Presented(type, data, origin), Presentation)))
-    }
-    static absolute (name: String, origin: String?) => DomainName(text: name == "@" ? origin?.trimmed(".") ?? "" : name ~= "." ⊣ ? name[..<-1] : origin ? name + "." + origin.trimmed(".") : name)
-    static text (name: Name) => name.labels.text.map(. as String).join(".")
+  // Character strings of the protocol compare case-insensitively (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3, https://www.rfc-editor.org/rfc/rfc4343#section-3): the class and type mnemonics and the control entries read in any case, written in upper case; owner names keep their case (https://www.rfc-editor.org/rfc/rfc4343#section-4.1)
+  static mnemonic (enumeration, text: String) => enumeration#{.name == text.upper_case}.first
+  static TypeMnemonic := (Char.Letter | Char.Digit)[]{mnemonic(Type, .) != None}
+  static ClassMnemonic := Char.Letter[]{mnemonic(Classes, .) != None}
 
-    // RDATA in its text form (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-3.4.1), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.4), SRV (https://www.rfc-editor.org/rfc/rfc2782)
-    static Presented := class = type: Type, text: *, origin: String?
-    static Blank = (" " | "\t")[]{length > 0}
-    static Presentation := {
-      {presented: Presented{!(text is String)}} => presented.text
-      {presented: Presented{type == Type.A}} => presented.text as IPv4
-      {presented: Presented{type == Type.AAAA}} => presented.text as IPv6
-      {presented: Presented{type is (Type.NS | Type.CNAME | Type.PTR)}} => absolute(presented.text, presented.origin)
-      {presented: Presented{type == Type.MX}} => (presented.text ~= (preference: Decimal, Blank, exchange: *)) -- (preference: .preference, exchange: absolute(.exchange, presented.origin) as Name)
-      // <character-string>: quoted, or a run without blanks (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
-      {presented: Presented{type == Type.TXT}} => (presented.text ~= (strings: (("\"", text: (!"\"")[], "\"") | text: (!" " && !"\t")[]{length > 0})[].join(Blank))).strings.text.map(. as String)
-      {presented: Presented{type == Type.SOA}} => (presented.text ~= (primary: *, Blank, mailbox: *, Blank, serial: Decimal, Blank, refresh: Decimal, Blank, retry: Decimal, Blank, expire: Decimal, Blank, minimum: Decimal)) -- (found =>
-        (primary: absolute(found.primary, presented.origin) as Name, mailbox: absolute(found.mailbox, presented.origin) as Name, serial: found.serial, refresh: found.refresh, retry: found.retry, expire: found.expire, minimum: found.minimum))
-      {presented: Presented{type == Type.SRV}} => (presented.text ~= (priority: Decimal, Blank, weight: Decimal, Blank, port: Decimal, Blank, target: *)) -- (found =>
-        (priority: found.priority, weight: found.weight, port: found.port, target: absolute(found.target, presented.origin) as Name))
-    }
-    static Presenting := {
-      {record: Record{data is IP}} => record.data as String
-      {record: Record{type is (Type.NS | Type.CNAME | Type.PTR)}} => text(record.data as Name) + "."
-      {record: Record{type == Type.MX}} => record.data.preference as String + " " + text(record.data.exchange as Name) + "."
-      {record: Record{type == Type.TXT}} => record.data.map("\"" + . + "\"").join(" ")
-      {record: Record{type == Type.SOA}} => record.data -- (soa => [text(soa.primary as Name) + ".", text(soa.mailbox as Name) + ".", soa.serial, soa.refresh, soa.retry, soa.expire, soa.minimum].map(. as String).join(" "))
-      {record: Record{type == Type.SRV}} => record.data -- (srv => [srv.priority, srv.weight, srv.port, text(srv.target as Name) + "."].map(. as String).join(" "))
-    }
+  // Comments run from ";" to the end of the line; $ORIGIN (https://www.rfc-editor.org/rfc/rfc1035#section-5.1) and $TTL (https://www.rfc-editor.org/rfc/rfc2308#section-4)
+  static Comment := class (";", text: (!\n)[])
+  static Origin := class ("$ORIGIN".ignore_case, Blank, name: (!" " && !"\t" && !\n)[])
+  static Lifetime := class ("$TTL".ignore_case, Blank, ttl: Decimal)
+  // <domain-name> [<TTL>] [<class>] <type> <RDATA>, the TTL and class in either order (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static Entry := class (
+    owner: (!" " && !"\t" && !\n)[]?, Blank,
+    ((ttl: Decimal, Blank)?, (within: ClassMnemonic, Blank)?) | ((within: ClassMnemonic, Blank), (ttl: Decimal, Blank)),
+    type: TypeMnemonic, Blank,
+    text: (!\n)[]
+  ) {
+    // A blank owner is the one above, a missing TTL the last given (https://www.rfc-editor.org/rfc/rfc1035#section-5.1, https://www.rfc-editor.org/rfc/rfc2308#section-4)
+    record (above: *[]) => above{. is Origin}.last?.name -- (origin => Record(
+      name: absolute(owner ?? above{. is Entry && .owner}.last?.owner ?? "@", origin) as Name,
+      type: mnemonic(Type, type),
+      within: within ? mnemonic(Classes, within) : Classes.IN,
+      ttl: ttl ?? above{. is Lifetime}.last?.ttl ?? above{. is Entry && .ttl}.last?.ttl ?? 3600
+    ) -- (record => record ~~ (.data = text is String ? with (DNS.origin = origin) (text as record.Presentation as record.Data) : text)))
+  }
+  static Zone := class (lines: (Blank?, line: (Origin | Lifetime | Comment | Entry)?, Blank?, \n | ⊣)[]) {
+    records => lines.line{!= None} -- (all => all.enumerate.map(line => line.value is Entry ? line.value.record(all[..<line.index]) : line.value){!(. is (Origin | Lifetime))})
+  }
 
-    // Character strings of the protocol compare case-insensitively (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3, https://www.rfc-editor.org/rfc/rfc4343#section-3): the class and type mnemonics and the control entries read in any case, written in upper case; owner names keep their case (https://www.rfc-editor.org/rfc/rfc4343#section-4.1)
-    static mnemonic (enumeration, text: String) => enumeration#{.name == text.upper_case}.first
-    static TypeMnemonic := String{mnemonic(Type, .) != None}
-    static ClassMnemonic := String{mnemonic(Classes, .) != None}
-
-    syntax := Compiler.default + {
-      // Comments run from ";" to the end of the line (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
-      ;{literal text} => Comment(text)
-      // $ORIGIN (https://www.rfc-editor.org/rfc/rfc1035#section-5.1) and $TTL (https://www.rfc-editor.org/rfc/rfc2308#section-4)
-      {"$ORIGIN".ignore_case} {name} => Origin(name as String)
-      {"$TTL".ignore_case} {ttl: Decimal} => Lifetime(ttl)
-      // <domain-name> [<TTL>] [<class>] <type> <RDATA>, the TTL and class in either order (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
-      {owner?} {ttl?: Decimal} {within?: ClassMnemonic} {type: TypeMnemonic} {data} => Line(owner as String, ttl, within ? mnemonic(Classes, within) : None, mnemonic(Type, type), data)
-      {owner?} {within: ClassMnemonic} {ttl: Decimal} {type: TypeMnemonic} {data} => Line(owner as String, ttl, mnemonic(Classes, within), mnemonic(Type, type), data)
-      {line: Line} => line.record([])
-      {zone: \n} => zone.components -- (lines => lines.enumerate.map(line => line.value is Line ? line.value.record(lines[..<line.index]) : line.value){!(. is (Origin | Lifetime))})
-      {message: Message} => message
-    }
-    level := syntax
-    written := {
-      {writing: Language.Writing{value is Message}} => writing.value
-      // Records written in the master file format, one to a line (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
-      {writing: Language.Writing{value is (Record | Comment)[]}} => writing.value.map(line => (line is Comment ? (";", line.text)
-        : (text(line.name), ". ", line.ttl as String, " ", line.within.name, " ", line.type.name, " ", Compiler.reduced(line, Presenting))), \n)
-    }
+  level := {
+    {message: Message} => message
+    {entry: Entry} => entry.record([])
+    {zone: Zone} => zone.records
+  }
+  written := {
+    {writing: Language.Writing{value is Message}} => writing.value
+    // Records written in the master file format, one to a line (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+    {writing: Language.Writing{value is (Record | Comment)[]}} => writing.value.map(line => (line is Comment ? line
+      : (text(line.name), ". ", line.ttl as String, " ", line.within.name, " ", line.type.name, " ", line.presented)), \n)
   }
 }

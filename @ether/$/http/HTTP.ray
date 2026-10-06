@@ -13,8 +13,11 @@ HTTP := class {
 
   static Status := class = code: Decimal{100 <= . <= 599}, reason: String = Reasons[code] ?? "" {
     // Status codes by their first digit (https://www.rfc-editor.org/rfc/rfc9110#section-15)
-    static Kind := enum informational | successful | redirection | client_error | server_error
-    kind => Kind[(code / 100).floor - 1]
+    static Informational := Status{100 <= code < 200}
+    static Successful := Status{200 <= code < 300}
+    static Redirection := Status{300 <= code < 400}
+    static ClientError := Status{400 <= code < 500}
+    static ServerError := Status{500 <= code < 600}
     // Reason phrases (https://www.rfc-editor.org/rfc/rfc9110#section-15)
     static Reasons = { 100: "Continue", 101: "Switching Protocols", 200: "OK", 201: "Created", 204: "No Content", 206: "Partial Content",
       301: "Moved Permanently", 302: "Found", 304: "Not Modified", 307: "Temporary Redirect", 308: "Permanent Redirect",
@@ -52,7 +55,7 @@ HTTP := class {
   static Response := class: Message {
     status: Status = Status(200)
 
-    ok => status.kind == Status.Kind.successful
+    ok => status is Status.Successful
   }
 
   // The target URI is rebuilt from origin-form and Host (https://www.rfc-editor.org/rfc/rfc9112#section-3.3)
@@ -68,8 +71,10 @@ HTTP := class {
   // field-value, without its surrounding whitespace (https://www.rfc-editor.org/rfc/rfc9110#section-5.5)
   static Value = (!"\r" && !\n)[]{!(. ~= ⊢(" " | "\t")) && !(. ~= (" " | "\t") ⊣)}
   static CRLF = "\r\n"
+  // A line ends in CRLF; a bare LF is recognised too, so a message also reads written inline, its last line ending with the text (https://www.rfc-editor.org/rfc/rfc9112#section-2.2)
+  static End = CRLF | \n | ⊣
   // field-line (https://www.rfc-editor.org/rfc/rfc9112#section-5)
-  static Line = (name: Token, ":", OWS, value: Value, OWS, CRLF)
+  static Line = (name: Token, ":", OWS, value: Value, OWS, End)
 
   // HTTP/1.1 (https://www.rfc-editor.org/rfc/rfc9112)
   static v1_1 := class: Language {
@@ -81,13 +86,13 @@ HTTP := class {
       (method: Token, " ", target: (!" " && !"\r")[]{length > 0}, " ", version: Name)
       // status-line (https://www.rfc-editor.org/rfc/rfc9112#section-4)
       | (version: Name, " ", code: Decimal{length == 3}, " ", reason: (!"\r" && !\n)[]),
-      CRLF,
+      end: End,
       lines: Line[],
-      CRLF,
-      // Message body length (https://www.rfc-editor.org/rfc/rfc9112#section-6.3)
+      End,
+      // Message body length; a request has none without a length, unless written inline, where it is the rest of the text (https://www.rfc-editor.org/rfc/rfc9112#section-6.3)
       (body: Chunked) if chunked,
       (body: Byte[]{length == content_length}) if !chunked && content_length != None,
-      (body: Byte[]) if !chunked && content_length == None && code && !(code < 200 || code == 204 || code == 304)
+      (body: Byte[]) if !chunked && content_length == None && (code ? !(code < 200 || code == 204 || code == 304) : end == \n)
     ) {
       // HTTP-version (https://www.rfc-editor.org/rfc/rfc9112#section-2.3)
       static Name = ("HTTP/", Char.Digit, ".", Char.Digit)
@@ -122,23 +127,9 @@ HTTP := class {
       static (bytes: Byte[]) as (=== Chunked) => Chunked(chunks: bytes.chunk(2 ^ 14).map((size: .count as Hexadecimal, data: .)), trailers: [])
     }
 
-    // Messages written inline: a line ends in a newline as well as CRLF (https://www.rfc-editor.org/rfc/rfc9112#section-2.2)
-    syntax := Compiler.default + {
-      // request-line (https://www.rfc-editor.org/rfc/rfc9112#section-3)
-      {method: Token} {target} {version: Wire.Name} => Request(method: method as Method, target: located(target, None))
-      // status-line (https://www.rfc-editor.org/rfc/rfc9112#section-4)
-      {version: Wire.Name} {code: Decimal{length == 3}} {reason} => Response(status: Status(code, reason as String))
-      // field-line (https://www.rfc-editor.org/rfc/rfc9112#section-5)
-      {name: Token}:{value} => (name: name as String, value: (value as String).trimmed)
-      // The start line, field lines, an empty line, then the body (https://www.rfc-editor.org/rfc/rfc9112#section-2.1)
-      {message: \n{components.first is (Request | Response)}} => message.components -- (lines => lines[1..].split(None) -- (sections =>
-        Fields(entries: sections.first) -- (fields => lines.first
-          ~~ (.fields = fields)
-          ~~ (.body = sections[1..].flatten.map(. as String).join(\n) as Byte[])
-          ~~ (.target = located(.target.origin_form, fields["Host"]) if . is Request))))
+    level := {
       {wire: Wire} => wire.value
     }
-    level := syntax
     written := {
       {writing: Language.Writing{value is (Request | Response)}} => writing.value as Wire
     }
@@ -166,8 +157,7 @@ HTTP := class {
     static Wire := class (preface?, frames: Frame[]) {
       streams => frames{.stream > 0}.stream.unique
       // A field block is a HEADERS frame and the CONTINUATION frames after it (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
-      blocks => frames{.type is (Frame.Type.headers | Frame.Type.continuation)}.reduce(acc = [] => .type == Frame.Type.continuation
-        ? [acc[..<acc.count - 1], [[acc.last, .].flatten(1)]].flatten(1) : [acc, [[.]]].flatten(1))
+      blocks => (frames{.type is (Frame.Type.headers | Frame.Type.continuation)} ~= (blocks: (first: Frame{type == Frame.Type.headers}, rest: Frame{type == Frame.Type.continuation}[])[])).blocks.map([.first, .rest].flatten)
       // One decoding context per connection, field blocks in the order they arrive (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
       decoded => HPACK.Connection(blocks.map(.fragment.flatten as HPACK.Block)).fields
       // Pseudo-header fields (https://www.rfc-editor.org/rfc/rfc9113#section-8.3)

@@ -2,24 +2,24 @@
 
 mark ^keyword := external global
 
-question := Network.DNS.query("example.com")
+question := DNS.query("example.com")
 unless question.questions.count == 1 { INFO@mark `DN1 a query does not ask one question` }
 unless question.qdcount == 1 { INFO@mark `DN2 the header does not count its question` }
 unless question.recursion_desired { INFO@mark `DN3 a query does not ask for recursion` }
 asked_bytes := question as Byte[]
 unless asked_bytes.count == 29 { INFO@mark `DN4 a query for example.com is not 29 bytes` }
 unless asked_bytes[12] == 7 { INFO@mark `DN5 a label does not start with its length` }
-unless (asked_bytes as Network.DNS.Message).named(question.questions.first.name) as String == "example.com" { INFO@mark `DN6 a name does not read back` }
-unless question.named(Network.DNS.Name(labels: [], pointer: 12)) as String == "example.com" { INFO@mark `DN7 a pointer does not name what it points at` }
-replied := question.answer([Network.DNS.Record(name: Network.DomainName(text: "example.com") as Network.DNS.Name, type: Network.DNS.Type.A, data: "93.184.215.14" as IPv4)])
+unless (asked_bytes as DNS.Message).named(question.questions.first.name) as String == "example.com" { INFO@mark `DN6 a name does not read back` }
+unless question.named(DNS.Name(labels: [], pointer: 12)) as String == "example.com" { INFO@mark `DN7 a pointer does not name what it points at` }
+replied := question.answer([DNS.Record(name: Network.DomainName(text: "example.com") as DNS.Name, type: DNS.Type.A, data: "93.184.215.14" as IPv4)])
 unless replied.response { INFO@mark `DN8 an answer is not a response` }
 unless replied.id == question.id { INFO@mark `DN9 an answer does not carry the query's id` }
 unless replied.addresses.first as String == "93.184.215.14" { INFO@mark `DN10 an answer does not give its address` }
-unless (replied as Byte[] as Network.DNS.Message).answers.first.data as String == "93.184.215.14" { INFO@mark `DN11 an answer does not read back` }
-unless Network.DNS.Type.AAAA.code == 28 { INFO@mark `DN12 AAAA is not type 28` }
-large := Network.DNS.Message(questions: (1..40).map(Network.DNS.Question(name: Network.DomainName(text: "a-name-long-enough-to-matter.example.com") as Network.DNS.Name)))
-unless Compiler.reduced(Network.DNS.Lookup(large), Network.DNS.Optimizations).transport == Network.DNS.Transport.tcp { INFO@mark `DN13 a message over 512 bytes is not sent over TCP` }
-unless Compiler.reduced(Network.DNS.Lookup(question, server: @https://dns.example/dns-query), Network.DNS.Optimizations).transport == Network.DNS.Transport.https { INFO@mark `DN14 an https resolver is not asked over HTTPS` }
+unless (replied as Byte[] as DNS.Message).answers.first.data as String == "93.184.215.14" { INFO@mark `DN11 an answer does not read back` }
+unless DNS.Type.AAAA.code == 28 { INFO@mark `DN12 AAAA is not type 28` }
+large := DNS.Message(questions: (1..40).map(DNS.Question(name: Network.DomainName(text: "a-name-long-enough-to-matter.example.com") as DNS.Name)))
+unless Compiler.reduced(DNS.Lookup(large), DNS.Optimizations).transport == DNS.Transport.tcp { INFO@mark `DN13 a message over 512 bytes is not sent over TCP` }
+unless Compiler.reduced(DNS.Lookup(question, server: @https://dns.example/dns-query), DNS.Optimizations).transport == DNS.Transport.https { INFO@mark `DN14 an https resolver is not asked over HTTPS` }
 unless (@dns example.com. 300 IN A 93.184.215.14).data as String == "93.184.215.14" { INFO@mark `DN15 a zone-file line written inline is not an A record` }
 address := "93.184.215.14" as IPv4
 zone := @dns {
@@ -29,14 +29,18 @@ zone := @dns {
   @ IN A {address}
   www IN CNAME example.com.
 }
-unless zone.count == 3 && zone[0] is Network.DNS.Comment && zone[1].data as String == "93.184.215.14" && zone[1].ttl == 300 && Network.DNS.text(zone[2].name) == "www.example.com" { INFO@mark `DN16 a zone block does not read its comment, its hole, $ORIGIN and $TTL` }
-unless (zone as Network.DNS) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *) { INFO@mark `DN17 records are not written back as zone-file lines with their comment` }
+unless zone.count == 3 && zone[0] is DNS.Comment && zone[1].data as String == "93.184.215.14" && zone[1].ttl == 300 && DNS.text(zone[2].name) == "www.example.com" { INFO@mark `DN16 a zone block does not read its comment, its hole, $ORIGIN and $TTL` }
+unless (zone as DNS) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *) { INFO@mark `DN17 records are not written back as zone-file lines with their comment` }
 // Class and type mnemonics in any case (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3), written in upper case
 lower_line := @dns example.com. 300 in a 93.184.215.14
-unless lower_line.type == Network.DNS.Type.A && lower_line.within == Network.DNS.Classes.IN && ([lower_line] as Network.DNS) ~= (*, "example.com. 300 IN A 93.184.215.14", *) { INFO@mark `DN18 lower-case class and type mnemonics do not read as IN A, or are not written back in upper case` }
+unless lower_line.type == DNS.Type.A && lower_line.within == DNS.Classes.IN && ([lower_line] as DNS) ~= (*, "example.com. 300 IN A 93.184.215.14", *) { INFO@mark `DN18 lower-case class and type mnemonics do not read as IN A, or are not written back in upper case` }
 lower_zone := @dns {
   $origin Example.COM.
   $Ttl 60
   www Cname example.com.
 }
-unless lower_zone.count == 1 && lower_zone[0].ttl == 60 && lower_zone[0].type == Network.DNS.Type.CNAME && Network.DNS.text(lower_zone[0].name) == "www.Example.COM" { INFO@mark `DN19 lower- and mixed-case $ORIGIN, $TTL and mnemonics are not read, or the origin's case is not kept` }
+unless lower_zone.count == 1 && lower_zone[0].ttl == 60 && lower_zone[0].type == DNS.Type.CNAME && DNS.text(lower_zone[0].name) == "www.Example.COM" { INFO@mark `DN19 lower- and mixed-case $ORIGIN, $TTL and mnemonics are not read, or the origin's case is not kept` }
+// Each type's narrowing gives its RDATA on the wire and in a zone file (https://www.rfc-editor.org/rfc/rfc1035#section-3.3.9, https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+mail := (@dns example.com. 300 IN MX 10 mail.example.com.)
+unless mail is DNS.MX && mail.data.preference == 10 && DNS.text(mail.data.exchange) == "mail.example.com" && mail.presented == "10 mail.example.com." { INFO@mark `RDATA1 an MX record is not read and written by its narrowing` }
+unless (mail as Byte[] as DNS.Record).data.preference == 10 { INFO@mark `RDATA2 an MX record written to the wire does not read back` }

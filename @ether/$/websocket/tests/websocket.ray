@@ -15,8 +15,8 @@ pieces := WebSocket.Stream(frames: [
 ])
 unless pieces.messages.first.data == "Hello" { INFO@mark `WS5 fragments are not joined into one message` }
 unless pieces.controls.count == 1 { INFO@mark `WS6 a control frame between fragments is lost` }
-unless Compiler.reduced(WebSocket.Writing(WebSocket.Message("hi")), WebSocket.Framing).masked { INFO@mark `WS7 a client's frame is not masked` }
-if Compiler.reduced(WebSocket.Writing(WebSocket.Message("hi"), from: WebSocket.Side.server), WebSocket.Framing).masked { INFO@mark `WS8 a server's frame is masked` }
+unless Compiler.reduced(Language.Writing(WebSocket.Message("hi")), WebSocket.written).masked { INFO@mark `WS7 a client's frame is not masked` }
+if Compiler.reduced(Language.Writing(WebSocket.Message("hi")), WebSocket(client: false).written).masked { INFO@mark `WS8 a server's frame is masked` }
 opening := WebSocket.opening(@wss://example.com/chat)
 unless opening.fields["Upgrade"] == "websocket" && opening.fields["Sec-WebSocket-Version"] == "13" { INFO@mark `WS9 the opening request does not ask to upgrade` }
 unless WebSocket.opened(opening, WebSocket.accepting(opening)) { INFO@mark `WS10 an accepted opening is not open` }

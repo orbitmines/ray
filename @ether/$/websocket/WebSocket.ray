@@ -1,5 +1,6 @@
 // The WebSocket protocol (https://www.rfc-editor.org/rfc/rfc6455)
-WebSocket := class: Language {
+// A client masks every frame it sends, a server none (https://www.rfc-editor.org/rfc/rfc6455#section-5.1)
+WebSocket := class: Language = client: boolean = true {
   static extensions = ".ws" | ".websocket"
 
   // Opcodes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2, https://www.rfc-editor.org/rfc/rfc6455#section-11.8)
@@ -42,9 +43,9 @@ WebSocket := class: Language {
     data => [code as Byte[], reason as Unicode.UTF-8 as Byte[]].flatten
   }
 
-  // Fragmentation: a message is its first frame and its continuations (https://www.rfc-editor.org/rfc/rfc6455#section-5.4)
+  // Fragmentation: a message is its first frame and its continuations; control frames may come between them (https://www.rfc-editor.org/rfc/rfc6455#section-5.4)
   static Stream := class (frames: Frame[]) {
-    fragmented => frames{!.opcode.control}.reduce(acc = [] => .opcode == Opcode.continuation ? [acc[..<acc.count - 1], [[acc.last, .].flatten(1)]].flatten(1) : [acc, [[.]]].flatten(1))
+    fragmented => (frames{!.opcode.control} ~= (messages: (first: Frame{opcode != Opcode.continuation}, rest: Frame{opcode == Opcode.continuation}[])[])).messages.map([.first, .rest].flatten)
     messages => fragmented.map(fragments => fragments.first.opcode == Opcode.text
       ? Message(fragments.payload.flatten as Unicode.UTF-8 as String)
       : Message(fragments.payload.flatten))
@@ -53,21 +54,12 @@ WebSocket := class: Language {
       : Control(frame.opcode, frame.payload))
   }
 
-  static Side := enum client | server
-  static Writing := class = value: *, from: Side = Side.client {
-    // A client masks every frame it sends, a server none (https://www.rfc-editor.org/rfc/rfc6455#section-5.1)
-    masked => from == Side.client
-  }
-  static Framing := {
-    {writing: Writing{value is Message}} => Frame(opcode: writing.value.text ? Opcode.text : Opcode.binary, masked: writing.masked, payload: writing.value.bytes)
-    {writing: Writing{value is Control}} => Frame(opcode: writing.value.opcode, masked: writing.masked, payload: writing.value.data)
-  }
-
   level := {
     {stream: Stream} => stream.messages
   }
   written := {
-    {writing: Language.Writing{value is (Message | Control)}} => Compiler.reduced(Writing(writing.value), Framing)
+    {writing: Language.Writing{value is Message}} => Frame(opcode: writing.value.text ? Opcode.text : Opcode.binary, masked: client, payload: writing.value.bytes)
+    {writing: Language.Writing{value is Control}} => Frame(opcode: writing.value.opcode, masked: client, payload: writing.value.data)
   }
 
   // Opening handshake (https://www.rfc-editor.org/rfc/rfc6455#section-4.1)

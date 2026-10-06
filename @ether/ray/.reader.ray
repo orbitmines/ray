@@ -218,10 +218,15 @@ statement end from {at} to {to} below {base} =>
 
 // A reading of `pieces` from `at` that ends at `limit`: its `captures` (a chain of `name`, `from`, `to`), or nothing. A capture
 // reads one or more characters, the longest first; one that crosses a line end runs to `limit`.
-readings of {pieces} from {at} to {limit} =>
+// The same, in a `mode`: nothing reads up to `limit`; a prefix reading (on a receiver, R2.1) may end anywhere before it,
+// its last capture reading one operand.
+readings of {pieces} from {at} to {limit} in {mode} =>
   found := nothing
   unless pieces then
-    if same at limit then
+    ends_here := same at limit
+    if mode then
+      ends_here := yes
+    if ends_here then
       found := yes
       set found . end to at
   if pieces then
@@ -250,10 +255,13 @@ readings of {pieces} from {at} to {limit} =>
       unless within then
         within := limit comes after far
       if within then
-        found := readings of pieces . next from far to limit
+        found := readings of pieces . next from far to limit in mode
     unless fixed then
-      found := captured pieces from at to limit
+      found := captured pieces from at to limit in mode
   found
+
+readings of {pieces} from {at} to {limit} =>
+  readings of pieces from at to limit in nothing
 
 // The place after one or more spaces from `at`, or nothing when no space is there.
 spaces after {at} =>
@@ -357,7 +365,7 @@ values {a} {b} {c} =>
     found := reading from from to to among own
   found
 
-captured {pieces} from {at} to {limit} =>
+captured {pieces} from {at} to {limit} in {mode} =>
   name := pieces . capture
   rest_pieces := pieces . next
   leading := pieces . leading
@@ -366,6 +374,14 @@ captured {pieces} from {at} to {limit} =>
     ends := ends from at to limit
   unless leading then
     ends := ends shortest from at to limit
+  // read on a receiver, a capture that ends the head reads one operand
+  if mode then
+    unless rest_pieces then
+      ends := nothing
+      operand := operand end from at to limit
+      if operand then
+        ends := node
+        set ends . place to operand
   // an optional capture may hold nothing: tried after every other end
   optional := pieces . optional
   if optional then
@@ -412,7 +428,7 @@ captured {pieces} from {at} to {limit} =>
             worth := nothing
     rest := nothing
     if worth then
-      rest := readings of rest_pieces from e to limit
+      rest := readings of rest_pieces from e to limit in mode
     if rest then
       cap := node
       set cap . name to name
@@ -472,10 +488,6 @@ the seed's latest rule =>
   links := external rules top
   links . rule
 
-// The rules in reach of `scope`: each scope's `rules`, nearest scope first (its parents through `parent`), latest first.
-rules in reach of {scope} =>
-  rules in reach of scope below nothing
-
 // The same, stopping before the scope `outside` (a value's own rules and its classes', not the top scope's).
 rules in reach of {scope} below {outside} =>
   first := nothing
@@ -499,6 +511,10 @@ rules in reach of {scope} below {outside} =>
     if same here outside then
       here := nothing
   first
+
+// The rules in reach of `scope`: each scope's `rules`, nearest scope first (its parents through `parent`), latest first.
+rules in reach of {scope} =>
+  rules in reach of scope below nothing
 
 // Whether one of `pieces` is a literal spelling the definer (learned from the first statement).
 spells the definer {pieces} =>
@@ -637,6 +653,38 @@ reading from {at} to {limit} among {rules} =>
           take := nothing
           if spells the definer pieces then
             take := yes
+      if take then
+        best := r
+        best_rule := rule
+    rules := rules . next
+  if best then
+    set best . rule to best_rule
+  best
+
+// What reads the most of the text from `at` before `limit` among `rules`, read on a receiver (R2.1): its `rule`, `captures` and
+// `end`. Between readings that end at the same place, as `reading from … among` chooses.
+prefix reading from {at} to {limit} among {rules} =>
+  best := nothing
+  best_rule := nothing
+  while rules do
+    rule := rules . rule
+    pieces := rule . pieces
+    r := readings of pieces from at to limit in yes
+    if r then
+      take := yes
+      if best then
+        far := r . end
+        best_far := best . end
+        take := nothing
+        if far comes after best_far then
+          take := yes
+        if same far best_far then
+          take := yes
+          best_pieces := best_rule . pieces
+          if written alike rule best_rule then
+            take := nothing
+          if more pieces in best_pieces than pieces then
+            take := nothing
       if take then
         best := r
         best_rule := rule
@@ -1193,21 +1241,10 @@ read statement at {given} =>
   after
 
 hand reading over
-
-// ---------------------------------------------------------------- values with rules of their own (R2.1: a rule is a method)
-// What a statement's first operand is read as, when no rule in reach reads it whole: the rest is read by that value's rules,
-// applied with `this` bound to it.
-sent {this} {rest} =>
-  value := this
-  where := external span rest
-  rest_from := where . from
-  rest_to := where . to
-  spaced_rest := spaces after rest_from
-  if spaced_rest then
-    rest_from := spaced_rest
+// The rules a value is read by (R2.1): its own and its classes' (not the top scope's), then what every value has.
+rules of {value} =>
   top := registry . top
   rules := rules in reach of value below top
-  // then what every value has (its members by name: the base)
   base := registry . base
   base_rules := base . rules
   if rules then
@@ -1219,23 +1256,47 @@ sent {this} {rest} =>
       last := following
   unless rules then
     rules := base_rules
-  r := reading from rest_from to rest_to among rules
-  result := nothing
-  if r then
-    rule := r . rule
-    caps := r . captures
-    sender := registry . sender
-    sender_pieces := sender . pieces
-    this_piece := sender_pieces . next
-    bound := node
-    set bound . piece to this_piece
-    set bound . value to value
-    set bound . next to caps
-    within := where . frame
-    result := external apply rule bound within
-  unless r then
-    external report rest_from rest_to
+  rules
+
+// ---------------------------------------------------------------- values with rules of their own (R2.1: a rule is a method)
+// What a statement's first operand is read as, when no rule in reach reads it whole: the rest is read by that value's rules,
+// applied with `this` bound to it.
+sent {this} {rest} =>
+  where := external span rest
+  at := where . from
+  rest_to := where . to
+  within := where . frame
+  sender := registry . sender
+  sender_pieces := sender . pieces
+  this_piece := sender_pieces . next
+  current := this
+  result := current
+  going := yes
+  while going do
+    rules := rules of current
+    r := prefix reading from at to rest_to among rules
+    unless r then
+      spaced := spaces after at
+      if spaced then
+        at := spaced
+        r := prefix reading from at to rest_to among rules
+    unless r then
+      external report at rest_to
+      going := nothing
+    if r then
+      rule := r . rule
+      caps := r . captures
+      bound := node
+      set bound . piece to this_piece
+      set bound . value to current
+      set bound . next to caps
+      result := external apply rule bound within
+      at := r . end
+      if same at rest_to then
+        going := nothing
+      current := result
   result
+
 sent_rule := registry . latest
 set registry . sender to sent_rule
 

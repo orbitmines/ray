@@ -105,6 +105,11 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
 - **R4.2 A frame is a scope that sees the frame it was written in** (`sees` before `inlined`, 2026-09-22). **A rule made
   inside a frame keeps that frame, as a closure does** — so a static, a field default or a cache can keep a value
   language-side (2026-10-06 statics finding).
+- **R4.2b Scopes of files** (2026-10-06): a file other than the entrypoint is read in a scope of its own inside the entrypoint's,
+  so what it defines reaches neither the reader's code nor other files, and it sees all the entrypoint defines. Code applied
+  in a frame (a class's block, a type's) makes the frame see where the code was written. A receiver's rest is read by the
+  value's own rules and its classes' (not the top scope's), then the base's (`Node`); reading goes on from receiver to
+  receiver, each rule reading as much as it can, a capture that ends its head reading one operand.
 - **R4.3 Members**: a value's own member before its class's rules (own key wins, 14eec7f); a later `&+=` overrides an
   earlier member of the same name; `f[k] = v` writes `f.k`.
 - **R4.4 Classes, statics, defaults**: a class is a scope; statics and field defaults are read when first asked for and

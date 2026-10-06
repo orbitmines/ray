@@ -14,4 +14,5 @@ for (const g of process.argv.slice(3)) {
   try { s.file({ name: g, s: fs.readFileSync(g, 'utf8') }); } catch (e: any) { failed(e); }
   said();
 }
+if (process.env.SEED_TIME) console.log('done at', Math.round(performance.now()), 'ms');
 console.log('learned', JSON.stringify(s.learned), 'rules', s.global.rules.length, 'bodies planned in Ray', s.planned);

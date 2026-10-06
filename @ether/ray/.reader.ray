@@ -13,8 +13,7 @@
 {x}.{member} = {value} =>
   external set x member value
 {name} = {value} =>
-  holder := external declaring name
-  external set holder name value
+  external assign name value
 {a} === {b} =>
   external same a b
 {x}.{member} =>
@@ -394,6 +393,23 @@ caret := mark.character
         if c === end
           here = None
   stamp
+
+// Whether the character at `this` follows `c` somewhere in the statement indexed with `stamp` (on its first line).
+{this}.after({c}, {stamp}) =>
+  found := None
+  if c.stamp === stamp
+    wanted := this.character
+    places := c.places
+    while places
+      p := places.place
+      n := p.next
+      if n
+        if n.character === wanted
+          found = true
+          places = None
+      if places
+        places = places.next
+  found
 
 // The first place from `this` on, on its line and before `limit`, holding the character `c`, or nothing.
 {this}.first_of({c}, {limit}) =>
@@ -828,45 +844,102 @@ top := external .
 // a node with the `rule` and its `captures`, or nothing.
 {at}.reading_in({limit}, {scope}) =>
   written_here := at.text === reader_text
-  rules := scope.rules_in_reach(None, written_here)
-  at.reading(limit, rules)
+  // the statement indexed once: a rule led by a literal is tried only where it starts with that literal's first character, one
+  // led by a capture only when the literal after the capture is in it
+  stamp := at.indexed(limit)
+  first_character := at.character
+  state := external node
+  here := scope
+  while here
+    links := here.rules
+    while links
+      rule := links.rule
+      keep := true
+      if written_here
+        if rule.language
+          keep = None
+      unless written_here
+        if rule.internal
+          unless rule.shared
+            keep = None
+      if keep
+        // (indexed again when a reading inside one of the rules before indexed another statement)
+        stamp = at.indexed(limit)
+        pieces := rule.pieces
+        if pieces.literal
+          lit_from := pieces.from
+          unless lit_from.character === first_character
+            keep = None
+        unless pieces.literal
+          second := pieces.next
+          if second
+            if second.literal
+              second_from := second.from
+              w := second_from.character
+              unless w.stamp === stamp
+                keep = None
+                if w === space
+                  if end.stamp === stamp
+                    keep = true
+              // and, when that literal goes on, with its next character after one of them
+              if keep
+                following := second_from.next
+                unless following === second.to
+                  if following
+                    keep = following.after(w, stamp)
+      if keep
+        at.considered(rule, limit, state)
+      links = links.next
+    here = here.parent
+  best := state.best
+  if best
+    best.rule = state.rule
+  best
 
 {at}.reading({limit}, {rules}) =>
-  best := None
-  best_rule := None
-  definer := registry.definer
+  state := external node
   while rules
     rule := rules.rule
-    pieces := rule.pieces
-    r := at.readings(pieces, limit, None)
-    if r
-      take := true
-      if best
-        best_pieces := best_rule.pieces
-        if rule.alike(best_rule)
-          take = None
-        take = pieces.chosen_over(best_pieces, take)
-        // the rule that defines rules reads a definition whole, unless the other spells the definer itself (2026-10-06: a
-        // method head with parameters is read by the rule written with the definer in it, not as a rule of that name)
-        rule_defines := rule.alike(definer)
-        best_defines := best_rule.alike(definer)
-        if rule_defines
-          unless best_defines
-            take = true
-            if best_pieces.spells_the_definer
-              take = None
-        if best_defines
-          unless rule_defines
-            take = None
-            if pieces.spells_the_definer
-              take = true
-      if take
-        best = r
-        best_rule = rule
+    at.considered(rule, limit, state)
     rules = rules.next
+  best := state.best
   if best
-    best.rule = best_rule
+    best.rule = state.rule
   best
+
+// A rule's reading of the statement from `at` to `limit`, taken into `state` (its `best` reading and that reading's `rule`) when it
+// reads the statement whole and is chosen over the best so far (R2.5).
+{at}.considered({rule}, {limit}, {state}) =>
+  pieces := rule.pieces
+  r := at.readings(pieces, limit, None)
+  if r
+    take := true
+    best := state.best
+    if best
+      best_rule := state.rule
+      definer := registry.definer
+      best_pieces := best_rule.pieces
+      if rule.alike(best_rule)
+        take = None
+      take = pieces.chosen_over(best_pieces, take)
+      // the rule that defines rules reads a definition whole, unless the other spells the definer itself (2026-10-06: a
+      // method head with parameters is read by the rule written with the definer in it, not as a rule of that name)
+      rule_defines := rule.alike(definer)
+      best_defines := best_rule.alike(definer)
+      if rule_defines
+        unless best_defines
+          take = true
+          if best_pieces.spells_the_definer
+            take = None
+      if best_defines
+        unless rule_defines
+          take = None
+          if pieces.spells_the_definer
+            take = true
+    if take
+      state.best = r
+      state.rule = rule
+  state
 
 // What reads the most of the text from `at` before `limit` among `rules`, read on a receiver (R2.1): its `rule`, `captures` and
 // `end`. Between readings that end at the same place, as `reading from … among` chooses.

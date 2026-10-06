@@ -34,6 +34,7 @@ for (const text of texts) {
   t = performance.now();
   try { s.read(text, 0, scope); } catch (e) { failed(e); }
   const ds = s.diagnostics.slice(seen); seen = s.diagnostics.length;
+  if (process.env.SEED_CALLS) console.log('  forced', (s as any).forced, 'compiles', (s as any).compiles, 'planned', (s as any).recompiles);
   console.log(text.name.padEnd(16), String(Math.round(performance.now() - t)).padStart(7), 'ms', String(ds.length).padStart(4), 'diagnostics');
   for (const d of ds.slice(0, limit)) console.log('    ', d.at.text.s.slice(0, d.at.b).split('\n').length + ':', d.message);
 }

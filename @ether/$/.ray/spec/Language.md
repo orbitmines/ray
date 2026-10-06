@@ -121,6 +121,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided:** two conversions at the same distance that both define the method are both used, and the result is their superposition.
 - **From the drafts review (2026-10-06):**
   - **3.5.1 Ordered routes first — Q.** Among conversion routes of equal length, which wins: `Expression[]` reaches `Program` ordered, and the draft prefers `Expression -> Program[] -> Program` (linear) over a superposing route (*`.ray2/Program.ray:408`*). Recommend: prefer the route that keeps order over one that superposes. (The decision above superposes ties; this ranks before it.)
+    **Answered (user, 2026-10-06):** keep the superposition of ties; no ranking.
   - **3.5.2 Explicit-only conversions — Q.** The note wants some equivalence edges used only when written (*IDE:164*). Recommend: `explicit as (=== X) => …` is used only by a written `as X`, never by the lookup fallback or by `==` (U9).
     **Answered (user, 2026-10-06):** no `explicit`: all conversions are implicit but convert only when forced. `20 °C == 68 °F` holds through the equivalence; variables keep their type (unless an optimisation level converts them because the converted form is used). Only the equivalence collapses them.
 
@@ -360,6 +361,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **From the drafts review (2026-10-06):**
   - **8.2.1 Checking a context checks its program — Decided (draft).** An access check on a context checks the running Program and its `&who` / origin chain, never the frame's data. *`.ray2/Program.ray:247–248`*
   - **8.2.2 Releasing a derivative — Q.** A permission for whether data and its derivatives may cross the network, or only some derivatives (a count) (*`.ray2/_todo/ray.ray.txt/Ether/instance/Access.ray:1–2`*). Recommend: a grant may name a derivative (`@ether.read (x.count)`) that may leave although x may not; library code runs as `@ether`, which has access on the local instance only.
+    **Answered (user, 2026-10-06):** a grant names an expression: paths are just expressions (equivalent to the `.` pattern), so `@ether.read x.count` works and `@ether.read x @/count` is the same thing. Prefer code; use paths only where paths make sense.
   - **8.2.3 One-time and conditional grants — Q.** The note wants a permission for one occasion, or while a condition holds (while an app runs), or conditional on another party's code (*IDE:74, 550*). Recommend: a grant carries a narrowing, `@company may network @x {once}` / `{while app.running}`; the condition is re-read `dynamically` (P5.1), and a one-time grant is consumed by its first use, recorded in the grant's history.
   - See also World W2.17 (handed-over code runs as its character; run-log retention) and W2.18 (running *at* a location vs `@name { … }`).
 

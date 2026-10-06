@@ -50,6 +50,7 @@ and `…/UI.ray`, cited as *Geometry:line* and *UI:line*.
   clicking choose, `Ball(radius: choose? ?? 5m)` ("Choose + default"). Partly W9, v0
   `Choice.placeholder`. **Q.** Recommend (as Decided text): `x.choosing` is true while x is an open
   Choice; `choose? ?? d` offers a choice whose unanswered value is `d`, shown as the placeholder.
+  **Answered (user, 2026-10-06):** yes: the default of a `choose` is its placeholder, `x := choose? Number ?? placeholder`; `x.choosing` while the choice is open.
 - **F-D13: constructor code and renderings.** *Geometry:113, 146*: constructor code you always want
   to run; "use return in the constructor … the rendering func". Partly L§4.2, F-D5. **Q.** Recommend
   (as Decided text): statements before the first label run for every entry point (the shared part of

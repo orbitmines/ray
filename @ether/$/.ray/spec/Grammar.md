@@ -276,6 +276,7 @@ From the drafts review (2026-10-06).
   b)`; "How to say what kind of approximation". **Q** — Recommend: `approx` carries its error as a type,
   `approx<error: ≤ 1 ulp>` (N4.10's uncertainty), and applies only where the reader accepts that error (`with` an error
   budget).
+  **Answered (user, 2026-10-06):** the error is a narrowing on the result type (uncertainty, N4.10).
 - **G7.8 LaTeX-like symbol input** — *`.ray2/_todo/…/instance/UI/symbols.ray:1–5`*: input more extensive than vscode's,
   from MathJax `BaseMappings.ts` and vscode-latex-input `default-mappings.json`. **Q** — Recommend: typing `\alpha` gives
   `α` through a `force` equivalence in a style (`Style.latex`, G6.3), its table read from those mappings as a `$.latex`

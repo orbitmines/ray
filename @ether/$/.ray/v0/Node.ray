@@ -54,6 +54,7 @@ Possibilities := class = values: Iterable {
 }
 Possibilities.components.hierarchy &= Iterable
 Possibilities &+= {
+  erred => values.every(.erred)
   continuous => count is ∞ && !values.first?.next
   measure (within: Possibilities = this) => continuous ? values.last - values.first
     : count is ∞ ? (1 -> +1).map(n => values{. ∈ within.values[..<n]}.count / n).last
@@ -72,6 +73,7 @@ Node &+= {
 #{value} ^punctuation => value#
 
 Composed := class = parts: Node[], joining: Program {
+  erred => parts.some(.erred)
   .{literal property ^property} ^punctuation => parts.map(external get . property).reduce((acc) => joining(acc, .))
 }
 Node &+= {

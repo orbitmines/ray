@@ -29,7 +29,7 @@ Location := class: Hierarchy (
   with (changes) => Location(scheme, host, port, path, query: query.merged(changes), fragment)
 
   + (suffix) => ((this as String) + (suffix as String)) as Location
-  / (segment: String) => this + "/" + segment
+  / (segment: String) => this + "/" + segment ~~ (WARN@Location `text joined into a path may leave it` if segment ~= (*, ".." | "/", *))
   /{segment: Written} ^string => this + "/" + segment
   { }/{segment: Written} ^string => this + "/" + segment
   { }{value} => this + value if this as String ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣

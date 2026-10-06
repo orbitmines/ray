@@ -52,6 +52,7 @@ Grant := class = access: Access, target: * {
     : State.prompt
 
   uses => Permissions.current.allowed.history{=== this}.count
+  once => uses == 0
   names (value) => target === value || target is Program && (target == value || target() === value)
   covers (who: Character, method, target) => (access.who == who || who is access.who) && access.allows(method) && names(target)
     && (!access.filter || access.filter.entered(this, None))

@@ -1968,10 +1968,23 @@ fits (rule, caps, src, frame) => (
   while at != NIL and at != None { if at.value == value { return None }; at = at.next }
   outer_guarding := ROOT.guarding
   ROOT.guarding = Guarded(value: value, next: outer_guarding)
-  found := guard_reading(rule, UNDEF, UNDEF) catch err { ROOT.guarding = outer_guarding; rethrow(err) }
+  // what the guard names, read once per argument value like its answer: kept while none of the names it found missing is declared
+  named_missing, named_id := missing_open()
+  found := guard_reading(rule, UNDEF, UNDEF) catch err { ROOT.guarding = outer_guarding; missing_close(named_missing, named_id); rethrow(err) }
+  named := missing_close(named_missing, named_id)
+  depends(named)
   n := list_len(found.naming_names)
-  if n == 1 and span_is(rule.guard_src, rule.guard_begin, rule.guard_end, list_first(found.naming_names)) { ROOT.guarding = outer_guarding; return global }
-  if n > 1 { ROOT.guarding = outer_guarding; return !found.refused }
+  if n == 1 and span_is(rule.guard_src, rule.guard_begin, rule.guard_end, list_first(found.naming_names)) {
+    ROOT.guarding = outer_guarding
+    if value != UNDEF { rule.guarded = Guarded(value: value, declared: ROOT.declared, missing: named, fits: global, next: n_kept < 16 ? rule.guarded : NIL) }
+    return global
+  }
+  if n > 1 {
+    ROOT.guarding = outer_guarding
+    named_fits := !found.refused
+    if value != UNDEF { rule.guarded = Guarded(value: value, declared: ROOT.declared, missing: named, fits: named_fits, next: n_kept < 16 ? rule.guarded : NIL) }
+    return named_fits
+  }
   first := n == 1 ? argument : UNDEF
   from := n == 1 ? UNDEF : argument
   outer_missing, outer_id := missing_open()

@@ -494,7 +494,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Any labelled Ray program is a history (`program as History`), and `x.history` is the in-memory view of the same file.
 - **Decided (2026-10-06):** the backend, the storage granularity and the caches are Compiler levels. They are a choice of format, not fixed layout. `Compiler.stored` composes them and every backend read and write uses it.
   - `formats` reads a superposed store from its lossless member, and answers a checkout from a snapshot backend's tree.
-  - `per_object`: canonically a repository is one file, `.%/<id>.ray`.
+  - `per_object`: no layout is canonical (9.2.8); without it a history is written as one file, `.%/<id>.ray`.
     - Past 1 MiB it is split into one file per object.
     - The project's lines then become pins, `.["name"] = @./<id>/<name>.ray%[C]`, and each field's history is its own file.
   - `cached` writes `<id>.ray.txt`, every 64th commit and at the head: itself a history whose commits are the values (`label\ value`). A checkout starts from the nearest cached ancestor.

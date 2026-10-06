@@ -1131,6 +1131,18 @@ sent {this} {rest} =>
     rest_from := spaced_rest
   top := registry . top
   rules := rules in reach of value below top
+  // then what every value has (its members by name: the base)
+  base := registry . base
+  base_rules := base . rules
+  if rules then
+    last := rules
+    while last do
+      following := last . next
+      unless following then
+        set last . next to base_rules
+      last := following
+  unless rules then
+    rules := base_rules
   r := reading from rest_from to rest_to among rules
   result := nothing
   if r then
@@ -1267,3 +1279,27 @@ Balanced := checked by latest rule
 // A group: what is in brackets is read as itself.
 ({inside: Balanced}) =>
   inside
+
+// ---------------------------------------------------------------- what every value has (the base)
+Base := type
+  .{literal property} =>
+    external get this property
+  .{literal property} = {value} =>
+    external set this property value
+set registry . base to Base
+
+// ---------------------------------------------------------------- classes
+// A class is the frame its block is read in (its statics and its methods are that frame's); calling it makes an instance: a
+// frame of its own, made by a rule written in the class (so the class is around it), with the block read again in it.
+class {block} =>
+  static := external .
+  external apply block nothing static
+  instance frame =>
+    external .
+  ({args?}) =>
+    instance := instance frame
+    external apply block nothing instance
+    if args then
+      external apply args nothing instance
+    instance
+  static

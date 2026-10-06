@@ -1,7 +1,0 @@
-{pattern} => {body} => external rule pattern body
-{name} := {value} => external declare name value
-say {x} => external print x
-greeting := hello
-say greeting
-say {a} and {b} => external print a b
-say greeting and greeting

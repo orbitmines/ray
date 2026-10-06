@@ -1,0 +1,20 @@
+{pattern} => {body} =>
+  external rule pattern body
+{name} := {value} =>
+  external declare name value
+say {x} =>
+  external print x
+link {x} to {y} =>
+  external set x next y
+walk {list} =>
+  at := list
+  external label again
+  say at
+  at := external get at next
+  external goto again at
+a := external node
+b := external node
+c := external node
+link a to b
+link b to c
+walk a

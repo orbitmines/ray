@@ -1,8 +1,8 @@
 shadowing = None
 
-World.ether.@ether = => @me
+@ether = => @me
 
-World.ether.@admin = => World.ether.@"allow_{String}"
+@admin = => @"allow_{String}"
 @me.name |= @admin
 
 @me.status = Online & Broadcasting & Proxying

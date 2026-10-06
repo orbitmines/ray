@@ -15,6 +15,7 @@ Node &+= {
 World := class: Location + Nameable {
   static PREFIX = "#"
   static ether = World(name: "ether", path: "ether")
+  static current: World = World.ether
 
   clock: HybridClock = HybridClock(node: this)
   dynamics: Program?
@@ -69,10 +70,8 @@ Reference := class {
 }
 
 @me ^string => &caller as Character ?? Instance.local
-@private ^string => World.ether.@private
-@local ^string => World.ether.@local
-@localhost ^string => World.ether.@localhost
-@public ^string => World.ether.@public
+@{name: reservable_names} ^string => World.current["@", name]
+@{name: reservable_names} = {holder} ^punctuation => World.current["@", name] = holder
 
 Location &+= {
   [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]

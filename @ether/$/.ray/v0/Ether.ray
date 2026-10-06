@@ -1,28 +1,28 @@
 reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 
-World.ether.@ether = @ether
+@ether = @`ether.orbitmines.com:37839`
 
-World.ether.@private = => @me
-World.ether.@everyone = => World.ether.characters
-World.ether.@here = => World.ether.characters{is Online}
-World.ether.@local = => @me.presence ?? Instance.local
-World.ether.@anonymous = => ?
+@private = => @me
+@everyone = => characters
+@here = => characters{is Online}
+@local = => @me.presence ?? Instance.local
+@anonymous = => ?
 
-World.ether.@public = => World.ether.@everyone | Instance
-World.ether.@npc = World.ether.@npcs = => @public{is NPC}
-World.ether.@players = => @public{is Player}
+@public = => @everyone | Instance
+@npc = @npcs = => @public{is NPC}
+@players = => @public{is Player}
 
-World.ether.@host = => Instance.local.parent**#
-World.ether.@guests = => Instance.local.children**#
+@host = => Instance.local.parent**#
+@guests = => Instance.local.children**#
 @guests.read { @host }
 @host.read { @guests }
 
-World.ether.@localhost = => @`127.0.0.1` | @::1
-World.ether.@localnetwork = =>
+@localhost = => @`127.0.0.1` | @::1
+@localnetwork = =>
   // https://datatracker.ietf.org/doc/html/rfc1918#section-3
   @`10.0.0.0/8` | @`172.16.0.0/12` | @`192.168.0.0/16`
   // https://datatracker.ietf.org/doc/html/rfc4193#section-8
   | @`fc00::/7`
 
 @{instance: Instance} ^string => instance.canonical
-{prefix: "@" | "#"}{id: UUID} ^string => World.ether.children**{id is .name}.first
+{prefix: "@" | "#"}{id: UUID} ^string => children**{id is .name}.first

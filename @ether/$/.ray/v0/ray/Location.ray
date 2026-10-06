@@ -28,7 +28,6 @@ Location := class: Hierarchy (
 }
 
 Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
-@ether ^string => @`ether.orbitmines.com:37839`
 @{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
 @{scheme: "mailto" | "tel"}:{rest: Written} ^string => (scheme + ":" + rest) as Location
 @"{text: (!"\"")[]}" ^string => text as Location

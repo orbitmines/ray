@@ -26,7 +26,6 @@ UI := class {
   }
 
   Choice &+= {
-    placeholder: String = ""
     placeholder_color: Geometry.Paint?
     disabled: boolean = false
     language: Language | String | None = None
@@ -44,7 +43,7 @@ UI := class {
       {chosen: Choice{type is Number{least, most}}} => (chosen.value - chosen.type.least) / (chosen.type.most - chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
       {chosen: Choice{type is String{secret}}} => "•" * (chosen.value as String).length
       {chosen: Choice{listed}} => "‹ ", chosen.value as String, " ›"
-      {chosen: Choice{empty}} => chosen.placeholder
+      {chosen: Choice{empty}} => chosen.placeholder as String
       {chosen: Choice{language}} => (chosen.value as String).highlighted(chosen.language)
       {chosen: Choice} => chosen.value as String
     }

@@ -66,7 +66,7 @@ UI.HTML := class {
       {form: Geometry.Shape{children.some(.content is Choice)}} => @html <form {Named(form)}>{form.children}</form>
       {field: Geometry.Shape{content is Choice{type is String{multiline} && language}}} => @html <div id={field.dom} class={["painted", field.styles].flatten.join(" ")}>
         <pre id="{field.dom}-paint" aria-hidden="true">{Spans(field.face)}</pre>
-        <textarea id="{field.dom}-text" placeholder={field.content.placeholder} spellcheck="false">{field.content.empty ? "" : field.content.value as String}</textarea>
+        <textarea id="{field.dom}-text" placeholder={field.content.placeholder as String} spellcheck="false">{field.content.empty ? "" : field.content.value as String}</textarea>
       </div>
       {field: Geometry.Shape{content is Choice{type is String{multiline}}}} => @html <textarea {Named(field)} {Entry(field.content)}>{field.content.empty ? "" : field.content.value as String}</textarea>
       {field: Geometry.Shape{content is Choice{listed}}} => @html <select {Named(field)}>{field.content.options.map(@html <option value={. as String}>{. as String}</option>)}</select>
@@ -79,7 +79,7 @@ UI.HTML := class {
       {named: Named} => [("id", named.shape.dom), ("class", named.shape.styles.join(" ")) if named.shape.styles.nonempty]
       // WAI-ARIA aria-label (https://www.w3.org/TR/wai-aria-1.2/#aria-label), the popover attribute (https://html.spec.whatwg.org/multipage/popover.html)
       {described: Described} => [("aria-label", described.shape.label) if described.shape.label, ("popover", "manual") if described.shape.position.kind == anchored]
-      {entry: Entry} => entry.chosen -- (chosen => [("placeholder", chosen.placeholder), ("disabled", "") if chosen.disabled,
+      {entry: Entry} => entry.chosen -- (chosen => [("placeholder", chosen.placeholder as String), ("disabled", "") if chosen.disabled,
         ("min", chosen.type.least as String) if chosen.type is Number{least, most}, ("max", chosen.type.most as String) if chosen.type is Number{least, most}])
       {inner: Inner{shape.content is String}} => [Spans(inner.shape), inner.shape.children]
       {inner: Inner} => inner.shape.children

@@ -23,6 +23,7 @@ Location := class: Hierarchy (
     .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name && .value?.nonempty}.last?.value
   }
 
+  static current: Location = @local
   segments => path.split("/"){.nonempty}
   with (changes) => Location(scheme, host, port, path, query: query.merged(changes), fragment)
 
@@ -46,10 +47,17 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != 
 @me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
 @{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location
 @{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => Program(code: external ** block).run_as(Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)
+@{who: (Char.Word | "-")[] | UUID}~{literal label ^label}{ }{{block}} ^keyword => Program(code: external ** block).run_after((Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label)
+{f}@{location: Location}({args}) ^punctuation => (() => f(args)).run_at(location)
 
 Program &+= {
   giver: Character?
 
+  run_at (location: Location) => {
+    with { Location.current = location }
+    this()
+  }
+  run_after (entry: Entry) => run_as(entry.of) ~~ Program(code: entry.following).entered(entry.of, None)
   run_as (who: Character) => {
     with { &caller = who }
     this()

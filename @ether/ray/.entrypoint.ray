@@ -106,6 +106,8 @@ link {value} {previous} ^keyword => (
 
 // Whether an instance's body is being read (its class's statics are not read again).
 constructing := None
+// The positional arguments not yet taken by a field of the instance being constructed.
+given_in_order := None
 class {block} ^keyword => (
   static := external .
   static.instance = None
@@ -139,6 +141,8 @@ class {block} ^keyword => (
 
   construct (args) => (
     static := this
+    outer_given := given_in_order
+    given_in_order = None
     goto positional if static.header
     goto named
    positional\
@@ -146,7 +150,7 @@ class {block} ^keyword => (
     goto spread if (external first (external ** args))
     goto named
    spread\
-    (inline (external ** first_names(positional_of(static), header_items((external ** args), `,`).count).join(`, `))) := (inline args)
+    given_in_order = header_parts((external ** args), `,`).head
     goto entered
    named\
     inline args
@@ -160,6 +164,7 @@ class {block} ^keyword => (
     constructing = global
     inline block
     constructing = outer_constructing
+    given_in_order = outer_given
     if global.Store { Store.constructed(this) }
     this
   )
@@ -720,13 +725,26 @@ Node := base class {
     }
     this
   )
+  // A field declared while positional arguments are given (`S(a, b)`) takes the next one, in the order the header declares them.
   :{type} = {value} ^punctuation => (
     goto given if external own this
+    goto defaulted if (given_in_order === None)
+    given_now := given_in_order.value
+    given_in_order = given_in_order.next
+    external declare this given_now
+    goto given
+   defaulted\
     external rule this value
    given\
     this
   )
   :{type} ^punctuation => (
+    goto typed if (given_in_order === None)
+    goto typed if external own this
+    given_now := given_in_order.value
+    given_in_order = given_in_order.next
+    external declare this given_now
+   typed\
     declared_type := type
     if (external own this) {
       unless declared_type.instance {
@@ -1791,6 +1809,22 @@ argument_name (item) => (
 positional_of (type) => (
   unless type.positional_names { type.positional_names = header_names(type.header) }
   type.positional_names
+)
+// The pieces of code between separators written outside brackets (`a: T, b: U` at `,`).
+header_parts (written, separator) => (
+  found_parts := chain None
+  pending_part := written
+  while ((pending_part === None).not) {
+    one_part := external before pending_part separator
+    if (one_part === None) {
+      found_parts &= pending_part
+      pending_part = None
+    } else {
+      found_parts &= one_part
+      pending_part = external after pending_part separator
+    }
+  }
+  found_parts
 )
 first_names (names, k) => (
   taken := chain None

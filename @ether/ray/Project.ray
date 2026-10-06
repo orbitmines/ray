@@ -1,22 +1,19 @@
 Project := class: Location {
   static Dependency := class ("@", location: (!" ")[], (" ", version: Version | (!\n)[])?) => {
-    kind = "dependencies"
-    alternatives: Dependency[] = []
     name => location.split("/").last as String
 
     project: Project? => (Program(code: ("@", location)){O: {
-      @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project)
-      @{scheme: Char.Word[]}://{remainder: Written} => Project.known(Network.fetch((scheme + "://" + remainder) as Location, "", version) as Project)
+      @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? IO.fetch(@ether, bundled_path, version) as Project)
+      @{scheme: Char.Word[]}://{remainder: Written} => Project.known(IO.fetch((scheme + "://" + remainder) as Location, "", version) as Project)
       @{name: (Char.Word | "-" | "+")[]{Language.project(.) != None}} => Language.project(name)
-      @{local_path: Written} => Project.known(IO.read(local_path) as Project)
-    }}() ?? alternatives.map(.project).first(. != None))?.load
+      @{local_path: Written} => Project.known((local_path as Location).content as Project)
+    }}())?.load
   }
 
-  static all: Project[] = []
-  static known (found: Project?) => found && (all{. == found}.first ?? (all.push found -- found))
-  static declared => all{.loaded || .loading}.map(.dependencies).flatten
+  static known (found: Project?) => found && (Project#{. == found}.first ?? (found ~~ (static.# ??= []).push .))
+  static declared => Project#{.loaded || .loading}.map(.dependencies).flatten
   static declares (name: String) => declared.find(.name == name)
-  static holding (location: Location) => all{(location as String) ~= ⊢(. as String + "/")}.max((. as String).count)
+  static holding (location: Location) => Project#{(location as String) ~= ⊢(. as String + "/")}.max((. as String).count)
   static data (location: Location) => holding(location) -- (held => held && !Language.ray.location.contains(held) && !((location as String) ~= ".ray" ⊣))
 
   name: String?
@@ -35,18 +32,12 @@ Project := class: Location {
   shadowing => (parent, dependencies.project)#
   carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
   language_of (name: String) => Compiler.reduced(name, readings)
-  sources => IO.listing(this)**{!.directory && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !(.parent / ".project.ray").exists)}
+  sources => listing**{!(. is Directory) && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !(.parent / ".project.ray").exists)}
   load: static => loaded || loading ? this : this ~~ (.loading = true) ~~ sources.for(Language.ray.read(.content)) ~~ (.loaded = true) ~~ .loading = false
 }
 
 @{name: (Char.Word | "-" | "+")[]{Project.declares(.)}} ^string => Project.declares(name).project
 @{name: (Char.Word | "-" | "+")[]{Project.declares(.)}}/{path: Written} ^string => Project.declares(name).project / path
-
-Layout := class = root: Location = @./.ether/external/@ {
-  checked_out (name: String) => root / ("@" + name)
-  path (name: String, locations: String[], version) => locations.reduce(held = checked_out(name) / "$" => held / ("@" + .)) / "%" / ((version as String) -- (. ~= ⊢"%" ? .[1..] as String : .))
-  changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)
-}
 
 %{number: Decimal.String} ^number => Version(number: number as Decimal)
 %{number: Decimal.String}'{revision: Decimal.String} ^number => Version(number: number as Decimal, revision: revision as Decimal)
@@ -63,26 +54,17 @@ Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
 
   resolved (revisions: Version[]) => latest ? revisions{number == this.number}.max(.revision) ?? this : this
 
-  static Range := class ("%[", first: Decimal, "..", last: Decimal, "]") => {
-    includes (version: Version) => first <= version.number <= last
-    versions => (first..last).map(%.)
-  }
-
   static Pin := class ("%[", label: UUID | Char.Word[], "]")
 }
 
-Versioned<T> := class = value: T, range: Version.Range? {
-  at (version: Version) => value if !range || range.includes(version)
-  selected (range: Version.Range) => range.versions.map(at(.)){!= None}
-}
+%[{first: Decimal.String}..{last: Decimal.String}] ^number => Version{first as Decimal <= number <= last as Decimal}
 
 Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
-  static declared: Migration[] = []
-  (static.declared ??= []).push this
+  (static.# ??= []).push this
 
   backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? Program(name: "derive the inverse of a migration", goal: this))
 
-  static leaving (version: Version) => declared{.from == version}, declared{.to == version}.backward
+  static leaving (version: Version) => Migration#{.from == version}, Migration#{.to == version}.backward
   static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path is Abstract
     ? Program(name: "migrate", goal: (value: old, from: from, to: to))
     : path.zip(path.rest).map((a, b) => leaving(a){.to == b}.first).reduce(held = old => .body(held)))

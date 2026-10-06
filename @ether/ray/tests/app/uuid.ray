@@ -3,7 +3,7 @@ mark ^keyword := external global
 uu := UUID.v4()
 unless uu.length == 32 { INFO@mark `UU1 v4 has other than 32 digits` }
 unless uu.version == 4 { INFO@mark `UU2 v4 version is not 4` }
-unless uu.variant as UUID.Variant == UUID.Variant.RFC_4122 { INFO@mark `UU3 v4 variant is not RFC 4122` }
+unless uu is UUID.RFC_4122 { INFO@mark `UU3 v4 variant is not RFC 4122` }
 uu_text := uu as String
 unless uu_text.length == 36 { INFO@mark `UU4 v4 text is not 36 characters` }
 unless uu_text[8] == "-" { INFO@mark `UU5 no dash after eight digits` }
@@ -18,7 +18,7 @@ spelled_out := "00000000-0000-4000-8000-000000000000"
 read_back := spelled_out as UUID
 unless read_back.length == 32 { INFO@mark `UU15 what is read back has other than 32 digits` }
 unless read_back is UUID.v4 { INFO@mark `UU16 what is read back is not of the version it was written with` }
-unless read_back.variant as UUID.Variant == UUID.Variant.RFC_4122 { INFO@mark `UU17 what is read back is not of the variant it was written with` }
+unless read_back is UUID.RFC_4122 { INFO@mark `UU17 what is read back is not of the variant it was written with` }
 unless read_back as String == spelled_out { INFO@mark `UU13 a uuid written down does not read back as itself` }
 
 unless UUID.v1 { INFO@mark `UU21 the version built from a time is not there` }
@@ -30,6 +30,6 @@ made_second := choose UUID.v1{unique}
 unless made_first.version == 1 { INFO@mark `UU30 a generated version 1 identifier is not version 1` }
 if made_first == made_second { INFO@mark `UU31 two version 1 identifiers made one after the other are the same` }
 unless made_first.time < made_second.time { INFO@mark `UU32 the later identifier is not later` }
-unless made_first.variant as UUID.Variant == UUID.Variant.RFC_4122 { INFO@mark `UU33 a generated identifier is not of the RFC 4122 variant` }
+unless made_first is UUID.RFC_4122 { INFO@mark `UU33 a generated identifier is not of the RFC 4122 variant` }
 unless UUID.Namespace.DNS.version == 1 { INFO@mark `UU34 the DNS namespace is not a version 1 identifier` }
 unless UUID.Namespace.DNS as String == "6ba7b810-9dad-11d1-80b4-00c04fd430c8" { INFO@mark `UU35 the DNS namespace does not write as itself` }

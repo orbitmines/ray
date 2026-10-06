@@ -32,43 +32,17 @@ FileSystem := class: Language {
     listing (location: Location) => @me/device/storage.keys{~= ⊢(key(location) + "/")}
       .map(.after(key(location) + "/").before("/")).unique.map(location / .)
   }
-  static Remote := class: FileSystem {
-    remotely (location: Location) => Network.Remote(character: @me, location: location.scheme ? location.origin : @remote)
-    inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
-    over_http (location: Location) => location.scheme ~= ⊢"http"
-    sent (method: $.http.Method, location: Location, content = None, fields = $.http.Fields()) => $.http.send($.http.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
-    read (location: Location) => over_http(location)
-      ? sent($.http.Method.get, location) -- (.ok ? .text : None)
-      : remotely(location).run({ inner(location).content })
-    write (location: Location, content) => over_http(location)
-      ? sent(content === None ? $.http.Method.delete : $.http.Method.put, location, content).ok
-      : remotely(location).run({ inner(location).write(content) })
-    // WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2)
-    listing (location: Location) => over_http(location)
-      ? (sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")).text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
-        .map(href => href ~= ⊢"/" ? location.origin + href : href as Location)
-      : remotely(location).run({ inner(location).listing })
-  }
-  static Mirrored := class: FileSystem {
-    read (location: Location) => Program(name: "the content at a location of a project not held here, from a mirror (World W2.9) or a shard (World W2.7, Universal U7) of it, kept by a cache level (Language §9.1, §9.2)", goal: location)
-  }
 }
 
 FileOptimizations := {
-  {location: Location{scheme && scheme != "file"}} => FileSystem.Remote()
-  {location: Location{segments.first == "remote"}} => FileSystem.Remote()
-  {location: Location{OS().name == browser}} => FileSystem.Browser()
-  {location: Location{Project.data(.) && !FileSystem.Posix().exists(.)}} => FileSystem.Mirrored()
+  {location: Location{OS() is OS.Browser}} => FileSystem.Browser()
   {location: Location} => FileSystem.Posix()
 }
 
 IO := class {
-  read (location) => (location as Location).content
-  write (location, content) => (location as Location).write(content)
   output (text: String) => external io `/dev/stdout` text
   host (location) => Run.current.ask(`size`, location) -- (. == true ? (external io location None) as String : .)
-  field (name: String) => (name + (".ray" | "/" | ""))#.map(read(.)).first(.nonempty) ?? ""
-  listing (location) => (location as Location).listing
+  fetch (from: Location, path: String, version: Version?) => ((from / path + (version as String)).content if version) ?? (from / path).content
 }
 
 Random := class {
@@ -90,27 +64,18 @@ Random := class {
   }
 }
 
-choose {type} ^keyword => @me.choose(type)
-choose {n: Number} {type} ^keyword => @me.choose(type, n)
-choose? {type} ^keyword => Choice(type)
-choose? {type} ?? {placeholder} ^keyword => Choice(type, placeholder)
-Choice := class = type: *?, value: *?, placeholder: *?, count: Number = 1, reason: String? {
-  static algorithm: *?
-
-  choosing => value === None
-  answer => value ?? placeholder
-  told (given, weight: Number = 1/2): static => (given ~~ .weight = weight) -- (weighed => this ~~ .value = (value === None ? weighed : value | weighed))
-}
-Node &+= {
-  choosing => false
-}
+choose {type} ^keyword => Program(who: @me, name: "choose", goal: type)
+choose {n: Number} {type} ^keyword => Program(who: @me, name: "choose", goal: n type)
+choose? {type} ^keyword => Program(who: @me, name: "choose", goal: type?)
+choose? {type} ?? {placeholder} ^keyword => Program(who: @me, name: "choose", goal: type?, tried: placeholder)
+Choice := Program{name == "choose"}
 
 Proof := class = proposition: *, argument: * {
-  static Proposition := class = holds: boolean = true, fact: *?, verified = false {
-    negated => Proposition(holds: !holds, fact)
-    quest => Program(name: "verify the assumption", goal: fact)
-    verify (actual) => verified = actual == fact
-    rolled_back => !verified
+  static Proposition := class: Program {
+    holds => this() as boolean
+    negated => Proposition(code: { !holds })
+    verify (actual) => attempt(actual)
+    rolled_back => solution === None
   }
 
   holds => argument.holds
@@ -124,21 +89,21 @@ Proof := class = proposition: *, argument: * {
 ! `+` `-`
 ! `*` `/`
 
-Network := class {
-  static fetch (from: Location, path: String, version: Version?) => (IO.read(from / path + (version as String)) if version) ?? IO.read(from / path)
-}
-
 OS := class {
   [property: String] => (external os property) as String
   platform => this["platform"]
   architecture => this["architecture"]
-  zoneinfo: Location? => name is (linux | macos) ? (this["TZDIR"] ?? "/usr/share/zoneinfo") as Location : None
+  zoneinfo: Location? => this is (OS.Linux | OS.Macos) ? (this["TZDIR"] ?? "/usr/share/zoneinfo") as Location : None
+
+  static Linux := OS{platform == "linux"}
+  static Macos := OS{platform == "darwin"}
+  static Windows := OS{platform == "win32"}
+  static Browser := OS{platform == "browser"}
 
   static devices := {
     {os: OS{platform}} => os
-    {os: OS} => ("@ether/os" as Project.Dependency).project -- OS.Ether()
+    {os: OS} => Program(name: "an operating system", goal: os)
   }
-  name: linux | macos | windows | browser | ether | unknown => platform ? { "linux": linux, "darwin": macos, "win32": windows, "browser": browser, "ether": ether }[platform] ?? unknown : ether
 
   static launch (location: Location) => external os `open` (location as String)
 

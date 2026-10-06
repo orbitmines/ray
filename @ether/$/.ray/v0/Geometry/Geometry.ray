@@ -14,8 +14,9 @@ Geometry := class {
   euclidean: Metric = (a, b) => √(Space.current.between(a, b).map(. ^ 2).sum)
   graph: Metric = (a, b) => Place(a).shortest_path_to(Place(b)).count - 1
 
-  Axis := class: Ray = continuous: boolean = true, loop: boolean = false, extent: Length? {
+  Axis := class: Ray = continuous: boolean = true, loop: boolean = false, extent: Length?, orientation: -1 | +1 = +1 {
     coordinate => continuous ? Number : Integer
+    seen (at: Length, frame: Length = 0, size: Length = 0) => orientation > 0 ? at : frame - at - size
     holds (at: Length) => loop || extent == None || 0 <= at < extent
     wrapped (at: Length) => loop && extent != None ? at % extent : at
     between (difference: Length) => loop && extent != None ? (difference % extent) -- (. min (extent - .)) : difference
@@ -23,6 +24,7 @@ Geometry := class {
   }
   Space := class = axes: Axis[], metric: Metric = euclidean, projection: Projection?, vertices: Graph? {
     static plane = Space([Axis(), Axis()])
+    static screen = Space([Axis(), Axis(orientation: -1)])
     static current: Space = plane
     static grid (extent: Vector, loop: boolean = false) => Space(extent.map(Axis(continuous: false, loop: loop, extent: .)), graph)
     static of (structure: Graph) => Space([], graph, Projection.embedding(structure), structure)
@@ -32,6 +34,7 @@ Geometry := class {
     holds (at) => vertices ? vertices.vertices.contains(at) : axes.zip(at).every(.0.holds(.1))
     wrapped (at: Vector) => Vector(axes.zip(at).map(.0.wrapped(.1)))
     between (a: Vector, b: Vector) => Vector(axes.zip(b - a).map(.0.between(.1)))
+    seen (at: Vector, frame: Vector = Vector(), size: Vector = Vector()) => Vector(axes.enumerate.map(axis => axis.value.seen(at[axis.index] ?? 0, frame[axis.index] ?? 0, size[axis.index] ?? 0)))
     neighbours (at) => vertices ? vertices.outgoing(at) : sides#.map(wrapped(at + .vector(dimension))){holds(.)}
     positions => vertices ? vertices.vertices : axes.map(.positions).reduce(acc = [[]] => acc.pairs(.).map([.0, [.1]].flatten)).map(Vector(.))
   }
@@ -134,14 +137,14 @@ Geometry := class {
   Side := class = axis: Integer{. >= 0}, toward: -1 | +1 {
     opposite => Side(axis, -toward)
     ordinal => 2 * axis + (toward + 1) / 2
-    label => [["left", "right"], ["top", "bottom"], ["front", "back"]][axis]?[ordinal % 2]
+    label => [["left", "right"], ["bottom", "top"], ["front", "back"]][axis]?[ordinal % 2]
     vector (dimension: Integer = Space.current.dimension) => Vector((0..<dimension).map(. == axis ? toward : 0))
     as (=== String) => label ?? (axis as String) + (toward > 0 ? "+" : "-")
   }
   left := Side(0, -1)
   right := Side(0, +1)
-  top := Side(1, -1)
-  bottom := Side(1, +1)
+  bottom := Side(1, -1)
+  top := Side(1, +1)
   front := Side(2, -1)
   back := Side(2, +1)
   horizontal := left | right
@@ -152,6 +155,7 @@ Geometry := class {
     [side: Side] => side.label ? this.`side.label` : beyond[side.ordinal - 6]
     total => Vector((0..<Space.current.dimension).map(axis => (this[Side(axis, -1)] ?? 0px) + (this[Side(axis, +1)] ?? 0px)))
     start => Vector((0..<Space.current.dimension).map(this[Side(., -1)] ?? 0px))
+    leading => Vector(left ?? 0px, top ?? 0px)
   }
   Position := class = kind: flow | sticky | fixed | absolute | anchored = flow, anchor: Shape?, side: Side = bottom
   Flowing := Position{kind is (flow | sticky)}
@@ -195,7 +199,7 @@ Geometry := class {
 
   rectangle (size: Vector) => Curve([Vector(), Vector(size.x, 0), size, Vector(0, size.y)].loop)
   ellipse (size: Vector) => size * (1 / 2) -- (r => Curve([Vector(size.x, r.y), Arc(r, to: Vector(0, r.y)), Arc(r, to: Vector(size.x, r.y))].loop))
-  triangle (size: Vector) => Curve([Vector(size.x / 2, 0), size, Vector(0, size.y)].loop)
+  triangle (size: Vector) => Curve([Vector(size.x / 2, size.y), Vector(size.x, 0), Vector()].loop)
   box (size: Vector) => Space.current.dimension -- (n => n == 2 ? rectangle(size) : Shape(rank: n - 1, children: all#.map(side =>
     Mesh(simplices(Vector((0..<n).map(. == side.axis && side.toward > 0 ? size[.] : 0)), size, (0..<n){!= side.axis}).map(Facet(.)), rank: n - 1))))
 
@@ -222,10 +226,10 @@ Geometry := class {
     at: Vector => position.kind.match
       fixed => origin
       anchored => (position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0))
-      sticky => (parent.at + origin - parent.scrolled) -- Vector(.x, .y max (inset.top ?? 0px) min (parent.at.y + parent.size.y - size.y))
-      * => parent ? parent.at + origin - parent.scrolled : origin
+      sticky => (parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y)) -- Vector(.x, .y min (root.size.y - (inset.top ?? 0px) - size.y) max parent.at.y)
+      * => parent ? parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y) : origin
     outer => size + margin.total
-    content_height => children.map(.origin.y + .size.y + .margin.bottom).max ?? size.y
+    content_height => children.map(size.y - .origin.y + .margin.bottom).max ?? size.y
     texts => reachable{.content is String}
     in_place => children{.position.kind is (flow | sticky | absolute)}
     lifted => reachable{.position.kind is (fixed | anchored) && .visible}.sort_by(.layer)
@@ -272,10 +276,10 @@ Geometry := class {
       flowing = children{.position is Flowing}
       bottom = flow.match
         grid => flowing.chunk(columns).reduce(acc = padding.top => .enumerate.for(cell =>
-            cell.value.laid(inner / columns - gap.x) -- (cell.value.origin = Vector(padding.left + cell.index * (inner / columns + gap.x), acc) + cell.value.margin.start)
+            cell.value.laid(inner / columns - gap.x) -- (cell.value.origin = Vector(padding.left + cell.index * (inner / columns + gap.x), acc) + cell.value.margin.leading)
           ) -- acc + .map(.outer.y).max + gap.y)
-        layered => flowing.for(.laid(inner) -- (.origin = padding.start + .margin.start)) -- padding.top + flowing.map(.outer.y).max
-        * => flowing.reduce(acc = (at: padding.start, row: 0px) => {
+        layered => flowing.for(.laid(inner) -- (.origin = padding.leading + .margin.leading)) -- padding.top + flowing.map(.outer.y).max
+        * => flowing.reduce(acc = (at: padding.leading, row: 0px) => {
           .laid(inner)
           continues = flow == inline && (!wrap || acc.at.x + .outer.x <= padding.left + inner)
           y = continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0px ? gap.y : 0px)
@@ -283,16 +287,17 @@ Geometry := class {
             center => (inner - .outer.x) / 2
             end => inner - .outer.x
             * => 0px
-          .origin = Vector(x, y) + .margin.start
+          .origin = Vector(x, y) + .margin.leading
           (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
         }) -- (.at.y + .row)
       (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? padding.top + intrinsic(inner) : bottom) + padding.bottom))) if parent
+      flowing.for(.origin = Vector(.origin.x, size.y - .origin.y - .size.y))
       children{!(.position is Flowing)}.for(.positioned)
     } -- this
     positioned => (position.kind == fixed ? root.size : parent.size) -- (frame => {
       laid(inset.left != None && inset.right != None ? frame.x - inset.left - inset.right : frame.x)
       (size = Vector(size.x, frame.y - inset.top - inset.bottom)) if inset.top != None && inset.bottom != None
-      origin = Vector(inset.left ?? (inset.right != None ? frame.x - inset.right - size.x : 0px), inset.top ?? (inset.bottom != None ? frame.y - inset.bottom - size.y : 0px))
+      origin = Vector(inset.left ?? (inset.right != None ? frame.x - inset.right - size.x : 0px), inset.bottom ?? frame.y - (inset.top ?? 0px) - size.y)
     }) -- this
   }
   Box := Shape
@@ -319,9 +324,9 @@ Geometry := class {
       ? Shape(origin: origin, size: size, transform: transform, boundary: initiator, fill: fill, stroke: stroke)
       : Shape(origin: origin, size: size, transform: transform, children: children.map(.approximated(resolution)))
   }
-  Sierpinski := Fractal{initiator == triangle(size), copies == [Vector(1 / 4, 0), Vector(0, 1 / 2), Vector(1 / 2, 1 / 2)].map(Transform.translate(. * size) * Transform.scale(1 / 2))}
+  Sierpinski := Fractal{initiator == triangle(size), copies == [Vector(1 / 4, 1 / 2), Vector(), Vector(1 / 2, 0)].map(Transform.translate(. * size) * Transform.scale(1 / 2))}
   Koch := Fractal{rank == 1, initiator == Curve([Vector(), Vector(size.x, 0)]),
-    copies == [(Vector(), 0 turn), (Vector(1 / 3, 0), (-1 / 6) turn), (Vector(1 / 2, -(√3) / 6), (1 / 6) turn), (Vector(2 / 3, 0), 0 turn)].map((at, angle) =>
+    copies == [(Vector(), 0 turn), (Vector(1 / 3, 0), (1 / 6) turn), (Vector(1 / 2, (√3) / 6), (-1 / 6) turn), (Vector(2 / 3, 0), 0 turn)].map((at, angle) =>
       Transform.translate(at * size.x) * Transform.rotate(angle) * Transform.scale(1 / 3))}
 
   Solving := {

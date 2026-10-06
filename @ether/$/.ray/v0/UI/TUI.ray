@@ -20,9 +20,9 @@ UI.TUI := class {
 
   Painting := class = grid: Grid, writes: *[]
   Paint := class = shape: Geometry.Shape {
-    at => cells(shape.at)
+    at => cells(Geometry.Space.screen.seen(shape.at, shape.root.size, shape.size))
     size => cells(shape.size)
-    area => Geometry.Space.grid(size).positions.map(. + at){shape.contains((. - at) * px_per_cell)}
+    area => Geometry.Space.grid(size).positions.map(. + at){shape.contains(Geometry.Space.screen.seen((. - at) * px_per_cell, shape.size, px_per_cell))}
   }
   Boxed := class = paint: Paint
   Filled := class = paint: Paint
@@ -67,7 +67,7 @@ UI.TUI := class {
     {filled: Filled{paint.shape.fill is Geometry.Gradient}} => filled.paint.area.map(at => { .background(at, filled.paint.shape.fill.at((at.x - filled.paint.at.x) / filled.paint.size.x)) })
     {filled: Filled} => []
     {shade: Shade{effect is Geometry.Filter{kind == opacity}}} => shade.paint.area.map(at => { .faded(at, shade.effect.amount) })
-    {shade: Shade{effect is Geometry.Shadow}} => shade.paint.area.map(at => { .shaded(at + cells(shade.effect.offset)) })
+    {shade: Shade{effect is Geometry.Shadow}} => shade.paint.area.map(at => { .shaded(at + cells(Geometry.Space.screen.seen(shade.effect.offset))) })
     {shade: Shade} => []
     {border: Border} => {
       paint = border.paint
@@ -130,7 +130,7 @@ UI.TUI := class {
     name => Compiler.reduced(this, UI.TUI.named)
   }
   ANSI.Mouse &+= {
-    position => Geometry.Vector(cell.x * px_per_cell.x, cell.y * px_per_cell.y)
+    position => Geometry.Space.screen.seen(Geometry.Vector(cell.x * px_per_cell.x, cell.y * px_per_cell.y), UI.scene.size, px_per_cell)
   }
   Resize := class
   Pressed := class = key: ANSI.Key
@@ -162,7 +162,7 @@ UI.TUI := class {
     {pressed: Pressed{key.name === @me/device/keyboard/Enter}} => (UI.focus.first ?? UI.current)?.activate
     {pressed: Pressed{key.code == "q"}} => UI.running = false
     {pressed: Pressed} => None
-    {mouse: ANSI.Mouse{button >= 64}} => (UI.pointed().wheel = Geometry.Vector(y: mouse.button == 64 ? -1 : 1)) -- UI.scene.scroll(UI.pointed().wheel.y * 3 * px_per_cell.y)
+    {mouse: ANSI.Mouse{button >= 64}} => (UI.pointed().wheel = Geometry.Vector(y: mouse.button == 64 ? 1 : -1)) -- UI.scene.scroll(-UI.pointed().wheel.y * 3 * px_per_cell.y)
     {mouse: ANSI.Mouse{state == "m"}} => UI.pointed().to(mouse.position, pressing: [])
     {mouse: ANSI.Mouse{button >= 32}} => UI.pointed().to(mouse.position)
     {mouse: ANSI.Mouse} => UI.pointed().to(mouse.position, pressing: [mouse.button])

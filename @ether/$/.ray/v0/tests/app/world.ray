@@ -40,7 +40,6 @@ unless wp.avatars.count == 1 { INFO@mark `PE2 a character has other than one ava
 
 unless Repository(world: wg).histories.empty { INFO@mark `RP1 a new repository already has histories` }
 unless Region(name: "north").name == "north" { INFO@mark `RG1 a region is not a world by another name` }
-unless Instance(location: None).status == Status.online { INFO@mark `IN1 a new instance is not online` }
 unless here == here { INFO@mark `LO5 a location is not itself` }
 
 // A world is a location: what holds places, and is held.
@@ -61,8 +60,7 @@ unless (wi ~~ .location = here).location == here { INFO@mark `ITM3 a moved item 
 wc := Certificate(issuer: wg, secret: None)
 unless (wi ~~ .certificate = wc).certificate == wc { INFO@mark `ITM4 a certified item does not carry its certificate` }
 
-unless wp.status == Status.offline { INFO@mark `PE3 a new character is not offline` }
-unless Status.invisible { INFO@mark `STS1 there is no being invisible` }
+unless wp is Offline { INFO@mark `PE3 a new character is not offline` }
 unless Accessor.Permission.public { INFO@mark `AC1 there is no public permission` }
 if Accessor.Permission.private == Accessor.Permission.public { INFO@mark `AC2 private and public are the same` }
 
@@ -143,15 +141,14 @@ unless job.interrupt.interrupted { INFO@mark `QU8 interrupting a task does not` 
 if job.done { INFO@mark `QU9 an interrupted task is done` }
 unless job.difficulty == 0 { INFO@mark `QU10 a task with no steps is difficult` }
 
-// Where someone is says how they are, and where they are not, what they said
-// they were.
+// Where someone is says how they are, and saying nothing holds them to nothing.
 away := Character(name: "away")
-unless away.status_now == Status.offline { INFO@mark `PS1 someone with nowhere to be is not offline` }
+unless away is Offline { INFO@mark `PS1 someone with nowhere to be is not offline` }
 somewhere := Instance(location: here)
 present := Character(name: "present", presence: somewhere)
-unless present.status_now == Status.online { INFO@mark `PS2 someone somewhere is not as that place is` }
-if present.status_now == Status.offline { INFO@mark `PS3 someone somewhere is offline anyway` }
-unless present.status == Status.offline { INFO@mark `PS4 what they said they were is not what they said` }
+unless (present is Online) == (present.presence.device.network.connected ?? false) { INFO@mark `PS2 someone somewhere is not as that place is` }
+if present is Offline && present is Online { INFO@mark `PS3 someone somewhere is offline and online at once` }
+if present.constraint { INFO@mark `PS4 someone who said nothing is held to something` }
 
 // What a world and a character are written with in front of their names.
 unless World(name: "w").PREFIX == "#" { INFO@mark `WP1 a world is not written with a hash` }
@@ -199,7 +196,7 @@ unless (cited ~~ .note = "read it").notes.count == 1 { INFO@mark `WP20 a note ta
 // Who belongs to an organization.
 guild := Organization(name: "guild")
 unless guild.members.empty { INFO@mark `WP21 an organization nobody joined has members` }
-unless guild.status == Status.offline { INFO@mark `WP22 an organization is not offline to begin with` }
+unless guild is Offline { INFO@mark `WP22 an organization is not offline to begin with` }
 
 sited := Reference(title: "t", subtitle: "s", date: "2025-01-01" as Time, location: @https://a.b | "p")
 unless sited.subtitle == "s" { INFO@mark `WR1 a reference forgot its subtitle` }
@@ -216,12 +213,33 @@ unless (Reference(title: "t") ~~ .note = "n").notes.first.value == "n" { INFO@ma
 unless (Reference(title: "t") ~~ .note = "n").notes.first.when { INFO@mark `WR11 a note says nothing about when` }
 if Reference(title: "t").location { INFO@mark `WR12 a new reference has a remote it was not given` }
 
-unless Status.idle { INFO@mark `STS2 there is no being idle` }
-unless Status.do_not_disturb { INFO@mark `STS3 there is no being do not disturb` }
-unless Status.busy { INFO@mark `STS4 there is no being busy` }
-if Status.idle == Status.busy { INFO@mark `STS5 idle and busy are the same` }
-unless Status#.count == 9 { INFO@mark `STS6 there are other than nine statuses` }
-unless Character(name: "p", status: Status.busy).status == Status.busy { INFO@mark `STS7 a character forgot being busy` }
+// A status is what a character is now, read off what it runs; saying one is a
+// constraint on what may run.
+unless Status#.count == 9 { INFO@mark `CS1 there are other than nine statuses` }
+if Idle === Busy { INFO@mark `CS2 idle and busy are the same` }
+unless Character(name: "s").status.contains(Offline) { INFO@mark `CS3 a character nowhere does not read as offline` }
+if Character(name: "s").status.contains(Online) { INFO@mark `CS4 a character nowhere reads as online` }
+if Character(name: "s") is Idle { INFO@mark `CS5 a character nowhere is idle` }
+if Character(name: "s") is Busy { INFO@mark `CS6 a character with nothing to focus on is busy` }
+focused := Character(name: "f", focus: Job(program: Program()))
+unless focused is Busy { INFO@mark `CS7 a character focused on a job is not busy` }
+focused.focus.state = Job.State.done
+if focused is Busy { INFO@mark `CS8 a character whose focus is done is still busy` }
+quiet := Character(name: "q")
+if quiet is DoNotDisturb { INFO@mark `CS9 a character is not to be disturbed before saying so` }
+quiet.status = DoNotDisturb
+unless quiet.constraint === DoNotDisturb { INFO@mark `CS10 a status said is not kept as what may run` }
+unless quiet is DoNotDisturb { INFO@mark `CS11 a character that said do not disturb is not left alone` }
+unless quiet.status.contains(DoNotDisturb) { INFO@mark `CS12 do not disturb does not read back` }
+disturbed := false
+(disturbed = true) unless quiet is DoNotDisturb
+if disturbed { INFO@mark `CS13 something flagged against do not disturb ran anyway` }
+held_back := Character(name: "h") ~~ .status = !Offline
+if held_back is Offline { INFO@mark `CS14 a character held to not offline is offline` }
+hidden := Character(name: "hidden", presence: somewhere) ~~ .status = Invisible
+unless hidden is Invisible { INFO@mark `CS15 a character that went invisible is not` }
+if hidden is Online { INFO@mark `CS16 an invisible character is online to someone else` }
+unless Program(code: { (hidden is Online) == (hidden.presence.device.network.connected ?? false) }).run_as(hidden) { INFO@mark `CS17 an invisible character is not as it is to itself` }
 
 looked := World(name: "looked")
 looked.add(Character(name: "Fadi"))

@@ -12,9 +12,9 @@ Access := class = who: *?, method: `=` | `()` | * = *, filter: Program? {
 
 Accessor := Access{who is Accessor.Permission} {
   static Permission := enum local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) | private (at: @private) | confidential | protected | public (at: @public) {
-    resolved => this == confidential ? Visibility.policy : this
+    resolved => this == confidential ? Visibility.policy min managed : this
     chainable < (other: Permission) => resolved.index < other.resolved.index
-    reaches (who) => this == public || (this == confidential ? Visibility.policy.reaches(who) : at && who is at)
+    reaches (who) => this == public || (this == confidential ? resolved.reaches(who) : at && who is at)
   }
 
   read => Accessor(who, method: Access.Reading)

@@ -105,6 +105,7 @@ From the drafts review (2026-10-06).
 - **N4.14 GMT and leap seconds** — **Q** (conflict). The draft (*Astronomy.ray:31, 39, 44*): `UTC` has
   `leap_seconds: boolean = false` (true reads them from tzdata) and `GMT = UTC{leap_seconds == false}`. v0 has `GMT := UTC`.
   Recommend the draft: a `leap_seconds` field on UTC and `GMT := UTC{leap_seconds == false}` (fits N4.6/N4.7).
+  **Answered (user, 2026-10-06):** the draft: `UTC` has `leap_seconds: boolean = false`, and `GMT := UTC{leap_seconds == false}`.
 - **N4.15 Relativistic time** — **Q.** *…/utils/Time.ray:6* ("Variable relativistic trajectory"). Recommend: later, with
   Astronomy (N4.9), a Time may carry the trajectory (frame) it is proper time of; converting between frames is an
   equivalence like a calendar's.

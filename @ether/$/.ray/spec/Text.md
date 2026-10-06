@@ -32,6 +32,7 @@ From the drafts review (2026-10-06).
   (paraphrased): extend UTF-8 with custom symbols as a new String type; copied text marks which symbols are custom.
   Recommend (journal review): a `String` whose characters are `Char | Custom`, written out as plain UTF-8 with a fallback
   sequence per custom symbol and an inverse reading it back. Either keep X1.8 or reopen it.
+  **Answered (user, 2026-10-06):** flagged for future support; X1.8 stands for now.
 - **X1.13 Fields on substrings** — see P1.16 (**Decided (draft)**): a field set on a slice lives on that subgraph, which is
   how styles and marks (X3.4 DoNotEmit) sit on substrings.
 

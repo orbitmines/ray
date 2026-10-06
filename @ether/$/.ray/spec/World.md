@@ -92,6 +92,7 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   `func@local()`, `@local~{}` and `@local~label{}` (after a label) (*`Ether.ray:14–15`*); L§4.2 decided `~` is for entry points,
   and L§8.2's `@name { … }` runs *as* a character. Recommend: running at a location is `f@loc()` / `loc~{…}` (an entry point of
   the location), kept distinct from `@name { … }`; `loc~label{…}` ties into `.%` labels.
+  **Answered (user, 2026-10-06):** running at a location is `f@loc()`; there is no `loc~{…}` form. `~` works like a label: `@who~label{ … }` runs the block after that block/label on that character.
 - **W2.19 Several public keys** — **Q**. A character has more than one key (one for handshake-free communication, one for logging
   in elsewhere, visible to that service). Recommend: `.public_key` is a narrowing of `.name`, and a character holds a superposition
   of keys, each scoped to who may see it (W2.1, X4.3). *`Ether.ray:35–36`*

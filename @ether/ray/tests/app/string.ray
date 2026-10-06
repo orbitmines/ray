@@ -254,7 +254,7 @@ unless "a \{b}".count == 5 { INFO@mark `SI3 an escaped brace is read as an expre
 unless @ray`1 + 2` == 3 { INFO@mark `TL1 a literal tagged ray is not read as Ray` }
 unless "goto x" ~= ⊢"goto " { INFO@mark `PM1 ⊢ does not hold a pattern to the start` }
 if "a goto" ~= ⊢"goto" { INFO@mark `PM2 ⊢ reads a pattern away from the start` }
-unless "x\" ~= "\" ⊣ { INFO@mark `PM3 ⊣ does not hold a pattern to the end` }
+unless "x\\" ~= "\\" ⊣ { INFO@mark `PM3 ⊣ does not hold a pattern to the end` }
 unless ("abcabc" ~= "ca").index == 2 { INFO@mark `PM4 a reading does not say where it starts` }
 unless "abc" !~= "z" { INFO@mark `PM5 !~= does not hold when nothing is read` }
 

@@ -40,6 +40,10 @@ const cli: CLI.Spec = {
   //      ephemeral jobs of a daemon that was replaced by a newer build can't be listed or stopped any more (its socket is gone); environment variables are never persisted, which a future `continue` would need to revisit.
   lsp:      { description: 'Serve the language server (LSP) over stdio, through the daemon; for a project, which when it is a !language project is the language read.' },
   ephemeral: {           description:`Keep nothing on disk: the output is only streamed, and the job's record is removed when it ends.` },
+  engine:   {             description: 'Run with the old engine (translated to JavaScript) instead of the kernel.' },
+  settle:   {             description: 'Read every library file again where its first reading left a name unresolved.' },
+  verbose:  { alias: 'v', description: 'Say what was read before the file, and how long it took.' },
+  with:     { value: true, description: 'Read a project before the file as if its project declared it (`--with @ether/ui`).' },
 };
 
 export async function main([args, kwargs]: CLI.Args = CLI.args()) {
@@ -90,6 +94,12 @@ export function drained(stream: NodeJS.EventEmitter & { destroyed?: boolean }, w
 }
 
 export async function run(project: Project, [args, kwargs]: CLI.Args, io: IO): Promise<number> {
+  if (!kwargs.engine) {
+    const kernel = await import('./kernel/run.ts');
+    let exit = 0;
+    for (const file of args) exit = Math.max(exit, await kernel.run(env.path.resolve(project.from, file), io, { settle: !!kwargs.settle, verbose: !!kwargs.verbose, with: [kwargs.with ?? []].flat().filter((x): x is string => typeof x === 'string') }));
+    return exit;
+  }
   const translator = await Translator.shared();
   let exit = 0;
   for (const file of args) {

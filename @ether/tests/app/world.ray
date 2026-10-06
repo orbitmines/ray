@@ -35,7 +35,7 @@ if wr.public { INFO@mark `RE1 a new reference is public` }
 unless wr.publish.public { INFO@mark `RE2 a published reference is not public` }
 
 // An avatar is one of a character's names: its name on a platform, written with `@` (`@github.com/package` is a package of github).
-wa := Character(name: "alice" | @github.com/@alice | @mailto:alice@a.b)
+wa := Character(name: "alice" | @github.com/@alice | "alice@a.b")
 unless wa.avatars#.count == 1 { INFO@mark `PE2 a character has other than one avatar` }
 unless wa.avatars#.first.segments.last == "@alice" { INFO@mark `AV1 an avatar is not the character's name on its platform` }
 
@@ -311,11 +311,19 @@ unless rdr.@a == 1 { INFO@mark `RDR2 a redirected name answers what the other he
 unless rdr.@A == rdr.@b { INFO@mark `RDR1 a redirected name does not answer what the other holds` }
 unless (rdr.@b = 3).erred { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
 
-// A character's name is every name it goes by, each told apart by its pattern: email and phone are locations.
-cth := Character(name: "reachable" | "Ada Lovelace" | @mailto:a@b.c | @tel:+31612345678)
-unless cth.name{is Email}#.first.scheme == "mailto" { INFO@mark `CTH1 an email is not a mailto location` }
-unless cth.name{is Phone}#.first as String == "tel:+31612345678" { INFO@mark `CTH2 a phone number is not a tel location` }
-unless cth.name{is FullName}#.first.last == "Lovelace" { INFO@mark `CTH4 a full name is not read as first and last` }
+// A character's name is every name it goes by, each told apart by its pattern: an email, a phone number, a full name are what they look like.
+cth := Character(name: "reachable" | "Ada Lovelace" | "a@b.c" | "+31612345678")
+unless cth.email#.first.domain == "b.c" { INFO@mark `CTH1 an email is not read as local part and domain` }
+unless cth.phone#.first as String == "+31612345678" { INFO@mark `CTH2 a phone number is not one of its names` }
+unless cth.full_name#.first.parts == ["Ada", "Lovelace"] { INFO@mark `CTH4 a full name is not read as its parts` }
+unless "+31 (0)6 1234-5678" is Phone && ("+31 (0)6 1234-5678" as Phone).digits == "+31612345678" && ("(020) 123 4567" as Phone).digits == "0201234567" { INFO@mark `CTH7 a grouped phone number is not read to its digits` }
+unless ["毛泽东", "김민준", "山田 太郎", "列奥纳多·达·芬奇", "レオナルド・ダ・ヴィンチ", "محمد بن سلمان", "Nguyễn Văn An", "Þórunn Guðmundsdóttir", "José María Álvarez de la Cruz", "Мария Иванова", "बिमल रॉय"].every(is FullName) { INFO@mark `CTH8 a full name in another script or order is not a full name` }
+unless "J. R. R. Tolkien" is FullName && "Mary-Jane O'Brien" is FullName && "bell hooks" is FullName { INFO@mark `CTH9 initials, joined or lowercase parts are not a full name` }
+unless ("列奥纳多·达·芬奇" as FullName).parts.count == 3 { INFO@mark `CTH12 a script's name separator does not separate parts` }
+if "alice" is FullName || "Suharto" is FullName { INFO@mark `CTH13 one word in a spaced script was taken for a full name` }
+unless "\"a b\"@x.org" is Email && "a.b+tag@sub.example.org" is Email && "a@[192.0.2.1]" is Email { INFO@mark `CTH10 a valid email address is not an Email` }
+if "a..b@x.org" is Email || ".a@x.org" is Email || "a@-x.org" is Email || "a@x" is Email || "12" is Phone || "+1234567890123456" is Phone { INFO@mark `CTH11 an invalid email or phone number was accepted` }
+if cth.email#.count != 1 || cth.phone#.count != 1 { INFO@mark `CTH6 a name was taken for an email or phone number it does not look like` }
 unless Character.local("reachable") === cth || !Instance.local.logged_in(cth) { INFO@mark `CTH5 a character is not found by any of its names` }
 unless (@https://a.b/c).host == "a.b" { INFO@mark `CTH3 a location with an authority lost its host` }
 

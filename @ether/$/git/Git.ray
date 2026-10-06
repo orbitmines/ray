@@ -46,7 +46,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
 
   Signature := class (name: (!"<")[], " <", email: (!">")[], "> ", seconds: Decimal, " ", zone: (("+" | "-"), Decimal.Digit₄)) {
     when: Time => (seconds seconds) as Time
-    static (signed: (who: *, when: Time)) as (=== Signature) => Signature(name: (signed.who?.name{is FullName}#.first ?? signed.who?.name#.first ?? signed.who) as String, email: signed.who?.name{is Email}#.first?.path ?? (signed.who?.name#.first ?? "someone") + "@ether", seconds: (signed.when as s).floor, zone: "+0000")
+    static (signed: (who: *, when: Time)) as (=== Signature) => Signature(name: (signed.who?.full_name#.first ?? signed.who?.name#.first ?? signed.who) as String, email: (signed.who?.email#.first as String) ?? (signed.who?.name#.first ?? "someone") + "@ether", seconds: (signed.when as s).floor, zone: "+0000")
   }
 
   // A commit's tree and parents, and a tag's object, are written as names in the repository's format (https://git-scm.com/docs/hash-function-transition#_object_format)

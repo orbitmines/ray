@@ -49,9 +49,9 @@ Escape := {
   \f => U+000C
   \r => U+000D
   \e => U+001B
-  \\ => "\"
-  \" => "\""
-  \{ => "{"
+  \\ => U+005C
+  \" => U+0022
+  \{ => U+007B
 }
 dynamically Escape.for spelling => global[spelling] := Compiler.reduced(spelling, Escape)
 

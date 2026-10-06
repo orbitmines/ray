@@ -38,9 +38,32 @@ None := external none
   ^(style)(external rule pattern body)
 )
 {name} := {value} ^punctuation => external declare name value
+// A static is read with the class's statics, not again for each instance. Written as loose as `:=` itself, so its value is the
+// rest of the statement (`static X := class: T{…} { … }`).
+static{ }{name ^property} := {value} ^keyword => (
+  goto instance if constructing
+  external declare name value
+ instance\
+)
+// A static with another name (`static TF | TransformationFormat := …`): both names hold the one value.
+static{ }{name ^property} | {alias ^property} := {value} ^keyword => (
+  goto instance if constructing
+  external declare name value
+  external declare alias name
+ instance\
+)
+static{ }{name ^property} = {value} ^keyword => (
+  goto instance if constructing
+  external declare name value
+ instance\
+)
 `{literal string ^string}` ^string.punctuation => string
 // An escaped quote is read as one piece, so a written literal does not end at it.
 \{`"`} ^string => `"`
+// An escaped brace too, so a block does not open at it, and an escaped backslash, so the quote after it ends the literal
+// (String.ray's `Escape`: `\{ => "{"`, `\\ => "\"`).
+\{`{`} ^string => `{`
+\{`\`} ^string => `\`
 "{literal string ^string}" ^string.punctuation => string
 \n => `
 `
@@ -2042,17 +2065,6 @@ static ({parameters ^parameter}) {`=>`} {block} ^keyword => (
     (inline method_parameters) := arguments
     inline method_written
   } parameters
-)
-// A static is read with the class's statics, not again for each instance.
-static{ }{name ^property} := {value} ^keyword => (
-  goto instance if constructing
-  external declare name value
- instance\
-)
-static{ }{name ^property} = {value} ^keyword => (
-  goto instance if constructing
-  external declare name value
- instance\
 )
 static{ }{name ^property}: {type} = {value} ^keyword => (
   goto instance if constructing

@@ -45,11 +45,11 @@ Program &+= {
 
 Program &+= {
   is_jump => code ~= ⊢"goto "
-  is_label => code ~= "\" ⊣
+  is_label => code ~= "\\" ⊣
   jump => code ~= (⊢"goto ", name: Char.Word[], (" ", condition: *)?)
   is_conditional => is_jump && jump.condition
-  target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\"}.first
-  holding (name: String) => written.some(.is_label && .code == name + "\") ? this : written.map(.holding(name)){!= None}.first
+  target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\\"}.first
+  holding (name: String) => written.some(.is_label && .code == name + "\\") ? this : written.map(.holding(name)){!= None}.first
   crosses (jump: Program) => !target_of(jump) && holding(jump.jump.name)
   called_at (jump: Program) => holding(jump.jump.name) -- .copy ~~ (.at = .target_of(jump)) ~~ (.started = true) -- .finished.results.last
 

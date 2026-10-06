@@ -2697,7 +2697,8 @@ external_call (name, n, a0, a1, a2, a3, frame, src, b, e) => (
   if name == "rest" { return program_part(x, None) }
   if name == "before" { return program_split(x, y, global) }
   if name == "after" { return program_split(x, y, None) }
-  unported(name)
+  // Any other is the host's (the platform's externals: io, os, time, …).
+  return runtime(name, n, a0, a1, a2, a3, frame)
 )
 // `first program`, `rest program`: a program's first statement, and the statements after it (None when there are none).
 program_part (x, first) => (

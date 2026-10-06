@@ -60,6 +60,9 @@ export class Seed {
     this.externals.set('rules', (frame, [of]) => self.rules_of(self.force(of) as Node));
     this.externals.set('apply', (frame, [rule, caps, within]) => self.apply_chain(self.force(rule) as Node, self.force(caps) as Node, self.force(within) as Node));
     this.externals.set('frame', frame => frame.parent ?? frame);
+    this.externals.set('latest', () => { let last: Rule | undefined; for (const r of self.global.reach()) if (last === undefined || r.order > last.order) last = r; return last; });
+    // What no rule reads, from a place to a place (or the text's end): a diagnostic (G1.8).
+    this.externals.set('unread', (frame, [from, to]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined; const e = t === undefined ? f.text.s.length : self.where.get(t)!.i; self.say(`Unread \`${f.text.s.slice(f.i, e).slice(0, 60)}\`.`, { text: f.text, b: f.i, e }); return undefined; });
     // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
     this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); return n; });
     // The head of a rule as a chain, to tell whether two rules are written with the same head.
@@ -238,14 +241,17 @@ export class Seed {
     }
     return i <= limit ? i : -1;
   }
-  // The reading of what starts at `p`: the longest. Between equally long ones, a rule written with the same head as an earlier
-  // one overrides it (`=>`); otherwise the one declared first reads the whole, as declaration order is precedence and what
-  // is declared first binds loosest (G3.1).
+  // The reading of what starts at `p`: the longest. Between equally long ones, one that starts with a literal (a statement
+  // led by a word) reads the whole over one that starts with a capture (an operator between operands); then a rule written
+  // with the same head as an earlier one overrides it (`=>`); otherwise the one declared first reads the whole, as declaration
+  // order is precedence and what is declared first binds loosest (G3.1).
   reading(frame: Node, text: Text, p: number, limit: number) {
     let best: { rule: Rule; end: number; caps: [string, Span][] } | undefined;
     for (const rule of frame.reach()) for (const m of this.match(rule, text, p, limit)) {
       if (best === undefined || m.end > best.end) { best = { rule, ...m }; continue; }
       if (m.end < best.end) continue;
+      const led = 'lit' in rule.pieces[0], bestLed = 'lit' in best.rule.pieces[0];
+      if (led !== bestLed) { if (led) best = { rule, ...m }; continue; }
       const same = rule.head.s.trim() === best.rule.head.s.trim();
       if (same ? rule.order > best.rule.order : rule.order < best.rule.order) best = { rule, ...m };
     }
@@ -328,10 +334,10 @@ export class Seed {
       if (st.kind === 'external') {
         const ext = this.externals.get(st.name);
         if (ext === undefined) { this.say(`No external \`${st.name}\`.`, st.at); continue; }
-        lines.push(`r = ${ref(ext)}(f, [${st.args.map(a => `S.arg(f, ${ref(a)})`).join(', ')}], ${ref(st.at)});`);
+        lines.push(`try { r = ${ref(ext)}(f, [${st.args.map(a => `S.arg(f, ${ref(a)})`).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
         continue;
       }
-      lines.push(`r = S.apply(${ref(st.rule)}, f, ${ref(st.caps)});`);
+      lines.push(`try { r = S.apply(${ref(st.rule)}, f, ${ref(st.caps)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
     }
     lines.push('return r;', '}');
     const fn = new Function('S', 'k', `return function (f) { ${lines.join('\n')} };`)(this, k) as Compiled;
@@ -350,6 +356,13 @@ export class Seed {
     for (let at: Node | undefined = frame; at; at = at.parent) if (at.members.has(word)) return this.force(at.members.get(word));
     this.say(`Unresolved \`${word}\`.`, sp);
     return undefined;
+  }
+  // An error in a compiled body, with the statements it was in (innermost first).
+  where_failed(x: unknown, at: Span): Error {
+    const e = x instanceof Error ? x : new Error(String(x));
+    const line = at.text.s.slice(0, at.b).split('\n').length;
+    (e as any).ray = [...((e as any).ray ?? []), `${at.text.name.split('/').pop()}:${line} ${at.text.s.slice(at.b, at.e).split('\n')[0]}`];
+    return e;
   }
   show(v: unknown): string { return v instanceof Code ? v.s : v instanceof Node ? 'node' : String(v); }
 

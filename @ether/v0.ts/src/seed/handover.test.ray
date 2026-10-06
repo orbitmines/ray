@@ -1,0 +1,13 @@
+say {x} =>
+  external print x
+link {x} to {y} =>
+  set x . next to y
+p := node
+q := node
+link p to q
+walk {list} =>
+  at := list
+  while at do
+    say at
+    at := at . next
+walk p

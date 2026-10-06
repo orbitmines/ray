@@ -67,7 +67,8 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
 - **R2.4 A capture's type is a value of the rule**, evaluated once when the rule is defined (re-evaluated only when a name
   it could not find is declared, P5.1), never while another statement is read.
 - **R2.5 Which reading wins.** Rules in reach are those of the scopes the code sees (R4.2). Among readings of a span:
-  longest match first; between equally long readings by different rules, the one declared first reads the whole (declaration
+  longest match first; between equally long readings, one led by a literal (a statement led by a word) reads the whole over
+  one led by a capture (an operator between operands); then, between different rules, the one declared first reads the whole (declaration
   order is precedence, G3.1, and what is declared first binds loosest: a definition containing ` := ` is still a definition);
   a rule written with the same head as an earlier one overrides it (`=>`). Readings still equal are a superposition (U1), not a tie broken by a flag; `.first`/`#` pick.
 - **R2.6 Text no rule reads** is an error, and the error is its diagnostic; reading goes on and the text stays an

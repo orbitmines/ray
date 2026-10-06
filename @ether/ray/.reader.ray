@@ -8,7 +8,7 @@
 // Control flow: a block given after a word is a capture like any other, continued on deeper lines.
 if {condition} then {block} =>
   external goto taken condition
-  external goto done block
+  external goto done
   external label taken
   block
   external label done
@@ -19,10 +19,10 @@ unless {condition} then {block} =>
 while {condition} do {block} =>
   external label again
   external goto body condition
-  external goto done block
+  external goto done
   external label body
   block
-  external goto again block
+  external goto again
   external label done
 
 // Nodes, members, identity. What is declared first binds loosest, so `.` comes after the rules written with it.
@@ -36,3 +36,234 @@ set {x} . {member} to {value} =>
   external set x member value
 {x} . {member} =>
   external get x member
+yes =>
+  external node
+
+// ---------------------------------------------------------------- the reader (spec/Reader.md R1, R2), handed reading at the end
+learned := external learned
+end := learned . end
+space := learned . space
+indent := learned . indent
+
+// Whether `a` is the same character as `b`.
+character {a} is {b} =>
+  external same a b
+
+// The place after `chain` spelled from `at`, or nothing. A space in it also reads a line end and the indentation that
+// continues a statement (R0.1, as the first statement wrote its definer's space).
+spelled {chain} from {at} =>
+  here := at
+  wanted := chain
+  result := yes
+  while wanted do
+    unless here then
+      result := nothing
+      wanted := nothing
+    if here then
+      c := here . character
+      w := wanted . character
+      matches := character c is w
+      continued := nothing
+      unless matches then
+        if character w is space then
+          if character c is end then
+            continued := continuation after here
+      if continued then
+        here := continued
+        wanted := wanted . next
+        matches := nothing
+      if matches then
+        here := here . next
+        wanted := wanted . next
+      unless matches then
+        unless continued then
+          result := nothing
+          wanted := nothing
+  if result then
+    set result . end to here
+  result
+
+// The place after a line end and one or more indentations, or nothing.
+continuation after {at} =>
+  here := at . next
+  more := spelled indent from here
+  found := nothing
+  while more do
+    found := more . end
+    more := spelled indent from found
+  found
+
+// Where the statement starting at `at` ends: the line end not followed by a deeper line (R0.1), or nothing at the text's end.
+statement end from {at} =>
+  here := at
+  found := nothing
+  while here do
+    c := here . character
+    if character c is end then
+      deeper := continuation after here
+      unless deeper then
+        found := here
+        here := nothing
+      if deeper then
+        here := deeper
+    if here then
+      here := here . next
+  found
+
+// Whether `b` comes after `a` before `limit` (walking: there are no integers).
+{b} comes after {a} =>
+  here := a
+  found := nothing
+  while here do
+    here := here . next
+    if same here b then
+      found := yes
+      here := nothing
+  found
+
+// A reading of `pieces` from `at` that ends at `limit`: its `captures` (a chain of `name`, `from`, `to`), or nothing. A capture
+// reads one or more characters, the longest first; one that crosses a line end runs to `limit`.
+readings of {pieces} from {at} to {limit} =>
+  found := nothing
+  unless pieces then
+    if same at limit then
+      found := yes
+      set found . end to at
+  if pieces then
+    literal := pieces . literal
+    if literal then
+      spelt := spelled literal from at
+      if spelt then
+        far := spelt . end
+        within := same far limit
+        unless within then
+          within := limit comes after far
+        if within then
+          found := readings of pieces . next from far to limit
+    unless literal then
+      found := captured pieces from at to limit
+  found
+
+// The ends a capture from `at` can have, the longest first: every place after `at` up to `limit`, but past a line end only
+// `limit` itself.
+ends from {at} to {limit} =>
+  stack := nothing
+  here := at . next
+  crossed := nothing
+  going := yes
+  while going do
+    at_limit := same here limit
+    keep := yes
+    if crossed then
+      unless at_limit then
+        keep := nothing
+    if keep then
+      link := node
+      set link . place to here
+      set link . next to stack
+      stack := link
+    if at_limit then
+      going := nothing
+    unless here then
+      going := nothing
+    if going then
+      c := here . character
+      if character c is end then
+        crossed := yes
+      here := here . next
+  stack
+
+captured {pieces} from {at} to {limit} =>
+  name := pieces . capture
+  rest_pieces := pieces . next
+  ends := ends from at to limit
+  found := nothing
+  while ends do
+    e := ends . place
+    rest := readings of rest_pieces from e to limit
+    if rest then
+      cap := node
+      set cap . name to name
+      set cap . from to at
+      set cap . to to e
+      earlier := rest . captures
+      set cap . next to earlier
+      set rest . captures to cap
+      found := rest
+      ends := nothing
+    if ends then
+      ends := ends . next
+  found
+
+// Whether two chains spell the same.
+chain {a} equals {b} =>
+  x := a
+  y := b
+  result := yes
+  while x do
+    unless y then
+      result := nothing
+      x := nothing
+    if y then
+      c := x . character
+      d := y . character
+      unless character c is d then
+        result := nothing
+        x := nothing
+      if x then
+        x := x . next
+        y := y . next
+  if y then
+    result := nothing
+  result
+
+// Reading handed to the rule defined last (R0.6).
+hand reading over =>
+  latest := external latest
+  external reader latest
+
+// One statement, read where it starts with the rules in reach (R2.5): every rule that reads it whole; between them, one led
+// by a literal over one led by a capture; then one written with the same head as a later one gives way to it (`=>`),
+// otherwise the one declared first reads it (G3.1). The
+// rules come nearest scope first, latest first. Answers the place after the statement.
+read statement at {at} =>
+  scope := external frame
+  limit := statement end from at
+  rules := external rules scope
+  best := nothing
+  best_rule := nothing
+  while rules do
+    rule := rules . rule
+    pieces := rule . pieces
+    r := readings of pieces from at to limit
+    if r then
+      take := yes
+      if best then
+        mine := external head rule
+        theirs := external head best_rule
+        if chain mine equals theirs then
+          take := nothing
+        led := pieces . literal
+        best_pieces := best_rule . pieces
+        best_led := best_pieces . literal
+        if led then
+          unless best_led then
+            take := yes
+        unless led then
+          if best_led then
+            take := nothing
+      if take then
+        best := r
+        best_rule := rule
+    rules := rules . next
+  if best then
+    caps := best . captures
+    external apply best_rule caps scope
+  unless best then
+    external unread at limit
+  after := nothing
+  if limit then
+    after := limit . next
+  after
+
+hand reading over

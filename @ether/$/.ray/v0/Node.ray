@@ -199,7 +199,6 @@ read_within (text, pattern) => (
 
 Node &+= {
   right-to-left internal => this ~~ .access = Accessor(Accessor.Permission.local)
-  right-to-left protected => this ~~ .access = Accessor(Accessor.Permission.protected)
   right-to-left trivially => instance ? this : ?
 }
 

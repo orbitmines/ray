@@ -121,6 +121,7 @@ From the drafts review (2026-10-06).
   protected", `protected INSTANCE`. v0 `Accessor.Permission` has a `protected` member that no spec defines. **Q** —
   Recommend: readable and writable by the class and its subclasses' code (language-level, like `internal`, T3.16); or
   drop it and remove it from `Accessor.Permission`.
+  **Answered (user, 2026-10-06):** dropped; `protected` is removed from `Accessor.Permission`.
 - **T3.24 `internal` in local contexts** — *`.ray2/_todo/…/instance/Access.ray:66–69`*: "You want this to work for local
   contexts too, so cant rely just on class." Extends T3.16. **Q** — Recommend: `internal x` is visible only inside the
   context that declares it: a class, a function or a block.
@@ -133,6 +134,7 @@ From the drafts review (2026-10-06).
   **Decided (draft)**, library: `assign` is an alias of `=`, and `x.clear` sets x to a fresh `static()`.
 - **T3.27 `global = local` at the top of a file** — *`.ray3/Node.ray:60`*. **Q** — Recommend asking. One reading: the
   file's local scope is published as the global one.
+  **Answered (user, 2026-10-06):** every program is a language that defines abstractions (when `!language` is selected). `global = …` sets the language a file reads with, and it is version-controlled: `global = @remote%[version]` takes someone else's setup or another version as the defaults.
 - **T3.28 Values read per reader** — *`.ray2/Character.ray:53–55`*: `Invisible => return Online if
   &who.CURRENT_INSTANCE == ME.CURRENT_INSTANCE; Offline`; "how to say load the expression, not the value". **Q** —
   Recommend (general): a field may hold an expression evaluated per reader (`&@.last`, who reads), not when it is set,

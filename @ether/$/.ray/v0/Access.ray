@@ -11,7 +11,7 @@ Access := class = who: *?, method: `=` | `()` | * = *, filter: Program? {
 {who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))
 
 Accessor := Access{who is Accessor.Permission} {
-  static Permission := enum local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) | private (at: @private) | confidential | protected | public (at: @public) {
+  static Permission := enum local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) | private (at: @private) | confidential | public (at: @public) {
     resolved => this == confidential ? Visibility.policy min managed : this
     chainable < (other: Permission) => resolved.index < other.resolved.index
     reaches (who) => this == public || (this == confidential ? resolved.reaches(who) : at && who is at)

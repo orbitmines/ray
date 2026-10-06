@@ -13,7 +13,7 @@ Calendar := class {
   }
 
   static segments = static*{. is Segment}
-  protected static TimeDefinition = Time{(-> .epoch).every(.calendar == calendar)}
+  internal static TimeDefinition = Time{(-> .epoch).every(.calendar == calendar)}
   static equivalence (from: TimeDefinition) -> (to: TimeDefinition{calendar == this}) => {
     within_same_calendar_system = from.calendar.static == to.calendar.static
 

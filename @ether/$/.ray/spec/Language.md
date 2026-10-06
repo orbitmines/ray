@@ -179,6 +179,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - An inverse is derived when every step of `f` is reversible. A function with some irreversible steps is partially reversible.
 - **From the drafts review (2026-10-06):**
   - **4.5.1 A leftward step is the inverse — Q.** `-1 <- x -> +1` as the inverse notation for going the other way (*`.ray2/Feature/Transaction.ray:71–72`*). Recommend: `f <- x` steps through `f⁻¹`, so `+1 <- x` ≡ `x -> -1` (with §5.2's `<-`).
+    **Answered (user, 2026-10-06):** it is the inverse, defined as a structural step to the left: `<-` walks `.previous` as `->` walks `.next`.
 
 ### 4.6 Composition and calls (*from the drafts review, 2026-10-06*)
 - **4.6.1 `∘` and `Function` — Decided (draft).** A function is a Node on which `(*) => *` is defined: `Function := Node{(args) => *}` (structural). `f ∘ g` (alias `compose`) is `(args) => f(g(args))`, declared right-to-left (G3.3), so `f ∘ g ∘ h` is `f ∘ (g ∘ h)`. *`.ray2/_todo/ray.ray.txt/ray.ray:119–124`* (L§10.3 listed it.)
@@ -642,6 +643,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - Path references within a file `/path/earlier/in/file`: `.ray2/Feature/Choice.ray:27`. Engine.
 - **From the drafts review (2026-10-06):**
   - **10.6.1 Shadowing — Decided (draft).** `x %= y` (also `x.shadow = y`) makes x a shadow of y: reads fall through to y, writes stay in x. A write by anyone other than x's owner copies-on-write into a new entry for the owner. A commit to y is applied to the shadow too, unless the shadow changed that part (then a merge quest). `x %= None` stops shadowing for that path (`IO /instance/entrypoint/entrypoint.* %= None`). *`.ray2/_todo/ray.ray.txt/ray.ray:20`, `…/Ether/instance/entrypoint/entrypoint.ray:4–7, 34–36`* (v0 `Location.shadowing` is only a read fallback.) **Q:** whether a shadow's version and its customisations are reported upstream (`@ether`) by default; recommend only when the shadow's visibility allows (§8.3). **Q:** the spelling `%=` is also §10.1's compound `{op}=` with `%` as modulo; recommend keeping `.shadow =` as the spelling wherever `%=` could read as modulo-assign.
+    **Answered (user, 2026-10-06):** `%=` is modulo-assign, the same as every `op=` (`x = x % 3`); no shadowing operator is needed.
   - **10.6.2 `temporary` — Q.** The note is a single word (*IDE:149*). Recommend, if it is a modifier: the opposite of `persistent`, a value never kept in `Class$` nor in history.
 
 ### 10.7 World

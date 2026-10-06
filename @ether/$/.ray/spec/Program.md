@@ -219,6 +219,7 @@ From the drafts review (2026-10-06).
 - **P7.7 `Program < Language`** — **Q.** *.ray2/Program.ray:367*. P7.1 says a language is a Program level, not the converse.
   Recommend: every Program is also a Language, reading its arguments' text through its parameter types (T4.10), so a
   function is a small language.
+  **Answered (user, 2026-10-06):** yes: every Program is a Language, defining abstractions when `!language` is selected; which language a program reads with is `global`, pinned by version (T3.27).
 - **P7.8 An `as` that depends on its input is a language** — **Q.** *library/Index.ray:782–790*:
   `FileEncodings => static{Expression ==.instance_of File}`, `UTF-8: Language (i: File): String`, any `as` is a language
   when it depends on the input. Recommend adding this as P7.3's criterion (P7.3 stays open as research otherwise).

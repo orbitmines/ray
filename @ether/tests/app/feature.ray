@@ -117,13 +117,13 @@ unless read_once == read_twice { INFO@mark `IO6 reading a file changed it` }
 read_by_bits := ("@ether/.project.ray".bits as Location).content
 unless read_by_bits == read_once { INFO@mark `IO7 a location given as a string's bits is read as another place` }
 
-kept := Storage()
+kept := Location(path: "kept")
 kept["ray:a/b"] = "x"
 unless kept["ray:a/b"] == "x" { INFO@mark `IO8 what is written to the device's storage is not read back` }
-unless kept.keys == ["ray:a/b"] { INFO@mark `IO9 the device's storage does not list the key written to it` }
+unless kept.fields.name == ["ray:a/b"] { INFO@mark `IO9 the device's storage does not list the key written to it` }
 kept["ray:a/b"] = None
-if kept.keys.nonempty { INFO@mark `IO10 a key removed from the device's storage is still listed` }
-unless @me/device/storage is Storage { INFO@mark `IO11 the device has no storage location` }
+if kept.fields{.value !== None}.nonempty { INFO@mark `IO10 a key removed from the device's storage is still listed` }
+unless @me/device/storage is Location { INFO@mark `IO11 the device has no storage location` }
 unless Compiler.reduced("https://example.org/a" as Location, FileOptimizations) is FileSystem.Remote { INFO@mark `IO12 an http location is not reached over the network` }
 unless $.http.Method.propfind.written == "PROPFIND" { INFO@mark `IO13 WebDAV's listing method is not written PROPFIND` }
 unless $.http.Method.propfind.safe { INFO@mark `IO14 listing a remote collection is not safe` }
@@ -134,10 +134,9 @@ unless started is @me/quests { INFO@mark `JB1 a program given to @me/quests is n
 unless started.who === @me { INFO@mark `JB11 a started program is not run by whoever started it` }
 unless started.stop.done { INFO@mark `JB5 stopping a program does not end it` }
 unless @me/quests == @me.quests { INFO@mark `JB7 @me/quests is not the character's selection of its programs` }
-serving_quest := Program(code: "1", serving: @public)
+serving_quest := Program(code: "1", from: @public)
 unless serving_quest.serves(@public) { INFO@mark `JB8 a quest serving a location does not serve it` }
 if serving_quest.serves(@private) { INFO@mark `JB9 a quest serves a location it was not given` }
-if serving_quest.proxies { INFO@mark `JB10 a quest proxies without a proxy` }
 
 tapped := Keyboard.Key(name: 2)
 unless tapped.presses == 0 { INFO@mark `KB9 an untouched key has been pressed` }

@@ -439,6 +439,9 @@ Answers from 2026-09-30.
     key-log event it relies on: backdating is a fork, rejected (or a merge quest) by anyone holding the history.
     Per-world instance keys, each certified by the root, are optional, for unlinkability.
   - **Storage.** Private keys are `none`-readable (W5.6), zeroised on logout, never in a history or cache level.
+  - **Its own project (user, 2026-10-06).** All of this is the project `@ether/Security`; `@ether/Network` is its own
+    project and depends on it. Neither is imported by default, and comparing characters errs in the language unless one
+    of them is (`ERROR@Security`); importing it replaces that with the verified comparison above.
   - **Algorithms are chosen by the root (user, 2026-10-06).** Every key names its algorithm, a language (`$/ed25519`,
     `$/x25519`, `$/noise`, …), and the root policy says which ones its keys use; signing, verifying and the handshake
     use whatever the keys name, so nothing is fixed to one algorithm and changing one is a key event. Only Ed25519,

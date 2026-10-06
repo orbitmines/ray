@@ -49,8 +49,10 @@ Identity := class = keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.
 {threshold: Identity.Threshold} after {wait: Quantity.Temporal} ^keyword => threshold ~~ .wait = wait
 {threshold: Identity.Threshold} vetoable by {veto: Identity.Threshold} ^keyword => threshold ~~ .veto = veto
 
+// A delegation is bound to its holder: it names who may act on it (`to`, a character by its root, or any narrowing),
+// and only that one, verified, acts on it (`Instance.delegated`); the signature covers `to`, so it cannot be renamed.
 Delegation := class = from: Character, to: *, scope: Access = Access(), until: Time = Time.now + 1 day, signature: Encoding.Signed? {
-  hash => from.policy()?.digest.write(Language.ray.write((from.root, to, scope, until)) as Byte[]).bytes
+  hash => from.policy()?.digest.write(Language.ray.write((from.root, to is Character ? to.root : to, scope, until)) as Byte[]).bytes
   valid (at: Time = Time.now) => at < until && signature?.valid && signature.value == hash && from.certified(signature.by, World.ether.clock.now)
   covers (method, target) => valid() && scope.allows(method) && (!scope.filter || scope.filter.entered(target, None))
 }
@@ -61,18 +63,25 @@ Live := Verified{!proof.at && (!proof.delegation || proof.delegation.valid())}
 Character &+= {
   local.write proof: (root: Byte[]?, by: Encoding.Key?, at: Stamp?, session: *?, delegation: Delegation?)?
   identity: Identity?
-  inbox: Encoding.Key?
+  // Private keys are secrets (`none.read`, W2.1 Storage): no store writes them, and logging out zeroises and drops them.
+  // A per-world key's entry is secret as a whole, since it holds the key; pseudonyms are derived from `key`, never kept.
+  none.read inbox: Encoding.Key?
   none.read roots: Encoding.Key[] = []
-  world_keys: (world: World, key: Encoding.Key)[] = []
+  none.read world_keys: (world: World, key: Encoding.Key)[] = []
 
   root => identity?.history.roots.first?.hash
   policy (at: Stamp? = None) => identity ? Identity.logged(identity.history, at) : None
   certified (by: Encoding.Key, at: Stamp, world: World? = None) => policy(at)?.certifies(by, at, world: world) ?? false
-  key_in (world: World?) => world_keys{.world === world}.last?.key ?? key
+  key_in (world: World?) => (world_keys ?? []){.world === world}.last?.key ?? key
   inboxes (at: Stamp = World.ether.clock.now) => policy(at) -- (policy => policy ? policy.certificates{policy.receives(.key, at)}.map(.key) : [])
   pseudonym (root: History.Label) => policy() -- (policy => policy.signing.pair(policy.digest.write([key.secret, (root as String).bytes].flatten).bytes))
 
   chainable == (other) => proof && other?.proof ? proof.root !== None && proof.root == other.proof.root : !proof && !other?.proof && this === other
+  // The same principal: by root, the one a proof carries when verified, else the key log's of one held here (named by a
+  // grant, a delegation or a registry). Finds a principal's grants and entries; never evidence on its own.
+  same (other) => other is Character && (proof?.root ?? root) -- (mine => mine !== None && mine == (other.proof?.root ?? other.root))
+  // Only a verified principal answers for anyone: a claimed one answers for nothing, whatever it names or copies.
+  answers_for (who) => this is Verified && (same(who) || this is who)
   as (=== boolean) => (this is Verified ? this : Instance.local.verified(this)) == @me
   acting => this is Verified ? this : Instance.local.verified(this) ?? ERROR@Access `a character acts only as verified by a handshake or a key held here`
   sealed (commit: History.Commit) => commit.who is Encoding.Key ? commit ~~ (.signature = pseudonym(commit.line.id ?? commit.id).signed(.hash))
@@ -80,14 +89,33 @@ Character &+= {
   delegate (to, scope: Access = Access(), until: Time = Time.now + 1 day) => Delegation(from: this, to, scope, until) -- (made => made ~~ .signature = key.signed(made.hash))
 }
 
+// What security adds to a line: the key-log event it relies on, its signature, its content key with the wraps of it, and
+// its ciphertext. Version control knows none of them (version does not import security).
 History.Commit &+= {
+  relies: Byte[]?
+  signature: *?
+  key: History.Label?
+  wraps: *[] = []
+  sealed: Byte[]?
+
+  more_attributes => [(name: "relies", text: Language.ray.write(relies)) if relies, (name: "key", text: Language.ray.write(key)) if key,
+    (name: "wraps", text: Language.ray.write(wraps)) if wraps.nonempty]
+  more_settings => [(name: "signature", text: Language.ray.write(signature)) if signature]
+  text => sealed ? Language.ray.write(sealed) : change as String
+  given (set, written: String) => this ~~ (.relies = set.relies) ~~ (.signature = set.signature) ~~ (.key = set.key) ~~ (.wraps = set.wraps ?? [])
+    ~~ (set.key ? . ~~ (.sealed = Language.ray.read(written)) ~~ (.change = None) : .)
+  rewritten (change: Program?) => copy ~~ (.change = change) ~~ (.sealed = None unless change === this.change)
+
   covers (signed: Encoding.Signed) => signed.valid && (signed.value as Byte[])[..<hash.count] == hash
   authentic => who is Encoding.Key ? signature#.some(covers(.) && .by == who)
     : who is Character && who.identity?.history.since(None).some(.hash == relies && !(stamp < .stamp))
     && signature#.some(covers(.) && who.certified(.by, stamp))
   signer => who is Encoding.Key ? (sealed ? opened.signer : who)
     : authentic ? who.copy ~~ .proof = (root: who.root, by: signature#.find(covers(.)).by, at: stamp, session: None, delegation: None) : who
-  applied (held) => held -- with (@me = signer) opened.change
+  // Who the runtime verified signed this line, as of its stamp (so never `Live`); None for a line nobody verifiably signed.
+  attested => signer -- (by => by is Verified && by.proof.at ? by : None)
+  // History is attribution, not authority (W2.1): a line runs as its who only when attested, otherwise as whoever replays it.
+  applied (held) => opened -- (plain => attested -- (by => held -- (by ? with (@me = by) plain.change : plain.change)))
 
   label_hash => $.sha256.write((id, change as String).join("") as Byte[]).bytes
   payload => Language.ray.write(line.sealed_sender ? (hash: label_hash, change: change as String, who: who, relies: relies, signature: signature) : (hash: label_hash, change: change as String)) as Byte[]
@@ -107,17 +135,17 @@ History &+= {
   sender: Accessor.Permission?
 
   sealed_sender => sender !== None && sender < Visibility.of(this)
-  covered (grant: Grant) => grant.names(this) ? since(None) : grant.target is Program ? grant.target() -- (got => got is Iterable
+  covered (grant: Grant) => grant.names(this) ? since(None) : grant.target is Program && Grant.checkable(grant.target) ? grant.target() -- (got => got is Iterable
     ? since(None){c => got.some(s => s === c || s is Iterable && s.some(=== c))} : []) : []
   reaches (grant: Grant) => grant.names(this) || covered(grant).some(=== head)
   read_grants => Permissions.current.grants{.access.reads && (reaches(.) || covered(.).nonempty)}
   readers => Visibility.of(this) -- (visible => [read_grants.map(.access.who), @everyone{visible.reaches(.)}].flatten{is Character})
-  following => readers{reader => read_grants{.access.who === reader} -- (granted => granted.empty || granted.some(reaches(.)))}
+  following => readers{reader => read_grants{reader.same(.access.who)} -- (granted => granted.empty || granted.some(reaches(.)))}
   holders => [[@me], (Instance.local.registry, Instance.local.hosted)#].flatten{is Character && .inbox}
   rotations => ordered{c => c.wraps.some(.key == c.id)}
   current_key => public ? None : rotations.last?.id
   readable => !current_key || content_key(current_key) is Encoding.Key
-  keys_for (reader: Character) => read_grants{.access.who === reader}.map(covered(.)).flatten(1).map(.key).compact.unique
+  keys_for (reader: Character) => read_grants{reader.same(.access.who)}.map(covered(.)).flatten(1).map(.key).compact.unique
 
   wrapped (content: Encoding.Key, label, reader: Encoding.Key, policy: Identity) => policy.wrapping(kem: reader.algorithm, kdf: policy.digest, aead: content.algorithm) -- (by =>
     by.tagged(reader, (label as String).bytes, [], content.secret) -- (held => (key: label, cipher: content.algorithm, by: by, tag: held.tag, sealed: held.sealed)))
@@ -128,12 +156,24 @@ History &+= {
 
   rekeying (who: Character, label, readers = following) => who.policy() -- (policy => policy.cipher.generated() -- (content =>
     [[who], readers].flatten.map(.inboxes()).flatten.unique.map(wrapped(content, label, ., policy)).shuffled))
-  rekeyed (who: Character, readers = following) => choose UUID.v1{unique} -- (label => commit(who, Program(code: { . }), id: label, wraps: rekeying(who, label, readers)))
-  shared (reader: Character, who: Character = @me) => (Permissions.current.grant(Access(who: reader, method: Access.Reading), this) unless read_grants.some(.access.who === reader))
-    -- keys_for(reader) -- (keys => keys.empty ? this : commit(who, Program(code: { . }),
-      wraps: keys.map(label => reader.inboxes().map(wrapped(content_key(label), label, ., who.policy()))).flatten(1).shuffled))
-  unshared (reader: Character, who: Character = @me) => read_grants{.access.who === reader} -- (theirs => Permissions.current.grants = Permissions.current.grants{g => !theirs.some(=== g)})
-    -- rekeyed(who, following{!== reader})
+  rekeyed (who: Character, readers = following) => choose UUID.v1{unique} -- (label => wrapping(who, rekeying(who, label, readers), id: label))
+
+  // A line that is not public uses its current content key (a first commit brings one of its own); its who signs it
+  // before and after the storage levels, so the signature covers the ciphertext (L§9.2).
+  committed (made: History.Commit) => (made.wraps.empty && !public && !current_key && made.who is Character && made.who.inbox ? rekeying(made.who, made.id) : made.wraps)
+    -- (keyed => made ~~ (.wraps = keyed) ~~ (.key = keyed.some(.key == made.id) ? made.id : current_key))
+    -- (keyed => keyed.who is Entity ? keyed.who.sealed(keyed.who.sealed(keyed).stored) : keyed.stored)
+  // A commit that only carries wraps of content keys (a reader added, a key rotated).
+  wrapping (who, wraps: *[], id: History.Label = choose UUID.v1{unique}) =>
+    this ~~ .head = committed(History.Commit(id, who, stamp: clock.now, change: Program(code: { . }), wraps: wraps, previous: head, line: this))
+  // A cache line carries the wraps of its key, so it opens without the line it caches.
+  cached_at (commit: History.Commit) => commit.rewritten(Language.ray.write(at(commit).value) as Program) ~~ (.wraps = wraps_of(commit.key) if commit.key)
+  shared (reader: Character, who: Character = @me) => (Permissions.current.grant(Access(who: reader, method: Access.Reading), this) unless read_grants.some(reader.same(.access.who)))
+    -- keys_for(reader) -- (keys => keys.empty ? this
+      : wrapping(who, keys.map(label => reader.inboxes().map(wrapped(content_key(label), label, ., who.policy()))).flatten(1).shuffled))
+  // Revoking compares principals by root (`same`), so a verified copy of the reader revokes the grant made to them.
+  unshared (reader: Character, who: Character = @me) => read_grants{reader.same(.access.who)} -- (theirs => Permissions.current.grants = Permissions.current.grants{g => !theirs.some(=== g)})
+    -- rekeyed(who, following{!.same(reader)})
 }
 
 History &+= {
@@ -147,10 +187,12 @@ Instance &+= {
   none.read handshake_key: Encoding.Key?
 
   login (character: Character) => (registry |= character) -- certified(character)
+  // Keys dropped by logging out are made afresh here (`??=`); a key log whose roots are not held here asks for them (`endorsed`).
   certified (character: Character, world: World? = None) => {
     character.identity ??= founded(character)
     character.key ??= character.policy().signing.pair() unless world
     character.inbox ??= character.policy().agreement.pair() unless world
+    character.world_keys ??= []
     character.world_keys |= (world: world, key: character.policy().signing.pair()) if world && !character.world_keys{.world === world}.nonempty
     renewed(character, world)
     character
@@ -158,6 +200,7 @@ Instance &+= {
 
   founded (character: Character) => {
     root = Identity.algorithms.signing.pair()
+    character.roots ??= []
     character.roots |= root
     identity = Identity(keys: [root.published], signing: root.algorithm)
     identity.history.publish
@@ -169,7 +212,7 @@ Instance &+= {
     log = character.identity.history
     policy = character.policy()
     event = log.commit(character, change).head
-    event.signature |= character.roots.map(.signed(event.hash))#
+    event.signature |= (character.roots ?? []).map(.signed(event.hash))#
     policy.allows(event, log) ? character : Program(name: "sign the key event with more root keys", goal: event, who: character)
   }
   renewed (character: Character, world: World? = None) => [character.key_in(world), character.inbox unless world].compact.map(.published).map(key =>
@@ -181,33 +224,41 @@ Instance &+= {
     pair && (logged_in(character) || character is hosted) && character.certified(pair.published, World.ether.clock.now, world)
       ? character.copy ~~ .proof = (root: character.root, by: pair.published, at: None, session: None, delegation: None) : None)
 
-  delegated (delegation: Delegation) => delegation.valid()
-    ? delegation.from.copy ~~ .proof = (root: delegation.from.root, by: delegation.signature.by, at: None, session: None, delegation)
-    : ERROR@Access `the delegation is unsigned, expired or not certified`
-  host_for (character: Character, delegation: Delegation? = None) => (delegation ? delegated(delegation) : character) ~~ (hosted |= .) ~~ .presence = this
+  // Acting on a delegation takes its signature, scope and expiry, and that whoever presents it (`by`, verified) is the one
+  // it was given to: a delegation seen elsewhere (it travels with handed-over code) is not a bearer token.
+  delegated (delegation: Delegation, by = @me) => !delegation.valid() ? ERROR@Access `the delegation is unsigned, expired or not certified`
+    : !(by is Character ? by.acting : by).answers_for(delegation.to) ? ERROR@Access `a delegation is acted on only by the one it was given to`
+    : delegation.from.copy ~~ .proof = (root: delegation.from.root, by: delegation.signature.by, at: None, session: None, delegation)
+  host_for (character: Character, delegation: Delegation? = None) => (delegation ? delegated(delegation, by: character) : character) ~~ (hosted |= .) ~~ .presence = this
 
   greeted (character: Character, initiator: boolean) => character.policy() -- (policy => policy.handshake.handshake(initiator, handshake_key ??= policy.agreement.pair(), hash: policy.digest))
-  introduction (character: Character, session: Noise.Session) => session.sent(Language.ray.write((name: character.name, identity: character.identity, log: character.identity.history,
+  introduction (character: Character, session: Noise.Session) => session.sent(Language.ray.write((name: character.name, log: character.identity.history,
     by: character.key.published, signature: character.key.signed(session.binding))) as Byte[])
   introduced (session: Noise.Session, message: Byte[]) => Language.ray.read(session.received(message) as String) -- (said => Identity.logged(said.log) -- (policy =>
     policy && said.signature.valid && said.signature.value == session.binding && said.signature.by == said.by && policy.certifies(said.by, World.ether.clock.now)
-      ? Character(name: said.name, identity: said.identity, proof: (root: said.log.roots.first.hash, by: said.by, at: None, session, delegation: None))
+      // The identity is the one derived from the key log just checked; a told `identity` is never taken (its history could certify other keys).
+      ? Character(name: said.name, identity: policy ~~ (.history = said.log), proof: (root: said.log.roots.first.hash, by: said.by, at: None, session, delegation: None))
       : ERROR@Access `the other side is not who its key log says`))
 }
 
+// Handed-over code runs as its giver only through what the runtime verified: the giver's delegation, held by whoever
+// runs it, or the verified signer of its logged run; otherwise as whoever runs it (W2.1 Delegation, W2.17).
 Program &+= {
   delegation: Delegation?
 
-  run => Run.log.commit(who, this).head.opened -- (logged => with (@me = delegation ? Instance.local.delegated(delegation) : logged.who) logged.change)
+  run => Run.log.commit(who, this).head -- (logged => logged.opened -- (plain => delegation ? with (@me = Instance.local.delegated(delegation)) plain.change
+    : logged.attested -- (by => by ? with (@me = by) plain.change : plain.change)))
 }
 
 Run &+= {
-  static replay (logged: History.Commit) => with (@me = logged.signer) logged.opened.change if logs.some(=== logged)
+  // A replay runs as recorded, as of the line's stamp, never with the live permissions of who it replays (W2.1).
+  static replay (logged: History.Commit) => (logged.attested -- (by => by ? with (@me = by) logged.opened.change : logged.opened.change)) if logs.some(=== logged)
 
   may (method, target) => hops.every(. is Live && Permissions.current.allows(., method, target) && (.proof.delegation?.covers(method, target) ?? true))
 }
 
-Recovery := class = character: Character, roots: Encoding.Key[] = [character.policy().signing.pair(), character.policy().signing.pair()], sessions: Noise.Session[] = [] {
+Recovery := class = character: Character, sessions: Noise.Session[] = [] {
+  none.read roots: Encoding.Key[] = [character.policy().signing.pair(), character.policy().signing.pair()]
   log => character.identity.history
   event: History.Commit = History.Commit(who: character, stamp: log.clock.now, change: Program(code: { .keys = roots.map(.published) }), previous: log.head, line: log)
 
@@ -217,4 +268,20 @@ Recovery := class = character: Character, roots: Encoding.Key[] = [character.pol
   received (signed: Encoding.Signed): static => this ~~ (event.signature |= signed if event.covers(signed) && sessions.some(.binding == (signed.value as Byte[])[event.hash.count..]))
   met => Identity.logged(log) -- (policy => policy.recover.met(event, policy))
   appended: static => this ~~ (log.extended(event) if met)
+}
+
+// A commit is signed by an entity's key, when one is held here.
+Entity &+= {
+  sealed (commit: History.Commit) => commit ~~ (.signature = key.signed(.hash) if key)
+}
+
+// End-to-end encryption is one storage level, after deltas and compression (L§9.2).
+Compiler &+= {
+  encrypted := {
+    {commit: History.Commit{key && !sealed}}.stored => commit.enciphered
+    {commit: History.Commit{sealed}}.opened => commit.deciphered
+  }
+
+  stored &+= encrypted
+  levels &+= [encrypted]
 }

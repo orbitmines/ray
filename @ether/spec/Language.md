@@ -594,8 +594,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Draft TODOs not covered above: a text form for when UUIDs cannot be assigned through an interface (ORIG:1), in-between caches (ORIG:18).
 
 - **Decided (user, 2026-10-06): end-to-end encryption.** Every history that is not public is stored encrypted for its
-  readers, by default; it is one storage level (`encrypted`, part of `Compiler.stored`, in `version/`) with the key
-  wrapping in `security/`.
+  readers, by default; it is one storage level (`encrypted`, added to `Compiler.stored` by `security/`) with the key
+  wrapping, both in `security/`; version control knows no keys (World W2.1).
   - A line keeps in plaintext what storing, ordering and checking need: its label, parents, stamp, signature and
     which content key it uses (`with (…; key = K₃)`); its change is ciphertext.
   - A history has a symmetric content key, wrapped for each reader's instance key (HPKE, RFC 9180: X25519, HKDF,
@@ -608,6 +608,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     and only readers check authorship.
   - Merging happens on readers' machines (a server keeps both heads); caches are encrypted with the same key or kept
     local; deltas and compression come before encryption; backends (git) carry ciphertext.
+  - **Follows (2026-10-06): logout by access.** What logging out drops is every secret, a `none.read` field, rather
+    than every field holding an `Encoding.Key`: each key it holds (lists and tuples of keys included) is zeroised and
+    the field set to None, so the next login makes fresh keys; World still knows nothing of Security (World W2.1 Storage).
   - **Decided (user, 2026-10-06): logout.** Logging out zeroises every key on the character, without World knowing
     Security: `character.fields{.value is Encoding.Key}.for(.value.zeroised)` (the instance key, Security's `inbox`,
     and any key field added later; pseudonyms are derived from the instance key, so they go with it).

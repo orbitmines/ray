@@ -104,13 +104,22 @@ Instance := class: Location + Entity {
 
   login (character: Character) => (registry |= character) -- character
   logged_in (character: Character) => character is registry
+  // Logging out drops every secret on the character, whichever field holds it: each `none.read` field is zeroised and
+  // set to None, so the next login makes fresh keys (W2.1 Storage). The entry removed is the character itself, or the one
+  // a verified copy answers for (`answers_for`), never one a claimed character only names.
   logout (character: Character, delete_all = false) => {
-    registry = registry#{!== character}
-    character.fields{.value is Encoding.Key}.for(.value.zeroised)
-    character.key = None
+    registry = registry#{!(. === character || character.answers_for(.))}
+    character.fields{Visibility.secret(.)}.for(field => {
+      Instance.keys_in(field.value).for(.zeroised)
+      character[field.name] = None
+    })
     deletions.push Deletion(character) if delete_all
     character
   }
+  // The keys a secret holds: a key, or a list of keys or of tuples holding keys (`world_keys`); never what else a tuple names.
+  static keys_in (value) => value is Encoding.Key ? [value]
+    : value is *[] ? value.map(. is Encoding.Key ? [.] : .fields.value{is Encoding.Key}).flatten(1)
+    : []
   swap (from: Character, to: Character) => {
     logout(from)
     login(to)
@@ -139,7 +148,7 @@ Instance := class: Location + Entity {
 Online := Character{presence?.device.network.connected}
 Offline := Character{!(. is Online)}
 Broadcasting := Character{quests{serves @public}.nonempty}
-Hosting := Character{presence?.hosted#.some(!== this)}
+Hosting := Character{presence?.hosted#.some(!.same(this))}
 Proxying := Character{quests{proxies}.nonempty}
 Invisible := Character{constraint is Invisible}
 Idle := Character{presence && !device.keyboard.keys.some([.pressed, .pressed.previous**].flatten{== true}.first?.when >= Time.now - 5 minutes)}

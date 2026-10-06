@@ -53,6 +53,7 @@ Source: `private-journal/public/archive/projects/2030+? Project - Gamification.m
 - Proposal, as classes:
   - `Character` — permanent, one per `@player`.
   - `Avatar` — per world or group of worlds; a set of unlocked skills and paths traversed; can be copied and merged (components, L§1.5 `+`).
+    (2026-10-06: there is no `Avatar` class. An avatar is one of the character's names, a location such as `@github.com/@alice` or `#world/@alice`; skills are on the character, and per-world progress is its history narrowed to that world.)
   - `Skill` — a class of quests (a type over quests). Proficiency = recent verified solutions in that class, decaying over time against a historic baseline (*G:377*).
   - Progress is awarded only for **verified** solutions whose effect is measured downstream (the solution is used, the benchmark moved) — this is the anti-gaming rule (*G:382–383*).
 - **Decided:** proficiency decays. Unused, it is partially lost against the historic baseline.

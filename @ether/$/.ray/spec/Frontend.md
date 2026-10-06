@@ -324,6 +324,7 @@ entry stays as the record of the question, and this section overrides it.
   on String, since a String is text.
 - **F-C3.** No `Link` component: a location (`@https://…` and the like) renders as a link by
   default. `@orbitmines.avatars.map => .location{: URL} => .platform.profile_picture` is enough.
+  (2026-10-06: avatars are names, locations like `@github.com/@orbitmines` — the `@` segment marks a character on the platform, `@github.com/package` is a package — so `@orbitmines.avatars` is already the list of locations to render.)
 - **F-C5.** `DownloadButton` and `LoginButton` were examples. Components like them come from the
   orbitmines.com library in that repository, not from UI.
 - **F-C6.** Articles, the Almanac and profiles are pure Ray: every paragraph, heading and

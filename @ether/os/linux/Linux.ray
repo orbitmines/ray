@@ -12,8 +12,8 @@ OS.Linux := class: OS {
   bit => (external random) ? 1 : 0
   now: Time => nondeterministic (external time) ns ± ((external time).resolution) ns
   // tzfile(5): $TZDIR, else /usr/share/zoneinfo (https://man7.org/linux/man-pages/man5/tzfile.5.html)
-  time_zones: TimeZone.Source => TimeZone.Zoneinfo(directory: (this["TZDIR"] ?? "/usr/share/zoneinfo") as Location)
-  fonts: Location[] => ["/usr/share/fonts" as Location]
+  time_zones: TimeZone.Source => TimeZone.Zoneinfo(directory: (this["TZDIR"] as Location ?? @/usr/share/zoneinfo))
+  fonts: Location[] => [@/usr/share/fonts]
 
   tcp (address: String, bytes: Byte[]) => external network `tcp` (address, bytes)
   udp (address: String, bytes: Byte[]) => external network `udp` (address, bytes)

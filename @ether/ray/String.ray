@@ -92,6 +92,7 @@ String := class: Char[] {
   camel_case | camelcase | camelCase => words[0].lower_case, words[1..].title_case
   pascal_case | pascalcase | PascalCase => words.title_case as String
 
+  //TODO Uncide support
   plural => ends_with("s") ? this : this + "s"
   singular => ends_with("s") ? this[..<-1] : this
 

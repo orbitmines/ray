@@ -12,7 +12,7 @@ OS.Windows := class: OS {
   bit => (external random) ? 1 : 0
   now: Time => nondeterministic (external time) ns ± ((external time).resolution) ns
   time_zones: TimeZone.Source => ICU()
-  fonts: Location[] => ["C:/Windows/Fonts" as Location]
+  fonts: Location[] => [@C:/Windows/Fonts]
 
   tcp (address: String, bytes: Byte[]) => external network `tcp` (address, bytes)
   udp (address: String, bytes: Byte[]) => external network `udp` (address, bytes)

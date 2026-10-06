@@ -1,0 +1,14 @@
+// A MAC address (EUI-48): six octets. Its canonical text is IEEE 802's: the octets in uppercase hexadecimal, separated by
+// hyphens (AC-DE-48-00-00-80; https://standards.ieee.org/wp-content/uploads/import/documents/tutorials/eui.pdf,
+// https://www.rfc-editor.org/rfc/rfc7042#section-2.1). It is read as written elsewhere too: with colons, as most systems
+// print it (ac:de:48:00:00:80), or as three dot-separated groups (acde.4800.0080).
+MAC := class: Binary₄₈ (
+  (octets: Hexadecimal₂[]{length == 6}).join("-")
+  | (octets: Hexadecimal₂[]{length == 6}).join(":")
+  | (groups: Hexadecimal₄[]{length == 3}).join(".")
+) => {
+  // The first octet's lowest bit: one station (0) or a group (1); the next bit: assigned by the manufacturer (0) or locally (1).
+  multicast => (this as Byte[]).first & 1 == 1
+  locally_administered => (this as Byte[]).first & 2 == 2
+  as (=== String) => (this as Byte[]).map((. as Hexadecimal₂ as String).upper_case).join("-")
+}

@@ -10,7 +10,7 @@ OS.Windows := class: OS {
   received (stream: String) => external io stream None
   launch (location: Location) => external os `open` (location as String)
   bit => (external random) ? 1 : 0
-  now: Time => nondeterministic (external time) ns ± (external time).resolution
+  now: Time => nondeterministic (external time) ns ± ((external time).resolution) ns
   time_zones: TimeZone.Source => ICU()
   fonts: Location[] => ["C:/Windows/Fonts" as Location]
 
@@ -18,7 +18,7 @@ OS.Windows := class: OS {
   udp (address: String, bytes: Byte[]) => external network `udp` (address, bytes)
   // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the connection, and the protocol of `offered` the two sides agreed on.
   tls (address: String, offered: String[]) => external network `tls` (address, offered) as (connection: *, protocol: String?)
-  mac_address: Binary₄₈? => external os `mac_address`
+  mac_address: MAC? => external os `mac_address`
   connected: boolean => external network `connected`
 
   // Windows 10 1703+ ships ICU and its tz data as icu.dll (https://learn.microsoft.com/en-us/windows/win32/intl/international-components-for-unicode--icu-), ucal API (https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/ucal_8h.html)

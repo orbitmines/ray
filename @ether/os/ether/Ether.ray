@@ -18,7 +18,7 @@ OS.Ether := class: OS {
   udp (address: String, bytes: Byte[]) => ERROR@OS `UDP is not written in Ray yet`
   // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301)
   tls (address: String, offered: String[]) => ERROR@OS `TLS 1.3 is not written in Ray yet`
-  mac_address: Binary₄₈? => None
+  mac_address: MAC? => None
   connected: boolean => ERROR@OS `a network in Ray is not written yet`
 }
 OS |= OS.Ether

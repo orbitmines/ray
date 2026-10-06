@@ -45,12 +45,12 @@ OS &+= {
   // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the
   // connection, and the protocol of `offered` the two sides agreed on.
   tls (address: String, offered: String[]) => ERROR@OS `the operating system has no TLS`
-  mac_address: Binary₄₈? => None
+  mac_address: MAC? => None
   connected: boolean => ERROR@OS `the operating system does not say whether it is on a network`
 }
 
 Device &+= {
-  network: (mac: Binary₄₈, connected: boolean) = (mac: os.mac_address ?? (Binary₄₈.random ~~ .[7] = 1), connected: os.connected ?? false)
+  network: (mac: MAC, connected: boolean) = (mac: os.mac_address ?? (MAC.random ~~ .[7] = 1), connected: os.connected ?? false)
 }
 
 Instance &+= {

@@ -1,0 +1,5 @@
+// A MAC address reads as systems write it and writes as IEEE 802 does.
+unless ("04:7c:16:4e:3a:42" as MAC) as String == "04-7C-16-4E-3A-42" { INFO@mark `MAC1 a colon-separated address is not written canonically` }
+unless "04-7C-16-4E-3A-42" as MAC == "047c.164e.3a42" as MAC { INFO@mark `MAC2 one address in two notations is not one address` }
+if "04:7c:16:4e:3a" is MAC || "04:7c:16:4e:3a:4g" is MAC { INFO@mark `MAC3 five octets or a non-hexadecimal digit was taken for an address` }
+unless ("03-00-00-00-00-00" as MAC).multicast && ("02-00-00-00-00-00" as MAC).locally_administered { INFO@mark `MAC4 the group and local bits are not read from the first octet` }

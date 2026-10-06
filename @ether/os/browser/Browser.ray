@@ -10,7 +10,7 @@ OS.Browser := class: OS {
   sent (stream: String, content) => external io stream content
   received (stream: String) => external io stream None
   bit => (external random) ? 1 : 0
-  now: Time => nondeterministic (external time) ns ± (external time).resolution
+  now: Time => nondeterministic (external time) ns ± ((external time).resolution) ns
   time_zones: TimeZone.Source => Intl()
   fonts: Location[] => []
 

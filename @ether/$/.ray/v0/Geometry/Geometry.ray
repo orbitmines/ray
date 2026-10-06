@@ -12,7 +12,7 @@ Geometry := class {
 
   Metric := (a: Vector, b: Vector): Length
   euclidean: Metric = (a, b) => √(Space.current.between(a, b).map(. ^ 2).sum)
-  graph: Metric = (a, b) => Place(a).path_to(Place(b)) -- (. is Quest ? . : .map(path => path.zip(path.rest).map(Space.current.edge_length(.0.at, .1.at)).sum).min)
+  graph: Metric = (a, b) => Place(a).path_to(Place(b)) -- (. is Abstract ? . : .map(path => path.zip(path.rest).map(Space.current.edge_length(.0.at, .1.at)).sum).min)
 
   Axis := class: Ray = continuous: boolean = true, loop: boolean = false, extent: Length?, orientation: -1 | +1 = +1 {
     coordinate => continuous ? Number : Integer

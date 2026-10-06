@@ -8,19 +8,19 @@ three := Instance(location: None, key: 3)
 
 locked := Encoding.Encrypted(value: 5, key: 1)
 unless locked.opened(one) == 5 { INFO@mark `EN1 what is locked does not open with its key` }
-unless locked.opened(two) is Quest { INFO@mark `EN2 it opens with the wrong key` }
+unless locked.opened(two) is Abstract { INFO@mark `EN2 it opens with the wrong key` }
 kept := Encoding.Encrypted(value: 5, key: 3)
-if kept.opened(three) is Quest { INFO@mark `EN8 what is held is not read back where the key is` }
-unless kept.opened(two) is Quest { INFO@mark `EN9 it is read back where the key is not` }
+if kept.opened(three) is Abstract { INFO@mark `EN8 what is held is not read back where the key is` }
+unless kept.opened(two) is Abstract { INFO@mark `EN9 it is read back where the key is not` }
 unless kept.opened(three) == 5 { INFO@mark `EN10 what is read back is not what was put in` }
 open_to_none := Encoding.Encrypted(value: 5, key: None)
-unless open_to_none.opened(Instance(location: None)) is Quest { INFO@mark `EN21 a value held under nothing comes back at nothing` }
-unless open_to_none.opened(one) is Quest { INFO@mark `EN22 a value held under nothing comes back anywhere` }
+unless open_to_none.opened(Instance(location: None)) is Abstract { INFO@mark `EN21 a value held under nothing comes back at nothing` }
+unless open_to_none.opened(one) is Abstract { INFO@mark `EN22 a value held under nothing comes back anywhere` }
 
 held_there := Encoding.Encrypted(value: 5, key: 7)
 unless held_there.opened(Instance(location: None, key: 7)) == 5 { INFO@mark `EN30 a value does not open at an instance holding its key` }
-unless held_there.opened(Instance(location: None, key: 8)) is Quest { INFO@mark `EN31 a value opens at an instance holding another key` }
-unless held_there.opened(Instance(location: None)) is Quest { INFO@mark `EN32 a value opened without its key does not ask to find it` }
+unless held_there.opened(Instance(location: None, key: 8)) is Abstract { INFO@mark `EN31 a value opens at an instance holding another key` }
+unless held_there.opened(Instance(location: None)) is Abstract { INFO@mark `EN32 a value opened without its key does not ask to find it` }
 unless held_there.opened(Character(name: "k", key: 7)) == 5 { INFO@mark `EN33 a value does not open for a character holding its key` }
 unless held_there.opened(Instance(location: None, key: 7)) == 5 { INFO@mark `EN34 a value opened with its key is not what was put in` }
 
@@ -33,7 +33,7 @@ unless anywhere as one == 4 { INFO@mark `EN23 a packed value does not come back 
 unless anywhere as Number == 4 { INFO@mark `EN24 a packed value does not come back at nothing` }
 nested := Encoding.Encrypted(value: 5 as $.gzip, key: 1)
 unless nested.opened(one) as Number == 5 { INFO@mark `EN15 what is packed inside what is locked does not come back` }
-unless nested.opened(two) is Quest { INFO@mark `EN16 what is locked around a packed value opens with the wrong key` }
+unless nested.opened(two) is Abstract { INFO@mark `EN16 what is locked around a packed value opens with the wrong key` }
 
 sha := Encoding.Hash(value: 5, algorithm: $.sha256)
 unless sha == Encoding.Hash(value: 5, algorithm: $.sha256) { INFO@mark `EN5 two like digests are not the same` }

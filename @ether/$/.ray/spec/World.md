@@ -502,9 +502,9 @@ Decided 2026-10-06 (history queries).
 
 Decided 2026-10-06 (processes).
 
-- **W6.12** The language makes no process calls; running anything is running a Program (L§8.4). A running program is a
-  quest with a `who` (2026-10-06, replacing jobs): `@me/quests/<id>`, `.output` as a history, `.stop()`; `@me/quests` lists
-  them and `@me/quests |= program` starts one. The daemon is Ether's scheduler for the computer's quests.
+- **W6.12** The language makes no process calls; running anything is running a Program (L§8.4). Every program is a
+  quest with a `who` (2026-10-06, replacing jobs; no `Quest` class): `@me/quests` (= `@me.quests`) is the selection of the
+  character's running programs, `@me/quests |= program` starts one, `.stop()` ends one. The daemon is Ether's scheduler.
 - **W6.13** Like the other device locations (W8), the browser's storage is `@me/device/storage/<key>` (the page keeps it in
   `localStorage`) and the browser's time zones are `@me/device/os/zones` (the page answers from `Intl.DateTimeFormat`).
   A file system over HTTP is `$.http`: GET, PUT, DELETE, and WebDAV's PROPFIND to list.

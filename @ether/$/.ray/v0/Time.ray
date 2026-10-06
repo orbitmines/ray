@@ -192,7 +192,7 @@ TimeZone := class (name: String) {
   static Source := class {
     directory: Location?
     data (zone: String) => None
-    at (zone: String, time: Time) => Quest(name: "the offset in force in the zone", goal: zone)
+    at (zone: String, time: Time) => Program(name: "the offset in force in the zone", goal: zone)
   }
 
   // IANA tz database compiled to TZif (RFC 8536), one file per zone, read only when that zone is asked for (https://data.iana.org/time-zones/tz-link.html, https://man7.org/linux/man-pages/man5/tzfile.5.html for $TZDIR)
@@ -230,7 +230,7 @@ TimeZone := class (name: String) {
     {os: OS{zoneinfo}} => TimeZone.Zoneinfo(directory: os.zoneinfo)
     {os: OS{name == windows}} => TimeZone.ICU()
     {os: OS{name == browser}} => TimeZone.Intl()
-    {os: OS} => Quest(name: "time-zone data on an operating system that has none", goal: os)
+    {os: OS} => Program(name: "time-zone data on an operating system that has none", goal: os)
   }
   static source: Source => Compiler.reduced(@me/device/os, sources)
 

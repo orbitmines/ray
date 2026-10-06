@@ -13,7 +13,7 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
   static project (name: String) => projects{.name == name}.first
     ?? Project.known(ray.bundled("$/" + name)) -- (found => found ~~ (.name = name) ~~ projects.push(.) ~~ .load if found)
   static found (name: String) => name.lower_case -- (lowered => lowered == "ray" ? ray
-    : (project(lowered) ? Language#{.names("." + lowered)}.last : named("." + lowered)) ?? Quest(name: "a language by that name", goal: lowered))
+    : (project(lowered) ? Language#{.names("." + lowered)}.last : named("." + lowered)) ?? Program(name: "a language by that name", goal: lowered))
 
   static Fidelity := enum lossless | snapshot
 
@@ -50,10 +50,10 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
   admits (program) => true
   read (source) => level
     ? Compiler.reduced(source, level + Compiler.stored + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`)
-    : Quest(name: "a reader for the language", goal: this)
+    : Program(name: "a reader for the language", goal: this)
   write (value) => written
     ? Compiler.reduced(Writing(value, language: this), unwrapped + written + Compiler.stored + (stored ?? Compiler.none)) -- (. is Entry ? . : . as String)
-    : Quest(name: "a writer for the language", goal: this)
+    : Program(name: "a writer for the language", goal: this)
   written_to (value, location: Location) => write(value) -- (. is Entry ? .files.for(location / .path = .content) : location.write(.)) -- location
   converted (location, from: Language) => write(from.read(location))
   tree_at (location: Location, label) => read(location).at(label).tree

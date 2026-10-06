@@ -141,17 +141,13 @@ unless Compiler.reduced("https://example.org/a" as Location, FileOptimizations) 
 unless $.http.Method.propfind.written == "PROPFIND" { INFO@mark `IO13 WebDAV's listing method is not written PROPFIND` }
 unless $.http.Method.propfind.safe { INFO@mark `IO14 listing a remote collection is not safe` }
 
-quests := Quests()
-quests |= Program(code: "1")
-unless quests.all.count == 1 { INFO@mark `JB1 a program given to the quests is not listed` }
-started_quest := quests.all.first
-if started_quest.running { INFO@mark `JB2 a new quest is already running` }
-unless quests[started_quest.name] === started_quest { INFO@mark `JB3 a quest is not found at its name` }
-unless started_quest.output is History { INFO@mark `JB4 a quest's output is not a history` }
-unless started_quest.who === @me { INFO@mark `JB11 a started quest is not run by whoever started it` }
-unless started_quest.stop.done { INFO@mark `JB5 stopping a quest does not end it` }
-unless @me/quests is Quests { INFO@mark `JB7 the machine has no quests location` }
-serving_quest := Quest(code: "1", serving: @public)
+started := Program(code: "1")
+@me/quests |= started
+unless @me/quests ∋ started { INFO@mark `JB1 a program given to @me/quests is not among them` }
+unless started.who === @me { INFO@mark `JB11 a started program is not run by whoever started it` }
+unless started.stop.done { INFO@mark `JB5 stopping a program does not end it` }
+unless @me/quests == @me.quests { INFO@mark `JB7 @me/quests is not the character's selection of its programs` }
+serving_quest := Program(code: "1", serving: @public)
 unless serving_quest.serves(@public) { INFO@mark `JB8 a quest serving a location does not serve it` }
 if serving_quest.serves(@private) { INFO@mark `JB9 a quest serves a location it was not given` }
 if serving_quest.proxies { INFO@mark `JB10 a quest proxies without a proxy` }

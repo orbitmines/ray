@@ -10,12 +10,12 @@ Git<format: Format = Format.sha1> := class: Language {
     static sha1 = Format(name: "sha1", hash: SHA1, size: 20)
     static sha256 = Format(name: "sha256", hash: SHA256, size: 32)
     // extensions.objectFormat names the format, case-insensitively; any other name is a repository git cannot read (https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionsobjectFormat)
-    static (name: String) as (=== Format) => [sha1, sha256].find(.name == name.fold_case) ?? Quest(name: "an object format by that name", goal: name)
+    static (name: String) as (=== Format) => [sha1, sha256].find(.name == name.fold_case) ?? Program(name: "an object format by that name", goal: name)
   }
   static sha1 = Format.sha1
   static sha256 = Format.sha256
   // Compatibility mode, each object named in both formats through a translation table (https://git-scm.com/docs/hash-function-transition#_translation_table, https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionscompatObjectFormat)
-  static compatible = Quest(name: "extensions.compatObjectFormat: every object named in a second format beside the repository's own", goal: Format)
+  static compatible = Program(name: "extensions.compatObjectFormat: every object named in a second format beside the repository's own", goal: Format)
 
   // An object name written out: two hexadecimal digits a byte, 40 in SHA-1, 64 in SHA-256 (https://git-scm.com/docs/hash-function-transition#_object_names)
   Id := Hexadecimal{length == format.size * 2}

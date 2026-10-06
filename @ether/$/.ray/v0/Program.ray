@@ -6,7 +6,7 @@ Program &+= {
   target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\"}.first
   holding (name: String) => written.some(.is_label && .code == name + "\") ? this : written.map(.holding(name)){!= None}.first
   crosses (jump: Program) => !target_of(jump) && holding(jump.jump.name)
-  called_at (jump: Program) => holding(jump.jump.name) -- Quest(code: .code, at: .target_of(jump), started: true).finished.results.last
+  called_at (jump: Program) => holding(jump.jump.name) -- .copy ~~ (.at = .target_of(jump)) ~~ (.started = true) -- .finished.results.last
 
   flow => written.map(step => (step, jumps_to: step.is_jump ? target_of(step) : None, falls_through: !step.is_jump || step.is_conditional || crosses(step)))
   jumps_backward => written.some(step => step.is_jump && written.index_of(target_of(step)) <= written.index_of(step))
@@ -25,12 +25,9 @@ Program &+= {
   effects => Effects.of(this)
   schedule (on = @me) => on.quests |= this
 
-  running => Quest(code)
-  & => running.&
-  expand => written
-  concurrently => written.map(. is Quest ? . : Quest(code: .code))
+  concurrently => written
 
-  right-to-left branch => Quest(code) -- Quest.branches.push(.)
+  right-to-left branch => copy -- Program.branches.push(.)
   right-to-left sync => concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
   right-to-left race => concurrently
     -- (.map(.stepped) while .every(.holds))
@@ -38,9 +35,9 @@ Program &+= {
     -- .{is_terminal}.first.results.last
   right-to-left rush => concurrently
     -- (.map(.stepped) while .every(.holds))
-    -- Quest.branches.push(.{holds})
+    -- Program.branches.push(.{holds})
     -- .{is_terminal}.first.results.last
-  right-to-left defer => Quest(code) -- Quest.deferred.push(.)
+  right-to-left defer => copy -- Program.deferred.push(.)
 
   right-to-left transaction => {
     branch = &caller.history.fork

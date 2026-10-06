@@ -29,7 +29,7 @@ Accessor := Access{who is Accessor.Permission} {
   derived (from) => from.access ?? this
 
   static Consistency := class = replicas: *[] = [] {
-    read (value) => replicas.every(.synced) ? value : Quest(name: "wait for the replicas", goal: value)
+    read (value) => replicas.every(.synced) ? value : Program(name: "wait for the replicas", goal: value)
   }
 }
 
@@ -79,7 +79,7 @@ Run := class = actor: Character?, origin: Character[] = [], settings: Settings? 
   hops | chain => origin.contains(actor) ? origin : (origin, actor)
 
   may (method, target) => hops.every(Permissions.current.allows(., method, target))
-  ask (method, target) => may(method, target) ? true : Quest(name: prompt, goal: Grant(Access(origin.first, method), target))
+  ask (method, target) => may(method, target) ? true : Program(name: prompt, goal: Grant(Access(origin.first, method), target))
 
   static called (character: Character) => character.PREFIX + character.name
   prompt => called(origin.first) + " wants to run this"

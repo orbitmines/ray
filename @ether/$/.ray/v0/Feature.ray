@@ -13,8 +13,8 @@ Location &+= {
 }
 
 FileSystem := class: Language {
-  read (location: Location) => Quest(name: "a reader for the location", goal: location)
-  write (location: Location, content) => Quest(name: "a writer for the location", goal: location)
+  read (location: Location) => Program(name: "a reader for the location", goal: location)
+  write (location: Location, content) => Program(name: "a writer for the location", goal: location)
   listing (location: Location) => []
   exists (location: Location) => read(location) != None
   removed (location: Location) => write(location, None)
@@ -50,7 +50,7 @@ FileSystem := class: Language {
       : remotely(location).run({ inner(location).listing })
   }
   static Mirrored := class: FileSystem {
-    read (location: Location) => Quest(name: "the content at a location of a project not held here, from a mirror (World W2.9) or a shard (World W2.7, Universal U7) of it, kept by a cache level (Language §9.1, §9.2)", goal: location)
+    read (location: Location) => Program(name: "the content at a location of a project not held here, from a mirror (World W2.9) or a shard (World W2.7, Universal U7) of it, kept by a cache level (Language §9.1, §9.2)", goal: location)
   }
   static Device := class: FileSystem {
     on (location: Disk) => Instance#{.device === location.device}.first -- (. && . !== Instance.local ? Remote() : Posix())
@@ -121,17 +121,17 @@ Node &+= {
 Proof := class = proposition: *, argument: * {
   static Proposition := class = holds: boolean = true, fact: *?, verified = false {
     negated => Proposition(holds: !holds, fact)
-    quest => Quest(name: "verify the assumption", goal: fact)
+    quest => Program(name: "verify the assumption", goal: fact)
     verify (actual) => verified = actual == fact
     rolled_back => !verified
   }
 
   holds => argument.holds
 
-  static theorem | lemma | example (proposition, proof) => proof.holds ? true : Quest(name: "prove", goal: proposition)
+  static theorem | lemma | example (proposition, proof) => proof.holds ? true : Program(name: "prove", goal: proposition)
   static by_contradiction | contradiction (proposition, proof_of_negation) => !proof_of_negation.holds
   static rfl (proposition) => proposition.holds
-  static failed (error) => Quest(name: "fix", goal: error)
+  static failed (error) => Program(name: "fix", goal: error)
 }
 
 ! `+` `-`
@@ -190,7 +190,7 @@ Device := class {
   opened: Location?
   memory: Store = Store(at: @"memory")
   storage: Storage = Storage()
-  quests: Quests = Quests()
+  quests => Program#{who ∋ this && running}
   disk => Disk(device: this, path: "")
 
   choose (s, n: Number = 1) => Choice.algorithm ? Choice.algorithm(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random

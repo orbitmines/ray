@@ -1,8 +1,8 @@
 Skill := class: Nameable = quests: *, baseline = 0 {
-  solved: Quest?
+  solved: Program?
 
-  covers (quest: Quest) => quest is quests
-  solve (quest: Quest): static => this ~~ .solved = quest
+  covers (quest: Program) => quest is quests
+  solve (quest: Program): static => this ~~ .solved = quest
   recent (within: Quantity.Temporal) => solved.history{Time.now - .when < within}
   proficiency (within: Quantity.Temporal) => {
     counted = recent(within).count

@@ -39,13 +39,13 @@ Network &+= {
 
   static Handshake := class {
     version => 0
-    offer (versions) => versions{== version}.last ?? Quest(name: "agree on a version", goal: versions)
+    offer (versions) => versions{== version}.last ?? Program(name: "agree on a version", goal: versions)
   }
 
   static Remote := class = character: Character, location: Location = @remote {
     static Execution := class = code: *, as: Character, at: Location
 
-    run (code) => character.key ? Execution(code, as: character, at: location) : Quest(name: "authorise", goal: code)
+    run (code) => character.key ? Execution(code, as: character, at: location) : Program(name: "authorise", goal: code)
     fresh (code) => Remote(Character(name: "unauthorised"), location).run(code)
   }
 

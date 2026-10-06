@@ -7,7 +7,7 @@ wg := World(name: "genesis")
 wp := wg.add(Player(name: "alice"))
 unless wp.name == "alice" { INFO@mark `WO1 spawned player lost its name` }
 unless wg.characters.count == 1 { INFO@mark `WO2 world has other than one character` }
-wq := Quest(name: "find", goal: None)
+wq := Program(name: "find", goal: None)
 if wq.done { INFO@mark `WO3 a new quest is done` }
 wh := History(repository: wg)
 unless wh.commit(wp, "hello").count == 1 { INFO@mark `WO4 a commit did not add to the history` }
@@ -26,7 +26,7 @@ unless here.children.count == 1 { INFO@mark `LO3 the holder does not hold one` }
 unless there.parent { INFO@mark `LO4 a held location has no parent` }
 
 // Tasks, references, characters and repositories: what a class says it holds.
-wt := Quest(name: "walk")
+wt := Program(name: "walk")
 if wt.stopped { INFO@mark `TA1 a new quest is stopped` }
 unless wt.stop.stopped { INFO@mark `TA2 a stopped quest is not stopped` }
 
@@ -122,10 +122,10 @@ if Permissions.current.allows(reader, `size`, night_target) { INFO@mark `AC9 a g
 if Permissions.current.allows(reader, `=`, day_target) { INFO@mark `AC10 a read grant allows writing` }
 
 // A quest is a program with someone to run it; a step defined nowhere is one they do themselves.
-errand := Quest(name: "fetch", goal: wi)
+errand := Program(name: "fetch", goal: wi)
 if errand.done { INFO@mark `QU1 a new quest is already done` }
 unless errand.abstract.count == 1 { INFO@mark `QU2 a quest given only a name is not one step its runner does` }
-staged := Quest(code: "go(wi)\ntake(wi)", goal: wi)
+staged := Program(code: "go(wi)\ntake(wi)", goal: wi)
 unless staged.difficulty == 2 { INFO@mark `QU3 a quest of two steps is not two hard` }
 unless staged.who === @me { INFO@mark `QUW1 a quest is not run by whoever made it` }
 unless errand.complete.done { INFO@mark `QU4 completing a quest does not` }
@@ -135,7 +135,7 @@ unless wg.add(errand) == errand { INFO@mark `QU6 posting a quest does not answer
 unless wg.quests.count == 1 { INFO@mark `QU11 posting a quest does not put it in the world` }
 
 // A quest can be stopped; a stopped quest is done.
-carrying := Quest(name: "carry", goal: wi)
+carrying := Program(name: "carry", goal: wi)
 unless carrying.stop.done { INFO@mark `QU8 stopping a quest does not end it` }
 
 // Where someone is says how they are, and saying nothing holds them to nothing.
@@ -218,7 +218,7 @@ unless Character(name: "s").status.contains(Offline) { INFO@mark `CS3 a characte
 if Character(name: "s").status.contains(Online) { INFO@mark `CS4 a character nowhere reads as online` }
 if Character(name: "s") is Idle { INFO@mark `CS5 a character nowhere is idle` }
 if Character(name: "s") is Busy { INFO@mark `CS6 a character with nothing to focus on is busy` }
-focused := Character(name: "f", focus: Quest(name: "focus"))
+focused := Character(name: "f", focus: Program(name: "focus"))
 unless focused is Busy { INFO@mark `CS7 a character focused on a quest is not busy` }
 focused.focus.stop
 if focused is Busy { INFO@mark `CS8 a character whose focus is done is still busy` }
@@ -274,9 +274,9 @@ cw := Character(name: "viewer")
 unless Program(code: { cw ? true : false }).run_as(cw) { INFO@mark `CW1 a character as a condition is false to itself` }
 if Program(code: { cw ? true : false }).run_as(Character(name: "other")) { INFO@mark `CW2 a character as a condition is true to someone else` }
 
-// Handed-over code runs as the character that handed it over; its runs are logged for replay.
+// A program runs as its who; its runs are logged for replay.
 hg_giver := Character(name: "giver")
-hg := Program(code: { @me }).handed(hg_giver)
+hg := Program(code: { @me }, who: hg_giver)
 unless hg.run == hg_giver { INFO@mark `HG1 handed-over code does not run as the character that handed it over` }
 unless Run.log.head.who == hg_giver { INFO@mark `HG2 a run of handed-over code is not logged as its giver` }
 unless Run.replay(Run.log.head) == hg_giver { INFO@mark `HG3 a logged run does not replay as its character` }
@@ -299,7 +299,7 @@ rdr.reserve("a").redirect(rdr_b)
 unless rdr.allocated("a") == 1 { INFO@mark `RDR1 a redirected name does not answer what the other holds` }
 rdr_b.holder = 2
 unless rdr.allocated("a") == 2 { INFO@mark `RDR2 a redirected name answers what the other held when it was redirected` }
-unless rdr.allocate("b", 3) is Quest { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
+unless rdr.allocate("b", 3) is Abstract { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
 
 // Phone and email are locations.
 cth := Character(name: "reachable", email: @mailto:a@b.c, phone: @tel:+31612345678)
@@ -345,14 +345,11 @@ rpl_session := rpl.session
 rpl_session.commit(rpl, 9)
 unless rpl.keep(rpl_session).value == 9 { INFO@mark `BRN5 keeping a session does not merge it into the character` }
 
-// Completing a quest issues a certificate from its world; its secret is private.
+// Reaching a program's goal completes it.
 qct_world := World(name: "quests")
-qct := qct_world.add(Quest(name: "q", goal: 1))
+qct := qct_world.add(Program(name: "q", goal: 1))
 qct.attempt(1)
 unless qct.done { INFO@mark `QCT1 a reached quest is not done` }
-unless qct.certificate.issuer == qct_world { INFO@mark `QCT2 a completed quest's certificate is not from its world` }
-unless qct.certificate.visibility == Accessor.Permission.private { INFO@mark `QCT3 a certificate's secret is not private by default` }
-if Quest(name: "open", goal: 1).certificate { INFO@mark `QCT4 an open quest has a certificate` }
 
 // An item's issuer is the nearest world; moving it is in its trail; unnamed, it is shown by its class and place.
 itv_world := World(name: "items")
@@ -369,7 +366,7 @@ if itv.name { INFO@mark `ITV5 an unnamed item was given a stored name` }
 clm_who := Character(name: "claimant")
 clm := Reference(title: "dummy")
 clm_quest := clm.claim(clm_who)
-unless clm_quest is Quest { INFO@mark `CLM1 claiming authorship is not a quest` }
+unless clm_quest is Abstract { INFO@mark `CLM1 claiming authorship is not a quest` }
 if clm_quest.reached(clm) { INFO@mark `CLM2 a claim is reached before the claimant is an author` }
 clm.authors.push clm_who
 unless clm_quest.reached(clm) { INFO@mark `CLM3 a claim is not reached once the claimant is an author` }

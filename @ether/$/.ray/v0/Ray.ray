@@ -173,8 +173,8 @@ Ray := class: Iterable & Ordered {
 
   path_to | between (target, trail = []) => this === target ? [[trail, this]]
     : continuations{!trail.contains(.)}.map(.path_to(target, [trail, this])).flatten(1)
-    -- . ?? Quest(name: "find a path", goal: target)
-  shortest_path_to (target) => path_to(target) -- . is Quest ? . : .min_by(.count)
+    -- . ?? Program(name: "find a path", goal: target)
+  shortest_path_to (target) => path_to(target) -- . is Abstract ? . : .min_by(.count)
 
   complement (selection) => reachable{!selection.contains(.)}
 
@@ -293,7 +293,7 @@ Graph := class: Structure {
 
       applies (host: Simple) => left.vertices.every(host.vertices.contains(.))
         && (single_pushout || !deleted.some(host.dangling(., host.vertices{!deleted.contains(.)}.union(left.vertices))))
-      apply (host: Simple) => applies(host) ? rewritten(deleted.reduce(acc = host => acc.without(.))) : Quest(name: "rewrite", goal: host)
+      apply (host: Simple) => applies(host) ? rewritten(deleted.reduce(acc = host => acc.without(.))) : Program(name: "rewrite", goal: host)
       rewritten (graph: Simple) => graph -- added.for(graph.vertex(.)) -- right.edges{!graph.connected(.from, .to)}.for(graph.connect(.from, .to)) -- graph
     }
   }

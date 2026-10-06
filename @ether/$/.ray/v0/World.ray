@@ -53,7 +53,56 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != 
 {f}@{location: Location}({args}) ^punctuation => (() => f(args)).run_at(location)
 
 Program &+= {
-  giver: Character?
+  who: * = @me
+  name: String?
+  goal: *?
+  from: *?
+  at: Program?
+  started = false
+  stopped = false
+  results: *[] = []
+  tried: *?
+  serving: Location?
+  proxying: Network.Proxy?
+  static branches: Program[] = []
+  static deferred: Program[] = []
+
+  written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
+  defined => global.declaring(head.head)
+  abstract => written{!.defined}
+
+  & => results
+  steps | expand => written
+  is_initial | waiting => !started
+  is_terminal | final => started && !at
+  intermediate => started && !is_terminal
+  holds => !is_terminal && !stopped
+  inputs => steps.zip(results){.0 is Nondeterministic}
+  stepped => {
+    at = started ? at.next : steps.first
+    started = true
+    results.push at() if at
+  } -- this
+  next => copy ~~ (.results = [results]) -- .stepped
+  finished => (stepped while holds) -- this
+  static round => branches{holds}.map(.stepped)
+  static until (condition) => (round while !condition() && branches.some(.holds)) -- this
+
+  reached (value) => goal !== None && value is goal
+  attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
+  running => started && !done
+  done => stopped || is_terminal
+  continuable => done && !(tried**.is_terminal ?? true)
+  path => tried.history
+  solution => path{reached(.value)}.first
+  solved_by => solution?.who
+  best => solution?.value
+  progress => started ? steps.index_of(at) ?? steps.count : 0
+  difficulty => steps.count
+
+  serves (at: Location) => !done && serving ∋ at
+  proxies => !done && proxying !== None
+  stop | cancel | complete: static => this ~~ (.stopped = true)
 
   run_at (location: Location) => {
     with { Location.current = location }
@@ -64,9 +113,10 @@ Program &+= {
     with { &caller = who }
     this()
   }
-  handed (by: Character = @me): static => this ~~ .giver = by
-  run => Run.log.commit(giver ?? @me, this).head -- .change.run_as(.who)
+  run => Run.log.commit(who, this).head -- .change.run_as(.who)
 }
+
+Abstract := Program{abstract.nonempty}
 
 Node &+= {
   history: History = History(repository: this)
@@ -152,7 +202,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     : ours.fields.nonempty && theirs.fields.nonempty ? (ours.fields.name, theirs.fields.name).flatten.unique.map(name => clashes(base?[name], ours[name], theirs[name])).flatten
     : [(ours, theirs)]
   merge (other: History, who = &caller) => common(other) -- (base => {
-    return Quest(name: "merge", goal: other) if clashes(at(base).value, value, other.value).nonempty
+    return Program(name: "merge", goal: other) if clashes(at(base).value, value, other.value).nonempty
     this.head = since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this)
     this
   })
@@ -163,7 +213,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   squash (who) => History(repository, base, head: Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .change), previous: base))
   cherry_pick (picked: Commit): static => commit(picked.who, picked.change, message: picked.message)
   erased => ordered.reduce(held = History(repository) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
-  revert (reverted: Commit) => reverted.change⁻¹ ? commit(reverted.who, reverted.change⁻¹) : Quest(name: "revert", goal: reverted)
+  revert (reverted: Commit) => reverted.change⁻¹ ? commit(reverted.who, reverted.change⁻¹) : Program(name: "revert", goal: reverted)
 
   received (stamp: Stamp) => clock.receive(stamp)
 }
@@ -199,80 +249,15 @@ World := class: Location + Nameable {
   reserved (name: String) => reservations{.name ==<in: .fold_case> name}.first
   issue (name: reservable_names) => Reservation(name, issuer: this) ~~ reservations.push(.)
   reserve (name: reservable_names) => reserved(name) ?? issue(name)
-  allocate (name: reservable_names, holder) => reserve(name) -- (taken => taken.holder === None || &@.may(`=`, taken) ? taken ~~ .holder = holder : Quest(name: "overwrite a reservation", goal: taken, from: taken.issuer))
+  allocate (name: reservable_names, holder) => reserve(name) -- (taken => taken.holder === None || &@.may(`=`, taken) ? taken ~~ .holder = holder : Program(name: "overwrite a reservation", goal: taken, from: taken.issuer))
   allocated (name: String) => reserved(name)?.holder
 }
 Region := World
 
-Quest := class: Program + Location + Nameable = who: * = @me, goal: *?, from: *?, at: Program?, started: boolean = false, results: *[] = [] {
-  static branches: Quest[] = []
-  static deferred: Quest[] = []
-
-  output: History = History(repository: this)
-  tried: *?
-  stopped = false
-  certificate: Certificate?
-  serving: Location?
-  proxying: Network.Proxy?
-
-  written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
-  abstract => written{!.defined}
-
-  & => results
-  steps | expand => written
-  is_initial | waiting => !started
-  is_terminal | final => started && !at
-  intermediate => started && !is_terminal
-  holds => !is_terminal && !stopped
-  inputs => steps.zip(results){.0 is Nondeterministic}
-
-  stepped => {
-    at = started ? at.next : steps.first
-    started = true
-    results.push at() if at
-  } -- this
-  next => Quest(code, who, goal, at, started, results: [results]).stepped
-  finished => (stepped while holds) -- this
-  static round => branches{holds}.map(.stepped)
-  static until (condition) => (round while !condition() && branches.some(.holds)) -- this
-
-  reached (value) => goal !== None && value is goal
-  attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
-  running => started && !done
-  done => stopped || certificate !== None || is_terminal
-  continuable => done && !(tried**.is_terminal ?? true)
-  path => tried.history
-  solution => path{reached(.value)}.first
-  solved_by => solution?.who
-  best => solution?.value
-
-  progress => started ? steps.index_of(at) ?? steps.count : 0
-  difficulty => steps.count
-
-  serves (at: Location) => !done && serving ∋ at
-  proxies => !done && proxying !== None
-  stop | cancel: static => this ~~ (.stopped = true)
-  complete: static => this ~~ (.certificate = Certificate(issuer: parent?.world ?? World.ether, holder: solved_by ?? who))
-}
-
-Quests := class: Location {
-  all => children{is Quest}
-  [id] => all{.name as String == id as String}.first
-  started (program: Program) => Quest(code: program.code, who: &caller, name: UUID.v4() as String) ~~ add(.)
-  |= (program: Program): static => this ~~ started(program)
-}
-
-Program &+= {
-  defined => global.declaring(head.head)
-  quest => @me/quests.started(this)
-  serve (at: Location) => quest ~~ (.serving |= at)
-  proxy (through: Network.Proxy) => quest ~~ (.proxying = through)
-}
-
 Item := class: Nameable {
   location: Location?
   issuer: World = location?.world ?? World.ether
-  obtained_by: Quest?
+  obtained_by: Program?
   certificate: Certificate?
 
   trail => location.history
@@ -312,7 +297,7 @@ Reference := class {
   visibility: Accessor.Permission = Accessor.Permission.private
 
   year => date.year
-  claim (who: Character = &caller) => Quest(name: "claim the authorship", goal: Reference{authors ∋ who}, from: location?.world ?? World.ether)
+  claim (who: Character = &caller) => Program(name: "claim the authorship", goal: Reference{authors ∋ who}, from: location?.world ?? World.ether)
   notes => note.history
   draft => visibility == Accessor.Permission.private
   publish: static => this ~~ .visibility = Accessor.Permission.public
@@ -346,7 +331,7 @@ Instance := class: Location + Entity {
   mirror (value, depth = 1) => Mirror(value, location: this, depth)
   .{literal name ^property} ^punctuation => external get device name
 
-  static Deletion := class: Quest (character: Character, requested: Stamp = World.ether.clock.now, window: Quantity.Temporal = 30 days) {
+  static Deletion := class: Program (character: Character, requested: Stamp = World.ether.clock.now, window: Quantity.Temporal = 30 days) {
     name = "delete"
     goal => character
     cancelled = false
@@ -371,7 +356,7 @@ Character := class: Hierarchy + Entity + Nameable {
 
   presence: Instance?
   constraint: *?
-  focus: Quest?
+  focus: Program?
   permissions: Accessor.Permission?
 
   first_name: String?
@@ -388,7 +373,7 @@ Character := class: Hierarchy + Entity + Nameable {
   keep (session: History) => history.merge(session)
   full_name => first_name ? first_name + " " + last_name : name
   device => (presence ?? Instance.local).device
-  quests => device.quests
+  quests => Program#{who ∋ this && running}
   status => Status#{this is .}
   .status = {wanted} ^punctuation => constraint = wanted
   is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
@@ -433,7 +418,8 @@ NPC := class: Character {
 
   mode: Mode = Mode.until_resolved
 
-  open_quests => children{is Quest && !.done}
+  quests => children{is Program}
+  open_quests => quests{!.done}
   running => mode == Mode.waiting || mode == Mode.until_resolved && open_quests.nonempty
 }
 

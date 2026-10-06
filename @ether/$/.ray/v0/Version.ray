@@ -31,11 +31,11 @@ Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => 
   static declared: Migration[] = []
   (static.declared ??= []).push this
 
-  backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? Quest(name: "derive the inverse of a migration", goal: this))
+  backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? Program(name: "derive the inverse of a migration", goal: this))
 
   static leaving (version: Version) => declared{.from == version}, declared{.to == version}.backward
-  static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path is Quest
-    ? Quest(name: "migrate", goal: (value: old, from: from, to: to))
+  static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path is Abstract
+    ? Program(name: "migrate", goal: (value: old, from: from, to: to))
     : path.zip(path.rest).map((a, b) => leaving(a){.to == b}.first).reduce(held = old => .body(held)))
 }
 
@@ -105,14 +105,14 @@ History &+= {
 
   static renamed_from (file: Language.Entry, gone: Language.Entry[]) => gone{similarity(.content, file.content) >= similar} -- (close =>
     close{similarity(.content, file.content) == close.map(similarity(.content, file.content)).max} -- (best =>
-      best.count > 1 ? Quest(name: "rename", goal: (to: file, from: best)) : best.first))
+      best.count > 1 ? Program(name: "rename", goal: (to: file, from: best)) : best.first))
 
   static read_file (file: Language.Entry) => Language.for_file(file.name).read(file.content as String)
   static valued (tree: Language.Entry) => tree.files.reduce(held = {} => held, {(.path): read_file(.)})
 
   static assigned (path: String, to: String) => ".[" + Language.ray.write(path) + "] = " + to
   static change (before: Language.Entry, after: Language.Entry) => before.files{!after.at(.path)} -- (gone =>
-    after.files{!before.at(.path)}.map(file => (file, from: renamed_from(file, gone))) -- (added => added.find(.from is Quest)?.from ?? [
+    after.files{!before.at(.path)}.map(file => (file, from: renamed_from(file, gone))) -- (added => added.find(.from is Abstract)?.from ?? [
       added{.from}.map(assigned(.file.path, ".[" + Language.ray.write(.from.path) + "]")),
       gone.map(assigned(.path, "None")),
       after.files{before.at(.path)?.content != .content && !added.some(a => a.file === . && a.from?.content == .content)}.map(assigned(.path, Language.ray.write(read_file(.))))

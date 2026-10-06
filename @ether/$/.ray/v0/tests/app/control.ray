@@ -129,7 +129,7 @@ unless declared == 4 { INFO@mark `CF20 a declaration and an assignment on one li
 counting := Program(code: {
   1
   2
-}).running
+})
 unless counting.waiting { INFO@mark `RU1 a program nobody stepped is not waiting` }
 unless counting.next.intermediate { INFO@mark `RU2 one step in is not intermediate` }
 unless counting.waiting { INFO@mark `RU3 stepping a copy moved the original` }
@@ -249,12 +249,11 @@ unless (looking()
   $missing_file 4) == 3 { INFO@mark `ER20 an error of a type was caught by another function's handler` }
 unless looking().diagnostics.last.type === NotFound { INFO@mark `ER21 an error does not keep the type written after @` }
 
-// A running program is a quest (P4.8); sleeping waits on the time (P4.11); a dynamic `&=` keeps one contribution (P5.7)
-quest_run := Program(code: { 1 }).running
-unless quest_run is Quest { INFO@mark `FWQ1 a running program is not a quest` }
+// A program is a quest (P4.8): its cursor says how far it is; sleeping waits on the time (P4.11); a dynamic `&=` keeps one contribution (P5.7)
+quest_run := Program(code: { 1 })
 if quest_run.done { INFO@mark `FWQ2 a program not yet stepped is done` }
 unless quest_run.finished.done { INFO@mark `FWQ3 a finished program is not a done quest` }
-unless Program(code: { 1 }).running.stop.done { INFO@mark `FWQ4 a stopped program is not done` }
+unless Program(code: { 1 }).stop.done { INFO@mark `FWQ4 a stopped program is not done` }
 slept_from := Time.now
 sleep (1 ms)
 unless Time.now >= slept_from + 1 ms { INFO@mark `FWQ5 sleeping did not wait` }

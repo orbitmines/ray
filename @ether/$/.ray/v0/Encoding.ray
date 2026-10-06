@@ -18,7 +18,7 @@ Encoding := class {
   }
 
   Encrypted<T> := class = value: T, key: Key? {
-    opened (holder) => key && holder?.key == key ? value : Quest(name: "find the key", goal: this)
+    opened (holder) => key && holder?.key == key ? value : Program(name: "find the key", goal: this)
   }
 
   static common (a: Byte[], b: Byte[]) => a.empty || b.empty || a.first != b.first ? 0 : 1 + common(a.rest, b.rest)

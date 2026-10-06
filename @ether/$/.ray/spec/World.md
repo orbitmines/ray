@@ -157,6 +157,7 @@ UUIDs are made, the `.%` draft) are under L§9.2.
   with several children and a merge one with several parents. *`.ray2/History.ray:55–65`*
 - **W3.23 Rebase** — **Q**. Recommend: `h + other` appends other's commits after h's head (re-stamped); `h | other` merges;
   `h &+ other` interleaves by stamp. *`.ray2/History.ray:67–69`*
+  **Answered (user, 2026-10-06):** operators: `h + other` rebases (appends other's commits re-stamped), `h | other` merges (one commit with both heads as parents), `h &+ other` interleaves by stamp.
 - **W3.24 A REPL session commits to the character** — **Q**. The journal wants a REPL session's changes committed to one variable,
   and a setting that makes them permanent on your character. Recommend: a REPL session is a history branch (W6.5); "make
   permanent" merges it into `@me`'s history; committing to one variable is `x @ @me = x`. *IDE:488, 585*

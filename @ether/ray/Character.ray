@@ -16,9 +16,45 @@ Nameable := class {
 }
 
 // Kinds of name, told apart by what is written: a name is any of them that matches.
-FullName := class (first: Char.Word[], " ", last: Char.Word[])
-Email := class (local: Char{!= "@" && != " "}[]{length > 0}, "@", domain: Char{!= "@" && != " "}[]{length > 0})
-Phone := class ("+"?, digits: Char.Digit[]{length > 0})
+
+// A person's full name: given names, then a family name, separated by spaces. A part is letters in any script, possibly joined
+// by a hyphen or an apostrophe (Smith-Jones, O'Brien, d'Artagnan), or an initial with a period (J. R. R. Tolkien); given names
+// are capitalised, and lowercase parts before the last one belong to the family name (Ludwig van Beethoven, Juan de la Cruz).
+FullName := class ((given: FullName.Given[]{length > 0}).join(" "), " ", (family: ((FullName.Particle, " ")[], FullName.Given))) => {
+  static Letter := Unicode.GeneralCategory.(Letter | Mark)
+  static Part := (FullName.Letter[]{length > 0}, (("-" | "'" | "’"), FullName.Letter[]{length > 0})[]) | (FullName.Letter, ".")
+  static Given := FullName.Part{first.is_upper}
+  static Particle := FullName.Part{first.is_lower}
+  first => given.first
+  last => family as String
+}
+
+// An email address (https://www.rfc-editor.org/rfc/rfc5322#section-3.4.1), UTF-8 allowed in both parts (https://www.rfc-editor.org/rfc/rfc6531#section-3.3):
+// a dot-atom or a quoted local part of at most 64 characters, "@", then a domain of at least two labels or an address literal
+// (https://www.rfc-editor.org/rfc/rfc5321#section-4.1.3, https://www.rfc-editor.org/rfc/rfc5321#section-4.5.3.1).
+Email := class (local: Email.Local{length <= 64}, "@", domain: Email.Domain{length <= 253}) => {
+  // atext: any visible character but the specials, or any non-ASCII one.
+  static Atom := Char{!is_ascii || "!" <= this <= "~" && !"()<>[]:;@\\,.\"".contains(this)}[]{length > 0}
+  static Local := (Email.Atom, (".", Email.Atom)[]) | ("\"", (Char{" " <= this <= "~" && != "\"" && != "\\"} | ("\\", Char{" " <= this <= "~"}))[], "\"")
+  // A label: letters and digits, hyphens only inside, at most 63 (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.1, https://www.rfc-editor.org/rfc/rfc5890).
+  static Alphanumeric := Char.Letter | Char.Digit | Char{!is_ascii}
+  static Label := (Email.Alphanumeric, ((Email.Alphanumeric | "-")[], Email.Alphanumeric)?){length <= 63}
+  static Domain := (Email.Label, (".", Email.Label)[]{length > 0}) | ("[", IPv4 | ("IPv6:", IPv6), "]")
+}
+
+// A phone number as people write it (https://www.itu.int/rec/T-REC-E.123): international with "+" or national, 3 to 15 digits
+// (https://www.itu.int/rec/T-REC-E.164) grouped by spaces, dashes or dots, groups possibly parenthesised (+1 (555) 123-4567,
+// +31 (0)6 1234 5678, (020) 123 4567), and an extension after (https://www.rfc-editor.org/rfc/rfc3966#section-5.1.5).
+Phone := class (
+  international: "+"?,
+  grouped: (Phone.Separator?, Char.Digit | ("(", Char.Digit[]{length == 1..5}, ")"))[]{length == 3..15},
+  (Phone.Separator?, ("ext." | "ext" | "x" | ";ext="), Phone.Separator?, extension: Char.Digit[]{length == 1..6})?
+) => {
+  static Separator := " " | "-" | "."
+  // What is dialled: the digits alone, "+" first when written internationally (a global number, RFC 3966). A trunk prefix
+  // written "(0)" is dialled only nationally, so it is left out of an international number (E.123: +31 (0)6 … is +316 …).
+  digits => (international ?? "") + grouped.map(.last){!international || != "(0)"}.join{is Char.Digit}
+}
 
 @me ^string => &caller as Character
 @me = {who} ^punctuation => &@.may(`@me =`, who) ? &caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`

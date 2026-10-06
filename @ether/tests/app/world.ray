@@ -315,7 +315,12 @@ unless (rdr.@b = 3).erred { INFO@mark `RDR3 a held name was overwritten without 
 cth := Character(name: "reachable" | "Ada Lovelace" | "a@b.c" | "+31612345678")
 unless cth.email#.first.domain == "b.c" { INFO@mark `CTH1 an email is not read as local part and domain` }
 unless cth.phone#.first as String == "+31612345678" { INFO@mark `CTH2 a phone number is not one of its names` }
-unless cth.full_name#.first.last == "Lovelace" { INFO@mark `CTH4 a full name is not read as first and last` }
+unless cth.full_name#.first.last == "Lovelace" { INFO@mark `CTH4 a full name is not read as given and family name` }
+unless "+31 (0)6 1234-5678" is Phone && ("+31 (0)6 1234-5678" as Phone).digits == "+31612345678" && ("(020) 123 4567" as Phone).digits == "0201234567" { INFO@mark `CTH7 a grouped phone number is not read to its digits` }
+unless "Ludwig van Beethoven" is FullName && ("Ludwig van Beethoven" as FullName).family as String == "van Beethoven" { INFO@mark `CTH8 a particle is not part of the family name` }
+unless "J. R. R. Tolkien" is FullName && "Mary-Jane O'Brien" is FullName { INFO@mark `CTH9 initials or joined parts are not a full name` }
+unless "\"a b\"@x.org" is Email && "a.b+tag@sub.example.org" is Email && "a@[192.0.2.1]" is Email { INFO@mark `CTH10 a valid email address is not an Email` }
+if "a..b@x.org" is Email || ".a@x.org" is Email || "a@-x.org" is Email || "a@x" is Email || "12" is Phone || "+1234567890123456" is Phone { INFO@mark `CTH11 an invalid email or phone number was accepted` }
 if cth.email#.count != 1 || cth.phone#.count != 1 { INFO@mark `CTH6 a name was taken for an email or phone number it does not look like` }
 unless Character.local("reachable") === cth || !Instance.local.logged_in(cth) { INFO@mark `CTH5 a character is not found by any of its names` }
 unless (@https://a.b/c).host == "a.b" { INFO@mark `CTH3 a location with an authority lost its host` }

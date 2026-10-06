@@ -15,7 +15,9 @@ const SEVERITY: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warning: 2
 import { ENTRYPOINT, ETHER, core, closure, project_of, project_files } from './projects.ts';
 
 type Check = { uri: string; file: string; text: string; version: number };
-type Checked = { uri: string; version: number; paints: { begin: number; end: number; style: string }[]; diagnostics: { level: string; message: string; begin: number; end: number }[] };
+type Position = { line: number; character: number };
+type Link = { begin: number; end: number; uri: string; range: { start: Position; end: Position }; head: string };
+type Checked = { uri: string; version: number; paints: { begin: number; end: number; style: string }[]; diagnostics: { level: string; message: string; begin: number; end: number }[]; links: Link[] };
 
 async function reader(read_entrypoint = true) {
   process.env.KOPT ??= 'off';
@@ -50,9 +52,11 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
   });
   const repaint = (uri: string) => { connection.languages.semanticTokens.refresh(); connection.sendNotification('ether/theme', payload([uri])); };
 
+  const linked = new Map<string, Link[]>();
   worker.on('message', (m: Checked) => {
     const doc = open.get(m.uri);
     if (doc === undefined || doc.version !== m.version) return;
+    linked.set(m.uri, m.links);
     r.adopt(doc.src, m.paints);
     connection.sendDiagnostics({ uri: m.uri, diagnostics: m.diagnostics.map(d => ({ severity: SEVERITY[d.level] ?? (1 as const), range: { start: position_of(doc.text, d.begin), end: position_of(doc.text, d.end + 1) }, message: d.message, source: 'ray' })) });
     repaint(m.uri);
@@ -76,6 +80,8 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Full,
       semanticTokensProvider: { legend: { tokenTypes: TYPES, tokenModifiers: MODIFIERS }, full: true, range: true },
+      definitionProvider: true,
+      hoverProvider: true,
     },
     serverInfo: { name: 'ray-kernel-language-server' },
   }));
@@ -96,6 +102,28 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
   });
   connection.onRequest('ether/theme', (params: { uris?: string[] }) => payload(params?.uris ?? []));
   connection.onRequest('ether/initialFiles', (): null => null);
+
+  const link_at = (uri: string, position: Position): Link | undefined => {
+    const doc = open.get(uri);
+    if (doc === undefined) return undefined;
+    const offset = offset_of(doc.text, position);
+    let best: Link | undefined;
+    for (const link of linked.get(uri) ?? []) {
+      if (link.begin > offset || offset > link.end) continue;
+      if (best === undefined || link.end - link.begin < best.end - best.begin) best = link;
+    }
+    return best;
+  };
+  connection.onDefinition(params => {
+    const link = link_at(params.textDocument.uri, params.position);
+    return link === undefined ? [] : [{ uri: link.uri, range: link.range }];
+  });
+  connection.onHover(params => {
+    const link = link_at(params.textDocument.uri, params.position);
+    if (link === undefined) return null;
+    const file = path.relative(path.dirname(ETHER), fileURLToPath(link.uri));
+    return { contents: { kind: 'markdown', value: `\`\`\`ray\n${link.head}\n\`\`\`\nRead by the rule in \`${file}:${link.range.start.line + 1}\`` } };
+  });
 
   documents.onDidOpen(e => sketch(e.document.uri, e.document.getText(), e.document.version, 0));
   documents.onDidChangeContent(e => sketch(e.document.uri, e.document.getText(), e.document.version, open.has(e.document.uri) ? undefined : 0));
@@ -178,7 +206,7 @@ async function read_in_worker() {
       const d0 = performance.now();
       try { r.safely(() => r.dry(src)); } catch { r.kernel('recover'); }
       if (process.env.KLSP_TRACE) trace(`worker: checked ${path.basename(check.file)} v${check.version}, dry ${Math.round(performance.now() - d0)} ms\n`);
-      port.postMessage({ uri: check.uri, version: check.version, paints: r.painted(src), diagnostics: r.diagnostics_of(src).map((d: any) => ({ level: d.level, message: d.message, begin: d.at.begin, end: d.at.end })) } satisfies Checked);
+      port.postMessage({ uri: check.uri, version: check.version, paints: r.painted(src), diagnostics: r.diagnostics_of(src).map((d: any) => ({ level: d.level, message: d.message, begin: d.at.begin, end: d.at.end })), links: links_of(r, src) } satisfies Checked);
       done(finished);
     }
     setImmediate(work);
@@ -192,6 +220,40 @@ async function read_in_worker() {
     if (!asked.includes(m.uri)) asked.push(m.uri);
     kick();
   });
+}
+
+function offset_of(text: string, position: Position): number {
+  let offset = 0;
+  for (let line = 0; line < position.line; line++) {
+    const newline = text.indexOf('\n', offset);
+    if (newline < 0) return text.length;
+    offset = newline + 1;
+  }
+  return Math.min(offset + position.character, text.length);
+}
+
+const line_starts = new Map<string, number[]>();
+function position_in(text: string, offset: number): Position {
+  let starts = line_starts.get(text);
+  if (starts === undefined) {
+    starts = [0];
+    for (let k = 0; k < text.length; k++) if (text[k] === '\n') starts.push(k + 1);
+    if (line_starts.size > 64) line_starts.clear();
+    line_starts.set(text, starts);
+  }
+  let low = 0, high = starts.length - 1;
+  while (low < high) { const mid = (low + high + 1) >> 1; if (starts[mid] <= offset) low = mid; else high = mid - 1; }
+  return { line: low, character: offset - starts[low] };
+}
+
+function links_of(r: { links(src: number): ReturnType<import('./host.ts').Reader['links']> }, src: number): Link[] {
+  return r.links(src).map(l => ({
+    begin: l.begin,
+    end: l.end,
+    uri: pathToFileURL(l.location).toString(),
+    range: { start: position_in(l.text, l.target_begin), end: position_in(l.text, l.target_end + 1) },
+    head: l.text.slice(l.target_begin, l.target_end + 1),
+  }));
 }
 
 // The colors of the language's theme, as its entrypoint writes them: `^name = ^ #RRGGBB` or `^name = ^other`.

@@ -414,6 +414,20 @@ export class Reader {
     return out;
   }
 
+  links(src: number): { begin: number; end: number; location: string; text: string; target_begin: number; target_end: number }[] {
+    const out: { begin: number; end: number; location: string; text: string; target_begin: number; target_end: number }[] = [];
+    for (const paint of this.paints.get(src)?.values() ?? []) {
+      for (const [kind, ref] of paint.refs) {
+        if (kind !== 2) continue;
+        const at = this.texts.get(this.field(ref, 'rule_at_src'));
+        if (at === undefined || at.location === '') continue;
+        out.push({ begin: paint.begin, end: paint.end, location: at.location, text: at.value, target_begin: this.field(ref, 'rule_at_begin') >> 3, target_end: this.field(ref, 'rule_at_end') >> 3 });
+        break;
+      }
+    }
+    return out;
+  }
+
   read(span: Span, frame: number): number | undefined { const r = this.kernel('read', span.src, I(span.begin), I(span.end), frame); return r === UNDEF ? undefined : r; }
   safely<T>(fn: () => T): T | undefined {
     try { return fn(); }

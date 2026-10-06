@@ -81,8 +81,8 @@ room.send(Program(code: { "hi" }), who: 1)
 unless room.count == 1 { INFO@mark `CH2 sending something does not keep it` }
 room.send(Program(code: { "ho" }), who: 2)
 unless room.count == 2 { INFO@mark `CH3 sending twice keeps other than two` }
-unless room.messages.first.who == 1 { INFO@mark `CH4 a message forgot who sent it` }
-unless room.messages.last.change() == "ho" { INFO@mark `CH5 a message forgot what was sent` }
+unless room.first.who == 1 { INFO@mark `CH4 a message forgot who sent it` }
+unless room.last.change() == "ho" { INFO@mark `CH5 a message forgot what was sent` }
 if room.send(Program(code: { while true { } })) is Program { INFO@mark `CH6 a chat admitted a program it does not allow` }
 unless Channel().send(Program(code: { @me.device })).count == 1 { INFO@mark `CH7 a channel that admits any program refused one` }
 

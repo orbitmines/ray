@@ -3,8 +3,6 @@ Channel := class: History {
 
   send (program: Program, who = @me): static => program is admits ? commit(who, program) : ERROR@Access `this channel does not admit that program`
   |= (program: Program): static => send(program)
-  messages => since(None)
-  count => messages.count
 }
 
 Chat := class: Channel = admits: Program = Program{Pure & Terminating}

@@ -4,8 +4,8 @@ Postgres := Language(".postgres" | ".pgsql", written: SQL.written, of: SQL){
     {at: Location} => SQL.Database(at: at, dialect: this)
   }
   // json_agg (https://www.postgresql.org/docs/current/functions-aggregate.html)
-  answered (at: Location, text: String) => (Process(command: "psql", arguments: [at as String, "-At", "-c", "SELECT coalesce(json_agg(t), '[]') FROM (" + text + ") t"]).stdout as JSON).value
-  sent (at: Location, text: String) => Process(command: "psql", arguments: [at as String, "-q", "-v", "ON_ERROR_STOP=1"], input: text).stdout
+  answered (at: Location, text: String) => Quest(name: "talk to a database without a process: its wire protocol, or the planned binary pipeline", goal: text)
+  sent (at: Location, text: String) => Quest(name: "talk to a database without a process: its wire protocol, or the planned binary pipeline", goal: text)
   // The information schema's tables view (https://www.postgresql.org/docs/current/infoschema-tables.html)
   listing = @sql SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public'
 }

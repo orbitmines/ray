@@ -38,29 +38,22 @@ Shell := class (Blank, steps: ((comment: Comment) | (pipeline: Pipeline, (Blank,
   static Redirect := class (descriptor: Char.Digit?, operator: ">>" | ">&" | ">" | "<", Blank, target: Word)
   static Command := class ((assignments: Assignment[]).join(Blank), Blank, (items: (Redirect | Word)[]).join(Blank)) => {
     words => items{is Word}.map(.value)
-    process => Process(command: words.first, arguments: words.rest, environment: assignments.map((name: .name as String, value: .value?.value ?? "")))
   }
   // 2.9.2 Pipelines
   static Pipeline := class ((commands: Command[]).join((Blank, "|", Blank))) => {
-    process => commands.map(.process).reduce(held => held.into(.))
   }
 
   commands => steps{.pipeline}
   simple => commands.count == 1 && !commands.first.connective && commands.first.pipeline.commands.every(.items.every(. is Word))
-  process => simple ? commands.first.pipeline.process : Process(command: "sh", arguments: ["-c", this as String])
 
   static quoted (word: String) => word.nonempty && word ~= ⊢ Safe[] ⊣ ? word : "'" + word.replace("'", "'\\''") + "'"
   static written := {
-    {writing: Language.Writing{value is Process{piped}}} => writing.value -- (held => Language.Writing(held.piped), " | ", Language.Writing(Process(held.command, held.arguments, held.environment, held.directory)))
-    {writing: Language.Writing{value is Process{directory}}} => writing.value -- (held => "cd ", quoted(held.directory.sandboxed), " && ", Language.Writing(Process(held.command, held.arguments, held.environment)))
-    {writing: Language.Writing{value is Process{command is Program}}} => writing.value -- (held => Language.Writing(Process(command: "ray", arguments: ["/dev/stdin", held.arguments].flatten, environment: held.environment)))
-    {writing: Language.Writing{value is Process}} => writing.value.environment.map(.name, "=", quoted(.value), " "), quoted(writing.value.command), writing.value.arguments.map(" ", quoted(.))
     {writing: Language.Writing{value is Shell}} => writing.value as String
     {writing: Language.Writing{value is String}} => quoted(writing.value)
   }
   static level := {
-    {script: Shell} => script.process
-    {text: String} => (text as Shell).process
+    {script: Shell} => script
+    {text: String} => text as Shell
   }
   static language = Language(".sh" | ".bash", level: level, written: written)
 }

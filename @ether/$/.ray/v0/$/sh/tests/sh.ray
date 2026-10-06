@@ -4,13 +4,13 @@ mark ^keyword := external global
 
 unless Shell.quoted("plain-word") == "plain-word" { INFO@mark `PC1 a plain word is quoted` }
 unless Shell.quoted("it's here") == "'it'\\''s here'" { INFO@mark `PC2 a quote is not escaped for the shell` }
-unless Process(command: "echo", arguments: ["a b"]).script == "echo 'a b'" { INFO@mark `PC3 a command is not written as shell` }
+unless (@sh`echo 'a b'` as String) == "echo 'a b'" { INFO@mark `PC3 a command is not written as shell` }
 read_command := @sh`FOO=1 ls -la "my dir"`
-unless read_command.command == "ls" { INFO@mark `PC4 a shell command is not read` }
-unless read_command.arguments.last == "my dir" { INFO@mark `PC5 a double-quoted argument is not one word` }
-unless read_command.environment.first.name == "FOO" { INFO@mark `PC6 an assignment before a command is not its environment` }
-unless @sh`ls | wc -l`.piped.command == "ls" { INFO@mark `PC7 a pipeline is not read as one process into another` }
-unless Process(command: "a").into(Process(command: "b")).script == "a | b" { INFO@mark `PC8 a pipe is not written as shell` }
+unless read_command.commands.first.pipeline.commands.first.words.first == "ls" { INFO@mark `PC4 a shell command is not read` }
+unless read_command.commands.first.pipeline.commands.first.words.last == "my dir" { INFO@mark `PC5 a double-quoted argument is not one word` }
+unless read_command.commands.first.pipeline.commands.first.assignments.first.name == "FOO" { INFO@mark `PC6 an assignment before a command is not its environment` }
+unless @sh`ls | wc -l`.commands.first.pipeline.commands.map(.words.first) == ["ls", "wc"] { INFO@mark `PC7 a pipeline is not read as one command into another` }
+unless (@sh`a | b` as String) == "a | b" { INFO@mark `PC8 a pipe is not written as shell` }
 
 folder := "my dir"
 listed := @sh ls -la {folder}

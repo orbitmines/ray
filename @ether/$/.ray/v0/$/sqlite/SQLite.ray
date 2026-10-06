@@ -4,8 +4,8 @@ SQLite := Language(".sqlite" | ".sqlite3" | ".db", written: SQL.written, of: SQL
     {at: Location} => SQL.Database(at: at, dialect: this)
   }
   // JSON output mode (https://sqlite.org/cli.html#changing_output_formats)
-  answered (at: Location, text: String) => (Process(command: "sqlite3", arguments: ["-json", at.sandboxed, text]).stdout as JSON).value ?? []
-  sent (at: Location, text: String) => Process(command: "sqlite3", arguments: [at.sandboxed], input: text).stdout
+  answered (at: Location, text: String) => Quest(name: "talk to a database without a process: its wire protocol, or the planned binary pipeline", goal: text)
+  sent (at: Location, text: String) => Quest(name: "talk to a database without a process: its wire protocol, or the planned binary pipeline", goal: text)
   // The schema table (https://www.sqlite.org/schematab.html)
   listing = @sql SELECT name FROM sqlite_master WHERE type = 'table'
 }

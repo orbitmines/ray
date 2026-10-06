@@ -254,7 +254,7 @@ site := @https://orbitmines.com/archive
 unless site as String == "https://orbitmines.com/archive" { INFO@mark `LC1 @https://… is not a location of what is written` }
 unless @"a location with spaces" as String == "a location with spaces" { INFO@mark `LC2 @"…" does not keep its spaces` }
 unless @./lib/logo.png as String == "./lib/logo.png" { INFO@mark `LC3 @./path is not a relative location` }
-unless @ether/UI as String == "ether/UI" { INFO@mark `LC4 @name/path is not a location under that name` }
+unless @ether/ui as String == "ether/UI" { INFO@mark `LC4 @name/path is not a location under that name` }
 unless (@./lib / "logo.png") == @./lib/logo.png { INFO@mark `LC5 / does not go into a location` }
 
 release := 17
@@ -271,8 +271,8 @@ here_now := Instance.local.login(Character(name: "local-one"))
 unless Character.local("local-one") === here_now { INFO@mark `WO15 a character logged in here is not here` }
 if Character.local("nobody-here") { INFO@mark `WO16 a character nobody logged in is here` }
 
-// Comparing characters is security: without @ether/Security (or @ether/Network) it is an error, not an answer.
-unless (Character(name: "a") == Character(name: "a")) is Diagnostic { INFO@mark `SEC1 two characters compare without @ether/Security` }
+// Comparing characters is security: without @ether/security (or @ether/network) it is an error, not an answer.
+unless (Character(name: "a") == Character(name: "a")) is Diagnostic { INFO@mark `SEC1 two characters compare without @ether/security` }
 unless Run.kept == 30 days { INFO@mark `HG4 run logs are not kept for thirty days` }
 
 // A reserved name is unique in its world under case folding.

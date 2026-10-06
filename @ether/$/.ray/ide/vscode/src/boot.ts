@@ -14,7 +14,7 @@ import { TransportKind } from 'vscode-languageclient/node';
  *   2. `bundled`  — Fall back to the language bundled with the extension itself: its daemon, kernel and library under
  *                   `server/`.
  *
- * When the workspace holds a language definition (a `!language` project, e.g. `@ether/$/.ray/v0` in a checkout of
+ * When the workspace holds a language definition (a `!language` project, e.g. `@ether/$/.ray/v0/ray` in a checkout of
  * orbitmines/ray), its directory is given to `--lsp`, and the daemon reads that language instead of its own.
  */
 export type BootMode = 'installed' | 'bundled';
@@ -25,13 +25,13 @@ export interface Boot {
   server: ServerOptions;
 }
 
-const LANGUAGE_DIRECTORY = path.join('@ether', '$', '.ray', 'v0');
+const LANGUAGE_DIRECTORY = path.join('@ether', '$', '.ray', 'v0', 'ray');
 
 function isLanguage(dir: string): boolean {
   try { return fs.readFileSync(path.join(dir, '.project.ray'), 'utf-8').split('\n')[0].includes('!language'); } catch { return false; }
 }
 
-/** The language definition the workspace holds: the workspace itself, or `@ether/$/.ray/v0` in it or above it. */
+/** The language definition the workspace holds: the workspace itself, or `@ether/$/.ray/v0/ray` in it or above it. */
 function findLanguage(start: string): string | null {
   if (isLanguage(start)) return start;
   let dir = start;
@@ -107,11 +107,11 @@ function nodeRuntime(): { command: string, env: NodeJS.ProcessEnv } {
 
 /**
  * Last-resort: the language shipped inside the extension — the daemon bundled as `server/language.mjs`, its
- * kernel (`server/.kernel.ray`) and the library (`server/v0`), given to it as RAY_LIBRARY.
+ * kernel (`server/.kernel.ray`) and the library (`server/v0`), whose core (`server/v0/ray`) is given to it as RAY_LIBRARY.
  */
 function bundledBoot(extensionPath: string, language: string | null): Boot {
   const entry = path.join(extensionPath, 'server', 'language.mjs');
-  const library = path.join(extensionPath, 'server', 'v0');
+  const library = path.join(extensionPath, 'server', 'v0', 'ray');
   if (!fs.existsSync(entry)) throw new Error(`Bundled Ray daemon not found at ${entry}`);
 
   const runtime = nodeRuntime();

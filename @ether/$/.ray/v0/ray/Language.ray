@@ -1,0 +1,80 @@
+Language := class: Ray = extensions: String, location: Location[] = [], level: Compiler?, written: Compiler?, stored: Compiler?, of: Language?, version: Version?, fidelity: Fidelity = Fidelity.snapshot, implementations: Implementation[] = [], targets: Language[] = [] {
+  static loaded_named (extension: String) => Language#{.names(extension)} -- (all => all{!.of}.first ?? all.first)
+  static named (extension: String) => loaded_named(extension) ?? (Project.declared.find(.project && loaded_named(extension)) && loaded_named(extension))
+  static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: base.level + outer.level, written: base.written + outer.written, of: base, version: outer.version)
+
+  static for_file (file_name: String) => file_name ~= (*, ".", inner: Char.Word[], ".ray") ⊣
+    ? (named("." + inner) ? over(named("." + inner), ray) : ray)
+    : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
+
+  static detected (content: String) => Language#{.level && !.read(content).erred}
+
+  static projects: Project[] = []
+  static project (name: String) => projects{.name == name}.first
+    ?? Project.known(ray.bundled("$/" + name)) -- (found => found ~~ (.name = name) ~~ projects.push(.) ~~ .load if found)
+  static found (name: String) => name.lower_case -- (lowered => lowered == "ray" ? ray
+    : (project(lowered) ? Language#{.names("." + lowered)}.last : named("." + lowered)) ?? Program(name: "a language by that name", goal: lowered))
+
+  static Fidelity := enum lossless | snapshot
+
+  static Writing := class = value: *, language: Language?
+  static unwrapped := {
+    {writing: Writing} => writing.value
+  }
+  static ray_written := {
+    {writing: Writing{value === None}} => "None"
+    {writing: Writing{value is String}} => "\"", writing.value.escaped_line, "\""
+    {writing: Writing{value is Number}} => writing.value as 10 as String
+    {writing: Writing{value is Iterable}} => "[", writing.value.map((", " if .index > 0), Writing(.)), "]"
+    {writing: Writing} => "(", writing.value.fields.map((", " if .index > 0), .name, ": ", Writing(.value)), ")"
+  }
+
+  static Entry := class: Hierarchy = name: String = "", content: Byte[]?, mode: Mode = Mode.file {
+    static Mode := enum file | executable | link | directory | module
+
+    directory => content === None
+    path => (parent?.path, name){!= None && .nonempty}.join("/")
+    files => directory ? children.map(.files).flatten : [this]
+    child (named: String) => children.find(c => c.name == named)
+    at (path: String) => path.split("/"){.nonempty}.reduce(held = this => held?.child(.))
+    placed (path: String, bytes: Byte[], kind: Mode = Mode.file): static => path.split("/"){.nonempty} -- (segments =>
+      (child(segments.first) ?? add(Entry(name: segments.first))) -- (next => segments.count == 1 ? next ~~ (.content = bytes) ~~ (.mode = kind) : next.placed(segments.rest.join("/"), bytes, kind)))
+      -- this
+
+    static of (files: (path: String, content: Byte[], mode: Mode?)[]) => files.reduce(root = Entry() => root.placed(.path, .content, .mode ?? Mode.file))
+  }
+
+  names (extension: String) => extension is extensions#
+  bundled (path: String) => location.map(. / path){IO.read(. / ".project.ray")}.first as Project
+
+  admits (program) => true
+  read (source) => level
+    ? Compiler.reduced(source, level + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`)
+    : Program(name: "a reader for the language", goal: this)
+  write (value) => written
+    ? Compiler.reduced(Writing(value, language: this), unwrapped + written + (stored ?? Compiler.none)) -- (. is Entry ? . : . as String)
+    : Program(name: "a writer for the language", goal: this)
+  written_to (value, location: Location) => write(value) -- (. is Entry ? .files.for(location / .path = .content) : location.write(.)) -- location
+  converted (location, from: Language) => write(from.read(location))
+  tree_at (location: Location, label) => read(location).at(label).tree
+
+  targeting (language: Language) => language is targets#
+  backwards_compatible => previous**.every(.targeting(this))
+  forwards_compatible => next**.every(.targeting(this))
+
+  static Implementation := class = language: Language, written_in: Language, location: Location {
+    source => IO.read(location)
+    level => written_in.read(source)
+    setup => language ~~ .implementations.push this ~~ .level ??= level
+  }
+
+  static ray := Language(".ray", location: [@ether/$/.ray/v0/ray, @ether/$/.ray/v0], level: Compiler.default, written: ray_written, fidelity: Fidelity.lossless)
+  static cfg := Language(".cfg", level: ray.level, written: ray.written, of: ray){admits Program{Pure & Terminating}}
+  static regex := Language(".regex")
+}
+
+$.{name: (Char.Word | "+" | "#" | "-")[]} ^keyword => Language.found(name as String)
+
+Node &+= {
+  as (language: Language) => language.write(this)
+}

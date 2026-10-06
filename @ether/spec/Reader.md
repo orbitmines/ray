@@ -30,7 +30,9 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
 - **R0.5 Recursion is broken by construction.** The first statement is read by inference, never by a rule. A definition's
   head is read with the rules in reach before it. Applying a rule inside its own body is a call, never an expansion. A
   capture's type is evaluated once, when its rule is defined. The reader the entrypoint defines is compiled by the reader
-  before it (the host's, or an earlier one).
+  before it (the host's, or an earlier one): every rule and every piece of code is read into a program by the reader in force
+  where it was written, and code of one reader sees only the rules defined while it was in force, so a later redefinition
+  (a new `:=`, a new `=>`) never reaches into the reader that reads it.
 - **R0.6 Handing over.** The entrypoint defines the full reader (R1–R5) in Ray and hands reading to it (`external reader`);
   from then on, later passes and every other file are read by it, as native code.
 - **R0.7 Externals** — none of them syntax: make a node; read a member; write a member; whether two nodes are the same;

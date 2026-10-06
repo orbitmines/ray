@@ -44,6 +44,7 @@ learned := external learned
 end := learned . end
 space := learned . space
 indent := learned . indent
+access := learned . access
 
 // Whether `a` is the same character as `b`.
 character {a} is {b} =>
@@ -93,21 +94,31 @@ continuation after {at} =>
     more := spelled indent from found
   found
 
-// Where the statement starting at `at` ends: the line end not followed by a deeper line (R0.1), or nothing at the text's end.
-statement end from {at} =>
+// Where the statement starting at `at` ends: the first line end not followed by a line deeper than `base` (R0.1), or `to`.
+statement end from {at} to {to} below {base} =>
   here := at
-  found := nothing
+  found := to
   while here do
-    c := here . character
-    if character c is end then
-      deeper := continuation after here
-      unless deeper then
-        found := here
-        here := nothing
-      if deeper then
-        here := deeper
+    if same here to then
+      here := nothing
     if here then
-      here := here . next
+      c := here . character
+      if character c is end then
+        deeper := nothing
+        next := here . next
+        inside := next
+        if base then
+          inside := nothing
+          based := spelled base from next
+          if based then
+            inside := based . end
+        if inside then
+          deeper := spelled indent from inside
+        unless deeper then
+          found := here
+          here := nothing
+      if here then
+        here := here . next
   found
 
 // Whether `b` comes after `a` before `limit` (walking: there are no integers).
@@ -217,18 +228,19 @@ chain {a} equals {b} =>
     result := nothing
   result
 
-// Reading handed to the rule defined last (R0.6).
+// Reading handed to the rule defined last (R0.6); bodies planned by the rule defined last, too.
 hand reading over =>
   latest := external latest
   external reader latest
+hand planning over =>
+  latest := external latest
+  external planner latest
 
-// One statement, read where it starts with the rules in reach (R2.5): every rule that reads it whole; between them, one led
-// by a literal over one led by a capture; then one written with the same head as a later one gives way to it (`=>`),
-// otherwise the one declared first reads it (G3.1). The
-// rules come nearest scope first, latest first. Answers the place after the statement.
-read statement at {at} =>
-  scope := external frame
-  limit := statement end from at
+// What reads the statement from `at` to `limit` with the rules in reach of `scope` (R2.5): every rule that reads it whole;
+// between them, one led by a literal over one led by a capture; then one written with the same head as a later one gives way
+// to it (`=>`), otherwise the one declared first reads it (G3.1). The rules come nearest scope first, latest first. Answers
+// a node with the `rule` and its `captures`, or nothing.
+reading from {at} to {limit} in {scope} =>
   rules := external rules scope
   best := nothing
   best_rule := nothing
@@ -257,9 +269,128 @@ read statement at {at} =>
         best_rule := rule
     rules := rules . next
   if best then
-    caps := best . captures
-    external apply best_rule caps scope
-  unless best then
+    set best . rule to best_rule
+  best
+
+// Whether the places from `at` to `limit` hold a space.
+spaced from {at} to {limit} =>
+  here := at
+  found := nothing
+  while here do
+    if same here limit then
+      here := nothing
+    if here then
+      c := here . character
+      if character c is space then
+        found := yes
+        here := nothing
+      if here then
+        here := here . next
+  found
+
+// One statement of a body, as a step (R0.4): a call of an external (`access name arguments…`), a rule with its captures, one
+// word, or what nothing reads.
+step from {at} to {limit} in {scope} =>
+  made := node
+  set made . from to at
+  set made . to to limit
+  led := spelled access from at
+  called := nothing
+  if led then
+    after := led . end
+    c := after . character
+    if character c is space then
+      called := after . next
+  if called then
+    set made . external to yes
+    words := words from called to limit
+    first := words . from
+    set made . name_from to first
+    last := words . to
+    set made . name_to to last
+    rest := words . next
+    set made . arguments to rest
+  unless called then
+    r := reading from at to limit in scope
+    if r then
+      rule := r . rule
+      set made . rule to rule
+      caps := r . captures
+      set made . captures to caps
+    unless r then
+      unless spaced from at to limit then
+        set made . word to yes
+  made
+
+// The words from `at` to `limit`, separated by spaces: a chain of `from`, `to`.
+words from {at} to {limit} =>
+  first := nothing
+  last := nothing
+  here := at
+  start := at
+  while here do
+    stop := same here limit
+    unless stop then
+      c := here . character
+      if character c is space then
+        stop := yes
+    if stop then
+      unless same start here then
+        word := node
+        set word . from to start
+        set word . to to here
+        if last then
+          set last . next to word
+        unless last then
+          first := word
+        last := word
+      if same here limit then
+        here := nothing
+      if here then
+        here := here . next
+        start := here
+    unless stop then
+      here := here . next
+  first
+
+// The statements of a body from `from` to `to`, each at the body's indentation `base`: a chain of steps.
+plan {from} to {to} below {base} in {scope} =>
+  first := nothing
+  last := nothing
+  at := from
+  while at do
+    if same at to then
+      at := nothing
+    if at then
+      limit := statement end from at to to below base
+      made := step from at to limit in scope
+      if last then
+        set last . next to made
+      unless last then
+        first := made
+      last := made
+      at := nothing
+      if limit then
+        unless same limit to then
+          at := limit . next
+          if base then
+            based := spelled base from at
+            if based then
+              at := based . end
+  first
+
+hand planning over
+
+// One statement read at the top: applied in place, or reported. Answers the place after it.
+read statement at {at} =>
+  scope := external frame
+  limit := statement end from at to nothing below nothing
+  r := reading from at to limit in scope
+  if r then
+    rule := r . rule
+    caps := r . captures
+    external apply rule caps scope
+  unless r then
     external unread at limit
   after := nothing
   if limit then

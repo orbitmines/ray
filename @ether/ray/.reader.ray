@@ -1850,7 +1850,7 @@ registry.sender = sent_rule
   found := None
   if given
     if given.listing
-      found = given.first
+      found = given.head
     unless given.listing
       found = external node
       found.value = given
@@ -1861,12 +1861,8 @@ registry.sender = sent_rule
   found := None
   if link.has(value)
     found = link.value
-  if link.item
-    item := link.item
-    if item.has(value)
-      found = item.value
-    unless item.has(value)
-      found = item.code
+  if link.listed
+    found = external get link value
   found
 
 // Whether arguments are given by name (`x: 1, …`): the first is a name followed by `: `.
@@ -1965,11 +1961,10 @@ runner := registry.latest
     bound := external apply written_parameters None frame
     // the bare names left in a list of them take what is left, in order
     if bound.listing
-      item := bound.first
+      item := bound.head
       while item
-        if item.item
-          held := item.item
-          code := held.code
+        if item.listed
+          code := external get item value
           if code.is_place
             left := registry.given
             if left
@@ -2061,7 +2056,15 @@ except_rule := registry.latest
       e = e.next
   found
 many_rule := registry.latest
-{item}[] =>
+// One operand: from where it starts (after spaces), a group, quoted text or a word, and nothing after it.
+{kind}.one_operand({from}, {to}) =>
+  start := from.spaces_after
+  unless start
+    start = from
+  e := start.operand_end(to)
+  e === to
+Operand := registry.latest.checked
+{item: Operand}[] =>
   made := many_rule.checked
   made.item = item
   made
@@ -2190,14 +2193,6 @@ Line := registry.latest.checked
   found
 Item := registry.latest.checked
 
-// One operand: from where it starts (after spaces), a group, quoted text or a word, and nothing after it.
-{kind}.one_operand({from}, {to}) =>
-  start := from.spaces_after
-  unless start
-    start = from
-  e := start.operand_end(to)
-  e === to
-Operand := registry.latest.checked
 
 // Parameters as written: no braces in them (a rule's head has some).
 Unbraced := opening_block.anything_but[]
@@ -2358,10 +2353,9 @@ Unbraced := opening_block.anything_but[]
     given := value.listed
     found = places
     if places.listing
-      item := places.first
+      item := places.head
       while item
-        held := item.item
-        code := held.code
+        code := external get item value
         if given
           external declare code given.argument
           given = given.next
@@ -2425,6 +2419,36 @@ Unbraced := opening_block.anything_but[]
   block := class_read.written
   code := block.code
   external apply code None instance
+
+// `a, b`: a list (a chain: `head`, `tail`, links with `value` and `next`), each item as written, read when its value is read;
+// a list given another item is that list with it at the end.
+{this}.listed_with({other}) =>
+  list := None
+  known := external span this
+  unless known
+    list = this
+    unless list.listing
+      list = None
+  unless list
+    list = external node
+    list.listing = true
+    first := external node
+    first.listed = true
+    written_this := external ** this
+    this_code := written_this.code
+    external keep first value this_code
+    list.head = first
+    list.tail = first
+  added := external node
+  added.listed = true
+  written_other := external ** other
+  other_code := written_other.code
+  external keep added value other_code
+  last := list.tail
+  last.next = added
+  added.previous = last
+  list.tail = added
+  list
 
 // Calling a value: a class makes an instance of itself; a closure runs.
 {this}.called({arguments}) =>
@@ -2537,6 +2561,23 @@ registry.language = true
   made
 
 // ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
+// `[items]`: a list of them; `[]`: an empty one.
+[{inside: Balanced}] =>
+  given := inside
+  found := given
+  unless given.listing
+    found = external node
+    found.listing = true
+    only := external node
+    only.listed = true
+    only.value = given
+    found.head = only
+    found.tail = only
+  found
+{`[]`} =>
+  found := external node
+  found.listing = true
+  found
 // A block as a value: a program (`{ … }`), run where something runs it.
 {{inside: Balanced}} =>
   made := external node
@@ -2620,25 +2661,7 @@ Node := type
   // `,` composes one value, a list (no split, 2026-09-27): `a, b, c` is the list of `a`, `b` and `c`, each as written (a
   // place or a value, read when it is used).
   ,{other: Item} =>
-    list := None
-    known := external span this
-    unless known
-      list = this
-      unless list.listing
-        list = None
-    unless list
-      list = external node
-      list.listing = true
-      first := external node
-      first.item = external ** this
-      list.first = first
-      list.last = first
-    added := external node
-    added.item = external ** other
-    last := list.last
-    last.next = added
-    list.last = added
-    list
+    this.listed_with(other)
   :={value} =>
     this.declared(value)
   ={value} =>

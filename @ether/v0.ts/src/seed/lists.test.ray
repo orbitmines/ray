@@ -4,8 +4,14 @@ a := external node
 b := external node
 l := a, b, a
 say l
-f := l.first
+f := l.head
 say f
 (x, y) := a, b
 say (x === a)
 say (y === b)
+m := [a]
+say (m.head.value === a)
+e := []
+say e
+n := [a, b]
+say (n.tail.value === b)

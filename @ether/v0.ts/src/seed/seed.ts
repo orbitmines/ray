@@ -79,6 +79,8 @@ export class Seed {
     this.externals.set('get', (frame, [of, name]) => { const n = self.force(of) as Node | undefined, k = self.code_of(name).s; return !(n instanceof Node) ? undefined : n.members.has(k) ? n.members.get(k) : k === 'parent' ? n.parent : k === 'caller' ? n.caller : k === 'rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
     // a name written where it was declared (the nearest frame from where it was written that has it, else there)
     this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = self.force(value); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; (at ?? c.frame).members.set(k, v); return v; });
+    // a member set to code as written, unread (read where the member is read)
+    this.externals.set('keep', (frame, [of, name, value]) => { const o = self.force(of) as Node; o.members.set(self.code_of(name).s, value); return value; });
     // whether a node has a member of its own (one set there, even to nothing)
     this.externals.set('own', (frame, [of, name]) => { const n = self.force(of); return n instanceof Node && n.members.has(self.code_of(name).s) ? true : undefined; });
     this.externals.set('set', (frame, [of, name, value]) => { const v = self.force(value), o = self.force(of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'parent') { if (process.env.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); o.parent = v as Node | undefined; } else o.members.set(k, v); return v; });

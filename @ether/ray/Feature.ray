@@ -64,10 +64,9 @@ Proof := class = proposition: *, argument: * {
 
   holds => argument.holds
 
-  static theorem | lemma | example (proposition, proof) => proof.holds ? true : Program(name: "prove", goal: proposition)
+  static theorem | lemma | example (proposition, proof) => proof.holds ? true : ERROR@Proof `the proposition is not proven`
   static by_contradiction | contradiction (proposition, proof_of_negation) => !proof_of_negation.holds
   static rfl (proposition) => proposition.holds
-  static failed (error) => Program(name: "fix", goal: error)
 }
 
 ! `+` `-`

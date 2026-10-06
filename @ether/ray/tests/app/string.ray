@@ -266,3 +266,9 @@ unless "x²".baseline == "x2" { INFO@mark `UD4 a superscript does not come down 
 unless "H₂O".baseline == "H2O" { INFO@mark `UD5 a subscript does not come up to its digit` }
 unless "2".superscript == "²" { INFO@mark `UD6 two has no superscript` }
 unless "2".subscript == "₂" { INFO@mark `UD7 two has no subscript` }
+
+// Confusable names compare by their UTS #39 skeleton.
+unless "\u00E9".nfd == "e\u0301" { INFO@mark `SKL4 a precomposed letter does not decompose to its base and mark` }
+unless "dаwn".confusable("dawn") { INFO@mark `SKL1 a Cyrillic a is not confusable with a Latin a` }
+unless "dаwn".mixed_script { INFO@mark `SKL2 Latin with a Cyrillic letter is not mixed-script` }
+if "dawn".mixed_script { INFO@mark `SKL3 a Latin name is mixed-script` }

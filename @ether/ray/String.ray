@@ -5,7 +5,6 @@ Char := class: Unicode.Scalar {
   static Word: Char = Letter | Digit | "_"
   static Symbol: Char = Unicode.GeneralCategory.(Punctuation | Symbol)
 
-  codepoint => this
   is_ascii => this < 128
   bytes => ([this] as String).bytes
 
@@ -18,6 +17,10 @@ Char := class: Unicode.Scalar {
   mirrored => Unicode.BidiMirroring[this]?.value ?? this
   swap_case | swapcase => is_lower ? upper_case : lower_case
   fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status is ("C" | "F")}.first?.value ?? this
+
+  // Unicode §3.7: the full canonical decomposition, a mapping without a <tag> applied until nothing decomposes (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G733)
+  decomposed => Unicode.Data[this]?.decomposition_mapping -- (. && !(. ~= ⊢"<") ? (. as Unicode.Scalar[].join(" ")).map(.decomposed).flatten : [this])
+  combining_class => (Unicode.Data[this]?.canonical_combining_class ?? "0") as Decimal
 
   decimal_digit_value => Unicode.DecimalDigitValue[this]
   digit_value => Unicode.DigitValue[this]
@@ -114,6 +117,16 @@ String := class: Char[] {
     : (lines[1..] -- (.last.trimmed.empty ? .[..<-1] : .)).join(\n).dedented
 
   replace (old: String, new: String) => split(old).join(new)
+
+  // UAX #15 §1.2: NFD is the full canonical decomposition, each run of non-starters then put in order of Canonical_Combining_Class (https://www.unicode.org/reports/tr15/#Norm_Forms, https://www.unicode.org/versions/latest/core-spec/chapter-3/#G49537)
+  nfd => (#.decomposed.flatten as String).ordered
+  ordered => empty ? "" : first.combining_class == 0 ? first, rest.ordered : marks.sort_by(.combining_class), this[marks.count..].ordered
+  marks => empty || first.combining_class == 0 ? [] : first, rest.marks
+  // UTS #39 §4: skeleton(X) is NFD(X) with each character replaced by its prototype, then NFD again; X and Y are confusable when their skeletons are equal (https://www.unicode.org/reports/tr39/#def-skeleton)
+  skeleton => (nfd#.map(Unicode.confusables[.]?.prototype ?? [.]).flatten as String).nfd
+  confusable (other: String) => skeleton == other.skeleton
+  // UTS #39 §5.1: Common and Inherited characters go with any script, so a string of one other script is single-script (https://www.unicode.org/reports/tr39/#Mixed_Script_Detection)
+  mixed_script => #.script{!= "Common" && != "Inherited"}.unique.count > 1
   escaped_line => #.map(Compiler.reduced(., Escape⁻¹)) as String
 
   as (base: Number.Base) => Number.numeral(base)(integer: this)

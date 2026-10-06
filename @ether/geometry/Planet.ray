@@ -1,0 +1,10 @@
+Planet := class {
+  years: Unit.Temporal
+  days: Unit.Temporal
+}
+Earth := Planet(years: year, days: day)
+
+// a sol is 1 day 39 minutes 35.244 seconds; a Martian year is 668.5991 sols (N4.9)
+Unit(name: "sol").multiple 88775.244, second
+Unit(name: "martian year").multiple 668.5991, sol
+Mars := Planet(years: martian year, days: sol)

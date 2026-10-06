@@ -106,3 +106,32 @@ FileSystem &+= {
 FileOptimizations = {
   {location: Disk} => FileSystem.Device()
 } + FileOptimizations
+
+FileSystem &+= {
+  static Remote := class: FileSystem {
+    remotely (location: Location) => Network.Remote(character: @me, location: location.scheme ? location.origin : @remote)
+    inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
+    over_http (location: Location) => location.scheme ~= ⊢"http"
+    sent (method: $.http.Method, location: Location, content = None, fields = $.http.Fields()) => $.http.send($.http.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
+    read (location: Location) => over_http(location)
+      ? sent($.http.Method.get, location) -- (.ok ? .text : None)
+      : remotely(location).run({ inner(location).content })
+    write (location: Location, content) => over_http(location)
+      ? sent(content === None ? $.http.Method.delete : $.http.Method.put, location, content).ok
+      : remotely(location).run({ inner(location).write(content) })
+    // WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2)
+    listing (location: Location) => over_http(location)
+      ? (sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")).text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
+        .map(href => href ~= ⊢"/" ? location.origin + href : href as Location)
+      : remotely(location).run({ inner(location).listing })
+  }
+}
+
+FileOptimizations = {
+  {location: Location{scheme && scheme != "file"}} => FileSystem.Remote()
+  {location: Location{segments.first == "remote"}} => FileSystem.Remote()
+} + FileOptimizations
+
+OS.devices = {
+  {os: OS{!platform}} => ("@ether/os" as Project.Dependency).project -- OS.Ether()
+} + OS.devices

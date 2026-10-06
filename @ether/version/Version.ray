@@ -1,8 +1,9 @@
 History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   static Label := UUID | Char.Word[]
 
-  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [], relies: Byte[]?, signature: *?,
-    key: Label?, wraps: *[] = [], sealed: Byte[]? {
+  // A commit is who changed what, when, after what. Signatures, content keys and ciphertext are @ether/security's
+  // (it adds them to commits); version control does not import it.
+  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [] {
     when: Time = stamp?.when ?? Time.now
     message: String?
     previous: Commit?
@@ -14,22 +15,29 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     merged => parents.count > 1
     stored => this
     opened => this
-    applied (held) => opened -- (plain => held -- with (@me = plain.who) plain.change)
-    rewritten (change: Program?) => Commit(id, who, stamp, change, from, versions, relies, signature, key, wraps, change === this.change ? sealed : None, when, message, previous, line)
+    // A line runs on the value before it as whoever replays it: its `who` is attribution, not authority (W2.1).
+    applied (held) => opened -- (plain => held -- plain.change)
+    rewritten (change: Program?) => copy ~~ (.change = change)
     expand => opened.change**
     successors => line?.since(None){.parents.some(=== this)} ?? []
     branching => successors.count > 1
     value => line?.at(this).value ?? applied(None)
     mentions (label) => id == label || versions.contains(label)
-    attributed => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty,
-      ("; relies = ", Language.ray.write(relies)) if relies, ("; key = ", Language.ray.write(key)) if key, ("; wraps = ", Language.ray.write(wraps)) if wraps.nonempty).join("")
-    settings => (attributed, ("; signature = ", Language.ray.write(signature)) if signature).join("")
-    text => sealed ? Language.ray.write(sealed) : change as String
+    // A line's settings, written `name = text` in its `with (…)`: those its hash covers, then the rest. A project that adds
+    // fields to commits adds their settings (`more_attributes`, `more_settings`) and how it reads them back (`given`).
+    attributes => [[(name: "@me", text: Language.ray.write(who)), (name: "now", text: stamp as String) if stamp,
+      (name: "version", text: versions.join(" | ")) if versions.nonempty], more_attributes].flatten(1)
+    more_attributes => []
+    more_settings => []
+    attributed => attributes.map(.name + " = " + .text).join("; ")
+    settings => [attributes, more_settings].flatten(1).map(.name + " = " + .text).join("; ")
+    text => change as String
+    given (set, written: String) => this
     hash: Byte[] => $.sha256.write([parents.map(.hash), (id, attributed, text).join("") as Byte[]].flatten).bytes
     written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, text, \n).join("")
     static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
-      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: set.key ? None : line.change as Program, from: line.root ? [] : line.from, versions: set.version# ?? [], relies: set.relies, signature: set.signature,
-        key: set.key, wraps: set.wraps ?? [], sealed: set.key ? Language.ray.read(line.change as String) : None))
+      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from,
+        versions: set.version# ?? []).given(set, line.change as String))
       : Commit(id: label, change: code))
 
     .{literal name ^property} ^punctuation => external get value name
@@ -51,10 +59,12 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   find (label) => since(None).find(.id == label)
   at (commit) => copy ~~ (.head = commit is Commit ? commit : find(commit))
 
-  commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = [], wraps: *[] = []): static =>
-    (wraps.empty && !public && !current_key && who is Character && who.inbox ? rekeying(who, id) : wraps) -- (keyed => this ~~ .head = Commit(id, who, stamp: clock.now,
-      change: change is Program ? change : Program(code: { change }), versions, key: keyed.some(.key == id) ? id : current_key, wraps: keyed, when, message, previous: head, line: this)
-        -- (made => who is Entity ? who.sealed(who.sealed(made).stored) : made.stored))
+  commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static =>
+    this ~~ .head = committed(Commit(id, who, stamp: clock.now, change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this))
+  // What a commit becomes before it is this line's head: what the storage levels in scope store. Security overrides it (keys, signatures).
+  committed (made: Commit) => made.stored
+  // Whether this line's values can be read here; security answers by the content keys held here.
+  readable => true
   |= (change): static => commit(@me, change)
   extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
 
@@ -115,10 +125,6 @@ Node &+= {
   history: History = History(repository: this)
 }
 
-Entity &+= {
-  sealed (commit: History.Commit) => commit ~~ (.signature = key.signed(.hash) if key)
-}
-
 Character &+= {
   session => history.fork
   keep (session: History) => history.merge(session)
@@ -150,6 +156,8 @@ History &+= {
   objects => value.fields.name.map(name => (path: object_path(name), content: (of(name) as Program) as String as Byte[]))
   pins (commit: Commit) => value.fields.name{of(.).find(commit.id)}.map(name => ".[" + Language.ray.write(name) + "] = @./" + object_path(name) + "%[" + commit.id + "]").join("; ") as Program
   cached => since(None){.index % 64 == 63 || . === head}
+  // A cache line: the value at a commit, written as that commit's change.
+  cached_at (commit: Commit) => commit.rewritten(Language.ray.write(at(commit).value) as Program)
 
   static trusted = true
 
@@ -207,12 +215,9 @@ Node &+= {
   edited (from: Number, to: Number, text: String) => Language.ray.write(this) -- (written => Language.ray.read((written[..<from], text, written[to..]).join("")))
 }
 
-History.Commit &+= {
-  expand => value**.expand
-}
-
 Program &+= {
-  run => Run.log.commit(who, this).head.opened -- (logged => with (@me = logged.who) logged.change)
+  // A run is logged as its who, and runs as whoever runs it; only @ether/security runs it as a verified giver (W2.1).
+  run => Run.log.commit(who, this).head.opened.change
   rewrites => history.since(None){.who is Program}
   revoked (rule: Program) => rewrites{.who === rule}.first -- (used => used ? (history.at(used.previous).value ?? this){O: O - rule} : this)
 
@@ -244,7 +249,7 @@ Run &+= {
   static kept: Quantity.Temporal = 30 days
 
   static logs => log.since(None){.when >= Time.now - kept}
-  static replay (logged: History.Commit) => logged.opened -- (plain => with (@me = plain.who) plain.change if logs.some(=== logged))
+  static replay (logged: History.Commit) => logged.opened.change if logs.some(=== logged)
 }
 
 Compiler &+= {
@@ -260,7 +265,7 @@ Compiler &+= {
   }
 
   cached := {
-    {history: History{readable}}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => (c.rewritten(Language.ray.write(history.at(c).value) as Program) ~~ (.wraps = history.wraps_of(c.key) if c.key)).stored) -- (kept =>
+    {history: History{readable}}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => history.cached_at(c).stored) -- (kept =>
       kept.map(.written(above: kept[.index - 1] if .index > 0)).join(""))) as Byte[])]
     {history: History{caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned)?.ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
       ? history.at(pinned).ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.caches.find(.find(hit.id)).at(hit.id).value => .applied(held))
@@ -271,14 +276,9 @@ Compiler &+= {
     {commit: History.Commit{previous && (History.edit(previous.value, value) as String).count < (change as String).count}}.change => History.edit(commit.previous.value, commit.value)
   }
 
-  encrypted := {
-    {commit: History.Commit{key && !sealed}}.stored => commit.enciphered
-    {commit: History.Commit{sealed}}.opened => commit.deciphered
-  }
+  stored := formats + per_object + cached + delta
 
-  stored := formats + per_object + cached + delta + encrypted
-
-  levels => [none, default, folding, logic, minimising, memoised, formats, per_object, cached, delta, encrypted, stored]
+  levels => [none, default, folding, logic, minimising, memoised, formats, per_object, cached, delta, stored]
 }
 
 Language &+= {

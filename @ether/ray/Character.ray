@@ -1,5 +1,11 @@
 Entity := class {
-  key: Encoding.Key?
+  // A private key is a secret: readable by no one (W2.1 Storage), so no store, history or cache level writes it, and logging out drops it.
+  none.read key: Encoding.Key?
+
+  // The same principal as `other`: here, the same value; @ether/security compares verified roots instead.
+  same (other) => this === other
+  // Whether this principal answers for `who`, a principal named by a grant, a delegation or a registry, or any narrowing of principals.
+  answers_for (who) => same(who) || this is who
 }
 
 Nameable := class {
@@ -31,7 +37,8 @@ Character := class: Hierarchy + Entity + Nameable {
 
   avatars => name{is Location && .segments.some(.starts_with("@"))}
   quests => Program#{who: this}{running}
-  as (=== boolean) => this == @me
+  // Without @ether/security a character is only itself; security replaces this with the verified comparison.
+  as (=== boolean) => this === @me
   acting => this
   chainable == (other) => ERROR@Security `comparing characters needs @ether/security (or @ether/network)`
 

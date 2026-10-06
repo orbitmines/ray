@@ -55,8 +55,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   reduced (seed, step: Program) => empty ? seed : rest.reduced(step.entered(first, seed), step)
 
   all => reduce(|)
-  right-to-left Σ | sum => reduce(total = 0 => total + .)
-  right-to-left ∑ => sum
+  right-to-left Σ | ∑ | sum => reduce(total = 0 => total + .)
   right-to-left ∏ | product => reduce(total = 1 => total * .)
   min => reduce((acc) => acc < . ? acc : .)
   max => reduce((acc) => acc > . ? acc : .)
@@ -146,10 +145,8 @@ Ray := class: Iterable & Ordered {
   initial | (internal right-to-left ⊢) : Boundary = Boundary.Initial(∙: this)
   terminal | (internal ⊣) : Boundary = Boundary.Terminal(∙: this)
 
-  is_initial => !previous
-  is_terminal => !next
-  is_first => is_initial
-  is_last => is_terminal
+  is_initial | is_first => !previous
+  is_terminal | is_last => !next
   is_boundary => is_initial || is_terminal
 
   entry => first
@@ -287,14 +284,17 @@ Graph := class: Structure {
     without (vertex) => Simple(vertices: vertices{!= vertex}, edges: edges{.from != vertex && .to != vertex})
     dangling (vertex, kept) => edges.some((.from == vertex || .to == vertex) && !(kept.contains(.from) && kept.contains(.to)))
 
-    static Rule := class = left: Simple, interface: Simple, right: Simple, single_pushout: boolean = false {
+    static Rule := class = left: Simple, interface: Simple, right: Simple {
       deleted => left.vertices{!interface.vertices.contains(.)}
       added => right.vertices{!interface.vertices.contains(.)}
 
       applies (host: Simple) => left.vertices.every(host.vertices.contains(.))
-        && (single_pushout || !deleted.some(host.dangling(., host.vertices{!deleted.contains(.)}.union(left.vertices))))
+        && !deleted.some(host.dangling(., host.vertices{!deleted.contains(.)}.union(left.vertices)))
       apply (host: Simple) => applies(host) ? rewritten(deleted.reduce(acc = host => acc.without(.))) : Program(name: "rewrite", goal: host)
       rewritten (graph: Simple) => graph -- added.for(graph.vertex(.)) -- right.edges{!graph.connected(.from, .to)}.for(graph.connect(.from, .to)) -- graph
+    }
+    static SinglePushout := class: Rule {
+      applies (host: Simple) => left.vertices.every(host.vertices.contains(.))
     }
   }
 }
@@ -358,7 +358,6 @@ Loop := class: Path = around: Iterable, at: * {
   unrolled => around
   instances (times: Number) => around * times
   unrolled_mod => around[at.index..], around[..<at.index]
-  disallow_loops => around
 }
 
 Node &+= {

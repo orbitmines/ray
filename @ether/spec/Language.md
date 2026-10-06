@@ -313,6 +313,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **From the drafts review (2026-10-06):**
   - **7.2.1 `%1..5` or `%[1..5]` — Q (conflict).** This section decided the suffix `field %1..5`; the 2026-10-05 answers (§10, "`%`") read `%` before a number as modulo and write version ranges `%[1..5]`; the Almanac writes `title %1..5: String` (*ALM:1641*). Recommend keeping the 2026-10-05 answer: rewrite this section to `field %[1..5]` and update the Almanac line.
     **Answered (user, 2026-10-06):** `%[1..5]`; `%` alone stays modulo. This section's `field %1..5` and the Almanac's `title %1..5` are to be written `%[1..5]`.
+    **(2026-10-06):** `%[1..5]` reads as the narrowing `Version{1 <= number <= 5}`: inclusion is `is`, the versions are `#`. `Versioned<T>` is gone; a versioned field is the field's history narrowed by version.
 
 ### 7.3 Errors carry their version — *IDE:432*
 > error[X] where X is the version the error type got introduced, plus a number.
@@ -498,6 +499,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided (2026-10-06):** there is no `Backend` class. A backend is a plain `Language`; what was generic moved to where it belongs.
   - `Language` has `fidelity` (`Language.Fidelity`), `stored` (the language's own storage level), `Language.Entry` (a tree of files, for a language that writes more than one), `written_to`, `converted` and `tree_at`.
   - `Language.write` answers text, or an `Entry` when the language writes files.
+  - **(2026-10-06):** `Language.Entry` and `Language.Fidelity` are gone. A language that writes files answers a tree of Locations with content (`Location.placed`, `files`, `at`); a directory is `Directory := Location{content === None}`, an executable `Executable := Location{access is Access(method: `()`)}`, a link a getter redirect (`a = => b`), a module a Project dependency. Fidelity is the narrowing `Language.Lossless` (reads back what it writes); `.ray` is declared `Lossless`.
   - `History` has what is about histories: `History.change(before, after)` (the change between two trees, written as Ray: moves `.["b"] = .["a"]`, removals `= None`, assignments), the rename `similarity` and its `similar` threshold, `History.read_file` and `History.valued` (a tree as a value). A backend reads its commits straight into `History.Commit`s; there is no `Revision` record in between.
   - `Encoding.common` and `Encoding.runs` are the shared byte diff the deltas use.
   - The other families get the same treatment:
@@ -594,8 +596,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Draft TODOs not covered above: a text form for when UUIDs cannot be assigned through an interface (ORIG:1), in-between caches (ORIG:18).
 
 - **Decided (user, 2026-10-06): end-to-end encryption.** Every history that is not public is stored encrypted for its
-  readers, by default; it is one storage level (`encrypted`, part of `Compiler.stored`, in `version/`) with the key
-  wrapping in `security/`.
+  readers, by default; it is one storage level (`encrypted`, added to `Compiler.stored` by `security/`) with the key
+  wrapping, both in `security/`; version control knows no keys (World W2.1).
   - A line keeps in plaintext what storing, ordering and checking need: its label, parents, stamp, signature and
     which content key it uses (`with (…; key = K₃)`); its change is ciphertext.
   - A history has a symmetric content key, wrapped for each reader's instance key (HPKE, RFC 9180: X25519, HKDF,
@@ -608,6 +610,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     and only readers check authorship.
   - Merging happens on readers' machines (a server keeps both heads); caches are encrypted with the same key or kept
     local; deltas and compression come before encryption; backends (git) carry ciphertext.
+  - **Follows (2026-10-06): logout by access.** What logging out drops is every secret, a `none.read` field, rather
+    than every field holding an `Encoding.Key`: each key it holds (lists and tuples of keys included) is zeroised and
+    the field set to None, so the next login makes fresh keys; World still knows nothing of Security (World W2.1 Storage).
   - **Decided (user, 2026-10-06): logout.** Logging out zeroises every key on the character, without World knowing
     Security: `character.fields{.value is Encoding.Key}.for(.value.zeroised)` (the instance key, Security's `inbox`,
     and any key field added later; pseudonyms are derived from the instance key, so they go with it).

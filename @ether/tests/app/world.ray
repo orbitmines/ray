@@ -15,7 +15,7 @@ unless Network.DomainName(text: "a.b").valid { INFO@mark `WO7 the domain name a.
 if Network.DomainName(text: "").valid { INFO@mark `WO8 a name of nothing is a valid domain name` }
 unless Keyboard.Key(name: "a").press.pressed { INFO@mark `WO9 a pressed key is not pressed` }
 unless Chat().commit(wp, Program(code: { "hi" })).count == 1 { INFO@mark `WO10 a said message is not in the chat` }
-unless Proof.theorem(Proof.Proposition(holds: true), Proof(proposition: None, argument: Proof.Proposition(holds: true))) { INFO@mark `WO11 the theorem does not hold` }
+unless Proof.theorem(Proof.Proposition(code: { true }), Proof(proposition: None, argument: Proof.Proposition(code: { true }))) { INFO@mark `WO11 the theorem does not hold` }
 
 // Locations: what holds what, and how deep that goes.
 here := Location(host: None)
@@ -271,13 +271,21 @@ here_now := Instance.local.login(Character(name: "local-one"))
 unless Character.local("local-one") === here_now { INFO@mark `WO15 a character logged in here is not here` }
 if Character.local("nobody-here") { INFO@mark `WO16 a character nobody logged in is here` }
 
-// Logging out zeroises every key the character holds, whatever field holds it, and no one else's.
-Keyholder := class: Character { spare: Encoding.Key? }
-zer := Instance.local.login(Keyholder(name: "zer", key: $.ed25519.pair(), spare: $.ed25519.pair()))
+// Logging out zeroises and drops every secret (`none.read` field) the character holds, whatever it is called, and no one else's; what is not a secret stays.
+Keyholder := class: Character {
+  none.read spare: Encoding.Key?
+  none.read spares: (label: String, key: Encoding.Key)[] = []
+}
+zer_at := Instance(location: "zer-at")
+zer := Instance.local.login(Keyholder(name: "zer", key: $.ed25519.pair(), spare: $.ed25519.pair(), spares: [(label: "one", key: $.ed25519.pair())], presence: zer_at))
 zer_spare := zer.spare
+zer_listed := zer.spares.first.key
 zer_other := Instance.local.login(Keyholder(name: "zer-other", key: $.ed25519.pair()))
 Instance.local.logout(zer)
-if zer.key || zer_spare.signed([1]).valid == true { INFO@mark `ZER1 a key on a character outlives logging out` }
+if zer.key || zer.spare || zer_spare.signed([1]).valid == true { INFO@mark `ZER1 a key on a character outlives logging out` }
+if zer.spares || zer_listed.signed([1]).valid == true { INFO@mark `ZER3 a key held in a list of tuples outlives logging out` }
+unless zer.presence === zer_at { INFO@mark `ZER4 logging out drops what is not a secret` }
+if Instance.local.logged_in(zer) { INFO@mark `ZER5 a character logged out is still logged in` }
 unless zer_other.key.signed([1]).valid == true { INFO@mark `ZER2 logging one character out zeroises another's key` }
 
 // Comparing characters is security: without @ether/security (or @ether/network) it is an error, not an answer.
@@ -370,3 +378,13 @@ unless clm_quest is Abstract { INFO@mark `CLM1 claiming authorship is not a ques
 if clm_quest.reached(clm) { INFO@mark `CLM2 a claim is reached before the claimant is an author` }
 clm.authors.push clm_who
 unless clm_quest.reached(clm) { INFO@mark `CLM3 a claim is not reached once the claimant is an author` }
+
+// A redirect is a world name, so it passes the world's write check; a stream moves only those who let it (W1.9).
+unless (with (World.current = rdr) { Network.Hosts.redirect("b", @https://elsewhere.example) }) is Abstract { INFO@mark `NETG1 a redirect overwrites a held name without the issuer's write` }
+netg_watcher := Instance.local.login(Character(name: "netg-watcher"))
+netg := Network.Stream(player: here_now, location: @local)
+unless &@.may(`=`, netg_watcher) || netg.watch(netg_watcher) is Diagnostic { INFO@mark `NETG2 a stream moves a character who did not grant it` }
+unless &@.may(`=`, here_now) || netg.moved(@localhost) is Diagnostic { INFO@mark `NETG3 a stream is moved without its player's grant` }
+// A name confusable with a reserved one finds it, and a confusable mixed-script name is not reserved (UTS #39).
+unless wg.@dаwn === wp { INFO@mark `SKL5 a name confusable with a reserved one does not find it` }
+unless (wg.@pаge = 3).erred { INFO@mark `SKL6 a name that mixes scripts and is confusable is reserved` }

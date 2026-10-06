@@ -276,7 +276,7 @@ with Time.now = animated.stops.last.at {
   unless animated.value == Geometry.Vector(100px, 0px) { INFO@mark `UI260 a value over a time is not where it ends when it ends` }
 }
 unless Geometry.Space.of(Graph.Simple().connect(1, 2)).projection.erred { INFO@mark `UI261 a graph is embedded before embedding is implemented` }
-unless Compiler.reduced(Geometry.Vector(1px, 2px).map(. * 2), Compiler.specialised) == Geometry.Vector(2px, 4px) { INFO@mark `UI262 specialising a known plane changes what a vector maps to` }
+unless Compiler.reduced(Geometry.Vector(1px, 2px).map(. * 2), Geometry.specialised) == Geometry.Vector(2px, 4px) { INFO@mark `UI262 specialising a known plane changes what a vector maps to` }
 unless Geometry.Transform.rotate((1 / 4) turn).count == 3 { INFO@mark `UI263 a plane's transform is not three by three` }
 
 // A share in a length is a share of the parent; a theme style narrows; a location literal takes a narrowing

@@ -24,12 +24,12 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
   // https://datatracker.ietf.org/doc/html/rfc4193#section-8
   | @`fc00::/7`
 
-local = => @local
-localhost = => @localhost
-private = => @private
-public = => @public
+local => @local
+localhost => @localhost
+private => @private
+public => @public
 // Whatever the policy, `confidential` is never wider than `@private.managed` (W5.5).
-confidential = => Node.policy & @private.managed
+confidential => Node.policy & @private.managed
 Node.policy = local
 
 Node &+= {

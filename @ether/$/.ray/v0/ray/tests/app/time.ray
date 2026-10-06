@@ -92,7 +92,7 @@ unless Gregorian(year: 2024).weekday_of(1) == Monday { INFO@mark `TI93 the first
 unless ("2024-02-07" as ISO_8601) < ("2024-02-08" as ISO_8601) { INFO@mark `TI94 a date is not before the day after it` }
 unless (Time.now.corrected(1 second, within: 1 ns)).uncertainty == 1 ns { INFO@mark `TI95 a corrected time does not keep how certain the correction is` }
 unless Mars.days == sol { INFO@mark `TI87 a day on Mars is not a sol` }
-unless 1 sol == 88775 seconds { INFO@mark `TI88 a sol is not 88775 seconds` }
+unless 1 sol == 88775.244 seconds { INFO@mark `TI88 a sol is not 88775.244 seconds` }
 
 Host := class: OS (platform: String)
 unless Compiler.reduced(Host("linux"), TimeZone.sources) is TimeZone.Zoneinfo { INFO@mark `TZ1 linux does not read the host's zoneinfo` }

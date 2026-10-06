@@ -51,6 +51,13 @@ From the drafts review (2026-10-06).
   on the platform with an `@` segment, `@github.com/@alice` (the `@` is required: `@github.com/package` is a package of
   github). `character.avatars` is `name{is Location}` of that form.
 
+From the drafts verification (2026-10-06).
+
+- **W1.12 `@player`** — *`Ether.ray:5` (as of `aeaca7c^`)*: "from the computers perspective it has a root setup where it is
+  @me, and @player is the player, and @me in a player session is themselves, and @me.device". W1.10 has `@players`; v0
+  `Ether.ray` has no `@player`. **Q** — Recommend: no `@player`. In a player session the player is `@me`; the root of a machine
+  is its server character (W2.26); the set is `@players`; the device is `@me/device/<…>` (W8).
+
 ## W2. Entities, instances, personas (*World:208–260, 381–442; Feature:264–340*)
 
 - **W2.1 Entity identity** — `==` on Entity/Instance checks the public key. Compromised keys: redistribute by a version log of
@@ -143,6 +150,41 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
 - **W2.27 Mirrors of unknown extent** — **Q**. Recommend: `world.locations` is an unbounded (possibly non-halting) Ray, explored
   as a quest; a mirror's permissions are its own and default to the original's (W2.9). *`.ray2/Character.ray:11–12`*
   **Follows (2026-10-06):** as recommended: `world.locations` is an unbounded (possibly non-halting) Ray, explored as a quest, and a mirror's permissions are its own, defaulting to the original's, from R3.4 (an unbounded search is a quest) and L§8.3 (permissions are inherited).
+
+From the drafts verification (2026-10-06).
+
+- **W2.28 Speaking to a character** — *`.ray2/Character.ray:74`*: `{" "}{string: String} //TODO Access permission filter` on
+  `class Character`: a character followed by a string, `@alice "hi"`. **Q** — Recommend: a rule on Character that sends the
+  string to it as a message (v0 `Messaging.ray`), allowed only when the sender holds what the recipient grants for messages
+  (W5.1: `execute` on its message method).
+- **W2.29 Loading a character into a world** — *`.ray2/Character.ray:69`*: "If blocks for which world to load it in, based on
+  location, then .avatar with {location == ?}.avatar or default {?} to load all properties with unknowns". The avatar half is
+  superseded (W1.11: avatars are names). **Q** — Recommend: which of a character's names and properties a world loads is a
+  narrowing by location (`character{location == world}`), and `{?}` loads the properties whose value is unknown there lazily,
+  as quests (T1.6 `?`, R3.4).
+- **W2.30 The spawner fills in a child's network** — *`…/instance/Network.ray:1`*: "external fills things like Network.Host
+  when spawning a child instance." **Decided (draft)**: what a child instance knows of its host and network (its host, the
+  shared socket, W2.20) is given by the instance that spawns it, through the external that starts it, not discovered by the child.
+- **W2.31 Recognising a logout that deletes** — *`…/instance/Entity.ray:30`*: "== OR >=, or rather ~= (any part says
+  delete_all) FUNC EQUIV ON DELETE_ALL." **Q** — Recommend: a logout schedules deletion (W2.4, W2.23) when any part of its
+  program calls `delete_all` (`~=`), judged by function equivalence (U9), not by its text.
+- **W2.32 Several servers beside a player** — *`…/instance/entrypoint/entrypoint.ray:9`*: "Also allow many simultaneous servers
+  running besides the player." **Decided (draft)**: a machine may run any number of server instances alongside a player
+  instance; each is its own character with its own entrypoint (W2.26), sharing the host's socket (W2.20).
+- **W2.33 An instance's address is private by default** — *`…/instance/entrypoint/Ether.ray:11–14`*: "Whether to broadcast
+  your IP to peers, by default your IP is only exposed to the central Ether server", `BROADCAST_INSTANCE: boolean = false`,
+  `dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE if !OFFLINE`; requests from outside
+  `location` are ignored. **Decided (draft)**, in today's terms: an instance's address is readable only by itself and `@ether`,
+  unless the character is `Broadcasting` (a narrowing, W2.15), when it is `@public`.
+- **W2.34 Connecting to the central server** — *`…/instance/entrypoint/Ether.ray:16–18`*: "Whether to connect to the central
+  Ether server or not", `OFFLINE: boolean = false`, `dynamically location &= public.read ETHER if !OFFLINE`. **Decided
+  (draft)**: an instance connects to `@ether` unless set offline; offline, it advertises nothing (W2.33). **Q** (conflict): U7
+  says "Offline by default" of `@me.status`. Recommend: two different things: the instance connects by default, and the
+  character's presence (`Online`, a narrowing) is off until set; U7 then reads "a character is not `Online` by default".
+- **W2.35 A server's names include the admin names** — *`entrypoint.server.ray:7` (as of `5229043^`)*: `@me.name = @admin
+  //TODO This should work`. **Decided (v0)**: `v0/entrypoint.server.ray` writes `World.ether.@admin = =>
+  World.ether.@"allow_{String}"` and `@me.name |= @admin`: the server's names gain the superposition of every `@allow_*` name
+  (`|=`, so its own name stays).
 
 ## W3. History and version control (*World:145–180, 294–324*)
 
@@ -272,6 +314,19 @@ From the drafts review (2026-10-06).
   like any other. *IDE:780–785*
   **Follows (2026-10-06):** as recommended: reaching by presence is a grant narrowed by distance (`@x.read item {player.location near item.location}`), and a cursor walking a graph is an actor like any other, from W5.6 (narrowing grants) and L§8.2 (a cursor is an actor).
 
+From the drafts verification (2026-10-06).
+
+- **W5.12 Execute runs at the owner; read lets you run a copy** — *`…/instance/Access.ray:19–20`*: "Whether Node{} is allowed to
+  execute on local instance. If it has read access, it can read the function and execute it locally for them." **Decided
+  (draft)**: `execute` (access to `()`, W5.1) runs the function where it is, on the owner's instance, for the caller; `read`
+  (access to the structure) lets the reader copy the function and run it on its own instance, so read implies running it
+  oneself, against what one may read.
+- **W5.13 Where the default privacy policy lives** — *`…/instance/Access.ray:24–40`*: "This should be on instance, merge
+  instance/player/entity?", over `+def Entity` with `confidential.write default_privacy_policy`, and `Node.access` falling back
+  to `location.parent?.access[ACCESS] ?? .default_privacy_policy[ACCESS]`. **Q** — Recommend: the merge is done (an instance is
+  a character, W2.26, and there is no Entity class); `default_privacy_policy` is a `confidential.write` field of the character,
+  and a node's access falls back up its location to the owning character's policy (L§8.3).
+
 ## W6. Features (*Feature.ray*)
 
 - **W6.1 IO** — `File = Byte[]`; paths relative to the instance directory; `..` can't leave the top (only symlinks); lazy file
@@ -324,6 +379,23 @@ From the drafts review (2026-10-06).
 - **W6.22 Update transfers only what is new** — **Decided (draft)**. `IO / = ETHER@ETHER/instance` transfers only the commits after
   the local head (L§9.2); local edits are kept and merged; offering an update is a quest. *`…/instance/Update.ray:1, 4, 11`*
 
+From the drafts verification (2026-10-06).
+
+- **W6.23 Assumptions that disagree; `assume` inside a proposition** — *`.ray2/Feature/Proof.ray:17–18, 69–76, 97–101`*:
+  `assume x % 2 == 0` then `assume x % 2 == 1 (superpose; 0 | 1)`; `theorem (assume A = 3) + (assume B = 5) == 8`; a bare `C`
+  indented under a theorem "means `assume C`"; `var = 5 | 10 | 15`, `∃var * var == 25` against `assume ∃var * var == 25` and
+  `var * var == 25` ("if 5 & 10, it's false & true, but only true succeeds"). W6.16 and U-C3 cover `x.assumptions` and
+  `if assume c`. **Decided (draft)**: two contradicting assumptions on one value superpose (`x % 2` is `0 | 1`); `assume` is an
+  expression and may stand inside a proposition, scoped to it; a name alone on a line under a `theorem` is assumed. **Q** for
+  `∃`: recommend `var * var == 25` answers the superposition of booleans (`true | false | false`), `∃var * var == 25` collapses
+  it to whether some alternative holds (`true`), and `assume ∃…` narrows `var` to the alternatives that hold (`5`).
+- **W6.24 Proxies that can or cannot read** — *`.ray2/Feature/Network/Network.ray:7, 10`*: "Handshake such that the proxy does
+  vs doesn't see traffic", `@USERNAME.read proxy @USERNAME`; "How to reroute all network traffic we're proxying". v0
+  `Network.Proxy` (`through`, `admits`) has no such notion. **Q** — Recommend: a proxy is end-to-end by default (the handshake,
+  W2.1, is with the destination, so the proxy forwards ciphertext); one the character grants `read` (`@x.read proxy @x`, as the
+  draft writes) terminates the session and the handshake is with it. Rerouting what a proxy admits is that proxy's routing over
+  the same `through`.
+
 ## W7. The editor (the journal part of Feature.ray, *Feature:760–863*)
 
 These are the Ether IDE's. Open: which of them belong in a spec now (vs later, with the IDE)?
@@ -361,6 +433,13 @@ From the drafts review (2026-10-06). Both are IDE backlog, like the rest of W7.
   one key applying a small program to the whole interface (*IDE:789–797*); preferred rewrites applied optionally (*IDE:827*);
   dragging from a contact point on the background starts a ray there (*`private-journal/year/2023/…/2023-05-17.md:10`*).
 
+From the drafts verification (2026-10-06).
+
+- **W7.17 Stepping through a run; browsing the read tree** — **Decided (draft, backlog)**. *`.ray2/.ray2.json:249–256`*:
+  `"execution": { "repl": true, "stepThrough": true, "astBrowser": true }`. Besides the REPL (W3.24), the editor steps through a
+  run one `. = .next` at a time (P1.20) and browses what a text was read as (each node's rule and span, which the LSP's painting
+  already knows). Both are renderings of the Program value (F-D), not separate tools.
+
 ## W8. Devices (*from the drafts review, 2026-10-06*)
 
 W8 itself is decided below (devices are locations under `@me/device/<…>`).
@@ -389,6 +468,39 @@ W9 itself is decided below (`choose` resolves through `@me.choose`).
   above a `choose` is the quest text shown to the player, and a player's answer enters as a weighted alternative (U8), not as a
   certainty. *IDE:666; `private-journal/year/2022/daily/2022-03-08.md:21`*
   **Follows (2026-10-06):** as recommended: the doc comment above a `choose` is the quest text shown to the player (`choice.reason`), and a player's answer enters as a weighted alternative, not a certainty, from G1.4 (the comment above attaches to the statement) and U-C1/U8 (an answer enters as a weight).
+
+## W10. The Ether instance directory (*`@ether/README.md`*)
+
+From the drafts verification (2026-10-06). The README describes the root of an Ether instance. **Decided (draft)** as a whole;
+each item says where it lives in v0 today (`@ether/$/.ray/v0`, whose core is the project `@ether/ray` at `v0/ray`).
+
+- **W10.1 One character's** — *README:2*: an instance directory belongs to a single character, a player or an NPC (a server
+  too, W2.26). Everything in it is that character's unless it says otherwise.
+- **W10.2 `/.ray`, the standard library** — *README:4*: loaded automatically into the Ray runtime as the standard library. Today
+  `@ether/.ray` (in this repository `@ether/$/.ray`, the Ray language's directory, `$.ray`, L§9.1), with the core `ray/`
+  (`v0/ray`, the project `@ether/ray`) and its bootstrap `v0/ray/.entrypoint.ray`.
+- **W10.3 `/.[LANGUAGE]`, languages** — *README:5*: the language, library and runtime packages the Ether supports. Today
+  `$/<name>`, each a project named in lowercase (`v0/ray/$/json`, `v0/ray/$/git`), answered by `$.name` (L§9.1, Decided
+  2026-10-06).
+- **W10.4 `/Ether.ray`, after the standard library** — *README:6*: running an instance loads the standard library, then
+  `Ether.ray`, then the entrypoint. Today `v0/Ether.ray` (the standard `@` names, W1.10), read after the core `v0/ray`.
+- **W10.5 `/#`, World data** — *README:7*. Not in v0 yet; world definitions are `v0/World.ray`.
+- **W10.6 `/@`, Character data** — *README:8*: one directory per character, `/@<uuid>`; a spawned instance's `/` is its host's
+  `/@<uuid>` (W2.21). Not in v0 yet.
+- **W10.7 `/%`, history of no character or world** — *README:9*: version history kept that belongs to neither. Today the drafts'
+  `@ether/.%/<ORIGINAL-UUID>.ray` (L§9.2, "What the `.%` draft writes"); in the core a value's past is `.previous`, and stores
+  are the `@ether/version` project (`v0/version`).
+- **W10.8 `/projects`, unassigned projects** — *README:12*: internal projects not yet given a package directory. Today every
+  project has its own directory with a `.project.ray` (`v0/geometry`, `v0/security`, `v0/library`, …), and `@ether/projects`
+  is gone.
+- **W10.9 `/entrypoint(.*)?.ray`, entrypoints per character kind** — *README:15*: one entrypoint per kind of character, and the
+  default `/entrypoint.ray` is this character's. Today `v0/entrypoint.server.ray`, `v0/entrypoint.npc.ray` and
+  `v0/entrypoint.player.ray` (W2.26), with no default `entrypoint.ray` yet. **Q** — Recommend: an instance runs
+  `entrypoint.ray` when it has one, else the entrypoint of its kind.
+- **W10.10 Any other directory is a package** — *README:18*: put there by the character or its host, and optionally
+  downloadable by other characters as a package (its visibility per L§8.3, private by default).
+- **W10.11 `avatar/`** — `@ether/avatar/` holds the character's avatar information (`2d.svg`, `2d.png`, `2d-square.*`) at that
+  name: an avatar is a name (W1.11), and the directory holds what is shown for it.
 
 ---
 

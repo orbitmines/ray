@@ -89,6 +89,17 @@ From the drafts review (2026-10-06).
   the data's visibility.
   **Follows (2026-10-06):** every Program has an inferred `.effects` (`Effects.of`); a parameter restricts it with a narrowing on Programs (`g: Program{effects ⊆ @local}`), and passing `confidential` data requires the callee's effects to stay within the data's visibility. From L§8.1 (effects are inferred, nothing declared), narrowings on Programs (P4.9 `Terminating`) and L§8.2 (the `local` mark is tracked).
 
+From the drafts verification (2026-10-06).
+
+- **P1.25 Evaluate before committing the text** — *`…/instance/Expression.ray:36–38`*: references in a stored expression are to
+  a version of the object ("dynamically is ref to most recent version, encoded how? UUID.last?"), "OR require eval before
+  committing to expression string with object_id". P1.7 records the first option. **Q** — Recommend: P1.7 (decorated contexts,
+  versioned references `x%[label]`, L§9.2) stays the default; the draft's alternative is a choice of the writer, committing a
+  statement as its value instead of its text, which is what a `.%` cache line already is (`label\ value`).
+- **P1.26 Variables set in a loop body** — *`…/utils/Number.ray:142`*: "A variable like this shouldn't be loaded into local,
+  loop-specific var Howto?" **Q** — Recommend: `:=` in a loop body declares a variable of that iteration (T1.6), gone after it;
+  `=` to a name from outside writes the enclosing binding (L§2.5). Nothing loop-specific.
+
 ## P2. `&caller` and control (*ep:1120–1128, 1148, 1168–1185*)
 
 - **P2.1 `&caller`** — L§10.3: the calling context as a value, with return/finally/redo/break/continue
@@ -118,6 +129,14 @@ From the drafts review (2026-10-06).
   ask whether `match` alone is enough.
   **Answered (user, 2026-10-06):** no `match`: `if` only. `if x` followed by case lines matches each case with `==` by default (no operator written), and a case may be `is Type`. (This replaces `.match`, A7.)
   **Answered (user, 2026-10-06, later):** the cases sit in the block, with the same structure as a normal `if`: `if x { 0 => …; 1 => … } else { … }`.
+
+From the drafts verification (2026-10-06).
+
+- **P2.12 `&caller` is a Location** — *`…/instance/Expression.ray:34–35`*: "caller is the method in a class, since caller is a
+  location, it has .parent on it defined on it which is the class"; "caller -> .parent == Some player except for the last one
+  which doesn't have a .parent". **Decided (draft)**, in today's terms: `&caller` is a Location (U7), so `&caller.parent` is the
+  calling method's class, and walking `&caller -> .parent` reaches the character who runs it (P2.1, T7.5); the last has no
+  `.parent`.
 
 ## P3. Hooks: code between statements (*ep:1080–1083, 1110–1112, 1126, Compiler:75*)
 
@@ -197,6 +216,18 @@ From the drafts review (2026-10-06).
   Recommend: when e recomputes, the previous contribution is removed and the new one added; `dynamically` on a statement
   also makes its right-hand side dynamic.
   **Follows (2026-10-06):** when e recomputes, the previous contribution is removed and the new one added; `dynamically` on a statement also makes its right-hand side dynamic. From P5.1: a dynamic statement always equals a fresh evaluation, so the previous contribution cannot stay.
+
+From the drafts verification (2026-10-06).
+
+- **P5.8 A speculative branch whose condition changes** — *`.ray2/Feature/Transaction.ray:3`*: "Or if dynamically the
+  speculative if branch change, if resources are dedicated to that if branch." P5.7 answers only the `&=` rollback.
+  **Q** — Recommend: a speculative branch (`if assume c`, P5.4) runs on resources granted to it; when a dynamic `c` changes, the
+  branch that no longer holds is cancelled, its effects rolled back (P5.7) and its resources freed, and the branch that now holds
+  is committed if it already ran speculatively, or started.
+- **P5.9 Asserting a finite chain** — *`…/utils/Time.ray:81`*: `dynamically assert (this -> .epoch).length != Infinite //TODO
+  Could put this in a keyword finite-self-ref or something`. v0 keeps the assert (`!= ∞`). **Q** — Recommend: no keyword;
+  `dynamically assert` stays, with a predicate the library names once (`finite`), so the line reads
+  `dynamically assert (this -> .epoch) is finite`.
 
 ## P6. Errors (*ep:751–756, 1372–1376, 1504–1515*)
 
@@ -279,6 +310,18 @@ From the drafts review (2026-10-06).
   somewhere; what is the default? Recommend: a model is a dependency (`@hf/<org>/<model>`) like `@tzif`, configured in
   `.cfg.ray`, with no default until asked. (Also L§9.1.)
 
+From the drafts verification (2026-10-06).
+
+- **P7.11 A language as a pipeline of stages** — *`.ray2/.ray2.json` (the whole file)*: a language is a list of named,
+  toggleable stages, each with settings and `isDefault`: reading (load a core file, then the directory recursively, with
+  excludes), structure, tokenization (compound splitting), delimiters (nesting), comments (`//`), binding (`|` aliasing,
+  forward references), scoping, evaluation (fixpoint rounds), associativity (left, with per-construct overrides), patterns
+  (`{name: type}`), dispatch (juxtaposition, a prototype fallback chain), diagnostics (collected, with locations), execution
+  (REPL, stepping, a tree browser). Each setting is decided elsewhere (G1.2, G1.3, G3.1, G3.3, R1.1, P8.8, G2.23, W7.17).
+  **Q** — Recommend: no stage list in the language; a language is its rules (P7.1). A language-designer view showing such a
+  pipeline is a rendering of a Language value, grouped by what its rules do. Keep the file's list as the checklist of what a
+  language description covers.
+
 ## P8. The compiler (*Compiler.ray*)
 
 - **P8.1 Rewrites** — decided: optimizations are rewrite rules in `Compiler.ray`, as levels.
@@ -349,6 +392,24 @@ From the drafts review (2026-10-06).
   Recommend: such a claim runs in a Program level of its own so the change cannot leak into the suite (as L§6.2's
   sublanguages).
   **Follows (2026-10-06):** such a claim runs in a Program level of its own, so the change cannot leak into the suite. From G5.4 (syntax tests override a rule in a scope) and L§6.2 (a sublanguage is a Program level).
+
+From the drafts verification (2026-10-06).
+
+- **P8.25 Dead code as a narrowing** — *`.ray2/Grammar.ray:86–106`*: `dead_code { if false; dead:{unreachable} } => …`,
+  `optimize.dead_code : Program{unreachable} => void`, "How to say if no jumps go there", and TODOs on capturing patterns,
+  negations and forward/backward looking. **Decided (draft)**: dead-code elimination is a rule over statements narrowed by
+  `unreachable` that rewrites them to nothing, kept in Compiler.ray with the other reductions (P8.2). **Q** for `unreachable`:
+  recommend a predicate on a statement of a Program: no path of its flow reaches it (no fall-through from the statement before,
+  no jump to its label), read from the statements as bits (`is_jump`, `target_of`, Number.ray).
+- **P8.26 Loop unrolling** — *`.ray2/Compiler/Optimizations.ray:16`*: the classic list ends "“dead code elimination”, and
+  “loop unrolling”". P8.2 lists the others. **Decided (draft)**: loop unrolling is one of the classic passes, a rewrite in
+  Compiler.ray: a loop with a known count becomes its unrolled ray (R5.1 `unrolled`); P4.7's unrollable loop in a shader is the
+  same rewrite.
+- **P8.27 More `<input>` attributes from narrowings** — *`.ray2/Language/Program/HTML.ray:7, 10, 11`*: `{.length == 5} // size
+  (though is only visual??)`, `not 1 String // multiple`, `{==.instance_of []} // pattern`. **Decided (draft)**, extending
+  P8.15: a field that holds more than one value (`not 1 String`) renders as `multiple`, and a narrowing by a pattern renders as
+  `pattern` (the regex it compiles to, X2). **Q** for `size`: recommend leaving it out: an exact length is `minlength` and
+  `maxlength` together, and the visual width is the renderer's.
 
 ---
 

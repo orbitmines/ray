@@ -70,6 +70,12 @@ From the drafts review (2026-10-06).
   gives `½`, `Ⅻ`; these readings are `suggest` equivalences, not defaults in code. (Also N1.)
   **Answered (user, 2026-10-06):** supported automatically as Unicode says: digit values of every script, and all string functionality tied to Unicode (super/subscripts to decimals, …), come from the Unicode data of the selected version. Universal support for every Unicode version is not in the library yet (to do).
 
+From the drafts verification (2026-10-06).
+
+- **X3.11 Editor fonts and super/subscripts** — *`.ray2/Language/String/Unicode.ray:52`*: "IntelliJ font doesnt support
+  super/subscript, add support". **Open (tooling backlog)**: the IDE plugins (`ide/`) should render every super/subscript Ray
+  uses (`Binary⁸`, `Binary₈ₙ`), falling back to a font that has them; which fonts ship is F-D16.
+
 ## X4. Encodings (*Encoding.ray*)
 
 - **X4.1 Scope** — hashes (SHA, MD5, BLAKE3), ciphers, compressors, Base64: each "its own project". Which first? UUID v3/v5
@@ -85,6 +91,16 @@ From the drafts review (2026-10-06).
 - **X4.5 Never decrypted in place** — **Decided (draft).** *.ray2/Language/Encoding.ray:6*: an `Encrypted<T>` is never
   decrypted where it is stored, only when read off to a location holding the key. (Listed in X4.2, missing from its
   Decided text.)
+
+From the drafts verification (2026-10-06).
+
+- **X4.6 Naming the channel** — *`.ray2/Language/Encoding.ray:1`*: "How to reference the channel the Instance communicates
+  over?" **Q** — Recommend: the channel is a value: the session between two instances (the handshake, W2.1) is reachable from
+  the location it connects to, carrying its encryption and keys, so "encrypted channel" (X4.2) is a property of that value, not
+  of the data sent over it.
+- **X4.7 Where encryption applies** — *`.ray2/Language/Encoding.ray:4`*: "Which targets like (disk/mirror)". **Q** —
+  Recommend: per location a value is stored at or sent to (at rest on a disk, on each mirror, on the wire); each target's policy
+  is a narrowing on that location (`@private & encrypted`, W5), so a mirror may hold only ciphertext (X4.5).
 
 ## X5. UUID (*UUID.ray*)
 
@@ -114,6 +130,14 @@ From the drafts review (2026-10-06).
   `choose UUID.v1{unique}`. Recommend: keep 2026-10-05 and update the Almanac line.
   **Answered (user, 2026-10-06):** keep 2026-10-05, `choose UUID.v1{unique}`; the Almanac line is to be updated.
 
+From the drafts verification (2026-10-06).
+
+- **X5.8 The v1 time fields' order** — *`…/utils/UUID.ray:18`*: "This is not the right order, should be defined differently.",
+  on the alternative `(time_high, time_mid, time_low) = time: Binary⁶⁰` ("The timestamp is a 60-bit value", RFC 4122 §4.1.4).
+  **Q** — Recommend: as v0 has it (`UUID.ray:29`): the layout is the fields in byte order (`time_low`, `time_mid`,
+  `time_high_and_version`), and the 60-bit time is a derived binding in numeric order (high, mid, low), not a second layout of
+  the same bits. Keep the RFC citation.
+
 ## X6. IP (*IP.ray*)
 
 - **X6.1 File name** — IP lives in `IP.ray` (the draft's name was `Test.ray`).
@@ -135,6 +159,7 @@ From the drafts review (2026-10-06).
 - **X6.7 Well-known prefixes are IP values** — **Decided (draft).** *removed …/Ether/instance/Network.ray:229 (7250308^)*:
   the test against `::ffff:0:0/96`, `64:ff9b::/96` is `==.instance_of` that IP value (a superposition if X6.6 is adopted), not a text
   comparison (v0 writes `. is "::ffff:0.0.0.0/96"`). Keep the RFC 5952 / RFC 6052 comments.
+  (2026-10-06: v0 `IP.ray:60` compares the well-known prefixes as text for now; that line stays as the author wrote it.)
 - **X6.8 Choosing among matches; what `~=` leaves** — **Q.** *7250308 Test.ray:89* (`#{length == min() & leftmost}`, "How to
   iterate over @ like min. and leftmost"); *removed Network.ray:213–214 (7250308^)* ("default functionality of `~=` is
   removed from surrounding context unless X?"; a match that is itself a superposition). Recommend: inside `#{…}`, `min()` /

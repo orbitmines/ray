@@ -312,7 +312,8 @@ export class Seed {
   apply(rule: Rule, caller: Node, caps: [string, Span][], planner: Rule | undefined): unknown {
     const frame = new Node(rule.head.frame);
     // a typed capture is read by its type's rules
-    for (const [name, sp] of caps) frame.members.set(name, new Code(sp.text, sp.b, sp.e, (sp as { type?: Node }).type ?? caller, planner, (sp as { of?: SpanOf }).of));
+    // a capture typed by a scope of reading rules is read by them; one typed by a check is read where it was written
+    for (const [name, sp] of caps) { const t = (sp as { type?: Node }).type; frame.members.set(name, new Code(sp.text, sp.b, sp.e, t !== undefined && t.rules.length > 0 ? t : caller, planner, (sp as { of?: SpanOf }).of)); }
     return this.compiled(rule)(frame);
   }
   compiled(rule: Rule): Compiled {

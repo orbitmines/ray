@@ -1,0 +1,7 @@
+say {x} =>
+  external print x
+a := node
+b := (a)
+say b
+say (same a b)
+say (same (a) (node))

@@ -629,3 +629,87 @@ Unquoted := everything but quote
 Quoted := Unquoted repeated
 "{text: Quoted}" =>
   external span text
+
+// ---------------------------------------------------------------- brackets: what they hold is balanced
+opening := external character (
+closing := external character )
+opening_list := external character [
+closing_list := external character ]
+opening_block := external character {
+closing_block := external character }
+
+// The bracket that closes `c`, or nothing when `c` opens none.
+closer of {c} =>
+  found := nothing
+  if character c is opening then
+    found := closing
+  if character c is opening_list then
+    found := closing_list
+  if character c is opening_block then
+    found := closing_block
+  found
+
+// Whether `c` closes a bracket.
+closes {c} =>
+  found := nothing
+  if character c is closing then
+    found := yes
+  if character c is closing_list then
+    found := yes
+  if character c is closing_block then
+    found := yes
+  found
+
+// Balanced text: every bracket it opens it closes, in order, and it closes none it did not open; quoted text is skipped.
+balanced {kind} {from} {to} =>
+  open_ones := nothing
+  here := from
+  ok := yes
+  while here do
+    if same here to then
+      here := nothing
+    if here then
+      c := here . character
+      shut := closer of c
+      if shut then
+        pushed := node
+        set pushed . shut to shut
+        set pushed . next to open_ones
+        open_ones := pushed
+      unless shut then
+        if closes c then
+          unless open_ones then
+            ok := nothing
+            here := nothing
+          if open_ones then
+            expected := open_ones . shut
+            unless character c is expected then
+              ok := nothing
+              here := nothing
+            if here then
+              open_ones := open_ones . next
+        if character c is quote then
+          here := here . next
+          skipping := here
+          while skipping do
+            if same skipping to then
+              ok := nothing
+              skipping := nothing
+              here := nothing
+            if skipping then
+              d := skipping . character
+              if character d is quote then
+                here := skipping
+                skipping := nothing
+              if skipping then
+                skipping := skipping . next
+      if here then
+        here := here . next
+  if open_ones then
+    ok := nothing
+  ok
+Balanced := checked by latest rule
+
+// A group: what is in brackets is read as itself.
+({inside: Balanced}) =>
+  inside

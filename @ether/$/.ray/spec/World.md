@@ -402,6 +402,38 @@ Answers from 2026-09-30.
 - **W3.2** Git import/export, as a frontend with an inverse, is part of L§9.2's first milestone.
 - **W7** The editor notes are the IDE's backlog (2027); they are not implemented in v0.
 - **W2.1** `==` on characters and instances compares public keys, now. Key compromise and rotation later.
+- **W2.1 Identity, keys and recovery — Decided (user, 2026-10-06).** Character equality is the whole of security in the
+  language, so it never rests on data anyone can claim.
+  - **Verified vs claimed.** A character value is *verified* only when the runtime made it, from a completed handshake or
+    from holding a local instance key; anything built from data (`Character(name: …)`, a name, a told public key, a
+    commit's `who`) is *claimed*. `verified == verified` compares root identities (constant-time); a claimed character
+    is never `==` a verified one. `&caller`/`@me` only ever hold verified principals, and no user code can make one.
+    Access checks see only `&caller`. Names, UUIDs included, are for addressing and visibility, never evidence.
+  - **Keys.** Each instance hosting a character has its own key pair, whose private half never leaves it, certified by
+    the character's root authority ("this instance key speaks for me, until T, for these scopes"). The root is a
+    **policy**, not one key: the character's first commit declares an `Identity` with its current root keys, the digest
+    of the next ones (pre-rotation), and a threshold per kind of key event, e.g. `revoke: 1 of keys`, `add: 2 of keys`,
+    `rotate: 2 of keys | next`, `recover: 2 of (printed_key | @ether) after 7 days, vetoable by any of keys`. Key events
+    are signed commits in the character's history (the key log); revoking is cheap (it can only lock out), gaining power
+    is expensive. Changing the policy is a `rotate`-level event. Root keys may be held on devices, hardware/passkeys, or
+    split k-of-n across the character's instances (threshold signing, resharing to replace lost devices).
+  - **Handshake.** Noise XX: ephemeral X25519 keys per session (forward secrecy), each side signs the transcript with
+    its instance key and presents the root-signed certificate; the verifier checks signature, chain, the key log at that
+    point (unrevoked) and scope/expiry. The result is a verified principal for the session.
+  - **History is attribution, not authority.** Every commit is signed by its `who`'s instance key. Replaying
+    `with (@me = @who)` lines runs them as recorded, checked against who's key log at the commit's stamp; it never gives
+    the replayer who's live permissions. Becoming another character (`@me = x`) needs x's grant.
+  - **Delegation.** Handed-over code and guests hosted for someone run only with that someone's signed, scoped,
+    expiring delegation, and with the intersection of the delegated and the local permissions.
+  - **Recovery handshake.** A lost device is revoked by the remaining root authority. A lost root is recovered without
+    any guardian choosing the new key: the recovering machine makes its own new root keys and writes the rotation event,
+    then opens a recovery handshake with each guardian and sends only the event's hash; a guardian verifies the person by
+    its own means and signs that hash, bound to the session. Once the `recover` threshold of signatures over the same hash
+    is met, the event is appended and takes effect after the waiting period unless an old key vetoes it. Guardians never
+    hold key material; `@ether` is the default guardian, and any server (one's `@private.managed` ones), friend or printed
+    key can be configured instead.
+  - **Storage.** Private keys are `none`-readable (W5.6), zeroised on logout, never in a history or cache level. The
+    algorithms are languages (`$/ed25519`, `$/x25519`, `$/noise`), versioned; changing one is a key event.
 - **W2.4** Spawning, login/logout/swap and deletion with a cancel window are implemented now, from the
   entrypoint drafts.
 - **W6.4** An error that fails the program is, in general, a quest; a failing proof is one such case.

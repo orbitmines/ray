@@ -106,6 +106,7 @@ From the drafts review (2026-10-06).
 - **P2.10 Labels across branches** — **Q.** *.ray2/Program.ray:126*: refer to labelled branches, so labels cross branches.
   Recommend: a label is visible from every branch of the same program (`A\` from branch B is `A @ B`); `goto` across
   branches is an error unless the target is in the current branch.
+  **Answered (user, 2026-10-06):** a program is cursors in a graph, and branches are places. A `goto` into another branch is a cursor going there; by default it behaves like a function call: it enters that place and runs there with the expected variables defined (whether as a parallel cursor or by moving is for the semantics to decide).
 - **P2.11 `if` as a match** — **Q.** *IDE:855* (paraphrased): write `if` with `==` followed by `,`-separated cases and
   `0 => …` instead of `match`. Recommend: `if ==` followed by cases is sugar for `x.match` (A7) on the comparison's subject;
   ask whether `match` alone is enough.

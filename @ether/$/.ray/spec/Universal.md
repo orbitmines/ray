@@ -93,6 +93,7 @@ From the drafts review (2026-10-06).
   exempt statements noted. Recommend: `==.normal` compares the results of a minimising Compiler level (fewest core steps, not
   fastest), and partial equivalence is `==<except: …>`, beside `==<in: …>` and `==<Number>`.
   *`private-journal/year/2022/daily/2022-01-14.md:2`, `2022-03-08.md:11`*
+  **Answered (user, 2026-10-06):** keep all four: `==.normal` compares after a minimising level, `==<except: …>` is partial equivalence, `trivially` means decidable without running, `up_to` compares up to a boundary; `==` vs `===` covers location.
 
 ## U10. Quests and assumptions
 

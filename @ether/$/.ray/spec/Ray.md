@@ -105,6 +105,7 @@ From the drafts review (2026-10-06).
 - **R3.17 `group_by` and `dimensionality`** — *`.ray2/Ray.ray:105, 190`*: "`//group_by`", "`dimensionality` //How to do
   this with different rays which can be equipped for different directions". **Q** — Recommend: `group_by(f)` answers
   `{(f(x)): [x…]}`; `dimensionality` is the number of directions equipped on the selection (1 for an Array, n for a grid).
+  **Answered (user, 2026-10-06):** `group_by(f)` answers a map `{(f(x)): [x…]}`.
 - **R3.18 A type's script: count or length** — *`.ray2/Ray.ray:201–203`*: "Allow `Binary₃₂ = Binary₈[]₄`. Uses count
   instead of length, since `Ray/Graph²²²` makes more sense as the size of the graph rather than each path length."
   **Q** — conflicts with Decided Almanac A5 (`^` on a base type means length) and the directive that length is not

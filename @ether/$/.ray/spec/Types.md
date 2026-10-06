@@ -251,6 +251,7 @@ From the drafts review (2026-10-06).
   and `trivially` are defined nowhere. **Q** — Recommend: `trivially` means decidable without running anything (used by
   `Iterable.count`, *`.ray3/Ray.ray:81`*); `up_to` compares only up to a boundary (a prefix). `exclude_location` needs no
   flag: it is the difference between `==` and `===` (U9).
+  **Answered (user, 2026-10-06):** see U9.1: `trivially` = decidable without running, `up_to` = up to a boundary; all kept.
 - **T6.12 Re-normalising held values** — *`.ray2/_todo/ray.ray.txt/ray.ray:68–73`*: `normalizer: Normalizer?`,
   `dynamically on(normalizer) = this = this`. **Q** — Recommend: a held value is re-normalised when its normalizer
   changes (it depends on it `dynamically`, P5.1). (T6.2/T6.4.)

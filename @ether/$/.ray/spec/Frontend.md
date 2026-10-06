@@ -60,6 +60,7 @@ and `…/UI.ray`, cited as *Geometry:line* and *UI:line*.
   `"text in between" & "other text in between"`. Extends F-D4. **Q.** Recommend (as Decided text):
   `a & b` (both at once) renders both, layered in one place; `a | b` is chosen (F-D4); `a, b` flows
   (F-B10).
+  **Answered (user, 2026-10-06):** `a & b` renders both at once, layered in one place (`|` is chosen, `,` flows).
 - **F-D15: a UI library by equivalence.** *UI:1, 4–6*: selecting an Entity filter goes into a
   library and renders its own way "if there's an equivalence for it to Entity code";
   `form global.entity.name: String`. **Decided (draft).** A value renders through the first

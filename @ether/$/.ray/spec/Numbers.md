@@ -46,8 +46,10 @@ From the drafts review (2026-10-06).
   **Answered (user, 2026-10-06):** a subscript is the `v` operator: in front of a number it is the base (`₂1111`, right-to-left), behind it is a length (`Binary₈`, `₂101₈`). Superscript (`^`) is always exponentiation; on a type that is the n-fold product. The Almanac's "on a base type `^` means length" is removed, and v0's uses were rewritten (`Binary³²` → `Binary₃₂`, `10₂` → `₂10`).
 - **N1.22 `sign` as a function** — **Q.** *…/utils/Number.ray:41*: `.sign` on all numbers so `x.sign ().sum` works, the empty
   string being `+`. Recommend: drop (the use at *Astronomy.ray:67* is ordinary multiplication by ±1).
+  **Answered (user, 2026-10-06):** dropped.
 - **N1.23 Digits of every script** — see X3.10 (**Q**): `decimal_digit_value` / `numeric_value` readings as `suggest`
   equivalences.
+  **Answered (user, 2026-10-06):** see X3.10: from Unicode, automatically.
 
 ## N2. Units (*Unit.ray*)
 
@@ -118,6 +120,7 @@ From the drafts review (2026-10-06).
 - **N4.17 ISO 8601 extensions** — **Q.** *…/utils/Time.ray:106–108*: other format orders, week dates (`Www`), time-zone
   names, and checking against the standard. Recommend: zone names follow RFC 9557's `[Zone/Name]` suffix (IXDTF); other
   orders stay out until asked; a task to check `ISO_8601` against the standard, with spec-origin comments.
+  **Answered (user, 2026-10-06):** RFC 9557 zone suffix, and ISO 8601 week dates (`2026-W41-2`) now as well; check against the standard.
 
 ## N5. boolean (*boolean.ray*)
 

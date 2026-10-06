@@ -651,6 +651,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
   - **10.6.1 Shadowing — Decided (draft).** `x %= y` (also `x.shadow = y`) makes x a shadow of y: reads fall through to y, writes stay in x. A write by anyone other than x's owner copies-on-write into a new entry for the owner. A commit to y is applied to the shadow too, unless the shadow changed that part (then a merge quest). `x %= None` stops shadowing for that path (`IO /instance/entrypoint/entrypoint.* %= None`). *`.ray2/_todo/ray.ray.txt/ray.ray:20`, `…/Ether/instance/entrypoint/entrypoint.ray:4–7, 34–36`* (v0 `Location.shadowing` is only a read fallback.) **Q:** whether a shadow's version and its customisations are reported upstream (`@ether`) by default; recommend only when the shadow's visibility allows (§8.3). **Q:** the spelling `%=` is also §10.1's compound `{op}=` with `%` as modulo; recommend keeping `.shadow =` as the spelling wherever `%=` could read as modulo-assign.
     **Answered (user, 2026-10-06):** `%=` is modulo-assign, the same as every `op=` (`x = x % 3`); no shadowing operator is needed.
   - **10.6.2 `temporary` — Q.** The note is a single word (*IDE:149*). Recommend, if it is a modifier: the opposite of `persistent`, a value never kept in `Class$` nor in history.
+    **Answered (user, 2026-10-06):** dropped.
 
 ### 10.7 World
 - `#name` / `@name` lookup grammar per class, plural collections, fallback to `@ether`: `.ray2/World.ray:14–36`. Engine.

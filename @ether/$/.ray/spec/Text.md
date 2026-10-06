@@ -66,6 +66,7 @@ From the drafts review (2026-10-06).
 - **X3.10 Digits of every script** — **Q.** *.ray2/Language/String/Unicode.ray:54*: "Adhere to digit/numeric values, and
   implement them." Recommend: a Decimal digit is any scalar with a `decimal_digit_value` (`٣`, `৩`), and `numeric_value`
   gives `½`, `Ⅻ`; these readings are `suggest` equivalences, not defaults in code. (Also N1.)
+  **Answered (user, 2026-10-06):** supported automatically as Unicode says: digit values of every script, and all string functionality tied to Unicode (super/subscripts to decimals, …), come from the Unicode data of the selected version. Universal support for every Unicode version is not in the library yet (to do).
 
 ## X4. Encodings (*Encoding.ray*)
 

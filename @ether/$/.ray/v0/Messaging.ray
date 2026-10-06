@@ -1,7 +1,7 @@
 Chat := class {
   message: (who: *, text: String)?
 
-  messages => message.previous**
+  messages => [message, message.previous**].flatten
   say (who, text: String): static => this ~~ .message = (who: who, text: text)
   count => messages.count
 }

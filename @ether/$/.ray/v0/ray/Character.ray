@@ -13,7 +13,11 @@ FullName := class (first: Char.Word[], " ", last: Char.Word[])
 Email := Location{scheme == "mailto"}
 Phone := Location{scheme == "tel"}
 
-@me ^string => &caller as Character ?? Instance.local
+@me ^string => &caller as Character
+@private ^string => @me
+@local ^string => @me
+@localhost ^string => @me
+@public ^string => *
 @me = {who} ^punctuation => &@.may(`@me =`, who) ? &caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
 @me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
 @{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: external ** block)
@@ -22,24 +26,15 @@ Phone := Location{scheme == "tel"}
 
 Character := class: Hierarchy + Entity + Nameable {
   static PREFIX = "@"
-  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find((who as String).fold_case is .name.fold_case)
+  static local (who) => who == "me" ? @me : None
 
-  presence: Instance?
-  constraint: *?
-  focus: Program?
   permissions: Accessor.Permission?
 
   profile_picture: *?
   profile: *?
 
   avatars => name{is Location && .segments.some(.starts_with("@"))}
-  instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
-  primary => presence
-  device => (presence ?? Instance.local).device
   quests => Program#{who: this}{running}
-  status => Status#{this is .}
-  .status = {wanted} ^punctuation => constraint = wanted
-  is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
   as (=== boolean) => this == @me
   acting => this
   chainable == (other) => ERROR@Security `comparing characters needs @ether/security (or @ether/network)`

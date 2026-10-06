@@ -11,7 +11,7 @@ Location := class: Hierarchy (
     .{literal name ^property} ^punctuation => pairs{.name == name && .value?.nonempty}.last?.value
   }
 
-  static current: Location = @local
+  static current: Location?
   segments => path.split("/"){.nonempty}
   with (changes) => Location(scheme, host, port, path, query: query.merged(changes), fragment)
 
@@ -24,10 +24,11 @@ Location := class: Hierarchy (
   == (other) => this as String == other as String
 
   shadowing: Location?
-  [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
+  [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent)?[name]
 }
 
 Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
+@ether ^string => @`ether.orbitmines.com:37839`
 @{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
 @{scheme: "mailto" | "tel"}:{rest: Written} ^string => (scheme + ":" + rest) as Location
 @"{text: (!"\"")[]}" ^string => text as Location

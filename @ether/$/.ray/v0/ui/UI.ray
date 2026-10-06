@@ -51,8 +51,8 @@ UI := class {
 
   Pointer := class = kind: mouse | pen | touch = mouse, id: Number = 0, position: Geometry.Vector = Geometry.Vector(), pressure: Probability = 0, tilt: Geometry.Vector = Geometry.Vector(), buttons: Number[] = [], wheel: Geometry.Vector = Geometry.Vector() {
     pressed => buttons.nonempty || pressure > 0
-    released => !pressed && (history[-2]?.pressed ?? false)
-    velocity => history[-2..] -- (.count == 2 && .last.when > .first.when ? (.last.position - .first.position) * (1 / ((.last.when - .first.when) as ms)) : Geometry.Vector())
+    released => !pressed && (previous?.pressed ?? false)
+    velocity => previous && when > previous.when ? (position - previous.position) * (1 / ((when - previous.when) as ms)) : Geometry.Vector()
     pressed_at => history{from pressed}.last?.first
     swipe => history{from pressed to !pressed}.last -- (from: .first, to: .last, distance: .last.position - .first.position, duration: .last.when - .first.when)
     to (at: Geometry.Vector, pressing: Number[] = buttons, time: Time = Time.now) => {
@@ -243,7 +243,7 @@ Device &+= {
   location: Location?
 
   free (id: Number.Nat) => !controllers.some(.id == id)
-  reclaimed (held) => controllers.previous**.flatten{.held == held && free(.id)}.first?.id
+  reclaimed (held) => [controllers, controllers.previous**].flatten{.held == held && free(.id)}.first?.id
   connected (held) => controllers{.held == held}.first ?? (Controller(reclaimed(held) ?? (0..).find(free(.)), held) ~~ controllers.push(.))
   disconnected (held) => controllers = controllers{.held != held}
   keyboards => controllers{.held is Keyboard}.held

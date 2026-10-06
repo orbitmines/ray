@@ -1,6 +1,6 @@
 reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 
-World.ether.@ether = @`ether.orbitmines.com:37839`
+World.ether.@ether = @ether
 
 World.ether.@private = => @me
 World.ether.@everyone = => World.ether.characters

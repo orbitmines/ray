@@ -37,7 +37,7 @@ Item := class: Nameable {
   issuer: World = location?.world ?? World.ether
   obtained_by: Program?
 
-  trail => location.previous**
+  trail => [location, location.previous**].flatten
   shown => name ?? (static.name, (" @ ", location as String) if location).join("")
   move (to: Location): static => {
     transaction { location = to }
@@ -65,7 +65,33 @@ Reference := class {
 
   year => date.year
   claim (who: Character = &caller) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location?.world ?? World.ether)
-  notes => note.previous**
+  notes => [note, note.previous**].flatten
+}
+
+@me ^string => &caller as Character ?? Instance.local
+@private ^string => World.ether.@private
+@local ^string => World.ether.@local
+@localhost ^string => World.ether.@localhost
+@public ^string => World.ether.@public
+
+Location &+= {
+  [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
+}
+Location.current = @local
+
+Character &+= {
+  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find((who as String).fold_case is .name.fold_case)
+
+  presence: Instance?
+  constraint: *?
+  focus: Program?
+
+  instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
+  primary => presence
+  device => (presence ?? Instance.local).device
+  status => Status#{this is .}
+  .status = {wanted} ^punctuation => constraint = wanted
+  is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
 }
 
 Instance := class: Location + Entity {
@@ -111,13 +137,13 @@ Instance := class: Location + Entity {
   }
 }
 
-Online := Character{presence?.device.network.connected && (. === @me || !(. is Invisible))}
+Online := Character{presence?.device.network.connected}
 Offline := Character{!(. is Online)}
 Broadcasting := Character{quests{serves @public}.nonempty}
 Hosting := Character{presence?.hosted#.some(!== this)}
 Proxying := Character{quests{proxies}.nonempty}
 Invisible := Character{constraint is Invisible}
-Idle := Character{presence && !device.keyboard.keys.some(.pressed.previous**{== true}.first?.when >= Time.now - 5 minutes)}
+Idle := Character{presence && !device.keyboard.keys.some([.pressed, .pressed.previous**].flatten{== true}.first?.when >= Time.now - 5 minutes)}
 Busy := Character{focus && !focus.done}
 DoNotDisturb := Character{constraint is DoNotDisturb}
 Status := Online | Offline | Broadcasting | Hosting | Proxying | Invisible | Idle | Busy | DoNotDisturb

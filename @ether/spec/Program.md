@@ -178,7 +178,7 @@ From the drafts review (2026-10-06).
   `.stop`. Recommend: a running Program is a Quest (`.stop`, `.done`); `race` stops the losers through it;
   `program.schedule(@npc)` runs it as that entity's quest (a job at its location, W6.12).
   **Answered (user, 2026-10-06):** programs are quests (as in the notes): jobs are replaced by quests, a quest has a `who` that runs it, and a quest is always a program, never a list of steps. A human quest is structured the same way and run by the human; its abstract steps are calls defined nowhere, which `who` performs. `Quest` is a Program (World.ray); `Task` and `Job` are gone (L§8.4).
-  **Answered (user, 2026-10-06):** later: the name `Quest` is dropped. Everything a quest had is on Program (`who` as a selection, its cursor, `goal`, `abstract`); `Abstract := Program{abstract.nonempty}`; a character's running programs are `@me.quests` = `@me/quests` (L§8.4).
+  **Answered (user, 2026-10-06):** later: the name `Quest` is dropped. Everything a quest had is on Program (`who` as a selection, its cursor, `goal`, `abstract`); ~~`Abstract := Program{abstract.nonempty}`~~ (removed 2026-10-06: failures raise `ERROR@Type` instead, L§8.4); a character's running programs are `@me.quests` = `@me/quests` (L§8.4).
 - **P4.9 `Total`, `Decidable`, `Halting`** — **Decided (draft).** *.ray2/Program.ray:308, 317*: `static Total | Decidable |
   Terminating | Halting`; they are aliases of `Terminating` (P4.5).
 - **P4.10 Awaiting a remote result only when used** — **Q.** *…/Ether/instance/Entity.ray:30*: if the return value is

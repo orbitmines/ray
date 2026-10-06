@@ -30,8 +30,8 @@ From the drafts review (2026-10-06).
   **Follows (2026-10-06):** `world.@a = world.@b` makes `@a` an equivalence of `@b`; a reservation may hold a parameterless getter, resolved on every lookup (`reservation.redirect(other)`); overwriting a held reservation needs write access from its issuer, and is a quest otherwise, from U9 (equivalences), P5.3 (parameterless functions are dynamic) and W5.1 (writing is access to `=`).
   **(2026-10-06)** There is no `Reservation`: a reserved name is a field of the world, `world.@name = holder` (case-insensitively
   unique), found by the `{PREFIX}{name}` lookup before the world's children and its fallback. A redirect assigns a getter,
-  `world.@a = => world.@b`. Overwriting a held name needs write access (`&@.may`), and answers
-  `Program(name: "overwrite a name", goal: …)` otherwise.
+  `world.@a = => world.@b`. Overwriting a held name needs write access (`&@.may`), and raises `ERROR@Name` otherwise
+  (2026-10-06: a failure is an error, never a `Program(name: …)`; an error becomes a quest down the line).
   **(2026-10-06)** Names compare and reserve by the UTS #39 skeleton of their case fold (`String.skeleton`, from `Unicode.confusables` of the selected Unicode version, §4), so a name confusable with a held one finds that one; a name that mixes scripts and is confusable (`mixed_script && skeleton != .`, §5) is refused with an error.
 - **W1.10 The standard `@` names** — **Decided (draft)**; none is defined in v0 (`@localnetwork` is used in
   `Network/Network.ray:82`, `reservable_names` in `World.ray:165–175`). *`Ether.ray:3–27`*
@@ -614,6 +614,9 @@ Answers from 2026-09-30.
 - **W2.4** Spawning, login/logout/swap and deletion with a cancel window are implemented now, from the
   entrypoint drafts.
 - **W6.4** An error that fails the program is, in general, a quest; a failing proof is one such case.
+  **(2026-10-06, user):** so library code raises the error (`ERROR@Type \`message\``, caught by `$Type`) where it would
+  have answered `Program(name: …, goal: …)` for a failure; the quest is what the error becomes down the line, not how it
+  is defined. Real work stays a Program (`choose`, a written status's `become`, recovery, a reference's `claim`).
 - **W6.6** All of the networking now (protocols, URL grammar, hosts as equivalences, DNS history checked
   against public keys, proxies, the version handshake), in a **separate project**, so it is isolated and
   can be excluded.
@@ -639,12 +642,14 @@ Answers from 2026-09-30.
   value's own, and `instance.synced` says whether someone is logged into it (W4.2's `replicas.every(.synced)`).
   Access per place (user, 2026-10-06): a grant is a node, so its own location says where it holds: placed at an instance it holds only there, placed nowhere it holds everywhere; `allows(who, called, at)` asks for a place. A mirror can so have permissions of its own (grants placed at the mirroring instance), and otherwise has the value's.
 - **W3.4** Assigning a value that has a history keeps both, linked: the `=` edge carries the value's
-  history, and conflicts become merge quests.
+  history, and conflicts become merge quests. **(2026-10-06)** A merge that conflicts raises `ERROR@Merge` (`History.merge`,
+  `History.accepted`), an ambiguous rename `ERROR@Rename`, a revert without an inverse `ERROR@Revert`, duplicates under a
+  key `ERROR@Key`; the quest comes from the error, it is not answered as a `Program(name: …)`.
 - **W3.7** "An approximate value is fine" is an uncertainty type (`likes: ≈Number`, as N4.10); the store
   picks an approximate encoding.
 - **W4.1** Quest difficulty and effectiveness ratings come with Gamification; quests are reachability now.
 - **W4.2** A consistency requirement is a narrowing on the read's location: `x @ {replicas.every(.synced)}`;
-  offline replicas make it a quest.
+  offline replicas make it a quest. **(2026-10-06)** `Consistency.read` raises `ERROR@Consistency` until they are synced.
 - **W4.4** References port the site's `references.ts` fields into a class `Reference`; authors are
   Characters (`@fadi`).
 - **W6.3** `()` on a constrained type chooses (`Number{> 5}()`), and `dynamically choose` may change later.

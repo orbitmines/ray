@@ -90,7 +90,7 @@ if sgn_h.head.rewritten(Program(code: { 3 })).authentic { INFO@mark `SGN5 a comm
 if History(repository: Repository()).commit(Character(name: "keyless"), 1).head.authentic { INFO@mark `SGN6 a commit by a claimed character is authentic` }
 sgn_back := sgn.sealed(History.Commit(who: sgn, stamp: Stamp(wall: sgn_h.head.previous.stamp.wall, logical: sgn_h.head.previous.stamp.logical + 1, node: "back"),
   change: Program(code: { 9 }), from: [sgn_h.head.previous.id]))
-unless sgn_h.accepted(sgn_back) is Abstract { INFO@mark `SGN7 a backdated commit is taken without a merge` }
+unless sgn_h.accepted(sgn_back).erred { INFO@mark `SGN7 a backdated commit is taken without a merge` }
 sgn_next := sgn.sealed(History.Commit(who: sgn, stamp: sgn_h.clock.now, change: Program(code: { 4 }), from: [sgn_h.head.id]))
 unless sgn_h.accepted(sgn_next).head.value == 4 { INFO@mark `SGN8 a commit that follows the head is refused` }
 
@@ -157,7 +157,7 @@ rcv_mine := rcv_i.session
 rcv_theirs := rcv_r.session
 rcv := rcv_c.recovery([rcv_mine])
 rcv_message := rcv_mine.sent(rcv.goal.hash)
-unless rcv_g.vouching(rcv_theirs, rcv_message) is Abstract { INFO@mark `RCV2 a guardian signs before verifying the person` }
+unless rcv_g.vouching(rcv_theirs, rcv_message) is Program { INFO@mark `RCV2 a guardian signs before verifying the person` }
 rcv_signed := rcv_g.key.signed([rcv.goal.hash, rcv_theirs.binding].flatten)
 rcv.countersigned(rcv_signed)
 unless rcv.goal.signature#.some(=== rcv_signed) { INFO@mark `RCV3 a guardian's signature over the hash, bound to the session, is not taken` }
@@ -178,7 +178,7 @@ unless wrp_owner.inboxes().contains(wrp_owner.inbox.published) { INFO@mark `WRAP
 if wrp_owner.policy().certifies(wrp_owner.inbox.published, World.ether.clock.now) { INFO@mark `WRAP3 an agreement key is certified to sign` }
 unless wrp.wraps_of(wrp_first).every(.by is HPKE && .by.kem === wrp_owner.policy().agreement && .cipher === wrp_owner.policy().cipher) { INFO@mark `WRAP4 a content key is not wrapped with the algorithms the keys and policy name` }
 unless wrp.content_key(wrp_first, [wrp_owner]) is Encoding.Key { INFO@mark `WRAP5 the writer does not hold the content key` }
-unless wrp.content_key(wrp_first, [wrp_reader]) is Abstract { INFO@mark `WRAP6 someone not let read holds the content key` }
+unless wrp.content_key(wrp_first, [wrp_reader]).erred { INFO@mark `WRAP6 someone not let read holds the content key` }
 wrp.shared(wrp_reader, wrp_owner)
 unless wrp.readers.some(=== wrp_reader) { INFO@mark `WRAP7 a character given read is not a reader` }
 unless wrp.current_key == wrp_first { INFO@mark `WRAP8 adding a reader rotated the key` }
@@ -186,7 +186,7 @@ unless wrp.head.wraps.some(w => w.by.recognised(wrp_reader.inbox, (wrp_first as 
 unless wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key { INFO@mark `WRAP10 an added reader does not hold the current key` }
 wrp.unshared(wrp_reader, wrp_owner)
 unless wrp.current_key != wrp_first && wrp.current_key == wrp.head.id { INFO@mark `WRAP11 removing a reader does not rotate to a new key` }
-unless wrp.content_key(wrp.current_key, [wrp_reader]) is Abstract { INFO@mark `WRAP12 a removed reader holds the new key` }
+unless wrp.content_key(wrp.current_key, [wrp_reader]).erred { INFO@mark `WRAP12 a removed reader holds the new key` }
 unless wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key { INFO@mark `WRAP13 a removed reader lost what they already saw` }
 unless wrp.content_key(wrp.current_key, [wrp_owner]) is Encoding.Key { INFO@mark `WRAP14 the rest do not hold the new key` }
 wrp.commit(wrp_owner, 2)
@@ -238,15 +238,15 @@ grk.shared(grk_all, grk_owner)
 unless [grk_first, grk_second, grk_third].every(grk.content_key(., [grk_all]) is Encoding.Key) { INFO@mark `GRK1 a reader of the whole history does not hold every key` }
 grk.shared(grk_now, grk_owner)
 unless grk.head.wraps.every(.key == grk_third) { INFO@mark `GRK2 sharing from now wraps a key from before now` }
-unless grk.content_key(grk_third, [grk_now]) is Encoding.Key && [grk_first, grk_second].every(grk.content_key(., [grk_now]) is Abstract) { INFO@mark `GRK3 a reader from now does not hold exactly the current key` }
+unless grk.content_key(grk_third, [grk_now]) is Encoding.Key && [grk_first, grk_second].every(grk.content_key(., [grk_now]).erred) { INFO@mark `GRK3 a reader from now does not hold exactly the current key` }
 grk.shared(grk_from, grk_owner)
-unless [grk_second, grk_third].every(grk.content_key(., [grk_from]) is Encoding.Key) && grk.content_key(grk_first, [grk_from]) is Abstract { INFO@mark `GRK4 a reader from a label does not hold exactly the keys from that commit on` }
+unless [grk_second, grk_third].every(grk.content_key(., [grk_from]) is Encoding.Key) && grk.content_key(grk_first, [grk_from]).erred { INFO@mark `GRK4 a reader from a label does not hold exactly the keys from that commit on` }
 grk.shared(grk_past, grk_owner)
-unless [grk_first, grk_second].every(grk.content_key(., [grk_past]) is Encoding.Key) && grk.content_key(grk_third, [grk_past]) is Abstract { INFO@mark `GRK5 a reader of a closed stretch does not hold exactly its keys` }
+unless [grk_first, grk_second].every(grk.content_key(., [grk_past]) is Encoding.Key) && grk.content_key(grk_third, [grk_past]).erred { INFO@mark `GRK5 a reader of a closed stretch does not hold exactly its keys` }
 unless grk.readers.some(=== grk_past) && !grk.following.some(=== grk_past) { INFO@mark `GRK6 a reader of a closed stretch follows the head` }
 grk.rekeyed(grk_owner)
 unless [grk_owner, grk_all, grk_now, grk_from].every(grk.content_key(grk.current_key, [.]) is Encoding.Key) { INFO@mark `GRK7 a rotation is not wrapped for a reader whose grant reaches the head` }
-unless grk.content_key(grk.current_key, [grk_past]) is Abstract { INFO@mark `GRK8 a rotation is wrapped for a reader whose grant ended` }
+unless grk.content_key(grk.current_key, [grk_past]).erred { INFO@mark `GRK8 a rotation is wrapped for a reader whose grant ended` }
 
 // Wraps are anonymous: no recipient key in plaintext, a tag only the recipient recomputes, the writer's own wrap like any other.
 anw := grk.head.wraps
@@ -278,7 +278,7 @@ unless crypt_back.value.secret == "kept twice" { INFO@mark `CRYPT9 a reader does
 unless crypt.head.covers(crypt.head.signature) && crypt.head.authentic { INFO@mark `CRYPT10 the signature does not cover the line with its ciphertext` }
 if (crypt.head.rewritten(None) ~~ (.sealed = crypt_first.sealed)).authentic { INFO@mark `CRYPT11 a line whose ciphertext was replaced is authentic` }
 unless (crypt_first.rewritten(None) ~~ (.sealed = crypt.head.sealed)).opened is Diagnostic { INFO@mark `CRYPT12 a ciphertext moved to another line opens there` }
-unless crypt.content_key(crypt.current_key, []) is Abstract { INFO@mark `CRYPT13 the content key opens for nobody's instance key` }
+unless crypt.content_key(crypt.current_key, []).erred { INFO@mark `CRYPT13 the content key opens for nobody's instance key` }
 if Compiler.reduced(crypt, Compiler.cached).cache_files.first.content as String ~= "kept" { INFO@mark `CRYPT14 a cache of an encrypted history is in plaintext` }
 unless crypt.tree.at(crypt.id as String + ".ray") { INFO@mark `CRYPT15 a backend is given the values of an encrypted history instead of its lines` }
 unless Compiler.levels.contains(Compiler.encrypted) { INFO@mark `CRYPT16 encryption is not a storage level` }
@@ -318,7 +318,7 @@ revk.commit(revk_owner, 1)
 revk.shared(revk_reader, revk_owner)
 revk.unshared(revk_reader.acting, revk_owner)
 if revk.access#.some(.who === revk_reader) { INFO@mark `REVK1 a reader revoked by a verified copy keeps the grant` }
-unless revk.content_key(revk.current_key, [revk_reader]) is Abstract { INFO@mark `REVK2 a reader revoked by a verified copy holds the new key` }
+unless revk.content_key(revk.current_key, [revk_reader]).erred { INFO@mark `REVK2 a reader revoked by a verified copy holds the new key` }
 revk_leaving := Instance.local.login(Character(name: "revk-leaving"))
 Instance.local.logout(revk_leaving.acting)
 if Instance.local.logged_in(revk_leaving) { INFO@mark `REVK3 a verified copy logging out leaves the character logged in` }

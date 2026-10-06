@@ -33,4 +33,4 @@ unless vgs.head.id == vh.head.id { INFO@mark `VC58 a history written as sha256 g
 // Modes and pack object types are read and written by the header (https://git-scm.com/docs/gitformat-index#_index_entry, https://git-scm.com/docs/gitformat-pack#_object_types)
 unless "100755" as Git.Mode == Git.Mode.executable && Git.Mode.directory.code == "40000" && Location(path: "a") as Git.Mode == Git.Mode.directory { INFO@mark `GIT1 a tree entry's mode is not read by its octal code` }
 unless Git.Pack.Kind.reference_delta.code == 7 && 2 as Git.Pack.Kind == Git.Pack.Kind.tree { INFO@mark `GIT2 a pack entry's type is not read by its number` }
-unless Git.formatted("SHA256") === SHA256 && Git.formatted("md5") is Abstract && Git<SHA256>.format_name == "sha256" { INFO@mark `GIT3 an object format is not named by its digest` }
+unless Git.formatted("SHA256") === SHA256 && Git.formatted("md5").erred && Git<SHA256>.format_name == "sha256" { INFO@mark `GIT3 an object format is not named by its digest` }

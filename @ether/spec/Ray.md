@@ -291,7 +291,7 @@ Answers from 2026-09-30.
 - **R1.4** Many initial/terminal boundaries are in the Ray core now: a boundary holds a superposition, so
   hypergraphs fall out.
 - **R3.4** `a.path_to(b)` gives all paths (a superposition), `.min` the shortest; an unbounded search is a
-  quest.
+  quest. **(2026-10-06)** No path raises `ERROR@Path` (`shortest_path_to` passes it on); the quest comes from the error.
 - **R3.7** `.complement` is the whole context graph except the selection.
 - **R3.5** Graph rewriting (DPO, SPO), products (cartesian, tensor) and unions (plain, disjoint) are built
   now, on the rule machinery.

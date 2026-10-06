@@ -5,6 +5,26 @@ UI := class {
 
   Interface := class: Location = level: Program
 
+  // Pointer Events (https://www.w3.org/TR/pointerevents3/), UI Events (https://www.w3.org/TR/uievents/), as a window reports them
+  Input := class {
+    Id = Char{!= " "}[]
+    Pointer := class (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
+      contact => @me/device/pointer[device ?? "mouse", number ?? 0]
+      position => Geometry.Space.screen.seen(Geometry.Vector(x * 1px, y * 1px), UI.scene.size)
+      time => stamp ? stamp * 1 ms : Time.now
+    }
+    Keystroke := class (id: Id, " ", kind: "keydown" | "keyup", " ", key: Id, modifiers: (" ", held: "shift" | "control" | "alt" | "meta")[])
+    Inbound := Pointer | Keystroke
+    applied := {
+      {pointer: Pointer{kind == "pointerdown"}} => pointer.contact.to(pointer.position, pressing: [0], time: pointer.time)
+      {pointer: Pointer{kind == "pointermove"}} => pointer.contact.to(pointer.position, time: pointer.time)
+      {pointer: Pointer} => pointer.contact.to(pointer.position, pressing: [], time: pointer.time)
+      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- @me/device/keyboard[keystroke.key].press((Keyboard.Modifier.shift if .contains("shift")) | (Keyboard.Modifier.control if .contains("control")) | (Keyboard.Modifier.alt if .contains("alt")) | (Keyboard.Modifier.meta if .contains("meta")))
+      {keystroke: Keystroke} => @me/device/keyboard[keystroke.key].release
+    }
+    static dispatched (line: String?) => line?.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
+  }
+
   Scene := {
     {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
     {text: String} => Geometry.Box(content: text)
@@ -34,23 +54,23 @@ UI := class {
 
   Choice &+= {
     disabled => !&@.may(`=`, this)
-    options => type#
-    listed => !(type is (boolean | String | Number | Time | Geometry.Color | Location | Language))
-    empty => value == None || (value as String).empty
-    typed (text: String) => (value = value, text) -- this
-    composed (text: String) => (value as String ?? "") -- (now => value = now{!.styles.contains("composing")}, text.marked("composing")) -- this
-    set (text: String) => (value = text) -- this
-    erased => (value = value[..<-1]) -- this
-    activate => type is boolean ? (value = !value) : listed ? (value = options[(options.index_of(value) + 1) % options.count]) : None
+    placeholder => [tried, tried.previous**].flatten.last
+    options => goal#
+    listed => !(goal is (boolean | String | Number | Time | Geometry.Color | Location | Language))
+    empty => tried === None || tried === placeholder && !done || (tried as String).empty
+    typed (text: String) => attempt((tried, text)) -- this
+    composed (text: String) => (tried as String ?? "") -- (now => attempt((now{!.styles.contains("composing")}, text.marked("composing")))) -- this
+    erased => attempt(tried[..<-1]) -- this
+    activate => goal is boolean ? attempt(!tried) : listed ? attempt(options[(options.index_of(tried) + 1) % options.count]) : None
     shown => Compiler.reduced(this, Showing)
     static Showing := {
-      {chosen: Choice{type is boolean}} => chosen.value ? "[x]" : "[ ]"
-      {chosen: Choice{type is Number{least, most}}} => (chosen.value - chosen.type.least) / (chosen.type.most - chosen.type.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
-      {chosen: Choice{type is String{secret}}} => "•" * (chosen.value as String).length
-      {chosen: Choice{listed}} => "‹ ", chosen.value as String, " ›"
-      {chosen: Choice{empty}} => chosen.placeholder as String
-      {chosen: Choice{type is Language}} => (chosen.value as String).highlighted(chosen.type)
-      {chosen: Choice} => chosen.value as String
+      {chosen: Choice{goal is boolean}} => chosen.tried ? "[x]" : "[ ]"
+      {chosen: Choice{goal is Number{least, most}}} => (chosen.tried - chosen.goal.least) / (chosen.goal.most - chosen.goal.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
+      {chosen: Choice{goal is String{secret}}} => "•" * (chosen.tried as String).length
+      {chosen: Choice{listed}} => "‹ ", chosen.tried as String, " ›"
+      {chosen: Choice{empty}} => (chosen.placeholder as String) ?? ""
+      {chosen: Choice{goal is Language}} => (chosen.tried as String).highlighted(chosen.goal)
+      {chosen: Choice} => chosen.tried as String
     }
   }
 
@@ -142,7 +162,7 @@ UI := class {
     activated => focused && @me/device/keyboard/Enter.pulsed || hovered && @me/device/pointer.contacts.some(.released)
     focusable => this is (UI.Linked | UI.Chosen | UI.Overlay)
     activate => None
-    submitted => dynamically children{.content is Choice}.every(.content.value) && @me/device/keyboard/Enter.pulsed
+    submitted => dynamically children{.content is Choice}.every(.content.solution) && @me/device/keyboard/Enter.pulsed
     text: String => content is String ? content : texts.content.join("")
     select (from: Number = 0, to: Number = text.length) => (selected = true) -- ((content = content.marked("selected", from, to)) if content is String) -- this
     scroll (by: Geometry.Length) => (scrolled = Geometry.Vector(scrolled.x, (scrolled.y + by) min (content_height - size.y) max 0px)) unless this === UI.scene && UI.locked
@@ -167,10 +187,10 @@ UI := class {
   }
   Chosen := Geometry.Shape{content is Choice} + {
     activate => content.activate
-    text => content.empty ? "" : content.value as String
-    select (from: Number = 0, to: Number = text.length) => (selected = true) -- (content.value = text.marked("selected", from, to)) -- this
+    text => content.empty ? "" : content.tried as String
+    select (from: Number = 0, to: Number = text.length) => (selected = true) -- content.attempt(text.marked("selected", from, to)) -- this
     face => Geometry.Box(content: content.shown, origin: inside.start, size: size - inside.total, font: font, color: color, palette: palette,
-      white_space: content.type is (String{multiline} | Language) ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap) -- (shown => content.empty ? shown.styled("placeholder") : shown)
+      white_space: content.goal is (String{multiline} | Language) ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap) -- (shown => content.empty ? shown.styled("placeholder") : shown)
   }
 
   Theme := class {

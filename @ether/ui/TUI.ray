@@ -1,6 +1,6 @@
 // The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
 UI.TUI := class {
-  Grid := class = width: Number, height: Number, cells: ANSI.Cell[][] = (0..<height).map((0..<width).map(ANSI.Cell())), graphics: Graphic[] = [], title: String? = UI.page?.title {
+  Grid := class = width: Number, height: Number, cells: ANSI.Cell[][] = (0..<height).map((0..<width).map(ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page?.title {
     space => Geometry.Space.grid(Geometry.Vector(width, height))
     inside (at: Geometry.Vector) => space.holds(at)
     put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
@@ -10,72 +10,38 @@ UI.TUI := class {
     linked (at: Geometry.Vector, to: Location) => put(at, cell(at) ~~ .link = to)
     faded (at: Geometry.Vector, amount: Probability) => cell(at) -- (cell => put(at, cell ~~ .foreground = cell.foreground?.mix(cell.background, 1 - amount)))
     shaded (at: Geometry.Vector) => cell(at) -- (cell => put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
-    graphic (at: Geometry.Vector, bytes) => graphics.push Graphic(at, bytes)
-    changes (previous: Grid?) => (0..<height).map(y => (0..<width){!previous || cells[y][.] != previous.cells[y][.]}.map(x => (Geometry.Vector(x, y), cells[y][x]))).flatten
-    framed (previous: Grid?) => Frame(changes(previous), title if title != previous?.title, graphics{!(previous?.graphics.contains(.) ?? false)})
+    graphic (at: Geometry.Vector, bytes) => graphics.push (at: at, bytes: bytes)
+    changes (before: Grid?) => (0..<height).map(y => (0..<width){!before || cells[y][.] != before.cells[y][.]}.map(x => (Geometry.Vector(x, y), cells[y][x]))).flatten
+    framed => [
+      ANSI.Title(title) if title && title != previous?.title,
+      changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: cell.link ? cell.link as String : ""), cell.glyph]),
+      graphics{!(previous?.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
+      ANSI.Style()
+    ]
   }
   static px_per_cell = Geometry.Vector(8px, 16px)
-  static cells (length: Geometry.Vector) => Geometry.Vector(length.x / px_per_cell.x, length.y / px_per_cell.y)
-  static space (length: Geometry.Vector) => Geometry.Space.grid(cells(length))
+  static gridded (length: Geometry.Vector) => Geometry.Vector(length.x as column, length.y as row)
 
-  Painting := class = grid: Grid, writes: *[]
-  Paint := class = shape: Geometry.Shape {
-    at => cells(Geometry.Space.screen.seen(shape.at, shape.root.size, shape.size))
-    size => cells(shape.size)
-    area => Geometry.Space.grid(size).positions.map(. + at){shape.contains(Geometry.Space.screen.seen((. - at) * px_per_cell, shape.size, px_per_cell))}
-  }
-  Boxed := class = paint: Paint
-  Filled := class = paint: Paint
-  Border := class = paint: Paint
-  Shade := class = paint: Paint, effect: Geometry.Effect
-  Scrollbar := class = paint: Paint
-  Shown := class = paint: Paint
-
-  rules := {
-    {root: Geometry.Shape{solved}} => Painting(Grid(root.size.x / px_per_cell.x, root.size.y / px_per_cell.y), [root, root.lifted].flatten.map(Paint(.)))
-    {painting: Painting{writes.flatten.every(. is Program)}} => painting.grid ~~ painting.writes.flatten
-
-    {paint: Paint{shape.content is Choice}} => [Boxed(paint), Paint(paint.shape.face)]
-    {paint: Paint} => Boxed(paint)
-
-    {boxed: Boxed} => boxed.paint -- (paint => [
-      Filled(paint),
-      Border(paint) if paint.shape.stroke,
-      paint.shape.effects.map(Shade(paint, .)),
-      Shown(paint) if paint.shape.content,
-      paint.shape.in_place.sort_by(.layer).map(Paint(.)) if paint.shape.visible,
-      Scrollbar(paint) if paint.shape.overflow == scroll,
-      paint.area.map(at => { .underlined(at) }) if paint.shape.focused,
-      paint.area.map(at => { .linked(at, paint.shape.location) }) if paint.shape.location
+  Geometry.Shape &+= {
+    cell_at => UI.TUI.gridded(Geometry.Space.screen.seen(at, root.size, size))
+    cell_size => UI.TUI.gridded(size)
+    cell_area => Geometry.Space.grid(cell_size).positions.map(. + cell_at){contains(Geometry.Space.screen.seen((. - cell_at) * UI.TUI.px_per_cell, size, UI.TUI.px_per_cell))}
+    cell_writes => Compiler.reduced(this, UI.Lowered) -- (shape => [
+      Compiler.reduced(shape.painted(shape.fill), UI.TUI.filled(shape)) if shape.fill,
+      shape.cell_border if shape.stroke,
+      shape.effects.map(Compiler.reduced(., UI.TUI.shaded(shape))),
+      Compiler.reduced(shape, UI.TUI.shown) if shape.content,
+      shape.in_place.sort_by(.layer).map(.cell_writes) if shape.visible,
+      shape.cell_scrollbar if shape.overflow == scroll && shape.scrollbar,
+      shape.cell_area.map(at => { .underlined(at) }) if shape.focused,
+      shape.cell_area.map(at => { .linked(at, shape.content) }) if shape.content is Location
     ])
-    {shown: Shown{paint.shape.content is String}} => shown.paint -- (paint => paint.shape -- (text => text.lines(text.size.x).enumerate.map(row => row.value.enumerate.map(glyph =>
-      (UI.Theme.face(text, glyph.index), paint.at + Geometry.Vector(row.value[..<glyph.index].map(.columns).sum, row.index)) -- ((look, at) => ANSI.Cell(text.case ? text.case(glyph.value) : glyph.value,
-        foreground: text.painted(look.color) as Geometry.Color, background: text.painted(look.fill) as Geometry.Color,
-        bold: look.font.weight >= 600, italic: look.font.style == italic, reverse: look.styles.contains("selected")) -- (written => { .put(at, written) }))
-    )).flatten))
-    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image && paint.shape.fill}} => shown.paint -- (paint => paint.area.map(at => { .put(at, tinted(paint.shape.content, at - paint.at, paint.size, paint.shape.fill as Geometry.Color)) }))
-    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => shown.paint -- (paint => paint.area.map(at => { .put(at, sampled(paint.shape.content, at - paint.at, paint.size)) }))
-    {shown: Shown{paint.shape.content is Location && paint.shape.content.video_site}} => shown.paint -- (paint => Paint(Geometry.Box(location: paint.shape.content ~~ (.window = new), origin: paint.shape.at, size: paint.shape.size, stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
-      Geometry.Box(content: "▶ " + (paint.shape.content.alt ?? paint.shape.content as String), origin: px_per_cell, size: paint.shape.size - px_per_cell * 2)
-    ])))
-    {shown: Shown{paint.shape.content is Program}} => shown.paint -- (paint => paint.shape.content.rendered(Language.Direct.level) -- (rows => paint.area.map(at => (at - paint.at) -- (dot =>
-      ANSI.Cell(braille(rows[dot.y * 4..<dot.y * 4 + 4].map(.[dot.x * 2..<dot.x * 2 + 2].map(.alpha > 0)))) -- (written => { .put(at, written) })
-    ))))
-    {shown: Shown} => []
-    {filled: Filled{paint.shape.content is Location}} => []
-    {filled: Filled{paint.shape.painted(paint.shape.fill) is Geometry.Color}} => filled.paint.area.map(at => { .background(at, filled.paint.shape.painted(filled.paint.shape.fill)) })
-    {filled: Filled{paint.shape.fill is Geometry.Gradient}} => filled.paint.area.map(at => { .background(at, filled.paint.shape.fill.at((at.x - filled.paint.at.x) / filled.paint.size.x)) })
-    {filled: Filled} => []
-    {shade: Shade{effect is Geometry.Filter{kind == opacity}}} => shade.paint.area.map(at => { .faded(at, shade.effect.amount) })
-    {shade: Shade{effect is Geometry.Shadow}} => shade.paint.area.map(at => { .shaded(at + cells(Geometry.Space.screen.seen(shade.effect.offset))) })
-    {shade: Shade} => []
-    {border: Border} => {
-      paint = border.paint
-      corners = paint.shape.radius != [0] ? "╭╮╰╯" : "┌┐└┘"
-      from = paint.at
-      to = from + paint.size - Geometry.Vector(1, 1)
-      ink = paint.shape.painted(paint.shape.stroke.paint) as Geometry.Color
-      sides = paint.shape.stroke.sides#
+    cell_border => {
+      corners = radius != [0] ? "╭╮╰╯" : "┌┐└┘"
+      from = cell_at
+      to = from + cell_size - Geometry.Vector(1, 1)
+      ink = painted(stroke.paint) as Geometry.Color
+      sides = stroke.sides#
       [
         (from.x..to.x).map(x => { .underlined(Geometry.Vector(x, to.y)) }) if sides == [Geometry.bottom],
         (from.x + 1..<to.x).map(x => { .put(Geometry.Vector(x, from.y), ANSI.Cell("─", foreground: ink)) }) if sides.contains(Geometry.top),
@@ -85,46 +51,58 @@ UI.TUI := class {
         [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].map((at, i) => { .put(at, ANSI.Cell(corners[i], foreground: ink)) }) if sides.count == Geometry.all#.count
       ]
     }
-    {scrollbar: Scrollbar} => scrollbar.paint -- (paint => (0..<paint.size.y).map(y =>
-      { .put(paint.at + Geometry.Vector(paint.size.x - 1, y), ANSI.Cell(y == paint.shape.scrolled.y * paint.size.y / paint.shape.content_height ? "┃" : "│")) }
-    ))
+    cell_scrollbar => (0..<cell_size.y).map(y => { .put(cell_at + Geometry.Vector(cell_size.x - 1, y), ANSI.Cell(y == scrolled.y * cell_size.y / content_height ? "┃" : "│")) })
   }
-  Cells := Geometry.Preparing(px_per_cell.x min px_per_cell.y) + rules
+
+  drawn := {
+    {root: Geometry.Shape{solved && !parent}} => Grid(root.size.x as column, root.size.y as row) ~~ [root, root.lifted].flatten.map(.cell_writes).flatten
+  }
+  filled (shape: Geometry.Shape) => {
+    {color: Geometry.Color} => shape.cell_area.map(at => { .background(at, color) })
+    {gradient: Geometry.Gradient} => shape.cell_area.map(at => { .background(at, gradient.at((at.x - shape.cell_at.x) / shape.cell_size.x)) })
+    {sampled: Geometry.Pointwise} => shape.cell_area.map(at => sampled(Geometry.Space.screen.seen((at - shape.cell_at) * px_per_cell, shape.size, px_per_cell)) -- (color =>
+      { .put(at, ANSI.Cell(ramp[color.alpha * color.luminance * (ramp.length - 1) / 255], foreground: color)) }))
+    {paint} => []
+  }
+  shaded (shape: Geometry.Shape) => {
+    {filter: Geometry.Opacity} => shape.cell_area.map(at => { .faded(at, filter.amount) })
+    {shadow: Geometry.Shadow} => shape.cell_area.map(at => { .shaded(at + gridded(Geometry.Space.screen.seen(shadow.offset))) })
+    {effect} => []
+  }
+  shown := {
+    {text: Geometry.Shape{content is String}} => text.lines(text.size.x).enumerate.map(row => row.value.enumerate.map(glyph =>
+      (UI.Theme.face(text, glyph.value), text.cell_at + Geometry.Vector(row.value[..<glyph.index].map(.columns).sum, row.index)) -- ((look, at) => ANSI.Cell(text.case ? text.case(glyph.value) : glyph.value,
+        foreground: text.painted(look.color) as Geometry.Color, background: text.painted(look.fill) as Geometry.Color,
+        bold: look.font.weight >= 600, italic: look.font.style == italic, reverse: look.styles.contains("selected")) -- (written => { .put(at, written) }))
+    )).flatten
+    {canvas: Geometry.Shape{content is Program && !(content is Choice)}} => canvas.content.rendered(Language.Direct.level) -- (rows => canvas.cell_area.map(at => (at - canvas.cell_at) -- (dot =>
+      ANSI.Cell(braille(rows[dot.y * 4..<dot.y * 4 + 4].map(.[dot.x * 2..<dot.x * 2 + 2].map(.alpha > 0)))) -- (written => { .put(at, written) })
+    )))
+    {shape: Geometry.Shape} => []
+  }
+  Cells := Geometry.Preparing(px_per_cell.x min px_per_cell.y) + drawn
   level := Cells
 
   static braille (dots: boolean[][]) => (0x2800 + [[0, 3], [1, 4], [2, 5], [6, 7]].zip(dots).map((bits, row) => row.zip(bits).map((on, bit) => on ? 2 ^ bit : 0).sum).sum) as Char
   static ramp = " .:-=+*#%@"
-  static pixel (image: Location, at: Geometry.Vector, of: Geometry.Vector) => image.pixels -- (pixels => pixels.at(at.x * pixels.width / of.x, at.y * pixels.height / of.y))
-  static sampled (image: Location, at: Geometry.Vector, of: Geometry.Vector) => pixel(image, at, of) -- ANSI.Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
-  static tinted (image: Location, at: Geometry.Vector, of: Geometry.Vector, ink: Geometry.Color?) => pixel(image, at, of) -- ANSI.Cell(ramp[.alpha * (ramp.length - 1)], foreground: ink)
 
-  Graphic := class = at: Geometry.Vector, bytes: *
-  Frame := class = changes: (at: Geometry.Vector, cell: ANSI.Cell)[], title: String?, graphics: Graphic[] = []
-  framing := {
-    {frame: Frame} => [
-      ANSI.Title(frame.title) if frame.title,
-      frame.changes.map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: cell.link ? cell.link as String : ""), cell.glyph]),
-      frame.graphics.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
-      ANSI.Style()
-    ]
-  }
-
-  Target := class = written: Compiler = ANSI.written, shown: Grid? {
-    emitted (value) => Terminal.emit(Compiler.reduced(value, framing + written) as String)
+  Terminal := class: UI.Interface = written: Compiler = ANSI.written, grid: Grid? {
+    emit (bytes) => external io `stdout` (bytes)
+    received => external io `stdin` None
+    size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
+    emitted (value) => emit(Compiler.reduced(value, written) as String)
     start => emitted(ANSI.Start())
+      -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
+      -- ({ OS.launch(@me/device/opened) } when @me/device/opened changes)
     stop => emitted(ANSI.Stop())
-    framed (grid: Grid) => grid.framed(shown)
-    write (grid: Grid) => emitted(framed(grid)) -- (shown = grid)
-    read => UI.TUI.read
-    copy (text: String) => emitted(text as ANSI.Copy)
-    open (to: Location) => OS.launch(to)
+    write (drawn: Grid) => (grid = drawn) -- emitted(grid.framed)
+    read => (received ?? "") ~= (events: Event[]) -- .events.for(Compiler.reduced(., applied))
   }
 
   Browser := {
     {grid: Grid} => UI.HTML.Package([(path: "index.html", content: $.html.Document(head: [], body: $.html.Element("body", [], [$.html.Element("pre", [], [$.html.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
   }
 
-  static read => (Terminal.read ?? "") ~= (events: Event[]) -- .events.for(Compiler.reduced(., applied))
   Event := ANSI.Input | Resize
   ANSI.Key &+= {
     name => Compiler.reduced(this, UI.TUI.named)
@@ -133,50 +111,40 @@ UI.TUI := class {
     position => Geometry.Space.screen.seen(Geometry.Vector(cell.x * px_per_cell.x, cell.y * px_per_cell.y), UI.scene.size, px_per_cell)
   }
   Resize := class
-  Pressed := class = key: ANSI.Key
 
   named := {
     {key: ANSI.Key{page == "5"}} => @me/device/keyboard/PageUp
     {key: ANSI.Key{page == "6"}} => @me/device/keyboard/PageDown
     {key: ANSI.Key{alt}} => @me/device/keyboard[key.alt as String]
     {key: ANSI.Key{lettered}} => @me/device/keyboard[((key.code as Number) + 96) as Char as String]
-    {key: ANSI.Key{code is ("A" | "w")}} => Geometry.top
-    {key: ANSI.Key{code is ("B" | "s")}} => Geometry.bottom
-    {key: ANSI.Key{code is ("C" | "d")}} => Geometry.right
-    {key: ANSI.Key{code is ("D" | "a")}} => Geometry.left
+    {key: ANSI.Key{code == "A"}} => @me/device/keyboard/ArrowUp
+    {key: ANSI.Key{code == "B"}} => @me/device/keyboard/ArrowDown
+    {key: ANSI.Key{code == "C"}} => @me/device/keyboard/ArrowRight
+    {key: ANSI.Key{code == "D"}} => @me/device/keyboard/ArrowLeft
     {key: ANSI.Key{code == "Q"}} => @me/device/keyboard/F2
     {key: ANSI.Key{code == "\r"}} => @me/device/keyboard/Enter
     {key: ANSI.Key{code is ("\t" | "Z")}} => @me/device/keyboard/Tab
     {key: ANSI.Key} => @me/device/keyboard.coded(key.code as Number)
   }
 
+  // A terminal reports no key release: a key read is pressed and released
   applied := {
-    {key: ANSI.Key{name is Geometry.Side}} => Pressed(key)
-    {key: ANSI.Key} => key.name.press((Keyboard.Modifier.shift if key.shift) | (Keyboard.Modifier.control if key.control) | (Keyboard.Modifier.alt if key.alt != None)) -- Pressed(key)
-    {pressed: Pressed{key.page}} => UI.scene.scroll((pressed.key.page == "5" ? -1 : 1) * UI.scene.size.y)
-    {pressed: Pressed{key.name is Geometry.Side && key.control}} => UI.skip(pressed.key.name)
-    {pressed: Pressed{key.name is Geometry.Side && key.shift}} => UI.expand(pressed.key.name)
-    {pressed: Pressed{key.name is Geometry.Side}} => UI.move(pressed.key.name)
-    {pressed: Pressed{key.name === @me/device/keyboard/Tab && key.shift}} => UI.tab(previous)
-    {pressed: Pressed{key.name === @me/device/keyboard/Tab}} => UI.tab(next)
-    {pressed: Pressed{key.name === @me/device/keyboard/Enter}} => (UI.focus.first ?? UI.current)?.activate
-    {pressed: Pressed{key.code == "q"}} => UI.running = false
-    {pressed: Pressed} => None
-    {mouse: ANSI.Mouse{button >= 64}} => (UI.pointed().wheel = Geometry.Vector(y: mouse.button == 64 ? 1 : -1)) -- UI.scene.scroll(-UI.pointed().wheel.y * 3 * px_per_cell.y)
-    {mouse: ANSI.Mouse{state == "m"}} => UI.pointed().to(mouse.position, pressing: [])
-    {mouse: ANSI.Mouse{button >= 32}} => UI.pointed().to(mouse.position)
-    {mouse: ANSI.Mouse} => UI.pointed().to(mouse.position, pressing: [mouse.button])
+    {key: ANSI.Key} => key.name.press((Keyboard.Modifier.shift if key.shift || key.code == "Z") | (Keyboard.Modifier.control if key.control) | (Keyboard.Modifier.alt if key.alt != None)).release
+    {mouse: ANSI.Mouse{button >= 64}} => @me/device/pointer["mouse"].wheel = Geometry.Vector(y: mouse.button == 64 ? 1 : -1)
+    {mouse: ANSI.Mouse{state == "m"}} => @me/device/pointer["mouse"].to(mouse.position, pressing: [])
+    {mouse: ANSI.Mouse{button >= 32}} => @me/device/pointer["mouse"].to(mouse.position)
+    {mouse: ANSI.Mouse} => @me/device/pointer["mouse"].to(mouse.position, pressing: [mouse.button])
     {paste: ANSI.Paste} => (@me/device/clipboard = paste.text) -- UI.focus.content.typed(paste.text)
     {focus: ANSI.FocusChange} => @me/device/preferences.focused = focus.state == "I"
-    {resize: Resize} => UI.scene.size = Geometry.Vector(Terminal.size.x * px_per_cell.x, Terminal.size.y * px_per_cell.y)
+    {resize: Resize} => UI.scene.size = Geometry.Vector(@me/device/terminal.size.x * px_per_cell.x, @me/device/terminal.size.y * px_per_cell.y)
   }
 }
 
-Terminal := class {
-  emit (bytes) => external io `stdout` (bytes)
-  read => external io `stdin` None
-  size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
-  raw_mode => emit(ANSI.write(ANSI.Start().modes))
-  clear => emit(ANSI.write([ANSI.Erase(2), ANSI.Move()]))
-  restore => emit(ANSI.write(ANSI.Stop()))
+Unit(name: "column")
+  .convert (x: Number) => x * (UI.TUI.px_per_cell.x as px), px
+Unit(name: "row")
+  .convert (x: Number) => x * (UI.TUI.px_per_cell.y as px), px
+
+Device &+= {
+  terminal: UI.TUI.Terminal = UI.TUI.Terminal(level: UI.TUI.level)
 }

@@ -104,7 +104,16 @@ Random := class {
 }
 
 choose {type} ^keyword => @me.choose(type)
-Choice := class = type: *?, value: *?
+choose {n: Number} {type} ^keyword => @me.choose(type, n)
+choose? {type} ^keyword => Choice(type)
+choose? {type} ?? {placeholder} ^keyword => Choice(type, placeholder)
+Choice := class = type: *?, value: *?, placeholder: *?, count: Number = 1 {
+  choosing => value === None
+  answer => value ?? placeholder
+}
+Node &+= {
+  choosing => false
+}
 
 Proof := class = proposition: *, argument: * {
   static Proposition := class = holds: boolean = true, fact: *?, verified = false {
@@ -176,7 +185,7 @@ Device := class {
   jobs: Jobs = Jobs()
   disk => Disk(device: this, path: "")
 
-  choose (s) => s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : s#.random
+  choose (s, n: Number = 1) => s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random
 }
 
 Storage := class: Location {

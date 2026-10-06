@@ -271,3 +271,26 @@ unless Character(name: "c").id { INFO@mark `WO14 a character has no identity of 
 here_now := Instance.local.login(Character(name: "local-one"))
 unless Character.local("local-one") === here_now { INFO@mark `WO15 a character logged in here is not here` }
 if Character.local("nobody-here") { INFO@mark `WO16 a character nobody logged in is here` }
+
+// A character used as a condition is whether it is @me.
+cw := Character(name: "viewer")
+unless Program(code: { cw ? true : false }).run_as(cw) { INFO@mark `CW1 a character as a condition is false to itself` }
+if Program(code: { cw ? true : false }).run_as(Character(name: "other")) { INFO@mark `CW2 a character as a condition is true to someone else` }
+
+// Handed-over code runs as the character that handed it over; its runs are logged for replay.
+hg_giver := Character(name: "giver")
+hg := Program(code: { @me }).handed(hg_giver)
+unless hg.run == hg_giver { INFO@mark `HG1 handed-over code does not run as the character that handed it over` }
+unless Run.log.head.who == hg_giver { INFO@mark `HG2 a run of handed-over code is not logged as its giver` }
+unless Run.replay(Run.log.head) == hg_giver { INFO@mark `HG3 a logged run does not replay as its character` }
+unless Run.kept == 30 days { INFO@mark `HG4 run logs are not kept for thirty days` }
+with Run.kept = 0 seconds {
+  if Run.logs.some(=== Run.log.head) { INFO@mark `HG5 a run older than the configured window is kept for replay` }
+}
+
+// A reserved name is unique in its world under case folding.
+rz := World(name: "folded")
+rz.reserve("Alice")
+unless rz.reserved("ALICE").name == "Alice" { INFO@mark `RZ1 a name found in another letter case lost the case it was reserved in` }
+unless rz.issue("aLiCe").erred { INFO@mark `RZ2 one name was issued twice in other letter cases` }
+if World(name: "unfolded").issue("ALICE").erred { INFO@mark `RZ3 a name is unique beyond the world that issued it` }

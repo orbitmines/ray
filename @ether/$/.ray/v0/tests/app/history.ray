@@ -101,3 +101,44 @@ unless stretched.last.value == [7] { INFO@mark `VC46 an unfinished last stretch 
 unless vs{from value > 4}.first.value == [5, 6, 2] { INFO@mark `VC47 a stretch with no end does not end where its start stops holding` }
 unless vs.since(None){.value == 5}.first.next.value == 6 { INFO@mark `VC48 a commit's next is not the one after it on its line` }
 unless vs.head.next == None { INFO@mark `VC49 the head has a next` }
+
+// `+` rebases (other's commits appended, re-stamped), `|` merges, `&+` interleaves by stamp.
+hb := History(repository: Repository())
+hb.commit(ada, Program(code: { .x = 1 }))
+hb_other := hb.fork
+hb.commit(ada, Program(code: { .x = 2 }))
+hb_other.commit(ada, Program(code: { .y = 5 }))
+hb_rebased := hb + hb_other
+unless hb_rebased.value.x == 2 && hb_rebased.value.y == 5 { INFO@mark `HB1 a rebase lost a change from one side` }
+if hb_rebased.since(None).some(.merged) { INFO@mark `HB2 a rebase made a merge` }
+unless hb_other.head.stamp < hb_rebased.head.stamp { INFO@mark `HB3 a rebased commit kept its old stamp` }
+unless hb.value.y == None { INFO@mark `HB4 rebasing changed the history it started from` }
+hb_merged := hb | hb_other
+unless hb_merged.head.merged { INFO@mark `HB5 a merge is not one commit with both heads as parents` }
+unless hb_merged.value.x == 2 && hb_merged.value.y == 5 { INFO@mark `HB6 a merge with | lost a change from one side` }
+hb_woven := hb &+ hb_other
+unless hb_woven.since(None).count == 3 { INFO@mark `HB7 an interleaving has other than the three commits of both` }
+if hb_woven.since(None).some(.merged) { INFO@mark `HB8 an interleaving made a merge` }
+unless hb_woven.value.x == 2 && hb_woven.value.y == 5 { INFO@mark `HB9 an interleaving lost a change from one side` }
+unless hb_woven.head.stamp == hb_other.head.stamp { INFO@mark `HB10 an interleaving re-stamped what it ordered` }
+
+// A history may hold branches with no common commit.
+hr := History(repository: Repository())
+hr.commit(ada, Program(code: { .a = 1 }))
+hr_apart := History(repository: Repository())
+hr_apart.commit(ada, Program(code: { .b = 2 }))
+hr_joined := hr | hr_apart
+unless hr_joined.roots.count == 2 { INFO@mark `HB11 a merge of two unrelated histories does not keep both roots` }
+unless hr_joined.value.a == 1 && hr_joined.value.b == 2 { INFO@mark `HB12 a merge of two unrelated histories lost one of them` }
+hr_text := Language.ray.write(hr_joined).at(hr_joined.id as String + ".ray").content as String
+unless hr_text ~= ". = None; " { INFO@mark `HB13 a second root is written as continuing the line above it` }
+unless ((hr_text as Program) as History).roots.count == 2 { INFO@mark `HB14 a history read back has other than its two roots` }
+unless (hr + hr_apart).value.b == 2 { INFO@mark `HB15 a rebase onto an unrelated history lost its commits` }
+
+// Forking is a copy, whose history is a fork of the original's.
+hx := Character(name: "forked")
+hx.history.commit(ada, 1)
+hx_copy := hx.copy
+hx_copy.history.commit(ada, 2)
+unless hx.history.since(None).count == 1 { INFO@mark `HB16 committing to a copy changed the original's history` }
+unless hx_copy.history.since(None).count == 2 { INFO@mark `HB17 a copy's history does not continue the original's` }

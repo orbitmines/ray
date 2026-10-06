@@ -48,10 +48,14 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != 
 @{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => Program(code: external ** block).run_as(Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)
 
 Program &+= {
+  giver: Character?
+
   run_as (who: Character) => {
     with { &caller = who }
     this()
   }
+  handed (by: Character = @me): static => this ~~ .giver = by
+  run => Run.log.commit(giver ?? @me, this).head -- .change.run_as(.who)
 }
 
 Node &+= {
@@ -75,13 +79,13 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     staged => visibility == Accessor.Permission.private
     publish: static => this ~~ .visibility = Accessor.Permission.public
     applied (held) => held -- change.run_as(who)
-    rewritten (change: Program) => Commit(id, who, stamp, change, versions, when, message, previous, line)
+    rewritten (change: Program) => Commit(id, who, stamp, change, from, versions, when, message, previous, line)
     value => line?.at(this).value ?? applied(None)
     mentions (label) => id == label || versions ∋ label
     settings => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty).join("")
-    written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.id.join(" & "), "; ") unless parents.empty || parents == [above], change as String, \n).join("")
-    static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
-      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.from, versions: set.version# ?? []))
+    written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, change as String, \n).join("")
+    static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
+      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from, versions: set.version# ?? []))
       : Commit(id: label, change: code))
 
     .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : external get value name
@@ -103,7 +107,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
 
   commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
     change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this)
-  extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from ? commit.from.map(find(.))# : head) ~~ .line = this
+  extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
   published => commits{!.staged}
   publish: static => this ~~ commits#.publish
 
@@ -126,6 +130,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   back: static => reset(head?.previous ?? head)
   run (program: Program) => Program(code: program.code, history: this)()
 
+  roots => since(None){.parents.empty}
   common (other: History) => since(None).filter(c => other.since(None).some(=== c)).last
   static clashes (base, ours, theirs) => ours == theirs || ours == base || theirs == base ? []
     : ours.fields.nonempty && theirs.fields.nonempty ? (ours.fields.name, theirs.fields.name).flatten.unique.map(name => clashes(base?[name], ours[name], theirs[name])).flatten
@@ -135,6 +140,9 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     this.head = since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this)
     this
   })
+  + (other: History) => other.since(common(other)).sort_by(.stamp).reduce(held = at(head) => held.commit(.who, .change, message: .message, versions: .versions))
+  | (other: History) => at(head).merge(other)
+  &+ (other: History) => common(other) -- (base => (since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = at(base) => held.extended(.rewritten(.change) ~~ .from = None)))
   static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
   squash (who) => History(repository, base, head: Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .change), previous: base))
   cherry_pick (picked: Commit): static => commit(picked.who, picked.change, message: picked.message)
@@ -166,10 +174,10 @@ World := class: Location + Nameable {
       ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
   }
 
-  static Reservation := class = name: reservable_names, issuer: World, holder: *?
+  static Reservation := class = unique<in: .fold_case> name: reservable_names, issuer: World, holder: *?
   reservations: Reservation[] = []
 
-  reserved (name: String) => reservations{.name.fold_case == name.fold_case}.first
+  reserved (name: String) => reservations{.name ==<in: .fold_case> name}.first
   issue (name: reservable_names) => Reservation(name, issuer: this) ~~ reservations.push(.)
   reserve (name: reservable_names) => reserved(name) ?? issue(name)
   allocate (name: reservable_names, holder) => reserve(name) ~~ .holder = holder
@@ -309,8 +317,9 @@ Character := class: Hierarchy + Entity + Nameable {
   status => Status#{this is .}
   .status = {wanted} ^punctuation => constraint = wanted
   is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
+  as (=== boolean) => this == @me
 
-  choose (s) => Choice(type: s)
+  choose (s, n: Number = 1) => Choice(type: s, count: n)
 
   read => Access(this)
   write => on(`=`)

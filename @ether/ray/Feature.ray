@@ -29,7 +29,7 @@ FileSystem := class: Language {
     key (location: Location) => "ray:" + location.normalised
     read (location: Location) => @me/device/storage[key(location)]
     write (location: Location, content) => @me/device/storage[key(location)] = (content as String if content !== None)
-    listing (location: Location) => @me/device/storage.keys{~= ⊢(key(location) + "/")}
+    listing (location: Location) => @me/device/storage.fields.name{~= ⊢(key(location) + "/")}
       .map(.after(key(location) + "/").before("/")).unique.map(location / .)
   }
 }
@@ -41,7 +41,7 @@ FileOptimizations := {
 
 IO := class {
   output (text: String) => external io `/dev/stdout` text
-  host (location) => Run.current.ask(`size`, location) -- (. == true ? (external io location None) as String : .)
+  host (location) => &@.ask(`size`, location) -- (. == true ? (external io location None) as String : .)
   fetch (from: Location, path: String, version: Version?) => ((from / path + (version as String)).content if version) ?? (from / path).content
 }
 

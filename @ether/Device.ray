@@ -1,13 +1,13 @@
 OS &+= {
-  zones: Zones = Zones()
+  // Answered by the page at `zones/<zone>/<at>` (Intl.DateTimeFormat, Time.ray); keeping answers is a cache level.
+  zones: Zones = Zones(path: "zones")
 }
 
+// What a device can do is a path under it, granted like anything else (`@me.execute { @me/device/camera }`); a
+// capability nobody granted is asked for (`&@.ask`).
 Device := class {
-  static Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
-
   os: OS = Compiler.reduced(OS(), OS.devices)
   keyboard: Keyboard = Keyboard()
-  capabilities: Capability?
   handheld = false
   clipboard: String | Location = ""
   pads: (buttons: boolean[], axes: Number[])?
@@ -19,50 +19,23 @@ Device := class {
   fullscreen = false
   printing = false
   opened: Location?
+  camera: *?
+  microphone: *?
+  speech: String?
+  share: Location?
+  vibration: Quantity.Temporal[]?
+  wake_lock = false
   memory: Store = Store(at: @"memory")
-  storage: Storage = Storage()
+  storage: Location = @"storage"
   quests => Program#{who: this}{running}
   disk => Disk(device: this, path: "")
 
-  choose (s, n: Number = 1) => Choice.algorithm ? Choice.algorithm(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random
-}
-
-Storage := class: Location {
-  static Entry := class: Nameable = value: String?
-
-  entries => children{is Entry && .value !== None}
-  keys => entries.name
-  entry (key: String) => children{is Entry && .name == key}.first ?? (Entry(name: key) ~~ add(.))
-  [key: String] => entry(key).value
-  [{key}] = {value} ^punctuation => entry(key as String).value = value
-  .{literal name ^property} ^punctuation => this[name]
-  .{literal name ^property} = {value} ^punctuation => this[name] = value
+  static chooser: Program?
+  choose (s, n: Number = 1) => Device.chooser ? Device.chooser(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random
 }
 
 Zones := class: Location {
-  static Answer := class = zone: String, at: Number, offset: String?, abbreviation: String?
-
-  answers: Answer[] = []
-  asked: Answer?
-
-  answer (zone: String, at: Number) => answers{.zone == zone && .at == at}.first ?? (Answer(zone, at) ~~ answers.push .)
-  [zone: String, at: Number] => answer(zone, at) ~~ (asked = . unless .offset) ~~ (await .offset)
-  / (segment: String) => Path(zones: this, segments: [segment])
-  .{literal name ^property} ^punctuation => this / name
-
-  static Path := class = zones: Zones, segments: String[] {
-    / (segment: String) => Path(zones, segments: [segments, segment].flatten)
-    .{literal name ^property} ^punctuation => this / name
-    .{literal at ^property} = {value} ^punctuation => zones.answer(segments.join("/"), at as Number) ~~ (.offset = value.offset) ~~ (.abbreviation = value.abbreviation)
-  }
-}
-
-Device &+= {
-  granted: Grant[] = []
-
-  permission (capability: Capability) => granted{.target == capability}.last -- (. ? .state : Grant.State.prompt)
-  grant (capability: Capability, access: Access = Access(who: Accessor.Permission.localhost)): static => this ~~ granted.push Grant(access, target: capability)
-  allows (capability: Capability) => permission(capability) == Grant.State.granted
+  [zone: String, at: Number] => await (this / zone / (at as String)).value
 }
 
 Keyboard := class: Location {
@@ -74,7 +47,7 @@ Keyboard := class: Location {
     presses => [pressed, pressed.previous**].flatten{== true}.count
     toggled => presses.odd
     pulsed (max: Number = 0, delay: Quantity.Temporal = 500 ms) => pressed && (max == 0 || presses <= max)
-      && (presses == 1 || Time.now - [pressed, pressed.previous**].flatten{== true}.first.when >= delay)
+      && (presses == 1 || Time.now - pressed.history.since(None){.value == true}.last.when >= delay)
 
     press (modifiers: Modifier? = None): static => this ~~ (.modifiers = modifiers) ~~ (.pressed = true)
     release: static => this ~~ .pressed = false
@@ -89,7 +62,7 @@ Keyboard := class: Location {
 }
 
 Disk := class: Location = device: Device {
-  local => Instance#{.device === device}.first -- (. && . !== Instance.local ? (.address as String + path) as Location : (path as Location))
+  local => Instance#{.device === device}.first -- (. && . !== Instance.local ? (. as String + path) as Location : (path as Location))
   / (segment: String) => Disk(device, path: (path as String) + "/" + segment)
   .{literal name ^property} ^punctuation => this / name
 }
@@ -105,31 +78,6 @@ FileSystem &+= {
 
 FileOptimizations = {
   {location: Disk} => FileSystem.Device()
-} + FileOptimizations
-
-FileSystem &+= {
-  static Remote := class: FileSystem {
-    remotely (location: Location) => Network.Remote(character: @me, location: location.scheme ? location.origin : @remote)
-    inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
-    over_http (location: Location) => location.scheme ~= ⊢"http"
-    sent (method: $.http.Method, location: Location, content = None, fields = $.http.Fields()) => $.http.send($.http.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
-    read (location: Location) => over_http(location)
-      ? sent($.http.Method.get, location) -- (.ok ? .text : None)
-      : remotely(location).run({ inner(location).content })
-    write (location: Location, content) => over_http(location)
-      ? sent(content === None ? $.http.Method.delete : $.http.Method.put, location, content).ok
-      : remotely(location).run({ inner(location).write(content) })
-    // WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2)
-    listing (location: Location) => over_http(location)
-      ? (sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")).text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
-        .map(href => href ~= ⊢"/" ? location.origin + href : href as Location)
-      : remotely(location).run({ inner(location).listing })
-  }
-}
-
-FileOptimizations = {
-  {location: Location{scheme && scheme != "file"}} => FileSystem.Remote()
-  {location: Location{segments.first == "remote"}} => FileSystem.Remote()
 } + FileOptimizations
 
 OS.devices = {

@@ -12,7 +12,7 @@ vh.commit(ada, Program(code: { .welcome = .greet; .greet = None }))
 unless vh.value.welcome == "hello" && vh.value.greet == None { INFO@mark `VC2 a renaming program did not rename` }
 vh.commit(ada, Program(code: { .count = 0; (0..<100).for { this.count += 1 } }))
 unless vh.value.count == 100 { INFO@mark `VC3 a loop in a commit did not run` }
-unless vh.at(vh.head.previous).value.count == None { INFO@mark `VC4 an earlier version sees a later change` }
+unless vh[vh.head.previous].value.count == None { INFO@mark `VC4 an earlier version sees a later change` }
 unless vh.head.previous.stamp < vh.head.stamp { INFO@mark `VC5 a later commit is not stamped later` }
 
 // Running as a character.
@@ -44,16 +44,16 @@ unless (vp as History).count == 2 { INFO@mark `VC16 a labelled program is not a 
 unless !Language.cfg.admits(Program(code: { while true { } })) { INFO@mark `VC57 a line's settings may run forever` }
 
 // What the Ray language keeps.
-unless Language.ray.fidelity == Language.Fidelity.lossless { INFO@mark `VC17 the .% history is not lossless` }
+unless Language.ray is Language.Lossless { INFO@mark `VC17 the .% history is not lossless` }
 unless $.ray === Language.ray { INFO@mark `VC43 $.ray is not the Ray language` }
 
 // A foreign snapshot: the change between two trees, written as Ray.
 text := "x := 1\ny := 2\nz := 3" as Byte[]
-vs1 := Language.Entry.of([(path: "a.ray", content: text)])
-vs2 := Language.Entry.of([(path: "b.ray", content: text)])
+vs1 := History.placed([(path: "a.ray", content: text)])
+vs2 := History.placed([(path: "b.ray", content: text)])
 unless History.change(vs1, vs2) as String == ".[\"b.ray\"] = .[\"a.ray\"]; .[\"a.ray\"] = None" { INFO@mark `VC29 a moved file is not read as a move` }
 unless (History.valued(vs1) -- History.change(vs1, vs2))["b.ray"] == History.valued(vs1)["a.ray"] { INFO@mark `VC30 a move does not keep the value` }
-vt1 := Language.Entry.of([(path: "a.ray", content: text), (path: "c.ray", content: text)])
+vt1 := History.placed([(path: "a.ray", content: text), (path: "c.ray", content: text)])
 unless History.change(vt1, vs2) is Abstract { INFO@mark `VC31 a rename two files could have made is not a quest` }
 
 // Merging: concurrent changes to one field are a quest; to two are not.
@@ -146,7 +146,7 @@ unless hx_copy.history.since(None).count == 2 { INFO@mark `HB17 a copy's history
 // A history read without trust keeps its lines and ignores their claims (L§9.2.12)
 claimed := History()
 claimed.commit(ada, 1, versions: ["fixed"])
-unless (with History.trusted = false { claimed.head.versions }).empty { INFO@mark `FWV1 an untrusted history's claims were believed` }
+unless (with (O = O + Compiler.untrusted) { claimed.head.versions }).empty { INFO@mark `FWV1 an untrusted history's claims were believed` }
 unless claimed.head.versions == ["fixed"] { INFO@mark `FWV2 a trusted history's claims were not kept` }
 
 // A transaction happens as a whole or not at all.
@@ -165,19 +165,17 @@ transaction {
 }
 unless from.balance == 10 && to.balance == 10 { INFO@mark `TX2 a transaction that failed was not undone as a whole` }
 
-t := Transaction(forwards: 1, backwards: 2)
-unless t.forwards == 1 { INFO@mark `FE4 a transaction forgot the step it takes` }
-unless t.reversed.forwards == 2 { INFO@mark `FE5 a reversed transaction does not swap what it holds` }
-unless t.commit.applied { INFO@mark `FE6 a transaction does not remember being applied` }
-
-// A step each way, and swapping them.
-step := Transaction(forwards: 1, backwards: 2)
-unless step.forwards == 1 { INFO@mark `TR1 a transaction forgot which way it goes` }
-unless step.reversed.forwards == 2 { INFO@mark `TR2 reversing does not swap the two ways` }
-unless step.reversed.backwards == 1 { INFO@mark `TR3 reversing does not swap the other way` }
-if step.applied { INFO@mark `TR4 a new transaction is already applied` }
-unless step.commit.applied { INFO@mark `TR5 marking it applied does not` }
-unless step.reversed.reversed.forwards == 1 { INFO@mark `TR6 reversing twice does not come back` }
+// A transaction is a fork merged as a whole: nothing of it is in the history until it is merged.
+txh := History()
+txh.commit(ada, 1)
+tx_branch := txh.fork
+tx_branch.commit(ada, 2)
+if txh.value == 2 { INFO@mark `TXF1 a fork's commit is in the history before it is merged` }
+txh.merge(tx_branch)
+unless txh.value == 2 { INFO@mark `TXF2 merging a fork does not bring its commits` }
+tx_dropped := txh.fork
+tx_dropped.commit(ada, 3)
+unless tx_dropped.drop.head === txh.head { INFO@mark `TXF3 dropping a fork does not leave it where it started` }
 
 // A rewrite is a commit by its rule; revoking a rule runs on from before it was used (P8.21)
 unless Program(code: { 1 }).rewrites.empty { INFO@mark `FWC1 a program nothing rewrote has rewrites` }
@@ -190,8 +188,8 @@ if layer.head.written() ~= "; key = " || layer.head.written() ~= "; signature = 
 unless layer.value == 1 { INFO@mark `LAYER2 version control alone does not read a history that is not public` }
 if (History.Commit(who: ada, stamp: World.ether.clock.now, change: Program(code: { @me })).applied(None)) === ada { INFO@mark `AUTH1 version control replays a line as the character it names` }
 if Program(code: { @me }, who: ada).run === ada { INFO@mark `AUTH2 version control runs handed-over code as the character it names` }
-auth_logged := Run.log.commit(ada, Program(code: { @me })).head
-if Run.replay(auth_logged) === ada { INFO@mark `AUTH3 version control replays a logged run as the character it names` }
+auth_logged := Program.runs.commit(ada, Program(code: { @me })).head
+if Program.replay(auth_logged) === ada { INFO@mark `AUTH3 version control replays a logged run as the character it names` }
 
 // A stretch bound by a time holds from the commit current at that time; by a label or a commit, from that commit on.
 bnd := History()
@@ -207,10 +205,10 @@ cpy := none.read History(repository: Repository()) ~~ (.caches = [History()])
 cpy.commit(ada, 1)
 cpy.commit(ada, 2)
 cpy_fork := cpy.fork
-cpy_at := cpy.at(cpy.head.previous)
+cpy_at := cpy[cpy.head.previous]
 unless cpy_fork.base === cpy.head && cpy_fork.head === cpy.head { INFO@mark `CPY1 a fork does not start at the head it forked` }
 unless cpy_at.head === cpy.head.previous && cpy_at.value == 1 { INFO@mark `CPY2 going back does not stop at the commit gone back to` }
-unless [cpy_fork, cpy_at, cpy.squash(ada), cpy.blank, cpy.erased].every(Visibility.of(.) == Accessor.Permission.none && .repository === cpy.repository) { INFO@mark `CPY3 a history made from another is readable by more, or kept elsewhere` }
+unless [cpy_fork, cpy_at, cpy.squash(ada), cpy.blank, cpy.erased].every(.unreadable && .repository === cpy.repository) { INFO@mark `CPY3 a history made from another is readable by more, or kept elsewhere` }
 unless cpy_fork.caches == cpy.caches && cpy_at.caches == cpy.caches { INFO@mark `CPY4 a fork or an earlier version loses the caches` }
 unless cpy.erased.caches.empty { INFO@mark `CPY5 an erased history keeps caches of its values` }
-unless cpy.at(cpy.head.previous.id).head === cpy.head.previous { INFO@mark `CPY6 going back to a label does not find its commit` }
+unless cpy[cpy.head.previous.id].head === cpy.head.previous { INFO@mark `CPY6 going back to a label does not find its commit` }

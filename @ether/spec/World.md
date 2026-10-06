@@ -102,6 +102,12 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   it do not run, so "do not disturb" suppresses rather than labels. A grant (`@allow_proxy Proxy`) is access on the narrowing;
   `invisible` is a per-reader view (W2.16). Statuses not inferable from what runs (idle, busy) are narrowings over device input
   history or a declared focus job. v0's `Status := enum` is to be replaced.
+  **(2026-10-06)** Two kinds: what is read off what runs (`Online`, `Offline`, `Broadcasting`, `Hosting`, `Proxying`, `Idle`,
+  `Busy`) and what is only said (`Constraint := Invisible | DoNotDisturb | NPC`, the NPC modes `Resolving | Waiting | Stopping`).
+  Writing a status keeps it as the constraint and, when the character is not that already, starts a quest run by the character
+  whose goal is that status (`@me.status = Online & Broadcasting & Proxying` starts what makes it true). Running somewhere is
+  `f@loc()`, which runs a Program `from: loc`; `serves(at)` reads that, so there is no `serving`/`proxying` mode field.
+  `NPC := Resolving | Waiting | Stopping` and `Player := Character{!(. is NPC)}` are narrowings, not classes.
 - **W2.16 Values relative to the reader (`invisible`)** — **Q**. Recommend, generally: a field may store an expression evaluated
   per reader (`&@.last`), not when set; `invisible` is `online` to oneself and `offline` to others. Possible spelling: the field
   holds `=> …` (P5.3). *`.ray2/Character.ray:53–55`*
@@ -339,6 +345,10 @@ From the drafts verification (2026-10-06).
 - **W6.4 Proof** — equational reasoning; assumptions outside vs inside a function; externally used variables are assumptions;
   a failed proof starts a quest (or not); sub-proofs; a Lean library; proof by contradiction; theorem/lemma/example graph.
 - **W6.5 Transaction** — revert a specific commit when the graph changed since; record the version; roll back `&=`.
+  **(2026-10-06)** There is no `Transaction` class: a transaction is `history.fork`, then `merge` (or `drop`), and undoing one
+  commit is `revert`; `x.transaction` runs a program that way. Deleting an account (`logout(c, delete_all: true)`) and
+  recovering a root (`character.recovery(sessions)`) are Programs (`name`, `who`, `goal`, `from`; cancelled by `stop`), not
+  classes with their own lifecycle fields.
 - **W6.6 Network** — protocols with default ports (ether 37839); URL grammar; `Port = Decimal{< 2^16}`; sockets; a hosts table as
   equivalences (`"ether".ignore_case => "ether.orbitmines.com"`); DNS history checked against stored public keys;
   `Node.Remote`; `< @https://…` imports; proxies (all traffic or a block; per user); the version handshake.
@@ -446,6 +456,9 @@ From the drafts verification (2026-10-06).
 
 W8 itself is decided below (devices are locations under `@me/device/<…>`).
 
+- **(2026-10-06)** A device's capabilities are its paths (`@me/device/camera`, `…/microphone`, `…/storage`), granted as any
+  node is (`@me.execute { @me/device/camera }`); nobody granted, `&@.ask` answers a quest. There is no `Capability` enum or
+  per-device grant list. `storage` and `os.zones` are plain locations whose entries the page writes.
 - **W8.1 Devices controlled by someone else** — **Q**. Recommend: remote control is a grant of `write` on `@me/device/mouse` (or
   `keyboard`) to another character (L§8.2); the prompt shows its origin chain. *IDE:181*
   **Follows (2026-10-06):** as recommended: remote control is a grant of `write` on `@me/device/mouse` (or `keyboard`) to another character, and the prompt shows its origin chain, from W8 (devices are locations) and the U6 grants (L§8.2).
@@ -560,6 +573,8 @@ Answers from 2026-09-30.
     **Follows (2026-10-06):** a delegation is bound to its holder, never a bearer token: its signature covers `to` (a
     character by its root, or a narrowing), and it is acted on only by whoever presents it as the verified `to`
     (`Instance.delegated(delegation, by)`; hosting a guest presents the guest).
+  - **(2026-10-06)** A key event's threshold is `identity.threshold(after)` (revoke, add, otherwise rotate); there is no
+    event-kind enum. A history's sealed sender is its `sender`, a `who` value narrower than the line's readers.
   - **Recovery handshake.** A lost device is revoked by the remaining root authority. A lost root is recovered without
     any guardian choosing the new key: the recovering machine makes its own new root keys and writes the rotation event,
     then opens a recovery handshake with each guardian and sends only the event's hash; a guardian verifies the person by

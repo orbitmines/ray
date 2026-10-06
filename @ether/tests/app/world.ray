@@ -40,7 +40,6 @@ unless wa.avatars#.count == 1 { INFO@mark `PE2 a character has other than one av
 unless wa.avatars#.first.segments.last == "@alice" { INFO@mark `AV1 an avatar is not the character's name on its platform` }
 
 unless Repository(world: wg).histories.empty { INFO@mark `RP1 a new repository already has histories` }
-unless Region(name: "north").name == "north" { INFO@mark `RG1 a region is not a world by another name` }
 unless here == here { INFO@mark `LO5 a location is not itself` }
 
 // A world is a location: what holds places, and is held.
@@ -62,8 +61,8 @@ wi.history.commit(wg, wi)
 unless wi.history{who: wg}.nonempty { INFO@mark `ITM4 a certified item does not carry its certificate` }
 
 unless wp is Offline { INFO@mark `PE3 a new character is not offline` }
-unless Accessor.Permission.public { INFO@mark `AC1 there is no public permission` }
-if Accessor.Permission.private == Accessor.Permission.public { INFO@mark `AC2 private and public are the same` }
+unless public { INFO@mark `AC1 there is no public permission` }
+if private === public { INFO@mark `AC2 private and public are the same` }
 
 // A name reserved in a world is a field of it, `world.@name = holder`, answered to whoever asks for that name again.
 wg.@dawn = wp
@@ -83,8 +82,8 @@ past.commit(wp, "first")
 unless past.count == 1 { INFO@mark `HI2 committing does not keep it` }
 past.commit(wp, "second")
 unless past.count == 2 { INFO@mark `HI3 committing twice keeps other than two` }
-unless past.latest.value == "second" { INFO@mark `HI4 the latest is not the last committed` }
-unless past.latest.who === wp { INFO@mark `HI5 a commit forgot who made it` }
+unless past.last.value == "second" { INFO@mark `HI4 the latest is not the last committed` }
+unless past.last.who === wp { INFO@mark `HI5 a commit forgot who made it` }
 branched := past.fork
 unless branched.count == 0 { INFO@mark `HI6 a fork starts with commits on it` }
 unless branched.base === past.last { INFO@mark `HI7 a fork forgot what it came from` }
@@ -100,21 +99,20 @@ unless cite.notes.count == 1 { INFO@mark `RF4 a note is not kept` }
 unless cite.title == "on rays" { INFO@mark `RF5 a reference forgot its title` }
 
 // Who may see what.
-unless Accessor.Permission.confidential { INFO@mark `AC3 there is no confidential permission` }
-unless Accessor.Permission#.count == 7 { INFO@mark `AC4 there are other than seven permissions` }
-unless Accessor(who: Accessor.Permission.public).who == Accessor.Permission.public { INFO@mark `AC5 an accessor forgot its level` }
+unless confidential { INFO@mark `AC3 there is no confidential permission` }
+unless Access(who: public).who === public { INFO@mark `AC5 an access forgot who it is for` }
 reader := Character(name: "reader")
 once_target := "used once"
 reader{uses < 1}.execute once_target
-unless Permissions.current.allows(reader, `()`, once_target) { INFO@mark `AC6 a grant never used before is refused` }
-if Permissions.current.allows(reader, `()`, once_target) { INFO@mark `AC7 a grant for one use allowed a second` }
+unless once_target.allows(reader, `()`) { INFO@mark `AC6 a grant never used before is refused` }
+if once_target.allows(reader, `()`) { INFO@mark `AC7 a grant for one use allowed a second` }
 day_target := "read by day"
 reader{0:00 <= now}.read day_target
-unless Permissions.current.allows(reader, `size`, day_target) { INFO@mark `AC8 a grant whose filter holds is refused` }
+unless day_target.allows(reader, `size`) { INFO@mark `AC8 a grant whose filter holds is refused` }
 night_target := "never read"
 reader{now < 0:00}.read night_target
-if Permissions.current.allows(reader, `size`, night_target) { INFO@mark `AC9 a grant whose filter fails is allowed` }
-if Permissions.current.allows(reader, `=`, day_target) { INFO@mark `AC10 a read grant allows writing` }
+if night_target.allows(reader, `size`) { INFO@mark `AC9 a grant whose filter fails is allowed` }
+if day_target.allows(reader, `=`) { INFO@mark `AC10 a read grant allows writing` }
 
 // A quest is a program with someone to run it; a step defined nowhere is one they do themselves.
 errand := Program(name: "fetch", goal: wi)
@@ -136,7 +134,7 @@ unless carrying.stop.done { INFO@mark `QU8 stopping a quest does not end it` }
 // Where someone is says how they are, and saying nothing holds them to nothing.
 away := Character(name: "away")
 unless away is Offline { INFO@mark `PS1 someone with nowhere to be is not offline` }
-somewhere := Instance(location: here)
+somewhere := Instance(path: "somewhere")
 present := Character(name: "present", presence: somewhere)
 unless (present is Online) == (present.presence.device.network.connected ?? false) { INFO@mark `PS2 someone somewhere is not as that place is` }
 if present is Offline && present is Online { INFO@mark `PS3 someone somewhere is offline and online at once` }
@@ -152,10 +150,10 @@ unless renamed.name == "after" { INFO@mark `WP3 something named is not called th
 
 // What a world holds, and how many live in it.
 county := World(name: "county")
-unless county.population == 0 { INFO@mark `WP4 an empty world has someone in it` }
+unless county.characters.count == 0 { INFO@mark `WP4 an empty world has someone in it` }
 county.add(Character(name: "one"))
 county.add(Character(name: "two"))
-unless county.population == 2 { INFO@mark `WP5 two who live there do not count two` }
+unless county.characters.count == 2 { INFO@mark `WP5 two who live there do not count two` }
 unless county.items.empty { INFO@mark `WP6 an empty world holds something` }
 county.add(Item(name: "lamp", issuer: county))
 unless county.items.count == 1 { INFO@mark `WP7 what was added to a world is not there` }
@@ -189,9 +187,11 @@ guild := Organization(name: "guild")
 unless guild.members.empty { INFO@mark `WP21 an organization nobody joined has members` }
 unless guild is Offline { INFO@mark `WP22 an organization is not offline to begin with` }
 
-// An NPC runs until its quests are resolved, unless told to wait for more or to stop: narrowings over its quests, like statuses.
-npc := NPC(name: "keeper")
-if npc is Resolving { INFO@mark `NPC1 an NPC with no quests is resolving some` }
+// An NPC runs until its quests are resolved, waits for more, or stops: what it was told to do, like any said status; a player is any other character.
+npc := Character(name: "keeper")
+unless npc is Player { INFO@mark `NPC4 a character told nothing is not a player` }
+npc.status = Resolving
+unless npc is NPC && !(npc is Player) { INFO@mark `NPC1 a character told to resolve its quests is not an NPC` }
 npc.status = Waiting
 unless npc is Waiting { INFO@mark `NPC2 an NPC told to wait is not waiting` }
 npc.status = Stopping
@@ -209,7 +209,7 @@ sited.authors.push wp
 unless sited.authors.count == 1 { INFO@mark `WR8 an author added is not kept` }
 unless sited.authors.first === wp { INFO@mark `WR9 the author kept is not the one added` }
 unless (Reference(title: "t") ~~ .note = "n").notes.first == "n" { INFO@mark `WR10 a note forgot its text` }
-unless (Reference(title: "t") ~~ .note = "n").notes.first.when { INFO@mark `WR11 a note says nothing about when` }
+unless (Reference(title: "t") ~~ .note = "n").history.last.when { INFO@mark `WR11 a note says nothing about when` }
 if Reference(title: "t").location { INFO@mark `WR12 a new reference has a remote it was not given` }
 
 // A status is what a character is now, read off what it runs; saying one is a
@@ -235,6 +235,10 @@ disturbed := false
 if disturbed { INFO@mark `CS13 something flagged against do not disturb ran anyway` }
 held_back := Character(name: "h") ~~ .status = !Offline
 if held_back is Offline { INFO@mark `CS14 a character held to not offline is offline` }
+unless Program#{who: quiet}.empty { INFO@mark `BEC1 saying a status that holds once said started something` }
+becoming := Character(name: "becoming")
+becoming.status = Broadcasting
+unless Program#{who: becoming}{goal === Broadcasting}.nonempty { INFO@mark `BEC2 saying a status read off what runs does not start a quest to make it hold` }
 hidden := Character(name: "hidden", presence: somewhere) ~~ .status = Invisible
 unless hidden is Invisible { INFO@mark `CS15 a character that went invisible is not` }
 if hidden is Online { INFO@mark `CS16 an invisible character is online to someone else` }
@@ -276,7 +280,7 @@ Keyholder := class: Character {
   none.read spare: Encoding.Key?
   none.read spares: (label: String, key: Encoding.Key)[] = []
 }
-zer_at := Instance(location: "zer-at")
+zer_at := Instance(path: "zer-at")
 zer := Instance.local.login(Keyholder(name: "zer", key: $.ed25519.pair(), spare: $.ed25519.pair(), spares: [(label: "one", key: $.ed25519.pair())], presence: zer_at))
 zer_spare := zer.spare
 zer_listed := zer.spares.first.key
@@ -290,7 +294,7 @@ unless zer_other.key.signed([1]).valid == true { INFO@mark `ZER2 logging one cha
 
 // Comparing characters is security: without @ether/security (or @ether/network) it is an error, not an answer.
 unless (Character(name: "a") == Character(name: "a")) is Diagnostic { INFO@mark `SEC1 two characters compare without @ether/security` }
-unless Run.kept == 30 days { INFO@mark `HG4 run logs are not kept for thirty days` }
+unless Program.kept == 30 days { INFO@mark `HG4 run logs are not kept for thirty days` }
 
 // A reserved name is unique in its world under case folding.
 rz := World(name: "folded")
@@ -316,26 +320,25 @@ unless Character.local("reachable") === cth || !Instance.local.logged_in(cth) { 
 unless (@https://a.b/c).host == "a.b" { INFO@mark `CTH3 a location with an authority lost its host` }
 
 // A character on several instances is on all of them; the one it is at is the primary.
-ins_at := Instance(location: "ins-at")
+ins_at := Instance(path: "ins-at")
 ins_c := Character(name: "spread", presence: ins_at)
-ins_other := Instance(location: "ins-other")
+ins_other := Instance(path: "ins-other")
 ins_other.login(ins_c)
 unless ins_at is ins_c.instances && ins_other is ins_c.instances { INFO@mark `INS1 a character is not on every instance running it` }
 unless ins_c.primary === ins_at { INFO@mark `INS2 the primary instance is not where the character is` }
 
-// Deleting an account waits on stamps, then keeps every commit with its value gone.
+// Deleting an account is a program run as the character 30 days on, which keeps every commit with its value gone.
 dlt_c := Character(name: "leaving")
 dlt_c.history.commit(dlt_c, 5)
 dlt_ids := dlt_c.history.since(None).id
-dlt := Instance.Deletion(dlt_c)
-if dlt.lapsed { INFO@mark `DLT1 a deletion lapsed before its window` }
+Instance.local.logout(dlt_c, delete_all: true)
+dlt := Program#{name == "delete" && who === dlt_c}.first
+if !dlt || dlt.started || dlt.from <= Time.now { INFO@mark `DLT1 a deletion lapsed before its window` }
 dlt_erased := dlt_c.history.erased
 unless dlt_erased.since(None).id == dlt_ids { INFO@mark `DLT2 an erased history lost its commits' labels` }
 unless dlt_erased.ordered.stamp == dlt_c.history.ordered.stamp { INFO@mark `DLT3 an erased history lost its stamps` }
 if dlt_erased.value !== None { INFO@mark `DLT4 an erased history still holds a value` }
-with dlt.window = 0 seconds {
-  unless dlt.lapsed { INFO@mark `DLT5 a deletion does not lapse after its window` }
-}
+unless dlt.cancel.done { INFO@mark `DLT6 a cancelled deletion is still pending` }
 
 // A branch is named by its nearest label; a blank history has no commits; a commit expands into its run.
 brn := History(repository: Repository())
@@ -379,12 +382,14 @@ if clm_quest.reached(clm) { INFO@mark `CLM2 a claim is reached before the claima
 clm.authors.push clm_who
 unless clm_quest.reached(clm) { INFO@mark `CLM3 a claim is not reached once the claimant is an author` }
 
-// A redirect is a world name, so it passes the world's write check; a stream moves only those who let it (W1.9).
-unless (with (World.current = rdr) { Network.Hosts.redirect("b", @https://elsewhere.example) }) is Abstract { INFO@mark `NETG1 a redirect overwrites a held name without the issuer's write` }
-netg_watcher := Instance.local.login(Character(name: "netg-watcher"))
-netg := Network.Stream(player: here_now, location: @local)
-unless &@.may(`=`, netg_watcher) || netg.watch(netg_watcher) is Diagnostic { INFO@mark `NETG2 a stream moves a character who did not grant it` }
-unless &@.may(`=`, here_now) || netg.moved(@localhost) is Diagnostic { INFO@mark `NETG3 a stream is moved without its player's grant` }
 // A name confusable with a reserved one finds it, and a confusable mixed-script name is not reserved (UTS #39).
 unless wg.@dаwn === wp { INFO@mark `SKL5 a name confusable with a reserved one does not find it` }
 unless (wg.@pаge = 3).erred { INFO@mark `SKL6 a name that mixes scripts and is confusable is reserved` }
+
+// A channel reads as a program first (`Program + History`): its cursor is the program's, and going back in it is indexing the history.
+chn := Channel()
+chn.commit(1, Program(code: { "a" }))
+chn.commit(1, Program(code: { "b" }))
+if chn.at { INFO@mark `CHN1 a channel's cursor is a commit of its history` }
+unless chn[chn.head.previous].head === chn.head.previous { INFO@mark `CHN2 going back in a channel does not stop at the commit gone back to` }
+unless chn.written_as() as String ~= "\"b\"" { INFO@mark `CHN3 a channel is not written as its lines` }

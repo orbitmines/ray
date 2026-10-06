@@ -1,0 +1,1 @@
+@me = Instance.local.login(Character(name: @me.name))

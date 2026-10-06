@@ -376,6 +376,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     - pushing is `history as $.git` (or `Git.push(history, remote)`);
     - converting is reading as one language and writing as another (`$.mercurial.write($.git.read(@./repo))`).
   - Routing uses §9.1's syntax: `History{location ∈ @me}$ = $.ray | $.git`. A superposition stores in each of them.
+  - **For now (2026-10-06):** the Mercurial, Fossil, Pijul and Subversion backends, with the languages only they use (SHA3, MD5, BLAKE3, Bincode, Zstd, Base32) and the unused SHA-512 and Blowfish, are on the branch `version-control` for later; main has Git only (with SHA-1, zlib, DEFLATE, and SHA-256 for git's SHA-256 object format).
 - **Decided (2026-10-06):** there is no `Backend` class. A backend is a plain `Language`; what was generic moved to where it belongs.
   - `Language` has `fidelity` (`Language.Fidelity`), `stored` (the language's own storage level), `Language.Entry` (a tree of files, for a language that writes more than one), `written_to`, `converted` and `tree_at`.
   - `Language.write` answers text, or an `Entry` when the language writes files.

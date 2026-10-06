@@ -1,5 +1,0 @@
-// Subversion: a dump stream of snapshots.
-
-mark ^keyword := external global
-
-unless Subversion.fidelity == Language.Fidelity.snapshot { INFO@mark `VC22 subversion does not keep snapshots` }

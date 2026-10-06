@@ -1,8 +1,0 @@
-// Pijul: changes, kept whole.
-
-mark ^keyword := external global
-
-unless Pijul.fidelity == Language.Fidelity.lossless { INFO@mark `VC18 pijul's changes are not lossless` }
-// The hashed part of a change file is bincode 1.x's serialization, fixed-width integers (libpijul's change.rs, https://nest.pijul.com/pijul/pijul)
-unless Pijul.Encoded.configuration == Bincode.legacy && !Pijul.Encoded.configuration.varint { INFO@mark `VC50 pijul's change files are not read with bincode's legacy configuration` }
-unless Bincode<String, Bincode.legacy>(value: "ray") as Byte[] != Bincode<String>(value: "ray") as Byte[] { INFO@mark `VC51 a string written for pijul is the same as under bincode's standard configuration` }

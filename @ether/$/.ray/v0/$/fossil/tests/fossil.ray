@@ -1,5 +1,0 @@
-// Fossil: artifacts in a database.
-
-mark ^keyword := external global
-
-unless Fossil.fidelity == Language.Fidelity.snapshot { INFO@mark `VC21 fossil does not keep snapshots` }

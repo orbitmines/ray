@@ -106,6 +106,52 @@ link {value} {previous} ^keyword => (
 
 // Whether an instance's body is being read (its class's statics are not read again).
 constructing := None
+// Programs that run again when a class is made or added to (P5.1, `dynamically`): those whose last run answered nothing.
+// (Not on every `:=`: that runs them deep inside whatever declares, where they exhaust the depth and are lost.)
+// While they run, what they add does not run them again (P5.2).
+waiting_runs := None
+rerunning := None
+// Each run is entered on a frame of its own (entering defines its body as a rule there).
+fresh_frame () => external .
+watched (watched_program) => (
+  watched_outer := None
+  watched_outer = rerunning
+  rerunning = global
+  watched_answer := None
+  watched_answer = watched_program.entered(fresh_frame(), None)
+  if (watched_answer === None) {
+    unless waiting_runs { waiting_runs = chain None }
+    waiting_runs &= watched_program
+  }
+  rerunning = watched_outer
+  watched_program
+)
+// Run by what makes a class or adds to one. Their own declarations do not run them again (P5.2): `rerunning` is set before
+// anything is declared, and the checks are gotos (an `if` would declare names itself).
+rerun_if_waiting () => (
+  goto rerun_done if rerunning
+  goto rerun_now if waiting_runs
+  goto rerun_done
+ rerun_now\
+  rerunning = global
+  rerun_waiting()
+  rerunning = None
+ rerun_done\
+)
+rerun_waiting () => (
+  still_waiting := chain None
+  waiting_at := None
+  waiting_at = waiting_runs.head
+  waiting_runs = chain None
+  while waiting_at {
+    waiting_program := waiting_at.value
+    if ((waiting_program.entered(fresh_frame(), None)) === None) { still_waiting &= waiting_program }
+    waiting_at = waiting_at.next
+  }
+  extended_by(still_waiting, waiting_runs.head)
+  waiting_runs = None
+  if still_waiting.head { waiting_runs = still_waiting }
+)
 // The positional arguments not yet taken by a field of the instance being constructed.
 given_in_order := None
 class {block} ^keyword => (
@@ -169,6 +215,7 @@ class {block} ^keyword => (
     this
   )
 
+  rerun_if_waiting()
   static
 )
 
@@ -1039,6 +1086,7 @@ Node := base class {
 
   &+={ }{{members}} ^punctuation => (
     this.components.hierarchy &= class { inline members }
+    rerun_if_waiting()
     this
   )
   &={x} ^punctuation => (
@@ -1078,7 +1126,9 @@ Node := base class {
 
   . => this
   .{literal property ^property} ^punctuation => external get this property
-  .{literal method ^function} {parameter ^parameter} => {body} ^punctuation => (
+  // A closure handed to a method by juxtaposition (G2.21): `xs.for name => { … }`. Its `=>` is spelled as the rule's own, so
+  // the statement is not read as a definition.
+  .{literal method ^function} {parameter ^parameter} {`=>`} {body} ^punctuation => (
     closure := Program()
     closure.code = external ** body
     closure.parameters = external ** parameter
@@ -2131,7 +2181,6 @@ Modifier.spellings &= `static`
   picked
 )
 
-dynamically ^keyword (x) => (inline x)
 
 assert ^keyword (condition) => (
   unless condition { ERROR `assertion failed` }
@@ -2245,13 +2294,19 @@ Program.components.hierarchy &= class {
   last => .written.last
   count => .written.count
   empty => .count.is_zero
+  // Over its keys; with no keys to go over (none can be read yet) it answers nothing.
   for (body) => (
-    walker := .keys.head
-    while walker {
-      body(walker.value)
-      walker = walker.next
+    keyed := .keys
+    answered := None
+    unless (keyed === None) {
+      walker := keyed.head
+      while walker {
+        body(walker.value)
+        walker = walker.next
+      }
+      answered = this
     }
-    this
+    answered
   )
 
   variables => (

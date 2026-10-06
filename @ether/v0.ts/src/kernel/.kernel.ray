@@ -99,6 +99,15 @@ spelled (src, at, lit, joined, followed, limit) => (
   if !joined and is_run(first) and run(src, at - 1) { return None }
   return followed or !is_run(last) or !run(src, at + n)
 )
+// A literal right after what the previous piece of its rule consumed: only its end is guarded.
+spelled_within (src, at, lit, followed, limit) => (
+  n := lit.length
+  if at + n > limit or !starts(src, at, lit) { return None }
+  if n == 0 { return global }
+  last := lit.chars[n - 1]
+  if !followed and is_word(last) and word(src, at + n) { return None }
+  return followed or !is_run(last) or !run(src, at + n)
+)
 opening (c) => c == '{' or c == '(' or c == '['
 // Where the bracket opening at j closes (just after it); j itself when it does not close by `end`.
 group_end (src, j, end) => (
@@ -269,7 +278,8 @@ matching (rule, caps, src, pos, limit, frame, receiving, receiver) => (
       if piece.tight and !(p > 0 and pieces[p - 1].kind == 0 and lit_ends_line(pieces[p - 1].text)) { from = i }
       if p == 0 and receiving and !rule.defines and opener(lit) { from = i }
       followed := p + 1 < n and pieces[p + 1].kind == 2 and pieces[p + 1].tight and (pieces[p + 1].typed or (pieces[p + 1].piece_raw and p + 2 == n))
-      if !spelled(src, from, lit, (piece.tight and p > 0 and from == i) or (p == 0 and receiving and from == pos), followed, limit) { return -1, 0 }
+      within := piece.tight and p > 0 and from == i
+      if !(within ? spelled_within(src, from, lit, followed, limit) : spelled(src, from, lit, p == 0 and receiving and from == pos, followed, limit)) { return -1, 0 }
       reach = reach + lit.length
       if opener(lit) { opened = opened + 1 } elsif opened > 0 and closer(lit) { opened = opened - 1 }
       i = from + lit.length
@@ -334,7 +344,8 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
   if next == 0 and !raw and !inside and piece.typed and pieces[p + 1].tight and space(src, end - 1) { return -1 }
   if piece.typed and !type_known(rule, p) { return -1 }
   if piece.typed and holds(rule, p, src, from, stop - 1) == UNDEF {
-    shorter := next >= 0 ? -1 : held_from(rule, p, src, from, from, stop, limit)
+    stepwise := next == 2 and pieces[p + 1].tight and pieces[p + 1].typed
+    shorter := next >= 0 and !stepwise ? -1 : held_from(rule, p, src, from, from, stop, limit, stepwise)
     if shorter >= 0 { cap(caps, p, from, shorter) }
     return shorter
   }
@@ -445,8 +456,31 @@ spelled_over (src, from, j, limit, frame) => (
   while at != None and at != NIL { if at.src == src and at.at == from { return -1 }; at = at.next }
   overing := Claim(src: src, at: from, next: ROOT.overing)
   ROOT.overing = overing
-  found, end, reach := best_in(src, from, limit, frame, None, None, 0, frame, 1 + 512, -1, -1, -1, -1) always { ROOT.overing = overing.next }
-  return found != None and end > j and !captured_at(found, src, from, limit, frame, None, None, j) ? end : -1
+  found, end, reach := best_in(src, from, limit, frame, None, None, 0, frame, 1 + 512, -1, -1, -1, -1) catch err { ROOT.overing = overing.next; rethrow(err) }
+  if found != None and end > j and !captured_at(found, src, from, limit, frame, None, None, j) { ROOT.overing = overing.next; return end }
+  ROOT.overing = overing.next
+  return -1
+)
+// Or by a rule read on what is written before it, tight after it (`b.for name => { … }`), that spells it: asked only where a
+// statement's `=>` is weighed against a definition (spelled_inside), not by every capture's scan.
+spelled_over_on (src, from, j, limit, frame) => (
+  over := spelled_over(src, from, j, limit, frame)
+  if over > j { return over }
+  at := ROOT.overing
+  while at != None and at != NIL { if at.src == src and at.at == from { return -1 }; at = at.next }
+  overing := Claim(src: src, at: from, next: ROOT.overing)
+  ROOT.overing = overing
+  // or a rule read on what is written before it, tight after it (`b.for name => { … }`), that spells it
+  k := skip(src, from, j, None)
+  while k < j {
+    if !space(src, k) and !space(src, k - 1) {
+      on, on_end, on_reach := best_target(UNDEF, frame, src, k, limit, UNDEF, 512, None) catch err { ROOT.overing = overing.next; rethrow(err) }
+      if on != None and on_end > j and !captured_at(on, src, k, limit, frame, global, UNDEF, j) { ROOT.overing = overing.next; return on_end }
+    }
+    k = skip(src, k, j, None)
+  }
+  ROOT.overing = overing.next
+  return -1
 )
 // Whether j is inside one of the captures of rule read at pos (or outside what it reads): not one of its own literals.
 captured_at (rule, src, pos, limit, frame, receiving, receiver, j) => (
@@ -901,7 +935,7 @@ first_step (src, pos, limit, frame) => (
     other, other_end, other_reach := best_in(src, start, limit, frame, None, None, 0, frame, 1 + 512, -1, -1, -1, -1)
     if other != None and other_end >= found_end {
       k := split_of(found, src, start, limit, frame)
-      if k >= 0 and !captured_at(other, src, start, limit, frame, None, None, k) { found = other; found_end = other_end; found_reach = other_reach }
+      if k >= 0 and (!captured_at(other, src, start, limit, frame, None, None, k) or spelled_inside(other, src, start, limit, frame, k)) { found = other; found_end = other_end; found_reach = other_reach }
     }
   }
   name := token(src, start, limit)
@@ -963,6 +997,17 @@ overridden (found, named, src, start, name, limit, frame, place) => (
   p := 0
   while p < rule_count(named) {
     if cap_begin(held, p) != -1 and cap_begin(held, p) < k and k < cap_stop(held, p) { return spelled_over(src, cap_begin(held, p), k, limit, frame) > k }
+    p = p + 1
+  }
+  return None
+)
+// Whether the `=>` at k, inside a capture of rule read at pos, is spelled there by a rule that defines nothing (spelled_over).
+spelled_inside (rule, src, pos, limit, frame, k) => (
+  e, r, held := match(rule, src, pos, limit, frame, None, None)
+  if e < 0 { return None }
+  p := 0
+  while p < rule_count(rule) {
+    if cap_begin(held, p) != -1 and cap_begin(held, p) < k and k < cap_stop(held, p) { return spelled_over_on(src, cap_begin(held, p), k, limit, frame) > k }
     p = p + 1
   }
   return None
@@ -1724,11 +1769,11 @@ still (kept) => (
 )
 missing_declared (missing) => ( missing for name => { if own(global(), name) != UNDEF { return global } }; return None )
 // The ends after j, all found first, then tried from the last: the longest prefix whose text is held.
-held_from (rule, p, src, from, j, last, limit) => (
+held_from (rule, p, src, from, j, last, limit, stepwise) => (
   if j >= last { return -1 }
-  k := max(claim(src, j, limit), token(src, j, limit))
+  k := stepwise and word(src, j) ? j + 1 : max(claim(src, j, limit), token(src, j, limit))
   j = k > j ? k : j + 1
-  deeper := held_from(rule, p, src, from, j, last, limit)
+  deeper := held_from(rule, p, src, from, j, last, limit, stepwise)
   if deeper >= 0 { return deeper }
   return j < last and !space(src, j - 1) and holds(rule, p, src, from, j - 1) != UNDEF ? j : -1
 )

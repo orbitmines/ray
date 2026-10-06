@@ -89,18 +89,14 @@ Superposed := Node{.superposed}
 {a} [x] {b: Superposed} => b.each(one => a[x] one)
 {f}({argument: Superposed}) => argument.each(one => f(one))
 
-Section := class = operator: String, operand: Node? {
+// An operator missing a side is a section: the function of what it misses (`xs.map(+ 1)`, `xs.sorted(<)`, `xs{> 0}`, `(!)`).
+Section := class = operator, operand? {
   continues => true
   admits (candidate) => this(candidate)
-  (subject, other?) => operand != None ? (external get subject operator)(operand)
-    : other != None ? (external get subject operator)(other)
-    : (external get subject operator)
+  (a, b?) => operand != None ? a [operator] operand : b != None ? a [operator] b : a [operator]
 }
-Operator := "!" | "&&" | "||" | "!&&" | "!||" | "x||" | "x!||" | "+" | "-" | "/" | "%" | "^" | "==" | "!=" | "<" | ">" | "<=" | ">="
-({operator: Operator}) ^operator => Section(operator)
-(*) ^operator => Section("*")
-{operator: Operator} ^operator => Section(operator)
-{operator: Operator{!= "-" && != "!" && != "^"} | "*"}{operand} ^operator => Section(operator, operand)
+[x] ^operator => Section(operator: [x])
+[x]{b} ^operator => Section(operator: [x], operand: b)
 
 Cases := Program{written.nonempty && written.every(.code ~= (*, " => ", *))}
 if &+= {
@@ -109,7 +105,7 @@ if &+= {
 }
 Program &+= {
   as (=== Compiler) => Program(code: external ** written.map(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *))?.type
-    ?? (arm.case ~= (Operator, *) ? ("*{", arm.case, "}") : ("*{== ", arm.case, "}")), "} => ", arm.value)).join(\n))
+    ?? ((arm.case as Program)() is Section ? ("*{", arm.case, "}") : ("*{== ", arm.case, "}")), "} => ", arm.value)).join(\n))
   otherwise => ("{subject_of_case: *} => (", code, ")") as String as Program as Compiler
 }
 

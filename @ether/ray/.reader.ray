@@ -94,16 +94,78 @@ continuation after {at} =>
     more := spelled indent from found
   found
 
+quote := external character "
+opening := external character (
+closing := external character )
+opening_list := external character [
+closing_list := external character ]
+opening_block := external character {
+closing_block := external character }
+
+// The bracket that closes `c`, or nothing when `c` opens none.
+closer of {c} =>
+  found := nothing
+  if character c is opening then
+    found := closing
+  if character c is opening_list then
+    found := closing_list
+  if character c is opening_block then
+    found := closing_block
+  found
+
+// Whether `c` closes a bracket.
+closes {c} =>
+  found := nothing
+  if character c is closing then
+    found := yes
+  if character c is closing_list then
+    found := yes
+  if character c is closing_block then
+    found := yes
+  found
+
 // Where the statement starting at `at` ends: the first line end not followed by a line deeper than `base` (R0.1), or `to`.
 statement end from {at} to {to} below {base} =>
   here := at
   found := to
+  open_ones := nothing
   while here do
     if same here to then
       here := nothing
     if here then
       c := here . character
-      if character c is end then
+      // a statement goes on while a bracket it opened is open (quoted text holds none)
+      shut := closer of c
+      if shut then
+        pushed := node
+        set pushed . shut to shut
+        set pushed . next to open_ones
+        open_ones := pushed
+      unless shut then
+        if open_ones then
+          expected := open_ones . shut
+          if character c is expected then
+            open_ones := open_ones . next
+        if character c is quote then
+          skipping := here . next
+          while skipping do
+            if same skipping to then
+              skipping := nothing
+            if skipping then
+              d := skipping . character
+              if character d is end then
+                skipping := nothing
+            if skipping then
+              if character d is quote then
+                here := skipping
+                skipping := nothing
+              if skipping then
+                skipping := skipping . next
+      ending := nothing
+      unless open_ones then
+        if character c is end then
+          ending := yes
+      if ending then
         deeper := nothing
         next := here . next
         inside := next
@@ -398,6 +460,27 @@ words from {at} to {limit} =>
       here := here . next
   first
 
+// The first place from `at` that is not a space or a line end, or nothing before `to`.
+blank from {at} to {to} =>
+  here := at
+  found := nothing
+  while here do
+    if same here to then
+      here := nothing
+    if here then
+      c := here . character
+      skip := nothing
+      if character c is space then
+        skip := yes
+      if character c is end then
+        skip := yes
+      unless skip then
+        found := here
+        here := nothing
+      if here then
+        here := here . next
+  found
+
 // The statements of a body from `from` to `to`, each at the body's indentation `base`: a chain of steps.
 plan {from} to {to} below {base} in {scope} =>
   first := nothing
@@ -406,6 +489,8 @@ plan {from} to {to} below {base} in {scope} =>
   while at do
     if same at to then
       at := nothing
+    if at then
+      at := blank from at to to
     if at then
       limit := statement end from at to to below base
       made := step from at to limit in scope
@@ -624,42 +709,12 @@ many_rule := latest rule
   made
 
 // ---------------------------------------------------------------- text written in quotes
-quote := external character "
 Unquoted := everything but quote
 Quoted := Unquoted repeated
 "{text: Quoted}" =>
   external span text
 
 // ---------------------------------------------------------------- brackets: what they hold is balanced
-opening := external character (
-closing := external character )
-opening_list := external character [
-closing_list := external character ]
-opening_block := external character {
-closing_block := external character }
-
-// The bracket that closes `c`, or nothing when `c` opens none.
-closer of {c} =>
-  found := nothing
-  if character c is opening then
-    found := closing
-  if character c is opening_list then
-    found := closing_list
-  if character c is opening_block then
-    found := closing_block
-  found
-
-// Whether `c` closes a bracket.
-closes {c} =>
-  found := nothing
-  if character c is closing then
-    found := yes
-  if character c is closing_list then
-    found := yes
-  if character c is closing_block then
-    found := yes
-  found
-
 // Balanced text: every bracket it opens it closes, in order, and it closes none it did not open; quoted text is skipped.
 balanced {kind} {from} {to} =>
   open_ones := nothing

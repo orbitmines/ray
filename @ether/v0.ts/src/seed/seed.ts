@@ -369,7 +369,9 @@ export class Seed {
   plan_by(planner: Rule, body: Code): Step[] {
     this.planned++;
     const frame = new Node(planner.head.frame), names = planner.pieces.filter(p => 'cap' in p).map(p => (p as { cap: string }).cap);
-    const base = this.base(body.text, body.b);
+    // the body's statements are at the indentation of its first line with anything on it
+    let first = body.b; const { end, space } = this.learned!; while (first < body.e && (body.text.s.startsWith(end, first) || body.text.s.startsWith(space, first))) first++;
+    const base = this.base(body.text, first);
     [this.place(body.text, body.b), body.e >= body.text.s.length ? undefined : this.place(body.text, body.e), this.chain_of(base), body.frame].forEach((v, i) => frame.members.set(names[i], v));
     const steps: Step[] = [];
     const span = (from: unknown, to: unknown): Span => { const f = this.where.get(from as Node)!; const t = to as Node | undefined; return { text: f.text, b: f.i, e: t === undefined ? f.text.s.length : this.where.get(t)!.i }; };

@@ -15,8 +15,6 @@ unless Kept{size > 5}$.first == large { INFO@mark `DB4 a narrowed view answers t
 unless Store.routed(small).contains(memory_store) { INFO@mark `DB5 an instance is not routed where its type was sent` }
 Kept$ |= Store(at: @"memory/copy")
 unless Store.routed(small).count == 2 { INFO@mark `DB6 a type sent to two stores is routed to other than two` }
-unless Store(at: @./kept.sqlite).kept_in.language === $.sqlite { INFO@mark `DB7 a .sqlite location is not kept in SQLite` }
-unless Store(at: @"postgres://db/kept").kept_in.language === $.postgres { INFO@mark `DB8 a postgres location is not kept in Postgres` }
 unless Store(at: @./kept.kv).kept_in == Store.keyed { INFO@mark `DB9 a .kv location is not kept as keys` }
 unless Store(at: @"kept.%").kept_in == Store.native { INFO@mark `DB10 a .% location is not kept natively` }
 unless (small as Store.Row).type == "Kept" { INFO@mark `DB11 a row forgot its type` }

@@ -117,23 +117,12 @@ Access &+= {
   writes => allows(`=`)
   executes => allows(`()`)
 
-  static Enforcing := class = grants: Grant[] {
-    target => grants.first?.target
-    local => target is Location && !target.scheme
-  }
-  static Optimizations := {
-    {enforcing: Enforcing{local && grants.every(.access.who is Accessor.Permission)}} => external os `chmod` (enforcing.target as String, enforcing.grants.access as $.posix)
-    {enforcing: Enforcing{local}} => external os `setfacl` (enforcing.target as String, enforcing.grants.access as $.acl)
-    {enforcing: Enforcing{target is Device.Capability && OS().platform == "android"}} => external os `request_permissions` (enforcing.grants as $.android)
-    {enforcing: Enforcing{target is Device.Capability}} => external io `permissions` (enforcing.grants as $.permissions)
-  }
-  static enforced (grants: Grant[]) => Compiler.reduced(Enforcing(grants), Optimizations)
 }
 
 Device &+= {
   granted: Grant[] = []
 
   permission (capability: Capability) => granted{.target == capability}.last -- (. ? .state : Grant.State.prompt)
-  grant (capability: Capability, access: Access = Access(who: Accessor.Permission.localhost)): static => this ~~ granted.push Grant(access, target: capability) ~~ Access.enforced([granted.last])
+  grant (capability: Capability, access: Access = Access(who: Accessor.Permission.localhost)): static => this ~~ granted.push Grant(access, target: capability)
   allows (capability: Capability) => permission(capability) == Grant.State.granted
 }

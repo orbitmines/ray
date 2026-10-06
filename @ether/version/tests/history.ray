@@ -183,44 +183,15 @@ unless step.reversed.reversed.forwards == 1 { INFO@mark `TR6 reversing twice doe
 unless Program(code: { 1 }).rewrites.empty { INFO@mark `FWC1 a program nothing rewrote has rewrites` }
 unless Program(code: { 1 }).revoked(Compiler.folding) { INFO@mark `FWC2 revoking a rule nothing used loses the program` }
 
-// End-to-end encryption: a history that is not public is stored as ciphertext for its readers; its lines keep label, parents, stamp, key and signature in plaintext (L§9.2).
-crypt := History(repository: Repository())
-crypt.commit(ada, Program(code: { .secret = "kept" }))
-crypt.commit(ada, Program(code: { .secret = "kept twice" }))
-crypt_first := crypt.since(None).first
-crypt_line := crypt.head.written(above: crypt.head.previous)
-crypt_text := Language.ray.write(crypt).at(crypt.id as String + ".ray").content as String
-if crypt.public { INFO@mark `CRYPT1 a history is public by default` }
-unless crypt_first.wraps.some(.key == crypt_first.id) && crypt_first.key == crypt_first.id { INFO@mark `CRYPT2 the first commit does not bring a content key of its own` }
-unless crypt.head.key == crypt_first.id { INFO@mark `CRYPT3 a line does not name the content key it uses` }
-if crypt_text ~= "kept" { INFO@mark `CRYPT4 a change is written in plaintext` }
-unless crypt_line ~= ⊢(crypt.head.id as String + "\\ with (@me = @ada; now = ") { INFO@mark `CRYPT5 a line's label, who and stamp are not in plaintext` }
-unless crypt_line ~= "; key = " && crypt_line ~= "; signature = " { INFO@mark `CRYPT6 a line's key and signature are not in plaintext` }
-unless crypt.value.secret == "kept twice" { INFO@mark `CRYPT7 a reader does not read an encrypted history` }
-crypt_back := (crypt_text as Program) as History
-unless crypt_back.head.sealed && crypt_back.head.change == None { INFO@mark `CRYPT8 a line read back holds its change other than as ciphertext` }
-unless crypt_back.value.secret == "kept twice" { INFO@mark `CRYPT9 a reader does not read an encrypted history back from its lines` }
-unless crypt.head.covers(crypt.head.signature) && crypt.head.authentic { INFO@mark `CRYPT10 the signature does not cover the line with its ciphertext` }
-if (crypt.head.rewritten(None) ~~ (.sealed = crypt_first.sealed)).authentic { INFO@mark `CRYPT11 a line whose ciphertext was replaced is authentic` }
-unless (crypt_first.rewritten(None) ~~ (.sealed = crypt.head.sealed)).opened is Diagnostic { INFO@mark `CRYPT12 a ciphertext moved to another line opens there` }
-unless crypt.content_key(crypt.current_key, []) is Abstract { INFO@mark `CRYPT13 the content key opens for nobody's instance key` }
-if Compiler.reduced(crypt, Compiler.cached).cache_files.first.content as String ~= "kept" { INFO@mark `CRYPT14 a cache of an encrypted history is in plaintext` }
-unless crypt.tree.at(crypt.id as String + ".ray") { INFO@mark `CRYPT15 a backend is given the values of an encrypted history instead of its lines` }
-unless Compiler.levels.contains(Compiler.encrypted) { INFO@mark `CRYPT16 encryption is not a storage level` }
-
-// A public history stays plaintext and has no content key.
-crypt_open := History(repository: Repository()).publish
-crypt_open.commit(ada, Program(code: { .open = 1 }))
-unless crypt_open.head.written() ~= ".open = 1" { INFO@mark `CRYPT17 a public history is encrypted` }
-if crypt_open.head.key || crypt_open.head.wraps.nonempty { INFO@mark `CRYPT18 a public history has a content key` }
-
-// Merging happens where the history is read: two branches under one key merge as any other.
-crypt_branch := crypt.fork
-crypt.commit(ada, Program(code: { .x = 1 }))
-crypt_branch.commit(ada, Program(code: { .y = 2 }))
-unless crypt_branch.head.key == crypt.head.key { INFO@mark `CRYPT19 a fork does not keep the content key` }
-crypt.merge(crypt_branch)
-unless crypt.head.merged && crypt.value.x == 1 && crypt.value.y == 2 { INFO@mark `CRYPT20 a reader does not merge two branches of an encrypted history` }
+// Version control alone neither keys nor signs a line, and replays it as whoever replays it: who is attribution, not authority (W2.1).
+layer := History(repository: Repository())
+layer.commit(ada, 1)
+if layer.head.written() ~= "; key = " || layer.head.written() ~= "; signature = " { INFO@mark `LAYER1 version control alone keys or signs a line` }
+unless layer.value == 1 { INFO@mark `LAYER2 version control alone does not read a history that is not public` }
+if (History.Commit(who: ada, stamp: World.ether.clock.now, change: Program(code: { @me })).applied(None)) === ada { INFO@mark `AUTH1 version control replays a line as the character it names` }
+if Program(code: { @me }, who: ada).run === ada { INFO@mark `AUTH2 version control runs handed-over code as the character it names` }
+auth_logged := Run.log.commit(ada, Program(code: { @me })).head
+if Run.replay(auth_logged) === ada { INFO@mark `AUTH3 version control replays a logged run as the character it names` }
 
 // A stretch bound by a time holds from the commit current at that time; by a label or a commit, from that commit on.
 bnd := History()

@@ -20,6 +20,7 @@ cw := Instance.local.login(Character(name: "viewer"))
 cw_other := Instance.local.login(Character(name: "other"))
 unless (with (@me = cw) { cw ? true : false }) { INFO@mark `CW1 a character as a condition is false to itself` }
 if (with (@me = cw_other) { cw ? true : false }) { INFO@mark `CW2 a character as a condition is true to someone else` }
+unless (with (@me = cw) { cw.acting ? true : false }) { INFO@mark `COND1 a verified character as a condition is false to itself` }
 
 // A program runs as its who; its runs are logged for replay, as recorded.
 hg_giver := Instance.local.login(Character(name: "giver"))
@@ -109,6 +110,13 @@ unless hsk_seen is Verified && hsk_seen.proof.session === hsk_sr { INFO@mark `HS
 unless hsk_seen == hsk_a.acting { INFO@mark `HSK2 who was verified over the wire is not who was verified here` }
 if hsk_seen == hsk_b.acting { INFO@mark `HSK3 the other side is verified as oneself` }
 
+// An introduction is checked against its key log, and the character is made from that log: an identity told beside it is never taken.
+intro_forged := hsk_si.sent(Language.ray.write((name: "hsk-a", identity: ver_b.identity, log: hsk_a.identity.history,
+  by: hsk_a.key.published, signature: hsk_a.key.signed(hsk_si.binding))) as Byte[])
+intro_seen := hsk_peer.introduced(hsk_sr, intro_forged)
+if intro_seen.root == ver_b.root || intro_seen.policy().keys == ver_b.policy().keys { INFO@mark `INTRO1 an introduction keeps the identity it was told` }
+unless intro_seen.root == hsk_a.root && intro_seen.policy().certifies(hsk_a.key.published, World.ether.clock.now) { INFO@mark `INTRO2 an introduced character's identity is not the key log that was checked` }
+
 // Delegation: signed, scoped and expiring; the effective permission is the intersection.
 dlg_from := Instance.local.login(Character(name: "lender"))
 dlg := dlg_from.delegate(@me, Access(method: `()`), until: Time.now + 1 hour)
@@ -120,6 +128,19 @@ if Delegation(from: dlg_from, to: @me, until: Time.now + 1 day, signature: dlg.s
 unless Instance.local.delegated(dlg) == dlg_from.acting { INFO@mark `DLG6 a delegated principal is not the one who delegated` }
 unless Instance.local.delegated(dlg_from.delegate(@me, until: Time.now - 1 second)) is Diagnostic { INFO@mark `DLG7 an expired delegation is acted on` }
 unless Program(code: { @me }, who: dlg_from, delegation: dlg).run.proof.delegation === dlg { INFO@mark `DLG8 handed-over code does not run under its delegation` }
+
+// A delegation is bound to its holder: only the one it was given to, verified, acts on it; renaming the holder breaks its signature.
+hold_from := Instance.local.login(Character(name: "hold-from"))
+hold_to := Instance.local.login(Character(name: "hold-to"))
+hold_other := Instance.local.login(Character(name: "hold-other"))
+hold := hold_from.delegate(hold_to, Access(method: `()`), until: Time.now + 1 hour)
+unless Instance.local.delegated(hold, by: hold_to) == hold_from.acting { INFO@mark `HOLD1 the one a delegation was given to does not act on it` }
+unless Instance.local.delegated(hold) is Diagnostic { INFO@mark `HOLD2 a delegation given to someone else is acted on by whoever presents it` }
+unless Instance.local.delegated(hold, by: hold_other) is Diagnostic { INFO@mark `HOLD3 a delegation is acted on by someone it was not given to` }
+unless Instance.local.delegated(hold, by: Character(name: "hold-to")) is Diagnostic { INFO@mark `HOLD4 a character built from the holder's name acts on a delegation` }
+if Delegation(from: hold_from, to: hold_other, scope: hold.scope, until: hold.until, signature: hold.signature).valid() { INFO@mark `HOLD5 a delegation renamed to another holder keeps its signature` }
+unless Instance.local.host_for(hold_other, hold) is Diagnostic { INFO@mark `HOLD6 a guest is hosted under a delegation given to someone else` }
+unless Program(code: { @me }, who: hold_from, delegation: hold).run is Diagnostic { INFO@mark `HOLD7 handed-over code runs under a delegation its runner was not given` }
 
 // Recovery: the recovering machine writes the rotation itself; guardians get only its hash and sign it bound to their session.
 rcv_c := Instance.local.login(Character(name: "recovering"))
@@ -232,3 +253,78 @@ unless anw{w => w.by.recognised(grk_all.inbox, anw_info, w.tag, w.sealed)}.count
 if anw.some(w => w.by.recognised(grk_past.inbox, anw_info, w.tag, w.sealed)) { INFO@mark `ANW3 someone not a reader recognises a wrap` }
 unless anw.every(.tag.count == anw.first.tag.count && .sealed.count == anw.first.sealed.count) { INFO@mark `ANW4 the writer's wrap differs in shape from a reader's` }
 if Language.ray.write(sel.since(None).map(.wraps)) ~= Language.ray.write(sel_writer.inbox.published.public) { INFO@mark `ANW5 a sealed history's wraps name its writer` }
+
+// End-to-end encryption: a history that is not public is stored as ciphertext for its readers; its lines keep label, parents, stamp, key and signature in plaintext (L§9.2).
+ada := Instance.local.login(Character(name: "ada"))
+crypt := History(repository: Repository())
+crypt.commit(ada, Program(code: { .secret = "kept" }))
+crypt.commit(ada, Program(code: { .secret = "kept twice" }))
+crypt_first := crypt.since(None).first
+crypt_line := crypt.head.written(above: crypt.head.previous)
+crypt_text := Language.ray.write(crypt).at(crypt.id as String + ".ray").content as String
+if crypt.public { INFO@mark `CRYPT1 a history is public by default` }
+unless crypt_first.wraps.some(.key == crypt_first.id) && crypt_first.key == crypt_first.id { INFO@mark `CRYPT2 the first commit does not bring a content key of its own` }
+unless crypt.head.key == crypt_first.id { INFO@mark `CRYPT3 a line does not name the content key it uses` }
+if crypt_text ~= "kept" { INFO@mark `CRYPT4 a change is written in plaintext` }
+unless crypt_line ~= ⊢(crypt.head.id as String + "\\ with (@me = @ada; now = ") { INFO@mark `CRYPT5 a line's label, who and stamp are not in plaintext` }
+unless crypt_line ~= "; key = " && crypt_line ~= "; signature = " { INFO@mark `CRYPT6 a line's key and signature are not in plaintext` }
+unless crypt.value.secret == "kept twice" { INFO@mark `CRYPT7 a reader does not read an encrypted history` }
+crypt_back := (crypt_text as Program) as History
+unless crypt_back.head.sealed && crypt_back.head.change == None { INFO@mark `CRYPT8 a line read back holds its change other than as ciphertext` }
+unless crypt_back.value.secret == "kept twice" { INFO@mark `CRYPT9 a reader does not read an encrypted history back from its lines` }
+unless crypt.head.covers(crypt.head.signature) && crypt.head.authentic { INFO@mark `CRYPT10 the signature does not cover the line with its ciphertext` }
+if (crypt.head.rewritten(None) ~~ (.sealed = crypt_first.sealed)).authentic { INFO@mark `CRYPT11 a line whose ciphertext was replaced is authentic` }
+unless (crypt_first.rewritten(None) ~~ (.sealed = crypt.head.sealed)).opened is Diagnostic { INFO@mark `CRYPT12 a ciphertext moved to another line opens there` }
+unless crypt.content_key(crypt.current_key, []) is Abstract { INFO@mark `CRYPT13 the content key opens for nobody's instance key` }
+if Compiler.reduced(crypt, Compiler.cached).cache_files.first.content as String ~= "kept" { INFO@mark `CRYPT14 a cache of an encrypted history is in plaintext` }
+unless crypt.tree.at(crypt.id as String + ".ray") { INFO@mark `CRYPT15 a backend is given the values of an encrypted history instead of its lines` }
+unless Compiler.levels.contains(Compiler.encrypted) { INFO@mark `CRYPT16 encryption is not a storage level` }
+
+// A public history stays plaintext and has no content key.
+crypt_open := History(repository: Repository()).publish
+crypt_open.commit(ada, Program(code: { .open = 1 }))
+unless crypt_open.head.written() ~= ".open = 1" { INFO@mark `CRYPT17 a public history is encrypted` }
+if crypt_open.head.key || crypt_open.head.wraps.nonempty { INFO@mark `CRYPT18 a public history has a content key` }
+
+// Merging happens where the history is read: two branches under one key merge as any other.
+crypt_branch := crypt.fork
+crypt.commit(ada, Program(code: { .x = 1 }))
+crypt_branch.commit(ada, Program(code: { .y = 2 }))
+unless crypt_branch.head.key == crypt.head.key { INFO@mark `CRYPT19 a fork does not keep the content key` }
+crypt.merge(crypt_branch)
+unless crypt.head.merged && crypt.value.x == 1 && crypt.value.y == 2 { INFO@mark `CRYPT20 a reader does not merge two branches of an encrypted history` }
+
+// Every private key is a secret (`none.read`): stores skip it whatever it is called, and logging out zeroises and drops all of them, so the next login makes fresh ones.
+sct := Instance.local.login(Character(name: "secret-keeper"))
+Instance.local.certified(sct, World(name: "sct-world"))
+unless ["key", "inbox", "roots", "world_keys"].every(name => sct.fields{.name == name}.every(Visibility.secret(.))) { INFO@mark `SECRET1 a private key is held in a field someone may read` }
+unless Recovery(character: sct).fields{.name == "roots"}.every(Visibility.secret(.)) { INFO@mark `SECRET2 the root keys made for a recovery are held in a field someone may read` }
+if (sct as Store.Row).fields.some(.name is ("key" | "inbox" | "roots" | "world_keys")) { INFO@mark `SECRET3 a store writes a private key` }
+sct_root := sct.roots.first
+Instance.local.logout(sct)
+if sct.key || sct.inbox || sct.roots || sct.world_keys { INFO@mark `SECRET4 a secret field holds a value after logging out` }
+if sct_root.signed([1]).valid == true { INFO@mark `SECRET5 a root key outlives logging out` }
+Instance.local.login(sct)
+unless sct.key && sct.inbox { INFO@mark `SECRET6 logging in again does not make fresh keys` }
+if sct.policy().certifies(sct.key.published, World.ether.clock.now) { INFO@mark `SECRET7 a key made after logging out is certified without the root keys` }
+
+// Revoking and logging out compare principals by root: a verified copy revokes the grant made to the character, and logs it out.
+revk_owner := Instance.local.login(Character(name: "revk-owner"))
+revk_reader := Instance.local.login(Character(name: "revk-reader"))
+revk := none.read History(repository: Repository())
+revk.commit(revk_owner, 1)
+revk.shared(revk_reader, revk_owner)
+revk.unshared(revk_reader.acting, revk_owner)
+if Permissions.current.grants.some(.target === revk && .access.who === revk_reader) { INFO@mark `REVK1 a reader revoked by a verified copy keeps the grant` }
+unless revk.content_key(revk.current_key, [revk_reader]) is Abstract { INFO@mark `REVK2 a reader revoked by a verified copy holds the new key` }
+revk_leaving := Instance.local.login(Character(name: "revk-leaving"))
+Instance.local.logout(revk_leaving.acting)
+if Instance.local.logged_in(revk_leaving) { INFO@mark `REVK3 a verified copy logging out leaves the character logged in` }
+if revk_reader.answers_for(revk_reader) || Character(name: "revk-reader").answers_for(revk_reader) { INFO@mark `REVK4 a claimed character answers for a principal` }
+unless revk_reader.acting.answers_for(revk_reader) { INFO@mark `REVK5 a verified character does not answer for itself` }
+if revk_reader.acting.answers_for(revk_owner) { INFO@mark `REVK6 a verified character answers for another` }
+
+// A line runs as its who only when the runtime verified who signed it, and never with their live permissions.
+auth_ran := History.Commit(who: hg_giver, stamp: World.ether.clock.now, change: Program(code: { @me })).applied(None)
+if auth_ran is Verified && auth_ran.same(hg_giver) { INFO@mark `AUTH4 an unsigned line replays as the character it names` }
+if auth_ran is Live { INFO@mark `AUTH5 a replayed line is given live permissions` }

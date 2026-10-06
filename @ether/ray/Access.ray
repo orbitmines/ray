@@ -41,6 +41,9 @@ Accessor := Access{who is Accessor.Permission} {
 Visibility := class {
   policy = Accessor.Permission.local
 
+  // A secret is a field no one may read (`none.read`, W5.6): stores skip it and logging out drops it.
+  static secret (field) => field.access?.who == Accessor.Permission.none && `read` is field.access.method
+
   of (item) => item ? item.access?.who ?? of(item.parent) : policy
   narrowest (levels: Accessor.Permission[]) => levels.min ?? policy
   derived (sources) => narrowest(sources.map(of(.)))
@@ -61,16 +64,24 @@ Grant := class = access: Access, target: * {
     : access.who is Accessor.Permission && access.who.reaches(Run.current.actor) ? State.granted
     : State.prompt
 
-  names (value) => target === value || target is Program && (target == value || target() === value)
-  covers (who: Character, method, target) => (access.who === who || who is access.who) && access.allows(method) && names(target)
-    && (!access.filter || access.filter.entered(this, None))
+  // A grant's expression and filter are read to check it, never run for what they do: only one that changes nothing
+  // outside itself and terminates is granted, so checking a permission runs no one's code. Reading the time stays
+  // allowed (`@bob.read history{from Time.now}`, L§9.2), so this is `!Effecting`, not `Pure`.
+  static checkable (expression) => !(expression is Program) || !(expression is Effecting) && expression is Terminating
+
+  names (value) => target === value || target is Program && (target == value || checkable(target) && target() === value)
+  // Who is compared as a principal (`answers_for`): identity in the core, verified roots with @ether/security.
+  covers (who: Character, method, target) => who.answers_for(access.who) && access.allows(method) && names(target)
+    && (!access.filter || checkable(access.filter) && access.filter.entered(this, None))
 }
 
 Permissions := class = grants: Grant[] = [] {
   static current = Permissions()
   allowed: Grant?
 
-  grant (access: Access, target) => grants.push Grant(access, target) -- target
+  grant (access: Access, target) => Grant.checkable(target) && Grant.checkable(access.filter)
+    ? grants.push Grant(access, target) -- target
+    : ERROR@Access `a grant names an expression that changes nothing and terminates`
   allows (who: Character, method, target) => grants{.covers(who, method, target)}.first ~~ (allowed = . if .)
 }
 

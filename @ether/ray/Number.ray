@@ -3,8 +3,7 @@ Number := class: Ray {
   { }{value} ^punctuation => [value] * this
   pred => next
   is_zero => next === None
-  nonzero => !is_zero
-  holds => nonzero
+  nonzero | holds => !is_zero
   as (=== boolean) => nonzero
   [&&, ||, !&&, !||, x||, x!||].for operator => {
     `operator` (b) => (this as boolean) operator b

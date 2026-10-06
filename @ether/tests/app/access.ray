@@ -41,3 +41,12 @@ nrw_target := (lamp: 1)
 Character{presence === nrw_room}.read nrw_target
 unless Permissions.current.allows(nrw_near, `size`, nrw_target) { INFO@mark `NRW1 a grant to a narrowing refuses who satisfies it` }
 if Permissions.current.allows(nrw_far, `size`, nrw_target) { INFO@mark `NRW2 a grant to a narrowing allows who does not satisfy it` }
+
+// Checking a permission runs no one's code: a grant whose expression or filter has effects is refused when granted, and never run.
+purg_reader := Character(name: "purg-reader")
+purg_count := Permissions.current.grants.count
+unless Permissions.current.grant(Access(who: purg_reader, method: Access.Reading), Program(code: { IO().output("leak") })) is Diagnostic { INFO@mark `PURG1 a grant naming an expression with effects is granted` }
+unless Permissions.current.grant(Access(who: purg_reader, method: Access.Reading, filter: Program(code: { IO().output("leak") })), (lamp: 1)) is Diagnostic { INFO@mark `PURG2 a grant whose filter has effects is granted` }
+unless Permissions.current.grants.count == purg_count { INFO@mark `PURG3 a refused grant is kept` }
+if Grant(Access(who: purg_reader, method: Access.Reading), Program(code: { IO().output("leak") })).names("leak") { INFO@mark `PURG4 checking a grant runs an expression with effects` }
+if Permissions.current.grant(Access(who: purg_reader, method: Access.Reading), Program(code: { Time.now })) is Diagnostic { INFO@mark `PURG5 a grant reading the time is refused` }

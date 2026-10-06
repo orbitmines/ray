@@ -30,9 +30,10 @@ Network &+= {
 
   static Hosts := class {
     static equivalences => @/etc/hosts.content as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
-    static table: (from: Location, to: Location)[] = []
-    static redirect (from: Location, to: Location) => table.push (from, to) -- to
-    static mapped (name) => table{.from as String ==<in: .fold_case> name as String}.last?.to
+    // A redirect is a world name (W1.9): `@name = holder`, so it passes the world's write check like any name, and
+    // overwriting someone's name needs their grant (World.ray). There is no table of redirects beside the names.
+    static redirect (name: String, to: Location) => World.current["@", name] = to
+    static mapped (name) => World.current["@", name as String] -- (held => held is Location ? held : None)
     static resolved (name: String) => mapped(name) ?? DomainName(equivalences.rows{name.fold_case is .names.fold_case#}.last?.address ?? name)
   }
 
@@ -57,8 +58,12 @@ Network &+= {
 
   static Stream := class = player: Character, location: Location {
     watchers => Character#{.presence == location}
-    watch (character: Character): static => this ~~ character.presence = location
-    moved (to: Location): static => this ~~ (watchers.presence = to) ~~ (.location = to)
+    // A character's presence is theirs: watching or moving them takes their grant to write it (`&@.may`), so a stream
+    // moves only the watchers who let it, and only its player's grant moves the stream.
+    watch (character: Character): static => &@.may(`=`, character) ? this ~~ character.presence = location
+      : ERROR@Access `moving a character's presence needs their grant`
+    moved (to: Location): static => &@.may(`=`, player) ? this ~~ (watchers{&@.may(`=`, .)}.presence = to) ~~ (.location = to)
+      : ERROR@Access `moving a stream needs its player's grant`
   }
 
   static Shard := class = character: Character, parts: *? {

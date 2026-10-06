@@ -25,7 +25,17 @@ Location := class: Hierarchy (
 
   shadowing: Location?
   [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent)?[name]
+
+  name => segments.last ?? ""
+  files => this is Directory ? children.map(.files).flatten : [this]
+  at (relative: String) => relative.split("/"){.nonempty}.reduce(held = this => held?.children.find(.name == .))
+  placed (relative: String, bytes): static => relative.split("/"){.nonempty} -- (segments =>
+    (children.find(.name == segments.first) ?? add(Location(path: (path, segments.first){.nonempty}.join("/"), content: segments.count == 1 ? bytes : None)))
+      -- (next => segments.count == 1 ? next : next.placed(segments.rest.join("/"), bytes)))
+    -- this
 }
+Directory := Location{content === None}
+Executable := Location{access is Access(method: `()`)}
 
 Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
 @{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location

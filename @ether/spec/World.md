@@ -32,6 +32,7 @@ From the drafts review (2026-10-06).
   unique), found by the `{PREFIX}{name}` lookup before the world's children and its fallback. A redirect assigns a getter,
   `world.@a = => world.@b`. Overwriting a held name needs write access (`&@.may`), and answers
   `Program(name: "overwrite a name", goal: …)` otherwise.
+  **(2026-10-06)** Names compare and reserve by the UTS #39 skeleton of their case fold (`String.skeleton`, from `Unicode.confusables` of the selected Unicode version, §4), so a name confusable with a held one finds that one; a name that mixes scripts and is confusable (`mixed_script && skeleton != .`, §5) is refused with an error.
 - **W1.10 The standard `@` names** — **Decided (draft)**; none is defined in v0 (`@localnetwork` is used in
   `Network/Network.ray:82`, `reservable_names` in `World.ray:165–175`). *`Ether.ray:3–27`*
   - `@ether` is `` @`ether.orbitmines.com:37839` ``; `@me | @private` is `global` (on a computer the root is `@me`; in a player
@@ -464,6 +465,7 @@ W9 itself is decided below (`choose` resolves through `@me.choose`).
   `with` setting, `with Choice.algorithm = WaveFunctionCollapse { choose Room }`; the computer's default stays a weighted random
   pick. *IDE:687; ALM:2040*
   **Follows (2026-10-06):** as recommended: the chooser is a `with` setting (`with Choice.algorithm = WaveFunctionCollapse { choose Room }`), and the default stays a weighted random pick, from L§6.3 `with` and choices being optimisations.
+  **(2026-10-06):** a choice is an abstract Program run by its chooser, `choose T` is `Program(who: @me, name: "choose", goal: T)` and `choose? T ?? d` the same with `d` as its first attempt; `Choice` is the narrowing `Program{name == "choose"}`. Randomness has one selector, `x.random`. The algorithm stays a `with` setting of whoever performs the choice.
 - **W9.3 A choice put to players carries its reason** — **Q**. The journal attaches an explanation to `@players.choose`, keeps the
   results for later, and treats a human's answer as an untrusted external one with an acceptance weight. Recommend: the doc comment
   above a `choose` is the quest text shown to the player, and a player's answer enters as a weighted alternative (U8), not as a
@@ -526,6 +528,13 @@ Answers from 2026-09-30.
     commit's `who`) is *claimed*. `verified == verified` compares root identities (constant-time); a claimed character
     is never `==` a verified one. `&caller`/`@me` only ever hold verified principals, and no user code can make one.
     Access checks see only `&caller`. Names, UUIDs included, are for addressing and visibility, never evidence.
+    **Follows (2026-10-06):** grants, delegations, registries and revocation match principals by two methods, never by
+    `===` (a verified character is a copy): `a.same(b)` compares roots (a verified one's proof root, else the key log's
+    of a character held here), and `a.answers_for(who)` holds only for a verified `a` that is the same as `who`, or
+    satisfies `who` when it is a narrowing; a claimed character answers for nothing. The core defines both as identity
+    (`same` is `===`), so the core never needs Security to check a grant, and Security overrides them. Checking a
+    permission runs no one's code: a grant's expression and filter must change nothing outside themselves and terminate
+    (`!Effecting`, `Terminating`; reading the time stays allowed), or the grant is refused when made.
   - **Keys.** Each instance hosting a character has its own key pair, whose private half never leaves it, certified by
     the character's root authority ("this instance key speaks for me, until T, for these scopes"). The root is a
     **policy**, not one key: the character's first commit declares an `Identity` with its current root keys, the digest
@@ -537,11 +546,20 @@ Answers from 2026-09-30.
   - **Handshake.** Noise XX: ephemeral X25519 keys per session (forward secrecy), each side signs the transcript with
     its instance key and presents the root-signed certificate; the verifier checks signature, chain, the key log at that
     point (unrevoked) and scope/expiry. The result is a verified principal for the session.
+    **Follows (2026-10-06):** an introduction sends the key log, and the character is made from that log: its identity
+    is derived from the log that was checked, and an `identity` told beside it is never taken.
   - **History is attribution, not authority.** Every commit is signed by its `who`'s instance key. Replaying
     `with (@me = @who)` lines runs them as recorded, checked against who's key log at the commit's stamp; it never gives
     the replayer who's live permissions. Becoming another character (`@me = x`) needs x's grant.
+    **Follows (2026-10-06):** version control alone runs a line (`applied`, `Program.run`, `Run.replay`) as whoever
+    replays it, never `with (@me = who)` from its text; only `@ether/security` runs it `with (@me = signer)`, and only
+    for a signer it verified, as of the line's stamp (so never `Live`). Version does not import security, so which
+    definition holds never depends on load order.
   - **Delegation.** Handed-over code and guests hosted for someone run only with that someone's signed, scoped,
     expiring delegation, and with the intersection of the delegated and the local permissions.
+    **Follows (2026-10-06):** a delegation is bound to its holder, never a bearer token: its signature covers `to` (a
+    character by its root, or a narrowing), and it is acted on only by whoever presents it as the verified `to`
+    (`Instance.delegated(delegation, by)`; hosting a guest presents the guest).
   - **Recovery handshake.** A lost device is revoked by the remaining root authority. A lost root is recovered without
     any guardian choosing the new key: the recovering machine makes its own new root keys and writes the rotation event,
     then opens a recovery handshake with each guardian and sends only the event's hash; a guardian verifies the person by
@@ -557,17 +575,26 @@ Answers from 2026-09-30.
     Per-world instance keys, each certified by the root, are optional, for unlinkability.
   - **Storage.** Private keys are `none`-readable (W5.6), never in a history or cache level. Logging out zeroises
     every key on the character, whichever field holds it (Decided, user, 2026-10-06; L§9.2).
+    **Follows (2026-10-06):** a secret is a `none.read` field, and every private key is one: `Entity.key`, and
+    Security's `inbox`, `roots`, `world_keys` and `Recovery.roots` (pseudonym keys are derived from `key`, never kept).
+    Stores skip fields by access (`Visibility.secret`), not by name. Logging out zeroises every key a secret field holds
+    (a key, or a list of keys or of tuples holding keys) and sets the field to None, leaving everything else (presence,
+    identity); the next login makes fresh keys (`??=`), which are certified only once the root keys sign for them.
   - **Its own project (user, 2026-10-06).** All of this is the project `@ether/security`; `@ether/network` is its own
     project and depends on it. Neither is imported by default, and comparing characters errs in the language unless one
     of them is (`ERROR@Security`); importing it replaces that with the verified comparison above.
+    **Follows (2026-10-06):** networking changes no one else's state without a grant: a redirect is a world name
+    (`@name = holder`, through the world's write check, W1.9), and a stream moves a character's presence only with
+    that character's grant.
   - **Algorithms are chosen by the root (user, 2026-10-06).** Every key names its algorithm, a language (`$/ed25519`,
     `$/x25519`, `$/noise`, …), and the root policy says which ones its keys use; signing, verifying and the handshake
     use whatever the keys name, so nothing is fixed to one algorithm and changing one is a key event. Only Ed25519,
     X25519 and Noise XX are implemented for now; other algorithms are not being added.
   - **Where it lives (2026-10-06).** All of this is the subproject `@ether/security` (`@ether/security/`, L§9.1), which
     `@ether/network` (`@ether/network/`) imports; the core imports neither. Without it, comparing characters is an error
-    (`ERROR@Security`), `@me = x` sets `x` as given, and commits are signed (`History.Commit.signature`, `relies`, `hash`)
-    but never verified. The algorithms are the languages `$/ed25519` (over `$/sha512`), `$/x25519`, `$/chacha20poly1305`
+    (`ERROR@Security`), `@me = x` sets `x` as given, and commits carry no signature: a commit is `id`, `who`, `stamp`,
+    `change`, `from`, `versions`, and Security adds `relies`, `signature`, `key`, `wraps`, `sealed`, the `encrypted`
+    storage level and signing (`committed`) to it (security imports version; version imports nothing of security). The algorithms are the languages `$/ed25519` (over `$/sha512`), `$/x25519`, `$/chacha20poly1305`
     and `$/noise`, whose defaults are named once, in `Identity.algorithms`.
 - **W2.4** Spawning, login/logout/swap and deletion with a cancel window are implemented now, from the
   entrypoint drafts.

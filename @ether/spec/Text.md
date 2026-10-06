@@ -214,6 +214,7 @@ Answers from 2026-09-30.
 - **X3.5** Scripts are Char narrowings from the tables: `Char.Latin`, `Char.Arabic`.
 - **X3.6** Endianness is a direction on the bytes: little-endian reads them right-to-left, and a single
   byte is the same either way.
+  (2026-10-06: no `Endianness` enum; `Unicode.LittleEndian` is a narrowing of a transformation format whose bytes are `<-` the big-endian ones.)
 - **X3.7** A pinned Unicode version is fetched once and never refetched (cached under `@ether`, X3.3);
   `latest` refetches on an explicit update.
 - **X4.4** Storage encodings are deferred with X4.1; choosing them from statistics stays the store's rule.

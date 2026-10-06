@@ -7,25 +7,20 @@ Node &+= {
     contains (x) => conjoined.contains(x)
   }
 
-  properties => fields
-
   as (=== String) => (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)
 
-  inverse: Node?
+  inverse | reversible: Node?
   ⁻¹ | ^-1 => inverse
-  reversible => inverse
   inverted_by (backward) => (inverse = backward) -- backward.inverse = this -- this
 
-  right-to-left await => Program.until(() => this && (!(this is Program) || is_terminal))
+  right-to-left await | pending => Program.until(() => this && (!(this is Program) || is_terminal))
     -- this is Program ? results.last : this
-  right-to-left pending => await this
 
   right-to-left never => never -- ERROR `happened, and was said never to` if this
 
   chosen_within (width) => components.random
-  right-to-left choose => chosen_within(1)
 
   erred => diagnostics?.nonempty ?? false
   as (=== boolean) => !erred
@@ -54,7 +49,7 @@ Possibilities &+= {
   erred => values.every(.erred)
   continuous => count is ∞ && !values.first?.next
   measure (within: Possibilities = this) => continuous ? values.last - values.first
-    : count is ∞ ? (1 -> +1).map(n => values{. ∈ within.values[..<n]}.count / n).last
+    : count is ∞ ? (1 -> +1).map(n => values{within.values[..<n].contains(.)}.count / n).last
     : count
 }
 
@@ -211,13 +206,14 @@ Node &+= {
   is_unique<in: Program?> => (&){in ? (. ==<in: in> this) : . == this}.count == 1
 }
 
-∀{ }{name} ∈ {domain}: {predicate} ^keyword => domain.every(Program(code: external ** predicate, parameters: external ** name))
-∃{ }{name} ∈ {domain}: {predicate} ^keyword => domain.some(Program(code: external ** predicate, parameters: external ** name))
-∃{ }{name}: {type} {predicate} ^keyword => type#.some(Program(code: external ** predicate, parameters: external ** name))
-∄{ }{name}: {type} {predicate} ^keyword => !type#.some(Program(code: external ** predicate, parameters: external ** name))
-Node &+= {
-  ∈ (type) => . is type || (type.contains && type.contains(this))
-  ∉ (type) => !(this ∈ type)
+forall{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.every(Program(code: external ** predicate, parameters: external ** name))
+exists{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.some(Program(code: external ** predicate, parameters: external ** name))
+exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => type#.some(Program(code: external ** predicate, parameters: external ** name))
+!exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => !type#.some(Program(code: external ** predicate, parameters: external ** name))
+mathematics := suggest {
+  forall == ∀
+  exists == ∃
+  !exists == ∄
 }
 
 print (x) => IO.output(x as String) -- x

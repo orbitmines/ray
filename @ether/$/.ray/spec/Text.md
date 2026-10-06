@@ -107,6 +107,7 @@ From the drafts review (2026-10-06).
 - **X5.7 `UUID.version`; `choose{unique}`** — *Almanac.tsx:2345, 2348*. **Decided (Almanac):** a UUID exposes `.version`.
   **Q** (conflict): the Almanac writes `choose{unique} UUID.v1`, as X5.2 first did; the 2026-10-05 supersession writes
   `choose UUID.v1{unique}`. Recommend: keep 2026-10-05 and update the Almanac line.
+  **Answered (user, 2026-10-06):** keep 2026-10-05, `choose UUID.v1{unique}`; the Almanac line is to be updated.
 
 ## X6. IP (*IP.ray*)
 

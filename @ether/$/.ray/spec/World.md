@@ -75,6 +75,13 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   `@me.status = Online & Broadcast & @allow_proxy Proxy` (*`entrypoint.server.ray:1–9`*). Recommend: Status as components in
   groups (network, hosting, presence); assigning one replaces only its group's member (`status = offline` keeps `hosted`),
   `status -= broadcast` removes one (T2.4), and a component may carry a grant.
+  **Answered (user, 2026-10-06):** neither. A status is a narrowing of a character (`Online := Character{device.network.connected}`,
+  `Broadcasting := Character{jobs{serves @public}.nonempty}`), never an enum member. Any part of a program can be flagged to run only
+  under one (`serve(@public) if @me is Online`). Reading `@me.status` is inferred: the narrowings `@me` satisfies now. Writing it is a
+  **constraint** on what may run (`@me.status = Online & !Broadcasting`, or scoped `with (@me: …) { … }`): flagged parts that contradict
+  it do not run, so "do not disturb" suppresses rather than labels. A grant (`@allow_proxy Proxy`) is access on the narrowing;
+  `invisible` is a per-reader view (W2.16). Statuses not inferable from what runs (idle, busy) are narrowings over device input
+  history or a declared focus job. v0's `Status := enum` is to be replaced.
 - **W2.16 Values relative to the reader (`invisible`)** — **Q**. Recommend, generally: a field may store an expression evaluated
   per reader (`&@.last`), not when set; `invisible` is `online` to oneself and `offline` to others. Possible spelling: the field
   holds `=> …` (P5.3). *`.ray2/Character.ray:53–55`*

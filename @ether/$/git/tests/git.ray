@@ -7,7 +7,7 @@ vh := History(repository: Repository())
 vh.commit(ada, Program(code: { .greet = "hello" }))
 vh.commit(ada, Program(code: { .welcome = .greet; .greet = None }))
 
-unless Git.fidelity == Language.Fidelity.snapshot { INFO@mark `VC19 git does not keep snapshots` }
+if Git is Language.Lossless { INFO@mark `VC19 git does not keep snapshots` }
 unless Git is Language { INFO@mark `VC23 a backend is not a language` }
 unless $.git === Git { INFO@mark `VC44 $.git is not the git language` }
 
@@ -25,12 +25,12 @@ unless Git.Object("tree", []).id == "4b825dc642cb6eb9a060e54bf8d69288fbee4904" {
 unless Git<SHA256>.Object("tree", []).id == "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321" { INFO@mark `VC52 git's empty tree in a sha256 repository is not named as git names it` }
 unless ("[core]\n\trepositoryformatversion = 1\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === SHA256 { INFO@mark `VC53 a sha256 repository's config does not read as sha256` }
 unless Git<SHA256>.Object("blob", "hello\n" as Byte[]).id.count == 64 && Git.Object("blob", "hello\n" as Byte[]).id.count == 40 { INFO@mark `VC54 an object's id is not 64 hexadecimal digits in sha256 and 40 in sha1` }
-unless (([Language.Entry(name: "hello", content: "hello\n" as Byte[])] as Git<SHA256>.Tree).entries.first.id as Byte[]).count == 32 { INFO@mark `VC55 a tree entry's id is not 32 bytes in sha256` }
+unless (([Location(path: "hello", content: "hello\n" as Byte[])] as Git<SHA256>.Tree).entries.first.id as Byte[]).count == 32 { INFO@mark `VC55 a tree entry's id is not 32 bytes in sha256` }
 unless Git.hash === SHA1 && ("" as Git.Config).format === SHA1 && ("[core]\n\trepositoryformatversion = 0\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === SHA1 { INFO@mark `VC56 the object format is not sha1 by default` }
 unless (Git<SHA256>.write(vh).at("config").content as Git.Config).format === SHA256 { INFO@mark `VC57 a history written as sha256 git does not name its object format in its config` }
 vgs := Git.read(Git<SHA256>.written_to(vh, @./history-test-sha256))
 unless vgs.head.id == vh.head.id { INFO@mark `VC58 a history written as sha256 git and read back has other labels` }
 // Modes and pack object types are read and written by the header (https://git-scm.com/docs/gitformat-index#_index_entry, https://git-scm.com/docs/gitformat-pack#_object_types)
-unless "100755" as Git.Mode == Git.Mode.executable && Git.Mode.directory.code == "40000" && Git.Mode.link.entry == Language.Entry.Mode.link { INFO@mark `GIT1 a tree entry's mode is not read by its octal code` }
+unless "100755" as Git.Mode == Git.Mode.executable && Git.Mode.directory.code == "40000" && Location(path: "a") as Git.Mode == Git.Mode.directory { INFO@mark `GIT1 a tree entry's mode is not read by its octal code` }
 unless Git.Pack.Kind.reference_delta.code == 7 && 2 as Git.Pack.Kind == Git.Pack.Kind.tree { INFO@mark `GIT2 a pack entry's type is not read by its number` }
 unless Git.formatted("SHA256") === SHA256 && Git.formatted("md5") is Abstract && Git<SHA256>.format_name == "sha256" { INFO@mark `GIT3 an object format is not named by its digest` }

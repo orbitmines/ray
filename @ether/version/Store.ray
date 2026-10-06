@@ -17,7 +17,7 @@ Store := class: Hierarchy = at: Location = @local, format: Format? {
 
   static View (type) => (materialised |= type) -- (routes{.type === type || type is .type}.stores.flatten, default).unique.map(.instances(type)).flatten.unique{is type}
   static as_of (instance, field: String, when: Time) => (external get instance field).history.commits{.when <= when}.last?.value
-  static conflicts (type, key: Program) => View(type) -- (all => all.map(key).unique.map(k => all{key(.) == k}){.count > 1}.map(Program(name: "resolve the duplicates", goal: .)))
+  static conflicts (type, key: Program) => View(type) -- (all => all.map(key).unique.map(k => all{key(.) == k}){.count > 1}.map(duplicates => duplicates ~~ ERROR@Key `resolve the duplicates`))
 
   kept_in: Format? => format ?? Compiler.reduced(this, StoreOptimizations)
   instances (type) => (children{is type}, kept_in?.read(this, type) ?? []).flatten.unique

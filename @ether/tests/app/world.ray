@@ -163,7 +163,7 @@ if county.shadowing { INFO@mark `WP8 a world falls back to another by itself` }
 // again is overwriting it, which needs write access.
 county.@a = 1
 unless county.fields{.name == "@a"}.last?.value == 1 { INFO@mark `NM2 a reserved name is not a field of the world` }
-unless (county.@a = 2) is Abstract { INFO@mark `WP11 reserving a taken name takes it again` }
+unless (county.@a = 2).erred { INFO@mark `WP11 reserving a taken name takes it again` }
 
 // An item sits somewhere, is obtained by something, and carries what says so: a certificate is a commit its issuer made in the item's history.
 lamp := Item(name: "lamp", issuer: county)
@@ -300,8 +300,8 @@ unless Program.kept == 30 days { INFO@mark `HG4 run logs are not kept for thirty
 rz := World(name: "folded")
 rz.@Alice = 1
 unless rz.fields{.name == "@Alice"}.nonempty { INFO@mark `RZ1 a name found in another letter case lost the case it was reserved in` }
-unless (rz.@aLiCe = 2) is Abstract && rz.fields{.name ==<in: .fold_case> "@alice"}.count == 1 { INFO@mark `RZ2 one name was issued twice in other letter cases` }
-if (World(name: "unfolded").@ALICE = 1) is Abstract { INFO@mark `RZ3 a name is unique beyond the world that issued it` }
+unless (rz.@aLiCe = 2).erred && rz.fields{.name ==<in: .fold_case> "@alice"}.count == 1 { INFO@mark `RZ2 one name was issued twice in other letter cases` }
+if (World(name: "unfolded").@ALICE = 1).erred { INFO@mark `RZ3 a name is unique beyond the world that issued it` }
 
 // A redirect is a name holding a getter: it answers what the other answers, at every lookup; a held name is overwritten only with write access.
 rdr := World(name: "redirects")
@@ -309,7 +309,7 @@ rdr.@a = => rdr.@b
 rdr.@b = 1
 unless rdr.@a == 1 { INFO@mark `RDR2 a redirected name answers what the other held when it was redirected` }
 unless rdr.@A == rdr.@b { INFO@mark `RDR1 a redirected name does not answer what the other holds` }
-unless (rdr.@b = 3) is Abstract { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
+unless (rdr.@b = 3).erred { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
 
 // A character's name is every name it goes by, each told apart by its pattern: email and phone are locations.
 cth := Character(name: "reachable" | "Ada Lovelace" | @mailto:a@b.c | @tel:+31612345678)
@@ -377,7 +377,7 @@ if itv.name { INFO@mark `ITV5 an unnamed item was given a stored name` }
 clm_who := Character(name: "claimant")
 clm := Reference(title: "dummy")
 clm_quest := clm.claim(clm_who)
-unless clm_quest is Abstract { INFO@mark `CLM1 claiming authorship is not a quest` }
+unless clm_quest is Program { INFO@mark `CLM1 claiming authorship is not a quest` }
 if clm_quest.reached(clm) { INFO@mark `CLM2 a claim is reached before the claimant is an author` }
 clm.authors.push clm_who
 unless clm_quest.reached(clm) { INFO@mark `CLM3 a claim is not reached once the claimant is an author` }

@@ -28,7 +28,7 @@ Noise := class: Language = pattern = XX, dh: Encoding.Agreement = X25519, cipher
     {algorithm: *{=== X25519}} => "25519"
     {algorithm: *{=== ChaCha20Poly1305}} => "ChaChaPoly"
     {algorithm: *{=== SHA256}} => "SHA256"
-    {algorithm} => Program(name: "a Noise name for this algorithm", goal: algorithm)
+    {algorithm} => ERROR@Name `a Noise name for this algorithm`
   }
   name => ["Noise", pattern.name, [dh, cipher, hash].map(Compiler.reduced(., names))].flatten.join("_")
   size => hash.size
@@ -71,7 +71,7 @@ Noise := class: Language = pattern = XX, dh: Encoding.Agreement = X25519, cipher
     // Split: two CipherStates from ck, the first for the initiator's sending; h stays as the channel binding (§5.2, §11.2)
     session => done ? protocol.kdf.derived(ck, []).chunk(protocol.size).map(Cipher(cipher: protocol.cipher, k: .[..<32])) -- (pair =>
       Session(sending: initiator ? pair[0] : pair[1], receiving: initiator ? pair[1] : pair[0], binding: h, peer: Encoding.Key(algorithm: protocol.dh, public: rs)))
-      : Program(name: "finish the handshake", goal: this)
+      : ERROR@Handshake `finish the handshake`
   }
 
   // The transport phase: each side's CipherState, the handshake hash, and the remote static key (§5.1, §11.2)

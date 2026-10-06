@@ -54,15 +54,15 @@ vs2 := History.placed([(path: "b.ray", content: text)])
 unless History.change(vs1, vs2) as String == ".[\"b.ray\"] = .[\"a.ray\"]; .[\"a.ray\"] = None" { INFO@mark `VC29 a moved file is not read as a move` }
 unless (History.valued(vs1) -- History.change(vs1, vs2))["b.ray"] == History.valued(vs1)["a.ray"] { INFO@mark `VC30 a move does not keep the value` }
 vt1 := History.placed([(path: "a.ray", content: text), (path: "c.ray", content: text)])
-unless History.change(vt1, vs2) is Abstract { INFO@mark `VC31 a rename two files could have made is not a quest` }
+unless History.change(vt1, vs2).erred { INFO@mark `VC31 a rename two files could have made is not raised` }
 
-// Merging: concurrent changes to one field are a quest; to two are not.
+// Merging: concurrent changes to one field raise ERROR@Merge; to two do not.
 vm := History(repository: Repository())
 vm.commit(ada, Program(code: { .x = 1 }))
 vbranch := vm.fork
 vm.commit(ada, Program(code: { .x = 2 }))
 vbranch.commit(ada, Program(code: { .x = 3 }))
-unless vm.merge(vbranch) is Abstract { INFO@mark `VC32 two changes to one field merged without asking` }
+unless vm.merge(vbranch).erred { INFO@mark `VC32 two changes to one field merged without asking` }
 vn := History(repository: Repository())
 vn.commit(ada, Program(code: { .x = 1 }))
 vother := vn.fork

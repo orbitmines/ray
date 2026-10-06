@@ -43,8 +43,6 @@ Program &+= {
   stop | cancel | complete: static => this ~~ (.stopped = true)
 }
 
-Abstract := Program{abstract.nonempty}
-
 Program &+= {
   is_jump => code ~= ⊢"goto "
   is_label => code ~= "\" ⊣

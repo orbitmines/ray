@@ -62,10 +62,10 @@ Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
 Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
   (static.# ??= []).push this
 
-  backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? Program(name: "derive the inverse of a migration", goal: this))
+  backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? ERROR@Migration `the migration has no inverse`)
 
   static leaving (version: Version) => Migration#{.from == version}, Migration#{.to == version}.backward
-  static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path is Abstract
-    ? Program(name: "migrate", goal: (value: old, from: from, to: to))
+  static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path.erred
+    ? ERROR@Migration `no migration leads from that version to the other`
     : path.zip(path.rest).map((a, b) => leaving(a){.to == b}.first).reduce(held = old => .body(held)))
 }

@@ -24,7 +24,7 @@ World := class: Location + Nameable {
       ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
     {class.PREFIX}{name: reservable_names{.mixed_script && .skeleton != .}} = {holder} => ERROR@Name `a name that mixes scripts and is confusable is not reserved` if class.PREFIX
     {class.PREFIX}{unique<in: .fold_case.skeleton> name: reservable_names} = {holder} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last
-      -- (held => held && !&@.may(`=`, held) ? Program(name: "overwrite a name", goal: held, from: this) : this[held?.name ?? class.PREFIX + name] = holder) if class.PREFIX
+      -- (held => held && !&@.may(`=`, held) ? ERROR@Name `overwrite a name` : this[held?.name ?? class.PREFIX + name] = holder) if class.PREFIX
   }
 }
 

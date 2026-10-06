@@ -7,7 +7,7 @@ HPKE := class: Language = kem: Encoding.Agreement = X25519, kdf: Encoding.Digest
     {algorithm: *{=== X25519}} => 0x0020
     {algorithm: *{=== SHA256}} => 0x0001
     {algorithm: *{=== ChaCha20Poly1305}} => 0x0003
-    {algorithm} => Program(name: "an HPKE identifier for this algorithm", goal: algorithm)
+    {algorithm} => ERROR@Name `an HPKE identifier for this algorithm`
   }
   static identified (algorithm) => Compiler.reduced(algorithm, ids) as Binary₁₆ as Byte[]
 

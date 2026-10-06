@@ -173,7 +173,7 @@ History &+= {
   wraps_of (label) => since(None).map(.wraps).flatten{.key == label}
   content_key (label, holders: Character[] = this.holders, wraps = wraps_of(label)) => (label as String).bytes -- (info => holders{.inbox}.map(.inbox) -- (inboxes =>
     wraps.map(w => inboxes.find(w.by.recognised(., info, w.tag, w.sealed)) -- (inbox => inbox ? Encoding.Key(algorithm: w.cipher, public: [], secret: w.by.opened(inbox, info, [], w.sealed)) : None)).compact.first
-      ?? Program(name: "find the key", goal: (history: this, key: label))))
+      ?? ERROR@Key `find the key`))
 
   rekeying (who: Character, label, readers = following) => who.policy() -- (policy => policy.cipher.generated() -- (content =>
     [[who], readers].flatten.map(.inboxes()).flatten.unique.map(wrapped(content, label, ., policy)).shuffled))
@@ -200,7 +200,7 @@ History &+= {
 History &+= {
   accepted (commit: History.Commit) => commit ~~ (.previous = commit.from#.map(find(.))#) ~~ (.line = this) -- (linked =>
     !linked.authentic ? ERROR@Access `a commit is not signed by its who's instance key at its stamp`
-    : head && !(head is linked.previous && head.stamp < linked.stamp) ? Program(name: "merge", goal: linked)
+    : head && !(head is linked.previous && head.stamp < linked.stamp) ? ERROR@Merge `merge`
     : this ~~ .head = linked)
 }
 
@@ -234,11 +234,11 @@ Instance &+= {
     policy = character.policy()
     event = log.commit(character, change).head
     event.signature |= (character.roots ?? []).map(.signed(event.hash))#
-    policy.allows(event, log) ? character : Program(name: "sign the key event with more root keys", goal: event, who: character)
+    policy.allows(event, log) ? character : ERROR@Access `sign the key event with more root keys`
   }
   renewed (character: Character, world: World? = None) => [character.key_in(world), character.inbox unless world].compact.map(.published).map(key =>
     character.policy().certificates{.key == key && .world === world && !.expiring}.nonempty ? character
-    : endorsed(character, Program(code: { .certificates |= Identity.Certificate(key, world: world) }))).find(. is Abstract) ?? character
+    : endorsed(character, Program(code: { .certificates |= Identity.Certificate(key, world: world) }))).find(.erred) ?? character
   revoked (character: Character, key: Encoding.Key) => endorsed(character, Program(code: { .certificates = .certificates{.key != key} }))
 
   verified (character: Character, world: World? = None) => character.key_in(world) -- (pair =>

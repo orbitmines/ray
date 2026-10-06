@@ -2,7 +2,7 @@
 
 mark ^keyword := external global
 
-unless &@.ask(`()`, @me/device/camera) is Abstract { INFO@mark `AC26 a capability nobody granted is not asked for` }
+unless &@.ask(`()`, @me/device/camera).erred { INFO@mark `AC26 a capability nobody granted does not err` }
 
 // confidential follows the policy, but never past @private.managed.
 with Node.policy = public {

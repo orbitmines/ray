@@ -80,7 +80,8 @@ From the drafts verification (2026-10-06).
 
 - **X4.1 Scope** — hashes (SHA, MD5, BLAKE3), ciphers, compressors, Base64: each "its own project". Which first? UUID v3/v5
   need MD5/SHA-1.
-- **X4.2 Encrypted values** — read back only at a location holding the key; without it a quest is spawned. Encrypted value
+- **X4.2 Encrypted values** — read back only at a location holding the key; without it a quest is spawned. **(2026-10-06)** `opened` raises
+  `ERROR@Key` there (so does `History.content_key`); the quest comes from the error. Encrypted value
   vs encrypted channel; don't evaluate in place, only read off to another location; homomorphic values not decoded.
 - **X4.3 Keys** — a public key per Instance and per character.
 - **X4.4 Storage encodings** — Fastlanes, ALP, FSST, dict, bitpacked, RLE, delta, PCodec, ZSTD, FFOR, chosen from

@@ -26,7 +26,7 @@ unless nz_b.received(nz_a.sent("ping".bytes)) == "ping".bytes { INFO@mark `NZ11 
 unless nz_a.received(nz_b.sent("pong".bytes)) == "pong".bytes { INFO@mark `NZ12 a transport message from the responder does not arrive` }
 unless nz_a.binding == nz_b.binding { INFO@mark `NZ13 the two sessions are bound to other hashes` }
 unless nz_a.peer.algorithm === X25519 { INFO@mark `NZ14 the peer's key does not name its algorithm` }
-unless Noise.handshake(true, X25519.pair()).session is Abstract { INFO@mark `NZ15 an unfinished handshake has a session` }
+unless Noise.handshake(true, X25519.pair()).session.erred { INFO@mark `NZ15 an unfinished handshake has a session` }
 // Each token is written and read by its own narrowing; a DH token from each side's view (§5.3, §7.1)
 unless Noise.Token.e is Noise.Ephemeral && Noise.Token.s is Noise.Static && Noise.Token.es is Noise.Mixing && !(Noise.Token.e is Noise.Mixing) { INFO@mark `NZ16 a token is not the narrowing that writes and reads it` }
-unless Compiler.reduced(HKDF, Noise.names) is Abstract { INFO@mark `NZ17 an algorithm without a Noise name has one` }
+unless Compiler.reduced(HKDF, Noise.names).erred { INFO@mark `NZ17 an algorithm without a Noise name has one` }

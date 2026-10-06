@@ -51,7 +51,7 @@ Program &+= {
   caller: Program?
   hops | chain => [caller?.hops ?? [], who].flatten.unique
   may (method, target) => hops.every(target.allows(., method))
-  ask (method, target) => may(method, target) || Program(name: prompt, goal: Access(hops.first, method), from: target)
+  ask (method, target) => may(method, target) || ERROR@Access `not granted`
   prompt => hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
     + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
 

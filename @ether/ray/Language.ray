@@ -12,7 +12,7 @@ Language := class: Ray = extensions: String, level: Compiler?, written: Compiler
   static project (name: String) => Project#{.name == name}.first
     ?? Project.known(ray.bundled("$/" + name)) -- (found => found ~~ (.name = name) ~~ .load if found)
   static found (name: String) => name.lower_case -- (lowered => lowered == "ray" ? ray
-    : (project(lowered) ? Language#{.names("." + lowered)}.last : named("." + lowered)) ?? Program(name: "a language by that name", goal: lowered))
+    : (project(lowered) ? Language#{.names("." + lowered)}.last : named("." + lowered)) ?? ERROR@Language `no language by that name`)
 
   static Lossless := Language{forall value is *#: read(write(value)) == value}
 
@@ -34,10 +34,10 @@ Language := class: Ray = extensions: String, level: Compiler?, written: Compiler
   admits (program) => true
   read (source) => level
     ? Compiler.reduced(source, level + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`)
-    : Program(name: "a reader for the language", goal: this)
+    : ERROR@Language `the language has no reader`
   write (value) => written
     ? Compiler.reduced(Writing(value, language: this), unwrapped + written + (stored ?? Compiler.none)) -- (. is Location ? . : . as String)
-    : Program(name: "a writer for the language", goal: this)
+    : ERROR@Language `the language has no writer`
   written_to (value, location: Location) => write(value) -- (. is Location ? .files.for((location / .path).content = .content) : location.write(.)) -- location
   converted (location, from: Language) => write(from.read(location))
   tree_at (location: Location, label) => read(location).at(label).tree

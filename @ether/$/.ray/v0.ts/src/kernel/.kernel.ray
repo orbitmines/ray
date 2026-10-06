@@ -4,7 +4,7 @@
 // flags; None and global are no and yes; UNDEF is nothing.
 
 // ---------------------------------------------------------------- the root
-Root := { global, blank, none_side, global_side, undef_side, spellings, base, made, order, declared, silent, refused, trying, depth, running, claiming, forced, naming, diagnostics, definitions, missing, written_keys, external, rules_version, brackets_version, brackets_changes, brackets_list, brackets_firsts, unsure, level, epoch, walker, find_epoch, missing_id, missing_epoch, no_more, fuel, budget, chosen_caps, recent, recent_at, serving, bodies, shape_version, stating, stating_src, unplanned, tracing, top_src, top_at, overing, capturing, spelled_list }
+Root := { global, blank, none_side, global_side, undef_side, spellings, base, made, order, declared, silent, refused, trying, depth, running, claiming, forced, naming, diagnostics, definitions, missing, written_keys, external, rules_version, brackets_version, brackets_changes, brackets_list, brackets_firsts, unsure, level, epoch, walker, find_epoch, missing_id, missing_epoch, no_more, fuel, budget, chosen_caps, recent, recent_at, serving, bodies, shape_version, stating, stating_src, unplanned, tracing, top_src, top_at, overing, capturing, spelled_list, guarding }
 
 boot () => (
   ROOT.spellings = make(Name); ROOT.spellings.length = 0
@@ -14,7 +14,7 @@ boot () => (
   ROOT.base = UNDEF; ROOT.made = UNDEF; ROOT.order = 0; ROOT.rules_version = 0; ROOT.brackets_version = -1; ROOT.brackets_changes = 0; ROOT.brackets_list = NIL; ROOT.declared = 0
   ROOT.forced = list_new(); ROOT.diagnostics = list_new(); ROOT.definitions = list_new(); ROOT.written_keys = list_new(); ROOT.bodies = list_new()
   settle()
-  ROOT.claiming = None; ROOT.running = None; ROOT.overing = None; ROOT.capturing = None
+  ROOT.claiming = None; ROOT.running = None; ROOT.overing = None; ROOT.capturing = None; ROOT.guarding = None
   ROOT.level = 0; ROOT.epoch = 0; ROOT.find_epoch = 0; ROOT.missing_id = 0; ROOT.missing_epoch = 0; ROOT.serving = None; ROOT.tracing = None; ROOT.top_src = -1; ROOT.top_at = -1
   ROOT.recent = make(64); ROOT.recent_at = 0; ROOT.walker = make(Reach)
   ROOT.budget = 1000000; ROOT.fuel = ROOT.budget; ROOT.shape_version = 0; ROOT.stating = -1; ROOT.stating_src = -1; ROOT.unplanned = None
@@ -1856,24 +1856,52 @@ fits (rule, caps, src, frame) => (
   q := p == rule_count(rule) ? -1 : cap_named(rule, caps, rule.pieces[p].name)
   if q < 0 { return global }
   argument := code(src, cap_begin(caps, q), cap_stop(caps, q) - 1, frame)
-  found := guard_reading(rule, UNDEF, UNDEF)
-  n := list_len(found.naming_names)
-  if n == 1 and span_is(rule.guard_src, rule.guard_begin, rule.guard_end, list_first(found.naming_names)) { return global }
-  if n > 1 { return !found.refused }
   value := quiet_deref(argument)
   if value == UNDEF { value = text_id(src, cap_begin(caps, q), cap_stop(caps, q)) }
   n_kept := 0
   if value != UNDEF {
     kept := rule.guarded
-    while kept != NIL { if kept.value == value and kept.declared == ROOT.declared { return kept.fits }; n_kept = n_kept + 1; kept = kept.next }
+    while kept != NIL { if kept.value == value and still(kept) { return kept.fits }; n_kept = n_kept + 1; kept = kept.next }
   }
-  again := n == 1 ? guard_reading(rule, argument, UNDEF) : guard_reading(rule, UNDEF, argument)
-  answer := !again.refused and again.value != UNDEF and again.value != None
-  if value != UNDEF { rule.guarded = Guarded(value: value, declared: ROOT.declared, fits: answer, next: n_kept < 16 ? rule.guarded : NIL) }
+  // a guard asked for the same argument while a guard is being read for it (a guard reads `if`, whose `as` asks the guards):
+  // it does not fit
+  at := ROOT.guarding
+  while at != NIL and at != None { if at.value == value { return None }; at = at.next }
+  outer_guarding := ROOT.guarding
+  ROOT.guarding = Guarded(value: value, next: outer_guarding)
+  found := guard_reading(rule, UNDEF, UNDEF) catch err { ROOT.guarding = outer_guarding; rethrow(err) }
+  n := list_len(found.naming_names)
+  if n == 1 and span_is(rule.guard_src, rule.guard_begin, rule.guard_end, list_first(found.naming_names)) { ROOT.guarding = outer_guarding; return global }
+  if n > 1 { ROOT.guarding = outer_guarding; return !found.refused }
+  first := n == 1 ? argument : UNDEF
+  from := n == 1 ? UNDEF : argument
+  outer_missing, outer_id := missing_open()
+  // a guard has its own allowance: one that cannot be answered within it does not fit
+  outer := ROOT.fuel
+  allowed := outer < 20000 ? outer : 20000
+  ROOT.fuel = allowed
+  answer := None
+  refused_mark := ROOT.refused
+  again := guard_reading(rule, first, from) catch err {
+    ROOT.guarding = outer_guarding
+    ROOT.fuel = outer - (allowed - ROOT.fuel)
+    if !is_exhausted(err) or allowed < 20000 { missing_close(outer_missing, outer_id); rethrow(err) }
+    forget(err)
+    ROOT.refused = refused_mark
+    ROOT.unsure = global
+    again = UNDEF
+  }
+  ROOT.guarding = outer_guarding
+  ROOT.fuel = outer - (allowed - ROOT.fuel)
+  missing := missing_close(outer_missing, outer_id)
+  depends(missing)
+  if again != UNDEF { answer = !again.refused and again.value != UNDEF and again.value != None }
+  // kept while none of the names it found missing is declared
+  if value != UNDEF { rule.guarded = Guarded(value: value, declared: ROOT.declared, missing: missing, fits: answer, next: n_kept < 16 ? rule.guarded : NIL) }
   return answer
 )
 // What a guard answered for an argument's value, kept while nothing new is declared.
-Guarded := class { value, declared, fits, next }
+Guarded := class { value, declared, missing, fits, next }
 guard_reading (rule, first, from) => (
   scope := scope_in(rule.guard_in, rule.guard_src, rule.guard_begin, rule.guard_end)
   scope.bare = global
@@ -2450,7 +2478,7 @@ choose_rules (c, index) => (
 )
 
 // After a read that failed outside the language (a runtime error): reading starts afresh.
-recover () => ( settle(); ROOT.level = 0; ROOT.overing = None; ROOT.capturing = None )
+recover () => ( settle(); ROOT.level = 0; ROOT.overing = None; ROOT.capturing = None; ROOT.guarding = None )
 rules_of (node) => node.rules
 
 // The brackets in reach of the global scope, kept until its rules change; their first characters are marked (32) in the classes.

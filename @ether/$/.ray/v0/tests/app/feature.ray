@@ -151,6 +151,10 @@ unless started_job.output is History { INFO@mark `JB4 a job's output is not a hi
 unless started_job.stop.state == Job.State.stopping { INFO@mark `JB5 stopping a job does not ask it to stop` }
 if started_job.done { INFO@mark `JB6 a job asked to stop is already done` }
 unless @me/jobs is Jobs { INFO@mark `JB7 the machine has no jobs location` }
+serving_job := Job(program: Program(code: "1"), serving: @public)
+unless serving_job.serves(@public) { INFO@mark `JB8 a job serving a location does not serve it` }
+if serving_job.serves(@private) { INFO@mark `JB9 a job serves a location it was not given` }
+if started_job.proxies { INFO@mark `JB10 a job proxies without a proxy` }
 
 tapped := Keyboard.Key(name: 2)
 unless tapped.presses == 0 { INFO@mark `KB9 an untouched key has been pressed` }

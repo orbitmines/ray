@@ -145,7 +145,7 @@ tinted_icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
 Geometry.Box(color: red, children: [tinted_icon])
 unless tinted_icon.painted(tinted_icon.fill) == red { INFO@mark `UI152 an icon filled with currentColor does not take the colour around it` }
 
-revealed := Geometry.Box(origin: Geometry.Vector(0, 1000px), size: Geometry.Vector(100px, 100px))
+revealed := Geometry.Box(origin: Geometry.Vector(0, -300px), size: Geometry.Vector(100px, 100px))
 with UI.scene = Geometry.Box(size: Geometry.Vector(1000px, 800px), overflow: scroll, children: [revealed]) {
   UI.scene.reveal(revealed)
   unless UI.scene.scrolled.y == 1000px { INFO@mark `UI153 revealing a shape does not scroll to it` }
@@ -158,7 +158,7 @@ with UI.scene = Geometry.Box(size: Geometry.Vector(1000px, 800px), overflow: scr
   UI.scene.scrolled = Geometry.Vector(0, 120px)
   unless UI.scene.scrolled.y == 120px { INFO@mark `UI157 the page scroll cannot be set` }
 }
-scroller := Geometry.Box(size: Geometry.Vector(100px, 200px), overflow: scroll, children: [Geometry.Box(origin: Geometry.Vector(0, 1000px), size: Geometry.Vector(100px, 100px))])
+scroller := Geometry.Box(size: Geometry.Vector(100px, 200px), overflow: scroll, children: [Geometry.Box(origin: Geometry.Vector(0, -900px), size: Geometry.Vector(100px, 100px))])
 scroller.reveal(scroller.children.first)
 unless scroller.scrolled.y == 1000px { INFO@mark `UI158 revealing within a container does not scroll the container` }
 unless revealed.size.y == 100px { INFO@mark `UI159 a shape's height cannot be measured` }

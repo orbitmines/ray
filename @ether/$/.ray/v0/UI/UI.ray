@@ -146,7 +146,7 @@ UI := class {
     text: String => content is Choice ? (content.empty ? "" : content.value as String) : content is String ? content : texts.content.join("")
     select (from: Number = 0, to: Number = text.length) => (selected = true) -- text.marked("selected", from, to) -- (marked => content is Choice ? (content.value = marked) : content is String ? (content = marked) : None) -- this
     scroll (by: Geometry.Length) => (scrolled = Geometry.Vector(scrolled.x, (scrolled.y + by) min (content_height - size.y) max 0px)) unless this === UI.scene && UI.locked
-    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && (shape.at.y - at.y + scrolled.y + offset - align.match
+    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && ((at.y + size.y) - (shape.at.y + shape.size.y) + scrolled.y + offset - align.match
         center => (size.y - shape.size.y) / 2
         end => size.y - shape.size.y
         * => 0px

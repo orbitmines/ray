@@ -72,7 +72,7 @@ Location &+= {
 }
 
 Device &+= {
-  network: (mac: Binary⁴⁸) = (mac: (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1))
+  network: (mac: Binary⁴⁸, connected: boolean) = (mac: (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1), connected: (external network `connected`) ?? false)
 }
 
 Instance &+= {

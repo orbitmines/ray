@@ -214,8 +214,12 @@ Job := class: Location = id: UUID = UUID.v4(), program: Program, by: Character? 
 
   state: State = State.queued
   output: History = History(repository: this)
+  serving: Location?
+  proxying: Network.Proxy?
 
   done => state is (State.done | State.lost)
+  serves (at: Location) => !done && serving ∋ at
+  proxies => !done && proxying !== None
   stop: static => this ~~ (.state = State.stopping unless done)
 }
 
@@ -229,6 +233,8 @@ Jobs := class: Location {
 
 Program &+= {
   job => @me/jobs.started(this)
+  serve (at: Location) => job ~~ (.serving |= at)
+  proxy (through: Network.Proxy) => job ~~ (.proxying = through)
 }
 
 Keyboard := class: Location {

@@ -27,7 +27,7 @@ Compiler := class {
       shape.origin.x <= q.x < shape.origin.x + shape.size.x && shape.origin.y <= q.y < shape.origin.y + shape.size.y)
     {edges: Geometry.Edges}[{side: Geometry.Side{label}}] => edges.`side.label`
     {edges: Geometry.Edges{Geometry.Space.current.dimension == 2}}.total => Geometry.Vector(edges.left + edges.right, edges.top + edges.bottom)
-    {edges: Geometry.Edges{Geometry.Space.current.dimension == 2}}.start => Geometry.Vector(edges.left, edges.top)
+    {edges: Geometry.Edges{Geometry.Space.current.dimension == 2}}.start => Geometry.Vector(edges.left, edges.bottom)
     {side: Geometry.Side}.vector(2) => side.axis == 0 ? Geometry.Vector(side.toward, 0) : Geometry.Vector(0, side.toward)
   }
 

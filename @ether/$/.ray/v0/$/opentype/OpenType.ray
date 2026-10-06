@@ -2,7 +2,7 @@
 // The table directory (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
 OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Char⁴, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
   static language = Language(".otf" | ".ttf" | ".opentype", level: { {font: OpenType} => font })
-  static Glyph := class = outlines: Geometry.Curve[], advance: Number, units: Number
+  static Glyph := class = outlines: Geometry.Curve[], advance: Number, units: Number, ascender: Number
   // Data types (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#data-types)
   static U8 = Binary⁸
   static U16 = Binary¹⁶
@@ -100,6 +100,6 @@ OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Cha
     ? points.index_of(points{.on}.first) -- (start => [points[start..], points[..start]].flatten)
     : Point((points.first.at + points.last.at) * (1 / 2), true) -- (start => [start, points, start].flatten)
   ) -- (ring => Geometry.Curve([ring.first.at, Compiler.reduced(ring.zip(ring.rest).map(Step(.0, .1)), contoured)].flatten.loop))
-  outlines (glyph: Number) => hhea.ascender.signed -- (ascender => contours(glyph).map(.map(Point(Geometry.Vector(.at.x, ascender - .at.y), .on))).map(outline(.)))
-  [character: Char] => cmap[character as Number] -- (glyph => Glyph(outlines(glyph), hmtx[glyph], head.units))
+  outlines (glyph: Number) => contours(glyph).map(outline(.))
+  [character: Char] => cmap[character as Number] -- (glyph => Glyph(outlines(glyph), hmtx[glyph], head.units, hhea.ascender.signed))
 }

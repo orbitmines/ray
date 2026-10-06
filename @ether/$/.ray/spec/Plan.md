@@ -5,7 +5,7 @@ Written 2026-09-30. Sources: `spec/Language.md`, `spec/Gamification.md`, the `//
 `//TODO`s and commented draft code in `v0/*.ray`, and the draft
 `../orbitmines.com/orbitmines.com.ray/` (the frontend track, part F).
 
-Paths are relative to `@ether/$/.ray/` unless they say otherwise. `ep` = `v0/.entrypoint.ray`.
+Paths are relative to `@ether/$/.ray/` unless they say otherwise. `ep` = `v0/ray/.entrypoint.ray`.
 
 ---
 
@@ -188,7 +188,7 @@ the work it saves.
 ### 2.1 The loop, per item
 
 1. Pick the item (§3 order). Find its `spec:` mark, its Language.md section, and its draft lines.
-2. Write the claim first, in the matching `v0/tests/app/<file>.ray`, with a **fresh ID**:
+2. Write the claim first, in the matching `v0/ray/tests/app/<file>.ray` (a subproject's claims are in its own `tests/`), with a **fresh ID**:
    `unless (…) { INFO@mark \`XX12 what should hold\` }`. Check IDs are unique:
    `grep -oE 'INFO@mark \`[A-Za-z]+[0-9]+ ' f.ray | sort | uniq -d`.
    Never reuse a name already bound in that test file.
@@ -325,7 +325,7 @@ IO externals and unbounded loops; `FILE.[ext].ray` naming.
 
 ### Phase 4: the spec items (the library has no comments any more)
 
-On 2026-09-30 every comment was removed from `v0/*.ray` and `v0/.entrypoint.ray`, after all of them
+On 2026-09-30 every comment was removed from `v0/*.ray` and `v0/ray/.entrypoint.ray`, after all of them
 were turned into spec items. The comments' old line numbers (`ep:123`, `Number:45`) cited in the spec
 files refer to commit `3f2c53c`: `git show 3f2c53c:'@ether/$/.ray/v0/<file>'` shows them.
 **Don't add comments back** (standing instruction); the spec files are where intent lives.
@@ -400,7 +400,7 @@ stage, and the design belongs to the user.
 - The core is **geometry**: shapes, space added as components (`+ Padding…`, with `pt 5` as the
   preferred notation over it), and constraints as narrowings, all solved by a **Ray-side
   solver**. The HTML level may delegate a constraint to CSS where CSS expresses it exactly.
-- Two isolated projects under `v0`: **`v0/Geometry/`** and **`v0/UI/`** (render levels, input,
+- Two isolated projects under `v0`: **`v0/geometry/`** and **`v0/ui/`** (render levels, input,
   platforms; depends on Geometry). Each has its own `.project.ray`.
 - **HTML**: static HTML+CSS+JS for production (plain JS now, React as a level that composes),
   plus the TS interpreter bundled for the browser in development. Both must work.
@@ -420,7 +420,7 @@ stage, and the design belongs to the user.
    addition (L§1.5), `A & B` (L§3.1), narrowings on fields (L§3.2), `~` entry points (L§4.2),
    `with` (L§6.3), `->` overridable per type (L§5.2), `dynamically` re-evaluation (ep:561),
    locations as values (L§6.1), `$.ext` formats (L§9.1), declared hyphenated names by longest match.
-2. **`v0/Geometry/`**: dimensions (the draft's `1D`/`2D` classes), shapes, space components,
+2. **`v0/geometry/`**: dimensions (the draft's `1D`/`2D` classes), shapes, space components,
    position narrowings (`center`, `left`, `right`, `between`: lower case, `^keyword`),
    width shares (`n * X`), units via Unit.ray, then the solver. Claims check solved geometry
    on tiny layouts.
@@ -434,7 +434,7 @@ stage, and the design belongs to the user.
 6. **orbitmines.com**: organizations and players (hardcoded for now), then the index page,
    then profiles, archive and almanac as pure Ray. Ask F-S1 first.
 
-Tests: `v0/Geometry/tests/` and `v0/UI/tests/` in the `tests/app` claim style, with their own
+Tests: `v0/geometry/tests/` and `v0/ui/tests/` in the `tests/app` claim style, with their own
 ID prefixes (`GE1…`, `UI1…`). Keep the layouts tiny. Never run the whole site as a probe.
 
 ## Needs the engine (2026-10-05)

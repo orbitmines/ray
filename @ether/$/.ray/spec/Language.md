@@ -80,6 +80,11 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **2.4.2 First initialisation merges — Q.** The draft's default first initialisation: overwrite if None, else `&=`, else `=` if the class provides one (*`.ray2/_todo/ray.ray.txt/Ether/instance/Expression.ray:17`*). Recommend: not as a default (§2.1 and T1.6 decide declaration); only as a named policy of a location or store, where assigning into a slot that holds a value superposes (`&=`) unless the slot's class defines `=` (what W3.4's merge quests need).
   **Follows (2026-10-06):** not a default. Declaration and assignment are §2.1 and T1.6, and an assignment is checked against the history it writes over, a conflict becoming a quest (W3.4). "Overwrite if None, else `&=`" may be a store's or a location's own policy, nothing more. From §2.1, T1.6, W3.4.
 
+### 2.5 What an assignment replaces (*user, 2026-10-06*)
+- **Decided:** a program's own graph is its history. An assignment keeps the value it replaces as the new value's `.previous`, so `x.previous**` are the values `x` held before, nearest first; this is Ray structure, not a `History`. The `=` edge carries when it was made, `.when` (W3.4).
+  - The core keeps no history: `with`/`assume` restore what their settings wrote through `.previous`; transitions, key presses, idleness, a quest's attempts, a chat's messages, an item's trail and a reference's notes read `.previous**` and `.when`.
+  - Commits, repositories, logs of runs, stores and storage levels are `@ether/version` (§9.1).
+
 ---
 
 ## 3. Types
@@ -368,7 +373,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A `.%` line uses `with (@me = @who)` instead, which replaces the draft's `&caller = <uuid>;` (§9.2.6, 2026-10-06).
   - **(2026-10-06)** `@name { … }` is `with (@me = name) { … }`, the same as a `.%` line, and running somewhere is
     `with (Location.current = loc) program`; there are no `run_as`/`run_at`/`run_after` methods.
-  - **(2026-10-06)** With `@ether/Security` imported (§9.1 subprojects), `&caller` holds only verified principals:
+  - **(2026-10-06)** With `@ether/security` imported (§9.1 subprojects), `&caller` holds only verified principals:
     `@me = x` sets `x.acting`, which is `x` verified by a key held here or a handshake, and an access check also needs
     the actor `Live` and within its delegation (World W2.1). Without it, `@me = x` sets `x` as given.
 - **From the drafts review (2026-10-06):**
@@ -429,17 +434,17 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A `persistent` value is kept in its class's `$`.
 - **Decided (2026-10-06):** `$.name` answers the language called `name`, loading it when it is not loaded.
   - `$.ray` is Ray itself (`Language.ray`).
-  - Any other name is the project `v0/$/<name>`: the folder is the language's name in lowercase (`$/git`, `$/json`, `$/html`).
+  - Any other name is the project `v0/ray/$/<name>`: the folder is the language's name in lowercase (`$/git`, `$/json`, `$/html`).
   - The first `$.name` reads that project, once. Its dependencies are read when they are first referenced (below). It answers the language in it whose extensions include `.name`.
   - Without such a project, `$.name` answers a loaded language with that extension, or a `Quest`.
-- **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/$/`, and nothing in the core depends on one.
-  - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs as `@zlib` (Decided 2026-10-06: `@X`, not `@ether/$/X`; `@X` resolves to the project in `v0/$/X` for now, and will later map to the repository named X).
+- **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/ray/$/`, and nothing in the core depends on one.
+  - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs as `@zlib` (Decided 2026-10-06: `@X`, not `@ether/$/X`; `@X` resolves to the project in `v0/ray/$/X` for now, and will later map to the repository named X).
   - Its claims are in its own `tests/` project.
-  - Every language stays at `v0/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/UI` lists `$/html`, `$/css`, `$/js`, `$/json`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. A language in the part is read when it is first referenced, not when the part is.
+  - Every language stays at `v0/ray/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/ui` lists `$/html`, `$/css`, `$/js`, `$/json`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. A language in the part is read when it is first referenced, not when the part is.
   - A language may depend on other languages and on the project that bundles it. Loading tolerates a mutual dependency: a project is marked as loading before its dependencies load, so a cycle stops where it comes back, and every project in it ends up loaded once.
   - A project that uses a language either declares it in its `.project.ray` or reaches it through `$.name`.
   - The core reaches them only through `$.name`, lazily. Examples: in an optimisation level that picks a format (`StoreOptimizations` answers `$.sqlite`), in the enforcement of a permission (`as $.posix`), or in a store route (`$.git`).
-  - A `$/<name>` project holds only the outside language: its syntax, levels, API values and tests. What is specific to Ray stays in the Ray library. The renderers are Ray's, so they are in `v0/UI`: `UI.HTML` writes `$.html`, `$.css`, `$.js` and `$.json`, and `UI.TUI` writes `$.ansi`, `$.sixel` and `$.kitty`. `Language.Direct`, Ray's own raster drawing, stays in the core UI, and its fonts are `$/opentype`.
+  - A `$/<name>` project holds only the outside language: its syntax, levels, API values and tests. What is specific to Ray stays in the Ray library. The renderers are Ray's, so they are in `v0/ui`: `UI.HTML` writes `$.html`, `$.css`, `$.js` and `$.json`, and `UI.TUI` writes `$.ansi`, `$.sixel` and `$.kitty`. `Language.Direct`, Ray's own raster drawing, stays in the core UI, and its fonts are `$/opentype`.
   - The core keeps only what it needs to work:
     - UTF-8 and the Unicode tables, because a String is characters;
     - ISO 8601, because a Time is written and read as one;
@@ -450,7 +455,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Reading a project does not read its dependencies. A dependency is read the first time it is referenced: through `$.name`, through `@name` in code, through a name the project does not define itself, or through a file in its language (`Project.load`, `Project.Dependency.project`, `Language.named`).
   - `@name` in code is the project of the dependency declared as `@name` in a loaded project's `.project.ray`, and `@name/path` is a location inside it. Where no loaded project declares `@name`, `@name` keeps its other meanings (`@me`, a character, a relative location).
   - Data a dependency's project names but does not hold, like `@tzif/zoneinfo` (the full IANA database compiled to TZif), is a location like any other. Ether reaches its content through mirrors (World W2.9) and shards (World W2.7, Universal U7), and keeps it through a cache, which is an optimisation level (§9.1, §9.2). This is later work: until then reading such a location answers a `Quest` (`FileSystem.Mirrored`).
-  - The OS is its own project, `v0/OS`, which declares `@tzif`. The core does not read it at startup: a device with no host platform takes its OS through the level `OS.devices`, which references `@ether/OS` and answers `OS.Ether`.
+  - The OS is its own project, `v0/os`, which declares `@tzif`. The core does not read it at startup: a device with no host platform takes its OS through the level `OS.devices`, which references `@ether/os` and answers `OS.Ether`.
 - **From the drafts review (2026-10-06):**
   - **9.1.1 A language keeps its identity across renames — Decided (draft).** Old names are equivalences (`$.coq` ≡ `$.rocq`), as are its several extensions; dialects are its children in the class hierarchy. *`.ray2/Program.ray:343–347`*
   - **9.1.2 Recognising a language from content — Q.** Detect a file's language and version from the file itself (*IDE:191*). Recommend: `Language.detect(bytes)` answers the superposition of every loaded language whose reading accepts the content, ranked by how much each reads (§3.6), each carrying its version (`%N`).
@@ -461,8 +466,12 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 - **Decided (user, 2026-10-06): subprojects.** A folder with its own `.project.ray` inside a project is a subproject.
   The parent never sees it without an explicit import (`Project.sources` skips it); a subproject sees its parent
-  automatically (`shadowing => (parent, dependencies.project)#`). `@ether/Security` and `@ether/Network` are such
-  subprojects of v0 (`v0/Security/`, `v0/Network/`), imported by nothing by default.
+  automatically (`shadowing => (parent, dependencies.project)#`). `@ether/security` and `@ether/network` are such
+  subprojects of v0 (`v0/security/`, `v0/network/`), imported by nothing by default.
+
+- **Decided (user, 2026-10-06): layout.** `v0/` is the Ether project; its `.project.ray` imports `@ether/network` and `@ether/version`, and it holds `Ether.ray` (the standard `@` names), `World.ray`, `Device.ray`, `Messaging.ray` and the instance entrypoints (`entrypoint.server.ray`, `entrypoint.npc.ray`, `entrypoint.player.ray`).
+  - `v0/ray/` is the core, `@ether/ray` (`!language`): Node, Ray, Number, String, Unicode, Encoding, Program, Control, Compiler, Language, Project, Location, Character, Format, Reporting, Time, Unit, UUID, IP, Roman, Access, Feature, the outside languages in `v0/ray/$/`, and its claims in `v0/ray/tests/`. Every project assumes it without an import.
+  - Subprojects of v0, each with its own `.project.ray`: `security/`, `network/`, `os/`, `ui/`, `geometry/`, `version/` (History, Repository, runs' logs, stores and storage levels; imports `@ether/security`), `game/` and `library/`. Folders of projects are lowercase.
 
 ### 9.2 Version control — *IDE:412–420, 633–641, 732*
 > Hybrid logical clocks / CRDTs; your fork always accessible, can always push; apply a change to all stable versions (respecting their own changes); flag a change as the one that works; group changes; test my changes against the latest instead of merging the latest into mine; label functions inline in `.ray.txt` for non-Ether editors; notify when a monkey-patched function starts being used by a library, or when a renamed parameter breaks a partial call.
@@ -583,7 +592,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 ## 10. From the drafts (`.ray2`, `.ray3`) — what v0 doesn't have yet
 
-Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives what it is, where the draft writes it, and what it needs. Items already specified above are not repeated. **Q** marks the ones that need your decision before implementing.
+Paths are relative to `@ether/`; `ep` = `v0/ray/.entrypoint.ray`. Each line gives what it is, where the draft writes it, and what it needs. Items already specified above are not repeated. **Q** marks the ones that need your decision before implementing.
 
 ### 10.1 Syntax and operators
 - `??` null-coalescing: `.ray3/Node.ray:213`. **Done** (Node's `??`, before its postfix `?`; boolean.ray BN1–3).

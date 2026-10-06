@@ -439,15 +439,15 @@ Answers from 2026-09-30.
     key-log event it relies on: backdating is a fork, rejected (or a merge quest) by anyone holding the history.
     Per-world instance keys, each certified by the root, are optional, for unlinkability.
   - **Storage.** Private keys are `none`-readable (W5.6), zeroised on logout, never in a history or cache level.
-  - **Its own project (user, 2026-10-06).** All of this is the project `@ether/Security`; `@ether/Network` is its own
+  - **Its own project (user, 2026-10-06).** All of this is the project `@ether/security`; `@ether/network` is its own
     project and depends on it. Neither is imported by default, and comparing characters errs in the language unless one
     of them is (`ERROR@Security`); importing it replaces that with the verified comparison above.
   - **Algorithms are chosen by the root (user, 2026-10-06).** Every key names its algorithm, a language (`$/ed25519`,
     `$/x25519`, `$/noise`, …), and the root policy says which ones its keys use; signing, verifying and the handshake
     use whatever the keys name, so nothing is fixed to one algorithm and changing one is a key event. Only Ed25519,
     X25519 and Noise XX are implemented for now; other algorithms are not being added.
-  - **Where it lives (2026-10-06).** All of this is the subproject `@ether/Security` (`v0/Security/`, L§9.1), which
-    `@ether/Network` (`v0/Network/`) imports; the core imports neither. Without it, comparing characters is an error
+  - **Where it lives (2026-10-06).** All of this is the subproject `@ether/security` (`v0/security/`, L§9.1), which
+    `@ether/network` (`v0/network/`) imports; the core imports neither. Without it, comparing characters is an error
     (`ERROR@Security`), `@me = x` sets `x` as given, and commits are signed (`History.Commit.signature`, `relies`, `hash`)
     but never verified. The algorithms are the languages `$/ed25519` (over `$/sha512`), `$/x25519`, `$/chacha20poly1305`
     and `$/noise`, whose defaults are named once, in `Identity.algorithms`.
@@ -464,7 +464,7 @@ Answers from 2026-09-30.
   node's `access`, read as `.public`, W3.3 above.)
 - **W3.6** Every class is a repository; String's lowest level is the character.
 - **W4.5** Counted types (`4 Wall`, `1..3 Bookshelf`, `a Table`) now; spatial relations (`against`,
-  `next to`) as Geometry narrowings once `v0/Geometry/` exists.
+  `next to`) as Geometry narrowings once `v0/geometry/` exists.
 - **W5.3** Access to a value's program is `@public.read` on `**`: visibility is recursive.
 - **W6.10** The Keyboard API is the draft's (`pulsed (max: 20/s, delay: 1s)`, `toggled`, `cycle`,
   `as boolean` when pressed), with keys as `dynamically` variables. It is also the TUI's input.

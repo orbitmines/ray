@@ -31,7 +31,7 @@ follow and are equivalent.
   How do resizes, keys and clicks reach the description in each target?
 - **F-D7: HTML output.** Static HTML+CSS, or HTML plus a runtime? Does it replace the Next.js
   site in `orbitmines.com/orbitmines.com/`?
-- **F-D8: where the library lives.** `v0/UI.ray` in this repository, or in `orbitmines.com`.
+- **F-D8: where the library lives.** `v0/ui.ray` in this repository, or in `orbitmines.com`.
 - **F-D9: how a renderer writes out.** Which existing externals (stdout, files); any new
   external needs the user's say.
 - **F-D10: the TUI target.** A static print, or a full-screen interactive program (alternate
@@ -145,7 +145,7 @@ From the drafts review (2026-10-06).
   before it (`{id}\`) names that element.
   **Answered (user, 2026-10-06):** page text interpolates `{…}` like strings; no `{id}\` labels on rendered elements (not needed).
 
-## G. Geometry: shapes and spaces (`v0/Geometry`, F-D8b)
+## G. Geometry: shapes and spaces (`v0/geometry`, F-D8b)
 
 From the drafts review (2026-10-06). Source: *Geometry:line* as above. v0 has `Ball` as a 2D
 box-sized ellipse, `Space.grid(extent, loop)`, `Curve`, `Polygon`, `Fractal`, `Side`, `Shape.fill`.
@@ -244,7 +244,7 @@ entry stays as the record of the question, and this section overrides it.
 - **F-D7.** Both: a Ray runtime in the browser (development) and static HTML+CSS+JS
   (production). Whether the JS is plain JS or React is a choice between compiler levels that
   compose, e.g. `.JS + .React`. Plain JS is fine for now. Both must work.
-- **F-D8.** A separate UI project underneath `v0`, isolated: `v0/UI/` with its own `.project.ray`.
+- **F-D8.** A separate UI project underneath `v0`, isolated: `v0/ui/` with its own `.project.ray`.
 - **Platforms.** Linux/macOS terminals, Windows terminals, all major browsers, and capabilities
   that degrade. The TUI can also run in the browser, as an optional setting. Native control of
   each terminal is wanted. Platform differences are compiler levels, or several composed into
@@ -306,8 +306,8 @@ entry stays as the record of the question, and this section overrides it.
   `pt 5` form.
 - **F-B8c.** The Bootstrap-like shorthands (`px 5`, `pt 5`, `mt 5`) stay, as a library over the
   core. They are the preferred notation (F-B8b).
-- **F-D8b.** Two projects: `v0/Geometry/` (shapes, space, constraints and the solver) and
-  `v0/UI/` (render levels, input, platforms), which depends on Geometry.
+- **F-D8b.** Two projects: `v0/geometry/` (shapes, space, constraints and the solver) and
+  `v0/ui/` (render levels, input, platforms), which depends on Geometry.
 - **F-B9.** The alignment words are narrowings on position. `center` means equal space on both
   sides (the draft's `(<-D).length == (D->).length`), and `between` distributes the remaining
   space. Each accepts any block and works per dimension. They are **lower case and
@@ -373,10 +373,10 @@ entry stays as the record of the question, and this section overrides it.
 - Authors are written `@name`. `@ether` is the Ether organization (they are the same thing). Names are reserved and mapped ignoring case.
 
 ## Decided 2026-10-06 (renderers are Ray's, the languages they write are from outside)
-- `$/<name>` holds only the outside language itself: its syntax, its reading and writing levels, its API values and its own tests. Anything specific to Ray goes in the Ray library. The renderers are Ray's own, so they are in the UI library. The web renderer is `UI.HTML` (`v0/UI/HTML.ray`), named after its target ("web" is not a language). It renders a scene into an HTML document with its stylesheet and script (`UI.HTML.Markup`, `UI.HTML.Style`, `UI.HTML.Script`, packaged by `UI.HTML.level` as `UI.HTML.Package`); the DOM protocol is `UI.HTML.DOM`. It writes the languages `$.html`, `$.css`, `$.js` and `$.json`.
-- The terminal renderer is `UI.TUI` (`v0/UI/TUI.ray`): a scene drawn into cells (`UI.TUI.Cells`, `UI.TUI.level`), its input, its `Target` and the `Terminal` device. It writes `$.ansi` (the escape sequences in both directions, the keys and mouse reports it reads included, the xterm 256-colour and Windows Terminal levels), and draws images through `$.sixel` and `$.kitty`.
+- `$/<name>` holds only the outside language itself: its syntax, its reading and writing levels, its API values and its own tests. Anything specific to Ray goes in the Ray library. The renderers are Ray's own, so they are in the UI library. The web renderer is `UI.HTML` (`v0/ui/HTML.ray`), named after its target ("web" is not a language). It renders a scene into an HTML document with its stylesheet and script (`UI.HTML.Markup`, `UI.HTML.Style`, `UI.HTML.Script`, packaged by `UI.HTML.level` as `UI.HTML.Package`); the DOM protocol is `UI.HTML.DOM`. It writes the languages `$.html`, `$.css`, `$.js` and `$.json`.
+- The terminal renderer is `UI.TUI` (`v0/ui/TUI.ray`): a scene drawn into cells (`UI.TUI.Cells`, `UI.TUI.level`), its input, its `Target` and the `Terminal` device. It writes `$.ansi` (the escape sequences in both directions, the keys and mouse reports it reads included, the xterm 256-colour and Windows Terminal levels), and draws images through `$.sixel` and `$.kitty`.
 - `Language.Direct`, Ray's own raster drawing, stays in the core UI. The formats it reads are outside: fonts through `$.opentype`, images through `$.png` (with `$/zlib` and `$/deflate` under it).
 - A frontend picks its renderer by its level: `page.rendered(UI.HTML.level)`, `page.rendered(UI.TUI.level)`.
-- `v0/UI` bundles the languages its renderers write: its `.project.ray` lists `@html`, `@css`, `@js`, `@json`, `@ansi`, `@sixel`, `@kitty`, `@opentype` and `@png`, which stay at `v0/$/<name>`. Renderer claims are in `v0/tests/app` (`ui_html.ray`, `ui_tui.ray`); pure-language claims are in each language's own `tests/`.
+- `v0/ui` bundles the languages its renderers write: its `.project.ray` lists `@html`, `@css`, `@js`, `@json`, `@ansi`, `@sixel`, `@kitty`, `@opentype` and `@png`, which stay at `v0/ray/$/<name>`. Renderer claims are in `v0/tests/app` (`ui_html.ray`, `ui_tui.ray`); pure-language claims are in each language's own `tests/`.
 - A share (`50%`, the Number 0.5) in a length field is that share of the parent's available size on that axis, bounds included (`{width <= 50%}`); Solving resolves it and the web writes it as a CSS percentage. A share radius is that share of the shape's own size (`radius: [50%]` is a circle).
 

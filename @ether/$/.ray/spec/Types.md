@@ -1,4 +1,4 @@
-# Ray — Types and Node spec (from the comments in `v0/.entrypoint.ray` and `Number.ray`)
+# Ray — Types and Node spec (from the comments in `v0/ray/.entrypoint.ray` and `Number.ray`)
 
 Status legend: **Decided** · **Open** · **See L§n**.
 IDs `T…`. Answers go under **Decided** at the end.
@@ -315,7 +315,7 @@ From the drafts review (2026-10-06).
 
 - **T9.1 Superposed values keep their origin** — *private journal, IDE:678–679 (paraphrased)*: each part of a superposed
   value carries which caller produced it, so a result can be refined once a condition is known. v0 already has
-  `.origin` / `.sources` on branched values (`v0/Node.ray:89`); L§8.2's origin is that of code, not of values. **Q** —
+  `.origin` / `.sources` on branched values (`v0/ray/Node.ray`); L§8.2's origin is that of code, not of values. **Q** —
   Recommend as Decided text: every alternative in a superposition keeps where it came from (`.origin`, `.sources`).
   Narrowing an input (`with c = true`, `if assume c`) narrows the result to the alternatives that came from it.
   **Follows (2026-10-06):** every alternative in a superposition keeps where it came from (`.origin`, `.sources`); narrowing an input (`with c = true`, `if assume c`) narrows the result to the alternatives that came from it, from P1.4 (`**` is provenance), v0's `.origin`/`.sources`/`holds_for` (`v0/Node.ray`) and U-C3 (`assume` narrows).

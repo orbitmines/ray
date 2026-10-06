@@ -1,4 +1,4 @@
-# Ray — Ray, graph and collection spec (from the comments in `v0/Ray.ray` and the entrypoint)
+# Ray — Ray, graph and collection spec (from the comments in `v0/ray/Ray.ray` and the entrypoint)
 
 Status legend: **Decided** · **Open** · **See L§n**.
 IDs `R…`. Answers go under **Decided** at the end.

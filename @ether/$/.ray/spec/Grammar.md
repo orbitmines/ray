@@ -1,4 +1,4 @@
-# Ray — Grammar spec (from the comments in `v0/.entrypoint.ray`)
+# Ray — Grammar spec (from the comments in `v0/ray/.entrypoint.ray`)
 
 Status legend: **Decided** · **Open** (to ask) · **See L§n** (already decided in `Language.md`).
 Each item: its ID, where the comment is (`ep:line`), what it says, and a proposal.

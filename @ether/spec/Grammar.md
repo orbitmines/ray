@@ -397,6 +397,7 @@ Answers from 2026-09-30.
 - **G5.3** No "evaluate now" flag: the fixpoint evaluates definitions as they are found.
 - **G6.3** A style is a set of forced equivalences switched on or off (`Style.mathematics`: `∀` ↔
   `.every`, `∈` ↔ `:`); turning it off rewrites back to words.
+  **(2026-10-06):** quantifiers are words, `forall x is d: p`, `exists x is d: p`, `exists x: T p`, `!exists x: T p`, and membership is `is` (`x is xs#`); `∈`/`∉` are gone. `∀`, `∃`, `∄` are only `suggest` equivalences of `forall`, `exists`, `!exists` in `mathematics` (Node.ray), so the editor may show them.
 - **G7.4** Backspace removes the whole displayed glyph of an equivalence; Ctrl-Z gets the typed form back.
 - **G4.7** Padding spaces inside brackets aren't separators (`{ .func }` = `{.func}`), and `[]` accepts
   a closure like `.()` does.

@@ -32,6 +32,7 @@ From the drafts review (2026-10-06).
   unique), found by the `{PREFIX}{name}` lookup before the world's children and its fallback. A redirect assigns a getter,
   `world.@a = => world.@b`. Overwriting a held name needs write access (`&@.may`), and answers
   `Program(name: "overwrite a name", goal: …)` otherwise.
+  **(2026-10-06)** Names compare and reserve by the UTS #39 skeleton of their case fold (`String.skeleton`, from `Unicode.confusables` of the selected Unicode version, §4), so a name confusable with a held one finds that one; a name that mixes scripts and is confusable (`mixed_script && skeleton != .`, §5) is refused with an error.
 - **W1.10 The standard `@` names** — **Decided (draft)**; none is defined in v0 (`@localnetwork` is used in
   `Network/Network.ray:82`, `reservable_names` in `World.ray:165–175`). *`Ether.ray:3–27`*
   - `@ether` is `` @`ether.orbitmines.com:37839` ``; `@me | @private` is `global` (on a computer the root is `@me`; in a player
@@ -464,6 +465,7 @@ W9 itself is decided below (`choose` resolves through `@me.choose`).
   `with` setting, `with Choice.algorithm = WaveFunctionCollapse { choose Room }`; the computer's default stays a weighted random
   pick. *IDE:687; ALM:2040*
   **Follows (2026-10-06):** as recommended: the chooser is a `with` setting (`with Choice.algorithm = WaveFunctionCollapse { choose Room }`), and the default stays a weighted random pick, from L§6.3 `with` and choices being optimisations.
+  **(2026-10-06):** a choice is an abstract Program run by its chooser, `choose T` is `Program(who: @me, name: "choose", goal: T)` and `choose? T ?? d` the same with `d` as its first attempt; `Choice` is the narrowing `Program{name == "choose"}`. Randomness has one selector, `x.random`. The algorithm stays a `with` setting of whoever performs the choice.
 - **W9.3 A choice put to players carries its reason** — **Q**. The journal attaches an explanation to `@players.choose`, keeps the
   results for later, and treats a human's answer as an untrusted external one with an acceptance weight. Recommend: the doc comment
   above a `choose` is the quest text shown to the player, and a player's answer enters as a weighted alternative (U8), not as a

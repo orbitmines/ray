@@ -250,6 +250,7 @@ Answers from 2026-09-30.
 
 - **R1.1** `⊢ ⊣ ∙ ⊙ ∃ ∀` are plain aliases: `initial | ⊢ : Boundary`. Hugged together they compose
   members (`∙⊣⊙initial`).
+  **(2026-10-06):** `∃`/`∀` are no longer aliases; they are `suggest` equivalences of the words `exists`/`forall` (G6.3, G7.1).
 - **R1.2** `Ray := Iterable + Ordered` (component addition).
 - **R2.1** The default traverser is a context override: `with Traverser.default = …`; per call
   `for<traverse: BreadthFirst>`.

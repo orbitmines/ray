@@ -486,7 +486,7 @@ Answers from 2026-09-30.
 - **P2.3** `return x` sets the result and jumps to the function's end label (`&caller.return` = goto the
   end); it is lexical.
 - **P2.4** `recur(args)` is a tail call; a bare `recur` uses the same arguments.
-- **P4.5** `Terminating := Program{∀ path ∈ .paths: path.length < ∞}` (quantifier style). Finite step
+- **P4.5** `Terminating := Program{∀ path ∈ .paths: path.length < ∞}` (quantifier style). (2026-10-06: written `Program{forall path is .paths: path.length < ∞}`, G6.3.) Finite step
   time is part of it (Time.ray's note).
 - **P4.6** Ignored: no out-of-order execution rule.
 - **P5.4** `speculative.if` is `if assume c` (U-C3); `speculative.if` is dropped.

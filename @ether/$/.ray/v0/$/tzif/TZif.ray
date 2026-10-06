@@ -36,5 +36,7 @@ TZif := class (
   data => v2 ?? v1
   at (time: Time) => (time as s).floor -- (seconds => data.type_at(seconds) -- (type => (offset: type.offset seconds, daylight: type.daylight == 1, abbreviation: data.named(type), rule: footer if data.after_last(seconds))))
 
-  static language = Language(".tzif", level: { {zone: TZif} => zone }, written: { {writing: Language.Writing{value is TZif}} => writing.value as Byte[] })
+  static language = Language(".tzif", level: { {zone: TZif} => zone }, written: { {writing: Language.Writing{value is TZif}} => writing.value as Byte[] }){
+    repository = @https://raw.githubusercontent.com/orbitmines/ray/tzif
+  }
 }

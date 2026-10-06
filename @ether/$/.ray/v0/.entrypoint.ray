@@ -2164,7 +2164,7 @@ boolean := enum false (holds: None) | true (holds: global) {
   xor (b) => .or(b).and(.nand(b))
   xnor (b) => .xor(b).not
 
-  as (=== boolean) => this
+  as (=== boolean) => this // TODO generalized on Node with .type
 
   next => .not
   previous => .not

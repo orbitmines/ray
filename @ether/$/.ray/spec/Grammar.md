@@ -148,6 +148,7 @@ From the drafts review (2026-10-06).
   are operators like any other. G3.2 rejected the whole-run reduce, not these. **Q** — Recommend keeping them as
   principles: (1) every operator takes one argument per side; (2) prefix, postfix and bracket operators are binary with a
   None side; (3) juxtaposition and `,` are ordinary operators with a precedence.
+  **Follows (2026-10-06):** kept as principles: (1) every operator takes one argument per side; (2) prefix, postfix and bracket operators are binary with a None side; (3) juxtaposition and `,` are ordinary operators with a precedence, from Almanac A5 (a function has one argument, described structurally), the 2026-09-27 answer (`,` composes one value) and G2.9; G3.2 rejected only the whole-run reduce.
 - **G3.14 Found, but declared for the other direction** — *`.ray2/Grammar.ray:506`*: "'Found method X but it wasnt
   flagged as {direction}'". **Decided (draft)**: when a method is found but its declared direction doesn't fit where it
   is written, the diagnostic says so ("`X` is declared right-to-left") instead of "unresolved". (With G3.4.)
@@ -199,6 +200,7 @@ From the drafts review (2026-10-06).
 - **G4.13 A rule's literal word is not a variable** — *`.ray2/Grammar.ray:422–423`*: "What if 'for' is already defined
   in scope? Say the same for 'approximation' or 'optimization'". **Q** — Recommend: a literal word in a rule head matches
   only the written word, never a variable's value. A local named `for` shadows the name only where it is used as a value.
+  **Follows (2026-10-06):** a literal word in a rule head matches only the written word, never a variable's value; a local named `for` shadows the name only where it is used as a value, from T4.10 (a written literal reads exactly itself) and the engine invariant of word-bounded literals.
 - **G4.14 A negated pattern fails; it does not stop** — *private journal, IDE:601–607 (paraphrased)*: a negated part
   (`not '=>'`) does not end the match just before the excluded text; it only says the match must not continue with it.
   A pattern that then doesn't match all it was given fails, unless another alternative matches. **Decided (draft)**
@@ -255,6 +257,7 @@ From the drafts review (2026-10-06).
 - **G6.5 The signature of a modifier** — *`.ray3/Node.ray:74`*: `Modifier = (this: *): { location: a (this, *) }`: a
   modifier is a function of what it modifies, answering a located value. Plan §1 says only "a method that takes the
   method definition". **Q** — Recommend adding the signature as written.
+  **Follows (2026-10-06):** the draft's signature is added as written: `Modifier = (this: *): { location: a (this, *) }`, a modifier is a function of what it modifies, answering a located value, from Plan.md §5 (port the drafts in their style) and G6.4 (Decided draft), which already uses it.
 
 ## G7. Equivalences (*ep:1272–1300, 1314–1316*)
 

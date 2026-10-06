@@ -54,6 +54,7 @@ From the drafts review (2026-10-06).
 - **T2.8 A map is `* - Node`** — *`.ray3/Node.ray:55`*: "Object with -Node as a primitive, which is then basically
   map." **Q** — Recommend recording it as the meaning of `-` on class components (T2.4): `Object = * - Node`, a value
   with Node's methods taken off, is a plain map. (See T8.7.)
+  **Follows (2026-10-06):** `Object := * - Node` (T2.4: a class component can be taken off with `-`) is a value with none of Node's members: a plain map. An ordinary map literal does not need it, since its own keys already win over Node's members (`{ count: 3 }.count` is 3, `.on(Node).count` reaches Node's); `* - Node` is for when Node's members should not be reachable at all, from T2.4 and T8.7 (answered: own key wins).
 
 ## T3. Classes, static, constructors (*ep:85–134, 938–958, 1034–1039, 1216*)
 
@@ -125,6 +126,7 @@ From the drafts review (2026-10-06).
 - **T3.24 `internal` in local contexts** — *`.ray2/_todo/…/instance/Access.ray:66–69`*: "You want this to work for local
   contexts too, so cant rely just on class." Extends T3.16. **Q** — Recommend: `internal x` is visible only inside the
   context that declares it: a class, a function or a block.
+  **Follows (2026-10-06):** `internal x` is visible only inside the context that declares it: a class, a function or a block, from T3.16 (`internal` is a narrowing on who accesses, `Node{==.instance_of Example}`) and T7.1 (a frame or block is a location like a class).
 - **T3.25 A context variable declared but not given** — *`.ray3/Node.ray:84`*: "with <CONTEXT> = <VAL>, can be expected
   when setting some variable like Node.CONST: String and not setting it. error thrown? or explicitly say with required."
   **Q** — against Decided T1.6 (an unset field is `?`, every possibility), the review recommends an error at use unless
@@ -140,6 +142,7 @@ From the drafts review (2026-10-06).
   Recommend (general): a field may hold an expression evaluated per reader (`&@.last`, who reads), not when it is set,
   written as a parameterless function stored in the field (`x => …`, P5.3). `invisible` is then `online` to oneself and
   `offline` to others (W2.6).
+  **Follows (2026-10-06):** a field may hold an expression evaluated per reader, written as a parameterless function stored in the field (`x => …`), re-evaluated on each read; `invisible` is `online` when the reader (`&@.last`) is the character itself and `offline` to everyone else (W2.6), from P5.3 (parameterless functions are dynamic) and `&@` (L§10 answers, 2026-10-05: `&@.last` is who runs it now).
 
 ## T4. Structural type checking (*ep:230–260, 969–980, 1030–1032, Number:808–855*)
 
@@ -203,10 +206,12 @@ From the drafts review (2026-10-06).
 - **T4.19 Definite assignment across labels** — *`.ray2/_todo/ray.ray.txt/ray.ray:85–89`*: "Type-checker should know that
   it must be set in Ordered to get here." **Q** — Recommend: the checker narrows a `T?` to `T` at a label when every edge
   into that label sets it (definite assignment over the Program's edges, P1.1).
+  **Follows (2026-10-06):** the checker narrows a `T?` to `T` at a label when every edge into that label sets it (definite assignment over the Program's edges), from L§3.2.1/T4.15 (narrowing in the branch taken) over P1.1 (a Program is a Ray with jump edges).
 - **T4.20 Finding types through references** — *private journal, IDE:831 (paraphrased)*: types that match should be
   findable by following references, e.g. every Program with a cycle, to assert there are none or to forbid recursion.
   **Q** — Recommend: `T$ @ x ->` already searches a type under a location (W1.5); `never (Program{has_cycle}$ @
   project ->)` asserts there are none.
+  **Follows (2026-10-06):** `T$ @ x ->` already searches a type under a location; `never (Program{has_cycle}$ @ project ->)` asserts there are none, with `has_cycle` a boolean predicate used as a narrowing (T4.11 answer), from W1.5's `T$ @ x ->` search and L§4.1's `never`.
 
 ## T5. Generics and parameterized types
 
@@ -255,13 +260,16 @@ From the drafts review (2026-10-06).
 - **T6.12 Re-normalising held values** — *`.ray2/_todo/ray.ray.txt/ray.ray:68–73`*: `normalizer: Normalizer?`,
   `dynamically on(normalizer) = this = this`. **Q** — Recommend: a held value is re-normalised when its normalizer
   changes (it depends on it `dynamically`, P5.1). (T6.2/T6.4.)
+  **Follows (2026-10-06):** a held value is re-normalised when its normalizer changes: it depends on it `dynamically`, from T6.2/T6.4 (`with X.normalizer = …` switches the normalizer) and P5.1 (`dynamically` recomputes on every change by default).
 - **T6.13 Equivalences to many, and from a type** — *`.ray2/_todo/ray.ray.txt/ray.ray:76–79`*: "Support many to*s";
   "What if from is type (how to distinguish?) then we'd want ==.instance_of". **Q** — Recommend: `equivalence a -> (b |
   c)` is one equivalence to a superposition. From a type it applies to its instances (`==.instance_of`); to relate the
   type itself, write `static`.
+  **Follows (2026-10-06):** `equivalence a -> (b | c)` is one equivalence to a superposition. From a type it applies to its instances (`==.instance_of`); to relate the type itself, write `static`, from U1 (superposition over enums), `==.instance_of` and T5.3 (`static` names the type itself).
 - **T6.14 `as T` through an isomorphic target** — *`.ray2/_todo/ray.ray.txt/ray.ray:3`*: ""as String" should also accept
   "as Digit[]"". **Q** — Recommend: `as T` succeeds through any conversion to a type isomorphic to T, by L§3.5's
   breadth-first walk.
+  **Follows (2026-10-06):** `as T` succeeds through any conversion to a type isomorphic to T, found by the breadth-first walk over the equivalence graph, from L§3.5 and N1.9 (isomorphisms are equivalences).
 
 ## T7. Values of a location (*ep:906–915, 1149*)
 
@@ -310,6 +318,7 @@ From the drafts review (2026-10-06).
   `.origin` / `.sources` on branched values (`v0/Node.ray:89`); L§8.2's origin is that of code, not of values. **Q** —
   Recommend as Decided text: every alternative in a superposition keeps where it came from (`.origin`, `.sources`).
   Narrowing an input (`with c = true`, `if assume c`) narrows the result to the alternatives that came from it.
+  **Follows (2026-10-06):** every alternative in a superposition keeps where it came from (`.origin`, `.sources`); narrowing an input (`with c = true`, `if assume c`) narrows the result to the alternatives that came from it, from P1.4 (`**` is provenance), v0's `.origin`/`.sources`/`holds_for` (`v0/Node.ray`) and U-C3 (`assume` narrows).
 
 ---
 

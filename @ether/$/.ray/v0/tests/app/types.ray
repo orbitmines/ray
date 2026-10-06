@@ -161,3 +161,8 @@ named_clash := UniquelyNamed(name: "ADA")
 if named_clash.name.is_unique<in: .fold_case> { INFO@mark `UQI2 a name another holds in other case is unique with case folded` }
 unless named_clash.name.is_unique { INFO@mark `UQI3 a name is not unique without folding case though no other is equal` }
 unless [1, 2, 1].unique == [1, 2] { INFO@mark `UQI4 each thing once is no longer what unique answers` }
+
+// A map's own key wins over Node's member (T8.7, T2.8)
+counted_map := { count: 3 }
+unless counted_map.count == 3 { INFO@mark `FWO1 a map's own count does not win over Node's` }
+unless (counted_map as Object).count == 3 { INFO@mark `FWO3 a value without Node does not read its own key` }

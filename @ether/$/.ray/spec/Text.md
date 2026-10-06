@@ -25,9 +25,11 @@ From the drafts review (2026-10-06).
 - **X1.10 `^`/`v` as case aliases** — **Q.** *.ray2/Language/String/String.ray:14–15*: `lower_case | lowercase | v`,
   `upper_case | uppercase | ^`. They clash with `^` as power/style (L§5.1, N1.12) and with `^`/`v` for super/subscript.
   Recommend: drop the `^`/`v` aliases for case.
+  **Follows (2026-10-06):** the `^`/`v` aliases for case are dropped (v0's `String.ray` has only `upper_case | uppercase`, `lower_case | lowercase`), from L§5.1 (`^` is style and power) and N1.12 / Almanac A5 (super/subscripts; N1.21 answer: subscript is `v`).
 - **X1.11 Editor glyph mappings inside strings** — **Q.** *.ray2/Language/String/String.ray:46*: how do escapes (`\n`, `\t`,
   `\x{}`) conflict with the editor's Unicode mappings for characters. Recommend: editor glyph mappings (`->` → `→`, G7.4)
   apply only outside string literals and escapes; inside a string the text is what was typed.
+  **Follows (2026-10-06):** editor glyph mappings (`->` → `→`) apply only outside string literals and escapes; inside a string the text is what was typed, from L§1.1 (a literal is what was written) and G6.3/G7.4 (glyph styles are equivalences over code).
 - **X1.12 Custom symbols as a String type** — **Q** (conflict with Decided X1.8, "custom symbols are dropped"). *IDE:665*
   (paraphrased): extend UTF-8 with custom symbols as a new String type; copied text marks which symbols are custom.
   Recommend (journal review): a `String` whose characters are `Char | Custom`, written out as plain UTF-8 with a fallback
@@ -99,6 +101,7 @@ From the drafts review (2026-10-06).
   bits; the compiler should reverse the time from the other three fields; an OS that allows custom v1 generation overrides
   it. Recommend: `uuid.time as Time` is the inverse of generation (L§4.5); a stamp past 60 bits (year 5236) is an error; an
   OS level may supply v1 generation (W6.9).
+  **Follows (2026-10-06):** `uuid.time as Time` is the inverse of generation, derived because every step is reversible; a stamp past 60 bits (year 5236) fails `time: Binary₆₀` and is an error; an OS level may supply v1 generation, from L§4.5 (an inverse is derived when every step is reversible), X5.2's structure and W6.9.
 - **X5.6 Identity-derived UUIDs** — **Q.** *…/Ether/instance/Entity.ray:91*, *…/Expression.ray:49*: a player's UUID node
   is generated from its public key and the time is when it joined; a history's UUIDs use a key-derived node and the last
   edit time. *.%/ORIGINAL-UUID-OF-OBJECT.ray:4*: a project uses the player's/organisation's public key for generating its
@@ -138,8 +141,10 @@ From the drafts review (2026-10-06).
   `leftmost` aggregate over the superposition; `xs.max(by)` is the superposition of the tied ones and `.first`/`.last` picks
   by position; `x ~= p` answers selections that stay in their context and does not change x (`.remove` on a match removes
   it); a superposed match is one match, `.expand` unfolds it. (Also R3.10, R3, U9.)
+  **Follows (2026-10-06):** as R3.22 and R3.23 (recorded there): inside `#{…}`, `min()` / `leftmost` aggregate over the superposition; `xs.max(by)` is the superposition of the tied ones and `#.first`/`#.last` picks by position; `x ~= p` answers selections that stay in their context and does not change x (`.remove` on a match removes it); a superposed match is one match, `.expand` unfolds it, from U1, R3.4, T2.3, L§1.2 and R3.1.
 - **X6.9 IP ranges** — **Q.** *7250308 Test.ray:38* (`//TODO Range`). Recommend: `ip1..ip2` is the range over X6.2's line
   (R4), with no IP-specific code.
+  **Follows (2026-10-06):** `ip1..ip2` is the range over X6.2's line, with no IP-specific code, from X6.2 (an address is a location on a line) and R4.1 (ranges are rays).
 
 ---
 

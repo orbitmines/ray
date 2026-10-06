@@ -52,3 +52,7 @@ unless cidr_block == "10.0.0.0/8" as IP { INFO@mark `BLK4 the block divided out 
 unless "10.0.0.0" as IP / 32 as String == "10.0.0.0" { INFO@mark `BLK5 a block of all the bits is written with a prefix` }
 unless "::ffff:1.2.3.4" as IP is ("::ffff:0:0/96" as IP) { INFO@mark `BLK6 a mapped address is not in the mapped block` }
 if "1::2" as IP is ("64:ff9b::/96" as IP) { INFO@mark `BLK7 an address outside the translated block is in it` }
+
+// A range of addresses is a range on their line (X6.9)
+unless ("1.0.0.10" as IPv4 .. "1.0.0.13" as IPv4).count == 4 { INFO@mark `FWR1 1.0.0.10 to 1.0.0.13 is not four addresses` }
+unless ("1.0.0.10" as IPv4 .. "1.0.0.13" as IPv4).last as String == "1.0.0.13" { INFO@mark `FWR2 a range of addresses does not end where written` }

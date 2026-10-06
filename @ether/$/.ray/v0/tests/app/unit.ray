@@ -44,3 +44,7 @@ unless 1k == 1000 { INFO@mark `UB15 1k is not a thousand` }
 unless 2 GB/s * 3 s == 6 GB { INFO@mark `U51 a rate times a duration is not an amount` }
 unless 1d 10h 10m 30s as s == 123030 s { INFO@mark `U52 a juxtaposed quantity is not the sum of its parts` }
 unless 10000000 s as days hours minutes seconds == 115d 17h 46m 40s { INFO@mark `U53 a quantity is not normalized into days hours minutes seconds` }
+
+unless 2 B as Binary == Binary₁₆ { INFO@mark `FWB1 two bytes are not sixteen bits of Binary` }
+unless 1 KiB as Binary == Binary{length == 8192} { INFO@mark `FWB2 a kibibyte is not 8192 bits of Binary` }
+unless (0.5 b as Binary).erred { INFO@mark `FWB3 half a bit is Binary` }

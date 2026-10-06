@@ -60,8 +60,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   right-to-left ∏ | product => reduce(total = 1 => total * .)
   min => reduce((acc) => acc < . ? acc : .)
   max => reduce((acc) => acc > . ? acc : .)
-  min | min_by (key: Program | Section) => reduce((acc) => key(acc) <= key(.) ? acc : .)
-  max | max_by (key: Program | Section) => reduce((acc) => key(acc) >= key(.) ? acc : .)
+  min | min_by (key: Program | Section) => this[{key(.) == map(key).min}].all
+  max | max_by (key: Program | Section) => this[{key(.) == map(key).max}].all
   count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
   length => paths.map(.count).max
   paths: Path{.bounded: bounded} => [this]
@@ -310,7 +310,7 @@ Path := class: Structure{consistent & connected} {
   length => acyclic ? count : ∞
 }
 Array := class: Path{acyclic} {
-  push_back | push (x) => (this &= x) -- this
+  push_back | push (x = ?) => (this &= x) -- this
   push_front (x) => {
     added = link x None
     added.next = head

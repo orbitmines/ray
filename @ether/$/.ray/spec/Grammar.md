@@ -31,6 +31,7 @@ From the drafts review (2026-10-06).
 - **G1.8 Any text is legal syntax** — *`.ray2/_todo/…/instance/Expression.ray:2`*: `class Expression = String // Any
   string is legal syntax`. **Q** — Recommend: no text is a syntax error. What no rule reads stays a value (an unresolved
   Expression, which is a String) with a diagnostic, and later rules may still read it.
+  **Answered (user, 2026-10-06):** text no rule reads is an error, and the error is its diagnostic: reading goes on, so a file can hold several. The unread text stays an unresolved Expression that later rules may still read.
 
 ## G2. Calls and juxtaposition (*ep:1217–1264, 1383–1420*)
 
@@ -84,12 +85,15 @@ From the drafts review (2026-10-06).
   "if(a, == b block)", or "(if condition).block"? G2.13 covers continuation, not an indented argument list. **Q** —
   Recommend: lines indented under a call are its arguments in order; an operator-led line (`== b`) continues the previous
   argument (G2.13); the last is the block when the callee takes a `(): *`. The example is `if(a == b, block)`.
+  **Answered (user, 2026-10-06):** indented lines under a call are its arguments in order; an operator-led line continues the previous (G2.13); `a ; + b` applies to the result before `;`; a closure argument extends to the next `,`/`->` at its level.
 - **G2.20 `;` keeps the continuation's subject** — *`.ray2/_todo/…/instance/Expression.ray:50`*: "; does not change the
   selected context to + on." **Q** — Recommend: `a ; + b` applies `+ b` to the result before `;`. `;` separates statements
   but does not reset what a continuation applies to (G2.13).
+  **Answered (user, 2026-10-06):** indented lines under a call are its arguments in order; an operator-led line continues the previous (G2.13); `a ; + b` applies to the result before `;`; a closure argument extends to the next `,`/`->` at its level.
 - **G2.21 A closure argument reaches the next `,`** — *`.ray3/Node.ray:58`*: "Accept closure up to syntax for , for
   instance, or -> should have it too". **Q** — Recommend yes: a closure argument extends up to the next `,` (or `->`) at
   its level, consistent with `,` composing one value (2026-09-27).
+  **Answered (user, 2026-10-06):** indented lines under a call are its arguments in order; an operator-led line continues the previous (G2.13); `a ; + b` applies to the result before `;`; a closure argument extends to the next `,`/`->` at its level.
 - **G2.22 Member names with holes** — *`.ray3/Node.ray:108–109`*: `{property: (\S[], "{", *, "}", \S[])+} =>
   this[property - punctuation]`, so `a.foo{x}bar` reads the member `"foo" + x + "bar"`. **Q** — Recommend yes: a computed
   member name uses the same `{…}` holes as string interpolation (L§10.1).
@@ -136,6 +140,7 @@ From the drafts review (2026-10-06).
 - **G3.12 How far `:` reaches left** — *`.ray2/Grammar.ray:584–589`*: `a + b: Terminating () c + d` is
   `a + (b () c + d)`; `(a + b)()` to annotate more. **Q** — Recommend the draft: `:` binds only to the nearest operand on
   its left, as a hugging member does (G2.7). Parenthesise to annotate a larger expression.
+  **Answered (user, 2026-10-06):** the nearest operand only, like a hugging member (G2.7).
 - **G3.13 One argument per side** — *`.ray2/Grammar.ray:242–249`*: arity is always 1 (`,` collapses many into one); a
   bracket operator is a triple with a None side (prefix `[None [{}] r]`, postfix `[l [{}] None]`); juxtaposition and `,`
   are operators like any other. G3.2 rejected the whole-run reduce, not these. **Q** — Recommend keeping them as
@@ -219,10 +224,12 @@ From the drafts review (2026-10-06).
   elsewhere "wouldnt fail, it would just drop this interpretation". Refines Decided G5.1/G5.2 (circular prevention is an
   error). **Q** — Recommend: a reading that would define a rule already defined elsewhere is dropped, not an error; only
   a mutual prevention that leaves no reading is the error.
+  **Answered (user, 2026-10-06):** a rule defined again with `=>` overrides the earlier one; with `&=>` it superposes with it (as decided 2026-09-27 for subclass rules).
 - **G5.6 First defined wins within a phase** — *`.ray3/Node.ray:8–9`*: "Whichever one is defined first would 'prevent'
   the other one from being defined … pay attention when importing other code that it doesnt nullify certain grammar
   rules". **Q** — Recommend: within one phase the first-defined rule wins; importing code that would nullify an existing
   rule is a diagnostic.
+  **Answered (user, 2026-10-06):** see G5.5: `=>` overrides, `&=>` superposes; no first-wins rule.
 
 ## G6. Modifiers (*ep:1022–1029, 1266, 1295–1298*)
 

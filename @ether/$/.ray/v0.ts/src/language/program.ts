@@ -10,7 +10,6 @@ import { Paints } from './paints.ts';
 export function v0(diagnostics: Diagnostics) {
   return new Program(diagnostics)
     .add(env.directory(`@ether/$/${EXTENSION}/v0/ray`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
-    .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
     .interpreting(optimizations());
 }
 

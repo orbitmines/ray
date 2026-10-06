@@ -54,12 +54,12 @@ unless Roman.Fraction.deunx as Decimal == 1.0 * 11 / 12 { INFO@mark `RO48 the de
 
 unless "IIII" as Roman as Decimal == 4 { INFO@mark `RO61 IIII is not read as four` }
 unless "IIII" as Roman as Decimal as Roman == "IV" { INFO@mark `RO63 IIII does not normalize to IV` }
-unless Roman.normalizer == Roman.Normalizer.Subtractive { INFO@mark `RO65 the normalizer is not subtractive to begin with` }
+unless Roman.normalizer == Roman.Subtractive { INFO@mark `RO65 the normalizer is not subtractive to begin with` }
 1..20 for (n) => {
   unless n as Roman as Decimal == n { INFO@mark `RO66 a number does not come back from its roman form` }
 }
 (
-  with Roman.normalizer = Additive
+  with Roman.normalizer = Roman.Additive
   unless 4 as Roman == "IIII" { INFO@mark `RO68 four is not written IIII once the normalizer is additive` }
   unless 9 as Roman == "VIIII" { INFO@mark `RO11 nine is not written VIIII the additive way` }
   unless 3 as Roman == "III" { INFO@mark `RO24 three is written the same either way` }

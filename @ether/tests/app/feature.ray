@@ -6,8 +6,8 @@ unless Random.bit { INFO@mark `FE1 a bit from the machine is nothing` }
 unless Random.bits(3).count == 3 { INFO@mark `FE2 three bits are not three` }
 unless boolean#.random is boolean { INFO@mark `FE3 a coin comes up with nothing` }
 
-unless Proof.rfl(Proof.Proposition(holds: true)) { INFO@mark `FE7 what holds is not proved by itself` }
-if Proof.rfl(Proof.Proposition(holds: false)) { INFO@mark `FE8 what does not hold is proved by itself` }
+unless Proof.rfl(Proof.Proposition(code: { true })) { INFO@mark `FE7 what holds is not proved by itself` }
+if Proof.rfl(Proof.Proposition(code: { false })) { INFO@mark `FE8 what does not hold is proved by itself` }
 
 unless `+`.reversible { INFO@mark `FE9a the inverses have no plus` }
 unless `+`⁻¹ as String == "-" { INFO@mark `FE9b the inverse of plus is not minus` }
@@ -44,8 +44,8 @@ if ones == 0 { INFO@mark `RN6 twenty draws were all nothing` }
 if zeros == 0 { INFO@mark `RN7 twenty draws were all something` }
 
 // A proposition holds or it does not, and what says so is a proof.
-yes := Proof.Proposition(holds: true)
-no := Proof.Proposition(holds: false)
+yes := Proof.Proposition(code: { true })
+no := Proof.Proposition(code: { false })
 unless yes.holds { INFO@mark `PF1 a proposition written as holding does not hold` }
 if no.holds { INFO@mark `PF2 a proposition written as not holding holds` }
 if yes.negated.holds { INFO@mark `PF3 the negation of one that holds holds` }
@@ -105,8 +105,8 @@ unless @me/device/os["platform"].nonempty { INFO@mark `IO3 the machine does not 
 unless @me/device/os["architecture"] == @me/device/os/architecture { INFO@mark `IO4 asking by name is not asking the other way` }
 // Reading a location answers what is written there and leaves it as it was:
 // the file the library is declared in is read twice.
-read_once := IO.read(`@ether/.project.ray`)
-read_twice := IO.read(`@ether/.project.ray`)
+read_once := (`@ether/.project.ray` as Location).content
+read_twice := (`@ether/.project.ray` as Location).content
 unless read_once.nonempty { INFO@mark `IO5 a read answers nothing` }
 unless read_once == read_twice { INFO@mark `IO6 reading a file changed it` }
 // spec: writing a location is not claimed here — a test that writes a file
@@ -114,7 +114,7 @@ unless read_once == read_twice { INFO@mark `IO6 reading a file changed it` }
 
 // A location computed as a string reaches the machine as the bits it is
 // written with.
-read_by_bits := IO.read("@ether/.project.ray".bits)
+read_by_bits := ("@ether/.project.ray".bits as Location).content
 unless read_by_bits == read_once { INFO@mark `IO7 a location given as a string's bits is read as another place` }
 
 kept := Storage()

@@ -15,7 +15,7 @@ unless Network.DomainName(text: "a.b").valid { INFO@mark `WO7 the domain name a.
 if Network.DomainName(text: "").valid { INFO@mark `WO8 a name of nothing is a valid domain name` }
 unless Keyboard.Key(name: "a").press.pressed { INFO@mark `WO9 a pressed key is not pressed` }
 unless Chat().commit(wp, Program(code: { "hi" })).count == 1 { INFO@mark `WO10 a said message is not in the chat` }
-unless Proof.theorem(Proof.Proposition(holds: true), Proof(proposition: None, argument: Proof.Proposition(holds: true))) { INFO@mark `WO11 the theorem does not hold` }
+unless Proof.theorem(Proof.Proposition(code: { true }), Proof(proposition: None, argument: Proof.Proposition(code: { true }))) { INFO@mark `WO11 the theorem does not hold` }
 
 // Locations: what holds what, and how deep that goes.
 here := Location(host: None)
@@ -382,7 +382,6 @@ if clm_quest.reached(clm) { INFO@mark `CLM2 a claim is reached before the claima
 clm.authors.push clm_who
 unless clm_quest.reached(clm) { INFO@mark `CLM3 a claim is not reached once the claimant is an author` }
 
-// A name answers what holds it in the world, whatever letters stand in for others: confusables are one name (UTS #39).
-cnf := World(name: "confusables")
-cnf.@admin = 1
-unless (cnf.@аdmin = 2) is Abstract { INFO@mark `CNF1 a name spelled with a Cyrillic а is another name` }
+// A name confusable with a reserved one finds it, and a confusable mixed-script name is not reserved (UTS #39).
+unless wg.@dаwn === wp { INFO@mark `SKL5 a name confusable with a reserved one does not find it` }
+unless (wg.@pаge = 3).erred { INFO@mark `SKL6 a name that mixes scripts and is confusable is reserved` }

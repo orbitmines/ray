@@ -47,4 +47,4 @@ unless Compiler.memoised { INFO@mark `CO33 there is no memoising level` }
 unless Compiler.levels.contains(Compiler.memoised) { INFO@mark `CO34 the memoising level is not one of the levels` }
 twice := (x) => x * 2
 unless Program(code: { twice(4) + twice(4) }){O: Compiler.memoised}() == 16 { INFO@mark `CO35 a remembered application does not answer what it answered` }
-unless twice.results.count == 1 { INFO@mark `CO36 a pure application with the same arguments is not remembered once` }
+unless Compiler.memoised.remembered.fields.count == 1 { INFO@mark `CO36 a pure application with the same arguments is not remembered once` }

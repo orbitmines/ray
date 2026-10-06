@@ -23,6 +23,8 @@ Unicode := class {
 
   static Blocks => file("Blocks") as Table<(range: Range, "; ", value: *)>
   static Scripts => file("Scripts") as Table<(range: Range, " "[], "; ", value: *)>
+  // UTS #39 §4: each confusable character and the prototype it maps to, from the security data of the same version (https://www.unicode.org/reports/tr39/#Confusable_Detection, https://www.unicode.org/Public/security/)
+  static confusables => (Public / "security" / "{spelled}.0" / "confusables.txt") as Table<(range: Range, " "[], ";", "\t"[], prototype: Scalar[].join(" "), " "[], ";", "\t"[], type: Char.Word[], *)>
   static EastAsianWidth => file("EastAsianWidth") as Table<(range: Range, " "[], "; ", value: *)>
   static CaseFolding => file("CaseFolding") as Table<(range: Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
   static SpecialCasing => file("SpecialCasing") as Table<(
@@ -53,17 +55,17 @@ Unicode := class {
     rows.for category => static `category.name` = Scalar{Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
   }
 
-  static Endianness := enum BE | LE
-
   static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
     static CodeUnit: Binary
-    endianness: Endianness = BE
     static Decoding := {
       {unit: UTF-16.Unit{prefix}} => unit.U0 + 1, unit.U1, unit.U2
       {unit} => unit.U0, unit.U1, unit.U2, unit.U3
     }
     as (=== CodePoint[]) => sequence.map(Compiler.reduced(., Decoding))
-    bytes => endianness == LE ? <-(this as Byte[]) : this as Byte[]
+    bytes => this as Byte[]
+  }
+  static LittleEndian := TF{} {
+    bytes => <-(this as Byte[])
   }
 
   static UTF-8 := class: TF = sequence: Unit[] {

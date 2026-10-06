@@ -1,5 +1,4 @@
-// A name is an identifier, and two names are one when their confusable skeletons are (https://www.unicode.org/reports/tr39/#Confusable_Detection)
-reservable_names := String.NonEmpty{length < 2^8}{is Unicode.Identifier}
+reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 
 @ether = @`ether.orbitmines.com:37839`
 

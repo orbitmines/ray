@@ -32,12 +32,11 @@ unless ("😀" as Unicode.UTF-16).bytes.length == 4 { INFO@mark `UN23 😀 is ot
 unless ("a" as Unicode.UTF-32).bytes.length == 4 { INFO@mark `UN24 a is other than four bytes in UTF-32` }
 unless "😀" as Unicode.UTF-16 as String == "😀" { INFO@mark `UN25 😀 does not come back from UTF-16` }
 
-unless ("a" as Unicode.UTF-16).endianness == Unicode.Endianness.BE { INFO@mark `UN47 the bytes are not big-endian unless told otherwise` }
 big := ("a" as Unicode.UTF-16).bytes
 byte := ("a" as Unicode.UTF-8).bytes
 unless big == (0x00, 0x61) { INFO@mark `UN50 a in big-endian UTF-16 is not 00 61` }
-unless ("a" as Unicode.UTF-16{endianness == Unicode.Endianness.LE}).bytes == <-big { INFO@mark `UN48 little-endian does not read the bytes right to left` }
-unless ("a" as Unicode.UTF-8{endianness == Unicode.Endianness.LE}).bytes == byte { INFO@mark `UN49 a single byte is not the same either way` }
+unless ("a" as Unicode.UTF-16 as Unicode.LittleEndian).bytes == <-big { INFO@mark `UN48 little-endian does not read the bytes right to left` }
+unless ("a" as Unicode.UTF-8 as Unicode.LittleEndian).bytes == byte { INFO@mark `UN49 a single byte is not the same either way` }
 
 unless (Unicode.UCD as String).starts_with("https://www.unicode.org/Public/") { INFO@mark `UN36 the tables are not read from unicode.org` }
 unless Unicode.version == 17 { INFO@mark `UN40 the Unicode version is not seventeen` }

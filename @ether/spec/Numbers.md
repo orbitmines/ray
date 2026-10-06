@@ -226,7 +226,7 @@ Answers from 2026-09-30.
 - **N4.5** Epochs now: `"2025-01-01"` with `epoch: "2000-01-01"` is `25.years`, and calendar conversions
   keep the epoch structure.
 - **N4.6/N4.7** tzdata and leap seconds now, read through IO (the byte stream); a minute may be 61 s.
-- **N4.9** Astronomy later; Mars's sol and year stay as they are. (2026-10-06: v0 had rounded them; it now keeps
+- **N4.9** Astronomy later; Mars's sol and year stay as they are. (2026-10-06: `Planet`, `Earth`, `Mars` and their units moved from core to `@ether/geometry/Planet.ray`.) (2026-10-06: v0 had rounded them; it now keeps
   88775.244 s and 668.5991 sol.)
 - **N4.10** A value that may be corrected carries an uncertainty: `now` is a distribution (U8) around the
   reading, and a correction narrows it.

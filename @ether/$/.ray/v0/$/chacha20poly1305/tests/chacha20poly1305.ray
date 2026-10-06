@@ -1,0 +1,20 @@
+// ChaCha20, Poly1305 and their AEAD against RFC 8439's test vectors (https://www.rfc-editor.org/rfc/rfc8439).
+
+mark ^keyword := external global
+
+// The block function: key 00..1f, nonce 00:00:00:09:00:00:00:4a:00:00:00:00, counter 1 (RFC 8439 §2.3.2)
+unless ChaCha20Poly1305.block(0..<32, 1, "000000090000004a00000000" as Hexadecimal₂₄ as Byte₁₂) as Hexadecimal₁₂₈ == "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e" { INFO@mark `CCP1 the block of RFC 8439 §2.3.2 is not 10f1e7e4…` }
+
+// Poly1305 over "Cryptographic Forum Research Group" (RFC 8439 §2.5.2)
+unless ChaCha20Poly1305.poly1305("85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b" as Hexadecimal₆₄ as Byte₃₂, "Cryptographic Forum Research Group".bytes) as Hexadecimal₃₂ == "a8061dc1305136c6c22b8baf0c0127a9" { INFO@mark `CCP2 the tag of RFC 8439 §2.5.2 is not a8061dc1…` }
+
+// The AEAD: key 80..9f, nonce 07:00:00:00:40..47, AAD 50:51:52:53:c0..c7, and the sunscreen sentence (RFC 8439 §2.8.2)
+ccp_key := 0x80..<0xa0
+ccp_nonce := "070000004041424344454647" as Hexadecimal₂₄ as Byte₁₂
+ccp_aad := "50515253c0c1c2c3c4c5c6c7" as Hexadecimal₂₄ as Byte₁₂
+ccp_text := "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.".bytes
+ccp_sealed := ChaCha20Poly1305.sealed(ccp_key, ccp_nonce, ccp_aad, ccp_text) as ChaCha20Poly1305.Sealed
+unless ccp_sealed.ciphertext as Hexadecimal₂₂₈ == "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b6116" { INFO@mark `CCP3 the ciphertext of RFC 8439 §2.8.2 is not d31a8d34…` }
+unless ccp_sealed.tag as Hexadecimal₃₂ == "1ae10b594f09e26a7e902ecbd0600691" { INFO@mark `CCP4 the tag of RFC 8439 §2.8.2 is not 1ae10b59…` }
+unless ChaCha20Poly1305.opened(ccp_key, ccp_nonce, ccp_aad, ccp_sealed as Byte[]) == ccp_text { INFO@mark `CCP5 what was sealed does not open` }
+unless ChaCha20Poly1305.opened(ccp_key, ccp_nonce, [], ccp_sealed as Byte[]) is Diagnostic { INFO@mark `CCP6 what was sealed opens under other associated data` }

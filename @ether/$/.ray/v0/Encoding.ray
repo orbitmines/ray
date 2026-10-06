@@ -8,6 +8,28 @@ Encoding := class {
     write (value) => Packed(value, algorithm: this)
   }
 
+  Asymmetric := class: Language {
+    pair (secret: Byte[] = secure Byte₃₂.random) => Key(algorithm: this, public: public(secret), secret)
+  }
+  Signing := class: Asymmetric {
+    read (signed: Signed) => signed.valid ? signed.value : ERROR `the signature does not hold for what it signs`
+  }
+  Agreement := class: Asymmetric
+
+  Key := class = algorithm: Asymmetric, public: Byte[], none.read secret: Byte[]? {
+    published => Key(algorithm, public)
+    signed (value) => Signed(value, by: published, signature: algorithm.sign(secret, value as Byte[]))
+    agreed (other: Byte[]) => algorithm.agreed(secret, other)
+    zeroised: static => this ~~ .secret = None
+    chainable == (other: Key) => algorithm === other.algorithm && public == other.public
+  }
+  Signed := class = value: *, by: Key, signature: Byte[] {
+    valid => by.algorithm.verify(by.public, value as Byte[], signature)
+  }
+
+  static little (number: Number, count: Number) => <-(number as Binary{length == 8 * count} as Byte[])
+  static little_number (bytes: Byte[]) => (<-bytes) as Binary
+
   Packed := class = value: *, algorithm: Packing {
     as (target) => algorithm.read(this)
   }

@@ -45,7 +45,7 @@ Network &+= {
   static Remote := class = character: Character, location: Location = @remote {
     static Execution := class = code: *, as: Character, at: Location
 
-    run (code) => character.key ? Execution(code, as: character, at: location) : Program(name: "authorise", goal: code)
+    run (code) => character is Verified ? Execution(code, as: character, at: location) : Program(name: "authorise", goal: code)
     fresh (code) => Remote(Character(name: "unauthorised"), location).run(code)
   }
 

@@ -1,0 +1,23 @@
+// Ed25519 against RFC 8032's test vectors (https://www.rfc-editor.org/rfc/rfc8032#section-7.1).
+
+mark ^keyword := external global
+
+// TEST 1: the secret key, its public key, and the signature of the empty message (RFC 8032 §7.1)
+ed_secret := "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60" as Hexadecimal₆₄ as Byte₃₂
+ed_public := "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a" as Hexadecimal₆₄ as Byte₃₂
+ed_signature := "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b" as Hexadecimal₁₂₈ as Byte₆₄
+unless Ed25519.public(ed_secret) == ed_public { INFO@mark `EDS1 the public key of RFC 8032's test 1 is not d75a9801…` }
+unless Ed25519.sign(ed_secret, []) == ed_signature { INFO@mark `EDS2 the empty message does not sign as e5564300… in RFC 8032's test 1` }
+unless Ed25519.verify(ed_public, [], ed_signature) { INFO@mark `EDS3 the signature of RFC 8032's test 1 does not verify` }
+if Ed25519.verify(ed_public, [0x72], ed_signature) { INFO@mark `EDS4 a signature verifies for another message` }
+if Ed25519.verify(ed_public, [], [ed_signature[..<63], ed_signature[63] ~x|| 0x01].flatten) { INFO@mark `EDS5 a changed signature verifies` }
+
+// The base point decodes to y = 4/5 and encodes back; L B is the neutral point (RFC 8032 §5.1)
+unless (Ed25519.B as Byte[]) as Ed25519.Point == Ed25519.B { INFO@mark `EDS6 the base point does not read back as itself` }
+unless Ed25519.B * Ed25519.L == Ed25519.Point.neutral { INFO@mark `EDS7 the base point times its order is not the neutral point` }
+
+// A key pair names its algorithm, and what it signs is read back only where the signature holds
+ed_pair := Ed25519.pair(ed_secret)
+unless ed_pair.algorithm === Ed25519 && ed_pair.public == ed_public { INFO@mark `EDS8 a key pair forgot its algorithm or its public half` }
+unless Ed25519.read(ed_pair.signed("abc".bytes)) == "abc".bytes { INFO@mark `EDS9 what a key signed does not read back` }
+unless Ed25519.read(ed_pair.signed("abc".bytes) ~~ .value = "abd".bytes) is Diagnostic { INFO@mark `EDS10 a signed value that was changed reads back` }

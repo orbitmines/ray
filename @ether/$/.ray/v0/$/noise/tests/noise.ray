@@ -1,0 +1,33 @@
+// Noise_XX_25519_ChaChaPoly_SHA256 (https://noiseprotocol.org/noise.html), and its HKDF against RFC 5869.
+
+mark ^keyword := external global
+
+// HKDF test case 1: 22 bytes of 0x0b, salt 00..0c, info f0..f9, 42 bytes (https://www.rfc-editor.org/rfc/rfc5869#appendix-A.1)
+nz_protocol := Noise()
+unless nz_protocol.hmac(0..<13, [0x0b] * 22) as Hexadecimal₆₄ == "077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5" { INFO@mark `NZ1 the PRK of RFC 5869's test case 1 is not 07770936…` }
+unless nz_protocol.hkdf(0..<13, [0x0b] * 22, 0xf0..<0xfa, 42) as Hexadecimal₈₄ == "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865" { INFO@mark `NZ2 the OKM of RFC 5869's test case 1 is not 3cb25f25…` }
+
+// The name has 32 bytes, HASHLEN, so h starts as the name itself (§5.2, §8)
+unless nz_protocol.name == "Noise_XX_25519_ChaChaPoly_SHA256" { INFO@mark `NZ3 the protocol is not named Noise_XX_25519_ChaChaPoly_SHA256` }
+nz_alice := Noise.handshake(true, X25519.pair())
+nz_bob := Noise.handshake(false, X25519.pair())
+unless Noise.handshake(true, X25519.pair()).h == nz_protocol.name.bytes { INFO@mark `NZ4 a name of HASHLEN bytes is not h as it is` }
+
+// -> e; <- e, ee, s, es; -> s, se: both sides end with one handshake hash, each holding the other's static key (§7.5)
+nz_bob.read(nz_alice.written())
+nz_hello := nz_alice.read(nz_bob.written("hello".bytes))
+unless nz_hello == "hello".bytes { INFO@mark `NZ5 the payload of the second message does not read back` }
+unless nz_bob.read(nz_alice.written()) == [] { INFO@mark `NZ6 an empty payload does not read back empty` }
+unless nz_alice.done && nz_bob.done { INFO@mark `NZ7 three messages do not finish XX` }
+unless nz_alice.h == nz_bob.h && nz_alice.bound == nz_bob.bound { INFO@mark `NZ8 the two sides end with other handshake hashes` }
+unless nz_alice.rs == nz_bob.s.public && nz_bob.rs == nz_alice.s.public { INFO@mark `NZ9 a side does not learn the other's static key` }
+if nz_alice.e.public == nz_bob.e.public { INFO@mark `NZ10 both sides used one ephemeral key` }
+
+// Split: what one side sends, the other receives (§5.2)
+nz_a := nz_alice.session
+nz_b := nz_bob.session
+unless nz_b.received(nz_a.sent("ping".bytes)) == "ping".bytes { INFO@mark `NZ11 a transport message from the initiator does not arrive` }
+unless nz_a.received(nz_b.sent("pong".bytes)) == "pong".bytes { INFO@mark `NZ12 a transport message from the responder does not arrive` }
+unless nz_a.binding == nz_b.binding { INFO@mark `NZ13 the two sessions are bound to other hashes` }
+unless nz_a.peer.algorithm === X25519 { INFO@mark `NZ14 the peer's key does not name its algorithm` }
+unless Noise.handshake(true, X25519.pair()).session is Abstract { INFO@mark `NZ15 an unfinished handshake has a session` }

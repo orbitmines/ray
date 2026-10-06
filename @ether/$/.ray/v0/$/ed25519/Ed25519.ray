@@ -1,0 +1,53 @@
+// Edwards-Curve Digital Signature Algorithm, Ed25519 (https://www.rfc-editor.org/rfc/rfc8032)
+Ed25519 := class: Encoding.Signing {
+  static extensions = ".ed25519"
+
+  // The field GF(2^255 - 19), the curve constant d = -121665/121666 and the order L of the base point (RFC 8032 §5.1)
+  static p = 2 ^ 255 - 19
+  static power (base, exponent, modulus = p) => exponent.digits(2).reduce(held = 1 => held * held * (. == 1 ? base : 1) % modulus)
+  static inverse (x) => power(x, p - 2)
+  static d = (p - 121665) * inverse(121666) % p
+  static L = 2 ^ 252 + 27742317777372353535851937790883648493
+  static I = power(2, (p - 1) / 4)
+
+  // A point of -x^2 + y^2 = 1 + d x^2 y^2, added by the complete twisted Edwards formula (RFC 8032 §5.1.4)
+  static Point := class = x: Number, y: Number {
+    static neutral = Point(x: 0, y: 1)
+    + (other: Point) => d * x * other.x * y * other.y % p -- (t => Point(
+      x: (x * other.y + other.x * y) * inverse(1 + t) % p,
+      y: (y * other.y + x * other.x) * inverse(p + 1 - t) % p))
+    * (n: Number) => n.digits(2).reduce(held = neutral => held + held + (. == 1 ? this : neutral))
+    == (other: Point) => x == other.x && y == other.y
+
+    // Encoding: y in 255 bits little-endian, the low bit of x in the top bit (RFC 8032 §5.1.2)
+    as (=== Byte[]) => Encoding.little(y + x % 2 * 2 ^ 255, 32)
+    // Decoding: y, then x from x^2 = (y^2 - 1) / (d y^2 + 1) by the square root of §5.1.1, its sign from the top bit (RFC 8032 §5.1.3)
+    static (bytes: Byte₃₂) as (=== Point) => {
+      y = Encoding.little_number(bytes) % 2 ^ 255
+      sign = (Encoding.little_number(bytes) / 2 ^ 255).floor
+      u = (y * y + p - 1) * inverse(d * y * y + 1) % p
+      root = power(u, (p + 3) / 8) -- (. * . % p == u ? . : . * I % p)
+      return ERROR `the bytes are not a point of Ed25519` if y >= p || root * root % p != u || root == 0 && sign == 1
+      Point(x: root % 2 == sign ? root : (p - root) % p, y)
+    }
+  }
+
+  // The base point: y = 4/5 and x even (RFC 8032 §5.1)
+  static B = Encoding.little(4 * inverse(5) % p, 32) as Point
+
+  // The secret's SHA-512, pruned: the low three bits and the top bit cleared, the next highest set (RFC 8032 §5.1.5)
+  static clamped (bytes: Byte₃₂) => (Encoding.little_number(bytes) ~&& (2 ^ 254 - 8)) + 2 ^ 254
+  static expanded (secret: Byte₃₂) => $.sha512.write(secret).bytes -- (h => (scalar: clamped(h[..<32]), prefix: h[32..]))
+  static reduced (bytes: Byte[]) => Encoding.little_number($.sha512.write(bytes).bytes) % L
+
+  // The public key: the base point times the pruned scalar (RFC 8032 §5.1.5)
+  static public (secret: Byte₃₂) => (B * expanded(secret).scalar) as Byte[]
+
+  // Signing: r from the prefix and the message, R = rB, S = r + H(R, A, M) s mod L (RFC 8032 §5.1.6)
+  static sign (secret: Byte₃₂, message: Byte[]) => expanded(secret) -- (key => reduced([key.prefix, message].flatten) -- (r => (B * r) as Byte[] -- (R =>
+    [R, Encoding.little((r + reduced([R, public(secret), message].flatten) * key.scalar) % L, 32)].flatten)))
+
+  // Verifying: S < L and SB = R + H(R, A, M) A, the equation without the cofactor, which §5.1.7 allows
+  static verify (public: Byte₃₂, message: Byte[], signature: Byte₆₄) => Encoding.little_number(signature[32..]) -- (s =>
+    s < L && B * s == (signature[..<32] as Point) + (public as Point) * reduced([signature[..<32], public, message].flatten))
+}

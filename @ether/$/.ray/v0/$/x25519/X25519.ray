@@ -1,0 +1,28 @@
+// Elliptic Curves for Security, X25519 (https://www.rfc-editor.org/rfc/rfc7748)
+X25519 := class: Encoding.Agreement {
+  static extensions = ".x25519"
+  static p = Ed25519.p
+
+  // One rung of the Montgomery ladder: (x2, z2) doubled, (x3, z3) added to it, with a24 = 121665 (RFC 7748 §5)
+  static stepped (x2, z2, x3, z3, x1) => {
+    a = x2 + z2
+    b = x2 + p - z2
+    da = (x3 + p - z3) * a % p
+    cb = (x3 + z3) * b % p
+    aa = a * a % p
+    bb = b * b % p
+    (aa * bb % p, (aa + p - bb) * (aa + 121665 * (aa + p - bb)) % p, (da + cb) ^ 2 % p, x1 * (da + p - cb) ^ 2 % p)
+  }
+  // The ladder from bit 254 down, the pairs swapped where k has a 1, and x2 / z2 at the end (RFC 7748 §5)
+  static ladder (k: Number, u: Number) => (254..0).reduce(held = (1, 0, u, 1) => (k / 2 ^ .).floor % 2 == 1
+    ? stepped(held[2], held[3], held[0], held[1], u) -- (.[2], .[3], .[0], .[1])
+    : stepped(held[0], held[1], held[2], held[3], u)
+  ) -- (.[0] * Ed25519.inverse(.[1]) % p)
+
+  // The scalar pruned as Ed25519's (decodeScalar25519), the u-coordinate without its top bit (decodeUCoordinate) (RFC 7748 §5)
+  static x25519 (k: Byte₃₂, u: Byte₃₂) => Encoding.little(ladder(Ed25519.clamped(k), Encoding.little_number(u) % 2 ^ 255), 32)
+
+  // The public key is the scalar times u = 9; the shared secret is one's scalar times the other's public key, refused when it is all zeros (RFC 7748 §6.1)
+  static public (secret: Byte₃₂) => x25519(secret, Encoding.little(9, 32))
+  static agreed (secret: Byte₃₂, other: Byte₃₂) => x25519(secret, other) -- (. == [0] * 32 ? ERROR `the other public key gives an all-zero shared secret` : .)
+}

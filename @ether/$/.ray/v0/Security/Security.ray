@@ -1,0 +1,164 @@
+Identity := class = keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.Digest = algorithms.digest, signing: Encoding.Signing = algorithms.signing,
+  agreement: Encoding.Agreement = algorithms.agreement, handshake: Language = algorithms.handshake, printed_key: Encoding.Key?, guardians: *[] = [@ether],
+  certificates: Identity.Certificate[] = [], vetoed: Byte[][] = [],
+  revoke: Identity.Threshold = 1 of keys,
+  add: Identity.Threshold = (2 min keys.count) of keys,
+  rotate: Identity.Threshold = (2 min keys.count) of [keys, next].flatten,
+  recover: Identity.Threshold = 2 of [printed_key, guardians].flatten.compact after 7 days vetoable by 1 of keys {
+
+  static algorithms = (signing: $.ed25519, agreement: $.x25519, handshake: $.noise, digest: $.sha256)
+  static Event := enum revoke | add | rotate
+
+  static Threshold := class = count: Number, signers: *[], wait: Quantity.Temporal = 0 seconds, veto: Identity.Threshold? {
+    met (event: History.Commit, identity: Identity) => event.signature#{event.covers(.) && identity.counts(.by, signers, event.stamp)}.map(.by).unique.count >= count
+  }
+
+  static Certificate := class = key: Encoding.Key, until: Time = Time.now + 30 days, scope: * = *, world: World? {
+    expiring (at: Time = Time.now) => at + 1 day >= until
+  }
+
+  rules => (next, digest, signing, agreement, handshake, printed_key, guardians, revoke, add, rotate, recover)
+  counts (by: Encoding.Key, signers: *[], at: Stamp) => signers.some(signer => signer is Encoding.Key ? signer == by
+    : signer is Byte[] ? signer == digest.write(by.public).bytes
+    : signer.certified(by, at))
+
+  kind (after: Identity) => after.rules != rules ? Event.rotate
+    : after.keys.every(keys.contains(.)) && after.certificates.every(certificates.contains(.)) ? Event.revoke
+    : keys.every(after.keys.contains(.)) && certificates.every(after.certificates.contains(.)) ? Event.add
+    : Event.rotate
+  threshold (kind: Event) => kind == Event.revoke ? revoke : kind == Event.add ? add : rotate
+
+  vetoes (event: History.Commit, log: History, at: Stamp?) => recover.veto && log.ordered{event.stamp < .stamp && (at === None || .stamp < at)}
+    .some(veto => recover.veto.met(veto, this) && (copy -- veto.change).vetoed.contains(event.hash))
+  recovered (event: History.Commit, log: History, at: Stamp?) => recover.met(event, this)
+    && (at?.when ?? World.ether.clock.now.when) >= event.when + recover.wait && !vetoes(event, log, at)
+  allows (event: History.Commit, log: History, at: Stamp? = None) => kind(copy -- event.change) -- (kind =>
+    threshold(kind).met(event, this) || kind == Event.rotate && recovered(event, log, at))
+
+  static logged (log: History, at: Stamp? = None) => log.ordered{at === None || .stamp < at}.reduce(held = None => . -- (event =>
+    held === None ? (None -- event.change) -- (genesis => genesis.add.met(event, genesis) ? genesis : None)
+    : held.allows(event, log, at) ? held.copy -- event.change : held))
+
+  certifies (by: Encoding.Key, at: Stamp, scope = *, world: World? = None) => by.algorithm === signing
+    && certificates{.key == by && at.when < .until && scope is .scope && .world === world}.nonempty
+}
+
+{count: Number} of {signers: *[]} ^keyword => Identity.Threshold(count, signers)
+{threshold: Identity.Threshold} after {wait: Quantity.Temporal} ^keyword => threshold ~~ .wait = wait
+{threshold: Identity.Threshold} vetoable by {veto: Identity.Threshold} ^keyword => threshold ~~ .veto = veto
+
+Delegation := class = from: Character, to: *, scope: Access = Access(), until: Time = Time.now + 1 day, signature: Encoding.Signed? {
+  hash => from.policy()?.digest.write(Language.ray.write((from.root, to, scope, until)) as Byte[]).bytes
+  valid (at: Time = Time.now) => at < until && signature?.valid && signature.value == hash && from.certified(signature.by, World.ether.clock.now)
+  covers (method, target) => valid() && scope.allows(method) && (!scope.filter || scope.filter.entered(target, None))
+}
+
+Verified := Character{proof}
+Live := Verified{!proof.at && (!proof.delegation || proof.delegation.valid())}
+
+Character &+= {
+  local.write proof: (root: Byte[]?, by: Encoding.Key?, at: Stamp?, session: *?, delegation: Delegation?)?
+  identity: Identity?
+  none.read roots: Encoding.Key[] = []
+  world_keys: (world: World, key: Encoding.Key)[] = []
+
+  root => identity?.history.roots.first?.hash
+  policy (at: Stamp? = None) => identity ? Identity.logged(identity.history, at) : None
+  certified (by: Encoding.Key, at: Stamp, world: World? = None) => policy(at)?.certifies(by, at, world: world) ?? false
+  key_in (world: World?) => world_keys{.world === world}.last?.key ?? key
+
+  chainable == (other) => proof && other?.proof ? proof.root !== None && proof.root == other.proof.root : !proof && !other?.proof && this === other
+  as (=== boolean) => (this is Verified ? this : Instance.local.verified(this)) == @me
+  acting => this is Verified ? this : Instance.local.verified(this) ?? ERROR@Access `a character acts only as verified by a handshake or a key held here`
+  sealed (commit: History.Commit) => key_in(commit.line?.repository?.world) -- (pair => commit ~~ (.relies = identity?.history.head?.hash) ~~ (.signature = pair.signed(.hash) if pair))
+  delegate (to, scope: Access = Access(), until: Time = Time.now + 1 day) => Delegation(from: this, to, scope, until) -- (made => made ~~ .signature = key.signed(made.hash))
+}
+
+History.Commit &+= {
+  covers (signed: Encoding.Signed) => signed.valid && (signed.value as Byte[])[..<hash.count] == hash
+  authentic => who is Character && who.identity?.history.since(None).some(.hash == relies && !(stamp < .stamp))
+    && signature#.some(covers(.) && who.certified(.by, stamp))
+  signer => authentic ? who.copy ~~ .proof = (root: who.root, by: signature#.find(covers(.)).by, at: stamp, session: None, delegation: None) : who
+  applied (held) => held -- with (@me = signer) change
+}
+
+History &+= {
+  accepted (commit: History.Commit) => commit ~~ (.previous = commit.from#.map(find(.))#) ~~ (.line = this) -- (linked =>
+    !linked.authentic ? ERROR@Access `a commit is not signed by its who's instance key at its stamp`
+    : head && !(head is linked.previous && head.stamp < linked.stamp) ? Program(name: "merge", goal: linked)
+    : this ~~ .head = linked)
+}
+
+Instance &+= {
+  none.read handshake_key: Encoding.Key?
+
+  login (character: Character) => (registry |= character) -- certified(character)
+  certified (character: Character, world: World? = None) => {
+    character.identity ??= founded(character)
+    character.key ??= character.policy().signing.pair() unless world
+    character.world_keys |= (world: world, key: character.policy().signing.pair()) if world && !character.world_keys{.world === world}.nonempty
+    renewed(character, world)
+    character
+  }
+
+  founded (character: Character) => {
+    root = Identity.algorithms.signing.pair()
+    character.roots |= root
+    identity = Identity(keys: [root.published], signing: root.algorithm)
+    identity.history.commit(character, identity).head ~~ (.signature |= root.signed(.hash))
+    identity
+  }
+
+  endorsed (character: Character, change: Program) => {
+    log = character.identity.history
+    policy = character.policy()
+    event = log.commit(character, change).head
+    event.signature |= character.roots.map(.signed(event.hash))#
+    policy.allows(event, log) ? character : Program(name: "sign the key event with more root keys", goal: event, who: character)
+  }
+  renewed (character: Character, world: World? = None) => character.key_in(world).published -- (key =>
+    character.policy().certificates{.key == key && .world === world && !.expiring}.nonempty ? character
+    : endorsed(character, Program(code: { .certificates |= Identity.Certificate(key, world: world) })))
+  revoked (character: Character, key: Encoding.Key) => endorsed(character, Program(code: { .certificates = .certificates{.key != key} }))
+
+  verified (character: Character, world: World? = None) => character.key_in(world) -- (pair =>
+    pair && (logged_in(character) || character is hosted) && character.certified(pair.published, World.ether.clock.now, world)
+      ? character.copy ~~ .proof = (root: character.root, by: pair.published, at: None, session: None, delegation: None) : None)
+
+  delegated (delegation: Delegation) => delegation.valid()
+    ? delegation.from.copy ~~ .proof = (root: delegation.from.root, by: delegation.signature.by, at: None, session: None, delegation)
+    : ERROR@Access `the delegation is unsigned, expired or not certified`
+  host_for (character: Character, delegation: Delegation? = None) => (delegation ? delegated(delegation) : character) ~~ (hosted |= .) ~~ .presence = this
+
+  greeted (character: Character, initiator: boolean) => character.policy() -- (policy => policy.handshake.handshake(initiator, handshake_key ??= policy.agreement.pair(), hash: policy.digest))
+  introduction (character: Character, session: Noise.Session) => session.sent(Language.ray.write((name: character.name, identity: character.identity, log: character.identity.history,
+    by: character.key.published, signature: character.key.signed(session.binding))) as Byte[])
+  introduced (session: Noise.Session, message: Byte[]) => Language.ray.read(session.received(message) as String) -- (said => Identity.logged(said.log) -- (policy =>
+    policy && said.signature.valid && said.signature.value == session.binding && said.signature.by == said.by && policy.certifies(said.by, World.ether.clock.now)
+      ? Character(name: said.name, identity: said.identity, proof: (root: said.log.roots.first.hash, by: said.by, at: None, session, delegation: None))
+      : ERROR@Access `the other side is not who its key log says`))
+}
+
+Program &+= {
+  delegation: Delegation?
+
+  run => Run.log.commit(who, this).head -- (logged => with (@me = delegation ? Instance.local.delegated(delegation) : logged.who) logged.change)
+}
+
+Run &+= {
+  static replay (logged: History.Commit) => with (@me = logged.signer) logged.change if logs.some(=== logged)
+
+  may (method, target) => hops.every(. is Live && Permissions.current.allows(., method, target) && (.proof.delegation?.covers(method, target) ?? true))
+}
+
+Recovery := class = character: Character, roots: Encoding.Key[] = [character.policy().signing.pair(), character.policy().signing.pair()], sessions: Noise.Session[] = [] {
+  log => character.identity.history
+  event: History.Commit = History.Commit(who: character, stamp: log.clock.now, change: Program(code: { .keys = roots.map(.published) }), previous: log.head, line: log)
+
+  asked (session: Noise.Session) => session.sent(event.hash) ~~ sessions.push session
+  static vouched (guardian: Character, session: Noise.Session, message: Byte[]) => session.received(message) -- (hash =>
+    Program(name: "verify the person recovering", who: guardian, goal: hash, code: { guardian.key.signed([hash, session.binding].flatten) }))
+  received (signed: Encoding.Signed): static => this ~~ (event.signature |= signed if event.covers(signed) && sessions.some(.binding == (signed.value as Byte[])[event.hash.count..]))
+  met => Identity.logged(log) -- (policy => policy.recover.met(event, policy))
+  appended: static => this ~~ (log.extended(event) if met)
+}

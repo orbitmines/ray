@@ -25,7 +25,7 @@ Store := class: Hierarchy = at: Location = @local, format: Format? {
 
   static Row := class = type: String, id: String, fields: (name: String, value: String)[] {
     static (instance) as (=== Row) => Row(type: instance.static.name, id: (instance.key ?? (instance.key = UUID.v4())) as String,
-      fields: instance.fields{.name != "key"}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.key : .value))))
+      fields: instance.fields{.name != "key"}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.id : .value))))
     instance => Language.ray.read((type, "(key: ", Language.ray.write(id), fields.map(", ", .name, ": ", .value), ")") as String)
   }
 

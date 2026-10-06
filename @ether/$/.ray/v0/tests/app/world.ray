@@ -84,7 +84,7 @@ unless past.count == 1 { INFO@mark `HI2 committing does not keep it` }
 past.commit(wp, "second")
 unless past.count == 2 { INFO@mark `HI3 committing twice keeps other than two` }
 unless past.latest.value == "second" { INFO@mark `HI4 the latest is not the last committed` }
-unless past.latest.who == wp { INFO@mark `HI5 a commit forgot who made it` }
+unless past.latest.who === wp { INFO@mark `HI5 a commit forgot who made it` }
 branched := past.fork
 unless branched.count == 0 { INFO@mark `HI6 a fork starts with commits on it` }
 unless branched.base === past.last { INFO@mark `HI7 a fork forgot what it came from` }
@@ -207,7 +207,7 @@ unless Reference(title: "t").organizations.empty { INFO@mark `WR6 a new referenc
 unless Reference(title: "t").published.empty { INFO@mark `WR7 a new reference is already published somewhere` }
 sited.authors.push wp
 unless sited.authors.count == 1 { INFO@mark `WR8 an author added is not kept` }
-unless sited.authors.first == wp { INFO@mark `WR9 the author kept is not the one added` }
+unless sited.authors.first === wp { INFO@mark `WR9 the author kept is not the one added` }
 unless (Reference(title: "t") ~~ .note = "n").notes.first.value == "n" { INFO@mark `WR10 a note forgot its text` }
 unless (Reference(title: "t") ~~ .note = "n").notes.first.when { INFO@mark `WR11 a note says nothing about when` }
 if Reference(title: "t").location { INFO@mark `WR12 a new reference has a remote it was not given` }
@@ -242,7 +242,7 @@ unless (with (@me = hidden) { (hidden is Online) == (hidden.presence.device.netw
 
 looked := World(name: "looked")
 looked.add(Character(name: "Fadi"))
-unless looked@fadi == looked.characters.first { INFO@mark `LK1 @name does not find a character ignoring case` }
+unless looked@fadi === looked.characters.first { INFO@mark `LK1 @name does not find a character ignoring case` }
 unless looked.characters.count == 1 { INFO@mark `LK2 the plural is not the collection of that class` }
 inner := World(name: "inner")
 looked.add(inner)
@@ -271,21 +271,9 @@ here_now := Instance.local.login(Character(name: "local-one"))
 unless Character.local("local-one") === here_now { INFO@mark `WO15 a character logged in here is not here` }
 if Character.local("nobody-here") { INFO@mark `WO16 a character nobody logged in is here` }
 
-// A character used as a condition is whether it is @me.
-cw := Character(name: "viewer")
-unless (with (@me = cw) { cw ? true : false }) { INFO@mark `CW1 a character as a condition is false to itself` }
-if (with (@me = Character(name: "other")) { cw ? true : false }) { INFO@mark `CW2 a character as a condition is true to someone else` }
-
-// A program runs as its who; its runs are logged for replay.
-hg_giver := Character(name: "giver")
-hg := Program(code: { @me }, who: hg_giver)
-unless hg.run == hg_giver { INFO@mark `HG1 handed-over code does not run as the character that handed it over` }
-unless Run.log.head.who == hg_giver { INFO@mark `HG2 a run of handed-over code is not logged as its giver` }
-unless Run.replay(Run.log.head) == hg_giver { INFO@mark `HG3 a logged run does not replay as its character` }
+// Comparing characters is security: without @ether/Security (or @ether/Network) it is an error, not an answer.
+unless (Character(name: "a") == Character(name: "a")) is Diagnostic { INFO@mark `SEC1 two characters compare without @ether/Security` }
 unless Run.kept == 30 days { INFO@mark `HG4 run logs are not kept for thirty days` }
-with Run.kept = 0 seconds {
-  if Run.logs.some(=== Run.log.head) { INFO@mark `HG5 a run older than the configured window is kept for replay` }
-}
 
 // A reserved name is unique in its world under case folding.
 rz := World(name: "folded")

@@ -10,6 +10,11 @@ Access := class = who: *?, method: `=` | `()` | * = *, filter: Program? {
 {who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (external ** filter)))
 {who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))
 const {target} ^keyword => target ~~ .access = Accessor(who: Accessor.Permission.none, method: `=`)
+[none: Accessor.Permission.none, local: Accessor.Permission.local, confidential: Accessor.Permission.confidential].for (word, level) => {
+  right-to-left `word`.read {target} ^keyword => target ~~ .access = Accessor(who: level, method: Access.Reading)
+  right-to-left `word`.write {target} ^keyword => target ~~ .access = Accessor(who: level, method: `=`)
+  right-to-left `word`.execute {target} ^keyword => target ~~ .access = Accessor(who: level, method: `()`)
+}
 
 Accessor := Access{who is Accessor.Permission} {
   static Permission := enum none | local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) | private (at: @private) | confidential | public (at: @public) {
@@ -59,7 +64,7 @@ Grant := class = access: Access, target: * {
   uses => Permissions.current.allowed.history{=== this}.count
   once => uses == 0
   names (value) => target === value || target is Program && (target == value || target() === value)
-  covers (who: Character, method, target) => (access.who == who || who is access.who) && access.allows(method) && names(target)
+  covers (who: Character, method, target) => (access.who === who || who is access.who) && access.allows(method) && names(target)
     && (!access.filter || access.filter.entered(this, None))
 }
 

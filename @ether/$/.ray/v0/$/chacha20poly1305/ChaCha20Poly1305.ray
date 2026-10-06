@@ -1,0 +1,42 @@
+// ChaCha20 and Poly1305 for IETF Protocols (https://www.rfc-editor.org/rfc/rfc8439)
+ChaCha20Poly1305 := class: Language {
+  static extensions = ".chacha20poly1305"
+  static word = 2 ^ 32
+
+  // The quarter round on four words of the state (RFC 8439 §2.1, §2.2)
+  static rotl (x, n) => (x * 2 ^ n + (x / 2 ^ (32 - n)).floor) % word
+  static quarter (state: Number[], (a, b, c, d)) => {
+    s = state.copy
+    s[a] = (s[a] + s[b]) % word
+    s[d] = rotl(s[d] ~x|| s[a], 16)
+    s[c] = (s[c] + s[d]) % word
+    s[b] = rotl(s[b] ~x|| s[c], 12)
+    s[a] = (s[a] + s[b]) % word
+    s[d] = rotl(s[d] ~x|| s[a], 8)
+    s[c] = (s[c] + s[d]) % word
+    s[b] = rotl(s[b] ~x|| s[c], 7)
+    s
+  }
+  // A double round: the four columns, then the four diagonals (RFC 8439 §2.3)
+  static rounds = [[0, 4, 8, 12], [1, 5, 9, 13], [2, 6, 10, 14], [3, 7, 11, 15], [0, 5, 10, 15], [1, 6, 11, 12], [2, 7, 8, 13], [3, 4, 9, 14]]
+  static words (bytes: Byte[]) => bytes.chunk(4).map(Encoding.little_number(.))
+
+  // The block function: the constants "expand 32-byte k", the key, the counter and the nonce; ten double rounds, added back, little-endian (RFC 8439 §2.3)
+  static block (key: Byte₃₂, counter: Number, nonce: Byte₁₂) => [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574, words(key), counter, words(nonce)].flatten -- (initial =>
+    ([rounds] * 10).flatten(1).reduce(state = initial => quarter(state, .)).zip(initial).map((a, b) => Encoding.little((a + b) % word, 4)).flatten)
+
+  // Encryption: each 64 bytes XORed with the block of the next counter (RFC 8439 §2.4)
+  static chacha20 (key: Byte₃₂, counter: Number, nonce: Byte₁₂, text: Byte[]) => text.chunk(64).enumerate.map(chunk => chunk.value.zip(block(key, counter + chunk.index, nonce)).map((a, b) => a ~x|| b)).flatten
+
+  // Poly1305: r clamped, each 16 bytes with a 1 byte after them added and multiplied by r modulo 2^130 - 5, then s added modulo 2^128 (RFC 8439 §2.5)
+  static poly1305 (key: Byte₃₂, message: Byte[]) => Encoding.little_number(key[..<16]) ~&& 0x0ffffffc0ffffffc0ffffffc0fffffff -- (r =>
+    Encoding.little((message.chunk(16).reduce(acc = 0 => (acc + Encoding.little_number([., 1].flatten)) * r % (2 ^ 130 - 5)) + Encoding.little_number(key[16..])) % 2 ^ 128, 16))
+
+  // The AEAD construction: the one-time Poly1305 key from block 0, the text from block 1, and the tag over the padded AAD, the ciphertext and both lengths (RFC 8439 §2.6, §2.8)
+  static Sealed := class (ciphertext: Byte[], tag: Byte₁₆)
+  static padded (bytes: Byte[]) => [bytes, [0] * ((16 - bytes.count % 16) % 16)].flatten
+  static tag (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], ciphertext: Byte[]) => poly1305(block(key, 0, nonce)[..<32], [padded(aad), padded(ciphertext), Encoding.little(aad.count, 8), Encoding.little(ciphertext.count, 8)].flatten)
+  static sealed (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], plaintext: Byte[]) => chacha20(key, 1, nonce, plaintext) -- (c => Sealed(ciphertext: c, tag: tag(key, nonce, aad, c)) as Byte[])
+  static opened (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], sealed: Byte[]) => (sealed as Sealed) -- (held =>
+    tag(key, nonce, aad, held.ciphertext) == held.tag ? chacha20(key, 1, nonce, held.ciphertext) : ERROR `the tag does not authenticate the message`)
+}

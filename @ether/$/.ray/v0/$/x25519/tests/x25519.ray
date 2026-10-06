@@ -1,0 +1,20 @@
+// X25519 against RFC 7748's test vectors (https://www.rfc-editor.org/rfc/rfc7748#section-5.2, #section-6.1).
+
+mark ^keyword := external global
+
+// One scalar times one u-coordinate (RFC 7748 §5.2, the first vector)
+unless X25519.x25519("a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4" as Hexadecimal₆₄ as Byte₃₂, "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c" as Hexadecimal₆₄ as Byte₃₂) as Hexadecimal₆₄ == "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552" { INFO@mark `XDH1 the first scalar of RFC 7748 §5.2 does not multiply to c3da5537…` }
+
+// Alice and Bob: their public keys, and the secret they share (RFC 7748 §6.1)
+xa := "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a" as Hexadecimal₆₄ as Byte₃₂
+xb := "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb" as Hexadecimal₆₄ as Byte₃₂
+unless X25519.public(xa) as Hexadecimal₆₄ == "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a" { INFO@mark `XDH2 Alice's public key is not that of RFC 7748 §6.1` }
+unless X25519.public(xb) as Hexadecimal₆₄ == "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f" { INFO@mark `XDH3 Bob's public key is not that of RFC 7748 §6.1` }
+unless X25519.agreed(xa, X25519.public(xb)) as Hexadecimal₆₄ == "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742" { INFO@mark `XDH4 Alice does not derive the shared secret of RFC 7748 §6.1` }
+unless X25519.agreed(xb, X25519.public(xa)) == X25519.agreed(xa, X25519.public(xb)) { INFO@mark `XDH5 Bob and Alice derive different secrets` }
+unless X25519.agreed(xa, [0] * 32) is Diagnostic { INFO@mark `XDH6 a public key of zeros gives a shared secret` }
+
+// A key pair names its algorithm and agrees with another pair's public half
+xpa := X25519.pair(xa)
+xpb := X25519.pair(xb)
+unless xpa.algorithm === X25519 && xpa.agreed(xpb.public) == xpb.agreed(xpa.public) { INFO@mark `XDH7 two key pairs do not agree on one secret` }

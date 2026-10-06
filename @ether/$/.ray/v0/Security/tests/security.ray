@@ -1,0 +1,137 @@
+// Who a character is, by what only the runtime can make: keys under a root policy, handshakes, signed history, delegation, recovery (World W2.1).
+
+mark ^keyword := external global
+
+// Verified and claimed: verified characters compare by root, a claimed one is only itself, and never a verified one.
+ver_a := Instance.local.login(Character(name: "ver-a"))
+ver_b := Instance.local.login(Character(name: "ver-b"))
+unless ver_a.acting is Verified { INFO@mark `VER1 a character logged in here does not act as verified` }
+unless ver_a.acting == ver_a.acting { INFO@mark `VER2 one character verified twice is two characters` }
+if ver_a == ver_a.acting || ver_a.acting == ver_a { INFO@mark `VER3 a claimed character equals a verified one` }
+unless ver_a == ver_a { INFO@mark `VER4 a claimed character is not itself` }
+if Character(name: "ver-a") == ver_a || Character(name: "ver-a") == ver_a.acting { INFO@mark `VER5 a character built from a name is the character of that name` }
+if ver_a.acting == ver_b.acting { INFO@mark `VER6 two roots compare equal` }
+unless Character(name: "nowhere").acting is Diagnostic { INFO@mark `VER7 a character nobody holds here acts` }
+if (with (@me = ver_a) { Character(name: "forged", proof: ver_a.acting.proof) == ver_a.acting }) { INFO@mark `VER8 code running as a character made a verified one` }
+if (Character(name: "a") == Character(name: "a")) is Diagnostic { INFO@mark `VER9 comparing characters errs with @ether/Security imported` }
+
+// A character used as a condition is whether it is @me.
+cw := Instance.local.login(Character(name: "viewer"))
+cw_other := Instance.local.login(Character(name: "other"))
+unless (with (@me = cw) { cw ? true : false }) { INFO@mark `CW1 a character as a condition is false to itself` }
+if (with (@me = cw_other) { cw ? true : false }) { INFO@mark `CW2 a character as a condition is true to someone else` }
+
+// A program runs as its who; its runs are logged for replay, as recorded.
+hg_giver := Instance.local.login(Character(name: "giver"))
+hg := Program(code: { @me }, who: hg_giver)
+unless hg.run == hg_giver.acting { INFO@mark `HG1 handed-over code does not run as the character that handed it over` }
+unless Run.log.head.who === hg_giver { INFO@mark `HG2 a run of handed-over code is not logged as its giver` }
+unless Run.replay(Run.log.head) == hg_giver.acting { INFO@mark `HG3 a logged run does not replay as its character` }
+if Run.replay(Run.log.head) is Live { INFO@mark `VER10 a replay is given the live permissions of who it replays` }
+with Run.kept = 0 seconds {
+  if Run.logs.some(=== Run.log.head) { INFO@mark `HG5 a run older than the configured window is kept for replay` }
+}
+
+// The root policy: the first commit of the key log, keys naming their algorithm, and short-lived certificates for instance keys.
+idy := Instance.local.login(Character(name: "rooted"))
+idy_policy := idy.policy()
+unless idy.identity.history.since(None).count >= 2 { INFO@mark `IDY1 a character logged in has no key log` }
+unless idy_policy.keys.count == 1 && idy_policy.keys.first.algorithm === idy_policy.signing { INFO@mark `IDY2 the root key does not name the policy's algorithm` }
+unless idy.key.algorithm === idy_policy.signing { INFO@mark `IDY3 the instance key is not of the algorithm the policy names` }
+unless idy_policy.certifies(idy.key.published, World.ether.clock.now) { INFO@mark `IDY4 the instance key held here is not certified` }
+if idy_policy.certifies(idy.key.published, World.ether.clock.now, world: World(name: "elsewhere")) { INFO@mark `IDY5 a certificate for no world speaks in a world` }
+if idy_policy.certificates.first.until > Time.now + 30 days { INFO@mark `IDY6 an instance certificate lasts beyond thirty days` }
+unless idy_policy.revoke.count == 1 && idy_policy.recover.wait == 7 days && idy_policy.recover.veto { INFO@mark `IDY7 the default thresholds are not revoke 1, recover after 7 days with a veto` }
+unless idy_policy.kind(idy_policy.copy ~~ .certificates = []) == Identity.Event.revoke { INFO@mark `IDY8 removing a certificate is not a revocation` }
+unless idy_policy.kind(idy_policy.copy ~~ .signing = $.x25519) == Identity.Event.rotate { INFO@mark `IDY9 changing the algorithm is not a rotation` }
+unless (2 of [1, 2] after 7 days vetoable by 1 of [3]).veto.signers == [3] { INFO@mark `IDY10 a threshold does not read its wait and veto` }
+
+// Pre-rotation: the next keys are known by their digests only, and count for a rotation once revealed.
+idy_next := $.ed25519.pair()
+idy_pre := Identity(keys: [$.ed25519.pair().published], next: [$.sha256.write(idy_next.public).bytes])
+unless idy_pre.counts(idy_next.published, idy_pre.rotate.signers, World.ether.clock.now) { INFO@mark `IDY11 a revealed next key does not count for a rotation` }
+if idy_pre.counts($.ed25519.pair().published, idy_pre.rotate.signers, World.ether.clock.now) { INFO@mark `IDY12 a key nobody committed to counts for a rotation` }
+
+// Revoking the key of a lost device takes one root key, and locks it out.
+Instance.local.revoked(idy, idy.key.published)
+if idy.policy().certifies(idy.key.published, World.ether.clock.now) { INFO@mark `IDY13 a revoked instance key is still certified` }
+if Instance.local.verified(idy) { INFO@mark `IDY14 a character whose key was revoked is verified` }
+
+// Per-world instance keys, each certified by the root, for unlinkability.
+idy_world := World(name: "unlinked")
+Instance.local.certified(idy, idy_world)
+unless idy.key_in(idy_world) && idy.key_in(idy_world) != idy.key { INFO@mark `IDY15 a world is not given a key of its own` }
+unless idy.policy().certifies(idy.key_in(idy_world).published, World.ether.clock.now, world: idy_world) { INFO@mark `IDY16 a world's key is not certified for that world` }
+
+// Logging out zeroises the key.
+vz := Instance.local.login(Character(name: "leaving-keys"))
+Instance.local.logout(vz)
+if vz.key || Instance.local.verified(vz) { INFO@mark `IDY17 a character logged out keeps its key` }
+if (with (@me = ver_a) { ver_a.key.secret }) is Byte[] { INFO@mark `IDY18 a private key is read by the character's own code` }
+
+// Signed history: one instance key signs every commit, over a hash that chains the parents and the key-log event relied on.
+sgn := Instance.local.login(Character(name: "signer"))
+sgn_h := History(repository: Repository())
+sgn_h.commit(sgn, 1)
+sgn_h.commit(sgn, 2)
+unless sgn_h.head.signature && sgn_h.head.covers(sgn_h.head.signature) { INFO@mark `SGN1 a commit is not signed over its hash` }
+unless sgn_h.head.authentic { INFO@mark `SGN2 a signed commit does not check against the key log at its stamp` }
+unless sgn_h.head.relies == sgn.identity.history.head.hash { INFO@mark `SGN3 a commit does not name the key-log event it relies on` }
+unless sgn_h.head.signature.by == sgn_h.head.previous.signature.by { INFO@mark `SGN4 one instance signs its commits with other keys` }
+if sgn_h.head.rewritten(Program(code: { 3 })).authentic { INFO@mark `SGN5 a commit whose change was replaced is still authentic` }
+if History(repository: Repository()).commit(Character(name: "keyless"), 1).head.authentic { INFO@mark `SGN6 a commit by a claimed character is authentic` }
+sgn_back := sgn.sealed(History.Commit(who: sgn, stamp: Stamp(wall: sgn_h.head.previous.stamp.wall, logical: sgn_h.head.previous.stamp.logical + 1, node: "back"),
+  change: Program(code: { 9 }), from: [sgn_h.head.previous.id]))
+unless sgn_h.accepted(sgn_back) is Abstract { INFO@mark `SGN7 a backdated commit is taken without a merge` }
+sgn_next := sgn.sealed(History.Commit(who: sgn, stamp: sgn_h.clock.now, change: Program(code: { 4 }), from: [sgn_h.head.id]))
+unless sgn_h.accepted(sgn_next).head.value == 4 { INFO@mark `SGN8 a commit that follows the head is refused` }
+
+// The handshake: Noise XX between two instances, then each introduces itself signing the handshake hash with its instance key.
+hsk_a := Instance.local.login(Character(name: "hsk-a"))
+hsk_peer := Instance(location: "hsk-peer")
+hsk_b := hsk_peer.login(Character(name: "hsk-b"))
+hsk_i := Instance.local.greeted(hsk_a, true)
+hsk_r := hsk_peer.greeted(hsk_b, false)
+hsk_r.read(hsk_i.written())
+hsk_i.read(hsk_r.written())
+hsk_r.read(hsk_i.written())
+hsk_si := hsk_i.session
+hsk_sr := hsk_r.session
+hsk_seen := hsk_peer.introduced(hsk_sr, Instance.local.introduction(hsk_a, hsk_si))
+unless hsk_seen is Verified && hsk_seen.proof.session === hsk_sr { INFO@mark `HSK1 a completed handshake does not give a verified principal for the session` }
+unless hsk_seen == hsk_a.acting { INFO@mark `HSK2 who was verified over the wire is not who was verified here` }
+if hsk_seen == hsk_b.acting { INFO@mark `HSK3 the other side is verified as oneself` }
+
+// Delegation: signed, scoped and expiring; the effective permission is the intersection.
+dlg_from := Instance.local.login(Character(name: "lender"))
+dlg := dlg_from.delegate(@me, Access(method: `()`), until: Time.now + 1 hour)
+unless dlg.valid() { INFO@mark `DLG1 a signed delegation is not valid` }
+unless dlg.covers(`()`, "x") { INFO@mark `DLG2 a delegation does not cover what it names` }
+if dlg.covers(`=`, "x") { INFO@mark `DLG3 a delegation to run covers writing` }
+if dlg_from.delegate(@me, until: Time.now - 1 second).valid() { INFO@mark `DLG4 an expired delegation is valid` }
+if Delegation(from: dlg_from, to: @me, until: Time.now + 1 day, signature: dlg.signature).valid() { INFO@mark `DLG5 a signature over another delegation makes one valid` }
+unless Instance.local.delegated(dlg) == dlg_from.acting { INFO@mark `DLG6 a delegated principal is not the one who delegated` }
+unless Instance.local.delegated(dlg_from.delegate(@me, until: Time.now - 1 second)) is Diagnostic { INFO@mark `DLG7 an expired delegation is acted on` }
+unless Program(code: { @me }, who: dlg_from, delegation: dlg).run.proof.delegation === dlg { INFO@mark `DLG8 handed-over code does not run under its delegation` }
+
+// Recovery: the recovering machine writes the rotation itself; guardians get only its hash and sign it bound to their session.
+rcv_c := Instance.local.login(Character(name: "recovering"))
+rcv := Recovery(character: rcv_c)
+if rcv.log.find(rcv.event.id) { INFO@mark `RCV1 a recovery is in the key log before its guardians signed it` }
+rcv_g := Instance.local.login(Character(name: "guardian"))
+rcv_i := Noise.handshake(true, $.x25519.pair())
+rcv_r := Noise.handshake(false, $.x25519.pair())
+rcv_r.read(rcv_i.written())
+rcv_i.read(rcv_r.written())
+rcv_r.read(rcv_i.written())
+rcv_mine := rcv_i.session
+rcv_theirs := rcv_r.session
+rcv_message := rcv.asked(rcv_mine)
+unless Recovery.vouched(rcv_g, rcv_theirs, rcv_message) is Abstract { INFO@mark `RCV2 a guardian signs before verifying the person` }
+rcv_signed := rcv_g.key.signed([rcv.event.hash, rcv_theirs.binding].flatten)
+rcv.received(rcv_signed)
+unless rcv.event.signature#.some(=== rcv_signed) { INFO@mark `RCV3 a guardian's signature over the hash, bound to the session, is not taken` }
+rcv.received(rcv_g.key.signed([rcv.event.hash, [0] * 32].flatten))
+unless rcv.event.signature#.count == 1 { INFO@mark `RCV4 a signature bound to no session of this recovery is taken` }
+if rcv.met { INFO@mark `RCV5 one guardian meets a threshold of two` }
+unless rcv.roots.every(.algorithm === rcv_c.policy().signing) { INFO@mark `RCV6 the new root keys are not of the policy's algorithm` }

@@ -33,7 +33,7 @@ From the drafts review (2026-10-06).
   `world.@a = => world.@b`. Overwriting a held name needs write access (`&@.may`), and answers
   `Program(name: "overwrite a name", goal: …)` otherwise.
 - **W1.10 The standard `@` names** — **Decided (draft)**; none is defined in v0 (`@localnetwork` is used in
-  `network/Network.ray:82`, `reservable_names` in `World.ray:165–175`). *`Ether.ray:3–27`*
+  `Network/Network.ray:82`, `reservable_names` in `World.ray:165–175`). *`Ether.ray:3–27`*
   - `@ether` is `` @`ether.orbitmines.com:37839` ``; `@me | @private` is `global` (on a computer the root is `@me`; in a player
     session `@me` is the player).
   - `@everyone` and `@here` are the characters (`@here`: the online ones); `@local` is `@me` at the current instance;
@@ -446,6 +446,11 @@ Answers from 2026-09-30.
     `$/x25519`, `$/noise`, …), and the root policy says which ones its keys use; signing, verifying and the handshake
     use whatever the keys name, so nothing is fixed to one algorithm and changing one is a key event. Only Ed25519,
     X25519 and Noise XX are implemented for now; other algorithms are not being added.
+  - **Where it lives (2026-10-06).** All of this is the subproject `@ether/Security` (`v0/Security/`, L§9.1), which
+    `@ether/Network` (`v0/Network/`) imports; the core imports neither. Without it, comparing characters is an error
+    (`ERROR@Security`), `@me = x` sets `x` as given, and commits are signed (`History.Commit.signature`, `relies`, `hash`)
+    but never verified. The algorithms are the languages `$/ed25519` (over `$/sha512`), `$/x25519`, `$/chacha20poly1305`
+    and `$/noise`, whose defaults are named once, in `Identity.algorithms`.
 - **W2.4** Spawning, login/logout/swap and deletion with a cancel window are implemented now, from the
   entrypoint drafts.
 - **W6.4** An error that fails the program is, in general, a quest; a failing proof is one such case.

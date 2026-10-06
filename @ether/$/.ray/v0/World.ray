@@ -1,7 +1,7 @@
 Entity := class {
-  key: *?
+  key: Encoding.Key?
 
-  chainable == (other) => key ? key == other.key : this === other
+  sealed (commit: History.Commit) => commit ~~ (.signature = key.signed(.hash) if key)
 }
 
 Nameable := class {
@@ -50,7 +50,7 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != 
 @"{text: (!"\"")[]}" ^string => text as Location
 @{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
 @me ^string => &caller as Character ?? Instance.local
-@me = {who} ^punctuation => &@.may(`@me =`, who) ? &caller = who : ERROR@Access `running as another character needs their grant`
+@me = {who} ^punctuation => &@.may(`@me =`, who) ? &caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
 @me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
 @{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location
 @{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: external ** block)
@@ -123,7 +123,7 @@ Node &+= {
 History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   static Label := UUID | Char.Word[]
 
-  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program, from: Label[]?, versions: Label[] = [] {
+  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program, from: Label[]?, versions: Label[] = [], relies: Byte[]?, signature: *? {
     when: Time = stamp?.when ?? Time.now
     message: String?
     previous: Commit?
@@ -134,16 +134,19 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
     merged => parents.count > 1
     applied (held) => held -- with (@me = who) change
-    rewritten (change: Program) => Commit(id, who, stamp, change, from, versions, when, message, previous, line)
+    rewritten (change: Program) => Commit(id, who, stamp, change, from, versions, relies, signature, when, message, previous, line)
     expand => change**
     successors => line?.since(None){.parents.some(=== this)} ?? []
     branching => successors.count > 1
     value => line?.at(this).value ?? applied(None)
     mentions (label) => id == label || versions.contains(label)
-    settings => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty).join("")
+    attributed => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty,
+      ("; relies = ", Language.ray.write(relies)) if relies).join("")
+    settings => (attributed, ("; signature = ", Language.ray.write(signature)) if signature).join("")
+    hash: Byte[] => $.sha256.write([parents.map(.hash), (id, attributed, change as String).join("") as Byte[]].flatten).bytes
     written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, change as String, \n).join("")
     static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
-      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from, versions: set.version# ?? []))
+      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from, versions: set.version# ?? [], relies: set.relies, signature: set.signature))
       : Commit(id: label, change: code))
 
     .{literal name ^property} ^punctuation => external get value name
@@ -166,7 +169,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   at (commit) => History(repository, head: commit is Commit ? commit : find(commit), caches)
 
   commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
-    change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this)
+    change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this) -- (made => who is Entity ? who.sealed(made) : made)
   extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
 
   ordered => since(None).sort_by(.stamp)
@@ -287,10 +290,9 @@ Instance := class: Location + Entity {
   logged_in (character: Character) => character is registry
   logout (character: Character, delete_all = false) => {
     registry = registry#{!== character}
-    if delete_all {
-      character.key = None
-      deletions.push Deletion(character)
-    }
+    character.key?.zeroised
+    character.key = None
+    deletions.push Deletion(character) if delete_all
     character
   }
   swap (from: Character, to: Character) => {
@@ -343,6 +345,8 @@ Character := class: Hierarchy + Entity + Nameable {
   .status = {wanted} ^punctuation => constraint = wanted
   is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
   as (=== boolean) => this == @me
+  acting => this
+  chainable == (other) => ERROR@Security `comparing characters needs @ether/Security (or @ether/Network)`
 
   choose (s, n: Number = 1) => Choice(type: s, count: n)
   unlock (skill: Skill): static => this ~~ skills.push skill

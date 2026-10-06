@@ -368,6 +368,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A `.%` line uses `with (@me = @who)` instead, which replaces the draft's `&caller = <uuid>;` (§9.2.6, 2026-10-06).
   - **(2026-10-06)** `@name { … }` is `with (@me = name) { … }`, the same as a `.%` line, and running somewhere is
     `with (Location.current = loc) program`; there are no `run_as`/`run_at`/`run_after` methods.
+  - **(2026-10-06)** With `@ether/Security` imported (§9.1 subprojects), `&caller` holds only verified principals:
+    `@me = x` sets `x.acting`, which is `x` verified by a key held here or a handshake, and an access check also needs
+    the actor `Live` and within its delegation (World W2.1). Without it, `@me = x` sets `x` as given.
 - **From the drafts review (2026-10-06):**
   - **8.2.1 Checking a context checks its program — Decided (draft).** An access check on a context checks the running Program and its `&who` / origin chain, never the frame's data. *`.ray2/Program.ray:247–248`*
   - **8.2.2 Releasing a derivative — Q.** A permission for whether data and its derivatives may cross the network, or only some derivatives (a count) (*`.ray2/_todo/ray.ray.txt/Ether/instance/Access.ray:1–2`*). Recommend: a grant may name a derivative (`@ether.read (x.count)`) that may leave although x may not; library code runs as `@ether`, which has access on the local instance only.

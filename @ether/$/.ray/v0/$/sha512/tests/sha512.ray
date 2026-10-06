@@ -1,0 +1,14 @@
+// SHA-512 digests of FIPS 180's examples (https://csrc.nist.gov/projects/cryptographic-standards-and-guidelines/example-values, SHA512.pdf).
+
+mark ^keyword := external global
+
+// One-block message "abc" (FIPS 180-4 example SHA512.pdf, and FIPS 180-2 Appendix C.1)
+unless SHA512.write("abc".bytes) as Byte₆₄ as Hexadecimal₁₂₈ == "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f" { INFO@mark `SHF1 abc does not digest as in FIPS 180's one-block example` }
+// Two-block message, the 896 bits "abcdefghbcdefghi…nopqrstu" (FIPS 180-4 example SHA512.pdf, and FIPS 180-2 Appendix C.2)
+unless SHA512.write("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu".bytes) as Byte₆₄ as Hexadecimal₁₂₈ == "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909" { INFO@mark `SHF2 the 896-bit message does not digest as in FIPS 180's two-block example` }
+// The 448-bit message "abcdbcde…nopq" (NIST example values, SHA2_Additional / the SHA-512 test of the 448-bit string)
+unless SHA512.write("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes) as Byte₆₄ as Hexadecimal₁₂₈ == "204a8fc6dda82f0a0ced7beb8e08a41657c16ef468b228a8279be331a703c33596fd15c13b1b07f9aa1d3bea57789ca031ad85c7a71dd70354ec631238ca3445" { INFO@mark `SHF3 the 448-bit message does not digest as 204a8fc6…` }
+// The empty message (NIST CAVP SHAVS, SHA512ShortMsg.rsp, Len = 0)
+unless SHA512.write([]) as Byte₆₄ as Hexadecimal₁₂₈ == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e" { INFO@mark `SHF4 the empty message does not digest as cf83e135…` }
+// The first constant and initial word (FIPS 180-4 §4.2.3, §5.3.5)
+unless SHA512.K.first == 0x428a2f98d728ae22 && SHA512.K.count == 80 && SHA512.initial.first == 0x6a09e667f3bcc908 { INFO@mark `SHF5 the constants and initial hash value are not those of FIPS 180-4 §4.2.3 and §5.3.5` }

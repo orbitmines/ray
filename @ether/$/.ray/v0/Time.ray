@@ -62,11 +62,11 @@ Gregorian := class: Julian {
   equivalence "1582-10-04" as Julian -> "1582-10-15"
 }
 
-UTC := class: Gregorian (offset: Quantity.Temporal = 0) {
+UTC := class: Gregorian (offset: Quantity.Temporal = 0, leap_seconds: boolean = false) {
+  static minute = Calendar.Segment(global.minute, 60 seconds | 61 seconds if leap_seconds && LeapSeconds.at(this))
   equivalence 0 -> offset
-  static leap_seconds => false
 }
-GMT := UTC
+GMT := UTC{leap_seconds == false}
 
 Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
   epoch: Time{== calendar} = 0

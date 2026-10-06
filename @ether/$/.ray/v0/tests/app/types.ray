@@ -142,3 +142,22 @@ unless Count.Inner { INFO@mark `HD14 a static class is not on the class` }
 Both := class: Pair &+ Tagged { }
 unless Both(left: 1, right: 2, tag: 3).total == 3 { INFO@mark `HD15 class: A &+ B is not built on A` }
 unless Both(left: 1, right: 2, tag: 3).doubled == 6 { INFO@mark `HD16 class: A &+ B is not built on B` }
+
+// Negations on nothing answer true (T1.8)
+unless None != 1 { INFO@mark `NGN1 nothing is said to be one` }
+unless None !~= "a" { INFO@mark `NGN2 nothing is said to match` }
+unless None != 5 && !(None != None) { INFO@mark `NGN3 a negation on nothing does not answer true against something, or holds against nothing` }
+cleared_vertex := [1, 2].entry
+kept_vertex := cleared_vertex
+cleared_vertex = None
+if kept_vertex.initial || kept_vertex.terminal { INFO@mark `NGN4 a vertex set to nothing keeps its boundaries` }
+
+// Uniqueness under an equivalence (T6.9)
+UniquelyNamed := class { unique<in: .fold_case> name: String }
+named_first := UniquelyNamed(name: "Ada")
+named_other := UniquelyNamed(name: "Bea")
+unless named_other.name.is_unique<in: .fold_case> { INFO@mark `UQI1 a name no other holds is not unique` }
+named_clash := UniquelyNamed(name: "ADA")
+if named_clash.name.is_unique<in: .fold_case> { INFO@mark `UQI2 a name another holds in other case is unique with case folded` }
+unless named_clash.name.is_unique { INFO@mark `UQI3 a name is not unique without folding case though no other is equal` }
+unless [1, 2, 1].unique == [1, 2] { INFO@mark `UQI4 each thing once is no longer what unique answers` }

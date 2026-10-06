@@ -7,23 +7,20 @@ IP := class: Location &+ (-1 <- . -> +1) {
     static Binary := Binary{length == SEGMENT_LENGTH}
   }
   segments: Segment[]{length == NUMBER_OF_SEGMENTS}
-  prefix: Number?
 
   static canonical = static
   // Lowercase hexadecimal (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
-  as (=== String) => (this as canonical).written_out.lowercase, ("/", prefix if prefix)
+  // CIDR notation where the low bits are superposed (https://datatracker.ietf.org/doc/html/rfc4632#section-3.1)
+  as (=== String) => NUMBER_OF_BITS - (as Binary ~= Superposed[]⊣ -- .length) -- (prefix_length => prefix_length == NUMBER_OF_BITS
+    ? (this as canonical).written_out.lowercase
+    : ((as Binary ~~ .[prefix_length..] = 0) as static as String, "/", prefix_length))
   full: String => written_out
-  chainable == (other: IP) => as Binary == other as Binary && prefix == other.prefix
+  chainable == (other: IP) => as Binary == other as Binary
 
   compounds + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
   compounds - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
 
-  compounds / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => {
-    binary_form = as Binary
-    binary_form[prefix_length..] = 0
-    (binary_form as static) ~~ .prefix = prefix_length
-  }
-  hosts => (as Binary)[..<prefix], (0 | 1)[]{length == NUMBER_OF_BITS - prefix}
+  compounds / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => as Binary ~~ .[prefix_length..] = 0 | 1
 
   static v4 := class: IP ({segments.join(".")}) => {
     static NUMBER_OF_SEGMENTS = 4

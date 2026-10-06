@@ -45,6 +45,7 @@ end := learned . end
 space := learned . space
 indent := learned . indent
 access := learned . access
+defining := learned . definer
 
 // Whether `a` is the same character as `b`.
 character {a} is {b} =>
@@ -107,6 +108,8 @@ characters of {written} =>
   where := external span written
   where . from
 quote := characters of "
+slash := characters of /
+slash := slash . character
 quote := quote . character
 pairs := characters of ()[]{}
 opening := pairs . character
@@ -497,6 +500,48 @@ rules in reach of {scope} below {outside} =>
       here := nothing
   first
 
+// Whether one of `pieces` is a literal spelling the definer (learned from the first statement).
+spells the definer {pieces} =>
+  piece := pieces
+  found := nothing
+  while piece do
+    if piece . literal then
+      lit_from := piece . from
+      lit_to := piece . to
+      if chain spans lit_from lit_to as defining then
+        found := yes
+        piece := nothing
+    if piece then
+      piece := piece . next
+  found
+
+// Whether the places from `from` to `to` spell the chain `chain` (which ends by itself).
+chain spans {from} {to} as {chain} =>
+  here := from
+  wanted := chain
+  result := yes
+  going := yes
+  while going do
+    here_done := same here to
+    unless wanted then
+      going := nothing
+      unless here_done then
+        result := nothing
+    if going then
+      if here_done then
+        going := nothing
+        result := nothing
+    if going then
+      c := here . character
+      w := wanted . character
+      unless character c is w then
+        result := nothing
+        going := nothing
+      if going then
+        here := here . next
+        wanted := wanted . next
+  result
+
 // Whether the chain `a` has more pieces than the chain `b` (walked side by side: there are no integers).
 more pieces in {a} than {b} =>
   x := a
@@ -582,11 +627,16 @@ reading from {at} to {limit} among {rules} =>
         unless led then
           if best_led then
             take := nothing
-        // the rule that defines rules reads a definition whole, whatever else could (R0.1)
+        // the rule that defines rules reads a definition whole, unless the other spells the definer itself (2026-10-06: a
+        // method head with parameters is read by the rule written with the definer in it, not as a rule of that name)
         if written alike rule definer then
           take := yes
+          if spells the definer best_pieces then
+            take := nothing
         if written alike best_rule definer then
           take := nothing
+          if spells the definer pieces then
+            take := yes
       if take then
         best := r
         best_rule := rule
@@ -772,7 +822,8 @@ words from {at} to {limit} =>
       here := here . next
   first
 
-// The first place from `at` that is not a space or a line end, or nothing before `to`.
+// The first place from `at` that is not a space, a line end or a comment (`//` to the line's end, skipped before any rule
+// reads it: comments say anything, definitions included), or nothing before `to`.
 blank from {at} to {to} =>
   here := at
   found := nothing
@@ -786,6 +837,25 @@ blank from {at} to {to} =>
         skip := yes
       if character c is end then
         skip := yes
+      if character c is slash then
+        following := here . next
+        if following then
+          f := following . character
+          if character f is slash then
+            skip := yes
+            going := yes
+            while going do
+              following := here . next
+              unless following then
+                going := nothing
+              if same following to then
+                going := nothing
+              if going then
+                d := following . character
+                if character d is end then
+                  going := nothing
+              if going then
+                here := following
       unless skip then
         found := here
         here := nothing
@@ -1030,6 +1100,8 @@ colon := characters of :
 colon := colon . character
 dot := characters of .
 dot := dot . character
+comma := characters of ,
+comma := comma . character
 marks := characters of `\n?
 backtick := marks . character
 marks := marks . next
@@ -1100,17 +1172,21 @@ take the seed's rules
 hand planning over
 
 // One statement read at the top: applied in place, or reported. Answers the place after it.
-read statement at {at} =>
+read statement at {given} =>
   here := external .
   scope := here . parent
-  limit := statement end from at to nothing below nothing
-  made := step from at to limit in scope
-  rule := made . rule
-  if rule then
-    caps := made . captures
-    external apply rule caps scope
-  unless rule then
-    external report at limit
+  at := blank from given to nothing
+  limit := nothing
+  if at then
+    limit := statement end from at to nothing below nothing
+  if at then
+    made := step from at to limit in scope
+    rule := made . rule
+    if rule then
+      caps := made . captures
+      external apply rule caps scope
+    unless rule then
+      external report at limit
   after := nothing
   if limit then
     after := limit . next
@@ -1303,3 +1379,51 @@ class {block} =>
       external apply args nothing instance
     instance
   static
+
+// ---------------------------------------------------------------- methods: `name (a, b) => body`
+// A method is a rule whose head is its name and its parameters, each a capture: `foo (a, b) => …` is `foo({a}, {b})`, so a call
+// binds each argument to its parameter by reading, as any rule's captures are.
+parentheses := external span ()
+comma_written := external span ,
+{name} ({parameters?}) {`=>`} {body} =>
+  name_at := external span name
+  pieces := node
+  name_from := name_at . from
+  name_to := name_at . to
+  add literal piece from name_from to name_to into pieces
+  // the brackets as written here
+  open_at := parentheses . from
+  close_at := open_at . next
+  close_end := close_at . next
+  add literal piece from open_at to close_at into pieces
+  parameters_at := external span parameters
+  if parameters_at then
+    at := parameters_at . from
+    stop := parameters_at . to
+    start := at
+    while at do
+      ending := same at stop
+      unless ending then
+        c := at . character
+        if character c is comma then
+          ending := yes
+      if ending then
+        add capture piece from start to at into pieces
+        if same at stop then
+          at := nothing
+        if at then
+          comma_from := comma_written . from
+          comma_to := comma_written . to
+          add literal piece from comma_from to comma_to into pieces
+          at := at . next
+          spaced := spaces after at
+          if spaced then
+            add gap piece from at to spaced into pieces
+            at := spaced
+          start := at
+      unless ending then
+        at := at . next
+  add literal piece from close_at to close_end into pieces
+  chain := pieces . first
+  made := external define name chain body
+  keep rule made

@@ -1,2 +1,2 @@
-Channel := History + Program
+Channel := Program + History
 Chat := Channel{Pure & Terminating}

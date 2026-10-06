@@ -39,7 +39,6 @@ Executable := Location{access is Access(method: `()`)}
 
 Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
 @{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
-@{scheme: "mailto" | "tel"}:{rest: Written} ^string => (scheme + ":" + rest) as Location
 @"{text: (!"\"")[]}" ^string => text as Location
 @{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
 @{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location

@@ -15,9 +15,10 @@ Nameable := class {
   named (name): static => this ~~ .name |= name
 }
 
+// Kinds of name, told apart by what is written: a name is any of them that matches.
 FullName := class (first: Char.Word[], " ", last: Char.Word[])
-Email := Location{scheme == "mailto"}
-Phone := Location{scheme == "tel"}
+Email := class (local: Char{!= "@" && != " "}[]{length > 0}, "@", domain: Char{!= "@" && != " "}[]{length > 0})
+Phone := class ("+"?, digits: Char.Digit[]{length > 0})
 
 @me ^string => &caller as Character
 @me = {who} ^punctuation => &@.may(`@me =`, who) ? &caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
@@ -31,6 +32,9 @@ Character := class: Hierarchy + Entity + Nameable {
   static local (who) => who == "me" ? @me : None
 
   quests => Program#{who: this}{running}
+  full_name => name{is FullName}
+  email => name{is Email}
+  phone => name{is Phone}
   // Without @ether/security a character is only itself; security replaces this with the verified comparison.
   as (=== boolean) => this === @me
   acting => this

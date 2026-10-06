@@ -79,7 +79,11 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
 
 - **W2.12 Contact handles** — **Q**. Recommend: phone and email are Locations (`@tel:…`, `@mailto:…`), so
   `Character.email: Location{scheme == "mailto"}`. *`…/instance/UI/Player.ray:1–2`*
-  **Follows (2026-10-06):** phone and email are Locations, `Character.email: Location{scheme == "mailto"}?` and `phone: Location{scheme == "tel"}?`; the authority (`//host`) after a scheme is optional (RFC 3986 §3), from L§6.1 (`@https://…` and the like are location values anywhere).
+  **Decided (2026-10-06, user):** not Locations. `Email`, `Phone` and `FullName` are patterns over what is written
+  (`alice@a.b`, `+31612345678`, `Ada Lovelace`), and they stay fields of a character by filtering its names:
+  `email => name{is Email}`, `phone => name{is Phone}`, `full_name => name{is FullName}` (every one it goes by). Reaching
+  someone at one is a conversion (`email as Location`), not how the name is stored. The authority (`//host`) after a scheme
+  is optional (RFC 3986 §3), from L§6.1 (`@https://…` and the like are location values anywhere).
 - **W2.13 A character on many instances** — **Q**. Recommend: `character.instances` is every instance running it (a
   superposition), and the selected one is where its focus is (`primary`); v0 has one `presence`.
   *`…/instance/Entity.ray:15–27`*

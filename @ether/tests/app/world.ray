@@ -35,7 +35,7 @@ if wr.public { INFO@mark `RE1 a new reference is public` }
 unless wr.publish.public { INFO@mark `RE2 a published reference is not public` }
 
 // An avatar is one of a character's names: its name on a platform, written with `@` (`@github.com/package` is a package of github).
-wa := Character(name: "alice" | @github.com/@alice | @mailto:alice@a.b)
+wa := Character(name: "alice" | @github.com/@alice | "alice@a.b")
 unless wa.avatars#.count == 1 { INFO@mark `PE2 a character has other than one avatar` }
 unless wa.avatars#.first.segments.last == "@alice" { INFO@mark `AV1 an avatar is not the character's name on its platform` }
 
@@ -311,11 +311,12 @@ unless rdr.@a == 1 { INFO@mark `RDR2 a redirected name answers what the other he
 unless rdr.@A == rdr.@b { INFO@mark `RDR1 a redirected name does not answer what the other holds` }
 unless (rdr.@b = 3).erred { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
 
-// A character's name is every name it goes by, each told apart by its pattern: email and phone are locations.
-cth := Character(name: "reachable" | "Ada Lovelace" | @mailto:a@b.c | @tel:+31612345678)
-unless cth.name{is Email}#.first.scheme == "mailto" { INFO@mark `CTH1 an email is not a mailto location` }
-unless cth.name{is Phone}#.first as String == "tel:+31612345678" { INFO@mark `CTH2 a phone number is not a tel location` }
-unless cth.name{is FullName}#.first.last == "Lovelace" { INFO@mark `CTH4 a full name is not read as first and last` }
+// A character's name is every name it goes by, each told apart by its pattern: an email, a phone number, a full name are what they look like.
+cth := Character(name: "reachable" | "Ada Lovelace" | "a@b.c" | "+31612345678")
+unless cth.email#.first.domain == "b.c" { INFO@mark `CTH1 an email is not read as local part and domain` }
+unless cth.phone#.first as String == "+31612345678" { INFO@mark `CTH2 a phone number is not one of its names` }
+unless cth.full_name#.first.last == "Lovelace" { INFO@mark `CTH4 a full name is not read as first and last` }
+if cth.email#.count != 1 || cth.phone#.count != 1 { INFO@mark `CTH6 a name was taken for an email or phone number it does not look like` }
 unless Character.local("reachable") === cth || !Instance.local.logged_in(cth) { INFO@mark `CTH5 a character is not found by any of its names` }
 unless (@https://a.b/c).host == "a.b" { INFO@mark `CTH3 a location with an authority lost its host` }
 

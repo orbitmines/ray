@@ -13,8 +13,21 @@ export class Node {
   *reach(): Generator<Rule> { for (let n: Node | undefined = this; n; n = n.parent) for (let i = n.rules.length - 1; i >= 0; i--) yield n.rules[i]; }
 }
 // Code: a span, read later in the frame it was written in.
+// What a span always is, whatever frame it is read in: its text, the one word it is (if it is one), its programs.
+export type SpanOf = { s: string; word: string | undefined; programs: Map<Rule | undefined, Map<Node | undefined, { version: number; fn: Compiled }>> };
+const spans = new WeakMap<Text, Map<number, SpanOf>>();
+function span_of(text: Text, b: number, e: number): SpanOf {
+  let m = spans.get(text); if (m === undefined) spans.set(text, m = new Map());
+  const k = b * 4194304 + e; let t = m.get(k);
+  if (t === undefined) { const s = text.s.slice(b, e), w = s.trim(); m.set(k, t = { s, word: w.length > 0 && !/\s/.test(w) ? w : undefined, programs: new Map() }); }
+  return t;
+}
 // `planner`: the reader in force where it was written, which reads it into a program (none: the seed).
-export class Code { constructor(public text: Text, public b: number, public e: number, public frame: Node, public planner?: Rule) {} get s() { return this.text.s.slice(this.b, this.e); } }
+export class Code {
+  of: SpanOf;
+  constructor(public text: Text, public b: number, public e: number, public frame: Node, public planner?: Rule, of?: SpanOf) { this.of = of ?? span_of(text, b, e); }
+  get s() { return this.of.s; }
+}
 // A typed capture holds only what its type's own rules read whole (R2.2, R2.3); it is then read by them.
 export type Piece = { lit: string } | { cap: string; type?: Node };
 export type Rule = { head: Code; pieces: Piece[]; body: Code; order: number; fn?: Compiled; version?: number; planner?: Rule };
@@ -299,7 +312,7 @@ export class Seed {
   apply(rule: Rule, caller: Node, caps: [string, Span][], planner: Rule | undefined): unknown {
     const frame = new Node(rule.head.frame);
     // a typed capture is read by its type's rules
-    for (const [name, sp] of caps) frame.members.set(name, new Code(sp.text, sp.b, sp.e, (sp as { type?: Node }).type ?? caller, planner));
+    for (const [name, sp] of caps) frame.members.set(name, new Code(sp.text, sp.b, sp.e, (sp as { type?: Node }).type ?? caller, planner, (sp as { of?: SpanOf }).of));
     return this.compiled(rule)(frame);
   }
   compiled(rule: Rule): Compiled {
@@ -310,8 +323,8 @@ export class Seed {
   // Code that names a member of its frame is that member (as an argument is); other code runs its compiled program.
   force(x: unknown): unknown {
     if (!(x instanceof Code)) return x;
-    const word = x.s.trim();
-    for (let at: Node | undefined = x.frame; at; at = at.parent) if (at.members.has(word)) return this.force(at.members.get(word));
+    const word = x.of.word;
+    if (word !== undefined) for (let at: Node | undefined = x.frame; at; at = at.parent) { const v = at.members.get(word); if (v !== undefined || at.members.has(word)) return this.force(v); }
     return this.compile(x)(x.frame);
   }
 
@@ -385,8 +398,8 @@ export class Seed {
   id<K>(m: Map<K, number>, k: K) { let n = m.get(k); if (n === undefined) m.set(k, n = m.size); return n; }
   compile(body: Code): Compiled {
     let scope: Node | undefined = body.frame; while (scope && scope.rules.length === 0) scope = scope.parent;
-    const key = `${this.id(this.texts_seen, body.text)}:${body.b}:${body.e}:${this.id(this.planners_seen, body.planner)}:${scope ? this.id(this.scopes_seen, scope) : -1}`;
-    const kept = this.compiled_code.get(key);
+    let byPlanner = body.of.programs.get(body.planner); if (byPlanner === undefined) body.of.programs.set(body.planner, byPlanner = new Map());
+    const kept = byPlanner.get(scope);
     if (kept !== undefined && kept.version === this.version) return kept.fn;
     const steps = body.planner ? this.plan_by(body.planner, body) : this.program(body);
     const labels = new Map<string, number>();
@@ -407,21 +420,22 @@ export class Seed {
       if (st.kind === 'external') {
         const ext = this.externals.get(st.name);
         if (ext === undefined) { this.say(`No external \`${st.name}\`.`, st.at); continue; }
-        lines.push(`try { r = ${ref(ext)}(f, [${st.args.map(a => `S.arg(f, ${ref(a)}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
+        lines.push(`try { r = ${ref(ext)}(f, [${st.args.map(a => `S.arg(f, ${ref({ ...a, of: span_of(a.text, a.b, a.e) })}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
         continue;
       }
-      lines.push(`try { r = S.apply(${ref(st.rule)}, f, ${ref(st.caps)}, ${ref(body.planner)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
+      const caps = st.caps.map(([n, sp]) => [n, { ...sp, of: span_of(sp.text, sp.b, sp.e) }] as [string, Span]);
+      lines.push(`try { r = S.apply(${ref(st.rule)}, f, ${ref(caps)}, ${ref(body.planner)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
     }
     lines.push('return r;', '}');
     const fn = new Function('S', 'k', `return function (f) { ${lines.join('\n')} };`)(this, k) as Compiled;
-    this.compiled_code.set(key, { version: this.version, fn });
+    byPlanner.set(scope, { version: this.version, fn });
     return fn;
   }
   // An argument that names a member of the frame (a capture, a local) is what it names; any other word is code.
-  arg(frame: Node, sp: Span, planner?: Rule): unknown {
-    const word = sp.text.s.slice(sp.b, sp.e);
-    for (let at: Node | undefined = frame; at; at = at.parent) if (at.members.has(word)) return at.members.get(word);
-    return new Code(sp.text, sp.b, sp.e, frame, planner);
+  arg(frame: Node, sp: Span & { of?: SpanOf }, planner?: Rule): unknown {
+    const of = sp.of ?? span_of(sp.text, sp.b, sp.e), word = of.s;
+    for (let at: Node | undefined = frame; at; at = at.parent) { const v = at.members.get(word); if (v !== undefined || at.members.has(word)) return v; }
+    return new Code(sp.text, sp.b, sp.e, frame, planner, of);
   }
   // A statement that is one word: the member it names, or nothing and a diagnostic.
   name(frame: Node, sp: Span): unknown {

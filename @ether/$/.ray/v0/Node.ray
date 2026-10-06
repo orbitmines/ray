@@ -22,7 +22,7 @@ Node &+= {
     -- this is Running ? results.last : this
   right-to-left pending => await this
 
-  right-to-left never => Never -- ERROR `happened, and was said never to` if this
+  right-to-left never => never -- ERROR `happened, and was said never to` if this
 
   chosen_within (width) => components.random
   right-to-left choose => chosen_within(1)

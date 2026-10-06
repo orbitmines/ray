@@ -135,7 +135,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 ### 4.1 Non-returning functions — *IDE:213*
 - **Decided:**
-  - A function typed `=> Never` never returns.
+  - A function typed `=> never` never returns (renamed from `Never`, 2026-10-06).
   - `never` is a keyword. `never <something>` asserts (or proves) that something never happens.
   - `never return` says the function's end is never reached: the return, i.e. reaching the end label. When a branch containing `never return` is taken, the function's return value is `never` as well.
   - Example:
@@ -295,6 +295,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided:** a migration is a function `%4 -> %5 (old) => new`, for now declared beside the thing it migrates (declaring it elsewhere may come later). Migrations chain, so %1 reaches %5, and an inverse (§4.5) is the backward migration.
 - **From the drafts review (2026-10-06):**
   - **7.2.1 `%1..5` or `%[1..5]` — Q (conflict).** This section decided the suffix `field %1..5`; the 2026-10-05 answers (§10, "`%`") read `%` before a number as modulo and write version ranges `%[1..5]`; the Almanac writes `title %1..5: String` (*ALM:1641*). Recommend keeping the 2026-10-05 answer: rewrite this section to `field %[1..5]` and update the Almanac line.
+    **Answered (user, 2026-10-06):** `%[1..5]`; `%` alone stays modulo. This section's `field %1..5` and the Almanac's `title %1..5` are to be written `%[1..5]`.
 
 ### 7.3 Errors carry their version — *IDE:432*
 > error[X] where X is the version the error type got introduced, plus a number.

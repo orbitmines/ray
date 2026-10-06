@@ -188,7 +188,7 @@ unless (
   Setting.level
 ) == 3 { INFO@mark `WI3 assume is not with` }
 
-if Never.admits(5) { INFO@mark `NV1 something is of the type that never returns` }
+if never.admits(5) { INFO@mark `NV1 something is of the type that never returns` }
 
 doubling := Program(code: { 2 })
 halving := Program(code: { 1 })

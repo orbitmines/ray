@@ -228,6 +228,7 @@ From the drafts review (2026-10-06).
   T6.3 (`unique{expr}` dropped), while World needs case-insensitive unique names. Recommend: keep T6.3; `unique` as a
   field modifier means no other value of that field in its scope is `==`, the comparison taken from `<in: …>` (R3.14),
   e.g. `unique<in: .fold_case> name`. `.unique` stays dedupe, and the predicate is `.is_unique`.
+  **Answered (user, 2026-10-06):** `unique<in: …>` as a field modifier, uniqueness under an equivalence (the same `<in:>` as `==`), and `.is_unique` for the predicate. Replaces T6.3's drop.
 - **T6.10 `!=`, `===`, `!==` come from `==`** — *`.ray3/Node.ray:81–82, 145–150`*: `(this @@ Node ==)*.map{.on ==}(method
   => args => !method<local: .>(args))`; `¬{.} => not.instance_of this`. **Decided (draft)**: `!=`, `===`, `!==` and
   `not` are generated from `==`'s methods, so every option of `==` (`.instance_of`, `<in: …>`, `<up_to>`) exists on them

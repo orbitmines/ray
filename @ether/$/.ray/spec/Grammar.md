@@ -156,6 +156,7 @@ From the drafts review (2026-10-06).
   writes a modifier `precedence(before X)` / `precedence(after X)`. Recommend (review): allow the modifier, since
   modifiers are language-side, but define it as G3.1's placement (`precedence(after X)` = written after `X~`) so there
   is one mechanism. Otherwise drop it.
+  **Answered (user, 2026-10-06):** add the modifier `precedence(before X)` / `precedence(after X)`, language-side, placing the method relative to X; declaration order (G3.1) stays the default.
 
 ## G4. Patterns and rules (*ep:285–287, 1245–1255, 1301–1313, 1377–1382, 1748–1757*)
 

@@ -145,10 +145,12 @@ From the drafts review (2026-10-06).
 - **A-C7 `never` against `Never`.** The Almanac writes `forever (): never => loop { }`
   (*Almanac.tsx:1299*); L§4.1 decides `=> Never` as the type and `never` as the keyword. **Q.**
   Recommend accepting both: `never` in a type position reads as `Never`, as `boolean` names a type.
+  **Answered (user, 2026-10-06):** `never`, as the Almanac writes it; L§4.1's `Never` is renamed.
 - **A-C8 Version range spelling.** The Almanac writes `title %1..5: String` (*Almanac.tsx:1641*);
   L§7.2 decides the suffix `field %1..5`; the 2026-10-05 answer (Language.md, `%`) reads `%` followed
   by a number as modulo and spells ranges `%[1..5]`. **Q.** Recommend keeping the 2026-10-05 answer
   (`field %[1..5]`), rewriting L§7.2, and updating the Almanac line.
+  **Answered (user, 2026-10-06):** `%[1..5]` (L§7.2.1).
 
 ---
 

@@ -144,6 +144,7 @@ From the drafts review (2026-10-06).
 - **U-C4 `never` and `Never`** — **Q**. L§4.1 decided `=> Never` as the type and `never` as the keyword; the Almanac writes
   `forever (): never => loop { }` (*ALM:1299*). Recommend accepting both: `never` in a type position reads as `Never`, as
   `boolean` names a type.
+  **Answered (user, 2026-10-06):** the type is `never` (L§4.1 renamed).
 
 ---
 

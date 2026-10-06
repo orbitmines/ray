@@ -1829,8 +1829,8 @@ fits (rule, caps, src, frame) => (
   n := list_len(found.naming_names)
   if n == 1 and span_is(rule.guard_src, rule.guard_begin, rule.guard_end, list_first(found.naming_names)) { return global }
   if n > 1 { return !found.refused }
-  value := n == 1 ? quiet_deref(argument) : UNDEF
-  if n == 1 and value == UNDEF { value = text_id(src, cap_begin(caps, q), cap_stop(caps, q)) }
+  value := quiet_deref(argument)
+  if value == UNDEF { value = text_id(src, cap_begin(caps, q), cap_stop(caps, q)) }
   n_kept := 0
   if value != UNDEF {
     kept := rule.guarded

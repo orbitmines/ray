@@ -158,6 +158,26 @@ base class {body} ^keyword => (
   static
 )
 
+// A class written only as its header (`class = key: *, ":", value: *`): declared before `,` so the header reads whole.
+class = {header} ^keyword => (
+  made := class {
+    inline header
+  }
+  made.header = external ** header
+  reads_by_header(made)
+  made
+)
+class:{ }{parent} = {header} ^keyword => (
+  made := class {
+    inline header
+  }
+  made.components.hierarchy &= parent
+  external extend made parent
+  made.header = external ** header
+  reads_by_header(made)
+  made
+)
+
 if ^class := class {
   { }{cond}{ }{yes} ^class => (
     branch ^keyword := external .
@@ -1759,6 +1779,62 @@ declare_partials (written, into) => (
   }
   into
 )
+// Text read through a class header (T4.10, types are patterns): each class with a header reads text as itself, item by item
+// along its header, a field taking the text up to the literal after it.
+reads_by_header (type) => (
+  Node &+= {
+    as (=== type) => header_read(this, type)
+  }
+)
+// Whether a piece of code is there (code is tested by `=== None`, not by what it reads as).
+present (x) => (x === None).not
+literal_item (item) => present(external after item `"`) && (present(external before item `"`)).not
+// An instance of a type whose fields are set by its reader: the class body is not read again.
+read_instance (type) => (
+  this := external .
+  this.components = chain None
+  this.components.hierarchy = chain this
+  this.components.hierarchy &= type
+  this.instance = global
+  this
+)
+header_read (text, type) => (
+  made := read_instance(type)
+  rest := text
+  pending := type.header
+  failed := None
+  while present(pending) {
+    part := external before pending `,`
+    unless present(part) { part = pending }
+    pending = external after pending `,`
+    named := external before part `:`
+    if (literal_item(part) && (present(external before part `[]`)).not) {
+      piece := inline part
+      if present(external before rest piece) {
+        failed = global
+        pending = None
+      }
+      rest = external after rest piece
+    } elsif (present(named) && (present(external before part `(`)).not && (present(external after part `(`)).not) {
+      piece := rest
+      if present(pending) {
+        next := external before pending `,`
+        unless present(next) { next = pending }
+        if (literal_item(next) && (present(external before next `[]`)).not) {
+          piece = external before rest (inline next)
+          rest = external after rest (inline next)
+          pending = external after pending `,`
+        }
+      }
+      unless present(piece) { failed = global }
+      external extend made {
+        (inline named) := piece
+      }
+    }
+  }
+  if failed { made = None }
+  made
+)
 named_arguments (args) => (
   found := false
   header_items((external ** args), `,`) for { if (argument_name(it.value)) { found = true } }
@@ -1819,13 +1895,7 @@ class = {header}{ }{`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.header = external ** header
-  made
-)
-class = {header}{\n} ^keyword => (
-  made := class {
-    inline header
-  }
-  made.header = external ** header
+  reads_by_header(made)
   made
 )
 class ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
@@ -1834,6 +1904,7 @@ class ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.header = external ** header
+  reads_by_header(made)
   made
 )
 class ({header}){ }{`{`}{members?}{`}`} ^keyword => (
@@ -1842,14 +1913,16 @@ class ({header}){ }{`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.header = external ** header
+  reads_by_header(made)
   made
 )
-class ({header}) {`=>`} {single}{\n} ^keyword => (
+class ({header}) {`=>`} {single} ^keyword => (
   made := class {
     inline header
     inline single
   }
   made.header = external ** header
+  reads_by_header(made)
   made
 )
 class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => (
@@ -1860,15 +1933,7 @@ class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => (
   made.components.hierarchy &= parent
   external extend made parent
   made.header = external ** header
-  made
-)
-class:{ }{parent} = {header}{\n} ^keyword => (
-  made := class {
-    inline header
-  }
-  made.components.hierarchy &= parent
-  external extend made parent
-  made.header = external ** header
+  reads_by_header(made)
   made
 )
 class:{ }{parent} ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
@@ -1879,6 +1944,7 @@ class:{ }{parent} ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
   made.components.hierarchy &= parent
   external extend made parent
   made.header = external ** header
+  reads_by_header(made)
   made
 )
 class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => (
@@ -1889,6 +1955,7 @@ class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => (
   made.components.hierarchy &= parent
   external extend made parent
   made.header = external ** header
+  reads_by_header(made)
   made
 )
 

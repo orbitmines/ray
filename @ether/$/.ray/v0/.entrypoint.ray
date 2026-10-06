@@ -899,13 +899,13 @@ Node := base class {
     narrowed := this
     closure := { inline narrowing }
     selected := None
-    if (narrowed.superposes && narrowed.components.head.value.instance) {
+    if ((narrowed.superposes === global) && (narrowed.components.head.value.instance === global)) {
       alternative := narrowed.components.head
       while alternative {
         if (alternative.value.satisfies(closure)) { if selected { selected = selected | alternative.value } else { selected = alternative.value } }
         alternative = alternative.next
       }
-    } elsif (narrowed.instance) {
+    } elsif (narrowed.instance === global) {
       selected = chain None
       narrowed for {
         held := it.value

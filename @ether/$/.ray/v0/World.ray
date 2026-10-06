@@ -11,8 +11,9 @@ Nameable := class {
   named (name: String): static => this ~~ .name = name
 }
 
+// A scheme, then the authority only when "//" follows (https://www.rfc-editor.org/rfc/rfc3986#section-3)
 Location := class: Hierarchy (
-  (scheme: Char.Word[], "://", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?,
+  (scheme: Char.Word[], ":", ("//", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?)?,
   path: Char{!= "?" && != "#"}[],
   ("?", query: Query{pairs.nonempty} = Query())?,
   ("#", fragment: Char[])?
@@ -41,6 +42,7 @@ Location := class: Hierarchy (
 
 Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
 @{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
+@{scheme: "mailto" | "tel"}:{rest: Written} ^string => (scheme + ":" + rest) as Location
 @"{text: (!"\"")[]}" ^string => text as Location
 @{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
 @me ^string => &caller as Character ?? Instance.local
@@ -68,6 +70,7 @@ Program &+= {
 
 Node &+= {
   history: History = History(repository: this)
+  world => this is World ? this : parent?.world
 }
 
 History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
@@ -88,6 +91,9 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     publish: static => this ~~ .visibility = Accessor.Permission.public
     applied (held) => held -- change.run_as(who)
     rewritten (change: Program) => Commit(id, who, stamp, change, from, versions, when, message, previous, line)
+    expand => change**
+    successors => line?.since(None){.parents.some(=== this)} ?? []
+    branching => successors.count > 1
     value => line?.at(this).value ?? applied(None)
     mentions (label) => id == label || versions ∋ label
     settings => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty).join("")
@@ -101,6 +107,8 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
 
   name: String?
   id => since(None).first?.id
+  label => name ?? since(None){!(.id is UUID)}.last?.id
+  blank => History(repository, caches)
   location => repository?.location
   clock => repository?.clock ?? World.ether.clock
   written_last: Commit?
@@ -154,6 +162,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
   squash (who) => History(repository, base, head: Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .change), previous: base))
   cherry_pick (picked: Commit): static => commit(picked.who, picked.change, message: picked.message)
+  erased => ordered.reduce(held = History(repository) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
   revert (reverted: Commit) => reverted.change⁻¹ ? commit(reverted.who, reverted.change⁻¹) : Quest(name: "revert", goal: reverted)
 
   received (stamp: Stamp) => clock.receive(stamp)
@@ -163,7 +172,7 @@ Repository := class = world: World?, histories: History[] = [], location: Locati
   id: UUID = UUID.v4()
   clock: HybridClock = HybridClock(node: id)
 
-  branch (name: String) => histories.find(.name == name)
+  branch (name: String) => histories.find(.label == name)
   global => History.global(histories)
 }
 
@@ -182,13 +191,15 @@ World := class: Location + Nameable {
       ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
   }
 
-  static Reservation := class = unique<in: .fold_case> name: reservable_names, issuer: World, holder: *?
+  static Reservation := class = unique<in: .fold_case> name: reservable_names, issuer: World, holder: *? {
+    redirect (to: Reservation): static => this ~~ .holder = (=> to.holder)
+  }
   reservations: Reservation[] = []
 
   reserved (name: String) => reservations{.name ==<in: .fold_case> name}.first
   issue (name: reservable_names) => Reservation(name, issuer: this) ~~ reservations.push(.)
   reserve (name: reservable_names) => reserved(name) ?? issue(name)
-  allocate (name: reservable_names, holder) => reserve(name) ~~ .holder = holder
+  allocate (name: reservable_names, holder) => reserve(name) -- (taken => taken.holder === None || &@.may(`=`, taken) ? taken ~~ .holder = holder : Quest(name: "overwrite a reservation", goal: taken, from: taken.issuer))
   allocated (name: String) => reserved(name)?.holder
 }
 Region := World
@@ -200,8 +211,11 @@ Quest := class: Nameable {
   tried: *?
   done = false
 
+  certificate: Certificate?
+
   reached (value) => value is goal
-  attempt (value): static => this ~~ (.tried = value) ~~ (.done = true if reached(value))
+  attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
+  continuable => done && !(tried**.is_terminal ?? true)
   path => tried.history
   solution => path{reached(.value)}.first
   solved_by => solution?.who
@@ -212,7 +226,7 @@ Quest := class: Nameable {
   progress => steps{. is Quest && .done}.count
   difficulty => steps.count
 
-  complete: static => this ~~ .done = true
+  complete: static => this ~~ (.done = true) ~~ (.certificate = Certificate(issuer: parent?.world ?? World.ether, holder: solved_by ?? &caller))
 }
 
 Task := class: Quest {
@@ -222,19 +236,29 @@ Task := class: Quest {
 }
 
 Item := class: Nameable {
-  issuer: World
   location: Location?
+  issuer: World = location?.world ?? World.ether
   obtained_by: Quest?
   certificate: Certificate?
 
   trail => location.history
+  shown => name ?? (static.name, (" @ ", location as String) if location).join("")
+  certify (given: Certificate): static => this ~~ .certificate = given
+  move (to: Location): static => {
+    transaction { location = to }
+    this
+  }
 }
 
-Certificate := class = issuer: World, secret: *, issued_on: Time = Time.now
+Certificate := class = issuer: World, secret: *?, issued_on: Time = Time.now, holder: *? {
+  visibility: Accessor.Permission = Accessor.Permission.private
+  public: *?
+}
 
 Platform := class: Location + Nameable {
   icon: *?
 
+  @{handle: reservable_names} => this / handle
   avatar (handle: String, character: Character) => Avatar(character, platform: this, handle)
 }
 
@@ -254,6 +278,7 @@ Reference := class {
   visibility: Accessor.Permission = Accessor.Permission.private
 
   year => date.year
+  claim (who: Character = &caller) => Quest(name: "claim the authorship", goal: Reference{authors ∋ who}, from: location?.world ?? World.ether)
   notes => note.history
   draft => visibility == Accessor.Permission.private
   publish: static => this ~~ .visibility = Accessor.Permission.public
@@ -274,7 +299,7 @@ Instance := class: Location + Entity {
     registry = registry#{!== character}
     if delete_all {
       character.key = None
-      deletions.push Deletion(character, due: Time.now + 30 days)
+      deletions.push Deletion(character)
     }
     character
   }
@@ -287,16 +312,19 @@ Instance := class: Location + Entity {
   mirror (value, depth = 1) => Mirror(value, location: this, depth)
   .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : external get device name
 
-  static Deletion := class: Quest (character: Character, due: Time) {
+  static Deletion := class: Quest (character: Character, requested: Stamp = World.ether.clock.now, window: Quantity.Temporal = 30 days) {
     name = "delete"
     goal => character
     cancelled = false
 
     cancel: static => this ~~ .cancelled = true
     pending => !cancelled && !done
+    lapsed => pending && World.ether.clock.now.when >= requested.when + window
+    carry_out: static => this ~~ (character.history = character.history.erased if lapsed) ~~ (.complete if lapsed)
   }
 
   static Mirror := class = value: *, location: Instance, depth = 1 {
+    access: Accessor? = value?.access
     synced => location.registry#.nonempty
   }
 }
@@ -314,11 +342,16 @@ Character := class: Hierarchy + Entity + Nameable {
 
   first_name: String?
   last_name: String?
-  email: String?
+  email: Location{scheme == "mailto"}?
+  phone: Location{scheme == "tel"}?
   profile_picture: *?
   profile: *?
 
   avatars => children{is Avatar}
+  instances => Instance#{. === presence || .logged_in(this) || .hosted ∋ this}
+  primary => presence
+  session => history.fork
+  keep (session: History) => history.merge(session)
   full_name => first_name ? first_name + " " + last_name : name
   device => (presence ?? Instance.local).device
   jobs => device.jobs

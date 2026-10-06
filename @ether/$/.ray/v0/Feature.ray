@@ -107,9 +107,12 @@ choose {type} ^keyword => @me.choose(type)
 choose {n: Number} {type} ^keyword => @me.choose(type, n)
 choose? {type} ^keyword => Choice(type)
 choose? {type} ?? {placeholder} ^keyword => Choice(type, placeholder)
-Choice := class = type: *?, value: *?, placeholder: *?, count: Number = 1 {
+Choice := class = type: *?, value: *?, placeholder: *?, count: Number = 1, reason: String? {
+  static algorithm: *?
+
   choosing => value === None
   answer => value ?? placeholder
+  told (given, weight: Number = 1/2): static => (given ~~ .weight = weight) -- (weighed => this ~~ .value = (value === None ? weighed : value | weighed))
 }
 Node &+= {
   choosing => false
@@ -161,6 +164,11 @@ OS := class {
   name: linux | macos | windows | browser | ether | unknown => platform ? { "linux": linux, "darwin": macos, "win32": windows, "browser": browser, "ether": ether }[platform] ?? unknown : ether
 
   static launch (location: Location) => external os `open` (location as String)
+
+  env => Environment(os: this)
+  static Environment := class = os: OS {
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : os[name]
+  }
 }
 
 Device := class {
@@ -185,7 +193,7 @@ Device := class {
   jobs: Jobs = Jobs()
   disk => Disk(device: this, path: "")
 
-  choose (s, n: Number = 1) => s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random
+  choose (s, n: Number = 1) => Choice.algorithm ? Choice.algorithm(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random
 }
 
 Storage := class: Location {

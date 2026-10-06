@@ -294,3 +294,85 @@ rz.reserve("Alice")
 unless rz.reserved("ALICE").name == "Alice" { INFO@mark `RZ1 a name found in another letter case lost the case it was reserved in` }
 unless rz.issue("aLiCe").erred { INFO@mark `RZ2 one name was issued twice in other letter cases` }
 if World(name: "unfolded").issue("ALICE").erred { INFO@mark `RZ3 a name is unique beyond the world that issued it` }
+
+// A redirected name answers what the other answers, at every lookup; a held name is overwritten only with the issuer's write.
+rdr := World(name: "redirects")
+rdr_b := rdr.allocate("b", 1)
+rdr.reserve("a").redirect(rdr_b)
+unless rdr.allocated("a") == 1 { INFO@mark `RDR1 a redirected name does not answer what the other holds` }
+rdr_b.holder = 2
+unless rdr.allocated("a") == 2 { INFO@mark `RDR2 a redirected name answers what the other held when it was redirected` }
+unless rdr.allocate("b", 3) is Quest { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
+
+// Phone and email are locations.
+cth := Character(name: "reachable", email: @mailto:a@b.c, phone: @tel:+31612345678)
+unless cth.email.scheme == "mailto" { INFO@mark `CTH1 an email is not a mailto location` }
+unless cth.phone as String == "tel:+31612345678" { INFO@mark `CTH2 a phone number is not a tel location` }
+unless (@https://a.b/c).host == "a.b" { INFO@mark `CTH3 a location with an authority lost its host` }
+
+// A character on several instances is on all of them; the one it is at is the primary.
+ins_at := Instance(location: "ins-at")
+ins_c := Character(name: "spread", presence: ins_at)
+ins_other := Instance(location: "ins-other")
+ins_other.login(ins_c)
+unless ins_c.instances ∋ ins_at && ins_c.instances ∋ ins_other { INFO@mark `INS1 a character is not on every instance running it` }
+unless ins_c.primary === ins_at { INFO@mark `INS2 the primary instance is not where the character is` }
+
+// Deleting an account waits on stamps, then keeps every commit with its value gone.
+dlt_c := Character(name: "leaving")
+dlt_c.history.commit(dlt_c, 5)
+dlt_ids := dlt_c.history.since(None).id
+dlt := Instance.Deletion(dlt_c)
+if dlt.lapsed { INFO@mark `DLT1 a deletion lapsed before its window` }
+dlt_erased := dlt_c.history.erased
+unless dlt_erased.since(None).id == dlt_ids { INFO@mark `DLT2 an erased history lost its commits' labels` }
+unless dlt_erased.ordered.stamp == dlt_c.history.ordered.stamp { INFO@mark `DLT3 an erased history lost its stamps` }
+if dlt_erased.value !== None { INFO@mark `DLT4 an erased history still holds a value` }
+with dlt.window = 0 seconds {
+  unless dlt.lapsed { INFO@mark `DLT5 a deletion does not lapse after its window` }
+}
+
+// A branch is named by its nearest label; a blank history has no commits; a commit expands into its run.
+brn := History(repository: Repository())
+brn.commit(@me, 1)
+brn.commit(@me, 2, id: "v1")
+brn.commit(@me, 3)
+unless brn.label == "v1" { INFO@mark `BRN1 a branch is not named by its nearest label` }
+unless brn.blank.commits.empty { INFO@mark `BRN2 a blank history has commits` }
+if brn.find("v1").branching { INFO@mark `BRN3 a commit with one child in its line branches` }
+unless brn.head.expand { INFO@mark `BRN4 a commit does not expand into the run that made it` }
+
+// A REPL session is a branch of the character's history; keeping it merges it in.
+rpl := Character(name: "repl")
+rpl_session := rpl.session
+rpl_session.commit(rpl, 9)
+unless rpl.keep(rpl_session).value == 9 { INFO@mark `BRN5 keeping a session does not merge it into the character` }
+
+// Completing a quest issues a certificate from its world; its secret is private.
+qct_world := World(name: "quests")
+qct := qct_world.add(Quest(name: "q", goal: 1))
+qct.attempt(1)
+unless qct.done { INFO@mark `QCT1 a reached quest is not done` }
+unless qct.certificate.issuer == qct_world { INFO@mark `QCT2 a completed quest's certificate is not from its world` }
+unless qct.certificate.visibility == Accessor.Permission.private { INFO@mark `QCT3 a certificate's secret is not private by default` }
+if Quest(name: "open", goal: 1).certificate { INFO@mark `QCT4 an open quest has a certificate` }
+
+// An item's issuer is the nearest world; moving it is in its trail; unnamed, it is shown by its class and place.
+itv_world := World(name: "items")
+itv_room := itv_world.add(Room(path: "room", value: None))
+itv := Item(location: itv_room)
+unless itv.issuer == itv_world { INFO@mark `ITV1 an item's issuer is not the world it is in` }
+itv.move(itv_world)
+unless itv.location == itv_world { INFO@mark `ITV2 a moved item is not where it was moved` }
+unless itv.trail.count >= 2 { INFO@mark `ITV3 a move is not in the item's trail` }
+unless itv.shown ~= ⊢"Item" { INFO@mark `ITV4 an unnamed item is not shown by its class` }
+if itv.name { INFO@mark `ITV5 an unnamed item was given a stored name` }
+
+// Claiming a reference's authorship is a quest, reached when the claimant is an author.
+clm_who := Character(name: "claimant")
+clm := Reference(title: "dummy")
+clm_quest := clm.claim(clm_who)
+unless clm_quest is Quest { INFO@mark `CLM1 claiming authorship is not a quest` }
+if clm_quest.reached(clm) { INFO@mark `CLM2 a claim is reached before the claimant is an author` }
+clm.authors.push clm_who
+unless clm_quest.reached(clm) { INFO@mark `CLM3 a claim is not reached once the claimant is an author` }

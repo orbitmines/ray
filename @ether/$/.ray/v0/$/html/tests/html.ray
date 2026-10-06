@@ -38,3 +38,9 @@ unless (HTML.read(written_document as HTML) as HTML) == (written_document as HTM
 unless (@html <p>&#65;&#x42;&amp;</p>).children.map(.text).join("") == "AB&" { INFO@mark `UI288 a numeric character reference is not its character` }
 unless HTML.read("<script>if (a) { f() }</script>").children.first is HTML.Raw { INFO@mark `UI289 the text of a script is not kept raw` }
 unless Language.named(".html") == HTML && $.html === HTML { INFO@mark `UI65 html is not a registered language` }
+// Tag and attribute names are ASCII case-insensitive, written in lower case (https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name, https://html.spec.whatwg.org/multipage/syntax.html#attributes-2)
+upper := HTML.read("<P ID=\"x\">a<BR>b</p>")
+unless upper.tag == "p" && upper.id == "x" && upper.children[1].tag == "br" && (upper as HTML) == "<p id=\"x\">a<br>b</p>" { INFO@mark `UI300 upper- and mixed-case tag and attribute names do not read as the lower-case element` }
+unless HTML.read("<Script>if (a) { f() }</SCRIPT>").children.first is HTML.Raw { INFO@mark `UI301 a raw text element closed in another case is not kept raw` }
+// The DOCTYPE in any case (https://html.spec.whatwg.org/multipage/syntax.html#the-doctype); &#X as &#x (https://html.spec.whatwg.org/multipage/syntax.html#character-references)
+unless HTML.read("<!DocType HTML><HTML lang=\"en\"><Head><title>Ray</title></Head><body></body></HTML>") is HTML.Document && (@html <p>&#X42;&#x6a;</p>).children.map(.text).join("") == "Bj" { INFO@mark `UI302 a mixed-case doctype or &#X reference is not read` }

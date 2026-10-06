@@ -27,21 +27,21 @@ HTML := class: Language {
   Attributes := class = value: *
 
   syntax := Compiler.default + {
-    // The DOCTYPE (https://html.spec.whatwg.org/multipage/syntax.html#the-doctype)
-    <!{doctype: "doctype" | "DOCTYPE"} html><html lang="{language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">{head}</head>{body}</html> => Document(Child(head), body, language)
-    <!{doctype: "doctype" | "DOCTYPE"} html><html lang="{language}"><head>{head}</head>{body}</html> => Document(Child(head), body, language)
+    // The DOCTYPE: "<!DOCTYPE" and "html" match ASCII case-insensitively (https://html.spec.whatwg.org/multipage/syntax.html#the-doctype); tag names likewise (https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name)
+    <!{"DOCTYPE".ignore_case} {"html".ignore_case}><{"html".ignore_case} lang="{language}"><{"head".ignore_case}><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">{head}</{"head".ignore_case}>{body}</{"html".ignore_case}> => Document(Child(head), body, language)
+    <!{"DOCTYPE".ignore_case} {"html".ignore_case}><{"html".ignore_case} lang="{language}"><{"head".ignore_case}>{head}</{"head".ignore_case}>{body}</{"html".ignore_case}> => Document(Child(head), body, language)
     // Comments (https://html.spec.whatwg.org/multipage/syntax.html#comments)
     <!--{literal text}--> => Comment(text)
-    // Elements (https://html.spec.whatwg.org/multipage/syntax.html#elements-2)
-    <{tag: RawText}{attributes}>{literal text}</{tag}> => Element(tag, Attributes(attributes), [Raw(text) if !text.empty])
-    <{tag: Name}{attributes}/> => Element(tag, Attributes(attributes))
-    <{tag: Void}{attributes}> => Element(tag, Attributes(attributes))
-    <{tag: Name}{attributes}>{children}</{tag}> => Element(tag, Attributes(attributes), Child(children))
-    // Attributes (https://html.spec.whatwg.org/multipage/syntax.html#attributes-2)
-    {name: Name}="{value}" => (name, value)
-    {name: Name}={value} => value === None || value == false ? None : value == true ? (name, "") : (name, value)
-    // Character references (https://html.spec.whatwg.org/multipage/syntax.html#character-references)
-    &#x{code: Hexadecimal}; => code as Char
+    // Elements; tag names are ASCII case-insensitive, an end tag closing its start tag in any case, and kept in lower case as the tokenizer does (https://html.spec.whatwg.org/multipage/syntax.html#elements-2, https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name, https://html.spec.whatwg.org/multipage/parsing.html#tag-name-state)
+    <{tag: RawText.ignore_case}{attributes}>{literal text}</{tag.ignore_case}> => Element(tag.lower_case, Attributes(attributes), [Raw(text) if !text.empty])
+    <{tag: Name}{attributes}/> => Element(tag.lower_case, Attributes(attributes))
+    <{tag: Void.ignore_case}{attributes}> => Element(tag.lower_case, Attributes(attributes))
+    <{tag: Name}{attributes}>{children}</{tag.ignore_case}> => Element(tag.lower_case, Attributes(attributes), Child(children))
+    // Attributes; their names are ASCII case-insensitive, kept in lower case (https://html.spec.whatwg.org/multipage/syntax.html#attributes-2, https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state)
+    {name: Name}="{value}" => (name.lower_case, value)
+    {name: Name}={value} => value === None || value == false ? None : value == true ? (name.lower_case, "") : (name.lower_case, value)
+    // Character references: "&#x" or "&#X", then hex digits of either case; named references are case-sensitive (https://html.spec.whatwg.org/multipage/syntax.html#character-references)
+    &#{"x".ignore_case}{code: Hexadecimal}; => code as Char
     &#{code: Decimal}; => code as Char
     &{name: Char.Letter[]}; => Entities[name] ?? ("&" + name + ";")
     {child: Child{value === None}} => []

@@ -153,15 +153,20 @@ Network &+= {
       {record: Record{type == Type.SRV}} => record.data -- (srv => [srv.priority, srv.weight, srv.port, text(srv.target as Name) + "."].map(. as String).join(" "))
     }
 
+    // Character strings of the protocol compare case-insensitively (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3, https://www.rfc-editor.org/rfc/rfc4343#section-3): the class and type mnemonics and the control entries read in any case, written in upper case; owner names keep their case (https://www.rfc-editor.org/rfc/rfc4343#section-4.1)
+    static mnemonic (enumeration, text: String) => enumeration#{.name == text.upper_case}.first
+    static TypeMnemonic := String{mnemonic(Type, .) != None}
+    static ClassMnemonic := String{mnemonic(Classes, .) != None}
+
     syntax := Compiler.default + {
       // Comments run from ";" to the end of the line (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
       ;{literal text} => Comment(text)
       // $ORIGIN (https://www.rfc-editor.org/rfc/rfc1035#section-5.1) and $TTL (https://www.rfc-editor.org/rfc/rfc2308#section-4)
-      $ORIGIN {name} => Origin(name as String)
-      $TTL {ttl: Decimal} => Lifetime(ttl)
+      {"$ORIGIN".ignore_case} {name} => Origin(name as String)
+      {"$TTL".ignore_case} {ttl: Decimal} => Lifetime(ttl)
       // <domain-name> [<TTL>] [<class>] <type> <RDATA>, the TTL and class in either order (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
-      {owner?} {ttl?: Decimal} {within?: Classes} {type: Type} {data} => Line(owner as String, ttl, within, type, data)
-      {owner?} {within: Classes} {ttl: Decimal} {type: Type} {data} => Line(owner as String, ttl, within, type, data)
+      {owner?} {ttl?: Decimal} {within?: ClassMnemonic} {type: TypeMnemonic} {data} => Line(owner as String, ttl, within ? mnemonic(Classes, within) : None, mnemonic(Type, type), data)
+      {owner?} {within: ClassMnemonic} {ttl: Decimal} {type: TypeMnemonic} {data} => Line(owner as String, ttl, mnemonic(Classes, within), mnemonic(Type, type), data)
       {line: Line} => line.record([])
       {zone: \n} => zone.components -- (lines => lines.enumerate.map(line => line.value is Line ? line.value.record(lines[..<line.index]) : line.value){!(. is (Origin | Lifetime))})
       {message: Message} => message

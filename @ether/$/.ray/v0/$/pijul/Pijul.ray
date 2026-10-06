@@ -37,8 +37,10 @@ Pijul := class: Language {
   Edit := class ("Edit in ", path: Named, ":", line: Decimal, " ", (!\n)[], \n, (" "[], (!\n)[], \n)[], content: Lines)
   Replacement := class ("Replacement in ", path: Named, ":", line: Decimal, " ", (!\n)[], \n, (" "[], (!\n)[], \n)[], content: Lines)
 
+  // The hashed part is bincode 1.x's serialization: fixed-width little-endian integers (libpijul's change.rs, https://nest.pijul.com/pijul/pijul)
+  Encoded := Bincode<Change, Bincode.legacy>
   Stored := class (version: Binary⁶⁴, hashed: Zstd, unhashed: Zstd, contents: Zstd) {
-    change => (hashed.bytes as Bincode<Change>).value -- (made => made ~~ (.unhashed = JSON.language.read(unhashed.bytes as String).entries) ~~ (.contents = contents.bytes))
+    change => (hashed.bytes as Encoded).value -- (made => made ~~ (.unhashed = JSON.language.read(unhashed.bytes as String).entries) ~~ (.contents = contents.bytes))
   }
 
   Store := class = root: Location {
@@ -99,7 +101,7 @@ Pijul := class: Language {
   }
 
   static stored := {
-    {change: Change} as Byte[] => Stored(version: 6, hashed: change as Bincode.language as Zstd.language, unhashed: change.unhashed as JSON.language as Zstd.language, contents: change.hunks.hunk.content.lines.flatten.text.join(\n) as Zstd.language) as Byte[]
+    {change: Change} as Byte[] => Stored(version: 6, hashed: Encoded(value: change) as Byte[] as Zstd.language, unhashed: change.unhashed as JSON.language as Zstd.language, contents: change.hunks.hunk.content.lines.flatten.text.join(\n) as Zstd.language) as Byte[]
   }
 }
 

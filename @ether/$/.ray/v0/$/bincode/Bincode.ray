@@ -1,12 +1,24 @@
 // Bincode's wire format (https://github.com/bincode-org/bincode/blob/trunk/docs/spec.md)
-Bincode<T> := class (value: Schema<T>) {
-  // Configuration: integer encoding and byte order
-  static Configuration := class = varint = true, endianness: Unicode.Endianness = Unicode.Endianness.LE {
+// The configuration is part of the type, chosen per use: Bincode<T> reads and writes the standard one, Bincode<T, Bincode.legacy> bincode 1.x's (https://github.com/bincode-org/bincode/blob/trunk/docs/spec.md#configuration)
+Bincode<T, configuration: Configuration = Configuration.standard> := class (value: Schema<T>) {
+  // Configuration: integer encoding, byte order and a limit on the bytes read (https://docs.rs/bincode/latest/bincode/config/struct.Configuration.html)
+  static Configuration := class = varint = true, endianness: Unicode.Endianness = Unicode.Endianness.LE, limit: Decimal? = None {
+    // config::standard(): little endian, variable integer encoding, no limit (https://docs.rs/bincode/latest/bincode/config/fn.standard.html)
     static standard = Configuration()
-    // bincode 1.x's fixed-width integers, which Pijul's change files use
+    // config::legacy(): little endian, fixed integer encoding, no limit; bincode 1.x's format, which Pijul's change files use (https://docs.rs/bincode/latest/bincode/config/fn.legacy.html)
     static legacy = Configuration(varint: false)
+    // with_fixed_int_encoding, with_variable_int_encoding, with_big_endian, with_little_endian, with_limit (https://docs.rs/bincode/latest/bincode/config/struct.Configuration.html)
+    fixint => Configuration(varint: false, endianness, limit)
+    varint_encoded => Configuration(varint: true, endianness, limit)
+    big_endian => Configuration(varint, endianness: Unicode.Endianness.BE, limit)
+    little_endian => Configuration(varint, endianness: Unicode.Endianness.LE, limit)
+    limited (bytes: Decimal) => Configuration(varint, endianness, limit: bytes)
   }
-  static configuration: Configuration = Configuration.standard
+  static standard = Configuration.standard
+  static legacy = Configuration.legacy
+
+  // Decoding more bytes than the limit is an error (https://docs.rs/bincode/latest/bincode/config/struct.Configuration.html#method.with_limit)
+  dynamically assert configuration.limit === None || (this as Byte[]).count <= configuration.limit
 
   // Fixint encoding: the integer in its width, in the configured byte order
   static Fixed<width> := class (bytes: Byte[]{count == width / 8}) {
@@ -51,6 +63,6 @@ Bincode<T> := class (value: Schema<T>) {
   static Schema<E> := Compiler.reduced(E, schema)
 
   static language = Language(".bincode",
-    level: { {encoded: Bincode} => encoded.value },
-    written: { {writing: Language.Writing} => Bincode<writing.value.static>(value: writing.value) as Byte[] })
+    level: { {encoded: Bincode<*, configuration>} => encoded.value },
+    written: { {writing: Language.Writing} => Bincode<writing.value.static, configuration>(value: writing.value) as Byte[] })
 }

@@ -24,3 +24,6 @@ unless sheet_block.count == 2 && sheet_block.last.selector == "#Ray" { INFO@mark
 unless ((@css p { /* note */ display: grid; }) as CSS) == "p{/* note */display:grid;}" { INFO@mark `UI237 a css comment is not written into the css` }
 unless (CSS.read(css_rule as CSS) as CSS) == (css_rule as CSS) { INFO@mark `UI290 a written css rule does not read back as the same rule` }
 unless (@css @font-face { font-family: Ray; }).selector == "@font-face" { INFO@mark `UI291 an at-rule of declarations is not a rule` }
+// Property names and at-rule names are ASCII case-insensitive, custom properties are not (https://www.w3.org/TR/css-syntax-3/#declaration, https://www.w3.org/TR/css-variables-1/#defining-variables)
+unless ((@css p { Display: grid; --Gap: 1px; }) as CSS) == "p{display:grid;--Gap:1px;}" { INFO@mark `UI303 a mixed-case property is not written in lower case, or a custom property's case is not kept` }
+unless (@css @Font-Face { font-family: Ray; }).selector == "@font-face" && (@css @KEYFRAMES spin { FROM { opacity: 0; } To { opacity: 1; } }).frames.at == [0, 1] { INFO@mark `UI304 upper- or mixed-case at-rule names and keyframe selectors are not read` }

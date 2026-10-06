@@ -31,3 +31,12 @@ zone := @dns {
 }
 unless zone.count == 3 && zone[0] is Network.DNS.Comment && zone[1].data as String == "93.184.215.14" && zone[1].ttl == 300 && Network.DNS.text(zone[2].name) == "www.example.com" { INFO@mark `DN16 a zone block does not read its comment, its hole, $ORIGIN and $TTL` }
 unless (zone as Network.DNS) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *) { INFO@mark `DN17 records are not written back as zone-file lines with their comment` }
+// Class and type mnemonics in any case (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3), written in upper case
+lower_line := @dns example.com. 300 in a 93.184.215.14
+unless lower_line.type == Network.DNS.Type.A && lower_line.within == Network.DNS.Classes.IN && ([lower_line] as Network.DNS) ~= (*, "example.com. 300 IN A 93.184.215.14", *) { INFO@mark `DN18 lower-case class and type mnemonics do not read as IN A, or are not written back in upper case` }
+lower_zone := @dns {
+  $origin Example.COM.
+  $Ttl 60
+  www Cname example.com.
+}
+unless lower_zone.count == 1 && lower_zone[0].ttl == 60 && lower_zone[0].type == Network.DNS.Type.CNAME && Network.DNS.text(lower_zone[0].name) == "www.Example.COM" { INFO@mark `DN19 lower- and mixed-case $ORIGIN, $TTL and mnemonics are not read, or the origin's case is not kept` }

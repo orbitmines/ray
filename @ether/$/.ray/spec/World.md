@@ -236,3 +236,17 @@ Decided 2026-10-06 (history queries).
   `history{from p to !p}`: a stretch lasts while `p` holds and includes the commit where it stops holding.
 - **W3.18** A commit's `.next` is the following commit on the same line (the one whose first parent it is),
   `None` at the head. `.previous` is the other direction.
+
+Decided 2026-10-06 (processes).
+
+- **W6.12** The language makes no process calls; running anything is running a Program (L§8.4). A job is a Program
+  at a location, the daemon is Ether's scheduler, and job control is `@me/jobs/<id>`: its program and state
+  (`queued | running | stopping | done | lost`), `.output` as a history, `.stop()`. `@me/jobs` lists them, and
+  `@me/jobs |= program` starts one.
+- **W6.13** Like the other device locations (W8), the browser's storage is `@me/device/storage/<key>` (the page keeps it in
+  `localStorage`) and the browser's time zones are `@me/device/os/zones` (the page answers from `Intl.DateTimeFormat`).
+  A file system over HTTP is `$.http`: GET, PUT, DELETE, and WebDAV's PROPFIND to list.
+- **W6.14 (planned, not decided)** Other systems are reached by inspecting their binaries (`$/elf`, `$/pe`, `$/macho`,
+  `$/wasm`; `$/x86-64`, `$/aarch64`, wasm bytecode). Inspecting is reading; using a binary lifts it into a Ray Program
+  whose syscalls and imports are effects on Ray locations checked by Access; native execution is an optimisation level
+  (L§8.4).

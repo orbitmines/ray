@@ -27,24 +27,26 @@ FileSystem := class: Language {
   }
   static Browser := class: FileSystem {
     key (location: Location) => "ray:" + location.normalised
-    read (location: Location) => Process(command: "localStorage.getItem(" + $.json.write(key(location)) + ")").stdout
-    write (location: Location, content) => Process(command: content === None
-      ? "localStorage.removeItem(" + $.json.write(key(location)) + ")"
-      : "localStorage.setItem(" + $.json.write(key(location)) + ", " + $.json.write(content as String) + ")").stdout
-    listing (location: Location) => $.json.read(Process(command: "JSON.stringify(Object.keys(localStorage).filter(key => key.startsWith(" + $.json.write(key(location) + "/") + ")))").stdout)
+    read (location: Location) => @me/device/storage[key(location)]
+    write (location: Location, content) => @me/device/storage[key(location)] = (content as String if content !== None)
+    listing (location: Location) => @me/device/storage.keys{~= ⊢(key(location) + "/")}
       .map(.after(key(location) + "/").before("/")).unique.map(location / .)
   }
   static Remote := class: FileSystem {
     remotely (location: Location) => Network.Remote(character: @me, location: location.scheme ? location.origin : @remote)
     inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
-    read (location: Location) => location.scheme ~= ⊢"http"
-      ? Process(command: "curl", arguments: ["-fsSL", location as String]) -- (.succeeded ? .stdout : None)
+    over_http (location: Location) => location.scheme ~= ⊢"http"
+    sent (method: $.http.Method, location: Location, content = None, fields = $.http.Fields()) => $.http.send($.http.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
+    read (location: Location) => over_http(location)
+      ? sent($.http.Method.get, location) -- (.ok ? .text : None)
       : remotely(location).run({ inner(location).content })
-    write (location: Location, content) => location.scheme ~= ⊢"http"
-      ? Process(command: "curl", arguments: content === None ? ["-fsS", "-X", "DELETE", location as String] : ["-fsS", "-X", "PUT", "--data-binary", "@-", location as String], input: content as String).succeeded
+    write (location: Location, content) => over_http(location)
+      ? sent(content === None ? $.http.Method.delete : $.http.Method.put, location, content).ok
       : remotely(location).run({ inner(location).write(content) })
-    listing (location: Location) => location.scheme ~= ⊢"http"
-      ? (Process(command: "curl", arguments: ["-fsS", "-X", "PROPFIND", "-H", "Depth: 1", location as String]).stdout ~= (*, "<D:href>", href: (!"<")[], "</D:href>")[]).href[1..].map(. as Location)
+    // WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2)
+    listing (location: Location) => over_http(location)
+      ? (sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")).text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
+        .map(href => href ~= ⊢"/" ? location.origin + href : href as Location)
       : remotely(location).run({ inner(location).listing })
   }
   static Device := class: FileSystem {
@@ -134,6 +136,7 @@ Network := class {
 
 OS := class {
   [property: String] => (external os property) as String
+  zones: Zones = Zones()
   platform => this["platform"]
   architecture => this["architecture"]
   name: linux | macos | windows | browser | ether | unknown => platform ? { "linux": linux, "darwin": macos, "win32": windows, "browser": browser, "ether": ether }[platform] ?? unknown : ether
@@ -143,7 +146,6 @@ OS := class {
   }
 
   static launch (location: Location) => external os `open` (location as String)
-  static run (command: String, arguments: String[] = []) => Process(command, arguments)
 }
 
 Device := class {
@@ -164,9 +166,63 @@ Device := class {
   printing = false
   opened: Location?
   memory: Store = Store(at: @"memory")
+  storage: Storage = Storage()
+  jobs: Jobs = Jobs()
   disk => Disk(device: this, path: "")
 
   choose (s) => s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : s#.random
+}
+
+Storage := class: Location {
+  static Entry := class: Nameable = value: String?
+
+  entries => children{is Entry && .value !== None}
+  keys => entries.name
+  entry (key: String) => children{is Entry && .name == key}.first ?? (Entry(name: key) ~~ add(.))
+  [key: String] => entry(key).value
+  [{key}] = {value} ^punctuation => entry(key as String).value = value
+  .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : this[name]
+  .{literal name ^property} = {value} ^punctuation => this[name] = value
+}
+
+Zones := class: Location {
+  static Answer := class = zone: String, at: Number, offset: String?, abbreviation: String?
+
+  answers: Answer[] = []
+  asked: Answer?
+
+  answer (zone: String, at: Number) => answers{.zone == zone && .at == at}.first ?? (Answer(zone, at) ~~ answers.push .)
+  [zone: String, at: Number] => answer(zone, at) ~~ (asked = . unless .offset) ~~ (await .offset)
+  / (segment: String) => Path(zones: this, segments: [segment])
+  .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : this / name
+
+  static Path := class = zones: Zones, segments: String[] {
+    / (segment: String) => Path(zones, segments: [segments, segment].flatten)
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : this / name
+    .{literal at ^property} = {value} ^punctuation => zones.answer(segments.join("/"), at as Number) ~~ (.offset = value.offset) ~~ (.abbreviation = value.abbreviation)
+  }
+}
+
+Job := class: Location = id: UUID = UUID.v4(), program: Program, by: Character? {
+  static State := enum queued | running | stopping | done | lost
+
+  state: State = State.queued
+  output: History = History(repository: this)
+
+  done => state is (State.done | State.lost)
+  stop: static => this ~~ (.state = State.stopping unless done)
+}
+
+Jobs := class: Location {
+  all => children{is Job}
+  [id] => all{.id as String == id as String}.first
+  started (program: Program) => Job(program, by: &caller) ~~ add(.)
+  |= (program: Program): static => this ~~ started(program)
+  .{literal id ^property} ^punctuation => .declaring(id) ? external get this id : this[id]
+}
+
+Program &+= {
+  job => @me/jobs.started(this)
 }
 
 Keyboard := class: Location {

@@ -1,10 +1,11 @@
 // HTTP semantics (https://www.rfc-editor.org/rfc/rfc9110)
 HTTP := class {
-  static Method := enum get | head | post | put | delete | connect | options | trace | patch {
+  // PATCH (https://www.rfc-editor.org/rfc/rfc5789), WebDAV's PROPFIND, safe and idempotent (https://www.rfc-editor.org/rfc/rfc4918#section-9.1)
+  static Method := enum get | head | post | put | delete | connect | options | trace | patch | propfind {
     // Method names are case-sensitive, the standard ones uppercase (https://www.rfc-editor.org/rfc/rfc9110#section-9.1)
     written => name.uppercase
     // Safe methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.1)
-    safe => this is (get | head | options | trace)
+    safe => this is (get | head | options | trace | propfind)
     // Idempotent methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)
     idempotent => safe || this is (put | delete)
     static (token: String) as (=== Method) => Method#{.written == token}.first

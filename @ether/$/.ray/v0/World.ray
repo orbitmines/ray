@@ -307,6 +307,7 @@ Character := class: Hierarchy + Entity + Nameable {
   avatars => children{is Avatar}
   full_name => first_name ? first_name + " " + last_name : name
   device => (presence ?? Instance.local).device
+  jobs => device.jobs
   status_now => presence?.status ?? status
 
   choose (s) => Choice(type: s)

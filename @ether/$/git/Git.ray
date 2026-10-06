@@ -191,18 +191,18 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
       change: History.change(made_by.parents.first ? tree(commit(made_by.parents.first).tree) : Location(), tree(made_by.tree)),
       when: made_by.author.when, message: made_by.message)) ~~ (.previous = made_by.parents.map(made[.])#))
 
-    history => Repository(location: root) -- (repository => reachable(references{.0 != noted_at && .0 != "HEAD"}.map(.1)).reduce(made = {} => made, {(.): read_commit(., made, repository)}) -- (made => repository
+    history => (Repository() @ root) -- (repository => reachable(references{.0 != noted_at && .0 != "HEAD"}.map(.1)).reduce(made = {} => made, {(.): read_commit(., made, repository)}) -- (made => repository
       ~~ (.histories = branches.map(branch => History(repository, head: made[branch.id], name: branch.name)))
       -- History(repository, head: made[head], name: current)))
   }
 
-  Remote := class = location: Location {
-    advertised (service: String) => (location / "info/refs").with(service: service).content as Advertised
-    fetched => advertised("git-upload-pack") -- (offered => Git<offered.format>.Remote(location).fetching(offered))
-    fetching (offered: Advertised) => ((location / "git-upload-pack") = (
+  Remote := class: Location {
+    advertised (service: String) => (this / "info/refs").with(service: service).content as Advertised
+    fetched => advertised("git-upload-pack") -- (offered => (this as String as Git<offered.format>.Remote).fetching(offered))
+    fetching (offered: Advertised) => ((this / "git-upload-pack") = (
       offered.references.enumerate.map(("want " + .value.id + (.index == 0 ? asked : "") + \n) as Line), Line.flush, "done\n" as Line
     )) as Pack -- (pack => Store(fetched: [pack], given: offered.references.map((.name, .id as Id))))
-    pushed (written: Written, old: Id?) => (location / "git-receive-pack") = (
+    pushed (written: Written, old: Id?) => (this / "git-receive-pack") = (
       ((old ?? zero) + " " + written.head.id + " refs/heads/" + written.branch + "\x00report-status" + asked + "\n") as Line, Line.flush, written.objects as Pack
     )
   }
@@ -232,7 +232,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   static opened (root: Location) => Git<((root / "config").content as Config).format>.Store(root: root)
 
   static level := {
-    {at: Location{scheme is ("https" | "http" | "git" | "ssh")}} => Remote(location: at).fetched
+    {at: Location{scheme is ("https" | "http" | "git" | "ssh")}} => (at as String as Remote).fetched
     {at: Location} => opened((at / ".git/HEAD").content.nonempty ? at / ".git" : at)
     {store: Store} => store.history
   }
@@ -251,6 +251,6 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
 
   tree_at (location: Location, label) => opened(location) -- (store => store.recorded.find(.line ~= ⊢(label as String + "\\")) -- (noted => noted ? store.tree(store.commit(noted.target).tree) : None))
   // A push writes in the format the server names (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)
-  push (history: History, remote: Location) => Remote(location: remote).advertised("git-receive-pack") -- (offered => Git<offered.format> -- (git =>
-    git.Remote(location: remote).pushed(Compiler.reduced(Language.Writing(history), git.written), offered.references.find(.name == "refs/heads/" + (history.name ?? "main"))?.id)))
+  push (history: History, remote: Location) => (remote as String as Remote).advertised("git-receive-pack") -- (offered => Git<offered.format> -- (git =>
+    (remote as String as git.Remote).pushed(Compiler.reduced(Language.Writing(history), git.written), offered.references.find(.name == "refs/heads/" + (history.name ?? "main"))?.id)))
 }

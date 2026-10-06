@@ -393,3 +393,14 @@ chn.commit(1, Program(code: { "b" }))
 if chn.at { INFO@mark `CHN1 a channel's cursor is a commit of its history` }
 unless chn[chn.head.previous].head === chn.head.previous { INFO@mark `CHN2 going back in a channel does not stop at the commit gone back to` }
 unless chn.written_as() as String ~= "\"b\"" { INFO@mark `CHN3 a channel is not written as its lines` }
+
+// A node's location is every place it is: `@` adds one, and a mirror is the same value at another instance.
+plc := (Item(name: "plc") @ here)
+plc @ there
+unless here is plc.location# && there is plc.location# { INFO@mark `PLC1 a value placed twice is not at both places` }
+unless (Item(name: "plc2") @ here).location == here { INFO@mark `PLC2 a value placed once is not where it was placed` }
+mir_peer := Instance(host: "mir-peer")
+mir_value := Item(name: "mirrored")
+mir_peer.mirror(mir_value)
+unless mir_peer is mir_value.location# { INFO@mark `MIR1 a mirrored value is not at the mirroring instance` }
+if mir_peer.synced { INFO@mark `MIR2 an instance nobody is logged into is synced` }

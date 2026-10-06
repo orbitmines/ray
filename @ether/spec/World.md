@@ -633,6 +633,10 @@ Answers from 2026-09-30.
   assignment is the whole mechanism; there is no `allocate`, W1.9.)
 - **W2.9** A mirror is the same variable at another location (`x @ @me.managed`); sync depth is a setting
   of that location.
+  **Decided (user, 2026-10-06):** a node's location is the superposition of where it is, and `@` adds one; there are no
+  per-class location fields (no `Item.location`, `Reference.location`, `Repository.location`, `Instance.Mirror`). A mirror
+  is no wrapper: `instance.mirror(x, depth)` places x (and its children to `depth`) at the instance, so its access is the
+  value's own, and `instance.synced` says whether someone is logged into it (W4.2's `replicas.every(.synced)`).
 - **W3.4** Assigning a value that has a history keeps both, linked: the `=` edge carries the value's
   history, and conflicts become merge quests.
 - **W3.7** "An approximate value is fine" is an uncertainty type (`likes: ≈Number`, as N4.10); the store

@@ -96,7 +96,7 @@ unless sgn_h.accepted(sgn_next).head.value == 4 { INFO@mark `SGN8 a commit that 
 
 // The handshake: Noise XX between two instances, then each introduces itself signing the handshake hash with its instance key.
 hsk_a := Instance.local.login(Character(name: "hsk-a"))
-hsk_peer := Instance(location: "hsk-peer")
+hsk_peer := Instance(host: "hsk-peer")
 hsk_b := hsk_peer.login(Character(name: "hsk-b"))
 hsk_i := Instance.local.greeted(hsk_a, true)
 hsk_r := hsk_peer.greeted(hsk_b, false)

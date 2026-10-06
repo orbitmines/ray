@@ -271,6 +271,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 - v0: Done in `.project.ray` dependency lines: `@./x`, `@../x`, `@/abs`, `@username/package`.
 - **Decided:** the same forms are expressions anywhere in code: `@https://…` is a location value; `@"a b"` for one with spaces.
+- **Decided (user, 2026-10-06):** a node's location is the superposition of every place it is (`Node.location: *?`, superposed the way `name` is). `value @ place` adds one (`value ~~ .location |= place`) and answers the value itself; `(value @ place) = v` writes v at that place. No class keeps a location field of its own: a language's locations, a repository's, an item's or reference's, a device's and a git remote's are the node's own (`Language.ray @ (@ether/ray | @ether)`, `held is Language.ray.location#`), and a mirror is the value at another instance (`instance.mirror(x)` is `x @ instance`; World W2.9).
 
 ### 6.2 Config files — *IDE:694–699*
 > `.cfg.ray`; & variables … Cfg /file/path, Cfg @me/file … They still get executed. All fields are instantiated with ?() — already the default; if ? then None.

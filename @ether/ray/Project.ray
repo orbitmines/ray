@@ -1,8 +1,8 @@
 Project := class: Location {
-  static Dependency := class ("@", location: (!" ")[], (" ", version: Version | (!\n)[])?) => {
-    name => location.split("/").last as String
+  static Dependency := class ("@", path: (!" ")[], (" ", version: Version | (!\n)[])?) => {
+    name => path.split("/").last as String
 
-    project: Project? => (Program(code: ("@", location)){O: {
+    project: Project? => (Program(code: ("@", path)){O: {
       @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? IO.fetch(@ether, bundled_path, version) as Project)
       @{scheme: Char.Word[]}://{remainder: Written} => Project.known(IO.fetch((scheme + "://" + remainder) as Location, "", version) as Project)
       @{name: (Char.Word | "-" | "+")[]{Language.project(.) != None}} => Language.project(name)
@@ -14,7 +14,7 @@ Project := class: Location {
   static declared => Project#{.loaded || .loading}.map(.dependencies).flatten
   static declares (name: String) => declared.find(.name == name)
   static holding (location: Location) => Project#{(location as String) ~= ⊢(. as String + "/")}.max((. as String).count)
-  static data (location: Location) => holding(location) -- (held => held && !Language.ray.location.contains(held) && !((location as String) ~= ".ray" ⊣))
+  static data (location: Location) => holding(location) -- (held => held && !(held is Language.ray.location#) && !((location as String) ~= ".ray" ⊣))
 
   name: String?
   version: *?

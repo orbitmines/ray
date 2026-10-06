@@ -130,11 +130,11 @@ Entry := class = of: Node, at: Program? {
   ({args}) => of.construct(args) ~~ Program(code: following).entered(., None)
 }
 
-{value} @ {location} ^keyword => Placed(value, location)
-Placed := class = value: Node, location: Node {
-  = (written) => (location[value] = written) -- this
-  .{literal property ^property} ^punctuation => external get value property
+Node &+= {
+  location: *?
 }
+{value} @ {location} ^keyword => value ~~ (.location |= location)
+{value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)
 
 ? ^keyword => Unknown()
 Unknown := class {

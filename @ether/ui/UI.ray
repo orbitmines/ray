@@ -34,7 +34,7 @@ UI := class {
     {{literal narrowing}} {narrowed: String | Geometry.Shape | Choice} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: external ** narrowing))
     {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location as String)])
       -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
-    {placed: Placed} => Geometry.Box(content: placed.location, children: [Compiler.reduced(placed.value, Scene)])
+    {placed: *{location}} => Geometry.Box(content: placed.location, children: [Compiler.reduced(placed.copy ~~ (.location = None), Scene)])
     {shape: Geometry.Shape} => shape
     {chosen: Choice} => Geometry.Box(content: chosen)
     {lines: \n} => Geometry.Box(flow: block, children: lines.components)
@@ -133,7 +133,7 @@ UI := class {
   Site := class = index: *? {
     static (value) as (=== Site) => Site(index: value)
     at (path: String) => index{location ~= path} ?? index
-    rendering => at(@me/device/location.path as String)
+    rendering => at((@me/device/location ?? @/).path as String)
   }
 
   Popover := Geometry.Box{position is Geometry.Anchored, layer == 20, visible == (position.anchor.hovered | position.anchor.focused | hovered)}
@@ -296,7 +296,6 @@ Controllers := class: Location {
 Device &+= {
   controllers: Controllers = Controllers()
   pointer: Pointer = Pointer()
-  location: Location = @/
 }
 
 Language.Image := class: Language {

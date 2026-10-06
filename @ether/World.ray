@@ -29,7 +29,6 @@ World := class: Location + Nameable {
 }
 
 Item := class: Nameable {
-  location: Location?
   issuer: World = location?.world ?? World.ether
   obtained_by: Program?
 
@@ -48,7 +47,6 @@ Reference := class {
   organizations: Organization[] = []
   authors: Character[] = []
   published: *[] = []
-  location: Location?
   journal: *?
   volume: *?
   pages: *?
@@ -119,12 +117,8 @@ Instance := class: Location + Entity {
   }
 
   host_for (character: Character) => character ~~ (hosted |= .) ~~ .presence = this
-  mirror (value, depth = 1) => Mirror(value, location: this, depth)
-
-  static Mirror := class = value: *, location: Instance, depth = 1 {
-    access = value?.access
-    synced => location.registry#.nonempty
-  }
+  mirror (value, depth = 1) => (value.children.for(child => mirror(child, depth - 1)) if depth > 1) -- (value @ this)
+  synced => registry#.nonempty
 }
 
 Online := Character{presence?.device.network.connected}

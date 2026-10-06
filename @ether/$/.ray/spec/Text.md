@@ -124,6 +124,7 @@ From the drafts review (2026-10-06).
   bits. v0 (*IP.ray:10, 21–26*) stores a `prefix: Number?` field, zeroes the bits and has a separate `hosts`. Decided X6.5
   only fixes the reading. Recommend the draft (superposition over a flag): `ip / n` is the superposition of every address in
   the block, printed as CIDR because its low bits are `0 | 1`; no `prefix` field.
+  **Answered (user, 2026-10-06):** the draft. `ip / n` is the superposition of every address in the block (low bits `0 | 1`), written as CIDR because of that; v0's `prefix` field goes.
 - **X6.7 Well-known prefixes are IP values** — **Decided (draft).** *removed …/Ether/instance/Network.ray:229 (7250308^)*:
   the test against `::ffff:0:0/96`, `64:ff9b::/96` is `==.instance_of` that IP value (a superposition if X6.6 is adopted), not a text
   comparison (v0 writes `. is "::ffff:0.0.0.0/96"`). Keep the RFC 5952 / RFC 6052 comments.

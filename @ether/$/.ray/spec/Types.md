@@ -29,6 +29,7 @@ From the drafts review (2026-10-06).
   is None, so `None !~= …` is None; the draft wants it true. Recommend: negated matches and predicates (`!~=`, `!=`) on
   None answer true (None matches nothing), as the one exception to T1.2. Setting a vertex to None also clears its
   boundaries.
+  **Answered (user, 2026-10-06):** negated matches and predicates (`!~=`, `!=`) on None answer true — the one exception to T1.2; setting a vertex to None also clears its boundaries.
 
 ## T2. Components: `+`, `&+`, `#`, `##`, `###`
 
@@ -123,6 +124,7 @@ From the drafts review (2026-10-06).
   when setting some variable like Node.CONST: String and not setting it. error thrown? or explicitly say with required."
   **Q** — against Decided T1.6 (an unset field is `?`, every possibility), the review recommends an error at use unless
   the variable is declared `?`. Recommend deciding whether context variables follow T1.6 or must be supplied by `with`.
+  **Answered (user, 2026-10-06):** a declared context variable must be supplied by `with`; it is an error at use otherwise — unless the declaration is only a type narrowing and the field already holds a value of that type.
 - **T3.26 `assign` and `clear`** — *`.ray3/Node.ray:152, 234`*: `= | assign`; `clear => this = static()`.
   **Decided (draft)**, library: `assign` is an alias of `=`, and `x.clear` sets x to a fresh `static()`.
 - **T3.27 `global = local` at the top of a file** — *`.ray3/Node.ray:60`*. **Q** — Recommend asking. One reading: the

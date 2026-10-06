@@ -208,6 +208,7 @@ From the drafts review (2026-10-06).
   says `confidential` *is* the default privacy policy and follows it. The draft clamps it: if the policy is more permissive than
   private, `confidential` is `@private.managed` (*`…/instance/Access.ray:51–58`*). Recommend the clamp, so setting one's policy
   to `@public` never publishes confidential data.
+  **Answered (user, 2026-10-06):** clamp: whatever the policy, `confidential` is never wider than `@private.managed`.
 - **W5.6 What the policy never opens** — **Decided (draft)**. Whatever the policy, these stay `confidential`: the policy itself
   (write), an instance's `private` flag, reading private keys, and overwriting existing keys (new keys may be written).
   `@private & encrypted` is data the central server holds but cannot read, nor recover if the key is lost (X4.2). **Q:** policies

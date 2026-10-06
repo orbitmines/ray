@@ -109,6 +109,7 @@ From the drafts review (2026-10-06).
   **Q** — conflicts with Decided Almanac A5 (`^` on a base type means length) and the directive that length is not
   count. Recommend following the draft: a type's super/subscript constrains `.count` (the size), which equals length on a
   chain; `Graph²²²` is a graph of 222 vertices.
+  **Answered (user, 2026-10-06):** length (A5). A count is the counted type, `T{#.count == n}` (`n T`).
 - **R3.19 Measured expanded, or as written** — *`.ray2/Program.ray:1, 129`*: "`.length` etc. use `.expanded` by default,
   how to get the `.length` specific to without expanding"; ".expand on an unknown function makes the length possibly
   infinite, optionally assume it terminates". **Q** — Recommend: `.length`/`.count` measure the fully expanded

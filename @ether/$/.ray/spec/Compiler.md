@@ -202,6 +202,7 @@ What is left is the applications themselves, ~3–4 µs each: a frame, lazies fo
   Program is a Ray whose vertices are statements, with sequence and conditional jumps as its edges. Recommend: the recorded
   graph is a Program value (P1.1), its nodes are statements, and the passes are P8 rewrites as Compiler levels; the table
   describes the shapes the evaluator recognises, not a second language.
+  **Answered (user, 2026-10-06):** the recorded graph is a `Program` value (Ray, conditional gotos as its edges, P1); passes are P8 rewrite rules. There is no separate instruction vocabulary; the IR section above is to be rewritten in those terms.
 - **C2 `Compiler.none`** — see P8.20 (**Decided (Almanac)**, *Almanac.tsx:1930–1931*): the empty level. The evaluator with
   no passes is that level.
 - **C3 Deopt and revoked equivalences** — see P8.21 (**Q**, *journal 2023-01-17.md:12, 16*): if each applied rewrite is a

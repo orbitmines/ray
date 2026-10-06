@@ -28,6 +28,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - Dropped (no longer applies).
 - **From the drafts review (2026-10-06):**
   - **1.3.1 `x++` as copy — Q (conflict).** The IDE note's `++` is dropped above, but v0 uses `this++` as a copy (`String.ray:70`, `Node.ray:89, 222`) and the draft has `++ | copy` forking a variable's history (*`.ray2/Node.ray:155`*; L§10.3 lists it). Recommend: the drop concerns `++` as concatenation; `x++` (alias `copy`) is a copy whose history is a fork of `x%`.
+    **Answered (user, 2026-10-06):** `++` stays dropped. v0's `x++` becomes `x.copy`.
 
 ### 1.4 Entry and index — *IDE:280*
 > entry is origin no self. .index is from origin.

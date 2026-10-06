@@ -67,7 +67,7 @@ String := class: Char[] {
   is_upper => some(.is_upper) && !some(.is_lower)
   is_lower => some(.is_lower) && !some(.is_upper)
   swap_case | swapcase => #.swap_case as String
-  ignore_case | ignorecase => this++ ~~ .normalizer = (text) => text.fold_case
+  ignore_case | ignorecase => this.copy ~~ .normalizer = (text) => text.fold_case
   fold_case | foldcase => #.fold_case as String
   title_case | titlecase => words.map(.[0].upper_case, .[1..].lower_case).join(" ")
 

@@ -86,7 +86,7 @@ Node &+= {
   each (step: Program) => superposes
     ? alternatives.map(one => step(one).branched(one, this)).reduce(|)
     : conjoined.count > 1 ? conjoined.map(one => step(one).branched(one, this)).reduce(&) : step(this)
-  branched (from, whole) => this++ ~~ (.sources = [(whole: whole, part: from)], from.sources ?? []) ~~ (.origin = from.origin ?? from)
+  branched (from, whole) => this.copy ~~ (.sources = [(whole: whole, part: from)], from.sources ?? []) ~~ (.origin = from.origin ?? from)
   agrees (other) => !sources || !other.sources || sources.every(mine => other.sources{.whole === mine.whole}.every(.part === mine.part))
   holds_for (branch) => superposed ? alternatives.some(alternative => alternative.agrees(branch) && alternative) : this
 }
@@ -219,9 +219,9 @@ print (x) => IO.output(x as String) -- x
 Origin := class = method: Node, arguments: Node {
   == (other) => other === method || (other is Origin && other.method === method && other.arguments == arguments)
 }
-{f}({a}) | {g}({b}) ^punctuation => (f(a)++ ~~ .origin = Origin(f, a)) | (g(b)++ ~~ .origin = Origin(g, b))
-{f}({a}) | {rest} ^punctuation => (f(a)++ ~~ .origin = Origin(f, a)) | rest
-{rest} | {g}({b}) ^punctuation => rest | (g(b)++ ~~ .origin = Origin(g, b))
+{f}({a}) | {g}({b}) ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | (g(b).copy ~~ .origin = Origin(g, b))
+{f}({a}) | {rest} ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | rest
+{rest} | {g}({b}) ^punctuation => rest | (g(b).copy ~~ .origin = Origin(g, b))
 
 & ^keyword => external .
 &{literal member ^variable} ^keyword => external get (external .) member

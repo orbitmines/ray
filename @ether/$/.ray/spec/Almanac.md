@@ -141,6 +141,7 @@ From the drafts review (2026-10-06).
   standing directive is length ≠ count. **Q.** Recommend following the draft: a type's
   super/subscript constrains `.count` (the size), which equals the length for chains; `Graph²²²` is a
   graph of 222 vertices.
+  **Answered (user, 2026-10-06):** length, as A5 says; counted types are `#.count`.
 - **A-C7 `never` against `Never`.** The Almanac writes `forever (): never => loop { }`
   (*Almanac.tsx:1299*); L§4.1 decides `=> Never` as the type and `never` as the keyword. **Q.**
   Recommend accepting both: `never` in a type position reads as `Never`, as `boolean` names a type.

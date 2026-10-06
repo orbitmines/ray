@@ -221,6 +221,7 @@ From the drafts review (2026-10-06).
   history`; v0 uses `this++` (String.ray:70, Node.ray:89, 222); L§10.3 lists `++ | copy`. **Q** — conflicts with Decided
   L§1.3 ("`++` dropped"), while the draft and v0 use `x++` as copy. Recommend: `x++` (alias `copy`) is a copy whose
   history is a fork of x's (`x%` branches), and L§1.3 is corrected to say it dropped `++` as concatenation only.
+  **Answered (user, 2026-10-06):** dropped (L§1.3.1); a copy is `.copy`.
 - **T6.9 `unique` as a field constraint** — *`.ray2/Node.ray:206–209`, `.ray2/World.ray:20`, `.ray2/Ray.ray:89–90`*:
   "unique{} accepts an expression"; `unique{.ignore_case if name ==.instance_of String} name{issuer == this}`; `unique =>
   this&{== this}.count == 1 //TODO Is different from unique/compact of iterable, rename`. **Q** — conflicts with Decided

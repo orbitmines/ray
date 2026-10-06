@@ -3,7 +3,7 @@
 
 Calendar := class {
   static Segment := class: Unit = length: * {
-    static (unit: Unit, length): Calendar.Segment => unit++ ~~ .length = length
+    static (unit: Unit, length): Calendar.Segment => unit.copy ~~ .length = length
 
     static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 1
 

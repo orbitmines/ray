@@ -22,6 +22,20 @@ IDs `R…`. Answers go under **Decided** at the end.
 - **R1.7 `.value`** — *Ray:638*: everything on x except the Rays at `#`; methods on Ray vs x.
 - **R1.8 Continuous** — *Ray:698*: equip Continuous, accepting Reals in `[property]` without affecting `.next`.
 
+From the drafts review (2026-10-06).
+
+- **R1.9 `relative_context | &&`** — *`.ray2/Ray.ray:86–87`*: `context | & =>`, `relative_context | && => //TODO Perhaps
+  just context, relative context = just the ray.` `&&` here clashes with boolean `&&`. **Q** — Recommend dropping
+  `relative_context | &&`: the relative context is the ray itself, as the draft suggests, and `&&` stays boolean.
+- **R1.10 `.value` on a many boundary** — *`.ray2/Ray.ray:44`*: "Setting .value on Many boundary in the case of Edge."
+  **Q** — Recommend: setting `.value` on a superposed boundary sets it on each (U1), as R1.5 does for predicates.
+- **R1.11 `unidirectional`** — *`.ray3/Ray.ray:54–57`*: `unidirectional => return // Tell the compiler links should be
+  one-way`, with a `Reverse\` label; v0 (Ray.ray:29) has only the predicate `all.every(!.previous)`. **Q** — Recommend:
+  written on a structure, `unidirectional` is an assertion and a compile hint (no `.previous` links are kept), like
+  `dynamically assert` (R1.3).
+- **R1.12 `|` inside a list makes branches** — *`Almanac.tsx:893–896`*: `x: Graph = [1, "2a" | "2b", 3]`. **Decided
+  (draft, Almanac)**: alternatives written with `|` while building a structure become separate branches of the graph.
+
 ## R2. Iteration and traversal (*Ray:72–130, 559–565, 633–673*)
 
 - **R2.1 Traversers** — the draft's `with Traverser.(default = 4 * DepthFirst, BreadthFirst)` and mixes. L§10.4.
@@ -39,6 +53,19 @@ IDs `R…`. Answers go under **Decided** at the end.
 - **R2.7 Generators** — *Ray:613–614*: support generators, or convert automatically when something is
   returned (an intermediate result). L§10.3 `yield`.
 - **R2.8 Next with `#`** — *Ray:660*: `.next` always returns an iterable with `#`, since `#` is depth-aware.
+
+From the drafts review (2026-10-06).
+
+- **R2.9 `.index(start)`** — *`.ray2/Ray.ray:107`*: `index (start = first) => start to this -- .length - 1`. **Decided
+  (draft)**: `.index(start)` is the path length from `start` to this, minus one; without an argument it counts from the
+  entry (L§1.4).
+- **R2.10 Mixing traversers** — *`.ray3/Ray.ray:90–101`*: `4 * DepthFirst, BreadthFirst`, `100 * BreadthFirst, 2 *
+  (BreadthFirst if 50% else DepthFirst), (entry) => …`, and "How to combine traversers like Left only but breadth-first
+  depth-first X levels then breadth". R2.1 decides only the spelling. **Q** — Recommend: `n * T` is n steps of T, `,`
+  sequences them, a traverser may be a superposition (probabilistic) or a function of the entry, and a direction filter
+  composes with any of them.
+- **R2.11 Indexing a recursively defined ray** — *`Almanac.tsx:864–867`*: `(0 -> +2)[4]` is `8`. **Decided (draft,
+  Almanac)**: a ray defined by a recursive step is indexed like any iterable; `[n]` applies the step n times.
 
 ## R3. Operations
 
@@ -68,6 +95,42 @@ IDs `R…`. Answers go under **Decided** at the end.
 - **R3.15 Time vs space** — *Ray:685–686*: each step might be in a different version of the graph; start a quest
   to find a path.
 
+From the drafts review (2026-10-06).
+
+- **R3.16 `split` answers its delimiters** — *`.ray2/Ray.ray:100–103`*: "Returns superposition instead of an Array[]";
+  "split {predicate: /* Should split, returns Ray @ the delimiter, with prev/next the two sides. */}". **Q** — Recommend:
+  `split` answers a Ray (not an Array) whose vertices are the delimiters, each with `.previous`/`.next` the two sides;
+  `.pieces` lists the pieces. (R3.6.)
+- **R3.17 `group_by` and `dimensionality`** — *`.ray2/Ray.ray:105, 190`*: "`//group_by`", "`dimensionality` //How to do
+  this with different rays which can be equipped for different directions". **Q** — Recommend: `group_by(f)` answers
+  `{(f(x)): [x…]}`; `dimensionality` is the number of directions equipped on the selection (1 for an Array, n for a grid).
+- **R3.18 A type's script: count or length** — *`.ray2/Ray.ray:201–203`*: "Allow `Binary₃₂ = Binary₈[]₄`. Uses count
+  instead of length, since `Ray/Graph²²²` makes more sense as the size of the graph rather than each path length."
+  **Q** — conflicts with Decided Almanac A5 (`^` on a base type means length) and the directive that length is not
+  count. Recommend following the draft: a type's super/subscript constrains `.count` (the size), which equals length on a
+  chain; `Graph²²²` is a graph of 222 vertices.
+- **R3.19 Measured expanded, or as written** — *`.ray2/Program.ray:1, 129`*: "`.length` etc. use `.expanded` by default,
+  how to get the `.length` specific to without expanding"; ".expand on an unknown function makes the length possibly
+  infinite, optionally assume it terminates". **Q** — Recommend: `.length`/`.count` measure the fully expanded
+  structure, `.collapsed.length` measures it as written, and on an unknown program the answer is `?` (possibly ∞) unless
+  `assume Terminating`. (R3.3, R3.4.)
+- **R3.20 `zip` and `zip_longest`** — *`.ray2/_todo/ray.ray.txt/ray.ray:5`*: ".zip/.zip_longest (ziplongest returns with
+  _length to the max) for parameterless, and parameters [this, b].zip"; used in *`.ray2/_todo/…/instance/utils/Number.ray:84`*.
+  **Decided (draft)**: `a.zip(b)` stops at the shorter; `a.zip_longest(b)` runs to the longer with None for the missing
+  side; `[a, b, c].zip` (no argument) zips the lists in the list.
+- **R3.21 `push_back()` with no value** — *`.ray2/_todo/ray.ray.txt/ray.ray:6`*: "push_back(void) should only create the
+  array one longer." **Q** — Recommend: `push_back()` adds one entry holding `?` (unknown, T1.6). (R3.2.)
+- **R3.22 Ties at the extreme** — *`.ray2/_todo/…/instance/Network.ray:113` (before 7250308), `v0/Test.ray:89` (7250308)*:
+  `#{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost` (RFC 5952: the longest run of
+  zeros, the leftmost of equals). **Q** — Recommend: `xs.max(by)` is the superposition of the tied ones, and `.first` /
+  `.last` picks among them by position; inside `#{…}`, `min()` and `leftmost` aggregate over the superposition. (R3.10.)
+- **R3.23 What `~=` leaves behind** — *`.ray2/_todo/…/instance/Network.ray:114–115` (before 7250308; `:213–214` in the
+  removed block)*: "default functionality of ~= is removed from surrounding context unless X?"; "What if the result of ~=
+  is another iterable #. … how to know that a group doesnt belong to the iterable. Probably .expand." **Q** — Recommend:
+  `x ~= p` answers the matches, a superposition of selections that stay in their context, and does not change x;
+  `.remove` on a match removes it from x (R3.1). A match that is itself a superposition is one match; `.expand` unfolds
+  it.
+
 ## R4. Ranges (*ep:1558–1638; Ray:657–659*)
 
 - **R4.1 Forms** — `a..b`, `..b`, `a..`, `0..10..20` (to 20 through 10), `..10` = `10->`? MultiRange. L§10.4.
@@ -85,12 +148,28 @@ IDs `R…`. Answers go under **Decided** at the end.
 - **R5.2 Infinity as a loop** — *Number:629*: infinity is a looped integer; −∞ a reversed loop; `.reverse` must
   be preserved to tell them apart.
 
+From the drafts review (2026-10-06).
+
+- **R5.3 A loop iterated finitely** — *private journal, `PENDING (2027?+) ; Physics (& Hardware).md:558–565`
+  (paraphrased)*: an iterable is always finite but carries a "modular" property, so iterating a loop gives finite rays
+  together with where they wrap around. **Q** — Recommend: iterating an orbit answers the finite unrolled ray plus a
+  terminal boundary joined to its initial one (R5.1 `unrolled_mod`). Ask whether the note is still current.
+
 ## R6. Objects as rays (*Ray:704–728*)
 
 - **R6.1 `Object[String]`** — an object is a superposed Ray, so `Object[String]` is all its rays that end in
   strings. Is `.field.next` a ray when the return has structure of its own?
 - **R6.2 Wave-function collapse** — instantiate a type by collapsing its open possibilities.
 - **R6.3 `[y: 5]`** — move in one named dimension.
+
+From the drafts review (2026-10-06).
+
+- **R6.4 `x.1` and `x[1]`** — *`.ray2/Ray.ray:48`*: "`.[index]` shouldnt overwrite the '1' without a .1 (needs a special
+  rule)". **Q** — Recommend: `x[1]` is the index and `x.1` the member written `1`; `x[1] = v` never creates a member `1`.
+- **R6.5 An object's members as a graph** — *`.ray2/Node.ray:1`*: "Functionality for turning the Node structure into a
+  Graph (only certain types of methods) and navigating that. Like Saying the hierarchical tree as a Graph." **Q** —
+  Recommend: `x as Graph` views an object's members (its fields by default, not methods; others with `<members: …>`) as
+  a Graph whose edges are labelled by member name; the hierarchy is that view restricted to `.children`.
 
 ## R7. Hierarchy and Location (*World:17–25, 444–470; ep:279–284*)
 
@@ -102,6 +181,19 @@ IDs `R…`. Answers go under **Decided** at the end.
   itself; "`.hierarchy` instead of `.inventory`".
 - **R7.3 `[{field: *}]`** — a child reached by the field it is decorated with.
 - **R7.4 Hierarchy is a second collapse** — *ep:1139*: a hierarchy is like collapse/expand in reverse.
+
+From the drafts review (2026-10-06).
+
+- **R7.5 A child's location extends its parent's** — *`.ray2/Transaction.ray:4–8`*: `sub.location &= dynamically
+  location.copy().push_back<edge: .value = property>(sub).last`; *`.ray2/Character.ray:14–24`*:
+  `inventory.push<edge: .value = property>(current)`. **Decided (draft)**: a child's location is its parent's location
+  extended by one edge labelled with the property it is reached by (`x.a.b@` = `x@ -a-> -b->`). It is dynamic, so moving
+  the parent moves it.
+- **R7.6 `->>` and the hierarchy** — *`.ray2/_todo/…/instance/UI/Geometry.ray:36, 268–269`*: in the current group
+  (hierarchy-wise) or the entire "under", ignoring hierarchy; "`->>` means everthing to the right"; "Allow
+  top.left.last go to the topmost/leftmost". **Q** — Recommend: `->` is the next one; `->>` is everything onward to the
+  far boundary within the current hierarchy level; `x.hierarchy ->>` ignores levels. Directions compose:
+  `top.left.last` is the top-left extreme.
 
 ---
 

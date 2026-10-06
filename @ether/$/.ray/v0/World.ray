@@ -50,7 +50,7 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != 
 @"{text: (!"\"")[]}" ^string => text as Location
 @{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
 @me ^string => &caller as Character ?? Instance.local
-@me = {who} ^punctuation => &caller = who
+@me = {who} ^punctuation => &@.may(`@me =`, who) ? &caller = who : ERROR@Access `running as another character needs their grant`
 @me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
 @{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location
 @{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: external ** block)

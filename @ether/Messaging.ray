@@ -1,8 +1,2 @@
-Channel := class: History {
-  admits: Program = Program
-
-  send (program: Program, who = @me): static => program is admits ? commit(who, program) : ERROR@Access `this channel does not admit that program`
-  |= (program: Program): static => send(program)
-}
-
-Chat := class: Channel = admits: Program = Program{Pure & Terminating}
+Channel := History + Program
+Chat := Channel{Pure & Terminating}

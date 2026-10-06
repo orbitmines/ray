@@ -48,6 +48,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
 
   commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
     change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this) -- (made => who is Entity ? who.sealed(made) : made)
+  |= (change): static => commit(@me, change)
   extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
 
   ordered => since(None).sort_by(.stamp)

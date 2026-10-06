@@ -14,7 +14,7 @@ unless wh.commit(wp, "hello").count == 1 { INFO@mark `WO4 a commit did not add t
 unless Network.DomainName(text: "a.b").valid { INFO@mark `WO7 the domain name a.b is not valid` }
 if Network.DomainName(text: "").valid { INFO@mark `WO8 a name of nothing is a valid domain name` }
 unless Keyboard.Key(name: "a").press.pressed { INFO@mark `WO9 a pressed key is not pressed` }
-unless Chat().send(Program(code: { "hi" }), who: wp).count == 1 { INFO@mark `WO10 a said message is not in the chat` }
+unless Chat().commit(wp, Program(code: { "hi" })).count == 1 { INFO@mark `WO10 a said message is not in the chat` }
 unless Proof.theorem(Proof.Proposition(holds: true), Proof(proposition: None, argument: Proof.Proposition(holds: true))) { INFO@mark `WO11 the theorem does not hold` }
 
 // Locations: what holds what, and how deep that goes.

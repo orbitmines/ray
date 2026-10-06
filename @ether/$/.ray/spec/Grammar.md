@@ -98,6 +98,7 @@ From the drafts review (2026-10-06).
 - **G2.22 Member names with holes** — *`.ray3/Node.ray:108–109`*: `{property: (\S[], "{", *, "}", \S[])+} =>
   this[property - punctuation]`, so `a.foo{x}bar` reads the member `"foo" + x + "bar"`. **Q** — Recommend yes: a computed
   member name uses the same `{…}` holes as string interpolation (L§10.1).
+  **Answered (user, 2026-10-06):** no holes in member names: they would interfere with the `{…}` filter and are confusing. Holes stay in strings (L§10.1).
 
 ## G3. Operators, precedence and direction (*ep:768–870, 1319–1370, 1391–1397*)
 
@@ -157,6 +158,7 @@ From the drafts review (2026-10-06).
   of both directions; where both apply, the operator is invoked on their shared boundary. **Q** (`.ray2`) — Recommend:
   the side the operand is on picks the reading, and a right-to-left operator with nothing on its right (`!` at the end)
   is a postfix rule on the class to its left.
+  **Answered (user, 2026-10-06):** the side picks the reading only for an operator that is actually usable on either side; a right-to-left operator is usable only right-to-left (with nothing on its right it does not apply).
 - **G3.16 Precedence as a modifier** — *`.ray3/Node.ray:57`*: `// TODO Modifier: precedence(before Node.==)`. **Q** —
   conflicts with Decided G3.1: G3.1 places an operator by its position after a method label (`Node~method`); the draft
   writes a modifier `precedence(before X)` / `precedence(after X)`. Recommend (review): allow the modifier, since
@@ -205,6 +207,7 @@ From the drafts review (2026-10-06).
 - **G4.15 `{{expr}}`** — *`.ray3/Node.ray:69–71`*: `{{expr: (): *}} => expr.= = (obj) => expr<local: obj>; expr`
   ("Required to return (): * for .while to work"): assigning to a lazy expression runs it with that object as local.
   **Q** — intent unclear. Recommend asking whether the double brace is the lazy-expression literal; drop it if not.
+  **Answered (user, 2026-10-06):** dropped.
 
 ## G5. Grammar phases and conflicts (*ep:1001–1013, 1265, 1776*)
 

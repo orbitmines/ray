@@ -109,6 +109,7 @@ From the drafts review (2026-10-06).
 - **P2.11 `if` as a match** — **Q.** *IDE:855* (paraphrased): write `if` with `==` followed by `,`-separated cases and
   `0 => …` instead of `match`. Recommend: `if ==` followed by cases is sugar for `x.match` (A7) on the comparison's subject;
   ask whether `match` alone is enough.
+  **Answered (user, 2026-10-06):** no `match`: `if` only. `if x` followed by case lines matches each case with `==` by default (no operator written), and a case may be `is Type`. (This replaces `.match`, A7.)
 
 ## P3. Hooks: code between statements (*ep:1080–1083, 1110–1112, 1126, Compiler:75*)
 

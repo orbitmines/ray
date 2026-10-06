@@ -137,6 +137,7 @@ From the drafts review (2026-10-06).
   `{Ball / radius: 1m ; center}`. Partly F-C6, L§10.1 interpolation. **Q.** Recommend: inside page
   text, `{…}` is code whose value is rendered in place (string interpolation, L§10.1); a label
   before it (`{id}\`) names that element.
+  **Answered (user, 2026-10-06):** page text interpolates `{…}` like strings; no `{id}\` labels on rendered elements (not needed).
 
 ## G. Geometry: shapes and spaces (`v0/Geometry`, F-D8b)
 

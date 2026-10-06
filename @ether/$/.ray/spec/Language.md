@@ -456,6 +456,11 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     **Follows (2026-10-06):** (the Q) the cache inherits its source's visibility: public for a `@public` source, private otherwise. From §8.3 (an item inherits its visibility) and W5.7.
   - **9.1.4 Per-file granularity — Decided (draft).** The later-work mirrors and caches above include single files of fetched repositories, not only whole ones. *`_todo/_download_dependencies.sh:3`*
 
+- **Decided (user, 2026-10-06): subprojects.** A folder with its own `.project.ray` inside a project is a subproject.
+  The parent never sees it without an explicit import (`Project.sources` skips it); a subproject sees its parent
+  automatically (`shadowing => (parent, dependencies.project)#`). `@ether/Security` and `@ether/Network` are such
+  subprojects of v0 (`v0/Security/`, `v0/Network/`), imported by nothing by default.
+
 ### 9.2 Version control — *IDE:412–420, 633–641, 732*
 > Hybrid logical clocks / CRDTs; your fork always accessible, can always push; apply a change to all stable versions (respecting their own changes); flag a change as the one that works; group changes; test my changes against the latest instead of merging the latest into mine; label functions inline in `.ray.txt` for non-Ether editors; notify when a monkey-patched function starts being used by a library, or when a renamed parameter breaks a partial call.
 

@@ -25,4 +25,4 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
   | @`fc00::/7`
 
 @{instance: Instance} ^string => instance.canonical
-{prefix: "@" | "#"}{id: UUID} ^string => children**{id is .name}.first
+{prefix: "@" | "#"}{id: UUID} ^string => children**{.PREFIX == prefix & id is .name}.first

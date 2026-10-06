@@ -1,9 +1,0 @@
-class Entity
-end
-
-class Nameable
-  static PREFIX
-
-  name
-    issuer: World
-end

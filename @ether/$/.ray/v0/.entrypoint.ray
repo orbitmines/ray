@@ -857,6 +857,15 @@ Node := base class {
     selected
   )
 
+  {this}<{literal partial}> := {defined} ^punctuation => (
+    declare_partials((external ** partial), external .)
+    made := defined
+    defaults := class { }
+    declare_partials((external ** partial), defaults)
+    made.components.hierarchy &= defaults
+    made.partial_names = partial_names(external ** partial)
+    external declare this made
+  )
   {this}<{literal partial}> ^punctuation => (
     narrowed := this
     made := class { }
@@ -1707,15 +1716,6 @@ declare_partials (written, into) => (
   }
   into
 )
-{literal name}<{literal partial}> := {defined} ^punctuation => (
-  declare_partials((external ** partial), external .)
-  made := defined
-  defaults := class { }
-  declare_partials((external ** partial), defaults)
-  made.components.hierarchy &= defaults
-  made.partial_names = partial_names(external ** partial)
-  external declare name made
-)
 named_arguments (args) => (
   found := false
   header_items((external ** args), `,`) for { if (argument_name(it.value)) { found = true } }
@@ -2164,7 +2164,7 @@ boolean := enum false (holds: None) | true (holds: global) {
   xor (b) => .or(b).and(.nand(b))
   xnor (b) => .xor(b).not
 
-  as (=== boolean) => this // TODO generalized on Node with .type
+  as (=== boolean) => this
 
   next => .not
   previous => .not

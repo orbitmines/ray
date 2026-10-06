@@ -593,7 +593,9 @@ choosing (src, pos, limit, frame, receiving, receiver, w1, r1, f1, w2, r2, f2, t
   choose(c, w1, r1)
   c.filter = f2
   choose(c, w2, r2)
-  if w1 >= 0 and has(f1, 256) and c.mine != None { ROOT.chosen_caps = c.mine_caps; return c.mine, c.mine_end, c.mine_reach }
+  // The value's own rule, unless another reads further, or as far spelling more of what it reads.
+  outread := c.best != c.mine and (c.end > c.mine_end or (c.end == c.mine_end and c.reach > c.mine_reach))
+  if w1 >= 0 and has(f1, 256) and c.mine != None and !outread { ROOT.chosen_caps = c.mine_caps; return c.mine, c.mine_end, c.mine_reach }
   ROOT.chosen_caps = c.caps
   return c.best, c.end, c.reach
 )
@@ -1818,13 +1820,14 @@ fits (rule, caps, src, frame) => (
   if n > 1 { return !found.refused }
   value := n == 1 ? quiet_deref(argument) : UNDEF
   if n == 1 and value == UNDEF { value = text_id(src, cap_begin(caps, q), cap_stop(caps, q)) }
+  n_kept := 0
   if value != UNDEF {
     kept := rule.guarded
-    while kept != NIL { if kept.value == value and kept.declared == ROOT.declared { return kept.fits }; kept = kept.next }
+    while kept != NIL { if kept.value == value and kept.declared == ROOT.declared { return kept.fits }; n_kept = n_kept + 1; kept = kept.next }
   }
   again := n == 1 ? guard_reading(rule, argument, UNDEF) : guard_reading(rule, UNDEF, argument)
   answer := !again.refused and again.value != UNDEF and again.value != None
-  if value != UNDEF { rule.guarded = Guarded(value: value, declared: ROOT.declared, fits: answer, next: rule.guarded) }
+  if value != UNDEF { rule.guarded = Guarded(value: value, declared: ROOT.declared, fits: answer, next: n_kept < 16 ? rule.guarded : NIL) }
   return answer
 )
 // What a guard answered for an argument's value, kept while nothing new is declared.

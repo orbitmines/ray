@@ -79,6 +79,8 @@ link {value} {previous} ^keyword => (
   entry
 )
 
+// Whether an instance's body is being read (its class's statics are not read again).
+constructing := None
 class {block} ^keyword => (
   static := external .
   static.instance = None
@@ -129,7 +131,10 @@ class {block} ^keyword => (
     this.components.hierarchy = chain this
     this.components.hierarchy &= static
     this.instance = global
+    outer_constructing := constructing
+    constructing = global
     inline block
+    constructing = outer_constructing
     if global.Store { Store.constructed(this) }
     this
   )
@@ -605,7 +610,7 @@ Node := base class {
   xor (b) => .or(b).and(.nand(b))
   xnor (b) => .xor(b).not
 
-  // A field with another name: `initial | (internal right-to-left ⊢) : Boundary = …`; the last word is the other name, the words
+  // A field with another name: `initial | (internal right-to-left ⊢) : Boundary = …`. The last word is the other name, the words
   // before it its modifiers.
   | ({aliased}) : {type} = {value} ^punctuation => (
     goto given if external own this
@@ -1896,18 +1901,27 @@ static ({parameters ^parameter}) {`=>`} {block} ^keyword => (
     inline method_written
   } parameters
 )
-static{ }{literal name ^property} := {value} ^keyword => (
+// A static is read with the class's statics, not again for each instance.
+static{ }{name ^property} := {value} ^keyword => (
+  goto instance if constructing
   external declare name value
+ instance\
 )
-static{ }{literal name ^property} = {value} ^keyword => (
+static{ }{name ^property} = {value} ^keyword => (
+  goto instance if constructing
   external declare name value
+ instance\
 )
-static{ }{literal name ^property}: {type} = {value} ^keyword => (
+static{ }{name ^property}: {type} = {value} ^keyword => (
+  goto instance if constructing
   external declare name value
   name: type
+ instance\
 )
-static{ }{literal name ^property}: {type}{\n} ^keyword => (
+static{ }{name ^property}: {type} ^keyword => (
+  goto instance if constructing
   name: type
+ instance\
 )
 static{ }{head} ({parameters ^parameter}) => {block} ^keyword => (
   method_parameters := external ** parameters

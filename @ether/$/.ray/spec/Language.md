@@ -182,6 +182,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 ### 4.6 Composition and calls (*from the drafts review, 2026-10-06*)
 - **4.6.1 `∘` and `Function` — Decided (draft).** A function is a Node on which `(*) => *` is defined: `Function := Node{(args) => *}` (structural). `f ∘ g` (alias `compose`) is `(args) => f(g(args))`, declared right-to-left (G3.3), so `f ∘ g ∘ h` is `f ∘ (g ∘ h)`. *`.ray2/_todo/ray.ray.txt/ray.ray:119–124`* (L§10.3 listed it.)
 - **4.6.2 Chaining `=>` — Q.** `A => +1 => +3` as successive steps (*`…/ray.ray:117`*). Recommend: `f => g` where `f` is already a function appends a step, `(+3) ∘ (+1) ∘ A`; a body that is not a function stays a plain body (G2.2).
+  **Answered (user, 2026-10-06):** `f => g` with f already a function appends a step: `A => +1 => +3` is `(+3) ∘ (+1) ∘ A`.
 - **4.6.3 The call is not the text `"()"` — Q.** Calling `()` must not go through a string-named member (*`…/ray.ray:11`*); v0's Access uses the method name `` `()` `` for execute permission. Recommend: the call is the `()` method; looking up a member by the text `"()"` (`x["()"]`) is a field lookup, never the call.
 
 ---

@@ -34,14 +34,17 @@ From the drafts review (2026-10-06).
   expression, even parameterless; a copy on a history branch; `base` is the unfilled original; each filled argument is
   inserted after that variable's first initialization. Recommend: `f<x: 1>` is f with x filled, a copy of f on a history
   branch (`++`); `f.base` is the unfilled original; each filled argument binds where its parameter is first initialised.
+  **Answered (user, 2026-10-06):** already decided (2026-10-06, reader session): `<…>` is partial arguments; generics are partial arguments that remember what they were given (`f<a: 'A'>`, then called with `(b:)`).
 - **P1.11 The receiver is a parameter** — **Q.** *.ray2/Program.ray:292* ("from parameters one of which is the instance"),
   *.ray2/Feature/Proof.ray:5* (a method on `this` is bound to `(this, …)`). Recommend: `this` is the first, unnamed
   parameter (`x.f(a)` ≡ `f(x, a)`), and `&callee` names it.
+  **Answered (user, 2026-10-06):** no: `this` stays a context member only (U4's `&`); there is no uniform call syntax.
 - **P1.12 Void return** — **Decided (draft).** *.ray2/Program.ray:446*: a function whose return type is None answers
   nothing; its last value is not its result and is not added to lists (T1.3).
 - **P1.13 Sequencing programs** — **Q.** *.ray2/Program.ray:216*: `, (b: Program): Program` must be overridden, since the
   two programs' states clash. Recommend: `p, q` on Programs is sequencing; the two keep separate contexts, and q's free names
   read from p's final context.
+  **Answered (user, 2026-10-06):** `p, q` is just a composed value: an array (or any structure) of Programs; a `Program[]` is equivalenced to a Program by `as Program`, which runs them with separate contexts.
 - **P1.14 The sequence about one variable** — **Q.** *.ray2/Program.ray:212*: how to make the sequence of operations be
   only about one variable and what it depends on. Recommend: `x%` is x's own sequence, and `x**` restricted to what x depends
   on is its slice (`x**.slice`).

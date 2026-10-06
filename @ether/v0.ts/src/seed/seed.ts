@@ -67,7 +67,7 @@ export class Seed {
     this.externals.set('node', () => new Node());
     // a node's `parent` (the frame it was made in) reads like any member
     this.externals.set('get', (frame, [of, name]) => { const n = self.force(of) as Node | undefined, k = self.code_of(name).s; return n === undefined ? undefined : n.members.has(k) ? n.members.get(k) : k === 'parent' ? n.parent : undefined; });
-    this.externals.set('set', (frame, [of, name, value]) => { const v = self.force(value); (self.force(of) as Node).members.set(self.code_of(name).s, v); return v; });
+    this.externals.set('set', (frame, [of, name, value]) => { const v = self.force(value), o = self.force(of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) : String(of)) + ' (not a node)'); o.members.set(self.code_of(name).s, v); return v; });
     this.externals.set('same', (frame, [a, b]) => self.force(a) === self.force(b) ? true : undefined);
     // R0.6: reading handed to a rule of the entrypoint; it is applied to the place where a statement starts and answers the
     // place after it.
@@ -164,19 +164,21 @@ export class Seed {
   // A rule applied with captures read by the entrypoint's reader: a chain of (name, from, to) where from/to are places.
   apply_chain(rule: Node, caps: Node | undefined, within: Node): unknown {
     if (process.env.SEED_CAPS) { const ps: string[] = []; const rr = rule instanceof Node ? rule.members.get('pieces') as Node | undefined : undefined; for (let p = rr; p; p = p.members.get('next') as Node | undefined) ps.push([...p.members.keys()].filter(k => k !== 'next').join('+')); console.log('APPLY', ps.join(' | '), '::', (() => { const out: string[] = []; for (let c = caps; c; c = c.members.get('next') as Node | undefined) out.push([...c.members.keys()].join('+')); return out.join(' | '); })()); }
-    const r = this.rule_of(rule), list: [string, Span][] = [];
-    if (caps !== undefined && caps.members.has('value')) {
+    const r = this.rule_of(rule), list: [string, Span][] = [], given: [string, unknown][] = [];
+    if (caps !== undefined && caps.members.has('value') && !caps.members.has('piece') && !caps.members.has('name')) {
       // captures given as values, in the order the rule's head names them
       const f = new Node(r.head.frame), names = r.pieces.filter(p => 'cap' in p).map(p => (p as { cap: string }).cap);
       let i = 0; for (let c: Node | undefined = caps; c; c = c.members.get('next') as Node | undefined) f.members.set(names[i++], c.members.get('value'));
       return this.compiled(r)(f);
     }
     for (let c = caps; c; c = c.members.get('next') as Node | undefined) {
+      // a capture given as a value (a receiver bound to its capture): the value itself
+      if (c.members.has('value')) { given.push([this.cap_name(c), c.members.get('value')]); continue; }
       const from = this.where.get(c.members.get('from') as Node)!, to = c.members.get('to') as Node | undefined;
       const e = to === undefined ? from.text.s.length : this.where.get(to)!.i;
       list.push([this.cap_name(c), { text: from.text, b: from.i, e, type: c.members.get('type') as Node | undefined, raw: c.members.has('raw') } as Span]);
     }
-    return this.apply(r, within, list, this.planner);
+    return this.apply(r, within, list, this.planner, given);
   }
 
   // ---------------------------------------------------------------- R0.1: the first statement, read by what it says about itself
@@ -313,6 +315,8 @@ export class Seed {
       if (rule.head.s.trim() === definer && best.rule.head.s.trim() !== definer) { best = { rule, ...m }; continue; }
       const led = 'lit' in rule.pieces[0], bestLed = 'lit' in best.rule.pieces[0];
       if (led !== bestLed) { if (led) best = { rule, ...m }; continue; }
+      // between two led by a literal, the one with more pieces is the more particular
+      if (led && rule.pieces.length !== best.rule.pieces.length) { if (rule.pieces.length > best.rule.pieces.length) best = { rule, ...m }; continue; }
       const same = rule.head.s.trim() === best.rule.head.s.trim();
       if (same ? rule.order > best.rule.order : rule.order < best.rule.order) best = { rule, ...m };
     }
@@ -321,8 +325,9 @@ export class Seed {
 
   // ---------------------------------------------------------------- R0.4: a body read once into a goto program, then JS
   // `planner`: the planner of the code the captures are in (undefined: the seed's) — passed always, never defaulted (R0.5).
-  apply(rule: Rule, caller: Node, caps: [string, Span][], planner: Rule | undefined): unknown {
+  apply(rule: Rule, caller: Node, caps: [string, Span][], planner: Rule | undefined, given: [string, unknown][] = []): unknown {
     const frame = new Node(rule.head.frame);
+    for (const [name, v] of given) frame.members.set(name, v);
     // a typed capture is read by its type's rules
     // a capture typed by a scope of reading rules is read by them; one typed by a check is read where it was written
     for (const [name, sp] of caps) {

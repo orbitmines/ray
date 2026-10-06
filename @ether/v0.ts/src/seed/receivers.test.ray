@@ -1,0 +1,10 @@
+say {x} =>
+  external io stdout x
+T := type
+  ({x}) =>
+    say x
+  hi =>
+    say this
+T(T)
+T hi
+T nope

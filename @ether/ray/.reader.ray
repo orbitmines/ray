@@ -471,9 +471,15 @@ the seed's latest rule =>
 
 // The rules in reach of `scope`: each scope's `rules`, nearest scope first (its parents through `parent`), latest first.
 rules in reach of {scope} =>
+  rules in reach of scope below nothing
+
+// The same, stopping before the scope `outside` (a value's own rules and its classes', not the top scope's).
+rules in reach of {scope} below {outside} =>
   first := nothing
   last := nothing
   here := scope
+  if same here outside then
+    here := nothing
   while here do
     links := here . rules
     while links do
@@ -487,7 +493,28 @@ rules in reach of {scope} =>
       last := link
       links := links . next
     here := here . parent
+    if same here outside then
+      here := nothing
   first
+
+// Whether the chain `a` has more pieces than the chain `b` (walked side by side: there are no integers).
+more pieces in {a} than {b} =>
+  x := a
+  y := b
+  going := yes
+  while going do
+    unless x then
+      going := nothing
+    unless y then
+      going := nothing
+    if going then
+      x := x . next
+      y := y . next
+  result := nothing
+  if x then
+    unless y then
+      result := yes
+  result
 
 // Whether two rules are written with the same head (their heads spell the same).
 written alike {a} {b} =>
@@ -538,12 +565,18 @@ reading from {at} to {limit} among {rules} =>
     if r then
       take := yes
       if best then
-        if written alike rule best_rule then
-          take := nothing
         led := pieces . literal
         best_pieces := best_rule . pieces
         best_led := best_pieces . literal
+        if written alike rule best_rule then
+          take := nothing
         if led then
+          // between two led by a literal, the one with more pieces is the more particular: it reads the statement
+          if best_led then
+            if more pieces in pieces than best_pieces then
+              take := yes
+            if more pieces in best_pieces than pieces then
+              take := nothing
           unless best_led then
             take := yes
         unless led then
@@ -608,9 +641,105 @@ step from {at} to {limit} in {scope} =>
       caps := r . captures
       set made . captures to caps
     unless r then
-      unless spaced from at to limit then
-        set made . word to yes
+      // what no rule in reach reads whole: its first operand, read when it runs, and the rest read by that value's rules
+      split := operand end from at to limit
+      sending := nothing
+      if split then
+        unless same split limit then
+          sending := registry . sender
+      if sending then
+        sender := registry . sender
+        set made . rule to sender
+        pieces := sender . pieces
+        receiver_piece := pieces . next
+        rest_piece := receiver_piece . next
+        rest_piece := rest_piece . next
+        rest_cap := node
+        set rest_cap . piece to rest_piece
+        set rest_cap . from to split
+        set rest_cap . to to limit
+        set rest_cap . raw to yes
+        receiver_cap := node
+        set receiver_cap . piece to receiver_piece
+        set receiver_cap . from to at
+        set receiver_cap . to to split
+        set receiver_cap . next to rest_cap
+        set made . captures to receiver_cap
+      unless sending then
+        unless spaced from at to limit then
+          set made . word to yes
   made
+
+// Where the first operand from `at` ends: after a bracketed group, quoted text, or a word (up to a space, a bracket or a
+// dot). Nothing when there is none.
+operand end from {at} to {limit} =>
+  c := at . character
+  found := nothing
+  shut := closer of c
+  if shut then
+    found := balanced end from at to limit
+  unless shut then
+    if character c is quote then
+      here := at . next
+      while here do
+        if same here limit then
+          here := nothing
+        if here then
+          d := here . character
+          if character d is quote then
+            found := here . next
+            here := nothing
+          if here then
+            here := here . next
+  unless found then
+    unless shut then
+      unless character c is quote then
+        here := at
+        while here do
+          stop := same here limit
+          unless stop then
+            d := here . character
+            if character d is space then
+              stop := yes
+            if closer of d then
+              stop := yes
+            if character d is dot then
+              stop := yes
+          if stop then
+            unless same here at then
+              found := here
+            here := nothing
+          if here then
+            here := here . next
+  found
+
+// The place after the bracket that closes the one at `at`.
+balanced end from {at} to {limit} =>
+  open_ones := nothing
+  here := at
+  found := nothing
+  while here do
+    if same here limit then
+      here := nothing
+    if here then
+      c := here . character
+      shut := closer of c
+      if shut then
+        pushed := node
+        set pushed . shut to shut
+        set pushed . next to open_ones
+        open_ones := pushed
+      unless shut then
+        if open_ones then
+          expected := open_ones . shut
+          if character c is expected then
+            open_ones := open_ones . next
+            unless open_ones then
+              found := here . next
+              here := nothing
+      if here then
+        here := here . next
+  found
 
 // The words from `at` to `limit`, separated by spaces: a chain of `from`, `to`.
 words from {at} to {limit} =>
@@ -899,6 +1028,8 @@ word end from {at} to {limit} =>
 // A capture's name written with its type (`{d: Digit}`): the name ends before the colon. Answers a node with `name_end`, or nothing.
 colon := characters of :
 colon := colon . character
+dot := characters of .
+dot := dot . character
 marks := characters of `\n?
 backtick := marks . character
 marks := marks . next
@@ -942,6 +1073,7 @@ take the seed's rules =>
   top := here . parent
   imported := external rules top
   set top . rules to imported
+  set registry . top to top
   last := imported
   while last do
     first_statement := last . rule
@@ -972,12 +1104,12 @@ read statement at {at} =>
   here := external .
   scope := here . parent
   limit := statement end from at to nothing below nothing
-  r := reading from at to limit in scope
-  if r then
-    rule := r . rule
-    caps := r . captures
+  made := step from at to limit in scope
+  rule := made . rule
+  if rule then
+    caps := made . captures
     external apply rule caps scope
-  unless r then
+  unless rule then
     external report at limit
   after := nothing
   if limit then
@@ -985,6 +1117,39 @@ read statement at {at} =>
   after
 
 hand reading over
+
+// ---------------------------------------------------------------- values with rules of their own (R2.1: a rule is a method)
+// What a statement's first operand is read as, when no rule in reach reads it whole: the rest is read by that value's rules,
+// applied with `this` bound to it.
+sent {this} {rest} =>
+  value := this
+  where := external span rest
+  rest_from := where . from
+  rest_to := where . to
+  spaced_rest := spaces after rest_from
+  if spaced_rest then
+    rest_from := spaced_rest
+  top := registry . top
+  rules := rules in reach of value below top
+  r := reading from rest_from to rest_to among rules
+  result := nothing
+  if r then
+    rule := r . rule
+    caps := r . captures
+    sender := registry . sender
+    sender_pieces := sender . pieces
+    this_piece := sender_pieces . next
+    bound := node
+    set bound . piece to this_piece
+    set bound . value to value
+    set bound . next to caps
+    within := where . frame
+    result := external apply rule bound within
+  unless r then
+    external report rest_from rest_to
+  result
+sent_rule := registry . latest
+set registry . sender to sent_rule
 
 // ---------------------------------------------------------------- types with a check: characters, repetition (R2.2)
 latest rule =>

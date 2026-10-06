@@ -1,0 +1,70 @@
+// Extensible Markup Language 1.0 (https://www.w3.org/TR/xml/)
+XML := class: Language {
+  static extensions = ".xml"
+
+  // S (https://www.w3.org/TR/xml/#NT-S)
+  static S = (" " | "\t" | "\r" | \n)[]{length > 0}
+  // Name (https://www.w3.org/TR/xml/#NT-Name)
+  static Name = (Char.Letter | "_" | ":", (Char.Letter | Char.Digit | "_" | ":" | "-" | ".")[])
+  // Predefined entities and character references (https://www.w3.org/TR/xml/#sec-predefined-ent, https://www.w3.org/TR/xml/#sec-references)
+  static Entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&apos;" }
+  static Escaped := class: String ((!"&" && !"<" && !"\"") | ("&", entity: ("amp" | "lt" | "gt" | "quot" | "apos" | ("#", Decimal) | ("#x", Hexadecimal)), ";"))[] {
+    static (text: String) as (=== Escaped) => #text.map(Entities[.] ?? .) as String
+  }
+
+  // Comment (https://www.w3.org/TR/xml/#sec-comments)
+  static Comment := class ("<!--", text: (!"-" | ("-", !"-"))[], "-->")
+  // CDATA section (https://www.w3.org/TR/xml/#sec-cdata-sect)
+  static Data := class ("<![CDATA[", text: *{!(. ~= (*, "]]>", *))}, "]]>")
+  static Text := class (text: Escaped{length > 0})
+
+  // Element, start-tag, end-tag and empty-element tag (https://www.w3.org/TR/xml/#sec-starttags)
+  static Element := class (
+    "<", name: Name,
+    attributes: (S, name: Name, "=", "\"", value: Escaped, "\"")[] = [],
+    S?,
+    ("/>" if children.empty) | (">", children: (Element | Text | Data | Comment)[] = [], "</", Name{== name}, S?, ">")
+  ) {
+    [attribute: String] => attributes{.name == attribute}.last?.value
+    text => children{!(. is Comment)}.map(.text).join("")
+  }
+  static Node := Element | Text | Data | Comment
+
+  // Document with its XML declaration (https://www.w3.org/TR/xml/#sec-prolog-dtd)
+  static Document := class (
+    ("<?xml", S, "version=\"", version: ("1.", Char.Digit), "\"", (S, "encoding=\"", encoding: Name, "\"")?, S?, "?>")?,
+    (S | Comment)[],
+    root: Element,
+    (S | Comment)[]
+  ) {
+    version = "1.0"
+    encoding = "UTF-8"
+  }
+
+  static Child := class = value: *
+  static Attributes := class = value: *
+
+  syntax := Compiler.default + {
+    <!--{literal text}--> => Comment(text: text)
+    <![CDATA[{literal text}]]> => Data(text: text)
+    <{name: Name}{attributes}/> => Element(name: name, attributes: Attributes(attributes))
+    <{name: Name}{attributes}>{children}</{name}> => Element(name: name, attributes: Attributes(attributes), children: Child(children))
+    {name: Name}="{value}" => (name: name, value: value as String as Escaped)
+    {name: Name}={value} => value === None ? None : (name: name, value: value as String as Escaped)
+    &{name: Name}; => Entities.find(.value == "&" + name + ";")?.key ?? ("&" + name + ";")
+    {child: Child{value === None}} => []
+    {child: Child{value is String{trimmed.empty && contains(\n)}}} => []
+    {child: Child{value is Node}} => [child.value]
+    {child: Child{value is Iterable && !(value is String)}} => Compiler.reduced(child.value.map(Child(.)), syntax).flatten(1)
+    {child: Child} => [Text(text: child.value as String as Escaped)]
+    {attributes: Attributes{value === None}} => []
+    {attributes: Attributes{value is Iterable && !(value.first is String)}} => Compiler.reduced(attributes.value.map(Attributes(.)), syntax).flatten(1)
+    {attributes: Attributes} => [attributes.value]
+  }
+  level := syntax + {
+    {document: Document} => document.root
+  }
+  written := {
+    {writing: Language.Writing{value is (Document | Node)}} => writing.value
+  }
+}

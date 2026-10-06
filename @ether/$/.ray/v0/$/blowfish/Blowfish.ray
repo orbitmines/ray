@@ -1,0 +1,34 @@
+// Blowfish (https://www.schneier.com/academic/archives/1994/09/description_of_a_new.html)
+Blowfish := class: Language = key: Byte[]{4 <= length <= 56} {
+  static extensions = ".blowfish"
+
+  // The P-array and the four S-boxes start as the hexadecimal digits of π's fraction (Schneier 1994, "Generating the Subkeys")
+  static digits = ((π - 3) as Hexadecimal).fraction.chunk(8)[..<18 + 4 * 256].map(. as Hexadecimal as Number)
+  static Keys := class = words: Number[] {
+    P => words[..<18]
+    boxes => words[18..].chunk(256)
+  }
+
+  // F splits its 32 bits into four bytes a, b, c, d: ((S1[a] + S2[b]) xor S3[c]) + S4[d] (Schneier 1994, "Description of the Algorithm")
+  static F (keys: Keys, x) => (x as Binary³² as Byte[]) -- ((a, b, c, d) => ((((keys.boxes[0][a] + keys.boxes[1][b]) % 2 ^ 32) ~x|| keys.boxes[2][c]) + keys.boxes[3][d]) % 2 ^ 32)
+  // Sixteen rounds of a Feistel network, then the last swap undone and P17, P18 applied (Schneier 1994, "Encryption")
+  static enciphered (keys: Keys, block: (left: Number, right: Number)) => (0..<16).reduce(held = block =>
+    (held.left ~x|| keys.P[.]) -- (left => (left: F(keys, left) ~x|| held.right, right: left)))
+    -- (last => (left: last.right ~x|| keys.P[17], right: last.left ~x|| keys.P[16]))
+  // Decryption is encryption with the P-array reversed (Schneier 1994, "Decryption")
+  static deciphered (keys: Keys, block: (left: Number, right: Number)) => enciphered(Keys([<-keys.P, keys.words[18..]].flatten), block)
+
+  // The key is cycled into the P-array, then the all-zero block is encrypted again and again, each result replacing the next two subkeys (Schneier 1994, "Generating the Subkeys")
+  subkeys => (0..<18).map(i => (0..<4).map(j => key[(4 * i + j) % key.count]) as Binary as Number) -- (cycled =>
+    (0..<(18 + 4 * 256) / 2).reduce(held = (keys: Keys([digits[..<18].zip(cycled).map((a, b) => a ~x|| b), digits[18..]].flatten), block: (left: 0, right: 0), at: 0) =>
+      enciphered(held.keys, held.block) -- (block => (keys: Keys(held.keys.words ~~ (.[held.at] = block.left) ~~ (.[held.at + 1] = block.right)), block: block, at: held.at + 2))).keys)
+
+  // 64-bit blocks, each half most significant byte first (Schneier 1994, "Description of the Algorithm")
+  static halves (block: Byte[]) => (left: block[..<4] as Binary as Number, right: block[4..] as Binary as Number)
+  static joined (block: (left: Number, right: Number)) => [block.left as Binary³² as Byte[], block.right as Binary³² as Byte[]].flatten
+  opened (bytes: Byte[]{length % 8 == 0}) => bytes.chunk(8).map(joined(deciphered(subkeys, halves(.)))).flatten
+
+  written := {
+    {writing: Language.Writing{(value as Byte[]).count % 8 == 0}} => (writing.value as Byte[]).chunk(8).map(joined(enciphered(subkeys, halves(.)))).flatten
+  }
+}

@@ -1,0 +1,37 @@
+// SHA-3 Standard, SHA3-256 (https://csrc.nist.gov/pubs/fips/202/final)
+SHA3 := class: Encoding.Digest {
+  static extensions = ".sha3"
+  // SHA3-256: rate 1088 bits, capacity 512, 256 bits out (FIPS 202 §6.1)
+  static rate = 136
+  static size = 32
+
+  // pad10*1 after the domain bits 01, written as bytes 0x06 … 0x80 (FIPS 202 §5.1, §6.1, Appendix B.2)
+  static padded (message: Byte[]) => [message, 0x06, [0] * ((rate - 1 - message.count % rate) % rate)].flatten -- (bytes => bytes ~~ (.[-1] = .[-1] ~|| 0x80))
+
+  // Lanes of 64 bits, A[x][y] at x + 5y, bytes least significant first (FIPS 202 §3.1.2, Appendix B.1)
+  static lanes (bytes: Byte[]) => [bytes, [0] * (200 - bytes.count)].flatten -- (all => (0..<5).map(x => (0..<5).map(y => <-all[8 * (x + 5 * y)..<8 * (x + 5 * y + 1)] as Binary as Number)))
+  static rot (lane, n) => (lane * 2 ^ (n % 64) + (lane / 2 ^ (64 - n % 64)).floor) % 2 ^ 64
+
+  // θ (FIPS 202 Algorithm 1)
+  static θ (A) => A.map(.reduce(c = 0 => c ~x|| .)) -- (C => A.enumerate.map(column => column.value.map(. ~x|| C[(column.index + 4) % 5] ~x|| rot(C[(column.index + 1) % 5], 1))))
+  // ρ: offsets (t + 1)(t + 2)/2 along the walk (x, y) → (y, 2x + 3y) from (1, 0) (FIPS 202 Algorithm 2)
+  static walk = (0..<23).reduce(path = [(1, 0)] => [path, (path.last.1, (2 * path.last.0 + 3 * path.last.1) % 5)])
+  static ρ (A) => A.enumerate.map(column => column.value.enumerate.map(lane => walk.index_of((column.index, lane.index)) -- (t => t == None ? lane.value : rot(lane.value, (t + 1) * (t + 2) / 2))))
+  // π (FIPS 202 Algorithm 3)
+  static π (A) => (0..<5).map(x => (0..<5).map(y => A[(x + 3 * y) % 5][x]))
+  // χ (FIPS 202 Algorithm 4)
+  static χ (A) => (0..<5).map(x => (0..<5).map(y => A[x][y] ~x|| ((2 ^ 64 - 1 - A[(x + 1) % 5][y]) ~&& A[(x + 2) % 5][y])))
+  // rc(t), a linear feedback shift register, and the round constant of ι (FIPS 202 Algorithms 5 and 6)
+  static rc (t) => (0..<t % 255).reduce(R = [1, 0, 0, 0, 0, 0, 0, 0] => [0, R].flatten -- (S => [S[0] ~x|| S[8], S[1], S[2], S[3], S[4] ~x|| S[8], S[5] ~x|| S[8], S[6] ~x|| S[8], S[7]])).first
+  static ι (A, round) => A ~~ (.[0][0] = .[0][0] ~x|| (0..6).map(j => rc(j + 7 * round) * 2 ^ (2 ^ j - 1)).sum)
+  // Keccak-f[1600]: 24 rounds (FIPS 202 Algorithm 7, §3.4)
+  static permuted (A) => (0..<24).reduce(state = A => ι(χ(π(ρ(θ(state)))), .))
+
+  // The sponge: absorb each block into the state, then squeeze the first bytes (FIPS 202 Algorithm 8)
+  static absorbed (A, block: Byte[]) => permuted(A.zip(lanes(block)).map((a, b) => a.zip(b).map((x, y) => x ~x|| y)))
+  static squeezed (A) => (0..<rate / 8).map(i => <-(A[i % 5][(i / 5).floor] as Binary⁶⁴ as Byte[])).flatten[..<size]
+
+  written := {
+    {writing: Language.Writing} => squeezed(padded(writing.value as Byte[]).chunk(rate).reduce(A = [[0] * 5] * 5 => absorbed(A, .)))
+  }
+}

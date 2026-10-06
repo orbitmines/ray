@@ -1,0 +1,185 @@
+// Database Language SQL, ISO/IEC 9075-2 Foundation (https://www.iso.org/standard/76584.html), in the statements SQLite documents (https://sqlite.org/lang.html)
+SQL := class: Language {
+  static extensions = ".sql"
+
+  Column := class = name: String, table: String? {
+    on (row) => row[name]
+  }
+  All := class {
+    on (row) => row
+  }
+  Literal := class = value: * {
+    on (row) => value
+  }
+  Aliased := class = expression: Expression, name: String {
+    on (row) => expression.on(row)
+  }
+  Operation := class = left: Expression, operator: String, right: Expression {
+    on (row) => Operators[operator](left.on(row), right.on(row))
+  }
+  Not := class = operand: Expression {
+    on (row) => !operand.on(row)
+  }
+  Listing := class = elements: Expression[] {
+    on (row) => elements.map(.on(row))
+  }
+  Call := class = function: String, arguments: Expression[] = [] {
+    on (row) => Functions[function.lower_case](arguments.map(.on(row)))
+  }
+  Ordering := class = by: Expression, descending = false
+  Expression := Column | All | Literal | Aliased | Operation | Not | Listing | Call
+
+  // LIKE (https://sqlite.org/lang_expr.html#like): % is any run, _ is one character
+  Like := class ((("%" as *) | ("_" as Char) | Char)[])
+
+  static Operators = {
+    "=": (a, b) => a == b, "==": (a, b) => a == b, "<>": (a, b) => a != b, "!=": (a, b) => a != b,
+    "<": (a, b) => a < b, "<=": (a, b) => a <= b, ">": (a, b) => a > b, ">=": (a, b) => a >= b,
+    "IS": (a, b) => a === b, "IS NOT": (a, b) => a !== b,
+    "AND": (a, b) => a && b, "OR": (a, b) => a || b,
+    "LIKE": (a, b) => (a as String).fold_case ~= ⊢ ((b as String).fold_case as Like) ⊣,
+    "IN": (a, b) => b ∋ a,
+    "||": (a, b) => (a as String) + (b as String),
+    "+": (a, b) => a + b, "-": (a, b) => a - b, "*": (a, b) => a * b, "/": (a, b) => a / b, "%": (a, b) => a % b
+  }
+  // Core functions (https://sqlite.org/lang_corefunc.html) and aggregates (https://sqlite.org/lang_aggfunc.html)
+  static Functions = {
+    "lower": (a) => (a.0 as String).lower_case, "upper": (a) => (a.0 as String).upper_case,
+    "length": (a) => (a.0 as String).count, "coalesce": (a) => a{!== None}.first,
+    "count": (a) => a.0.count, "sum": (a) => a.0.sum, "min": (a) => a.0.min, "max": (a) => a.0.max
+  }
+
+  Select := class = columns: Expression[] = [All()], from: String, where: Expression?, order: Ordering[] = [], limit: Expression? {
+    rows (database: Database) => database[from]{where === None || where.on(.)}
+      -- (found => order.reverse.reduce(held = found => held.sort_by(row => .by.on(row)) -- (sorted => .descending ? <-sorted : sorted)))
+      -- (found => limit ? found[..<limit.on(None)] : found)
+      -- (found => columns.every(. is All) ? found : found.map(row => Document(entries: columns.map((name: . is Column | Aliased ? .name : Language.ray.write(.), value: .on(row))))))
+  }
+  Insert := class = into: String, columns: String[], values: Expression[][], conflict: String[] = [], updated: String[] = []
+  Defined := class = name: String, type: String?, key = false
+  Create := class = table: String, columns: Defined[], exists = false
+  Update := class = table: String, set: (column: String, value: Expression)[], where: Expression?
+  Delete := class = from: String, where: Expression?
+  Comment := class = text: String
+  Statement := Select | Insert | Create | Update | Delete | Comment
+
+  Database := class = tables: * = {}, at: Location?, dialect: Language? {
+    [name: String] => at ? answered(Select(from: name)) : tables[name] ?? []
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : this[name]
+    names => at ? answered(dialect.listing).map(.name) : tables.fields.name
+    answered (select: Select) => at ? dialect.answered(at, SQL.write(select)) : select.rows(this)
+    executed (statements) => dialect.sent(at, statements is String ? statements : SQL.write(statements))
+    statements => names.map(name => this[name] -- (rows => [
+      Create(table: name, columns: rows.first.fields.map(Defined(.name))),
+      Insert(into: name, columns: rows.first.fields.name, values: rows.map(.fields.map(Literal(.value))))
+    ] if rows.nonempty)).flatten
+  }
+
+  // <regular identifier> and <delimited identifier> (ISO/IEC 9075-2 §5.2)
+  Name = (Char.Letter | "_", Char.Word[])
+  Qualified = (Name, (".", Name)[])
+  // <reserved word> (ISO/IEC 9075-2 §5.2), the ones this level reads
+  static Keyword = "SELECT" | "FROM" | "WHERE" | "ORDER" | "BY" | "ASC" | "DESC" | "LIMIT" | "INSERT" | "INTO" | "VALUES" | "ON" | "CONFLICT" | "DO" | "UPDATE" | "SET"
+    | "CREATE" | "TABLE" | "IF" | "NOT" | "EXISTS" | "PRIMARY" | "KEY" | "DELETE" | "AND" | "OR" | "IS" | "NULL" | "LIKE" | "IN" | "AS" | "TRUE" | "FALSE"
+  // Datatypes (https://sqlite.org/datatype3.html, ISO/IEC 9075-2 §6.1 <data type>)
+  static Type = "TEXT" | "INTEGER" | "REAL" | "BLOB" | "NUMERIC" | "BOOLEAN" | "VARCHAR" | "CHAR" | "DATE" | "TIMESTAMP" | "JSON" | "JSONB" | "UUID" | "BIGINT" | "SERIAL"
+
+  static identifier (text: String) => text ~= ⊢ Name ⊣ && !(text.upper_case is Keyword) ? text : "\"" + text.replace("\"", "\"\"") + "\""
+  static quoted (text: String) => "'" + text.replace("'", "''") + "'"
+  static literal (value) => value === None ? "NULL" : value is boolean ? (value ? "TRUE" : "FALSE") : value is Number ? value as 10 as String : value is Byte[] ? "X'" + (value as Hexadecimal) + "'" : quoted(value as String)
+
+  static upserted (row: Store.Row) => Insert(into: row.type, columns: ["id", row.fields.name].flatten, values: [[row.id, row.fields.value].flatten.map(Literal(.))], conflict: ["id"], updated: row.fields.name)
+
+  Spliced := class = value: *
+  Built := Expression | Statement | Ordering | Defined
+
+  syntax := Compiler.default + {
+    // <comment> (ISO/IEC 9075-2 §5.2): -- simple and /* bracketed */
+    --{literal text: (!\n)[]} => Comment(text)
+    /*{literal text}*/ => Comment(text)
+    {statement: Statement}; => statement
+
+    // Keywords are case-insensitive, a <key word>'s lower case letters equivalent to their upper case ones (ISO/IEC 9075-2 §5.2 <token> and <separator>, Syntax Rules); written in upper case
+    {"SELECT".ignore_case} * {"FROM".ignore_case} {from: Qualified} => Select(from: from as String)
+    {"SELECT".ignore_case} {columns: *[]} {"FROM".ignore_case} {from: Qualified} => Select(columns: columns.map(Spliced(.)), from: from as String)
+    {select: Select} {"ORDER".ignore_case} {"BY".ignore_case} {order: *[]} => select ~~ .order = order.map(. is Ordering ? . : Ordering(Spliced(.)))
+    {select: Select} {"LIMIT".ignore_case} {limit} => select ~~ .limit = Spliced(limit)
+    {term} {"DESC".ignore_case} => Ordering(Spliced(term), descending: true)
+    {term} {"ASC".ignore_case} => Ordering(Spliced(term))
+    {"INSERT".ignore_case} {"INTO".ignore_case} {into: Qualified} ({columns: *[]}) {"VALUES".ignore_case} {rows: *[]} => Insert(into as String, columns.map(.name), rows.map(row => (row is Iterable && !(row is String) ? row : [row]).map(Spliced(.))))
+    // UPSERT (https://sqlite.org/lang_upsert.html)
+    {insert: Insert} {"ON".ignore_case} {"CONFLICT".ignore_case} ({key: *[]}) {"DO".ignore_case} {"UPDATE".ignore_case} {"SET".ignore_case} {set: *[]} => insert ~~ (.conflict = key.map(.name)) ~~ (.updated = set.map(.left.name))
+    {"CREATE".ignore_case} {"TABLE".ignore_case} {"IF".ignore_case} {"NOT".ignore_case} {"EXISTS".ignore_case} {table: Qualified} ({columns: *[]}) => Create(table as String, columns, exists: true)
+    {"CREATE".ignore_case} {"TABLE".ignore_case} {table: Qualified} ({columns: *[]}) => Create(table as String, columns)
+    {name: Name} {type: Type.ignore_case} {"PRIMARY".ignore_case} {"KEY".ignore_case} => Defined(name as String, type.upper_case, key: true)
+    {name: Name} {type: Type.ignore_case} => Defined(name as String, type.upper_case)
+    {"UPDATE".ignore_case} {table: Qualified} {"SET".ignore_case} {set: *[]} => Update(table as String, set.map((column: .left.name, value: .right)))
+    {"DELETE".ignore_case} {"FROM".ignore_case} {from: Qualified} => Delete(from as String)
+    {statement: Select | Update | Delete} {"WHERE".ignore_case} {condition} => statement ~~ .where = Spliced(condition)
+
+    // <boolean value expression> and <comparison predicate> (ISO/IEC 9075-2 §6.39, §8.2), loosest first
+    {left} {"OR".ignore_case} {right} => Operation(Spliced(left), "OR", Spliced(right))
+    {left} {"AND".ignore_case} {right} => Operation(Spliced(left), "AND", Spliced(right))
+    {"NOT".ignore_case} {operand} => Not(Spliced(operand))
+    // <null predicate> (ISO/IEC 9075-2 §8.8)
+    {left} {"IS".ignore_case} {"NOT".ignore_case} {"NULL".ignore_case} => Operation(Spliced(left), "IS NOT", Literal(None))
+    {left} {"IS".ignore_case} {"NULL".ignore_case} => Operation(Spliced(left), "IS", Literal(None))
+    // <in predicate> (ISO/IEC 9075-2 §8.4)
+    {left} {"IN".ignore_case} ({elements: *[]}) => Operation(Spliced(left), "IN", Listing(elements.map(Spliced(.))))
+    {left} {operator: "=" | "==" | "!=" | "<>"} {right} => Operation(Spliced(left), operator, Spliced(right))
+    {left} {"IS".ignore_case} {"NOT".ignore_case} {right} => Operation(Spliced(left), "IS NOT", Spliced(right))
+    {left} {operator: ("IS" | "LIKE").ignore_case} {right} => Operation(Spliced(left), operator.upper_case, Spliced(right))
+    {left} {operator: "<=" | ">=" | "<" | ">"} {right} => Operation(Spliced(left), operator, Spliced(right))
+    {left} {operator: "+" | "-"} {right} => Operation(Spliced(left), operator, Spliced(right))
+    {left} {operator: "*" | "/" | "%"} {right} => Operation(Spliced(left), operator, Spliced(right))
+    // <concatenation> (ISO/IEC 9075-2 §6.31)
+    {left} || {right} => Operation(Spliced(left), "||", Spliced(right))
+    {expression} {"AS".ignore_case} {name: Name} => Aliased(Spliced(expression), name as String)
+
+    // <character string literal>, <binary string literal>: X or x, then hexits of either case (ISO/IEC 9075-2 §5.3)
+    '{literal text: ((!"'") | ("''" as "'"))[]}' => Literal(text as String)
+    {"X".ignore_case}'{literal digits: Hexadecimal}' => Literal(digits as Byte[])
+    // <null specification> and <boolean literal> (ISO/IEC 9075-2 §6.5, §5.3)
+    {"NULL".ignore_case} => Literal(None)
+    {"TRUE".ignore_case} => Literal(true)
+    {"FALSE".ignore_case} => Literal(false)
+    // <delimited identifier> (ISO/IEC 9075-2 §5.2)
+    "{literal name: ((!"\"") | ("\"\"" as "\""))[]}" => Column(name as String)
+    {function: Name}(*) => Call(function as String, [All()])
+    {function: Name}({arguments: *[]}) => Call(function as String, arguments.map(Spliced(.)))
+    {table: Name}.{column: Name} => Column(column as String, table: table as String)
+    {name: Name} => Column(name as String)
+    {spliced: Spliced{value is Built}} => spliced.value
+    {spliced: Spliced} => Literal(spliced.value)
+  }
+  level := syntax
+
+  written := {
+    {writing: Language.Writing{value is Store.Row[]}} => writing.value -- (rows => Language.Writing([
+      rows.type.unique.map(type => rows{.type == type}.first -- (row => Create(table: type, columns: [Defined("id", "TEXT", key: true), row.fields.map(Defined(.name, "TEXT"))].flatten, exists: true))),
+      rows.map(upserted(.))
+    ].flatten))
+    {writing: Language.Writing{value is Store.Row}} => upserted(writing.value)
+    {writing: Language.Writing{value is Iterable}} => writing.value.map(. is Comment ? (., \n) : (., ";", \n))
+
+    {select: Select} => "SELECT ", select.columns.map((", " if .index > 0), .), " FROM ", identifier(select.from),
+      (" WHERE ", select.where) if select.where, (" ORDER BY ", select.order.map((", " if .index > 0), .)) if select.order.nonempty, (" LIMIT ", select.limit) if select.limit
+    {insert: Insert} => "INSERT INTO ", identifier(insert.into), " (", insert.columns.map(identifier(.)).join(", "), ") VALUES ",
+      insert.values.map((", " if .index > 0), "(", .map((", " if .index > 0), .), ")"),
+      (" ON CONFLICT (", insert.conflict.map(identifier(.)).join(", "), ") DO UPDATE SET ", insert.updated.map(identifier(.) + " = excluded." + identifier(.)).join(", ")) if insert.conflict.nonempty
+    {create: Create} => "CREATE TABLE ", ("IF NOT EXISTS " if create.exists), identifier(create.table), " (", create.columns.map((", " if .index > 0), .), ")"
+    {defined: Defined} => identifier(defined.name), (" " + defined.type) if defined.type, " PRIMARY KEY" if defined.key
+    {update: Update} => "UPDATE ", identifier(update.table), " SET ", update.set.map((", " if .index > 0), identifier(.column), " = ", .value), (" WHERE ", update.where) if update.where
+    {delete: Delete} => "DELETE FROM ", identifier(delete.from), (" WHERE ", delete.where) if delete.where
+    {comment: Comment} => "/*", comment.text, "*/"
+    {ordering: Ordering} => ordering.by, " DESC" if ordering.descending
+    {column: Column} => (identifier(column.table) + ".") if column.table, identifier(column.name)
+    {all: All} => "*"
+    {aliased: Aliased} => aliased.expression, " AS ", identifier(aliased.name)
+    {literal: Literal} => literal(literal.value)
+    {listing: Listing} => "(", listing.elements.map((", " if .index > 0), .), ")"
+    {operation: Operation} => "(", operation.left, " ", operation.operator, " ", operation.right, ")"
+    {negated: Not} => "NOT ", negated.operand
+    {call: Call} => call.function, "(", call.arguments.map((", " if .index > 0), .), ")"
+  }
+}

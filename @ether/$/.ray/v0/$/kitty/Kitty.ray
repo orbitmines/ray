@@ -1,0 +1,15 @@
+// Kitty's terminal graphics protocol (https://sw.kovidgoyal.net/kitty/graphics-protocol/)
+Kitty := class ("\e_G", keys: (key: Char.Letter, "=", value: (Char.Word | "-")[])[].join(","), (";", payload: Base64)?, "\e\\") {
+  [key: Char] => keys{.key == key}.last?.value
+  // The control data keys: a action, f format (100 is PNG), m more chunks follow (https://sw.kovidgoyal.net/kitty/graphics-protocol/#control-data-reference)
+  more => this["m"] == "1"
+  // Remote client chunking, at most 4096 bytes of base64 in each (https://sw.kovidgoyal.net/kitty/graphics-protocol/#remote-client)
+  static (png: Byte[]) as (=== Kitty[]) => (png as Base64 as String).chunk(4096) -- (chunks => chunks.enumerate.map(Kitty(
+    keys: [[(key: "a", value: "T"), (key: "f", value: "100")] if .index == 0, [(key: "m", value: .index < chunks.count - 1 ? "1" : "0")]].flatten(1),
+    payload: .value as Base64)))
+  static image (chunks: Kitty[]) => chunks.payload.map(.bytes).flatten
+
+  static language = Language(".kitty", of: Language.Image,
+    level: { {chunks: Kitty[]} => $.png.read(image(chunks)) },
+    written: { {writing: Language.Writing} => writing.value as Byte[] as Kitty[] })
+}

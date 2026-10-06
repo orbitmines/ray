@@ -1,0 +1,188 @@
+// Zstandard Compression and the 'application/zstd' Media Type (https://www.rfc-editor.org/rfc/rfc8878)
+Zstd := class (frames: (Frame | Skippable)[]{length > 0}) {
+  bytes: Byte[] => frames{is Frame}.map(.content).flatten
+
+  static Little<width> := class (bytes: Byte[]{count == width / 8}) {
+    value => <-bytes as Binary
+    static (n: Integer) as (=== Little<width>) => Little<width>(bytes: <-((n as Binary{length == width}) as Byte[]))
+  }
+
+  // 3.1.1 Zstandard Frames
+  static Frame := class (
+    0x28, 0xB5, 0x2F, 0xFD,
+    header: Header,
+    blocks: Block{!last}[], Block{last},
+    (checksum: Little<32>) if header.checksummed
+  ) {
+    content => blocks.reduce(held = Decoding() => .decoded(held)).output
+    valid => !header.checksummed || checksum.value == XXH64.digest(content) % 2 ^ 32
+  }
+  // 3.1.1.1 Frame_Header, its descriptor's bits from the highest
+  static Header := class (
+    (size_flag: Binary², single: Binary¹, Binary¹, Binary¹{== 0}, checksummed: Binary¹, dictionary_flag: Binary²),
+    (window: (exponent: Binary⁵, mantissa: Binary³)) if !single,
+    (dictionary: Little<[0, 8, 16, 32][dictionary_flag]>) if dictionary_flag > 0,
+    (content_size: Little<[single ? 8 : 0, 16, 32, 64][size_flag]>) if single || size_flag > 0
+  ) {
+    size => content_size ? content_size.value + (size_flag == 1 ? 256 : 0) : None
+    window_size => single ? size : 2 ^ (10 + window.exponent) -- (base => base + base / 8 * window.mantissa)
+  }
+  // 3.1.2 Skippable Frames
+  static Skippable := class (Byte{0x50 <= . <= 0x5F}, 0x2A, 0x4D, 0x18, size: Little<32>, data: Byte[]{count == size.value})
+
+  // 3.1.1.2 Blocks: Last_Block, Block_Type and Block_Size in 3 little-endian bytes
+  static Block := class (header: Little<24>, content: (Byte[]{count == size} if raw) | (Byte if rle) | (Compressed{count == size} if compressed)) {
+    last => header.value % 2 == 1
+    type => (header.value / 2).floor % 4
+    size => (header.value / 8).floor
+    raw => type == 0
+    rle => type == 1
+    compressed => type == 2
+    decoded (held: Decoding) => raw ? held.emitted(content) : rle ? held.emitted([content] * size) : content.decoded(held)
+  }
+
+  // What a frame carries from block to block: output, repeat offsets, the last tables
+  static Decoding := class = output: Byte[] = [], offsets: Number[] = [1, 4, 8], huffman: Huffman?, tables: (literals: FSE?, offsets: FSE?, matches: FSE?) = () {
+    emitted (bytes: Byte[]) => Decoding(output: (output, bytes).flatten, offsets, huffman, tables)
+  }
+
+  // 3.1.1.3 Compressed Blocks
+  static Compressed := class (literals: Literals, sequences: Sequences) {
+    decoded (held: Decoding) => literals.read(held) -- (read => sequences.executed(read.literals, held ~~ (.huffman = read.huffman)))
+  }
+  // 3.1.1.3.1 Literals_Section, its header's type and size format from the lowest bits
+  static Literals := class (
+    header: Little<8>, (more: Byte[]{count == extra}),
+    (tree: Huffman) if type == 2,
+    content: Byte[]{count == (type == 1 ? 1 : type < 2 ? regenerated : compressed_size - (tree as Byte[]).count)}
+  ) {
+    type => header.value % 4
+    format => (header.value / 4).floor % 4
+    extra => type < 2 ? [0, 1, 0, 2][format] : [1, 1, 2, 3][format]
+    sizes => (([header.value], more).flatten as Little<8 * (1 + extra)>).value -- (all => type < 2
+      ? (regenerated: (all / (format % 2 == 0 ? 8 : 16)).floor, compressed: 0)
+      : (bits: [10, 10, 14, 18][format]) -- (regenerated: (all / 16).floor % 2 ^ .bits, compressed: (all / 2 ^ (4 + .bits)).floor))
+    regenerated => sizes.regenerated
+    compressed_size => sizes.compressed
+    streams => format == 0 && type >= 2 ? 1 : 4
+    // 3.1.1.3.1.6 Jump_Table: four streams after six bytes of sizes
+    read (held: Decoding) => (huffman: tree ?? held.huffman) -- (table => (
+      literals: type == 0 ? content : type == 1 ? [content.0] * regenerated
+        : streams == 1 ? table.huffman.decoded(content, regenerated)
+        : content[..<6].chunk(2).map(. as Little<16> .value) -- (jumps => [jumps.0, jumps.0 + jumps.1, jumps.0 + jumps.1 + jumps.2] -- (starts =>
+          [0, starts].flatten.zip([starts, content.count - 6].flatten).map((from, to) => table.huffman.decoded(content[6 + from..<6 + to], (regenerated + 3) / 4 -- .floor)).flatten[..<regenerated])),
+      huffman: table.huffman))
+  }
+
+  // 4.2.1 Huffman Tree Description: weights given directly or FSE-compressed
+  static Huffman := class ((direct: Byte{>= 128}, weights: Binary⁴[]{count == direct - 127}) | (size: Byte{< 128}, compressed: Byte[]{count == size})) {
+    given => direct ? weights.map(.value) : FSE.weights(compressed)
+    all_weights => given -- (known => known.map(2 ^ (. - 1)){. >= 1}.sum -- (total => (2 ^ (total.log2.floor + 1)) -- (whole => [known, (whole - total).log2 + 1].flatten)))
+    depth => (all_weights.map(2 ^ (. - 1)){. >= 1}.sum).log2
+    // 4.2.1.3: codes by weight, then by symbol
+    codes => all_weights.enumerate{.value > 0}.sort_by((.value, .index)).reduce(held = (made: [], next: 0) => (depth + 1 - .value) -- (bits =>
+      (held.made.last ? (held.next / 2 ^ (held.made.last.bits - bits)).floor : 0) -- (prefix => (made: [held.made, (symbol: .index, bits: bits, prefix: prefix)].flatten, next: prefix + 1)))).made
+    decoded (stream: Byte[], count: Number) => Bits(stream).backward.reduce_while(held = [] => held.count < count, bits => codes.find(code => bits.peek(code.bits) == code.prefix) -- (code => bits.skip(code.bits) -- [held, code.symbol].flatten))
+  }
+
+  // 3.1.1.3.2 Sequences_Section
+  static Sequences := class (
+    count: (Byte{== 0} as 0) | (Byte{< 128}) | (high: Byte{128 <= . < 255}, low: Byte) as ((high - 128) * 256 + low) | (255, rest: Little<16>) as (rest.value + 0x7F00),
+    (modes: (literals: Binary², offsets: Binary², matches: Binary², Binary²{== 0})) if count > 0,
+    (literal_table: Table<modes.literals, 35, 9>, offset_table: Table<modes.offsets, 31, 8>, match_table: Table<modes.matches, 52, 9>) if count > 0,
+    stream: Byte[]
+  ) {
+    // 3.1.1.3.2.1.1: the predefined distributions
+    static predefined = (
+      literals: [4, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 1, 1, 1, 1, 1, -1, -1, -1, -1],
+      offsets: [1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1],
+      matches: [1, 4, 3, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1])
+    // 3.1.1.3.2.1.1 Literals_Length and Match_Length codes: baselines and extra bits
+    static literal_codes = (0..15).map((base: ., bits: 0)), [(16, 1), (18, 1), (20, 1), (22, 1), (24, 2), (28, 2), (32, 3), (40, 3), (48, 4), (64, 6), (128, 7), (256, 8), (512, 9), (1024, 10), (2048, 11), (4096, 12), (8192, 13), (16384, 14), (32768, 15), (65536, 16)]
+    static match_codes = (0..31).map((base: . + 3, bits: 0)), [(35, 1), (37, 1), (39, 1), (41, 1), (43, 2), (47, 2), (51, 3), (59, 3), (67, 4), (83, 4), (99, 5), (131, 7), (259, 8), (515, 9), (1027, 10), (2051, 11), (4099, 12), (8195, 13), (16387, 14), (32771, 15), (65539, 16)]
+
+    // 3.1.1.4 Sequence Execution, with 3.1.1.5 Repeat_Offsets
+    executed (literals: Byte[], held: Decoding) => decoded(held).reduce(state = (output: held.output, offsets: held.offsets, at: 0) => (
+      [state.output, literals[state.at..<state.at + .literal_length]].flatten -- (copied => resolved(.offset, .literal_length, state.offsets) -- (offset =>
+        (output: (copied, (0..<.match_length).reduce(grown = copied => [grown, grown[grown.count - offset.value]].flatten)[copied.count..]).flatten,
+         offsets: offset.offsets, at: state.at + .literal_length))))
+    ) -- (done => Decoding(output: [done.output, literals[done.at..]].flatten, offsets: done.offsets, held.huffman, held.tables))
+    resolved (offset: Number, literal_length: Number, offsets: Number[]) => offset > 3
+      ? (value: offset - 3, offsets: [offset - 3, offsets.0, offsets.1])
+      : (literal_length == 0 ? offset + 1 : offset) -- (index => index == 1 ? (value: offsets.0, offsets: offsets)
+        : (index == 4 ? offsets.0 - 1 : offsets[index - 1]) -- (value => (value: value, offsets: index == 2 ? [value, offsets.0, offsets.2] : [value, offsets.0, offsets.1])))
+    decoded (held: Decoding) => Bits(stream).backward -- (bits => (literal_table.fse(held.tables.literals, predefined.literals, 6), offset_table.fse(held.tables.offsets, predefined.offsets, 5), match_table.fse(held.tables.matches, predefined.matches, 6)) -- ((ll, of, ml) =>
+      (ll.start(bits), of.start(bits), ml.start(bits)) -- (states => (0..<count).reduce(made = (sequences: [], states: states) => made.states -- ((l, o, m) =>
+        (offset: 2 ^ o.symbol + bits.read(o.symbol), match_length: match_codes[m.symbol] -- (.base + bits.read(.bits)), literal_length: literal_codes[l.symbol] -- (.base + bits.read(.bits))) -- (sequence =>
+          (sequences: [made.sequences, sequence].flatten, states: (ll.next(l, bits), ml.next(m, bits), of.next(o, bits))))).sequences))))
+  }
+  // 3.1.1.3.2.2: a table is predefined, one repeated symbol, an FSE description, or the last one again
+  static Table<mode, symbols, log> := class ((Byte as symbol) if mode == 1 | (description: FSE.Description) if mode == 2) {
+    fse (last: FSE?, predefined: Number[], accuracy: Number) => mode == 0 ? FSE(predefined, accuracy) : mode == 1 ? FSE([0] * symbol, 0) ~~ .single = symbol : mode == 2 ? description.table : last
+  }
+
+  // 4.1 FSE: a state table spread from the normalised probabilities
+  static FSE := class = probabilities: Number[], accuracy: Number, single: Number? {
+    // 4.1.1 FSE Table Description: accuracy, then each probability in as few bits as the remainder needs
+    static Description := class (bytes: Byte[]) {
+      table => Bits(bytes).forward -- (bits => (bits.read(4) + 5) -- (accuracy => (0..).reduce_while(held = (probabilities: [], remaining: 2 ^ accuracy + 1) => held.remaining > 1, held =>
+        (held.remaining + 1).log2.ceil -- (width => bits.read(width) -- (raw => (raw - 1) -- (probability => (probabilities: [held.probabilities, probability].flatten, remaining: held.remaining - (probability < 0 ? 1 : probability)))))).probabilities -- (found => FSE(found, accuracy))))
+    }
+    static weights (bytes: Byte[]) => Description(bytes).table -- (table => Bits(bytes).backward -- (bits => (table.start(bits), table.start(bits)) -- (states => (0..).reduce_while(held = (weights: [], states: states) => !bits.empty, held => (weights: [held.weights, held.states.0.symbol].flatten, states: (held.states.1, table.next(held.states.0, bits)))).weights)))
+    size => 2 ^ accuracy
+    // 4.1.1: symbols with probability -1 take the last cells; the rest are spread by the step
+    cells => probabilities.enumerate -- (all => (all{.value == -1}.map(.index)) -- (rare => (size - rare.count) -- (open =>
+      all{.value > 0}.map(entry => [entry.index] * entry.value).flatten.enumerate.map((symbol: .value, at: (.index * ((size / 2).floor + (size / 8).floor + 3)) % size))
+      .sort_by(.at).map(.symbol), <-rare)))
+    states => cells.enumerate.map(cell => probabilities[cell.value] -- (probability => probability == -1 ? (symbol: cell.value, bits: accuracy, baseline: 0)
+      : cells[..<cell.index]{== cell.value}.count + probability -- (next => (accuracy - next.log2.floor) -- (bits => (symbol: cell.value, bits: bits, baseline: next * 2 ^ bits - size)))))
+    start (bits: Bits) => single !== None ? (symbol: single, bits: 0, baseline: 0) : states[bits.read(accuracy)]
+    next (state, bits: Bits) => single !== None ? state : states[state.baseline + bits.read(state.bits)]
+  }
+
+  // 4.1: bitstreams read forward from the lowest bit, or backward from the highest set bit of the last byte
+  static Bits := class = bytes: Byte[], position: Number = 0, reversed = false {
+    forward => this
+    backward => Bits(bytes, position: bytes.count * 8 - 8 + (bytes.last as Binary).length, reversed: true)
+    empty => reversed ? position <= 0 : position >= bytes.count * 8
+    read (count: Number) => (0..<count).map(at => reversed ? position - 1 - at : position + at).map(bytes[(. / 8).floor].bit(. % 8)) -- (taken => skip(count) -- (reversed ? taken : <-taken).reduce(acc = 0 => acc * 2 + .))
+    peek (count: Number) => Bits(bytes, position, reversed).read(count)
+    skip (count: Number): static => this ~~ .position = reversed ? position - count : position + count
+  }
+
+  // Writing: raw blocks of at most 128 KiB; choosing RLE or compressed blocks is an optimisation
+  static (bytes: Byte[]) as (=== Zstd) => Zstd(frames: [Frame(
+    header: Header(size_flag: 3, single: 1, checksummed: 1, dictionary_flag: 0, content_size: bytes.count as Little<64>),
+    blocks: bytes.chunk(2 ^ 17).enumerate.map(Block(header: ((.index == (bytes.count / 2 ^ 17).ceil - 1 ? 1 : 0) + 8 * .value.count) as Little<24>, content: .value)) -- (.empty ? [Block(header: 1 as Little<24>, content: [])] : .),
+    checksum: (XXH64.digest(bytes) % 2 ^ 32) as Little<32>)])
+
+  static optimised := {
+    {block: Block{raw && content.unique.count == 1 && size > 1}} => Block(header: (block.header.value + 2) as Little<24>, content: block.content.0)
+  }
+
+  static language = Language(".zst" | ".zstd",
+    level: { {compressed: Zstd} => compressed.bytes },
+    written: { {writing: Language.Writing} => writing.value as Byte[] as Zstd },
+    stored: optimised)
+}
+
+// XXH64 (https://github.com/Cyan4973/xxHash/blob/dev/doc/xxhash_spec.md), the frame's Content_Checksum
+XXH64 := class {
+  static primes = [0x9E3779B185EBCA87, 0xC2B2AE3D27D4EB4F, 0x165667B19E3779F9, 0x85EBCA77C2B2AE63, 0x27D4EB2F165667C5]
+  static wrap (n: Integer) => n % 2 ^ 64
+  static rotated (n: Integer, by: Number) => wrap(n * 2 ^ by + (n / 2 ^ (64 - by)).floor)
+  static round (acc: Integer, lane: Integer) => wrap(rotated(wrap(acc + lane * primes.1), 31) * primes.0)
+  static merged (acc: Integer, value: Integer) => wrap(acc.xor(round(0, value)) * primes.0 + primes.3)
+  static avalanche (h: Integer) => wrap(h.xor((h / 2 ^ 33).floor) * primes.1) -- (h => wrap(h.xor((h / 2 ^ 29).floor) * primes.2)) -- (h => h.xor((h / 2 ^ 32).floor))
+  static lane (bytes: Byte[]) => (<-bytes) as Binary
+
+  static digest (bytes: Byte[], seed: Integer = 0) => (bytes.count >= 32
+    ? bytes[..<(bytes.count / 32).floor * 32].chunk(32).reduce(accs = [wrap(seed + primes.0 + primes.1), wrap(seed + primes.1), seed, wrap(seed - primes.0)] => .chunk(8) -- (lanes => accs.enumerate.map(round(.value, lane(lanes[.index])))))
+      -- (accs => [1, 7, 12, 18].enumerate.map(rotated(accs[.index], .value)).sum -- (h => accs.reduce(held = wrap(h) => merged(held, .))))
+    : wrap(seed + primes.4))
+    -- (h => wrap(h + bytes.count))
+    -- (h => bytes[(bytes.count / 32).floor * 32..] -- (rest => rest.chunk(8){.count == 8}.reduce(held = h => wrap(rotated(held.xor(round(0, lane(.))), 27) * primes.0 + primes.3))
+      -- (h => rest[(rest.count / 8).floor * 8..] -- (tail => tail.chunk(4){.count == 4}.reduce(held = h => wrap(rotated(held.xor(wrap(lane(.) * primes.0)), 23) * primes.1 + primes.2))
+        -- (h => tail[(tail.count / 4).floor * 4..].reduce(held = h => wrap(rotated(held.xor(wrap(. * primes.4)), 11) * primes.0)))))))
+    -- avalanche(.)
+}

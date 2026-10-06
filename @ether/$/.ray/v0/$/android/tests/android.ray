@@ -1,0 +1,16 @@
+// Permission levels written as Android manifest permissions.
+
+mark ^keyword := external global
+
+camera := Grant(Access(who: Accessor.Permission.localhost), target: Device.Capability.camera)
+unless [camera] as Android ~= (*, "android.permission.CAMERA", *) { INFO@mark `AC25 the camera is not Android's CAMERA permission` }
+unless (@android <uses-permission android:name="android.permission.CAMERA"/>).target == Device.Capability.camera { INFO@mark `AC27 a uses-permission written inline is not a grant of its capability` }
+asked := "RECORD_AUDIO"
+android_block := @android {
+  <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- what the app asks for -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.{asked}"/>
+  </manifest>
+}
+unless android_block.count == 2 && android_block.last.target == Device.Capability.microphone { INFO@mark `AC28 a manifest block does not read its permissions and its hole` }

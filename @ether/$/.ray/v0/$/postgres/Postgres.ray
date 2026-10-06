@@ -1,0 +1,11 @@
+// psql, the PostgreSQL interactive terminal (https://www.postgresql.org/docs/current/app-psql.html)
+Postgres := Language(".postgres" | ".pgsql", written: SQL.written, of: SQL){
+  level => SQL.syntax + {
+    {at: Location} => SQL.Database(at: at, dialect: this)
+  }
+  // json_agg (https://www.postgresql.org/docs/current/functions-aggregate.html)
+  answered (at: Location, text: String) => Quest(name: "talk to a database without a process: its wire protocol, or the planned binary pipeline", goal: text)
+  sent (at: Location, text: String) => Quest(name: "talk to a database without a process: its wire protocol, or the planned binary pipeline", goal: text)
+  // The information schema's tables view (https://www.postgresql.org/docs/current/infoschema-tables.html)
+  listing = @sql SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public'
+}

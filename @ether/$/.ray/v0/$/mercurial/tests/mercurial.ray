@@ -1,0 +1,5 @@
+// Mercurial: revlogs of snapshots.
+
+mark ^keyword := external global
+
+unless Mercurial.fidelity == Language.Fidelity.snapshot { INFO@mark `VC20 mercurial does not keep snapshots` }

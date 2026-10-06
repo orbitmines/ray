@@ -41,6 +41,8 @@ Store := class: Hierarchy = at: Location = @local, format: Format? {
   static rows = Format(language: Language.ray)
   static columnar = Format(language: Columns.language)
   static keyed = Format(language: KeyValue.language)
+  static sqlite => Format(language: $.sqlite, file: false)
+  static postgres => Format(language: $.postgres, file: false)
 
   static Column := class = name: String, values: *[] {
     distinct => values.unique.count
@@ -88,6 +90,8 @@ Store := class: Hierarchy = at: Location = @local, format: Format? {
 
 StoreOptimizations := {
   {store: Store{at === @local || at.path ~= ⊢"memory"}} => Store.memory
+  {store: Store{at.scheme == "sqlite" || at.path ~= (".sqlite" | ".sqlite3" | ".db") ⊣}} => Store.sqlite
+  {store: Store{at.scheme == "postgres" || at.scheme == "postgresql"}} => Store.postgres
   {store: Store{at.path ~= ".kv" ⊣}} => Store.keyed
   {store: Store{at.path ~= ".columns" ⊣}} => Store.columnar
   {store: Store{at.path ~= ".ray" ⊣}} => Store.rows

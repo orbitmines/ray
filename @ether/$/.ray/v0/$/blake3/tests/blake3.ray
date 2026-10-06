@@ -1,0 +1,21 @@
+// BLAKE3 hashes of the official test vectors: inputs of the repeating bytes 0, 1, …, 250 (https://github.com/BLAKE3-team/BLAKE3/blob/master/test_vectors/test_vectors.json).
+
+mark ^keyword := external global
+
+// "input": the first n bytes of 0, 1, …, 250, 0, 1, … (test_vectors.json, "_comment")
+repeating (n: Number) => (0..<n).map(. % 251)
+
+// input_len 0: the empty input, one empty chunk compressed as the root (test_vectors.json; BLAKE3 §2.4, §2.6)
+unless BLAKE3.write(repeating(0)) as Byte³² as Hexadecimal⁶⁴ == "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262" { INFO@mark `BLK1 the empty input does not hash as in the official test vectors` }
+// input_len 1 (test_vectors.json)
+unless BLAKE3.write(repeating(1)) as Byte³² as Hexadecimal⁶⁴ == "2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213" { INFO@mark `BLK2 one byte does not hash as in the official test vectors` }
+// input_len 1023: one chunk, its last block short (test_vectors.json)
+unless BLAKE3.write(repeating(1023)) as Byte³² as Hexadecimal⁶⁴ == "10108970eeda3eb932baac1428c7a2163b0e924c9a9e25b35bba72b28f70bd11" { INFO@mark `BLK3 1023 bytes do not hash as in the official test vectors` }
+// input_len 1024: exactly one full chunk (test_vectors.json)
+unless BLAKE3.write(repeating(1024)) as Byte³² as Hexadecimal⁶⁴ == "42214739f095a406f3fc83deb889744ac00df831c10daa55189b5d121c855af7" { INFO@mark `BLK4 one full chunk does not hash as in the official test vectors` }
+// input_len 1025: two chunks under a parent node (test_vectors.json; BLAKE3 §2.5)
+unless BLAKE3.write(repeating(1025)) as Byte³² as Hexadecimal⁶⁴ == "d00278ae47eb27b34faecf67b4fe263f82d5412916c1ffd97c8cb7fb814b8444" { INFO@mark `BLK5 1025 bytes, two chunks, do not hash as in the official test vectors` }
+// input_len 2048: two full chunks (test_vectors.json)
+unless BLAKE3.write(repeating(2048)) as Byte³² as Hexadecimal⁶⁴ == "e776b6028c7cd22a4d0ba182a8bf62205d2ef576467e838ed6f2529b85fba24a" { INFO@mark `BLK6 two full chunks do not hash as in the official test vectors` }
+// input_len 3072: three chunks, a left subtree of two and a right of one (test_vectors.json; BLAKE3 §2.5)
+unless BLAKE3.write(repeating(3072)) as Byte³² as Hexadecimal⁶⁴ == "b98cb0ff3623be03326b373de6b9095218513e64f1ee2edd2525c7ad1e5cffd2" { INFO@mark `BLK7 three chunks do not hash as in the official test vectors` }

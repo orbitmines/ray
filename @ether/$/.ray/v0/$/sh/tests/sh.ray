@@ -1,0 +1,23 @@
+// Commands: written as shell, read from shell.
+
+mark ^keyword := external global
+
+unless Shell.quoted("plain-word") == "plain-word" { INFO@mark `PC1 a plain word is quoted` }
+unless Shell.quoted("it's here") == "'it'\\''s here'" { INFO@mark `PC2 a quote is not escaped for the shell` }
+unless Process(command: "echo", arguments: ["a b"]).script == "echo 'a b'" { INFO@mark `PC3 a command is not written as shell` }
+read_command := @sh`FOO=1 ls -la "my dir"`
+unless read_command.command == "ls" { INFO@mark `PC4 a shell command is not read` }
+unless read_command.arguments.last == "my dir" { INFO@mark `PC5 a double-quoted argument is not one word` }
+unless read_command.environment.first.name == "FOO" { INFO@mark `PC6 an assignment before a command is not its environment` }
+unless @sh`ls | wc -l`.piped.command == "ls" { INFO@mark `PC7 a pipeline is not read as one process into another` }
+unless Process(command: "a").into(Process(command: "b")).script == "a | b" { INFO@mark `PC8 a pipe is not written as shell` }
+
+folder := "my dir"
+listed := @sh ls -la {folder}
+unless listed.command == "ls" && listed.arguments.last == "my dir" { INFO@mark `PC9 a hole in a single-line sh fragment is not one word holding its value` }
+sh_block := @sh {
+  # into the folder, then list it
+  cd {folder}
+  ls -la
+}
+unless sh_block.command == "sh" && sh_block.arguments.last ~= (*, "# into the folder, then list it", *, "cd 'my dir'", *, "ls -la", *) { INFO@mark `PC10 an sh block is not one script keeping its comment, with the hole quoted` }

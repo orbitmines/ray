@@ -42,5 +42,5 @@ if sha == Encoding.Hash(value: 4, algorithm: $.sha256) { INFO@mark `EN7 digests 
 unless sha.value == 5 { INFO@mark `EN17 a digest forgot what it was made of` }
 unless sha.algorithm === $.sha256 { INFO@mark `EN18 a digest forgot how` }
 
-if $.sha256 === $.sha1 { INFO@mark `EN19 two algorithms are the same` }
+if $.md5 === $.sha1 { INFO@mark `EN19 two algorithms are the same` }
 unless $.md5 === $.md5 { INFO@mark `EN20 an algorithm is not itself` }

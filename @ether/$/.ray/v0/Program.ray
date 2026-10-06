@@ -17,6 +17,14 @@ Program &+= {
   declares (head: String) => written.some(.code ~= ⊢(head, " " | "(" | ":"))
   precedence (spelled: String) => written.index_of(written{.code ~= ⊢((Modifier.spellings, " ")?, spelled, " ")}.first)
 
+  writes (name: String) => written{.code ~= ⊢(name, " "[], (":=" | "=" | "&=" | "|=" | "+=" | "-=" | ":"))}
+  depends (name: String, seen: String[] = []) => [[name], writes(name).map(statement => variables{. != name && !seen.contains(.) && statement.mentions(.)}).flatten.unique
+    .map(depends(., [seen, [name]].flatten)).flatten].flatten.unique
+  slice (name: String) => depends(name) -- (names => written{statement => names.some(writes(.).contains(statement))})
+
+  effects => Effects.of(this)
+  schedule (on = @me) => on.jobs |= this
+
   running => Running(program: this)
   & => running.&
   expand => written

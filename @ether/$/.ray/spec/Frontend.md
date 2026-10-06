@@ -45,6 +45,7 @@ and `…/UI.ray`, cited as *Geometry:line* and *UI:line*.
   (`external? javascript`). Partly F-D7, F-D9b. **Q.** Recommend: a browser extension is another
   HTML platform level; the page's URL is `@me/device/location`; direct JS access is `$.js` code run
   through the DOM protocol, not an external.
+  **Follows (2026-10-06):** a browser extension is another HTML platform level (`UI.HTML.Extension`, beside `Chromium`/`Firefox`/`Safari`); the page's URL is `@me/device/location`; direct JS access is `$.js` code sent through the DOM protocol, not an external. From F-D2 (a renderer is a level), W8 (devices under `@me/device`) and L§8.4/L§9.1 (no externals, so JS is `$.js`).
 - **F-D12: knowing a value is being chosen.** *Geometry:105–107, 144, 190*: `if choosing` (this
   variable is being chosen), `if choosing radius`, a placeholder that is the default but is reset on
   clicking choose, `Ball(radius: choose? ?? 5m)` ("Choose + default"). Partly W9, v0
@@ -123,6 +124,7 @@ and `…/UI.ray`, cited as *Geometry:line* and *UI:line*.
   Avatars without a URL are dropped automatically because `Link` needs one (*Feature:436*).
   What is `Link`, and what is it in a terminal (OSC 8 hyperlinks)?
 - **F-C4:** `@fadi as Author`, `Author: Player = { }`: `as` renders a value through a class?
+  **Follows (2026-10-06):** yes: `as` converts, and a value renders through the first rendering along its equivalence graph, so `@fadi as Author` renders `@fadi` through `Author`'s rendering. From F-D15 (Decided draft) and L§3.5 (lookup walks the equivalence graph).
 - **F-C5:** `DownloadButton`, `LoginButton()`: what they do, their state, and how they behave
   in the TUI.
 - **F-C6:** an Article's content (`class Article (name: String) < name`, `Book`, `Profile`,
@@ -165,6 +167,7 @@ box-sized ellipse, `Space.grid(extent, loop)`, `Curve`, `Polygon`, `Fractal`, `S
   torus; `Plane` is an unbounded 2D space; continuous space is the limit of a grid's divisibility.
   Solids are Shapes over those spaces. `curvature` and `Straight` are properties of a Curve.
   Effective dimension is per point (fractals).
+  **Follows (2026-10-06):** `n D Grid` is `Space.grid`, each of whose axes may loop (one looped axis gives a cylinder, two a torus); `Plane` is an unbounded 2D space; continuous space is the limit of a grid's divisibility; solids are Shapes over those spaces; `Straight` is a property of a Curve; effective dimension is per point. From U12 (Geometry), v0's `Space.grid(extent, loop)`, R5.1 (loops) and R1.8/R4.3 (continuous structures come with Geometry).
 - **F-G3: direction words.** *Geometry:276–292*: per axis `left <<- previous <- horizontal | x ->
   next ->> right`, `bottom <<- down <- vertical | y -> up ->> top`,
   `behind <<- backward <- depth | z -> forward ->> in_front`; `Center<D>` as
@@ -182,15 +185,18 @@ box-sized ellipse, `Space.grid(extent, loop)`, `Curve`, `Polygon`, `Fractal`, `S
   Decided: a graph space's edges may carry a length (default 1), which its metric sums.
   `x discretized (1 / m)` samples a continuous shape on a grid of that resolution; points that sample
   to the same cell superpose, resolved by the renderer's policy (e.g. coverage).
+  **Follows (2026-10-06):** a graph space's edges may carry a length (default 1), which its metric sums along the shortest path; `x discretized (1 / m)` samples a shape on a grid of that resolution, and what lands in one cell superposes, resolved by the renderer's policy. From F-D3 (general solutions), R3.4 (the metric over paths) and L§4.4 (overlaps superpose, a policy resolves them).
 - **F-G5: fields over space.** *Geometry:20, 202*: "a point has a color", colour as information of
   each point, which is an approximation. **Q.** Recommend: a per-point value is a function on the
   shape's points (`color: (p: Point) => Color`); `fill` is its constant case, Gradient/Pattern are
   others.
+  **Follows (2026-10-06):** a per-point value is a function on the shape's points (`Pointwise := (point: Vector): Color`), and a constant `fill` is its parameterless case; Gradient and Pattern are others. From P5.3/G2.5 (a value per point is a function; a constant is its parameterless case).
 - **F-G6: holes, smooth unions, connectedness.** *Geometry:34, 204–206*: holes as negative
   components, `LocallyConnected` (no jumps between neighbourhoods), a smooth join of
   `Ball - Square` at its boundary. Partly T2.4, v0 winding-number `contains`. **Q.** Recommend
   Decided: a hole is a subtracted component (`shape - Ball(…)`); `LocallyConnected` is a narrowing
   on a Space; a smooth join is a component with a blend radius (`a &+ b smoothed r`).
+  **Follows (2026-10-06):** a hole is a subtracted component (`shape - Ball(…)`); `LocallyConnected` is a narrowing on a Space; `a &+ b smoothed r` is a join with a blend radius (library). From T2.4/T4.2 (a hole is a subtracted component) and narrowings on Spaces.
 - **F-G7: shader output.** *Geometry:1*: translations to GLSL inferred from the types' structure
   (signed distance functions); exact vs approximate equivalences. P4.7 keeps shaders as a note.
   **Q.** Recommend, later: a `$.glsl` level writes a shape as its signed distance function derived
@@ -210,6 +216,7 @@ From the drafts review (2026-10-06).
   `@me/device/controllers/<id>`; a reconnecting device gets back the id its history shows, unless
   another claimed it. A new controller is a guest until assigned a character. There may be many
   keyboards: `@me/device/keyboard` is their superposition, `…/keyboard#0` one of them.
+  **Follows (2026-10-06):** an interface is a location with an extent into a world, so a window or document is both an Interface and a World; controllers are `@me/device/controllers/<id>`; a reconnecting device takes back the id its history shows unless another claimed it; a new controller is a guest until assigned a character; many keyboards are a superposition, `@me/device/keyboard`, with `…/keyboard#0` one of them. From W1.2 (a World is a Location), W8 (`@me/device/<…>`), history (reclaiming an id) and superposition.
 - **F-I2: switching the view of a value.** *private-journal `Project - Controller = Keyboard (2026).md:1–79`*
   (paraphrased; the rest is W7 backlog): a trigger switches the view between Many, Array, Graph and Tree. **Decided (draft).**
   That switch is a choice of rendering level over the same Ray, not a change of the value. The rest

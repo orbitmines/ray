@@ -1,4 +1,4 @@
-Running := class = program: Program, at: Program?, started: boolean = false, results: *[] = [] {
+Running := class: Quest = program: Program, at: Program?, started: boolean = false, results: *[] = [] {
   static branches: Running[] = []
   static deferred: Running[] = []
 
@@ -8,6 +8,9 @@ Running := class = program: Program, at: Program?, started: boolean = false, res
   is_terminal | final => started && !at
   intermediate => started && !is_terminal
   holds => !is_terminal
+  goal => program
+  done => is_terminal
+  inputs => steps.zip(results){.0 is Nondeterministic}
 
   stepped => {
     at = started ? at.next : steps.first
@@ -16,7 +19,7 @@ Running := class = program: Program, at: Program?, started: boolean = false, res
   } -- this
   next => Running(program, at, started, results: [results]).stepped
   finished => (stepped while holds) -- this
-  cancel => (at, started = None, true) -- this
+  cancel | stop => (at, started = None, true) -- this
 
   static round => branches{holds}.map(.stepped)
   static until (condition) => (round while !condition() && branches.some(.holds)) -- this
@@ -24,6 +27,7 @@ Running := class = program: Program, at: Program?, started: boolean = false, res
 
 dynamically {name} = {value} ^keyword => external rule name value
 dynamically {name} := {value} ^keyword => external rule name value
+dynamically {name} &= {value} ^keyword => name -- (base => external rule name (base & value))
 dynamically if{ }{cond}{ }{block} ^keyword => Dynamic(program: () => if cond block)
 dynamically{ }{value} ^keyword => Dynamic(program: Program(code: external ** value))
 Dynamic := class = program: Program {
@@ -31,6 +35,10 @@ Dynamic := class = program: Program {
   as (=== boolean) => program() as boolean
 }
 dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR `assertion failed`) -- .empty
+
+Quantity.Temporal &+= {
+  right-to-left sleep => Time.now -- (start => await dynamically (Time.now >= start + this))
+}
 
 Component := class {
   {literal label ^label}\ ^punctuation => return this

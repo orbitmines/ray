@@ -248,3 +248,18 @@ unless (looking()
 unless (looking()
   $missing_file 4) == 3 { INFO@mark `ER20 an error of a type was caught by another function's handler` }
 unless looking().diagnostics.last.type === NotFound { INFO@mark `ER21 an error does not keep the type written after @` }
+
+// A running program is a quest (P4.8); sleeping waits on the time (P4.11); a dynamic `&=` keeps one contribution (P5.7)
+quest_run := Program(code: { 1 }).running
+unless quest_run is Quest { INFO@mark `FWQ1 a running program is not a quest` }
+if quest_run.done { INFO@mark `FWQ2 a program not yet stepped is done` }
+unless quest_run.finished.done { INFO@mark `FWQ3 a finished program is not a done quest` }
+unless Program(code: { 1 }).running.stop.done { INFO@mark `FWQ4 a stopped program is not done` }
+slept_from := Time.now
+sleep (1 ms)
+unless Time.now >= slept_from + 1 ms { INFO@mark `FWQ5 sleeping did not wait` }
+contributed := 1
+contribution := 2
+dynamically contributed &= contribution
+contribution = 3
+if contributed == (1 & 2 & 3) { INFO@mark `FWQ6 a dynamic contribution kept its earlier value` }

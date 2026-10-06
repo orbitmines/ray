@@ -12,7 +12,7 @@ Geometry := class {
 
   Metric := (a: Vector, b: Vector): Length
   euclidean: Metric = (a, b) => √(Space.current.between(a, b).map(. ^ 2).sum)
-  graph: Metric = (a, b) => Place(a).shortest_path_to(Place(b)).count - 1
+  graph: Metric = (a, b) => Place(a).path_to(Place(b)) -- (. is Quest ? . : .map(path => path.zip(path.rest).map(Space.current.edge_length(.0.at, .1.at)).sum).min)
 
   Axis := class: Ray = continuous: boolean = true, loop: boolean = false, extent: Length?, orientation: -1 | +1 = +1 {
     coordinate => continuous ? Number : Integer
@@ -26,8 +26,13 @@ Geometry := class {
     static plane = Space([Axis(), Axis()])
     static screen = Space([Axis(), Axis(orientation: -1)])
     static current: Space = plane
-    static grid (extent: Vector, loop: boolean = false) => Space(extent.map(Axis(continuous: false, loop: loop, extent: .)), graph)
+    static grid (extent: Vector, loop: boolean | boolean[] = false) => Space(extent.enumerate.map(Axis(continuous: false, loop: loop is boolean ? loop : loop[.index] ?? false, extent: .value)), graph)
     static of (structure: Graph) => Space([], graph, Projection.embedding(structure), structure)
+    static Plane := Space{dimension == 2 && axes.every(.extent == None && !.loop)}
+    static Grid := Space{discrete && vertices == None}
+    static Cylinder := Space{axes{loop}.count == 1}
+    static Torus := Space{dimension == 2 && axes.every(.loop)}
+    static LocallyConnected := Space{positions.every(p => neighbours(p).every(q => neighbours(q).contains(p)))}
     dimension => axes.count
     discrete => vertices != None || !axes.some(.continuous)
     sides => Side{axis < dimension}
@@ -36,6 +41,7 @@ Geometry := class {
     between (a: Vector, b: Vector) => Vector(axes.zip(b - a).map(.0.between(.1)))
     seen (at: Vector, frame: Vector = Vector(), size: Vector = Vector()) => Vector(axes.enumerate.map(axis => axis.value.seen(at[axis.index] ?? 0, frame[axis.index] ?? 0, size[axis.index] ?? 0)))
     neighbours (at) => vertices ? vertices.outgoing(at) : sides#.map(wrapped(at + .vector(dimension))){holds(.)}
+    edge_length (from, to) => vertices?.edges.find(.from == from && .to == to)?.measured ?? 1
     positions => vertices ? vertices.vertices : axes.map(.positions).reduce(acc = [[]] => acc.pairs(.).map([.0, [.1]].flatten)).map(Vector(.))
   }
   Place := class: Ray = at: *, space: Space = Space.current {
@@ -83,7 +89,8 @@ Geometry := class {
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
   }
-  Paint := Color | Gradient | Pattern | Section
+  Paint := Color | Gradient | Pattern | Section | Pointwise
+  Pointwise := (point: Vector): Color
   Stop<K = Length, V = Number> := class = at: K, value: V {
     -> (other: Stop) => Stops([this, other])
   }
@@ -211,7 +218,7 @@ Geometry := class {
     flow: block | inline | grid | layered = block, gap: Vector = Vector(), columns: Number = 1, wrap: boolean = false,
     align: (start | center | end | between | around | stretch | middle | justify)? = parent?.align,
     fill: Paint?, color: Paint? = parent?.color, font: Font = parent ? (parent.font ~~ .size = parent.font_size) : Font.base, stroke: Stroke?, radius: (Length | Number)[] = [0px],
-    effects: Effect[] = [], blend: normal | multiply | screen | overlay | darken | lighten | difference = normal,
+    effects: Effect[] = [], holes: Shape[] = [], smoothing: Length = 0px, blend: normal | multiply | screen | overlay | darken | lighten | difference = normal,
     overflow: visible | clip | scroll = visible, scrollbar: shown | hidden = shown, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
     cursor: default | pointer | text | grab | grabbing | move | wait | none = default, touch: auto | none | pan_x | pan_y = auto,
     transition: Transition?, styles: String[] | Dynamic = [], content: * = None, location: Location?, palette: *? = parent?.palette,
@@ -238,12 +245,15 @@ Geometry := class {
     facets => children.map(.facets).flatten
     edges => children.map(.edges).flatten(1)
     winding (point: Vector) => facets.map(.crossing(point)).sum
-    contains (point: Vector) => transform.inverse.applied(point) -- (p => space.vertices ? cells.some(.at == p)
+    contains (point: Vector) => holes.some(.contains(point)) ? false : (transform.inverse.applied(point) -- (p => space.vertices ? cells.some(.at == p)
       : space.discrete ? cells.some(cell => (0..<space.dimension).every(cell.at[.] <= p[.] < cell.at[.] + 1))
       : rectangular ? (0..<space.dimension).every(0 <= p[.] < size[.])
-      : boundary.winding(p) != 0)
+      : boundary.winding(p) != 0))
+    discretized (resolution: Length) => Space.grid(size.map((. / resolution).ceil)) -- (grid => Shape(space: grid, size: Vector(grid.axes.map(.extent)), fill: fill, stroke: stroke,
+      cells: grid.positions{cell => contains((cell + Vector(cell.map(1 / 2))) * resolution)}.map(Cell(., 0..<grid.dimension))))
     dimension => ERROR@Type `fractal dimension is not implemented yet`
     painted (paint: Paint?) => paint is Section ? paint(this) : paint
+    sampled (paint: Paint?, point: Vector) => paint is Pointwise ? paint(point) : painted(paint)
     displayed (name: String) => this.`name` is Animated ? this.`name`.value
       : transition ? this.`name`.history.last -- (.previous?.value.mix(.value, transition.easing(((Time.now - .when) / transition.duration) min 1)) ?? .value) : this.`name`
     projected (by: Projection) => with Space.current = space {
@@ -259,6 +269,8 @@ Geometry := class {
     intrinsic (width: Length) => content is String ? font.size * font.line_height * lines(width).count : 0px
 
     compounds + (effect: Effect) => (effects ,= effect) -- this
+    compounds - (hole: Shape) => (holes ,= hole) -- this
+    smoothed (radius: Length) => (smoothing = radius) -- this
     narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? writes.for(.entered(this, None)) -- this : reachable.filter(narrowing.entered(., None)))
     {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
 
@@ -314,6 +326,7 @@ Geometry := class {
     edges => points -- .zip([.rest, (.first if segments is Loop)].flatten)
     facets => edges.map(Facet([.0, .1]))
   }
+  Straight := Curve{points -- (p => p.every(((p.last - p.first).x * (. - p.first).y - (p.last - p.first).y * (. - p.first).x) == 0))}
   Mesh := class: Shape = facets: Facet[]
   Polygon := Shape{boundary is Curve{segments.every(. is Vector)}}
 
@@ -359,6 +372,7 @@ Geometry := class {
 }
 
 Edge &+= {
+  measured: Number | Geometry.Length = 1
   ∂ => [Geometry.Cell(from, [], -1), Geometry.Cell(to, [], 1)]
 }
 

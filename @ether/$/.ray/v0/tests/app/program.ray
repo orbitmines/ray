@@ -177,3 +177,16 @@ ui_project := Project.known(Language.ray.bundled("UI")).load
 unless ui_project.loaded && !ui_project.loading { INFO@mark `PJ1 a project bundling a language that depends back on it does not finish loading` }
 unless Language.project("web").loaded { INFO@mark `PJ2 a language in a mutual dependency is not loaded` }
 unless Language.project("web").installed.some(=== ui_project) { INFO@mark `PJ3 a mutual dependency loads a second copy of the project it comes back to` }
+
+// A variable's slice is the part of its program it was written from (P1.14); effects are inferred (P1.24)
+sliced := Program(code: {
+  a := 1
+  b := 2
+  c := a + 1
+})
+unless sliced.slice("c").count == 2 { INFO@mark `FWP1 a variable's slice is not what it was written from` }
+if sliced.slice("c").some(.code ~= ⊢"b") { INFO@mark `FWP2 a slice holds what the variable does not depend on` }
+unless Program(code: { 1 + 1 }).effects.empty { INFO@mark `FWP3 a program with no effects is said to have some` }
+
+// A language is recognised by the readings that accept the text (L§9.1.2)
+unless Language.detected("x := 1").contains(Language.ray) { INFO@mark `FWP4 Ray text is not recognised as Ray` }

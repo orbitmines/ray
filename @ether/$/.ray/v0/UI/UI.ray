@@ -235,6 +235,20 @@ when {value} changes {{action}} ^keyword => Program(code: external ** action).wh
 after {delay: Quantity.Temporal} {{action}} ^keyword => Program(code: external ** action).after(delay)
 {action} after {delay: Quantity.Temporal} ^keyword => Program(code: external ** action).after(delay)
 
+Device &+= {
+  static Controller := class = id: Number.Nat, held: *, character: Character? {
+    guest => character === None
+  }
+  controllers: Controller[] = []
+  location: Location?
+
+  free (id: Number.Nat) => !controllers.some(.id == id)
+  reclaimed (held) => controllers.history.map(.value).flatten{.held == held && free(.id)}.last?.id
+  connected (held) => controllers{.held == held}.first ?? (Controller(reclaimed(held) ?? (0..).find(free(.)), held) ~~ controllers.push(.))
+  disconnected (held) => controllers = controllers{.held != held}
+  keyboards => controllers{.held is Keyboard}.held
+}
+
 Language.Image := class: Language {
   static extensions = ".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif"
   level := {

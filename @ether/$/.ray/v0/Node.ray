@@ -157,7 +157,7 @@ Node &+= {
   ⊣ => Anchored(pattern: this, at_end: true)
 }
 None &+= {
-  chainable != (other) => true
+  chainable != (other) => other !== None
   !~= (pattern) => true
 }
 Anchored := class = pattern: Node, at_start: boolean = false, at_end: boolean = false {

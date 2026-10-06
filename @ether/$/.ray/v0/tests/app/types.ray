@@ -146,7 +146,7 @@ unless Both(left: 1, right: 2, tag: 3).doubled == 6 { INFO@mark `HD16 class: A &
 // Negations on nothing answer true (T1.8)
 unless None != 1 { INFO@mark `NGN1 nothing is said to be one` }
 unless None !~= "a" { INFO@mark `NGN2 nothing is said to match` }
-unless None != None { INFO@mark `NGN3 a negation on nothing does not answer true` }
+unless None != 5 && !(None != None) { INFO@mark `NGN3 a negation on nothing does not answer true against something, or holds against nothing` }
 cleared_vertex := [1, 2].entry
 kept_vertex := cleared_vertex
 cleared_vertex = None

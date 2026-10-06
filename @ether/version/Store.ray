@@ -26,14 +26,14 @@ Store := class: Hierarchy = at: Location = @local, format: Format? {
   static Row := class = type: String, id: String, fields: (name: String, value: String)[] {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
     static (instance) as (=== Row) => Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
-      fields: instance.fields{!Visibility.secret(.)}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.name{is UUID}#.first : .value))))
+      fields: instance.fields{!.unreadable}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.name{is UUID}#.first : .value))))
     instance => Language.ray.read((type, "(name: ", Language.ray.write(id as UUID), fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String)
   }
 
   static Format := class = language: Language, file = true, versioned = false {
     read (store: Store, type) => (versioned ? language.read(store.at)?.value : file ? language.read(store.at.content) : language.read(store.at)[type.name].map(row => Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
     kept (store: Store, instance) => versioned ? store.history.appended(store.at, language)
-      : file ? store.at.write(language.write(store.children))
+      : file ? (store.at.content = language.write(store.children))
       : language.read(store.at).executed(language.write([instance as Row]))
   }
 

@@ -1,8 +1,10 @@
 // Time Zone Information Format (https://datatracker.ietf.org/doc/html/rfc8536)
-TZif := class (
+TZif := class: Language (
   v1: Block<Binary₃₂>,
   (v2: Block<Binary₆₄>, \n, footer: Rule?, \n) if v1.version != ₂0
 ) {
+  static extensions = ".tzif"
+
   // 3.1 TZif Header and 3.2 TZif Data Block
   static Block<Moment> := class (
     "TZif",
@@ -36,5 +38,10 @@ TZif := class (
   data => v2 ?? v1
   at (time: Time) => (time as s).floor -- (seconds => data.type_at(seconds) -- (type => (offset: type.offset seconds, daylight: type.daylight == 1, abbreviation: data.named(type), rule: footer if data.after_last(seconds))))
 
-  static language = Language(".tzif", level: { {zone: TZif} => zone }, written: { {writing: Language.Writing{value is TZif}} => writing.value as Byte[] })
+  static level := {
+    {zone: TZif} => zone
+  }
+  static written := {
+    {writing: Language.Writing{value is TZif}} => writing.value as Byte[]
+  }
 }

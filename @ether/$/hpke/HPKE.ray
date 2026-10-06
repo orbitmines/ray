@@ -2,19 +2,22 @@
 HPKE := class: Language = kem: Encoding.Agreement = X25519, kdf: Encoding.Digest = SHA256, aead: Encoding.Symmetric = ChaCha20Poly1305 {
   static extensions = ".hpke"
 
-  // DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20Poly1305 by their identifiers (RFC 9180 §7.1, §7.2, §7.3)
-  static identified (algorithm) => algorithm === X25519 ? 0x0020 : algorithm === SHA256 ? 0x0001 : algorithm === ChaCha20Poly1305 ? 0x0003
-    : Program(name: "an HPKE identifier for this algorithm", goal: algorithm)
-  static i2osp (number: Number, count: Number) => number as Binary{length == 8 * count} as Byte[]
+  // DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20Poly1305 by their identifiers, two bytes each (RFC 9180 §7.1, §7.2, §7.3)
+  static ids := {
+    {algorithm: *{=== X25519}} => 0x0020
+    {algorithm: *{=== SHA256}} => 0x0001
+    {algorithm: *{=== ChaCha20Poly1305}} => 0x0003
+    {algorithm} => Program(name: "an HPKE identifier for this algorithm", goal: algorithm)
+  }
+  static identified (algorithm) => Compiler.reduced(algorithm, ids) as Binary₁₆ as Byte[]
 
-  kem_suite => ["KEM".bytes, i2osp(identified(kem), 2)].flatten
-  suite => ["HPKE".bytes, [kem, kdf, aead].map(i2osp(identified(.), 2))].flatten
-  hkdf => Noise(hash: kdf)
-  size => hkdf.size
+  kem_suite => ["KEM".bytes, identified(kem)].flatten
+  suite => ["HPKE".bytes, [kem, kdf, aead].map(identified(.))].flatten
+  size => kdf.size
 
   // LabeledExtract and LabeledExpand: "HPKE-v1", the suite and the label before what is extracted or expanded (RFC 9180 §4)
-  extracted (suite: Byte[], salt: Byte[], label: String, ikm: Byte[]) => hkdf.hmac(salt, ["HPKE-v1".bytes, suite, label.bytes, ikm].flatten)
-  expanded (suite: Byte[], prk: Byte[], label: String, info: Byte[], length: Number) => hkdf.expanded(prk, [i2osp(length, 2), "HPKE-v1".bytes, suite, label.bytes, info].flatten, length)
+  extracted (suite: Byte[], salt: Byte[], label: String, ikm: Byte[]) => HKDF(kdf).extracted(salt, ["HPKE-v1".bytes, suite, label.bytes, ikm].flatten)
+  expanded (suite: Byte[], prk: Byte[], label: String, info: Byte[], length: Number) => HKDF(kdf).expanded(prk, [length as Binary₁₆ as Byte[], "HPKE-v1".bytes, suite, label.bytes, info].flatten, length)
 
   // DeriveKeyPair for X25519: the secret expanded from the input keying material (RFC 9180 §7.1.3)
   derived (ikm: Byte[]) => kem.pair(expanded(kem_suite, extracted(kem_suite, [], "dkp_prk", ikm), "sk", [], 32))
@@ -30,7 +33,7 @@ HPKE := class: Language = kem: Encoding.Agreement = X25519, kdf: Encoding.Digest
 
   // The encryption context: each message's nonce is the base nonce XOR the sequence number (RFC 9180 §5.2, §5.3)
   static Context := class = hpke: HPKE, key: Byte[], base_nonce: Byte[], exporter: Byte[], seq: Number = 0 {
-    nonce => base_nonce.zip(HPKE.i2osp(seq, base_nonce.count)).map((a, b) => a ~x|| b)
+    nonce => base_nonce.zip(seq as Binary{length == 8 * base_nonce.count} as Byte[]).map((a, b) => a ~x|| b)
     sealed (aad: Byte[], plaintext: Byte[]) => hpke.aead.sealed(key, nonce, aad, plaintext) ~~ (seq += 1)
     opened (aad: Byte[], ciphertext: Byte[]) => hpke.aead.opened(key, nonce, aad, ciphertext) ~~ (seq += 1)
     exported (context: Byte[], length: Number) => hpke.expanded(hpke.suite, exporter, "sec", context, length)

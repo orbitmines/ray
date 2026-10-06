@@ -9,7 +9,7 @@ posted := HTTP.Request(method: HTTP.Method.post, target: @http://example.com/, b
 unless posted as HTTP.v1_1 == "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 2\r\n\r\nhi" { INFO@mark `HT3 a body is not framed by its length` }
 answered := HTTP.v1_1.read("HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\ncontent-type: text/plain\r\n\r\nnope")
 unless answered.status.code == 404 { INFO@mark `HT4 a status line does not give its code` }
-unless answered.status.kind == HTTP.Status.Kind.client_error { INFO@mark `HT5 404 is not a client error` }
+unless answered.status is HTTP.Status.ClientError && !(answered.status is HTTP.Status.ServerError) { INFO@mark `HT5 404 is not a client error` }
 unless answered.fields["Content-Type"] == "text/plain" { INFO@mark `HT6 a field name is read case-sensitively` }
 unless answered.text == "nope" { INFO@mark `HT7 a body of a given length is not read` }
 chunked := HTTP.v1_1.read("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n1;x=y\r\n!\r\n0\r\n\r\n")

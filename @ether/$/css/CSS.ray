@@ -1,37 +1,37 @@
 // CSS Snapshot (https://www.w3.org/TR/css-2023/)
+// The headers read CSS and write it; written inline, a Ray value in braces is a hole in a selector or a value, and a declaration whose value is None is left out
 CSS := class: Language {
   static extensions = ".css"
 
-  Rule := class = selector: String, declarations: ((property: String, value: String) | Comment)[], within: String?
-  Keyframes := class = name: String, frames: (at: Probability, declarations: ((property: String, value: String) | Comment)[])[]
-  Comment := class = text: String
-  Sheet := class = rules: (Rule | Keyframes | Comment)[] = []
+  static Blank = (" " | \t | \n | \r)[]
+  // Comments (https://www.w3.org/TR/css-syntax-3/#consume-comment)
+  static Comment := class ("/*", text: (!"*/")[], "*/")
+  // Declarations; property names are ASCII case-insensitive, custom properties ("--") case-sensitive (https://www.w3.org/TR/css-syntax-3/#declaration, https://www.w3.org/TR/css-variables-1/#defining-variables, https://www.w3.org/TR/CSS2/syndata.html#characters)
+  static Property = ("--", (Char.Word | "-")[]) | ((Char.Letter | "-"), (Char.Word | "-")[]).lower_case
+  static Declaration = (Blank, property: Property, Blank, ":", Blank, value: (!";" && !"}")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, ";")
+  static Declarations = (Declaration | (Blank, Comment))[]
 
-  syntax := Compiler.default + {
-    // Comments (https://www.w3.org/TR/css-syntax-3/#consume-comment)
-    /*{literal text}*/ => Comment(text)
-    // Declarations; property names are ASCII case-insensitive, custom properties ("--") case-sensitive (https://www.w3.org/TR/css-syntax-3/#declaration, https://www.w3.org/TR/css-variables-1/#defining-variables, https://www.w3.org/TR/CSS2/syndata.html#characters)
-    {property}:{value}; => ((property as String) -- (. ~= ⊢"--" ? . : .lower_case), value) if value != None
-    // Style rules (https://www.w3.org/TR/css-syntax-3/#style-rules)
-    {selector}{`{`}{declarations: *[]}{`}`} => Rule((selector as String).trimmed, declarations{!= None})
-    // At-rule names and the keyframe selectors from and to are ASCII case-insensitive (https://www.w3.org/TR/css-syntax-3/#at-rule, https://www.w3.org/TR/css-animations-1/#keyframes, https://www.w3.org/TR/css-values-4/#keywords)
-    @{"keyframes".ignore_case} {name}{`{`}{frames: *[]}{`}`} => Keyframes((name as String).trimmed, frames)
-    {"from".ignore_case}{`{`}{declarations: *[]}{`}`} => (at: 0, declarations: declarations{!= None})
-    {"to".ignore_case}{`{`}{declarations: *[]}{`}`} => (at: 1, declarations: declarations{!= None})
-    {percent: Decimal}%{`{`}{declarations: *[]}{`}`} => (at: percent / 100, declarations: declarations{!= None})
-    // At-rules holding declarations: @font-face (https://www.w3.org/TR/css-fonts-4/#font-face-rule), @page (https://www.w3.org/TR/css-page-3/#at-page-rule)
-    @{name: ("font-face" | "page").ignore_case}{`{`}{declarations: *[]}{`}`} => Rule("@" + name.lower_case, declarations{!= None})
-    // Conditional group rules: @media, @supports, @container (https://www.w3.org/TR/css-conditional-3/#contents-of, https://www.w3.org/TR/css-contain-3/#container-rule)
-    @{prelude}{`{`}{rules: *[]}{`}`} => rules{!= None}.map(. is Rule ? Rule(.selector, .declarations, within: "@" + (prelude as String).trimmed) : .)
-      -- (.count == 1 ? .first : .)
+  // Style rules, and the at-rules holding declarations, @font-face and @page, by their lower-case name (https://www.w3.org/TR/css-syntax-3/#style-rules, https://www.w3.org/TR/css-fonts-4/#font-face-rule, https://www.w3.org/TR/css-page-3/#at-page-rule)
+  static Rule := class (selector: ("@", ("font-face" | "page").lower_case) | (!"{" && !"}" && !";" && !"@")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, "{", declarations: Declarations, Blank, "}") {
+    within: String?
   }
+  // Keyframes; the at-rule name and the selectors from and to in any case (https://www.w3.org/TR/css-animations-1/#keyframes, https://www.w3.org/TR/css-syntax-3/#at-rule, https://www.w3.org/TR/css-values-4/#keywords)
+  static Keyframes := class ("@", "keyframes".ignore_case, Blank, name: (!"{" && !" ")[], Blank, "{",
+    frames: (Blank, at: ("from".ignore_case as 0) | ("to".ignore_case as 1) | ((percent: Decimal, "%") as percent / 100), Blank, "{", declarations: Declarations, Blank, "}")[], Blank, "}")
+  // Conditional group rules: @media, @supports, @container, each style rule within it (https://www.w3.org/TR/css-conditional-3/#contents-of, https://www.w3.org/TR/css-contain-3/#container-rule)
+  static Group := class ("@", prelude: (!"{")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, "{", rules: (Blank, Rule)[], Blank, "}") {
+    held => rules.map(Rule(.selector, .declarations, within: "@" + prelude)) -- (.count == 1 ? .first : .)
+  }
+  static Sheet := class (rules: (Blank, Rule | Keyframes | Comment)[] = [], Blank)
 
-  written := {
+  level := {
+    {group: Group} => group.held
+    {rule: Rule | Keyframes | Comment} => rule
     {sheet: Sheet} => sheet.rules
-    {rule: Rule{within}} => rule.within, "{", Rule(rule.selector, rule.declarations), "}"
-    {rule: Rule} => rule.selector, "{", rule.declarations.map(. is Comment ? . : (.0, ":", .[1..], ";")), "}"
-    {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations.map(. is Comment ? . : (.0, ":", .[1..], ";")), "}"), "}"
-    {comment: Comment} => "/*", comment.text, "*/"
+    {declarations: Declarations} => declarations
   }
-  level := syntax
+  written := {
+    {rule: Rule{within}} => rule.within, "{", Rule(rule.selector, rule.declarations), "}"
+    {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations, "}"), "}"
+  }
 }

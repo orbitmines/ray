@@ -200,7 +200,7 @@ read_within (text, pattern) => (
 {type}+, {rest} ^punctuation => type[], rest
 
 Node &+= {
-  right-to-left internal => this ~~ .access = Accessor(Accessor.Permission.local)
+  right-to-left internal => this ~~ .access = Access(&caller, method: Access.Reading, target: this)
   right-to-left trivially => instance ? this : ?
   right-to-left unique<in: Program?> => this{.is_unique<in: in>}
   is_unique<in: Program?> => (&){in ? (. ==<in: in> this) : . == this}.count == 1

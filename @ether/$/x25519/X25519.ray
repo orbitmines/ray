@@ -1,7 +1,12 @@
 // Elliptic Curves for Security, X25519 (https://www.rfc-editor.org/rfc/rfc7748)
 X25519 := class: Encoding.Agreement {
   static extensions = ".x25519"
-  static p = Ed25519.p
+  // The field GF(2^255 - 19), its inverses by Fermat's little theorem (RFC 7748 §4.1, §5)
+  static p = 2 ^ 255 - 19
+  static power (base, exponent, modulus = p) => exponent.digits(2).reduce(held = 1 => held * held * (. == 1 ? base : 1) % modulus)
+  static inverse (x) => power(x, p - 2)
+  // decodeScalar25519: the low three bits and the top bit cleared, the next highest set (RFC 7748 §5)
+  static clamped (bytes: Byte₃₂) => (Encoding.little_number(bytes) ~&& (2 ^ 254 - 8)) + 2 ^ 254
 
   // One rung of the Montgomery ladder: (x2, z2) doubled, (x3, z3) added to it, with a24 = 121665 (RFC 7748 §5)
   static stepped (x2, z2, x3, z3, x1) => {
@@ -17,10 +22,10 @@ X25519 := class: Encoding.Agreement {
   static ladder (k: Number, u: Number) => (254..0).reduce(held = (1, 0, u, 1) => (k / 2 ^ .).floor % 2 == 1
     ? stepped(held[2], held[3], held[0], held[1], u) -- (.[2], .[3], .[0], .[1])
     : stepped(held[0], held[1], held[2], held[3], u)
-  ) -- (.[0] * Ed25519.inverse(.[1]) % p)
+  ) -- (.[0] * inverse(.[1]) % p)
 
-  // The scalar pruned as Ed25519's (decodeScalar25519), the u-coordinate without its top bit (decodeUCoordinate) (RFC 7748 §5)
-  static x25519 (k: Byte₃₂, u: Byte₃₂) => Encoding.little(ladder(Ed25519.clamped(k), Encoding.little_number(u) % 2 ^ 255), 32)
+  // The scalar clamped, the u-coordinate without its top bit (decodeUCoordinate) (RFC 7748 §5)
+  static x25519 (k: Byte₃₂, u: Byte₃₂) => Encoding.little(ladder(clamped(k), Encoding.little_number(u) % 2 ^ 255), 32)
 
   // The public key is the scalar times u = 9; the shared secret is one's scalar times the other's public key, refused when it is all zeros (RFC 7748 §6.1)
   static public (secret: Byte₃₂) => x25519(secret, Encoding.little(9, 32))

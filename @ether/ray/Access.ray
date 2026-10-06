@@ -1,141 +1,77 @@
-Access := class = who: *?, method: `=` | `()` | * = *, filter: Program? {
+Access := class = who: *?, method: `=` | `()` | * = *, filter: Program?, target: *? {
   static Reading := *{. != `=` && . != `()`}
-
-  allows (called) => called ∈ method
-
-  { }{literal target} ^punctuation => Permissions.current.grant(this, Program(code: external ** target))
-}
-
-{who}{{literal filter}}.read ^keyword => Access(who, method: Access.Reading, filter: Program(code: (external ** filter)))
-{who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (external ** filter)))
-{who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))
-const {target} ^keyword => target ~~ .access = Accessor(who: Accessor.Permission.none, method: `=`)
-[(`none`, Accessor.Permission.none), (`local`, Accessor.Permission.local), (`confidential`, Accessor.Permission.confidential)].for (word, level) => {
-  right-to-left `word`.read {target} ^keyword => target ~~ .access = Accessor(who: level, method: Access.Reading)
-  right-to-left `word`.write {target} ^keyword => target ~~ .access = Accessor(who: level, method: `=`)
-  right-to-left `word`.execute {target} ^keyword => target ~~ .access = Accessor(who: level, method: `()`)
-}
-
-Accessor := Access{who is Accessor.Permission} {
-  static Permission := enum none | local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) | private (at: @private) | confidential | public (at: @public) {
-    resolved => this == confidential ? Visibility.policy min managed : this
-    chainable < (other: Permission) => resolved.index < other.resolved.index
-    reaches (who) => this == public || (this == confidential ? resolved.reaches(who) : at && who is at)
-  }
-
-  read => Accessor(who, method: Access.Reading)
-  write => Accessor(who, method: `=`)
-  execute => Accessor(who, method: `()`)
-
-  allows (who: Character, called) => !(called ∈ method) || this.who.reaches(who) || who.permissions.contains(this.who)
-
-  { }{target} ^punctuation => target ~~ .access = this
-  block (values: *[]) => values ~~ #.access = this
-  derived (from) => from.access ?? this
-
-  static Consistency := class = replicas: *[] = [] {
-    read (value) => replicas.every(.synced) ? value : Program(name: "wait for the replicas", goal: value)
-  }
-}
-
-Visibility := class {
-  policy = Accessor.Permission.local
-
-  // A secret is a field no one may read (`none.read`, W5.6): stores skip it and logging out drops it.
-  static secret (field) => field.access?.who == Accessor.Permission.none && `read` is field.access.method
-
-  of (item) => item ? item.access?.who ?? of(item.parent) : policy
-  narrowest (levels: Accessor.Permission[]) => levels.min ?? policy
-  derived (sources) => narrowest(sources.map(of(.)))
-
-  mark (value, sources) => value ~~ .access = Accessor(derived(sources))
-  may_leave (value) => of(value) != Accessor.Permission.local
-}
-
-Node &+= {
-  public => Visibility.of(this).reaches(@public)
-  publish: static => this ~~ .access = Accessor(Accessor.Permission.public)
-}
-
-Grant := class = access: Access, target: * {
-  // PermissionState (https://w3c.github.io/permissions/#dom-permissionstate)
-  static State := enum granted | denied | prompt
-  state => Run.current.settings?.refused.contains(target) ? State.denied
-    : access.who is Accessor.Permission && access.who.reaches(Run.current.actor) ? State.granted
-    : State.prompt
 
   // A grant's expression and filter are read to check it, never run for what they do: only one that changes nothing
   // outside itself and terminates is granted, so checking a permission runs no one's code. Reading the time stays
   // allowed (`@bob.read history{from Time.now}`, L§9.2), so this is `!Effecting`, not `Pure`.
   static checkable (expression) => !(expression is Program) || !(expression is Effecting) && expression is Terminating
 
-  names (value) => target === value || target is Program && (target == value || checkable(target) && target() === value)
-  // Who is compared as a principal (`answers_for`): identity in the core, verified roots with @ether/security.
-  covers (who: Character, method, target) => who.answers_for(access.who) && access.allows(method) && names(target)
-    && (!access.filter || checkable(access.filter) && access.filter.entered(this, None))
-}
+  allowed: *?
 
-Permissions := class = grants: Grant[] = [] {
-  static current = Permissions()
-  allowed: Grant?
-
-  grant (access: Access, target) => Grant.checkable(target) && Grant.checkable(access.filter)
-    ? grants.push Grant(access, target) -- target
-    : ERROR@Access `a grant names an expression that changes nothing and terminates`
-  allows (who: Character, method, target) => grants{.covers(who, method, target)}.first ~~ (allowed = . if .)
-}
-
-Run := class = actor: Character?, origin: Character[] = [], settings: Settings? {
-  static Mode := enum full | abstract | refused
-  static current = Run()
-
-  originating (character: Character) => Run(actor, origin: (origin, character), settings)
-  hops | chain => origin.contains(actor) ? origin : (origin, actor)
-
-  may (method, target) => hops.every(Permissions.current.allows(., method, target))
-  ask (method, target) => may(method, target) ? true : Program(name: prompt, goal: Grant(Access(origin.first, method), target))
-
-  static called (character: Character) => character.PREFIX + character.name
-  prompt => called(origin.first) + " wants to run this"
-    + (origin.count > 1 ? ", originating from " + origin[1..].map(called(.)).join(" <- ") : "")
-
-  mode (method) => (settings ?? Settings()).mode(method)
-
-  static Settings := class = speculated: *[] = [], refused: *[] = [] {
-    speculate (place): static => this ~~ speculated.push place
-    refuse (place): static => this ~~ refused.push place
-    mode (method) => refused.contains(method) ? Mode.refused
-      : !(method** is Effecting) || speculated.contains(method) ? Mode.full
-      : Mode.abstract
-  }
-}
-
-&@ ^keyword => Run.current
-
-Effects := class {
-  static Source := enum io | os | random | time | network
-
-  static Calls := class: Ray = at: Program {
-    value => at
-    continuations => at.calls{!.is_external}.map(Calls(at: .**))
-  }
-
-  static of (program: Program) => Calls(at: program).reachable
-    .map(.at.calls{.is_external}.map(Source[.external_name])).flatten.compact.unique
-}
-
-Pure := Program{Effects.of(.).empty}
-Deterministic := Program{!Effects.of(.).some(. is (Effects.Source.random | Effects.Source.time | Effects.Source.io))}
-Nondeterministic := Program{!(. is Deterministic)}
-Effecting := Program{Effects.of(.).some(. is (Effects.Source.io | Effects.Source.os | Effects.Source.network))}
-Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
-
-[(`pure`, Pure), (`deterministic`, Deterministic), (`nondeterministic`, Nondeterministic)].for (word, claim) => {
-  right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
-}
-
-Access &+= {
+  allows (called) => called is method#
   reads => allows(`read`)
   writes => allows(`=`)
   executes => allows(`()`)
+  // Who is compared as a principal (`answers_for`): identity in the core, verified roots with @ether/security.
+  covers (who, called) => who.answers_for(this.who) && allows(called) && (!filter || checkable(filter) && filter.entered(this, None))
+
+  // A grant is an Access on what it names: on what the expression answers when that is held somewhere (a value, a
+  // field), on the expression itself when it derives something (`@ether.read x.count`, L§8.2.2).
+  { }{literal target} ^punctuation => Program(code: external ** target) -- (named => checkable(named) && checkable(filter)
+    ? named() -- (value => value is Node && value.parent ? value : named) -- (held => held ~~ .access |= (this ~~ .target = held))
+    : ERROR@Access `a grant names an expression that changes nothing and terminates`)
+}
+
+none := Character{false}
+
+{who}.read ^keyword => Access(who, method: Access.Reading)
+{who}.write ^keyword => Access(who, method: `=`)
+{who}.execute ^keyword => Access(who, method: `()`)
+{who}{{literal filter}}.read ^keyword => Access(who, method: Access.Reading, filter: Program(code: (external ** filter)))
+{who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (external ** filter)))
+{who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))
+const {target} ^keyword => target ~~ .access |= Access(none, method: `=`, target: target)
+confidential = => Node.policy
+
+Node &+= {
+  static policy: * = none
+
+  visibility => access ?? parent?.visibility ?? Access(Node.policy, method: Access.Reading, target: this)
+  // Grants on a derivative sit on the expression that names it, found by what that expression answers (L§8.2.2).
+  granted => [visibility#, Program#{.access && .names(this)}.access#].flatten
+  allows (who, called) => granted.find(.covers(who, called)) ~~ (.allowed = this if .)
+  // A secret is a node no one may read (`none.read`, W5.6): stores skip it and logging out drops it.
+  unreadable => access#.some(.who === none && .reads)
+}
+
+Program &+= {
+  names (value) => this === value || this == value || Access.checkable(this) && this() === value
+
+  caller: Program?
+  hops | chain => [caller?.hops ?? [], who].flatten.unique
+  may (method, target) => hops.every(target.allows(., method))
+  ask (method, target) => may(method, target) || Program(name: prompt, goal: Access(hops.first, method), from: target)
+  prompt => hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
+    + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
+
+  // What a run may do is the runner's setting (L§8.1): `with (Program.speculated |= x)`, `with (Program.refused |= x)`, or a `.cfg.ray`.
+  static speculated: *[] = []
+  static refused: *[] = []
+
+  continuations => calls{!.is_external}.map(.**)
+  effects => reachable.map(.calls{.is_external}.external_name).flatten.unique
+}
+
+&@ ^keyword => &caller as Program
+
+Pure := Program{effects.empty}
+Deterministic := Program{!effects.some(. is ("random" | "time" | "io"))}
+Nondeterministic := Program{!(. is Deterministic)}
+Effecting := Program{effects.some(. is ("io" | "os"))}
+Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
+Refused := Program{. is Program.refused#}
+Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
+
+[(`pure`, Pure), (`deterministic`, Deterministic), (`nondeterministic`, Nondeterministic)].for (word, claim) => {
+  right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
 }

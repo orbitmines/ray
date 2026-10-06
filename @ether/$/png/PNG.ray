@@ -1,41 +1,40 @@
 // Portable Network Graphics (PNG) Specification, Third Edition (https://www.w3.org/TR/png-3/)
-PNG := class (
+PNG := class: Language (
   // PNG signature (5.2)
   137, 80, 78, 71, 13, 10, 26, 10,
   header: Chunk{type == "IHDR"},
   chunks: Chunk{type != "IEND"}[],
-  Chunk{type == "IEND"}
+  Chunk{type == "IEND"} = Chunk(type: "IEND", data: [])
 ) {
+  static extensions = ".png"
+  static of = Language.Image
+
   // Chunk layout (5.3), its CRC over the type and data (5.5)
-  static Chunk := class (size: Binary₃₂, type: Char₄, data: Byte[]{length == size}, crc: Binary₃₂{. == crc32([type.bytes, data].flatten)})
-  // CRC-32 of ISO 3309 and ITU-T V.42, the polynomial reflected (D. Sample CRC implementation)
-  static crc32 (bytes: Byte[]) => bytes.reduce(c = 0xFFFFFFFF => (0..7).reduce(r = c.xor(.) => r.odd ? (r / 2).floor.xor(0xEDB88320) : (r / 2).floor)).xor(0xFFFFFFFF)
-  static chunk (type: String, data: Byte[]) => Chunk(size: data.count, type: type, data: data, crc: crc32([type.bytes, data].flatten))
+  static Chunk := class (size: Binary₃₂ = data.count, type: Char₄, data: Byte[]{length == size}, crc: Binary₃₂ = [type.bytes, data].flatten as CRC32 as Binary₃₂) {
+    dynamically assert crc == [type.bytes, data].flatten as CRC32 as Binary₃₂
+  }
 
   // IHDR (11.2.1)
-  static Header := class (width: Binary₃₂, height: Binary₃₂, depth: Byte, color: Byte, compression: Byte{. == 0}, filter: Byte{. == 0}, interlace: Byte{. <= 1})
-  // Filter types (9.2): the filter byte before each scanline
-  static Scanline := class (filter: Byte, bytes: Byte[])
-  static Prediction := class = filter: Byte, left: Byte = 0, up: Byte = 0, corner: Byte = 0
-  static Predicting := {
-    {prediction: Prediction{filter == 0}} => 0
-    {prediction: Prediction{filter == 1}} => prediction.left
-    {prediction: Prediction{filter == 2}} => prediction.up
-    {prediction: Prediction{filter == 3}} => (prediction.left + prediction.up) / 2 -- .floor
-    // The Paeth predictor (9.4)
-    {prediction: Prediction{filter == 4}} => (prediction.left + prediction.up - prediction.corner) -- (estimate => [prediction.left, prediction.up, prediction.corner].min_by(guess => (estimate - guess) max (guess - estimate))#.first)
+  static Header := class (width: Binary₃₂, height: Binary₃₂, depth: Byte, color: Byte, compression: Byte{. == 0}, filter: Byte{. == 0}, interlace: Byte{. <= 1}) {
+    scaled (samples: Number[]) => samples.map(. * 255 / (2 ^ depth - 1))
   }
   // Colour types and their samples (6.1)
-  static Pixel := class = png: PNG, samples: Number[] {
-    channels => samples.map(. * 255 / (2 ^ png.ihdr.depth - 1))
+  static Greyscale := Header{color == 0} { colored (samples: Number[], png: PNG) => scaled(samples) -- Geometry.Color(.0, .0, .0) }
+  static Truecolour := Header{color == 2} { colored (samples: Number[], png: PNG) => scaled(samples) -- Geometry.Color(.0, .1, .2) }
+  static Indexed := Header{color == 3} { colored (samples: Number[], png: PNG) => png.palette[samples.0] ~~ .alpha = (png.transparency[samples.0] ?? 255) / 255 }
+  static GreyscaleAlpha := Header{color == 4} { colored (samples: Number[], png: PNG) => scaled(samples) -- Geometry.Color(.0, .0, .0, .1 / 255) }
+  static TruecolourAlpha := Header{color == 6} { colored (samples: Number[], png: PNG) => scaled(samples) -- Geometry.Color(.0, .1, .2, .3 / 255) }
+
+  // Filter types (9.2): the filter byte before each scanline, and what each predicts a byte from: the one to its left, above, and above-left
+  static Scanline := class (filter: Byte, bytes: Byte[]) {
+    predicted (left: Byte, up: Byte, corner: Byte) => 0
   }
-  static Coloring := {
-    {pixel: Pixel{png.ihdr.color == 0}} => pixel.channels -- Geometry.Color(.0, .0, .0)
-    {pixel: Pixel{png.ihdr.color == 2}} => pixel.channels -- Geometry.Color(.0, .1, .2)
-    {pixel: Pixel{png.ihdr.color == 3}} => pixel.png.palette[pixel.samples.0] ~~ .alpha = (pixel.png.transparency[pixel.samples.0] ?? 255) / 255
-    {pixel: Pixel{png.ihdr.color == 4}} => pixel.channels -- Geometry.Color(.0, .0, .0, .1 / 255)
-    {pixel: Pixel{png.ihdr.color == 6}} => pixel.channels -- Geometry.Color(.0, .1, .2, .3 / 255)
-  }
+  static Sub := Scanline{filter == 1} { predicted (left: Byte, up: Byte, corner: Byte) => left }
+  static Up := Scanline{filter == 2} { predicted (left: Byte, up: Byte, corner: Byte) => up }
+  static Average := Scanline{filter == 3} { predicted (left: Byte, up: Byte, corner: Byte) => (left + up) / 2 -- .floor }
+  // The Paeth predictor (9.4)
+  static Paeth := Scanline{filter == 4} { predicted (left: Byte, up: Byte, corner: Byte) => (left + up - corner) -- (estimate => [left, up, corner].min_by(guess => (estimate - guess) max (guess - estimate))#.first) }
+
   // Adam7 interlacing: each pass's first column and row and its steps (8.2)
   static Adam7 = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
 
@@ -46,25 +45,28 @@ PNG := class (
   palette => chunks{.type == "PLTE"}.first?.data.chunk(3).map(Geometry.Color(.0, .1, .2)) ?? []
   transparency => chunks{.type == "tRNS"}.first?.data ?? []
   // IDAT (11.2.4): one zlib stream over all of them
-  inflated => $.zlib.read(chunks{.type == "IDAT"}.data.flatten)
+  inflated => Zlib.read(chunks{.type == "IDAT"}.data.flatten)
   passes => (ihdr.interlace == 0 ? [(0, 0, 1, 1)] : Adam7).map((x, y, dx, dy) => (x: x, y: y, dx: dx, dy: dy,
     width: ((ihdr.width - x + dx - 1) / dx).floor max 0, height: ((ihdr.height - y + dy - 1) / dy).floor max 0))
   span (width: Number) => (width * ihdr.depth * channels + 7) / 8 -- .floor
   sizes => passes.map(.width > 0 && .height > 0 ? .height * (span(.width) + 1) : 0)
-  unfiltered (line: Scanline, above: Byte[]) => line.bytes.enumerate.reduce(acc = [] => [acc, (.value + Compiler.reduced(Prediction(line.filter,
-    .index >= stride ? acc[.index - stride] : 0, above[.index] ?? 0, .index >= stride ? above[.index - stride] ?? 0 : 0), Predicting)) % 256].flatten)
+  unfiltered (line: Scanline, above: Byte[]) => line.bytes.enumerate.reduce(acc = [] => [acc, (.value + line.predicted(
+    .index >= stride ? acc[.index - stride] : 0, above[.index] ?? 0, .index >= stride ? above[.index - stride] ?? 0 : 0)) % 256].flatten)
   rows (bytes: Byte[], width: Number) => bytes.chunk(span(width) + 1).map(. as Scanline).reduce(acc = [] => [acc, [unfiltered(., acc.last ?? [])]].flatten(1))
-  pixels (row: Byte[], width: Number) => (row as Binary{length == ihdr.depth}[])[..<width * channels].chunk(channels).map(Compiler.reduced(Pixel(this, .), Coloring))
+  pixels (row: Byte[], width: Number) => (row as Binary{length == ihdr.depth}[])[..<width * channels].chunk(channels).map(ihdr.colored(., this))
   placed => passes.enumerate.map(pass => inflated[sizes[..<pass.index].sum ..< sizes[..pass.index].sum] -- (bytes => pass.value -- (at =>
     rows(bytes, at.width).enumerate.map(row => pixels(row.value, at.width).enumerate.map((x: at.x + .index * at.dx, y: at.y + row.index * at.dy, color: .value)))))).flatten
   raster => placed -- (all => (0..<ihdr.height).map(y => all{.y == y}.sort_by(.x).color)) as Geometry.Raster
 
   // Writing: 8-bit truecolour with alpha, filter type 0, not interlaced
   static (raster: Geometry.Raster) as (=== PNG) => PNG(
-    header: chunk("IHDR", Header(width: raster.width, height: raster.height, depth: 8, color: 6, compression: 0, filter: 0, interlace: 0) as Byte[]),
-    chunks: [chunk("IDAT", $.zlib.write(raster.map(row => [0, row.map([.red, .green, .blue, (.alpha * 255).floor])].flatten)) as Byte[])])
+    header: Chunk(type: "IHDR", data: Header(width: raster.width, height: raster.height, depth: 8, color: 6, compression: 0, filter: 0, interlace: 0) as Byte[]),
+    chunks: [Chunk(type: "IDAT", data: Zlib.write(raster.map(row => [0, row.map([.red, .green, .blue, (.alpha * 255).floor])].flatten)) as Byte[])])
 
-  static language = Language(".png", of: Language.Image,
-    level: { {png: PNG} => png.raster },
-    written: { {writing: Language.Writing{value is Geometry.Raster}} => writing.value as PNG })
+  static level := {
+    {png: PNG} => png.raster
+  }
+  static written := {
+    {writing: Language.Writing{value is Geometry.Raster}} => writing.value as PNG
+  }
 }

@@ -1,6 +1,9 @@
 // Secure Hash Standard, SHA-1 (https://csrc.nist.gov/pubs/fips/180-4/upd1/final)
 SHA1 := class: Encoding.Digest {
   static extensions = ".sha1"
+  // 512-bit blocks, a 160-bit digest, in bytes (FIPS 180-4 §1)
+  static block = 64
+  static size = 20
 
   // Padding: the message, a 1 bit, zeros, and the message length in bits as 64 bits (FIPS 180-4 §5.1.1)
   static Padded := class (message: Byte[], 0x80, Byte{== 0}[]{length == (119 - message.count % 64) % 64}, size: Binary₆₄ = message.count * 8)

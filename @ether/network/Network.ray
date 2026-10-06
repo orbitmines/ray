@@ -10,10 +10,7 @@ Network &+= {
     carries (traffic) => !admits || traffic is admits
   }
 
-  static Protocol := enum ether (port: @ether.address.port) | https (port: 443) | http (port: 80) | ssh (port: 22) | wss (port: 443) | ws (port: 80) | dns (port: 53) {
-    static handshake (offered) => offered
-    static version => Handshake.version
-  }
+  static Protocol := enum ether (port: @ether.port) | https (port: 443) | http (port: 80) | ssh (port: 22) | wss (port: 443) | ws (port: 80) | dns (port: 53)
 
   static URL := Location{scheme}
 
@@ -21,55 +18,21 @@ Network &+= {
     static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => {
       send (bytes: Byte[]) => external network `tcp` (this as String, bytes)
       datagram (bytes: Byte[]) => external network `udp` (this as String, bytes)
+      // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the
+      // connection, and the protocol of `offered` the two sides agreed on.
+      tls (offered: String[]) => external network `tls` (this as String, offered) as (connection: *, protocol: String?)
     }
-  }
-
-  static Names := class {
-    record (name: String, address, key): static => this ~~ (this[name] = (address: address, key: key))
   }
 
   static Hosts := class {
     static equivalences => @/etc/hosts.content as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
-    // A redirect is a world name (W1.9): `@name = holder`, so it passes the world's write check like any name, and
-    // overwriting someone's name needs their grant (World.ray). There is no table of redirects beside the names.
-    static redirect (name: String, to: Location) => World.current["@", name] = to
-    static mapped (name) => World.current["@", name as String] -- (held => held is Location ? held : None)
-    static resolved (name: String) => mapped(name) ?? DomainName(equivalences.rows{name.fold_case is .names.fold_case#}.last?.address ?? name)
-  }
-
-  static Handshake := class {
-    version => 0
-    offer (versions) => versions{== version}.last ?? Program(name: "agree on a version", goal: versions)
-  }
-
-  static Remote := class = character: Character, location: Location = @remote {
-    static Execution := class = code: *, as: Character, at: Location
-
-    run (code) => character is Verified ? Execution(code, as: character, at: location) : Program(name: "authorise", goal: code)
-    fresh (code) => Remote(Character(name: "unauthorised"), location).run(code)
-  }
-
-  static Challenge := class = message: *, due: Time, answered = false {
-    answer (response) => {
-      answered = response == message if Time.now < due
-      answered
-    }
-  }
-
-  static Stream := class = player: Character, location: Location {
-    watchers => Character#{.presence == location}
-    // A character's presence is theirs: watching or moving them takes their grant to write it (`&@.may`), so a stream
-    // moves only the watchers who let it, and only its player's grant moves the stream.
-    watch (character: Character): static => &@.may(`=`, character) ? this ~~ character.presence = location
-      : ERROR@Access `moving a character's presence needs their grant`
-    moved (to: Location): static => &@.may(`=`, player) ? this ~~ (watchers{&@.may(`=`, .)}.presence = to) ~~ (.location = to)
-      : ERROR@Access `moving a stream needs its player's grant`
-  }
-
-  static Shard := class = character: Character, parts: *? {
-    store (part, location: Location): static => this ~~ (.parts |= part @ location)
+    // A redirect is a world name (W1.9, `@name = holder`), so it passes the world's write check like any name.
+    static resolved (name: String) => World.current["@", name] -- (held => held is Location ? held
+      : DomainName(equivalences.rows{name.fold_case is .names.fold_case#}.last?.address ?? name))
   }
 }
+
+Effecting |= Program{effects.some(. is "network")}
 
 Location &+= {
   static canonical := Location{!port || port != protocol?.port}
@@ -83,11 +46,34 @@ Device &+= {
 }
 
 Instance &+= {
-  address: (Network.URL | Network.Socket.Address | IP | Network.DomainName)?
-
-  seen_from (other: Instance) => other === this ? @localhost : address
-  local => address is @localnetwork
-  canonical: static => Instance(location, address: address.static.canonical ? address as address.static.canonical : address)
+  seen_from (other: Instance) => other === this ? @localhost : this
+  local => this is @localnetwork
+  canonical: static => this as Location.canonical
 }
 
-{address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => Instance(location: address, address)
+{address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => (address as String) as Instance
+
+FileSystem &+= {
+  static Remote := class: FileSystem {
+    at (location: Location) => location.scheme ? location.origin : @remote
+    inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
+    over_http (location: Location) => location.scheme ~= ⊢"http"
+    sent (method: $.http.Method, location: Location, content = None, fields = $.http.Fields()) => $.http.send($.http.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
+    read (location: Location) => over_http(location)
+      ? sent($.http.Method.get, location) -- (.ok ? .text : None)
+      : { inner(location).content }@(at(location))()
+    write (location: Location, content) => over_http(location)
+      ? sent(content === None ? $.http.Method.delete : $.http.Method.put, location, content).ok
+      : { inner(location).content = content }@(at(location))()
+    // WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2)
+    listing (location: Location) => over_http(location)
+      ? (sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")).text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
+        .map(href => href ~= ⊢"/" ? location.origin + href : href as Location)
+      : { inner(location).listing }@(at(location))()
+  }
+}
+
+FileOptimizations = {
+  {location: Location{scheme && scheme != "file"}} => FileSystem.Remote()
+  {location: Location{segments.first == "remote"}} => FileSystem.Remote()
+} + FileOptimizations

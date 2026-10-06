@@ -1,69 +1,64 @@
 // HTML Living Standard (https://html.spec.whatwg.org/multipage/)
+// The headers read HTML and write it; written inline, a Ray value in braces is a hole, taken at its position: text as Text, an element or a list of them as children, and a boolean as an attribute present or not
 HTML := class: Language {
   static extensions = ".html"
 
-  Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | Text | Raw | Comment)[] = [] {
-    id => attributes{.name == "id"}.last?.value
-    void => tag is Void
-  }
-  Text := class = text: String
-  Raw := class = text: String
-  Comment := class = text: String
-  Document := class = head: Element[], body: Element, language: String = "en"
-
-  // Void elements (https://html.spec.whatwg.org/multipage/syntax.html#void-elements)
-  Void = "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta" | "source" | "track" | "wbr"
-  // Raw text elements (https://html.spec.whatwg.org/multipage/syntax.html#raw-text-elements)
-  RawText = "script" | "style"
+  static Blank = (" " | \t | \n | \r)[]
+  // Tag and attribute names, ASCII case-insensitive, kept in lower case as the tokenizer does (https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name, https://html.spec.whatwg.org/multipage/parsing.html#tag-name-state, https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state)
+  static Name = (Char.Letter, (Char.Word | "-" | ":" | ".")[]).lower_case
   // Escaping a string (https://html.spec.whatwg.org/multipage/parsing.html#escapingString)
-  Escapes = { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
-  escaped (text: String) => #text.map(Escapes[.] ?? .) as String
+  static Escapes = { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
+  static escaped (text: String) => #text.map(Escapes[.] ?? .) as String
 
-  // Tag and attribute names (https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name)
-  Name = (Char.Letter, (Char.Word | "-" | ":" | ".")[])
-  // Named character references (https://html.spec.whatwg.org/multipage/named-characters.html)
-  Entities = { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
-  Child := class = value: *
-  Attributes := class = value: *
+  // Character references: "&#x" or "&#X" with hex digits of either case, decimal, or named, which are case-sensitive (https://html.spec.whatwg.org/multipage/syntax.html#character-references, https://html.spec.whatwg.org/multipage/named-characters.html)
+  static Entities = { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
+  static Reference := class (("&#", "x".ignore_case, code: Hexadecimal, ";") | ("&#", code: Decimal, ";") | ("&", name: Char.Letter[], ";")) {
+    text => name ? Entities[name] ?? "&" + name + ";" : code as Char
+  }
+  static Text := class (characters: (Reference | Char{!= "<"})[]{length > 0}) {
+    text => characters.map(. is Reference ? .text : .).join("") as String
+    static (value: String | Number) as (=== Text) => Text(characters: value as String)
+  }
+  // Text of raw text elements, as it is (https://html.spec.whatwg.org/multipage/syntax.html#raw-text-elements)
+  static Raw := class (text: (!"</")[]{length > 0})
+  // Comments (https://html.spec.whatwg.org/multipage/syntax.html#comments)
+  static Comment := class ("<!--", text: (!"-->")[], "-->")
 
-  syntax := Compiler.default + {
-    // The DOCTYPE: "<!DOCTYPE" and "html" match ASCII case-insensitively (https://html.spec.whatwg.org/multipage/syntax.html#the-doctype); tag names likewise (https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name)
-    <!{"DOCTYPE".ignore_case} {"html".ignore_case}><{"html".ignore_case} lang="{language}"><{"head".ignore_case}><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">{head}</{"head".ignore_case}>{body}</{"html".ignore_case}> => Document(Child(head), body, language)
-    <!{"DOCTYPE".ignore_case} {"html".ignore_case}><{"html".ignore_case} lang="{language}"><{"head".ignore_case}>{head}</{"head".ignore_case}>{body}</{"html".ignore_case}> => Document(Child(head), body, language)
-    // Comments (https://html.spec.whatwg.org/multipage/syntax.html#comments)
-    <!--{literal text}--> => Comment(text)
-    // Elements; tag names are ASCII case-insensitive, an end tag closing its start tag in any case, and kept in lower case as the tokenizer does (https://html.spec.whatwg.org/multipage/syntax.html#elements-2, https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name, https://html.spec.whatwg.org/multipage/parsing.html#tag-name-state)
-    <{tag: RawText.ignore_case}{attributes}>{literal text}</{tag.ignore_case}> => Element(tag.lower_case, Attributes(attributes), [Raw(text) if !text.empty])
-    <{tag: Name}{attributes}/> => Element(tag.lower_case, Attributes(attributes))
-    <{tag: Void.ignore_case}{attributes}> => Element(tag.lower_case, Attributes(attributes))
-    <{tag: Name}{attributes}>{children}</{tag.ignore_case}> => Element(tag.lower_case, Attributes(attributes), Child(children))
-    // Attributes; their names are ASCII case-insensitive, kept in lower case (https://html.spec.whatwg.org/multipage/syntax.html#attributes-2, https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state)
-    {name: Name}="{value}" => (name.lower_case, value)
-    {name: Name}={value} => value === None || value == false ? None : value == true ? (name.lower_case, "") : (name.lower_case, value)
-    // Character references: "&#x" or "&#X", then hex digits of either case; named references are case-sensitive (https://html.spec.whatwg.org/multipage/syntax.html#character-references)
-    &#{"x".ignore_case}{code: Hexadecimal}; => code as Char
-    &#{code: Decimal}; => code as Char
-    &{name: Char.Letter[]}; => Entities[name] ?? ("&" + name + ";")
-    {child: Child{value === None}} => []
-    {child: Child{value is String{trimmed.empty && contains(\n)}}} => []
-    {child: Child{value is String}} => [Text(child.value)]
-    {child: Child{value is Number}} => [Text(child.value as String)]
-    {child: Child{value is (Element | Text | Raw | Comment)}} => [child.value]
-    {child: Child{value is Iterable}} => Compiler.reduced(child.value.map(Child(.)), syntax).flatten(1)
-    {child: Child} => [child.value]
-    {attributes: Attributes{value === None}} => []
-    {attributes: Attributes{value is String}} => [(attributes.value, "")]
-    {attributes: Attributes{value is Iterable && !(value.first is String)}} => Compiler.reduced(attributes.value.map(Attributes(.)), syntax).flatten(1)
-    {attributes: Attributes} => [attributes.value]
+  // Attributes, quoted or bare; a boolean attribute is its name alone when present, and absent when false (https://html.spec.whatwg.org/multipage/syntax.html#attributes-2, https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#boolean-attributes)
+  static Attribute := class (Blank, name: Name, ("=", ("\"", value: (Reference | Char{!= "\""})[], "\"") | value: (!" " && !">" && !"\"" && !"/")[]{length > 0})?) {
+    static (pair: (name: String, value)) as (=== Attribute?) => pair.value === None || pair.value == false ? None : Attribute(pair.name, pair.value == true ? "" : pair.value as String)
   }
 
+  // Elements: an end tag closes its start tag in any case, and "/>" closes an element written without children (https://html.spec.whatwg.org/multipage/syntax.html#elements-2, https://html.spec.whatwg.org/multipage/syntax.html#start-tags)
+  static Element := class ("<", tag: Name, attributes: Attribute[] = [], Blank, (">", children: Content[] = [], "</", tag.ignore_case, ">") | "/>") {
+    id => attributes{.name == "id"}.last?.value
+    void => tag is Voids
+  }
+  // Void elements: no children and no end tag (https://html.spec.whatwg.org/multipage/syntax.html#void-elements)
+  static Voids = "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta" | "source" | "track" | "wbr"
+  static Void := class: Element ("<", tag: Name{is Voids}, attributes: Attribute[] = [], Blank, "/"?, ">")
+  // Raw text elements: script and style (https://html.spec.whatwg.org/multipage/syntax.html#raw-text-elements)
+  static RawTexts = "script" | "style"
+  static RawText := class: Element ("<", tag: Name{is RawTexts}, attributes: Attribute[] = [], Blank, ">", children: Raw[] = [], "</", tag.ignore_case, ">")
+  static Content := Comment | Void | RawText | Element | Text
+
+  // The DOCTYPE, in any case, then the html element with its language, head and body (https://html.spec.whatwg.org/multipage/syntax.html#the-doctype, https://html.spec.whatwg.org/multipage/syntax.html#writing)
+  static Document := class (
+    "<!", "doctype".ignore_case, " ", "html".ignore_case, ">",
+    "<", "html".ignore_case, " lang=\"", language: (!"\"")[] = "en", "\">",
+    "<", "head".ignore_case, ">", head: Content[] = [], "</", "head".ignore_case, ">",
+    body: Element,
+    "</", "html".ignore_case, ">"
+  )
+
+  level := {
+    {document: Document} => document
+    {content: Content} => content
+    {contents: (Blank, content: Content, Blank)[]} => contents.content
+  }
+  // Text and attribute values are written escaped (https://html.spec.whatwg.org/multipage/parsing.html#escapingString)
   written := {
-    {document: Document} => "<!doctype html><html lang=\"", document.language, "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", document.head, "</head>", document.body, "</html>"
-    {element: Element{void}} => "<", element.tag, element.attributes.map(" ", .name, "=\"", escaped(.value as String), "\""), ">"
-    {element: Element} => "<", element.tag, element.attributes.map(" ", .name, "=\"", escaped(.value as String), "\""), ">", element.children, "</", element.tag, ">"
     {text: Text} => escaped(text.text)
-    {raw: Raw} => raw.text
-    {comment: Comment} => "<!--", comment.text, "-->"
+    {attribute: Attribute} => " ", attribute.name, "=\"", escaped(attribute.value as String), "\""
   }
-  level := syntax
 }

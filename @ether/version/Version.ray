@@ -3,7 +3,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
 
   // A commit is who changed what, when, after what. Signatures, content keys and ciphertext are @ether/security's
   // (it adds them to commits); version control does not import it.
-  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [] {
+  static Commit := class: Ray = id: Label = UUID.v1(), who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [] {
     when: Time = stamp?.when ?? Time.now
     message: String?
     previous: Commit?
@@ -21,7 +21,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     expand => opened.change**
     successors => line?.since(None){.parents.some(=== this)} ?? []
     branching => successors.count > 1
-    value => line?.at(this).value ?? applied(None)
+    value => line?[this].value ?? applied(None)
     mentions (label) => id == label || versions.contains(label)
     // A line's settings, written `name = text` in its `with (…)`: those its hash covers, then the rest. A project that adds
     // fields to commits adds their settings (`more_attributes`, `more_settings`) and how it reads them back (`given`).
@@ -55,11 +55,10 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   since (commit: Commit?) => head ? head.ancestry.filter(c => !(commit?.ancestry ?? []).some(=== c)) : []
   commits => since(base)
   entry => commits.entry
-  last | latest => head
   find (label) => since(None).find(.id == label)
-  at (commit) => copy ~~ (.head = commit is Commit ? commit : find(commit))
+  [commit: Commit | Label] => copy ~~ (.head = commit is Commit ? commit : find(commit))
 
-  commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static =>
+  commit (who, change, id: Label = UUID.v1(), when: Time = Time.now, message: String? = None, versions: Label[] = []): static =>
     this ~~ .head = committed(Commit(id, who, stamp: clock.now, change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this))
   // What a commit becomes before it is this line's head: what the storage levels in scope store. Security overrides it (keys, signatures).
   committed (made: Commit) => made.stored
@@ -81,29 +80,29 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   {this}{from {literal start}} ^punctuation => Program(code: external ** start) -- (holds => stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
   value => ordered.reduce(held = None => .applied(held))
   pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last?.id ?? label
-  checkout (label, as_of: Stamp? = None) => at(pinned(label, as_of)).value
+  checkout (label, as_of: Stamp? = None) => this[pinned(label, as_of)].value
   fix (who, label: Label, change) => commit(who, change, versions: [label])
-  tree => public ? value -- (held => Language.Entry.of(held.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])))) : Language.Entry.of(files)
+  tree => History.placed(public ? value.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])) : files)
+  static placed (files) => files.reduce(held = Location(path: "") => held.placed(.path, .content))
 
   fork => copy ~~ (.base = head)
   drop: static => reset(base)
   reset (to: Commit?): static => this ~~ .head = to
   back: static => reset(head?.previous ?? head)
-  run (program: Program) => Program(code: program.code, history: this)()
 
   roots => since(None){.parents.empty}
   common (other: History) => since(None).filter(c => other.since(None).some(=== c)).last
   static clashes (base, ours, theirs) => ours == theirs || ours == base || theirs == base ? []
     : ours.fields.nonempty && theirs.fields.nonempty ? (ours.fields.name, theirs.fields.name).flatten.unique.map(name => clashes(base?[name], ours[name], theirs[name])).flatten
     : [(ours, theirs)]
-  merge (other: History, who = &caller) => !readable ? (this ~~ .head = head | other.head) : common(other) -- (base => {
-    return Program(name: "merge", goal: other) if clashes(at(base).value, value, other.value).nonempty
+  merge (other: History, who = @me) => !readable ? (this ~~ .head = head | other.head) : common(other) -- (base => {
+    return Program(name: "merge", goal: other) if clashes(this[base].value, value, other.value).nonempty
     this.head = since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this)
     this
   })
-  + (other: History) => other.since(common(other)).sort_by(.stamp).reduce(held = at(head) => .opened -- (plain => held.commit(plain.who, plain.change, message: plain.message, versions: plain.versions)))
-  | (other: History) => at(head).merge(other)
-  &+ (other: History) => common(other) -- (base => (since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = at(base) => held.extended(.rewritten(.change) ~~ .from = None)))
+  + (other: History) => other.since(common(other)).sort_by(.stamp).reduce(held = this[head] => .opened -- (plain => held.commit(plain.who, plain.change, message: plain.message, versions: plain.versions)))
+  | (other: History) => this[head].merge(other)
+  &+ (other: History) => common(other) -- (base => (since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = this[base] => held.extended(.rewritten(.change) ~~ .from = None)))
   static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
   squash (who) => copy ~~ (.head = Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .opened.change), previous: base))
   cherry_pick (picked: Commit): static => picked.opened -- (plain => commit(plain.who, plain.change, message: plain.message))
@@ -130,10 +129,6 @@ Character &+= {
   keep (session: History) => history.merge(session)
 }
 
-Instance.Deletion &+= {
-  carry_out: static => this ~~ (character.history = character.history.erased if lapsed) ~~ (.complete if lapsed)
-}
-
 {value}%{pin: Version.Pin} ^punctuation => value.history.checkout(pin.label, as_of: &caller.history.last?.stamp)
 {at: Location}%{pin: Version.Pin} ^punctuation => (at.content as Program as History).checkout(pin.label, as_of: &caller.history.last?.stamp)
 
@@ -145,30 +140,27 @@ History &+= {
     Encoding.common(old, new) -- (prefix => Encoding.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
       (". edited(", prefix, ", ", old.count - suffix, ", ", Language.ray.write(new[prefix..<new.count - suffix] as String), ")") as String as Program))))
 
-  file => (path: id as String + ".ray", content: (this as Program) as String as Byte[])
+  file => (path: id as String + ".ray", content: written_as() as String as Byte[])
   stored_file => file
   object_files => []
   cache_files => []
   files => [[stored_file], object_files, cache_files].flatten(1)
 
-  of (name) => since(None){at(.).value?[name] != at(.previous)?.value?[name]}.reduce(held = History() => held.extended(.rewritten(Language.ray.write(at(.).value?[name]) as Program)))
+  of (name) => since(None){this[.].value?[name] != this[.previous]?.value?[name]}.reduce(held = History() => held.extended(.rewritten(Language.ray.write(this[.].value?[name]) as Program)))
   object_path (name) => id as String + "/" + name + ".ray"
-  objects => value.fields.name.map(name => (path: object_path(name), content: (of(name) as Program) as String as Byte[]))
+  objects => value.fields.name.map(name => (path: object_path(name), content: of(name).written_as() as String as Byte[]))
   pins (commit: Commit) => value.fields.name{of(.).find(commit.id)}.map(name => ".[" + Language.ray.write(name) + "] = @./" + object_path(name) + "%[" + commit.id + "]").join("; ") as Program
   cached => since(None){.index % 64 == 63 || . === head}
   // A cache line: the value at a commit, written as that commit's change.
-  cached_at (commit: Commit) => commit.rewritten(Language.ray.write(at(commit).value) as Program)
-
-  static trusted = true
+  cached_at (commit: Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program)
 
   static level := {
-    {commit: Commit{!History.trusted}}.versions => []
-    {at: Location{segments.last == ".%"}} => IO.listing(at) -- (files => History.global(files{.name ~= ".ray" ⊣}.map(.content as Program as History))
+    {at: Location{segments.last == ".%"}} => at.listing -- (files => History.global(files{.name ~= ".ray" ⊣}.map(.content as Program as History))
       ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(.content as Program as History))
   }
 
   static written := {
-    {writing: Language.Writing{value is History}} => Language.Entry.of(writing.value.files)
+    {writing: Language.Writing{value is History}} => History.placed(writing.value.files)
   }
 
   static similar: Probability = 50%
@@ -176,15 +168,15 @@ History &+= {
   static similarity (a: Byte[], b: Byte[]) => (a as String).lines -- (left => (b as String).lines -- (right =>
     left.count + right.count == 0 ? 1 : 2 * left{right.contains(.)}.count / (left.count + right.count)))
 
-  static renamed_from (file: Language.Entry, gone: Language.Entry[]) => gone{similarity(.content, file.content) >= similar} -- (close =>
+  static renamed_from (file: Location, gone: Location[]) => gone{similarity(.content, file.content) >= similar} -- (close =>
     close{similarity(.content, file.content) == close.map(similarity(.content, file.content)).max} -- (best =>
       best.count > 1 ? Program(name: "rename", goal: (to: file, from: best)) : best.first))
 
-  static read_file (file: Language.Entry) => Language.for_file(file.name).read(file.content as String)
-  static valued (tree: Language.Entry) => tree.files.reduce(held = {} => held, {(.path): read_file(.)})
+  static read_file (file: Location) => Language.for_file(file.name).read(file.content as String)
+  static valued (tree: Location) => tree.files.reduce(held = {} => held, {(.path): read_file(.)})
 
   static assigned (path: String, to: String) => ".[" + Language.ray.write(path) + "] = " + to
-  static change (before: Language.Entry, after: Language.Entry) => before.files{!after.at(.path)} -- (gone =>
+  static change (before: Location, after: Location) => before.files{!after.at(.path)} -- (gone =>
     after.files{!before.at(.path)}.map(file => (file, from: renamed_from(file, gone))) -- (added => added.find(.from is Abstract)?.from ?? [
       added{.from}.map(assigned(.file.path, ".[" + Language.ray.write(.from.path) + "]")),
       gone.map(assigned(.path, "None")),
@@ -192,7 +184,7 @@ History &+= {
     ].flatten.join("; ") as Program))
 
   stored => Store.routed(this).map(.kept_in?.language).compact
-  lossless => stored.find(.fidelity == Language.Fidelity.lossless)
+  lossless => stored.find(. is Language.Lossless)
 
   append (location: Location) => head -- (commit => {
     location / (id as String + ".ray") += commit.written(above: written_last)
@@ -204,11 +196,11 @@ History &+= {
     : language.written_to(copy ~~ (.base = head?.previous), location)
 }
 
-History{location ∈ @me}$ = $.ray | $.git
+History{location is @me}$ = $.ray | $.git
 
 Program &+= {
-  commits => written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last?.code = .last.code + .))
-  as (=== History) => commits.reduce(held = History() => held.extended(History.Commit.read(.label, .code)))
+  as (=== History) => written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last?.code = .last.code + .))
+    .reduce(held = History() => held.extended(History.Commit.read(.label, .code)))
 }
 
 Node &+= {
@@ -216,60 +208,50 @@ Node &+= {
 }
 
 Program &+= {
-  // A run is logged as its who, and runs as whoever runs it; only @ether/security runs it as a verified giver (W2.1).
-  run => Run.log.commit(who, this).head.opened.change
-  rewrites => history.since(None){.who is Program}
-  revoked (rule: Program) => rewrites{.who === rule}.first -- (used => used ? (history.at(used.previous).value ?? this){O: O - rule} : this)
+  // Runs are logged as their who for replay, kept 30 days (W2.17), and run as whoever runs them; only @ether/security
+  // runs one as a verified giver (W2.1).
+  static runs: History = History()
+  static kept: Quantity.Temporal = 30 days
+  static recent => runs.since(None){.when >= Time.now - kept}
+  static replay (logged: History.Commit) => logged.opened.change if recent.some(=== logged)
 
+  run => Program.runs.commit(who, this).head.opened.change
+  rewrites => history.since(None){.who is Program}
+  revoked (rule: Program) => rewrites{.who === rule}.first -- (used => used ? (history[used.previous].value ?? this){O: O - rule} : this)
+
+  // A transaction runs on a fork of the history and is merged as a whole, or not at all.
   right-to-left transaction => {
     branch = &caller.history.fork
-    result = branch.run(this)
+    result = Program(code: code, history: branch)()
     return result ~~ &caller.history.merge(branch) unless result.erred
     ERROR `a transaction was undone`
     result
   }
 }
 
-Transaction := class = forwards: *?, backwards: *? = forwards⁻¹, history: History = History(), applied = false {
-  branch: History = history.fork
-
-  record (who, change): static => this ~~ branch.commit(who, change)
-  commit: static => this ~~ history.merge(branch) ~~ (.applied = true)
-  abort: static => this ~~ branch.drop
-  reversed => Transaction(forwards: backwards, backwards: forwards, history, applied)
-}
-
-Grant &+= {
-  uses => Permissions.current.allowed.history{=== this}.count
+Access &+= {
+  uses => allowed ? [allowed, allowed.previous**].flatten.count : 0
   once => uses == 0
-}
-
-Run &+= {
-  static log: History = History()
-  static kept: Quantity.Temporal = 30 days
-
-  static logs => log.since(None){.when >= Time.now - kept}
-  static replay (logged: History.Commit) => logged.opened.change if logs.some(=== logged)
 }
 
 Compiler &+= {
   formats := {
-    ({kept: Language{fidelity == Language.Fidelity.lossless}} | {other: Language}).read({source}) => kept.read(source)
-    {history: History{location && stored.some(.fidelity == Language.Fidelity.snapshot)}}.checkout({label}) => history.pinned(label) -- (pinned =>
-      history.stored.find(.fidelity == Language.Fidelity.snapshot).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history.at(pinned).value))
+    ({kept: Language.Lossless} | {other: Language}).read({source}) => kept.read(source)
+    {history: History{location && stored.some(!(. is Language.Lossless))}}.checkout({label}) => history.pinned(label) -- (pinned =>
+      history.stored.find(!(. is Language.Lossless)).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history[pinned].value))
   }
 
   per_object := {
-    {history: History{public && (. as Program as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
-    {history: History{public && (. as Program as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
+    {history: History{public && (written_as() as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
+    {history: History{public && (written_as() as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
   }
 
   cached := {
     {history: History{readable}}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => history.cached_at(c).stored) -- (kept =>
       kept.map(.written(above: kept[.index - 1] if .index > 0)).join(""))) as Byte[])]
     {history: History{caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned)?.ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
-      ? history.at(pinned).ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.caches.find(.find(hit.id)).at(hit.id).value => .applied(held))
-      : history.at(pinned).value))
+      ? history[pinned].ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.caches.find(.find(hit.id))[hit.id].value => .applied(held))
+      : history[pinned].value))
   }
 
   delta := {
@@ -278,7 +260,12 @@ Compiler &+= {
 
   stored := formats + per_object + cached + delta
 
-  levels => [none, default, folding, logic, minimising, memoised, formats, per_object, cached, delta, stored]
+  // A history read without trust keeps its lines and ignores their claims (L§9.2.12): `with (O = O + Compiler.untrusted)`.
+  untrusted := {
+    {commit: History.Commit}.versions => []
+  }
+
+  levels &+= [formats, per_object, cached, delta, stored]
 }
 
 Language &+= {
@@ -288,4 +275,8 @@ Language &+= {
 Language.ray &+= {
   level &+= History.level
   written &+= History.written
+}
+
+Consistency := class = replicas: *[] = [] {
+  read (value) => replicas.every(.synced) ? value : Program(name: "wait for the replicas", goal: value)
 }

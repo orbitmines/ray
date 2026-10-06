@@ -18,3 +18,4 @@ unless ccp_sealed.ciphertext as Hexadecimal₂₂₈ == "d31a8d34648e60db7b86afb
 unless ccp_sealed.tag as Hexadecimal₃₂ == "1ae10b594f09e26a7e902ecbd0600691" { INFO@mark `CCP4 the tag of RFC 8439 §2.8.2 is not 1ae10b59…` }
 unless ChaCha20Poly1305.opened(ccp_key, ccp_nonce, ccp_aad, ccp_sealed as Byte[]) == ccp_text { INFO@mark `CCP5 what was sealed does not open` }
 unless ChaCha20Poly1305.opened(ccp_key, ccp_nonce, [], ccp_sealed as Byte[]) is Diagnostic { INFO@mark `CCP6 what was sealed opens under other associated data` }
+unless ChaCha20Poly1305.authentic(ccp_sealed.tag, ccp_sealed.tag) && !ChaCha20Poly1305.authentic(ccp_sealed.tag, [ccp_sealed.tag[..<15], ccp_sealed.tag[15] ~x|| 0x01].flatten) { INFO@mark `CCP7 a tag is not compared byte for byte` }

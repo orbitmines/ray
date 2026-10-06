@@ -81,8 +81,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   **Follows (2026-10-06):** not a default. Declaration and assignment are §2.1 and T1.6, and an assignment is checked against the history it writes over, a conflict becoming a quest (W3.4). "Overwrite if None, else `&=`" may be a store's or a location's own policy, nothing more. From §2.1, T1.6, W3.4.
 
 ### 2.5 What an assignment replaces (*user, 2026-10-06*)
-- **Decided:** a program's own graph is its history. An assignment keeps the value it replaces as the new value's `.previous`, so `x.previous**` are the values `x` held before, nearest first; this is Ray structure, not a `History`. The `=` edge carries when it was made, `.when` (W3.4).
-  - The core keeps no history: `with`/`assume` restore what their settings wrote through `.previous`; transitions, key presses, idleness, a quest's attempts, a chat's messages, an item's trail and a reference's notes read `.previous**` and `.when`.
+- **Decided:** a program's own graph is its history. An assignment keeps the value it replaces as the new value's `.previous`, so `x.previous**` are the values `x` held before, nearest first; this is Ray structure, not a `History`. There is no time on that edge: when a value changed comes from version control (a commit's stamp, `x.history`), so anything measured against time imports `@ether/version` (user, 2026-10-06).
+  - The core keeps no history: `with`/`assume` restore what their settings wrote through `.previous`; transitions, key presses, idleness, a quest's attempts, an item's trail and a reference's notes read `.previous**`; what needs time (transitions, pointer velocity, double presses, idleness, recent solves) reads `x.history` with `@ether/version` imported.
   - Commits, repositories, logs of runs, stores and storage levels are `@ether/version` (§9.1).
 
 ---
@@ -367,6 +367,12 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A permission is a `.cfg.ray` rule over `(origin, capability, target)`: `@company may network @https://api.x.com`.
   - Data carries a mark saying its derivatives may not leave (`local`); the engine tracks it through composition, the way `listed_by_separator` is carried.
 - **Decided:** the origin is the whole chain (company ← me ← library). Permissions see every hop, and a prompt says "@company wants to run this, originating from @me".
+- **(2026-10-06)** There is no `Run`: the chain is the running Program's (`&@`, the caller frame's program). A Program has a
+  `caller` (the program that started it) and `hops` (`[caller.hops, who]`, the origin first); `may(method, target)` holds when
+  every hop is allowed by the target, and `ask` answers a quest for the grant when not. `speculate`/`refuse` are the run
+  settings `with (Program.speculated |= x)` / `with (Program.refused |= x)`; `Refused` and `Abstracted` are narrowings of Program.
+  A permission is an `Access` on the node it names (below, §8.3); a capability is a path granted the same way
+  (`@me.execute { @me/device/camera }`, asked with `&@.ask`).
 - **Decided (2026-10-06):** running as a character is `@name { … }`, or `@<uuid> { … }` with the character's UUID.
   - The block runs with `&caller` set to that character, so `@me` inside it is that character.
   - It works only when the character is here: logged in or hosted on the local instance. Otherwise it is an error.
@@ -392,6 +398,13 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Visibility is a field of each item, `@public | @me | @<group>`, default inherited from the parent.
   - Visibility is itself a value, so it has a visibility. The visibility's visibility is what makes an item *findable*: A can be `@private` while its visibility is `@public`, so others find that A exists but cannot read it.
 - **Decided:** an item inherits its parent's visibility. At the top it falls back to the default privacy policy, which is private.
+- **(2026-10-06, one mechanism)** A node's `access` superposition is the only store of who may do what. A grant `{who}.read x`
+  is an `Access(who, method, filter)` placed on what `x` names: on the value or field the expression answers, or on the
+  expression itself when it derives something (`@ether.read x.count`). `x.visibility` is its own access, else its parent's,
+  else `Access(Node.policy)`; `x.allows(who, method)` checks it and the grants on expressions naming `x`. The levels are `who`
+  values: the core has only `none` (no one; `none.read` is a secret, `const` is `none.write`) and `confidential = => Node.policy`;
+  `local`, `localhost`, `private` and `public` are Ether's names for `@local`…, and Ether clamps
+  `confidential = => Node.policy & @private.managed` (W5.5). There is no `Grant`, `Permissions`, `Accessor` or `Visibility`.
 - **(2026-10-06)** That visibility is the node's `access`, the only one: `x.public` is whether it reaches `@public`, and
   `x.publish` makes it public. Commits, references and items have no `visibility`/`draft`/`staged` of their own (World W3.3).
 - **From the drafts review (2026-10-06):**
@@ -446,6 +459,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A project that uses a language either declares it in its `.project.ray` or reaches it through `$.name`.
   - The core reaches them only through `$.name`, lazily. Examples: in an optimisation level that picks a format (`StoreOptimizations` answers `$.sqlite`), in the enforcement of a permission (`as $.posix`), or in a store route (`$.git`).
   - A `$/<name>` project holds only the outside language: its syntax, levels, API values and tests. What is specific to Ray stays in the Ray library. The renderers are Ray's, so they are in `@ether/ui`: `UI.HTML` writes `$.html`, `$.css`, `$.js` and `$.json`, and `UI.TUI` writes `$.ansi`, `$.sixel` and `$.kitty`. `Language.Direct`, Ray's own raster drawing, stays in the core UI, and its fonts are `$/opentype`.
+  - **(2026-10-06)** A language is declared one way: its class is `class: Language`, with its header when the format has one (`JSON := class: Language (Blank, root: Value, Blank)`), so `$.name === Name` for every project; there is no `static language = Language(…)`. Reading is `Name.read`, writing `Name.write` or `x as Name`.
+  - **(2026-10-06)** A format reads straight into Ray values with one grammar, its headers, which also write it; `@name` fragments read with the same headers, a hole being a Ray value at a typed position. There is no record vocabulary between a format and Ray: a `@js` fragment is a Ray program, and writing JS is one Compiler level over Ray's program shapes. Kinds of a value (an HTTP status class, a DNS record type, a Noise token, a PNG filter) are narrowings with their own members.
+  - **(2026-10-06)** Pieces several languages share are their own projects: `$/hmac` and `$/hkdf` over any `Encoding.Digest` (each digest gives `block` and `size` in bytes), and `$/crc32`. A curve's field belongs to the language that defines it (`X25519`; `Ed25519` declares `@x25519`).
   - The core keeps only what it needs to work:
     - UTF-8 and the Unicode tables, because a String is characters;
     - ISO 8601, because a Time is written and read as one;
@@ -770,6 +786,7 @@ Paths are relative to `@ether/`; `ep` = `ray/.entrypoint.ray`. Each line gives w
 ### Answers 2026-10-05, second round
 - **G3.11.** There is no `accepts` and no `alike`. A rule for one operator writes it in the pattern (`{a} - {b} => …`); kinds of operators are what modifiers such as `chainable` say about methods.
 - **`&@`.** The call chain of a run (whose origin chain L§8 keeps): `&@.last` is who runs it now, `&@.first` who started it.
+  **(2026-10-06)** `&@` is the running Program: `&@.who` is who runs it now, `&@.hops.first` who started it, `&@.may`/`&@.ask` check a grant.
 - **Which reading wins.** A longer rule over operators wins over a value's own operator method only where the operators are `chainable`: that is what `chainable` is for. It is not a general rule.
 
 ### Answers 2026-10-05

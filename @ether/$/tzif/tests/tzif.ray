@@ -1,0 +1,12 @@
+// TZif files read into zones (https://datatracker.ietf.org/doc/html/rfc8536).
+
+mark ^keyword := external global
+
+// A version 1 file of one local time type, UTC: no transitions, offset 0, abbreviation "UTC" (RFC 8536 3.1, 3.2)
+utc_tzif := ["TZif".bytes, [0x00], [0x00] * 15, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4], [0, 0, 0, 0, 0, 0], "UTC".bytes, [0x00]].flatten
+utc := TZif.read(utc_tzif)
+unless utc.v1.type_count == 1 && utc.v2 === None { INFO@mark `TZIF1 a version 1 file is not read as one data block` }
+unless utc.at(Time.now) -- (.offset == 0 seconds && !.daylight && .abbreviation == "UTC") { INFO@mark `TZIF2 a zone of one type is not UTC at every time` }
+// A TZ string footer (RFC 8536 3.3, POSIX.1-2024 XBD 8.3)
+unless ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).start.month == 3 && ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).offset.seconds_west == -3600 { INFO@mark `TZIF3 a footer's TZ string is not read` }
+unless $.tzif === TZif { INFO@mark `TZIF4 $.tzif is not TZif` }

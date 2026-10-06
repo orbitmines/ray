@@ -1,0 +1,15 @@
+// OpenType fonts read by their table directory (https://learn.microsoft.com/en-us/typography/opentype/spec/otff).
+
+mark ^keyword := external global
+
+// A table directory with no tables: sfntVersion 0x00010000 for TrueType outlines, numTables 0 (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
+empty_font := OpenType.read([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+unless empty_font.sfnt_version == 0x00010000 && empty_font.records.empty { INFO@mark `OTF1 an empty table directory is not read` }
+// int16 and F2DOT14 (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#data-types)
+unless (0xFFFF as OpenType.I16).signed == -1 && (0x4000 as OpenType.F2Dot14).value == 1 && (0xC000 as OpenType.F2Dot14).value == -1 { INFO@mark `OTF2 a signed or 2.14 number is not read` }
+// Two off-curve points imply an on-curve point between them (https://learn.microsoft.com/en-us/typography/opentype/spec/glyf#simple-glyph-description)
+off_a := OpenType.Point(Geometry.Vector(0, 0), false)
+off_b := OpenType.Point(Geometry.Vector(2, 2), false)
+on_c := OpenType.Point(Geometry.Vector(4, 0), true)
+unless OpenType.Step(off_a, off_b).segment == Geometry.Quadratic(Geometry.Vector(0, 0), Geometry.Vector(1, 1)) && OpenType.Step(on_c, on_c).segment == Geometry.Vector(4, 0) && OpenType.Step(on_c, off_a).segment == [] { INFO@mark `OTF3 a step between contour points is not the segment glyf describes` }
+unless $.opentype === OpenType && Language.named(".ttf") === OpenType { INFO@mark `OTF4 $.opentype is not OpenType` }

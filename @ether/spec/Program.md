@@ -87,6 +87,7 @@ From the drafts review (2026-10-06).
   like `confidential`. Recommend: every Program has an inferred `.effects` (the locations it may write); a parameter may
   restrict it (`g: Program{effects ⊆ @local}`); passing `confidential` data requires the callee's effects to stay within
   the data's visibility.
+  **(2026-10-06)** `effects` is the external names a program reaches (`reachable` over `continuations`, the calls that are not external); `Pure`, `Deterministic` and `Effecting` test those names directly (`io`, `os`, `random`, `time`; `@ether/network` adds `network` to `Effecting`). There is no `Effects` class or `Source` enum.
   **Follows (2026-10-06):** every Program has an inferred `.effects` (`Effects.of`); a parameter restricts it with a narrowing on Programs (`g: Program{effects ⊆ @local}`), and passing `confidential` data requires the callee's effects to stay within the data's visibility. From L§8.1 (effects are inferred, nothing declared), narrowings on Programs (P4.9 `Terminating`) and L§8.2 (the `local` mark is tracked).
 
 From the drafts verification (2026-10-06).

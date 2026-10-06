@@ -1,0 +1,10 @@
+// CRC-32 check values (https://reveng.sourceforge.io/crc-catalogue/17plus.htm#crc.cat.crc-32-iso-hdlc).
+
+mark ^keyword := external global
+
+// The catalogue's check: "123456789" is 0xCBF43926
+unless "123456789".bytes as CRC32 as Binary₃₂ == 0xCBF43926 { INFO@mark `CRC1 the check string does not sum to cbf43926` }
+unless [] as CRC32 as Binary₃₂ == 0 { INFO@mark `CRC2 no bytes do not sum to zero` }
+// PNG's IEND chunk carries the CRC of its type alone (https://www.w3.org/TR/png-3/#11IEND)
+unless "IEND".bytes as CRC32 as Byte[] == [0xAE, 0x42, 0x60, 0x82] { INFO@mark `CRC3 IEND's type does not sum to ae426082` }
+unless $.crc32 === CRC32 { INFO@mark `CRC4 $.crc32 is not CRC32` }

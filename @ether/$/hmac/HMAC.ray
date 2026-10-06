@@ -1,0 +1,14 @@
+// HMAC: Keyed-Hashing for Message Authentication, over any digest (https://www.rfc-editor.org/rfc/rfc2104)
+HMAC := class: Encoding.Digest = hash: Encoding.Digest, key: Byte[] {
+  static extensions = ".hmac"
+  size => hash.size
+  block => hash.block
+
+  // K: a key longer than B bytes hashed first, then zeros to B bytes (RFC 2104 §2, §3)
+  padded => (key.count > block ? hash.write(key).bytes : key) -- (k => [k, [0] * (block - k.count)].flatten)
+
+  // H(K XOR opad, H(K XOR ipad, text)), ipad 0x36 and opad 0x5C repeated B times (RFC 2104 §2)
+  written := {
+    {writing: Language.Writing} => hash.write([padded.map(. ~x|| 0x5c), hash.write([padded.map(. ~x|| 0x36), writing.value as Byte[]].flatten).bytes].flatten).bytes
+  }
+}

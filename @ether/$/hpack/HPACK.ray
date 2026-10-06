@@ -41,7 +41,7 @@ HPACK := class: Language {
     (28, [2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 127, 220, 249]),
     (30, [10, 13, 22, 256])
   ]
-  static code = $.deflate.Huffman((0..256).map(symbol => Lengths{symbol is (.1 is String ? .1.bytes : .1)#}.first.0))
+  static code = Deflate.Huffman((0..256).map(symbol => Lengths{symbol is (.1 is String ? .1.bytes : .1)#}.first.0))
 
   // Huffman-coded octets: codes most significant bit first, padded to the octet with the high bits of EOS (https://www.rfc-editor.org/rfc/rfc7541#section-5.2)
   static Coded := class (symbols: code.Symbol{< 256}[], padding: Binary{length < 8 && every(. == 1)} = [1] * ((8 - symbols.map(code.bits(.).length).sum % 8) % 8)) {

@@ -68,7 +68,7 @@ HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
 
 History &+= {
   as (=== Program) => written_as()
-  written_as (program_of = .program) => since(None) -- (commits => commits.map(c => c.rewritten(program_of(c)).written(above: commits[c.index - 1] if c.index > 0)).join("") as Program)
+  written_as (change_of = .change) => since(None) -- (commits => commits.map(c => c.rewritten(change_of(c)).written(above: commits[c.index - 1] if c.index > 0)).join("") as Program)
 
   static edit (before, after) => (Language.ray.write(before) as Byte[]) -- (old => (Language.ray.write(after) as Byte[]) -- (new =>
     Encoding.common(old, new) -- (prefix => Encoding.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
@@ -131,7 +131,8 @@ History &+= {
 History{location ∈ @me}$ = $.ray | $.git
 
 Program &+= {
-  as (=== History) => ((code as String) as History.Commit[]).reduce(held = History() => held.extended(.))
+  commits => written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last?.code = .last.code + .))
+  as (=== History) => commits.reduce(held = History() => held.extended(History.Commit.read(.label, .code)))
 }
 
 Node &+= {

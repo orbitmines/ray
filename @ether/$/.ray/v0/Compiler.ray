@@ -73,7 +73,7 @@ Compiler := class {
   }
 
   delta := {
-    {commit: History.Commit{previous && (History.edit(previous.value, value) as String).count < (program as String).count}}.program => History.edit(commit.previous.value, commit.value)
+    {commit: History.Commit{previous && (History.edit(previous.value, value) as String).count < (change as String).count}}.change => History.edit(commit.previous.value, commit.value)
   }
 
   stored := formats + per_object + cached + delta

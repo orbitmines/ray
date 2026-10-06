@@ -435,15 +435,15 @@ Answers from 2026-10-06.
   is a quest.
 - **W3.11b (2026-10-06)** For now, the Mercurial, Fossil, Pijul and Subversion backends, with the languages only they use (SHA3, MD5, BLAKE3, Bincode, Zstd, Base32) the unused SHA-512 and Blowfish, the SARIF, TAP and JUnit report formats (LSP stays), the permission backends (POSIX, ACL, Android, browser permissions; a grant is recorded, not enforced on the platform) with XML, the SQL stores (SQL, SQLite, Postgres) the terminal image protocols (Sixel, Kitty; images are drawn as text) and the shell language (`$/sh`), are on the branch `version-control` for later; main has Git only (with SHA-1, zlib, DEFLATE, and SHA-256 for git's SHA-256 object format).
 - **W3.12** A `.%` history is a program, and its working directory holds the value. A commit is one appended line:
-  `UUID\ [parents] <stamp> @<who> { … }`, with any Ray as its body. Caches are optimisation levels. (The `.%/index.ray`
+  `UUID\ with (@me = @who; now = X) <change>`, any Ray (L§9.2.6). Caches are optimisation levels. (The `.%/index.ray`
   name map was dropped 2026-10-06: names are in the program.)
 - **W3.13** Which backend is used, whether a history is stored per object or per project, and the caches are all
   Compiler levels (`Compiler.stored`).
 - **W3.14** The STD's and the players' histories are separate. They are joined into one global order by stamp, and
   `global%[version]` pins a version. A STD fix substitutes for the version it fixes in everything written after the
   fix; what was written before it replays as recorded.
-- **W2.8b** `@character { … }` runs a block as that character when the character is here (L§8.2). It is how a
-  `.%` line says who made the commit.
+- **W2.8b** `@character { … }` runs a block as that character when the character is here (L§8.2). A `.%` line
+  says who made the commit with `with (@me = @who)` instead (L§9.2.6, 2026-10-06).
 - **W3.15** There is no `Backend` class: each backend is a plain `Language`, in its own project `$/git`, `$/mercurial`,
   `$/fossil`, `$/pijul` or `$/subversion`, and is reached as `$.git` and so on (L§9.1, L§9.2).
 - **W3.16** `Ray.history` is `Node.history`. A node's history is a `History`; its stored `.%` form is the Ray

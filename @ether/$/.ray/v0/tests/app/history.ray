@@ -18,10 +18,10 @@ unless vh.head.previous.stamp < vh.head.stamp { INFO@mark `VC5 a later commit is
 // Running as a character.
 unless (@ada { @me }) == ada { INFO@mark `VC6 a block run as a character does not run as it` }
 
-// `.%`: a line per commit, the program that produces the next version, read and written through the commit's header.
+// `.%`: a line per commit, `LABEL\ with (@me = @who; now = X) <change>`, ordinary Ray.
 vl := vh.head.written(above: vh.head.previous)
 unless vl ~= ⊢(vh.head.id as String + "\\ ") { INFO@mark `VC7 a line does not begin with its label` }
-unless vl ~= " @ada { " { INFO@mark `VC8 a line does not run as who made the commit` }
+unless vl ~= "\\ with (@me = @ada; now = " { INFO@mark `VC8 a line does not set who made the commit and when` }
 unless vl ~= "(0..<100).for" { INFO@mark `VC9 a line does not hold the program as written` }
 vt := Language.ray.write(vh)
 vf := vt.at(vh.id as String + ".ray").content as String
@@ -41,6 +41,7 @@ vp := Program(code: {
   2
 })
 unless (vp as History).count == 2 { INFO@mark `VC16 a labelled program is not a history of its labels` }
+unless !Language.cfg.admits(Program(code: { while true { } })) { INFO@mark `VC57 a line's settings may run forever` }
 
 // What the Ray language keeps.
 unless Language.ray.fidelity == Language.Fidelity.lossless { INFO@mark `VC17 the .% history is not lossless` }

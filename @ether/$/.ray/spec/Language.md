@@ -350,7 +350,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - The block runs with `&caller` set to that character, so `@me` inside it is that character.
   - It works only when the character is here: logged in or hosted on the local instance. Otherwise it is an error.
   - `@me { … }` runs as whoever `@me` already is.
-  - It replaces the draft's `&caller = <uuid>;`, and every `.%` line is written with it (§9.2).
+  - A `.%` line uses `with (@me = @who)` instead, which replaces the draft's `&caller = <uuid>;` (§9.2.6, 2026-10-06).
 - **From the drafts review (2026-10-06):**
   - **8.2.1 Checking a context checks its program — Decided (draft).** An access check on a context checks the running Program and its `&who` / origin chain, never the frame's data. *`.ray2/Program.ray:247–248`*
   - **8.2.2 Releasing a derivative — Q.** A permission for whether data and its derivatives may cross the network, or only some derivatives (a count) (*`.ray2/_todo/ray.ray.txt/Ether/instance/Access.ray:1–2`*). Recommend: a grant may name a derivative (`@ether.read (x.count)`) that may leave although x may not; library code runs as `@ether`, which has access on the local instance only.
@@ -483,10 +483,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     - A tie is `Quest("rename")`.
 - **Decided (2026-10-06):** the `.%` format.
   - The stored form is the program. The working directory holds the resulting value, as in git.
-  - A line is `UUID\ <stamp> @<who> { … }`. The body is any Ray, applied to `.`, the value before; ` @<who> { … }` is the ordinary run-as-a-character block.
-    - The parent is left out when it is the line above.
-    - A fork names its one parent: `UUID\ A <stamp> @<who> { … }`.
-    - A merge names both: `UUID\ A & B <stamp> @<who> { … }`.
+  - A line is `UUID\ with (@me = @who; now = X) <change>` (9.2.6, user 2026-10-06). The change is any Ray, applied to `.`, the value before.
+    - The parent is the line above.
+    - A line with another parent starts from it: `UUID\ with (…) . = A; <change>`; a merge starts from both, `UUID\ with (…) . = A & B`. A label read as a value is the value there.
   - A body is whatever was run: `+ "B"`, `.x = 1`, `.["b"] = .["a"]; .["a"] = None`, a loop, a class. There are no body forms of its own (the draft: `(&caller = …; 0..100.for this += 1)`).
   - Checking out is running the file up to a label. Committing appends one line and reads nothing back.
   - A label inside a body points at an intermediate result.
@@ -505,7 +504,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Stamps give one global order.
   - The STD's and the players' histories are separate commit Rays. `History.global(histories)` joins them under one commit, ordered by stamp.
   - `x%[label]` pins a version.
-  - A STD bug fix is a commit whose program begins with a rule on mentions of the version it fixes, `{value}%[<old>] => value%[<fix>]` (the draft: "when this version is mentioned, use this version instead"); `history.fix(who, old, change)` writes it.
+  - A STD bug fix is a version that the narrowing for the version it fixes also takes (9.2.9); `history.fix(who, old, change)` writes it.
     - A pin resolved for a line stamped after the fix gets the fix.
     - A line stamped before the fix replays as recorded, and its caches stay.
   - Concurrent commits that leave one field with different values (three-way against their common ancestor, `History.clashes`) are `Quest("merge")`.
@@ -515,10 +514,11 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - **9.2.3 Labels inside a body; expansion not stored — Decided (draft).** A label may sit on any subexpression, guarded by `if` (`0..100.for (UUID\ if i == 50) this += 1`). Unlabelled per-iteration states are not stored: they are the line's `.expand` (ORIG:14–15, 40–42). (VC8)
   - **9.2.4 Assigning to a label patches — Decided (draft).** `label\ = value` replaces the subexpression tagged `label\` in later runs: tag `0..(tag\ 100)`, then `tag\ = 99`. This is how the STD is patched without rewriting text (ORIG:37). (VC9)
   - **9.2.5 Out-of-order lines — Decided (draft).** `A + B + C` evaluated as `A + (B + C)` is written as the lines `B`, `.+ C`, `A + .`: a line starting with an operator or `.` continues on the previous line's result, and a line that needs another receiver names it (ORIG:49–56). **Q:** the draft's own ambiguity ("A" not defined on `B + C`); recommend `.` always be the previous result and every other value be written by name. (VC11)
-  - **9.2.6 Time in the header or in the body — Q (conflict).** Above, a line is `UUID\ <stamp> @<who> { … }`, the stamp a header position. The draft sets time inside the body as a context value, `&Time.NOW = …;`, like `&caller` (ORIG:11). Recommend the draft's form: an HLC `Stamp` is a Time value assigned in the body, so nothing is read beyond what Ray reads. (VC13, and the rest of VC1)
-  - **9.2.7 What `&caller` is — Q (conflict).** §8.2 decided that `@name { … }` replaces the draft's `&caller = <uuid>;` and is how a line says who committed. In the draft `&caller` is the *function* that caused the change: its version, plus the call instance; a function's usages follow from it, and inside a loop the caller may change per iteration (ORIG:42, 58, 67–69). Recommend keeping both: `&caller = <function-version>` inside the `@who { … }` block. (VC2)
-  - **9.2.8 One file per object or per repository — Q (conflict).** Above, a repository is canonically one file, split per object past 1 MiB by `per_object`. The draft names each object's history by its original UUID and writes a change that touches several objects into each object's file, sharing its `&caller`; there is no project-wide line (ORIG:59–66). Recommend: per object is canonical, and joining them into one file is the optimisation level. (VC3)
-  - **9.2.9 STD bug fixes — Q.** Above, a fix is a commit beginning with the rule `{value}%[<old>] => value%[<fix>]`. The draft leaves three options open (substitute when mentioned; but histories may rely on the bug; or generate caches with the bugged version and never call it again) (ORIG:30–34). Recommend also allowing the fix as a `.%` line `OLD-LABEL\ = (fixed)` (9.2.4), with the stamp rule above. Still open from the draft: refusing a history written against a pre-fix version. (VC10)
+  - **9.2.6 Who and when — Decided (user, 2026-10-06).** Not header positions: a line is `LABEL\ with (@me = @who; now = X) <change>`, ordinary Ray. `with` sets the context the change runs in: `@me` is who made it (replacing the draft's `&caller = …` and the `@who { … }` form above) and `now` is its time (the draft's `&Time.NOW = …`, ORIG:11). (VC13, VC1)
+  - **9.2.6b The settings are `.cfg.ray` — Decided (user, 2026-10-06).** A line's `with (…)` settings are read as `.cfg` (`Language.cfg`, which admits only `Program{Pure & Terminating}`), so reading a history forces the halting check on them to succeed. A fix names the versions it also is with `version = OLD` there (9.2.9).
+  - **9.2.7 `&caller` — Decided (user, 2026-10-06).** Superseded by `with (@me = @who)` (9.2.6). The draft's other meaning, the function version that caused the change (ORIG:42, 58, 67–69), is not a line field; it is what the change's code itself calls. (VC2)
+  - **9.2.8 Files — Decided (user, 2026-10-06).** Neither one file per object nor one per repository is decided: the compiler chooses. The spec only describes declaratively what happens (a history is a Ray of programs over a value); per object, per project, splitting and caches are optimisation levels (W3.13). (VC3)
+  - **9.2.9 STD bug fixes — Decided (user, 2026-10-06).** A function is one thing; its versions each add or mention part of how it is structured. A pin is a narrowing of the function over that constraint, which collapses to the function that is required, so a fix is one more version that the narrowing for the fixed version also takes. Which version a narrowing collapses to is chosen by the compiler, and this is a general mechanism (narrowing a superposition of partial definitions), not one for version control. Still open from the draft: refusing a history written against a pre-fix version. (VC10)
   - **9.2.10 Pinning the STD — Q.** Above, `History.global(histories)` joins the STD's and the players' histories. The draft pins the STD inside a history with an ordinary assignment, `global = global%[UUID-VERSION-OF-STD]`, keeps STD and player histories in separate subdirectories, and wants three global orders: STD + player, STD only, player only (ORIG:13, 26–29). Recommend the draft's statement; the three orders are queries over stamps, not stored. (VC12)
   - **9.2.11 Program labels vs UUID labels — Q.** A program's own labels must not be read as UUIDs, and `\.` in strings must be escaped (ORIG:16–17); above, the writer escapes newlines. Recommend: UUID labels match only the UUID pattern, so word labels never collide. (VC14)
   - **9.2.12 Reading without trusting a history's claims — Q.** Loading a history while ignoring what it claims (such as implementing another version) (ORIG:6). Recommend a run setting, like `speculate`/`refuse` (§8.1): `with History.trusted = false`. (VC15)

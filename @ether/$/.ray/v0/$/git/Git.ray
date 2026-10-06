@@ -182,9 +182,9 @@ Git<format: Format = Format.sha1> := class: Language {
       : Language.Entry(name: .name, content: object(.id as Id).content, mode: modes.find(.value == .mode).key)))
     recorded => reference(noted_at) -- (tip => tip ? tree(commit(tip).tree).files.map((target: .path.replace("/", ""), line: .content as String)) : [])
     reachable (ids: Id[]) => ids.map(id => (reachable(commit(id).parents), id)).flatten.unique
-    read_commit (id: Id, made, repository: Repository) => commit(id) -- (made_by => (recorded.find(.target == id)?.line as History.Commit ?? History.Commit(
+    read_commit (id: Id, made, repository: Repository) => commit(id) -- (made_by => (recorded.find(.target == id)?.line -- (noted => noted ? (noted as Program as History).head : None) ?? History.Commit(
       stamp: repository.clock.receive(Stamp.at(made_by.author.when, node: made_by.author.name)), who: Character.local(made_by.author.name) ?? made_by.author.name,
-      program: History.change(made_by.parents.first ? tree(commit(made_by.parents.first).tree) : Language.Entry(), tree(made_by.tree)),
+      change: History.change(made_by.parents.first ? tree(commit(made_by.parents.first).tree) : Language.Entry(), tree(made_by.tree)),
       when: made_by.author.when, message: made_by.message)) ~~ (.previous = made_by.parents.map(made[.])#))
 
     history => Repository(location: root) -- (repository => reachable(references{.0 != noted_at && .0 != "HEAD"}.map(.1)).reduce(made = {} => made, {(.): read_commit(., made, repository)}) -- (made => repository
@@ -209,7 +209,7 @@ Git<format: Format = Format.sha1> := class: Language {
     line => history.since(None)
     commits => line.reduce(made = {} => made, {(.id): Object("commit", Commit(
       tree: (history.at(.).tree as Object).id, parents: .parents.map(made[.id].id),
-      author: (who: .who, when: .when) as Signature, committer: (who: .who, when: .when) as Signature, headers: [], message: .message ?? .program as String) as Byte[])})
+      author: (who: .who, when: .when) as Signature, committer: (who: .who, when: .when) as Signature, headers: [], message: .message ?? .change as String) as Byte[])})
     head => commits[history.head.id]
     notes => line.map(commit => (path: commits[commit.id].id, content: commit.written() as Byte[])) -- (noted =>
       Language.Entry.of(noted) -- (tree => (who: history.head?.who, when: Time.now) as Signature -- (signed => [objects_in(tree), Object("commit", Commit(tree: (tree as Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))

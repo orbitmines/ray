@@ -61,14 +61,7 @@ Node &+= {
 History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   static Label := UUID | Char.Word[]
 
-  static Commit := class: Ray (
-    id: Label = UUID.v4(), "\\",
-    (" ", from: Label[].join(" & "))?,
-    (" ", stamp: Stamp)?,
-    (" @", who: Character | UUID = &caller)?,
-    ((" { ", program: Program, " }") | ((" " | \n), program: Program)),
-    (\n | ⊣)
-  ) => {
+  static Commit := class: Ray = id: Label = UUID.v4(), who: * = @me, stamp: Stamp?, change: Program, from: Label[]?, versions: Label[] = [] {
     when: Time = stamp?.when ?? Time.now
     visibility: Accessor.Permission = Accessor.Permission.private
     message: String?
@@ -81,11 +74,15 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     merged => parents.count > 1
     staged => visibility == Accessor.Permission.private
     publish: static => this ~~ .visibility = Accessor.Permission.public
-    applied (held) => held -- program
-    rewritten (program: Program) => Commit(id, stamp, who, program, when, message, previous, line)
+    applied (held) => held -- change.run_as(who)
+    rewritten (change: Program) => Commit(id, who, stamp, change, versions, when, message, previous, line)
     value => line?.at(this).value ?? applied(None)
-    written (above: Commit? = None) => (this ~~ .from = (parents.id unless parents.empty || parents == [above])) as String
-    substitutes => program.written.map(.code ~= (⊢"{value}%[", label: Label, "] => ")).find(.)?.label
+    mentions (label) => id == label || versions ∋ label
+    settings => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty).join("")
+    written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.id.join(" & "), "; ") unless parents.empty || parents == [above], change as String, \n).join("")
+    static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
+      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.from, versions: set.version# ?? []))
+      : Commit(id: label, change: code))
 
     .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : external get value name
   }
@@ -104,8 +101,8 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   find (label) => since(None).find(.id == label)
   at (commit) => History(repository, head: commit is Commit ? commit : find(commit), caches)
 
-  commit (who, change, id: Label = UUID.v4(), when: Time = Time.now, message: String? = None): static => this ~~ .head = Commit(id, stamp: clock.now, who,
-    program: change is Program ? change : Program(code: { change }), when, message, previous: head, line: this)
+  commit (who, change, id: Label = UUID.v4(), when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
+    change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this)
   extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from ? commit.from.map(find(.))# : head) ~~ .line = this
   published => commits{!.staged}
   publish: static => this ~~ commits#.publish
@@ -118,9 +115,9 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: external ** start), Program(code: external ** end))
   {this}{from {literal start}} ^punctuation => Program(code: external ** start) -- (holds => stretches(holds, Program(code: { !holds.entered(this, None) })))
   value => ordered.reduce(held = None => .applied(held))
-  pinned (label, as_of: Stamp? = None) => since(None).find(c => c.substitutes == label && (as_of === None || c.stamp < as_of))?.id ?? label
+  pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last?.id ?? label
   checkout (label, as_of: Stamp? = None) => at(pinned(label, as_of)).value
-  fix (who, label: Label, change) => UUID.v4() -- (made => commit(who, ("{value}%[" + label + "] => value%[" + made + "]\n" + Language.ray.write(change)) as Program, id: made))
+  fix (who, label: Label, change) => commit(who, change, versions: [label])
   tree => value -- (held => Language.Entry.of(held.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[]))))
 
   fork => History(repository, base: head, head)
@@ -135,13 +132,13 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     : [(ours, theirs)]
   merge (other: History, who = &caller) => common(other) -- (base => {
     return Quest(name: "merge", goal: other) if clashes(at(base).value, value, other.value).nonempty
-    this.head = since(base).empty ? other.head : other.since(base).empty ? head : Commit(stamp: clock.now, who, program: Program(code: { . }), previous: head | other.head, line: this)
+    this.head = since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this)
     this
   })
-  static global (histories: History[]) => History(head: History.Commit(who: None, program: Program(code: { . }), stamp: histories.head#.stamp.max, previous: histories.head#))
-  squash (who) => History(repository, base, head: Commit(stamp: clock.now, who, program: commits.sort_by(.stamp).reduce(held = Program() => held + .program), previous: base))
-  cherry_pick (change: Commit): static => commit(change.who, change.program, message: change.message)
-  revert (change: Commit) => change.program⁻¹ ? commit(change.who, change.program⁻¹) : Quest(name: "revert", goal: change)
+  static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
+  squash (who) => History(repository, base, head: Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .change), previous: base))
+  cherry_pick (picked: Commit): static => commit(picked.who, picked.change, message: picked.message)
+  revert (reverted: Commit) => reverted.change⁻¹ ? commit(reverted.who, reverted.change⁻¹) : Quest(name: "revert", goal: reverted)
 
   received (stamp: Stamp) => clock.receive(stamp)
 }

@@ -117,3 +117,7 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
 - **(2026-10-06, user)** A rule takes effect from the moment it is defined, within the same pass (R0.4.3); the next pass
   picks up what was written later in the file.
 - **(2026-10-06, user)** Native code is rebuilt at every start, not kept on disk (R0.5).
+- **(2026-10-06, user)** Where a statement ends is a type (option 3): a capture with no type reads up to the end of its
+  line (`{x}` is `{x: Char{!= ⏎}[]}`); that default is the only place the host knows a newline. What spans lines says so in
+  its type (`Balanced`, `Continued`, defined in the entrypoint), and the grammar rule is redefined early as
+  `{pattern} => {body: Continued} => …`. After a statement, reading goes on after the line end its last capture stopped at.

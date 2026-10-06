@@ -282,6 +282,23 @@ while ^class := class {
   )
 }
 
+// A closure as a value, in brackets: `(n => n + 1)`, `((a, b) => a)` (G2.2: its body follows `=>`). A call's arguments are
+// read in brackets, so `xs.map(n => n + 1)` hands the method a closure.
+({parameter ^parameter} {`=>`} {body}) ^punctuation => (
+  closure := Program()
+  closure.code = external ** body
+  closure.parameters = external ** parameter
+  closure.context = external .
+  closure
+)
+(({parameters ^parameter}) {`=>`} {body}) ^punctuation => (
+  closure := Program()
+  closure.code = external ** body
+  closure.parameters = external ** parameters
+  closure.context = external .
+  closure
+)
+
 do{ }{loop_block}{ }while{ }{cond} ^class => (
   first_round := external ** loop_block
   inline first_round
@@ -1010,7 +1027,6 @@ Node := base class {
     closure.context = this
     (external get this method)(closure)
   )
-
   [{property}] ^punctuation => external get this property
   [] => (
     item := this
@@ -1021,9 +1037,9 @@ Node := base class {
   )
 
   copy => (
-    copy := external .
-    external extend copy this
-    copy
+    copied := external .
+    external extend copied this
+    copied
   )
 
   diagnostics = None

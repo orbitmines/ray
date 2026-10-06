@@ -514,7 +514,7 @@ Answers from 2026-09-30.
 - **W3.2** Git import/export, as a frontend with an inverse, is part of L§9.2's first milestone.
 - **W7** The editor notes are the IDE's backlog (2027); they are not implemented in v0.
 - **W2.1** `==` on characters and instances compares public keys, now. Key compromise and rotation later.
-- **W1.12 Names resolve in the selected world — Decided (user, 2026-10-06).** Each instance runs its Ether files
+- **W1.13 Names resolve in the selected world — Decided (user, 2026-10-06).** Each instance runs its Ether files
   (`Ether.ray`, its entrypoint) in its selected world, `World.current` (default `World.ether`); a bare `@name` reads
   `World.current`'s name and `@name = …` writes it, so the files say `@private = => @me`, `@everyone = => characters`,
   never `World.ether.@…`. The core defines no such names (only `@me`); `@ether` itself is a name in `Ether.ray`.

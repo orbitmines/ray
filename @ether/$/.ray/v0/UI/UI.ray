@@ -71,7 +71,7 @@ UI := class {
 
   selection: Geometry.Shape{selected}[] => scene{selected}
   current => selection.last ?? scene
-  step (from: Geometry.Shape, direction: Geometry.Side) => (direction.match
+  step (from: Geometry.Shape, direction: Geometry.Side) => (if direction
       Geometry.bottom => from.children.first
       Geometry.top => from.parent
       Geometry.right => from.parent?.children{=== from}.next
@@ -146,11 +146,11 @@ UI := class {
     text: String => content is Choice ? (content.empty ? "" : content.value as String) : content is String ? content : texts.content.join("")
     select (from: Number = 0, to: Number = text.length) => (selected = true) -- text.marked("selected", from, to) -- (marked => content is Choice ? (content.value = marked) : content is String ? (content = marked) : None) -- this
     scroll (by: Geometry.Length) => (scrolled = Geometry.Vector(scrolled.x, (scrolled.y + by) min (content_height - size.y) max 0px)) unless this === UI.scene && UI.locked
-    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && ((at.y + size.y) - (shape.at.y + shape.size.y) + scrolled.y + offset - align.match
+    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && ((at.y + size.y) - (shape.at.y + shape.size.y) + scrolled.y + offset - (if align
         center => (size.y - shape.size.y) / 2
         end => size.y - shape.size.y
-        * => 0px
-      ) max 0px -- (to => ((transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !@me/device/preferences.reduced_motion)
+        else => 0px
+      )) max 0px -- (to => ((transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !@me/device/preferences.reduced_motion)
         -- (scrolled = Geometry.Vector(scrolled.x, to)))
     face => content -- (chosen => Geometry.Box(content: chosen.shown, origin: at + padding.start, size: size - padding.total, font: font,
       color: chosen.empty ? chosen.placeholder_color ?? Theme["muted"].color : color, white_space: chosen.type is String{multiline} ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap, palette: palette))

@@ -92,7 +92,8 @@ From the drafts review (2026-10-06).
 - Separate constructors by overriding the static constructor: `static (a: String) { super(property: a) }`;
   without `super` in it, the default one runs first. (Answers T3.3.)
 - `ExampleEnum := enum A | B | C(: String)`, equivalently `ExampleEnum: A | B | C = class { A := class {} … }`.
-- `x.match` with `A => 1`, `var: B => var * 2`, `C("A") => 3`, `C<var: "B"> => 4`, `C(var) => var * 5`, `C => 6`.
+- `if x` followed by one case per line: `A => 1`, `is B => x * 2`, `C("A") => 3`, `is C<var: "B"> => 4`, `is C(var) => var * 5`,
+  `is C => 6`, `< 10 => 7`, `else => 8`. A case with no operator is asked with `==`; `is Type` asks the type.
   **Answered (user, 2026-10-06):** no `match` (P2.11): `if x` with case lines, `==` by default and `is Type` allowed; this example is to be rewritten.
 
 ## A8. Syntax and punctuation (Almanac §4.1)

@@ -4,8 +4,11 @@ Program &+= {
   jump => code ~= (⊢"goto ", name: Char.Word[], (" ", condition: *)?)
   is_conditional => is_jump && jump.condition
   target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\"}.first
+  holding (name: String) => written.some(.is_label && .code == name + "\") ? this : written.map(.holding(name)){!= None}.first
+  crosses (jump: Program) => !target_of(jump) && holding(jump.jump.name)
+  called_at (jump: Program) => holding(jump.jump.name) -- Running(program: ., at: .target_of(jump), started: true).finished.results.last
 
-  flow => written.map(step => (step, jumps_to: step.is_jump ? target_of(step) : None, falls_through: !step.is_jump || step.is_conditional))
+  flow => written.map(step => (step, jumps_to: step.is_jump ? target_of(step) : None, falls_through: !step.is_jump || step.is_conditional || crosses(step)))
   jumps_backward => written.some(step => step.is_jump && written.index_of(target_of(step)) <= written.index_of(step))
   terminating => !jumps_backward
 

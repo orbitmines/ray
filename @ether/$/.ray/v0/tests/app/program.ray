@@ -47,6 +47,20 @@ unless jumping is Terminating { INFO@mark `PG32 a program that only jumps forwar
 if looping is Terminating { INFO@mark `PG33 a program that jumps back terminates` }
 unless Program(code: { x := 1 }).declares("x") { INFO@mark `PG34 a program declaring x does not say so` }
 
+// A goto into another branch is a call at that place (P2.10)
+branched := Program(code: {
+  goto there
+  5
+  if true {
+   there\
+    6
+  }
+})
+unless branched.crosses(branched.written.first) { INFO@mark `XB1 a goto into another branch is not read as crossing` }
+if jumping.crosses(jumping.written.first) { INFO@mark `XB2 a goto within its own branch is read as crossing` }
+unless branched.flow.first.falls_through { INFO@mark `XB3 a goto into another branch does not come back like a call` }
+unless branched.called_at(branched.written.first) == 6 { INFO@mark `XB4 a goto into another branch does not run at that place` }
+
 // As what it does: a jump is an edge to where it lands
 unless jumping.flow.first.jumps_to == landed { INFO@mark `PG25 a jump's edge does not reach its label` }
 unless jumping.flow.first.falls_through { INFO@mark `PG27 a conditional jump does not go on below it` }
@@ -60,18 +74,28 @@ unless [true, false].map(!) == [false, true] { INFO@mark `OP3 ! alone is not the
 unless [1, 2, 3].reduce((*)) == 6 { INFO@mark `OP4 (*) is not multiplication as a value` }
 unless [1, 5, 20]{< 10}.count == 2 { INFO@mark `OP5 a section in a narrowing is not applied to each` }
 
-// `x.match` with one arm per line (A7)
-described (x) => x.match
-  Number => "number"
+// `if x` with one case per line: `==` unless an operator is written, `is` for a type (P2.11)
+described (x) => if x
+  is Number => "number"
   "A" => "letter"
-  * => "other"
-unless described(5) == "number" { INFO@mark `MA1 a type arm does not match its instance` }
-unless described("A") == "letter" { INFO@mark `MA2 a literal arm does not match itself` }
-unless described(true) == "other" { INFO@mark `MA3 the * arm does not take what nothing else does` }
-graded (x) => x.match
+  else => "other"
+unless described(5) == "number" { INFO@mark `MA1 an is case does not match an instance of its type` }
+unless described("A") == "letter" { INFO@mark `MA2 a case with no operator is not asked with ==` }
+unless described(true) == "other" { INFO@mark `MA3 the else case does not take what nothing else does` }
+graded (x) => if x
   < 10 => "low"
-  * => "high"
-unless graded(3) == "low" { INFO@mark `MA4 a section arm is not asked of the value` }
+  else => "high"
+unless graded(3) == "low" { INFO@mark `MA4 a case with an operator is not asked with it` }
+first_case (x) => if x
+  1 => "one"
+  is Number => "number"
+  else => "other"
+unless first_case(1) == "one" { INFO@mark `IC1 a later case answers before an earlier one that holds` }
+unless first_case(2) == "number" { INFO@mark `IC2 a case that does not hold answers` }
+unless (if 3
+  != 0 => "nonzero"
+  else => "zero") == "nonzero" { INFO@mark `IC3 if with case lines is not a value where it is written` }
+if (if 0 { "taken" }) { INFO@mark `IC4 if with a block on the same line is read as cases` }
 
 // `.( … )` reads among the members of what is before it (A8)
 Grouped := class {
@@ -88,6 +112,19 @@ Entered := class {
 }
 unless Entered~later().steps == 7 { INFO@mark `EP1 ~label does not enter the class at that label` }
 unless Entered~default == Entered { INFO@mark `EP2 ~default is not the class itself` }
+
+// A class body runs like any function: labels are never skipped; a Component's labels are entered, not executed (F-D13, L§4.2.1)
+unless Entered().steps == 7 { INFO@mark `CMP1 a label in a class body stops its construction` }
+Panel := class: Component {
+  shown := 0
+ opened\
+  shown = 1
+ closed\
+  shown = 2
+}
+unless Panel().shown == 0 { INFO@mark `CMP2 constructing a component runs past its first label` }
+unless Panel~opened().shown == 1 { INFO@mark `CMP3 entering a component at a label runs past the next label` }
+unless Panel~closed().shown == 2 { INFO@mark `CMP4 entering a component at its last label does not run what follows it` }
 
 // `recur` re-enters the method; `break` and `continue` in a loop (P2.4, P2.1)
 countdown (n) => (

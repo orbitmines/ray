@@ -23,10 +23,10 @@ Roman := class: Digit+ (
   }
 
   static Place<one, five, ten> := class = (one, ten) | (one, five) | (five?, one[]{length <= 4}) {
-    as (=== Decimal) => .match
-      (one, ten) => 9
-      (one, five) => 4
-      (fives: five?, ones: one[]) => (fives ? 5 : 0) + ones.length
+    as (=== Decimal) => if this
+      is (one, ten) => 9
+      is (one, five) => 4
+      is (fives: five?, ones: one[]) => (fives ? 5 : 0) + ones.length
     subtractive => !(this ~= (five?, one[]{length == 4}))
     additive => !(this ~= (one, five | ten))
   }

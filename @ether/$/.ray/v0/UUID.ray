@@ -4,8 +4,8 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
 
   static Variant := enum RESERVED_NCS | RFC_4122 | RESERVED_MICROSOFT | RESERVED_FUTURE
   variant: ⊢₂11 ? Binary₃ : Binary₂ => this[16] as Binary
-  variant as (=== Variant) => .match
-    ⊢0 => Variant.RESERVED_NCS
+  variant as (=== Variant) => if this
+    is ⊢0 => Variant.RESERVED_NCS
     ₂10 => Variant.RFC_4122
     ₂110 => Variant.RESERVED_MICROSOFT
     ₂111 => Variant.RESERVED_FUTURE

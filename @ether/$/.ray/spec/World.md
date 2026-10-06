@@ -438,8 +438,11 @@ Answers from 2026-09-30.
     stolen key expires on its own. A signature covers the commit's hash, which includes its parents' hashes and the
     key-log event it relies on: backdating is a fork, rejected (or a merge quest) by anyone holding the history.
     Per-world instance keys, each certified by the root, are optional, for unlinkability.
-  - **Storage.** Private keys are `none`-readable (W5.6), zeroised on logout, never in a history or cache level. The
-    algorithms are languages (`$/ed25519`, `$/x25519`, `$/noise`), versioned; changing one is a key event.
+  - **Storage.** Private keys are `none`-readable (W5.6), zeroised on logout, never in a history or cache level.
+  - **Algorithms are chosen by the root (user, 2026-10-06).** Every key names its algorithm, a language (`$/ed25519`,
+    `$/x25519`, `$/noise`, …), and the root policy says which ones its keys use; signing, verifying and the handshake
+    use whatever the keys name, so nothing is fixed to one algorithm and changing one is a key event. Only Ed25519,
+    X25519 and Noise XX are implemented for now; other algorithms are not being added.
 - **W2.4** Spawning, login/logout/swap and deletion with a cancel window are implemented now, from the
   entrypoint drafts.
 - **W6.4** An error that fails the program is, in general, a quest; a failing proof is one such case.

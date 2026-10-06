@@ -13,7 +13,8 @@ Access := class = who: *?, method: `=` | `()` | * = *, filter: Program?, target:
   writes => allows(`=`)
   executes => allows(`()`)
   // Who is compared as a principal (`answers_for`): identity in the core, verified roots with @ether/security.
-  covers (who, called) => who.answers_for(this.who) && allows(called) && (!filter || checkable(filter) && filter.entered(this, None))
+  // A grant placed somewhere (its own location) holds only there; one placed nowhere holds everywhere (W2.27).
+  covers (who, called, at = None) => who.answers_for(this.who) && allows(called) && (!location || !at || at is location#) && (!filter || checkable(filter) && filter.entered(this, None))
 
   // A grant is an Access on what it names: on what the expression answers when that is held somewhere (a value, a
   // field), on the expression itself when it derives something (`@ether.read x.count`, L§8.2.2).
@@ -39,7 +40,7 @@ Node &+= {
   visibility => access ?? parent?.visibility ?? Access(Node.policy, method: Access.Reading, target: this)
   // Grants on a derivative sit on the expression that names it, found by what that expression answers (L§8.2.2).
   granted => [visibility#, Program#{.access && .names(this)}.access#].flatten
-  allows (who, called) => granted.find(.covers(who, called)) ~~ (.allowed = this if .)
+  allows (who, called, at = None) => granted.find(.covers(who, called, at)) ~~ (.allowed = this if .)
   // A secret is a node no one may read (`none.read`, W5.6): stores skip it and logging out drops it.
   unreadable => access#.some(.who === none && .reads)
 }

@@ -39,6 +39,8 @@ ChaCha20Poly1305 := class: Encoding.Symmetric {
   static padded (bytes: Byte[]) => [bytes, [0] * ((16 - bytes.count % 16) % 16)].flatten
   static tag (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], ciphertext: Byte[]) => poly1305(block(key, 0, nonce)[..<32], [padded(aad), padded(ciphertext), Encoding.little(aad.count, 8), Encoding.little(ciphertext.count, 8)].flatten)
   static sealed (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], plaintext: Byte[]) => chacha20(key, 1, nonce, plaintext) -- (c => Sealed(ciphertext: c, tag: tag(key, nonce, aad, c)) as Byte[])
+  // The tag is compared in constant time: every byte's difference, none left out early (RFC 8439 §4)
+  static authentic (given: Byte₁₆, expected: Byte₁₆) => given.zip(expected).map((a, b) => a ~x|| b).sum == 0
   static opened (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], sealed: Byte[]) => (sealed as Sealed) -- (held =>
-    tag(key, nonce, aad, held.ciphertext) == held.tag ? chacha20(key, 1, nonce, held.ciphertext) : ERROR `the tag does not authenticate the message`)
+    authentic(held.tag, tag(key, nonce, aad, held.ciphertext)) ? chacha20(key, 1, nonce, held.ciphertext) : ERROR `the tag does not authenticate the message`)
 }

@@ -1,0 +1,11 @@
+// HMAC-based Extract-and-Expand Key Derivation Function, over any digest (https://www.rfc-editor.org/rfc/rfc5869)
+HKDF := class: Language = hash: Encoding.Digest {
+  static extensions = ".hkdf"
+  size => hash.size
+
+  // HKDF-Extract: PRK = HMAC-Hash(salt, IKM); no salt is HashLen zeros, which HMAC pads to the same key (https://www.rfc-editor.org/rfc/rfc5869#section-2.2)
+  extracted (salt: Byte[], ikm: Byte[]) => HMAC(hash, key: salt).write(ikm).bytes
+  // HKDF-Expand: T(1) | T(2) | …, T(i) = HMAC-Hash(PRK, T(i-1) | info | i), its first L bytes (https://www.rfc-editor.org/rfc/rfc5869#section-2.3)
+  expanded (prk: Byte[], info: Byte[], length: Number) => (1..(length / size).ceil).reduce(blocks = [] => [blocks, [HMAC(hash, key: prk).write([blocks.last ?? [], info, .].flatten).bytes]].flatten(1)).flatten[..<length]
+  derived (salt: Byte[], ikm: Byte[], info: Byte[] = [], length: Number = 2 * size) => expanded(extracted(salt, ikm), info, length)
+}

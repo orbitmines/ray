@@ -1,7 +1,9 @@
 // Secure Hash Standard, the SHA-2 family (https://csrc.nist.gov/pubs/fips/180-4/upd1/final)
 SHA2 := class: Encoding.Digest = width: 32 | 64, rounds: Number, sums: Number[][], sigmas: Number[][] {
   word => 2 ^ width
+  // A block is sixteen words, the digest eight, in bytes (FIPS 180-4 §1)
   block => 2 * width
+  size => width
 
   // Constants: the first bits of the fractional parts of the cube roots of the first primes (FIPS 180-4 §4.2.2, §4.2.3)
   static primes = (2 -> +1){n => (2..<n).every(n % . != 0)}

@@ -2,20 +2,17 @@
 Ed25519 := class: Encoding.Signing {
   static extensions = ".ed25519"
 
-  // The field GF(2^255 - 19), the curve constant d = -121665/121666 and the order L of the base point (RFC 8032 §5.1)
-  static p = 2 ^ 255 - 19
-  static power (base, exponent, modulus = p) => exponent.digits(2).reduce(held = 1 => held * held * (. == 1 ? base : 1) % modulus)
-  static inverse (x) => power(x, p - 2)
-  static d = (p - 121665) * inverse(121666) % p
+  // The field GF(2^255 - 19) is X25519's (RFC 7748 §4.1); the curve constant d = -121665/121666 and the order L of the base point (RFC 8032 §5.1)
+  static d = (X25519.p - 121665) * X25519.inverse(121666) % X25519.p
   static L = 2 ^ 252 + 27742317777372353535851937790883648493
-  static I = power(2, (p - 1) / 4)
+  static I = X25519.power(2, (X25519.p - 1) / 4)
 
   // A point of -x^2 + y^2 = 1 + d x^2 y^2, added by the complete twisted Edwards formula (RFC 8032 §5.1.4)
   static Point := class = x: Number, y: Number {
     static neutral = Point(x: 0, y: 1)
-    + (other: Point) => d * x * other.x * y * other.y % p -- (t => Point(
-      x: (x * other.y + other.x * y) * inverse(1 + t) % p,
-      y: (y * other.y + x * other.x) * inverse(p + 1 - t) % p))
+    + (other: Point) => d * x * other.x * y * other.y % X25519.p -- (t => Point(
+      x: (x * other.y + other.x * y) * X25519.inverse(1 + t) % X25519.p,
+      y: (y * other.y + x * other.x) * X25519.inverse(X25519.p + 1 - t) % X25519.p))
     * (n: Number) => n.digits(2).reduce(held = neutral => held + held + (. == 1 ? this : neutral))
     == (other: Point) => x == other.x && y == other.y
 
@@ -25,20 +22,19 @@ Ed25519 := class: Encoding.Signing {
     static (bytes: Byte₃₂) as (=== Point) => {
       y = Encoding.little_number(bytes) % 2 ^ 255
       sign = (Encoding.little_number(bytes) / 2 ^ 255).floor
-      u = (y * y + p - 1) * inverse(d * y * y + 1) % p
-      root = power(u, (p + 3) / 8) -- (. * . % p == u ? . : . * I % p)
-      return ERROR `the bytes are not a point of Ed25519` if y >= p || root * root % p != u || root == 0 && sign == 1
-      Point(x: root % 2 == sign ? root : (p - root) % p, y)
+      u = (y * y + X25519.p - 1) * X25519.inverse(d * y * y + 1) % X25519.p
+      root = X25519.power(u, (X25519.p + 3) / 8) -- (. * . % X25519.p == u ? . : . * I % X25519.p)
+      return ERROR `the bytes are not a point of Ed25519` if y >= X25519.p || root * root % X25519.p != u || root == 0 && sign == 1
+      Point(x: root % 2 == sign ? root : (X25519.p - root) % X25519.p, y)
     }
   }
 
   // The base point: y = 4/5 and x even (RFC 8032 §5.1)
-  static B = Encoding.little(4 * inverse(5) % p, 32) as Point
+  static B = Encoding.little(4 * X25519.inverse(5) % X25519.p, 32) as Point
 
-  // The secret's SHA-512, pruned: the low three bits and the top bit cleared, the next highest set (RFC 8032 §5.1.5)
-  static clamped (bytes: Byte₃₂) => (Encoding.little_number(bytes) ~&& (2 ^ 254 - 8)) + 2 ^ 254
-  static expanded (secret: Byte₃₂) => $.sha512.write(secret).bytes -- (h => (scalar: clamped(h[..<32]), prefix: h[32..]))
-  static reduced (bytes: Byte[]) => Encoding.little_number($.sha512.write(bytes).bytes) % L
+  // The secret's SHA-512, its first half pruned as X25519's scalar (RFC 8032 §5.1.5, RFC 7748 §5)
+  static expanded (secret: Byte₃₂) => SHA512.write(secret).bytes -- (h => (scalar: X25519.clamped(h[..<32]), prefix: h[32..]))
+  static reduced (bytes: Byte[]) => Encoding.little_number(SHA512.write(bytes).bytes) % L
 
   // The public key: the base point times the pruned scalar (RFC 8032 §5.1.5)
   static public (secret: Byte₃₂) => (B * expanded(secret).scalar) as Byte[]

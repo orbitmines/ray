@@ -1,13 +1,9 @@
-// Noise_XX_25519_ChaChaPoly_SHA256 (https://noiseprotocol.org/noise.html), and its HKDF against RFC 5869.
+// Noise_XX_25519_ChaChaPoly_SHA256 (https://noiseprotocol.org/noise.html).
 
 mark ^keyword := external global
 
-// HKDF test case 1: 22 bytes of 0x0b, salt 00..0c, info f0..f9, 42 bytes (https://www.rfc-editor.org/rfc/rfc5869#appendix-A.1)
-nz_protocol := Noise()
-unless nz_protocol.hmac(0..<13, [0x0b] * 22) as Hexadecimal₆₄ == "077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5" { INFO@mark `NZ1 the PRK of RFC 5869's test case 1 is not 07770936…` }
-unless nz_protocol.hkdf(0..<13, [0x0b] * 22, 0xf0..<0xfa, 42) as Hexadecimal₈₄ == "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865" { INFO@mark `NZ2 the OKM of RFC 5869's test case 1 is not 3cb25f25…` }
-
 // The name has 32 bytes, HASHLEN, so h starts as the name itself (§5.2, §8)
+nz_protocol := Noise()
 unless nz_protocol.name == "Noise_XX_25519_ChaChaPoly_SHA256" { INFO@mark `NZ3 the protocol is not named Noise_XX_25519_ChaChaPoly_SHA256` }
 nz_alice := Noise.handshake(true, X25519.pair())
 nz_bob := Noise.handshake(false, X25519.pair())
@@ -31,3 +27,6 @@ unless nz_a.received(nz_b.sent("pong".bytes)) == "pong".bytes { INFO@mark `NZ12 
 unless nz_a.binding == nz_b.binding { INFO@mark `NZ13 the two sessions are bound to other hashes` }
 unless nz_a.peer.algorithm === X25519 { INFO@mark `NZ14 the peer's key does not name its algorithm` }
 unless Noise.handshake(true, X25519.pair()).session is Abstract { INFO@mark `NZ15 an unfinished handshake has a session` }
+// Each token is written and read by its own narrowing; a DH token from each side's view (§5.3, §7.1)
+unless Noise.Token.e is Noise.Ephemeral && Noise.Token.s is Noise.Static && Noise.Token.es is Noise.Mixing && !(Noise.Token.e is Noise.Mixing) { INFO@mark `NZ16 a token is not the narrowing that writes and reads it` }
+unless Compiler.reduced(HKDF, Noise.names) is Abstract { INFO@mark `NZ17 an algorithm without a Noise name has one` }

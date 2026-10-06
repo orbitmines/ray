@@ -34,8 +34,8 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
   - the structural reading of R0.1;
   - the primitives (R3.2), each a named native reached through the word R0.1 learned;
   - the emitter from a goto program to native code.
-  After bootstrapping, the native code the entrypoint produced is kept (keyed by the text it came from) and loaded
-  instead of reading the entrypoint again. Regenerating from the seed must give the same code.
+  Native code is rebuilt at every start (Decided, 2026-10-06): the host is a JS program that compiles `.ray` live, so
+  each start reads the entrypoint and emits its code again; nothing is kept between runs.
 
 ## R1. Text and places
 
@@ -112,7 +112,8 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
    and the kernel compiler are deleted and `ray`/the LSP use the new reader.
 4. Then the library, the renderers and version control (the goal of 2026-10-06).
 
-## Open questions
+## Decided
 
-- **R?.1** Does a pass see a rule from the moment it is defined (my proposal, R0.4.3), or only from the next pass?
-- **R?.2** Is native code kept on disk between runs (keyed by text), or rebuilt each start?
+- **(2026-10-06, user)** A rule takes effect from the moment it is defined, within the same pass (R0.4.3); the next pass
+  picks up what was written later in the file.
+- **(2026-10-06, user)** Native code is rebuilt at every start, not kept on disk (R0.5).

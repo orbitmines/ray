@@ -10,7 +10,7 @@ import { encode, position_of, runs, MODIFIERS } from '../lsp/semantics.ts';
 // touched, matched dry against the entrypoint, the rest keeps its paints. A worker's reads: the library a statement at a time, and
 // each document once typing stops (again when the library is all read); what it read replaces the editor's paints and diagnostics.
 
-const TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator'];
+const TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator', 'punctuation', 'label'];
 const SEVERITY: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warning: 2, info: 3, debug: 4, trace: 4 };
 import { ENTRYPOINT, ETHER, core, closure, project_of, project_files } from './projects.ts';
 

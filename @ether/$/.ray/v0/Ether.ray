@@ -8,7 +8,7 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 @local = => @me.presence ?? Instance.local
 @anonymous = => ?
 
-@public = => @everyone | Instance
+@public = => @ether.@everyone | Instance
 @npc = @npcs = => @public{is NPC}
 @players = => @public{is Player}
 

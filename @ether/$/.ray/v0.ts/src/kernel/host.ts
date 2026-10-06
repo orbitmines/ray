@@ -39,7 +39,7 @@ export class Reader {
   active?: Set<number>;
   on_trace?: (rule: number, src: number, begin: number, end: number) => void;
   private reads = new Map<number, Set<number>>();
-  private heavy = Number(process.env.KMEM ?? 1 << 24);
+  private heavy = Number(process.env.KMEM ?? 1 << 26);
   private dried = new Set<string>();
   private fence = 0;
   heavy_hits = 0;

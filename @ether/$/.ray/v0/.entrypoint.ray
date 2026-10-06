@@ -164,7 +164,6 @@ class = {header} ^keyword => (
     inline header
   }
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 class:{ }{parent} = {header} ^keyword => (
@@ -174,7 +173,6 @@ class:{ }{parent} = {header} ^keyword => (
   made.components.hierarchy &= parent
   external extend made parent
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 
@@ -1779,13 +1777,8 @@ declare_partials (written, into) => (
   }
   into
 )
-// Text read through a class header (T4.10, types are patterns): each class with a header reads text as itself, item by item
-// along its header, a field taking the text up to the literal after it.
-reads_by_header (type) => (
-  Node &+= {
-    as (=== type) => header_read(this, type)
-  }
-)
+// Text read through a class header (T4.10, types are patterns): `text as T` for a T with a header reads the text item by item
+// along the header, a field taking the text up to the literal after it (`as (.header)` in Node).
 // Whether a piece of code is there (code is tested by `=== None`, not by what it reads as).
 present (x) => (x === None).not
 literal_item (item) => present(external after item `"`) && (present(external before item `"`)).not
@@ -1799,41 +1792,97 @@ read_instance (type) => (
   this
 )
 header_read (text, type) => (
+  unless type.read_steps { type.read_steps = steps_of(type.header) }
   made := read_instance(type)
-  rest := text
-  pending := type.header
-  failed := None
-  while present(pending) {
+  if ((read_steps(type.read_steps.head, text, made)) === Unread) { made = None }
+  made
+)
+Node &+= {
+  as (.header) => header_read(this, arguments)
+}
+// What reading answers when the text is not read.
+Unread := class { }
+// A header's items, each said once what it is: a literal (`":"`), a group (`(…)?`), or a field (`name: T`, `T`), with the
+// literal after a field (which ends it).
+literal_step := class { }
+group_step := class { }
+field_step := class { }
+literal_of (x) => (
+  kind := literal_step
+  part := x
+  external .
+)
+group_of (x) => (
+  kind := group_step
+  inner := x
+  external .
+)
+field_of (x, y) => (
+  kind := field_step
+  named := x
+  ending := y
+  external .
+)
+steps_of (pending) => (
+  steps := chain None
+  while ((pending === None).not) {
     part := external before pending `,`
-    unless present(part) { part = pending }
+    if (part === None) { part = pending }
     pending = external after pending `,`
-    named := external before part `:`
-    if (literal_item(part) && (present(external before part `[]`)).not) {
-      piece := inline part
-      if present(external before rest piece) {
-        failed = global
-        pending = None
-      }
-      rest = external after rest piece
-    } elsif (present(named) && (present(external before part `(`)).not && (present(external after part `(`)).not) {
-      piece := rest
-      if present(pending) {
+    repeated := (external before part `[]`) === None
+    made_step := None
+    if (literal_item(part) && repeated) { made_step = literal_of(inline part) }
+    elsif (((external before part `(`) === None) && ((external after part `(`) === None).not) {
+      inner_steps := steps_of(external before (external after part `(`) `)`)
+      made_step = group_of(inner_steps)
+    } elsif (literal_item(part).not) {
+      ending := None
+      unless (pending === None) {
         next := external before pending `,`
-        unless present(next) { next = pending }
-        if (literal_item(next) && (present(external before next `[]`)).not) {
-          piece = external before rest (inline next)
-          rest = external after rest (inline next)
+        if (next === None) { next = pending }
+        if (literal_item(next) && ((external before next `[]`) === None)) {
+          ending = inline next
           pending = external after pending `,`
         }
       }
-      unless present(piece) { failed = global }
-      external extend made {
-        (inline named) := piece
+      field_name := external before part `:`
+      made_step = field_of(field_name, ending)
+    }
+    unless (made_step === None) { steps &= made_step }
+  }
+  steps
+)
+// The steps read from the text `rest`, fields set on `made`: answers what is left of the text, or Unread.
+read_steps (at, rest, made) => (
+  while ((at === None).not) {
+    one := at.value
+    at = at.next
+    if (one.kind === literal_step) {
+      if ((external before rest one.part) === None) { rest = external after rest one.part } else {
+        rest = Unread
+        at = None
+      }
+    } elsif (one.kind === group_step) {
+      tried := read_steps(one.inner.head, rest, made)
+      unless (tried === Unread) { rest = tried }
+    } else {
+      piece := rest
+      unless (one.ending === None) {
+        piece = external before rest one.ending
+        rest = external after rest one.ending
+      }
+      if (piece === None) {
+        rest = Unread
+        at = None
+      } elsif ((one.named === None).not) {
+        field := one.named
+        external extend made {
+          (inline field) := piece
+        }
       }
     }
   }
-  if failed { made = None }
-  made
+  rest
 )
 named_arguments (args) => (
   found := false
@@ -1895,7 +1944,6 @@ class = {header}{ }{`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 class ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
@@ -1904,7 +1952,6 @@ class ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 class ({header}){ }{`{`}{members?}{`}`} ^keyword => (
@@ -1913,7 +1960,6 @@ class ({header}){ }{`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 class ({header}) {`=>`} {single} ^keyword => (
@@ -1922,7 +1968,6 @@ class ({header}) {`=>`} {single} ^keyword => (
     inline single
   }
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => (
@@ -1933,7 +1978,6 @@ class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => (
   made.components.hierarchy &= parent
   external extend made parent
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 class:{ }{parent} ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
@@ -1944,7 +1988,6 @@ class:{ }{parent} ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
   made.components.hierarchy &= parent
   external extend made parent
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => (
@@ -1955,7 +1998,6 @@ class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => (
   made.components.hierarchy &= parent
   external extend made parent
   made.header = external ** header
-  reads_by_header(made)
   made
 )
 

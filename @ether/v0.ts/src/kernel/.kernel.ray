@@ -931,7 +931,8 @@ first_step (src, pos, limit, frame) => (
   own_end := 0
   if self != UNDEF { own, own_end, own_reach := best_target(target_of(self), frame, src, start, limit, self, 64, global) }
   spelled := name > start and !word(src, start) and !(named != None and named.defines) and !(found != None and found.defines)
-  if spelled and own != None and rule_p0(own) == 0 { return fire(own, src, start, own_end, limit, frame, global, self), own_end }
+  // an operator of the value this code runs on, unless a rule in reach reads further (`!(x)` is not `this!` applied to `(x)`)
+  if spelled and own != None and rule_p0(own) == 0 and (found == None or own_end >= found_end) { return fire(own, src, start, own_end, limit, frame, global, self), own_end }
   if spelled and found != None and rule_p0(found) == 0 { return fire(found, src, start, found_end, limit, frame, None, None), found_end }
   asks_own := own != None and place != UNDEF and rule_p0(own) == 0 and own.pieces[0].text == place_name(place)
   shadowed := asks_own and lookup_quietly(frame, place, global) != UNDEF
@@ -969,7 +970,7 @@ overridden (found, named, src, start, name, limit, frame, place) => (
 // The best rule on what a name is bound to, read while trying (an unbound name is not reported).
 best_named (place, frame, src, pos, limit) => (
   trying(1)
-  target := target_of(place) catch e { trying(-1); rethrow(e) }
+  target := named_target(place) catch e { trying(-1); rethrow(e) }
   found, end, reach := best_target(target, frame, src, pos, limit, place, 0, None) always { trying(-1) }
   return found, end, reach
 )
@@ -1266,10 +1267,46 @@ reaches_from (at, target, seen) => (
   sees_of(at) for x => { if reaches_from(x, target, seen) { return global } }
   return parent(at) != -1 and reaches_from(parent(at), target, seen)
 )
-bound (node) => place_member(node) ? member_in(place_scope(node), place_name(node), walk_stamp()) : lookup(place_scope(node), place_name(node), at_src(node), at_begin(node), at_end(node))
+// A member a rule answered (`x.k` for a rule `k`) is held by its place until the value holds the name itself (T3.30: an assigned
+// value wins over the computation).
+bound (node) => (
+  found := place_member(node) ? member_in(place_scope(node), place_name(node), walk_stamp()) : lookup(place_scope(node), place_name(node), at_src(node), at_begin(node), at_end(node))
+  return found == UNDEF ? node.answered : found
+)
+// A member read by its rule; a field's default is kept on the value it was read on (L§2.3, T3.5). Kept until what it read
+// changes: the dependency tracking of `dynamically` (P5.1) is to plug in at `default_still`; until then it is kept for good.
+Kept := class { kept_rule, kept_value, next: None }
+member_read (rule, holder, receiver, target, src, b, e) => (
+  if !rule.field or side_of(holder) == ROOT.blank { return apply(rule, global, receiver, None, target, src, b, e, -1, None) }
+  kept := holder.defaults
+  while kept != None { if kept.kept_rule == rule and default_still(kept) { return kept.kept_value }; kept = kept.next }
+  value := apply(rule, global, receiver, None, target, src, b, e, -1, None)
+  if value != UNDEF { holder.defaults = Kept(kept_rule: rule, kept_value: value, next: holder.defaults) }
+  return value
+)
+default_still (kept) => global
+// A name no scope holds, read in a method: the default of the field of that name on the value the method runs on (L§2.3).
+field_default (node) => (
+  if !first_word_is(place_name(node)) { return UNDEF }
+  at := place_scope(node)
+  while at != -1 and at != global() and side_of(at) != ROOT.blank and at.on == UNDEF { at = parent(at) }
+  if at == -1 or at == global() or side_of(at) == ROOT.blank { return UNDEF }
+  self := at.on
+  target := target_of(self)
+  if target == UNDEF or target == None { return UNDEF }
+  plain, taking, nearer := members(target, place_name(node))
+  if plain == -1 or !plain.field { return UNDEF }
+  // where the rule is written (the field's own head, read again with its class) the default is there but not read
+  if (plain.rule_at_src == at_src(node) and plain.rule_at_begin <= at_begin(node) and at_begin(node) <= plain.rule_at_end and !in_body(place_scope(node), at_src(node), at_begin(node))) { return None }
+  holder := target
+  if node_tag(self) == SCOPE and self.stands != UNDEF { stood := quiet_deref(self.stands); if stood != UNDEF and stood != None { holder = stood } }
+  node.answered = member_read(plain, holder, self, target, at_src(node), at_begin(node), at_end(node))
+  return node.answered
+)
 // What a value holds: through places and code, until something else (or `stands`). An unbound name answers itself when `keep`,
-// else a method of that name, else nothing (said when `report`).
-follow (node, report, stands, keep) => (
+// else a method of that name, else (with `members`) the member of that name on the value a method runs on, else nothing (said
+// when `report`).
+follow (node, report, stands, keep, members) => (
   depth := 0
   while node != UNDEF and depth < 256 {
     if node == stands { return node }
@@ -1280,18 +1317,22 @@ follow (node, report, stands, keep) => (
         if place_member(node) { return None }
         rule := method_in(place_scope(node), place_name(node), walk_stamp())
         if rule != -1 { return fn_value(method_fn_id(rule, place_scope(node), rule.pieces[1].name), at_src(node), at_begin(node), at_end(node)) }
+        defaulted := members ? field_default(node) : None
+        if defaulted == None { return UNDEF }
+        if defaulted != UNDEF { node = defaulted; goto next }
         missing_add(place_name(node))
         if report { error_on(said("Unresolved `", place_name(node), "`."), node) }
         return UNDEF
       }
       node = found
     } elsif is_code(node) and !is_program(node) { node = force(node) } else { return node }
+    next\
     depth = depth + 1
   }
   return node
 )
-deref (node, report) => follow(node, report, UNDEF, None)
-held (node, stands) => follow(node, None, stands, global)
+deref (node, report) => follow(node, report, UNDEF, None, global)
+held (node, stands) => follow(node, None, stands, global, global)
 // Code is read once and keeps its value; going back over a label forgets what was read since.
 force (node) => (
   if code_value(node) != UNDEF { return code_value(node) }
@@ -1450,7 +1491,10 @@ inline (node, frame, compose) => (
       sees_add(frame, code_frame(target))
       bs, bb, be := span_inner(src, at_begin(target), at_end(target))
       last := read(bs, bb, be, frame)
-      held = last == UNDEF ? UNDEF : deref(last, None)
+      held = UNDEF
+      if last != UNDEF {
+        held = follow(last, None, UNDEF, None, None)
+      }
       if held != UNDEF and is_program(held) and !compose { return inline(held, frame, None) }
       if compose and held != UNDEF and !is_text(held) and held != None and !is_code(held) and held != frame { with_push(frame, held, None) }
       return last
@@ -1519,12 +1563,20 @@ get (node, key) => (
   if target == UNDEF { return UNDEF }
   name := text_of_node(key)
   if has_style(target) { return style(said(target.style, ".", name)) }
+  // A name the value holds itself is its member: before a rule of the same name on it or its classes (a field set over its default).
   plain, taking, nearer := members(target, name)
-  if nearer { plain = -1 }
+  if nearer or own(target, name) != UNDEF { plain = -1 }
+  if own(target, name) != UNDEF { taking = list_new() }
   receiver := or_else(location(node), node)
   at := at_src(key) < 0 ? node : key
   if plain != -1 {
-    answer := apply(plain, global, receiver, None, target, at_src(at), at_begin(at), at_end(at), -1, None)
+    answer := member_read(plain, target, receiver, target, at_src(at), at_begin(at), at_end(at))
+    if list_len(taking) == 0 and answer != UNDEF {
+      computed := value(PLACE, target, name, 1)
+      if at_src(key) >= 0 { placed_at(computed, at_src(key), at_begin(key), at_end(key)) }
+      computed.answered = answer
+      return computed
+    }
     if list_len(taking) == 0 or answer == UNDEF { return answer }
     held := quiet_deref(answer)
     if held == UNDEF or held == None { return answer }
@@ -1546,6 +1598,8 @@ lookup_quietly (frame, place, also_trying) => (
 )
 quiet_deref (node) => silently(node, None)
 silently (node, report) => ( silent(1); held := deref(node, report) always { silent(-1) }; return held )
+// What a name is bound to, without reading a member for it (asked while reading what a statement is).
+named_target (value) => is_place(value) ? follow(value, None, UNDEF, None, None) : target_of(value)
 target_of (value) => is_place(value) or is_code(value) ? deref(value, None) : value
 
 // ---------------------------------------------------------------- typed captures: a capture's text is held when its type, read with the text bound, is not None
@@ -1962,7 +2016,11 @@ rule_from (given, held, frame) => (
   if at_src(pattern) < 0 or at_src(body) < 0 { return UNDEF }
   scope := is_code(pattern) ? code_frame(pattern) : is_place(pattern) ? place_scope(pattern) : frame
   rule := define(at_src(pattern), at_begin(pattern), at_end(pattern), at_src(body), at_begin(body), at_end(body), scope, scope, -1, 0, 0, None, -1, 0, 0)
-  return rule == -1 ? UNDEF : rule_value(rule)
+  if rule == -1 { return UNDEF }
+  // A rule made for the place the rule making it runs on (`x: T = v` makes `x`'s) is the default of that field.
+  top := running_top()
+  if top != None and top.receiving and top.receiver == pattern and is_code(body) { rule.field = global }
+  return rule_value(rule)
 )
 // A rule already made for this head where it is written: met in the order of the rules on the scope and what it was made with.
 made_in (node, hs, hb, he, ss, sb, se, seen) => (
@@ -2034,7 +2092,7 @@ define_in (scope, tail, body, src, b, e, parameters) => (
 // what it sees, what it was made with, and the rest (Extra, made when first written): what it runs on and stands for, the body
 // it reads, its marks, and what it is (a function, a style, a rule, a program).
 Value := class { node_a, node_b, node_c, names: None, at_src: -1, at_begin: 0, at_end: 0, sees: None, with: None, rules: None, index: None, seen, found_seen, more }
-Value.Extra := class { constructed: None, on: UNDEF, stands: UNDEF, body_src: -1, body_begin: 0, body_end: 0, bare: None, raw: None, given: None, fn: -1, style: -1, rule: -1, program: None, marks: None, marked: None, marked_names: None, observed: None, rh0, rg0, rv0: -1, rh1, rg1, rv1: -1, bracketed: -1, name_table: NIL, name_cap: 0, name_count: 0, name_last: NIL }
+Value.Extra := class { constructed: None, on: UNDEF, stands: UNDEF, body_src: -1, body_begin: 0, body_end: 0, bare: None, raw: None, given: None, fn: -1, style: -1, rule: -1, program: None, marks: None, marked: None, marked_names: None, observed: None, rh0, rg0, rv0: -1, rh1, rg1, rv1: -1, bracketed: -1, answered: UNDEF, defaults: None, name_table: NIL, name_cap: 0, name_count: 0, name_last: NIL }
 
 value (tag, a, b, c) => Value(tag, node_a: a, node_b: b, node_c: c)
 more (s) => ( if s.more == NIL { s.more = Extra() }; return s.more )
@@ -2083,6 +2141,8 @@ body_from (local, rule) => ( local.body_src = rule.rule_body_src; local.body_beg
 sees_of (node) => node.sees
 with_of (node) => node.with
 
+// Whether j is in the body a frame reads (an alias whose body is a field's name: `⊢` reads `initial`).
+in_body (frame, src, j) => side_of(frame) != ROOT.blank and frame.body_src == src and frame.body_begin <= j and j <= frame.body_end
 // What a scope sees is shown to what is written outside the body it reads.
 sees_shown (node, src, b, e) => src < 0 or node.body_src < 0 or !(src == node.body_src and b >= node.body_begin and e <= node.body_end)
 
@@ -2281,7 +2341,7 @@ code_names (node) => (
 // ---------------------------------------------------------------- rules: a pattern of pieces, where it was written, what it does
 // Piece kinds: 0 a literal, 1 a gap, 2 a capture. A span that is not there has src -1.
 Piece := class { kind, text: -1, tight: None, name: -1, piece_raw: None, typed: None, optional: None, exact: None, content_src: -1, content_begin: 0, content_end: 0, within: UNDEF, operator: None, undecided: None, decided: -1, type: UNDEF, checking: None, missing: None }
-Rule := class { pieces, size, closure, rule_at_src, rule_at_begin, rule_at_end, key, pattern_name, order, rule_body_src, rule_body_begin, rule_body_end, rule_fn: -1, guard_src: -1, guard_begin, guard_end, guard_in, overloaded: None, native: -1, defines: None, home: UNDEF, lexical_src: -1, lexical_begin, lexical_end, position, rule_style, rule_held: UNDEF, guarded: NIL }
+Rule := class { pieces, size, closure, rule_at_src, rule_at_begin, rule_at_end, key, pattern_name, order, rule_body_src, rule_body_begin, rule_body_end, rule_fn: -1, guard_src: -1, guard_begin, guard_end, guard_in, overloaded: None, native: -1, defines: None, home: UNDEF, lexical_src: -1, lexical_begin, lexical_end, position, rule_style, rule_held: UNDEF, guarded: NIL, field: None }
 
 piece_literal (text) => Piece(kind: 0, text: text)
 piece_capture (name) => Piece(kind: 2, name: name)

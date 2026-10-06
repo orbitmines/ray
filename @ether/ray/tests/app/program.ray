@@ -10,7 +10,7 @@ taken := Program(code: {
 unless taken { INFO@mark `PG1 a block handed to a rule is not read as a program` }
 unless taken.written { INFO@mark `PG3 a program is not written as anything` }
 unless taken.written.count == 3 { INFO@mark `PG8 a program of three statements does not count three` }
-unless taken.expand.count == 3 { INFO@mark `PG9 a program of three does not expand to three` }
+unless taken.written.count == 3 { INFO@mark `PG9 a program of three is not written as three` }
 unless taken.written.first.written { INFO@mark `PG5 a statement is not a program in turn` }
 unless taken.written.first.written.count == 1 { INFO@mark `PG10 a statement is written as other than one thing` }
 unless Program(code: { 5 }).written.count == 1 { INFO@mark `PG11 a program of one statement counts other than one` }
@@ -161,10 +161,10 @@ unless given == 4 { INFO@mark `QM2 ?= does not set only what has no value` }
 
 // `is`, quantifiers and membership (A5, R1.1)
 unless ("A", "A", "A") is "A"[] { INFO@mark `IS1 is does not ask instance_of` }
-unless ∀ x ∈ [2, 4]: x % 2 == 0 { INFO@mark `IS2 ∀ does not hold of every element` }
-unless ∃ x ∈ [1, 4]: x == 4 { INFO@mark `IS3 ∃ does not find the element` }
-unless 3 ∈ [1, 2, 3] { INFO@mark `IS4 ∈ does not find a member` }
-if 5 ∈ [1, 2, 3] { INFO@mark `IS5 ∈ finds what is not there` }
+unless forall x is [2, 4]: x % 2 == 0 { INFO@mark `IS2 forall does not hold of every element` }
+unless exists x is [1, 4]: x == 4 { INFO@mark `IS3 exists does not find the element` }
+unless 3 is [1, 2, 3]# { INFO@mark `IS4 is does not find a member` }
+if 5 is [1, 2, 3]# { INFO@mark `IS5 is finds what is not there` }
 unless 2 is [1, 2]# { INFO@mark `IS6 is does not find a member` }
 
 // `dynamically x` reads x again each time (P5.1)

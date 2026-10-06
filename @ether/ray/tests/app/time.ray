@@ -101,7 +101,6 @@ if Compiler.reduced(Host("linux"), TimeZone.sources).directory == OS.Ether().zon
 unless Compiler.reduced(Host("win32"), TimeZone.sources) is TimeZone.ICU { INFO@mark `TZ4 windows does not ask the OS's ICU` }
 unless Compiler.reduced(Host("browser"), TimeZone.sources) is TimeZone.Intl { INFO@mark `TZ5 the browser does not ask Intl` }
 unless Compiler.reduced(OS.Ether(), TimeZone.sources).directory == OS.Ether().zoneinfo { INFO@mark `TZ6 ether does not download the data` }
-unless OS.Ether().name == ether { INFO@mark `TZ7 the language as the operating system is not ether` }
 unless TimeZone.Zoneinfo(directory: OS.Ether().zoneinfo).version == "2026c" { INFO@mark `TZ8 the downloaded data is not tzdata 2026c` }
 
 summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time

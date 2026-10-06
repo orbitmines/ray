@@ -2,14 +2,12 @@
 UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₁₂) {
   version: Hexadecimal₁ => this[12]
 
-  static Variant := enum RESERVED_NCS | RFC_4122 | RESERVED_MICROSOFT | RESERVED_FUTURE
   variant: ⊢₂11 ? Binary₃ : Binary₂ => this[16] as Binary
-  variant as (=== Variant) => if this {
-    is ⊢0 => Variant.RESERVED_NCS
-    ₂10 => Variant.RFC_4122
-    ₂110 => Variant.RESERVED_MICROSOFT
-    ₂111 => Variant.RESERVED_FUTURE
-  }
+  // the variant field (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.1)
+  static RESERVED_NCS := UUID{variant ~= ⊢0}
+  static RFC_4122 := UUID{variant == ₂10}
+  static RESERVED_MICROSOFT := UUID{variant == ₂110}
+  static RESERVED_FUTURE := UUID{variant == ₂111}
 
   static v1 := class: UUID{version == 1} (
     (

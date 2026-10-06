@@ -4,7 +4,7 @@ dynamically {name} &= {value} ^keyword => name -- (base => external rule name (b
 dynamically if{ }{cond}{ }{block} ^keyword => Dynamic(program: () => if cond block)
 dynamically{ }{value} ^keyword => Dynamic(program: Program(code: external ** value))
 Dynamic := class = program: Program {
-  .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get program() property
+  .{literal property ^property} ^punctuation => external get program() property
   as (=== boolean) => program() as boolean
 }
 dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR `assertion failed`) -- .empty
@@ -18,4 +18,3 @@ Component := class {
 }
 
 never := Node{false}
-never return ^keyword => never

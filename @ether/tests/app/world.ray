@@ -15,7 +15,7 @@ unless Network.DomainName(text: "a.b").valid { INFO@mark `WO7 the domain name a.
 if Network.DomainName(text: "").valid { INFO@mark `WO8 a name of nothing is a valid domain name` }
 unless Keyboard.Key(name: "a").press.pressed { INFO@mark `WO9 a pressed key is not pressed` }
 unless Chat().commit(wp, Program(code: { "hi" })).count == 1 { INFO@mark `WO10 a said message is not in the chat` }
-unless Proof.theorem(Proof.Proposition(holds: true), Proof(proposition: None, argument: Proof.Proposition(holds: true))) { INFO@mark `WO11 the theorem does not hold` }
+unless Proof.theorem(Proof.Proposition(code: { true }), Proof(proposition: None, argument: Proof.Proposition(code: { true }))) { INFO@mark `WO11 the theorem does not hold` }
 
 // Locations: what holds what, and how deep that goes.
 here := Location(host: None)
@@ -385,3 +385,6 @@ netg_watcher := Instance.local.login(Character(name: "netg-watcher"))
 netg := Network.Stream(player: here_now, location: @local)
 unless &@.may(`=`, netg_watcher) || netg.watch(netg_watcher) is Diagnostic { INFO@mark `NETG2 a stream moves a character who did not grant it` }
 unless &@.may(`=`, here_now) || netg.moved(@localhost) is Diagnostic { INFO@mark `NETG3 a stream is moved without its player's grant` }
+// A name confusable with a reserved one finds it, and a confusable mixed-script name is not reserved (UTS #39).
+unless wg.@dаwn === wp { INFO@mark `SKL5 a name confusable with a reserved one does not find it` }
+unless (wg.@pаge = 3).erred { INFO@mark `SKL6 a name that mixes scripts and is confusable is reserved` }

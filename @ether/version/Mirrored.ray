@@ -1,0 +1,9 @@
+FileSystem &+= {
+  static Mirrored := class: FileSystem {
+    read (location: Location) => Program(name: "the content of a project not held here, from a mirror or a shard of it", goal: location)
+  }
+}
+
+FileOptimizations = {
+  {location: Location{Project.data(.) && !FileSystem.Posix().exists(.)}} => FileSystem.Mirrored()
+} + FileOptimizations

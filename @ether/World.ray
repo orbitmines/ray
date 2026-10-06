@@ -169,3 +169,15 @@ Organization := class: Player {
 
   members => children{is Character}
 }
+
+// UTS #39: a name is held by the skeleton of its case fold, so a name confusable with a reserved one finds that one (§4), and a name that mixes scripts and is confusable is refused (§5) (https://www.unicode.org/reports/tr39/#Confusable_Detection, https://www.unicode.org/reports/tr39/#Mixed_Script_Detection)
+World &+= {
+  class{>.instance_of Nameable}#.for class => {
+    {class.PREFIX}{name: reservable_names} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last?.value
+      ?? children**{is class && .name.fold_case.skeleton == name.fold_case.skeleton}.first
+      ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
+    {class.PREFIX}{name: reservable_names{.mixed_script && .skeleton != .}} = {holder} => ERROR@Name `a name that mixes scripts and is confusable is not reserved` if class.PREFIX
+    {class.PREFIX}{unique<in: .fold_case.skeleton> name: reservable_names} = {holder} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last
+      -- (held => held && !&@.may(`=`, held) ? Program(name: "overwrite a name", goal: held, from: this) : this[held?.name ?? class.PREFIX + name] = holder) if class.PREFIX
+  }
+}

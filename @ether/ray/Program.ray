@@ -8,29 +8,26 @@ Program &+= {
   stopped = false
   results: *[] = []
   tried: *?
-  static branches: Program[] = []
-  static deferred: Program[] = []
 
   written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
   defined => global.declaring(head.head)
   abstract => written{!.defined}
 
   & => results
-  steps | expand => written
   is_initial | waiting => !started
   is_terminal | final => started && !at
   intermediate => started && !is_terminal
   holds => !is_terminal && !stopped
-  inputs => steps.zip(results){.0 is Nondeterministic}
+  inputs => written.zip(results){.0 is Nondeterministic}
   stepped => {
-    at = started ? at.next : steps.first
+    at = started ? at.next : written.first
     started = true
     results.push at() if at
   } -- this
   next => copy ~~ (.results = [results]) -- .stepped
   finished => (stepped while holds) -- this
-  static round => branches{holds}.map(.stepped)
-  static until (condition) => (round while !condition() && branches.some(.holds)) -- this
+  static round => Program#{running}.map(.stepped)
+  static until (condition) => (round while !condition() && Program#.some(.running)) -- this
 
   reached (value) => goal !== None && value is goal
   attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
@@ -38,11 +35,10 @@ Program &+= {
   done => stopped || is_terminal
   continuable => done && !(tried**.is_terminal ?? true)
   path => [tried, tried.previous**].flatten
-  solution => path{reached(.)}.first
+  solution | best => path{reached(.)}.first
   solved_by => solution?.who
-  best => solution
-  progress => started ? steps.index_of(at) ?? steps.count : 0
-  difficulty => steps.count
+  progress => started ? written.index_of(at) ?? written.count : 0
+  difficulty => written.count
 
   stop | cancel | complete: static => this ~~ (.stopped = true)
 }
@@ -77,25 +73,22 @@ Program &+= {
   effects => Effects.of(this)
   schedule (on = @me) => on.quests |= this
 
-  concurrently => written
-
-  right-to-left branch => copy -- Program.branches.push(.)
-  right-to-left sync => concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
-  right-to-left race => concurrently
+  right-to-left branch => copy.stepped
+  right-to-left sync => written -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
+  right-to-left race => written
     -- (.map(.stepped) while .every(.holds))
     -- .{holds}.map(.cancel)
     -- .{is_terminal}.first.results.last
-  right-to-left rush => concurrently
+  right-to-left rush => written
     -- (.map(.stepped) while .every(.holds))
-    -- Program.branches.push(.{holds})
     -- .{is_terminal}.first.results.last
-  right-to-left defer => copy -- Program.deferred.push(.)
+  right-to-left defer => copy ~~ .from = &caller
 }
 
 right-to-left with | assume (settings: Program) => {
   set = settings.written.map(statement => statement() -- (. if statement.assigns)).compact
   defer { set.for(. = .previous) }
-  Proof.Proposition(fact: settings)
+  Proof.Proposition(code: settings.code, goal: settings)
 }
 
 Terminating := Program{terminating}

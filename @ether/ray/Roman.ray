@@ -38,9 +38,9 @@ Roman := class: Digit+ (
 
   Standard := Roman{1 <= as Decimal <= 3999}
 
-  static Normalizer := enum Subtractive (pattern: Standard{(hundreds, tens, ones).every(.subtractive)})
-    | Additive (pattern: Standard{(hundreds, tens, ones).every(.additive)})
-  static normalizer: Normalizer = Subtractive
+  static Subtractive := Standard{(hundreds, tens, ones).every(.subtractive)}
+  static Additive := Standard{(hundreds, tens, ones).every(.additive)}
+  static normalizer = Subtractive
 
   // Vinculum — combining overline multiplies by 1000 (https://en.wikipedia.org/wiki/Roman_numerals#Large_numbers)
   static Vinculum := class: Roman (high: Lined<"̅">?, low: Roman) {
@@ -106,7 +106,7 @@ Roman := class: Digit+ (
 }
 
 {roman: Roman}: Roman => roman
-(number: Decimal) as (=== Roman) => Roman.normalizer.pattern(
+(number: Decimal) as (=== Roman) => Roman.normalizer(
   thousands: ["M"] * (number / 1000),
   hundreds: number / 100 % 10,
   tens: number / 10 % 10,

@@ -313,6 +313,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **From the drafts review (2026-10-06):**
   - **7.2.1 `%1..5` or `%[1..5]` — Q (conflict).** This section decided the suffix `field %1..5`; the 2026-10-05 answers (§10, "`%`") read `%` before a number as modulo and write version ranges `%[1..5]`; the Almanac writes `title %1..5: String` (*ALM:1641*). Recommend keeping the 2026-10-05 answer: rewrite this section to `field %[1..5]` and update the Almanac line.
     **Answered (user, 2026-10-06):** `%[1..5]`; `%` alone stays modulo. This section's `field %1..5` and the Almanac's `title %1..5` are to be written `%[1..5]`.
+    **(2026-10-06):** `%[1..5]` reads as the narrowing `Version{1 <= number <= 5}`: inclusion is `is`, the versions are `#`. `Versioned<T>` is gone; a versioned field is the field's history narrowed by version.
 
 ### 7.3 Errors carry their version — *IDE:432*
 > error[X] where X is the version the error type got introduced, plus a number.
@@ -498,6 +499,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided (2026-10-06):** there is no `Backend` class. A backend is a plain `Language`; what was generic moved to where it belongs.
   - `Language` has `fidelity` (`Language.Fidelity`), `stored` (the language's own storage level), `Language.Entry` (a tree of files, for a language that writes more than one), `written_to`, `converted` and `tree_at`.
   - `Language.write` answers text, or an `Entry` when the language writes files.
+  - **(2026-10-06):** `Language.Entry` and `Language.Fidelity` are gone. A language that writes files answers a tree of Locations with content (`Location.placed`, `files`, `at`); a directory is `Directory := Location{content === None}`, an executable `Executable := Location{access is Access(method: `()`)}`, a link a getter redirect (`a = => b`), a module a Project dependency. Fidelity is the narrowing `Language.Lossless` (reads back what it writes); `.ray` is declared `Lossless`.
   - `History` has what is about histories: `History.change(before, after)` (the change between two trees, written as Ray: moves `.["b"] = .["a"]`, removals `= None`, assignments), the rename `similarity` and its `similar` threshold, `History.read_file` and `History.valued` (a tree as a value). A backend reads its commits straight into `History.Commit`s; there is no `Revision` record in between.
   - `Encoding.common` and `Encoding.runs` are the shared byte diff the deltas use.
   - The other families get the same treatment:

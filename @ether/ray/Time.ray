@@ -229,8 +229,8 @@ TimeZone := class (name: String) {
 
   static sources := {
     {os: OS{zoneinfo}} => TimeZone.Zoneinfo(directory: os.zoneinfo)
-    {os: OS{name == windows}} => TimeZone.ICU()
-    {os: OS{name == browser}} => TimeZone.Intl()
+    {os: OS.Windows} => TimeZone.ICU()
+    {os: OS.Browser} => TimeZone.Intl()
     {os: OS} => Program(name: "time-zone data on an operating system that has none", goal: os)
   }
   static source: Source => Compiler.reduced(@me/device/os, sources)
@@ -238,17 +238,6 @@ TimeZone := class (name: String) {
   data => source.data(name)
   at (time: Time) => source.at(name, time)
 }
-
-Planet := class {
-  years: Unit.Temporal
-  days: Unit.Temporal
-}
-Earth := Planet(years: year, days: day)
-
-// a sol is 1 day 39 minutes 35.244 seconds; a Martian year is 668.5991 sols (N4.9)
-Unit(name: "sol").multiple 88775.244, second
-Unit(name: "martian year").multiple 668.5991, sol
-Mars := Planet(years: martian year, days: sol)
 
 Stamp := class = wall: Decimal, ".", logical: Decimal = 0, "@", node: * {
   chainable < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)

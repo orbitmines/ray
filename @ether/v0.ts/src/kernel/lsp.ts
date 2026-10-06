@@ -8,7 +8,7 @@ import { encode, position_of, runs, MODIFIERS } from '../lsp/semantics.ts';
 
 // The language server over the kernel's reader, in two readers. The editor's paints every edit at once: only the statements it
 // touched, matched dry against the entrypoint, the rest keeps its paints. A worker's reads: the library a statement at a time, and
-// each document once typing stops (again when the library is all read); what it read replaces the editor's paints and diagnostics.
+// each document once typing stops (again when the library is all read); what it read replaces the editor's paints, links and diagnostics.
 
 const TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator'];
 const SEVERITY: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warning: 2, info: 3, debug: 4, trace: 4 };
@@ -52,11 +52,11 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
   });
   const repaint = (uri: string) => { connection.languages.semanticTokens.refresh(); connection.sendNotification('ether/theme', payload([uri])); };
 
-  const linked = new Map<string, Link[]>();
+  const linked = new Map<string, { version: number; links: Link[] }>();
   worker.on('message', (m: Checked) => {
     const doc = open.get(m.uri);
     if (doc === undefined || doc.version !== m.version) return;
-    linked.set(m.uri, m.links);
+    linked.set(m.uri, { version: m.version, links: m.links });
     r.adopt(doc.src, m.paints);
     connection.sendDiagnostics({ uri: m.uri, diagnostics: m.diagnostics.map(d => ({ severity: SEVERITY[d.level] ?? (1 as const), range: { start: position_of(doc.text, d.begin), end: position_of(doc.text, d.end + 1) }, message: d.message, source: 'ray' })) });
     repaint(m.uri);
@@ -106,13 +106,9 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
   const link_at = (uri: string, position: Position): Link | undefined => {
     const doc = open.get(uri);
     if (doc === undefined) return undefined;
-    const offset = offset_of(doc.text, position);
-    let best: Link | undefined;
-    for (const link of linked.get(uri) ?? []) {
-      if (link.begin > offset || offset > link.end) continue;
-      if (best === undefined || link.end - link.begin < best.end - best.begin) best = link;
-    }
-    return best;
+    const offset = offset_of(doc.text, position), read = linked.get(uri);
+    if (read?.version === doc.version) return nearest(read.links, offset);
+    return nearest(links_of(r, doc.src), offset) ?? nearest(read?.links ?? [], offset);
   };
   connection.onDefinition(params => {
     const link = link_at(params.textDocument.uri, params.position);
@@ -220,6 +216,15 @@ async function read_in_worker() {
     if (!asked.includes(m.uri)) asked.push(m.uri);
     kick();
   });
+}
+
+function nearest(links: Link[], offset: number): Link | undefined {
+  let best: Link | undefined;
+  for (const link of links) {
+    if (link.begin > offset || offset > link.end) continue;
+    if (best === undefined || link.end - link.begin < best.end - best.begin) best = link;
+  }
+  return best;
 }
 
 function offset_of(text: string, position: Position): number {

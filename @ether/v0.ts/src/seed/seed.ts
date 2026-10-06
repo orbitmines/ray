@@ -83,6 +83,10 @@ export class Seed {
     this.externals.set('character', (frame, [word]) => self.character(self.code_of(word).s[0]));
     // A scope's own rules, latest first (not those of the scopes around it): a type's reading rules.
     this.externals.set('own_rules', (frame, [of]) => { const n = self.force(of) as Node; let first: Node | undefined, last: Node | undefined; for (let i = n.rules.length - 1; i >= 0; i--) { const link = new Node(); link.members.set('rule', self.node_of(n.rules[i])); if (last) last.members.set('next', link); else first = link; last = link; } return first; });
+    // A rule applied to values (not code): its captures, in order, are the arguments given.
+    this.externals.set('invoke', (frame, [rule, ...args]) => { const r = self.force(rule) as Rule, f = new Node(r.head.frame); r.pieces.filter(p => 'cap' in p).forEach((p, i) => f.members.set((p as { cap: string }).cap, self.force(args[i]))); return self.compiled(r)(f); });
+    // The rule that defines rules (the first statement's), as a node: its reading of a statement is the loosest of all (R0.1).
+    this.externals.set('definer', () => self.node_of(self.global.rules[0]));
     this.externals.set('latest', () => { let last: Rule | undefined; for (const r of self.global.reach()) if (last === undefined || r.order > last.order) last = r; return last; });
     // What no rule reads, from a place to a place (or the text's end): a diagnostic (G1.8).
     this.externals.set('unread', (frame, [from, to]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined; const e = t === undefined ? f.text.s.length : self.where.get(t)!.i; self.say(`Unread \`${f.text.s.slice(f.i, e).slice(0, 60)}\`.`, { text: f.text, b: f.i, e }); return undefined; });
@@ -279,6 +283,9 @@ export class Seed {
     for (const rule of frame.reach()) if (!seed_only || rule.planner === undefined) for (const m of this.match(rule, text, p, limit)) {
       if (best === undefined || m.end > best.end) { best = { rule, ...m }; continue; }
       if (m.end < best.end) continue;
+      const definer = this.global.rules[0].head.s.trim();
+      if (best.rule.head.s.trim() === definer && rule.head.s.trim() !== definer) continue;
+      if (rule.head.s.trim() === definer && best.rule.head.s.trim() !== definer) { best = { rule, ...m }; continue; }
       const led = 'lit' in rule.pieces[0], bestLed = 'lit' in best.rule.pieces[0];
       if (led !== bestLed) { if (led) best = { rule, ...m }; continue; }
       const same = rule.head.s.trim() === best.rule.head.s.trim();

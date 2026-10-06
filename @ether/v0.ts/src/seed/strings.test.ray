@@ -1,0 +1,5 @@
+say {x} =>
+  external print x
+s := "hello world"
+say s
+same "a" "b"

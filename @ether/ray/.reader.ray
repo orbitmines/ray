@@ -184,6 +184,17 @@ ends from {at} to {limit} =>
       here := here . next
   stack
 
+// Whether `type` holds the places from `from` to `to`: its check, when it has one, else its own rules reading them whole.
+{kind} holds from {from} to {to} =>
+  check := kind . check
+  found := nothing
+  if check then
+    found := external invoke check kind from to
+  unless check then
+    own := external own_rules kind
+    found := reading from from to to among own
+  found
+
 captured {pieces} from {at} to {limit} =>
   name := pieces . capture
   rest_pieces := pieces . next
@@ -195,9 +206,6 @@ captured {pieces} from {at} to {limit} =>
     if following then
       wanted := following . character
   piece_type := pieces . type
-  type_rules := nothing
-  if piece_type then
-    type_rules := external own_rules piece_type
   found := nothing
   while ends do
     e := ends . place
@@ -213,7 +221,7 @@ captured {pieces} from {at} to {limit} =>
             worth := yes
     if worth then
       if piece_type then
-        worth := reading from at to e among type_rules
+        worth := piece_type holds from at to e
     rest := nothing
     if worth then
       rest := readings of rest_pieces from e to limit
@@ -274,6 +282,8 @@ reading from {at} to {limit} in {scope} =>
 reading from {at} to {limit} among {rules} =>
   best := nothing
   best_rule := nothing
+  definer := external definer
+  defining := external head definer
   while rules do
     rule := rules . rule
     pieces := rule . pieces
@@ -294,6 +304,11 @@ reading from {at} to {limit} among {rules} =>
         unless led then
           if best_led then
             take := nothing
+        // the rule that defines rules reads a definition whole, whatever else could (R0.1)
+        if chain mine equals defining then
+          take := yes
+        if chain theirs equals defining then
+          take := nothing
       if take then
         best := r
         best_rule := rule
@@ -551,3 +566,66 @@ read statement at {at} =>
   after
 
 hand reading over
+
+// ---------------------------------------------------------------- types with a check: characters, repetition (R2.2)
+latest rule =>
+  external latest
+checked by {check} =>
+  made := node
+  set made . check to check
+  made
+
+// One character, any.
+one character {kind} {from} {to} =>
+  following := from . next
+  same following to
+Char := checked by latest rule
+
+// One character, not `excluded`.
+one character except {kind} {from} {to} =>
+  following := from . next
+  found := nothing
+  if same following to then
+    c := from . character
+    excluded := kind . excluded
+    unless character c is excluded then
+      found := yes
+  found
+except_rule := latest rule
+everything but {c} =>
+  made := checked by except_rule
+  set made . excluded to c
+  made
+
+// One or more of `item`, one after another.
+one or more {kind} {from} {to} =>
+  item := kind . item
+  e := from . next
+  found := nothing
+  going := yes
+  while going do
+    if item holds from from to e then
+      if same e to then
+        found := yes
+      unless found then
+        unless same e to then
+          found := one or more kind e to
+    if found then
+      going := nothing
+    if same e to then
+      going := nothing
+    if going then
+      e := e . next
+  found
+many_rule := latest rule
+{item} repeated =>
+  made := checked by many_rule
+  set made . item to item
+  made
+
+// ---------------------------------------------------------------- text written in quotes
+quote := external character "
+Unquoted := everything but quote
+Quoted := Unquoted repeated
+"{text: Quoted}" =>
+  external span text

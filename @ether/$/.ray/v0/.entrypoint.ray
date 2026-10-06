@@ -180,7 +180,7 @@ class:{ }{parent} = {header} ^keyword => (
 
 if ^class := class {
   { }{cond}{ }{yes} ^class => (
-    branch ^keyword := external .
+    if_branch ^keyword := external .
     inline static
     taken := None
     answer := None
@@ -195,14 +195,14 @@ if ^class := class {
     goto composes if (external own result)
     goto skip
    composes\
-    external extend branch result
+    external extend if_branch result
    skip\
 
-    ^(`variable`)(branch)
+    ^(`variable`)(if_branch)
   )
 
   elsif{ }{cond}{ }{taken_block} ^class => (
-    branch ^keyword := external .
+    if_branch ^keyword := external .
     inline this
     taken := .taken
     answer := .answer
@@ -218,10 +218,10 @@ if ^class := class {
     goto composes if (external own result)
     goto skip
    composes\
-    external extend branch result
+    external extend if_branch result
    skip\
 
-    ^(`variable`)(branch)
+    ^(`variable`)(if_branch)
   )
 
   {\n}elsif{ }{cond}{ }{taken_block} ^class => this elsif cond taken_block
@@ -240,7 +240,7 @@ if ^class := class {
 }
 
 unless{ }{cond}{ }{taken_block} ^class => (
-  branch ^keyword := external .
+  if_branch ^keyword := external .
   inline if
   taken := None
   answer := None
@@ -253,10 +253,10 @@ unless{ }{cond}{ }{taken_block} ^class => (
   goto composes if (external own result)
   goto skip
  composes\
-  external extend branch result
+  external extend if_branch result
  skip\
 
-  ^(`variable`)(branch)
+  ^(`variable`)(if_branch)
 )
 
 while ^class := class {
@@ -909,9 +909,12 @@ Node := base class {
 
   admits (candidate) => global
 
-  {this}{{literal narrowing}} ^punctuation => (
+  {this}{{literal narrowing}} ^punctuation => .narrowed_by(external ** narrowing)
+  // A type narrowed by a predicate (`T{p}`): of a superposition or a collection, the ones that satisfy it; of a class, the class
+  // whose instances satisfy it.
+  narrowed_by (written) => (
     narrowed := this
-    closure := { inline narrowing }
+    closure := { inline written }
     selected := None
     if ((narrowed.superposes === global) && (narrowed.components.head.value.instance === global)) {
       alternative := narrowed.components.head
@@ -2166,7 +2169,19 @@ enum{ }{literal member ^enumMember}{ }{given_fields? ^property}{ }{literal rest?
 
 Program.components.hierarchy &= class {
   optimizations => .O
-  {this}{`{`}{literal setting}{`}`} ^punctuation => class: this { inline setting }
+  // `Program{O: Compiler.default}` sets a setting; braces that declare nothing narrow it like any type (`Program{terminating}`).
+  {this}{`{`}{literal setting}{`}`} ^punctuation => (
+    written_setting := external ** setting
+    set := this
+    goto setting if ((external before written_setting `:`) === None).not
+    goto setting if ((external before written_setting `=`) === None).not
+    set = .narrowed_by(written_setting)
+    goto done
+   setting\
+    set = class: this { inline written_setting }
+   done\
+    set
+  )
 
   written => (
     out := chain None

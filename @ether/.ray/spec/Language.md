@@ -427,7 +427,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A frontend is a view program (filesystem, git) with an inverse (§4.5) so writes flow back.
 - **Decided:** `Class$` is the spelling.
   - `$` on its own is *languages*: `$.ray` answers the Program that is the Ray programming language, and `$.cpp` / `$.c++` is C++.
-  - This matches the repository layout (`@ether/$/.ray`).
+  - This matches the repository layout (`@ether/.ray`).
 - **Decided:** where `Class$` stores is itself defined, and may differ by context.
   - For example, the store may sit under the current user, with many instances kept like a database.
   - Several databases: `ClassA{filter}$ = DB` sends the instances that pass the filter (for example those located inside `@user`) to that store. Stores are routed this way.

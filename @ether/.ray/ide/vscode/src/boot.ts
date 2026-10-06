@@ -14,7 +14,7 @@ import { TransportKind } from 'vscode-languageclient/node';
  *   2. `bundled`  — Fall back to the language bundled with the extension itself: its daemon, kernel and library under
  *                   `server/`.
  *
- * When the workspace holds a language definition (a `!language` project, e.g. `@ether/$/.ray/v0/ray` in a checkout of
+ * When the workspace holds a language definition (a `!language` project, e.g. `@ether/.ray/v0/ray` in a checkout of
  * orbitmines/ray), its directory is given to `--lsp`, and the daemon reads that language instead of its own.
  */
 export type BootMode = 'installed' | 'bundled';
@@ -25,13 +25,13 @@ export interface Boot {
   server: ServerOptions;
 }
 
-const LANGUAGE_DIRECTORY = path.join('@ether', '$', '.ray', 'v0', 'ray');
+const LANGUAGE_DIRECTORY = path.join('@ether', '.ray', 'v0', 'ray');
 
 function isLanguage(dir: string): boolean {
   try { return fs.readFileSync(path.join(dir, '.project.ray'), 'utf-8').split('\n')[0].includes('!language'); } catch { return false; }
 }
 
-/** The language definition the workspace holds: the workspace itself, or `@ether/$/.ray/v0/ray` in it or above it. */
+/** The language definition the workspace holds: the workspace itself, or `@ether/.ray/v0/ray` in it or above it. */
 function findLanguage(start: string): string | null {
   if (isLanguage(start)) return start;
   let dir = start;

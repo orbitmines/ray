@@ -5,7 +5,7 @@ Written 2026-09-30. Sources: `spec/Language.md`, `spec/Gamification.md`, the `//
 `//TODO`s and commented draft code in `v0/*.ray`, and the draft
 `../orbitmines.com/orbitmines.com.ray/` (the frontend track, part F).
 
-Paths are relative to `@ether/$/.ray/` unless they say otherwise. `ep` = `v0/ray/.entrypoint.ray`.
+Paths are relative to `@ether/.ray/` unless they say otherwise. `ep` = `v0/ray/.entrypoint.ray`.
 
 ---
 
@@ -327,7 +327,7 @@ IO externals and unbounded loops; `FILE.[ext].ray` naming.
 
 On 2026-09-30 every comment was removed from `v0/*.ray` and `v0/ray/.entrypoint.ray`, after all of them
 were turned into spec items. The comments' old line numbers (`ep:123`, `Number:45`) cited in the spec
-files refer to commit `3f2c53c`: `git show 3f2c53c:'@ether/$/.ray/v0/<file>'` shows them.
+files refer to commit `3f2c53c`: `git show 3f2c53c:'@ether/.ray/v0/<file>'` shows them.
 **Don't add comments back** (standing instruction); the spec files are where intent lives.
 
 Work in these buckets, which clear in bulk because each shares one blocker:

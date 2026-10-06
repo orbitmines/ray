@@ -160,15 +160,15 @@ export class env {
   static get root(): string {
     if (env._root) return env._root;
     const { fs, path } = env;
-    const root = ['@ether', '$', '.ray']
+    const root = ['@ether', '.ray']
     const language_dir = (dir: string) => path.join(dir, ...root);
     // A checkout enclosing the working directory: walk up to the marker.
     let dir = process.cwd();
     while (!fs.existsSync(language_dir(dir)) && path.dirname(dir) !== dir) dir = path.dirname(dir);
     if (fs.existsSync(language_dir(dir))) return env._root = dir;
-    // Production: package ships @ether/$/.ray inside its tarball — root sits one dir up from src/.
+    // Production: package ships @ether/.ray inside its tarball — root sits one dir up from src/.
     dir = path.resolve(import.meta.dirname, '..', '..'); if (fs.existsSync(language_dir(dir))) return env._root = dir;
-    // Development: src lives at <repo>/@ether/$/.ray/v0.ts/src — repo root is five dirs up.
+    // Development: src lives at <repo>/@ether/.ray/v0.ts/src — repo root is five dirs up.
     dir = path.resolve(import.meta.dirname, '..', '..', '..', '..', '..', '..'); if (fs.existsSync(language_dir(dir))) return env._root = dir;
 
     throw new Error(`Couldn't find a language definition on your system. Expected one in the hierarchy of your CWD, in the package (production), or in the repository (development). Signature is a '${root.join('/')}' directory.`)

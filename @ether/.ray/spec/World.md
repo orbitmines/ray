@@ -472,12 +472,12 @@ W9 itself is decided below (`choose` resolves through `@me.choose`).
 ## W10. The Ether instance directory (*`@ether/README.md`*)
 
 From the drafts verification (2026-10-06). The README describes the root of an Ether instance. **Decided (draft)** as a whole;
-each item says where it lives in v0 today (`@ether/$/.ray/v0`, whose core is the project `@ether/ray` at `v0/ray`).
+each item says where it lives in v0 today (`@ether/.ray/v0`, whose core is the project `@ether/ray` at `v0/ray`).
 
 - **W10.1 One character's** — *README:2*: an instance directory belongs to a single character, a player or an NPC (a server
   too, W2.26). Everything in it is that character's unless it says otherwise.
 - **W10.2 `/.ray`, the standard library** — *README:4*: loaded automatically into the Ray runtime as the standard library. Today
-  `@ether/.ray` (in this repository `@ether/$/.ray`, the Ray language's directory, `$.ray`, L§9.1), with the core `ray/`
+  `@ether/.ray` (in this repository `@ether/.ray`, the Ray language's directory, `$.ray`, L§9.1), with the core `ray/`
   (`v0/ray`, the project `@ether/ray`) and its bootstrap `v0/ray/.entrypoint.ray`.
 - **W10.3 `/.[LANGUAGE]`, languages** — *README:5*: the language, library and runtime packages the Ether supports. Today
   `$/<name>`, each a project named in lowercase (`v0/ray/$/json`, `v0/ray/$/git`), answered by `$.name` (L§9.1, Decided

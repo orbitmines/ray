@@ -121,7 +121,7 @@ jobs:
         with:
           node-version: 22
       - name: pack @orbitmines/ether.ray (its prepack, scripts/bundle.mjs, bundles src/language.ts and the .ray files)
-        working-directory: "@ether/$/.ray/v0.ts"
+        working-directory: "@ether/.ray/v0.ts"
         run: |
           npm ci
           npm version --no-git-tag-version --allow-same-version "${{ needs.build.outputs.version }}"
@@ -214,10 +214,10 @@ jobs:
         with:
           node-version: 22
       - name: install @orbitmines/ether.ray, which the extension bundles
-        working-directory: "@ether/$/.ray/v0.ts"
+        working-directory: "@ether/.ray/v0.ts"
         run: npm ci
       - name: package the extension (the Marketplace takes major.minor.patch only, so v0.1.3-E2027.0A.3 is 0.1.3)
-        working-directory: "@ether/$/.ray/ide/vscode"
+        working-directory: "@ether/.ray/ide/vscode"
         run: |
           npm ci
           npm version --no-git-tag-version --allow-same-version "${VERSION%%-*}"

@@ -68,7 +68,7 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
     setup => language ~~ .implementations.push this ~~ .level ??= level
   }
 
-  static ray := Language(".ray", location: [@ether/$/.ray/v0/ray, @ether/$/.ray/v0], level: Compiler.default, written: ray_written, fidelity: Fidelity.lossless)
+  static ray := Language(".ray", location: [@ether/.ray/v0/ray, @ether/.ray/v0], level: Compiler.default, written: ray_written, fidelity: Fidelity.lossless)
   static cfg := Language(".cfg", level: ray.level, written: ray.written, of: ray){admits Program{Pure & Terminating}}
   static regex := Language(".regex")
 }

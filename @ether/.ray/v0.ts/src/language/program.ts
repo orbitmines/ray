@@ -9,7 +9,7 @@ import { Paints } from './paints.ts';
 
 export function v0(diagnostics: Diagnostics) {
   return new Program(diagnostics)
-    .add(env.directory(`@ether/$/${EXTENSION}/v0/ray`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
+    .add(env.directory(`@ether/${EXTENSION}/v0/ray`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
     .interpreting(optimizations());
 }
 
@@ -22,7 +22,7 @@ export function source(location: string, value: string): Text.Source {
 export function lsp(diagnostics: Diagnostics) {
   const program = new Program(diagnostics)
     .serve()
-    .add(env.directory(`@ether/$/${EXTENSION}/v0/ray`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
+    .add(env.directory(`@ether/${EXTENSION}/v0/ray`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
     .interpreting(optimizations());
   program.eager = src => program.active.has(src.location);
   return program;
@@ -30,7 +30,7 @@ export function lsp(diagnostics: Diagnostics) {
 
 export function optimizations(): Text.Source[] {
   for (const name of ['core.o', 'v0.ts.o']) {
-    const location = `@ether/$/${EXTENSION}/v0.ts/${name}${EXTENSION}`;
+    const location = `@ether/${EXTENSION}/v0.ts/${name}${EXTENSION}`;
     if (env.nodejs && env.fs.existsSync(env.path.join(env.root, location))) return env.at(location);
   }
   return [];

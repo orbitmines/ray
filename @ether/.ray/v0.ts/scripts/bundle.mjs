@@ -5,13 +5,13 @@ import { fileURLToPath } from 'url';
 
 // Bundle ONLY the language's `.ray` files into the package for publishing, mirroring
 // the loader's skip of `ide/` and versioned implementation dirs (`v*.*`, e.g. this
-// very `v0.ts`). The tarball ships them under `@ether/$/.ray`, which `nodejs.root`
+// very `v0.ts`). The tarball ships them under `@ether/.ray`, which `nodejs.root`
 // looks for at the package root in production.
 const pkg = dirname(dirname(fileURLToPath(import.meta.url))); // v0.ts
 process.chdir(pkg);
 
-const SRC = '..';              // language definition root: the parent @ether/$/.ray
-const DEST = '@ether/$/.ray';  // where the published package expects the definitions
+const SRC = '..';              // language definition root: the parent @ether/.ray
+const DEST = '@ether/.ray';  // where the published package expects the definitions
 
 const skip = (name) => name === 'ide' || (name.startsWith('v') && name.includes('.'));
 

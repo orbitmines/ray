@@ -2,7 +2,7 @@ import { sources } from './bundled.ts';
 
 export const NAME = 'Ether' as const
 export const ALIASES = ['ray', 'orbitmines'] as const;
-export const ROOT = ['@ether', '$', '.ray']
+export const ROOT = ['@ether', '.ray']
 export const version:
   [major: number, releaseDate: string, index: number] =
   [0, '2027-01-01', 4];
@@ -1411,7 +1411,7 @@ export class Translator {
     const { Program, env, Diagnostics, Node } = Engine.modules;
     const t = new Translator(), diagnostics = new Diagnostics();
     const at = (x: string) => env.at(x);
-    t.program = new Program(diagnostics).add([...at('@ether/$/.ray/v0/ray/.project.ray'), ...at('@ether/$/.ray/v0/ray/.entrypoint.ray'), ...at('@ether/$/.ray/v0/ray/Compiler.ray'), ...at('@ether/$/.ray/v0.ts/javascript.o.ray')]);
+    t.program = new Program(diagnostics).add([...at('@ether/.ray/v0/ray/.project.ray'), ...at('@ether/.ray/v0/ray/.entrypoint.ray'), ...at('@ether/.ray/v0/ray/Compiler.ray'), ...at('@ether/.ray/v0.ts/javascript.o.ray')]);
     await t.program.exec();
     t.it = t.program.default_language.interpreter;
     t.jt = t.program.projects.find((p: any) => p.source.some((x: any) => x.location.endsWith('javascript.o.ray'))).interpreter;

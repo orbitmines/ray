@@ -7,7 +7,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/orbitmines/ray.git",
-    "directory": "@ether/$/.ray/ide/vscode"
+    "directory": "@ether/.ray/ide/vscode"
   },
   "homepage": "https://orbitmines.com",
   "icon": "icons/2d-square.png",

@@ -19,7 +19,7 @@
   "files": [
     "bin",
     "dist",
-    "@ether/$/.ray"
+    "@ether/.ray"
   ],
   "engines": {
     "node": ">=20.11"

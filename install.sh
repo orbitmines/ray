@@ -16,9 +16,9 @@ ETHER_HOME="${ETHER_HOME:-$HOME/.ether}"
 NAME="ether"
 ALIASES="ray orbitmines"
 TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-msvc"
-ENTRY='@ether/$/.ray/v0.ts/src/language.ts'
-CONFIG='@ether/$/.ray/v0.ts/deno.npm.json'
-INCLUDES=('LICENSE' '@ether/$/.ray/v0' '@ether/$/.ray/v0.ts/javascript.o.ray')
+ENTRY='@ether/.ray/v0.ts/src/language.ts'
+CONFIG='@ether/.ray/v0.ts/deno.npm.json'
+INCLUDES=('LICENSE' '@ether/.ray/v0' '@ether/.ray/v0.ts/javascript.o.ray')
 MARKER="# Added by the Ether installer"
 
 usage() {

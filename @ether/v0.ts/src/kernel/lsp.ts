@@ -144,6 +144,12 @@ async function read_in_worker() {
           r.active!.add(src);
           reading = { check, r, src, pos: 0, text: check.text, before };
         } else {
+          // The library read, its files are read again where they left a name unresolved (one per step, after any document that
+          // was waiting), then the documents again.
+          if (library.length === 0) {
+            const file = read_files.find(f => !f.settled);
+            if (file !== undefined) { file.settled = true; const t0 = performance.now(); const again = library_reader.settle(file.src, file.text.length); trace(`worker: settled ${file.src} again=${again} ${Math.round(performance.now() - t0)} ms\n`); if (read_files.every(f => f.settled)) for (const uri of docs.keys()) if (!asked.includes(uri)) asked.push(uri); continue; }
+          }
           const file = library.shift();
           if (process.env.KLSP_TRACE) trace(`worker: library ${file}\n`);
           if (file === undefined) { busy = false; return; }
@@ -160,10 +166,6 @@ async function read_in_worker() {
       if (reading.check !== undefined && r !== library_reader) r.settle(src, text.length, true);
       if (reading.check === undefined) {
         read_files.push(reading);
-        if (library.length === 0) {
-          for (const file of read_files) { if (file.settled) continue; file.settled = true; const t0 = performance.now(); const again = library_reader.settle(file.src, file.text.length); trace(`worker: settled ${file.src} again=${again} ${Math.round(performance.now() - t0)} ms\n`); }
-          for (const uri of docs.keys()) if (!asked.includes(uri)) asked.push(uri);
-        }
       }
       const check = reading.check, finished = reading;
       reading = undefined;

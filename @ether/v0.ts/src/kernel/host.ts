@@ -2,6 +2,7 @@ import { Graph, INT, CONST, edge } from './kernel.ts';
 import { compile, type Records } from './k.ts';
 import { reduce, results, Reducer } from './reduce.ts';
 import { javascript } from './js.ts';
+import { Runtime, type Values } from './runtime.ts';
 import { Machine, Raised, basics, memory, graph, raising, NONE, GLOBAL as TRUE, NATIVE, PROP, RECORD, arities, type Native } from './vm.ts';
 
 // The host of the reader in `.kernel.ray`: it lays out the machine, the character classes and the sources, runs `read`,
@@ -47,9 +48,12 @@ export class Reader {
   private compiling?: { natives: Record<string, Native>; table: Native[]; constants: Record<string, number>; program: import('./k.ts').Program };
   private kept: number[] = [];
   private bodies = 0;
+  // The platform's externals; and the text of each source, for reading arguments back.
+  runtime: Runtime;
+  private texts = new Map<number, { location: string; value: string }>();
 
   constructor() {
-    const natives: Record<string, Native> = { ...basics, ...memory, ...graph, ...raising, unported: (m: Machine, what: number) => { throw new Error('unported: ' + this.name_text(what)); }, dried: (m: Machine, src: number, b: number, limit: number) => { const key = `${src}:${b}:${limit}`; if (this.dried.has(key)) return TRUE; this.dried.add(key); return NONE; }, compile_body: (m: Machine, src: number, begin: number, limit: number) => this.compile_body(src, begin >> 3, limit >> 3), run_body: (m: Machine, block: number, frame: number, src: number, limit: number, begin: number, mark: number, c: number) => (this.machine.compiled!.get(block) as any)(this.machine, frame, src, limit, begin, mark, c), heavy: () => this.fence > 0 && this.graph.made > this.heavy ? (this.heavy_hits++, TRUE) : NONE, read_at: (m: Machine, src: number, at: number) => { if (this.active === undefined || this.active.has(src)) { let read = this.reads.get(src); if (read === undefined) this.reads.set(src, read = new Set()); read.add(at >> 3); } return NONE; }, shown: (m: Machine, src: number) => this.active === undefined || this.active.has(src) ? TRUE : NONE, traced: (m: Machine, rule: number, src: number, b: number, e: number) => { this.on_trace?.(rule, src, b >> 3, e >> 3); return NONE; }, was_read: (m: Machine, src: number, at: number) => this.reads.get(src)?.has(at >> 3) ? TRUE : NONE, paint: (m: Machine, src: number, b: number, e: number, kind: number, ref: number) => { this.paint(src, b >> 3, e >> 3, kind >> 3, ref); return NONE; }, collect: (m: Machine, a: number, b: number, c: number, mark: number) => { if (this.fence > 0 && this.graph.made > Number(process.env.KGC ?? 1 << 23)) this.collect([a, b, c], mark >> 3); return NONE; } };
+    const natives: Record<string, Native> = { ...basics, ...memory, ...graph, ...raising, unported: (m: Machine, what: number) => { throw new Error('unported: ' + this.name_text(what)); }, dried: (m: Machine, src: number, b: number, limit: number) => { const key = `${src}:${b}:${limit}`; if (this.dried.has(key)) return TRUE; this.dried.add(key); return NONE; }, compile_body: (m: Machine, src: number, begin: number, limit: number) => this.compile_body(src, begin >> 3, limit >> 3), run_body: (m: Machine, block: number, frame: number, src: number, limit: number, begin: number, mark: number, c: number) => (this.machine.compiled!.get(block) as any)(this.machine, frame, src, limit, begin, mark, c), heavy: () => this.fence > 0 && this.graph.made > this.heavy ? (this.heavy_hits++, TRUE) : NONE, read_at: (m: Machine, src: number, at: number) => { if (this.active === undefined || this.active.has(src)) { let read = this.reads.get(src); if (read === undefined) this.reads.set(src, read = new Set()); read.add(at >> 3); } return NONE; }, shown: (m: Machine, src: number) => this.active === undefined || this.active.has(src) ? TRUE : NONE, traced: (m: Machine, rule: number, src: number, b: number, e: number) => { this.on_trace?.(rule, src, b >> 3, e >> 3); return NONE; }, was_read: (m: Machine, src: number, at: number) => this.reads.get(src)?.has(at >> 3) ? TRUE : NONE, paint: (m: Machine, src: number, b: number, e: number, kind: number, ref: number) => { this.paint(src, b >> 3, e >> 3, kind >> 3, ref); return NONE; }, runtime: (m: Machine, name: number, n: number, a0: number, a1: number, a2: number, a3: number, frame: number) => { return this.runtime.call(this.name_text(name), [a0, a1, a2, a3].map((a, k) => k < n >> 3 ? a : UNDEF)); }, collect: (m: Machine, a: number, b: number, c: number, mark: number) => { if (this.fence > 0 && this.graph.made > Number(process.env.KGC ?? 1 << 23)) this.collect([a, b, c], mark >> 3); return NONE; } };
     const table = Object.values(natives);
     const a = new Uint8Array(NATIVE + table.length);
     a.set(arities(table));
@@ -83,6 +87,8 @@ export class Reader {
     for (const name of this.pending.sort((a, b) => this.field(a, 'length') - this.field(b, 'length'))) this.kernel('name_adopt', name);
     this.GLOBAL = this.kernel('global');
     this.kernel('natives_table');
+    this.runtime = new Runtime(this.values());
+    for (const [name, arity] of Object.entries(this.runtime.natives)) this.kernel('native', this.name_id(name), I(arity));
     this.kernel('seed_rule', this.source('', '{pattern} => {body}'));
     if (process.env.KPLANS === 'off') this.kernel('set_unplanned');
     if (process.env.KBUDGET) this.kernel('set_budget', I(Number(process.env.KBUDGET)));
@@ -189,7 +195,77 @@ export class Reader {
     for (let k = 0; k < n; k++) this.put(chars, k, I(value.charCodeAt(k)));
     const src = this.kernel('lay', chars, I(n), location !== '' ? TRUE : NONE);
     this.sources.push(src);
+    this.texts.set(src, { location, value });
     return src;
+  }
+  // What the runtime's natives see of values: an argument's value as text, the elements written in its brackets, answers as text.
+  values(): Values {
+    const tag = (v: number) => (v & 7) === 0 && v !== 0 ? this.graph.heap[(v >> 3) * 4] : -1;
+    const held = (v: number) => { const d = this.kernel('quiet_deref', v); return d === UNDEF ? v : d; };
+    // A chain (the entrypoint's `chain`: head, then each link's value and next) is its elements; its text is where it was written.
+    const member = (v: number, name: string) => { const m = this.kernel('own', v, this.name_id(name)); return m === UNDEF ? UNDEF : held(m); };
+    const linked = (d: number): number[] | undefined => {
+      if (tag(d) < 0) return undefined;
+      let link = member(d, 'head');
+      if (link === UNDEF) return undefined;
+      const out: number[] = [];
+      for (let n = 0; link !== NONE && link !== UNDEF && tag(link) >= 0 && n < 1 << 20; n++) { out.push(member(link, 'value')); link = member(link, 'next'); }
+      // `[a, b]` is a list of the one value `a, b` composes (itself a chain) while lists take a composed value whole.
+      return out.length === 1 ? linked(out[0]) ?? out : out;
+    };
+    const text = (v: number): string | undefined => {
+      if (v === UNDEF || v === NONE) return undefined;
+      const d = held(v);
+      if (d === NONE || (d & 7) !== 0 && d !== TRUE) return undefined;
+      if (d === TRUE) return 'true';
+      const t = this.texts.get(this.field(d, 'at_src'));
+      const id = this.kernel('text_of_node', d);
+      let s = id === 0 || (id & 7) !== 0 ? (t ? t.value.slice(this.field(d, 'at_begin') >> 3, (this.field(d, 'at_end') >> 3) + 1) : undefined) : this.name_text(id);
+      if (s === undefined) return undefined;
+      if (s.length >= 2 && (s[0] === '"' && s.at(-1) === '"' || s[0] === '`' && s.at(-1) === '`')) s = s.slice(1, -1);
+      return s;
+    };
+    // `(a, b)` / `[a, b]` as written (following names to where it was written); anything else is one element.
+    const elements = (v: number): number[] => {
+      if (v === UNDEF) return [];
+      let w = this.kernel('written', v);
+      if (tag(w) !== CODE) { const d = held(v); if (tag(d) === CODE) w = d; else return linked(d) ?? [v]; }
+      const src = this.field(w, 'at_src'), t = this.texts.get(src)?.value;
+      if (t === undefined) return linked(held(v)) ?? [v];
+      let b = this.field(w, 'at_begin') >> 3, e = this.field(w, 'at_end') >> 3;
+      while (b <= e && /\s/.test(t[b])) b++;
+      while (e >= b && /\s/.test(t[e])) e--;
+      if (!((t[b] === '(' || t[b] === '[') && this.kernel('group_end', src, I(b), I(e + 1)) >> 3 === e + 1)) return linked(held(v)) ?? [v];
+      const frame = this.kernel('code_frame', w), out: number[] = [];
+      let from = b + 1;
+      for (let j = b + 1; j <= e;) {
+        if (j === e || t[j] === ',') {
+          let x = from, y = j - 1;
+          while (x <= y && /\s/.test(t[x])) x++;
+          while (y >= x && /\s/.test(t[y])) y--;
+          if (x <= y) out.push(this.kernel('code', src, I(x), I(y), frame));
+          from = j + 1; j++;
+          continue;
+        }
+        const k = this.kernel('skip', src, I(j), I(e), NONE) >> 3;
+        j = k > j ? k : j + 1;
+      }
+      return out;
+    };
+    const answer = (s: string) => { const src = this.source('', s); return this.kernel('literal', src, I(0), I(s.length - 1)); };
+    const record = (fields: Record<string, number>, s?: string) => {
+      const node = s === undefined ? this.kernel('scope_of', 0) : answer(s);
+      for (const [k, x] of Object.entries(fields)) this.kernel('set_name', node, this.name_id(k), x);
+      return node;
+    };
+    const located = (v: number) => {
+      const d = held(v);
+      if (tag(d) < 0) return undefined;
+      const t = this.texts.get(this.field(d, 'at_src'));
+      return t === undefined || t.location === '' ? undefined : `${t.location}:${this.field(d, 'at_begin') >> 3}`;
+    };
+    const raw = (v: number) => { const d = held(v), t = this.texts.get(this.field(d, 'at_src')); return { tag: tag(d), names: tag(d) >= 0 ? this.name_keys(d) : [], parts: (linked(d) ?? []).map(x => tag(x) >= 0 ? this.name_keys(x).join(',') : x), written: t?.value.slice(this.field(d, 'at_begin') >> 3, (this.field(d, 'at_end') >> 3) + 1) }; };
+    return { NONE, TRUE, UNDEF, text, elements, answer, record, located, raw };
   }
   span(src: number, begin: number, end: number): Span { return { src, begin, end }; }
 

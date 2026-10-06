@@ -682,6 +682,9 @@ Answers from 2026-09-30.
   and `secure` names a cryptographic source.
 - **W6.9** An OS is a platform Language level (`Language.linux`, …), composed with the target; per-OS code
   lives there, not in the default code.
+  **(user, 2026-10-06)** Each OS is its own project under `@ether/os/` (`ether`, `linux`, `macos`, `windows`, `browser`)
+  holding its externals and configuration; the core holds only the `OS` enum, whose members those projects add, and the
+  abstract interface they implement (L§8.4).
 - **W6.11** Chat later.
 
 Answers from 2026-10-05.

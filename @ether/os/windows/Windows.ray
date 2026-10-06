@@ -1,0 +1,36 @@
+OS.Windows := class: OS {
+  [property: String] => (external os property) as String
+  running => platform == "win32"
+
+  read (location: Location) => external io location.sandboxed None
+  write (location: Location, content) => external io location.sandboxed content
+  listing (location: Location) => (&@.ask(`size`, location) -- (. == true ? received(location as String) as String : .)).lines{.nonempty}.map(location / .)
+  removed (location: Location) => external os `remove` location.sandboxed
+  sent (stream: String, content) => external io stream content
+  received (stream: String) => external io stream None
+  launch (location: Location) => external os `open` (location as String)
+  bit => (external random) ? 1 : 0
+  now: Time => nondeterministic (external time) ns ± (external time).resolution
+  time_zones: TimeZone.Source => ICU()
+  fonts: Location[] => ["C:/Windows/Fonts" as Location]
+
+  tcp (address: String, bytes: Byte[]) => external network `tcp` (address, bytes)
+  udp (address: String, bytes: Byte[]) => external network `udp` (address, bytes)
+  // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the connection, and the protocol of `offered` the two sides agreed on.
+  tls (address: String, offered: String[]) => external network `tls` (address, offered) as (connection: *, protocol: String?)
+  mac_address: Binary₄₈? => external os `mac_address`
+  connected: boolean => external network `connected`
+
+  // Windows 10 1703+ ships ICU and its tz data as icu.dll (https://learn.microsoft.com/en-us/windows/win32/intl/international-components-for-unicode--icu-), ucal API (https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/ucal_8h.html)
+  static ICU := class: TimeZone.Source {
+    call (function: String, arguments) => external os `icu` (function, arguments)
+    // a Windows zone id read as its IANA name through CLDR's windowsZones (https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones)
+    iana (zone: String) => call("ucal_getTimeZoneIDForWindowsID", (zone, "001")) ?? zone
+    at (zone: String, time: Time) => call("ucal_open", (iana(zone), "", "UCAL_GREGORIAN")) ~~ call("ucal_setMillis", (., (time as s).floor * 1000)) -- (calendar => call("ucal_inDaylightTime", calendar) as boolean -- (daylight => (
+      offset: ((call("ucal_get", (calendar, "UCAL_ZONE_OFFSET")) + call("ucal_get", (calendar, "UCAL_DST_OFFSET"))) / 1000) seconds,
+      daylight,
+      abbreviation: call("ucal_getTimeZoneDisplayName", (calendar, daylight ? "UCAL_SHORT_DST" : "UCAL_SHORT_STANDARD", "en")) as String
+    )) ~~ call("ucal_close", calendar))
+  }
+}
+OS |= OS.Windows

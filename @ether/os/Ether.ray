@@ -1,6 +1,0 @@
-OS.Ether := class: OS {
-  [property: String] => { "platform": "ether", "architecture": "ray" }[property]
-  zoneinfo => @tzif/zoneinfo
-  // `external network tls`: TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301)
-  tls (address: String, offered: String[]) => Program(name: "TLS 1.3 in Ray", goal: (connection: address, protocol: offered#))
-}

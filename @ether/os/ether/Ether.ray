@@ -1,0 +1,24 @@
+OS.Ether := class: OS {
+  [property: String] => { "platform": "ether", "architecture": "ray" }[property]
+  running => OS#{!== OS.Ether}.map(.()){running}.empty
+
+  read (location: Location) => @me/device/storage[location.normalised]
+  write (location: Location, content) => @me/device/storage[location.normalised] = content
+  listing (location: Location) => @me/device/storage.fields.name{~= ⊢(location.normalised + "/")}
+    .map(.after(location.normalised + "/").before("/")).unique.map(location / .)
+  sent (stream: String, content) => Program(name: "a stream in Ray", goal: stream)
+  received (stream: String) => Program(name: "a stream in Ray", goal: stream)
+  launch (location: Location) => Program(name: "open a location in Ray", goal: location)
+  bit => Program(name: "a random bit in Ray", goal: 0 | 1)
+  now: Time => Program(name: "the clock kept by NTP in Ray", goal: Time)
+  time_zones: TimeZone.Source => TimeZone.Zoneinfo(directory: @tzif/zoneinfo)
+  fonts: Location[] => Program(name: "fonts in Ray", goal: Location[])
+
+  tcp (address: String, bytes: Byte[]) => Program(name: "TCP in Ray", goal: address)
+  udp (address: String, bytes: Byte[]) => Program(name: "UDP in Ray", goal: address)
+  // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301)
+  tls (address: String, offered: String[]) => Program(name: "TLS 1.3 in Ray", goal: (connection: address, protocol: offered#))
+  mac_address: Binary₄₈? => None
+  connected: boolean => Program(name: "whether the network in Ray is reached", goal: boolean)
+}
+OS |= OS.Ether

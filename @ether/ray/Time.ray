@@ -96,7 +96,7 @@ Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
 
   uncertainty: Quantity.Temporal?
   corrected (by: Quantity.Temporal, within: Quantity.Temporal) => Time(calendar, epoch: epoch, uncertainty: within) = this + by
-  static now => nondeterministic (external time) ns ± (external time).resolution
+  static now => @me/device/os.now
   dynamically {
     .calendar.segments.for segment => `segment.name.upper_case` = `segment.name`
   } = now
@@ -183,7 +183,7 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   date ?= ?
 }
 
-LeapSeconds := class = ((@me/device/os.zoneinfo / "leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
+LeapSeconds := class = ((TimeZone.source.directory / "leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
   .map(.seconds seconds as Time(epoch: "1900-01-01"))
 {
   at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
@@ -196,7 +196,7 @@ TimeZone := class (name: String) {
     at (zone: String, time: Time) => Program(name: "the offset in force in the zone", goal: zone)
   }
 
-  // IANA tz database compiled to TZif (RFC 8536), one file per zone, read only when that zone is asked for (https://data.iana.org/time-zones/tz-link.html, https://man7.org/linux/man-pages/man5/tzfile.5.html for $TZDIR)
+  // IANA tz database compiled to TZif (RFC 8536), one file per zone, read only when that zone is asked for (https://data.iana.org/time-zones/tz-link.html)
   static Zoneinfo := class: Source (directory: Location) {
     data (zone: String) => $.tzif.read((directory / zone).bytes)
     at (zone: String, time: Time) => data(zone).at(time)
@@ -204,36 +204,7 @@ TimeZone := class (name: String) {
     zones => (directory / "zones").content.lines{.nonempty}
   }
 
-  // Windows 10 1703+ ships ICU and its tz data as icu.dll (https://learn.microsoft.com/en-us/windows/win32/intl/international-components-for-unicode--icu-), ucal API (https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/ucal_8h.html)
-  static ICU := class: Source {
-    call (function: String, arguments) => external os `icu` (function, arguments)
-    // a Windows zone id read as its IANA name through CLDR's windowsZones (https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones)
-    iana (zone: String) => call("ucal_getTimeZoneIDForWindowsID", (zone, "001")) ?? zone
-    at (zone: String, time: Time) => call("ucal_open", (iana(zone), "", "UCAL_GREGORIAN")) ~~ call("ucal_setMillis", (., (time as s).floor * 1000)) -- (calendar => call("ucal_inDaylightTime", calendar) as boolean -- (daylight => (
-      offset: ((call("ucal_get", (calendar, "UCAL_ZONE_OFFSET")) + call("ucal_get", (calendar, "UCAL_DST_OFFSET"))) / 1000) seconds,
-      daylight,
-      abbreviation: call("ucal_getTimeZoneDisplayName", (calendar, daylight ? "UCAL_SHORT_DST" : "UCAL_SHORT_STANDARD", "en")) as String
-    )) ~~ call("ucal_close", calendar))
-  }
-
-  // ECMA-402 Intl.DateTimeFormat: the offset in force read back from formatToParts with timeZoneName "longOffset" (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts), answered by the page at @me/device/os/zones
-  static Intl := class: Source {
-    asked (zone: String, time: Time) => @me/device/os/zones[zone, (time as s).floor * 1000]
-    offset (zone: String, time: Time) => (asked(zone, time).offset ~= ("GMT", (sign: "+" | "-", hours: Decimal, ":", minutes: Decimal)?)) -- (.sign ? (.sign == "-" ? -1 : 1) * (.hours hours + .minutes minutes) : 0 seconds)
-    at (zone: String, time: Time) => offset(zone, time) -- (in_force => (
-      offset: in_force,
-      daylight: in_force > offset(zone, time - 182 days).min(offset(zone, time + 182 days)),
-      abbreviation: asked(zone, time).abbreviation
-    ))
-  }
-
-  static sources := {
-    {os: OS{zoneinfo}} => TimeZone.Zoneinfo(directory: os.zoneinfo)
-    {os: OS.Windows} => TimeZone.ICU()
-    {os: OS.Browser} => TimeZone.Intl()
-    {os: OS} => Program(name: "time-zone data on an operating system that has none", goal: os)
-  }
-  static source: Source => Compiler.reduced(@me/device/os, sources)
+  static source: Source => @me/device/os.time_zones
 
   data => source.data(name)
   at (time: Time) => source.at(name, time)

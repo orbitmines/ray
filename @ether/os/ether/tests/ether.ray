@@ -1,0 +1,32 @@
+mark ^keyword := external global
+
+summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
+winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
+unless OS.Ether().time_zones is TimeZone.Zoneinfo { INFO@mark `ETH7 the language as the operating system does not read TZif` }
+unless OS.Ether().time_zones.directory == @tzif/zoneinfo { INFO@mark `TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo` }
+unless TimeZone.Zoneinfo(directory: @tzif/zoneinfo).version == "2026c" { INFO@mark `TZ8 the downloaded data is not tzdata 2026c` }
+with @me/device/os = OS.Ether() {
+  amsterdam := TimeZone("Europe/Amsterdam")
+  unless amsterdam.at(summer).offset == 2 hours { INFO@mark `TZ9 Amsterdam in summer is not at +02:00 on ether` }
+  unless amsterdam.at(summer).abbreviation == "CEST" && amsterdam.at(summer).daylight { INFO@mark `TZ10 Amsterdam in summer is not on CEST` }
+  unless amsterdam.at(winter).offset == 1 hour { INFO@mark `TZ11 Amsterdam in winter is not at +01:00 on ether` }
+  unless amsterdam.at(winter).abbreviation == "CET" && !amsterdam.at(winter).daylight { INFO@mark `TZ12 Amsterdam in winter is not on CET` }
+  unless TimeZone("UTC").at(summer).offset == 0 seconds { INFO@mark `TZ13 UTC is off zero on ether` }
+
+  ("ethertest/a" as Location).content = "x"
+  unless ("ethertest/a" as Location).content == "x" { INFO@mark `ETH1 what is written on ether is not read back` }
+  unless ("ethertest" as Location).listing == ["ethertest/a" as Location] { INFO@mark `ETH2 a location on ether does not list what was written under it` }
+  ("ethertest/a" as Location).remove
+  if ("ethertest/a" as Location).exists { INFO@mark `ETH3 a location removed on ether is still there` }
+}
+Counting := class: TimeZone.Zoneinfo {
+  asked: String[] = []
+  data (zone: String) => (asked.push zone) -- $.tzif.read((directory / zone).bytes)
+}
+counting := Counting(directory: @tzif/zoneinfo)
+counting.at("Europe/Amsterdam", summer)
+unless counting.asked == ["Europe/Amsterdam"] { INFO@mark `TZ16 reading one zone read others than the one asked for` }
+unless OS.Ether().tls("ether.orbitmines.com:443", ["h2"]) is Abstract { INFO@mark `TLS1 TLS in the language is not a step still to write` }
+unless OS.Ether()["platform"] == "ether" { INFO@mark `ETH4 the language as the operating system does not name its platform ether` }
+if OS.Ether().mac_address { INFO@mark `ETH5 the language as the operating system has a hardware address` }
+unless [OS.Ether().bit, OS.Ether().now, OS.Ether().fonts, OS.Ether().launch("a" as Location)].every(. is Abstract) { INFO@mark `ETH6 a step the language as the operating system still has to write is not left to write` }

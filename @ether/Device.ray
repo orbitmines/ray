@@ -1,12 +1,7 @@
-OS &+= {
-  // Answered by the page at `zones/<zone>/<at>` (Intl.DateTimeFormat, Time.ray); keeping answers is a cache level.
-  zones: Zones = Zones(path: "zones")
-}
-
 // What a device can do is a path under it, granted like anything else (`@me.execute { @me/device/camera }`); a
 // capability nobody granted is asked for (`&@.ask`).
 Device := class {
-  os: OS = Compiler.reduced(OS(), OS.devices)
+  os: OS = OS.current ?? (("@ether/os/ether" as Project.Dependency).project -- OS.Ether())
   keyboard: Keyboard = Keyboard()
   handheld = false
   clipboard: String | Location = ""
@@ -31,10 +26,6 @@ Device := class {
 
   static chooser: Program?
   choose (s, n: Number = 1) => Device.chooser ? Device.chooser(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random
-}
-
-Zones := class: Location {
-  [zone: String, at: Number] => await (this / zone / (at as String)).value
 }
 
 Keyboard := class: Location {
@@ -68,7 +59,7 @@ Disk := class: Location = device: Device {
 
 FileSystem &+= {
   static Device := class: FileSystem {
-    on (location: Disk) => Instance#{.device === location.device}.first -- (. && . !== Instance.local ? Remote() : Posix())
+    on (location: Disk) => Instance#{.device === location.device}.first -- (. && . !== Instance.local ? Remote() : location.device.os)
     read (location: Location) => on(location).read(location.local)
     write (location: Location, content) => on(location).write(location.local, content)
     listing (location: Location) => on(location).listing(location.local)
@@ -78,7 +69,3 @@ FileSystem &+= {
 FileOptimizations = {
   {location: Disk} => FileSystem.Device()
 } + FileOptimizations
-
-OS.devices = {
-  {os: OS{!platform}} => ("@ether/os" as Project.Dependency).project -- OS.Ether()
-} + OS.devices

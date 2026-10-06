@@ -5,5 +5,5 @@ FileSystem &+= {
 }
 
 FileOptimizations = {
-  {location: Location{Project.data(.) && !FileSystem.Posix().exists(.)}} => FileSystem.Mirrored()
+  {location: Location{Project.data(.) && !@me/device/os.exists(.)}} => FileSystem.Mirrored()
 } + FileOptimizations

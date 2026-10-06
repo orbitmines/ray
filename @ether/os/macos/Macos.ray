@@ -1,0 +1,25 @@
+OS.Macos := class: OS {
+  [property: String] => (external os property) as String
+  running => platform == "darwin"
+
+  read (location: Location) => external io location.sandboxed None
+  write (location: Location, content) => external io location.sandboxed content
+  listing (location: Location) => (&@.ask(`size`, location) -- (. == true ? received(location as String) as String : .)).lines{.nonempty}.map(location / .)
+  removed (location: Location) => external os `remove` location.sandboxed
+  sent (stream: String, content) => external io stream content
+  received (stream: String) => external io stream None
+  launch (location: Location) => external os `open` (location as String)
+  bit => (external random) ? 1 : 0
+  now: Time => nondeterministic (external time) ns ± (external time).resolution
+  // tzfile(5): $TZDIR, else /usr/share/zoneinfo (https://man7.org/linux/man-pages/man5/tzfile.5.html)
+  time_zones: TimeZone.Source => TimeZone.Zoneinfo(directory: (this["TZDIR"] ?? "/usr/share/zoneinfo") as Location)
+  fonts: Location[] => ["/System/Library/Fonts" as Location]
+
+  tcp (address: String, bytes: Byte[]) => external network `tcp` (address, bytes)
+  udp (address: String, bytes: Byte[]) => external network `udp` (address, bytes)
+  // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the connection, and the protocol of `offered` the two sides agreed on.
+  tls (address: String, offered: String[]) => external network `tls` (address, offered) as (connection: *, protocol: String?)
+  mac_address: Binary₄₈? => external os `mac_address`
+  connected: boolean => external network `connected`
+}
+OS |= OS.Macos

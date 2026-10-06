@@ -18,30 +18,14 @@ FileSystem := class: Language {
   listing (location: Location) => []
   exists (location: Location) => read(location) != None
   removed (location: Location) => write(location, None)
-
-  static Posix := class: FileSystem {
-    read (location: Location) => external io location.sandboxed None
-    write (location: Location, content) => external io location.sandboxed content
-    listing (location: Location) => IO.host(location as String).lines{.nonempty}.map(location / .)
-    removed (location: Location) => external os `remove` location.sandboxed
-  }
-  static Browser := class: FileSystem {
-    key (location: Location) => "ray:" + location.normalised
-    read (location: Location) => @me/device/storage[key(location)]
-    write (location: Location, content) => @me/device/storage[key(location)] = (content as String if content !== None)
-    listing (location: Location) => @me/device/storage.fields.name{~= ⊢(key(location) + "/")}
-      .map(.after(key(location) + "/").before("/")).unique.map(location / .)
-  }
 }
 
 FileOptimizations := {
-  {location: Location{OS() is OS.Browser}} => FileSystem.Browser()
-  {location: Location} => FileSystem.Posix()
+  {location: Location} => @me/device/os
 }
 
 IO := class {
-  output (text: String) => external io `/dev/stdout` text
-  host (location) => &@.ask(`size`, location) -- (. == true ? (external io location None) as String : .)
+  output (text: String) => @me/device/os.sent("stdout", text)
   fetch (from: Location, path: String, version: Version?) => ((from / path + (version as String)).content if version) ?? (from / path).content
 }
 
@@ -49,7 +33,7 @@ Random := class {
   secure => Random
   seeded (seed: Number) => Seeded(state: seed)
 
-  bit => (external random) ? 1 : 0
+  bit => @me/device/os.bit
   bits (count: Number) => count.times.map(bit)
   number (width: Number) => Binary(integer: bits(width).map(Binary.digit))
   below (limit: Number) => {
@@ -89,27 +73,23 @@ Proof := class = proposition: *, argument: * {
 ! `+` `-`
 ! `*` `/`
 
-OS := class {
-  [property: String] => (external os property) as String
+OS := class: FileSystem {
+  [property: String] => Program(name: "a property of the operating system", goal: property)
   platform => this["platform"]
   architecture => this["architecture"]
-  fonts: Location[] => this is OS.Linux ? ["/usr/share/fonts" as Location] : this is OS.Macos ? ["/System/Library/Fonts" as Location] : this is OS.Windows ? ["C:/Windows/Fonts" as Location] : []
-  zoneinfo: Location? => this is (OS.Linux | OS.Macos) ? (this["TZDIR"] ?? "/usr/share/zoneinfo") as Location : None
-
-  static Linux := OS{platform == "linux"}
-  static Macos := OS{platform == "darwin"}
-  static Windows := OS{platform == "win32"}
-  static Browser := OS{platform == "browser"}
-
-  static devices := {
-    {os: OS{platform}} => os
-    {os: OS} => Program(name: "an operating system", goal: os)
-  }
-
-  static launch (location: Location) => external os `open` (location as String)
-
   env => Environment(os: this)
   static Environment := class = os: OS {
     .{literal name ^property} ^punctuation => os[name]
   }
+
+  running => Program(name: "whether the host runs this operating system", goal: boolean)
+  static current: OS? => OS#.map(.()){running}.first
+
+  sent (stream: String, content) => Program(name: "send on a stream of the operating system", goal: stream)
+  received (stream: String) => Program(name: "receive from a stream of the operating system", goal: stream)
+  launch (location: Location) => Program(name: "open a location", goal: location)
+  bit => Program(name: "a random bit", goal: 0 | 1)
+  now: Time => Program(name: "the time", goal: Time)
+  time_zones: TimeZone.Source => Program(name: "time-zone data", goal: TimeZone.Source)
+  fonts: Location[] => Program(name: "the fonts", goal: Location[])
 }

@@ -65,10 +65,10 @@ Language.Direct := class: Language {
   }
 
   Display := class: UI.Interface = target: Location, title: String = "" {
-    start => { OS.launch(@me/device/opened) } when @me/device/opened changes
+    start => { @me/device/os.launch(@me/device/opened) } when @me/device/opened changes
     stop => None
     write (raster: Geometry.Raster) => (title = UI.page?.title ?? "") -- (target.content = raster)
-    read => UI.Input.dispatched(external io `window` None)
+    read => UI.Input.dispatched(@me/device/os.received("window"))
   }
 }
 

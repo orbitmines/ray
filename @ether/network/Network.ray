@@ -16,11 +16,9 @@ Network &+= {
 
   static Socket := class {
     static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => {
-      send (bytes: Byte[]) => external network `tcp` (this as String, bytes)
-      datagram (bytes: Byte[]) => external network `udp` (this as String, bytes)
-      // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the
-      // connection, and the protocol of `offered` the two sides agreed on.
-      tls (offered: String[]) => external network `tls` (this as String, offered) as (connection: *, protocol: String?)
+      send (bytes: Byte[]) => @me/device/os.tcp(this as String, bytes)
+      datagram (bytes: Byte[]) => @me/device/os.udp(this as String, bytes)
+      tls (offered: String[]) => @me/device/os.tls(this as String, offered)
     }
   }
 
@@ -41,8 +39,18 @@ Location &+= {
   socket => Network.Socket.Address(host: host, port: port ?? protocol?.port)
 }
 
+OS &+= {
+  tcp (address: String, bytes: Byte[]) => Program(name: "send over TCP", goal: address)
+  udp (address: String, bytes: Byte[]) => Program(name: "send a datagram", goal: address)
+  // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the
+  // connection, and the protocol of `offered` the two sides agreed on.
+  tls (address: String, offered: String[]) => Program(name: "connect over TLS", goal: (connection: address, protocol: offered#))
+  mac_address: Binary₄₈? => None
+  connected: boolean => Program(name: "whether the device is on a network", goal: boolean)
+}
+
 Device &+= {
-  network: (mac: Binary₄₈, connected: boolean) = (mac: (external os `mac_address`) ?? (Binary₄₈.random ~~ .[7] = 1), connected: (external network `connected`) ?? false)
+  network: (mac: Binary₄₈, connected: boolean) = (mac: os.mac_address ?? (Binary₄₈.random ~~ .[7] = 1), connected: os.connected ?? false)
 }
 
 Instance &+= {

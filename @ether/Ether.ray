@@ -38,4 +38,4 @@ Node &+= {
 }
 
 @{instance: Instance} ^string => instance.canonical
-{prefix: "@" | "#"}{id: UUID} ^string => children**{id is .name}.first
+{prefix: "@" | "#"}{id: UUID} ^string => children**{.PREFIX == prefix & id is .name}.first

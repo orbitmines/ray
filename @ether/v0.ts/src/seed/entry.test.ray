@@ -1,0 +1,13 @@
+say {x} =>
+  external io stdout x
+say (true.holds === true.holds)
+say false.holds
+say (false ? 1 : true)
+say ((true.and(false)) === false)
+say ((false.or(true)) === true)
+Color := enum red | green | blue
+say (Color.red === Color.red)
+say ((Color.members.head.value) === Color.red)
+x := external node
+say ((x if true) === x)
+say (x if false)

@@ -498,6 +498,17 @@ pipe := mark.character
     ok = None
   ok
 
+// The places from `this` to `limit` marked as the language's text.
+{this}.stamped_language({limit}) =>
+  here := this
+  while here
+    if here === limit
+      here = None
+    if here
+      here.language = true
+      here = here.next
+  this
+
 // Whether a capture can end at `here` when `wanted` follows it (as `ends` keeps them).
 {here}.can_end({wanted}) =>
   found := true
@@ -536,6 +547,11 @@ pipe := mark.character
 {at}.captured({pieces}, {limit}, {mode}) =>
   name := pieces.capture
   rest_pieces := pieces.next
+  // a capture holds something unless it may hold nothing
+  nothing_left := at === limit
+  if nothing_left
+    if pieces.optional
+      nothing_left = None
   // a capture followed by a literal ends only where that literal starts
   wanted := None
   if rest_pieces
@@ -640,6 +656,8 @@ pipe := mark.character
   piece_type := pieces.type
   found := None
   going := true
+  if nothing_left
+    going = None
   while going
     // the next end: from the chain `ends`, then the places of the wanted character (`same`), then `late`
     e := None
@@ -913,6 +931,9 @@ top := external .
 // a node with the `rule` and its `captures`, or nothing.
 {at}.reading_in({limit}, {scope}) =>
   written_here := at.text === reader_text
+  // the entrypoint's text after the reader is the language's (read with its rules)
+  if at.language
+    written_here = None
   // the statement indexed once: a rule led by a literal is tried only where it starts with that literal's first character, one
   // led by a capture only when the literal after the capture is in it
   stamp := at.indexed(limit)
@@ -1655,6 +1676,10 @@ external planner plan_rule
   limit := None
   if at
     limit = at.statement_end(None, None)
+  // past the reader, the entrypoint's own statements are the language's: their places say so
+  if registry.language_text
+    if at
+      at.stamped_language(limit)
   if at
     made := at.step(limit, scope)
     rule := made.rule
@@ -1717,6 +1742,7 @@ external reader reader
   value := None
   receiver_at := external span this
   frame := receiver_at.frame
+  frame_written := frame
   held := None
   while frame
     held = external get frame this
@@ -1727,13 +1753,18 @@ external reader reader
   if held
     value = held
   unless held
-    // not a name a frame holds: a group, quoted text, or a name nothing holds yet (a place)
+    // not a name a frame holds: a group, quoted text, a word a rule reads (`enum`), or a name nothing holds yet (a place)
     first_place := receiver_at.from
     c := first_place.character
     if c.closer
       value = this
     if c === quote
       value = this
+    unless value
+      receiver_end := receiver_at.to
+      read_receiver := first_place.reading_in(receiver_end, frame_written)
+      if read_receiver
+        value = this
   result := current
   going := true
   // a rest that is only spaces: nothing more to read on it
@@ -1853,6 +1884,7 @@ registry.sender = sent_rule
       found = given.head
     unless given.listing
       found = external node
+      found.listed = true
       found.value = given
   found
 
@@ -1875,6 +1907,9 @@ registry.sender = sent_rule
     at := from.spaces_after
     unless at
       at = from
+    // inside the brackets they are given in
+    if at.character === opening
+      at = at.next
     e := at.operand_end(to)
     if e
       c := e.character
@@ -2269,6 +2304,60 @@ Unbraced := opening_block.anything_but[]
         here = here.next
   found
 
+// The place of the `{` opening a block that ends the places from `at` to `to`, or nothing.
+{at}.trailing_block({to}) =>
+  here := at
+  found := None
+  while here
+    if here === to
+      here = None
+    if here
+      if here.character === opening_block
+        shut := here.balanced_end(to)
+        if shut === to
+          found = here
+          here = None
+        if here
+          if shut
+            here = shut
+          unless shut
+            here = here.next
+      unless here.character === opening_block
+        here = here.next
+  found
+
+// The place before `limit` from `at` (`limit`'s previous place among them).
+{limit}.before_place({at}) =>
+  here := at
+  found := at
+  while here
+    following := here.next
+    if following === limit
+      found = here
+      here = None
+    if here
+      here = following
+  found
+
+// Where a name from `at` ends: at a space or an opening bracket, or `to`.
+{at}.name_end({to}) =>
+  here := at
+  found := to
+  while here
+    if here === to
+      here = None
+    if here
+      c := here.character
+      stop := c === space
+      if c === opening
+        stop = true
+      if stop
+        found = here
+        here = None
+      if here
+        here = here.next
+  found
+
 // The place after ` | `, from the space before it.
 {at}.after_alternative =>
   bar := at.next
@@ -2417,8 +2506,9 @@ Unbraced := opening_block.anything_but[]
   if ancestor
     ancestor.read_into(instance)
   block := class_read.written
-  code := block.code
-  external apply code None instance
+  if block
+    code := block.code
+    external apply code None instance
 
 // `a, b`: a list (a chain: `head`, `tail`, links with `value` and `next`), each item as written, read when its value is read;
 // a list given another item is that list with it at the end.
@@ -2450,6 +2540,24 @@ Unbraced := opening_block.anything_but[]
   list.tail = added
   list
 
+// A list with a value added at its end (a new list when `list` is nothing).
+{list}.listed_with_value({value}) =>
+  found := list
+  unless found
+    found = external node
+    found.listing = true
+  added := external node
+  added.listed = true
+  added.value = value
+  last := found.tail
+  if last
+    last.next = added
+    added.previous = last
+  unless last
+    found.head = added
+  found.tail = added
+  found
+
 // Calling a value: a class makes an instance of itself; a closure runs.
 {this}.called({arguments}) =>
   value := this
@@ -2472,8 +2580,15 @@ Unbraced := opening_block.anything_but[]
   outer_naming := registry.naming
   registry.given = None
   registry.naming = None
-  written := arguments
-  if written
+  // the arguments as written (code passed on is followed to where it was written)
+  given_node := external ** arguments
+  written := given_node.code
+  given_value := given_node.value
+  if given_value
+    registry.given = given_value.listed
+  // (code held in a name is read where the name is: whether there is any is asked of where it is written)
+  written_at := external span written
+  if written_at
     if written.named
       where := external span written
       naming_frame := external node
@@ -2719,6 +2834,48 @@ class: {parent} {{block: Balanced}} =>
   made.written = external ** block
   external apply block None made
   made
+// `enum a | b (field: v) | c { block }`: a class of exactly these members, each an instance of it named on it (`X.a`), in
+// `members` in order; a block after them is the class's own.
+enum {written: Item} =>
+  where := external span written
+  made := external node
+  made.parent = where.frame
+  made.class = true
+  made.enum = true
+  from := where.from
+  to := where.to
+  members_to := to
+  block_at := from.trailing_block(to)
+  if block_at
+    members_to = from.trimmed(block_at)
+    inside_from := block_at.next
+    inside_to := to.before_place(block_at)
+    block := external code inside_from inside_to written
+    made.written = block
+    block_code := block.code
+    external apply block_code None made
+  member_from := from
+  while member_from
+    member_end := member_from.alternative_end(members_to)
+    name_end := member_from.name_end(member_end)
+    named_written := external code member_from name_end written
+    name := named_written.code
+    fields := None
+    fields_from := None
+    unless name_end === member_end
+      fields_from = name_end.spaces_after
+    if fields_from
+      unless fields_from === member_end
+        fields_written := external code fields_from member_end written
+        fields = fields_written.code
+    entry := made.constructed(fields)
+    external set made name entry
+    made.members = made.members.listed_with_value(entry)
+    member_from = None
+    unless member_end === members_to
+      member_from = member_end.after_alternative
+  made
+
 // `static statement` in a class: read once, for the class, not again for each instance.
 static {statement} =>
   where := external span statement
@@ -2727,3 +2884,30 @@ static {statement} =>
   unless frame.instance
     found = statement
   found
+
+// ================================================================ the language, in its own terms
+// From here the entrypoint is read as any file of the language is (with the language's rules, not the reader's).
+registry.language_text = true
+
+// `a; b`: both read, the value of the second.
+Node &+= {
+  ; (x) => x
+}
+
+// A value kept only if a condition holds (`x if c`), or unless it does (`x unless c`).
+{guarded} if {condition} => condition ? guarded : None
+{guarded} unless {condition} => condition ? None : guarded
+
+boolean := enum false (holds: None) | true (holds: true) {
+  nand (b) => (holds && b.holds) ? false : true
+  not => nand(this)
+  and (b) => nand(b).not
+  or (b) => not.nand(b.not)
+  nor (b) => or(b).not
+  xor (b) => or(b).and(nand(b))
+  xnor (b) => xor(b).not
+  next => not
+  previous => not
+}
+true := boolean.true
+false := boolean.false

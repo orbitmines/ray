@@ -593,6 +593,22 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Commits append; nothing is re-read to write (ORIG:8). Checkout runs the file to the next label (ORIG:21).
   - Draft TODOs not covered above: a text form for when UUIDs cannot be assigned through an interface (ORIG:1), in-between caches (ORIG:18).
 
+- **Decided (user, 2026-10-06): end-to-end encryption.** Every history that is not public is stored encrypted for its
+  readers, by default; it is one storage level (`encrypted`, part of `Compiler.stored`, in `version/`) with the key
+  wrapping in `security/`.
+  - A line keeps in plaintext what storing, ordering and checking need: its label, parents, stamp, signature and
+    which content key it uses (`with (…; key = K₃)`); its change is ciphertext.
+  - A history has a symmetric content key, wrapped for each reader's instance key (HPKE, RFC 9180: X25519, HKDF,
+    ChaCha20-Poly1305); readers are whoever its access lets `read`. Adding a reader is a commit wrapping the current key
+    for them; removing one rotates to a new key wrapped for the rest (they keep what they already saw).
+  - The signature covers the hash of the line with its ciphertext, so a server verifies chain and authorship without
+    reading; the plaintext change carries its own hash inside, so ciphertexts cannot be swapped between lines.
+  - `who` has a visibility like any field, inherited from the history by default (then it is in plaintext). Narrowing
+    it seals it: `who` and the signature move inside the ciphertext, the server sees a per-history pseudonymous key,
+    and only readers check authorship.
+  - Merging happens on readers' machines (a server keeps both heads); caches are encrypted with the same key or kept
+    local; deltas and compression come before encryption; backends (git) carry ciphertext.
+
 ## 10. From the drafts (`.ray2`, `.ray3`) — what v0 doesn't have yet
 
 Paths are relative to `@ether/`; `ep` = `v0/ray/.entrypoint.ray`. Each line gives what it is, where the draft writes it, and what it needs. Items already specified above are not repeated. **Q** marks the ones that need your decision before implementing.

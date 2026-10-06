@@ -107,6 +107,8 @@ export class Seed {
     // Code from one place to another, read where `like` was written (a capture's type, read once when its rule is defined).
     this.externals.set('read', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.written(like); return self.force(new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner)); });
     this.externals.set('.', frame => frame);
+    // Code as a value (a Program): a node holding the code unread, not read where a name names it.
+    this.externals.set('**', (frame, [x]) => { const n = new Node(); n.members.set('code', x instanceof Code ? x : self.code_of(x)); return n; });
     // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
     this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); n.members.set('access', self.chain_of(l.access)); n.members.set('open', self.character(l.open)); n.members.set('close', self.character(l.close)); n.members.set('definer', self.chain_of(l.definer)); return n; });
   }

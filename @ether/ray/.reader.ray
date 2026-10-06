@@ -378,7 +378,10 @@ captured {pieces} from {at} to {limit} in {mode} =>
   if mode then
     unless rest_pieces then
       ends := nothing
-      operand := operand end from at to limit
+      operand_at := spaces after at
+      unless operand_at then
+        operand_at := at
+      operand := operand end from operand_at to limit
       if operand then
         ends := node
         set ends . place to operand
@@ -803,12 +806,35 @@ operand end from {at} to {limit} =>
               stop := yes
             if character d is dot then
               stop := yes
+          unless stop then
+            unless same here at then
+              stop := a base rule starts at here
           if stop then
             unless same here at then
               found := here
             here := nothing
           if here then
             here := here . next
+  found
+
+// Whether one of the base's rules (what every value has: `Node`'s operators) starts with a literal spelled at `at`: an
+// operand ends there (the operators the language defines decide where a word ends).
+a base rule starts at {at} =>
+  base := registry . base
+  found := nothing
+  if base then
+    links := base . rules
+    while links do
+      rule := links . rule
+      pieces := rule . pieces
+      first_from := pieces . from
+      first_to := pieces . to
+      if pieces . literal then
+        if spells out first_from up to first_to from at then
+          found := yes
+          links := nothing
+      if links then
+        links := links . next
   found
 
 // The place after the bracket that closes the one at `at`.
@@ -1241,6 +1267,38 @@ read statement at {given} =>
   after
 
 hand reading over
+// Whether code holds something: a name that a frame where it is written holds, or anything that is not one name.
+holds something {code} =>
+  where := external span code
+  from := where . from
+  to := where . to
+  word := yes
+  here := from
+  while here do
+    if same here to then
+      here := nothing
+    if here then
+      c := here . character
+      if character c is space then
+        word := nothing
+      if closer of c then
+        word := nothing
+      if character c is quote then
+        word := nothing
+      here := here . next
+  found := yes
+  if word then
+    found := nothing
+    frame := where . frame
+    while frame do
+      held := external get frame code
+      if held then
+        found := yes
+        frame := nothing
+      if frame then
+        frame := frame . parent
+  found
+
 // The rules a value is read by (R2.1): its own and its classes' (not the top scope's), then what every value has.
 rules of {value} =>
   top := registry . top
@@ -1269,11 +1327,15 @@ sent {this} {rest} =>
   sender := registry . sender
   sender_pieces := sender . pieces
   this_piece := sender_pieces . next
+  // the first receiver is a place (its code, unread): what it holds is read for its rules only when it holds something
   current := this
+  value := nothing
+  if holds something this then
+    value := this
   result := current
   going := yes
   while going do
-    rules := rules of current
+    rules := rules of value
     r := prefix reading from at to rest_to among rules
     unless r then
       spaced := spaces after at
@@ -1295,6 +1357,7 @@ sent {this} {rest} =>
       if same at rest_to then
         going := nothing
       current := result
+      value := result
   result
 
 sent_rule := registry . latest
@@ -1418,12 +1481,35 @@ Balanced := checked by latest rule
   inside
 
 // ---------------------------------------------------------------- what every value has (the base)
-Base := type
+Node := type
   .{literal property} =>
     external get this property
   .{literal property} = {value} =>
     external set this property value
-set registry . base to Base
+  // `,` composes one value, a list (no split, 2026-09-27): `a, b, c` is the list of `a`, `b` and `c`, each as written (a
+  // place or a value, read when it is used).
+  ,{other} =>
+    list := nothing
+    if holds something this then
+      list := this
+      unless list . listing then
+        list := nothing
+    unless list then
+      list := node
+      set list . listing to yes
+      first := node
+      first_item := external ** this
+      set first . item to first_item
+      set list . first to first
+      set list . last to first
+    added := node
+    other_item := external ** other
+    set added . item to other_item
+    last := list . last
+    set last . next to added
+    set list . last to added
+    list
+set registry . base to Node
 
 // ---------------------------------------------------------------- classes
 // A class is the frame its block is read in (its statics and its methods are that frame's); calling it makes an instance: a

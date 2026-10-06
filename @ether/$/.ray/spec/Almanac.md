@@ -76,6 +76,7 @@ From the drafts review (2026-10-06).
   Decided text): `p X` over n possibilities chooses `round(p * n)` of them; when `p * n` isn't whole it
   is the superposition of the floor and the ceiling, weighted by the remainder (`50%` of 3 is `1 | 2`,
   half each). (Also U8.)
+  **Answered (user, 2026-10-06):** already answered (2026-10-06, World W9): a share is a count of possibilities, and a non-whole share of a finite structure is a type error.
 
 ## A6. Equality (Almanac §2.6)
 

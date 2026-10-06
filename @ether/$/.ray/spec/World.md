@@ -332,6 +332,7 @@ W9 itself is decided below (`choose` resolves through `@me.choose`).
 
 - **W9.1 With or without replacement** — **Q**. Recommend: `choose n T` is without replacement; with replacement is
   `n * (choose 1 T)` or `choose (T, T, …)` by structure; no new keyword. *`.ray2/Feature/Choice.ray:18`*
+  **Answered (user, 2026-10-06):** `choose n` chooses n distinct ones by identity (`===`, location included): `choose 2 ("A" | "B" | "C")` gives two of the three, but `choose 2 (x, x, "5")` may give x twice, since the two x are at different locations.
 - **W9.2 Choosing by an algorithm** — **Q**. Instantiating a type with, e.g., Wave Function Collapse. Recommend: the chooser is a
   `with` setting, `with Choice.algorithm = WaveFunctionCollapse { choose Room }`; the computer's default stays a weighted random
   pick. *IDE:687; ALM:2040*

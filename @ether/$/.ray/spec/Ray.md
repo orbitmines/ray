@@ -101,6 +101,7 @@ From the drafts review (2026-10-06).
   "split {predicate: /* Should split, returns Ray @ the delimiter, with prev/next the two sides. */}". **Q** — Recommend:
   `split` answers a Ray (not an Array) whose vertices are the delimiters, each with `.previous`/`.next` the two sides;
   `.pieces` lists the pieces. (R3.6.)
+  **Answered (user, 2026-10-06):** delimiters are the edges: they stay in the structure, and `"a,b,c".split(",")` still answers `[a, b, c]` (its vertices are the pieces).
 - **R3.17 `group_by` and `dimensionality`** — *`.ray2/Ray.ray:105, 190`*: "`//group_by`", "`dimensionality` //How to do
   this with different rays which can be equipped for different directions". **Q** — Recommend: `group_by(f)` answers
   `{(f(x)): [x…]}`; `dimensionality` is the number of directions equipped on the selection (1 for an Array, n for a grid).
@@ -115,6 +116,7 @@ From the drafts review (2026-10-06).
   infinite, optionally assume it terminates". **Q** — Recommend: `.length`/`.count` measure the fully expanded
   structure, `.collapsed.length` measures it as written, and on an unknown program the answer is `?` (possibly ∞) unless
   `assume Terminating`. (R3.3, R3.4.)
+  **Answered (user, 2026-10-06):** it follows from what the elements are: a range as a value is a Ray (R4.1), so `[1, 2, (3..5)]` has three elements, the third a nested Ray, and counts 3; a superposed element counts as one.
 - **R3.20 `zip` and `zip_longest`** — *`.ray2/_todo/ray.ray.txt/ray.ray:5`*: ".zip/.zip_longest (ziplongest returns with
   _length to the max) for parameterless, and parameters [this, b].zip"; used in *`.ray2/_todo/…/instance/utils/Number.ray:84`*.
   **Decided (draft)**: `a.zip(b)` stops at the shorter; `a.zip_longest(b)` runs to the longer with None for the missing

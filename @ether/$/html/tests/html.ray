@@ -12,7 +12,7 @@ unless holed.id == "Ray" && holed.children.first.text == "Ray" { INFO@mark `UI19
 unless (@html <p id="x-{who}" />).id == "x-Ray" { INFO@mark `UI193 a hole inside a quoted attribute is not spliced into the text` }
 unless (@html <ul>{["a", "b", "c"].map(item => @html <li>{item}</li>)}</ul>).children.count == 3 { INFO@mark `UI194 a list hole does not splice children` }
 unless (@html <p>a \{b}</p>).children.first.text == "a {b}" { INFO@mark `UI195 a backslashed brace is not a literal brace` }
-unless (@html <input disabled={true} />).attributes.contains(("disabled", "")) { INFO@mark `UI196 a true attribute is not present` }
+unless (@html <input disabled={true} />).attributes.some(.name == "disabled" && .value == "") { INFO@mark `UI196 a true attribute is not present` }
 unless (@html <input disabled={false} />).attributes.empty { INFO@mark `UI197 a false attribute is present` }
 commented := @html <p><!-- note -->a</p>
 unless commented.children.count == 2 && commented.children.first is HTML.Comment && commented.children.first.text == " note " { INFO@mark `UI198 an html comment is not kept as a child` }

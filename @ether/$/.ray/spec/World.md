@@ -28,6 +28,10 @@ From the drafts review (2026-10-06).
   name bound to a getter. Recommend: `world.@a = world.@b` makes `@a` an equivalence of `@b`; `reserve` may bind a name to a
   `dynamically` getter, resolved per lookup; overwriting a reservation needs the issuer's write access. *`.ray2/World.ray:29–36`*
   **Follows (2026-10-06):** `world.@a = world.@b` makes `@a` an equivalence of `@b`; a reservation may hold a parameterless getter, resolved on every lookup (`reservation.redirect(other)`); overwriting a held reservation needs write access from its issuer, and is a quest otherwise, from U9 (equivalences), P5.3 (parameterless functions are dynamic) and W5.1 (writing is access to `=`).
+  **(2026-10-06)** There is no `Reservation`: a reserved name is a field of the world, `world.@name = holder` (case-insensitively
+  unique), found by the `{PREFIX}{name}` lookup before the world's children and its fallback. A redirect assigns a getter,
+  `world.@a = => world.@b`. Overwriting a held name needs write access (`&@.may`), and answers
+  `Program(name: "overwrite a name", goal: …)` otherwise.
 - **W1.10 The standard `@` names** — **Decided (draft)**; none is defined in v0 (`@localnetwork` is used in
   `network/Network.ray:82`, `reservable_names` in `World.ray:165–175`). *`Ether.ray:3–27`*
   - `@ether` is `` @`ether.orbitmines.com:37839` ``; `@me | @private` is `global` (on a computer the root is `@me`; in a player
@@ -43,6 +47,9 @@ From the drafts review (2026-10-06).
   (*ALM:1605–1611*, ALM = `orbitmines.com/…/routes/Almanac.tsx`), and `@github.@x == @https://github.com/x` is an
   equivalence (U9). *IDE:185* (IDE = the private journal's `Project - IDE - The Ether (2027->).md`, as in Language.md)
   **Follows (2026-10-06):** a platform's `@ether.@name` is one more avatar of it, and `@github.@x == @https://github.com/x` is an equivalence (`platform.@x` is `platform / x`), from W2.14 (a name is superposed with its avatars' names) and U9.
+  **(2026-10-06)** There is no `Avatar` class and no `platform.@handle` rule: an avatar is one of a character's names, a location
+  on the platform with an `@` segment, `@github.com/@alice` (the `@` is required: `@github.com/package` is a package of
+  github). `character.avatars` is `name{is Location}` of that form.
 
 ## W2. Entities, instances, personas (*World:208–260, 381–442; Feature:264–340*)
 
@@ -71,7 +78,8 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   **Follows (2026-10-06):** `character.instances` is the superposition of every instance running it (present, logged in or hosted), and the selected one, `primary`, is where its focus is (`presence`), from W2.14 (status is the max over all instances) and superposition over a single field (U1).
 - **W2.14 Status and name over instances and avatars** — **Decided (draft)**. A character's status is the highest over all its
   instances (`instance.status#.max`), and its name is its own name superposed with its avatars' names, so any of them finds it.
-  *`.ray2/Character.ray:63, 72`*
+  *`.ray2/Character.ray:63, 72`* **(2026-10-06)** The avatars are themselves in the name's superposition (W1.11); an avatar's
+  skills are the character's (`character.skills`, `unlock`).
 - **W2.15 Status: one enum, or grouped components** — **Q (conflict)**. W2.6 decided one superposable enum
   (`Online & Hosted & Idle`), and v0 has a flat `Status := enum online | offline | hosted | broadcast | proxy | …`
   (`World.ray:289`). The drafts group it: `class Status < Status.Network` with `Hosted`, `Broadcast`, `Proxy`
@@ -99,6 +107,9 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   and L§8.2's `@name { … }` runs *as* a character. Recommend: running at a location is `f@loc()` / `loc~{…}` (an entry point of
   the location), kept distinct from `@name { … }`; `loc~label{…}` ties into `.%` labels.
   **Answered (user, 2026-10-06):** running at a location is `f@loc()`; there is no `loc~{…}` form. `~` works like a label: `@who~label{ … }` runs the block after that block/label on that character.
+  **(2026-10-06)** There are no `run_as`/`run_at`/`run_after` methods: running as someone or somewhere is `with`, as in a `.%`
+  line: `with (@me = who) program`, `with (Location.current = loc) program`. `@who { … }`, `@who~label{ … }`, `f@loc()`,
+  `program.run` and a run's replay are written that way.
 - **W2.19 Several public keys** — **Q**. A character has more than one key (one for handshake-free communication, one for logging
   in elsewhere, visible to that service). Recommend: `.public_key` is a narrowing of `.name`, and a character holds a superposition
   of keys, each scoped to who may see it (W2.1, X4.3). *`Ether.ray:35–36`*
@@ -128,7 +139,7 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   (`@aws/…`) and an account a character there (W1.4). *IDE:230–252, 519*
 - **W2.26 An instance's kind is its entrypoint** — **Decided (draft)**. `entrypoint.server.ray`, `entrypoint.npc.ray`
   (`< NPC`), `entrypoint.player.ray`, and `Ether.ray` (`< Character`). The server's sets `shadowing = None`,
-  `reserve @ether => @me`, and `@admin` as the superposition of every `@allow_*` name. *`entrypoint.server.ray:1–9`, `Ether.ray:1`*
+  `reserve @ether => @me` (2026-10-06: `@ether = => @me`, W1.9), and `@admin` as the superposition of every `@allow_*` name. *`entrypoint.server.ray:1–9`, `Ether.ray:1`*
 - **W2.27 Mirrors of unknown extent** — **Q**. Recommend: `world.locations` is an unbounded (possibly non-halting) Ray, explored
   as a quest; a mirror's permissions are its own and default to the original's (W2.9). *`.ray2/Character.ray:11–12`*
   **Follows (2026-10-06):** as recommended: `world.locations` is an unbounded (possibly non-halting) Ray, explored as a quest, and a mirror's permissions are its own, defaulting to the original's, from R3.4 (an unbounded search is a quest) and L§8.3 (permissions are inherited).
@@ -139,6 +150,9 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   definitions with rename-preserving identity.
 - **W3.2 Git both ways** — a history conversion to git.
 - **W3.3 Staged = local visibility** — uncommitted and staged changes are visibility set to local/private.
+  **(2026-10-06)** One mechanism for every node: its `access` (L§8.3). `x.public` is whether its visibility reaches `@public`,
+  `x.publish` makes it public; staged or draft is `!x.public`. Commits, references and items have no `visibility`, `staged`,
+  `draft` or `publish` of their own.
 - **W3.4 Assignment carries history** — the `.=(value)` edge carries where the value came from; default `=` checks histories
   and raises merge conflicts as quests; keep the variable's own history vs the value's.
 - **W3.5 Type conflicts are merge conflicts** — in distributed databases.
@@ -194,10 +208,14 @@ From the drafts review (2026-10-06).
   continuation, and one that can continue is `done & continuable`; a certificate's secret defaults to `@private` and pairs with a
   public part (X4.3). *`.ray2/Quest.ray:3, 8`, `.ray2/Item.ray:21–25`*
   **Follows (2026-10-06):** ported from the drafts (`.ray2/Quest.ray`, `.ray2/Item.ray`): completing a quest issues a `Certificate` from the quest's world to the solver (`quest.certificate`); done is P1.8's `x**.is_terminal`, and one that can continue is `done & continuable`; a certificate's secret defaults to `@private` (L§8.3) and pairs with a public part (X4.3).
+  **(2026-10-06)** There is no `Certificate` class: a certificate is a commit in the item's history made by its issuer
+  (`item.history.commit(issuer, …)`, read as `item.history{who: issuer}`); when it was issued is the commit's `when`, and
+  its secret is that commit's access.
 - **W4.7 Certificate validity** — **Decided (draft)**. A certificate has `valid: Time..Time?` (a range), and `issuer` defaults to
   the caller. **Q:** the distributed vs central case; recommend verifying by the issuer's public key (W2.1), so no central
   database is needed. *`…/instance/Item.ray:7–11`*
   **Follows (2026-10-06):** verify a certificate by its issuer's public key, so no central database is needed, from W2.1 (identity is the public key).
+  **(2026-10-06)** Verifying it is verifying the commit's `who` (W4.6).
 - **W4.8 Item issuer and moving** — **Q**. Recommend: an Item's issuer defaults to the world it was created in, and
   `item.move(location)` is a Transaction (W6.5) that changes its location atomically and appends to `item.trail`.
   *`.ray2/Item.ray:5, 8, 11–12`*
@@ -393,7 +411,8 @@ Answers from 2026-09-30.
 - **W6.1** IO is sandboxed: `IO /path` is inside the instance directory, `..` can't leave the top
   (symlinks can), and the host filesystem is reached only via `confidential IO.os /path` when permitted.
 - **W6.1b** A path naming a field is looked up as `{field}.ray`, then a directory `{field}`, then a file.
-- **W3.3** Staged/uncommitted changes are visibility set to local/private; publishing raises visibility.
+- **W3.3** Staged/uncommitted changes are visibility set to local/private; publishing raises visibility. (2026-10-06: the
+  node's `access`, read as `.public`, W3.3 above.)
 - **W3.6** Every class is a repository; String's lowest level is the character.
 - **W4.5** Counted types (`4 Wall`, `1..3 Bookshelf`, `a Table`) now; spatial relations (`against`,
   `next to`) as Geometry narrowings once `v0/Geometry/` exists.
@@ -401,7 +420,8 @@ Answers from 2026-09-30.
 - **W6.10** The Keyboard API is the draft's (`pulsed (max: 20/s, delay: 1s)`, `toggled`, `cycle`,
   `as boolean` when pressed), with keys as `dynamically` variables. It is also the TUI's input.
 - **W2.6** Status is one superposable enum: `@me.status = Online & Hosted & Idle`.
-- **W1.4** Allocating names now: `@google.@x = @someone`, where the issuer is whoever owns the namespace.
+- **W1.4** Allocating names now: `@google.@x = @someone`, where the issuer is whoever owns the namespace. (2026-10-06: that
+  assignment is the whole mechanism; there is no `allocate`, W1.9.)
 - **W2.9** A mirror is the same variable at another location (`x @ @me.managed`); sync depth is a setting
   of that location.
 - **W3.4** Assigning a value that has a history keeps both, linked: the `=` edge carries the value's
@@ -484,7 +504,8 @@ Answers from 2026-10-06.
   `global%[version]` pins a version. A STD fix substitutes for the version it fixes in everything written after the
   fix; what was written before it replays as recorded.
 - **W2.8b** `@character { … }` runs a block as that character when the character is here (L§8.2). A `.%` line
-  says who made the commit with `with (@me = @who)` instead (L§9.2.6, 2026-10-06).
+  says who made the commit with `with (@me = @who)` instead (L§9.2.6, 2026-10-06). (2026-10-06: `@character { … }` is
+  itself `with (@me = character) { … }`, W2.18.)
 - **W3.15** There is no `Backend` class: each backend is a plain `Language`, in its own project `$/git`, `$/mercurial`,
   `$/fossil`, `$/pijul` or `$/subversion`, and is reached as `$.git` and so on (L§9.1, L§9.2).
 - **W3.16** `Ray.history` is `Node.history`. A node's history is a `History`; its stored `.%` form is the Ray

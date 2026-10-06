@@ -366,6 +366,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - It works only when the character is here: logged in or hosted on the local instance. Otherwise it is an error.
   - `@me { … }` runs as whoever `@me` already is.
   - A `.%` line uses `with (@me = @who)` instead, which replaces the draft's `&caller = <uuid>;` (§9.2.6, 2026-10-06).
+  - **(2026-10-06)** `@name { … }` is `with (@me = name) { … }`, the same as a `.%` line, and running somewhere is
+    `with (Location.current = loc) program`; there are no `run_as`/`run_at`/`run_after` methods.
 - **From the drafts review (2026-10-06):**
   - **8.2.1 Checking a context checks its program — Decided (draft).** An access check on a context checks the running Program and its `&who` / origin chain, never the frame's data. *`.ray2/Program.ray:247–248`*
   - **8.2.2 Releasing a derivative — Q.** A permission for whether data and its derivatives may cross the network, or only some derivatives (a count) (*`.ray2/_todo/ray.ray.txt/Ether/instance/Access.ray:1–2`*). Recommend: a grant may name a derivative (`@ether.read (x.count)`) that may leave although x may not; library code runs as `@ether`, which has access on the local instance only.
@@ -381,6 +383,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - Visibility is a field of each item, `@public | @me | @<group>`, default inherited from the parent.
   - Visibility is itself a value, so it has a visibility. The visibility's visibility is what makes an item *findable*: A can be `@private` while its visibility is `@public`, so others find that A exists but cannot read it.
 - **Decided:** an item inherits its parent's visibility. At the top it falls back to the default privacy policy, which is private.
+- **(2026-10-06)** That visibility is the node's `access`, the only one: `x.public` is whether it reaches `@public`, and
+  `x.publish` makes it public. Commits, references and items have no `visibility`/`draft`/`staged` of their own (World W3.3).
 - **From the drafts review (2026-10-06):**
   - **8.3.1 Conditions on the viewer — Q.** Branching on who views (*IDE:630–631*). Recommend: `if @public { … } elsif @me { … }` tests the current viewer's chain (`&@`) against a visibility; a visibility used as a condition answers whether the current reader satisfies it.
     **Answered (user, 2026-10-06):** yes: a character used as a condition is equivalenced to a boolean, whether it is `@me` (the current reader).
@@ -391,7 +395,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided (2026-10-06):** the language makes no process calls. Running anything is running a Program.
   - There is no `Process`, no `Jobs` runner and no `OS.run`.
   - **Programs are quests (user, 2026-10-06).** There are no jobs and no separate `Quest` class (the name was dropped): every Program has a `who` that runs it (a selection: `@me`, `@me.device`, `@alice`), its own cursor (`at`, `started`, `results`; `done`, `running`, `progress`, `.stop`), an optional `goal` (`reached`, `attempt`), and `abstract`: its steps that call something defined nowhere, which `who` performs. A human quest is structured the same way, and the human runs it. `Abstract := Program{abstract.nonempty}` is what used to be answered as a `Quest(name:, goal:)`: a program of one abstract step, written `Program(name: "rename", goal: …)`.
-  - A character's running programs are a selection on it: `@me.quests` (`Program#{who ∋ this && running}`), paths being `.`, so `@me/quests` and `@me/device/quests`. `@me/quests |= program` writes that condition, which starts it. The daemon is Ether's scheduler for the computer's programs.
+  - A character's running programs are a selection on it: `@me.quests` (`Program#{who: this}{running}`), paths being `.`, so `@me/quests` and `@me/device/quests`. `@me/quests |= program` writes that condition, which starts it. The daemon is Ether's scheduler for the computer's programs.
   - What used to be a process is a typed read or write of a location:
     - the browser's file system is `@me/device/storage/<key>`, which the page keeps in `localStorage`;
     - a remote file system over HTTP is `$.http` requests: GET reads, PUT writes, DELETE removes and WebDAV's PROPFIND lists (RFC 4918);
@@ -600,7 +604,8 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 
 ### 10.2 Types
 - `===`, `!==`, `==<up_to>`, `trivially`: `.ray3/Node.ray:132–150`. Library.
-- Negated types `¬T`, `∉ ∋ ∌`; `∈` as `:`: `.ray3/Node.ray:81, 192–219`. Library/syntax.
+- Negated types `¬T`, `∉ ∋ ∌`; `∈` as `:`: `.ray3/Node.ray:81, 192–219`. Library/syntax. (2026-10-06: `∋` and `∌` are
+  dropped; membership is `x is set`, or `{field: value}` in a narrowing.)
 - Quantified types `∀ ∃ ∄`, `x: R{^2 < 0}`: `.ray3/Node.ray:220`, `.ray2/Grammar.ray:13–23`. Engine.
 - Counted types `1 Object`, `a | an T`; array/repetition types `T[]`, `T+`, `T^n`, `Binary₈[]₄`: `.ray3/Node.ray:76–79, 179, 224`. Library.
 - `Option<T>`; None as false/0 (`as boolean`): `.ray3/Node.ray:239–246`. Library.
@@ -676,7 +681,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 
 ### 10.7 World
 - `#name` / `@name` lookup grammar per class, plural collections, fallback to `@ether`: `.ray2/World.ray:14–36`. Engine.
-- Characters (status, avatars, addressing, sharding), inventory with loop detection, remote execution as a character: `.ray2/Character.ray`. Library + `dynamically`.
+- Characters (status, avatars, addressing, sharding), inventory with loop detection, remote execution as a character: `.ray2/Character.ray`. Library + `dynamically`. (2026-10-06: avatars are names, World W1.11; remote execution is `with (@me = …)`, §8.2.)
 - Quests as runnable Programs: `.ray2/Quest.ray:5`. Library.
 - History as branches of Programs (merge, conflicts as quests, cherry-pick, squash, git conversion); references derived from history: `.ray2/History.ray`, `.ray2/Reference.ray`. Library + `%`; connects to §9.2.
 - Access: READ/WRITE/EXECUTE, `default_privacy_policy`, `confidential` / `internal`: `.ray2/_todo/…/Access.ray`. Engine; connects to §8.3.

@@ -7,14 +7,14 @@ Deflate := class: Language {
     codes => lengths.enumerate{.value > 0}.sort_by((.value, .index)).reduce(acc = [] => [acc,
       (symbol: .index, bits: ((acc.empty ? 0 : (acc.last.bits + 1) * 2 ^ (.value - acc.last.bits.length)) as Binary).padded(.value))])
     // A symbol is read as the one code whose bits come next, most significant bit first, and written as its code (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
-    Symbol => Binary{codes.bits ∋ .} as (bits => codes{.bits == bits}.first.symbol)
+    Symbol => Binary{. is codes.bits#} as (bits => codes{.bits == bits}.first.symbol)
     bits (symbol: Decimal) => codes{.symbol == symbol}.first.bits
 
     // Lengths fitted to frequencies: the two least frequent join until one is left, each join one bit deeper (Huffman 1952, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
     static fitted (frequencies: Number[]) => (1..<frequencies{> 0}.count).reduce(held = (nodes: frequencies.enumerate{.value > 0}.map((weight: .value, symbols: [.index])), lengths: [0] * frequencies.count) =>
       held.nodes.sort_by(.weight) -- (sorted => [sorted[0].symbols, sorted[1].symbols].flatten -- (joined => (
         nodes: [sorted[2..], (weight: sorted[0].weight + sorted[1].weight, symbols: joined)],
-        lengths: held.lengths.enumerate.map(.value + (joined ∋ .index ? 1 : 0))))))
+        lengths: held.lengths.enumerate.map(.value + (.index is joined# ? 1 : 0))))))
       .lengths.enumerate.map(frequencies[.index] > 0 ? .value max 1 : 0) -- Huffman(.)
   }
 

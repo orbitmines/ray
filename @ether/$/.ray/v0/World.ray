@@ -50,11 +50,13 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != 
 @"{text: (!"\"")[]}" ^string => text as Location
 @{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
 @me ^string => &caller as Character ?? Instance.local
+@me = {who} ^punctuation => &caller = who
 @me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
 @{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location
-@{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => Program(code: external ** block).run_as(Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)
-@{who: (Char.Word | "-")[] | UUID}~{literal label ^label}{ }{{block}} ^keyword => Program(code: external ** block).run_after((Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label)
-{f}@{location: Location}({args}) ^punctuation => (() => f(args)).run_at(location)
+@{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: external ** block)
+@{who: (Char.Word | "-")[] | UUID}~{literal label ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
+  -- (entry => with (@me = entry.of) Program(code: external ** block) ~~ Program(code: entry.following).entered(entry.of, None))
+{f}@{location: Location}({args}) ^punctuation => with (Location.current = location) f(args)
 
 Program &+= {
   who: * = @me
@@ -108,16 +110,7 @@ Program &+= {
   proxies => !done && proxying !== None
   stop | cancel | complete: static => this ~~ (.stopped = true)
 
-  run_at (location: Location) => {
-    with { Location.current = location }
-    this()
-  }
-  run_after (entry: Entry) => run_as(entry.of) ~~ Program(code: entry.following).entered(entry.of, None)
-  run_as (who: Character) => {
-    with { &caller = who }
-    this()
-  }
-  run => Run.log.commit(who, this).head -- .change.run_as(.who)
+  run => Run.log.commit(who, this).head -- (logged => with (@me = logged.who) logged.change)
 }
 
 Abstract := Program{abstract.nonempty}
@@ -132,7 +125,6 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
 
   static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program, from: Label[]?, versions: Label[] = [] {
     when: Time = stamp?.when ?? Time.now
-    visibility: Accessor.Permission = Accessor.Permission.private
     message: String?
     previous: Commit?
     line: History?
@@ -141,9 +133,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     next => line?.since(None){.parents.first === this}.first
     ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
     merged => parents.count > 1
-    staged => visibility == Accessor.Permission.private
-    publish: static => this ~~ .visibility = Accessor.Permission.public
-    applied (held) => held -- change.run_as(who)
+    applied (held) => held -- with (@me = who) change
     rewritten (change: Program) => Commit(id, who, stamp, change, from, versions, when, message, previous, line)
     expand => change**
     successors => line?.since(None){.parents.some(=== this)} ?? []
@@ -178,8 +168,6 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
     change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this)
   extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
-  published => commits{!.staged}
-  publish: static => this ~~ commits#.publish
 
   ordered => since(None).sort_by(.stamp)
   stretches (start: Program, end: Program) => ordered.reduce(acc = (closed: [], open: None) => acc.open
@@ -241,20 +229,12 @@ World := class: Location + Nameable {
 
   class{>.instance_of Nameable}#.for class => {
     `class.name.plural`: class[] => children{is class}
-    {class.PREFIX}{name: reservable_names} => children**{is class && .name.ignore_case == name.ignore_case}.first
+    {class.PREFIX}{name: reservable_names} => fields{.name ==<in: .fold_case> class.PREFIX + name}.last?.value
+      ?? children**{is class && .name.ignore_case == name.ignore_case}.first
       ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
+    {class.PREFIX}{unique<in: .fold_case> name: reservable_names} = {holder} => fields{.name ==<in: .fold_case> class.PREFIX + name}.last
+      -- (held => held && !&@.may(`=`, held) ? Program(name: "overwrite a name", goal: held, from: this) : this[held?.name ?? class.PREFIX + name] = holder) if class.PREFIX
   }
-
-  static Reservation := class = unique<in: .fold_case> name: reservable_names, issuer: World, holder: *? {
-    redirect (to: Reservation): static => this ~~ .holder = (=> to.holder)
-  }
-  reservations: Reservation[] = []
-
-  reserved (name: String) => reservations{.name ==<in: .fold_case> name}.first
-  issue (name: reservable_names) => Reservation(name, issuer: this) ~~ reservations.push(.)
-  reserve (name: reservable_names) => reserved(name) ?? issue(name)
-  allocate (name: reservable_names, holder) => reserve(name) -- (taken => taken.holder === None || &@.may(`=`, taken) ? taken ~~ .holder = holder : Program(name: "overwrite a reservation", goal: taken, from: taken.issuer))
-  allocated (name: String) => reserved(name)?.holder
 }
 Region := World
 
@@ -262,27 +242,17 @@ Item := class: Nameable {
   location: Location?
   issuer: World = location?.world ?? World.ether
   obtained_by: Program?
-  certificate: Certificate?
 
   trail => location.history
   shown => name ?? (static.name, (" @ ", location as String) if location).join("")
-  certify (given: Certificate): static => this ~~ .certificate = given
   move (to: Location): static => {
     transaction { location = to }
     this
   }
 }
 
-Certificate := class = issuer: World, secret: *?, issued_on: Time = Time.now, holder: *? {
-  visibility: Accessor.Permission = Accessor.Permission.private
-  public: *?
-}
-
 Platform := class: Location + Nameable {
   icon: *?
-
-  @{handle: reservable_names} => this / handle
-  avatar (handle: String, character: Character) => Avatar(character, platform: this, handle)
 }
 
 Reference := class {
@@ -298,13 +268,10 @@ Reference := class {
   pages: *?
   publisher: *?
   note: String?
-  visibility: Accessor.Permission = Accessor.Permission.private
 
   year => date.year
   claim (who: Character = &caller) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location?.world ?? World.ether)
   notes => note.history
-  draft => visibility == Accessor.Permission.private
-  publish: static => this ~~ .visibility = Accessor.Permission.public
 }
 
 Instance := class: Location + Entity {
@@ -363,8 +330,9 @@ Character := class: Hierarchy + Entity + Nameable {
 
   profile_picture: *?
   profile: *?
+  skills: Skill[] = []
 
-  avatars => children{is Avatar}
+  avatars => name{is Location && .segments.some(.starts_with("@"))}
   instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
   primary => presence
   session => history.fork
@@ -377,6 +345,7 @@ Character := class: Hierarchy + Entity + Nameable {
   as (=== boolean) => this == @me
 
   choose (s, n: Number = 1) => Choice(type: s, count: n)
+  unlock (skill: Skill): static => this ~~ skills.push skill
 
   read => Access(this)
   write => on(`=`)
@@ -395,30 +364,12 @@ Busy := Character{focus && !focus.done}
 DoNotDisturb := Character{constraint is DoNotDisturb}
 Status := Online | Offline | Broadcasting | Hosting | Proxying | Invisible | Idle | Busy | DoNotDisturb
 
-Avatar := class: Character {
-  character: Character
-  platform: Platform?
-  handle: String?
-  location: Location? = (platform / handle if platform && handle)
-  skills: Skill[] = []
-
-  traversed => location.history
-  unlock (skill: Skill): static => this ~~ skills.push skill
-  copied => Avatar(character, platform)
-  compounds + (other: Avatar): static => this ~~ (.skills = (skills, other.skills).unique) ~~ .location.history.merge(other.location.history)
-}
-
 Player := class: Character
 
-NPC := class: Character {
-  static Mode := enum until_resolved | waiting | stopping
-
-  mode: Mode = Mode.until_resolved
-
-  quests => children{is Program}
-  open_quests => quests{!.done}
-  running => mode == Mode.waiting || mode == Mode.until_resolved && open_quests.nonempty
-}
+NPC := class: Character
+Waiting := NPC{constraint is Waiting}
+Stopping := NPC{constraint is Stopping}
+Resolving := NPC{quests.nonempty && !(constraint is Waiting | Stopping)}
 
 Organization := class: Player {
   logo: *?

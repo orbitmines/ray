@@ -245,7 +245,7 @@ Keyboard := class: Location {
   keys => children{is Key}
   [name] => keys{.name == name}.first ?? add(Key(name))
   coded (code: Number) => keys{.code == code}.first ?? add(Key(name: code as Char as String, code))
-  pressed (name, modifier: Modifier? = None) => this[name] -- (key => key.pressed && (!modifier || modifier#.some(key.modifiers ∋ .)))
+  pressed (name, modifier: Modifier? = None) => this[name] -- (key => key.pressed && (!modifier || modifier#.some(. is key.modifiers)))
   .{literal name ^property} ^punctuation => this[name]
 }
 

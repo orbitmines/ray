@@ -41,7 +41,7 @@ HPACK := class: Language {
     (28, [2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 127, 220, 249]),
     (30, [10, 13, 22, 256])
   ]
-  static code = $.deflate.Huffman((0..256).map(symbol => Lengths{(.1 is String ? .1.bytes : .1) ∋ symbol}.first.0))
+  static code = $.deflate.Huffman((0..256).map(symbol => Lengths{symbol is (.1 is String ? .1.bytes : .1)#}.first.0))
 
   // Huffman-coded octets: codes most significant bit first, padded to the octet with the high bits of EOS (https://www.rfc-editor.org/rfc/rfc7541#section-5.2)
   static Coded := class (symbols: code.Symbol{< 256}[], padding: Binary{length < 8 && every(. == 1)} = [1] * ((8 - symbols.map(code.bits(.).length).sum % 8) % 8)) {
@@ -91,9 +91,9 @@ HPACK := class: Language {
 
   // The encoder's choices: an index for what the static table holds, and Huffman coding when it is shorter (https://www.rfc-editor.org/rfc/rfc7541#section-7.1)
   static Optimizations := {
-    {r: Representation{kind == ₂0000 && name && Static ∋ (name: name.value, value: value.value)}} =>
+    {r: Representation{kind == ₂0000 && name && (name: name.value, value: value.value) is Static#}} =>
       Representation(index: (Static.index_of((name: r.name.value, value: r.value.value)) + 1) as Integer<7>)
-    {r: Representation{kind == ₂0000 && name && Static.name ∋ name.value}} =>
+    {r: Representation{kind == ₂0000 && name && name.value is Static.name#}} =>
       Representation(kind: r.kind, at: (Static.name.index_of(r.name.value) + 1) as Integer<4>, value: r.value)
     {text: Text{!huffman && (value as Coded as Byte[]).count < octets.count}} => Text(huffman: true, octets: text.value as Coded as Byte[])
   }

@@ -221,8 +221,6 @@ Node &+= {
 Node &+= {
   ∈ (type) => . is type || (type.contains && type.contains(this))
   ∉ (type) => !(this ∈ type)
-  ∋ (element) => element ∈ this
-  ∌ (element) => element ∉ this
 }
 
 print (x) => IO.output(x as String) -- x

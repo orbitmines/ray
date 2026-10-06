@@ -44,7 +44,7 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
     static of (files: (path: String, content: Byte[], mode: Mode?)[]) => files.reduce(root = Entry() => root.placed(.path, .content, .mode ?? Mode.file))
   }
 
-  names (extension: String) => extensions# ∋ extension
+  names (extension: String) => extension is extensions#
   bundled (path: String) => location.map(. / path){IO.read(. / ".project.ray")}.first as Project
 
   admits (program) => true
@@ -58,7 +58,7 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
   converted (location, from: Language) => write(from.read(location))
   tree_at (location: Location, label) => read(location).at(label).tree
 
-  targeting (language: Language) => targets ∋ language
+  targeting (language: Language) => language is targets#
   backwards_compatible => previous**.every(.targeting(this))
   forwards_compatible => next**.every(.targeting(this))
 

@@ -209,5 +209,5 @@ Location &+= {
   // origin-form (https://www.rfc-editor.org/rfc/rfc9112#section-3.2.1)
   origin_form => (path.nonempty ? path : "/") + (query ? "?" + query as String : "")
   // Application-Layer Protocol Negotiation (https://www.rfc-editor.org/rfc/rfc7301)
-  offers (name: String) => external network `alpn` (this as String) ∋ name
+  offers (name: String) => name is (external network `alpn` (this as String))#
 }

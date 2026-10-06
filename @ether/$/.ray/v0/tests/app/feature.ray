@@ -143,7 +143,7 @@ unless $.http.Method.propfind.safe { INFO@mark `IO14 listing a remote collection
 
 started := Program(code: "1")
 @me/quests |= started
-unless @me/quests ∋ started { INFO@mark `JB1 a program given to @me/quests is not among them` }
+unless started is @me/quests { INFO@mark `JB1 a program given to @me/quests is not among them` }
 unless started.who === @me { INFO@mark `JB11 a started program is not run by whoever started it` }
 unless started.stop.done { INFO@mark `JB5 stopping a program does not end it` }
 unless @me/quests == @me.quests { INFO@mark `JB7 @me/quests is not the character's selection of its programs` }

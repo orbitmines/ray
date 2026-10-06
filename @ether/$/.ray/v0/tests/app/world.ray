@@ -31,12 +31,13 @@ if wt.stopped { INFO@mark `TA1 a new quest is stopped` }
 unless wt.stop.stopped { INFO@mark `TA2 a stopped quest is not stopped` }
 
 wr := Reference(title: "a")
-unless wr.draft { INFO@mark `RE1 a new reference is no draft` }
-if wr.publish.draft { INFO@mark `RE2 a published reference is still a draft` }
+if wr.public { INFO@mark `RE1 a new reference is public` }
+unless wr.publish.public { INFO@mark `RE2 a published reference is not public` }
 
-wa := Avatar(character: wp, platform: None)
-unless wp.add(wa).character.name == "alice" { INFO@mark `PE1 an embodied avatar is not of its character` }
-unless wp.avatars.count == 1 { INFO@mark `PE2 a character has other than one avatar` }
+// An avatar is one of a character's names: its name on a platform, written with `@` (`@github.com/package` is a package of github).
+wa := Character(name: "alice" | @github.com/@alice | @mailto:alice@a.b)
+unless wa.avatars#.count == 1 { INFO@mark `PE2 a character has other than one avatar` }
+unless wa.avatars#.first.segments.last == "@alice" { INFO@mark `AV1 an avatar is not the character's name on its platform` }
 
 unless Repository(world: wg).histories.empty { INFO@mark `RP1 a new repository already has histories` }
 unless Region(name: "north").name == "north" { INFO@mark `RG1 a region is not a world by another name` }
@@ -57,28 +58,22 @@ wi := Item(name: "lamp", issuer: wg)
 unless wi.name == "lamp" { INFO@mark `ITM1 an item lost its name` }
 unless wi.issuer == wg { INFO@mark `ITM2 an item forgot who issued it` }
 unless (wi ~~ .location = here).location == here { INFO@mark `ITM3 a moved item is not where it was moved` }
-wc := Certificate(issuer: wg, secret: None)
-unless (wi ~~ .certificate = wc).certificate == wc { INFO@mark `ITM4 a certified item does not carry its certificate` }
+wi.history.commit(wg, wi)
+unless wi.history{who: wg}.nonempty { INFO@mark `ITM4 a certified item does not carry its certificate` }
 
 unless wp is Offline { INFO@mark `PE3 a new character is not offline` }
 unless Accessor.Permission.public { INFO@mark `AC1 there is no public permission` }
 if Accessor.Permission.private == Accessor.Permission.public { INFO@mark `AC2 private and public are the same` }
 
-// Reserving a name: the world issues it, keeps it, and answers the same
-// reservation to whoever asks for that name again.
-wr := wg.reserve("alice")
-unless wr.name == "alice" { INFO@mark `RS1 a reservation does not hold the name it was made for` }
-unless wr.issuer == wg { INFO@mark `RS2 a reservation forgot which world issued it` }
-unless wg.reservations.count == 1 { INFO@mark `RS3 the world did not keep what it issued` }
-unless wg.reserve("alice") == wr { INFO@mark `RS4 reserving a taken name issues a second one` }
-unless wg.reservations.count == 1 { INFO@mark `RS5 reserving twice kept two` }
-unless wg.reserve("bob").name == "bob" { INFO@mark `RS6 another name is not another reservation` }
-unless wg.reservations.count == 2 { INFO@mark `RS7 the world did not keep both` }
-unless wg.reserved("alice") { INFO@mark `RS8 a taken name does not read as taken` }
-if wg.reserved("carol") { INFO@mark `RS9 an untaken name reads as taken` }
+// A name reserved in a world is a field of it, `world.@name = holder`, answered to whoever asks for that name again.
+wg.@dawn = wp
+unless wg.@dawn === wp { INFO@mark `NM1 a reserved name does not answer what holds it` }
+wg.@eve = 2
+unless wg.@eve == 2 && wg.@dawn === wp { INFO@mark `RS6 another name is not another reservation` }
+if wg.@carol { INFO@mark `RS9 an untaken name reads as taken` }
 // A name is taken within a world and nowhere else.
-if World(name: "elsewhere").reserved("alice") { INFO@mark `RS10 a name reserved in one world is taken in another` }
-unless wg.reserved("ALICE") { INFO@mark `RS11 a reserved name is free again in other letter case` }
+if World(name: "elsewhere").@dawn { INFO@mark `RS10 a name reserved in one world is taken in another` }
+unless wg.@DAWN === wp { INFO@mark `RS11 a reserved name is free again in other letter case` }
 
 // A history keeps what was committed, in the order it was committed.
 repo := Repository(world: wg)
@@ -97,8 +92,8 @@ unless branched.base === past.last { INFO@mark `HI7 a fork forgot what it came f
 // What is written down about something read.
 cite := Reference(title: "on rays")
 cite.authors.push wp
-unless cite.draft { INFO@mark `RF1 a new reference is not a draft` }
-if cite.publish.draft { INFO@mark `RF2 publishing does not take it out of draft` }
+if cite.public { INFO@mark `RF1 a new reference is not a draft` }
+unless cite.publish.public { INFO@mark `RF2 publishing does not take it out of draft` }
 unless cite.notes.empty { INFO@mark `RF3 a new reference already has notes` }
 cite.note = "a note"
 unless cite.notes.count == 1 { INFO@mark `RF4 a note is not kept` }
@@ -166,26 +161,25 @@ county.add(Item(name: "lamp", issuer: county))
 unless county.items.count == 1 { INFO@mark `WP7 what was added to a world is not there` }
 if county.shadowing { INFO@mark `WP8 a world falls back to another by itself` }
 
-// A name issued in a world is the reservation that took it, and reserving it
-// again is reserving it once.
-taken := county.issue("a")
-unless taken.name == "a" { INFO@mark `WP9 what was issued does not hold the name` }
-unless taken.issuer == county { INFO@mark `WP10 what issued a name is not the world` }
-unless county.reserve("a") == taken { INFO@mark `WP11 reserving a taken name takes it again` }
+// A name reserved in a world is held as one of its fields, and reserving it
+// again is overwriting it, which needs write access.
+county.@a = 1
+unless county.fields{.name == "@a"}.last?.value == 1 { INFO@mark `NM2 a reserved name is not a field of the world` }
+unless (county.@a = 2) is Abstract { INFO@mark `WP11 reserving a taken name takes it again` }
 
-// An item sits somewhere, is obtained by something, and carries what says so.
+// An item sits somewhere, is obtained by something, and carries what says so: a certificate is a commit its issuer made in the item's history.
 lamp := Item(name: "lamp", issuer: county)
 if lamp.obtained_by { INFO@mark `WP12 an item nobody has is had by something` }
-if lamp.certificate { INFO@mark `WP13 an item carries a certificate it was not given` }
-paper := Certificate(issuer: county, secret: 1)
-unless lamp.certify(paper).certificate == paper { INFO@mark `WP14 what an item was given is not what it carries` }
-unless paper.issued_on { INFO@mark `WP15 a certificate says nothing about when it was issued` }
+if lamp.history{who: county}.nonempty { INFO@mark `WP13 an item carries a certificate it was not given` }
+lamp.history.commit(county, lamp)
+unless lamp.history.head.who === county { INFO@mark `WP14 what an item was given is not what it carries` }
+unless lamp.history{who: county}.last.when { INFO@mark `WP15 a certificate says nothing about when it was issued` }
 
 // What is written down about something read elsewhere.
 cited := Reference(title: "a paper")
 cited.authors.push 1
-unless cited.draft { INFO@mark `WP16 something written down is not a draft to begin with` }
-if cited.publish.draft { INFO@mark `WP17 something published is still a draft` }
+if cited.public { INFO@mark `WP16 something written down is not a draft to begin with` }
+unless cited.publish.public { INFO@mark `WP17 something published is still a draft` }
 if cited.location { INFO@mark `WP18 a reference points somewhere it was not pointed` }
 unless cited.date { INFO@mark `WP19 a reference says nothing about when` }
 unless (cited ~~ .note = "read it").notes.count == 1 { INFO@mark `WP20 a note taken is not kept` }
@@ -195,11 +189,19 @@ guild := Organization(name: "guild")
 unless guild.members.empty { INFO@mark `WP21 an organization nobody joined has members` }
 unless guild is Offline { INFO@mark `WP22 an organization is not offline to begin with` }
 
+// An NPC runs until its quests are resolved, unless told to wait for more or to stop: narrowings over its quests, like statuses.
+npc := NPC(name: "keeper")
+if npc is Resolving { INFO@mark `NPC1 an NPC with no quests is resolving some` }
+npc.status = Waiting
+unless npc is Waiting { INFO@mark `NPC2 an NPC told to wait is not waiting` }
+npc.status = Stopping
+if npc is Waiting || npc is Resolving { INFO@mark `NPC3 an NPC told to stop still runs` }
+
 sited := Reference(title: "t", subtitle: "s", date: "2025-01-01" as Time, location: @https://a.b | "p")
 unless sited.subtitle == "s" { INFO@mark `WR1 a reference forgot its subtitle` }
 unless sited.year == 2025 { INFO@mark `WR2 a reference forgot its year` }
-unless sited.location ∋ @https://a.b { INFO@mark `WR3 a reference forgot its link` }
-unless sited.location ∋ "p" { INFO@mark `WR4 a reference forgot its pointer` }
+unless @https://a.b is sited.location { INFO@mark `WR3 a reference forgot its link` }
+unless "p" is sited.location { INFO@mark `WR4 a reference forgot its pointer` }
 unless Reference(title: "t").authors.empty { INFO@mark `WR5 a new reference already has authors` }
 unless Reference(title: "t").organizations.empty { INFO@mark `WR6 a new reference already has organizations` }
 unless Reference(title: "t").published.empty { INFO@mark `WR7 a new reference is already published somewhere` }
@@ -236,7 +238,7 @@ if held_back is Offline { INFO@mark `CS14 a character held to not offline is off
 hidden := Character(name: "hidden", presence: somewhere) ~~ .status = Invisible
 unless hidden is Invisible { INFO@mark `CS15 a character that went invisible is not` }
 if hidden is Online { INFO@mark `CS16 an invisible character is online to someone else` }
-unless Program(code: { (hidden is Online) == (hidden.presence.device.network.connected ?? false) }).run_as(hidden) { INFO@mark `CS17 an invisible character is not as it is to itself` }
+unless (with (@me = hidden) { (hidden is Online) == (hidden.presence.device.network.connected ?? false) }) { INFO@mark `CS17 an invisible character is not as it is to itself` }
 
 looked := World(name: "looked")
 looked.add(Character(name: "Fadi"))
@@ -271,8 +273,8 @@ if Character.local("nobody-here") { INFO@mark `WO16 a character nobody logged in
 
 // A character used as a condition is whether it is @me.
 cw := Character(name: "viewer")
-unless Program(code: { cw ? true : false }).run_as(cw) { INFO@mark `CW1 a character as a condition is false to itself` }
-if Program(code: { cw ? true : false }).run_as(Character(name: "other")) { INFO@mark `CW2 a character as a condition is true to someone else` }
+unless (with (@me = cw) { cw ? true : false }) { INFO@mark `CW1 a character as a condition is false to itself` }
+if (with (@me = Character(name: "other")) { cw ? true : false }) { INFO@mark `CW2 a character as a condition is true to someone else` }
 
 // A program runs as its who; its runs are logged for replay.
 hg_giver := Character(name: "giver")
@@ -287,19 +289,18 @@ with Run.kept = 0 seconds {
 
 // A reserved name is unique in its world under case folding.
 rz := World(name: "folded")
-rz.reserve("Alice")
-unless rz.reserved("ALICE").name == "Alice" { INFO@mark `RZ1 a name found in another letter case lost the case it was reserved in` }
-unless rz.issue("aLiCe").erred { INFO@mark `RZ2 one name was issued twice in other letter cases` }
-if World(name: "unfolded").issue("ALICE").erred { INFO@mark `RZ3 a name is unique beyond the world that issued it` }
+rz.@Alice = 1
+unless rz.fields{.name == "@Alice"}.nonempty { INFO@mark `RZ1 a name found in another letter case lost the case it was reserved in` }
+unless (rz.@aLiCe = 2) is Abstract && rz.fields{.name ==<in: .fold_case> "@alice"}.count == 1 { INFO@mark `RZ2 one name was issued twice in other letter cases` }
+if (World(name: "unfolded").@ALICE = 1) is Abstract { INFO@mark `RZ3 a name is unique beyond the world that issued it` }
 
-// A redirected name answers what the other answers, at every lookup; a held name is overwritten only with the issuer's write.
+// A redirect is a name holding a getter: it answers what the other answers, at every lookup; a held name is overwritten only with write access.
 rdr := World(name: "redirects")
-rdr_b := rdr.allocate("b", 1)
-rdr.reserve("a").redirect(rdr_b)
-unless rdr.allocated("a") == 1 { INFO@mark `RDR1 a redirected name does not answer what the other holds` }
-rdr_b.holder = 2
-unless rdr.allocated("a") == 2 { INFO@mark `RDR2 a redirected name answers what the other held when it was redirected` }
-unless rdr.allocate("b", 3) is Abstract { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
+rdr.@a = => rdr.@b
+rdr.@b = 1
+unless rdr.@a == 1 { INFO@mark `RDR2 a redirected name answers what the other held when it was redirected` }
+unless rdr.@A == rdr.@b { INFO@mark `RDR1 a redirected name does not answer what the other holds` }
+unless (rdr.@b = 3) is Abstract { INFO@mark `RDR3 a held name was overwritten without the issuer's write` }
 
 // A character's name is every name it goes by, each told apart by its pattern: email and phone are locations.
 cth := Character(name: "reachable" | "Ada Lovelace" | @mailto:a@b.c | @tel:+31612345678)
@@ -314,7 +315,7 @@ ins_at := Instance(location: "ins-at")
 ins_c := Character(name: "spread", presence: ins_at)
 ins_other := Instance(location: "ins-other")
 ins_other.login(ins_c)
-unless ins_c.instances ∋ ins_at && ins_c.instances ∋ ins_other { INFO@mark `INS1 a character is not on every instance running it` }
+unless ins_at is ins_c.instances && ins_other is ins_c.instances { INFO@mark `INS1 a character is not on every instance running it` }
 unless ins_c.primary === ins_at { INFO@mark `INS2 the primary instance is not where the character is` }
 
 // Deleting an account waits on stamps, then keeps every commit with its value gone.

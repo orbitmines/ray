@@ -44,6 +44,11 @@ Visibility := class {
   may_leave (value) => of(value) != Accessor.Permission.local
 }
 
+Node &+= {
+  public => Visibility.of(this).reaches(@public)
+  publish: static => this ~~ .access = Accessor(Accessor.Permission.public)
+}
+
 Grant := class = access: Access, target: * {
   // PermissionState (https://w3c.github.io/permissions/#dom-permissionstate)
   static State := enum granted | denied | prompt
@@ -73,7 +78,7 @@ Run := class = actor: Character?, origin: Character[] = [], settings: Settings? 
   static kept: Quantity.Temporal = 30 days
 
   static logs => log.since(None){.when >= Time.now - kept}
-  static replay (logged: History.Commit) => logged.change.run_as(logged.who) if logs.some(=== logged)
+  static replay (logged: History.Commit) => with (@me = logged.who) logged.change if logs.some(=== logged)
 
   originating (character: Character) => Run(actor, origin: (origin, character), settings)
   hops | chain => origin.contains(actor) ? origin : (origin, actor)

@@ -68,7 +68,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   dynamically assert this as String? != None
   as (=== String?) => name
 
-  static spelled (written: String) => Unit#{(. as String?)# ∋ written}.reduce(|)
+  static spelled (written: String) => Unit#{written is (. as String?)#}.reduce(|)
   static Spelling := String{Unit.spelled(.)}
 
   compounds / (other: Unit) => Rate(numerator: this, denominator: other)

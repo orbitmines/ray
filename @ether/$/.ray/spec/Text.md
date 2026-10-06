@@ -104,6 +104,7 @@ From the drafts review (2026-10-06).
   UUIDs. Two recommendations: (a) a v1 UUID whose node is derived from the key (`_todo` review); (b) a name-based v5 in the
   namespace of the owner's key, reproducible per owner (misc review). Otherwise keep v4 (v0 `Character.id`). Note X4.1
   leaves v3/v5 unimplemented.
+  **Answered (user, 2026-10-06):** v1 with a key-derived node (L§9.2.13).
 - **X5.7 `UUID.version`; `choose{unique}`** — *Almanac.tsx:2345, 2348*. **Decided (Almanac):** a UUID exposes `.version`.
   **Q** (conflict): the Almanac writes `choose{unique} UUID.v1`, as X5.2 first did; the 2026-10-05 supersession writes
   `choose UUID.v1{unique}`. Recommend: keep 2026-10-05 and update the Almanac line.

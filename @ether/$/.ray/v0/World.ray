@@ -61,7 +61,7 @@ Node &+= {
 History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   static Label := UUID | Char.Word[]
 
-  static Commit := class: Ray = id: Label = UUID.v4(), who: * = @me, stamp: Stamp?, change: Program, from: Label[]?, versions: Label[] = [] {
+  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program, from: Label[]?, versions: Label[] = [] {
     when: Time = stamp?.when ?? Time.now
     visibility: Accessor.Permission = Accessor.Permission.private
     message: String?
@@ -101,7 +101,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   find (label) => since(None).find(.id == label)
   at (commit) => History(repository, head: commit is Commit ? commit : find(commit), caches)
 
-  commit (who, change, id: Label = UUID.v4(), when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
+  commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
     change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this)
   extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from ? commit.from.map(find(.))# : head) ~~ .line = this
   published => commits{!.staged}

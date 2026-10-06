@@ -88,6 +88,7 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
 - **W2.17 Running handed-over code, and run logs** — **Q**. Recommend: a program handed over by a character runs as that
   character by default; run logs are kept 30 days by default (configurable), and within that window a run can be replayed as
   that character (L§8.2). *`.ray2/Character.ray:28–30`*
+  **Answered (user, 2026-10-06):** it runs as the character that handed it over; run logs are kept (30 days, configurable) for replay.
 - **W2.18 Running *at* a location vs *as* someone** — **Q (conflict)**. The draft runs a call or block elsewhere with
   `func@local()`, `@local~{}` and `@local~label{}` (after a label) (*`Ether.ray:14–15`*); L§4.2 decided `~` is for entry points,
   and L§8.2's `@name { … }` runs *as* a character. Recommend: running at a location is `f@loc()` / `loc~{…}` (an entry point of

@@ -26,6 +26,12 @@ Answers are recorded under **Decided** at the end, by ID.
 - **G1.6 Warnings** — see L§5.6.
 - **G1.7 A first statement with leading whitespace** — see L§5.6.
 
+From the drafts review (2026-10-06).
+
+- **G1.8 Any text is legal syntax** — *`.ray2/_todo/…/instance/Expression.ray:2`*: `class Expression = String // Any
+  string is legal syntax`. **Q** — Recommend: no text is a syntax error. What no rule reads stays a value (an unresolved
+  Expression, which is a String) with a diagnostic, and later rules may still read it.
+
 ## G2. Calls and juxtaposition (*ep:1217–1264, 1383–1420*)
 
 - **G2.1 What a space means** — *ep:1227–1234*: `" "` is a call when the thing before expects an
@@ -67,6 +73,27 @@ Answers are recorded under **Decided** at the end, by ID.
   See G2.2.
 - **G2.17 Calling a string** — L§10.5 (engine).
 
+From the drafts review (2026-10-06).
+
+- **G2.18 A method's type and its return type** — *`.ray2/Grammar.ray:374–412, 585`, `.ray2/Program.ray:261, 420`*:
+  `test: Program{terminating} <OPTS>{FILTER} l() -> Return {`, `func: Terminating ()`, "sets return_type, not function
+  type?". Nothing says what `name: T` means on a method, or how a return type is written. **Q** — Recommend: on a method,
+  `name: T` types the method itself (a Program narrowing: `f: Terminating (x) => …`). The return type follows the
+  parameters, `(x): R => …` (as in `(x): T` captures), not `-> R`. Drop `-> Return` and `l()`.
+- **G2.19 Arguments indented under a call** — *`.ray2/Grammar.ray:563–581`*: `if` / `  a` / `  ==` / `  b` / `  block`:
+  "if(a, == b block)", or "(if condition).block"? G2.13 covers continuation, not an indented argument list. **Q** —
+  Recommend: lines indented under a call are its arguments in order; an operator-led line (`== b`) continues the previous
+  argument (G2.13); the last is the block when the callee takes a `(): *`. The example is `if(a == b, block)`.
+- **G2.20 `;` keeps the continuation's subject** — *`.ray2/_todo/…/instance/Expression.ray:50`*: "; does not change the
+  selected context to + on." **Q** — Recommend: `a ; + b` applies `+ b` to the result before `;`. `;` separates statements
+  but does not reset what a continuation applies to (G2.13).
+- **G2.21 A closure argument reaches the next `,`** — *`.ray3/Node.ray:58`*: "Accept closure up to syntax for , for
+  instance, or -> should have it too". **Q** — Recommend yes: a closure argument extends up to the next `,` (or `->`) at
+  its level, consistent with `,` composing one value (2026-09-27).
+- **G2.22 Member names with holes** — *`.ray3/Node.ray:108–109`*: `{property: (\S[], "{", *, "}", \S[])+} =>
+  this[property - punctuation]`, so `a.foo{x}bar` reads the member `"foo" + x + "bar"`. **Q** — Recommend yes: a computed
+  member name uses the same `{…}` holes as string interpolation (L§10.1).
+
 ## G3. Operators, precedence and direction (*ep:768–870, 1319–1370, 1391–1397*)
 
 - **G3.1 Precedence** — decided: declaration order (standing instructions). *ep:1241*: "precedence
@@ -104,6 +131,32 @@ Answers are recorded under **Decided** at the end, by ID.
   is a rule written that applies to one specific operator only (e.g. only `-`)? `tests/app/precedence.ray`
   `minus` and `tests/app/rewrite.ray` `minus` still use `accepts`.
 
+From the drafts review (2026-10-06).
+
+- **G3.12 How far `:` reaches left** — *`.ray2/Grammar.ray:584–589`*: `a + b: Terminating () c + d` is
+  `a + (b () c + d)`; `(a + b)()` to annotate more. **Q** — Recommend the draft: `:` binds only to the nearest operand on
+  its left, as a hugging member does (G2.7). Parenthesise to annotate a larger expression.
+- **G3.13 One argument per side** — *`.ray2/Grammar.ray:242–249`*: arity is always 1 (`,` collapses many into one); a
+  bracket operator is a triple with a None side (prefix `[None [{}] r]`, postfix `[l [{}] None]`); juxtaposition and `,`
+  are operators like any other. G3.2 rejected the whole-run reduce, not these. **Q** — Recommend keeping them as
+  principles: (1) every operator takes one argument per side; (2) prefix, postfix and bracket operators are binary with a
+  None side; (3) juxtaposition and `,` are ordinary operators with a precedence.
+- **G3.14 Found, but declared for the other direction** — *`.ray2/Grammar.ray:506`*: "'Found method X but it wasnt
+  flagged as {direction}'". **Decided (draft)**: when a method is found but its declared direction doesn't fit where it
+  is written, the diagnostic says so ("`X` is declared right-to-left") instead of "unresolved". (With G3.4.)
+- **G3.15 Both directions at once** — *`.ray3/Node.ray:121`*: `bidirectional: Modifier = left-to-right & right-to-left`,
+  "where if both ltr and rtl are used, their shared boundary is what they both invoke on"; *`.ray2/Grammar.ray:174–175`*:
+  "allowed to be on either side. ; right-to-left on nothing is a top-level class?". G6.2 dropped a different
+  `bidirectional X`; G3.3 doesn't say what both directions mean. **Decided (draft, `.ray3`)**: `bidirectional` is the `&`
+  of both directions; where both apply, the operator is invoked on their shared boundary. **Q** (`.ray2`) — Recommend:
+  the side the operand is on picks the reading, and a right-to-left operator with nothing on its right (`!` at the end)
+  is a postfix rule on the class to its left.
+- **G3.16 Precedence as a modifier** — *`.ray3/Node.ray:57`*: `// TODO Modifier: precedence(before Node.==)`. **Q** —
+  conflicts with Decided G3.1: G3.1 places an operator by its position after a method label (`Node~method`); the draft
+  writes a modifier `precedence(before X)` / `precedence(after X)`. Recommend (review): allow the modifier, since
+  modifiers are language-side, but define it as G3.1's placement (`precedence(after X)` = written after `X~`) so there
+  is one mechanism. Otherwise drop it.
+
 ## G4. Patterns and rules (*ep:285–287, 1245–1255, 1301–1313, 1377–1382, 1748–1757*)
 
 - **G4.1 A pattern must match the whole** — *ep:1748–1750*: a pattern with a lookahead doesn't
@@ -132,6 +185,20 @@ Answers are recorded under **Decided** at the end, by ID.
 - **G4.12 `if` blocks for `for`** — *ep:1225*: `;` in pattern matching with `[]` includes
   `is_last` etc., available to `for`.
 
+From the drafts review (2026-10-06).
+
+- **G4.13 A rule's literal word is not a variable** — *`.ray2/Grammar.ray:422–423`*: "What if 'for' is already defined
+  in scope? Say the same for 'approximation' or 'optimization'". **Q** — Recommend: a literal word in a rule head matches
+  only the written word, never a variable's value. A local named `for` shadows the name only where it is used as a value.
+- **G4.14 A negated pattern fails; it does not stop** — *private journal, IDE:601–607 (paraphrased)*: a negated part
+  (`not '=>'`) does not end the match just before the excluded text; it only says the match must not continue with it.
+  A pattern that then doesn't match all it was given fails, unless another alternative matches. **Decided (draft)**
+  (with G4.1, G4.3). To check: whether the reader's `not` does the opposite (the note was written against a parser test
+  that succeeded with `"hello"`).
+- **G4.15 `{{expr}}`** — *`.ray3/Node.ray:69–71`*: `{{expr: (): *}} => expr.= = (obj) => expr<local: obj>; expr`
+  ("Required to return (): * for .while to work"): assigning to a lazy expression runs it with that object as local.
+  **Q** — intent unclear. Recommend asking whether the double brace is the lazy-expression literal; drop it if not.
+
 ## G5. Grammar phases and conflicts (*ep:1001–1013, 1265, 1776*)
 
 - **G5.1 Phases** — the draft: phases are language definition + dependencies + the program; "each
@@ -145,6 +212,17 @@ Answers are recorded under **Decided** at the end, by ID.
 - **G5.4 Syntax tests** — *ep:1776*: tests that change the externals the grammar is written with,
   then read something.
 
+From the drafts review (2026-10-06).
+
+- **G5.5 A clashing reading is dropped** — *`.ray3/Node.ray:40–45`*: rule text that would define a rule already defined
+  elsewhere "wouldnt fail, it would just drop this interpretation". Refines Decided G5.1/G5.2 (circular prevention is an
+  error). **Q** — Recommend: a reading that would define a rule already defined elsewhere is dropped, not an error; only
+  a mutual prevention that leaves no reading is the error.
+- **G5.6 First defined wins within a phase** — *`.ray3/Node.ray:8–9`*: "Whichever one is defined first would 'prevent'
+  the other one from being defined … pay attention when importing other code that it doesnt nullify certain grammar
+  rules". **Q** — Recommend: within one phase the first-defined rule wins; importing code that would nullify an existing
+  rule is a diagnostic.
+
 ## G6. Modifiers (*ep:1022–1029, 1266, 1295–1298*)
 
 - **G6.1 The modifier list** — `external`, `initializer`, comment-transparent, `io`, `pure`,
@@ -155,6 +233,16 @@ Answers are recorded under **Decided** at the end, by ID.
 - **G6.3 Levels of meaning** — *ep:1295–1298*: normal methods are flagged "higher-level"; disable or
   reverse all of mathematics; `mathematics.optional` for alternative versions of `:`; edit-time
   equivalences per style ("mathematician + nomathematics").
+
+From the drafts review (2026-10-06).
+
+- **G6.4 A modifier on a block** — *`.ray2/Grammar.ray:120–121`*: "These accept a block, which applies it to all
+  properties. or just a single one, like most modifiers." W5.2 decided this for permissions only. **Decided (draft)**:
+  every modifier takes one definition or a block; on a block it applies to each definition in it (`force { … }`,
+  `@private { … }`, `static { … }`).
+- **G6.5 The signature of a modifier** — *`.ray3/Node.ray:74`*: `Modifier = (this: *): { location: a (this, *) }`: a
+  modifier is a function of what it modifies, answering a located value. Plan §1 says only "a method that takes the
+  method definition". **Q** — Recommend adding the signature as written.
 
 ## G7. Equivalences (*ep:1272–1300, 1314–1316*)
 
@@ -169,6 +257,17 @@ Answers are recorded under **Decided** at the end, by ID.
   recognise it could be a Node; `x.∈` "wrong direction" should suggest reading it differently.
 - **G7.6 Preferred spellings** — *ep:1556*: "I want a : prefer this syntax, so the IDE suggests
   rewriting it"; preferences configurable.
+
+From the drafts review (2026-10-06).
+
+- **G7.7 How far an approximation may be off** — *`.ray2/Grammar.ray:69, 117`*: `approx a: float * b: float => a * (1 /
+  b)`; "How to say what kind of approximation". **Q** — Recommend: `approx` carries its error as a type,
+  `approx<error: ≤ 1 ulp>` (N4.10's uncertainty), and applies only where the reader accepts that error (`with` an error
+  budget).
+- **G7.8 LaTeX-like symbol input** — *`.ray2/_todo/…/instance/UI/symbols.ray:1–5`*: input more extensive than vscode's,
+  from MathJax `BaseMappings.ts` and vscode-latex-input `default-mappings.json`. **Q** — Recommend: typing `\alpha` gives
+  `α` through a `force` equivalence in a style (`Style.latex`, G6.3), its table read from those mappings as a `$.latex`
+  language. IDE backlog (W7).
 
 ---
 

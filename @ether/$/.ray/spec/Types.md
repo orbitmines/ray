@@ -19,6 +19,17 @@ IDs `T…`. Answers go under **Decided** at the end.
 - **T1.6 Default assignment** — *ep:995–997, 1734*: `?` is unknown (L§10.1); every field is
   instantiated with `?()`; "is default assignment `?` if not an Option, which is None?"
 
+From the drafts review (2026-10-06).
+
+- **T1.7 Every value but None is true** — *`.ray3/Node.ray:239–246`*: `if static != boolean: as (=== boolean) true`, with
+  None as `false` and as `0`. L§10.2 has only None. **Decided (draft)**: as a boolean, a non-boolean value that is not
+  None is `true`; None is `false` (and `0`).
+- **T1.8 Negations on None** — *`.ray2/Node.ray:199, 201`*: "If None `!";"⊣` should return true"; "When vertex is set to
+  None, should set recursively the boundaries etc. as well." **Q** — conflicts with Decided T1.2: there a member of None
+  is None, so `None !~= …` is None; the draft wants it true. Recommend: negated matches and predicates (`!~=`, `!=`) on
+  None answer true (None matches nothing), as the one exception to T1.2. Setting a vertex to None also clears its
+  boundaries.
+
 ## T2. Components: `+`, `&+`, `#`, `##`, `###`
 
 - **T2.1 `+` vs `&+`** — *ep:926–928*: "+/&+ are both components but normal + overrides."
@@ -36,6 +47,12 @@ IDs `T…`. Answers go under **Decided** at the end.
 - **T2.7 All in Type vs all in Database** — *ep:923–924*: `choose Type` means any of the type; "all
   in Database" needs another spelling. The draft: "Always whole type, use something else for All in
   Database."
+
+From the drafts review (2026-10-06).
+
+- **T2.8 A map is `* - Node`** — *`.ray3/Node.ray:55`*: "Object with -Node as a primitive, which is then basically
+  map." **Q** — Recommend recording it as the meaning of `-` on class components (T2.4): `Object = * - Node`, a value
+  with Node's methods taken off, is a plain map. (See T8.7.)
 
 ## T3. Classes, static, constructors (*ep:85–134, 938–958, 1034–1039, 1216*)
 
@@ -68,6 +85,54 @@ IDs `T…`. Answers go under **Decided** at the end.
 - **T3.15 Single vs namespace** — *ep:1441*: "Is there even a difference between single and namespace?"
 - **T3.16 Private** — *ep:1426*: `private`. And *ep:885*: `internal` = the same file, same class.
 
+From the drafts review (2026-10-06).
+
+- **T3.17 The class's members and the instance's** — *`.ray2/Node.ray:14`*: "If all methods on an instance are on the
+  static class, what happens to () and other things which are already defined on Class? … (Single default method defined
+  on class, which wraps the actual object fully)". **Q** — Recommend the draft: the class's own members (`()`, `name`,
+  `#`) are reached on the class value; instance members that collide with them are reached through one default member
+  that wraps the instance (`Class~default` / `Class.instance`).
+- **T3.18 `super` with several bases** — *`.ray2/Node.ray:113–116`*: `internal this.super &= constructor<local: this>`,
+  `internal this.super[constructor.name] = constructor<local: this> if constructor.name`. With `Test := Super + Super2`
+  (L§10.1). **Decided (draft)**: `super` is the superposition of all bases' constructors; `super[Name]` / `super.Name`
+  picks one by name.
+- **T3.19 A field stored as another type** — *`.ray2/Program.ray:450–456`*: `< ( : Binary^128 = field: String, field2:
+  Binary^8 )`; "`:` should be called on new variable not on this". **Q** — Recommend: `field: String @ Binary^128`, a
+  storage narrowing, which is a Compiler/Store level (L§9.1) rather than a type. Or keep the draft's `: Repr = name: Type`.
+- **T3.20 Node's own members resolve on `this`** — *`.ray2/Node.ray:20–22`, `.ray2/Program.ray:104–105`*: "Everything
+  defined on Node, isn't put on local, unless explicitely accessed"; Node's members and global extensions don't get the
+  global value in closures; `#` and `*` are called on this (global), not local. **Q** — Recommend adopting: Node's own
+  members (`#`, `##`, `*`, `**`, `%`, `@`) always resolve on `this` (or `global` at the top), never on a local or closure
+  frame; closures capture only names defined outside Node. (Also P1.3.)
+- **T3.21 `:{p}` narrows in place** — *`.ray2/Grammar.ray:84`*: "`:{}` without an arg maps to type = type{filter}".
+  **Q** — Recommend: `x :{p}` narrows x's declared type in place (`x: (typeof x){p}`). Adopt it or drop it explicitly.
+- **T3.22 Fields defined by each other** — *`.ray2/_todo/…/instance/UI/Geometry.ray:225–226`*: `radius =>
+  surface.radial_distance` ("a circular definition, which is allowed, and expected to break for a valid object, either by
+  setting boundary, or by setting radius, or by setting diameter"); `diameter => radius * 2 // implements diameter =`.
+  **Decided (draft)**: fields may be defined in terms of each other. Such a cycle is allowed, and a valid instance breaks
+  it by setting any one of them. A derived member `d => f(x)` is writable when `f` is reversible: `d = v` sets
+  `x = f⁻¹(v)` (L§4.5).
+- **T3.23 `protected`** — *`.ray2/_todo/…/instance/Access.ray:12`, `…/instance/entrypoint/Ether.ray:9–20`*: "TODO
+  protected", `protected INSTANCE`. v0 `Accessor.Permission` has a `protected` member that no spec defines. **Q** —
+  Recommend: readable and writable by the class and its subclasses' code (language-level, like `internal`, T3.16); or
+  drop it and remove it from `Accessor.Permission`.
+- **T3.24 `internal` in local contexts** — *`.ray2/_todo/…/instance/Access.ray:66–69`*: "You want this to work for local
+  contexts too, so cant rely just on class." Extends T3.16. **Q** — Recommend: `internal x` is visible only inside the
+  context that declares it: a class, a function or a block.
+- **T3.25 A context variable declared but not given** — *`.ray3/Node.ray:84`*: "with <CONTEXT> = <VAL>, can be expected
+  when setting some variable like Node.CONST: String and not setting it. error thrown? or explicitly say with required."
+  **Q** — against Decided T1.6 (an unset field is `?`, every possibility), the review recommends an error at use unless
+  the variable is declared `?`. Recommend deciding whether context variables follow T1.6 or must be supplied by `with`.
+- **T3.26 `assign` and `clear`** — *`.ray3/Node.ray:152, 234`*: `= | assign`; `clear => this = static()`.
+  **Decided (draft)**, library: `assign` is an alias of `=`, and `x.clear` sets x to a fresh `static()`.
+- **T3.27 `global = local` at the top of a file** — *`.ray3/Node.ray:60`*. **Q** — Recommend asking. One reading: the
+  file's local scope is published as the global one.
+- **T3.28 Values read per reader** — *`.ray2/Character.ray:53–55`*: `Invisible => return Online if
+  &who.CURRENT_INSTANCE == ME.CURRENT_INSTANCE; Offline`; "how to say load the expression, not the value". **Q** —
+  Recommend (general): a field may hold an expression evaluated per reader (`&@.last`, who reads), not when it is set,
+  written as a parameterless function stored in the field (`x => …`, P5.3). `invisible` is then `online` to oneself and
+  `offline` to others (W2.6).
+
 ## T4. Structural type checking (*ep:230–260, 969–980, 1030–1032, Number:808–855*)
 
 - **T4.1 The algorithm** — the draft: class constraints must all apply; `|` finds a matching one, `&`
@@ -90,6 +155,46 @@ IDs `T…`. Answers go under **Decided** at the end.
 - **T4.9 Counted and typed use** — *ep:1051*: `1 Object` still lets the compiler use many for abstract
   interpretation; type checking expects one.
 
+From the drafts review (2026-10-06).
+
+- **T4.11 `∀` asserts, `{…}` filters** — *`.ray2/Grammar.ray:17`*: "`∀ x ∈ R ∋ (x + y)^2 < 0` // Forces that all things
+  in R indeed follow this, which is different from just enumerating the possibilities after the filter." **Q** —
+  Recommend: `∀ x ∈ R: p` is an assertion over all of R (a `dynamically assert` that fails, or starts a quest, when some
+  x doesn't hold); `R{p}` is a narrowing that keeps those that do; `∃ x ∈ R: p` is a quest for a witness.
+- **T4.12 `expr : T` constrains its free variables** — *`.ray2/Grammar.ray:21–23`*: "`x^2 < 0 : R` // Type constraints
+  like this which is just `x: R{^2 < 0}`"; "`x^2 < 0 && y^3 < a : R`"; "All the variables which are already castable to
+  R?" **Q** — Recommend as sugar: a boolean `expr : T` narrows every free variable of `expr` that is castable to T.
+- **T4.13 A method answering a copy, as a narrowing** — *`.ray2/Program.ray:3`*: "Valid type: `Ray{compact}`; anything
+  which returns an altered version of this should work?" **Q** — Recommend: in a narrowing, a method answering `static`
+  holds when the copy equals the value: `Ray{compact}` ≡ `Ray{compact == this}`, and `String{lower_case}` is already
+  lowercase.
+- **T4.14 Sortedness is a type** — *`.ray2/Ray.ray:131`*: `sort (dimension): static{~every .previous[DIMENSION] <=
+  .[DIMENSION] <= .next[DIMENSION]}`; *`.ray2/Reference.ray:14`*: `String{#.sorted_by(date)}`. **Decided (draft)**:
+  `sort` answers `static{sorted}`, where `sorted(dim)` is the narrowing `every .previous[dim] <= .[dim] <= .next[dim]`.
+  A field typed `T{sorted_by(f)}` stays sorted on insert. (Follows from T4.13; see R3.10.)
+- **T4.15 `x: T` and `x ∈ T` as conditions** — *`.ray2/Node.ray:29–30, 187`*: "Constraint accept methods which introduce
+  constraints, like types"; "`:`/element_of etc. castable to type boolean"; `{" "}(: | ∊ | ∈) (type) => this
+  ==.instance_of type //TODO Only if used in if-block or ?`. **Decided (draft)**: in a boolean position (`if`, `?`,
+  `{…}`), `x: T` and `x ∈ T` are `x ==.instance_of T`; in a statement position `x: T` declares. These are constraint
+  methods: they narrow x in the taken branch (L§3.2.1).
+- **T4.16 Negating a predicate** — *`.ray2/Feature/Proof.ray:41–44`*: `Node{(): boolean}` / `! | ¬ {.} = () =>
+  !this()` / `as (=== boolean) => this()`. **Decided (draft)**: a parameterless boolean program is a predicate; `!p` /
+  `¬p` is `() => !p()`, and a predicate converts to boolean by running it.
+- **T4.17 `T>`, the greater type** — *`.ray2/Node.ray:135`*: "`>` // Greater type than this, components could be together
+  this type." **Q** — Recommend: `T>` (postfix) is T's supertype, any value whose components together could make a T
+  (T4.7). Otherwise drop it.
+- **T4.18 A `T` is a one-element `T[]`** — *`.ray2/_todo/…/instance/utils/boolean.ray:1–2`*: "Anything that is
+  implementing Array<T>, like Positive, should also apply to just a T." N1.10 covers the boolean case only. **Q** —
+  Recommend: where `T[]` is accepted, a single `T` is the one-element list, and what `T[]` implements applies to a `T`
+  (so `"0"`/`"1"` read as boolean through Binary).
+- **T4.19 Definite assignment across labels** — *`.ray2/_todo/ray.ray.txt/ray.ray:85–89`*: "Type-checker should know that
+  it must be set in Ordered to get here." **Q** — Recommend: the checker narrows a `T?` to `T` at a label when every edge
+  into that label sets it (definite assignment over the Program's edges, P1.1).
+- **T4.20 Finding types through references** — *private journal, IDE:831 (paraphrased)*: types that match should be
+  findable by following references, e.g. every Program with a cycle, to assert there are none or to forbid recursion.
+  **Q** — Recommend: `T$ @ x ->` already searches a type under a location (W1.5); `never (Program{has_cycle}$ @
+  project ->)` asserts there are none.
+
 ## T5. Generics and parameterized types
 
 - **T5.1 `Optional<T>`, `Required<T>`, `Query<T>`** — *ep:1548–1551*. L§10.2 (engine). Open: `Query<T>`
@@ -109,6 +214,38 @@ IDs `T…`. Answers go under **Decided** at the end.
 - **T6.5 `equivalence (from) -> (to)`** — *ep:1498–1502*. L§10.2 (engine).
 - **T6.6 Transparent pairs** — *Ray:714–715*: a key/value where everything is delegated to the value,
   so `==` compares values.
+
+From the drafts review (2026-10-06).
+
+- **T6.8 `x++` is a copy with a forked history** — *`.ray2/Node.ray:155`*: `++ | copy // TODO Fork the variable
+  history`; v0 uses `this++` (String.ray:70, Node.ray:89, 222); L§10.3 lists `++ | copy`. **Q** — conflicts with Decided
+  L§1.3 ("`++` dropped"), while the draft and v0 use `x++` as copy. Recommend: `x++` (alias `copy`) is a copy whose
+  history is a fork of x's (`x%` branches), and L§1.3 is corrected to say it dropped `++` as concatenation only.
+- **T6.9 `unique` as a field constraint** — *`.ray2/Node.ray:206–209`, `.ray2/World.ray:20`, `.ray2/Ray.ray:89–90`*:
+  "unique{} accepts an expression"; `unique{.ignore_case if name ==.instance_of String} name{issuer == this}`; `unique =>
+  this&{== this}.count == 1 //TODO Is different from unique/compact of iterable, rename`. **Q** — conflicts with Decided
+  T6.3 (`unique{expr}` dropped), while World needs case-insensitive unique names. Recommend: keep T6.3; `unique` as a
+  field modifier means no other value of that field in its scope is `==`, the comparison taken from `<in: …>` (R3.14),
+  e.g. `unique<in: .fold_case> name`. `.unique` stays dedupe, and the predicate is `.is_unique`.
+- **T6.10 `!=`, `===`, `!==` come from `==`** — *`.ray3/Node.ray:81–82, 145–150`*: `(this @@ Node ==)*.map{.on ==}(method
+  => args => !method<local: .>(args))`; `¬{.} => not.instance_of this`. **Decided (draft)**: `!=`, `===`, `!==` and
+  `not` are generated from `==`'s methods, so every option of `==` (`.instance_of`, `<in: …>`, `<up_to>`) exists on them
+  and they never fall out of step with it.
+- **T6.11 `==`'s options** — *`.ray3/Node.ray:133–137`*: `<up_to?>`, `in?: -> as (*)`, `exclude_location: boolean =
+  true`, `trivially: boolean = false`; `===` is `==<exclude_location: false>`. U9 has "`===` includes location"; `up_to`
+  and `trivially` are defined nowhere. **Q** — Recommend: `trivially` means decidable without running anything (used by
+  `Iterable.count`, *`.ray3/Ray.ray:81`*); `up_to` compares only up to a boundary (a prefix). `exclude_location` needs no
+  flag: it is the difference between `==` and `===` (U9).
+- **T6.12 Re-normalising held values** — *`.ray2/_todo/ray.ray.txt/ray.ray:68–73`*: `normalizer: Normalizer?`,
+  `dynamically on(normalizer) = this = this`. **Q** — Recommend: a held value is re-normalised when its normalizer
+  changes (it depends on it `dynamically`, P5.1). (T6.2/T6.4.)
+- **T6.13 Equivalences to many, and from a type** — *`.ray2/_todo/ray.ray.txt/ray.ray:76–79`*: "Support many to*s";
+  "What if from is type (how to distinguish?) then we'd want ==.instance_of". **Q** — Recommend: `equivalence a -> (b |
+  c)` is one equivalence to a superposition. From a type it applies to its instances (`==.instance_of`); to relate the
+  type itself, write `static`.
+- **T6.14 `as T` through an isomorphic target** — *`.ray2/_todo/ray.ray.txt/ray.ray:3`*: ""as String" should also accept
+  "as Digit[]"". **Q** — Recommend: `as T` succeeds through any conversion to a type isomorphic to T, by L§3.5's
+  breadth-first walk.
 
 ## T7. Values of a location (*ep:906–915, 1149*)
 
@@ -134,6 +271,27 @@ IDs `T…`. Answers go under **Decided** at the end.
 - **T8.5 `.for` on an object** — *ep:1429*: overridden when the object is an Array; use `.properties.for`.
 - **T8.6 Structured maps** — *ep:880*: `.map`/`~filter`/`join` act on the actual events, expanded
   automatically.
+
+From the drafts review (2026-10-06).
+
+- **T8.7 Map keys and Node's members** — *`.ray2/Node.ray:16`*: "SOlution for Map/{} object which checks .on X and doesnt
+  override the usage of Node so allow any field?"; v0 guards ad hoc with `.declaring(name) ? external get this name : …`.
+  **Q** — Recommend: a map literal's keys may shadow Node members for `.key`; Node's member stays reachable with
+  `.on(Node).key` (or `x##`). One rule for all maps instead of per-class `.declaring` guards. (T2.8, T6.6, R6.1.)
+- **T8.8 A field read on a list reads its elements** — *`.ray2/Program.ray:417`*: `(Base, unit: Unit = Unit.None)[]`,
+  "Should implement `x[0].unit & x.unit` as `|`, because it binds the variable to it." **Q** — Recommend: a field the list
+  itself lacks is read on each element and answered as their superposition (`xs.unit` is `xs#.unit` joined with `|`):
+  T8.1 extended from superpositions to lists.
+
+## T9. Where an alternative came from
+
+From the drafts review (2026-10-06).
+
+- **T9.1 Superposed values keep their origin** — *private journal, IDE:678–679 (paraphrased)*: each part of a superposed
+  value carries which caller produced it, so a result can be refined once a condition is known. v0 already has
+  `.origin` / `.sources` on branched values (`v0/Node.ray:89`); L§8.2's origin is that of code, not of values. **Q** —
+  Recommend as Decided text: every alternative in a superposition keeps where it came from (`.origin`, `.sources`).
+  Narrowing an input (`with c = true`, `if assume c`) narrows the result to the alternatives that came from it.
 
 ---
 

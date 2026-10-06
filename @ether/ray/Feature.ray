@@ -93,6 +93,7 @@ OS := class {
   [property: String] => (external os property) as String
   platform => this["platform"]
   architecture => this["architecture"]
+  fonts: Location[] => this is OS.Linux ? ["/usr/share/fonts" as Location] : this is OS.Macos ? ["/System/Library/Fonts" as Location] : this is OS.Windows ? ["C:/Windows/Fonts" as Location] : []
   zoneinfo: Location? => this is (OS.Linux | OS.Macos) ? (this["TZDIR"] ?? "/usr/share/zoneinfo") as Location : None
 
   static Linux := OS{platform == "linux"}

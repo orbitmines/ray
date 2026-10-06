@@ -72,14 +72,6 @@ Language.Direct := class: Language {
   }
 }
 
-OS &+= {
-  fonts: Location[] => if name {
-    linux => ["/usr/share/fonts" as Location]
-    macos => ["/System/Library/Fonts" as Location]
-    windows => ["C:/Windows/Fonts" as Location]
-  } else {
-    []
-  }
 }
 
 Device &+= {

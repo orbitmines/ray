@@ -10,7 +10,6 @@ Device := class {
   keyboard: Keyboard = Keyboard()
   handheld = false
   clipboard: String | Location = ""
-  pads: (buttons: boolean[], axes: Number[])?
   orientation: Geometry.Vector?
   motion: Geometry.Vector?
   geolocation: (latitude: Number, longitude: Number, accuracy: Geometry.Length)?

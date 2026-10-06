@@ -59,9 +59,8 @@ IP := class: Location &+ (-1 <- . -> +1) {
       // Prefer compressed zeros representation when possible (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
       zero_compression if segments ~= 0[]{length >= 2}
       // Mixed notation for a well-known IPv4-mapped prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
-      embedded_ipv4 if . is "::ffff:0.0.0.0/96"
       // Mixed notation for NAT64 (https://datatracker.ietf.org/doc/html/rfc6052#section-2.1)
-      embedded_ipv4 if . is "64:ff9b::/96"
+      embedded_ipv4 if . is "::ffff:0.0.0.0/96" | "64:ff9b::/96"
     }
     full: String => (this as v6{!zero_compression && !embedded_ipv4}).written_out
   }

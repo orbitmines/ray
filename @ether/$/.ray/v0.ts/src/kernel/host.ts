@@ -287,7 +287,12 @@ export class Reader {
   }
   // One top-level statement, and where reading goes on: past a statement that kept applying itself (said by recursion_said), or
   // one the reader failed on (said as a diagnostic), at the next statement.
+  slow = Number(process.env.KSLOW ?? 0);
   step_on(src: number, at: number, end: number): number {
+    if (this.slow) { const t0 = performance.now(), next = this.step_on_timed(src, at, end), ms = performance.now() - t0; if (ms > this.slow) console.error(`slow ${Math.round(ms)} ms src ${src} at ${at}`); return next; }
+    return this.step_on_timed(src, at, end);
+  }
+  step_on_timed(src: number, at: number, end: number): number {
     try {
       const next = this.safely(() => this.step(src, at, end));
       if (next !== undefined) return next;

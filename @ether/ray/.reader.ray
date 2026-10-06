@@ -3,7 +3,7 @@
 {name} := {value} =>
   external declare name value
 //{comment} =>
-  external none
+  external label comment
 
 // Control flow: a block given after a word is a capture like any other, continued on deeper lines.
 if {condition} then {block} =>
@@ -27,7 +27,7 @@ while {condition} do {block} =>
 
 // Nodes, members, identity. What is declared first binds loosest, so `.` comes after the rules written with it.
 nothing =>
-  external none
+  external get node nothing
 node =>
   external node
 same {a} {b} =>
@@ -94,13 +94,24 @@ continuation after {at} =>
     more := spelled indent from found
   found
 
-quote := external character "
-opening := external character (
-closing := external character )
-opening_list := external character [
-closing_list := external character ]
-opening_block := external character {
-closing_block := external character }
+// Characters the reader names are taken from where they are written here.
+characters of {written} =>
+  where := external span written
+  where . from
+quote := characters of "
+quote := quote . character
+pairs := characters of ()[]{}
+opening := pairs . character
+pairs := pairs . next
+closing := pairs . character
+pairs := pairs . next
+opening_list := pairs . character
+pairs := pairs . next
+closing_list := pairs . character
+pairs := pairs . next
+opening_block := pairs . character
+pairs := pairs . next
+closing_block := pairs . character
 
 // The bracket that closes `c`, or nothing when `c` opens none.
 closer of {c} =>
@@ -247,11 +258,25 @@ ends from {at} to {limit} =>
   stack
 
 // Whether `type` holds the places from `from` to `to`: its check, when it has one, else its own rules reading them whole.
+// Three values in order, as captures for a rule applied to values.
+values {a} {b} {c} =>
+  third := node
+  set third . value to c
+  second := node
+  set second . value to b
+  set second . next to third
+  first := node
+  set first . value to a
+  set first . next to second
+  first
+
 {kind} holds from {from} to {to} =>
   check := kind . check
   found := nothing
   if check then
-    found := external invoke check kind from to
+    given := values kind from to
+    here := external .
+    found := external apply check given here
   unless check then
     own := external own_rules kind
     found := reading from from to to among own
@@ -576,7 +601,7 @@ pieces of {head_from} to {head_to} like {like} =>
           bare := typed . name_end
           add capture piece from inner to bare into into
           type_from := name_end . next
-          capture_type := external evaluate type_from shut like
+          capture_type := external read type_from shut like
           made := into . last
           set made . type to capture_type
         at := shut . next
@@ -604,7 +629,8 @@ word end from {at} to {limit} =>
   found
 
 // A capture's name written with its type (`{d: Digit}`): the name ends before the colon. Answers a node with `name_end`, or nothing.
-colon := external character :
+colon := characters of :
+colon := colon . character
 typed name from {at} to {limit} =>
   here := at
   before := nothing
@@ -624,7 +650,9 @@ typed name from {at} to {limit} =>
 
 // A type: a scope of the rules its block defines (R2.3).
 type {block} =>
-  external scope block
+  made := node
+  external apply block nothing made
+  made
 
 // Rules defined from here on are read by their heads in Ray.
 {pattern} => {body} =>
@@ -636,7 +664,8 @@ type {block} =>
 
 // One statement read at the top: applied in place, or reported. Answers the place after it.
 read statement at {at} =>
-  scope := external frame
+  here := external .
+  scope := here . parent
   limit := statement end from at to nothing below nothing
   r := reading from at to limit in scope
   if r then
@@ -644,7 +673,7 @@ read statement at {at} =>
     caps := r . captures
     external apply rule caps scope
   unless r then
-    external unread at limit
+    external report at limit
   after := nothing
   if limit then
     after := limit . next

@@ -1,5 +1,5 @@
 say {x} =>
-  external print x
+  external io stdout x
 a := node
 b := (a)
 say b

@@ -3,7 +3,7 @@
 {name} := {value} =>
   external declare name value
 say {x} =>
-  external print x
+  external io stdout x
 link {x} to {y} =>
   external set x next y
 walk {list} =>

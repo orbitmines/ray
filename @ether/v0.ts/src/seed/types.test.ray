@@ -1,10 +1,10 @@
 say {x} =>
-  external print x
+  external io stdout x
 Digit := type
   0 =>
-    external print zero
+    external io stdout zero
   1 =>
-    external print one
+    external io stdout one
 bit {d: Digit} =>
   d
 bit 1

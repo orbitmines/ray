@@ -1,5 +1,5 @@
 say {x} =>
-  external print x
+  external io stdout x
 s := "hello world"
 say s
 same "a" "b"

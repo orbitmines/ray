@@ -1,5 +1,5 @@
 say {x} =>
-  external print x
+  external io stdout x
 link {x} to {y} =>
   set x . next to y
 p := node

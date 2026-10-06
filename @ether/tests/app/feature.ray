@@ -1,0 +1,196 @@
+// Features: what the machine hands over, what is chosen, and what is proved.
+
+mark ^keyword := external global
+
+unless Random.bit { INFO@mark `FE1 a bit from the machine is nothing` }
+unless Random.bits(3).count == 3 { INFO@mark `FE2 three bits are not three` }
+unless boolean#.random is boolean { INFO@mark `FE3 a coin comes up with nothing` }
+
+unless Proof.rfl(Proof.Proposition(holds: true)) { INFO@mark `FE7 what holds is not proved by itself` }
+if Proof.rfl(Proof.Proposition(holds: false)) { INFO@mark `FE8 what does not hold is proved by itself` }
+
+unless `+`.reversible { INFO@mark `FE9a the inverses have no plus` }
+unless `+`⁻¹ as String == "-" { INFO@mark `FE9b the inverse of plus is not minus` }
+unless `-`.reversible { INFO@mark `FE9 the inverses have no minus` }
+unless `-`⁻¹ as String == "+" { INFO@mark `FE10 the inverse of minus is not plus` }
+
+// Keys: what a press and a release leave behind.
+fresh_key := Keyboard.Key(name: "a")
+if fresh_key.pressed { INFO@mark `FE11 an untouched key is pressed` }
+if fresh_key.toggled { INFO@mark `FE12 an untouched key is toggled` }
+pushed_key := Keyboard.Key(name: "b").press
+unless pushed_key.pressed { INFO@mark `FE13 a pressed key is not pressed` }
+unless pushed_key.toggled { INFO@mark `FE14 a pressed key is not toggled` }
+if pushed_key.release.pressed { INFO@mark `FE15 a released key is still pressed` }
+unless (Keyboard() ~~ .add(fresh_key)).keys.count == 1 { INFO@mark `FE16 a keyboard given one key does not hold one` }
+
+// The machine's own bit. It is handed over as presence, not as a written
+// digit, so it can be read at all; before that every bit was zero and every
+// uuid was the same one.
+drawn_bit := Random.bit
+unless drawn_bit == 1 || drawn_bit == 0 { INFO@mark `RN1 a drawn bit is neither one nor zero` }
+unless Random.bits(4).count == 4 { INFO@mark `RN2 four drawn bits are not four` }
+unless Random.number(3) < 8 { INFO@mark `RN3 three bits spell eight or more` }
+unless Random.below(5) < 5 { INFO@mark `RN4 a number below five is not below five` }
+
+// Twenty draws are not all the same. They could be — about twice in a
+// million — but every bit being the same is what a machine that hands over
+// nothing readable looks like, which is what this is here to catch.
+draws := 20.times.map((external random) ? 1 : 0)
+ones := draws{== 1}.count
+zeros := draws{== 0}.count
+unless ones + zeros == 20 { INFO@mark `RN5 twenty draws are not twenty` }
+if ones == 0 { INFO@mark `RN6 twenty draws were all nothing` }
+if zeros == 0 { INFO@mark `RN7 twenty draws were all something` }
+
+// A proposition holds or it does not, and what says so is a proof.
+yes := Proof.Proposition(holds: true)
+no := Proof.Proposition(holds: false)
+unless yes.holds { INFO@mark `PF1 a proposition written as holding does not hold` }
+if no.holds { INFO@mark `PF2 a proposition written as not holding holds` }
+if yes.negated.holds { INFO@mark `PF3 the negation of one that holds holds` }
+unless no.negated.holds { INFO@mark `PF4 the negation of one that does not hold does not hold` }
+unless Proof.rfl(yes) { INFO@mark `PF5 a proposition is not proof of itself` }
+if Proof.rfl(no) { INFO@mark `PF6 one that does not hold proves itself` }
+unless (assume { yes }).holds { INFO@mark `PF7 what is assumed is not what was assumed` }
+unless Proof.by_contradiction(yes, no) { INFO@mark `PF8 a proof of the negation failing does not prove it` }
+if Proof.by_contradiction(no, yes) { INFO@mark `PF9 a proof of the negation holding proves it anyway` }
+unless Proof(proposition: yes, argument: yes).holds { INFO@mark `PF10 a proof holds only if its argument does` }
+// What is proved is true; what is not is what there is to do.
+unless Proof.theorem(yes, yes) { INFO@mark `PF11 a theorem with a proof that holds is not true` }
+unless Proof.theorem(yes, no).goal { INFO@mark `PF12 a theorem without a proof is not something to do` }
+unless Proof.theorem(yes, no).goal == yes { INFO@mark `PF13 what there is to do is not proving the proposition` }
+if Proof.theorem(yes, no).completed { INFO@mark `PF14 what there is to do is already done` }
+
+// A key is pressed and released; what it toggles stays.
+key := Keyboard.Key(name: 1)
+if key.pressed { INFO@mark `KB1 a new key is already pressed` }
+if key.toggled { INFO@mark `KB2 a new key is already toggled` }
+unless key.press.pressed { INFO@mark `KB3 pressing a key does not press it` }
+unless key.toggled { INFO@mark `KB4 pressing a key does not toggle it` }
+if key.release.pressed { INFO@mark `KB5 releasing a key does not release it` }
+unless key.toggled { INFO@mark `KB6 releasing a key untoggled it` }
+if key.press.toggled { INFO@mark `KB7 pressing again does not toggle back` }
+board := Keyboard()
+unless (board ~~ .add(key)).keys.count == 1 { INFO@mark `KB8 a board with one key added does not hold one` }
+
+// A chat is a chain of messages, each from someone.
+room := Chat()
+unless room.count == 0 { INFO@mark `CH1 a new chat already holds messages` }
+room.say(1, "hi")
+unless room.count == 1 { INFO@mark `CH2 saying something does not keep it` }
+room.say(2, "ho")
+unless room.count == 2 { INFO@mark `CH3 saying twice keeps other than two` }
+unless room.messages.first.who == 1 { INFO@mark `CH4 a message forgot who said it` }
+unless room.messages.last.text == "ho" { INFO@mark `CH5 a message forgot what was said` }
+
+// What the machine says about itself.
+unless @me/device/os/platform { INFO@mark `IO1 the machine does not say what it is` }
+unless @me/device/os/architecture { INFO@mark `IO2 the machine does not say what it is built on` }
+
+// One of a collection, and several. Which one is the machine's to say; that
+// there is one, and that it is one of them, is not.
+bag := [1, 2, 3]
+unless bag.random { INFO@mark `RN8 a collection does not answer one of itself` }
+unless Instance.local.choose(bag) { INFO@mark `RN9 choosing from a collection answers nothing` }
+unless 2.times.map(Instance.local.choose(bag)).count == 2 { INFO@mark `RN10 choosing two does not answer two` }
+picked_one := bag.random
+unless bag.contains(picked_one) { INFO@mark `RN11 what was chosen is not one of them` }
+unless boolean#.random is boolean { INFO@mark `RN12 a coin lands on neither side` }
+
+// What the machine says about itself, asked by name.
+unless @me/device/os["platform"].nonempty { INFO@mark `IO3 the machine does not name its platform` }
+unless @me/device/os["architecture"] == @me/device/os/architecture { INFO@mark `IO4 asking by name is not asking the other way` }
+// Reading a location answers what is written there and leaves it as it was:
+// the file the library is declared in is read twice.
+read_once := IO.read(`@ether/.project.ray`)
+read_twice := IO.read(`@ether/.project.ray`)
+unless read_once.nonempty { INFO@mark `IO5 a read answers nothing` }
+unless read_once == read_twice { INFO@mark `IO6 reading a file changed it` }
+// spec: writing a location is not claimed here — a test that writes a file
+// leaves one behind.
+
+// A location computed as a string reaches the machine as the bits it is
+// written with.
+read_by_bits := IO.read("@ether/.project.ray".bits)
+unless read_by_bits == read_once { INFO@mark `IO7 a location given as a string's bits is read as another place` }
+
+kept := Storage()
+kept["ray:a/b"] = "x"
+unless kept["ray:a/b"] == "x" { INFO@mark `IO8 what is written to the device's storage is not read back` }
+unless kept.keys == ["ray:a/b"] { INFO@mark `IO9 the device's storage does not list the key written to it` }
+kept["ray:a/b"] = None
+if kept.keys.nonempty { INFO@mark `IO10 a key removed from the device's storage is still listed` }
+unless @me/device/storage is Storage { INFO@mark `IO11 the device has no storage location` }
+unless Compiler.reduced("https://example.org/a" as Location, FileOptimizations) is FileSystem.Remote { INFO@mark `IO12 an http location is not reached over the network` }
+unless $.http.Method.propfind.written == "PROPFIND" { INFO@mark `IO13 WebDAV's listing method is not written PROPFIND` }
+unless $.http.Method.propfind.safe { INFO@mark `IO14 listing a remote collection is not safe` }
+
+started := Program(code: "1")
+@me/quests |= started
+unless started is @me/quests { INFO@mark `JB1 a program given to @me/quests is not among them` }
+unless started.who === @me { INFO@mark `JB11 a started program is not run by whoever started it` }
+unless started.stop.done { INFO@mark `JB5 stopping a program does not end it` }
+unless @me/quests == @me.quests { INFO@mark `JB7 @me/quests is not the character's selection of its programs` }
+serving_quest := Program(code: "1", serving: @public)
+unless serving_quest.serves(@public) { INFO@mark `JB8 a quest serving a location does not serve it` }
+if serving_quest.serves(@private) { INFO@mark `JB9 a quest serves a location it was not given` }
+if serving_quest.proxies { INFO@mark `JB10 a quest proxies without a proxy` }
+
+tapped := Keyboard.Key(name: 2)
+unless tapped.presses == 0 { INFO@mark `KB9 an untouched key has been pressed` }
+tapped.press
+unless tapped.presses == 1 { INFO@mark `KB10 a press is not counted` }
+tapped.release
+tapped.press
+unless tapped.presses == 2 { INFO@mark `KB11 two presses are not counted two` }
+options := [10, 20, 30]
+unless Keyboard.Key(name: 3).cycle(options) == 10 { INFO@mark `KB12 a key never pressed does not answer the first entry` }
+unless Keyboard.Key(name: 4).press.cycle(options) == 20 { INFO@mark `KB13 one press does not answer the second entry` }
+unless tapped.cycle(options) == 30 { INFO@mark `KB14 two presses do not answer the third entry` }
+unless tapped.press.cycle(options) == 10 { INFO@mark `KB15 three presses do not come back to the first entry` }
+held_key := Keyboard.Key(name: 5).press
+unless held_key.pressed { INFO@mark `KB16 a pressed key does not hold as a condition` }
+if held_key.release.pressed { INFO@mark `KB17 a released key holds as a condition` }
+if Keyboard.Key(name: 6).pressed { INFO@mark `KB18 a key nobody pressed holds as a condition` }
+
+// Calling a narrowed type chooses a value of it.
+chosen_above := Number{. > 5}()
+unless chosen_above > 5 { INFO@mark `CN1 a value chosen from a narrowing does not satisfy it` }
+unless boolean{. == true}() == true { INFO@mark `CN2 the only member a narrowing admits is not the one chosen` }
+unless choose boolean is boolean { INFO@mark `CN3 what is chosen from a type is not of it` }
+unless (choose 3 boolean).count == 3 { INFO@mark `CN4 choosing three booleans does not choose three` }
+unless (3 boolean).count == 3 { INFO@mark `CN5 three called on boolean is not three of it` }
+unless Number{choose 5}.count == 5 { INFO@mark `CN6 a narrowing by a choice of five is not five` }
+unless [1, 2, 3].map{choose 1}(*10).zip([1, 2, 3]).filter((a, b) => a != b).count == 1 { INFO@mark `CN7 a filtered map changes other than the one it chose` }
+
+// `choose n` chooses n distinct by identity: the same value at two locations is two.
+cx := Character(name: "chosen")
+unless Device().choose((cx, cx, "5"), 2).count == 2 { INFO@mark `CQ1 choosing two did not give two` }
+cq_both := Device().choose(("A" | "B" | "C"), 2)
+unless cq_both.count == 2 && cq_both.first != cq_both.last { INFO@mark `CQ2 choosing two of three gave one of them twice` }
+unless (0..<20).map(i => Device().choose((cx, cx, "5"), 2)).some(.every(=== cx)) { INFO@mark `CQ3 one value written twice is never chosen twice` }
+unless (choose 2 ("A" | "B" | "C")).count == 2 { INFO@mark `CQ4 choose 2 does not choose two` }
+
+// The default of a choose is its placeholder; `choosing` while it is open.
+cq_open := choose? Number ?? 5
+unless cq_open.choosing { INFO@mark `CQ5 an unanswered choice is not being chosen` }
+unless cq_open.placeholder == 5 { INFO@mark `CQ6 the default of a choose is not its placeholder` }
+unless cq_open.answer == 5 { INFO@mark `CQ7 an unanswered choice does not answer its placeholder` }
+cq_open.value = 7
+if cq_open.choosing { INFO@mark `CQ8 an answered choice is still being chosen` }
+unless cq_open.answer == 7 { INFO@mark `CQ9 an answered choice answers its placeholder` }
+if 5.choosing { INFO@mark `CQ10 a plain value is being chosen` }
+
+// The chooser is a setting; a player's answer is a weighted alternative.
+with Choice.algorithm = ((s, n) => "picked") {
+  unless Device().choose(1 | 2) == "picked" { INFO@mark `CHS1 a chooser set with with is not asked` }
+}
+chs := choose? Number ?? 5
+chs.told(3)
+unless chs.value.weight == 1/2 { INFO@mark `CHS2 a player's answer is taken as a certainty` }
+chs.told(4)
+unless chs.value#.count == 2 { INFO@mark `CHS3 a second answer replaced the first instead of joining it` }
+
+// The environment is read through the OS, live.
+unless OS().env.PATH == OS()["PATH"] { INFO@mark `ENV1 the environment is not read through the OS` }

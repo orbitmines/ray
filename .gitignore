@@ -7,7 +7,7 @@
 /**/.vite
 /**/.ether
 /**/.*.ts
-/@ether/.ray/v0.ts/src/language.*.ts
-/@ether/.ray/v0.ts/src/kernel.*/
-/@ether/.ray/v0.ts/dist/
-/@ether/.ray/v0.ts/@ether/
+/@ether/v0.ts/src/language.*.ts
+/@ether/v0.ts/src/kernel.*/
+/@ether/v0.ts/dist/
+/@ether/v0.ts/@ether/

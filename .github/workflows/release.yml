@@ -121,7 +121,7 @@ jobs:
         with:
           node-version: 22
       - name: pack @orbitmines/ether.ray (its prepack, scripts/bundle.mjs, bundles src/language.ts and the .ray files)
-        working-directory: "@ether/.ray/v0.ts"
+        working-directory: "@ether/v0.ts"
         run: |
           npm ci
           npm version --no-git-tag-version --allow-same-version "${{ needs.build.outputs.version }}"
@@ -214,20 +214,20 @@ jobs:
         with:
           node-version: 22
       - name: install @orbitmines/ether.ray, which the extension bundles
-        working-directory: "@ether/.ray/v0.ts"
+        working-directory: "@ether/v0.ts"
         run: npm ci
       - name: package the extension (the Marketplace takes major.minor.patch only, so v0.1.3-E2027.0A.3 is 0.1.3)
-        working-directory: "@ether/.ray/ide/vscode"
+        working-directory: "@ether/ide/vscode"
         run: |
           npm ci
           npm version --no-git-tag-version --allow-same-version "${VERSION%%-*}"
           mkdir -p "$GITHUB_WORKSPACE/vsix"
           npx --yes @vscode/vsce package --no-dependencies --baseContentUrl https://github.com/orbitmines/ray/blob/main --baseImagesUrl https://raw.githubusercontent.com/orbitmines/ray/main --out "$GITHUB_WORKSPACE/vsix/ether-ray-${VERSION}.vsix"
-      - name: the bundled language answers on its own through its own daemon (server/language.mjs --lsp with server/v0, outside the repository)
+      - name: the bundled language answers on its own through its own daemon (server/language.mjs --lsp with server/@ether, outside the repository)
         run: |
           probe="$RUNNER_TEMP/probe" && mkdir -p "$probe"
-          cp -r "@ether/\$/.ray/ide/vscode/server" "$probe/"
-          node "@ether/\$/.ray/ide/vscode/scripts/probe.mjs" "$probe"
+          cp -r "@ether/ide/vscode/server" "$probe/"
+          node "@ether/ide/vscode/scripts/probe.mjs" "$probe"
       - uses: actions/upload-artifact@v7
         with:
           name: vsix

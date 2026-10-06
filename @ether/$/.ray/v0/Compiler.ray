@@ -78,7 +78,9 @@ Compiler := class {
 
   stored := formats + per_object + cached + delta
 
-  levels => [none, default, folding, logic, memoised, formats, per_object, cached, delta, stored]
+  minimising := default + folding + logic
+
+  levels => [none, default, folding, logic, minimising, memoised, formats, per_object, cached, delta, stored]
 
   static reduced (value, level) => Program(code: { value }){O: level}()
 }

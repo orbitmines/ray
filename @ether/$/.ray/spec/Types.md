@@ -165,6 +165,7 @@ From the drafts review (2026-10-06).
   in R indeed follow this, which is different from just enumerating the possibilities after the filter." **Q** —
   Recommend: `∀ x ∈ R: p` is an assertion over all of R (a `dynamically assert` that fails, or starts a quest, when some
   x doesn't hold); `R{p}` is a narrowing that keeps those that do; `∃ x ∈ R: p` is a quest for a witness.
+  **Answered (user, 2026-10-06):** `∀`, `∃` are booleans: written in an `if`, or used as a narrowing like any boolean (as `Terminating := Program{terminating}`). No separate assert/quest forms.
 - **T4.12 `expr : T` constrains its free variables** — *`.ray2/Grammar.ray:21–23`*: "`x^2 < 0 : R` // Type constraints
   like this which is just `x: R{^2 < 0}`"; "`x^2 < 0 && y^3 < a : R`"; "All the variables which are already castable to
   R?" **Q** — Recommend as sugar: a boolean `expr : T` narrows every free variable of `expr` that is castable to T.
@@ -173,6 +174,7 @@ From the drafts review (2026-10-06).
   which returns an altered version of this should work?" **Q** — Recommend: in a narrowing, a method answering `static`
   holds when the copy equals the value: `Ray{compact}` ≡ `Ray{compact == this}`, and `String{lower_case}` is already
   lowercase.
+  **Answered (user, 2026-10-06):** a narrowing takes booleans: `Ray{compact}` needs `compact` to be a boolean predicate (see T4.11).
 - **T4.14 Sortedness is a type** — *`.ray2/Ray.ray:131`*: `sort (dimension): static{~every .previous[DIMENSION] <=
   .[DIMENSION] <= .next[DIMENSION]}`; *`.ray2/Reference.ray:14`*: `String{#.sorted_by(date)}`. **Decided (draft)**:
   `sort` answers `static{sorted}`, where `sorted(dim)` is the narrowing `every .previous[dim] <= .[dim] <= .next[dim]`.
@@ -193,6 +195,7 @@ From the drafts review (2026-10-06).
   implementing Array<T>, like Positive, should also apply to just a T." N1.10 covers the boolean case only. **Q** —
   Recommend: where `T[]` is accepted, a single `T` is the one-element list, and what `T[]` implements applies to a `T`
   (so `"0"`/`"1"` read as boolean through Binary).
+  **Answered (user, 2026-10-06):** no special rule: `[]` is a method on Node that implements the type on the value and answers an array of that type.
 - **T4.19 Definite assignment across labels** — *`.ray2/_todo/ray.ray.txt/ray.ray:85–89`*: "Type-checker should know that
   it must be set in Ordered to get here." **Q** — Recommend: the checker narrows a `T?` to `T` at a label when every edge
   into that label sets it (definite assignment over the Program's edges, P1.1).
@@ -290,6 +293,7 @@ From the drafts review (2026-10-06).
   "Should implement `x[0].unit & x.unit` as `|`, because it binds the variable to it." **Q** — Recommend: a field the list
   itself lacks is read on each element and answered as their superposition (`xs.unit` is `xs#.unit` joined with `|`):
   T8.1 extended from superpositions to lists.
+  **Answered (user, 2026-10-06):** no special rule (T4.18): a list answers what its own methods answer; mapping is written.
 
 ## T9. Where an alternative came from
 

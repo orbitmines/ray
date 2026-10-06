@@ -108,7 +108,7 @@ Deflate := class: Language {
 
   // LZ77: at each position the longest earlier match of at least 3 bytes, at most 258 long and 32768 back (https://www.rfc-editor.org/rfc/rfc1951#section-4)
   static parsed (bytes: Byte[], at: Number = 0) => at >= bytes.count ? []
-    : ((0 max at - 32768)..<at).map(from => (length: Encoding.common(bytes[from..], bytes[at..<(at + 258 min bytes.count)]), distance: at - from)).max_by(.length) -- (best =>
+    : ((0 max at - 32768)..<at).map(from => (length: Encoding.common(bytes[from..], bytes[at..<(at + 258 min bytes.count)]), distance: at - from)).max_by(.length)#.first -- (best =>
       best && best.length >= 3 ? [Copy(best.length, best.distance), parsed(bytes, at + best.length)] : [Literal(bytes[at]), parsed(bytes, at + 1)])
 
   static fixed (values: (Literal | Copy)[]) => Data<fixed_literals, fixed_distances>(elements: values.map(coded(.)))

@@ -23,7 +23,7 @@ PNG := class (
     {prediction: Prediction{filter == 2}} => prediction.up
     {prediction: Prediction{filter == 3}} => (prediction.left + prediction.up) / 2 -- .floor
     // The Paeth predictor (9.4)
-    {prediction: Prediction{filter == 4}} => (prediction.left + prediction.up - prediction.corner) -- (estimate => [prediction.left, prediction.up, prediction.corner].min_by(guess => (estimate - guess) max (guess - estimate)))
+    {prediction: Prediction{filter == 4}} => (prediction.left + prediction.up - prediction.corner) -- (estimate => [prediction.left, prediction.up, prediction.corner].min_by(guess => (estimate - guess) max (guess - estimate))#.first)
   }
   // Colour types and their samples (6.1)
   static Pixel := class = png: PNG, samples: Number[] {

@@ -122,5 +122,5 @@ Counting := class: TimeZone.Zoneinfo {
 counting := Counting(directory: OS.Ether().zoneinfo)
 counting.at("Europe/Amsterdam", summer)
 unless counting.asked == ["Europe/Amsterdam"] { INFO@mark `TZ16 reading one zone read others than the one asked for` }
-unless OS.Ether().zoneinfo.kept && (OS.Ether().zoneinfo / "Europe/Amsterdam").kept { INFO@mark `TZ17 the language as the operating system does not download its zone data and keep it` }
-if Host("linux").zoneinfo.kept { INFO@mark `TZ18 a host's own zone data is downloaded` }
+unless OS.Ether().zoneinfo == @tzif/zoneinfo { INFO@mark `TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo` }
+if Host("linux").zoneinfo ~= ⊢"tzif" { INFO@mark `TZ18 a host refers to @tzif for its zone data` }

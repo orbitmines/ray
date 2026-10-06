@@ -128,6 +128,8 @@ export class Seed {
     // Where code is: a node with the place it starts at (`from`) and the place after it (`to`, none at the text's end).
     this.externals.set('span', (frame, [code]) => { if (!(code instanceof Code)) return undefined; const c = self.written(code), n = new Node(); n.members.set('from', self.place(c.text, c.b)); n.members.set('to', c.e >= c.text.s.length ? undefined : self.place(c.text, c.e)); n.members.set('frame', c.frame); return n; });
     // Code from one place to another, read where `like` was written (a capture's type, read once when its rule is defined).
+    // The same, unread: a node holding the code (as `**` does).
+    this.externals.set('code', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.written(like), n = new Node(); n.members.set('code', new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner)); return n; });
     this.externals.set('read', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.written(like); return self.force(new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner)); });
     this.externals.set('.', frame => frame);
     // Code as a value (a Program): a node holding the code unread, not read where a name names it.
@@ -649,7 +651,7 @@ export class Seed {
     (e as any).ray = [...((e as any).ray ?? []), `${at.text.name.split('/').pop()}:${line} ${at.text.s.slice(at.b, at.e).split('\n')[0]}`];
     return e;
   }
-  show(v: unknown): string { return v instanceof Code ? 'code:' + v.s : v instanceof Node ? 'node(' + v.rules.length + ' rules, ' + [...v.members.keys()].join(',') + ')' : String(v); }
+  show(v: unknown): string { if (v instanceof Node && v.members.get('code') instanceof Code) return 'CODE:' + JSON.stringify((v.members.get('code') as Code).s.slice(0, 50)); return v instanceof Code ? 'code:' + v.s : v instanceof Node ? 'node(' + v.rules.length + ' rules, ' + [...v.members.keys()].join(',') + ')' : String(v); }
 
   // ---------------------------------------------------------------- R0.3: a text read statement after statement
   // A text read statement after statement, in `scope`: a file other than the entrypoint has a scope of its own inside the

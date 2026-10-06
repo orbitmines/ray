@@ -32,5 +32,9 @@ Dynamic := class = program: Program {
 }
 dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR `assertion failed`) -- .empty
 
+Component := class {
+  {literal label ^label}\ ^punctuation => return this
+}
+
 never := Node{false}
 never return ^keyword => never

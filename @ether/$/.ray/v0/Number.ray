@@ -121,9 +121,9 @@ dynamically Number.Bases.for name => {
 
     static digit (value: Number) => Base#[value]
     static value_of (written: Base) => Base#.index_of(written.lowercase)
-    next => integer.match
-      digit(0)[] => None
-      (rest: Base[], last: Base{!= digit(0)}, zeros: digit(0)[]) => static(integer: rest, digit(value_of(last) - 1), [digit(radix - 1)] * zeros.length)
+    next => if integer
+      is digit(0)[] => None
+      is (rest: Base[], last: Base{!= digit(0)}, zeros: digit(0)[]) => static(integer: rest, digit(value_of(last) - 1), [digit(radix - 1)] * zeros.length)
 
     << (places: Number) => static(integer: integer, [digit(0)] * places)
     >> (places: Number) => places >= integer.length ? static(integer: [digit(0)]) : static(integer: integer[..<-places])

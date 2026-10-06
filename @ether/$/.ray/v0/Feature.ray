@@ -49,6 +49,9 @@ FileSystem := class: Language {
         .map(href => href ~= ⊢"/" ? location.origin + href : href as Location)
       : remotely(location).run({ inner(location).listing })
   }
+  static Mirrored := class: FileSystem {
+    read (location: Location) => Quest(name: "the content at a location of a project not held here, from a mirror (World W2.9) or a shard (World W2.7, Universal U7) of it, kept by a cache level (Language §9.1, §9.2)", goal: location)
+  }
   static Device := class: FileSystem {
     on (location: Disk) => Instance#{.device === location.device}.first -- (. && . !== Instance.local ? Remote() : Posix())
     read (location: Location) => on(location).read(location.local)
@@ -68,6 +71,7 @@ FileOptimizations := {
   {location: Location{scheme && scheme != "file"}} => FileSystem.Remote()
   {location: Location{segments.first == "remote"}} => FileSystem.Remote()
   {location: Location{OS().name == browser}} => FileSystem.Browser()
+  {location: Location{Project.data(.) && !FileSystem.Posix().exists(.)}} => FileSystem.Mirrored()
   {location: Location} => FileSystem.Posix()
 }
 
@@ -140,6 +144,11 @@ OS := class {
   platform => this["platform"]
   architecture => this["architecture"]
   zoneinfo: Location? => name is (linux | macos) ? (this["TZDIR"] ?? "/usr/share/zoneinfo") as Location : None
+
+  static devices := {
+    {os: OS{platform}} => os
+    {os: OS} => ("@ether/OS" as Project.Dependency).project -- OS.Ether()
+  }
   name: linux | macos | windows | browser | ether | unknown => platform ? { "linux": linux, "darwin": macos, "win32": windows, "browser": browser, "ether": ether }[platform] ?? unknown : ether
 
   static launch (location: Location) => external os `open` (location as String)
@@ -148,7 +157,7 @@ OS := class {
 Device := class {
   static Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
 
-  os: OS = OS()
+  os: OS = Compiler.reduced(OS(), OS.devices)
   keyboard: Keyboard = Keyboard()
   capabilities: Capability?
   handheld = false

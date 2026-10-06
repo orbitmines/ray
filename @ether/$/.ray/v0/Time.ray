@@ -161,7 +161,7 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   date ?= ?
 }
 
-LeapSeconds := class = ((((@me/device/os).zoneinfo ?? OS.Ether().zoneinfo) / "leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
+LeapSeconds := class = ((@me/device/os.zoneinfo / "leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
   .map(.seconds seconds as Time(epoch: "1900-01-01"))
 {
   at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
@@ -209,7 +209,7 @@ TimeZone := class (name: String) {
     {os: OS{zoneinfo}} => TimeZone.Zoneinfo(directory: os.zoneinfo)
     {os: OS{name == windows}} => TimeZone.ICU()
     {os: OS{name == browser}} => TimeZone.Intl()
-    {os: OS} => TimeZone.Zoneinfo(directory: OS.Ether().zoneinfo)
+    {os: OS} => Quest(name: "time-zone data on an operating system that has none", goal: os)
   }
   static source: Source => Compiler.reduced(@me/device/os, sources)
 

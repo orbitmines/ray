@@ -356,12 +356,12 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided (2026-10-06):** `$.name` answers the language called `name`, loading it when it is not loaded.
   - `$.ray` is Ray itself (`Language.ray`).
   - Any other name is the project `v0/$/<name>`: the folder is the language's name in lowercase (`$/git`, `$/json`, `$/html`).
-  - The first `$.name` reads that project and its dependencies, once. It answers the language in it whose extensions include `.name`.
+  - The first `$.name` reads that project, once. Its dependencies are read when they are first referenced (below). It answers the language in it whose extensions include `.name`.
   - Without such a project, `$.name` answers a loaded language with that extension, or a `Quest`.
 - **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/$/`, and nothing in the core depends on one.
   - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs as `@zlib` (Decided 2026-10-06: `@X`, not `@ether/$/X`; `@X` resolves to the project in `v0/$/X` for now, and will later map to the repository named X).
   - Its claims are in its own `tests/` project.
-  - Every language stays at `v0/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/UI` lists `$/html`, `$/css`, `$/js`, `$/json`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. Loading the part loads them.
+  - Every language stays at `v0/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/UI` lists `$/html`, `$/css`, `$/js`, `$/json`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. A language in the part is read when it is first referenced, not when the part is.
   - A language may depend on other languages and on the project that bundles it. Loading tolerates a mutual dependency: a project is marked as loading before its dependencies load, so a cycle stops where it comes back, and every project in it ends up loaded once.
   - A project that uses a language either declares it in its `.project.ray` or reaches it through `$.name`.
   - The core reaches them only through `$.name`, lazily. Examples: in an optimisation level that picks a format (`StoreOptimizations` answers `$.sqlite`), in the enforcement of a permission (`as $.posix`), or in a store route (`$.git`).
@@ -371,6 +371,12 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     - ISO 8601, because a Time is written and read as one;
     - the base-N digits, because a Number is written in them;
     - Ray's own storage formats (`.%`, `.columns`, `.kv`), because they are Ray.
+
+- **Decided (2026-10-06):** dependencies resolve lazily.
+  - Reading a project does not read its dependencies. A dependency is read the first time it is referenced: through `$.name`, through `@name` in code, through a name the project does not define itself, or through a file in its language (`Project.load`, `Project.Dependency.project`, `Language.named`).
+  - `@name` in code is the project of the dependency declared as `@name` in a loaded project's `.project.ray`, and `@name/path` is a location inside it. Where no loaded project declares `@name`, `@name` keeps its other meanings (`@me`, a character, a relative location).
+  - Data a dependency's project names but does not hold, like `@tzif/zoneinfo` (the full IANA database compiled to TZif), is a location like any other. Ether reaches its content through mirrors (World W2.9) and shards (World W2.7, Universal U7), and keeps it through a cache, which is an optimisation level (§9.1, §9.2). This is later work: until then reading such a location answers a `Quest` (`FileSystem.Mirrored`).
+  - The OS is its own project, `v0/OS`, which declares `@tzif`. The core does not read it at startup: a device with no host platform takes its OS through the level `OS.devices`, which references `@ether/OS` and answers `OS.Ether`.
 
 ### 9.2 Version control — *IDE:412–420, 633–641, 732*
 > Hybrid logical clocks / CRDTs; your fork always accessible, can always push; apply a change to all stable versions (respecting their own changes); flag a change as the one that works; group changes; test my changes against the latest instead of merging the latest into mine; label functions inline in `.ray.txt` for non-Ether editors; notify when a monkey-patched function starts being used by a library, or when a renamed parameter breaks a partial call.

@@ -2,18 +2,22 @@ Project := class: Location {
   static Dependency := class ("@", location: (!" ")[], (" ", version: Version | (!\n)[])?) => {
     kind = "dependencies"
     alternatives: Dependency[] = []
-    name => location ~= "://" ? location.split("/").last as String : location.after("/")
+    name => location.split("/").last as String
 
-    project: Project? => Program(code: ("@", location)){O: {
+    project: Project? => (Program(code: ("@", location)){O: {
       @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project)
       @{scheme: Char.Word[]}://{remainder: Written} => Project.known(Network.fetch((scheme + "://" + remainder) as Location, "", version) as Project)
       @{name: (Char.Word | "-" | "+")[]{Language.project(.) != None}} => Language.project(name)
       @{local_path: Written} => Project.known(IO.read(local_path) as Project)
-    }}() ?? alternatives.map(.project).first(. != None)
+    }}() ?? alternatives.map(.project).first(. != None))?.load
   }
 
   static all: Project[] = []
   static known (found: Project?) => found && (all{. == found}.first ?? (all.push found -- found))
+  static declared => all{.loaded || .loading}.map(.dependencies).flatten
+  static declares (name: String) => declared.find(.name == name)
+  static holding (location: Location) => all{(location as String) ~= ⊢(. as String + "/")}.max((. as String).count)
+  static data (location: Location) => holding(location) -- (held => held && !Language.ray.location.contains(held) && !((location as String) ~= ".ray" ⊣))
 
   name: String?
   version: *?
@@ -31,10 +35,12 @@ Project := class: Location {
   shadowing => (parent, dependencies.project)#
   carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
   language_of (name: String) => Compiler.reduced(name, readings)
-  installed => dependencies.map(.project)
   sources => IO.listing(this)**{!.directory && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !(.parent / ".project.ray").exists)}
-  load: static => loaded || loading ? this : this ~~ (.loading = true) ~~ installed#.load ~~ sources.for(Language.ray.read(.content)) ~~ (.loaded = true) ~~ .loading = false
+  load: static => loaded || loading ? this : this ~~ (.loading = true) ~~ sources.for(Language.ray.read(.content)) ~~ (.loaded = true) ~~ .loading = false
 }
+
+@{name: (Char.Word | "-" | "+")[]{Project.declares(.)}} ^string => Project.declares(name).project
+@{name: (Char.Word | "-" | "+")[]{Project.declares(.)}}/{path: Written} ^string => Project.declares(name).project / path
 
 Layout := class = root: Location = @./.ether/external/@ {
   checked_out (name: String) => root / ("@" + name)

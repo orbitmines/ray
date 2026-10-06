@@ -1,5 +1,6 @@
 Language := class: Ray = extensions: String, location: Location[] = [], level: Compiler?, written: Compiler?, stored: Compiler?, of: Language?, version: Version?, fidelity: Fidelity = Fidelity.snapshot, implementations: Implementation[] = [], targets: Language[] = [] {
-  static named (extension: String) => Language#{.names(extension)} -- (all => all{!.of}.first ?? all.first)
+  static loaded_named (extension: String) => Language#{.names(extension)} -- (all => all{!.of}.first ?? all.first)
+  static named (extension: String) => loaded_named(extension) ?? (Project.declared.find(.project && loaded_named(extension)) && loaded_named(extension))
   static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: base.level + outer.level, written: base.written + outer.written, of: base, version: outer.version)
 
   static for_file (file_name: String) => file_name ~= (*, ".", inner: Char.Word[], ".ray") ⊣

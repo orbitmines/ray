@@ -124,3 +124,5 @@ counting.at("Europe/Amsterdam", summer)
 unless counting.asked == ["Europe/Amsterdam"] { INFO@mark `TZ16 reading one zone read others than the one asked for` }
 unless OS.Ether().zoneinfo == @tzif/zoneinfo { INFO@mark `TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo` }
 if Host("linux").zoneinfo ~= ⊢"tzif" { INFO@mark `TZ18 a host refers to @tzif for its zone data` }
+unless Compiler.reduced(Host("plan9"), TimeZone.sources) is Quest { INFO@mark `TZ19 an operating system without time-zone data does not leave it to be found` }
+unless Compiler.reduced(Host(""), OS.devices) is OS.Ether { INFO@mark `TZ20 a device with no host platform does not run the language as its operating system` }

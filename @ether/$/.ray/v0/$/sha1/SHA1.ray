@@ -3,7 +3,7 @@ SHA1 := class: Encoding.Digest {
   static extensions = ".sha1"
 
   // Padding: the message, a 1 bit, zeros, and the message length in bits as 64 bits (FIPS 180-4 §5.1.1)
-  static Padded := class (message: Byte[], 0x80, Byte{== 0}[]{length == (119 - message.count % 64) % 64}, size: Binary⁶⁴ = message.count * 8)
+  static Padded := class (message: Byte[], 0x80, Byte{== 0}[]{length == (119 - message.count % 64) % 64}, size: Binary₆₄ = message.count * 8)
   // Initial hash value (FIPS 180-4 §5.3.1)
   static initial = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0]
   // Constants, one for each twenty steps (FIPS 180-4 §4.2.1)
@@ -15,14 +15,14 @@ SHA1 := class: Encoding.Digest {
   // ROTL (FIPS 180-4 §3.2)
   static rotl (x, n) => (x * 2 ^ n + (x / 2 ^ (32 - n)).floor) % 2 ^ 32
   // Message schedule (FIPS 180-4 §6.1.2, step 1)
-  static schedule (block: Binary³²[]) => (16..<80).reduce(w = block => [w, rotl(w[-3] ~x|| w[-8] ~x|| w[-14] ~x|| w[-16], 1)])
+  static schedule (block: Binary₃₂[]) => (16..<80).reduce(w = block => [w, rotl(w[-3] ~x|| w[-8] ~x|| w[-14] ~x|| w[-16], 1)])
   // Eighty steps over a, b, c, d, e, then added to the hash (FIPS 180-4 §6.1.2, steps 2–4)
-  static compressed (h, block: Binary³²[]) => schedule(block).enumerate.reduce(v = h => [
+  static compressed (h, block: Binary₃₂[]) => schedule(block).enumerate.reduce(v = h => [
     (rotl(v[0], 5) + f(.index, v[1], v[2], v[3]) + v[4] + K[(.index / 20).floor] + .value) % 2 ^ 32, v[0], rotl(v[1], 30), v[2], v[3]
   ]).zip(h).map((a, b) => (a + b) % 2 ^ 32)
 
   written := {
-    {writing: Language.Writing} => (Padded(message: writing.value as Byte[]) as Byte[]).chunk(64).map(.chunk(4).map(. as Binary³²))
-      .reduce(h = initial => compressed(h, .)).map(. as Binary³² as Byte⁴).flatten
+    {writing: Language.Writing} => (Padded(message: writing.value as Byte[]) as Byte[]).chunk(64).map(.chunk(4).map(. as Binary₃₂))
+      .reduce(h = initial => compressed(h, .)).map(. as Binary₃₂ as Byte₄).flatten
   }
 }

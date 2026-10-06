@@ -18,7 +18,7 @@ Location := class: Hierarchy (
   ("#", fragment: Char[])?
 ) => {
   static Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
-    static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal²)[]{length > 0} as Unicode.UTF-8)[])
+    static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal₂)[]{length > 0} as Unicode.UTF-8)[])
     merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
     .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name && .value?.nonempty}.last?.value
   }

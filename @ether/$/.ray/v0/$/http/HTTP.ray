@@ -151,7 +151,7 @@ HTTP := class {
     static preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
     // Frame format (https://www.rfc-editor.org/rfc/rfc9113#section-4.1)
-    static Frame := class (size: Binary²⁴ = payload.count, type: Byte as Type, flags: Byte = 0, Binary¹{== 0}, stream: Binary³¹, payload: Byte[]{length == size}) {
+    static Frame := class (size: Binary₂₄ = payload.count, type: Byte as Type, flags: Byte = 0, Binary₁{== 0}, stream: Binary₃₁, payload: Byte[]{length == size}) {
       // Frame definitions (https://www.rfc-editor.org/rfc/rfc9113#section-6)
       static Type := enum data | headers | priority | rst_stream | settings | push_promise | ping | goaway | window_update | continuation
       // END_STREAM, END_HEADERS, PADDED and PRIORITY (https://www.rfc-editor.org/rfc/rfc9113#section-6.1, https://www.rfc-editor.org/rfc/rfc9113#section-6.2)

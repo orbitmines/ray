@@ -1,5 +1,5 @@
 // The Base 64 Encoding (https://www.rfc-editor.org/rfc/rfc4648#section-4)
-Base64 := class = (sextets: (Binary⁶ as Alphabet)[], "="[]{length == (4 - sextets.count % 4) % 4}) {
+Base64 := class = (sextets: (Binary₆ as Alphabet)[], "="[]{length == (4 - sextets.count % 4) % 4}) {
   static Alphabet = ("A".."Z", "a".."z", "0".."9", "+", "/") as String
 
   bytes: Byte[] => sextets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))

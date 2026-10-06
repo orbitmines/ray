@@ -8,7 +8,7 @@ JSON := class (Blank, root: Value, Blank) => {
   static Array := class ("[", Blank, (elements: (Blank, element: Value, Blank)[]).join(","), Blank, "]") => {
     value => elements.map(.element.value)
   }
-  static Escaped := class ("\\", (character: "\"" | "\\" | "/") | (control: "b" | "f" | "n" | "r" | "t") | ("u", unit: Hexadecimal⁴)) => {
+  static Escaped := class ("\\", (character: "\"" | "\\" | "/") | (control: "b" | "f" | "n" | "r" | "t") | ("u", unit: Hexadecimal₄)) => {
     value => character ?? (unit ? unit as Char : { "b": \b, "f": \f, "n": \n, "r": \r, "t": \t }[control])
   }
   static Text := class ("\"", characters: (Escaped | Char{!= "\"" && != "\\" && . >= \x20})[], "\"") => {

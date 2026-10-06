@@ -100,6 +100,7 @@ From the drafts review (2026-10-06).
 - **T3.19 A field stored as another type** — *`.ray2/Program.ray:450–456`*: `< ( : Binary^128 = field: String, field2:
   Binary^8 )`; "`:` should be called on new variable not on this". **Q** — Recommend: `field: String @ Binary^128`, a
   storage narrowing, which is a Compiler/Store level (L§9.1) rather than a type. Or keep the draft's `: Repr = name: Type`.
+  **Answered (user, 2026-10-06):** no syntax; the compiler chooses storage (an optimisation level, L§9.1).
 - **T3.20 Node's own members resolve on `this`** — *`.ray2/Node.ray:20–22`, `.ray2/Program.ray:104–105`*: "Everything
   defined on Node, isn't put on local, unless explicitely accessed"; Node's members and global extensions don't get the
   global value in closures; `#` and `*` are called on this (global), not local. **Q** — Recommend adopting: Node's own
@@ -107,6 +108,7 @@ From the drafts review (2026-10-06).
   frame; closures capture only names defined outside Node. (Also P1.3.)
 - **T3.21 `:{p}` narrows in place** — *`.ray2/Grammar.ray:84`*: "`:{}` without an arg maps to type = type{filter}".
   **Q** — Recommend: `x :{p}` narrows x's declared type in place (`x: (typeof x){p}`). Adopt it or drop it explicitly.
+  **Answered (user, 2026-10-06):** `:` already narrows; no `:{p}` form.
 - **T3.22 Fields defined by each other** — *`.ray2/_todo/…/instance/UI/Geometry.ray:225–226`*: `radius =>
   surface.radial_distance` ("a circular definition, which is allowed, and expected to break for a valid object, either by
   setting boundary, or by setting radius, or by setting diameter"); `diameter => radius * 2 // implements diameter =`.
@@ -166,6 +168,7 @@ From the drafts review (2026-10-06).
 - **T4.12 `expr : T` constrains its free variables** — *`.ray2/Grammar.ray:21–23`*: "`x^2 < 0 : R` // Type constraints
   like this which is just `x: R{^2 < 0}`"; "`x^2 < 0 && y^3 < a : R`"; "All the variables which are already castable to
   R?" **Q** — Recommend as sugar: a boolean `expr : T` narrows every free variable of `expr` that is castable to T.
+  **Answered (user, 2026-10-06):** dropped; `:` already narrows.
 - **T4.13 A method answering a copy, as a narrowing** — *`.ray2/Program.ray:3`*: "Valid type: `Ray{compact}`; anything
   which returns an altered version of this should work?" **Q** — Recommend: in a narrowing, a method answering `static`
   holds when the copy equals the value: `Ray{compact}` ≡ `Ray{compact == this}`, and `String{lower_case}` is already
@@ -185,6 +188,7 @@ From the drafts review (2026-10-06).
 - **T4.17 `T>`, the greater type** — *`.ray2/Node.ray:135`*: "`>` // Greater type than this, components could be together
   this type." **Q** — Recommend: `T>` (postfix) is T's supertype, any value whose components together could make a T
   (T4.7). Otherwise drop it.
+  **Answered (user, 2026-10-06):** dropped.
 - **T4.18 A `T` is a one-element `T[]`** — *`.ray2/_todo/…/instance/utils/boolean.ray:1–2`*: "Anything that is
   implementing Array<T>, like Positive, should also apply to just a T." N1.10 covers the boolean case only. **Q** —
   Recommend: where `T[]` is accepted, a single `T` is the one-element list, and what `T[]` implements applies to a `T`

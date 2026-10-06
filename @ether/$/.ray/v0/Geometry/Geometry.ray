@@ -79,7 +79,7 @@ Geometry := class {
     depth (point: Vector) => point[depth_axis] ?? 0
   }
 
-  Color := class: Elementwise ("#", red: Hexadecimal², green: Hexadecimal², blue: Hexadecimal², (alpha: Probability = 1) = (Hexadecimal² / 255)?) {
+  Color := class: Elementwise ("#", red: Hexadecimal₂, green: Hexadecimal₂, blue: Hexadecimal₂, (alpha: Probability = 1) = (Hexadecimal₂ / 255)?) {
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
   }

@@ -43,6 +43,7 @@ From the drafts review (2026-10-06).
   for length, so a number should match the whole string plus subscript rather than `v`. N1.12 leaves this unsettled; A5 makes
   the superscript on a base type a length. Recommend: a subscript on a written number is its base (`1111₂`); on a type it is
   a length (`Binary₂`), mirroring A5; `(111₂)₂` reads inner first.
+  **Answered (user, 2026-10-06):** a subscript is the `v` operator: in front of a number it is the base (`₂1111`, right-to-left), behind it is a length (`Binary₈`, `₂101₈`). Superscript (`^`) is always exponentiation; on a type that is the n-fold product. The Almanac's "on a base type `^` means length" is removed, and v0's uses were rewritten (`Binary³²` → `Binary₃₂`, `10₂` → `₂10`).
 - **N1.22 `sign` as a function** — **Q.** *…/utils/Number.ray:41*: `.sign` on all numbers so `x.sign ().sum` works, the empty
   string being `+`. Recommend: drop (the use at *Astronomy.ray:67* is ordinary multiplication by ±1).
 - **N1.23 Digits of every script** — see X3.10 (**Q**): `decimal_digit_value` / `numeric_value` readings as `suggest`
@@ -66,6 +67,7 @@ From the drafts review (2026-10-06).
 - **N2.9 `x` between quantities** — **Q.** *.ray2/_todo/ray.ray.txt/ProceduralGeneration.ray:12*:
   `choose Room{4..5m x 5..7m}` ("`.x` on unit brings 2d"). Recommend: `a x b` on quantities is the Geometry extent
   `Vector(a, b)` (cartesian product of ranges, R3.5); `x` must be spaced.
+  **Answered (user, 2026-10-06):** `*` on ranges: `4..5m * 5..7m`.
 - **N2.10 Compound quantities share a dimension** — **Decided (draft).** *…/Ether/instance/utils/Unit.ray:10–11*: every part
   of a juxtaposed quantity must convert to the first part's unit; `1d 5m` (meter) is an error, `1d 5m` (minute) is read
   (with N2.4's superposition resolved by this).

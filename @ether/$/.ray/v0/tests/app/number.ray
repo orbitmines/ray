@@ -177,7 +177,7 @@ unless third.fraction[5] == 3 { INFO@mark `FR2 1/3 does not repeat its threes` }
 unless third * 3 != 0 { INFO@mark `FR3 1/3 is integer zero` }
 unless 50% == 1/2 { INFO@mark `FR4 50% is not a half` }
 unless 7 % 3 == 1 { INFO@mark `FR5 % before a number is no longer modulo` }
-unless 10₂ == 2 { INFO@mark `SS1 a subscript is not the base the digits are read in` }
+unless ₂10 == 2 { INFO@mark `SS1 a subscript in front is not the base the digits are read in` }
 unless 2³ == 8 { INFO@mark `SS2 a superscript on a number is not its power` }
-unless Binary³².admits(Binary(integer: [1] * 32)) { INFO@mark `SS3 a superscript on a base type is not its length` }
-if Binary³².admits(Binary(integer: [1] * 8)) { INFO@mark `SS4 a base type with a length admits another length` }
+unless Binary₃₂.admits(Binary(integer: [1] * 32)) { INFO@mark `SS3 a subscript behind a type is not its length` }
+if Binary₃₂.admits(Binary(integer: [1] * 8)) { INFO@mark `SS4 a base type with a length admits another length` }

@@ -60,9 +60,9 @@ spec files. IDs `A…`. Answers go under **Decided** at the end.
 - `"A"[]`; `"A", "B", "B" ==.instance_of "A", "B"[]`; nesting with `["B"][]` vs `["B"[]]`.
 - Spread: `first, middle: String[], last := "A", "B", "C", "D"`; `first, ...middle, last := …`;
   `middle: ...String`. `...` is alternative syntax for `[]`, allowed anywhere `[]` is.
-- `x: Binary³² = Binary⁸[]⁴`; superscripts are `^`: `Binary^32 = Binary^8[]^4`. On a base type like
-  Binary, `^` means length; once the base type is altered it means exponentiation:
-  `Binary{== 1..4}² // == 2 | 4 | 8 | 16`.
+- `x: Binary₃₂ = Binary₈[]₄`: a subscript behind is a length, one in front a base (`₂1111`). A superscript
+  is `^`, always exponentiation: `Binary{== 1..4}² // == 2 | 4 | 8 | 16` (revised 2026-10-06, N1.21; the
+  Almanac's "on a base type `^` means length" is to be rewritten).
 - `x: 1 Number` = `Number{#.count == 1}`.
 - `50% ("A" | "B" | "C" | "D")`, `1/2 Binary³²`, `0.5 "A" | "B"` (= `1 ("A" | "B")`).
 - Variadics: a function has one argument, described structurally by its parameters in sequence:
@@ -143,6 +143,7 @@ From the drafts review (2026-10-06).
   super/subscript constrains `.count` (the size), which equals the length for chains; `Graph²²²` is a
   graph of 222 vertices.
   **Answered (user, 2026-10-06):** length, as A5 says; counted types are `#.count`.
+  **Answered (user, 2026-10-06):** revised: superscript is always exponentiation; a length is a subscript behind (`Binary₃₂ = Binary₈[]₄`), a base a subscript in front (N1.21).
 - **A-C7 `never` against `Never`.** The Almanac writes `forever (): never => loop { }`
   (*Almanac.tsx:1299*); L§4.1 decides `=> Never` as the type and `never` as the keyword. **Q.**
   Recommend accepting both: `never` in a type position reads as `Never`, as `boolean` names a type.

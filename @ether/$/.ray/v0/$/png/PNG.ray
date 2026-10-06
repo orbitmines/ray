@@ -7,13 +7,13 @@ PNG := class (
   Chunk{type == "IEND"}
 ) {
   // Chunk layout (5.3), its CRC over the type and data (5.5)
-  static Chunk := class (size: Binary³², type: Char⁴, data: Byte[]{length == size}, crc: Binary³²{. == crc32([type.bytes, data].flatten)})
+  static Chunk := class (size: Binary₃₂, type: Char₄, data: Byte[]{length == size}, crc: Binary₃₂{. == crc32([type.bytes, data].flatten)})
   // CRC-32 of ISO 3309 and ITU-T V.42, the polynomial reflected (D. Sample CRC implementation)
   static crc32 (bytes: Byte[]) => bytes.reduce(c = 0xFFFFFFFF => (0..7).reduce(r = c.xor(.) => r.odd ? (r / 2).floor.xor(0xEDB88320) : (r / 2).floor)).xor(0xFFFFFFFF)
   static chunk (type: String, data: Byte[]) => Chunk(size: data.count, type: type, data: data, crc: crc32([type.bytes, data].flatten))
 
   // IHDR (11.2.1)
-  static Header := class (width: Binary³², height: Binary³², depth: Byte, color: Byte, compression: Byte{. == 0}, filter: Byte{. == 0}, interlace: Byte{. <= 1})
+  static Header := class (width: Binary₃₂, height: Binary₃₂, depth: Byte, color: Byte, compression: Byte{. == 0}, filter: Byte{. == 0}, interlace: Byte{. <= 1})
   // Filter types (9.2): the filter byte before each scanline
   static Scanline := class (filter: Byte, bytes: Byte[])
   static Prediction := class = filter: Byte, left: Byte = 0, up: Byte = 0, corner: Byte = 0

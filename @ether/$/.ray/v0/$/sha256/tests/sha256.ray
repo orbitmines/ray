@@ -3,11 +3,11 @@
 mark ^keyword := external global
 
 // One-block message "abc" (FIPS 180-4 example SHA256.pdf, and FIPS 180-2 Appendix B.1)
-unless SHA256.write("abc".bytes) as Byte³² as Hexadecimal⁶⁴ == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" { INFO@mark `SHT1 abc does not digest as in FIPS 180's one-block example` }
+unless SHA256.write("abc".bytes) as Byte₃₂ as Hexadecimal₆₄ == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" { INFO@mark `SHT1 abc does not digest as in FIPS 180's one-block example` }
 // Two-block message, the 448 bits "abcdbcde…nopq" (FIPS 180-4 example SHA256.pdf, and FIPS 180-2 Appendix B.2)
-unless SHA256.write("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes) as Byte³² as Hexadecimal⁶⁴ == "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1" { INFO@mark `SHT2 the 448-bit message does not digest as in FIPS 180's two-block example` }
+unless SHA256.write("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes) as Byte₃₂ as Hexadecimal₆₄ == "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1" { INFO@mark `SHT2 the 448-bit message does not digest as in FIPS 180's two-block example` }
 // The empty message (NIST CAVP SHAVS, SHA256ShortMsg.rsp, Len = 0)
-unless SHA256.write([]) as Byte³² as Hexadecimal⁶⁴ == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" { INFO@mark `SHT3 the empty message does not digest as e3b0c442…` }
+unless SHA256.write([]) as Byte₃₂ as Hexadecimal₆₄ == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" { INFO@mark `SHT3 the empty message does not digest as e3b0c442…` }
 // The first constant and initial word (FIPS 180-4 §4.2.2, §5.3.3)
 unless SHA256.K.first == 0x428a2f98 && SHA256.K.last == 0xc67178f2 && SHA256.K.count == 64 { INFO@mark `SHT4 the constants are not the 64 of FIPS 180-4 §4.2.2` }
 unless SHA256.initial == [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19] { INFO@mark `SHT5 the initial hash value is not that of FIPS 180-4 §5.3.3` }

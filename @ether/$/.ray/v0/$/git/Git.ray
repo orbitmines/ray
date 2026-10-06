@@ -49,7 +49,7 @@ Git<format: Format = Format.sha1> := class: Language {
     static (children: Language.Entry[]) as (=== Tree) => Tree(entries: children.sort_by(.directory ? .name + "/" : .name).map(child => (mode: modes[child.directory ? Language.Entry.Mode.directory : child.mode], name: child.name, id: (child as Object).id as Raw)))
   }
 
-  Signature := class (name: (!"<")[], " <", email: (!">")[], "> ", seconds: Decimal, " ", zone: (("+" | "-"), Decimal.Digit⁴)) {
+  Signature := class (name: (!"<")[], " <", email: (!">")[], "> ", seconds: Decimal, " ", zone: (("+" | "-"), Decimal.Digit₄)) {
     when: Time => (seconds seconds) as Time
     static (signed: (who: *, when: Time)) as (=== Signature) => Signature(name: signed.who?.full_name ?? signed.who as String, email: signed.who?.email ?? (signed.who?.name ?? "someone") + "@ether", seconds: (signed.when as s).floor, zone: "+0000")
   }
@@ -72,14 +72,14 @@ Git<format: Format = Format.sha1> := class: Language {
   PackedReferences := class (("# pack-refs with:", (!\n)[], \n)?, references: (id: Id, " ", name: (!\n)[], \n, ("^", peeled: Id, \n)?)[])
 
   // A reference delta's base and the trailing checksum are hashes of the repository's format (https://git-scm.com/docs/gitformat-pack#_pack_pack_files_have_the_following_format, https://git-scm.com/docs/hash-function-transition#_pack_format)
-  Pack := class ("PACK", version: Binary³²{== 2 || == 3}, count: Binary³², entries: Entry[]{count == this.count}, checksum: Raw) {
+  Pack := class ("PACK", version: Binary₃₂{== 2 || == 3}, count: Binary₃₂, entries: Entry[]{count == this.count}, checksum: Raw) {
     static types = { commit: 1, tree: 2, blob: 3, tag: 4, offset_delta: 6, reference_delta: 7 }
 
-    static Size := class (more: Binary¹{== 1}, low: Binary⁷)[], (Binary¹{== 0}, last: Binary⁷) {
+    static Size := class (more: Binary₁{== 1}, low: Binary₇)[], (Binary₁{== 0}, last: Binary₇) {
       value => (last, more.low.reverse).flatten as Binary
     }
     static Entry := class (
-      (continues: Binary¹, type: Binary³, low: Binary⁴), size: (continues ? Size : None),
+      (continues: Binary₁, type: Binary₃, low: Binary₄), size: (continues ? Size : None),
       (type == 6 ? (offset: Size = at - base_entry.at) : type == 7 ? base: Raw : None),
       data: Zlib
     ) {
@@ -104,11 +104,11 @@ Git<format: Format = Format.sha1> := class: Language {
   }
 
   Delta := class (source: Pack.Size, target: Pack.Size, instructions: (Copy | Insert)[]) {
-    static Copy := class (Binary¹{== 1}, sizes: Binary³, offsets: Binary⁴, offset: Byte[]{count == offsets.ones}, size: Byte[]{count == sizes.ones}) {
+    static Copy := class (Binary₁{== 1}, sizes: Binary₃, offsets: Binary₄, offset: Byte[]{count == offsets.ones}, size: Byte[]{count == sizes.ones}) {
       from => offsets.spread(offset) as Binary
       length => (sizes.spread(size) as Binary) -- (. == 0 ? 0x10000 : .)
     }
-    static Insert := class (Binary¹{== 0}, length: Binary⁷{> 0}, bytes: Byte[]{count == length})
+    static Insert := class (Binary₁{== 0}, length: Binary₇{> 0}, bytes: Byte[]{count == length})
 
     applied (base: Byte[]) => instructions.map(. is Copy ? base[.from..<.from + .length] : .bytes).flatten
     size => (this as Byte[]).count
@@ -120,12 +120,12 @@ Git<format: Format = Format.sha1> := class: Language {
   // Version 2: the names and both trailing checksums are hashes of the repository's format (https://git-scm.com/docs/gitformat-pack#_version_2_pack_idx_files_support_packs_larger_than_4_gib_and, https://git-scm.com/docs/hash-function-transition#_pack_index)
   // Version 3, naming each object in both formats, belongs to compatibility mode (https://git-scm.com/docs/hash-function-transition#_pack_index)
   Index := class (
-    0xFF, "tOc", version: Binary³²{== 2},
-    fanout: Binary³²[]{count == 256},
+    0xFF, "tOc", version: Binary₃₂{== 2},
+    fanout: Binary₃₂[]{count == 256},
     ids: Raw[]{count == fanout.last},
-    crcs: Binary³²[]{count == fanout.last},
-    offsets: (large: Binary¹, offset: Binary³¹)[]{count == fanout.last},
-    larger: Binary⁶⁴[],
+    crcs: Binary₃₂[]{count == fanout.last},
+    offsets: (large: Binary₁, offset: Binary₃₁)[]{count == fanout.last},
+    larger: Binary₆₄[],
     pack: Raw, checksum: Raw
   ) {
     offset_of (id: Id) => ids.index_of(id as Raw) -- (at => at === None ? None : offsets[at] -- (.large == 1 ? larger[.offset] : .offset))
@@ -135,7 +135,7 @@ Git<format: Format = Format.sha1> := class: Language {
       offsets: sorted.map((large: 0, offset: .at)), larger: [], pack: pack.checksum))
   }
 
-  Line := class (((length: Hexadecimal⁴{!= "0000" && != "0001" && != "0002"}), payload: Byte[]{count == length - 4}) | flush: "0000" | delimiter: "0001" | end: "0002") {
+  Line := class (((length: Hexadecimal₄{!= "0000" && != "0001" && != "0002"}), payload: Byte[]{count == length - 4}) | flush: "0000" | delimiter: "0001" | end: "0002") {
     static (text: String) as (=== Line) => Line(length: text.count + 4, payload: text as Byte[])
   }
   // A server names its object format among its capabilities, SHA-1 when it does not, and advertises names in it (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)

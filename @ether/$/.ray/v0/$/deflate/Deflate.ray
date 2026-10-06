@@ -47,7 +47,7 @@ Deflate := class: Language {
       distance_code: distance.index, distance_extra: value.distance - distance.value.0)))
 
   // Non-compressed block: to the byte boundary, LEN, its one's complement NLEN, then LEN bytes (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.4)
-  static Stored := class (Binary{length < 8 && (at + length) % 8 == 0}, size: <-Binary¹⁶ = bytes.count, <-Binary¹⁶{== 2 ^ 16 - 1 - size}, bytes: (<-Byte)[]{length == size})
+  static Stored := class (Binary{length < 8 && (at + length) % 8 == 0}, size: <-Binary₁₆ = bytes.count, <-Binary₁₆{== 2 ^ 16 - 1 - size}, bytes: (<-Byte)[]{length == size})
 
   // Fixed Huffman codes (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.6)
   static fixed_literals = Huffman([[8] * 144, [9] * 112, [7] * 24, [8] * 8].flatten)
@@ -57,9 +57,9 @@ Deflate := class: Language {
   static CodeLengths := class<code: Huffman> (
     entries: (
       (length: code.Symbol{< 16})
-      | (code.Symbol{== 16}, again: <-Binary²)
-      | (code.Symbol{== 17}, zeros: <-Binary³)
-      | (code.Symbol{== 18}, many: <-Binary⁷)
+      | (code.Symbol{== 16}, again: <-Binary₂)
+      | (code.Symbol{== 17}, zeros: <-Binary₃)
+      | (code.Symbol{== 18}, many: <-Binary₇)
     )[]
   ) {
     values => entries.reduce(acc = [] => [acc, .length != None ? [.length] : .again != None ? [acc.last] * (.again + 3) : [0] * (.zeros != None ? .zeros + 3 : .many + 11)].flatten)
@@ -68,10 +68,10 @@ Deflate := class: Language {
   // Dynamic Huffman codes: HLIT, HDIST, HCLEN, the code length code in its own order, then both codes' lengths as one sequence (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.7)
   static Order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
   static Dynamic := class (
-    hlit: <-Binary⁵ = literals.lengths.count - 257,
-    hdist: <-Binary⁵ = distances.lengths.count - 1,
-    hclen: <-Binary⁴ = 15,
-    sizes: (<-Binary³)[]{length == hclen + 4} = Order.map(length_code.lengths[.] ?? 0),
+    hlit: <-Binary₅ = literals.lengths.count - 257,
+    hdist: <-Binary₅ = distances.lengths.count - 1,
+    hclen: <-Binary₄ = 15,
+    sizes: (<-Binary₃)[]{length == hclen + 4} = Order.map(length_code.lengths[.] ?? 0),
     lengths: CodeLengths<length_code>{values.count == hlit + 257 + hdist + 1} = CodeLengths<length_code>(entries: [literals.lengths, distances.lengths].flatten.map((length: .))),
     data: Data<literals, distances>
   ) {
@@ -82,8 +82,8 @@ Deflate := class: Language {
 
   // Block header: BFINAL, then BTYPE: 0 stored, 1 fixed codes, 2 dynamic codes (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.3)
   static Block := class (
-    final: Binary¹ as boolean = false,
-    kind: <-Binary²{< 3} = 0,
+    final: Binary₁ as boolean = false,
+    kind: <-Binary₂{< 3} = 0,
     (stored: Stored) if kind == 0,
     (data: Data<fixed_literals, fixed_distances>) if kind == 1,
     (dynamic: Dynamic) if kind == 2

@@ -1,31 +1,31 @@
 // A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
-UUID := class: Hexadecimal³² (Hexadecimal⁸, "-", Hexadecimal⁴, "-", Hexadecimal⁴, "-", Hexadecimal⁴, "-", Hexadecimal¹²) {
-  version: Hexadecimal¹ => this[12]
+UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₁₂) {
+  version: Hexadecimal₁ => this[12]
 
   static Variant := enum RESERVED_NCS | RFC_4122 | RESERVED_MICROSOFT | RESERVED_FUTURE
-  variant: ⊢11₂ ? Binary³ : Binary₂ => this[16] as Binary
+  variant: ⊢₂11 ? Binary₃ : Binary₂ => this[16] as Binary
   variant as (=== Variant) => .match
     ⊢0 => Variant.RESERVED_NCS
-    10₂ => Variant.RFC_4122
-    110₂ => Variant.RESERVED_MICROSOFT
-    111₂ => Variant.RESERVED_FUTURE
+    ₂10 => Variant.RFC_4122
+    ₂110 => Variant.RESERVED_MICROSOFT
+    ₂111 => Variant.RESERVED_FUTURE
 
   static v1 := class: UUID{version == 1} (
     (
-      time_low: Hexadecimal⁸, "-",
-      time_mid: Hexadecimal⁴, "-",
-      (version: Hexadecimal¹, time_high: Hexadecimal³) = time_high_and_version: Hexadecimal⁴
+      time_low: Hexadecimal₈, "-",
+      time_mid: Hexadecimal₄, "-",
+      (version: Hexadecimal₁, time_high: Hexadecimal₃) = time_high_and_version: Hexadecimal₄
     ), "-",
     (
       (
         variant,
         clock_seq_high: Binary{length == 8 - variant.length}
-      ) = clock_seq_high_and_reserved: Hexadecimal²,
-      clock_seq_low: Hexadecimal²,
+      ) = clock_seq_high_and_reserved: Hexadecimal₂,
+      clock_seq_low: Hexadecimal₂,
     ), "-",
-    node: Hexadecimal¹²
+    node: Hexadecimal₁₂
   ) {
-    (time_high, time_mid, time_low) = time: Binary⁶⁰
+    (time_high, time_mid, time_low) = time: Binary₆₀
 
     chosen_within (width) => ~generate()
 
@@ -34,9 +34,9 @@ UUID := class: Hexadecimal³² (Hexadecimal⁸, "-", Hexadecimal⁴, "-", Hexade
       stamp = clock.now
       time = stamp.wall + 0x01B21DD213814000
       version = 1
-      variant = 10₂
+      variant = ₂10
       (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random + stamp.logical
-      node = @me/device/network/mac ?? (Hexadecimal¹².random ~~ .[1] |= 1)
+      node = @me/device/network/mac ?? (Hexadecimal₁₂.random ~~ .[1] |= 1)
   }
 
   static v3 := class: UUID{version == 3} {
@@ -45,7 +45,7 @@ UUID := class: Hexadecimal³² (Hexadecimal⁸, "-", Hexadecimal⁴, "-", Hexade
   }
   static v4 := class: UUID{version == 4} = secure Hexadecimal{length == 32}.random ~~ (
     .version = 4
-    .variant = 10₂
+    .variant = ₂10
   )
   static v5 := class: UUID{version == 5} {
     namespace: UUID

@@ -11,8 +11,8 @@ unless ("é" as Unicode.UTF-8).bytes.length == 2 { INFO@mark `S8 é is not two b
 unless "é"[0] == 233 { INFO@mark `S9 é is not codepoint 233` }
 
 unless ("a" as Unicode.UTF-8 as Binary).length == 8 { INFO@mark `T1 a is not eight bits in UTF-8` }
-unless "a" as Unicode.UTF-8 as Binary == 01100001₂ { INFO@mark `T2 a is not 01100001 in UTF-8` }
-unless 01100001₂ as Unicode.UTF-8 as String == "a" { INFO@mark `T4 01100001 is not a in UTF-8` }
+unless "a" as Unicode.UTF-8 as Binary == ₂01100001 { INFO@mark `T2 a is not 01100001 in UTF-8` }
+unless ₂01100001 as Unicode.UTF-8 as String == "a" { INFO@mark `T4 01100001 is not a in UTF-8` }
 unless "a".length == 1 { INFO@mark `U5 a has other than one character` }
 
 unless U+0061 == "a"[0] { INFO@mark `W1 U+0061 is not a` }

@@ -4,24 +4,24 @@ Gzip := class (
   0x1F, 0x8B,
   method: Byte{== 8} = 8,
   // FLG: reserved, FCOMMENT, FNAME, FEXTRA, FHCRC, FTEXT (https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1)
-  Binary³{== 0},
-  commented: Binary¹ as boolean = comment != None,
-  named: Binary¹ as boolean = name != None,
-  extended: Binary¹ as boolean = extra != None,
-  checked: Binary¹ as boolean = false,
-  text: Binary¹ as boolean = false,
+  Binary₃{== 0},
+  commented: Binary₁ as boolean = comment != None,
+  named: Binary₁ as boolean = name != None,
+  extended: Binary₁ as boolean = extra != None,
+  checked: Binary₁ as boolean = false,
+  text: Binary₁ as boolean = false,
   // Numbers are stored least significant byte first (https://www.rfc-editor.org/rfc/rfc1952#section-2.1)
-  modified: <-Byte⁴ = 0,
+  modified: <-Byte₄ = 0,
   flags: Byte = 0,
   system: Byte = 255,
-  (size: <-Byte² = extra.count, extra: Byte[]{length == size}) if extended,
+  (size: <-Byte₂ = extra.count, extra: Byte[]{length == size}) if extended,
   // FNAME and FCOMMENT are ISO 8859-1, zero-terminated (https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1)
   (name: Byte{!= 0}[], 0) if named,
   (comment: Byte{!= 0}[], 0) if commented,
-  (header_crc: <-Byte²) if checked,
+  (header_crc: <-Byte₂) if checked,
   deflated: $.deflate.Stream,
-  crc: <-Byte⁴ = crc32(inflated),
-  isize: <-Byte⁴ = inflated.count % 2 ^ 32
+  crc: <-Byte₄ = crc32(inflated),
+  isize: <-Byte₄ = inflated.count % 2 ^ 32
 ) {
   inflated: Byte[] => deflated.bytes
   dynamically assert crc == crc32(inflated) && isize == inflated.count % 2 ^ 32

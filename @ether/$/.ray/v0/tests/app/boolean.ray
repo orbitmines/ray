@@ -58,5 +58,5 @@ unless true.next.next == true { INFO@mark `BOR3 true.next.next should be true` }
 unless false.next.next == false { INFO@mark `BOR4 false.next.next should be false` }
 unless true.previous == false { INFO@mark `BOR5 true.previous should be false` }
 unless false.previous == true { INFO@mark `BOR6 false.previous should be true` }
-unless true as Binary == 1₂ { INFO@mark `BOR7 true is not the bit one` }
-unless false as Binary == 0₂ { INFO@mark `BOR8 false is not the bit zero` }
+unless true as Binary == ₂1 { INFO@mark `BOR7 true is not the bit one` }
+unless false as Binary == ₂0 { INFO@mark `BOR8 false is not the bit zero` }

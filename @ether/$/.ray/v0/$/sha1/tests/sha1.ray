@@ -3,11 +3,11 @@
 mark ^keyword := external global
 
 // One-block message "abc" (FIPS 180-4 example SHA1.pdf, and FIPS 180-2 Appendix A.1)
-unless SHA1.write("abc".bytes) as Byte²⁰ as Hexadecimal⁴⁰ == "a9993e364706816aba3e25717850c26c9cd0d89d" { INFO@mark `SHI1 abc does not digest as in FIPS 180's one-block example` }
+unless SHA1.write("abc".bytes) as Byte₂₀ as Hexadecimal₄₀ == "a9993e364706816aba3e25717850c26c9cd0d89d" { INFO@mark `SHI1 abc does not digest as in FIPS 180's one-block example` }
 // Two-block message, the 448 bits "abcdbcde…nopq" (FIPS 180-4 example SHA1.pdf, and FIPS 180-2 Appendix A.2)
-unless SHA1.write("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes) as Byte²⁰ as Hexadecimal⁴⁰ == "84983e441c3bd26ebaae4aa1f95129e5e54670f1" { INFO@mark `SHI2 the 448-bit message does not digest as in FIPS 180's two-block example` }
+unless SHA1.write("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes) as Byte₂₀ as Hexadecimal₄₀ == "84983e441c3bd26ebaae4aa1f95129e5e54670f1" { INFO@mark `SHI2 the 448-bit message does not digest as in FIPS 180's two-block example` }
 // The empty message (NIST CAVP SHAVS, SHA1ShortMsg.rsp, Len = 0)
-unless SHA1.write([]) as Byte²⁰ as Hexadecimal⁴⁰ == "da39a3ee5e6b4b0d3255bfef95601890afd80709" { INFO@mark `SHI3 the empty message does not digest as da39a3ee…` }
+unless SHA1.write([]) as Byte₂₀ as Hexadecimal₄₀ == "da39a3ee5e6b4b0d3255bfef95601890afd80709" { INFO@mark `SHI3 the empty message does not digest as da39a3ee…` }
 // The padded message is a multiple of 512 bits, its last 64 bits the length (FIPS 180-4 §5.1.1)
 unless (SHA1.Padded(message: "abc".bytes) as Byte[]).count == 64 && (SHA1.Padded(message: "abc".bytes) as Byte[]).last == 0x18 { INFO@mark `SHI4 abc is not padded to one block ending in its length, 24 bits` }
 unless (SHA1.Padded(message: [0] * 56) as Byte[]).count == 128 { INFO@mark `SHI5 a 448-bit message is not padded to two blocks` }

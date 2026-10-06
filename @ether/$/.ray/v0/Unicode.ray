@@ -52,29 +52,29 @@ Unicode := class {
   }
 
   static UTF-8 := class: TF = sequence: Unit[] {
-    static CodeUnit = Binary⁸
+    static CodeUnit = Binary₈
     static Unit := class = (
       prefix: 1[]{length == 0..4},
       U0: Binary{length == 8 - prefix.length}{⊢0},
-      (10₂, U1: Binary⁶) if prefix ⊢11₂,
-      (10₂, U2: Binary⁶) if prefix ⊢111₂,
-      (10₂, U3: Binary⁶) if prefix ⊢1111₂
+      (₂10, U1: Binary₆) if prefix ⊢₂11,
+      (₂10, U2: Binary₆) if prefix ⊢₂111,
+      (₂10, U3: Binary₆) if prefix ⊢₂1111
     )
   }
 
   static UTF-16 := class: TF = sequence: Unit[] {
-    static CodeUnit = Binary¹⁶
+    static CodeUnit = Binary₁₆
     static Unit := class = (
-      prefix: 110110₂?,
-      U0: Binary⁴,
+      prefix: ₂110110?,
+      U0: Binary₄,
       U1: Binary{length == 12 - prefix.length},
-      (110111₂, U2: Binary¹⁰) if prefix
+      (₂110111, U2: Binary₁₀) if prefix
     )
   }
 
   static UTF-32 := class: TF = sequence: Unit[] {
-    static CodeUnit = Binary³²
-    static Unit := class = (0[]¹¹, U0: Binary²¹)
+    static CodeUnit = Binary₃₂
+    static Unit := class = (0[]₁₁, U0: Binary₂₁)
   }
 }
 

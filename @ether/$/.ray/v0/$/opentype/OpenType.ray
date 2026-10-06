@@ -1,16 +1,16 @@
 // OpenType specification (https://learn.microsoft.com/en-us/typography/opentype/spec/)
 // The table directory (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
-OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Char⁴, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
+OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Char₄, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
   static language = Language(".otf" | ".ttf" | ".opentype", level: { {font: OpenType} => font })
   static Glyph := class = outlines: Geometry.Curve[], advance: Number, units: Number, ascender: Number
   // Data types (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#data-types)
-  static U8 = Binary⁸
-  static U16 = Binary¹⁶
-  static U32 = Binary³²
-  static I8 := class: Binary⁸ {
+  static U8 = Binary₈
+  static U16 = Binary₁₆
+  static U32 = Binary₃₂
+  static I8 := class: Binary₈ {
     signed => this < 2 ^ 7 ? this : this - 2 ^ 8
   }
-  static I16 := class: Binary¹⁶ {
+  static I16 := class: Binary₁₆ {
     signed => this < 2 ^ 15 ? this : this - 2 ^ 16
   }
   static F2Dot14 := class: I16 {
@@ -18,7 +18,7 @@ OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Cha
   }
 
   // head (https://learn.microsoft.com/en-us/typography/opentype/spec/head)
-  static Head := class = (U32, U32, U32, U32{== 0x5F0F3CF5}, U16, units: U16, Binary⁶⁴, Binary⁶⁴, I16, I16, I16, I16, U16, U16, I16, long_offsets: U16, I16)
+  static Head := class = (U32, U32, U32, U32{== 0x5F0F3CF5}, U16, units: U16, Binary₆₄, Binary₆₄, I16, I16, I16, I16, U16, U16, I16, long_offsets: U16, I16)
   // hhea (https://learn.microsoft.com/en-us/typography/opentype/spec/hhea)
   static Hhea := class = (U32, ascender: I16, I16, I16, U16, I16, I16, I16, I16, I16, I16, I16, I16, I16, I16, I16, metrics: U16)
   // hmtx (https://learn.microsoft.com/en-us/typography/opentype/spec/hmtx)
@@ -39,7 +39,7 @@ OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Cha
   }
 
   // glyf, simple glyph descriptions (https://learn.microsoft.com/en-us/typography/opentype/spec/glyf#simple-glyph-description)
-  static Flag := class = (Binary², y_same: Binary¹, x_same: Binary¹, repeats: Binary¹, y_short: Binary¹, x_short: Binary¹, on_curve: Binary¹)
+  static Flag := class = (Binary₂, y_same: Binary₁, x_same: Binary₁, repeats: Binary₁, y_short: Binary₁, x_short: Binary₁, on_curve: Binary₁)
   static Coordinate<short, same> := class = ((magnitude: U8) if short, (value: I16) if !(short || same)) {
     delta => short ? (same ? magnitude : -magnitude) : same ? 0 : value.signed
   }
@@ -66,8 +66,8 @@ OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Cha
       [-1, ends].flatten.zip(ends).map((from, to) => points[(from + 1)..to]))
   }
   // glyf, composite glyph descriptions (https://learn.microsoft.com/en-us/typography/opentype/spec/glyf#composite-glyph-description)
-  static ComponentFlag := class = (Binary³, unscaled: Binary¹, scaled_offset: Binary¹, overlap: Binary¹, metrics: Binary¹, instructions: Binary¹,
-    two_by_two: Binary¹, xy_scale: Binary¹, more: Binary¹, Binary¹, scale: Binary¹, round: Binary¹, xy_values: Binary¹, words: Binary¹)
+  static ComponentFlag := class = (Binary₃, unscaled: Binary₁, scaled_offset: Binary₁, overlap: Binary₁, metrics: Binary₁, instructions: Binary₁,
+    two_by_two: Binary₁, xy_scale: Binary₁, more: Binary₁, Binary₁, scale: Binary₁, round: Binary₁, xy_values: Binary₁, words: Binary₁)
   static Component := class = (
     flag: ComponentFlag, glyph: U16,
     ((first: I16, second: I16) if flag.words == 1), ((first: I8, second: I8) if flag.words == 0),

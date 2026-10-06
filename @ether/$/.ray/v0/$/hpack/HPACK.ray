@@ -18,7 +18,7 @@ HPACK := class: Language {
   // Integer representation: an N-bit prefix, continued in 7-bit groups least significant first (https://www.rfc-editor.org/rfc/rfc7541#section-5.1)
   static Integer := class<prefix: Number> (
     (small: Binary{length == prefix && . < 2 ^ prefix - 1})
-    | (Binary{length == prefix && . == 2 ^ prefix - 1}, groups: (Binary¹{== 1}, group: Binary⁷)[], Binary¹{== 0}, last: Binary⁷)
+    | (Binary{length == prefix && . == 2 ^ prefix - 1}, groups: (Binary₁{== 1}, group: Binary₇)[], Binary₁{== 0}, last: Binary₇)
   ) {
     value => small ?? 2 ^ prefix - 1 + [groups.group, last].flatten.enumerate.map(.value * 128 ^ .index).sum
     as (=== Decimal) => value
@@ -50,7 +50,7 @@ HPACK := class: Language {
   }
 
   // String literal: H, the length, then the octets, Huffman coded when H is set (https://www.rfc-editor.org/rfc/rfc7541#section-5.2)
-  static Text := class (huffman: Binary¹ as boolean = false, size: Integer<7> = octets.count as Integer<7>, octets: Byte[]{length == size.value}) {
+  static Text := class (huffman: Binary₁ as boolean = false, size: Integer<7> = octets.count as Integer<7>, octets: Byte[]{length == size.value}) {
     value => huffman ? (octets as Coded).text : octets as String
     static (text: String) as (=== Text) => Text(octets: text as Byte[])
   }
@@ -58,15 +58,15 @@ HPACK := class: Language {
   // Field representations (https://www.rfc-editor.org/rfc/rfc7541#section-6)
   static Representation := class (
     // Indexed field (https://www.rfc-editor.org/rfc/rfc7541#section-6.1)
-    (Binary¹{== 1}, index: Integer<7>{value > 0})
+    (Binary₁{== 1}, index: Integer<7>{value > 0})
     // Literal with incremental indexing, without indexing, never indexed (https://www.rfc-editor.org/rfc/rfc7541#section-6.2)
-    | (((kind: 01₂, at: Integer<6>) | (kind: 0000₂, at: Integer<4>) | (kind: 0001₂, at: Integer<4>)), (name: Text) if at.value == 0, value: Text)
+    | (((kind: ₂01, at: Integer<6>) | (kind: ₂0000, at: Integer<4>) | (kind: ₂0001, at: Integer<4>)), (name: Text) if at.value == 0, value: Text)
     // Dynamic table size update (https://www.rfc-editor.org/rfc/rfc7541#section-6.3)
-    | (001₂, size: Integer<5>)
+    | (₂001, size: Integer<5>)
   ) {
-    inserting => kind == 01₂
+    inserting => kind == ₂01
     field (table: Table) => index ? table[index.value] : (name: name?.value ?? table[at.value].name, value: value.value)
-    static (field: (name: String, value: String)) as (=== Representation) => Representation(kind: 0000₂, at: 0 as Integer<4>, name: field.name as Text, value: field.value as Text)
+    static (field: (name: String, value: String)) as (=== Representation) => Representation(kind: ₂0000, at: 0 as Integer<4>, name: field.name as Text, value: field.value as Text)
   }
 
   // The dynamic table: newest first after the static entries, each costing its octets plus 32, the oldest evicted to fit (https://www.rfc-editor.org/rfc/rfc7541#section-2.3, https://www.rfc-editor.org/rfc/rfc7541#section-4)
@@ -91,9 +91,9 @@ HPACK := class: Language {
 
   // The encoder's choices: an index for what the static table holds, and Huffman coding when it is shorter (https://www.rfc-editor.org/rfc/rfc7541#section-7.1)
   static Optimizations := {
-    {r: Representation{kind == 0000₂ && name && Static ∋ (name: name.value, value: value.value)}} =>
+    {r: Representation{kind == ₂0000 && name && Static ∋ (name: name.value, value: value.value)}} =>
       Representation(index: (Static.index_of((name: r.name.value, value: r.value.value)) + 1) as Integer<7>)
-    {r: Representation{kind == 0000₂ && name && Static.name ∋ name.value}} =>
+    {r: Representation{kind == ₂0000 && name && Static.name ∋ name.value}} =>
       Representation(kind: r.kind, at: (Static.name.index_of(r.name.value) + 1) as Integer<4>, value: r.value)
     {text: Text{!huffman && (value as Coded as Byte[]).count < octets.count}} => Text(huffman: true, octets: text.value as Coded as Byte[])
   }

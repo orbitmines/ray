@@ -180,9 +180,9 @@ Ending := \n | ")" | ","
 {numerator: Decimal.String}/{denominator: Decimal.String} ^number => Decimal.Real(integer: numerator as Decimal, fraction: []) / (denominator as Decimal)
 {amount: Decimal}%{followed_by: ⊢(Ending | " ")} ^number => Decimal.Real(integer: amount, fraction: []) / 100
 
-{digits: Decimal.String}{radix: Subscript.String} ^number => Number.numeral(Subscript(integer: radix))(integer: digits)
+right-to-left {radix: Subscript.String}{digits: Decimal.String} ^number => Number.numeral(Subscript(integer: radix))(integer: digits)
 {base}{power: Superscript.String} ^number => base ^ Superscript(integer: power)
-{type}{length: Subscript.String} ^number => type ^ Subscript(integer: length)
+{type}{length: Subscript.String} ^number => type[]{length == Subscript(integer: length)}
 
 {digits: Decimal.String} => Decimal(integer: digits)
 -{number: Decimal} => Decimal.Signed(sign: "-", integer: number)
@@ -193,7 +193,7 @@ Ending := \n | ")" | ","
 u{width: Decimal} => Binary{length <= width}
 i{width: Decimal} => Binary{length <= width}.Signed
 USize = u8 | u16 | u32 | u64
-Byte = Binary⁸
+Byte = Binary₈
 
 Matrix := Number[][]
 Matrix &+= {
@@ -220,5 +220,5 @@ Angle &+= {
 }
 
 boolean &+= {
-  as (=== Binary) => this ? 1₂ : 0₂
+  as (=== Binary) => this ? ₂1 : ₂0
 }

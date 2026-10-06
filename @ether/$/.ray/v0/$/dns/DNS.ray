@@ -5,11 +5,11 @@ Network &+= {
 
     // TYPE values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.1), SRV (https://www.rfc-editor.org/rfc/rfc2782)
     static Type := enum A (code: 1) | NS (code: 2) | CNAME (code: 5) | SOA (code: 6) | PTR (code: 12) | MX (code: 15) | TXT (code: 16) | AAAA (code: 28) | SRV (code: 33) | ANY (code: 255) {
-      static (code: Binary¹⁶) as (=== Type) => Type#{.code == code}.first
+      static (code: Binary₁₆) as (=== Type) => Type#{.code == code}.first
     }
     // CLASS values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4)
     static Classes := enum IN (code: 1) | CH (code: 3) | HS (code: 4) | ANY (code: 255) {
-      static (code: Binary¹⁶) as (=== Classes) => Classes#{.code == code}.first
+      static (code: Binary₁₆) as (=== Classes) => Classes#{.code == code}.first
     }
     // OPCODE and RCODE (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
     static Opcode := enum query | iquery | status
@@ -17,8 +17,8 @@ Network &+= {
 
     // Domain names as labels or a pointer (https://www.rfc-editor.org/rfc/rfc1035#section-3.1, https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
     static Name := class (
-      labels: (00₂, size: Binary⁶{> 0}, text: Byte[]{length == size})[],
-      Byte{== 0} | (11₂, pointer: Binary¹⁴)
+      labels: (₂00, size: Binary₆{> 0}, text: Byte[]{length == size})[],
+      Byte{== 0} | (₂11, pointer: Binary₁₄)
     ) {
       static (domain: DomainName) as (=== Name) => Name(labels: domain.text.split("."){.nonempty}.map((size: .count, text: . as Byte[])))
       // Labels are at most 63 octets, names at most 255 (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4)
@@ -26,15 +26,15 @@ Network &+= {
     }
 
     // Question section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.2)
-    static Question := class (name: Name, type: Binary¹⁶ as Type = Type.A, within: Binary¹⁶ as Classes = Classes.IN)
+    static Question := class (name: Name, type: Binary₁₆ as Type = Type.A, within: Binary₁₆ as Classes = Classes.IN)
 
     // Resource record (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.3)
     static Record := class (
       name: Name,
-      type: Binary¹⁶ as Type,
-      within: Binary¹⁶ as Classes = Classes.IN,
-      ttl: Binary³² = 3600,
-      size: Binary¹⁶ = rdata.count,
+      type: Binary₁₆ as Type,
+      within: Binary₁₆ as Classes = Classes.IN,
+      ttl: Binary₃₂ = 3600,
+      size: Binary₁₆ = rdata.count,
       rdata: Byte[]{length == size} = Compiler.reduced(this, Encoded)
     ) {
       data = Compiler.reduced(this, Decoded)
@@ -47,10 +47,10 @@ Network &+= {
       {record: Record{type == Type.A}} => record.rdata as Binary as IPv4
       {record: Record{type == Type.AAAA}} => record.rdata as Binary as IPv6
       {record: Record{type is (Type.NS | Type.CNAME | Type.PTR)}} => record.rdata as Name
-      {record: Record{type == Type.MX}} => record.rdata as (preference: Binary¹⁶, exchange: Name)
+      {record: Record{type == Type.MX}} => record.rdata as (preference: Binary₁₆, exchange: Name)
       {record: Record{type == Type.TXT}} => (record.rdata as Text[]).text.map(. as String)
-      {record: Record{type == Type.SOA}} => record.rdata as (primary: Name, mailbox: Name, serial: Binary³², refresh: Binary³², retry: Binary³², expire: Binary³², minimum: Binary³²)
-      {record: Record{type == Type.SRV}} => record.rdata as (priority: Binary¹⁶, weight: Binary¹⁶, port: Binary¹⁶, target: Name)
+      {record: Record{type == Type.SOA}} => record.rdata as (primary: Name, mailbox: Name, serial: Binary₃₂, refresh: Binary₃₂, retry: Binary₃₂, expire: Binary₃₂, minimum: Binary₃₂)
+      {record: Record{type == Type.SRV}} => record.rdata as (priority: Binary₁₆, weight: Binary₁₆, port: Binary₁₆, target: Name)
       {record: Record} => record.rdata
     }
     static Encoded := {
@@ -63,19 +63,19 @@ Network &+= {
     // Message format (https://www.rfc-editor.org/rfc/rfc1035#section-4.1)
     static Message := class (
       // Header section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
-      id: Binary¹⁶ = Binary¹⁶.random,
-      response: Binary¹ as boolean = false,
-      opcode: Binary⁴ as Opcode = Opcode.query,
-      authoritative: Binary¹ as boolean = false,
-      truncated: Binary¹ as boolean = false,
-      recursion_desired: Binary¹ as boolean = true,
-      recursion_available: Binary¹ as boolean = false,
-      Binary³{== 0},
-      rcode: Binary⁴ as Rcode = Rcode.no_error,
-      qdcount: Binary¹⁶ = questions.count,
-      ancount: Binary¹⁶ = answers.count,
-      nscount: Binary¹⁶ = authorities.count,
-      arcount: Binary¹⁶ = additional.count,
+      id: Binary₁₆ = Binary₁₆.random,
+      response: Binary₁ as boolean = false,
+      opcode: Binary₄ as Opcode = Opcode.query,
+      authoritative: Binary₁ as boolean = false,
+      truncated: Binary₁ as boolean = false,
+      recursion_desired: Binary₁ as boolean = true,
+      recursion_available: Binary₁ as boolean = false,
+      Binary₃{== 0},
+      rcode: Binary₄ as Rcode = Rcode.no_error,
+      qdcount: Binary₁₆ = questions.count,
+      ancount: Binary₁₆ = answers.count,
+      nscount: Binary₁₆ = authorities.count,
+      arcount: Binary₁₆ = additional.count,
       questions: Question[]{length == qdcount} = [],
       answers: Record[]{length == ancount} = [],
       authorities: Record[]{length == nscount} = [],
@@ -97,7 +97,7 @@ Network &+= {
       // UDP messages are at most 512 octets (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
       {lookup: Lookup{transport == Transport.udp}} => lookup.socket.datagram(lookup.message as Byte[])
       // TCP messages are prefixed with a two octet length (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.2)
-      {lookup: Lookup{transport == Transport.tcp}} => lookup.socket.send((lookup.message as Byte[]).count as Binary¹⁶ as Byte[], lookup.message as Byte[]) -- (.[2..])
+      {lookup: Lookup{transport == Transport.tcp}} => lookup.socket.send((lookup.message as Byte[]).count as Binary₁₆ as Byte[], lookup.message as Byte[]) -- (.[2..])
       // DNS over HTTPS: a POST of application/dns-message (https://www.rfc-editor.org/rfc/rfc8484#section-4.1)
       {lookup: Lookup{transport == Transport.https}} => HTTP.send(HTTP.Request(method: HTTP.Method.post, target: lookup.server,
         fields: HTTP.Fields(entries: [(name: "Content-Type", value: "application/dns-message"), (name: "Accept", value: "application/dns-message")]), body: lookup.message as Byte[])).body

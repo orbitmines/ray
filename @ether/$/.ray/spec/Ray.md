@@ -39,6 +39,14 @@ From the drafts review (2026-10-06).
 - **R1.12 `|` inside a list makes branches** — *`Almanac.tsx:893–896`*: `x: Graph = [1, "2a" | "2b", 3]`. **Decided
   (draft, Almanac)**: alternatives written with `|` while building a structure become separate branches of the graph.
 
+From the drafts verification (2026-10-06).
+
+- **R1.13 Order along a ray** — *`.ray2/Ray.ray:29–42`*: `Ordered &+ Ray` with `<= (b: T) reduce()`, and commented
+  `gte`/`gt`/`lte`/`lt` built on `reduce_right`/`reduce` that stop at the first element equal to `b` ("is this the first
+  check"). v0's `Ordered.<` is still a TODO. **Decided (draft)**: on a Ray, `<`, `<=`, `>`, `>=` compare positions by walking
+  from the entry: `a <= b` when `a` is reached no later than `b`, and `<` also excludes the first check landing on `a` itself;
+  `>`/`>=` walk from the other end. A Ray is Ordered by its own walk (R1.2).
+
 ## R2. Iteration and traversal (*Ray:72–130, 559–565, 633–673*)
 
 - **R2.1 Traversers** — the draft's `with Traverser.(default = 4 * DepthFirst, BreadthFirst)` and mixes. L§10.4.
@@ -70,6 +78,12 @@ From the drafts review (2026-10-06).
   **Follows (2026-10-06):** `n * T` is n steps of T, `,` sequences traversers, a traverser may be a superposition (weighted for a probabilistic mix) or a function of the entry, and a direction filter composes with any of them; nothing traverser-specific, from R2.1 (the traverser is a context override), R3.9 (`* n` repeats), `,` composition and U-C1 weights.
 - **R2.11 Indexing a recursively defined ray** — *`Almanac.tsx:864–867`*: `(0 -> +2)[4]` is `8`. **Decided (draft,
   Almanac)**: a ray defined by a recursive step is indexed like any iterable; `[n]` applies the step n times.
+
+From the drafts verification (2026-10-06).
+
+- **R2.12 Indexing follows the traverser** — *`.ray3/Ray.ray:86`*: `[at: Integer] => // TODO compose right/left only on
+  selected traverser.`, beside `+ (at)`, `- (at)` and `±` (L§10.4). **Q** — Recommend: `[n]` takes n steps with the context's
+  traverser (R2.1), so the direction it composes in is the traverser's; `+ (at)` / `- (at)` fix the direction, `±` is both.
 
 ## R3. Operations
 
@@ -142,6 +156,16 @@ From the drafts review (2026-10-06).
   it.
   **Follows (2026-10-06):** `x ~= p` answers the matches, a superposition of selections that stay in their context, and does not change x; `.remove` on a match removes it from x. A match that is itself a superposition is one match; `.expand` unfolds it, from L§1.2 (only an optimisation mutates; the semantics never do) and R3.1 (`.remove` is a separate method).
 
+From the drafts verification (2026-10-06).
+
+- **R3.24 Selecting vertices by degree** — *`.ray2/Ray.ray:109`*: `v (count: Number) => this{##.count == count} //TODO for Ray
+  only counting Ray classes.` Not in v0. **Q** — Recommend: no method named `v`; it is the narrowing as written,
+  `ray{##.count == n}` (the vertices with n neighbours), where `##` counts only the Ray links, as the TODO asks. Name it
+  (`.degree`) only if it recurs.
+- **R3.25 `$` on an Iterable** — *`.ray2/Ray.ray:68`*: `def $ = this !~= ^* //Then add any match at the beginning.` The meaning
+  is unclear: `$` is already the store of instances (L§9.1) and the error part (T2.7). **Open** — Recommend dropping it: `$`
+  keeps its decided meanings, and a match anchored at the start is `~= ^p` (X2).
+
 ## R4. Ranges (*ep:1558–1638; Ray:657–659*)
 
 - **R4.1 Forms** — `a..b`, `..b`, `a..`, `0..10..20` (to 20 through 10), `..10` = `10->`? MultiRange. L§10.4.
@@ -209,6 +233,14 @@ From the drafts review (2026-10-06).
   far boundary within the current hierarchy level; `x.hierarchy ->>` ignores levels. Directions compose:
   `top.left.last` is the top-left extreme.
   **Follows (2026-10-06):** `->` is the next one; `->>` is everything onward to the far boundary within the current hierarchy level; `x.hierarchy ->>` ignores levels; directions compose (`top.left.last` is the top-left extreme), from F-G3 (Decided draft: `<-`/`->` are neighbours, `<<-`/`->>` the far ends) and R7.2.
+
+From the drafts verification (2026-10-06).
+
+- **R7.7 Two hierarchies at once** — *`…/instance/Entity.ray:82–86`*: "`.hierarchy` for `.inventory`, and rendering hierarchy
+  — What if has both"; "Would be rendering a cursor for an IDE, which would be the location, but the top-level rendering location
+  would be the IDE". **Q** — Recommend: a node may carry several hierarchy directions, each a named directionality equipped on
+  its location (R7.2); rendering walks the rendering one (the IDE draws the cursor), while the cursor's `.location` stays where
+  it points. Which one `.hierarchy` names is chosen by the context, as traversers are (R2.1).
 
 ---
 

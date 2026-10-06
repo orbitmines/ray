@@ -71,6 +71,20 @@ and `…/UI.ray`, cited as *Geometry:line* and *UI:line*.
   library's filter widget. A form is a block of declared, unset fields (`name: String`), each
   rendered as its Choice. (Extends F-D4; P8.15 narrowings → inputs.)
 
+From the drafts verification (2026-10-06).
+
+- **F-D16 Fonts that ship** — *`_todo/_download_dependencies.sh:31–64`*: Noto for every script, Noto CJK (Japanese, Korean,
+  Simplified Chinese, Traditional Chinese, Hong Kong) and Noto Color Emoji; "Where's the emoji monochrome?" (Noto Emoji has no
+  repository, only fonts.google.com). **Q** — Recommend: the default font set is Noto (all scripts, CJK, Color Emoji, and the
+  monochrome Noto Emoji for the TUI and plain text), fetched as dependencies (as P7.10) and read by `$.opentype`.
+- **F-D17 Host builds and development setup** — *`_todo/_download_dependencies.sh:3–9, 80–146`, `_todo/boot_macOS.sh`*: a
+  desktop app (WebKitGTK/Tauri, AppImage, a Windows cross-build with mingw and NSIS), wasm through emsdk, a WebGPU runtime
+  (Dawn), tinygrad with clang, and macOS development in a QEMU/OpenCore VM; "Rewrite in Ray, with the cache system in place for
+  all the things like the github repos" (*:3*). **Open (tooling backlog)**: none of it is in the spec, and none is dropped.
+  Recommend: distribution is the install pipeline (`install.sh`, release builds); a desktop shell, wasm and WebGPU are back ends
+  (Compiler levels, F-D) when the frontend needs them; fetching is L§9.1's cache; the macOS VM is a developer note, outside the
+  spec.
+
 ## A. The site and routing (*index:1–30*)
 
 - **F-A1:** `orbitmines.com() if &entrypoint`: what `&entrypoint` is, and what calling the site
@@ -113,6 +127,13 @@ and `…/UI.ray`, cited as *Geometry:line* and *UI:line*.
   column?).
 - **F-B12:** the prefix form `mt 5 @fadi as Author` / `mt 5 { @fadi as Author }` against the
   argument form `Author(@fadi, margin.top: 5%)` and the narrowing form `{margin.top: 5%}`.
+
+From the drafts verification (2026-10-06).
+
+- **F-B13 Style classes** — *`…/instance/UI/Geometry.ray:74–77, 180`*: `class StyleClass < Ball; &+= Padding.Right(5m);
+  padding.right = 5m; radius = 1m`, used as `Ball(radius: 5m) + Padding(5m) + StyleClass + OtherStyleClass`. **Q** —
+  Recommend: a reusable style is a set of components and field values added to a shape with `+` (T2), not a subclass of the
+  shape; when two styles set the same field the later one wins (L§2.5). Padding as a component is F-B7/F-B8b.
 
 ## C. Content (*index:40–60*, `organizations.ray`, `Article.ray`)
 
@@ -202,6 +223,25 @@ box-sized ellipse, `Space.grid(extent, loop)`, `Curve`, `Polygon`, `Fractal`, `S
   (signed distance functions); exact vs approximate equivalences. P4.7 keeps shaders as a note.
   **Q.** Recommend, later: a `$.glsl` level writes a shape as its signed distance function derived
   from its structure; an exact SDF is a `force` equivalence, a bound is `approx` (G7.1).
+
+From the drafts verification (2026-10-06).
+
+- **F-G8 Bounding boxes** — *`…/instance/UI/Geometry.ray:69–72`*: `class BoundingBox // What is bounding box in fractional
+  dimensional` with `width: x.length if ==.instance_of 1D`, `height … 2D`, `depth … 3D`. **Q** — Recommend: a bounding box has
+  one extent per dimension of its space (members present by dimension, as Types:13's conditional members); in a space of
+  fractional or per-point dimension (F-G2) it has the extents along the axes the space has there, and the box of a fractal is
+  the box of its points.
+- **F-G9 Volume** — *`…/instance/UI/Geometry.ray:246`*: "Things like volume, for the arbitrary space discrete vs infinite (needs
+  to be evenly spaced out too when not having discrete effects)". **Q** — Recommend: volume is a measure over the space: in a
+  discrete space the count of its points times the elementary size, in a continuous one the integral; a discretised continuous
+  space is sampled evenly so the two agree (F-G4).
+- **F-G10 Orientation as part of a location** — *`…/instance/UI/Geometry.ray:238`*: "Needs like an example of 2D/3D world with
+  yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths". U7 names
+  yaw/pitch as a location modifier. **Open (low)**: write the worked example: a location in a 3D world carries yaw and pitch as
+  arcs of a continuous circle, discretised as F-G4's spaces are.
+- **F-G11 Directions start at the boundary** — *`…/instance/UI/Geometry.ray:283`*: "`.under` etc. needs to go to the boundary of
+  this abstract object". **Decided (draft)**: a direction word on an object (F-G3) starts from the object's boundary on that
+  side, not from its centre or a point.
 
 ## I. Interfaces and controllers
 

@@ -33,6 +33,14 @@ From the drafts review (2026-10-06).
   Expression, which is a String) with a diagnostic, and later rules may still read it.
   **Answered (user, 2026-10-06):** text no rule reads is an error, and the error is its diagnostic: reading goes on, so a file can hold several. The unread text stays an unresolved Expression that later rules may still read.
 
+From the drafts verification (2026-10-06).
+
+- **G1.9 An Expression's fallback reading** — *`…/instance/Expression.ray:3–10`*: `class Expression = String // Any string is
+  legal syntax`, a protected `generate_ast` with `delimiter = "/" | "." | \s | \n`, then `ast = generate_ast; &= ast`.
+  G1.8 (answered) makes unread text an error that stays an unresolved Expression. **Q** — Recommend keeping the draft's two
+  ideas on top of G1.8: unread text is still split path-like on `/`, `.`, whitespace and newlines, so names, members and paths
+  inside it resolve; and what is read superposes onto the string (`&=`), so an Expression is its text as well as its reading.
+
 ## G2. Calls and juxtaposition (*ep:1217–1264, 1383–1420*)
 
 - **G2.1 What a space means** — *ep:1227–1234*: `" "` is a call when the thing before expects an
@@ -99,6 +107,14 @@ From the drafts review (2026-10-06).
   this[property - punctuation]`, so `a.foo{x}bar` reads the member `"foo" + x + "bar"`. **Q** — Recommend yes: a computed
   member name uses the same `{…}` holes as string interpolation (L§10.1).
   **Answered (user, 2026-10-06):** no holes in member names: they would interfere with the `{…}` filter and are confusing. Holes stay in strings (L§10.1).
+
+From the drafts verification (2026-10-06).
+
+- **G2.23 Applying what is not callable** — *`.ray2/.ray2.json:216–221`*: `"dispatch": { "call": "juxtaposition",
+  "notCallable": "error" }`, with a prototype fallback chain for lookup. **Decided (draft)**: a call is juxtaposition. **Q** for
+  the other half: G2.1 reads a space as a call only when the thing before takes an argument. Recommend: a value that takes no
+  argument is not read as a call, so `a b` is read some other way; when nothing reads it, that is the draft's error, a
+  diagnostic on the span (G1.8).
 
 ## G3. Operators, precedence and direction (*ep:768–870, 1319–1370, 1391–1397*)
 
@@ -211,6 +227,14 @@ From the drafts review (2026-10-06).
   **Q** — intent unclear. Recommend asking whether the double brace is the lazy-expression literal; drop it if not.
   **Answered (user, 2026-10-06):** dropped.
 
+From the drafts verification (2026-10-06).
+
+- **G4.16 An untyped `*` capture and a trailing block** — *`.ray2/Grammar.ray:131–138`*: `{: *}`, `{: (): *} // what about
+  block and * capture`, "how to distinguish from (last of it)". G2.13 prefers `(): *` as the last argument of a call.
+  **Q** — Recommend the same for rule captures: a trailing block goes to a `(): *` capture when the pattern ends in one; a `*`
+  capture never takes a block that a following `(): *` capture could take; without a block capture, the block is the `*`
+  capture's last element.
+
 ## G5. Grammar phases and conflicts (*ep:1001–1013, 1265, 1776*)
 
 - **G5.1 Phases** — the draft: phases are language definition + dependencies + the program; "each
@@ -258,6 +282,15 @@ From the drafts review (2026-10-06).
   modifier is a function of what it modifies, answering a located value. Plan §1 says only "a method that takes the
   method definition". **Q** — Recommend adding the signature as written.
   **Follows (2026-10-06):** the draft's signature is added as written: `Modifier = (this: *): { location: a (this, *) }`, a modifier is a function of what it modifies, answering a located value, from Plan.md §5 (port the drafts in their style) and G6.4 (Decided draft), which already uses it.
+
+From the drafts verification (2026-10-06).
+
+- **G6.6 Lint styles as suggestions** — *`.ray2/Grammar.ray:75–76`*: `@me.style = suggest mathematics + suggest dead_code +
+  suggest redundancy + suggest simplify // Normal methods are flagged as higher-level -> in the direction of using the method`;
+  `style = suggest -mathematics` disables or reverses a set. G6.3/G7.6 cover `mathematics`. **Q** — Recommend: each is a named
+  set of `suggest` equivalences (G7.1): `dead_code` (P8.25), `redundancy` (recomputing what is already in scope), `simplify`
+  (a shorter equivalent), and using the method (an inline body equal to a library method suggests the call). A style is a sum of
+  sets, and `-set` removes one, as written.
 
 ## G7. Equivalences (*ep:1272–1300, 1314–1316*)
 

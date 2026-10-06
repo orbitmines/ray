@@ -60,7 +60,8 @@ Gregorian := class: Julian {
   is_leap_year => year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
   days_before_year => 365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
 
-  equivalence "1582-10-04" as Julian -> "1582-10-15"
+  // Julian Thursday 4 October 1582 was followed by Gregorian Friday 15 October 1582: the same day is Julian 5 October and Gregorian 15 October
+  equivalence "1582-10-05" as Julian -> "1582-10-15"
 }
 
 UTC := class: Gregorian (offset: Quantity.Temporal = 0, leap_seconds: boolean = false) {
@@ -244,8 +245,9 @@ Planet := class {
 }
 Earth := Planet(years: year, days: day)
 
-Unit(name: "sol").multiple 88775, second
-Unit(name: "martian year").multiple 668, sol
+// a sol is 1 day 39 minutes 35.244 seconds; a Martian year is 668.5991 sols (N4.9)
+Unit(name: "sol").multiple 88775.244, second
+Unit(name: "martian year").multiple 668.5991, sol
 Mars := Planet(years: martian year, days: sol)
 
 Stamp := class = wall: Decimal, ".", logical: Decimal = 0, "@", node: * {

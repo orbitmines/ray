@@ -144,6 +144,17 @@ From the drafts review (2026-10-06).
   `offline` to others (W2.6).
   **Follows (2026-10-06):** a field may hold an expression evaluated per reader, written as a parameterless function stored in the field (`x => …`), re-evaluated on each read; `invisible` is `online` when the reader (`&@.last`) is the character itself and `offline` to everyone else (W2.6), from P5.3 (parameterless functions are dynamic) and `&@` (L§10 answers, 2026-10-05: `&@.last` is who runs it now).
 
+From the drafts verification (2026-10-06).
+
+- **T3.29 A definition that sees only its own context** — *`.ray3/Node.ray:175–178`*: `class enum`, `{name: \S[]} (def:
+  Program)` → `class[name](def) //TODO < override, to force local context which removes global context`. **Q** — Recommend: no
+  special parent for it. A class or enum body sees its writing frame first (L§6.3; blocks see their writing frame), and one that
+  must not see the global context says so with an override of what it sees (`with` on its body, L§6.3). Open until a case needs it.
+- **T3.30 Back to the computed member** — *`…/instance/UI/Geometry.ray:229–230`*: `dimensionality ()` "Implementation even
+  though there's a default value, how to reset to this implementation?" **Q** — Recommend: a member with both a computed
+  definition and an assigned value answers the assigned value; assigning `?` (unset, T1.6) returns it to the computation. A
+  default is what the computation answers when nothing is assigned (L§2.3).
+
 ## T4. Structural type checking (*ep:230–260, 969–980, 1030–1032, Number:808–855*)
 
 - **T4.1 The algorithm** — the draft: class constraints must all apply; `|` finds a matching one, `&`
@@ -213,6 +224,13 @@ From the drafts review (2026-10-06).
   project ->)` asserts there are none.
   **Follows (2026-10-06):** `T$ @ x ->` already searches a type under a location; `never (Program{has_cycle}$ @ project ->)` asserts there are none, with `has_cycle` a boolean predicate used as a narrowing (T4.11 answer), from W1.5's `T$ @ x ->` search and L§4.1's `never`.
 
+From the drafts verification (2026-10-06).
+
+- **T4.21 Which arguments an operator accepts** — *`.ray3/Node.ray:181`*: the generic `{operator}= (x)` rule, "And accepts args
+  should be inferred automatically because we use it." **Q** — Recommend: superseded by the 2026-09-29 decision (no `accepts`;
+  kinds on methods): `x op= y` is `x = x op y`, so it accepts what `op` declares (`chainable < (other) =>`); nothing is inferred
+  separately (L§10.1, `{op}=` through `compounds`).
+
 ## T5. Generics and parameterized types
 
 - **T5.1 `Optional<T>`, `Required<T>`, `Query<T>`** — *ep:1548–1551*. L§10.2 (engine). Open: `Query<T>`
@@ -271,6 +289,15 @@ From the drafts review (2026-10-06).
   breadth-first walk.
   **Follows (2026-10-06):** `as T` succeeds through any conversion to a type isomorphic to T, found by the breadth-first walk over the equivalence graph, from L§3.5 and N1.9 (isomorphisms are equivalences).
 
+From the drafts verification (2026-10-06).
+
+- **T6.15 A conversion written as a rule** — *`.ray2/Grammar.ray:1`*: "instead of as (== String) make it somehow IPv6 =>
+  String". **Q** — Recommend: `as` stays the one conversion (T6, X1.6); `IPv6 => String` would be the same edge of the
+  equivalence graph (L§3.5) written as a rule head, adopted only if G7's equivalence spelling takes it. Otherwise dropped.
+- **T6.16 `==` against a superposition** — *`.ray3/Node.ray:137`*: "Is default instance_of when comparing a | superposition?"
+  **Q** — Recommend: no. `x == (a | b)` compares x with each alternative (U1) and answers the superposition of the results;
+  membership stays `is` / `==.instance_of` (T6.10, T6.11).
+
 ## T7. Values of a location (*ep:906–915, 1149*)
 
 - **T7.1 Per-location values** — *ep:911–915*: "Each `=` is a new branch. In Ray every mutation is a `=`
@@ -282,6 +309,14 @@ From the drafts review (2026-10-06).
 - **T7.4 `*` on a default** — *ep:919*: `*` says whether a default is loaded and whether the current
   value is that default (don't store it if so). Related to L§2.3.
 - **T7.5 `&caller == this`, `&caller == @me`** — *ep:1149*.
+
+From the drafts verification (2026-10-06).
+
+- **T7.6 Members visible only through a location** — *`…/instance/Access.ray:50`*: "Only provide this method when accessed
+  through location @private? `*{location == @private}` What if you use == like this, should it know the location that variable
+  is in and check it?" **Q** — Recommend: yes, by narrowing: a member declared on `*{location == @private}` exists only on
+  values reached at that location, and `location` in a narrowing is the location of the value being filtered (U7), not of the
+  expression. Same mechanism as access (W5.2): what a reader cannot reach is not there for it.
 
 ## T8. Maps and superposed calls (*ep:962–965, 1424, 1435–1438*)
 

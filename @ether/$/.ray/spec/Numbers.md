@@ -51,6 +51,17 @@ From the drafts review (2026-10-06).
   equivalences.
   **Answered (user, 2026-10-06):** see X3.10: from Unicode, automatically.
 
+From the drafts verification (2026-10-06).
+
+- **N1.24 `ℕ` and `ℝ`** — *`…/utils/Number.ray:32–34`*: `Nat | ℕ <n>`, `ℝ: Any Base ℝ`, `{ ℕ, ℝ } = Number`. N1.1 renamed the
+  classes (`Decimal`, `.Real`) and v0 has `Number.Nat`; neither has the symbols. **Q** — Recommend: `ℕ`, `ℤ`, `ℚ`, `ℝ` as `|`
+  aliases of `Number.Nat`, the integers, the rationals and `.Real`, once non-ASCII names read (as R1.1).
+- **N1.25 Floating point as rays** — *`library/phases/Project Index.md:180`* (now under `v0/library`): "Floating-Point
+  Arithmetic … probably a very neat way of phrasing them in terms of rays ; as in where the ambiguity happens". **Open** —
+  Recommend recording the direction: an IEEE 754 value is a Ray narrowed to representable points, and rounding is where the
+  ambiguity is: the superposition of the neighbouring representable values (U1), collapsed by the rounding mode; a `$.ieee754`
+  project reads the bits (byte order is X3.6).
+
 ## N2. Units (*Unit.ray*)
 
 - **N2.1 Literal syntax** — `1m`, `1.0m`, `1 m`, `1.m`, `1.0 m`, `1.0.m`, `1 of Byte`. Which of these?
@@ -76,6 +87,13 @@ From the drafts review (2026-10-06).
 - **N2.11 Bytes as Binary** — **Q.** *…/utils/Number.ray:162–171*: `1000 MB`, `MiB`, `3.2 Kilobyte`, `Unit as Binary`.
   Recommend: `n B as Binary` is `Binary^(8n)` (`b` is one bit); a fractional byte count is a bit count and must be whole bits.
   **Follows (2026-10-06):** `n B as Binary` is `Binary₈ₙ`, a length of 8n bits (`b` is one bit), written as a subscript behind, not `Binary^(8n)`: a superscript is always exponentiation (N1.21 answer, which removed A5's "`^` on a base type is length"). A fractional byte count is a bit count and must be whole bits, from N1.21 (answered), A-C6 (answered: length) and N2.5/N2.6 (units and binary prefixes).
+
+From the drafts verification (2026-10-06).
+
+- **N2.12 `n Unit` against `n T`** — *`…/utils/Unit.ray:89`* ("Should overwrite Number.def\`node: not String\` since it's more
+  specific"), *`…/utils/Number.ray:167–168`* ("Units override the X Node", `3.2 Kilobyte`). A quantity (`1 m`, N2.1) and a
+  counted type (`1 Object`, T4.9) are written alike. **Decided (draft)**: when the word is a Unit, the quantity reading wins, as
+  the more specific one.
 
 ## N3. Roman (*Roman.ray*)
 
@@ -122,6 +140,21 @@ From the drafts review (2026-10-06).
   names, and checking against the standard. Recommend: zone names follow RFC 9557's `[Zone/Name]` suffix (IXDTF); other
   orders stay out until asked; a task to check `ISO_8601` against the standard, with spec-origin comments.
   **Answered (user, 2026-10-06):** RFC 9557 zone suffix, and ISO 8601 week dates (`2026-W41-2`) now as well; check against the standard.
+
+From the drafts verification (2026-10-06).
+
+- **N4.18 A calendar's orbit carries** — *`…/utils/Astronomy.ray:101`*: the months end with `-- ~.orbit(&Time.YEAR -= 1 <- ->
+  &Time.YEAR += 1)`. **Decided (draft)**: a calendar segment is an orbit (R5) whose wrap edge carries an effect: stepping past
+  December moves the year context (`&Time.YEAR`, N4.4) on by one, stepping before January moves it back. In general an orbit's
+  wrap edge may act on the enclosing segment (seconds into minutes, days into months). v0's `Month` is a plain enum and
+  `Weekday#.loop` carries nothing yet.
+- **N4.19 `day 5`, `sol 3` as points in time** — *`…/utils/Time.ray:14`*: `"days"/"day/sol X - set epoch to 0 start of that"`, with `Earth.years` / `Mars.years`. **Q** — Recommend: a segment name before a number is the time at the start of
+  that segment, with its epoch at the start of the first (N4.5). Planet-qualified units are in v0 (`Planet`, N4.9).
+- **N4.20 Superposed weeks and times** — *`…/utils/Time.ray:105`*: "Make sure superpositions are working for weeks and times".
+  **Open (test backlog)**: tests for a superposed weekday and time (`Monday | Friday`, `12:00 | 13:00`) through arithmetic and
+  comparison.
+- **N4.21 Martian calendars** — *`…/utils/Astronomy.ray:29`*: "Are there any martian calendars yet?" **Open** — Recommend, with
+  N4.9 later: the Darian calendar as the first, a Calendar over `sol` and `martian year`, beside N4.2's Earth calendars.
 
 ## N5. boolean (*boolean.ray*)
 
@@ -171,7 +204,9 @@ Answers from 2026-09-30.
 - **N4.3** `12:00` has an unknown (`?`) date: a time of day on every day. Printing omits the unknown parts.
 - **N4.1** `Time.now` is read when first forced and then fixed for that variable. Its reads are
   nondeterministic (never cached or folded); `dynamically now` stays current.
-- **N4.2** Gregorian, Julian and UTC first; the other calendars later.
+- **N4.2** Gregorian, Julian and UTC first; the other calendars later. The 1582 equivalence: Julian Thursday 4 October
+  was followed by Gregorian Friday 15 October, so the same day is Julian 5 October and Gregorian 15 October
+  (*`…/utils/Astronomy.ray:49`*; v0 had mapped Julian 4 October, fixed 2026-10-06).
 - **N5.1** Operator classes are structural: a Binary operator is a method type with one parameter
   (`Node{(other) => *}`). Nothing is declared.
 - **N5.3** boolean has its orbit: `true.next == false`, `false.next == true`.
@@ -191,7 +226,8 @@ Answers from 2026-09-30.
 - **N4.5** Epochs now: `"2025-01-01"` with `epoch: "2000-01-01"` is `25.years`, and calendar conversions
   keep the epoch structure.
 - **N4.6/N4.7** tzdata and leap seconds now, read through IO (the byte stream); a minute may be 61 s.
-- **N4.9** Astronomy later; Mars's sol and year stay as they are.
+- **N4.9** Astronomy later; Mars's sol and year stay as they are. (2026-10-06: v0 had rounded them; it now keeps
+  88775.244 s and 668.5991 sol.)
 - **N4.10** A value that may be corrected carries an uncertainty: `now` is a distribution (U8) around the
   reading, and a correction narrows it.
 - **N1.3** Quantities don't compare with plain numbers: `1m > ∞` is a type error, not true.

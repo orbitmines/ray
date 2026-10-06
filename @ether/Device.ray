@@ -1,7 +1,8 @@
 // What a device can do is a path under it, granted like anything else (`@me.execute { @me/device/camera }`); a
 // capability nobody granted is asked for (`&@.ask`).
 Device := class {
-  os: OS = OS.current ?? (("@ether/os/ether" as Project.Dependency).project -- OS.Ether())
+  // The operating system is the one a project declares (`@ether/os/linux`, `@ether/os/ether`, …); none is read for it.
+  os: OS = OS.current ?? ERROR@OS `no operating system is declared: a project declares one (@ether/os/linux, @ether/os/ether, …)`
   keyboard: Keyboard = Keyboard()
   handheld = false
   clipboard: String | Location = ""

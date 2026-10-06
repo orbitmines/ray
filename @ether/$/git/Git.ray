@@ -212,12 +212,12 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
     objects_in (tree: Location): Object[] => [tree, tree**].flatten.map(. as Object)
     line => history.since(None)
     commits => line.reduce(made = {} => made, {(.id): Object("commit", Commit(
-      tree: (history.at(.).tree as Object).id, parents: .parents.map(made[.id].id),
+      tree: (history[.].tree as Object).id, parents: .parents.map(made[.id].id),
       author: (who: .who, when: .when) as Signature, committer: (who: .who, when: .when) as Signature, headers: [], message: .message ?? .change as String) as Byte[])})
     head => commits[history.head.id]
     notes => line.map(commit => (path: commits[commit.id].id, content: commit.written() as Byte[])) -- (noted =>
       rooted(noted) -- (tree => (who: history.head?.who, when: Time.now) as Signature -- (signed => [objects_in(tree), Object("commit", Commit(tree: (tree as Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))
-    objects => (line.map(objects_in(history.at(.).tree)).flatten, commits.values, notes).flatten.unique(.id)
+    objects => (line.map(objects_in(history[.].tree)).flatten, commits.values, notes).flatten.unique(.id)
     object_files => objects.map((path: .path, content: .loose))
     // A new repository records its object format in its config (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
     files => object_files, [

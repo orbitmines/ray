@@ -434,13 +434,13 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A `persistent` value is kept in its class's `$`.
 - **Decided (2026-10-06):** `$.name` answers the language called `name`, loading it when it is not loaded.
   - `$.ray` is Ray itself (`Language.ray`).
-  - Any other name is the project `v0/ray/$/<name>`: the folder is the language's name in lowercase (`$/git`, `$/json`, `$/html`).
+  - Any other name is the project `v0/$/<name>`: the folder is the language's name in lowercase (`$/git`, `$/json`, `$/html`).
   - The first `$.name` reads that project, once. Its dependencies are read when they are first referenced (below). It answers the language in it whose extensions include `.name`.
   - Without such a project, `$.name` answers a loaded language with that extension, or a `Quest`.
-- **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/ray/$/`, and nothing in the core depends on one.
-  - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs as `@zlib` (Decided 2026-10-06: `@X`, not `@ether/$/X`; `@X` resolves to the project in `v0/ray/$/X` for now, and will later map to the repository named X).
+- **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/$/`, and nothing in the core depends on one.
+  - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs as `@zlib` (Decided 2026-10-06: `@X`, not `@ether/$/X`; `@X` resolves to the project in `v0/$/X` for now, and will later map to the repository named X).
   - Its claims are in its own `tests/` project.
-  - Every language stays at `v0/ray/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/ui` lists `$/html`, `$/css`, `$/js`, `$/json`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. A language in the part is read when it is first referenced, not when the part is.
+  - Every language stays at `v0/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/ui` lists `$/html`, `$/css`, `$/js`, `$/json`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. A language in the part is read when it is first referenced, not when the part is.
   - A language may depend on other languages and on the project that bundles it. Loading tolerates a mutual dependency: a project is marked as loading before its dependencies load, so a cycle stops where it comes back, and every project in it ends up loaded once.
   - A project that uses a language either declares it in its `.project.ray` or reaches it through `$.name`.
   - The core reaches them only through `$.name`, lazily. Examples: in an optimisation level that picks a format (`StoreOptimizations` answers `$.sqlite`), in the enforcement of a permission (`as $.posix`), or in a store route (`$.git`).
@@ -470,7 +470,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   subprojects of v0 (`v0/security/`, `v0/network/`), imported by nothing by default.
 
 - **Decided (user, 2026-10-06): layout.** `v0/` is the Ether project; its `.project.ray` imports `@ether/network` and `@ether/version`, and it holds `Ether.ray` (the standard `@` names), `World.ray`, `Device.ray`, `Messaging.ray` and the instance entrypoints (`entrypoint.server.ray`, `entrypoint.npc.ray`, `entrypoint.player.ray`).
-  - `v0/ray/` is the core, `@ether/ray` (`!language`): Node, Ray, Number, String, Unicode, Encoding, Program, Control, Compiler, Language, Project, Location, Character, Format, Reporting, Time, Unit, UUID, IP, Roman, Access, Feature, the outside languages in `v0/ray/$/`, and its claims in `v0/ray/tests/`. Every project assumes it without an import.
+  - `v0/ray/` is the core, `@ether/ray` (`!language`): Node, Ray, Number, String, Unicode, Encoding, Program, Control, Compiler, Language, Project, Location, Character, Format, Reporting, Time, Unit, UUID, IP, Roman, Access, Feature, the outside languages in `v0/$/`, and its claims in `v0/ray/tests/`. Every project assumes it without an import.
   - Subprojects of v0, each with its own `.project.ray`: `security/`, `network/`, `os/`, `ui/`, `geometry/`, `version/` (History, Repository, runs' logs, stores and storage levels; imports `@ether/security`), `game/` and `library/`. Folders of projects are lowercase.
 
 ### 9.2 Version control — *IDE:412–420, 633–641, 732*

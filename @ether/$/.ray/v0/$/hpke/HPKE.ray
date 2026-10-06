@@ -1,0 +1,47 @@
+// Hybrid Public Key Encryption, base mode (https://www.rfc-editor.org/rfc/rfc9180)
+HPKE := class: Language = kem: Encoding.Agreement = X25519, kdf: Encoding.Digest = SHA256, aead: Encoding.Symmetric = ChaCha20Poly1305 {
+  static extensions = ".hpke"
+
+  // DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20Poly1305 by their identifiers (RFC 9180 §7.1, §7.2, §7.3)
+  static identified (algorithm) => algorithm === X25519 ? 0x0020 : algorithm === SHA256 ? 0x0001 : algorithm === ChaCha20Poly1305 ? 0x0003
+    : Program(name: "an HPKE identifier for this algorithm", goal: algorithm)
+  static i2osp (number: Number, count: Number) => number as Binary{length == 8 * count} as Byte[]
+
+  kem_suite => ["KEM".bytes, i2osp(identified(kem), 2)].flatten
+  suite => ["HPKE".bytes, [kem, kdf, aead].map(i2osp(identified(.), 2))].flatten
+  hkdf => Noise(hash: kdf)
+  size => hkdf.size
+
+  // LabeledExtract and LabeledExpand: "HPKE-v1", the suite and the label before what is extracted or expanded (RFC 9180 §4)
+  extracted (suite: Byte[], salt: Byte[], label: String, ikm: Byte[]) => hkdf.hmac(salt, ["HPKE-v1".bytes, suite, label.bytes, ikm].flatten)
+  expanded (suite: Byte[], prk: Byte[], label: String, info: Byte[], length: Number) => hkdf.expanded(prk, [i2osp(length, 2), "HPKE-v1".bytes, suite, label.bytes, info].flatten, length)
+
+  // DeriveKeyPair for X25519: the secret expanded from the input keying material (RFC 9180 §7.1.3)
+  derived (ikm: Byte[]) => kem.pair(expanded(kem_suite, extracted(kem_suite, [], "dkp_prk", ikm), "sk", [], 32))
+  // ExtractAndExpand over the DH output, with enc and the recipient's public key as context; Encap with an ephemeral key, Decap with the recipient's (RFC 9180 §4.1)
+  shared (dh: Byte[], enc: Byte[], recipient: Byte[]) => expanded(kem_suite, extracted(kem_suite, [], "eae_prk", dh), "shared_secret", [enc, recipient].flatten, size)
+  encapsulated (recipient: Encoding.Key, e: Encoding.Key = kem.pair()) => (shared: shared(e.agreed(recipient.public), e.public, recipient.public), enc: e.public)
+  decapsulated (enc: Byte[], recipient: Encoding.Key) => shared(recipient.agreed(enc), enc, recipient.public)
+
+  // KeySchedule in base mode: no PSK, the info hashed into the context, then the key, the base nonce and the exporter secret (RFC 9180 §5.1)
+  scheduled (shared: Byte[], info: Byte[]) => [[0x00], extracted(suite, [], "psk_id_hash", []), extracted(suite, [], "info_hash", info)].flatten -- (context =>
+    extracted(suite, shared, "secret", []) -- (secret => Context(hpke: this, key: expanded(suite, secret, "key", context, 32),
+      base_nonce: expanded(suite, secret, "base_nonce", context, aead.nonce_size), exporter: expanded(suite, secret, "exp", context, size))))
+
+  // The encryption context: each message's nonce is the base nonce XOR the sequence number (RFC 9180 §5.2, §5.3)
+  static Context := class = hpke: HPKE, key: Byte[], base_nonce: Byte[], exporter: Byte[], seq: Number = 0 {
+    nonce => base_nonce.zip(HPKE.i2osp(seq, base_nonce.count)).map((a, b) => a ~x|| b)
+    sealed (aad: Byte[], plaintext: Byte[]) => hpke.aead.sealed(key, nonce, aad, plaintext) ~~ (seq += 1)
+    opened (aad: Byte[], ciphertext: Byte[]) => hpke.aead.opened(key, nonce, aad, ciphertext) ~~ (seq += 1)
+    exported (context: Byte[], length: Number) => hpke.expanded(hpke.suite, exporter, "sec", context, length)
+  }
+
+  // SetupBaseS and SetupBaseR (RFC 9180 §5.1.1)
+  sender (recipient: Encoding.Key, info: Byte[] = [], e: Encoding.Key = kem.pair()) => encapsulated(recipient, e) -- (held => (enc: held.enc, context: scheduled(held.shared, info)))
+  receiver (enc: Byte[], recipient: Encoding.Key, info: Byte[] = []) => scheduled(decapsulated(enc, recipient), info)
+
+  // Single-shot Seal and Open: enc, then the ciphertext (RFC 9180 §6.1)
+  static Sealed := class (enc: Byte₃₂, ciphertext: Byte[])
+  sealed (recipient: Encoding.Key, info: Byte[], aad: Byte[], plaintext: Byte[]) => sender(recipient, info) -- (held => Sealed(enc: held.enc, ciphertext: held.context.sealed(aad, plaintext)) as Byte[])
+  opened (recipient: Encoding.Key, info: Byte[], aad: Byte[], sealed: Byte[]) => (sealed as Sealed) -- (held => receiver(held.enc, recipient, info).opened(aad, held.ciphertext))
+}

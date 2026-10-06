@@ -15,8 +15,11 @@ Encoding := class {
     read (signed: Signed) => signed.valid ? signed.value : ERROR `the signature does not hold for what it signs`
   }
   Agreement := class: Asymmetric
+  Symmetric := class: Language {
+    generated (secret: Byte[] = secure Byte₃₂.random) => Key(algorithm: this, public: [], secret)
+  }
 
-  Key := class = algorithm: Asymmetric, public: Byte[], none.read secret: Byte[]? {
+  Key := class = algorithm: Asymmetric | Symmetric, public: Byte[], none.read secret: Byte[]? {
     published => Key(algorithm, public)
     signed (value) => Signed(value, by: published, signature: algorithm.sign(secret, value as Byte[]))
     agreed (other: Byte[]) => algorithm.agreed(secret, other)

@@ -1,7 +1,9 @@
 // ChaCha20 and Poly1305 for IETF Protocols (https://www.rfc-editor.org/rfc/rfc8439)
-ChaCha20Poly1305 := class: Language {
+ChaCha20Poly1305 := class: Encoding.Symmetric {
   static extensions = ".chacha20poly1305"
   static word = 2 ^ 32
+  // A 96-bit nonce (RFC 8439 §2.8)
+  static nonce_size = 12
 
   // The quarter round on four words of the state (RFC 8439 §2.1, §2.2)
   static rotl (x, n) => (x * 2 ^ n + (x / 2 ^ (32 - n)).floor) % word

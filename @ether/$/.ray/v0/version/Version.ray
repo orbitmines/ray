@@ -1,7 +1,8 @@
 History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   static Label := UUID | Char.Word[]
 
-  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program, from: Label[]?, versions: Label[] = [], relies: Byte[]?, signature: *? {
+  static Commit := class: Ray = id: Label = choose UUID.v1{unique}, who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [], relies: Byte[]?, signature: *?,
+    key: Label?, wraps: *[] = [], sealed: Byte[]? {
     when: Time = stamp?.when ?? Time.now
     message: String?
     previous: Commit?
@@ -11,20 +12,24 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
     next => line?.since(None){.parents.first === this}.first
     ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
     merged => parents.count > 1
-    applied (held) => held -- with (@me = who) change
-    rewritten (change: Program) => Commit(id, who, stamp, change, from, versions, relies, signature, when, message, previous, line)
-    expand => change**
+    stored => this
+    opened => this
+    applied (held) => opened -- (plain => held -- with (@me = plain.who) plain.change)
+    rewritten (change: Program?) => Commit(id, who, stamp, change, from, versions, relies, signature, key, wraps, change === this.change ? sealed : None, when, message, previous, line)
+    expand => opened.change**
     successors => line?.since(None){.parents.some(=== this)} ?? []
     branching => successors.count > 1
     value => line?.at(this).value ?? applied(None)
     mentions (label) => id == label || versions.contains(label)
     attributed => ("@me = ", Language.ray.write(who), ("; now = ", stamp as String) if stamp, ("; version = ", versions.join(" | ")) if versions.nonempty,
-      ("; relies = ", Language.ray.write(relies)) if relies).join("")
+      ("; relies = ", Language.ray.write(relies)) if relies, ("; key = ", Language.ray.write(key)) if key, ("; wraps = ", Language.ray.write(wraps)) if wraps.nonempty).join("")
     settings => (attributed, ("; signature = ", Language.ray.write(signature)) if signature).join("")
-    hash: Byte[] => $.sha256.write([parents.map(.hash), (id, attributed, change as String).join("") as Byte[]].flatten).bytes
-    written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, change as String, \n).join("")
+    text => sealed ? Language.ray.write(sealed) : change as String
+    hash: Byte[] => $.sha256.write([parents.map(.hash), (id, attributed, text).join("") as Byte[]].flatten).bytes
+    written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, text, \n).join("")
     static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
-      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from, versions: set.version# ?? [], relies: set.relies, signature: set.signature))
+      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: set.key ? None : line.change as Program, from: line.root ? [] : line.from, versions: set.version# ?? [], relies: set.relies, signature: set.signature,
+        key: set.key, wraps: set.wraps ?? [], sealed: set.key ? Language.ray.read(line.change as String) : None))
       : Commit(id: label, change: code))
 
     .{literal name ^property} ^punctuation => external get value name
@@ -46,8 +51,10 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   find (label) => since(None).find(.id == label)
   at (commit) => History(repository, head: commit is Commit ? commit : find(commit), caches)
 
-  commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = []): static => this ~~ .head = Commit(id, who, stamp: clock.now,
-    change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this) -- (made => who is Entity ? who.sealed(made) : made)
+  commit (who, change, id: Label = choose UUID.v1{unique}, when: Time = Time.now, message: String? = None, versions: Label[] = [], wraps: *[] = []): static =>
+    (wraps.empty && !public && !current_key && who is Character && who.inbox ? rekeying(who, id) : wraps) -- (keyed => this ~~ .head = Commit(id, who, stamp: clock.now,
+      change: change is Program ? change : Program(code: { change }), versions, key: keyed.some(.key == id) ? id : current_key, wraps: keyed, when, message, previous: head, line: this)
+        -- (made => who is Entity ? who.sealed(who.sealed(made).stored) : made.stored))
   extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
 
   ordered => since(None).sort_by(.stamp)
@@ -61,7 +68,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last?.id ?? label
   checkout (label, as_of: Stamp? = None) => at(pinned(label, as_of)).value
   fix (who, label: Label, change) => commit(who, change, versions: [label])
-  tree => value -- (held => Language.Entry.of(held.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[]))))
+  tree => public ? value -- (held => Language.Entry.of(held.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])))) : Language.Entry.of(files)
 
   fork => History(repository, base: head, head)
   drop: static => reset(base)
@@ -74,19 +81,19 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   static clashes (base, ours, theirs) => ours == theirs || ours == base || theirs == base ? []
     : ours.fields.nonempty && theirs.fields.nonempty ? (ours.fields.name, theirs.fields.name).flatten.unique.map(name => clashes(base?[name], ours[name], theirs[name])).flatten
     : [(ours, theirs)]
-  merge (other: History, who = &caller) => common(other) -- (base => {
+  merge (other: History, who = &caller) => !readable ? (this ~~ .head = head | other.head) : common(other) -- (base => {
     return Program(name: "merge", goal: other) if clashes(at(base).value, value, other.value).nonempty
     this.head = since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this)
     this
   })
-  + (other: History) => other.since(common(other)).sort_by(.stamp).reduce(held = at(head) => held.commit(.who, .change, message: .message, versions: .versions))
+  + (other: History) => other.since(common(other)).sort_by(.stamp).reduce(held = at(head) => .opened -- (plain => held.commit(plain.who, plain.change, message: plain.message, versions: plain.versions)))
   | (other: History) => at(head).merge(other)
   &+ (other: History) => common(other) -- (base => (since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = at(base) => held.extended(.rewritten(.change) ~~ .from = None)))
   static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
-  squash (who) => History(repository, base, head: Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .change), previous: base))
-  cherry_pick (picked: Commit): static => commit(picked.who, picked.change, message: picked.message)
+  squash (who) => History(repository, base, head: Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .opened.change), previous: base))
+  cherry_pick (picked: Commit): static => picked.opened -- (plain => commit(plain.who, plain.change, message: plain.message))
   erased => ordered.reduce(held = History(repository) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
-  revert (reverted: Commit) => reverted.change⁻¹ ? commit(reverted.who, reverted.change⁻¹) : Program(name: "revert", goal: reverted)
+  revert (reverted: Commit) => reverted.opened -- (plain => plain.change⁻¹ ? commit(plain.who, plain.change⁻¹) : Program(name: "revert", goal: reverted))
 
   received (stamp: Stamp) => clock.receive(stamp)
 }
@@ -121,7 +128,7 @@ Instance.Deletion &+= {
 
 History &+= {
   as (=== Program) => written_as()
-  written_as (change_of = .change) => since(None) -- (commits => commits.map(c => c.rewritten(change_of(c)).written(above: commits[c.index - 1] if c.index > 0)).join("") as Program)
+  written_as (change_of = .change) => since(None) -- (commits => commits.map(c => c.rewritten(change_of(c)).stored.written(above: commits[c.index - 1] if c.index > 0)).join("") as Program)
 
   static edit (before, after) => (Language.ray.write(before) as Byte[]) -- (old => (Language.ray.write(after) as Byte[]) -- (new =>
     Encoding.common(old, new) -- (prefix => Encoding.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
@@ -200,7 +207,7 @@ History.Commit &+= {
 }
 
 Program &+= {
-  run => Run.log.commit(who, this).head -- (logged => with (@me = logged.who) logged.change)
+  run => Run.log.commit(who, this).head.opened -- (logged => with (@me = logged.who) logged.change)
   rewrites => history.since(None){.who is Program}
   revoked (rule: Program) => rewrites{.who === rule}.first -- (used => used ? (history.at(used.previous).value ?? this){O: O - rule} : this)
 
@@ -232,7 +239,7 @@ Run &+= {
   static kept: Quantity.Temporal = 30 days
 
   static logs => log.since(None){.when >= Time.now - kept}
-  static replay (logged: History.Commit) => with (@me = logged.who) logged.change if logs.some(=== logged)
+  static replay (logged: History.Commit) => logged.opened -- (plain => with (@me = plain.who) plain.change if logs.some(=== logged))
 }
 
 Compiler &+= {
@@ -243,12 +250,12 @@ Compiler &+= {
   }
 
   per_object := {
-    {history: History{(. as Program as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
-    {history: History{(. as Program as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
+    {history: History{public && (. as Program as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
+    {history: History{public && (. as Program as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
   }
 
   cached := {
-    {history: History}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => c.rewritten(Language.ray.write(history.at(c).value) as Program)) -- (kept =>
+    {history: History{readable}}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => (c.rewritten(Language.ray.write(history.at(c).value) as Program) ~~ (.wraps = history.wraps_of(c.key) if c.key)).stored) -- (kept =>
       kept.map(.written(above: kept[.index - 1] if .index > 0)).join(""))) as Byte[])]
     {history: History{caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned)?.ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
       ? history.at(pinned).ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.caches.find(.find(hit.id)).at(hit.id).value => .applied(held))
@@ -259,9 +266,14 @@ Compiler &+= {
     {commit: History.Commit{previous && (History.edit(previous.value, value) as String).count < (change as String).count}}.change => History.edit(commit.previous.value, commit.value)
   }
 
-  stored := formats + per_object + cached + delta
+  encrypted := {
+    {commit: History.Commit{key && !sealed}}.stored => commit.enciphered
+    {commit: History.Commit{sealed}}.opened => commit.deciphered
+  }
 
-  levels => [none, default, folding, logic, minimising, memoised, formats, per_object, cached, delta, stored]
+  stored := formats + per_object + cached + delta + encrypted
+
+  levels => [none, default, folding, logic, minimising, memoised, formats, per_object, cached, delta, encrypted, stored]
 }
 
 Language &+= {

@@ -1,12 +1,13 @@
 Identity := class = keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.Digest = algorithms.digest, signing: Encoding.Signing = algorithms.signing,
-  agreement: Encoding.Agreement = algorithms.agreement, handshake: Language = algorithms.handshake, printed_key: Encoding.Key?, guardians: *[] = [@ether],
+  agreement: Encoding.Agreement = algorithms.agreement, handshake: Language = algorithms.handshake, wrapping: Language = algorithms.wrapping, cipher: Encoding.Symmetric = algorithms.cipher,
+  printed_key: Encoding.Key?, guardians: *[] = [@ether],
   certificates: Identity.Certificate[] = [], vetoed: Byte[][] = [],
   revoke: Identity.Threshold = 1 of keys,
   add: Identity.Threshold = (2 min keys.count) of keys,
   rotate: Identity.Threshold = (2 min keys.count) of [keys, next].flatten,
   recover: Identity.Threshold = 2 of [printed_key, guardians].flatten.compact after 7 days vetoable by 1 of keys {
 
-  static algorithms = (signing: $.ed25519, agreement: $.x25519, handshake: $.noise, digest: $.sha256)
+  static algorithms = (signing: $.ed25519, agreement: $.x25519, handshake: $.noise, digest: $.sha256, wrapping: $.hpke, cipher: $.chacha20poly1305)
   static Event := enum revoke | add | rotate
 
   static Threshold := class = count: Number, signers: *[], wait: Quantity.Temporal = 0 seconds, veto: Identity.Threshold? {
@@ -17,7 +18,7 @@ Identity := class = keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.
     expiring (at: Time = Time.now) => at + 1 day >= until
   }
 
-  rules => (next, digest, signing, agreement, handshake, printed_key, guardians, revoke, add, rotate, recover)
+  rules => (next, digest, signing, agreement, handshake, wrapping, cipher, printed_key, guardians, revoke, add, rotate, recover)
   counts (by: Encoding.Key, signers: *[], at: Stamp) => signers.some(signer => signer is Encoding.Key ? signer == by
     : signer is Byte[] ? signer == digest.write(by.public).bytes
     : signer.certified(by, at))
@@ -41,6 +42,7 @@ Identity := class = keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.
 
   certifies (by: Encoding.Key, at: Stamp, scope = *, world: World? = None) => by.algorithm === signing
     && certificates{.key == by && at.when < .until && scope is .scope && .world === world}.nonempty
+  receives (key: Encoding.Key, at: Stamp) => key.algorithm === agreement && certificates{.key == key && at.when < .until && .world === None}.nonempty
 }
 
 {count: Number} of {signers: *[]} ^keyword => Identity.Threshold(count, signers)
@@ -59,6 +61,7 @@ Live := Verified{!proof.at && (!proof.delegation || proof.delegation.valid())}
 Character &+= {
   local.write proof: (root: Byte[]?, by: Encoding.Key?, at: Stamp?, session: *?, delegation: Delegation?)?
   identity: Identity?
+  inbox: Encoding.Key?
   none.read roots: Encoding.Key[] = []
   world_keys: (world: World, key: Encoding.Key)[] = []
 
@@ -66,20 +69,65 @@ Character &+= {
   policy (at: Stamp? = None) => identity ? Identity.logged(identity.history, at) : None
   certified (by: Encoding.Key, at: Stamp, world: World? = None) => policy(at)?.certifies(by, at, world: world) ?? false
   key_in (world: World?) => world_keys{.world === world}.last?.key ?? key
+  inboxes (at: Stamp = World.ether.clock.now) => policy(at) -- (policy => policy ? policy.certificates{policy.receives(.key, at)}.map(.key) : [])
+  pseudonym (root: History.Label) => policy() -- (policy => policy.signing.pair(policy.digest.write([key.secret, (root as String).bytes].flatten).bytes))
 
   chainable == (other) => proof && other?.proof ? proof.root !== None && proof.root == other.proof.root : !proof && !other?.proof && this === other
   as (=== boolean) => (this is Verified ? this : Instance.local.verified(this)) == @me
   acting => this is Verified ? this : Instance.local.verified(this) ?? ERROR@Access `a character acts only as verified by a handshake or a key held here`
-  sealed (commit: History.Commit) => key_in(commit.line?.repository?.world) -- (pair => commit ~~ (.relies = identity?.history.head?.hash) ~~ (.signature = pair.signed(.hash) if pair))
+  sealed (commit: History.Commit) => commit.who is Encoding.Key ? commit ~~ (.signature = pseudonym(commit.line.id ?? commit.id).signed(.hash))
+    : key_in(commit.line?.repository?.world) -- (pair => commit ~~ (.relies = identity?.history.head?.hash) ~~ (.signature = pair.signed(.hash) if pair))
   delegate (to, scope: Access = Access(), until: Time = Time.now + 1 day) => Delegation(from: this, to, scope, until) -- (made => made ~~ .signature = key.signed(made.hash))
 }
 
 History.Commit &+= {
   covers (signed: Encoding.Signed) => signed.valid && (signed.value as Byte[])[..<hash.count] == hash
-  authentic => who is Character && who.identity?.history.since(None).some(.hash == relies && !(stamp < .stamp))
+  authentic => who is Encoding.Key ? signature#.some(covers(.) && .by == who)
+    : who is Character && who.identity?.history.since(None).some(.hash == relies && !(stamp < .stamp))
     && signature#.some(covers(.) && who.certified(.by, stamp))
-  signer => authentic ? who.copy ~~ .proof = (root: who.root, by: signature#.find(covers(.)).by, at: stamp, session: None, delegation: None) : who
-  applied (held) => held -- with (@me = signer) change
+  signer => who is Encoding.Key ? (sealed ? opened.signer : who)
+    : authentic ? who.copy ~~ .proof = (root: who.root, by: signature#.find(covers(.)).by, at: stamp, session: None, delegation: None) : who
+  applied (held) => held -- with (@me = signer) opened.change
+
+  label_hash => $.sha256.write((id, change as String).join("") as Byte[]).bytes
+  payload => Language.ray.write(line.sealed_sender ? (hash: label_hash, change: change as String, who: who, relies: relies, signature: signature) : (hash: label_hash, change: change as String)) as Byte[]
+  content_key (holders: Character[] = line.holders) => line.content_key(key, holders, [wraps{.key == key}, line.wraps_of(key)].flatten)
+  enciphered => content_key([[who], line.holders].flatten) -- (content => content is Encoding.Key
+    ? (secure Byte₃₂.random)[..<content.algorithm.nonce_size] -- (nonce => rewritten(change) ~~ (.sealed = [nonce, content.algorithm.sealed(content.secret, nonce, [], payload)].flatten)
+      ~~ (line.sealed_sender ? . ~~ (.who = who.pseudonym(line.id ?? id).published) ~~ (.relies = None) ~~ (.signature = None) : .))
+    : ERROR@Access `only a reader of a history writes to it`)
+  deciphered => content_key() -- (content => content is Encoding.Key ? content.algorithm.nonce_size -- (n =>
+      Language.ray.read(content.algorithm.opened(content.secret, sealed[..<n], [], sealed[n..]) as String) -- (inner =>
+        rewritten(inner.change as Program) ~~ (inner.who ? . ~~ (.who = inner.who) ~~ (.relies = inner.relies) ~~ (.signature = inner.signature) : .)
+          -- (plain => plain.label_hash == inner.hash ? plain : ERROR@Access `a line's ciphertext belongs to another line`)))
+    : rewritten(content))
+}
+
+History &+= {
+  sender: Accessor.Permission?
+
+  sealed_sender => sender !== None && sender < Visibility.of(this)
+  readers => Visibility.of(this) -- (visible => [Permissions.current.grants{.names(this) && .access.reads}.map(.access.who), @everyone{visible.reaches(.)}].flatten{is Character})
+  holders => [[@me], (Instance.local.registry, Instance.local.hosted)#].flatten{is Character && .inbox}
+  rotations => ordered{c => c.wraps.some(.key == c.id)}
+  current_key => public ? None : rotations.last?.id
+  readable => !current_key || content_key(current_key) is Encoding.Key
+
+  wrapped (content: Encoding.Key, label, reader: Encoding.Key, policy: Identity) => policy.wrapping(kem: reader.algorithm, kdf: policy.digest, aead: content.algorithm) -- (by =>
+    (key: label, cipher: content.algorithm, reader: reader, by: by, sealed: by.sealed(reader, (label as String).bytes, [], content.secret)))
+  wraps_of (label) => since(None).map(.wraps).flatten{.key == label}
+  content_key (label, holders: Character[] = this.holders, wraps = wraps_of(label)) => holders{.inbox}.map(.inbox) -- (inboxes =>
+    wraps.find(w => inboxes.some(== w.reader)) -- (wrap => wrap
+      ? Encoding.Key(algorithm: wrap.cipher, public: [], secret: wrap.by.opened(inboxes.find(== wrap.reader), (label as String).bytes, [], wrap.sealed))
+      : Program(name: "find the key", goal: (history: this, key: label))))
+
+  rekeying (who: Character, label, readers = this.readers) => who.policy() -- (policy => policy.cipher.generated() -- (content =>
+    [[who], readers].flatten.map(.inboxes()).flatten.unique.map(wrapped(content, label, ., policy))))
+  rekeyed (who: Character, readers = this.readers) => choose UUID.v1{unique} -- (label => commit(who, Program(code: { . }), id: label, wraps: rekeying(who, label, readers)))
+  shared (reader: Character, who: Character = @me) => Permissions.current.grant(Access(who: reader, method: Access.Reading), this) -- (current_key
+    ? commit(who, Program(code: { . }), wraps: reader.inboxes().map(wrapped(content_key(current_key), current_key, ., who.policy())))
+    : this)
+  unshared (reader: Character, who: Character = @me) => (Permissions.current.grants = Permissions.current.grants{!(.names(this) && .access.who === reader)}) -- rekeyed(who, readers{!== reader})
 }
 
 History &+= {
@@ -96,6 +144,7 @@ Instance &+= {
   certified (character: Character, world: World? = None) => {
     character.identity ??= founded(character)
     character.key ??= character.policy().signing.pair() unless world
+    character.inbox ??= character.policy().agreement.pair() unless world
     character.world_keys |= (world: world, key: character.policy().signing.pair()) if world && !character.world_keys{.world === world}.nonempty
     renewed(character, world)
     character
@@ -105,6 +154,7 @@ Instance &+= {
     root = Identity.algorithms.signing.pair()
     character.roots |= root
     identity = Identity(keys: [root.published], signing: root.algorithm)
+    identity.history.publish
     identity.history.commit(character, identity).head ~~ (.signature |= root.signed(.hash))
     identity
   }
@@ -116,9 +166,9 @@ Instance &+= {
     event.signature |= character.roots.map(.signed(event.hash))#
     policy.allows(event, log) ? character : Program(name: "sign the key event with more root keys", goal: event, who: character)
   }
-  renewed (character: Character, world: World? = None) => character.key_in(world).published -- (key =>
+  renewed (character: Character, world: World? = None) => [character.key_in(world), character.inbox unless world].compact.map(.published).map(key =>
     character.policy().certificates{.key == key && .world === world && !.expiring}.nonempty ? character
-    : endorsed(character, Program(code: { .certificates |= Identity.Certificate(key, world: world) })))
+    : endorsed(character, Program(code: { .certificates |= Identity.Certificate(key, world: world) }))).find(. is Abstract) ?? character
   revoked (character: Character, key: Encoding.Key) => endorsed(character, Program(code: { .certificates = .certificates{.key != key} }))
 
   verified (character: Character, world: World? = None) => character.key_in(world) -- (pair =>
@@ -142,11 +192,11 @@ Instance &+= {
 Program &+= {
   delegation: Delegation?
 
-  run => Run.log.commit(who, this).head -- (logged => with (@me = delegation ? Instance.local.delegated(delegation) : logged.who) logged.change)
+  run => Run.log.commit(who, this).head.opened -- (logged => with (@me = delegation ? Instance.local.delegated(delegation) : logged.who) logged.change)
 }
 
 Run &+= {
-  static replay (logged: History.Commit) => with (@me = logged.signer) logged.change if logs.some(=== logged)
+  static replay (logged: History.Commit) => with (@me = logged.signer) logged.opened.change if logs.some(=== logged)
 
   may (method, target) => hops.every(. is Live && Permissions.current.allows(., method, target) && (.proof.delegation?.covers(method, target) ?? true))
 }

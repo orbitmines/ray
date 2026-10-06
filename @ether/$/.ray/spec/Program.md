@@ -48,6 +48,7 @@ From the drafts review (2026-10-06).
 - **P1.14 The sequence about one variable** — **Q.** *.ray2/Program.ray:212*: how to make the sequence of operations be
   only about one variable and what it depends on. Recommend: `x%` is x's own sequence, and `x**` restricted to what x depends
   on is its slice (`x**.slice`).
+  **Follows (2026-10-06):** `x%` is x's own sequence and `x**` its provenance; the part of `x**` that x depends on is its slice, `x**.slice("x")`, the only new name. From `%` history on every Node and P1.4 (`**` is provenance).
 - **P1.15 Saving a running program** — **Decided (draft).** *.ray2/Program.ray:313–315*: `program as Expression` writes
   the program with its running state (`x**` selected at its step, P1.8), so pausing or saving a game is writing it. With no
   state changed it writes the original expression.
@@ -57,6 +58,7 @@ From the drafts review (2026-10-06).
 - **P1.17 Selection through nested expansions** — **Q.** *.ray2/_todo/ray.ray.txt/Ether/instance/Expression.ray:45*: a
   program pointer that `.expand`s into calls needs both "handling this expand" and "here inside it". Recommend: when the
   running step is a call, `x**`'s selection is a chain, one selection per expanded level (`x**##`), outermost first.
+  **Follows (2026-10-06):** when the running step is a call, `x**`'s selection is a chain with one selection per expanded level, outermost first (`x**##`); no other record holds it. From P1.8 (`x**` is selected at the running step) and Ray being the IR.
 - **P1.18 A continuation keeps its own context** — **Decided (draft).** *…/Ether/instance/Expression.ray:24–30*: a
   continuation written in another context (`+ C`) applies to the previous result in *its* context, not the enclosing local
   one (as G2.13). The draft's `&caller = OBJECT_ID` spelling is `@<uuid> { … }` (L§8.2).
@@ -64,10 +66,12 @@ From the drafts review (2026-10-06).
   (a random seed) in history so each thread is deterministic, with an option to run again without them. Recommend: a run
   records its nondeterministic inputs (seed, time, IO answers) in its history, so a branch replays exactly;
   `rerun(without: …)` replays with them unset.
+  **Follows (2026-10-06):** a run records the answers of its nondeterministic inputs (random, time, IO: what `Nondeterministic` infers) in its history, so a branch replays exactly; rerunning without them is the same program with those answers unset (`Running.inputs`). From history replacing stored values and L§10.2 (nondeterminism is inferred from random/io/time).
 - **P1.20 A step is `. = .next`** — **Q.** *journal Ray Calculi & Physics.md:20–25* (paraphrased): running is one
   instruction, move to `.next`, repeated; parallel running applies it at many places at once; the instruction itself could
   be another. Recommend: record it as the definition of stepping; `x**.next` (P1.8) is one application, and a Compiler level
   may replace the stepping rule.
+  **Follows (2026-10-06):** stepping is the one rule `. = .next`, applied at each cursor (a program is cursors in a graph, P2.10's answer); `x**.next` is one application, and replacing the stepping rule is a Compiler level. From P1.1 and P1.8.
 - **P1.21 `Function`** — **Decided (draft).** *.ray3/Program.ray:28*: `class Program | Function`; `Function` is an alias of
   Program. (The `_todo` review's structural `Function := Node{(args) => *}`, *.ray2/_todo/ray.ray.txt/ray.ray:119–124*,
   agrees where every such Node is a Program.)
@@ -78,10 +82,12 @@ From the drafts review (2026-10-06).
 - **P1.23 A commit expands to its run** — **Q.** *.ray2/History.ray:6*: evaluation history is a `.expand` on one commit.
   Recommend: a commit's `.expand` is the evaluation that produced it (its program's steps, P1.8); history is coarse,
   expanding a commit gives the fine-grained run. (Also World W3.)
+  **Follows (2026-10-06):** a commit's `.expand` is the run that produced it, its value's steps (`value**.expand`); history stays coarse. From L§9.2.3 (expansions are not stored; they are `.expand`) and P1.8.
 - **P1.24 Effects** — **Q.** *.ray2/Program.ray:26*: a notion of what a function changes, and limiting it with a keyword
   like `confidential`. Recommend: every Program has an inferred `.effects` (the locations it may write); a parameter may
   restrict it (`g: Program{effects ⊆ @local}`); passing `confidential` data requires the callee's effects to stay within
   the data's visibility.
+  **Follows (2026-10-06):** every Program has an inferred `.effects` (`Effects.of`); a parameter restricts it with a narrowing on Programs (`g: Program{effects ⊆ @local}`), and passing `confidential` data requires the callee's effects to stay within the data's visibility. From L§8.1 (effects are inferred, nothing declared), narrowings on Programs (P4.9 `Terminating`) and L§8.2 (the `local` mark is tracked).
 
 ## P2. `&caller` and control (*ep:1120–1128, 1148, 1168–1185*)
 
@@ -125,6 +131,7 @@ From the drafts review (2026-10-06).
 - **P3.2 Injecting events into others' code** — **Q.** *IDE:380* (paraphrased): an event system in which a user injects
   events into code someone else wrote. Recommend: injection is a Compiler level the user applies (as P3.1), needing an
   `execute` grant on the target (L§8.2); without one it runs only on the user's own copy.
+  **Follows (2026-10-06):** as L§10.3.1: a Compiler level the user applies (P3.1), needing an execute grant on the target; without one it runs only on the user's own copy. From P3.1 and W5.1/L§10 grants (execute is access to `()`).
 
 ## P4. Concurrency (*ep:1089–1093, 1104, 1116–1119, 1137–1138, 1189–1192, 1453–1483*)
 
@@ -156,11 +163,14 @@ From the drafts review (2026-10-06).
 - **P4.10 Awaiting a remote result only when used** — **Q.** *…/Ether/instance/Entity.ray:30*: if the return value is
   used, it waits (as a quest) on a response. Recommend: a call to a remote location whose result is unused is sent and not
   awaited; one whose result is used waits on it as a quest (`pending`, P4.2).
+  **Follows (2026-10-06):** a call to a remote location whose result is never read is sent and not awaited; one whose result is read waits on it as `pending`. From L§4.3 (arguments are lazy programs) and P4.2 (`pending` waits until set).
 - **P4.11 `sleep`** — **Q.** *…/Ether/instance/utils/Time.ray:8* ("sleep delay"). Recommend: `sleep d` is
   `await Time.now >= start + d` (waiting on a dynamic value, no new external).
+  **Follows (2026-10-06):** `sleep d` is `await` on the dynamic value `Time.now >= start + d`, with no new external. From P4.1 (`await`), P5.3 (dynamic values) and L§8.4.
 - **P4.12 A loop fills a lazy value** — **Q.** *IDE:853* (paraphrased): a `while` loop should work as filling a lazy,
   partial value. Recommend: a value produced by a loop is readable while the loop runs, through `x**.&` (P1.8); reading
   past what is filled waits, as for `pending` (P4.2).
+  **Follows (2026-10-06):** a value a loop produces is readable while the loop runs, through `x**.&`; reading past what is filled waits, as for `pending`. From P1.8 (`x**.&`) and P4.2 (`pending`).
 - **P4.13 Shader output** — **Q.** *…/Ether/instance/UI/Geometry.ray:1*: translations to GLSL inferred from the types'
   structure (distance functions); exact vs approximate equivalences. Recommend: later, a `$.glsl` level writes a shape as
   its signed distance function derived from its structure; an exact SDF is a `force` equivalence, a bound is `approx`
@@ -185,6 +195,7 @@ From the drafts review (2026-10-06).
   roll back previous changes of `&=`; `dynamically sub.location &= …` is `dynamically sub.location &= dynamically …`.
   Recommend: when e recomputes, the previous contribution is removed and the new one added; `dynamically` on a statement
   also makes its right-hand side dynamic.
+  **Follows (2026-10-06):** when e recomputes, the previous contribution is removed and the new one added; `dynamically` on a statement also makes its right-hand side dynamic. From P5.1: a dynamic statement always equals a fresh evaluation, so the previous contribution cannot stay.
 
 ## P6. Errors (*ep:751–756, 1372–1376, 1504–1515*)
 
@@ -201,6 +212,7 @@ From the drafts review (2026-10-06).
   `if acc1 | acc2 $`, `test := func() ~~ $ { ERROR … }`. Recommend: `$` on a superposition handles each branch's error and
   superposes the results; with `&` the whole errs if any part errs, with `|` only if every part errs. `x ~~ $ { … }` runs
   the handler for its effect and answers x unchanged (A-C5 `~~`).
+  **Follows (2026-10-06):** `$` on a superposition handles each branch's error and superposes the results; with `&` the whole errs if any part errs, with `|` only if every part errs; `x ~~ $ { … }` runs the handler for its effect and answers x. From R1.5 (operations map over a superposition), G3.6/L§3.1 (`&` needs both, `|` either) and A-C5 (`~~` answers the original).
 
 ## P7. Languages as mappings (*ep:1193–1212*)
 
@@ -261,6 +273,7 @@ From the drafts review (2026-10-06).
     description (*journal 2023-09-01.md:28–43*).
   - When a dependency changes, find the equivalences it breaks and ask a human to approve proposed ones
     (*journal 2023-09-11.md:2–3*).
+  **Follows (2026-10-06):** the block lives in `Library.md`, the Library Project's backlog; nothing in it is implemented now. From P8.13 (reading foreign software is the Library Project's).
 - **P7.10 Models as dependencies** — **Q.** *_todo/_download_dependencies.sh:72–78*: allow any Hugging Face model configured
   somewhere; what is the default? Recommend: a model is a dependency (`@hf/<org>/<model>`) like `@tzif`, configured in
   `.cfg.ray`, with no default until asked. (Also L§9.1.)
@@ -323,15 +336,18 @@ From the drafts review (2026-10-06).
   if the equivalence it used is later found false in a context, undo it; prefer determinism to speed when uncertain.
   Recommend: a rewrite applied by a Compiler level is a commit in the program's history (P8.16), labelled with the rule it
   used; revoking an equivalence in a context re-runs from the last commit that did not use it.
+  **Follows (2026-10-06):** a rewrite applied by a Compiler level is a commit in the program's history, labelled with the rule it used; revoking an equivalence in a context forbids it there and runs on from the last commit that did not use it (`Program.revoked`). Since the IR is a Program (C1), a failed guard is the same mechanism. From P8.16 (programs live in history), G7.1 (undoing an applied equivalence forbids it there) and history replacing stored state. (= C3)
 - **P8.22 Mixes keep their components** — **Q.** *journal 2022-12-10.md:26*, *Gamification.md:485* (paraphrased): keep
   audio sources unmixed so a layer can be removed later; separating is un-superposing. Recommend: a mixed signal is
   `a &+ b`; the store keeps the components when it can, and a flattened mix is a lossy optimization level (P8.14).
+  **Follows (2026-10-06):** a mixed signal is `a &+ b`; the store keeps the components when it can, and a flattened mix is a lossy optimisation level. From T2.1 (`&+` superposes components), P8.14 (media are optimisations) and choices being compiler optimisations.
 - **P8.23 Quests force lazy values and warm caches** — **Q.** *…/Ether/instance/Expression.ray:31–32*. Recommend: forcing a
   lazy value someone else may compute, and warming a cache of often-read history values, are quests picked up by whoever
   has capacity (with P8.11).
 - **P8.24 Tests that change externals** — **Q.** *IDE:428* (paraphrased): tests of syntax that alter existing externals.
   Recommend: such a claim runs in a Program level of its own so the change cannot leak into the suite (as L§6.2's
   sublanguages).
+  **Follows (2026-10-06):** such a claim runs in a Program level of its own, so the change cannot leak into the suite. From G5.4 (syntax tests override a rule in a scope) and L§6.2 (a sublanguage is a Program level).
 
 ---
 

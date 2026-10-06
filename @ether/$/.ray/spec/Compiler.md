@@ -16,50 +16,36 @@ This is correct but slow: the entrypoint alone is ~310 ms, and the target is und
 ## Shape
 
 ```
-text ──interpreter (first read)──▶ decisions ──recorder──▶ IR ──passes──▶ IR ──back end──▶ run
-                                                            ▲                              │
-                                                            └──── guard failed: deopt ─────┘
+text ──interpreter (first read)──▶ decisions ──recorder──▶ Program ──rewrites──▶ Program ──back end──▶ run
+                                                             ▲                                      │
+                                                             └──────── guard failed: deopt ─────────┘
 ```
 
 1. **Interpreter.** Unchanged in meaning. It reads, decides and applies, and exposes what it decided.
-2. **Recorder (front end).** Turns a unit's decisions into IR. A unit is a span read in a frame: a rule body, a block, a file. Every decision that depended on run-time state becomes a `guard` instruction.
-3. **IR (portable).** A control-flow graph of blocks of instructions. It contains nothing from JS and nothing from the language's vocabulary.
-4. **Passes.** IR → IR, each removing work while keeping meaning.
+2. **Recorder (front end).** Turns a unit's decisions into a Program. A unit is a span read in a frame: a rule body, a block, a file. Every decision that depended on run-time state becomes a guard: a conditional goto.
+3. **IR: a Program.** Ray is the IR (C1). Nothing from JS, and no vocabulary of its own.
+4. **Passes.** P8 rewrite rules, Program → Program, each removing work while keeping meaning.
 5. **Back ends.**
-   - *Evaluator:* runs IR. This is the reference implementation and the template for ports.
-   - *JS code generator:* `new Function`, blocks as a `switch (pc)` loop, natives called directly.
+   - *Evaluator:* walks the Program. This is the reference implementation and the template for ports.
+   - *JS code generator:* `new Function`, the Program's vertices as a `switch (pc)` loop, natives called directly.
 
-   A port to another language is another back end plus that language's natives. The recorder, the IR and the passes are shared.
+   A port to another language is another back end plus that language's natives. The recorder, the Program and the rewrites are shared.
 
-## IR
+## IR: a Program (C1, answered 2026-10-06)
 
-A unit is a list of blocks. A block is a list of instructions ending in a jump, a branch, a return or a fall-through. Values live in registers. Frames are values.
+The recorded graph is a `Program` value (P1.1): a Ray whose vertices are statements, each itself a Program, and whose edges are sequence and conditional gotos. There is no separate instruction vocabulary, and no intermediate record: what the TS kernel's table named instructions (`frame`, `name`, `slot`, `lookup`, `lazy`, `literal`, `deref`, `native`, `apply`, `enter`/`leave`, `guard`, `jump`/`branch`/`label`, `raise`, `return`) are shapes of statements the evaluator recognises.
 
-| Instruction | Meaning |
-|---|---|
-| `frame` | the unit's frame (what `external .` answers) |
-| `name r ← frame, "x", site` | the place `x` in a frame (not resolved yet) |
-| `lookup r ← frame, "x", site` | resolve a name as `lookup` does |
-| `slot r ← frame, "x"` | read a binding known to be held by that frame (the pass `slots` proves it) |
-| `lazy r ← span, frame` | code not read yet (a capture) |
-| `literal r ← span` | written text |
-| `deref r ← r` | place/code → value, as `deref` |
-| `native r ← NAME, args…` | call a native |
-| `apply r ← rule, captures…, receiver?` | apply a rule: the generic slow path |
-| `enter rule, captures…, receiver?` | apply a rule whose body is compiled: a new frame, and running entry pushed |
-| `leave` | the end of an entered body |
-| `guard kind, r, expected → deopt(position)` | a decision's precondition |
-| `jump L` / `branch r, L` / `label L` | control flow: labels and gotos lowered |
-| `raise label, site` | a jump that leaves the unit (lexical return) |
-| `return r` | the unit's value |
-
-Guard kinds are exactly the facts the interpreter's choices depend on:
-
-- `rules`: the rule list in scope;
-- `receiver`: the rules a value answers to;
-- `bound`: whether a name is bound;
-- `native`: whether a value is a native, and which;
-- `epoch`: rules or declarations changed.
+- **Control flow is the Program's edges.** A label is a vertex, `goto L` an edge, `goto L if c` a conditional edge (`flow`, `target_of`, `jumps_backward` in `Program.ray`). Lowering control flow is reading them as edges. A branch is a place; a program is cursors in that graph (P2.10's answer).
+- **Statements.** A name read, a literal, `external NAME args` (a native), a capture handed on unread (a lazy Program, L§4.3), and a rule application. An application whose rule body is known is the body spliced at that vertex (what the table called `enter`), with `return` the goto to its end label (P2.3) and a lexical jump out of the unit the goto to the enclosing label (`raise`).
+- **The frame is the context.** `external .` answers the Program's context, `x**.&` (P1.3, P1.8); a slot is a name whose holder a rewrite has proved, so reading it is one step.
+- **Guards are conditional gotos.** `goto deopt if !(expected)`, where `deopt` is the interpreter reading on from that statement. The guard kinds are exactly the facts the interpreter's choices depend on:
+  - `rules`: the rule list in scope;
+  - `receiver`: the rules a value answers to;
+  - `bound`: whether a name is bound;
+  - `native`: whether a value is a native, and which;
+  - `epoch`: rules or declarations changed.
+- **Passes are rewrites.** Each is a P8 rule `{pattern} => replacement` over statements, in a Compiler level (`Compiler.folding`, `Compiler.logic`, …, P8.1); the evaluator with no passes is `Compiler.none` (P8.20). Applying a rewrite is a commit in the program's history labelled with its rule (P8.16, P8.21), so a failed guard and a revoked equivalence are one mechanism (C3).
+- **Stepping** is `. = .next` at each cursor (P1.20); a back end is a Language level that writes the Program (`$.js`).
 
 On a failed guard the unit hands back to the interpreter at the statement where the guard was recorded. The interpreter reads on from there, and the recorder records again (at most N variants per position).
 
@@ -74,23 +60,23 @@ The interpreter already records per unit (kernel4 since e72dd1f, a4aa07b, dff093
 
 The recorder generalizes this:
 
-- every statement becomes instructions;
+- every statement becomes a vertex of the Program;
 - every decision becomes a guard plus the action it chose;
-- a statement it can't express stays `apply` (generic), so coverage grows without changing meaning.
+- a statement it can't express stays a generic rule application, so coverage grows without changing meaning.
 
 ## Passes (where the speed comes from)
 
-1. **Lower control flow.** `label` and `goto`/`goto … if` statements become CFG edges. (This is done by the step replay today.)
-2. **Natives.** A statement that is `external NAME args` becomes `native`, with no reading. (Done today.)
+1. **Lower control flow.** `label` and `goto`/`goto … if` statements are read as the Program's edges. (This is done by the step replay today.)
+2. **Natives.** A statement that is `external NAME args` is called as a native, with no reading. (Done today.)
 3. **Inline static rules.** When a rule's body is compiled and its application is guarded only by `rules`/`receiver`, the body is entered without building the generic application. Frames are built only as far as the body can observe them: a frame is a value (`external .`), so it is still made. The running entry is kept only when the body reads given names through it.
-4. **Slots.** A name declared (`:=`) in the unit's own frame, or a capture of the entered rule, is read with `slot` instead of a scope walk. The guard is `epoch`.
+4. **Slots.** A name declared (`:=`) in the unit's own frame, or a capture of the entered rule, is read as a slot instead of a scope walk. The guard is `epoch`.
 5. **Inline caches.** Receiver dispatch (`.member`, `x op y`) is guarded by the receiver's rule list. A hit costs one identity compare.
 6. **Dead guards.** A guard that is implied by an earlier one in the same block is dropped.
 
 ## Back ends
 
-- **Evaluator** (`compile/evaluate.ts`): a loop over blocks. It is the reference and must give the interpreter's exact diagnostics and values.
-- **JS** (`compile/js.ts`): generates `function (rt, frame, …)` with registers as JS locals, natives as direct calls through `rt.natives`, and guards as `if (…) return rt.deopt(pc)`.
+- **Evaluator** (`compile/evaluate.ts`): a walk over the Program's edges. It is the reference and must give the interpreter's exact diagnostics and values.
+- **JS** (`compile/js.ts`): generates `function (rt, frame, …)` with the statements' values as JS locals, natives as direct calls through `rt.natives`, and guards as `if (…) return rt.deopt(pc)`.
 
 ## What was measured (2026-10-03)
 
@@ -105,14 +91,14 @@ The recorder generalizes this:
 So the unit of compilation is a **rule application**, not a statement:
 
 1. **Trace.** An application is recorded whole for the *shapes* of its receiver and captures (their rule lists): every decision, native call and frame the body can observe.
-2. **IR.** Names resolve to slots where the body proves where they are held (its frame, its captures, its `:=` locals). Applications of static rules are inlined. Dispatch becomes one shape check.
+2. **Program.** Names resolve to slots where the body proves where they are held (its frame, its captures, its `:=` locals). Applications of static rules are inlined. Dispatch becomes one shape check.
 3. **Runtime representation.** Frames and lazy values are made only where code can observe them: `external .`, a capture passed on unforced, a name looked up from elsewhere.
 4. **Deopt.** A failed shape check runs that application in the interpreter and records another variant.
 
 ## Constraints
 
 - No language vocabulary in TS: guards and passes talk about rules, places, frames and natives only.
-- The level (o.ray) maps operation patterns to natives. To the compiler, a level entry is just a `native` instruction behind a guard.
+- The level (o.ray) maps operation patterns to natives. To the compiler, a level entry is just a native statement behind a guard.
 - Painting: units compiled while serving (painting) aren't used; the interpreter paints.
 
 ## To do (decided 2026-10-03: not yet)
@@ -208,3 +194,4 @@ What is left is the applications themselves, ~3–4 µs each: a frame, lazies fo
 - **C3 Deopt and revoked equivalences** — see P8.21 (**Q**, *journal 2023-01-17.md:12, 16*): if each applied rewrite is a
   commit labelled with its rule, a failed guard and a revoked equivalence are one mechanism: run on from the last state
   that did not rely on it.
+  **Follows (2026-10-06):** as P8.21: an applied rewrite is a commit labelled with its rule, and a failed guard and a revoked equivalence are one mechanism, running on from the last commit that did not rely on it. From P8.16, G7.1 and C1's answer (the IR is a Program, so a rewrite is a commit).

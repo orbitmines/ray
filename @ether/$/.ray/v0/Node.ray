@@ -18,8 +18,8 @@ Node &+= {
   reversible => inverse
   inverted_by (backward) => (inverse = backward) -- backward.inverse = this -- this
 
-  right-to-left await => Running.until(() => this && (!(this is Running) || is_terminal))
-    -- this is Running ? results.last : this
+  right-to-left await => Quest.until(() => this && (!(this is Quest) || is_terminal))
+    -- this is Quest ? results.last : this
   right-to-left pending => await this
 
   right-to-left never => never -- ERROR `happened, and was said never to` if this

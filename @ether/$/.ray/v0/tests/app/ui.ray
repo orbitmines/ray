@@ -317,3 +317,22 @@ bottomed := Geometry.Box(position: Geometry.Absolute(), inset: Geometry.Edges(No
 solved([bottomed])
 unless bottomed.origin.y == 4px { INFO@mark `YU11 a bottom inset is not measured up from the bottom` }
 unless Geometry.Edges(1px, 2px, 3px, 4px).start == Geometry.Vector(4px, 3px) { INFO@mark `YU12 a box's corner of origin is not its bottom left` }
+
+// Spaces by their axes, holes, fields over points, sampling on a grid (F-G2, F-G4, F-G5, F-G6)
+unless Geometry.Space.grid(Geometry.Vector(4, 4), [true, false]) is Geometry.Space.Cylinder { INFO@mark `FWG1 a grid with one looped axis is not a cylinder` }
+unless Geometry.Space.grid(Geometry.Vector(4, 4), true) is Geometry.Space.Torus { INFO@mark `FWG2 a grid looped both ways is not a torus` }
+unless Geometry.Space.plane is Geometry.Space.Plane { INFO@mark `FWG3 the plane is not a Plane` }
+holed := Geometry.Box(size: Geometry.Vector(4px, 4px)) - Geometry.Box(size: Geometry.Vector(2px, 2px), transform: Geometry.Transform.translate(Geometry.Vector(1px, 1px)))
+if holed.contains(Geometry.Vector(2px, 2px)) { INFO@mark `FWG4 a point in a hole is inside the shape` }
+unless holed.contains(Geometry.Vector(0.5px, 0.5px)) { INFO@mark `FWG5 a point beside a hole is outside the shape` }
+halves := (point: Geometry.Vector) => point.x > 1px ? Geometry.Color(255, 0, 0) : Geometry.Color(0, 0, 255)
+unless Geometry.Box().sampled(halves, Geometry.Vector(2px, 0px)) == Geometry.Color(255, 0, 0) { INFO@mark `FWG6 a field is not read at its point` }
+unless Geometry.Box().sampled(Geometry.Color(0, 255, 0), Geometry.Vector(2px, 0px)) == Geometry.Color(0, 255, 0) { INFO@mark `FWG7 a constant paint is not its own value at every point` }
+unless Geometry.Box(size: Geometry.Vector(4px, 2px)).discretized(1px).cells.count == 8 { INFO@mark `FWG8 a box sampled at one pixel is not one cell per pixel` }
+
+// Controllers are numbered on the device and take back their number (F-I1)
+pad_device := Device()
+unless pad_device.connected("pad A").id == 0 && pad_device.connected("pad A").guest { INFO@mark `FWU1 a new controller is not a guest with the first free id` }
+unless pad_device.connected("pad B").id == 1 { INFO@mark `FWU2 a second controller does not take the next id` }
+pad_device.disconnected("pad A")
+unless pad_device.connected("pad A").id == 0 { INFO@mark `FWU3 a reconnecting controller does not take back its id` }

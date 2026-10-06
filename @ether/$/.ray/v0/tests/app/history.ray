@@ -142,3 +142,9 @@ hx_copy := hx.copy
 hx_copy.history.commit(ada, 2)
 unless hx.history.since(None).count == 1 { INFO@mark `HB16 committing to a copy changed the original's history` }
 unless hx_copy.history.since(None).count == 2 { INFO@mark `HB17 a copy's history does not continue the original's` }
+
+// A history read without trust keeps its lines and ignores their claims (L§9.2.12)
+claimed := History()
+claimed.commit(ada, 1, versions: ["fixed"])
+unless (with History.trusted = false { claimed.head.versions }).empty { INFO@mark `FWV1 an untrusted history's claims were believed` }
+unless claimed.head.versions == ["fixed"] { INFO@mark `FWV2 a trusted history's claims were not kept` }

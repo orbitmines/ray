@@ -204,9 +204,11 @@ World := class: Location + Nameable {
 }
 Region := World
 
-Quest := class: Program + Location + Nameable = who: * = @me, goal: *?, from: *? {
+Quest := class: Program + Location + Nameable = who: * = @me, goal: *?, from: *?, at: Program?, started: boolean = false, results: *[] = [] {
+  static branches: Quest[] = []
+  static deferred: Quest[] = []
+
   output: History = History(repository: this)
-  cursor: Running = Running(program: this)
   tried: *?
   stopped = false
   certificate: Certificate?
@@ -216,22 +218,40 @@ Quest := class: Program + Location + Nameable = who: * = @me, goal: *?, from: *?
   written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
   abstract => written{!.defined}
 
+  & => results
+  steps | expand => written
+  is_initial | waiting => !started
+  is_terminal | final => started && !at
+  intermediate => started && !is_terminal
+  holds => !is_terminal && !stopped
+  inputs => steps.zip(results){.0 is Nondeterministic}
+
+  stepped => {
+    at = started ? at.next : steps.first
+    started = true
+    results.push at() if at
+  } -- this
+  next => Quest(code, who, goal, at, started, results: [results]).stepped
+  finished => (stepped while holds) -- this
+  static round => branches{holds}.map(.stepped)
+  static until (condition) => (round while !condition() && branches.some(.holds)) -- this
+
   reached (value) => goal !== None && value is goal
   attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
-  running => cursor.started && !done
-  done => stopped || certificate !== None || cursor.is_terminal
+  running => started && !done
+  done => stopped || certificate !== None || is_terminal
   continuable => done && !(tried**.is_terminal ?? true)
   path => tried.history
   solution => path{reached(.value)}.first
   solved_by => solution?.who
   best => solution?.value
 
-  progress => cursor.started ? written.index_of(cursor.at) ?? written.count : 0
-  difficulty => written.count
+  progress => started ? steps.index_of(at) ?? steps.count : 0
+  difficulty => steps.count
 
   serves (at: Location) => !done && serving ∋ at
   proxies => !done && proxying !== None
-  stop: static => this ~~ (.stopped = true)
+  stop | cancel: static => this ~~ (.stopped = true)
   complete: static => this ~~ (.certificate = Certificate(issuer: parent?.world ?? World.ether, holder: solved_by ?? who))
 }
 

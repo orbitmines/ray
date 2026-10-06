@@ -350,6 +350,7 @@ UI.HTML := class {
         window.addEventListener("focusin", (event) => ray.set("UI.focus", event.target.id))
         window.addEventListener("resize", (event) => ray.set("UI.scene.size", ray.size()))
         window.addEventListener("popstate", (event) => ray.set("UI.at", location.pathname))
+        ray.set("@me/device/location", location.href)
         window.addEventListener("paste", (event) => ray.set("@me/device/clipboard", event.clipboardData.getData("text")))
         window.addEventListener("dragstart", (event) => ray.set(event.target.id + ".dragged", true))
         window.addEventListener("dragend", (event) => ray.set(event.target.id + ".dragged", false))
@@ -514,6 +515,7 @@ UI.HTML := class {
 
   Chromium := { }
   Firefox := { }
+  Extension := { }
   Safari := {
     // backdrop-filter, which Safari reads only prefixed (https://www.w3.org/TR/filter-effects-2/#BackdropFilterProperty)
     {rule: $.css.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => $.css.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)

@@ -21,9 +21,9 @@ Compiler := class {
     {t: Geometry.Transform{count == 3}}.applied({p}) => Geometry.Vector(t[0][0] * p.x + t[0][1] * p.y + t[0][2], t[1][0] * p.x + t[1][1] * p.y + t[1][2])
     {facet: Geometry.Facet{corners.count == 2}}.crossing({p}) => facet.corners -- ((a, b) =>
       (a.y <= p.y) != (b.y <= p.y) && p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y) ? facet.orientation * (b.y > a.y ? 1 : -1) : 0)
-    {shape: Geometry.Shape{space.dimension == 2 && !space.discrete && rectangular}}.contains({p}) => shape.transform.inverse.applied(p) -- (q =>
+    {shape: Geometry.Shape{space.dimension == 2 && !space.discrete && rectangular && holes.empty}}.contains({p}) => shape.transform.inverse.applied(p) -- (q =>
       0 <= q.x < shape.size.x && 0 <= q.y < shape.size.y)
-    {shape: Geometry.Shape{space.dimension == 2 && space.discrete && space.vertices == None}}.contains({p}) => shape.transform.inverse.applied(p) -- (q =>
+    {shape: Geometry.Shape{space.dimension == 2 && space.discrete && space.vertices == None && holes.empty}}.contains({p}) => shape.transform.inverse.applied(p) -- (q =>
       shape.origin.x <= q.x < shape.origin.x + shape.size.x && shape.origin.y <= q.y < shape.origin.y + shape.size.y)
     {edges: Geometry.Edges}[{side: Geometry.Side{label}}] => edges.`side.label`
     {edges: Geometry.Edges{Geometry.Space.current.dimension == 2}}.total => Geometry.Vector(edges.left + edges.right, edges.top + edges.bottom)
@@ -90,4 +90,7 @@ Program &+= {
   compounds + (other: Program) => Program(code: (code, other.code))
   results: (arguments: *, value: *)[] = []
   remembered (arguments) => (results{.arguments == arguments}.first ?? (results.push (arguments: arguments, value: this(arguments)) -- results.last)).value
+
+  rewrites => history.since(None){.who is Program}
+  revoked (rule: Program) => rewrites{.who === rule}.first -- (used => used ? (history.at(used.previous).value ?? this){O: O - rule} : this)
 }

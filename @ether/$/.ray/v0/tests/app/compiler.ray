@@ -48,3 +48,7 @@ unless Compiler.levels.contains(Compiler.memoised) { INFO@mark `CO34 the memoisi
 twice := (x) => x * 2
 unless Program(code: { twice(4) + twice(4) }){O: Compiler.memoised}() == 16 { INFO@mark `CO35 a remembered application does not answer what it answered` }
 unless twice.results.count == 1 { INFO@mark `CO36 a pure application with the same arguments is not remembered once` }
+
+// A rewrite is a commit by its rule; revoking a rule runs on from before it was used (P8.21)
+unless Program(code: { 1 }).rewrites.empty { INFO@mark `FWC1 a program nothing rewrote has rewrites` }
+unless Program(code: { 1 }).revoked(Compiler.folding) { INFO@mark `FWC2 revoking a rule nothing used loses the program` }

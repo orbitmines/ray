@@ -86,7 +86,10 @@ History &+= {
   pins (commit: Commit) => value.fields.name{of(.).find(commit.id)}.map(name => ".[" + Language.ray.write(name) + "] = @./" + object_path(name) + "%[" + commit.id + "]").join("; ") as Program
   cached => since(None){.index % 64 == 63 || . === head}
 
+  static trusted = true
+
   static level := {
+    {commit: Commit{!History.trusted}}.versions => []
     {at: Location{segments.last == ".%"}} => IO.listing(at) -- (files => History.global(files{.name ~= ".ray" ⊣}.map(.content as Program as History))
       ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(.content as Program as History))
   }
@@ -137,4 +140,8 @@ Program &+= {
 
 Node &+= {
   edited (from: Number, to: Number, text: String) => Language.ray.write(this) -- (written => Language.ray.read((written[..<from], text, written[to..]).join("")))
+}
+
+History.Commit &+= {
+  expand => value**.expand
 }

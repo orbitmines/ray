@@ -7,6 +7,8 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
     ? (named("." + inner) ? over(named("." + inner), ray) : ray)
     : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
 
+  static detected (content: String) => Language#{.level && !.read(content).erred}
+
   static projects: Project[] = []
   static project (name: String) => projects{.name == name}.first
     ?? Project.known(ray.bundled("$/" + name)) -- (found => found ~~ (.name = name) ~~ projects.push(.) ~~ .load if found)

@@ -278,7 +278,7 @@ values {a} {b} {c} =>
     here := external .
     found := external apply check given here
   unless check then
-    own := external own_rules kind
+    own := kind . rules
     found := reading from from to to among own
   found
 
@@ -350,27 +350,85 @@ chain {a} equals {b} =>
     result := nothing
   result
 
+// Where the reader keeps what it knows of its rules: the `latest` defined, and the `definer` (the first statement's rule).
+registry := node
+
 // Reading handed to the rule defined last (R0.6); bodies planned by the rule defined last, too.
 hand reading over =>
-  latest := external latest
+  latest := registry . latest
   external reader latest
 hand planning over =>
-  latest := external latest
-  external planner latest
+  external planner plan_rule
+
+// The rule the seed defined last.
+the seed's latest rule =>
+  here := external .
+  top := here . parent
+  links := external rules top
+  links . rule
+
+// The rules in reach of `scope`: each scope's `rules`, nearest scope first (its parents through `parent`), latest first.
+rules in reach of {scope} =>
+  first := nothing
+  last := nothing
+  here := scope
+  while here do
+    links := here . rules
+    while links do
+      link := node
+      r := links . rule
+      set link . rule to r
+      if last then
+        set last . next to link
+      unless last then
+        first := link
+      last := link
+      links := links . next
+    here := here . parent
+  first
+
+// Whether two rules are written with the same head (their heads spell the same).
+written alike {a} {b} =>
+  x := a . head_from
+  x_end := a . head_to
+  y := b . head_from
+  y_end := b . head_to
+  result := yes
+  going := yes
+  while going do
+    x_done := same x x_end
+    y_done := same y y_end
+    if x_done then
+      going := nothing
+      unless y_done then
+        result := nothing
+    if going then
+      if y_done then
+        going := nothing
+        result := nothing
+    if going then
+      c := x . character
+      d := y . character
+      unless character c is d then
+        result := nothing
+        going := nothing
+      if going then
+        x := x . next
+        y := y . next
+  result
 
 // What reads the statement from `at` to `limit` with the rules in reach of `scope` (R2.5): every rule that reads it whole;
 // between them, one led by a literal over one led by a capture; then one written with the same head as a later one gives way
 // to it (`=>`), otherwise the one declared first reads it (G3.1). The rules come nearest scope first, latest first. Answers
 // a node with the `rule` and its `captures`, or nothing.
 reading from {at} to {limit} in {scope} =>
-  rules := external rules scope
+  rules := rules in reach of scope
   reading from at to limit among rules
 
 reading from {at} to {limit} among {rules} =>
   best := nothing
   best_rule := nothing
-  definer := external definer
-  defining := external head definer
+  definer := registry . definer
   while rules do
     rule := rules . rule
     pieces := rule . pieces
@@ -378,9 +436,7 @@ reading from {at} to {limit} among {rules} =>
     if r then
       take := yes
       if best then
-        mine := external head rule
-        theirs := external head best_rule
-        if chain mine equals theirs then
+        if written alike rule best_rule then
           take := nothing
         led := pieces . literal
         best_pieces := best_rule . pieces
@@ -392,9 +448,9 @@ reading from {at} to {limit} among {rules} =>
           if best_led then
             take := nothing
         // the rule that defines rules reads a definition whole, whatever else could (R0.1)
-        if chain mine equals defining then
+        if written alike rule definer then
           take := yes
-        if chain theirs equals defining then
+        if written alike best_rule definer then
           take := nothing
       if take then
         best := r
@@ -534,7 +590,7 @@ plan {from} to {to} below {base} in {scope} =>
               at := based . end
   first
 
-hand planning over
+plan_rule := the seed's latest rule
 
 // ---------------------------------------------------------------- heads read in Ray (R2.2)
 open := learned . open
@@ -648,6 +704,30 @@ typed name from {at} to {limit} =>
       set found . name_end to before
   found
 
+// A rule kept where it reads rules: on its scope's `rules`, latest first; the registry's `latest`.
+keep rule {made} =>
+  scope := made . scope
+  link := node
+  set link . rule to made
+  earlier := scope . rules
+  set link . next to earlier
+  set scope . rules to link
+  set registry . latest to made
+  made
+
+// The seed's rules, taken over once: the top scope's, latest first; the earliest is the first statement's.
+take the seed's rules =>
+  here := external .
+  top := here . parent
+  imported := external rules top
+  set top . rules to imported
+  last := imported
+  while last do
+    first_statement := last . rule
+    last := last . next
+  set registry . definer to first_statement
+  set registry . latest to imported . rule
+
 // A type: a scope of the rules its block defines (R2.3).
 type {block} =>
   made := node
@@ -660,7 +740,11 @@ type {block} =>
   head_from := where . from
   head_to := where . to
   pieces := pieces of head_from to head_to like pattern
-  external define pattern pieces body
+  made := external define pattern pieces body
+  keep rule made
+
+take the seed's rules
+hand planning over
 
 // One statement read at the top: applied in place, or reported. Answers the place after it.
 read statement at {at} =>
@@ -683,7 +767,7 @@ hand reading over
 
 // ---------------------------------------------------------------- types with a check: characters, repetition (R2.2)
 latest rule =>
-  external latest
+  registry . latest
 checked by {check} =>
   made := node
   set made . check to check

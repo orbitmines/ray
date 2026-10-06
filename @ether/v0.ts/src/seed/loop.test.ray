@@ -1,7 +1,3 @@
-{pattern} => {body} =>
-  external rule pattern body
-{name} := {value} =>
-  external declare name value
 say {x} =>
   external io stdout x
 link {x} to {y} =>

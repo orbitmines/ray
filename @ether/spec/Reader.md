@@ -35,11 +35,20 @@ Status legend as in the other spec files. Everything here is **Proposed** until 
   (a new `:=`, a new `=>`) never reaches into the reader that reads it.
 - **R0.6 Handing over.** The entrypoint defines the full reader (R1–R5) in Ray and hands reading to it (`external reader`);
   from then on, later passes and every other file are read by it, as native code.
-- **R0.7 Externals** — none of them syntax: make a node; read a member; write a member; whether two nodes are the same;
-  `rule` (add a rule); `reader` (hand reading over); `goto`/`label` (the edges of the goto program a body compiles to); the
-  host's natives (io, os, time, random, network, where). No integers: text is a chain of character nodes, one node per
-  character, so comparing characters is identity; positions are places; counting is walking; numbers are `Number.ray`'s,
-  mapped to native integers only by a removable Compiler-level optimisation.
+- **R0.7 Externals** — none of them syntax, and as few as reading needs (2026-10-06, user: "minimize externals"):
+  - memory: `node`, `get`, `set`, `same` (a node's `parent` reads like a member);
+  - control: `goto`, `label` — the edges of the goto program a body compiles to;
+  - code and frames: `.` (the frame a body runs in), `span` (where code is: its first place, the place after it, the frame it
+    was written in), `read` (code between two places, read where other code was written), `apply` (a rule's body or code, run
+    in a frame, with captures given as spans or as values), `declare` (a name bound in the frame it was written in);
+  - the bootstrap: the external the first statement names (`rule`), `learned`, `reader`, `planner`, and `rules` (the seed's
+    rules, taken over once by the reader in Ray, which keeps every rule after that on its scope's `rules`);
+  - `define` (a rule whose head the reader read, registered so it compiles), `report` (a diagnostic);
+  - the host's natives (io, os, time, random, network, where).
+  No integers: text is a chain of character nodes, one node per character, so comparing characters is identity; positions are
+  places; counting is walking; numbers are `Number.ray`'s, mapped to native integers only by a removable Compiler-level
+  optimisation. Dropped from the old kernel: `bits`, `forward`, `literal`, `unordered`, `=`, `theme`, `base`, `extend`,
+  `inline`, `own`, `assign`, `before`/`after`/`first`/`rest` (Ray over members and spans), `none`, `**`.
 - **R0.8 One file.** The host is a single file, set up as `language.ts` is (the CLI, the daemon and the LSP use it the same
   way); only the reading mechanics are the seed's.
 

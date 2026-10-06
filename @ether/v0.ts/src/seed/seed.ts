@@ -68,8 +68,8 @@ export class Seed {
     this.externals.set('same', (frame, [a, b]) => self.force(a) === self.force(b) ? true : undefined);
     // R0.6: reading handed to a rule of the entrypoint; it is applied to the place where a statement starts and answers the
     // place after it.
-    this.externals.set('reader', (frame, [rule]) => { self.handed = self.force(rule) as Rule; return self.handed; });
-    this.externals.set('planner', (frame, [rule]) => { self.planner = self.force(rule) as Rule; return self.planner; });
+    this.externals.set('reader', (frame, [rule]) => { self.handed = self.rule_of(self.force(rule)); return self.handed; });
+    this.externals.set('planner', (frame, [rule]) => { self.planner = self.rule_of(self.force(rule)); return self.planner; });
     // R0.7, R1: a text is a chain of places, each holding a character node (one node per character) and the next place.
     this.externals.set('rules', (frame, [of]) => self.rules_of(self.force(of) as Node));
     // Run a rule's body, or code, in a frame: captures given as spans (`name`, `from`, `to`) or as values (`value`, in order).
@@ -82,7 +82,8 @@ export class Seed {
     this.externals.set('report', (frame, [from, to]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined; const e = t === undefined ? f.text.s.length : self.where.get(t)!.i; self.say(`Unread \`${f.text.s.slice(f.i, e).slice(0, 60)}\`.`, { text: f.text, b: f.i, e }); return undefined; });
     // The outside world (the host's natives, as the old host has them): only writing a stream so far.
     this.externals.set('io', (frame, [stream, content]) => { const v = self.force(content); self.output(self.show(v)); return undefined; });
-    // A rule from a head read by the entrypoint's reader: its pieces a chain of `literal` or `capture`, each a span (`from`, `to`).
+    // A rule whose head the reader in Ray has read (R2.1): `pieces` a chain of `literal`/`capture` (spans, a capture's
+    // `type`). Answers the rule as a node (`pieces`, `head_from`, `head_to`, `scope`) for the reader to keep where it reads rules.
     this.externals.set('define', (frame, [pattern, pieces, body]) => {
       const head = self.code_of(pattern), list: Piece[] = [];
       for (let p = self.force(pieces) as Node | undefined; p; p = p.members.get('next') as Node | undefined) {
@@ -90,22 +91,18 @@ export class Seed {
         const text = f.text.s.slice(f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i);
         list.push(p.members.has('capture') ? (p.members.has('type') ? { cap: text, type: p.members.get('type') as Node } : { cap: text }) : { lit: text });
       }
-      return self.define(head, self.code_of(body), list);
+      const b = self.code_of(body);
+      const rule: Rule = { head, pieces: list, body: new Code(b.text, b.b, b.e, b.frame, self.planner), order: self.order++, planner: self.planner };
+      self.version++;
+      return self.node_of(rule);
     });
     // Where code is: a node with the place it starts at (`from`) and the place after it (`to`, none at the text's end).
-    this.externals.set('span', (frame, [code]) => { const c = self.code_of(code), n = new Node(); n.members.set('from', self.place(c.text, c.b)); n.members.set('to', c.e >= c.text.s.length ? undefined : self.place(c.text, c.e)); return n; });
+    this.externals.set('span', (frame, [code]) => { const c = self.code_of(code), n = new Node(); n.members.set('from', self.place(c.text, c.b)); n.members.set('to', c.e >= c.text.s.length ? undefined : self.place(c.text, c.e)); n.members.set('frame', c.frame); return n; });
     // Code from one place to another, read where `like` was written (a capture's type, read once when its rule is defined).
     this.externals.set('read', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.code_of(like); return self.force(new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner)); });
-    // A scope's own rules, latest first (not those of the scopes around it): a type's reading rules.
-    this.externals.set('own_rules', (frame, [of]) => { const n = self.force(of) as Node; let first: Node | undefined, last: Node | undefined; for (let i = n.rules.length - 1; i >= 0; i--) { const link = new Node(); link.members.set('rule', self.node_of(n.rules[i])); if (last) last.members.set('next', link); else first = link; last = link; } return first; });
-    // The rule that defines rules (the first statement's), as a node: its reading of a statement is the loosest of all (R0.1).
-    this.externals.set('definer', () => self.node_of(self.global.rules[0]));
     this.externals.set('.', frame => frame);
-    this.externals.set('latest', () => { let last: Rule | undefined; for (const r of self.global.reach()) if (last === undefined || r.order > last.order) last = r; return last; });
     // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
     this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); n.members.set('access', self.chain_of(l.access)); n.members.set('open', self.character(l.open)); n.members.set('close', self.character(l.close)); return n; });
-    // The head of a rule as a chain, to tell whether two rules are written with the same head.
-    this.externals.set('head', (frame, [rule]) => self.chain_of(((self.force(rule) as Node).members.get('rule') as Rule).head.s.trim()));
   }
 
   say(message: string, at: Span) { this.diagnostics.push({ message, at }); }
@@ -132,12 +129,14 @@ export class Seed {
   where = new Map<Node, { text: Text; i: number }>();
   // A literal written in a head, as a chain of places of its own.
   chain_of(s: string): Node | undefined { return s.length === 0 ? undefined : this.place({ name: 'literal', s }, 0); }
+  rule_of(x: unknown): Rule { return x instanceof Node ? x.members.get('rule') as Rule : x as Rule; }
   // A rule as a node: its pieces in order (`literal`: a chain of places; `capture`: its name), its head and its order.
   rule_nodes = new Map<Rule, Node>();
   node_of(rule: Rule): Node {
     let n = this.rule_nodes.get(rule);
     if (n !== undefined) return n;
-    n = new Node(); n.members.set('rule', rule);
+    n = new Node(); n.members.set('rule', rule); n.members.set('scope', rule.head.frame);
+    { const h = rule.head, from = h.s.length - h.s.trimStart().length, to = h.s.trimEnd().length; n.members.set('head_from', this.place(h.text, h.b + from)); n.members.set('head_to', h.b + to >= h.text.s.length ? undefined : this.place(h.text, h.b + to)); }
     let first: Node | undefined, last: Node | undefined;
     for (const piece of rule.pieces) {
       const p = new Node();
@@ -157,7 +156,7 @@ export class Seed {
   }
   // A rule applied with captures read by the entrypoint's reader: a chain of (name, from, to) where from/to are places.
   apply_chain(rule: Node, caps: Node | undefined, within: Node): unknown {
-    const r = rule instanceof Node ? rule.members.get('rule') as Rule : rule as unknown as Rule, list: [string, Span][] = [];
+    const r = this.rule_of(rule), list: [string, Span][] = [];
     if (caps !== undefined && caps.members.has('value')) {
       // captures given as values, in the order the rule's head names them
       const f = new Node(r.head.frame), names = r.pieces.filter(p => 'cap' in p).map(p => (p as { cap: string }).cap);
@@ -318,7 +317,7 @@ export class Seed {
     const frame = new Node(rule.head.frame);
     // a typed capture is read by its type's rules
     // a capture typed by a scope of reading rules is read by them; one typed by a check is read where it was written
-    for (const [name, sp] of caps) { const t = (sp as { type?: Node }).type; frame.members.set(name, new Code(sp.text, sp.b, sp.e, t !== undefined && t.rules.length > 0 ? t : caller, planner, (sp as { of?: SpanOf }).of)); }
+    for (const [name, sp] of caps) { const t = (sp as { type?: Node }).type; frame.members.set(name, new Code(sp.text, sp.b, sp.e, t !== undefined && (t.rules.length > 0 || t.members.get('rules') !== undefined) ? t : caller, planner, (sp as { of?: SpanOf }).of)); }
     return this.compiled(rule)(frame);
   }
   compiled(rule: Rule): Compiled {

@@ -69,9 +69,11 @@ unless finer == (Time(calendar: Julian) = 120 seconds) { INFO@mark `TRO9 two min
 
 unless "1582-10-04" as Julian + 1 day as Gregorian == "1582-10-15" as Gregorian { INFO@mark `TI52 the day after the last Julian day is not the first Gregorian one` }
 unless UTC().offset == 0 { INFO@mark `TI19 UTC is at some offset` }
-unless GMT == UTC { INFO@mark `TI40 GMT is not UTC` }
-if UTC.leap_seconds { INFO@mark `TI41 UTC counts leap seconds` }
-if GMT.leap_seconds { INFO@mark `TI78 the zone without leap seconds has them` }
+unless UTC() is GMT { INFO@mark `TI40 UTC without leap seconds is not GMT` }
+if UTC().leap_seconds { INFO@mark `TI41 UTC counts leap seconds` }
+if GMT().leap_seconds { INFO@mark `TI78 the zone without leap seconds has them` }
+if UTC(leap_seconds: true) is GMT { INFO@mark `GML1 UTC counting leap seconds is GMT` }
+unless UTC(leap_seconds: true).leap_seconds { INFO@mark `GML2 UTC asked to count leap seconds does not` }
 unless Julian.week.is_recurring { INFO@mark `TI57 the weekdays do not recur` }
 if Julian.hour.is_recurring { INFO@mark `TI58 an hour of sixty minutes recurs` }
 unless Julian.month.EPOCH == 1 && "2024-01-01" as ISO_8601 .month == January && January.index + 1 == 1 { INFO@mark `TI59 a segment does not start at one: January is not month 1` }

@@ -42,3 +42,13 @@ unless "64:ff9b::1.2.3.4" as IP as String == "64:ff9b::1.2.3.4" { INFO@mark `IP4
 unless ("::ffff:1.2.3.4" as IPv6).embedded_ipv4 as String == "1.2.3.4" { INFO@mark `IP45 the embedded address is not kept` }
 unless "1.0.0.1" as IP + 1 as String == "1.0.0.2" { INFO@mark `IP46 the address after 1.0.0.1 is not 1.0.0.2` }
 unless "1.0.0.1" as IP - 1 as String == "1.0.0.0" { INFO@mark `IP47 the address before 1.0.0.1 is not 1.0.0.0` }
+
+// A block is every address in it: its low bits are `0 | 1`, and that is why it is written `/n`.
+cidr_block := "10.0.0.0" as IP / 8
+unless cidr_block.superposed { INFO@mark `BLK1 a block is not a superposition of its addresses` }
+unless "10.1.2.3" as IP is cidr_block { INFO@mark `BLK2 an address in the block is not one of it` }
+if "11.0.0.1" as IP is cidr_block { INFO@mark `BLK3 an address outside the block is one of it` }
+unless cidr_block == "10.0.0.0/8" as IP { INFO@mark `BLK4 the block divided out is not the one read` }
+unless "10.0.0.0" as IP / 32 as String == "10.0.0.0" { INFO@mark `BLK5 a block of all the bits is written with a prefix` }
+unless "::ffff:1.2.3.4" as IP is ("::ffff:0:0/96" as IP) { INFO@mark `BLK6 a mapped address is not in the mapped block` }
+if "1::2" as IP is ("64:ff9b::/96" as IP) { INFO@mark `BLK7 an address outside the translated block is in it` }

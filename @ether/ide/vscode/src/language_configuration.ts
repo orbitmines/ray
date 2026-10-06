@@ -2,6 +2,7 @@ import {
   Disposable,
   LanguageConfiguration,
   languages,
+  SyntaxTokenType,
 } from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
 
@@ -38,6 +39,10 @@ export async function requestLanguageConfiguration(
   }
 }
 
+/** A token kind by name, as `notIn` takes them ("string", "comment", "regex"). */
+const token = (name: string): SyntaxTokenType =>
+  ({ string: SyntaxTokenType.String, comment: SyntaxTokenType.Comment, regex: SyntaxTokenType.RegEx } as Record<string, SyntaxTokenType>)[name] ?? SyntaxTokenType.Other;
+
 const re = (r: { pattern: string; flags?: string }) => new RegExp(r.pattern, r.flags);
 
 /** Convert wire form to VS Code's LanguageConfiguration. */
@@ -47,14 +52,10 @@ function toVsCode(wire: WireConfiguration): LanguageConfiguration {
   if (wire.brackets) out.brackets = wire.brackets;
   if (wire.autoClosingPairs) {
     out.autoClosingPairs = wire.autoClosingPairs.map(p =>
-      Array.isArray(p) ? { open: p[0], close: p[1] } : p,
+      Array.isArray(p) ? { open: p[0], close: p[1] } : { ...p, notIn: p.notIn?.map(token) },
     );
   }
-  if (wire.surroundingPairs) {
-    out.surroundingPairs = wire.surroundingPairs.map(p =>
-      Array.isArray(p) ? { open: p[0], close: p[1] } : p,
-    );
-  }
+  // surroundingPairs exist only in a static language-configuration.json; the API cannot set them.
   if (wire.wordPattern) out.wordPattern = re(wire.wordPattern);
   if (wire.indentationRules) {
     out.indentationRules = {

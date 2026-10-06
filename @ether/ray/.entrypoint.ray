@@ -691,7 +691,7 @@ Node := base class {
   // before it its modifiers.
   | ({aliased}) : {type} = {value} ^punctuation => (
     goto given if external own this
-    external declare this value
+    external rule this value
    given\
     head := external ** aliased
     modifiers := chain None
@@ -734,7 +734,7 @@ Node := base class {
     external declare this given_now
     goto given
    defaulted\
-    external declare this value
+    external rule this value
    given\
     this
   )

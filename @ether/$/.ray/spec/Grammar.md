@@ -81,6 +81,7 @@ From the drafts review (2026-10-06).
   type?". Nothing says what `name: T` means on a method, or how a return type is written. **Q** — Recommend: on a method,
   `name: T` types the method itself (a Program narrowing: `f: Terminating (x) => …`). The return type follows the
   parameters, `(x): R => …` (as in `(x): T` captures), not `-> R`. Drop `-> Return` and `l()`.
+  **Answered (user, 2026-10-06):** `f: Terminating (x) => …` types the method; the return type follows the parameters, `(x): R => …`; the draft's `-> Return` and `l()` are dropped.
 - **G2.19 Arguments indented under a call** — *`.ray2/Grammar.ray:563–581`*: `if` / `  a` / `  ==` / `  b` / `  block`:
   "if(a, == b block)", or "(if condition).block"? G2.13 covers continuation, not an indented argument list. **Q** —
   Recommend: lines indented under a call are its arguments in order; an operator-led line (`== b`) continues the previous

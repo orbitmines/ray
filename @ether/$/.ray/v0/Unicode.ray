@@ -1,6 +1,10 @@
 Unicode := class {
-  static version = %17
-  static UCD = @https://www.unicode.org/Public/ %version /ucd
+  static version: Version = %17
+  static spelled => "{version.number}.{version.revision ?? 0}"
+  static Public = @https://www.unicode.org/Public
+  // one directory per version: `<version>/ucd/` from 4.1.0, `<version>-Update/` with versioned file names before it (https://www.unicode.org/Public/, https://www.unicode.org/reports/tr44/)
+  static UCD => version >= %4'1 ? Public / "{spelled}.0" / "ucd" : Public / "{spelled}-Update"
+  static file (name: String) => version >= %4'1 ? UCD / "{name}.txt" : UCD / "{name}-{spelled}.0.txt"
 
   static Table<Row> := class = (("#", *) | (row: Row, (" "[], "#", *)?) | "")[].join("\n") {
     rows => this.row{!= None}
@@ -17,24 +21,35 @@ Unicode := class {
     category => GeneralCategory.rows{Data[this].general_category ~= ⊢.short_name}.first
   }
 
-  static Blocks = UCD/Blocks.txt as Table<(range: Range, "; ", value: *)>
-  static Scripts = UCD/Scripts.txt as Table<(range: Range, " "[], "; ", value: *)>
-  static EastAsianWidth = UCD/EastAsianWidth.txt as Table<(range: Range, " "[], "; ", value: *)>
-  static CaseFolding = UCD/CaseFolding.txt as Table<(range: Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
-  static BidiMirroring = UCD/BidiMirroring.txt as Table<(range: Range, "; ", value: Scalar)>
+  static Blocks => file("Blocks") as Table<(range: Range, "; ", value: *)>
+  static Scripts => file("Scripts") as Table<(range: Range, " "[], "; ", value: *)>
+  static EastAsianWidth => file("EastAsianWidth") as Table<(range: Range, " "[], "; ", value: *)>
+  static CaseFolding => file("CaseFolding") as Table<(range: Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
+  static SpecialCasing => file("SpecialCasing") as Table<(
+    range: Range, "; ", lower: Scalar[].join(" "), "; ", title: Scalar[].join(" "), "; ", upper: Scalar[].join(" "), ";", (" ", condition: Char.Word[].join(" "), ";")?
+  )>
+  static BidiMirroring => file("BidiMirroring") as Table<(range: Range, "; ", value: Scalar)>
+  static Age => file("DerivedAge") as Table<(range: Range, " "[], "; ", number: Decimal, ".", revision: Decimal)>
 
-  static Data = UCD/UnicodeData.txt as Table<(
+  static Data => file("UnicodeData") as Table<(
     range: Range, ";", name: *, ";", general_category: *, ";", canonical_combining_class: *, ";",
-    bidi_class: *, ";", decomposition_mapping: *, ";", decimal_digit_value: *, ";", digit_value: *, ";",
-    numeric_value: *, ";", bidi_mirrored: "Y" | "N", ";", unicode1_name: *, ";", ISO_10646_comment: *, ";",
+    bidi_class: *, ";", decomposition_mapping: *, ";", decimal_digit_value: Decimal?, ";", digit_value: Decimal?, ";",
+    numeric_value: (minus: "-"?, numerator: Decimal, ("/", denominator: Decimal)?)?, ";", bidi_mirrored: "Y" | "N", ";", unicode1_name: *, ";", ISO_10646_comment: *, ";",
     upper_case: Scalar?, ";", lower_case: Scalar?, ";", title_case: Scalar?
   )>
-  static UpperCase = Data.rows{.upper_case}.map(.range.from: .upper_case)
-  static LowerCase = Data.rows{.lower_case}.map(.range.from: .lower_case)
+  static UpperCase => Data.rows{.upper_case}.map(.range.from: .upper_case)
+  static LowerCase => Data.rows{.lower_case}.map(.range.from: .lower_case)
+  static TitleCase => Data.rows{.title_case}.map(.range.from: .title_case)
+  static DecimalDigitValue => Data.rows{.decimal_digit_value != None}.map(.range.from: .decimal_digit_value)
+  static DigitValue => Data.rows{.digit_value != None}.map(.range.from: .digit_value)
+  static NumericValue => Data.rows{.numeric_value}.map(.range.from: .numeric_value -- (.minus ? -1 : 1) * .numerator / (.denominator ?? 1))
+  static Superscript => decomposed("<super>")
+  static Subscript => decomposed("<sub>")
+  static decomposed (tag: String) => Data.rows{.decomposition_mapping ~= ⊢(tag, " ")}.map(.range.from: .decomposition_mapping.after(tag + " ") as Scalar)
 
   Scripts.rows.value.unique.for script => static Char.`script` = Char{.script == script}
 
-  static GeneralCategory := class = UCD/PropertyValueAliases.txt as Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)> {
+  static GeneralCategory := class = file("PropertyValueAliases") as Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)> {
     rows.for category => static `category.name` = Scalar{Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
   }
 

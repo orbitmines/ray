@@ -63,3 +63,29 @@ unless Unicode.UpperCase[U+0061] == U+0041 { INFO@mark `UN61 the upper case of a
 unless Unicode.LowerCase[U+0041] == U+0061 { INFO@mark `UN62 the lower case of A is not a` }
 unless Unicode.BidiMirroring[U+0028] == U+0029 { INFO@mark `UN63 the mirror of ( is not )` }
 unless U+0061 == "a"[0] { INFO@mark `UN64 U+0061 is not a` }
+
+// Digit values of every script (X3.10, N1.23)
+unless "٣"[0] as Decimal == 3 { INFO@mark `UD8 an Arabic-Indic three is not three` }
+unless "৩"[0] as Decimal == 3 { INFO@mark `UD9 a Bengali three is not three` }
+unless "²"[0] as Decimal == 2 { INFO@mark `UD10 a superscript two is not two` }
+unless "7"[0] as Decimal == 7 { INFO@mark `UD11 a seven is not seven` }
+unless "f"[0] as Decimal == 15 { INFO@mark `UD12 f is not fifteen` }
+unless U+0663.decimal_digit_value == 3 { INFO@mark `UD13 the decimal value of ٣ is not three` }
+if U+00B2.decimal_digit_value { INFO@mark `UD14 a superscript two is a decimal digit` }
+unless U+00B2.digit_value == 2 { INFO@mark `UD15 the digit value of ² is not two` }
+unless U+00BD.numeric_value == 1/2 { INFO@mark `UD16 ½ is not a half` }
+unless U+216B.numeric_value == 12 { INFO@mark `UD17 Ⅻ is not twelve` }
+unless Unicode.Superscript[U+00B2] == U+0032 { INFO@mark `UD18 ² is not a superscript 2` }
+unless Unicode.Subscript[U+2082] == U+0032 { INFO@mark `UD19 ₂ is not a subscript 2` }
+if Unicode.Superscript[U+0032] { INFO@mark `UD20 2 is a superscript` }
+
+// The Unicode version is selectable; its tables follow it (X3.2)
+unless (Unicode.UCD as String) ~= "17.0.0" { INFO@mark `UV1 the tables are not those of version seventeen` }
+unless (Unicode.file("Blocks") as String).ends_with("/ucd/Blocks.txt") { INFO@mark `UV2 a table of a current version is not in its ucd directory` }
+unless U+0061.age == %1'1 { INFO@mark `UV3 a is not from Unicode 1.1` }
+unless U+0061.assigned { INFO@mark `UV4 a is not assigned in the selected version` }
+Unicode.version = %3'2
+unless (Unicode.UCD as String) ~= "3.2-Update" { INFO@mark `UV5 an old version is not read from its update directory` }
+unless (Unicode.file("Blocks") as String).ends_with("Blocks-3.2.0.txt") { INFO@mark `UV6 an old table is not named with its version` }
+if U+1F600.assigned { INFO@mark `UV7 an emoji from 6.1 is assigned in 3.2` }
+Unicode.version = %17

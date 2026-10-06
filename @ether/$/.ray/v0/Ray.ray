@@ -84,7 +84,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   intersection (other: Iterable) => this[{other.contains(.)}]
   disjoint (other: Iterable) => intersection(other).empty
   xor | symmetric_difference (other: Iterable) => this[{!other.contains(.)}], other[{!this.contains(.)}]
-  split (delimiter) => this ~= (*, delimiter)[] -- #.join(*)
+  split (delimiter) => this ~= ((piece: *, ⊙: delimiter)[], piece: *) -- .piece
+  group_by (key: Program | Section) => map(key).unique.map((group) => (group): this[{key(.) == group}])
   enumerate => map((x) => (index: x.index, value: x))
   zip (other: Iterable) => empty || other.empty ? [] : [(first, other.first)], rest.zip(other.rest)
   pairs (other: Iterable) => map(a => other.map(b => (a, b))).flatten(1)
@@ -98,6 +99,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   take (count: Number) => this[..<count]
   find (predicate) => this[{predicate}].first
   index_of (x, at = 0) => empty ? None : first == x ? at : rest.index_of(x, at + 1)
+  until (boundary) => empty || first == boundary ? [] : first, rest.until(boundary)
   squeeze => this[{. != .previous}]
   padded (width: Number, with = 0) => [with] * (width - length), this
 
@@ -133,9 +135,11 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
 
   as (: Iterable<R: ?>) => this[{. is R}]
 
-  chainable == (other: Iterable) => orderless || other.orderless
-    ? count == other.count && every(other.contains(.))
-    : empty ? other.empty : other.nonempty && first == other.first && rest == other.rest
+  chainable == <up_to = None, except: Iterable = []>(other: Iterable) => up_to != None || except.nonempty
+    ? this[{!except.contains(.)}].until(up_to) == other[{!except.contains(.)}].until(up_to)
+    : orderless || other.orderless
+      ? count == other.count && every(other.contains(.))
+      : empty ? other.empty : other.nonempty && first == other.first && rest == other.rest
 }
 
 Ray := class: Iterable & Ordered {

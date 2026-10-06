@@ -645,6 +645,18 @@ Node := base class {
   xor (b) => .or(b).and(.nand(b))
   xnor (b) => .xor(b).not
 
+  // Two fields, each with another name, joined by an edge: `parent | previous : static? <- hierarchy -> children | next : static?`.
+  | {alias} : {type} <- {literal edge ^property} -> {other} | {other_alias} : {other_type} ^punctuation => (
+    goto declared if external own this
+    external declare this None
+   declared\
+    goto other_declared if external own other
+    external declare other None
+   other_declared\
+    external rule alias this
+    external rule other_alias other
+    this
+  )
   // A field with another name: `initial | (internal right-to-left ⊢) : Boundary = …`. The last word is the other name, the words
   // before it its modifiers.
   | ({aliased}) : {type} = {value} ^punctuation => (
@@ -899,13 +911,13 @@ Node := base class {
     narrowed := this
     closure := { inline narrowing }
     selected := None
-    if (narrowed.superposes && narrowed.components.head.value.instance) {
+    if ((narrowed.superposes === global) && (narrowed.components.head.value.instance === global)) {
       alternative := narrowed.components.head
       while alternative {
         if (alternative.value.satisfies(closure)) { if selected { selected = selected | alternative.value } else { selected = alternative.value } }
         alternative = alternative.next
       }
-    } elsif (narrowed.instance) {
+    } elsif (narrowed.instance === global) {
       selected = chain None
       narrowed for {
         held := it.value

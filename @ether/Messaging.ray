@@ -1,7 +1,10 @@
-Chat := class {
-  message: (who: *, text: String)?
+Channel := class: History {
+  admits: Program = Program
 
-  messages => [message, message.previous**].flatten
-  say (who, text: String): static => this ~~ .message = (who: who, text: text)
+  send (program: Program, who = @me): static => program is admits ? commit(who, program) : ERROR@Access `this channel does not admit that program`
+  |= (program: Program): static => send(program)
+  messages => since(None)
   count => messages.count
 }
+
+Chat := class: Channel = admits: Program = Program{Pure & Terminating}

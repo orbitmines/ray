@@ -346,6 +346,7 @@ From the drafts verification (2026-10-06).
 - **W6.9 OS** — `OS.name` from an external; per-OS files that `return if OS.name != "Linux"`.
 - **W6.10 Keyboard** — `pulsed (max: 20/s, delay: 1s)`, `toggled`, `cycle`, `as boolean` if pressed. Now also F-D10b.
 - **W6.11 Chat** — a chain of messages from personas; "only what changed since last seen".
+  **Answered (user, 2026-10-06):** chat is generalised to a program: a `Channel` is a History (version control) whose messages are commits, each carrying any Program, sent with `channel |= program` / `.send(program, who)`; a message is rendered as its program (the UI renders values). What a channel allows is its `admits`, a narrowing of Program: `Chat := Channel` admitting `Program{Pure & Terminating}`; other channels admit other programs. Encryption, signing and authorship come from version control and Security (L§9.2, W2.1); a received program runs with the sender's delegation intersected with the reader's grants (W2.17).
 
 From the drafts review (2026-10-06).
 

@@ -1,0 +1,28 @@
+say {x} =>
+  external io stdout x
+greet {who?} =>
+  say who
+greet
+greet you
+tag {literal word} =>
+  say word
+tag hello
+spaced{ }{x} =>
+  say x
+spaced   wide
+quoted {`=>`} {x} =>
+  say x
+quoted => arrow
+{a} then {b} then {c} =>
+  say a
+  say b
+  say c
+one then two then three then four
+tag {literal word} =>
+  say word
+tag hello
+{a} then {b} then {c} =>
+  say a
+  say b
+  say c
+one then two then three then four

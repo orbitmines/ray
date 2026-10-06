@@ -25,6 +25,7 @@ function span_of(text: Text, b: number, e: number): SpanOf {
 // `planner`: the reader in force where it was written, which reads it into a program (none: the seed).
 export class Code {
   of: SpanOf;
+  raw = false;   // a capture taken as written: its value is its text, never read
   constructor(public text: Text, public b: number, public e: number, public frame: Node, public planner?: Rule, of?: SpanOf) { this.of = of ?? span_of(text, b, e); }
   get s() { return this.of.s; }
 }
@@ -94,7 +95,9 @@ export class Seed {
       const b = self.code_of(body);
       const rule: Rule = { head, pieces: list, body: new Code(b.text, b.b, b.e, b.frame, self.planner), order: self.order++, planner: self.planner };
       self.version++;
-      return self.node_of(rule);
+      // the rule as the reader keeps it: with the pieces it read (their flags: `leading`, `optional`, `raw`, `gap`, `line_end`)
+      const n = self.node_of(rule); n.members.set('pieces', self.force(pieces));
+      return n;
     });
     // Where code is: a node with the place it starts at (`from`) and the place after it (`to`, none at the text's end).
     this.externals.set('span', (frame, [code]) => { const c = self.code_of(code), n = new Node(); n.members.set('from', self.place(c.text, c.b)); n.members.set('to', c.e >= c.text.s.length ? undefined : self.place(c.text, c.e)); n.members.set('frame', c.frame); return n; });
@@ -129,6 +132,8 @@ export class Seed {
   where = new Map<Node, { text: Text; i: number }>();
   // A literal written in a head, as a chain of places of its own.
   chain_of(s: string): Node | undefined { return s.length === 0 ? undefined : this.place({ name: 'literal', s }, 0); }
+  // A capture's name: written as text by the seed's pieces, or the span of the piece the reader in Ray read.
+  cap_name(c: Node): string { const n = c.members.get('name'); if (typeof n === 'string') return n; const p = c.members.get('piece') as Node, f = this.where.get(p.members.get('from') as Node)!, t = p.members.get('to') as Node | undefined; return f.text.s.slice(f.i, t === undefined ? f.text.s.length : this.where.get(t)!.i); }
   rule_of(x: unknown): Rule { return x instanceof Node ? x.members.get('rule') as Rule : x as Rule; }
   // A rule as a node: its pieces in order (`literal`: a chain of places; `capture`: its name), its head and its order.
   rule_nodes = new Map<Rule, Node>();
@@ -140,7 +145,7 @@ export class Seed {
     let first: Node | undefined, last: Node | undefined;
     for (const piece of rule.pieces) {
       const p = new Node();
-      if ('lit' in piece) p.members.set('literal', this.chain_of(piece.lit)); else { p.members.set('capture', piece.cap); if (piece.type) p.members.set('type', piece.type); }
+      if ('lit' in piece) { const c = this.chain_of(piece.lit); p.members.set('literal', c); p.members.set('from', c); } else { p.members.set('capture', piece.cap); if (piece.type) p.members.set('type', piece.type); }
       if (last) last.members.set('next', p); else first = p;
       last = p;
     }
@@ -156,6 +161,7 @@ export class Seed {
   }
   // A rule applied with captures read by the entrypoint's reader: a chain of (name, from, to) where from/to are places.
   apply_chain(rule: Node, caps: Node | undefined, within: Node): unknown {
+    if (process.env.SEED_CAPS) { const ps: string[] = []; const rr = rule instanceof Node ? rule.members.get('pieces') as Node | undefined : undefined; for (let p = rr; p; p = p.members.get('next') as Node | undefined) ps.push([...p.members.keys()].filter(k => k !== 'next').join('+')); console.log('APPLY', ps.join(' | '), '::', (() => { const out: string[] = []; for (let c = caps; c; c = c.members.get('next') as Node | undefined) out.push([...c.members.keys()].join('+')); return out.join(' | '); })()); }
     const r = this.rule_of(rule), list: [string, Span][] = [];
     if (caps !== undefined && caps.members.has('value')) {
       // captures given as values, in the order the rule's head names them
@@ -166,7 +172,7 @@ export class Seed {
     for (let c = caps; c; c = c.members.get('next') as Node | undefined) {
       const from = this.where.get(c.members.get('from') as Node)!, to = c.members.get('to') as Node | undefined;
       const e = to === undefined ? from.text.s.length : this.where.get(to)!.i;
-      list.push([c.members.get('name') as string, { text: from.text, b: from.i, e, type: c.members.get('type') as Node | undefined } as Span]);
+      list.push([this.cap_name(c), { text: from.text, b: from.i, e, type: c.members.get('type') as Node | undefined, raw: c.members.has('raw') } as Span]);
     }
     return this.apply(r, within, list, this.planner);
   }
@@ -317,7 +323,14 @@ export class Seed {
     const frame = new Node(rule.head.frame);
     // a typed capture is read by its type's rules
     // a capture typed by a scope of reading rules is read by them; one typed by a check is read where it was written
-    for (const [name, sp] of caps) { const t = (sp as { type?: Node }).type; frame.members.set(name, new Code(sp.text, sp.b, sp.e, t !== undefined && (t.rules.length > 0 || t.members.get('rules') !== undefined) ? t : caller, planner, (sp as { of?: SpanOf }).of)); }
+    for (const [name, sp] of caps) {
+      // an optional capture that holds nothing is nothing
+      if (sp.b === sp.e) { frame.members.set(name, undefined); continue; }
+      const t = (sp as { type?: Node }).type;
+      const code = new Code(sp.text, sp.b, sp.e, t !== undefined && (t.rules.length > 0 || t.members.get('rules') !== undefined) ? t : caller, planner, (sp as { of?: SpanOf }).of);
+      if ((sp as { raw?: boolean }).raw) code.raw = true;
+      frame.members.set(name, code);
+    }
     return this.compiled(rule)(frame);
   }
   compiled(rule: Rule): Compiled {
@@ -327,7 +340,7 @@ export class Seed {
   // Code read where it was written: its own compiled program, run in its frame.
   // Code that names a member of its frame is that member (as an argument is); other code runs its compiled program.
   force(x: unknown): unknown {
-    if (!(x instanceof Code)) return x;
+    if (!(x instanceof Code) || x.raw) return x;
     const word = x.of.word;
     if (word !== undefined) for (let at: Node | undefined = x.frame; at; at = at.parent) { const v = at.members.get(word); if (v !== undefined || at.members.has(word)) return this.force(v); }
     return this.compile(x)(x.frame);
@@ -389,7 +402,7 @@ export class Seed {
         else steps.push({ kind: 'external', name: n, args, at });
       } else if (m.has('rule')) {
         const caps: [string, Span][] = [];
-        for (let c = m.get('captures') as Node | undefined; c; c = c.members.get('next') as Node | undefined) caps.push([c.members.get('name') as string, { ...span(c.members.get('from'), c.members.get('to')), type: c.members.get('type') } as Span]);
+        for (let c = m.get('captures') as Node | undefined; c; c = c.members.get('next') as Node | undefined) caps.push([this.cap_name(c), { ...span(c.members.get('from'), c.members.get('to')), type: c.members.get('type'), raw: c.members.has('raw') } as Span]);
         steps.push({ kind: 'apply', rule: (m.get('rule') as Node).members.get('rule') as Rule, caps, at });
       } else if (m.has('word')) steps.push({ kind: 'name', at });
       else steps.push({ kind: 'unread', at });

@@ -53,9 +53,15 @@ character {a} is {b} =>
 // The place after `chain` spelled from `at`, or nothing. A space in it also reads a line end and the indentation that
 // continues a statement (R0.1, as the first statement wrote its definer's space).
 spelled {chain} from {at} =>
+  spells out chain up to nothing from at
+
+// The same, for a chain that ends at `chain_end` (a literal written in a head).
+spells out {chain} up to {chain_end} from {at} =>
   here := at
   wanted := chain
   result := yes
+  if same wanted chain_end then
+    wanted := nothing
   while wanted do
     unless here then
       result := nothing
@@ -76,6 +82,8 @@ spelled {chain} from {at} =>
       if matches then
         here := here . next
         wanted := wanted . next
+      if same wanted chain_end then
+        wanted := nothing
       unless matches then
         unless continued then
           result := nothing
@@ -215,18 +223,82 @@ readings of {pieces} from {at} to {limit} =>
       set found . end to at
   if pieces then
     literal := pieces . literal
+    gap := pieces . gap
+    line_end := pieces . line_end
+    fixed := literal
+    far := nothing
     if literal then
-      spelt := spelled literal from at
+      lit_from := pieces . from
+      lit_to := pieces . to
+      spelt := spells out lit_from up to lit_to from at
       if spelt then
         far := spelt . end
-        within := same far limit
-        unless within then
-          within := limit comes after far
-        if within then
-          found := readings of pieces . next from far to limit
-    unless literal then
+    if gap then
+      fixed := yes
+      far := spaces after at
+    if line_end then
+      fixed := yes
+      if at then
+        c := at . character
+        if character c is end then
+          far := at . next
+    if far then
+      within := same far limit
+      unless within then
+        within := limit comes after far
+      if within then
+        found := readings of pieces . next from far to limit
+    unless fixed then
       found := captured pieces from at to limit
   found
+
+// The place after one or more spaces from `at`, or nothing when no space is there.
+spaces after {at} =>
+  here := at
+  found := nothing
+  while here do
+    c := here . character
+    if character c is space then
+      here := here . next
+      found := here
+      unless here then
+        here := nothing
+    unless character c is space then
+      here := nothing
+  found
+
+// The ends a capture from `at` can have, the shortest first (a capture that is not the first piece ends at the first place
+// the rest reads from).
+ends shortest from {at} to {limit} =>
+  first := nothing
+  last := nothing
+  here := at . next
+  crossed := nothing
+  going := yes
+  while going do
+    at_limit := same here limit
+    keep := yes
+    if crossed then
+      unless at_limit then
+        keep := nothing
+    if keep then
+      link := node
+      set link . place to here
+      if last then
+        set last . next to link
+      unless last then
+        first := link
+      last := link
+    if at_limit then
+      going := nothing
+    unless here then
+      going := nothing
+    if going then
+      c := here . character
+      if character c is end then
+        crossed := yes
+      here := here . next
+  first
 
 // The ends a capture from `at` can have, the longest first: every place after `at` up to `limit`, but past a line end only
 // `limit` itself.
@@ -285,13 +357,32 @@ values {a} {b} {c} =>
 captured {pieces} from {at} to {limit} =>
   name := pieces . capture
   rest_pieces := pieces . next
-  ends := ends from at to limit
+  leading := pieces . leading
+  ends := nothing
+  if leading then
+    ends := ends from at to limit
+  unless leading then
+    ends := ends shortest from at to limit
+  // an optional capture may hold nothing: tried after every other end
+  optional := pieces . optional
+  if optional then
+    empty := node
+    set empty . place to at
+    tail := ends
+    unless tail then
+      ends := empty
+    while tail do
+      following := tail . next
+      unless following then
+        set tail . next to empty
+      tail := following
   // a capture followed by a literal ends only where that literal starts (its first character, or a line end for a space)
   wanted := nothing
   if rest_pieces then
     following := rest_pieces . literal
     if following then
-      wanted := following . character
+      following_from := rest_pieces . from
+      wanted := following_from . character
   piece_type := pieces . type
   found := nothing
   while ends do
@@ -308,15 +399,20 @@ captured {pieces} from {at} to {limit} =>
             worth := yes
     if worth then
       if piece_type then
-        worth := piece_type holds from at to e
+        unless same at e then
+          worth := piece_type holds from at to e
     rest := nothing
     if worth then
       rest := readings of rest_pieces from e to limit
     if rest then
       cap := node
       set cap . name to name
+      set cap . piece to pieces
       if piece_type then
         set cap . type to piece_type
+      raw := pieces . raw
+      if raw then
+        set cap . raw to yes
       set cap . from to at
       set cap . to to e
       earlier := rest . captures
@@ -649,17 +745,7 @@ pieces of {head_from} to {head_to} like {like} =>
       if captured then
         unless same start at then
           add literal piece from start to at into into
-        name_end := word end from inner to shut
-        typed := typed name from inner to name_end
-        unless typed then
-          add capture piece from inner to name_end into into
-        if typed then
-          bare := typed . name_end
-          add capture piece from inner to bare into into
-          type_from := name_end . next
-          capture_type := external read type_from shut like
-          made := into . last
-          set made . type to capture_type
+        what brackets hold from inner to shut into into like like
         at := shut . next
         start := at
       unless captured then
@@ -667,6 +753,126 @@ pieces of {head_from} to {head_to} like {like} =>
   unless same start head_to then
     add literal piece from start to head_to into into
   into . first
+
+// What a capture's brackets hold (R2.2): spaces only, a gap; `\n`, a line end; text in backticks, a literal; `literal`
+// and a name, a capture taken as written; a name ending in `?`, a capture that may hold nothing; a name ending in `:` and a
+// type, a typed capture (the type read once, here). Anything after the name (`^style`) is the highlighting's.
+what brackets hold from {inner} to {shut} into {into} like {like} =>
+  c := inner . character
+  done := nothing
+  if character c is space then
+    rest := spaces after inner
+    if same rest shut then
+      add gap piece from inner to shut into into
+      done := yes
+  unless done then
+    if character c is backtick then
+      lit_from := inner . next
+      lit_to := closing backtick from lit_from to shut
+      if lit_to then
+        add literal piece from lit_from to lit_to into into
+        done := yes
+  unless done then
+    if character c is backslash then
+      n := inner . next
+      d := n . character
+      if character d is letter_n then
+        after_n := n . next
+        if same after_n shut then
+          add line_end piece from inner to shut into into
+          done := yes
+  unless done then
+    name_from := inner
+    name_end := word end from inner to shut
+    raw := nothing
+    if spells raw_word from name_from to name_end then
+      unless same name_end shut then
+        raw := yes
+        name_from := name_end . next
+        name_end := word end from name_from to shut
+    last_char := last place from name_from to name_end
+    l := last_char . character
+    optional := nothing
+    if character l is question then
+      optional := yes
+    typed := typed name from name_from to name_end
+    bare := name_end
+    if optional then
+      bare := last_char
+    if typed then
+      bare := typed . name_end
+    leading := nothing
+    unless into . first then
+      leading := yes
+    add capture piece from name_from to bare into into
+    made := into . last
+    if raw then
+      set made . raw to yes
+    if optional then
+      set made . optional to yes
+    if leading then
+      set made . leading to yes
+    if typed then
+      type_from := name_end . next
+      capture_type := external read type_from shut like
+      set made . type to capture_type
+
+// The place of the backtick that closes one, from `at`, before `limit`.
+closing backtick from {at} to {limit} =>
+  here := at
+  found := nothing
+  while here do
+    if same here limit then
+      here := nothing
+    if here then
+      c := here . character
+      if character c is backtick then
+        found := here
+        here := nothing
+      if here then
+        here := here . next
+  found
+
+// The last place from `at` before `limit`.
+last place from {at} to {limit} =>
+  here := at
+  found := at
+  while here do
+    if same here limit then
+      here := nothing
+    if here then
+      found := here
+      here := here . next
+  found
+
+// Whether the places from `at` to `limit` spell the word written from `word . from` to `word . to`.
+spells {word} from {at} to {limit} =>
+  x := word . from
+  x_end := word . to
+  y := at
+  result := yes
+  going := yes
+  while going do
+    x_done := same x x_end
+    y_done := same y limit
+    if x_done then
+      going := nothing
+      unless y_done then
+        result := nothing
+    if going then
+      if y_done then
+        going := nothing
+        result := nothing
+    if going then
+      c := x . character
+      d := y . character
+      unless character c is d then
+        result := nothing
+        going := nothing
+      if going then
+        x := x . next
+        y := y . next
+  result
 
 // Where the word from `at` ends: at a space, or at `limit`.
 word end from {at} to {limit} =>
@@ -687,6 +893,15 @@ word end from {at} to {limit} =>
 // A capture's name written with its type (`{d: Digit}`): the name ends before the colon. Answers a node with `name_end`, or nothing.
 colon := characters of :
 colon := colon . character
+marks := characters of `\n?
+backtick := marks . character
+marks := marks . next
+backslash := marks . character
+marks := marks . next
+letter_n := marks . character
+marks := marks . next
+question := marks . character
+raw_word := external span literal
 typed name from {at} to {limit} =>
   here := at
   before := nothing

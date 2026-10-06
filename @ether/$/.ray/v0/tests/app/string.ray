@@ -257,3 +257,12 @@ if "a goto" ~= ⊢"goto" { INFO@mark `PM2 ⊢ reads a pattern away from the star
 unless "x\" ~= "\" ⊣ { INFO@mark `PM3 ⊣ does not hold a pattern to the end` }
 unless ("abcabc" ~= "ca").index == 2 { INFO@mark `PM4 a reading does not say where it starts` }
 unless "abc" !~= "z" { INFO@mark `PM5 !~= does not hold when nothing is read` }
+
+// Case and scripts from the Unicode data (X3.10)
+unless "Straße".upper_case == "STRASSE" { INFO@mark `UD1 sharp s does not upper-case to SS` }
+unless U+01C6.title_case == U+01C5 { INFO@mark `UD2 dž does not title-case to Dž` }
+unless "ǆemal".title_case == "ǅemal" { INFO@mark `UD3 a word does not start with its title case` }
+unless "x²".baseline == "x2" { INFO@mark `UD4 a superscript does not come down to its digit` }
+unless "H₂O".baseline == "H2O" { INFO@mark `UD5 a subscript does not come up to its digit` }
+unless "2".superscript == "²" { INFO@mark `UD6 two has no superscript` }
+unless "2".subscript == "₂" { INFO@mark `UD7 two has no subscript` }

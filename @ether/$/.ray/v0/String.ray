@@ -9,15 +9,23 @@ Char := class: Unicode.Scalar {
   is_ascii => this < 128
   bytes => ([this] as String).bytes
 
-  upper_case | uppercase => Unicode.UpperCase[this] ?? this
-  lower_case | lowercase => Unicode.LowerCase[this] ?? this
+  special_casing => Unicode.SpecialCasing.rows{.range.in(this) && !.condition}.first
+  upper_case | uppercase => special_casing?.upper ?? Unicode.UpperCase[this] ?? this
+  lower_case | lowercase => special_casing?.lower ?? Unicode.LowerCase[this] ?? this
+  title_case | titlecase => special_casing?.title ?? Unicode.TitleCase[this] ?? upper_case
   is_upper => lower_case != this
   is_lower => upper_case != this
   mirrored => Unicode.BidiMirroring[this]?.value ?? this
   swap_case | swapcase => is_lower ? upper_case : lower_case
   fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status is ("C" | "F")}.first?.value ?? this
 
-  as (=== Decimal) => this is Digit ? this - "0" : this.lower_case - "a" + 10
+  decimal_digit_value => Unicode.DecimalDigitValue[this]
+  digit_value => Unicode.DigitValue[this]
+  numeric_value => Unicode.NumericValue[this]
+  baseline => Unicode.Superscript[this] ?? Unicode.Subscript[this] ?? this
+  superscript => Unicode.Superscript⁻¹[this]
+  subscript => Unicode.Subscript⁻¹[this]
+  as (=== Decimal) => digit_value ?? lower_case - "a" + 10
   static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
   static (codepoint: Unicode.Scalar) as (=== Char) => codepoint
 
@@ -25,6 +33,8 @@ Char := class: Unicode.Scalar {
   columns => east_asian_width is ("W" | "F") ? 2 : 1
   script => Unicode.Scripts[this]?.value ?? "Unknown"
   block => Unicode.Blocks[this]?.value ?? "No_Block"
+  age => Unicode.Age[this] -- . ? Version(number: .number, revision: .revision) : None
+  assigned => age && age <= Unicode.version
 }
 
 Escape := {
@@ -69,7 +79,10 @@ String := class: Char[] {
   swap_case | swapcase => #.swap_case as String
   ignore_case | ignorecase => this.copy ~~ .normalizer = (text) => text.fold_case
   fold_case | foldcase => #.fold_case as String
-  title_case | titlecase => words.map(.[0].upper_case, .[1..].lower_case).join(" ")
+  title_case | titlecase => words.map(.[0].title_case, .[1..].lower_case).join(" ")
+  baseline => #.baseline as String
+  superscript => #.superscript as String
+  subscript => #.subscript as String
 
   words => split(Char.Blank | "_")
   snake_case | snakecase => words.lower_case.join("_")

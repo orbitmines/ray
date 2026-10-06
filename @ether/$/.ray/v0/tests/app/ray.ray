@@ -318,3 +318,23 @@ unless swap_a == 2 && swap_b == 1 { INFO@mark `SD5 (a, b) = pair does not assign
 unless ["ccc", "a", "bb"].min(.count) == "a" { INFO@mark `MK1 min along a key does not pick the smallest by it` }
 unless ["ccc", "a", "bb"].max(.count) == "ccc" { INFO@mark `MK2 max along a key does not pick the largest by it` }
 unless 2.min(5) == 2 { INFO@mark `MK3 min of a value is no longer the smaller of the two` }
+
+// `split` keeps its delimiters as the edges between the pieces (R3.16)
+unless "a,b,c".split(",") == ["a", "b", "c"] { INFO@mark `SQ1 a,b,c split at its commas is not a, b, c` }
+unless "a,b,c".split(",").count == 3 { INFO@mark `SQ2 the delimiters are counted among the pieces` }
+unless "a,b,c".split(",").first.⊣.⊙ == "," { INFO@mark `SQ3 the edge after a piece is not the delimiter it was split at` }
+unless "abc".split(",") == ["abc"] { INFO@mark `SQ4 text without the delimiter is not one piece` }
+
+// `group_by` answers a map from each key to what has it (R3.17)
+grouped := [1, 2, 3, 4, 5].group_by(. % 2)
+unless grouped[1] == [1, 3, 5] { INFO@mark `GY1 the odd numbers are not grouped under one` }
+unless grouped[0] == [2, 4] { INFO@mark `GY2 the even numbers are not grouped under zero` }
+unless ["a", "bb", "cc"].group_by(.count)[2] == ["bb", "cc"] { INFO@mark `GY3 two words of one length are not grouped together` }
+if ["a"].group_by(.count)[2] { INFO@mark `GY4 a key nothing has holds something` }
+
+// `==` up to a boundary, and with exceptions (U9.1)
+unless [1, 2, 0, 3] ==<up_to: 0> [1, 2, 0, 4] { INFO@mark `EQ1 two lists alike up to a boundary are not equal up to it` }
+if [1, 2, 0, 3] ==<up_to: 0> [1, 5, 0, 3] { INFO@mark `EQ2 lists that differ before the boundary are equal up to it` }
+unless [1, 2, 3] ==<except: [2]> [1, 3] { INFO@mark `EQ3 an exempt element still counts` }
+if [1, 2, 3] ==<except: [2]> [1, 4, 3] { INFO@mark `EQ4 an exception excuses an element that is not exempt` }
+unless [1, 2] == [1, 2] { INFO@mark `EQ5 equality without options is no longer structural` }

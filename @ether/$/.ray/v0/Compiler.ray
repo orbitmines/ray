@@ -78,7 +78,7 @@ Compiler := class {
 
   stored := formats + per_object + cached + delta
 
-  minimising := default + folding + logic
+  minimising := default + logic
 
   levels => [none, default, folding, logic, minimising, memoised, formats, per_object, cached, delta, stored]
 

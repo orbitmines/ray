@@ -91,3 +91,34 @@ unless ("2024-02-07" as ISO_8601) < ("2024-02-08" as ISO_8601) { INFO@mark `TI94
 unless (Time.now.corrected(1 second, within: 1 ns)).uncertainty == 1 ns { INFO@mark `TI95 a corrected time does not keep how certain the correction is` }
 unless Mars.days == sol { INFO@mark `TI87 a day on Mars is not a sol` }
 unless 1 sol == 88775 seconds { INFO@mark `TI88 a sol is not 88775 seconds` }
+
+Host := class: OS (platform: String)
+unless Compiler.reduced(Host("linux"), TimeZone.sources) is TimeZone.Zoneinfo { INFO@mark `TZ1 linux does not read the host's zoneinfo` }
+unless Compiler.reduced(Host("darwin"), TimeZone.sources) is TimeZone.Zoneinfo { INFO@mark `TZ2 macos does not read the host's zoneinfo` }
+if Compiler.reduced(Host("linux"), TimeZone.sources).directory == TimeZone.bundled.directory { INFO@mark `TZ3 linux reads the bundled data instead of the host's` }
+unless Compiler.reduced(Host("win32"), TimeZone.sources) is TimeZone.ICU { INFO@mark `TZ4 windows does not ask the OS's ICU` }
+unless Compiler.reduced(Host("browser"), TimeZone.sources) is TimeZone.Intl { INFO@mark `TZ5 the browser does not ask Intl` }
+unless Compiler.reduced(OS.Ether(), TimeZone.sources).directory == TimeZone.bundled.directory { INFO@mark `TZ6 ether does not read the bundled data` }
+unless OS.Ether().name == ether { INFO@mark `TZ7 the language as the operating system is not ether` }
+unless TimeZone.bundled.version == "2026c" { INFO@mark `TZ8 the bundled data is not tzdata 2026c` }
+
+summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
+winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
+with @me/device/os = OS.Ether() {
+  amsterdam := TimeZone("Europe/Amsterdam")
+  unless amsterdam.at(summer).offset == 2 hours { INFO@mark `TZ9 Amsterdam in summer is not at +02:00 on ether` }
+  unless amsterdam.at(summer).abbreviation == "CEST" && amsterdam.at(summer).daylight { INFO@mark `TZ10 Amsterdam in summer is not on CEST` }
+  unless amsterdam.at(winter).offset == 1 hour { INFO@mark `TZ11 Amsterdam in winter is not at +01:00 on ether` }
+  unless amsterdam.at(winter).abbreviation == "CET" && !amsterdam.at(winter).daylight { INFO@mark `TZ12 Amsterdam in winter is not on CET` }
+  unless TimeZone("UTC").at(summer).offset == 0 seconds { INFO@mark `TZ13 UTC is off zero on ether` }
+}
+unless TimeZone("UTC").at(summer).offset == 0 seconds { INFO@mark `TZ14 UTC is off zero on this host` }
+unless [Host("linux"), Host("darwin"), OS.Ether()].every(Compiler.reduced(., TimeZone.sources).at("UTC", winter).offset == 0 seconds) { INFO@mark `TZ15 UTC is off zero on a platform that reads TZif` }
+
+Counting := class: TimeZone.Zoneinfo {
+  asked: String[] = []
+  data (zone: String) => (asked.push zone) -- $.tzif.read((directory / zone).bytes)
+}
+counting := Counting(directory: TimeZone.bundled.directory)
+counting.at("Europe/Amsterdam", summer)
+unless counting.asked == ["Europe/Amsterdam"] { INFO@mark `TZ16 reading one zone read others than the one asked for` }

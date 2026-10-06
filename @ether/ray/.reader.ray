@@ -104,7 +104,7 @@ defining := learned.definer
   found
 
 // Characters the reader names are taken from where they are written here.
-written := external span "/()[]{}:.,`\n?^
+written := external span "/()[]{}:.,`\n?^|
 mark := written.from
 // the text the reader is written in (code written in it reads with the reader's own rules)
 reader_text := mark.text
@@ -139,6 +139,8 @@ mark = mark.next
 question := mark.character
 mark = mark.next
 caret := mark.character
+mark = mark.next
+pipe := mark.character
 
 // The bracket that closes `c`, or nothing when `c` opens none.
 {c}.closer =>
@@ -634,8 +636,7 @@ caret := mark.character
   late := None
   if wanted
     unless pieces.leading
-      unless mode
-        late = true
+      late = true
   piece_type := pieces.type
   found := None
   going := true
@@ -1674,6 +1675,17 @@ external reader reader
 {value}.reading_rules =>
   top := registry.top
   rules := value.rules_in_reach(top, None)
+  // a class's parent's rules after its own
+  ancestor := value.extended_class
+  while ancestor
+    more := ancestor.rules_in_reach(top, None)
+    if more
+      if rules
+        last := rules.last_piece
+        last.next = more
+      unless rules
+        rules = more
+    ancestor = ancestor.extends
   base := registry.base
   base_rules := base.rules
   if rules
@@ -1786,13 +1798,34 @@ registry.sender = sent_rule
           found = true
   found
 
-// Whether `x` is `scope` or inside it (its parents reach it).
+// Whether `x` is `scope` or inside it (its parents reach it, or the classes they extend).
 {x}.inside({scope}) =>
   here := x
   found := None
   while here
     if here === scope
       found = true
+      here = None
+    if here
+      ancestor := here.extends
+      while ancestor
+        if ancestor === scope
+          found = true
+          ancestor = None
+          here = None
+        if ancestor
+          ancestor = ancestor.extends
+    if here
+      here = here.parent
+  found
+
+// The class a value is an instance of (or the class itself) that extends another: what it extends, or nothing.
+{value}.extended_class =>
+  here := value
+  found := None
+  while here
+    if here.extends
+      found = here.extends
       here = None
     if here
       here = here.parent
@@ -2170,6 +2203,89 @@ Operand := registry.latest.checked
 Unbraced := opening_block.anything_but[]
 
 // ---------------------------------------------------------------- what the language's rules do (the reader's own)
+// A rule of the head `pieces` defined (R2.1): one in a class, or with parameters, runs what every method runs with the body written
+// here; a head of parameters only names nothing (a closure: the rule is a value, not kept where rules are read).
+{pieces}.defined({written_pattern}, {written_body}, {scope}, {modifiers}) =>
+  head := written_pattern.code
+  b := written_body.code
+  parameters := pieces.parameters_piece
+  method := scope.class
+  if parameters
+    method = true
+  made := None
+  if method
+    made = external define head pieces method_body
+    made.method = true
+    made.written = written_body
+    if parameters
+      if parameters.has(parameters)
+        made.parameters = parameters.parameters
+  unless method
+    made = external define head pieces b
+  made.modifiers = modifiers
+  named := true
+  if parameters
+    if parameters === pieces
+      named = None
+  if named
+    made.keep
+  made
+
+// The value a name written (code, in a node) names where it was written, or nothing.
+{word}.named_value =>
+  code := word.code
+  holder := external declaring code
+  external get holder code
+
+// Where an alternative of a head from `at` ends: at a ` | ` outside brackets, before which no capture is written; else `to`.
+{at}.alternative_end({to}) =>
+  here := at
+  found := to
+  depth := None
+  captures := None
+  while here
+    if here === to
+      here = None
+    if here
+      c := here.character
+      if c === open
+        captures = true
+      shut := c.closer
+      if shut
+        pushed := external node
+        pushed.next = depth
+        depth = pushed
+      unless shut
+        if c.closes
+          if depth
+            depth = depth.next
+        unless depth
+          if c === space
+            unless captures
+              bar := here.next
+              if bar
+                if bar.character === pipe
+                  after := bar.next
+                  if after
+                    if after.character === space
+                      found = here
+                      here = None
+      if here
+        here = here.next
+  found
+
+// The place after ` | `, from the space before it.
+{at}.after_alternative =>
+  bar := at.next
+  after := bar.next
+  after.next
+
+// The last of a chain of pieces.
+{pieces}.last_piece =>
+  piece := pieces
+  while piece.next
+    piece = piece.next
+  piece
 // `x.name`: the receiver's own member `name` (T8.7: own key wins), else its method of that name applied to it with
 // `arguments` (code, or nothing).
 {this}.member({name}, {arguments}) =>
@@ -2300,6 +2416,16 @@ Unbraced := opening_block.anything_but[]
     found = other
   found
 
+// A class's block read again in an instance being made, after the blocks of the classes it extends.
+{static}.read_into({instance}) =>
+  class_read := static
+  ancestor := class_read.extends
+  if ancestor
+    ancestor.read_into(instance)
+  block := class_read.written
+  code := block.code
+  external apply code None instance
+
 // Calling a value: a class makes an instance of itself; a closure runs.
 {this}.called({arguments}) =>
   value := this
@@ -2333,9 +2459,8 @@ Unbraced := opening_block.anything_but[]
       registry.naming = None
     unless written.named
       registry.given = written.listed
-  block := static.written
-  code := block.code
-  external apply code None instance
+  // the parents' blocks first, then its own
+  static.read_into(instance)
   registry.given = outer_given
   registry.naming = outer_naming
   instance
@@ -2362,29 +2487,53 @@ registry.language = true
   where := external span pattern
   scope := where.frame
   made := None
+  written_pattern := external ** pattern
+  written_body := external ** body
   unless scope.instance
     head_from := where.from
     head_to := head_from.unstyled(where.to)
-    pieces := head_from.pieces(head_to, pattern)
-    parameters := pieces.parameters_piece
-    method := scope.class
-    if parameters
-      method = true
-    if method
-      made = external define pattern pieces method_body
-      made.method = true
-      made.written = external ** body
-      if parameters
-        if parameters.has(parameters)
-          made.parameters = parameters.parameters
-    unless method
-      made = external define pattern pieces body
-    named := true
-    if parameters
-      if parameters === pieces
-        named = None
-    if named
-      made.keep
+    // modifiers before the head (`static`, `chainable`, …): the values its first words name, kept on the rule
+    modifiers := None
+    going := true
+    while going
+      going = None
+      word_end := head_from.word_end(head_to)
+      unless word_end === head_to
+        word := external code head_from word_end pattern
+        modifier := word.named_value
+        if modifier
+          if modifier.modifier
+            link := external node
+            link.modifier = modifier
+            link.next = modifiers
+            modifiers = link
+            head_from = word_end.spaces_after
+            going = true
+    // alternatives (`a | b => …`, names only): one rule each; the parameters of the last are all of theirs
+    last_from := head_from
+    alternative_end := head_from.alternative_end(head_to)
+    while alternative_end
+      unless alternative_end === head_to
+        last_from = alternative_end.after_alternative
+        alternative_end = last_from.alternative_end(head_to)
+      if alternative_end === head_to
+        alternative_end = None
+    last_pieces := last_from.pieces(head_to, pattern)
+    shared := last_pieces.parameters_piece
+    alternative := head_from
+    while alternative
+      ending := alternative.alternative_end(head_to)
+      pieces := last_pieces
+      unless alternative === last_from
+        pieces = alternative.pieces(ending, pattern)
+        unless pieces.parameters_piece
+          if shared
+            tail := pieces.last_piece
+            tail.next = shared
+      made = pieces.defined(written_pattern, written_body, scope, modifiers)
+      alternative = None
+      unless ending === head_to
+        alternative = ending.after_alternative
   made
 
 // ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
@@ -2503,20 +2652,55 @@ Node := type
   // a comment after a value: the value
   {`//`}{comment: Line} =>
     this
+  // `x &+= { … }`: what the block defines, added to `x` (R4.3)
+  &+={ }{{members: Balanced}} =>
+    extended := this
+    external apply members None extended
+    extended
   &&{other} =>
     this.and(other)
   ||{other} =>
     this.or(other)
 registry.base = Node
 
+// ---------------------------------------------------------------- modifiers: words before a definition's head, kept on its rule
+static := external node
+static.modifier = true
+chainable := external node
+chainable.modifier = true
+compounds := external node
+compounds.modifier = true
+right-to-left := external node
+right-to-left.modifier = true
+left-to-right := external node
+left-to-right.modifier = true
+
 // ---------------------------------------------------------------- classes (R4.4)
 // A class: the frame its block is read in, inside the frame it was written in; its statics, its fields' defaults and its methods
 // are that frame's. Calling it makes an instance.
 class {{block: Balanced}} =>
   where := external span block
-  static := external node
-  static.parent = where.frame
-  static.class = true
-  static.written = external ** block
-  external apply block None static
-  static
+  made := external node
+  made.parent = where.frame
+  made.class = true
+  made.written = external ** block
+  external apply block None made
+  made
+// `class: Parent { … }`: a class whose instances are also its parent's (its rules and fields too).
+class: {parent} {{block: Balanced}} =>
+  where := external span block
+  made := external node
+  made.parent = where.frame
+  made.class = true
+  made.extends = parent
+  made.written = external ** block
+  external apply block None made
+  made
+// `static statement` in a class: read once, for the class, not again for each instance.
+static {statement} =>
+  where := external span statement
+  frame := where.frame
+  found := None
+  unless frame.instance
+    found = statement
+  found

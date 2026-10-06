@@ -194,6 +194,10 @@ captured {pieces} from {at} to {limit} =>
     following := rest_pieces . literal
     if following then
       wanted := following . character
+  piece_type := pieces . type
+  type_rules := nothing
+  if piece_type then
+    type_rules := external own_rules piece_type
   found := nothing
   while ends do
     e := ends . place
@@ -207,12 +211,17 @@ captured {pieces} from {at} to {limit} =>
         if character wanted is space then
           if character c is end then
             worth := yes
+    if worth then
+      if piece_type then
+        worth := reading from at to e among type_rules
     rest := nothing
     if worth then
       rest := readings of rest_pieces from e to limit
     if rest then
       cap := node
       set cap . name to name
+      if piece_type then
+        set cap . type to piece_type
       set cap . from to at
       set cap . to to e
       earlier := rest . captures
@@ -260,6 +269,9 @@ hand planning over =>
 // a node with the `rule` and its `captures`, or nothing.
 reading from {at} to {limit} in {scope} =>
   rules := external rules scope
+  reading from at to limit among rules
+
+reading from {at} to {limit} among {rules} =>
   best := nothing
   best_rule := nothing
   while rules do
@@ -437,7 +449,7 @@ add {kind} piece from {piece_from} to {piece_to} into {into} =>
 
 // The pieces of a head: a capture is the brackets around a name (its first word), brackets around brackets are literal,
 // the rest is literal. A chain of `literal`/`capture`, each with `from` and `to`.
-pieces of {head_from} to {head_to} =>
+pieces of {head_from} to {head_to} like {like} =>
   into := node
   at := head_from
   start := head_from
@@ -457,7 +469,16 @@ pieces of {head_from} to {head_to} =>
         unless same start at then
           add literal piece from start to at into into
         name_end := word end from inner to shut
-        add capture piece from inner to name_end into into
+        typed := typed name from inner to name_end
+        unless typed then
+          add capture piece from inner to name_end into into
+        if typed then
+          bare := typed . name_end
+          add capture piece from inner to bare into into
+          type_from := name_end . next
+          capture_type := external evaluate type_from shut like
+          made := into . last
+          set made . type to capture_type
         at := shut . next
         start := at
       unless captured then
@@ -482,12 +503,35 @@ word end from {at} to {limit} =>
         here := here . next
   found
 
+// A capture's name written with its type (`{d: Digit}`): the name ends before the colon. Answers a node with `name_end`, or nothing.
+colon := external character :
+typed name from {at} to {limit} =>
+  here := at
+  before := nothing
+  while here do
+    if same here limit then
+      here := nothing
+    if here then
+      before := here
+      here := here . next
+  found := nothing
+  if before then
+    c := before . character
+    if character c is colon then
+      found := node
+      set found . name_end to before
+  found
+
+// A type: a scope of the rules its block defines (R2.3).
+type {block} =>
+  external scope block
+
 // Rules defined from here on are read by their heads in Ray.
 {pattern} => {body} =>
   where := external span pattern
   head_from := where . from
   head_to := where . to
-  pieces := pieces of head_from to head_to
+  pieces := pieces of head_from to head_to like pattern
   external define pattern pieces body
 
 // One statement read at the top: applied in place, or reported. Answers the place after it.

@@ -1970,12 +1970,39 @@ external reader reader
     unless value
       if first_place.reading_in(receiver_at.to, frame_written)
         value = this
+    // (a name the `this` it is read for has, a member or a method, as a name read on its own is: `pred < other.pred`)
+    unless value
+      seen := frame_written.this_seen
+      if seen
+        written_name := external code receiver_at.from receiver_at.to reader_like
+        name := written_name.code
+        if external own seen name
+          value = external get seen name
+        unless value
+          method := seen.method_spelled(receiver_at.from, receiver_at.to)
+          if method
+            value = method.applied_to(seen, None)
   result := current
   going := true
   // a rest that is only spaces: nothing more to read on it
   if at.spaces_after === rest_to
     going = None
     result = this
+  // a name the base's operators split (`this` at `is`) that a frame holds whole: what it holds, the rest read after it
+  name_end := held ? None : receiver_at.from.name_ends(rest_to)
+  if going && name_end && (name_end === receiver_at.to ? None : at === receiver_at.to)
+    written_whole := external code receiver_at.from name_end reader_like
+    whole := written_whole.code
+    frame = frame_written
+    while frame
+      if external own frame whole
+        value = external get frame whole
+        at = name_end
+        frame = None
+      frame = frame ? frame.outer : None
+    if at === rest_to
+      going = None
+      result = value
   while going
     scopes := value.reading_scopes
     r := at.prefix_reading_in(rest_to, scopes)
@@ -2536,8 +2563,10 @@ registry.latest.shared = true
 {value}.method_named({key}) =>
   k := key
   where := external span k
-  from := where.from
-  to := where.to
+  value.method_spelled(where.from, where.to)
+
+// The same, for the name written from `from` to `to`.
+{value}.method_spelled({from}, {to}) =>
   // (an empty name at the text's end names nothing)
   first_character := None
   if from

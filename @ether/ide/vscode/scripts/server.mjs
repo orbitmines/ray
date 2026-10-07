@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { cpSync, copyFileSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs';
+import { cpSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -12,7 +12,8 @@ rmSync(server, { recursive: true, force: true });
 mkdirSync(server, { recursive: true });
 
 await build({
-  entryPoints: { language: join(implementation, 'src', 'language.ts'), lsp: join(implementation, 'src', 'kernel', 'lsp.ts') },
+  // the language (src/language.ts): `--lsp` serves the language server, its reader runs in a worker of the same file
+  entryPoints: { language: join(implementation, 'src', 'language.ts') },
   outdir: server,
   outExtension: { '.js': '.mjs' },
   bundle: true,
@@ -23,8 +24,6 @@ await build({
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
   logLevel: 'warning',
 });
-
-copyFileSync(join(implementation, 'src', 'kernel', '.kernel.ray'), join(server, '.kernel.ray'));
 
 // The library: @ether itself, less what is not the library (this extension, the implementation, the spec, tests).
 const library = language;

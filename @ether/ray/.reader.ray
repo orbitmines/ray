@@ -2888,6 +2888,7 @@ Unbraced := opening_block.anything_but[]
   block_written := static.written
   block_code := block_written.code
   external apply block_code None static
+  registry.rerun_waiting
   static
 
 // A class's header read into `frame`: each of its items (separated by `,` outside brackets), as a statement; a header in brackets,
@@ -2895,26 +2896,35 @@ Unbraced := opening_block.anything_but[]
 {static}.read_header_into({frame}) =>
   written := static.header
   if written
-    code := written.code
-    where := external span code
-    from := where.from
-    to := where.to
-    if from.character === opening
-      from = from.next
-      to = to.before_place(from)
-    item_from := from
-    while item_from
-      item_end := item_from.item_end(to)
-      item_written := external code item_from item_end code
-      item_code := item_written.code
-      external apply item_code None frame
-      item_from = None
-      unless item_end === to
-        item_from = item_end.next
-        spaced := item_from.spaces_after
-        if spaced
-          item_from = spaced
+    written.read_items_into(frame)
   static
+
+// The items of written code (a node with its `code`), separated by `,` outside brackets (in a bracketed one, what the brackets
+// hold), each read as a statement in `frame`.
+{written}.read_items_into({frame}) =>
+  code := written.code
+  where := external span code
+  from := where.from
+  to := where.to
+  spaced_from := from.spaces_after
+  if spaced_from
+    from = spaced_from
+  if from.character === opening
+    from = from.next
+    to = to.before_place(from)
+  item_from := from
+  while item_from
+    item_end := item_from.item_end(to)
+    item_written := external code item_from item_end code
+    item_code := item_written.code
+    external apply item_code None frame
+    item_from = None
+    unless item_end === to
+      item_from = item_end.next
+      spaced := item_from.spaces_after
+      if spaced
+        item_from = spaced
+  frame
 
 // Where an item from `at` ends: at a `,` outside brackets, or `to`.
 {at}.item_end({to}) =>
@@ -3101,6 +3111,15 @@ Unbraced := opening_block.anything_but[]
   // a rule as a value (a closure: `(x) => …`): applied to them
   if value.method
     found = value.applied_to(None, arguments)
+  // a program: entered where it was written, the arguments bound to its parameters
+  program_class := registry.program_class
+  if program_class
+    if value.instance
+      if value.outer === program_class
+        given := None
+        if arguments
+          given = arguments.listed
+        found = value.entered_in(value.context, given)
   found
 
 // An instance of a class (R4.4): a frame inside it, with the class's block read again there, where a definition is the class's
@@ -3128,7 +3147,7 @@ Unbraced := opening_block.anything_but[]
       naming_frame := external node
       naming_frame.outer = where.frame
       registry.naming = instance
-      external apply written None naming_frame
+      given_node.read_items_into(naming_frame)
       registry.naming = None
     unless written.named
       registry.given = written.listed
@@ -3137,6 +3156,52 @@ Unbraced := opening_block.anything_but[]
   registry.given = outer_given
   registry.naming = outer_naming
   instance
+
+// ---------------------------------------------------------------- programs (P1): code, read where it was written or entered on a value
+// A program entered on `element`: its code read in a frame of its own inside `element`, `this` being `element`; the values
+// `given` (a list's first link, or nothing) bound to its parameters. What its code answers.
+{program}.entered_in({element}, {given}) =>
+  p := program
+  frame := external node
+  frame.outer = element
+  frame.this = element
+  parameters := p.parameters
+  if parameters
+    frame.bound(parameters, given)
+  written := p.code
+  code := written.code
+  external apply code None frame
+
+// A program run now and kept to run again when a class is made or added to while it answers nothing (P5.1); entered on a frame
+// of its own inside where it was written.
+{program}.watched_run =>
+  p := program
+  written := p.code
+  code := written.code
+  where := external span code
+  fresh := external node
+  fresh.outer = where.frame
+  answer := p.entered_in(fresh, None)
+  unless answer
+    waiting := external node
+    waiting.program = p
+    waiting.next = registry.waiting
+    registry.waiting = waiting
+  p
+
+// The programs waiting, run again (P5.1); what they make or add to while they run does not run them again (P5.2).
+{this}.rerun_waiting =>
+  unless registry.rerunning
+    waiting := registry.waiting
+    if waiting
+      registry.rerunning = true
+      registry.waiting = None
+      while waiting
+        p := waiting.program
+        p.watched_run
+        waiting = waiting.next
+      registry.rerunning = None
+  None
 
 // ================================================================ the language
 // The rules so far are the reader's own vocabulary: from here on they are out of reach of a project's files (R4.2b), which are
@@ -3247,8 +3312,15 @@ registry.language = true
   made := external node
   made.program = true
   made.written = external ** inside
+  made.code = made.written
   where := external span inside
   made.context = where.frame
+  // (an instance of the language's `Program`, once there is one)
+  program_class := registry.program_class
+  if program_class
+    made.outer = program_class
+    made.instance = true
+    made.this = made
   made
 // `name := value`: the value declared where the name was written; a list of names, each with the value in its place.
 {name: Tight} := {value} =>
@@ -3333,6 +3405,7 @@ Node := type
       at := where.from
       limit := where.to
       external report at limit nothing_extended
+    registry.rerun_waiting
     extended
   // `x -- f`: `f` read with `this` being `x` (a closure it answers called with `x`): what it answers; `x ~~ f`: the same, for
   // what it does, answering `x`
@@ -3379,6 +3452,7 @@ class {{block: Balanced}} =>
   made.class = true
   made.written = external ** block
   external apply block None made
+  registry.rerun_waiting
   made
 // `class: Parent { … }`: a class whose instances are also its parent's (its rules and fields too).
 class: {parent} {{block: Balanced}} =>
@@ -3389,6 +3463,7 @@ class: {parent} {{block: Balanced}} =>
   made.extends = parent
   made.written = external ** block
   external apply block None made
+  registry.rerun_waiting
   made
 // `enum a | b (field: v) | c { block }`: a class of exactly these members, each an instance of it named on it (`X.a`), in
 // `members` in order; a block after them is the class's own.
@@ -3460,12 +3535,38 @@ static {statement} =>
     found = statement
   found
 
+// `program.entered(element, given)`: its code read with `this` being `element` (P1); `watched(program)`: run now, and again while
+// it answers nothing when a class is made or added to (P5.1).
+{program: Tight}.entered{arguments: Bracketed} =>
+  p := program
+  given_values := arguments
+  first := given_values.head
+  element := first.argument
+  second := first.next
+  given := second.argument
+  given_list := None
+  if given
+    given_list = given.listed
+  p.entered_in(element, given_list)
+watched({program: Balanced}) =>
+  p := program
+  p.watched_run
+
 // ================================================================ the language, in its own terms
 // From here the entrypoint is read as any file of the language is (with the language's rules, not the reader's).
 language_scope := external node
 language_scope.outer = top
 registry.language_scope = language_scope
 registry.language_text = true
+
+// A program (P1): code, read where it was written (`context`) or entered on a value; with `parameters`, a closure of them. A
+// block (`{ … }`) is one.
+Program := class {
+  code: Node?
+  parameters: Node?
+  context: Node?
+}
+registry.program_class = Program
 
 // `a; b`: both read, the value of the second.
 Node &+= {

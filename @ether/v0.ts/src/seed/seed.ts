@@ -1,5 +1,5 @@
 // the debug switches, read once (reading the environment is a call into the runtime)
-const ENV = { SEED_CAPS: process.env.SEED_CAPS, SEED_COUNT: process.env.SEED_COUNT, SEED_DBG: process.env.SEED_DBG, SEED_DEPTH: process.env.SEED_DEPTH, SEED_EXT: process.env.SEED_EXT, SEED_INLINE: process.env.SEED_INLINE, SEED_REREAD: process.env.SEED_REREAD, SEED_SLOW: process.env.SEED_SLOW, SEED_STEPS: process.env.SEED_STEPS, SEED_TIME: process.env.SEED_TIME, SEED_HANG: process.env.SEED_HANG };
+const ENV = { SEED_CAPS: process.env.SEED_CAPS, SEED_COUNT: process.env.SEED_COUNT, SEED_DBG: process.env.SEED_DBG, SEED_DEPTH: process.env.SEED_DEPTH, SEED_EXT: process.env.SEED_EXT, SEED_INLINE: process.env.SEED_INLINE, SEED_REREAD: process.env.SEED_REREAD, SEED_SLOW: process.env.SEED_SLOW, SEED_STEPS: process.env.SEED_STEPS, SEED_TIME: process.env.SEED_TIME, SEED_HANG: process.env.SEED_HANG, SEED_STACK: process.env.SEED_STACK };
 // The seed: what starts the reader when there is nothing yet (spec/Reader.md R0). It knows no syntax. Its one assumption is
 // about meaning: the entrypoint's first statement defines how rules are defined, and uses that definition in its own body.
 // From that statement it infers the capture brackets, the definer, the access word and the statement end (R0.1); it reads
@@ -731,6 +731,7 @@ export class Seed {
           if (x instanceof Jump) throw x;
           // a statement that failed: said where it starts, and reading goes on at the next line that is not indented
           const message = x instanceof Error ? x.message : String(x), trace = (x as { ray?: string[] }).ray ?? [];
+          if (ENV.SEED_STACK && x instanceof Error) console.log(x.stack?.split('\n').slice(0, 12).join('\n'));
           let e = s.indexOf(end, p); while (e >= 0 && (s.startsWith(end, e + end.length) || s.startsWith(this.learned!.indent, e + end.length) || s.startsWith(this.learned!.space, e + end.length))) e = s.indexOf(end, e + end.length);
           this.say(`Failed: ${message}${trace.length ? ' (in ' + trace[0] + ')' : ''}`, { text, b: p, e: e < 0 ? s.length : e });
           p = e < 0 ? s.length : e + end.length;

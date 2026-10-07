@@ -195,9 +195,17 @@
 
 // `x[key]`: what `x` holds named by `key` (a block's declarations, T8.7).
 {x: Tight}[{key: Balanced}] ^punctuation =>
+  where := external span key
+  external goto empty (external same where.from where.to)
   holder := x.as_map
   name := key.member_code
   external get holder name
+  external goto done
+  // (nothing in the brackets: `T[]`, an Array of it)
+  external label empty
+  item := x
+  Array<item>
+  external label done
 // `x.m name => body`: a closure handed to a method by juxtaposition (G2.21): its `=>` spells the definer, so the statement is not
 // read as a definition.
 {x: Tight}.{literal method} {parameter: Word} {`=>`} {body} =>

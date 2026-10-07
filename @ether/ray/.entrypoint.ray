@@ -11,10 +11,10 @@
   // (a program running: the frame it runs in, `&caller[name] = x`)
   external goto running (external get v running)
   external goto plain ((external get v instance) === None ? true : None)
-  external goto plain ((external get v outer) === registry.program_class ? None : true)
+  external goto plain ((external get v outer_frame) === registry.program_class ? None : true)
   external goto declared (external get v declared)
   frame := external node
-  frame.outer = (external get v context)
+  frame.outer_frame = (external get v context)
   program_code := external get (external get v code) code
   external apply program_code None frame
   v.declared = frame
@@ -65,7 +65,7 @@
 {name}<{parameters}> := {value} ^punctuation =>
   // (read where its parameters are declared with their defaults: its header and block name them, `Stops<K = Length> := class … K`)
   within := external node
-  within.outer = (external span name).frame
+  within.outer_frame = (external span name).frame
   within.bound((external ** parameters), None)
   value_code := external get (external ** value) code
   made := external apply value_code None within
@@ -92,7 +92,7 @@
 {`[]`} ^punctuation =>
   found := external node
   found.listing = true
-  found.outer = Chain
+  found.outer_frame = Chain
   found.instance = true
   found.this = found
   found
@@ -105,7 +105,7 @@
   made.context = (external span inside).frame
   program_class := registry.program_class
   external goto done (program_class === None ? true : None)
-  made.outer = program_class
+  made.outer_frame = program_class
   made.instance = true
   made.this = made
   external label done
@@ -168,7 +168,7 @@
   external set holder member value
   external goto done
   external label forward
-  external forward holder member value (external get reading outer)
+  external forward holder member value (external get reading outer_frame)
   external label done
 // `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing); a name is written with it
 // (anything else: the base's `&=`).
@@ -183,7 +183,7 @@
   external assign target value
   external goto done
   external label forward
-  external forward (external declaring target) target value (external get reading outer)
+  external forward (external declaring target) target value (external get reading outer_frame)
   external label done
 // `condition ? yes : no`: `yes` when the condition holds (T1.7: nothing does not; a value saying whether it `holds` as that says;
 // any other does), else `no`; only the one taken is read.
@@ -252,7 +252,7 @@
 // read as a definition.
 {x: Tight}.{literal method} {parameter: Word} {`=>`} {body} =>
   closure := external node
-  closure.outer = registry.program_class
+  closure.outer_frame = registry.program_class
   closure.instance = true
   closure.this = closure
   closure.code = external ** body
@@ -277,14 +277,14 @@
   v := item
   external goto listing found
   found := external node
-  external set found outer Chain
+  external set found outer_frame Chain
   external set found instance true
   external set found this found
   external label listing
   external set found listing true
   added := external node
   external set added listed true
-  external set added outer Link
+  external set added outer_frame Link
   external set added instance true
   external set added this added
   external set added value v
@@ -362,7 +362,7 @@
   n := narrowing
   code := external get (external get n constraint) code
   frame := external node
-  frame.outer = (external span code).frame
+  frame.outer_frame = (external span code).frame
   frame.this = candidate
   (external apply code None frame) ? true : None
 
@@ -515,7 +515,7 @@ registry.text_is = registry.latest
   value := this
   code := external get (external ** call) code
   frame := external node
-  frame.outer = (external span code).frame
+  frame.outer_frame = (external span code).frame
   frame.this = value
   result := external apply code None frame
   result.method ? (result.applied_to(None, value)) : result
@@ -663,6 +663,12 @@ declaring_written := external span x:=x
   external goto closing
   external label ended
   value_to := next_link ? next_link.value.from : block_to
+  // (without the line ends and indentation before the next)
+  external label trim
+  external goto trimmed (value_to.previous.character === space ? None : (value_to.previous.character === end ? None : true))
+  value_to = value_to.previous
+  external goto trim
+  external label trimmed
   name_code := external get (external code key.from key.to block) code
   value_code := external get (external code at.next.next.next.next value_to block) code
   external keep holder name_code value_code holder
@@ -706,7 +712,7 @@ Node.components = Node.components_with(None)
 // methods are that frame's; `components.hierarchy`, what it is made of. Calling it makes an instance.
 {block: Tight}.class_of({parent}) =>
   made := external node
-  made.outer = (external span block).frame
+  made.outer_frame = (external span block).frame
   made.class = true
   made.highlighted = external ^ class
   made.components = made.components_with(parent)
@@ -718,7 +724,7 @@ Node.components = Node.components_with(None)
 // `,` outside brackets) read as its block is (a typed one a field, given in order when an instance is made).
 {source: Tight}.header_class({parent}) =>
   made := external node
-  made.outer = (external span source).frame
+  made.outer_frame = (external span source).frame
   made.class = true
   made.highlighted = external ^ class
   made.components = made.components_with(parent)
@@ -765,7 +771,7 @@ Node.components = Node.components_with(None)
 // takes what the arguments give it (by name, or in order).
 {static: Tight}.constructed({arguments}) =>
   instance := external node
-  instance.outer = static
+  instance.outer_frame = static
   instance.instance = true
   instance.this = instance
   outer_given := external get registry given
@@ -786,7 +792,7 @@ Node.components = Node.components_with(None)
   external goto read
   external label by_name
   naming_frame := external node
-  naming_frame.outer = (external span written).frame
+  naming_frame.outer_frame = (external span written).frame
   external set registry naming instance
   given_node.read_items_into(naming_frame)
   external set registry naming None
@@ -852,7 +858,7 @@ Node.components = Node.components_with(None)
   None
   external goto done
   external label maybe_program
-  external goto nothing ((external get value outer) === registry.program_class ? None : true)
+  external goto nothing ((external get value outer_frame) === registry.program_class ? None : true)
   value.entered_in(value.context, (arguments === None ? None : (arguments.listed)))
   external goto done
   external label construct
@@ -887,7 +893,7 @@ class: {parent: Tight} {header: Balanced} ^keyword =>
 // `class: Parent`: a class that is its parent and nothing more.
 class: {parent: Tight} ^keyword =>
   made := external node
-  made.outer = (external span parent).frame
+  made.outer_frame = (external span parent).frame
   made.class = true
   made.highlighted = external ^ class
   made.components = made.components_with(parent)
@@ -900,7 +906,7 @@ class: {parent: Tight} ^keyword =>
 enum {written: Item} ^keyword =>
   where := external span written
   made := external node
-  made.outer = where.frame
+  made.outer_frame = where.frame
   made.class = true
   made.enum = true
   made.highlighted = external ^ enum
@@ -982,7 +988,7 @@ enum {written: Item} ^keyword =>
   p := program
   code := external get p.code code
   fresh := external node
-  fresh.outer = (external span code).frame
+  fresh.outer_frame = (external span code).frame
   answer := p.entered_in(fresh, None)
   registry.classes_changed = None
   external goto done (answer === None ? None : true)
@@ -1023,7 +1029,7 @@ Node &+= {
     base := this
     written := external get (external ** given) code
     made := external node
-    made.outer = (external span written).frame
+    made.outer_frame = (external span written).frame
     made.class = true
     made.components = made.components_with(base)
     // (its parameters, or those of what it is made of first: `Array<T>` binds an Iterable's `Vertex`)
@@ -1079,7 +1085,7 @@ Node &+= {
 // `previous` are the members beside it (nothing past the ends).
 Enum := class {
   == (other) => this === other ? true : false
-  static # => this.members ?? this.outer.members
+  static # => this.members ?? this.outer_frame.members
   next => this.following
   previous => this.preceding
 }
@@ -1290,7 +1296,7 @@ Node &+= {
 // `link value previous`, `chain holder`: a link of a list, a list (its links' owner) (R).
 link {value} {previous} ^keyword =>
   made := external node
-  made.outer = Link
+  made.outer_frame = Link
   made.instance = true
   made.this = made
   made.value = value
@@ -1358,7 +1364,7 @@ Program &+= {
   caller =>
     at := this.context
     while at && !(external get at caller_frame) {
-      at = external get at outer
+      at = external get at outer_frame
     }
     at ? Program.running_in(external get at caller_frame) : None
   optimizations => this.O
@@ -1492,7 +1498,7 @@ Node &+= {
   copy =>
     source := this
     made := external node
-    made.outer = external get source outer
+    made.outer_frame = external get source outer_frame
     made.instance = source.instance
     made.this = made
     made.components = source.components
@@ -1596,7 +1602,7 @@ text_of (points) =>
     held &= character_of(at_link.value)
     at_link = at_link.next
   }
-  held.outer = String
+  held.outer_frame = String
   held
 // A String's characters: a text's, the places it is written at (from `from`, up to `to`), each as its Char; else the list's.
 String &+= {

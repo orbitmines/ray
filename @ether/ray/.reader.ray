@@ -831,7 +831,7 @@ top := external .
         last = link
       links = links.next
     // past the value, only the classes it is in: not the scopes they were written in
-    here = here.outer
+    here = here.outer_frame
     unless here === outside ? None : here.class
       here = None
   first
@@ -1036,7 +1036,7 @@ top := external .
       capture_led = capture_led.next
       if boundary && capture_led === boundary
         capture_led = registry.shared_capture_led
-    here = here.outer
+    here = here.outer_frame
   best := state.best
   if best
     best.rule = state.rule
@@ -1233,7 +1233,7 @@ top := external .
   while here
     if here.components
       found = here
-    here = found ? None : here.outer
+    here = found ? None : here.outer_frame
   found
 
 // The classes a class is made of besides itself (`components.hierarchy`, R4.4), depth first, each with what it is made of in turn:
@@ -1292,7 +1292,7 @@ top := external .
   here := scope === outside ? None : scope
   while here
     into.scope_added(here)
-    here = here.outer
+    here = here.outer_frame
     unless here === outside ? None : here.class
       here = None
   into
@@ -1404,7 +1404,7 @@ top := external .
       if external own here leading_name
         value = external get here leading_name
         here = None
-      here = here.outer
+      here = here.outer_frame
     // (code held by a frame, read only when it is used, is no class)
     if external span value
       value = None
@@ -1932,7 +1932,7 @@ type {block} =>
     if external own frame_whole whole
       here = None
       frame_whole = None
-    frame_whole = frame_whole.outer
+    frame_whole = frame_whole.outer_frame
   while here
     if here === limit
       here = None
@@ -1952,7 +1952,7 @@ type {block} =>
               if r && r.end === limit
                 found = here
           frame = None
-        frame = frame.outer
+        frame = frame.outer_frame
       here = here.next
   found
 
@@ -1999,8 +1999,8 @@ registry.definer.defines = true
   if registry.language_text
     scope = scope === top ? registry.language_scope : scope
     // (a scope directly in the top; one inside another project's scope sees the language through it)
-    if scope === registry.language_scope ? None : scope.outer === top
-      scope.outer = registry.language_scope
+    if scope === registry.language_scope ? None : scope.outer_frame === top
+      scope.outer_frame = registry.language_scope
   at := given.skip_blank(None)
   limit := at ? at.statement_end(None, None) : None
   // past the reader, the entrypoint's own statements are the language's: their places say so
@@ -2082,7 +2082,7 @@ external reader reader
   held := None
   while frame
     held = external get frame this
-    frame = held ? None : frame.outer
+    frame = held ? None : frame.outer_frame
   value := held
   unless held
     // not a name a frame holds: a group, quoted text, a word a rule reads (`enum`), or a name nothing holds yet (a place)
@@ -2122,7 +2122,7 @@ external reader reader
         value = external get frame whole
         at = name_end
         frame = None
-      frame = frame ? frame.outer : None
+      frame = frame ? frame.outer_frame : None
     if at === rest_to
       going = None
       result = value
@@ -2242,7 +2242,7 @@ registry.latest.shared = true
       found = true
     unless found
       found = here.made_of_has(scope)
-    here = found ? None : here.outer
+    here = found ? None : here.outer_frame
   found
 registry.latest.shared = true
 
@@ -2254,7 +2254,7 @@ registry.latest.shared = true
     if here.has(this)
       found = here.this
       here = None
-    here = here.outer
+    here = here.outer_frame
   found
 registry.latest.shared = true
 
@@ -2270,7 +2270,7 @@ registry.latest.shared = true
   if one
     found = external node
     found.listed = true
-    found.outer = Link
+    found.outer_frame = Link
     found.instance = true
     found.this = found
     external keep found value written
@@ -2282,7 +2282,7 @@ registry.latest.shared = true
       unless given.listing
         found = external node
         found.listed = true
-        found.outer = Link
+        found.outer_frame = Link
         found.instance = true
         found.this = found
         found.value = given
@@ -2333,9 +2333,9 @@ registry.latest.shared = true
   frame.this = receiver
   scope := method.scope
   if receiver && receiver.inside(scope)
-    frame.outer = receiver
+    frame.outer_frame = receiver
   inner := external node
-  inner.outer = frame
+  inner.outer_frame = frame
   parameters := method.parameters
   if parameters
     given := frame.has(arguments) ? frame.arguments.listed : None
@@ -2513,7 +2513,7 @@ Quoted := Unquoted[]
   // (a String, once the language has one)
   string_class := registry.string_class
   if string_class
-    made.outer = string_class
+    made.outer_frame = string_class
     made.instance = true
     made.this = made
   made
@@ -2760,7 +2760,7 @@ registry.latest.shared = true
   made := external node
   made.bound_method = method
   made.bound_receiver = receiver
-  made.outer = registry.program_class
+  made.outer_frame = registry.program_class
   made.instance = true
   made.this = made
   made
@@ -2850,12 +2850,12 @@ registry.latest.shared = true
   unless found
     found = external node
     found.listing = true
-    found.outer = Chain
+    found.outer_frame = Chain
     found.instance = true
     found.this = found
   added := external node
   added.listed = true
-  added.outer = Link
+  added.outer_frame = Link
   added.instance = true
   added.this = added
   added.value = value
@@ -2873,7 +2873,7 @@ registry.latest.shared = true
 {program: Tight}.entered_in({element}, {given}) =>
   p := program
   frame := external node
-  frame.outer = element
+  frame.outer_frame = element
   frame.this = element
   parameters := p.parameters
   if parameters
@@ -2905,7 +2905,7 @@ registry.latest.shared = true
       found = external get frame name
       frame = None
     if frame
-      frame = frame.outer
+      frame = frame.outer_frame
   unless held
     receiver := read_in.this_seen
     if receiver
@@ -3062,6 +3062,6 @@ language_definer.defines = true
 // ================================================================ handed over: the language is defined in .entrypoint.ray
 // From here what is read (the entrypoint first) is read as any file of the language is (with the language's rules, not the reader's).
 language_scope := external node
-language_scope.outer = top
+language_scope.outer_frame = top
 registry.language_scope = language_scope
 registry.language_text = true

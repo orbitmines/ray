@@ -88,9 +88,9 @@ Program &+= {
 // rest of the context the `with` is in, and everything called from there. (settings that are a block: what it holds)
 with {settings} {{body: Balanced}} ^keyword =>
   context := external node
-  context.outer = (external span settings).frame
+  context.outer_frame = (external span settings).frame
   forwarding := external node
-  forwarding.outer = context
+  forwarding.outer_frame = context
   forwarding.writes_forward = true
   settings_code := external get (external ** settings) code
   answer := external apply settings_code None forwarding
@@ -102,7 +102,7 @@ with {settings} {{body: Balanced}} ^keyword =>
   external apply body_code None context
 with {settings} ^keyword =>
   forwarding := external node
-  forwarding.outer = (external span settings).frame
+  forwarding.outer_frame = (external span settings).frame
   forwarding.writes_forward = true
   settings_code := external get (external ** settings) code
   answer := external apply settings_code None forwarding

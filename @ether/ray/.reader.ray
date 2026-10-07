@@ -2596,7 +2596,11 @@ Unbraced := opening_block.anything_but[]
     frame.bound(parameters, given)
   written := p.code
   code := written.code
-  external apply code None frame
+  result := external apply code None frame
+  // (code that is one block runs it, as a method's body does)
+  if code.starts_block && result.program
+    result = result.run_in(frame)
+  result
 
 // A program run now and kept to run again when a class is made or added to while it answers nothing (P5.1); entered on a frame
 // of its own inside where it was written.
@@ -2673,6 +2677,82 @@ Unbraced := opening_block.anything_but[]
   found
 registry.bare_rule = registry.latest
 
+// ---------------------------------------------------------------- maps (T8.7): a block's declarations, keyed by their names
+// The name a key spells (a key: a node with the places it is `from` and `to`, as a string's), as code naming a member.
+{key}.member_code =>
+  k := key
+  (external code k.from k.to reader_like).code
+// What a value holds by name: a program's (a block's) declarations, read once in a frame of their own inside where it was
+// written; any other value itself.
+{value}.as_map =>
+  v := value
+  holder := v
+  if v.instance && v.outer === registry.program_class
+    unless v.declared
+      frame := external node
+      frame.outer = v.context
+      written := v.code
+      code := written.code
+      external apply code None frame
+      v.declared = frame
+    holder = v.declared
+  holder
+// The names a program declares, in order: each statement's first word (up to a space or `:`), as keys.
+{program}.declared_keys =>
+  written := program.code
+  code := written.code
+  where := external span code
+  to := where.to
+  found := None
+  first := where.from.skip_blank(to)
+  at := first
+  while at
+    // a statement starts at the first statement's indentation; a line indented deeper continues the one above
+    if at.indented_as(first)
+      name_end := at
+      while name_end && (name_end === to ? None : true) && (name_end.character === space ? None : true) && (name_end.character === colon ? None : true)
+        name_end = name_end.next
+      key := external node
+      key.from = at
+      key.to = name_end
+      found = found.listed_with_value(key)
+    line_end := at.first_place_of(end, to)
+    at = line_end ? line_end.next.skip_blank(to) : None
+  found
+registry.latest.shared = true
+// Whether the line `at` starts (its first place that is not a space) is indented as the line `other` starts: the same spaces
+// before both.
+{at}.indented_as({other}) =>
+  here := at.previous
+  there := other.previous
+  same := true
+  while same && here && there && here.character === space && there.character === space
+    here = here.previous
+    there = there.previous
+  if same
+    here_spaced := here ? here.character === space : None
+    there_spaced := there ? there.character === space : None
+    same = here_spaced ? there_spaced : (there_spaced ? None : true)
+  same
+
+// Each key a program declares given to `body` (a closure of one parameter), in order.
+{program}.each_key({body}) =>
+  b := body
+  keys := program.declared_keys
+  link := keys ? keys.head : None
+  while link
+    given := None.listed_with_value(link.value)
+    b.entered_in(b.context, given.head)
+    link = link.next
+  program
+registry.latest.shared = true
+// A value's method named as `name` (a name taken as written) applied to it with `argument` (a value).
+{value}.called_with({name}, {argument}) =>
+  v := value
+  arg := argument
+  method := v.method_named(name)
+  method ? method.applied_to(v, arg) : None
+
 // ================================================================ the language
 // The rules so far are the reader's own vocabulary: from here on they are out of reach of a project's files (R4.2b), which are
 // read with the language defined below.
@@ -2746,6 +2826,21 @@ registry.language = true
 language_definer := registry.latest
 language_definer.defines = true
 
+// `x[key] := v`, `x[key] = v` (declared before `:=` and `=`: they read these first)
+{x: Tight}[{key: Balanced}] := {value} =>
+  holder := x.as_map
+  k := key
+  name := k.member_code
+  v := value
+  external set holder name v
+  v
+{x: Tight}[{key: Balanced}] = {value} =>
+  holder := x.as_map
+  k := key
+  name := k.member_code
+  v := value
+  external set holder name v
+  v
 // ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
 // `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`).
 ({parameter: Word} {`=>`} {body}) =>
@@ -3034,6 +3129,26 @@ static {statement} =>
   given := second.argument
   given_list := given ? given.listed : None
   p.entered_in(element, given_list)
+// `x[key]`: what `x` holds named by `key` (a block's declarations, T8.7); `x[key] := v`, `x[key] = v`: declared or written so.
+{x: Tight}[{key: Balanced}] =>
+  holder := x.as_map
+  k := key
+  name := k.member_code
+  found := external get holder name
+  found
+// `x.m name => body`: a closure handed to a method by juxtaposition (G2.21): its `=>` spells the definer, so the statement is
+// not read as a definition.
+{x: Tight}.{literal method} {parameter: Word} {`=>`} {body} =>
+  closure := external node
+  closure.outer = registry.program_class
+  closure.instance = true
+  closure.this = closure
+  closure.code = external ** body
+  closure.parameters = external ** parameter
+  closure.context = (external span body).frame
+  receiver := x
+  receiver.called_with(method, closure)
+
 watched({program: Balanced}) =>
   p := program
   p.watched_run
@@ -3051,7 +3166,11 @@ Program := class {
   code: Node?
   parameters: Node?
   context: Node?
+  // as a map (T8.7): the names it declares, and each of them given to a closure
+  keys => this.declared_keys
+  for (body) => this.each_key(body)
 }
+global := external global
 registry.program_class = Program
 
 // `a; b`: both read, the value of the second.

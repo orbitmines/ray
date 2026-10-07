@@ -1,11 +1,11 @@
 // usage: paint.mts FILE.ray — reads the language and its library as the language server does (src/language.ts), then the file (a
 // library file: as read there), and prints what it said (DIAGNOSTICS=1) and each painted span with its style. PAINT=0: unpainted,
 // TIMINGS=1: per file. Run as lib.mts is (ulimit -s unlimited; node --stack-size=20000 --import <tsx loader> paint.mts FILE).
-const { Ray } = await import('../language.ts');
+const { Readings } = await import('../language.ts');
 const fs = await import('fs'), path = await import('path');
 const file = path.resolve(process.argv[2]);
 const t0 = performance.now();
-const ray = new Ray({ paint: process.env.PAINT !== '0' }).boot().read_library();
+const ray = new Readings({ paint: process.env.PAINT !== '0' }, 1).for(file);
 const read = (ray.core(file) ? ray.of(file) : undefined) ?? ray.file(file, fs.readFileSync(file, 'utf8'), !!process.env.THEME, ray.prepare(file));
 const s = read.text.s, line = (i: number) => s.slice(0, i).split('\n').length;
 if (process.env.TIMINGS) for (const [name, ms] of ray.timings) console.log(name.padEnd(16), String(Math.round(ms)).padStart(7), 'ms');

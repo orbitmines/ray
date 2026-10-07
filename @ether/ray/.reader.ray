@@ -1976,8 +1976,12 @@ external reader reader
       bound := external node
       bound.piece = this_piece
       if first
-        bound.from = receiver_at.from
-        bound.to = receiver_at.to
+        // a name a frame holds: its value; anything else: as written
+        if held
+          bound.value = held
+        unless held
+          bound.from = receiver_at.from
+          bound.to = receiver_at.to
       unless first
         bound.value = current
       first = None
@@ -2754,6 +2758,9 @@ Unbraced := opening_block.anything_but[]
     list = this
     unless list.listing
       list = None
+    // a value given, not as written: a list of it
+    unless list
+      list = None.listed_with_value(this)
   unless list
     list = external node
     list.listing = true
@@ -2808,6 +2815,76 @@ Unbraced := opening_block.anything_but[]
   if keep
     result = value
   result
+
+// A superposition of `this` and `other` (one more component when `this` is one).
+{this}.superposed_with({other}) =>
+  value := this
+  given := other
+  found := None
+  if value.superposes
+    found = external node
+    found.superposes = true
+    found.components = value.components.copied_list.listed_with_value(given)
+  unless value.superposes
+    found = external node
+    found.superposes = true
+    first := None.listed_with_value(value)
+    found.components = first.listed_with_value(given)
+  found
+
+// A list with the same values (a new chain).
+{list}.copied_list =>
+  found := None
+  link := list.head
+  while link
+    found = found.listed_with_value(link.value)
+    link = link.next
+  found
+
+// A type narrowed by a constraint (code read with `this` being a candidate).
+{this}.narrowed({constraint}) =>
+  made := external node
+  made.narrows = this
+  made.constraint = external ** constraint
+  made
+
+// Whether `type` admits `this` (T4.10): a narrowing, what it narrows that satisfies its constraint; a superposition, what one of its
+// components admits; a class, its instances (and those of the classes extending it); any other value, itself.
+{this}.admitted_by({type}) =>
+  value := this
+  t := type
+  found := None
+  decided := None
+  if t.narrows
+    decided = true
+    narrowed_type := t.narrows
+    if value.admitted_by(narrowed_type)
+      written := t.constraint
+      code := written.code
+      where := external span code
+      frame := external node
+      frame.parent = where.frame
+      frame.this = value
+      found = external apply code None frame
+      found = found.holds_true
+  unless decided
+    if t.superposes
+      decided = true
+      component := t.components.head
+      while component
+        if value.admitted_by(component.value)
+          found = true
+          component = None
+        if component
+          component = component.next
+  unless decided
+    if t.class
+      decided = true
+      if value
+        found = value.inside(t)
+  unless decided
+    found = value === t
+  found
 
 // Calling a value: a class makes an instance of itself; a closure runs.
 {this}.called({arguments}) =>
@@ -3045,6 +3122,17 @@ Node := type
     this.continued(call, None)
   ~~{call: Line} =>
     this.continued(call, true)
+  // `a | b`: both, superposed (U1); `T?`: `None | T`
+  |{other: Operand} =>
+    this.superposed_with(other)
+  ? =>
+    None.superposed_with(this)
+  // `T{p}`: what `T` admits that satisfies `p` (read with `this` being the candidate)
+  {{constraint: Balanced}} =>
+    this.narrowed(constraint)
+  // `x is T`: whether `T` admits `x` (T4.10)
+  { }is {type: Operand} =>
+    this.admitted_by(type)
   &&{other} =>
     this.and(other)
   ||{other} =>

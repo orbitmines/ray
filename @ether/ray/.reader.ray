@@ -142,6 +142,12 @@ question := mark.character
 caret := mark.next.character
 mark = mark.next.next
 pipe := mark.character
+equals_written := external span x=x
+equals_mark := equals_written.from.next.character
+// (`<` written right after a word opens what `>` closes: a type's arguments, `Stop<K, V>`; `a < b` compares)
+angles := external span <>
+opening_angle := angles.from.character
+closing_angle := angles.from.next.character
 
 // The characters of a word (`c.word`): letters, digits and `_`. An operator spelled with them (`is`, `or`, `not`) does not start
 // inside a word (`this`, `works`).
@@ -168,6 +174,30 @@ closing_block.closes = true
   pushed.shut = shut
   pushed.next = chain
   pushed
+
+// Whether the line from `at` defines: a `=>` on it outside brackets.
+{at}.defines_on_line =>
+  here := at
+  found := None
+  depth := None
+  while here
+    c := here.character
+    if c === end
+      here = None
+    if here
+      shut := c.closer
+      if shut
+        depth = shut.pushed_on(depth)
+      unless shut
+        if c.closes && depth
+          depth = depth.next
+        unless depth
+          if c === equals_mark
+            if here.next.character === closing_angle
+              found = true
+              here = None
+    here = here ? here.next : None
+  found
 
 // Where the statement starting at `at` ends: the first line end not followed by a line deeper than `base` (R0.1), or `to`.
 {at}.statement_end({to}, {base}) =>
@@ -211,6 +241,23 @@ closing_block.closes = true
           while before && before.character === space
             before = before.previous
           deeper = before ? before.character === comma : None
+        // (and a line led by an operator no expression starts with goes on with the one above, G2.13: `(c\n  ? a\n  : b)`)
+        unless deeper
+          led := inside ? inside.past_spaces : None
+          lead := led ? led.character : None
+          if lead
+            if lead === question
+              deeper = true
+            if lead === pipe
+              deeper = true
+            if lead === equals_mark
+              deeper = true
+            // (`: b`, not a name's `:`)
+            if lead === colon
+              deeper = led.next.character === space
+            // (a definition led by its operator is a statement of its own)
+            if deeper
+              deeper = led.defines_on_line ? None : true
         unless deeper
           found = here
           here = None
@@ -608,10 +655,6 @@ closing_block.closes = true
   found
 
 // The first place from `at` before `to` holding `wanted` outside the brackets opened from `at`, or `to`.
-// (`<` written right after a word opens what `>` closes: a type's arguments, `Stop<K, V>`; `a < b` compares)
-angles := external span <>
-opening_angle := angles.from.character
-closing_angle := angles.from.next.character
 // Whether every `<` written right after a word from `at` to `to` is closed by a `>` before `to`.
 {at}.angles_closed({to}) =>
   here := at === to ? None : at
@@ -2399,8 +2442,6 @@ method_body := registry.latest.body
 
 // Parameters bound in `frame` to what `given` (a chain of arguments) gives, in order: `(parameters) := arguments` (a name
 // declared with a type takes the next argument given, a bare name the next one left).
-equals_written := external span x=x
-equals_mark := equals_written.from.next.character
 {frame: Tight}.bound({parameters}, {given}) =>
   saved_given := registry.given
   registry.given = given

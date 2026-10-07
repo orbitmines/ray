@@ -851,7 +851,14 @@ enum {written: Item} ^keyword =>
 // the class, not again for each instance.
 {`static`} {name: Tight} = {value} ^keyword =>
   external goto done (external get (external span name).frame instance)
-  external declare name value
+  // (read once, when first wanted: the class it is written in is declared by then, `static plane = Space(…)`)
+  holder := (external span name).frame
+  external keep holder name value
+  external label done
+{`static`} {name: Tight} := {value} ^keyword =>
+  external goto done (external get (external span name).frame instance)
+  holder := (external span name).frame
+  external keep holder name value
   external label done
 {`static`} {statement} ^keyword =>
   external goto done (external get (external span statement).frame instance)

@@ -12,6 +12,8 @@ OS.Ether := class: OS {
   received (stream: String) => (@me/device/streams[stream] ?? []) -- (waiting => (@me/device/streams[stream] = waiting.rest) -- waiting.first)
   launch (location: Location) => ERROR@OS `opening a location is not written in Ray yet`
   bit => ERROR@OS `a source of random bits is not written in Ray yet`
+  // a character's Unicode scalar, a bit at a time, most significant first: on ether a character already is its scalar
+  bits (character: Char, take) => (character as Binary).integer.for(take)
   now: Time => ERROR@OS `the clock kept by NTP is not written in Ray yet`
   time_zones: TimeZone.Source => TimeZone.Zoneinfo(directory: @tzif/zoneinfo)
   fonts: Location[] => ERROR@OS `fonts are not written in Ray yet`

@@ -66,7 +66,7 @@ const DEPTH = ENV.SEED_DEPTH ? { max: 0, word: '' } : undefined;
 if (DEPTH) process.on('exit', () => console.log('deepest lookup', DEPTH.max, DEPTH.word));
 // SEED_COUNT: how often each rule was applied, printed at exit.
 // The arguments each external reads, in the order it reads them: given to it read (no code made for them), the rest as code.
-const EAGER: Record<string, number[]> = { declare: [1], get: [0], assign: [1], keep: [0], own: [0], set: [2, 0], same: [0, 1], reader: [0], planner: [0], rules: [0], report: [0, 1, 2], io: [1], code: [0, 1], read: [0, 1] };
+const EAGER: Record<string, number[]> = { declare: [1], get: [0], assign: [1], keep: [0], own: [0], set: [2, 0], same: [0, 1], reader: [0], planner: [0], rules: [0], report: [0, 1, 2], io: [1], code: [0, 1], read: [0, 1], bits: [0, 1] };
 // SEED_HANG=n: after n applications, the rules being applied (innermost last), and stop.
 // (SEED_HANG_LATE: counted only once `hang_reset` is called, e.g. before the tests a probe reads)
 const HANG = ENV.SEED_HANG ? { n: 0, max: Number(ENV.SEED_HANG), stack: [] as string[], armed: !process.env.SEED_HANG_LATE } : undefined;
@@ -152,6 +152,16 @@ export class Seed {
     this.externals.set('.', frame => frame);
     // the top scope (what the entrypoint is read in)
     this.externals.set('global', () => self.global);
+    // A character's Unicode scalar, a bit at a time, the most significant first, each given to the rule `take` (its capture holds
+    // the character for a one, nothing for a zero): no names are made up for them (2026-10-07). What `take` answered last.
+    this.externals.set('bits', (frame, [c, take]) => {
+      const spelled = c instanceof Node ? self.spelled.get(c) : undefined, rule = take instanceof Node ? self.rule_of(take) : undefined;
+      if (spelled === undefined || rule === undefined) return undefined;
+      const cap = rule.pieces.find(p => 'cap' in p) as { cap: string } | undefined;
+      let r: unknown;
+      for (const b of spelled.codePointAt(0)!.toString(2)) r = self.apply(rule, frame, [], rule.planner, cap ? [[cap.cap, b === '1' ? c : undefined]] : []);
+      return r;
+    });
     // Code as a value (a Program): a node holding the code unread, not read where a name names it.
     this.externals.set('**', (frame, [x]) => { const n = new Node(); if (x instanceof Code) n.members.set('code', self.named(x)); else n.members.set('value', x); return n; });
     // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
@@ -182,7 +192,8 @@ export class Seed {
   // it was defined, so the reader never reads itself (R0.5).
   planner?: Rule;
   characters = new Map<string, Node>();
-  character(c: string): Node { let n = this.characters.get(c); if (n === undefined) this.characters.set(c, n = new Node()); return n; }
+  character(c: string): Node { let n = this.characters.get(c); if (n === undefined) { this.characters.set(c, n = new Node()); this.spelled.set(n, c); } return n; }
+  spelled = new Map<Node, string>();
   places = new Map<Text, Node[]>();
   // The place at `i` in a text: its character and the next place (none at the end). Made once per text.
   place(text: Text, i: number): Node | undefined {

@@ -1364,3 +1364,66 @@ Node &+= {
   written_as => Program(code: this.written)
   super => ERROR `super is not written on the seed yet`
 }
+
+// The core of a number (Number.ray adds the rest): a Ray, its `next` the number before it (nothing after zero); and of a
+// character (String.ray adds the rest): a number, its Unicode scalar.
+Number := class { }
+Char := class: Number { }
+// The bits of a text's characters (each one's Unicode scalar, the most significant first), one character after another: a list
+// of them, the character for a one, nothing for a zero.
+text_bits (text) =>
+  held := None
+  take {bit} =>
+    held &= bit
+  taking := registry.latest
+  at := text.from
+  end := text.to
+  if (at === end) { at = None }
+  while at {
+    external bits at.character taking
+    at = at.next
+    if (at === end) { at = None }
+  }
+  held
+// `held.bits_onto(text)`: `held` (a list) with the bits of `text` after it. (The old `bits_onto(held, text)`: a list given as the
+// first of several arguments is that list with the rest at its end, `,` composing one value.)
+{held: Tight}.bits_onto({text}) =>
+  onto := held
+  more := text_bits(text)
+  at_link := more ? more.head : None
+  while at_link {
+    onto &= at_link.value
+    at_link = at_link.next
+  }
+  onto
+// The Unicode scalars of a text's characters, in order: a list of numbers (each one doubled for every bit, one more for a one).
+code_points (source) =>
+  points := None
+  point := Number()
+  take {bit} =>
+    point = point + point
+    if bit { point = point.succ }
+  taking := registry.latest
+  at := source.from
+  end := source.to
+  if (at === end) { at = None }
+  while at {
+    point = Number()
+    external bits at.character taking
+    points &= point
+    at = at.next
+    if (at === end) { at = None }
+  }
+  points
+// A scalar as a character: a Char, the same number.
+character_of (point) => Char(next: point.next)
+// Scalars as text: a String of their characters.
+text_of (points) =>
+  held := None
+  at_link := points ? points.head : None
+  while at_link {
+    held &= character_of(at_link.value)
+    at_link = at_link.next
+  }
+  held.outer = String
+  held

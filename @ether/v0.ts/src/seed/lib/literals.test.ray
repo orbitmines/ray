@@ -1,0 +1,23 @@
+// Text and numbers with the core library read (lib.mts -- lib/literals.test.ray): a claim that does not hold says so (`INFO@mark`).
+mark ^keyword := external global
+// ---------------------------------------------------------------- a character is its Unicode scalar, a Number
+points := code_points("ab")
+a := points.head.value
+b := points.tail.value
+unless a is Number { INFO@mark `L1 a point is a Number` }
+unless (b == a.succ) { INFO@mark `L2 "b" is one after "a"` }
+unless (a < b) { INFO@mark `L3 "a" is before "b"` }
+if (a == b) { INFO@mark `L4 "a" is not "b"` }
+// 97: 1100001
+seven := Number().succ.succ.succ.succ.succ.succ.succ
+fourteen := seven + seven
+fifty_six := (fourteen + fourteen) + (fourteen + fourteen)
+forty_nine := fifty_six - seven
+ninety_seven := (forty_nine + forty_nine).pred
+unless (a == ninety_seven) { INFO@mark `L5 "a" is 97` }
+c := character_of(a)
+unless c is Char { INFO@mark `L6 a point as a character is a Char` }
+unless (c == a) { INFO@mark `L7 a Char is its scalar` }
+s := text_of(points)
+unless s is String { INFO@mark `L8 points as text are a String` }
+unless (s.head.value == a) { INFO@mark `L9 its first character is "a"` }

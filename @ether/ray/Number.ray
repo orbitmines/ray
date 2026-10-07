@@ -1,4 +1,5 @@
-Number := class: Ray {
+// (Number is made in the entrypoint, its core; what follows is the rest of it)
+Number &+= {
   succ => Number(next: this)
   { }{value} ^punctuation => [value] * this
   pred => next
@@ -99,6 +100,7 @@ Number := class: Ray {
   static Base := static{2 <= .}
   static numeral (base: Base) => Bases.keys.map(global[.]){.radix == base}.first
 }
+Number.components.hierarchy &= Ray
 
 zero := Number()
 0 := zero

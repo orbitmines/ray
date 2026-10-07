@@ -47,6 +47,8 @@ export class Code {
   raw = false;   // a capture taken as written: its value is its text, never read
   // code kept to be read later (`keep`: an argument, a list's item) is read once, when it first is (call by need)
   once = false; read = false; value: unknown;
+  // (kept before the statement that declares it is read, `ahead`: that statement takes it; `reading` while it is being read)
+  ahead = false; reading = false;
   constructor(public text: Text, public b: number, public e: number, public frame: Node, public planner?: Rule, of?: SpanOf) { this.of = of ?? span_of(text, b, e); }
   get s() { return this.of.s; }
 }
@@ -81,7 +83,7 @@ const DEPTH = ENV.SEED_DEPTH ? { max: 0, word: '' } : undefined;
 if (DEPTH) process.on('exit', () => console.log('deepest lookup', DEPTH.max, DEPTH.word));
 // SEED_COUNT: how often each rule was applied, printed at exit.
 // The arguments each external reads, in the order it reads them: given to it read (no code made for them), the rest as code.
-const EAGER: Record<string, number[]> = { forward: [0, 2, 3], declare: [1], get: [0], assign: [1], keep: [0], own: [0], set: [2, 0], same: [0, 1], reader: [0], planner: [0], rules: [0], report: [0, 1, 2], io: [1], code: [0, 1], read: [0, 1], bits: [0, 1] };
+const EAGER: Record<string, number[]> = { forward: [0, 2, 3], declare: [], get: [0], assign: [1], keep: [0, 3], own: [0], set: [2, 0], same: [0, 1], reader: [0], planner: [0], rules: [0], report: [0, 1, 2], io: [1], code: [0, 1], read: [0, 1], bits: [0, 1] };
 // SEED_HANG=n: after n applications, the rules being applied (innermost last), and stop.
 // (SEED_HANG_LATE: counted only once `hang_reset` is called, e.g. before the tests a probe reads)
 const HANG = ENV.SEED_HANG ? { n: 0, max: Number(ENV.SEED_HANG), stack: [] as string[], armed: !process.env.SEED_HANG_LATE } : undefined;
@@ -116,7 +118,7 @@ export class Seed {
     const self = this;
     // R0.7 — none of them syntax
     this.externals.set('rule', (frame, [pattern, body]) => self.define(self.code_of(pattern), self.code_of(body)));
-    this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); if (ENV.SEED_DBG && n.s === 'Item') { const vv = (value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = (value); if (self.journal) self.journal.member(n.frame, n.s); n.frame.members.set(n.s, v); if (self.observer) self.observer.declared(n); return v; });
+    this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name), was = n.frame.members.get(n.s); if (was instanceof Code && was.ahead) value = self.force(was); else value = self.force(value); if (ENV.SEED_DBG && n.s === 'Item') { const vv = (value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = (value); if (self.journal) self.journal.member(n.frame, n.s); n.frame.members.set(n.s, v); if (self.observer) self.observer.declared(n); return v; });
     this.externals.set('node', () => new Node());
     // a node's `outer` (the frame it was made in), and a frame's `caller_frame` and `applied_rule` (as a node), read like members
     // (named so no member a program sets is taken for them)
@@ -124,7 +126,7 @@ export class Seed {
     // a name written where it was declared (the nearest frame from where it was written that has it, else there)
     this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = (value); if (ENV.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; if (self.journal) self.journal.member(at ?? c.frame, k); (at ?? c.frame).members.set(k, v); return v; });
     // a member set to code as written, unread (read where the member is read)
-    this.externals.set('keep', (frame, [of, name, value]) => { const o = (of) as Node; let kept = value; if (value instanceof Code && !value.raw) { const c = new Code(value.text, value.b, value.e, value.frame, value.planner, value.of); c.once = true; kept = c; } if (self.journal) self.journal.member(o, self.code_of(name).s); o.members.set(self.code_of(name).s, kept); return kept; });
+    this.externals.set('keep', (frame, [of, name, value, within]) => { const o = (of) as Node; let kept = value; if (value instanceof Code && !value.raw) { const ahead = within instanceof Node, c = new Code(value.text, value.b, value.e, ahead ? within : value.frame, value.planner, value.of); c.once = true; c.ahead = ahead; kept = c; } if (self.journal) self.journal.member(o, self.code_of(name).s); o.members.set(self.code_of(name).s, kept); return kept; });
     // whether a node has a member of its own (one set there, even to nothing)
     this.externals.set('own', (frame, [of, name]) => { const n = (of); return n instanceof Node && (n.members.has(self.code_of(name).s) || (self.forwarding > 0 && self.forwarded(frame, n, self.code_of(name).s) !== undefined)) ? true : undefined; });
     // `holder.name @ -> = value` (Almanac A3): written for the context the statement is read in, and everything it calls (read
@@ -532,7 +534,7 @@ export class Seed {
   forced = 0; compiles = 0; recompiles = 0; stale = 0;
   force(x: unknown): unknown {
     if (!(x instanceof Code) || x.raw) return x;
-    if (x.once) { if (!x.read) { x.value = this.force_(x); x.read = true; } return x.value; }
+    if (x.once) { if (!x.read) { if (x.reading) return undefined; x.reading = true; try { x.value = this.force_(x); } finally { x.reading = false; } x.read = true; } return x.value; }
     return this.force_(x);
   }
   force_(x: Code): unknown {

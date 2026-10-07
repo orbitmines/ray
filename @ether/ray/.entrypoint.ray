@@ -600,6 +600,46 @@ left-to-right := external node
 left-to-right.modifier = true
 // ---------------------------------------------------------------- classes (R4.4)
 // A class's block read for the class itself: what a construction under way was given is not its (its fields take no arguments).
+// The names a class's block declares (`Name := value`), there before the block is read: each read when it is first wanted, by
+// the statement that declares it at the latest, so a statement may name one declared after it (`Paint := Color | Gradient`).
+// (written with jumps: what reads a class is read before `while` and `&&` are)
+declaring_written := external span x:=x
+{made: Tight}.declared_ahead({block}) =>
+  holder := made
+  p := external node
+  p.code = external ** block
+  keys := p.declared_keys
+  at_link := keys ? keys.head : None
+  block_to := (external span block).to
+  colon_mark := declaring_written.from.next.character
+  equals_mark := declaring_written.from.next.next.character
+  external label next
+  external goto done (at_link === None ? true : None)
+  key := at_link.value
+  at := key.to
+  external goto skip (at.character === space ? None : true)
+  external goto skip (at.next.character === colon_mark ? None : true)
+  external goto skip (at.next.next.character === equals_mark ? None : true)
+  external goto skip (at.next.next.next.character === space ? None : true)
+  // (a block is a value as it is: nothing to read ahead)
+  external goto skip (at.next.next.next.next.character === opening_block ? true : None)
+  // (it ends where the next statement starts: a line that closes a bracket goes on the one before)
+  next_link := at_link.next
+  external label closing
+  external goto ended (next_link === None ? true : None)
+  external goto ended ((next_link.value.from.character.closes === None) ? true : None)
+  next_link = next_link.next
+  external goto closing
+  external label ended
+  value_to := next_link ? next_link.value.from : block_to
+  name_code := external get (external code key.from key.to block) code
+  value_code := external get (external code at.next.next.next.next value_to block) code
+  external keep holder name_code value_code holder
+  external label skip
+  at_link = at_link.next
+  external goto next
+  external label done
+  holder
 {static: Tight}.read_as_class({block}) =>
   // (a capture is read where it is named: one that makes something is named once)
   made := static
@@ -608,6 +648,7 @@ left-to-right.modifier = true
   external set registry given None
   external set registry naming None
   code := external get (external ** block) code
+  made.declared_ahead(block)
   external apply code None made
   external set registry given saved_given
   external set registry naming saved_naming

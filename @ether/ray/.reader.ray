@@ -606,6 +606,24 @@ closing_block.closes = true
 angles := external span <>
 opening_angle := angles.from.character
 closing_angle := angles.from.next.character
+// Whether every `<` written right after a word from `at` to `to` is closed by a `>` before `to`.
+{at}.angles_closed({to}) =>
+  here := at === to ? None : at
+  open_ones := None
+  while here
+    c := here.character
+    if c === opening_angle
+      before := here.previous
+      if before
+        if before.character.word
+          open_ones = true.pushed_on(open_ones)
+    if c === closing_angle
+      if open_ones
+        open_ones = open_ones.next
+    here = here.next
+    if here === to
+      here = None
+  open_ones ? None : true
 {at}.first_outside({to}, {wanted}) =>
   here := at === to ? None : at
   found := to
@@ -2200,6 +2218,9 @@ registry.sender = registry.latest
   found := from.balanced_to(to)
   if found
     found = from.first_outside(to, space) === to
+  // (a type's arguments it opens it closes: `Stop<K, V>`, not `Stop<K,`)
+  if found
+    found = from.angles_closed(to)
   found
 Tight := registry.latest.checked
 

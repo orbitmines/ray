@@ -8,6 +8,7 @@ Location &+= {
 FileSystem := class: Language {
   [location: Location] => ERROR@FileSystem `nothing loaded holds the location (a file needs @ether/filesystem, a URL @ether/network)`
   { }[{location: Location}] = {value} ^punctuation => ERROR@FileSystem `nothing loaded holds the location to write it`
+  ({location: Location}, {args}) => ERROR@FileSystem `nothing loaded holds the location to execute it`
 }
 
 // What holds a location: the projects add theirs (@ether/filesystem the file space, @ether/network the URLs).

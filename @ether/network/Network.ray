@@ -83,6 +83,10 @@ FileSystem &+= {
     { }[{location: Location}] = {value} ^punctuation => over_http(location)
       ? sent(value === None ? $.http.Method.delete : $.http.Method.put, location, value).ok
       : { inner(location).held = value }@(at(location))()
+    // executed: a page is opened by what the host opens it with; on an instance, executed there
+    ({location: Location}, {args}) => over_http(location)
+      ? (OS.Ether || OS.Browser ? ERROR@OS `opening a page is not written in Ray yet` : external os `open` (location.@ as String, args))
+      : { inner(location).held(args) }@(at(location))()
   }
 }
 

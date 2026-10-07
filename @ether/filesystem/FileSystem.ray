@@ -22,6 +22,8 @@ FileSystem &+= {
     { }[{location: Location}] = {value} ^punctuation => if OS.Browser || OS.Ether { @me/device/storage[location.normalised] = value }
       elsif value === None { external os `remove` location.sandboxed }
       else { external io location.sandboxed value }
+    // executed: what the host opens it with, given the code between the brackets
+    ({location: Location}, {args}) => if OS.Ether || OS.Browser { ERROR@OS `executing a location is not written in Ray yet` } else { external os `open` (location.@ as String, args) }
   }
 }
 

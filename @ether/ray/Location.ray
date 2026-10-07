@@ -40,13 +40,15 @@ Location := class: Hierarchy (
 // What is at a location. Mentioning `@x` is what is held there: a location while it is used as one (`/`, `name`,
 // `segments`, `children`, `==`), and read when it is used as anything else (`@/etc/hosts as String`, `as Byte[]`,
 // `as Program`; as a boolean, whether anything is held there). `@x = value` writes it, `@x = None` removes it,
-// `@new = @x` copies it, and `(@./x).@` is the location itself. What holds it is what its space is reserved to
+// `@new = @x` copies it, `@x(…)` executes it (whatever code is given between the brackets goes along), and `(@./x).@`
+// is the location itself. What holds it is what its space is reserved to
 // (`@/ => FileSystem.Host()` in @ether/filesystem, the schemes in @ether/network); nothing loaded holds it: nothing is held.
 Held := class: Location {
   location => Location(scheme, host, port, path, query, fragment)
   holder => Compiler.reduced(location, FileOptimizations) -- (. is Location ? FileSystem() : .)
   + (suffix) => (location + suffix) as String as Held
   as (=== boolean) => holder[location] != None
+  ({args}) => holder(location, args)
   as (type) => holder[location] as type
   // a directory holds its entries
   children => (holder[location] as Location[] ?? []).map(entry => (entry as String as Held) ~~ (.parent = this))

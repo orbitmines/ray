@@ -31,8 +31,6 @@ Device := class {
   // until it is received (whoever plays the terminal or the window reads and writes the same place).
   sent (stream: String, content) => if OS.Ether { streams[stream] = [streams[stream] ?? [], [content]].flatten(1) } else { external io stream content }
   received (stream: String) => if OS.Ether { (streams[stream] ?? []) -- (waiting => (streams[stream] = waiting.rest) -- waiting.first) } else { external io stream None }
-  // A location opened by what the host opens it with.
-  launch (location: Location) => if OS.Ether || OS.Browser { ERROR@OS `opening a location is not written in Ray yet` } else { external os `open` (location as String) }
 
   static chooser: Program?
   choose (s, n: Number = 1) => Device.chooser ? Device.chooser(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random

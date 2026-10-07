@@ -105,7 +105,7 @@ UI.TUI := class {
     emitted (value) => emit(Compiler.reduced(value, written) as String)
     start => emitted(Start())
       -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
-      -- ({ @me/device.launch(@me/device/opened) } when @me/device/opened changes)
+      -- ({ (@me/device/opened).held() } when @me/device/opened changes)
     stop => emitted(Stop())
     write (drawn: Grid) => (grid = drawn) -- emitted(grid.framed)
     read => (received ?? "") ~= (events: Event[]) -- .events.for(Compiler.reduced(., applied))

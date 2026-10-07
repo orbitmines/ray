@@ -2998,6 +2998,22 @@ registry.latest.shared = true
       frame = None
     if frame
       frame = frame.outer_frame
+  // (a method sees where it was written: a parent class's names, `kind => K` in `Stops<K>`, read on a subclass's instance)
+  unless held
+    frame = read_in
+    while frame
+      applied := external get frame applied_rule
+      written_in := applied ? applied.scope : None
+      while written_in
+        if external own written_in name
+          held = true
+          found = external get written_in name
+          written_in = None
+          frame = None
+        if written_in
+          written_in = written_in.outer_frame
+      if frame
+        frame = frame.outer_frame
   unless held
     receiver := read_in.this_seen
     if receiver

@@ -467,22 +467,36 @@ pipe := mark.character
       here = here.next
   here
 
-// The last place from `this` before `limit` holding the character `c`, when it is past a line end; else nothing.
+// The last place from `this` before `limit` holding the character `c`, when it is past a line end; else nothing. Walked back from
+// `limit` (a text is a ray both ways), then the first line from `this` checked not to hold it.
 {this}.last_of({c}, {limit}) =>
-  here := this
+  back := None
+  of := this.text
+  if limit
+    back = limit.previous
+  unless limit
+    back = of.last
   found := None
-  crossed := None
-  while here
-    if here === limit
-      here = None
-    if here
-      d := here.character
-      if crossed
-        if d === c
-          found = here
-      if d === end
-        crossed = true
-      here = here.next
+  here := this
+  while back
+    if back === this
+      back = None
+    if back
+      if back.character === c
+        found = back
+        back = None
+      if back
+        back = back.previous
+  if found
+    while here
+      if here === found
+        found = None
+        here = None
+      if here
+        if here.character === end
+          here = None
+      if here
+        here = here.next
   found
 
 // Whether the places from `at` to `limit` close every bracket they open, in order, and none they did not (quoted text skipped).
@@ -1258,7 +1272,13 @@ top := external .
 // what follows it: then they read it, before any rule reads the statement whole.
 {at}.class_dispatch({limit}, {scope}) =>
   found := None
-  split := at.operand_end(limit)
+  // (the reader's own text is read by its rules alone: no class's)
+  split := None
+  written_here := at.text === reader_text
+  if at.language
+    written_here = None
+  unless written_here
+    split = at.operand_end(limit)
   if split
     unless split === limit
       written_name := external code at split reader_like

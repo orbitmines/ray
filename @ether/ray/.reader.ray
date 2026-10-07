@@ -920,9 +920,9 @@ top := external .
 
 // Whether one of `pieces` is a capture that holds nothing, so the head reads nothing wherever it is tried (R2.3): one whose type was
 // not defined when it was read for `text` (a type is tried once per text, and not while another type is read), or one, not
-// optional, whose type has neither a check nor rules to read with.
+// optional, whose type has neither a check nor rules to read with. (Only a head with a typed capture has one.)
 {pieces}.holds_nothing_in({text}) =>
-  piece := pieces
+  piece := pieces.has_types ? pieces : None
   found := None
   reading_type := registry.reading_type
   while piece
@@ -1428,7 +1428,11 @@ close := learned.close
       at = None
   unless start === head_to
     into.add(literal, start, head_to)
-  into.first
+  // (whether a capture in it is typed, kept on its first piece)
+  first_piece := into.first
+  if first_piece
+    first_piece.has_types = into.has_types
+  first_piece
 
 // The place after the last place from `from` before `to` that is not a space (`to` itself when none is).
 {from}.trimmed({to}) =>
@@ -1497,6 +1501,7 @@ close := learned.close
     if leading
       made.leading = true
     if typed
+      into.has_types = true
       type_from := name_end.next
       made.type = external read type_from shut like
       // (a type not defined yet is read again when the capture is tried; until it is, the capture holds nothing)

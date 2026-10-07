@@ -26,7 +26,13 @@ export type SpanOf = { s: string; word: string | undefined; programs: Map<Rule |
 const spans = new WeakMap<Text, Map<number, SpanOf>>();
 // (the same text written in several places is one string: a member named by it is found by the string itself, not compared)
 const strings = new Map<string, string>();
-function interned(s: string): string { if (s.length > 64) return s; const t = strings.get(s); if (t !== undefined) return t; strings.set(s, s); return s; }
+function interned(s: string): string {
+  if (s.length > 64) return s;
+  let t = strings.get(s);
+  // (as a property's name: the one string the host's own names are too)
+  if (t === undefined) { const o: Record<string, number> = {}; o[s] = 0; t = Object.keys(o)[0]; strings.set(t, t); }
+  return t;
+}
 function span_of(text: Text, b: number, e: number): SpanOf {
   let m = spans.get(text); if (m === undefined) spans.set(text, m = new Map());
   const k = b * 4194304 + e; let t = m.get(k);

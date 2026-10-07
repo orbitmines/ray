@@ -69,7 +69,7 @@ export type Said = { message: string; begin: number; end: number };
 // the first head the reader in Ray read a mark off (what is written after the pieces it read).
 // What is written as a name, whatever the language (letters, digits, `_`): what names nothing is painted only when it is one.
 const NAMELIKE = /^[\p{L}\p{N}_]+$/u;
-type Info = { style?: string; caps: Map<string, string>; mark?: string };
+type Info = { style?: string; caps: Map<string, string>; mark?: string; call?: boolean };
 export class Painter implements Observer {
   sigil?: string;
   rules = new WeakMap<Rule, Info>();
@@ -164,7 +164,7 @@ export class Painter implements Observer {
     });
     for (const p of inside) {
       // (a method's name, a head's words before its parameters, when the head has no mark: a function, as what names a rule is)
-      if (!p.cap) { if (info.style) this.paint(text, p.b, p.e, info.style); else if (parameters && !/\s/.test(s.slice(p.b, p.e).trim())) this.paint(text, p.b, p.e, 'function', true); continue; }
+      if (!p.cap) { if (info.style) this.paint(text, p.b, p.e, info.style); else if (parameters && !/\s/.test(s.slice(p.b, p.e).trim())) { info.call = true; this.paint(text, p.b, p.e, 'function', true); } continue; }
       this.paint(text, p.b, p.e, 'parameter', true);
       // what follows a capture's name in its brackets: a mark, unless it is a type
       const shut = shut_of(p);
@@ -273,7 +273,9 @@ export class Painter implements Observer {
       if ((sp as { raw?: boolean }).raw && !NAMELIKE.test(text.s.slice(sp.b, sp.e).trim())) continue;
       this.name(text, sp.b, sp.e, frame, sp === leading);
     }
-    const style = info?.style;
+    // (a method with parameters and no mark, called: its name is a name read, as the old kernel painted it)
+    const call = info?.style === undefined && info?.call === true;
+    const style = info?.style ?? (call ? 'variable' : undefined);
     if (style === undefined) return;
     let cursor: number | undefined = at?.b;
     rule.pieces.forEach((p, i) => {
@@ -287,7 +289,7 @@ export class Painter implements Observer {
         if (sp && sp.text === text) { let e = sp.b; while (e > 0 && /\s/.test(s[e - 1])) e--; if (s.slice(e - lit.length, e) === lit) from = e - lit.length; }
       }
       if (from === undefined) { cursor = undefined; return; }
-      this.paint(text, from, from + lit.length, style);
+      if (!call || NAMELIKE.test(lit)) this.paint(text, from, from + lit.length, style, call);
       cursor = from + lit.length;
     });
     // A method of a value with no word of its own before what it captures (`if := class { { }{condition} {{yes}} ^class => … }`)

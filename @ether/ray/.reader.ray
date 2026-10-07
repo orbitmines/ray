@@ -2360,7 +2360,7 @@ Unbraced := opening_block.anything_but[]
 // ---------------------------------------------------------------- what the language's rules do (the reader's own)
 // A rule of the head `pieces` defined (R2.1): one in a class, or with parameters, runs what every method runs with the body written
 // here; a head of parameters only names nothing (a closure: the rule is a value, not kept where rules are read).
-{pieces}.defined({written_pattern}, {written_body}, {scope}, {modifiers}) =>
+{pieces: Tight}.defined({written_pattern}, {written_body}, {scope}, {modifiers}) =>
   head := written_pattern.code
   b := written_body.code
   parameters := pieces.parameters_piece
@@ -2378,6 +2378,7 @@ Unbraced := opening_block.anything_but[]
   unless parameters && parameters === pieces
     made.keep
   made
+registry.latest.shared = true
 
 // The value a name written (code, in a node) names where it was written, or nothing.
 {word}.named_value =>
@@ -2643,25 +2644,6 @@ registry.latest.shared = true
 registry.bare_rule = registry.latest
 
 // ---------------------------------------------------------------- maps (T8.7): a block's declarations, keyed by their names
-// The name a key spells (a key: a node with the places it is `from` and `to`, as a string's), as code naming a member.
-{key}.member_code =>
-  k := key
-  (external code k.from k.to reader_like).code
-// What a value holds by name: a program's (a block's) declarations, read once in a frame of their own inside where it was
-// written; any other value itself.
-{value}.as_map =>
-  v := value
-  holder := v
-  if v.instance && v.outer === registry.program_class
-    unless v.declared
-      frame := external node
-      frame.outer = v.context
-      written := v.code
-      code := written.code
-      external apply code None frame
-      v.declared = frame
-    holder = v.declared
-  holder
 // The names a program declares, in order: each statement's first word (up to a space or `:`), as keys.
 {program: Tight}.declared_keys =>
   written := program.code
@@ -2700,23 +2682,13 @@ registry.latest.shared = true
     same = here_spaced ? there_spaced : (there_spaced ? None : true)
   same
 
-// Each key a program declares given to `body` (a closure of one parameter), in order.
-{program: Tight}.each_key({body}) =>
-  b := body
-  keys := program.declared_keys
-  link := keys ? keys.head : None
-  while link
-    given := None.listed_with_value(link.value)
-    b.entered_in(b.context, given.head)
-    link = link.next
-  program
-registry.latest.shared = true
 // A value's method named as `name` (a name taken as written) applied to it with `argument` (a value).
-{value}.called_with({name}, {argument}) =>
+{value: Tight}.called_with({name}, {argument}) =>
   v := value
   arg := argument
   method := v.method_named(name)
   method ? method.applied_to(v, arg) : None
+registry.latest.shared = true
 
 // ================================================================ the language
 // The rules so far are the reader's own vocabulary: from here on they are out of reach of a project's files (R4.2b), which are
@@ -2791,95 +2763,96 @@ registry.language = true
 language_definer := registry.latest
 language_definer.defines = true
 
-// `x[key] := v`, `x[key] = v` (declared before `:=` and `=`: they read these first)
-{x: Tight}[{key: Balanced}] := {value} =>
-  holder := x.as_map
-  k := key
-  name := k.member_code
-  v := value
-  external set holder name v
-  v
-{x: Tight}[{key: Balanced}] = {value} =>
-  holder := x.as_map
-  k := key
-  name := k.member_code
-  v := value
-  external set holder name v
-  v
-
-// ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
-// `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`).
-({parameter: Word} {`=>`} {body}) =>
-  into := external node
-  into.add(capture, arguments_from, arguments_to)
-  piece := into.last
-  piece.optional = true
-  piece.arguments = true
-  piece.type = Operand
-  piece.parameters = external ** parameter
-  written_pattern := external ** parameter
-  written_body := external ** body
-  where := external span parameter
-  pieces := into.first
-  pieces.defined(written_pattern, written_body, where.frame, None)
-// `[items]`: a list of them; `[]`: an empty one.
-[{inside: Balanced}] =>
-  given := inside
-  found := given
-  unless given.listing
-    found = external node
-    found.listing = true
-    only := external node
-    only.listed = true
-    only.value = given
-    found.head = only
-    found.tail = only
-  found
-{`[]`} =>
-  found := external node
-  found.listing = true
-  found
-// A block as a value: a program (`{ … }`), run where something runs it.
-{{inside: Balanced}} =>
-  made := external node
-  made.program = true
-  made.written = external ** inside
-  made.code = made.written
-  where := external span inside
-  made.context = where.frame
-  // (an instance of the language's `Program`, once there is one)
-  program_class := registry.program_class
-  if program_class
-    made.outer = program_class
-    made.instance = true
-    made.this = made
-  made
-// `x[key]`: what `x` holds named by `key` (a block's declarations, T8.7); `x[key] := v`, `x[key] = v`: declared or written so.
-{x: Tight}[{key: Balanced}] =>
-  holder := x.as_map
-  k := key
-  name := k.member_code
-  found := external get holder name
-  found
-// `x.m name => body`: a closure handed to a method by juxtaposition (G2.21): its `=>` spells the definer, so the statement is
-// not read as a definition.
-{x: Tight}.{literal method} {parameter: Word} {`=>`} {body} =>
-  closure := external node
-  closure.outer = registry.program_class
-  closure.instance = true
-  closure.this = closure
-  closure.code = external ** body
-  closure.parameters = external ** parameter
-  closure.context = (external span body).frame
-  receiver := x
-  receiver.called_with(method, closure)
-
 // ================================================================ the language, in its own terms
 // From here the entrypoint is read as any file of the language is (with the language's rules, not the reader's).
 language_scope := external node
 language_scope.outer = top
 registry.language_scope = language_scope
 registry.language_text = true
+
+// ---------------------------------------------------------------- maps (T8.7): a block's declarations, keyed by their names
+// The name a key spells (a key: a node with the places it is `from` and `to`, as a string's), as code naming a member.
+{key: Tight}.member_code =>
+  k := key
+  external get (external code k.from k.to reader_like) code
+// What a value holds by name: a program's (a block's) declarations, read once in a frame of their own inside where it was
+// written; any other value itself.
+{value: Tight}.as_map =>
+  v := value
+  external goto plain ((external get v instance) === None ? true : None)
+  external goto plain ((external get v outer) === registry.program_class ? None : true)
+  external goto declared (external get v declared)
+  frame := external node
+  frame.outer = (external get v context)
+  program_code := external get (external get v code) code
+  external apply program_code None frame
+  v.declared = frame
+  external label declared
+  v := external get v declared
+  external label plain
+  v
+// Each key a program declares given to `body` (a closure of one parameter), in order.
+{program: Tight}.each_key({body}) =>
+  p := program
+  b := body
+  keys := p.declared_keys
+  link := (keys === None ? None : keys.head)
+  external label next
+  external goto done (link === None ? true : None)
+  b.entered_in((external get b context), (None.listed_with_value(link.value)).head)
+  link = link.next
+  external goto next
+  external label done
+  p
+// `x[key] := v`, `x[key] = v`: declared or written so (declared before `:=` and `=`: they read these first).
+{x: Tight}[{key: Balanced}] := {value} =>
+  holder := x.as_map
+  name := key.member_code
+  v := value
+  external set holder name v
+  v
+{x: Tight}[{key: Balanced}] = {value} =>
+  holder := x.as_map
+  name := key.member_code
+  v := value
+  external set holder name v
+  v
+
+// ---------------------------------------------------------------- values written: closures, lists, blocks
+// `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`): a rule whose
+// head is only its parameters (one argument, an operand).
+({parameter: Word} {`=>`} {body}) =>
+  piece := external node
+  piece.capture = true
+  piece.from = arguments_from
+  piece.to = arguments_to
+  piece.optional = true
+  piece.arguments = true
+  piece.type = Operand
+  piece.parameters = external ** parameter
+  piece.defined((external ** parameter), (external ** body), (external span parameter).frame, None)
+// `[items]`: a list of them; `[]`: an empty one.
+[{inside: Balanced}] =>
+  given := inside
+  (external get given listing) ? given : None.listed_with_value(given)
+{`[]`} =>
+  found := external node
+  found.listing = true
+  found
+// A block as a value: a program (`{ … }`), run where something runs it; an instance of the language's `Program` (once there is one).
+{{inside: Balanced}} =>
+  made := external node
+  made.program = true
+  made.written = external ** inside
+  made.code = made.written
+  made.context = (external span inside).frame
+  program_class := registry.program_class
+  external goto done (program_class === None ? true : None)
+  made.outer = program_class
+  made.instance = true
+  made.this = made
+  external label done
+  made
 
 // `places` (a list of names as written) each declared with the value in its place in `value` (arguments: one, or a list).
 {places: Tight}.declared_each({values}) =>
@@ -2976,6 +2949,24 @@ registry.language_text = true
   receiver := (external get (external .) caller_frame).this_seen
   receiver.member(member, None)
 
+
+// `x[key]`: what `x` holds named by `key` (a block's declarations, T8.7).
+{x: Tight}[{key: Balanced}] =>
+  holder := x.as_map
+  name := key.member_code
+  external get holder name
+// `x.m name => body`: a closure handed to a method by juxtaposition (G2.21): its `=>` spells the definer, so the statement is not
+// read as a definition.
+{x: Tight}.{literal method} {parameter: Word} {`=>`} {body} =>
+  closure := external node
+  closure.outer = registry.program_class
+  closure.instance = true
+  closure.this = closure
+  closure.code = external ** body
+  closure.parameters = external ** parameter
+  closure.context = (external span body).frame
+  receiver := x
+  (receiver.called_with(method, closure))
 
 // ---------------------------------------------------------------- what every value has (the base)
 // `x &+= { … }`: what the block defines, added to `x` (R4.3)

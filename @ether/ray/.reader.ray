@@ -2243,8 +2243,11 @@ method_body := registry.latest.body
   saved_given := registry.given
   registry.given = given
   written_parameters := parameters.code
+  // (one parameter takes its argument as it was given: kept unread, read when the parameter first is)
   if written_parameters.is_place
-    external set frame written_parameters registry.given.argument
+    first_given := registry.given
+    held := first_given ? external get first_given value : None
+    external keep frame written_parameters held
   unless written_parameters.is_place
     bound := external apply written_parameters None frame
     // the bare names left in a list of them take what is left, in order
@@ -3048,23 +3051,26 @@ private {this: Tight}.listed_with_last({value}) =>
 // ---------------------------------------------------------------- lists: a chain (`listing`, `head`, `tail`) of links (`listed`, `value`,
 // `next`, `previous`)
 // `list` with `value` at its end (a new list when `list` is nothing).
-private {list: Tight}.listed_with_value({value}) =>
+// (written with externals: every `,` makes one; a local is never named as a member an external is given)
+private {list: Tight}.listed_with_value({item}) =>
   found := list
-  v := value
-  found = (found ? found : external node)
-  found.listing = true
+  v := item
+  external goto listing found
+  found := external node
+  external label listing
+  external set found listing true
   added := external node
-  added.listed = true
-  added.value = v
-  last := found.tail
-  external goto first (last ? None : true)
-  added.previous = last
-  last.next = added
+  external set added listed true
+  external set added value v
+  last := external get found tail
+  external goto after_last last
+  external set found head added
   external goto linked
-  external label first
-  found.head = added
+  external label after_last
+  external set added previous last
+  external set last next added
   external label linked
-  found.tail = added
+  external set found tail added
   found
 // A list with the same values (a new chain).
 private {list: Tight}.copied_list =>

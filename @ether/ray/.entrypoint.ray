@@ -50,7 +50,12 @@
 // `X<T, V: Type> := class { … }`: `X`, a class with parameters (as a method has them); `X<a, b>`, `X<V: b>`: a class like it with
 // them bound (by name, or in order), its instances `X`'s too. (Declared before `:=`: it reads these first.)
 {name}<{parameters}> := {value} ^punctuation =>
-  made := value
+  // (read where its parameters are declared with their defaults: its header and block name them, `Stops<K = Length> := class … K`)
+  within := external node
+  within.outer = (external span name).frame
+  within.bound((external ** parameters), None)
+  value_code := external get (external ** value) code
+  made := external apply value_code None within
   made.parameters = external ** parameters
   external declare name made
 

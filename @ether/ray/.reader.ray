@@ -602,6 +602,10 @@ closing_block.closes = true
   found
 
 // The first place from `at` before `to` holding `wanted` outside the brackets opened from `at`, or `to`.
+// (`<` written right after a word opens what `>` closes: a type's arguments, `Stop<K, V>`; `a < b` compares)
+angles := external span <>
+opening_angle := angles.from.character
+closing_angle := angles.from.next.character
 {at}.first_outside({to}, {wanted}) =>
   here := at === to ? None : at
   found := to
@@ -609,10 +613,18 @@ closing_block.closes = true
   while here
     c := here.character
     shut := c.closer
+    if c === opening_angle
+      before := here.previous
+      if before
+        if before.character.word
+          shut = closing_angle
     if shut
       depth = shut.pushed_on(depth)
     unless shut
-      if c.closes && depth
+      closes := c.closes
+      if c === closing_angle
+        closes = depth ? depth.shut === closing_angle : None
+      if closes && depth
         depth = depth.next
       if depth ? None : c === wanted
         found = here
@@ -2347,36 +2359,41 @@ equals_mark := equals_written.from.next.character
     first_given := registry.given
     held := first_given ? external get first_given value : None
     external keep frame written_parameters held
+  // (several: each item, up to a `,` outside brackets, in its turn: a name alone takes what is given in its place; `name = default`
+  // takes what is given in its place, else its default; a typed one takes it as it declares itself)
   unless written_parameters.is_place
-    bound := external apply written_parameters None frame
-    // the bare names left in a list of them take what is left, in order
-    if bound.listing
-      item := bound.head
-      while item
-        if item.listed
-          item_code := external get item value
-          // (a name alone takes what is given in its place; anything else is read in its turn: `name = default` takes what is given
-          // in its place, else its default; a typed one takes it as it declares itself)
-          where := external span item_code
-          name_to := where.from.name_end(where.to)
-          plain := name_to === where.to
-          if plain
-            left := registry.given
-            if left
-              external set frame item_code left.argument
-              registry.given = left.next
-          unless plain
-            defaulted := name_to.character === space
-            if defaulted
-              defaulted = name_to.next.character === equals_mark
-            given_here := defaulted ? registry.given : None
-            if given_here
-              name_code := external get (external code where.from name_to item_code) code
-              external set frame name_code given_here.argument
-              registry.given = given_here.next
-            unless given_here
-              external apply item_code None frame
-        item = item.next
+    whole := external span written_parameters
+    to := whole.to
+    item_from := whole.from.past_spaces
+    while item_from
+      item_end := item_from.item_end(to)
+      item_written := external code item_from item_end written_parameters
+      item_code := item_written.code
+      name_to := item_from.name_end(item_end)
+      plain := name_to === item_end
+      if plain
+        left := registry.given
+        if left
+          external set frame item_code left.argument
+          registry.given = left.next
+      unless plain
+        defaulted := name_to.character === space
+        if defaulted
+          defaulted = name_to.next.character === equals_mark
+        given_here := defaulted ? registry.given : None
+        // (nothing given there is its default: `f()` gives nothing once)
+        if given_here
+          given_value := given_here.argument
+          unless given_value
+            registry.given = given_here.next
+            given_here = None
+        if given_here
+          name_code := external get (external code item_from name_to written_parameters) code
+          external set frame name_code given_here.argument
+          registry.given = given_here.next
+        unless given_here
+          external apply item_code None frame
+      item_from = item_end === to ? None : item_end.next.past_spaces
   registry.given = saved_given
   frame
 registry.latest.shared = true

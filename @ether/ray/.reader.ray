@@ -35,8 +35,8 @@
   external get x member
 true := external node
 // Nothing: what a node does not have.
-empty := external node
-None := empty.nothing
+nothing_holder := external node
+None := nothing_holder.nothing
 // A list (`a, b`): a chain of links, instances of `Chain` and `Link` (the classes the library extends: `Array`, `Ray`).
 Chain := external node
 Chain.class = true
@@ -636,6 +636,10 @@ closing_angle := angles.from.next.character
       if before
         if before.character.word
           shut = closing_angle
+        // (and after a space, a word right after it: arguments given in part, `== <up_to = None, except: …>(other)`)
+        if before.character === space
+          if here.next.character.word
+            shut = closing_angle
     if shut
       depth = shut.pushed_on(depth)
     unless shut
@@ -1670,6 +1674,23 @@ close := learned.close
     if parameters
       // the literal before them ends where its last word does
       literal_end := start.trimmed(at)
+      // (`== <up_to = None>(other)`: what angles hold after a space, right before them, are arguments given in part (P1.10),
+      // each its default unless given; the literal ends before them)
+      option_space := None
+      unless start === literal_end
+        if literal_end.previous.character === closing_angle
+          here := start
+          while here
+            if here.character === space && here.next.character === opening_angle
+              option_space = here
+              here = None
+            if here
+              here = here.next
+              if here === literal_end
+                here = None
+      option_end := literal_end
+      if option_space
+        literal_end = start.trimmed(option_space)
       unless start === literal_end
         into.add(literal, start, literal_end)
       into.add(capture, arguments_from, arguments_to)
@@ -1680,6 +1701,8 @@ close := learned.close
       made.type = Argument
       if inner_parameters
         made.parameters = external code inner_parameters close_parameters like
+      if option_space
+        made.options = external code option_space.next.next option_end.previous like
       at = None
       start = head_to
     if captured ? None : at
@@ -2357,6 +2380,10 @@ registry.latest.shared = true
     frame.outer_frame = receiver
   inner := external node
   inner.outer_frame = frame
+  // (its arguments given in part, `<…>`: each its default)
+  given_in_part := method.options
+  if given_in_part
+    inner.bound(given_in_part, None)
   parameters := method.parameters
   if parameters
     given := frame.has(arguments) ? frame.arguments.listed : None
@@ -2637,6 +2664,8 @@ Unbraced := opening_block.anything_but[]
     made.written = written_body
     if parameters && parameters.has(parameters)
       made.parameters = parameters.parameters
+    if parameters && parameters.has(options)
+      made.options = parameters.options
   unless method
     made = external define head pieces b
   made.modifiers = modifiers

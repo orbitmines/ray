@@ -1128,6 +1128,8 @@ Node &+= {
 
 // `!x`: whether `x` does not hold.
 !{x} ^punctuation => x ? false : true
+// `a !== b`: whether they are not the same value (T6.10).
+{a} !== {b} ^punctuation => (a === b) ? false : true
 
 // A block comment is nothing: on its own, and between operands (what it follows is what the whole is). Nested ones are read
 // whole: the comment ends at the `*/` the statement ends with.
@@ -1635,4 +1637,76 @@ String &+= {
       }
     }
     found
+  empty =>
+    text := this
+    at := text.from ? text.from : (text.head)
+    end := text.from ? text.to : None
+    at === end
+  // what follows its first character: a text's, from the place after it; a list's, its links after the first
+  rest =>
+    text := this
+    at := text.from
+    made := None
+    if at {
+      made = external node
+      made.from = (at === text.to) ? at : at.next
+      made.to = text.to
+      made.frame = text.frame
+    }
+    unless at {
+      at_link := text.head ? text.head.next : None
+      while at_link {
+        made &= at_link.value
+        at_link = at_link.next
+      }
+      unless made {
+        made = external node
+        made.listing = true
+      }
+    }
+    made.outer_frame = String
+    made.instance = true
+    made.this = made
+    made
+  // `a + b`: a String of the characters of `a`, then those of `b` (a character given is one)
+  compounds + (other) =>
+    made := None
+    parts := this, other
+    at_part := parts.head
+    while at_part {
+      part := at_part.value
+      if part.from {
+        points := code_points(part)
+        at_point := points ? points.head : None
+        while at_point {
+          made &= character_of(at_point.value)
+          at_point = at_point.next
+        }
+      }
+      if part.listing {
+        at_link := part.head
+        while at_link {
+          made &= at_link.value
+          at_link = at_link.next
+        }
+      }
+      unless part.from || part.listing { made &= part }
+      at_part = at_part.next
+    }
+    unless made {
+      made = external node
+      made.listing = true
+    }
+    made.outer_frame = String
+    made.instance = true
+    made.this = made
+    made
 }
+// `""`: the empty text, a String of no characters (a list of none).
+"" ^string =>
+  made := external node
+  made.listing = true
+  made.outer_frame = String
+  made.instance = true
+  made.this = made
+  made

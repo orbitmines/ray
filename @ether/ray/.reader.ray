@@ -205,6 +205,12 @@ closing_block.closes = true
         // G2.13: a line the language's rules continue (`{\n}else …`) goes on with the statement above it
         unless deeper
           deeper = inside && inside.continues_statement
+        // (a line ending with `,` goes on: the list it composes continues, `[a,\n b]`)
+        unless deeper
+          before := here.previous
+          while before && before.character === space
+            before = before.previous
+          deeper = before ? before.character === comma : None
         unless deeper
           found = here
           here = None

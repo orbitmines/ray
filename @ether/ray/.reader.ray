@@ -449,27 +449,70 @@ pipe := mark.character
 
 // The first place from `this` on, on its line and before `limit`, holding the character `c`, or nothing.
 {this}.first_of({c}, {limit}) =>
-  here := this
-  going := true
-  while going
-    if here === limit
-      here = None
-    unless here
-      going = None
-    if going
-      d := here.character
-      if d === c
-        going = None
-      if d === end
+  // every character's first place from `this` on, found in one walk and kept on the characters until another place asks
+  scan := registry.scan
+  fresh := None
+  if scan
+    if scan.at === this
+      if scan.limit === limit
+        fresh = true
+  unless fresh
+    scan = external node
+    scan.at = this
+    scan.limit = limit
+    registry.scan = scan
+    here := this
+    while here
+      if here === limit
         here = None
-        going = None
-    if going
-      here = here.next
-  here
+      if here
+        d := here.character
+        unless d.scanned === scan
+          d.scanned = scan
+          d.first_from = here
+        if d === end
+          here = None
+      if here
+        here = here.next
+  found := None
+  if c.scanned === scan
+    found = c.first_from
+  found
 
 // The last place from `this` before `limit` holding the character `c`, when it is past a line end; else nothing. Walked back from
 // `limit` (a text is a ray both ways), then the first line from `this` checked not to hold it.
 {this}.last_of({c}, {limit}) =>
+  // from a place on the first line of the statement indexed last, the same for every such place: found once per character
+  stamp := registry.indexed
+  on_first_line := None
+  if stamp.to === limit
+    if this.stamp === stamp
+      on_first_line = true
+  if on_first_line
+    unless c.late_stamp === stamp
+      c.late_stamp = stamp
+      c.late = None
+      line_end := None
+      if end.stamp === stamp
+        ends := end.places
+        line_end = ends.place
+      going := None
+      if line_end
+        if limit
+          going = limit.previous
+        unless limit
+          whole := this.text
+          going = whole.last
+      while going
+        if going === line_end
+          going = None
+        if going
+          if going.character === c
+            c.late = going
+            going = None
+          if going
+            going = going.previous
+  late_found := c.late
   back := None
   of := this.text
   if limit
@@ -478,6 +521,10 @@ pipe := mark.character
     back = of.last
   found := None
   here := this
+  if on_first_line
+    back = None
+    here = None
+    found = late_found
   while back
     if back === this
       back = None

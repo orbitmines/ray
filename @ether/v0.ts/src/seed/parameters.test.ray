@@ -15,4 +15,4 @@ say ((Stop<Other, Node>)(at: true, value: true).kind === Other)
 Stops<K = Length, V = Node> := class stops: Stop<K, V> { }
 say (Stops === Stops)
 G := class: Stop<Other, Node> angle: Node
-say (G.components.hierarchy.head.next.value.parameters === Stop.parameters)
+say (G.components.hierarchy.head.next.value.components.hierarchy.head.next.value === Stop)

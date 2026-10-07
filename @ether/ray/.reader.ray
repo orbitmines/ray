@@ -918,11 +918,24 @@ top := external .
     best.rule = state.rule
   best
 
+// Whether one of `pieces` is a capture whose type was not defined when it was read for `text` (R2.3): it holds nothing there (a
+// type is tried once per text), so the head reads nothing in it, wherever it is tried.
+{pieces}.untyped_in({text}) =>
+  piece := pieces
+  found := None
+  while piece
+    if piece.type_from && piece.type_tried === text
+      unless piece.type
+        found = true
+        piece = None
+    piece = piece.next
+  found
+
 // A rule's reading of the statement from `at` to `limit`, taken into `state` (its `best` reading and that reading's `rule`) when it
 // reads the statement whole and is chosen over the best so far (R2.5).
 {at}.considered({rule}, {limit}, {state}) =>
   pieces := rule.pieces
-  r := at.readings(pieces, limit, None)
+  r := pieces.untyped_in(at.text) ? None : at.readings(pieces, limit, None)
   if r
     take := true
     if state.best
@@ -951,7 +964,7 @@ top := external .
   while rules
     rule := rules.rule
     pieces := rule.pieces
-    r := at.readings(pieces, limit, true)
+    r := pieces.untyped_in(at.text) ? None : at.readings(pieces, limit, true)
     if r
       take := true
       if best

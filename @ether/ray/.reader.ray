@@ -2336,6 +2336,8 @@ method_body := registry.latest.body
 
 // Parameters bound in `frame` to what `given` (a chain of arguments) gives, in order: `(parameters) := arguments` (a name
 // declared with a type takes the next argument given, a bare name the next one left).
+equals_written := external span x=x
+equals_mark := equals_written.from.next.character
 {frame: Tight}.bound({parameters}, {given}) =>
   saved_given := registry.given
   registry.given = given
@@ -2352,12 +2354,28 @@ method_body := registry.latest.body
       item := bound.head
       while item
         if item.listed
-          code := external get item value
-          if code.is_place
+          item_code := external get item value
+          // (a name alone takes what is given in its place; anything else is read in its turn: `name = default` takes what is given
+          // in its place, else its default; a typed one takes it as it declares itself)
+          where := external span item_code
+          name_to := where.from.name_end(where.to)
+          plain := name_to === where.to
+          if plain
             left := registry.given
             if left
-              external set frame code left.argument
+              external set frame item_code left.argument
               registry.given = left.next
+          unless plain
+            defaulted := name_to.character === space
+            if defaulted
+              defaulted = name_to.next.character === equals_mark
+            given_here := defaulted ? registry.given : None
+            if given_here
+              name_code := external get (external code where.from name_to item_code) code
+              external set frame name_code given_here.argument
+              registry.given = given_here.next
+            unless given_here
+              external apply item_code None frame
         item = item.next
   registry.given = saved_given
   frame

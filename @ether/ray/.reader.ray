@@ -567,8 +567,23 @@ closing_block.closes = true
   answer
 
 {kind}.holds_written({from}, {to}) =>
-  // (the type's own rules read it: a value written as a type carries them, language-side)
-  from.reading(to, kind.rules)
+  // whether the text is the type is the language's to say (its `is`, T4.10); until it can, the type's own rules read it (R2.3)
+  said := registry.text_is
+  found := None
+  if said
+    text := external node
+    text.from = from
+    text.to = to
+    type_given := external node
+    type_given.value = kind
+    given := external node
+    given.value = text
+    given.next = type_given
+    here := external .
+    found = external apply said given here
+  unless said
+    found = from.reading(to, kind.rules)
+  found
 
 // The first place from `at` before `to` holding `wanted` outside the brackets opened from `at`, or `to`.
 {at}.first_outside({to}, {wanted}) =>
@@ -719,7 +734,11 @@ closing_block.closes = true
     unless worth
       going = None
     if worth
-      if piece_type
+      // (a literal after a typed capture is looked for first: it is cheaper than asking the type)
+      if piece_type && rest_pieces
+        if rest_pieces.literal
+          worth = e.spells(rest_pieces.from, rest_pieces.to)
+      if piece_type && worth
         unless at === e
           worth = piece_type.holds(at, e)
       // what a capture holds is balanced: it closes every bracket it opens, and none it did not (the last piece runs to the
@@ -740,6 +759,9 @@ closing_block.closes = true
       cap.piece = pieces
       if piece_type
         cap.type = piece_type
+        // (text a type is by its structure, not by rules of its own: what it holds is the text, taken as written)
+        unless piece_type.check ? true : piece_type.rules
+          cap.raw = true
       if pieces.raw
         cap.raw = true
       cap.from = capture_from
@@ -947,7 +969,8 @@ top := external .
     candidates := here.led ? external get here.led key : None
     while candidates
       rule := candidates.rule
-      if rule.visible(written_here)
+      seen_here := rule.private ? at.language : true
+      if seen_here && rule.visible(written_here)
         at.considered(rule, limit, state)
       candidates = candidates.next
     capture_led := here.capture_led
@@ -966,6 +989,9 @@ top := external .
       hidden := rule.shared ? None : rule.internal
       if written_here
         hidden = rule.language
+      if rule.private
+        unless at.language
+          hidden = true
       unless hidden
         unless registry.indexed === stamp
           stamp = at.indexed(limit)
@@ -1025,7 +1051,10 @@ top := external .
         found = true
     if kind
       unless piece.optional ? true : kind.check
-        unless kind.rules
+        // (one without rules holds nothing, unless the language says what text is: a type by its structure; one it said holds no
+        // text does not)
+        said := kind.holds_no_text ? None : registry.text_is
+        unless kind.rules ? true : said
           found = true
     piece = found ? None : piece.next
   found
@@ -1869,9 +1898,10 @@ registry.definer.defines = true
       unless made.external
         external report at limit
   // a class made or added to: the programs waiting run again (P5.1), once the statement has run
-  if registry.classes_changed
+  if registry.classes_changed && registry.rerun
     registry.classes_changed = None
-    registry.rerun_waiting
+    rerun := registry.rerun
+    external apply rerun None scope
   limit ? limit.next : None
 
 reader := registry.latest
@@ -1940,12 +1970,39 @@ external reader reader
     unless value
       if first_place.reading_in(receiver_at.to, frame_written)
         value = this
+    // (a name the `this` it is read for has, a member or a method, as a name read on its own is: `pred < other.pred`)
+    unless value
+      seen := frame_written.this_seen
+      if seen
+        written_name := external code receiver_at.from receiver_at.to reader_like
+        name := written_name.code
+        if external own seen name
+          value = external get seen name
+        unless value
+          method := seen.method_spelled(receiver_at.from, receiver_at.to)
+          if method
+            value = method.applied_to(seen, None)
   result := current
   going := true
   // a rest that is only spaces: nothing more to read on it
   if at.spaces_after === rest_to
     going = None
     result = this
+  // a name the base's operators split (`this` at `is`) that a frame holds whole: what it holds, the rest read after it
+  name_end := held ? None : receiver_at.from.name_ends(rest_to)
+  if going && name_end && (name_end === receiver_at.to ? None : at === receiver_at.to)
+    written_whole := external code receiver_at.from name_end reader_like
+    whole := written_whole.code
+    frame = frame_written
+    while frame
+      if external own frame whole
+        value = external get frame whole
+        at = name_end
+        frame = None
+      frame = frame ? frame.outer : None
+    if at === rest_to
+      going = None
+      result = value
   while going
     scopes := value.reading_scopes
     r := at.prefix_reading_in(rest_to, scopes)
@@ -2004,6 +2061,34 @@ external reader reader
 
 registry.sender = registry.latest
 
+// A type with a check (R2.2): a rule given the type and the places a capture holds, answering whether it holds them.
+{check}.checked =>
+  made := external node
+  made.check = check
+  made
+
+// Text that is tight: balanced, with no space outside its brackets (what a member is read on: `a.b(1, 2).c`).
+{kind}.tight({from}, {to}) =>
+  found := from.balanced_to(to)
+  if found
+    found = from.first_outside(to, space) === to
+  found
+Tight := registry.latest.checked
+
+// Whether a text (a node with the places it is `from` and `to`) is held by a type (R2.2): the type's check, or what the language
+// says it is (once per type and text).
+{text: Tight}.is_held_by({type}) =>
+  t := type
+  given := text
+  t.holds(given.from, given.to)
+registry.latest.shared = true
+// A text read whole by a type's own rules (R2.3: a value written as a type carries them).
+{text: Tight}.read_with_rules_of({type}) =>
+  t := type
+  given := text
+  given.from.reading(given.to, t.rules)
+registry.latest.shared = true
+
 // ---------------------------------------------------------------- what the language is defined with (the reader's own)
 // Whether `x` has a member `name` of its own (one set there, even to nothing).
 {x}.has({name}) =>
@@ -2021,7 +2106,7 @@ registry.sender = registry.latest
   found
 
 // Whether `x` is `scope` or inside it (its parents reach it, or the classes they extend).
-{x}.inside({scope}) =>
+{x: Tight}.inside({scope}) =>
   here := x
   found := None
   while here
@@ -2033,9 +2118,10 @@ registry.sender = registry.latest
       ancestor = ancestor.extends
     here = found ? None : here.outer
   found
+registry.latest.shared = true
 
 // The `this` a frame sees: its own, or the nearest frame around it that has one.
-{frame}.this_seen =>
+{frame: Tight}.this_seen =>
   here := frame
   found := None
   while here
@@ -2044,9 +2130,10 @@ registry.sender = registry.latest
       here = None
     here = here.outer
   found
+registry.latest.shared = true
 
 // What `arguments` give, in order (code, read here): a chain of `value`s, or of `item`s (code as written, `,`).
-{arguments}.listed =>
+{arguments: Tight}.listed =>
   // (`frame.arguments` answers them unread)
   written := arguments
   // (whether there are any asked of where they are written: not by reading them)
@@ -2068,6 +2155,7 @@ registry.sender = registry.latest
         found.listed = true
         found.value = given
   found
+registry.latest.shared = true
 
 // Whether the arguments written from `at` to `to` are one: no `,` outside the brackets they are in.
 {at}.one_argument({to}) =>
@@ -2088,7 +2176,7 @@ registry.sender = registry.latest
   found
 
 // Whether arguments are given by name (`x: 1, …`): the first is a name followed by `: `.
-{code}.named =>
+{code: Tight}.named =>
   where := external span code
   found := None
   if where
@@ -2099,6 +2187,7 @@ registry.sender = registry.latest
     e := at.operand_end(where.to)
     found = e.character === colon && e.next.character === space
   found
+registry.latest.shared = true
 
 // The place a head written from `from` to `to` ends at without its highlighting: a last word `^style` is a mark (R5.2).
 {from}.unstyled({to}) =>
@@ -2150,12 +2239,15 @@ method_body := registry.latest.body
 
 // Parameters bound in `frame` to what `given` (a chain of arguments) gives, in order: `(parameters) := arguments` (a name
 // declared with a type takes the next argument given, a bare name the next one left).
-{frame}.bound({parameters}, {given}) =>
+{frame: Tight}.bound({parameters}, {given}) =>
   saved_given := registry.given
   registry.given = given
   written_parameters := parameters.code
+  // (one parameter takes its argument as it was given: kept unread, read when the parameter first is)
   if written_parameters.is_place
-    external set frame written_parameters registry.given.argument
+    first_given := registry.given
+    held := first_given ? external get first_given value : None
+    external keep frame written_parameters held
   unless written_parameters.is_place
     bound := external apply written_parameters None frame
     // the bare names left in a list of them take what is left, in order
@@ -2172,6 +2264,7 @@ method_body := registry.latest.body
         item = item.next
   registry.given = saved_given
   frame
+registry.latest.shared = true
 
 // Whether code starts with a block's bracket.
 {code}.starts_block =>
@@ -2185,25 +2278,12 @@ method_body := registry.latest.body
 {program}.run_in({frame}) =>
   code := program.written.code
   external apply code None frame
-
-// Whether a value holds (T1.7): nothing does not; a value saying whether it `holds` as that says; any other does.
-{value}.holds_true =>
-  v := value
-  found := v
-  if v && v.has(holds)
-    found = v.holds
-  found
 this_written := external span this
 arguments_written := external span arguments
 arguments_from := arguments_written.from
 arguments_to := arguments_written.to
 
 // ---------------------------------------------------------------- types with a check: characters, repetition (R2.2)
-{check}.checked =>
-  made := external node
-  made.check = check
-  made
-
 // One character, any.
 {kind}.one_character({from}, {to}) =>
   from.next === to
@@ -2238,13 +2318,6 @@ except_rule := registry.latest
   found
 many_rule := registry.latest
 
-// Text that is tight: balanced, with no space outside its brackets (what a member is read on: `a.b(1, 2).c`).
-{kind}.tight({from}, {to}) =>
-  found := from.balanced_to(to)
-  if found
-    found = from.first_outside(to, space) === to
-  found
-Tight := registry.latest.checked
 
 // One operand: from where it starts (after spaces), a group, quoted text or a word, and nothing after it.
 {kind}.one_operand({from}, {to}) =>
@@ -2263,7 +2336,8 @@ Argument := registry.latest.checked
 {kind}.word_text({from}, {to}) =>
   c := from.character
   found := None
-  unless c.closer ? true : c === quote
+  // (none with a space in it: found before the operators are looked for)
+  unless c.closer ? true : (c === quote ? true : from.first_place_of(space, to))
     found = from.operand_end(to) === to
   found
 Word := registry.latest.checked
@@ -2347,8 +2421,9 @@ Line := registry.latest.checked
 // One item of a list: balanced, with no `,` outside the brackets in it (G2.21: `,` composes before `=>` reads a definition).
 {kind}.item_text({from}, {to}) =>
   found := from.balanced_to(to)
+  // (one that starts with `,` has nothing before it to compose with: the head of `,` itself)
   if found
-    found = from.first_outside(to, comma) === to
+    found = (from.character === comma ? from.next : from).first_outside(to, comma) === to
   found
 Item := registry.latest.checked
 
@@ -2359,7 +2434,7 @@ Unbraced := opening_block.anything_but[]
 // ---------------------------------------------------------------- what the language's rules do (the reader's own)
 // A rule of the head `pieces` defined (R2.1): one in a class, or with parameters, runs what every method runs with the body written
 // here; a head of parameters only names nothing (a closure: the rule is a value, not kept where rules are read).
-{pieces}.defined({written_pattern}, {written_body}, {scope}, {modifiers}) =>
+{pieces: Tight}.defined({written_pattern}, {written_body}, {scope}, {modifiers}) =>
   head := written_pattern.code
   b := written_body.code
   parameters := pieces.parameters_piece
@@ -2374,9 +2449,16 @@ Unbraced := opening_block.anything_but[]
   unless method
     made = external define head pieces b
   made.modifiers = modifiers
+  // (a modifier that hides: the rule is read only in the language's own code, out of reach of a project's files)
+  modifier := modifiers
+  while modifier
+    if modifier.modifier.hides
+      made.private = true
+    modifier = modifier.next
   unless parameters && parameters === pieces
     made.keep
   made
+registry.latest.shared = true
 
 // The value a name written (code, in a node) names where it was written, or nothing.
 {word}.named_value =>
@@ -2385,7 +2467,7 @@ Unbraced := opening_block.anything_but[]
   external get holder code
 
 // Where an alternative of a head from `at` ends: at a ` | ` outside brackets, before which no capture is written; else `to`.
-{at}.alternative_end({to}) =>
+{at: Tight}.alternative_end({to}) =>
   here := at === to ? None : at
   found := to
   depth := None
@@ -2408,9 +2490,10 @@ Unbraced := opening_block.anything_but[]
     if here === to
       here = None
   found
+registry.latest.shared = true
 
 // The place of the `{` opening a block that ends the places from `at` to `to`, or nothing.
-{at}.trailing_block({to}) =>
+{at: Tight}.trailing_block({to}) =>
   here := at
   found := None
   while here
@@ -2427,9 +2510,10 @@ Unbraced := opening_block.anything_but[]
       unless here.character === opening_block
         here = here.next
   found
+registry.latest.shared = true
 
 // The place before `limit` from `at` (`limit`'s previous place among them).
-{limit}.before_place({at}) =>
+{limit: Tight}.before_place({at}) =>
   here := at
   found := at
   while here
@@ -2440,9 +2524,10 @@ Unbraced := opening_block.anything_but[]
     if here
       here = following
   found
+registry.latest.shared = true
 
 // Where a name from `at` ends: at a space or an opening bracket, or `to`.
-{at}.name_end({to}) =>
+{at: Tight}.name_end({to}) =>
   here := at === to ? None : at
   found := to
   while here
@@ -2454,14 +2539,16 @@ Unbraced := opening_block.anything_but[]
     if here === to
       here = None
   found
+registry.latest.shared = true
 
 // The place after ` | `, from the space before it.
-{at}.after_alternative =>
+{at: Tight}.after_alternative =>
   at.next.next.next
+registry.latest.shared = true
 
 // `x.name`: the receiver's own member `name` (T8.7: own key wins), else its method of that name applied to it with
 // `arguments` (code, or nothing).
-{this}.member({name}, {arguments}) =>
+{this: Tight}.member({name}, {arguments}) =>
   value := this
   key := name
   found := None
@@ -2472,14 +2559,17 @@ Unbraced := opening_block.anything_but[]
     if method
       found = method.applied_to(value, arguments)
   found
+registry.latest.shared = true
 
 // The method of a value named as `key` (raw code: its text): a method rule read by the value whose head is that name, and
 // its arguments if any. (Only the rules kept under the name's first character, scope by scope in the order they are met.)
 {value}.method_named({key}) =>
   k := key
   where := external span k
-  from := where.from
-  to := where.to
+  value.method_spelled(where.from, where.to)
+
+// The same, for the name written from `from` to `to`.
+{value}.method_spelled({from}, {to}) =>
   // (an empty name at the text's end names nothing)
   first_character := None
   if from
@@ -2505,7 +2595,7 @@ Unbraced := opening_block.anything_but[]
   found
 
 // A method applied to `receiver` with `arguments` (their value, given as the method's capture).
-{method}.applied_to({receiver}, {arguments}) =>
+{method: Tight}.applied_to({receiver}, {arguments}) =>
   m := method
   r := receiver
   given := arguments
@@ -2520,123 +2610,11 @@ Unbraced := opening_block.anything_but[]
     caps.next = given_cap
   here := external .
   external apply m caps here
-
-// `x := value`: a place declared where it was written; a list of places, each declared with the value in its place.
-{this}.declared({value}) =>
-  found := None
-  if this.is_place
-    written := external ** this
-    place := written.code
-    found = external declare place value
-  unless this.is_place
-    places := this
-    given := value.listed
-    found = places
-    if places.listing
-      item := places.head
-      while item
-        code := external get item value
-        if given
-          external declare code given.argument
-          given = given.next
-        item = item.next
-  found
-
-// `x &= value`: the list `x` holds with `value` at its end; a new one when it holds nothing (and `x` written with it).
-{this}.appended({value}) =>
-  list := this
-  given := value
-  unless list ? list.listing : true
-    list = None.listed_with_value(list)
-  found := list.listed_with_value(given)
-  if this.is_place
-    written := external ** this
-    place := written.code
-    holder := external declaring place
-    external set holder place found
-  found
-
-// `x = value`: written where the place was declared.
-{this}.assigned({value}) =>
-  found := value
-  if this.is_place
-    written := external ** this
-    place := written.code
-    holder := external declaring place
-    external set holder place found
-  found
-
-// `x: T`, `x: T = default`: a name declared with a type. What is being constructed or called gives it its value: by name (its
-// own member already), or the next given in order; else `default`, else nothing.
-{this}.declared_as({type}, {default}) =>
-  where := external span this
-  // (a name with aliases, `initial | (⊢)`: declared as the first)
-  named_end := where.from.alternative_end(where.to)
-  written := named_end === where.to ? external ** this : external code where.from named_end this
-  place := written.code
-  naming := registry.naming
-  value := None
-  if naming
-    value = type
-    external set naming place value
-  unless naming
-    given := external own where.frame place
-    next := given ? None : registry.given
-    if given
-      value = external get where.frame place
-    if next
-      value = next.argument
-      registry.given = next.next
-    if given ? true : next
-      external declare place value
-    // (nothing given for it: its default, read when the field first is, not while the instance is made)
-    unless given ? true : next
-      external keep where.frame place default
-  value
-
-// `a && b`: `b` when `a` holds, else `a`; `a || b`: `a` when it holds, else `b`.
-{this}.and({other}) =>
-  found := this
-  if found.holds_true
-    found = other
-  found
-{this}.or({other}) =>
-  found := this
-  unless found.holds_true
-    found = other
-  found
-
-// A class made from a header (code), a block (code, or nothing) and the class it extends (or nothing).
-{source}.header_class({parent}) =>
-  where := external span source
-  made := external node
-  made.outer = where.frame
-  made.class = true
-  if parent
-    made.extends = parent
-  made.header = external ** source
-  made.read_header_into(made)
-  made
-
-// A class given its block: read in it, and kept to be read again in each instance.
-{made}.with_block({block}) =>
-  static := made
-  static.written = external ** block
-  static.read_as_class(block)
-  registry.classes_changed = true
-  static
-
-// A class's header read into `frame`: each of its items (separated by `,` outside brackets), as a statement; a header in brackets,
-// what they hold.
-{static}.read_header_into({frame}) =>
-  written := static.header
-  if written
-    written.read_items_into(frame)
-  static
+registry.latest.shared = true
 
 // The items of written code (a node with its `code`), separated by `,` outside brackets (in a bracketed one, what the brackets
 // hold), each read as a statement in `frame`.
-{written}.read_items_into({frame}) =>
+{written: Tight}.read_items_into({frame}) =>
   code := written.code
   where := external span code
   from := where.from.past_spaces
@@ -2652,53 +2630,14 @@ Unbraced := opening_block.anything_but[]
     external apply item_code None frame
     item_from = item_end === to ? None : item_end.next.past_spaces
   frame
+registry.latest.shared = true
 
 // Where an item from `at` ends: at a `,` outside brackets, or `to`.
 {at}.item_end({to}) =>
   at.first_outside(to, comma)
 
-// A class's block read again in an instance being made, after the blocks of the classes it extends.
-{static}.read_into({instance}) =>
-  class_read := static
-  if class_read.extends
-    class_read.extends.read_into(instance)
-  class_read.read_header_into(instance)
-  block := class_read.written
-  if block
-    code := block.code
-    external apply code None instance
-
-// `a, b`: a list (a chain: `head`, `tail`, links with `value` and `next`), each item as written, read when its value is read;
-// a list given another item is that list with it at the end.
-{this}.listed_with({other}) =>
-  list := None
-  unless external span this
-    list = this
-    // a value given, not as written: a list of it
-    unless list.listing
-      list = None.listed_with_value(this)
-  unless list
-    list = external node
-    list.listing = true
-    first := external node
-    first.listed = true
-    written_this := external ** this
-    this_code := written_this.code
-    external keep first value this_code
-    list.head = first
-    list.tail = first
-  added := external node
-  added.listed = true
-  written_other := external ** other
-  other_code := written_other.code
-  external keep added value other_code
-  list.tail.next = added
-  added.previous = list.tail
-  list.tail = added
-  list
-
 // A list with a value added at its end (a new list when `list` is nothing).
-{list}.listed_with_value({value}) =>
+{list: Tight}.listed_with_value({value}) =>
   found := list
   unless found
     found = external node
@@ -2714,136 +2653,10 @@ Unbraced := opening_block.anything_but[]
   found.tail = added
   found
 
-// `x -- call`, `x ~~ call`: `call` read in a frame where `this` is `x`; a closure it answers is called with `x`; `keep`: `x`.
-{this}.continued({call}, {keep}) =>
-  value := this
-  written := external ** call
-  code := written.code
-  where := external span code
-  frame := external node
-  frame.outer = where.frame
-  frame.this = value
-  result := external apply code None frame
-  if result.method
-    result = result.applied_to(None, value)
-  if keep
-    result = value
-  result
-
-// A superposition of `this` and `other` (one more component when `this` is one).
-{this}.superposed_with({other}) =>
-  value := this
-  given := other
-  found := external node
-  found.superposes = true
-  if value.superposes
-    found.components = value.components.copied_list.listed_with_value(given)
-  unless value.superposes
-    found.components = None.listed_with_value(value).listed_with_value(given)
-  found
-
-// A list with the same values (a new chain).
-{list}.copied_list =>
-  found := None
-  link := list.head
-  while link
-    found = found.listed_with_value(link.value)
-    link = link.next
-  found
-
-// A type narrowed by a constraint (code read with `this` being a candidate).
-{this}.narrowed({constraint}) =>
-  made := external node
-  made.narrows = this
-  made.constraint = external ** constraint
-  made
-
-// Whether `type` admits `this` (T4.10): a narrowing, what it narrows that satisfies its constraint; a superposition, what one of its
-// components admits; a class, its instances (and those of the classes extending it); any other value, itself.
-{this}.admitted_by({type}) =>
-  value := this
-  t := type
-  found := None
-  decided := None
-  if t.narrows
-    decided = true
-    if value.admitted_by(t.narrows)
-      code := t.constraint.code
-      where := external span code
-      frame := external node
-      frame.outer = where.frame
-      frame.this = value
-      found = external apply code None frame
-      found = found.holds_true
-  unless decided
-    if t.superposes
-      decided = true
-      component := t.components.head
-      while component
-        if value.admitted_by(component.value)
-          found = true
-          component = None
-        component = component.next
-  unless decided
-    if t.class
-      decided = true
-      found = value && value.inside(t)
-  unless decided
-    found = value === t
-  found
-
-// Calling a value: a class makes an instance of itself; a closure runs.
-{this}.called({arguments}) =>
-  value := this
-  found := value.class ? value.constructed(arguments) : None
-  // a rule as a value (a closure: `(x) => …`): applied to them
-  if value.method
-    found = value.applied_to(None, arguments)
-  // a program: entered where it was written, the arguments bound to its parameters
-  program_class := registry.program_class
-  if program_class && value.instance && value.outer === program_class
-    given := arguments ? arguments.listed : None
-    found = value.entered_in(value.context, given)
-  found
-
-// An instance of a class (R4.4): a frame inside it, with the class's block read again there, where a definition is the class's
-// and a field takes what the arguments give it (by name, or in order).
-{static}.constructed({arguments}) =>
-  instance := external node
-  instance.outer = static
-  instance.instance = true
-  instance.this = instance
-  outer_given := registry.given
-  outer_naming := registry.naming
-  registry.given = None
-  registry.naming = None
-  // the arguments as written (code passed on is followed to where it was written)
-  given_node := external ** arguments
-  written := given_node.code
-  given_value := given_node.value
-  if given_value
-    registry.given = given_value.listed
-  // (code held in a name is read where the name is: whether there is any is asked of where it is written)
-  written_at := external span written
-  if written_at
-    if written.named
-      naming_frame := external node
-      naming_frame.outer = written_at.frame
-      registry.naming = instance
-      given_node.read_items_into(naming_frame)
-      registry.naming = None
-    unless written.named
-      registry.given = written.listed
-  // the parents' blocks first, then its own
-  static.read_into(instance)
-  registry.given = outer_given
-  registry.naming = outer_naming
-  instance
-
 // ---------------------------------------------------------------- programs (P1): code, read where it was written or entered on a value
 // A program entered on `element`: its code read in a frame of its own inside `element`, `this` being `element`; the values
 // `given` (a list's first link, or nothing) bound to its parameters. What its code answers.
-{program}.entered_in({element}, {given}) =>
+{program: Tight}.entered_in({element}, {given}) =>
   p := program
   frame := external node
   frame.outer = element
@@ -2858,52 +2671,7 @@ Unbraced := opening_block.anything_but[]
   if code.starts_block && result.program
     result = result.run_in(frame)
   result
-
-// A program run now and kept to run again when a class is made or added to while it answers nothing (P5.1); entered on a frame
-// of its own inside where it was written.
-{program}.watched_run =>
-  p := program
-  code := p.code.code
-  where := external span code
-  fresh := external node
-  fresh.outer = where.frame
-  answer := p.entered_in(fresh, None)
-  registry.classes_changed = None
-  unless answer
-    waiting := external node
-    waiting.program = p
-    waiting.next = registry.waiting
-    registry.waiting = waiting
-  p
-
-// The programs waiting, run again (P5.1); what they make or add to while they run does not run them again (P5.2).
-{this}.rerun_waiting =>
-  unless registry.rerunning
-    waiting := registry.waiting
-    if waiting
-      registry.rerunning = true
-      registry.waiting = None
-      while waiting
-        p := waiting.program
-        p.watched_run
-        waiting = waiting.next
-      registry.rerunning = None
-  // (what they made does not run them again, P5.2)
-  registry.classes_changed = None
-  None
-
-// A class's block read for the class itself: what a construction under way was given is not its (its fields take no arguments).
-{static}.read_as_class({block}) =>
-  saved_given := registry.given
-  saved_naming := registry.naming
-  registry.given = None
-  registry.naming = None
-  written_block := external ** block
-  block_code := written_block.code
-  external apply block_code None static
-  registry.given = saved_given
-  registry.naming = saved_naming
-  static
+registry.latest.shared = true
 
 // A name read on its own in the language's code: what the frames around it hold; else the member of the `this` it is read for
 // (nothing when it has none: `next` of the last); else it is said to be unresolved.
@@ -2935,27 +2703,8 @@ Unbraced := opening_block.anything_but[]
 registry.bare_rule = registry.latest
 
 // ---------------------------------------------------------------- maps (T8.7): a block's declarations, keyed by their names
-// The name a key spells (a key: a node with the places it is `from` and `to`, as a string's), as code naming a member.
-{key}.member_code =>
-  k := key
-  (external code k.from k.to reader_like).code
-// What a value holds by name: a program's (a block's) declarations, read once in a frame of their own inside where it was
-// written; any other value itself.
-{value}.as_map =>
-  v := value
-  holder := v
-  if v.instance && v.outer === registry.program_class
-    unless v.declared
-      frame := external node
-      frame.outer = v.context
-      written := v.code
-      code := written.code
-      external apply code None frame
-      v.declared = frame
-    holder = v.declared
-  holder
 // The names a program declares, in order: each statement's first word (up to a space or `:`), as keys.
-{program}.declared_keys =>
+{program: Tight}.declared_keys =>
   written := program.code
   code := written.code
   where := external span code
@@ -2992,23 +2741,13 @@ registry.latest.shared = true
     same = here_spaced ? there_spaced : (there_spaced ? None : true)
   same
 
-// Each key a program declares given to `body` (a closure of one parameter), in order.
-{program}.each_key({body}) =>
-  b := body
-  keys := program.declared_keys
-  link := keys ? keys.head : None
-  while link
-    given := None.listed_with_value(link.value)
-    b.entered_in(b.context, given.head)
-    link = link.next
-  program
-registry.latest.shared = true
 // A value's method named as `name` (a name taken as written) applied to it with `argument` (a value).
-{value}.called_with({name}, {argument}) =>
+{value: Tight}.called_with({name}, {argument}) =>
   v := value
   arg := argument
   method := v.method_named(name)
   method ? method.applied_to(v, arg) : None
+registry.latest.shared = true
 
 // ================================================================ the language
 // The rules so far are the reader's own vocabulary: from here on they are out of reach of a project's files (R4.2b), which are
@@ -3023,7 +2762,10 @@ quoted_rule.shared = true
 ticked_rule.shared = true
 group_rule.shared = true
 empty_group_rule.shared = true
-repeated_rule.shared = true
+// `private` before a head: a rule read only in the language's own code, out of reach of a project's files (the language's helpers).
+private := external node
+private.modifier = true
+private.hides = true
 registry.language = true
 
 // Rules defined from here on (R2.1: a rule is a method). One written in a class, or with parameters (`name (a, b: T) => …`), runs
@@ -3083,100 +2825,187 @@ registry.language = true
 language_definer := registry.latest
 language_definer.defines = true
 
-// `x[key] := v`, `x[key] = v` (declared before `:=` and `=`: they read these first)
+// ================================================================ the language, in its own terms
+// From here the entrypoint is read as any file of the language is (with the language's rules, not the reader's).
+language_scope := external node
+language_scope.outer = top
+registry.language_scope = language_scope
+registry.language_text = true
+
+// ---------------------------------------------------------------- maps (T8.7): a block's declarations, keyed by their names
+// The name a key spells (a key: a node with the places it is `from` and `to`, as a string's), as code naming a member.
+private {key: Tight}.member_code =>
+  k := key
+  external get (external code k.from k.to reader_like) code
+// What a value holds by name: a program's (a block's) declarations, read once in a frame of their own inside where it was
+// written; any other value itself.
+private {value: Tight}.as_map =>
+  v := value
+  external goto plain ((external get v instance) === None ? true : None)
+  external goto plain ((external get v outer) === registry.program_class ? None : true)
+  external goto declared (external get v declared)
+  frame := external node
+  frame.outer = (external get v context)
+  program_code := external get (external get v code) code
+  external apply program_code None frame
+  v.declared = frame
+  external label declared
+  v := external get v declared
+  external label plain
+  v
+// Each key a program declares given to `body` (a closure of one parameter), in order.
+private {program: Tight}.each_key({body}) =>
+  p := program
+  b := body
+  keys := p.declared_keys
+  link := (keys === None ? None : keys.head)
+  external label next
+  external goto done (link === None ? true : None)
+  b.entered_in((external get b context), (None.listed_with_value(link.value)).head)
+  link = link.next
+  external goto next
+  external label done
+  p
+// `x[key] := v`, `x[key] = v`: declared or written so (declared before `:=` and `=`: they read these first).
 {x: Tight}[{key: Balanced}] := {value} =>
   holder := x.as_map
-  k := key
-  name := k.member_code
+  name := key.member_code
   v := value
   external set holder name v
   v
 {x: Tight}[{key: Balanced}] = {value} =>
   holder := x.as_map
-  k := key
-  name := k.member_code
+  name := key.member_code
   v := value
   external set holder name v
   v
-// ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
-// `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`).
+
+// `X<T, V: Type> := class { … }`: `X`, a class with parameters (as a method has them); `X<a, b>`, `X<V: b>`: a class like it with
+// them bound (by name, or in order), its instances `X`'s too. (Declared before `:=`: it reads these first.)
+{name: Word}<{literal parameters}> := {value} =>
+  made := value
+  made.parameters = external ** parameters
+  external declare name made
+
+// ---------------------------------------------------------------- values written: closures, lists, blocks
+// `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`): a rule whose
+// head is only its parameters (one argument, an operand).
 ({parameter: Word} {`=>`} {body}) =>
-  into := external node
-  into.add(capture, arguments_from, arguments_to)
-  piece := into.last
+  piece := external node
+  piece.capture = true
+  piece.from = arguments_from
+  piece.to = arguments_to
   piece.optional = true
   piece.arguments = true
   piece.type = Operand
   piece.parameters = external ** parameter
-  written_pattern := external ** parameter
-  written_body := external ** body
-  where := external span parameter
-  pieces := into.first
-  pieces.defined(written_pattern, written_body, where.frame, None)
+  piece.defined((external ** parameter), (external ** body), (external span parameter).frame, None)
 // `[items]`: a list of them; `[]`: an empty one.
 [{inside: Balanced}] =>
   given := inside
-  found := given
-  unless given.listing
-    found = external node
-    found.listing = true
-    only := external node
-    only.listed = true
-    only.value = given
-    found.head = only
-    found.tail = only
-  found
+  (external get given listing) ? given : None.listed_with_value(given)
 {`[]`} =>
   found := external node
   found.listing = true
   found
-// A block as a value: a program (`{ … }`), run where something runs it.
+// A block as a value: a program (`{ … }`), run where something runs it; an instance of the language's `Program` (once there is one).
 {{inside: Balanced}} =>
   made := external node
   made.program = true
   made.written = external ** inside
   made.code = made.written
-  where := external span inside
-  made.context = where.frame
-  // (an instance of the language's `Program`, once there is one)
+  made.context = (external span inside).frame
   program_class := registry.program_class
-  if program_class
-    made.outer = program_class
-    made.instance = true
-    made.this = made
+  external goto done (program_class === None ? true : None)
+  made.outer = program_class
+  made.instance = true
+  made.this = made
+  external label done
   made
-// `name := value`: the value declared where the name was written; a list of names, each with the value in its place.
-{name: Tight} := {value} =>
-  name.declared(value)
-// `condition ? yes : no`: `yes` when the condition holds, else `no`.
+
+// `places` (a list of names as written) each declared with the value in its place in `value` (arguments: one, or a list).
+private {places: Tight}.declared_each({values}) =>
+  list := places
+  given := (values.listed)
+  item := ((external get list listing) ? list.head : None)
+  external label next_place
+  external goto done (item ? None : true)
+  external goto done (given ? None : true)
+  place := external get item value
+  external declare place given.value
+  given = given.next
+  item = item.next
+  external goto next_place
+  external label done
+  list
+// The list `this` holds with `value` at its end; a new one when it holds nothing (one of it, when it holds something else).
+private {this: Tight}.listed_with_last({value}) =>
+  list := this
+  v := value
+  external goto listed ((list === None) ? true : (external get list listing))
+  list = (None.listed_with_value(list))
+  external label listed
+  list.listed_with_value(v)
+
+// ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
+// (what declares and writes binds loosest: `x = c ? a : b` writes what `?` answers)
+// `name ^style := value`: the mark is the highlighting's (R5.2).
+{name: Tight} ^{literal style} := {value} =>
+  external declare name value
+// `name := value`: the value declared where the name was written (read in place: nothing but an external); a list of names in
+// brackets (`(x, y) := a, b`), each with the value in its place.
+({names}) := {value} =>
+  names.declared_each(value)
+// (a name with another, `O | optimizations := …`: both)
+{name} | {alias} := {value} =>
+  external declare name value
+  external declare alias value
+{name} := {value} =>
+  external declare name value
+// `x.member = value`: the member set.
+{x: Tight}.{literal member} = {value} =>
+  external set x member value
+// `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing); a name is written with it
+// (anything else: the base's `&=`).
+{target: Word} &= {value} =>
+  list := target.listed_with_last(value)
+  external assign target list
+// `name = value`: written where the name was declared (anything else: the base's `=`).
+{target: Word} = {value} =>
+  external assign target value
+// `condition ? yes : no`: `yes` when the condition holds (T1.7: nothing does not; a value saying whether it `holds` as that says;
+// any other does), else `no`; only the one taken is read.
 {condition} ? {yes} : {no} =>
-  answer := None
   taken := condition
-  answer = taken.holds_true ? yes : no
-  answer
+  external goto said (external own taken holds)
+  external goto yes_taken taken
+  external goto no_taken
+  external label said
+  external goto yes_taken (external get taken holds)
+  external label no_taken
+  no
+  external goto done
+  external label yes_taken
+  yes
+  external label done
 // `name: Type = default`, `name: Type`: a name declared with a type, given its value by what is constructed or called.
 {name}: {type} = {default} =>
   name.declared_as(type, default)
 {name}: {type} =>
   name.declared_as(type, None)
-// `name ^style := value`: the mark is the highlighting's (R5.2).
-{name: Tight} ^{literal style} := {value} =>
-  name.declared(value)
-// `x.member = value`: the member set.
-{x: Tight}.{literal member} = {value} =>
-  external set x member value
-// `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing).
-{target: Tight} &= {value} =>
-  target.appended(value)
-// `name = value`: written where the name was declared.
-{target: Tight} = {value} =>
-  target.assigned(value)
-// `a === b`: whether they are the same value (identity).
-// (the language's `true` and `false` once it has them)
+// `a === b`: whether they are the same value (identity): the language's `true` or `false` (before it has them, whether they are).
 {a} === {b} =>
   same := external same a b
-  said_true := registry.true_value
-  same ? (said_true ? said_true : same) : registry.false_value
+  external goto said registry.true_value
+  same
+  external goto done
+  external label said
+  external goto yes same
+  registry.false_value
+  external goto done
+  external label yes
+  registry.true_value
+  external label done
 // `x.member`, `x.member(arguments)`: its own member, else its method (T8.7).
 {x: Tight}.{literal member}{arguments: Bracketed} =>
   x.member(member, arguments)
@@ -3184,17 +3013,246 @@ language_definer.defines = true
   x.member(member, None)
 // `.member`, `.member = value`, `.member(arguments)`: of `this` (what the statement's frame sees as `this`).
 .{literal member} = {value} =>
-  receiver := (external .).caller_frame.this_seen
+  receiver := (external get (external .) caller_frame).this_seen
   external set receiver member value
 .{literal member}{arguments: Bracketed} =>
-  receiver := (external .).caller_frame.this_seen
+  receiver := (external get (external .) caller_frame).this_seen
   receiver.member(member, arguments)
 .{literal member} =>
-  receiver := (external .).caller_frame.this_seen
+  receiver := (external get (external .) caller_frame).this_seen
   receiver.member(member, None)
 
+
+// `x[key]`: what `x` holds named by `key` (a block's declarations, T8.7).
+{x: Tight}[{key: Balanced}] =>
+  holder := x.as_map
+  name := key.member_code
+  external get holder name
+// `x.m name => body`: a closure handed to a method by juxtaposition (G2.21): its `=>` spells the definer, so the statement is not
+// read as a definition.
+{x: Tight}.{literal method} {parameter: Word} {`=>`} {body} =>
+  closure := external node
+  closure.outer = registry.program_class
+  closure.instance = true
+  closure.this = closure
+  closure.code = external ** body
+  closure.parameters = external ** parameter
+  closure.context = (external span body).frame
+  receiver := x
+  (receiver.called_with(method, closure))
+
 // ---------------------------------------------------------------- what every value has (the base)
-Node := type
+// `x &+= { … }`: what the block defines, added to `x` (R4.3)
+{target: Tight} &+= {{members: Balanced}} =>
+  extended := target
+  extended ? (external apply members None extended) : (external report (external span members).from (external span members).to nothing_extended)
+  registry.classes_changed = true
+  extended
+// ---------------------------------------------------------------- lists: a chain (`listing`, `head`, `tail`) of links (`listed`, `value`,
+// `next`, `previous`)
+// `list` with `value` at its end (a new list when `list` is nothing).
+// (written with externals: every `,` makes one; a local is never named as a member an external is given)
+private {list: Tight}.listed_with_value({item}) =>
+  found := list
+  v := item
+  external goto listing found
+  found := external node
+  external label listing
+  external set found listing true
+  added := external node
+  external set added listed true
+  external set added value v
+  last := external get found tail
+  external goto after_last last
+  external set found head added
+  external goto linked
+  external label after_last
+  external set added previous last
+  external set last next added
+  external label linked
+  external set found tail added
+  found
+// A list with the same values (a new chain).
+private {list: Tight}.copied_list =>
+  found := None
+  link := list.head
+  external label again
+  external goto done (link ? None : true)
+  found = found.listed_with_value(link.value)
+  link = link.next
+  external goto again
+  external label done
+  found
+// A superposition of `this` and `other` (U1): `superposes`, its `components` a list (one more component when `this` is one).
+private {this: Tight}.superposed_with({other}) =>
+  value := this
+  given := other
+  found := external node
+  found.superposes = true
+  found.components = (value.superposes ? value.components.copied_list.listed_with_value(given) : None.listed_with_value(value).listed_with_value(given))
+  found
+
+// ---------------------------------------------------------------- types (T4.10): what a type admits
+// Whether `type` admits `this` (`x is T`): a narrowing (`narrows`, `constraint`), what it narrows that satisfies its constraint (read
+// with `this` being the candidate); a superposition (`a | b`), what one of its components admits; a class, its instances (and those
+// of the classes extending it). Text (a value with the places it is `from` and `to`: a String) is a type by its structure: a list
+// (`a, b`), its items one after another; text, the same characters; a class or a type with rules of its own, what they read whole
+// (R2.3). Any other value, itself. (Nothing, or `true`.)
+// (written with jumps on whether something is there: it answers every typed capture's text)
+private {this: Tight}.admitted_by({type}) =>
+  candidate := this
+  t := type
+  found := None
+  is_text := external own candidate from
+  external goto narrowing (external get t narrows)
+  external goto superposition (external get t superposes)
+  external goto class (external get t class)
+  external goto text is_text
+  external label itself
+  external goto same_value (external same candidate t)
+  external goto done
+  external label same_value
+  found = true
+  external goto done
+  external label text
+  external goto sequence (external get t listing)
+  external goto spelled (external own t from)
+  external goto by_rules (external get t rules)
+  external goto itself
+  external label by_rules
+  found = (candidate.read_with_rules_of(t))
+  external goto done
+  external label narrowing
+  // (text narrowed from a type with rules of its own: the value they would read is what is narrowed, not the text; said once, to the
+  // reader too)
+  external goto narrowed_text is_text
+  external label narrowed
+  external goto done ((candidate.admits_part_of(external get t narrows)) ? None : true)
+  // (code held as a value is a `**` node's `code`: declared as it is, not read)
+  code := external get (external get t constraint) code
+  frame := external node
+  frame.outer = (external span code).frame
+  frame.this = candidate
+  external goto done ((external apply code None frame) ? None : true)
+  found = true
+  external goto done
+  external label narrowed_text
+  external goto narrowed (external get (external get t narrows) rules)
+  t.holds_no_text = true
+  external goto done
+  external label superposition
+  component := external get (external get t components) head
+  external label next_component
+  external goto try_component component
+  external goto done
+  external label try_component
+  external goto admitted (candidate.admits_part_of(external get component value))
+  component = external get component next
+  external goto next_component
+  external label admitted
+  found = true
+  external goto done
+  external label class
+  external goto repetition (is_text ? ((external same (external get t extends) registry.array_class) ? true : None) : None)
+  found = (candidate.inside(t))
+  external goto done found
+  external goto by_rules is_text
+  external goto done
+  external label sequence
+  found = (candidate.from.through((external get t head), candidate.to))
+  external goto done
+  external label spelled
+  found = (candidate.from.spells_as(candidate.to, (external get t from), (external get t to)))
+  external goto done
+  external label repetition
+  found = (candidate.from.repeated((external get t T), candidate.to))
+  external label done
+  found
+// A part of a type admitting `this`: text, as a capture of that type holds it (its check, or the language's `is`, once per text);
+// any other value, as `is` says.
+private {this: Tight}.admits_part_of({type}) =>
+  value := this
+  external goto text (external own value from)
+  value.admitted_by(type)
+  external goto done
+  external label text
+  value.is_held_by(type)
+  external label done
+// Whether the text from `this` to `to` is the types `link` holds (a list's links), one after another.
+private {this: Tight}.through({link}, {to}) =>
+  here := this
+  l := link
+  end := to
+  found := None
+  external goto items l
+  external goto done ((external same here end) ? None : true)
+  found = true
+  external goto done
+  external label items
+  external goto done (external same here end)
+  item := l.value
+  rest := external get l next
+  e := external get here next
+  external label next_end
+  part := external node
+  part.from = here
+  part.to = e
+  external goto matched (part.admits_part_of(item))
+  external label not_here
+  external goto done (external same e end)
+  e = external get e next
+  external goto next_end
+  external label matched
+  external goto not_here ((e.through(rest, end)) ? None : true)
+  found = true
+  external label done
+  found
+// Whether the text from `this` to `to` has the characters the text from `other` to `other_to` has.
+private {this: Tight}.spells_as({to}, {other}, {other_to}) =>
+  here := this
+  there := other
+  end := to
+  there_end := other_to
+  found := None
+  external label next
+  external goto ended (external same here end)
+  external goto done (external same there there_end)
+  external goto done ((external same (external get here character) (external get there character)) ? None : true)
+  here = external get here next
+  there = external get there next
+  external goto next
+  external label ended
+  external goto done ((external same there there_end) ? None : true)
+  found = true
+  external label done
+  found
+// Whether a text is a type (what the reader asks of a typed capture): a type with rules of its own, what they read whole; nothing, no
+// text; else as `is` says.
+private {text: Tight}.is_text_of({type}) =>
+  external goto by_rules (external get type rules)
+  external goto structure type
+  external goto done
+  external label structure
+  text.admitted_by(type)
+  external goto done
+  external label by_rules
+  text.read_with_rules_of(type)
+  external label done
+registry.text_is = registry.latest
+
+// `call` read in a frame where `this` is `this`; a closure it answers is called with it (`x -- call`, `x ~~ call`).
+private {this: Tight}.continued({call}) =>
+  value := this
+  code := external get (external ** call) code
+  frame := external node
+  frame.outer = (external span code).frame
+  frame.this = value
+  result := external apply code None frame
+  result.method ? (result.applied_to(None, value)) : result
+
+Node := external node
+registry.base = Node
+Node &+= {
   .{literal property} =>
     this.member(property, None)
   .{literal property}{arguments: Bracketed} =>
@@ -3203,12 +3261,45 @@ Node := type
     external set this property value
   // `,` composes one value, a list (no split, 2026-09-27): `a, b, c` is the list of `a`, `b` and `c`, each as written (a
   // place or a value, read when it is used).
+  // (a list given more is that list with it at its end; a value given, not as written, the first of a new one)
   ,{other: Item} =>
-    this.listed_with(other)
+    list := None
+    external goto as_written (external span this)
+    list = this
+    external goto last (external get list listing)
+    list = (None.listed_with_value(list))
+    external goto last
+    external label as_written
+    this_code := external get (external ** this) code
+    list = (None.listed_with_value(None))
+    external keep list.head value this_code
+    external label last
+    other_code := external get (external ** other) code
+    list = (list.listed_with_value(None))
+    external keep list.tail value other_code
+    list
+  // `x := value`, `x = value` on a value read first: a name as written declared (written) with it; a list of names, each with the
+  // value in its place
   :={value} =>
-    this.declared(value)
+    external goto as_written (external span this)
+    this.declared_each(value)
+    external goto done
+    external label as_written
+    external declare this value
+    external label done
   ={value} =>
-    this.assigned(value)
+    external goto as_written (external span this)
+    value
+    external goto done
+    external label as_written
+    external assign this value
+    external label done
+  &={value} =>
+    list := this.listed_with_last(value)
+    external goto done ((external span this) ? None : true)
+    external assign this list
+    external label done
+    list
   :{type} =>
     this.declared_as(type, None)
   :{type} = {default} =>
@@ -3218,24 +3309,14 @@ Node := type
   // a comment after a value: the value
   {`//`}{comment: Line} =>
     this
-  // `x &+= { … }`: what the block defines, added to `x` (R4.3)
-  &+={ }{{members: Balanced}} =>
-    extended := this
-    if extended
-      external apply members None extended
-    unless extended
-      where := external span members
-      at := where.from
-      limit := where.to
-      external report at limit nothing_extended
-    registry.classes_changed = true
-    extended
   // `x -- f`: `f` read with `this` being `x` (a closure it answers called with `x`): what it answers; `x ~~ f`: the same, for
   // what it does, answering `x`
   --{call: Line} =>
-    this.continued(call, None)
+    this.continued(call)
   ~~{call: Line} =>
-    this.continued(call, true)
+    value := this
+    value.continued(call)
+    value
   // `a | b`: both, superposed (U1); `T?`: `None | T`
   |{other: Operand} =>
     this.superposed_with(other)
@@ -3243,15 +3324,19 @@ Node := type
     None.superposed_with(this)
   // `T{p}`: what `T` admits that satisfies `p` (read with `this` being the candidate)
   {{constraint: Balanced}} =>
-    this.narrowed(constraint)
+    made := external node
+    made.narrows = this
+    made.constraint = external ** constraint
+    made
   // `x is T`: whether `T` admits `x` (T4.10)
   { }is {type: Operand} =>
     this.admitted_by(type) ? registry.true_value : registry.false_value
+  // `a && b`: `b` when `a` holds, else `a`; `a || b`: `a` when it holds, else `b` (the other side read only when it decides)
   &&{other} =>
-    this.and(other)
+    this ? other : this
   ||{other} =>
-    this.or(other)
-registry.base = Node
+    this ? this : other
+}
 
 // ---------------------------------------------------------------- modifiers: words before a definition's head, kept on its rule
 static := external node
@@ -3264,158 +3349,337 @@ right-to-left := external node
 right-to-left.modifier = true
 left-to-right := external node
 left-to-right.modifier = true
-
 // ---------------------------------------------------------------- classes (R4.4)
-
-// A class: the frame its block is read in, inside the frame it was written in; its statics, its fields' defaults and its methods
-// are that frame's. Calling it makes an instance.
-class {{block: Balanced}} =>
-  where := external span block
-  made := external node
-  made.outer = where.frame
-  made.class = true
-  made.written = external ** block
-  made.read_as_class(block)
-  registry.classes_changed = true
+// A class's block read for the class itself: what a construction under way was given is not its (its fields take no arguments).
+private {static: Tight}.read_as_class({block}) =>
+  // (a capture is read where it is named: one that makes something is named once)
+  made := static
+  saved_given := external get registry given
+  saved_naming := external get registry naming
+  external set registry given None
+  external set registry naming None
+  code := external get (external ** block) code
+  external apply code None made
+  external set registry given saved_given
+  external set registry naming saved_naming
   made
-// `class: Parent { … }`: a class whose instances are also its parent's (its rules and fields too).
-class: {parent} {{block: Balanced}} =>
-  where := external span block
+// A class: the frame its block is read in, inside the frame it was written in (`outer`); its statics, its fields' defaults and its
+// methods are that frame's; `extends`, the class it extends (or nothing). Calling it makes an instance.
+private {block: Tight}.class_of({parent}) =>
   made := external node
-  made.outer = where.frame
+  made.outer = (external span block).frame
   made.class = true
   made.extends = parent
   made.written = external ** block
   made.read_as_class(block)
   registry.classes_changed = true
   made
-// `enum a | b (field: v) | c { block }`: a class of exactly these members, each an instance of it named on it (`X.a`), in
-// `members` in order; a block after them is the class's own.
+// A class made from a header (code, `values: Iterable`, `(x: T, y)`) and the class it extends (or nothing): its items (separated by
+// `,` outside brackets) read as its block is (a typed one a field, given in order when an instance is made).
+private {source: Tight}.header_class({parent}) =>
+  made := external node
+  made.outer = (external span source).frame
+  made.class = true
+  made.extends = parent
+  made.header = external ** source
+  made.read_header_into(made)
+  made
+// A class given its block: read in it, and kept to be read again in each instance.
+private {static: Tight}.with_block({block}) =>
+  made := static
+  made.written = external ** block
+  made.read_as_class(block)
+  registry.classes_changed = true
+  made
+// A class's header read into `frame`: each of its items, as a statement.
+private {static: Tight}.read_header_into({frame}) =>
+  made := static
+  written := made.header
+  external goto done (written ? None : true)
+  written.read_items_into(frame)
+  external label done
+  made
+// A class's block read again in an instance being made, after the blocks of the classes it extends.
+private {static: Tight}.read_into({instance}) =>
+  class_read := static
+  parent := class_read.extends
+  external goto parents_read (parent ? None : true)
+  parent.read_into(instance)
+  external label parents_read
+  class_read.read_header_into(instance)
+  block := class_read.written
+  external goto done (block ? None : true)
+  code := external get block code
+  external apply code None instance
+  external label done
+  instance
+// An instance of a class: a frame inside it, with the class's block read again there, where a definition is the class's and a field
+// takes what the arguments give it (by name, or in order).
+private {static: Tight}.constructed({arguments}) =>
+  instance := external node
+  instance.outer = static
+  instance.instance = true
+  instance.this = instance
+  outer_given := external get registry given
+  outer_naming := external get registry naming
+  external set registry given None
+  external set registry naming None
+  // the arguments as written (code passed on is followed to where it was written), or a value given
+  given_node := external ** arguments
+  given_value := external get given_node value
+  external goto as_written (given_value === None ? true : None)
+  external set registry given (given_value.listed)
+  external label as_written
+  written := external get given_node code
+  // (code held in a name is read where the name is: whether there is any is asked of where it is written)
+  external goto read ((external span written) ? None : true)
+  external goto by_name (written.named)
+  external set registry given (written.listed)
+  external goto read
+  external label by_name
+  naming_frame := external node
+  naming_frame.outer = (external span written).frame
+  external set registry naming instance
+  given_node.read_items_into(naming_frame)
+  external set registry naming None
+  external label read
+  // the parents' blocks first, then its own
+  static.read_into(instance)
+  external set registry given outer_given
+  external set registry naming outer_naming
+  instance
+// `x: T`, `x: T = default`: a name declared with a type. What is being constructed or called gives it its value: by name (its own
+// member already), or the next given in order; else `default` (read when the field first is), else nothing. While arguments are
+// given by name, a field is the type it is declared with.
+private {this: Tight}.declared_as({type}, {default}) =>
+  where := external span this
+  // (a name with aliases, `initial | (⊢)`: declared as the first)
+  named_end := where.from.alternative_end(where.to)
+  place := external get (external ** this) code
+  external goto one_name (named_end === where.to ? true : None)
+  place = external get (external code where.from named_end this) code
+  external label one_name
+  naming := registry.naming
+  value := None
+  external goto by_order (naming === None ? true : None)
+  value = type
+  external set naming place value
+  external goto done
+  external label by_order
+  external goto by_name (external own where.frame place)
+  next := registry.given
+  external goto by_default (next ? None : true)
+  value = next.value
+  registry.given = next.next
+  external declare place value
+  external goto done
+  external label by_name
+  value = external get where.frame place
+  external declare place value
+  external goto done
+  external label by_default
+  external keep where.frame place default
+  external label done
+  value
+// Calling a value: a class makes an instance of itself; a closure runs; a program is entered where it was written, the arguments
+// bound to its parameters.
+private {this: Tight}.called({arguments}) =>
+  value := this
+  external goto construct (external get value class)
+  external goto method (external get value method)
+  external goto maybe_program (external get value instance)
+  external label nothing
+  None
+  external goto done
+  external label maybe_program
+  external goto nothing ((external get value outer) === registry.program_class ? None : true)
+  value.entered_in((external get value context), (arguments === None ? None : (arguments.listed)))
+  external goto done
+  external label construct
+  value.constructed(arguments)
+  external goto done
+  external label method
+  (value.applied_to(None, arguments))
+  external label done
+
+class {{block: Balanced}} =>
+  block.class_of(None)
+// `class: Parent { … }`: a class whose instances are also its parent's (its rules and fields too).
+class: {parent} {{block: Balanced}} =>
+  block.class_of(parent)
+// A class written with a header (`class = values: Iterable { … }`, `class (x: T, y) { … }`).
+class = {header: Balanced} {{block: Balanced}} =>
+  header.header_class(None).with_block(block)
+class = {header: Balanced} =>
+  header.header_class(None)
+class: {parent: Tight} = {header: Balanced} {{block: Balanced}} =>
+  header.header_class(parent).with_block(block)
+class: {parent: Tight} = {header: Balanced} =>
+  header.header_class(parent)
+class {header: Bracketed} {{block: Balanced}} =>
+  header.header_class(None).with_block(block)
+class: {parent: Tight} {header: Bracketed} {{block: Balanced}} =>
+  header.header_class(parent).with_block(block)
+
+// `enum a | b (field: v) | c { block }`: a class of exactly these members, each an instance of it named on it (`X.a`), in `members` in
+// order, knowing the ones beside it (`preceding`, `following`); a block after them is the class's own. Every enum is the language's
+// `Enum` (once there is one).
 enum {written: Item} =>
   where := external span written
   made := external node
   made.outer = where.frame
   made.class = true
   made.enum = true
-  // (every enum is the language's `Enum`, once there is one)
-  enum_class := registry.enum_class
-  if enum_class
-    made.extends = enum_class
+  made.extends = registry.enum_class
   from := where.from
   to := where.to
   members_to := to
   block_at := from.trailing_block(to)
-  if block_at
-    members_to = from.trimmed(block_at)
-    inside_from := block_at.next
-    inside_to := to.before_place(block_at)
-    block := external code inside_from inside_to written
-    made.written = block
-    block_code := block.code
-    external apply block_code None made
+  external goto members (block_at ? None : true)
+  // (the members end where their last word does)
+  members_to = block_at
+  external label trim
+  external goto trimmed (members_to.previous.character === space ? None : true)
+  members_to = members_to.previous
+  external goto trim
+  external label trimmed
+  block := external code block_at.next (to.before_place(block_at)) written
+  made.written = block
+  // (a local is never named as a member an external is given: the external would be given what it holds)
+  block_code := external get block code
+  external apply block_code None made
+  external label members
   member_from := from
-  while member_from
-    member_end := member_from.alternative_end(members_to)
-    name_end := member_from.name_end(member_end)
-    named_written := external code member_from name_end written
-    name := named_written.code
-    fields := None
-    fields_from := None
-    unless name_end === member_end
-      fields_from = name_end.spaces_after
-    if fields_from
-      unless fields_from === member_end
-        fields_written := external code fields_from member_end written
-        fields = fields_written.code
-    entry := made.constructed(fields)
-    external set made name entry
-    // each member knows the ones beside it
-    last_entry := made.last_member
-    if last_entry
-      last_entry.following = entry
-      entry.preceding = last_entry
-    made.last_member = entry
-    made.members = made.members.listed_with_value(entry)
-    member_from = None
-    unless member_end === members_to
-      member_from = member_end.after_alternative
+  external label member
+  member_end := member_from.alternative_end(members_to)
+  name_end := member_from.name_end(member_end)
+  name := external get (external code member_from name_end written) code
+  fields := None
+  // (after the spaces after its name: none, no fields)
+  fields_from := name_end
+  external label spaces
+  external goto spaced (fields_from === member_end ? None : (fields_from.character === space ? true : None))
+  external goto made_one (fields_from === name_end ? true : (fields_from === member_end ? true : None))
+  external goto given
+  external label spaced
+  fields_from = fields_from.next
+  external goto spaces
+  external label given
+  fields = external get (external code fields_from member_end written) code
+  external label made_one
+  entry := made.constructed(fields)
+  external set made name entry
+  last_entry := made.last_member
+  external goto first (last_entry === None ? true : None)
+  last_entry.following = entry
+  entry.preceding = last_entry
+  external label first
+  made.last_member = entry
+  made.members = (made.members.listed_with_value(entry))
+  external goto done (member_end === members_to ? true : None)
+  member_from = (member_end.after_alternative)
+  external goto member
+  external label done
   made
 
-// A class written with a header (`class = values: Iterable { … }`, `class (x: T, y) { … }`): its items (separated by `,` outside
-// brackets) are read as the class's block is, before it (a typed one a field, given in order when an instance is made).
-class = {header: Balanced} {{block: Balanced}} =>
-  made := header.header_class(None)
-  made.with_block(block)
-class = {header: Balanced} =>
-  header.header_class(None)
-class: {parent: Tight} = {header: Balanced} {{block: Balanced}} =>
-  made := header.header_class(parent)
-  made.with_block(block)
-class: {parent: Tight} = {header: Balanced} =>
-  header.header_class(parent)
-class {header: Bracketed} {{block: Balanced}} =>
-  made := header.header_class(None)
-  made.with_block(block)
-class: {parent: Tight} {header: Bracketed} {{block: Balanced}} =>
-  made := header.header_class(parent)
-  made.with_block(block)
+// (`static` written as a literal: as a head's first word it names the modifier)
+// `static name = value` in a class: a member of the class (declared there, as `:=` does), read once; `static statement`: read once, for
+// the class, not again for each instance.
+{`static`} {name: Tight} = {value} =>
+  external goto done (external get (external span name).frame instance)
+  external declare name value
+  external label done
+{`static`} {statement} =>
+  external goto done (external get (external span statement).frame instance)
+  statement
+  external label done
 
-// `static name = value` in a class: a member of the class (declared there, as `:=` does), read once.
-static {name: Tight} = {value} =>
-  where := external span name
-  found := None
-  unless where.frame.instance
-    found = name.declared(value)
-  found
-// `static statement` in a class: read once, for the class, not again for each instance.
-static {statement} =>
-  where := external span statement
-  found := None
-  unless where.frame.instance
-    found = statement
-  found
-
-// `program.entered(element, given)`: its code read with `this` being `element` (P1); `watched(program)`: run now, and again while
-// it answers nothing when a class is made or added to (P5.1).
-{program: Tight}.entered{arguments: Bracketed} =>
+// `watched(program)`: run now, and again while it answers nothing when a class is made or added to (P5.1); what runs again makes or
+// adds to does not run it again (P5.2).
+private {program: Tight}.watched_run =>
   p := program
+  code := external get p.code code
+  fresh := external node
+  fresh.outer = (external span code).frame
+  answer := p.entered_in(fresh, None)
+  registry.classes_changed = None
+  external goto done (answer === None ? None : true)
+  waiting := external node
+  waiting.program = p
+  waiting.next = registry.waiting
+  registry.waiting = waiting
+  external label done
+  p
+watched({program: Balanced}) =>
+  program.watched_run
+// The programs waiting, run again (what the reader runs once a statement made or added to a class).
+private rerunning_waiting =>
+  external goto done registry.rerunning
+  waiting := registry.waiting
+  external goto done (waiting ? None : true)
+  registry.rerunning = true
+  registry.waiting = None
+  external label next
+  waiting.program.watched_run
+  waiting = waiting.next
+  external goto next waiting
+  registry.rerunning = None
+  external label done
+  registry.classes_changed = None
+  None
+registry.rerun = registry.latest
+// `program.entered(element, given)`: its code read with `this` being `element` (P1).
+{program: Tight}.entered{arguments: Bracketed} =>
   given_values := arguments
   first := given_values.head
-  element := first.argument
-  second := first.next
-  given := second.argument
-  given_list := given ? given.listed : None
-  p.entered_in(element, given_list)
-// `x[key]`: what `x` holds named by `key` (a block's declarations, T8.7); `x[key] := v`, `x[key] = v`: declared or written so.
-{x: Tight}[{key: Balanced}] =>
-  holder := x.as_map
-  k := key
-  name := k.member_code
-  found := external get holder name
+  given := first.next.value
+  program.entered_in(first.value, (given === None ? None : (given.listed)))
+
+// ---------------------------------------------------------------- parameters of a class (`T<a>`), repetition (`T[]`)
+Node &+= {
+  <{literal given}> =>
+    base := this
+    made := external node
+    made.outer = (external span given).frame
+    made.class = true
+    made.extends = base
+    parameters := external get base parameters
+    external goto done (parameters === None ? true : None)
+    arguments := external get (external code (external span given).from (external span given).to given) code
+    made.bound(parameters, (arguments.listed))
+    external label done
+    made
+}
+// `T[]`: one or more `T`, one after another (T4.10): an `Array` of them.
+Array<T> := class { }
+registry.array_class = Array
+Node &+= {
+  [] => Array<this>
+}
+// Whether the text from `this` to `to` is `item`, one or more times, one after another.
+private {this: Tight}.repeated({item}, {to}) =>
+  here := this
+  kind := item
+  end := to
+  found := None
+  external goto done (external same here end)
+  e := external get here next
+  external label next_end
+  part := external node
+  part.from = here
+  part.to = e
+  external goto matched (part.admits_part_of(kind))
+  external label not_here
+  external goto done (external same e end)
+  e = external get e next
+  external goto next_end
+  external label matched
+  external goto found_it (external same e end)
+  external goto not_here ((e.repeated(kind, end)) ? None : true)
+  external label found_it
+  found = true
+  external label done
   found
-// `x.m name => body`: a closure handed to a method by juxtaposition (G2.21): its `=>` spells the definer, so the statement is
-// not read as a definition.
-{x: Tight}.{literal method} {parameter: Word} {`=>`} {body} =>
-  closure := external node
-  closure.outer = registry.program_class
-  closure.instance = true
-  closure.this = closure
-  closure.code = external ** body
-  closure.parameters = external ** parameter
-  closure.context = (external span body).frame
-  receiver := x
-  receiver.called_with(method, closure)
-
-watched({program: Balanced}) =>
-  p := program
-  p.watched_run
-
-// ================================================================ the language, in its own terms
-// From here the entrypoint is read as any file of the language is (with the language's rules, not the reader's).
-language_scope := external node
-language_scope.outer = top
-registry.language_scope = language_scope
-registry.language_text = true
 
 // A program (P1): code, read where it was written (`context`) or entered on a value; with `parameters`, a closure of them. A
 // block (`{ … }`) is one.

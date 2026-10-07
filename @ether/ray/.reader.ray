@@ -14,6 +14,21 @@
   external set x member value
 {name} = {value} =>
   external assign name value
+// `condition ? yes : no`: `yes` when the condition holds, else `no` (only the one taken is read).
+{condition} ? {yes} : {no} =>
+  external goto taken condition
+  no
+  external goto done
+  external label taken
+  yes
+  external label done
+// `a && b`: `b` when `a` holds, else nothing (`b` read only then).
+{a} && {b} =>
+  external goto both a
+  external goto done
+  external label both
+  b
+  external label done
 {a} === {b} =>
   external same a b
 {x}.{member} =>
@@ -73,9 +88,8 @@ defining := learned.definer
       matches := c === w
       continued := None
       unless matches
-        if w === space
-          if c === end
-            continued = here.continuation
+        if w === space && c === end
+          continued = here.continuation
       if continued
         here = continued
         wanted = wanted.next
@@ -147,9 +161,7 @@ pipe := mark.character
 
 // The bracket that closes `c`, or nothing when `c` opens none.
 {c}.closer =>
-  found := None
-  if c === opening
-    found = closing
+  found := c === opening ? closing : None
   if c === opening_list
     found = closing_list
   if c === opening_block
@@ -158,9 +170,7 @@ pipe := mark.character
 
 // Whether `c` closes a bracket.
 {c}.closes =>
-  found := None
-  if c === closing
-    found = true
+  found := c === closing ? true : None
   if c === closing_list
     found = true
   if c === closing_block
@@ -282,9 +292,7 @@ pipe := mark.character
     fixed := literal
     far := None
     if literal
-      lit_from := pieces.from
-      lit_to := pieces.to
-      spelt := at.spells(lit_from, lit_to)
+      spelt := at.spells(pieces.from, pieces.to)
       if spelt
         far = spelt.end
     if gap
@@ -338,17 +346,13 @@ pipe := mark.character
     keep := at_limit
     unless crossed
       keep = true
-    c := None
-    if here
-      c = here.character
-    if keep
-      if wanted
-        keep = None
-        if c === wanted
-          keep = true
-        if wanted === space
-          if c === end
-            keep = true
+    c := here ? here.character : None
+    if keep && wanted
+      keep = None
+      if c === wanted
+        keep = true
+      if wanted === space && c === end
+        keep = true
     if keep
       link := external node
       link.place = here
@@ -387,10 +391,9 @@ pipe := mark.character
 {at}.indexed({limit}) =>
   stamp := at.index
   fresh := None
-  if stamp
-    if stamp.to === limit
-      if registry.indexed === stamp
-        fresh = true
+  if stamp && stamp.to === limit
+    if registry.indexed === stamp
+      fresh = true
   unless fresh
     stamp = external node
     stamp.to = limit
@@ -439,10 +442,9 @@ pipe := mark.character
     while places
       p := places.place
       n := p.next
-      if n
-        if n.character === wanted
-          found = true
-          places = None
+      if n && n.character === wanted
+        found = true
+        places = None
       if places
         places = places.next
   found
@@ -452,10 +454,9 @@ pipe := mark.character
   // every character's first place from `this` on, found in one walk and kept on the characters until another place asks
   scan := registry.scan
   fresh := None
-  if scan
-    if scan.at === this
-      if scan.limit === limit
-        fresh = true
+  if scan && scan.at === this
+    if scan.limit === limit
+      fresh = true
   unless fresh
     scan = external node
     scan.at = this
@@ -474,9 +475,7 @@ pipe := mark.character
           here = None
       if here
         here = here.next
-  found := None
-  if c.scanned === scan
-    found = c.first_from
+  found := c.scanned === scan ? c.first_from : None
   found
 
 // The last place from `this` before `limit` holding the character `c`, when it is past a line end; else nothing. Walked back from
@@ -485,9 +484,8 @@ pipe := mark.character
   // from a place on the first line of the statement indexed last, the same for every such place: found once per character
   stamp := registry.indexed
   on_first_line := None
-  if stamp.to === limit
-    if this.stamp === stamp
-      on_first_line = true
+  if stamp.to === limit && this.stamp === stamp
+    on_first_line = true
   if on_first_line
     unless c.late_stamp === stamp
       c.late_stamp = stamp
@@ -498,11 +496,7 @@ pipe := mark.character
         line_end = ends.place
       going := None
       if line_end
-        if limit
-          going = limit.previous
-        unless limit
-          whole := this.text
-          going = whole.last
+        going = limit ? limit.previous : this.text.last
       while going
         if going === line_end
           going = None
@@ -513,12 +507,7 @@ pipe := mark.character
           if going
             going = going.previous
   late_found := c.late
-  back := None
-  of := this.text
-  if limit
-    back = limit.previous
-  unless limit
-    back = of.last
+  back := limit ? limit.previous : this.text.last
   found := None
   here := this
   if on_first_line
@@ -539,9 +528,8 @@ pipe := mark.character
       if here === found
         found = None
         here = None
-      if here
-        if here.character === end
-          here = None
+      if here && here.character === end
+        here = None
       if here
         here = here.next
   found
@@ -556,14 +544,9 @@ pipe := mark.character
       text.stacked = true
       first_of_text := text.first
       first_of_text.bracket_stacks
-    if at.stack
-      if limit.stack
-        known = true
-  found := None
-  if known
-    found = at.stack === limit.stack
-  unless known
-    found = at.balanced_walk(limit)
+    if at.stack && limit.stack
+      known = true
+  found := known ? at.stack === limit.stack : at.balanced_walk(limit)
   found
 
 // The brackets open before each place from `this` on, as a chain (one opened: a new link; one closed: the link before it), so a
@@ -583,10 +566,7 @@ pipe := mark.character
     unless shut
       if c.closes
         expected := open_ones.shut
-        if c === expected
-          open_ones = open_ones.next
-        unless c === expected
-          open_ones = external node
+        open_ones = c === expected ? open_ones.next : external node
       if c === quote
         skipping := here.next
         while skipping
@@ -671,9 +651,8 @@ pipe := mark.character
       c := here.character
       if c === wanted
         found = true
-      if wanted === space
-        if c === end
-          found = true
+      if wanted === space && c === end
+        found = true
   found
 
 // Whether `type` holds the places from `from` to `to`: its check, when it has one, else its own rules reading them whole.
@@ -702,9 +681,8 @@ pipe := mark.character
   rest_pieces := pieces.next
   // a capture holds something unless it may hold nothing
   nothing_left := at === limit
-  if nothing_left
-    if pieces.optional
-      nothing_left = None
+  if nothing_left && pieces.optional
+    nothing_left = None
   // a type written that was not defined then: read again now (nothing read: the capture holds nothing)
   // (not while another type is being read: reading one does not read types again)
   // (tried once per text read: in one where it was not defined, it stays undefined)
@@ -732,28 +710,24 @@ pipe := mark.character
         nothing_left = true
   // a capture followed by a literal ends only where that literal starts
   wanted := None
-  if rest_pieces
-    if rest_pieces.literal
-      next_from := rest_pieces.from
-      wanted = next_from.character
+  if rest_pieces && rest_pieces.literal
+    wanted = rest_pieces.from.character
   ends := None
   same := None
   indexed := None
   // a leading capture with a literal after it: the places that literal can start at, from the statement's index
-  if pieces.leading
-    if wanted
-      unless pieces.optional
-        stamp := at.indexed(limit)
-        if wanted.stamp === stamp
-          ends = wanted.places
-        if wanted === space
-          if end.stamp === stamp
-            line_end := end.places
-            at_line_end := external node
-            at_line_end.place = line_end.place
-            at_line_end.next = ends
-            ends = at_line_end
-        indexed = true
+  if pieces.leading && wanted
+    unless pieces.optional
+      stamp := at.indexed(limit)
+      if wanted.stamp === stamp
+        ends = wanted.places
+      if wanted === space && end.stamp === stamp
+        line_end := end.places
+        at_line_end := external node
+        at_line_end.place = line_end.place
+        at_line_end.next = ends
+        ends = at_line_end
+      indexed = true
   // any other with a literal after it: the places from `at` where that literal starts, the shortest first (a line end first,
   // G2.19), on the line `at` is on in the statement indexed last (when it was indexed up to the same `limit`)
   unless indexed
@@ -761,19 +735,15 @@ pipe := mark.character
       unless pieces.leading
         unless pieces.optional
           stamp := registry.indexed
-          first_place := None
-          if stamp.to === limit
-            first_place = at.next
-          if first_place
-            if first_place.stamp === stamp
-              indexed = true
-              same = first_place.first_of(wanted, limit)
-              if wanted === space
-                if end.stamp === stamp
-                  line_end := end.places
-                  at_line_end := external node
-                  at_line_end.place = line_end.place
-                  ends = at_line_end
+          first_place := stamp.to === limit ? at.next : None
+          if first_place && first_place.stamp === stamp
+            indexed = true
+            same = first_place.first_of(wanted, limit)
+            if wanted === space && end.stamp === stamp
+              line_end := end.places
+              at_line_end := external node
+              at_line_end.place = line_end.place
+              ends = at_line_end
   // the last piece of a head read whole ends where the statement does
   unless rest_pieces
     unless mode
@@ -812,9 +782,7 @@ pipe := mark.character
         ends = external node
         ends.place = operand
   // an optional capture may hold nothing: tried after every other end
-  optional := None
-  if pieces.optional
-    optional = at.can_end(wanted)
+  optional := pieces.optional ? at.can_end(wanted) : None
   if optional
     empty := external node
     empty.place = at
@@ -867,14 +835,11 @@ pipe := mark.character
         if rest_pieces
           worth = at.balanced_to(e)
     // a capture taken as written that ends the head takes one word
-    if worth
-      if pieces.raw
-        unless rest_pieces
-          if at.spaced(e)
-            worth = None
-    rest := None
-    if worth
-      rest = e.readings(rest_pieces, limit, mode)
+    if worth && pieces.raw
+      unless rest_pieces
+        if at.spaced(e)
+          worth = None
+    rest := worth ? e.readings(rest_pieces, limit, mode) : None
     if rest
       cap := external node
       cap.name = name
@@ -966,10 +931,9 @@ top := external .
       going = None
       unless here_done
         result = None
-    if going
-      if here_done
-        going = None
-        result = None
+    if going && here_done
+      going = None
+      result = None
     if going
       c := here.character
       w := wanted.character
@@ -1015,10 +979,9 @@ top := external .
       going = None
       unless y_done
         result = None
-    if going
-      if y_done
-        going = None
-        result = None
+    if going && y_done
+      going = None
+      result = None
     if going
       c := x.character
       d := y.character
@@ -1098,12 +1061,11 @@ top := external .
     chosen = None
   unless more
     unless less
-      if pieces.literal
-        if other.literal
-          if pieces.longer_than(other)
-            chosen = true
-          if other.longer_than(pieces)
-            chosen = None
+      if pieces.literal && other.literal
+        if pieces.longer_than(other)
+          chosen = true
+        if other.longer_than(pieces)
+          chosen = None
   chosen
 
 // What reads the statement from `at` to `limit` with the rules in reach of `scope` (R2.5): every rule that reads it whole;
@@ -1125,9 +1087,7 @@ top := external .
   here := scope
   while here
     led := here.led
-    candidates := None
-    if led
-      candidates = external get led key
+    candidates := led ? external get led key : None
     while candidates
       rule := candidates.rule
       if rule.visible(written_here)
@@ -1151,9 +1111,8 @@ top := external .
         if w
           unless w.stamp === stamp
             keep = None
-            if w === space
-              if end.stamp === stamp
-                keep = true
+            if w === space && end.stamp === stamp
+              keep = true
           // and its first two characters together in it
           if keep
             written_pair := rule.key_pair
@@ -1163,9 +1122,8 @@ top := external .
               seen := external get pairs pair
               unless seen === stamp
                 keep = None
-                if w === space
-                  if end.stamp === stamp
-                    keep = true
+                if w === space && end.stamp === stamp
+                  keep = true
       if keep
         at.considered(rule, limit, state)
       capture_led = capture_led.next
@@ -1297,8 +1255,7 @@ top := external .
     words := called.words(limit)
     first := words.from
     made.name_from = first
-    last := words.to
-    made.name_to = last
+    made.name_to = words.to
     rest := words.next
     made.arguments = rest
   unless called
@@ -1372,20 +1329,18 @@ top := external .
       held_code := external span value
       if held_code
         value = None
-      if value
-        if value.class
-          own_rules := value.rules
-          if own_rules
-            rest_at := split
-            r := rest_at.prefix_reading(limit, own_rules)
-            unless r
-              spaced := rest_at.spaces_after
-              if spaced
-                r = spaced.prefix_reading(limit, own_rules)
-            // (only a reading of all of the rest: `X := …` is the declaration's, not X's)
-            if r
-              if r.end === limit
-                found = true
+      if value && value.class
+        own_rules := value.rules
+        if own_rules
+          rest_at := split
+          r := rest_at.prefix_reading(limit, own_rules)
+          unless r
+            spaced := rest_at.spaces_after
+            if spaced
+              r = spaced.prefix_reading(limit, own_rules)
+          // (only a reading of all of the rest: `X := …` is the declaration's, not X's)
+          if r && r.end === limit
+            found = true
   found
 
 // Where the first operand from `at` ends: after a bracketed group, quoted text, or a word (up to a space, a bracket or a
@@ -1444,12 +1399,9 @@ top := external .
     while links
       rule := links.rule
       pieces := rule.pieces
-      first_from := pieces.from
-      first_to := pieces.to
-      if pieces.literal
-        if at.spells(first_from, first_to)
-          found = true
-          links = None
+      if pieces.literal && at.spells(pieces.from, pieces.to)
+        found = true
+        links = None
       if links
         links = links.next
   found
@@ -1509,8 +1461,10 @@ top := external .
       if here
         here = here.next
         start = here
+    // (what brackets hold is one word: `(external span x).from`)
     unless stop
-      here = here.next
+      shut := c.closer
+      here = shut ? here.balanced_end(limit) : here.next
   first
 
 // The first place from `at` that is not a space, a line end or a comment (`//` to the line's end, skipped before any rule
@@ -1523,9 +1477,7 @@ top := external .
       here = None
     if here
       c := here.character
-      skip := None
-      if c === space
-        skip = true
+      skip := c === space ? true : None
       if c === end
         skip = true
       if c === slash
@@ -1587,10 +1539,9 @@ top := external .
       // after a definition, the rest is read once it has run (what it defines may read it)
       if at
         read_by := made.rule
-        if read_by
-          if read_by.defines
-            made.rest = at
-            at = None
+        if read_by && read_by.defines
+          made.rest = at
+          at = None
   first
 
 // Bodies are planned by the rule defined last (R0.6), once the seed's rules are the reader's.
@@ -1612,10 +1563,9 @@ close := learned.close
       c := here.character
       if c === open
         here = None
-      if here
-        if c === close
-          found = here
-          here = None
+      if here && c === close
+        found = here
+        here = None
       if here
         here = here.next
   found
@@ -1768,9 +1718,7 @@ close := learned.close
         name_end = name_from.word_end(shut)
     last_char := name_from.last_place(name_end)
     l := last_char.character
-    optional := None
-    if l === question
-      optional = true
+    optional := l === question ? true : None
     typed := name_from.typed_name(name_end)
     bare := name_end
     if optional
@@ -1840,10 +1788,9 @@ close := learned.close
       going = None
       unless y_done
         result = None
-    if going
-      if y_done
-        going = None
-        result = None
+    if going && y_done
+      going = None
+      result = None
     if going
       c := x.character
       d := y.character
@@ -1906,13 +1853,12 @@ raw_word := external span literal
   pieces := made.pieces
   if pieces.line_end
     following := pieces.next
-    if following
-      if following.literal
-        continuation := external node
-        continuation.from = following.from
-        continuation.to = following.to
-        continuation.next = registry.continuations
-        registry.continuations = continuation
+    if following && following.literal
+      continuation := external node
+      continuation.from = following.from
+      continuation.to = following.to
+      continuation.next = registry.continuations
+      registry.continuations = continuation
   made
 
 // A rule kept where reading looks it up (R2.5): one led by a literal under its first character in its scope's `led` (a node whose
@@ -1941,16 +1887,15 @@ raw_word := external span literal
     scope.capture_led = link
     // the literal after the capture: its first character, and its first two
     second := pieces.next
-    if second
-      if second.literal
-        second_from := second.from
-        made.key_character = second_from.character
-        second_next := second_from.next
-        unless second_next === second.to
-          if second_next
-            pair_end := second_next.next
-            written_pair := external code second_from pair_end reader_like
-            made.key_pair = written_pair
+    if second && second.literal
+      second_from := second.from
+      made.key_character = second_from.character
+      second_next := second_from.next
+      unless second_next === second.to
+        if second_next
+          pair_end := second_next.next
+          written_pair := external code second_from pair_end reader_like
+          made.key_pair = written_pair
   made
 
 // The seed's rules, taken over once: the top scope's, latest first; the earliest is the first statement's.
@@ -2061,9 +2006,8 @@ type {block} =>
             if held
               held_rules := held.reading_rules
               r := here.prefix_reading(limit, held_rules)
-              if r
-                if r.end === limit
-                  found = here
+              if r && r.end === limit
+                found = here
           frame = None
         if frame
           frame = frame.outer
@@ -2073,9 +2017,7 @@ type {block} =>
 // Rules defined from here on are read by their heads in Ray.
 {pattern} => {body} =>
   where := external span pattern
-  head_from := where.from
-  head_to := where.to
-  pieces := head_from.pieces(head_to, pattern)
+  pieces := where.from.pieces(where.to, pattern)
   made := external define pattern pieces body
   made.keep
 
@@ -2103,13 +2045,10 @@ seed_definer.defines = true
       if scope.outer === top
         scope.outer = registry.language_scope
   at := given.skip_blank(None)
-  limit := None
-  if at
-    limit = at.statement_end(None, None)
+  limit := at ? at.statement_end(None, None) : None
   // past the reader, the entrypoint's own statements are the language's: their places say so
-  if registry.language_text
-    if at
-      at.stamped_language(limit)
+  if registry.language_text && at
+    at.stamped_language(limit)
   if at
     made := at.step(limit, scope)
     rule := made.rule
@@ -2128,9 +2067,7 @@ seed_definer.defines = true
   if registry.classes_changed
     registry.classes_changed = None
     registry.rerun_waiting
-  after := None
-  if limit
-    after = limit.next
+  after := limit ? limit.next : None
   after
 
 reader := registry.latest
@@ -2173,8 +2110,7 @@ external reader reader
     if c === quote
       value = this
     unless value
-      receiver_end := receiver_at.to
-      read_receiver := first_place.reading_in(receiver_end, frame_written)
+      read_receiver := first_place.reading_in(receiver_at.to, frame_written)
       if read_receiver
         value = this
   result := current
@@ -2294,9 +2230,7 @@ registry.sender = sent_rule
 
 // The value of a link of such a chain.
 {link}.argument =>
-  found := None
-  if link.has(value)
-    found = link.value
+  found := link.has(value) ? link.value : None
   if link.listed
     found = external get link value
   found
@@ -2365,24 +2299,20 @@ registry.sender = sent_rule
     receiver = caller.this_seen
   frame.this = receiver
   scope := method.scope
-  if receiver
-    if receiver.inside(scope)
-      frame.outer = receiver
+  if receiver && receiver.inside(scope)
+    frame.outer = receiver
   inner := external node
   inner.outer = frame
   parameters := method.parameters
   if parameters
-    given := None
-    if frame.has(arguments)
-      given = frame.arguments.listed
+    given := frame.has(arguments) ? frame.arguments.listed : None
     inner.bound(parameters, given)
   written := method.written
   body := written.code
   result := external apply body None inner
   // a body that is one block runs it
-  if body.starts_block
-    if result.program
-      result = result.run_in(inner)
+  if body.starts_block && result.program
+    result = result.run_in(inner)
   result
 
 running a method =>
@@ -2439,9 +2369,8 @@ runner := registry.latest
 {value}.holds_true =>
   v := value
   found := v
-  if v
-    if v.has(holds)
-      found = v.holds
+  if v && v.has(holds)
+    found = v.holds
   found
 method_body := runner.body
 this_written := external span this
@@ -2716,16 +2645,14 @@ Unbraced := opening_block.anything_but[]
     made = external define head pieces method_body
     made.method = true
     made.written = written_body
-    if parameters
-      if parameters.has(parameters)
-        made.parameters = parameters.parameters
+    if parameters && parameters.has(parameters)
+      made.parameters = parameters.parameters
   unless method
     made = external define head pieces b
   made.modifiers = modifiers
   named := true
-  if parameters
-    if parameters === pieces
-      named = None
+  if parameters && parameters === pieces
+    named = None
   if named
     made.keep
   made
@@ -2755,20 +2682,17 @@ Unbraced := opening_block.anything_but[]
         pushed.next = depth
         depth = pushed
       unless shut
-        if c.closes
-          if depth
-            depth = depth.next
+        if c.closes && depth
+          depth = depth.next
         unless depth
           if c === space
             unless captures
               bar := here.next
-              if bar
-                if bar.character === pipe
-                  after := bar.next
-                  if after
-                    if after.character === space
-                      found = here
-                      here = None
+              if bar && bar.character === pipe
+                after := bar.next
+                if after && after.character === space
+                  found = here
+                  here = None
       if here
         here = here.next
   found
@@ -2787,10 +2711,7 @@ Unbraced := opening_block.anything_but[]
           found = here
           here = None
         if here
-          if shut
-            here = shut
-          unless shut
-            here = here.next
+          here = shut ? shut : here.next
       unless here.character === opening_block
         here = here.next
   found
@@ -2861,16 +2782,15 @@ Unbraced := opening_block.anything_but[]
     r := rules.rule
     if r.method
       pieces := r.pieces
-      if pieces.literal
-        if from.spells_word(pieces, to)
-          following := pieces.next
-          fits := true
-          if following
-            unless following.capture
-              fits = None
-          if fits
-            found = r
-            rules = None
+      if pieces.literal && from.spells_word(pieces, to)
+        following := pieces.next
+        fits := true
+        if following
+          unless following.capture
+            fits = None
+        if fits
+          found = r
+          rules = None
     if rules
       rules = rules.next
   found
@@ -2885,12 +2805,11 @@ Unbraced := opening_block.anything_but[]
   caps.value = r
   pieces := method.pieces
   argument_piece := pieces.parameters_piece
-  if argument_piece
-    if given
-      given_cap := external node
-      given_cap.piece = argument_piece
-      given_cap.value = given
-      caps.next = given_cap
+  if argument_piece && given
+    given_cap := external node
+    given_cap.piece = argument_piece
+    given_cap.value = given
+    caps.next = given_cap
   here := external .
   external apply m caps here
 
@@ -2994,9 +2913,7 @@ Unbraced := opening_block.anything_but[]
 {made}.with_block({block}) =>
   static := made
   static.written = external ** block
-  block_written := static.written
-  block_code := block_written.code
-  static.read_as_class(block_code)
+  static.read_as_class(block)
   registry.classes_changed = true
   static
 
@@ -3051,9 +2968,8 @@ Unbraced := opening_block.anything_but[]
         pushed.next = depth
         depth = pushed
       unless shut
-        if c.closes
-          if depth
-            depth = depth.next
+        if c.closes && depth
+          depth = depth.next
         unless depth
           if c === comma
             found = here
@@ -3214,21 +3130,16 @@ Unbraced := opening_block.anything_but[]
 // Calling a value: a class makes an instance of itself; a closure runs.
 {this}.called({arguments}) =>
   value := this
-  found := None
-  if value.class
-    found = value.constructed(arguments)
+  found := value.class ? value.constructed(arguments) : None
   // a rule as a value (a closure: `(x) => …`): applied to them
   if value.method
     found = value.applied_to(None, arguments)
   // a program: entered where it was written, the arguments bound to its parameters
   program_class := registry.program_class
-  if program_class
-    if value.instance
-      if value.outer === program_class
-        given := None
-        if arguments
-          given = arguments.listed
-        found = value.entered_in(value.context, given)
+  if program_class && value.instance
+    if value.outer === program_class
+      given := arguments ? arguments.listed : None
+      found = value.entered_in(value.context, given)
   found
 
 // An instance of a class (R4.4): a frame inside it, with the class's block read again there, where a definition is the class's
@@ -3285,8 +3196,7 @@ Unbraced := opening_block.anything_but[]
 // of its own inside where it was written.
 {program}.watched_run =>
   p := program
-  written := p.code
-  code := written.code
+  code := p.code.code
   where := external span code
   fresh := external node
   fresh.outer = where.frame
@@ -3365,14 +3275,13 @@ registry.language = true
       unless word_end === head_to
         word := external code head_from word_end pattern
         modifier := word.named_value
-        if modifier
-          if modifier.modifier
-            link := external node
-            link.modifier = modifier
-            link.next = modifiers
-            modifiers = link
-            head_from = word_end.spaces_after
-            going = true
+        if modifier && modifier.modifier
+          link := external node
+          link.modifier = modifier
+          link.next = modifiers
+          modifiers = link
+          head_from = word_end.spaces_after
+          going = true
     // alternatives (`a | b => …`, names only): one rule each; the parameters of the last are all of theirs
     last_from := head_from
     alternative_end := head_from.alternative_end(head_to)
@@ -3456,10 +3365,7 @@ language_definer.defines = true
 {condition} ? {yes} : {no} =>
   answer := None
   taken := condition
-  if taken.holds_true
-    answer = yes
-  unless taken.holds_true
-    answer = no
+  answer = taken.holds_true ? yes : no
   answer
 // `name: Type = default`, `name: Type`: a name declared with a type, given its value by what is constructed or called.
 {name}: {type} = {default} =>
@@ -3667,17 +3573,15 @@ class: {parent: Tight} {header: Bracketed} {{block: Balanced}} =>
 // `static name = value` in a class: a member of the class (declared there, as `:=` does), read once.
 static {name: Tight} = {value} =>
   where := external span name
-  frame := where.frame
   found := None
-  unless frame.instance
+  unless where.frame.instance
     found = name.declared(value)
   found
 // `static statement` in a class: read once, for the class, not again for each instance.
 static {statement} =>
   where := external span statement
-  frame := where.frame
   found := None
-  unless frame.instance
+  unless where.frame.instance
     found = statement
   found
 
@@ -3690,9 +3594,7 @@ static {statement} =>
   element := first.argument
   second := first.next
   given := second.argument
-  given_list := None
-  if given
-    given_list = given.listed
+  given_list := given ? given.listed : None
   p.entered_in(element, given_list)
 watched({program: Balanced}) =>
   p := program
@@ -3827,55 +3729,28 @@ Diagnostic := class {
   fatal: Node
 }
 ERROR{`@`}{type} {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
   Diagnostic(message: message, type: type)
 ERROR {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
   Diagnostic(message: message)
 FATAL{`@`}{type} {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
   Diagnostic(message: message, type: type, fatal: true)
 FATAL {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
   Diagnostic(message: message, fatal: true)
 TODO {message} => None
 WARN{`@`}{type} {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
 INFO{`@`}{type} {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
 DEBUG{`@`}{type} {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
 WARN {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
 INFO {message} =>
-  where := external span message
-  at := where.from
-  limit := where.to
-  external report at limit message
+  external report (external span message).from (external span message).to message
 TODO => None
 
 // `assert (condition)`: an error when it does not hold; the condition.

@@ -57,7 +57,7 @@
 // ---------------------------------------------------------------- values written: closures, lists, blocks
 // `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`): a rule whose
 // head is only its parameters (one argument, an operand).
-({parameter: Word} {`=>`} {body}) =>
+({parameter: Word} {`=>`} {body}) ^punctuation =>
   piece := external node
   piece.capture = true
   piece.from = arguments_from
@@ -68,7 +68,7 @@
   piece.parameters = external ** parameter
   piece.defined((external ** parameter), (external ** body), (external span parameter).frame, None)
 // `[items]`: a list of them; `[]`: an empty one.
-[{inside: Balanced}] =>
+[{inside: Balanced}] ^punctuation =>
   given := inside
   (external get given listing) ? given : None.listed_with_value(given)
 {`[]`} =>
@@ -946,9 +946,9 @@ Node &+= {
 
 // A block comment is nothing: on its own, and between operands (what it follows is what the whole is). Nested ones are read
 // whole: the comment ends at the `*/` the statement ends with.
-/*{comment?}*/ => None
+/*{comment?}*/ ^comment => None
 Node &+= {
-  /*{comment?}*/ => this
+  /*{comment?}*/ ^comment => this
 }
 
 // ---------------------------------------------------------------- jumps (R3.1): a program's edges
@@ -957,7 +957,7 @@ goto {literal target} if {condition} => (
   taken := condition ? true : None
   external goto target taken
 )
-{literal label}\ => external label label
+{literal label ^label}\ ^punctuation => external label label
 
 // ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
 // What `if` answers: whether a block was taken and what it answered; `else` and `elsif` on it, on the same line or the next,
@@ -996,8 +996,8 @@ loop := class {
   )
 }
 // `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in.
-break => external goto loop_break
-continue => external goto loop_continue
+break ^keyword => external goto loop_break
+continue ^keyword => external goto loop_continue
 return {value} =>
   value
   external goto return
@@ -1031,7 +1031,7 @@ WARN {message} =>
   external report (external span message).from (external span message).to message
 INFO {message} =>
   external report (external span message).from (external span message).to message
-TODO => None
+TODO ^debug => None
 
 // `assert (condition)`: an error when it does not hold; the condition.
 assert (condition) => (

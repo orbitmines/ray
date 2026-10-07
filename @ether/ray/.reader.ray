@@ -919,12 +919,14 @@ top := external .
   best
 
 // Whether one of `pieces` is a capture whose type was not defined when it was read for `text` (R2.3): it holds nothing there (a
-// type is tried once per text), so the head reads nothing in it, wherever it is tried.
+// type is tried once per text, and not while another type is read), so the head reads nothing in it, wherever it is tried.
 {pieces}.untyped_in({text}) =>
   piece := pieces
   found := None
+  reading_type := registry.reading_type
   while piece
-    if piece.type_from && piece.type_tried === text
+    tried := reading_type ? true : piece.type_tried === text
+    if piece.type_from && tried
       unless piece.type
         found = true
         piece = None

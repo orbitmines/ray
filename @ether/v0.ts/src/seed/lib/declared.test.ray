@@ -1,0 +1,21 @@
+say {x} =>
+  external io stdout x
+// `name: T = { field: value … }` is a `T` made with the block's lines naming its fields (F-C7): a Platform with its name, prefix
+// and a list `1, 2`; a block naming no fields is the value as it is: a Program
+Platform := class {
+  name: String?
+  prefix: Node?
+  tags: Node?
+}
+github: Platform = {
+  name: "GitHub"
+  prefix: "x"
+  tags: 1, 2
+}
+say github
+say github.name
+say github.tags
+readings: Program = {
+  {name: String} => name
+}
+say readings

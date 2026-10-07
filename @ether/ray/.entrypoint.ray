@@ -266,9 +266,12 @@ declaring
   external label yes_taken
   yes
   external label done
-// `name: Type = default`, `name: Type`: a name declared with a type, given its value by what is constructed or called.
+// `name: Type = default`, `name: Type`: a name declared with a type, given its value by what is constructed or called. A
+// default that is a block naming fields, `name: T = { field: value … }`, is a `T` made with them (F-C7); another block is the
+// value as it is (`readings: Program = { {name: String} => … }`).
 {name}: {type} = {default} ^punctuation =>
-  name.declared_as(type, default)
+  written := external get (external ** default) code
+  name.declared_as(type, (written.named ? type.constructed(default) : default))
 declaring
 {name}: {type} ^punctuation =>
   name.declared_as(type, None)

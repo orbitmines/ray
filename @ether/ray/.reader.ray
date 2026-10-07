@@ -2430,9 +2430,18 @@ registry.latest.shared = true
   found := None
   if where
     at := where.from.past_spaces
-    // inside the brackets they are given in
+    // inside the brackets they are given in, or the block (`{ name: value … }`, one a line)
     if at.character === opening
       at = at.next
+    if at.character === opening_block
+      at = at.next
+      going := true
+      while going
+        going = at.character === end
+        unless going
+          going = at.character === space
+        if going
+          at = at.next
     e := at.operand_end(where.to)
     found = e.character === colon && e.next.character === space
   found
@@ -2957,6 +2966,14 @@ registry.latest.shared = true
     from = from.next
     to = to.before_place(from)
   item_from := from
+  // (a block's lines are read as they are, `,` in them is a value's: `authors: @a, @b`)
+  if from.character === opening_block
+    item_from = None
+    from = from.next
+    to = to.before_place(from)
+    lines := external code from to code
+    lines_code := lines.code
+    external apply lines_code None frame
   while item_from
     item_end := item_from.item_end(to)
     item_written := external code item_from item_end code

@@ -1,0 +1,15 @@
+say {x} =>
+  external io stdout x
+// a dynamic value watched: what it depends on (its code and the rules it calls) written marks it to run again: the names, then true
+Scene := class {
+  size: Node?
+}
+scene := Scene(size: true)
+draw => scene.size
+d := dynamically draw
+say (external get d source)
+say ((external get d source).mentioned)
+watch(d)
+say (external get registry watching)
+scene.size = false
+say (external get d dirty)

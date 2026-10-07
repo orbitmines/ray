@@ -467,6 +467,12 @@ Answers from 2026-09-30.
   "Waiting / Intermediate / Final" are derived from where the selection is.
 - **P1.9** Hot reload: running instances of an updated function continue in the new version via
   migrations (L§7.2). Where state can't migrate, they keep the old version and a quest is raised.
+- **P5.1a What a dynamic value depends on (user, 2026-10-07).** `dynamically x` is language-side: every write (`=`, `:=`,
+  `x.m =`, `x[k] =`, `@x =`, `@ ->`) announces what it wrote, and a dynamic value runs again when something it depends on is
+  announced. What it depends on is read from code, not from reads: what its code mentions, and what the code of the methods,
+  rules and closures it calls mentions, collected once and kept with it (`dynamically page.rendered(level)` runs again when
+  `UI.scene.size` is written). A file is no special case: `dynamically @./index.ray` mentions a location, and the runner
+  (`ray --dev`, like the LSP) writes a file's new content at its location when the OS reports a change.
 - **P1.9a Hot reload (user, 2026-10-07).** Any running program reloads the same way, with no reload mechanism of its own: its
   code is what is held at a location (`@./index.ray as Program`), read `dynamically` (P5.1).
   - Development is a Compiler level, `Compiler.development := default + { {code: Location as Program} => dynamically code }`;

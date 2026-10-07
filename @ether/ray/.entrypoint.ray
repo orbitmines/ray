@@ -54,13 +54,31 @@ declaring ^keyword =>
   external label done
   v
 declaring
-{x: Tight}[{key: Balanced}] = {value} ^punctuation =>
+{x: Tight}[{key: Balanced}] = {assigned} ^punctuation =>
   holder := x.as_map
   k := key
-  v := value
+  v := assigned
   // (no key, nothing written: `&caller[name] = this if name`)
   external goto done (k === None ? true : None)
   name := k.member_code
+  // (what watches the name written runs again at its next turn, P5.1a)
+  watching_now := external get registry watching
+  external goto announcing_start watching_now
+  external goto announced
+  external label announcing_start
+  watchers := external get watching_now name
+  external goto announcing_list watchers
+  external goto announced
+  external label announcing_list
+  watchers := external get watchers head
+  external label announcing
+  external goto announcing_one watchers
+  external goto announced
+  external label announcing_one
+  external set (external get watchers value) dirty true
+  watchers := external get watchers next
+  external goto announcing
+  external label announced
   external set holder name v
   external label done
   v
@@ -169,7 +187,7 @@ declaring
 {target: Word} @ -> = {value} ^punctuation =>
   external forward (external declaring target) target value
 // `x.member = value`: the member set.
-{x: Tight}.{literal member ^property} = {value} ^punctuation =>
+{x: Tight}.{literal member ^property} = {assigned} ^punctuation =>
   reading := external get (external .) caller_frame
   holder := x
   external goto forward (external get reading writes_forward)
@@ -177,10 +195,28 @@ declaring
   external goto plain ((external get holder running) ? None : true)
   holder = external get holder context
   external label plain
-  external set holder member value
+  // (what watches the name written runs again at its next turn, P5.1a)
+  watching_now := external get registry watching
+  external goto announcing_start watching_now
+  external goto announced
+  external label announcing_start
+  watchers := external get watching_now member
+  external goto announcing_list watchers
+  external goto announced
+  external label announcing_list
+  watchers := external get watchers head
+  external label announcing
+  external goto announcing_one watchers
+  external goto announced
+  external label announcing_one
+  external set (external get watchers value) dirty true
+  watchers := external get watchers next
+  external goto announcing
+  external label announced
+  external set holder member assigned
   external goto done
   external label forward
-  external forward holder member value (external get reading outer_frame)
+  external forward holder member assigned (external get reading outer_frame)
   external label done
 // `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing); a name is written with it
 // (anything else: the base's `&=`).
@@ -189,13 +225,31 @@ declaring
   external assign target list
 // `name = value`: written where the name was declared (anything else: the base's `=`).
 // (read where what is written goes forward, `with`'s settings: written `@ ->` for the context around)
-{target: Word} = {value} ^punctuation =>
+{target: Word} = {assigned} ^punctuation =>
   reading := external get (external .) caller_frame
   external goto forward (external get reading writes_forward)
-  external assign target value
+  // (what watches the name written runs again at its next turn, P5.1a)
+  watching_now := external get registry watching
+  external goto announcing_start watching_now
+  external goto announced
+  external label announcing_start
+  watchers := external get watching_now target
+  external goto announcing_list watchers
+  external goto announced
+  external label announcing_list
+  watchers := external get watchers head
+  external label announcing
+  external goto announcing_one watchers
+  external goto announced
+  external label announcing_one
+  external set (external get watchers value) dirty true
+  watchers := external get watchers next
+  external goto announcing
+  external label announced
+  external assign target assigned
   external goto done
   external label forward
-  external forward (external declaring target) target value (external get reading outer_frame)
+  external forward (external declaring target) target assigned (external get reading outer_frame)
   external label done
 // `condition ? yes : no`: `yes` when the condition holds (T1.7: nothing does not; a value saying whether it `holds` as that says;
 // any other does), else `no`; only the one taken is read.

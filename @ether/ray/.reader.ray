@@ -3138,6 +3138,71 @@ registry.latest.shared = true
   found
 registry.latest.shared = true
 
+// The words of code (letters, digits, `_`), in order, each as code: what a dynamic value depends on (P5.1a).
+{written: Tight}.words =>
+  // (a rule's body, or code)
+  written_code := external get written body
+  unless written_code
+    written_code = external get written code
+  where := external span written_code
+  to := where.to
+  at := where.from
+  found := None
+  while at
+    if at === to
+      at = None
+    if at
+      in_word := at.character.word
+      if in_word
+        start := at
+        going := true
+        while going
+          at = at.next
+          going = at ? at.character.word : None
+          if at === to
+            going = None
+        word := external code start at written_code
+        found = found.listed_with_value(word)
+      unless in_word
+        at = at.next
+  found
+registry.latest.shared = true
+// `item` added to what `index` keeps under the name `word` writes (a node with `code`); what it keeps there; whether it keeps
+// anything there (the registers of what dynamic values depend on, P5.1a).
+{index: Tight}.listed_under({word}, {item}) =>
+  key := external get word code
+  external set index key (external get index key).listed_with_value(item)
+  index
+registry.latest.shared = true
+{index: Tight}.listed_at({word}) =>
+  key := external get word code
+  external get index key
+registry.latest.shared = true
+{index: Tight}.holds_word({word}) =>
+  key := external get word code
+  external own index key
+registry.latest.shared = true
+// The first word of a rule's head, as code (`multiple` of `multiple (a, b) =>`), or nothing.
+{pieces: Tight}.first_word =>
+  piece := pieces
+  found := None
+  while piece
+    if piece.literal
+      at := piece.from
+      while at && at.character === space
+        at = at.next
+      if at
+        if at.character.word
+          start := at
+          while at && at.character.word
+            at = at.next
+          found = external code start at reader_like
+      piece = None
+    if piece
+      piece = piece.next
+  found
+registry.latest.shared = true
+
 // Whether the line `at` starts (its first place that is not a space) is indented as the line `other` starts: the same spaces
 // before both.
 {at}.indented_as({other}) =>

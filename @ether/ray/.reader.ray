@@ -2360,8 +2360,8 @@ nothing_extended := `nothing to add to (it is not defined yet)`
   open_ones ? None : ok
 Balanced := registry.latest.checked
 
-// A group: what is in brackets is read as itself.
-({inside: Balanced}) =>
+// A group: what is in brackets is read as itself (balanced, as a capture before a literal is: read in place, where it is).
+({inside}) =>
   inside
 group_rule := registry.latest
 // Nothing in brackets.
@@ -2922,14 +2922,18 @@ registry.language_text = true
 
 // ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
 // (what declares and writes binds loosest: `x = c ? a : b` writes what `?` answers)
-// `name := value`: the value declared where the name was written; a list of names (`(x, y) := a, b`), each with the value in its
-// place.
-{name: Word} := {value} =>
-  external declare name value
-{names: Tight} := {value} =>
-  names.declared_each(value)
 // `name ^style := value`: the mark is the highlighting's (R5.2).
 {name: Tight} ^{literal style} := {value} =>
+  external declare name value
+// `name := value`: the value declared where the name was written (read in place: nothing but an external); a list of names in
+// brackets (`(x, y) := a, b`), each with the value in its place.
+({names}) := {value} =>
+  names.declared_each(value)
+// (a name with another, `O | optimizations := …`: both)
+{name} | {alias} := {value} =>
+  external declare name value
+  external declare alias value
+{name} := {value} =>
   external declare name value
 // `x.member = value`: the member set.
 {x: Tight}.{literal member} = {value} =>

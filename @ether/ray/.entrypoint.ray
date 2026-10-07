@@ -520,7 +520,8 @@ registry.text_is = registry.latest
   frame.outer_frame = (external span code).frame
   frame.this = value
   result := external apply code None frame
-  result.method ? (result.applied_to(None, value)) : result
+  // (a rule it answers, read with its pieces: not a value's field named `method`, `Access(method: …)`)
+  (external get result pieces) ? (result.applied_to(None, value)) : result
 
 Node := external node
 Node.highlighted = external ^ class
@@ -857,7 +858,7 @@ Node.components = Node.components_with(None)
 {this: Tight}.called({arguments}) =>
   value := this
   external goto construct (external get value class)
-  external goto method (external get value method)
+  external goto method (external get value pieces)
   external goto bound (external get value bound_method)
   external goto maybe_program (external get value instance)
   external label nothing

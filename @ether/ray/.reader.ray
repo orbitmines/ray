@@ -2145,64 +2145,83 @@ external reader reader
       going = None
       result = value
   while going
-    scopes := value.reading_scopes
-    r := at.prefix_reading_in(rest_to, scopes)
-    // read after the spaces too: what reads farther (a method `== x` over a juxtaposed value `{ }{value}`), else that
-    spaced := at.spaces_after
-    // (and past a line end that continues the statement: `Unit(…)` / `  .convert …`)
-    if at.character === end
-      continued := at.continuation
-      if continued
-        spaced = continued
-    r_spaced := spaced ? spaced.prefix_reading_in(rest_to, scopes) : None
-    if r_spaced
-      better := true
-      if r
-        better = r_spaced.end === r.end ? None : r.end.reaches(r_spaced.end, rest_to)
-      if better
-        at = spaced
-        r = r_spaced
-    unless r
-      external report (spaced ? spaced : at) rest_to
-      going = None
-    if r
-      rule := r.rule
-      // precedence (G3.1): an operator after this one's argument that the value's rules declare later binds tighter, so the
-      // argument takes it in (`a && b == c` is `a && (b == c)`; `a + b == c` is `(a + b) == c`)
-      argument := r.captures ? r.captures.last_piece : None
-      tighter := argument && argument.piece.arguments
-      while tighter
-        tighter = None
-        next_at := r.end === rest_to ? None : r.end.past_spaces
-        r_next := next_at ? next_at.prefix_reading_in(rest_to, scopes) : None
-        if r_next && scopes.declares_later_in(r_next.rule, rule)
-          argument.to = r_next.end
-          r.end = r_next.end
-          tighter = r.end === rest_to ? None : true
-        // (an operator the value has not: when one spelled so was declared later anywhere, the argument takes the rest in)
-        if next_at && (r_next ? None : true) && registry.all_rules.spelled_later(next_at, rest_to, rule)
-          argument.to = rest_to
-          r.end = rest_to
-      bound := external node
-      bound.piece = this_piece
-      if first
-        // what was read for its rules (a name a frame holds, a group, quoted text): its value, read once; a name nothing holds
-        // yet: as written
-        if value
-          bound.value = value
-        unless value
-          bound.from = receiver_at.from
-          bound.to = receiver_at.to
-      unless first
-        bound.value = current
-      first = None
-      bound.next = r.captures
-      result = external apply rule bound within
-      at = r.end
-      if at === rest_to
+    // a method waiting for its arguments is given what is written after a space (G2.1: `x.multiple 60, second`; nothing else is
+    // called so, G2.23)
+    waiting := external get value bound_method
+    if waiting
+      given_at := at.spaces_after
+      if given_at === at
+        given_at = None
+      if given_at
+        unless given_at.given_text(given_at, rest_to)
+          given_at = None
+      if given_at
+        given_written := external code given_at rest_to rest
+        given_code := given_written.code
+        given := external apply given_code None within
+        value = waiting.applied_to((external get value bound_receiver), given)
+        at = rest_to
         going = None
-      current = result
-      value = result
+        result = value
+    if going
+      scopes := value.reading_scopes
+      r := at.prefix_reading_in(rest_to, scopes)
+      // read after the spaces too: what reads farther (a method `== x` over a juxtaposed value `{ }{value}`), else that
+      spaced := at.spaces_after
+      // (and past a line end that continues the statement: `Unit(…)` / `  .convert …`)
+      if at.character === end
+        continued := at.continuation
+        if continued
+          spaced = continued
+      r_spaced := spaced ? spaced.prefix_reading_in(rest_to, scopes) : None
+      if r_spaced
+        better := true
+        if r
+          better = r_spaced.end === r.end ? None : r.end.reaches(r_spaced.end, rest_to)
+        if better
+          at = spaced
+          r = r_spaced
+      unless r
+        external report (spaced ? spaced : at) rest_to
+        going = None
+      if r
+        rule := r.rule
+        // precedence (G3.1): an operator after this one's argument that the value's rules declare later binds tighter, so the
+        // argument takes it in (`a && b == c` is `a && (b == c)`; `a + b == c` is `(a + b) == c`)
+        argument := r.captures ? r.captures.last_piece : None
+        tighter := argument && argument.piece.arguments
+        while tighter
+          tighter = None
+          next_at := r.end === rest_to ? None : r.end.past_spaces
+          r_next := next_at ? next_at.prefix_reading_in(rest_to, scopes) : None
+          if r_next && scopes.declares_later_in(r_next.rule, rule)
+            argument.to = r_next.end
+            r.end = r_next.end
+            tighter = r.end === rest_to ? None : true
+          // (an operator the value has not: when one spelled so was declared later anywhere, the argument takes the rest in)
+          if next_at && (r_next ? None : true) && registry.all_rules.spelled_later(next_at, rest_to, rule)
+            argument.to = rest_to
+            r.end = rest_to
+        bound := external node
+        bound.piece = this_piece
+        if first
+          // what was read for its rules (a name a frame holds, a group, quoted text): its value, read once; a name nothing holds
+          // yet: as written
+          if value
+            bound.value = value
+          unless value
+            bound.from = receiver_at.from
+            bound.to = receiver_at.to
+        unless first
+          bound.value = current
+        first = None
+        bound.next = r.captures
+        result = external apply rule bound within
+        at = r.end
+        if at === rest_to
+          going = None
+        current = result
+        value = result
   result
 
 registry.sender = registry.latest

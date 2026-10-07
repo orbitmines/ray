@@ -12,3 +12,7 @@ b
 // on a line continuing a call: false, true
 B(name: true)
   .multiple true, false
+// a closure of one name after a space, and a running program read on as any value: true, then a Program
+B(name: true).convert (x: Node) => x, true
+f => &caller as Program
+say f

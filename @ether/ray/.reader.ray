@@ -2423,7 +2423,14 @@ repeated_rule := registry.latest
 Unquoted := quote.anything_but
 Quoted := Unquoted[]
 "{text: Quoted}" =>
-  external span text
+  made := external span text
+  // (a String, once the language has one)
+  string_class := registry.string_class
+  if string_class
+    made.outer = string_class
+    made.instance = true
+    made.this = made
+  made
 quoted_rule := registry.latest
 // Text in backticks, taken as written.
 Unticked := backtick.anything_but

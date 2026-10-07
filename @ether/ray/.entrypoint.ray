@@ -275,6 +275,11 @@
   candidate := this
   t := type
   found := None
+  // (an instance of a class is one, text or not)
+  external goto not_class ((external get t class) ? None : true)
+  found = candidate.inside(t)
+  external goto done found
+  external label not_class
   external goto text (external own candidate from)
   external goto narrowing (external get t narrows)
   external goto superposition (external get t superposes)
@@ -913,6 +918,10 @@ Node &+= {
 // them in order. `T[]` is an Array of `T`.
 Iterable<Vertex> := class { }
 Array := class: Iterable { }
+// The core of text (String.ray adds the rest): an Array of its characters. Text written in quotes is one (the reader makes it: the
+// places it is written at, from its first character to the closing quote).
+String := class: Array { }
+registry.string_class = String
 Node &+= {
   [] ^punctuation => Array<this>
 }

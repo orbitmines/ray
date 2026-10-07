@@ -72,7 +72,8 @@ LanguageName := String{Language.named("." + .) != None}
 @{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
 @{extension: LanguageName} {code} => Compiler.reduced(code, Language.named("." + extension).level)
 
-String := class: Char[] {
+// (String is made in the entrypoint, its core; what follows is the rest of it)
+String &+= {
   () => &caller[this]()
 
   upper_case | uppercase => #.upper_case as String
@@ -137,6 +138,7 @@ String := class: Char[] {
   bytes => (this as Unicode.UTF-8).bytes
   find_all (pattern: String) => (this ~= pattern)#.index
 }
+String.components.hierarchy &= Char[]
 
 String[] &+= {
   as (=== String) => this.reduce(,)

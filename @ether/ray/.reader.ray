@@ -918,26 +918,31 @@ top := external .
     best.rule = state.rule
   best
 
-// Whether one of `pieces` is a capture whose type was not defined when it was read for `text` (R2.3): it holds nothing there (a
-// type is tried once per text, and not while another type is read), so the head reads nothing in it, wherever it is tried.
-{pieces}.untyped_in({text}) =>
+// Whether one of `pieces` is a capture that holds nothing, so the head reads nothing wherever it is tried (R2.3): one whose type was
+// not defined when it was read for `text` (a type is tried once per text, and not while another type is read), or one, not
+// optional, whose type has neither a check nor rules to read with.
+{pieces}.holds_nothing_in({text}) =>
   piece := pieces
   found := None
   reading_type := registry.reading_type
   while piece
+    kind := piece.type
     tried := reading_type ? true : piece.type_tried === text
     if piece.type_from && tried
-      unless piece.type
+      unless kind
         found = true
-        piece = None
-    piece = piece.next
+    if kind
+      unless piece.optional ? true : kind.check
+        unless kind.rules
+          found = true
+    piece = found ? None : piece.next
   found
 
 // A rule's reading of the statement from `at` to `limit`, taken into `state` (its `best` reading and that reading's `rule`) when it
 // reads the statement whole and is chosen over the best so far (R2.5).
 {at}.considered({rule}, {limit}, {state}) =>
   pieces := rule.pieces
-  r := pieces.untyped_in(at.text) ? None : at.readings(pieces, limit, None)
+  r := pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, None)
   if r
     take := true
     if state.best
@@ -966,7 +971,7 @@ top := external .
   while rules
     rule := rules.rule
     pieces := rule.pieces
-    r := pieces.untyped_in(at.text) ? None : at.readings(pieces, limit, true)
+    r := pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, true)
     if r
       take := true
       if best
@@ -1026,7 +1031,7 @@ top := external .
 {at}.prefixed({rule}, {limit}, {state}) =>
   unless rule.shared ? None : rule.internal
     pieces := rule.pieces
-    r := pieces.untyped_in(at.text) ? None : at.readings(pieces, limit, true)
+    r := pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, true)
     if r
       take := true
       best := state.best

@@ -7,6 +7,34 @@ Node &+= {
   mix (other, t: Probability) => this + (other - this) * t
 }
 
+// How a shape lays out its children, aligns, blends and overflows: each word its own value, named as written (`flow: block | inline`).
+Flow := enum block | inline | grid | layered
+block := Flow.block
+inline := Flow.inline
+grid := Flow.grid
+layered := Flow.layered
+Alignment := enum start | center | end | between | around | stretch | middle | justify
+start := Alignment.start
+center := Alignment.center
+end := Alignment.end
+between := Alignment.between
+around := Alignment.around
+stretch := Alignment.stretch
+middle := Alignment.middle
+justify := Alignment.justify
+Blend := enum normal | multiply | screen | overlay | darken | lighten | difference
+normal := Blend.normal
+multiply := Blend.multiply
+screen := Blend.screen
+overlay := Blend.overlay
+darken := Blend.darken
+lighten := Blend.lighten
+difference := Blend.difference
+Overflow := enum visible | clip | scroll
+visible := Overflow.visible
+clip := Overflow.clip
+scroll := Overflow.scroll
+
 Geometry := class {
   Length := Quantity{unit is (px | pt | em | rem | vw | vh | column | row | m)}
 

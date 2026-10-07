@@ -683,9 +683,11 @@ pipe := mark.character
       if piece_type ? None : rest_pieces
         worth = at.balanced_to(e)
     // a capture taken as written takes one word when no literal follows it (it ends the head, or another capture does)
-    if worth && pieces.raw && at.spaced(e)
+    // (one word: one operand, up to a space, a bracket or a dot)
+    if worth && pieces.raw
       unless rest_pieces ? rest_pieces.literal : None
-        worth = None
+        unless at.operand_end(e) === e
+          worth = None
     rest := worth ? e.readings(rest_pieces, limit, mode) : None
     if rest
       cap := external node

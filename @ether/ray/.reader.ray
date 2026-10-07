@@ -2503,7 +2503,7 @@ repeated_rule := registry.latest
 // ---------------------------------------------------------------- text written in quotes
 Unquoted := quote.anything_but
 Quoted := Unquoted[]
-"{text: Quoted}" =>
+"{text: Quoted}" ^string =>
   made := external span text
   // (a String, once the language has one)
   string_class := registry.string_class
@@ -2516,7 +2516,7 @@ quoted_rule := registry.latest
 // Text in backticks, taken as written.
 Unticked := backtick.anything_but
 Ticked := Unticked[]
-`{text: Ticked}` =>
+`{text: Ticked}` ^string =>
   external span text
 ticked_rule := registry.latest
 // what is said when there is nothing to add to

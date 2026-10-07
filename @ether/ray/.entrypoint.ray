@@ -157,7 +157,7 @@
 {target: Word} @ -> = {value} ^punctuation =>
   external forward (external declaring target) target value
 // `x.member = value`: the member set.
-{x: Tight}.{literal member} = {value} =>
+{x: Tight}.{literal member ^property} = {value} ^punctuation =>
   reading := external get (external .) caller_frame
   holder := x
   external goto forward (external get reading writes_forward)
@@ -219,9 +219,9 @@
   registry.true_value
   external label done
 // `x.member`, `x.member(arguments)`: its own member, else its method (T8.7).
-{x: Tight}.{literal member}{arguments: Bracketed} =>
+{x: Tight}.{literal member ^property}{arguments: Bracketed} ^punctuation =>
   x.member(member, arguments)
-{x: Tight}.{literal member} =>
+{x: Tight}.{literal member ^property} ^punctuation =>
   x.member(member, None)
 // `.member`, `.member = value`, `.member(arguments)`: of `this` (what the statement's frame sees as `this`).
 .{literal member ^property} = {value} ^punctuation =>
@@ -521,6 +521,9 @@ registry.text_is = registry.latest
   result.method ? (result.applied_to(None, value)) : result
 
 Node := external node
+Node.highlighted = external ^ class
+Chain.highlighted = external ^ class
+Link.highlighted = external ^ class
 registry.base = Node
 Node &+= {
   .{literal property ^property} ^punctuation =>
@@ -611,16 +614,21 @@ Node &+= {
 // ---------------------------------------------------------------- modifiers: words before a definition's head, kept on its rule
 static := external node
 static.modifier = true
+static.highlighted = external ^ modifier
 // (a rule of the class itself, read by the class: the others are its instances')
 static.class_level = true
 chainable := external node
 chainable.modifier = true
+chainable.highlighted = external ^ modifier
 compounds := external node
 compounds.modifier = true
+compounds.highlighted = external ^ modifier
 right-to-left := external node
 right-to-left.modifier = true
+right-to-left.highlighted = external ^ modifier
 left-to-right := external node
 left-to-right.modifier = true
+left-to-right.highlighted = external ^ modifier
 // ---------------------------------------------------------------- classes (R4.4)
 // A class's block read for the class itself: what a construction under way was given is not its (its fields take no arguments).
 // The names a class's block declares (`Name := value`), there before the block is read: each read when it is first wanted, by
@@ -700,6 +708,7 @@ Node.components = Node.components_with(None)
   made := external node
   made.outer = (external span block).frame
   made.class = true
+  made.highlighted = external ^ class
   made.components = made.components_with(parent)
   made.written = external ** block
   made.read_as_class(block)
@@ -711,6 +720,7 @@ Node.components = Node.components_with(None)
   made := external node
   made.outer = (external span source).frame
   made.class = true
+  made.highlighted = external ^ class
   made.components = made.components_with(parent)
   made.header = external ** source
   made.read_header_into(made)
@@ -879,6 +889,7 @@ class: {parent: Tight} ^keyword =>
   made := external node
   made.outer = (external span parent).frame
   made.class = true
+  made.highlighted = external ^ class
   made.components = made.components_with(parent)
   registry.classes_changed = true
   made
@@ -892,6 +903,7 @@ enum {written: Item} ^keyword =>
   made.outer = where.frame
   made.class = true
   made.enum = true
+  made.highlighted = external ^ enum
   made.components = made.components_with(registry.enum_class)
   from := where.from
   to := where.to
@@ -930,6 +942,7 @@ enum {written: Item} ^keyword =>
   fields = external get (external code fields_from member_end written) code
   external label made_one
   entry := made.constructed(fields)
+  entry.highlighted = external ^ enumMember
   external set made name entry
   last_entry := made.last_member
   external goto first (last_entry === None ? true : None)

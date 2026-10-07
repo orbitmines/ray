@@ -1187,6 +1187,22 @@ Node &+= {
 }
 
 // A value kept only if a condition holds (`x if c`), or unless it does (`x unless c`).
+// `(M if c) x`: `M x` when `c` holds, else `x` (P1.9b): any prefix (a word whose rule reads what follows it) applied by a
+// condition, `(dynamically if @me/development?) orbitmines.com() if &entrypoint`. (Declared before `x if c`: it reads it first.)
+// A word naming a prefix: a rule of one word, then one capture (`dynamically {value}`, P1.9b).
+{kind}.prefix_text({from}, {to}) =>
+  found := None
+  // (a text of more than one word is listed under no word)
+  rules := Program.rules_by_word.listed_at(from.code_to(to))
+  at_rule := rules ? rules.head : None
+  external label looking
+  found := at_rule ? (at_rule.value.pieces.word_then_capture ? at_rule : found) : found
+  at_rule := at_rule ? at_rule.next : None
+  external goto looking at_rule
+  found
+Prefix := external node
+Prefix.check = registry.latest
+({prefix: Prefix} if {condition}) {rest} ^keyword => condition ? Program.prefixed((external ** prefix), (external span rest)) : rest
 {guarded} if {condition} ^keyword => condition ? guarded : None
 {guarded} unless {condition} ^keyword => condition ? None : guarded
 

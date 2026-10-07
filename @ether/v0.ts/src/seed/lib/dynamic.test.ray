@@ -13,3 +13,11 @@ watch(d)
 say (external get registry watching)
 scene.size = false
 say (external get d dirty)
+// `(M if c) x` applies the prefix M when c holds (P1.9b): false said, then nothing; a Dynamic, then the plain value true
+loud {x} => say x
+(loud if true) false
+(loud if false) true
+e := (dynamically if true) true
+say (external get e source)
+f := (dynamically if false) true
+say f

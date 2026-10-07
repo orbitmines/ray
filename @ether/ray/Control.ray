@@ -23,6 +23,27 @@ Dynamic := class program: Program, source: Program? {
 watch (dynamic) => (external get dynamic source).watched_for(dynamic)
 
 Program &+= {
+  // `prefix` (a word, as written) read as a prefix of what is `written` (a span: `from`, `to`, `frame`): the rule its word heads with one capture after it,
+  // applied to what is written (`(M if c) x`, P1.9b); nothing when `prefix` heads no such rule
+  static prefixed (prefix, written) => {
+    answer := None
+    at_rule := Program.rules_by_word.listed_at(prefix)
+    at_rule = at_rule ? at_rule.head : None
+    while at_rule {
+      if at_rule.value.pieces.word_then_capture {
+        given := external node
+        given.piece = at_rule.value.pieces.next
+        given.from = written.from
+        given.to = written.to
+        applied := external get at_rule.value rule
+        answer = external apply applied given written.frame
+        at_rule = None
+      }
+      at_rule = at_rule ? at_rule.next : None
+    }
+    answer
+  }
+
   // this program's dynamic value kept under each name the program depends on
   watched_for (dynamic) => {
     unless registry.watching { registry.watching = external node }

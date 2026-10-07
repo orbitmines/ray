@@ -3174,6 +3174,10 @@ registry.latest.shared = true
   external set index key (external get index key).listed_with_value(item)
   index
 registry.latest.shared = true
+// The text from one place up to another, as code (a key for the registers above).
+{from: Tight}.code_to({to}) =>
+  external code from to reader_like
+registry.latest.shared = true
 {index: Tight}.listed_at({word}) =>
   key := external get word code
   external get index key
@@ -3181,6 +3185,23 @@ registry.latest.shared = true
 {index: Tight}.holds_word({word}) =>
   key := external get word code
   external own index key
+registry.latest.shared = true
+// Whether a rule's head is one word, then one capture (`loud {x}`, `dynamically {value}`): a prefix (P1.9b).
+{pieces: Tight}.word_then_capture =>
+  found := None
+  if pieces.literal
+    after := pieces.next
+    if after
+      if after.capture
+        found = after.next ? None : true
+  if found
+    at := pieces.from
+    while at && at.character.word
+      at = at.next
+    while at && at.character === space
+      at = at.next
+    found = at === pieces.to
+  found
 registry.latest.shared = true
 // The first word of a rule's head, as code (`multiple` of `multiple (a, b) =>`), or nothing.
 {pieces: Tight}.first_word =>

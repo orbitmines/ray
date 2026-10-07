@@ -567,8 +567,23 @@ closing_block.closes = true
   answer
 
 {kind}.holds_written({from}, {to}) =>
-  // (the type's own rules read it: a value written as a type carries them, language-side)
-  from.reading(to, kind.rules)
+  // whether the text is the type is the language's to say (its `is`, T4.10); until it can, the type's own rules read it (R2.3)
+  said := registry.text_is
+  found := None
+  if said
+    text := external node
+    text.from = from
+    text.to = to
+    type_given := external node
+    type_given.value = kind
+    given := external node
+    given.value = text
+    given.next = type_given
+    here := external .
+    found = external apply said given here
+  unless said
+    found = from.reading(to, kind.rules)
+  found
 
 // The first place from `at` before `to` holding `wanted` outside the brackets opened from `at`, or `to`.
 {at}.first_outside({to}, {wanted}) =>
@@ -740,6 +755,9 @@ closing_block.closes = true
       cap.piece = pieces
       if piece_type
         cap.type = piece_type
+        // (text a type is by its structure, not by rules of its own: what it holds is the text, taken as written)
+        unless piece_type.check ? true : piece_type.rules
+          cap.raw = true
       if pieces.raw
         cap.raw = true
       cap.from = capture_from
@@ -1025,7 +1043,10 @@ top := external .
         found = true
     if kind
       unless piece.optional ? true : kind.check
-        unless kind.rules
+        // (one without rules holds nothing, unless the language says what text is: a type by its structure; one it said holds no
+        // text does not)
+        said := kind.holds_no_text ? None : registry.text_is
+        unless kind.rules ? true : said
           found = true
     piece = found ? None : piece.next
   found
@@ -2018,6 +2039,20 @@ registry.sender = registry.latest
     found = from.first_outside(to, space) === to
   found
 Tight := registry.latest.checked
+
+// Whether a text (a node with the places it is `from` and `to`) is held by a type (R2.2): the type's check, or what the language
+// says it is (once per type and text).
+{text: Tight}.is_held_by({type}) =>
+  t := type
+  given := text
+  t.holds(given.from, given.to)
+registry.latest.shared = true
+// A text read whole by a type's own rules (R2.3: a value written as a type carries them).
+{text: Tight}.read_with_rules_of({type}) =>
+  t := type
+  given := text
+  given.from.reading(given.to, t.rules)
+registry.latest.shared = true
 
 // ---------------------------------------------------------------- what the language is defined with (the reader's own)
 // Whether `x` has a member `name` of its own (one set there, even to nothing).
@@ -3017,41 +3052,148 @@ registry.language_text = true
   found
 
 // ---------------------------------------------------------------- types (T4.10): what a type admits
-// Whether `type` admits `this`: a narrowing (`narrows`, `constraint`), what it narrows that satisfies its constraint (read with `this`
-// being the candidate); a superposition, what one of its components admits; a class, its instances (and those of the classes
-// extending it); any other value, itself. (Nothing, or `true`.)
+// Whether `type` admits `this` (`x is T`): a narrowing (`narrows`, `constraint`), what it narrows that satisfies its constraint (read
+// with `this` being the candidate); a superposition (`a | b`), what one of its components admits; a class, its instances (and those
+// of the classes extending it). Text (a value with the places it is `from` and `to`: a String) is a type by its structure: a list
+// (`a, b`), its items one after another; text, the same characters; a class or a type with rules of its own, what they read whole
+// (R2.3). Any other value, itself. (Nothing, or `true`.)
+// (written with jumps on whether something is there: it answers every typed capture's text)
 {this: Tight}.admitted_by({type}) =>
-  value := this
+  candidate := this
   t := type
   found := None
-  external goto narrowing t.narrows
-  external goto superposition t.superposes
-  external goto class t.class
-  found = ((value === t) ? true : None)
+  is_text := external own candidate from
+  external goto narrowing (external get t narrows)
+  external goto superposition (external get t superposes)
+  external goto class (external get t class)
+  external goto text is_text
+  external label itself
+  external goto same_value (external same candidate t)
+  external goto done
+  external label same_value
+  found = true
+  external goto done
+  external label text
+  external goto sequence (external get t listing)
+  external goto spelled (external own t from)
+  external goto by_rules (external get t rules)
+  external goto itself
+  external label by_rules
+  found = (candidate.read_with_rules_of(t))
   external goto done
   external label narrowing
-  external goto done (value.admitted_by(t.narrows) ? None : true)
+  // (text narrowed from a type with rules of its own: the value they would read is what is narrowed, not the text; said once, to the
+  // reader too)
+  external goto narrowed_text is_text
+  external label narrowed
+  external goto done ((candidate.admits_part_of(external get t narrows)) ? None : true)
   // (code held as a value is a `**` node's `code`: declared as it is, not read)
-  code := external get t.constraint code
+  code := external get (external get t constraint) code
   frame := external node
   frame.outer = (external span code).frame
-  frame.this = value
-  found = ((external apply code None frame) ? true : None)
+  frame.this = candidate
+  external goto done ((external apply code None frame) ? None : true)
+  found = true
+  external goto done
+  external label narrowed_text
+  external goto narrowed (external get (external get t narrows) rules)
+  t.holds_no_text = true
   external goto done
   external label superposition
-  component := t.components.head
+  component := external get (external get t components) head
   external label next_component
-  external goto done (component ? None : true)
-  external goto admitted (value.admitted_by(component.value))
-  component = component.next
+  external goto try_component component
+  external goto done
+  external label try_component
+  external goto admitted (candidate.admits_part_of(external get component value))
+  component = external get component next
   external goto next_component
   external label admitted
   found = true
   external goto done
   external label class
-  found = (value.inside(t))
+  found = (candidate.inside(t))
+  external goto done found
+  external goto by_rules is_text
+  external goto done
+  external label sequence
+  found = (candidate.from.through((external get t head), candidate.to))
+  external goto done
+  external label spelled
+  found = (candidate.from.spells_as(candidate.to, (external get t from), (external get t to)))
   external label done
   found
+// A part of a type admitting `this`: text, as a capture of that type holds it (its check, or the language's `is`, once per text);
+// any other value, as `is` says.
+{this: Tight}.admits_part_of({type}) =>
+  value := this
+  external goto text (external own value from)
+  value.admitted_by(type)
+  external goto done
+  external label text
+  value.is_held_by(type)
+  external label done
+// Whether the text from `this` to `to` is the types `link` holds (a list's links), one after another.
+{this: Tight}.through({link}, {to}) =>
+  here := this
+  l := link
+  end := to
+  found := None
+  external goto items l
+  external goto done ((external same here end) ? None : true)
+  found = true
+  external goto done
+  external label items
+  external goto done (external same here end)
+  item := l.value
+  rest := external get l next
+  e := external get here next
+  external label next_end
+  part := external node
+  part.from = here
+  part.to = e
+  external goto matched (part.admits_part_of(item))
+  external label not_here
+  external goto done (external same e end)
+  e = external get e next
+  external goto next_end
+  external label matched
+  external goto not_here ((e.through(rest, end)) ? None : true)
+  found = true
+  external label done
+  found
+// Whether the text from `this` to `to` has the characters the text from `other` to `other_to` has.
+{this: Tight}.spells_as({to}, {other}, {other_to}) =>
+  here := this
+  there := other
+  end := to
+  there_end := other_to
+  found := None
+  external label next
+  external goto ended (external same here end)
+  external goto done (external same there there_end)
+  external goto done ((external same (external get here character) (external get there character)) ? None : true)
+  here = external get here next
+  there = external get there next
+  external goto next
+  external label ended
+  external goto done ((external same there there_end) ? None : true)
+  found = true
+  external label done
+  found
+// Whether a text is a type (what the reader asks of a typed capture): a type with rules of its own, what they read whole; nothing, no
+// text; else as `is` says.
+{text: Tight}.is_text_of({type}) =>
+  external goto by_rules (external get type rules)
+  external goto structure type
+  external goto done
+  external label structure
+  text.admitted_by(type)
+  external goto done
+  external label by_rules
+  text.read_with_rules_of(type)
+  external label done
+registry.text_is = registry.latest
 
 // `call` read in a frame where `this` is `this`; a closure it answers is called with it (`x -- call`, `x ~~ call`).
 {this: Tight}.continued({call}) =>

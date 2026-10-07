@@ -1,0 +1,14 @@
+say {x} =>
+  external io stdout x
+Ab := "a" | "b"
+pick {x: Ab} =>
+  say x
+pick a
+pick b
+pick c
+Pair := "a", Ab
+two {x: Pair} =>
+  say x
+two ab
+two aa
+two ba

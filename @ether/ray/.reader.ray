@@ -2368,8 +2368,8 @@ nothing_extended := `nothing to add to (it is not defined yet)`
   open_ones ? None : ok
 Balanced := registry.latest.checked
 
-// A group: what is in brackets is read as itself (balanced, as a capture before a literal is: read in place, where it is).
-({inside}) =>
+// A group: what is in brackets is read as itself.
+({inside: Balanced}) =>
   inside
 group_rule := registry.latest
 // Nothing in brackets.

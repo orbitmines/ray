@@ -25,7 +25,7 @@ const order = given.length ? given : reading_order(files);
 const s = new Seed();
 let t = performance.now();
 const failed = (e: any) => { console.log('FAILED', e.message ?? e); for (const w of (e.ray ?? []).slice(0, 6)) console.log('  in', w); };
-try { s.boot({ name: '.reader.ray', s: fs.readFileSync(path.resolve(dir, '.reader.ray'), 'utf8') }); } catch (e) { failed(e); }
+try { s.boot({ name: '.reader.ray', s: fs.readFileSync(path.resolve(dir, '.reader.ray'), 'utf8') }); s.entry({ name: '.entrypoint.ray', s: fs.readFileSync(path.resolve(dir, '.entrypoint.ray'), 'utf8') }); } catch (e) { failed(e); }
 console.log('boot', Math.round(performance.now() - t), 'ms', s.diagnostics.length, 'diagnostics');
 const limit = Number(process.env.LIMIT ?? 8);
 let seen = s.diagnostics.length;

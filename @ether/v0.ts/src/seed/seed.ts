@@ -595,7 +595,7 @@ export class Seed {
     const version = body.planner === undefined && this.planner !== undefined ? -1 : this.reach_version(body.frame);
     this.compiles++;
     // the entrypoint's code is read once, by the rules in force then (R0.5), unless it left something unread
-    if (kept !== undefined && (kept.version === version || (body.text === this.boot_text && !kept.unread && !ENV.SEED_REREAD))) { kept.epoch = this.version; kept.handed = this.planner; return kept.fn; }
+    if (kept !== undefined && (kept.version === version || (this.boot_texts.has(body.text) && !kept.unread && !ENV.SEED_REREAD))) { kept.epoch = this.version; kept.handed = this.planner; return kept.fn; }
     this.recompiles++; if (kept !== undefined) this.stale++;
     const steps = this.expand(this.steps_of(body), body, 0);
     const labels = new Map<string, number>();
@@ -820,8 +820,11 @@ export class Seed {
       p = stop;
     }
   }
-  boot_text?: Text;
-  boot(text: Text) { this.boot_text = text; const after = this.axiom(text); this.read(text, after); }
+  // the entrypoint's texts: the reader, then the language it hands over to
+  boot_texts = new Set<Text>();
+  boot(text: Text) { this.boot_texts.add(text); const after = this.axiom(text); this.read(text, after); }
+  // A text read where the entrypoint was, after it (the language the reader hands over to: .entrypoint.ray).
+  entry(text: Text) { this.boot_texts.add(text); this.read(text, 0, this.global); }
   file(text: Text) { this.read(text, 0, new Node(this.global)); }
   // The files of one project, read in one scope of their own inside the entrypoint's: what one defines the others see (P8.8).
   project(texts: Text[], each?: (text: Text) => void) { const scope = new Node(this.global); for (const t of texts) { this.read(t, 0, scope); each?.(t); } }

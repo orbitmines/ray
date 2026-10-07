@@ -1,5 +1,5 @@
 #!/bin/bash
-# usage: test.sh — boots the new entrypoint (@ether/ray/.reader.ray) with the seed once, then reads each *.test.ray in a scope
+# usage: test.sh — boots the reader (@ether/ray/.reader.ray) and the language beside it (.entrypoint.ray) with the seed once, then reads each *.test.ray in a scope
 # of its own
 cd "$(dirname "$0")"
 L=file://$(cd ../../ && pwd)/node_modules/tsx/dist/loader.mjs

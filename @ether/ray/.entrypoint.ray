@@ -1,2499 +1,1040 @@
-{pattern} => {body} => external rule pattern body
-//{comment?} => None
-;{statement} => statement
-({expr}) => expr
-{{expr}} => (
-  made := external ** expr
-  external extend made Program
+// The language, in its own terms (spec/Language.md): read after .reader.ray, in the same scope, with the rules defined here.
+// ---------------------------------------------------------------- maps (T8.7): a block's declarations, keyed by their names
+// The name a key spells (a key: a node with the places it is `from` and `to`, as a string's), as code naming a member.
+{key: Tight}.member_code =>
+  k := key
+  external get (external code k.from k.to reader_like) code
+// What a value holds by name: a program's (a block's) declarations, read once in a frame of their own inside where it was
+// written; any other value itself.
+{value: Tight}.as_map =>
+  v := value
+  external goto plain ((external get v instance) === None ? true : None)
+  external goto plain ((external get v outer) === registry.program_class ? None : true)
+  external goto declared (external get v declared)
+  frame := external node
+  frame.outer = (external get v context)
+  program_code := external get (external get v code) code
+  external apply program_code None frame
+  v.declared = frame
+  external label declared
+  v := external get v declared
+  external label plain
+  v
+// Each key a program declares given to `body` (a closure of one parameter), in order.
+{program: Tight}.each_key({body}) =>
+  p := program
+  b := body
+  keys := p.declared_keys
+  link := (keys === None ? None : keys.head)
+  external label next
+  external goto done (link === None ? true : None)
+  b.entered_in((external get b context), (None.listed_with_value(link.value)).head)
+  link = link.next
+  external goto next
+  external label done
+  p
+// `x[key] := v`, `x[key] = v`: declared or written so (declared before `:=` and `=`: they read these first).
+{x: Tight}[{key: Balanced}] := {value} =>
+  holder := x.as_map
+  name := key.member_code
+  v := value
+  external set holder name v
+  v
+{x: Tight}[{key: Balanced}] = {value} =>
+  holder := x.as_map
+  name := key.member_code
+  v := value
+  external set holder name v
+  v
+
+// `X<T, V: Type> := class { … }`: `X`, a class with parameters (as a method has them); `X<a, b>`, `X<V: b>`: a class like it with
+// them bound (by name, or in order), its instances `X`'s too. (Declared before `:=`: it reads these first.)
+{name}<{parameters}> := {value} =>
+  made := value
+  made.parameters = external ** parameters
+  external declare name made
+
+// ---------------------------------------------------------------- values written: closures, lists, blocks
+// `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`): a rule whose
+// head is only its parameters (one argument, an operand).
+({parameter: Word} {`=>`} {body}) =>
+  piece := external node
+  piece.capture = true
+  piece.from = arguments_from
+  piece.to = arguments_to
+  piece.optional = true
+  piece.arguments = true
+  piece.type = Operand
+  piece.parameters = external ** parameter
+  piece.defined((external ** parameter), (external ** body), (external span parameter).frame, None)
+// `[items]`: a list of them; `[]`: an empty one.
+[{inside: Balanced}] =>
+  given := inside
+  (external get given listing) ? given : None.listed_with_value(given)
+{`[]`} =>
+  found := external node
+  found.listing = true
+  found.outer = Chain
+  found.instance = true
+  found.this = found
+  found
+// A block as a value: a program (`{ … }`), run where something runs it; an instance of the language's `Program` (once there is one).
+{{inside: Balanced}} =>
+  made := external node
+  made.program = true
+  made.written = external ** inside
+  made.code = made.written
+  made.context = (external span inside).frame
+  program_class := registry.program_class
+  external goto done (program_class === None ? true : None)
+  made.outer = program_class
+  made.instance = true
+  made.this = made
+  external label done
   made
-)
-{name} := {value} => external declare name value
-literal := external literal
-^ := external ^
-{target} ^{literal style}{ } => (
-  ^(style)(style)
-  ^(style)(target)
-)
-^{literal style}{ } => (
-  ^(style)(style)
-  ^(style)
-)
-global ^keyword := external global
-unordered ^keyword := external unordered
-inline ^keyword := external inline
-literal ^keyword := external literal
-theme ^keyword := external theme
-report ^keyword := external report
-forward := external forward
-None := external none
 
-^{ }{literal color ^ color} => ^(color)
-{pattern} ^{literal style} => {body} => (
-  ^(style)(style)
-  ^(style)(external rule pattern body)
-)
-{pattern} => {body} ^punctuation => external rule pattern body
-{pattern} ^{literal style} => {body} ^punctuation => (
-  ^(style)(style)
-  ^(style)(external rule pattern body)
-)
-{name} := {value} ^punctuation => external declare name value
-// A static is read with the class's statics, not again for each instance. Written as loose as `:=` itself, so its value is the
-// rest of the statement (`static X := class: T{…} { … }`).
-static{ }{name ^property} := {value} ^keyword => (
-  goto instance if constructing
+// `places` (a list of names as written) each declared with the value in its place in `value` (arguments: one, or a list).
+{places: Tight}.declared_each({values}) =>
+  list := places
+  given := (values.listed)
+  item := ((external get list listing) ? list.head : None)
+  external label next_place
+  external goto done (item ? None : true)
+  external goto done (given ? None : true)
+  place := external get item value
+  external declare place given.value
+  given = given.next
+  item = item.next
+  external goto next_place
+  external label done
+  list
+// The list `this` holds with `value` at its end; a new one when it holds nothing (one of it, when it holds something else).
+{this: Tight}.listed_with_last({value}) =>
+  list := this
+  v := value
+  external goto listed ((list === None) ? true : (external get list listing))
+  list = (None.listed_with_value(list))
+  external label listed
+  list.listed_with_value(v)
+
+// ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
+// (what declares and writes binds loosest: `x = c ? a : b` writes what `?` answers)
+// `name ^style := value`: the mark is the highlighting's (R5.2).
+{name: Tight} ^{literal style} := {value} =>
   external declare name value
- instance\
-)
-// A static with another name (`static TF | TransformationFormat := …`): both names hold the one value.
-static{ }{name ^property} | {alias ^property} := {value} ^keyword => (
-  goto instance if constructing
+// `name := value`: the value declared where the name was written (read in place: nothing but an external); a list of names in
+// brackets (`(x, y) := a, b`), each with the value in its place.
+({names}) := {value} =>
+  names.declared_each(value)
+// (a name with another, `O | optimizations := …`: both)
+{name} | {alias} := {value} =>
   external declare name value
-  external declare alias name
- instance\
-)
-static{ }{name ^property} = {value} ^keyword => (
-  goto instance if constructing
+  external declare alias value
+{name} := {value} =>
   external declare name value
- instance\
-)
-`{literal string ^string}` ^string.punctuation => string
-// An escaped quote is read as one piece, so a written literal does not end at it.
-\{`"`} ^string => `"`
-// An escaped brace too, so a block does not open at it, and an escaped backslash, so the quote after it ends the literal
-// (String.ray's `Escape`: `\{ => "{"`, `\\ => "\"`).
-\{`{`} ^string => `{`
-\{`\`} ^string => `\`
-"{literal string ^string}" ^string.punctuation => string
-\n => `
-`
-//{comment?} ^comment => None
-/*{comment?}*/ ^comment => None
+// `x.member = value`: the member set.
+{x: Tight}.{literal member} = {value} =>
+  external set x member value
+// `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing); a name is written with it
+// (anything else: the base's `&=`).
+{target: Word} &= {value} =>
+  list := target.listed_with_last(value)
+  external assign target list
+// `name = value`: written where the name was declared (anything else: the base's `=`).
+{target: Word} = {value} =>
+  external assign target value
+// `condition ? yes : no`: `yes` when the condition holds (T1.7: nothing does not; a value saying whether it `holds` as that says;
+// any other does), else `no`; only the one taken is read.
+{condition} ? {yes} : {no} =>
+  taken := condition
+  external goto said (external own taken holds)
+  external goto yes_taken taken
+  external goto no_taken
+  external label said
+  external goto yes_taken (external get taken holds)
+  external label no_taken
+  no
+  external goto done
+  external label yes_taken
+  yes
+  external label done
+// `name: Type = default`, `name: Type`: a name declared with a type, given its value by what is constructed or called.
+{name}: {type} = {default} =>
+  name.declared_as(type, default)
+{name}: {type} =>
+  name.declared_as(type, None)
+// `a === b`: whether they are the same value (identity): the language's `true` or `false` (before it has them, whether they are).
+{a} === {b} =>
+  same := external same a b
+  external goto said registry.true_value
+  same
+  external goto done
+  external label said
+  external goto yes same
+  registry.false_value
+  external goto done
+  external label yes
+  registry.true_value
+  external label done
+// `x.member`, `x.member(arguments)`: its own member, else its method (T8.7).
+{x: Tight}.{literal member}{arguments: Bracketed} =>
+  x.member(member, arguments)
+{x: Tight}.{literal member} =>
+  x.member(member, None)
+// `.member`, `.member = value`, `.member(arguments)`: of `this` (what the statement's frame sees as `this`).
+.{literal member} = {value} =>
+  receiver := (external get (external .) caller_frame).this_seen
+  external set receiver member value
+.{literal member}{arguments: Bracketed} =>
+  receiver := (external get (external .) caller_frame).this_seen
+  receiver.member(member, arguments)
+.{literal member} =>
+  receiver := (external get (external .) caller_frame).this_seen
+  receiver.member(member, None)
 
-[{expr}] ^punctuation => (
-  listed := chain None
-  external extend listed Listed
-  listed &= expr
-  listed
-)
 
-goto {literal target ^label} ^class => external goto target global
-goto {literal target ^label} if {condition} ^class => external goto target condition
-{literal label ^label}\ ^punctuation => external label label
-
-return {value} ^keyword => (
-  value
-  goto return\
-)
-
-chain {holder} ^keyword => (
-  links ^keyword := external .
-  instance := global
-  owner := holder
-  head := None
-  tail := None
-  external extend links Chain
-  links
-)
-
-link {value} {previous} ^keyword => (
-  entry ^keyword := external .
-  instance := global
-  next := None
-  external extend entry Link
-  entry
-)
-
-// Whether an instance's body is being read (its class's statics are not read again).
-constructing := None
-// Programs that run again when a class is made or added to (P5.1, `dynamically`): those whose last run answered nothing.
-// (Not on every `:=`: that runs them deep inside whatever declares, where they exhaust the depth and are lost.)
-// While they run, what they add does not run them again (P5.2).
-waiting_runs := None
-rerunning := None
-// Each run is entered on a frame of its own (entering defines its body as a rule there).
-fresh_frame () => external .
-watched (watched_program) => (
-  watched_outer := None
-  watched_outer = rerunning
-  rerunning = global
-  watched_answer := None
-  watched_answer = watched_program.entered(fresh_frame(), None)
-  if (watched_answer === None) {
-    unless waiting_runs { waiting_runs = chain None }
-    waiting_runs &= watched_program
-  }
-  rerunning = watched_outer
-  watched_program
-)
-// Run by what makes a class or adds to one. Their own declarations do not run them again (P5.2): `rerunning` is set before
-// anything is declared, and the checks are gotos (an `if` would declare names itself).
-rerun_if_waiting () => (
-  goto rerun_done if rerunning
-  goto rerun_now if waiting_runs
-  goto rerun_done
- rerun_now\
-  rerunning = global
-  rerun_waiting()
-  rerunning = None
- rerun_done\
-)
-rerun_waiting () => (
-  still_waiting := chain None
-  waiting_at := None
-  waiting_at = waiting_runs.head
-  waiting_runs = chain None
-  while waiting_at {
-    waiting_program := waiting_at.value
-    if ((waiting_program.entered(fresh_frame(), None)) === None) { still_waiting &= waiting_program }
-    waiting_at = waiting_at.next
-  }
-  extended_by(still_waiting, waiting_runs.head)
-  waiting_runs = None
-  if still_waiting.head { waiting_runs = still_waiting }
-)
-// The positional arguments not yet taken by a field of the instance being constructed.
-given_in_order := None
-class {block} ^keyword => (
-  static := external .
-  static.instance = None
-  static.components = chain None
-  static.components.hierarchy = chain static
-  static.written_body = external ** block
-  static.classes_read = None
-  static.requirements_read = None
-  static.requirements_known = None
-  static.heads_read = None
-  static.heads_known = None
-  static.header = None
-  static.positional_names = None
-  static.partial_names = None
-  written_as => static.written_body**
-  super => (
-    parent := static.components.hierarchy.tail.value
-    instance := this
-    view := external .
-    external extend view parent
-    external extend view instance
-    view
-  )
-  ({args}) => (
-    given := external ** args
-    .construct(given)
-  )
-  static.reading_statics = global
-  inline block
-  static.reading_statics = None
-
-  construct (args) => (
-    static := this
-    outer_given := given_in_order
-    given_in_order = None
-    goto positional if static.header
-    goto named
-   positional\
-    goto named if (external before (external ** args) `:`)
-    goto spread if (external first (external ** args))
-    goto named
-   spread\
-    given_in_order = header_parts((external ** args), `,`).head
-    goto entered
-   named\
-    inline args
-   entered\
-    this := external .
-    this.components = chain None
-    this.components.hierarchy = chain this
-    this.components.hierarchy &= static
-    this.instance = global
-    outer_constructing := constructing
-    constructing = global
-    inline block
-    constructing = outer_constructing
-    given_in_order = outer_given
-    if global.Store { Store.constructed(this) }
-    this
-  )
-
-  rerun_if_waiting()
-  static
-)
-
-base class {body} ^keyword => (
-  static := external .
-  static.instance = None
-  static.components = chain None
-  static.components.hierarchy = chain static
-  static.written_body = external ** body
-  static.requirements_read = chain None
-  static.requirements_known = global
-  written_as => static.written_body**
-  inline body
-  external base static {
-    external declare this external .
-  }
-  static
-)
-
-// A class written only as its header (`class = key: *, ":", value: *`): declared before `,` so the header reads whole.
-class = {header} ^keyword => (
-  made := class {
-    inline header
-  }
-  made.header = external ** header
-  made
-)
-class:{ }{parent} = {header} ^keyword => (
-  made := class {
-    inline header
-  }
-  made.components.hierarchy &= parent
-  external extend made parent
-  made.header = external ** header
-  made
-)
-
-if ^class := class {
-  { }{cond}{ }{yes} ^class => (
-    if_branch ^keyword := external .
-    inline static
-    taken := None
-    answer := None
-
-    goto enter if (cond as boolean).holds
-    goto skip
-   enter\
-    taken = global
-    result := None
-    external declare result (inline (external ** yes))
-    answer = result
-    goto composes if (external own result)
-    goto skip
-   composes\
-    external extend if_branch result
-   skip\
-
-    ^(`variable`)(if_branch)
-  )
-
-  elsif{ }{cond}{ }{taken_block} ^class => (
-    if_branch ^keyword := external .
-    inline this
-    taken := .taken
-    answer := .answer
-
-    goto skip if taken
-    goto enter if (cond as boolean).holds
-    goto skip
-   enter\
-    taken = global
-    result := None
-    external declare result (inline (external ** taken_block))
-    answer = result
-    goto composes if (external own result)
-    goto skip
-   composes\
-    external extend if_branch result
-   skip\
-
-    ^(`variable`)(if_branch)
-  )
-
-  {\n}elsif{ }{cond}{ }{taken_block} ^class => this elsif cond taken_block
-  {\n}else{ }{taken_block} ^class => this else taken_block
-
-  else{ }{taken_block} ^class => (
-    chosen ^keyword := .answer
-    goto done if .taken
-    chosen = inline (external ** taken_block)
-   done\
-
-    chosen
-  )
-
-  as (=== boolean) => (.answer as boolean)
-}
-
-unless{ }{cond}{ }{taken_block} ^class => (
-  if_branch ^keyword := external .
-  inline if
-  taken := None
-  answer := None
-
-  goto skip if (cond as boolean).holds
-  taken = global
-  result := None
-  external declare result (inline (external ** taken_block))
-  answer = result
-  goto composes if (external own result)
-  goto skip
- composes\
-  external extend if_branch result
- skip\
-
-  ^(`variable`)(if_branch)
-)
-
-while ^class := class {
-  { }{cond}{ }{loop_block} ^class => (
-    looping ^keyword := external .
-    inline static
-    written_block := external ** loop_block
-
-   loop_continue\
-    goto loop_body if (cond as boolean).holds
-    goto loop_break
-   loop_body\
-    inline written_block
-    goto loop_continue
-   loop_break\
-
-    looping ^variable
-  )
-
-  { }{loop_block}{ }while{ }{cond} ^class => (
-    written_block := external ** loop_block
-    inline written_block
-
-    this cond loop_block
-  )
-}
-
-// A closure as a value, in brackets: `(n => n + 1)`, `((a, b) => a)` (G2.2: its body follows `=>`). A call's arguments are
-// read in brackets, so `xs.map(n => n + 1)` hands the method a closure.
-({parameter ^parameter} {`=>`} {body}) ^punctuation => (
-  closure := Program()
+// `x[key]`: what `x` holds named by `key` (a block's declarations, T8.7).
+{x: Tight}[{key: Balanced}] =>
+  holder := x.as_map
+  name := key.member_code
+  external get holder name
+// `x.m name => body`: a closure handed to a method by juxtaposition (G2.21): its `=>` spells the definer, so the statement is not
+// read as a definition.
+{x: Tight}.{literal method} {parameter: Word} {`=>`} {body} =>
+  closure := external node
+  closure.outer = registry.program_class
+  closure.instance = true
+  closure.this = closure
   closure.code = external ** body
   closure.parameters = external ** parameter
-  closure.context = external .
-  closure
-)
-(({parameters ^parameter}) {`=>`} {body}) ^punctuation => (
-  closure := Program()
-  closure.code = external ** body
-  closure.parameters = external ** parameters
-  closure.context = external .
-  closure
-)
+  closure.context = (external span body).frame
+  receiver := x
+  (receiver.called_with(method, closure))
 
-do{ }{loop_block}{ }while{ }{cond} ^class => (
-  first_round := external ** loop_block
-  inline first_round
-  while cond loop_block
-)
-
-loop{ }{loop_block} ^class => while true loop_block
-break ^keyword => goto loop_break
-recur({given}) ^keyword => (
-  arguments = given
-  goto method_recur
-)
-recur ^keyword => goto method_recur
-continue ^keyword => goto loop_continue
-
-Program := class {
-  ({arguments}) => if .instance { .entered(.context, arguments) } else { .construct(external ** arguments) }
-
-  { }{expr} => this(expr)
-
-  entered (element, given) => (
-    closure_code := .code
-    closure_parameters := .parameters
-    entering := chain None
-    entering.target = element
-    entered_value := None
-    if (closure_parameters.not) {
-      external define entering.target `closure_entered` {
-        this := element
-        (inline closure_code)
-      } None
-      entered_value = entering.target.closure_entered
-    } else {
-      external define entering.target `closure_applied{arguments}` {
-        (inline closure_parameters) := arguments
-        inline closure_code
-      } None
-      entered_value = entering.target.closure_applied(given)
-    }
-    entered_value
-  )
-}
-
-class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
-  made := class { inline members }
-  made.written_body = external ** members
-  made.components.hierarchy &= header
-  external extend made header
-  made
-)
-
-Modifier := class {
-  kind => TODO
-  modify (definition) => (
-    definition.components = chain None
-    definition.components.hierarchy = chain None
-    definition.components.hierarchy &= this
-    definition
-  )
-}
-chainable ^keyword := class: Modifier {
-  chains => TODO
-}
-compounds ^keyword := class: Modifier {
-  compounds => TODO
-}
-right-to-left ^keyword := class: Modifier {
-  reads_right_to_left => TODO
-}
-left-to-right ^keyword := class: Modifier {
-  reads_left_to_right => TODO
-}
-right-to-left {head} | {alias} ({parameters ^parameter}) => {block} => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  external define alias `{arguments}` {
-   method_recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  defined := external define head `{arguments}` {
-   method_recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  right-to-left.modify(defined)
-)
-chainable {head} ({parameters ^parameter}) => {block} => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  defined := external define head `{arguments}` {
-   method_recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  chainable.modify(defined)
-)
-compounds {head} ({parameters ^parameter}) => {block} => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  defined := external define head `{arguments}` {
-   method_recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  compounds.modify(defined)
-)
-right-to-left {head} ({parameters ^parameter}) => {block} => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  defined := external define head `{arguments}` {
-   method_recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  right-to-left.modify(defined)
-)
-left-to-right {head} ({parameters ^parameter}) => {block} => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  defined := external define head `{arguments}` {
-   method_recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  left-to-right.modify(defined)
-)
-right-to-left {head} | {alias} => {body} => (
-  external rule alias body
-  right-to-left.modify(external rule head body)
-)
-right-to-left {head} => {body} => right-to-left.modify(external rule head body)
-Modifier.spellings = chain None
-Modifier.spellings &= `chainable`
-Modifier.spellings &= `compounds`
-Modifier.spellings &= `right-to-left`
-Modifier.spellings &= `left-to-right`
-
-Node := base class {
-  //{comment?} ^comment => this
-  /*{comment?}*/ ^comment => this
-
-  continued_by (call) => Program(code: call).entered(this, None)
-  continued_if (call, condition) => Program(code: condition).entered(this, None) ? .continued_by(call) : this
-  --{call} ^punctuation => .continued_by(external ** call)
-  --{call} if {condition} ^punctuation => .continued_if((external ** call), (external ** condition))
-  {\n}--{call} ^punctuation => .continued_by(external ** call)
-  {\n}--{call} if {condition} ^punctuation => .continued_if((external ** call), (external ** condition))
-  ~~{x} ^punctuation => (
-    .continued_by(external ** x)
-    this
-  )
-  {\n}~~{x} ^punctuation => (
-    .continued_by(external ** x)
-    this
-  )
-
-  , => this
-
-  ; ^punctuation (x) => x
-  listing => None
-
-  ({parameters ^parameter}) => {block} => (
-    method_parameters := external ** parameters
-    method_written := external ** block
-    this ^function
-    external define this `{arguments}` {
-     method_recur\
-      (inline method_parameters) := arguments
-      inline method_written
-    } parameters
-  )
-  ^{literal style} ({parameters ^parameter}) => {block} => (
-    method_parameters := external ** parameters
-    method_written := external ** block
-    this ^function
-    external define this `{arguments}` {
-     method_recur\
-      (inline method_parameters) := arguments
-      inline method_written
-    } parameters
-  )
-
-  :={x} ^punctuation => (
-    goto existing if external own this
-    external declare this x
-    goto declared
-   existing\
-    goto both if x.head
-    goto plain
-   both\
-    goto destructure if this.head
-   plain\
-    external declare this x
-    goto declared
-   destructure\
-    external declare name this.head
-    external declare value x.head
-   next\
-    goto declared if (name.not)
-    goto valued if external own name.value
-    goto named
-   valued\
-    goto spreading if name.value.spreads
-   named\
-    external declare name.value value.value
-    name = name.next
-    value = value.next
-    goto next
-   spreading\
-    after := 0
-    counting := name.next
-    while counting {
-      after = after.succ
-      counting = counting.next
-    }
-    remaining := 0
-    counting = value
-    while counting {
-      remaining = remaining.succ
-      counting = counting.next
-    }
-    spread := chain None
-    external extend spread Listed
-    while (after < remaining) {
-      spread &= value.value
-      value = value.next
-      remaining = remaining.pred
-    }
-    external declare name.value.of spread
-    name = name.next
-    goto next
-   declared\
-    this
-  )
-
-  ,{other} ^punctuation => (
-    listed := chain None
-    goto held if external own other
-    external extend listed Listed
-    listed &= this
-    entry := other
-    listed &= entry
-    goto done
-   held\
-    goto branching if other.superposes
-    external extend listed Listed
-    listed &= this
-    goto continued if other.continues
-   appended\
-    listed &= other
-    goto done
-   continued\
-    listed &= other(this)
-    goto done
-   branching\
-    first := this
-    listed = other.each((one) => first, one)
-   done\
-    listed
-  )
-
-  ={x} ^punctuation => (
-    external assign this x
-
-    this
-  )
-
-  ?? ^punctuation (other) => (
-    chosen := this
-    if (chosen === None) { chosen = other }
-    chosen
-  )
-  ? => None | this
-  ?: ^punctuation (type) => this: (type?)
-
-  compounds + (component) => (
-    external extend this component
-    this
-  )
-  compounds - (component) => (
-    remaining := chain this
-    walker := this.components.hierarchy.head
-    while walker {
-      unless (walker.value === component) { remaining &= walker.value }
-      walker = walker.next
-    }
-    this.components.hierarchy = remaining
-    this.classes_read = None
-    this
-  )
-
-  === (other) => (
-    answer := None
-    goto marking if this
-    goto done if other
-    answer = global
-    goto done
-   marking\
-    marker := external .
-    marker.probe = global
-    this.identical = marker
-    goto owned if (external own other.identical)
-    goto cleared
-   owned\
-    answer = other.identical.probe
-   cleared\
-    marker.probe = None
-   done\
-
-    answer
-  )
-  as (=== boolean) => true
-
-  not => (
-    answer := global
-    goto held if this
-    goto done
-   held\
-    answer = None
-   done\
-
-    answer
-  )
-  and (b) => (
-    answer := b
-    goto done if this
-    answer = this
-   done\
-
-    answer
-  )
-  or (b) => (
-    answer := this
-    goto done if this
-    answer = b
-   done\
-
-    answer
-  )
-  && (b) => .and(b)
-  || (b) => .or(b)
-  nand (b) => .and(b).not
-  xor (b) => .or(b).and(.nand(b))
-  xnor (b) => .xor(b).not
-
-  // Two fields, each with another name, joined by an edge: `parent | previous : static? <- hierarchy -> children | next : static?`.
-  | {alias} : {type} <- {literal edge ^property} -> {other} | {other_alias} : {other_type} ^punctuation => (
-    goto declared if external own this
-    external declare this None
-   declared\
-    goto other_declared if external own other
-    external declare other None
-   other_declared\
-    external rule alias this
-    external rule other_alias other
-    this
-  )
-  // A field with another name: `initial | (internal right-to-left ⊢) : Boundary = …`. The last word is the other name, the words
-  // before it its modifiers.
-  | ({aliased}) : {type} = {value} ^punctuation => (
-    goto given if external own this
-    external rule this value
-   given\
-    head := external ** aliased
-    modifiers := chain None
-    while (external after head ` `) {
-      modifiers &= external before head ` `
-      head = external after head ` `
-    }
-    defined := external rule head this
-    modifier := modifiers.head
-    while modifier {
-      if ((inline modifier.value) === right-to-left) { right-to-left.modify(defined) }
-      modifier = modifier.next
-    }
-    this
-  )
-  | ({aliased}) : {type} ^punctuation => (
-    goto given if external own this
-    external declare this None
-   given\
-    head := external ** aliased
-    modifiers := chain None
-    while (external after head ` `) {
-      modifiers &= external before head ` `
-      head = external after head ` `
-    }
-    defined := external rule head this
-    modifier := modifiers.head
-    while modifier {
-      if ((inline modifier.value) === right-to-left) { right-to-left.modify(defined) }
-      modifier = modifier.next
-    }
-    this
-  )
-  // A field declared while positional arguments are given (`S(a, b)`) takes the next one, in the order the header declares them.
-  :{type} = {value} ^punctuation => (
-    goto given if external own this
-    goto defaulted if (given_in_order === None)
-    given_now := given_in_order.value
-    given_in_order = given_in_order.next
-    external declare this given_now
-    goto given
-   defaulted\
-    external rule this value
-   given\
-    this
-  )
-  :{type} ^punctuation => (
-    goto typed if (given_in_order === None)
-    goto typed if external own this
-    given_now := given_in_order.value
-    given_in_order = given_in_order.next
-    external declare this given_now
-   typed\
-    declared_type := type
-    if (external own this) {
-      unless declared_type.instance {
-        if this {
-          if this.instance { declared_type.verify(this) }
-          elsif this.written_body { unless ((this === declared_type) || this.subtype_of(declared_type)) { ERROR `is not of the type it is declared as` } }
-          elsif (this.instance_of(declared_type)) {
-            if declared_type.repeating { external assign this this.instance_of(declared_type) }
-            declared_type.verify(this)
-          }
-          else { ERROR `is not of the type it is declared as` }
-        }
-      }
-    } elsif (declared_type.superposes && None.instance_of(declared_type)) { external declare this None }
-    else {
-      external declare this declared_type
-      if declared_type.written_body { external declare this this }
-    }
-
-    this
-  )
-
-  subtype_of (other) => (
-    found := other === Node
-    held := this.classes.head
-    while (held && found.not) {
-      if (held.value === other) { found = global }
-      held = held.next
-    }
-    found
-  )
-  supertype_of (other) => other.subtype_of(this)
-
-  classes => (
-    unless ((external own this.classes_read) && this.classes_read) {
-      this.classes_read = chain None
-      reached := chain None
-      reached &= this
-      parent := this.components.hierarchy.head
-      while parent {
-        unless (parent.value === None) { extended_by(reached, parent.value.classes.head) }
-        parent = parent.next
-      }
-      this.classes_read = reached
-    }
-    this.classes_read
-  )
-  heads_written => (
-    unless this.heads_known {
-      read := chain None
-      if this.written_body {
-        left := this.written_body
-        one := external first left
-        while one {
-          read &= head_of(one)
-          left = external rest left
-          one = external first left
-        }
-      }
-      this.heads_read = read
-      this.heads_known = global
-    }
-    this.heads_read
-  )
-  requirements => (
-    unless this.requirements_known {
-      wanted := chain None
-      held := this.classes.head
-      while held {
-        head := held.value.heads_written.head
-        while head {
-          if head.value.is_required { wanted &= head.value.spelled }
-          head = head.next
-        }
-        held = held.next
-      }
-      this.requirements_read = wanted
-      this.requirements_known = global
-    }
-    this.requirements_read
-  )
-  declaring (wanted_head) => (
-    found := None
-    held := this.classes.head
-    while (held && found.not) {
-      head := held.value.heads_written.head
-      while (head && found.not) {
-        if (head.value.is_declared && (head.value.spelled === wanted_head)) { found = global }
-        head = head.next
-      }
-      held = held.next
-    }
-    found
-  )
-  structurally (type) => (
-    holding := global
-    wanted := None
-    unless (.subtype_of(type)) { wanted = type.requirements.head }
-    while (wanted && holding) {
-      unless (.declaring(wanted.value)) { holding = None }
-      wanted = wanted.next
-    }
-    holding
-  )
-  instance_of (type) => (
-    found := None
-    among := None
-    if this.codepoint { among = type.superposes }
-    if this {
-      if (type.repeating || type.listing) { found = read_whole(this, type) }
-      elsif (type.pattern && !this.instance) {
-        read := read_whole(this, type.pattern)
-        if read { found = type.built_from(read) }
-      }
-      elsif among {
-        alternative := type.components.head
-        while (alternative && found.not) {
-          if alternative.value.superposes { if (this.instance_of(alternative.value)) { found = alternative } }
-          elsif (same_text(this, alternative.value)) { found = alternative }
-          alternative = alternative.next
-        }
-      } else {
-        found = .structurally(type)
-        if (found.not && type.components) {
-          other := type.components.head
-          while (other && found.not) {
-            found = .structurally(other.value)
-            other = other.next
-          }
-        }
-        if found { found = type.admits(this) }
-      }
-    } else {
-      unless type.instance {
-        if type.superposes {
-          walker := type.components.head
-          while (walker && found.not) {
-            if (walker.value === None) { found = global }
-            walker = walker.next
-          }
-        }
-      }
-    }
-
-    found
-  )
-
-  is_abstract => (
-    missing := None
-    head := this.heads_written.head
-    while (head && missing.not) {
-      if head.value.is_required { missing = global }
-      head = head.next
-    }
-    missing
-  )
-
-  fields => (
-    found := chain None
-    holder := this
-    colon := code_points(`x:y`).head.next.value
-    held := this.classes.head
-    while held {
-      if held.value.written_body {
-        statements := Program(code: held.value.written_body).written
-        statements for {
-          read := head_read(it.value.code)
-          if (read.ending && (read.ending == colon)) {
-            named := text_of(read.points)
-            found &= Field(name: named, value: (external get holder named))
-          }
-        }
-      }
-      held = held.next
-    }
-    found
-  )
-
-  canonical => (
-    normal := this
-    if (this.normalizer) { normal = this.normalizer(this) }
-    normal
-  )
-
-  structure => None
-
-  built_from (reading) => (
-    made := this()
-    reading for {
-      if it.value.named { made[it.value.name] = it.value.value }
-    }
-    made
-  )
-
-  satisfies (predicate) => (
-    answer := Program(code: (external ** predicate)).entered(this, None)
-    if (answer.continues || answer.code) { answer = answer(this) }
-    if answer.superposed { answer = answer.holds_for(this) }
-    answer
-  )
-
-  verify (candidate) => candidate
-
-  admits (candidate) => global
-
-  {this}{{literal narrowing}} ^punctuation => .narrowed_by(external ** narrowing)
-  // A type narrowed by a predicate (`T{p}`): of a superposition or a collection, the ones that satisfy it; of a class, the class
-  // whose instances satisfy it.
-  narrowed_by (written) => (
-    narrowed := this
-    closure := { inline written }
-    selected := None
-    if ((narrowed.superposes === global) && (narrowed.components.head.value.instance === global)) {
-      alternative := narrowed.components.head
-      while alternative {
-        if (alternative.value.satisfies(closure)) { if selected { selected = selected | alternative.value } else { selected = alternative.value } }
-        alternative = alternative.next
-      }
-    } elsif (narrowed.instance === global) {
-      selected = chain None
-      narrowed for {
-        held := it.value
-        if (held.satisfies(closure)) { selected &= held }
-      }
-    } else {
-      selected = class: narrowed {
-        constraint := closure
-        narrows := narrowed
-
-        verify (candidate) => (
-          this.narrows.verify(candidate)
-          unless (candidate.satisfies(this.constraint)) { ERROR `does not satisfy a constraint of its type` }
-
-          candidate
-        )
-        admits (candidate) => if (this.narrows.admits(candidate)) { candidate.satisfies(this.constraint) } else { None }
-        chosen_within (width) => (
-          picked := this.narrows.chosen_within(width)
-          if (picked.satisfies(this.constraint)) { picked } else { .chosen_within(width.succ) }
-        )
-        () ^punctuation => .chosen_within(1)
-        if (this.instance) { selected.verify(this) }
-      }
-    }
-
-    selected
-  )
-
-  {this}<{literal partial}> := {defined} ^punctuation => (
-    declare_partials((external ** partial), external .)
-    made := defined
-    defaults := class { }
-    declare_partials((external ** partial), defaults)
-    made.components.hierarchy &= defaults
-    made.partial_names = partial_names(external ** partial)
-    external declare this made
-  )
-  {this}<{literal partial}> ^punctuation => (
-    narrowed := this
-    made := class { }
-    made.header = narrowed.header
-    made.partial_names = narrowed.partial_names
-    remaining := narrowed.partial_names
-    if remaining { remaining = remaining.head }
-    rest := external ** partial
-    while rest {
-      item := external before rest `,`
-      unless item { item = rest }
-      rest = external after rest `,`
-      named := external before item `:`
-      given := external after item `:`
-      unless named {
-        given = item
-        if remaining {
-          named = remaining.value
-          remaining = remaining.next
-        }
-      }
-      if named {
-        held := inline given
-        external extend made {
-          (inline named) := held
-        }
-      }
-    }
-    made.components.hierarchy &= narrowed
-    external extend made narrowed
-    made
-  )
-
-  ** => Program(code: (external ** this))
-
-  &+={ }{{members}} ^punctuation => (
-    this.components.hierarchy &= class { inline members }
-    rerun_if_waiting()
-    this
-  )
-  &={x} ^punctuation => (
-    adding := x
-    previous := this.tail
-    added := link adding previous
-    goto more if previous
-    this.head = added
-    goto linked
-   more\
-    previous.next = added
-   linked\
-    this.tail = added
-    goto owned if this.owner
-    goto done
-   owned\
-    holder := this.owner
-    external extend holder x
-   done\
-
-    this
-  )
-
-  | ^punctuation (other) => (
-    superposed := external .
-    goto valued if this.instance
-    external extend superposed this
-   valued\
-    superposed.instance = None
-    superposed.superposes = global
-    superposed.components = chain None
-    if this.superposes { extended_by(superposed.components, this.components.head) } else { superposed.components &= this }
-    if other.continues { superposed.components &= other(superposed.components.tail.value) } else { superposed.components &= other }
-
-    superposed
-  )
-
-  . => this
-  .{literal property ^property} ^punctuation => external get this property
-  // A closure handed to a method by juxtaposition (G2.21): `xs.for name => { … }`. Its `=>` is spelled as the rule's own, so
-  // the statement is not read as a definition.
-  .{literal method ^function} {parameter ^parameter} {`=>`} {body} ^punctuation => (
-    closure := Program()
-    closure.code = external ** body
-    closure.parameters = external ** parameter
-    closure.context = this
-    (external get this method)(closure)
-  )
-  [{property}] ^punctuation => external get this property
-  [] => (
-    item := this
-    repeated := class: Array { }
-    repeated.repeats = item
-    repeated.repeating = global
-    repeated
-  )
-
-  copy => (
-    copied := external .
-    external extend copied this
-    copied
-  )
-
-  diagnostics = None
-  diagnosed (diagnostic) => (
-    marked := this.copy
-    marked.diagnostics = chain None
-    if this.diagnostics { extended_by(marked.diagnostics, this.diagnostics.head) }
-    marked.diagnostics &= diagnostic
-    marked
-  )
-
-}
-
-Node.DEFINE_METHOD = `&=`
-!{x} ^punctuation => (x).not
-* := Node
-
-external extend None {
-  as (=== boolean) => false
-  == (other) => other === None
-  != (other) => (other === None).not
-}
-
-extended_by (onto, walker) => (
-  while walker {
-    onto &= walker.value
-    walker = walker.next
-  }
-  onto
-)
-
-Chain := class {
-  entry => .head
-}
-Listed := class {
-  listing => global
-  ,{other} ^punctuation => (
-    joined := chain None
-    goto held if external own other
-    external extend joined Listed
-    walker := .head
-    while walker {
-      joined &= walker.value
-      walker = walker.next
-    }
-    entry := other
-    joined &= entry
-    goto done
-   held\
-    goto branching if other.superposes
-    external extend joined Listed
-    walker = .head
-    while walker {
-      joined &= walker.value
-      walker = walker.next
-    }
-    goto continued if other.continues
-   appended\
-    joined &= other
-    goto done
-   continued\
-    joined &= other(this.tail.value)
-    goto done
-   branching\
-    before := this
-    joined = other.each((one) => before, one)
-   done\
-    joined
-  )
-}
-Link := class { }
-
-Reading := class {
-  rest: Node
-  value: Node
-}
-Field := class {
-  name: Node
-  value: Node
-}
-Chosen := class {
-  among: Node
-  value: Node
-  previous => .among.previous
-  next => .among.next
-}
-Capture := class {
-  name: Node
-  type: Node
-  capturing => true
-}
-Captured := class {
-  name: Node
-  value: Node
-  named => true
-}
-Call := class {
-  statement: Node
-  is_external => prefix_of(text_bits(.statement.code).head, `external `)
-  external_name => (
-    named := chain None
-    space := code_points(`x y`).head.next.value
-    skipped := 9
-    ended := false
-    code_points(.statement.code) for {
-      if skipped.nonzero { skipped = skipped.pred } elsif !ended {
-        if (it.value == space) { ended = true } else { named &= it.value }
-      }
-    }
-    text_of(named)
-  )
-  ** => .statement
-}
-
-text_bits (text) => (
-  held := chain None
-  take (bit) => (
-    held &= bit
-    global
-  )
-  external bits text take
-  held
-)
-bits_onto (held, text) => extended_by(held, text_bits(text).head)
-code_points (source) => (
-  points := chain None
-  point := 0
-  ones := 0
-  counting := true
-  leading := true
-  skip := 0
-  position := 0
-  following := 0
-  take (bit) => (
-    if counting {
-      if bit { ones = ones.succ } else { counting = false }
-    } elsif skip.nonzero { skip = skip.pred } else {
-      point = point + point
-      if bit { point = point.succ }
-    }
-    position = position.succ
-    if (position == 8) {
-      position = 0
-      if leading {
-        if ones.is_zero { following = 0 } else { following = ones.pred }
-      } else { following = following.pred }
-      if following.is_zero {
-        points &= point
-        point = 0
-        ones = 0
-        counting = true
-        leading = true
-      } else {
-        leading = false
-        counting = false
-        skip = 2
-      }
-    }
-    global
-  )
-  external bits source take
-  points
-)
-character_of (point) => (
-  held := 0 + point
-  external extend held Char
-  held.components.hierarchy &= Char
-  held
-)
-text_of (points) => (
-  held := chain None
-  points for { held &= character_of(it.value) }
-  external extend held String
-  held
-)
-HeadRead := class {
-  points: Node
-  ending: Node
-}
-head_read (code) => (
-  enders := code_points(`x (:?`).head.next
-  points := chain None
-  ending := None
-  code_points(code) for {
-    unless ending {
-      ender := enders
-      while (ender && ending.not) {
-        if (ender.value == it.value) { ending = ender.value }
-        ender = ender.next
-      }
-      unless ending { points &= it.value }
-    }
-  }
-  HeadRead(points: points, ending: ending)
-)
-prefix_of (at, spelling) => (
-  prefix := None
-  matching := global
-  compare (bit) => (
-    unless at { matching = None }
-    if matching {
-      unless (bit === at.value) { matching = None }
-      at = at.next
-    }
-    matching
-  )
-  external bits spelling compare
-  if matching { prefix = Reading(rest: at, value: spelling) }
-  prefix
-)
-same_text (first_text, second_text) => (
-  same := false
-  if (first_text && second_text) {
-    matched := prefix_of(text_bits(first_text).head, second_text)
-    if matched { unless matched.rest { same = true } }
-  }
-  same
-)
-outnumbers (first_reading, other) => (
-  mine := chain None
-  theirs := chain None
-  if first_reading.head { mine = first_reading } else { mine &= first_reading }
-  if other.head { theirs = other } else { theirs &= other }
-  a := mine.head
-  b := theirs.head
-  while (a && b) {
-    a = a.next
-    b = b.next
-  }
-  a
-)
-read_whole (text, type) => (
-  whole := None
-  if type.repeating {
-    tree := None
-    if type.repeats.superposes { tree = spelled_tree_of(type.repeats) }
-    if (tree) {
-      ends := spelled_ends(text, tree)
-      if (ends) {
-        if type.repeats.spelled_unique { whole = spelled_reading(ends) } else { whole = read_repeated(text_bits(text).head, type.repeats) }
-      }
-    } else { whole = read_repeated(text_bits(text).head, type.repeats) }
-  } else {
-    candidate := readings_of(text_bits(text).head, type).head
-    while candidate {
-      reading := candidate.value
-      unless reading.rest {
-        if whole {
-          if (outnumbers(reading.value, whole)) { whole = reading.value }
-        } else { whole = reading.value }
-      }
-      candidate = candidate.next
-    }
-  }
-  whole
-)
-
-spelled_node ^keyword => (
-  node := external .
-  ends := None
-  path := None
-  zero := None
-  one := None
-  node
-)
-spelled_tree_of (type) => (
-  unless type.spelled_tree_known {
-    type.spelled_tree = None
-    type.spelled_unique = global
-    root := spelled_node
-    plain := global
-    insert (kind, path) => (
-      at := root
-      bit := text_bits(kind).head
-      while bit {
-        if at.ends { type.spelled_unique = None }
-        if bit.value {
-          unless at.one { at.one = spelled_node }
-          at = at.one
-        } else {
-          unless at.zero { at.zero = spelled_node }
-          at = at.zero
-        }
-        bit = bit.next
-      }
-      unless (at === root) {
-        if (at.ends || at.zero || at.one) { type.spelled_unique = None }
-        at.ends = global
-        at.path = path
-      }
-    )
-    gather (kind, path) => (
-      if kind.superposes {
-        alternative := kind.components.head
-        while alternative {
-          deeper := chain None
-          extended_by(deeper, path.head)
-          deeper &= alternative
-          gather(alternative.value, deeper)
-          alternative = alternative.next
-        }
-      } elsif (kind.repeating || kind.listing || kind.capturing || kind.written_body) { plain = None }
-      else { insert(kind, path) }
-    )
-    gather(type, chain None)
-    if plain { type.spelled_tree = root }
-    type.spelled_tree_known = global
-  }
-  type.spelled_tree
-)
-spelled_ends (text, root) => (
-  active := chain None
-  active &= root
-  ended := chain None
-  completed := None
-  step (bit) => (
-    reached := chain None
-    done := None
-    at := active.head
-    while at {
-      next_node := None
-      if bit { next_node = at.value.one } else { next_node = at.value.zero }
-      if next_node {
-        reached &= next_node
-        if next_node.ends {
-          done = global
-          ended &= next_node
-        }
-      }
-      at = at.next
-    }
-    if done { reached &= root }
-    completed = done
-    active = reached
-    reached.head
-  )
-  external bits text step
-  unless active.head { completed = None }
-  unless completed { ended = None }
-  ended
-)
-spelled_reading (ends) => (
-  whole := chain None
-  ended := ends.head
-  while ended {
-    step := ended.value.path.tail
-    chosen := step.value.value
-    while step {
-      chosen = Chosen(among: step.value, value: chosen)
-      step = step.previous
-    }
-    whole &= chosen
-    ended = ended.next
-  }
-  whole
-)
-
-head_stops := ` ` | `(` | `:` | `?`
-not_word_starts := `{` | `[` | `^` | `@`
-heads_root ^keyword => (
-  unless global.heads_trie { global.heads_trie = spelled_node }
-  global.heads_trie
-)
-todo_held := chain None
-todo_bits ^keyword => (
-  unless todo_held.head { bits_onto(bits_onto(bits_onto(todo_held, `=`), `>`), ` TODO`) }
-  todo_held
-)
-byte_steps := text_bits(` `)
-written_head ^keyword => (
-  node := external .
-  spelled := None
-  stop := None
-  is_required := None
-  is_declared := None
-  node
-)
-head_of (statement) => (
-  read := written_head
-  stops := spelled_tree_of(head_stops)
-  starts := spelled_tree_of(not_word_starts)
-  head_at := heads_root
-  byte_from := heads_root
-  stop_at := stops
-  start_at := starts
-  first_bit := None
-  second_bit := None
-  bits_seen := None
-  second_seen := None
-  word_start := None
-  first_done := None
-  step_at := byte_steps.head
-  todo_at := None
-  reading := global
-  take (bit) => (
-    going := global
-    if reading {
-      if bit {
-        unless head_at.one { head_at.one = spelled_node }
-        head_at = head_at.one
-        if stop_at { stop_at = stop_at.one }
-        if start_at { start_at = start_at.one }
-      } else {
-        unless head_at.zero { head_at.zero = spelled_node }
-        head_at = head_at.zero
-        if stop_at { stop_at = stop_at.zero }
-        if start_at { start_at = start_at.zero }
-      }
-      unless first_done {
-        if bits_seen {
-          unless second_seen {
-            second_bit = bit
-            second_seen = global
-          }
-        } else {
-          first_bit = bit
-          bits_seen = global
-        }
-      }
-      step_at = step_at.next
-      unless step_at {
-        if stop_at { if stop_at.ends { read.stop = stop_at.path.head.value } }
-        if read.stop {
-          reading = None
-          if (read.stop === head_stops.components.head) { todo_at = todo_bits.head } else { going = None }
-        } else {
-          unless first_done {
-            first_done = global
-            if (first_bit || second_bit) { word_start = global }
-            if start_at { if start_at.ends { word_start = None } }
-            start_at = None
-            unless word_start {
-              reading = None
-              going = None
-            }
-          }
-          byte_from = head_at
-          stop_at = stops
-          step_at = byte_steps.head
-        }
-      }
-    } else {
-      if (bit === todo_at.value) { todo_at = todo_at.next } else { going = None }
-      unless todo_at {
-        read.is_required = global
-        going = None
-      }
-    }
-    going
-  )
-  external bits statement take
-  read.spelled = byte_from
-  if read.stop {
-    unless (read.stop === head_stops.components.tail) { read.is_declared = global }
-    if ((read.stop === head_stops.components.head.next.next) && word_start) { read.is_required = global }
-  }
-  read
-)
-
-read_repeated (start, element) => (
-  whole := None
-  layer := chain None
-  layer &= Reading(rest: start, value: chain None)
-  while layer.head {
-    reached := chain None
-    state := layer.head
-    while state {
-      reading := state.value
-      steps := readings_of(reading.rest, element).head
-      while steps {
-        step := steps.value
-        unless (step.rest === reading.rest) {
-          seen := None
-          known := reached.head
-          while (known && !seen) {
-            if (known.value.rest === step.rest) { seen = global }
-            known = known.next
-          }
-          unless seen {
-            more := chain None
-            extended_by(more, reading.value.head)
-            more &= step.value
-            reached &= Reading(rest: step.rest, value: more)
-            unless step.rest { whole = more }
-          }
-        }
-        steps = steps.next
-      }
-      state = state.next
-    }
-    layer = reached
-  }
-  whole
-)
-readings_of (rest, type) => (
-  found := chain None
-  if type.repeating {
-    firsts := readings_of(rest, type.repeats).head
-    while firsts {
-      first := firsts.value
-      single := chain None
-      single &= first.value
-      found &= Reading(rest: first.rest, value: single)
-      unless (first.rest === rest) {
-        others := readings_of(first.rest, type).head
-        while others {
-          more := chain None
-          more &= first.value
-          extended_by(more, others.value.value.head)
-          found &= Reading(rest: others.value.rest, value: more)
-          others = others.next
-        }
-      }
-      firsts = firsts.next
-    }
-  } elsif type.listing {
-    reached := chain None
-    listed_from := rest
-    reached &= Reading(rest: listed_from, value: chain None)
-    item := type.head
-    while item {
-      further := chain None
-      so_far_at := reached.head
-      while so_far_at {
-        so_far := so_far_at.value
-        nexts := readings_of(so_far.rest, item.value).head
-        while nexts {
-          parts := chain None
-          extended_by(parts, so_far.value.head)
-          parts &= nexts.value.value
-          further &= Reading(rest: nexts.value.rest, value: parts)
-          nexts = nexts.next
-        }
-        so_far_at = so_far_at.next
-      }
-      reached = further
-      item = item.next
-    }
-    found = reached
-  } elsif type.superposes {
-    alternative := type.components.head
-    while alternative {
-      alternatives := readings_of(rest, alternative.value).head
-      while alternatives {
-        found &= Reading(rest: alternatives.value.rest, value: Chosen(among: alternative, value: alternatives.value.value))
-        alternatives = alternatives.next
-      }
-      alternative = alternative.next
-    }
-  } elsif type.capturing {
-    captures := readings_of(rest, type.type).head
-    while captures {
-      found &= Reading(rest: captures.value.rest, value: Captured(name: type.name, value: captures.value.value))
-      captures = captures.next
-    }
-  } elsif type.written_body {
-    piece := chain None
-    at := rest
-    while at {
-      piece &= at.value
-      at = at.next
-      copied := chain None
-      extended_by(copied, piece.head)
-      if (copied.instance_of(type)) { found &= Reading(rest: at, value: copied) }
-    }
-  } else {
-    matched := prefix_of(rest, type)
-    if matched { found &= matched }
-  }
+// ---------------------------------------------------------------- what every value has (the base)
+// `x &+= { … }`: what the block defines, added to `x` (R4.3)
+{target: Tight} &+= {{members: Balanced}} =>
+  extended := target
+  extended ? (external apply members None extended) : (external report (external span members).from (external span members).to nothing_extended)
+  registry.classes_changed = true
+  extended
+// ---------------------------------------------------------------- lists: a chain (`listing`, `head`, `tail`) of links (`listed`, `value`,
+// `next`, `previous`)
+// `list` with `value` at its end (a new list when `list` is nothing).
+// (written with externals: every `,` makes one; a local is never named as a member an external is given)
+{list: Tight}.listed_with_value({item}) =>
+  found := list
+  v := item
+  external goto listing found
+  found := external node
+  external set found outer Chain
+  external set found instance true
+  external set found this found
+  external label listing
+  external set found listing true
+  added := external node
+  external set added listed true
+  external set added outer Link
+  external set added instance true
+  external set added this added
+  external set added value v
+  last := external get found tail
+  external goto after_last last
+  external set found head added
+  external goto linked
+  external label after_last
+  external set added previous last
+  external set last next added
+  external label linked
+  external set found tail added
   found
-)
+// A list with the same values (a new chain).
+{list: Tight}.copied_list =>
+  found := None
+  link := list.head
+  external label again
+  external goto done (link ? None : true)
+  found = found.listed_with_value(link.value)
+  link = link.next
+  external goto again
+  external label done
+  found
+// A superposition of `this` and `other` (U1): `superposes`, its `components` a list (one more component when `this` is one).
+{this: Tight}.superposed_with({other}) =>
+  value := this
+  given := other
+  found := external node
+  found.superposes = true
+  found.components = (value.superposes ? value.components.copied_list.listed_with_value(given) : None.listed_with_value(value).listed_with_value(given))
+  found
 
-capture_of (content) => (
-  space := code_points(`x y`).head.next.value
-  colon := code_points(`x:y`).head.next.value
-  caret := code_points(`x^y`).head.next.value
-  question := code_points(`x?y`).head.next.value
-  named := chain None
-  typed := chain None
-  word := chain None
-  typing := None
-  flush (into) => (
-    if word.head { into &= word }
-    word = chain None
-    into
-  )
-  code_points(content) for {
-    if typing {
-      if (it.value == space) { flush(typed) } else { word &= it.value }
-    } elsif (it.value == colon) {
-      flush(named)
-      typing = global
-    } elsif (it.value == space) { flush(named) } else { word &= it.value }
-  }
-  if typing { flush(typed) } else { flush(named) }
-  name := None
-  named for {
-    spelled := it.value
-    unless ((spelled.head.value == caret) || same_text(text_of(spelled), `literal`)) { name = spelled }
-  }
-  if name {
-    if (name.tail.value == question) {
-      kept := chain None
-      at := name.head
-      while at.next {
-        kept &= at.value
-        at = at.next
-      }
-      name = kept
-    }
-    name = text_of(name)
-  }
-  type := Node
-  written := chain None
-  styled := None
-  typed for {
-    if (it.value.head.value == caret) { styled = global }
-    unless styled {
-      if written.head { written &= space }
-      extended_by(written, it.value.head)
-    }
-  }
-  if written.head { type = inline (external ** text_of(written)) }
-  Capture(name: name, type: type)
-)
-pattern_of (head) => (
-  pattern := None
-  head for {
-    part := it.value
-    item := part.value
-    if part.among.previous { item = capture_of(part.value.head.next.value) }
-    if pattern { pattern = pattern, item } else { pattern = [item] }
-  }
-  pattern
-)
-matcher_of (pattern) => ((text, captured) => (
-  read := None
-  reading := None
-  start := text_bits(text).head
-  readings_of(start, pattern) for {
-    if reading {
-      if (outnumbers(it.value.value, reading.value)) { reading = it.value }
-    } else { reading = it.value }
-  }
-  if reading {
-    reading.value for {
-      if it.value.named { captured[it.value.name] = it.value.value }
-    }
-    read = chain None
-    walker := start
-    while (walker && !(walker === reading.rest)) {
-      read &= walker.value
-      walker = walker.next
-    }
-  }
-  read
-))
+// ---------------------------------------------------------------- types (T4.10): `x is T`
+// A value is `T` as `T` is: what a narrowing (`narrows`, `constraint`) narrows and satisfies its constraint (read with `this` being
+// the value); one of a superposition's components (#); an instance of a class (or of one extending it); else itself.
+{this: Tight}.admitted_by({type}) =>
+  candidate := this
+  t := type
+  found := None
+  external goto text (external own candidate from)
+  external goto narrowing (external get t narrows)
+  external goto superposition (external get t superposes)
+  external goto class (external get t class)
+  found = (external same candidate t) ? true : None
+  external goto done
+  external label text
+  found = (candidate.from.walked((t.vertices_of), None, candidate.to))
+  external goto done
+  external label narrowing
+  external goto done ((candidate.admitted_by(external get t narrows)) ? None : true)
+  found = (candidate.satisfies_constraint_of(t))
+  external goto done
+  external label superposition
+  component := external get (external get t components) head
+  external label next_component
+  external goto done (component ? None : true)
+  found = (candidate.admitted_by(external get component value))
+  external goto done found
+  component = external get component next
+  external goto next_component
+  external label class
+  found = (candidate.inside(t))
+  external label done
+  found
+// Whether a narrowing's constraint holds with `this` being `this` (code held as a value is a `**` node's `code`: declared as it is,
+// not read).
+{this: Tight}.satisfies_constraint_of({narrowing}) =>
+  candidate := this
+  n := narrowing
+  code := external get (external get n constraint) code
+  frame := external node
+  frame.outer = (external span code).frame
+  frame.this = candidate
+  (external apply code None frame) ? true : None
 
-header_items (written, separator) => (
-  items := chain None
-  piece := chain None
-  depth := 0
-  quoted := false
-  opening := code_points(`([{`)
-  closing := code_points(`)]}`)
-  quote := code_points(`"`).head.value
-  apart := code_points(separator).head.value
-  code_points(written) for {
-    point := it.value
-    if (point == quote) { quoted = !quoted }
-    unless quoted {
-      if (opening.contains(point)) { depth = depth.succ }
-      if (closing.contains(point)) { depth = depth.pred }
-    }
-    if (depth.is_zero && !quoted && (point == apart)) {
-      items &= piece.as(String).trimmed
-      piece = chain None
-    } else { piece &= point }
-  }
-  if piece.head { items &= piece.as(String).trimmed }
-  items
-)
-header_word (item) => (
-  word := chain None
-  ended := false
-  code_points(item) for {
-    unless ended { if (it.value.word) { word &= it.value } else { ended = true } }
-  }
-  (word.head && !word.head.value.digit) ? word.as(String) : None
-)
-header_field (item) => (
-  named := header_word(item)
-  field := None
-  if named {
-    rest := item.slice(named.count, item.count).trimmed
-    if (rest.empty || rest.starts_with(`:`) || rest.starts_with(`?:`) || rest.starts_with(`=`) || rest.starts_with(`|`)) { field = named }
-  }
-  field
-)
-argument_name (item) => (
-  named := header_word(item)
-  given := None
-  if named {
-    rest := item.slice(named.count, item.count)
-    if (rest.starts_with(`:`) && !rest.starts_with(`::`)) { given = named }
-  }
-  given
-)
-positional_of (type) => (
-  unless type.positional_names { type.positional_names = header_names(type.header) }
-  type.positional_names
-)
-// The pieces of code between separators written outside brackets (`a: T, b: U` at `,`).
-header_parts (written, separator) => (
-  found_parts := chain None
-  pending_part := written
-  while ((pending_part === None).not) {
-    one_part := external before pending_part separator
-    if (one_part === None) {
-      found_parts &= pending_part
-      pending_part = None
-    } else {
-      found_parts &= one_part
-      pending_part = external after pending_part separator
-    }
-  }
-  found_parts
-)
-first_names (names, k) => (
-  taken := chain None
-  names for { if (taken.count < k) { taken &= it.value } }
-  taken
-)
-// The partial parameters written in `<…>` (`T`, `T = default`, `T: Type = default`): their names, and each declared in `into`
-// as its default (Node when it has none).
-partial_names (written) => (
-  names := chain None
-  rest := written
-  while rest {
-    item := external before rest `,`
-    unless item { item = rest }
-    rest = external after rest `,`
-    head := external before item `=`
-    unless head { head = item }
-    named := external before head `:`
-    unless named { named = head }
-    names &= named
-  }
-  names
-)
-declare_partials (written, into) => (
-  rest := written
-  while rest {
-    item := external before rest `,`
-    unless item { item = rest }
-    rest = external after rest `,`
-    head := external before item `=`
-    given := external after item `=`
-    unless head { head = item }
-    named := external before head `:`
-    unless named { named = head }
-    held := Node
-    if given { held = inline given }
-    external extend into {
-      (inline named) := held
-    }
-  }
-  into
-)
-// Text read through a class header (T4.10, types are patterns): `text as T` for a T with a header reads the text item by item
-// along the header, a field taking the text up to the literal after it (`as (.header)` in Node).
-// Whether a piece of code is there (code is tested by `=== None`, not by what it reads as).
-present (x) => (x === None).not
-literal_item (item) => present(external after item `"`) && (present(external before item `"`)).not
-// An instance of a type whose fields are set by its reader: the class body is not read again.
-read_instance (type) => (
-  this := external .
-  this.components = chain None
-  this.components.hierarchy = chain this
-  this.components.hierarchy &= type
-  this.instance = global
-  this
-)
-header_read (text, type) => (
-  unless type.read_steps { type.read_steps = steps_of(type.header) }
-  made := read_instance(type)
-  if ((read_steps(type.read_steps.head, text, made)) === Unread) { made = None }
+// A text is `T` when the two are walked together, vertex by vertex (Ray's own matching): a vertex's value is matched where the walk
+// is, and the walk goes on at its `next`. What a vertex holds: a text, its characters, one place each; a Ray (a list's links, an
+// Iterable's `Vertex` once and then optionally again), entered, the walk going on after it once it ends; a superposition, any of
+// its components (#); nothing, nothing; a narrowing, a part that is what it narrows and satisfies its constraint (from a type
+// without rules of its own a text holds nothing: said once, to the reader too); anything else (a named type: a value with rules of
+// its own, an Iterable), a part it holds (the reader's check: once per type and part).
+// The vertices `T` is walked as: an Iterable of `Vertex`, one `Vertex` and then optionally the Iterable again; anything else, itself.
+// (A named type met inside another is a part the reader checks once per text: its own vertices are walked only when it is asked.)
+{this: Tight}.vertices_of =>
+  v := this
+  first := external node
+  external goto itself ((external get v Vertex) ? (v.inside(Iterable) ? None : true) : true)
+  more := external node
+  more.value = (v.optional_again)
+  first.value = external get v Vertex
+  first.next = more
+  external goto done
+  external label itself
+  first.value = v
+  external label done
+  first
+// Whether the text from `this` to `to` is the vertices from `link` on, then what `after` holds (the vertices left in the Rays the walk
+// entered, innermost first).
+{this: Tight}.walked({from_vertex}, {rays_left}, {text_end}) =>
+  here := this
+  l := from_vertex
+  above := rays_left
+  end := text_end
+  found := None
+  external goto vertex l
+  // (a Ray ended: on in the one around it, or, at the outermost, the text ends too)
+  external goto popped above
+  found = (external same here end) ? true : None
+  external goto done
+  external label popped
+  found = (here.walked((external get above link), (external get above below), end))
+  external goto done
+  external label vertex
+  v := external get l value
+  rest := external get l next
+  external goto nothing (v === None ? true : None)
+  external goto characters (external own v from)
+  external goto entered (external get v listing)
+  external goto any (external get v superposes)
+  external goto narrowed (external get v narrows)
+  // a part the value holds, and on after it (only one that reads text: its rules, a check, an Iterable's vertices)
+  external goto done ((external get v rules) ? None : ((external get v check) ? None : ((external get v Vertex) ? None : true)))
+  e := external get here next
+  external label leaf_end
+  external goto leaf_tried (e === None ? true : None)
+  part := external node
+  part.from = here
+  part.to = e
+  external goto leaf_on ((part.is_held_by(v)) ? true : None)
+  external label leaf_next
+  external goto leaf_tried (external same e end)
+  e = external get e next
+  external goto leaf_end
+  external label leaf_on
+  found = (e.walked(rest, above, end))
+  external goto done found
+  external goto leaf_next
+  external label leaf_tried
+  external goto done
+  external label nothing
+  found = (here.walked(rest, above, end))
+  external goto done
+  external label characters
+  at := here
+  c := external get v from
+  c_end := external get v to
+  external label character
+  external goto spelt (external same c c_end)
+  external goto done (external same at end)
+  external goto done ((external same (external get at character) (external get c character)) ? None : true)
+  at = external get at next
+  c = external get c next
+  external goto character
+  external label spelt
+  found = (at.walked(rest, above, end))
+  external goto done
+  external label entered
+  pending := external node
+  pending.link = rest
+  pending.below = above
+  found = (here.walked((external get v head), pending, end))
+  external goto done
+  external label any
+  component := external get (external get v components) head
+  external label next_component
+  external goto done (component ? None : true)
+  one := external node
+  one.value = external get component value
+  one.next = rest
+  found = (here.walked(one, above, end))
+  external goto done found
+  component = external get component next
+  external goto next_component
+  external label narrowed
+  inner := external get v narrows
+  external goto narrow_text (external get inner rules)
+  v.holds_no_text = true
+  external goto done
+  external label narrow_text
+  n_end := external get here next
+  external label narrow_end
+  external goto done (n_end === None ? true : None)
+  piece := external node
+  piece.from = here
+  piece.to = n_end
+  external goto narrow_on ((piece.is_held_by(inner)) ? ((piece.satisfies_constraint_of(v)) ? true : None) : None)
+  external label narrow_next
+  external goto done (external same n_end end)
+  n_end = external get n_end next
+  external goto narrow_end
+  external label narrow_on
+  found = (n_end.walked(rest, above, end))
+  external goto done found
+  external goto narrow_next
+  external label done
+  found
+// An Iterable optionally again (`T?`: nothing, or itself), made once for it.
+{this: Tight}.optional_again =>
+  v := this
+  made := external get v again
+  external goto done made
+  made = None.superposed_with(v)
+  external set v again made
+  external label done
   made
-)
+// Whether a text is a type (what the reader asks of a typed capture): a type with rules of its own, what they read whole; else the
+// two walked together.
+{text: Tight}.is_text_of({type}) =>
+  external goto by_rules (external get type rules)
+  external goto structure type
+  external goto done
+  external label structure
+  text.admitted_by(type)
+  external goto done
+  external label by_rules
+  text.read_with_rules_of(type)
+  external label done
+registry.text_is = registry.latest
+
+// `call` read in a frame where `this` is `this`; a closure it answers is called with it (`x -- call`, `x ~~ call`).
+{this: Tight}.continued({call}) =>
+  value := this
+  code := external get (external ** call) code
+  frame := external node
+  frame.outer = (external span code).frame
+  frame.this = value
+  result := external apply code None frame
+  result.method ? (result.applied_to(None, value)) : result
+
+Node := external node
+registry.base = Node
 Node &+= {
-  as (.header) => header_read(this, arguments)
+  .{literal property} =>
+    this.member(property, None)
+  .{literal property}{arguments: Bracketed} =>
+    this.member(property, arguments)
+  .{literal property} = {value} =>
+    external set this property value
+  // `,` composes one value, a list (no split, 2026-09-27): `a, b, c` is the list of `a`, `b` and `c`, each as written (a
+  // place or a value, read when it is used).
+  // (a list given more is that list with it at its end; a value given, not as written, the first of a new one)
+  ,{other: Item} =>
+    list := None
+    external goto as_written (external span this)
+    list = this
+    external goto last (external get list listing)
+    list = (None.listed_with_value(list))
+    external goto last
+    external label as_written
+    this_code := external get (external ** this) code
+    list = (None.listed_with_value(None))
+    external keep list.head value this_code
+    external label last
+    other_code := external get (external ** other) code
+    list = (list.listed_with_value(None))
+    external keep list.tail value other_code
+    list
+  // `x := value`, `x = value` on a value read first: a name as written declared (written) with it; a list of names, each with the
+  // value in its place
+  :={value} =>
+    external goto as_written (external span this)
+    this.declared_each(value)
+    external goto done
+    external label as_written
+    external declare this value
+    external label done
+  ={value} =>
+    external goto as_written (external span this)
+    value
+    external goto done
+    external label as_written
+    external assign this value
+    external label done
+  &={value} =>
+    list := this.listed_with_last(value)
+    external goto done ((external span this) ? None : true)
+    external assign this list
+    external label done
+    list
+  :{type} =>
+    this.declared_as(type, None)
+  :{type} = {default} =>
+    this.declared_as(type, default)
+  {arguments: Bracketed} =>
+    this.called(arguments)
+  // a comment after a value: the value
+  {`//`}{comment: Line} =>
+    this
+  // `x -- f`: `f` read with `this` being `x` (a closure it answers called with `x`): what it answers; `x ~~ f`: the same, for
+  // what it does, answering `x`
+  --{call: Line} =>
+    this.continued(call)
+  ~~{call: Line} =>
+    value := this
+    value.continued(call)
+    value
+  // `a | b`: both, superposed (U1); `T?`: `None | T`
+  |{other: Operand} =>
+    this.superposed_with(other)
+  ? =>
+    None.superposed_with(this)
+  // `T{p}`: what `T` admits that satisfies `p` (read with `this` being the candidate)
+  {{constraint: Balanced}} =>
+    made := external node
+    made.narrows = this
+    made.constraint = external ** constraint
+    made
+  // `x is T`: whether `T` admits `x` (T4.10)
+  { }is {type: Operand} =>
+    this.admitted_by(type) ? registry.true_value : registry.false_value
+  // `a && b`: `b` when `a` holds, else `a`; `a || b`: `a` when it holds, else `b` (the other side read only when it decides)
+  &&{other} =>
+    this ? other : this
+  ||{other} =>
+    this ? this : other
 }
-// What reading answers when the text is not read.
-Unread := class { }
-// A header's items, each said once what it is: a literal (`":"`), a group (`(…)?`), or a field (`name: T`, `T`), with the
-// literal after a field (which ends it).
-literal_step := class { }
-group_step := class { }
-field_step := class { }
-literal_of (x) => (
-  kind := literal_step
-  part := x
-  external .
-)
-group_of (x) => (
-  kind := group_step
-  inner := x
-  external .
-)
-field_of (x, y) => (
-  kind := field_step
-  named := x
-  ending := y
-  external .
-)
-steps_of (pending) => (
-  steps := chain None
-  while ((pending === None).not) {
-    part := external before pending `,`
-    if (part === None) { part = pending }
-    pending = external after pending `,`
-    repeated := (external before part `[]`) === None
-    made_step := None
-    if (literal_item(part) && repeated) { made_step = literal_of(inline part) }
-    elsif (((external before part `(`) === None) && ((external after part `(`) === None).not) {
-      inner_steps := steps_of(external before (external after part `(`) `)`)
-      made_step = group_of(inner_steps)
-    } elsif (literal_item(part).not) {
-      ending := None
-      unless (pending === None) {
-        next := external before pending `,`
-        if (next === None) { next = pending }
-        if (literal_item(next) && ((external before next `[]`) === None)) {
-          ending = inline next
-          pending = external after pending `,`
-        }
-      }
-      field_name := external before part `:`
-      made_step = field_of(field_name, ending)
-    }
-    unless (made_step === None) { steps &= made_step }
-  }
-  steps
-)
-// The steps read from the text `rest`, fields set on `made`: answers what is left of the text, or Unread.
-read_steps (at, rest, made) => (
-  while ((at === None).not) {
-    one := at.value
-    at = at.next
-    if (one.kind === literal_step) {
-      if ((external before rest one.part) === None) { rest = external after rest one.part } else {
-        rest = Unread
-        at = None
-      }
-    } elsif (one.kind === group_step) {
-      tried := read_steps(one.inner.head, rest, made)
-      unless (tried === Unread) { rest = tried }
-    } else {
-      piece := rest
-      unless (one.ending === None) {
-        piece = external before rest one.ending
-        rest = external after rest one.ending
-      }
-      if (piece === None) {
-        rest = Unread
-        at = None
-      } elsif ((one.named === None).not) {
-        field := one.named
-        external extend made {
-          (inline field) := piece
-        }
-      }
-    }
-  }
-  rest
-)
-named_arguments (args) => (
-  found := false
-  header_items((external ** args), `,`) for { if (argument_name(it.value)) { found = true } }
-  found
-)
-header_names (header) => (
-  names := chain None
-  alternatives := header_items(header, `|`)
-  alternatives for {
-    alternative := it.value
-    header_items(alternative, `,`) for {
-      item := it.value
-      named := header_field(item)
-      if named { unless (names.contains(named)) { names &= named } }
-      elsif (item.starts_with(`(`) && (header_items(item, `|`).count == 1)) {
-        header_names(item.slice(1, item.count.pred)) for { unless (names.contains(it.value)) { names &= it.value } }
-      }
-    }
-  }
-  names
-)
-header_type (header) => (
-  read := None
-  alternatives := header_items(header, `|`)
-  if (alternatives.count > 1) {
-    alternatives for {
-      one := header_type(it.value)
-      if read { read = read | one } else { read = one }
-    }
-  } else {
-    header_items(header, `,`) for {
-      item := it.value
-      named := header_field(item)
-      one := None
-      if named {
-        typed := header_items(item.slice(named.count, item.count).trimmed, `=`).head.value
-        if (typed.starts_with(`?:`)) { typed = typed.slice(2, typed.count).trimmed + `?` }
-        elsif (typed.starts_with(`:`)) { typed = typed.slice(1, typed.count).trimmed }
-        else { typed = `*` }
-        one = Capture(name: named, type: inline (external ** typed))
-      } elsif (item.starts_with(`(`)) { one = header_type(item.slice(1, item.count.pred)) }
-      else { one = inline (external ** item) }
-      if read { read = read, one } else { read = [one] }
-    }
-  }
-  read
-)
-header_statements (header) => (
-  statements := chain None
-  header_items(header, `,`) for { if (header_field(it.value)) { statements &= it.value } }
-  statements.join(`
-`)
-)
 
-class = {header}{ }{`{`}{members?}{`}`} ^keyword => (
-  made := class {
-    inline header
-    inline members
-  }
-  made.header = external ** header
+// ---------------------------------------------------------------- modifiers: words before a definition's head, kept on its rule
+static := external node
+static.modifier = true
+chainable := external node
+chainable.modifier = true
+compounds := external node
+compounds.modifier = true
+right-to-left := external node
+right-to-left.modifier = true
+left-to-right := external node
+left-to-right.modifier = true
+// ---------------------------------------------------------------- classes (R4.4)
+// A class's block read for the class itself: what a construction under way was given is not its (its fields take no arguments).
+{static: Tight}.read_as_class({block}) =>
+  // (a capture is read where it is named: one that makes something is named once)
+  made := static
+  saved_given := external get registry given
+  saved_naming := external get registry naming
+  external set registry given None
+  external set registry naming None
+  code := external get (external ** block) code
+  external apply code None made
+  external set registry given saved_given
+  external set registry naming saved_naming
   made
-)
-class ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
-  made := class {
-    inline header
-    inline members
-  }
-  made.header = external ** header
+// A class: the frame its block is read in, inside the frame it was written in (`outer`); its statics, its fields' defaults and its
+// methods are that frame's; `extends`, the class it extends (or nothing). Calling it makes an instance.
+{block: Tight}.class_of({parent}) =>
+  made := external node
+  made.outer = (external span block).frame
+  made.class = true
+  made.extends = parent
+  made.written = external ** block
+  made.read_as_class(block)
+  registry.classes_changed = true
   made
-)
-class ({header}){ }{`{`}{members?}{`}`} ^keyword => (
-  made := class {
-    inline header
-    inline members
-  }
-  made.header = external ** header
+// A class made from a header (code, `values: Iterable`, `(x: T, y)`) and the class it extends (or nothing): its items (separated by
+// `,` outside brackets) read as its block is (a typed one a field, given in order when an instance is made).
+{source: Tight}.header_class({parent}) =>
+  made := external node
+  made.outer = (external span source).frame
+  made.class = true
+  made.extends = parent
+  made.header = external ** source
+  made.read_header_into(made)
   made
-)
-class ({header}) {`=>`} {single} ^keyword => (
-  made := class {
-    inline header
-    inline single
-  }
-  made.header = external ** header
+// A class given its block: read in it, and kept to be read again in each instance.
+{static: Tight}.with_block({block}) =>
+  made := static
+  made.written = external ** block
+  made.read_as_class(block)
+  registry.classes_changed = true
   made
-)
-class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => (
-  made := class {
-    inline header
-    inline members
-  }
-  made.components.hierarchy &= parent
-  external extend made parent
-  made.header = external ** header
+// A class's header read into `frame`: each of its items, as a statement.
+{static: Tight}.read_header_into({frame}) =>
+  made := static
+  written := made.header
+  external goto done (written ? None : true)
+  written.read_items_into(frame)
+  external label done
   made
-)
-class:{ }{parent} ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
-  made := class {
-    inline header
-    inline members
-  }
-  made.components.hierarchy &= parent
-  external extend made parent
-  made.header = external ** header
-  made
-)
-class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => (
-  made := class {
-    inline header
-    inline members
-  }
-  made.components.hierarchy &= parent
-  external extend made parent
-  made.header = external ** header
-  made
-)
+// A class's block read again in an instance being made, after the blocks of the classes it extends.
+{static: Tight}.read_into({instance}) =>
+  class_read := static
+  parent := class_read.extends
+  external goto parents_read (parent ? None : true)
+  parent.read_into(instance)
+  external label parents_read
+  class_read.read_header_into(instance)
+  block := class_read.written
+  external goto done (block ? None : true)
+  code := external get block code
+  external apply code None instance
+  external label done
+  instance
+// An instance of a class: a frame inside it, with the class's block read again there, where a definition is the class's and a field
+// takes what the arguments give it (by name, or in order).
+{static: Tight}.constructed({arguments}) =>
+  instance := external node
+  instance.outer = static
+  instance.instance = true
+  instance.this = instance
+  outer_given := external get registry given
+  outer_naming := external get registry naming
+  external set registry given None
+  external set registry naming None
+  // the arguments as written (code passed on is followed to where it was written), or a value given
+  given_node := external ** arguments
+  given_value := external get given_node value
+  external goto as_written (given_value === None ? true : None)
+  external set registry given (given_value.listed)
+  external label as_written
+  written := external get given_node code
+  // (code held in a name is read where the name is: whether there is any is asked of where it is written)
+  external goto read ((external span written) ? None : true)
+  external goto by_name (written.named)
+  external set registry given (written.listed)
+  external goto read
+  external label by_name
+  naming_frame := external node
+  naming_frame.outer = (external span written).frame
+  external set registry naming instance
+  given_node.read_items_into(naming_frame)
+  external set registry naming None
+  external label read
+  // the parents' blocks first, then its own
+  static.read_into(instance)
+  external set registry given outer_given
+  external set registry naming outer_naming
+  instance
+// `x: T`, `x: T = default`: a name declared with a type. What is being constructed or called gives it its value: by name (its own
+// member already), or the next given in order; else `default` (read when the field first is), else nothing. While arguments are
+// given by name, a field is the type it is declared with.
+{this: Tight}.declared_as({type}, {default}) =>
+  where := external span this
+  // (a name with aliases, `initial | (⊢)`: declared as the first)
+  named_end := where.from.alternative_end(where.to)
+  place := external get (external ** this) code
+  external goto one_name (named_end === where.to ? true : None)
+  place = external get (external code where.from named_end this) code
+  external label one_name
+  naming := registry.naming
+  value := None
+  external goto by_order (naming === None ? true : None)
+  value = type
+  external set naming place value
+  external goto done
+  external label by_order
+  external goto by_name (external own where.frame place)
+  next := registry.given
+  external goto by_default (next ? None : true)
+  value = next.value
+  registry.given = next.next
+  external declare place value
+  external goto done
+  external label by_name
+  value = external get where.frame place
+  external declare place value
+  external goto done
+  external label by_default
+  external keep where.frame place default
+  external label done
+  value
+// Calling a value: a class makes an instance of itself; a closure runs; a program is entered where it was written, the arguments
+// bound to its parameters.
+{this: Tight}.called({arguments}) =>
+  value := this
+  external goto construct (external get value class)
+  external goto method (external get value method)
+  external goto maybe_program (external get value instance)
+  external label nothing
+  None
+  external goto done
+  external label maybe_program
+  external goto nothing ((external get value outer) === registry.program_class ? None : true)
+  value.entered_in((external get value context), (arguments === None ? None : (arguments.listed)))
+  external goto done
+  external label construct
+  value.constructed(arguments)
+  external goto done
+  external label method
+  (value.applied_to(None, arguments))
+  external label done
 
-static ({parameters ^parameter}) {`=>`} {block} ^keyword => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  external define this `{arguments}` {
-   method_recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-)
-static{ }{name ^property}: {type} = {value} ^keyword => (
-  goto instance if constructing
+class {{block: Balanced}} =>
+  block.class_of(None)
+// `class: Parent { … }`: a class whose instances are also its parent's (its rules and fields too).
+class: {parent} {{block: Balanced}} =>
+  block.class_of(parent)
+// A class written with a header (`class = values: Iterable { … }`, `class (x: T, y) { … }`).
+class = {header: Balanced} {{block: Balanced}} =>
+  header.header_class(None).with_block(block)
+class = {header: Balanced} =>
+  header.header_class(None)
+class: {parent: Tight} = {header: Balanced} {{block: Balanced}} =>
+  header.header_class(parent).with_block(block)
+class: {parent: Tight} = {header: Balanced} =>
+  header.header_class(parent)
+class {header: Bracketed} {{block: Balanced}} =>
+  header.header_class(None).with_block(block)
+class: {parent: Tight} {header: Bracketed} {{block: Balanced}} =>
+  header.header_class(parent).with_block(block)
+
+// `enum a | b (field: v) | c { block }`: a class of exactly these members, each an instance of it named on it (`X.a`), in `members` in
+// order, knowing the ones beside it (`preceding`, `following`); a block after them is the class's own. Every enum is the language's
+// `Enum` (once there is one).
+enum {written: Item} =>
+  where := external span written
+  made := external node
+  made.outer = where.frame
+  made.class = true
+  made.enum = true
+  made.extends = registry.enum_class
+  from := where.from
+  to := where.to
+  members_to := to
+  block_at := from.trailing_block(to)
+  external goto members (block_at ? None : true)
+  // (the members end where their last word does)
+  members_to = block_at
+  external label trim
+  external goto trimmed (members_to.previous.character === space ? None : true)
+  members_to = members_to.previous
+  external goto trim
+  external label trimmed
+  block := external code block_at.next (to.before_place(block_at)) written
+  made.written = block
+  // (a local is never named as a member an external is given: the external would be given what it holds)
+  block_code := external get block code
+  external apply block_code None made
+  external label members
+  member_from := from
+  external label member
+  member_end := member_from.alternative_end(members_to)
+  name_end := member_from.name_end(member_end)
+  name := external get (external code member_from name_end written) code
+  fields := None
+  // (after the spaces after its name: none, no fields)
+  fields_from := name_end
+  external label spaces
+  external goto spaced (fields_from === member_end ? None : (fields_from.character === space ? true : None))
+  external goto made_one (fields_from === name_end ? true : (fields_from === member_end ? true : None))
+  external goto given
+  external label spaced
+  fields_from = fields_from.next
+  external goto spaces
+  external label given
+  fields = external get (external code fields_from member_end written) code
+  external label made_one
+  entry := made.constructed(fields)
+  external set made name entry
+  last_entry := made.last_member
+  external goto first (last_entry === None ? true : None)
+  last_entry.following = entry
+  entry.preceding = last_entry
+  external label first
+  made.last_member = entry
+  made.members = (made.members.listed_with_value(entry))
+  external goto done (member_end === members_to ? true : None)
+  member_from = (member_end.after_alternative)
+  external goto member
+  external label done
+  made
+
+// (`static` written as a literal: as a head's first word it names the modifier)
+// `static name = value` in a class: a member of the class (declared there, as `:=` does), read once; `static statement`: read once, for
+// the class, not again for each instance.
+{`static`} {name: Tight} = {value} =>
+  external goto done (external get (external span name).frame instance)
   external declare name value
-  name: type
- instance\
-)
-static{ }{name ^property}: {type} ^keyword => (
-  goto instance if constructing
-  name: type
- instance\
-)
-static{ }{head} ({parameters ^parameter}) => {block} ^keyword => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  external define head `{arguments}` {
-   method_recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-)
-static{ }{head} => {block} ^keyword => (
-  external rule head block
-)
-Modifier.spellings &= `static`
+  external label done
+{`static`} {statement} =>
+  external goto done (external get (external span statement).frame instance)
+  statement
+  external label done
 
-{condition} ? {if_true} : {if_false} ^punctuation => (
-  picked := if_false
-  if condition { picked = if_true }
-  picked
-)
+// `watched(program)`: run now, and again while it answers nothing when a class is made or added to (P5.1); what runs again makes or
+// adds to does not run it again (P5.2).
+{program: Tight}.watched_run =>
+  p := program
+  code := external get p.code code
+  fresh := external node
+  fresh.outer = (external span code).frame
+  answer := p.entered_in(fresh, None)
+  registry.classes_changed = None
+  external goto done (answer === None ? None : true)
+  waiting := external node
+  waiting.program = p
+  waiting.next = registry.waiting
+  registry.waiting = waiting
+  external label done
+  p
+watched({program: Balanced}) =>
+  program.watched_run
+// The programs waiting, run again (what the reader runs once a statement made or added to a class).
+rerunning_waiting =>
+  external goto done registry.rerunning
+  waiting := registry.waiting
+  external goto done (waiting ? None : true)
+  registry.rerunning = true
+  registry.waiting = None
+  external label next
+  waiting.program.watched_run
+  waiting = waiting.next
+  external goto next waiting
+  registry.rerunning = None
+  external label done
+  registry.classes_changed = None
+  None
+registry.rerun = registry.latest
+// `program.entered(element, given)`: its code read with `this` being `element` (P1).
+{program: Tight}.entered{arguments: Bracketed} =>
+  given_values := arguments
+  first := given_values.head
+  given := first.next.value
+  program.entered_in(first.value, (given === None ? None : (given.listed)))
 
+// ---------------------------------------------------------------- parameters of a class (`T<a>`), repetition (`T[]`)
+Node &+= {
+  <{given}> =>
+    base := this
+    written := external get (external ** given) code
+    made := external node
+    made.outer = (external span written).frame
+    made.class = true
+    made.extends = base
+    // (its parameters, or those of what it extends: `Array<T>` binds an Iterable's `Vertex`)
+    holder := base
+    names := None
+    external label find
+    names = external get holder parameters
+    external goto found names
+    holder = external get holder extends
+    external goto find holder
+    external label found
+    external goto done (names === None ? true : None)
+    made.bound(names, written.listed)
+    external label done
+    made
+}
+// The core of a Ray of values (Ray.ray adds the rest, R): an Iterable of `Vertex`, what each of its vertices is; an Array, one of
+// them in order. `T[]` is an Array of `T`.
+Iterable<Vertex> := class { }
+Array := class: Iterable { }
+Node &+= {
+  [] => Array<this>
+}
+// A program (P1): code, read where it was written (`context`) or entered on a value; with `parameters`, a closure of them. A
+// block (`{ … }`) is one.
+Program := class {
+  code: Node?
+  parameters: Node?
+  context: Node?
+  // as a map (T8.7): the names it declares, and each of them given to a closure
+  keys => this.declared_keys
+  for (body) => this.each_key(body)
+}
+global := external global
+registry.program_class = Program
 
-assert ^keyword (condition) => (
-  unless condition { ERROR `assertion failed` }
-
-  condition
-)
-
-enum ^keyword => (
-
-  static := class {
-    {literal member ^enumMember} ^punctuation => (
-      entry := this()
-      this[member] = entry ^enumMember
-      this.components &= entry
-
-      this
-    )
-    {literal member ^enumMember}{ }{given_fields ^property} ^punctuation => (
-      entry := this(
-        inline given_fields
-      )
-      this[member] = entry ^enumMember
-      this.components &= entry
-
-      this
-    )
-    |{ }{literal member ^enumMember} ^punctuation => (
-      entry := this()
-      this[member] = entry ^enumMember
-      this.components &= entry
-
-      this
-    )
-    |{ }{literal member ^enumMember}{ }{given_fields ^property} ^punctuation => (
-      entry := this(
-        inline given_fields
-      )
-      this[member] = entry ^enumMember
-      this.components &= entry
-
-      this
-    )
-
-    chainable == (candidate) => (
-      (this === candidate) || same_text((external where this), (external where candidate))
-    )
-    admits (candidate) => .components.contains(candidate)
-  }
-
-  static ^enum
-)
-
-enum{ }{literal member ^enumMember}{ }{given_fields? ^property}{ }{literal rest?} {`{`}{block}{`}`} ^keyword => (
-  static := external .
-  inline enum
-  inline block
-
-  entry := static(
-    inline given_fields
-  )
-  static[member] = entry ^enumMember
-  static.components &= entry
-  inline rest
-
-  static ^enum
-)
-
-enum{ }{literal member ^enumMember}{ }{given_fields? ^property}{ }{literal rest?}{\n} ^keyword => (
-  static := external .
-  inline enum
-
-  entry := static(
-    inline given_fields
-  )
-  static[member] = entry ^enumMember
-  static.components &= entry
-  inline rest
-
-  static ^enum
-)
-
-Program.components.hierarchy &= class {
-  optimizations => .O
-  // `Program{O: Compiler.default}` sets a setting; braces that declare nothing narrow it like any type (`Program{terminating}`).
-  {this}{`{`}{literal setting}{`}`} ^punctuation => (
-    written_setting := external ** setting
-    set := this
-    goto setting if ((external before written_setting `:`) === None).not
-    goto setting if ((external before written_setting `=`) === None).not
-    set = .narrowed_by(written_setting)
-    goto done
-   setting\
-    set = class: this { inline written_setting }
-   done\
-    set
-  )
-
-  written => (
-    out := chain None
-    left := .code
-    one := external first left
-    while (one) {
-      out &= Program(code: one)
-      left = external rest left
-      one = external first left
-    }
-    out
-  )
-  entry => .written.entry
-  first => .written.first
-  last => .written.last
-  count => .written.count
-  empty => .count.is_zero
-  // Over its keys; with no keys to go over (none can be read yet) it answers nothing.
-  for (body) => (
-    keyed := .keys
-    answered := None
-    unless (keyed === None) {
-      walker := keyed.head
-      while walker {
-        body(walker.value)
-        walker = walker.next
-      }
-      answered = this
-    }
-    answered
-  )
-
-  variables => (
-    names := chain None
-    statements := .written
-    statements for {
-      read := head_of(it.value.code)
-      if read.is_declared { names &= read.spelled }
-    }
-    names
-  )
-  usages (name) => (
-    used := chain None
-    statements := .written
-    statements for {
-      if (it.value.mentions(name)) { used &= it.value }
-    }
-    used
-  )
-  mentions (name) => (
-    found := None
-    at := text_bits(.code).head
-    while (at && found.not) {
-      found = prefix_of(at, name)
-      step := byte_steps.head
-      while (step && at) {
-        at = at.next
-        step = step.next
-      }
-    }
-    found
-  )
-  is_terminal => .written.empty
-  calls => (
-    found := chain None
-    statements := .written
-    statements for { found &= Call(statement: it.value) }
-    found
-  )
-
-  compounds + (addend) => (
-    augend := .code
-    {
-      inline augend
-      inline addend.code
-    }
-  )
+// `a; b`: both read, the value of the second.
+Node &+= {
+  ; (x) => x
 }
 
-LSP := {
-  SemanticToken := class {
-    Type := enum namespace | type | class | enum | interface | struct | typeParameter | parameter | variable | property | enumMember | event | function | method | macro | keyword | modifier | comment | string | number | regexp | operator | decorator
-    Modifier := enum declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary
-  }
+// A value kept only if a condition holds (`x if c`), or unless it does (`x unless c`).
+{guarded} if {condition} => condition ? guarded : None
+{guarded} unless {condition} => condition ? None : guarded
+
+// What every enum is: its members are themselves only (`==` is identity), `#` is its members in order, and a member's `next` and
+// `previous` are the members beside it (nothing past the ends).
+Enum := class {
+  == (other) => this === other ? true : false
+  # => this.members ?? this.outer.members
+  next => this.following
+  previous => this.preceding
 }
+registry.enum_class = Enum
 
-DARK := theme `Ether.ray - Dark` {
-
-  ^U0 = ^ #F2F0FF
-  ^U1 = ^ #C4B9FE
-  ^U2 = ^ #9A86FD
-  ^U3 = ^ #6C6783
-  ^U4 = ^ #97A4BF
-
-  ^D0 = ^ #F59E47
-  ^D1 = ^ #EBAE6B
-  ^D2 = ^ #FFCC99
-  ^D3 = ^ #A18565
-  ^D4 = ^ #8F8881
-
-  ^external = ^D0
-  ^label = ^D3
-
-  ^namespace = ^U2
-  ^type = ^U2
-  ^class = ^U2
-  ^enum = ^U2
-  ^interface = ^U2
-  ^struct = ^U2
-  ^event = ^U2
-  ^enumMember = ^U2
-  ^typeParameter = ^U0
-  ^parameter = ^U0
-  ^variable = ^U1
-  ^property = ^U1
-  ^function = ^U4
-  ^method = ^U4
-  ^decorator = ^U4
-  ^macro = ^U2
-  ^keyword = ^U3
-  ^modifier = ^U3
-  ^comment = ^U3
-  ^string = ^D2
-  ^number = ^D2
-  ^regexp = ^D2
-  ^operator = ^U4
-
-  ^character = ^D3
-  ^punctuation = ^comment
-  ^string.punctuation = ^D3
-
-  ^fatal = ^error
-  ^error = ^ #CD5C5C
-  ^warn = ^ #CDCD5C
-  ^info = ^ #5C5CCD
-  ^debug = ^ #5CCD5C
-  ^trace = ^comment
+boolean := enum false (holds: None) | true (holds: true) {
+  nand (b) => (holds && b.holds) ? false : true
+  not => nand(this)
+  and (b) => nand(b).not
+  or (b) => not.nand(b.not)
+  nor (b) => or(b).not
+  xor (b) => or(b).and(nand(b))
+  xnor (b) => xor(b).not
+  next => not
+  previous => not
+  // (the other side read only when it decides)
+  && (b) => holds ? b : this
+  || (b) => holds ? this : b
+  !&& (b) => nand(b)
+  !|| (b) => nor(b)
+  x|| (b) => xor(b)
+  x!|| (b) => xnor(b)
+  == (other) => this === other ? true : false
 }
-inline DARK
-
-Diagnostic := class {
-  message: Node
-  type: Node?
-  fatal: Node?
-  cause: Node?
-  trace: Node?
-
-  origin => trace.head.value
-  caught_by (catching) => if (type && (type !== *)) { (type === catching) || type.instance_of(catching) } else { origin === catching }
-
-  causes => (
-    all := chain None
-    all &= this
-    if cause { extended_by(all, cause.causes.head) }
-    all
-  )
-}
-
-FATAL{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^fatal => (
-  report FATAL comment comment
-  &caller.return(Diagnostic(message: comment, type: type, fatal: true, trace: &caller.trace))
-)
-ERROR{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^error => (
-  report ERROR comment comment
-  raised := Diagnostic(message: comment, type: type, trace: &caller.trace)
-  &caller.filed &= raised
-  raised
-)
- WARN{`@` ^punctuation}{var}{ }{comment ^comment} ^warn => report WARN var comment
- INFO{`@` ^punctuation}{var}{ }{comment ^comment} ^info => report INFO var comment
-DEBUG{`@` ^punctuation}{var}{ }{comment ^comment} ^debug => report DEBUG var comment
-TRACE{`@` ^punctuation}{var}{ }{comment ^comment} ^trace => report TRACE var comment
-
-FATAL{ }{comment ^comment} ^fatal => FATAL@* comment
-ERROR{ }{comment ^comment} ^error => ERROR@* comment
- WARN{ }{comment ^comment} ^warn => WARN@* comment
- INFO{ }{comment ^comment} ^info => INFO@* comment
-DEBUG{ }{comment ^comment} ^debug => DEBUG@* comment
-TRACE{ }{comment ^comment} ^trace => TRACE@* comment
-
-TODO{ }{comment ^comment} ^debug => DEBUG@. comment 
-TODO ^debug => None
-
-boolean := enum false (holds: None) | true (holds: global) {
-  nand (b) => (.holds && (b as boolean).holds) ? false : true
-
-  not => .nand(this)
-
-  and (b) => .nand(b).not
-  or (b) => .not.nand(b.not)
-  nor (b) => .or(b).not
-  xor (b) => .or(b).and(.nand(b))
-  xnor (b) => .xor(b).not
-
-  as (=== boolean) => this // TODO generalized on Node with .type
-
-  next => .not
-  previous => .not
-
-  && (b) => .and(b)
-  || (b) => .or(b)
-  !&& (b) => .nand(b)
-  !|| (b) => .nor(b)
-  x|| (b) => .xor(b)
-  x!|| (b) => .xnor(b)
-}
-
 true := boolean.true
 false := boolean.false
+registry.true_value = true
+registry.false_value = false
 
-{guarded} if {condition} => (
-  kept := None
-  if condition { kept = guarded }
-  kept
+// `a ?? b`: `a`, or `b` when `a` is nothing.
+Node &+= {
+  ?? (other) => this === None ? other : this
+}
+
+// `!x`: whether `x` does not hold.
+!{x} => x ? false : true
+
+// A block comment is nothing: on its own, and between operands (what it follows is what the whole is). Nested ones are read
+// whole: the comment ends at the `*/` the statement ends with.
+/*{comment?}*/ => None
+Node &+= {
+  /*{comment?}*/ => this
+}
+
+// ---------------------------------------------------------------- jumps (R3.1): a program's edges
+goto {literal target} => external goto target
+goto {literal target} if {condition} => (
+  taken := condition ? true : None
+  external goto target taken
 )
-{guarded} unless {condition} => (
-  kept := guarded
-  if condition { kept = None }
-  kept
+{literal label}\ => external label label
+
+// ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
+// What `if` answers: whether a block was taken and what it answered; `else` and `elsif` on it, on the same line or the next,
+// choose what the whole answers.
+Branch := class {
+  taken: Node
+  answer: Node
+  else {{otherwise: Balanced}} => taken ? answer : otherwise
+  {\n}else {{otherwise: Balanced}} => taken ? answer : otherwise
+  elsif {condition} {{yes: Balanced}} => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
+  {\n}elsif {condition} {{yes: Balanced}} => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
+}
+if := class {
+  { }{condition} {{yes: Balanced}} => condition ? Branch(true, yes) : Branch(None, None)
+}
+unless := class {
+  { }{condition} {{yes: Balanced}} => condition ? Branch(None, None) : Branch(true, yes)
+}
+while := class {
+  { }{condition} {{body: Balanced}} => (
+   loop_continue\
+    goto loop_break if !condition
+    body
+    goto loop_continue
+   loop_break\
+    None
+  )
+}
+loop := class {
+  { }{{body: Balanced}} => (
+   loop_continue\
+    body
+    goto loop_continue
+   loop_break\
+    None
+  )
+}
+// `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in.
+break => external goto loop_break
+continue => external goto loop_continue
+return {value} =>
+  value
+  external goto return
+
+// ---------------------------------------------------------------- diagnostics (R5.1): values, each with the place it is about
+Diagnostic := class {
+  message: Node
+  type: Node
+  fatal: Node
+}
+ERROR{`@`}{type} {message} =>
+  external report (external span message).from (external span message).to message
+  Diagnostic(message: message, type: type)
+ERROR {message} =>
+  external report (external span message).from (external span message).to message
+  Diagnostic(message: message)
+FATAL{`@`}{type} {message} =>
+  external report (external span message).from (external span message).to message
+  Diagnostic(message: message, type: type, fatal: true)
+FATAL {message} =>
+  external report (external span message).from (external span message).to message
+  Diagnostic(message: message, fatal: true)
+TODO {message} => None
+WARN{`@`}{type} {message} =>
+  external report (external span message).from (external span message).to message
+INFO{`@`}{type} {message} =>
+  external report (external span message).from (external span message).to message
+DEBUG{`@`}{type} {message} =>
+  external report (external span message).from (external span message).to message
+WARN {message} =>
+  external report (external span message).from (external span message).to message
+INFO {message} =>
+  external report (external span message).from (external span message).to message
+TODO => None
+
+// `assert (condition)`: an error when it does not hold; the condition.
+assert (condition) => (
+  unless condition { ERROR `assertion failed` }
+  condition
 )

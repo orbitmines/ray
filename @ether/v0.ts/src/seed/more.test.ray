@@ -16,3 +16,10 @@ t := `some text`
 say t
 ERROR `something failed`
 TODO `later`
+l := None
+l &= a
+l &= t
+say (l.head.value === a)
+say (l.tail.value === t)
+assert (a)
+assert (None)

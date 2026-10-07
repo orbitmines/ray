@@ -79,15 +79,16 @@ export class Seed {
     this.externals.set('rule', (frame, [pattern, body]) => self.define(self.code_of(pattern), self.code_of(body)));
     this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); if (process.env.SEED_DBG && n.s === 'Item') { const vv = self.force(value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = self.force(value); n.frame.members.set(n.s, v); return v; });
     this.externals.set('node', () => new Node());
-    // a node's `parent` (the frame it was made in), and a frame's `caller` and `rule` (as a node), read like any member
-    this.externals.set('get', (frame, [of, name]) => { const n = self.force(of) as Node | undefined, k = self.code_of(name).s; return !(n instanceof Node) ? undefined : n.members.has(k) ? n.members.get(k) : k === 'parent' ? n.parent : k === 'caller' ? n.caller : k === 'rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
+    // a node's `outer` (the frame it was made in), and a frame's `caller_frame` and `applied_rule` (as a node), read like members
+    // (named so no member a program sets is taken for them)
+    this.externals.set('get', (frame, [of, name]) => { const n = self.force(of) as Node | undefined, k = self.code_of(name).s; return !(n instanceof Node) ? undefined : n.members.has(k) ? n.members.get(k) : k === 'outer' ? n.parent : k === 'caller_frame' ? n.caller : k === 'applied_rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
     // a name written where it was declared (the nearest frame from where it was written that has it, else there)
     this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = self.force(value); if (process.env.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; (at ?? c.frame).members.set(k, v); return v; });
     // a member set to code as written, unread (read where the member is read)
     this.externals.set('keep', (frame, [of, name, value]) => { const o = self.force(of) as Node; o.members.set(self.code_of(name).s, value); return value; });
     // whether a node has a member of its own (one set there, even to nothing)
     this.externals.set('own', (frame, [of, name]) => { const n = self.force(of); return n instanceof Node && n.members.has(self.code_of(name).s) ? true : undefined; });
-    this.externals.set('set', (frame, [of, name, value]) => { const v = self.force(value), o = self.force(of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'parent') { if (process.env.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); o.parent = v as Node | undefined; } else o.members.set(k, v); return v; });
+    this.externals.set('set', (frame, [of, name, value]) => { const v = self.force(value), o = self.force(of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'outer') { if (process.env.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); o.parent = v as Node | undefined; } else o.members.set(k, v); return v; });
     // the frame a name is bound in: the nearest from where it was written that has it (even holding nothing), else that one
     this.externals.set('declaring', (frame, [name]) => { const c = self.code_of(name), k = c.s.trim(); for (let n: Node | undefined = c.frame; n; n = n.parent) if (n.members.has(k)) return n; return c.frame; });
     this.externals.set('same', (frame, [a, b]) => self.force(a) === self.force(b) ? true : undefined);
@@ -525,7 +526,7 @@ export class Seed {
     const version = body.planner === undefined && this.planner !== undefined ? -1 : this.reach_version(body.frame);
     this.compiles++;
     // the entrypoint's code is read once, by the rules in force then (R0.5), unless it left something unread
-    if (kept !== undefined && (kept.version === version || (body.text === this.boot_text && !kept.unread))) return kept.fn;
+    if (kept !== undefined && (kept.version === version || (body.text === this.boot_text && !kept.unread && !process.env.SEED_REREAD))) return kept.fn;
     this.recompiles++;
     const steps = this.expand(this.steps_of(body), body, 0);
     const labels = new Map<string, number>();
@@ -677,7 +678,17 @@ export class Seed {
         const frame = new Node(this.global); frame.caller = scope;
         const cap = this.handed.pieces.find(x => 'cap' in x) as { cap: string };
         frame.members.set(cap.cap, this.place(text, p));
-        const next = this.compiled(this.handed)(frame) as Node | undefined;
+        let next: Node | undefined;
+        try { next = this.compiled(this.handed)(frame) as Node | undefined; }
+        catch (x) {
+          if (x instanceof Jump) throw x;
+          // a statement that failed: said where it starts, and reading goes on at the next line that is not indented
+          const message = x instanceof Error ? x.message : String(x), trace = (x as { ray?: string[] }).ray ?? [];
+          let e = s.indexOf(end, p); while (e >= 0 && (s.startsWith(end, e + end.length) || s.startsWith(this.learned!.indent, e + end.length) || s.startsWith(this.learned!.space, e + end.length))) e = s.indexOf(end, e + end.length);
+          this.say(`Failed: ${message}${trace.length ? ' (in ' + trace[0] + ')' : ''}`, { text, b: p, e: e < 0 ? s.length : e });
+          p = e < 0 ? s.length : e + end.length;
+          continue;
+        }
         const w = next === undefined ? undefined : this.where.get(next);
         if (next !== undefined && w === undefined) throw new Error(`the reader answered ${this.show(next)}, not a place, after \`${s.slice(p, p + 60)}\``);
         p = w === undefined ? s.length : w.i;

@@ -845,7 +845,7 @@ top := external .
           first = link
         last = link
       links = links.next
-    here = here.parent
+    here = here.outer
     if here === outside
       here = None
   first
@@ -1080,7 +1080,7 @@ top := external .
       if keep
         at.considered(rule, limit, state)
       capture_led = capture_led.next
-    here = here.parent
+    here = here.outer
   best := state.best
   if best
     best.rule = state.rule
@@ -1428,7 +1428,11 @@ top := external .
       at = at.skip_blank(to)
     if at
       limit := at.statement_end(to, base)
-      made := at.step(limit, scope)
+      // the last statement of a body ends where its last word does (`{ a }`)
+      read_to := limit
+      if limit === to
+        read_to = at.trimmed(to)
+      made := at.step(read_to, scope)
       if last
         last.next = made
       unless last
@@ -1846,13 +1850,13 @@ external planner plan_rule
 {given}.read_statement =>
   here := external .
   // the scope read in applies the reader; the language's text and a project's files are read inside the language's scope
-  scope := here.caller
+  scope := here.caller_frame
   if registry.language_text
     if scope === top
       scope = registry.language_scope
     unless scope === registry.language_scope
-      unless scope.parent === registry.language_scope
-        scope.parent = registry.language_scope
+      unless scope.outer === registry.language_scope
+        scope.outer = registry.language_scope
   at := given.skip_blank(None)
   limit := None
   if at
@@ -1936,7 +1940,7 @@ external reader reader
     if held
       frame = None
     if frame
-      frame = frame.parent
+      frame = frame.outer
   if held
     value = held
   unless held
@@ -2038,7 +2042,7 @@ registry.sender = sent_rule
         if ancestor
           ancestor = ancestor.extends
     if here
-      here = here.parent
+      here = here.outer
   found
 
 // The class a value is an instance of (or the class itself) that extends another: what it extends, or nothing.
@@ -2050,7 +2054,7 @@ registry.sender = sent_rule
       found = here.extends
       here = None
     if here
-      here = here.parent
+      here = here.outer
   found
 
 // The `this` a frame sees: its own, or the nearest frame around it that has one.
@@ -2062,7 +2066,7 @@ registry.sender = sent_rule
       found = here.this
       here = None
     if here
-      here = here.parent
+      here = here.outer
   found
 
 // What `arguments` give, in order (code, read here): a chain of `value`s, or of `item`s (code as written, `,`).
@@ -2143,20 +2147,20 @@ registry.sender = sent_rule
 // frame of its own. A `return` in it ends it.
 // (The frame a method runs in holds its captures: what runs it keeps its own names in a frame of its own.)
 {frame}.method_run =>
-  method := frame.rule
+  method := frame.applied_rule
   receiver := None
   if frame.has(this)
     receiver = frame.this
   unless frame.has(this)
-    caller := frame.caller
+    caller := frame.caller_frame
     receiver = caller.this_seen
   frame.this = receiver
   scope := method.scope
   if receiver
     if receiver.inside(scope)
-      frame.parent = receiver
+      frame.outer = receiver
   inner := external node
-  inner.parent = frame
+  inner.outer = frame
   parameters := method.parameters
   if parameters
     given := None
@@ -2180,7 +2184,7 @@ runner := registry.latest
 // Parameters bound in `frame` to what `given` (a chain of arguments) gives, in order: `(parameters) := arguments` (a name
 // declared with a type takes the next argument given, a bare name the next one left).
 {frame}.bound({parameters}, {given}) =>
-  outer := registry.given
+  saved_given := registry.given
   registry.given = given
   written_parameters := parameters.code
   if written_parameters.is_place
@@ -2200,7 +2204,7 @@ runner := registry.latest
               external set frame code left.argument
               registry.given = left.next
         item = item.next
-  registry.given = outer
+  registry.given = saved_given
   frame
 
 // Whether code starts with a block's bracket.
@@ -2350,6 +2354,8 @@ Ticked := Unticked[]
 `{text: Ticked}` =>
   external span text
 ticked_rule := registry.latest
+// what is said when there is nothing to add to
+nothing_extended := `nothing to add to (it is not defined yet)`
 
 // ---------------------------------------------------------------- brackets: what they hold is balanced
 // Balanced text: every bracket it opens it closes, in order, and it closes none it did not open; quoted text is skipped.
@@ -2690,6 +2696,21 @@ Unbraced := opening_block.anything_but[]
         item = item.next
   found
 
+// `x &= value`: the list `x` holds with `value` at its end; a new one when it holds nothing (and `x` written with it).
+{this}.appended({value}) =>
+  list := this
+  given := value
+  if list
+    unless list.listing
+      list = None.listed_with_value(list)
+  found := list.listed_with_value(given)
+  if this.is_place
+    written := external ** this
+    place := written.code
+    holder := external declaring place
+    external set holder place found
+  found
+
 // `x = value`: written where the place was declared.
 {this}.assigned({value}) =>
   found := value
@@ -2739,14 +2760,14 @@ Unbraced := opening_block.anything_but[]
   found
 
 // A class made from a header (code), a block (code, or nothing) and the class it extends (or nothing).
-{header}.header_class({parent}) =>
-  where := external span header
+{source}.header_class({parent}) =>
+  where := external span source
   made := external node
-  made.parent = where.frame
+  made.outer = where.frame
   made.class = true
   if parent
     made.extends = parent
-  made.header = external ** header
+  made.header = external ** source
   made.read_header_into(made)
   made
 
@@ -2882,7 +2903,7 @@ Unbraced := opening_block.anything_but[]
   code := written.code
   where := external span code
   frame := external node
-  frame.parent = where.frame
+  frame.outer = where.frame
   frame.this = value
   result := external apply code None frame
   if result.method
@@ -2938,7 +2959,7 @@ Unbraced := opening_block.anything_but[]
       code := written.code
       where := external span code
       frame := external node
-      frame.parent = where.frame
+      frame.outer = where.frame
       frame.this = value
       found = external apply code None frame
       found = found.holds_true
@@ -2976,7 +2997,7 @@ Unbraced := opening_block.anything_but[]
 // and a field takes what the arguments give it (by name, or in order).
 {static}.constructed({arguments}) =>
   instance := external node
-  instance.parent = static
+  instance.outer = static
   instance.instance = true
   instance.this = instance
   outer_given := registry.given
@@ -2995,7 +3016,7 @@ Unbraced := opening_block.anything_but[]
     if written.named
       where := external span written
       naming_frame := external node
-      naming_frame.parent = where.frame
+      naming_frame.outer = where.frame
       registry.naming = instance
       external apply written None naming_frame
       registry.naming = None
@@ -3139,6 +3160,9 @@ registry.language = true
 // `x.member = value`: the member set.
 {x: Tight}.{literal member} = {value} =>
   external set x member value
+// `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing).
+{target: Tight} &= {value} =>
+  target.appended(value)
 // `name = value`: written where the name was declared.
 {target: Tight} = {value} =>
   target.assigned(value)
@@ -3152,13 +3176,13 @@ registry.language = true
   x.member(member, None)
 // `.member`, `.member = value`, `.member(arguments)`: of `this` (what the statement's frame sees as `this`).
 .{literal member} = {value} =>
-  receiver := (external .).caller.this_seen
+  receiver := (external .).caller_frame.this_seen
   external set receiver member value
 .{literal member}{arguments: Bracketed} =>
-  receiver := (external .).caller.this_seen
+  receiver := (external .).caller_frame.this_seen
   receiver.member(member, arguments)
 .{literal member} =>
-  receiver := (external .).caller.this_seen
+  receiver := (external .).caller_frame.this_seen
   receiver.member(member, None)
 
 // ---------------------------------------------------------------- what every value has (the base)
@@ -3189,7 +3213,13 @@ Node := type
   // `x &+= { … }`: what the block defines, added to `x` (R4.3)
   &+={ }{{members: Balanced}} =>
     extended := this
-    external apply members None extended
+    if extended
+      external apply members None extended
+    unless extended
+      where := external span members
+      at := where.from
+      limit := where.to
+      external report at limit nothing_extended
     extended
   // `x -- f`: `f` read with `this` being `x` (a closure it answers called with `x`): what it answers; `x ~~ f`: the same, for
   // what it does, answering `x`
@@ -3232,7 +3262,7 @@ left-to-right.modifier = true
 class {{block: Balanced}} =>
   where := external span block
   made := external node
-  made.parent = where.frame
+  made.outer = where.frame
   made.class = true
   made.written = external ** block
   external apply block None made
@@ -3241,7 +3271,7 @@ class {{block: Balanced}} =>
 class: {parent} {{block: Balanced}} =>
   where := external span block
   made := external node
-  made.parent = where.frame
+  made.outer = where.frame
   made.class = true
   made.extends = parent
   made.written = external ** block
@@ -3252,7 +3282,7 @@ class: {parent} {{block: Balanced}} =>
 enum {written: Item} =>
   where := external span written
   made := external node
-  made.parent = where.frame
+  made.outer = where.frame
   made.class = true
   made.enum = true
   from := where.from
@@ -3320,7 +3350,7 @@ static {statement} =>
 // ================================================================ the language, in its own terms
 // From here the entrypoint is read as any file of the language is (with the language's rules, not the reader's).
 language_scope := external node
-language_scope.parent = top
+language_scope.outer = top
 registry.language_scope = language_scope
 registry.language_text = true
 
@@ -3438,3 +3468,9 @@ FATAL {message} =>
   Diagnostic(message: message, fatal: true)
 TODO {message} => None
 TODO => None
+
+// `assert (condition)`: an error when it does not hold; the condition.
+assert (condition) => (
+  unless condition { ERROR `assertion failed` }
+  condition
+)

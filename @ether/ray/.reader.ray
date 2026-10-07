@@ -839,9 +839,8 @@ pipe := mark.character
       // what a capture holds is balanced: it closes every bracket it opens, and none it did not (the last piece runs to the
       // statement's end, which is)
       unless piece_type
-        unless pieces.raw
-          if rest_pieces
-            worth = at.balanced_to(e)
+        if rest_pieces
+          worth = at.balanced_to(e)
     // a capture taken as written that ends the head takes one word
     if worth
       if pieces.raw
@@ -1975,8 +1974,9 @@ seed_definer.defines = true
   if registry.language_text
     if scope === top
       scope = registry.language_scope
+    // (a scope directly in the top; one inside another project's scope sees the language through it)
     unless scope === registry.language_scope
-      unless scope.outer === registry.language_scope
+      if scope.outer === top
         scope.outer = registry.language_scope
   at := given.skip_blank(None)
   limit := None

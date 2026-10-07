@@ -191,12 +191,25 @@ export class Seed {
       for (const b of spelled.codePointAt(0)!.toString(2)) r = self.apply(rule, frame, [], rule.planner, cap ? [[cap.cap, b === '1' ? c : undefined]] : []);
       return r;
     });
+    // A style (`^name`, R5.2): the one node of that name, for what is painted with it; a theme says how each is shown.
+    this.externals.set('^', (frame, [name]) => self.style(self.code_of(name).s.trim()));
+    // A theme: its block read in a scope of its own, inside where it was written; the scope is the theme (each name it declares a
+    // style, held as the style it is shown as). The last one made is the one shown.
+    this.externals.set('theme', (frame, [name, block]) => {
+      const code = self.written(block), scope = new Node(code.frame);
+      self.compile(new Code(code.text, code.b, code.e, scope, code.planner, code.of))(scope);
+      self.themes.push({ name: self.code_of(name).s.trim(), scope });
+      return scope;
+    });
     // Code as a value (a Program): a node holding the code unread, not read where a name names it.
     this.externals.set('**', (frame, [x]) => { const n = new Node(); if (x instanceof Code) n.members.set('code', self.named(x)); else n.members.set('value', x); return n; });
     // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
     this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); n.members.set('access', self.chain_of(l.access)); n.members.set('open', self.character(l.open)); n.members.set('close', self.character(l.close)); n.members.set('definer', self.chain_of(l.definer)); return n; });
   }
 
+  styles = new Map<string, Node>(); style_names = new Map<Node, string>();
+  style(name: string): Node { let n = this.styles.get(name); if (n === undefined) { this.styles.set(name, n = new Node()); this.style_names.set(n, name); } return n; }
+  themes: { name: string; scope: Node }[] = [];
   // (the same said again about the same place is said once)
   said = new Set<string>();
   say(message: string, at: Span) { const k = `${at.text.name}\0${at.b}\0${at.e}\0${message}`; if (this.said.has(k)) return; this.said.add(k); this.diagnostics.push({ message, at }); }

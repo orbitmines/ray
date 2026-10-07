@@ -1438,6 +1438,10 @@ top := external .
     unless r
       // what no rule in reach reads whole: its first operand, read when it runs, and the rest read by that value's rules
       split := at.operand_end(limit)
+      // (`.member …`: a member of `this` is the first operand, `.date is Time`)
+      if at.character === dot
+        if at.next.character.word
+          split = at.next.operand_end(limit)
       // (a word naming nothing: the longest start of it that names something, the rest read by that (`Colour#`))
       if split === limit
         split = at.held_prefix(limit, scope)

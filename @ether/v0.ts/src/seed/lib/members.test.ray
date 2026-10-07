@@ -1,0 +1,11 @@
+say {x} =>
+  external io stdout x
+// `.member …`: a member of `this` is the first operand, the rest read by its value (`.date is Time`): true, true
+R := class {
+  date: Node?
+  plain => .date is String
+  grouped => (.date) is String
+}
+r := R(date: "x")
+say r.plain
+say r.grouped

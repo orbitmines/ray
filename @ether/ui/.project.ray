@@ -10,3 +10,4 @@
 @ether/network
 @ether/fonts
 @ether/timezone
+@ether/device

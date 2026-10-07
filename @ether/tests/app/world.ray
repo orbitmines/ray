@@ -305,7 +305,7 @@ if (World(name: "unfolded").@ALICE = 1).erred { INFO@mark `RZ3 a name is unique 
 
 // A redirect is a name holding a getter: it answers what the other answers, at every lookup; a held name is overwritten only with write access.
 rdr := World(name: "redirects")
-rdr.@a = => rdr.@b
+rdr.@a => rdr.@b
 rdr.@b = 1
 unless rdr.@a == 1 { INFO@mark `RDR2 a redirected name answers what the other held when it was redirected` }
 unless rdr.@A == rdr.@b { INFO@mark `RDR1 a redirected name does not answer what the other holds` }

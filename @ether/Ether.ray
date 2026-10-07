@@ -2,18 +2,18 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 
 @ether = @`ether.orbitmines.com:37839`
 
-@private = => @me
-@everyone = => characters
-@here = => characters{is Online}
-@local = => @me.presence ?? Instance.local
-@anonymous = => ?
+@private => @me
+@everyone => characters
+@here => characters{is Online}
+@local => @me.presence ?? Instance.local
+@anonymous => ?
 
-@public = => @ether.@everyone | Instance
-@npc = @npcs = => @public{is NPC}
-@players = => @public{is Player}
+@public => @ether.@everyone | Instance
+@npc = @npcs => @public{is NPC}
+@players => @public{is Player}
 
-@host = => Instance.local.parent**#
-@guests = => Instance.local.children**#
+@host => Instance.local.parent**#
+@guests => Instance.local.children**#
 @guests.read { @host }
 @host.read { @guests }
 

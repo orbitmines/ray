@@ -2340,6 +2340,12 @@ Quoted := Unquoted[]
 "{text: Quoted}" =>
   external span text
 quoted_rule := registry.latest
+// Text in backticks, taken as written.
+Unticked := backtick.anything_but
+Ticked := Unticked[]
+`{text: Ticked}` =>
+  external span text
+ticked_rule := registry.latest
 
 // ---------------------------------------------------------------- brackets: what they hold is balanced
 // Balanced text: every bracket it opens it closes, in order, and it closes none it did not open; quoted text is skipped.
@@ -2859,6 +2865,7 @@ while internal_rules
   internal_rules = internal_rules.next
 // what both read with: quoted text, groups, repetition
 quoted_rule.shared = true
+ticked_rule.shared = true
 group_rule.shared = true
 empty_group_rule.shared = true
 repeated_rule.shared = true
@@ -3193,11 +3200,59 @@ unless := class {
 }
 while := class {
   { }{condition} {{body: Balanced}} => (
-   again\
-    goto done if !condition
+   loop_continue\
+    goto loop_break if !condition
     body
-    goto again
-   done\
+    goto loop_continue
+   loop_break\
     None
   )
 }
+loop := class {
+  { }{{body: Balanced}} => (
+   loop_continue\
+    body
+    goto loop_continue
+   loop_break\
+    None
+  )
+}
+// `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in.
+break => external goto loop_break
+continue => external goto loop_continue
+return {value} =>
+  value
+  external goto return
+
+// ---------------------------------------------------------------- diagnostics (R5.1): values, each with the place it is about
+Diagnostic := class {
+  message: Node
+  type: Node
+  fatal: Node
+}
+ERROR{`@`}{type} {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
+  Diagnostic(message: message, type: type)
+ERROR {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
+  Diagnostic(message: message)
+FATAL{`@`}{type} {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
+  Diagnostic(message: message, type: type, fatal: true)
+FATAL {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
+  Diagnostic(message: message, fatal: true)
+TODO {message} => None
+TODO => None

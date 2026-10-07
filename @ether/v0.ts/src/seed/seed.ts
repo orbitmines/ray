@@ -112,7 +112,8 @@ export class Seed {
       return self.apply_chain(r as Node, self.force(caps) as Node | undefined, w, parent === undefined ? undefined : self.force(parent) as Node);
     });
     // What reading says: a diagnostic over the places from `from` to `to`.
-    this.externals.set('report', (frame, [from, to]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined; const e = t === undefined ? f.text.s.length : self.where.get(t)!.i; self.say(`Unread \`${f.text.s.slice(f.i, e).slice(0, 60)}\`.`, { text: f.text, b: f.i, e }); return undefined; });
+    // (a message given as text: a node with the places it is `from` and `to`)
+    this.externals.set('report', (frame, [from, to, message]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined; const e = t === undefined ? f.text.s.length : self.where.get(t)!.i; const m = self.force(message) as Node | undefined; let said = `Unread \`${f.text.s.slice(f.i, e).slice(0, 60)}\`.`; if (m instanceof Node && m.members.has('from')) { const mf = self.where.get(m.members.get('from') as Node), mt = m.members.get('to') as Node | undefined; if (mf) said = mf.text.s.slice(mf.i, mt === undefined ? mf.text.s.length : self.where.get(mt)!.i); } self.say(said, { text: f.text, b: f.i, e }); return undefined; });
     // The outside world (the host's natives, as the old host has them): only writing a stream so far.
     this.externals.set('io', (frame, [stream, content]) => { const v = self.force(content); self.output(self.show(v)); return undefined; });
     // A rule whose head the reader in Ray has read (R2.1): `pieces` a chain of `literal`/`capture` (spans, a capture's

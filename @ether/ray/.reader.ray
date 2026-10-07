@@ -2566,29 +2566,6 @@ registry.latest.shared = true
   external apply m caps here
 registry.latest.shared = true
 
-// `x := value`: a place declared where it was written; a list of places, each declared with the value in its place.
-{this: Tight}.declared({value}) =>
-  found := None
-  if this.is_place
-    written := external ** this
-    place := written.code
-    found = external declare place value
-  unless this.is_place
-    places := this
-    given := value.listed
-    found = places
-    if places.listing
-      item := places.head
-      while item
-        code := external get item value
-        if given
-          external declare code given.argument
-          given = given.next
-        item = item.next
-  found
-registry.latest.shared = true
-
-
 // The items of written code (a node with its `code`), separated by `,` outside brackets (in a bracketed one, what the brackets
 // hold), each read as a statement in `frame`.
 {written: Tight}.read_items_into({frame}) =>

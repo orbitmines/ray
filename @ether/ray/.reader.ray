@@ -725,7 +725,8 @@ closing_block.closes = true
       // what a capture holds is balanced: it closes every bracket it opens, and none it did not (the last piece runs to the
       // statement's end, which is)
       if piece_type ? None : rest_pieces
-        worth = at.balanced_to(e)
+        // (the open brackets each place sees, once counted over the text, compared here; else counted)
+        worth = at.stack && e.stack ? at.stack === e.stack : at.balanced_to(e)
     // a capture taken as written takes one word when no literal follows it (it ends the head, or another capture does)
     // (one name: up to a space, a bracket or a dot)
     if worth && pieces.raw
@@ -1047,7 +1048,7 @@ top := external .
 
 {at}.considered({rule}, {limit}, {state}) =>
   pieces := rule.pieces
-  r := pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, None)
+  r := pieces.has_types && pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, None)
   if r
     take := true
     if state.best
@@ -1081,7 +1082,7 @@ top := external .
   while rules
     rule := rules.rule
     pieces := rule.pieces
-    r := pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, true)
+    r := pieces.has_types && pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, true)
     if r
       take := true
       if best
@@ -1141,7 +1142,7 @@ top := external .
 {at}.prefixed({rule}, {limit}, {state}) =>
   unless rule.shared ? None : rule.internal
     pieces := rule.pieces
-    r := pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, true)
+    r := pieces.has_types && pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, true)
     if r
       take := true
       best := state.best

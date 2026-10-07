@@ -1,0 +1,10 @@
+say {x} =>
+  external io stdout x
+// a class read for itself takes what it declares (A7): nothing, then true
+Q := class {
+  static { }{c} zz ^class => c
+  m => true
+}
+say Q
+say Q.m
+say (Q().m)

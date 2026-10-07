@@ -1,4 +1,8 @@
 // The language, in its own terms (spec/Language.md): read after .reader.ray, in the same scope, with the rules defined here.
+// `declaring` after a rule: what it reads declares (a name, a field, a static, what `&+=` adds), so a class's block is read
+// for the class by it (A7: the rest of the block is each instance's).
+declaring ^keyword =>
+  external set (external get registry latest) declares true
 // ---------------------------------------------------------------- maps (T8.7): a block's declarations, keyed by their names
 // The name a key spells (a key: a node with the places it is `from` and `to`, as a string's), as code naming a member.
 {key: Tight}.member_code =>
@@ -49,6 +53,7 @@
   external set holder name v
   external label done
   v
+declaring
 {x: Tight}[{key: Balanced}] = {value} ^punctuation =>
   holder := x.as_map
   k := key
@@ -71,6 +76,7 @@
   made := external apply value_code None within
   made.parameters = external ** parameters
   external declare name made
+declaring
 
 // ---------------------------------------------------------------- values written: closures, lists, blocks
 // `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`): a rule whose
@@ -142,16 +148,20 @@
 // `name ^style := value`: the mark is the highlighting's (R5.2).
 {name: Tight} ^{literal style} := {value} =>
   external declare name value
+declaring
 // `name := value`: the value declared where the name was written (read in place: nothing but an external); a list of names in
 // brackets (`(x, y) := a, b`), each with the value in its place.
 ({names}) := {value} ^punctuation =>
   names.declared_each(value)
+declaring
 // (a name with another, `O | optimizations := …`: both)
 {name} | {alias} := {value} ^punctuation =>
   external declare name value
   external declare alias value
+declaring
 {name} := {value} ^punctuation =>
   external declare name value
+declaring
 // `x.member @ -> = value`, `name @ -> = value` (Almanac A3): written for the context it is read in and everything that calls on
 // from there, never above it; gone with the context.
 {x: Tight}.{literal member} @ -> = {value} ^punctuation =>
@@ -205,8 +215,10 @@
 // `name: Type = default`, `name: Type`: a name declared with a type, given its value by what is constructed or called.
 {name}: {type} = {default} ^punctuation =>
   name.declared_as(type, default)
+declaring
 {name}: {type} ^punctuation =>
   name.declared_as(type, None)
+declaring
 // `a === b`: whether they are the same value (identity): the language's `true` or `false` (before it has them, whether they are).
 {a} === {b} ^punctuation =>
   same := external same a b
@@ -222,7 +234,13 @@
   external label done
 // `x.member`, `x.member(arguments)`: its own member, else its method (T8.7).
 {x: Tight}.{literal member ^property}{arguments: Bracketed} ^punctuation =>
-  x.member(member, arguments)
+  receiver := x
+  // (a member it holds that is called, a class, a method or a program: called, `G.V()`)
+  held := (external own receiver member) ? (external get receiver member) : None
+  callable := held ? (external get held class) : None
+  callable = callable ? callable : (held ? (external get held pieces) : None)
+  callable = callable ? callable : (held ? (external get held program) : None)
+  callable ? held.called(arguments) : receiver.member(member, arguments)
 {x: Tight}.{literal member ^property} ^punctuation =>
   x.member(member, None)
 // `.member`, `.member = value`, `.member(arguments)`: of `this` (what the statement's frame sees as `this`).
@@ -270,6 +288,7 @@
   extended ? (external apply members None extended) : (external report (external span members).from (external span members).to nothing_extended)
   registry.classes_changed = true
   extended
+declaring
 // ---------------------------------------------------------------- lists: a chain (`listing`, `head`, `tail`) of links (`listed`, `value`,
 // `next`, `previous`)
 // `list` with `value` at its end (a new list when `list` is nothing).
@@ -520,7 +539,8 @@ registry.text_is = registry.latest
   frame.outer_frame = (external span code).frame
   frame.this = value
   result := external apply code None frame
-  result.method ? (result.applied_to(None, value)) : result
+  // (a rule it answers, read with its pieces: not a value's field named `method`, `Access(method: …)`)
+  (external get result pieces) ? (result.applied_to(None, value)) : result
 
 Node := external node
 Node.highlighted = external ^ class
@@ -650,12 +670,19 @@ declaring_written := external span x:=x
   external goto done (at_link === None ? true : None)
   key := at_link.value
   at := key.to
+  // (a class with parameters, `Stops<K = Length> := class …`: its name, kept as its whole statement)
+  angle := key.from.angle_within(key.to)
+  name_to := angle ? angle : key.to
+  value_from := key.from
+  external goto parameterized (angle ? true : None)
   external goto skip (at.character === space ? None : true)
   external goto skip (at.next.character === colon_mark ? None : true)
   external goto skip (at.next.next.character === equals_mark ? None : true)
   external goto skip (at.next.next.next.character === space ? None : true)
   // (a block is a value as it is: nothing to read ahead)
   external goto skip (at.next.next.next.next.character === opening_block ? true : None)
+  value_from = at.next.next.next.next
+  external label parameterized
   // (it ends where the next statement starts: a line that closes a bracket goes on the one before)
   next_link := at_link.next
   external label closing
@@ -671,8 +698,8 @@ declaring_written := external span x:=x
   value_to = value_to.previous
   external goto trim
   external label trimmed
-  name_code := external get (external code key.from key.to block) code
-  value_code := external get (external code at.next.next.next.next value_to block) code
+  name_code := external get (external code key.from name_to block) code
+  value_code := external get (external code value_from value_to block) code
   external keep holder name_code value_code holder
   external label skip
   at_link = at_link.next
@@ -692,7 +719,10 @@ declaring_written := external span x:=x
   external goto called ((external get made caller_frame) ? true : None)
   external set made caller_frame (external span block).frame
   external label called
-  external apply code None made
+  // (only what declares: the rest is each instance's, read when one is made, A7)
+  read := external node
+  read.code = external ** block
+  made.declarations_read(read)
   external set registry given saved_given
   external set registry naming saved_naming
   made
@@ -710,6 +740,9 @@ declaring_written := external span x:=x
   parts
 // What every value has is a class made of itself too.
 Node.components = Node.components_with(None)
+// A list and its links are classes too (Ray.ray makes them Arrays and Rays: `Chain.components.hierarchy &= Array`).
+Chain.components = Chain.components_with(None)
+Link.components = Link.components_with(None)
 // A class: the frame its block is read in, inside the frame it was written in (`outer`); its statics, its fields' defaults and its
 // methods are that frame's; `components.hierarchy`, what it is made of. Calling it makes an instance.
 {block: Tight}.class_of({parent}) =>
@@ -857,7 +890,7 @@ Node.components = Node.components_with(None)
 {this: Tight}.called({arguments}) =>
   value := this
   external goto construct (external get value class)
-  external goto method (external get value method)
+  external goto method (external get value pieces)
   external goto bound (external get value bound_method)
   external goto maybe_program (external get value instance)
   external label nothing
@@ -978,15 +1011,22 @@ enum {written: Item} ^keyword =>
   holder := (external span name).frame
   external keep holder name value
   external label done
+declaring
 {`static`} {name: Tight} := {value} ^keyword =>
   external goto done (external get (external span name).frame instance)
   holder := (external span name).frame
   external keep holder name value
   external label done
+declaring
 {`static`} {statement} ^keyword =>
   external goto done (external get (external span statement).frame instance)
+  before := external get registry latest
   statement
+  // (a rule it defined is the class's own, as `static` before a head makes it)
+  external goto done ((external get registry latest) === before ? true : None)
+  external set (external get registry latest) class_level true
   external label done
+declaring
 
 // `watched(program)`: run now, and again while it answers nothing when a class is made or added to (P5.1); what runs again makes or
 // adds to does not run it again (P5.2).
@@ -1252,6 +1292,16 @@ Node &+= {
   compounds + (component) =>
     whole := this
     added := component
+    // (a block added is a class of what it declares: `Vector := Elementwise + { x => this[0] … }`)
+    external goto composed ((external get added program) ? None : true)
+    block_class := external node
+    block_class.outer_frame = external get added context
+    block_class.class = true
+    block_class.components = block_class.components_with(None)
+    block_class.written = external get added written
+    block_class.declarations_read(added)
+    added = block_class
+    external label composed
     made := external node
     made.outer_frame = external get whole outer_frame
     made.class = true

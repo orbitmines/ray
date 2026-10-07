@@ -73,8 +73,6 @@ Language.Direct := class: Language {
   }
 }
 
-}
-
 Device &+= {
   window: Language.Direct.Display?
 }

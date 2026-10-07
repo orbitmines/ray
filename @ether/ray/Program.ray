@@ -1,6 +1,4 @@
 Program &+= {
-  // `f x`, `f a, b`: called with what is written after it (G2.1: a space is a call; an operator after it is not given to it)
-  { }{arguments: Given} ^punctuation => this.called(arguments)
   who: * = @me
   name: String?
   goal: *?

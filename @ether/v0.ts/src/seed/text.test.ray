@@ -19,3 +19,6 @@ holds ("" + "").empty
 holds ("a" + "").rest.empty
 holds (None !== None)
 holds (s !== None)
+// `\"` is a quote in quoted text (not its end): the text, and one joined with it
+say "a\"b"
+say ("\"" + "t")

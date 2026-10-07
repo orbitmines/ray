@@ -224,6 +224,10 @@ closing_block.closes = true
           if skipping && d === quote
             here = skipping
             skipping = None
+          // (`\"` is a quote in the text)
+          if skipping && d === backslash
+            unless skipping.next === to
+              skipping = skipping.next
           skipping = skipping.next
     unless open_ones
       if c === end
@@ -544,6 +548,10 @@ closing_block.closes = true
           if d === quote ? true : d === end
             here = skipping
             skipping = None
+          if skipping && d === backslash
+            skipping = skipping.next
+            if skipping
+              skipping.stack = open_ones
           skipping = skipping.next
     here = here.next
   this
@@ -573,6 +581,9 @@ closing_block.closes = true
           if skipping && skipping.character === quote
             here = skipping
             skipping = None
+          if skipping && skipping.character === backslash
+            unless skipping.next === limit
+              skipping = skipping.next
           skipping = skipping.next
     here = here.next
     if here === limit
@@ -1509,6 +1520,9 @@ top := external .
       if here.character === quote
         found = here.next
         here = None
+      if here && here.character === backslash
+        unless here.next === limit
+          here = here.next
       here = here.next
       if here === limit
         here = None
@@ -2634,8 +2648,23 @@ Word := registry.latest.checked
 repeated_rule := registry.latest
 
 // ---------------------------------------------------------------- text written in quotes
-Unquoted := quote.anything_but
-Quoted := Unquoted[]
+// Quoted text: no `"` in it but one escaped (`\"`).
+{kind}.quoted_text({from}, {to}) =>
+  found := true
+  here := from === to ? None : from
+  while here
+    if here.character === quote
+      found = None
+      here = None
+    if here && here.character === backslash
+      unless here.next === to
+        here = here.next
+    if here
+      here = here.next
+      if here === to
+        here = None
+  found
+Quoted := registry.latest.checked
 "{text: Quoted}" ^string =>
   made := external span text
   // (a String, once the language has one)
@@ -2684,6 +2713,9 @@ nothing_extended := `nothing to add to (it is not defined yet)`
           if skipping && skipping.character === quote
             here = skipping
             skipping = None
+          if skipping && skipping.character === backslash
+            unless skipping.next === to
+              skipping = skipping.next
           skipping = skipping.next
     here = here.next
     if here === to

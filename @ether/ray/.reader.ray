@@ -734,7 +734,11 @@ closing_block.closes = true
     unless worth
       going = None
     if worth
-      if piece_type
+      // (a literal after a typed capture is looked for first: it is cheaper than asking the type)
+      if piece_type && rest_pieces
+        if rest_pieces.literal
+          worth = e.spells(rest_pieces.from, rest_pieces.to)
+      if piece_type && worth
         unless at === e
           worth = piece_type.holds(at, e)
       // what a capture holds is balanced: it closes every bracket it opens, and none it did not (the last piece runs to the

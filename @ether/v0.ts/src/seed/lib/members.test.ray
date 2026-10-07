@@ -9,3 +9,5 @@ R := class {
 r := R(date: "x")
 say r.plain
 say r.grouped
+// `x.is(T)`, the method, as `x is T`: true
+say ("x".is(String))

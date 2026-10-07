@@ -142,7 +142,7 @@ Unknown := class {
 {target} ?= {value} ^punctuation => target = target ?? value
 
 Node &+= {
-  is (type) => .instance_of(type)
+  is (type) => this.admitted_by(type) ? true : false
 }
 
 Node &+= {

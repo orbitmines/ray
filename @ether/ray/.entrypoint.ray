@@ -114,7 +114,9 @@
 // `places` (a list of names as written) each declared with the value in its place in `value` (arguments: one, or a list).
 {places: Tight}.declared_each({values}) =>
   list := places
-  given := (values.listed)
+  given_values := values
+  // (an enum: its members, in order, `(visible, clip, scroll) := Overflow`)
+  given := (external get given_values members) ? (external get given_values members).head : (given_values.listed)
   item := ((external get list listing) ? list.head : None)
   external label next_place
   external goto done (item ? None : true)

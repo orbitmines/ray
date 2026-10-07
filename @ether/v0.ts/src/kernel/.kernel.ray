@@ -1402,6 +1402,13 @@ member_in (node, name, seen) => (
   with_of(node) for x => { found := member_in(x, name, seen); if found != UNDEF { return found } }
   return UNDEF
 )
+member_holder (node, name, seen) => (
+  if walk_marked(node, seen) { return UNDEF }
+  walk_mark(node, seen)
+  if own(node, name) != UNDEF { return node }
+  with_of(node) for x => { found := member_holder(x, name, seen); if found != UNDEF { return found } }
+  return UNDEF
+)
 holder (frame, name, wsrc, wb, we) => ( found, holder := find(frame, name, wsrc, wb, we, None); return holder )
 near_holder (frame, name) => (
   if own(frame, name) != UNDEF { return frame }
@@ -1457,6 +1464,7 @@ declare (target, value, frame) => (
   if scope == global() and own(scope, place_name(at)) == UNDEF { ROOT.declared = ROOT.declared + 1 }
   set_name(scope, place_name(at), held)
   marked_place(at, scope)
+  declared_place(at, scope)
   paint_place(at)
   return held
 )
@@ -2150,7 +2158,7 @@ define_in (scope, tail, body, src, b, e, parameters) => (
 // what it sees, what it was made with, and the rest (Extra, made when first written): what it runs on and stands for, the body
 // it reads, its marks, and what it is (a function, a style, a rule, a program).
 Value := class { node_a, node_b, node_c, names: None, at_src: -1, at_begin: 0, at_end: 0, sees: None, with: None, rules: None, index: None, seen, found_seen, more }
-Value.Extra := class { constructed: None, on: UNDEF, stands: UNDEF, body_src: -1, body_begin: 0, body_end: 0, bare: None, raw: None, given: None, fn: -1, style: -1, rule: -1, program: None, marks: None, marked: None, marked_names: None, observed: None, rh0, rg0, rv0: -1, rh1, rg1, rv1: -1, bracketed: -1, answered: UNDEF, defaults: None, name_table: NIL, name_cap: 0, name_count: 0, name_last: NIL }
+Value.Extra := class { constructed: None, on: UNDEF, stands: UNDEF, body_src: -1, body_begin: 0, body_end: 0, bare: None, raw: None, given: None, fn: -1, style: -1, rule: -1, program: None, marks: None, marked: None, marked_names: None, observed: None, rh0, rg0, rv0: -1, rh1, rg1, rv1: -1, bracketed: -1, answered: UNDEF, defaults: None, declarations: None, name_table: NIL, name_cap: 0, name_count: 0, name_last: NIL }
 
 value (tag, a, b, c) => Value(tag, node_a: a, node_b: b, node_c: c)
 more (s) => ( if s.more == NIL { s.more = Extra() }; return s.more )
@@ -2970,6 +2978,17 @@ marked_place (at, scope) => (
   if scope.marked_names == None { scope.marked_names = list_new() }
   list_push(scope.marked_names, place_name(at))
   list_push(scope.marked_names, at.marks)
+)
+declared_place (at, scope) => (
+  if at_src(at) < 0 or side_of(scope) == ROOT.blank { return None }
+  if scope.declarations == None { scope.declarations = value(SCOPE, NIL, NIL, NIL) }
+  set_name(scope.declarations, place_name(at), at)
+)
+declared_at (place) => (
+  name := place_name(place)
+  scope := place_member(place) ? member_holder(place_scope(place), name, walk_stamp()) : holder(place_scope(place), name, at_src(place), at_begin(place), at_end(place))
+  if scope == UNDEF or scope == None or scope == -1 or side_of(scope) == ROOT.blank or scope.declarations == None { return UNDEF }
+  return own(scope.declarations, name)
 )
 // Bodies that were never run are painted dry: each statement's rule is matched, never applied; names are painted as places.
 dry_all () => (

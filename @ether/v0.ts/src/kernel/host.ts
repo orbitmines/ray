@@ -414,14 +414,23 @@ export class Reader {
     return out;
   }
 
-  links(src: number): { begin: number; end: number; location: string; text: string; target_begin: number; target_end: number }[] {
-    const out: { begin: number; end: number; location: string; text: string; target_begin: number; target_end: number }[] = [];
+  links(src: number): { begin: number; end: number; kind: 'rule' | 'name'; location: string; text: string; target_begin: number; target_end: number }[] {
+    const out: { begin: number; end: number; kind: 'rule' | 'name'; location: string; text: string; target_begin: number; target_end: number }[] = [];
     for (const paint of this.paints.get(src)?.values() ?? []) {
       for (const [kind, ref] of paint.refs) {
-        if (kind !== 2) continue;
-        const at = this.texts.get(this.field(ref, 'rule_at_src'));
+        if (kind === 2) {
+          const at = this.texts.get(this.field(ref, 'rule_at_src'));
+          if (at === undefined || at.location === '') continue;
+          out.push({ begin: paint.begin, end: paint.end, kind: 'rule', location: at.location, text: at.value, target_begin: this.field(ref, 'rule_at_begin') >> 3, target_end: this.field(ref, 'rule_at_end') >> 3 });
+          break;
+        }
+        if (kind !== 1 && kind !== 3) continue;
+        let place: number;
+        try { place = this.kernel('declared_at', ref); } catch { this.kernel('recover'); continue; }
+        if (place === UNDEF || (place & 7) !== 0) continue;
+        const at = this.texts.get(this.kernel('at_src', place));
         if (at === undefined || at.location === '') continue;
-        out.push({ begin: paint.begin, end: paint.end, location: at.location, text: at.value, target_begin: this.field(ref, 'rule_at_begin') >> 3, target_end: this.field(ref, 'rule_at_end') >> 3 });
+        out.push({ begin: paint.begin, end: paint.end, kind: 'name', location: at.location, text: at.value, target_begin: this.kernel('at_begin', place) >> 3, target_end: this.kernel('at_end', place) >> 3 });
         break;
       }
     }

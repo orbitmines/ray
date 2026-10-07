@@ -16,7 +16,7 @@ import { ENTRYPOINT, ETHER, core, closure, project_of, project_files } from './p
 
 type Check = { uri: string; file: string; text: string; version: number };
 type Position = { line: number; character: number };
-type Link = { begin: number; end: number; uri: string; range: { start: Position; end: Position }; head: string };
+type Link = { begin: number; end: number; kind: 'rule' | 'name'; uri: string; range: { start: Position; end: Position }; head: string };
 type Checked = { uri: string; version: number; paints: { begin: number; end: number; style: string }[]; diagnostics: { level: string; message: string; begin: number; end: number }[]; links: Link[] };
 
 async function reader(read_entrypoint = true) {
@@ -122,7 +122,8 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
     const link = link_at(params.textDocument.uri, params.position);
     if (link === undefined) return null;
     const file = path.relative(path.dirname(ETHER), fileURLToPath(link.uri));
-    return { contents: { kind: 'markdown', value: `\`\`\`ray\n${link.head}\n\`\`\`\nRead by the rule in \`${file}:${link.range.start.line + 1}\`` } };
+    const said = link.kind === 'rule' ? 'Read by the rule in' : 'Declared in';
+    return { contents: { kind: 'markdown', value: `\`\`\`ray\n${link.head}\n\`\`\`\n${said} \`${file}:${link.range.start.line + 1}\`` } };
   });
 
   documents.onDidOpen(e => sketch(e.document.uri, e.document.getText(), e.document.version, 0));
@@ -250,10 +251,16 @@ function links_of(r: { links(src: number): ReturnType<import('./host.ts').Reader
   return r.links(src).map(l => ({
     begin: l.begin,
     end: l.end,
+    kind: l.kind,
     uri: pathToFileURL(l.location).toString(),
     range: { start: position_in(l.text, l.target_begin), end: position_in(l.text, l.target_end + 1) },
-    head: l.text.slice(l.target_begin, l.target_end + 1),
+    head: l.kind === 'rule' ? l.text.slice(l.target_begin, l.target_end + 1) : line_around(l.text, l.target_begin),
   }));
+}
+
+function line_around(text: string, offset: number): string {
+  const end = text.indexOf('\n', offset);
+  return text.slice(text.lastIndexOf('\n', offset - 1) + 1, end < 0 ? text.length : end).trim();
 }
 
 // The colors of the language's theme, as its entrypoint writes them: `^name = ^ #RRGGBB` or `^name = ^other`.

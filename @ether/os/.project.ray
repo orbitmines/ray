@@ -1,5 +1,1 @@
-@ether/os/ether
-@ether/os/linux
-@ether/os/macos
-@ether/os/windows
-@ether/os/browser
+@tzif

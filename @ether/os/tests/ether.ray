@@ -2,10 +2,10 @@ mark ^keyword := external global
 
 summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
 winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
-unless OS.Ether().time_zones is TimeZone.Zoneinfo { INFO@mark `ETH7 the language as the operating system does not read TZif` }
-unless OS.Ether().time_zones.directory == @tzif/zoneinfo { INFO@mark `TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo` }
 unless TimeZone.Zoneinfo(directory: @tzif/zoneinfo).version == "2026c" { INFO@mark `TZ8 the downloaded data is not tzdata 2026c` }
-with @me/device/os = OS.Ether() {
+with @me/device/os = OS.Ether {
+  unless TimeZone.source is TimeZone.Zoneinfo { INFO@mark `ETH7 the language as the operating system does not read TZif` }
+  unless TimeZone.source.directory == @tzif/zoneinfo { INFO@mark `TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo` }
   amsterdam := TimeZone("Europe/Amsterdam")
   unless amsterdam.at(summer).offset == 2 hours { INFO@mark `TZ9 Amsterdam in summer is not at +02:00 on ether` }
   unless amsterdam.at(summer).abbreviation == "CEST" && amsterdam.at(summer).daylight { INFO@mark `TZ10 Amsterdam in summer is not on CEST` }
@@ -19,9 +19,9 @@ with @me/device/os = OS.Ether() {
   ("ethertest/a" as Location).remove
   if ("ethertest/a" as Location).exists { INFO@mark `ETH3 a location removed on ether is still there` }
 
-  OS.Ether().sent("ethertest", "a")
-  OS.Ether().sent("ethertest", "b")
-  unless OS.Ether().received("ethertest") == "a" && OS.Ether().received("ethertest") == "b" && OS.Ether().received("ethertest") === None { INFO@mark `ETH9 a stream on ether does not give back what was sent to it, in order, once` }
+  @me/device.sent("ethertest", "a")
+  @me/device.sent("ethertest", "b")
+  unless @me/device.received("ethertest") == "a" && @me/device.received("ethertest") == "b" && @me/device.received("ethertest") === None { INFO@mark `ETH9 a stream on ether does not give back what was sent to it, in order, once` }
 }
 Counting := class: TimeZone.Zoneinfo {
   asked: String[] = []
@@ -30,7 +30,9 @@ Counting := class: TimeZone.Zoneinfo {
 counting := Counting(directory: @tzif/zoneinfo)
 counting.at("Europe/Amsterdam", summer)
 unless counting.asked == ["Europe/Amsterdam"] { INFO@mark `TZ16 reading one zone read others than the one asked for` }
-unless OS.Ether().tls("ether.orbitmines.com:443", ["h2"]).erred { INFO@mark `TLS2 TLS in the language does not err while it is unwritten` }
-unless OS.Ether()["platform"] == "ether" { INFO@mark `ETH4 the language as the operating system does not name its platform ether` }
-if OS.Ether().mac_address { INFO@mark `ETH5 the language as the operating system has a hardware address` }
-unless [OS.Ether().bit, OS.Ether().now, OS.Ether().fonts, OS.Ether().launch("a" as Location)].every(.erred) { INFO@mark `ETH8 what the language as the operating system has not written yet does not err` }
+unless OS.Ether["platform"] == "ether" { INFO@mark `ETH4 the language as the operating system does not name its platform ether` }
+with @me/device/os = OS.Ether {
+  unless ("ether.orbitmines.com:443" as Network.Socket.Address).tls(["h2"]).erred { INFO@mark `TLS2 TLS in the language does not err while it is unwritten` }
+  if @me/device.network.connected { INFO@mark `ETH5 the language as the operating system is on a network` }
+  unless [Random.bit, Time.now, $.opentype.installed, @me/device.launch("a" as Location)].every(.erred) { INFO@mark `ETH8 what the language as the operating system has not written yet does not err` }
+}

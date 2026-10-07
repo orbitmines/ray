@@ -691,9 +691,12 @@ Answers from 2026-09-30.
   and `secure` names a cryptographic source.
 - **W6.9** An OS is a platform Language level (`Language.linux`, …), composed with the target; per-OS code
   lives there, not in the default code.
-  **(user, 2026-10-06)** Each OS is its own project under `@ether/os/` (`ether`, `linux`, `macos`, `windows`, `browser`)
+  ~~(user, 2026-10-06)~~ superseded: Each OS is its own project under `@ether/os/` (`ether`, `linux`, `macos`, `windows`, `browser`)
   holding its externals and configuration; the core holds only the `OS` enum, whose members those projects add, and the
   abstract interface they implement (L§8.4).
+  **(user, 2026-10-07)** `OS` is an enum in `@ether/ray/OS.ray`; a member as a boolean is whether the device runs it, and
+  per-OS code is `if OS.Windows { … }` in the package it is about (zones in Time.ray, sockets in network, fonts in
+  opentype). `@ether/os` is only the Ether OS project (L§8.4).
 - **W6.11** Chat later.
 
 Answers from 2026-10-05.

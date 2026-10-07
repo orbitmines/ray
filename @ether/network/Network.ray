@@ -16,9 +16,12 @@ Network &+= {
 
   static Socket := class {
     static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => {
-      send (bytes: Byte[]) => @me/device/os.tcp(this as String, bytes)
-      datagram (bytes: Byte[]) => @me/device/os.udp(this as String, bytes)
-      tls (offered: String[]) => @me/device/os.tls(this as String, offered)
+      // the host's sockets; a browser has none, and on ether they are not written yet
+      send (bytes: Byte[]) => if OS.Browser { ERROR@OS `a browser has no TCP` } elsif OS.Ether { ERROR@OS `TCP is not written in Ray yet` } else { external network `tcp` (this as String, bytes) }
+      datagram (bytes: Byte[]) => if OS.Browser { ERROR@OS `a browser has no UDP` } elsif OS.Ether { ERROR@OS `UDP is not written in Ray yet` } else { external network `udp` (this as String, bytes) }
+      // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the
+      // connection, and the protocol of `offered` the two sides agreed on.
+      tls (offered: String[]) => if OS.Browser { ERROR@OS `a browser has no TLS` } elsif OS.Ether { ERROR@OS `TLS 1.3 is not written in Ray yet` } else { external network `tls` (this as String, offered) as (connection: *, protocol: String?) }
     }
   }
 
@@ -39,18 +42,10 @@ Location &+= {
   socket => Network.Socket.Address(host: host, port: port ?? protocol?.port)
 }
 
-OS &+= {
-  tcp (address: String, bytes: Byte[]) => ERROR@OS `the operating system has no TCP`
-  udp (address: String, bytes: Byte[]) => ERROR@OS `the operating system has no UDP`
-  // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the
-  // connection, and the protocol of `offered` the two sides agreed on.
-  tls (address: String, offered: String[]) => ERROR@OS `the operating system has no TLS`
-  mac_address: MAC? => None
-  connected: boolean => ERROR@OS `the operating system does not say whether it is on a network`
-}
-
 Device &+= {
-  network: (mac: MAC, connected: boolean) = (mac: os.mac_address ?? (MAC.random ~~ .[7] = 1), connected: os.connected ?? false)
+  // the host's MAC address and whether it is on a network; a browser and ether say neither (a random locally administered MAC)
+  network: (mac: MAC, connected: boolean) = (OS.Browser || OS.Ether) ? (mac: MAC.random ~~ .[7] = 1, connected: false)
+    : (mac: (external os `mac_address`) ?? (MAC.random ~~ .[7] = 1), connected: (external network `connected`) ?? false)
 }
 
 Instance &+= {

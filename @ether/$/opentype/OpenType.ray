@@ -2,6 +2,12 @@
 // The table directory (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
 OpenType := class: Language (sfnt_version: U32, count: U16, U16, U16, U16, records: (tag: Char₄, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
   static extensions = ".otf" | ".ttf" | ".opentype"
+  // where the host keeps its fonts; a browser gives none to read, and on ether they are not written yet
+  static installed: Location[] => if OS.Linux { [@/usr/share/fonts] }
+    elsif OS.Macos { ["/System/Library/Fonts" as Location] }
+    elsif OS.Windows { [@C:/Windows/Fonts] }
+    elsif OS.Browser { [] }
+    else { ERROR@OS `fonts are not written in Ray yet` }
   static level := {
     {font: OpenType} => font
   }

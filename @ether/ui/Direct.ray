@@ -60,15 +60,15 @@ Language.Direct := class: Language {
   level := Geometry.Preparing(1px) + rules
 
   Font := class = font: Geometry.Font {
-    file => font.family.map(family => @me/device/os.fonts.map(.listing).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first).first
+    file => font.family.map(family => $.opentype.installed.map(.listing).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first).first
     glyph (character: Char) => $.opentype.read(file.bytes)[character]
   }
 
   Display := class: UI.Interface = target: Location, title: String = "" {
-    start => { @me/device/os.launch(@me/device/opened) } when @me/device/opened changes
+    start => { @me/device.launch(@me/device/opened) } when @me/device/opened changes
     stop => None
     write (raster: Geometry.Raster) => (title = UI.page?.title ?? "") -- (target.content = raster)
-    read => UI.Input.dispatched(@me/device/os.received("window"))
+    read => UI.Input.dispatched(@me/device.received("window"))
   }
 }
 

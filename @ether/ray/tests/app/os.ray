@@ -1,0 +1,30 @@
+mark ^keyword := external global
+
+// An operating system is a member of the enum OS; as a boolean, whether it is the one the device runs.
+unless [OS.Ether, OS.Linux, OS.Macos, OS.Windows, OS.Browser].every(. is OS) { INFO@mark `OSE1 an operating system is not one of OS` }
+unless OS#{as boolean}.count == 1 { INFO@mark `OSE3 other than one operating system runs this device` }
+unless @me/device/os === OS.host { INFO@mark `OSE4 the device does not run the operating system the host reports` }
+with @me/device/os = OS.Windows {
+  unless OS.Windows { INFO@mark `OSE6 the operating system the device runs is not true as a boolean` }
+  if OS.Linux { INFO@mark `OSE7 an operating system the device does not run is true as a boolean` }
+}
+
+// What differs per operating system is written in the package it is about.
+winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
+with @me/device/os = OS.Linux {
+  unless TimeZone.source is TimeZone.Zoneinfo { INFO@mark `TZ1 linux does not read the host's zoneinfo` }
+  if TimeZone.source.directory == @tzif/zoneinfo { INFO@mark `TZ3 linux downloads the data instead of reading the host's` }
+  if TimeZone.source.directory ~= ⊢"tzif" { INFO@mark `TZ18 a host refers to @tzif for its zone data` }
+  unless TimeZone.source.at("UTC", winter).offset == 0 seconds { INFO@mark `TZ15 UTC is off zero on linux` }
+}
+with @me/device/os = OS.Macos {
+  unless TimeZone.source is TimeZone.Zoneinfo { INFO@mark `TZ2 macos does not read the host's zoneinfo` }
+}
+with @me/device/os = OS.Windows {
+  unless TimeZone.source is TimeZone.ICU { INFO@mark `TZ4 windows does not ask the OS's ICU` }
+}
+with @me/device/os = OS.Browser {
+  unless TimeZone.source is TimeZone.Intl { INFO@mark `TZ5 the browser does not ask Intl` }
+  unless $.opentype.installed == [] { INFO@mark `OSE8 a browser gives fonts to read` }
+}
+unless [OS.Linux, OS.Macos, OS.Windows].every(os => with @me/device/os = os { $.opentype.installed is Location[] && $.opentype.installed.nonempty }) { INFO@mark `OSE5 an operating system does not say where its fonts are` }

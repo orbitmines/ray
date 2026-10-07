@@ -1,6 +1,5 @@
 @ether/geometry
 @ether/version
-@ether/os/browser
 @html
 @css
 @js

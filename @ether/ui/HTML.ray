@@ -346,7 +346,8 @@ UI.HTML := class {
       {page: Geometry.Shape{solved && !parent}} => [
         prelude,
         devices,
-        OS.Browser.script,
+        FileSystem.Host.script,
+        TimeZone.Intl.script,
         Dynamic#{!page.reachable.map(.fields.value).flatten.contains(.)}.map(dynamic => @js effect({dynamic.program.reads}, () => { {dynamic.program{O: state}} })),
         page.reachable.map(.scripted)
       ].flatten
@@ -372,8 +373,8 @@ UI.HTML := class {
   level := Geometry.Preparing(1px) + packaged
 
   DOM := class: UI.Interface {
-    send (message) => @me/device/os.sent("dom", message)
-    received => @me/device/os.received("dom")
+    send (message) => @me/device.sent("dom", message)
+    received => @me/device.received("dom")
     line (parts: String[]) => parts.join(" "), \n
 
     static made = 0

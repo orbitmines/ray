@@ -96,7 +96,8 @@ Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
 
   uncertainty: Quantity.Temporal?
   corrected (by: Quantity.Temporal, within: Quantity.Temporal) => Time(calendar, epoch: epoch, uncertainty: within) = this + by
-  static now => @me/device/os.now
+  // the host's clock (with its resolution as the uncertainty); on ether the clock kept by NTP, not written yet
+  static now => if OS.Ether { ERROR@OS `the clock kept by NTP is not written in Ray yet` } else { nondeterministic (external time) ns ± ((external time).resolution) ns }
   dynamically {
     .calendar.segments.for segment => `segment.name.upper_case` = `segment.name`
   } = now
@@ -204,7 +205,43 @@ TimeZone := class (name: String) {
     zones => (directory / "zones").content.lines{.nonempty}
   }
 
-  static source: Source => @me/device/os.time_zones
+  // Where the zones are read: the host's zoneinfo (tzfile(5): $TZDIR, else /usr/share/zoneinfo,
+  // https://man7.org/linux/man-pages/man5/tzfile.5.html), Windows' ICU, the browser's Intl, on ether the downloaded @tzif.
+  static source: Source => if OS.Linux || OS.Macos { Zoneinfo(directory: (OS.env.TZDIR ?? "/usr/share/zoneinfo") as Location) }
+    elsif OS.Windows { ICU() }
+    elsif OS.Browser { Intl() }
+    else { Zoneinfo(directory: @tzif/zoneinfo) }
+
+  // Windows 10 1703+ ships ICU and its tz data as icu.dll (https://learn.microsoft.com/en-us/windows/win32/intl/international-components-for-unicode--icu-), ucal API (https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/ucal_8h.html)
+  static ICU := class: Source {
+    call (function: String, arguments) => external os `icu` (function, arguments)
+    // a Windows zone id read as its IANA name through CLDR's windowsZones (https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones)
+    iana (zone: String) => call("ucal_getTimeZoneIDForWindowsID", (zone, "001")) ?? zone
+    at (zone: String, time: Time) => call("ucal_open", (iana(zone), "", "UCAL_GREGORIAN")) ~~ call("ucal_setMillis", (., (time as s).floor * 1000)) -- (calendar => call("ucal_inDaylightTime", calendar) as boolean -- (daylight => (
+      offset: ((call("ucal_get", (calendar, "UCAL_ZONE_OFFSET")) + call("ucal_get", (calendar, "UCAL_DST_OFFSET"))) / 1000) seconds,
+      daylight,
+      abbreviation: call("ucal_getTimeZoneDisplayName", (calendar, daylight ? "UCAL_SHORT_DST" : "UCAL_SHORT_STANDARD", "en")) as String
+    )) ~~ call("ucal_close", calendar))
+  }
+
+  // ECMA-402 Intl.DateTimeFormat: the offset in force read back from formatToParts with timeZoneName "longOffset" (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts), answered by the page at @me/device/zones (`zones/<zone>/<at>`; keeping answers is a cache level)
+  static Intl := class: Source {
+    asked (zone: String, time: Time) => await (@me/device/zones / zone / ((time as s).floor * 1000 as String)).value
+    offset (zone: String, time: Time) => (asked(zone, time).offset ~= ("GMT", (sign: "+" | "-", hours: Decimal, ":", minutes: Decimal)?)) -- (.sign ? (.sign == "-" ? -1 : 1) * (.hours hours + .minutes minutes) : 0 seconds)
+    at (zone: String, time: Time) => offset(zone, time) -- (in_force => (
+      offset: in_force,
+      daylight: in_force > offset(zone, time - 182 days).min(offset(zone, time + 182 days)),
+      abbreviation: asked(zone, time).abbreviation
+    ))
+    // ECMA-402 Intl.DateTimeFormat formatToParts, the zone's offset ("longOffset") and abbreviation ("short") (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts)
+    static script := @js {
+      ray.awaited("@me/device/zones", (path) => {
+        const [zone, at] = [path.split("/").slice(0, -1).join("/"), Number(path.split("/").at(-1))]
+        const part = (style) => new Intl.DateTimeFormat("en-US", \{timeZone: zone, timeZoneName: style}).formatToParts(at).find((part) => part.type === "timeZoneName").value
+        ray.set("@me/device/zones/" + path, \{offset: part("longOffset"), abbreviation: part("short")})
+      })
+    }
+  }
 
   data => source.data(name)
   at (time: Time) => source.at(name, time)

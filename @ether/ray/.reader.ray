@@ -705,6 +705,22 @@ pipe := mark.character
   if nothing_left
     if pieces.optional
       nothing_left = None
+  // a type written that was not defined then: read again now (nothing read: the capture holds nothing)
+  // (not while another type is being read: reading one does not read types again)
+  unless pieces.type
+    if pieces.type_from
+      read_type := None
+      unless registry.reading_type
+        registry.reading_type = true
+        written_type_from := pieces.type_from
+        written_type_to := pieces.type_to
+        written_type_like := pieces.type_like
+        read_type = external read written_type_from written_type_to written_type_like
+        registry.reading_type = None
+      if read_type
+        pieces.type = read_type
+      unless read_type
+        nothing_left = true
   // a capture followed by a literal ends only where that literal starts
   wanted := None
   if rest_pieces
@@ -1795,6 +1811,11 @@ close := learned.close
       type_from := name_end.next
       capture_type := external read type_from shut like
       made.type = capture_type
+      // (a type not defined yet is read again when the capture is tried; until it is, the capture holds nothing)
+      unless capture_type
+        made.type_from = type_from
+        made.type_to = shut
+        external keep made type_like like
 
 // The place of the backtick that closes one, from `at`, before `limit`.
 {at}.closing_backtick({limit}) =>

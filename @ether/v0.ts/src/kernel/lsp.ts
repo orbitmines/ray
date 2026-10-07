@@ -16,7 +16,7 @@ import { ENTRYPOINT, ETHER, core, closure, project_of, project_files } from './p
 
 type Check = { uri: string; file: string; text: string; version: number };
 type Step = 'reading' | 'settling';
-type Progress = { progress: { step: Step; done: number; total: number; file: string } | { step: Step; end: true } };
+type Progress = { progress: { step: Step; done: number; total: number; file: string; document?: true } | { step: Step; end: true } };
 type Checked = { uri: string; version: number; paints: { begin: number; end: number; style: string }[]; diagnostics: { level: string; message: string; begin: number; end: number }[] };
 
 async function reader(read_entrypoint = true) {
@@ -57,7 +57,7 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
     if ('end' in state) { void reporters.get(state.step)?.then(p => p.done()); reporters.delete(state.step); return; }
     let reporter = reporters.get(state.step);
     if (reporter === undefined) reporters.set(state.step, reporter = connection.window.createWorkDoneProgress().then(p => { p.begin(TITLES[state.step], 0, undefined, false); return p; }));
-    void reporter.then(p => p.report(Math.floor(100 * state.done / state.total), `${state.done}/${state.total} ${path.basename(state.file)}`));
+    void reporter.then(p => p.report(Math.floor(100 * state.done / state.total), state.document ? `${path.basename(state.file)} (open document)` : `${state.done + 1}/${state.total} ${path.basename(state.file)}`));
   };
 
   worker.on('message', (m: Checked | Progress) => {
@@ -159,6 +159,7 @@ async function read_in_worker() {
           const src = r.source(check.file, check.text);
           r.active!.add(src);
           reading = { check, r, src, pos: 0, text: check.text, before };
+          if (reading_library) port.postMessage({ progress: { step: 'reading', done: queued.size - library.length, total: queued.size, file: check.file, document: true } } satisfies Progress);
         } else {
           // The library read, its files are read again where they left a name unresolved (one per step, after any document that
           // was waiting), then the documents again.
@@ -169,7 +170,7 @@ async function read_in_worker() {
           const file = library.shift();
           if (process.env.KLSP_TRACE) trace(`worker: library ${file}\n`);
           if (file === undefined) { for (const step of ['reading', 'settling'] as const) port.postMessage({ progress: { step, end: true } } satisfies Progress); busy = false; return; }
-          port.postMessage({ progress: { step: 'reading', done: queued.size - library.length, total: queued.size, file } } satisfies Progress);
+          port.postMessage({ progress: { step: 'reading', done: queued.size - library.length - 1, total: queued.size, file } } satisfies Progress);
           const text = fs.readFileSync(file, 'utf8');
           reading = { r: library_reader, file, src: library_reader.source(file, text), pos: 0, text };
         }
@@ -191,6 +192,7 @@ async function read_in_worker() {
       try { r.safely(() => r.dry(src)); } catch { r.kernel('recover'); }
       if (process.env.KLSP_TRACE) trace(`worker: checked ${path.basename(check.file)} v${check.version}, dry ${Math.round(performance.now() - d0)} ms\n`);
       port.postMessage({ uri: check.uri, version: check.version, paints: r.painted(src), diagnostics: r.diagnostics_of(src).map((d: any) => ({ level: d.level, message: d.message, begin: d.at.begin, end: d.at.end })) } satisfies Checked);
+      if (library.length === 0) port.postMessage({ progress: { step: 'reading', end: true } } satisfies Progress);
       done(finished);
     }
     setImmediate(work);

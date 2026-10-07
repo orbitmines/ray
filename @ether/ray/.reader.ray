@@ -849,6 +849,34 @@ top := external .
         chosen = None
   chosen
 
+// Where the reader's own rules led by a capture start in the top scope's chain of them, once the language is read (they were kept
+// before it, so they are its last), found once; and those of them both read with, as a chain of their own
+// (`registry.shared_capture_led`).
+{scope}.capture_led_boundary =>
+  found := registry.internal_capture_led
+  unless found
+    link := scope.capture_led
+    while link
+      if link.rule.internal
+        found = link
+        link = None
+      link = link.next
+    registry.internal_capture_led = found
+    shared := external node
+    link = found
+    while link
+      if link.rule.shared
+        shared_link := external node
+        shared_link.rule = link.rule
+        if shared.last
+          shared.last.next = shared_link
+        unless shared.last
+          shared.first = shared_link
+        shared.last = shared_link
+      link = link.next
+    registry.shared_capture_led = shared.first
+  found
+
 // What reads the statement from `at` to `limit` with the rules in reach of `scope` (R2.5): every rule that reads it whole;
 // between them, one led by a literal over one led by a capture; then one written with the same head as a later one gives way
 // to it (`=>`), otherwise the one declared first reads it (G3.1). The rules come nearest scope first, latest first. Answers
@@ -871,6 +899,16 @@ top := external .
         at.considered(rule, limit, state)
       candidates = candidates.next
     capture_led := here.capture_led
+    // (in the top scope, once the language is read: the reader's own rules from where they start for the reader's text; for other
+    // code the language's, then only those of the reader's that both read with)
+    boundary := None
+    if registry.language && here === top
+      boundary = here.capture_led_boundary
+      if written_here
+        capture_led = boundary
+        boundary = None
+      if boundary && capture_led === boundary
+        capture_led = registry.shared_capture_led
     while capture_led
       rule := capture_led.rule
       hidden := rule.shared ? None : rule.internal
@@ -894,6 +932,8 @@ top := external .
         if keep
           at.considered(rule, limit, state)
       capture_led = capture_led.next
+      if boundary && capture_led === boundary
+        capture_led = registry.shared_capture_led
     here = here.outer
   best := state.best
   if best

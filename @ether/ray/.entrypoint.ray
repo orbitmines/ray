@@ -569,6 +569,8 @@ Node &+= {
 // ---------------------------------------------------------------- modifiers: words before a definition's head, kept on its rule
 static := external node
 static.modifier = true
+// (a rule of the class itself, read by the class: the others are its instances')
+static.class_level = true
 chainable := external node
 chainable.modifier = true
 compounds := external node
@@ -959,7 +961,7 @@ Node &+= {
 // `previous` are the members beside it (nothing past the ends).
 Enum := class {
   == (other) => this === other ? true : false
-  # => this.members ?? this.outer.members
+  static # => this.members ?? this.outer.members
   next => this.following
   previous => this.preceding
 }
@@ -1024,13 +1026,13 @@ Branch := class {
   {\n}elsif {condition} {{yes: Balanced}} ^class => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
 }
 if := class {
-  { }{condition} {{yes: Balanced}} ^class => condition ? Branch(true, yes) : Branch(None, None)
+  static { }{condition} {{yes: Balanced}} ^class => condition ? Branch(true, yes) : Branch(None, None)
 }
 unless := class {
-  { }{condition} {{yes: Balanced}} ^class => condition ? Branch(None, None) : Branch(true, yes)
+  static { }{condition} {{yes: Balanced}} ^class => condition ? Branch(None, None) : Branch(true, yes)
 }
 while := class {
-  { }{condition} {{body: Balanced}} ^class => (
+  static { }{condition} {{body: Balanced}} ^class => (
    loop_continue\
     goto loop_break if !condition
     body
@@ -1040,7 +1042,7 @@ while := class {
   )
 }
 loop := class {
-  { }{{body: Balanced}} ^class => (
+  static { }{{body: Balanced}} ^class => (
    loop_continue\
     body
     goto loop_continue

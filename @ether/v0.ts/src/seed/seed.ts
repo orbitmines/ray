@@ -598,7 +598,9 @@ export class Seed {
     const steps = this.expand(this.steps_of(body), body, 0);
     const labels = new Map<string, number>();
     steps.forEach(st => { if (st.kind === 'label') labels.set(st.name, labels.size + 1); });
-    const lines: string[] = ['let r, pc = 0; const V = f.version;', `const L = ${JSON.stringify(Object.fromEntries(labels))};`, 'for (;;) { try { switch (pc) {', 'case 0:'];
+    // (a program with labels is a loop over them, a jump caught by it continuing at its label; one without is its steps in order)
+    const looped = labels.size > 0;
+    const lines: string[] = looped ? ['let r, pc = 0; const V = f.version;', 'for (;;) { try { switch (pc) {', 'case 0:'] : ['let r; const V = f.version;'];
     // a statement that defined a rule where this body is read: the rest of the body read after it, with that rule in reach
     // (not in a body with labels: a jump does not cross where it was read again)
     const reread = (st: Step & { at: Span }, i: number) => { if (labels.size === 0 && i < steps.length - 1) lines.push(`if (f.version !== V) return S.rest(f, ${ref({ text: body.text, b: st.at.e, e: body.e })}, ${ref(body.planner)});`); };
@@ -644,8 +646,9 @@ export class Seed {
       lines.push(`try { r = S.apply(${ref(st.rule)}, f, ${ref(caps)}, ${ref(body.planner)}, ${ref(st.given ?? [])}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
 
     }
-    lines.push('return r;', '} } catch (x) { if (x instanceof S.Jump && L[x.name] !== undefined) { pc = L[x.name]; r = x.value; continue; } throw x; } }');
-    const fn = new Function('S', 'k', `return function ${ENV.SEED_NAMED ? 'R_' + body.s.trim().slice(0, 50).replace(/\W+/g, '_') : ''}(f) { ${lines.join('\n')} };`)(this, k) as Compiled;
+    lines.push('return r;');
+    if (looped) lines.push('} } catch (x) { if (x instanceof S.Jump && L[x.name] !== undefined) { pc = L[x.name]; r = x.value; continue; } throw x; } }');
+    const fn = new Function('S', 'k', 'L', `return function ${ENV.SEED_NAMED ? 'R_' + body.s.trim().slice(0, 50).replace(/\W+/g, '_') : ''}(f) { ${lines.join('\n')} };`)(this, k, Object.fromEntries(labels)) as Compiled;
     if (ENV.SEED_JS && body.s.trimStart().startsWith(ENV.SEED_JS)) console.log('JS', JSON.stringify(body.s.slice(0, 60)), '\n' + lines.join('\n') + '\nK ' + k.map((x, i) => i + '=' + (x instanceof Function ? 'fn' : x && typeof x === 'object' && 'text' in (x as object) ? JSON.stringify((x as Span).text.s.slice((x as Span).b, (x as Span).e).slice(0, 30)) : Array.isArray(x) ? 'caps' : typeof x)).join(' '));
     byPlanner.set(scope, { version, fn, unread: steps.some(st => st.kind === 'unread'), epoch: this.version, handed: this.planner });
     return fn;

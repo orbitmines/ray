@@ -1290,6 +1290,9 @@ top := external .
     unless r
       // what no rule in reach reads whole: its first operand, read when it runs, and the rest read by that value's rules
       split := at.operand_end(limit)
+      // (a word naming nothing: the longest start of it that names something, the rest read by that (`Colour#`))
+      if split === limit
+        split = at.held_prefix(limit, scope)
       sending := None
       if split
         unless split === limit
@@ -1316,6 +1319,36 @@ top := external .
         unless at.spaced(limit)
           made.word = true
   made
+
+// The place the longest start of the word from `at` to `limit` that names something held where it is read ends at; or nothing.
+{at}.held_prefix({limit}, {scope}) =>
+  found := None
+  here := at.next
+  // (none when the whole word names something)
+  written_whole := external code at limit reader_like
+  whole := written_whole.code
+  frame_whole := scope
+  while frame_whole
+    if external own frame_whole whole
+      here = None
+      frame_whole = None
+    if frame_whole
+      frame_whole = frame_whole.outer
+  while here
+    if here === limit
+      here = None
+    if here
+      written_name := external code at here reader_like
+      name := written_name.code
+      frame := scope
+      while frame
+        if external own frame name
+          found = here
+          frame = None
+        if frame
+          frame = frame.outer
+      here = here.next
+  found
 
 // Whether the statement from `at` to `limit` starts with a word naming a class (a value with rules of its own) whose own rules read
 // what follows it: then they read it, before any rule reads the statement whole.
@@ -1647,8 +1680,8 @@ close := learned.close
         made := into.last
         made.optional = true
         made.arguments = true
-        // its arguments are one operand (a word, or what brackets hold)
-        made.type = Operand
+        // its arguments are one argument (what brackets hold, or an operand with what accesses it)
+        made.type = Argument
         if inner_parameters
           made.parameters = external code inner_parameters close_parameters like
         at = None
@@ -2446,6 +2479,21 @@ Tight := registry.latest.checked
   e := start.operand_end(to)
   e === to
 Operand := registry.latest.checked
+
+// A method's argument: what brackets hold (the group, nothing after it), or one operand with what accesses it (`a.b`, `f(x)`):
+// nothing outside brackets is a space.
+{kind}.one_argument({from}, {to}) =>
+  start := from.spaces_after
+  unless start
+    start = from
+  found := None
+  if start.character === opening
+    e := start.balanced_end(to)
+    found = e === to
+  unless start.character === opening
+    found = kind.tight(start, to)
+  found
+Argument := registry.latest.checked
 
 // A word: one operand that is not in brackets or quotes.
 {kind}.word_text({from}, {to}) =>
@@ -3486,6 +3534,10 @@ enum {written: Item} =>
   made.outer = where.frame
   made.class = true
   made.enum = true
+  // (every enum is the language's `Enum`, once there is one)
+  enum_class := registry.enum_class
+  if enum_class
+    made.extends = enum_class
   from := where.from
   to := where.to
   members_to := to
@@ -3514,6 +3566,12 @@ enum {written: Item} =>
         fields = fields_written.code
     entry := made.constructed(fields)
     external set made name entry
+    // each member knows the ones beside it
+    last_entry := made.last_member
+    if last_entry
+      last_entry.following = entry
+      entry.preceding = last_entry
+    made.last_member = entry
     made.members = made.members.listed_with_value(entry)
     member_from = None
     unless member_end === members_to
@@ -3589,6 +3647,16 @@ Node &+= {
 // A value kept only if a condition holds (`x if c`), or unless it does (`x unless c`).
 {guarded} if {condition} => condition ? guarded : None
 {guarded} unless {condition} => condition ? None : guarded
+
+// What every enum is: its members are themselves only (`==` is identity), `#` is its members in order, and a member's `next` and
+// `previous` are the members beside it (nothing past the ends).
+Enum := class {
+  == (other) => this === other ? true : false
+  # => this.members ?? this.outer.members
+  next => this.following
+  previous => this.preceding
+}
+registry.enum_class = Enum
 
 boolean := enum false (holds: None) | true (holds: true) {
   nand (b) => (holds && b.holds) ? false : true

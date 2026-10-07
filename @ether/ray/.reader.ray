@@ -1919,10 +1919,29 @@ type {block} =>
       here = here.next
   found
 
-// Rules defined from here on are read by their heads in Ray.
+// The place a head written from `from` to `to` ends at without its highlighting: a last word `^style` is a mark (R5.2).
+{from}.unstyled({to}) =>
+  here := from === to ? None : from
+  found := to
+  last_space := None
+  while here
+    if here.character === space
+      last_space = here
+    here = here.next
+    if here === to
+      here = None
+  mark := last_space.next
+  if mark.character === caret
+    after := mark.next
+    unless after === to ? true : after.character === space
+      found = last_space
+  found
+
+// Rules defined from here on are read by their heads in Ray (a last word `^style` is the head's mark, not a piece of it).
 {pattern} => {body} =>
   where := external span pattern
-  pieces := where.from.pieces(where.to, pattern)
+  head_to := where.from.unstyled(where.to)
+  pieces := where.from.pieces(head_to, pattern)
   made := external define pattern pieces body
   made.keep
 
@@ -2259,24 +2278,6 @@ registry.latest.shared = true
     found = e.character === colon && e.next.character === space
   found
 registry.latest.shared = true
-
-// The place a head written from `from` to `to` ends at without its highlighting: a last word `^style` is a mark (R5.2).
-{from}.unstyled({to}) =>
-  here := from === to ? None : from
-  found := to
-  last_space := None
-  while here
-    if here.character === space
-      last_space = here
-    here = here.next
-    if here === to
-      here = None
-  mark := last_space.next
-  if mark.character === caret
-    after := mark.next
-    unless after === to ? true : after.character === space
-      found = last_space
-  found
 
 // ---------------------------------------------------------------- methods (R2.1)
 // What every method runs: `this` (the receiver given, or the `this` its caller sees), its frame inside it when it is an
@@ -2843,7 +2844,7 @@ registry.language = true
 // Rules defined from here on (R2.1: a rule is a method). One written in a class, or with parameters (`name (a, b: T) => …`), runs
 // what every method runs with the body written here; one written while an instance is made is the class's already. A head that
 // is only parameters (`(x) => …`) names nothing: the rule is a value (a closure), not kept where rules are read.
-{pattern: Item} => {body} =>
+{pattern: Item} => {body} ^punctuation =>
   where := external span pattern
   scope := where.frame
   made := None

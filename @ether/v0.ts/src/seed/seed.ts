@@ -1,5 +1,5 @@
 // the debug switches, read once (reading the environment is a call into the runtime)
-const ENV = { SEED_CAPS: process.env.SEED_CAPS, SEED_COUNT: process.env.SEED_COUNT, SEED_DBG: process.env.SEED_DBG, SEED_DEPTH: process.env.SEED_DEPTH, SEED_EXT: process.env.SEED_EXT, SEED_INLINE: process.env.SEED_INLINE, SEED_REREAD: process.env.SEED_REREAD, SEED_SLOW: process.env.SEED_SLOW, SEED_STEPS: process.env.SEED_STEPS, SEED_TIME: process.env.SEED_TIME, SEED_HANG: process.env.SEED_HANG, SEED_STACK: process.env.SEED_STACK, SEED_SETTLE: process.env.SEED_SETTLE };
+const ENV = { SEED_CAPS: process.env.SEED_CAPS, SEED_COUNT: process.env.SEED_COUNT, SEED_DBG: process.env.SEED_DBG, SEED_DEPTH: process.env.SEED_DEPTH, SEED_EXT: process.env.SEED_EXT, SEED_INLINE: process.env.SEED_INLINE, SEED_REREAD: process.env.SEED_REREAD, SEED_SLOW: process.env.SEED_SLOW, SEED_STEPS: process.env.SEED_STEPS, SEED_TIME: process.env.SEED_TIME, SEED_HANG: process.env.SEED_HANG, SEED_STACK: process.env.SEED_STACK, SEED_SETTLE: process.env.SEED_SETTLE, SEED_TRACE_RULE: process.env.SEED_TRACE_RULE, SEED_TRACE_N: process.env.SEED_TRACE_N, SEED_DEFINED: process.env.SEED_DEFINED };
 // The seed: what starts the reader when there is nothing yet (spec/Reader.md R0). It knows no syntax. Its one assumption is
 // about meaning: the entrypoint's first statement defines how rules are defined, and uses that definition in its own body.
 // From that statement it infers the capture brackets, the definer, the access word and the statement end (R0.1); it reads
@@ -32,6 +32,8 @@ function span_of(text: Text, b: number, e: number): SpanOf {
 export class Code {
   of: SpanOf;
   raw = false;   // a capture taken as written: its value is its text, never read
+  // code kept to be read later (`keep`: an argument, a list's item) is read once, when it first is (call by need)
+  once = false; read = false; value: unknown;
   constructor(public text: Text, public b: number, public e: number, public frame: Node, public planner?: Rule, of?: SpanOf) { this.of = of ?? span_of(text, b, e); }
   get s() { return this.of.s; }
 }
@@ -70,6 +72,7 @@ const EAGER: Record<string, number[]> = { declare: [1], get: [0], assign: [1], k
 // SEED_HANG=n: after n applications, the rules being applied (innermost last), and stop.
 // (SEED_HANG_LATE: counted only once `hang_reset` is called, e.g. before the tests a probe reads)
 const HANG = ENV.SEED_HANG ? { n: 0, max: Number(ENV.SEED_HANG), stack: [] as string[], armed: !process.env.SEED_HANG_LATE } : undefined;
+const TRACE_N = { n: 0 };
 const COUNT = ENV.SEED_COUNT ? new Map<string, number>() : undefined, SELF = COUNT && new Map<string, number>(), STACK = ['(top)'];
 if (COUNT) process.on('exit', () => { const all = [...COUNT.entries()].sort((a, b) => b[1] - a[1]); console.log('applications', all.reduce((t, [, n]) => t + n, 0)); for (const [h, n] of all.slice(0, 25)) console.log(String(n).padStart(9), h.split('\n')[0]); console.log('applications within each method'); for (const [h, n] of [...SELF!.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(String(n).padStart(9), h.split('\n')[0]); });
 export class Jump { constructor(public name: string, public value: unknown) {} }
@@ -95,7 +98,7 @@ export class Seed {
     // a name written where it was declared (the nearest frame from where it was written that has it, else there)
     this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = (value); if (ENV.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; (at ?? c.frame).members.set(k, v); return v; });
     // a member set to code as written, unread (read where the member is read)
-    this.externals.set('keep', (frame, [of, name, value]) => { const o = (of) as Node; o.members.set(self.code_of(name).s, value); return value; });
+    this.externals.set('keep', (frame, [of, name, value]) => { const o = (of) as Node; let kept = value; if (value instanceof Code && !value.raw) { const c = new Code(value.text, value.b, value.e, value.frame, value.planner, value.of); c.once = true; kept = c; } o.members.set(self.code_of(name).s, kept); return kept; });
     // whether a node has a member of its own (one set there, even to nothing)
     this.externals.set('own', (frame, [of, name]) => { const n = (of); return n instanceof Node && n.members.has(self.code_of(name).s) ? true : undefined; });
     this.externals.set('set', (frame, [of, name, value]) => { const v = (value), o = (of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'outer') { if (ENV.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); if (v instanceof Node && (v === o || self.inside(v, o))) throw new Error('a node would be inside itself'); o.parent = v as Node | undefined; } else o.members.set(k, v); return v; });
@@ -138,7 +141,7 @@ export class Seed {
       }
       const b = self.code_of(body);
       const rule: Rule = { head, pieces: list, body: new Code(b.text, b.b, b.e, b.frame, self.planner), order: self.order++, planner: self.planner };
-      self.version++; head.frame.version++;
+      self.version++; head.frame.version++; if (ENV.SEED_DEFINED && HANG?.armed) console.log('DEFINED', JSON.stringify(head.s.slice(0, 60)));
       // the rule as the reader keeps it: with the pieces it read (their flags: `leading`, `optional`, `raw`, `gap`, `line_end`)
       const n = self.node_of(rule); n.members.set('pieces', self.force(pieces));
       return n;
@@ -332,7 +335,8 @@ export class Seed {
     for (let i = 0; i < 64 && !c.raw; i++) {
       const w = c.of.word; if (w === undefined) break;
       let held: unknown; for (let n: Node | undefined = c.frame; n; n = n.parent) if (n.members.has(w)) { held = n.members.get(w); break; }
-      if (!(held instanceof Code)) break;
+      // (a value kept to be read once is a value, not code passed on)
+      if (!(held instanceof Code) || held.once) break;
       c = held;
     }
     return c;
@@ -344,7 +348,7 @@ export class Seed {
   define(head: Code, body: Code, pieces?: Piece[]): Rule {
     const rule: Rule = { head, pieces: pieces ?? this.pieces(head.s.trim()), body: new Code(body.text, body.b, body.e, body.frame, this.planner), order: this.order++, planner: this.planner };
     head.frame.rules.push(rule);
-    this.version++; head.frame.version++;
+    this.version++; head.frame.version++; if (ENV.SEED_DEFINED && HANG?.armed) console.log('DEFINED', JSON.stringify(head.s.slice(0, 60)));
     return rule;
   }
   // The pieces of a head: a capture is the learned brackets around a name (its first word); brackets around other brackets are literal.
@@ -449,6 +453,7 @@ export class Seed {
   // `planner`: the planner of the code the captures are in (undefined: the seed's) — passed always, never defaulted (R0.5).
   apply(rule: Rule, caller: Node, caps: [string, Span][], planner: Rule | undefined, given: [string, unknown][] = [], parent?: Node): unknown {
     if (COUNT || EXT) { const h = rule.head.s.trim(); if (COUNT) { COUNT.set(h, (COUNT.get(h) ?? 0) + 1); SELF!.set(STACK[STACK.length - 1], (SELF!.get(STACK[STACK.length - 1]) ?? 0) + 1); } if (/^\{\w+\}\.\w/.test(h) || /^[a-z_]+$/.test(h)) { STACK.push(h); try { return this.apply_(rule, caller, caps, planner, given, parent); } finally { STACK.pop(); } } }
+    if (HANG && ENV.SEED_TRACE_RULE && rule.head.s.includes(ENV.SEED_TRACE_RULE) && ++TRACE_N.n === Number(ENV.SEED_TRACE_N ?? 1)) console.log('TRACE', HANG.stack.join('\n      '));
     if (HANG) { HANG.stack.push(rule.head.s.trim().slice(0, 60) + ' ← ' + caps.map(([n, c]) => n + '=' + JSON.stringify(c.text.s.slice(c.b, c.e).slice(0, 30))).join(' ')); if (HANG.armed && ++HANG.n > HANG.max) { console.log(HANG.stack.slice(0, 25).join('\n') + '\n…' + HANG.stack.length + ' deep…\n' + HANG.stack.slice(-15).join('\n')); process.exit(3); } try { return this.apply_(rule, caller, caps, planner, given, parent); } finally { HANG.stack.pop(); } }
     return this.apply_(rule, caller, caps, planner, given, parent);
   }
@@ -479,6 +484,10 @@ export class Seed {
   forced = 0; compiles = 0; recompiles = 0;
   force(x: unknown): unknown {
     if (!(x instanceof Code) || x.raw) return x;
+    if (x.once) { if (!x.read) { x.value = this.force_(x); x.read = true; } return x.value; }
+    return this.force_(x);
+  }
+  force_(x: Code): unknown {
     this.forced++;
     const word = x.of.word;
     if (word !== undefined) { let d = 0; for (let at: Node | undefined = x.frame; at; at = at.parent) { d++; const v = at.members.get(word); if (v !== undefined || at.members.has(word)) { if (DEPTH && d > DEPTH.max) { DEPTH.max = d; DEPTH.word = word; } return this.force(v); } } if (DEPTH && d > DEPTH.max) { DEPTH.max = d; DEPTH.word = word + ' (unresolved)'; } }

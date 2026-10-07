@@ -740,6 +740,9 @@ declaring_written := external span x:=x
   parts
 // What every value has is a class made of itself too.
 Node.components = Node.components_with(None)
+// A list and its links are classes too (Ray.ray makes them Arrays and Rays: `Chain.components.hierarchy &= Array`).
+Chain.components = Chain.components_with(None)
+Link.components = Link.components_with(None)
 // A class: the frame its block is read in, inside the frame it was written in (`outer`); its statics, its fields' defaults and its
 // methods are that frame's; `components.hierarchy`, what it is made of. Calling it makes an instance.
 {block: Tight}.class_of({parent}) =>

@@ -77,6 +77,10 @@ Character &+= {
 
   instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
   device => (presence ?? Instance.local).device
+  // The standard location of all communication with it: every instance it runs on, superposed, with the one its focus is on
+  // selected (`\…\`, U-C2). `@me/instance = x` sends to the selected one, `dynamically event: @me/instance` follows what
+  // comes from it; what holds an instance decides the protocol (a host's terminal, a page, another instance over the network).
+  instance => instances{!== primary} | \(primary ?? Instance.local)\
   status => Status#{this is .}
   // Saying a status constrains what may run (W2.15); one read off what runs (`Online`, `Broadcasting`) that does not
   // hold yet is a quest to make it hold, run by the character.

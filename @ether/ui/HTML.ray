@@ -386,8 +386,8 @@ UI.HTML := class {
   level := Geometry.Preparing(1px) + packaged
 
   DOM := class: UI.Interface {
-    send (message) => @me/device.sent("dom", message)
-    received => @me/device.received("dom")
+    send (message) => @me/instance = message
+    dynamically event: @me/instance
     line (parts: String[]) => parts.join(" "), \n
 
     static made = 0
@@ -435,7 +435,7 @@ UI.HTML := class {
     write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as $.css])) if package.sheet)
       -- send(line(["lock", UI.locked as String]))
       -- send(line(["scroll", "window", (UI.scene.scrolled.y as px) as String, (UI.scene.transition != None) as String]))
-    read => dispatched(received)
+    read => dispatched(event)
   }
 
   Chromium := { }

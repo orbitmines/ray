@@ -15,7 +15,7 @@ FileSystem := class: Language {
 FileOptimizations := { }
 
 IO := class {
-  output (text: String) => @me/device.sent("stdout", text)
+  output (text: String) => @me/instance = text
   fetch (from: Location, path: String, version: Version?) => ((from / path + (version as String)).held as String if version) ?? (from / path).held as String
 }
 

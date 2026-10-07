@@ -88,6 +88,9 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   superposition), and the selected one is where its focus is (`primary`); v0 has one `presence`.
   *`…/instance/Entity.ray:15–27`*
   **Follows (2026-10-06):** `character.instances` is the superposition of every instance running it (present, logged in or hosted), and the selected one, `primary`, is where its focus is (`presence`), from W2.14 (status is the max over all instances) and superposition over a single field (U1).
+  **(user, 2026-10-07)** `@me/instance` is that superposition with the selection (`instances{!== primary} | \primary\`), and
+  the standard location of all communication: "use the @me/instance for ALL communication, terminal or not"; each terminal or
+  page of the same player is its own instance, a different channel with its own protocol behind the same location.
 - **W2.14 Status and name over instances and avatars** — **Decided (draft)**. A character's status is the highest over all its
   instances (`instance.status#.max`), and its name is its own name superposed with its avatars' names, so any of them finds it.
   *`.ray2/Character.ray:63, 72`* **(2026-10-06)** The avatars are themselves in the name's superposition (W1.11); an avatar's

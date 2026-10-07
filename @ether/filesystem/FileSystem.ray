@@ -27,7 +27,19 @@ FileSystem &+= {
   }
 }
 
+FileSystem &+= {
+  // This instance, as whoever plays it reaches it: the host's terminal (its standard input and output); in a browser the
+  // page and on ether the player, through two places on the device (what is sent waits in `instance/sent`, what comes in
+  // arrives in `instance/received`, each keeping its history).
+  static Terminal := class: FileSystem {
+    [location: Location] => if OS.Browser || OS.Ether { @me/device/storage["instance/received"] } else { external io "stdin" None }
+    { }[{location: Location}] = {value} ^punctuation => if OS.Browser || OS.Ether { @me/device/storage["instance/sent"] = value } else { external io "stdout" value }
+    ({location: Location}, {args}) => ERROR@FileSystem `an instance is not executed: it is sent to`
+  }
+}
+
 FileOptimizations = FileOptimizations + {
+  {instance: Instance{=== Instance.local}} => FileSystem.Terminal()
   // a scheme of one letter is a Windows drive (https://url.spec.whatwg.org/#windows-drive-letter)
   {location: Location{!scheme || scheme == "file" || scheme.length == 1}} => @/
 }

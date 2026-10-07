@@ -2,8 +2,8 @@ mark ^keyword := external global
 
 unless OS.Ether["platform"] == "ether" { INFO@mark `ETH4 the language as the operating system does not name its platform ether` }
 with @me/device/os = OS.Ether {
-  @me/device.sent("ethertest", "a")
-  @me/device.sent("ethertest", "b")
-  unless @me/device.received("ethertest") == "a" && @me/device.received("ethertest") == "b" && @me/device.received("ethertest") === None { INFO@mark `ETH9 a stream on ether does not give back what was sent to it, in order, once` }
+  @me/instance = "a"
+  @me/instance = "b"
+  unless @me/device/storage["instance/sent"] == "b" && @me/device/storage["instance/sent"].previous == "a" { INFO@mark `ETH9 what is sent to an instance on ether is not kept in order` }
   unless [Random.bit, Time.now, ("a" as Location).held()].every(.erred) { INFO@mark `ETH8 what the language as the operating system has not written yet does not err` }
 }

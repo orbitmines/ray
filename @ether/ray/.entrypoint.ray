@@ -234,7 +234,13 @@ declaring
   external label done
 // `x.member`, `x.member(arguments)`: its own member, else its method (T8.7).
 {x: Tight}.{literal member ^property}{arguments: Bracketed} ^punctuation =>
-  x.member(member, arguments)
+  receiver := x
+  // (a member it holds that is called, a class, a method or a program: called, `G.V()`)
+  held := (external own receiver member) ? (external get receiver member) : None
+  callable := held ? (external get held class) : None
+  callable = callable ? callable : (held ? (external get held pieces) : None)
+  callable = callable ? callable : (held ? (external get held program) : None)
+  callable ? held.called(arguments) : receiver.member(member, arguments)
 {x: Tight}.{literal member ^property} ^punctuation =>
   x.member(member, None)
 // `.member`, `.member = value`, `.member(arguments)`: of `this` (what the statement's frame sees as `this`).
@@ -1274,6 +1280,16 @@ Node &+= {
   compounds + (component) =>
     whole := this
     added := component
+    // (a block added is a class of what it declares: `Vector := Elementwise + { x => this[0] … }`)
+    external goto composed ((external get added program) ? None : true)
+    block_class := external node
+    block_class.outer_frame = external get added context
+    block_class.class = true
+    block_class.components = block_class.components_with(None)
+    block_class.written = external get added written
+    block_class.declarations_read(added)
+    added = block_class
+    external label composed
     made := external node
     made.outer_frame = external get whole outer_frame
     made.class = true

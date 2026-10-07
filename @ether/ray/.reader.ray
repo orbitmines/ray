@@ -1437,7 +1437,13 @@ top := external .
     pieces := links.rule.pieces
     word_led := inside ? pieces.from.character.word : None
     unless word_led
-      if pieces.literal && at.spells(pieces.from, pieces.to)
+      spelt := pieces.literal ? at.spells(pieces.from, pieces.to) : None
+      // (one spelled with a word's characters ends where the word does: `or` is not the start of `original`)
+      if spelt && pieces.from.character.word
+        after := spelt.end
+        if after && after.character.word
+          spelt = None
+      if spelt
         found = true
         links = None
     links = links.next
@@ -2503,7 +2509,12 @@ Unbraced := opening_block.anything_but[]
   head := written_pattern.code
   b := written_body.code
   parameters := pieces.parameters_piece
+  // (a rule written in a class is a method; on what every value has, one whose head is a word alone: `copy =>`)
   method := parameters ? true : scope.class
+  unless method
+    if scope === registry.base
+      lone := pieces.next ? None : pieces.literal
+      method = lone ? pieces.from.character.word : None
   made := None
   if method
     made = external define head pieces method_body

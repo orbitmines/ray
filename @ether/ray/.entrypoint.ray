@@ -691,10 +691,11 @@ Node.components = Node.components_with(None)
   where := external span this
   // (a name with aliases, `initial | (⊢)`: declared as the first)
   named_end := where.from.alternative_end(where.to)
-  place := external get (external ** this) code
+  place_written := external ** this
   external goto one_name (named_end === where.to ? true : None)
-  place = external get (external code where.from named_end this) code
+  place_written = external code where.from named_end this
   external label one_name
+  place := external get place_written code
   naming := registry.naming
   value := None
   external goto by_order (naming === None ? true : None)
@@ -702,6 +703,9 @@ Node.components = Node.components_with(None)
   external set naming place value
   external goto done
   external label by_order
+  // (the field kept, in order, on the frame it is declared in: `fields`)
+  holder := (external span place).frame
+  holder.field_places = holder.field_places.listed_with_value(place_written)
   external goto by_name (external own where.frame place)
   next := registry.given
   external goto by_default (next ? None : true)
@@ -1280,4 +1284,65 @@ DARK := theme `Ether.ray - Dark` {
   ^info = ^ #5C5CCD
   ^debug = ^ #5CCD5C
   ^trace = ^comment
+}
+
+// A field: its name, and what a value holds there.
+Field := class {
+  name: Node
+  value: Node
+}
+Node &+= {
+  // its fields: what its class declares with a type (`name: T`, in its header or its block), with what it holds there
+  fields =>
+    holder := this
+    found := None
+    at_link := holder.field_places ? holder.field_places.head : None
+    while at_link {
+      place := external get at_link.value code
+      found = found.listed_with_value(Field(name: (external span place), value: (external get holder place)))
+      at_link = at_link.next
+    }
+    found
+  // another value like it: the same class, its fields holding what it holds, its diagnostics
+  copy =>
+    source := this
+    made := external node
+    made.outer = external get source outer
+    made.instance = source.instance
+    made.this = made
+    made.components = source.components
+    made.diagnostics = source.diagnostics
+    made.field_places = source.field_places
+    at_link := source.field_places ? source.field_places.head : None
+    while at_link {
+      place := external get at_link.value code
+      external set made place (external get source place)
+      at_link = at_link.next
+    }
+    made
+  // a copy of it with `diagnostic` after the ones it has
+  diagnosed (diagnostic) =>
+    given := diagnostic
+    marked := this.copy
+    kept := None
+    at_link := this.diagnostics ? this.diagnostics.head : None
+    while at_link {
+      kept = kept.listed_with_value(at_link.value)
+      at_link = at_link.next
+    }
+    marked.diagnostics = kept.listed_with_value(given)
+    marked
+  // an instance of it whose fields are what `reading` names (its named captures)
+  built_from (reading) =>
+    made := this()
+    at_link := reading ? reading.head : None
+    while at_link {
+      item := at_link.value
+      if item.named { made[item.name] = item.value }
+      at_link = at_link.next
+    }
+    made
+  // its block as written
+  written_as => Program(code: this.written)
+  super => ERROR `super is not written on the seed yet`
 }

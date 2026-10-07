@@ -34,13 +34,13 @@
   external label done
   p
 // `x[key] := v`, `x[key] = v`: declared or written so (declared before `:=` and `=`: they read these first).
-{x: Tight}[{key: Balanced}] := {value} =>
+{x: Tight}[{key: Balanced}] := {value} ^punctuation =>
   holder := x.as_map
   name := key.member_code
   v := value
   external set holder name v
   v
-{x: Tight}[{key: Balanced}] = {value} =>
+{x: Tight}[{key: Balanced}] = {value} ^punctuation =>
   holder := x.as_map
   name := key.member_code
   v := value
@@ -49,7 +49,7 @@
 
 // `X<T, V: Type> := class { … }`: `X`, a class with parameters (as a method has them); `X<a, b>`, `X<V: b>`: a class like it with
 // them bound (by name, or in order), its instances `X`'s too. (Declared before `:=`: it reads these first.)
-{name}<{parameters}> := {value} =>
+{name}<{parameters}> := {value} ^punctuation =>
   made := value
   made.parameters = external ** parameters
   external declare name made
@@ -71,7 +71,7 @@
 [{inside: Balanced}] ^punctuation =>
   given := inside
   (external get given listing) ? given : None.listed_with_value(given)
-{`[]`} =>
+{`[]`} ^punctuation =>
   found := external node
   found.listing = true
   found.outer = Chain
@@ -79,7 +79,7 @@
   found.this = found
   found
 // A block as a value: a program (`{ … }`), run where something runs it; an instance of the language's `Program` (once there is one).
-{{inside: Balanced}} =>
+{{inside: Balanced}} ^punctuation =>
   made := external node
   made.program = true
   made.written = external ** inside
@@ -124,28 +124,28 @@
   external declare name value
 // `name := value`: the value declared where the name was written (read in place: nothing but an external); a list of names in
 // brackets (`(x, y) := a, b`), each with the value in its place.
-({names}) := {value} =>
+({names}) := {value} ^punctuation =>
   names.declared_each(value)
 // (a name with another, `O | optimizations := …`: both)
-{name} | {alias} := {value} =>
+{name} | {alias} := {value} ^punctuation =>
   external declare name value
   external declare alias value
-{name} := {value} =>
+{name} := {value} ^punctuation =>
   external declare name value
 // `x.member = value`: the member set.
 {x: Tight}.{literal member} = {value} =>
   external set x member value
 // `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing); a name is written with it
 // (anything else: the base's `&=`).
-{target: Word} &= {value} =>
+{target: Word} &= {value} ^punctuation =>
   list := target.listed_with_last(value)
   external assign target list
 // `name = value`: written where the name was declared (anything else: the base's `=`).
-{target: Word} = {value} =>
+{target: Word} = {value} ^punctuation =>
   external assign target value
 // `condition ? yes : no`: `yes` when the condition holds (T1.7: nothing does not; a value saying whether it `holds` as that says;
 // any other does), else `no`; only the one taken is read.
-{condition} ? {yes} : {no} =>
+{condition} ? {yes} : {no} ^punctuation =>
   taken := condition
   external goto said (external own taken holds)
   external goto yes_taken taken
@@ -159,12 +159,12 @@
   yes
   external label done
 // `name: Type = default`, `name: Type`: a name declared with a type, given its value by what is constructed or called.
-{name}: {type} = {default} =>
+{name}: {type} = {default} ^punctuation =>
   name.declared_as(type, default)
-{name}: {type} =>
+{name}: {type} ^punctuation =>
   name.declared_as(type, None)
 // `a === b`: whether they are the same value (identity): the language's `true` or `false` (before it has them, whether they are).
-{a} === {b} =>
+{a} === {b} ^punctuation =>
   same := external same a b
   external goto said registry.true_value
   same
@@ -182,19 +182,19 @@
 {x: Tight}.{literal member} =>
   x.member(member, None)
 // `.member`, `.member = value`, `.member(arguments)`: of `this` (what the statement's frame sees as `this`).
-.{literal member} = {value} =>
+.{literal member ^property} = {value} ^punctuation =>
   receiver := (external get (external .) caller_frame).this_seen
   external set receiver member value
-.{literal member}{arguments: Bracketed} =>
+.{literal member ^property}{arguments: Bracketed} ^punctuation =>
   receiver := (external get (external .) caller_frame).this_seen
   receiver.member(member, arguments)
-.{literal member} =>
+.{literal member ^property} ^punctuation =>
   receiver := (external get (external .) caller_frame).this_seen
   receiver.member(member, None)
 
 
 // `x[key]`: what `x` holds named by `key` (a block's declarations, T8.7).
-{x: Tight}[{key: Balanced}] =>
+{x: Tight}[{key: Balanced}] ^punctuation =>
   holder := x.as_map
   name := key.member_code
   external get holder name
@@ -213,7 +213,7 @@
 
 // ---------------------------------------------------------------- what every value has (the base)
 // `x &+= { … }`: what the block defines, added to `x` (R4.3)
-{target: Tight} &+= {{members: Balanced}} =>
+{target: Tight} &+= {{members: Balanced}} ^punctuation =>
   extended := target
   extended ? (external apply members None extended) : (external report (external span members).from (external span members).to nothing_extended)
   registry.classes_changed = true
@@ -468,16 +468,16 @@ registry.text_is = registry.latest
 Node := external node
 registry.base = Node
 Node &+= {
-  .{literal property} =>
+  .{literal property ^property} ^punctuation =>
     this.member(property, None)
-  .{literal property}{arguments: Bracketed} =>
+  .{literal property ^property}{arguments: Bracketed} ^punctuation =>
     this.member(property, arguments)
-  .{literal property} = {value} =>
+  .{literal property ^property} = {value} ^punctuation =>
     external set this property value
   // `,` composes one value, a list (no split, 2026-09-27): `a, b, c` is the list of `a`, `b` and `c`, each as written (a
   // place or a value, read when it is used).
   // (a list given more is that list with it at its end; a value given, not as written, the first of a new one)
-  ,{other: Item} =>
+  ,{other: Item} ^punctuation =>
     list := None
     external goto as_written (external span this)
     list = this
@@ -495,61 +495,61 @@ Node &+= {
     list
   // `x := value`, `x = value` on a value read first: a name as written declared (written) with it; a list of names, each with the
   // value in its place
-  :={value} =>
+  :={value} ^punctuation =>
     external goto as_written (external span this)
     this.declared_each(value)
     external goto done
     external label as_written
     external declare this value
     external label done
-  ={value} =>
+  ={value} ^punctuation =>
     external goto as_written (external span this)
     value
     external goto done
     external label as_written
     external assign this value
     external label done
-  &={value} =>
+  &={value} ^punctuation =>
     list := this.listed_with_last(value)
     external goto done ((external span this) ? None : true)
     external assign this list
     external label done
     list
-  :{type} =>
+  :{type} ^punctuation =>
     this.declared_as(type, None)
-  :{type} = {default} =>
+  :{type} = {default} ^punctuation =>
     this.declared_as(type, default)
-  {arguments: Bracketed} =>
+  {arguments: Bracketed} ^punctuation =>
     this.called(arguments)
   // a comment after a value: the value
-  {`//`}{comment: Line} =>
+  {`//`}{comment: Line} ^comment =>
     this
   // `x -- f`: `f` read with `this` being `x` (a closure it answers called with `x`): what it answers; `x ~~ f`: the same, for
   // what it does, answering `x`
-  --{call: Line} =>
+  --{call: Line} ^punctuation =>
     this.continued(call)
-  ~~{call: Line} =>
+  ~~{call: Line} ^punctuation =>
     value := this
     value.continued(call)
     value
   // `a | b`: both, superposed (U1); `T?`: `None | T`
-  |{other: Operand} =>
+  |{other: Operand} ^punctuation =>
     this.superposed_with(other)
-  ? =>
+  ? ^punctuation =>
     None.superposed_with(this)
   // `T{p}`: what `T` admits that satisfies `p` (read with `this` being the candidate)
-  {{constraint: Balanced}} =>
+  {{constraint: Balanced}} ^punctuation =>
     made := external node
     made.narrows = this
     made.constraint = external ** constraint
     made
   // `x is T`: whether `T` admits `x` (T4.10)
-  { }is {type: Operand} =>
+  { }is {type: Operand} ^keyword =>
     this.admitted_by(type) ? registry.true_value : registry.false_value
   // `a && b`: `b` when `a` holds, else `a`; `a || b`: `a` when it holds, else `b` (the other side read only when it decides)
-  &&{other} =>
+  &&{other} ^punctuation =>
     this ? other : this
-  ||{other} =>
+  ||{other} ^punctuation =>
     this ? this : other
 }
 
@@ -738,29 +738,29 @@ Node.components = Node.components_with(None)
   (value.applied_to(None, arguments))
   external label done
 
-class {{block: Balanced}} =>
+class {{block: Balanced}} ^keyword =>
   block.class_of(None)
 // `class: Parent { … }`: a class whose instances are also its parent's (its rules and fields too).
-class: {parent} {{block: Balanced}} =>
+class: {parent} {{block: Balanced}} ^keyword =>
   block.class_of(parent)
 // A class written with a header (`class = values: Iterable { … }`, `class (x: T, y) { … }`).
-class = {header: Balanced} {{block: Balanced}} =>
+class = {header: Balanced} {{block: Balanced}} ^keyword =>
   header.header_class(None).with_block(block)
-class = {header: Balanced} =>
+class = {header: Balanced} ^keyword =>
   header.header_class(None)
-class: {parent: Tight} = {header: Balanced} {{block: Balanced}} =>
+class: {parent: Tight} = {header: Balanced} {{block: Balanced}} ^keyword =>
   header.header_class(parent).with_block(block)
-class: {parent: Tight} = {header: Balanced} =>
+class: {parent: Tight} = {header: Balanced} ^keyword =>
   header.header_class(parent)
-class {header: Bracketed} {{block: Balanced}} =>
+class {header: Bracketed} {{block: Balanced}} ^keyword =>
   header.header_class(None).with_block(block)
-class: {parent: Tight} {header: Bracketed} {{block: Balanced}} =>
+class: {parent: Tight} {header: Bracketed} {{block: Balanced}} ^keyword =>
   header.header_class(parent).with_block(block)
 
 // `enum a | b (field: v) | c { block }`: a class of exactly these members, each an instance of it named on it (`X.a`), in `members` in
 // order, knowing the ones beside it (`preceding`, `following`); a block after them is the class's own. Every enum is the language's
 // `Enum` (once there is one).
-enum {written: Item} =>
+enum {written: Item} ^keyword =>
   where := external span written
   made := external node
   made.outer = where.frame
@@ -821,11 +821,11 @@ enum {written: Item} =>
 // (`static` written as a literal: as a head's first word it names the modifier)
 // `static name = value` in a class: a member of the class (declared there, as `:=` does), read once; `static statement`: read once, for
 // the class, not again for each instance.
-{`static`} {name: Tight} = {value} =>
+{`static`} {name: Tight} = {value} ^keyword =>
   external goto done (external get (external span name).frame instance)
   external declare name value
   external label done
-{`static`} {statement} =>
+{`static`} {statement} ^keyword =>
   external goto done (external get (external span statement).frame instance)
   statement
   external label done
@@ -846,7 +846,7 @@ enum {written: Item} =>
   registry.waiting = waiting
   external label done
   p
-watched({program: Balanced}) =>
+watched({program: Balanced}) ^keyword =>
   program.watched_run
 // The programs waiting, run again (what the reader runs once a statement made or added to a class).
 rerunning_waiting =>
@@ -873,7 +873,7 @@ registry.rerun = registry.latest
 
 // ---------------------------------------------------------------- parameters of a class (`T<a>`), repetition (`T[]`)
 Node &+= {
-  <{given}> =>
+  <{given}> ^punctuation =>
     base := this
     written := external get (external ** given) code
     made := external node
@@ -901,7 +901,7 @@ Node &+= {
 Iterable<Vertex> := class { }
 Array := class: Iterable { }
 Node &+= {
-  [] => Array<this>
+  [] ^punctuation => Array<this>
 }
 // A program (P1): code, read where it was written (`context`) or entered on a value; with `parameters`, a closure of them. A
 // block (`{ … }`) is one.
@@ -922,8 +922,8 @@ Node &+= {
 }
 
 // A value kept only if a condition holds (`x if c`), or unless it does (`x unless c`).
-{guarded} if {condition} => condition ? guarded : None
-{guarded} unless {condition} => condition ? None : guarded
+{guarded} if {condition} ^keyword => condition ? guarded : None
+{guarded} unless {condition} ^keyword => condition ? None : guarded
 
 // What every enum is: its members are themselves only (`==` is identity), `#` is its members in order, and a member's `next` and
 // `previous` are the members beside it (nothing past the ends).
@@ -965,7 +965,7 @@ Node &+= {
 }
 
 // `!x`: whether `x` does not hold.
-!{x} => x ? false : true
+!{x} ^punctuation => x ? false : true
 
 // A block comment is nothing: on its own, and between operands (what it follows is what the whole is). Nested ones are read
 // whole: the comment ends at the `*/` the statement ends with.
@@ -975,8 +975,8 @@ Node &+= {
 }
 
 // ---------------------------------------------------------------- jumps (R3.1): a program's edges
-goto {literal target} => external goto target
-goto {literal target} if {condition} => (
+goto {literal target ^label} ^class => external goto target
+goto {literal target ^label} if {condition} ^class => (
   taken := condition ? true : None
   external goto target taken
 )
@@ -988,19 +988,19 @@ goto {literal target} if {condition} => (
 Branch := class {
   taken: Node
   answer: Node
-  else {{otherwise: Balanced}} => taken ? answer : otherwise
-  {\n}else {{otherwise: Balanced}} => taken ? answer : otherwise
-  elsif {condition} {{yes: Balanced}} => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
-  {\n}elsif {condition} {{yes: Balanced}} => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
+  else {{otherwise: Balanced}} ^class => taken ? answer : otherwise
+  {\n}else {{otherwise: Balanced}} ^class => taken ? answer : otherwise
+  elsif {condition} {{yes: Balanced}} ^class => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
+  {\n}elsif {condition} {{yes: Balanced}} ^class => taken ? this : (condition ? Branch(true, yes) : Branch(None, None))
 }
 if := class {
-  { }{condition} {{yes: Balanced}} => condition ? Branch(true, yes) : Branch(None, None)
+  { }{condition} {{yes: Balanced}} ^class => condition ? Branch(true, yes) : Branch(None, None)
 }
 unless := class {
-  { }{condition} {{yes: Balanced}} => condition ? Branch(None, None) : Branch(true, yes)
+  { }{condition} {{yes: Balanced}} ^class => condition ? Branch(None, None) : Branch(true, yes)
 }
 while := class {
-  { }{condition} {{body: Balanced}} => (
+  { }{condition} {{body: Balanced}} ^class => (
    loop_continue\
     goto loop_break if !condition
     body
@@ -1010,7 +1010,7 @@ while := class {
   )
 }
 loop := class {
-  { }{{body: Balanced}} => (
+  { }{{body: Balanced}} ^class => (
    loop_continue\
     body
     goto loop_continue
@@ -1021,7 +1021,7 @@ loop := class {
 // `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in.
 break ^keyword => external goto loop_break
 continue ^keyword => external goto loop_continue
-return {value} =>
+return {value} ^keyword =>
   value
   external goto return
 
@@ -1031,28 +1031,28 @@ Diagnostic := class {
   type: Node
   fatal: Node
 }
-ERROR{`@`}{type} {message} =>
+ERROR{`@`}{type} {message} ^error =>
   external report (external span message).from (external span message).to message
   Diagnostic(message: message, type: type)
-ERROR {message} =>
+ERROR {message} ^error =>
   external report (external span message).from (external span message).to message
   Diagnostic(message: message)
-FATAL{`@`}{type} {message} =>
+FATAL{`@`}{type} {message} ^fatal =>
   external report (external span message).from (external span message).to message
   Diagnostic(message: message, type: type, fatal: true)
-FATAL {message} =>
+FATAL {message} ^fatal =>
   external report (external span message).from (external span message).to message
   Diagnostic(message: message, fatal: true)
-TODO {message} => None
-WARN{`@`}{type} {message} =>
+TODO {message} ^debug => None
+WARN{`@`}{type} {message} ^warn =>
   external report (external span message).from (external span message).to message
-INFO{`@`}{type} {message} =>
+INFO{`@`}{type} {message} ^info =>
   external report (external span message).from (external span message).to message
-DEBUG{`@`}{type} {message} =>
+DEBUG{`@`}{type} {message} ^debug =>
   external report (external span message).from (external span message).to message
-WARN {message} =>
+WARN {message} ^warn =>
   external report (external span message).from (external span message).to message
-INFO {message} =>
+INFO {message} ^info =>
   external report (external span message).from (external span message).to message
 TODO ^debug => None
 
@@ -1132,8 +1132,8 @@ Node &+= {
     answer.superposed ? answer.holds_for(this) : answer
   verify (candidate) => candidate
   // the value as code (`x**`)
-  ** => Program(code: (external ** this))
-  . => this
+  ** ^punctuation => Program(code: (external ** this))
+  . ^punctuation => this
 }
 * := Node
 

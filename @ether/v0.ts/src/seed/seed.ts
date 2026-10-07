@@ -845,7 +845,7 @@ export class Seed {
           // a statement that failed: said where it starts, and reading goes on at the next line that is not indented
           const message = x instanceof Error ? x.message : String(x), trace = (x as { ray?: string[] }).ray ?? [];
           if (ENV.SEED_STACK && x instanceof Error) console.log(x.stack?.split('\n').slice(0, 12).join('\n'));
-          let e = s.indexOf(end, p); while (e >= 0 && (s.startsWith(end, e + end.length) || s.startsWith(this.learned!.indent, e + end.length) || s.startsWith(this.learned!.space, e + end.length))) e = s.indexOf(end, e + end.length);
+          let e = s.indexOf(end, p); while (e >= 0 && (s.startsWith(end, e + end.length) || s.startsWith(this.learned!.indent, e + end.length) || s.startsWith(this.learned!.space, e + end.length) || s.startsWith(this.learned!.close, e + end.length))) e = s.indexOf(end, e + end.length);
           this.say(`Failed: ${message}${trace.length ? ' (in ' + trace[0] + ')' : ''}`, { text, b: p, e: e < 0 ? s.length : e });
           p = e < 0 ? s.length : e + end.length;
           pend();

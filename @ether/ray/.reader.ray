@@ -138,17 +138,13 @@ caret := mark.next.character
 mark = mark.next.next
 pipe := mark.character
 
-// The bracket that closes `c`, or nothing when `c` opens none.
-{c}.closer =>
-  found := c === opening ? closing : None
-  if c === opening_list
-    found = closing_list
-  c === opening_block ? closing_block : found
-
-// Whether `c` closes a bracket.
-{c}.closes =>
-  found := c === closing ? true : c === closing_list
-  c === closing_block ? true : found
+// A bracket knows the bracket that closes it (`c.closer`: nothing when `c` opens none), and one that closes says so (`c.closes`).
+opening.closer = closing
+opening_list.closer = closing_list
+opening_block.closer = closing_block
+closing.closes = true
+closing_list.closes = true
+closing_block.closes = true
 
 // The chain of brackets open, `chain`, with one more waiting for `shut`.
 {shut}.pushed_on({chain}) =>

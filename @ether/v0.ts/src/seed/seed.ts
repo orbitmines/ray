@@ -185,6 +185,7 @@ export class Seed {
       this.diagnostics = this.diagnostics.filter(d => { if (!inside(d)) return true; this.said.delete(`${d.at.text.name}\0${d.at.b}\0${d.at.e}\0${d.message}`); return false; });
       const kept = before - this.diagnostics.length;
       for (const st of now) { const t0 = performance.now(); if (ENV.SEED_SETTLE && HANG?.armed) this.hang_reset(); this.read(st.text, st.b, st.scope, st.e); if (process.env.SEED_SETTLE_EXIT && performance.now() > Number(process.env.SEED_SETTLE_EXIT)) process.exit(0); if (ENV.SEED_SETTLE) for (const d of this.diagnostics.slice(-3)) if (d.at.text === st.text && d.at.b >= st.b && d.at.b < st.e) console.log('   said', d.message.slice(0, 300)); if (ENV.SEED_SETTLE) console.log('settle', pass, Math.round(performance.now() - t0), 'ms', st.text.name.split('/').pop() + ':' + st.text.s.slice(0, st.b).split('\n').length, JSON.stringify(st.text.s.slice(st.b, st.b + 50))); }
+      if (ENV.SEED_SETTLE) console.log('pass', pass, 'pending', now.length, '->', this.pending.length, 'diagnostics', kept, '->', this.diagnostics.length - (before - kept));
       if (this.pending.length >= now.length && this.diagnostics.length - (before - kept) >= kept) break;
     }
   }

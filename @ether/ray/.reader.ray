@@ -2930,7 +2930,7 @@ private {program: Tight}.each_key({body}) =>
 
 // `X<T, V: Type> := class { … }`: `X`, a class with parameters (as a method has them); `X<a, b>`, `X<V: b>`: a class like it with
 // them bound (by name, or in order), its instances `X`'s too. (Declared before `:=`: it reads these first.)
-{name: Word}<{literal parameters}> := {value} =>
+{name}<{parameters}> := {value} =>
   made := value
   made.parameters = external ** parameters
   external declare name made
@@ -3722,16 +3722,16 @@ registry.rerun = registry.latest
 
 // ---------------------------------------------------------------- parameters of a class (`T<a>`), repetition (`T[]`)
 Node &+= {
-  <{literal given}> =>
+  <{given}> =>
     base := this
+    written := external get (external ** given) code
     made := external node
-    made.outer = (external span given).frame
+    made.outer = (external span written).frame
     made.class = true
     made.extends = base
     parameters := external get base parameters
     external goto done (parameters === None ? true : None)
-    arguments := external get (external code (external span given).from (external span given).to given) code
-    made.bound(parameters, (arguments.listed))
+    made.bound(parameters, written.listed)
     external label done
     made
 }

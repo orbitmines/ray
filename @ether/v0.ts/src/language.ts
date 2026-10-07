@@ -67,9 +67,19 @@ export type Said = { message: string; begin: number; end: number };
 // capture's name in a head is a parameter; what a capture holds is painted by what reads it; a name read is a parameter (code a
 // rule was given), a function (a rule) or a variable. Which character marks a style is not assumed: it is the first character of
 // the first head the reader in Ray read a mark off (what is written after the pieces it read).
+type Info = { style?: string; caps: Map<string, string>; mark?: string };
 export class Painter implements Observer {
   sigil?: string;
-  rules = new WeakMap<Rule, { style?: string; caps: Map<string, string> }>();
+  rules = new WeakMap<Rule, Info>();
+  // what a declaration's mark marked (`name ^style := value`): values, and names where they are held
+  marked = new WeakMap<object, string>();
+  marked_names = new WeakMap<Node, Map<string, string>>();
+  // the places of names an application with a mark is about to declare, with the mark's style
+  marking = new WeakMap<Text, Map<number, string>>();
+  // a method's parameters written in a head (`name (a, b: T)`), per text: read without running when the text is painted
+  parameters = new Map<Text, Code[]>();
+  // (while parameters are read: a name that names nothing there is a parameter)
+  naming_parameters = false;
   paints = new Map<Text, Map<string, Paint & { weak: boolean }>>();
   defined_in = new Map<Text, Rule[]>();
   // the texts painted (what the host read: not the texts the seed makes of literals and names)
@@ -93,16 +103,16 @@ export class Painter implements Observer {
     if (had === undefined || (had.weak && !weak)) m.set(k, { begin: b, end: e - 1, style, weak });
   }
   painted(text: Text): Paint[] { return [...this.paints.get(text)?.values() ?? []].map(({ begin, end, style }) => ({ begin, end, style })); }
-  forget(text: Text) { this.paints.delete(text); this.defined_in.delete(text); this.heads.delete(text); this.texts.delete(text); }
+  forget(text: Text) { this.paints.delete(text); this.defined_in.delete(text); this.heads.delete(text); this.texts.delete(text); this.parameters.delete(text); }
 
   // A rule defined: its capture names are parameters, its literals and its mark take its style.
-  defined(rule: Rule, pieces?: { text: Text; b: number; e: number; cap: boolean; typed: boolean }[]) {
+  defined(rule: Rule, pieces?: { text: Text; b: number; e: number; cap: boolean; typed: boolean; parameters?: Code }[]) {
     const h = rule.head, text = h.text, s = text.s;
     let list = this.defined_in.get(text); if (list === undefined) this.defined_in.set(text, list = []);
     list.push(rule);
     let heads = this.heads.get(text); if (heads === undefined) this.heads.set(text, heads = []);
     heads.push([h.b, h.e]);
-    const info: { style?: string; caps: Map<string, string> } = { caps: new Map() };
+    const info: Info = { caps: new Map() };
     this.rules.set(rule, info);
     const open = this.seed.learned?.open, close = this.seed.learned?.close;
     if (pieces === undefined) {
@@ -135,6 +145,15 @@ export class Painter implements Observer {
         if (at >= last) this.paint(text, at, at + mark.length, info.style!);
       }
     }
+    for (const p of pieces) if (p.parameters !== undefined && p.parameters.text === text) {
+      let list = this.parameters.get(text); if (list === undefined) this.parameters.set(text, list = []);
+      list.push(p.parameters);
+    }
+    inside.forEach((p, i) => {
+      // a capture right after a literal that ends with the mark's character holds a mark (`name ^{literal style} := value`)
+      const before = inside[i - 1];
+      if (p.cap && before !== undefined && !before.cap && this.sigil !== undefined && s.slice(before.b, before.e).trimEnd().endsWith(this.sigil) && s.slice(before.b, before.e).trimEnd().length === before.e - before.b) info.mark = s.slice(p.b, p.e);
+    });
     for (const p of inside) {
       if (!p.cap) { if (info.style) this.paint(text, p.b, p.e, info.style); continue; }
       this.paint(text, p.b, p.e, 'parameter', true);
@@ -154,10 +173,33 @@ export class Painter implements Observer {
   planned(steps: Step[], frame: Node) {
     for (const st of steps) {
       if (st.kind === 'apply') this.read(st.rule, st.caps, frame, st.at, st.given);
-      else if (st.kind === 'name') { const style = this.named(frame, st.at.text.s.slice(st.at.b, st.at.e).trim()); if (style) this.paint(st.at.text, st.at.b, st.at.e, style, true); }
+      else if (st.kind === 'name') this.name(st.at.text, st.at.b, st.at.e, frame);
     }
   }
-  applied(rule: Rule, caps: [string, Span][], frame: Node, given: [string, unknown][]) { this.read(rule, caps, frame, undefined, given); }
+  applied(rule: Rule, caps: [string, Span][], frame: Node, given: [string, unknown][]) {
+    // a rule with a mark among its captures: the names it declares take the mark's style (see `declared`)
+    const mark = this.rules.get(rule)?.mark, held = mark === undefined ? undefined : caps.find(([n]) => n === mark)?.[1];
+    if (held !== undefined) {
+      const style = held.text.s.slice(held.b, held.e).trim();
+      if (/^[\p{L}_][\p{L}\p{N}_.]*$/u.test(style)) {
+        this.styles.add(style);
+        let m = this.marking.get(held.text); if (m === undefined) this.marking.set(held.text, m = new Map());
+        for (const [n, sp] of caps) if (n !== mark && sp.text === held.text) m.set(sp.b * 4194304 + sp.e, style);
+        // (the mark in its own style, with the character that marks it)
+        let b = held.b; while (b > 0 && /\s/.test(held.text.s[b - 1])) b--;
+        this.paint(held.text, held.text.s[b - 1] === this.sigil ? b - 1 : held.b, held.e, style);
+      }
+    }
+    this.read(rule, caps, frame, undefined, given);
+  }
+  // A word read where `frame` reads it: what it names (a parameter, while a method's parameters are read, when it names nothing).
+  name(text: Text, b: number, e: number, frame: Node) {
+    const word = text.s.slice(b, e).trim();
+    if (word.length === 0 || /\s/.test(word)) return;
+    const kind = this.kind(frame, word);
+    if (kind !== undefined) this.paint(text, b, e, kind.style, kind.weak);
+    else if (this.naming_parameters) this.paint(text, b, e, 'parameter', true);
+  }
   // A name declared: a parameter when it is written in a head (bound by what runs a method), else a variable.
   declared(name: Code) {
     if (!this.texts.has(name.text) || name.e <= name.b) return;
@@ -166,8 +208,17 @@ export class Painter implements Observer {
     if (seen.has(k)) return;
     seen.set(k, new Set());
     if (/\s/.test(name.s.trim())) return;
+    const key = name.s.trim(), mark = this.marking.get(name.text)?.get(name.b * 4194304 + name.e);
     const head = this.heads.get(name.text)?.some(([b, e]) => name.b >= b && name.e <= e);
-    this.paint(name.text, name.b, name.e, head ? 'parameter' : 'variable', true);
+    // (a name declared where a head is written: a method's parameter, bound in the frame its body is first read in)
+    const style = mark ?? (head ? 'parameter' : undefined);
+    if (style !== undefined) {
+      let m = this.marked_names.get(name.frame); if (m === undefined) this.marked_names.set(name.frame, m = new Map());
+      m.set(key, style);
+      const v = name.frame.members.get(key);
+      if (mark !== undefined && typeof v === 'object' && v !== null && !this.marked.has(v)) this.marked.set(v, mark);
+    }
+    this.paint(name.text, name.b, name.e, style ?? 'variable', mark === undefined);
   }
 
   // A rule that read a statement (from `at`, when known): its captures, then its literals found again between them.
@@ -186,10 +237,7 @@ export class Painter implements Observer {
       const style = info?.caps.get(name);
       if (style) { this.paint(text, sp.b, sp.e, style); continue; }
       if ((sp as { raw?: boolean }).raw) continue;
-      const word = s.slice(sp.b, sp.e).trim();
-      if (word.length === 0 || /\s/.test(word)) continue;
-      const named = this.named(frame, word);
-      if (named) this.paint(text, sp.b, sp.e, named, true);
+      this.name(text, sp.b, sp.e, frame);
     }
     const style = info?.style;
     if (style === undefined) return;
@@ -223,13 +271,16 @@ export class Painter implements Observer {
   value(frame: Node, word: string): unknown { for (let n: Node | undefined = frame; n; n = n.parent) if (n.members.has(word)) return n.members.get(word); return undefined; }
 
   // What a name read in a frame is: code a rule was given (a parameter), a rule (a function), or any other value (a variable).
-  named(frame: Node, word: string): string | undefined {
+  // A name a declaration with a mark declared is painted with that mark (`weak` false: over what reads it).
+  kind(frame: Node, word: string): { style: string; weak: boolean } | undefined {
     for (let n: Node | undefined = frame; n; n = n.parent) if (n.members.has(word)) {
-      const v = n.members.get(word);
-      return v instanceof Code ? 'parameter' : v instanceof Node && v.members.has('rule') ? 'function' : 'variable';
+      const v = n.members.get(word), mark = this.marked_names.get(n)?.get(word) ?? (typeof v === 'object' && v !== null ? this.marked.get(v) : undefined);
+      if (mark !== undefined) return { style: mark, weak: mark === 'parameter' };
+      return { style: v instanceof Code ? 'parameter' : v instanceof Node && v.members.has('rule') ? 'function' : 'variable', weak: true };
     }
     return undefined;
   }
+  named(frame: Node, word: string): string | undefined { return this.kind(frame, word)?.style; }
 
   // Bodies written in a text that were never run, read into their statements (never run) so they are painted too: the rules defined
   // there, and what their statements capture, read in the frame they were written in.
@@ -250,6 +301,9 @@ export class Painter implements Observer {
         body(new Code(sp.text, sp.b, sp.e, reads ? t : code.frame, code.planner), depth + 1);
       }
     };
+    // a method's parameters: read with the language's rules, never run; what they name that names nothing is a parameter
+    this.naming_parameters = true;
+    try { for (const code of this.parameters.get(text) ?? []) body(code, 0); } finally { this.naming_parameters = false; }
     for (const rule of this.defined_in.get(text) ?? []) {
       const written = this.seed.rule_nodes.get(rule)?.members.get('written');
       const code = written instanceof Node && written.members.get('code') instanceof Code ? written.members.get('code') as Code : rule.body;

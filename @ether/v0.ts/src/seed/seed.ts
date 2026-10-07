@@ -749,8 +749,10 @@ export class Seed {
   where_failed(x: unknown, at: Span): unknown {
     if (x instanceof Jump) return x;
     const e = x instanceof Error ? x : new Error(String(x));
-    const line = at.text.s.slice(0, at.b).split('\n').length;
-    (e as any).ray = [...((e as any).ray ?? []), `${at.text.name.split('/').pop()}:${line} ${at.text.s.slice(at.b, at.e).split('\n')[0]}`];
+    // (the innermost statements only: an error unwinding a deep recursion passes here once per frame, and the line a statement
+    // is on is counted over its text)
+    const ray: string[] = (e as any).ray ??= [];
+    if (ray.length < 32) { let line = 1; for (let i = at.text.s.indexOf('\n'); i >= 0 && i < at.b; i = at.text.s.indexOf('\n', i + 1)) line++; ray.push(`${at.text.name.split('/').pop()}:${line} ${at.text.s.slice(at.b, at.e).split('\n')[0]}`); }
     return e;
   }
   show(v: unknown): string { if (v instanceof Node && v.members.get('code') instanceof Code) return 'CODE:' + JSON.stringify((v.members.get('code') as Code).s.slice(0, 50)); return v instanceof Code ? 'code:' + v.s : v instanceof Node ? 'node(' + v.rules.length + ' rules, ' + [...v.members.keys()].join(',') + ')' : String(v); }

@@ -3073,6 +3073,21 @@ registry.latest.shared = true
   frame
 registry.latest.shared = true
 
+// Where a `<` right after a word is, from `at` before `to` (a class's parameters, `Stops<K`), or nothing.
+{at: Tight}.angle_within({to}) =>
+  here := at === to ? None : at
+  found := None
+  while here
+    if here.character === opening_angle
+      found = here
+      here = None
+    if here
+      here = here.next
+      if here === to
+        here = None
+  found
+registry.latest.shared = true
+
 // Whether the line `at` starts (its first place that is not a space) is indented as the line `other` starts: the same spaces
 // before both.
 {at}.indented_as({other}) =>

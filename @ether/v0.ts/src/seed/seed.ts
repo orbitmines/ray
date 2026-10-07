@@ -77,6 +77,8 @@ const HANG = ENV.SEED_HANG ? { n: 0, max: Number(ENV.SEED_HANG), stack: [] as st
 const TRACE_N = { n: 0 };
 const COUNT = ENV.SEED_COUNT ? new Map<string, number>() : undefined, SELF = COUNT && new Map<string, number>(), STACK = ['(top)'];
 if (COUNT) process.on('exit', () => { const all = [...COUNT.entries()].sort((a, b) => b[1] - a[1]); console.log('applications', all.reduce((t, [, n]) => t + n, 0)); for (const [h, n] of all.slice(0, 25)) console.log(String(n).padStart(9), h.split('\n')[0]); console.log('applications within each method'); for (const [h, n] of [...SELF!.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(String(n).padStart(9), h.split('\n')[0]); });
+const TMPSTAT = process.env.SEED_TMPSTAT, TMP = new Map<string, number[]>();
+if (TMPSTAT) process.on('exit', () => { for (const [k, n] of [...TMP.entries()].sort((a, b) => b[1][2] - a[1][2]).filter((x, i) => i < 40 || x[0].startsWith('TEXT'))) console.log('tmp', String(n[0]).padStart(8), String(n[1]).padStart(7), Math.round(n[2]) + 'ms', k); });
 export class Jump { constructor(public name: string, public value: unknown) {} }
 
 export class Seed {
@@ -478,6 +480,11 @@ export class Seed {
     // a method returns what a jump nothing in it caught carried (`return`): it stops there
     if (this.rule_nodes.get(rule)?.members.has('method')) {
       try { return this.compiled(rule)(frame); } catch (x) { if (x instanceof Jump) return x.value; throw x; }
+    }
+    if (TMPSTAT && rule.head.s.includes('.readings({pieces}') && caller.rule?.head.s.includes(TMPSTAT)) {
+      const t0 = performance.now(); const r = this.compiled(rule)(frame); const dt = performance.now() - t0;
+      const rn = this.force(caller.members.get('rule')) as Node; const h = rn instanceof Node ? (rn.members.get('rule') as Rule).head.s.trim().slice(0, 50) : '?';
+      const e = TMP.get(h) ?? [0, 0, 0]; e[0]++; if (r !== undefined) e[1]++; e[2] += dt; TMP.set(h, e); return r;
     }
     return this.compiled(rule)(frame);
   }

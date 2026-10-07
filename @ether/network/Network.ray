@@ -86,6 +86,7 @@ FileSystem &+= {
 }
 
 FileOptimizations = {
-  {location: Location{scheme && scheme != "file"}} => FileSystem.Remote()
+  // not a scheme of one letter: that is a Windows drive (`@C:/`, https://url.spec.whatwg.org/#windows-drive-letter)
+  {location: Location{scheme && scheme != "file" && scheme.length > 1}} => FileSystem.Remote()
   {location: Location{segments.first == "remote"}} => FileSystem.Remote()
 } + FileOptimizations

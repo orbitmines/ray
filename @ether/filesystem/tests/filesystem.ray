@@ -7,3 +7,7 @@ with @me/device/os = OS.Ether {
   ("ethertest/a" as Location).remove
   if ("ethertest/a" as Location).exists { INFO@mark `ETH3 a location removed on ether is still there` }
 }
+
+// A Windows drive is a file location, not a URL with the scheme "C".
+unless @C:/Windows/Fonts as String == "C:/Windows/Fonts" { INFO@mark `FS1 a Windows drive path is not read as written` }
+unless (@C:/Windows/Fonts).system === (@/usr/share).system { INFO@mark `FS2 a Windows drive is not held like any other file path` }

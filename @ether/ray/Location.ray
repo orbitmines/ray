@@ -41,4 +41,6 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != 
 @{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
 @"{text: (!"\"")[]}" ^string => text as Location
 @{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
+// a Windows drive (`@C:/…`): a letter and ":" (https://url.spec.whatwg.org/#windows-drive-letter)
+@{drive: Char.Letter}:/{path: Written} ^string => (drive + ":/" + path) as Location
 @{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location

@@ -3,6 +3,8 @@
 @/ => FileSystem.Host()
 @./ => FileSystem.Host()
 @../ => FileSystem.Host()
+// a Windows drive, `@C:/` (https://url.spec.whatwg.org/#windows-drive-letter)
+@{drive: Char.Letter}:/ => FileSystem.Host()
 
 Location &+= {
   sandboxed => "instance/" + normalised
@@ -24,5 +26,6 @@ FileSystem &+= {
 }
 
 FileOptimizations = FileOptimizations + {
-  {location: Location{!scheme || scheme == "file"}} => @/
+  // a scheme of one letter is a Windows drive (https://url.spec.whatwg.org/#windows-drive-letter)
+  {location: Location{!scheme || scheme == "file" || scheme.length == 1}} => @/
 }

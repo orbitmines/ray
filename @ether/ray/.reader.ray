@@ -1184,15 +1184,14 @@ top := external .
     best := state.best
     if best
       best_rule := state.rule
-      definer := registry.definer
       best_pieces := best_rule.pieces
       if rule.alike(best_rule)
         take = None
       take = pieces.chosen_over(best_pieces, take)
       // the rule that defines rules reads a definition whole, unless the other spells the definer itself (2026-10-06: a
       // method head with parameters is read by the rule written with the definer in it, not as a rule of that name)
-      rule_defines := rule.alike(definer)
-      best_defines := best_rule.alike(definer)
+      rule_defines := rule.defines
+      best_defines := best_rule.defines
       if rule_defines
         unless best_defines
           take = true

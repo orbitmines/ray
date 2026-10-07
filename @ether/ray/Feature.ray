@@ -1,23 +1,13 @@
 Location &+= {
   normalised => segments{!= "."}.reduce(kept = [] => . == ".." ? kept[..<-1] : (kept, .)).join("/")
-  // what holds it, by the projects loaded (files: @ether/filesystem, URLs: @ether/network); none: it holds nothing to read
-  system: FileSystem => Compiler.reduced(this, FileOptimizations) -- (. is FileSystem ? . : FileSystem())
-  content => system.read(this) as String
-  bytes => (system.read(this) ?? []) as Byte[]
-  listing => system.listing(this)
-  exists => system.exists(this)
-  write (content): static => this ~~ system.write(., content)
-  remove: static => this ~~ system.removed(.)
   origin => Location(scheme, host, port, path: "")
-  .content = {value} ^punctuation => write(value)
 }
 
+// What holds the locations of a space: `holder[location]` is what is held there, `holder[location] = value` writes it.
+// This one holds nothing: what a project holds it adds (@ether/filesystem the file space, @ether/network the URLs).
 FileSystem := class: Language {
-  read (location: Location) => ERROR@FileSystem `nothing loaded holds the location (a file needs @ether/filesystem, a URL @ether/network)`
-  write (location: Location, content) => ERROR@FileSystem `nothing loaded holds the location to write it (a file needs @ether/filesystem, a URL @ether/network)`
-  listing (location: Location) => []
-  exists (location: Location) => read(location) != None
-  removed (location: Location) => write(location, None)
+  [location: Location] => ERROR@FileSystem `nothing loaded holds the location (a file needs @ether/filesystem, a URL @ether/network)`
+  { }[{location: Location}] = {value} ^punctuation => ERROR@FileSystem `nothing loaded holds the location to write it`
 }
 
 // What holds a location: the projects add theirs (@ether/filesystem the file space, @ether/network the URLs).
@@ -25,7 +15,7 @@ FileOptimizations := { }
 
 IO := class {
   output (text: String) => @me/device.sent("stdout", text)
-  fetch (from: Location, path: String, version: Version?) => ((from / path + (version as String)).content if version) ?? (from / path).content
+  fetch (from: Location, path: String, version: Version?) => ((from / path + (version as String)).held as String if version) ?? (from / path).held as String
 }
 
 Random := class {

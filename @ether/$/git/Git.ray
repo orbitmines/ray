@@ -32,7 +32,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
     id: Id => hashed(framed)
     path => "objects/" + id[..1] + "/" + id[2..]
     loose: Byte[] => framed as Zlib as Byte[]
-    static (at: Location) as (=== Object) => at is Directory ? Object("tree", at.children as Tree as Byte[]) : Object("blob", at.content)
+    static (at: Location) as (=== Object) => at.children.nonempty ? Object("tree", at.children as Tree as Byte[]) : Object("blob", at.content)
   }
   Loose := class (kind: Char.Letter[], " ", size: Decimal, "\x00", content: Byte[]{count == size}) {
     object => Object(kind, content)
@@ -168,18 +168,18 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   }
 
   Store := class = root: Location?, fetched: Pack[] = [], given: (String, Id)[] = [] {
-    loose (id: Id) => root ? (root / ("objects/" + id[..1] + "/" + id[2..])).bytes -- (bytes => bytes.nonempty ? (Zlib.read(bytes) as Loose).object : None) : None
-    packs => fetched.map(pack => (index: pack as Index, pack)), (root ? (root / "objects/pack").listing{.name ~= ".idx" ⊣}.map(index => (index: index.bytes as Index, pack: ((index as String)[..<-4] + ".pack") as Location -- (.bytes as Pack))) : [])
+    loose (id: Id) => root ? (root / ("objects/" + id[..1] + "/" + id[2..])).held as Byte[] -- (bytes => bytes.nonempty ? (Zlib.read(bytes) as Loose).object : None) : None
+    packs => fetched.map(pack => (index: pack as Index, pack)), (root ? (root / "objects/pack").held.children{.name ~= ".idx" ⊣}.map(index => (index: index as Byte[] as Index, pack: ((index.@ as String)[..<-4] + ".pack") as Held as Byte[] as Pack)) : [])
     packed (id: Id) => packs.find(.index.offset_of(id) != None) -- (found => found?.pack.object_at(found.index.offset_of(id), this))
     object (id: Id) => loose(id) ?? packed(id)
 
-    references => given, (root ? (((root / "packed-refs").content as PackedReferences).references.map((.name, .id)), (root / "refs").listing**{!(. is Directory)}.map(at => ((at as String)[(root as String).count + 1..], (at.content as Reference).id))) : [])
+    references => given, (root ? (((root / "packed-refs").held as PackedReferences).references.map((.name, .id)), (root / "refs").held.children**{!(. is Directory)}.map(at => ((at.@ as String)[(root.@ as String).count + 1..], (at as Reference).id))) : [])
     reference (name: String) => references{.0 == name}.last?.1
-    current => root ? ((root / "HEAD").content as Reference).symbolic : references.find(.0 ~= ⊢"refs/heads/" && .1 == reference("HEAD"))?.0
-    head => reference("HEAD") ?? ((root / "HEAD").content as Reference) -- (head => head.symbolic ? reference(head.symbolic) : head.id)
+    current => root ? ((root / "HEAD").held as Reference).symbolic : references.find(.0 ~= ⊢"refs/heads/" && .1 == reference("HEAD"))?.0
+    head => reference("HEAD") ?? ((root / "HEAD").held as Reference) -- (head => head.symbolic ? reference(head.symbolic) : head.id)
     branches => references{.0 ~= ⊢"refs/heads/"}.map((name: .0[11..], id: .1))
 
-    config => root ? (root / "config").content as Config : hash as Config
+    config => root ? (root / "config").held as Config : hash as Config
     commit (id: Id) => object(id).content as Commit
     tree (id: Id, name: String = ""): Location => (object(id).content as Tree).entries.reduce(held = Location(path: name) => held ~~ .add(.mode == Mode.directory
       ? tree(.id as Id, .name)
@@ -197,7 +197,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   }
 
   Remote := class: Location {
-    advertised (service: String) => (this / "info/refs").with(service: service).content as Advertised
+    advertised (service: String) => (this / "info/refs").with(service: service).held as Advertised
     fetched => advertised("git-upload-pack") -- (offered => (this as String as Git<offered.format>.Remote).fetching(offered))
     fetching (offered: Advertised) => ((this / "git-upload-pack") = (
       offered.references.enumerate.map(("want " + .value.id + (.index == 0 ? asked : "") + \n) as Line), Line.flush, "done\n" as Line
@@ -229,11 +229,11 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   }
 
   // A repository on disk is read in the format its config names (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
-  static opened (root: Location) => Git<((root / "config").content as Config).format>.Store(root: root)
+  static opened (root: Location) => Git<((root / "config").held as Config).format>.Store(root: root)
 
   static level := {
     {at: Location{scheme is ("https" | "http" | "git" | "ssh")}} => (at as String as Remote).fetched
-    {at: Location} => opened((at / ".git/HEAD").content.nonempty ? at / ".git" : at)
+    {at: Location} => opened((at / ".git/HEAD").held as boolean ? at / ".git" : at)
     {store: Store} => store.history
   }
 

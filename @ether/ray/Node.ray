@@ -127,6 +127,8 @@ Entry := class = of: Node, at: Program? {
 
 Node &+= {
   location: *?
+  // where it is (`@x.@`, `value.@`)
+  .@ ^punctuation => location
 }
 {value} @ {location} ^keyword => value ~~ (.location |= location)
 {value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)

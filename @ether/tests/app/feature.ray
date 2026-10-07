@@ -104,8 +104,8 @@ unless @me/device/os["platform"].nonempty { INFO@mark `IO3 the machine does not 
 unless @me/device/os["architecture"] == @me/device/os/architecture { INFO@mark `IO4 asking by name is not asking the other way` }
 // Reading a location answers what is written there and leaves it as it was:
 // the file the library is declared in is read twice.
-read_once := (`@ether/.project.ray` as Location).content
-read_twice := (`@ether/.project.ray` as Location).content
+read_once := @ether/.project.ray as String
+read_twice := @ether/.project.ray as String
 unless read_once.nonempty { INFO@mark `IO5 a read answers nothing` }
 unless read_once == read_twice { INFO@mark `IO6 reading a file changed it` }
 // spec: writing a location is not claimed here — a test that writes a file
@@ -113,7 +113,7 @@ unless read_once == read_twice { INFO@mark `IO6 reading a file changed it` }
 
 // A location computed as a string reaches the machine as the bits it is
 // written with.
-read_by_bits := ("@ether/.project.ray".bits as Location).content
+read_by_bits := ("@ether/.project.ray".bits as Location).held as String
 unless read_by_bits == read_once { INFO@mark `IO7 a location given as a string's bits is read as another place` }
 
 kept := Location(path: "kept")
@@ -123,7 +123,7 @@ unless kept.fields.name == ["ray:a/b"] { INFO@mark `IO9 the device's storage doe
 kept["ray:a/b"] = None
 if kept.fields{.value !== None}.nonempty { INFO@mark `IO10 a key removed from the device's storage is still listed` }
 unless @me/device/storage is Location { INFO@mark `IO11 the device has no storage location` }
-unless Compiler.reduced("https://example.org/a" as Location, FileOptimizations) is FileSystem.Remote { INFO@mark `IO12 an http location is not reached over the network` }
+unless ("https://example.org/a" as Held).holder is FileSystem.Remote { INFO@mark `IO12 an http location is not reached over the network` }
 unless $.http.Method.propfind.written == "PROPFIND" { INFO@mark `IO13 WebDAV's listing method is not written PROPFIND` }
 unless $.http.Method.propfind.safe { INFO@mark `IO14 listing a remote collection is not safe` }
 

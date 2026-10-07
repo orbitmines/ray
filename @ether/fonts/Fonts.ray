@@ -7,5 +7,5 @@ Fonts := class {
     elsif OS.Browser { [] }
     else { ERROR@OS `fonts are not written in Ray yet` }
   // the file named like the family, in any of the folders
-  static named (family: String): Location? => installed.map(.listing).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
+  static named (family: String): Location? => installed.map(.held.children).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
 }

@@ -51,11 +51,11 @@ UI.HTML := class {
     rules := {
       {page: Geometry.Shape{solved && !parent}} => $.html.Document(head: [head(UI.page)], body: @html <body {page.dom_named}>{page.children}</body>)
       {image: Geometry.Shape{content is Location && content.language === Language.Image && fill}} => @html <span {image.dom_named} role="img" aria-label={image.label} />
-      {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @html <img {image.dom_named} src={image.content as String} alt={image.label} loading="lazy" />
-      {video: Geometry.Shape{content is Location && content.language === Language.Video}} => @html <video {video.dom_named} src={video.content as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
-      {audio: Geometry.Shape{content is Location && content.language === Language.Audio}} => @html <audio {audio.dom_named} src={audio.content as String} controls />
-      {frame: Geometry.Shape{content is Location && content.video_site}} => @html <iframe {frame.dom_named} src={frame.content.embedded as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
-      {link: Geometry.Shape{content is Location}} => @html <a {link.dom_named} href={link.content as String} target={"_blank" if link.content.window == new} rel={"noopener noreferrer" if link.content.window == new}>{link.children}</a>
+      {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @html <img {image.dom_named} src={image.content.@ as String} alt={image.label} loading="lazy" />
+      {video: Geometry.Shape{content is Location && content.language === Language.Video}} => @html <video {video.dom_named} src={video.content.@ as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
+      {audio: Geometry.Shape{content is Location && content.language === Language.Audio}} => @html <audio {audio.dom_named} src={audio.content.@ as String} controls />
+      {frame: Geometry.Shape{content is Location && content.video_site}} => @html <iframe {frame.dom_named} src={frame.content.embedded.@ as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
+      {link: Geometry.Shape{content is Location}} => @html <a {link.dom_named} href={link.content.@ as String} target={"_blank" if link.content.window == new} rel={"noopener noreferrer" if link.content.window == new}>{link.children}</a>
       {text: Geometry.Shape{content is String && font.weight >= 600 && font.size >= 2em}} => @html <h1 {text.dom_named}>{text.dom_spans}</h1>
       {text: Geometry.Shape{content is String && font.weight >= 600 && font.size >= 1.5em}} => @html <h2 {text.dom_named}>{text.dom_spans}</h2>
       {text: Geometry.Shape{content is String && font.weight >= 600}} => @html <h3 {text.dom_named}>{text.dom_spans}</h3>
@@ -177,7 +177,7 @@ UI.HTML := class {
       {frame: Geometry.Shape{content is Location && content.video_site}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
       {shape: Geometry.Shape} => []
     }
-    mask (image: Geometry.Shape) => "url(\"", image.content as String, "\") center/", image.content.fit == fill ? "100% 100%" : image.content.fit as String, " no-repeat"
+    mask (image: Geometry.Shape) => "url(\"", image.content.@ as String, "\") center/", image.content.fit == fill ? "100% 100%" : image.content.fit as String, " no-repeat"
 
     sized (shape: Geometry.Shape, along: "width" | "height") => (shape.`along`, shape.fields[along].type) -- ((given, bounds) => @css {
       {along}: {percent(given) if given is Number};
@@ -370,7 +370,7 @@ UI.HTML := class {
   }
 
   Package := class = files: (path: String, content: *)[] {
-    write (to: Location) => files.for((to / .path).content = .content)
+    write (to: Location) => files.for((to / .path).held = .content)
     document => files{.path == "index.html"}.first?.content
     sheet => files{.path == "style.css"}.first?.content
   }

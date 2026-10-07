@@ -61,13 +61,13 @@ Language.Direct := class: Language {
 
   Font := class = font: Geometry.Font {
     file => font.family.map(Fonts.named).first
-    glyph (character: Char) => $.opentype.read(file.bytes)[character]
+    glyph (character: Char) => $.opentype.read(file.held as Byte[])[character]
   }
 
   Display := class: UI.Interface = target: Location, title: String = "" {
     start => { @me/device.launch(@me/device/opened) } when @me/device/opened changes
     stop => None
-    write (raster: Geometry.Raster) => (title = UI.page?.title ?? "") -- (target.content = raster)
+    write (raster: Geometry.Raster) => (title = UI.page?.title ?? "") -- (target.held = raster)
     read => UI.Input.dispatched(@me/device.received("window"))
   }
 }

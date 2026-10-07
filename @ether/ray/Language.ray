@@ -29,7 +29,7 @@ Language := class: Ray = extensions: String, level: Compiler?, written: Compiler
   }
 
   names (extension: String) => extension is extensions#
-  bundled (path: String) => location#.map(. / path){(. / ".project.ray").content}.first as Project
+  bundled (path: String) => location#.map(. / path){(. / ".project.ray").held as boolean}.first.held as Project
 
   admits (program) => true
   read (source) => level
@@ -38,7 +38,7 @@ Language := class: Ray = extensions: String, level: Compiler?, written: Compiler
   write (value) => written
     ? Compiler.reduced(Writing(value, language: this), unwrapped + written + (stored ?? Compiler.none)) -- (. is Location ? . : . as String)
     : ERROR@Language `the language has no writer`
-  written_to (value, location: Location) => write(value) -- (. is Location ? .files.for((location / .path).content = .content) : location.write(.)) -- location
+  written_to (value, location: Location) => write(value) -- (. is Location ? .files.for(file => (location / file.path).held = file.content) : location.held = .) -- location
   converted (location, from: Language) => write(from.read(location))
   tree_at (location: Location, label) => read(location).at(label).tree
 
@@ -47,7 +47,7 @@ Language := class: Ray = extensions: String, level: Compiler?, written: Compiler
   forwards_compatible => next**.every(.targeting(this))
 
   static Implementation := class = language: Language, written_in: Language {
-    level => written_in.read(location.content)
+    level => written_in.read(location.held as String)
     setup => language ~~ .implementations.push this ~~ .level ??= level
   }
 

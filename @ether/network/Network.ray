@@ -35,7 +35,7 @@ Network &+= {
   }
 
   static Hosts := class {
-    static equivalences => @/etc/hosts.content as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
+    static equivalences => @/etc/hosts as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
     // A redirect is a world name (W1.9, `@name = holder`), so it passes the world's write check like any name.
     static resolved (name: String) => World.current["@", name] -- (held => held is Location ? held
       : DomainName(equivalences.rows{name.fold_case is .names.fold_case#}.last?.address ?? name))
@@ -71,17 +71,18 @@ FileSystem &+= {
     inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
     over_http (location: Location) => location.scheme ~= ⊢"http"
     sent (method: $.http.Method, location: Location, content = None, fields = $.http.Fields()) => $.http.send($.http.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
-    read (location: Location) => over_http(location)
-      ? sent($.http.Method.get, location) -- (.ok ? .text : None)
-      : { inner(location).content }@(at(location))()
-    write (location: Location, content) => over_http(location)
-      ? sent(content === None ? $.http.Method.delete : $.http.Method.put, location, content).ok
-      : { inner(location).content = content }@(at(location))()
-    // WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2)
-    listing (location: Location) => over_http(location)
-      ? (sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")).text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
-        .map(href => href ~= ⊢"/" ? location.origin + href : href as Location)
-      : { inner(location).listing }@(at(location))()
+    // over HTTP: GET's body, else (a collection) its members: WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming
+    // the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2);
+    // an instance: what is held there, asked on it
+    [location: Location] => over_http(location)
+      ? sent($.http.Method.get, location) -- (.ok ? .text : members(location))
+      : { inner(location).held as * }@(at(location))()
+    members (location: Location) => sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")) -- (.status == 207 ? (.text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
+      .map(href => href ~= ⊢"/" ? location.origin + href : href as Location) : None)
+    // PUT writes it, DELETE removes it (`= None`)
+    { }[{location: Location}] = {value} ^punctuation => over_http(location)
+      ? sent(value === None ? $.http.Method.delete : $.http.Method.put, location, value).ok
+      : { inner(location).held = value }@(at(location))()
   }
 }
 

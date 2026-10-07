@@ -1,9 +1,9 @@
 FileSystem &+= {
   static Mirrored := class: FileSystem {
-    read (location: Location) => ERROR@FileSystem `reading a project not held here from a mirror or a shard of it is not written yet`
+    [location: Location] => ERROR@FileSystem `reading a project not held here from a mirror or a shard of it is not written yet`
   }
 }
 
 FileOptimizations = {
-  {location: Location{Project.data(.) && !FileSystem.Host().exists(.)}} => FileSystem.Mirrored()
+  {location: Location{Project.data(.) && FileSystem.Host()[.] === None}} => FileSystem.Mirrored()
 } + FileOptimizations

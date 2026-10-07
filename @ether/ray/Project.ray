@@ -6,15 +6,15 @@ Project := class: Location {
       @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? IO.fetch(@ether, bundled_path, version) as Project)
       @{scheme: Char.Word[]}://{remainder: Written} => Project.known(IO.fetch((scheme + "://" + remainder) as Location, "", version) as Project)
       @{name: (Char.Word | "-" | "+")[]{Language.project(.) != None}} => Language.project(name)
-      @{local_path: Written} => Project.known((local_path as Location).content as Project)
+      @{local_path: Written} => Project.known(local_path as Held as Project)
     }}())?.load
   }
 
   static known (found: Project?) => found && (Project#{. == found}.first ?? (found ~~ (static.# ??= []).push .))
   static declared => Project#{.loaded || .loading}.map(.dependencies).flatten
   static declares (name: String) => declared.find(.name == name)
-  static holding (location: Location) => Project#{(location as String) ~= ⊢(. as String + "/")}.max((. as String).count)
-  static data (location: Location) => holding(location) -- (held => held && !(held is Language.ray.location#) && !((location as String) ~= ".ray" ⊣))
+  static holding (location: Location) => Project#{(location.@ as String) ~= ⊢(.@ as String + "/")}.max((.@ as String).count)
+  static data (location: Location) => holding(location) -- (held => held && !(held is Language.ray.location#) && !((location.@ as String) ~= ".ray" ⊣))
 
   name: String?
   version: *?
@@ -32,8 +32,8 @@ Project := class: Location {
   shadowing => (parent, dependencies.project)#
   carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
   language_of (name: String) => Compiler.reduced(name, readings)
-  sources => listing**{!(. is Directory) && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !(.parent / ".project.ray").exists)}
-  load: static => loaded || loading ? this : this ~~ (.loading = true) ~~ sources.for(Language.ray.read(.content)) ~~ (.loaded = true) ~~ .loading = false
+  sources => held.children**{!(. is Directory) && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !((.parent / ".project.ray") as boolean))}
+  load: static => loaded || loading ? this : this ~~ (.loading = true) ~~ sources.for(Language.ray.read(. as String)) ~~ (.loaded = true) ~~ .loading = false
 }
 
 @{name: (Char.Word | "-" | "+")[]{Project.declares(.)}} ^string => Project.declares(name).project

@@ -15,32 +15,50 @@ Location := class: Hierarchy (
   segments => path.split("/"){.nonempty}
   with (changes) => Location(scheme, host, port, path, query: query.merged(changes), fragment)
 
-  + (suffix) => ((this as String) + (suffix as String)) as Location
+  + (suffix) => ((location as String) + ((suffix is Location ? suffix.@ : suffix) as String)) as Location
   / (segment: String) => this + "/" + segment ~~ (WARN@Location `text joined into a path may leave it` if segment ~= (*, ".." | "/", *))
   /{segment: Written} ^string => this + "/" + segment
   { }/{segment: Written} ^string => this + "/" + segment
-  { }{value} => this + value if this as String ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
+  { }{value} => this + value if location as String ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
   { }.{piece: Written} ^string => this + "." + piece
-  == (other) => this as String == other as String
+  == (other) => location as String == (other is Location ? other.@ : other) as String
+  // a location is where it is; what is held there is `held`
+  location => this
+  held => location as String as Held
 
   shadowing: Location?
   [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent)?[name]
 
   name => segments.last ?? ""
-  files => this is Directory ? children.map(.files).flatten : [this]
+  files => children.nonempty ? children.map(.files).flatten : [this]
   at (relative: String) => relative.split("/"){.nonempty}.reduce(held = this => held?.children.find(.name == .))
   placed (relative: String, bytes): static => relative.split("/"){.nonempty} -- (segments =>
     (children.find(.name == segments.first) ?? add(Location(path: (path, segments.first){.nonempty}.join("/"), content: segments.count == 1 ? bytes : None)))
       -- (next => segments.count == 1 ? next : next.placed(segments.rest.join("/"), bytes)))
     -- this
 }
-Directory := Location{content === None}
+// What is at a location. Mentioning `@x` is what is held there: a location while it is used as one (`/`, `name`,
+// `segments`, `children`, `==`), and read when it is used as anything else (`@/etc/hosts as String`, `as Byte[]`,
+// `as Program`; as a boolean, whether anything is held there). `@x = value` writes it, `@x = None` removes it,
+// `@new = @x` copies it, and `(@./x).@` is the location itself. What holds it is what its space is reserved to
+// (`@/ => FileSystem.Host()` in @ether/filesystem, the schemes in @ether/network); nothing loaded holds it: nothing is held.
+Held := class: Location {
+  location => Location(scheme, host, port, path, query, fragment)
+  holder => Compiler.reduced(location, FileOptimizations) -- (. is Location ? FileSystem() : .)
+  + (suffix) => (location + suffix) as String as Held
+  as (=== boolean) => holder[location] != None
+  as (type) => holder[location] as type
+  // a directory holds its entries
+  children => (holder[location] as Location[] ?? []).map(entry => (entry as String as Held) ~~ (.parent = this))
+}
+{held: Held} = {value} ^punctuation => held.holder[held.location] = (value is Held ? value.holder[value.location] : value)
+Directory := Held{holder[location] is Location[]}
 Executable := Location{access is Access(method: `()`)}
 
 Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
-@{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
-@"{text: (!"\"")[]}" ^string => text as Location
-@{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
+@{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Held
+@"{text: (!"\"")[]}" ^string => text as Held
+@{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Held
 // a Windows drive (`@C:/…`): a letter and ":" (https://url.spec.whatwg.org/#windows-drive-letter)
-@{drive: Char.Letter}:/{path: Written} ^string => (drive + ":/" + path) as Location
-@{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Location
+@{drive: Char.Letter}:/{path: Written} ^string => (drive + ":/" + path) as Held
+@{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Held

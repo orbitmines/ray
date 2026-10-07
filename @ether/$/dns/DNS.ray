@@ -122,7 +122,7 @@ DNS := class: Language {
     {lookup: Lookup{server.scheme == "https"}} => Lookup(lookup.message, lookup.server, transport: Transport.https)
   }
 
-  static resolver: Location = (@/etc/resolv.conf.content as Unicode.Table<("nameserver", " "[], address: IP)>).rows.first?.address ?? "1.1.1.1" as IP
+  static resolver: Location = (@/etc/resolv.conf as Unicode.Table<("nameserver", " "[], address: IP)>).rows.first?.address ?? "1.1.1.1" as IP
   static query (name: String, type: Type = Type.A) => Message(questions: [Question(name: Network.DomainName(text: name) as Name, type)])
   static resolve (name: String, type: Type = Type.A) => Compiler.reduced(Lookup(query(name, type)), Optimizations).answer.addresses.first
 

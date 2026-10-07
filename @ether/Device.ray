@@ -24,7 +24,8 @@ Device := class {
   storage: Location = @"storage"
   streams: Location = @"streams"
   quests => Program#{who: this}{running}
-  disk => Disk(device: this, path: "")
+  // its files: this device's are the file space (`@/`), another's are at its instance (held by @ether/network)
+  disk => Instance#{.device === this}.first -- (. && . !== Instance.local ? (. as String + "/") as Held : @/)
 
   // A stream (stdout, stdin, window, dom, …): the host's; on ether a place on the device, where what is sent waits, in order,
   // until it is received (whoever plays the terminal or the window reads and writes the same place).
@@ -59,22 +60,3 @@ Keyboard := class: Location {
   pressed (name, modifier: Modifier? = None) => this[name] -- (key => key.pressed && (!modifier || modifier#.some(. is key.modifiers)))
   .{literal name ^property} ^punctuation => this[name]
 }
-
-Disk := class: Location = device: Device {
-  local => Instance#{.device === device}.first -- (. && . !== Instance.local ? (. as String + path) as Location : (path as Location))
-  / (segment: String) => Disk(device, path: (path as String) + "/" + segment)
-  .{literal name ^property} ^punctuation => this / name
-}
-
-FileSystem &+= {
-  static Device := class: FileSystem {
-    on (location: Disk) => Instance#{.device === location.device}.first -- (. && . !== Instance.local ? Remote() : location.device.os)
-    read (location: Location) => on(location).read(location.local)
-    write (location: Location, content) => on(location).write(location.local, content)
-    listing (location: Location) => on(location).listing(location.local)
-  }
-}
-
-FileOptimizations = {
-  {location: Disk} => FileSystem.Device()
-} + FileOptimizations

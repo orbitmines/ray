@@ -32,7 +32,7 @@ UI := class {
     {styled: String ^{style}} => Compiler.reduced(styled.marked(style), Scene)
     {styled: Geometry.Shape | Choice ^{style}} => Compiler.reduced(styled, Scene).styled(style)
     {{literal narrowing}} {narrowed: String | Geometry.Shape | Choice} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: external ** narrowing))
-    {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location as String)])
+    {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as String)])
       -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
     {placed: *{location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), Scene)])
     {shape: Geometry.Shape} => shape
@@ -45,7 +45,7 @@ UI := class {
   Lowered := {
     {field: Geometry.Shape{content is Choice}} => field.face -- (face => field ~~ (.content = None) ~~ (.children = [face]))
     {frame: Geometry.Shape{content is Location && content.video_site && children.empty}} => frame ~~ (.content = frame.content ~~ .window = new) ~~ (.fill = Geometry.Color(17, 20, 24)) ~~ (.stroke = Geometry.Stroke(Geometry.Color(128, 128, 128))) ~~ (.children = [
-      Geometry.Box(content: "▶ " + (frame.content.alt ?? frame.content as String), origin: frame.size * (1 / 4), size: frame.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
+      Geometry.Box(content: "▶ " + (frame.content.alt ?? frame.content.@ as String), origin: frame.size * (1 / 4), size: frame.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
     ])
     {image: Geometry.Shape{content is Location && content.language === Language.Image}} => image.content.pixels -- (pixels => image ~~ (.content = None) ~~ (.fill = image.fill
       ? (point => (image.painted(image.fill) as Geometry.Color) ~~ .alpha *= pixels.sampled(Geometry.Vector(point.x / image.size.x, point.y / image.size.y)).alpha)

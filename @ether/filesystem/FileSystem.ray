@@ -11,17 +11,17 @@ Location &+= {
 }
 
 FileSystem &+= {
-  // The device's own files: the host's (sandboxed); a browser and the language as the operating system keep them on the
-  // device (`@me/device/storage`, which a page keeps in its Web Storage).
+  // The device's own files: the host's (sandboxed: what the host answers for a directory is its entries); a browser and
+  // the language as the operating system keep them on the device (`@me/device/storage`, which a page keeps in its Web
+  // Storage), where a directory is what is kept under it.
   static Host := class: FileSystem {
-    read (location: Location) => if OS.Browser || OS.Ether { @me/device/storage[location.normalised] } else { external io location.sandboxed None }
-    write (location: Location, content) => if OS.Browser || OS.Ether { @me/device/storage[location.normalised] = content } else { external io location.sandboxed content }
-    listing (location: Location) => if OS.Browser || OS.Ether {
-        @me/device/storage.fields.name{~= ⊢(location.normalised + "/")}.map(.after(location.normalised + "/").before("/")).unique.map(location / .)
-      } else {
-        (&@.ask(`size`, location) -- (. == true ? @me/device.received(location as String) as String : .)).lines{.nonempty}.map(location / .)
-      }
-    removed (location: Location) => if OS.Browser || OS.Ether { write(location, None) } else { external os `remove` location.sandboxed }
+    [location: Location] => if OS.Browser || OS.Ether {
+        @me/device/storage[location.normalised] ?? (@me/device/storage.fields.name{~= ⊢(location.normalised + "/")}
+          .map(.after(location.normalised + "/").before("/")).unique.map(location / .) -- (.nonempty ? . : None))
+      } else { external io location.sandboxed None }
+    { }[{location: Location}] = {value} ^punctuation => if OS.Browser || OS.Ether { @me/device/storage[location.normalised] = value }
+      elsif value === None { external os `remove` location.sandboxed }
+      else { external io location.sandboxed value }
   }
 }
 

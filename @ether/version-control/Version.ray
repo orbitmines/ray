@@ -130,7 +130,7 @@ Character &+= {
 }
 
 {value}%{pin: Version.Pin} ^punctuation => value.history.checkout(pin.label, as_of: &caller.history.last?.stamp)
-{at: Location}%{pin: Version.Pin} ^punctuation => (at.content as Program as History).checkout(pin.label, as_of: &caller.history.last?.stamp)
+{at: Location}%{pin: Version.Pin} ^punctuation => (at.held as Program as History).checkout(pin.label, as_of: &caller.history.last?.stamp)
 
 History &+= {
   as (=== Program) => written_as()
@@ -155,8 +155,8 @@ History &+= {
   cached_at (commit: Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program)
 
   static level := {
-    {at: Location{segments.last == ".%"}} => at.listing -- (files => History.global(files{.name ~= ".ray" ⊣}.map(.content as Program as History))
-      ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(.content as Program as History))
+    {at: Location{segments.last == ".%"}} => at.held.children -- (files => History.global(files{.name ~= ".ray" ⊣}.map(. as Program as History))
+      ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(. as Program as History))
   }
 
   static written := {

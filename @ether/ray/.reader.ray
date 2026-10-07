@@ -1556,6 +1556,13 @@ top := external .
             based := at.spelled(base)
             if based
               at = based.end
+      // after a definition, the rest is read once it has run (what it defines may read it)
+      if at
+        read_by := made.rule
+        if read_by
+          if read_by.defines
+            made.rest = at
+            at = None
   first
 
 // Bodies are planned by the rule defined last (R0.6), once the seed's rules are the reader's.
@@ -1955,6 +1962,11 @@ type {block} =>
 
 take_over_the_seeds_rules
 external planner plan_rule
+// (what a definition is read by: a body's statements after one are read once it has run, with what it defined in reach)
+reader_definer := registry.latest
+reader_definer.defines = true
+seed_definer := registry.definer
+seed_definer.defines = true
 
 // One statement read at the top: applied in place, or reported. Answers the place after it.
 {given}.read_statement =>
@@ -3274,6 +3286,8 @@ registry.language = true
       unless ending === head_to
         alternative = ending.after_alternative
   made
+language_definer := registry.latest
+language_definer.defines = true
 
 // ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
 // `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`).

@@ -39,6 +39,13 @@ for (const text of texts) {
   console.log(text.name.padEnd(16), String(Math.round(performance.now() - t)).padStart(7), 'ms', String(ds.length).padStart(4), 'diagnostics');
   for (const d of ds.slice(0, limit)) console.log('    ', d.at.text.s.slice(0, d.at.b).split('\n').length + ':', d.message);
 }
+// the statements that left something said, read again now that the whole library is
+t = performance.now();
+const pending = s.pending.length, before = s.diagnostics.length;
+s.settle();
+seen = s.diagnostics.length;
+console.log('settled', pending, 'statements in', Math.round(performance.now() - t), 'ms:', before, '->', s.diagnostics.length, 'diagnostics');
+if (process.env.SETTLED) for (const d of s.diagnostics.slice(0, limit)) console.log('    ', d.at.text.name, d.at.text.s.slice(0, d.at.b).split('\n').length + ':', d.message);
 // each test in a scope of its own under the library's: what it says, then its diagnostics
 for (const test of tests) {
   t = performance.now();

@@ -51,7 +51,8 @@ type Step =
   | { kind: 'label'; name: string }
   | { kind: 'goto'; name: string; when?: Span & { code?: boolean }; at: Span }
   | { kind: 'name'; at: Span }
-  | { kind: 'unread'; at: Span };
+  | { kind: 'unread'; at: Span }
+  | { kind: 'rest'; at: Span };
 export type Compiled = (frame: Node) => unknown;
 // A jump to a label (R3.1): raised by `goto`, caught by the program that has the label, with the value read last.
 // SEED_SLOW=ms: top-level statements that took longer, printed as they finish.
@@ -156,7 +157,23 @@ export class Seed {
     this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); n.members.set('access', self.chain_of(l.access)); n.members.set('open', self.character(l.open)); n.members.set('close', self.character(l.close)); n.members.set('definer', self.chain_of(l.definer)); return n; });
   }
 
-  say(message: string, at: Span) { this.diagnostics.push({ message, at }); }
+  // (the same said again about the same place is said once)
+  said = new Set<string>();
+  say(message: string, at: Span) { const k = `${at.text.name}\0${at.b}\0${at.e}\0${message}`; if (this.said.has(k)) return; this.said.add(k); this.diagnostics.push({ message, at }); }
+  // Statements at the top that left something said about themselves: read again once the rest of their project is (`settle`).
+  pending: { text: Text; b: number; e: number; scope: Node }[] = [];
+  // Read the pending statements again, what they said before unsaid, while a pass leaves fewer of them (P8.8: what one file
+  // defines, the files read before it see).
+  settle(passes = 4) {
+    for (let pass = 0; pass < passes && this.pending.length > 0; pass++) {
+      const now = this.pending, before = this.diagnostics.length; this.pending = [];
+      const inside = (d: Diagnostic) => now.some(st => d.at.text === st.text && d.at.b >= st.b && d.at.b < st.e);
+      this.diagnostics = this.diagnostics.filter(d => { if (!inside(d)) return true; this.said.delete(`${d.at.text.name}\0${d.at.b}\0${d.at.e}\0${d.message}`); return false; });
+      const kept = before - this.diagnostics.length;
+      for (const st of now) this.read(st.text, st.b, st.scope, st.e);
+      if (this.pending.length >= now.length && this.diagnostics.length - (before - kept) >= kept) break;
+    }
+  }
 
   // ---------------------------------------------------------------- R1: text as a chain of places
   handed?: Rule;
@@ -518,6 +535,8 @@ export class Seed {
           caps.push([this.cap_name(c), { ...span(c.members.get('from'), c.members.get('to')), type: c.members.get('type'), raw: c.members.has('raw') } as Span]);
         }
         steps.push({ kind: 'apply', rule: (m.get('rule') as Node).members.get('rule') as Rule, caps, given, at });
+        // a definition: the rest of the body is read once it has run
+        if (m.has('rest')) steps.push({ kind: 'rest', at: span(m.get('rest'), body.e >= body.text.s.length ? undefined : this.place(body.text, body.e)) });
       } else if (m.has('word')) steps.push({ kind: 'name', at });
       else steps.push({ kind: 'unread', at });
     }
@@ -575,6 +594,7 @@ export class Seed {
         continue;
       }
       if (st.kind === 'name') { lines.push(`r = S.name(f, ${ref(st.at)});`); continue; }
+      if (st.kind === 'rest') { lines.push(`return S.rest(f, ${ref(st.at)}, ${ref(body.planner)});`); continue; }
       if (st.kind === 'unread') { lines.push(`S.say(${JSON.stringify('Unread `' + st.at.text.s.slice(st.at.b, st.at.e).slice(0, 60) + '`.')}, ${ref(st.at)});`); continue; }
       if (st.kind === 'external') {
         let ext = this.externals.get(st.name);
@@ -588,7 +608,7 @@ export class Seed {
       }
       const caps = st.caps.map(([n, sp]) => [n, { ...sp, of: span_of(sp.text, sp.b, sp.e) }] as [string, Span]);
       lines.push(`try { r = S.apply(${ref(st.rule)}, f, ${ref(caps)}, ${ref(body.planner)}, ${ref(st.given ?? [])}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
-      reread(st, i);
+
     }
     lines.push('return r;', '} } catch (x) { if (x instanceof S.Jump && L[x.name] !== undefined) { pc = L[x.name]; r = x.value; continue; } throw x; } }');
     const fn = new Function('S', 'k', `return function (f) { ${lines.join('\n')} };`)(this, k) as Compiled;
@@ -713,12 +733,14 @@ export class Seed {
   // ---------------------------------------------------------------- R0.3: a text read statement after statement
   // A text read statement after statement, in `scope`: a file other than the entrypoint has a scope of its own inside the
   // entrypoint's, so what it defines reaches neither the reader's code nor other files.
-  read(text: Text, from = 0, scope: Node = this.global) {
+  read(text: Text, from = 0, scope: Node = this.global, to = text.s.length) {
     const s = text.s, { end } = this.learned!;
     let p = from;
-    while (p < s.length) {
+    while (p < to) {
       if (s.startsWith(end, p)) { p += end.length; continue; }
       if (this.handed) {
+        const said = this.diagnostics.length, at = p;
+        const pend = () => { if (this.diagnostics.slice(said).some(d => d.at.text === text && d.at.b >= at && d.at.b < p)) this.pending.push({ text, b: at, e: p, scope }); };
         // the reader's frame is the top's; the scope it reads in is what applies it (its `caller`)
         const frame = new Node(this.global); frame.caller = scope;
         const cap = this.handed.pieces.find(x => 'cap' in x) as { cap: string };
@@ -735,12 +757,14 @@ export class Seed {
           let e = s.indexOf(end, p); while (e >= 0 && (s.startsWith(end, e + end.length) || s.startsWith(this.learned!.indent, e + end.length) || s.startsWith(this.learned!.space, e + end.length))) e = s.indexOf(end, e + end.length);
           this.say(`Failed: ${message}${trace.length ? ' (in ' + trace[0] + ')' : ''}`, { text, b: p, e: e < 0 ? s.length : e });
           p = e < 0 ? s.length : e + end.length;
+          pend();
           continue;
         }
         if (SLOW && performance.now() - started > SLOW) console.log('slow', Math.round(performance.now() - started), 'ms', text.name.split('/').pop() + ':' + (s.slice(0, p).split(end).length), JSON.stringify(s.slice(p, p + 70)));
         const w = next === undefined ? undefined : this.where.get(next);
         if (next !== undefined && w === undefined) throw new Error(`the reader answered ${this.show(next)}, not a place, after \`${s.slice(p, p + 60)}\``);
         p = w === undefined ? s.length : w.i;
+        pend();
         continue;
       }
       // a statement at the top is read as a body's statement is, and run there

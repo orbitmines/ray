@@ -546,7 +546,10 @@ export class Seed {
     const steps = this.expand(this.steps_of(body), body, 0);
     const labels = new Map<string, number>();
     steps.forEach(st => { if (st.kind === 'label') labels.set(st.name, labels.size + 1); });
-    const lines: string[] = ['let r, pc = 0;', `const L = ${JSON.stringify(Object.fromEntries(labels))};`, 'for (;;) { try { switch (pc) {', 'case 0:'];
+    const lines: string[] = ['let r, pc = 0; const V = f.version;', `const L = ${JSON.stringify(Object.fromEntries(labels))};`, 'for (;;) { try { switch (pc) {', 'case 0:'];
+    // a statement that defined a rule where this body is read: the rest of the body read after it, with that rule in reach
+    // (not in a body with labels: a jump does not cross where it was read again)
+    const reread = (st: Step & { at: Span }, i: number) => { if (labels.size === 0 && i < steps.length - 1) lines.push(`if (f.version !== V) return S.rest(f, ${ref({ text: body.text, b: st.at.e, e: body.e })}, ${ref(body.planner)});`); };
     const k: unknown[] = [];
     const ref = (x: unknown) => { k.push(x); return `k[${k.length - 1}]`; };
     // An argument an external reads, as a JS expression: when it reads (by the rules this body is read by) as one external whose
@@ -561,7 +564,7 @@ export class Seed {
       if (ext === undefined || eager.some((e, i) => i > 0 && e < eager[i - 1])) return read;
       return `${ref(ext)}(f, [${st.args.map((a, i) => eager.includes(i) ? expr(a, d + 1) : `${a.code ? 'S.code_at' : 'S.arg'}(f, ${ref({ ...a, of: span_of(a.text, a.b, a.e) })}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)})`;
     };
-    for (const st of steps) {
+    for (const [i, st] of steps.entries()) {
       if (st.kind === 'label') { lines.push(`case ${labels.get(st.name)}:`); continue; }
       if (st.kind === 'goto') {
         const to = labels.get(st.name);
@@ -580,10 +583,12 @@ export class Seed {
         const eager = EAGER[st.name] ?? [], spans = st.args.map(a => ref({ ...a, of: span_of(a.text, a.b, a.e) }));
         const read = eager.filter(i => i < st.args.length).map(i => `const a${i} = ${expr(st.args[i], 0)};`).join(' ');
         lines.push(`try { ${read} r = ${ref(ext)}(f, [${st.args.map((a, i) => eager.includes(i) ? `a${i}` : `${a.code ? 'S.code_at' : 'S.arg'}(f, ${spans[i]}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
+        if (st.name === 'rule' || st.name === 'define') reread(st, i);
         continue;
       }
       const caps = st.caps.map(([n, sp]) => [n, { ...sp, of: span_of(sp.text, sp.b, sp.e) }] as [string, Span]);
       lines.push(`try { r = S.apply(${ref(st.rule)}, f, ${ref(caps)}, ${ref(body.planner)}, ${ref(st.given ?? [])}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
+      reread(st, i);
     }
     lines.push('return r;', '} } catch (x) { if (x instanceof S.Jump && L[x.name] !== undefined) { pc = L[x.name]; r = x.value; continue; } throw x; } }');
     const fn = new Function('S', 'k', `return function (f) { ${lines.join('\n')} };`)(this, k) as Compiled;
@@ -677,6 +682,8 @@ export class Seed {
     for (let at: Node | undefined = frame; at; at = at.parent) { const v = at.members.get(word); if (v !== undefined || at.members.has(word)) return v; }
     return new Code(sp.text, sp.b, sp.e, frame, planner, of);
   }
+  // The rest of a body, from `sp.b`, read again where it runs (a rule was defined there) and run.
+  rest(frame: Node, sp: Span, planner?: Rule): unknown { return this.compile(new Code(sp.text, sp.b, sp.e, frame, planner))(frame); }
   // An argument an external reads: the member it names, read; or its code run where it was written.
   val(frame: Node, sp: Span & { of: SpanOf }, planner?: Rule): unknown {
     const of = sp.of, w = of.word;

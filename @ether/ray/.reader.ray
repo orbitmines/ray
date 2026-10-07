@@ -906,9 +906,13 @@ top := external .
           first = link
         last = link
       links = links.next
+    // past the value, only the classes it is in: not the scopes they were written in
     here = here.outer
     if here === outside
       here = None
+    if here
+      unless here.class
+        here = None
   first
 
 // Whether one of `pieces` is a literal spelling the definer (learned from the first statement).
@@ -3500,6 +3504,13 @@ Node &+= {
 
 // `!x`: whether `x` does not hold.
 !{x} => x ? false : true
+
+// A block comment is nothing: on its own, and between operands (what it follows is what the whole is). Nested ones are read
+// whole: the comment ends at the `*/` the statement ends with.
+/*{comment?}*/ => None
+Node &+= {
+  /*{comment?}*/ => this
+}
 
 // ---------------------------------------------------------------- jumps (R3.1): a program's edges
 goto {literal target} => external goto target

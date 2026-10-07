@@ -1,4 +1,4 @@
-Access := class = who: *?, method: `=` | `()` | * = *, filter: Program?, target: *? {
+Access := class who: *?, method: `=` | `()` | * = *, filter: Program?, target: *? {
   static Reading := *{. != `=` && . != `()`}
 
   // A grant's expression and filter are read to check it, never run for what they do: only one that changes nothing

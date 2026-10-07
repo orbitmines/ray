@@ -31,7 +31,7 @@ Random := class {
     drawn < limit ? drawn : below(limit)
   }
 
-  static Seeded := class = state: Number {
+  static Seeded := class state: Number {
     next => state = (state * 1664525 + 1013904223) % 2^32
     bit => next / 2^31 == 1 ? 1 : 0
     number (width: Number) => Binary(integer: width.times.map(bit).map(Binary.digit))
@@ -44,7 +44,7 @@ choose? {type} ^keyword => Program(who: @me, name: "choose", goal: type?)
 choose? {type} ?? {placeholder} ^keyword => Program(who: @me, name: "choose", goal: type?, tried: placeholder)
 Choice := Program{name == "choose"}
 
-Proof := class = proposition: *, argument: * {
+Proof := class proposition: *, argument: * {
   static Proposition := class: Program {
     holds => this() as boolean
     negated => Proposition(code: { !holds })

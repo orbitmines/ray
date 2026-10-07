@@ -3,7 +3,7 @@ Deflate := class: Language {
   static extensions = ".deflate"
 
   // Huffman codes given by their lengths alone: shorter codes first, equal lengths in symbol order, each the next binary number (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
-  static Huffman := class = lengths: Decimal[] {
+  static Huffman := class lengths: Decimal[] {
     codes => lengths.enumerate{.value > 0}.sort_by((.value, .index)).reduce(acc = [] => [acc,
       (symbol: .index, bits: ((acc.empty ? 0 : (acc.last.bits + 1) * 2 ^ (.value - acc.last.bits.length)) as Binary).padded(.value))])
     // A symbol is read as the one code whose bits come next, most significant bit first, and written as its code (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
@@ -25,8 +25,8 @@ Deflate := class: Language {
     (257, 7), (385, 7), (513, 8), (769, 8), (1025, 9), (1537, 9), (2049, 10), (3073, 10), (4097, 11), (6145, 11), (8193, 12), (12289, 12), (16385, 13), (24577, 13)]
 
   // A literal byte, or a copy of length bytes from distance bytes back (https://www.rfc-editor.org/rfc/rfc1951#section-2)
-  static Literal := class = byte: Byte
-  static Copy := class = length: Decimal{3 <= . <= 258}, distance: Decimal{1 <= . <= 32768}
+  static Literal := class byte: Byte
+  static Copy := class length: Decimal{3 <= . <= 258}, distance: Decimal{1 <= . <= 32768}
 
   // Data elements other than Huffman codes are packed starting with their least significant bit, so they read reversed (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
   static Data := class<literals: Huffman, distances: Huffman> (

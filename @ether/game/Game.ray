@@ -1,4 +1,4 @@
-Skill := class: Nameable = quests: *, baseline = 0 {
+Skill := class: Nameable quests: *, baseline = 0 {
   solved: Program?
 
   covers (quest: Program) => quest is quests
@@ -17,7 +17,7 @@ Character &+= {
   unlock (skill: Skill): static => this ~~ skills.push skill
 }
 
-Mana := class = resource: String, capacity: *, held: Spell? {
+Mana := class resource: String, capacity: *, held: Spell? {
   static measured (resource: String) => Mana(resource, capacity: @me/device/os[resource])
 
   cast (spell: Spell) => held = spell
@@ -25,13 +25,13 @@ Mana := class = resource: String, capacity: *, held: Spell? {
   concentrating => held != None
 }
 
-Spell := class = operation: *, cost: *, progress = 0, interrupt_level = 0 {
+Spell := class operation: *, cost: *, progress = 0, interrupt_level = 0 {
   interrupted_by (level) => interrupt_level < level
 }
 
 Presence := @me/device/memory | @me/device/disk | @remote
 
-Room := class: Location = value: * {
+Room := class: Location value: * {
   items => value.fields
   enter (item) => (this / item.name) ~~ (.value = item.value)
 }

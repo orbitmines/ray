@@ -27,7 +27,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   // A tree of files at their paths (https://git-scm.com/docs/gitformat-index#_index_entry)
   static rooted (files: (path: String, content: Byte[])[]) => files.reduce(root = Location() => root.placed(.path, .content))
 
-  Object := class = kind: "blob" | "tree" | "commit" | "tag", content: Byte[] {
+  Object := class kind: "blob" | "tree" | "commit" | "tag", content: Byte[] {
     framed: Byte[] => (kind + " " + content.count as String + "\x00") as Byte[], content
     id: Id => hashed(framed)
     path => "objects/" + id[..1] + "/" + id[2..]
@@ -167,7 +167,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
     ])
   }
 
-  Store := class = root: Location?, fetched: Pack[] = [], given: (String, Id)[] = [] {
+  Store := class root: Location?, fetched: Pack[] = [], given: (String, Id)[] = [] {
     loose (id: Id) => root ? (root / ("objects/" + id[..1] + "/" + id[2..])).held as Byte[] -- (bytes => bytes.nonempty ? (Zlib.read(bytes) as Loose).object : None) : None
     packs => fetched.map(pack => (index: pack as Index, pack)), (root ? (root / "objects/pack").held.children{.name ~= ".idx" ⊣}.map(index => (index: index as Byte[] as Index, pack: ((index.@ as String)[..<-4] + ".pack") as Held as Byte[] as Pack)) : [])
     packed (id: Id) => packs.find(.index.offset_of(id) != None) -- (found => found?.pack.object_at(found.index.offset_of(id), this))
@@ -207,7 +207,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
     )
   }
 
-  Written := class = history: History {
+  Written := class history: History {
     branch => history.name ?? "main"
     objects_in (tree: Location): Object[] => [tree, tree**].flatten.map(. as Object)
     line => history.since(None)

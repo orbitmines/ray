@@ -81,7 +81,7 @@ unless None is Either { INFO@mark `TY23 nothing is not one of a thing or nothing
 if None is Parent { INFO@mark `TY24 nothing is one of a thing` }
 
 // A class written as a structure: each named position a field of that type
-Pointed := class = whole: Number, ".", part: Number {
+Pointed := class whole: Number, ".", part: Number {
   summed => whole + part
 }
 pointed := Pointed(whole: 2, part: 3)
@@ -90,7 +90,7 @@ unless pointed.part == 3 { INFO@mark `TY33 a structure's last field is not what 
 unless pointed.summed == 5 { INFO@mark `TY34 a structure's body does not read its fields` }
 unless Pointed.positions[1] == "." { INFO@mark `TY35 a structure does not keep what is written between its fields` }
 
-Ranged := class = low: Decimal, "-", high: Decimal {
+Ranged := class low: Decimal, "-", high: Decimal {
   width => high - low
 }
 range_of{ }{written: Ranged} => written
@@ -106,14 +106,14 @@ spanned: Ranged = 3-8
 unless spanned.width == 5 { INFO@mark `TY41 text given to a structure is not read by it` }
 
 // Class headers: fields written inline, a class read by its pattern, `static` (A7, T3.10, T3.15b)
-Pair := class = left: Number, right: Number = 7 {
+Pair := class left: Number, right: Number = 7 {
   total => left + right
 }
 unless Pair(1, 2).left == 1 { INFO@mark `HD1 a header field is not taken by position` }
 unless Pair(1, 2).right == 2 { INFO@mark `HD2 the second header field is not taken by position` }
 unless Pair(right: 3, left: 4).total == 7 { INFO@mark `HD3 header fields are not taken by name` }
 unless Pair(1).right == 7 { INFO@mark `HD4 a header default is not used when not given` }
-Bare := class = only: Number
+Bare := class only: Number
 unless Bare(3).only == 3 { INFO@mark `HD6 a header without a body has no field` }
 Tagged := class ("#", tag: Decimal) => {
   doubled => tag * 2

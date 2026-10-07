@@ -22,7 +22,7 @@ Roman := class: Digit+ (
     "ↆ": 50     // U+2186 ROMAN NUMERAL FIFTY EARLY FORM
   }
 
-  static Place<one, five, ten> := class = (one, ten) | (one, five) | (five?, one[]{length <= 4}) {
+  static Place<one, five, ten> := class (one, ten) | (one, five) | (five?, one[]{length <= 4}) {
     as (=== Decimal) => if this {
       is (one, ten) => 9
       is (one, five) => 4
@@ -44,7 +44,7 @@ Roman := class: Digit+ (
 
   // Vinculum — combining overline multiplies by 1000 (https://en.wikipedia.org/wiki/Roman_numerals#Large_numbers)
   static Vinculum := class: Roman (high: Lined<"̅">?, low: Roman) {
-    static Lined<mark> := class = (digit: Roman.Digit, mark)[] {
+    static Lined<mark> := class (digit: Roman.Digit, mark)[] {
       as (=== Decimal) => digit as String as Roman as Decimal
     }
     as (=== Decimal) => (high as Decimal ?? 0) * 1000 + (low as Decimal)
@@ -64,7 +64,7 @@ Roman := class: Digit+ (
       "ↇ": 50000,   // U+2187 — IↃↃↃ
       "ↈ": 100000   // U+2188 — CCCIↃↃↃ
     }
-    static Piece := class = (closed: "C"[], "I", reversed: ("Ↄ" | "ↄ")[]{closed.empty ? length >= 2 : length == closed.length}) | precomposed: "ↀ" | "ↁ" | "ↂ" | "ↇ" | "ↈ" {
+    static Piece := class (closed: "C"[], "I", reversed: ("Ↄ" | "ↄ")[]{closed.empty ? length >= 2 : length == closed.length}) | precomposed: "ↀ" | "ↁ" | "ↂ" | "ↇ" | "ↈ" {
       as (=== Decimal) => precomposed ? Value[precomposed] : closed.empty ? 5 * 10 ^ (reversed.length + 1) : 10 ^ (closed.length + 2)
     }
     as (=== Decimal) => pieces.map(as Decimal).sum + (low as Decimal)

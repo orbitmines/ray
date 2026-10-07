@@ -90,7 +90,7 @@ right-to-left with | assume (settings: Program) => {
 
 Terminating := Program{terminating}
 
-Keyed := class = key: *, ":", " "[], (*, " = ")?, value: * {
+Keyed := class key: *, ":", " "[], (*, " = ")?, value: * {
   as (=== String) => value as String
 }
 

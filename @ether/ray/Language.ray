@@ -1,4 +1,4 @@
-Language := class: Ray = extensions: String, level: Compiler?, written: Compiler?, stored: Compiler?, of: Language?, version: Version?, implementations: Implementation[] = [], targets: Language[] = [] {
+Language := class: Ray extensions: String, level: Compiler?, written: Compiler?, stored: Compiler?, of: Language?, version: Version?, implementations: Implementation[] = [], targets: Language[] = [] {
   static loaded_named (extension: String) => Language#{.names(extension)} -- (all => all{!.of}.first ?? all.first)
   static named (extension: String) => loaded_named(extension) ?? (Project.declared.find(.project && loaded_named(extension)) && loaded_named(extension))
   static over (outer: Language, base: Language) => Language(outer.extensions, level: base.level + outer.level, written: base.written + outer.written, of: base, version: outer.version) @ outer.location
@@ -16,7 +16,7 @@ Language := class: Ray = extensions: String, level: Compiler?, written: Compiler
 
   static Lossless := Language{forall value is *#: read(write(value)) == value}
 
-  static Writing := class = value: *, language: Language?
+  static Writing := class value: *, language: Language?
   static unwrapped := {
     {writing: Writing} => writing.value
   }
@@ -46,7 +46,7 @@ Language := class: Ray = extensions: String, level: Compiler?, written: Compiler
   backwards_compatible => previous**.every(.targeting(this))
   forwards_compatible => next**.every(.targeting(this))
 
-  static Implementation := class = language: Language, written_in: Language {
+  static Implementation := class language: Language, written_in: Language {
     level => written_in.read(location.held as String)
     setup => language ~~ .implementations.push this ~~ .level ??= level
   }

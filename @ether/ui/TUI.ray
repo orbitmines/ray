@@ -1,6 +1,6 @@
 // The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
 UI.TUI := class {
-  Grid := class = width: Number, height: Number, cells: ANSI.Cell[][] = (0..<height).map((0..<width).map(ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page?.title {
+  Grid := class width: Number, height: Number, cells: ANSI.Cell[][] = (0..<height).map((0..<width).map(ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page?.title {
     space => Geometry.Space.grid(Geometry.Vector(width, height))
     inside (at: Geometry.Vector) => space.holds(at)
     put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
@@ -87,8 +87,8 @@ UI.TUI := class {
   static ramp = " .:-=+*#%@"
 
   // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
-  Start := class = modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]
-  Stop := class = start: Start = Start()
+  Start := class modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]
+  Stop := class start: Start = Start()
   written := {
     {start: Start} => start.modes, ANSI.Erase(2), ANSI.Move()
     {stop: Stop} => <-stop.start.modes.map(.flipped)
@@ -98,7 +98,7 @@ UI.TUI := class {
     {start: Start{!modes.contains(ANSI.Mode(9001, "h"))}} => Start([start.modes, [ANSI.Mode(9001, "h")]].flatten)
   }
 
-  Terminal := class: UI.Interface = written: Compiler = UI.TUI.written, grid: Grid? {
+  Terminal := class: UI.Interface written: Compiler = UI.TUI.written, grid: Grid? {
     emit (bytes) => @me/instance = bytes
     dynamically typed: @me/instance
     size => Geometry.Vector(@me/device/os.env.COLUMNS as Decimal, @me/device/os.env.LINES as Decimal)

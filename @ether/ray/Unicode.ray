@@ -6,11 +6,11 @@ Unicode := class {
   static UCD => version >= %4'1 ? Public / "{spelled}.0" / "ucd" : Public / "{spelled}-Update"
   static file (name: String) => version >= %4'1 ? UCD / "{name}.txt" : UCD / "{name}-{spelled}.0.txt"
 
-  static Table<Row> := class = (("#", *) | (row: Row, (" "[], "#", *)?) | "")[].join("\n") {
+  static Table<Row> := class (("#", *) | (row: Row, (" "[], "#", *)?) | "")[].join("\n") {
     rows => this.row{!= None}
     [codepoint: Scalar] => rows{.range.in(codepoint)}.first
   }
-  static Range := class = (from: Scalar, ("..", to: Scalar)?) {
+  static Range := class (from: Scalar, ("..", to: Scalar)?) {
     in (codepoint: Scalar) => from <= codepoint <= to ?? from
   }
 
@@ -51,7 +51,7 @@ Unicode := class {
 
   Scripts.rows.value.unique.for script => static Char.`script` = Char{.script == script}
 
-  static GeneralCategory := class = file("PropertyValueAliases") as Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)> {
+  static GeneralCategory := class file("PropertyValueAliases") as Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)> {
     rows.for category => static `category.name` = Scalar{Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
   }
 
@@ -68,9 +68,9 @@ Unicode := class {
     bytes => <-(this as Byte[])
   }
 
-  static UTF-8 := class: TF = sequence: Unit[] {
+  static UTF-8 := class: TF sequence: Unit[] {
     static CodeUnit = Binary₈
-    static Unit := class = (
+    static Unit := class (
       prefix: 1[]{length == 0..4},
       U0: Binary{length == 8 - prefix.length}{⊢0},
       (₂10, U1: Binary₆) if prefix ⊢₂11,
@@ -79,9 +79,9 @@ Unicode := class {
     )
   }
 
-  static UTF-16 := class: TF = sequence: Unit[] {
+  static UTF-16 := class: TF sequence: Unit[] {
     static CodeUnit = Binary₁₆
-    static Unit := class = (
+    static Unit := class (
       prefix: ₂110110?,
       U0: Binary₄,
       U1: Binary{length == 12 - prefix.length},
@@ -89,9 +89,9 @@ Unicode := class {
     )
   }
 
-  static UTF-32 := class: TF = sequence: Unit[] {
+  static UTF-32 := class: TF sequence: Unit[] {
     static CodeUnit = Binary₃₂
-    static Unit := class = (0[]₁₁, U0: Binary₂₁)
+    static Unit := class (0[]₁₁, U0: Binary₂₁)
   }
 }
 

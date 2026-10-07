@@ -1,5 +1,5 @@
 // The Noise Protocol Framework, revision 34 (https://noiseprotocol.org/noise.html)
-Noise := class: Language = pattern = XX, dh: Encoding.Agreement = X25519, cipher = ChaCha20Poly1305, hash: Encoding.Digest = SHA256 {
+Noise := class: Language pattern = XX, dh: Encoding.Agreement = X25519, cipher = ChaCha20Poly1305, hash: Encoding.Digest = SHA256 {
   static extensions = ".noise"
 
   // Tokens of message patterns (§7.1), each written and read by its narrowing below; XX: -> e, <- e, ee, s, es, -> s, se (§7.5)
@@ -36,7 +36,7 @@ Noise := class: Language = pattern = XX, dh: Encoding.Agreement = X25519, cipher
   kdf => HKDF(hash)
 
   // A CipherState: a key and a nonce; with no key yet, text passes as it is (§5.1). ChaChaPoly's nonce is 32 zero bits, then n as 64 bits little-endian (§12.3)
-  static Cipher := class = cipher: Language = ChaCha20Poly1305, k: Byte₃₂?, n: Number = 0 {
+  static Cipher := class cipher: Language = ChaCha20Poly1305, k: Byte₃₂?, n: Number = 0 {
     nonce => [[0] * 4, Encoding.little(n, 8)].flatten
     encrypted (ad: Byte[], plaintext: Byte[]) => k ? cipher.sealed(k, nonce, ad, plaintext) ~~ (n += 1) : plaintext
     decrypted (ad: Byte[], ciphertext: Byte[]) => k ? cipher.opened(k, nonce, ad, ciphertext) ~~ (n += 1) : ciphertext
@@ -47,7 +47,7 @@ Noise := class: Language = pattern = XX, dh: Encoding.Agreement = X25519, cipher
     Handshake(protocol: Noise(pattern, dh: s.algorithm, cipher, hash), initiator, s) ~~ .mixed_hash(prologue)
 
   // The HandshakeState with its SymmetricState: the name as h (padded, or hashed when longer than HASHLEN), ck = h, then the tokens of each message in turn (§5.2, §5.3)
-  static Handshake := class = protocol: Noise, initiator: boolean, s: Encoding.Key, e: Encoding.Key?, rs: Byte[]?, re: Byte[]?, step: Number = 0 {
+  static Handshake := class protocol: Noise, initiator: boolean, s: Encoding.Key, e: Encoding.Key?, rs: Byte[]?, re: Byte[]?, step: Number = 0 {
     h: Byte[] = protocol.name.bytes -- (.count <= protocol.size ? [., [0] * (protocol.size - .count)].flatten : protocol.hash.write(.).bytes)
     ck: Byte[] = h
     cipher: Cipher = Cipher(cipher: protocol.cipher)
@@ -75,7 +75,7 @@ Noise := class: Language = pattern = XX, dh: Encoding.Agreement = X25519, cipher
   }
 
   // The transport phase: each side's CipherState, the handshake hash, and the remote static key (§5.1, §11.2)
-  static Session := class = sending: Cipher, receiving: Cipher, binding: Byte[], peer: Encoding.Key {
+  static Session := class sending: Cipher, receiving: Cipher, binding: Byte[], peer: Encoding.Key {
     sent (payload: Byte[]) => sending.encrypted([], payload)
     received (message: Byte[]) => receiving.decrypted([], message)
   }

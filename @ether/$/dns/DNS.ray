@@ -103,7 +103,7 @@ DNS := class: Language {
 
   // Transport (https://www.rfc-editor.org/rfc/rfc1035#section-4.2)
   static Transport := enum udp | tcp | https
-  static Lookup := class = message: Message, server: Location = resolver, transport: Transport = Transport.udp {
+  static Lookup := class message: Message, server: Location = resolver, transport: Transport = Transport.udp {
     answer => Compiler.reduced(this, Sending) as Message
     socket => Network.Socket.Address(host: server.host ?? server, port: server.port ?? Network.Protocol.dns.port)
   }

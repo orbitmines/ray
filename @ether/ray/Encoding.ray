@@ -19,30 +19,30 @@ Encoding := class {
     generated (secret: Byte[] = secure Byte₃₂.random) => Key(algorithm: this, public: [], secret)
   }
 
-  Key := class = algorithm: Asymmetric | Symmetric, public: Byte[], none.read secret: Byte[]? {
+  Key := class algorithm: Asymmetric | Symmetric, public: Byte[], none.read secret: Byte[]? {
     published => Key(algorithm, public)
     signed (value) => Signed(value, by: published, signature: algorithm.sign(secret, value as Byte[]))
     agreed (other: Byte[]) => algorithm.agreed(secret, other)
     zeroised: static => this ~~ .secret = None
     chainable == (other: Key) => algorithm === other.algorithm && public == other.public
   }
-  Signed := class = value: *, by: Key, signature: Byte[] {
+  Signed := class value: *, by: Key, signature: Byte[] {
     valid => by.algorithm.verify(by.public, value as Byte[], signature)
   }
 
   static little (number: Number, count: Number) => <-(number as Binary{length == 8 * count} as Byte[])
   static little_number (bytes: Byte[]) => (<-bytes) as Binary
 
-  Packed := class = value: *, algorithm: Packing {
+  Packed := class value: *, algorithm: Packing {
     as (target) => algorithm.read(this)
   }
 
-  Hash := class = value: *, algorithm: Digest {
+  Hash := class value: *, algorithm: Digest {
     bytes: Byte[] => Compiler.reduced(Language.Writing(value, language: algorithm), algorithm.written)
     chainable == (other: Hash) => algorithm == other.algorithm && value == other.value
   }
 
-  Encrypted<T> := class = value: T, key: Key? {
+  Encrypted<T> := class value: T, key: Key? {
     opened (holder) => key && holder?.key == key ? value : ERROR@Key `find the key`
   }
 

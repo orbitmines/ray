@@ -8,7 +8,7 @@ Ed25519 := class: Encoding.Signing {
   static I = X25519.power(2, (X25519.p - 1) / 4)
 
   // A point of -x^2 + y^2 = 1 + d x^2 y^2, added by the complete twisted Edwards formula (RFC 8032 §5.1.4)
-  static Point := class = x: Number, y: Number {
+  static Point := class x: Number, y: Number {
     static neutral = Point(x: 0, y: 1)
     + (other: Point) => d * x * other.x * y * other.y % X25519.p -- (t => Point(
       x: (x * other.y + other.x * y) * X25519.inverse(1 + t) % X25519.p,

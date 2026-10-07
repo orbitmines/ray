@@ -1,6 +1,6 @@
 // The WebSocket protocol (https://www.rfc-editor.org/rfc/rfc6455)
 // A client masks every frame it sends, a server none (https://www.rfc-editor.org/rfc/rfc6455#section-5.1)
-WebSocket := class: Language = client: boolean = true {
+WebSocket := class: Language client: boolean = true {
   static extensions = ".ws" | ".websocket"
 
   // Opcodes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2, https://www.rfc-editor.org/rfc/rfc6455#section-11.8)
@@ -31,14 +31,14 @@ WebSocket := class: Language = client: boolean = true {
     dynamically assert fin && payload.count <= 125 if opcode.control
   }
 
-  static Message := class = data: String | Byte[] {
+  static Message := class data: String | Byte[] {
     text => data is String
     bytes => text ? data as Unicode.UTF-8 as Byte[] : data
   }
   // Control frames: ping, pong, and close with its status code and reason (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
-  static Control := class = opcode: Opcode{control} = Opcode.ping, data: Byte[] = []
+  static Control := class opcode: Opcode{control} = Opcode.ping, data: Byte[] = []
   // Closing (https://www.rfc-editor.org/rfc/rfc6455#section-5.5.1), status codes (https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1)
-  static Close := class: Control = code: Binary₁₆ = 1000, reason: String = "" {
+  static Close := class: Control code: Binary₁₆ = 1000, reason: String = "" {
     opcode = Opcode.close
     data => [code as Byte[], reason as Unicode.UTF-8 as Byte[]].flatten
   }

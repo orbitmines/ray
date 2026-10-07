@@ -747,19 +747,28 @@ class {{block: Balanced}} ^keyword =>
 // `class: Parent { … }`: a class whose instances are also its parent's (its rules and fields too).
 class: {parent} {{block: Balanced}} ^keyword =>
   block.class_of(parent)
-// A class written with a header (`class = values: Iterable { … }`, `class (x: T, y) { … }`).
-class = {header: Balanced} {{block: Balanced}} ^keyword =>
+// A class written with a header, its fields (`class values: Iterable { … }`, `class (x: T, y) { … }`, `class: P (x: T)`).
+class {header: Balanced} {{block: Balanced}} ^keyword =>
   header.header_class(None).with_block(block)
-class = {header: Balanced} ^keyword =>
+// (its block after `=>`: `class (x: T) => { … }`)
+class {header: Balanced} {`=>`} {{block: Balanced}} ^keyword =>
+  header.header_class(None).with_block(block)
+class: {parent: Tight} {header: Balanced} {`=>`} {{block: Balanced}} ^keyword =>
+  header.header_class(parent).with_block(block)
+class {header: Balanced} ^keyword =>
   header.header_class(None)
-class: {parent: Tight} = {header: Balanced} {{block: Balanced}} ^keyword =>
+class: {parent: Tight} {header: Balanced} {{block: Balanced}} ^keyword =>
   header.header_class(parent).with_block(block)
-class: {parent: Tight} = {header: Balanced} ^keyword =>
+class: {parent: Tight} {header: Balanced} ^keyword =>
   header.header_class(parent)
-class {header: Bracketed} {{block: Balanced}} ^keyword =>
-  header.header_class(None).with_block(block)
-class: {parent: Tight} {header: Bracketed} {{block: Balanced}} ^keyword =>
-  header.header_class(parent).with_block(block)
+// `class: Parent`: a class that is its parent and nothing more.
+class: {parent: Tight} ^keyword =>
+  made := external node
+  made.outer = (external span parent).frame
+  made.class = true
+  made.components = made.components_with(parent)
+  registry.classes_changed = true
+  made
 
 // `enum a | b (field: v) | c { block }`: a class of exactly these members, each an instance of it named on it (`X.a`), in `members` in
 // order, knowing the ones beside it (`preceding`, `following`); a block after them is the class's own. Every enum is the language's

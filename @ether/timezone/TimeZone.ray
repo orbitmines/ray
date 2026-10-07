@@ -1,6 +1,6 @@
 // Time zones and leap seconds: IANA's tz data (https://data.iana.org/time-zones/tz-link.html), read from where the
 // operating system keeps it, else downloaded (@tzif/zoneinfo).
-LeapSeconds := class = ((TimeZone.source.directory / "leap-seconds.list").held as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
+LeapSeconds := class ((TimeZone.source.directory / "leap-seconds.list").held as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
   .map(.seconds seconds as Time(epoch: "1900-01-01"))
 {
   at (minute: Time) => this.contains(minute.round(minute) + 1 minute)

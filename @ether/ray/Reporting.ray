@@ -13,8 +13,8 @@ Diagnostic &+= {
   related => causes[1..]
 }
 
-Report := class = name: String = "ray", claims: Claim[] = [] {
-  static Claim := class = id: String, message: String, passed = true, at: Location?, duration: Quantity.Temporal?
+Report := class name: String = "ray", claims: Claim[] = [] {
+  static Claim := class id: String, message: String, passed = true, at: Location?, duration: Quantity.Temporal?
 
   passed => claims.every(.passed)
   failures => claims{!.passed}

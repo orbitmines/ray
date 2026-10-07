@@ -1,5 +1,5 @@
 // Hybrid Public Key Encryption, base mode (https://www.rfc-editor.org/rfc/rfc9180)
-HPKE := class: Language = kem: Encoding.Agreement = X25519, kdf: Encoding.Digest = SHA256, aead: Encoding.Symmetric = ChaCha20Poly1305 {
+HPKE := class: Language kem: Encoding.Agreement = X25519, kdf: Encoding.Digest = SHA256, aead: Encoding.Symmetric = ChaCha20Poly1305 {
   static extensions = ".hpke"
 
   // DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20Poly1305 by their identifiers, two bytes each (RFC 9180 §7.1, §7.2, §7.3)
@@ -32,7 +32,7 @@ HPKE := class: Language = kem: Encoding.Agreement = X25519, kdf: Encoding.Digest
       base_nonce: expanded(suite, secret, "base_nonce", context, aead.nonce_size), exporter: expanded(suite, secret, "exp", context, size))))
 
   // The encryption context: each message's nonce is the base nonce XOR the sequence number (RFC 9180 §5.2, §5.3)
-  static Context := class = hpke: HPKE, key: Byte[], base_nonce: Byte[], exporter: Byte[], seq: Number = 0 {
+  static Context := class hpke: HPKE, key: Byte[], base_nonce: Byte[], exporter: Byte[], seq: Number = 0 {
     nonce => base_nonce.zip(seq as Binary{length == 8 * base_nonce.count} as Byte[]).map((a, b) => a ~x|| b)
     sealed (aad: Byte[], plaintext: Byte[]) => hpke.aead.sealed(key, nonce, aad, plaintext) ~~ (seq += 1)
     opened (aad: Byte[], ciphertext: Byte[]) => hpke.aead.opened(key, nonce, aad, ciphertext) ~~ (seq += 1)

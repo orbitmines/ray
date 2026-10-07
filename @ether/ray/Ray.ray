@@ -39,7 +39,7 @@ Iterable &+= {
 
   first => entry
   last => rest.empty ? first : rest.last
-  static From := class: Iterable = at: Ray {
+  static From := class: Iterable at: Ray {
     entry => at
   }
 
@@ -265,7 +265,7 @@ Hypergraph := class: Structure {
 Graph := class: Structure {
   HyperContinuations = true
 
-  static Simple := class: Graph = vertices: *[] = [], edges: Edge[] = [] {
+  static Simple := class: Graph vertices: *[] = [], edges: Edge[] = [] {
     vertex (value) => (vertices.push(value) unless vertices.contains(value)) -- value
     connect (from, to) => { vertex(from); vertex(to); edges.push Edge.between(from, to) } -- this
     connected (from, to) => edges.some(.from == from && .to == to)
@@ -285,7 +285,7 @@ Graph := class: Structure {
     without (vertex) => Simple(vertices: vertices{!= vertex}, edges: edges{.from != vertex && .to != vertex})
     dangling (vertex, kept) => edges.some((.from == vertex || .to == vertex) && !(kept.contains(.from) && kept.contains(.to)))
 
-    static Rule := class = left: Simple, interface: Simple, right: Simple {
+    static Rule := class left: Simple, interface: Simple, right: Simple {
       deleted => left.vertices{!interface.vertices.contains(.)}
       added => right.vertices{!interface.vertices.contains(.)}
 
@@ -350,7 +350,7 @@ Hierarchy := class: Ray {
   depth => parent ? parent.depth + 1 : 0
 }
 
-Loop := class: Path = around: Iterable, at: * {
+Loop := class: Path around: Iterable, at: * {
   next => Loop(around, at: at.next ?? around.first)
   previous => Loop(around, at: at.previous ?? around.last)
   is_initial => false
@@ -370,7 +370,7 @@ Node &+= {
   -> (step = 1) => Stepped(at: this, forward: step)
   right-to-left <- (base) => base is Stepped ? Stepped(at: base.at, forward: base.forward, backward: this) : Stepped(at: base, backward: this)
 }
-Stepped := class: Ray = at: *, forward: *?, backward: *?, behind: Stepped?, ahead: Stepped? {
+Stepped := class: Ray at: *, forward: *?, backward: *?, behind: Stepped?, ahead: Stepped? {
   static stepped (step, from) => step is Number ? from + step : step(from)
   value => at
   next => ahead ?? (forward ? Stepped(at: stepped(forward, at), forward, backward, behind: this) : None)
@@ -379,7 +379,7 @@ Stepped := class: Ray = at: *, forward: *?, backward: *?, behind: Stepped?, ahea
   == (other) => at == (other is Stepped ? other.at : other)
 }
 
-Filtered := class: Ray = from: Ray?, keeps: * {
+Filtered := class: Ray from: Ray?, keeps: * {
   found => from ? (from.satisfies(keeps) ? this : Filtered(from: from.next, keeps).found) : None
   entry => found
   value => from.value ?? from
@@ -389,7 +389,7 @@ Filtered := class: Ray = from: Ray?, keeps: * {
 }
 
 ...{of} ^punctuation => Spread(of: of)
-Spread := class = of: * {
+Spread := class of: * {
   spreads => true
   repeating => true
   repeats => of

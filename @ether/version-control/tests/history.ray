@@ -150,7 +150,7 @@ unless (with (O = O + Compiler.untrusted) { claimed.head.versions }).empty { INF
 unless claimed.head.versions == ["fixed"] { INFO@mark `FWV2 a trusted history's claims were not kept` }
 
 // A transaction happens as a whole or not at all.
-Account := class = balance: Number
+Account := class balance: Number
 from := Account(20)
 to := Account(0)
 transaction {

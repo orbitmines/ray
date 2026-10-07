@@ -3,7 +3,7 @@
 mark ^keyword := external global
 
 // The store: routed by type, read back as a narrowing.
-Kept := class = key: *, size: Number
+Kept := class key: *, size: Number
 memory_store := Store(at: @"memory/kept")
 Kept$ = memory_store
 small := Kept(key: 1, size: 2).persistent

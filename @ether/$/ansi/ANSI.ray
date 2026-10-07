@@ -1,7 +1,7 @@
 // ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
 ANSI := class: Language {
   static extensions = ".ansi"
-  Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, styles: Attribute# = [], link: Location?
+  Cell := class glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, styles: Attribute# = [], link: Location?
 
   // CUP, Cursor Position (ECMA-48 8.3.21)
   Move := class ("\e[", (row: Decimal, ";", column: Decimal)?, "H") {

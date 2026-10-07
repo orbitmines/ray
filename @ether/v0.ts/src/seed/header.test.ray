@@ -2,7 +2,7 @@ say {x} =>
   external io stdout x
 a := external node
 b := external node
-P := class = left: Node, right: Node {
+P := class left: Node, right: Node {
   swapped => P(right, left)
 }
 p := P(a, b)
@@ -14,5 +14,5 @@ Q := class (only: Node) {
   it => only
 }
 say (Q(a).it === a)
-R := class = value: Node
+R := class value: Node
 say (R(b).value === b)

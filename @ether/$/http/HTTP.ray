@@ -11,7 +11,7 @@ HTTP := class {
     static (token: String) as (=== Method) => Method#{.written == token}.first
   }
 
-  static Status := class = code: Decimal{100 <= . <= 599}, reason: String = Reasons[code] ?? "" {
+  static Status := class code: Decimal{100 <= . <= 599}, reason: String = Reasons[code] ?? "" {
     // Status codes by their first digit (https://www.rfc-editor.org/rfc/rfc9110#section-15)
     static Informational := Status{100 <= code < 200}
     static Successful := Status{200 <= code < 300}
@@ -183,7 +183,7 @@ HTTP := class {
     }
   }
 
-  static Exchange := class = request: Request, format: Language = v1_1 {
+  static Exchange := class request: Request, format: Language = v1_1 {
     response => request.target.socket.send(format.write(request)) -- format.read(.)
   }
   // Protocol negotiation (https://www.rfc-editor.org/rfc/rfc7301) picks the newest format both ends speak

@@ -2,7 +2,7 @@
 {hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{length == 2}}: Quantity.Temporal => hh_mm ss seconds
 
 Calendar := class {
-  static Segment := class: Unit = length: * {
+  static Segment := class: Unit length: * {
     static (unit: Unit, length): Calendar.Segment => unit.copy ~~ .length = length
 
     static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 1
@@ -65,12 +65,12 @@ Gregorian := class: Julian {
 }
 
 // whether a minute had a leap second is IANA's data (@ether/timezone adds it); without it every minute is 60 seconds
-UTC := class: Gregorian (offset: Quantity.Temporal = 0, leap_seconds: boolean = false) {
+UTC := class: Gregorian (offset: Quantity.Temporal 0, leap_seconds: boolean = false) {
   equivalence 0 -> offset
 }
 GMT := UTC{leap_seconds == false}
 
-Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
+Time := class: Quantity.Temporal (calendar: Calendar? UTC) {
   epoch: Time{== calendar} = 0
   = (x) => {
     this -= x
@@ -183,13 +183,13 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   date ?= ?
 }
 
-Stamp := class = wall: Decimal, ".", logical: Decimal = 0, "@", node: * {
+Stamp := class wall: Decimal, ".", logical: Decimal = 0, "@", node: * {
   chainable < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)
   when: Time => ((wall * 100) ns) as Time
   static at (time: Time, node) => Stamp(wall: (time as ns / 100).floor, node)
 }
 
-HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
+HybridClock := class node: *, wall: Decimal = 0, logical: Decimal = 0 {
   measured => (Time.now as ns / 100).floor
 
   now: Stamp => {

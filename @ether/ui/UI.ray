@@ -3,7 +3,7 @@ UI := class {
   page: *?
   program: Program?
 
-  Interface := class: Location = level: Program
+  Interface := class: Location level: Program
 
   // Pointer Events (https://www.w3.org/TR/pointerevents3/), UI Events (https://www.w3.org/TR/uievents/), as a window reports them
   Input := class {
@@ -130,7 +130,7 @@ UI := class {
     {this}{{literal narrowing}} ^punctuation => Program(code: external ** narrowing) -- (narrowing => (this ~~ .narrowing = narrowing)
       -- (copy => [narrowing{O: Geometry.Settings}()].flatten.for(write => write.entered(copy, None) if write.writes.every(copy.declaring(.))) -- copy))
   }
-  Site := class = index: *? {
+  Site := class index: *? {
     static (value) as (=== Site) => Site(index: value)
     at (path: String) => index{location ~= path} ?? index
     rendering => at((@me/device/location ?? @/).path as String)
@@ -261,7 +261,7 @@ Node &+= {
 { UI.program?.stop } when UI.pulsed(["q"]) && !UI.typing
 
 Pointer := class: Location {
-  static Contact := class: Nameable = number: Number = 0, position: Geometry.Vector = Geometry.Vector(), pressure: Probability = 0, tilt: Geometry.Vector = Geometry.Vector(), buttons: Number[] = [], wheel: Geometry.Vector = Geometry.Vector() {
+  static Contact := class: Nameable number: Number = 0, position: Geometry.Vector = Geometry.Vector(), pressure: Probability = 0, tilt: Geometry.Vector = Geometry.Vector(), buttons: Number[] = [], wheel: Geometry.Vector = Geometry.Vector() {
     pressed => buttons.nonempty || pressure > 0
     released => !pressed && (previous?.pressed ?? false)
     velocity => history.last -- (now => now.previous && now.when > now.previous.when ? (now.value.position - now.previous.value.position) * (1 / ((now.when - now.previous.when) as ms)) : Geometry.Vector())
@@ -284,7 +284,7 @@ Pointer := class: Location {
 }
 
 Controllers := class: Location {
-  static Controller := class: Nameable = held: *, character: Character? {
+  static Controller := class: Nameable held: *, character: Character? {
     guest => character === None
   }
   [id: Number.Nat] => children{.name == id}.first

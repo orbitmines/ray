@@ -40,7 +40,7 @@ Node &+= {
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)
 
-Possibilities := class = values: Iterable {
+Possibilities := class values: Iterable {
   entry => values.entry
   .{literal property ^property} ^punctuation => Possibilities(values: values.map(external get . property))
 }
@@ -64,7 +64,7 @@ Node &+= {
 }
 #{value} ^punctuation => value#
 
-Composed := class = parts: Node[], joining: Program {
+Composed := class parts: Node[], joining: Program {
   erred => parts.some(.erred)
   .{literal property ^property} ^punctuation => parts.map(external get . property).reduce((acc) => joining(acc, .))
 }
@@ -90,7 +90,7 @@ Superposed := Node{.superposed}
 {f}({argument: Superposed}) => argument.each(one => f(one))
 
 // An operator missing a side is a section: the function of what it misses (`xs.map(+ 1)`, `xs.sorted(<)`, `xs{> 0}`, `(!)`).
-Section := class = operator, operand? {
+Section := class operator, operand? {
   continues => true
   (a, b?) => operand != None ? a [operator] operand : b != None ? a [operator] b : a [operator]
 }
@@ -120,7 +120,7 @@ Node &+= {
   ~"{label}" ^punctuation => Entry(of: this, at: entry_at(label))
   ~{index: Decimal.String} ^punctuation => Entry(of: this, at: entry_at(index as Decimal))
 }
-Entry := class = of: Node, at: Program? {
+Entry := class of: Node, at: Program? {
   following => Program(code: of.written_body).written -- .[.index_of(at) + 1..]
   ({args}) => of.construct(args) ~~ Program(code: following).entered(., None)
 }
@@ -155,7 +155,7 @@ None &+= {
   chainable != (other) => other !== None
   !~= (pattern) => true
 }
-Anchored := class = pattern: Node, at_start: boolean = false, at_end: boolean = false {
+Anchored := class pattern: Node, at_start: boolean = false, at_end: boolean = false {
   admits (candidate) => candidate ~= this
   ⊣ => Anchored(pattern, at_start, at_end: true)
 }
@@ -217,7 +217,7 @@ print (x) => IO.output(x as String) -- x
 
 Object := * - Node
 
-Origin := class = method: Node, arguments: Node {
+Origin := class method: Node, arguments: Node {
   == (other) => other === method || (other is Origin && other.method === method && other.arguments == arguments)
 }
 {f}({a}) | {g}({b}) ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | (g(b).copy ~~ .origin = Origin(g, b))

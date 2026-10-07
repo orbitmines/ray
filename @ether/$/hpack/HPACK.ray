@@ -70,7 +70,7 @@ HPACK := class: Language {
   }
 
   // The dynamic table: newest first after the static entries, each costing its octets plus 32, the oldest evicted to fit (https://www.rfc-editor.org/rfc/rfc7541#section-2.3, https://www.rfc-editor.org/rfc/rfc7541#section-4)
-  static Table := class = entries: (name: String, value: String)[] = [], limit: Number = 4096 {
+  static Table := class entries: (name: String, value: String)[] = [], limit: Number = 4096 {
     size => entries.map(.name.bytes.count + .value.bytes.count + 32).sum
     fitted => size <= limit ? this : Table(entries[..<-1], limit).fitted
     inserted (entry: (name: String, value: String)) => Table([[entry], entries].flatten(1), limit).fitted
@@ -85,7 +85,7 @@ HPACK := class: Language {
       : (table: .inserting ? held.table.inserted(field) : held.table, fields: [held.fields, field])))
   }
   // The blocks of one connection share its dynamic table, in the order they are decoded (https://www.rfc-editor.org/rfc/rfc7541#section-2.2)
-  static Connection := class = blocks: Block[] {
+  static Connection := class blocks: Block[] {
     fields => blocks.reduce(held = (table: Table(), fields: []) => .decoded(held.table) -- (decoded => (table: decoded.table, fields: [held.fields, [decoded.fields]].flatten(1)))).fields
   }
 

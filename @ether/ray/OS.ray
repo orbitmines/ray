@@ -7,7 +7,7 @@ OS := enum Linux (platform: "linux") | Windows (platform: "win32") | Macos (plat
   [property: String] => this === OS.Ether ? { "platform": "ether", "architecture": "ray" }[property] : (external os property) as String
   architecture => this["architecture"]
   env => Environment(os: this)
-  static Environment := class = os: OS {
+  static Environment := class os: OS {
     .{literal name ^property} ^punctuation => os[name]
   }
 

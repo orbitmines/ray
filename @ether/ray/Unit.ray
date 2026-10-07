@@ -37,7 +37,7 @@ Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Uni
   static Temporal = Quantity{unit == Unit.Temporal}
 }
 
-Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural {
+Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural {
   static Normalizers := class {
     modulus (order: Quantity) => Quantity.Normalizer = (x) => {
       result: Quantity?
@@ -50,7 +50,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
     }
   }
 
-  static Rate := class: Unit = numerator: Unit, denominator: Unit {
+  static Rate := class: Unit numerator: Unit, denominator: Unit {
     name => numerator.name + "/" + denominator.name
     chainable == (other: Rate) => numerator == other.numerator && denominator == other.denominator
   }

@@ -1,5 +1,5 @@
 // HMAC-based Extract-and-Expand Key Derivation Function, over any digest (https://www.rfc-editor.org/rfc/rfc5869)
-HKDF := class: Language = hash: Encoding.Digest {
+HKDF := class: Language hash: Encoding.Digest {
   static extensions = ".hkdf"
   size => hash.size
 

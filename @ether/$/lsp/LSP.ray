@@ -18,7 +18,7 @@ LSP &+= {
   // Location (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#location)
   located (uri: String, range) => (uri as Location){from == (range["start"]["line"] + 1, range["start"]["character"] + 1), to == (range["end"]["line"] + 1, range["end"]["character"] + 1)}
 
-  Published := class = file: Location?, diagnostics: Diagnostic[], source: String?
+  Published := class file: Location?, diagnostics: Diagnostic[], source: String?
 
   level := JSON.level + {
     // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)

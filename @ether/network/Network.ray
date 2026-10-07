@@ -15,7 +15,7 @@ Network &+= {
     static canonical := DomainName{text == text.fold_case}
   }
 
-  static Proxy := class = through: Character, admits: *? {
+  static Proxy := class through: Character, admits: *? {
     carries (traffic) => !admits || traffic is admits
   }
 

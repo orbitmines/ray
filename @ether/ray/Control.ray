@@ -8,7 +8,7 @@ dynamically {value} ^keyword => (
   running = watched(Program(code: external ** value, context: external .))
   Dynamic(program: running)
 )
-Dynamic := class = program: Program {
+Dynamic := class program: Program {
   .{literal property ^property} ^punctuation => external get program() property
   as (=== boolean) => program() as boolean
 }

@@ -578,13 +578,25 @@ left-to-right.modifier = true
   external set registry given saved_given
   external set registry naming saved_naming
   made
+// What a class is made of (`components.hierarchy`, R4.4): itself, then `parent` when it has one (more are added with
+// `X.components.hierarchy &= Y`).
+{made: Tight}.components_with({parent}) =>
+  whole := made
+  p := parent
+  parts := external node
+  chain := None.listed_with_value(whole)
+  external goto done (p === None ? true : None)
+  chain.listed_with_value(p)
+  external label done
+  parts.hierarchy = chain
+  parts
 // A class: the frame its block is read in, inside the frame it was written in (`outer`); its statics, its fields' defaults and its
-// methods are that frame's; `extends`, the class it extends (or nothing). Calling it makes an instance.
+// methods are that frame's; `components.hierarchy`, what it is made of. Calling it makes an instance.
 {block: Tight}.class_of({parent}) =>
   made := external node
   made.outer = (external span block).frame
   made.class = true
-  made.extends = parent
+  made.components = made.components_with(parent)
   made.written = external ** block
   made.read_as_class(block)
   registry.classes_changed = true
@@ -595,7 +607,7 @@ left-to-right.modifier = true
   made := external node
   made.outer = (external span source).frame
   made.class = true
-  made.extends = parent
+  made.components = made.components_with(parent)
   made.header = external ** source
   made.read_header_into(made)
   made
@@ -614,13 +626,20 @@ left-to-right.modifier = true
   written.read_items_into(frame)
   external label done
   made
-// A class's block read again in an instance being made, after the blocks of the classes it extends.
+// A class's block read again in an instance being made, after the blocks of the classes it is made of.
 {static: Tight}.read_into({instance}) =>
   class_read := static
-  parent := class_read.extends
-  external goto parents_read (parent ? None : true)
-  parent.read_into(instance)
-  external label parents_read
+  parts := class_read.components
+  link := parts ? parts.hierarchy.head : None
+  external label next_part
+  external goto parts_read (link ? None : true)
+  part := link.value
+  external goto skip ((external same part class_read) ? true : (part ? None : true))
+  part.read_into(instance)
+  external label skip
+  link = link.next
+  external goto next_part
+  external label parts_read
   class_read.read_header_into(instance)
   block := class_read.written
   external goto done (block ? None : true)
@@ -745,7 +764,7 @@ enum {written: Item} =>
   made.outer = where.frame
   made.class = true
   made.enum = true
-  made.extends = registry.enum_class
+  made.components = made.components_with(registry.enum_class)
   from := where.from
   to := where.to
   members_to := to
@@ -858,14 +877,16 @@ Node &+= {
     made := external node
     made.outer = (external span written).frame
     made.class = true
-    made.extends = base
-    // (its parameters, or those of what it extends: `Array<T>` binds an Iterable's `Vertex`)
+    made.components = made.components_with(base)
+    // (its parameters, or those of what it is made of first: `Array<T>` binds an Iterable's `Vertex`)
     holder := base
     names := None
     external label find
     names = external get holder parameters
     external goto found names
-    holder = external get holder extends
+    parts := holder.components
+    next_link := parts ? parts.hierarchy.head.next : None
+    holder = next_link ? next_link.value : None
     external goto find holder
     external label found
     external goto done (names === None ? true : None)

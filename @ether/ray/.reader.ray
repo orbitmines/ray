@@ -1188,16 +1188,54 @@ top := external .
         state.rule = rule
   state
 
+// The class a value is (itself, or the nearest class around it) whose `components` say what it is made of, or nothing.
+{value}.composed_class =>
+  here := value
+  found := None
+  while here
+    if here.components
+      found = here
+    here = found ? None : here.outer
+  found
+
+// The classes a class is made of besides itself (`components.hierarchy`, R4.4), depth first, each with what it is made of in turn:
+// each added to the chain `into` with the scopes around it (not past `outside`).
+{class}.made_of_into({outside}, {into}) =>
+  owner := class.composed_class
+  link := owner ? owner.components.hierarchy : None
+  link = link ? link.head : None
+  while link
+    part := link.value
+    unless part === owner
+      if part
+        part.scopes_into(outside, into)
+        part.made_of_into(outside, into)
+    link = link.next
+  into
+
+// Whether `scope` is one of the classes `class` is made of (`components.hierarchy`), or of what they are made of.
+{class}.made_of_has({scope}) =>
+  owner := class.composed_class
+  link := owner ? owner.components.hierarchy : None
+  link = link ? link.head : None
+  found := None
+  while link
+    part := link.value
+    unless part === owner
+      if part === scope
+        found = true
+      unless found
+        found = part ? part.made_of_has(scope) : None
+    link = found ? None : link.next
+  found
+
 // The scopes whose rules a value is read by (R2.1), in the order they are met: its own and its classes' (not the top scope's), then
-// those of each class it extends, then what every value has (`reading_rules`, scope by scope).
+// those of each class they are made of, then what every value has (`reading_rules`, scope by scope).
 {value}.reading_scopes =>
   top := registry.top
   into := external node
   value.scopes_into(top, into)
-  ancestor := value.extended_class
-  while ancestor
-    ancestor.scopes_into(top, into)
-    ancestor = ancestor.extends
+  value.made_of_into(top, into)
   into.scope_added(registry.base)
   into.first
 
@@ -1789,28 +1827,21 @@ type {block} =>
     piece = piece.next
   piece
 
-// The class a value is an instance of (or the class itself) that extends another: what it extends, or nothing.
-{value}.extended_class =>
-  here := value
-  found := None
-  while here
-    found = here.extends
-    here = found ? None : here.outer
-  found
-
 // The rules a value is read by (R2.1): its own and its classes' (not the top scope's), then what every value has.
 {value}.reading_rules =>
   top := registry.top
   rules := value.rules_in_reach(top, None)
-  // a class's parent's rules after its own
-  ancestor := value.extended_class
-  while ancestor
-    more := ancestor.rules_in_reach(top, None)
+  // the rules of the classes a class is made of after its own
+  parts := external node
+  value.made_of_into(top, parts)
+  scope_link := parts.first
+  while scope_link
+    more := scope_link.scope.rules_in_reach(top, None)
     if rules && more
       rules.last_piece.next = more
     unless rules
       rules = more
-    ancestor = ancestor.extends
+    scope_link = scope_link.next
   base_rules := registry.base.rules
   if rules
     rules.last_piece.next = base_rules
@@ -2106,17 +2137,15 @@ registry.latest.shared = true
       found = from.operand_end(where.to) === where.to
   found
 
-// Whether `x` is `scope` or inside it (its parents reach it, or the classes they extend).
+// Whether `x` is `scope` or inside it (its parents reach it, or the classes they are made of).
 {x: Tight}.inside({scope}) =>
   here := x
   found := None
   while here
-    ancestor := here
-    while ancestor
-      if ancestor === scope
-        found = true
-        ancestor = None
-      ancestor = ancestor.extends
+    if here === scope
+      found = true
+    unless found
+      found = here.made_of_has(scope)
     here = found ? None : here.outer
   found
 registry.latest.shared = true

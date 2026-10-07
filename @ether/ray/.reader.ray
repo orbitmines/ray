@@ -396,11 +396,20 @@ pipe := mark.character
     stamp.to = limit
     at.index = stamp
     registry.indexed = stamp
+    // the pairs of characters in it (a node whose members are named by them)
+    pairs := external node
+    stamp.pairs = pairs
     here := at.next
     while here
       if here === limit
         here = None
       if here
+        pair_end := here.next
+        if pair_end
+          pair_end = pair_end.next
+          written_pair := external code here pair_end reader_like
+          pair := written_pair.code
+          external set pairs pair stamp
         c := here.character
         here.stamp = stamp
         here.next_same = None
@@ -419,49 +428,6 @@ pipe := mark.character
         here = here.next
         if c === end
           here = None
-    // the brackets open before each place, as a chain (one opened: a new link; one closed: the link before it), so a span is
-    // balanced when its two ends see the same link (a bracket closing what it did not open: a link of its own)
-    open_ones := external node
-    here = at
-    going := true
-    while going
-      unless here
-        going = None
-      if going
-        here.stack = open_ones
-        here.stack_stamp = stamp
-        if here === limit
-          going = None
-      if going
-        c := here.character
-        shut := c.closer
-        if shut
-          pushed := external node
-          pushed.shut = shut
-          pushed.next = open_ones
-          open_ones = pushed
-        unless shut
-          if c.closes
-            expected := open_ones.shut
-            if c === expected
-              open_ones = open_ones.next
-            unless c === expected
-              open_ones = external node
-          if c === quote
-            skipping := here.next
-            while skipping
-              if skipping === limit
-                skipping = None
-              if skipping
-                skipping.stack = open_ones
-                skipping.stack_stamp = stamp
-                d := skipping.character
-                if d === quote
-                  here = skipping
-                  skipping = None
-              if skipping
-                skipping = skipping.next
-        here = here.next
   stamp
 
 // Whether the character at `this` follows `c` somewhere in the statement indexed with `stamp` (on its first line).
@@ -521,12 +487,16 @@ pipe := mark.character
 
 // Whether the places from `at` to `limit` close every bracket they open, in order, and none they did not (quoted text skipped).
 {at}.balanced_to({limit}) =>
-  // in the statement indexed last: its two ends see the same open brackets
-  stamp := registry.indexed
+  // its two ends see the same open brackets (counted once over the whole text)
   known := None
-  if at.stack_stamp === stamp
-    if limit
-      if limit.stack_stamp === stamp
+  if limit
+    text := at.text
+    unless text.stacked
+      text.stacked = true
+      first_of_text := text.first
+      first_of_text.bracket_stacks
+    if at.stack
+      if limit.stack
         known = true
   found := None
   if known
@@ -534,6 +504,44 @@ pipe := mark.character
   unless known
     found = at.balanced_walk(limit)
   found
+
+// The brackets open before each place from `this` on, as a chain (one opened: a new link; one closed: the link before it), so a
+// span is balanced when its two ends see the same link (a bracket closing what it did not open: a link of its own).
+{this}.bracket_stacks =>
+  open_ones := external node
+  here := this
+  while here
+    here.stack = open_ones
+    c := here.character
+    shut := c.closer
+    if shut
+      pushed := external node
+      pushed.shut = shut
+      pushed.next = open_ones
+      open_ones = pushed
+    unless shut
+      if c.closes
+        expected := open_ones.shut
+        if c === expected
+          open_ones = open_ones.next
+        unless c === expected
+          open_ones = external node
+      if c === quote
+        skipping := here.next
+        while skipping
+          skipping.stack = open_ones
+          d := skipping.character
+          if d === quote
+            here = skipping
+            skipping = None
+          if d === end
+            here = skipping
+            skipping = None
+          if skipping
+            skipping = skipping.next
+    if here
+      here = here.next
+  this
 
 // The same, walked.
 {at}.balanced_walk({limit}) =>
@@ -1018,16 +1026,27 @@ top := external .
   // the entrypoint's text after the reader is the language's (read with its rules)
   if at.language
     written_here = None
-  // the statement indexed once: a rule led by a literal is tried only where it starts with that literal's first character, one
-  // led by a capture only when the literal after the capture is in it
+  // the statement indexed once: the rules led by a literal starting with its first character, and those led by a capture whose
+  // literal after it is in it, scope by scope (R2.5)
   stamp := at.indexed(limit)
-  first_character := at.character
+  at_next := at.next
+  written_key := external code at at_next reader_like
+  key := written_key.code
   state := external node
   here := scope
   while here
-    links := here.rules
-    while links
-      rule := links.rule
+    led := here.led
+    candidates := None
+    if led
+      candidates = external get led key
+    while candidates
+      rule := candidates.rule
+      if rule.visible(written_here)
+        at.considered(rule, limit, state)
+      candidates = candidates.next
+    capture_led := here.capture_led
+    while capture_led
+      rule := capture_led.rule
       keep := true
       if written_here
         if rule.language
@@ -1037,38 +1056,47 @@ top := external .
           unless rule.shared
             keep = None
       if keep
-        // (indexed again when a reading inside one of the rules before indexed another statement)
-        stamp = at.indexed(limit)
-        pieces := rule.pieces
-        if pieces.literal
-          lit_from := pieces.from
-          unless lit_from.character === first_character
+        unless registry.indexed === stamp
+          stamp = at.indexed(limit)
+        w := rule.key_character
+        if w
+          unless w.stamp === stamp
             keep = None
-        unless pieces.literal
-          second := pieces.next
-          if second
-            if second.literal
-              second_from := second.from
-              w := second_from.character
-              unless w.stamp === stamp
+            if w === space
+              if end.stamp === stamp
+                keep = true
+          // and its first two characters together in it
+          if keep
+            written_pair := rule.key_pair
+            if written_pair
+              pair := written_pair.code
+              pairs := stamp.pairs
+              seen := external get pairs pair
+              unless seen === stamp
                 keep = None
                 if w === space
                   if end.stamp === stamp
                     keep = true
-              // and, when that literal goes on, with its next character after one of them
-              if keep
-                following := second_from.next
-                unless following === second.to
-                  if following
-                    keep = following.after(w, stamp)
       if keep
         at.considered(rule, limit, state)
-      links = links.next
+      capture_led = capture_led.next
     here = here.parent
   best := state.best
   if best
     best.rule = state.rule
   best
+
+// Whether a rule is read with by code written in the reader's text (`written_here`), or by other code (R4.2b).
+{rule}.visible({written_here}) =>
+  found := true
+  if written_here
+    if rule.language
+      found = None
+  unless written_here
+    if rule.internal
+      unless rule.shared
+        found = None
+  found
 
 {at}.reading({limit}, {rules}) =>
   state := external node
@@ -1719,6 +1747,7 @@ raw_word := external span literal
   registry.latest = made
   if registry.language
     made.language = true
+  made.dispatched
   // a head starting with a line end continues the statement above (G2.13): what follows it, kept
   pieces := made.pieces
   if pieces.line_end
@@ -1732,6 +1761,44 @@ raw_word := external span literal
         registry.continuations = continuation
   made
 
+// A rule kept where reading looks it up (R2.5): one led by a literal under its first character in its scope's `led` (a node whose
+// members are named by characters), one led by a capture on its scope's `capture_led`; latest first in each.
+{made}.dispatched =>
+  scope := made.scope
+  pieces := made.pieces
+  if pieces.literal
+    lit_from := pieces.from
+    lit_next := lit_from.next
+    written_key := external code lit_from lit_next reader_like
+    key := written_key.code
+    led := scope.led
+    unless led
+      led = external node
+      scope.led = led
+    entry := external node
+    entry.rule = made
+    earlier := external get led key
+    entry.next = earlier
+    external set led key entry
+  unless pieces.literal
+    link := external node
+    link.rule = made
+    link.next = scope.capture_led
+    scope.capture_led = link
+    // the literal after the capture: its first character, and its first two
+    second := pieces.next
+    if second
+      if second.literal
+        second_from := second.from
+        made.key_character = second_from.character
+        second_next := second_from.next
+        unless second_next === second.to
+          if second_next
+            pair_end := second_next.next
+            written_pair := external code second_from pair_end reader_like
+            made.key_pair = written_pair
+  made
+
 // The seed's rules, taken over once: the top scope's, latest first; the earliest is the first statement's.
 take_over_the_seeds_rules =>
   imported := external rules top
@@ -1743,6 +1810,19 @@ take_over_the_seeds_rules =>
     last = last.next
   registry.definer = first_statement
   registry.latest = imported.rule
+  // dispatched earliest first, so each scope's lists are latest first
+  reversed := None
+  link := imported
+  while link
+    back := external node
+    back.rule = link.rule
+    back.next = reversed
+    reversed = back
+    link = link.next
+  while reversed
+    taken := reversed.rule
+    taken.dispatched
+    reversed = reversed.next
 
 // A type: a scope of the rules its block defines (R2.3).
 type {block} =>

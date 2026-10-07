@@ -52,6 +52,10 @@ type Step =
   | { kind: 'unread'; at: Span };
 export type Compiled = (frame: Node) => unknown;
 // A jump to a label (R3.1): raised by `goto`, caught by the program that has the label, with the value read last.
+// SEED_EXT: calls and time per external, printed at exit.
+const EXT = process.env.SEED_EXT ? new Map<string, [number, number]>() : undefined;
+const EXT_IN = new Map<string, number>();
+if (EXT) process.on('exit', () => { for (const [n, c] of [...EXT_IN.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20)) console.log('externals in', String(c).padStart(9), n.split('\n')[0]); for (const [n, [c, t]] of [...EXT.entries()].sort((a, b) => b[1][1] - a[1][1])) console.log('external', n.padEnd(10), String(c).padStart(9), Math.round(t) + ' ms'); });
 // SEED_DEPTH: the deepest frame chain a name was looked up through.
 const DEPTH = process.env.SEED_DEPTH ? { max: 0, word: '' } : undefined;
 if (DEPTH) process.on('exit', () => console.log('deepest lookup', DEPTH.max, DEPTH.word));
@@ -159,6 +163,7 @@ export class Seed {
       const of = new Node();
       for (let k = 0; k < text.s.length; k++) { const n = new Node(); n.members.set('character', this.character(text.s[k])); n.members.set('text', of); all.push(n); }
       all.forEach((n, k) => { if (k + 1 < all!.length) n.members.set('next', all![k + 1]); this.where.set(n, { text, i: k }); });
+      if (all.length > 0) of.members.set('first', all[0]);
       this.places.set(text, all);
     }
     return all[i];
@@ -399,7 +404,7 @@ export class Seed {
   // ---------------------------------------------------------------- R0.4: a body read once into a goto program, then JS
   // `planner`: the planner of the code the captures are in (undefined: the seed's) — passed always, never defaulted (R0.5).
   apply(rule: Rule, caller: Node, caps: [string, Span][], planner: Rule | undefined, given: [string, unknown][] = [], parent?: Node): unknown {
-    if (COUNT) { const h = rule.head.s.trim(); COUNT.set(h, (COUNT.get(h) ?? 0) + 1); SELF!.set(STACK[STACK.length - 1], (SELF!.get(STACK[STACK.length - 1]) ?? 0) + 1); if (/^\{\w+\}\.\w/.test(h) || /^[a-z_]+$/.test(h)) { STACK.push(h); try { return this.apply_(rule, caller, caps, planner, given, parent); } finally { STACK.pop(); } } }
+    if (COUNT || EXT) { const h = rule.head.s.trim(); if (COUNT) { COUNT.set(h, (COUNT.get(h) ?? 0) + 1); SELF!.set(STACK[STACK.length - 1], (SELF!.get(STACK[STACK.length - 1]) ?? 0) + 1); } if (/^\{\w+\}\.\w/.test(h) || /^[a-z_]+$/.test(h)) { STACK.push(h); try { return this.apply_(rule, caller, caps, planner, given, parent); } finally { STACK.pop(); } } }
     return this.apply_(rule, caller, caps, planner, given, parent);
   }
   apply_(rule: Rule, caller: Node, caps: [string, Span][], planner: Rule | undefined, given: [string, unknown][] = [], parent?: Node): unknown {
@@ -539,7 +544,8 @@ export class Seed {
       if (st.kind === 'name') { lines.push(`r = S.name(f, ${ref(st.at)});`); continue; }
       if (st.kind === 'unread') { lines.push(`S.say(${JSON.stringify('Unread `' + st.at.text.s.slice(st.at.b, st.at.e).slice(0, 60) + '`.')}, ${ref(st.at)});`); continue; }
       if (st.kind === 'external') {
-        const ext = this.externals.get(st.name);
+        let ext = this.externals.get(st.name);
+        if (EXT && ext) { const inner = ext, name = st.name; ext = (f: Node, a: unknown[], at: Span) => { const where = STACK[STACK.length - 1]; EXT_IN.set(where, (EXT_IN.get(where) ?? 0) + 1); const t = performance.now(); try { return inner(f, a, at); } finally { const e = EXT.get(name) ?? [0, 0]; e[0]++; e[1] += performance.now() - t; EXT.set(name, e); } }; }
         if (ext === undefined) { this.say(`No external \`${st.name}\`.`, st.at); continue; }
         lines.push(`try { r = ${ref(ext)}(f, [${st.args.map(a => `${a.code ? 'S.code_at' : 'S.arg'}(f, ${ref({ ...a, of: span_of(a.text, a.b, a.e) })}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
         continue;

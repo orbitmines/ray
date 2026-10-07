@@ -143,6 +143,17 @@ caret := mark.next.character
 mark = mark.next.next
 pipe := mark.character
 
+// The characters of a word (`c.word`): letters, digits and `_`. An operator spelled with them (`is`, `or`, `not`) does not start
+// inside a word (`this`, `works`).
+written_word := external span abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_
+word_place := written_word.from
+while word_place === written_word.to ? None : word_place
+  word_place.character.word = true
+  word_place = word_place.next
+// `-` between two characters of a word joins them into one name (`right-to-left`, `UTF-8`).
+written_join := external span -
+written_join.from.character.joins = true
+
 // A bracket knows the bracket that closes it (`c.closer`: nothing when `c` opens none), and one that closes says so (`c.closes`).
 opening.closer = closing
 opening_list.closer = closing_list
@@ -1411,15 +1422,24 @@ top := external .
 // `at` (R2.5: a rule led by a literal is kept under its first character) can.
 {at}.starts_a_base_rule =>
   found := None
-  led := registry.base.led
+  // (inside a word, only an operator that does not start with a word's character)
+  inside := at.previous ? at.previous.character.word : None
+  // (nor at a `-` joining two words into one name)
+  joined := inside ? at.character.joins : None
+  if joined
+    inside = at.next ? at.next.character.word : None
+    joined = inside
+  led := joined ? None : registry.base.led
   written_key := external code at at.next reader_like
   key := written_key.code
   links := led ? external get led key : None
   while links
     pieces := links.rule.pieces
-    if pieces.literal && at.spells(pieces.from, pieces.to)
-      found = true
-      links = None
+    word_led := inside ? pieces.from.character.word : None
+    unless word_led
+      if pieces.literal && at.spells(pieces.from, pieces.to)
+        found = true
+        links = None
     links = links.next
   found
 
@@ -1850,6 +1870,14 @@ type {block} =>
   rules
 
 // The place the longest start of the word from `at` to `limit` that names something held where it is read ends at; or nothing.
+// Whether a word read up to `here` would be split there: inside a word, or at a `-` joining two words into one name.
+{here}.splits_a_word =>
+  c := here.character
+  found := c.word ? here.previous.character.word : None
+  if c.joins
+    found = here.next ? here.next.character.word : None
+  found
+
 {at}.held_prefix({limit}, {scope}) =>
   found := None
   here := at.next
@@ -1868,7 +1896,8 @@ type {block} =>
     if here
       written_name := external code at here reader_like
       name := written_name.code
-      frame := scope
+      // (a name is not split inside a word)
+      frame := here.splits_a_word ? None : scope
       while frame
         if external own frame name
           // (only where what it names reads the rest by its own rules)

@@ -590,6 +590,8 @@ left-to-right.modifier = true
   external label done
   parts.hierarchy = chain
   parts
+// What every value has is a class made of itself too.
+Node.components = Node.components_with(None)
 // A class: the frame its block is read in, inside the frame it was written in (`outer`); its statics, its fields' defaults and its
 // methods are that frame's; `components.hierarchy`, what it is made of. Calling it makes an instance.
 {block: Tight}.class_of({parent}) =>
@@ -1059,3 +1061,78 @@ assert (condition) => (
   unless condition { ERROR `assertion failed` }
   condition
 )
+
+// ================================================================ from the old entrypoint
+// What the old kernel's entrypoint defined that the language here did not yet, written again in its terms.
+Node &+= {
+  // `x -- f if c`: `f` read with `this` being `x` when `c` holds of it, else `x`; a line that starts with `--` or `~~`
+  // continues the one above
+  --{call} if {condition} ^punctuation =>
+    value := this
+    (value.continued(condition)) ? value.continued(call) : value
+  {\n}--{call} ^punctuation =>
+    this.continued(call)
+  {\n}~~{call} ^punctuation =>
+    value := this
+    value.continued(call)
+    value
+  // a value as a boolean: whether it holds; the boolean operators on any value
+  not => this ? false : true
+  and (b) => this ? b : this
+  or (b) => this ? this : b
+  nand (b) => this.and(b).not
+  xor (b) => this.or(b).and(this.nand(b))
+  xnor (b) => this.xor(b).not
+  // what a class is made of: `+` adds a class to it, `-` takes one out
+  compounds + (component) =>
+    whole := this
+    whole.components.hierarchy &= component
+    whole
+  compounds - (component) =>
+    whole := this
+    left := None.listed_with_value(whole)
+    link := whole.components.hierarchy.head.next
+    while link {
+      unless link.value === component { left.listed_with_value(link.value) }
+      link = link.next
+    }
+    whole.components.hierarchy = left
+    whole
+  // the classes a value's class is made of, itself first (each once)
+  classes =>
+    found := None.listed_with_value(this)
+    link := this.components ? this.components.hierarchy.head.next : None
+    while link {
+      unless link.value === None {
+        more := link.value.classes.head
+        while more {
+          found.listed_with_value(more.value)
+          more = more.next
+        }
+      }
+      link = link.next
+    }
+    found
+  subtype_of (other) =>
+    wanted := other
+    found := wanted === Node
+    link := this.classes.head
+    while link {
+      if link.value === wanted { found = true }
+      link = link.next
+    }
+    found
+  supertype_of (other) => other.subtype_of(this)
+  // what a value normalizes to (its class's `normalizer`), else itself
+  canonical => this.normalizer ? this.normalizer(this) : this
+  structure => None
+  // whether `predicate` (code, read with `this` being the value; a closure it answers called with it) holds of it
+  satisfies (predicate) =>
+    answer := this.continued(predicate)
+    answer.superposed ? answer.holds_for(this) : answer
+  verify (candidate) => candidate
+  // the value as code (`x**`)
+  ** => Program(code: (external ** this))
+  . => this
+}
+* := Node

@@ -15,6 +15,8 @@ export class Node {
   rules: Rule[] = NO_RULES;
   // a frame's caller (the frame that applied the rule) and the rule it is a frame of
   caller?: Node; rule?: Rule;
+  // what was written here `@ ->` (Almanac A3): a holder's member as everything this context calls reads it
+  forwards?: Map<Node, Map<string, unknown>>;
   // how many rules were defined here: a body read here is read again when this, or the count of a scope around it, changed
   version = 0;
   constructor(public parent?: Node) {}
@@ -79,7 +81,7 @@ const DEPTH = ENV.SEED_DEPTH ? { max: 0, word: '' } : undefined;
 if (DEPTH) process.on('exit', () => console.log('deepest lookup', DEPTH.max, DEPTH.word));
 // SEED_COUNT: how often each rule was applied, printed at exit.
 // The arguments each external reads, in the order it reads them: given to it read (no code made for them), the rest as code.
-const EAGER: Record<string, number[]> = { declare: [1], get: [0], assign: [1], keep: [0], own: [0], set: [2, 0], same: [0, 1], reader: [0], planner: [0], rules: [0], report: [0, 1, 2], io: [1], code: [0, 1], read: [0, 1], bits: [0, 1] };
+const EAGER: Record<string, number[]> = { forward: [0, 2, 3], declare: [1], get: [0], assign: [1], keep: [0], own: [0], set: [2, 0], same: [0, 1], reader: [0], planner: [0], rules: [0], report: [0, 1, 2], io: [1], code: [0, 1], read: [0, 1], bits: [0, 1] };
 // SEED_HANG=n: after n applications, the rules being applied (innermost last), and stop.
 // (SEED_HANG_LATE: counted only once `hang_reset` is called, e.g. before the tests a probe reads)
 const HANG = ENV.SEED_HANG ? { n: 0, max: Number(ENV.SEED_HANG), stack: [] as string[], armed: !process.env.SEED_HANG_LATE } : undefined;
@@ -118,13 +120,16 @@ export class Seed {
     this.externals.set('node', () => new Node());
     // a node's `outer` (the frame it was made in), and a frame's `caller_frame` and `applied_rule` (as a node), read like members
     // (named so no member a program sets is taken for them)
-    this.externals.set('get', (frame, [of, name]) => { const n = (of) as Node | undefined, k = self.code_of(name).s; if (!(n instanceof Node)) return undefined; const v = n.members.get(k); return v !== undefined || n.members.has(k) ? v : k === 'outer' ? n.parent : k === 'caller_frame' ? n.caller : k === 'applied_rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
+    this.externals.set('get', (frame, [of, name]) => { const n = (of) as Node | undefined, k = self.code_of(name).s; if (!(n instanceof Node)) return undefined; if (self.forwarding) { const w = self.forwarded(frame, n, k); if (w) return w.v; } const v = n.members.get(k); return v !== undefined || n.members.has(k) ? v : k === 'outer' ? n.parent : k === 'caller_frame' ? n.caller : k === 'applied_rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
     // a name written where it was declared (the nearest frame from where it was written that has it, else there)
     this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = (value); if (ENV.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; if (self.journal) self.journal.member(at ?? c.frame, k); (at ?? c.frame).members.set(k, v); return v; });
     // a member set to code as written, unread (read where the member is read)
     this.externals.set('keep', (frame, [of, name, value]) => { const o = (of) as Node; let kept = value; if (value instanceof Code && !value.raw) { const c = new Code(value.text, value.b, value.e, value.frame, value.planner, value.of); c.once = true; kept = c; } if (self.journal) self.journal.member(o, self.code_of(name).s); o.members.set(self.code_of(name).s, kept); return kept; });
     // whether a node has a member of its own (one set there, even to nothing)
-    this.externals.set('own', (frame, [of, name]) => { const n = (of); return n instanceof Node && n.members.has(self.code_of(name).s) ? true : undefined; });
+    this.externals.set('own', (frame, [of, name]) => { const n = (of); return n instanceof Node && (n.members.has(self.code_of(name).s) || (self.forwarding > 0 && self.forwarded(frame, n, self.code_of(name).s) !== undefined)) ? true : undefined; });
+    // `holder.name @ -> = value` (Almanac A3): written for the context the statement is read in, and everything it calls (read
+    // there before the holder's own member; gone with the context)
+    this.externals.set('forward', (frame, [of, name, value, context]) => { const o = of as Node, at = context instanceof Node ? context : frame.caller ?? frame; if (!(o instanceof Node)) throw new Error('forward on ' + String(of) + ' (not a node)'); (at.forwards ??= new Map()); let m = at.forwards.get(o); if (!m) at.forwards.set(o, m = new Map()); m.set(self.code_of(name).s.trim(), value); self.forwarding++; return value; });
     this.externals.set('set', (frame, [of, name, value]) => { const v = (value), o = (of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'outer') { if (ENV.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); if (v instanceof Node && (v === o || self.inside(v, o))) throw new Error('a node would be inside itself'); if (self.journal) self.journal.parent(o); o.parent = v as Node | undefined; } else { if (self.journal) self.journal.member(o, k); o.members.set(k, v); } return v; });
     // the frame a name is bound in: the nearest from where it was written that has it (even holding nothing), else that one
     this.externals.set('declaring', (frame, [name]) => { const c = self.code_of(name), k = c.s.trim(); for (let n: Node | undefined = c.frame; n; n = n.parent) if (n.members.has(k)) return n; return c.frame; });
@@ -533,7 +538,7 @@ export class Seed {
   force_(x: Code): unknown {
     this.forced++;
     const word = x.of.word;
-    if (word !== undefined) { let d = 0; for (let at: Node | undefined = x.frame; at; at = at.parent) { d++; const v = at.members.get(word); if (v !== undefined || at.members.has(word)) { if (DEPTH && d > DEPTH.max) { DEPTH.max = d; DEPTH.word = word; } return this.force(v); } } if (DEPTH && d > DEPTH.max) { DEPTH.max = d; DEPTH.word = word + ' (unresolved)'; } }
+    if (word !== undefined) { let d = 0; for (let at: Node | undefined = x.frame; at; at = at.parent) { d++; const v = at.members.get(word); if (v !== undefined || at.members.has(word)) { if (DEPTH && d > DEPTH.max) { DEPTH.max = d; DEPTH.word = word; } if (this.forwarding) { const w = this.forwarded(x.frame, at, word); if (w) return this.force(w.v); } return this.force(v); } } if (DEPTH && d > DEPTH.max) { DEPTH.max = d; DEPTH.word = word + ' (unresolved)'; } }
     return this.compile(x)(x.frame);
   }
 
@@ -771,7 +776,7 @@ export class Seed {
   // An argument that names a member of the frame (a capture, a local) is what it names; any other word is code.
   arg(frame: Node, sp: Span & { of?: SpanOf }, planner?: Rule): unknown {
     const of = sp.of ?? span_of(sp.text, sp.b, sp.e), word = of.s;
-    for (let at: Node | undefined = frame; at; at = at.parent) { const v = at.members.get(word); if (v !== undefined || at.members.has(word)) return v; }
+    for (let at: Node | undefined = frame; at; at = at.parent) { const v = at.members.get(word); if (v !== undefined || at.members.has(word)) { if (this.forwarding) { const w = this.forwarded(frame, at, word); if (w) return w.v; } return v; } }
     return new Code(sp.text, sp.b, sp.e, frame, planner, of);
   }
   // The rest of a body, from `sp.b`, read again where it runs (a rule was defined there) and run.
@@ -789,9 +794,15 @@ export class Seed {
     return this.compile(new Code(sp.text, sp.b, sp.e, frame, planner, of))(frame);
   }
   // A statement that is one word: the member it names, or nothing and a diagnostic.
+  // What was written `@ ->` for `holder`'s `key` in the context `frame` is read in (it, or a context that called it).
+  forwarding = 0;
+  forwarded(frame: Node | undefined, holder: Node, key: string): { v: unknown } | undefined {
+    for (let f = frame, n = 0; f && n < 100000; f = f.caller ?? f.parent, n++) { const m = f.forwards?.get(holder); if (m?.has(key)) return { v: m.get(key) }; }
+    return undefined;
+  }
   name(frame: Node, sp: Span): unknown {
     const word = sp.text.s.slice(sp.b, sp.e);
-    for (let at: Node | undefined = frame; at; at = at.parent) if (at.members.has(word)) return this.force(at.members.get(word));
+    for (let at: Node | undefined = frame; at; at = at.parent) if (at.members.has(word)) { if (this.forwarding) { const w = this.forwarded(frame, at, word); if (w) return this.force(w.v); } return this.force(at.members.get(word)); }
     this.say(`Unresolved \`${word}\`.`, sp);
     return undefined;
   }

@@ -28,7 +28,7 @@
   at_link := (keys === None ? None : keys.head)
   external label next
   external goto done (at_link === None ? true : None)
-  b.entered_in((external get b context), (None.listed_with_value(at_link.value)).head)
+  b.entered_in(b.context, (None.listed_with_value(at_link.value)).head)
   at_link = at_link.next
   external goto next
   external label done
@@ -132,17 +132,36 @@
   external declare alias value
 {name} := {value} ^punctuation =>
   external declare name value
+// `x.member @ -> = value`, `name @ -> = value` (Almanac A3): written for the context it is read in and everything that calls on
+// from there, never above it; gone with the context.
+{x: Tight}.{literal member} @ -> = {value} ^punctuation =>
+  external forward x member value
+{target: Word} @ -> = {value} ^punctuation =>
+  external forward (external declaring target) target value
 // `x.member = value`: the member set.
 {x: Tight}.{literal member} = {value} =>
+  reading := external get (external .) caller_frame
+  external goto forward (external get reading writes_forward)
   external set x member value
+  external goto done
+  external label forward
+  external forward x member value (external get reading outer)
+  external label done
 // `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing); a name is written with it
 // (anything else: the base's `&=`).
 {target: Word} &= {value} ^punctuation =>
   list := target.listed_with_last(value)
   external assign target list
 // `name = value`: written where the name was declared (anything else: the base's `=`).
+// (read where what is written goes forward, `with`'s settings: written `@ ->` for the context around)
 {target: Word} = {value} ^punctuation =>
+  reading := external get (external .) caller_frame
+  external goto forward (external get reading writes_forward)
   external assign target value
+  external goto done
+  external label forward
+  external forward (external declaring target) target value (external get reading outer)
+  external label done
 // `condition ? yes : no`: `yes` when the condition holds (T1.7: nothing does not; a value saying whether it `holds` as that says;
 // any other does), else `no`; only the one taken is read.
 {condition} ? {yes} : {no} ^punctuation =>
@@ -748,7 +767,7 @@ Node.components = Node.components_with(None)
   external goto done
   external label maybe_program
   external goto nothing ((external get value outer) === registry.program_class ? None : true)
-  value.entered_in((external get value context), (arguments === None ? None : (arguments.listed)))
+  value.entered_in(value.context, (arguments === None ? None : (arguments.listed)))
   external goto done
   external label construct
   value.constructed(arguments)
@@ -1268,6 +1287,16 @@ LSP := {
   }
 }
 
+// `theme `name` { ^style = ^ shown … }`: the styles a theme shows (the last one made is the one shown); `^style = ^ other`
+// shows `style` as `other` is.
+theme `{literal name}` {{block: Balanced}} ^keyword =>
+  external theme name block
+^{literal style} = ^ {literal shown} ^punctuation =>
+  made := external ^ shown
+  external declare style made
+^{literal style} = ^{literal shown} ^punctuation =>
+  made := external ^ shown
+  external declare style made
 DARK := theme `Ether.ray - Dark` {
 
   ^U0 = ^ #F2F0FF

@@ -9,6 +9,9 @@ import { TransportKind } from 'vscode-languageclient/node';
 /**
  * The ways we can get a Ray language server running, in priority order (both `--lsp` over stdio):
  *
+ *   0. `workspace`— The workspace is a checkout holding the language's host beside it (`@ether/v0.ts/src/language.ts`, with
+ *                   tsx installed there): run that source as it is on disk, so a change to the host is picked up by
+ *                   reloading the window, without rebuilding the extension.
  *   1. `installed`— The host has a `ray` executable on PATH whose `--version` parses under Ether's version scheme and
  *                   whose `--help` lists `--lsp`. Use it.
  *   2. `bundled`  — Fall back to the language bundled with the extension itself: the language (src/language.ts) and
@@ -17,7 +20,7 @@ import { TransportKind } from 'vscode-languageclient/node';
  * When the workspace holds a language definition (a `!language` project, e.g. `@ether/ray` in a checkout of
  * orbitmines/ray), its directory is given to `--lsp`, and that language is read instead of its own.
  */
-export type BootMode = 'installed' | 'bundled';
+export type BootMode = 'workspace' | 'installed' | 'bundled';
 
 export interface Boot {
   mode: BootMode;
@@ -129,6 +132,27 @@ function bundledBoot(extensionPath: string, language: string | null): Boot {
   };
 }
 
+/** The host beside a language in a checkout: `@ether/v0.ts/src/language.ts`, run with that directory's tsx. */
+function workspaceBoot(language: string | null): Boot | null {
+  if (!language) return null;
+  const v0 = path.join(path.dirname(language), 'v0.ts');
+  const entry = path.join(v0, 'src', 'language.ts'), loader = path.join(v0, 'node_modules', 'tsx', 'dist', 'loader.mjs');
+  if (!fs.existsSync(entry) || !fs.existsSync(loader)) return null;
+  const runtime = nodeRuntime();
+  const env = { ...process.env, ...runtime.env };
+  const run = {
+    command: runtime.command,
+    args: ['--import', 'file://' + loader, entry, '--lsp', language],
+    transport: TransportKind.stdio,
+    options: { cwd: workspaceRoot() ?? v0, env },
+  };
+  return {
+    mode: 'workspace',
+    description: `the workspace's language (${entry}), reading the language in ${language}`,
+    server: { run, debug: { ...run, options: { ...run.options, env: { ...env, DEBUG: '1' } } } },
+  };
+}
+
 /**
  * Resolve the highest-priority Boot available given the current workspace and
  * environment. Throws only if every mode fails.
@@ -136,5 +160,5 @@ function bundledBoot(extensionPath: string, language: string | null): Boot {
 export function resolveBoot(extensionPath: string): Boot {
   const ws = workspaceRoot();
   const language = ws ? findLanguage(ws) : null;
-  return installedBoot(language) ?? bundledBoot(extensionPath, language);
+  return workspaceBoot(language) ?? installedBoot(language) ?? bundledBoot(extensionPath, language);
 }

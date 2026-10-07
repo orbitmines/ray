@@ -82,11 +82,32 @@ Program &+= {
   right-to-left defer => copy ~~ .from = &caller
 }
 
-right-to-left with | assume (settings: Program) => {
-  set = settings.written.map(statement => statement() -- (. if statement.assigns)).compact
-  defer { set.for(. = .previous) }
-  Proof.Proposition(code: settings.code, goal: settings)
-}
+// `with settings { … }`, `with settings` (L§6.3): what the settings write is written `@ ->` (Almanac A3) for the block, or the
+// rest of the context the `with` is in, and everything called from there. (settings that are a block: what it holds)
+with {settings} {{body: Balanced}} ^keyword =>
+  context := external node
+  context.outer = (external span settings).frame
+  forwarding := external node
+  forwarding.outer = context
+  forwarding.writes_forward = true
+  settings_code := external get (external ** settings) code
+  answer := external apply settings_code None forwarding
+  if answer.program {
+    inside_code := external get answer.written code
+    external apply inside_code None forwarding
+  }
+  body_code := external get (external ** body) code
+  external apply body_code None context
+with {settings} ^keyword =>
+  forwarding := external node
+  forwarding.outer = (external span settings).frame
+  forwarding.writes_forward = true
+  settings_code := external get (external ** settings) code
+  answer := external apply settings_code None forwarding
+  if answer.program {
+    inside_code := external get answer.written code
+    external apply inside_code None forwarding
+  }
 
 Terminating := Program{terminating}
 

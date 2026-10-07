@@ -2783,6 +2783,9 @@ registry.latest.shared = true
   if parameters
     frame.bound(parameters, given)
   written := p.code
+  // (a program made of a block, `Program(code: { … })`: the block's code)
+  if written.program
+    written = written.code
   code := written.code
   result := external apply code None frame
   // (code that is one block runs it, as a method's body does)

@@ -566,6 +566,25 @@ pipe := mark.character
       here = None
   found
 
+// Where a name written from `at` ends: at a space, a dot, a bracket, or `limit` (the language's operators do not split a name).
+{at}.name_ends({limit}) =>
+  here := at === limit ? None : at
+  found := limit
+  while here
+    c := here.character
+    stop := c === space ? true : c === dot
+    if c.closer
+      stop = true
+    if c.closes
+      stop = true
+    if stop
+      found = here
+      here = None
+    here = here ? here.next : None
+    if here === limit
+      here = None
+  found
+
 {at}.captured({pieces}, {limit}, {mode}) =>
   rest_pieces := pieces.next
   // a capture holds something unless it may hold nothing
@@ -637,7 +656,7 @@ pipe := mark.character
       // (one operand with what accesses it: `b.holds`, `f(x).y`; a name taken as written: the word alone)
       unless pieces.type
         ends = external node
-        ends.place = pieces.raw ? capture_from.operand_end(limit) : capture_from.first_outside(limit, space)
+        ends.place = pieces.raw ? capture_from.name_ends(limit) : capture_from.first_outside(limit, space)
   // an optional capture may hold nothing: tried after every other end
   if pieces.optional && at.can_end(wanted)
     empty := external node
@@ -683,10 +702,10 @@ pipe := mark.character
       if piece_type ? None : rest_pieces
         worth = at.balanced_to(e)
     // a capture taken as written takes one word when no literal follows it (it ends the head, or another capture does)
-    // (one word: one operand, up to a space, a bracket or a dot)
+    // (one name: up to a space, a bracket or a dot)
     if worth && pieces.raw
       unless rest_pieces ? rest_pieces.literal : None
-        unless at.operand_end(e) === e
+        unless at.name_ends(e) === e
           worth = None
     rest := worth ? e.readings(rest_pieces, limit, mode) : None
     if rest
@@ -868,6 +887,7 @@ top := external .
   written_key := external code at at.next reader_like
   key := written_key.code
   state := external node
+  state.scope = scope
   here := scope
   while here
     candidates := here.led ? external get here.led key : None
@@ -926,6 +946,20 @@ top := external .
 
 // A rule's reading of the statement from `at` to `limit`, taken into `state` (its `best` reading and that reading's `rule`) when it
 // reads the statement whole and is chosen over the best so far (R2.5).
+// Whether one of a reading's captures is read whole by a rule written with the definer in it (a closure handed by juxtaposition,
+// `x.m name`, the definer, a body): then the definer there is that call's, not a definition's.
+{reading}.closes_over_a_call({scope}) =>
+  cap := reading.captures
+  found := None
+  while cap
+    if cap.from
+      inner := cap.from.reading_in(cap.to, scope)
+      if inner && inner.rule.pieces.spells_the_definer
+        found = true
+        cap = None
+    cap = cap ? cap.next : None
+  found
+
 {at}.considered({rule}, {limit}, {state}) =>
   pieces := rule.pieces
   r := at.readings(pieces, limit, None)
@@ -938,12 +972,17 @@ top := external .
       take = pieces.chosen_over(best_pieces, take)
       // the rule that defines rules reads a definition whole, unless the other spells the definer itself (2026-10-06: a
       // method head with parameters is read by the rule written with the definer in it, not as a rule of that name)
+      // (nor when the other's capture holding the definer is read whole by such a rule: `dynamically x.for name`, the definer, a block)
       if rule.defines
         unless best_rule.defines
           take = best_pieces.spells_the_definer ? None : true
+          if take && state.best.closes_over_a_call(state.scope)
+            take = None
       if best_rule.defines
         unless rule.defines
           take = pieces.spells_the_definer
+          unless take
+            take = r.closes_over_a_call(state.scope)
     if take
       state.best = r
       state.rule = rule

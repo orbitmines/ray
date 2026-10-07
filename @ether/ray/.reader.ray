@@ -3354,14 +3354,14 @@ left-to-right.modifier = true
 private {static: Tight}.read_as_class({block}) =>
   // (a capture is read where it is named: one that makes something is named once)
   made := static
-  saved_given := registry.given
-  saved_naming := registry.naming
-  registry.given = None
-  registry.naming = None
+  saved_given := external get registry given
+  saved_naming := external get registry naming
+  external set registry given None
+  external set registry naming None
   code := external get (external ** block) code
   external apply code None made
-  registry.given = saved_given
-  registry.naming = saved_naming
+  external set registry given saved_given
+  external set registry naming saved_naming
   made
 // A class: the frame its block is read in, inside the frame it was written in (`outer`); its statics, its fields' defaults and its
 // methods are that frame's; `extends`, the class it extends (or nothing). Calling it makes an instance.
@@ -3420,33 +3420,33 @@ private {static: Tight}.constructed({arguments}) =>
   instance.outer = static
   instance.instance = true
   instance.this = instance
-  outer_given := registry.given
-  outer_naming := registry.naming
-  registry.given = None
-  registry.naming = None
+  outer_given := external get registry given
+  outer_naming := external get registry naming
+  external set registry given None
+  external set registry naming None
   // the arguments as written (code passed on is followed to where it was written), or a value given
   given_node := external ** arguments
   given_value := external get given_node value
   external goto as_written (given_value === None ? true : None)
-  registry.given = (given_value.listed)
+  external set registry given (given_value.listed)
   external label as_written
   written := external get given_node code
   // (code held in a name is read where the name is: whether there is any is asked of where it is written)
   external goto read ((external span written) ? None : true)
   external goto by_name (written.named)
-  registry.given = (written.listed)
+  external set registry given (written.listed)
   external goto read
   external label by_name
   naming_frame := external node
   naming_frame.outer = (external span written).frame
-  registry.naming = instance
+  external set registry naming instance
   given_node.read_items_into(naming_frame)
-  registry.naming = None
+  external set registry naming None
   external label read
   // the parents' blocks first, then its own
   static.read_into(instance)
-  registry.given = outer_given
-  registry.naming = outer_naming
+  external set registry given outer_given
+  external set registry naming outer_naming
   instance
 // `x: T`, `x: T = default`: a name declared with a type. What is being constructed or called gives it its value: by name (its own
 // member already), or the next given in order; else `default` (read when the field first is), else nothing. While arguments are

@@ -1,0 +1,11 @@
+// The fonts installed on the device: where the operating system keeps them, and the file of a family.
+Fonts := class {
+  // where the host keeps its fonts; a browser gives none to read, and on ether they are not written yet
+  static installed: Location[] => if OS.Linux { [@/usr/share/fonts] }
+    elsif OS.Macos { ["/System/Library/Fonts" as Location] }
+    elsif OS.Windows { [@C:/Windows/Fonts] }
+    elsif OS.Browser { [] }
+    else { ERROR@OS `fonts are not written in Ray yet` }
+  // the file named like the family, in any of the folders
+  static named (family: String): Location? => installed.map(.listing).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
+}

@@ -99,13 +99,13 @@ UI.TUI := class {
   }
 
   Terminal := class: UI.Interface = written: Compiler = UI.TUI.written, grid: Grid? {
-    emit (bytes) => @me/device/os.sent("stdout", bytes)
-    received => @me/device/os.received("stdin")
-    size => Geometry.Vector(@me/device/os["COLUMNS"] as Decimal, @me/device/os["LINES"] as Decimal)
+    emit (bytes) => @me/device.sent("stdout", bytes)
+    received => @me/device.received("stdin")
+    size => Geometry.Vector(@me/device/os.env.COLUMNS as Decimal, @me/device/os.env.LINES as Decimal)
     emitted (value) => emit(Compiler.reduced(value, written) as String)
     start => emitted(Start())
       -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
-      -- ({ @me/device/os.launch(@me/device/opened) } when @me/device/opened changes)
+      -- ({ @me/device.launch(@me/device/opened) } when @me/device/opened changes)
     stop => emitted(Stop())
     write (drawn: Grid) => (grid = drawn) -- emitted(grid.framed)
     read => (received ?? "") ~= (events: Event[]) -- .events.for(Compiler.reduced(., applied))

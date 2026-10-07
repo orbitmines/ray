@@ -28,7 +28,7 @@ $Name = 'ether'
 $Aliases = @('ray', 'orbitmines')
 $Entry = '@ether/v0.ts/src/language.ts'
 $Config = '@ether/v0.ts/deno.npm.json'
-$Includes = @('LICENSE', '@ether/.project.ray', '@ether/Ether.ray', '@ether/World.ray', '@ether/Device.ray', '@ether/Messaging.ray', '@ether/entrypoint.server.ray', '@ether/entrypoint.npc.ray', '@ether/entrypoint.player.ray', '@ether/ray', '@ether/$', '@ether/ui', '@ether/geometry', '@ether/security', '@ether/network', '@ether/version', '@ether/game', '@ether/os', '@ether/library', '@ether/v0.ts/javascript.o.ray')
+$Includes = @('LICENSE', '@ether/.project.ray', '@ether/Ether.ray', '@ether/World.ray', '@ether/Device.ray', '@ether/Messaging.ray', '@ether/entrypoint.server.ray', '@ether/entrypoint.npc.ray', '@ether/entrypoint.player.ray', '@ether/ray', '@ether/$', '@ether/ui', '@ether/geometry', '@ether/security', '@ether/network', '@ether/version-control', '@ether/filesystem', '@ether/fonts', '@ether/timezone', '@ether/game', '@ether/os', '@ether/library', '@ether/v0.ts/javascript.o.ray')
 $Marker = '# Added by the Ether installer'
 
 if ($Help) {

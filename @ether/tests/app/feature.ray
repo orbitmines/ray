@@ -36,7 +36,7 @@ unless Random.below(5) < 5 { INFO@mark `RN4 a number below five is not below fiv
 // Twenty draws are not all the same. They could be — about twice in a
 // million — but every bit being the same is what a machine that hands over
 // nothing readable looks like, which is what this is here to catch.
-draws := 20.times.map(@me/device/os.bit)
+draws := 20.times.map(Random.bit)
 ones := draws{== 1}.count
 zeros := draws{== 0}.count
 unless ones + zeros == 20 { INFO@mark `RN5 twenty draws are not twenty` }

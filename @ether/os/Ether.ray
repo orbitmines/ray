@@ -1,0 +1,7 @@
+// Ether: the language as the operating system. What the host's externals answer elsewhere is written here in Ray; what
+// differs per operating system otherwise lives in the package it is about (`if OS.Ether { … }`: storage and streams in
+// Feature.ray and Device.ray, the clock and zones in Time.ray, sockets in network, font folders in opentype).
+OS.Ether &+= {
+  // a character's Unicode scalar, a bit at a time, most significant first: on ether a character already is its scalar
+  bits (character: Char, take) => (character as Binary).integer.for(take)
+}

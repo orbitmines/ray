@@ -1,7 +1,7 @@
 Location &+= {
   normalised => segments{!= "."}.reduce(kept = [] => . == ".." ? kept[..<-1] : (kept, .)).join("/")
-  sandboxed => "instance/" + normalised
-  system: FileSystem => Compiler.reduced(this, FileOptimizations)
+  // what holds it, by the projects loaded (files: @ether/filesystem, URLs: @ether/network); none: it holds nothing to read
+  system: FileSystem => Compiler.reduced(this, FileOptimizations) -- (. is FileSystem ? . : FileSystem())
   content => system.read(this) as String
   bytes => (system.read(this) ?? []) as Byte[]
   listing => system.listing(this)
@@ -13,19 +13,18 @@ Location &+= {
 }
 
 FileSystem := class: Language {
-  read (location: Location) => ERROR@FileSystem `no reader for the location`
-  write (location: Location, content) => ERROR@FileSystem `no writer for the location`
+  read (location: Location) => ERROR@FileSystem `nothing loaded holds the location (a file needs @ether/filesystem, a URL @ether/network)`
+  write (location: Location, content) => ERROR@FileSystem `nothing loaded holds the location to write it (a file needs @ether/filesystem, a URL @ether/network)`
   listing (location: Location) => []
   exists (location: Location) => read(location) != None
   removed (location: Location) => write(location, None)
 }
 
-FileOptimizations := {
-  {location: Location} => @me/device/os
-}
+// What holds a location: the projects add theirs (@ether/filesystem the file space, @ether/network the URLs).
+FileOptimizations := { }
 
 IO := class {
-  output (text: String) => @me/device/os.sent("stdout", text)
+  output (text: String) => @me/device.sent("stdout", text)
   fetch (from: Location, path: String, version: Version?) => ((from / path + (version as String)).content if version) ?? (from / path).content
 }
 
@@ -33,7 +32,7 @@ Random := class {
   secure => Random
   seeded (seed: Number) => Seeded(state: seed)
 
-  bit => @me/device/os.bit
+  bit => OS.Ether ? ERROR@OS `a source of random bits is not written in Ray yet` : (external random) ? 1 : 0
   bits (count: Number) => count.times.map(bit)
   number (width: Number) => Binary(integer: bits(width).map(Binary.digit))
   below (limit: Number) => {
@@ -72,23 +71,3 @@ Proof := class = proposition: *, argument: * {
 ! `+` `-`
 ! `*` `/`
 
-OS := class: FileSystem {
-  [property: String] => ERROR@OS `the operating system has no properties`
-  platform => this["platform"]
-  architecture => this["architecture"]
-  env => Environment(os: this)
-  static Environment := class = os: OS {
-    .{literal name ^property} ^punctuation => os[name]
-  }
-
-  running => ERROR@OS `the operating system does not say whether the host runs it`
-  static current: OS? => OS#.map(.()){running}.first
-
-  sent (stream: String, content) => ERROR@OS `the operating system has no streams`
-  received (stream: String) => ERROR@OS `the operating system has no streams`
-  launch (location: Location) => ERROR@OS `the operating system opens no locations`
-  bit => ERROR@OS `the operating system has no source of random bits`
-  now: Time => ERROR@OS `the operating system has no clock`
-  time_zones: TimeZone.Source => ERROR@OS `the operating system has no time-zone data`
-  fonts: Location[] => ERROR@OS `the operating system has no fonts`
-}

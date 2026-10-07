@@ -1,0 +1,16 @@
+// The operating system a device runs: one of these. As a boolean, whether it is the one the device runs (`@me/device/os`):
+// what differs between them is written where it belongs (`if OS.Windows { … } elsif OS.Browser { … }`), in the package
+// it is about (files and streams here, time zones in Time.ray, sockets in network, font folders in opentype).
+OS := enum Linux (platform: "linux") | Windows (platform: "win32") | Macos (platform: "darwin") | Browser (platform: "browser") | Ether (platform: "ether") {
+  as (=== boolean) => this === @me/device/os
+  // what the host says of itself (`os["PATH"]`, `os.env.PATH`); the language as the operating system says only what it is
+  [property: String] => this === OS.Ether ? { "platform": "ether", "architecture": "ray" }[property] : (external os property) as String
+  architecture => this["architecture"]
+  env => Environment(os: this)
+  static Environment := class = os: OS {
+    .{literal name ^property} ^punctuation => os[name]
+  }
+
+  // the one the host reports; none: the language as the operating system
+  static host: OS => OS#{!== OS.Ether && .platform == (external os "platform") as String}.first ?? OS.Ether
+}

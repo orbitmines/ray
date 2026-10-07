@@ -1,0 +1,10 @@
+mark ^keyword := external global
+
+// An operating system is a member of the enum OS; as a boolean, whether it is the one the device runs.
+unless [OS.Ether, OS.Linux, OS.Macos, OS.Windows, OS.Browser].every(. is OS) { INFO@mark `OSE1 an operating system is not one of OS` }
+unless OS#{as boolean}.count == 1 { INFO@mark `OSE3 other than one operating system runs this device` }
+unless @me/device/os === OS.host { INFO@mark `OSE4 the device does not run the operating system the host reports` }
+with @me/device/os = OS.Windows {
+  unless OS.Windows { INFO@mark `OSE6 the operating system the device runs is not true as a boolean` }
+  if OS.Linux { INFO@mark `OSE7 an operating system the device does not run is true as a boolean` }
+}

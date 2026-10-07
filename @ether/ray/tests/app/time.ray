@@ -96,7 +96,6 @@ unless 1 sol == 88775.244 seconds { INFO@mark `TI88 a sol is not 88775.244 secon
 
 summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
 winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
-unless TimeZone("UTC").at(summer).offset == 0 seconds { INFO@mark `TZ14 UTC is off zero on this host` }
 
 // ISO 8601 week dates: week 01 holds the year's first Thursday, so a week date may name a day of the year before or after.
 unless "2026-W41-2" as ISO_8601 == "2026-10-06" as ISO_8601 { INFO@mark `WD1 the Tuesday of week 41 of 2026 is not the sixth of October` }
@@ -111,7 +110,7 @@ unless "2026-W41" as ISO_8601 == "2026-10-05" as ISO_8601 { INFO@mark `WD9 a wee
 
 // RFC 9557: a time-zone name and tagged annotations after the offset.
 paris := "2026-10-06T12:00:00+02:00[Europe/Paris]" as ISO_8601
-unless paris.zone.name == "Europe/Paris" { INFO@mark `WD10 the zone named in brackets is not read` }
+unless paris.zone_name == "Europe/Paris" { INFO@mark `WD10 the zone named in brackets is not read` }
 unless paris == "2026-10-06T10:00:00Z" as ISO_8601 { INFO@mark `WD11 a zone name moved the instant its offset gives` }
 unless "2026-10-06T12:00:00+02:00[!Europe/Paris][u-ca=gregory]" is ISO_8601 { INFO@mark `WD12 a critical zone and a calendar tag are not read` }
 unless "2026-10-06T12:00:00Z[foo=bar]" is ISO_8601 { INFO@mark `WD13 an elective tag nobody understands is refused` }

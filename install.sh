@@ -18,7 +18,7 @@ ALIASES="ray orbitmines"
 TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-msvc"
 ENTRY='@ether/v0.ts/src/language.ts'
 CONFIG='@ether/v0.ts/deno.npm.json'
-INCLUDES=('LICENSE' '@ether/.project.ray' '@ether/Ether.ray' '@ether/World.ray' '@ether/Device.ray' '@ether/Messaging.ray' '@ether/entrypoint.server.ray' '@ether/entrypoint.npc.ray' '@ether/entrypoint.player.ray' '@ether/ray' '@ether/$' '@ether/ui' '@ether/geometry' '@ether/security' '@ether/network' '@ether/version' '@ether/game' '@ether/os' '@ether/library' '@ether/v0.ts/javascript.o.ray')
+INCLUDES=('LICENSE' '@ether/.project.ray' '@ether/Ether.ray' '@ether/World.ray' '@ether/Device.ray' '@ether/Messaging.ray' '@ether/entrypoint.server.ray' '@ether/entrypoint.npc.ray' '@ether/entrypoint.player.ray' '@ether/ray' '@ether/$' '@ether/ui' '@ether/geometry' '@ether/security' '@ether/network' '@ether/version-control' '@ether/filesystem' '@ether/fonts' '@ether/timezone' '@ether/game' '@ether/os' '@ether/library' '@ether/v0.ts/javascript.o.ray')
 MARKER="# Added by the Ether installer"
 
 usage() {

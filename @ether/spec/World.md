@@ -30,7 +30,7 @@ From the drafts review (2026-10-06).
   **Follows (2026-10-06):** `world.@a = world.@b` makes `@a` an equivalence of `@b`; a reservation may hold a parameterless getter, resolved on every lookup (`reservation.redirect(other)`); overwriting a held reservation needs write access from its issuer, and is a quest otherwise, from U9 (equivalences), P5.3 (parameterless functions are dynamic) and W5.1 (writing is access to `=`).
   **(2026-10-06)** There is no `Reservation`: a reserved name is a field of the world, `world.@name = holder` (case-insensitively
   unique), found by the `{PREFIX}{name}` lookup before the world's children and its fallback. A redirect assigns a getter,
-  `world.@a = => world.@b`. Overwriting a held name needs write access (`&@.may`), and raises `ERROR@Name` otherwise
+  `world.@a => world.@b` (user, 2026-10-07: `@localhost => @\`127.0.0.1\``, no `= =>`). Overwriting a held name needs write access (`&@.may`), and raises `ERROR@Name` otherwise
   (2026-10-06: a failure is an error, never a `Program(name: …)`; an error becomes a quest down the line).
   **(2026-10-06)** Names compare and reserve by the UTS #39 skeleton of their case fold (`String.skeleton`, from `Unicode.confusables` of the selected Unicode version, §4), so a name confusable with a held one finds that one; a name that mixes scripts and is confusable (`mixed_script && skeleton != .`, §5) is refused with an error.
 - **W1.10 The standard `@` names** — **Decided (draft)**; none is defined in v0 (`@localnetwork` is used in
@@ -157,7 +157,7 @@ From the drafts review (2026-10-06). Paths are relative to `@ether/`; `…/insta
   (`@aws/…`) and an account a character there (W1.4). *IDE:230–252, 519*
 - **W2.26 An instance's kind is its entrypoint** — **Decided (draft)**. `entrypoint.server.ray`, `entrypoint.npc.ray`
   (`< NPC`), `entrypoint.player.ray`, and `Ether.ray` (`< Character`). The server's sets `shadowing = None`,
-  `reserve @ether => @me` (2026-10-06: `@ether = => @me`, W1.9), and `@admin` as the superposition of every `@allow_*` name. *`entrypoint.server.ray:1–9`, `Ether.ray:1`*
+  `reserve @ether => @me` (2026-10-06: `@ether => @me`, W1.9), and `@admin` as the superposition of every `@allow_*` name. *`entrypoint.server.ray:1–9`, `Ether.ray:1`*
 - **W2.27 Mirrors of unknown extent** — **Q**. Recommend: `world.locations` is an unbounded (possibly non-halting) Ray, explored
   as a quest; a mirror's permissions are its own and default to the original's (W2.9). *`.ray2/Character.ray:11–12`*
   **Follows (2026-10-06):** as recommended: `world.locations` is an unbounded (possibly non-halting) Ray, explored as a quest, and a mirror's permissions are its own, defaulting to the original's, from R3.4 (an unbounded search is a quest) and L§8.3 (permissions are inherited).
@@ -193,7 +193,7 @@ From the drafts verification (2026-10-06).
   says "Offline by default" of `@me.status`. Recommend: two different things: the instance connects by default, and the
   character's presence (`Online`, a narrowing) is off until set; U7 then reads "a character is not `Online` by default".
 - **W2.35 A server's names include the admin names** — *`entrypoint.server.ray:7` (as of `5229043^`)*: `@me.name = @admin
-  //TODO This should work`. **Decided (v0)**: `@ether/entrypoint.server.ray` writes `World.ether.@admin = =>
+  //TODO This should work`. **Decided (v0)**: `@ether/entrypoint.server.ray` writes `World.ether.@admin =>
   World.ether.@"allow_{String}"` and `@me.name |= @admin`: the server's names gain the superposition of every `@allow_*` name
   (`|=`, so its own name stays).
 
@@ -509,7 +509,7 @@ each item says where it lives in v0 today (`@ether/`, whose core is the project 
   `/@<uuid>` (W2.21). Not in v0 yet.
 - **W10.7 `/%`, history of no character or world** — *README:9*: version history kept that belongs to neither. Today the drafts'
   `@ether/.%/<ORIGINAL-UUID>.ray` (L§9.2, "What the `.%` draft writes"); in the core a value's past is `.previous`, and stores
-  are the `@ether/version` project (`@ether/version/`).
+  are the `@ether/version-control` project (`@ether/version-control/`).
 - **W10.8 `/projects`, unassigned projects** — *README:12*: internal projects not yet given a package directory. Today every
   project has its own directory with a `.project.ray` (`@ether/geometry`, `@ether/security`, `@ether/library`, …), and `@ether/projects`
   is gone.
@@ -536,7 +536,7 @@ Answers from 2026-09-30.
 - **W2.1** `==` on characters and instances compares public keys, now. Key compromise and rotation later.
 - **W1.13 Names resolve in the selected world — Decided (user, 2026-10-06).** Each instance runs its Ether files
   (`Ether.ray`, its entrypoint) in its selected world, `World.current` (default `World.ether`); a bare `@name` reads
-  `World.current`'s name and `@name = …` writes it, so the files say `@private = => @me`, `@everyone = => characters`,
+  `World.current`'s name and `@name = …` writes it, so the files say `@private => @me`, `@everyone => characters`,
   never `World.ether.@…`. The core defines no such names (only `@me`); `@ether` itself is a name in `Ether.ray`.
 - **W2.1 Identity, keys and recovery — Decided (user, 2026-10-06).** Character equality is the whole of security in the
   language, so it never rests on data anyone can claim.
@@ -691,9 +691,13 @@ Answers from 2026-09-30.
   and `secure` names a cryptographic source.
 - **W6.9** An OS is a platform Language level (`Language.linux`, …), composed with the target; per-OS code
   lives there, not in the default code.
-  **(user, 2026-10-06)** Each OS is its own project under `@ether/os/` (`ether`, `linux`, `macos`, `windows`, `browser`)
+  ~~(user, 2026-10-06)~~ superseded: Each OS is its own project under `@ether/os/` (`ether`, `linux`, `macos`, `windows`, `browser`)
   holding its externals and configuration; the core holds only the `OS` enum, whose members those projects add, and the
   abstract interface they implement (L§8.4).
+  **(user, 2026-10-07)** `OS` is an enum in `@ether/ray/OS.ray`; a member as a boolean is whether the device runs it, and
+  per-OS code is `if OS.Windows { … }` in the project it is about (`@ether/timezone`, `@ether/network`, `@ether/fonts`,
+  `@ether/filesystem`, each holding its location space and declaring its own dependencies). `@ether/os` is only the
+  Ether OS project (L§8.4).
 - **W6.11** Chat later.
 
 Answers from 2026-10-05.

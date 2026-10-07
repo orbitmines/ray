@@ -1,0 +1,9 @@
+mark ^keyword := external global
+
+unless OS.Ether["platform"] == "ether" { INFO@mark `ETH4 the language as the operating system does not name its platform ether` }
+with @me/device/os = OS.Ether {
+  @me/device.sent("ethertest", "a")
+  @me/device.sent("ethertest", "b")
+  unless @me/device.received("ethertest") == "a" && @me/device.received("ethertest") == "b" && @me/device.received("ethertest") === None { INFO@mark `ETH9 a stream on ether does not give back what was sent to it, in order, once` }
+  unless [Random.bit, Time.now, @me/device.launch("a" as Location)].every(.erred) { INFO@mark `ETH8 what the language as the operating system has not written yet does not err` }
+}

@@ -1,0 +1,9 @@
+mark ^keyword := external global
+
+with @me/device/os = OS.Browser {
+  unless Fonts.installed == [] { INFO@mark `OSE8 a browser gives fonts to read` }
+}
+unless [OS.Linux, OS.Macos, OS.Windows].every(os => with @me/device/os = os { Fonts.installed is Location[] && Fonts.installed.nonempty }) { INFO@mark `OSE5 an operating system does not say where its fonts are` }
+with @me/device/os = OS.Ether {
+  unless Fonts.installed.erred { INFO@mark `FON1 fonts on ether do not err while they are unwritten` }
+}

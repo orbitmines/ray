@@ -1,0 +1,13 @@
+mark ^keyword := external global
+
+with @me/device/os = OS.Ether {
+  ("ethertest/a" as Location).content = "x"
+  unless ("ethertest/a" as Location).content == "x" { INFO@mark `ETH1 what is written on ether is not read back` }
+  unless ("ethertest" as Location).listing == ["ethertest/a" as Location] { INFO@mark `ETH2 a location on ether does not list what was written under it` }
+  ("ethertest/a" as Location).remove
+  if ("ethertest/a" as Location).exists { INFO@mark `ETH3 a location removed on ether is still there` }
+}
+
+// A Windows drive is a file location, not a URL with the scheme "C".
+unless @C:/Windows/Fonts as String == "C:/Windows/Fonts" { INFO@mark `FS1 a Windows drive path is not read as written` }
+unless (@C:/Windows/Fonts).system === (@/usr/share).system { INFO@mark `FS2 a Windows drive is not held like any other file path` }

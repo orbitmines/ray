@@ -515,7 +515,8 @@ export class Seed {
     let scope: Node | undefined = body.frame; while (scope && scope.version === 0) scope = scope.parent;
     let byPlanner = body.of.programs.get(body.planner); if (byPlanner === undefined) body.of.programs.set(body.planner, byPlanner = new Map());
     const kept = byPlanner.get(scope);
-    const version = this.reach_version(body.frame);
+    // a body the seed reads sees only the seed's rules, which no rule defined after the planner was handed over changes
+    const version = body.planner === undefined && this.planner !== undefined ? -1 : this.reach_version(body.frame);
     this.compiles++;
     if (kept !== undefined && kept.version === version) return kept.fn;
     this.recompiles++;

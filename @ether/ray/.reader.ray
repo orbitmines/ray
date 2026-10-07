@@ -416,6 +416,49 @@ pipe := mark.character
         here = here.next
         if c === end
           here = None
+    // the brackets open before each place, as a chain (one opened: a new link; one closed: the link before it), so a span is
+    // balanced when its two ends see the same link (a bracket closing what it did not open: a link of its own)
+    open_ones := external node
+    here = at
+    going := true
+    while going
+      unless here
+        going = None
+      if going
+        here.stack = open_ones
+        here.stack_stamp = stamp
+        if here === limit
+          going = None
+      if going
+        c := here.character
+        shut := c.closer
+        if shut
+          pushed := external node
+          pushed.shut = shut
+          pushed.next = open_ones
+          open_ones = pushed
+        unless shut
+          if c.closes
+            expected := open_ones.shut
+            if c === expected
+              open_ones = open_ones.next
+            unless c === expected
+              open_ones = external node
+          if c === quote
+            skipping := here.next
+            while skipping
+              if skipping === limit
+                skipping = None
+              if skipping
+                skipping.stack = open_ones
+                skipping.stack_stamp = stamp
+                d := skipping.character
+                if d === quote
+                  here = skipping
+                  skipping = None
+              if skipping
+                skipping = skipping.next
+        here = here.next
   stamp
 
 // Whether the character at `this` follows `c` somewhere in the statement indexed with `stamp` (on its first line).
@@ -475,6 +518,22 @@ pipe := mark.character
 
 // Whether the places from `at` to `limit` close every bracket they open, in order, and none they did not (quoted text skipped).
 {at}.balanced_to({limit}) =>
+  // in the statement indexed last: its two ends see the same open brackets
+  stamp := registry.indexed
+  known := None
+  if at.stack_stamp === stamp
+    if limit
+      if limit.stack_stamp === stamp
+        known = true
+  found := None
+  if known
+    found = at.stack === limit.stack
+  unless known
+    found = at.balanced_walk(limit)
+  found
+
+// The same, walked.
+{at}.balanced_walk({limit}) =>
   open_ones := None
   here := at
   ok := true
@@ -1703,8 +1762,14 @@ external planner plan_rule
 // One statement read at the top: applied in place, or reported. Answers the place after it.
 {given}.read_statement =>
   here := external .
-  // the scope read in applies the reader
+  // the scope read in applies the reader; the language's text and a project's files are read inside the language's scope
   scope := here.caller
+  if registry.language_text
+    if scope === top
+      scope = registry.language_scope
+    unless scope === registry.language_scope
+      unless scope.parent === registry.language_scope
+        scope.parent = registry.language_scope
   at := given.skip_blank(None)
   limit := None
   if at
@@ -2760,12 +2825,6 @@ registry.language = true
 // `name = value`: written where the name was declared.
 {target} = {value} =>
   target.assigned(value)
-// `!x`: whether `x` does not hold.
-!{x} =>
-  found := None
-  unless x.holds_true
-    found = true
-  found
 // `a === b`: whether they are the same value (identity).
 {a} === {b} =>
   external same a b
@@ -2897,6 +2956,9 @@ static {statement} =>
 
 // ================================================================ the language, in its own terms
 // From here the entrypoint is read as any file of the language is (with the language's rules, not the reader's).
+language_scope := external node
+language_scope.parent = top
+registry.language_scope = language_scope
 registry.language_text = true
 
 // `a; b`: both read, the value of the second.
@@ -2922,9 +2984,15 @@ boolean := enum false (holds: None) | true (holds: true) {
 true := boolean.true
 false := boolean.false
 
+// `!x`: whether `x` does not hold.
+!{x} => x ? false : true
+
 // ---------------------------------------------------------------- jumps (R3.1): a program's edges
 goto {literal target} => external goto target
-goto {literal target} if {condition} => external goto target condition
+goto {literal target} if {condition} => (
+  taken := condition ? true : None
+  external goto target taken
+)
 {literal label}\ => external label label
 
 // ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)

@@ -3179,7 +3179,8 @@ private {this: Tight}.admitted_by({type}) =>
   found = true
   external goto done
   external label class
-  external goto repetition (is_text ? ((external same (external get t extends) registry.array_class) ? true : None) : None)
+  // (a Ray of values, an Iterable whose `Vertex` is given: a text that is one `Vertex` after another)
+  external goto repetition (is_text ? ((external get t Vertex) ? (candidate.inside(Iterable) ? None : (t.inside(Iterable) ? true : None)) : None) : None)
   found = (candidate.inside(t))
   external goto done found
   external goto by_rules is_text
@@ -3191,7 +3192,7 @@ private {this: Tight}.admitted_by({type}) =>
   found = (candidate.from.spells_as(candidate.to, (external get t from), (external get t to)))
   external goto done
   external label repetition
-  found = (candidate.from.repeated((external get t T), candidate.to))
+  found = (candidate.from.repeated((external get t Vertex), candidate.to))
   external label done
   found
 // A part of a type admitting `this`: text, as a capture of that type holds it (its check, or the language's `is`, once per text);
@@ -3670,15 +3671,24 @@ Node &+= {
     made.outer = (external span written).frame
     made.class = true
     made.extends = base
-    parameters := external get base parameters
-    external goto done (parameters === None ? true : None)
-    made.bound(parameters, written.listed)
+    // (its parameters, or those of what it extends: `Array<T>` binds an Iterable's `Vertex`)
+    holder := base
+    names := None
+    external label find
+    names = external get holder parameters
+    external goto found names
+    holder = external get holder extends
+    external goto find holder
+    external label found
+    external goto done (names === None ? true : None)
+    made.bound(names, written.listed)
     external label done
     made
 }
-// `T[]`: one or more `T`, one after another (T4.10): an `Array` of them.
-Array<T> := class { }
-registry.array_class = Array
+// The core of a Ray of values (Ray.ray adds the rest, R): an Iterable of `Vertex`, what each of its vertices is; an Array, one of
+// them in order. `T[]` is an Array of `T`.
+Iterable<Vertex> := class { }
+Array := class: Iterable { }
 Node &+= {
   [] => Array<this>
 }

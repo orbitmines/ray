@@ -17,4 +17,4 @@ many {x: Many} =>
   say x
 many abba
 many abc
-say (Array<Ab>.T === Ab)
+say (Array<Ab>.Vertex === Ab)

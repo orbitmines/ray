@@ -11,7 +11,8 @@ Ordered<T = static> := class {
   max (b: T) => this >= b ? this : b
 }
 
-Iterable<Vertex: Ray = Ray> := class: Ordered {
+// (Iterable and Array are made in the entrypoint, their core; what follows is the rest of them)
+Iterable &+= {
   entry: Vertex? => TODO
 
   dynamically assert count < ∞ if bounded: boolean = true
@@ -309,7 +310,7 @@ Path := class: Structure{consistent & connected} {
   paths => this
   length => acyclic ? count : ∞
 }
-Array := class: Path{acyclic} {
+Array &+= {
   push_back | push (x = ?) => (this &= x) -- this
   push_front (x) => {
     added = link x None
@@ -330,6 +331,8 @@ Array := class: Path{acyclic} {
   } -- this
   push_before (at, x) => link_of(at)?.previous ? push_after(link_of(at).previous.value, x) : push_front(x)
 }
+Iterable.components.hierarchy &= Ordered
+Array.components.hierarchy &= Path{acyclic}
 Chain.components.hierarchy &= Array
 Link.components.hierarchy &= Ray
 

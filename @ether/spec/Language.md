@@ -81,9 +81,9 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   **Follows (2026-10-06):** not a default. Declaration and assignment are §2.1 and T1.6, and an assignment is checked against the history it writes over, a conflict becoming a quest (W3.4). "Overwrite if None, else `&=`" may be a store's or a location's own policy, nothing more. From §2.1, T1.6, W3.4.
 
 ### 2.5 What an assignment replaces (*user, 2026-10-06*)
-- **Decided:** a program's own graph is its history. An assignment keeps the value it replaces as the new value's `.previous`, so `x.previous**` are the values `x` held before, nearest first; this is Ray structure, not a `History`. There is no time on that edge: when a value changed comes from version control (a commit's stamp, `x.history`), so anything measured against time imports `@ether/version` (user, 2026-10-06).
-  - The core keeps no history: `with`/`assume` restore what their settings wrote through `.previous`; transitions, key presses, idleness, a quest's attempts, an item's trail and a reference's notes read `.previous**`; what needs time (transitions, pointer velocity, double presses, idleness, recent solves) reads `x.history` with `@ether/version` imported.
-  - Commits, repositories, logs of runs, stores and storage levels are `@ether/version` (§9.1).
+- **Decided:** a program's own graph is its history. An assignment keeps the value it replaces as the new value's `.previous`, so `x.previous**` are the values `x` held before, nearest first; this is Ray structure, not a `History`. There is no time on that edge: when a value changed comes from version control (a commit's stamp, `x.history`), so anything measured against time imports `@ether/version-control` (user, 2026-10-06).
+  - The core keeps no history: `with`/`assume` restore what their settings wrote through `.previous`; transitions, key presses, idleness, a quest's attempts, an item's trail and a reference's notes read `.previous**`; what needs time (transitions, pointer velocity, double presses, idleness, recent solves) reads `x.history` with `@ether/version-control` imported.
+  - Commits, repositories, logs of runs, stores and storage levels are `@ether/version-control` (§9.1).
 
 ---
 
@@ -501,7 +501,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   automatically (`shadowing => (parent, dependencies.project)#`). `@ether/security` and `@ether/network` are such
   subprojects of the Ether project `@ether` (`@ether/security/`, `@ether/network/`), imported by nothing by default.
 
-- **Decided (user, 2026-10-06): layout.** `@ether/` is the Ether project (no `.ray/` or `v0/` level: the library, `v0.ts/`, `spec/` and `ide/` sit directly in it); its `.project.ray` imports `@ether/network` and `@ether/version`, and it holds `Ether.ray` (the standard `@` names), `World.ray`, `Device.ray`, `Messaging.ray` and the instance entrypoints (`entrypoint.server.ray`, `entrypoint.npc.ray`, `entrypoint.player.ray`).
+- **Decided (user, 2026-10-06): layout.** `@ether/` is the Ether project (no `.ray/` or `v0/` level: the library, `v0.ts/`, `spec/` and `ide/` sit directly in it); its `.project.ray` imports `@ether/network` and `@ether/version-control`, and it holds `Ether.ray` (the standard `@` names), `World.ray`, `Device.ray`, `Messaging.ray` and the instance entrypoints (`entrypoint.server.ray`, `entrypoint.npc.ray`, `entrypoint.player.ray`).
   - `@ether/ray/` is the core, the project `@ether/ray` (`!language`): Node, Ray, Number, String, Unicode, Encoding, Program, Control, Compiler, Language, Project, Location, Character, Format, Reporting, Time, Unit, UUID, IP, Roman, Access, Feature, the outside languages in `@ether/$/`, and its claims in `@ether/ray/tests/`. Every project assumes it without an import.
   - Subprojects of `@ether`, each with its own `.project.ray`: `security/`, `network/`, `os/` (a project per OS, §8.4), `ui/`, `geometry/`, `version/` (History, Repository, runs' logs, stores and storage levels; imports `@ether/security`), `game/` and `library/`. Folders of projects are lowercase.
 

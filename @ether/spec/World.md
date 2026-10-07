@@ -509,7 +509,7 @@ each item says where it lives in v0 today (`@ether/`, whose core is the project 
   `/@<uuid>` (W2.21). Not in v0 yet.
 - **W10.7 `/%`, history of no character or world** — *README:9*: version history kept that belongs to neither. Today the drafts'
   `@ether/.%/<ORIGINAL-UUID>.ray` (L§9.2, "What the `.%` draft writes"); in the core a value's past is `.previous`, and stores
-  are the `@ether/version` project (`@ether/version/`).
+  are the `@ether/version-control` project (`@ether/version-control/`).
 - **W10.8 `/projects`, unassigned projects** — *README:12*: internal projects not yet given a package directory. Today every
   project has its own directory with a `.project.ray` (`@ether/geometry`, `@ether/security`, `@ether/library`, …), and `@ether/projects`
   is gone.

@@ -542,8 +542,37 @@ pipe := mark.character
     here := external .
     found = external apply check given here
   unless check
-    found = from.reading(to, kind.rules)
+    found = kind.held_as_written(from, to)
   found
+
+// What a type reads (T4.10: the rules it carries), answered once per type and text; one being asked holds while it is, so a type
+// written with itself (`Base[]{length >= 1}` reading `1`) does not read forever.
+{kind}.held_as_written({from}, {to}) =>
+  k := kind
+  found_known := None
+  answer := None
+  known := from.held_by
+  while known
+    if known.kind === k && known.to === to
+      found_known := known
+      known = None
+    known = known ? known.next : None
+  if found_known
+    answer = found_known.done ? found_known.answer : true
+  unless found_known
+    entry := external node
+    entry.kind = k
+    entry.to = to
+    entry.next = from.held_by
+    from.held_by = entry
+    answer = k.holds_written(from, to)
+    entry.answer = answer
+    entry.done = true
+  answer
+
+{kind}.holds_written({from}, {to}) =>
+  // (the type's own rules read it: a value written as a type carries them, language-side)
+  from.reading(to, kind.rules)
 
 // The first place from `at` before `to` holding `wanted` outside the brackets opened from `at`, or `to`.
 {at}.first_outside({to}, {wanted}) =>

@@ -1416,7 +1416,11 @@ code_points (source) =>
   }
   points
 // A scalar as a character: a Char, the same number.
-character_of (point) => Char(next: point.next)
+// (the point read first: not while the Char is being made)
+character_of (point) =>
+  scalar := point
+  before := scalar.next
+  Char(next: before)
 // Scalars as text: a String of their characters.
 text_of (points) =>
   held := None
@@ -1427,3 +1431,32 @@ text_of (points) =>
   }
   held.outer = String
   held
+// A String's characters: a text's, the places it is written at (from `from`, up to `to`), each as its Char; else the list's.
+String &+= {
+  count =>
+    found := Number()
+    text := this
+    at := text.from ? text.from : (text.head)
+    end := text.from ? text.to : None
+    if (at === end) { at = None }
+    while at {
+      found = found.succ
+      at = at.next
+      if (at === end) { at = None }
+    }
+    found
+  length => this.count
+  first =>
+    text := this
+    at := text.from
+    found := at ? None : (text.head ? text.head.value : None)
+    if at {
+      unless (at === text.to) {
+        one := external node
+        one.from = at
+        one.to = at.next
+        found = character_of(code_points(one).head.value)
+      }
+    }
+    found
+}

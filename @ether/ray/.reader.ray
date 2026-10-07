@@ -37,6 +37,11 @@ true := external node
 // Nothing: what a node does not have.
 empty := external node
 None := empty.nothing
+// A list (`a, b`): a chain of links, instances of `Chain` and `Link` (the classes the library extends: `Array`, `Ray`).
+Chain := external node
+Chain.class = true
+Link := external node
+Link.class = true
 
 // Control flow (spec/Grammar.md G2.19): what is indented under `if`, `unless` and `while` is their block.
 if {condition} {block} =>
@@ -2144,6 +2149,9 @@ registry.latest.shared = true
   if one
     found = external node
     found.listed = true
+    found.outer = Link
+    found.instance = true
+    found.this = found
     external keep found value written
   // several: their list (whose items are kept unread)
   unless one
@@ -2153,6 +2161,9 @@ registry.latest.shared = true
       unless given.listing
         found = external node
         found.listed = true
+        found.outer = Link
+        found.instance = true
+        found.this = found
         found.value = given
   found
 registry.latest.shared = true
@@ -2642,8 +2653,14 @@ registry.latest.shared = true
   unless found
     found = external node
     found.listing = true
+    found.outer = Chain
+    found.instance = true
+    found.this = found
   added := external node
   added.listed = true
+  added.outer = Link
+  added.instance = true
+  added.this = added
   added.value = value
   if found.tail
     found.tail.next = added
@@ -2907,6 +2924,9 @@ private {program: Tight}.each_key({body}) =>
 {`[]`} =>
   found := external node
   found.listing = true
+  found.outer = Chain
+  found.instance = true
+  found.this = found
   found
 // A block as a value: a program (`{ … }`), run where something runs it; an instance of the language's `Program` (once there is one).
 {{inside: Balanced}} =>
@@ -3057,10 +3077,16 @@ private {list: Tight}.listed_with_value({item}) =>
   v := item
   external goto listing found
   found := external node
+  external set found outer Chain
+  external set found instance true
+  external set found this found
   external label listing
   external set found listing true
   added := external node
   external set added listed true
+  external set added outer Link
+  external set added instance true
+  external set added this added
   external set added value v
   last := external get found tail
   external goto after_last last

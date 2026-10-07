@@ -97,7 +97,7 @@ defining := learned.definer
 {at}.continuation =>
   here := at.next
   more := here.spelled(indent)
-  found := here
+  found := None
   while more
     found = more.end
     more = found.spelled(indent)
@@ -108,6 +108,9 @@ written := external span "/()[]{}:.,`\n?^|
 mark := written.from
 // the text the reader is written in (code written in it reads with the reader's own rules)
 reader_text := mark.text
+// code written here, to read other code like it
+reader_written := external ** None
+reader_like := reader_written.code
 quote := mark.character
 mark = mark.next
 slash := mark.character
@@ -1785,7 +1788,13 @@ external planner plan_rule
       caps := made.captures
       external apply rule caps scope
     unless rule
-      external report at limit
+      // a call of an external (`external name arguments`): run as code, in the scope read in
+      if made.external
+        statement := external code at limit reader_like
+        statement_code := statement.code
+        external apply statement_code None scope
+      unless made.external
+        external report at limit
   after := None
   if limit
     after = limit.next
@@ -2192,6 +2201,34 @@ except_rule := registry.latest
       e = e.next
   found
 many_rule := registry.latest
+// Text that is tight: balanced, with no space outside its brackets (what a member is read on: `a.b(1, 2).c`).
+{kind}.tight({from}, {to}) =>
+  found := from.balanced_to(to)
+  if found
+    depth := None
+    here := from
+    while here
+      if here === to
+        here = None
+      if here
+        c := here.character
+        shut := c.closer
+        if shut
+          pushed := external node
+          pushed.next = depth
+          depth = pushed
+        unless shut
+          if c.closes
+            depth = depth.next
+          unless depth
+            if c === space
+              found = None
+              here = None
+        if here
+          here = here.next
+  found
+Tight := registry.latest.checked
+
 // One operand: from where it starts (after spaces), a group, quoted text or a word, and nothing after it.
 {kind}.one_operand({from}, {to}) =>
   start := from.spaces_after
@@ -2200,6 +2237,17 @@ many_rule := registry.latest
   e := start.operand_end(to)
   e === to
 Operand := registry.latest.checked
+
+// A word: one operand that is not in brackets or quotes.
+{kind}.word_text({from}, {to}) =>
+  found := None
+  c := from.character
+  unless c.closer
+    unless c === quote
+      e := from.operand_end(to)
+      found = e === to
+  found
+Word := registry.latest.checked
 {item: Operand}[] =>
   made := many_rule.checked
   made.item = item
@@ -2659,6 +2707,22 @@ Unbraced := opening_block.anything_but[]
   found.tail = added
   found
 
+// `x -- call`, `x ~~ call`: `call` read in a frame where `this` is `x`; a closure it answers is called with `x`; `keep`: `x`.
+{this}.continued({call}, {keep}) =>
+  value := this
+  written := external ** call
+  code := written.code
+  where := external span code
+  frame := external node
+  frame.parent = where.frame
+  frame.this = value
+  result := external apply code None frame
+  if result.method
+    result = result.applied_to(None, value)
+  if keep
+    result = value
+  result
+
 // Calling a value: a class makes an instance of itself; a closure runs.
 {this}.called({arguments}) =>
   value := this
@@ -2777,6 +2841,20 @@ registry.language = true
   made
 
 // ---------------------------------------------------------------- statements read whole (L§2): what is declared first binds loosest
+// `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`).
+({parameter: Word} {`=>`} {body}) =>
+  into := external node
+  into.add(capture, arguments_from, arguments_to)
+  piece := into.last
+  piece.optional = true
+  piece.arguments = true
+  piece.type = Operand
+  piece.parameters = external ** parameter
+  written_pattern := external ** parameter
+  written_body := external ** body
+  where := external span parameter
+  pieces := into.first
+  pieces.defined(written_pattern, written_body, where.frame, None)
 // `[items]`: a list of them; `[]`: an empty one.
 [{inside: Balanced}] =>
   given := inside
@@ -2803,7 +2881,7 @@ registry.language = true
   made.context = where.frame
   made
 // `name := value`: the value declared where the name was written; a list of names, each with the value in its place.
-{name} := {value} =>
+{name: Tight} := {value} =>
   name.declared(value)
 // `condition ? yes : no`: `yes` when the condition holds, else `no`.
 {condition} ? {yes} : {no} =>
@@ -2820,19 +2898,29 @@ registry.language = true
 {name}: {type} =>
   name.declared_as(type, None)
 // `x.member = value`: the member set.
-{x}.{literal member} = {value} =>
+{x: Tight}.{literal member} = {value} =>
   external set x member value
 // `name = value`: written where the name was declared.
-{target} = {value} =>
+{target: Tight} = {value} =>
   target.assigned(value)
 // `a === b`: whether they are the same value (identity).
 {a} === {b} =>
   external same a b
 // `x.member`, `x.member(arguments)`: its own member, else its method (T8.7).
-{x}.{literal member}{arguments: Bracketed} =>
+{x: Tight}.{literal member}{arguments: Bracketed} =>
   x.member(member, arguments)
-{x}.{literal member} =>
+{x: Tight}.{literal member} =>
   x.member(member, None)
+// `.member`, `.member = value`, `.member(arguments)`: of `this` (what the statement's frame sees as `this`).
+.{literal member} = {value} =>
+  receiver := (external .).caller.this_seen
+  external set receiver member value
+.{literal member}{arguments: Bracketed} =>
+  receiver := (external .).caller.this_seen
+  receiver.member(member, arguments)
+.{literal member} =>
+  receiver := (external .).caller.this_seen
+  receiver.member(member, None)
 
 // ---------------------------------------------------------------- what every value has (the base)
 Node := type
@@ -2864,6 +2952,12 @@ Node := type
     extended := this
     external apply members None extended
     extended
+  // `x -- f`: `f` read with `this` being `x` (a closure it answers called with `x`): what it answers; `x ~~ f`: the same, for
+  // what it does, answering `x`
+  --{call: Line} =>
+    this.continued(call, None)
+  ~~{call: Line} =>
+    this.continued(call, true)
   &&{other} =>
     this.and(other)
   ||{other} =>
@@ -2983,6 +3077,11 @@ boolean := enum false (holds: None) | true (holds: true) {
 }
 true := boolean.true
 false := boolean.false
+
+// `a ?? b`: `a`, or `b` when `a` is nothing.
+Node &+= {
+  ?? (other) => this === None ? other : this
+}
 
 // `!x`: whether `x` does not hold.
 !{x} => x ? false : true

@@ -20,7 +20,7 @@ export class Node {
 }
 // Code: a span, read later in the frame it was written in.
 // What a span always is, whatever frame it is read in: its text, the one word it is (if it is one), its programs.
-export type SpanOf = { s: string; word: string | undefined; programs: Map<Rule | undefined, Map<Node | undefined, { version: number; fn: Compiled; unread?: boolean }>> };
+export type SpanOf = { s: string; word: string | undefined; programs: Map<Rule | undefined, Map<Node | undefined, { version: number; fn: Compiled; unread?: boolean; epoch?: number; handed?: Rule }>> };
 const spans = new WeakMap<Text, Map<number, SpanOf>>();
 function span_of(text: Text, b: number, e: number): SpanOf {
   let m = spans.get(text); if (m === undefined) spans.set(text, m = new Map());
@@ -64,6 +64,8 @@ if (EXT) process.on('exit', () => { for (const [n, c] of [...EXT_IN.entries()].s
 const DEPTH = ENV.SEED_DEPTH ? { max: 0, word: '' } : undefined;
 if (DEPTH) process.on('exit', () => console.log('deepest lookup', DEPTH.max, DEPTH.word));
 // SEED_COUNT: how often each rule was applied, printed at exit.
+// The arguments each external reads, in the order it reads them: given to it read (no code made for them), the rest as code.
+const EAGER: Record<string, number[]> = { declare: [1], get: [0], assign: [1], keep: [0], own: [0], set: [2, 0], same: [0, 1], reader: [0], planner: [0], rules: [0], report: [0, 1, 2], io: [1], code: [0, 1], read: [0, 1] };
 // SEED_HANG=n: after n applications, the rules being applied (innermost last), and stop.
 const HANG = ENV.SEED_HANG ? { n: 0, max: Number(ENV.SEED_HANG), stack: [] as string[] } : undefined;
 const COUNT = ENV.SEED_COUNT ? new Map<string, number>() : undefined, SELF = COUNT && new Map<string, number>(), STACK = ['(top)'];
@@ -83,27 +85,27 @@ export class Seed {
     const self = this;
     // R0.7 — none of them syntax
     this.externals.set('rule', (frame, [pattern, body]) => self.define(self.code_of(pattern), self.code_of(body)));
-    this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); if (ENV.SEED_DBG && n.s === 'Item') { const vv = self.force(value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = self.force(value); n.frame.members.set(n.s, v); return v; });
+    this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); if (ENV.SEED_DBG && n.s === 'Item') { const vv = (value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = (value); n.frame.members.set(n.s, v); return v; });
     this.externals.set('node', () => new Node());
     // a node's `outer` (the frame it was made in), and a frame's `caller_frame` and `applied_rule` (as a node), read like members
     // (named so no member a program sets is taken for them)
-    this.externals.set('get', (frame, [of, name]) => { const n = self.force(of) as Node | undefined, k = self.code_of(name).s; return !(n instanceof Node) ? undefined : n.members.has(k) ? n.members.get(k) : k === 'outer' ? n.parent : k === 'caller_frame' ? n.caller : k === 'applied_rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
+    this.externals.set('get', (frame, [of, name]) => { const n = (of) as Node | undefined, k = self.code_of(name).s; return !(n instanceof Node) ? undefined : n.members.has(k) ? n.members.get(k) : k === 'outer' ? n.parent : k === 'caller_frame' ? n.caller : k === 'applied_rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
     // a name written where it was declared (the nearest frame from where it was written that has it, else there)
-    this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = self.force(value); if (ENV.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; (at ?? c.frame).members.set(k, v); return v; });
+    this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = (value); if (ENV.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; (at ?? c.frame).members.set(k, v); return v; });
     // a member set to code as written, unread (read where the member is read)
-    this.externals.set('keep', (frame, [of, name, value]) => { const o = self.force(of) as Node; o.members.set(self.code_of(name).s, value); return value; });
+    this.externals.set('keep', (frame, [of, name, value]) => { const o = (of) as Node; o.members.set(self.code_of(name).s, value); return value; });
     // whether a node has a member of its own (one set there, even to nothing)
-    this.externals.set('own', (frame, [of, name]) => { const n = self.force(of); return n instanceof Node && n.members.has(self.code_of(name).s) ? true : undefined; });
-    this.externals.set('set', (frame, [of, name, value]) => { const v = self.force(value), o = self.force(of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'outer') { if (ENV.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); o.parent = v as Node | undefined; } else o.members.set(k, v); return v; });
+    this.externals.set('own', (frame, [of, name]) => { const n = (of); return n instanceof Node && n.members.has(self.code_of(name).s) ? true : undefined; });
+    this.externals.set('set', (frame, [of, name, value]) => { const v = (value), o = (of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'outer') { if (ENV.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); o.parent = v as Node | undefined; } else o.members.set(k, v); return v; });
     // the frame a name is bound in: the nearest from where it was written that has it (even holding nothing), else that one
     this.externals.set('declaring', (frame, [name]) => { const c = self.code_of(name), k = c.s.trim(); for (let n: Node | undefined = c.frame; n; n = n.parent) if (n.members.has(k)) return n; return c.frame; });
-    this.externals.set('same', (frame, [a, b]) => self.force(a) === self.force(b) ? true : undefined);
+    this.externals.set('same', (frame, [a, b]) => (a) === (b) ? true : undefined);
     // R0.6: reading handed to a rule of the entrypoint; it is applied to the place where a statement starts and answers the
     // place after it.
-    this.externals.set('reader', (frame, [rule]) => { if (ENV.SEED_TIME) console.log('handover at', Math.round(performance.now()), 'ms'); self.handed = self.rule_of(self.force(rule)); return self.handed; });
-    this.externals.set('planner', (frame, [rule]) => { self.planner = self.rule_of(self.force(rule)); return self.planner; });
+    this.externals.set('reader', (frame, [rule]) => { if (ENV.SEED_TIME) console.log('handover at', Math.round(performance.now()), 'ms'); self.handed = self.rule_of((rule)); return self.handed; });
+    this.externals.set('planner', (frame, [rule]) => { self.planner = self.rule_of((rule)); return self.planner; });
     // R0.7, R1: a text is a chain of places, each holding a character node (one node per character) and the next place.
-    this.externals.set('rules', (frame, [of]) => self.rules_of(self.force(of) as Node));
+    this.externals.set('rules', (frame, [of]) => self.rules_of((of) as Node));
     // Run a rule's body, or code, in a frame: captures given as spans (`name`, `from`, `to`) or as values (`value`, in order).
     // (a rule's frame made inside `parent`, when given: a method's inside the value it is a method of)
     this.externals.set('apply', (frame, [rule, caps, within, parent]) => {
@@ -120,9 +122,9 @@ export class Seed {
     });
     // What reading says: a diagnostic over the places from `from` to `to`.
     // (a message given as text: a node with the places it is `from` and `to`)
-    this.externals.set('report', (frame, [from, to, message]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined; const e = t === undefined ? f.text.s.length : self.where.get(t)!.i; const m = self.force(message) as Node | undefined; let said = `Unread \`${f.text.s.slice(f.i, e).slice(0, 60)}\`.`; if (m instanceof Node && m.members.has('from')) { const mf = self.where.get(m.members.get('from') as Node), mt = m.members.get('to') as Node | undefined; if (mf) said = mf.text.s.slice(mf.i, mt === undefined ? mf.text.s.length : self.where.get(mt)!.i); } self.say(said, { text: f.text, b: f.i, e }); return undefined; });
+    this.externals.set('report', (frame, [from, to, message]) => { const f = self.where.get((from) as Node)!, t = (to) as Node | undefined; const e = t === undefined ? f.text.s.length : self.where.get(t)!.i; const m = (message) as Node | undefined; let said = `Unread \`${f.text.s.slice(f.i, e).slice(0, 60)}\`.`; if (m instanceof Node && m.members.has('from')) { const mf = self.where.get(m.members.get('from') as Node), mt = m.members.get('to') as Node | undefined; if (mf) said = mf.text.s.slice(mf.i, mt === undefined ? mf.text.s.length : self.where.get(mt)!.i); } self.say(said, { text: f.text, b: f.i, e }); return undefined; });
     // The outside world (the host's natives, as the old host has them): only writing a stream so far.
-    this.externals.set('io', (frame, [stream, content]) => { const v = self.force(content); self.output(self.show(v)); return undefined; });
+    this.externals.set('io', (frame, [stream, content]) => { const v = (content); self.output(self.show(v)); return undefined; });
     // A rule whose head the reader in Ray has read (R2.1): `pieces` a chain of `literal`/`capture` (spans, a capture's
     // `type`). Answers the rule as a node (`pieces`, `head_from`, `head_to`, `scope`) for the reader to keep where it reads rules.
     this.externals.set('define', (frame, [pattern, pieces, body]) => {
@@ -143,8 +145,8 @@ export class Seed {
     this.externals.set('span', (frame, [code]) => { if (!(code instanceof Code)) return undefined; const c = self.written(code), n = new Node(); n.members.set('from', self.place(c.text, c.b)); n.members.set('to', c.e >= c.text.s.length ? undefined : self.place(c.text, c.e)); n.members.set('frame', c.frame); return n; });
     // Code from one place to another, read where `like` was written (a capture's type, read once when its rule is defined).
     // The same, unread: a node holding the code (as `**` does).
-    this.externals.set('code', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.written(like), n = new Node(); n.members.set('code', new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner)); return n; });
-    this.externals.set('read', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.written(like); const c = new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner); if (ENV.SEED_DBG && c.s === 'Item') console.log('READ Item', l.frame === self.global, l.frame.members.has('Item'), self.show(l.frame.members.get('Item')), JSON.stringify(f.text.s.slice(f.i - 30, f.i + 10))); return self.force(c); });
+    this.externals.set('code', (frame, [from, to, like]) => { const f = self.where.get((from) as Node)!, t = (to) as Node | undefined, l = self.written(like), n = new Node(); n.members.set('code', new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner)); return n; });
+    this.externals.set('read', (frame, [from, to, like]) => { const f = self.where.get((from) as Node)!, t = (to) as Node | undefined, l = self.written(like); const c = new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner); if (ENV.SEED_DBG && c.s === 'Item') console.log('READ Item', l.frame === self.global, l.frame.members.has('Item'), self.show(l.frame.members.get('Item')), JSON.stringify(f.text.s.slice(f.i - 30, f.i + 10))); return self.force(c); });
     this.externals.set('.', frame => frame);
     // the top scope (what the entrypoint is read in)
     this.externals.set('global', () => self.global);
@@ -533,11 +535,13 @@ export class Seed {
     let scope: Node | undefined = body.frame; while (scope && scope.version === 0) scope = scope.parent;
     let byPlanner = body.of.programs.get(body.planner); if (byPlanner === undefined) body.of.programs.set(body.planner, byPlanner = new Map());
     const kept = byPlanner.get(scope);
+    // nothing defined since it was last found current: it is
+    if (kept !== undefined && kept.epoch === this.version && kept.handed === this.planner) return kept.fn;
     // a body the seed reads sees only the seed's rules, which no rule defined after the planner was handed over changes
     const version = body.planner === undefined && this.planner !== undefined ? -1 : this.reach_version(body.frame);
     this.compiles++;
     // the entrypoint's code is read once, by the rules in force then (R0.5), unless it left something unread
-    if (kept !== undefined && (kept.version === version || (body.text === this.boot_text && !kept.unread && !ENV.SEED_REREAD))) return kept.fn;
+    if (kept !== undefined && (kept.version === version || (body.text === this.boot_text && !kept.unread && !ENV.SEED_REREAD))) { kept.epoch = this.version; kept.handed = this.planner; return kept.fn; }
     this.recompiles++;
     const steps = this.expand(this.steps_of(body), body, 0);
     const labels = new Map<string, number>();
@@ -545,11 +549,23 @@ export class Seed {
     const lines: string[] = ['let r, pc = 0;', `const L = ${JSON.stringify(Object.fromEntries(labels))};`, 'for (;;) { try { switch (pc) {', 'case 0:'];
     const k: unknown[] = [];
     const ref = (x: unknown) => { k.push(x); return `k[${k.length - 1}]`; };
+    // An argument an external reads, as a JS expression: when it reads (by the rules this body is read by) as one external whose
+    // arguments are read in the order written, that external called in place; else read when it runs.
+    const expr = (sp: Span, d: number): string => {
+      const of = span_of(sp.text, sp.b, sp.e), read = `S.val(f, ${ref({ ...sp, of })}, ${ref(body.planner)})`;
+      if (EXT || d > 6) return read;
+      const inner = this.expand(this.steps_of(new Code(sp.text, sp.b, sp.e, body.frame, body.planner, of)), body, 0);
+      const st = inner[0];
+      if (inner.length !== 1 || st.kind !== 'external') return read;
+      const ext = this.externals.get(st.name), eager = EAGER[st.name] ?? [];
+      if (ext === undefined || eager.some((e, i) => i > 0 && e < eager[i - 1])) return read;
+      return `${ref(ext)}(f, [${st.args.map((a, i) => eager.includes(i) ? expr(a, d + 1) : `${a.code ? 'S.code_at' : 'S.arg'}(f, ${ref({ ...a, of: span_of(a.text, a.b, a.e) })}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)})`;
+    };
     for (const st of steps) {
       if (st.kind === 'label') { lines.push(`case ${labels.get(st.name)}:`); continue; }
       if (st.kind === 'goto') {
         const to = labels.get(st.name);
-        const when = st.when ? `S.force(${st.when.code ? 'S.code_at' : 'S.arg'}(f, ${ref(st.when)}, ${ref(body.planner)})) !== undefined` : 'true';
+        const when = st.when ? `${expr(st.when, 0)} !== undefined` : 'true';
         // a label of this body: a jump within it; any other (a captured name, a label of a body around it): raised
         if (to !== undefined) lines.push(`if (${when}) { pc = ${to}; continue; }`);
         else lines.push(`if (${when}) throw new S.Jump(S.label_name(f, ${ref({ ...st.at, b: st.at.b, e: st.at.e, name: st.name })}), r);`);
@@ -561,7 +577,9 @@ export class Seed {
         let ext = this.externals.get(st.name);
         if (EXT && ext) { const inner = ext, name = st.name; ext = (f: Node, a: unknown[], at: Span) => { const where = STACK[STACK.length - 1]; EXT_IN.set(where, (EXT_IN.get(where) ?? 0) + 1); const t = performance.now(); try { return inner(f, a, at); } finally { const e = EXT.get(name) ?? [0, 0]; e[0]++; e[1] += performance.now() - t; EXT.set(name, e); } }; }
         if (ext === undefined) { this.say(`No external \`${st.name}\`.`, st.at); continue; }
-        lines.push(`try { r = ${ref(ext)}(f, [${st.args.map(a => `${a.code ? 'S.code_at' : 'S.arg'}(f, ${ref({ ...a, of: span_of(a.text, a.b, a.e) })}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
+        const eager = EAGER[st.name] ?? [], spans = st.args.map(a => ref({ ...a, of: span_of(a.text, a.b, a.e) }));
+        const read = eager.filter(i => i < st.args.length).map(i => `const a${i} = ${expr(st.args[i], 0)};`).join(' ');
+        lines.push(`try { ${read} r = ${ref(ext)}(f, [${st.args.map((a, i) => eager.includes(i) ? `a${i}` : `${a.code ? 'S.code_at' : 'S.arg'}(f, ${spans[i]}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
         continue;
       }
       const caps = st.caps.map(([n, sp]) => [n, { ...sp, of: span_of(sp.text, sp.b, sp.e) }] as [string, Span]);
@@ -569,7 +587,7 @@ export class Seed {
     }
     lines.push('return r;', '} } catch (x) { if (x instanceof S.Jump && L[x.name] !== undefined) { pc = L[x.name]; r = x.value; continue; } throw x; } }');
     const fn = new Function('S', 'k', `return function (f) { ${lines.join('\n')} };`)(this, k) as Compiled;
-    byPlanner.set(scope, { version, fn, unread: steps.some(st => st.kind === 'unread') });
+    byPlanner.set(scope, { version, fn, unread: steps.some(st => st.kind === 'unread'), epoch: this.version, handed: this.planner });
     return fn;
   }
   Jump = Jump;
@@ -658,6 +676,15 @@ export class Seed {
     const of = sp.of ?? span_of(sp.text, sp.b, sp.e), word = of.s;
     for (let at: Node | undefined = frame; at; at = at.parent) { const v = at.members.get(word); if (v !== undefined || at.members.has(word)) return v; }
     return new Code(sp.text, sp.b, sp.e, frame, planner, of);
+  }
+  // An argument an external reads: the member it names, read; or its code run where it was written.
+  val(frame: Node, sp: Span & { of: SpanOf }, planner?: Rule): unknown {
+    const of = sp.of, w = of.word;
+    if (w !== undefined) for (let at: Node | undefined = frame; at; at = at.parent) { const v = at.members.get(w); if (v !== undefined || at.members.has(w)) return this.force(v); }
+    let scope: Node | undefined = frame; while (scope && scope.version === 0) scope = scope.parent;
+    const kept = of.programs.get(planner)?.get(scope);
+    if (kept !== undefined && kept.epoch === this.version && kept.handed === this.planner) return kept.fn(frame);
+    return this.compile(new Code(sp.text, sp.b, sp.e, frame, planner, of))(frame);
   }
   // A statement that is one word: the member it names, or nothing and a diagnostic.
   name(frame: Node, sp: Span): unknown {

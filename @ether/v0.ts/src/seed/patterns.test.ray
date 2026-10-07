@@ -12,3 +12,9 @@ two {x: Pair} =>
 two ab
 two aa
 two ba
+Many := Ab[]
+many {x: Many} =>
+  say x
+many abba
+many abc
+say (Array<Ab>.T === Ab)

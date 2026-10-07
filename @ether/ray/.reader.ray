@@ -2204,7 +2204,7 @@ method_body := registry.latest.body
 
 // Parameters bound in `frame` to what `given` (a chain of arguments) gives, in order: `(parameters) := arguments` (a name
 // declared with a type takes the next argument given, a bare name the next one left).
-{frame}.bound({parameters}, {given}) =>
+{frame: Tight}.bound({parameters}, {given}) =>
   saved_given := registry.given
   registry.given = given
   written_parameters := parameters.code
@@ -2226,6 +2226,7 @@ method_body := registry.latest.body
         item = item.next
   registry.given = saved_given
   frame
+registry.latest.shared = true
 
 // Whether code starts with a block's bracket.
 {code}.starts_block =>
@@ -2738,7 +2739,6 @@ quoted_rule.shared = true
 ticked_rule.shared = true
 group_rule.shared = true
 empty_group_rule.shared = true
-repeated_rule.shared = true
 registry.language = true
 
 // Rules defined from here on (R2.1: a rule is a method). One written in a class, or with parameters (`name (a, b: T) => …`), runs
@@ -2852,6 +2852,13 @@ registry.language_text = true
   v := value
   external set holder name v
   v
+
+// `X<T, V: Type> := class { … }`: `X`, a class with parameters (as a method has them); `X<a, b>`, `X<V: b>`: a class like it with
+// them bound (by name, or in order), its instances `X`'s too. (Declared before `:=`: it reads these first.)
+{name: Word}<{literal parameters}> := {value} =>
+  made := value
+  made.parameters = external ** parameters
+  external declare name made
 
 // ---------------------------------------------------------------- values written: closures, lists, blocks
 // `(x => body)`: a closure of one parameter, written in brackets (the original's form; `x => body` alone defines `x`): a rule whose
@@ -3112,6 +3119,7 @@ registry.language_text = true
   found = true
   external goto done
   external label class
+  external goto repetition (is_text ? ((external same (external get t extends) registry.array_class) ? true : None) : None)
   found = (candidate.inside(t))
   external goto done found
   external goto by_rules is_text
@@ -3121,6 +3129,9 @@ registry.language_text = true
   external goto done
   external label spelled
   found = (candidate.from.spells_as(candidate.to, (external get t from), (external get t to)))
+  external goto done
+  external label repetition
+  found = (candidate.from.repeated((external get t T), candidate.to))
   external label done
   found
 // A part of a type admitting `this`: text, as a capture of that type holds it (its check, or the language's `is`, once per text);
@@ -3589,6 +3600,52 @@ registry.rerun = registry.latest
   first := given_values.head
   given := first.next.value
   program.entered_in(first.value, (given === None ? None : (given.listed)))
+
+// ---------------------------------------------------------------- parameters of a class (`T<a>`), repetition (`T[]`)
+Node &+= {
+  <{literal given}> =>
+    base := this
+    made := external node
+    made.outer = (external span given).frame
+    made.class = true
+    made.extends = base
+    parameters := external get base parameters
+    external goto done (parameters === None ? true : None)
+    arguments := external get (external code (external span given).from (external span given).to given) code
+    made.bound(parameters, (arguments.listed))
+    external label done
+    made
+}
+// `T[]`: one or more `T`, one after another (T4.10): an `Array` of them.
+Array<T> := class { }
+registry.array_class = Array
+Node &+= {
+  [] => Array<this>
+}
+// Whether the text from `this` to `to` is `item`, one or more times, one after another.
+{this: Tight}.repeated({item}, {to}) =>
+  here := this
+  kind := item
+  end := to
+  found := None
+  external goto done (external same here end)
+  e := external get here next
+  external label next_end
+  part := external node
+  part.from = here
+  part.to = e
+  external goto matched (part.admits_part_of(kind))
+  external label not_here
+  external goto done (external same e end)
+  e = external get e next
+  external goto next_end
+  external label matched
+  external goto found_it (external same e end)
+  external goto not_here ((e.repeated(kind, end)) ? None : true)
+  external label found_it
+  found = true
+  external label done
+  found
 
 // A program (P1): code, read where it was written (`context`) or entered on a value; with `parameters`, a closure of them. A
 // block (`{ … }`) is one.

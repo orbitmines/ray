@@ -232,6 +232,15 @@ declaring
   external label yes
   registry.true_value
   external label done
+// `a !== b`: whether they are not the same value (T6.10; once the language has `true` and `false`).
+{a} !== {b} ^punctuation =>
+  same := external same a b
+  external goto same_one same
+  registry.true_value
+  external goto done
+  external label same_one
+  registry.false_value
+  external label done
 // `x.member`, `x.member(arguments)`: its own member, else its method (T8.7).
 {x: Tight}.{literal member ^property}{arguments: Bracketed} ^punctuation =>
   receiver := x
@@ -1168,8 +1177,6 @@ Node &+= {
 
 // `!x`: whether `x` does not hold.
 !{x} ^punctuation => x ? false : true
-// `a !== b`: whether they are not the same value (T6.10).
-{a} !== {b} ^punctuation => (a === b) ? false : true
 
 // A block comment is nothing: on its own, and between operands (what it follows is what the whole is). Nested ones are read
 // whole: the comment ends at the `*/` the statement ends with.
@@ -1760,3 +1767,45 @@ String &+= {
   made.instance = true
   made.this = made
   made
+// A list's elements (Ray.ray adds the rest: a list is an Array): what its links hold, from `head` along `next`.
+Chain &+= {
+  entry => this.head
+  first => this.head ? this.head.value : None
+  last => this.tail ? this.tail.value : None
+  empty => this.head === None
+  count =>
+    found := Number()
+    at_link := this.head
+    while at_link {
+      found = found.succ
+      at_link = at_link.next
+    }
+    found
+  length => this.count
+  // what follows its first element: a list of the elements after it
+  rest =>
+    made := []
+    at_link := this.head ? this.head.next : None
+    while at_link {
+      made &= at_link.value
+      at_link = at_link.next
+    }
+    made
+  // each element given to `mapping` (a closure, or code read with `this` being the element): a list of what it answers
+  map (mapping) =>
+    made := []
+    at_link := this.head
+    while at_link {
+      made &= at_link.value.continued(mapping)
+      at_link = at_link.next
+    }
+    made
+  // each element given to `body`, in order; the list
+  for (body) =>
+    at_link := this.head
+    while at_link {
+      at_link.value.continued(body)
+      at_link = at_link.next
+    }
+    this
+}

@@ -1,0 +1,32 @@
+say {x} =>
+  external io stdout x
+YES := external node
+YES.yes = YES
+NO := external node
+NO.no = NO
+holds {x} =>
+  external io stdout (x === true ? YES : (x === false ? NO : x))
+// a list's elements: yes no no yes no yes, nothing, no; no yes; no yes; yes
+l := [true, false]
+holds l.first
+holds l.last
+holds l.empty
+holds [].empty
+holds l.rest.first
+holds l.rest.rest.empty
+holds [true].rest.first
+holds ([] === None)
+m := l.map((s) => !s)
+holds m.first
+holds m.last
+seen := []
+l.for(s => seen &= !s)
+holds seen.first
+holds seen.last
+holds [].map((s) => s).empty
+// a method's name is not the start of a parameter's: yes
+K := class {
+  zap (x) => NO
+  run (zapping) => zapping
+}
+holds K().run(true)

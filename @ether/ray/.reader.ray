@@ -306,6 +306,11 @@ closing_block.closes = true
     if pieces.literal
       spelt := at.spells(pieces.from, pieces.to)
       far = spelt && spelt.end
+      // (a method's name is not the start of a longer one: `map` in `mapping(x)`)
+      if far && far.character.word && far.previous.character.word
+        bounded := pieces.next ? pieces.next.arguments : true
+        if bounded
+          far = None
     if pieces.gap
       far = at.spaces_after
     if pieces.line_end && at.character === end

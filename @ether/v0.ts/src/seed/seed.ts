@@ -1,5 +1,5 @@
 // the debug switches, read once (reading the environment is a call into the runtime)
-const ENV = { SEED_CAPS: process.env.SEED_CAPS, SEED_COUNT: process.env.SEED_COUNT, SEED_DBG: process.env.SEED_DBG, SEED_DEPTH: process.env.SEED_DEPTH, SEED_EXT: process.env.SEED_EXT, SEED_INLINE: process.env.SEED_INLINE, SEED_REREAD: process.env.SEED_REREAD, SEED_SLOW: process.env.SEED_SLOW, SEED_STEPS: process.env.SEED_STEPS, SEED_TIME: process.env.SEED_TIME, SEED_HANG: process.env.SEED_HANG, SEED_STACK: process.env.SEED_STACK, SEED_SETTLE: process.env.SEED_SETTLE, SEED_TRACE_RULE: process.env.SEED_TRACE_RULE, SEED_TRACE_N: process.env.SEED_TRACE_N, SEED_DEFINED: process.env.SEED_DEFINED };
+const ENV = { SEED_CAPS: process.env.SEED_CAPS, SEED_COUNT: process.env.SEED_COUNT, SEED_DBG: process.env.SEED_DBG, SEED_DEPTH: process.env.SEED_DEPTH, SEED_EXT: process.env.SEED_EXT, SEED_INLINE: process.env.SEED_INLINE, SEED_REREAD: process.env.SEED_REREAD, SEED_SLOW: process.env.SEED_SLOW, SEED_STEPS: process.env.SEED_STEPS, SEED_TIME: process.env.SEED_TIME, SEED_HANG: process.env.SEED_HANG, SEED_STACK: process.env.SEED_STACK, SEED_SETTLE: process.env.SEED_SETTLE, SEED_TRACE_RULE: process.env.SEED_TRACE_RULE, SEED_TRACE_N: process.env.SEED_TRACE_N, SEED_DEFINED: process.env.SEED_DEFINED, SEED_JS: process.env.SEED_JS, SEED_NAMED: process.env.SEED_NAMED };
 // The seed: what starts the reader when there is nothing yet (spec/Reader.md R0). It knows no syntax. Its one assumption is
 // about meaning: the entrypoint's first statement defines how rules are defined, and uses that definition in its own body.
 // From that statement it infers the capture brackets, the definer, the access word and the statement end (R0.1); it reads
@@ -633,7 +633,8 @@ export class Seed {
 
     }
     lines.push('return r;', '} } catch (x) { if (x instanceof S.Jump && L[x.name] !== undefined) { pc = L[x.name]; r = x.value; continue; } throw x; } }');
-    const fn = new Function('S', 'k', `return function (f) { ${lines.join('\n')} };`)(this, k) as Compiled;
+    const fn = new Function('S', 'k', `return function ${ENV.SEED_NAMED ? 'R_' + body.s.trim().slice(0, 50).replace(/\W+/g, '_') : ''}(f) { ${lines.join('\n')} };`)(this, k) as Compiled;
+    if (ENV.SEED_JS && body.s.trimStart().startsWith(ENV.SEED_JS)) console.log('JS', JSON.stringify(body.s.slice(0, 60)), '\n' + lines.join('\n') + '\nK ' + k.map((x, i) => i + '=' + (x instanceof Function ? 'fn' : x && typeof x === 'object' && 'text' in (x as object) ? JSON.stringify((x as Span).text.s.slice((x as Span).b, (x as Span).e).slice(0, 30)) : Array.isArray(x) ? 'caps' : typeof x)).join(' '));
     byPlanner.set(scope, { version, fn, unread: steps.some(st => st.kind === 'unread'), epoch: this.version, handed: this.planner });
     return fn;
   }

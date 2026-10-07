@@ -1102,10 +1102,14 @@ top := external .
   found
 
 // Whether one of the base's rules (what every value has: `Node`'s operators) starts with a literal spelled at `at`: an
-// operand ends there (the operators the language defines decide where a word ends).
+// operand ends there (the operators the language defines decide where a word ends). Only the rules kept under the character at
+// `at` (R2.5: a rule led by a literal is kept under its first character) can.
 {at}.starts_a_base_rule =>
   found := None
-  links := registry.base.rules
+  led := registry.base.led
+  written_key := external code at at.next reader_like
+  key := written_key.code
+  links := led ? external get led key : None
   while links
     pieces := links.rule.pieces
     if pieces.literal && at.spells(pieces.from, pieces.to)

@@ -138,17 +138,13 @@ caret := mark.next.character
 mark = mark.next.next
 pipe := mark.character
 
-// The bracket that closes `c`, or nothing when `c` opens none.
-{c}.closer =>
-  found := c === opening ? closing : None
-  if c === opening_list
-    found = closing_list
-  c === opening_block ? closing_block : found
-
-// Whether `c` closes a bracket.
-{c}.closes =>
-  found := c === closing ? true : c === closing_list
-  c === closing_block ? true : found
+// A bracket knows the bracket that closes it (`c.closer`: nothing when `c` opens none), and one that closes says so (`c.closes`).
+opening.closer = closing
+opening_list.closer = closing_list
+opening_block.closer = closing_block
+closing.closes = true
+closing_list.closes = true
+closing_block.closes = true
 
 // The chain of brackets open, `chain`, with one more waiting for `shut`.
 {shut}.pushed_on({chain}) =>
@@ -729,7 +725,8 @@ pipe := mark.character
       // what a capture holds is balanced: it closes every bracket it opens, and none it did not (the last piece runs to the
       // statement's end, which is)
       if piece_type ? None : rest_pieces
-        worth = at.balanced_to(e)
+        // (the open brackets each place sees, once counted over the text, compared here; else counted)
+        worth = at.stack && e.stack ? at.stack === e.stack : at.balanced_to(e)
     // a capture taken as written takes one word when no literal follows it (it ends the head, or another capture does)
     // (one name: up to a space, a bracket or a dot)
     if worth && pieces.raw
@@ -903,6 +900,34 @@ top := external .
         chosen = None
   chosen
 
+// Where the reader's own rules led by a capture start in the top scope's chain of them, once the language is read (they were kept
+// before it, so they are its last), found once; and those of them both read with, as a chain of their own
+// (`registry.shared_capture_led`).
+{scope}.capture_led_boundary =>
+  found := registry.internal_capture_led
+  unless found
+    link := scope.capture_led
+    while link
+      if link.rule.internal
+        found = link
+        link = None
+      link = link.next
+    registry.internal_capture_led = found
+    shared := external node
+    link = found
+    while link
+      if link.rule.shared
+        shared_link := external node
+        shared_link.rule = link.rule
+        if shared.last
+          shared.last.next = shared_link
+        unless shared.last
+          shared.first = shared_link
+        shared.last = shared_link
+      link = link.next
+    registry.shared_capture_led = shared.first
+  found
+
 // What reads the statement from `at` to `limit` with the rules in reach of `scope` (R2.5): every rule that reads it whole;
 // between them, one led by a literal over one led by a capture; then one written with the same head as a later one gives way
 // to it (`=>`), otherwise the one declared first reads it (G3.1). The rules come nearest scope first, latest first. Answers
@@ -926,6 +951,16 @@ top := external .
         at.considered(rule, limit, state)
       candidates = candidates.next
     capture_led := here.capture_led
+    // (in the top scope, once the language is read: the reader's own rules from where they start for the reader's text; for other
+    // code the language's, then only those of the reader's that both read with)
+    boundary := None
+    if registry.language && here === top
+      boundary = here.capture_led_boundary
+      if written_here
+        capture_led = boundary
+        boundary = None
+      if boundary && capture_led === boundary
+        capture_led = registry.shared_capture_led
     while capture_led
       rule := capture_led.rule
       hidden := rule.shared ? None : rule.internal
@@ -949,6 +984,8 @@ top := external .
         if keep
           at.considered(rule, limit, state)
       capture_led = capture_led.next
+      if boundary && capture_led === boundary
+        capture_led = registry.shared_capture_led
     here = here.outer
   best := state.best
   if best
@@ -973,6 +1010,26 @@ top := external .
     best.rule = state.rule
   best
 
+// Whether one of `pieces` is a capture that holds nothing, so the head reads nothing wherever it is tried (R2.3): one whose type was
+// not defined when it was read for `text` (a type is tried once per text, and not while another type is read), or one, not
+// optional, whose type has neither a check nor rules to read with. (Only a head with a typed capture has one.)
+{pieces}.holds_nothing_in({text}) =>
+  piece := pieces.has_types ? pieces : None
+  found := None
+  reading_type := registry.reading_type
+  while piece
+    kind := piece.type
+    tried := reading_type ? true : piece.type_tried === text
+    if piece.type_from && tried
+      unless kind
+        found = true
+    if kind
+      unless piece.optional ? true : kind.check
+        unless kind.rules
+          found = true
+    piece = found ? None : piece.next
+  found
+
 // A rule's reading of the statement from `at` to `limit`, taken into `state` (its `best` reading and that reading's `rule`) when it
 // reads the statement whole and is chosen over the best so far (R2.5).
 // Whether one of a reading's captures is read whole by a rule written with the definer in it (a closure handed by juxtaposition,
@@ -991,7 +1048,7 @@ top := external .
 
 {at}.considered({rule}, {limit}, {state}) =>
   pieces := rule.pieces
-  r := at.readings(pieces, limit, None)
+  r := pieces.has_types && pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, None)
   if r
     take := true
     if state.best
@@ -1025,7 +1082,7 @@ top := external .
   while rules
     rule := rules.rule
     pieces := rule.pieces
-    r := at.readings(pieces, limit, true)
+    r := pieces.has_types && pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, true)
     if r
       take := true
       if best
@@ -1042,6 +1099,114 @@ top := external .
   if best
     best.rule = best_rule
   best
+
+// The same among the rules of `scopes` (a chain of `scope`s, in the order their rules are met), asking each scope only the rules
+// that can start at `at` (R2.5): those kept under its character, and those led by a capture. (A rule led by a literal reads only
+// where its first character is; which of two readings as far is taken does not depend on whether a rule led by a literal or one
+// led by a capture was met first, as the one led by the literal is the more particular.) At a line end, where a literal's space
+// reads too, every rule.
+{at}.prefix_reading_in({limit}, {scopes}) =>
+  state := external node
+  // (a key is code: named, it is read, so whether there is one is asked of `keyed`)
+  keyed := at && at.character === end ? None : at
+  key := None
+  if keyed
+    written_key := external code at at.next reader_like
+    key = written_key.code
+  link := scopes
+  while link
+    scope := link.scope
+    if keyed
+      led := scope.led
+      candidates := led ? external get led key : None
+      while candidates
+        at.prefixed(candidates.rule, limit, state)
+        candidates = candidates.next
+      capture_led := scope.capture_led
+      while capture_led
+        at.prefixed(capture_led.rule, limit, state)
+        capture_led = capture_led.next
+    unless keyed
+      every := scope.rules
+      while every
+        at.prefixed(every.rule, limit, state)
+        every = every.next
+    link = link.next
+  best := state.best
+  if best
+    best.rule = state.rule
+  best
+
+// A rule's reading on a receiver from `at` before `limit`, taken into `state` (its `best` and that reading's `rule`) when it reads
+// farther than the best so far, or as far and is chosen over it (R2.1, as `prefix_reading`); none of the reader's own rules.
+{at}.prefixed({rule}, {limit}, {state}) =>
+  unless rule.shared ? None : rule.internal
+    pieces := rule.pieces
+    r := pieces.has_types && pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, true)
+    if r
+      take := true
+      best := state.best
+      if best
+        far := r.end
+        best_far := best.end
+        take = far === best_far ? None : best_far.reaches(far, limit)
+        // (reading as far: the one met first, nearest the value, unless the other is more particular)
+        if far === best_far
+          take = pieces.chosen_over(state.rule.pieces, None)
+      if take
+        state.best = r
+        state.rule = rule
+  state
+
+// The scopes whose rules a value is read by (R2.1), in the order they are met: its own and its classes' (not the top scope's), then
+// those of each class it extends, then what every value has (`reading_rules`, scope by scope).
+{value}.reading_scopes =>
+  top := registry.top
+  into := external node
+  value.scopes_into(top, into)
+  ancestor := value.extended_class
+  while ancestor
+    ancestor.scopes_into(top, into)
+    ancestor = ancestor.extends
+  into.scope_added(registry.base)
+  into.first
+
+// A scope and the classes around it (not past `outside`), added to the chain `into` (a node with `first` and `last`).
+{scope}.scopes_into({outside}, {into}) =>
+  here := scope === outside ? None : scope
+  while here
+    into.scope_added(here)
+    here = here.outer
+    unless here === outside ? None : here.class
+      here = None
+  into
+
+{into}.scope_added({scope}) =>
+  link := external node
+  link.scope = scope
+  if into.last
+    into.last.next = link
+  unless into.last
+    into.first = link
+  into.last = link
+  into
+
+// Whether `later` is met before `earlier` among the rules of `scopes`, kept latest first (it was declared after it).
+{scopes}.declares_later_in({later}, {earlier}) =>
+  scope_link := scopes
+  found := None
+  while scope_link
+    link := scope_link.scope.rules
+    while link
+      r := link.rule
+      if r === later
+        found = true
+      if found ? true : r === earlier
+        link = None
+        scope_link = None
+      link = link.next
+    scope_link = scope_link.next
+  found
 
 // Whether the places from `at` to `limit` hold a space.
 {at}.spaced({limit}) =>
@@ -1129,11 +1294,13 @@ top := external .
       value = None
     own_rules := value && value.class && value.rules
     if own_rules
-      r := split.prefix_reading(limit, own_rules)
+      own_scope := external node
+      own_scope.scope = value
+      r := split.prefix_reading_in(limit, own_scope)
       unless r
         spaced := split.spaces_after
         if spaced
-          r = spaced.prefix_reading(limit, own_rules)
+          r = spaced.prefix_reading_in(limit, own_scope)
       // (only a reading of all of the rest: `X := …` is the declaration's, not X's)
       found = r && r.end === limit
   found
@@ -1172,10 +1339,14 @@ top := external .
   found
 
 // Whether one of the base's rules (what every value has: `Node`'s operators) starts with a literal spelled at `at`: an
-// operand ends there (the operators the language defines decide where a word ends).
+// operand ends there (the operators the language defines decide where a word ends). Only the rules kept under the character at
+// `at` (R2.5: a rule led by a literal is kept under its first character) can.
 {at}.starts_a_base_rule =>
   found := None
-  links := registry.base.rules
+  led := registry.base.led
+  written_key := external code at at.next reader_like
+  key := written_key.code
+  links := led ? external get led key : None
   while links
     pieces := links.rule.pieces
     if pieces.literal && at.spells(pieces.from, pieces.to)
@@ -1368,7 +1539,11 @@ close := learned.close
       at = None
   unless start === head_to
     into.add(literal, start, head_to)
-  into.first
+  // (whether a capture in it is typed, kept on its first piece)
+  first_piece := into.first
+  if first_piece
+    first_piece.has_types = into.has_types
+  first_piece
 
 // The place after the last place from `from` before `to` that is not a space (`to` itself when none is).
 {from}.trimmed({to}) =>
@@ -1437,6 +1612,7 @@ close := learned.close
     if leading
       made.leading = true
     if typed
+      into.has_types = true
       type_from := name_end.next
       made.type = external read type_from shut like
       // (a type not defined yet is read again when the capture is tried; until it is, the capture holds nothing)
@@ -1638,8 +1814,8 @@ type {block} =>
           held := external get frame name
           unless external span held
             if held
-              held_rules := held.reading_rules
-              r := here.prefix_reading(limit, held_rules)
+              held_scopes := held.reading_scopes
+              r := here.prefix_reading_in(limit, held_scopes)
               if r && r.end === limit
                 found = here
           frame = None
@@ -1772,11 +1948,11 @@ external reader reader
     going = None
     result = this
   while going
-    rules := value.reading_rules
-    r := at.prefix_reading(rest_to, rules)
+    scopes := value.reading_scopes
+    r := at.prefix_reading_in(rest_to, scopes)
     // read after the spaces too: what reads farther (a method `== x` over a juxtaposed value `{ }{value}`), else that
     spaced := at.spaces_after
-    r_spaced := spaced ? spaced.prefix_reading(rest_to, rules) : None
+    r_spaced := spaced ? spaced.prefix_reading_in(rest_to, scopes) : None
     if r_spaced
       better := true
       if r
@@ -1796,8 +1972,8 @@ external reader reader
       while tighter
         tighter = None
         next_at := r.end === rest_to ? None : r.end.past_spaces
-        r_next := next_at ? next_at.prefix_reading(rest_to, rules) : None
-        if r_next && rules.declares_later(r_next.rule, rule)
+        r_next := next_at ? next_at.prefix_reading_in(rest_to, scopes) : None
+        if r_next && scopes.declares_later_in(r_next.rule, rule)
           argument.to = r_next.end
           r.end = r_next.end
           tighter = r.end === rest_to ? None : true
@@ -2305,23 +2481,34 @@ registry.latest.shared = true
 registry.latest.shared = true
 
 // The method of a value named as `key` (raw code: its text): a method rule read by the value whose head is that name, and
-// its arguments if any.
+// its arguments if any. (Only the rules kept under the name's first character, scope by scope in the order they are met.)
 {value}.method_named({key}) =>
   k := key
   where := external span k
   from := where.from
   to := where.to
-  rules := value.reading_rules
+  // (an empty name at the text's end names nothing)
+  first_character := None
+  if from
+    written_key := external code from from.next reader_like
+    first_character = written_key.code
+  scopes := from ? value.reading_scopes : None
   found := None
-  while rules
-    r := rules.rule
-    pieces := r.pieces
-    if r.method && pieces.literal && from.spells_word(pieces, to)
-      following := pieces.next
-      if following ? following.capture : true
-        found = r
-        rules = None
-    rules = rules.next
+  while scopes
+    led := scopes.scope.led
+    rules := led ? external get led first_character : None
+    while rules
+      r := rules.rule
+      pieces := r.pieces
+      hidden := r.shared ? None : r.internal
+      if hidden ? None : r.method && pieces.literal && from.spells_word(pieces, to)
+        following := pieces.next
+        if following ? following.capture : true
+          found = r
+          rules = None
+          scopes = None
+      rules = rules.next
+    scopes = scopes.next
   found
 
 // A method applied to `receiver` with `arguments` (their value, given as the method's capture).

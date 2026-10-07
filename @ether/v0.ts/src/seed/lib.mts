@@ -45,6 +45,7 @@ const pending = s.pending.length, before = s.diagnostics.length;
 if (process.env.SEED_HANG_SETTLE) s.hang_reset();
 if (process.env.SETTLE !== '0') s.settle();
 seen = s.diagnostics.length;
+if (process.env.SEED_CALLS) console.log('  forced', (s as any).forced, 'compiles', (s as any).compiles, 'planned', (s as any).recompiles, 'plans by the reader', (s as any).planned, 'stale', (s as any).stale);
 console.log('settled', pending, 'statements in', Math.round(performance.now() - t), 'ms:', before, '->', s.diagnostics.length, 'diagnostics');
 if (process.env.SETTLED) for (const d of s.diagnostics.slice(0, limit)) console.log('    ', d.at.text.name, d.at.text.s.slice(0, d.at.b).split('\n').length + ':', d.message);
 s.hang_reset();

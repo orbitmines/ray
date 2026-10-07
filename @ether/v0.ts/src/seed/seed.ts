@@ -91,7 +91,7 @@ export class Jump { constructor(public name: string, public value: unknown) {} }
 // head, when the reader in Ray read them), a body read into its steps (in the frame it was written in), a rule applied to captures
 // a reader found, a name declared. Told only when a host set one; reading is the same without.
 export type Observer = {
-  defined(rule: Rule, pieces?: { text: Text; b: number; e: number; cap: boolean; typed: boolean }[]): void;
+  defined(rule: Rule, pieces?: { text: Text; b: number; e: number; cap: boolean; typed: boolean; parameters?: Code }[]): void;
   planned(steps: Step[], frame: Node): void;
   applied(rule: Rule, caps: [string, Span][], frame: Node, given: [string, unknown][]): void;
   declared(name: Code): void;
@@ -157,12 +157,12 @@ export class Seed {
     // A rule whose head the reader in Ray has read (R2.1): `pieces` a chain of `literal`/`capture` (spans, a capture's
     // `type`). Answers the rule as a node (`pieces`, `head_from`, `head_to`, `scope`) for the reader to keep where it reads rules.
     this.externals.set('define', (frame, [pattern, pieces, body]) => {
-      const head = self.code_of(pattern), list: Piece[] = [], at = self.observer && [] as { text: Text; b: number; e: number; cap: boolean; typed: boolean }[];
+      const head = self.code_of(pattern), list: Piece[] = [], at = self.observer && [] as { text: Text; b: number; e: number; cap: boolean; typed: boolean; parameters?: Code }[];
       for (let p = self.force(pieces) as Node | undefined; p; p = p.members.get('next') as Node | undefined) {
         const f = self.where.get(p.members.get('from') as Node)!, t = p.members.get('to') as Node | undefined;
         const e = t === undefined ? f.text.s.length : self.where.get(t)!.i, text = f.text.s.slice(f.i, e);
         list.push(p.members.has('capture') ? (p.members.has('type') ? { cap: text, type: p.members.get('type') as Node } : { cap: text }) : { lit: text });
-        if (at) at.push({ text: f.text, b: f.i, e, cap: p.members.has('capture'), typed: p.members.has('type') || p.members.has('type_from') });
+        if (at) { const ps = p.members.get('parameters'), code = ps instanceof Node ? ps.members.get('code') : undefined; at.push({ text: f.text, b: f.i, e, cap: p.members.has('capture'), typed: p.members.has('type') || p.members.has('type_from'), parameters: code instanceof Code ? code : undefined }); }
       }
       const b = self.code_of(body);
       const rule: Rule = { head, pieces: list, body: new Code(b.text, b.b, b.e, b.frame, self.planner), order: self.order++, planner: self.planner };
@@ -191,12 +191,25 @@ export class Seed {
       for (const b of spelled.codePointAt(0)!.toString(2)) r = self.apply(rule, frame, [], rule.planner, cap ? [[cap.cap, b === '1' ? c : undefined]] : []);
       return r;
     });
+    // A style (`^name`, R5.2): the one node of that name, for what is painted with it; a theme says how each is shown.
+    this.externals.set('^', (frame, [name]) => self.style(self.code_of(name).s.trim()));
+    // A theme: its block read in a scope of its own, inside where it was written; the scope is the theme (each name it declares a
+    // style, held as the style it is shown as). The last one made is the one shown.
+    this.externals.set('theme', (frame, [name, block]) => {
+      const code = self.written(block), scope = new Node(code.frame);
+      self.compile(new Code(code.text, code.b, code.e, scope, code.planner, code.of))(scope);
+      self.themes.push({ name: self.code_of(name).s.trim(), scope });
+      return scope;
+    });
     // Code as a value (a Program): a node holding the code unread, not read where a name names it.
     this.externals.set('**', (frame, [x]) => { const n = new Node(); if (x instanceof Code) n.members.set('code', self.named(x)); else n.members.set('value', x); return n; });
     // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
     this.externals.set('learned', () => { const n = new Node(), l = self.learned!; n.members.set('end', self.character(l.end)); n.members.set('space', self.character(l.space)); n.members.set('indent', self.chain_of(l.indent)); n.members.set('access', self.chain_of(l.access)); n.members.set('open', self.character(l.open)); n.members.set('close', self.character(l.close)); n.members.set('definer', self.chain_of(l.definer)); return n; });
   }
 
+  styles = new Map<string, Node>(); style_names = new Map<Node, string>();
+  style(name: string): Node { let n = this.styles.get(name); if (n === undefined) { this.styles.set(name, n = new Node()); this.style_names.set(n, name); } return n; }
+  themes: { name: string; scope: Node }[] = [];
   // (the same said again about the same place is said once)
   said = new Set<string>();
   say(message: string, at: Span) { const k = `${at.text.name}\0${at.b}\0${at.e}\0${message}`; if (this.said.has(k)) return; this.said.add(k); this.diagnostics.push({ message, at }); }

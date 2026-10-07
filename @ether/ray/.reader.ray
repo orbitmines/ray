@@ -2738,12 +2738,87 @@ Unbraced := opening_block.anything_but[]
     found = other
   found
 
+// A class made from a header (code), a block (code, or nothing) and the class it extends (or nothing).
+{header}.header_class({parent}) =>
+  where := external span header
+  made := external node
+  made.parent = where.frame
+  made.class = true
+  if parent
+    made.extends = parent
+  made.header = external ** header
+  made.read_header_into(made)
+  made
+
+// A class given its block: read in it, and kept to be read again in each instance.
+{made}.with_block({block}) =>
+  static := made
+  static.written = external ** block
+  block_written := static.written
+  block_code := block_written.code
+  external apply block_code None static
+  static
+
+// A class's header read into `frame`: each of its items (separated by `,` outside brackets), as a statement; a header in brackets,
+// what they hold.
+{static}.read_header_into({frame}) =>
+  written := static.header
+  if written
+    code := written.code
+    where := external span code
+    from := where.from
+    to := where.to
+    if from.character === opening
+      from = from.next
+      to = to.before_place(from)
+    item_from := from
+    while item_from
+      item_end := item_from.item_end(to)
+      item_written := external code item_from item_end code
+      item_code := item_written.code
+      external apply item_code None frame
+      item_from = None
+      unless item_end === to
+        item_from = item_end.next
+        spaced := item_from.spaces_after
+        if spaced
+          item_from = spaced
+  static
+
+// Where an item from `at` ends: at a `,` outside brackets, or `to`.
+{at}.item_end({to}) =>
+  here := at
+  found := to
+  depth := None
+  while here
+    if here === to
+      here = None
+    if here
+      c := here.character
+      shut := c.closer
+      if shut
+        pushed := external node
+        pushed.next = depth
+        depth = pushed
+      unless shut
+        if c.closes
+          if depth
+            depth = depth.next
+        unless depth
+          if c === comma
+            found = here
+            here = None
+      if here
+        here = here.next
+  found
+
 // A class's block read again in an instance being made, after the blocks of the classes it extends.
 {static}.read_into({instance}) =>
   class_read := static
   ancestor := class_read.extends
   if ancestor
     ancestor.read_into(instance)
+  class_read.read_header_into(instance)
   block := class_read.written
   if block
     code := block.code
@@ -3213,6 +3288,25 @@ enum {written: Item} =>
     unless member_end === members_to
       member_from = member_end.after_alternative
   made
+
+// A class written with a header (`class = values: Iterable { … }`, `class (x: T, y) { … }`): its items (separated by `,` outside
+// brackets) are read as the class's block is, before it (a typed one a field, given in order when an instance is made).
+class = {header: Balanced} {{block: Balanced}} =>
+  made := header.header_class(None)
+  made.with_block(block)
+class = {header: Balanced} =>
+  header.header_class(None)
+class: {parent: Tight} = {header: Balanced} {{block: Balanced}} =>
+  made := header.header_class(parent)
+  made.with_block(block)
+class: {parent: Tight} = {header: Balanced} =>
+  header.header_class(parent)
+class {header: Bracketed} {{block: Balanced}} =>
+  made := header.header_class(None)
+  made.with_block(block)
+class: {parent: Tight} {header: Bracketed} {{block: Balanced}} =>
+  made := header.header_class(parent)
+  made.with_block(block)
 
 // `static statement` in a class: read once, for the class, not again for each instance.
 static {statement} =>

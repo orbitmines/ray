@@ -610,7 +610,8 @@ export class Ray {
     const m = line.trim().match(/^@(\S+)/);
     if (m === null || m[1].includes('://')) return undefined;
     const name = m[1], candidates = name.includes('/') ? [path.join(this.repository, '@' + name)] : [path.join(this.ether, '$', name), path.join(this.repository, '@' + name)];
-    return candidates.find(dir => fs.existsSync(path.join(dir, '.project.ray')));
+    // (names are mapped ignoring case: `@ether/UI` is `@ether/ui`)
+    return candidates.map(dir => cased(dir)).find((dir): dir is string => dir !== undefined && fs.existsSync(path.join(dir, '.project.ray')));
   }
   declared(dir: string): string[] {
     let text = '';
@@ -619,7 +620,8 @@ export class Ray {
   }
   // The project a file is in: the nearest directory above it with a `.project.ray` (none outside the repository).
   project_of(file: string): string | undefined {
-    for (let dir = path.dirname(path.resolve(file)); dir.startsWith(this.repository + path.sep); dir = path.dirname(dir))
+    // (a project outside the repository too: one depending on Ether's, `orbitmines.com.ray`)
+    for (let dir = path.dirname(path.resolve(file)); dir !== path.dirname(dir); dir = path.dirname(dir))
       if (fs.existsSync(path.join(dir, '.project.ray'))) return dir;
     return undefined;
   }
@@ -998,6 +1000,18 @@ const OPTIONS: Record<string, { alias?: string; value?: string; description: str
   lsp: { value: '[language]', description: 'Serve the language server (LSP) over stdio; with the directory of the language to read (`@ether/ray`).' },
   verbose: { alias: 'v', description: 'Say how long reading the language and its library took, and how much it said.' },
 };
+// A path as it is on disk, each part matched ignoring case where it is not spelled the same (nothing when there is none).
+function cased(dir: string): string | undefined {
+  if (fs.existsSync(dir)) return dir;
+  const parent = path.dirname(dir);
+  if (parent === dir) return undefined;
+  const at = cased(parent);
+  if (at === undefined) return undefined;
+  let entries: string[] = [];
+  try { entries = fs.readdirSync(at); } catch { return undefined; }
+  const name = path.basename(dir).toLowerCase(), found = entries.find(e => e.toLowerCase() === name);
+  return found === undefined ? undefined : path.join(at, found);
+}
 export function help(): string {
   const rows = Object.entries(OPTIONS).map(([name, o]) => [`  ${o.alias ? `-${o.alias}, ` : '    '}--${name}${o.value ? ' ' + o.value : ''}`, o.description]);
   const width = Math.max(...rows.map(([flags]) => flags.length));

@@ -151,3 +151,9 @@ Organization := class: Character {
 
   members => children{is Character}
 }
+
+// A character as it is somewhere else: its name on a platform (`@fadi` on GitHub), standing for `persona`.
+Avatar := class: Character {
+  persona: Character?
+  platform: Character?
+}

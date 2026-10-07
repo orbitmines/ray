@@ -765,6 +765,10 @@ Node.components = Node.components_with(None)
   class_read.read_header_into(instance)
   block := class_read.written
   external goto done (block ? None : true)
+  // (a block given as a value, `X + { … }`: its code)
+  external goto as_written ((external get block program) ? None : true)
+  block = external get block code
+  external label as_written
   code := external get block code
   external apply code None instance
   external label done

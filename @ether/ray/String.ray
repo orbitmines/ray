@@ -136,7 +136,6 @@ String &+= {
   as (base: Number.Base) => Number.numeral(base)(integer: this)
   as (=== Decimal) => Decimal(integer: this)
 
-  compounds + (other: String) => this, other
   bytes => (this as Unicode.UTF-8).bytes
   find_all (pattern: String) => (this ~= pattern)#.index
 }

@@ -135,7 +135,7 @@ Iterable &+= {
 
   as (: Iterable<R: ?>) => this[{. is R}]
 
-  chainable == <up_to = None, except: Iterable = []>(other: Iterable) => up_to != None || except.nonempty
+  chainable == <up_to = None, except: Iterable = []>(other: Iterable) => (up_to !== None) || except.nonempty
     ? this[{!except.contains(.)}].until(up_to) == other[{!except.contains(.)}].until(up_to)
     : orderless || other.orderless
       ? count == other.count && every(other.contains(.))

@@ -19,7 +19,7 @@ B.components.hierarchy &= A
 say (B().hello === a)
 say (B() is A)
 C := class { }
-C + A
+C = C + A
 say (C().hello === a)
 say (a.not === false)
 say ((a.and(b)) === b)

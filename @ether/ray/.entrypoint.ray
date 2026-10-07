@@ -1245,11 +1245,18 @@ Node &+= {
   nand (b) => this.and(b).not
   xor (b) => this.or(b).and(this.nand(b))
   xnor (b) => this.xor(b).not
-  // what a class is made of: `+` adds a class to it, `-` takes one out
+  // what a class is made of: `A + B` is a new whole made of `B` then `A` (L§1: `B` overrides `A`; `A &+= B` changes `A`), `-` takes
+  // one out
   compounds + (component) =>
     whole := this
-    whole.components.hierarchy &= component
-    whole
+    added := component
+    made := external node
+    made.outer_frame = external get whole outer_frame
+    made.class = true
+    made.highlighted = external ^ class
+    made.components = made.components_with(added)
+    made.components.hierarchy &= whole
+    made
   compounds - (component) =>
     whole := this
     left := None.listed_with_value(whole)

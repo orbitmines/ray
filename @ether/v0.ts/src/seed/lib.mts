@@ -42,10 +42,12 @@ for (const text of texts) {
 // the statements that left something said, read again now that the whole library is
 t = performance.now();
 const pending = s.pending.length, before = s.diagnostics.length;
-s.settle();
+if (process.env.SEED_HANG_SETTLE) s.hang_reset();
+if (process.env.SETTLE !== '0') s.settle();
 seen = s.diagnostics.length;
 console.log('settled', pending, 'statements in', Math.round(performance.now() - t), 'ms:', before, '->', s.diagnostics.length, 'diagnostics');
 if (process.env.SETTLED) for (const d of s.diagnostics.slice(0, limit)) console.log('    ', d.at.text.name, d.at.text.s.slice(0, d.at.b).split('\n').length + ':', d.message);
+s.hang_reset();
 // each test in a scope of its own under the library's: what it says, then its diagnostics
 for (const test of tests) {
   t = performance.now();

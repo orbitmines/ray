@@ -707,10 +707,19 @@ pipe := mark.character
       nothing_left = None
   // a type written that was not defined then: read again now (nothing read: the capture holds nothing)
   // (not while another type is being read: reading one does not read types again)
+  // (tried once per text read: in one where it was not defined, it stays undefined)
   unless pieces.type
     if pieces.type_from
       read_type := None
-      unless registry.reading_type
+      tried_in := at.text
+      if pieces.type_tried === tried_in
+        registry.reading_type_skipped = true
+      unless pieces.type_tried === tried_in
+        registry.reading_type_skipped = None
+      if registry.reading_type
+        registry.reading_type_skipped = true
+      unless registry.reading_type_skipped
+        pieces.type_tried = tried_in
         registry.reading_type = true
         written_type_from := pieces.type_from
         written_type_to := pieces.type_to
@@ -1403,8 +1412,10 @@ top := external .
               spaced := rest_at.spaces_after
               if spaced
                 r = spaced.prefix_reading(limit, own_rules)
+            // (only a reading of all of the rest: `X := …` is the declaration's, not X's)
             if r
-              found = true
+              if r.end === limit
+                found = true
   found
 
 // Where the first operand from `at` ends: after a bracketed group, quoted text, or a word (up to a space, a bracket or a
@@ -2023,6 +2034,9 @@ seed_definer.defines = true
 // One statement read at the top: applied in place, or reported. Answers the place after it.
 {given}.read_statement =>
   here := external .
+  // (no construction is under way at the top: one that failed left its arguments behind)
+  registry.given = None
+  registry.naming = None
   // the scope read in applies the reader; the language's text and a project's files are read inside the language's scope
   scope := here.caller_frame
   if registry.language_text
@@ -2054,6 +2068,10 @@ seed_definer.defines = true
         external apply statement_code None scope
       unless made.external
         external report at limit
+  // a class made or added to: the programs waiting run again (P5.1), once the statement has run
+  if registry.classes_changed
+    registry.classes_changed = None
+    registry.rerun_waiting
   after := None
   if limit
     after = limit.next
@@ -2967,8 +2985,8 @@ Unbraced := opening_block.anything_but[]
   static.written = external ** block
   block_written := static.written
   block_code := block_written.code
-  external apply block_code None static
-  registry.rerun_waiting
+  static.read_as_class(block_code)
+  registry.classes_changed = true
   static
 
 // A class's header read into `frame`: each of its items (separated by `,` outside brackets), as a statement; a header in brackets,
@@ -3262,6 +3280,7 @@ Unbraced := opening_block.anything_but[]
   fresh := external node
   fresh.outer = where.frame
   answer := p.entered_in(fresh, None)
+  registry.classes_changed = None
   unless answer
     waiting := external node
     waiting.program = p
@@ -3281,7 +3300,22 @@ Unbraced := opening_block.anything_but[]
         p.watched_run
         waiting = waiting.next
       registry.rerunning = None
+  // (what they made does not run them again, P5.2)
+  registry.classes_changed = None
   None
+
+// A class's block read for the class itself: what a construction under way was given is not its (its fields take no arguments).
+{static}.read_as_class({block}) =>
+  saved_given := registry.given
+  saved_naming := registry.naming
+  registry.given = None
+  registry.naming = None
+  written_block := external ** block
+  block_code := written_block.code
+  external apply block_code None static
+  registry.given = saved_given
+  registry.naming = saved_naming
+  static
 
 // ================================================================ the language
 // The rules so far are the reader's own vocabulary: from here on they are out of reach of a project's files (R4.2b), which are
@@ -3487,7 +3521,7 @@ Node := type
       at := where.from
       limit := where.to
       external report at limit nothing_extended
-    registry.rerun_waiting
+    registry.classes_changed = true
     extended
   // `x -- f`: `f` read with `this` being `x` (a closure it answers called with `x`): what it answers; `x ~~ f`: the same, for
   // what it does, answering `x`
@@ -3525,6 +3559,7 @@ left-to-right := external node
 left-to-right.modifier = true
 
 // ---------------------------------------------------------------- classes (R4.4)
+
 // A class: the frame its block is read in, inside the frame it was written in; its statics, its fields' defaults and its methods
 // are that frame's. Calling it makes an instance.
 class {{block: Balanced}} =>
@@ -3533,8 +3568,8 @@ class {{block: Balanced}} =>
   made.outer = where.frame
   made.class = true
   made.written = external ** block
-  external apply block None made
-  registry.rerun_waiting
+  made.read_as_class(block)
+  registry.classes_changed = true
   made
 // `class: Parent { … }`: a class whose instances are also its parent's (its rules and fields too).
 class: {parent} {{block: Balanced}} =>
@@ -3544,8 +3579,8 @@ class: {parent} {{block: Balanced}} =>
   made.class = true
   made.extends = parent
   made.written = external ** block
-  external apply block None made
-  registry.rerun_waiting
+  made.read_as_class(block)
+  registry.classes_changed = true
   made
 // `enum a | b (field: v) | c { block }`: a class of exactly these members, each an instance of it named on it (`X.a`), in
 // `members` in order; a block after them is the class's own.
@@ -3618,6 +3653,14 @@ class: {parent: Tight} {header: Bracketed} {{block: Balanced}} =>
   made := header.header_class(parent)
   made.with_block(block)
 
+// `static name = value` in a class: a member of the class (declared there, as `:=` does), read once.
+static {name: Tight} = {value} =>
+  where := external span name
+  frame := where.frame
+  found := None
+  unless frame.instance
+    found = name.declared(value)
+  found
 // `static statement` in a class: read once, for the class, not again for each instance.
 static {statement} =>
   where := external span statement

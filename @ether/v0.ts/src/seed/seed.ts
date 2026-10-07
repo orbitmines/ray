@@ -492,7 +492,7 @@ export class Seed {
   compiled(rule: Rule): Compiled { return this.compile(rule.body); }
   // Code read where it was written: its own compiled program, run in its frame.
   // Code that names a member of its frame is that member (as an argument is); other code runs its compiled program.
-  forced = 0; compiles = 0; recompiles = 0;
+  forced = 0; compiles = 0; recompiles = 0; stale = 0;
   force(x: unknown): unknown {
     if (!(x instanceof Code) || x.raw) return x;
     if (x.once) { if (!x.read) { x.value = this.force_(x); x.read = true; } return x.value; }
@@ -594,7 +594,7 @@ export class Seed {
     this.compiles++;
     // the entrypoint's code is read once, by the rules in force then (R0.5), unless it left something unread
     if (kept !== undefined && (kept.version === version || (body.text === this.boot_text && !kept.unread && !ENV.SEED_REREAD))) { kept.epoch = this.version; kept.handed = this.planner; return kept.fn; }
-    this.recompiles++;
+    this.recompiles++; if (kept !== undefined) this.stale++;
     const steps = this.expand(this.steps_of(body), body, 0);
     const labels = new Map<string, number>();
     steps.forEach(st => { if (st.kind === 'label') labels.set(st.name, labels.size + 1); });

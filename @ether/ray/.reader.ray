@@ -1345,36 +1345,6 @@ top := external .
           made.word = true
   made
 
-// The place the longest start of the word from `at` to `limit` that names something held where it is read ends at; or nothing.
-{at}.held_prefix({limit}, {scope}) =>
-  found := None
-  here := at.next
-  // (none when the whole word names something)
-  written_whole := external code at limit reader_like
-  whole := written_whole.code
-  frame_whole := scope
-  while frame_whole
-    if external own frame_whole whole
-      here = None
-      frame_whole = None
-    if frame_whole
-      frame_whole = frame_whole.outer
-  while here
-    if here === limit
-      here = None
-    if here
-      written_name := external code at here reader_like
-      name := written_name.code
-      frame := scope
-      while frame
-        if external own frame name
-          found = here
-          frame = None
-        if frame
-          frame = frame.outer
-      here = here.next
-  found
-
 // Whether the statement from `at` to `limit` starts with a word naming a class (a value with rules of its own) whose own rules read
 // what follows it: then they read it, before any rule reads the statement whole.
 {at}.class_dispatch({limit}, {scope}) =>
@@ -2014,6 +1984,92 @@ type {block} =>
   external apply block None made
   made
 
+// The last link of a chain.
+{pieces}.last_piece =>
+  piece := pieces
+  while piece.next
+    piece = piece.next
+  piece
+
+// The class a value is an instance of (or the class itself) that extends another: what it extends, or nothing.
+{value}.extended_class =>
+  here := value
+  found := None
+  while here
+    if here.extends
+      found = here.extends
+      here = None
+    if here
+      here = here.outer
+  found
+
+// The rules a value is read by (R2.1): its own and its classes' (not the top scope's), then what every value has.
+{value}.reading_rules =>
+  top := registry.top
+  rules := value.rules_in_reach(top, None)
+  // a class's parent's rules after its own
+  ancestor := value.extended_class
+  while ancestor
+    more := ancestor.rules_in_reach(top, None)
+    if more
+      if rules
+        last := rules.last_piece
+        last.next = more
+      unless rules
+        rules = more
+    ancestor = ancestor.extends
+  base := registry.base
+  base_rules := base.rules
+  if rules
+    last := rules
+    while last
+      following := last.next
+      unless following
+        last.next = base_rules
+      last = following
+  unless rules
+    rules = base_rules
+  rules
+
+// The place the longest start of the word from `at` to `limit` that names something held where it is read ends at; or nothing.
+{at}.held_prefix({limit}, {scope}) =>
+  found := None
+  here := at.next
+  // (none when the whole word names something)
+  written_whole := external code at limit reader_like
+  whole := written_whole.code
+  frame_whole := scope
+  while frame_whole
+    if external own frame_whole whole
+      here = None
+      frame_whole = None
+    if frame_whole
+      frame_whole = frame_whole.outer
+  while here
+    if here === limit
+      here = None
+    if here
+      written_name := external code at here reader_like
+      name := written_name.code
+      frame := scope
+      while frame
+        if external own frame name
+          // (only where what it names reads the rest by its own rules)
+          held := external get frame name
+          held_code := external span held
+          unless held_code
+            if held
+              held_rules := held.reading_rules
+              r := here.prefix_reading(limit, held_rules)
+              if r
+                if r.end === limit
+                  found = here
+          frame = None
+        if frame
+          frame = frame.outer
+      here = here.next
+  found
+
 // Rules defined from here on are read by their heads in Ray.
 {pattern} => {body} =>
   where := external span pattern
@@ -2079,34 +2135,6 @@ seed_definer.defines = true
 
 reader := registry.latest
 external reader reader
-
-// The rules a value is read by (R2.1): its own and its classes' (not the top scope's), then what every value has.
-{value}.reading_rules =>
-  top := registry.top
-  rules := value.rules_in_reach(top, None)
-  // a class's parent's rules after its own
-  ancestor := value.extended_class
-  while ancestor
-    more := ancestor.rules_in_reach(top, None)
-    if more
-      if rules
-        last := rules.last_piece
-        last.next = more
-      unless rules
-        rules = more
-    ancestor = ancestor.extends
-  base := registry.base
-  base_rules := base.rules
-  if rules
-    last := rules
-    while last
-      following := last.next
-      unless following
-        last.next = base_rules
-      last = following
-  unless rules
-    rules = base_rules
-  rules
 
 // ---------------------------------------------------------------- values with rules of their own (R2.1: a rule is a method)
 // What a statement's first operand is read as, when no rule in reach reads it whole: the rest is read by that value's rules,
@@ -2234,18 +2262,6 @@ registry.sender = sent_rule
           here = None
         if ancestor
           ancestor = ancestor.extends
-    if here
-      here = here.outer
-  found
-
-// The class a value is an instance of (or the class itself) that extends another: what it extends, or nothing.
-{value}.extended_class =>
-  here := value
-  found := None
-  while here
-    if here.extends
-      found = here.extends
-      here = None
     if here
       here = here.outer
   found
@@ -2818,11 +2834,6 @@ Unbraced := opening_block.anything_but[]
   after.next
 
 // The last of a chain of pieces.
-{pieces}.last_piece =>
-  piece := pieces
-  while piece.next
-    piece = piece.next
-  piece
 // `x.name`: the receiver's own member `name` (T8.7: own key wins), else its method of that name applied to it with
 // `arguments` (code, or nothing).
 {this}.member({name}, {arguments}) =>

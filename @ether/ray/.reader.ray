@@ -3035,6 +3035,44 @@ registry.bare_rule = registry.latest
     at = line_end ? line_end.next.skip_blank(to) : None
   found
 registry.latest.shared = true
+// A class's block read for the class itself (A7): only what declares (a name with `:=`, a method, a field, a static, what `&+=`
+// adds: its rule `declares` or `defines`); every other statement is its instances', read when one is made.
+{frame: Tight}.declarations_read({program}) =>
+  keys := program.declared_keys
+  written := program.code
+  block_code := written.code
+  whole := external span block_code
+  block_to := whole.to
+  at_key := keys ? keys.head : None
+  while at_key
+    from := at_key.value.from
+    next_key := at_key.next
+    // (a line that closes a bracket goes on with the statement before it)
+    while next_key && next_key.value.from.character.closes
+      next_key = next_key.next
+    to := next_key ? next_key.value.from : block_to
+    // (without the line ends and indentation before the next)
+    trimming := to
+    while trimming
+      c := to.previous.character
+      trimming = None
+      if c === space
+        trimming = true
+      if c === end
+        trimming = true
+      if trimming
+        to = to.previous
+    made := from.step(to, frame)
+    rule := made.rule
+    declares := rule ? rule.defines : None
+    unless declares
+      declares = rule ? rule.declares : None
+    if declares
+      external apply rule made.captures frame
+    at_key = next_key
+  frame
+registry.latest.shared = true
+
 // Whether the line `at` starts (its first place that is not a space) is indented as the line `other` starts: the same spaces
 // before both.
 {at}.indented_as({other}) =>

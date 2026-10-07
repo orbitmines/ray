@@ -8,9 +8,11 @@ const ENV = { SEED_CAPS: process.env.SEED_CAPS, SEED_COUNT: process.env.SEED_COU
 
 export type Text = { name: string; s: string };
 export type Span = { text: Text; b: number; e: number };   // end exclusive
+const NO_RULES: Rule[] = [];
 export class Node {
   members = new Map<string, unknown>();
-  rules: Rule[] = [];
+  // (most nodes never have a rule defined in them: they share one empty list until one is)
+  rules: Rule[] = NO_RULES;
   // a frame's caller (the frame that applied the rule) and the rule it is a frame of
   caller?: Node; rule?: Rule;
   // how many rules were defined here: a body read here is read again when this, or the count of a scope around it, changed
@@ -348,6 +350,7 @@ export class Seed {
   code_of(x: unknown): Code { return x instanceof Code ? x : new Code({ name: '?', s: String(x) }, 0, String(x).length, this.global); }
   define(head: Code, body: Code, pieces?: Piece[]): Rule {
     const rule: Rule = { head, pieces: pieces ?? this.pieces(head.s.trim()), body: new Code(body.text, body.b, body.e, body.frame, this.planner), order: this.order++, planner: this.planner };
+    if (head.frame.rules === NO_RULES) head.frame.rules = [];
     head.frame.rules.push(rule);
     this.version++; head.frame.version++; if (ENV.SEED_DEFINED && HANG?.armed) console.log('DEFINED', JSON.stringify(head.s.slice(0, 60)));
     return rule;
@@ -594,6 +597,7 @@ export class Seed {
     const reread = (st: Step & { at: Span }, i: number) => { if (labels.size === 0 && i < steps.length - 1) lines.push(`if (f.version !== V) return S.rest(f, ${ref({ text: body.text, b: st.at.e, e: body.e })}, ${ref(body.planner)});`); };
     const k: unknown[] = [];
     const ref = (x: unknown) => { k.push(x); return `k[${k.length - 1}]`; };
+    const arg = (a: Span & { code?: boolean }) => `${a.code ? 'S.code_at' : 'S.arg'}(f, ${ref({ ...a, of: span_of(a.text, a.b, a.e) })}, ${ref(body.planner)})`;
     // An argument an external reads, as a JS expression: when it reads (by the rules this body is read by) as one external whose
     // arguments are read in the order written, that external called in place; else read when it runs.
     const expr = (sp: Span, d: number): string => {
@@ -604,7 +608,7 @@ export class Seed {
       if (inner.length !== 1 || st.kind !== 'external') return read;
       const ext = this.externals.get(st.name), eager = EAGER[st.name] ?? [];
       if (ext === undefined || eager.some((e, i) => i > 0 && e < eager[i - 1])) return read;
-      return `${ref(ext)}(f, [${st.args.map((a, i) => eager.includes(i) ? expr(a, d + 1) : `${a.code ? 'S.code_at' : 'S.arg'}(f, ${ref({ ...a, of: span_of(a.text, a.b, a.e) })}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)})`;
+      return `${ref(ext)}(f, [${st.args.map((a, i) => eager.includes(i) ? expr(a, d + 1) : arg(a)).join(', ')}], ${ref(st.at)})`;
     };
     for (const [i, st] of steps.entries()) {
       if (st.kind === 'label') { lines.push(`case ${labels.get(st.name)}:`); continue; }
@@ -623,9 +627,9 @@ export class Seed {
         let ext = this.externals.get(st.name);
         if (EXT && ext) { const inner = ext, name = st.name; ext = (f: Node, a: unknown[], at: Span) => { const where = STACK[STACK.length - 1]; EXT_IN.set(where, (EXT_IN.get(where) ?? 0) + 1); const t = performance.now(); try { return inner(f, a, at); } finally { const e = EXT.get(name) ?? [0, 0]; e[0]++; e[1] += performance.now() - t; EXT.set(name, e); } }; }
         if (ext === undefined) { this.say(`No external \`${st.name}\`.`, st.at); continue; }
-        const eager = EAGER[st.name] ?? [], spans = st.args.map(a => ref({ ...a, of: span_of(a.text, a.b, a.e) }));
+        const eager = EAGER[st.name] ?? [];
         const read = eager.filter(i => i < st.args.length).map(i => `const a${i} = ${expr(st.args[i], 0)};`).join(' ');
-        lines.push(`try { ${read} r = ${ref(ext)}(f, [${st.args.map((a, i) => eager.includes(i) ? `a${i}` : `${a.code ? 'S.code_at' : 'S.arg'}(f, ${spans[i]}, ${ref(body.planner)})`).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
+        lines.push(`try { ${read} r = ${ref(ext)}(f, [${st.args.map((a, i) => eager.includes(i) ? `a${i}` : arg(a)).join(', ')}], ${ref(st.at)}); } catch (x) { throw S.where_failed(x, ${ref(st.at)}); }`);
         if (st.name === 'rule' || st.name === 'define') reread(st, i);
         continue;
       }

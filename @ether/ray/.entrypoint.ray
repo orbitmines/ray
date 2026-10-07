@@ -8,6 +8,8 @@
 // written; any other value itself.
 {value: Tight}.as_map =>
   v := value
+  // (a program running: the frame it runs in, `&caller[name] = x`)
+  external goto running (external get v running)
   external goto plain ((external get v instance) === None ? true : None)
   external goto plain ((external get v outer) === registry.program_class ? None : true)
   external goto declared (external get v declared)
@@ -18,6 +20,9 @@
   v.declared = frame
   external label declared
   v := external get v declared
+  external goto plain
+  external label running
+  v := external get v context
   external label plain
   v
 // Each key a program declares given to `body` (a closure of one parameter), in order.
@@ -36,15 +41,23 @@
 // `x[key] := v`, `x[key] = v`: declared or written so (declared before `:=` and `=`: they read these first).
 {x: Tight}[{key: Balanced}] := {value} ^punctuation =>
   holder := x.as_map
-  name := key.member_code
+  k := key
   v := value
+  // (no key, nothing written: `&caller[name] = this if name`)
+  external goto done (k === None ? true : None)
+  name := k.member_code
   external set holder name v
+  external label done
   v
 {x: Tight}[{key: Balanced}] = {value} ^punctuation =>
   holder := x.as_map
-  name := key.member_code
+  k := key
   v := value
+  // (no key, nothing written: `&caller[name] = this if name`)
+  external goto done (k === None ? true : None)
+  name := k.member_code
   external set holder name v
+  external label done
   v
 
 // `X<T, V: Type> := class { … }`: `X`, a class with parameters (as a method has them); `X<a, b>`, `X<V: b>`: a class like it with
@@ -146,11 +159,16 @@
 // `x.member = value`: the member set.
 {x: Tight}.{literal member} = {value} =>
   reading := external get (external .) caller_frame
+  holder := x
   external goto forward (external get reading writes_forward)
-  external set x member value
+  // (a program running: written where it runs, `&caller.x = v`)
+  external goto plain ((external get holder running) ? None : true)
+  holder = external get holder context
+  external label plain
+  external set holder member value
   external goto done
   external label forward
-  external forward x member value (external get reading outer)
+  external forward holder member value (external get reading outer)
   external label done
 // `x &= value`: `value` added at the end of the list `x` holds (a list of it when `x` holds nothing); a name is written with it
 // (anything else: the base's `&=`).
@@ -654,6 +672,10 @@ declaring_written := external span x:=x
   external set registry naming None
   code := external get (external ** block) code
   made.declared_ahead(block)
+  // (read where it is written: `&caller` in it, the context it is written in)
+  external goto called ((external get made caller_frame) ? true : None)
+  external set made caller_frame (external span block).frame
+  external label called
   external apply code None made
   external set registry given saved_given
   external set registry naming saved_naming
@@ -759,6 +781,13 @@ Node.components = Node.components_with(None)
   given_node.read_items_into(naming_frame)
   external set registry naming None
   external label read
+  // (what it is read for was called from where its arguments are written, else from where it is made: `&caller` in its block)
+  external goto called_here ((external span written) ? None : true)
+  external set instance caller_frame (external span written).frame
+  external goto called
+  external label called_here
+  external set instance caller_frame (external get (external .) caller_frame)
+  external label called
   // the parents' blocks first, then its own
   static.read_into(instance)
   external set registry given outer_given
@@ -1285,7 +1314,26 @@ Node &+= {
   ?:{type} ^punctuation => this: (type?)
 }
 
+// `&`: the program this is read in, running (U4); `&caller`, `&next`, `&entrypoint` are its methods.
+& ^keyword =>
+  reading := external get (external .) caller_frame
+  Program.running_in(reading)
+&{literal member ^property} ^keyword =>
+  reading := external get (external .) caller_frame
+  (Program.running_in(reading)).member(member, None)
 Program &+= {
+  // a program running in `frame` (what it reads it holds there)
+  static running_in (frame) =>
+    made := Program(context: frame)
+    made.running = true
+    made
+  // the program that called it: from the nearest frame around where it runs that was called, where that was called from
+  caller =>
+    at := this.context
+    while at && !(external get at caller_frame) {
+      at = external get at outer
+    }
+    at ? Program.running_in(external get at caller_frame) : None
   optimizations => this.O
   is_terminal => this.empty
   first => this.written.first

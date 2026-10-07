@@ -834,9 +834,10 @@ pipe := mark.character
       unless piece_type
         if rest_pieces
           worth = at.balanced_to(e)
-    // a capture taken as written that ends the head takes one word
+    // a capture taken as written takes one word when what follows it is no literal (it ends the head, or another capture does)
     if worth && pieces.raw
-      unless rest_pieces
+      bounded := rest_pieces ? rest_pieces.literal : None
+      unless bounded
         if at.spaced(e)
           worth = None
     rest := worth ? e.readings(rest_pieces, limit, mode) : None
@@ -1300,6 +1301,21 @@ top := external .
       unless sending
         unless at.spaced(limit)
           made.word = true
+          // (in the language's code, a name is read by the rule that also asks the `this` it is read for)
+          bare := registry.bare_rule
+          if at.text === reader_text
+            bare = at.language ? bare : None
+          if registry.bare_reporting
+            bare = None
+          if bare
+            made.word = None
+            made.rule = bare
+            bare_cap := external node
+            bare_cap.piece = bare.pieces
+            bare_cap.from = at
+            bare_cap.to = limit
+            bare_cap.raw = true
+            made.captures = bare_cap
   made
 
 // Whether the statement from `at` to `limit` starts with a word naming a class (a value with rules of its own) whose own rules read
@@ -2123,13 +2139,18 @@ external reader reader
   while going
     rules := value.reading_rules
     r := at.prefix_reading(rest_to, rules)
-    unless r
-      spaced := at.spaces_after
-      if spaced
+    // read after the spaces too: what reads farther (a method `== x` over a juxtaposed value `{ }{value}`), else that
+    spaced := at.spaces_after
+    r_spaced := spaced ? spaced.prefix_reading(rest_to, rules) : None
+    if r_spaced
+      better := true
+      if r
+        better = r_spaced.end === r.end ? None : r.end.reaches(r_spaced.end, rest_to)
+      if better
         at = spaced
-        r = at.prefix_reading(rest_to, rules)
+        r = r_spaced
     unless r
-      external report at rest_to
+      external report (spaced ? spaced : at) rest_to
       going = None
     if r
       rule := r.rule
@@ -3237,6 +3258,35 @@ Unbraced := opening_block.anything_but[]
   registry.given = saved_given
   registry.naming = saved_naming
   static
+
+// A name read on its own in the language's code: what the frames around it hold; else the member of the `this` it is read for
+// (nothing when it has none: `next` of the last); else it is said to be unresolved.
+{word}.bare_name =>
+  name := (external ** word).code
+  // (the frame it is read in is the one applying this: the name taken as written, not followed)
+  read_in := (external .).caller_frame
+  frame := read_in
+  found := None
+  held := None
+  while frame
+    if external own frame name
+      held = true
+      found = external get frame name
+      frame = None
+    if frame
+      frame = frame.outer
+  unless held
+    receiver := read_in.this_seen
+    if receiver
+      found = external get receiver name
+    // (none: read as a plain name, which says it is unresolved)
+    unless receiver
+      unless registry.bare_reporting
+        registry.bare_reporting = true
+        external read (external span word).from (external span word).to reader_like
+        registry.bare_reporting = None
+  found
+registry.bare_rule = registry.latest
 
 // ================================================================ the language
 // The rules so far are the reader's own vocabulary: from here on they are out of reach of a project's files (R4.2b), which are

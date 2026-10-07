@@ -328,7 +328,8 @@ export class Seed {
   // Code followed back to where it was written: a word naming code held by its frame is that code.
   written(x: unknown): Code {
     let c = this.code_of(x);
-    for (let i = 0; i < 64; i++) {
+    // (a capture taken as written is where it is: not followed)
+    for (let i = 0; i < 64 && !c.raw; i++) {
       const w = c.of.word; if (w === undefined) break;
       let held: unknown; for (let n: Node | undefined = c.frame; n; n = n.parent) if (n.members.has(w)) { held = n.members.get(w); break; }
       if (!(held instanceof Code)) break;

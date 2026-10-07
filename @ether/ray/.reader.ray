@@ -634,10 +634,10 @@ pipe := mark.character
   if mode
     unless rest_pieces
       capture_from = at.past_spaces
-      // (one operand with what accesses it: `b.holds`, `f(x).y`)
+      // (one operand with what accesses it: `b.holds`, `f(x).y`; a name taken as written: the word alone)
       unless pieces.type
         ends = external node
-        ends.place = capture_from.first_outside(limit, space)
+        ends.place = pieces.raw ? capture_from.operand_end(limit) : capture_from.first_outside(limit, space)
   // an optional capture may hold nothing: tried after every other end
   if pieces.optional && at.can_end(wanted)
     empty := external node

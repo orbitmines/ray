@@ -70,26 +70,29 @@ export type Said = { message: string; begin: number; end: number };
 export class Painter implements Observer {
   sigil?: string;
   rules = new WeakMap<Rule, { style?: string; caps: Map<string, string> }>();
-  paints = new Map<Text, Map<string, Paint>>();
+  paints = new Map<Text, Map<string, Paint & { weak: boolean }>>();
   defined_in = new Map<Text, Rule[]>();
   // the texts painted (what the host read: not the texts the seed makes of literals and names)
   texts = new Set<Text>();
   // where heads are written, per text
   heads = new Map<Text, [number, number][]>();
   seen = new WeakMap<Text, Map<number, Set<Rule>>>();
+  // the styles the marks name
+  styles = new Set<string>();
   constructor(public seed: Seed) {}
 
-  paint(text: Text, b: number, e: number, style: string) {
+  // (a name's kind, `weak`, gives way to a mark painted on the same span)
+  paint(text: Text, b: number, e: number, style: string, weak = false) {
     if (!this.texts.has(text)) return;
     const s = text.s;
     while (b < e && /\s/.test(s[b])) b++;
     while (e > b && /\s/.test(s[e - 1])) e--;
     if (e <= b) return;
     let m = this.paints.get(text); if (m === undefined) this.paints.set(text, m = new Map());
-    const k = `${b}:${e}:${style}`;
-    if (!m.has(k)) m.set(k, { begin: b, end: e - 1, style });
+    const k = `${b}:${e}`, had = m.get(k);
+    if (had === undefined || (had.weak && !weak)) m.set(k, { begin: b, end: e - 1, style, weak });
   }
-  painted(text: Text): Paint[] { return [...this.paints.get(text)?.values() ?? []]; }
+  painted(text: Text): Paint[] { return [...this.paints.get(text)?.values() ?? []].map(({ begin, end, style }) => ({ begin, end, style })); }
   forget(text: Text) { this.paints.delete(text); this.defined_in.delete(text); this.heads.delete(text); this.texts.delete(text); }
 
   // A rule defined: its capture names are parameters, its literals and its mark take its style.
@@ -109,7 +112,7 @@ export class Painter implements Observer {
         if (!('cap' in p) || open === undefined) continue;
         const i = s.indexOf(open + p.cap, at);
         if (i < 0 || i >= h.e) break;
-        this.paint(text, i + open.length, i + open.length + p.cap.length, 'parameter');
+        this.paint(text, i + open.length, i + open.length + p.cap.length, 'parameter', true);
         at = i + open.length + p.cap.length;
       }
       return;
@@ -127,13 +130,14 @@ export class Painter implements Observer {
       if (this.sigil === undefined && !parameters) this.sigil = mark[0];
       if (mark[0] === this.sigil) {
         info.style = style_of(mark);
+        this.styles.add(info.style!);
         const at = s.lastIndexOf(mark, h.e);
         if (at >= last) this.paint(text, at, at + mark.length, info.style!);
       }
     }
     for (const p of inside) {
       if (!p.cap) { if (info.style) this.paint(text, p.b, p.e, info.style); continue; }
-      this.paint(text, p.b, p.e, 'parameter');
+      this.paint(text, p.b, p.e, 'parameter', true);
       // what follows a capture's name in its brackets: a mark, unless it is a type
       const shut = shut_of(p);
       if (p.typed || this.sigil === undefined || shut === undefined) continue;
@@ -141,6 +145,7 @@ export class Painter implements Observer {
       const style = word[0] === this.sigil ? style_of(word) : undefined;
       if (style === undefined) continue;
       info.caps.set(s.slice(p.b, p.e), style);
+      this.styles.add(style);
       const at = s.lastIndexOf(word, shut);
       if (at >= p.e) this.paint(text, at, at + word.length, style);
     }
@@ -148,11 +153,11 @@ export class Painter implements Observer {
 
   planned(steps: Step[], frame: Node) {
     for (const st of steps) {
-      if (st.kind === 'apply') this.read(st.rule, st.caps, frame, st.at);
-      else if (st.kind === 'name') { const style = this.named(frame, st.at.text.s.slice(st.at.b, st.at.e).trim()); if (style) this.paint(st.at.text, st.at.b, st.at.e, style); }
+      if (st.kind === 'apply') this.read(st.rule, st.caps, frame, st.at, st.given);
+      else if (st.kind === 'name') { const style = this.named(frame, st.at.text.s.slice(st.at.b, st.at.e).trim()); if (style) this.paint(st.at.text, st.at.b, st.at.e, style, true); }
     }
   }
-  applied(rule: Rule, caps: [string, Span][], frame: Node) { this.read(rule, caps, frame); }
+  applied(rule: Rule, caps: [string, Span][], frame: Node, given: [string, unknown][]) { this.read(rule, caps, frame, undefined, given); }
   // A name declared: a parameter when it is written in a head (bound by what runs a method), else a variable.
   declared(name: Code) {
     if (!this.texts.has(name.text) || name.e <= name.b) return;
@@ -162,11 +167,11 @@ export class Painter implements Observer {
     seen.set(k, new Set());
     if (/\s/.test(name.s.trim())) return;
     const head = this.heads.get(name.text)?.some(([b, e]) => name.b >= b && name.e <= e);
-    this.paint(name.text, name.b, name.e, head ? 'parameter' : 'variable');
+    this.paint(name.text, name.b, name.e, head ? 'parameter' : 'variable', true);
   }
 
   // A rule that read a statement (from `at`, when known): its captures, then its literals found again between them.
-  read(rule: Rule, caps: [string, Span][], frame: Node, at?: Span) {
+  read(rule: Rule, caps: [string, Span][], frame: Node, at?: Span, given?: [string, unknown][]) {
     const first = at ?? caps.find(([, sp]) => sp.e > sp.b)?.[1], text = first?.text;
     if (text === undefined || !this.texts.has(text)) return;
     // (once per rule and place: a body run again reads the same)
@@ -180,11 +185,11 @@ export class Painter implements Observer {
       if (sp.text !== text || sp.e <= sp.b) continue;
       const style = info?.caps.get(name);
       if (style) { this.paint(text, sp.b, sp.e, style); continue; }
-      if ((sp as { raw?: boolean }).raw || (sp as { type?: unknown }).type !== undefined) continue;
+      if ((sp as { raw?: boolean }).raw) continue;
       const word = s.slice(sp.b, sp.e).trim();
       if (word.length === 0 || /\s/.test(word)) continue;
       const named = this.named(frame, word);
-      if (named) this.paint(text, sp.b, sp.e, named);
+      if (named) this.paint(text, sp.b, sp.e, named, true);
     }
     const style = info?.style;
     if (style === undefined) return;
@@ -203,7 +208,19 @@ export class Painter implements Observer {
       this.paint(text, from, from + lit.length, style);
       cursor = from + lit.length;
     });
+    // A method of a value with no word of its own before what it captures (`if := class { { }{condition} {{yes}} ^class => … }`)
+    // is named by that value where it is applied: the word before its first capture, when it names the value the rule was
+    // written in, takes the rule's style.
+    if (given === undefined || !given.some(([, v]) => v === rule.head.frame)) return;
+    const k0 = rule.pieces.findIndex(p => 'cap' in p);
+    if (k0 < 0 || rule.pieces.slice(0, k0).some(p => 'lit' in p && p.lit.trim().length > 0)) return;
+    const sp = spans.get((rule.pieces[k0] as { cap: string }).cap);
+    if (sp === undefined || sp.text !== text) return;
+    let e = sp.b; while (e > 0 && /\s/.test(s[e - 1])) e--;
+    let b = e; while (b > 0 && !/\s/.test(s[b - 1])) b--;
+    if (b < e && this.named(frame, s.slice(b, e)) !== undefined && this.value(frame, s.slice(b, e)) === rule.head.frame) this.paint(text, b, e, style);
   }
+  value(frame: Node, word: string): unknown { for (let n: Node | undefined = frame; n; n = n.parent) if (n.members.has(word)) return n.members.get(word); return undefined; }
 
   // What a name read in a frame is: code a rule was given (a parameter), a rule (a function), or any other value (a variable).
   named(frame: Node, word: string): string | undefined {
@@ -225,9 +242,12 @@ export class Painter implements Observer {
       try { steps = this.seed.steps_of(code); } catch { return; }
       if (depth >= 6) return;
       for (const st of steps) if (st.kind === 'apply') for (const [, sp] of st.caps) {
-        if (sp.text !== text || sp.e <= sp.b || (sp as { raw?: boolean }).raw || (sp as { type?: unknown }).type !== undefined) continue;
-        if (!/\s/.test(text.s.slice(sp.b, sp.e).trim())) continue;
-        body(new Code(sp.text, sp.b, sp.e, code.frame, code.planner), depth + 1);
+        if (sp.text !== text || sp.e <= sp.b || (sp as { raw?: boolean }).raw) continue;
+        // (a name is what it names; anything else is read: by its type's rules when it has a type that reads, else where it was)
+        const written = text.s.slice(sp.b, sp.e).trim();
+        if (!/\s/.test(written) && this.named(code.frame, written) !== undefined) continue;
+        const t = (sp as { type?: Node }).type, reads = t instanceof Node && (t.rules.length > 0 || t.members.get('rules') !== undefined);
+        body(new Code(sp.text, sp.b, sp.e, reads ? t : code.frame, code.planner), depth + 1);
       }
     };
     for (const rule of this.defined_in.get(text) ?? []) {
@@ -297,26 +317,133 @@ export class Ray {
     this.scope ??= new Node(this.seed.global);
     return this;
   }
-  // Whether a file is one the language or the library was read from.
-  has(file: string): boolean { return this.texts.has(path.resolve(file)); }
+  // Whether a file is one the language or the core library was read from (a text in place of it means reading them again).
+  core(file: string): boolean { const f = path.resolve(file); return this.texts.has(f) && path.dirname(f) === this.library; }
+
+  // ------------------------------------------------ projects (P8.8), as a run lays them out: the core (above), then the projects a
+  // file's project declares in its `.project.ray` (`@ether/<path>` a project of Ether, `@<name>` a language project at
+  // `@ether/$/<name>`), each after those it declares, then the file's own project (not the other files of a project of tests: each
+  // test is a program of its own), then the file. A project is read once, when a file first needs it, in a scope inside the
+  // projects read before it: what they define, it sees.
+  get ether(): string { return path.dirname(this.library); }
+  get repository(): string { return path.dirname(this.ether); }
+  projects = new Set<string>();
+  // the innermost scope of the projects read so far (the library's, before any is)
+  private chain?: Node;
+  dependency_dir(line: string): string | undefined {
+    const m = line.trim().match(/^@(\S+)/);
+    if (m === null || m[1].includes('://')) return undefined;
+    const name = m[1], candidates = name.includes('/') ? [path.join(this.repository, '@' + name)] : [path.join(this.ether, '$', name), path.join(this.repository, '@' + name)];
+    return candidates.find(dir => fs.existsSync(path.join(dir, '.project.ray')));
+  }
+  declared(dir: string): string[] {
+    let text = '';
+    try { text = fs.readFileSync(path.join(dir, '.project.ray'), 'utf8'); } catch { return []; }
+    return text.split('\n').filter(line => line.trim().startsWith('@')).map(line => this.dependency_dir(line)).filter((d): d is string => d !== undefined);
+  }
+  // The project a file is in: the nearest directory above it with a `.project.ray` (none outside the repository).
+  project_of(file: string): string | undefined {
+    for (let dir = path.dirname(path.resolve(file)); dir.startsWith(this.repository + path.sep); dir = path.dirname(dir))
+      if (fs.existsSync(path.join(dir, '.project.ray'))) return dir;
+    return undefined;
+  }
+  // A project's files in reading order: its `.ray` files, and those of directories under it that are no project of their own.
+  project_files(dir: string): string[] {
+    const out: string[] = [], top_only = dir === this.ether;
+    const walk = (at: string) => {
+      for (const entry of fs.readdirSync(at, { withFileTypes: true })) {
+        const full = path.join(at, entry.name);
+        if (entry.isDirectory()) { if (!top_only && !entry.name.startsWith('.') && entry.name !== 'node_modules' && !fs.existsSync(path.join(full, '.project.ray'))) walk(full); continue; }
+        if (entry.name.endsWith('.ray') && !entry.name.startsWith('.') && !entry.name.startsWith('entrypoint.')) out.push(full);
+      }
+    };
+    walk(dir);
+    return reading_order(out.map(f => ({ path: f, text: this.given.get(f) ?? fs.readFileSync(f, 'utf8') })));
+  }
+  // A project read (after what it declares), unless it was: its files in one scope, then its statements that left something said
+  // read again.
+  project(dir: string, seen = new Set<string>()) {
+    if (this.projects.has(dir) || seen.has(dir) || dir === this.library) return;
+    seen.add(dir);
+    for (const dep of this.declared(dir)) this.project(dep, seen);
+    this.projects.add(dir);
+    const t0 = performance.now();
+    this.chain = this.group(this.project_files(dir));
+    this.timings.push([path.relative(this.repository, dir), performance.now() - t0]);
+  }
+  // Files read in one scope inside the projects read so far, then their statements that left something said read again.
+  group(files: string[]): Node {
+    const scope = new Node(this.chain ?? this.scope), waiting = this.seed.pending.length;
+    for (const file of files) {
+      const t = this.text(file);
+      try { this.seed.read(t, 0, scope); } catch (e) { this.failed(t, e); }
+    }
+    const before = this.seed.pending.slice(0, waiting);
+    this.seed.pending = this.seed.pending.slice(waiting);
+    try { this.seed.settle(); } catch { /* said where it was */ }
+    this.seed.pending = before.concat(this.seed.pending);
+    return scope;
+  }
+  // The scope a file is read in, with what is read before it: the projects its project declares, then the other files of its
+  // project (once per file: the scope is kept for its next text), unless it is a project of tests.
+  private own = new Map<string, Node>();
+  prepare(file: string): Node {
+    file = path.resolve(file);
+    const project = this.project_of(file);
+    if (project === undefined || project === this.library) return this.chain ?? this.scope;
+    for (const dep of this.declared(project)) this.project(dep);
+    if (path.relative(this.ether, project).split(path.sep).includes('tests')) return this.chain ?? this.scope;
+    const k = `${project}\0${file}`;
+    let scope = this.own.get(k);
+    if (scope === undefined) {
+      const t0 = performance.now();
+      this.own.set(k, scope = this.group(this.project_files(project).filter(f => f !== file)));
+      this.timings.push([path.relative(this.repository, project) + ' (without ' + path.basename(file) + ')', performance.now() - t0]);
+    }
+    return scope;
+  }
 
   // A file read in a scope of its own inside the library's: what it said, what it wrote, how it is painted. Its text is forgotten
   // after (`keep`: kept, until `forget`).
-  file(file: string, s: string, keep = false): { text: Text; diagnostics: Said[]; written: string[]; paints: Paint[] } {
+  //
+  // Reading a file changes more than its own scope (`Device &+= { … }` adds to a class of a project read before it): what it
+  // changed is taken back after (unless it is kept), so the next text of the same document is read where the first was, and
+  // the next document is not read where an earlier one left something.
+  file(file: string, s: string, keep = false, scope: Node = this.chain ?? this.scope ?? this.seed.global): { text: Text; diagnostics: Said[]; written: string[]; paints: Paint[] } {
     const text: Text = { name: path.resolve(file), s };
     this.painter?.texts.add(text);
     this.written = [];
-    try { this.seed.read(text, 0, new Node(this.scope ?? this.seed.global)); } catch (e) { this.failed(text, e); }
-    const diagnostics = this.said(text), written = this.written;
-    this.written = [];
-    if (this.painter) {
-      const before = this.seed.diagnostics.length;
-      this.painter.dry(text);
-      this.seed.diagnostics.length = before;
+    // (what was said about the file as a project read it is said again about this text: the seed says a thing once per place)
+    for (const k of [...this.seed.said]) if (k.startsWith(text.name + '\0')) this.seed.said.delete(k);
+    const members = new Map<Node, Map<string, [boolean, unknown]>>(), parents = new Map<Node, Node | undefined>(), said = this.seed.diagnostics.length;
+    if (!keep) this.seed.journal = {
+      member(node, key) { let m = members.get(node); if (m === undefined) members.set(node, m = new Map()); if (!m.has(key)) m.set(key, [node.members.has(key), node.members.get(key)]); },
+      parent(node) { if (!parents.has(node)) parents.set(node, node.parent); },
+    };
+    let diagnostics: Said[], written: string[], paints: Paint[];
+    try {
+      try { this.seed.read(text, 0, new Node(scope)); } catch (e) { this.failed(text, e); }
+      diagnostics = this.said(text); written = this.written;
+      this.written = [];
+      if (this.painter) {
+        const before = this.seed.diagnostics.length;
+        this.painter.dry(text);
+        this.seed.diagnostics.length = before;
+      }
+      paints = this.painter?.painted(text) ?? [];
+    } finally {
+      this.seed.journal = undefined;
+      if (!keep) {
+        for (const [node, m] of members) { for (const [key, [had, value]] of m) { if (had) node.members.set(key, value); else node.members.delete(key); } node.version++; }
+        for (const [node, parent] of parents) { node.parent = parent; node.version++; }
+        this.seed.version++;
+        // (and what it said elsewhere: a statement of the library it ran that failed)
+        const elsewhere = this.seed.diagnostics.slice(said).filter(d => d.at.text !== text);
+        if (elsewhere.length > 0) { const gone = new Set(elsewhere); this.seed.diagnostics = this.seed.diagnostics.filter(d => !gone.has(d)); for (const d of elsewhere) this.seed.said.delete(`${d.at.text.name}\0${d.at.b}\0${d.at.e}\0${d.message}`); }
+        this.forget(text);
+      }
     }
-    const paints = this.painter?.painted(text) ?? [];
-    if (!keep) this.forget(text);
-    return { text, diagnostics, written, paints };
+    return { text, diagnostics: diagnostics!, written: written!, paints: paints! };
   }
   forget(text: Text) { this.seed.forget(text); this.painter?.forget(text); }
   said(text: Text): Said[] { return this.seed.diagnostics.filter(d => d.at.text === text).map(d => ({ message: d.message, begin: d.at.b, end: d.at.e })); }
@@ -355,11 +482,14 @@ async function worker(task: { kind: 'run'; files: string[]; library?: string; ve
     const ray = new Ray({ library: task.library }).boot().read_library();
     const out = (line: string) => port.postMessage({ out: line }), err = (line: string) => port.postMessage({ err: line });
     const line_of = (s: string, i: number) => s.slice(0, i).split('\n').length;
-    if (task.verbose) { for (const [name, ms] of ray.timings) err(`${name.padEnd(16)} ${String(Math.round(ms)).padStart(7)} ms`); err(`${ray.seed.diagnostics.length} diagnostics in the library`); }
+    const timed = () => { for (const [name, ms] of ray.timings.splice(0)) err(`${name.padEnd(16)} ${String(Math.round(ms)).padStart(7)} ms`); };
+    if (task.verbose) { timed(); err(`${ray.seed.diagnostics.length} diagnostics in the library`); }
     let failed = false;
     for (const file of task.files) {
-      const known = ray.of(file);
-      const read = known ? { text: known.text, diagnostics: known.diagnostics, written: [] as string[] } : ray.file(file, fs.readFileSync(file, 'utf8'));
+      // (a file of the language or the core library: as it was read there)
+      const known = ray.core(file) ? ray.of(file) : undefined, scope = known ? undefined : ray.prepare(file);
+      if (task.verbose) timed();
+      const read = known ? { text: known.text, diagnostics: known.diagnostics, written: [] as string[] } : ray.file(file, fs.readFileSync(file, 'utf8'), false, scope);
       for (const line of read.written) out(line);
       for (const d of read.diagnostics) err(`${path.relative(process.cwd(), file)}:${line_of(read.text.s, d.begin)}: ${d.message}`);
       if (read.diagnostics.length > 0) failed = true;
@@ -374,7 +504,7 @@ async function worker(task: { kind: 'run'; files: string[]; library?: string; ve
   let ray: Ray | undefined, scheduled: ReturnType<typeof setTimeout> | undefined;
   const given = () => {
     const out = new Map<string, string>();
-    for (const doc of docs.values()) if (ray?.has(doc.file) || path.dirname(doc.file) === library_dir(task.library)) {
+    for (const doc of docs.values()) if (ray?.core(doc.file) || path.dirname(path.resolve(doc.file)) === library_dir(task.library)) {
       let disk: string | undefined; try { disk = fs.readFileSync(doc.file, 'utf8'); } catch { disk = undefined; }
       if (disk !== doc.text) out.set(path.resolve(doc.file), doc.text);
     }
@@ -387,6 +517,7 @@ async function worker(task: { kind: 'run'; files: string[]; library?: string; ve
     if (ray === undefined || !same(wanted, ray.given)) {
       const t0 = performance.now();
       ray = new Ray({ library: task.library, given: wanted, paint: true }).boot().read_library();
+      port.postMessage({ styles: [...ray.painter!.styles] });
       port.postMessage({ log: `read the language and its library in ${Math.round(performance.now() - t0)} ms (${ray.seed.diagnostics.length} diagnostics)` });
       for (const uri of docs.keys()) dirty.add(uri);
     }
@@ -395,7 +526,15 @@ async function worker(task: { kind: 'run'; files: string[]; library?: string; ve
       const doc = docs.get(uri);
       if (doc === undefined) continue;
       const t0 = performance.now();
-      const read = ray.of(doc.file) ?? ray.file(doc.file, doc.text);
+      // (a file of a project read before is as it was read there, unless it was changed since)
+      let read: { text: Text; diagnostics: Said[]; paints: Paint[] } | undefined;
+      const known = ray.core(doc.file) ? ray.of(doc.file) : undefined;
+      if (known !== undefined) read = known;
+      else {
+        let scope: Node | undefined;
+        try { scope = ray.prepare(doc.file); } catch (e) { port.postMessage({ log: `reading the projects before ${doc.file} failed: ${(e as Error).stack ?? e}` }); }
+        read = ray.file(doc.file, doc.text, false, scope);
+      }
       port.postMessage({ checked: { uri, version: doc.version, text: read.text.s, paints: read.paints, diagnostics: read.diagnostics } });
       port.postMessage({ log: `read ${path.basename(doc.file)} v${doc.version} in ${Math.round(performance.now() - t0)} ms: ${read.diagnostics.length} diagnostics, ${read.paints.length} paints` });
     }
@@ -410,15 +549,21 @@ async function worker(task: { kind: 'run'; files: string[]; library?: string; ve
 
 // ---------------------------------------------------------------- the language server
 // The legend: the LSP's standard token types, and the styles the library's marks name that it lacks.
-export const TOKEN_TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator', 'punctuation', 'label', 'error'];
+// The legend: the LSP's standard token types, then the styles the language's marks name that it lacks (known once the language is
+// read: the server answers `initialize` then).
+export const TOKEN_TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator'];
 
 // Serve the language server over stdio (or the streams given): diagnostics, semantic tokens and the theme channel (`ether/theme`),
 // from what the seed read.
 export async function lsp(options: { library?: string; io?: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream } } = {}): Promise<void> {
+  // (CommonJS modules: imported from a bundle, their exports are its `default`)
+  const commonjs = <T>(m: T): T => ((m as { default?: T }).default ?? m);
   const [{ createConnection, TextDocuments, ProposedFeatures, TextDocumentSyncKind }, { TextDocument }, { encode, runs, position_of, MODIFIERS }] = await Promise.all([
-    import('vscode-languageserver/node.js'), import('vscode-languageserver-textdocument'), import('./lsp/semantics.ts'),
+    import('vscode-languageserver/node.js').then(commonjs), import('vscode-languageserver-textdocument').then(commonjs), import('./lsp/semantics.ts'),
   ]);
-  const connection = options.io === undefined ? createConnection(ProposedFeatures.all) : createConnection(ProposedFeatures.all, options.io.input, options.io.output);
+  // (over stdio unless streams are given: `--lsp` is not one of the flags the library looks for)
+  const io = options.io ?? { input: process.stdin, output: process.stdout };
+  const connection = createConnection(ProposedFeatures.all, io.input, io.output);
   const documents = new TextDocuments(TextDocument);
   const reader = thread({ kind: 'lsp', library: options.library });
   reader.unref();
@@ -430,7 +575,12 @@ export async function lsp(options: { library?: string; io?: { input: NodeJS.Read
     documents: uris.flatMap(uri => { const c = checked.get(uri); return c ? [{ uri, version: c.version, ranges: runs(c.text, painted(c.paints)) }] : []; }),
   });
 
-  reader.on('message', (m: { checked?: { uri: string; version: number; text: string; paints: Paint[]; diagnostics: Said[] }; log?: string }) => {
+  const legend = [...TOKEN_TYPES];
+  let styled: () => void = () => {}, answered = false;
+  const read = new Promise<void>(resolve => { styled = resolve; setTimeout(resolve, Number(process.env.RAY_LSP_WAIT ?? 60000)); });
+  reader.on('message', (m: { checked?: { uri: string; version: number; text: string; paints: Paint[]; diagnostics: Said[] }; log?: string; styles?: string[] }) => {
+    // (the legend is the client's once it was answered: a style named later is not sent as a token)
+    if (m.styles !== undefined) { if (!answered) for (const style of m.styles) { const type = style.split('.')[0]; if (!legend.includes(type)) legend.push(type); } styled(); return; }
     if (m.log !== undefined) { if (process.env.RAY_LSP_LOG) connection.console.log(m.log); return; }
     const c = m.checked;
     if (c === undefined) return;
@@ -444,17 +594,17 @@ export async function lsp(options: { library?: string; io?: { input: NodeJS.Read
   reader.on('error', e => connection.console.error(`the reader stopped: ${(e as Error).stack ?? e}`));
 
   const open = (uri: string, text: string, version: number) => reader.postMessage({ open: { uri, file: file_of(uri), text, version } });
-  connection.onInitialize(() => ({
+  connection.onInitialize(async () => (await read, answered = true, {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Full,
-      semanticTokensProvider: { legend: { tokenTypes: TOKEN_TYPES, tokenModifiers: MODIFIERS }, full: true, range: true },
+      semanticTokensProvider: { legend: { tokenTypes: legend, tokenModifiers: MODIFIERS }, full: true, range: true },
     },
     serverInfo: { name: 'ray-language-server', version: Version.current.toString() },
   }));
   // (the paints of the text last read: a newer text is painted with them until it is read)
   const tokens = (uri: string, range?: [number, number]) => {
     const c = checked.get(uri);
-    return { data: c ? encode(documents.get(uri)?.getText() ?? c.text, painted(c.paints), TOKEN_TYPES, range) : [] };
+    return { data: c ? encode(documents.get(uri)?.getText() ?? c.text, painted(c.paints), legend, range) : [] };
   };
   connection.languages.semanticTokens.on(params => tokens(params.textDocument.uri));
   connection.languages.semanticTokens.onRange(params => {

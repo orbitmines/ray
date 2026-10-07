@@ -1,0 +1,24 @@
+// The device's file system: it holds the file space (`@/…`, `@./…`, `@../…`, `file:`); without it, such a location holds
+// nothing to read.
+Location &+= {
+  sandboxed => "instance/" + normalised
+}
+
+FileSystem &+= {
+  // The device's own files: the host's (sandboxed); a browser and the language as the operating system keep them on the
+  // device (`@me/device/storage`, which a page keeps in its Web Storage).
+  static Host := class: FileSystem {
+    read (location: Location) => if OS.Browser || OS.Ether { @me/device/storage[location.normalised] } else { external io location.sandboxed None }
+    write (location: Location, content) => if OS.Browser || OS.Ether { @me/device/storage[location.normalised] = content } else { external io location.sandboxed content }
+    listing (location: Location) => if OS.Browser || OS.Ether {
+        @me/device/storage.fields.name{~= ⊢(location.normalised + "/")}.map(.after(location.normalised + "/").before("/")).unique.map(location / .)
+      } else {
+        (&@.ask(`size`, location) -- (. == true ? @me/device.received(location as String) as String : .)).lines{.nonempty}.map(location / .)
+      }
+    removed (location: Location) => if OS.Browser || OS.Ether { write(location, None) } else { external os `remove` location.sandboxed }
+  }
+}
+
+FileOptimizations = FileOptimizations + {
+  {location: Location{!scheme || scheme == "file"}} => FileSystem.Host()
+}

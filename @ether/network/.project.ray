@@ -3,3 +3,4 @@
 @websocket
 @hpack
 @ether/security
+@ether/filesystem

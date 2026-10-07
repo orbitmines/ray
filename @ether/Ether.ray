@@ -17,15 +17,7 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 @guests.read { @host }
 @host.read { @guests }
 
-@localhost = => @`127.0.0.1` | @::1
-@localnetwork = =>
-  // https://datatracker.ietf.org/doc/html/rfc1918#section-3
-  @`10.0.0.0/8` | @`172.16.0.0/12` | @`192.168.0.0/16`
-  // https://datatracker.ietf.org/doc/html/rfc4193#section-8
-  | @`fc00::/7`
-
 local => @local
-localhost => @localhost
 private => @private
 public => @public
 // Whatever the policy, `confidential` is never wider than `@private.managed` (W5.5).

@@ -1,0 +1,6 @@
+mark ^keyword := external global
+
+with @me/device/os = OS.Ether {
+  unless ("ether.orbitmines.com:443" as Network.Socket.Address).tls(["h2"]).erred { INFO@mark `TLS2 TLS in the language does not err while it is unwritten` }
+  if @me/device.network.connected { INFO@mark `ETH5 the language as the operating system is on a network` }
+}

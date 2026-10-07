@@ -1,7 +1,7 @@
 Location &+= {
   normalised => segments{!= "."}.reduce(kept = [] => . == ".." ? kept[..<-1] : (kept, .)).join("/")
-  sandboxed => "instance/" + normalised
-  system: FileSystem => Compiler.reduced(this, FileOptimizations)
+  // what holds it, by the projects loaded (files: @ether/filesystem, URLs: @ether/network); none: it holds nothing to read
+  system: FileSystem => Compiler.reduced(this, FileOptimizations) -- (. is FileSystem ? . : FileSystem())
   content => system.read(this) as String
   bytes => (system.read(this) ?? []) as Byte[]
   listing => system.listing(this)
@@ -13,51 +13,15 @@ Location &+= {
 }
 
 FileSystem := class: Language {
-  read (location: Location) => ERROR@FileSystem `no reader for the location`
-  write (location: Location, content) => ERROR@FileSystem `no writer for the location`
+  read (location: Location) => ERROR@FileSystem `nothing loaded holds the location (a file needs @ether/filesystem, a URL @ether/network)`
+  write (location: Location, content) => ERROR@FileSystem `nothing loaded holds the location to write it (a file needs @ether/filesystem, a URL @ether/network)`
   listing (location: Location) => []
   exists (location: Location) => read(location) != None
   removed (location: Location) => write(location, None)
 }
 
-FileSystem &+= {
-  // The device's own files: the host's (sandboxed); a browser keeps them in its storage (as `ray:<path>`, Web Storage), the
-  // language as the operating system on the device (`@me/device/storage`).
-  static Host := class: FileSystem {
-    key (location: Location) => "ray:" + location.normalised
-    read (location: Location) => if OS.Browser { @me/device/storage[key(location)] }
-      elsif OS.Ether { @me/device/storage[location.normalised] }
-      else { external io location.sandboxed None }
-    write (location: Location, content) => if OS.Browser { @me/device/storage[key(location)] = (content as String if content !== None) }
-      elsif OS.Ether { @me/device/storage[location.normalised] = content }
-      else { external io location.sandboxed content }
-    listing (location: Location) => if OS.Browser {
-        @me/device/storage.fields.name{~= ⊢(key(location) + "/")}.map(.after(key(location) + "/").before("/")).unique.map(location / .)
-      } elsif OS.Ether {
-        @me/device/storage.fields.name{~= ⊢(location.normalised + "/")}.map(.after(location.normalised + "/").before("/")).unique.map(location / .)
-      } else {
-        (&@.ask(`size`, location) -- (. == true ? @me/device.received(location as String) as String : .)).lines{.nonempty}.map(location / .)
-      }
-    removed (location: Location) => if OS.Browser || OS.Ether { write(location, None) } else { external os `remove` location.sandboxed }
-
-    // Web Storage: localStorage, and the storage event other documents of the origin fire (https://html.spec.whatwg.org/multipage/webstorage.html#the-localstorage-attribute, https://html.spec.whatwg.org/multipage/webstorage.html#the-storageevent-interface)
-    static script := @js {
-      Object.keys(localStorage).forEach((key) => ray.set("@me/device/storage/" + key, localStorage.getItem(key)))
-      window.addEventListener("storage", (event) => event.key === null
-        ? ray.get("@me/device/storage.fields.name").forEach((key) => ray.set("@me/device/storage/" + key, null))
-        : ray.set("@me/device/storage/" + event.key, event.newValue))
-      effect(["@me/device/storage"], () => {
-        const kept = ray.get("@me/device/storage.fields")
-        Object.keys(localStorage).filter((key) => !kept.some((field) => field.name === key)).forEach((key) => localStorage.removeItem(key))
-        kept.forEach((field) => localStorage.getItem(field.name) === field.value || localStorage.setItem(field.name, field.value))
-      })
-    }
-  }
-}
-
-FileOptimizations := {
-  {location: Location} => FileSystem.Host()
-}
+// What holds a location: the projects add theirs (@ether/filesystem the file space, @ether/network the URLs).
+FileOptimizations := { }
 
 IO := class {
   output (text: String) => @me/device.sent("stdout", text)

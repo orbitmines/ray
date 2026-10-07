@@ -43,7 +43,7 @@ Julian := class: Calendar {
   static week = Calendar.Segment(global.week, Weekday#.length days)
   static day = Calendar.Segment(global.day, 24 hours)
   static hour = Calendar.Segment(global.hour, 60 minutes)
-  static minute = Calendar.Segment(global.minute, 60 seconds | 61 seconds if LeapSeconds.at(this))
+  static minute = Calendar.Segment(global.minute, 60 seconds)
 
   is_leap_year => year % 4 == 0
 
@@ -64,8 +64,8 @@ Gregorian := class: Julian {
   equivalence "1582-10-05" as Julian -> "1582-10-15"
 }
 
+// whether a minute had a leap second is IANA's data (@ether/timezone adds it); without it every minute is 60 seconds
 UTC := class: Gregorian (offset: Quantity.Temporal = 0, leap_seconds: boolean = false) {
-  static minute = Calendar.Segment(global.minute, 60 seconds | 61 seconds if leap_seconds && LeapSeconds.at(this))
   equivalence 0 -> offset
 }
 GMT := UTC{leap_seconds == false}
@@ -169,7 +169,6 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   long: String => this as Long as String
 
   in_year => Gregorian(year: year)
-  zone => TimeZone(zone_name) if zone_name
   // RFC 9557 §3: an elective annotation that is not understood is ignored, and a critical one must be acted on or the timestamp refused; of the registered keys only the calendar (u-ca, BCP 47) is read (https://www.rfc-editor.org/rfc/rfc9557#section-3)
   understood => !tags.some(.critical && !(.key == "u-ca" && .value is ("gregory" | "iso8601")))
   date_known => date != ?
@@ -182,69 +181,6 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   dynamically assert date | time
   dynamically assert understood
   date ?= ?
-}
-
-LeapSeconds := class = ((TimeZone.source.directory / "leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
-  .map(.seconds seconds as Time(epoch: "1900-01-01"))
-{
-  at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
-}
-
-TimeZone := class (name: String) {
-  static Source := class {
-    directory: Location?
-    data (zone: String) => None
-    at (zone: String, time: Time) => ERROR@TimeZone `no time-zone data for the zone`
-  }
-
-  // IANA tz database compiled to TZif (RFC 8536), one file per zone, read only when that zone is asked for (https://data.iana.org/time-zones/tz-link.html)
-  static Zoneinfo := class: Source (directory: Location) {
-    data (zone: String) => $.tzif.read((directory / zone).bytes)
-    at (zone: String, time: Time) => data(zone).at(time)
-    version => (directory / "version").content.trimmed
-    zones => (directory / "zones").content.lines{.nonempty}
-  }
-
-  // Where the zones are read: the host's zoneinfo (tzfile(5): $TZDIR, else /usr/share/zoneinfo,
-  // https://man7.org/linux/man-pages/man5/tzfile.5.html), Windows' ICU, the browser's Intl, on ether the downloaded @tzif.
-  static source: Source => if OS.Linux || OS.Macos { Zoneinfo(directory: (OS.env.TZDIR ?? "/usr/share/zoneinfo") as Location) }
-    elsif OS.Windows { ICU() }
-    elsif OS.Browser { Intl() }
-    else { Zoneinfo(directory: @tzif/zoneinfo) }
-
-  // Windows 10 1703+ ships ICU and its tz data as icu.dll (https://learn.microsoft.com/en-us/windows/win32/intl/international-components-for-unicode--icu-), ucal API (https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/ucal_8h.html)
-  static ICU := class: Source {
-    call (function: String, arguments) => external os `icu` (function, arguments)
-    // a Windows zone id read as its IANA name through CLDR's windowsZones (https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones)
-    iana (zone: String) => call("ucal_getTimeZoneIDForWindowsID", (zone, "001")) ?? zone
-    at (zone: String, time: Time) => call("ucal_open", (iana(zone), "", "UCAL_GREGORIAN")) ~~ call("ucal_setMillis", (., (time as s).floor * 1000)) -- (calendar => call("ucal_inDaylightTime", calendar) as boolean -- (daylight => (
-      offset: ((call("ucal_get", (calendar, "UCAL_ZONE_OFFSET")) + call("ucal_get", (calendar, "UCAL_DST_OFFSET"))) / 1000) seconds,
-      daylight,
-      abbreviation: call("ucal_getTimeZoneDisplayName", (calendar, daylight ? "UCAL_SHORT_DST" : "UCAL_SHORT_STANDARD", "en")) as String
-    )) ~~ call("ucal_close", calendar))
-  }
-
-  // ECMA-402 Intl.DateTimeFormat: the offset in force read back from formatToParts with timeZoneName "longOffset" (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts), answered by the page at @me/device/zones (`zones/<zone>/<at>`; keeping answers is a cache level)
-  static Intl := class: Source {
-    asked (zone: String, time: Time) => await (@me/device/zones / zone / ((time as s).floor * 1000 as String)).value
-    offset (zone: String, time: Time) => (asked(zone, time).offset ~= ("GMT", (sign: "+" | "-", hours: Decimal, ":", minutes: Decimal)?)) -- (.sign ? (.sign == "-" ? -1 : 1) * (.hours hours + .minutes minutes) : 0 seconds)
-    at (zone: String, time: Time) => offset(zone, time) -- (in_force => (
-      offset: in_force,
-      daylight: in_force > offset(zone, time - 182 days).min(offset(zone, time + 182 days)),
-      abbreviation: asked(zone, time).abbreviation
-    ))
-    // ECMA-402 Intl.DateTimeFormat formatToParts, the zone's offset ("longOffset") and abbreviation ("short") (https://tc39.es/ecma402/#sec-createdatetimeformat, https://tc39.es/ecma402/#sec-formatdatetimetoparts)
-    static script := @js {
-      ray.awaited("@me/device/zones", (path) => {
-        const [zone, at] = [path.split("/").slice(0, -1).join("/"), Number(path.split("/").at(-1))]
-        const part = (style) => new Intl.DateTimeFormat("en-US", \{timeZone: zone, timeZoneName: style}).formatToParts(at).find((part) => part.type === "timeZoneName").value
-        ray.set("@me/device/zones/" + path, \{offset: part("longOffset"), abbreviation: part("short")})
-      })
-    }
-  }
-
-  data => source.data(name)
-  at (time: Time) => source.at(name, time)
 }
 
 Stamp := class = wall: Decimal, ".", logical: Decimal = 0, "@", node: * {

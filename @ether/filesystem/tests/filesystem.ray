@@ -1,0 +1,9 @@
+mark ^keyword := external global
+
+with @me/device/os = OS.Ether {
+  ("ethertest/a" as Location).content = "x"
+  unless ("ethertest/a" as Location).content == "x" { INFO@mark `ETH1 what is written on ether is not read back` }
+  unless ("ethertest" as Location).listing == ["ethertest/a" as Location] { INFO@mark `ETH2 a location on ether does not list what was written under it` }
+  ("ethertest/a" as Location).remove
+  if ("ethertest/a" as Location).exists { INFO@mark `ETH3 a location removed on ether is still there` }
+}

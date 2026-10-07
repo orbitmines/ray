@@ -2131,6 +2131,11 @@ external reader reader
     r := at.prefix_reading_in(rest_to, scopes)
     // read after the spaces too: what reads farther (a method `== x` over a juxtaposed value `{ }{value}`), else that
     spaced := at.spaces_after
+    // (and past a line end that continues the statement: `Unit(…)` / `  .convert …`)
+    if at.character === end
+      continued := at.continuation
+      if continued
+        spaced = continued
     r_spaced := spaced ? spaced.prefix_reading_in(rest_to, scopes) : None
     if r_spaced
       better := true

@@ -24,10 +24,13 @@ export class Node {
 // What a span always is, whatever frame it is read in: its text, the one word it is (if it is one), its programs.
 export type SpanOf = { s: string; word: string | undefined; programs: Map<Rule | undefined, Map<Node | undefined, { version: number; fn: Compiled; unread?: boolean; epoch?: number; handed?: Rule }>> };
 const spans = new WeakMap<Text, Map<number, SpanOf>>();
+// (the same text written in several places is one string: a member named by it is found by the string itself, not compared)
+const strings = new Map<string, string>();
+function interned(s: string): string { if (s.length > 64) return s; const t = strings.get(s); if (t !== undefined) return t; strings.set(s, s); return s; }
 function span_of(text: Text, b: number, e: number): SpanOf {
   let m = spans.get(text); if (m === undefined) spans.set(text, m = new Map());
   const k = b * 4194304 + e; let t = m.get(k);
-  if (t === undefined) { const s = text.s.slice(b, e), w = s.trim(); m.set(k, t = { s, word: w.length > 0 && !/\s/.test(w) ? w : undefined, programs: new Map() }); }
+  if (t === undefined) { const s = interned(text.s.slice(b, e)), w = s.trim(); m.set(k, t = { s, word: w.length > 0 && !/\s/.test(w) ? interned(w) : undefined, programs: new Map() }); }
   return t;
 }
 // `planner`: the reader in force where it was written, which reads it into a program (none: the seed).
@@ -98,7 +101,7 @@ export class Seed {
     this.externals.set('node', () => new Node());
     // a node's `outer` (the frame it was made in), and a frame's `caller_frame` and `applied_rule` (as a node), read like members
     // (named so no member a program sets is taken for them)
-    this.externals.set('get', (frame, [of, name]) => { const n = (of) as Node | undefined, k = self.code_of(name).s; return !(n instanceof Node) ? undefined : n.members.has(k) ? n.members.get(k) : k === 'outer' ? n.parent : k === 'caller_frame' ? n.caller : k === 'applied_rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
+    this.externals.set('get', (frame, [of, name]) => { const n = (of) as Node | undefined, k = self.code_of(name).s; if (!(n instanceof Node)) return undefined; const v = n.members.get(k); return v !== undefined || n.members.has(k) ? v : k === 'outer' ? n.parent : k === 'caller_frame' ? n.caller : k === 'applied_rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
     // a name written where it was declared (the nearest frame from where it was written that has it, else there)
     this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = (value); if (ENV.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; (at ?? c.frame).members.set(k, v); return v; });
     // a member set to code as written, unread (read where the member is read)

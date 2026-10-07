@@ -467,6 +467,11 @@ Answers from 2026-09-30.
   "Waiting / Intermediate / Final" are derived from where the selection is.
 - **P1.9** Hot reload: running instances of an updated function continue in the new version via
   migrations (L§7.2). Where state can't migrate, they keep the old version and a quest is raised.
+- **P1.9b Enabling hot reload (user, 2026-10-07).** It works through levels, and a developer enables it explicitly with one
+  line, nothing special-cased: `(dynamically if @me/development?) orbitmines.com() if &entrypoint`.
+  - `(M if c) x` applies a prefix `M` (any modifier word, `dynamically`, `static`, …) to `x` when `c` holds, else is `x`.
+  - `@me/<name>` names your instances: a configurable mapping from names to the instances you run (`@me/development`,
+    `@me/phone`, …). `@me/development?` holds when the running instance is the one named `development`.
 - **P5.1a What a dynamic value depends on (user, 2026-10-07).** `dynamically x` is language-side: every write (`=`, `:=`,
   `x.m =`, `x[k] =`, `@x =`, `@ ->`) announces what it wrote, and a dynamic value runs again when something it depends on is
   announced. What it depends on is read from code, not from reads: what its code mentions, and what the code of the methods,

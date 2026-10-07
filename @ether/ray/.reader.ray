@@ -1186,9 +1186,44 @@ top := external .
     cap = cap ? cap.next : None
   found
 
+// Whether a reading holds in a capture a `,` written outside brackets in the statement from `at` to `limit` (they are found once
+// per statement, kept on `state`).
+{reading}.holds_a_comma({at}, {limit}, {state}) =>
+  unless state.commas_found
+    state.commas_found = true
+    found_commas := None
+    place := at.first_outside(limit, comma)
+    while place
+      if place === limit
+        place = None
+      if place
+        comma_link := external node
+        comma_link.value = place
+        comma_link.next = found_commas
+        found_commas = comma_link
+        place = place.next.first_outside(limit, comma)
+    state.commas = found_commas
+  found := None
+  link := state.commas
+  while link
+    cap := reading.captures
+    while cap
+      if cap.from
+        unless link.value === cap.to
+          if cap.from.reaches(link.value, cap.to)
+            found = true
+      cap = found ? None : cap.next
+    link = found ? None : link.next
+  found
+
 {at}.considered({rule}, {limit}, {state}) =>
   pieces := rule.pieces
   r := pieces.has_types && pieces.holds_nothing_in(at.text) ? None : at.readings(pieces, limit, None)
+  // (`,` composes looser than the rules declared after it (G3.1): none of theirs holds a `,` of the statement in a capture,
+  // `x if c, y` is `(x if c), y`)
+  if r && rule.after_comma
+    if r.holds_a_comma(at, limit, state)
+      r = None
   if r
     take := true
     if state.best
@@ -1438,10 +1473,16 @@ top := external .
     unless r
       // what no rule in reach reads whole: its first operand, read when it runs, and the rest read by that value's rules
       split := at.operand_end(limit)
+      // (a `,` outside brackets: what is before it is the first operand, `,` the loosest, `x if c, y`)
+      first_comma := at.first_outside(limit, comma)
+      unless first_comma === limit
+        unless first_comma === at
+          split = first_comma
       // (`.member …`: a member of `this` is the first operand, `.date is Time`)
       if at.character === dot
         if at.next.character.word
-          split = at.next.operand_end(limit)
+          if split === at.operand_end(limit)
+            split = at.next.operand_end(limit)
       // (a word naming nothing: the longest start of it that names something, the rest read by that (`Colour#`))
       if split === limit
         split = at.held_prefix(limit, scope)
@@ -1926,6 +1967,8 @@ raw_word := external span literal
   everywhere.next = registry.all_rules
   registry.all_rules = everywhere
   registry.latest = made
+  if registry.after_comma
+    made.after_comma = true
   if registry.language
     made.language = true
   made.dispatched
@@ -2226,6 +2269,9 @@ external reader reader
     result = this
   // a name the base's operators split (`this` at `is`) that a frame holds whole: what it holds, the rest read after it
   name_end := held ? None : receiver_at.from.name_ends(rest_to)
+  // (not of a receiver that is more than a name: `x if c` before `, y`)
+  if name_end && receiver_at.from.spaced(receiver_at.to)
+    name_end = None
   if going && name_end && (name_end === receiver_at.to ? None : at === receiver_at.to)
     written_whole := external code receiver_at.from name_end reader_like
     whole := written_whole.code

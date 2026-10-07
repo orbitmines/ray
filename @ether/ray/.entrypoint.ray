@@ -1093,6 +1093,9 @@ declaring
   external set (external get registry latest) class_level true
   external label done
 declaring
+// (the rules declared from here on bind tighter than `,`: none of them reads a `,` outside brackets in a capture, `x if c, y`;
+// those above read a declaration whole, its `,` too: `class left: Node, right: Node`, `x := a, b`)
+registry.after_comma = true
 
 // `watched(program)`: run now, and again while it answers nothing when a class is made or added to (P5.1); what runs again makes or
 // adds to does not run it again (P5.2).

@@ -467,6 +467,20 @@ Answers from 2026-09-30.
   "Waiting / Intermediate / Final" are derived from where the selection is.
 - **P1.9** Hot reload: running instances of an updated function continue in the new version via
   migrations (L§7.2). Where state can't migrate, they keep the old version and a quest is raised.
+- **P1.9a Hot reload (user, 2026-10-07).** Any running program reloads the same way, with no reload mechanism of its own: its
+  code is what is held at a location (`@./index.ray as Program`), read `dynamically` (P5.1).
+  - Development is a Compiler level, `Compiler.development := default + { {code: Location as Program} => dynamically code }`;
+    running in development is `with O = Compiler.development { orbitmines.com() }` (`ray --dev`). A program says nothing about
+    reloading; a static build runs without the level and reads its code once.
+  - When the location changes (`@ether/filesystem` turns the OS's file events into writes there), the code is read again as a
+    new version; definitions are matched to the old ones by name and location, and what changed replaces them.
+  - A running call continues at the same statement when it survived, else its enclosing call starts again in the new version
+    (the default; configurable). State that cannot migrate keeps the old version and raises a quest.
+  - Instances migrate by field name by default (same name keeps its value, a new field its default, a removed one is dropped);
+    a written migration `%4 -> %5 (old) => new` (L§7.2) overrides it.
+  - What was derived `dynamically` recomputes (`page.rendered(level)`); the renderers write only what changed (TUI cell
+    changes, HTML patches).
+
 - **P3.1** Code between statements is a rewrite on the program, applied as a Compiler level, with no
   new syntax: `with O = Compiler.default + Debug.timed`,
   `Debug.timed := { {s: Statement} => s; timer.tick }`. The draft's `<{…}>` is dropped.

@@ -2745,6 +2745,11 @@ registry.latest.shared = true
   found := None
   if external own value key
     found = external get value key
+    // (one it holds that is called, given arguments: `G.bezier(points, t)` of `bezier := (points, t) => …`)
+    if arguments
+      if found
+        if found.method
+          found = found.applied_to(None, arguments)
   unless external own value key
     method := value.method_named(key)
     // (named without arguments, one that wants some is the method of the value, waiting for them: `x.multiple 60, second`, G2.1)

@@ -1334,16 +1334,6 @@ recur ^keyword => goto method_recur
   piece.arguments = true
   piece.parameters = external ** parameters
   piece.defined((external ** parameters), (external ** body), (external span parameters).frame, None)
-// `(a: T, b) => body, more`: one given as an argument, its body up to the next `,` at its level (G2.21).
-{parameters: Bracketed} {`=>`} {body: Item} ^punctuation =>
-  piece := external node
-  piece.capture = true
-  piece.from = arguments_from
-  piece.to = arguments_to
-  piece.optional = true
-  piece.arguments = true
-  piece.parameters = external ** parameters
-  piece.defined((external ** parameters), (external ** body), (external span parameters).frame, None)
 Node &+= {
   // `x ?: T`: `x: T?`
   ?:{type} ^punctuation => this: (type?)

@@ -58,7 +58,7 @@ export type Learned = { open: string; close: string; space: string; definer: str
 
 // ---------------------------------------------------------------- the goto program a body compiles to (R0.4, R3.1)
 // Each statement is one step; `label`/`goto` are the program's edges, the rest are calls of an external or of a rule.
-type Step =
+export type Step =
   | { kind: 'external'; name: string; args: (Span & { code?: boolean })[]; at: Span }
   | { kind: 'apply'; rule: Rule; caps: [string, Span][]; given?: [string, unknown][]; at: Span }
   | { kind: 'label'; name: string }
@@ -87,6 +87,15 @@ const TRACE_N = { n: 0 };
 const COUNT = ENV.SEED_COUNT ? new Map<string, number>() : undefined, SELF = COUNT && new Map<string, number>(), STACK = ['(top)'];
 if (COUNT) process.on('exit', () => { const all = [...COUNT.entries()].sort((a, b) => b[1] - a[1]); console.log('applications', all.reduce((t, [, n]) => t + n, 0)); for (const [h, n] of all.slice(0, 25)) console.log(String(n).padStart(9), h.split('\n')[0]); console.log('applications within each method'); for (const [h, n] of [...SELF!.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(String(n).padStart(9), h.split('\n')[0]); });
 export class Jump { constructor(public name: string, public value: unknown) {} }
+// What reading did, told to a host that shows it (the language server paints it): a rule defined (with where its pieces are in its
+// head, when the reader in Ray read them), a body read into its steps (in the frame it was written in), a rule applied to captures
+// a reader found, a name declared. Told only when a host set one; reading is the same without.
+export type Observer = {
+  defined(rule: Rule, pieces?: { text: Text; b: number; e: number; cap: boolean; typed: boolean }[]): void;
+  planned(steps: Step[], frame: Node): void;
+  applied(rule: Rule, caps: [string, Span][], frame: Node): void;
+  declared(name: Code): void;
+};
 
 export class Seed {
   learned?: Learned;
@@ -96,12 +105,13 @@ export class Seed {
   version = 0;
   externals = new Map<string, (frame: Node, args: unknown[], at: Span) => unknown>();
   output: (line: string) => void = line => console.log(line);
+  observer?: Observer;
 
   constructor() {
     const self = this;
     // R0.7 — none of them syntax
     this.externals.set('rule', (frame, [pattern, body]) => self.define(self.code_of(pattern), self.code_of(body)));
-    this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); if (ENV.SEED_DBG && n.s === 'Item') { const vv = (value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = (value); n.frame.members.set(n.s, v); return v; });
+    this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); if (ENV.SEED_DBG && n.s === 'Item') { const vv = (value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = (value); n.frame.members.set(n.s, v); if (self.observer) self.observer.declared(n); return v; });
     this.externals.set('node', () => new Node());
     // a node's `outer` (the frame it was made in), and a frame's `caller_frame` and `applied_rule` (as a node), read like members
     // (named so no member a program sets is taken for them)
@@ -144,17 +154,19 @@ export class Seed {
     // A rule whose head the reader in Ray has read (R2.1): `pieces` a chain of `literal`/`capture` (spans, a capture's
     // `type`). Answers the rule as a node (`pieces`, `head_from`, `head_to`, `scope`) for the reader to keep where it reads rules.
     this.externals.set('define', (frame, [pattern, pieces, body]) => {
-      const head = self.code_of(pattern), list: Piece[] = [];
+      const head = self.code_of(pattern), list: Piece[] = [], at = self.observer && [] as { text: Text; b: number; e: number; cap: boolean; typed: boolean }[];
       for (let p = self.force(pieces) as Node | undefined; p; p = p.members.get('next') as Node | undefined) {
         const f = self.where.get(p.members.get('from') as Node)!, t = p.members.get('to') as Node | undefined;
-        const text = f.text.s.slice(f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i);
+        const e = t === undefined ? f.text.s.length : self.where.get(t)!.i, text = f.text.s.slice(f.i, e);
         list.push(p.members.has('capture') ? (p.members.has('type') ? { cap: text, type: p.members.get('type') as Node } : { cap: text }) : { lit: text });
+        if (at) at.push({ text: f.text, b: f.i, e, cap: p.members.has('capture'), typed: p.members.has('type') || p.members.has('type_from') });
       }
       const b = self.code_of(body);
       const rule: Rule = { head, pieces: list, body: new Code(b.text, b.b, b.e, b.frame, self.planner), order: self.order++, planner: self.planner };
       self.version++; head.frame.version++; if (ENV.SEED_DEFINED && HANG?.armed) console.log('DEFINED', JSON.stringify(head.s.slice(0, 60)));
       // the rule as the reader keeps it: with the pieces it read (their flags: `leading`, `optional`, `raw`, `gap`, `line_end`)
       const n = self.node_of(rule); n.members.set('pieces', self.force(pieces));
+      if (self.observer) self.observer.defined(rule, at);
       return n;
     });
     // Where code is: a node with the place it starts at (`from`) and the place after it (`to`, none at the text's end).
@@ -274,6 +286,7 @@ export class Seed {
       const e = to === undefined ? from.text.s.length : this.where.get(to)!.i;
       list.push([this.cap_name(c), { text: from.text, b: from.i, e, type: c.members.get('type') as Node | undefined, raw: c.members.has('raw') } as Span]);
     }
+    if (this.observer) this.observer.applied(r, list, within);
     return this.apply(r, within, list, this.planner, given, parent);
   }
 
@@ -362,6 +375,7 @@ export class Seed {
     if (head.frame.rules === NO_RULES) head.frame.rules = [];
     head.frame.rules.push(rule);
     this.version++; head.frame.version++; if (ENV.SEED_DEFINED && HANG?.armed) console.log('DEFINED', JSON.stringify(head.s.slice(0, 60)));
+    if (this.observer) this.observer.defined(rule);
     return rule;
   }
   // The pieces of a head: a capture is the learned brackets around a name (its first word); brackets around other brackets are literal.
@@ -663,7 +677,9 @@ export class Seed {
   // The statements of a body, as steps; a statement read by a rule whose body is only a label is a label of this body, named by
   // what it captured.
   steps_of(body: Code): Step[] {
-    return (body.planner ? this.plan_by(body.planner, body) : this.program(body)).map(st => {
+    const read = body.planner ? this.plan_by(body.planner, body) : this.program(body);
+    if (this.observer) this.observer.planned(read, body.frame);
+    return read.map(st => {
       if (st.kind !== 'apply') return st;
       const named = this.labelling(st.rule);
       if (named === undefined) return st;
@@ -828,4 +844,12 @@ export class Seed {
   file(text: Text) { this.read(text, 0, new Node(this.global)); }
   // The files of one project, read in one scope of their own inside the entrypoint's: what one defines the others see (P8.8).
   project(texts: Text[], each?: (text: Text) => void) { const scope = new Node(this.global); for (const t of texts) { this.read(t, 0, scope); each?.(t); } }
+  // A text no one reads any more (a document's older version): its places, what was said about it and its statements waiting to
+  // be read again.
+  forget(text: Text) {
+    for (const n of this.places.get(text) ?? []) this.where.delete(n);
+    this.places.delete(text);
+    this.diagnostics = this.diagnostics.filter(d => { if (d.at.text !== text) return true; this.said.delete(`${d.at.text.name}\0${d.at.b}\0${d.at.e}\0${d.message}`); return false; });
+    this.pending = this.pending.filter(st => st.text !== text);
+  }
 }

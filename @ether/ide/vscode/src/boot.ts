@@ -7,15 +7,15 @@ import type { ServerOptions } from 'vscode-languageclient/node';
 import { TransportKind } from 'vscode-languageclient/node';
 
 /**
- * The ways we can get a Ray language server running, in priority order. Both go through the daemon:
+ * The ways we can get a Ray language server running, in priority order (both `--lsp` over stdio):
  *
  *   1. `installed`— The host has a `ray` executable on PATH whose `--version` parses under Ether's version scheme and
  *                   whose `--help` lists `--lsp`. Use it.
- *   2. `bundled`  — Fall back to the language bundled with the extension itself: its daemon, kernel and library under
- *                   `server/`.
+ *   2. `bundled`  — Fall back to the language bundled with the extension itself: the language (src/language.ts) and
+ *                   the library under `server/`.
  *
  * When the workspace holds a language definition (a `!language` project, e.g. `@ether/ray` in a checkout of
- * orbitmines/ray), its directory is given to `--lsp`, and the daemon reads that language instead of its own.
+ * orbitmines/ray), its directory is given to `--lsp`, and that language is read instead of its own.
  */
 export type BootMode = 'installed' | 'bundled';
 
@@ -106,13 +106,13 @@ function nodeRuntime(): { command: string, env: NodeJS.ProcessEnv } {
 }
 
 /**
- * Last-resort: the language shipped inside the extension — the daemon bundled as `server/language.mjs`, its
- * kernel (`server/.kernel.ray`) and the library (`server/@ether`), whose core (`server/@ether/ray`) is given to it as RAY_LIBRARY.
+ * Last-resort: the language shipped inside the extension — src/language.ts bundled as `server/language.mjs`, and the
+ * library (`server/@ether`), whose core (`server/@ether/ray`) is given to it as RAY_LIBRARY.
  */
 function bundledBoot(extensionPath: string, language: string | null): Boot {
   const entry = path.join(extensionPath, 'server', 'language.mjs');
   const library = path.join(extensionPath, 'server', '@ether', 'ray');
-  if (!fs.existsSync(entry)) throw new Error(`Bundled Ray daemon not found at ${entry}`);
+  if (!fs.existsSync(entry)) throw new Error(`Bundled Ray language server not found at ${entry}`);
 
   const runtime = nodeRuntime();
   const env = { ...process.env, ...runtime.env, RAY_LIBRARY: library };
@@ -124,7 +124,7 @@ function bundledBoot(extensionPath: string, language: string | null): Boot {
   };
   return {
     mode: 'bundled',
-    description: `bundled language (${path.join(extensionPath, 'server')}), served by its daemon${language ? `, reading the language in ${language}` : ''}`,
+    description: `bundled language (${path.join(extensionPath, 'server')})${language ? `, reading the language in ${language}` : ''}`,
     server: { run, debug: { ...run, options: { ...run.options, env: { ...env, DEBUG: '1' } } } },
   };
 }

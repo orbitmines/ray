@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-if (process.env.RAY_LSP === 'engine') {
-  const [{ Engine }, { Diagnostics }, { start }] = await Promise.all([import('../language.ts'), import('../language/diagnostics.ts'), import('./server.ts')]);
-  start((await Engine.ray()).lsp(new Diagnostics()));
-} else {
-  const { start } = await import('../kernel/lsp.ts');
-  await start();
-}
+// The language server over stdio: the language as the seed reads it (src/language.ts). With a directory: the language to read.
+const { lsp } = await import('../language.ts');
+await lsp({ library: process.argv.slice(2).find(a => !a.startsWith('-')) });

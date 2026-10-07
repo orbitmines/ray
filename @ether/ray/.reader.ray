@@ -1214,7 +1214,11 @@ top := external .
     rest := words.next
     made.arguments = rest
   unless called
-    r := at.reading_in(limit, scope)
+    // a statement led by a word naming a class: the class's own rules read what follows first (class-rule dispatch)
+    dispatched := at.class_dispatch(limit, scope)
+    r := None
+    unless dispatched
+      r = at.reading_in(limit, scope)
     if r
       rule := r.rule
       made.rule = rule
@@ -1249,6 +1253,41 @@ top := external .
         unless at.spaced(limit)
           made.word = true
   made
+
+// Whether the statement from `at` to `limit` starts with a word naming a class (a value with rules of its own) whose own rules read
+// what follows it: then they read it, before any rule reads the statement whole.
+{at}.class_dispatch({limit}, {scope}) =>
+  found := None
+  split := at.operand_end(limit)
+  if split
+    unless split === limit
+      written_name := external code at split reader_like
+      leading_name := written_name.code
+      here := scope
+      value := None
+      while here
+        if external own here leading_name
+          value = external get here leading_name
+          here = None
+        if here
+          here = here.outer
+      // (code held by a frame, read only when it is used, is no class)
+      held_code := external span value
+      if held_code
+        value = None
+      if value
+        if value.class
+          own_rules := value.rules
+          if own_rules
+            rest_at := split
+            r := rest_at.prefix_reading(limit, own_rules)
+            unless r
+              spaced := rest_at.spaces_after
+              if spaced
+                r = spaced.prefix_reading(limit, own_rules)
+            if r
+              found = true
+  found
 
 // Where the first operand from `at` ends: after a bracketed group, quoted text, or a word (up to a space, a bracket or a
 // dot). Nothing when there is none.
@@ -3157,6 +3196,9 @@ registry.language = true
   name.declared_as(type, default)
 {name}: {type} =>
   name.declared_as(type, None)
+// `name ^style := value`: the mark is the highlighting's (R5.2).
+{name: Tight} ^{literal style} := {value} =>
+  name.declared(value)
 // `x.member = value`: the member set.
 {x: Tight}.{literal member} = {value} =>
   external set x member value
@@ -3373,6 +3415,13 @@ boolean := enum false (holds: None) | true (holds: true) {
   xnor (b) => xor(b).not
   next => not
   previous => not
+  && (b) => and(b)
+  || (b) => or(b)
+  !&& (b) => nand(b)
+  !|| (b) => nor(b)
+  x|| (b) => xor(b)
+  x!|| (b) => xnor(b)
+  == (other) => this === other ? true : false
 }
 true := boolean.true
 false := boolean.false
@@ -3467,6 +3516,31 @@ FATAL {message} =>
   external report at limit message
   Diagnostic(message: message, fatal: true)
 TODO {message} => None
+WARN{`@`}{type} {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
+INFO{`@`}{type} {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
+DEBUG{`@`}{type} {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
+WARN {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
+INFO {message} =>
+  where := external span message
+  at := where.from
+  limit := where.to
+  external report at limit message
 TODO => None
 
 // `assert (condition)`: an error when it does not hold; the condition.

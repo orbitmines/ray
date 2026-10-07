@@ -52,6 +52,8 @@ type Step =
   | { kind: 'unread'; at: Span };
 export type Compiled = (frame: Node) => unknown;
 // A jump to a label (R3.1): raised by `goto`, caught by the program that has the label, with the value read last.
+// SEED_SLOW=ms: top-level statements that took longer, printed as they finish.
+const SLOW = Number(process.env.SEED_SLOW ?? 0);
 // SEED_EXT: calls and time per external, printed at exit.
 const EXT = process.env.SEED_EXT ? new Map<string, [number, number]>() : undefined;
 const EXT_IN = new Map<string, number>();
@@ -140,6 +142,8 @@ export class Seed {
     this.externals.set('code', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.written(like), n = new Node(); n.members.set('code', new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner)); return n; });
     this.externals.set('read', (frame, [from, to, like]) => { const f = self.where.get(self.force(from) as Node)!, t = self.force(to) as Node | undefined, l = self.written(like); const c = new Code(f.text, f.i, t === undefined ? f.text.s.length : self.where.get(t)!.i, l.frame, l.planner); if (process.env.SEED_DBG && c.s === 'Item') console.log('READ Item', l.frame === self.global, l.frame.members.has('Item'), self.show(l.frame.members.get('Item')), JSON.stringify(f.text.s.slice(f.i - 30, f.i + 10))); return self.force(c); });
     this.externals.set('.', frame => frame);
+    // the top scope (what the entrypoint is read in)
+    this.externals.set('global', () => self.global);
     // Code as a value (a Program): a node holding the code unread, not read where a name names it.
     this.externals.set('**', (frame, [x]) => { const n = new Node(); if (x instanceof Code) n.members.set('code', self.named(x)); else n.members.set('value', x); return n; });
     // What the first statement taught, as characters (R0.1): `end`, `space`, and `indent` (a chain).
@@ -679,8 +683,10 @@ export class Seed {
         const cap = this.handed.pieces.find(x => 'cap' in x) as { cap: string };
         frame.members.set(cap.cap, this.place(text, p));
         let next: Node | undefined;
+        const started = SLOW ? performance.now() : 0;
         try { next = this.compiled(this.handed)(frame) as Node | undefined; }
         catch (x) {
+          if (x instanceof Jump && process.env.SEED_DBG) console.log('JUMP escaped', x.name, JSON.stringify(s.slice(p, p + 60)));
           if (x instanceof Jump) throw x;
           // a statement that failed: said where it starts, and reading goes on at the next line that is not indented
           const message = x instanceof Error ? x.message : String(x), trace = (x as { ray?: string[] }).ray ?? [];
@@ -689,6 +695,7 @@ export class Seed {
           p = e < 0 ? s.length : e + end.length;
           continue;
         }
+        if (SLOW && performance.now() - started > SLOW) console.log('slow', Math.round(performance.now() - started), 'ms', text.name.split('/').pop() + ':' + (s.slice(0, p).split(end).length), JSON.stringify(s.slice(p, p + 70)));
         const w = next === undefined ? undefined : this.where.get(next);
         if (next !== undefined && w === undefined) throw new Error(`the reader answered ${this.show(next)}, not a place, after \`${s.slice(p, p + 60)}\``);
         p = w === undefined ? s.length : w.i;

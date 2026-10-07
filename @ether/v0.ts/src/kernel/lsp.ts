@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { createConnection, TextDocuments, ProposedFeatures, TextDocumentSyncKind, type InitializeResult } from 'vscode-languageserver/node.js';
+import { createConnection, TextDocuments, ProposedFeatures, TextDocumentSyncKind, type InitializeResult, type WorkDoneProgressServerReporter } from 'vscode-languageserver/node.js';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
 import { encode, position_of, runs, MODIFIERS } from '../lsp/semantics.ts';
@@ -17,6 +17,8 @@ import { ENTRYPOINT, ETHER, core, closure, project_of, project_files } from './p
 type Check = { uri: string; file: string; text: string; version: number };
 type Position = { line: number; character: number };
 type Link = { begin: number; end: number; uri: string; range: { start: Position; end: Position }; head: string };
+type Step = 'reading' | 'settling';
+type Progress = { progress: { step: Step; done: number; total: number; file: string } | { step: Step; end: true } };
 type Checked = { uri: string; version: number; paints: { begin: number; end: number; style: string }[]; diagnostics: { level: string; message: string; begin: number; end: number }[]; links: Link[] };
 
 async function reader(read_entrypoint = true) {
@@ -52,8 +54,18 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
   });
   const repaint = (uri: string) => { connection.languages.semanticTokens.refresh(); connection.sendNotification('ether/theme', payload([uri])); };
 
+  const TITLES: Record<Step, string> = { reading: 'Reading the library', settling: 'Settling the library' };
+  const reporters = new Map<Step, Promise<WorkDoneProgressServerReporter>>();
+  const progress = (state: Progress['progress']) => {
+    if ('end' in state) { void reporters.get(state.step)?.then(p => p.done()); reporters.delete(state.step); return; }
+    let reporter = reporters.get(state.step);
+    if (reporter === undefined) reporters.set(state.step, reporter = connection.window.createWorkDoneProgress().then(p => { p.begin(TITLES[state.step], 0, undefined, false); return p; }));
+    void reporter.then(p => p.report(Math.floor(100 * state.done / state.total), `${state.done}/${state.total} ${path.basename(state.file)}`));
+  };
+
   const linked = new Map<string, { version: number; links: Link[] }>();
-  worker.on('message', (m: Checked) => {
+  worker.on('message', (m: Checked | Progress) => {
+    if ('progress' in m) return progress(m.progress);
     const doc = open.get(m.uri);
     if (doc === undefined || doc.version !== m.version) return;
     linked.set(m.uri, { version: m.version, links: m.links });
@@ -179,11 +191,12 @@ async function read_in_worker() {
           // was waiting), then the documents again.
           if (library.length === 0) {
             const file = read_files.find(f => !f.settled);
-            if (file !== undefined) { file.settled = true; const t0 = performance.now(); const again = library_reader.settle(file.src, file.text.length); trace(`worker: settled ${file.src} again=${again} ${Math.round(performance.now() - t0)} ms\n`); if (read_files.every(f => f.settled)) for (const uri of docs.keys()) if (!asked.includes(uri)) asked.push(uri); continue; }
+            if (file !== undefined) { if (read_files.every(f => !f.settled)) port.postMessage({ progress: { step: 'reading', end: true } } satisfies Progress); file.settled = true; port.postMessage({ progress: { step: 'settling', done: read_files.filter(f => f.settled).length, total: read_files.length, file: (file as { file?: string }).file ?? '' } } satisfies Progress); const t0 = performance.now(); const again = library_reader.settle(file.src, file.text.length); trace(`worker: settled ${file.src} again=${again} ${Math.round(performance.now() - t0)} ms\n`); if (read_files.every(f => f.settled)) { port.postMessage({ progress: { step: 'settling', end: true } } satisfies Progress); for (const uri of docs.keys()) if (!asked.includes(uri)) asked.push(uri); } continue; }
           }
           const file = library.shift();
           if (process.env.KLSP_TRACE) trace(`worker: library ${file}\n`);
-          if (file === undefined) { busy = false; return; }
+          if (file === undefined) { for (const step of ['reading', 'settling'] as const) port.postMessage({ progress: { step, end: true } } satisfies Progress); busy = false; return; }
+          port.postMessage({ progress: { step: 'reading', done: queued.size - library.length, total: queued.size, file } } satisfies Progress);
           const text = fs.readFileSync(file, 'utf8');
           reading = { r: library_reader, file, src: library_reader.source(file, text), pos: 0, text };
         }

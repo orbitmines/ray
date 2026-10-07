@@ -1,0 +1,11 @@
+say {x} =>
+  external io stdout x
+// a method called without brackets (G2.1), a closure argument up to the next `,` (G2.21): false, then true
+B := class {
+  convert (f, other) => say (f(other))
+  multiple (a, other) => say other
+}
+b := B()
+b.multiple true, false
+b
+  .convert (x: Node) => x, true

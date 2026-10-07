@@ -836,6 +836,7 @@ Node.components = Node.components_with(None)
   value := this
   external goto construct (external get value class)
   external goto method (external get value method)
+  external goto bound (external get value bound_method)
   external goto maybe_program (external get value instance)
   external label nothing
   None
@@ -849,6 +850,9 @@ Node.components = Node.components_with(None)
   external goto done
   external label method
   (value.applied_to(None, arguments))
+  external goto done
+  external label bound
+  ((external get value bound_method).applied_to((external get value bound_receiver), arguments))
   external label done
 
 class {{block: Balanced}} ^keyword =>
@@ -1301,6 +1305,16 @@ recur({given}) ^keyword => (
 recur ^keyword => goto method_recur
 // `((a, b) => body)`: a closure of several parameters.
 (({parameters}) {`=>`} {body}) ^punctuation =>
+  piece := external node
+  piece.capture = true
+  piece.from = arguments_from
+  piece.to = arguments_to
+  piece.optional = true
+  piece.arguments = true
+  piece.parameters = external ** parameters
+  piece.defined((external ** parameters), (external ** body), (external span parameters).frame, None)
+// `(a: T, b) => body, more`: one given as an argument, its body up to the next `,` at its level (G2.21).
+{parameters: Bracketed} {`=>`} {body: Item} ^punctuation =>
   piece := external node
   piece.capture = true
   piece.from = arguments_from

@@ -2365,6 +2365,11 @@ equals_mark := equals_written.from.next.character
     whole := external span written_parameters
     to := whole.to
     item_from := whole.from.past_spaces
+    // (written in brackets: what they hold)
+    if item_from.character === opening
+      if item_from.balanced_end(to) === to
+        to = to.before_place(item_from)
+        item_from = item_from.next
     while item_from
       item_end := item_from.item_end(to)
       item_written := external code item_from item_end written_parameters
@@ -2456,6 +2461,22 @@ many_rule := registry.latest
   start := from.past_spaces
   start.operand_end(to) === to
 Operand := registry.latest.checked
+
+// What is given to a value written after it with a space (`f x`, `f a, b`): balanced, and starting as an operand does (a word, a
+// bracket, quoted text): an operator after a value is not given to it (G2.1, G2.23).
+{kind}.given_text({from}, {to}) =>
+  start := from.past_spaces
+  c := start.character
+  found := c.word
+  unless found
+    found = c.closer
+  unless found
+    found = c === quote
+  if found
+    found = start.balanced_to(to)
+  found
+Given := registry.latest.checked
+
 
 // A method's argument: what brackets hold (the group, nothing after it), or one operand with what accesses it (`a.b`, `f(x)`):
 // nothing outside brackets is a space.
@@ -2700,9 +2721,44 @@ registry.latest.shared = true
     found = external get value key
   unless external own value key
     method := value.method_named(key)
-    if method
-      found = method.applied_to(value, arguments)
+    // (named without arguments, one that wants some is the method of the value, waiting for them: `x.multiple 60, second`, G2.1)
+    waiting := arguments ? None : method
+    if waiting
+      waiting = method.wants_arguments
+    if waiting
+      found = method.bound_to(value)
+    unless waiting
+      if method
+        found = method.applied_to(value, arguments)
   found
+registry.latest.shared = true
+
+// Whether a method has a parameter that has no default (it is not called without its arguments).
+{method: Tight}.wants_arguments =>
+  written := method.parameters
+  found := None
+  if written
+    parameters_code := external get written code
+    whole := external span parameters_code
+    to := whole.to
+    item_from := whole.from.past_spaces
+    while item_from
+      item_end := item_from.item_end(to)
+      if item_from.first_outside(item_end, equals_mark) === item_end
+        found = true
+      item_from = found ? None : (item_end === to ? None : item_end.next.past_spaces)
+  found
+registry.latest.shared = true
+
+// A method of `receiver`, as a value: called (`f(x)`, `f x`), it is applied to it.
+{method: Tight}.bound_to({receiver}) =>
+  made := external node
+  made.bound_method = method
+  made.bound_receiver = receiver
+  made.outer = registry.program_class
+  made.instance = true
+  made.this = made
+  made
 registry.latest.shared = true
 
 // The method of a value named as `key` (raw code: its text): a method rule read by the value whose head is that name, and
@@ -2959,6 +3015,15 @@ registry.language = true
         alternative_end = None
     last_pieces := last_from.pieces(head_to, pattern)
     shared := last_pieces.parameters_piece
+    // (a closure, a head of parameters only, ends at the next `,` at its level: what follows is composed after it, G2.21)
+    closure_rest := None
+    if last_pieces === shared
+      unless last_pieces.next
+        body_where := external span body
+        comma_at := body_where.from.first_outside(body_where.to, comma)
+        unless comma_at === body_where.to
+          written_body = external code body_where.from comma_at body
+          closure_rest = external code comma_at.next body_where.to body
     alternative := head_from
     while alternative
       ending := alternative.alternative_end(head_to)
@@ -2973,6 +3038,18 @@ registry.language = true
       alternative = None
       unless ending === head_to
         alternative = ending.after_alternative
+    if closure_rest
+      rest_code := closure_rest.code
+      rest_value := external apply rest_code None scope
+      listed := None.listed_with_value(made)
+      if rest_value.listing
+        rest_link := rest_value.head
+        while rest_link
+          listed.listed_with_value(rest_link.value)
+          rest_link = rest_link.next
+      unless rest_value.listing
+        listed.listed_with_value(rest_value)
+      made = listed
   made
 language_definer := registry.latest
 language_definer.defines = true

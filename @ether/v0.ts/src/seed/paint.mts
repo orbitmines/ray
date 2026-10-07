@@ -6,7 +6,7 @@ const fs = await import('fs'), path = await import('path');
 const file = path.resolve(process.argv[2]);
 const t0 = performance.now();
 const ray = new Ray({ paint: process.env.PAINT !== '0' }).boot().read_library();
-const read = ray.of(file) ?? ray.file(file, fs.readFileSync(file, 'utf8'));
+const read = (ray.core(file) ? ray.of(file) : undefined) ?? ray.file(file, fs.readFileSync(file, 'utf8'), false, ray.prepare(file));
 const s = read.text.s, line = (i: number) => s.slice(0, i).split('\n').length;
 if (process.env.TIMINGS) for (const [name, ms] of ray.timings) console.log(name.padEnd(16), String(Math.round(ms)).padStart(7), 'ms');
 console.log('read in', Math.round(performance.now() - t0), 'ms;', read.diagnostics.length, 'diagnostics,', read.paints.length, 'paints');

@@ -93,7 +93,7 @@ export class Jump { constructor(public name: string, public value: unknown) {} }
 export type Observer = {
   defined(rule: Rule, pieces?: { text: Text; b: number; e: number; cap: boolean; typed: boolean }[]): void;
   planned(steps: Step[], frame: Node): void;
-  applied(rule: Rule, caps: [string, Span][], frame: Node): void;
+  applied(rule: Rule, caps: [string, Span][], frame: Node, given: [string, unknown][]): void;
   declared(name: Code): void;
 };
 
@@ -106,23 +106,26 @@ export class Seed {
   externals = new Map<string, (frame: Node, args: unknown[], at: Span) => unknown>();
   output: (line: string) => void = line => console.log(line);
   observer?: Observer;
+  // A host that takes back what reading a text changed (an editor's document, read again as it is edited): told before a node's
+  // member or the node it is inside changes. Told only when a host set one.
+  journal?: { member(node: Node, key: string): void; parent(node: Node): void };
 
   constructor() {
     const self = this;
     // R0.7 — none of them syntax
     this.externals.set('rule', (frame, [pattern, body]) => self.define(self.code_of(pattern), self.code_of(body)));
-    this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); if (ENV.SEED_DBG && n.s === 'Item') { const vv = (value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = (value); n.frame.members.set(n.s, v); if (self.observer) self.observer.declared(n); return v; });
+    this.externals.set('declare', (frame, [name, value]) => { const n = self.code_of(name); if (ENV.SEED_DBG && n.s === 'Item') { const vv = (value); console.log('DECLARE Item', self.show(vv), n.frame === self.global); n.frame.members.set(n.s, vv); return vv; } const v = (value); if (self.journal) self.journal.member(n.frame, n.s); n.frame.members.set(n.s, v); if (self.observer) self.observer.declared(n); return v; });
     this.externals.set('node', () => new Node());
     // a node's `outer` (the frame it was made in), and a frame's `caller_frame` and `applied_rule` (as a node), read like members
     // (named so no member a program sets is taken for them)
     this.externals.set('get', (frame, [of, name]) => { const n = (of) as Node | undefined, k = self.code_of(name).s; if (!(n instanceof Node)) return undefined; const v = n.members.get(k); return v !== undefined || n.members.has(k) ? v : k === 'outer' ? n.parent : k === 'caller_frame' ? n.caller : k === 'applied_rule' ? (n.rule && self.node_of(n.rule)) : undefined; });
     // a name written where it was declared (the nearest frame from where it was written that has it, else there)
-    this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = (value); if (ENV.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; (at ?? c.frame).members.set(k, v); return v; });
+    this.externals.set('assign', (frame, [name, value]) => { const c = self.code_of(name), k = c.s.trim(), v = (value); if (ENV.SEED_DBG && k === 'Item') console.log('ASSIGN Item', self.show(v)); let at: Node | undefined = c.frame; while (at && !at.members.has(k)) at = at.parent; if (self.journal) self.journal.member(at ?? c.frame, k); (at ?? c.frame).members.set(k, v); return v; });
     // a member set to code as written, unread (read where the member is read)
-    this.externals.set('keep', (frame, [of, name, value]) => { const o = (of) as Node; let kept = value; if (value instanceof Code && !value.raw) { const c = new Code(value.text, value.b, value.e, value.frame, value.planner, value.of); c.once = true; kept = c; } o.members.set(self.code_of(name).s, kept); return kept; });
+    this.externals.set('keep', (frame, [of, name, value]) => { const o = (of) as Node; let kept = value; if (value instanceof Code && !value.raw) { const c = new Code(value.text, value.b, value.e, value.frame, value.planner, value.of); c.once = true; kept = c; } if (self.journal) self.journal.member(o, self.code_of(name).s); o.members.set(self.code_of(name).s, kept); return kept; });
     // whether a node has a member of its own (one set there, even to nothing)
     this.externals.set('own', (frame, [of, name]) => { const n = (of); return n instanceof Node && n.members.has(self.code_of(name).s) ? true : undefined; });
-    this.externals.set('set', (frame, [of, name, value]) => { const v = (value), o = (of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'outer') { if (ENV.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); if (v instanceof Node && (v === o || self.inside(v, o))) throw new Error('a node would be inside itself'); o.parent = v as Node | undefined; } else o.members.set(k, v); return v; });
+    this.externals.set('set', (frame, [of, name, value]) => { const v = (value), o = (of) as Node; if (!(o instanceof Node)) throw new Error('set on ' + (of instanceof Code ? JSON.stringify(of.s) + ' in ' + self.show(of.frame) + ' = ' + self.show(o) : String(of)) + ' (not a node)'); const k = self.code_of(name).s; if (k === 'outer') { if (ENV.SEED_DBG) console.log('SET PARENT', self.show(o), '->', self.show(v)); if (v instanceof Node && (v === o || self.inside(v, o))) throw new Error('a node would be inside itself'); if (self.journal) self.journal.parent(o); o.parent = v as Node | undefined; } else { if (self.journal) self.journal.member(o, k); o.members.set(k, v); } return v; });
     // the frame a name is bound in: the nearest from where it was written that has it (even holding nothing), else that one
     this.externals.set('declaring', (frame, [name]) => { const c = self.code_of(name), k = c.s.trim(); for (let n: Node | undefined = c.frame; n; n = n.parent) if (n.members.has(k)) return n; return c.frame; });
     this.externals.set('same', (frame, [a, b]) => (a) === (b) ? true : undefined);
@@ -139,7 +142,7 @@ export class Seed {
       // code applied in a frame: the frame sees where the code was written (when that is inside what it saw); a method's frame
       // (one with `method`) is where a jump nothing in it caught stops (`return`)
       if (r instanceof Code) {
-        if (r.frame !== w && (w.parent === undefined || self.inside(r.frame, w.parent)) && !self.inside(r.frame, w)) w.parent = r.frame;
+        if (r.frame !== w && (w.parent === undefined || self.inside(r.frame, w.parent)) && !self.inside(r.frame, w)) { if (self.journal) self.journal.parent(w); w.parent = r.frame; }
         const run = self.compile(new Code(r.text, r.b, r.e, w, r.planner, r.of));
         if (!w.members.has('method')) return run(w);
         try { return run(w); } catch (x) { if (x instanceof Jump) return x.value; throw x; }
@@ -286,7 +289,7 @@ export class Seed {
       const e = to === undefined ? from.text.s.length : this.where.get(to)!.i;
       list.push([this.cap_name(c), { text: from.text, b: from.i, e, type: c.members.get('type') as Node | undefined, raw: c.members.has('raw') } as Span]);
     }
-    if (this.observer) this.observer.applied(r, list, within);
+    if (this.observer) this.observer.applied(r, list, within, given);
     return this.apply(r, within, list, this.planner, given, parent);
   }
 

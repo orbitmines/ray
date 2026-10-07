@@ -2479,9 +2479,12 @@ Unbraced := opening_block.anything_but[]
   where := external span k
   from := where.from
   to := where.to
-  written_key := external code from from.next reader_like
-  first_character := written_key.code
-  scopes := value.reading_scopes
+  // (an empty name at the text's end names nothing)
+  first_character := None
+  if from
+    written_key := external code from from.next reader_like
+    first_character = written_key.code
+  scopes := from ? value.reading_scopes : None
   found := None
   while scopes
     led := scopes.scope.led

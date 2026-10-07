@@ -524,7 +524,8 @@ export class Seed {
     // a body the seed reads sees only the seed's rules, which no rule defined after the planner was handed over changes
     const version = body.planner === undefined && this.planner !== undefined ? -1 : this.reach_version(body.frame);
     this.compiles++;
-    if (kept !== undefined && kept.version === version) return kept.fn;
+    // the entrypoint's code is read once, by the rules in force then (R0.5), unless it left something unread
+    if (kept !== undefined && (kept.version === version || (body.text === this.boot_text && !kept.unread))) return kept.fn;
     this.recompiles++;
     const steps = this.expand(this.steps_of(body), body, 0);
     const labels = new Map<string, number>();
@@ -688,7 +689,8 @@ export class Seed {
       p = stop;
     }
   }
-  boot(text: Text) { const after = this.axiom(text); this.read(text, after); }
+  boot_text?: Text;
+  boot(text: Text) { this.boot_text = text; const after = this.axiom(text); this.read(text, after); }
   file(text: Text) { this.read(text, 0, new Node(this.global)); }
   // The files of one project, read in one scope of their own inside the entrypoint's: what one defines the others see (P8.8).
   project(texts: Text[], each?: (text: Text) => void) { const scope = new Node(this.global); for (const t of texts) { this.read(t, 0, scope); each?.(t); } }

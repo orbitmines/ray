@@ -28,8 +28,11 @@ Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
 // declared; `x &= v`: `v` at the end of the Ray `x` holds (a Ray of it, when it holds nothing).
 {declared_name Unspaced} := {declared_value Expression} =>
   & &+= { declared_name => declared_value }
-{declared_on Expression}.{declared_name Word} := {declared_value Expression} =>
-  declared_on &+= { declared_name => declared_value }
+// (`a.b := v`, `a` holding nothing yet: `a` a value of its own, declared where the statement is)
+{member_on Expression}.{member_name Word} := {member_value Expression} =>
+  member_at := member_on ?? (@made Node)
+  member_on ?? (& &+= { member_on => member_at })
+  member_at &+= { member_name => member_value }
 // `X<K = D, V> := class …`: the class, each parameter a name of it (its default, or nothing).
 {name Word}<{parameters}> := {value Expression} =>
   made := value

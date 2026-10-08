@@ -179,7 +179,10 @@ export class Host {
     const body = this.unblocked(held(w) ?? (valued ? new Value(valued.n.m.get(w), f) : this.substitutes(this.writer(at, f)) ? this.substituted(f, caps) : f));
     // (a pattern handed on, written elsewhere, stands for itself)
     let head = p.s.trim(), stood = p.ctx !== at && p.ctx !== at.into;
-    if (held(head)) {
+    // (a capture read as a value, named in a head: what it was written as)
+    if (!held(head)) for (const n of this.reach(at)) if (n.rule && n.has(head)) { const c = n.codes?.get(head); if (c) { head = c.s.trim(); stood = true; } break; }
+    if (stood && head !== p.s.trim()) { /* written as */ }
+    else if (held(head)) {
       // (a word naming what holds a word, as written (`name` given `red`): that word)
       let c = held(head)!;
       for (let k = 0; k < 8; k++) { const w = c.s.trim(); let next: Code | undefined; for (const n of this.reach(c.ctx)) if (n.has(w)) { const x = n.m.get(w); if (x instanceof Code && x.word && x !== c) next = x; break; } if (!next) break; c = next; }
@@ -282,7 +285,10 @@ export class Host {
     const out = new Map<string, Code>();
     // (a name the nearest holds as a value read hides one further out held as code)
     const valued = new Set<string>();
-    for (const n of this.reach(at)) { if (!n.rule && n !== at) continue; if (n.size) for (const [k, c] of n.m) { if (out.has(k) || valued.has(k)) continue; if (c instanceof Code) out.set(k, c); else valued.add(k); } }
+    // (where the code was written first, out from it; then what it reaches, a value it is read into among them)
+    const take = (n: Ray) => { if (n.size) for (const [k, c] of n.m) { if (out.has(k) || valued.has(k)) continue; if (c instanceof Code) out.set(k, c); else valued.add(k); } };
+    for (let n: Ray | undefined = at; n; n = n.outer) if (n.rule || n === at) take(n);
+    for (const n of this.reach(at)) if (n.rule || n === at) take(n);
     return out;
   }
   // whether a pattern names a capture held in a frame (a word of it, between edges)

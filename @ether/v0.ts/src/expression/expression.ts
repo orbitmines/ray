@@ -473,7 +473,9 @@ export class Host {
       // (an atom: as far as an operand goes, else just the name there, `0` in `0..<n`)
       if (atom) { const w = this.name_end(text, at, e); if (w > at && w < r) ends.push(w); } }
     else {
-      ends = this.ends(text, at, e, 'lit' in next ? next.lit : undefined, eq.pairs);
+      // (what follows the definer in a head reader is functionality: its brackets balance)
+      const after = eq.pairs === 0 && eq.pieces.slice(0, i).some(x => 'lit' in x && x.lit.includes(this.learned.definer));
+      ends = this.ends(text, at, e, 'lit' in next ? next.lit : undefined, after ? Infinity : eq.pairs);
       // (next to a bracket, or a pair, a capture may hold nothing, or only spaces)
       bracketed = (next && 'lit' in next && this.opens(next.lit)) || (prev && 'lit' in prev && this.closed(prev.lit));
       if (bracketed && ('lit' in next ? this.literal(text, next.lit, at, e) >= 0 : true)) ends.push(at);

@@ -321,8 +321,11 @@ Node &+= {
     made.components.hierarchy := [this, added]
     made
 }
-class {header} => {{block}} => Class.made_of(None, header, block)
-class: {parent} {header} => {{block}} => Class.made_of(parent, header, block)
+// `X := class (header) => { block }`: read as a definition is read (its `=>` is the class's)
+{name} := class {header} => {{block}} =>
+  name := Class.made_of(None, header, block)
+{name} := class: {parent} {header} => {{block}} =>
+  name := Class.made_of(parent, header, block)
 class {{block}} => Class.made_of(None, None, block)
 class: {parent} {{block}} => Class.made_of(parent, None, block)
 class {header} {{block}} => Class.made_of(None, header, block)

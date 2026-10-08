@@ -100,7 +100,7 @@ UI.TUI := class {
 
   Terminal := class: UI.Interface written: Compiler = UI.TUI.written, grid: Grid? {
     emit (bytes) => @me/instance = bytes
-    dynamically typed: @me/instance
+    dynamically typed = @me/instance
     size => Geometry.Vector(@me/device/os.env.COLUMNS as Decimal, @me/device/os.env.LINES as Decimal)
     emitted (value) => emit(Compiler.reduced(value, written) as String)
     start => emitted(Start())

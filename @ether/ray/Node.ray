@@ -216,6 +216,8 @@ mathematics := suggest {
 
 print (x) => IO.output(x as String) -- x
 
+// any value: every value is a Node
+* := Node
 Object := * - Node
 
 Origin := class method: Node, arguments: Node {

@@ -20,15 +20,16 @@ const block = (h: Host, written: Ray, into: Ray): Ray => { let r = into; if (r.s
 const amp = (F: Ray) => { if (!F.has('caller')) F.m.set('caller', F.caller); return F; };
 
 // `{declared_name Unspaced} := {declared_value Expression} =>  & &+= { declared_name => declared_value }`
-natives.set('& &+= { declared_name => declared_value }', (h, F, eq) => {
+natives.set('& &+= { declared_name => declared_value }\n  declared_value', (h, F, eq) => {
   const T = block(h, F, amp(F)), off = eq.body.s.indexOf('{');
   h.defined(spot(eq, 'declared_name', off, T), spot(eq, 'declared_value', off, T), T, true);
-  return F;
+  return F.m.get('declared_value');
 });
 // `{member_on Expression}.{member_name Word} := {member_value Expression} =>` (three statements)
 natives.set(`member_at := member_on ?? (@made Node)
   member_on ?? (& &+= { member_on => member_at })
-  member_at &+= { member_name => member_value }`, (h, F, eq) => {
+  member_at &+= { member_name => member_value }
+  member_value`, (h, F, eq) => {
   const on = F.m.get('member_on'), none = on === undefined || on === h.none;
   const at = none ? new Ray(h.base) : on;
   // (`member_at := …`: a value of the frame)
@@ -37,7 +38,7 @@ natives.set(`member_at := member_on ?? (@made Node)
   if (none) { const T = block(h, F, amp(F)), off = eq.body.s.indexOf('{'); h.defined(spot(eq, 'member_on', off, T), spot(eq, 'member_at', off, T), T, true); }
   const T2 = block(h, F, at as Ray), off2 = eq.body.s.lastIndexOf('{');
   h.defined(spot(eq, 'member_name', off2, T2), spot(eq, 'member_value', off2, T2), T2, true);
-  return at;
+  return F.m.get('member_value');
 });
 
 // the loops (`while`, `{body} while {condition}`, `loop`): their statements read in order, as `in_order` reads them, but going on

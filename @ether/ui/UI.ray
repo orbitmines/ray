@@ -238,9 +238,11 @@ Unit(name: "viewport height", symbol: "vh")
   .convert (x: Number) => x * (UI.scene.size.y as px) / 100, px
 
 Program &+= {
-  drawn (before: Geometry.Shape = UI.scene) => (UI.page = this()) -- Geometry.Box(size: before.size, scrolled: before.scrolled, overflow: scroll, transition: before.transition, children: [this{O: UI.Scene}().themed])
+  drawn (before: Geometry.Shape = UI.scene) =>
+    UI.page = this()
+    Geometry.Box(size: before.size, scrolled: before.scrolled, overflow: scroll, transition: before.transition, children: [this{O: UI.Scene}().themed])
   rendered (level) => Compiler.reduced(drawn(), level)
-  run (on: UI.Interface) => (UI.program = this) -- on.start -- ((on.write(Compiler.reduced(UI.scene = drawn(), on.level)) -- on.read) while !done) -- on.stop -- this
+  run (on: UI.Interface) => (UI.program = this) ~~ on.start ~~ ((on.write(Compiler.reduced(UI.scene = drawn(), on.level)) -- on.read) while !done) ~~ on.stop
 }
 
 Node &+= {

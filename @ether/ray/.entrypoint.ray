@@ -564,7 +564,7 @@ Superposition &+= {
 }
 Superposition &+= {
   // (what a superposition admits: what any of its components admits, is, or (a list of values) holds)
-  {superposed} => this.components.some((component) => (@same superposed component) || (@inside superposed component) || ((@owns component "head") && Superposition.held(superposed, component.head)))
+  {superposed} => this.components.some((component) => (@same superposed component) || (@inside superposed component) || ((@of component) === Ray && Superposition.held(superposed, component.head)))
 }
 
 boolean := enum false (holds: None) | true (holds: true) {

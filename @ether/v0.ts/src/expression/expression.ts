@@ -402,12 +402,23 @@ export class Host {
       let n = e + end.length; while (n < limit && s.startsWith(end, n + this.depth(s, n))) n += this.depth(s, n) + end.length;
       if (n >= limit) return e;
       const d = this.depth(s, n);
-      if (d >= base + indent.length || (d === base && (this.closes(s, n + d) || this.leads(s, n + d)))) { i = n; continue; }
+      if (d >= base + indent.length || (d === base && (this.closes(s, n + d) || this.leads(s, n + d) || this.trails(s, e)))) { i = n; continue; }
       return e;
     }
   }
   // the name a head starts with
   lead(pieces: Piece[]): string { const p = pieces[0]; if (!('lit' in p)) return ''; let i = 0; while (i < p.lit.length && !this.edge(p.lit, i) && !this.pairs.has(p.lit[i])) i++; return p.lit.slice(0, i); }
+  // whether a line ends with what reads on from a value, a value to follow it on the next line (G2.12): `a,`
+  trails(s: string, e: number): boolean {
+    let j = e; while (j > 0 && s[j - 1] === this.learned.space) j--;
+    for (const list of this.infix.values()) for (const x of list) { const l = x.lit.trimEnd(); if (l.length > 0 && l !== x.lit && !x.eq.ctx.scope && !x.eq.node && s.endsWith(l, j) && !this.bracket(l[0]) && (this.blank(s[j - l.length - 1]) || !this.postfix(l))) return true; }
+    return false;
+  }
+  // (what is also read after a value as all it reads, `T?`: not a value to follow)
+  postfix(l: string): boolean {
+    for (const list of this.infix.values()) for (const x of list) { const ps = x.eq.pieces; if (ps.length === 2 && 'cap' in ps[0] && 'lit' in ps[1] && ps[1].lit === l) return true; }
+    return false;
+  }
   // whether a line starts with what reads on from a value (and is not a definition): it goes on with the line above (G2.13)
   leads(s: string, at: number): boolean {
     const { end, definer, space } = this.learned, line = s.slice(at, s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at));
@@ -774,7 +785,8 @@ export class Host {
     for (let i = at; i < e; i++) {
       if (this.blank(s[i]) || this.closes(s, i)) return i;
       if (this.pairs.has(s[i])) return i;
-      if (i > at) for (const x of this.infix.get(s[i]) ?? []) if (s.startsWith(x.lit, i)) return i;
+      // (a space in the literal reads a line end too, as where it is read)
+      if (i > at) for (const x of this.infix.get(s[i]) ?? []) if (this.literal(text, x.lit, i, e) >= 0 || (s.startsWith(x.lit.trimEnd(), i) && x.lit !== x.lit.trimEnd() && this.blank(s[i + x.lit.trimEnd().length]))) return i;
     }
     return e;
   }

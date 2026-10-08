@@ -42,6 +42,8 @@ export class Ray {
   alone = false;
   // (a node a head was read into: what it was written as, its parameters (each a member, in order), whether it is applied with what
   // is on its right; a member's type, what `:` said of it)
+  // (a field's own node in a head, and the head node it is a field of; what a head was read as, in order)
+  field_of?: Ray; pieces?: unknown;
   own?: boolean; spelled?: string; params?: string[]; leftward?: boolean; again?: boolean; method?: boolean; literal?: boolean; closing?: string; types?: Map<string, Code>; between?: string; defaults?: Set<string>; default_codes?: Map<string, Code>;
   // (a frame of an equivalence applied: which, and whether to a statement)
   rule?: Eq; statement = false;
@@ -339,17 +341,22 @@ export class Host {
   parameter(target: Code): unknown {
     const node = this.reading_node; if (!node) return undefined;
     const t = target.s.trim(), name = t.slice(0, this.name_end({ name: '', s: t }, 0, t.length));
-    if (!name) return undefined;
+    // (text written in quotes, a piece of the head as it is: its value)
+    if (!name) return this.quotes.has(t[0]) ? this.walk(target) : undefined;
     (node.params ??= []).includes(name) || node.params.push(name);
+    // (the head's piece for it: a node of its own, what `:` and `= d` said of it with it)
+    const field = this.named(name); field.params = [name]; field.field_of = node;
     // (what it says read into the node, as written where it was: what does not read, not a parameter)
     const T = new Ray(target.ctx); T.scope = true; T.into = node; T.sees = node;
-    if (t === name) return node;
+    if (t === name) return field;
     // (its name is the parameter's while it is read: not what that name reads as where the head is written, `head: String` in a class
     // that has `head`)
     const had = node.has(name); if (!had) node.m.set(name, undefined);
     const said = this.diagnostics.length;
     try { this.walk(stated(new Code(target.text, target.b, target.e, T))); } finally { if (!had) node.m.delete(name); }
-    return this.diagnostics.length > said ? undefined : node;
+    const type = node.types?.get(name), dflt = node.default_codes?.get(name);
+    if (type) field.types = new Map([[name, type]]); if (dflt) { field.default_codes = new Map([[name, dflt]]); field.defaults = new Set([name]); }
+    return this.diagnostics.length > said ? undefined : field;
   }
   // a member's type (what `:` said of it, as written), kept with what it is declared in
   // (in a head being read: only that, nothing read)
@@ -364,7 +371,8 @@ export class Host {
   read_parameters(node: unknown, code: unknown): unknown {
     if (!(node instanceof Ray) || !(code instanceof Code) || !this.captured_by) return node;
     const was = this.reading_node; this.reading_node = node; node.params ??= [];
-    try { this.read_in(this.captured_by, code); } finally { this.reading_node = was; }
+    // (its pieces, in order, as what reads them says: kept with it)
+    try { node.pieces = this.read_in(this.captured_by, code); } finally { this.reading_node = was; }
     return node;
   }
   // what is inside a capture, read as a parameter: its name, and what reads it (as written); none when it does not read so
@@ -375,7 +383,7 @@ export class Host {
       const N = this.named(''); N.params = []; const was = this.reading_node; this.reading_node = N;
       let v: unknown; try { v = this.aside(() => this.read_in(this.captured_by!, new Code({ name: 'capture', s: t }, 0, t.length, ctx))); } finally { this.reading_node = was; }
       const reader = N.types?.get(N.params[0]);
-      kept = v instanceof Ray && v.literal ? { name: '', lit: v.spelled } : v === N && N.params.length === 1 ? { name: N.params[0], reader: reader ? reader.s : undefined } : null;
+      kept = v instanceof Ray && v.literal ? { name: '', lit: v.spelled } : (v === N || (v instanceof Ray && v.field_of === N)) && N.params.length === 1 ? { name: N.params[0], reader: reader ? reader.s : undefined } : null;
       if (!this.booting || kept) this.parameters_seen.set(t, kept);
     }
     if (kept?.lit !== undefined) return { lit: kept.lit };

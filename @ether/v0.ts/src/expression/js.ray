@@ -78,6 +78,8 @@ global => @js $.global
 // a method given what is written between two texts, `[at: Integer]` (`xs[3]`)
 @between {open} {close} {parameters} => @js $.read_parameters(Object.assign($.named(String($.get(F, "open"))), { closing: String($.get(F, "close")) }), $.written(F.m.get("parameters")))
 @literally {text} => @js Object.assign($.named($.written(F.m.get("text")).s), { literal: true })
+// what a head was read as, its pieces in order
+@pieces {node} => @js (n => n instanceof Ray ? n.pieces : undefined)($.get(F, "node"))
 @parameters {node} {parameters} => @js $.read_parameters($.get(F, "node"), $.written(F.m.get("parameters")))
 @parameter {target} => @js $.parameter($.written(F.m.get("target")))
 @typed {type} => @js $.name(F, $.typed(F, $.written(F.m.get("type"))) ? "true" : "false")

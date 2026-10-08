@@ -255,8 +255,11 @@ false &+= {
 // What is inside a capture is read the same way: a capture is a parameter.
 Parameters := @context None
 Parameters &+= {
-  {first Parameters}, {rest Parameters} => first
+  {first Parameters}, {rest Parameters} => [first].append(rest)
   ({inside Parameters}) => inside
+  // (a group of pieces, optional or repeated: its own piece, read as such)
+  ({group Parameters})? => None | group
+  ({group Parameters})[] => group[]
   literal {target Parameters} => target
   {target Parameters} ^{style Text} => target
   === {type Text} => @parameter given: type
@@ -297,16 +300,6 @@ Head &+= {
   head.superposes ? head.components.for((alias) => @define alias "receiver" ", ") : (@define head "receiver" ", ")
 
 
-
-// ---------------------------------------------------------------- control flow: what a Branch is made of (`of`)
-Branch &+= {
-  of (taken, answer) =>
-    made := @made Branch
-    made.taken := taken
-    made.answer := answer
-    made
-}
-// (`while c { body }`: the body again while `c` holds; iterating is the interpreter's (`js.ray`))
 
 // ---------------------------------------------------------------- Rays (`a, b`): vertices in order (`head`, `tail`; each `value`, `next`, `previous`)
 // (a Ray is an Array, which is an Iterable: what the library adds to them is a Ray's too)
@@ -410,6 +403,16 @@ Ray &+= {
     }
     this
 }
+// ---------------------------------------------------------------- control flow: what a Branch is made of (`of`)
+Branch &+= {
+  of (taken, answer) =>
+    made := @made Branch
+    made.taken := taken
+    made.answer := answer
+    made
+}
+// (`while c { body }`: the body again while `c` holds; iterating is the interpreter's (`js.ray`))
+
 [] => @made Ray
 [{inside: Expression}] => inside === None ? (@made Ray) : ((@of inside) === Ray ? inside : (@made Ray).append(inside))
 
@@ -451,6 +454,8 @@ Class &+= {
   made_of (parent, header, block) =>
     made := @made (parent ?? Node)
     fields := ((@text header) === "None") ? None : (@parameters (@named "") header)
+    // (its header: its pieces in order, a text as it is written, a field its node)
+    fields ? (made.header := @pieces fields) : None
     made with {
       read_into (instance) =>
         (@of made).read_into(instance)

@@ -1,0 +1,30 @@
+say {x} =>
+  @me/instance = x
+a := @made Node
+b := @made Node
+same := ((x) => x)
+say (same(a) === a)
+both := ((x, y) => y)
+say (both(a, b) === b)
+nothing := (() => a)
+say (nothing() === a)
+apply (x, f) => f(x)
+say (apply(b, (v) => v) === b)
+block (x) => {
+  y := x
+  y
+}
+say (block(a) === a)
+grouped (x) => (
+  y := x
+  y
+)
+say (grouped(b) === b)
+say ((a ? a : b) === a)
+say ((None ? a : b) === b)
+c := a // a comment after a statement
+say (c === a)
+say (!None)
+say (!a)
+say ((a && b) === b)
+say ((None || b) === b)

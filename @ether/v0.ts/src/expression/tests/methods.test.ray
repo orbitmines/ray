@@ -1,0 +1,15 @@
+say {x} => @me/instance = x
+greet (who) => say who
+both (a, b) =>
+  say a
+  say b
+nothing_given () =>
+  say ran
+p := @made Node
+greet(p)
+both(p, p)
+nothing_given()
+same := ((x) => x)
+say (same(p) === p)
+two := ((x, y) => y)
+say (two(None, p) === p)

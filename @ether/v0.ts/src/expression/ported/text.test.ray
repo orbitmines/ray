@@ -1,0 +1,24 @@
+say {x} =>
+  @me/instance = x
+YES := @made Node
+YES.yes = YES
+NO := @made Node
+NO.no = NO
+holds {x} =>
+  @me/instance = (x === true ? YES : (x === false ? NO : x))
+s := "ab"
+holds s.empty
+holds s.rest.empty
+holds s.rest.rest.empty
+holds "".empty
+t := "ab" + "cd"
+holds t.empty
+holds t.rest.rest.rest.empty
+holds t.rest.rest.rest.rest.empty
+holds ("" + "").empty
+holds ("a" + "").rest.empty
+holds (None !== None)
+holds (s !== None)
+// `\"` is a quote in quoted text (not its end): the text, and one joined with it
+say "a\"b"
+say ("\"" + "t")

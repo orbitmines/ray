@@ -1,0 +1,7 @@
+say {x} =>
+  @me/instance = x
+a := @made Node
+b := (a)
+say b
+say (a === b)
+say ((a) === (@made Node))

@@ -1,0 +1,11 @@
+say {x} =>
+  @me/instance = x
+// `&` is the program running, `caller` a method of it: a constructor writing into the context that called it, a method answering
+// the program that called it; each line says true (preceding)
+Reg := class name: Node {
+  &caller.registered = this
+}
+r := Reg(name: true)
+say (registered === r)
+f => &caller
+say (f.context === (external .))

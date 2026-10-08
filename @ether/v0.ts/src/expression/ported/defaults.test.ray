@@ -1,0 +1,8 @@
+say {x} =>
+  @me/instance = x
+// a parameter written with a default takes what is given in its place, else its default: true, false, true
+f (a, b = true) => say b
+f(false)
+f(false, false)
+k (b = true) => say b
+k()

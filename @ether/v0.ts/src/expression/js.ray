@@ -1,0 +1,17 @@
+None => @js $.none ??= new Ray()
+Word => @js $.word ??= Object.assign(new Ray(), { scope: true })
+Node => @js $.base ??= new Ray()
+this => @js $.self(F)
+@made {x} => @js new Ray(x)
+@same {a} {b} => @js $.name(F, (a ?? $.none) === (b ?? $.none) ? "true" : "false")
+@declaring {name} => @js $.declaring(F.m.get("name"), F)
+@show {x} => @js $.output($.show(x))
+& => @js $.here(F)
+@has {x} {name} => @js $.name(F, $.has(x, F.m.get("name").s.trim()) ? "true" : "false")
+@of {x} => @js x instanceof Ray ? x.outer : undefined
+@applies {x} => @js $.name(F, x instanceof Ray && x.eqs.some(eq => !("lit" in eq.pieces[0]) || eq.pieces[0].lit === "()") ? "true" : "false")
+@declare {value} => @js $.declare(F, value, false)
+@assign {value} => @js $.declare(F, value, true)
+@inside {x} {type} => @js $.name(F, (() => { for (let n = x; n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
+@text {x} => @js F.m.get("x").s
+@kind {name} {class} => @js $.kinds.set(F.m.get("name").s.trim(), $.get(F, "class"))

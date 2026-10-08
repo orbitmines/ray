@@ -1,0 +1,18 @@
+say {x} => @me/instance = x
+link {x} to {y} =>
+  x.next := y
+a := @made Node
+b := @made Node
+c := @made Node
+link a to b
+link b to c
+at := a
+while at {
+  say at
+  at = at.next
+}
+if a { say true }
+unless None { say unless-works }
+if None { say wrong } else { say else-works }
+say (a === a)
+say (a === b)

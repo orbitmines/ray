@@ -1,0 +1,10 @@
+say {x} =>
+  @me/instance = x
+// `,` composes looser than the rules declared after it (G3.1): `x if c, y` is `(x if c), y`. Each says true (preceding)
+t := @made Node
+u := @made Node
+both := (t if true, u)
+say (both.head.value === t)
+say (both.head.next.value === u)
+none_first := (t if false, u)
+say (none_first.head.next.value === u)

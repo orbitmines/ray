@@ -1,0 +1,14 @@
+say {x} =>
+  @me/instance = x
+link {x} to {y} =>
+  x.next = y
+p := @made Node
+q := @made Node
+link p to q
+walk {list} =>
+  at := list
+  while at {
+    say at
+    at = at.next
+  }
+walk p

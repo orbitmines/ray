@@ -1,0 +1,21 @@
+say {x} =>
+  @me/instance = x
+greet (who) =>
+  say who
+both (a, b) =>
+  say a
+  say b
+nothing_given () =>
+  say ran
+p := @made Node
+greet(p)
+both(p, p)
+nothing_given()
+Counter := class {
+  count: Node
+  bump (by) => say by
+  shown => say count
+}
+k := Counter(@made Node)
+k.shown
+k.bump(k)

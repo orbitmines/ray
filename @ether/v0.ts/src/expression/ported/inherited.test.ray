@@ -1,0 +1,15 @@
+say {x} =>
+  @me/instance = x
+// a method of a parent class sees that class's names on a subclass's instance: true, then Other twice
+Other := class { }
+G := class {
+  Grad := class: Stops<Other, Node> { }
+  Stops<K = Other, V = Node> := class at: Node {
+    kind => K
+    one => true
+  }
+}
+g := G.Grad()
+say g.one
+say g.kind
+say (G.Stops().kind)

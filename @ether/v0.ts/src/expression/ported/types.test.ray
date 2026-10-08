@@ -1,0 +1,4 @@
+say {x} =>
+  @me/instance = x
+bit {d: Digit} =>
+  d

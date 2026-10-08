@@ -1,0 +1,9 @@
+say {x} =>
+  @me/instance = x
+// a line led by an operator goes on with the one above (G2.13): true
+c := true
+r := (c
+  ? true
+  : false
+)
+say r

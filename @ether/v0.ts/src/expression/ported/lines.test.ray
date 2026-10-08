@@ -1,0 +1,12 @@
+say {x} =>
+  @me/instance = x
+// a list written over lines, each ending with `,`: its second item, false, twice
+l := [
+  true,
+  false,
+  true
+]
+say l.head.next.value
+m := [true,
+  false]
+say m.head.next.value

@@ -1,0 +1,12 @@
+say {x} =>
+  @me/instance = x
+a := @made Node
+b := @made Node
+say ((None ?? a) === a)
+say ((b ?? a) === b)
+c := @made Node
+c ~~ .name = a
+say (c.name === a)
+say ((c -- .name) === a)
+say ((c -- (v => v.name)) === a)
+say ((c ~~ (v => v.name)) === c)

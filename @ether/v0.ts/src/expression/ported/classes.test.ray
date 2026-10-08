@@ -1,0 +1,13 @@
+say {x} =>
+  @me/instance = x
+Box := class {
+  content: Node = @made Node
+  hello => say this
+}
+b := Box()
+b.hello
+c := b.content
+say c
+b.content = b
+d := b.content
+say (d === b)

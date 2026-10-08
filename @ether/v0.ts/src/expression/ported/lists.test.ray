@@ -1,0 +1,17 @@
+say {x} =>
+  @me/instance = x
+a := @made Node
+b := @made Node
+l := a, b, a
+say l
+f := l.head
+say f
+(x, y) := a, b
+say (x === a)
+say (y === b)
+m := [a]
+say (m.head.value === a)
+e := []
+say e
+n := [a, b]
+say (n.tail.value === b)

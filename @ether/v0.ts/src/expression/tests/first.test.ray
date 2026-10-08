@@ -1,0 +1,6 @@
+say {x} => @me/instance = x
+a := @js 41 + 1
+say a
+say b
+loud {x: Expression} ^keyword => say x
+loud a

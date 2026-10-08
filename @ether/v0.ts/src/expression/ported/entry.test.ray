@@ -1,0 +1,13 @@
+say {x} =>
+  @me/instance = x
+say (true.holds === true.holds)
+say false.holds
+say (false ? 1 : true)
+say ((true.and(false)) === false)
+say ((false.or(true)) === true)
+Color := enum red | green | blue
+say (Color.red === Color.red)
+say ((Color.members.head.value) === Color.red)
+x := @made Node
+say ((x if true) === x)
+say (x if false)

@@ -1,0 +1,18 @@
+say {x} =>
+  @me/instance = x
+a := @made Node
+b := @made Node
+P := class left: Node, right: Node {
+  swapped => P(right, left)
+}
+p := P(a, b)
+say (p.left === a)
+say (p.right === b)
+q := p.swapped
+say (q.left === b)
+Q := class (only: Node) {
+  it => only
+}
+say (Q(a).it === a)
+R := class value: Node
+say (R(b).value === b)

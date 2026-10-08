@@ -1,0 +1,25 @@
+say {x} =>
+  @me/instance = x
+a := @made Node
+first (x) => (
+  return x
+  None
+)
+say (first(a) === a)
+n := @made Node
+loop {
+  n.done = a
+  break
+}
+say (n.done === a)
+t := `some text`
+say t
+ERROR `something failed`
+TODO `later`
+l := None
+l &= a
+l &= t
+say (l.head.value === a)
+say (l.tail.value === t)
+assert (a)
+assert (None)

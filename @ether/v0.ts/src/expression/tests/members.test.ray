@@ -1,0 +1,10 @@
+say {x} => @me/instance = x
+a := Node
+a &+= {
+  m := @js 42
+}
+say a.m
+a.n := @js 7
+say a.n
+say (a.m)
+say a.q

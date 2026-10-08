@@ -1,0 +1,374 @@
+{pattern} => {functionality} =>
+  Expression |= pattern => functionality
+{left}{{name Word}: {type}}{right} => {functionality} =>
+  left{name type}right => functionality
+{expression: dynamically Expression} => expression
+{pattern} ^{style} => {functionality} =>
+  pattern => functionality
+// In a head: `{x ^style}`, a capture's style (for highlighting only); `{literal x}`, what is written (as every capture without a
+// type is); `` {`text`} ``, text written as it is.
+{left}{{inside} ^{style Word}}{right} => {functionality} =>
+  left{inside}right => functionality
+{left}{literal {inside}}{right} => {functionality} =>
+  left{inside}right => functionality
+{left}{`{text}`}{right} => {functionality} =>
+  left{}text{}right => functionality
+//{comment} => None
+{statement} //{comment} => statement
+//{comment} => {functionality} =>
+  None
+
+// Brackets: what is between them, read as one; a block, a context of what it declares.
+({inside}) => inside
+{{inside}} =>
+  made := @made None
+  made &+= { inside }
+
+// `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
+static {statement} => (@has & given) ? None : statement
+
+// Text written in quotes: a String (its characters).
+"{text}" => @text text
+
+// ---------------------------------------------------------------- what else a head says
+// Each reads a definition and hands a simpler one to the definer.
+// Words naming what a definition is (modifiers): the definition as written.
+static {pattern} => {functionality} =>
+  pattern => functionality
+chainable {pattern} => {functionality} =>
+  pattern => functionality
+right-to-left {pattern} => {functionality} =>
+  pattern => functionality
+// `a | b => body`: both names.
+{name Word} | {alias Word} => {functionality} =>
+  name => functionality
+  alias => functionality
+// `name (a, b: T) => body`: a method; its parameters are captures of what it is given in brackets (`{a, b}` is `{a}, {b}`).
+// (G2.1: given what follows a space, too: `x as String`)
+{name Word} ({parameters}) => {functionality} =>
+  name({parameters}) => functionality
+  name {parameters} => functionality
+// `(=== T)`: what is given is `T` (`as (=== String)`)
+{left}{=== {target}}{right} => {functionality} =>
+  left{given: target}right => functionality
+{left}{{first Word}, {rest}}{right} => {functionality} =>
+  left{first}, {rest}right => functionality
+{left}{{first Word}: {type}, {rest}}{right} => {functionality} =>
+  left{first type}, {rest}right => functionality
+// `name (a, b = d) => body`: given `b`, or without it, `b` being `d`.
+{left}, {{first Word} = {default}}{right} => {functionality} =>
+  left, {first}right => functionality
+  left{}right =>
+    first := default
+    functionality
+{left}({{first Word} = {default}}){right} => {functionality} =>
+  left({first})right => functionality
+  left(){}right =>
+    first := default
+    functionality
+// `(a, b) => body` without a name: its parameters as captures; `(x => body)`: one.
+({first Word}) => {functionality} =>
+  {first} => functionality
+({first Word}, {rest}) => {functionality} =>
+  {first, rest} => functionality
+({first Word}: {rest}) => {functionality} =>
+  {first: rest} => functionality
+({name Word} => {functionality}) =>
+  ({name} => functionality)
+// `name := (a, b) => body`: the name is a closure.
+{name} := ({parameters}) => {functionality} =>
+  name => ((parameters) => functionality)
+
+// ---------------------------------------------------------------- names, brackets, blocks, members
+// `x &+= { … }`: the block read into `x` (what it defines is `x`'s).
+{target: Expression} &+= {{block: target}} => target
+// `x -- call`: `call` read with `this` being `x` (a closure it answers, applied to `x`); `x ~~ call`: the same, answering `x`. They
+// go on from everything before them (A-C5): declared first, they bind loosest.
+Node &+= {
+  -- {call} =>
+    answer := this with { call }
+    (@applies answer) ? answer(this) : answer
+  ~~ {call} =>
+    answer := this with { call }
+    (@applies answer) ? answer(this) : answer
+    this
+  // `x := v`: `v` at the place `x` was read at, from here on; `x = v`: where `x` is declared; `x &= v`: `v` at the end of the Ray `x`
+  // holds (a Ray of it, when it holds nothing).
+  := {value: Expression} => @declare value
+  = {value: Expression} => @assign value
+  &= {value: Expression} => @assign ((this ?? []).append(value))
+}
+// `X<K = D, V> := class …`: the class, each parameter a name of it (its default, or nothing).
+{name Word}<{parameters}> := {value: Expression} =>
+  made := value
+  reading := @made None
+  reading &+= {
+    {parameter Word} => made &+= { parameter := None }
+    {parameter Word} = {default} => made &+= { parameter := default }
+    {parameter Word}, {rest: reading} => made &+= { parameter := None }
+    {parameter Word} = {default}, {rest: reading} => made &+= { parameter := default }
+  }
+  reading with { parameters }
+  & &+= { name := made }
+
+// `x with { … }`: the block read with `x` as what it is read in, answering what the block answers.
+{target: Expression} with {{block: target}} => block
+// `x.rest`: the rest read by `x` (its own, then its class's, then the base's): `x.m`, `x.m(a)`. `f(a, b)`: the arguments read by
+// `f` (a closure: its parameters; a class: its construction); `f()`: `f` itself.
+Node &+= {
+  .{rest: this} => rest
+  ({arguments: this}) => arguments
+  () => this
+}
+
+// ---------------------------------------------------------------- what holds (T1.7): every value but nothing and false
+true := @made Node
+false := @made Node
+Node &+= {
+  ? {yes} : {no} => yes
+  || {other} => this
+  && {other} => other
+  ?? {other} => this
+}
+None &+= {
+  ? {yes} : {no} => no
+  || {other} => other
+  && {other} => this
+  ?? {other} => other
+}
+false &+= {
+  ? {yes} : {no} => no
+  && {other} => this
+  || {other} => other
+}
+!{x} => x ? false : true
+{a} === {b} => @same a b
+{a} !== {b} => (@same a b) ? false : true
+@me/instance = {x} => @show x
+
+// ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
+Branch := @made Node
+Branch &+= {
+  of (taken, answer) =>
+    made := @made Branch
+    made.taken := taken
+    made.answer := answer
+    made
+  else {{otherwise}} => this.taken ? this.answer : otherwise
+  elsif {condition} {{yes}} => this.taken ? this : (condition ? Branch.of(true, yes) : this)
+}
+if {condition} {{yes}} => condition ? Branch.of(true, yes) : Branch.of(None, None)
+unless {condition} {{yes}} => condition ? Branch.of(None, None) : Branch.of(true, yes)
+while {condition} {{body}} => condition ? {
+    body
+    while condition {body}
+  } : None
+
+// ---------------------------------------------------------------- Rays (`a, b`): vertices in order (`head`, `tail`; each `value`, `next`, `previous`)
+Ray := @made Node
+Vertex := @made Node
+Ray &+= {
+  append (value) =>
+    link := @made Vertex
+    link.value := value
+    if this.tail {
+      this.tail.next := link
+      link.previous := this.tail
+    } else {
+      this.head := link
+    }
+    this.tail := link
+    this
+  take =>
+    first := this.head
+    this.head := first ? first.next : None
+    first ? first.value : None
+  prepend (value) =>
+    vertex := @made Vertex
+    vertex.value := value
+    if this.head {
+      this.head.previous := vertex
+      vertex.next := this.head
+    } else {
+      this.tail := vertex
+    }
+    this.head := vertex
+    this
+  some (predicate) =>
+    found := None
+    at_vertex := this.head
+    while at_vertex {
+      if predicate(at_vertex.value) { found = true }
+      at_vertex = found ? None : at_vertex.next
+    }
+    found ?? false
+  , {other: Expression} => this.append(other)
+  first => this.head ? this.head.value : None
+  last => this.tail ? this.tail.value : None
+  empty => this.head === None
+  rest =>
+    made := []
+    at_link := this.head ? this.head.next : None
+    while at_link {
+      made.append(at_link.value)
+      at_link = at_link.next
+    }
+    made
+  map (mapping) =>
+    made := []
+    at_link := this.head
+    while at_link {
+      made.append(mapping(at_link.value))
+      at_link = at_link.next
+    }
+    made
+  for (body) =>
+    at_link := this.head
+    while at_link {
+      body(at_link.value)
+      at_link = at_link.next
+    }
+    this
+}
+Node &+= {
+  , {other: Expression} => (@made Ray).append(this).append(other)
+}
+[] => @made Ray
+[{inside: Expression}] => inside === None ? (@made Ray) : ((@of inside) === Ray ? inside : (@made Ray).append(inside))
+// `(x, y) := a, b`: each name, the value in its place.
+({first Word}, {rest}) := {value: Expression} =>
+  first := value.first
+  (rest) := value.rest
+({name Word}) := {value: Expression} => name := ((@of value) === Ray ? value.first : value)
+
+// ---------------------------------------------------------------- classes (A7): the block is the constructor; what it defines, the class's too
+Node &+= {
+  read_into (instance) => instance
+}
+Class := @made Node
+Class &+= {
+  // an instance: given its arguments (by name, then in order), the blocks of what it is made of read into it
+  instance_of (made, arguments) =>
+    instance := @made made
+    instance &+= { naming := true }
+    instance &+= { given := [arguments] }
+    instance &+= { naming := None }
+    made.read_into(instance)
+    instance
+  made_of (parent, header, block) =>
+    made := @made (parent ?? Node)
+    made &+= {
+      read_into (instance) =>
+        (@of made).read_into(instance)
+        instance &+= { header }
+        instance &+= { block }
+        instance
+      ({arguments}) => Class.instance_of(made, arguments)
+      () => Class.instance_of(made, None)
+      // what it is made of: its hierarchy, the classes it is one of
+      components := (@made Node) &+= { hierarchy := [] }
+    }
+    made &+= { header }
+    made &+= { block }
+    made
+}
+class {{block}} => Class.made_of(None, None, block)
+class: {parent} {{block}} => Class.made_of(parent, None, block)
+class {header} {{block}} => Class.made_of(None, header, block)
+class: {parent} {header} {{block}} => Class.made_of(parent, header, block)
+class: {parent} {header} => Class.made_of(parent, header, None)
+class {header} => Class.made_of(None, header, None)
+class: {parent} => Class.made_of(parent, None, None)
+// `name: T`, `name: T = default`: a field, given by name, else in order, else its default.
+{name Word}: {type} => &.naming ? (& &+= { name := type }) : ((@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take })) : None)
+{name Word}: {type} = {default} => (@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take ?? default })) : None
+
+// ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`)
+{guarded} if {condition} => condition ? guarded : None
+{guarded} unless {condition} => condition ? None : guarded
+
+// ---------------------------------------------------------------- superposition (U1): `a | b`, both; `T?`, `None | T`
+Superposition := @made Node
+Node &+= {
+  | {other: Expression} =>
+    made := @made Superposition
+    made.superposes := true
+    made.components := [this, other]
+    made
+}
+{value}? => None | value
+Superposition &+= {
+  | {other: Expression} =>
+    this.components.append(other)
+    this
+}
+
+// ---------------------------------------------------------------- enums: `enum a | b (field: v) | c { block }`, a class of exactly these members
+// The members are read by rules of their own (R2.3: not the enum's members), each member, then the rest.
+Enum := @made Node
+Enum &+= {
+  first_member (name, fields) =>
+    member := @made this
+    member &+= { naming := true }
+    member &+= { fields }
+    member &+= { naming := None }
+    this &+= { name := member }
+    this.members := (this.members ?? []).prepend(member)
+    this
+}
+enum {members} =>
+  made := @made Enum
+  reading := @made None
+  reading &+= {
+    {name Word} => made.first_member(name, None)
+    {name Word} ({fields}) => made.first_member(name, fields)
+    {name Word} | {rest: reading} => made.first_member(name, None)
+    {name Word} ({fields}) | {rest: reading} => made.first_member(name, fields)
+  }
+  reading with { members }
+  made
+enum {members} {{block}} => (enum members) &+= { block }
+boolean := enum false (holds: None) | true (holds: true) {
+  not => this.holds ? false : true
+  and (b) => this.holds ? b : this
+  or (b) => this.holds ? this : b
+}
+true := boolean.true
+false := boolean.false
+false &+= {
+  ? {yes} : {no} => no
+  && {other} => this
+  || {other} => other
+}
+
+// ---------------------------------------------------------------- types (T4.10): `x is T`; `T{p}`, what `T` holds of which `p` holds
+Narrowing := @made Node
+Node &+= {
+  {{constraint}} =>
+    made := @made Narrowing
+    made.narrows := this
+    made.constraint := (it => it with { constraint })
+    made
+  is {type: Expression} => (@inside this type) || (type.superposes && type.components.some((component) => this is component)) || (type.narrows && (this is type.narrows) && type.constraint(this)) || (@same this type)
+}
+
+// ---------------------------------------------------------------- the core the library extends: an Iterable of `Vertex`, an Array, text, numbers
+Iterable<Vertex> := class { }
+Array := class: Iterable { }
+// text (String.ray adds the rest): an Array of its characters; the host's text is one
+String := class: Array { }
+@kind string String
+Number := class { }
+Char := class: Number { }
+// a program (P1): code, read where it was written (`context`); with `parameters`, a closure of them
+Program := class {
+  code: Node?
+  parameters: Node?
+  context: Node?
+}
+// a diagnostic (R5.1)
+Diagnostic := class {
+  message: Node
+  type: Node
+  fatal: Node
+}

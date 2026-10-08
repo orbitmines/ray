@@ -1,0 +1,26 @@
+say {x} =>
+  @me/instance = x
+a := @made Node
+Animal := class {
+  legs: Node
+  walks => legs
+  first | head => legs
+  static count := a
+  chainable is (other) => this === other
+}
+x := Animal(a)
+say (x.walks === a)
+say (x.first === a)
+say (x.head === a)
+say (Animal.count === a)
+say (x.is(x))
+Animal &+= {
+  sound => a
+}
+say (x.sound === a)
+Dog := class: Animal {
+  barks => legs
+}
+d := Dog(a)
+say (d.barks === a)
+say (d.walks === a)

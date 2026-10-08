@@ -7,7 +7,8 @@ const site = path.resolve(ether, '../../orbitmines.com/orbitmines.com.ray');
 const listed = (dir: string) => fs.readdirSync(dir).filter((f: string) => f.endsWith('.ray') && !f.startsWith('.')).map((f: string) => path.join(dir, f));
 const order = fs.readFileSync(path.resolve(import.meta.dirname, 'order.txt'), 'utf8').trim().split(/\s+/).map((f: string) => path.join(ether, 'ray', f));
 const library = [...order, ...listed(path.join(ether, 'ray')).filter((f: string) => !order.includes(f))];
-const project = ['geometry', 'device', '$/ansi', 'timezone', 'fonts', 'ui'].flatMap((d: string) => listed(path.join(ether, d)));
+// (the web renderer is not what the terminal runs)
+const project = ['geometry', 'device', '$/ansi', 'timezone', 'fonts', 'ui'].flatMap((d: string) => listed(path.join(ether, d))).filter((f: string) => !f.endsWith('/HTML.ray'));
 const files = [...library, ...project, ...(process.env.NOSITE ? [] : listed(site))];
 const h = new Host();
 const js = new URL('./js.ray', import.meta.url).pathname;

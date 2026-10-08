@@ -266,10 +266,14 @@ Node &+= {
 [] => @made Ray
 [{inside: Expression}] => inside === None ? (@made Ray) : ((@of inside) === Ray ? inside : (@made Ray).append(inside))
 // `(x, y) := a, b`: each name, the value in its place.
+// (each declared where the statement is read)
 ({first Word}, {rest}) := {value: Expression} =>
-  first := value.first
-  (rest) := value.rest
-({name Word}) := {value: Expression} => name := ((@of value) === Ray ? value.first : value)
+  given := value
+  & &+= { first := given.first }
+  & &+= { (rest) := given.rest }
+({name Word}) := {value: Expression} =>
+  given := value
+  & &+= { name := ((@of given) === Ray ? given.first : given) }
 
 // ---------------------------------------------------------------- classes (A7): the block is the constructor; what it defines, the class's too
 Node &+= {

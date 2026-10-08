@@ -66,6 +66,6 @@ HostString := class: String {
   length => @js [...F.self].length
 }
 // Types read text (a type in a rule where statements are read): which fields hold what the language's types are made of.
-@js $.patterns = { alternatives: "components", narrowed: "narrows", constraint: "constraint", repeated: "of", sequence: "head", value: "value", next: "next", one: "Char", read_by: { Number: "Numeral", String: "Text" } }
+@js $.patterns = { superposed: "superposes", alternatives: "components", narrowed: "narrows", constraint: "constraint", repeated: "of", sequence: "head", value: "value", next: "next", one: "Char", read_by: { Number: "Numeral", String: "Text" } }
 // any text (what reads a String written in a rule's head)
 Text => @js $.reader(s => s)

@@ -55,6 +55,12 @@ Node &+= {
     // (a field given, or of a class (what its instances are given), is what `= default` does not write)
     &.naming ? & : (((!head) && (had || taken || (@has & components))) ? Field : this)
 }
+// `x[key]`, `x[key] = v`, `x[key] := v` (T8.7): what a value holds under a name, by its name
+Node &+= {
+  [{key Expression}] => @member this key
+  [{key Expression}] = {value} => @field this key value
+  [{key Expression}] := {value} => @field this key value
+}
 // what `x: T = default` writes nothing to (a field given, or the class's own)
 Field := @made Node
 Field &+= {
@@ -122,6 +128,7 @@ Method &+= {
   {head Method} () => @takes head
   {head Method}() => @takes head
   ({parameters Unled}) => @parameters @unnamed parameters
+  [{parameters Unled}] => @between "[" "]" parameters
   {a Method} | {b Method} => a | b
   // (names written together take what is written after them: `min | min_by (key)`)
   {a Method} | {b Method} ({parameters Unled}) => (@parameters a parameters) | (@parameters b parameters)
@@ -220,6 +227,15 @@ Ray &+= {
     ((@of given) === Ray) ? given.for(x => made.append(x)) : made.append(given)
     made
   entry => this.head
+  // the value at a place (0 the first; below 0 from the last)
+  [at: Number] =>
+    at_vertex := at < 0 ? this.tail : this.head
+    left := at < 0 ? (0 - at) - 1 : at
+    while at_vertex && left > 0 {
+      at_vertex = at < 0 ? at_vertex.previous : at_vertex.next
+      left = left - 1
+    }
+    at_vertex ? at_vertex.value : None
   first => this.head ? this.head.value : None
   count =>
     counted := 0

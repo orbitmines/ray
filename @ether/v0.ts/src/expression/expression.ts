@@ -30,7 +30,7 @@ export class Ray {
   alone = false;
   // (a node a head was read into: what it was written as, its parameters (each a member, in order), whether it is applied with what
   // is on its right; a member's type, what `:` said of it)
-  spelled?: string; params?: string[]; leftward?: boolean; again?: boolean; method?: boolean; literal?: boolean; types?: Map<string, Code>; between?: string; defaults?: Set<string>; default_codes?: Map<string, Code>;
+  spelled?: string; params?: string[]; leftward?: boolean; again?: boolean; method?: boolean; literal?: boolean; closing?: string; types?: Map<string, Code>; between?: string; defaults?: Set<string>; default_codes?: Map<string, Code>;
   // (a frame of an equivalence applied: which, and whether to a statement)
   rule?: Eq; statement = false;
   // (a frame of an equivalence applied on a value: where that value was read; of its captures read as values, where each was)
@@ -328,10 +328,12 @@ export class Host {
     const form = (pieces: Piece[], apart: boolean) => { const eq = this.add(node.params || !node.leftward ? into : this.global, pieces, body, node); eq.node = node; eq.apart = apart; if (!node.params) eq.receiver = r; out.push(eq); };
     const lead = (s: string) => { const ps = this.pieces(s, at); const last = ps[ps.length - 1]; if (last && 'lit' in last) return ps; return [...ps, { lit: '' }].filter(x => !('lit' in x) || x.lit !== ''); };
     const cap: Piece = { cap: r };
-    if (name === '') form([cap], false);
+    // (what is given between a pair, `[at: Integer]`: read between it, `xs[3]`)
+    if (node.closing !== undefined) form([{ lit: name }, cap, { lit: node.closing }], false);
+    else if (name === '') form([cap], false);
     else { form([...lead(name), cap], false); const sp = lead(name + space); form(sp[sp.length - 1] && 'lit' in sp[sp.length - 1] ? [...sp, cap] : [...lead(name), { lit: space }, cap], true); }
     // (all of its parameters with a default: also as written alone)
-    if (node.params && name !== '' && node.params.every(x => node.defaults?.has(x))) { const eq = this.add(into, this.pieces(name, at), body, node); eq.node = node; out.push(eq); }
+    if (node.params && name !== '' && node.closing === undefined && node.params.every(x => node.defaults?.has(x))) { const eq = this.add(into, this.pieces(name, at), body, node); eq.node = node; out.push(eq); }
     return statement ? this.held_as(out[0]) : into;
   }
   given_name = '\u0000given'; restating = new Set<string>();
@@ -341,7 +343,7 @@ export class Host {
     const node = eq.node!, params = node.params!, given = F.m.get(this.given_name);
     if (!(given instanceof Code) || !this.held(given.text, given.b, given.e)) { F.m.delete(this.given_name); return params.length === 0 || params.every(x => node.defaults?.has(x)) ? [] : NOT; }
     let b = given.b, e = given.e; const s = given.text.s; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
-    const close = this.pairs.get(s[b]); if (close !== undefined && s[e - 1] === close && this.scan(given.text, b + 1, e - 1, () => {}) === e - 1) { b++; e--; }
+    const close = this.pairs.get(s[b]); if (node.closing === undefined && close !== undefined && s[e - 1] === close && this.scan(given.text, b + 1, e - 1, () => {}) === e - 1) { b++; e--; }
     F.m.delete(this.given_name);
     if (!this.held(given.text, b, e)) return params.every(x => node.defaults?.has(x)) ? [] : NOT;
     const between = node.between ?? ', ';

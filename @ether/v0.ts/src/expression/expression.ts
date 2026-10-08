@@ -536,7 +536,7 @@ export class Host {
     const { end, definer, space } = this.learned, line = s.slice(at, s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at));
     if (line.includes(space + definer)) return false;
     const j = s.indexOf(space, at);
-    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0] && !this.shorter(l, { name: '', s }, at) ) return true; }
+    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0] && x.eq.pieces.length > 1 && !this.shorter(l, { name: '', s }, at) ) return true; }
     return false;
   }
   // (an operator written first, a space, then an operator written apart, `* := Node`: the operator is a name, not what reads on)
@@ -606,7 +606,7 @@ export class Host {
     // (a name and an opened bracket, `m(`, is a method's call: read in the value, after what reads members)
     const call = 'lit' in p0 && p0.lit.length > 1 && !p0.lit.includes(this.learned.space) && this.pairs.has(p0.lit[p0.lit.length - 1]);
     // (a member named by symbols alone, `#`, `!`: read on from what it hugs, `c#`)
-    const operator = !ctx.scope && 'lit' in p0 && !call && (pieces.length > 1 || this.bracket(p0.lit[0]) || (pieces.length === 1 && /^[^\p{L}\p{N}_\s]+$/u.test(p0.lit)));
+    const operator = !ctx.scope && 'lit' in p0 && !call && (pieces.length > 1 || this.bracket(p0.lit[0]) || (pieces.length === 1 && !eq.value && /^[^\p{L}\p{N}_\s]+$/u.test(p0.lit) && !node?.params?.length));
     if (operator) {
       eq.operator = true;
       const k = 'lit' in p0 ? p0.lit[0] : '';

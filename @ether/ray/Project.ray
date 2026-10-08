@@ -61,7 +61,7 @@ Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
 
 Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
   @field static "#" ((@owns static "#") ? (@member static "#") : [])
-  (@member static "#").push this
+  (@member static "#").push(this)
 
   backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? ERROR@Migration `the migration has no inverse`)
 

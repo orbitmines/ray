@@ -56,7 +56,7 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
   }
 
   @field static "#" ((@owns static "#") ? (@member static "#") : [])
-  (@member static "#").push this
+  (@member static "#").push(this)
 
   &caller[name] = this if name
 

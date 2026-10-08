@@ -89,8 +89,8 @@ Node &+= {
   $ ^error => instance ? this : Store.View(type: this)
 }
 
-{type}$ = {literal places} ^keyword => Store.rerouted(type, Program(code: external ** places))
-{type}$ |= {literal places} ^keyword => Store.route(type, Program(code: external ** places))
+{type}$ = {literal places} ^keyword => Store.rerouted(type, Program(code: places**))
+{type}$ |= {literal places} ^keyword => Store.route(type, Program(code: places**))
 
 StoreOptimizations := {
   {store: Store{at === @local || at.path ~= ⊢"memory"}} => Store.memory

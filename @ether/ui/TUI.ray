@@ -90,8 +90,12 @@ UI.TUI := class {
   Start := class modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]
   Stop := class start: Start = Start()
   written := {
-    {start: Start} => start.modes, ANSI.Erase(2), ANSI.Move()
-    {stop: Stop} => <-stop.start.modes.map(.flipped)
+    {text: String} => text
+    {glyph: Char} => glyph as String
+    {start: Start} => Compiler.reduced(start.modes, written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], written)
+    {stop: Stop} => Compiler.reduced(<-stop.start.modes.map(.flipped), written)
+    {sequences: Iterable} => sequences.map(sequence => Compiler.reduced(sequence, UI.TUI.written)).join("")
+    {sequence} => sequence as String
   }
   // Windows Terminal's win32-input-mode, DECSET 9001 (https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
   WindowsTerminal := {
@@ -102,7 +106,7 @@ UI.TUI := class {
     emit (bytes) => @me/instance = bytes
     dynamically typed = @me/instance
     size => Geometry.Vector(@me/device/os.env.COLUMNS as Decimal, @me/device/os.env.LINES as Decimal)
-    emitted (value) => emit(Compiler.reduced(value, written) as String)
+    emitted (value) => emit(Compiler.reduced(value, written))
     start => emitted(Start())
       -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
       -- ({ (@me/device/opened).held() } when @me/device/opened changes)

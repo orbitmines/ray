@@ -920,7 +920,7 @@ export class Host {
     // (what is read by a value, not a block read into it: what it is called with)
     const was = this.calling; this.calling = r; try { return this.reads_(r, text, b, e, eq, ctx); } finally { this.calling = was; }
   }
-  calling?: Ray;
+  calling?: Ray; wording = false;
   reads_(r: Ray, text: Text, b: number, e: number, eq: Eq, ctx?: Ray): boolean {
     // (the parameters of a value's rule, or of a call, `f(a: T)`: values, decided where applied)
     if (!r.scope && (!eq.ctx.scope || this.calls(eq))) return true;
@@ -932,12 +932,21 @@ export class Host {
     // value, where applied)
     if (!!read && read.e === end && this.own(read, r, text)) return true;
     // (a name whose value the language says is one of it: `center` read by `start | center`)
-    if (!ctx || this.name_end(text, b, end) !== end) return false;
+    if (!ctx) return false;
+    // (one value written apart from nothing else, not a name: what it is, decided where it is applied)
+    if (this.name_end(text, b, end) !== end) return false;
     const word = text.s.slice(b, end);
     // (what is not read yet is not read for this: reading it reads on)
     const now = (v: unknown) => v instanceof Later ? (v.read ? v.value : undefined) : v;
     for (const n of this.reach(ctx)) { if (n.has(word)) return this.of_type(now(n.m.get(word)), r); const x = this.valued(n, word); if (x) return this.of_type(now(x.native!(n)), r); }
-    return false;
+    // (a word nothing holds that a rule reads whole (a number): one of it when what that reads is)
+    // (read by a reader the host runs, `{number Numeral}`: what that reader reads it as, without reading it)
+    if (this.wording) return false;
+    let there: Read | undefined; this.wording = true; try { there = this.parsed(ctx, text, b, end, ctx, 0); } finally { this.wording = false; }
+    const p = there && there.e === end && !there.on && there.eq?.pieces.length === 1 ? there.eq.pieces[0] : undefined;
+    const by = p && 'cap' in p ? this.fixed(p.reader, there!.eq) : undefined;
+    if (!(by instanceof Ray) || !by.test) return false;
+    const v = by.test(word); return v !== undefined && this.is(v, r);
   }
   // (one of it without asking the language (read for every name, it would be): it, made of it, or one of what it superposes)
   of_type(v: unknown, r: Ray, seen = new Set<Ray>()): boolean {

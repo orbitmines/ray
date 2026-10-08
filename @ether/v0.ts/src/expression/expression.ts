@@ -458,7 +458,7 @@ export class Host {
       if (k < params.length && !this.defaulted_param(node, params[k])) break;
       if (k === 0) { if (this.held(given.text, b, e)) break; return []; }
       if (k === 1) return [{ name: params[0], b, e, floor: 0, reader: node.types?.get(params[0]), argument: true }];
-      let sub = this.subs.get(node)?.[k]; if (!sub) { const pieces: Piece[] = []; params.slice(0, k).forEach((x, i) => { if (i) pieces.push({ lit: between }); pieces.push({ cap: x, reader: node.types?.get(x) }); }); sub = { pieces, body: eq.body, ctx: eq.ctx, order: 0, seq: eq.seq, key: '', pairs: Infinity }; const m = this.subs.get(node) ?? []; m[k] = sub; this.subs.set(node, m); }
+      let sub = this.subs.get(node)?.[k]; if (!sub) { const pieces: Piece[] = []; params.slice(0, k).forEach((x, i) => { if (i) pieces.push({ lit: between }); pieces.push({ cap: x, reader: node.types?.get(x) }); }); sub = equivalence({ pieces, body: eq.body, ctx: eq.ctx, order: 0, seq: eq.seq, key: '', pairs: Infinity }); const m = this.subs.get(node) ?? []; m[k] = sub; this.subs.set(node, m); }
       const r = this.match(sub, given.text, b, e, given.ctx, 0, b, []);
       if (r && r.e >= e) return r.caps.map(c => ({ ...c, argument: true }));
     }
@@ -587,7 +587,7 @@ export class Host {
     const body = given instanceof Value ? given.code : given;
     // (one that reads definitions reads heads: brackets there are a pattern's, not pairs)
     const heads = pieces.some(x => 'lit' in x && x.lit.includes(this.learned.definer));
-    const eq: Eq = { pieces, body, ctx, order: this.order, seq: this.order++, key, pairs: heads ? 0 : Infinity };
+    const eq = equivalence({ pieces, body, ctx, order: this.order, seq: this.order++, key, pairs: heads ? 0 : Infinity });
     // (an operation on values binds as its head was first declared: what a class declares again keeps that place)
     if (!ctx.scope) { const first = this.heads.get(key); if (first === undefined) this.heads.set(key, eq.order); else eq.order = first; }
     // (a value under a name is a name: read where it is read, not a rule; declaring one changes no reading)
@@ -669,12 +669,12 @@ export class Host {
     }
     // a name: up to where something reads on
     // (not where an operator is written: `!=` is no name)
-    const w = this.name_end(text, b, e); if (w > b && (!this.operator_at(text, b) || this.named_by(s, b, s.slice(b, w))) && !(this.infix.has(s[b]) && this.leads(s, b) && !this.named_by(s, b, s.slice(b, w)))) { const o = this.on({ name: true, caps: [], b, e: w }, text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
+    const w = this.name_end(text, b, e); if (w > b && (!this.operator_at(text, b) || this.named_by(s, b, s.slice(b, w))) && !(this.infix.has(s[b]) && this.leads(s, b) && !this.named_by(s, b, s.slice(b, w)))) { const o = this.on(read_of(undefined, true, [], b, w), text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
     // (what begins with what reads on from a value, read whole by nothing else, reads on from what it is read in: `!= " "` in
     // `Char{!= " "}`)
-    if ((!best || best.e < e) && this.leads(s, b)) { const o = this.on({ eq: this.implicit, caps: [], b, e: b }, text, e, ctx, floor, not); if (o.e > b && this.better(o, best)) best = o; }
+    if ((!best || best.e < e) && this.leads(s, b)) { const o = this.on(read_of(this.implicit, false, [], b, b), text, e, ctx, floor, not); if (o.e > b && this.better(o, best)) best = o; }
     // (one character of what reads on, written apart, ` . + 1`: the value it reads on, itself)
-    if ((!best || best.e < e) && b + 1 < e && this.blank(s[b + 1]) && this.leads(s, b)) { const o = this.on({ eq: this.implicit, caps: [], b, e: b + 1 }, text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
+    if ((!best || best.e < e) && b + 1 < e && this.blank(s[b + 1]) && this.leads(s, b)) { const o = this.on(read_of(this.implicit, false, [], b, b + 1), text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
     return best;
   }
   led(n: Ray): Map<string, number[]> {
@@ -694,7 +694,7 @@ export class Host {
   // (whether a span has a literal in it, not copied out)
   contains(text: Text, b: number, e: number, k: string): boolean { if (!k) return true; const i = text.s.indexOf(k, b); return i >= 0 && i + k.length <= e; }
   // (what a statement that begins by reading on reads on from: the value it is read in)
-  implicit: Eq = { pieces: [], body: new Code({ name: '', s: '' }, 0, 0, new Ray()), ctx: new Ray(), order: -1, seq: -1, key: '', pairs: Infinity, native: F => { const e = this.element_of(F); return e !== undefined ? e : this.self(F); } };
+  implicit: Eq = equivalence({ pieces: [], body: new Code({ name: '', s: '' }, 0, 0, new Ray()), ctx: new Ray(), order: -1, seq: -1, key: '', pairs: Infinity, native: F => { const e = this.element_of(F); return e !== undefined ? e : this.self(F); } });
   // A reading with what reads on from its value, as far as it goes.
   on(best: Read, text: Text, e: number, ctx: Ray, floor: number, not?: Set<Eq>): Read {
     const s = text.s;
@@ -784,7 +784,7 @@ export class Host {
   match(eq: Eq, text: Text, at: number, e: number, ctx: Ray, i: number, start: number, caps: Cap[]): Read | undefined {
     if (DEADLINE && performance.now() > DEADLINE) { writeSync(2, `deadline: matching ${eq.key.slice(0, 40)} on ${text.name}:${text.s.slice(0, at).split(this.learned.end).length} steps=${this.steps} settling=${this.settling} applying=${this.applying}\n`); process.exit(3); }
     if (i === 0) this.counts.matches++;
-    if (i === eq.pieces.length) return { eq, caps: [...caps], b: start, e: at };
+    if (i === eq.pieces.length) return read_of(eq, false, [...caps], start, at);
     const piece = eq.pieces[i];
     if ('lit' in piece) {
       // (a head, what is before the definer, is balanced)
@@ -862,7 +862,7 @@ export class Host {
       if (hugged && n > at && this.blank(text.s[n - 1])) continue;
       if (fixed && (n === at || !this.reads(fixed, text, at, n, eq, ctx))) continue;
       const block = !!prev && 'lit' in prev && prev.lit.endsWith(this.learned.open) && !!next && 'lit' in next && next.lit.startsWith(this.learned.close);
-      caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, type: piece.type, block });
+      caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, type: piece.type, block, argument: false });
       const r = this.match(eq, text, n, e, ctx, i + 1, start, caps);
       caps.pop();
       if (r) return r;
@@ -1319,7 +1319,7 @@ export class Host {
         // (a word given as written: read here, as it is written)
         if (v instanceof Code && v.word) { const w = new Code(v.text, v.b, v.e, code.ctx); w.past = n; return this.walk(w); }
         // (a capture: where what it holds was read)
-        const held = n.places?.get(word), placed = held ?? { at: n.into ?? n, here: code.ctx.into ?? code.ctx, word };
+        const held = n.places?.get(word), placed = held ?? { at: n.into ?? n, here: code.ctx.into ?? code.ctx, word, text: undefined, b: undefined, e: undefined, on: undefined };
         // (the name's place, once what it holds was read)
         // (a capture a rule was handed is passed on as it is: what a field holds is read when the field is read)
         const read = this.held_value(v); this.place = placed; return read;
@@ -1341,7 +1341,7 @@ export class Host {
       const v = self === undefined && r.caps.length === 0 && eq.js && !eq.node && !eq.receiver ? this.direct(eq, code) : this.apply(eq, r.caps, code, self);
       // (a name, or a member: its place)
       // (a declared name is written where it is declared; one computed, as `this`, only where it is read)
-      if (eq.pieces.length === 1 && 'lit' in eq.pieces[0]) { const here = code.ctx.into ?? code.ctx; this.place = { at: eq.native && !eq.js ? eq.ctx : here, here, word: eq.key }; }
+      if (eq.pieces.length === 1 && 'lit' in eq.pieces[0]) { const here = code.ctx.into ?? code.ctx; this.place = { at: eq.native && !eq.js ? eq.ctx : here, here, word: eq.key, text: undefined, b: undefined, e: undefined, on: undefined }; }
       return v;
     }
     // on a value: the equivalence with that head it has (its own, its class's, …, the base's), applied where the value was read
@@ -1709,7 +1709,7 @@ export class Host {
     if (!eq) {
       const body = this.block_code(code); if (!body) return undefined;
       const node = this.named(''); node.params = []; const ps = this.block_code(parameters); if (ps) this.read_parameters(node, ps);
-      eq = { pieces: [{ cap: this.given_name }], body, ctx: body.ctx, order: 0, seq: 0, key: '', pairs: Infinity, node };
+      eq = equivalence({ pieces: [{ cap: this.given_name }], body, ctx: body.ctx, order: 0, seq: 0, key: '', pairs: Infinity, node });
       this.program_methods.set(p, eq);
     }
     const g = this.written(given);
@@ -1972,6 +1972,14 @@ export class Host {
     this.booting = true;
     try { this.project([...(mapping ? [mapping] : []), text, ...(kinds ? [kinds] : [])], this.global, from, text); } finally { this.booting = false; }
   }
+}
+// (every equivalence the same shape: what it comes to hold, held from the start)
+function equivalence(x: Pick<Eq, 'pieces' | 'body' | 'ctx' | 'order' | 'seq' | 'key' | 'pairs'> & Partial<Eq>): Eq {
+  return { own: undefined, pieces: x.pieces, body: x.body, ctx: x.ctx, order: x.order, seq: x.seq, key: x.key, value: undefined, operator: undefined, pairs: x.pairs, busy: undefined, native: x.native, js: undefined, word: undefined, receiver: undefined, apart: undefined, node: x.node, passing: undefined, indexed: undefined };
+}
+// (every reading the same shape)
+function read_of(eq: Eq | undefined, name: boolean, caps: Cap[], b: number, e: number): Read {
+  return { eq, name, caps, on: undefined, self: undefined, b, e, near: undefined, from: undefined };
 }
 function stated(c: Code): Code { c.statement = true; return c; }
 // A value given as a functionality (where it was written).

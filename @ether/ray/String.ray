@@ -159,4 +159,5 @@ Node &+= {
   : None
 
 Parameters := String{!.contains("{")}
-({parameters: Parameters}) => {block} => Program(code: (block**), parameters: (parameters**), context: this)
+({parameters: Parameters}) => {block} =>
+  Program(code: (block**), parameters: (parameters**), context: this)

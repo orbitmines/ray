@@ -1,11 +1,12 @@
 Node &+= {
   conjoined => [this]
-  & (other) => class {
+  // (both: made of each, `class: Iterable & Ordered` has what either has)
+  & (other) => @also (@also (class {
     conjoined => this.conjoined, other
     holds => conjoined.every(.)
     admits (candidate) => conjoined.every(candidate is .)
     contains (x) => conjoined.contains(x)
-  }
+  }) this) other
 
   as (=== String) => (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
 

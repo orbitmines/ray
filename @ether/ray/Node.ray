@@ -94,8 +94,8 @@ Section := class operator, operand? {
   continues => true
   (a, b?) => operand != None ? a [operator] operand : b != None ? a [operator] b : a [operator]
 }
-[x] ^operator => Section(operator: [x])
-[x]{b} ^operator => Section(operator: [x], operand: b)
+[x: Symbolic] ^operator => Section(operator: [x])
+[x: Symbolic]{b} ^operator => Section(operator: [x], operand: b)
 
 Cases := Program{written.nonempty && written.every(.code ~= (*, " => ", *))}
 if &+= {

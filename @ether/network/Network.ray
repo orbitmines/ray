@@ -95,5 +95,5 @@ FileOptimizations = {
   {location: Location{scheme && scheme != "file" && scheme.length > 1}} => FileSystem.Remote()
   {location: Location{segments.first == "remote"}} => FileSystem.Remote()
   // another instance: reached over its socket
-  {instance: Instance{!== Instance.local}} => FileSystem.Remote()
+  {instance: Instance{!== @local}} => FileSystem.Remote()
 } + FileOptimizations

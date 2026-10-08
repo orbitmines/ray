@@ -384,7 +384,7 @@ Class &+= {
         fields ? Class.fields_given(instance, fields) : None
         instance with { block }
         // (and the defaults of the fields declared on the class, its own or added since (`T &+= { x: T = d }`), not written yet)
-        ((@member made "defaults") ?? []).for((default) => default(instance))
+        ((@owns made "defaults") ? (@member made "defaults") : []).for((default) => default(instance))
         instance
       ({arguments}) => Class.instance_of(made, arguments)
       () => Class.instance_of(made, None)
@@ -500,7 +500,11 @@ Node &+= {
   admitted_by (type) => (@inside this type) || ((@member type "superposes") && (@member type "components").some((component) => this is component)) || ((@member type "narrows") && (this is (@member type "narrows")) && type.constraint(this)) || ((@inside type Listing) && this.every((element) => element is (@member type "of"))) || (@same this type)
   // `x as T`: `x` converted to a `T` (a class's own `as (=== T) => …`); where none converts it, `x` when it is a `T`, else nothing
   as {type} => (this is type) ? this : None
+  // `x/name`: what `x` holds under `name`, read as `x.name` is (a path step, `@me/device/terminal`)
+  /{rest this} => rest
 }
+// (what reads a capture of a type asks this)
+@admitting ((value, type) => value is type)
 // `T{p}(arguments)`: a `T` made of them (what `p` says of it is what it is made to be)
 Narrowing &+= {
   ({arguments}) => Class.instance_of(this.narrows, arguments)

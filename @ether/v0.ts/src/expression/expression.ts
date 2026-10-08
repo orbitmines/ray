@@ -1350,17 +1350,33 @@ export class Host {
       // (read where it was written, while the rule asking reads nothing itself)
       let at = code.ctx; while (at.written) at = at.written;
       if (by) by.busy = (by.busy ?? 0) + 1;
+      const said = this.diagnostics.length, mark = this.unread_log.length;
       let v: unknown; try { v = this.walk(new Code(code.text, code.b, code.e, at, code.floor)); } finally { if (by) by.busy!--; }
-      return this.is(v, r) ? v : NOT;
+      if (this.is(v, r)) return v;
+      // (what reads as nothing, as text: `device/terminal` is `Written`)
+      const t = code.s.trim(); if ((v === undefined || v === this.none) && this.is(t, r)) { this.unsay(said); this.forget(mark); return t; }
+      return NOT;
     }
     return this.sequence(code, T);
   }
   // whether a value is one of a context (it, or made of it; anything is one of the base)
   is(v: unknown, r: Ray): boolean {
     if (r === this.base) return true;
-    if (!(v instanceof Ray)) { const k = v === undefined ? undefined : this.kind_of(v); return k !== undefined && this.is(k, r); }
-    for (let n: Ray | undefined = v; n; n = n.outer) if (n === r) return true;
-    return false;
+    for (let n: Ray | undefined = v instanceof Ray ? v : v === undefined ? undefined : this.kind_of(v); n; n = n.outer) if (n === r) return true;
+    // (else as the language says a value is of a type (`@admitting`): a narrowing, a superposition, a list of one)
+    if (!this.admitting || this.admitting_now > 8) return false;
+    this.admitting_now++; try { return this.truthy(this.invoke_all(this.admitting, [v, r])); } finally { this.admitting_now--; }
+  }
+  admitting?: Ray; admitting_now = 0;
+  // a closure applied to values, one for each of its parameters
+  invoke_all(f: unknown, xs: unknown[]): unknown {
+    if (!(f instanceof Ray) || f.eqs.length !== 1) return undefined;
+    const eq = f.eqs[0]; if (!eq.node?.params) return undefined;
+    const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; F.self = f;
+    eq.node.params.forEach((p, i) => F.m.set(p, i < xs.length ? xs[i] : this.default_of(F, eq.node!, p)));
+    if (F.outer !== eq.body.ctx) F.sees = eq.body.ctx;
+    const I = new Ray(eq.node); I.scope = true; I.method = true; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
+    return eq.native ? eq.native(F) : this.body(eq, F);
   }
   // A block's statements in order. One naming what nothing holds yet is read again once the block is read: what the block declares
   // further on it may name (only then is what it leaves unresolved said).

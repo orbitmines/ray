@@ -20,6 +20,8 @@ global => @js $.global
 @holding {code} => @js $.declare(F, $.holding($.written(F.m.get("code"))), false)
 @assign {value} => @js $.assigning(F) || !$.placed(F) ? undefined : $.declare(F, $.defaulted(F) ? $.later($.written(F.m.get("value"))) : $.get(F, "value"), true)
 // (one character of the host's text is a `Char` too)
+// how the language says a value is of a type (`(value, type) => value is type`): asked by what reads a capture of a type
+@admitting {f} => @js ($.admitting = $.get(F, "f"), undefined)
 @inside {x} {type} => @js $.name(F, (() => { const v = x; if (typeof v === "string" && [...v].length === 1 && type === $.name(F, "Char")) return true; for (let n = x instanceof Ray ? x : $.kind_of(x); n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
 // a value's member by its name (as the host holds it: its own, its class's)

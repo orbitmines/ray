@@ -22,11 +22,23 @@ Language := class: Ray extensions: String, level: Compiler?, written: Compiler?,
   }
   static ray_written := {
     {writing: Writing{value === None}} => "None"
+    {writing: Writing{value is Number}} => writing.value as String
     {writing: Writing{value is String}} => "\"", writing.value.escaped_line, "\""
-    {writing: Writing{value is Number}} => writing.value as 10 as String
     {writing: Writing{value is Iterable}} => "[", writing.value.map((", " if .index > 0), Writing(.)), "]"
     {writing: Writing} => "(", writing.value.fields.map((", " if .index > 0), .name, ": ", Writing(.value)), ")"
   }
+
+  // (a value whose class's header is a pattern: written by walking the header from `at`, a literal as itself, a field as what
+  // the value holds under it, an optional group only when what it names is held)
+  static header_written (value, at) => at ? (Language.piece_written(value, at.value) + Language.header_written(value, at.next)) : ""
+  static piece_written (value, piece) => (piece is String) ? piece : ((@member piece "superposes") ? Language.group_written(value, piece.components.head.next.value.head) : Language.part_written(@member value (@param piece 0)))
+  static group_written (value, at) => Language.held_all(value, at) ? Language.header_written(value, at) : ""
+  static held_all (value, at) => at ? ((at.value is String || (@member at.value "superposes") || (@member value (@param at.value 0)) !== None) && Language.held_all(value, at.next)) : true
+  // (what the writer gave: text, or pieces of text in order, each joined)
+  static joined (x) => (@owns x "head") ? Language.pieces_joined(x.head) : ((x is String) ? x : Language.part_written(x))
+  static pieces_joined (at) => at ? (Language.joined(at.value) + Language.pieces_joined(at.next)) : ""
+  static patterned (at) => at ? ((at.value is String) || Language.patterned(at.next)) : false
+  static part_written (x) => x === None ? "" : (x is String ? x : ((@of x) && (@member (@of x) "header") && Language.patterned((@of x).header.head) ? Language.header_written(x, (@of x).header.head) : "" + x))
 
   names (extension: String) => extension is extensions#
   bundled (path: String) => location#.map(. / path){(. / ".project.ray").held as boolean}.first.held as Project
@@ -36,7 +48,7 @@ Language := class: Ray extensions: String, level: Compiler?, written: Compiler?,
     ? (Compiler.reduced(source, level + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`))
     : ERROR@Language `the language has no reader`
   write (value) => written
-    ? (Compiler.reduced(Writing(value, language: this), unwrapped + written + (stored ?? Compiler.none)) -- (. is Location ? . : . as String))
+    ? (Compiler.reduced(Writing(value, language: this), unwrapped + written + (stored ?? Compiler.none)) -- (result => result is Location ? result : Language.joined(result)))
     : ERROR@Language `the language has no writer`
   written_to (value, location: Location) => write(value) -- (. is Location ? .files.for(file => (location / file.path).held = file.content) : location.held = .) -- location
   converted (location, from: Language) => write(from.read(location))

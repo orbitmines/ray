@@ -18,6 +18,7 @@ HostNumber := class: Number {
   succ => @js F.self + 1
   pred => @js F.self - 1
   is_zero => @js $.name(F, F.self === 0 ? "true" : "false")
+  as (=== String) => @js String(F.self)
 }
 @kind string HostString
 HostString := class: String {

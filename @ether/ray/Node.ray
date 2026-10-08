@@ -8,7 +8,7 @@ Node &+= {
     contains (x) => conjoined.contains(x)
   }) this) other
 
-  as (=== String) => (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
+  as (=== String) => ((@of this) && (@member (@of this) "header") && Language.patterned((@of this).header.head)) ? Language.part_written(this) : (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)
 

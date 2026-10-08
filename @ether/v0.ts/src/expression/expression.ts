@@ -595,7 +595,7 @@ export class Host {
     if (ctx.eqs === NONE) ctx.eqs = [];
     // (the same head again in the same place: it replaces the one before, and reads the same)
     // (overloads by what their captures are read by are not the same head)
-    const readers = (ps: Piece[], n?: Ray) => ps.map(p => 'cap' in p && p.reader ? p.reader.s : '').join('\0') + (n?.params ? '\0' + n.params.map(x => this.id(n.types?.get(x))).join(',') : '');
+    const readers = (ps: Piece[], n?: Ray) => ps.map(p => 'cap' in p && p.reader ? p.reader.s : 'cap' in p && p.type !== undefined ? '#' + this.id(p.type) : '').join('\0') + (n?.params ? '\0' + n.params.map(x => this.id(n.types?.get(x))).join(',') : '');
     // (nor the class's own (`static`) and what is made of it's)
     const was = ctx.eqs.findIndex(x => x.key === key && readers(x.pieces, x.node) === readers(pieces, node) && !!x.own === (this.static_now > 0 || !!node?.own));
     if (was >= 0) { const old = ctx.eqs[was]; if (!(old.value && eq.value)) this.changed(pieces, ctx); old.body = eq.body; old.native = eq.native; old.js = undefined; old.word = undefined; old.pieces = eq.pieces; old.value = eq.value; ctx.led = undefined; if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq); return old; }
@@ -1693,11 +1693,8 @@ export class Host {
   is(v: unknown, r: Ray): boolean {
     if (r === this.base) return true;
     for (let n: Ray | undefined = v instanceof Ray ? v : v === undefined ? undefined : this.kind_of(v); n; n = n.outer) if (n === r) return true;
-    // (else as the language says a value is of a type (`@admitting`): a narrowing, a superposition, a list of one)
-    if (!this.admitting || this.admitting_now > 8) return false;
-    this.admitting_now++; try { return this.truthy(this.invoke_all(this.admitting, [v, r])); } finally { this.admitting_now--; }
+    return false;
   }
-  admitting?: Ray; admitting_now = 0;
   // a statement read as the class's own (`static`): what it defines is marked so
   static_now = 0;
   statically(code: unknown): unknown {

@@ -513,7 +513,6 @@ export class Host {
     if (b >= e) return undefined;
     let best: Read | undefined;
     // (each reading of what starts there, with what reads on from it)
-    const consider = (r: Read | undefined) => { if (r) { r = this.on(r, text, e, ctx, floor, not); if (this.better(r, best)) best = r; } };
     // (what reads definitions is tried on a definition only: the definer written outside every bracket)
     let defines = false; this.scan(text, b, e, i => { if (this.literal(text, this.learned.space + this.learned.definer, i, e) >= 0) { defines = true; return false; } });
     let self: unknown, held = false, near = 0, span: string | undefined; const found = new Map<string, boolean>();
@@ -539,12 +538,12 @@ export class Host {
         const atom = eq.pieces.length === 1 && !('lit' in p0) && p0.reader !== undefined && n.scope;
         // (one led by a capture reads only what has its literals in it)
         if (!('lit' in p0) && !atom) { const k = this.needle(eq.pieces); if (k) { let h = found.get(k); if (h === undefined) found.set(k, h = (span ??= s.slice(b, e)).includes(k)); if (!h) continue; } }
-        if ('lit' in p0 ? s[b] === p0.lit[0] && this.literal(text, p0.lit, b, e) >= 0 : eq.order >= floor || atom) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; consider(r); } }
+        if ('lit' in p0 ? s[b] === p0.lit[0] && this.literal(text, p0.lit, b, e) >= 0 : eq.order >= floor || atom) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; const o = this.on(r, text, e, ctx, floor, not); if (this.better(o, best)) best = o; } }
       }
       if (word && (n.has(word) || n.eqs.some(x => x.key === word))) held = true;
     }
     // a name: up to where something reads on
-    const w = this.name_end(text, b, e); if (w > b) consider({ name: true, caps: [], b, e: w });
+    const w = this.name_end(text, b, e); if (w > b) { const o = this.on({ name: true, caps: [], b, e: w }, text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
     return best;
   }
   led(n: Ray): Map<string, number[]> {
@@ -673,9 +672,8 @@ export class Host {
       // (an operation hugging its value, written without a space: its operand ends at any operation written with one)
       const hugs = !eq.ctx.scope && 'lit' in eq.pieces[0] && !eq.pieces.some(x => 'lit' in x && x.lit.includes(this.learned.space));
       const atom = i === 0 && piece.reader !== undefined;
-      // (led by a literal: the rest, up to an operation declared before it, `return x if c`; a pair not opened in it, there, is text)
-      const rest = () => { if (eq.order < this.earliest) return e; const o = this.operand(text, at, e, eq.order, ctx, eq.pairs, true); return o < e && this.closes(text.s, o) ? e : o; };
-      const r = prev && 'lit' in prev && prev.lit.includes(this.learned.definer) ? e : statement && 'lit' in eq.pieces[0] ? rest() : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : [];
+      // (led by a literal: the rest, as a statement reads it, `return x if c`)
+      const r = prev && 'lit' in prev && prev.lit.includes(this.learned.definer) ? e : statement && 'lit' in eq.pieces[0] ? this.rest(eq, text, at, e, ctx) : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : [];
       // (an atom: as far as an operand goes, else just the name there, `0` in `0..<n`)
       if (atom) { const w = this.name_end(text, at, e); if (w > at && w < r) ends.push(w); }
       // (what hugs a literal, opening a pair: to where that pair closes, `f(a).b`)
@@ -844,6 +842,12 @@ export class Host {
     }
     return false;
   }
+  // (what a statement led by a literal reads last: the rest, up to an operation declared before it; a pair not opened in it, there,
+  // is text)
+  rest(eq: Eq, text: Text, at: number, e: number, ctx: Ray): number {
+    if (eq.order < this.earliest) return e;
+    const o = this.operand(text, at, e, eq.order, ctx, eq.pairs, true); return o < e && this.closes(text.s, o) ? e : o;
+  }
   // Where a name from `at` ends: at a space, a pair, or a literal read on from a value.
   name_end(text: Text, at: number, e: number): number {
     const s = text.s;
@@ -860,12 +864,16 @@ export class Host {
   // Where an operand from `at` ends: where (no pair open) an equivalence declared before `floor` reads on after a space (what hugs
   // a value is part of it: `x.m`, `f(a)`), else at `e`.
   operand(text: Text, at: number, e: number, floor: number, ctx: Ray, pairs?: number, same = false): number {
-    const s = text.s, { space } = this.learned, alone = ctx.alone ? ctx : ctx.written && ctx.into?.alone ? ctx.into : undefined, stops = (x: { lit: string; order: number; eq: Eq; from: number }, i: number) => (same ? x.order <= floor : x.order < floor) && (x.eq.ctx.alone || alone ? x.eq.ctx === alone : true) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e);
+    const s = text.s, { space } = this.learned, alone = ctx.alone ? ctx : ctx.written && ctx.into?.alone ? ctx.into : undefined;
     return this.scan(text, at, e, i => {
       if (i <= at || this.amid(text, at, i)) return;
-      for (const x of this.infix.get(s[i]) ?? []) if (x.lit.includes(space) && stops(x, i)) return false;
-      if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (stops(x, i)) return false; }
+      for (const x of this.infix.get(s[i]) ?? []) if (x.lit.includes(space) && this.stops(x, i, text, e, floor, same, alone)) return false;
+      if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (this.stops(x, i, text, e, floor, same, alone)) return false; }
     }, pairs);
+  }
+  // (whether an operation declared before `floor` reads on at `i`)
+  stops(x: { lit: string; order: number; eq: Eq; from: number }, i: number, text: Text, e: number, floor: number, same: boolean, alone: Ray | undefined): boolean {
+    return (same ? x.order <= floor : x.order < floor) && (x.eq.ctx.alone || alone ? x.eq.ctx === alone : true) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e);
   }
   // Whether an equivalence's literals from piece `from` on are written after `at`, in order.
   follows(eq: Eq, from: number, text: Text, at: number, e: number): boolean {

@@ -405,3 +405,15 @@ Targets := String{.contains(",")}
   written := header_items((targets**), `,`)
   inline (written.enumerate.map**(.value + " = held[" + (.index as String) + "]").join("\n"))
 )
+
+// `xs{p}` (QT6): a narrowing of a value is the Ray of its elements of which `p` holds, in order (a class's: its instances)
+Narrowing &+= {
+  kept =>
+    made := []
+    narrowed := this.narrows
+    holds := this.constraint
+    narrowed.for(element => made.append(element) if holds(element))
+    made
+  head => this.kept.head
+  tail => this.kept.tail
+}

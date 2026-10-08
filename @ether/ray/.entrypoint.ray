@@ -58,6 +58,21 @@ class: {parent} {header} => Class.made_of(parent, header, None)
 class {header} => Class.made_of(None, header, None)
 class: {parent} => Class.made_of(parent, None, None)
 
+// `(x, y) := a, b`: each name, the value in its place, as a method's parameters are given what it is given in order (declared
+// before `:=`: what it reads first). (each declared where the statement is read)
+// (an enum, its members in order: `(start, end) := Alignment`)
+({names}) := {value Expression} =>
+  given := (@owns value "members") ? value.members : value
+  listed := (@of given) === Ray
+  read := @parameters (@named "") names
+  index := 0
+  name := @param read index
+  while name {
+    @field & name (listed ? given[index] : given)
+    index = index + 1
+    name = @param read index
+  }
+  given
 // ---------------------------------------------------------------- names, brackets, blocks, members
 // `x -- call`: `call` read with `this` being `x` (a closure it answers, applied to `x`); `x ~~ call`: the same, answering `x`. They
 // go on from everything before them (A-C5): declared first, they bind loosest.
@@ -171,6 +186,8 @@ false &+= {
 // What is inside a capture is read the same way: a capture is a parameter.
 Unled => @js $.reader(s => s.startsWith($.learned.open) ? undefined : s)
 Unspaced => @js $.reader(s => s.includes($.learned.space) ? undefined : s)
+// one capture, `{align: start | center}`
+Captured => @js $.reader(s => { const { open, close } = $.learned; if (!s.startsWith(open) || !s.endsWith(close)) return undefined; let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === open) d++; else if (s[i] === close && --d === 0 && i < s.length - 1) return undefined; } return s; })
 // a word: letters, digits, `_`
 Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
 Parameters := @context None
@@ -200,6 +217,8 @@ Method &+= {
   static {head Method} => @own head
   chainable {head Method} => head
   right-to-left {head Method} => @leftward head
+  // (a pattern applied on what is written after it: `right-to-left {align: start | center}`, `center x`)
+  right-to-left {name Captured} => @leftward (@named name)
   {head Method}: {type Unled} => head
   // (a name declared, `X := …`: the definition read again as it is written, without what was said of it)
   {name Unspaced} := {value Text} => @again name value
@@ -345,15 +364,6 @@ Node &+= {
 }
 [] => @made Ray
 [{inside: Expression}] => inside === None ? (@made Ray) : ((@of inside) === Ray ? inside : (@made Ray).append(inside))
-// `(x, y) := a, b`: each name, the value in its place.
-// (each declared where the statement is read)
-({first Word}, {rest}) := {value: Expression} =>
-  given := value
-  & &+= { first := given.first }
-  & &+= { (rest) := given.rest }
-({name Word}) := {value: Expression} =>
-  given := value
-  & &+= { name := ((@of given) === Ray ? given.first : given) }
 
 // ---------------------------------------------------------------- classes (A7): the block is the constructor; what it defines, the class's too
 Node &+= {

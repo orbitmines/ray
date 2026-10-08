@@ -743,7 +743,7 @@ export class Host {
     for (const n of ends) {
       if (n > at && !this.held(text, at, n) && !bracketed) continue;
       if (hugged && n > at && this.blank(text.s[n - 1])) continue;
-      if (fixed && (n === at || !this.reads(fixed, text, at, n, eq))) continue;
+      if (fixed && (n === at || !this.reads(fixed, text, at, n, eq, ctx))) continue;
       const block = !!prev && 'lit' in prev && prev.lit.endsWith(this.learned.open) && !!next && 'lit' in next && next.lit.startsWith(this.learned.close);
       caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, type: piece.type, block });
       const r = this.match(eq, text, n, e, ctx, i + 1, start, caps);
@@ -798,7 +798,7 @@ export class Host {
   }
   // whether a reader reads a span whole (the parameters of a value, typed by a value that is not a scope, read any: what is read
   // where it was written, if it is one of it)
-  reads(r: Ray, text: Text, b: number, e: number, eq: Eq): boolean {
+  reads(r: Ray, text: Text, b: number, e: number, eq: Eq, ctx?: Ray): boolean {
     if (r.test) return r.test(text.s.slice(b, e).trim()) !== undefined;
     // (the parameters of a value's rule, or of a call, `f(a: T)`: values, decided where applied)
     if (!r.scope && (!eq.ctx.scope || this.calls(eq))) return true;
@@ -808,7 +808,22 @@ export class Host {
     // written, and is one of it or not: decided where it is applied, unless the span is a rule of its own)
     // (a rule where statements are read reads text by its types; only a value's own rules (its parameters, a level's) decide by the
     // value, where applied)
-    return !!read && read.e === end && this.own(read, r, text);
+    if (!!read && read.e === end && this.own(read, r, text)) return true;
+    // (a name whose value the language says is one of it: `center` read by `start | center`)
+    if (!ctx || this.name_end(text, b, end) !== end) return false;
+    const word = text.s.slice(b, end);
+    // (what is not read yet is not read for this: reading it reads on)
+    const now = (v: unknown) => v instanceof Later ? (v.read ? v.value : undefined) : v;
+    for (const n of this.reach(ctx)) { if (n.has(word)) return this.of_type(now(n.m.get(word)), r); const x = this.valued(n, word); if (x) return this.of_type(now(x.native!(n)), r); }
+    return false;
+  }
+  // (one of it without asking the language (read for every name, it would be): it, made of it, or one of what it superposes)
+  of_type(v: unknown, r: Ray, depth = 0): boolean {
+    if (v === r) return true;
+    for (let n = v instanceof Ray ? v : undefined; n; n = n.outer) if (n === r) return true;
+    if (depth > 8 || !this.holds_member(r, 'components')) return false;
+    for (let l = this.field(this.field(r, 'components'), 'head'); l instanceof Ray; l = this.field(l, 'next') as Ray) { const x = this.field(l, 'value'); if (x instanceof Ray && this.of_type(v, x, depth + 1)) return true; }
+    return false;
   }
   // whether a reading is a value's own: a name it holds, or one of its equivalences (or its class's), not the base's
   own(read: Read, r: Ray, text: Text): boolean {

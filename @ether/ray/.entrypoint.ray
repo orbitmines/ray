@@ -552,6 +552,8 @@ Node &+= {
 }
 {value}? => None | value
 Superposition &+= {
+  // (what a superposition admits: what any of its components admits, or is)
+  {superposed} => this.components.some((component) => (@same superposed component) || (@inside superposed component))
   | {other: Expression} =>
     this.components.append(other)
     this
@@ -590,6 +592,8 @@ Node &+= {
 }
 // `T{p}(arguments)`: a `T` made of them (what `p` says of it is what it is made to be)
 Narrowing &+= {
+  // (what a narrowing admits: what it narrows admits, and its constraint holds of)
+  {narrowed} => (@inside narrowed this.narrows) && this.constraint(narrowed)
   ({arguments}) => Class.instance_of(this.narrows, arguments)
   () => Class.instance_of(this.narrows, None)
 }

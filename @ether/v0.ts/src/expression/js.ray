@@ -37,7 +37,7 @@ global => @js $.global
 @statically {statement} => @js $.statically(F.m.get("statement"))
 // (whether what is read is read as the class's own)
 @static => @js $.name(F, $.static_now > 0 ? "true" : "false")
-@inside {x} {type} => @js $.name(F, (() => { const v = x; if (typeof v === "string" && [...v].length === 1 && type === $.name(F, "Char")) return true; const start = x instanceof Ray ? x : $.kind_of(x); return start instanceof Ray && type instanceof Ray && $.made_of_(start, type); })() ? "true" : "false")
+@inside {x} {type} => @js $.name(F, (() => { const v = x; if (typeof v === "string" && [...v].length === 1 && type === $.name(F, "Char")) return true; return type instanceof Ray && $.is(x, type); })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
 // a value's member by its name (as the host holds it: its own, its class's)
 @member {x} {name} => @js $.field($.get(F, "x"), String($.get(F, "name")))

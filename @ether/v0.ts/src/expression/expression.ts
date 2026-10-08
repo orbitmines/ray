@@ -1699,8 +1699,24 @@ export class Host {
   // whether a value is one of a context (it, or made of it; anything is one of the base)
   is(v: unknown, r: Ray): boolean {
     if (r === this.base) return true;
-    for (let n: Ray | undefined = v instanceof Ray ? v : v === undefined ? undefined : this.kind_of(v); n; n = n.outer) if (n === r) return true;
-    return false;
+    const start = v instanceof Ray ? v : v === undefined ? undefined : this.kind_of(v);
+    if (start && this.made_of_(start, r)) return true;
+    // (else what the type value's own rule of one capture answers for the value: a narrowing's constraint, a superposition's
+    // components; applied to the value directly)
+    const eq = this.admitting(r); if (!eq || this.admits_now > 32) return false;
+    const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; F.self = r; F.caller = eq.body.ctx;
+    F.m.set((eq.pieces[0] as { cap: string }).cap, v);
+    this.admits_now++; try { return this.truthy(eq.native ? eq.native(F) : this.body(eq, F)); } finally { this.admits_now--; }
+  }
+  admits_now = 0;
+  // (a type value's rule of one capture, its own or its class's, not the base's)
+  admitting(r: Ray): Eq | undefined {
+    for (let n: Ray | undefined = r; n && n !== this.base; n = n.outer) {
+      if (n.eqs.length === 0) continue;
+      for (let i = n.eqs.length - 1; i >= 0; i--) { const eq = n.eqs[i]; if (eq.pieces.length === 1 && 'cap' in eq.pieces[0] && !eq.pieces[0].reader && eq.pieces[0].type === undefined && !eq.node && !eq.value) return eq; }
+      if (n.scope) break;
+    }
+    return undefined;
   }
   // a statement read as the class's own (`static`): what it defines is marked so
   static_now = 0;

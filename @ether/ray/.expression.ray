@@ -45,8 +45,17 @@ Node &+= {
   // `x: T`: `x` is a `T` (holding `T` until something is written to it); given by name, `x: v` gives it `v`; in what is being given
   // its fields in order, the next of them (one given by name keeps it)
   : {type} =>
-    (@typed type) ? None : (&.naming ? (@declare type) : ((@owns & @word) ? None : ((&.given && !(&.given.empty)) ? (@declare &.given.take) : (@holding type))))
-    &.naming ? & : this
+    head := @typed type
+    had := @owns & @word
+    taken := (!head) && (!(&.naming)) && (!had) && &.given && (!(&.given.empty))
+    head ? None : (&.naming ? (@declare type) : (had ? None : (taken ? (@declare &.given.take) : (@holding type))))
+    // (a field given, or of a class (what its instances are given), is what `= default` does not write)
+    &.naming ? & : (((!head) && (had || taken || (@has & components))) ? Field : this)
+}
+// what `x: T = default` writes nothing to (a field given, or the class's own)
+Field := @made Node
+Field &+= {
+  = {value} => this
 }
 // `x with { … }`: the block read with `x` as what it is read in, answering what the block answers.
 {target Expression} with {{block target}} => block

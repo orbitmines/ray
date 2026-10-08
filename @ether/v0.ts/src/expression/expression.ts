@@ -321,7 +321,7 @@ export class Host {
     if (typeof between === 'string') node.between = between;
     const into = statement ? at.into ?? at : new Ray(at), body = this.unblocked(this.written(f));
     // (read again into what continues into a class that has it, from the same text: that one)
-    if (statement && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.node && x.body.text === body.text && x.body.b === body.b && x.body.e === body.e); if (was) return this.held_as(was); }
+    if (statement && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.node && x.body.text === body.text && x.body.b === body.b && x.body.e === body.e && x.body.ctx.outer === body.ctx.outer); if (was) return this.held_as(was); }
     const { open, close, space } = this.learned, name = node.spelled, out: Eq[] = [];
     const r = node.params || typeof receiver !== 'string' ? this.given_name : receiver;
     // (what it is given: a capture no name written can be)
@@ -987,6 +987,8 @@ export class Host {
     this.unread.delete(p);
     // (declared where it was read; written where it is declared; written in a head's parameter, its default)
     let at = assign ? p.at : p.here;
+    // (declared: the name is where it was declared from now on)
+    if (!assign) p.at = p.here;
     // (a member of a name nothing holds: that name, a value of its own, declared where it was read)
     if (at === this.none && p.on?.text) { const on = p.on, ns = new Ray(this.base); this.unread.delete(on); this.add(on.at, [{ lit: on.word }], new Value(ns, new Code(on.text!, on.b!, on.e!, on.at))); at = ns; }
     const t = { name: '', s: p.word };

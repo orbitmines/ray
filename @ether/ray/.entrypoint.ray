@@ -127,8 +127,8 @@ Node &+= {
 // `x = v`: where `x` is declared (the first statement writes a name held further out there); `x.m = v`: on `x`
 {assigned_name Unspaced} = {assigned_value} =>
   assigned_name => assigned_value
-{assigned_on Expression}.{assigned_name Word} = {assigned_value Expression} =>
-  assigned_on &+= { assigned_name => assigned_value }
+{assigned_on Unspaced}.{assigned_name Word} = {assigned_value Expression} =>
+  (assigned_on**)() &+= { assigned_name => assigned_value }
 Node &+= {
   = {value} => @assign value
   &= {value Expression} => @assign ((this ?? []).append(value))

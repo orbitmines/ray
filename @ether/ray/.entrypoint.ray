@@ -9,7 +9,7 @@
 // Brackets: what is between them, read as one; a block, a context of what it declares.
 ({inside}) => inside
 {{inside}} =>
-  made := @made None
+  made := @made Node
   @block made inside
   made &+= { inside }
 
@@ -351,6 +351,14 @@ Node &+= {
 Node &+= {
   read_into (instance) => instance
 }
+// what a class is made of besides what it continues into (`components.hierarchy`): adding to it makes the class also made of what is
+// added, as `A + B` (read as it is: what that comes to hold later, the class holds too)
+Hierarchy := @made Ray
+Hierarchy &+= {
+  &= {value Expression} =>
+    @also (@member this "owner") value
+    @assign (this.append(value))
+}
 Class := @made Node
 Class &+= {
   // an instance: given its arguments (by name: `name: value`, read into it), the rest in order to its fields (its header, a
@@ -388,11 +396,10 @@ Class &+= {
         instance
       ({arguments}) => Class.instance_of(made, arguments)
       () => Class.instance_of(made, None)
-      // what it is made of: its hierarchy, the classes it is one of
-      components := (@made Node) &+= { hierarchy := [] }
+      // what it is made of: its hierarchy, the classes it is one of (adding one makes it made of that too)
+      components := (@made Node) &+= { hierarchy := (@made Hierarchy) ~~ (list => @field list "owner" made) }
     }
     made with { block }
-    @field made "reads" ((target) => target with { block })
     made
 }
 // `T + { … }`: a class made of `T` with what the block declares (both its components)
@@ -405,20 +412,10 @@ Node &+= {
   // `A + B`: a class made of both (both its components): an instance is what each makes of it
   + {other} =>
     made := Class.made_of(this, None, None)
-    first := @member this "reads"
-    first ? first(made) : None
-    reads := @member other "reads"
-    reads ? reads(made) : None
+    @also made other
     made.components.hierarchy := [this, other]
     made
 }
-// a block again, now that there are closures: it keeps how it is read into another (`A + B` of levels, `Solving + Projecting`)
-{{inside}} =>
-  made := @made None
-  @block made inside
-  made &+= { inside }
-  @field made "reads" ((target) => target &+= { inside })
-  made
 // `X := class (header) => { block }`: read as a definition is read (its `=>` is the class's)
 {name Unspaced} := class {header} => {{block}} =>
   name := Class.made_of(None, header, block)

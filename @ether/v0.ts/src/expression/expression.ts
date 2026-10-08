@@ -29,6 +29,10 @@ export class Ray {
   reached?: number;
   // (a closure: a method without a name, as a value)
   closure = false;
+  // (what it is also made of, read after what it continues into: `A + B`, a component)
+  also?: Ray[];
+  // (a program run at a level: the rules of what the level is made of read here too)
+  level = false;
   // (a context the host reads text with: what it reads a span as, or undefined)
   test?: (s: string) => unknown;
   scope = false; caller?: Ray; self?: unknown;
@@ -624,6 +628,8 @@ export class Host {
       if (n.alone && n !== this.read_alone) continue;
       n.seen = epoch; n.reached ??= this.version; if (!n.scope || (n.into && !n.into.scope)) valued = true; out.push(n);
       if (n.sees && n.sees === n.into) { if (this.reach_(n.sees, out, epoch)) valued = true; } else if (n.sees) (sees ??= []).push(n.sees);
+      // (what it is also made of, `A + B`: next to what it continues into, before what is further out)
+      if (n.also) for (const x of n.also) if (this.reach_(x, out, epoch)) valued = true;
     }
     if (sees) for (const x of sees) if (this.reach_(x, out, epoch)) valued = true;
     return valued;
@@ -689,7 +695,7 @@ export class Host {
       // members)
       // (one capture alone reads anything: only where that very value's own equivalences read text (a value read in, a level a
       // program runs by), not what continues into it)
-      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || eq.pieces.length > 1 || !(ctx.sees === eq.ctx || (ctx.written && ctx.outer === eq.ctx)) || (this.deciding > 0 && !eq.ctx.scope))) return undefined;
+      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || eq.pieces.length > 1 || !(ctx.sees === eq.ctx || (ctx.written && (ctx.outer === eq.ctx || (ctx.level && this.made_of_(ctx.outer, eq.ctx))))) || (this.deciding > 0 && !eq.ctx.scope))) return undefined;
       // (after the definer: the functionality, to the end; an operator read on a value reads one operand: the same operator after it reads on from what it gives)
       // (led by a literal, a statement: its last capture, the rest; an operator's, one operand)
       // (a reader's own rule, read in a value as its type: to the end, too)
@@ -1359,6 +1365,11 @@ export class Host {
     }
     return this.sequence(code, T);
   }
+  // whether a value is a context or made of it: what it continues into, what it is also made of
+  made_of_(v: Ray | undefined, c: Ray, seen = new Set<Ray>()): boolean {
+    for (let n = v; n && !seen.has(n); n = n.outer) { if (n === c) return true; seen.add(n); for (const a of n.also ?? []) if (this.made_of_(a, c, seen)) return true; }
+    return false;
+  }
   // whether a value is one of a context (it, or made of it; anything is one of the base)
   is(v: unknown, r: Ray): boolean {
     if (r === this.base) return true;
@@ -1490,7 +1501,7 @@ export class Host {
     const c = code instanceof Ray ? this.blocks.get(code) : code instanceof Code ? code : undefined;
     if (!c) return code;
     // (the level's equivalences nearer than what the code names)
-    const T = new Ray(O instanceof Ray ? O : c.ctx); T.scope = true; if (O instanceof Ray) { T.sees = c.ctx; T.written = c.ctx; }
+    const T = new Ray(O instanceof Ray ? O : c.ctx); T.scope = true; if (O instanceof Ray) { T.sees = c.ctx; T.written = c.ctx; T.level = true; }
     return this.sequence(c, T);
   }
   // what a value holds under a name (its own, or its class's)

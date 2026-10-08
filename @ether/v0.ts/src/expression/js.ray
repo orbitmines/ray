@@ -22,7 +22,9 @@ global => @js $.global
 // (one character of the host's text is a `Char` too)
 // how the language says a value is of a type (`(value, type) => value is type`): asked by what reads a capture of a type
 @admitting {f} => @js ($.admitting = $.get(F, "f"), undefined)
-@inside {x} {type} => @js $.name(F, (() => { const v = x; if (typeof v === "string" && [...v].length === 1 && type === $.name(F, "Char")) return true; for (let n = x instanceof Ray ? x : $.kind_of(x); n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
+// `x` also made of `y`: what `y` holds (and comes to hold) read in `x` after what `x` continues into (`A + B`)
+@also {x} {y} => @js ((a, b) => { if (a instanceof Ray && b instanceof Ray && a !== b) (a.also ??= []).push(b); return a; })($.get(F, "x"), $.get(F, "y"))
+@inside {x} {type} => @js $.name(F, (() => { const v = x; if (typeof v === "string" && [...v].length === 1 && type === $.name(F, "Char")) return true; const start = x instanceof Ray ? x : $.kind_of(x); return start instanceof Ray && type instanceof Ray && $.made_of_(start, type); })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
 // a value's member by its name (as the host holds it: its own, its class's)
 @member {x} {name} => @js $.field($.get(F, "x"), String($.get(F, "name")))

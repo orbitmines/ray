@@ -1148,10 +1148,14 @@ export class Host {
     const missing = this.missing; this.missing = undefined;
     try {
     for (const not = new Set<Eq>(); ;) {
+      this.failed = undefined;
       const v = this.run(r!, code);
       if (v !== NOT) return v;
       // (what read on from a value applied what that value has with that head: none of that head applies)
-      for (let x: Read | undefined = r; x; x = x.on) if (x.eq) { not.add(x.eq); const p0 = x.eq.pieces[0]; if (x.on && 'lit' in p0) for (const y of this.sends.get(p0.lit[0]) ?? []) if (y.key === x.eq.key) not.add(y); }
+      // (only what did not apply, where that is known: what read on from it still may)
+      let failed = this.failed; this.failed = undefined;
+      { let x: Read | undefined = r; while (x && x !== failed) x = x.on; if (!x) failed = undefined; }
+      for (let x: Read | undefined = r; x; x = x.on) if (x.eq && (!failed || x === failed)) { not.add(x.eq); const p0 = x.eq.pieces[0]; if (x.on && 'lit' in p0) for (const y of this.sends.get(p0.lit[0]) ?? []) if (y.key === x.eq.key) not.add(y); }
       r = this.parse(code.text, code.b, code.e, code.ctx, code.floor, not);
       if (NOTS && not.size % 1000 === 0) writeSync(2, `not ${not.size} ${code.s.slice(0, 30)} → ${r?.eq?.key ?? (r?.name ? 'name' : r)} on ${r?.on?.eq?.key ?? r?.on?.name}\n`);
       if (r === undefined || r.e < e) { const m = this.missing as Diagnostic | undefined; if (m) this.say(m.message, m.at.text, m.at.b, m.at.e); else this.say(`Unread \`${s.slice(code.b, e).trim().slice(0, 60)}\`.`, code.text, code.b, e); return undefined; }
@@ -1159,6 +1163,8 @@ export class Host {
     } finally { this.missing = missing; }
   }
   missing?: Diagnostic;
+  // (the reading that did not apply, the innermost first)
+  failed?: Read;
   // (what the definer reads in a span: what is written there and which operators are declared say, nothing else; kept)
   definitions = new WeakMap<Text, Map<number, Map<number, { syntax: number; sent: number; pieces: Piece[]; d: Read | undefined }>>>();
   definition(code: Code): Read | undefined {
@@ -1339,6 +1345,7 @@ export class Host {
       if (self === undefined && r.self !== undefined) self = this.self_of(code.ctx, r.near ?? 0);
       // (a rule whose functionality is the host's own code, given nothing: that code, called directly)
       const v = self === undefined && r.caps.length === 0 && eq.js && !eq.node && !eq.receiver ? this.direct(eq, code) : this.apply(eq, r.caps, code, self);
+      if (v === NOT) this.failed = r;
       // (a name, or a member: its place)
       // (a declared name is written where it is declared; one computed, as `this`, only where it is read)
       if (eq.pieces.length === 1 && 'lit' in eq.pieces[0]) { const here = code.ctx.into ?? code.ctx; this.place = { at: eq.native && !eq.js ? eq.ctx : here, here, word: eq.key, text: undefined, b: undefined, e: undefined, on: undefined }; }
@@ -1357,7 +1364,7 @@ export class Host {
       if (word && this.holds(value, word)) owns = this.dispatching(this.base, eq.key);
     }
     // (a value without that head: another reading, else said)
-    if (owns.length === 0) { this.missing ??= { message: `No \`${code.text.s.slice(r.on.e, r.e).trim().slice(0, 40)}\` on ${this.show(value)}.`, at: { text: code.text, b: r.on.e, e: r.e } }; return NOT; }
+    if (owns.length === 0) { this.failed = r; this.missing ??= { message: `No \`${code.text.s.slice(r.on.e, r.e).trim().slice(0, 40)}\` on ${this.show(value)}.`, at: { text: code.text, b: r.on.e, e: r.e } }; return NOT; }
     // (the value's own equivalences with that head, nearest first: the first that reads what follows, its own captures read from the
     // same place, and applies)
     // (read on a name nothing holds: what is read there remembers it, a member declared there makes it, `a.b := v`)
@@ -1372,6 +1379,7 @@ export class Host {
         if (v !== NOT) return v;
       }
     } finally { this.receiving = was; }
+    this.failed = r;
     return NOT;
   }
   // whether a span is the whole of some code (spaces around it aside)

@@ -89,7 +89,7 @@ Iterable &+= {
   enumerate => map((x) => (index: x.index, value: x))
   zip (other: Iterable) => empty || other.empty ? [] : [(first, other.first)], rest.zip(other.rest)
   pairs (other: Iterable) => map(a => other.map(b => (a, b))).flatten(1)
-  join (separator) => reduce((acc) => acc, separator, .)
+  join (separator) => this.empty ? "" : (this.rest.empty ? this.first : this.first + separator + this.rest.join(separator))
   random => drawn(Random.below(map(.weight ?? 1).sum))
   drawn (at: Number) => at < (first.weight ?? 1) ? first : rest.drawn(at - (first.weight ?? 1))
   subsets (size: Number) => size == 0 ? [[]] : empty ? [] : rest.subsets(size - 1).map([first, .]), rest.subsets(size)

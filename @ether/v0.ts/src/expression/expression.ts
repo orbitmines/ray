@@ -482,7 +482,7 @@ export class Host {
       const k = kept.list[i];
       if (k && k.syntax === this.syntax) { block = k.block; yield [k.p, k.e]; p = k.e; continue; }
       while (p < code.e && this.blank(s[p])) p++;
-      if (p >= code.e) break;
+      if (p >= code.e) { kept.count = i; kept.counted = this.syntax; break; }
       // (a statement less deep than the block's first, a label, ends as the block's statements do)
       const line = s.lastIndexOf(end, p - 1) + end.length, own = this.depth(s, line) === p - line ? p - line : 0;
       if (block < 0) block = own;
@@ -490,9 +490,17 @@ export class Host {
       kept.list.length = i; kept.list.push({ p, e, block, syntax: this.syntax });
       yield [p, e];
       p = e;
+      if (p >= code.e) { kept.count = i + 1; kept.counted = this.syntax; }
     }
   }
-  splits = new WeakMap<Text, Map<number, Map<number, { list: { p: number; e: number; block: number; syntax: number }[] }>>>();
+  // (whether code is one statement, as last split: undefined when that is not known now)
+  single(code: Code): boolean | undefined {
+    const k = this.splits.get(code.text)?.get(code.b)?.get(code.e);
+    if (!k || k.counted !== this.syntax || k.count === undefined) return undefined;
+    for (let i = 0; i < k.count; i++) if (k.list[i]?.syntax !== this.syntax) return undefined;
+    return k.count === 1;
+  }
+  splits = new WeakMap<Text, Map<number, Map<number, { list: { p: number; e: number; block: number; syntax: number }[]; count?: number; counted?: number }>>>();
   // (how often what reads on from a value, or what balances, was declared: where statements end may differ since)
   syntax = 0;
 
@@ -1016,8 +1024,8 @@ export class Host {
     // (nothing written: nothing)
     if (!this.held(code.text, code.b, code.e)) return undefined;
     // (code of several statements: each, in order)
-    const st = this.statements(code), first = st.next();
-    if (!first.done) { const second = st.next(); if (!second.done) return this.in_order(function* () { for (let x: IteratorResult<[number, number]> = first; !x.done; x = x === first ? second : st.next()) yield stated(new Code(code.text, x.value[0], x.value[1], code.ctx, code.floor)); }()); }
+    const st = this.single(code) ? undefined : this.statements(code), first = st?.next();
+    if (st && first && !first.done) { const second = st.next(); if (!second.done) return this.in_order(function* () { for (let x: IteratorResult<[number, number]> = first; !x.done; x = x === first ? second : st.next()) yield stated(new Code(code.text, x.value[0], x.value[1], code.ctx, code.floor)); }()); }
     // (a definition written in a functionality, its pattern naming what the rule captured: written again first, then read)
     if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.match(this.definer, code.text, code.b, code.e, code.ctx, 0, code.b, []); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.ctx.rule ? code.ctx.statement : code.statement); }
     let r = this.reading(code); const s = code.text.s;

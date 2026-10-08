@@ -785,7 +785,8 @@ export class Host {
   // whether a reading is a value's own: a name it holds, or one of its equivalences (or its class's), not the base's
   own(read: Read, r: Ray, text: Text): boolean {
     if (read.name) { const word = text.s.slice(read.b, read.e); return this.reach(r).some(n => n.has(word)); }
-    for (let x: Read | undefined = read; x; x = x.on) if (x.eq) { let mine = false; for (let n: Ray | undefined = r; n && !n.scope && n !== this.base; n = n.outer) if (x.eq.ctx === n) mine = true; if (!mine) return false; }
+    // (a word is one of it when it is a name it holds, not a method: `red` of an enum, not `first` of a Ray)
+    for (let x: Read | undefined = read; x; x = x.on) if (x.eq) { if (x.eq.pieces.length === 1 && 'lit' in x.eq.pieces[0] && !x.eq.value) return false; let mine = false; for (let n: Ray | undefined = r; n && !n.scope && n !== this.base; n = n.outer) if (x.eq.ctx === n) mine = true; if (!mine) return false; }
     return true;
   }
   // (a literal starting, or ending, with a bracket)
@@ -1123,6 +1124,17 @@ export class Host {
     }
     return undefined;
   }
+  // a field's type held as written (`x: T`, not given): what `= default` writes to it is read when the field is first read
+  held_types = new WeakSet<Code>();
+  holding(c: Code): Code { this.held_types.add(c); return c; }
+  defaulted(F: Ray): boolean {
+    let n: Ray | undefined = F; while (n && !n.place) n = n.caller; const p = n?.place;
+    const x = p ? this.valued(p.at, p.word) : undefined, v = x?.native!(p!.at);
+    return v instanceof Code && this.held_types.has(v);
+  }
+  later(c: Code): Later { return new Later(c); }
+  // whether what is written has a place to be written to (written to nothing, it is not read)
+  placed(F: Ray): boolean { let n: Ray | undefined = F; while (n && !n.place) n = n.caller; return !!n?.place; }
   // `x = v` in a parameter of a head being read: its default, as written (read where it is given, when it is not)
   assigning(F: Ray): boolean {
     let n: Ray | undefined = F; while (n && !n.place) n = n.caller;
@@ -1377,7 +1389,10 @@ export class Host {
     const h = this;
     return this.in_order(function* () { for (const [b, e] of h.statements(eq.body)) yield stated(new Code(eq.body.text, b, e, F)); }());
   }
-  force(v: unknown): unknown { return v instanceof Code ? this.walk(v) : v; }
+  force(v: unknown): unknown {
+    if (v instanceof Later) { if (!v.read) { v.read = true; v.value = this.walk(v.code); } return v.value; }
+    return v instanceof Code ? this.walk(v) : v;
+  }
   // the value a frame was applied on: the nearest that has one
   name(F: Ray, word: string): unknown { let t = this.named_texts.get(word); if (!t) this.named_texts.set(word, t = { name: word, s: word }); return this.walk(new Code(t, 0, word.length, F)); }
   named_texts = new Map<string, Text>();
@@ -1491,6 +1506,8 @@ const NOT = Symbol('not read');
 const NO_LEAD: number[] = [];
 // a reading that does not end: what applies deeper, or more often, than any program is written to
 class Runaway extends Error {}
+// a value read when it is first read (a field's default), then kept
+class Later { constructor(public code: Code) {} read = false; value?: unknown; }
 // a jump out of what is being read: to the end, or the start again, of the loop it is in (`break`, `continue`), out of the method
 // it is in with a value (`return`)
 export class Jump { constructor(public kind: string, public value?: unknown, public to?: Ray) {} }

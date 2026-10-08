@@ -13,8 +13,8 @@ global => @js $.global
 @applies {x} => @js $.name(F, x instanceof Ray && x.eqs.some(eq => !("lit" in eq.pieces[0]) || eq.pieces[0].lit === "()") ? "true" : "false")
 @declare {value} => @js $.declare(F, value, false)
 // (what it holds: a type, as written: read when it is read)
-@holding {code} => @js $.declare(F, $.written(F.m.get("code")), false)
-@assign {value} => @js $.assigning(F) ? undefined : $.declare(F, $.get(F, "value"), true)
+@holding {code} => @js $.declare(F, $.holding($.written(F.m.get("code"))), false)
+@assign {value} => @js $.assigning(F) || !$.placed(F) ? undefined : $.declare(F, $.defaulted(F) ? $.later($.written(F.m.get("value"))) : $.get(F, "value"), true)
 @inside {x} {type} => @js $.name(F, (() => { for (let n = x; n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
 // a value's member by its name (as the host holds it: its own, its class's)

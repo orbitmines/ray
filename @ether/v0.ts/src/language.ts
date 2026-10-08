@@ -243,9 +243,11 @@ export class Readings {
   rays = new Map<string, Ray>();
   constructor(public options: { library?: string; given?: Map<string, string>; paint?: boolean } = {}, public keep = Number(process.env.RAY_READINGS ?? 3)) {}
   get base(): Ray { return this.get(''); }
+  // (where projects are, without reading anything)
+  layout?: Ray;
   key(file: string): string {
-    const base = this.base, project = base.project_of(file);
-    return project === undefined || project === base.library ? '' : base.needed(project, false).join('\0');
+    const at = this.layout ??= new Ray(this.options), project = at.project_of(file);
+    return project === undefined || project === at.library ? '' : at.needed(project, false).join('\0');
   }
   get(key: string): Ray {
     let ray = this.rays.get(key);
@@ -276,16 +278,16 @@ function thread(data: object): Worker {
 async function worker(task: { kind: 'run'; files: string[]; library?: string; verbose?: boolean } | { kind: 'lsp'; library?: string }) {
   const port = parentPort!;
   if (task.kind === 'run') {
-    const readings = new Readings({ library: task.library }), first = readings.base;
+    const readings = new Readings({ library: task.library });
     const out = (line: string) => port.postMessage({ out: line }), err = (line: string) => port.postMessage({ err: line });
     const line_of = (s: string, i: number) => s.slice(0, i).split('\n').length;
     const timed = (ray: Ray) => { for (const [name, ms] of ray.timings.splice(0)) err(`${name.padEnd(16)} ${String(Math.round(ms)).padStart(7)} ms`); };
-    if (task.verbose) { timed(first); err(`${first.host.diagnostics.length} diagnostics in the library`); }
+    const told = new Set<Ray>();
     let failed = false;
     for (const file of task.files) {
       // (a file of the language or the core library: as it was read there)
       const ray = readings.for(file), known = ray.core(file) ? ray.of(file) : undefined, scope = known ? undefined : ray.prepare(file);
-      if (task.verbose) timed(ray);
+      if (task.verbose) { const library = !told.has(ray); timed(ray); if (library) { told.add(ray); err(`${ray.host.diagnostics.length} diagnostics in the language, its library and the projects`); } }
       const read = known ? { text: known.text, diagnostics: known.diagnostics, written: [] as string[] } : ray.file(file, fs.readFileSync(file, 'utf8'), false, scope);
       for (const line of read.written) out(line);
       for (const d of read.diagnostics) err(`${path.relative(process.cwd(), file)}:${line_of(read.text.s, d.begin)}: ${d.message}`);
@@ -314,9 +316,8 @@ async function worker(task: { kind: 'run'; files: string[]; library?: string; ve
     if (readings === undefined || !same(wanted, readings.options.given ?? new Map())) {
       const t0 = performance.now();
       readings = new Readings({ library: task.library, given: wanted, paint: true });
-      const base = readings.base;
-      port.postMessage({ styles: [], theme: base.theme() });
-      port.postMessage({ log: `read the language and its library in ${Math.round(performance.now() - t0)} ms (${base.host.diagnostics.length} diagnostics)` });
+      port.postMessage({ styles: [], theme: undefined });
+      port.postMessage({ log: `ready in ${Math.round(performance.now() - t0)} ms` });
       for (const uri of docs.keys()) dirty.add(uri);
     }
     for (const uri of [...dirty]) {

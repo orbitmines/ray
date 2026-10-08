@@ -76,8 +76,8 @@ History := class: Iterable repository: *?, base: Commit?, head: Commit? {
     ? (reached(end.entered(., None), .) ? (closed: [acc.closed, [[acc.open, [.]].flatten(1)]].flatten(1), open: None) : (closed: acc.closed, open: [acc.open, [.]].flatten(1)))
     : reached(start.entered(., None), .) ? (closed: acc.closed, open: [.]) : acc
   ) -- [.closed, [.open] if .open].flatten(1)
-  {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: external ** start), Program(code: external ** end))
-  {this}{from {literal start}} ^punctuation => Program(code: external ** start) -- (holds => stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
+  {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: start**), Program(code: end**))
+  {this}{from {literal start}} ^punctuation => Program(code: start**) -- (holds => stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
   value => ordered.reduce(held = None => .applied(held))
   pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last?.id ?? label
   checkout (label, as_of: Stamp? = None) => this[pinned(label, as_of)].value

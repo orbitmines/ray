@@ -133,7 +133,7 @@ export class Host {
       const stop = second + b.length;
       this.learned = { open, close, space, definer, end, indent, type: lead[0], add: lead[1] };
       // (its brackets balance, as they do around its own captures)
-      this.pairs.set(open, close); this.closers.add(close);
+      this.pairs.set(open, close); this.closers.add(close); this.paired++;
       this.global.m.set(lead[0], this.expression);
       const eq = this.add(this.global, this.pieces(s.slice(0, c2 + 1), this.global), new Code(text, i, stop, this.global));
       // (its functionality is what it says: the pattern and the functionality given to it, added to the Expression it is walked in)
@@ -501,7 +501,7 @@ export class Host {
       if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) { const x = { lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }; list.push(x); if (by === this.infix) this.indexed(x); if (x.order < this.earliest) this.earliest = x.order; }
     }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
-    if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
+    if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); this.paired++; }
     return eq;
   }
 
@@ -789,18 +789,33 @@ export class Host {
   // A walk over a span keeping what pairs are open: `at` is called where none is (false stops it); where one closes that was not
   // opened, it stops.
   scan(text: Text, b: number, e: number, at: (i: number) => boolean | void, pairs = Infinity): number {
-    const s = text.s, stack: string[] = [];
+    const s = text.s;
     for (let i = b; i < e; i++) {
-      if (stack.length === 0 && at(i) === false) return i;
+      if (at(i) === false) return i;
       if (pairs === 0) continue;
-      const c = s[i], top = stack.length ? stack[stack.length - 1] : undefined;
-      if (top !== undefined) { if (c === top) { stack.pop(); continue; } if (this.quotes.has(top)) continue; }
-      const close = this.pairs.get(c);
-      if (close !== undefined) { stack.push(close); continue; }
+      const c = s[i];
+      // (a pair: past where it closes; a closer not opened in it, there)
+      if (this.pairs.has(c)) { const m = this.closing(text, i); if (m === -1) return e; if (m < -1) return Math.min(-m - 2, e); if (m >= e) return e; i = m; continue; }
       if (this.closers.has(c)) return i;
     }
     return e;
   }
+  // where the pair opened at `i` closes (-1: it does not; -(j + 2): a closer at `j` that is not its own stops it), kept per text
+  closing(text: Text, i: number): number {
+    let seen = this.closings.get(text); if (!seen || seen.paired !== this.paired) this.closings.set(text, seen = { paired: this.paired, at: new Map() });
+    const was = seen.at.get(i); if (was !== undefined) return was;
+    const s = text.s, stack = [this.pairs.get(s[i])!]; let r = -1;
+    for (let j = i + 1; j < s.length; j++) {
+      const c = s[j], top = stack[stack.length - 1];
+      if (c === top) { stack.pop(); if (stack.length === 0) { r = j; break; } continue; }
+      if (this.quotes.has(top)) continue;
+      const close = this.pairs.get(c);
+      if (close !== undefined) { stack.push(close); continue; }
+      if (this.closers.has(c)) { r = -(j + 2); break; }
+    }
+    seen.at.set(i, r); return r;
+  }
+  closings = new WeakMap<Text, { paired: number; at: Map<number, number> }>(); paired = 0;
   // whether every pair opened in a span is closed in it
   balanced(text: Text, b: number, e: number): boolean {
     const s = text.s, stack: string[] = [];

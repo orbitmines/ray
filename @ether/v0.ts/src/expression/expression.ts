@@ -581,7 +581,7 @@ export class Host {
         if (!('lit' in p0) && !atom) { const k = this.needle(eq.pieces); if (k) { let h = found.get(k); if (h === undefined) found.set(k, h = (span ??= s.slice(b, e)).includes(k)); if (!h) continue; } }
         if ('lit' in p0 ? s[b] === p0.lit[0] && this.literal(text, p0.lit, b, e) >= 0 : eq.order >= floor || atom) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; const o = this.on(r, text, e, ctx, floor, not); if (this.better(o, best)) best = o; } }
       }
-      if (word && (n.has(word) || n.eqs.some(x => x.key === word))) held = true;
+      if (word && (n.has(word) || this.has_key(n, word))) held = true;
     }
     // a name: up to where something reads on
     // (not where an operator is written: `!=` is no name)
@@ -1224,7 +1224,7 @@ export class Host {
     return false;
   }
   // the value a context holds under a name (declared with `:=`), as the latest equivalence of it
-  valued(n: Ray, word: string): Eq | undefined { for (let i = n.eqs.length - 1; i >= 0; i--) { const x = n.eqs[i]; if (x.value && x.key === word) return x; } return undefined; }
+  valued(n: Ray, word: string): Eq | undefined { if (!this.has_key(n, word)) return undefined; for (let i = n.eqs.length - 1; i >= 0; i--) { const x = n.eqs[i]; if (x.value && x.key === word) return x; } return undefined; }
   // names read that nothing holds, waiting for the end of their statement
   unread = new Map<Place, Diagnostic>(); unread_log: Place[] = [];
   // (what is left unresolved, in the order it was left: what was since a mark)
@@ -1643,7 +1643,7 @@ export class Host {
   named_texts = new Map<string, Text>();
   // the context a name is declared in: the nearest from where it is read that has it (else there)
   declaring(name: Code, F?: Ray): Ray {
-    const word = name.s.trim(), has = (n: Ray) => n.has(word) || n.eqs.some(eq => eq.key === word);
+    const word = name.s.trim(), has = (n: Ray) => n.has(word) || this.has_key(n, word);
     // (from where the assignment is read: what it is read into, then around it; else where the name was written)
     let at = F?.caller; while (at && at.rule && !at.into) at = at.caller;
     if (at?.into && has(at.into)) return at.into;
@@ -1654,7 +1654,7 @@ export class Host {
   // the context a statement is read in: what is read into, else the nearest frame no rule applied
   here(F: Ray): Ray | undefined { for (let n: Ray | undefined = F.caller; n; n = n.caller ?? n.outer) { if (n.into) return n.into; if (!n.rule) return n; } return undefined; }
   // whether a context has a name of its own
-  has(x: unknown, word: string): boolean { return x instanceof Ray && (x.has(word) || x.eqs.some(eq => eq.key === word)); }
+  has(x: unknown, word: string): boolean { return x instanceof Ray && (x.has(word) || this.has_key(x, word)); }
   self(F: Ray): unknown { return this.self_(F.caller, new Set<Ray>()); }
   self_(n: Ray | undefined, seen: Set<Ray>): unknown {
     for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule?.node?.spelled === '') return this.self_(n.self.outer, seen); if (n.self !== undefined) return n.self; if (n.written && !n.rule && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = this.self_(n.sees, seen); if (v !== undefined) return v; } }
@@ -1693,7 +1693,7 @@ export class Host {
     for (const step of text.split(by)) { if (!(at instanceof Ray) || !this.holds_member(at, step)) return undefined; at = this.field(at, step); }
     return at;
   }
-  holds_member(v: Ray, word: string): boolean { for (let n: Ray | undefined = v; n && !n.scope; n = n.outer) if (n.has(word) || n.eqs.some(x => x.key === word && x.native)) return true; return false; }
+  holds_member(v: Ray, word: string): boolean { for (let n: Ray | undefined = v; n && !n.scope; n = n.outer) if (n.has(word) || (this.has_key(n, word) && n.eqs.some(x => x.key === word && x.native))) return true; return false; }
   // a closure applied to a value; whether a value holds (every value but nothing and false)
   invoke(f: unknown, x: unknown): unknown {
     if (f instanceof Ray && f.eqs.length !== 1) return this.called(f, [x]);

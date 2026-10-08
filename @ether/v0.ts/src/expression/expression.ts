@@ -446,7 +446,7 @@ export class Host {
       const head = d >= 0 ? text.s.indexOf(this.learned.definer, at + d - 1) : -1;
       if (d >= 0 && !('lit' in eq.pieces[0]) && !this.balanced(text, start, head)) return undefined;
       // (a statement whose first line ends with the definer has its head before that one)
-      if (d >= 0) { const { end, definer } = this.learned, line = text.s.indexOf(end, start), last = line < 0 ? -1 : text.s.lastIndexOf(definer, line); if (line >= 0 && last >= 0 && last + definer.length === line && head !== last && line < e) return undefined; }
+      if (d >= 0) { const { end, definer } = this.learned, line = text.s.indexOf(end, start), last = line < 0 ? -1 : text.s.lastIndexOf(definer, line); if (line >= 0 && last >= 0 && last + definer.length === line && head !== last && line < e && this.balanced(text, start, last)) return undefined; }
       // (a head that has the definer in it defines what reads heads: only the first statement's definer reads it)
       if (d >= 0 && eq !== this.definer && text.s.slice(start, head).includes(this.learned.space + this.learned.definer + this.learned.space)) return undefined;
       return this.match(eq, text, n, e, ctx, i + 1, start, caps);
@@ -549,7 +549,8 @@ export class Host {
   // where it was written, if it is one of it)
   reads(r: Ray, text: Text, b: number, e: number, eq: Eq): boolean {
     if (r.test) return r.test(text.s.slice(b, e).trim()) !== undefined;
-    if (!r.scope && !eq.ctx.scope) return true;
+    // (the parameters of a value's rule, or of a call, `f(a: T)`: values, decided where applied)
+    if (!r.scope && (!eq.ctx.scope || this.calls(eq))) return true;
     const read = this.parse(text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
     if (r.scope) return !!read && read.e === end;
     if (this.patterns && this.fits(r, text.s.slice(b, end).trimStart())) return true;
@@ -754,6 +755,8 @@ export class Host {
     // on a value: the equivalence with that head it has (its own, its class's, …, the base's), applied where the value was read
     // (what it is read on is a value, not the statement)
     const value = this.run(r.on, code.statement ? new Code(code.text, code.b, code.e, code.ctx, code.floor) : code), place = this.place;
+    // (what it is read on did not apply: neither does this)
+    if (value === NOT) return NOT;
     let owns = this.dispatching(value, eq.key);
     // (a name the value holds is read before what its classes add: `x.m`, `m` being one of its names, read as the base reads it)
     const own = owns[0];
@@ -777,6 +780,8 @@ export class Host {
     const s = c.text.s; let cb = c.b, ce = c.e; while (cb < ce && this.blank(s[cb])) cb++; while (ce > cb && this.blank(s[ce - 1])) ce--;
     return cb === b && ce === e;
   }
+  // whether a rule is written as a call: a name and an opened bracket first
+  calls(eq: Eq): boolean { const p = eq.pieces[0]; return 'lit' in p && p.lit.length > 1 && this.pairs.has(p.lit[p.lit.length - 1]) && !this.blank(p.lit[0]); }
   // whether a value has a name, of its own or its class's
   holds(value: unknown, word: string): boolean {
     // (a method: an equivalence led by the name)
@@ -1081,7 +1086,7 @@ const NOT = Symbol('not read');
 // a reading that does not end: what applies deeper, or more often, than any program is written to
 class Runaway extends Error {}
 const NOMEMO = !!process.env.EXPR_NOMEMO, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
-const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 200000);
+const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
 const REJECT = Symbol('reads nothing');
 // JS source with each capture named in it read from the frame (`F`).
 function rename(src: string, names: string[]): string {

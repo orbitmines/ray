@@ -42,7 +42,7 @@ chainable {pattern} => {functionality} =>
 // what it reads after it.
 // `right-to-left p => body` in a class: a name is applied with what is on its right (`√x`, `sleep 5`): the language's own rule,
 // `this` being what it reads after it; with what it takes (`^ (exponent)`), it groups from the right.
-right-to-left {name Single} => {functionality} =>
+right-to-left {name Symbolic} => {functionality} =>
   global &+= { name{receiver} => receiver -- (functionality) }
 right-to-left {name Word} => {functionality} =>
   global &+= { name {receiver} => receiver -- (functionality) }
@@ -56,7 +56,10 @@ right-to-left {pattern} => {functionality} =>
   name => functionality
   alias => functionality
 // `name (a, b: T) => body`: a method; its parameters are captures of what it is given in brackets (`{a, b}` is `{a}, {b}`).
-// (G2.1: given what follows a space, too: `x as String`)
+// (G2.1: given what follows a space, too: `x as String`; a symbol, what follows it: `0..<n`)
+{name Symbolic} ({parameters}) => {functionality} =>
+  name({parameters}) => functionality
+  name{parameters} => functionality
 {name Word} ({parameters}) => {functionality} =>
   name({parameters}) => functionality
   name {parameters} => functionality
@@ -67,6 +70,14 @@ right-to-left {pattern} => {functionality} =>
   left{first}, {rest}right => functionality
 {left}{{first Word}: {type}, {rest}}{right} => {functionality} =>
   left{first type}, {rest}right => functionality
+{left}, {{first Word}, {rest}}{right} => {functionality} =>
+  left, {first}, {rest}right => functionality
+{left}, {{first Word}: {type}, {rest}}{right} => {functionality} =>
+  left, {first type}, {rest}right => functionality
+{left}({{first Word}, {rest}}){right} => {functionality} =>
+  left({first}, {rest})right => functionality
+{left}({{first Word}: {type}, {rest}}){right} => {functionality} =>
+  left({first type}, {rest})right => functionality
 // `name (a, b = d) => body`: given `b`, or without it, `b` being `d`.
 {left}, {{first Word} = {default}}{right} => {functionality} =>
   left, {first}right => functionality
@@ -75,6 +86,16 @@ right-to-left {pattern} => {functionality} =>
     functionality
 {left}({{first Word} = {default}}){right} => {functionality} =>
   left({first})right => functionality
+  left(){}right =>
+    first := default
+    functionality
+{left}, {{first Word}: {type} = {default}}{right} => {functionality} =>
+  left, {first: type}right => functionality
+  left{}right =>
+    first := default
+    functionality
+{left}({{first Word}: {type} = {default}}){right} => {functionality} =>
+  left({first: type})right => functionality
   left(){}right =>
     first := default
     functionality
@@ -300,6 +321,8 @@ Node &+= {
     made.components.hierarchy := [this, added]
     made
 }
+class {header} => {{block}} => Class.made_of(None, header, block)
+class: {parent} {header} => {{block}} => Class.made_of(parent, header, block)
 class {{block}} => Class.made_of(None, None, block)
 class: {parent} {{block}} => Class.made_of(parent, None, block)
 class {header} {{block}} => Class.made_of(None, header, block)
@@ -309,7 +332,7 @@ class {header} => Class.made_of(None, header, None)
 class: {parent} => Class.made_of(parent, None, None)
 // `name: T`, `name: T = default`: a field, given by name, else in order, else its default.
 {name Word}: {type} => &.naming ? (& &+= { name := type }) : ((@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take })) : None)
-{name Word}: {type} = {default} => (@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take ?? default })) : (& &+= { name := default })
+{name Word}: {type} = {default} => (@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take ?? default })) : ((@has & components) ? None : (& &+= { name := default }))
 
 // ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`)
 {guarded} if {condition} => condition ? guarded : None

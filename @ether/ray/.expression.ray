@@ -474,6 +474,11 @@ Node &+= {
     made
   is {type: Expression} => (@inside this type) || (type.superposes && type.components.some((component) => this is component)) || (type.narrows && (this is type.narrows) && type.constraint(this)) || (@same this type)
 }
+// `T{p}(arguments)`: a `T` made of them (what `p` says of it is what it is made to be)
+Narrowing &+= {
+  ({arguments}) => Class.instance_of(this.narrows, arguments)
+  () => Class.instance_of(this.narrows, None)
+}
 
 // `T[]`: one `T` after another, a type of text read as a run of what `T` reads
 Listing := @made Node

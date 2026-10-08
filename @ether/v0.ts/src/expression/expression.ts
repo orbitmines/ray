@@ -63,7 +63,7 @@ export type Diagnostic = { message: string; at: { text: Text; b: number; e: numb
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; block?: boolean };
 // What reading a span gave: an equivalence applied to captures (read on the value of `on`, or on `self`), or a name.
-type Place = { at: Ray; here: Ray; word: string; text?: Text; b?: number; e?: number };
+type Place = { at: Ray; here: Ray; word: string; text?: Text; b?: number; e?: number; on?: Place };
 type Read = { eq?: Eq; name?: boolean; caps: Cap[]; on?: Read; self?: unknown; b: number; e: number; near?: number; from?: number };
 
 export class Host {
@@ -506,7 +506,7 @@ export class Host {
     if (this.reach_(ctx, out, epoch) && this.base && this.base.seen !== epoch) { this.base.seen = epoch; out.push(this.base); }
     return out;
   }
-  read_alone?: Ray;
+  read_alone?: Ray; receiving?: Place;
   reach_(ctx: Ray, out: Ray[], epoch: number): boolean {
     let valued = false, sees: Ray[] | undefined;
     // (a block read into a value reaches that value first, then where it was written)
@@ -807,6 +807,8 @@ export class Host {
       if (!r) return undefined; const v = this.run(r, code); return v === NOT ? undefined : v;
     }
     // (a reading whose captures its readers did not read has not applied: the next one)
+    const missing = this.missing; this.missing = undefined;
+    try {
     for (const not = new Set<Eq>(); ;) {
       const v = this.run(r!, code);
       if (v !== NOT) return v;
@@ -814,9 +816,11 @@ export class Host {
       for (let x: Read | undefined = r; x; x = x.on) if (x.eq) { not.add(x.eq); const p0 = x.eq.pieces[0]; if (x.on && 'lit' in p0) for (const y of this.sends.get(p0.lit[0]) ?? []) if (y.key === x.eq.key) not.add(y); }
       r = this.parse(code.text, code.b, code.e, code.ctx, code.floor, not);
       if (process.env.EXPR_NOTS && not.size % 1000 === 0) writeSync(2, `not ${not.size} ${code.s.slice(0, 30)} → ${r?.eq?.key ?? (r?.name ? 'name' : r)} on ${r?.on?.eq?.key ?? r?.on?.name}\n`);
-      if (r === undefined || r.e < e) { this.say(`Unread \`${s.slice(code.b, e).trim().slice(0, 60)}\`.`, code.text, code.b, e); return undefined; }
+      if (r === undefined || r.e < e) { const m = this.missing as Diagnostic | undefined; if (m) this.say(m.message, m.at.text, m.at.b, m.at.e); else this.say(`Unread \`${s.slice(code.b, e).trim().slice(0, 60)}\`.`, code.text, code.b, e); return undefined; }
     }
+    } finally { this.missing = missing; }
   }
+  missing?: Diagnostic;
   // (read once per span, floor and the nearest context that adds equivalences, until one is added)
   memo = new WeakMap<Ray, Map<Text, Map<number, { floor: number; e: number; version: number; r: Read | undefined }[]>>>();
   reading(code: Code): Read | undefined {
@@ -870,7 +874,7 @@ export class Host {
         return this.force(v);
       }
       const at = code.ctx.into ?? code.ctx;
-      this.place = { at, here: at, word, text: code.text, b: r.b, e: r.e };
+      this.place = { at, here: at, word, text: code.text, b: r.b, e: r.e, on: at === this.none ? this.receiving : undefined };
       // (what a value does not have, read in it, is nothing; a name nothing holds, said once the statement is read, unless it was
       // only a place given a value)
       if (!(code.ctx.into !== undefined && code.ctx.caller === undefined && !code.ctx.sees)) this.unread.set(this.place, { message: `Unresolved \`${word}\`.`, at: { text: code.text, b: r.b, e: r.e } });
@@ -896,15 +900,20 @@ export class Host {
       const c = r.caps[0], word = code.text.s.slice(c.b, this.name_end(code.text, c.b, c.e)).trim();
       if (word && this.holds(value, word)) owns = this.dispatching(this.base, eq.key);
     }
-    if (owns.length === 0) { this.say(`No \`${code.text.s.slice(r.on.e, r.e).trim().slice(0, 40)}\` on ${this.show(value)}.`, code.text, r.on.e, r.e); return undefined; }
+    // (a value without that head: another reading, else said)
+    if (owns.length === 0) { this.missing ??= { message: `No \`${code.text.s.slice(r.on.e, r.e).trim().slice(0, 40)}\` on ${this.show(value)}.`, at: { text: code.text, b: r.on.e, e: r.e } }; return NOT; }
     // (the value's own equivalences with that head, nearest first: the first that reads what follows, its own captures read from the
     // same place, and applies)
-    for (const x of owns) {
-      const caps = x === eq ? r.caps : this.match(x, code.text, r.from!, r.e, code.ctx, 0, r.from!, [])?.caps;
-      if (!caps) continue;
-      const v = this.apply(x, caps, code, value === undefined ? this.none : value, place);
-      if (v !== NOT) return v;
-    }
+    // (read on a name nothing holds: what is read there remembers it, a member declared there makes it, `a.b := v`)
+    const was = this.receiving; if (value === undefined && r.on.name && place?.text) this.receiving = place;
+    try {
+      for (const x of owns) {
+        const caps = x === eq ? r.caps : this.match(x, code.text, r.from!, r.e, code.ctx, 0, r.from!, [])?.caps;
+        if (!caps) continue;
+        const v = this.apply(x, caps, code, value === undefined ? this.none : value, place);
+        if (v !== NOT) return v;
+      }
+    } finally { this.receiving = was; }
     return NOT;
   }
   // whether a span is the whole of some code (spaces around it aside)
@@ -931,7 +940,9 @@ export class Host {
     const p = n?.place; if (!p) return v;
     this.unread.delete(p);
     // (declared where it was read; written where it is declared)
-    const at = assign ? p.at : p.here;
+    let at = assign ? p.at : p.here;
+    // (a member of a name nothing holds: that name, a value of its own, declared where it was read)
+    if (at === this.none && p.on?.text) { const on = p.on, ns = new Ray(this.base); this.unread.delete(on); this.add(on.at, [{ lit: on.word }], new Value(ns, new Code(on.text!, on.b!, on.e!, on.at))); at = ns; }
     const t = { name: '', s: p.word };
     this.add(at, [{ lit: p.word }], new Value(v, new Code(t, 0, p.word.length, at)));
     return v;

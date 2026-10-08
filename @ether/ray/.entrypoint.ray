@@ -453,9 +453,8 @@ Class &+= {
     instance
   made_of (parent, header, block) =>
     made := @made (parent ?? Node)
-    fields := ((@text header) === "None") ? None : (@parameters (@named "") header)
-    // (its header: its pieces in order, a text as it is written, a field its node)
-    fields ? (made.header := @pieces fields) : None
+    // (its header read into it: its fields, and its `header`, the pieces in order (a text as it is written, a field its node))
+    fields := ((@text header) === "None") ? None : (@parameters made header)
     made with {
       read_into (instance) =>
         (@of made).read_into(instance)

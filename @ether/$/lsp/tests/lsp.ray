@@ -1,6 +1,6 @@
 // Diagnostics written as LSP's publishDiagnostics.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 placed := Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)})
 warned := Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)

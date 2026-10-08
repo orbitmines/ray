@@ -1,6 +1,6 @@
 // An enum is a class whose `|` adds a member; a member may carry fields of its own.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 Colour := enum red | green | blue
 Shape := enum circle (radius: Number) | square (side: Number) | point

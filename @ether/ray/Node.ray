@@ -99,17 +99,17 @@ Section := class operator, operand? {
 
 Cases := Program{written.nonempty && written.every(.code ~= (*, " => ", *))}
 if &+= {
-  { }{subject} {{cases: Cases}} else {{otherwise}} ^class => Compiler.reduced(subject, (Program(code: external ** cases) as Compiler) + Program(code: external ** otherwise).otherwise)
-  { }{subject} {{cases: Cases}} ^class => Compiler.reduced(subject, Program(code: external ** cases) as Compiler)
+  { }{subject} {{cases: Cases}} else {{otherwise}} ^class => Compiler.reduced(subject, (Program(code: cases**) as Compiler) + Program(code: otherwise**).otherwise)
+  { }{subject} {{cases: Cases}} ^class => Compiler.reduced(subject, Program(code: cases**) as Compiler)
 }
 Program &+= {
-  as (=== Compiler) => Program(code: external ** written.map(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *))?.type
+  as (=== Compiler) => Program(code: written.map**(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *))?.type
     ?? ((arm.case as Program)() is Section ? ("*{", arm.case, "}") : ("*{== ", arm.case, "}")), "} => ", arm.value)).join(\n))
   otherwise => ("{subject_of_case: *} => (", code, ")") as String as Program as Compiler
 }
 
 Node &+= {
-  .({expr}) ^punctuation => Program(code: (external ** expr)).entered(this, None)
+  .({expr}) ^punctuation => Program(code: (expr**)).entered(this, None)
 }
 
 Node &+= {
@@ -203,10 +203,10 @@ Node &+= {
   is_unique<in: Program?> => (&){in ? (. ==<in: in> this) : . == this}.count == 1
 }
 
-forall{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.every(Program(code: external ** predicate, parameters: external ** name))
-exists{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.some(Program(code: external ** predicate, parameters: external ** name))
-exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => type#.some(Program(code: external ** predicate, parameters: external ** name))
-!exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => !type#.some(Program(code: external ** predicate, parameters: external ** name))
+forall{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.every(Program(code: predicate**, parameters: name**))
+exists{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.some(Program(code: predicate**, parameters: name**))
+exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => type#.some(Program(code: predicate**, parameters: name**))
+!exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => !type#.some(Program(code: predicate**, parameters: name**))
 mathematics := suggest {
   forall == ∀
   exists == ∃

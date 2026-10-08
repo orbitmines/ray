@@ -1,6 +1,6 @@
 // A program is what it is written as, and what holds a program holds programs all the way down.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 taken := Program(code: {
   1

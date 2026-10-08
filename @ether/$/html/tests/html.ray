@@ -1,6 +1,6 @@
 // HTML fragments written inline, and the HTML language writing them.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 who := "Ray"
 by_hand := HTML.Element("p", [("class", "note")], [HTML.Text("hi")])

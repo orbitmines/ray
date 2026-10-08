@@ -1,6 +1,6 @@
 // SHA-256 digests of FIPS 180's examples (https://csrc.nist.gov/projects/cryptographic-standards-and-guidelines/example-values, SHA256.pdf).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // One-block message "abc" (FIPS 180-4 example SHA256.pdf, and FIPS 180-2 Appendix B.1)
 unless SHA256.write("abc".bytes) as Byte₃₂ as Hexadecimal₆₄ == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" { INFO@mark `SHT1 abc does not digest as in FIPS 180's one-block example` }

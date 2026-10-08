@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 // An operating system is a member of the enum OS; as a boolean, whether it is the one the device runs.
 unless [OS.Ether, OS.Linux, OS.Macos, OS.Windows, OS.Browser].every(. is OS) { INFO@mark `OSE1 an operating system is not one of OS` }

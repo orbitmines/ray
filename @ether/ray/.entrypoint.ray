@@ -16,6 +16,9 @@
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
 static {statement} => (@has & given) ? None : statement
 
+// `x**`: what is written, as a program (R4.1: a captured argument is code; `**` gives it), not read
+{code}** => Program(code: @code code)
+
 // Text written in quotes: a String (its characters).
 "{text}" => @text text
 

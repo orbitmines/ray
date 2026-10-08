@@ -1,6 +1,6 @@
 // HPKE base mode with DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20Poly1305 against RFC 9180's test vector A.2.1 (https://www.rfc-editor.org/rfc/rfc9180#appendix-A.2.1).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 hpke := HPKE()
 unless hpke.suite == [0x48, 0x50, 0x4b, 0x45, 0x00, 0x20, 0x00, 0x01, 0x00, 0x03] { INFO@mark `HPKE1 the suite is not HPKE, 0x0020, 0x0001, 0x0003` }

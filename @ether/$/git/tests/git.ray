@@ -1,6 +1,6 @@
 // Git: a tree per commit, and the operations kept in notes.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 ada := Instance.local.login(Character(name: "ada"))
 vh := History(repository: Repository())

@@ -1,6 +1,6 @@
 // OpenType fonts read by their table directory (https://learn.microsoft.com/en-us/typography/opentype/spec/otff).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // A table directory with no tables: sfntVersion 0x00010000 for TrueType outlines, numTables 0 (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
 empty_font := OpenType.read([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])

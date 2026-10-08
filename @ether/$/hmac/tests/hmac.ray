@@ -1,6 +1,6 @@
 // HMAC over SHA-1 and SHA-256 against RFC 2202 and RFC 4231 (https://www.rfc-editor.org/rfc/rfc2202, https://www.rfc-editor.org/rfc/rfc4231).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // Test case 2: key "Jefe", data "what do ya want for nothing?" (RFC 2202 §3, RFC 4231 §4.3)
 unless HMAC(SHA1, key: "Jefe".bytes).write("what do ya want for nothing?".bytes).bytes as Hexadecimal₄₀ == "effcdf6ae5eb2fa2d27416d5f184df9c259a7c79" { INFO@mark `HMAC1 HMAC-SHA-1 of RFC 2202's test case 2 is not effcdf6a…` }

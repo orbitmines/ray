@@ -1,6 +1,6 @@
 // TZif files read into zones (https://datatracker.ietf.org/doc/html/rfc8536).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // A version 1 file of one local time type, UTC: no transitions, offset 0, abbreviation "UTC" (RFC 8536 3.1, 3.2)
 utc_tzif := ["TZif".bytes, [0x00], [0x00] * 15, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4], [0, 0, 0, 0, 0, 0], "UTC".bytes, [0x00]].flatten

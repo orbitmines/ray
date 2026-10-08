@@ -50,7 +50,7 @@ Iterable &+= {
   filter (predicate: (x: Vertex): boolean) => this[{predicate}]
 
   reduce (step: Program) => rest.reduced(first, step)
-  .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => reduced(initial, Program(code: (external ** step), parameters: (external ** accumulator)))
+  .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => reduced(initial, Program(code: (step**), parameters: (accumulator**)))
   .reduce({literal operator ^operator}) ^punctuation => .reduce((acc) => acc[operator] .)
   reduce_right | fold_right | foldr => reverse.reduce
   reduced (seed, step: Program) => empty ? seed : rest.reduced(step.entered(first, seed), step)
@@ -396,12 +396,12 @@ Spread := class of: * {
 }
 
 {`{`}{ }{names}{ }{`}`} = {source} ^punctuation => (
-  written := header_items((external ** names), `,`)
-  inline (external ** written.map(. + " := source." + .).join("\n"))
+  written := header_items((names**), `,`)
+  inline (written.map**(. + " := source." + .).join("\n"))
 )
 Targets := String{.contains(",")}
 ({targets: Targets}) = {value} ^punctuation => (
   held := value
-  written := header_items((external ** targets), `,`)
-  inline (external ** written.enumerate.map(.value + " = held[" + (.index as String) + "]").join("\n"))
+  written := header_items((targets**), `,`)
+  inline (written.enumerate.map**(.value + " = held[" + (.index as String) + "]").join("\n"))
 )

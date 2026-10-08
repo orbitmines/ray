@@ -1,6 +1,6 @@
 // JS fragments read as Ray programs, and the JS language writing them.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 who := "Ray"
 js_listen := @js document.getElementById({who}).addEventListener("click", (event) => ray.activate({who}))

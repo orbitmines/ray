@@ -1,6 +1,6 @@
 // nand is the only primitive; the rest is written from it.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 unless true !&& false { INFO@mark `BB1 nand(true,false) should be true` }
 if true !&& true { INFO@mark `BB2 nand(true,true) should be false` }

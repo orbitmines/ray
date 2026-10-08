@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 unless 1B == 8b { INFO@mark `U8 a byte does not equal eight bits` }
 unless 8 bits as byte == 1 byte { INFO@mark `UB6 eight bits are not one byte` }

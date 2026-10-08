@@ -1,6 +1,6 @@
 // Noise_XX_25519_ChaChaPoly_SHA256 (https://noiseprotocol.org/noise.html).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // The name has 32 bytes, HASHLEN, so h starts as the name itself (§5.2, §8)
 nz_protocol := Noise()

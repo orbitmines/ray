@@ -1,6 +1,6 @@
 // ANSI escape sequences written inline, read into their values, and written back.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 who := "Ray"
 moved := @ansi \e[2;3H

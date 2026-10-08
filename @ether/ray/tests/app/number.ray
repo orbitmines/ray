@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 unless 0.is_zero { INFO@mark `N1 zero is not zero` }
 if 1.is_zero { INFO@mark `N2 one reports zero` }

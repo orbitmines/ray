@@ -1,6 +1,6 @@
 // Roman numerals: what a number is written as, and what a numeral is worth.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 unless 4 as Roman == "IV" { INFO@mark `RO1 four is not written IV` }
 unless 9 as Roman == "IX" { INFO@mark `RO2 nine is not written IX` }

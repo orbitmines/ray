@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 uu := UUID.v4()
 unless uu.length == 32 { INFO@mark `UU1 v4 has other than 32 digits` }

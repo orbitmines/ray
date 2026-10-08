@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 unless "ab".length == 2 { INFO@mark `S1 ab has other than two characters` }
 unless "ab"[0] == 97 { INFO@mark `S2 a is not codepoint 97` }

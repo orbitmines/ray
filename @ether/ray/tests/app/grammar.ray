@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 {a} %+ {b} => true
 unless true %+ true { INFO@mark `GR1 a rule written at the top reads at the top` }

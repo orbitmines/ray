@@ -1,6 +1,6 @@
 // CRC-32 check values (https://reveng.sourceforge.io/crc-catalogue/17plus.htm#crc.cat.crc-32-iso-hdlc).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // The catalogue's check: "123456789" is 0xCBF43926
 unless "123456789".bytes as CRC32 as Binary₃₂ == 0xCBF43926 { INFO@mark `CRC1 the check string does not sum to cbf43926` }

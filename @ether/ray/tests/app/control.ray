@@ -1,6 +1,6 @@
 // `if` evaluates eagerly and inlines the branch it takes; `while` and `do` are one class.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 t := if true { true } else { false }
 unless t { INFO@mark `CC1 if-true did not take the then branch` }

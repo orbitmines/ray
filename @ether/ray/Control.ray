@@ -5,7 +5,7 @@ dynamically if{ }{cond}{ }{block} ^keyword => Dynamic(program: () => if cond blo
 // Run now, and again while it answers nothing when something is declared (P5.1, `watched` in the entrypoint); marked to run
 // again at its next turn when a name it depends on is written (P5.1a).
 dynamically {value} ^keyword => (
-  written := Program(code: external ** value, context: external .)
+  written := Program(code: value**, context: external .)
   running := None
   running = watched(written)
   Dynamic(program: running, source: written)
@@ -98,7 +98,7 @@ Program &+= {
     index
   }
 }
-dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR `assertion failed`) -- .empty
+dynamically assert {conditions} ^keyword => Program(code: conditions**).written{!.()} -- .for(ERROR `assertion failed`) -- .empty
 
 Quantity.Temporal &+= {
   right-to-left sleep => Time.now -- (start => await dynamically (Time.now >= start + this))

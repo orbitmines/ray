@@ -1,6 +1,6 @@
 // Types: what a value is built on, and where a type is written.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 TA := class { }
 TB := class: TA { }

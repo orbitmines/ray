@@ -1,6 +1,6 @@
 // Ed25519 against RFC 8032's test vectors (https://www.rfc-editor.org/rfc/rfc8032#section-7.1).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // TEST 1: the secret key, its public key, and the signature of the empty message (RFC 8032 §7.1)
 ed_secret := "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60" as Hexadecimal₆₄ as Byte₃₂

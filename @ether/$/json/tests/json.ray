@@ -1,6 +1,6 @@
 // JSON: read into a document and written back.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 json := JSON.read("{\"name\": \"x\", \"list\": [1, true, null], \"inner\": {\"a\": \"b\\n\"}}")
 unless json.name == "x" { INFO@mark `JN1 a JSON member is not read` }

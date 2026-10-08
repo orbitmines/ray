@@ -1,6 +1,6 @@
 // X25519 against RFC 7748's test vectors (https://www.rfc-editor.org/rfc/rfc7748#section-5.2, #section-6.1).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // One scalar times one u-coordinate (RFC 7748 §5.2, the first vector)
 unless X25519.x25519("a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4" as Hexadecimal₆₄ as Byte₃₂, "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c" as Hexadecimal₆₄ as Byte₃₂) as Hexadecimal₆₄ == "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552" { INFO@mark `XDH1 the first scalar of RFC 7748 §5.2 does not multiply to c3da5537…` }

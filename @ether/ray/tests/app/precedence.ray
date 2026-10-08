@@ -1,6 +1,6 @@
 // Comparisons chain; operators group by the order Number declares them.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 unless 1 < 2 < 3 { INFO@mark `PR3 one below two below three does not hold` }
 if 3 < 2 < 1 { INFO@mark `PR4 three below two below one holds` }

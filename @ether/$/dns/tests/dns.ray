@@ -1,6 +1,6 @@
 // DNS messages are values; the wire format reads them and writes them.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 question := DNS.query("example.com")
 unless question.questions.count == 1 { INFO@mark `DN1 a query does not ask one question` }

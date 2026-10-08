@@ -1,6 +1,6 @@
 // A rule that asks for an operator runs a body of statements with a name of its own.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 {left} - {right} => (
   held := 2

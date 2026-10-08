@@ -18,7 +18,7 @@ Access := class who: *?, method: `=` | `()` | * = *, filter: Program?, target: *
 
   // A grant is an Access on what it names: on what the expression answers when that is held somewhere (a value, a
   // field), on the expression itself when it derives something (`@ether.read x.count`, L§8.2.2).
-  { }{literal target} ^punctuation => Program(code: external ** target) -- (named => checkable(named) && checkable(filter)
+  { }{literal target} ^punctuation => Program(code: target**) -- (named => checkable(named) && checkable(filter)
     ? named() -- (value => value is Node && value.parent ? value : named) -- (held => held ~~ .access |= (this ~~ .target = held))
     : ERROR@Access `a grant names an expression that changes nothing and terminates`)
 }
@@ -28,9 +28,9 @@ none := Character{false}
 {who}.read ^keyword => Access(who, method: Access.Reading)
 {who}.write ^keyword => Access(who, method: `=`)
 {who}.execute ^keyword => Access(who, method: `()`)
-{who}{{literal filter}}.read ^keyword => Access(who, method: Access.Reading, filter: Program(code: (external ** filter)))
-{who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (external ** filter)))
-{who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))
+{who}{{literal filter}}.read ^keyword => Access(who, method: Access.Reading, filter: Program(code: (filter**)))
+{who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (filter**)))
+{who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (filter**)))
 const {target} ^keyword => target ~~ .access |= Access(none, method: `=`, target: target)
 confidential = => Node.policy
 

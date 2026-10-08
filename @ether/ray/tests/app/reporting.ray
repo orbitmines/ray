@@ -1,6 +1,6 @@
 // A diagnostic and a run of claims are values; $/lsp, $/sarif, $/tap and $/junit write them.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 failing := Diagnostic(message: "no")
 unless failing.severity == Diagnostic.Severity.error { INFO@mark `DG1 an error is not of error severity` }

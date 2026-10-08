@@ -1,6 +1,6 @@
 // HKDF-SHA256 against RFC 5869 (https://www.rfc-editor.org/rfc/rfc5869#appendix-A).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // Test case 1: 22 bytes of 0x0b, salt 00..0c, info f0..f9, 42 bytes (https://www.rfc-editor.org/rfc/rfc5869#appendix-A.1)
 kdf := HKDF(SHA256)

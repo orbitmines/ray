@@ -68,7 +68,7 @@ dynamically Escape.for spelling => global[spelling] := Compiler.reduced(spelling
 
 Balanced := (Char{!= "{" && != "}" && != "\""} | ("{", Balanced, "}"))[]
 Interpolation := class ("{", code: Balanced, "}")
-"{literal: (\{escape} | Interpolation | Char{!= "\""})[]}": String => literal.map(. is Interpolation ? (inline (external ** .code)) as String : .).join("").literal_dedented
+"{literal: (\{escape} | Interpolation | Char{!= "\""})[]}": String => literal.map(. is Interpolation ? (inline (.code**)) as String : .).join("").literal_dedented
 
 LanguageName := String{Language.named("." + .) != None}
 @{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
@@ -159,4 +159,4 @@ Node &+= {
   : None
 
 Parameters := String{!.contains("{")}
-({parameters: Parameters}) => {block} => Program(code: (external ** block), parameters: (external ** parameters), context: this)
+({parameters: Parameters}) => {block} => Program(code: (block**), parameters: (parameters**), context: this)

@@ -1,7 +1,7 @@
 // Unicode: what a scalar is, what a character is a kind of, the tables read
 // from unicode.org, and the transformation formats.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 unless 10 is Unicode.Scalar { INFO@mark `UN3 ten is not a scalar` }
 unless "a"[0] is Unicode.Scalar { INFO@mark `UN1 a is not a scalar` }

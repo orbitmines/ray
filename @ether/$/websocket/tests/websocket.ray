@@ -1,6 +1,6 @@
 // WebSocket frames and messages are values; the wire format reads them and writes them.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 hello := WebSocket.Frame(opcode: WebSocket.Opcode.text, payload: "Hello" as Byte[])
 unless hello as Byte[] == [0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f] { INFO@mark `WS1 an unmasked text frame is not written as in RFC 6455 section 5.7` }

@@ -1,6 +1,6 @@
 // ZLIB streams read and written (https://www.rfc-editor.org/rfc/rfc1950).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // "hello" as another zlib writes it: CMF 0x78, FLG 0x9c, then its Adler-32 062c0215 (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
 hello_z := [0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15]

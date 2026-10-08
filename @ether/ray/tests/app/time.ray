@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 unless second is Unit.Temporal { INFO@mark `TI1 a second is not temporal` }
 unless 5 seconds . is Quantity.Temporal { INFO@mark `TI14 five seconds is not temporal` }

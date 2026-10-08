@@ -1,6 +1,6 @@
 // Requests and responses are values; HTTP/1.1 and HTTP/2 read them and write them.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 asked := HTTP.Request(target: @https://example.com/a?b=1)
 unless asked.method == HTTP.Method.get { INFO@mark `HT1 a request without a method is not a GET` }

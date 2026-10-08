@@ -1,6 +1,6 @@
 // CSS fragments written inline, and the CSS language writing them.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 who := "Ray"
 css_rule := @css #{who} { gap: {2}px {3}px; display: grid; }

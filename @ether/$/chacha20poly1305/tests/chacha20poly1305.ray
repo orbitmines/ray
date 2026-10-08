@@ -1,6 +1,6 @@
 // ChaCha20, Poly1305 and their AEAD against RFC 8439's test vectors (https://www.rfc-editor.org/rfc/rfc8439).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // The block function: key 00..1f, nonce 00:00:00:09:00:00:00:4a:00:00:00:00, counter 1 (RFC 8439 §2.3.2)
 unless ChaCha20Poly1305.block(0..<32, 1, "000000090000004a00000000" as Hexadecimal₂₄ as Byte₁₂) as Hexadecimal₁₂₈ == "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e" { INFO@mark `CCP1 the block of RFC 8439 §2.3.2 is not 10f1e7e4…` }

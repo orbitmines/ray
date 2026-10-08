@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 a := Ray()
 b := Ray(previous: a)

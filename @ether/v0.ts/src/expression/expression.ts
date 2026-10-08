@@ -411,6 +411,8 @@ export class Host {
   // whether a line ends with what reads on from a value, a value to follow it on the next line (G2.12): `a,`
   trails(s: string, e: number): boolean {
     let j = e; while (j > 0 && s[j - 1] === this.learned.space) j--;
+    // (what is read after a value as all it reads ends it: `x**`)
+    for (const list of this.infix.values()) for (const x of list) { const ps = x.eq.pieces; if (ps.length === 2 && 'cap' in ps[0] && 'lit' in ps[1] && s.endsWith(ps[1].lit, j)) return false; }
     for (const list of this.infix.values()) for (const x of list) { const l = x.lit.trimEnd(); if (l.length > 0 && l !== x.lit && !x.eq.ctx.scope && !x.eq.node && s.endsWith(l, j) && !this.bracket(l[0]) && (this.blank(s[j - l.length - 1]) || !this.postfix(l))) return true; }
     return false;
   }

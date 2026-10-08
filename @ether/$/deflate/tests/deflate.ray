@@ -1,6 +1,6 @@
 // DEFLATE streams read and written (https://www.rfc-editor.org/rfc/rfc1951).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 unless Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111] { INFO@mark `DF1 the code lengths of section 3.2.2's example do not give its codes` }
 unless Deflate.fixed_literals.bits(0) == 0b00110000 && Deflate.fixed_literals.bits(144) == 0b110010000 && Deflate.fixed_literals.bits(256) == 0b0000000 { INFO@mark `DF2 the fixed literal codes are not those of section 3.2.6` }

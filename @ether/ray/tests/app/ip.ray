@@ -1,7 +1,7 @@
 // Addresses: what they are made of, how they are written, and where a run of
 // zeros is written `::`.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 address := "1.0.0.12" as IPv4
 unless address.segments.length == 4 { INFO@mark `IP1 the address has other than four segments` }

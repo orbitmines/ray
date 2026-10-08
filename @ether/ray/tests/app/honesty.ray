@@ -1,6 +1,6 @@
 // What `unless` does cannot be taken on trust: here its firing is counted, not reported.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 fired := 0
 unless false { fired += 1 }

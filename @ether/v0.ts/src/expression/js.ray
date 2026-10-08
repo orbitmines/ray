@@ -17,6 +17,8 @@ global => @js $.global
 @assign {value} => @js $.assigning(F) ? undefined : $.declare(F, $.get(F, "value"), true)
 @inside {x} {type} => @js $.name(F, (() => { for (let n = x; n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
+// what is written, as code (not read)
+@code {x} => @js $.written(F.m.get("x"))
 @given {instance} {arguments} => @js $.given($.get(F, "instance"), $.written(F.m.get("arguments")))
 @block {made} {code} => @js $.blocks.set($.get(F, "made"), $.written(F.m.get("code")))
 @run {program} => @js $.ran($.get(F, "program"))

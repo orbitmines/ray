@@ -304,7 +304,7 @@ Geometry := class {
     compounds - (hole: Shape) => (holes ,= hole) -- this
     smoothed (radius: Length) => (smoothing = radius) -- this
     narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? writes.for(.entered(this, None)) -- this : reachable.filter(narrowing.entered(., None)))
-    {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
+    {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: narrowing**))
 
     share (of: (Length | Number | Stops)?, room: Length) => of is Stops ? of.at(room) * room : of is Number ? of * room : of
     radii => radius.map(. is Number ? size * . : Vector(., .))

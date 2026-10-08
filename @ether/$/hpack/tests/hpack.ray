@@ -1,6 +1,6 @@
 // Field blocks read and written as in RFC 7541's examples (https://www.rfc-editor.org/rfc/rfc7541#appendix-C).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 unless (10 as HPACK.Integer<5>) as Binary == 0b01010 { INFO@mark `HP1 10 is not written in a 5-bit prefix as in C.1.1` }
 unless (1337 as HPACK.Integer<5>) as Binary == 0b111111001101000001010 { INFO@mark `HP2 1337 is not written with continuation octets as in C.1.2` }

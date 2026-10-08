@@ -40,8 +40,13 @@ Node &+= {
   // `x := v`: `v` at the place `x` was read at, from here on; `x = v`: where `x` is declared; `x &= v`: `v` at the end of the Ray `x`
   // holds (a Ray of it, when it holds nothing).
   := {value Expression} => @declare value
-  = {value Expression} => @assign value
+  = {value} => @assign value
   &= {value Expression} => @assign ((this ?? []).append(value))
+  // `x: T`: `x` is a `T` (holding `T` until something is written to it); given by name, `x: v` gives it `v`; in what is being given
+  // its fields in order, the next of them (one given by name keeps it)
+  : {type} =>
+    (@typed type) ? None : (&.naming ? (@declare type) : ((@owns & @word) ? None : ((&.given && !(&.given.empty)) ? (@declare &.given.take) : (@holding type))))
+    &.naming ? & : this
 }
 // `x with { … }`: the block read with `x` as what it is read in, answering what the block answers.
 {target Expression} with {{block target}} => block
@@ -78,161 +83,41 @@ false &+= {
 {a} !== {b} => (@same a b) ? false : true
 @me/instance = {x} => @show x
 
-// ---------------------------------------------------------------- heads: what a definition's head says (R0.1 on)
-// A head is read where only what reads heads reads (`@context`, a context of its own): as written, or what is said of one:
-// `p | q` (both), `p ^style` (how it is shown), `static p`, `chainable p`, `right-to-left p` (applied with what is on its right),
-// `p (parameters)` (a method), `p: T` (what it gives). What is inside a capture, and a method's parameters: a name, `x: T` (what
-// reads it), `x = d` (what it is, not given), `a, b` (one after the other), `x ^style`, `literal x`, `=== T` (given a `T`),
-// `` `text` `` (text as written), `"x"?` (text that may be written). Each is said of a Pattern (below), which writes the forms the
-// head is defined as.
-Defaulted := @outside ", " None
-// (a type is not led by a capture: `class: {parent} …` is written as it is)
-Opened => @js $.reader(s => s.startsWith($.learned.open) ? s : undefined)
-Unspaced := @outside " " None
-Typed := @outside " ^" (@outside " = " Defaulted)
-Captured := @context None
-Captured &+= {
-  {first Captured}, {rest Captured} => first.then(rest)
-  {parameter Captured} = {default Defaulted} => parameter.defaulting(@text default)
-  {parameter Captured} ^{style Word} => parameter
-  {name Word}: {type Typed} => (Pattern.of(@text name)).typed(@text type)
-  {name Word} => Pattern.of(@text name)
-  literal {parameter Captured} => parameter
-  === {type Typed} => (Pattern.of("given")).typed(@text type)
-  `{text}` => Pattern.literally(@text text)
-  {written Typed}? => (Pattern.of("optional")).typed(@joined (@text written) "?")
+// ---------------------------------------------------------------- definitions: what a head says
+// A definition's head is read as what it says, a node: its name as written (any text), what it is given (its parameters, each read
+// into it: `x: T` the `:` of Node, `= d` its `=`), the names it is also (`a | b`, a Superposition), how it is applied (`static p`,
+// `right-to-left p`). Defining it makes its name, and what is given to it, read as it says (R2.1: a method is a rule).
+// What is inside a capture is read the same way: a capture is a parameter.
+Unled => @js $.reader(s => s.startsWith($.learned.open) ? undefined : s)
+Unspaced => @js $.reader(s => s.includes($.learned.space) ? undefined : s)
+Parameters := @context None
+Parameters &+= {
+  {first Parameters}, {rest Parameters} => first
+  ({inside Parameters}) => inside
+  literal {target Parameters} => target
+  {target Parameters} ^{style Text} => target
+  === {type Text} => @parameter given: type
+  {target Text} => @parameter target
 }
-Head := @context None
-Head &+= {
-  {pattern} ^{style Word} => Pattern.head(@text pattern)
-  {pattern} | {alias} => (Pattern.head(@text pattern)).or(Pattern.head(@text alias))
-  static {pattern} => (Pattern.head(@text pattern)).restated
-  chainable {pattern} => (Pattern.head(@text pattern)).restated
-  right-to-left {pattern} => (Pattern.head(@text pattern)).leftward
-  {pattern} ({parameters Captured}) => (Pattern.head(@text pattern)).taking(parameters)
-  {pattern}({parameters Captured}) => (Pattern.head(@text pattern)).taking(parameters)
-  {pattern} () => (Pattern.head(@text pattern)).taking(None)
-  {pattern}() => (Pattern.head(@text pattern)).taking(None)
-  ({parameters Captured}) => Pattern.unnamed.taking(parameters)
-  {pattern} ({parameters Captured}): {type Typed} => (@read Opened (@text type)) ? None : (Pattern.head(@text pattern)).taking(parameters)
-  {pattern}({parameters Captured}): {type Typed} => (@read Opened (@text type)) ? None : (Pattern.head(@text pattern)).taking(parameters)
-  {name Word}: {type Typed} => (@read Opened (@text type)) ? None : Pattern.of(@text name)
+@captures Parameters
+Method := @context None
+Method &+= {
+  {name Unled} => @named name
+  {head Method} ({parameters Unled}) => @parameters head parameters
+  {head Method}({parameters Unled}) => @parameters head parameters
+  {head Method} () => @takes head
+  {head Method}() => @takes head
+  ({parameters Unled}) => @parameters @unnamed parameters
+  {a Method} | {b Method} => a | b
+  static {head Method} => head
+  chainable {head Method} => head
+  right-to-left {head Method} => @leftward head
+  {head Method}: {type Unled} => head
+  // (a name declared, `X := …`: the definition read again as it is written, without what was said of it)
+  {name Unspaced} := {value Text} => @again name value
 }
-
-// ---------------------------------------------------------------- what a head says: a Pattern, and the forms it is defined as
-Pattern := @made Node
-Pattern &+= {
-  // (what is not said of one is nothing: not what the base says, which the library extends)
-  type := None
-  default := None
-  next := None
-  parameters := None
-  takes := None
-  alias := None
-  receiving := None
-  nameless := None
-  literal := None
-  again := None
-  unread := None
-  // a head as written (a capture, `{x}`, named so); a symbol hugs what it is given; a name: one word, not a capture
-  of({text}) =>
-    made := @made Pattern
-    made.written := text
-    made
-  hugs => this.nameless ? this : (@read Symbolic this.written)
-  named => (@read Opened this.written) ? None : (@read Unspaced this.written)
-  // a method without a name (a closure's parameters)
-  unnamed =>
-    made := Pattern.of("")
-    made.nameless := made
-    made
-  // text written as it is
-  literally({text}) =>
-    made := Pattern.of(text)
-    made.literal := made
-    made
-  // what `Head` reads a text as, else the text as written
-  head({text}) =>
-    written := text
-    (@read Head written) ?? Pattern.raw(written)
-  raw({text}) =>
-    made := Pattern.of(text)
-    made.unread := made
-    made
-  // what a word said of it leaves: as written, the definition read again with it
-  restated =>
-    (this.takes || this.alias || this.receiving) ? None : (this.unread ? (this.again := this) : None)
-    this
-  // each form a head is defined as (none: as written); what is inside a capture, written as captures are (none: as written)
-  heading({text}) =>
-    read := @read Head text
-    read ? read.formed : None
-  capture({text}) =>
-    read := @read Captured text
-    read ? read.listed : None
-  // `p | q`: both names
-  or({other}) =>
-    alias := other
-    // (a name beside a method takes what it takes: `min | min_by (key)`)
-    (alias.takes && !this.takes) ? this.took(alias.parameters) : None
-    (this.named && alias.named) ? this.aliased(alias) : None
-  aliased({other}) =>
-    alias := other
-    this.alias := this.alias ? alias.aliased(this.alias) : alias
-    this
-  typed({type}) =>
-    this.type := type
-    this
-  defaulting({value}) =>
-    this.default := value
-    this
-  then({rest}) =>
-    more := rest
-    this.next := this.next ? this.next.then(more) : more
-    this
-  // a method (named), given its parameters
-  taking({parameters}) =>
-    given := parameters
-    this.named ? this.took(given) : None
-  took({parameters}) =>
-    this.parameters := parameters
-    this.takes := this
-    this
-  leftward =>
-    this.receiving := this
-    this.alias ? this.alias.leftward : None
-    this
-  // as a capture, `{name reader}` (or the text it is); all of them, one after the other (text joined by the interpreter: what
-  // reads a head is read before any class, `String` too)
-  captured => this.literal ? this.written : @joined (@joined @open (this.type ? (@joined (@joined this.written " ") this.type) : this.written)) @close
-  listed => this.next ? (@joined (@joined this.captured ", ") this.next.listed) : this.captured
-  // each form it is defined as: a method as called, `m(a, b)`, and given what follows it, `m a, b` (a symbol hugging it, `+b`; one
-  // without a name, only that); one applied right to left, with what is on its right (`this`); else as written
-  formed =>
-    this.alias ? this.alias.formed : None
-    this.again ? (@again this.written) : this.form
-  form =>
-    this.takes ? this.called : (this.receiving ? (@applied (@joined (@joined this.written (this.hugs ? "" : " ")) (@joined (@joined @open "receiver") @close)) "receiver") : (@form this.written ""))
-  called =>
-    after := this.hugs ? "" : " "
-    this.nameless ? None : (this.parameters ? this.parameters.forms((@joined this.written "("), "", ")", "", this) : (@form (@joined this.written "()") ""))
-    this.parameters ? this.parameters.forms((@joined this.written after), "", "", "", this.hugs) : None
-  // the forms of the parameters from this one on, after `before` (each after `between`), then `after`; one not given: declared;
-  // written as a call (or given what follows it, after a space)
-  forms({before}, {between}, {after}, {given}, {call}) =>
-    start := before
-    sep := between
-    closing := after
-    declared := given
-    calling := call
-    full := @joined (@joined start sep) this.captured
-    this.next ? this.next.forms(full, ", ", closing, declared, calling) : this.formed_as((@joined full closing), declared, calling)
-    this.default ? (this.next ? this.next.forms(start, sep, closing, (this.declared(declared)), calling) : this.formed_as((@joined start closing), (this.declared(declared)), calling)) : None
-  formed_as({written}, {given}, {call}) => call ? (@form written given) : (@called written given)
-  declared({given}) => @joined (@joined (@joined (@joined given this.written) " := ") this.default) @end
-}
-@captures Captured (written => Pattern.capture(written))
-@heads Head (written => Pattern.heading(written))
+{head Method} => {functionality} =>
+  head.superposes ? head.components.for((alias) => @define alias "receiver" ", ") : (@define head "receiver" ", ")
 
 // `X<K = D, V> := class …`: the class, each parameter a name of it (its default, or nothing).
 {name Word}<{parameters}> := {value: Expression} =>
@@ -354,23 +239,35 @@ Node &+= {
 }
 Class := @made Node
 Class &+= {
-  // an instance: given its arguments (by name, then in order), the blocks of what it is made of read into it
-  // (its arguments read into it while it names: `name: value` gives it that field, answering it; what it is given in order, the
-  // rest)
+  // an instance: given its arguments (by name: `name: value`, read into it), the rest in order to its fields (its header, a
+  // parameter list: what is not given is what the field says), the blocks of what it is made of read into it
   instance_of (made, arguments) =>
     instance := @made made
-    instance &+= { naming := true }
+    instance &+= { naming := instance }
     in_order := [@given instance arguments].without(instance)
-    instance &+= { given := in_order }
     instance &+= { naming := None }
+    instance &+= { given := in_order }
     made.read_into(instance)
+    instance
+  // (in order, to the fields not given by name: what is not given is what the field says)
+  fields_given (instance, fields) =>
+    index := 0
+    name := @param fields index
+    while name {
+      unless @owns instance name {
+        @field instance name (instance.given.empty ? (@default instance fields name) : instance.given.take)
+      }
+      index = index + 1
+      name = @param fields index
+    }
     instance
   made_of (parent, header, block) =>
     made := @made (parent ?? Node)
+    fields := ((@text header) === "None") ? None : (@parameters (@named "") header)
     made &+= {
       read_into (instance) =>
         (@of made).read_into(instance)
-        instance &+= { header }
+        fields ? Class.fields_given(instance, fields) : None
         instance &+= { block }
         instance
       ({arguments}) => Class.instance_of(made, arguments)
@@ -378,7 +275,6 @@ Class &+= {
       // what it is made of: its hierarchy, the classes it is one of
       components := (@made Node) &+= { hierarchy := [] }
     }
-    made &+= { header }
     made &+= { block }
     made
 }
@@ -402,10 +298,6 @@ class: {parent} {header} {{block}} => Class.made_of(parent, header, block)
 class: {parent} {header} => Class.made_of(parent, header, None)
 class {header} => Class.made_of(None, header, None)
 class: {parent} => Class.made_of(parent, None, None)
-// `name: T`, `name: T = default`: a field, given by name, else in order, else its default.
-{name Word}: {type} => &.naming ? (& &+= { name := type }) : ((@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take })) : None)
-{name Word}: {type} = {default} => (@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take ?? default })) : ((@has & components) ? None : (& &+= { name := default }))
-
 // ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`)
 {guarded} if {condition} => condition ? guarded : None
 {guarded} unless {condition} => condition ? None : guarded

@@ -39,6 +39,7 @@ UI := class {
     {chosen: Choice} => Geometry.Box(content: chosen)
     {lines: \n} => Geometry.Box(flow: block, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
+    {site: *{fields.some(.name == "{*}")}} => Compiler.reduced(UI.Site(index: site).rendering, Scene)
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
   }
 
@@ -132,7 +133,10 @@ UI := class {
   }
   Site := class index: *? {
     static (value) as (=== Site) => Site(index: value)
-    at (path: String) => index{location ~= path} ?? index
+    // (F-A4) what a path shows: the fields located at it (several: a choice), else the field named `{*}` (every path no field
+    // claims), else the index itself
+    at (path: String) => index.fields{.value.location ~= path}.map(.value) -- (claimed => claimed.nonempty ? claimed.all
+      : index.fields{.name == "{*}"}.first?.value ?? index)
     rendering => at((@me/device/location ?? @/).path as String)
   }
 

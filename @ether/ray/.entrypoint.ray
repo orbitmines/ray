@@ -392,6 +392,7 @@ Class &+= {
       components := (@made Node) &+= { hierarchy := [] }
     }
     made with { block }
+    @field made "reads" ((target) => target with { block })
     made
 }
 // `T + { … }`: a class made of `T` with what the block declares (both its components)
@@ -404,12 +405,20 @@ Node &+= {
   // `A + B`: a class made of both (both its components): an instance is what each makes of it
   + {other} =>
     made := Class.made_of(this, None, None)
-    made &+= {
-      read_into (instance) => other.read_into((@of made).read_into(instance))
-    }
+    first := @member this "reads"
+    first ? first(made) : None
+    reads := @member other "reads"
+    reads ? reads(made) : None
     made.components.hierarchy := [this, other]
     made
 }
+// a block again, now that there are closures: it keeps how it is read into another (`A + B` of levels, `Solving + Projecting`)
+{{inside}} =>
+  made := @made None
+  @block made inside
+  made &+= { inside }
+  @field made "reads" ((target) => target &+= { inside })
+  made
 // `X := class (header) => { block }`: read as a definition is read (its `=>` is the class's)
 {name Unspaced} := class {header} => {{block}} =>
   name := Class.made_of(None, header, block)

@@ -60,7 +60,7 @@ Geometry := class {
   }
 
   Vector := Elementwise{every(. is Length)}{length == Space.current.dimension} + {
-    static (x: Length = 0, y: Length = 0, z: Length = 0, ...rest: Length[]) as (=== Vector) => [x, y, z, rest].flatten -- (given => (0..<Space.current.dimension).map(given[.] ?? 0))
+    static (x: Length = 0, y: Length = 0, z: Length = 0) => (z == 0 ? [x, y] : [x, y, z]) -- (made => (@also made static) -- made)
     x => this[0] ?? 0
     y => this[1] ?? 0
     z => this[2] ?? 0

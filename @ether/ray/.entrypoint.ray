@@ -8,6 +8,13 @@
 
 // Brackets: what is between them, read as one; a block, a context of what it declares.
 ({inside}) => inside
+// `(a: 1, b: 2)`: a value of its own, holding what is given by name (`.a`, `.b`)
+Fielded => @js $.reader(s => /^[\p{L}\p{N}_]+: /u.test(s) ? s : undefined)
+({fields Fielded}) =>
+  record := @made Node
+  record &+= { naming := record }
+  record with { fields }
+  record
 {{inside}} =>
   made := @made Node
   @block made inside
@@ -287,6 +294,8 @@ Method &+= {
   // (names written together take what is written after them: `min | min_by (key)`)
   {a Method} | {b Method} ({parameters Unled}) => (@parameters a parameters) | (@parameters b parameters)
   static {head Method} => @own head
+  // (a class's own method without a name: how the class is called, `C(1, 2)`)
+  static ({parameters Unled}) => @own (@between "(" ")" parameters)
   chainable {head Method} => head
   right-to-left {head Method} => @leftward head
   // (a pattern applied on what is written after it: `right-to-left {align: start | center}`, `center x`)

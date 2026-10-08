@@ -129,9 +129,6 @@ Node &+= {
 // `x = v`: where `x` is declared (the first statement writes a name held further out there); `x.m = v`: on `x`
 {assigned_name Unspaced} = {assigned_value} =>
   assigned_name => assigned_value
-{assigned_on Unspaced}.{assigned_name Word} = {assigned_value Expression} =>
-  (assigned_on**)() &+= { assigned_name => assigned_value }
-  assigned_value
 Node &+= {
   = {value} => @assign value
   &= {value Expression} => @assign ((this ?? []).append(value))
@@ -157,6 +154,10 @@ Node &+= {
     colon_shared ? (@field colon_field "word" colon_word) : None
     colon_naming ? @here : ((!colon_head) && (colon_had || colon_taken)) ? Field : colon_shared ? colon_field : this
 }
+// `x.m = v`: `v` written on `x` (declared after `:`, which its receiver stops at: `x: T.U = d` is a field)
+{assigned_on Expression}.{assigned_name Word} = {assigned_value Expression} =>
+  assigned_on &+= { assigned_name => assigned_value }
+  assigned_value
 // `x[key]`, `x[key] = v`, `x[key] := v` (T8.7): what a value holds under a name, by its name
 Node &+= {
   [{key Expression}] => @member this key

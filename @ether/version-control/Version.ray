@@ -97,7 +97,7 @@ History := class: Iterable repository: *?, base: Commit?, head: Commit? {
     : [(ours, theirs)]
   merge (other: History, who = @me) => !readable ? (this ~~ .head = head | other.head) : common(other) -- (base => {
     return ERROR@Merge `merge` if clashes(this[base].value, value, other.value).nonempty
-    this.head = since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this)
+    this.head = (since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this))
     this
   })
   + (other: History) => other.since(common(other)).sort_by(.stamp).reduce(held = this[head] => .opened -- (plain => held.commit(plain.who, plain.change, message: plain.message, versions: plain.versions)))

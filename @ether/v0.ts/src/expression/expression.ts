@@ -1053,11 +1053,52 @@ export class Host {
       if (x.version === this.version) return x.r;
       // (what was declared since does not read anything there: read as it was)
       if (!this.since_read(x.version, text.s.slice(b, e))) { x.version = this.version; return x.r; }
-      x.r = this.parse(text, b, e, ctx, floor); x.version = this.version; return x.r;
+      x.r = this.parse_shared(text, b, e, ctx, floor); x.version = this.version; return x.r;
     }
-    const r = this.parse(text, b, e, ctx, floor);
+    const r = this.parse_shared(text, b, e, ctx, floor);
     list.push({ floor, e, version: this.version, r });
     return r;
+  }
+  // A span read in a context as it was read in any context that reaches the same equivalences, in the same order (S2: a span is
+  // read once): what a reading depends on is which contexts with equivalences it reaches, which of them (or of those between)
+  // hold its first word, where a value it is read on is first found, and what reading a capture alone asks of the context.
+  // (the reading kept says how near its equivalence was by its place among those contexts: given back as near as it is here)
+  shared = new WeakMap<Text, Map<string, { version: number; r: Read | undefined; at: number }>>();
+  parse_shared(text: Text, b: number, e: number, ctx: Ray, floor: number): Read | undefined {
+    if (NOSHARE) return this.parse(text, b, e, ctx, floor);
+    const s = text.s; let bb = b, ee = e; while (bb < ee && this.blank(s[bb])) bb++; while (ee > bb && this.blank(s[ee - 1])) ee--;
+    if (bb >= ee) return undefined;
+    const word = s.slice(bb, this.name_end(text, bb, ee)), nears: number[] = [];
+    // (what reading a capture alone asks of the context, `sees`, `outer` where code is written, the value called: only which of the
+    // contexts with equivalences it is)
+    let sig = `${b}:${e}:${floor}:${ctx.level ? this.id(ctx.outer) : ''}:${ctx.alone ? this.id(ctx) : ctx.written && ctx.into?.alone ? this.id(ctx.into) : ''}:${this.deciding > 0 ? 'D' : ''}|`;
+    let self = false, near = 0;
+    const marks = (n: Ray) => (n === ctx.sees ? 'S' : '') + (ctx.written && n === ctx.outer ? 'O' : '') + (n === this.calling ? 'C' : '');
+    for (const n of this.reach(ctx)) {
+      near++;
+      if (!self && ((n.into && !n.into.scope && !n.rule) || (!n.scope && n !== this.base))) { self = true; sig += 's'; }
+      // (names a context holds as values are not rules: only whether it holds the first word)
+      if (n.eqs.length > 0 && n.eqs.some(x => !x.value)) { sig += this.id(n) + marks(n) + ','; nears.push(near); }
+      if (word && (n.has(word) || n.eqs.some(x => x.key === word))) sig += 'h';
+    }
+    let m = this.shared.get(text); if (!m) this.shared.set(text, m = new Map());
+    const x = m.get(sig);
+    if (x && (x.version === this.version || !this.since_read(x.version, s.slice(b, e)))) { x.version = this.version; return this.neared(x.r, nears, x.at); }
+    const r = this.parse(text, b, e, ctx, floor);
+    // (how near, among the contexts with equivalences: the how manyth of them)
+    let inner = r; while (inner?.on) inner = inner.on;
+    const at = inner?.near === undefined ? -1 : nears.indexOf(inner.near);
+    m.set(sig, { version: this.version, r, at });
+    return r;
+  }
+  // a reading kept, as near as its equivalence is from here
+  neared(r: Read | undefined, nears: number[], at: number): Read | undefined {
+    if (!r || at < 0) return r;
+    const chain: Read[] = []; for (let x: Read | undefined = r; x; x = x.on) chain.push(x);
+    const inner = chain[chain.length - 1]; if (inner.near === nears[at]) return r;
+    let out: Read = { ...inner, near: nears[at] };
+    for (let i = chain.length - 2; i >= 0; i--) out = { ...chain[i], on: out };
+    return out;
   }
   shapes = new Map<string, Ray>(); ids = new WeakMap<object, number>(); counted = 0;
   id(x: unknown): number { if (typeof x !== 'object' || x === null) return 0; let i = this.ids.get(x); if (i === undefined) this.ids.set(x, i = ++this.counted); return i; }
@@ -1705,7 +1746,7 @@ class Later { constructor(public code: Code) {} read = false; value?: unknown; }
 // a jump out of what is being read: to the end, or the start again, of the loop it is in (`break`, `continue`), out of the method
 // it is in with a value (`return`)
 export class Jump { constructor(public kind: string, public value?: unknown, public to?: Ray) {} }
-const NOMEMO = !!process.env.EXPR_NOMEMO, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
+const NOMEMO = !!process.env.EXPR_NOMEMO, NOSHARE = !!process.env.EXPR_NOSHARE, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
 const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
 const REJECT = Symbol('reads nothing');
 // JS source with each capture named in it read from the frame (`F`).

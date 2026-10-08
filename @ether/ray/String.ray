@@ -60,7 +60,7 @@ dynamically Escape.for spelling => global[spelling] := Compiler.reduced(spelling
 \s = Unicode.GeneralCategory.Space_Separator | \t
 \S = !\s
 \R = Unicode.GeneralCategory.Line_Separator
-\{prefix: "x" | "u" | "U"}{codepoint: Hexadecimal{length == (x: 2, u: 4, U: 6)[prefix]} | ("{", codepoint: Hexadecimal{length == 1..6}, "}")}: Char => codepoint
+\\{prefix: "x" | "u" | "U"}{codepoint: Hexadecimal{length == (x: 2, u: 4, U: 6)[prefix]} | ("{", codepoint: Hexadecimal{length == 1..6}, "}")}: Char => codepoint
 \d = Unicode.GeneralCategory.Decimal_Number
 \D = !\d
 \w = Char.Word
@@ -68,7 +68,7 @@ dynamically Escape.for spelling => global[spelling] := Compiler.reduced(spelling
 
 Balanced := (Char{!= "{" && != "}" && != "\""} | ("{", Balanced, "}"))[]
 Interpolation := class ("{", code: Balanced, "}")
-"{literal: (\{escape} | Interpolation | Char{!= "\""})[]}": String => literal.map(. is Interpolation ? (inline (.code**)) as String : .).join("").literal_dedented
+"{literal: (\\{escape} | Interpolation | Char{!= "\""})[]}": String => literal.map(. is Interpolation ? (inline (.code**)) as String : .).join("").literal_dedented
 
 LanguageName := String{Language.named("." + .) != None}
 @{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)

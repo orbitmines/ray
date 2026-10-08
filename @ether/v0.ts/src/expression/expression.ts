@@ -193,7 +193,7 @@ export class Host {
       if (statement && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.body.text === bc.text && x.body.b === bc.b && x.body.e === bc.e && x.body.ctx.outer === bc.ctx.outer); if (was) return this.held_as(was); }
       // (a closure is given what it reads: a pattern of one word is what it is given, named)
       let pieces = this.pieces(head, at); const lead = p.b + p.s.indexOf(head);
-      if (!statement && pieces.length === 1 && 'lit' in pieces[0] && this.name_end(p.text, lead, p.e) === lead + head.length) pieces = [{ cap: head }];
+      if (!statement && pieces.length === 1 && 'lit' in pieces[0] && this.name_end(p.text, lead, p.e) === lead + head.length) { pieces = [{ cap: head }]; into.closure = true; }
       const eq = this.add(into, pieces, body); if (this.static_now > 0) eq.own = true; return statement ? this.held_as(eq) : into;
     }
     // (written by a rule: where the rule was applied, or into what is read into)
@@ -350,7 +350,7 @@ export class Host {
     if (typeof between === 'string') node.between = between;
     // (a method without a name is a value, a closure, where code is run; read into a value (a class's block), it is how that value is
     // called)
-    const declares = statement && (node.spelled !== '' || !(at.into ?? at).scope);
+    const declares = statement && (node.spelled !== '' || (at.into !== undefined && !at.into.scope));
     // (a closure has no `this` of its own: `this` in it is the one where it was written)
     const into = declares ? at.into ?? at : Object.assign(new Ray(at), { closure: node.spelled === '' }), body = this.unblocked(this.written(f));
     // (read again into what continues into a class that has it, from the same text: that one)
@@ -698,7 +698,8 @@ export class Host {
       // members)
       // (one capture alone reads anything: only where that very value's own equivalences read text (a value read in, a level a
       // program runs by), not what continues into it)
-      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || eq.pieces.length > 1 || !(ctx.sees === eq.ctx || (ctx.written && (ctx.outer === eq.ctx || (ctx.level && this.made_of_(ctx.outer, eq.ctx))))) || (this.deciding > 0 && !eq.ctx.scope))) return undefined;
+      // (a closure's parameter is what it is called with, `f(x)`: not a block it is read with, `f ~~ { … }`)
+      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || (eq.ctx.closure && this.calling !== eq.ctx) || eq.pieces.length > 1 || !(ctx.sees === eq.ctx || (ctx.written && (ctx.outer === eq.ctx || (ctx.level && this.made_of_(ctx.outer, eq.ctx))))) || (this.deciding > 0 && !eq.ctx.scope))) return undefined;
       // (after the definer: the functionality, to the end; an operator read on a value reads one operand: the same operator after it reads on from what it gives)
       // (led by a literal, a statement: its last capture, the rest; an operator's, one operand)
       // (a reader's own rule, read in a value as its type: to the end, too)
@@ -801,6 +802,11 @@ export class Host {
   // where it was written, if it is one of it)
   reads(r: Ray, text: Text, b: number, e: number, eq: Eq, ctx?: Ray): boolean {
     if (r.test) return r.test(text.s.slice(b, e).trim()) !== undefined;
+    // (what is read by a value, not a block read into it: what it is called with)
+    const was = this.calling; this.calling = r; try { return this.reads_(r, text, b, e, eq, ctx); } finally { this.calling = was; }
+  }
+  calling?: Ray;
+  reads_(r: Ray, text: Text, b: number, e: number, eq: Eq, ctx?: Ray): boolean {
     // (the parameters of a value's rule, or of a call, `f(a: T)`: values, decided where applied)
     if (!r.scope && (!eq.ctx.scope || this.calls(eq))) return true;
     const read = this.parsed(r, text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
@@ -1386,6 +1392,9 @@ export class Host {
   // code was written.
   // (read by a context of nothing, a word: the code itself)
   within(code: Code, r: Ray, typed = false, self?: unknown, by?: Eq): unknown {
+    const was = this.calling; this.calling = r; try { return this.within_(code, r, typed, self, by); } finally { this.calling = was; }
+  }
+  within_(code: Code, r: Ray, typed = false, self?: unknown, by?: Eq): unknown {
     // (a context the host reads with its own function: what that gives, or not read)
     // (one that reads a span as it is written: that span, a word)
     if (r.test) { const t = code.s.trim(), v = r.test(t); if (v === undefined) return NOT; if (v !== t) return v; const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }

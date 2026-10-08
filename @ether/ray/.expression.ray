@@ -38,8 +38,10 @@ static {pattern} => {functionality} =>
   pattern => functionality
 chainable {pattern} => {functionality} =>
   pattern => functionality
+// `right-to-left p => body` in a class: applied with what is on its right (`√x`, `center x`): the language's own rule, `this` being
+// what it reads after it.
 right-to-left {pattern} => {functionality} =>
-  pattern => functionality
+  global &+= { pattern{receiver} => receiver -- (functionality) }
 // `a | b => body`: both names.
 {name Word} | {alias Word} => {functionality} =>
   name => functionality
@@ -259,7 +261,7 @@ Class &+= {
   instance_of (made, arguments) =>
     instance := @made made
     instance &+= { naming := true }
-    in_order := [instance with { arguments }].without(instance)
+    in_order := [@given instance arguments].without(instance)
     instance &+= { given := in_order }
     instance &+= { naming := None }
     made.read_into(instance)

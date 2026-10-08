@@ -136,7 +136,7 @@ export class Host {
     const { open, close, space, definer } = this.learned;
     const caps = this.captures(at), held = (w: string) => { const c = caps.get(w); return c ? this.written(c) : undefined; };
     // (a functionality naming a value: that value; one written by the rule, its words naming what it captured standing for it)
-    const w = f.s.trim(), body = this.unblocked(held(w) ?? (at.has(w) ? new Value(at.m.get(w), f) : f.ctx === at && at.rule ? this.substituted(f, caps) : f));
+    const w = f.s.trim(), body = this.unblocked(held(w) ?? (at.has(w) ? new Value(at.m.get(w), f) : this.writer(at, f) ? this.substituted(f, caps) : f));
     // (a pattern handed on, written elsewhere, stands for itself)
     let head = p.s.trim(), stood = p.ctx !== at && p.ctx !== at.into;
     if (held(head)) { head = held(head)!.s.trim(); stood = true; }
@@ -798,7 +798,7 @@ export class Host {
       // (a value of the host's own kind, as what is read in: read in the class the interpreter maps that kind to, being that value)
       const kind = !(r instanceof Ray) && r !== undefined && this.dependent(c.reader, eq) ? this.kind(typeof r) : undefined;
       if (r === this.expression) F.m.set(c.name, this.walk(k));
-      else if (kind) { const v = this.within(k, kind, false, r); if (v === NOT) return NOT; F.m.set(c.name, v); }
+      else if (kind) { const v = c.block ? this.into(this.written(k), kind, r) : this.within(k, kind, false, r); if (v === NOT) return NOT; F.m.set(c.name, v); }
       else if (!(r instanceof Ray)) return NOT;
       // (code handed on, a word naming held code: that code, read into it)
       else { const v = c.block ? this.into(this.written(k), r) : this.within(k, r, !this.dependent(c.reader, eq), undefined, eq); if (v === NOT) return NOT; F.m.set(c.name, v); }
@@ -890,8 +890,8 @@ export class Host {
     catch (x) { if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
   }
   // A block read into a value: its names where it was written, what it declares the value's.
-  into(code: Code, r: Ray): unknown {
-    const T = new Ray(code.ctx); T.scope = true; T.into = r; T.sees = r;
+  into(code: Code, r: Ray, self?: unknown): unknown {
+    const T = new Ray(code.ctx); T.scope = true; T.into = r; T.sees = r; T.self = self;
     return this.sequence(code, T);
   }
   body(eq: Eq, F: Ray): unknown {
@@ -926,6 +926,13 @@ export class Host {
     return go(F.caller);
   }
 
+  // arguments given to an instance (`@given`): read where they were written (`this` theirs), what they name the instance's
+  given(instance: unknown, code: unknown): unknown {
+    if (!(instance instanceof Ray) || !(code instanceof Code)) return code instanceof Code ? undefined : code;
+    const T = new Ray(code.ctx); T.scope = true; T.into = instance; T.self = this.self_at(code.ctx);
+    return this.sequence(code, T);
+  }
+  self_at(ctx: Ray): unknown { const F = new Ray(); F.caller = ctx; return this.self(F); }
   // the code each block was made of (`@block`), and running a program (`@run`): its code read again where it was written, with
   // the equivalences of its level (`O`) in scope
   blocks = new WeakMap<Ray, Code>();

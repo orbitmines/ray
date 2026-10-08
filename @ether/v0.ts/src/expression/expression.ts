@@ -175,6 +175,7 @@ export class Host {
   // Read as a statement, it is added where it is read; read as a value, it is that equivalence alone (a closure). Either way its
   // value is the equivalence, a vertex it is applied on.
   defined(p: Code, f: Code, at: Ray, statement = true): unknown {
+    this.counts.defined = (this.counts.defined ?? 0) + 1;
     const { open, close, space, definer } = this.learned;
     const caps = this.captures(at), held = (w: string) => { const c = caps.get(w); return c ? this.written(c) : undefined; };
     // (a functionality naming a value: that value; one written by the rule, its words naming what it captured standing for it)
@@ -269,7 +270,7 @@ export class Host {
     // (its first line is written as deep as where it started: the lines after it as much deeper again, so they stay under it)
     const line = f.text.s.lastIndexOf(end, f.b - 1) + 1, col = f.b - line, deeper = space.repeat(col - this.depth(f.text.s, line));
     const t = space.repeat(col) + (out + s.slice(from)).split(end).map((l, j) => j === 0 || l.trim() === '' ? l : deeper + l).join(end);
-    return new Code({ name: f.text.name, s: t }, col, t.length, stood.ctx);
+    return new Code(this.text_of(f.text.name, t), col, t.length, stood.ctx);
   }
   // an equivalence as a value: a vertex that has it
   held_as(eq: Eq): Ray { const v = new Ray(); v.eqs = [eq]; return v; }
@@ -308,6 +309,9 @@ export class Host {
     return false;
   }
   rewritten = new Map<string, Text>();
+  // (code written again, alike: one text)
+  texts = new Map<string, Map<string, Text>>();
+  text_of(name: string, s: string): Text { let m = this.texts.get(name); if (!m) this.texts.set(name, m = new Map()); let t = m.get(s); if (!t) m.set(s, t = { name, s }); return t; }
   // Code followed back to where it was written: code that is one word naming code held where it is read is that code.
   // (`as_written`: a capture read as a value, as it was written, `x**`)
   written(c: Code, as_written = false): Code {
@@ -375,6 +379,9 @@ export class Host {
     try { node.pieces = this.read_in(this.captured_by, code); } finally { this.reading_node = was; }
     return node;
   }
+  // (what reads a capture, written alike: one text)
+  reader_texts = new Map<string, Text>();
+  reader_text(s: string): Text { let t = this.reader_texts.get(s); if (!t) this.reader_texts.set(s, t = { name: 'reader', s }); return t; }
   // what is inside a capture, read as a parameter: its name, and what reads it (as written); none when it does not read so
   parameter_of(t: string, ctx: Ray): Piece | undefined {
     if (!this.captured_by || this.reading_node) return undefined;
@@ -387,7 +394,7 @@ export class Host {
       if (!this.booting || kept) this.parameters_seen.set(t, kept);
     }
     if (kept?.lit !== undefined) return { lit: kept.lit };
-    return kept ? { cap: kept.name, reader: kept.reader !== undefined ? new Code({ name: 'reader', s: kept.reader }, 0, kept.reader.length, ctx) : undefined } : undefined;
+    return kept ? { cap: kept.name, reader: kept.reader !== undefined ? new Code(this.reader_text(kept.reader), 0, kept.reader.length, ctx) : undefined } : undefined;
   }
   parameters_seen = new Map<string, { name: string; reader?: string; lit?: string } | null>();
   // `@define node receiver between`: what a definition's head was read as, defined: as written; with parameters, its name and
@@ -481,7 +488,7 @@ export class Host {
         // (one whose name holds brackets, or read by a bracket, is brackets written around it)
         if (j > i + 1 && t !== '' && !name.includes(open) && !name.includes(close) && reader[0] !== open) {
           if (lit) { out.push({ lit }); lit = ''; }
-          out.push({ cap: name, reader: reader ? new Code({ name: 'reader', s: reader }, 0, reader.length, ctx) : undefined });
+          out.push({ cap: name, reader: reader ? new Code(this.reader_text(reader), 0, reader.length, ctx) : undefined });
           i = j + 1; continue;
         }
       }
@@ -1197,7 +1204,7 @@ export class Host {
     const word = s.slice(bb, this.name_end(text, bb, ee)), nears: number[] = [], held: Ray[] = [];
     // (what reading a capture alone asks of the context, `sees`, `outer` where code is written, the value called: only which of the
     // contexts with equivalences it is)
-    let sig = `${b}:${e}:${floor}:${ctx.level ? this.id(ctx.outer) : ''}:${ctx.alone ? this.id(ctx) : ctx.written && ctx.into?.alone ? this.id(ctx.into) : ''}:${this.deciding > 0 ? 'D' : ''}|`;
+    let sig = `${b}:${e}:${floor}:${ctx.level ? this.id(this.ruling(ctx.outer)) : ''}:${ctx.alone ? this.id(ctx) : ctx.written && ctx.into?.alone ? this.id(ctx.into) : ''}:${this.deciding > 0 ? 'D' : ''}|`;
     let self = false, near = 0;
 
     for (const n of this.reach(ctx)) {
@@ -1220,6 +1227,8 @@ export class Host {
     m.set(sig, { version: this.version, r, at, eqi, sent: this.sent, held });
     return r;
   }
+  // (what a value is made of, as far as reading by its rules goes: the nearest with rules of its own, or made of more than one)
+  ruling(v: Ray | undefined): Ray | undefined { while (v && !this.has_rules(v) && !v.also && v.outer && !v.scope) v = v.outer; return v; }
   // whether anything declared since a shared reading may read its span: only in the contexts it was read with (any other that comes to
   // have a rule for it reads under another signature), unless an operation on values was first declared since (read on from any)
   since_shared(x: { version: number; sent: number; held: Ray[] }, span: string): boolean {
@@ -1559,7 +1568,7 @@ export class Host {
     return eq.passing;
   }
   // (how much reading was done: walks, parses, match attempts, applications)
-  counts = { walks: 0, parses: 0, matches: 0, applications: 0 };
+  counts: Record<string, number> = { walks: 0, parses: 0, matches: 0, applications: 0, defined: 0 };
   applying = 0; steps = 0; chain: string[] = []; recent: string[] = [];
   apply_(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
     // (`recur(…)`: the method again, given what it is given there)

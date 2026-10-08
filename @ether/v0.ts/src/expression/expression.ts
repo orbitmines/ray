@@ -1118,7 +1118,7 @@ export class Host {
       if (!self && ((n.into && !n.into.scope && !n.rule) || (!n.scope && n !== this.base))) { self = true; sig += 's'; }
       // (names a context holds as values are not rules: only whether it holds the first word)
       if (n.eqs.length > 0 && !n.led) this.led(n);
-      if (n.eqs.length > 0 && n.ruled) { sig += this.id(n) + (n === ctx.sees ? 'S' : '') + (ctx.written && n === ctx.outer ? 'O' : '') + (n === this.calling ? 'C' : '') + ','; nears.push(near); }
+      if (n.eqs.length > 0 && n.ruled && this.candidates(n, s[bb])) { sig += this.id(n) + (n === ctx.sees ? 'S' : '') + (ctx.written && n === ctx.outer ? 'O' : '') + (n === this.calling ? 'C' : '') + ','; nears.push(near); }
       if (word && (n.has(word) || (n.eqs.length > 0 && n.keys!.has(word)))) sig += 'h';
     }
     let m = this.shared.get(text); if (!m) this.shared.set(text, m = new Map());
@@ -1130,6 +1130,12 @@ export class Host {
     const at = inner?.near === undefined ? -1 : nears.indexOf(inner.near);
     m.set(sig, { version: this.version, r, at });
     return r;
+  }
+  // (whether a context has a rule a span starting with `c` could be read by: led by it, or by a capture)
+  candidates(n: Ray, c: string): boolean {
+    const led = this.led(n);
+    for (const k of [c, '']) { const l = led.get(k); if (l) for (const i of l) if (!n.eqs[i].value) return true; }
+    return false;
   }
   // a reading kept, as near as its equivalence is from here
   neared(r: Read | undefined, nears: number[], at: number): Read | undefined {

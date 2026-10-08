@@ -74,26 +74,30 @@ Node &+= {
   := {value Expression} => @declare value
   = {value} => @assign value
   &= {value Expression} => @assign ((this ?? []).append(value))
+  // `a, b`: declared after `:=`, `=`, `&=` (`x := 1, 2` holds both), before `:` (it binds looser: `f(a: 1, b: 2)` gives two, each by
+  // its name); what it does, below
+  , {other Expression} => (@made Ray).append(this).joined(other)
   // `x: T`: `x` is a `T` (holding `T` until something is written to it); given by name, `x: v` gives it `v`; in what is being given
   // its fields in order, the next of them (one given by name keeps it)
   : {type} =>
     // (what is being given, read as held: not through the value's own `.`, which a class may read otherwise)
-    // (the place it is applied on, taken first: what is read after has places of its own)
-    @keep_place spot
-    called := @word
-    head := @typed type
-    had := @owns & called
-    naming := @member & "naming"
-    given := @member & "given"
-    taken := (!head) && (!naming) && (!had) && given && (!(given.empty))
+    // (the place it is applied on, taken first: what is read after has places of its own; its own names (`colon_…`), none a value
+    // holds, which would be read in their place)
+    @keep_place colon_place
+    colon_word := @place_word colon_place
+    colon_head := @typed type
+    colon_had := @owns & colon_word
+    colon_naming := @member & "naming"
+    colon_given := @member & "given"
+    colon_taken := (!colon_head) && (!colon_naming) && (!colon_had) && colon_given && (!(colon_given.empty))
     // (given by name, `x: v`: the field `x` of what is being given, whatever `x` names where it is read)
-    head ? None : (naming ? (@field & called type) : (had ? None : (taken ? (@declare_at spot given.take) : (@holding_at spot type))))
+    colon_head ? None : (colon_naming ? (@field_at & colon_place type) : (colon_had ? None : (colon_taken ? (@declare_at colon_place colon_given.take) : (@holding_at colon_place type))))
     // (a field given is what `= default` does not write; one of a class, what its instances are given unless given otherwise)
-    shared := (!naming) && (!head) && (!had) && (!taken) && (@has & components)
-    field := shared ? (@made ClassField) : None
-    shared ? (@field field "owner" &) : None
-    shared ? (@field field "word" called) : None
-    naming ? & : ((!head) && (had || taken)) ? Field : shared ? field : this
+    colon_shared := (!colon_naming) && (!colon_head) && (!colon_had) && (!colon_taken) && (@has & components)
+    colon_field := colon_shared ? (@made ClassField) : None
+    colon_shared ? (@field colon_field "owner" &) : None
+    colon_shared ? (@field colon_field "word" colon_word) : None
+    colon_naming ? & : ((!colon_head) && (colon_had || colon_taken)) ? Field : colon_shared ? colon_field : this
 }
 // `x[key]`, `x[key] = v`, `x[key] := v` (T8.7): what a value holds under a name, by its name
 Node &+= {

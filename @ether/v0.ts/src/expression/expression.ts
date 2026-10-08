@@ -1144,7 +1144,7 @@ export class Host {
   // the place read just before (`@place`): what a method is applied on, kept before anything else is read
   place_of(F: Ray): Place | undefined { let n: Ray | undefined = F; while (n && !n.place) n = n.caller; return n?.place; }
   // (kept under a name in the frame it is read in: what that frame was applied on)
-  keep_place(F: Ray, name: string): undefined { let n: Ray | undefined = F; while (n && !n.place) n = n.caller; if (n) n.m.set(name, n.place); return undefined; }
+  keep_place(F: Ray, name: string): undefined { const at = F.caller; let n: Ray | undefined = at; while (n && !n.place) n = n.caller; if (at) at.m.set(name, n?.place); return undefined; }
   declare_at(p: Place | undefined, v: unknown, assign: boolean): unknown {
     if (!p) return v;
     this.unread.delete(p);

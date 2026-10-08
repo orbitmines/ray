@@ -72,7 +72,7 @@ export class Code {
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
 export type Piece = { lit: string } | { cap: string; reader?: Code; type?: unknown };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
-export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean; indexed?: boolean };
+export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: ((F: Ray) => unknown) | null; word?: string; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean; indexed?: boolean };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string; typed?: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; type?: unknown; block?: boolean };
@@ -529,7 +529,7 @@ export class Host {
     const readers = (ps: Piece[], n?: Ray) => ps.map(p => 'cap' in p && p.reader ? p.reader.s : '').join('\0') + (n?.params ? '\0' + n.params.map(x => this.id(n.types?.get(x))).join(',') : '');
     // (nor the class's own (`static`) and what is made of it's)
     const was = ctx.eqs.findIndex(x => x.key === key && readers(x.pieces, x.node) === readers(pieces, node) && !!x.own === (this.static_now > 0 || !!node?.own));
-    if (was >= 0) { const old = ctx.eqs[was]; if (!(old.value && eq.value)) this.changed(pieces, ctx); old.body = eq.body; old.native = eq.native; old.js = undefined; old.pieces = eq.pieces; old.value = eq.value; ctx.led = undefined; if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq); return old; }
+    if (was >= 0) { const old = ctx.eqs[was]; if (!(old.value && eq.value)) this.changed(pieces, ctx); old.body = eq.body; old.native = eq.native; old.js = undefined; old.word = undefined; old.pieces = eq.pieces; old.value = eq.value; ctx.led = undefined; if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq); return old; }
     ctx.eqs.push(eq); ctx.led = undefined; if (!eq.value) this.changed(pieces, ctx);
     if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq);
     const p0 = pieces[0], p1 = pieces[1];
@@ -1651,10 +1651,17 @@ export class Host {
     return this.sequence(code, T);
   }
   body(eq: Eq, F: Ray): unknown {
-    if (eq.js === undefined && this.located(eq.body) && this.interpreted.has(eq.body.text)) eq.js = this.js(eq);
+    if (eq.js === undefined) eq.js = this.located(eq.body) && this.interpreted.has(eq.body.text) ? this.js(eq) : null;
     if (eq.js) return eq.js(F);
     // (a statement handed through, its functionality the capture it is: still a statement)
-    if (F.statement) { const w = eq.body.s.trim(); const c = F.m.get(w); if (c instanceof Code) return this.walk(stated(new Code(c.text, c.b, c.e, c.ctx, c.floor))); }
+    if (F.statement) { const w = eq.word ??= eq.body.s.trim(); const c = F.m.get(w); if (c instanceof Code) return this.walk(stated(new Code(c.text, c.b, c.e, c.ctx, c.floor))); }
+    // (one statement: read as the one it is, a label of itself the only place a `goto` in it goes)
+    const one = this.single(eq.body) ? this.splits.get(eq.body.text)!.get(eq.body.b)!.get(eq.body.e)!.list[0] : undefined;
+    if (one) {
+      const c = stated(new Code(eq.body.text, one.p, one.e, F));
+      this.ordered++;
+      try { for (;;) { try { return this.walk(c); } catch (x) { if (!(x instanceof Jump) || x.kind !== 'goto' || !this.labels(c, x.value as string)) throw x; } } } finally { this.ordered--; }
+    }
     const h = this;
     return this.in_order(function* () { for (const [b, e] of h.statements(eq.body)) yield stated(new Code(eq.body.text, b, e, F)); }());
   }

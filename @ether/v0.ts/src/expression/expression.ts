@@ -961,10 +961,12 @@ export class Host {
   // a value is part of it: `x.m`, `f(a)`), else at `e`.
   operand(text: Text, at: number, e: number, floor: number, ctx: Ray, pairs?: number, same = false): number {
     const s = text.s, { space } = this.learned, alone = ctx.alone ? ctx : ctx.written && ctx.into?.alone ? ctx.into : undefined;
+    // (what reads on there first, then whether it is inside an operator written from before it: most places have neither)
     return this.scan(text, at, e, i => {
-      if (i <= at || this.amid(text, at, i)) return;
-      for (const x of this.infix.get(s[i]) ?? []) if (x.lit.includes(space) && this.stops(x, i, text, e, floor, same, alone)) return false;
-      if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (this.stops(x, i, text, e, floor, same, alone)) return false; }
+      if (i <= at) return;
+      const list = this.infix.get(s[i]);
+      if (list) for (const x of list) if (x.lit.includes(space) && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
+      if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false; }
     }, pairs);
   }
   // (whether an operation declared before `floor` reads on at `i`)
@@ -1087,13 +1089,13 @@ export class Host {
     // contexts with equivalences it is)
     let sig = `${b}:${e}:${floor}:${ctx.level ? this.id(ctx.outer) : ''}:${ctx.alone ? this.id(ctx) : ctx.written && ctx.into?.alone ? this.id(ctx.into) : ''}:${this.deciding > 0 ? 'D' : ''}|`;
     let self = false, near = 0;
-    const marks = (n: Ray) => (n === ctx.sees ? 'S' : '') + (ctx.written && n === ctx.outer ? 'O' : '') + (n === this.calling ? 'C' : '');
+
     for (const n of this.reach(ctx)) {
       near++;
       if (!self && ((n.into && !n.into.scope && !n.rule) || (!n.scope && n !== this.base))) { self = true; sig += 's'; }
       // (names a context holds as values are not rules: only whether it holds the first word)
       if (n.eqs.length > 0 && !n.led) this.led(n);
-      if (n.eqs.length > 0 && n.ruled) { sig += this.id(n) + marks(n) + ','; nears.push(near); }
+      if (n.eqs.length > 0 && n.ruled) { sig += this.id(n) + (n === ctx.sees ? 'S' : '') + (ctx.written && n === ctx.outer ? 'O' : '') + (n === this.calling ? 'C' : '') + ','; nears.push(near); }
       if (word && (n.has(word) || (n.eqs.length > 0 && n.keys!.has(word)))) sig += 'h';
     }
     let m = this.shared.get(text); if (!m) this.shared.set(text, m = new Map());
@@ -1115,17 +1117,24 @@ export class Host {
     for (let i = chain.length - 2; i >= 0; i--) out = { ...chain[i], on: out };
     return out;
   }
-  shapes = new Map<string, Ray>(); ids = new WeakMap<object, number>(); counted = 0;
+  ids = new WeakMap<object, number>(); counted = 0;
   id(x: unknown): number { if (typeof x !== 'object' || x === null) return 0; let i = this.ids.get(x); if (i === undefined) this.ids.set(x, i = ++this.counted); return i; }
+  // (kept by what they are shaped by, one after another: no key written out; what is shaped by a frame goes with it)
+  shapes = new WeakMap<object, unknown>();
+  shaped(a: object | undefined, b: object | undefined, c: object | undefined, d?: object, e?: object, n = 3): Ray {
+    let m = this.shapes;
+    const by = [a, b, c, d, e];
+    for (let i = 0; i < n - 1; i++) { const k = by[i] ?? NIL; let x = m.get(k) as WeakMap<object, unknown> | undefined; if (!x) m.set(k, x = new WeakMap()); m = x; }
+    const k = by[n - 1] ?? NIL; let r = m.get(k) as Ray | undefined; if (!r) m.set(k, r = new Ray()); return r;
+  }
   shape(F: Ray): Ray {
     // (a method's frame continues into its node, then into what it was applied on: shaped as that)
     const W = F.outer?.method ? F.outer.sees! : F, o = W.outer, sees = W === F ? F.sees : W.sees;
-    const on = o && !o.scope ? o.outer : o, k = `${this.id(F.rule)}|${this.id(on)}|${this.id(sees)}`;
-    let s = this.shapes.get(k); if (!s) this.shapes.set(k, s = new Ray()); return s;
+    const on = o && !o.scope ? o.outer : o;
+    return this.shaped(F.rule, on, sees);
   }
   shape_into(T: Ray): Ray {
-    const k = `into|${this.id(T.outer)}|${this.id(T.into!.outer)}|${T.sees === T.into ? '' : this.id(T.sees)}|${this.id(T.written)}`;
-    let s = this.shapes.get(k); if (!s) this.shapes.set(k, s = new Ray()); return s;
+    return this.shaped(INTO, T.outer, T.into!.outer, T.sees === T.into ? undefined : T.sees, T.written, 5);
   }
   // the value a reading found its equivalence on, from a frame: as the reading found it (`near` contexts out)
   self_of(ctx: Ray, near: number): unknown {
@@ -1354,7 +1363,7 @@ export class Host {
   }
   dispatch(value: unknown, key: string): Eq | undefined { return this.dispatching(value, key, true)[0]; }
   dispatching(value: unknown, key: string, one = false): Eq[] {
-    let based = false; const out: Eq[] = [];
+    const out: Eq[] = [];
     // (nothing, absent, reads as the interpreter's nothing)
     if (value === undefined && this.none) value = this.none;
     // (a value of the host's own kind: the class the interpreter maps that kind to)
@@ -1362,19 +1371,23 @@ export class Host {
     // (its own, its class's, …: what each is also made of next to it (`A + B`, a component); the base last)
     // (a class's own (`static`) only on that class itself, not on what is made of it; on the class, before the rest)
     const seen = new Set<Ray>();
-    const visit = (start: Ray | undefined): boolean => {
-      for (let n = start; n && (n === start || !n.scope) && !seen.has(n) && n !== this.base; n = n.outer) {
-        seen.add(n);
+    if (value instanceof Ray && this.visit(value, value, key, one, seen, out)) return out;
+    const B = this.base;
+    if (B && this.has_key(B, key)) for (let i = B.eqs.length - 1; i >= 0; i--) if (B.eqs[i].key === key) { out.push(B.eqs[i]); if (one) return out; }
+    return out;
+  }
+  // (whether a context has an equivalence with that head)
+  has_key(n: Ray, key: string): boolean { if (n.eqs.length === 0) return false; if (!n.led) this.led(n); return n.keys!.has(key); }
+  visit(start: Ray, value: Ray, key: string, one: boolean, seen: Set<Ray>, out: Eq[]): boolean {
+    for (let n: Ray | undefined = start; n && (n === start || !n.scope) && !seen.has(n) && n !== this.base; n = n.outer) {
+      seen.add(n);
+      if (this.has_key(n, key)) {
         if (n === value) for (let i = n.eqs.length - 1; i >= 0; i--) if (n.eqs[i].key === key && n.eqs[i].own) { out.push(n.eqs[i]); if (one) return true; }
         for (let i = n.eqs.length - 1; i >= 0; i--) if (n.eqs[i].key === key && !n.eqs[i].own) { out.push(n.eqs[i]); if (one) return true; }
-        for (const a of n.also ?? []) if (visit(a)) return true;
       }
-      return false;
-    };
-    if (value instanceof Ray && visit(value)) return out;
-    void based;
-    if (this.base) for (let i = this.base.eqs.length - 1; i >= 0; i--) if (this.base.eqs[i].key === key) { out.push(this.base.eqs[i]); if (one) return out; }
-    return out;
+      if (n.also) for (const a of n.also) if (this.visit(a, value, key, one, seen, out)) return true;
+    }
+    return false;
   }
   // An equivalence applied: a frame inside the value it is applied on (or where its functionality was written), its captures bound
   // (as code, read where they were written each time they are named; one with a reader, what the reader read), its functionality
@@ -1642,10 +1655,10 @@ export class Host {
   here(F: Ray): Ray | undefined { for (let n: Ray | undefined = F.caller; n; n = n.caller ?? n.outer) { if (n.into) return n.into; if (!n.rule) return n; } return undefined; }
   // whether a context has a name of its own
   has(x: unknown, word: string): boolean { return x instanceof Ray && (x.has(word) || x.eqs.some(eq => eq.key === word)); }
-  self(F: Ray): unknown {
-    const seen = new Set<Ray>();
-    const go = (n: Ray | undefined): unknown => { for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule?.node?.spelled === '') return go(n.self.outer); if (n.self !== undefined) return n.self; if (n.written && !n.rule && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = go(n.sees); if (v !== undefined) return v; } } return undefined; };
-    return go(F.caller);
+  self(F: Ray): unknown { return this.self_(F.caller, new Set<Ray>()); }
+  self_(n: Ray | undefined, seen: Set<Ray>): unknown {
+    for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule?.node?.spelled === '') return this.self_(n.self.outer, seen); if (n.self !== undefined) return n.self; if (n.written && !n.rule && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = this.self_(n.sees, seen); if (v !== undefined) return v; } }
+    return undefined;
   }
 
   // arguments given to an instance (`@given`): read where they were written (`this` theirs), what they name the instance's
@@ -1764,6 +1777,8 @@ export class Jump { constructor(public kind: string, public value?: unknown, pub
 const NOMEMO = !!process.env.EXPR_NOMEMO, NOSHARE = !!process.env.EXPR_NOSHARE, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
 const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
 const REJECT = Symbol('reads nothing');
+// (what a shape is keyed by where nothing is, and a block read into a value)
+const NIL = {}, INTO = {};
 // JS source with each capture named in it read from the frame (`F`).
 function rename(src: string, names: string[]): string {
   if (names.length === 0) return src;

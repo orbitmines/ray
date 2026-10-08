@@ -25,6 +25,8 @@ export class Ray {
   eqs: Eq[] = NONE;
   // (its equivalences by what they start with: led by a literal, by its first character; led by a capture, '' (positions in `eqs`))
   led?: Map<string, number[]>;
+  // (with it: the heads of its equivalences, and whether any is a rule, not a value under a name)
+  keys?: Set<string>; ruled?: boolean;
   // (the version it was first reached at by a reading)
   reached?: number;
   // (a closure: a method without a name, as a value)
@@ -70,7 +72,7 @@ export class Code {
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
 export type Piece = { lit: string } | { cap: string; reader?: Code; type?: unknown };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
-export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean };
+export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean; indexed?: boolean };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string; typed?: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; type?: unknown; block?: boolean };
@@ -152,7 +154,7 @@ export class Host {
       const stop = second + b.length;
       this.learned = { open, close, space, definer, end, indent, type: lead[0], add: lead[1] };
       // (its brackets balance, as they do around its own captures)
-      this.pairs.set(open, close); this.closers.add(close); this.paired++;
+      this.pairs.set(open, close); this.closers.add(close); this.paired++; this.syntax++;
       this.global.m.set(lead[0], this.expression);
       const eq = this.add(this.global, this.pieces(s.slice(0, c2 + 1), this.global), new Code(text, i, stop, this.global));
       // (its functionality is what it says: the pattern and the functionality given to it, added to the Expression it is walked in)
@@ -361,7 +363,7 @@ export class Host {
     const { open, close, space } = this.learned, name = node.spelled, out: Eq[] = [];
     const r = node.params || typeof receiver !== 'string' ? this.given_name : receiver;
     // (what it is given: a capture no name written can be)
-    const form = (pieces: Piece[], apart: boolean) => { const eq = this.add(node.params || !node.leftward ? into : this.global, pieces, body, node); eq.node = node; eq.apart = apart; if (this.static_now > 0 || node.own) eq.own = true; if (!node.params) eq.receiver = r; out.push(eq); };
+    const form = (pieces: Piece[], apart: boolean) => { const eq = this.add(node.params || !node.leftward ? into : this.global, pieces, body, node); eq.node = node; if (apart && eq.indexed) this.syntax++; eq.apart = apart; if (this.static_now > 0 || node.own) eq.own = true; if (!node.params) eq.receiver = r; out.push(eq); };
     const lead = (s: string) => { const ps = this.pieces(s, at); const last = ps[ps.length - 1]; if (last && 'lit' in last) return ps; return [...ps, { lit: '' }].filter(x => !('lit' in x) || x.lit !== ''); };
     const cap: Piece = { cap: r };
     // (what is given between a pair, `[at: Integer]`: read between it, `xs[3]`)
@@ -471,17 +473,28 @@ export class Host {
   }
   *statements(code: Code): Generator<[number, number]> {
     const s = code.text.s, { end } = this.learned;
+    // (where each statement ends, kept while nothing that reads on from a value, or balances, was declared since)
+    let at = this.splits.get(code.text); if (!at) this.splits.set(code.text, at = new Map());
+    let from = at.get(code.b); if (!from) at.set(code.b, from = new Map());
+    let kept = from.get(code.e); if (!kept) from.set(code.e, kept = { list: [] });
     let p = code.b, block = -1;
-    while (p < code.e) {
-      if (this.blank(s[p])) { p++; continue; }
+    for (let i = 0; p < code.e; i++) {
+      const k = kept.list[i];
+      if (k && k.syntax === this.syntax) { block = k.block; yield [k.p, k.e]; p = k.e; continue; }
+      while (p < code.e && this.blank(s[p])) p++;
+      if (p >= code.e) break;
       // (a statement less deep than the block's first, a label, ends as the block's statements do)
       const line = s.lastIndexOf(end, p - 1) + end.length, own = this.depth(s, line) === p - line ? p - line : 0;
       if (block < 0) block = own;
       const base = Math.max(own, block), e = this.stop(code.text, p, code.e, base);
+      kept.list.length = i; kept.list.push({ p, e, block, syntax: this.syntax });
       yield [p, e];
       p = e;
     }
   }
+  splits = new WeakMap<Text, Map<number, Map<number, { list: { p: number; e: number; block: number; syntax: number }[] }>>>();
+  // (how often what reads on from a value, or what balances, was declared: where statements end may differ since)
+  syntax = 0;
 
   // ---------------------------------------------------------------- equivalences: added to the Expression of a context
   add(ctx: Ray, pieces: Piece[], given: Code | Value, node?: Ray): Eq {
@@ -501,7 +514,7 @@ export class Host {
     const readers = (ps: Piece[], n?: Ray) => ps.map(p => 'cap' in p && p.reader ? p.reader.s : '').join('\0') + (n?.params ? '\0' + n.params.map(x => this.id(n.types?.get(x))).join(',') : '');
     // (nor the class's own (`static`) and what is made of it's)
     const was = ctx.eqs.findIndex(x => x.key === key && readers(x.pieces, x.node) === readers(pieces, node) && !!x.own === (this.static_now > 0 || !!node?.own));
-    if (was >= 0) { const old = ctx.eqs[was]; if (!(old.value && eq.value)) this.changed(pieces, ctx); old.body = eq.body; old.native = eq.native; old.js = undefined; old.pieces = eq.pieces; old.value = eq.value; if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq); return old; }
+    if (was >= 0) { const old = ctx.eqs[was]; if (!(old.value && eq.value)) this.changed(pieces, ctx); old.body = eq.body; old.native = eq.native; old.js = undefined; old.pieces = eq.pieces; old.value = eq.value; ctx.led = undefined; if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq); return old; }
     ctx.eqs.push(eq); ctx.led = undefined; if (!eq.value) this.changed(pieces, ctx);
     if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq);
     const p0 = pieces[0], p1 = pieces[1];
@@ -525,10 +538,10 @@ export class Host {
       const apart = this.apart(after) || (!!node && after.endsWith(this.learned.space) && this.name_end({ name: '', s: after }, 0, after.length) === after.length - 1);
       const by = apart ? this.words : this.infix, k = apart ? after.slice(0, after.indexOf(this.learned.space)) : after[0];
       let list = by.get(k); if (!list) by.set(k, list = []);
-      if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) { const x = { lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }; list.push(x); if (by === this.infix) this.indexed(x); if (x.order < this.earliest) this.earliest = x.order; this.spelled(after); }
+      if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) { const x = { lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }; list.push(x); eq.indexed = true; this.syntax++; if (by === this.infix) this.indexed(x); if (x.order < this.earliest) this.earliest = x.order; this.spelled(after); }
     }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
-    if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); this.paired++; }
+    if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); this.paired++; this.syntax++; }
     return eq;
   }
 
@@ -580,8 +593,9 @@ export class Host {
   }
   led(n: Ray): Map<string, number[]> {
     if (n.led) return n.led;
-    const m = new Map<string, number[]>();
-    n.eqs.forEach((eq, i) => { const p0 = eq.pieces[0], k = 'lit' in p0 ? p0.lit[0] : ''; let l = m.get(k); if (!l) m.set(k, l = []); l.push(i); });
+    const m = new Map<string, number[]>(), keys = new Set<string>(); let ruled = false;
+    n.eqs.forEach((eq, i) => { const p0 = eq.pieces[0], k = 'lit' in p0 ? p0.lit[0] : ''; let l = m.get(k); if (!l) m.set(k, l = []); l.push(i); keys.add(eq.key); if (!eq.value) ruled = true; });
+    n.keys = keys; n.ruled = ruled;
     return n.led = m;
   }
   // (the longest run of a pattern's literals written without a space: what any text it reads has in it)
@@ -1078,8 +1092,9 @@ export class Host {
       near++;
       if (!self && ((n.into && !n.into.scope && !n.rule) || (!n.scope && n !== this.base))) { self = true; sig += 's'; }
       // (names a context holds as values are not rules: only whether it holds the first word)
-      if (n.eqs.length > 0 && n.eqs.some(x => !x.value)) { sig += this.id(n) + marks(n) + ','; nears.push(near); }
-      if (word && (n.has(word) || n.eqs.some(x => x.key === word))) sig += 'h';
+      if (n.eqs.length > 0 && !n.led) this.led(n);
+      if (n.eqs.length > 0 && n.ruled) { sig += this.id(n) + marks(n) + ','; nears.push(near); }
+      if (word && (n.has(word) || (n.eqs.length > 0 && n.keys!.has(word)))) sig += 'h';
     }
     let m = this.shared.get(text); if (!m) this.shared.set(text, m = new Map());
     const x = m.get(sig);

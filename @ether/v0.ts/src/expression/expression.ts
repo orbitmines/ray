@@ -1693,8 +1693,11 @@ export class Host {
   is(v: unknown, r: Ray): boolean {
     if (r === this.base) return true;
     for (let n: Ray | undefined = v instanceof Ray ? v : v === undefined ? undefined : this.kind_of(v); n; n = n.outer) if (n === r) return true;
-    return false;
+    // (else as the language says a value is of a type (`@admitting`): a narrowing, a superposition, a list of one)
+    if (!this.admitting || this.admitting_now > 8) return false;
+    this.admitting_now++; try { return this.truthy(this.invoke_all(this.admitting, [v, r])); } finally { this.admitting_now--; }
   }
+  admitting?: Ray; admitting_now = 0;
   // a statement read as the class's own (`static`): what it defines is marked so
   static_now = 0;
   statically(code: unknown): unknown {

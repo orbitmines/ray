@@ -92,6 +92,7 @@ global => @js $.global
 @leftward {node} => @js (n => (n instanceof Ray && (n.leftward = true), n))($.get(F, "node"))
 // what a head was read as, defined (`receiver`: what it is applied with, when on its right; `between`: what is written between
 // what it is given)
+@admitting {f} => @js ($.admitting = $.get(F, "f"), undefined)
 @define {node} {receiver} {between} => @js $.define(F, $.get(F, "node"), $.get(F, "receiver"), $.get(F, "between"))
 // Numbers: the host's own (a JS number), read where digits are written; a Number whose operations are the host's (loosest first).
 // a symbol: no letters or digits (`..<`, `√`): what is written as one hugs what it takes

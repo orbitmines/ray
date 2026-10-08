@@ -33,10 +33,10 @@ Language := class: Ray extensions: String, level: Compiler?, written: Compiler?,
 
   admits (program) => true
   read (source) => level
-    ? Compiler.reduced(source, level + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`)
+    ? (Compiler.reduced(source, level + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`))
     : ERROR@Language `the language has no reader`
   write (value) => written
-    ? Compiler.reduced(Writing(value, language: this), unwrapped + written + (stored ?? Compiler.none)) -- (. is Location ? . : . as String)
+    ? (Compiler.reduced(Writing(value, language: this), unwrapped + written + (stored ?? Compiler.none)) -- (. is Location ? . : . as String))
     : ERROR@Language `the language has no writer`
   written_to (value, location: Location) => write(value) -- (. is Location ? .files.for(file => (location / file.path).held = file.content) : location.held = .) -- location
   converted (location, from: Language) => write(from.read(location))

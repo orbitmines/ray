@@ -490,12 +490,17 @@ export class Host {
     }
     const fixed = this.fixed(piece.reader, eq);
     if (fixed === REJECT) return undefined;
+    // (a type that reads text, in a rule where statements are read, followed by another capture: as far as it reads, the longest first)
+    if (fixed && !fixed.scope && this.patterns && eq.ctx.scope && !this.calls(eq) && next && !('lit' in next)) {
+      const s = text.s.slice(at, e), found = [...this.fit_at(fixed, s, 0, new Map(), 0)].sort((x, y) => y - x);
+      ends = found.map(j => at + j);
+    }
     // (a literal written hugging the capture before it, `{value}?`, is read hugging it)
     const hugged = !!next && 'lit' in next && !this.blank(next.lit[0]) && !this.bracket(next.lit[0]) && !this.quotes.has(next.lit[0]);
     for (const n of ends) {
       if (n > at && !this.held(text, at, n) && !bracketed) continue;
       if (hugged && n > at && this.blank(text.s[n - 1])) continue;
-      if (fixed && (n === at || !this.reads(fixed, text, at, n, eq))) continue;
+      if (fixed && (n === at ? !(this.patterns && !fixed.scope && this.fits(fixed, '')) : !this.reads(fixed, text, at, n, eq))) continue;
       const block = !!prev && 'lit' in prev && prev.lit.endsWith(this.learned.open) && !!next && 'lit' in next && next.lit.startsWith(this.learned.close);
       caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, block });
       const r = this.match(eq, text, n, e, ctx, i + 1, start, caps);
@@ -1005,10 +1010,12 @@ export class Host {
   // A type reading text (`js.ray` names the fields the language's types are made of): text reads itself; a host reader what it
   // reads; nothing, nothing; `one` a character; alternatives any of theirs; a narrowing what it narrows that its constraint holds
   // of; a repetition one or more of what it repeats; a sequence its parts in order.
-  patterns?: { alternatives: string; narrowed: string; constraint: string; repeated: string; sequence: string; value: string; next: string; one: string };
+  patterns?: { alternatives: string; narrowed: string; constraint: string; repeated: string; sequence: string; value: string; next: string; one: string; read_by?: Record<string, string> };
+  // (classes the interpreter reads text of with a reader of its own: `Number` with `Numeral`)
+  readers_by?: Map<unknown, unknown>;
   fits(T: unknown, s: string): boolean {
     if (!(T instanceof Ray)) return this.fit_at(T, s, 0, new Map(), 0).has(s.length);
-    if (this.fitted_version !== this.version) { this.fitted = new WeakMap(); this.fitted_version = this.version; this.one = undefined; }
+    if (this.fitted_version !== this.version) { this.fitted = new WeakMap(); this.fitted_version = this.version; this.one = undefined; this.readers_by = undefined; }
     let m = this.fitted.get(T); if (!m) this.fitted.set(T, m = new Map());
     let v = m.get(s); if (v === undefined) m.set(s, v = this.fit_at(T, s, 0, new Map(), 0).has(s.length));
     return v;
@@ -1024,6 +1031,8 @@ export class Host {
     if (T === undefined || T === this.none) { out.add(i); return out; }
     if (!(T instanceof Ray) || !p) return out;
     if (T.test) { for (let j = i + 1; j <= s.length; j++) if (T.test(s.slice(i, j)) !== undefined) out.add(j); return out; }
+    if (!this.readers_by && p.read_by) { this.readers_by = new Map(); for (const [k, v] of Object.entries(p.read_by)) this.readers_by.set(this.name(this.global, k), this.name(this.global, v)); }
+    const by = this.readers_by?.get(T); if (by instanceof Ray && by.test) { for (let j = i + 1; j <= s.length; j++) if (by.test(s.slice(i, j)) !== undefined) out.add(j); return out; }
     if (T === (this.one ??= this.name(this.global, p.one))) { if (i < s.length) out.add(i + (s.codePointAt(i)! > 0xffff ? 2 : 1)); return out; }
     const alternatives = this.field(T, p.alternatives), narrowed = this.field(T, p.narrowed), repeated = this.field(T, p.repeated), first = this.field(T, p.sequence);
     if (alternatives instanceof Ray) for (let v = this.field(alternatives, p.sequence); v instanceof Ray; v = this.field(v, p.next)) for (const j of this.fit_at(this.field(v, p.value), s, i, memo, depth + 1)) out.add(j);

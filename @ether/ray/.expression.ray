@@ -11,6 +11,12 @@
   left{inside}right => functionality
 {left}{literal {inside}}{right} => {functionality} =>
   left{inside}right => functionality
+// `{"x"?}`: text that may be written there
+{left}{"{text}"?}{right} => {functionality} =>
+  left{optional: "text"?}right => functionality
+// `head: T => body`, `head(…): T => body`: what it gives is a T (the head as written)
+{pattern}: {type Word} => {functionality} =>
+  pattern => functionality
 {left}{`{text}`}{right} => {functionality} =>
   left{}text{}right => functionality
 //{comment} => None

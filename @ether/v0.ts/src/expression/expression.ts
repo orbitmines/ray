@@ -286,17 +286,23 @@ export class Host {
     // (a name the nearest holds as a value read hides one further out held as code)
     const valued = new Set<string>();
     // (where the code was written first, out from it; then what it reaches, a value it is read into among them)
-    const take = (n: Ray) => { if (n.size) for (const [k, c] of n.m) { if (out.has(k) || valued.has(k)) continue; if (c instanceof Code) out.set(k, c); else valued.add(k); } };
-    for (let n: Ray | undefined = at; n; n = n.outer) if (n.rule || n === at) take(n);
-    for (const n of this.reach(at)) if (n.rule || n === at) take(n);
+    for (let n: Ray | undefined = at; n; n = n.outer) if (n.rule || n === at) this.take(n, out, valued);
+    for (const n of this.reach(at)) if (n.rule || n === at) this.take(n, out, valued);
     return out;
+  }
+  take(n: Ray, out: Map<string, Code>, valued: Set<string>) { if (n.size) for (const [k, c] of n.m) { if (out.has(k) || valued.has(k)) continue; if (c instanceof Code) out.set(k, c); else valued.add(k); }
   }
   // whether a pattern names a capture held in a frame (a word of it, between edges)
   names_held(head: string, at: Ray): boolean {
     for (const [k, c] of this.captures(at)) if (c instanceof Code) for (let i = head.indexOf(k); i >= 0; i = head.indexOf(k, i + 1)) if (this.edge(head, i - 1) && this.edge(head, i + k.length)) return true;
     return false;
   }
-  edge(head: string, i: number): boolean { const { open, close } = this.learned; return i < 0 || i >= head.length || head[i] === open || head[i] === close || this.blank(head[i]) || [...this.pairs].some(([o, c]) => head.startsWith(o, i) || head.startsWith(c, i)); }
+  edge(head: string, i: number): boolean {
+    if (i < 0 || i >= head.length) return true;
+    const c = head[i], { open, close } = this.learned; if (c === open || c === close || this.blank(c)) return true;
+    for (const [o, k] of this.pairs) if (head.startsWith(o, i) || head.startsWith(k, i)) return true;
+    return false;
+  }
   rewritten = new Map<string, Text>();
   // Code followed back to where it was written: code that is one word naming code held where it is read is that code.
   // (`as_written`: a capture read as a value, as it was written, `x**`)

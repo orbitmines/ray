@@ -27,6 +27,8 @@ export class Ray {
   led?: Map<string, number[]>;
   // (the version it was first reached at by a reading)
   reached?: number;
+  // (a closure: a method without a name, as a value)
+  closure = false;
   // (a context the host reads text with: what it reads a span as, or undefined)
   test?: (s: string) => unknown;
   scope = false; caller?: Ray; self?: unknown;
@@ -79,12 +81,16 @@ export class Host {
   // the interpreter's nothing (`js.ray`), and the classes it maps its own kinds of value to
   none?: Ray; kinds = new Map<string, Ray>();
   // (a kind named before its class is declared: the class, once it is)
+  // the kind of a value of the host's own: its `typeof`; one character of text, a character (`char`) where one is mapped
+  kind_of(v: unknown): Ray | undefined { return typeof v === 'string' && this.kinds.has('char') && v.length > 0 && v.length <= 2 && [...v].length === 1 ? this.kind('char') : this.kind(typeof v); }
   kind(k: string): Ray | undefined { const v = this.kinds.get(k); if (v instanceof Code) { const r = this.walk(v); if (r instanceof Ray) { this.kinds.set(k, r); return r; } return undefined; } return v; }
   order = 0;
   version = 0;
   // what each version declared, and where: the literals any text it reads has in it (`needle`; none: it may read anything)
   changes: { needle: string; at: Ray }[] = [];
-  changed(pieces: Piece[], at: Ray) { this.version++; this.changes.push({ needle: this.needle(pieces), at }); }
+  // (what is declared where no reading has reached yet changes no reading: a closure made, a value made; nor in a rule's frame,
+  // read as its shape: every frame of it declares the same there)
+  changed(pieces: Piece[], at: Ray) { if (at.reached === undefined || (SHAPED && at.rule && at.scope && !at.into)) return; this.version++; this.changes.push({ needle: this.needle(pieces), at }); }
   // whether anything declared since a version may read a span: declared where a reading then could reach (one first reached
   // later was reached by none)
   since_read(version: number, span: string): boolean {
@@ -338,9 +344,12 @@ export class Host {
     }
     if (!node.params && !node.leftward) return this.defined(head, f, at, statement);
     if (typeof between === 'string') node.between = between;
-    const into = statement ? at.into ?? at : new Ray(at), body = this.unblocked(this.written(f));
+    // (a method without a name is a value, a closure, wherever it is read: declared in nothing)
+    const declares = statement && node.spelled !== '';
+    // (a closure has no `this` of its own: `this` in it is the one where it was written)
+    const into = declares ? at.into ?? at : Object.assign(new Ray(at), { closure: node.spelled === '' }), body = this.unblocked(this.written(f));
     // (read again into what continues into a class that has it, from the same text: that one)
-    if (statement && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.node && x.body.text === body.text && x.body.b === body.b && x.body.e === body.e && x.body.ctx.outer === body.ctx.outer); if (was) return this.held_as(was); }
+    if (declares && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.node && x.body.text === body.text && x.body.b === body.b && x.body.e === body.e && x.body.ctx.outer === body.ctx.outer); if (was) return this.held_as(was); }
     const { open, close, space } = this.learned, name = node.spelled, out: Eq[] = [];
     const r = node.params || typeof receiver !== 'string' ? this.given_name : receiver;
     // (what it is given: a capture no name written can be)
@@ -353,7 +362,7 @@ export class Host {
     else { form([...lead(name), cap], false); const sp = lead(name + space); form(sp[sp.length - 1] && 'lit' in sp[sp.length - 1] ? [...sp, cap] : [...lead(name), { lit: space }, cap], true); }
     // (all of its parameters with a default: also as written alone)
     if (node.params && name !== '' && node.closing === undefined && node.params.every(x => node.defaults?.has(x))) { const eq = this.add(into, this.pieces(name, at), body, node); eq.node = node; out.push(eq); }
-    return statement ? this.held_as(out[0]) : into;
+    return declares ? this.held_as(out[0]) : into;
   }
   given_name = '\u0000given'; restating = new Set<string>();
   // what a method was given, matched against its parameters (out of the one pair it may be written in), from all of them to as
@@ -551,7 +560,11 @@ export class Host {
       if (word && (n.has(word) || n.eqs.some(x => x.key === word))) held = true;
     }
     // a name: up to where something reads on
-    const w = this.name_end(text, b, e); if (w > b) { const o = this.on({ name: true, caps: [], b, e: w }, text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
+    // (not where an operator is written: `!=` is no name)
+    const w = this.name_end(text, b, e); if (w > b && !this.operator_at(text, b)) { const o = this.on({ name: true, caps: [], b, e: w }, text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
+    // (what begins with what reads on from a value, read whole by nothing else, reads on from what it is read in: `!= " "` in
+    // `Char{!= " "}`, `.is_digit`)
+    if ((!best || best.e < e) && this.leads(s, b)) { const o = this.on({ eq: this.implicit, caps: [], b, e: b }, text, e, ctx, floor, not); if (o.e > b && this.better(o, best)) best = o; }
     return best;
   }
   led(n: Ray): Map<string, number[]> {
@@ -567,6 +580,8 @@ export class Host {
     return k;
   }
   needles = new WeakMap<Piece[], string>();
+  // (what a statement that begins by reading on reads on from: the value it is read in)
+  implicit: Eq = { pieces: [], body: new Code({ name: '', s: '' }, 0, 0, new Ray()), ctx: new Ray(), order: -1, seq: -1, key: '', pairs: Infinity, native: F => this.self(F) };
   // A reading with what reads on from its value, as far as it goes.
   on(best: Read, text: Text, e: number, ctx: Ray, floor: number, not?: Set<Eq>): Read {
     const s = text.s;
@@ -578,7 +593,7 @@ export class Host {
       const spaced = this.blank(s[at]); while (at < e && this.blank(s[at])) at++;
       for (const list of [this.sends.get(s[at]), this.sends.get('')]) if (list) for (const eq of list) {
         if ((eq.order < floor && spaced) || not?.has(eq) || eq.busy) continue;
-        if (!this.blank(s[at - 1]) && 'lit' in eq.pieces[0] && (eq.apart || this.apart(eq.pieces[0].lit))) continue;
+        if (best.e > best.b && !this.blank(s[at - 1]) && 'lit' in eq.pieces[0] && (eq.apart || this.apart(eq.pieces[0].lit))) continue;
         { const k = this.needle(eq.pieces); if (k && !(span ??= s.slice(at, e)).includes(k)) continue; }
         const r = this.match(eq, text, at, e, ctx, 0, at, []);
         if (r && this.better(r, on)) on = r;
@@ -652,6 +667,8 @@ export class Host {
       const n = this.literal(text, piece.lit, at, e); if (n < 0) return undefined;
       // (a method's name is the whole of a name written there: `map` is not read in `mapping`)
       if (i === 0 && eq.node && n < e && !this.blank(text.s[n - 1]) && this.name_end(text, at, e) > n) return undefined;
+      // (not where a longer operator it begins is written: `!` is not read in `!=`, `.` not in `..<`)
+      if (this.shorter(piece.lit, text, at)) return undefined;
       // (not where it would be the rest of another operator written there: `?` is not the second of `??`; a space is no operator's)
       if (i > 0 && piece.lit.length === 1 && !this.blank(piece.lit) && at > 0 && !this.blank(text.s[at - 1]) && this.longer(text.s[at - 1], text.s[at])) return undefined;
       const d = piece.lit.indexOf(this.learned.definer);
@@ -701,7 +718,7 @@ export class Host {
       // (a head, before the definer: to the definer, whatever it holds)
       if (i === 0 && !('lit' in next && next.lit.includes(this.learned.definer))) { const o = this.operand(text, at, e, floor, ctx, eq.pairs); ends = ends.filter(n => n <= o); } else if (i > 0) ends.reverse();
       // (before a space: not where what follows reads on from it, nor after what reads on: `class: A + B { … }` has the parent `A + B`)
-      if (i > 0 && 'lit' in next && next.lit.trim() === '' && !after) ends = ends.filter(n => { let k = n; while (k < e && this.blank(text.s[k])) k++; return !this.leads(text.s, k) && !this.trails(text.s, n); });
+      if (i > 0 && 'lit' in next && next.lit.trim() === '' && !after) ends = ends.filter(n => { let k = n; while (k < e && this.blank(text.s[k])) k++; return !this.spaced_operator(text.s, k) && !(this.trails(text.s, n) && this.held(text, at, n) && text.s.slice(at, n).trim().includes(this.learned.space)); });
       // (between two literals, outside a pair: up to an operation declared before it, as an operand, `{g}({b})` in `a | b : T = f(x)`)
       if (i > 0 && !after && !bracketed && !quoted && eq.order >= this.earliest && !('lit' in next && next.lit.includes(this.learned.definer))) { const o = this.operand(text, at, e, eq.order, ctx, eq.pairs); ends = ends.filter(n => n <= o); }
       // (a head ends at a definer that ends its line, the functionality below it, as the first statement's does; else at the first)
@@ -789,7 +806,9 @@ export class Host {
   own(read: Read, r: Ray, text: Text): boolean {
     if (read.name) { const word = text.s.slice(read.b, read.e); return this.reach(r).some(n => n.has(word)); }
     // (a word is one of it when it is a name it holds, not a method: `red` of an enum, not `first` of a Ray)
-    for (let x: Read | undefined = read; x; x = x.on) if (x.eq) { if (x.eq.pieces.length === 1 && 'lit' in x.eq.pieces[0] && !x.eq.value) return false; let mine = false; for (let n: Ray | undefined = r; n && !n.scope && n !== this.base; n = n.outer) if (x.eq.ctx === n) mine = true; if (!mine) return false; }
+    // (and what it reads on from is one of it too: `me/device` is not an Instance's for its `/`)
+    for (let x: Read | undefined = read; x; x = x.on) if (x.name) { const word = text.s.slice(x.b, x.from ?? x.e).trim(); if (!this.reach(r).some(n => n.has(word) || this.valued(n, word) !== undefined)) return false; }
+    else if (x.eq) { if (x.eq.pieces.length === 1 && 'lit' in x.eq.pieces[0] && !x.eq.value) return false; let mine = false; for (let n: Ray | undefined = r; n && !n.scope && n !== this.base; n = n.outer) if (x.eq.ctx === n) mine = true; if (!mine) return false; }
     return true;
   }
   // (a literal starting, or ending, with a bracket)
@@ -849,12 +868,25 @@ export class Host {
   // (whether `i` is inside an operator written from before it, after `at`: in `==`, a shorter one, `=`, is not read)
   amid(text: Text, at: number, i: number): boolean {
     const s = text.s;
-    for (let k = i - 1; k > at && k >= i - 4 && !this.blank(s[k]); k--) for (const l of this.operators.get(s[k]) ?? []) if (l.length > i - k && s.startsWith(l, k)) return true;
+    for (let k = i - 1; k >= at && k >= i - 4 && !this.blank(s[k]); k--) for (const l of this.operators.get(s[k]) ?? []) if (l.length > i - k && s.startsWith(l, k)) return true;
     return false;
   }
-  // every operation's spelling (without the spaces around it), by its first character
+  // (an operator written apart, a space after it: `+ B`, not `@word`)
+  spaced_operator(s: string, at: number): boolean {
+    if (!this.leads(s, at)) return false;
+    let j = at; while (j < s.length && !this.blank(s[j])) j++;
+    return j < s.length && j > at && /^[^\p{L}\p{N}_]+$/u.test(s.slice(at, j));
+  }
+  operator_at(text: Text, at: number): boolean { for (const op of this.operators.get(text.s[at]) ?? []) if (text.s.startsWith(op, at)) return true; return false; }
+  shorter(lit: string, text: Text, at: number): boolean {
+    const l = lit.trim(); if (l.length === 0 || this.bracket(l[0]) || this.quotes.has(l[0])) return false;
+    const from = at + (lit.length - lit.trimStart().length), set = this.operators.get(l[0]); if (!set) return false;
+    for (const op of set) if (op.length > l.length && op.startsWith(l) && text.s.startsWith(op, from) && !l.includes(this.learned.space)) return true;
+    return false;
+  }
+  // every operation's spelling (without the spaces around it), by its first character; not one written as a name (`of`)
   operators = new Map<string, Set<string>>();
-  spelled(lit: string) { const l = lit.trim().split(this.learned.space)[0]; if (l.length < 2) return; let set = this.operators.get(l[0]); if (!set) this.operators.set(l[0], set = new Set()); set.add(l); }
+  spelled(lit: string) { const l = lit.trim().split(this.learned.space)[0]; if (l.length < 2 || /[\p{L}\p{N}_]/u.test(l)) return; let set = this.operators.get(l[0]); if (!set) this.operators.set(l[0], set = new Set()); set.add(l); }
   // (what a statement led by a literal reads last: the rest, up to an operation declared before it; a pair not opened in it, there,
   // is text)
   rest(eq: Eq, text: Text, at: number, e: number, ctx: Ray): number {
@@ -1154,6 +1186,11 @@ export class Host {
     if (c) { const T = new Ray(c.ctx); T.scope = true; T.into = target; T.sees = target; return this.walk(new Code(c.text, c.b, c.e, T, c.floor)); }
     const x = this.valued(node, name); return x ? x.native!(node) : undefined;
   }
+  // where the method it is read in was called from (`&caller`): the nearest method around where it is read
+  caller_of(F: Ray): Ray | undefined {
+    for (let c: Ray | undefined = F.caller, n = 0; c && n < 10000; c = c.rule && !c.rule.node ? c.caller : c.outer ?? c.sees, n++) if (c.method) return c.caller;
+    return undefined;
+  }
   // (`return` leaves, `recur` enters again, the method it is written in: the nearest method around where it is read)
   jump(kind: string, value?: unknown, F?: Ray): never {
     let to: Ray | undefined;
@@ -1215,7 +1252,7 @@ export class Host {
     // (nothing, absent, reads as the interpreter's nothing)
     if (value === undefined && this.none) value = this.none;
     // (a value of the host's own kind: the class the interpreter maps that kind to)
-    if (!(value instanceof Ray) && value !== undefined) { const k = this.kind(typeof value); if (k) value = k; }
+    if (!(value instanceof Ray) && value !== undefined) { const k = this.kind_of(value); if (k) value = k; }
     for (let n: Ray | undefined = value instanceof Ray ? value : (based = true, this.base); n; n = n.outer && !n.outer.scope ? n.outer : based ? undefined : (based = true, this.base)) {
       for (let i = n.eqs.length - 1; i >= 0; i--) if (n.eqs[i].key === key) { out.push(n.eqs[i]); if (one) return out; }
     }
@@ -1240,7 +1277,7 @@ export class Host {
     // (`recur(…)`: the method again, given what it is given there)
     for (let again: Code | undefined; ;) {
     // (a frame inside the value it is applied on: a value of the host's own kind, inside the class it is mapped to)
-    const kind = self !== undefined && !(self instanceof Ray) ? this.kind(typeof self) : undefined;
+    const kind = self !== undefined && !(self instanceof Ray) ? this.kind_of(self) : undefined;
     const F = new Ray(self instanceof Ray && !self.scope ? self : kind ?? eq.body.ctx); F.place = place;
     // (what a rule enclosed in literals reads is a value)
     const ps = eq.pieces, enclosed = 'lit' in ps[0] && 'lit' in ps[ps.length - 1] && ps.length > 1;
@@ -1255,7 +1292,7 @@ export class Host {
       if (sub === NOT) return NOT;
       if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) return NOT;
       for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.default_of(F, eq.node, x));
-      const I = new Ray(eq.node); I.scope = true; I.method = true; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
+      const I = new Ray(eq.node); I.scope = true; I.method = true; I.caller = code.ctx; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
     }
     // (what a form declares first, where it is not given it; the capture it is applied with, `this`)
     if (eq.receiver) F.self = this.get(F, eq.receiver);
@@ -1287,7 +1324,7 @@ export class Host {
       else if (c.reader) { eq.busy = (eq.busy ?? 0) + 1; try { r = this.walk(new Code(c.reader.text, c.reader.b, c.reader.e, F)); } finally { eq.busy--; } }
       // (a value of the host's own kind, as what is read in: read in the class the interpreter maps that kind to, being that value)
       const dependent = !!c.reader && this.dependent(c.reader, eq);
-      const kind = !(r instanceof Ray) && r !== undefined && dependent ? this.kind(typeof r) : undefined;
+      const kind = !(r instanceof Ray) && r !== undefined && dependent ? this.kind_of(r) : undefined;
       if (r === this.expression) F.m.set(c.name, this.walk(k));
       else if (kind) { const v = c.block ? this.into(this.written(k), kind, r) : this.within(k, kind, false, r); if (v === NOT) return false; F.m.set(c.name, v); }
       else if (!(r instanceof Ray)) return false;
@@ -1321,7 +1358,7 @@ export class Host {
   // whether a value is one of a context (it, or made of it; anything is one of the base)
   is(v: unknown, r: Ray): boolean {
     if (r === this.base) return true;
-    if (!(v instanceof Ray)) { const k = v === undefined ? undefined : this.kind(typeof v); return k !== undefined && this.is(k, r); }
+    if (!(v instanceof Ray)) { const k = v === undefined ? undefined : this.kind_of(v); return k !== undefined && this.is(k, r); }
     for (let n: Ray | undefined = v; n; n = n.outer) if (n === r) return true;
     return false;
   }
@@ -1418,7 +1455,7 @@ export class Host {
   has(x: unknown, word: string): boolean { return x instanceof Ray && (x.has(word) || x.eqs.some(eq => eq.key === word)); }
   self(F: Ray): unknown {
     const seen = new Set<Ray>();
-    const go = (n: Ray | undefined): unknown => { for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self !== undefined) return n.self; if (n.written && !n.rule && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = go(n.sees); if (v !== undefined) return v; } } return undefined; };
+    const go = (n: Ray | undefined): unknown => { for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule?.node?.spelled === '') return go(n.self.outer); if (n.self !== undefined) return n.self; if (n.written && !n.rule && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = go(n.sees); if (v !== undefined) return v; } } return undefined; };
     return go(F.caller);
   }
 
@@ -1448,6 +1485,13 @@ export class Host {
     }
     return undefined;
   }
+  // what a value holds along a path, each step a member it holds (`device/terminal`); nothing where a step is not held
+  path(v: unknown, text: string, by: string): unknown {
+    let at = v;
+    for (const step of text.split(by)) { if (!(at instanceof Ray) || !this.holds_member(at, step)) return undefined; at = this.field(at, step); }
+    return at;
+  }
+  holds_member(v: Ray, word: string): boolean { for (let n: Ray | undefined = v; n && !n.scope; n = n.outer) if (n.has(word) || n.eqs.some(x => x.key === word && x.native)) return true; return false; }
   // a closure applied to a value; whether a value holds (every value but nothing and false)
   invoke(f: unknown, x: unknown): unknown {
     if (!(f instanceof Ray) || f.eqs.length !== 1) return undefined;
@@ -1455,8 +1499,18 @@ export class Host {
     try { return this.invoke_(f, x); } finally { if (this.applying > 0) this.applying--; }
   }
   invoke_(f: Ray, x: unknown): unknown {
-    const eq = f.eqs[0], c = eq.pieces.find(q => 'cap' in q) as { cap: string } | undefined; if (!c) return undefined;
-    const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; F.m.set(c.cap, x);
+    const eq = f.eqs[0];
+    const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq;
+    // (a method: its first parameter given the value, the rest what they say; the frame continues into it, as applied)
+    if (eq.node?.params) {
+      const ps = eq.node.params; if (ps.length === 0) return undefined;
+      F.m.set(ps[0], x); for (const p of ps.slice(1)) F.m.set(p, this.default_of(F, eq.node, p));
+      if (F.outer !== eq.body.ctx) F.sees = eq.body.ctx;
+      const I = new Ray(eq.node); I.scope = true; I.method = true; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
+      return eq.native ? eq.native(F) : this.body(eq, F);
+    }
+    const c = eq.pieces.find(q => 'cap' in q) as { cap: string } | undefined; if (!c) return undefined;
+    F.m.set(c.cap, x);
     return eq.native ? eq.native(F) : this.body(eq, F);
   }
   truthy(v: unknown): boolean { return v !== undefined && v !== this.none && v !== NOT && v !== this.name(this.global, 'false'); }

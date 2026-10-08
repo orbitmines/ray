@@ -5,24 +5,20 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 @private => @me
 @everyone => characters
 @here => characters{is Online}
-@local => @me.presence ?? Instance.local
 @anonymous => ?
 
 @public => @ether.@everyone | Instance
 @npc = @npcs => @public{is NPC}
 @players => @public{is Player}
 
-@host => Instance.local.parent**#
-@guests => Instance.local.children**#
+@host => @local.parent**#
+@guests => @local.children**#
 @guests.read { @host }
 @host.read { @guests }
 
-local => @local
-private => @private
-public => @public
 // Whatever the policy, `confidential` is never wider than `@private.managed` (W5.5).
 confidential => Node.policy & @private.managed
-Node.policy = local
+Node.policy = @local
 
 Node &+= {
   public => visibility#.some(.reads && @public is .who)

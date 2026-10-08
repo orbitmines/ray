@@ -17,8 +17,9 @@ Location := class: Hierarchy (
 
   + (suffix: String | Location) => ((location as String) + ((suffix is Location ? suffix.@ : suffix) as String)) as Location
   / (segment: String) => this + "/" + segment ~~ (WARN@Location `text joined into a path may leave it` if segment ~= (*, ".." | "/", *))
-  /{segment: Written} ^string => this + "/" + segment
-  { }/{segment: Written} ^string => this + "/" + segment
+  // a path into what it holds (`@me/device/terminal`), else into the location's own path
+  /{segment: Written} ^string => (@path this segment "/") ?? (this + "/" + segment)
+  { }/{segment: Written} ^string => (@path this segment "/") ?? (this + "/" + segment)
   { }{value} => this + value if location as String ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
   { }.{piece: Written} ^string => this + "." + piece
   == (other) => location as String == (other is Location ? other.@ : other) as String

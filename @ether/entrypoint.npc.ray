@@ -1,2 +1,2 @@
-@me = Instance.local.login(Character(name: @me.name))
+@me = @local.login(Character(name: @me.name))
 @me.status = Resolving

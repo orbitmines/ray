@@ -37,4 +37,6 @@ HostString := class: String {
   + {other} => @js F.self + $.show($.get(F, "other"))
   codepoint => @js F.self.codePointAt(0)
   length => @js [...F.self].length
+  every (predicate) => @js $.name(F, [...F.self].every(c => $.truthy($.invoke($.get(F, "predicate"), c))) ? "true" : "false")
+  some (predicate) => @js $.name(F, [...F.self].some(c => $.truthy($.invoke($.get(F, "predicate"), c))) ? "true" : "false")
 }

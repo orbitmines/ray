@@ -58,7 +58,7 @@ Reference := class {
   notes => [note, note.previous**].flatten
 }
 
-@me ^string => &caller as Character ?? Instance.local
+@me ^string => &caller as Character ?? @local
 @{name: reservable_names} ^string => World.current["@", name]
 @{name: reservable_names} = {holder} ^punctuation => World.current["@", name] = holder
 
@@ -68,7 +68,7 @@ Location &+= {
 Location.current = @local
 
 Character &+= {
-  static local (who) => who == "me" ? @me : (Instance.local.registry, Instance.local.hosted)#.find((who as String).fold_case.skeleton is .name.fold_case.skeleton)
+  static local (who) => who == "me" ? @me : (@local.registry, @local.hosted)#.find((who as String).fold_case.skeleton is .name.fold_case.skeleton)
 
   avatars => name{is Location && .segments.some(.starts_with("@"))}
   presence | primary: Instance?
@@ -76,11 +76,11 @@ Character &+= {
   focus: Program?
 
   instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
-  device => (presence ?? Instance.local).device
+  device => (presence ?? @local).device
   // The standard location of all communication with it: every instance it runs on, superposed, with the one its focus is on
   // selected (`\…\`, U-C2). `@me/instance = x` sends to the selected one, `dynamically event: @me/instance` follows what
   // comes from it; what holds an instance decides the protocol (a host's terminal, a page, another instance over the network).
-  instance => instances{!== primary} | \(primary ?? Instance.local)\
+  instance => instances{!== primary} | \(primary ?? @local)\
   status => Status#{this is .}
   // Saying a status constrains what may run (W2.15); one read off what runs (`Online`, `Broadcasting`) that does not
   // hold yet is a quest to make it hold, run by the character.
@@ -89,8 +89,6 @@ Character &+= {
 }
 
 Instance := class: Location + Entity {
-  static local = Instance(host: "localhost")
-
   device: Device = Device()
   registry: Character?
   hosted: Character?
@@ -124,6 +122,9 @@ Instance := class: Location + Entity {
   mirror (value, depth = 1) => (value.children.for(child => mirror(child, depth - 1)) if depth > 1) -- (value @ this)
   synced => registry#.nonempty
 }
+
+// the current instance (not `@localhost`: anything on the host machine)
+@local = Instance()
 
 Online := Character{presence?.device.network.connected}
 Offline := Character{!(. is Online)}

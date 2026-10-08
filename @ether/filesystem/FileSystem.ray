@@ -39,7 +39,7 @@ FileSystem &+= {
 }
 
 FileOptimizations = FileOptimizations + {
-  {instance: Instance{=== Instance.local}} => FileSystem.Terminal()
+  {instance: Instance{=== @local}} => FileSystem.Terminal()
   // a scheme of one letter is a Windows drive (https://url.spec.whatwg.org/#windows-drive-letter)
   {location: Location{!scheme || scheme == "file" || scheme.length == 1}} => @/
 }

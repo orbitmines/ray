@@ -38,6 +38,9 @@ dynamically assert {conditions} => Dynamic(program: (Program(code: conditions**)
 "{text}" => @text text
 `{text}` => @text text
 
+// `&caller`: where the method it is read in was called from (the context its arguments were written in)
+&caller => @caller
+
 // `x &+= { … }`: the block read into `x` (what it defines is `x`'s).
 {target Expression} &+= {{block target}} => target
 
@@ -144,6 +147,8 @@ false &+= {
 // What is inside a capture is read the same way: a capture is a parameter.
 Unled => @js $.reader(s => s.startsWith($.learned.open) ? undefined : s)
 Unspaced => @js $.reader(s => s.includes($.learned.space) ? undefined : s)
+// a word: letters, digits, `_`
+Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
 Parameters := @context None
 Parameters &+= {
   {first Parameters}, {rest Parameters} => first
@@ -242,6 +247,7 @@ Ray &+= {
     }
     this.head := vertex
     this
+  every (predicate) => !(this.some((element) => !(predicate(element))))
   some (predicate) =>
     found := None
     at_vertex := this.head
@@ -469,7 +475,13 @@ Node &+= {
     made.narrows := this
     made.constraint := (it => it with { constraint })
     made
-  is {type: Expression} => (@inside this type) || (type.superposes && type.components.some((component) => this is component)) || (type.narrows && (this is type.narrows) && type.constraint(this)) || (@same this type)
+  // `x is T` (T4.10): whether `T` admits `x`: an instance of it (or of what is made of it); one of a superposition's components; what
+  // a narrowing narrows, satisfying its constraint; a list of `T`s for `T[]`; else `T` itself
+  is {type: Expression} => this.admitted_by(type)
+  // (what the type holds, its own: not what its values hold, `("(", T, ")")`)
+  admitted_by (type) => (@inside this type) || ((@member type "superposes") && (@member type "components").some((component) => this is component)) || ((@member type "narrows") && (this is (@member type "narrows")) && type.constraint(this)) || ((@inside type Listing) && this.every((element) => element is (@member type "of"))) || (@same this type)
+  // `x as T`: `x` converted to a `T` (a class's own `as (=== T) => …`); where none converts it, `x` when it is a `T`, else nothing
+  as {type} => (this is type) ? this : None
 }
 // `T{p}(arguments)`: a `T` made of them (what `p` says of it is what it is made to be)
 Narrowing &+= {

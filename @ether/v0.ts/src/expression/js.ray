@@ -8,6 +8,8 @@ global => @js $.global
 @declaring {name} => @js $.declaring(F.m.get("name"), F)
 @show {x} => @js $.output($.show(x))
 & => @js $.here(F)
+// where the method it is read in was called from
+@caller => @js $.caller_of(F)
 @has {x} {name} => @js $.name(F, $.has(x, F.m.get("name").s.trim()) ? "true" : "false")
 @of {x} => @js x instanceof Ray ? x.outer : undefined
 @applies {x} => @js $.name(F, x instanceof Ray && x.eqs.some(eq => !("lit" in eq.pieces[0]) || eq.pieces[0].lit === "()") ? "true" : "false")
@@ -17,10 +19,13 @@ global => @js $.global
 @later {code} => @js $.later($.written(F.m.get("code")))
 @holding {code} => @js $.declare(F, $.holding($.written(F.m.get("code"))), false)
 @assign {value} => @js $.assigning(F) || !$.placed(F) ? undefined : $.declare(F, $.defaulted(F) ? $.later($.written(F.m.get("value"))) : $.get(F, "value"), true)
-@inside {x} {type} => @js $.name(F, (() => { for (let n = x; n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
+// (one character of the host's text is a `Char` too)
+@inside {x} {type} => @js $.name(F, (() => { const v = x; if (typeof v === "string" && [...v].length === 1 && type === $.name(F, "Char")) return true; for (let n = x instanceof Ray ? x : $.kind_of(x); n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
 // a value's member by its name (as the host holds it: its own, its class's)
 @member {x} {name} => @js $.field($.get(F, "x"), String($.get(F, "name")))
+// what a value holds along a path (`device/terminal`, by `/`): each step a member it holds, else nothing
+@path {x} {path} {by} => @js $.path($.get(F, "x"), String($.get(F, "path")), String($.get(F, "by")))
 // the host this interpreter runs on: what it says of itself (`platform`, `architecture`, an environment variable), its clock (ns
 // since 1970, and how fine it is), a random bit
 @os {property} => @js (p => ({ platform: process.platform, architecture: process.arch })[p] ?? process.env[p])(String($.get(F, "property")))

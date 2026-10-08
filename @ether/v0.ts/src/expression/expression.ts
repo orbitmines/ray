@@ -537,7 +537,9 @@ export class Host {
     if (r.scope) return !!read && read.e === end;
     // (a value that is not a scope reads what its own equivalences, or names, read whole; anything else is read where it was
     // written, and is one of it or not: decided where it is applied, unless the span is a rule of its own)
-    return (!!read && read.e === end && this.own(read, r, text)) || eq.pieces.length > 1;
+    // (a rule where statements are read reads text by its types; only a value's own rules (its parameters, a level's) decide by the
+    // value, where applied)
+    return !!read && read.e === end && this.own(read, r, text);
   }
   // whether a reading is a value's own: a name it holds, or one of its equivalences (or its class's), not the base's
   own(read: Read, r: Ray, text: Text): boolean {

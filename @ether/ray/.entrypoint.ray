@@ -311,12 +311,8 @@ Ray &+= {
   append (value) =>
     link := @made Vertex
     link.value := value
-    if this.tail {
-      this.tail.next := link
-      link.previous := this.tail
-    } else {
-      this.head := link
-    }
+    this.tail ? (link.previous := this.tail) : (this.head := link)
+    this.tail ? (this.tail.next := link) : None
     this.tail := link
     this
   take =>

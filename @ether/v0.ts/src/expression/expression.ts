@@ -819,11 +819,11 @@ export class Host {
     return false;
   }
   // (one of it without asking the language (read for every name, it would be): it, made of it, or one of what it superposes)
-  of_type(v: unknown, r: Ray, depth = 0): boolean {
+  of_type(v: unknown, r: Ray, seen = new Set<Ray>()): boolean {
     if (v === r) return true;
     for (let n = v instanceof Ray ? v : undefined; n; n = n.outer) if (n === r) return true;
-    if (depth > 8 || !this.holds_member(r, 'components')) return false;
-    for (let l = this.field(this.field(r, 'components'), 'head'); l instanceof Ray; l = this.field(l, 'next') as Ray) { const x = this.field(l, 'value'); if (x instanceof Ray && this.of_type(v, x, depth + 1)) return true; }
+    if (seen.has(r) || !this.holds_member(r, 'components')) return false; seen.add(r);
+    for (let l = this.field(this.field(r, 'components'), 'head'); l instanceof Ray; l = this.field(l, 'next') as Ray) { const x = this.field(l, 'value'); if (x instanceof Ray && this.of_type(v, x, seen)) return true; }
     return false;
   }
   // whether a reading is a value's own: a name it holds, or one of its equivalences (or its class's), not the base's

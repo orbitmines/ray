@@ -34,6 +34,8 @@ global => @js $.global
 // a method head the class's own (`static m => …`): what it defines applies to the class, not to what is made of it
 @own {node} => @js ((n) => (n instanceof Ray && (n.own = true), n))($.get(F, "node"))
 @statically {statement} => @js $.statically(F.m.get("statement"))
+// (whether what is read is read as the class's own)
+@static => @js $.name(F, $.static_now > 0 ? "true" : "false")
 @inside {x} {type} => @js $.name(F, (() => { const v = x; if (typeof v === "string" && [...v].length === 1 && type === $.name(F, "Char")) return true; const start = x instanceof Ray ? x : $.kind_of(x); return start instanceof Ray && type instanceof Ray && $.made_of_(start, type); })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
 // a value's member by its name (as the host holds it: its own, its class's)

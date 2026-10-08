@@ -131,7 +131,8 @@ ClassField &+= {
   = {value} =>
     word := @member this "word"
     owner := @member this "owner"
-    @field owner "field_defaults" (((@owns owner "field_defaults") ? (@member owner "field_defaults") : []).append((instance) => (@owns instance word) ? None : (@field instance word (@later value))))
+    // (read as the class's own, `static x: T = v`: its member, read when it is first read; else what each instance is given)
+    (@static) ? (@field owner word (@later value)) : (@field owner "field_defaults" (((@owns owner "field_defaults") ? (@member owner "field_defaults") : []).append((instance) => (@owns instance word) ? None : (@field instance word (@later value)))))
     this
 }
 // `x with { … }`: the block read with `x` as what it is read in, answering what the block answers.

@@ -1905,7 +1905,7 @@ export class Host {
   has(x: unknown, word: string): boolean { return x instanceof Ray && (x.has(word) || this.has_key(x, word)); }
   self(F: Ray): unknown { return this.self_(F.caller, new Set<Ray>()); }
   self_(n: Ray | undefined, seen: Set<Ray>): unknown {
-    for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule?.node?.spelled === '') return this.self_(n.self.outer, seen); if (n.self !== undefined) return n.self; if (n.written && !n.rule && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = this.self_(n.sees, seen); if (v !== undefined) return v; } }
+    for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule && n.self.eqs.includes(n.rule)) return this.self_(n.self.outer, seen); if (n.self !== undefined) return n.self; if (n.written && !n.rule && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = this.self_(n.sees, seen); if (v !== undefined) return v; } }
     return undefined;
   }
 

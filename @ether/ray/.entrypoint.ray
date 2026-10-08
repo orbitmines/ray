@@ -117,10 +117,10 @@ class: {parent} => Class.made_of(parent, None, None)
 // go on from everything before them (A-C5): declared first, they bind loosest.
 Node &+= {
   -- {dash_call} =>
-    dash_answer := this with { dash_call }
+    dash_answer := dash_call
     (@applies dash_answer) ? dash_answer(this) : dash_answer
   ~~ {tilde_call} =>
-    tilde_answer := this with { tilde_call }
+    tilde_answer := tilde_call
     (@applies tilde_answer) ? tilde_answer(this) : tilde_answer
     this
   // (`x -- .m`, `x ~~ .m = v`: `.` is `x`, a closure of it; names and `this` read where the statement is written)

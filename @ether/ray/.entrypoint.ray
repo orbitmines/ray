@@ -584,8 +584,6 @@ Node &+= {
   // `x/name`: what `x` holds under `name`, read as `x.name` is (a path step, `@me/device/terminal`)
   /{rest this} => rest
 }
-// (what reads a capture of a type asks this)
-@admitting ((value, type) => value is type)
 // `T{p}(arguments)`: a `T` made of them (what `p` says of it is what it is made to be)
 Narrowing &+= {
   ({arguments}) => Class.instance_of(this.narrows, arguments)

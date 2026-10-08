@@ -926,9 +926,9 @@ export class Host {
         // (a word given as written: read here, as it is written)
         if (v instanceof Code && v.word) { const w = new Code(v.text, v.b, v.e, code.ctx); w.past = n; return this.walk(w); }
         // (a capture: where what it holds was read)
-        const held = n.places?.get(word); this.place = held ?? { at: n.into ?? n, here: code.ctx.into ?? code.ctx, word };
-        if (v === NOT && process.env.EXPR_NOTS) writeSync(2, `NOT held: ${word} in frame of ${n.rule?.key} @${n.rule?.body.text.name.split('/').pop()}:${n.rule?.body.text.s.slice(0, n.rule.body.b).split('\n').length} read at ${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split('\n').length}\n`);
-        return this.force(v);
+        const held = n.places?.get(word), placed = held ?? { at: n.into ?? n, here: code.ctx.into ?? code.ctx, word };
+        // (the name's place, once what it holds was read)
+        const read = this.force(v); this.place = placed; return read;
       }
       const at = code.ctx.into ?? code.ctx;
       this.place = { at, here: at, word, text: code.text, b: r.b, e: r.e, on: at === this.none ? this.receiving : undefined };
@@ -1043,6 +1043,12 @@ export class Host {
     const c = node.default_codes?.get(name);
     if (c) { const T = new Ray(c.ctx); T.scope = true; T.into = target; T.sees = target; return this.walk(new Code(c.text, c.b, c.e, T, c.floor)); }
     const x = this.valued(node, name); return x ? x.native!(node) : undefined;
+  }
+  // a message said where it is written (what it reads as, else as it is written)
+  report(m: unknown): unknown {
+    if (!(m instanceof Code)) return undefined;
+    const c = this.written(m), v = this.force(c), text = typeof v === 'string' ? v : c.s.trim();
+    this.say(text, c.text, c.b, c.e); return v;
   }
   // a member given to a value, by its name
   field_set(target: unknown, name: unknown, value: unknown): unknown {

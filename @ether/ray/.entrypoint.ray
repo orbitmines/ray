@@ -19,8 +19,9 @@ static {statement} => (@has & given) ? None : statement
 static {name Unspaced} = {value} => (@has & given) ? None : (& &+= { name := value })
 static {name Unspaced} := {value} => (@has & given) ? None : (& &+= { name := value })
 
-// Text written in quotes: a String (its characters).
+// Text written in quotes: a String (its characters); in backticks, the same (a message, `` `assertion failed` ``).
 "{text}" => @text text
+`{text}` => @text text
 
 // `x &+= { … }`: the block read into `x` (what it defines is `x`'s).
 {target Expression} &+= {{block target}} => target
@@ -474,6 +475,39 @@ Diagnostic := class {
   type: Node
   fatal: Node
 }
+// `ERROR@T message`, `ERROR message`, `FATAL …`: said where the message is written, and a Diagnostic (errors are values); `WARN`, `INFO`,
+// `DEBUG`, `TRACE`: said; `TODO`: nothing.
+ERROR{`@`}{type} {message} ^error =>
+  @report message
+  Diagnostic(message: message, type: type)
+ERROR {message} ^error =>
+  @report message
+  Diagnostic(message: message)
+FATAL{`@`}{type} {message} ^fatal =>
+  @report message
+  Diagnostic(message: message, type: type, fatal: true)
+FATAL {message} ^fatal =>
+  @report message
+  Diagnostic(message: message, fatal: true)
+WARN{`@`}{type} {message} ^warn => @report message
+INFO{`@`}{type} {message} ^info => @report message
+DEBUG{`@`}{type} {message} ^debug => @report message
+TRACE{`@`}{type} {message} ^trace => @report message
+WARN {message} ^warn => @report message
+INFO {message} ^info => @report message
+DEBUG {message} ^debug => @report message
+TRACE {message} ^trace => @report message
+TODO {message} ^debug => None
+TODO ^debug => None
+Diagnostic &+= {
+  cause: Node?
+  trace: Node?
+  caught_by (catching) => this.type ? ((this.type === catching) || (this.type is catching)) : false
+}
+// `assert (condition)`: an error when it does not hold; the condition.
+assert (condition) =>
+  unless condition { ERROR `assertion failed` }
+  condition
 
 // `x**`: what is written, as a program (R4.1: a captured argument is code; `**` gives it), not read (declared last: it takes
 // the operand closest to it)

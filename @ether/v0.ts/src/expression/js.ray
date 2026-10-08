@@ -32,6 +32,8 @@ global => @js $.global
 // what code writes as it is read (`with`), and that put back
 @writing {settings} => @js $.writing(F.m.get("settings"))
 @unwritten {journal} => @js $.unwritten($.get(F, "journal"))
+// a message said where it is written
+@report {message} => @js $.report(F.m.get("message"))
 // what is written, as code (not read)
 @code {x} => @js (r => ($.blocks.set(r, $.written(F.m.get("x"))), r))(new Ray())
 @given {instance} {arguments} => @js $.given($.get(F, "instance"), $.written(F.m.get("arguments")))

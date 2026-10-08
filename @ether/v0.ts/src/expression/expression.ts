@@ -685,13 +685,21 @@ export class Host {
     // (the same head: the nearer, found first, binds)
     // (the same head in one context, read differently: the one declared first, as the rules of a level are written in order)
     // (the same head written again in the same place overrides it: R2.5)
-    if (a.eq.key === b.eq.key) return a.eq.ctx === b.eq.ctx && a.eq.seq > b.eq.seq;
+    if (a.eq.key === b.eq.key) {
+      if (a.eq.ctx !== b.eq.ctx) return false;
+      const ta = this.typed_as(a.eq), tb = this.typed_as(b.eq);
+      if (ta === tb) return a.eq.seq > b.eq.seq;
+      const ua = ta.replace(/\0|,/g, '') === '', ub = tb.replace(/\0|,/g, '') === '';
+      if (ua !== ub) return ub;
+      return a.eq.seq < b.eq.seq;
+    }
     for (let i = a.b; i < a.e; i++) { const x = a.caps.some(c => i >= c.b && i < c.e), y = b.caps.some(c => i >= c.b && i < c.e); if (x !== y) return !x; }
     // (a capture left empty: less particular)
     const ea = a.caps.some(c => c.b === c.e), eb = b.caps.some(c => c.b === c.e);
     if (ea !== eb) return eb;
     return a.eq.order < b.eq.order;
   }
+  typed_as(eq: Eq): string { return eq.pieces.map(p => 'cap' in p && p.reader ? p.reader.s : '').join('\0') + (eq.node?.params ? '\0' + eq.node.params.map(x => eq.node!.types?.get(x)?.s ?? '').join(',') : ''); }
   // Where an equivalence reads from `at`: its literals exactly (a space also reads line ends and indentation); a capture enclosed
   // by literals up to where the next one is (the latest first, pairs balanced); one leading the head no further than what binds
   // looser; one ending it as far as an operand from its own equivalence on goes. A capture with a reader holds only what it reads.

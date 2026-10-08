@@ -229,8 +229,8 @@ Method &+= {
 // (a head as a whole: what a method says, else as written; either shown as it says)
 Head := @context None
 Head &+= {
-  {name Text} => @named name
   {method Method} => method
+  {name Text} => @named name
   {head Head} ^{style Unspaced} => head
 }
 {head Head} => {functionality} =>

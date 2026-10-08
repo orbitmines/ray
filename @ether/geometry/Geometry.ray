@@ -18,7 +18,7 @@ Overflow := enum visible | clip | scroll
 (visible, clip, scroll) := Overflow
 
 Geometry := class {
-  Length := Quantity{unit is (px | pt | em | rem | vw | vh | column | row | m)}
+  Length := Quantity{unit is (Unit.px | Unit.pt | Unit.em | Unit.rem | Unit.vw | Unit.vh | Unit.column | Unit.row | Unit.m)}
 
   Metric := (a: Vector, b: Vector): Length
   euclidean: Metric = (a, b) => √(Space.current.between(a, b).map(. ^ 2).sum)
@@ -60,7 +60,7 @@ Geometry := class {
   }
 
   Vector := Elementwise{every(. is Length)}{length == Space.current.dimension} + {
-    static (x: Length = 0, y: Length = 0, z: Length = 0) => (z == 0 ? [x, y] : [x, y, z]) -- (made => (@also made static) -- made)
+    static (x: Length = 0, y: Length = 0, z: Length = 0) => (z == 0 ? [x, y] : [x, y, z]) -- (made => (@also made Vector) -- made)
     x => this[0] ?? 0
     y => this[1] ?? 0
     z => this[2] ?? 0

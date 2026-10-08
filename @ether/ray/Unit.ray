@@ -105,8 +105,8 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
 }
 
 // (written right after it, or after a space: `16px`, `5 s`)
-{amount: Number}{written: Unit.Spelling} => amount, Unit.spelled(written)
-{amount: Number} {written: Unit.Spelling} => amount, Unit.spelled(written)
+{amount: Number}{written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
+{amount: Number} {written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
 
 si_name (symbol, name, symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
 

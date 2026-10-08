@@ -855,6 +855,8 @@ export class Host {
       // (inside a bracket, or a pair, a capture may hold nothing, or only spaces: after what opens it, or before what closes it)
       bracketed = (next && 'lit' in next && this.closer(next.lit[0])) || (prev && 'lit' in prev && this.opener(prev.lit[prev.lit.length - 1]));
       if (bracketed && ('lit' in next ? this.literal(text, next.lit, at, e) >= 0 : true)) ends.push(at);
+      // (two captures written together: one ends only where what is written changes kind, `16|px`, never inside a word)
+      if (!('lit' in next)) { const kind = (c: string | undefined) => c === undefined ? 0 : /\p{N}/u.test(c) ? 1 : /[\p{L}_]/u.test(c) ? 2 : 3; ends = ends.filter(n => n >= e || kind(text.s[n - 1]) !== kind(text.s[n])); }
       // (one leading the head, the longest; one between two literals, the shortest)
       // (a head, before the definer: to the definer, whatever it holds)
       if (i === 0 && !('lit' in next && next.lit.includes(this.learned.definer))) { const o = this.operand(text, at, e, floor, ctx, eq.pairs); ends = ends.filter(n => n <= o); } else if (i > 0) ends.reverse();

@@ -19,6 +19,19 @@ static {statement} => (@has & given) ? None : statement
 static {name Unspaced} = {value} => (@has & given) ? None : (& &+= { name := value })
 static {name Unspaced} := {value} => (@has & given) ? None : (& &+= { name := value })
 
+// `dynamically …`: a statement read again each time (P5.1, Control.ray's `Dynamic`); declared before the operations it is
+// written with (`dynamically assert x != None`)
+// `dynamically name = value`: `name` read as `value` is each time it is read (P5.1)
+dynamically {name} = {value} =>
+  name => value
+dynamically {name} := {value} =>
+  name => value
+dynamically if{ }{cond}{ }{block} => Dynamic(program: () => if cond block)
+// Run now, and again when what it reads is written (P5.1, P5.1a: by what runs it again, a runner, the TUI's loop)
+dynamically {value} => Dynamic(program: value**, source: value**)
+// `dynamically assert c`: checked by what runs dynamic values again (a runner), not as it is written
+dynamically assert {conditions} => Dynamic(program: (Program(code: conditions**).written{!.()} -- .for(ERROR `assertion failed`) -- .empty)**)
+
 // Text written in quotes: a String (its characters); in backticks, the same (a message, `` `assertion failed` ``).
 "{text}" => @text text
 `{text}` => @text text
@@ -524,6 +537,15 @@ assert (condition) =>
   unless condition { ERROR `assertion failed` }
   condition
 
+// a value read again each time it is read (`dynamically …`, P5.1): its program, and the code it was written as
+Dynamic := class program: Program, source: Program? {
+  dirty: Node?
+  .{literal property ^property} ^punctuation => @member (program()) (@text property)
+  as (=== boolean) => program() as boolean
+  // `dynamic` read again, now that what it depends on changed
+  static refreshed (dynamic) => dynamic.program()
+}
+watch (dynamic) => dynamic
 // `x**`: what is written, as a program (R4.1: a captured argument is code; `**` gives it), not read (declared last: it takes
 // the operand closest to it)
 {written}** => Program(code: @code written)

@@ -8,8 +8,8 @@ const said = () => { for (const d of h.diagnostics.slice(seen)) console.log('  '
 const t0 = performance.now();
 const f = process.argv[2];
 // (what this interpreter maps the language's values to, read once the first statement has taught it how equivalences are added)
-const js = new URL('./js.ray', import.meta.url).pathname;
-try { h.boot({ name: f, s: fs.readFileSync(f, 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') }); } catch (e: any) { console.log('FAILED', e.stack); }
+const js = new URL('./js.ray', import.meta.url).pathname, kinds = new URL('./js.kinds.ray', import.meta.url).pathname;
+try { h.boot({ name: f, s: fs.readFileSync(f, 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') }, { name: kinds, s: fs.readFileSync(kinds, 'utf8') }); } catch (e: any) { console.log('FAILED', e.stack); }
 said();
 if (process.env.EXPR_TIME) console.log('booted in', Math.round(performance.now() - t0), 'ms');
 for (const g of process.argv.slice(3)) {

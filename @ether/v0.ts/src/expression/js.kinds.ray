@@ -1,0 +1,40 @@
+// What this interpreter's own kinds of value are in the language: a number (a JS number), a Number whose operations are the
+// host's; text (a JS string), a String whose operations are the host's. Read after the language (`js.ray` before it): what
+// they declare is declared after what the language declares, and binds as tightly (`static x = a * b`).
+@kind number HostNumber
+HostNumber := class: Number {
+  == {other} => @js $.name(F, F.self === $.get(F, "other") ? "true" : "false")
+  != {other} => @js $.name(F, F.self !== $.get(F, "other") ? "true" : "false")
+  < {other} => @js $.name(F, F.self < $.get(F, "other") ? "true" : "false")
+  <= {other} => @js $.name(F, F.self <= $.get(F, "other") ? "true" : "false")
+  > {other} => @js $.name(F, F.self > $.get(F, "other") ? "true" : "false")
+  >= {other} => @js $.name(F, F.self >= $.get(F, "other") ? "true" : "false")
+  + {other} => @js F.self + $.get(F, "other")
+  - {other} => @js F.self - $.get(F, "other")
+  * {other} => @js F.self * $.get(F, "other")
+  / {other} => @js F.self / $.get(F, "other")
+  % {other} => @js ((F.self % $.get(F, "other")) + $.get(F, "other")) % $.get(F, "other")
+  ^ {other} => @js F.self ** $.get(F, "other")
+  succ => @js F.self + 1
+  pred => @js F.self - 1
+  is_zero => @js $.name(F, F.self === 0 ? "true" : "false")
+}
+@kind string HostString
+HostString := class: String {
+  == {other} => @js $.name(F, F.self === $.get(F, "other") ? "true" : "false")
+  != {other} => @js $.name(F, F.self !== $.get(F, "other") ? "true" : "false")
+  < {other} => @js $.name(F, F.self < $.get(F, "other") ? "true" : "false")
+  > {other} => @js $.name(F, F.self > $.get(F, "other") ? "true" : "false")
+  ..{last} =>
+    made := []
+    at := this.codepoint
+    end := (last).codepoint
+    while at <= end {
+      made.append(@character at)
+      at = at + 1
+    }
+    made
+  + {other} => @js F.self + $.show($.get(F, "other"))
+  codepoint => @js F.self.codePointAt(0)
+  length => @js [...F.self].length
+}

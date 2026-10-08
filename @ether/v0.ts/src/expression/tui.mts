@@ -11,8 +11,8 @@ const library = [...order, ...listed(path.join(ether, 'ray')).filter((f: string)
 const project = ['geometry', 'device', '$/ansi', 'timezone', 'fonts', 'ui'].flatMap((d: string) => listed(path.join(ether, d))).filter((f: string) => !f.endsWith('/HTML.ray'));
 const files = [...library, ...project, ...(process.env.NOSITE ? [] : listed(site))];
 const h = new Host();
-const js = new URL('./js.ray', import.meta.url).pathname;
-h.boot({ name: '.entrypoint.ray', s: fs.readFileSync(path.join(ether, 'ray/.entrypoint.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') });
+const js = new URL('./js.ray', import.meta.url).pathname, kinds = new URL('./js.kinds.ray', import.meta.url).pathname;
+h.boot({ name: '.entrypoint.ray', s: fs.readFileSync(path.join(ether, 'ray/.entrypoint.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') }, { name: kinds, s: fs.readFileSync(kinds, 'utf8') });
 const scope = new Ray(h.global); scope.scope = true;
 // (this interpreter's output: what is written to the instance, as near as the library's own rules)
 h.project([{ name: 'interpreter', s: '@me/instance = {x} => @show x' }], scope);

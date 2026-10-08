@@ -1388,16 +1388,16 @@ export class Host {
   }
   // The language, its first statement first; then what this interpreter maps the language's values to (`js.ray`: an interpreter in
   // another host language has its own), then the rest of the language.
-  boot(text: Text, mapping?: Text) {
+  boot(text: Text, mapping?: Text, kinds?: Text) {
     const from = this.axiom(text);
     // (the host's language at its location: `@js code`, the code run with the frame it is read in)
     const at = this.add(this.global, [{ lit: this.location + this.learned.space }, { cap: this.location }], new Code(text, 0, 0, this.global));
     // (code there run by this interpreter: what its own files write; elsewhere, code in that language is a value, the text written)
     at.native = F => { const c = F.m.get(this.location) as Code; if (!this.interpreted.has(c.text)) return c.s.trim(); return new Function('$', 'F', 'Ray', `return (${c.s});`)(this, c.ctx, Ray); };
-    this.interpreted.add(text); if (mapping) { this.interpreted.add(mapping); this.mapping = mapping; }
+    this.interpreted.add(text); if (mapping) { this.interpreted.add(mapping); this.mapping = mapping; } if (kinds) this.interpreted.add(kinds);
     // (read as one: what the mapping names that the language declares later is read again once it is)
     this.booting = true;
-    try { this.project(mapping ? [mapping, text] : [text], this.global, from, text); } finally { this.booting = false; }
+    try { this.project([...(mapping ? [mapping] : []), text, ...(kinds ? [kinds] : [])], this.global, from, text); } finally { this.booting = false; }
   }
 }
 function stated(c: Code): Code { c.statement = true; return c; }

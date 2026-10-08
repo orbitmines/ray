@@ -51,3 +51,4 @@ await build({
 // this interpreter's mapping of the language (read beside the bundle: `dist/expression/js.ray`)
 mkdirSync('dist/expression', { recursive: true });
 copyFileSync('src/expression/js.ray', 'dist/expression/js.ray');
+copyFileSync('src/expression/js.kinds.ray', 'dist/expression/js.kinds.ray');

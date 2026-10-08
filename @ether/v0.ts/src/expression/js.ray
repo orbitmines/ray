@@ -71,24 +71,6 @@ global => @js $.global
 Symbolic => @js $.reader(s => s.length > 0 && !/[\p{L}\p{N}_\s]/u.test(s) ? s : undefined)
 Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefined)
 {number Numeral} => number
-@kind number HostNumber
-HostNumber := class: Number {
-  == {other} => @js $.name(F, F.self === $.get(F, "other") ? "true" : "false")
-  != {other} => @js $.name(F, F.self !== $.get(F, "other") ? "true" : "false")
-  < {other} => @js $.name(F, F.self < $.get(F, "other") ? "true" : "false")
-  <= {other} => @js $.name(F, F.self <= $.get(F, "other") ? "true" : "false")
-  > {other} => @js $.name(F, F.self > $.get(F, "other") ? "true" : "false")
-  >= {other} => @js $.name(F, F.self >= $.get(F, "other") ? "true" : "false")
-  + {other} => @js F.self + $.get(F, "other")
-  - {other} => @js F.self - $.get(F, "other")
-  * {other} => @js F.self * $.get(F, "other")
-  / {other} => @js F.self / $.get(F, "other")
-  % {other} => @js ((F.self % $.get(F, "other")) + $.get(F, "other")) % $.get(F, "other")
-  ^ {other} => @js F.self ** $.get(F, "other")
-  succ => @js F.self + 1
-  pred => @js F.self - 1
-  is_zero => @js $.name(F, F.self === 0 ? "true" : "false")
-}
 // `while c { body }`: the body again while `c` holds (every value but nothing and false), iterated by the host.
 while {condition} {{body}} => @js $.looped(F)
 // `do { … } while c`: the block, then again while `c` holds
@@ -103,26 +85,6 @@ loop {{body}} => @js (F.m.set("condition", true), $.looped(F))
 @recur => @js $.jump("recur", undefined, F)
 @goto {target} => @js $.jump("goto", $.written(F.m.get("target")).s.trim())
 @label {name} => @js $.label(F)
-// Text: the host's own (a JS string), a String whose operations are the host's.
-@kind string HostString
 @character {x} => @js String.fromCodePoint($.get(F, "x"))
-HostString := class: String {
-  == {other} => @js $.name(F, F.self === $.get(F, "other") ? "true" : "false")
-  != {other} => @js $.name(F, F.self !== $.get(F, "other") ? "true" : "false")
-  < {other} => @js $.name(F, F.self < $.get(F, "other") ? "true" : "false")
-  > {other} => @js $.name(F, F.self > $.get(F, "other") ? "true" : "false")
-  ..{last} =>
-    made := []
-    at := this.codepoint
-    end := (last).codepoint
-    while at <= end {
-      made.append(@character at)
-      at = at + 1
-    }
-    made
-  + {other} => @js F.self + $.show($.get(F, "other"))
-  codepoint => @js F.self.codePointAt(0)
-  length => @js [...F.self].length
-}
 // any text (what reads a String written in a rule's head)
 Text => @js $.reader(s => s)

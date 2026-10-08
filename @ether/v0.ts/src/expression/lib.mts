@@ -23,8 +23,8 @@ const files = names.map((n: string) => ({ path: n, text: fs.readFileSync(path.re
 const order = given.length ? given : reading_order(files);
 const h = new Host();
 let t = performance.now();
-const js = new URL('./js.ray', import.meta.url).pathname;
-try { h.boot({ name: '.entrypoint.ray', s: fs.readFileSync(path.resolve(dir, '.entrypoint.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') }); } catch (e: any) { console.log('FAILED', e.message); }
+const js = new URL('./js.ray', import.meta.url).pathname, kinds = new URL('./js.kinds.ray', import.meta.url).pathname;
+try { h.boot({ name: '.entrypoint.ray', s: fs.readFileSync(path.resolve(dir, '.entrypoint.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') }, { name: kinds, s: fs.readFileSync(kinds, 'utf8') }); } catch (e: any) { console.log('FAILED', e.message); }
 console.log('boot', Math.round(performance.now() - t), 'ms', h.diagnostics.length, 'diagnostics');
 const limit = Number(process.env.LIMIT ?? 8);
 let seen = h.diagnostics.length;

@@ -35,6 +35,8 @@ export class Version {
 export const READER = '.entrypoint.ray';
 // this interpreter's mapping of the language to its host (JS)
 export const MAPPING = path.resolve(import.meta.dirname, 'expression/js.ray');
+// and what its own kinds of value are in the language (read after the language)
+export const KINDS = path.resolve(import.meta.dirname, 'expression/js.kinds.ray');
 // The core library (`@ether/ray`): RAY_LIBRARY, else beside this file in the repository (src/ or dist/), in the published package
 // (`<package>/@ether/ray`) or in the editor extension's server (`server/@ether/ray`).
 export function library_dir(given?: string): string {
@@ -104,8 +106,8 @@ export class Ray {
   // The language, with this interpreter's mapping; where what is written to the instance is said (`@me/instance`).
   boot(): this {
     const t0 = performance.now();
-    const language = this.text(path.join(this.library, READER)), mapping = { name: MAPPING, s: fs.readFileSync(MAPPING, 'utf8') };
-    try { this.host.boot(language, mapping); } catch (e) { this.failed(language, e); }
+    const language = this.text(path.join(this.library, READER)), mapping = { name: MAPPING, s: fs.readFileSync(MAPPING, 'utf8') }, kinds = { name: KINDS, s: fs.readFileSync(KINDS, 'utf8') };
+    try { this.host.boot(language, mapping, kinds); } catch (e) { this.failed(language, e); }
     this.scope = this.project([{ name: 'interpreter', s: '@me/instance = {x} => @show x' }], this.host.global);
     this.timings.push(['boot', performance.now() - t0]);
     return this;

@@ -30,7 +30,7 @@ export class Ray {
   alone = false;
   // (a node a head was read into: what it was written as, its parameters (each a member, in order), whether it is applied with what
   // is on its right; a member's type, what `:` said of it)
-  spelled?: string; params?: string[]; leftward?: boolean; again?: boolean; method?: boolean; types?: Map<string, Code>; between?: string; defaults?: Set<string>; default_codes?: Map<string, Code>;
+  spelled?: string; params?: string[]; leftward?: boolean; again?: boolean; method?: boolean; literal?: boolean; types?: Map<string, Code>; between?: string; defaults?: Set<string>; default_codes?: Map<string, Code>;
   // (a frame of an equivalence applied: which, and whether to a statement)
   rule?: Eq; statement = false;
   // (a frame of an equivalence applied on a value: where that value was read; of its captures read as values, where each was)
@@ -293,12 +293,13 @@ export class Host {
       const N = this.named(''); N.params = []; const was = this.reading_node; this.reading_node = N;
       let v: unknown; try { v = this.aside(() => this.read_in(this.captured_by!, new Code({ name: 'capture', s: t }, 0, t.length, ctx))); } finally { this.reading_node = was; }
       const reader = N.types?.get(N.params[0]);
-      kept = v === N && N.params.length === 1 ? { name: N.params[0], reader: reader ? reader.s : undefined } : null;
+      kept = v instanceof Ray && v.literal ? { name: '', lit: v.spelled } : v === N && N.params.length === 1 ? { name: N.params[0], reader: reader ? reader.s : undefined } : null;
       if (!this.booting || kept) this.parameters_seen.set(t, kept);
     }
+    if (kept?.lit !== undefined) return { lit: kept.lit };
     return kept ? { cap: kept.name, reader: kept.reader !== undefined ? new Code({ name: 'reader', s: kept.reader }, 0, kept.reader.length, ctx) : undefined } : undefined;
   }
-  parameters_seen = new Map<string, { name: string; reader?: string } | null>();
+  parameters_seen = new Map<string, { name: string; reader?: string; lit?: string } | null>();
   // `@define node receiver between`: what a definition's head was read as, defined: as written; with parameters, its name and
   // what it is given (after a space, or hugging it); applied right to left, at the top, `this` what is on its right (`receiver`).
   // Its functionality is read in a frame continuing into the node: what it is given is matched against its parameters (written
@@ -368,6 +369,7 @@ export class Host {
         if (j > i + 1 && inner.trim() === '' && !inner.includes(this.learned.end)) { lit += inner; i = j + 1; continue; }
         // (a capture: what the language reads inside it as a parameter, its name and what reads it; else a name, then what reads it)
         const t = inner.trim(), said = this.parameter_of(t, ctx);
+        if (said && 'lit' in said) { lit += said.lit; i = j + 1; continue; }
         if (said) { if (lit) { out.push({ lit }); lit = ''; } out.push(said); i = j + 1; continue; }
         const w = t.indexOf(space), name = w < 0 ? t : t.slice(0, w), reader = w < 0 ? '' : t.slice(w + 1).trim();
         // (one whose name holds brackets, or read by a bracket, is brackets written around it)

@@ -29,6 +29,7 @@ global => @js $.global
 // said of a member (as written); one applied with what is on its right
 @named {text} => @js $.named($.written(F.m.get("text")).s.trim())
 @unnamed => @js $.named("")
+@literally {text} => @js Object.assign($.named($.written(F.m.get("text")).s), { literal: true })
 @parameters {node} {parameters} => @js $.read_parameters($.get(F, "node"), $.written(F.m.get("parameters")))
 @parameter {target} => @js $.parameter($.written(F.m.get("target")))
 @typed {type} => @js $.name(F, $.typed(F, $.written(F.m.get("type"))) ? "true" : "false")

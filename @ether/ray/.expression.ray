@@ -98,6 +98,8 @@ Parameters &+= {
   {target Parameters} ^{style Text} => target
   === {type Text} => @parameter given: type
   {target Text} => @parameter target
+  // (text written as it is: `` {`=`} ``)
+  `{text Text}` => @literally text
 }
 @captures Parameters
 Method := @context None

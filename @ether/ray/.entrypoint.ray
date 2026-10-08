@@ -100,6 +100,16 @@ Node &+= {
   () => this
 }
 
+// ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
+// (declared before the operations a condition is written with: `if a && b { … }`, `unless x === y { … }`)
+Branch := @made Node
+Branch &+= {
+  else {{otherwise}} => this.taken ? this.answer : otherwise
+  elsif {condition} {{yes}} => this.taken ? this : (condition ? Branch.of(true, yes) : this)
+}
+if {condition} {{yes}} => condition ? Branch.of(true, yes) : Branch.of(None, None)
+unless {condition} {{yes}} => condition ? Branch.of(None, None) : Branch.of(true, yes)
+
 // ---------------------------------------------------------------- what holds (T1.7): every value but nothing and false
 true := @made Node
 false := @made Node
@@ -187,19 +197,14 @@ Head &+= {
   & &+= { name := made }
 
 
-// ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
-Branch := @made Node
+// ---------------------------------------------------------------- control flow: what a Branch is made of (`of`)
 Branch &+= {
   of (taken, answer) =>
     made := @made Branch
     made.taken := taken
     made.answer := answer
     made
-  else {{otherwise}} => this.taken ? this.answer : otherwise
-  elsif {condition} {{yes}} => this.taken ? this : (condition ? Branch.of(true, yes) : this)
 }
-if {condition} {{yes}} => condition ? Branch.of(true, yes) : Branch.of(None, None)
-unless {condition} {{yes}} => condition ? Branch.of(None, None) : Branch.of(true, yes)
 // (`while c { body }`: the body again while `c` holds; iterating is the interpreter's (`js.ray`))
 
 // ---------------------------------------------------------------- Rays (`a, b`): vertices in order (`head`, `tail`; each `value`, `next`, `previous`)

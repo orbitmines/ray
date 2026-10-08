@@ -412,7 +412,7 @@ Narrowing &+= {
     made := []
     narrowed := this.narrows
     holds := this.constraint
-    narrowed.for(element => made.append(element) if holds(element))
+    narrowed.for(element => holds(element) ? made.append(element) : None)
     made
   head => this.kept.head
   tail => this.kept.tail

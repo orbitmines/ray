@@ -50,6 +50,8 @@ Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
   @here &+= { name := made }
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
 static {statement} => (@has @here given) ? None : (@statically statement)
+// `static` alone, in a class's block: the class (read into an instance, the class it is made of)
+static => (@has @here given) ? (@of @here) : @here
 // `static name = value`, `static name := value`: the class's own member (not written where `name` is declared further out), read
 // when it is first read (`static default = Store()` in `Store`'s own block); written by its name, not read where the class's
 // own names are (`static name = …` beside a field `name`)

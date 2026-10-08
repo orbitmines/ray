@@ -417,3 +417,5 @@ Narrowing &+= {
   head => this.kept.head
   tail => this.kept.tail
 }
+// (and is read as one: what a Ray of its elements has, it has)
+@also Narrowing Iterable

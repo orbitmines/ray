@@ -60,7 +60,8 @@ Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
 %[{first: Decimal.String}..{last: Decimal.String}] ^number => Version{first as Decimal <= number <= last as Decimal}
 
 Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
-  (static.# ??= []).push this
+  @field static "#" ((@owns static "#") ? (@member static "#") : [])
+  (@member static "#").push this
 
   backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? ERROR@Migration `the migration has no inverse`)
 

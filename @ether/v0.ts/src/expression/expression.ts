@@ -536,6 +536,7 @@ export class Host {
   // A span read from `b`: the best of the readings of what starts there (an equivalence of the context, or a name), then what
   // reads on from the value it gives (an equivalence added at a value), each from the floor on.
   parse(text: Text, b: number, e: number, ctx: Ray, floor: number, not?: Set<Eq>): Read | undefined {
+    this.counts.parses++;
     const s = text.s; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
     if (b >= e) return undefined;
     let best: Read | undefined;
@@ -590,6 +591,8 @@ export class Host {
     return k;
   }
   needles = new WeakMap<Piece[], string>();
+  // (whether a span has a literal in it, not copied out)
+  contains(text: Text, b: number, e: number, k: string): boolean { if (!k) return true; const i = text.s.indexOf(k, b); return i >= 0 && i + k.length <= e; }
   // (what a statement that begins by reading on reads on from: the value it is read in)
   implicit: Eq = { pieces: [], body: new Code({ name: '', s: '' }, 0, 0, new Ray()), ctx: new Ray(), order: -1, seq: -1, key: '', pairs: Infinity, native: F => this.self(F) };
   // A reading with what reads on from its value, as far as it goes.
@@ -672,6 +675,7 @@ export class Host {
   // looser; one ending it as far as an operand from its own equivalence on goes. A capture with a reader holds only what it reads.
   match(eq: Eq, text: Text, at: number, e: number, ctx: Ray, i: number, start: number, caps: Cap[]): Read | undefined {
     if (DEADLINE && performance.now() > DEADLINE) { writeSync(2, `deadline: matching ${eq.key.slice(0, 40)} on ${text.name}:${text.s.slice(0, at).split(this.learned.end).length} steps=${this.steps} settling=${this.settling} applying=${this.applying}\n`); process.exit(3); }
+    if (i === 0) this.counts.matches++;
     if (i === eq.pieces.length) return { eq, caps: [...caps], b: start, e: at };
     const piece = eq.pieces[i];
     if ('lit' in piece) {
@@ -991,6 +995,7 @@ export class Host {
   walk_(code: Code): unknown {
     // (a statement that reads more than any is written to: one that does not end)
     if (STACK) { this.recent[this.steps % 60] = `${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 50))}`; }
+    this.counts.walks++;
     if (++this.steps > LONGEST) { if (STACK) writeSync(2, this.chain.slice(0, 30).concat(["...."], this.chain.slice(-40)).join('\n') + '\n====\n' + [...this.recent.slice(this.steps % 60), ...this.recent.slice(0, this.steps % 60)].join('\n') + '\n----\n'); this.steps = 0; this.applying = 0; throw new Runaway(`more than ${LONGEST} readings (\`${code.s.slice(0, 40)}\`)`); }
     // (nothing written: nothing)
     if (!this.held(code.text, code.b, code.e)) return undefined;
@@ -998,7 +1003,7 @@ export class Host {
     const st = this.statements(code), first = st.next();
     if (!first.done) { const second = st.next(); if (!second.done) return this.in_order(function* () { for (let x: IteratorResult<[number, number]> = first; !x.done; x = x === first ? second : st.next()) yield stated(new Code(code.text, x.value[0], x.value[1], code.ctx, code.floor)); }()); }
     // (a definition written in a functionality, its pattern naming what the rule captured: written again first, then read)
-    if (this.definer) { const d = this.match(this.definer, code.text, code.b, code.e, code.ctx, 0, code.b, []); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.ctx.rule ? code.ctx.statement : code.statement); }
+    if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.match(this.definer, code.text, code.b, code.e, code.ctx, 0, code.b, []); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.ctx.rule ? code.ctx.statement : code.statement); }
     let r = this.reading(code); const s = code.text.s;
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
     if (r === undefined || r.e < e) {
@@ -1321,6 +1326,7 @@ export class Host {
   apply(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
     // (what applies deeper than any program is written: a reading that never ends, said where its statement is)
     if (STACK) this.chain.push(`${eq.key.slice(0, 30)} @${eq.body.text.name.split('/').pop()}:${eq.body.text.s.slice(0, eq.body.b).split(this.learned.end).length} on ${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 40))}`);
+    this.counts.applications++;
     if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(0, 25).join('\n') + '\n....\n' + this.chain.slice(-12).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
     try { const v = this.apply_(eq, caps, code, self, place); if (!this.passes(eq)) this.place = undefined; return v; } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
   }
@@ -1329,6 +1335,8 @@ export class Host {
     if (eq.passing === undefined) { const t = eq.body.s.trim(); eq.passing = !eq.native && t.length > 0 && this.name_end({ name: '', s: t }, 0, t.length) === t.length; }
     return eq.passing;
   }
+  // (how much reading was done: walks, parses, match attempts, applications)
+  counts = { walks: 0, parses: 0, matches: 0, applications: 0 };
   applying = 0; steps = 0; chain: string[] = []; recent: string[] = [];
   apply_(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
     // (`recur(…)`: the method again, given what it is given there)

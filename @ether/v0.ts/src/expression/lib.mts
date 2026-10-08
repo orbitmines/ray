@@ -33,6 +33,7 @@ t = performance.now();
 const texts = order.map((p: string) => ({ name: p, s: files.find((f: any) => f.path === p)!.text }));
 try { h.project(texts, scope); } catch (e: any) { console.log('FAILED', e.message); }
 console.log('library', Math.round(performance.now() - t), 'ms');
+if (process.env.EXPR_COUNTS) console.log('counts', JSON.stringify(h.counts));
 for (const text of texts) {
   const ds = h.diagnostics.filter((d: any) => d.at.text === text);
   console.log(text.name.padEnd(16), String(ds.length).padStart(4), 'diagnostics');

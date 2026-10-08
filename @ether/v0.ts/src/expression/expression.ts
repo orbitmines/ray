@@ -398,7 +398,9 @@ export class Host {
     // called)
     const declares = statement && (node.spelled !== '' || (at.into !== undefined && !at.into.scope));
     // (a closure has no `this` of its own: `this` in it is the one where it was written)
-    const into = declares ? at.into ?? at : Object.assign(new Ray(at), { closure: node.spelled === '' }), body = this.unblocked(this.written(f));
+    // (a closure whose functionality is code a rule was handed: it closes over where that code was written, not over the rule)
+    const body = this.unblocked(this.written(f)), handed = body.ctx !== at;
+    const into = declares ? at.into ?? at : Object.assign(new Ray(handed ? body.ctx : at), { closure: node.spelled === '' });
     // (read again into what continues into a class that has it, from the same text: that one)
     if (declares && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.node && x.body.text === body.text && x.body.b === body.b && x.body.e === body.e && x.body.ctx.outer === body.ctx.outer); if (was) return this.held_as(was); }
     const { open, close, space } = this.learned, name = node.spelled, out: Eq[] = [];

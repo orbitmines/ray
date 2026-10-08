@@ -102,12 +102,6 @@ Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefin
 // `do { … } while c`: the block, then again while `c` holds
 // (the language's `x while c`: `x` again while `c` holds)
 // `loop { … }`: the block again, until a `break`
-while {condition} {{body}} => @js $.looped(F)
-do {{body}} while {condition} => @js $.looped(F, true)
-@while {condition} {body} => @js $.looped(F)
-loop {{body}} => @js (F.m.set("condition", true), $.looped(F))
-@break => @js $.jump("break")
-@continue => @js $.jump("continue")
 // jumps (the language's `break`, `continue`, `return`, `recur`, `goto`, labels): out of the loop, or method, they are written in
 @return {value} => @js $.jump("return", $.get(F, "value"), F)
 @recur {given} => @js $.jump("recur", $.written(F.m.get("given")), F)

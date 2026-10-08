@@ -196,6 +196,28 @@ Branch &+= {
 }
 if {condition} {{yes}} => condition ? Branch.of(true, yes) : Branch.of(None, None)
 unless {condition} {{yes}} => condition ? Branch.of(None, None) : Branch.of(true, yes)
+// loops, written with labels: `while c { body }` (again while `c` holds), `do { body } while c`, `loop { body }`; the body is
+// called with where the loop ends and where it starts again, what `break` and `continue` go to
+while {condition} {{body}} =>
+  loop_body := ((loop_break, loop_continue) => body)
+  loop_again\
+  condition ? None : (goto loop_done)
+  loop_body(loop_done, loop_again)
+  goto loop_again
+  loop_done\
+do {{body}} while {condition} =>
+  loop_body := ((loop_break, loop_continue) => body)
+  loop_again\
+  loop_body(loop_done, loop_next)
+  loop_next\
+  condition ? (goto loop_again) : None
+  loop_done\
+loop {{body}} =>
+  loop_body := ((loop_break, loop_continue) => body)
+  loop_again\
+  loop_body(loop_done, loop_again)
+  goto loop_again
+  loop_done\
 
 // ---------------------------------------------------------------- what holds (T1.7): every value but nothing and false
 true := @made Node
@@ -465,11 +487,16 @@ Node &+= {
 {guarded} if {condition} => condition ? guarded : None
 {guarded} unless {condition} => condition ? None : guarded
 // `x while c`: `x` again while `c` holds
-{body} while {condition} => @while condition body
+{body} while {condition} =>
+  loop_again\
+  condition ? None : (goto loop_done)
+  body
+  goto loop_again
+  loop_done\
 // `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in;
 // `recur`, `recur(arguments)`: the method it is in, again (from its start); `goto name`: on from the statement `name\`
-break => @break
-continue => @continue
+break => goto (&.caller).loop_break
+continue => goto (&.caller).loop_continue
 return {value} => @return value
 return => @return None
 recur({given}) => @recur given

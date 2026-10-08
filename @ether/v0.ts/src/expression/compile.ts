@@ -2,7 +2,7 @@
 // Each answers exactly what the rule's functionality answers (the same definitions, made the same way, through the host's `defined`),
 // without applying the rules that functionality is written with. Deleting this file (or not calling `accelerate`) changes no result,
 // only time. A rule is taken only when its functionality is written exactly as below; written otherwise, it is read as written.
-import { Host, Ray, Code, Value } from './expression.ts';
+import { Host, Ray, Code, Value, Label, Jump } from './expression.ts';
 
 type Native = (h: Host, F: Ray, eq: any) => unknown;
 // (functionality as written → what answers it; `FALLBACK`: read it as written after all)
@@ -39,6 +39,43 @@ natives.set(`member_at := member_on ?? (@made Node)
   h.defined(spot(eq, 'member_name', off2, T2), spot(eq, 'member_value', off2, T2), T2, true);
   return at;
 });
+
+// the loops (`while`, `{body} while {condition}`, `loop`): their statements read in order, as `in_order` reads them, but going on
+// from a label without a jump where a `goto` names the loop's own start (the statement `goto loop_again`)
+const looping: Native = (h, F, eq) => {
+  const codes: Code[] = []; for (const [b, e] of h.statements(eq.body)) { const c = new Code(eq.body.text, b, e, F); c.statement = true; codes.push(c); }
+  for (const c of codes) { const name = (h as any).label_ahead(c); if (name !== undefined) h.add(c.ctx, [{ lit: name }], new Value(new Label(c), c)); }
+  const again = codes.findIndex(c => c.s.trim() === 'goto loop_again'), start = codes.findIndex(c => c.s.trim() === 'loop_again\\');
+  (h as any).ordered++;
+  let v: unknown;
+  try {
+    for (let i = 0; i < codes.length; i++) {
+      if (i === again) { i = start - 1; continue; }
+      try { v = h.walk(codes[i]); }
+      catch (x) {
+        if (!(x instanceof Jump) || x.kind !== 'goto') throw x;
+        const j = x.value instanceof Label ? codes.indexOf(x.value.at) : codes.findIndex(c => (h as any).label_name(c) === x.value);
+        if (j < 0) throw x;
+        i = j - 1;
+      }
+    }
+    return v;
+  } finally { (h as any).ordered--; }
+};
+for (const body of [`loop_body := ((loop_break, loop_continue) => body)
+  loop_again\\
+  condition ? None : (goto loop_done)
+  loop_body(loop_done, loop_again)
+  goto loop_again
+  loop_done\\`, `loop_again\\
+  condition ? None : (goto loop_done)
+  body
+  goto loop_again
+  loop_done\\`, `loop_body := ((loop_break, loop_continue) => body)
+  loop_again\\
+  loop_body(loop_done, loop_again)
+  goto loop_again
+  loop_done\\`]) natives.set(body, looping);
 
 export function accelerate(h: Host) {
   (h as any).accelerated = (eq: any) => {

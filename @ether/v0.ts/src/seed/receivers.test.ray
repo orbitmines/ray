@@ -1,8 +1,0 @@
-say {x} =>
-  external io stdout x
-T := class {
-  hi => say this
-}
-t := T()
-t.hi
-t nope

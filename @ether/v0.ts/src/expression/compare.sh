@@ -5,7 +5,7 @@ S=/tmp/claude-1000/-home-fs-Documents-github-com-orbitmines-ray/4e0b9dde-d32b-47
 norm() { sed -E 's/^node\(0 rules, .*preceding\)$/true/; s/^node\(0 rules, .*following\)$/false/; s/^node\(0 rules, yes\)$/YES/; s/^node\(0 rules, no\)$/NO/; s/^Ray\(yes\)$/YES/; s/^Ray\(no\)$/NO/; s/^node\(.*\)$/<value>/; s/^Ray\(.*\)$/<value>/; s/^code:.*$/<value>/; s/[0-9]+: assertion failed/N: assertion failed/' | grep -v '^learned' | sed -E '/^(==| |true$|false$|undefined$|YES$|NO$|<value>$)/!s/.*/<value>/'; }
 norm < $S/t_w44.txt > $S/seed_norm.txt
 ulimit -s unlimited
-ls ported/*.test.ray | xargs -P 4 -I{} bash -c 'timeout ${T:-8} node --stack-size=60000 --import tsx run.mts ../../../ray/.expression.ray {} > '$S'/each_$(basename {}).txt 2>&1 || echo "   TIMEOUT" >> '$S'/each_$(basename {}).txt'
+ls ported/*.test.ray | xargs -P 4 -I{} bash -c 'timeout ${T:-8} node --stack-size=60000 --import tsx run.mts ../../../ray/.entrypoint.ray {} > '$S'/each_$(basename {}).txt 2>&1 || echo "   TIMEOUT" >> '$S'/each_$(basename {}).txt'
 for f in ported/*.test.ray; do cat $S/each_$(basename $f).txt; done | norm > $S/new_norm.txt
 diff $S/seed_norm.txt $S/new_norm.txt > $S/cmp.diff; echo "differing lines: $(grep -c '^[<>]' $S/cmp.diff)"
 python3 - $S/seed_norm.txt $S/new_norm.txt <<'PY'

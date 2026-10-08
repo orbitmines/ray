@@ -1,4 +1,0 @@
-say {x} =>
-  external io stdout x
-bit {d: Digit} =>
-  d

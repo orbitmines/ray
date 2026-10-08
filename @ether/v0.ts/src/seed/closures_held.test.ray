@@ -1,9 +1,0 @@
-say {x} =>
-  external io stdout x
-// a closure a class holds, calling itself: a closure, then true, true
-H := class {
-  Bz3 := (points: Node, t: Node) => t ? points : Bz3(points, true)
-}
-say H.Bz3
-say (H.Bz3(true, true))
-say (H.Bz3(true, false))

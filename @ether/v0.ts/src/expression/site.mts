@@ -13,7 +13,7 @@ const project = ['geometry', 'device', '$/ansi', 'timezone', 'fonts', 'ui'].flat
 const files = process.env.LIBONLY ? [...library, ...extra] : [...library, ...project, ...(process.env.NOSITE ? [] : listed(site)), ...extra];
 const h = new Host();
 const js = new URL('./js.ray', import.meta.url).pathname;
-h.boot({ name: '.expression.ray', s: fs.readFileSync(path.join(ether, 'ray/.expression.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') });
+h.boot({ name: '.entrypoint.ray', s: fs.readFileSync(path.join(ether, 'ray/.entrypoint.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') });
 const booted = h.diagnostics.length;
 const scope = new Ray(h.global); scope.scope = true;
 const texts = files.map((f: string) => ({ name: path.relative(ether, f), s: fs.readFileSync(f, 'utf8') }));

@@ -1,4 +1,4 @@
-// usage: lib.mts [FILE.ray…] — boots the language (.expression.ray with this interpreter's js.ray), then reads the core library
+// usage: lib.mts [FILE.ray…] — boots the language (.entrypoint.ray with this interpreter's js.ray), then reads the core library
 // (@ether/ray/*.ray, or the files given) as one project, in the seed's reading order. Per file: ms, diagnostics; then the first of
 // each (LIMIT, default 8).
 const { Host, Ray } = await import('./expression.ts');
@@ -24,7 +24,7 @@ const order = given.length ? given : reading_order(files);
 const h = new Host();
 let t = performance.now();
 const js = new URL('./js.ray', import.meta.url).pathname;
-try { h.boot({ name: '.expression.ray', s: fs.readFileSync(path.resolve(dir, '.expression.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') }); } catch (e: any) { console.log('FAILED', e.message); }
+try { h.boot({ name: '.entrypoint.ray', s: fs.readFileSync(path.resolve(dir, '.entrypoint.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') }); } catch (e: any) { console.log('FAILED', e.message); }
 console.log('boot', Math.round(performance.now() - t), 'ms', h.diagnostics.length, 'diagnostics');
 const limit = Number(process.env.LIMIT ?? 8);
 let seen = h.diagnostics.length;

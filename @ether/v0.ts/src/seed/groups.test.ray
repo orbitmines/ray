@@ -1,7 +1,0 @@
-say {x} =>
-  external io stdout x
-a := external node
-b := (a)
-say b
-say (a === b)
-say ((a) === (external node))

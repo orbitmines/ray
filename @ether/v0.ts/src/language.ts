@@ -1,4 +1,4 @@
-// The language, as the expression reader reads it (src/expression/expression.ts): `@ether/ray/.expression.ray` (the language, its
+// The language, as the expression reader reads it (src/expression/expression.ts): `@ether/ray/.entrypoint.ray` (the language, its
 // first statement saying how equivalences are added) with this interpreter's mapping (`src/expression/js.ray`), then the core library
 // (`@ether/ray/*.ray`) as one project, then files each in a scope of their own inside the library's. What the CLI and the language
 // server need: a file's diagnostics, what it wrote. (The seed's reading of it is in git history, and `language_old.ts`.)
@@ -32,7 +32,7 @@ export class Version {
 }
 
 // ---------------------------------------------------------------- where the language is
-export const READER = '.expression.ray';
+export const READER = '.entrypoint.ray';
 // this interpreter's mapping of the language to its host (JS)
 export const MAPPING = path.resolve(import.meta.dirname, 'expression/js.ray');
 // The core library (`@ether/ray`): RAY_LIBRARY, else beside this file in the repository (src/ or dist/), in the published package

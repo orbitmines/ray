@@ -605,7 +605,8 @@ export class Host {
     // (read on a value: added at one, taking something; one that takes nothing is a member, read in the value)
     // (a name and an opened bracket, `m(`, is a method's call: read in the value, after what reads members)
     const call = 'lit' in p0 && p0.lit.length > 1 && !p0.lit.includes(this.learned.space) && this.pairs.has(p0.lit[p0.lit.length - 1]);
-    const operator = !ctx.scope && 'lit' in p0 && !call && (pieces.length > 1 || this.bracket(p0.lit[0]));
+    // (a member named by symbols alone, `#`, `!`: read on from what it hugs, `c#`)
+    const operator = !ctx.scope && 'lit' in p0 && !call && (pieces.length > 1 || this.bracket(p0.lit[0]) || (pieces.length === 1 && /^[^\p{L}\p{N}_\s]+$/u.test(p0.lit)));
     if (operator) {
       eq.operator = true;
       const k = 'lit' in p0 ? p0.lit[0] : '';
@@ -1487,7 +1488,11 @@ export class Host {
   }
   // where the method it is read in was called from (`&caller`): the nearest method around where it is read
   caller_of(F: Ray): Ray | undefined {
-    for (let c: Ray | undefined = F.caller, n = 0; c && n < 10000; c = c.rule && !c.rule.node ? c.caller : c.outer ?? c.sees, n++) if (c.method) return c.caller;
+    for (let c: Ray | undefined = F.caller, n = 0; c && n < 10000; c = c.rule && !c.rule.node ? c.caller : c.outer ?? c.sees, n++) {
+      // (a block read into a value as it is made: where it was made)
+      if (c.into && !c.rule && this.made_at.has(c.into)) return this.made_at.get(c.into);
+      if (c.method) return c.caller;
+    }
     return undefined;
   }
   // (`return` leaves, `recur` enters again, the method it is written in: the nearest method around where it is read)
@@ -1717,6 +1722,7 @@ export class Host {
     this.admits_now++; try { return this.truthy(eq.native ? eq.native(F) : this.body(eq, F)); } finally { this.admits_now--; }
   }
   admits_now = 0;
+  made_at = new WeakMap<Ray, Ray>();
   // (a type value's rule of one capture, its own or its class's, not the base's)
   admitting(r: Ray): Eq | undefined {
     for (let n: Ray | undefined = r; n && n !== this.base; n = n.outer) {
@@ -1912,6 +1918,8 @@ export class Host {
   // arguments given to an instance (`@given`): read where they were written (`this` theirs), what they name the instance's
   given(instance: unknown, code: unknown): unknown {
     if (!(instance instanceof Ray) || !(code instanceof Code)) return code instanceof Code ? undefined : code;
+    // (where it was made: what `&caller` is in its class's block read into it)
+    this.made_at.set(instance, code.ctx);
     const T = new Ray(code.ctx); T.scope = true; T.into = instance; T.self = this.self_at(code.ctx);
     return this.sequence(code, T);
   }

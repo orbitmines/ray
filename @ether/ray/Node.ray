@@ -227,7 +227,7 @@ Origin := class method: Node, arguments: Node {
 {f}({a}) | {rest} ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | rest
 {rest} | {g}({b}) ^punctuation => rest | (g(b).copy ~~ .origin = Origin(g, b))
 
-&{literal member ^variable} ^keyword => @member @here (@text member)
+&{member Word ^variable} ^keyword => @member @here (@text member)
 
 ~{literal label ^label} ^punctuation => this~label
 Node &+= {

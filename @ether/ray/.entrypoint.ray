@@ -461,7 +461,7 @@ Class &+= {
         fields ? Class.fields_given(instance, fields) : None
         // (the block was read for the class: what it defines is the class's, what an instance holds until written; read again in an
         // instance only to give the fields it declares what is given in order)
-        ((@member instance "given").empty) ? None : (instance with { block })
+        instance with { block }
         // (and the defaults of the fields declared on the class, its own or added since (`T &+= { x: T = d }`), not written yet)
         ((@owns made "field_defaults") ? (@member made "field_defaults") : []).for((default) => default(instance))
         instance

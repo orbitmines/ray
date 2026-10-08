@@ -1316,7 +1316,8 @@ export class Host {
       let self = r.self === undefined || this.elements === 0 || !('lit' in eq.pieces[0]) ? undefined : this.element_of_ctx(code.ctx);
       if (self !== undefined && !this.leads(code.text.s, r.b)) self = undefined;
       if (self === undefined && r.self !== undefined) self = this.self_of(code.ctx, r.near ?? 0);
-      const v = this.apply(eq, r.caps, code, self);
+      // (a rule whose functionality is the host's own code, given nothing: that code, called directly)
+      const v = self === undefined && r.caps.length === 0 && eq.js && !eq.node && !eq.receiver ? this.direct(eq, code) : this.apply(eq, r.caps, code, self);
       // (a name, or a member: its place)
       // (a declared name is written where it is declared; one computed, as `this`, only where it is read)
       if (eq.pieces.length === 1 && 'lit' in eq.pieces[0]) { const here = code.ctx.into ?? code.ctx; this.place = { at: eq.native && !eq.js ? eq.ctx : here, here, word: eq.key }; }
@@ -1546,6 +1547,11 @@ export class Host {
     this.counts.applications++;
     if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(0, 25).join('\n') + '\n....\n' + this.chain.slice(-12).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
     try { const v = this.apply_(eq, caps, code, self, place); if (!this.passes(eq)) this.place = undefined; return v; } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
+  }
+  direct(eq: Eq, code: Code): unknown {
+    this.counts.applications++;
+    const F = new Ray(eq.body.ctx); F.scope = true; F.caller = code.ctx; F.rule = eq; F.statement = code.statement;
+    const v = eq.js!(F); this.place = undefined; return v;
   }
   // (what a functionality that is one name gives is where that name is; any other gives a value, at no place)
   passes(eq: Eq): boolean {

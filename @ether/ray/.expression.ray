@@ -292,6 +292,14 @@ Class &+= {
     made &+= { block }
     made
 }
+// `T + { … }`: a class made of `T` with what the block declares (both its components)
+Node &+= {
+  + {{block}} =>
+    added := Class.made_of(None, None, block)
+    made := Class.made_of(this, None, block)
+    made.components.hierarchy := [this, added]
+    made
+}
 class {{block}} => Class.made_of(None, None, block)
 class: {parent} {{block}} => Class.made_of(parent, None, block)
 class {header} {{block}} => Class.made_of(None, header, block)

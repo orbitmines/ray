@@ -357,6 +357,8 @@ export class Host {
       for (let i = n.eqs.length - 1; i >= 0; i--) {
         const eq = n.eqs[i], p0 = eq.pieces[0];
         if (eq.value || not?.has(eq)) continue;
+        // (a rule does not read the whole of its own functionality: that never ends)
+        if (eq.body.text === text && this.whole(eq.body, b, e)) continue;
         if ((eq.pairs === 0 && !defines) || eq.busy) continue;
         // (a value's equivalence led by a bracket is a call on it: read after it, not where a statement starts)
         if (!n.scope && 'lit' in p0 && this.bracket(p0.lit[0])) continue;
@@ -466,7 +468,9 @@ export class Host {
       // (an operation hugging its value, written without a space: its operand ends at any operation written with one)
       const hugs = !eq.ctx.scope && 'lit' in eq.pieces[0] && !eq.pieces.some(x => 'lit' in x && x.lit.includes(this.learned.space));
       const atom = i === 0 && piece.reader !== undefined;
-      const r = (prev && 'lit' in prev && prev.lit.includes(this.learned.definer)) || (statement && 'lit' in eq.pieces[0]) ? e : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : []; }
+      const r = (prev && 'lit' in prev && prev.lit.includes(this.learned.definer)) || (statement && 'lit' in eq.pieces[0]) ? e : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : [];
+      // (an atom: as far as an operand goes, else just the name there, `0` in `0..<n`)
+      if (atom) { const w = this.name_end(text, at, e); if (w > at && w < r) ends.push(w); } }
     else {
       ends = this.ends(text, at, e, 'lit' in next ? next.lit : undefined, eq.pairs);
       // (next to a bracket, or a pair, a capture may hold nothing, or only spaces)
@@ -767,6 +771,11 @@ export class Host {
       if (v !== NOT) return v;
     }
     return NOT;
+  }
+  // whether a span is the whole of some code (spaces around it aside)
+  whole(c: Code, b: number, e: number): boolean {
+    const s = c.text.s; let cb = c.b, ce = c.e; while (cb < ce && this.blank(s[cb])) cb++; while (ce > cb && this.blank(s[ce - 1])) ce--;
+    return cb === b && ce === e;
   }
   // whether a value has a name, of its own or its class's
   holds(value: unknown, word: string): boolean {

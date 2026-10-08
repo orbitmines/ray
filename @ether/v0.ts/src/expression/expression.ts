@@ -869,6 +869,13 @@ export class Host {
   // whether a reader depends on the frame it is applied in: led by one of the rule's own captures, a name a rule's frame holds, or
   // what is computed from the frame (as `this`)
   dependent(reader: Code, eq?: Eq): boolean {
+    // (kept per reader and rule, until something is declared under the reader's first word)
+    let m = this.dependents.get(reader); if (!m) this.dependents.set(reader, m = new Map());
+    const k = m.get(eq ?? reader), at = this.latest(reader); if (k && k.at === at) return k.r;
+    const r = this.dependent_(reader, eq); m.set(eq ?? reader, { at, r }); return r;
+  }
+  dependents = new WeakMap<Code, Map<object, { at: number; r: boolean }>>();
+  dependent_(reader: Code, eq?: Eq): boolean {
     const first = reader.text.s.slice(reader.b, this.name_end(reader.text, reader.b, reader.e)).trim();
     if (eq && eq.pieces.some(p => 'cap' in p && p.cap === first)) return true;
     for (const n of this.reach(eq?.body.ctx ?? reader.ctx)) { const x = n.eqs.find(y => y.key === first); if (x) return n.rule !== undefined || (!x.native && /\bF\b/.test(x.body.s)); if (n.has(first)) return n.rule !== undefined; }

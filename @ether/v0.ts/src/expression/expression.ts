@@ -244,10 +244,10 @@ export class Host {
   captured_by?: Ray; reading_node?: Ray; booting = false;
   // (asked on the side: what it says, or leaves unresolved, is not said)
   aside<T>(f: () => T): T {
-    const said = this.diagnostics.length, unread = this.unread.size === 0 ? undefined : new Map(this.unread), steps = this.steps, applying = this.applying;
+    const said = this.diagnostics.length, mark = this.unread_log.length, steps = this.steps, applying = this.applying;
     this.steps = 0; this.applying = 0;
     try { return f(); } catch (e) { if (!(e instanceof Runaway)) throw e; return undefined as T; }
-    finally { this.steps = steps; this.applying = applying; this.unsay(said); if (unread) this.unread = unread; else this.unread.clear(); }
+    finally { this.steps = steps; this.applying = applying; this.unsay(said); this.forget(mark); }
   }
   // text read whole in a context (else nothing): its value
   read_in(ctx: Ray, code: Code): unknown {
@@ -696,10 +696,10 @@ export class Host {
     // (decided on the side: what it says, or leaves unresolved, is not said)
     // (deciding it is not reading the statement it is asked in)
     // (and what a value reads with one capture alone does not read it: it is a type where the rule was written)
-    const said = this.diagnostics.length, unread = this.unread.size === 0 ? undefined : new Map(this.unread), steps = this.steps;
+    const said = this.diagnostics.length, mark = this.unread_log.length, steps = this.steps;
     this.deciding++; let r: unknown; try { r = this.walk(eq ? new Code(reader.text, reader.b, reader.e, eq.body.ctx) : reader); } finally { this.deciding--; }
     this.steps = steps;
-    this.unsay(said); if (unread) this.unread = unread; else this.unread.clear();
+    this.unsay(said); this.forget(mark);
     // (what reads nothing there yet reads nothing until something is declared)
     return r === this.expression ? undefined : r instanceof Ray ? r : REJECT;
   }
@@ -816,7 +816,7 @@ export class Host {
   }
   depth_ = 0;
   walk2(code: Code): unknown {
-    if (code.statement) { const before = new Set(this.unread.keys()); const v = this.walk_(code); for (const [p, d] of this.unread) if (!before.has(p)) { this.unread.delete(p); this.say(d.message, d.at.text, d.at.b, d.at.e); } return v; }
+    if (code.statement) { const mark = this.unread_log.length; const v = this.walk_(code); for (const p of this.since(mark)) { const d = this.unread.get(p)!; this.unread.delete(p); this.say(d.message, d.at.text, d.at.b, d.at.e); } this.unread_log.length = Math.min(this.unread_log.length, mark); return v; }
     return this.walk_(code);
   }
   walk_(code: Code): unknown {
@@ -911,7 +911,7 @@ export class Host {
       this.place = { at, here: at, word, text: code.text, b: r.b, e: r.e, on: at === this.none ? this.receiving : undefined };
       // (what a value does not have, read in it, is nothing; a name nothing holds, said once the statement is read, unless it was
       // only a place given a value)
-      if (!(code.ctx.into !== undefined && code.ctx.caller === undefined && !code.ctx.sees)) this.unread.set(this.place, { message: `Unresolved \`${word}\`.`, at: { text: code.text, b: r.b, e: r.e } });
+      if (!(code.ctx.into !== undefined && code.ctx.caller === undefined && !code.ctx.sees)) this.note(this.place, { message: `Unresolved \`${word}\`.`, at: { text: code.text, b: r.b, e: r.e } });
       return undefined;
     }
     const eq = r.eq!;
@@ -969,7 +969,11 @@ export class Host {
   // the value a context holds under a name (declared with `:=`), as the latest equivalence of it
   valued(n: Ray, word: string): Eq | undefined { for (let i = n.eqs.length - 1; i >= 0; i--) { const x = n.eqs[i]; if (x.value && x.key === word) return x; } return undefined; }
   // names read that nothing holds, waiting for the end of their statement
-  unread = new Map<Place, Diagnostic>();
+  unread = new Map<Place, Diagnostic>(); unread_log: Place[] = [];
+  // (what is left unresolved, in the order it was left: what was since a mark)
+  note(p: Place, d: Diagnostic) { this.unread.set(p, d); this.unread_log.push(p); }
+  since(mark: number): Place[] { const out: Place[] = []; for (let i = mark; i < this.unread_log.length; i++) if (this.unread.has(this.unread_log[i])) out.push(this.unread_log[i]); return out; }
+  forget(mark: number) { for (const p of this.since(mark)) this.unread.delete(p); this.unread_log.length = Math.min(this.unread_log.length, mark); }
   // A value given to the place the receiver was read at (`:=`): declared there; or where it is declared (`=`).
   declare(F: Ray, v: unknown, assign: boolean): unknown {
     let n: Ray | undefined = F; while (n && !n.place) n = n.caller;
@@ -1116,12 +1120,12 @@ export class Host {
           // (the same block, written in the same frame: what it closes over is the same)
           const into = c.ctx.into, was = into && !into.scope ? this.defining.get(c.text)?.get(c.b) : undefined;
           if (was && was.cls !== into && was.written === c.ctx.outer && this.made(into!, was.cls)) continue;
-          const d = this.diagnostics.length, held = this.unread.size === 0 ? undefined : new Set(this.unread.keys()), n = into?.eqs.length ?? 0;
+          const d = this.diagnostics.length, mark = this.unread_log.length, n = into?.eqs.length ?? 0;
           this.ran_away = false; last = this.tried(c, false);
           // (one that did not end is not read again)
-          if (this.ran_away) { for (const p of this.unread.keys()) if (!held?.has(p)) this.unread.delete(p); continue; }
+          if (this.ran_away) { this.forget(mark); continue; }
           if (into && !into.scope && into.eqs.length > n && into.eqs.slice(n).every(eq => !eq.native)) { let at = this.defining.get(c.text); if (!at) this.defining.set(c.text, at = new Map()); at.set(c.b, { cls: into, written: c.ctx.outer }); }
-          let left_unresolved = false; for (const p of this.unread.keys()) if (!held?.has(p)) { this.unread.delete(p); left_unresolved = true; }
+          const left_unresolved = this.since(mark).length > 0; this.forget(mark);
           if (left_unresolved) { this.unsay(d); again.push(c); }
         }
         if (process.env.EXPR_ROUNDS) console.log(this.settling + ' ' + this.applying + ' round', round, 'left', again.length, again[0] ? again[0].text.name + ':' + again[0].text.s.slice(0, again[0].b).split('\n').length : '', Math.round(performance.now()));

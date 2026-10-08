@@ -37,6 +37,14 @@ HostString := class: String {
     made
   + {other} => @js F.self + $.show($.get(F, "other"))
   codepoint => @js F.self.codePointAt(0)
+  first => @js [...F.self][0]
+  last => @js [...F.self].at(-1)
+  rest => @js [...F.self].slice(1).join("")
+  count => @js [...F.self].length
+  empty => @js $.name(F, F.self.length === 0 ? "true" : "false")
+  nonempty => @js $.name(F, F.self.length > 0 ? "true" : "false")
+  [{at}] => @js [...F.self][$.get(F, "at")]
+  as (=== String) => @js F.self
   length => @js [...F.self].length
   every (predicate) => @js $.name(F, [...F.self].every(c => $.truthy($.invoke($.get(F, "predicate"), c))) ? "true" : "false")
   some (predicate) => @js $.name(F, [...F.self].some(c => $.truthy($.invoke($.get(F, "predicate"), c))) ? "true" : "false")

@@ -1625,7 +1625,11 @@ export class Host {
       const I = new Ray(eq.node); I.scope = true; I.method = true; I.caller = code.ctx; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
     }
     // (what a form declares first, where it is not given it; the capture it is applied with, `this`)
-    if (eq.receiver) F.self = this.get(F, eq.receiver);
+    if (eq.receiver) {
+      F.self = this.get(F, eq.receiver);
+      // (a class's form applied on what it is written on: on one of that class only)
+      if (!eq.ctx.scope && eq.ctx !== this.base && !this.is(F.self, eq.ctx)) return NOT;
+    }
     if (eq.native) return eq.native(F);
     // (a method: what `return` gives, from inside it)
     if (eq.node) {

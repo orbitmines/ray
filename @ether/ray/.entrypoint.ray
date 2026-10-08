@@ -116,12 +116,12 @@ class: {parent} => Class.made_of(parent, None, None)
 // `x -- call`: `call` read with `this` being `x` (a closure it answers, applied to `x`); `x ~~ call`: the same, answering `x`. They
 // go on from everything before them (A-C5): declared first, they bind loosest.
 Node &+= {
-  -- {call} =>
-    answer := this with { call }
-    (@applies answer) ? answer(this) : answer
-  ~~ {call} =>
-    answer := this with { call }
-    (@applies answer) ? answer(this) : answer
+  -- {dash_call} =>
+    dash_answer := this with { dash_call }
+    (@applies dash_answer) ? dash_answer(this) : dash_answer
+  ~~ {tilde_call} =>
+    tilde_answer := this with { tilde_call }
+    (@applies tilde_answer) ? tilde_answer(this) : tilde_answer
     this
   // (`x -- .m`, `x ~~ .m = v`: `.` is `x`, a closure of it; names and `this` read where the statement is written)
   -- .{dot_rest} => this -- (dot_it => dot_it.dot_rest)
@@ -553,13 +553,11 @@ Node &+= {
 {value}? => None | value
 Superposition &+= {
   static held (x, at) => at ? ((@same x at.value) || Superposition.held(x, at.next)) : false
-  // (one more component: a superposition of its own; this one stays as it is)
+  // (one more component: a superposition of it and the component; this one stays as it is)
   | {other: Expression} =>
-    copy := @made Ray
-    this.components.for((component) => copy.append(component))
     made := @made Superposition
     made.superposes := true
-    made.components := copy.append(other)
+    made.components := [this, other]
     made
 }
 Superposition &+= {

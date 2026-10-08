@@ -482,6 +482,7 @@ export class Host {
 
   // ---------------------------------------------------------------- equivalences: added to the Expression of a context
   add(ctx: Ray, pieces: Piece[], given: Code | Value, node?: Ray): Eq {
+    this.adds++;
     const key = pieces.map(p => 'lit' in p ? p.lit : this.learned.open + this.learned.close).join('');
     const body = given instanceof Value ? given.code : given;
     // (one that reads definitions reads heads: brackets there are a pattern's, not pairs)
@@ -1082,7 +1083,7 @@ export class Host {
         const held = n.places?.get(word), placed = held ?? { at: n.into ?? n, here: code.ctx.into ?? code.ctx, word };
         // (the name's place, once what it holds was read)
         // (a capture a rule was handed is passed on as it is: what a field holds is read when the field is read)
-        const read = n.rule ? this.force(v) : this.held_value(v); this.place = placed; return read;
+        const read = this.held_value(v); this.place = placed; return read;
       }
       const at = code.ctx.into ?? code.ctx;
       this.place = { at, here: at, word, text: code.text, b: r.b, e: r.e, on: at === this.none ? this.receiving : undefined };
@@ -1214,11 +1215,11 @@ export class Host {
     this.unread.delete(p); (p.at.defaults ??= new Set()).add(p.word); (p.at.default_codes ??= new Map()).set(p.word, code);
     return true;
   }
-  // what a member given nothing is: its default read in the value given it, else what the head declared it as
+  // what a member given nothing is: its default read in the value given it (when it is first read), else what the head declared it as
   default_of(target: unknown, node: unknown, name: unknown): unknown {
     if (!(target instanceof Ray) || !(node instanceof Ray) || typeof name !== 'string') return undefined;
     const c = node.default_codes?.get(name);
-    if (c) { const T = new Ray(c.ctx); T.scope = true; T.into = target; T.sees = target; return this.walk(new Code(c.text, c.b, c.e, T, c.floor)); }
+    if (c) { const T = new Ray(c.ctx); T.scope = true; T.into = target; T.sees = target; return new Later(new Code(c.text, c.b, c.e, T, c.floor)); }
     const x = this.valued(node, name); return x ? x.native!(node) : undefined;
   }
   // where the method it is read in was called from (`&caller`): the nearest method around where it is read
@@ -1480,9 +1481,14 @@ export class Host {
     // (settled inside another settling: what it leaves unresolved is left for that one)
     const inner = this.settling++ > 0;
     try {
+      // (inside another settling, one is read again only once something was declared since it was read: what it left unresolved is
+      // otherwise left to that one, which reads it again with what it is in (reading it again at each would multiply))
+      const kept = new Map<Code, { adds: number; left: [Place, Diagnostic][] }>();
       for (let round = 0, before = Infinity; ; round++) {
         const again: Code[] = [], final = round >= 8;
         for (const c of left) {
+          const k = kept.get(c);
+          if (inner && k && k.adds === this.adds) { for (const [p, d] of k.left) this.note(p, d); continue; }
           if (final) { last = this.tried(c, !inner); continue; }
           // (a statement that defined what a class holds, read again into one of what is made of it: the class's already, A7)
           // (the same block, written in the same frame: what it closes over is the same)
@@ -1493,8 +1499,8 @@ export class Host {
           // (one that did not end is not read again)
           if (this.ran_away) { this.forget(mark); continue; }
           if (into && !into.scope && into.eqs.length > n && into.eqs.slice(n).every(eq => !eq.native)) { let at = this.defining.get(c.text); if (!at) this.defining.set(c.text, at = new Map()); at.set(c.b, { cls: into, written: c.ctx.outer }); }
-          const left_unresolved = this.since(mark).length > 0; this.forget(mark);
-          if (left_unresolved) { this.unsay(d); again.push(c); }
+          const left_unresolved = this.since(mark); if (inner) kept.set(c, { adds: this.adds, left: left_unresolved.map(p => [p, this.unread.get(p)!]) }); this.forget(mark);
+          if (left_unresolved.length > 0) { this.unsay(d); again.push(c); }
         }
         if (process.env.EXPR_ROUNDS) console.log(this.settling + ' ' + this.applying + ' round', round, 'left', again.length, again[0] ? again[0].text.name + ':' + again[0].text.s.slice(0, again[0].b).split('\n').length : '', Math.round(performance.now()));
         if (final || again.length === 0) break;
@@ -1505,7 +1511,7 @@ export class Host {
     } finally { this.settling--; }
     return last;
   }
-  settling = 0; ran_away = false; deciding = 0;
+  settling = 0; ran_away = false; deciding = 0; adds = 0;
   // block statements that defined what a class holds (where they start), and that class
   defining = new WeakMap<Text, Map<number, { cls: Ray; written?: Ray }>>();
   // whether a value is made of a class (it continues into it)

@@ -20,7 +20,7 @@ global => @js $.global
 @holding {code} => @js ((p) => $.declare_at(p, $.holding(p, $.written(F.m.get("code"))), false))($.place_of(F))
 // (the same, at a place taken before: `:` takes what it is applied on first)
 @place_word {spot} => @js (p => p && typeof p === "object" ? p.word : undefined)($.get(F, "spot"))
-@field_at {target} {spot} {value} => @js ((p) => p && typeof p === "object" ? $.field_set($.get(F, "target"), p.word, $.get(F, "value")) : undefined)($.get(F, "spot"))
+@field_at {target} {spot} {value} => @js ((p) => p && typeof p === "object" ? ($.unread.delete(p), $.field_set($.get(F, "target"), p.word, $.get(F, "value"))) : undefined)($.get(F, "spot"))
 @keep_place {name} => @js $.keep_place(F, F.m.get("name").s.trim())
 @declare_at {spot} {value} => @js $.declare_at($.get(F, "spot"), value, false)
 @holding_at {spot} {code} => @js ((p) => $.declare_at(p, $.holding(p, $.written(F.m.get("code"))), false))($.get(F, "spot"))

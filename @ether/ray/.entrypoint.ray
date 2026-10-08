@@ -391,12 +391,11 @@ Class &+= {
     instance
   // (in order, to the fields not given by name: what is not given is what the field says)
   fields_given (instance, fields) =>
+    in_order := @member instance "given"
     index := 0
     name := @param fields index
     while name {
-      unless @owns instance name {
-        @field instance name ((@member instance "given").empty ? (@default instance fields name) : (@member instance "given").take)
-      }
+      (@owns instance name) ? None : (@field instance name (in_order.empty ? (@default instance fields name) : in_order.take))
       index = index + 1
       name = @param fields index
     }

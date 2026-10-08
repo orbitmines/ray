@@ -77,6 +77,8 @@ export class Host {
   sends = new Map<string, Eq[]>();
   // the literal read after a value or a leading capture, by its first character: where a name or an operand ends
   infix = new Map<string, { lit: string; order: number; eq: Eq; from: number }[]>();
+  // (those written as a word and a space, `or `, by the word: read only after a space)
+  words = new Map<string, { lit: string; order: number; eq: Eq; from: number }[]>();
   // what the language reads as `open {x} close`: these balance in a capture (`open === close`: nothing inside is read)
   pairs = new Map<string, string>(); quotes = new Set<string>(); closers = new Set<string>();
   // the order each head of an operation on values was first declared in
@@ -235,14 +237,17 @@ export class Host {
     let lit = '';
     for (let i = 0; i < head.length;) {
       if (head[i] === open) {
-        const j = head.indexOf(close, i + 1), inner = j < 0 ? '' : head.slice(i + 1, j);
+        // (to its own close: what reads a capture may hold brackets)
+        let j = -1; for (let k = i + 1, depth = 1; k < head.length; k++) { if (head[k] === open) depth++; else if (head[k] === close && --depth === 0) { j = k; break; } }
+        const inner = j < 0 ? '' : head.slice(i + 1, j);
         // (brackets around nothing write nothing; around spaces, those spaces)
         if (j === i + 1) { i = j + 1; continue; }
         if (j > i + 1 && inner.trim() === '' && !inner.includes(this.learned.end)) { lit += inner; i = j + 1; continue; }
-        if (j > i + 1 && !inner.includes(open) && inner.trim() !== '') {
+        const t = inner.trim(), w = t.indexOf(space), name = w < 0 ? t : t.slice(0, w), reader = w < 0 ? '' : t.slice(w + 1).trim();
+        // (a capture: a name, then what reads it; one whose name holds brackets, or read by a bracket, is brackets written around it)
+        if (j > i + 1 && t !== '' && !name.includes(open) && !name.includes(close) && reader[0] !== open) {
           if (lit) { out.push({ lit }); lit = ''; }
-          const t = inner.trim(), w = t.indexOf(space), reader = w < 0 ? '' : t.slice(w + 1).trim();
-          out.push({ cap: w < 0 ? t : t.slice(0, w), reader: reader ? new Code({ name: 'reader', s: reader }, 0, reader.length, ctx) : undefined });
+          out.push({ cap: name, reader: reader ? new Code({ name: 'reader', s: reader }, 0, reader.length, ctx) : undefined });
           i = j + 1; continue;
         }
       }
@@ -269,11 +274,14 @@ export class Host {
       return e;
     }
   }
+  // the name a head starts with
+  lead(pieces: Piece[]): string { const p = pieces[0]; if (!('lit' in p)) return ''; let i = 0; while (i < p.lit.length && !this.edge(p.lit, i) && !this.pairs.has(p.lit[i])) i++; return p.lit.slice(0, i); }
   // whether a line starts with what reads on from a value (and is not a definition): it goes on with the line above (G2.13)
   leads(s: string, at: number): boolean {
     const { end, definer, space } = this.learned, line = s.slice(at, s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at));
     if (line.includes(space + definer)) return false;
-    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? []]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && 'lit' in x.eq.pieces[0]) return true; }
+    const j = s.indexOf(space, at);
+    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && 'lit' in x.eq.pieces[0]) return true; }
     return false;
   }
   *statements(code: Code): Generator<[number, number]> {
@@ -304,6 +312,7 @@ export class Host {
     const was = ctx.eqs.findIndex(x => x.key === key && readers(x.pieces) === readers(pieces));
     if (was >= 0) { const old = ctx.eqs[was]; old.body = eq.body; old.native = eq.native; old.js = undefined; old.pieces = eq.pieces; return old; }
     ctx.eqs.push(eq); this.version++;
+    if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), this.version);
     const p0 = pieces[0], p1 = pieces[1];
     // (read on a value: added at one, taking something; one that takes nothing is a member, read in the value)
     // (a name and an opened bracket, `m(`, is a method's call: read in the value, after what reads members)
@@ -316,9 +325,12 @@ export class Host {
     }
     const after = operator && 'lit' in p0 ? p0.lit : p0 && !('lit' in p0) && p1 && 'lit' in p1 ? p1.lit : undefined;
     // (a definition is a whole statement: what reads one never reads on from inside another)
-    if (after !== undefined && !heads) { let list = this.infix.get(after[0]); if (!list) this.infix.set(after[0], list = []); list.push({ lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }); }
-    // (`open {x} close`, a character each: a pair that balances)
-    if (pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
+    if (after !== undefined && !heads) {
+      const by = this.apart(after) ? this.words : this.infix, k = this.apart(after) ? after.slice(0, after.indexOf(this.learned.space)) : after[0];
+      let list = by.get(k); if (!list) by.set(k, list = []); list.push({ lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 });
+    }
+    // (`open {x} close` where statements are read, a character each: a pair that balances)
+    if (ctx.scope && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
     return eq;
   }
 
@@ -463,8 +475,11 @@ export class Host {
     }
     const fixed = this.fixed(piece.reader, eq);
     if (fixed === REJECT) return undefined;
+    // (a literal written hugging the capture before it, `{value}?`, is read hugging it)
+    const hugged = !!next && 'lit' in next && !this.blank(next.lit[0]) && !this.bracket(next.lit[0]) && !this.quotes.has(next.lit[0]);
     for (const n of ends) {
       if (n > at && !this.held(text, at, n) && !bracketed) continue;
+      if (hugged && n > at && this.blank(text.s[n - 1])) continue;
       if (fixed && (n === at || !this.reads(fixed, text, at, n, eq))) continue;
       const block = !!prev && 'lit' in prev && prev.lit.endsWith(this.learned.open) && !!next && 'lit' in next && next.lit.startsWith(this.learned.close);
       caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, block });
@@ -479,12 +494,15 @@ export class Host {
   fixed(reader: Code | undefined, eq?: Eq): Ray | typeof REJECT | undefined {
     if (!reader) return undefined;
     // (a context it was decided to be stays it; what was not yet decided is decided again once something was declared)
-    const kept = this.readers.get(reader); if (kept && (kept.version === this.version || kept.r instanceof Ray)) return kept.r;
+    const kept = this.readers.get(reader); if (kept && (kept.version === this.version || kept.r instanceof Ray || (kept.r === REJECT && kept.version >= (this.declared.get(this.first(reader)) ?? 0)))) return kept.r;
     // (while it is being decided, it reads nothing: a reader does not read itself)
     this.readers.set(reader, { version: this.version, r: REJECT });
     const r = this.fixed_(reader, eq); this.readers.set(reader, { version: this.version, r }); return r;
   }
   readers = new WeakMap<Code, { version: number; r: Ray | typeof REJECT | undefined }>();
+  // (when each name was last declared)
+  declared = new Map<string, number>();
+  first(reader: Code): string { return reader.text.s.slice(reader.b, this.name_end(reader.text, reader.b, reader.e)).trim(); }
   // whether a reader depends on the frame it is applied in: led by one of the rule's own captures, a name a rule's frame holds, or
   // what is computed from the frame (as `this`)
   dependent(reader: Code, eq?: Eq): boolean {
@@ -559,7 +577,7 @@ export class Host {
     for (let i = at; i < e; i++) {
       if (this.blank(s[i]) || this.closes(s, i)) return i;
       if (this.pairs.has(s[i])) return i;
-      if (i > at) for (const x of this.infix.get(s[i]) ?? []) if (s.startsWith(x.lit, i) && !(this.apart(x.lit) && !this.blank(s[i - 1]))) return i;
+      if (i > at) for (const x of this.infix.get(s[i]) ?? []) if (s.startsWith(x.lit, i)) return i;
     }
     return e;
   }
@@ -568,7 +586,12 @@ export class Host {
   // Where an operand from `at` ends: where (no pair open) an equivalence declared before `floor` reads on after a space (what hugs
   // a value is part of it: `x.m`, `f(a)`), else at `e`.
   operand(text: Text, at: number, e: number, floor: number, ctx: Ray, pairs?: number, same = false): number {
-    return this.scan(text, at, e, i => { if (i > at) for (const x of this.infix.get(text.s[i]) ?? []) if ((same ? x.order <= floor : x.order < floor) && (this.apart(x.lit) ? this.blank(text.s[i - 1]) : x.lit.includes(this.learned.space)) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e)) return false; }, pairs);
+    const s = text.s, { space } = this.learned, stops = (x: { lit: string; order: number; eq: Eq; from: number }, i: number) => (same ? x.order <= floor : x.order < floor) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e);
+    return this.scan(text, at, e, i => {
+      if (i <= at) return;
+      for (const x of this.infix.get(s[i]) ?? []) if (x.lit.includes(space) && stops(x, i)) return false;
+      if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (stops(x, i)) return false; }
+    }, pairs);
   }
   // Whether an equivalence's literals from piece `from` on are written after `at`, in order.
   follows(eq: Eq, from: number, text: Text, at: number, e: number): boolean {
@@ -606,6 +629,8 @@ export class Host {
     return this.walk_(code);
   }
   walk_(code: Code): unknown {
+    // (a statement that reads more than any is written to: one that does not end)
+    if (++this.steps > LONGEST) { this.steps = 0; this.applying = 0; throw new Runaway(`more than ${LONGEST} readings (\`${code.s.slice(0, 40)}\`)`); }
     // (nothing written: nothing)
     if (!this.held(code.text, code.b, code.e)) return undefined;
     // (code of several statements: each, in order)
@@ -730,6 +755,13 @@ export class Host {
   // (as code, read where they were written each time they are named; one with a reader, what the reader read), its functionality
   // run there.
   apply(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
+    // (what applies deeper than any program is written: a reading that never ends, said where its statement is)
+    if (STACK) this.chain.push(`${eq.key.slice(0, 30)} @${eq.body.text.name.split('/').pop()}:${eq.body.text.s.slice(0, eq.body.b).split(this.learned.end).length} on ${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 40))}`);
+    if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(-40).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
+    try { return this.apply_(eq, caps, code, self, place); } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
+  }
+  applying = 0; steps = 0; chain: string[] = [];
+  apply_(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
     const F = new Ray(self instanceof Ray && !self.scope ? self : eq.body.ctx); F.place = place;
     // (what a rule enclosed in literals reads is a value)
     const ps = eq.pieces, enclosed = 'lit' in ps[0] && 'lit' in ps[ps.length - 1] && ps.length > 1;
@@ -794,7 +826,7 @@ export class Host {
           let left_unresolved = false; for (const p of this.unread.keys()) if (!was?.has(p)) { this.unread.delete(p); left_unresolved = true; }
           if (left_unresolved) { this.unsay(d); again.push(c); }
         }
-        if (process.env.EXPR_ROUNDS && !inner) console.log('round', round, 'left', again.length, Math.round(performance.now()));
+        if (process.env.EXPR_ROUNDS) console.log(this.settling + ' ' + this.applying + ' round', round, 'left', again.length, again[0] ? again[0].text.name + ':' + again[0].text.s.slice(0, again[0].b).split('\n').length : '', Math.round(performance.now()));
         if (final || again.length === 0) break;
         // (nothing more was read: the last time)
         if (again.length >= before) round = 7;
@@ -806,9 +838,15 @@ export class Host {
   settling = 0;
   // a statement walked (what fails, said where it is)
   tried(c: Code, speak = true): unknown {
+    if (this.settling <= 1) this.steps = 0;
+    if (SLOW && this.settling <= 1) { const t = performance.now(); try { return this.tried_(c, speak); } finally { const ms = performance.now() - t; if (ms > SLOW) writeSync(2, `slow ${Math.round(ms)} ms ${c.text.name}:${c.text.s.slice(0, c.b).split(this.learned.end).length} ${JSON.stringify(c.s.slice(0, 60))}\n`); } }
+    return this.tried_(c, speak);
+  }
+  tried_(c: Code, speak: boolean): unknown {
     if (TRACE) writeSync(2, `${c.text.name}:${c.text.s.slice(0, c.b).split(this.learned.end).length} ${JSON.stringify(c.s.slice(0, 70))}\n`);
     try { return speak ? this.walk(c) : this.walk_(c); }
-    catch (x) { this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
+    // (one that does not end ends the outermost statement it is in)
+    catch (x) { if (x instanceof Runaway && this.settling > 1) throw x; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
   }
   // A block read into a value: its names where it was written, what it declares the value's.
   into(code: Code, r: Ray): unknown {
@@ -893,7 +931,10 @@ function stated(c: Code): Code { c.statement = true; return c; }
 // A value given as a functionality (where it was written).
 class Value { constructor(public value: unknown, public code: Code) {} }
 const NOT = Symbol('not read');
-const NOMEMO = !!process.env.EXPR_NOMEMO;
+// a reading that does not end: what applies deeper, or more often, than any program is written to
+class Runaway extends Error {}
+const NOMEMO = !!process.env.EXPR_NOMEMO, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
+const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
 const REJECT = Symbol('reads nothing');
 // JS source with each capture named in it read from the frame (`F`).
 function rename(src: string, names: string[]): string {

@@ -159,10 +159,7 @@ Branch &+= {
 }
 if {condition} {{yes}} => condition ? Branch.of(true, yes) : Branch.of(None, None)
 unless {condition} {{yes}} => condition ? Branch.of(None, None) : Branch.of(true, yes)
-while {condition} {{body}} => condition ? {
-    body
-    while condition {body}
-  } : None
+// (`while c { body }`: the body again while `c` holds; iterating is the interpreter's (`js.ray`))
 
 // ---------------------------------------------------------------- Rays (`a, b`): vertices in order (`head`, `tail`; each `value`, `next`, `previous`)
 Ray := @made Node

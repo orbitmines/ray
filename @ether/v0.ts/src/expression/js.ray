@@ -36,3 +36,5 @@ HostNumber := class: Number {
   pred => @js F.self - 1
   is_zero => @js $.name(F, F.self === 0 ? "true" : "false")
 }
+// `while c { body }`: the body again while `c` holds (every value but nothing and false), iterated by the host.
+while {condition} {{body}} => @js (() => { for (const no = $.name(F, "false"); ;) { const c = $.get(F, "condition"); if (c === undefined || c === $.none || c === no) return undefined; $.get(F, "body"); } })()

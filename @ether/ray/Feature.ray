@@ -23,7 +23,7 @@ Random := class {
   secure => Random
   seeded (seed: Number) => Seeded(state: seed)
 
-  bit => OS.Ether ? ERROR@OS `a source of random bits is not written in Ray yet` : (external random) ? 1 : 0
+  bit => OS.Ether ? ERROR@OS `a source of random bits is not written in Ray yet` : @random ? 1 : 0
   bits (count: Number) => count.times.map(bit)
   number (width: Number) => Binary(integer: bits(width).map(Binary.digit))
   below (limit: Number) => {

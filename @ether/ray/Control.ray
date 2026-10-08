@@ -1,104 +1,21 @@
-dynamically {name} = {value} ^keyword => external rule name value
-dynamically {name} := {value} ^keyword => external rule name value
-dynamically {name} &= {value} ^keyword => name -- (base => external rule name (base & value))
+// `dynamically name = value`: `name` read as `value` is each time it is read (P5.1)
+dynamically {name} = {value} ^keyword =>
+  name => value
+dynamically {name} := {value} ^keyword =>
+  name => value
 dynamically if{ }{cond}{ }{block} ^keyword => Dynamic(program: () => if cond block)
-// Run now, and again while it answers nothing when something is declared (P5.1, `watched` in the entrypoint); marked to run
-// again at its next turn when a name it depends on is written (P5.1a).
-dynamically {value} ^keyword => (
-  written := Program(code: value**, context: external .)
-  running := None
-  running = watched(written)
-  Dynamic(program: running, source: written)
-)
+// Run now, and again when what it reads is written (P5.1, P5.1a: by what runs it again, a runner, the TUI's loop)
+dynamically {value} ^keyword => Dynamic(program: value**, source: value**)
 Dynamic := class program: Program, source: Program? {
   dirty: Node?
-  .{literal property ^property} ^punctuation => external get program() property
+  .{literal property ^property} ^punctuation => @member (program()) (@text property)
   as (=== boolean) => program() as boolean
   // `dynamic` read again, now that what it depends on changed
-  static refreshed (dynamic) => (external set dynamic dirty None) -- (external get dynamic program)()
+  static refreshed (dynamic) => dynamic.program()
 }
-
-// `dynamic` kept under each name it depends on, where a write of that name finds it (`registry.watching`, read by `=` in the
-// entrypoint), by what runs it again when it changed (a runner: the TUI's loop, `ray --dev`)
-watch (dynamic) => (external get dynamic source).watched_for(dynamic)
-
-Program &+= {
-  // `prefix` (a word, as written) read as a prefix of what is `written` (a span: `from`, `to`, `frame`): the rule its word heads with one capture after it,
-  // applied to what is written (`(M if c) x`, P1.9b); nothing when `prefix` heads no such rule
-  static prefixed (prefix, written) => {
-    answer := None
-    at_rule := Program.rules_by_word.listed_at(prefix)
-    at_rule = at_rule ? at_rule.head : None
-    while at_rule {
-      if at_rule.value.pieces.word_then_capture {
-        given := external node
-        given.piece = at_rule.value.pieces.next
-        given.from = written.from
-        given.to = written.to
-        applied := external get at_rule.value rule
-        answer = external apply applied given written.frame
-        at_rule = None
-      }
-      at_rule = at_rule ? at_rule.next : None
-    }
-    answer
-  }
-
-  // this program's dynamic value kept under each name the program depends on
-  watched_for (dynamic) => {
-    unless registry.watching { registry.watching = external node }
-    watched := registry.watching
-    at_name := mentioned
-    at_name = at_name ? at_name.head : None
-    while at_name {
-      watched.listed_under(at_name.value, dynamic)
-      at_name = at_name.next
-    }
-    dynamic
-  }
-  // the names its code is written with, and those of the rules they name, each once (P5.1a: what a dynamic value depends on)
-  mentioned => {
-    words_seen := external node
-    words_found := None
-    queued_codes := None.listed_with_value(code)
-    at_queued := queued_codes.head
-    heads_by_word := Program.rules_by_word
-    while at_queued {
-      at_word := at_queued.value.words
-      at_word = at_word ? at_word.head : None
-      while at_word {
-        unless words_seen.holds_word(at_word.value) {
-          words_seen.listed_under(at_word.value, true)
-          words_found = words_found.listed_with_value(at_word.value)
-          at_rule := heads_by_word.listed_at(at_word.value)
-          at_rule = at_rule ? at_rule.head : None
-          while at_rule {
-            queued_codes.listed_with_value(at_rule.value)
-            at_rule = at_rule.next
-          }
-        }
-        at_word = at_word.next
-      }
-      at_queued = at_queued.next
-    }
-    words_found
-  }
-  // the rules kept under the first word of their heads (`multiple (a, b) => …` under `multiple`), those defined since the
-  // last time added
-  static rules_by_word => {
-    unless registry.rules_by_word { registry.rules_by_word = external node }
-    index := registry.rules_by_word
-    at_rule := registry.all_rules
-    while at_rule && at_rule !== registry.rules_indexed {
-      word := at_rule.rule.pieces.first_word
-      if word { index.listed_under(word, at_rule.rule) }
-      at_rule = at_rule.next
-    }
-    registry.rules_indexed = registry.all_rules
-    index
-  }
-}
-dynamically assert {conditions} ^keyword => Program(code: conditions**).written{!.()} -- .for(ERROR `assertion failed`) -- .empty
+watch (dynamic) => dynamic
+// `dynamically assert c`: checked by what runs dynamic values again (a runner), not as it is written
+dynamically assert {conditions} ^keyword => Dynamic(program: (Program(code: conditions**).written{!.()} -- .for(ERROR `assertion failed`) -- .empty)**)
 
 Quantity.Temporal &+= {
   right-to-left sleep => Time.now -- (start => await dynamically (Time.now >= start + this))

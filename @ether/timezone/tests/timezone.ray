@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
 winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time

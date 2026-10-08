@@ -97,7 +97,7 @@ Time := class: Quantity.Temporal (calendar: Calendar? UTC) {
   uncertainty: Quantity.Temporal?
   corrected (by: Quantity.Temporal, within: Quantity.Temporal) => Time(calendar, epoch: epoch, uncertainty: within) = this + by
   // the host's clock (with its resolution as the uncertainty); on ether the clock kept by NTP, not written yet
-  static now => if OS.Ether { ERROR@OS `the clock kept by NTP is not written in Ray yet` } else { nondeterministic (external time) ns ± ((external time).resolution) ns }
+  static now => if OS.Ether { ERROR@OS `the clock kept by NTP is not written in Ray yet` } else { nondeterministic @time ns ± @time_resolution ns }
   dynamically {
     .calendar.segments.for segment => `segment.name.upper_case` = `segment.name`
   } = now

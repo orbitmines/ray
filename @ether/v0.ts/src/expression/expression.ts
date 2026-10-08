@@ -412,14 +412,15 @@ export class Host {
   trails(s: string, e: number): boolean {
     let j = e; while (j > 0 && s[j - 1] === this.learned.space) j--;
     // (what is read after a value as all it reads ends it: `x**`)
-    for (const list of this.infix.values()) for (const x of list) { const ps = x.eq.pieces; if (ps.length === 2 && 'cap' in ps[0] && 'lit' in ps[1] && s.endsWith(ps[1].lit, j)) return false; }
-    for (const list of this.infix.values()) for (const x of list) { const l = x.lit.trimEnd(); if (l.length > 0 && l !== x.lit && !x.eq.ctx.scope && !x.eq.node && s.endsWith(l, j) && !this.bracket(l[0]) && (this.blank(s[j - l.length - 1]) || !this.postfix(l))) return true; }
+    for (const l of this.postfixes) if (s.endsWith(l, j)) return false;
+    for (const l of this.trailing) if (s.endsWith(l, j) && (this.blank(s[j - l.length - 1]) || !this.postfixes.has(l))) return true;
     return false;
   }
-  // (what is also read after a value as all it reads, `T?`: not a value to follow)
-  postfix(l: string): boolean {
-    for (const list of this.infix.values()) for (const x of list) { const ps = x.eq.pieces; if (ps.length === 2 && 'cap' in ps[0] && 'lit' in ps[1] && ps[1].lit === l) return true; }
-    return false;
+  // literals read after a value as all it reads (`T?`); operators that may end a line, a value following on the next
+  postfixes = new Set<string>(); trailing = new Set<string>();
+  indexed(x: { lit: string; eq: Eq }) {
+    const ps = x.eq.pieces; if (ps.length === 2 && 'cap' in ps[0] && 'lit' in ps[1]) this.postfixes.add(ps[1].lit);
+    const l = x.lit.trimEnd(); if (l.length > 0 && l !== x.lit && !x.eq.ctx.scope && !x.eq.node && !this.bracket(l[0])) this.trailing.add(l);
   }
   // whether a line starts with what reads on from a value (and is not a definition): it goes on with the line above (G2.13)
   leads(s: string, at: number): boolean {
@@ -480,7 +481,7 @@ export class Host {
       const apart = this.apart(after) || (!!node && after.endsWith(this.learned.space) && this.name_end({ name: '', s: after }, 0, after.length) === after.length - 1);
       const by = apart ? this.words : this.infix, k = apart ? after.slice(0, after.indexOf(this.learned.space)) : after[0];
       let list = by.get(k); if (!list) by.set(k, list = []);
-      if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) list.push({ lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 });
+      if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) { const x = { lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }; list.push(x); if (by === this.infix) this.indexed(x); }
     }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
     if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
@@ -1006,8 +1007,25 @@ export class Host {
     // (a member of a name nothing holds: that name, a value of its own, declared where it was read)
     if (at === this.none && p.on?.text) { const on = p.on, ns = new Ray(this.base); this.unread.delete(on); this.add(on.at, [{ lit: on.word }], new Value(ns, new Code(on.text!, on.b!, on.e!, on.at))); at = ns; }
     const t = { name: '', s: p.word };
+    // (written while what is written is kept: what it held before, to be put back)
+    if (this.journal) { const was = at.eqs.findIndex(x => x.key === p.word && x.value); this.journal.push({ at, word: p.word, was: was >= 0 ? at.eqs[was].native!(at) : undefined, had: was >= 0 }); }
     this.add(at, [{ lit: p.word }], new Value(v, new Code(t, 0, p.word.length, at)));
     return v;
+  }
+  // what is written while code is read (`with settings`), kept; and put back
+  journal?: { at: Ray; word: string; was: unknown; had: boolean }[];
+  writing(code: unknown): unknown {
+    const was = this.journal; this.journal = [];
+    try { this.force(code); return this.journal; } finally { const j = this.journal; this.journal = was; if (was) was.push(...j); }
+  }
+  unwritten(journal: unknown): undefined {
+    if (!Array.isArray(journal)) return undefined;
+    for (const w of [...journal].reverse()) {
+      const i = w.at.eqs.findIndex((x: Eq) => x.key === w.word && x.value);
+      if (w.had) { const t = { name: '', s: w.word }; this.add(w.at, [{ lit: w.word }], new Value(w.was, new Code(t, 0, w.word.length, w.at))); }
+      else if (i >= 0) w.at.eqs.splice(i, 1);
+    }
+    return undefined;
   }
   // `x = v` in a parameter of a head being read: its default, as written (read where it is given, when it is not)
   assigning(F: Ray): boolean {

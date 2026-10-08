@@ -15,9 +15,9 @@
 
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
 static {statement} => (@has & given) ? None : statement
-
-// `x**`: what is written, as a program (R4.1: a captured argument is code; `**` gives it), not read
-{code}** => Program(code: @code code)
+// `static name = value`, `static name := value`: the class's own member (not written where `name` is declared further out)
+static {name Unspaced} = {value} => (@has & given) ? None : (& &+= { name := value })
+static {name Unspaced} := {value} => (@has & given) ? None : (& &+= { name := value })
 
 // Text written in quotes: a String (its characters).
 "{text}" => @text text
@@ -458,3 +458,7 @@ Diagnostic := class {
   type: Node
   fatal: Node
 }
+
+// `x**`: what is written, as a program (R4.1: a captured argument is code; `**` gives it), not read (declared last: it takes
+// the operand closest to it)
+{written}** => Program(code: @code written)

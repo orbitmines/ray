@@ -159,7 +159,7 @@ Ray := class: Iterable & Ordered {
   .. (last: Ray) => this === last ? [this] : next ? this, next..last : None
   to (other: Ray) => reachable.some(. === other)
 
-  same_vertex (other: Ray) => value || other.value ? value == other.value : same_text((external where this), (external where other))
+  same_vertex (other: Ray) => value || other.value ? value == other.value : same_text((@where this), (@where other))
   matches (other: Ray) => same_vertex(other) && (is_terminal ? other.is_terminal : other.next && next.matches(other.next))
   chainable == (other: Ray) => first.matches(other.first)
 

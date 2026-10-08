@@ -1,7 +1,7 @@
 #!/bin/bash
 # compare.sh — the ported seed tests on the new reader (each on its own, 4 at a time, T s each), against what the seed said
 cd "$(dirname "$0")"
-S=/tmp/claude-1000/-home-fs-Documents-github-com-orbitmines-ray/4e0b9dde-d32b-4766-b1ca-6a50f2201e0f/scratchpad
+S=$HOME/.cache/ray-scratch/expr
 norm() { sed -E 's/^node\(0 rules, .*preceding\)$/true/; s/^node\(0 rules, .*following\)$/false/; s/^node\(0 rules, yes\)$/YES/; s/^node\(0 rules, no\)$/NO/; s/^Ray\(yes\)$/YES/; s/^Ray\(no\)$/NO/; s/^node\(.*\)$/<value>/; s/^Ray\(.*\)$/<value>/; s/^code:.*$/<value>/; s/[0-9]+: assertion failed/N: assertion failed/' | grep -v '^learned' | sed -E '/^(==| |true$|false$|undefined$|YES$|NO$|<value>$)/!s/.*/<value>/'; }
 norm < $S/t_w44.txt > $S/seed_norm.txt
 ulimit -s unlimited

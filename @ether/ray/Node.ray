@@ -42,7 +42,7 @@ Node &+= {
 
 Possibilities := class values: Iterable {
   entry => values.entry
-  .{literal property ^property} ^punctuation => Possibilities(values: values.map(external get . property))
+  .{literal property ^property} ^punctuation => Possibilities(values: values.map(x => @member x (@text property)))
 }
 Possibilities.components.hierarchy &= Iterable
 Possibilities &+= {
@@ -66,7 +66,7 @@ Node &+= {
 
 Composed := class parts: Node[], joining: Program {
   erred => parts.some(.erred)
-  .{literal property ^property} ^punctuation => parts.map(external get . property).reduce((acc) => joining(acc, .))
+  .{literal property ^property} ^punctuation => parts.map(x => @member x (@text property)).reduce((acc) => joining(acc, .))
 }
 Node &+= {
   &+ (other) => Composed(parts: [this, other], joining: (a, b) => a & b) ~~ .components.hierarchy &= this ~~ .components.hierarchy &= other
@@ -224,10 +224,9 @@ Origin := class method: Node, arguments: Node {
 {f}({a}) | {rest} ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | rest
 {rest} | {g}({b}) ^punctuation => rest | (g(b).copy ~~ .origin = Origin(g, b))
 
-& ^keyword => external .
-&{literal member ^variable} ^keyword => external get (external .) member
+&{literal member ^variable} ^keyword => @member & (@text member)
 
 ~{literal label ^label} ^punctuation => this~label
 Node &+= {
-  .{literal property ^property}? ^punctuation => (external get this (property + "?")) ?? (external get this property)?
+  .{literal property ^property}? ^punctuation => (@member this ((@text property) + "?")) ?? (@member this (@text property))?
 }

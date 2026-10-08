@@ -406,7 +406,8 @@ Targets := String{.contains(",")}
   inline (written.enumerate.map**(.value + " = held[" + (.index as String) + "]").join("\n"))
 )
 
-// `xs{p}` (QT6): a narrowing of a value is the Ray of its elements of which `p` holds, in order (a class's: its instances)
+// `xs{p}` (QT6): a narrowing of a value is the Ray of its elements of which `p` holds, in order (a class's: its instances); it
+// answers what that Ray answers (no comment inside the block: a narrowing's rule of one capture reads its statements)
 Narrowing &+= {
   kept =>
     made := []
@@ -416,6 +417,15 @@ Narrowing &+= {
     made
   head => this.kept.head
   tail => this.kept.tail
+  count => this.kept.count
+  first => this.kept.first
+  last => this.kept.last
+  empty => this.kept.empty
+  nonempty => this.kept.nonempty
+  map (mapping) => this.kept.map(mapping)
+  every (predicate) => this.kept.every(predicate)
+  some (predicate) => this.kept.some(predicate)
+  contains (x) => this.kept.contains(x)
+  join (separator) => this.kept.join(separator)
+  flatten => this.kept.flatten
 }
-// (and is read as one: what a Ray of its elements has, it has)
-@also Narrowing Iterable

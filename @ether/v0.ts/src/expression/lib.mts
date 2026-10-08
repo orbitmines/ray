@@ -22,6 +22,7 @@ const names = given.length ? given : fs.readdirSync(dir).filter((f: string) => f
 const files = names.map((n: string) => ({ path: n, text: fs.readFileSync(path.resolve(dir, n), 'utf8') }));
 const order = given.length ? given : reading_order(files);
 const h = new Host();
+if (!process.env.EXPR_NOCOMPILE) { try { (await import('./compile.ts')).accelerate(h); } catch {} }
 let t = performance.now();
 const js = new URL('./js.ray', import.meta.url).pathname, kinds = new URL('./js.kinds.ray', import.meta.url).pathname;
 try { h.boot({ name: '.entrypoint.ray', s: fs.readFileSync(path.resolve(dir, '.entrypoint.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') }, { name: kinds, s: fs.readFileSync(kinds, 'utf8') }); } catch (e: any) { console.log('FAILED', e.message); }

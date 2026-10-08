@@ -3,6 +3,7 @@
 const { Host, Ray } = await import('./expression.ts');
 const fs = await import('fs');
 const h = new Host();
+if (!process.env.EXPR_NOCOMPILE) { try { (await import('./compile.ts')).accelerate(h); } catch {} }
 let seen = 0;
 const said = () => { for (const d of h.diagnostics.slice(seen)) console.log('  ', d.at.text.s.slice(0, d.at.b).split('\n').length + ':', d.message); seen = h.diagnostics.length; };
 const t0 = performance.now();

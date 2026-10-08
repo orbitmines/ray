@@ -1717,7 +1717,7 @@ export class Host {
     return this.sequence(code, T);
   }
   body(eq: Eq, F: Ray): unknown {
-    if (eq.js === undefined) eq.js = this.located(eq.body) && this.interpreted.has(eq.body.text) ? this.js(eq) : null;
+    if (eq.js === undefined) eq.js = this.located(eq.body) && this.interpreted.has(eq.body.text) ? this.js(eq) : this.accelerated?.(eq) ?? null;
     if (eq.js) return eq.js(F);
     // (a statement handed through, its functionality the capture it is: still a statement)
     if (F.statement) { const w = eq.word ??= eq.body.s.trim(); const c = F.m.get(w); if (c instanceof Code) return this.walk(stated(new Code(c.text, c.b, c.e, c.ctx, c.floor))); }
@@ -1821,6 +1821,8 @@ export class Host {
 
   // ---------------------------------------------------------------- @js: the host's language, at its location
   location = '@js'; interpreted = new Set<Text>(); mapping?: Text;
+  // (an optional layer, `compile.ts`: a rule's functionality given an equivalent in the host's language; none: read as written)
+  accelerated?: (eq: Eq) => ((F: Ray) => unknown) | undefined;
   located(body: Code): boolean { const s = body.s.trimStart(); return s.startsWith(this.location) && this.blank(s[this.location.length]); }
   js(eq: Eq): (F: Ray) => unknown {
     const src = eq.body.s.trimStart().slice(this.location.length);
@@ -1863,7 +1865,7 @@ export class Host {
 }
 function stated(c: Code): Code { c.statement = true; return c; }
 // A value given as a functionality (where it was written).
-class Value { constructor(public value: unknown, public code: Code) {} }
+export class Value { constructor(public value: unknown, public code: Code) {} }
 const NOT = Symbol('not read');
 const NO_LEAD: number[] = [];
 // a reading that does not end: what applies deeper, or more often, than any program is written to

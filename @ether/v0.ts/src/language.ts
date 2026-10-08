@@ -61,6 +61,11 @@ export function reading_order(files: { path: string; text: string }[]): string[]
   return order;
 }
 
+// (the optional layer, `expression/compile.ts`: rules given an equivalent in JS; without it the same results, slower)
+let compiled: ((h: Host) => void) | undefined;
+try { if (!process.env.EXPR_NOCOMPILE) compiled = (await import('./expression/compile.ts')).accelerate; } catch {}
+const accelerated = (h: Host): Host => { compiled?.(h); return h; };
+
 // ---------------------------------------------------------------- what reading said
 // A span painted with a style (`begin`/`end` inclusive, as src/lsp/semantics.ts takes them).
 export type Paint = { begin: number; end: number; style: string };
@@ -68,7 +73,7 @@ export type Said = { message: string; begin: number; end: number };
 
 // ---------------------------------------------------------------- the host: the expression reader, the library, files
 export class Ray {
-  host = new Host();
+  host = accelerated(new Host());
   // the library's scope: a file is read in one of its own inside it
   scope!: Node;
   // the texts the language and the library were read from, by file

@@ -767,7 +767,7 @@ export class Host {
     if (r.test) return r.test(text.s.slice(b, e).trim()) !== undefined;
     // (the parameters of a value's rule, or of a call, `f(a: T)`: values, decided where applied)
     if (!r.scope && (!eq.ctx.scope || this.calls(eq))) return true;
-    const read = this.parse(text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
+    const read = this.parsed(r, text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
     if (r.scope) return !!read && read.e === end;
     // (a value that is not a scope reads what its own equivalences, or names, read whole; anything else is read where it was
     // written, and is one of it or not: decided where it is applied, unless the span is a rule of its own)
@@ -943,18 +943,23 @@ export class Host {
     let key: Ray = code.ctx; while (key.eqs === NONE && key.scope && key.outer && !key.sees && !key.into) key = key.outer;
     // (a rule's frame reads as every frame of that rule on what is made of the same class: its names are read when it runs)
     if (SHAPED && key.rule && key.scope && !key.into) key = this.shape(key);
-    if (NOMEMO) return this.parse(code.text, code.b, code.e, code.ctx, code.floor);
+    return this.parsed(key, code.text, code.b, code.e, code.ctx, code.floor);
+  }
+  // a span read in a context, as it was read before there (`key`: what reads as that context), until something declared since
+  // may read it
+  parsed(key: Ray, text: Text, b: number, e: number, ctx: Ray, floor: number): Read | undefined {
+    if (NOMEMO) return this.parse(text, b, e, ctx, floor);
     let m = this.memo.get(key); if (!m) this.memo.set(key, m = new Map());
-    let at = m.get(code.text); if (!at) m.set(code.text, at = new Map());
-    let list = at.get(code.b); if (!list) at.set(code.b, list = []);
-    for (const x of list) if (x.floor === code.floor && x.e === code.e) {
+    let at = m.get(text); if (!at) m.set(text, at = new Map());
+    let list = at.get(b); if (!list) at.set(b, list = []);
+    for (const x of list) if (x.floor === floor && x.e === e) {
       if (x.version === this.version) return x.r;
       // (what was declared since does not read anything there: read as it was)
-      if (!this.since_read(x.version, code.text.s.slice(code.b, code.e))) { x.version = this.version; return x.r; }
-      x.r = this.parse(code.text, code.b, code.e, code.ctx, code.floor); x.version = this.version; return x.r;
+      if (!this.since_read(x.version, text.s.slice(b, e))) { x.version = this.version; return x.r; }
+      x.r = this.parse(text, b, e, ctx, floor); x.version = this.version; return x.r;
     }
-    const r = this.parse(code.text, code.b, code.e, code.ctx, code.floor);
-    list.push({ floor: code.floor, e: code.e, version: this.version, r });
+    const r = this.parse(text, b, e, ctx, floor);
+    list.push({ floor, e, version: this.version, r });
     return r;
   }
   shapes = new Map<string, Ray>(); ids = new WeakMap<object, number>(); counted = 0;
@@ -1254,7 +1259,7 @@ export class Host {
     // (one that reads a span as it is written: that span, a word)
     if (r.test) { const t = code.s.trim(), v = r.test(t); if (v === undefined) return NOT; if (v !== t) return v; const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
     const T = new Ray(r); T.scope = true; T.into = r; T.written = code.ctx; T.self = self;
-    const read = this.parse(code.text, code.b, code.e, r, 0); let end = code.e; while (end > code.b && this.blank(code.text.s[end - 1])) end--;
+    const read = this.parsed(r, code.text, code.b, code.e, r, 0); let end = code.e; while (end > code.b && this.blank(code.text.s[end - 1])) end--;
     if (r.scope && read?.name && read.e === end) { const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
     const word = read?.name ? code.text.s.slice(read.b, read.e) : undefined;
     // (a reader decided where it was written, a type: what it does not read whole is read where it was written, one of it, or not read)

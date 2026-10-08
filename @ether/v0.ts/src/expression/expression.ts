@@ -23,6 +23,8 @@ export class Ray {
   has(k: string): boolean { return this.m_ !== undefined && this.m_.has(k); }
   get size(): number { return this.m_?.size ?? 0; }
   eqs: Eq[] = NONE;
+  // (its equivalences by what they start with: led by a literal, by its first character; led by a capture, '' (positions in `eqs`))
+  led?: Map<string, number[]>;
   // (a context the host reads text with: what it reads a span as, or undefined)
   test?: (s: string) => unknown;
   scope = false; caller?: Ray; self?: unknown;
@@ -473,7 +475,7 @@ export class Host {
     const readers = (ps: Piece[], n?: Ray) => ps.map(p => 'cap' in p && p.reader ? p.reader.s : '').join('\0') + (n?.params ? '\0' + n.params.map(x => this.id(n.types?.get(x))).join(',') : '');
     const was = ctx.eqs.findIndex(x => x.key === key && readers(x.pieces, x.node) === readers(pieces, node));
     if (was >= 0) { const old = ctx.eqs[was]; if (!(old.value && eq.value)) this.changed(pieces); old.body = eq.body; old.native = eq.native; old.js = undefined; old.pieces = eq.pieces; old.value = eq.value; if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq); return old; }
-    ctx.eqs.push(eq); if (!eq.value) this.changed(pieces);
+    ctx.eqs.push(eq); ctx.led = undefined; if (!eq.value) this.changed(pieces);
     if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq);
     const p0 = pieces[0], p1 = pieces[1];
     // (read on a value: added at one, taking something; one that takes nothing is a member, read in the value)
@@ -514,13 +516,16 @@ export class Host {
     const consider = (r: Read | undefined) => { if (r) { r = this.on(r, text, e, ctx, floor, not); if (this.better(r, best)) best = r; } };
     // (what reads definitions is tried on a definition only: the definer written outside every bracket)
     let defines = false; this.scan(text, b, e, i => { if (this.literal(text, this.learned.space + this.learned.definer, i, e) >= 0) { defines = true; return false; } });
-    let self: unknown, held = false, near = 0, span: string | undefined;
+    let self: unknown, held = false, near = 0, span: string | undefined; const found = new Map<string, boolean>();
     const word = s.slice(b, this.name_end(text, b, e));
     for (const n of this.reach(ctx)) {
       near++;
       if (self === undefined && n.into && !n.into.scope && !n.rule) self = n.self ?? n.into;
       if (!n.scope && n !== this.base && self === undefined) self = n;
-      for (let i = n.eqs.length - 1; i >= 0; i--) {
+      // (only those led by what is written first, or by a capture: in the order declared, the latest first)
+      const led = this.led(n), a = led.get(s[b]) ?? NO_LEAD, c = led.get('') ?? NO_LEAD;
+      for (let x = a.length - 1, y = c.length - 1; x >= 0 || y >= 0;) {
+        const i = y < 0 || (x >= 0 && a[x] > c[y]) ? a[x--] : c[y--];
         const eq = n.eqs[i], p0 = eq.pieces[0];
         if (eq.value || not?.has(eq)) continue;
         // (a rule does not read the whole of its own functionality: that never ends)
@@ -533,7 +538,7 @@ export class Host {
         // (one capture its reader reads, alone: what it reads, read at any precedence)
         const atom = eq.pieces.length === 1 && !('lit' in p0) && p0.reader !== undefined && n.scope;
         // (one led by a capture reads only what has its literals in it)
-        if (!('lit' in p0) && !atom) { const k = this.needle(eq.pieces); if (k && !(span ??= s.slice(b, e)).includes(k)) continue; }
+        if (!('lit' in p0) && !atom) { const k = this.needle(eq.pieces); if (k) { let h = found.get(k); if (h === undefined) found.set(k, h = (span ??= s.slice(b, e)).includes(k)); if (!h) continue; } }
         if ('lit' in p0 ? s[b] === p0.lit[0] && this.literal(text, p0.lit, b, e) >= 0 : eq.order >= floor || atom) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; consider(r); } }
       }
       if (word && (n.has(word) || n.eqs.some(x => x.key === word))) held = true;
@@ -541,6 +546,12 @@ export class Host {
     // a name: up to where something reads on
     const w = this.name_end(text, b, e); if (w > b) consider({ name: true, caps: [], b, e: w });
     return best;
+  }
+  led(n: Ray): Map<string, number[]> {
+    if (n.led) return n.led;
+    const m = new Map<string, number[]>();
+    n.eqs.forEach((eq, i) => { const p0 = eq.pieces[0], k = 'lit' in p0 ? p0.lit[0] : ''; let l = m.get(k); if (!l) m.set(k, l = []); l.push(i); });
+    return n.led = m;
   }
   // (the longest run of a pattern's literals written without a space: what any text it reads has in it)
   needle(pieces: Piece[]): string {
@@ -1061,7 +1072,7 @@ export class Host {
     for (const w of [...journal].reverse()) {
       const i = w.at.eqs.findIndex((x: Eq) => x.key === w.word && x.value);
       if (w.had) { const t = { name: '', s: w.word }; this.add(w.at, [{ lit: w.word }], new Value(w.was, new Code(t, 0, w.word.length, w.at))); }
-      else if (i >= 0) w.at.eqs.splice(i, 1);
+      else if (i >= 0) { w.at.eqs.splice(i, 1); w.at.led = undefined; }
     }
     return undefined;
   }
@@ -1426,6 +1437,7 @@ function stated(c: Code): Code { c.statement = true; return c; }
 // A value given as a functionality (where it was written).
 class Value { constructor(public value: unknown, public code: Code) {} }
 const NOT = Symbol('not read');
+const NO_LEAD: number[] = [];
 // a reading that does not end: what applies deeper, or more often, than any program is written to
 class Runaway extends Error {}
 // a jump out of what is being read: to the end, or the start again, of the loop it is in (`break`, `continue`), out of the method

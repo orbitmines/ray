@@ -55,7 +55,7 @@ UI.TUI := class {
   }
 
   drawn := {
-    {root: Geometry.Shape{solved && !parent}} => Grid(root.size.x as column, root.size.y as row) ~~ [root, root.lifted].flatten.map(.cell_writes).flatten
+    {root: Geometry.Shape{solved && !parent}} => Grid(root.size.x as column, root.size.y as row) ~~ (grid => [root, root.lifted].flatten.map(.cell_writes).flatten.for(write => grid ~~ write))
   }
   filled (shape: Geometry.Shape) => {
     {color: Geometry.Color} => shape.cell_area.map(at => { .background(at, color) })

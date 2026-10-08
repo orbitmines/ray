@@ -89,6 +89,8 @@ Node &+= {
   $ ^error => instance ? this : Store.View(type: this)
 }
 
+// `T$ @ L`: every `T` held under the location `L`, each routed by its path below `L` (`profiles: Profile$ @ /@`)
+{type}$ @ {location} ^keyword => type${(.@ as String).starts_with(location as String)} @ location
 {type}$ = {literal places} ^keyword => Store.rerouted(type, Program(code: places**))
 {type}$ |= {literal places} ^keyword => Store.route(type, Program(code: places**))
 

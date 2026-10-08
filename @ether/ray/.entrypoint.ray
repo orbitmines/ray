@@ -77,12 +77,19 @@ Node &+= {
   // `x: T`: `x` is a `T` (holding `T` until something is written to it); given by name, `x: v` gives it `v`; in what is being given
   // its fields in order, the next of them (one given by name keeps it)
   : {type} =>
+    // (what is being given, read as held: not through the value's own `.`, which a class may read otherwise)
     head := @typed type
     had := @owns & @word
-    taken := (!head) && (!(&.naming)) && (!had) && &.given && (!(&.given.empty))
-    head ? None : (&.naming ? (@declare type) : (had ? None : (taken ? (@declare &.given.take) : (@holding type))))
-    // (a field given, or of a class (what its instances are given), is what `= default` does not write)
-    &.naming ? & : (((!head) && (had || taken || (@has & components))) ? Field : this)
+    naming := @member & "naming"
+    given := @member & "given"
+    taken := (!head) && (!naming) && (!had) && given && (!(given.empty))
+    head ? None : (naming ? (@declare type) : (had ? None : (taken ? (@declare given.take) : (@holding type))))
+    // (a field given is what `= default` does not write; one of a class, what its instances are given unless given otherwise)
+    shared := (!naming) && (!head) && (!had) && (!taken) && (@has & components)
+    field := shared ? (@made ClassField) : None
+    shared ? (@field field "owner" &) : None
+    shared ? (@field field "word" @word) : None
+    naming ? & : ((!head) && (had || taken)) ? Field : shared ? field : this
 }
 // `x[key]`, `x[key] = v`, `x[key] := v` (T8.7): what a value holds under a name, by its name
 Node &+= {
@@ -94,6 +101,15 @@ Node &+= {
 Field := @made Node
 Field &+= {
   = {value} => this
+}
+// a field declared on a class: `= default` is what each instance holds until something is written to it, read when it is first read
+ClassField := @made Node
+ClassField &+= {
+  = {value} =>
+    word := @member this "word"
+    owner := @member this "owner"
+    @field owner "defaults" (((@member owner "defaults") ?? []).append((instance) => (@owns instance word) ? None : (@field instance word (@later value))))
+    this
 }
 // `x with { … }`: the block read with `x` as what it is read in, answering what the block answers.
 {target Expression} with {{block target}} => block
@@ -353,7 +369,7 @@ Class &+= {
     name := @param fields index
     while name {
       unless @owns instance name {
-        @field instance name (instance.given.empty ? (@default instance fields name) : instance.given.take)
+        @field instance name ((@member instance "given").empty ? (@default instance fields name) : (@member instance "given").take)
       }
       index = index + 1
       name = @param fields index
@@ -362,18 +378,20 @@ Class &+= {
   made_of (parent, header, block) =>
     made := @made (parent ?? Node)
     fields := ((@text header) === "None") ? None : (@parameters (@named "") header)
-    made &+= {
+    made with {
       read_into (instance) =>
         (@of made).read_into(instance)
         fields ? Class.fields_given(instance, fields) : None
-        instance &+= { block }
+        instance with { block }
+        // (and the defaults of the fields declared on the class, its own or added since (`T &+= { x: T = d }`), not written yet)
+        ((@member made "defaults") ?? []).for((default) => default(instance))
         instance
       ({arguments}) => Class.instance_of(made, arguments)
       () => Class.instance_of(made, None)
       // what it is made of: its hierarchy, the classes it is one of
       components := (@made Node) &+= { hierarchy := [] }
     }
-    made &+= { block }
+    made with { block }
     made
 }
 // `T + { … }`: a class made of `T` with what the block declares (both its components)

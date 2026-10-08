@@ -8,7 +8,9 @@ const listed = (dir: string) => fs.readdirSync(dir).filter((f: string) => f.ends
 const order = fs.readFileSync(path.resolve(import.meta.dirname, 'order.txt'), 'utf8').trim().split(/\s+/).map((f: string) => path.join(ether, 'ray', f));
 const library = [...order, ...listed(path.join(ether, 'ray')).filter((f: string) => !order.includes(f))];
 const extra = process.argv.slice(2).map((f: string) => path.resolve(f));
-const files = process.env.LIBONLY ? [...library, ...extra] : [...library, ...listed(path.join(ether, 'geometry')), ...listed(path.join(ether, 'ui')), ...(process.env.NOSITE ? [] : listed(site)), ...extra];
+// (what the TUI of the site reads: the library, geometry, the device, ANSI, time zones and fonts, the UI, then the site)
+const project = ['geometry', 'device', '$/ansi', 'timezone', 'fonts', 'ui'].flatMap((d: string) => listed(path.join(ether, d)));
+const files = process.env.LIBONLY ? [...library, ...extra] : [...library, ...project, ...(process.env.NOSITE ? [] : listed(site)), ...extra];
 const h = new Host();
 const js = new URL('./js.ray', import.meta.url).pathname;
 h.boot({ name: '.expression.ray', s: fs.readFileSync(path.join(ether, 'ray/.expression.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') });

@@ -458,7 +458,7 @@ export class Host {
       // members)
       // (one capture alone reads anything: only where that very value's own equivalences read text (a value read in, a level a
       // program runs by), not what continues into it)
-      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || eq.pieces.length > 1 || !(ctx.into === eq.ctx || ctx.sees === eq.ctx || (ctx.written && ctx.outer === eq.ctx)))) return undefined;
+      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || eq.pieces.length > 1 || !(ctx.sees === eq.ctx || (ctx.written && ctx.outer === eq.ctx)) || (this.deciding > 0 && !eq.ctx.scope))) return undefined;
       // (after the definer: the functionality, to the end; an operator read on a value reads one operand: the same operator after it reads on from what it gives)
       // (led by a literal, a statement: its last capture, the rest; an operator's, one operand)
       // (a reader's own rule, read in a value as its type: to the end, too)
@@ -502,7 +502,7 @@ export class Host {
   fixed(reader: Code | undefined, eq?: Eq): Ray | typeof REJECT | undefined {
     if (!reader) return undefined;
     // (a context it was decided to be stays it; what was not yet decided is decided again once something was declared)
-    const kept = this.readers.get(reader); if (kept && (kept.r instanceof Ray || (kept.version === this.version && kept.at >= (this.declared.get(this.first(reader)) ?? 0)))) return kept.r;
+    const kept = this.readers.get(reader); if (kept && (kept.r instanceof Ray || kept.version === this.version || kept.at >= this.latest(reader))) return kept.r;
     // (while it is being decided, it reads nothing: a reader does not read itself)
     this.readers.set(reader, { version: this.version, at: this.order, r: REJECT });
     const r = this.fixed_(reader, eq); this.readers.set(reader, { version: this.version, at: this.order, r }); return r;
@@ -511,6 +511,14 @@ export class Host {
   // (when each name was last declared)
   declared = new Map<string, number>();
   first(reader: Code): string { return reader.text.s.slice(reader.b, this.name_end(reader.text, reader.b, reader.e)).trim(); }
+  // when any name a reader is written with was last declared
+  latest(reader: Code): number {
+    let words = this.words_of.get(reader);
+    if (!words) { words = []; const s = reader.text.s; for (let i = reader.b; i < reader.e;) { if (this.blank(s[i])) { i++; continue; } const j = this.name_end(reader.text, i, reader.e); if (j > i) { words.push(s.slice(i, j)); i = j; } else i++; } this.words_of.set(reader, words); }
+    let at = 0; for (const w of words) { const d = this.declared.get(w); if (d !== undefined && d > at) at = d; }
+    return at;
+  }
+  words_of = new WeakMap<Code, string[]>();
   // whether a reader depends on the frame it is applied in: led by one of the rule's own captures, a name a rule's frame holds, or
   // what is computed from the frame (as `this`)
   dependent(reader: Code, eq?: Eq): boolean {
@@ -524,7 +532,11 @@ export class Host {
     const first = reader.text.s.slice(reader.b, this.name_end(reader.text, reader.b, reader.e)).trim();
     if (first === this.learned.type) return undefined;
     // (decided on the side: what it says, or leaves unresolved, is not said)
-    const said = this.diagnostics.length, unread = this.unread.size === 0 ? undefined : new Map(this.unread), r = this.walk(eq ? new Code(reader.text, reader.b, reader.e, eq.body.ctx) : reader);
+    // (deciding it is not reading the statement it is asked in)
+    // (and what a value reads with one capture alone does not read it: it is a type where the rule was written)
+    const said = this.diagnostics.length, unread = this.unread.size === 0 ? undefined : new Map(this.unread), steps = this.steps;
+    this.deciding++; let r: unknown; try { r = this.walk(eq ? new Code(reader.text, reader.b, reader.e, eq.body.ctx) : reader); } finally { this.deciding--; }
+    this.steps = steps;
     this.unsay(said); if (unread) this.unread = unread; else this.unread.clear();
     // (what reads nothing there yet reads nothing until something is declared)
     return r === this.expression ? undefined : r instanceof Ray ? r : REJECT;
@@ -893,7 +905,7 @@ export class Host {
     } finally { this.settling--; }
     return last;
   }
-  settling = 0; ran_away = false;
+  settling = 0; ran_away = false; deciding = 0;
   // block statements that defined what a class holds (where they start), and that class
   defining = new WeakMap<Text, Map<number, { cls: Ray; written?: Ray }>>();
   // whether a value is made of a class (it continues into it)
@@ -998,7 +1010,7 @@ export class Host {
     if (T === (this.one ??= this.name(this.global, p.one))) { if (i < s.length) out.add(i + (s.codePointAt(i)! > 0xffff ? 2 : 1)); return out; }
     const alternatives = this.field(T, p.alternatives), narrowed = this.field(T, p.narrowed), repeated = this.field(T, p.repeated), first = this.field(T, p.sequence);
     if (alternatives instanceof Ray) for (let v = this.field(alternatives, p.sequence); v instanceof Ray; v = this.field(v, p.next)) for (const j of this.fit_at(this.field(v, p.value), s, i, memo, depth + 1)) out.add(j);
-    else if (narrowed !== undefined) { const c = this.field(T, p.constraint); for (const j of this.fit_at(narrowed, s, i, memo, depth + 1)) if (this.holds(this.invoke(c, s.slice(i, j)))) out.add(j); }
+    else if (narrowed !== undefined) { const c = this.field(T, p.constraint); for (const j of this.fit_at(narrowed, s, i, memo, depth + 1)) if (this.truthy(this.invoke(c, s.slice(i, j)))) out.add(j); }
     else if (repeated !== undefined) { let edge = [...this.fit_at(repeated, s, i, memo, depth + 1)].filter(j => j > i); const seen = new Set<number>(); while (edge.length) { const next: number[] = []; for (const j of edge) if (!seen.has(j)) { seen.add(j); out.add(j); for (const k of this.fit_at(repeated, s, j, memo, depth + 1)) if (k > j) next.push(k); } edge = next; } }
     else if (first instanceof Ray) { let ends = new Set([i]); for (let v: unknown = first; v instanceof Ray; v = this.field(v, p.next)) { const next = new Set<number>(); for (const j of ends) for (const k of this.fit_at(this.field(v, p.value), s, j, memo, depth + 1)) next.add(k); ends = next; } for (const j of ends) out.add(j); }
     return out;
@@ -1010,7 +1022,7 @@ export class Host {
     const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; F.m.set(c.cap, x);
     return eq.native ? eq.native(F) : this.body(eq, F);
   }
-  holds(v: unknown): boolean { return v !== undefined && v !== this.none && v !== NOT && v !== this.name(this.global, 'false'); }
+  truthy(v: unknown): boolean { return v !== undefined && v !== this.none && v !== NOT && v !== this.name(this.global, 'false'); }
   // a context the host reads text with (`js.ray`): `test` gives what a span is read as, or undefined
   reader(test: (s: string) => unknown): Ray { const r = new Ray(); r.test = test; return r; }
 

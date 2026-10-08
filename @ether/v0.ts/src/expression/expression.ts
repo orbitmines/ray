@@ -30,7 +30,7 @@ export class Ray {
   alone = false;
   // (a node a head was read into: what it was written as, its parameters (each a member, in order), whether it is applied with what
   // is on its right; a member's type, what `:` said of it)
-  spelled?: string; params?: string[]; leftward?: boolean; again?: boolean; types?: Map<string, Code>; between?: string; defaults?: Set<string>; default_codes?: Map<string, Code>;
+  spelled?: string; params?: string[]; leftward?: boolean; again?: boolean; method?: boolean; types?: Map<string, Code>; between?: string; defaults?: Set<string>; default_codes?: Map<string, Code>;
   // (a frame of an equivalence applied: which, and whether to a statement)
   rule?: Eq; statement = false;
   // (a frame of an equivalence applied on a value: where that value was read; of its captures read as values, where each was)
@@ -315,6 +315,8 @@ export class Host {
     if (!node.params && !node.leftward) return this.defined(head, f, at, statement);
     if (typeof between === 'string') node.between = between;
     const into = statement ? at.into ?? at : new Ray(at), body = this.unblocked(this.written(f));
+    // (read again into what continues into a class that has it, from the same text: that one)
+    if (statement && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.node && x.body.text === body.text && x.body.b === body.b && x.body.e === body.e); if (was) return this.held_as(was); }
     const { open, close, space } = this.learned, name = node.spelled, out: Eq[] = [];
     const r = node.params || typeof receiver !== 'string' ? this.given_name : receiver;
     // (what it is given: a capture no name written can be)
@@ -874,7 +876,9 @@ export class Host {
   shapes = new Map<string, Ray>(); ids = new WeakMap<object, number>(); counted = 0;
   id(x: unknown): number { if (typeof x !== 'object' || x === null) return 0; let i = this.ids.get(x); if (i === undefined) this.ids.set(x, i = ++this.counted); return i; }
   shape(F: Ray): Ray {
-    const on = F.outer && !F.outer.scope ? F.outer.outer : F.outer, k = `${this.id(F.rule)}|${this.id(on)}|${this.id(F.sees)}`;
+    // (a method's frame continues into its node, then into what it was applied on: shaped as that)
+    const W = F.outer?.method ? F.outer.sees! : F, o = W.outer, sees = W === F ? F.sees : W.sees;
+    const on = o && !o.scope ? o.outer : o, k = `${this.id(F.rule)}|${this.id(on)}|${this.id(sees)}`;
     let s = this.shapes.get(k); if (!s) this.shapes.set(k, s = new Ray()); return s;
   }
   // the value a reading found its equivalence on, from a frame: as the reading found it (`near` contexts out)
@@ -1036,7 +1040,7 @@ export class Host {
       if (sub === NOT) return NOT;
       if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) return NOT;
       for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.default_of(F, eq.node, x));
-      const I = new Ray(eq.node); I.scope = true; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
+      const I = new Ray(eq.node); I.scope = true; I.method = true; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
     }
     // (what a form declares first, where it is not given it; the capture it is applied with, `this`)
     if (eq.receiver) F.self = this.get(F, eq.receiver);

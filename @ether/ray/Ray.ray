@@ -62,7 +62,7 @@ Iterable &+= {
   max => reduce((acc) => acc > . ? acc : .)
   min | min_by (key: Program | Section) => this[{key(.) == map(key).min}].all
   max | max_by (key: Program | Section) => this[{key(.) == map(key).max}].all
-  count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
+  count => unbounded ? ∞ : reduce(acc = 0 => acc + 1)
   length => paths.map(.count).max
   paths: Path{.bounded: bounded} => [this]
 

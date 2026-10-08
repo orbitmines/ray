@@ -625,7 +625,7 @@ export class Host {
       if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) { const x = { lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }; list.push(x); eq.indexed = true; this.syntax++; if (by === this.infix) this.indexed(x); if (x.order < this.earliest) this.earliest = x.order; this.spelled(after); }
     }
     // (a quote, one character, a capture, the quote: that character escapes what follows it inside the quote)
-    if (pieces.length === 3 && 'lit' in p0 && p0.lit.length === 2 && this.quotes.has(p0.lit[0]) && !this.blank(p0.lit[1]) && !('lit' in p1) && 'lit' in pieces[2] && pieces[2].lit === p0.lit[0] && this.escapes.get(p0.lit[0]) !== p0.lit[1]) { this.escapes.set(p0.lit[0], p0.lit[1]); this.paired++; this.syntax++; }
+    if (pieces.length === 3 && 'lit' in p0 && p0.lit.length === 2 && this.quotes.has(p0.lit[0]) && !this.blank(p0.lit[1]) && !('lit' in p1) && 'lit' in pieces[2] && pieces[2].lit === p0.lit[0] && this.escapes.get(p0.lit[0]) !== p0.lit[1]) { this.escapes.set(p0.lit[0], p0.lit[1]); this.escaping.add(p0.lit[1]); this.paired++; this.syntax++; }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
     if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); this.paired++; this.syntax++; }
     return eq;
@@ -985,6 +985,8 @@ export class Host {
       if (at(i) === false) return i;
       if (pairs === 0) continue;
       const c = s[i];
+      // (what follows the escape opens and closes nothing)
+      if (this.escaping.has(c) && !this.blank(s[i + 1])) { i++; continue; }
       // (a pair: past where it closes; a closer not opened in it, there)
       if (this.pairs.has(c)) { const m = this.closing(text, i); if (m === -1) return e; if (m < -1) return Math.min(-m - 2, e); if (m >= e) return e; i = m; continue; }
       if (this.closers.has(c)) return i;
@@ -1000,6 +1002,7 @@ export class Host {
       const c = s[j], top = stack[stack.length - 1];
       if (c === top) { stack.pop(); if (stack.length === 0) { r = j; break; } continue; }
       if (this.quotes.has(top)) { if (c === this.escapes.get(top)) j++; continue; }
+      if (this.escaping.has(c) && !this.blank(s[j + 1])) { j++; continue; }
       const close = this.pairs.get(c);
       if (close !== undefined) { stack.push(close); continue; }
       if (this.closers.has(c)) { r = -(j + 2); break; }
@@ -1008,7 +1011,7 @@ export class Host {
   }
   closings = new WeakMap<Text, { paired: number; at: Map<number, number> }>(); paired = 0;
   // (inside a quote: the character that takes the one after it as written, learned from a rule written quote, it, a capture, quote)
-  escapes = new Map<string, string>();
+  escapes = new Map<string, string>(); escaping = new Set<string>();
   escaped(text: Text, at: number, i: number, x: string): boolean { let k = 0; for (let j = i - 1; j >= at && text.s[j] === x; j--) k++; return k % 2 === 1; }
   // whether every pair opened in a span is closed in it
   balanced(text: Text, b: number, e: number): boolean {
@@ -1016,6 +1019,7 @@ export class Host {
     for (let i = b; i < e; i++) {
       const c = s[i], top = stack.length ? stack[stack.length - 1] : undefined;
       if (top !== undefined) { if (c === top) { stack.pop(); continue; } if (this.quotes.has(top)) { if (c === this.escapes.get(top)) i++; continue; } }
+      if (this.escaping.has(c) && !this.blank(s[i + 1])) { i++; continue; }
       const close = this.pairs.get(c);
       if (close !== undefined) { stack.push(close); continue; }
       if (this.closers.has(c)) return false;

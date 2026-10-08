@@ -1044,6 +1044,24 @@ export class Host {
     if (c) { const T = new Ray(c.ctx); T.scope = true; T.into = target; T.sees = target; return this.walk(new Code(c.text, c.b, c.e, T, c.floor)); }
     const x = this.valued(node, name); return x ? x.native!(node) : undefined;
   }
+  // (`return` leaves the method it is written in: the nearest method around where it is read)
+  jump(kind: string, value?: unknown, F?: Ray): never {
+    let to: Ray | undefined;
+    if (kind === 'return') for (let c: Ray | undefined = F?.caller, n = 0; c && n < 10000; c = c.outer ?? c.sees, n++) if (c.method) { to = c; break; }
+    throw new Jump(kind, value, to);
+  }
+  // a loop (the interpreter's): `body` while `condition` holds (`after`: checked after the body), until a `break`
+  looped(F: Ray, after = false): unknown {
+    const no = this.name(F, 'false'), holds = () => { const c = this.get(F, 'condition'); return !(c === undefined || c === this.none || c === no); };
+    this.loops++;
+    try { for (;;) {
+      if (!after && !holds()) return undefined;
+      try { this.get(F, 'body'); } catch (x) { if (!(x instanceof Jump) || x.kind === 'return') throw x; if (x.kind === 'break') return undefined; }
+      if (after && !holds()) return undefined;
+    } } finally { this.loops--; }
+  }
+  // (how many loops, and methods, are being run: what a `break`, or `return`, can leave)
+  loops = 0; methods = 0;
   // a message said where it is written (what it reads as, else as it is written)
   report(m: unknown): unknown {
     if (!(m instanceof Code)) return undefined;
@@ -1103,6 +1121,8 @@ export class Host {
     // (what a form declares first, where it is not given it; the capture it is applied with, `this`)
     if (eq.receiver) F.self = this.get(F, eq.receiver);
     if (eq.native) return eq.native(F);
+    // (a method: what `return` gives, from inside it)
+    if (eq.node) { const I = F.outer; this.methods++; try { return this.body(eq, F); } catch (x) { if (x instanceof Jump && x.kind === 'return' && (x.to === I || !x.to)) return x.value; throw x; } finally { this.methods--; } }
     return this.body(eq, F);
   }
   // captures bound in a frame: code, read where written each time it is named; one with a reader (or a type) a value, what that
@@ -1207,7 +1227,7 @@ export class Host {
     if (TRACE) writeSync(2, `${c.text.name}:${c.text.s.slice(0, c.b).split(this.learned.end).length} ${JSON.stringify(c.s.slice(0, 70))}\n`);
     try { return speak ? this.walk(c) : this.walk_(c); }
     // (one that does not end ends the outermost statement it is in)
-    catch (x) { if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
+    catch (x) { if (x instanceof Jump && (x.kind === 'return' ? this.methods : this.loops) > 0) throw x; if (x instanceof Jump) { this.say(`Nothing to ${x.kind} from here.`, c.text, c.b, c.e); return undefined; } if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
   }
   // A block read into a value: its names where it was written, what it declares the value's.
   into(code: Code, r: Ray, self?: unknown): unknown {
@@ -1335,6 +1355,9 @@ class Value { constructor(public value: unknown, public code: Code) {} }
 const NOT = Symbol('not read');
 // a reading that does not end: what applies deeper, or more often, than any program is written to
 class Runaway extends Error {}
+// a jump out of what is being read: to the end, or the start again, of the loop it is in (`break`, `continue`), out of the method
+// it is in with a value (`return`)
+export class Jump { constructor(public kind: string, public value?: unknown, public to?: Ray) {} }
 const NOMEMO = !!process.env.EXPR_NOMEMO, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
 const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
 const REJECT = Symbol('reads nothing');

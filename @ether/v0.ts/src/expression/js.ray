@@ -90,7 +90,16 @@ HostNumber := class: Number {
   is_zero => @js $.name(F, F.self === 0 ? "true" : "false")
 }
 // `while c { body }`: the body again while `c` holds (every value but nothing and false), iterated by the host.
-while {condition} {{body}} => @js (() => { for (const no = $.name(F, "false"); ;) { const c = $.get(F, "condition"); if (c === undefined || c === $.none || c === no) return undefined; $.get(F, "body"); } })()
+while {condition} {{body}} => @js $.looped(F)
+// `do { … } while c`: the block, then again while `c` holds
+do {{body}} while {condition} => @js $.looped(F, true)
+// `loop { … }`: the block again, until a `break`
+loop {{body}} => @js (F.m.set("condition", true), $.looped(F))
+// `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in
+break => @js $.jump("break")
+continue => @js $.jump("continue")
+return {value} => @js $.jump("return", $.get(F, "value"), F)
+return => @js $.jump("return", undefined, F)
 // Text: the host's own (a JS string), a String whose operations are the host's.
 @kind string HostString
 @character {x} => @js String.fromCodePoint($.get(F, "x"))

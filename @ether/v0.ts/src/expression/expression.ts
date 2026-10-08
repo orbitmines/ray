@@ -236,6 +236,14 @@ export class Host {
     if (r === undefined || r.e < text.s.length) { this.say(`Unread \`${said.slice(0, 60)}\`.`, p.text, p.b, p.e); return undefined; }
     return this.run(r, statement ? stated(new Code(text, 0, text.s.length, T)) : new Code(text, 0, text.s.length, T));
   }
+  // (text written as it is in a head, `` `x` ``: as written; a name a value holds as text where the head is written, that text)
+  literally(code: Code): string {
+    const w = code.s;
+    // (what was written there is text in quotes, handed on: that text)
+    if (w.length > 1 && this.quotes.has(w[0]) && w[w.length - 1] === w[0]) { const v = this.walk(code); if (typeof v === 'string') return v; }
+    for (const n of this.reach(code.ctx)) { const x = n.has(w) ? undefined : this.valued(n, w); if (!n.has(w) && !x) continue; const v = this.held_value(x ? x.native!(n) : n.m.get(w)); if (typeof v === 'string') return v; break; }
+    return w;
+  }
   // (the frame of a rule applied, from where a definition is written, that holds a word as a value read, not as code)
   valued_capture(at: Ray, w: string): { n: Ray } | undefined {
     if (at.has(w)) return at.m.get(w) instanceof Code ? undefined : { n: at };
@@ -473,6 +481,11 @@ export class Host {
     const { open, close, space } = this.learned, out: Piece[] = [];
     let lit = '';
     for (let i = 0; i < head.length;) {
+      // (text in a pair of quotes the language reads as a parameter written as it is, holding no capture: that text)
+      if (this.quotes.has(head[i]) && this.captured_by) {
+        const j = head.indexOf(head[i], i + 1), inner = j < 0 ? '' : head.slice(i, j + 1);
+        if (j > i + 1 && !inner.includes(open) && !inner.includes(space)) { const said = this.parameter_of(inner, ctx); if (said && 'lit' in said) { lit += this.literally(new Code(this.text_of('', said.lit), 0, said.lit.length, ctx)); i = j + 1; continue; } }
+      }
       if (head[i] === open) {
         // (to its own close: what reads a capture may hold brackets)
         let j = -1; for (let k = i + 1, depth = 1; k < head.length; k++) { if (head[k] === open) depth++; else if (head[k] === close && --depth === 0) { j = k; break; } }

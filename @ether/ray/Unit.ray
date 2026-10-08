@@ -57,6 +57,8 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
 
   @field static "#" ((@owns static "#") ? (@member static "#") : [])
   (@member static "#").push(this)
+  (@field static name this) if name
+  (@field static symbol this) if symbol
 
   &caller[name] = this if name
 
@@ -69,8 +71,8 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
   dynamically assert this as String? != None
   as (=== String?) => name
 
-  static spelled (written: String) => Unit#{written is (this as String?)#}.first
-  static Spelling := String{Unit.spelled(.)}
+  static spelled (written: String) => (@owns Unit written) ? (@member Unit written) : None
+  static Spelling := String{Unit.spelled(this)}
 
   compounds / (other: Unit) => Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static

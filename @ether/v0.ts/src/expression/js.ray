@@ -14,6 +14,8 @@ this => @js $.self(F)
 @assign {value} => @js $.declare(F, value, true)
 @inside {x} {type} => @js $.name(F, (() => { for (let n = x; n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
+@block {made} {code} => @js $.blocks.set($.get(F, "made"), $.written(F.m.get("code")))
+@run {program} => @js $.ran($.get(F, "program"))
 @kind {name} {class} => @js $.kinds.set(F.m.get("name").s.trim(), $.written(F.m.get("class")))
 // Numbers: the host's own (a JS number), read where digits are written; a Number whose operations are the host's (loosest first).
 Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefined)

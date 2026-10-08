@@ -22,6 +22,7 @@
 ({inside}) => inside
 {{inside}} =>
   made := @made None
+  @block made inside
   made &+= { inside }
 
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
@@ -203,6 +204,14 @@ Ray &+= {
   first => this.head ? this.head.value : None
   last => this.tail ? this.tail.value : None
   empty => this.head === None
+  without (x) =>
+    made := []
+    at_link := this.head
+    while at_link {
+      unless at_link.value === x { made.append(at_link.value) }
+      at_link = at_link.next
+    }
+    made
   rest =>
     made := []
     at_link := this.head ? this.head.next : None
@@ -245,10 +254,13 @@ Node &+= {
 Class := @made Node
 Class &+= {
   // an instance: given its arguments (by name, then in order), the blocks of what it is made of read into it
+  // (its arguments read into it while it names: `name: value` gives it that field, answering it; what it is given in order, the
+  // rest)
   instance_of (made, arguments) =>
     instance := @made made
     instance &+= { naming := true }
-    instance &+= { given := [arguments] }
+    in_order := [instance with { arguments }].without(instance)
+    instance &+= { given := in_order }
     instance &+= { naming := None }
     made.read_into(instance)
     instance
@@ -361,6 +373,15 @@ Program := class {
   code: Node?
   parameters: Node?
   context: Node?
+  O: Node?
+  // `p{O: level}`: the program, given what the block names
+  {{given}} =>
+    this &+= { naming := true }
+    this &+= { given }
+    this &+= { naming := None }
+    this
+  // run: its code read again, with the rules of its level in scope (a block's code: what the block was made of)
+  () => @run this
 }
 // a diagnostic (R5.1)
 Diagnostic := class {

@@ -336,7 +336,11 @@ export class Host {
     // (what it says read into the node, as written where it was: what does not read, not a parameter)
     const T = new Ray(target.ctx); T.scope = true; T.into = node; T.sees = node;
     if (t === name) return node;
-    const said = this.diagnostics.length; this.walk(stated(new Code(target.text, target.b, target.e, T)));
+    // (its name is the parameter's while it is read: not what that name reads as where the head is written, `head: String` in a class
+    // that has `head`)
+    const had = node.has(name); if (!had) node.m.set(name, undefined);
+    const said = this.diagnostics.length;
+    try { this.walk(stated(new Code(target.text, target.b, target.e, T))); } finally { if (!had) node.m.delete(name); }
     return this.diagnostics.length > said ? undefined : node;
   }
   // a member's type (what `:` said of it, as written), kept with what it is declared in

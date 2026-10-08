@@ -445,7 +445,7 @@ export class Host {
       let n = e + end.length; while (n < limit && s.startsWith(end, n + this.depth(s, n))) n += this.depth(s, n) + end.length;
       if (n >= limit) return e;
       const d = this.depth(s, n);
-      if (d > base || (d === base && (this.closes(s, n + d) || this.leads(s, n + d) || this.trails(s, e)))) { i = n; continue; }
+      if (d > base || (d === base && (this.closes(s, n + d) || (this.leads(s, n + d) && !this.named_by(s, n + d, s.slice(n + d, this.name_end({ name: '', s }, n + d, s.length)))) || this.trails(s, e)))) { i = n; continue; }
       return e;
     }
   }
@@ -470,8 +470,13 @@ export class Host {
     const { end, definer, space } = this.learned, line = s.slice(at, s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at));
     if (line.includes(space + definer)) return false;
     const j = s.indexOf(space, at);
-    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0] && !this.shorter(l, { name: '', s }, at)) return true; }
+    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0] && !this.shorter(l, { name: '', s }, at) ) return true; }
     return false;
+  }
+  // (an operator written first, a space, then an operator written apart, `* := Node`: the operator is a name, not what reads on)
+  named_by(s: string, at: number, l: string): boolean {
+    let k = at + l.trimEnd().length; if (!this.blank(s[k])) return false; while (k < s.length && s[k] === this.learned.space) k++;
+    return this.spaced_operator(s, k);
   }
   *statements(code: Code): Generator<[number, number]> {
     const s = code.text.s, { end } = this.learned;
@@ -595,7 +600,7 @@ export class Host {
     }
     // a name: up to where something reads on
     // (not where an operator is written: `!=` is no name)
-    const w = this.name_end(text, b, e); if (w > b && !this.operator_at(text, b)) { const o = this.on({ name: true, caps: [], b, e: w }, text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
+    const w = this.name_end(text, b, e); if (w > b && (!this.operator_at(text, b) || this.named_by(s, b, s.slice(b, w)))) { const o = this.on({ name: true, caps: [], b, e: w }, text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
     // (what begins with what reads on from a value, read whole by nothing else, reads on from what it is read in: `!= " "` in
     // `Char{!= " "}`, `.is_digit`)
     if ((!best || best.e < e) && this.leads(s, b)) { const o = this.on({ eq: this.implicit, caps: [], b, e: b }, text, e, ctx, floor, not); if (o.e > b && this.better(o, best)) best = o; }

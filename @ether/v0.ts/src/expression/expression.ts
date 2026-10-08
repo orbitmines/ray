@@ -175,10 +175,16 @@ export class Host {
     const caps = this.captures(at), held = (w: string) => { const c = caps.get(w); return c ? this.written(c) : undefined; };
     // (a functionality naming a value: that value; one written by the rule, its words naming what it captured standing for it)
     // (a rule that writes definitions writes its own: its words naming what it captured stand for that)
-    const w = f.s.trim(), body = this.unblocked(held(w) ?? (at.has(w) ? new Value(at.m.get(w), f) : this.writer(at, f)?.pairs === 0 ? this.substituted(f, caps) : f));
+    const w = f.s.trim(), valued = this.valued_capture(at, w);
+    const body = this.unblocked(held(w) ?? (valued ? new Value(valued.n.m.get(w), f) : this.writer(at, f)?.pairs === 0 ? this.substituted(f, caps) : f));
     // (a pattern handed on, written elsewhere, stands for itself)
     let head = p.s.trim(), stood = p.ctx !== at && p.ctx !== at.into;
-    if (held(head)) { head = held(head)!.s.trim(); stood = true; }
+    if (held(head)) {
+      // (a word naming what holds a word, as written (`name` given `red`): that word)
+      let c = held(head)!;
+      for (let k = 0; k < 8; k++) { const w = c.s.trim(); let next: Code | undefined; for (const n of this.reach(c.ctx)) if (n.has(w)) { const x = n.m.get(w); if (x instanceof Code && x.word && x !== c) next = x; break; } if (!next) break; c = next; }
+      head = c.s.trim(); stood = true;
+    }
     else {
       let out = '', from = 0;
       // (a capture's name also ends where, in the head of the rule that captured it, a capture is followed by a literal)
@@ -205,10 +211,19 @@ export class Host {
     const T = new Ray(where); T.scope = true; T.into = where; T.sees = this.global; T.m.set(this.functionality, body instanceof Value ? body.value : body);
     const said = head + space + definer + space + this.functionality;
     let text = this.rewritten.get(said); if (!text) this.rewritten.set(said, text = { name: p.text.name, s: said });
+    // (a head that is one name reads as itself: defined as the first statement says, without reading it again)
+    const one = { name: '', s: head };
+    if (head.length > 0 && this.name_end(one, 0, head.length) === head.length && !this.operator_at(one, 0) && !this.pairs.has(head[0])) return this.defined(new Code(text, 0, head.length, T), new Code(text, said.length - this.functionality.length, said.length, T), T, statement);
     // (what a rule led by a literal wrote starts as it does: not read by it again)
     const by = this.writer(at, p), r = this.parse(text, 0, text.s.length, T, 0, by && 'lit' in by.pieces[0] ? new Set([by]) : undefined);
     if (r === undefined || r.e < text.s.length) { this.say(`Unread \`${said.slice(0, 60)}\`.`, p.text, p.b, p.e); return undefined; }
     return this.run(r, statement ? stated(new Code(text, 0, text.s.length, T)) : new Code(text, 0, text.s.length, T));
+  }
+  // (the frame of a rule applied, from where a definition is written, that holds a word as a value read, not as code)
+  valued_capture(at: Ray, w: string): { n: Ray } | undefined {
+    if (at.has(w)) return at.m.get(w) instanceof Code ? undefined : { n: at };
+    for (const n of this.reach(at)) if (n.rule && n.has(w)) return n.m.get(w) instanceof Code ? undefined : { n };
+    return undefined;
   }
   // (a functionality written as one block: what is in it)
   unblocked<T>(f: T): T {
@@ -254,7 +269,9 @@ export class Host {
   // the captures a frame reaches: those of the frames of rules applied, nearest first
   captures(at: Ray): Map<string, Code> {
     const out = new Map<string, Code>();
-    for (const n of this.reach(at)) { if (!n.rule && n !== at) continue; if (n.size) for (const [k, c] of n.m) if (!out.has(k) && c instanceof Code) out.set(k, c); }
+    // (a name the nearest holds as a value read hides one further out held as code)
+    const valued = new Set<string>();
+    for (const n of this.reach(at)) { if (!n.rule && n !== at) continue; if (n.size) for (const [k, c] of n.m) { if (out.has(k) || valued.has(k)) continue; if (c instanceof Code) out.set(k, c); else valued.add(k); } }
     return out;
   }
   // whether a pattern names a capture held in a frame (a word of it, between edges)
@@ -476,7 +493,8 @@ export class Host {
   // (an operator written first, a space, then an operator written apart, `* := Node`: the operator is a name, not what reads on)
   named_by(s: string, at: number, l: string): boolean {
     let k = at + l.trimEnd().length; if (!this.blank(s[k])) return false; while (k < s.length && s[k] === this.learned.space) k++;
-    return this.spaced_operator(s, k);
+    let j = k; while (j < s.length && !this.blank(s[j])) j++;
+    return j > k && j < s.length && (this.operators.get(s[k])?.has(s.slice(k, j)) ?? false);
   }
   *statements(code: Code): Generator<[number, number]> {
     const s = code.text.s, { end } = this.learned;
@@ -1446,7 +1464,7 @@ export class Host {
     const kind = self !== undefined && !(self instanceof Ray) ? this.kind_of(self) : undefined;
     const F = new Ray(self instanceof Ray && !self.scope ? self : kind ?? eq.body.ctx); F.place = place;
     // (what a rule enclosed in literals reads is a value)
-    const ps = eq.pieces, enclosed = 'lit' in ps[0] && 'lit' in ps[ps.length - 1] && ps.length > 1;
+    const ps = eq.pieces, enclosed = ps.length > 1 && 'lit' in ps[0] && 'lit' in ps[ps.length - 1];
     F.scope = true; F.caller = code.ctx; F.self = self; F.rule = eq; F.statement = code.statement && !enclosed;
     if (F.outer !== eq.body.ctx) F.sees = eq.body.ctx;
     const at = code.ctx.written ?? code.ctx;
@@ -1626,6 +1644,7 @@ export class Host {
           if (left_unresolved.length > 0) { this.unsay(d); again.push(c); }
         }
         if (process.env.EXPR_ROUNDS) console.log(this.settling + ' ' + this.applying + ' round', round, 'left', again.length, again[0] ? again[0].text.name + ':' + again[0].text.s.slice(0, again[0].b).split('\n').length : '', Math.round(performance.now()));
+        if (process.env.EXPR_ROUNDS === '2' && this.settling === 1) for (const c of again) console.log('   left', c.text.name.split('/').pop() + ':' + c.text.s.slice(0, c.b).split('\n').length, JSON.stringify(c.s.slice(0, 50)));
         if (final || again.length === 0) break;
         // (nothing more was read: the last time)
         if (again.length >= before) round = 7;

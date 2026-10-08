@@ -13,6 +13,20 @@
   @block made inside
   made &+= { inside }
 
+// What reads a word, a span without spaces, one capture (the host's readers, `js.ray`'s kind of reader)
+Unled => @js $.reader(s => s.startsWith($.learned.open) ? undefined : s)
+Unspaced => @js $.reader(s => s.includes($.learned.space) ? undefined : s)
+// one capture, `{align: start | center}`
+Captured => @js $.reader(s => { const { open, close } = $.learned; if (!s.startsWith(open) || !s.endsWith(close)) return undefined; let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === open) d++; else if (s[i] === close && --d === 0 && i < s.length - 1) return undefined; } return s; })
+// a word: letters, digits, `_`
+Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
+
+// `x := v`: `x` is `v` where the statement is read, from here on (defined through the definer, as a value); `x = v`: where `x` is
+// declared; `x &= v`: `v` at the end of the Ray `x` holds (a Ray of it, when it holds nothing).
+{declared_name Unspaced} := {declared_value Expression} =>
+  declared_name => declared_value
+{declared_on Expression}.{declared_name Word} := {declared_value Expression} =>
+  declared_on &+= { declared_name => declared_value }
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
 static {statement} => (@has & given) ? None : (@statically statement)
 // `static name = value`, `static name := value`: the class's own member (not written where `name` is declared further out), read
@@ -84,9 +98,6 @@ Node &+= {
     answer := this with { call }
     (@applies answer) ? answer(this) : answer
     this
-  // `x := v`: `v` at the place `x` was read at, from here on; `x = v`: where `x` is declared; `x &= v`: `v` at the end of the Ray `x`
-  // holds (a Ray of it, when it holds nothing).
-  := {value Expression} => @declare value
   // `a, b`: declared after `:=` (`x := 1, 2` holds both), before `=`, `&=`, `:` (they bind tighter: `f(x = g(), y)`, `f(a: 1, b: 2)`
   // give two); what it does, below
   , {other Expression} => ((@owns this "commas") ? this : (@made Ray).append(this)).joined(other)
@@ -187,12 +198,6 @@ false &+= {
 // into it: `x: T` the `:` of Node, `= d` its `=`), the names it is also (`a | b`, a Superposition), how it is applied (`static p`,
 // `right-to-left p`). Defining it makes its name, and what is given to it, read as it says (R2.1: a method is a rule).
 // What is inside a capture is read the same way: a capture is a parameter.
-Unled => @js $.reader(s => s.startsWith($.learned.open) ? undefined : s)
-Unspaced => @js $.reader(s => s.includes($.learned.space) ? undefined : s)
-// one capture, `{align: start | center}`
-Captured => @js $.reader(s => { const { open, close } = $.learned; if (!s.startsWith(open) || !s.endsWith(close)) return undefined; let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === open) d++; else if (s[i] === close && --d === 0 && i < s.length - 1) return undefined; } return s; })
-// a word: letters, digits, `_`
-Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
 Parameters := @context None
 Parameters &+= {
   {first Parameters}, {rest Parameters} => first

@@ -15,7 +15,6 @@ global => @js $.global
 @has {x} {name} => @js $.name(F, $.has(x, F.m.get("name").s.trim()) ? "true" : "false")
 @of {x} => @js x instanceof Ray ? x.outer : undefined
 @applies {x} => @js $.name(F, x instanceof Ray && x.eqs.some(eq => !("lit" in eq.pieces[0]) || eq.pieces[0].lit === "()") ? "true" : "false")
-@declare {value} => @js $.declare(F, value, false)
 // (what it holds: a type, as written: read when it is read)
 // (what is read when it is first read: a value, then kept)
 @later {code} => @js $.later($.written(F.m.get("code")))

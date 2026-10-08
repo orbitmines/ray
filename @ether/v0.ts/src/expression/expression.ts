@@ -1085,7 +1085,13 @@ export class Host {
 
   // ---------------------------------------------------------------- what a reading means: its functionality applied
   // A span walked as Expression: read, then applied. What no equivalence reads is said, and stays its text (G1.8).
+  // (how many walks are open: a statement under one is not the outermost)
+  open = 0;
   walk(code: Code): unknown {
+    this.open++;
+    try { return this.walk1(code); } finally { this.open--; }
+  }
+  walk1(code: Code): unknown {
     if (TRACE && code.statement) { this.depth_++; if (this.depth_ < Number(TRACE)) writeSync(2, `${' '.repeat(this.depth_)}${code.text.name}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 60))}\n`); try { return this.walk2(code); } finally { this.depth_--; } }
     return this.walk2(code);
   }
@@ -1747,7 +1753,7 @@ export class Host {
     if (TRACE) writeSync(2, `${c.text.name}:${c.text.s.slice(0, c.b).split(this.learned.end).length} ${JSON.stringify(c.s.slice(0, 70))}\n`);
     try { return speak ? this.walk(c) : this.walk_(c); }
     // (one that does not end ends the outermost statement it is in)
-    catch (x) { if (x instanceof Jump && (x.kind === 'return' || x.kind === 'recur' ? this.methods : this.ordered) > 0) throw x; if (x instanceof Jump) { this.say(`Nothing to ${x.kind} from here.`, c.text, c.b, c.e); return undefined; } if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
+    catch (x) { if (x instanceof Jump && (x.kind === 'return' || x.kind === 'recur' ? this.methods : this.ordered) > 0) throw x; if (x instanceof Jump) { this.say(`Nothing to ${x.kind} from here.`, c.text, c.b, c.e); return undefined; } if (x instanceof Runaway && (this.settling > 1 || this.open > 0)) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
   }
   // A block read into a value: its names where it was written, what it declares the value's.
   into(code: Code, r: Ray, self?: unknown): unknown {

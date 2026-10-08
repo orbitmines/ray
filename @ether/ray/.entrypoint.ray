@@ -15,9 +15,10 @@
 
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
 static {statement} => (@has & given) ? None : statement
-// `static name = value`, `static name := value`: the class's own member (not written where `name` is declared further out)
-static {name Unspaced} = {value} => (@has & given) ? None : (& &+= { name := value })
-static {name Unspaced} := {value} => (@has & given) ? None : (& &+= { name := value })
+// `static name = value`, `static name := value`: the class's own member (not written where `name` is declared further out), read
+// when it is first read (`static default = Store()` in `Store`'s own block)
+static {name Unspaced} = {value} => (@has & given) ? None : (& &+= { name := @later value })
+static {name Unspaced} := {value} => (@has & given) ? None : (& &+= { name := @later value })
 
 // `dynamically …`: a statement read again each time (P5.1, Control.ray's `Dynamic`); declared before the operations it is
 // written with (`dynamically assert x != None`)

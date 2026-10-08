@@ -1023,7 +1023,8 @@ export class Host {
         // (a capture: where what it holds was read)
         const held = n.places?.get(word), placed = held ?? { at: n.into ?? n, here: code.ctx.into ?? code.ctx, word };
         // (the name's place, once what it holds was read)
-        const read = this.force(v); this.place = placed; return read;
+        // (a capture a rule was handed is passed on as it is: what a field holds is read when the field is read)
+        const read = n.rule ? this.force(v) : this.held_value(v); this.place = placed; return read;
       }
       const at = code.ctx.into ?? code.ctx;
       this.place = { at, here: at, word, text: code.text, b: r.b, e: r.e, on: at === this.none ? this.receiving : undefined };
@@ -1389,9 +1390,11 @@ export class Host {
     const h = this;
     return this.in_order(function* () { for (const [b, e] of h.statements(eq.body)) yield stated(new Code(eq.body.text, b, e, F)); }());
   }
-  force(v: unknown): unknown {
+  force(v: unknown): unknown { return v instanceof Code ? this.walk(v) : v; }
+  // what a name holds, as it is read: one read when it is first read, read now
+  held_value(v: unknown): unknown {
     if (v instanceof Later) { if (!v.read) { v.read = true; v.value = this.walk(v.code); } return v.value; }
-    return v instanceof Code ? this.walk(v) : v;
+    return this.force(v);
   }
   // the value a frame was applied on: the nearest that has one
   name(F: Ray, word: string): unknown { let t = this.named_texts.get(word); if (!t) this.named_texts.set(word, t = { name: word, s: word }); return this.walk(new Code(t, 0, word.length, F)); }
@@ -1437,8 +1440,8 @@ export class Host {
   // what a value holds under a name (its own, or its class's)
   field(v: unknown, word: string): unknown {
     for (let n = v instanceof Ray ? v : undefined; n && !n.scope; n = n.outer) {
-      if (n.has(word)) return this.force(n.m.get(word));
-      for (let i = n.eqs.length - 1; i >= 0; i--) { const x = n.eqs[i]; if (x.key === word && x.native) return x.native(n); }
+      if (n.has(word)) return this.held_value(n.m.get(word));
+      for (let i = n.eqs.length - 1; i >= 0; i--) { const x = n.eqs[i]; if (x.key === word && x.native) return this.held_value(x.native(n)); }
     }
     return undefined;
   }

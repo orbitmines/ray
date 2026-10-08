@@ -957,9 +957,15 @@ export class Host {
   memo = new WeakMap<Ray, Map<Text, Map<number, { floor: number; e: number; version: number; r: Read | undefined }[]>>>();
   reading(code: Code): Read | undefined {
     // (a frame that also reaches another context, a value's or where its code was written, reads as itself)
-    let key: Ray = code.ctx; while (key.eqs === NONE && key.scope && key.outer && !key.sees && !key.into) key = key.outer;
+    let key: Ray = code.ctx;
     // (a rule's frame reads as every frame of that rule on what is made of the same class: its names are read when it runs)
-    if (SHAPED && key.rule && key.scope && !key.into) key = this.shape(key);
+    if (SHAPED && key.rule && key.scope && !key.into && key.eqs === NONE) key = this.shape(key);
+    else {
+      while (key.eqs === NONE && key.scope && key.outer && !key.sees && !key.into) key = key.outer;
+      if (SHAPED && key.rule && key.scope && !key.into) key = this.shape(key);
+      // (a block read into a value reads as it does into every value of that class, from where it was written)
+      else if (SHAPED && key.into && key.scope && !key.rule && !key.into.scope && key.into !== this.global) key = this.shape_into(key);
+    }
     return this.parsed(key, code.text, code.b, code.e, code.ctx, code.floor);
   }
   // a span read in a context, as it was read before there (`key`: what reads as that context), until something declared since
@@ -985,6 +991,10 @@ export class Host {
     // (a method's frame continues into its node, then into what it was applied on: shaped as that)
     const W = F.outer?.method ? F.outer.sees! : F, o = W.outer, sees = W === F ? F.sees : W.sees;
     const on = o && !o.scope ? o.outer : o, k = `${this.id(F.rule)}|${this.id(on)}|${this.id(sees)}`;
+    let s = this.shapes.get(k); if (!s) this.shapes.set(k, s = new Ray()); return s;
+  }
+  shape_into(T: Ray): Ray {
+    const k = `into|${this.id(T.outer)}|${this.id(T.into!.outer)}|${T.sees === T.into ? '' : this.id(T.sees)}|${this.id(T.written)}`;
     let s = this.shapes.get(k); if (!s) this.shapes.set(k, s = new Ray()); return s;
   }
   // the value a reading found its equivalence on, from a frame: as the reading found it (`near` contexts out)
@@ -1255,7 +1265,10 @@ export class Host {
       // (while what reads its captures is read, the rule reads nothing itself)
       const k = new Code(text, c.b, c.e, at, c.floor);
       let r: unknown = c.type;
-      if (c.reader) { eq.busy = (eq.busy ?? 0) + 1; try { r = this.walk(new Code(c.reader.text, c.reader.b, c.reader.e, F)); } finally { eq.busy--; } }
+      // (a reader decided where it was written: what it was decided to be; else read here)
+      const decided = c.reader ? this.fixed(c.reader, eq) : undefined;
+      if (decided instanceof Ray) r = decided;
+      else if (c.reader) { eq.busy = (eq.busy ?? 0) + 1; try { r = this.walk(new Code(c.reader.text, c.reader.b, c.reader.e, F)); } finally { eq.busy--; } }
       // (a value of the host's own kind, as what is read in: read in the class the interpreter maps that kind to, being that value)
       const dependent = !!c.reader && this.dependent(c.reader, eq);
       const kind = !(r instanceof Ray) && r !== undefined && dependent ? this.kind(typeof r) : undefined;
@@ -1366,7 +1379,8 @@ export class Host {
   }
   force(v: unknown): unknown { return v instanceof Code ? this.walk(v) : v; }
   // the value a frame was applied on: the nearest that has one
-  name(F: Ray, word: string): unknown { const t = { name: word, s: word }; return this.walk(new Code(t, 0, word.length, F)); }
+  name(F: Ray, word: string): unknown { let t = this.named_texts.get(word); if (!t) this.named_texts.set(word, t = { name: word, s: word }); return this.walk(new Code(t, 0, word.length, F)); }
+  named_texts = new Map<string, Text>();
   // the context a name is declared in: the nearest from where it is read that has it (else there)
   declaring(name: Code, F?: Ray): Ray {
     const word = name.s.trim(), has = (n: Ray) => n.has(word) || n.eqs.some(eq => eq.key === word);

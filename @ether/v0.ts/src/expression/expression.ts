@@ -1259,9 +1259,19 @@ export class Host {
     if (value === undefined && this.none) value = this.none;
     // (a value of the host's own kind: the class the interpreter maps that kind to)
     if (!(value instanceof Ray) && value !== undefined) { const k = this.kind_of(value); if (k) value = k; }
-    for (let n: Ray | undefined = value instanceof Ray ? value : (based = true, this.base); n; n = n.outer && !n.outer.scope ? n.outer : based ? undefined : (based = true, this.base)) {
-      for (let i = n.eqs.length - 1; i >= 0; i--) if (n.eqs[i].key === key) { out.push(n.eqs[i]); if (one) return out; }
-    }
+    // (its own, its class's, …: what each is also made of next to it (`A + B`, a component); the base last)
+    const seen = new Set<Ray>();
+    const visit = (start: Ray | undefined): boolean => {
+      for (let n = start; n && (n === start || !n.scope) && !seen.has(n) && n !== this.base; n = n.outer) {
+        seen.add(n);
+        for (let i = n.eqs.length - 1; i >= 0; i--) if (n.eqs[i].key === key) { out.push(n.eqs[i]); if (one) return true; }
+        for (const a of n.also ?? []) if (visit(a)) return true;
+      }
+      return false;
+    };
+    if (value instanceof Ray && visit(value)) return out;
+    void based;
+    if (this.base) for (let i = this.base.eqs.length - 1; i >= 0; i--) if (this.base.eqs[i].key === key) { out.push(this.base.eqs[i]); if (one) return out; }
     return out;
   }
   // An equivalence applied: a frame inside the value it is applied on (or where its functionality was written), its captures bound

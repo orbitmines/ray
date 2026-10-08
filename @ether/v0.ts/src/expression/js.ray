@@ -20,6 +20,8 @@ global => @js $.global
 @run {program} => @js $.ran($.get(F, "program"))
 @kind {name} {class} => @js $.kinds.set(F.m.get("name").s.trim(), $.written(F.m.get("class")))
 // Numbers: the host's own (a JS number), read where digits are written; a Number whose operations are the host's (loosest first).
+// one character (`right-to-left √`: what is one character hugs what it is applied to)
+Single => @js $.reader(s => [...s].length === 1 ? s : undefined)
 Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefined)
 {number Numeral} => number
 @kind number HostNumber

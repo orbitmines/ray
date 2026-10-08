@@ -40,8 +40,17 @@ chainable {pattern} => {functionality} =>
   pattern => functionality
 // `right-to-left p => body` in a class: applied with what is on its right (`√x`, `center x`): the language's own rule, `this` being
 // what it reads after it.
+// `right-to-left p => body` in a class: a name is applied with what is on its right (`√x`, `sleep 5`): the language's own rule,
+// `this` being what it reads after it; with what it takes (`^ (exponent)`), it groups from the right.
+right-to-left {name Single} => {functionality} =>
+  global &+= { name{receiver} => receiver -- (functionality) }
+right-to-left {name Word} => {functionality} =>
+  global &+= { name {receiver} => receiver -- (functionality) }
+right-to-left {name Word} | {alias} => {functionality} =>
+  right-to-left name => functionality
+  right-to-left alias => functionality
 right-to-left {pattern} => {functionality} =>
-  global &+= { pattern{receiver} => receiver -- (functionality) }
+  pattern => functionality
 // `a | b => body`: both names.
 {name Word} | {alias Word} => {functionality} =>
   name => functionality

@@ -458,7 +458,7 @@ export class Host {
     const { end, definer, space } = this.learned, line = s.slice(at, s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at));
     if (line.includes(space + definer)) return false;
     const j = s.indexOf(space, at);
-    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0]) return true; }
+    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0] && !this.shorter(l, { name: '', s }, at)) return true; }
     return false;
   }
   *statements(code: Code): Generator<[number, number]> {

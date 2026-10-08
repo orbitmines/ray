@@ -537,10 +537,10 @@ Program := class {
   parameters: Node?
   context: Node?
   O: Node?
-  // `p{O: level}`: the program, given what the block names
-  {{given}} =>
+  // `p{O: level}`: the program, given what the block names (`settled`: not a name a program holds, which would be read in its place)
+  {{settled}} =>
     this &+= { naming := true }
-    this &+= { given }
+    this &+= { settled }
     this &+= { naming := None }
     this
   // run: its code read again, with the rules of its level in scope (a block's code: what the block was made of)

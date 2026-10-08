@@ -95,11 +95,14 @@ while {condition} {{body}} => @js $.looped(F)
 do {{body}} while {condition} => @js $.looped(F, true)
 // `loop { … }`: the block again, until a `break`
 loop {{body}} => @js (F.m.set("condition", true), $.looped(F))
-// `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in
-break => @js $.jump("break")
-continue => @js $.jump("continue")
-return {value} => @js $.jump("return", $.get(F, "value"), F)
-return => @js $.jump("return", undefined, F)
+// jumps (the language's `break`, `continue`, `return`, `recur`, `goto`, labels): out of the loop, or method, they are written in
+@break => @js $.jump("break")
+@continue => @js $.jump("continue")
+@return {value} => @js $.jump("return", $.get(F, "value"), F)
+@recur {given} => @js $.jump("recur", $.written(F.m.get("given")), F)
+@recur => @js $.jump("recur", undefined, F)
+@goto {target} => @js $.jump("goto", $.written(F.m.get("target")).s.trim())
+@label {name} => @js $.label(F)
 // Text: the host's own (a JS string), a String whose operations are the host's.
 @kind string HostString
 @character {x} => @js String.fromCodePoint($.get(F, "x"))

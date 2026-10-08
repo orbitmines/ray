@@ -30,6 +30,16 @@ static {name Unspaced} := {value} => (@has & given) ? None : (& &+= { name := va
 {name} := ({parameters}) => {functionality} =>
   name => ((parameters) => functionality)
 
+// `class header { block }`, `class: parent …`: a class made of what is written (declared before the operations on values, which
+// the header is written with: `class value: Node`)
+class {{block}} => Class.made_of(None, None, block)
+class: {parent} {{block}} => Class.made_of(parent, None, block)
+class {header} {{block}} => Class.made_of(None, header, block)
+class: {parent} {header} {{block}} => Class.made_of(parent, header, block)
+class: {parent} {header} => Class.made_of(parent, header, None)
+class {header} => Class.made_of(None, header, None)
+class: {parent} => Class.made_of(parent, None, None)
+
 // ---------------------------------------------------------------- names, brackets, blocks, members
 // `x -- call`: `call` read with `this` being `x` (a closure it answers, applied to `x`); `x ~~ call`: the same, answering `x`. They
 // go on from everything before them (A-C5): declared first, they bind loosest.
@@ -353,34 +363,22 @@ Node &+= {
   name := Class.made_of(None, header, block)
 {name Unspaced} := class: {parent} {header} => {{block}} =>
   name := Class.made_of(parent, header, block)
-class {{block}} => Class.made_of(None, None, block)
-class: {parent} {{block}} => Class.made_of(parent, None, block)
-class {header} {{block}} => Class.made_of(None, header, block)
-class: {parent} {header} {{block}} => Class.made_of(parent, header, block)
-class: {parent} {header} => Class.made_of(parent, header, None)
-class {header} => Class.made_of(None, header, None)
-class: {parent} => Class.made_of(parent, None, None)
 // ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`)
 {guarded} if {condition} => condition ? guarded : None
 {guarded} unless {condition} => condition ? None : guarded
-
-// ---------------------------------------------------------------- superposition (U1): `a | b`, both; `T?`, `None | T`
-Superposition := @made Node
-Node &+= {
-  | {other: Expression} =>
-    made := @made Superposition
-    made.superposes := true
-    made.components := [this, other]
-    made
-}
-{value}? => None | value
-Superposition &+= {
-  | {other: Expression} =>
-    this.components.append(other)
-    this
-}
+// `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in;
+// `recur`, `recur(arguments)`: the method it is in, again (from its start); `goto name`: on from the statement `name\`
+break => @break
+continue => @continue
+return {value} => @return value
+return => @return None
+recur({given}) => @recur given
+recur => @recur
+goto {target Unspaced} => @goto target
+{name Unspaced}\ => @label name
 
 // ---------------------------------------------------------------- enums: `enum a | b (field: v) | c { block }`, a class of exactly these members
+// (declared before `|`: `enum a | b` reads `a | b`)
 // The members are read by rules of their own (R2.3: not the enum's members), each member, then the rest.
 Enum := @made Node
 Enum &+= {
@@ -405,6 +403,23 @@ enum {members} =>
   reading with { members }
   made
 enum {members} {{block}} => (enum members) &+= { block }
+
+// ---------------------------------------------------------------- superposition (U1): `a | b`, both; `T?`, `None | T`
+Superposition := @made Node
+Node &+= {
+  | {other: Expression} =>
+    made := @made Superposition
+    made.superposes := true
+    made.components := [this, other]
+    made
+}
+{value}? => None | value
+Superposition &+= {
+  | {other: Expression} =>
+    this.components.append(other)
+    this
+}
+
 boolean := enum false (holds: None) | true (holds: true) {
   not => this.holds ? false : true
   and (b) => this.holds ? b : this

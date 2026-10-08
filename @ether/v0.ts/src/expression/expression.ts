@@ -395,7 +395,7 @@ export class Host {
   depth(s: string, at: number): number { let i = at; while (s[i] === this.learned.space) i++; return i - at; }
   closes(s: string, at: number): boolean { return this.closers.has(s[at]); }
   // Where the statement starting at `p` (on a line indented by `base`) ends: at the line end before a line no deeper than it
-  // that does not close a pair (empty lines go on).
+  // that does not close a pair (empty lines go on). (Any deeper line goes on: a label is written a space less deep.)
   stop(text: Text, p: number, limit: number, base: number): number {
     const s = text.s, { end, indent } = this.learned;
     for (let i = p; ;) {
@@ -404,7 +404,7 @@ export class Host {
       let n = e + end.length; while (n < limit && s.startsWith(end, n + this.depth(s, n))) n += this.depth(s, n) + end.length;
       if (n >= limit) return e;
       const d = this.depth(s, n);
-      if (d >= base + indent.length || (d === base && (this.closes(s, n + d) || this.leads(s, n + d) || this.trails(s, e)))) { i = n; continue; }
+      if (d > base || (d === base && (this.closes(s, n + d) || this.leads(s, n + d) || this.trails(s, e)))) { i = n; continue; }
       return e;
     }
   }
@@ -434,10 +434,13 @@ export class Host {
   }
   *statements(code: Code): Generator<[number, number]> {
     const s = code.text.s, { end } = this.learned;
-    let p = code.b;
+    let p = code.b, block = -1;
     while (p < code.e) {
       if (this.blank(s[p])) { p++; continue; }
-      const line = s.lastIndexOf(end, p - 1) + end.length, base = this.depth(s, line) === p - line ? p - line : 0, e = this.stop(code.text, p, code.e, base);
+      // (a statement less deep than the block's first, a label, ends as the block's statements do)
+      const line = s.lastIndexOf(end, p - 1) + end.length, own = this.depth(s, line) === p - line ? p - line : 0;
+      if (block < 0) block = own;
+      const base = Math.max(own, block), e = this.stop(code.text, p, code.e, base);
       yield [p, e];
       p = e;
     }
@@ -639,7 +642,9 @@ export class Host {
       // (an operation hugging its value, written without a space: its operand ends at any operation written with one)
       const hugs = !eq.ctx.scope && 'lit' in eq.pieces[0] && !eq.pieces.some(x => 'lit' in x && x.lit.includes(this.learned.space));
       const atom = i === 0 && piece.reader !== undefined;
-      const r = (prev && 'lit' in prev && prev.lit.includes(this.learned.definer)) || (statement && 'lit' in eq.pieces[0]) ? e : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : [];
+      // (led by a literal: the rest, up to an operation declared before it, `return x if c`; a pair not opened in it, there, is text)
+      const rest = () => { const o = this.operand(text, at, e, eq.order, ctx, eq.pairs, true); return o < e && this.closes(text.s, o) ? e : o; };
+      const r = prev && 'lit' in prev && prev.lit.includes(this.learned.definer) ? e : statement && 'lit' in eq.pieces[0] ? rest() : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : [];
       // (an atom: as far as an operand goes, else just the name there, `0` in `0..<n`)
       if (atom) { const w = this.name_end(text, at, e); if (w > at && w < r) ends.push(w); }
       // (what hugs a literal, opening a pair: to where that pair closes, `f(a).b`)
@@ -780,9 +785,18 @@ export class Host {
   // The places from `at` (before `e`) where no pair is open and `lit` is written (or the end, for none), latest first.
   ends(text: Text, at: number, e: number, lit: string | undefined, pairs?: number): number[] {
     const out: number[] = [];
-    const stopped = this.scan(text, at, e, i => { if (i > at && (lit === undefined || this.literal(text, lit, i, e) >= 0)) out.push(i); }, pairs);
+    const stopped = this.scan(text, at, e, i => { if (i > at && (lit === undefined || (this.literal(text, lit, i, e) >= 0 && !this.amid(text, at, i)))) out.push(i); }, pairs);
     if (lit === undefined && stopped === e) out.push(e);
     return out.reverse();
+  }
+  // (whether `i` is inside an operator written from before it, after `at`: in `==`, a shorter one, `=`, is not read)
+  amid(text: Text, at: number, i: number): boolean {
+    const s = text.s, { space } = this.learned;
+    for (let k = i - 1; k > at && k >= i - 4 && !this.blank(s[k]); k--) {
+      for (const x of this.infix.get(s[k]) ?? []) { const l = x.lit.trimEnd(); if (l.length > i - k && !this.blank(l[0]) && s.startsWith(l, k)) return true; }
+      if (this.blank(s[k - 1])) { const j = s.indexOf(space, k); if (j > i && this.words.has(s.slice(k, j))) return true; }
+    }
+    return false;
   }
   // Where a name from `at` ends: at a space, a pair, or a literal read on from a value.
   name_end(text: Text, at: number, e: number): number {
@@ -802,7 +816,7 @@ export class Host {
   operand(text: Text, at: number, e: number, floor: number, ctx: Ray, pairs?: number, same = false): number {
     const s = text.s, { space } = this.learned, alone = ctx.alone ? ctx : ctx.written && ctx.into?.alone ? ctx.into : undefined, stops = (x: { lit: string; order: number; eq: Eq; from: number }, i: number) => (same ? x.order <= floor : x.order < floor) && (x.eq.ctx.alone || alone ? x.eq.ctx === alone : true) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e);
     return this.scan(text, at, e, i => {
-      if (i <= at) return;
+      if (i <= at || this.amid(text, at, i)) return;
       for (const x of this.infix.get(s[i]) ?? []) if (x.lit.includes(space) && stops(x, i)) return false;
       if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (stops(x, i)) return false; }
     }, pairs);
@@ -850,7 +864,7 @@ export class Host {
     if (!this.held(code.text, code.b, code.e)) return undefined;
     // (code of several statements: each, in order)
     const st = this.statements(code), first = st.next();
-    if (!first.done) { const second = st.next(); if (!second.done) { let v = this.walk(stated(new Code(code.text, first.value[0], first.value[1], code.ctx, code.floor))); for (let x: IteratorResult<[number, number]> = second; !x.done; x = st.next()) v = this.walk(stated(new Code(code.text, x.value[0], x.value[1], code.ctx, code.floor))); return v; } }
+    if (!first.done) { const second = st.next(); if (!second.done) return this.in_order(function* () { for (let x: IteratorResult<[number, number]> = first; !x.done; x = x === first ? second : st.next()) yield stated(new Code(code.text, x.value[0], x.value[1], code.ctx, code.floor)); }()); }
     // (a definition written in a functionality, its pattern naming what the rule captured: written again first, then read)
     if (this.definer) { const d = this.match(this.definer, code.text, code.b, code.e, code.ctx, 0, code.b, []); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.ctx.rule ? code.ctx.statement : code.statement); }
     let r = this.reading(code); const s = code.text.s;
@@ -1044,10 +1058,10 @@ export class Host {
     if (c) { const T = new Ray(c.ctx); T.scope = true; T.into = target; T.sees = target; return this.walk(new Code(c.text, c.b, c.e, T, c.floor)); }
     const x = this.valued(node, name); return x ? x.native!(node) : undefined;
   }
-  // (`return` leaves the method it is written in: the nearest method around where it is read)
+  // (`return` leaves, `recur` enters again, the method it is written in: the nearest method around where it is read)
   jump(kind: string, value?: unknown, F?: Ray): never {
     let to: Ray | undefined;
-    if (kind === 'return') for (let c: Ray | undefined = F?.caller, n = 0; c && n < 10000; c = c.outer ?? c.sees, n++) if (c.method) { to = c; break; }
+    if (kind === 'return' || kind === 'recur') for (let c: Ray | undefined = F?.caller, n = 0; c && n < 10000; c = c.rule && !c.rule.node ? c.caller : c.outer ?? c.sees, n++) if (c.method) { to = c; break; }
     throw new Jump(kind, value, to);
   }
   // a loop (the interpreter's): `body` while `condition` holds (`after`: checked after the body), until a `break`
@@ -1056,12 +1070,38 @@ export class Host {
     this.loops++;
     try { for (;;) {
       if (!after && !holds()) return undefined;
-      try { this.get(F, 'body'); } catch (x) { if (!(x instanceof Jump) || x.kind === 'return') throw x; if (x.kind === 'break') return undefined; }
+      try { this.get(F, 'body'); } catch (x) { if (!(x instanceof Jump) || (x.kind !== 'break' && x.kind !== 'continue')) throw x; if (x.kind === 'break') return undefined; }
       if (after && !holds()) return undefined;
     } } finally { this.loops--; }
   }
-  // (how many loops, and methods, are being run: what a `break`, or `return`, can leave)
-  loops = 0; methods = 0;
+  // (how many loops, methods, and statements in order are being run: what a `break`, `return`, or `goto`, can leave)
+  loops = 0; methods = 0; ordered = 0;
+  // Statements read in order; a `goto` to a label among them goes on from that label (one further on is split first).
+  in_order(st: Iterator<Code>): unknown {
+    const seen: Code[] = []; let v: unknown;
+    this.ordered++;
+    try {
+      for (let i = 0; ; i++) {
+        if (i === seen.length) { const x = st.next(); if (x.done) return v; seen.push(x.value); }
+        try { v = this.walk(seen[i]); }
+        catch (x) {
+          if (!(x instanceof Jump) || x.kind !== 'goto') throw x;
+          let j = seen.findIndex(c => this.labels(c, x.value as string));
+          while (j < 0) { const y = st.next(); if (y.done) throw x; seen.push(y.value); if (this.labels(y.value, x.value as string)) j = seen.length - 1; }
+          i = j - 1;
+        }
+      }
+    } finally { this.ordered--; }
+  }
+  // whether a statement is a label of that name (one read by the interpreter's `label`)
+  labels(c: Code, name: string): boolean {
+    const r = this.reading(c);
+    if (!r?.eq || r.caps.length === 0 || c.text.s.slice(r.caps[0].b, r.caps[0].e).trim() !== name) return false;
+    // (its functionality the interpreter's `label`, or read as what is)
+    for (let eq: Eq | undefined = r.eq, k = 0; eq && k < 4; eq = this.reading(eq.body)?.eq, k++) if (eq.body.s.includes('$.label(')) return true;
+    return false;
+  }
+  label(_F: Ray): unknown { return undefined; }
   // a message said where it is written (what it reads as, else as it is written)
   report(m: unknown): unknown {
     if (!(m instanceof Code)) return undefined;
@@ -1101,6 +1141,8 @@ export class Host {
   }
   applying = 0; steps = 0; chain: string[] = []; recent: string[] = [];
   apply_(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
+    // (`recur(…)`: the method again, given what it is given there)
+    for (let again: Code | undefined; ;) {
     // (a frame inside the value it is applied on: a value of the host's own kind, inside the class it is mapped to)
     const kind = self !== undefined && !(self instanceof Ray) ? this.kind(typeof self) : undefined;
     const F = new Ray(self instanceof Ray && !self.scope ? self : kind ?? eq.body.ctx); F.place = place;
@@ -1112,6 +1154,7 @@ export class Host {
     if (!this.captured(eq, F, caps, code.text, at)) return NOT;
     // (a method: what it was given matched against its parameters; the frame continues into it, what it was not given what it says)
     if (eq.node?.params) {
+      if (again) F.m.set(this.given_name, again);
       const given = F.m.get(this.given_name), sub = this.bound(eq, F, code);
       if (sub === NOT) return NOT;
       if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) return NOT;
@@ -1122,8 +1165,17 @@ export class Host {
     if (eq.receiver) F.self = this.get(F, eq.receiver);
     if (eq.native) return eq.native(F);
     // (a method: what `return` gives, from inside it)
-    if (eq.node) { const I = F.outer; this.methods++; try { return this.body(eq, F); } catch (x) { if (x instanceof Jump && x.kind === 'return' && (x.to === I || !x.to)) return x.value; throw x; } finally { this.methods--; } }
+    if (eq.node) {
+      const I = F.outer; this.methods++;
+      try { return this.body(eq, F); }
+      catch (x) {
+        if (!(x instanceof Jump) || (x.to !== I && x.to) || (x.kind !== 'return' && x.kind !== 'recur')) throw x;
+        if (x.kind === 'return') return x.value;
+        again = x.value as Code | undefined; continue;
+      } finally { this.methods--; }
+    }
     return this.body(eq, F);
+    }
   }
   // captures bound in a frame: code, read where written each time it is named; one with a reader (or a type) a value, what that
   // reads it as, read once, here; false when one is not read so
@@ -1227,7 +1279,7 @@ export class Host {
     if (TRACE) writeSync(2, `${c.text.name}:${c.text.s.slice(0, c.b).split(this.learned.end).length} ${JSON.stringify(c.s.slice(0, 70))}\n`);
     try { return speak ? this.walk(c) : this.walk_(c); }
     // (one that does not end ends the outermost statement it is in)
-    catch (x) { if (x instanceof Jump && (x.kind === 'return' ? this.methods : this.loops) > 0) throw x; if (x instanceof Jump) { this.say(`Nothing to ${x.kind} from here.`, c.text, c.b, c.e); return undefined; } if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
+    catch (x) { if (x instanceof Jump && (x.kind === 'return' || x.kind === 'recur' ? this.methods : x.kind === 'goto' ? this.ordered : this.loops) > 0) throw x; if (x instanceof Jump) { this.say(`Nothing to ${x.kind} from here.`, c.text, c.b, c.e); return undefined; } if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
   }
   // A block read into a value: its names where it was written, what it declares the value's.
   into(code: Code, r: Ray, self?: unknown): unknown {
@@ -1239,9 +1291,8 @@ export class Host {
     if (eq.js) return eq.js(F);
     // (a statement handed through, its functionality the capture it is: still a statement)
     if (F.statement) { const w = eq.body.s.trim(); const c = F.m.get(w); if (c instanceof Code) return this.walk(stated(new Code(c.text, c.b, c.e, c.ctx, c.floor))); }
-    let v: unknown;
-    for (const [b, e] of this.statements(eq.body)) v = this.walk(stated(new Code(eq.body.text, b, e, F)));
-    return v;
+    const h = this;
+    return this.in_order(function* () { for (const [b, e] of h.statements(eq.body)) yield stated(new Code(eq.body.text, b, e, F)); }());
   }
   force(v: unknown): unknown { return v instanceof Code ? this.walk(v) : v; }
   // the value a frame was applied on: the nearest that has one

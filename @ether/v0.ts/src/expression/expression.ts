@@ -1121,11 +1121,14 @@ export class Host {
   id(x: unknown): number { if (typeof x !== 'object' || x === null) return 0; let i = this.ids.get(x); if (i === undefined) this.ids.set(x, i = ++this.counted); return i; }
   // (kept by what they are shaped by, one after another: no key written out; what is shaped by a frame goes with it)
   shapes = new WeakMap<object, unknown>();
+  // (what is not an object, kept by one that stands for it)
+  keyed(x: unknown): object { if (typeof x === 'object' && x !== null) return x; let k = this.standing.get(x); if (!k) this.standing.set(x, k = {}); return k; }
+  standing = new Map<unknown, object>();
   shaped(a: object | undefined, b: object | undefined, c: object | undefined, d?: object, e?: object, n = 3): Ray {
     let m = this.shapes;
     const by = [a, b, c, d, e];
-    for (let i = 0; i < n - 1; i++) { const k = by[i] ?? NIL; let x = m.get(k) as WeakMap<object, unknown> | undefined; if (!x) m.set(k, x = new WeakMap()); m = x; }
-    const k = by[n - 1] ?? NIL; let r = m.get(k) as Ray | undefined; if (!r) m.set(k, r = new Ray()); return r;
+    for (let i = 0; i < n - 1; i++) { const k = this.keyed(by[i]); let x = m.get(k) as WeakMap<object, unknown> | undefined; if (!x) m.set(k, x = new WeakMap()); m = x; }
+    const k = this.keyed(by[n - 1]); let r = m.get(k) as Ray | undefined; if (!r) m.set(k, r = new Ray()); return r;
   }
   shape(F: Ray): Ray {
     // (a method's frame continues into its node, then into what it was applied on: shaped as that)
@@ -1778,7 +1781,7 @@ const NOMEMO = !!process.env.EXPR_NOMEMO, NOSHARE = !!process.env.EXPR_NOSHARE, 
 const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
 const REJECT = Symbol('reads nothing');
 // (what a shape is keyed by where nothing is, and a block read into a value)
-const NIL = {}, INTO = {};
+const INTO = {};
 // JS source with each capture named in it read from the frame (`F`).
 function rename(src: string, names: string[]): string {
   if (names.length === 0) return src;

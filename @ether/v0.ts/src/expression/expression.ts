@@ -362,7 +362,8 @@ export class Host {
     const node = eq.node!, params = node.params!, given = F.m.get(this.given_name);
     if (!(given instanceof Code) || !this.held(given.text, given.b, given.e)) { F.m.delete(this.given_name); return params.length === 0 || params.every(x => node.defaults?.has(x)) ? [] : NOT; }
     let b = given.b, e = given.e; const s = given.text.s; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
-    const close = this.pairs.get(s[b]); if (node.closing === undefined && close !== undefined && s[e - 1] === close && this.scan(given.text, b + 1, e - 1, () => {}) === e - 1) { b++; e--; }
+    // (a bracket around what is given, not quotes: `"x"` is a value)
+    const close = this.quotes.has(s[b]) ? undefined : this.pairs.get(s[b]); if (node.closing === undefined && close !== undefined && s[e - 1] === close && this.scan(given.text, b + 1, e - 1, () => {}) === e - 1) { b++; e--; }
     F.m.delete(this.given_name);
     if (!this.held(given.text, b, e)) return params.every(x => node.defaults?.has(x)) ? [] : NOT;
     const between = node.between ?? ', ';
@@ -699,6 +700,8 @@ export class Host {
       // (one leading the head, the longest; one between two literals, the shortest)
       // (a head, before the definer: to the definer, whatever it holds)
       if (i === 0 && !('lit' in next && next.lit.includes(this.learned.definer))) { const o = this.operand(text, at, e, floor, ctx, eq.pairs); ends = ends.filter(n => n <= o); } else if (i > 0) ends.reverse();
+      // (before a space: not where what follows reads on from it, nor after what reads on: `class: A + B { … }` has the parent `A + B`)
+      if (i > 0 && 'lit' in next && next.lit.trim() === '' && !after) ends = ends.filter(n => { let k = n; while (k < e && this.blank(text.s[k])) k++; return !this.leads(text.s, k) && !this.trails(text.s, n); });
       // (between two literals, outside a pair: up to an operation declared before it, as an operand, `{g}({b})` in `a | b : T = f(x)`)
       if (i > 0 && !after && !bracketed && !quoted && eq.order >= this.earliest && !('lit' in next && next.lit.includes(this.learned.definer))) { const o = this.operand(text, at, e, eq.order, ctx, eq.pairs); ends = ends.filter(n => n <= o); }
       // (a head ends at a definer that ends its line, the functionality below it, as the first statement's does; else at the first)

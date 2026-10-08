@@ -15,7 +15,7 @@ Location := class: Hierarchy (
   segments => path.split("/"){.nonempty}
   with (changes) => Location(scheme, host, port, path, query: query.merged(changes), fragment)
 
-  + (suffix) => ((location as String) + ((suffix is Location ? suffix.@ : suffix) as String)) as Location
+  + (suffix: String | Location) => ((location as String) + ((suffix is Location ? suffix.@ : suffix) as String)) as Location
   / (segment: String) => this + "/" + segment ~~ (WARN@Location `text joined into a path may leave it` if segment ~= (*, ".." | "/", *))
   /{segment: Written} ^string => this + "/" + segment
   { }/{segment: Written} ^string => this + "/" + segment

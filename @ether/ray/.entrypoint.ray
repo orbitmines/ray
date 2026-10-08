@@ -16,9 +16,10 @@
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
 static {statement} => (@has & given) ? None : statement
 // `static name = value`, `static name := value`: the class's own member (not written where `name` is declared further out), read
-// when it is first read (`static default = Store()` in `Store`'s own block)
-static {name Unspaced} = {value} => (@has & given) ? None : (& &+= { name := @later value })
-static {name Unspaced} := {value} => (@has & given) ? None : (& &+= { name := @later value })
+// when it is first read (`static default = Store()` in `Store`'s own block); written by its name, not read where the class's
+// own names are (`static name = …` beside a field `name`)
+static {name Unspaced} = {value} => (@has & given) ? None : (@field & (@text name) (@later value))
+static {name Unspaced} := {value} => (@has & given) ? None : (@field & (@text name) (@later value))
 
 // `dynamically …`: a statement read again each time (P5.1, Control.ray's `Dynamic`); declared before the operations it is
 // written with (`dynamically assert x != None`)
@@ -375,6 +376,14 @@ Node &+= {
     added := Class.made_of(None, None, block)
     made := Class.made_of(this, None, block)
     made.components.hierarchy := [this, added]
+    made
+  // `A + B`: a class made of both (both its components): an instance is what each makes of it
+  + {other} =>
+    made := Class.made_of(this, None, None)
+    made &+= {
+      read_into (instance) => other.read_into((@of made).read_into(instance))
+    }
+    made.components.hierarchy := [this, other]
     made
 }
 // `X := class (header) => { block }`: read as a definition is read (its `=>` is the class's)

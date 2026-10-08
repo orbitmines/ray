@@ -17,13 +17,21 @@ global => @js $.global
 // (what it holds: a type, as written: read when it is read)
 // (what is read when it is first read: a value, then kept)
 @later {code} => @js $.later($.written(F.m.get("code")))
-@holding {code} => @js $.declare(F, $.holding($.written(F.m.get("code"))), false)
+@holding {code} => @js ((p) => $.declare_at(p, $.holding(p, $.written(F.m.get("code"))), false))($.place_of(F))
+// (the same, at a place taken before: `:` takes what it is applied on first)
+@keep_place {name} => @js $.keep_place(F, F.m.get("name").s.trim())
+@declare_at {spot} {value} => @js $.declare_at($.get(F, "spot"), value, false)
+@holding_at {spot} {code} => @js ((p) => $.declare_at(p, $.holding(p, $.written(F.m.get("code"))), false))($.get(F, "spot"))
 @assign {value} => @js $.assigning(F) || !$.placed(F) ? undefined : $.declare(F, $.defaulted(F) ? $.later($.written(F.m.get("value"))) : $.get(F, "value"), true)
 // (one character of the host's text is a `Char` too)
 // how the language says a value is of a type (`(value, type) => value is type`): asked by what reads a capture of a type
 @admitting {f} => @js ($.admitting = $.get(F, "f"), undefined)
 // `x` also made of `y`: what `y` holds (and comes to hold) read in `x` after what `x` continues into (`A + B`)
 @also {x} {y} => @js ((a, b) => { if (a instanceof Ray && b instanceof Ray && a !== b) (a.also ??= []).push(b); return a; })($.get(F, "x"), $.get(F, "y"))
+// a statement read as the class's own (`static`): what it defines applies to the class, not to what is made of it
+// a method head the class's own (`static m => …`): what it defines applies to the class, not to what is made of it
+@own {node} => @js ((n) => (n instanceof Ray && (n.own = true), n))($.get(F, "node"))
+@statically {statement} => @js $.statically(F.m.get("statement"))
 @inside {x} {type} => @js $.name(F, (() => { const v = x; if (typeof v === "string" && [...v].length === 1 && type === $.name(F, "Char")) return true; const start = x instanceof Ray ? x : $.kind_of(x); return start instanceof Ray && type instanceof Ray && $.made_of_(start, type); })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
 // a value's member by its name (as the host holds it: its own, its class's)
@@ -50,6 +58,8 @@ global => @js $.global
 @given {instance} {arguments} => @js $.given($.get(F, "instance"), $.written(F.m.get("arguments")))
 @block {made} {code} => @js $.blocks.set($.get(F, "made"), $.written(F.m.get("code")))
 @run {program} => @js $.ran($.get(F, "program"))
+// a program called with what it is given: matched against its parameters as a method's are, its code run with them
+@call {program} {code} {parameters} {given} => @js $.call_program($.get(F, "program"), $.get(F, "code"), $.get(F, "parameters"), F.m.get("given"))
 @kind {name} {class} => @js $.kinds.set(F.m.get("name").s.trim(), $.written(F.m.get("class")))
 // a context of its own: what is read there is read by its rules alone (and by those of the context it continues into)
 @context {outer} => @js Object.assign(new Ray(outer instanceof Ray && outer !== $.none ? outer : undefined), { scope: true, alone: true })
@@ -86,6 +96,8 @@ Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefin
 while {condition} {{body}} => @js $.looped(F)
 // `do { … } while c`: the block, then again while `c` holds
 do {{body}} while {condition} => @js $.looped(F, true)
+// (the language's `x while c`: `x` again while `c` holds)
+@while {condition} {body} => @js $.looped(F)
 // `loop { … }`: the block again, until a `break`
 loop {{body}} => @js (F.m.set("condition", true), $.looped(F))
 // jumps (the language's `break`, `continue`, `return`, `recur`, `goto`, labels): out of the loop, or method, they are written in

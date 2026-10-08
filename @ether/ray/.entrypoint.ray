@@ -14,7 +14,7 @@
   made &+= { inside }
 
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
-static {statement} => (@has & given) ? None : statement
+static {statement} => (@has & given) ? None : (@statically statement)
 // `static name = value`, `static name := value`: the class's own member (not written where `name` is declared further out), read
 // when it is first read (`static default = Store()` in `Store`'s own block); written by its name, not read where the class's
 // own names are (`static name = …` beside a field `name`)
@@ -78,17 +78,21 @@ Node &+= {
   // its fields in order, the next of them (one given by name keeps it)
   : {type} =>
     // (what is being given, read as held: not through the value's own `.`, which a class may read otherwise)
+    // (the place it is applied on, taken first: what is read after has places of its own)
+    @keep_place spot
+    called := @word
     head := @typed type
-    had := @owns & @word
+    had := @owns & called
     naming := @member & "naming"
     given := @member & "given"
     taken := (!head) && (!naming) && (!had) && given && (!(given.empty))
-    head ? None : (naming ? (@declare type) : (had ? None : (taken ? (@declare given.take) : (@holding type))))
+    // (given by name, `x: v`: the field `x` of what is being given, whatever `x` names where it is read)
+    head ? None : (naming ? (@field & called type) : (had ? None : (taken ? (@declare_at spot given.take) : (@holding_at spot type))))
     // (a field given is what `= default` does not write; one of a class, what its instances are given unless given otherwise)
     shared := (!naming) && (!head) && (!had) && (!taken) && (@has & components)
     field := shared ? (@made ClassField) : None
     shared ? (@field field "owner" &) : None
-    shared ? (@field field "word" @word) : None
+    shared ? (@field field "word" called) : None
     naming ? & : ((!head) && (had || taken)) ? Field : shared ? field : this
 }
 // `x[key]`, `x[key] = v`, `x[key] := v` (T8.7): what a value holds under a name, by its name
@@ -108,7 +112,7 @@ ClassField &+= {
   = {value} =>
     word := @member this "word"
     owner := @member this "owner"
-    @field owner "defaults" (((@member owner "defaults") ?? []).append((instance) => (@owns instance word) ? None : (@field instance word (@later value))))
+    @field owner "field_defaults" (((@owns owner "field_defaults") ? (@member owner "field_defaults") : []).append((instance) => (@owns instance word) ? None : (@field instance word (@later value))))
     this
 }
 // `x with { … }`: the block read with `x` as what it is read in, answering what the block answers.
@@ -189,7 +193,7 @@ Method &+= {
   {a Method} | {b Method} => a | b
   // (names written together take what is written after them: `min | min_by (key)`)
   {a Method} | {b Method} ({parameters Unled}) => (@parameters a parameters) | (@parameters b parameters)
-  static {head Method} => head
+  static {head Method} => @own head
   chainable {head Method} => head
   right-to-left {head Method} => @leftward head
   {head Method}: {type Unled} => head
@@ -392,10 +396,11 @@ Class &+= {
         fields ? Class.fields_given(instance, fields) : None
         instance with { block }
         // (and the defaults of the fields declared on the class, its own or added since (`T &+= { x: T = d }`), not written yet)
-        ((@owns made "defaults") ? (@member made "defaults") : []).for((default) => default(instance))
+        ((@owns made "field_defaults") ? (@member made "field_defaults") : []).for((default) => default(instance))
         instance
-      ({arguments}) => Class.instance_of(made, arguments)
-      () => Class.instance_of(made, None)
+      // (made with what it is given, unless its block says otherwise: `static () => …`, the class's own; `() => …`, what is made of it)
+      static ({arguments}) => Class.instance_of(made, arguments)
+      static () => Class.instance_of(made, None)
       // what it is made of: its hierarchy, the classes it is one of (adding one makes it made of that too)
       components := (@made Node) &+= { hierarchy := (@made Hierarchy) ~~ (list => @field list "owner" made) }
     }
@@ -424,6 +429,8 @@ Node &+= {
 // ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`)
 {guarded} if {condition} => condition ? guarded : None
 {guarded} unless {condition} => condition ? None : guarded
+// `x while c`: `x` again while `c` holds
+{body} while {condition} => @while condition body
 // `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in;
 // `recur`, `recur(arguments)`: the method it is in, again (from its start); `goto name`: on from the statement `name\`
 break => @break
@@ -551,6 +558,8 @@ Program := class {
     this
   // run: its code read again, with the rules of its level in scope (a block's code: what the block was made of)
   () => @run this
+  // `p(arguments)`: what it is given matched against its parameters (as a method's are), its code run with them
+  ({called}) => @call this code parameters called
 }
 // a diagnostic (R5.1)
 Diagnostic := class {

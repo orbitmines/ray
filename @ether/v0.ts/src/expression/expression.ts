@@ -43,6 +43,8 @@ export class Ray {
   own?: boolean; spelled?: string; params?: string[]; leftward?: boolean; again?: boolean; method?: boolean; literal?: boolean; closing?: string; types?: Map<string, Code>; between?: string; defaults?: Set<string>; default_codes?: Map<string, Code>;
   // (a frame of an equivalence applied: which, and whether to a statement)
   rule?: Eq; statement = false;
+  // (of its captures read as values, each as it was written: `x**`)
+  codes?: Map<string, Code>;
   // (a frame of an equivalence applied on a value: where that value was read; of its captures read as values, where each was)
   place?: Place; places?: Map<string, Place>;
   // (a definition written again is read in a frame of its own, and added where it was written)
@@ -259,10 +261,11 @@ export class Host {
   edge(head: string, i: number): boolean { const { open, close } = this.learned; return i < 0 || i >= head.length || head[i] === open || head[i] === close || this.blank(head[i]) || [...this.pairs].some(([o, c]) => head.startsWith(o, i) || head.startsWith(c, i)); }
   rewritten = new Map<string, Text>();
   // Code followed back to where it was written: code that is one word naming code held where it is read is that code.
-  written(c: Code): Code {
+  // (`as_written`: a capture read as a value, as it was written, `x**`)
+  written(c: Code, as_written = false): Code {
     for (let k = 0; k < 64 && !c.word; k++) {
       const w = c.s.trim(); let held: unknown;
-      for (const n of this.reach(c.ctx)) if (n.has(w)) { held = n.m.get(w); break; }
+      for (const n of this.reach(c.ctx)) if (n.has(w)) { held = n.m.get(w); if (as_written && !(held instanceof Code)) held = n.codes?.get(w); break; }
       if (!(held instanceof Code) || held === c) return c;
       c = held;
     }
@@ -1384,6 +1387,7 @@ export class Host {
       else if (!(r instanceof Ray)) return false;
       // (code handed on, a word naming held code: that code, read into it)
       else { const v = c.block ? this.into(this.written(k), r) : this.within(k, r, !dependent, undefined, eq); if (v === NOT) return false; F.m.set(c.name, v); }
+      (F.codes ??= new Map()).set(c.name, k);
       if (this.place) (F.places ??= new Map()).set(c.name, this.place);
     }
     return true;
@@ -1463,7 +1467,7 @@ export class Host {
     if (v instanceof Code) return v;
     if (!(v instanceof Ray)) return undefined;
     const c = this.blocks.get(v); if (c) return c;
-    for (const eq of v.eqs) if (eq.value && eq.native) { const x = eq.native(v); if (x instanceof Ray && this.blocks.has(x)) return this.blocks.get(x); }
+    for (const eq of v.eqs) if (eq.value && eq.native) { const raw = eq.native(v), x = raw instanceof Later ? this.held_value(raw) : raw; if (x instanceof Ray && this.blocks.has(x)) return this.blocks.get(x); if (x instanceof Code && eq.key === 'code') return x; }
     return undefined;
   }
   // a closure applied to values, one for each of its parameters

@@ -158,6 +158,6 @@ Node &+= {
   ? (a.placed(x) <= a.placed(y) ? (a [x] b) [y] c : a [x] (b [y] c))
   : None
 
-Parameters := String{!.contains("{")}
-({parameters: Parameters}) => {block} =>
+ParameterList := String{!.contains("{")}
+({parameters: ParameterList}) => {block} =>
   Program(code: (block**), parameters: (parameters**), context: this)

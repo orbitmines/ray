@@ -101,18 +101,18 @@ Node &+= {
     @keep_place colon_place
     colon_word := @place_word colon_place
     colon_head := @typed type
-    colon_had := @owns & colon_word
-    colon_naming := @member & "naming"
-    colon_given := @member & "given"
+    colon_had := @owns @here colon_word
+    colon_naming := @member @here "naming"
+    colon_given := @member @here "given"
     colon_taken := (!colon_head) && (!colon_naming) && (!colon_had) && colon_given && (!(colon_given.empty))
     // (given by name, `x: v`: the field `x` of what is being given, whatever `x` names where it is read)
-    colon_head ? None : (colon_naming ? (@field_at & colon_place type) : (colon_had ? None : (colon_taken ? (@declare_at colon_place colon_given.take) : (@holding_at colon_place type))))
+    colon_head ? None : (colon_naming ? (@field_at @here colon_place type) : (colon_had ? None : (colon_taken ? (@declare_at colon_place colon_given.take) : (@holding_at colon_place type))))
     // (a field given is what `= default` does not write; one of a class, what its instances are given unless given otherwise)
-    colon_shared := (!colon_naming) && (!colon_head) && (!colon_had) && (!colon_taken) && (@has & components)
+    colon_shared := (!colon_naming) && (!colon_head) && (!colon_had) && (!colon_taken) && (@has @here components)
     colon_field := colon_shared ? (@made ClassField) : None
-    colon_shared ? (@field colon_field "owner" &) : None
+    colon_shared ? (@field colon_field "owner" @here) : None
     colon_shared ? (@field colon_field "word" colon_word) : None
-    colon_naming ? & : ((!colon_head) && (colon_had || colon_taken)) ? Field : colon_shared ? colon_field : this
+    colon_naming ? @here : ((!colon_head) && (colon_had || colon_taken)) ? Field : colon_shared ? colon_field : this
 }
 // `x[key]`, `x[key] = v`, `x[key] := v` (T8.7): what a value holds under a name, by its name
 Node &+= {

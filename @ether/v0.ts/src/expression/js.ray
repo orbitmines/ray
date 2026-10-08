@@ -8,6 +8,8 @@ global => @js $.global
 @declaring {name} => @js $.declaring(F.m.get("name"), F)
 @show {x} => @js $.output($.show(x))
 & => @js $.here(F)
+// (the same, in a method: not a member `&` of what it is applied on)
+@here => @js $.here(F)
 // where the method it is read in was called from
 @caller => @js $.caller_of(F)
 @has {x} {name} => @js $.name(F, $.has(x, F.m.get("name").s.trim()) ? "true" : "false")
@@ -58,7 +60,7 @@ global => @js $.global
 // a message said where it is written
 @report {message} => @js $.report(F.m.get("message"))
 // what is written, as code (not read)
-@code {x} => @js (r => ($.blocks.set(r, $.written(F.m.get("x"))), r))(new Ray())
+@code {x} => @js (r => ($.blocks.set(r, $.written(F.m.get("x"), true)), r))(new Ray())
 @given {instance} {arguments} => @js $.given($.get(F, "instance"), $.written(F.m.get("arguments")))
 @block {made} {code} => @js $.blocks.set($.get(F, "made"), $.written(F.m.get("code")))
 @run {program} => @js $.ran($.get(F, "program"))

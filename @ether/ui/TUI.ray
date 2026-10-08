@@ -109,7 +109,7 @@ UI.TUI := class {
     stop => emitted(Stop())
     write (drawn: Grid) => (grid = drawn) -- emitted(grid.framed)
     // (input that has ended reads as nothing: the program is done, so a run with nothing to read writes one frame and returns)
-    read => typed ? ((typed ~= (events: Event[])) -- .events.for(Compiler.reduced(., applied))) : UI.program?.stop
+    read => typed ? ((typed ~= (events: Event[])) -- .events.for(Compiler.reduced(., applied))) : (UI.program ? UI.program.stop : None)
   }
 
   Browser := {

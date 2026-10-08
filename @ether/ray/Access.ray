@@ -25,9 +25,9 @@ Access := class who: *?, method: `=` | `()` | * = *, filter: Program?, target: *
 
 none := Character{false}
 
-{who}.read ^keyword => Access(who, method: Access.Reading)
-{who}.write ^keyword => Access(who, method: `=`)
-{who}.execute ^keyword => Access(who, method: `()`)
+{who: Character}.read ^keyword => Access(who, method: Access.Reading)
+{who: Character}.write ^keyword => Access(who, method: `=`)
+{who: Character}.execute ^keyword => Access(who, method: `()`)
 {who}{{literal filter}}.read ^keyword => Access(who, method: Access.Reading, filter: Program(code: (filter**)))
 {who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (filter**)))
 {who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (filter**)))

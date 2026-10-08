@@ -53,7 +53,7 @@ export class Code {
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
 export type Piece = { lit: string } | { cap: string; reader?: Code };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
-export type Eq = { pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown };
+export type Eq = { pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; block?: boolean };
@@ -323,6 +323,7 @@ export class Host {
     const call = 'lit' in p0 && p0.lit.length > 1 && !p0.lit.includes(this.learned.space) && this.pairs.has(p0.lit[p0.lit.length - 1]);
     const operator = !ctx.scope && 'lit' in p0 && !call && (pieces.length > 1 || this.bracket(p0.lit[0]));
     if (operator) {
+      eq.operator = true;
       const k = 'lit' in p0 ? p0.lit[0] : '';
       let list = this.sends.get(k); if (!list) this.sends.set(k, list = []);
       list.push(eq);
@@ -334,7 +335,7 @@ export class Host {
       let list = by.get(k); if (!list) by.set(k, list = []); list.push({ lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 });
     }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
-    if (ctx.scope && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
+    if (ctx.scope && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
     return eq;
   }
 
@@ -361,15 +362,15 @@ export class Host {
         // (a rule does not read the whole of its own functionality: that never ends)
         if (eq.body.text === text && this.whole(eq.body, b, e)) continue;
         if ((eq.pairs === 0 && !defines) || eq.busy) continue;
-        // (a value's equivalence led by a bracket is a call on it: read after it, not where a statement starts)
+        // (a value's equivalence led by a bracket is a call on it, an operator of it reads after it: not where a statement starts)
         if (!n.scope && 'lit' in p0 && this.bracket(p0.lit[0])) continue;
         // (a name a nearer context holds hides a member of that name further out)
-        if (held && eq.pieces.length === 1 && 'lit' in p0 && p0.lit === word) continue;
+        if (held && 'lit' in p0 && (eq.pieces.length === 1 ? p0.lit === word : !n.scope && p0.lit.startsWith(word))) continue;
         // (one capture its reader reads, alone: what it reads, read at any precedence)
         const atom = eq.pieces.length === 1 && !('lit' in p0) && p0.reader !== undefined && n.scope;
         if ('lit' in p0 ? s[b] === p0.lit[0] && this.literal(text, p0.lit, b, e) >= 0 : eq.order >= floor || atom) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; consider(r); } }
       }
-      if (word && (n.has(word) || n.eqs.some(x => x.value && x.key === word))) held = true;
+      if (word && (n.has(word) || n.eqs.some(x => x.key === word))) held = true;
     }
     // a name: up to where something reads on
     const w = this.name_end(text, b, e); if (w > b) consider({ name: true, caps: [], b, e: w });
@@ -399,13 +400,22 @@ export class Host {
   // read into a value was written.
   // (each context once: marked with the walk it was reached in)
   epoch = 0;
-  reach(ctx: Ray): Ray[] { const out: Ray[] = []; this.reach_(ctx, out, ++this.epoch); return out; }
-  reach_(ctx: Ray, out: Ray[], epoch: number) {
+  reach(ctx: Ray): Ray[] {
+    const out: Ray[] = [], epoch = ++this.epoch;
+    // (the base last: what every value continues into answers after everything written around it)
+    if (this.reach_(ctx, out, epoch) && this.base && this.base.seen !== epoch) { this.base.seen = epoch; out.push(this.base); }
+    return out;
+  }
+  reach_(ctx: Ray, out: Ray[], epoch: number): boolean {
     let valued = false, sees: Ray[] | undefined;
     // (a block read into a value reaches that value first, then where it was written)
-    for (let n: Ray | undefined = ctx; n && n.seen !== epoch; n = n.outer) { n.seen = epoch; if (!n.scope || (n.into && !n.into.scope)) valued = true; out.push(n); if (n.sees && n.sees === n.into) this.reach_(n.sees, out, epoch); else if (n.sees) (sees ??= []).push(n.sees); }
-    if (valued && this.base && this.base.seen !== epoch) { this.base.seen = epoch; out.push(this.base); }
-    if (sees) for (const x of sees) this.reach_(x, out, epoch);
+    for (let n: Ray | undefined = ctx; n && n.seen !== epoch; n = n.outer) {
+      if (n === this.base) { valued = true; break; }
+      n.seen = epoch; if (!n.scope || (n.into && !n.into.scope)) valued = true; out.push(n);
+      if (n.sees && n.sees === n.into) { if (this.reach_(n.sees, out, epoch)) valued = true; } else if (n.sees) (sees ??= []).push(n.sees);
+    }
+    if (sees) for (const x of sees) if (this.reach_(x, out, epoch)) valued = true;
+    return valued;
   }
   // Between two readings: the longer; an equivalence over a name; one equivalence over one read on from another; one led by a
   // literal over one led by a capture; the more
@@ -443,6 +453,8 @@ export class Host {
     if ('lit' in piece) {
       // (a head, what is before the definer, is balanced)
       const n = this.literal(text, piece.lit, at, e); if (n < 0) return undefined;
+      // (not where it would be the rest of another operator written there: `?` is not the second of `??`)
+      if (i > 0 && piece.lit.length === 1 && at > 0 && !this.blank(text.s[at - 1]) && this.longer(text.s[at - 1], text.s[at])) return undefined;
       const d = piece.lit.indexOf(this.learned.definer);
       const head = d >= 0 ? text.s.indexOf(this.learned.definer, at + d - 1) : -1;
       if (d >= 0 && !('lit' in eq.pieces[0]) && !this.balanced(text, start, head)) return undefined;
@@ -731,6 +743,13 @@ export class Host {
     let self: unknown, i = 0;
     for (const n of this.reach(ctx)) { i++; if (self === undefined && n.into && !n.into.scope && !n.rule) self = n.self ?? n.into; if (!n.scope && n !== this.base && self === undefined) self = n; if (i >= near) break; }
     return self;
+  }
+  // whether a character and the one after it begin an operator (or what reads on from a value)
+  longer(c: string, next: string): boolean {
+    const two = c + next;
+    for (const list of [this.infix.get(c), this.words.get(c)]) if (list) for (const x of list) if (x.lit.startsWith(two)) return true;
+    for (const x of this.sends.get(c) ?? []) { const p = x.pieces[0]; if ('lit' in p && p.lit.startsWith(two)) return true; }
+    return false;
   }
   // Where what was read last is (a name's place: the context it is declared in, or would be): what `:=` and `=` act on.
   place?: Place;

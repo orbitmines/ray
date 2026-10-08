@@ -546,6 +546,8 @@ export class Host {
     return k.count === 1;
   }
   splits = new WeakMap<Text, Map<number, Map<number, { list: { p: number; e: number; block: number; syntax: number }[]; count?: number; counted?: number }>>>();
+  // (how often an operation read on from a value was first declared: what reads on from any value may differ since)
+  sent = 0;
   // (how often what reads on from a value, or what balances, was declared: where statements end may differ since)
   syntax = 0;
 
@@ -580,7 +582,7 @@ export class Host {
       const k = 'lit' in p0 ? p0.lit[0] : '';
       let list = this.sends.get(k); if (!list) this.sends.set(k, list = []);
       // (read on a value, one head written alike stands for all of them: which applies is the value's)
-      const sig = readers(pieces, node); if (!list.some(x => x.key === key && readers(x.pieces, x.node) === sig)) list.push(eq);
+      const sig = readers(pieces, node); if (!list.some(x => x.key === key && readers(x.pieces, x.node) === sig)) { list.push(eq); this.sent++; }
     }
     const after = operator && 'lit' in p0 ? p0.lit : p0 && !('lit' in p0) && p1 && 'lit' in p1 ? p1.lit : undefined;
     // (a definition is a whole statement: what reads one never reads on from inside another)
@@ -1141,12 +1143,12 @@ export class Host {
   // read once): what a reading depends on is which contexts with equivalences it reaches, which of them (or of those between)
   // hold its first word, where a value it is read on is first found, and what reading a capture alone asks of the context.
   // (the reading kept says how near its equivalence was by its place among those contexts: given back as near as it is here)
-  shared = new WeakMap<Text, Map<string, { version: number; r: Read | undefined; at: number }>>();
+  shared = new WeakMap<Text, Map<string, { version: number; r: Read | undefined; at: number; eqi: number; sent: number; held: Ray[] }>>();
   parse_shared(text: Text, b: number, e: number, ctx: Ray, floor: number): Read | undefined {
     if (NOSHARE) return this.parse(text, b, e, ctx, floor);
     const s = text.s; let bb = b, ee = e; while (bb < ee && this.blank(s[bb])) bb++; while (ee > bb && this.blank(s[ee - 1])) ee--;
     if (bb >= ee) return undefined;
-    const word = s.slice(bb, this.name_end(text, bb, ee)), nears: number[] = [];
+    const word = s.slice(bb, this.name_end(text, bb, ee)), nears: number[] = [], held: Ray[] = [];
     // (what reading a capture alone asks of the context, `sees`, `outer` where code is written, the value called: only which of the
     // contexts with equivalences it is)
     let sig = `${b}:${e}:${floor}:${ctx.level ? this.id(ctx.outer) : ''}:${ctx.alone ? this.id(ctx) : ctx.written && ctx.into?.alone ? this.id(ctx.into) : ''}:${this.deciding > 0 ? 'D' : ''}|`;
@@ -1157,19 +1159,39 @@ export class Host {
       if (!self && ((n.into && !n.into.scope && !n.rule) || (!n.scope && n !== this.base))) { self = true; sig += 's'; }
       // (names a context holds as values are not rules: only whether it holds the first word)
       if (n.eqs.length > 0 && !n.led) this.led(n);
-      if (n.eqs.length > 0 && n.ruled && this.candidates(n, s[bb])) { sig += this.id(n) + (n === ctx.sees ? 'S' : '') + (ctx.written && n === ctx.outer ? 'O' : '') + (n === this.calling ? 'C' : '') + ','; nears.push(near); }
+      // (a closure is as every closure made by the same definition: its rule written alike, at the same place)
+      if (n.eqs.length > 0 && n.ruled && this.candidates(n, s[bb])) { sig += (n.closure ? 'k' + this.structure(n) : this.id(n)) + (n === ctx.sees ? 'S' : '') + (ctx.written && n === ctx.outer ? 'O' : '') + (n === this.calling ? 'C' : '') + ','; nears.push(near); held.push(n); }
       if (word && (n.has(word) || (n.eqs.length > 0 && n.keys!.has(word)))) sig += 'h';
     }
     let m = this.shared.get(text); if (!m) this.shared.set(text, m = new Map());
     const x = m.get(sig);
-    if (x && (x.version === this.version || !this.since_read(x.version, s.slice(b, e)))) { x.version = this.version; return this.neared(x.r, nears, x.at); }
+    if (x && (x.version === this.version || !this.since_shared(x, s.slice(b, e)))) { x.version = this.version; x.sent = this.sent; return this.neared(x.r, nears, x.at, x.eqi >= 0 ? held[x.at].eqs[x.eqi] : undefined); }
     const r = this.parse(text, b, e, ctx, floor);
-    // (how near, among the contexts with equivalences: the how manyth of them)
+    // (how near, among the contexts with equivalences: the how manyth of them; read by a closure's rule: the how manyth of its)
     let inner = r; while (inner?.on) inner = inner.on;
     const at = inner?.near === undefined ? -1 : nears.indexOf(inner.near);
-    m.set(sig, { version: this.version, r, at });
+    const eqi = at >= 0 && held[at].closure && inner?.eq ? held[at].eqs.indexOf(inner.eq) : -1;
+    m.set(sig, { version: this.version, r, at, eqi, sent: this.sent, held });
     return r;
   }
+  // whether anything declared since a shared reading may read its span: only in the contexts it was read with (any other that comes to
+  // have a rule for it reads under another signature), unless an operation on values was first declared since (read on from any)
+  since_shared(x: { version: number; sent: number; held: Ray[] }, span: string): boolean {
+    if (x.sent !== this.sent) return this.since_read(x.version, span);
+    for (let v = x.version; v < this.version; v++) {
+      const c = this.changes[v];
+      if (c.at.reached === undefined || c.at.reached > x.version || !x.held.includes(c.at)) continue;
+      if (!c.needle || span.includes(c.needle)) return true;
+    }
+    return false;
+  }
+  // (a closure's rules as they are written, where: what reads the same)
+  structure(n: Ray): string {
+    const k = this.structures.get(n); if (k && k.count === n.eqs.length) return k.s;
+    const s = n.eqs.map(x => x.key + '@' + this.id(x.body.text) + ':' + x.body.b + ':' + x.body.e + (x.value ? 'v' : '') + (x.node?.params ? '(' + x.node.params.join(',') + ')' : '') + x.pieces.map(p => 'cap' in p && p.reader ? p.reader.s : '').join(';')).join('|');
+    this.structures.set(n, { count: n.eqs.length, s }); return s;
+  }
+  structures = new WeakMap<Ray, { count: number; s: string }>();
   // (whether a context has a rule a span starting with `c` could be read by: led by it, or by a capture)
   candidates(n: Ray, c: string): boolean {
     const led = this.led(n);
@@ -1177,11 +1199,11 @@ export class Host {
     return false;
   }
   // a reading kept, as near as its equivalence is from here
-  neared(r: Read | undefined, nears: number[], at: number): Read | undefined {
+  neared(r: Read | undefined, nears: number[], at: number, eq?: Eq): Read | undefined {
     if (!r || at < 0) return r;
     const chain: Read[] = []; for (let x: Read | undefined = r; x; x = x.on) chain.push(x);
-    const inner = chain[chain.length - 1]; if (inner.near === nears[at]) return r;
-    let out: Read = { ...inner, near: nears[at] };
+    const inner = chain[chain.length - 1]; if (inner.near === nears[at] && (!eq || inner.eq === eq)) return r;
+    let out: Read = { ...inner, near: nears[at], eq: eq ?? inner.eq };
     for (let i = chain.length - 2; i >= 0; i--) out = { ...chain[i], on: out };
     return out;
   }

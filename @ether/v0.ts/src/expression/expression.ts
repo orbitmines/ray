@@ -59,7 +59,7 @@ type Learned = { open: string; close: string; space: string; definer: string; en
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; block?: boolean };
 // What reading a span gave: an equivalence applied to captures (read on the value of `on`, or on `self`), or a name.
 type Place = { at: Ray; here: Ray; word: string; text?: Text; b?: number; e?: number };
-type Read = { eq?: Eq; name?: boolean; caps: Cap[]; on?: Read; self?: Ray; b: number; e: number; near?: number; from?: number };
+type Read = { eq?: Eq; name?: boolean; caps: Cap[]; on?: Read; self?: unknown; b: number; e: number; near?: number; from?: number };
 
 export class Host {
   learned!: Learned;
@@ -154,7 +154,8 @@ export class Host {
     if (!stood) {
       const into = statement ? at.into ?? at : new Ray(at);
       // (read again into what continues into a class that has it, from the same text: that one)
-      if (statement && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.body.text === body.text && x.body.b === body.b && x.body.e === body.e && x.body.ctx.outer === body.ctx.outer); if (was) return this.held_as(was); }
+      const bc = body instanceof Value ? body.code : body;
+      if (statement && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.body.text === bc.text && x.body.b === bc.b && x.body.e === bc.e && x.body.ctx.outer === bc.ctx.outer); if (was) return this.held_as(was); }
       // (a closure is given what it reads: a pattern of one word is what it is given, named)
       let pieces = this.pieces(head, at); const lead = p.b + p.s.indexOf(head);
       if (!statement && pieces.length === 1 && 'lit' in pieces[0] && this.name_end(p.text, lead, p.e) === lead + head.length) pieces = [{ cap: head }];
@@ -348,7 +349,7 @@ export class Host {
     const consider = (r: Read | undefined) => { if (r) { r = this.on(r, text, e, ctx, floor, not); if (this.better(r, best)) best = r; } };
     // (what reads definitions is tried on a definition only: the definer written outside every bracket)
     let defines = false; this.scan(text, b, e, i => { if (this.literal(text, this.learned.space + this.learned.definer, i, e) >= 0) { defines = true; return false; } });
-    let self: Ray | undefined, held = false, near = 0;
+    let self: unknown, held = false, near = 0;
     const word = s.slice(b, this.name_end(text, b, e));
     for (const n of this.reach(ctx)) {
       near++;
@@ -942,7 +943,7 @@ export class Host {
     return this.sequence(code, T);
   }
   body(eq: Eq, F: Ray): unknown {
-    if (eq.js === undefined && this.located(eq.body)) eq.js = this.js(eq);
+    if (eq.js === undefined && this.located(eq.body) && this.interpreted.has(eq.body.text)) eq.js = this.js(eq);
     if (eq.js) return eq.js(F);
     // (a statement handed through, its functionality the capture it is: still a statement)
     if (F.statement) { const w = eq.body.s.trim(); const c = F.m.get(w); if (c instanceof Code) return this.walk(stated(new Code(c.text, c.b, c.e, c.ctx, c.floor))); }
@@ -1041,7 +1042,7 @@ export class Host {
   reader(test: (s: string) => unknown): Ray { const r = new Ray(); r.test = test; return r; }
 
   // ---------------------------------------------------------------- @js: the host's language, at its location
-  location = '@js';
+  location = '@js'; interpreted = new Set<Text>();
   located(body: Code): boolean { const s = body.s.trimStart(); return s.startsWith(this.location) && this.blank(s[this.location.length]); }
   js(eq: Eq): (F: Ray) => unknown {
     const src = eq.body.s.trimStart().slice(this.location.length);
@@ -1074,7 +1075,9 @@ export class Host {
     const from = this.axiom(text);
     // (the host's language at its location: `@js code`, the code run with the frame it is read in)
     const at = this.add(this.global, [{ lit: this.location + this.learned.space }, { cap: this.location }], new Code(text, 0, 0, this.global));
-    at.native = F => { const c = F.m.get(this.location) as Code; return new Function('$', 'F', 'Ray', `return (${c.s});`)(this, c.ctx, Ray); };
+    // (code there run by this interpreter: what its own files write; elsewhere, code in that language is a value, the text written)
+    at.native = F => { const c = F.m.get(this.location) as Code; if (!this.interpreted.has(c.text)) return c.s.trim(); return new Function('$', 'F', 'Ray', `return (${c.s});`)(this, c.ctx, Ray); };
+    this.interpreted.add(text); if (mapping) this.interpreted.add(mapping);
     // (read as one: what the mapping names that the language declares later is read again once it is)
     this.project(mapping ? [mapping, text] : [text], this.global, from, text);
   }

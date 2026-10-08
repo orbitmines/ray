@@ -1377,7 +1377,7 @@ export class Host {
   defaulted(F: Ray): boolean {
     let n: Ray | undefined = F; while (n && !n.place) n = n.caller; const p = n?.place;
     const h = this.held_place;
-    if (!p || h === undefined || p.word !== h.word || (p.at !== h.at && p.here !== h.here && p.at !== h.here && p.here !== h.at)) return false;
+    if (!p || h === undefined || p !== h) return false;
     this.held_place = undefined;
     const x = this.valued(p.at, p.word), v = x?.native!(p.at);
     return v instanceof Code && this.held_types.has(v);

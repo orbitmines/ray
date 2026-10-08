@@ -312,7 +312,11 @@ export class Host {
     const f = R.m.get(caps[caps.length - 1].cap) as Code;
     const text = { name: f.text.name, s: node.spelled }, head = new Code(text, 0, text.s.length, at);
     // (one read as another statement: that statement, read again where it was written)
-    if (node.again) { const { end, space, definer } = this.learned, line = f.text.s.lastIndexOf(end, f.b - 1) + 1, col = this.depth(f.text.s, line), t = space.repeat(col) + node.spelled + space + definer + space + f.s; return this.walk(stated(new Code({ name: f.text.name, s: t }, col, t.length, at))); }
+    // (not when that is this one again: then as written)
+    if (node.again && !this.restating.has(node.spelled)) {
+      const { end, space, definer } = this.learned, line = f.text.s.lastIndexOf(end, f.b - 1) + 1, col = this.depth(f.text.s, line), t = space.repeat(col) + node.spelled + space + definer + space + f.s;
+      this.restating.add(node.spelled); try { return this.walk(stated(new Code({ name: f.text.name, s: t }, col, t.length, at))); } finally { this.restating.delete(node.spelled); }
+    }
     if (!node.params && !node.leftward) return this.defined(head, f, at, statement);
     if (typeof between === 'string') node.between = between;
     const into = statement ? at.into ?? at : new Ray(at), body = this.unblocked(this.written(f));
@@ -330,7 +334,7 @@ export class Host {
     if (node.params && name !== '' && node.params.every(x => node.defaults?.has(x))) { const eq = this.add(into, this.pieces(name, at), body, node); eq.node = node; out.push(eq); }
     return statement ? this.held_as(out[0]) : into;
   }
-  given_name = '\u0000given';
+  given_name = '\u0000given'; restating = new Set<string>();
   // what a method was given, matched against its parameters (out of the one pair it may be written in), from all of them to as
   // few as its defaults allow; NOT when it does not read so
   bound(eq: Eq, F: Ray, code: Code): Cap[] | typeof NOT {

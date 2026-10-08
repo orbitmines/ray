@@ -78,6 +78,10 @@ dynamically assert {conditions} => Dynamic(program: (Program(code: conditions**)
 
 // `x &+= { … }`: the block read into `x` (what it defines is `x`'s).
 {target Expression} &+= {{block target}} => target
+// (inside quotes, a character before a capture between them takes what follows it as written: `"\""`)
+(@context None) &+= {
+  "\{escaped}" => escaped
+}
 
 // `name := (a, b) => body`: the name is a closure.
 {name} := ({parameters}) => {functionality} =>

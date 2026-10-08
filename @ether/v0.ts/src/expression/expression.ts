@@ -624,6 +624,8 @@ export class Host {
       let list = by.get(k); if (!list) by.set(k, list = []);
       if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) { const x = { lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }; list.push(x); eq.indexed = true; this.syntax++; if (by === this.infix) this.indexed(x); if (x.order < this.earliest) this.earliest = x.order; this.spelled(after); }
     }
+    // (a quote, one character, a capture, the quote: that character escapes what follows it inside the quote)
+    if (pieces.length === 3 && 'lit' in p0 && p0.lit.length === 2 && this.quotes.has(p0.lit[0]) && !this.blank(p0.lit[1]) && !('lit' in p1) && 'lit' in pieces[2] && pieces[2].lit === p0.lit[0] && this.escapes.get(p0.lit[0]) !== p0.lit[1]) { this.escapes.set(p0.lit[0], p0.lit[1]); this.paired++; this.syntax++; }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
     if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); this.paired++; this.syntax++; }
     return eq;
@@ -997,7 +999,7 @@ export class Host {
     for (let j = i + 1; j < s.length; j++) {
       const c = s[j], top = stack[stack.length - 1];
       if (c === top) { stack.pop(); if (stack.length === 0) { r = j; break; } continue; }
-      if (this.quotes.has(top)) continue;
+      if (this.quotes.has(top)) { if (c === this.escapes.get(top)) j++; continue; }
       const close = this.pairs.get(c);
       if (close !== undefined) { stack.push(close); continue; }
       if (this.closers.has(c)) { r = -(j + 2); break; }
@@ -1005,12 +1007,15 @@ export class Host {
     seen.at.set(i, r); return r;
   }
   closings = new WeakMap<Text, { paired: number; at: Map<number, number> }>(); paired = 0;
+  // (inside a quote: the character that takes the one after it as written, learned from a rule written quote, it, a capture, quote)
+  escapes = new Map<string, string>();
+  escaped(text: Text, at: number, i: number, x: string): boolean { let k = 0; for (let j = i - 1; j >= at && text.s[j] === x; j--) k++; return k % 2 === 1; }
   // whether every pair opened in a span is closed in it
   balanced(text: Text, b: number, e: number): boolean {
     const s = text.s, stack: string[] = [];
     for (let i = b; i < e; i++) {
       const c = s[i], top = stack.length ? stack[stack.length - 1] : undefined;
-      if (top !== undefined) { if (c === top) { stack.pop(); continue; } if (this.quotes.has(top)) continue; }
+      if (top !== undefined) { if (c === top) { stack.pop(); continue; } if (this.quotes.has(top)) { if (c === this.escapes.get(top)) i++; continue; } }
       const close = this.pairs.get(c);
       if (close !== undefined) { stack.push(close); continue; }
       if (this.closers.has(c)) return false;
@@ -1020,7 +1025,9 @@ export class Host {
   // The places from `at` (before `e`) where no pair is open and `lit` is written (or the end, for none), latest first.
   ends(text: Text, at: number, e: number, lit: string | undefined, pairs?: number): number[] {
     const out: number[] = [];
-    const stopped = this.scan(text, at, e, i => { if (i > at && (lit === undefined || (this.literal(text, lit, i, e) >= 0 && !this.amid(text, at, i)))) out.push(i); }, pairs);
+    // (a quote written after its escape, inside the pair, is not where it closes)
+    const x = lit !== undefined ? this.escapes.get(lit[0]) : undefined;
+    const stopped = this.scan(text, at, e, i => { if (i > at && (lit === undefined || (this.literal(text, lit, i, e) >= 0 && !this.amid(text, at, i) && !(x !== undefined && this.escaped(text, at, i, x))))) out.push(i); }, pairs);
     if (lit === undefined && stopped === e) out.push(e);
     return out.reverse();
   }

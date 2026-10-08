@@ -639,18 +639,12 @@ export class Host {
     }
     const fixed = piece.type !== undefined ? (piece.type instanceof Ray ? piece.type : REJECT) : this.fixed(piece.reader, eq);
     if (fixed === REJECT) return undefined;
-    // (a type that reads text, in a rule where statements are read, followed by another capture: as far as it reads, the longest first)
-    if (fixed && !fixed.scope && this.patterns && eq.ctx.scope && !this.calls(eq) && next && !('lit' in next)) {
-      // (no further than the capture could have gone)
-      const limit = ends.length ? Math.max(...ends) : e, s = text.s.slice(at, limit), found = [...this.fit_at(fixed, s, 0, new Map(), 0)].sort((x, y) => y - x);
-      ends = found.map(j => at + j);
-    }
     // (a literal written hugging the capture before it, `{value}?`, is read hugging it)
     const hugged = !!next && 'lit' in next && !this.blank(next.lit[0]) && !this.bracket(next.lit[0]) && !this.quotes.has(next.lit[0]);
     for (const n of ends) {
       if (n > at && !this.held(text, at, n) && !bracketed) continue;
       if (hugged && n > at && this.blank(text.s[n - 1])) continue;
-      if (fixed && (n === at ? !(this.patterns && !fixed.scope && this.fits(fixed, '')) : !this.reads(fixed, text, at, n, eq))) continue;
+      if (fixed && (n === at || !this.reads(fixed, text, at, n, eq))) continue;
       const block = !!prev && 'lit' in prev && prev.lit.endsWith(this.learned.open) && !!next && 'lit' in next && next.lit.startsWith(this.learned.close);
       caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, type: piece.type, block });
       const r = this.match(eq, text, n, e, ctx, i + 1, start, caps);
@@ -711,7 +705,6 @@ export class Host {
     if (!r.scope && (!eq.ctx.scope || this.calls(eq))) return true;
     const read = this.parse(text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
     if (r.scope) return !!read && read.e === end;
-    if (this.patterns && this.fits(r, text.s.slice(b, end).trimStart())) return true;
     // (a value that is not a scope reads what its own equivalences, or names, read whole; anything else is read where it was
     // written, and is one of it or not: decided where it is applied, unless the span is a rule of its own)
     // (a rule where statements are read reads text by its types; only a value's own rules (its parameters, a level's) decide by the
@@ -1080,8 +1073,6 @@ export class Host {
     if (r.scope && read?.name && read.e === end) { const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
     const word = read?.name ? code.text.s.slice(read.b, read.e) : undefined;
     // (a reader decided where it was written, a type: what it does not read whole is read where it was written, one of it, or not read)
-    // (a type that reads the text as it is written: that text)
-    if (typed && !r.scope && this.patterns && by && by.ctx.scope && !this.calls(by) && !(read && read.e === end && this.own(read, r, code.text)) && this.fits(r, code.s.trim())) return code.s.trim();
     if (typed && !r.scope && !(read && read.e === end && this.own(read, r, code.text))) {
       // (read where it was written, while the rule asking reads nothing itself)
       let at = code.ctx; while (at.written) at = at.written;
@@ -1215,61 +1206,6 @@ export class Host {
       for (let i = n.eqs.length - 1; i >= 0; i--) { const x = n.eqs[i]; if (x.key === word && x.native) return x.native(n); }
     }
     return undefined;
-  }
-  // A type reading text (`js.ray` names the fields the language's types are made of): text reads itself; a host reader what it
-  // reads; nothing, nothing; `one` a character; alternatives any of theirs; a narrowing what it narrows that its constraint holds
-  // of; a repetition one or more of what it repeats; a sequence its parts in order.
-  patterns?: { superposed: string; alternatives: string; narrowed: string; constraint: string; repeated: string; sequence: string; value: string; next: string; one: string; read_by?: Record<string, string> };
-  // (classes the interpreter reads text of with a reader of its own: `Number` with `Numeral`)
-  readers_by?: Map<unknown, unknown>;
-  fits(T: unknown, s: string): boolean {
-    if (!(T instanceof Ray)) return this.fit_at(T, s, 0, new Map(), 0).has(s.length);
-    // (what a type reads of a text is kept with the type; what names the readers by stays until something is declared)
-    if (this.fitted_version !== this.version) { this.fitted_version = this.version; this.one = undefined; this.readers_by = undefined; }
-    let m = this.fitted.get(T); if (!m) this.fitted.set(T, m = new Map());
-    let v = m.get(s); if (v === undefined) m.set(s, v = this.fit_to(T, s, 0, s.length, new Map(), 0));
-    return v;
-  }
-  // whether a type reads exactly from `i` to `end` (a narrowing asks its constraint of that span only)
-  fit_to(T: unknown, s: string, i: number, end: number, memo: Map<unknown, Map<number, Set<number>>>, depth: number): boolean {
-    const p = this.patterns;
-    if (p && T instanceof Ray && !T.test && depth < 64) {
-      const alternatives = this.field(T, p.superposed) ? this.field(T, p.alternatives) : undefined, narrowed = this.field(T, p.narrowed);
-      if (narrowed !== undefined && alternatives === undefined) return this.fit_to(narrowed, s, i, end, memo, depth + 1) && this.holds_of(T, this.field(T, p.constraint), s.slice(i, end));
-      if (alternatives instanceof Ray) { for (let v = this.field(alternatives, p.sequence); v instanceof Ray; v = this.field(v, p.next)) if (this.fit_to(this.field(v, p.value), s, i, end, memo, depth + 1)) return true; return false; }
-    }
-    if (T instanceof Ray && T.test) return T.test(s.slice(i, end)) !== undefined;
-    return this.fit_at(T, s.slice(0, end), i, memo, depth).has(end);
-  }
-  // whether a narrowing's constraint holds of a text (while it is asked, the narrowing reads nothing: a constraint that reads text
-  // by the same type does not ask it again)
-  holds_of(T: Ray, c: unknown, s: string): boolean {
-    if (this.asking.has(T)) return false;
-    this.asking.add(T); try { return this.truthy(this.invoke(c, s)); } finally { this.asking.delete(T); }
-  }
-  asking = new Set<Ray>();
-  fitted = new WeakMap<Ray, Map<string, boolean>>(); fitted_version = -1; one?: unknown;
-  fit_at(T: unknown, s: string, i: number, memo: Map<unknown, Map<number, Set<number>>>, depth: number): Set<number> {
-    let at = memo.get(T); if (!at) memo.set(T, at = new Map());
-    const kept = at.get(i); if (kept) return kept;
-    const out = new Set<number>(); at.set(i, out);
-    const p = this.patterns; if (depth > 64) return out;
-    if (typeof T === 'string') { if (s.startsWith(T, i)) out.add(i + T.length); return out; }
-    if (typeof T === 'number') { const t = String(T); if (s.startsWith(t, i)) out.add(i + t.length); return out; }
-    // (nothing, written: reads nothing; what is not there reads nothing at all)
-    if (T === undefined) return out;
-    if (T === this.none) { out.add(i); return out; }
-    if (!(T instanceof Ray) || !p) return out;
-    if (T.test) { for (let j = i + 1; j <= s.length; j++) if (T.test(s.slice(i, j)) !== undefined) out.add(j); return out; }
-    if (!this.readers_by && p.read_by) { this.readers_by = new Map(); for (const [k, v] of Object.entries(p.read_by)) this.readers_by.set(this.name(this.global, k), this.name(this.global, v)); }
-    const by = this.readers_by?.get(T); if (by instanceof Ray && by.test) { for (let j = i + 1; j <= s.length; j++) if (by.test(s.slice(i, j)) !== undefined) out.add(j); return out; }
-    if (T === (this.one ??= this.name(this.global, p.one))) { if (i < s.length) out.add(i + (s.codePointAt(i)! > 0xffff ? 2 : 1)); return out; }
-    const alternatives = this.field(T, p.superposed) ? this.field(T, p.alternatives) : undefined, narrowed = this.field(T, p.narrowed), repeated = this.field(T, p.repeated), first = this.field(T, p.sequence);
-    if (alternatives instanceof Ray) for (let v = this.field(alternatives, p.sequence); v instanceof Ray; v = this.field(v, p.next)) for (const j of this.fit_at(this.field(v, p.value), s, i, memo, depth + 1)) out.add(j);
-    else if (narrowed !== undefined) { const c = this.field(T, p.constraint); for (const j of this.fit_at(narrowed, s, i, memo, depth + 1)) if (this.holds_of(T, c, s.slice(i, j))) out.add(j); }
-    else if (repeated !== undefined) { let edge = [...this.fit_at(repeated, s, i, memo, depth + 1)].filter(j => j > i); const seen = new Set<number>(); while (edge.length) { const next: number[] = []; for (const j of edge) if (!seen.has(j)) { seen.add(j); out.add(j); for (const k of this.fit_at(repeated, s, j, memo, depth + 1)) if (k > j) next.push(k); } edge = next; } }
-    else if (first instanceof Ray) { let ends = new Set([i]); for (let v: unknown = first; v instanceof Ray; v = this.field(v, p.next)) { const next = new Set<number>(); for (const j of ends) for (const k of this.fit_at(this.field(v, p.value), s, j, memo, depth + 1)) next.add(k); ends = next; } for (const j of ends) out.add(j); }
-    return out;
   }
   // a closure applied to a value; whether a value holds (every value but nothing and false)
   invoke(f: unknown, x: unknown): unknown {

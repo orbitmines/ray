@@ -982,7 +982,7 @@ export class Host {
   walk_(code: Code): unknown {
     // (a statement that reads more than any is written to: one that does not end)
     if (STACK) { this.recent[this.steps % 60] = `${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 50))}`; }
-    if (++this.steps > LONGEST) { if (STACK) writeSync(2, this.chain.slice(0, 30).join('\n') + '\n====\n' + [...this.recent.slice(this.steps % 60), ...this.recent.slice(0, this.steps % 60)].join('\n') + '\n----\n'); this.steps = 0; this.applying = 0; throw new Runaway(`more than ${LONGEST} readings (\`${code.s.slice(0, 40)}\`)`); }
+    if (++this.steps > LONGEST) { if (STACK) writeSync(2, this.chain.slice(0, 30).concat(["...."], this.chain.slice(-40)).join('\n') + '\n====\n' + [...this.recent.slice(this.steps % 60), ...this.recent.slice(0, this.steps % 60)].join('\n') + '\n----\n'); this.steps = 0; this.applying = 0; throw new Runaway(`more than ${LONGEST} readings (\`${code.s.slice(0, 40)}\`)`); }
     // (nothing written: nothing)
     if (!this.held(code.text, code.b, code.e)) return undefined;
     // (code of several statements: each, in order)
@@ -1498,7 +1498,8 @@ export class Host {
           this.ran_away = false; last = this.tried(c, false);
           // (one that did not end is not read again)
           if (this.ran_away) { this.forget(mark); continue; }
-          if (into && !into.scope && into.eqs.length > n && into.eqs.slice(n).every(eq => !eq.native)) { let at = this.defining.get(c.text); if (!at) this.defining.set(c.text, at = new Map()); at.set(c.b, { cls: into, written: c.ctx.outer }); }
+          // (or one that declared a field the class gives each of what is made of it (its `field_defaults`): given it there)
+          if (into && !into.scope && into.eqs.length > n && (into.eqs.slice(n).every(eq => !eq.native) || into.eqs.slice(n).some(eq => eq.key === 'field_defaults'))) { let at = this.defining.get(c.text); if (!at) this.defining.set(c.text, at = new Map()); at.set(c.b, { cls: into, written: c.ctx.outer }); }
           const left_unresolved = this.since(mark); if (inner) kept.set(c, { adds: this.adds, left: left_unresolved.map(p => [p, this.unread.get(p)!]) }); this.forget(mark);
           if (left_unresolved.length > 0) { this.unsay(d); again.push(c); }
         }

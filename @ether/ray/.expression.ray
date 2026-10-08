@@ -118,7 +118,14 @@ Method &+= {
   // (a name declared, `X := …`: the definition read again as it is written, without what was said of it)
   {name Unspaced} := {value Text} => @again name value
 }
-{head Method} => {functionality} =>
+// (a head as a whole: what a method says, else as written; either shown as it says)
+Head := @context None
+Head &+= {
+  {name Text} => @named name
+  {method Method} => method
+  {head Head} ^{style Unspaced} => head
+}
+{head Head} => {functionality} =>
   head.superposes ? head.components.for((alias) => @define alias "receiver" ", ") : (@define head "receiver" ", ")
 
 // `X<K = D, V> := class …`: the class, each parameter a name of it (its default, or nothing).

@@ -449,7 +449,8 @@ export class Host {
       eq.operator = true;
       const k = 'lit' in p0 ? p0.lit[0] : '';
       let list = this.sends.get(k); if (!list) this.sends.set(k, list = []);
-      list.push(eq);
+      // (read on a value, one head written alike stands for all of them: which applies is the value's)
+      const sig = readers(pieces, node); if (!list.some(x => x.key === key && readers(x.pieces, x.node) === sig)) list.push(eq);
     }
     const after = operator && 'lit' in p0 ? p0.lit : p0 && !('lit' in p0) && p1 && 'lit' in p1 ? p1.lit : undefined;
     // (a definition is a whole statement: what reads one never reads on from inside another)
@@ -459,7 +460,8 @@ export class Host {
       // (a method's name and a space, `s {…}`, is written apart, whatever its length)
       const apart = this.apart(after) || (!!node && after.endsWith(this.learned.space) && this.name_end({ name: '', s: after }, 0, after.length) === after.length - 1);
       const by = apart ? this.words : this.infix, k = apart ? after.slice(0, after.indexOf(this.learned.space)) : after[0];
-      let list = by.get(k); if (!list) by.set(k, list = []); list.push({ lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 });
+      let list = by.get(k); if (!list) by.set(k, list = []);
+      if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) list.push({ lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 });
     }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
     if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
@@ -625,7 +627,9 @@ export class Host {
       const after = eq.pairs === 0 && eq.pieces.slice(0, i).some(x => 'lit' in x && x.lit.includes(this.learned.definer));
       // (between the two of a pair read as nothing inside, `"…"`: what is inside balances nothing)
       const quoted = !!prev && 'lit' in prev && 'lit' in next && this.quotes.has(prev.lit[prev.lit.length - 1]) && next.lit[0] === prev.lit[prev.lit.length - 1];
-      ends = this.ends(text, at, e, 'lit' in next ? next.lit : undefined, quoted ? 0 : after ? Infinity : eq.pairs);
+      // (what the definer follows is on the line it starts: a head is written on one line)
+      const line = 'lit' in next && next.lit.includes(this.learned.definer) ? text.s.indexOf(this.learned.end, at) : -1;
+      ends = this.ends(text, at, line >= 0 && line < e ? line + 1 : e, 'lit' in next ? next.lit : undefined, quoted ? 0 : after ? Infinity : eq.pairs);
       // (next to a bracket, or a pair, a capture may hold nothing, or only spaces)
       bracketed = (next && 'lit' in next && this.opens(next.lit)) || (prev && 'lit' in prev && this.closed(prev.lit));
       if (bracketed && ('lit' in next ? this.literal(text, next.lit, at, e) >= 0 : true)) ends.push(at);

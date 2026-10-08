@@ -7,8 +7,9 @@ global => @js $.global
 @same {a} {b} => @js $.name(F, (a ?? $.none) === (b ?? $.none) ? "true" : "false")
 @declaring {name} => @js $.declaring(F.m.get("name"), F)
 @show {x} => @js $.output($.show(x))
-& => @js $.here(F)
-// (the same, in a method: not a member `&` of what it is applied on)
+// `&`: the rule's application, a value: what it was read from is its `caller`
+& => @js (a => (a.has("caller") || a.m.set("caller", a.caller), a))(F.caller)
+// the context a statement is read in
 @here => @js $.here(F)
 // where the method it is read in was called from
 @caller => @js $.caller_of(F)

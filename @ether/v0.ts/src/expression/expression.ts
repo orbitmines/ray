@@ -176,7 +176,7 @@ export class Host {
     // (a functionality naming a value: that value; one written by the rule, its words naming what it captured standing for it)
     // (a rule that writes definitions writes its own: its words naming what it captured stand for that)
     const w = f.s.trim(), valued = this.valued_capture(at, w);
-    const body = this.unblocked(held(w) ?? (valued ? new Value(valued.n.m.get(w), f) : this.writer(at, f)?.pairs === 0 ? this.substituted(f, caps) : f));
+    const body = this.unblocked(held(w) ?? (valued ? new Value(valued.n.m.get(w), f) : this.substitutes(this.writer(at, f)) ? this.substituted(f, caps) : f));
     // (a pattern handed on, written elsewhere, stands for itself)
     let head = p.s.trim(), stood = p.ctx !== at && p.ctx !== at.into;
     if (held(head)) {
@@ -207,8 +207,17 @@ export class Host {
       const eq = this.add(into, pieces, body); if (this.static_now > 0) eq.own = true; return statement ? this.held_as(eq) : into;
     }
     // (written by a rule: where the rule was applied, or into what is read into)
-    const where = at.into ?? (at.caller ? at.caller.into ?? at.caller : at);
-    const T = new Ray(where); T.scope = true; T.into = where; T.sees = this.global; T.m.set(this.functionality, body instanceof Value ? body.value : body);
+    let where = at.into ?? (at.caller ? at.caller.into ?? at.caller : at);
+    // (one name, written where nothing it is read into says where: where that name is held, from where it is read)
+    if (!at.into && head.length > 0 && this.name_end({ name: '', s: head }, 0, head.length) === head.length) for (const n of this.reach(at.caller ?? at)) if (n !== this.base && (n.has(head) || this.has_key(n, head))) { where = n.into ?? n; break; }
+    // (a functionality that is one word naming what the rule captured, written in a head being read: that parameter's default, read
+    // when it is not given; elsewhere: what it reads now)
+    let given: unknown = body instanceof Value ? body.value : body;
+    if (held(w) && body instanceof Code) {
+      if (where === this.reading_node) { (where.defaults ??= new Set()).add(head); (where.default_codes ??= new Map()).set(head, body); return where; }
+      given = this.walk(body);
+    }
+    const T = new Ray(where); T.scope = true; T.into = where; T.sees = this.global; T.m.set(this.functionality, given);
     const said = head + space + definer + space + this.functionality;
     let text = this.rewritten.get(said); if (!text) this.rewritten.set(said, text = { name: p.text.name, s: said });
     // (a head that is one name reads as itself: defined as the first statement says, without reading it again)
@@ -225,6 +234,8 @@ export class Host {
     for (const n of this.reach(at)) if (n.rule && n.has(w)) return n.m.get(w) instanceof Code ? undefined : { n };
     return undefined;
   }
+  // (a rule that is not a method writes its own definitions: its capture words in them stand for what it captured)
+  substitutes(w: Eq | undefined): boolean { return !!w && (w.pairs === 0 || !w.node); }
   // (a functionality written as one block: what is in it)
   unblocked<T>(f: T): T {
     if (!(f instanceof Code)) return f;
@@ -239,8 +250,8 @@ export class Host {
     const s = f.s, { end, space } = this.learned, indent = (t: string, i: number) => { const l = t.lastIndexOf(end, i - 1) + 1; let k = l; while (t[k] === space) k++; return k - l; };
     let out = '', from = 0, stood: Code | undefined;
     for (let i = 0; i < s.length; i++) {
-      if (!this.edge(s, i - 1)) continue;
-      for (const [k, c] of caps) if (s.startsWith(k, i) && this.edge(s, i + k.length)) {
+      if (!this.edge(s, i - 1) && !this.infix.has(s[i - 1])) continue;
+      for (const [k, c] of caps) if (s.startsWith(k, i) && (this.edge(s, i + k.length) || this.infix.has(s[i + k.length]))) {
         const x = stood = this.written(c), shift = indent(f.text.s, f.b + i) - indent(x.text.s, x.b), lines = x.s.split(end);
         out += s.slice(from, i) + lines.map((l, j) => j === 0 ? l : shift >= 0 ? space.repeat(shift) + l : l.slice(Math.min(-shift, this.depth(l, 0)))).join(end);
         from = i + k.length; i = from - 1; break;
@@ -390,23 +401,25 @@ export class Host {
     else if (name === '') form([cap], false);
     else { form([...lead(name), cap], false); const sp = lead(name + space); form(sp[sp.length - 1] && 'lit' in sp[sp.length - 1] ? [...sp, cap] : [...lead(name), { lit: space }, cap], true); }
     // (all of its parameters with a default: also as written alone)
-    if (node.params && name !== '' && node.closing === undefined && node.params.every(x => node.defaults?.has(x))) { const eq = this.add(into, this.pieces(name, at), body, node); eq.node = node; out.push(eq); }
+    if (node.params && name !== '' && node.closing === undefined && node.params.every(x => this.defaulted_param(node, x))) { const eq = this.add(into, this.pieces(name, at), body, node); eq.node = node; out.push(eq); }
     return declares ? this.held_as(out[0]) : into;
   }
+  // (a parameter with a default: written `= d` on it in its head)
+  defaulted_param(node: Ray, x: string): boolean { return !!node.defaults?.has(x) || this.valued(node, x) !== undefined; }
   given_name = '\u0000given'; restating = new Set<string>();
   // what a method was given, matched against its parameters (out of the one pair it may be written in), from all of them to as
   // few as its defaults allow; NOT when it does not read so
   bound(eq: Eq, F: Ray, code: Code): Cap[] | typeof NOT {
     const node = eq.node!, params = node.params!, given = F.m.get(this.given_name);
-    if (!(given instanceof Code) || !this.held(given.text, given.b, given.e)) { F.m.delete(this.given_name); return params.length === 0 || params.every(x => node.defaults?.has(x)) ? [] : NOT; }
+    if (!(given instanceof Code) || !this.held(given.text, given.b, given.e)) { F.m.delete(this.given_name); return params.length === 0 || params.every(x => this.defaulted_param(node, x)) ? [] : NOT; }
     let b = given.b, e = given.e; const s = given.text.s; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
     // (a bracket around what is given, not quotes: `"x"` is a value)
     const close = this.quotes.has(s[b]) ? undefined : this.pairs.get(s[b]); if (node.closing === undefined && close !== undefined && s[e - 1] === close && this.scan(given.text, b + 1, e - 1, () => {}) === e - 1) { b++; e--; }
     F.m.delete(this.given_name);
-    if (!this.held(given.text, b, e)) return params.every(x => node.defaults?.has(x)) ? [] : NOT;
+    if (!this.held(given.text, b, e)) return params.every(x => this.defaulted_param(node, x)) ? [] : NOT;
     const between = node.between ?? ', ';
     for (let k = params.length; k >= 0; k--) {
-      if (k < params.length && !node.defaults?.has(params[k])) break;
+      if (k < params.length && !this.defaulted_param(node, params[k])) break;
       if (k === 0) { if (this.held(given.text, b, e)) break; return []; }
       if (k === 1) return [{ name: params[0], b, e, floor: 0, reader: node.types?.get(params[0]) }];
       let sub = this.subs.get(node)?.[k]; if (!sub) { const pieces: Piece[] = []; params.slice(0, k).forEach((x, i) => { if (i) pieces.push({ lit: between }); pieces.push({ cap: x, reader: node.types?.get(x) }); }); sub = { pieces, body: eq.body, ctx: eq.ctx, order: 0, seq: eq.seq, key: '', pairs: Infinity }; const m = this.subs.get(node) ?? []; m[k] = sub; this.subs.set(node, m); }
@@ -620,7 +633,7 @@ export class Host {
     // (not where an operator is written: `!=` is no name)
     const w = this.name_end(text, b, e); if (w > b && (!this.operator_at(text, b) || this.named_by(s, b, s.slice(b, w)))) { const o = this.on({ name: true, caps: [], b, e: w }, text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
     // (what begins with what reads on from a value, read whole by nothing else, reads on from what it is read in: `!= " "` in
-    // `Char{!= " "}`, `.is_digit`)
+    // `Char{!= " "}`)
     if ((!best || best.e < e) && this.leads(s, b)) { const o = this.on({ eq: this.implicit, caps: [], b, e: b }, text, e, ctx, floor, not); if (o.e > b && this.better(o, best)) best = o; }
     return best;
   }
@@ -1060,7 +1073,7 @@ export class Host {
     const st = this.single(code) ? undefined : this.statements(code), first = st?.next();
     if (st && first && !first.done) { const second = st.next(); if (!second.done) return this.in_order(function* () { for (let x: IteratorResult<[number, number]> = first; !x.done; x = x === first ? second : st.next()) yield stated(new Code(code.text, x.value[0], x.value[1], code.ctx, code.floor)); }()); }
     // (a definition written in a functionality, its pattern naming what the rule captured: written again first, then read)
-    if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.match(this.definer, code.text, code.b, code.e, code.ctx, 0, code.b, []); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.ctx.rule ? code.ctx.statement : code.statement); }
+    if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.match(this.definer, code.text, code.b, code.e, code.ctx, 0, code.b, []); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.statement || (code.ctx.rule ? code.ctx.statement : false)); }
     let r = this.reading(code); const s = code.text.s;
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
     if (r === undefined || r.e < e) {
@@ -1672,6 +1685,9 @@ export class Host {
   }
   // A block read into a value: its names where it was written, what it declares the value's.
   into(code: Code, r: Ray, self?: unknown): unknown {
+    // (into a rule's application: where it was applied; into a frame that reads into a value: into that value)
+    if (r.scope && r.rule && r.caller) r = r.caller;
+    if (r.scope && r.into) r = r.into;
     const T = new Ray(code.ctx); T.scope = true; T.into = r; T.sees = r; T.self = self;
     return this.sequence(code, T);
   }

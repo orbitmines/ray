@@ -15,33 +15,48 @@
 
 // What reads a word, a span without spaces, one capture (the host's readers, `js.ray`'s kind of reader)
 Unled => @js $.reader(s => s.startsWith($.learned.open) ? undefined : s)
-Unspaced => @js $.reader(s => s.includes($.learned.space) ? undefined : s)
+Unspaced => @js $.reader(s => s.includes($.learned.space) || [...$.pairs.keys()].some(o => s.includes(o)) ? undefined : s)
 // one capture, `{align: start | center}`
 Captured => @js $.reader(s => { const { open, close } = $.learned; if (!s.startsWith(open) || !s.endsWith(close)) return undefined; let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === open) d++; else if (s[i] === close && --d === 0 && i < s.length - 1) return undefined; } return s; })
 // a word: letters, digits, `_`
 Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
 
+// `.m`, `. + 1`: a closure of one value, what the rest is read on (`xs.map(. + 1)`, `x ~~ (.s = 5)`)
+. {dot_rest} => (dot_it => dot_it dot_rest)
+.{dot_rest} => (dot_it => dot_it.dot_rest)
 // `x := v`: `x` is `v` where the statement is read, from here on (defined through the definer, as a value); `x = v`: where `x` is
 // declared; `x &= v`: `v` at the end of the Ray `x` holds (a Ray of it, when it holds nothing).
 {declared_name Unspaced} := {declared_value Expression} =>
-  declared_name => declared_value
+  & &+= { declared_name => declared_value }
 {declared_on Expression}.{declared_name Word} := {declared_value Expression} =>
   declared_on &+= { declared_name => declared_value }
+// `X<K = D, V> := class …`: the class, each parameter a name of it (its default, or nothing).
+{name Word}<{parameters}> := {value Expression} =>
+  made := value
+  reading := @made None
+  reading &+= {
+    {parameter Word} => made &+= { parameter := None }
+    {parameter Word} = {default} => made &+= { parameter := default }
+    {parameter Word}, {rest: reading} => made &+= { parameter := None }
+    {parameter Word} = {default}, {rest: reading} => made &+= { parameter := default }
+  }
+  reading with { parameters }
+  @here &+= { name := made }
 // `static statement` in a class: the statement (before the modifiers below, which read `static` off a definition).
-static {statement} => (@has & given) ? None : (@statically statement)
+static {statement} => (@has @here given) ? None : (@statically statement)
 // `static name = value`, `static name := value`: the class's own member (not written where `name` is declared further out), read
 // when it is first read (`static default = Store()` in `Store`'s own block); written by its name, not read where the class's
 // own names are (`static name = …` beside a field `name`)
-static {name Unspaced} = {value} => (@has & given) ? None : (@field & (@text name) (@later value))
-static {name Unspaced} := {value} => (@has & given) ? None : (@field & (@text name) (@later value))
+static {name Unspaced} = {value} => (@has @here given) ? None : (@field @here (@text name) (@later value))
+static {name Unspaced} := {value} => (@has @here given) ? None : (@field @here (@text name) (@later value))
 
 // `dynamically …`: a statement read again each time (P5.1, Control.ray's `Dynamic`); declared before the operations it is
 // written with (`dynamically assert x != None`)
 // `dynamically name = value`: `name` read as `value` is each time it is read (P5.1)
 dynamically {name} = {value} =>
-  name => value
+  name => (value)
 dynamically {name} := {value} =>
-  name => value
+  name => (value)
 dynamically if{ }{cond}{ }{block} => Dynamic(program: () => if cond block)
 // Run now, and again when what it reads is written (P5.1, P5.1a: by what runs it again, a runner, the TUI's loop)
 dynamically {value} => Dynamic(program: value**, source: value**)
@@ -82,7 +97,7 @@ class: {parent} => Class.made_of(parent, None, None)
   index := 0
   name := @param read index
   while name {
-    @field & name (listed ? given[index] : given)
+    @field @here name (listed ? given[index] : given)
     index = index + 1
     name = @param read index
   }
@@ -92,15 +107,22 @@ class: {parent} => Class.made_of(parent, None, None)
 // go on from everything before them (A-C5): declared first, they bind loosest.
 Node &+= {
   -- {call} =>
-    answer := this with { call }
+    answer := call
     (@applies answer) ? answer(this) : answer
   ~~ {call} =>
-    answer := this with { call }
+    answer := call
     (@applies answer) ? answer(this) : answer
     this
   // `a, b`: declared after `:=` (`x := 1, 2` holds both), before `=`, `&=`, `:` (they bind tighter: `f(x = g(), y)`, `f(a: 1, b: 2)`
   // give two); what it does, below
   , {other Expression} => ((@owns this "commas") ? this : (@made Ray).append(this)).joined(other)
+}
+// `x = v`: where `x` is declared (the first statement writes a name held further out there); `x.m = v`: on `x`
+{assigned_name Unspaced} = {assigned_value} =>
+  assigned_name => assigned_value
+{assigned_on Expression}.{assigned_name Word} = {assigned_value Expression} =>
+  assigned_on &+= { assigned_name => assigned_value }
+Node &+= {
   = {value} => @assign value
   &= {value Expression} => @assign ((this ?? []).append(value))
   // `x: T`: `x` is a `T` (holding `T` until something is written to it); given by name, `x: v` gives it `v`; in what is being given
@@ -241,18 +263,6 @@ Head &+= {
 {head Head} => {functionality} =>
   head.superposes ? head.components.for((alias) => @define alias "receiver" ", ") : (@define head "receiver" ", ")
 
-// `X<K = D, V> := class …`: the class, each parameter a name of it (its default, or nothing).
-{name Word}<{parameters}> := {value: Expression} =>
-  made := value
-  reading := @made None
-  reading &+= {
-    {parameter Word} => made &+= { parameter := None }
-    {parameter Word} = {default} => made &+= { parameter := default }
-    {parameter Word}, {rest: reading} => made &+= { parameter := None }
-    {parameter Word} = {default}, {rest: reading} => made &+= { parameter := default }
-  }
-  reading with { parameters }
-  & &+= { name := made }
 
 
 // ---------------------------------------------------------------- control flow: what a Branch is made of (`of`)
@@ -522,7 +532,7 @@ Node &+= {
   {{constraint}} =>
     made := @made Narrowing
     made.narrows := this
-    made.constraint := (it => it with { constraint })
+    made.constraint := (it => (it with { constraint }) -- (said => (@applies said) ? said(it) : said))
     made
   // `x is T` (T4.10): whether `T` admits `x`: an instance of it (or of what is made of it); one of a superposition's components; what
   // a narrowing narrows, satisfying its constraint; a list of `T`s for `T[]`; else `T` itself

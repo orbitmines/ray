@@ -876,7 +876,9 @@ export class Host {
     for (const n of ends) {
       if (n > at && !this.held(text, at, n) && !bracketed) continue;
       if (hugged && n > at && this.blank(text.s[n - 1])) continue;
-      if (fixed && (n === at || !this.reads(fixed, text, at, n, eq, ctx))) continue;
+      // (a capture written right after another (or after only a space): a word there may be text its type admits, `5px`)
+      const juxtaposed = i > 0 && ('cap' in eq.pieces[i - 1] || (i > 1 && 'lit' in eq.pieces[i - 1] && (eq.pieces[i - 1] as { lit: string }).lit.trim() === '' && 'cap' in eq.pieces[i - 2]));
+      if (fixed && (n === at || !this.reads(fixed, text, at, n, eq, ctx, juxtaposed))) continue;
       const block = !!prev && 'lit' in prev && prev.lit.endsWith(this.learned.open) && !!next && 'lit' in next && next.lit.startsWith(this.learned.close);
       caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, type: piece.type, block, argument: false });
       const r = this.match(eq, text, n, e, ctx, i + 1, start, caps);
@@ -938,13 +940,13 @@ export class Host {
   }
   // whether a reader reads a span whole (the parameters of a value, typed by a value that is not a scope, read any: what is read
   // where it was written, if it is one of it)
-  reads(r: Ray, text: Text, b: number, e: number, eq: Eq, ctx?: Ray): boolean {
+  reads(r: Ray, text: Text, b: number, e: number, eq: Eq, ctx?: Ray, juxtaposed = false): boolean {
     if (r.test) return r.test(text.s.slice(b, e).trim()) !== undefined;
     // (what is read by a value, not a block read into it: what it is called with)
-    const was = this.calling; this.calling = r; try { return this.reads_(r, text, b, e, eq, ctx); } finally { this.calling = was; }
+    const was = this.calling; this.calling = r; try { return this.reads_(r, text, b, e, eq, ctx, juxtaposed); } finally { this.calling = was; }
   }
   calling?: Ray; wording = false;
-  reads_(r: Ray, text: Text, b: number, e: number, eq: Eq, ctx?: Ray): boolean {
+  reads_(r: Ray, text: Text, b: number, e: number, eq: Eq, ctx?: Ray, juxtaposed = false): boolean {
     // (the parameters of a value's rule, or of a call, `f(a: T)`: values, decided where applied)
     if (!r.scope && (!eq.ctx.scope || this.calls(eq))) return true;
     const read = this.parsed(r, text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
@@ -968,7 +970,7 @@ export class Host {
     let there: Read | undefined; this.wording = true; try { there = this.parsed(ctx, text, b, end, ctx, 0); } finally { this.wording = false; }
     const p = there && there.e === end && !there.on && there.eq?.pieces.length === 1 ? there.eq.pieces[0] : undefined;
     const by = p && 'cap' in p ? this.fixed(p.reader, there!.eq) : undefined;
-    if (!(by instanceof Ray) || !by.test) return false;
+    if (!(by instanceof Ray) || !by.test) return juxtaposed && this.is(word, r);
     const v = by.test(word); return v !== undefined && this.is(v, r);
   }
   // (one of it without asking the language (read for every name, it would be): it, made of it, or one of what it superposes)

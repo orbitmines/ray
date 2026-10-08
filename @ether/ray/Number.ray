@@ -42,8 +42,8 @@ Number &+= {
   cos => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k) / (2 * k)!).sum
   sin => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k + 1) / (2 * k + 1)!).sum
 
-  .. (last: Number) => this == last ? [this] : this, (this < last ? succ : pred)..last
-  ..< (last: Number) => this == last ? [] : this, (this < last ? succ : pred)..<last
+  .. (last: Number) => this == last ? [this] : ((this < last ? succ : pred)..last).prepend(this)
+  ..< (last: Number) => this == last ? [] : ((this < last ? succ : pred)..<last).prepend(this)
 
   bounded => false
   entry => Line(value: this)

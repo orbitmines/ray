@@ -100,7 +100,7 @@ UI.TUI := class {
 
   Terminal := class: UI.Interface written: Compiler = UI.TUI.written, grid: Grid? {
     emit (bytes) => @me/instance = bytes
-    dynamically typed: @me/instance
+    dynamically typed = @me/instance
     size => Geometry.Vector(@me/device/os.env.COLUMNS as Decimal, @me/device/os.env.LINES as Decimal)
     emitted (value) => emit(Compiler.reduced(value, written) as String)
     start => emitted(Start())
@@ -108,7 +108,8 @@ UI.TUI := class {
       -- ({ (@me/device/opened).held() } when @me/device/opened changes)
     stop => emitted(Stop())
     write (drawn: Grid) => (grid = drawn) -- emitted(grid.framed)
-    read => (typed ?? "") ~= (events: Event[]) -- .events.for(Compiler.reduced(., applied))
+    // (input that has ended reads as nothing: the program is done, so a run with nothing to read writes one frame and returns)
+    read => typed ? ((typed ~= (events: Event[])) -- .events.for(Compiler.reduced(., applied))) : UI.program?.stop
   }
 
   Browser := {

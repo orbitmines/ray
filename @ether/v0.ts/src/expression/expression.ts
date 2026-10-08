@@ -102,12 +102,12 @@ export class Host {
   changes: { needle: string; at: Ray }[] = [];
   // (what is declared where no reading has reached yet changes no reading: a closure made, a value made; nor in a rule's frame,
   // read as its shape: every frame of it declares the same there)
-  changed(pieces: Piece[], at: Ray) { if (at.reached === undefined || (SHAPED && at.rule && at.scope && !at.into)) return; this.version++; this.changes.push({ needle: this.needle(pieces), at }); }
+  changed(pieces: Piece[], at: Ray) { if (at.reached === undefined || (SHAPED && at.rule && at.scope && !at.into)) return; this.version++; this.counts.changes = (this.counts.changes ?? 0) + 1; this.changes.push({ needle: this.needle(pieces), at }); }
   // whether anything declared since a version may read a span: declared where a reading then could reach (one first reached
   // later was reached by none)
   since_read(version: number, span: string): boolean {
     for (let v = version; v < this.version; v++) {
-      const c = this.changes[v];
+      const c = this.changes[v]; this.counts.scanned = (this.counts.scanned ?? 0) + 1;
       if (c.at.reached === undefined || c.at.reached > version) continue;
       if (!c.needle || span.includes(c.needle)) return true;
     }
@@ -407,13 +407,13 @@ export class Host {
     if (!R || !(node instanceof Ray) || node.spelled === undefined) return undefined;
     const at = R.caller!, statement = R.statement, caps = R.rule!.pieces.filter(x => 'cap' in x) as { cap: string }[];
     const f = R.m.get(caps[caps.length - 1].cap) as Code;
-    if (process.env.DBGF && node instanceof Ray && node.spelled === '') console.log('  define f', JSON.stringify(f.s), 'f.ctx#', this.id(f.ctx), 'R#', this.id(R), 'R.caller#', this.id(R.caller));
-    const text = { name: f.text.name, s: node.spelled }, head = new Code(text, 0, text.s.length, at);
+    if (DBGF && node instanceof Ray && node.spelled === '') console.log('  define f', JSON.stringify(f.s), 'f.ctx#', this.id(f.ctx), 'R#', this.id(R), 'R.caller#', this.id(R.caller));
+    const text = this.text_of(f.text.name, node.spelled), head = new Code(text, 0, text.s.length, at);
     // (one read as another statement: that statement, read again where it was written)
     // (not when that is this one again: then as written)
     if (node.again && !this.restating.has(node.spelled)) {
       const { end, space, definer } = this.learned, line = f.text.s.lastIndexOf(end, f.b - 1) + 1, col = this.depth(f.text.s, line), t = space.repeat(col) + node.spelled + space + definer + space + f.s;
-      this.restating.add(node.spelled); try { return this.walk(stated(new Code({ name: f.text.name, s: t }, col, t.length, at))); } finally { this.restating.delete(node.spelled); }
+      this.restating.add(node.spelled); try { return this.walk(stated(new Code(this.text_of(f.text.name, t), col, t.length, at))); } finally { this.restating.delete(node.spelled); }
     }
     if (!node.params && !node.leftward) { if (node.own) this.static_now++; try { return this.defined(head, f, at, statement); } finally { if (node.own) this.static_now--; } }
     if (typeof between === 'string') node.between = between;
@@ -1153,7 +1153,7 @@ export class Host {
       // (what read on from a value applied what that value has with that head: none of that head applies)
       for (let x: Read | undefined = r; x; x = x.on) if (x.eq) { not.add(x.eq); const p0 = x.eq.pieces[0]; if (x.on && 'lit' in p0) for (const y of this.sends.get(p0.lit[0]) ?? []) if (y.key === x.eq.key) not.add(y); }
       r = this.parse(code.text, code.b, code.e, code.ctx, code.floor, not);
-      if (process.env.EXPR_NOTS && not.size % 1000 === 0) writeSync(2, `not ${not.size} ${code.s.slice(0, 30)} → ${r?.eq?.key ?? (r?.name ? 'name' : r)} on ${r?.on?.eq?.key ?? r?.on?.name}\n`);
+      if (NOTS && not.size % 1000 === 0) writeSync(2, `not ${not.size} ${code.s.slice(0, 30)} → ${r?.eq?.key ?? (r?.name ? 'name' : r)} on ${r?.on?.eq?.key ?? r?.on?.name}\n`);
       if (r === undefined || r.e < e) { const m = this.missing as Diagnostic | undefined; if (m) this.say(m.message, m.at.text, m.at.b, m.at.e); else this.say(`Unread \`${s.slice(code.b, e).trim().slice(0, 60)}\`.`, code.text, code.b, e); return undefined; }
     }
     } finally { this.missing = missing; }
@@ -1188,6 +1188,7 @@ export class Host {
   // may read it
   parsed(key: Ray, text: Text, b: number, e: number, ctx: Ray, floor: number): Read | undefined {
     if (NOMEMO) return this.parse(text, b, e, ctx, floor);
+    this.counts.memo = (this.counts.memo ?? 0) + 1;
     let m = this.memo.get(key); if (!m) this.memo.set(key, m = new Map());
     let at = m.get(text); if (!at) m.set(text, at = new Map());
     let list = at.get(b); if (!list) at.set(b, list = []);
@@ -1208,6 +1209,7 @@ export class Host {
   shared = new WeakMap<Text, Map<string, { version: number; r: Read | undefined; at: number; eqi: number; sent: number; held: Ray[] }>>();
   parse_shared(text: Text, b: number, e: number, ctx: Ray, floor: number): Read | undefined {
     if (NOSHARE) return this.parse(text, b, e, ctx, floor);
+    this.counts.shared = (this.counts.shared ?? 0) + 1;
     const s = text.s; let bb = b, ee = e; while (bb < ee && this.blank(s[bb])) bb++; while (ee > bb && this.blank(s[ee - 1])) ee--;
     if (bb >= ee) return undefined;
     const word = s.slice(bb, this.name_end(text, bb, ee)), nears: number[] = [], held: Ray[] = [];
@@ -1564,7 +1566,8 @@ export class Host {
     if (STACK) this.chain.push(`${eq.key.slice(0, 30)} @${eq.body.text.name.split('/').pop()}:${eq.body.text.s.slice(0, eq.body.b).split(this.learned.end).length} on ${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 40))}`);
     this.counts.applications++;
     if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(0, 25).join('\n') + '\n....\n' + this.chain.slice(-12).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
-    try { const v = this.apply_(eq, caps, code, self, place); if (!this.passes(eq)) this.place = undefined; return v; } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
+    const T0 = RULES ? performance.now() : 0, C0 = RULES ? this.child_ms : 0, W0 = this.counts.walks, CW = this.child_w, M0 = this.counts.matches, CM = this.child_m; if (RULES) { this.child_ms = 0; this.child_w = 0; this.child_m = 0; }
+    try { const v = this.apply_(eq, caps, code, self, place); if (!this.passes(eq)) this.place = undefined; return v; } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); if (RULES) { const t = performance.now() - T0, k = eq.key.slice(0, 50) + ' @' + eq.body.text.name.split('/').pop() + ':' + eq.body.text.s.slice(0, eq.body.b).split('\n').length; const x = this.rule_ms.get(k) ?? [0, 0, 0, 0]; const w = this.counts.walks - W0, m = this.counts.matches - M0; x[0] += t - this.child_ms; x[1]++; x[2] += w - this.child_w; x[3] += m - this.child_m; this.rule_ms.set(k, x); this.child_ms = C0 + t; this.child_w = CW + w; this.child_m = CM + m; } }
   }
   direct(eq: Eq, code: Code): unknown {
     this.counts.applications++;
@@ -1578,6 +1581,7 @@ export class Host {
   }
   // (how much reading was done: walks, parses, match attempts, applications)
   counts: Record<string, number> = { walks: 0, parses: 0, matches: 0, applications: 0, defined: 0 };
+  child_w = 0; child_m = 0; child_ms = 0; rule_ms = new Map<string, number[]>();
   applying = 0; steps = 0; chain: string[] = []; recent: string[] = [];
   apply_(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
     // (`recur(…)`: the method again, given what it is given there)
@@ -1732,6 +1736,8 @@ export class Host {
   // A block's statements in order. One naming what nothing holds yet is read again once the block is read: what the block declares
   // further on it may name (only then is what it leaves unresolved said).
   sequence(code: Code, T: Ray): unknown {
+    // (one statement: it alone)
+    if (this.single(code)) { const one = this.splits.get(code.text)!.get(code.b)!.get(code.e)!.list[0]; return this.settle([stated(new Code(code.text, one.p, one.e, T))]); }
     return this.settle(function* (h: Host) { for (const [b, e] of h.statements(code)) yield stated(new Code(code.text, b, e, T)); }(this));
   }
   // Statements in order (each split once those before it were read: what they declare says where it ends); each that said
@@ -1744,11 +1750,11 @@ export class Host {
     try {
       // (inside another settling, one is read again only once something was declared since it was read: what it left unresolved is
       // otherwise left to that one, which reads it again with what it is in (reading it again at each would multiply))
-      const kept = new Map<Code, { adds: number; left: [Place, Diagnostic][] }>();
+      let kept: Map<Code, { adds: number; left: [Place, Diagnostic][] }> | undefined;
       for (let round = 0, before = Infinity; ; round++) {
         const again: Code[] = [], final = round >= 8;
         for (const c of left) {
-          const k = kept.get(c);
+          const k = kept?.get(c);
           if (inner && k && k.adds === this.adds) { for (const [p, d] of k.left) this.note(p, d); continue; }
           if (final) { last = this.tried(c, !inner); continue; }
           // (a statement that defined what a class holds, read again into one of what is made of it: the class's already, A7)
@@ -1761,11 +1767,11 @@ export class Host {
           if (this.ran_away) { this.forget(mark); continue; }
           // (or one that declared a field the class gives each of what is made of it (its `field_defaults`): given it there)
           if (into && !into.scope && into.eqs.length > n && (into.eqs.slice(n).every(eq => !eq.native) || into.eqs.slice(n).some(eq => eq.key === 'field_defaults'))) { let at = this.defining.get(c.text); if (!at) this.defining.set(c.text, at = new Map()); at.set(c.b, { cls: into, written: c.ctx.outer }); }
-          const left_unresolved = this.since(mark); if (inner) kept.set(c, { adds: this.adds, left: left_unresolved.map(p => [p, this.unread.get(p)!]) }); this.forget(mark);
+          const left_unresolved = this.since(mark); if (inner && left_unresolved.length > 0) (kept ??= new Map()).set(c, { adds: this.adds, left: left_unresolved.map(p => [p, this.unread.get(p)!]) }); this.forget(mark);
           if (left_unresolved.length > 0) { this.unsay(d); again.push(c); }
         }
-        if (process.env.EXPR_ROUNDS) console.log(this.settling + ' ' + this.applying + ' round', round, 'left', again.length, again[0] ? again[0].text.name + ':' + again[0].text.s.slice(0, again[0].b).split('\n').length : '', Math.round(performance.now()));
-        if (process.env.EXPR_ROUNDS === '2' && this.settling === 1) for (const c of again) console.log('   left', c.text.name.split('/').pop() + ':' + c.text.s.slice(0, c.b).split('\n').length, JSON.stringify(c.s.slice(0, 50)));
+        if (ROUNDS) console.log(this.settling + ' ' + this.applying + ' round', round, 'left', again.length, again[0] ? again[0].text.name + ':' + again[0].text.s.slice(0, again[0].b).split('\n').length : '', Math.round(performance.now()));
+        if (ROUNDS === '2' && this.settling === 1) for (const c of again) console.log('   left', c.text.name.split('/').pop() + ':' + c.text.s.slice(0, c.b).split('\n').length, JSON.stringify(c.s.slice(0, 50)));
         if (final || again.length === 0) break;
         // (nothing more was read: the last time)
         if (again.length >= before) round = 7;
@@ -1981,6 +1987,7 @@ class Later { constructor(public code: Code) {} read = false; value?: unknown; }
 export class Label { constructor(public at: Code) {} }
 export class Jump { constructor(public kind: string, public value?: unknown, public to?: Ray) {} }
 const NOMEMO = !!process.env.EXPR_NOMEMO, NOSHARE = !!process.env.EXPR_NOSHARE, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
+const RULES = !!process.env.EXPR_RULES, ROUNDS = process.env.EXPR_ROUNDS, NOTS = !!process.env.EXPR_NOTS, DBGF = !!process.env.DBGF;
 const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
 const REJECT = Symbol('reads nothing');
 // (what a shape is keyed by where nothing is, and a block read into a value)

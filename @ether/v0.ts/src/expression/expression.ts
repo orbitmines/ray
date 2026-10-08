@@ -1230,6 +1230,7 @@ export class Host {
     let m = this.shared.get(text); if (!m) this.shared.set(text, m = new Map());
     const x = m.get(sig);
     if (x && (x.version === this.version || !this.since_shared(x, s.slice(b, e)))) { x.version = this.version; x.sent = this.sent; return this.neared(x.r, nears, x.at, x.eqi >= 0 ? held[x.at].eqs[x.eqi] : undefined); }
+    if (MISSES) console.log('MISS', text.name.split('/').pop() + ':' + text.s.slice(0, b).split('\n').length, JSON.stringify(s.slice(b, Math.min(e, b + 50))), x ? 'stale' : 'new', sig.slice(0, 100));
     const r = this.parse(text, b, e, ctx, floor);
     // (how near, among the contexts with equivalences: the how manyth of them; read by a closure's rule: the how manyth of its)
     let inner = r; while (inner?.on) inner = inner.on;
@@ -1987,7 +1988,7 @@ class Later { constructor(public code: Code) {} read = false; value?: unknown; }
 export class Label { constructor(public at: Code) {} }
 export class Jump { constructor(public kind: string, public value?: unknown, public to?: Ray) {} }
 const NOMEMO = !!process.env.EXPR_NOMEMO, NOSHARE = !!process.env.EXPR_NOSHARE, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
-const RULES = !!process.env.EXPR_RULES, ROUNDS = process.env.EXPR_ROUNDS, NOTS = !!process.env.EXPR_NOTS, DBGF = !!process.env.DBGF;
+const MISSES = !!process.env.EXPR_MISSES, RULES = !!process.env.EXPR_RULES, ROUNDS = process.env.EXPR_ROUNDS, NOTS = !!process.env.EXPR_NOTS, DBGF = !!process.env.DBGF;
 const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
 const REJECT = Symbol('reads nothing');
 // (what a shape is keyed by where nothing is, and a block read into a value)

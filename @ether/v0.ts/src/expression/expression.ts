@@ -380,6 +380,7 @@ export class Host {
     if (!R || !(node instanceof Ray) || node.spelled === undefined) return undefined;
     const at = R.caller!, statement = R.statement, caps = R.rule!.pieces.filter(x => 'cap' in x) as { cap: string }[];
     const f = R.m.get(caps[caps.length - 1].cap) as Code;
+    if (process.env.DBGF && node instanceof Ray && node.spelled === '') console.log('  define f', JSON.stringify(f.s), 'f.ctx#', this.id(f.ctx), 'R#', this.id(R), 'R.caller#', this.id(R.caller));
     const text = { name: f.text.name, s: node.spelled }, head = new Code(text, 0, text.s.length, at);
     // (one read as another statement: that statement, read again where it was written)
     // (not when that is this one again: then as written)
@@ -1112,7 +1113,8 @@ export class Host {
     if (SHAPED && key.rule && key.scope && !key.into && key.eqs === NONE) key = this.shape(key);
     else {
       while (key.eqs === NONE && key.scope && key.outer && !key.sees && !key.into) key = key.outer;
-      if (SHAPED && key.rule && key.scope && !key.into) key = this.shape(key);
+      // (one that holds rules of its own reads as itself: what it holds as values are only names)
+      if (SHAPED && key.rule && key.scope && !key.into && !this.has_rules(key)) key = this.shape(key);
       // (a block read into a value reads as it does into every value of that class, from where it was written)
       else if (SHAPED && key.into && key.scope && !key.rule && !key.into.scope && key.into !== this.global) key = this.shape_into(key);
     }
@@ -1396,27 +1398,40 @@ export class Host {
   // Statements read in order; a `goto` to a label among them goes on from that label (one further on is split first).
   in_order(st: Iterator<Code>): unknown {
     const seen: Code[] = []; let v: unknown;
+    // (a label is a place among the statements it is written with: named before any of them is read, so a statement can name one
+    // further on)
+    for (let x = st.next(); !x.done; x = st.next()) seen.push(x.value);
+    for (const c of seen) { const name = this.label_ahead(c); if (name !== undefined) this.add(c.ctx, [{ lit: name }], new Value(new Label(c), c)); }
     this.ordered++;
     try {
-      for (let i = 0; ; i++) {
-        if (i === seen.length) { const x = st.next(); if (x.done) return v; seen.push(x.value); }
+      for (let i = 0; i < seen.length; i++) {
         try { v = this.walk(seen[i]); }
         catch (x) {
           if (!(x instanceof Jump) || x.kind !== 'goto') throw x;
-          let j = seen.findIndex(c => this.labels(c, x.value as string));
-          while (j < 0) { const y = st.next(); if (y.done) throw x; seen.push(y.value); if (this.labels(y.value, x.value as string)) j = seen.length - 1; }
+          // (to a place: only the statements that hold it; by its name, the first label of that name among them)
+          const j = x.value instanceof Label ? seen.indexOf(x.value.at) : seen.findIndex(c => this.label_name(c) === x.value);
+          if (j < 0) throw x;
           i = j - 1;
         }
       }
+      return v;
     } finally { this.ordered--; }
   }
-  // whether a statement is a label of that name (one read by the interpreter's `label`)
-  labels(c: Code, name: string): boolean {
-    const r = this.reading(c);
-    if (!r?.eq || r.caps.length === 0 || c.text.s.slice(r.caps[0].b, r.caps[0].e).trim() !== name) return false;
+  // the name of a statement that is a label (one read by the interpreter's `label`), else nothing
+  // (whether a statement is a label, asked before what is before it is read: kept by where it is written, once the language is read)
+  label_ahead(c: Code): string | undefined {
+    let m = this.labelled.get(c.text); if (!m) this.labelled.set(c.text, m = new Map());
+    const k = c.b * 65536 + (c.e - c.b), was = m.get(k); if (was !== undefined && !this.booting) return was === null ? undefined : was;
+    const name = this.label_name(c, true); m.set(k, name ?? null); return name;
+  }
+  labelled = new WeakMap<Text, Map<number, string | null>>();
+  // (`ahead`: asked before the statements before it are read: read as it would be now, not kept)
+  label_name(c: Code, ahead = false): string | undefined {
+    const r = ahead ? this.aside(() => this.parse(c.text, c.b, c.e, c.ctx, c.floor)) : this.reading(c);
+    if (!r?.eq || r.caps.length === 0) return undefined;
     // (its functionality the interpreter's `label`, or read as what is)
-    for (let eq: Eq | undefined = r.eq, k = 0; eq && k < 4; eq = this.reading(eq.body)?.eq, k++) if (eq.body.s.includes('$.label(')) return true;
-    return false;
+    for (let eq: Eq | undefined = r.eq, k = 0; eq && k < 4; eq = this.reading(eq.body)?.eq, k++) if (eq.body.s.includes('$.label(')) return c.text.s.slice(r.caps[0].b, r.caps[0].e).trim();
+    return undefined;
   }
   label(_F: Ray): unknown { return undefined; }
   // a message said where it is written (what it reads as, else as it is written)
@@ -1445,6 +1460,8 @@ export class Host {
     if (B && this.has_key(B, key)) for (let i = B.eqs.length - 1; i >= 0; i--) if (B.eqs[i].key === key) { out.push(B.eqs[i]); if (one) return out; }
     return out;
   }
+  // (whether a context has rules of its own, not only values under names)
+  has_rules(n: Ray): boolean { if (n.eqs.length === 0) return false; if (!n.led) this.led(n); return !!n.ruled; }
   // (whether a context has an equivalence with that head)
   has_key(n: Ray, key: string): boolean { if (n.eqs.length === 0) return false; if (!n.led) this.led(n); return n.keys!.has(key); }
   visit(start: Ray, value: Ray, key: string, one: boolean, seen: Set<Ray>, out: Eq[]): boolean {
@@ -1550,6 +1567,8 @@ export class Host {
     if (r.test) { const t = code.s.trim(), v = r.test(t); if (v === undefined) return NOT; if (v !== t) return v; const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
     const T = new Ray(r); T.scope = true; T.into = r; T.written = code.ctx; T.self = self;
     const read = this.parsed(r, code.text, code.b, code.e, r, 0); let end = code.e; while (end > code.b && this.blank(code.text.s[end - 1])) end--;
+    // (a name read in a frame, a rule's application (`(&.caller).x`): what that frame holds under it)
+    if (r.scope && read?.name && read.e === end && (r.rule || r.caller)) return this.walk(new Code(code.text, code.b, code.e, r, code.floor));
     if (r.scope && read?.name && read.e === end) { const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
     const word = read?.name ? code.text.s.slice(read.b, read.e) : undefined;
     // (a reader decided where it was written, a type: what it does not read whole is read where it was written, one of it, or not read)
@@ -1707,7 +1726,7 @@ export class Host {
     if (one) {
       const c = stated(new Code(eq.body.text, one.p, one.e, F));
       this.ordered++;
-      try { for (;;) { try { return this.walk(c); } catch (x) { if (!(x instanceof Jump) || x.kind !== 'goto' || !this.labels(c, x.value as string)) throw x; } } } finally { this.ordered--; }
+      try { for (;;) { try { return this.walk(c); } catch (x) { if (!(x instanceof Jump) || x.kind !== 'goto' || (x.value instanceof Label ? x.value.at !== c : this.label_name(c) !== x.value)) throw x; } } } finally { this.ordered--; }
     }
     const h = this;
     return this.in_order(function* () { for (const [b, e] of h.statements(eq.body)) yield stated(new Code(eq.body.text, b, e, F)); }());
@@ -1853,6 +1872,8 @@ class Runaway extends Error {}
 class Later { constructor(public code: Code) {} read = false; value?: unknown; }
 // a jump out of what is being read: to the end, or the start again, of the loop it is in (`break`, `continue`), out of the method
 // it is in with a value (`return`)
+// a label's place: the statement it is, among those it is written with
+export class Label { constructor(public at: Code) {} }
 export class Jump { constructor(public kind: string, public value?: unknown, public to?: Ray) {} }
 const NOMEMO = !!process.env.EXPR_NOMEMO, NOSHARE = !!process.env.EXPR_NOSHARE, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
 const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);

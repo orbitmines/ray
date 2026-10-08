@@ -99,20 +99,20 @@ Symbolic => @js $.reader(s => s.length > 0 && !/[\p{L}\p{N}_\s]/u.test(s) ? s : 
 Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefined)
 {number Numeral} => number
 // `while c { body }`: the body again while `c` holds (every value but nothing and false), iterated by the host.
-while {condition} {{body}} => @js $.looped(F)
 // `do { … } while c`: the block, then again while `c` holds
-do {{body}} while {condition} => @js $.looped(F, true)
 // (the language's `x while c`: `x` again while `c` holds)
-@while {condition} {body} => @js $.looped(F)
 // `loop { … }`: the block again, until a `break`
+while {condition} {{body}} => @js $.looped(F)
+do {{body}} while {condition} => @js $.looped(F, true)
+@while {condition} {body} => @js $.looped(F)
 loop {{body}} => @js (F.m.set("condition", true), $.looped(F))
-// jumps (the language's `break`, `continue`, `return`, `recur`, `goto`, labels): out of the loop, or method, they are written in
 @break => @js $.jump("break")
 @continue => @js $.jump("continue")
+// jumps (the language's `break`, `continue`, `return`, `recur`, `goto`, labels): out of the loop, or method, they are written in
 @return {value} => @js $.jump("return", $.get(F, "value"), F)
 @recur {given} => @js $.jump("recur", $.written(F.m.get("given")), F)
 @recur => @js $.jump("recur", undefined, F)
-@goto {target} => @js $.jump("goto", $.written(F.m.get("target")).s.trim())
+@goto {target} => @js ((t) => $.jump("goto", t && t.constructor && t.constructor.name === "Label" ? t : $.written(F.m.get("target")).s.trim()))($.get(F, "target"))
 @label {name} => @js $.label(F)
 @character {x} => @js String.fromCodePoint($.get(F, "x"))
 // any text (what reads a String written in a rule's head)

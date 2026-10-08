@@ -470,7 +470,7 @@ return {value} => @return value
 return => @return None
 recur({given}) => @recur given
 recur => @recur
-goto {target Unspaced} => @goto target
+goto {target} => @goto target
 {name Unspaced}\ => @label name
 
 // ---------------------------------------------------------------- enums: `enum a | b (field: v) | c { block }`, a class of exactly these members

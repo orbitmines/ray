@@ -372,6 +372,15 @@ Node &+= {
   is {type: Expression} => (@inside this type) || (type.superposes && type.components.some((component) => this is component)) || (type.narrows && (this is type.narrows) && type.constraint(this)) || (@same this type)
 }
 
+// `T[]`: one `T` after another, a type of text read as a run of what `T` reads
+Listing := @made Node
+Node &+= {
+  [] =>
+    made := @made Listing
+    made.of := this
+    made
+}
+
 // ---------------------------------------------------------------- the core the library extends: an Iterable of `Vertex`, an Array, text, numbers
 Iterable<Vertex> := class { }
 Array := class: Iterable { }

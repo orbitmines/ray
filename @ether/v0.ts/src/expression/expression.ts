@@ -399,7 +399,8 @@ export class Host {
   reach(ctx: Ray): Ray[] { const out: Ray[] = []; this.reach_(ctx, out, ++this.epoch); return out; }
   reach_(ctx: Ray, out: Ray[], epoch: number) {
     let valued = false, sees: Ray[] | undefined;
-    for (let n: Ray | undefined = ctx; n && n.seen !== epoch; n = n.outer) { n.seen = epoch; if (!n.scope || (n.into && !n.into.scope)) valued = true; if (n.sees) (sees ??= []).push(n.sees); out.push(n); }
+    // (a block read into a value reaches that value first, then where it was written)
+    for (let n: Ray | undefined = ctx; n && n.seen !== epoch; n = n.outer) { n.seen = epoch; if (!n.scope || (n.into && !n.into.scope)) valued = true; out.push(n); if (n.sees && n.sees === n.into) this.reach_(n.sees, out, epoch); else if (n.sees) (sees ??= []).push(n.sees); }
     if (valued && this.base && this.base.seen !== epoch) { this.base.seen = epoch; out.push(this.base); }
     if (sees) for (const x of sees) this.reach_(x, out, epoch);
   }
@@ -535,6 +536,7 @@ export class Host {
     if (!r.scope && !eq.ctx.scope) return true;
     const read = this.parse(text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
     if (r.scope) return !!read && read.e === end;
+    if (this.patterns && this.fits(r, text.s.slice(b, end).trimStart())) return true;
     // (a value that is not a scope reads what its own equivalences, or names, read whole; anything else is read where it was
     // written, and is one of it or not: decided where it is applied, unless the span is a rule of its own)
     // (a rule where statements are read reads text by its types; only a value's own rules (its parameters, a level's) decide by the
@@ -835,6 +837,8 @@ export class Host {
     if (r.scope && read?.name && read.e === end) { const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
     const word = read?.name ? code.text.s.slice(read.b, read.e) : undefined;
     // (a reader decided where it was written, a type: what it does not read whole is read where it was written, one of it, or not read)
+    // (a type that reads the text as it is written: that text)
+    if (typed && !r.scope && this.patterns && !(read && read.e === end && this.own(read, r, code.text)) && this.fits(r, code.s.trim())) return code.s.trim();
     if (typed && !r.scope && !(read && read.e === end && this.own(read, r, code.text))) {
       // (read where it was written, while the rule asking reads nothing itself)
       let at = code.ctx; while (at.written) at = at.written;
@@ -969,6 +973,44 @@ export class Host {
     }
     return undefined;
   }
+  // A type reading text (`js.ray` names the fields the language's types are made of): text reads itself; a host reader what it
+  // reads; nothing, nothing; `one` a character; alternatives any of theirs; a narrowing what it narrows that its constraint holds
+  // of; a repetition one or more of what it repeats; a sequence its parts in order.
+  patterns?: { alternatives: string; narrowed: string; constraint: string; repeated: string; sequence: string; value: string; next: string; one: string };
+  fits(T: unknown, s: string): boolean {
+    if (!(T instanceof Ray)) return this.fit_at(T, s, 0, new Map(), 0).has(s.length);
+    if (this.fitted_version !== this.version) { this.fitted = new WeakMap(); this.fitted_version = this.version; this.one = undefined; }
+    let m = this.fitted.get(T); if (!m) this.fitted.set(T, m = new Map());
+    let v = m.get(s); if (v === undefined) m.set(s, v = this.fit_at(T, s, 0, new Map(), 0).has(s.length));
+    return v;
+  }
+  fitted = new WeakMap<Ray, Map<string, boolean>>(); fitted_version = -1; one?: unknown;
+  fit_at(T: unknown, s: string, i: number, memo: Map<unknown, Map<number, Set<number>>>, depth: number): Set<number> {
+    let at = memo.get(T); if (!at) memo.set(T, at = new Map());
+    const kept = at.get(i); if (kept) return kept;
+    const out = new Set<number>(); at.set(i, out);
+    const p = this.patterns; if (depth > 64) return out;
+    if (typeof T === 'string') { if (s.startsWith(T, i)) out.add(i + T.length); return out; }
+    if (typeof T === 'number') { const t = String(T); if (s.startsWith(t, i)) out.add(i + t.length); return out; }
+    if (T === undefined || T === this.none) { out.add(i); return out; }
+    if (!(T instanceof Ray) || !p) return out;
+    if (T.test) { for (let j = i + 1; j <= s.length; j++) if (T.test(s.slice(i, j)) !== undefined) out.add(j); return out; }
+    if (T === (this.one ??= this.name(this.global, p.one))) { if (i < s.length) out.add(i + (s.codePointAt(i)! > 0xffff ? 2 : 1)); return out; }
+    const alternatives = this.field(T, p.alternatives), narrowed = this.field(T, p.narrowed), repeated = this.field(T, p.repeated), first = this.field(T, p.sequence);
+    if (alternatives instanceof Ray) for (let v = this.field(alternatives, p.sequence); v instanceof Ray; v = this.field(v, p.next)) for (const j of this.fit_at(this.field(v, p.value), s, i, memo, depth + 1)) out.add(j);
+    else if (narrowed !== undefined) { const c = this.field(T, p.constraint); for (const j of this.fit_at(narrowed, s, i, memo, depth + 1)) if (this.holds(this.invoke(c, s.slice(i, j)))) out.add(j); }
+    else if (repeated !== undefined) { let edge = [...this.fit_at(repeated, s, i, memo, depth + 1)].filter(j => j > i); const seen = new Set<number>(); while (edge.length) { const next: number[] = []; for (const j of edge) if (!seen.has(j)) { seen.add(j); out.add(j); for (const k of this.fit_at(repeated, s, j, memo, depth + 1)) if (k > j) next.push(k); } edge = next; } }
+    else if (first instanceof Ray) { let ends = new Set([i]); for (let v: unknown = first; v instanceof Ray; v = this.field(v, p.next)) { const next = new Set<number>(); for (const j of ends) for (const k of this.fit_at(this.field(v, p.value), s, j, memo, depth + 1)) next.add(k); ends = next; } for (const j of ends) out.add(j); }
+    return out;
+  }
+  // a closure applied to a value; whether a value holds (every value but nothing and false)
+  invoke(f: unknown, x: unknown): unknown {
+    if (!(f instanceof Ray) || f.eqs.length !== 1) return undefined;
+    const eq = f.eqs[0], c = eq.pieces.find(q => 'cap' in q) as { cap: string } | undefined; if (!c) return undefined;
+    const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; F.m.set(c.cap, x);
+    return eq.native ? eq.native(F) : this.body(eq, F);
+  }
+  holds(v: unknown): boolean { return v !== undefined && v !== this.none && v !== NOT && v !== this.name(this.global, 'false'); }
   // a context the host reads text with (`js.ray`): `test` gives what a span is read as, or undefined
   reader(test: (s: string) => unknown): Ray { const r = new Ray(); r.test = test; return r; }
 

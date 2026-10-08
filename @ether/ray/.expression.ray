@@ -158,7 +158,10 @@ unless {condition} {{yes}} => condition ? Branch.of(None, None) : Branch.of(true
 // (`while c { body }`: the body again while `c` holds; iterating is the interpreter's (`js.ray`))
 
 // ---------------------------------------------------------------- Rays (`a, b`): vertices in order (`head`, `tail`; each `value`, `next`, `previous`)
-Ray := @made Node
+// (a Ray is an Array, which is an Iterable: what the library adds to them is a Ray's too)
+Iterable := @made Node
+Array := @made Iterable
+Ray := @made Array
 Vertex := @made Node
 Ray &+= {
   append (value) =>
@@ -195,8 +198,23 @@ Ray &+= {
       at_vertex = found ? None : at_vertex.next
     }
     found ?? false
-  , {other: Expression} => this.append(other)
+  , {other: Expression} => this.joined(other)
+  // (what follows a Ray: each of its values, else it)
+  joined (other) =>
+    given := other
+    made := this
+    ((@of given) === Ray) ? given.for(x => made.append(x)) : made.append(given)
+    made
+  entry => this.head
   first => this.head ? this.head.value : None
+  count =>
+    counted := 0
+    at_vertex := this.head
+    while at_vertex {
+      counted = counted + 1
+      at_vertex = at_vertex.next
+    }
+    counted
   last => this.tail ? this.tail.value : None
   empty => this.head === None
   without (x) =>
@@ -232,7 +250,7 @@ Ray &+= {
     this
 }
 Node &+= {
-  , {other: Expression} => (@made Ray).append(this).append(other)
+  , {other: Expression} => (@made Ray).append(this).joined(other)
 }
 [] => @made Ray
 [{inside: Expression}] => inside === None ? (@made Ray) : ((@of inside) === Ray ? inside : (@made Ray).append(inside))
@@ -391,8 +409,12 @@ Node &+= {
 }
 
 // ---------------------------------------------------------------- the core the library extends: an Iterable of `Vertex`, an Array, text, numbers
-Iterable<Vertex> := class { }
-Array := class: Iterable { }
+Iterable &+= {
+  components := (@made Node) &+= { hierarchy := [] }
+}
+Array &+= {
+  components := (@made Node) &+= { hierarchy := [Iterable] }
+}
 // text (String.ray adds the rest): an Array of its characters
 String := class: Array { }
 Number := class { }

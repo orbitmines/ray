@@ -58,7 +58,7 @@ export class Code {
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
 export type Piece = { lit: string } | { cap: string; reader?: Code; type?: unknown };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
-export type Eq = { pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown; receiver?: string; apart?: boolean; node?: Ray };
+export type Eq = { pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string; typed?: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; type?: unknown; block?: boolean };
@@ -883,7 +883,7 @@ export class Host {
   // the value a reading found its equivalence on, from a frame: as the reading found it (`near` contexts out)
   self_of(ctx: Ray, near: number): unknown {
     let self: unknown, i = 0;
-    for (const n of this.reach(ctx)) { i++; if (self === undefined && n.into && !n.into.scope && !n.rule) self = n.self ?? n.into; if (!n.scope && n !== this.base && self === undefined) self = n; if (i >= near) break; }
+    for (const n of this.reach(ctx)) { i++; if (self === undefined && n.rule && n.self !== undefined && !(n.self instanceof Ray)) self = n.self; if (self === undefined && n.into && !n.into.scope && !n.rule) self = n.self ?? n.into; if (!n.scope && n !== this.base && self === undefined) self = n; if (i >= near) break; }
     return self;
   }
   // whether a character and the one after it begin an operator (or what reads on from a value)
@@ -1026,11 +1026,18 @@ export class Host {
     // (what applies deeper than any program is written: a reading that never ends, said where its statement is)
     if (STACK) this.chain.push(`${eq.key.slice(0, 30)} @${eq.body.text.name.split('/').pop()}:${eq.body.text.s.slice(0, eq.body.b).split(this.learned.end).length} on ${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 40))}`);
     if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(0, 25).join('\n') + '\n....\n' + this.chain.slice(-12).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
-    try { return this.apply_(eq, caps, code, self, place); } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
+    try { const v = this.apply_(eq, caps, code, self, place); if (!this.passes(eq)) this.place = undefined; return v; } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
+  }
+  // (what a functionality that is one name gives is where that name is; any other gives a value, at no place)
+  passes(eq: Eq): boolean {
+    if (eq.passing === undefined) { const t = eq.body.s.trim(); eq.passing = !eq.native && t.length > 0 && this.name_end({ name: '', s: t }, 0, t.length) === t.length; }
+    return eq.passing;
   }
   applying = 0; steps = 0; chain: string[] = []; recent: string[] = [];
   apply_(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
-    const F = new Ray(self instanceof Ray && !self.scope ? self : eq.body.ctx); F.place = place;
+    // (a frame inside the value it is applied on: a value of the host's own kind, inside the class it is mapped to)
+    const kind = self !== undefined && !(self instanceof Ray) ? this.kind(typeof self) : undefined;
+    const F = new Ray(self instanceof Ray && !self.scope ? self : kind ?? eq.body.ctx); F.place = place;
     // (what a rule enclosed in literals reads is a value)
     const ps = eq.pieces, enclosed = 'lit' in ps[0] && 'lit' in ps[ps.length - 1] && ps.length > 1;
     F.scope = true; F.caller = code.ctx; F.self = self; F.rule = eq; F.statement = code.statement && !enclosed;

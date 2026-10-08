@@ -23,6 +23,8 @@ export class Ray {
   has(k: string): boolean { return this.m_ !== undefined && this.m_.has(k); }
   get size(): number { return this.m_?.size ?? 0; }
   eqs: Eq[] = NONE;
+  // (a context the host reads text with: what it reads a span as, or undefined)
+  test?: (s: string) => unknown;
   scope = false; caller?: Ray; self?: unknown;
   // (a frame of an equivalence applied: which, and whether to a statement)
   rule?: Eq; statement = false;
@@ -65,6 +67,8 @@ export class Host {
   base?: Ray;
   // the interpreter's nothing (`js.ray`), and the classes it maps its own kinds of value to
   none?: Ray; kinds = new Map<string, Ray>();
+  // (a kind named before its class is declared: the class, once it is)
+  kind(k: string): Ray | undefined { const v = this.kinds.get(k); if (v instanceof Code) { const r = this.walk(v); if (r instanceof Ray) { this.kinds.set(k, r); return r; } return undefined; } return v; }
   order = 0;
   version = 0;
   diagnostics: Diagnostic[] = [];
@@ -107,6 +111,8 @@ export class Host {
       if (indent.length === 0 || lead.length !== 2 || s.slice(first + a.length, second).trim() !== definer) continue;
       const stop = second + b.length;
       this.learned = { open, close, space, definer, end, indent, type: lead[0], add: lead[1] };
+      // (its brackets balance, as they do around its own captures)
+      this.pairs.set(open, close); this.closers.add(close);
       this.global.m.set(lead[0], this.expression);
       const eq = this.add(this.global, this.pieces(s.slice(0, c2 + 1), this.global), new Code(text, i, stop, this.global));
       // (its functionality is what it says: the pattern and the functionality given to it, added to the Expression it is walked in)
@@ -341,7 +347,9 @@ export class Host {
         if (!n.scope && 'lit' in p0 && this.bracket(p0.lit[0])) continue;
         // (a name a nearer context holds hides a member of that name further out)
         if (held && eq.pieces.length === 1 && 'lit' in p0 && p0.lit === word) continue;
-        if ('lit' in p0 ? s.startsWith(p0.lit, b) : eq.order >= floor) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; consider(r); } }
+        // (one capture its reader reads, alone: what it reads, read at any precedence)
+        const atom = eq.pieces.length === 1 && !('lit' in p0) && p0.reader !== undefined && n.scope;
+        if ('lit' in p0 ? s.startsWith(p0.lit, b) : eq.order >= floor || atom) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; consider(r); } }
       }
       if (word && n.has(word)) held = true;
     }
@@ -430,14 +438,15 @@ export class Host {
     if (next === undefined) {
       // (one capture alone reads anything: only where a value's own equivalences read text, a closure's parameters, an enum's
       // members)
-      if (i === 0 && (eq.ctx.scope || eq.pieces.length > 1 || !(ctx.written || ctx.sees === eq.ctx))) return undefined;
+      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || eq.pieces.length > 1 || !(ctx.written || ctx.sees === eq.ctx))) return undefined;
       // (after the definer: the functionality, to the end; an operator read on a value reads one operand: the same operator after it reads on from what it gives)
       // (led by a literal, a statement: its last capture, the rest; an operator's, one operand)
       // (a reader's own rule, read in a value as its type: to the end, too)
       const statement = ('lit' in eq.pieces[0] && eq.ctx.scope) || (!('lit' in eq.pieces[0]) && !eq.ctx.scope);
       // (an operation hugging its value, written without a space: its operand ends at any operation written with one)
       const hugs = !eq.ctx.scope && 'lit' in eq.pieces[0] && !eq.pieces.some(x => 'lit' in x && x.lit.includes(this.learned.space));
-      const r = (prev && 'lit' in prev && prev.lit.includes(this.learned.definer)) || (statement && 'lit' in eq.pieces[0]) ? e : statement ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : []; }
+      const atom = i === 0 && piece.reader !== undefined;
+      const r = (prev && 'lit' in prev && prev.lit.includes(this.learned.definer)) || (statement && 'lit' in eq.pieces[0]) ? e : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : []; }
     else {
       ends = this.ends(text, at, e, 'lit' in next ? next.lit : undefined, eq.pairs);
       // (next to a bracket, or a pair, a capture may hold nothing, or only spaces)
@@ -497,6 +506,7 @@ export class Host {
   // whether a reader reads a span whole (the parameters of a value, typed by a value that is not a scope, read any: what is read
   // where it was written, if it is one of it)
   reads(r: Ray, text: Text, b: number, e: number, eq: Eq): boolean {
+    if (r.test) return r.test(text.s.slice(b, e).trim()) !== undefined;
     if (!r.scope && !eq.ctx.scope) return true;
     const read = this.parse(text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
     if (!read || read.e !== end) return false;
@@ -558,7 +568,7 @@ export class Host {
   // Where an operand from `at` ends: where (no pair open) an equivalence declared before `floor` reads on after a space (what hugs
   // a value is part of it: `x.m`, `f(a)`), else at `e`.
   operand(text: Text, at: number, e: number, floor: number, ctx: Ray, pairs?: number, same = false): number {
-    return this.scan(text, at, e, i => { if (i > at) for (const x of this.infix.get(text.s[i]) ?? []) if ((same ? x.order <= floor : x.order < floor) && (this.apart(x.lit) ? this.blank(text.s[i - 1]) : x.lit.includes(this.learned.space) || this.blank(text.s[i - 1])) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e)) return false; }, pairs);
+    return this.scan(text, at, e, i => { if (i > at) for (const x of this.infix.get(text.s[i]) ?? []) if ((same ? x.order <= floor : x.order < floor) && (this.apart(x.lit) ? this.blank(text.s[i - 1]) : x.lit.includes(this.learned.space)) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e)) return false; }, pairs);
   }
   // Whether an equivalence's literals from piece `from` on are written after `at`, in order.
   follows(eq: Eq, from: number, text: Text, at: number, e: number): boolean {
@@ -710,7 +720,7 @@ export class Host {
     // (nothing, absent, reads as the interpreter's nothing)
     if (value === undefined && this.none) value = this.none;
     // (a value of the host's own kind: the class the interpreter maps that kind to)
-    if (!(value instanceof Ray) && value !== undefined) { const k = this.kinds.get(typeof value); if (k) value = k; }
+    if (!(value instanceof Ray) && value !== undefined) { const k = this.kind(typeof value); if (k) value = k; }
     for (let n: Ray | undefined = value instanceof Ray ? value : (based = true, this.base); n; n = n.outer && !n.outer.scope ? n.outer : based ? undefined : (based = true, this.base)) {
       for (let i = n.eqs.length - 1; i >= 0; i--) if (n.eqs[i].key === key) { out.push(n.eqs[i]); if (one) return out; }
     }
@@ -745,6 +755,8 @@ export class Host {
   // code was written.
   // (read by a context of nothing, a word: the code itself)
   within(code: Code, r: Ray, typed = false): unknown {
+    // (a context the host reads with its own function: what that gives, or not read)
+    if (r.test) return r.test(code.s.trim()) ?? NOT;
     const T = new Ray(r); T.scope = true; T.into = r; T.written = code.ctx;
     const read = this.parse(code.text, code.b, code.e, r, 0); let end = code.e; while (end > code.b && this.blank(code.text.s[end - 1])) end--;
     if (r.scope && read?.name && read.e === end) { const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
@@ -756,7 +768,7 @@ export class Host {
   // whether a value is one of a context (it, or made of it; anything is one of the base)
   is(v: unknown, r: Ray): boolean {
     if (r === this.base) return true;
-    if (!(v instanceof Ray)) { const k = v === undefined ? undefined : this.kinds.get(typeof v); return k !== undefined && this.is(k, r); }
+    if (!(v instanceof Ray)) { const k = v === undefined ? undefined : this.kind(typeof v); return k !== undefined && this.is(k, r); }
     for (let n: Ray | undefined = v; n; n = n.outer) if (n === r) return true;
     return false;
   }
@@ -835,6 +847,9 @@ export class Host {
     return go(F.caller);
   }
 
+  // a context the host reads text with (`js.ray`): `test` gives what a span is read as, or undefined
+  reader(test: (s: string) => unknown): Ray { const r = new Ray(); r.test = test; return r; }
+
   // ---------------------------------------------------------------- @js: the host's language, at its location
   location = '@js';
   located(body: Code): boolean { const s = body.s.trimStart(); return s.startsWith(this.location) && this.blank(s[this.location.length]); }
@@ -860,8 +875,8 @@ export class Host {
   // ---------------------------------------------------------------- reading a text
   read(text: Text, scope: Ray, from = 0) { this.project([text], scope, from); }
   // Texts read as one: their statements in order, settled together.
-  project(texts: Text[], scope: Ray, from = 0) {
-    this.settle(function* (h: Host) { for (const text of texts) for (const [b, e] of h.statements(new Code(text, text === texts[0] ? from : 0, text.s.length, scope))) yield stated(new Code(text, b, e, scope)); }(this));
+  project(texts: Text[], scope: Ray, from = 0, starting = texts[0]) {
+    this.settle(function* (h: Host) { for (const text of texts) for (const [b, e] of h.statements(new Code(text, text === starting ? from : 0, text.s.length, scope))) yield stated(new Code(text, b, e, scope)); }(this));
   }
   // The language, its first statement first; then what this interpreter maps the language's values to (`js.ray`: an interpreter in
   // another host language has its own), then the rest of the language.
@@ -870,8 +885,8 @@ export class Host {
     // (the host's language at its location: `@js code`, the code run with the frame it is read in)
     const at = this.add(this.global, [{ lit: this.location + this.learned.space }, { cap: this.location }], new Code(text, 0, 0, this.global));
     at.native = F => { const c = F.m.get(this.location) as Code; return new Function('$', 'F', 'Ray', `return (${c.s});`)(this, c.ctx, Ray); };
-    if (mapping) this.read(mapping, this.global);
-    this.read(text, this.global, from);
+    // (read as one: what the mapping names that the language declares later is read again once it is)
+    this.project(mapping ? [mapping, text] : [text], this.global, from, text);
   }
 }
 function stated(c: Code): Code { c.statement = true; return c; }

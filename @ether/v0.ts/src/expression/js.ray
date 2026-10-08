@@ -14,4 +14,25 @@ this => @js $.self(F)
 @assign {value} => @js $.declare(F, value, true)
 @inside {x} {type} => @js $.name(F, (() => { for (let n = x; n instanceof Ray; n = n.outer) if (n === type) return true; return false; })() ? "true" : "false")
 @text {x} => @js F.m.get("x").s
-@kind {name} {class} => @js $.kinds.set(F.m.get("name").s.trim(), $.get(F, "class"))
+@kind {name} {class} => @js $.kinds.set(F.m.get("name").s.trim(), $.written(F.m.get("class")))
+// Numbers: the host's own (a JS number), read where digits are written; a Number whose operations are the host's (loosest first).
+Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefined)
+{number Numeral} => number
+@kind number HostNumber
+HostNumber := class: Number {
+  == {other} => @js $.name(F, F.self === $.get(F, "other") ? "true" : "false")
+  != {other} => @js $.name(F, F.self !== $.get(F, "other") ? "true" : "false")
+  < {other} => @js $.name(F, F.self < $.get(F, "other") ? "true" : "false")
+  <= {other} => @js $.name(F, F.self <= $.get(F, "other") ? "true" : "false")
+  > {other} => @js $.name(F, F.self > $.get(F, "other") ? "true" : "false")
+  >= {other} => @js $.name(F, F.self >= $.get(F, "other") ? "true" : "false")
+  + {other} => @js F.self + $.get(F, "other")
+  - {other} => @js F.self - $.get(F, "other")
+  * {other} => @js F.self * $.get(F, "other")
+  / {other} => @js F.self / $.get(F, "other")
+  % {other} => @js ((F.self % $.get(F, "other")) + $.get(F, "other")) % $.get(F, "other")
+  ^ {other} => @js F.self ** $.get(F, "other")
+  succ => @js F.self + 1
+  pred => @js F.self - 1
+  is_zero => @js $.name(F, F.self === 0 ? "true" : "false")
+}

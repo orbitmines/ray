@@ -281,7 +281,7 @@ class {header} => Class.made_of(None, header, None)
 class: {parent} => Class.made_of(parent, None, None)
 // `name: T`, `name: T = default`: a field, given by name, else in order, else its default.
 {name Word}: {type} => &.naming ? (& &+= { name := type }) : ((@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take })) : None)
-{name Word}: {type} = {default} => (@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take ?? default })) : None
+{name Word}: {type} = {default} => (@has & given) ? ((@has & name) ? None : (& &+= { name := &.given.take ?? default })) : (& &+= { name := default })
 
 // ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`)
 {guarded} if {condition} => condition ? guarded : None

@@ -226,14 +226,16 @@ export class Host {
     for (let i = 0; i < s.length; i++) {
       if (!this.edge(s, i - 1)) continue;
       for (const [k, c] of caps) if (s.startsWith(k, i) && this.edge(s, i + k.length)) {
-        const x = stood = this.written(c), shift = indent(s, i) - indent(x.text.s, x.b), lines = x.s.split(end);
+        const x = stood = this.written(c), shift = indent(f.text.s, f.b + i) - indent(x.text.s, x.b), lines = x.s.split(end);
         out += s.slice(from, i) + lines.map((l, j) => j === 0 ? l : shift >= 0 ? space.repeat(shift) + l : l.slice(Math.min(-shift, this.depth(l, 0)))).join(end);
         from = i + k.length; i = from - 1; break;
       }
     }
     if (!stood) return f;
     // (read where what it captured was written)
-    const col = f.b - (f.text.s.lastIndexOf(end, f.b - 1) + 1), t = space.repeat(col) + out + s.slice(from);
+    // (its first line is written as deep as where it started: the lines after it as much deeper again, so they stay under it)
+    const line = f.text.s.lastIndexOf(end, f.b - 1) + 1, col = f.b - line, deeper = space.repeat(col - this.depth(f.text.s, line));
+    const t = space.repeat(col) + (out + s.slice(from)).split(end).map((l, j) => j === 0 || l.trim() === '' ? l : deeper + l).join(end);
     return new Code({ name: f.text.name, s: t }, col, t.length, stood.ctx);
   }
   // an equivalence as a value: a vertex that has it

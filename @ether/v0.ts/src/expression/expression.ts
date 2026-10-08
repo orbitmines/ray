@@ -1411,18 +1411,8 @@ export class Host {
     if (kind === 'return' || kind === 'recur') for (let c: Ray | undefined = F?.caller, n = 0; c && n < 10000; c = c.rule && !c.rule.node ? c.caller : c.outer ?? c.sees, n++) if (c.method) { to = c; break; }
     throw new Jump(kind, value, to);
   }
-  // a loop (the interpreter's): `body` while `condition` holds (`after`: checked after the body), until a `break`
-  looped(F: Ray, after = false): unknown {
-    const no = this.name(F, 'false'), holds = () => { const c = this.get(F, 'condition'); return !(c === undefined || c === this.none || c === no); };
-    this.loops++;
-    try { for (;;) {
-      if (!after && !holds()) return undefined;
-      try { this.get(F, 'body'); } catch (x) { if (!(x instanceof Jump) || (x.kind !== 'break' && x.kind !== 'continue')) throw x; if (x.kind === 'break') return undefined; }
-      if (after && !holds()) return undefined;
-    } } finally { this.loops--; }
-  }
-  // (how many loops, methods, and statements in order are being run: what a `break`, `return`, or `goto`, can leave)
-  loops = 0; methods = 0; ordered = 0;
+  // (how many methods, and statements in order, are being run: what a `return`, or a `goto`, can leave)
+  methods = 0; ordered = 0;
   // Statements read in order; a `goto` to a label among them goes on from that label (one further on is split first).
   in_order(st: Iterator<Code>): unknown {
     const seen: Code[] = []; let v: unknown;
@@ -1736,7 +1726,7 @@ export class Host {
     if (TRACE) writeSync(2, `${c.text.name}:${c.text.s.slice(0, c.b).split(this.learned.end).length} ${JSON.stringify(c.s.slice(0, 70))}\n`);
     try { return speak ? this.walk(c) : this.walk_(c); }
     // (one that does not end ends the outermost statement it is in)
-    catch (x) { if (x instanceof Jump && (x.kind === 'return' || x.kind === 'recur' ? this.methods : x.kind === 'goto' ? this.ordered : this.loops) > 0) throw x; if (x instanceof Jump) { this.say(`Nothing to ${x.kind} from here.`, c.text, c.b, c.e); return undefined; } if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
+    catch (x) { if (x instanceof Jump && (x.kind === 'return' || x.kind === 'recur' ? this.methods : this.ordered) > 0) throw x; if (x instanceof Jump) { this.say(`Nothing to ${x.kind} from here.`, c.text, c.b, c.e); return undefined; } if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
   }
   // A block read into a value: its names where it was written, what it declares the value's.
   into(code: Code, r: Ray, self?: unknown): unknown {

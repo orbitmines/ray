@@ -29,6 +29,8 @@ global => @js $.global
 @captures {context} {reading} => @js ($.captures_by = $.get(F, "context"), $.capturing = $.get(F, "reading"), undefined)
 // a form a head is defined as: as written, what it declares first; one applied with what is on its right, `this`
 @form {written} {given} => @js $.form($.get(F, "written"), $.get(F, "given"))
+// (a method given what follows it, after a space: a call, not what goes on from the line above)
+@called {written} {given} => @js $.form($.get(F, "written"), $.get(F, "given"), undefined, false, true)
 @applied {written} {receiver} => @js $.form($.get(F, "written"), undefined, $.get(F, "receiver"))
 // a head read as another: the definition read again, with that one
 @again {written} => @js $.form($.get(F, "written"), undefined, undefined, true)

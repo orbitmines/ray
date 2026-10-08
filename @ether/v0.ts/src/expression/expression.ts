@@ -55,10 +55,10 @@ export class Code {
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
 export type Piece = { lit: string } | { cap: string; reader?: Code };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
-export type Eq = { pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown; given?: Code; receiver?: string };
+export type Eq = { pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown; given?: Code; receiver?: string; apart?: boolean };
 // A form a head is defined as (what the language says a head is, `@heads`): as written, what it declares first, the capture that
 // is `this`.
-type Form = { written: string; given?: string; receiver?: string; again?: boolean };
+type Form = { written: string; given?: string; receiver?: string; again?: boolean; apart?: boolean };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; block?: boolean };
@@ -179,7 +179,7 @@ export class Host {
         let first: Eq | undefined;
         for (const f of forms) {
           const eq = this.add(f.receiver ? this.global : into, this.pieces(f.written, at), body);
-          eq.given = f.given ? new Code({ name: p.text.name, s: f.given }, 0, f.given.length, at) : undefined; eq.receiver = f.receiver; first ??= eq;
+          eq.given = f.given ? new Code({ name: p.text.name, s: f.given }, 0, f.given.length, at) : undefined; eq.receiver = f.receiver; eq.apart = f.apart; first ??= eq;
         }
         return statement ? this.held_as(first!) : into;
       }
@@ -270,14 +270,16 @@ export class Host {
     return !!read && !read.name && read.e === end;
   }
   forms_seen = new Map<string, Form[] | number>(); captures_seen = new Map<string, string | number>();
-  form(written: unknown, given?: unknown, receiver?: unknown, again = false) {
-    if (this.forming && typeof written === 'string') this.forming.push({ written: written.trim(), given: typeof given === 'string' && given !== '' ? given : undefined, receiver: typeof receiver === 'string' ? receiver : undefined, again });
+  form(written: unknown, given?: unknown, receiver?: unknown, again = false, apart = false) {
+    if (this.forming && typeof written === 'string') this.forming.push({ written: written.trim(), given: typeof given === 'string' && given !== '' ? given : undefined, receiver: typeof receiver === 'string' ? receiver : undefined, again, apart });
   }
   // (asked on the side: what it says, or leaves unresolved, is not said)
   aside<T>(f: () => T): T {
+    // (counted from nothing: how deep it is asked is not how deep it goes)
     const said = this.diagnostics.length, unread = this.unread.size === 0 ? undefined : new Map(this.unread), steps = this.steps, applying = this.applying;
-    try { return f(); } catch (e) { if (!(e instanceof Runaway)) throw e; this.applying = applying; return undefined as T; }
-    finally { this.steps = steps; this.unsay(said); if (unread) this.unread = unread; else this.unread.clear(); }
+    this.steps = 0; this.applying = 0;
+    try { return f(); } catch (e) { if (!(e instanceof Runaway)) throw e; return undefined as T; }
+    finally { this.steps = steps; this.applying = applying; this.unsay(said); if (unread) this.unread = unread; else this.unread.clear(); }
   }
   // the forms a head is defined as; none when it is defined as written
   forms_of(head: string): Form[] | undefined {
@@ -380,7 +382,7 @@ export class Host {
     const { end, definer, space } = this.learned, line = s.slice(at, s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at));
     if (line.includes(space + definer)) return false;
     const j = s.indexOf(space, at);
-    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && 'lit' in x.eq.pieces[0]) return true; }
+    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0]) return true; }
     return false;
   }
   *statements(code: Code): Generator<[number, number]> {
@@ -952,7 +954,7 @@ export class Host {
   apply(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
     // (what applies deeper than any program is written: a reading that never ends, said where its statement is)
     if (STACK) this.chain.push(`${eq.key.slice(0, 30)} @${eq.body.text.name.split('/').pop()}:${eq.body.text.s.slice(0, eq.body.b).split(this.learned.end).length} on ${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 40))}`);
-    if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(-40).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
+    if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(0, 25).join('\n') + '\n....\n' + this.chain.slice(-12).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
     try { return this.apply_(eq, caps, code, self, place); } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
   }
   applying = 0; steps = 0; chain: string[] = []; recent: string[] = [];
@@ -1151,12 +1153,19 @@ export class Host {
     const p = this.patterns;
     if (p && T instanceof Ray && !T.test && depth < 64) {
       const alternatives = this.field(T, p.superposed) ? this.field(T, p.alternatives) : undefined, narrowed = this.field(T, p.narrowed);
-      if (narrowed !== undefined && alternatives === undefined) return this.fit_to(narrowed, s, i, end, memo, depth + 1) && this.truthy(this.invoke(this.field(T, p.constraint), s.slice(i, end)));
+      if (narrowed !== undefined && alternatives === undefined) return this.fit_to(narrowed, s, i, end, memo, depth + 1) && this.holds_of(T, this.field(T, p.constraint), s.slice(i, end));
       if (alternatives instanceof Ray) { for (let v = this.field(alternatives, p.sequence); v instanceof Ray; v = this.field(v, p.next)) if (this.fit_to(this.field(v, p.value), s, i, end, memo, depth + 1)) return true; return false; }
     }
     if (T instanceof Ray && T.test) return T.test(s.slice(i, end)) !== undefined;
     return this.fit_at(T, s.slice(0, end), i, memo, depth).has(end);
   }
+  // whether a narrowing's constraint holds of a text (while it is asked, the narrowing reads nothing: a constraint that reads text
+  // by the same type does not ask it again)
+  holds_of(T: Ray, c: unknown, s: string): boolean {
+    if (this.asking.has(T)) return false;
+    this.asking.add(T); try { return this.truthy(this.invoke(c, s)); } finally { this.asking.delete(T); }
+  }
+  asking = new Set<Ray>();
   fitted = new WeakMap<Ray, Map<string, boolean>>(); fitted_version = -1; one?: unknown;
   fit_at(T: unknown, s: string, i: number, memo: Map<unknown, Map<number, Set<number>>>, depth: number): Set<number> {
     let at = memo.get(T); if (!at) memo.set(T, at = new Map());
@@ -1175,7 +1184,7 @@ export class Host {
     if (T === (this.one ??= this.name(this.global, p.one))) { if (i < s.length) out.add(i + (s.codePointAt(i)! > 0xffff ? 2 : 1)); return out; }
     const alternatives = this.field(T, p.superposed) ? this.field(T, p.alternatives) : undefined, narrowed = this.field(T, p.narrowed), repeated = this.field(T, p.repeated), first = this.field(T, p.sequence);
     if (alternatives instanceof Ray) for (let v = this.field(alternatives, p.sequence); v instanceof Ray; v = this.field(v, p.next)) for (const j of this.fit_at(this.field(v, p.value), s, i, memo, depth + 1)) out.add(j);
-    else if (narrowed !== undefined) { const c = this.field(T, p.constraint); for (const j of this.fit_at(narrowed, s, i, memo, depth + 1)) if (this.truthy(this.invoke(c, s.slice(i, j)))) out.add(j); }
+    else if (narrowed !== undefined) { const c = this.field(T, p.constraint); for (const j of this.fit_at(narrowed, s, i, memo, depth + 1)) if (this.holds_of(T, c, s.slice(i, j))) out.add(j); }
     else if (repeated !== undefined) { let edge = [...this.fit_at(repeated, s, i, memo, depth + 1)].filter(j => j > i); const seen = new Set<number>(); while (edge.length) { const next: number[] = []; for (const j of edge) if (!seen.has(j)) { seen.add(j); out.add(j); for (const k of this.fit_at(repeated, s, j, memo, depth + 1)) if (k > j) next.push(k); } edge = next; } }
     else if (first instanceof Ray) { let ends = new Set([i]); for (let v: unknown = first; v instanceof Ray; v = this.field(v, p.next)) { const next = new Set<number>(); for (const j of ends) for (const k of this.fit_at(this.field(v, p.value), s, j, memo, depth + 1)) next.add(k); ends = next; } for (const j of ends) out.add(j); }
     return out;

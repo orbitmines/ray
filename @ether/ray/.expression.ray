@@ -122,6 +122,18 @@ Head &+= {
 // ---------------------------------------------------------------- what a head says: a Pattern, and the forms it is defined as
 Pattern := @made Node
 Pattern &+= {
+  // (what is not said of one is nothing: not what the base says, which the library extends)
+  type := None
+  default := None
+  next := None
+  parameters := None
+  takes := None
+  alias := None
+  receiving := None
+  nameless := None
+  literal := None
+  again := None
+  unread := None
   // a head as written (a capture, `{x}`, named so); a symbol hugs what it is given; a name: one word, not a capture
   of({text}) =>
     made := @made Pattern
@@ -203,17 +215,20 @@ Pattern &+= {
     this.takes ? this.called : (this.receiving ? (@applied (@joined (@joined this.written (this.hugs ? "" : " ")) (@joined (@joined @open "receiver") @close)) "receiver") : (@form this.written ""))
   called =>
     after := this.hugs ? "" : " "
-    this.nameless ? None : (this.parameters ? this.parameters.forms((@joined this.written "("), "", ")", "") : (@form (@joined this.written "()") ""))
-    this.parameters ? this.parameters.forms((@joined this.written after), "", "", "") : None
-  // the forms of the parameters from this one on, after `before` (each after `between`), then `after`; one not given: declared
-  forms({before}, {between}, {after}, {given}) =>
+    this.nameless ? None : (this.parameters ? this.parameters.forms((@joined this.written "("), "", ")", "", this) : (@form (@joined this.written "()") ""))
+    this.parameters ? this.parameters.forms((@joined this.written after), "", "", "", this.hugs) : None
+  // the forms of the parameters from this one on, after `before` (each after `between`), then `after`; one not given: declared;
+  // written as a call (or given what follows it, after a space)
+  forms({before}, {between}, {after}, {given}, {call}) =>
     start := before
     sep := between
     closing := after
     declared := given
+    calling := call
     full := @joined (@joined start sep) this.captured
-    this.next ? this.next.forms(full, ", ", closing, declared) : (@form (@joined full closing) declared)
-    this.default ? (this.next ? this.next.forms(start, sep, closing, (this.declared(declared))) : (@form (@joined start closing) (this.declared(declared)))) : None
+    this.next ? this.next.forms(full, ", ", closing, declared, calling) : this.formed_as((@joined full closing), declared, calling)
+    this.default ? (this.next ? this.next.forms(start, sep, closing, (this.declared(declared)), calling) : this.formed_as((@joined start closing), (this.declared(declared)), calling)) : None
+  formed_as({written}, {given}, {call}) => call ? (@form written given) : (@called written given)
   declared({given}) => @joined (@joined (@joined (@joined given this.written) " := ") this.default) @end
 }
 @captures Captured (written => Pattern.capture(written))

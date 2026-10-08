@@ -1,24 +1,6 @@
 {pattern} => {functionality} =>
   Expression |= pattern => functionality
-{left}{{name Word}: {type}}{right} => {functionality} =>
-  left{name type}right => functionality
-{expression: dynamically Expression} => expression
-{pattern} ^{style} => {functionality} =>
-  pattern => functionality
-// In a head: `{x ^style}`, a capture's style (for highlighting only); `{literal x}`, what is written (as every capture without a
-// type is); `` {`text`} ``, text written as it is.
-{left}{{inside} ^{style Word}}{right} => {functionality} =>
-  left{inside}right => functionality
-{left}{literal {inside}}{right} => {functionality} =>
-  left{inside}right => functionality
-// `{"x"?}`: text that may be written there
-{left}{"{text}"?}{right} => {functionality} =>
-  left{optional: "text"?}right => functionality
-// `head: T => body`, `head(…): T => body`: what it gives is a T (the head as written)
-{pattern}: {type Word} => {functionality} =>
-  pattern => functionality
-{left}{`{text}`}{right} => {functionality} =>
-  left{}text{}right => functionality
+{expression dynamically Expression} => expression
 //{comment} => None
 {statement} //{comment} => statement
 //{comment} => {functionality} =>
@@ -37,90 +19,14 @@ static {statement} => (@has & given) ? None : statement
 // Text written in quotes: a String (its characters).
 "{text}" => @text text
 
-// ---------------------------------------------------------------- what else a head says
-// Each reads a definition and hands a simpler one to the definer.
-// Words naming what a definition is (modifiers): the definition as written.
-static {pattern} => {functionality} =>
-  pattern => functionality
-chainable {pattern} => {functionality} =>
-  pattern => functionality
-// `right-to-left p => body` in a class: applied with what is on its right (`√x`, `center x`): the language's own rule, `this` being
-// what it reads after it.
-// `right-to-left p => body` in a class: a name is applied with what is on its right (`√x`, `sleep 5`): the language's own rule,
-// `this` being what it reads after it; with what it takes (`^ (exponent)`), it groups from the right.
-right-to-left {name Symbolic} => {functionality} =>
-  global &+= { name{receiver} => receiver -- (functionality) }
-right-to-left {name Word} => {functionality} =>
-  global &+= { name {receiver} => receiver -- (functionality) }
-right-to-left {name Word} | {alias} => {functionality} =>
-  right-to-left name => functionality
-  right-to-left alias => functionality
-right-to-left {pattern} => {functionality} =>
-  pattern => functionality
-// `a | b => body`: both names.
-{name Word} | {alias Word} => {functionality} =>
-  name => functionality
-  alias => functionality
-// `name (a, b: T) => body`: a method; its parameters are captures of what it is given in brackets (`{a, b}` is `{a}, {b}`).
-// (G2.1: given what follows a space, too: `x as String`; a symbol, what follows it: `0..<n`)
-{name Symbolic} ({parameters}) => {functionality} =>
-  name({parameters}) => functionality
-  name{parameters} => functionality
-{name Word} ({parameters}) => {functionality} =>
-  name({parameters}) => functionality
-  name {parameters} => functionality
-// `(=== T)`: what is given is `T` (`as (=== String)`)
-{left}{=== {target}}{right} => {functionality} =>
-  left{given: target}right => functionality
-{left}{{first Word}, {rest}}{right} => {functionality} =>
-  left{first}, {rest}right => functionality
-{left}{{first Word}: {type}, {rest}}{right} => {functionality} =>
-  left{first type}, {rest}right => functionality
-{left}, {{first Word}, {rest}}{right} => {functionality} =>
-  left, {first}, {rest}right => functionality
-{left}, {{first Word}: {type}, {rest}}{right} => {functionality} =>
-  left, {first type}, {rest}right => functionality
-{left}({{first Word}, {rest}}){right} => {functionality} =>
-  left({first}, {rest})right => functionality
-{left}({{first Word}: {type}, {rest}}){right} => {functionality} =>
-  left({first type}, {rest})right => functionality
-// `name (a, b = d) => body`: given `b`, or without it, `b` being `d`.
-{left}, {{first Word} = {default}}{right} => {functionality} =>
-  left, {first}right => functionality
-  left{}right =>
-    first := default
-    functionality
-{left}({{first Word} = {default}}){right} => {functionality} =>
-  left({first})right => functionality
-  left(){}right =>
-    first := default
-    functionality
-{left}, {{first Word}: {type} = {default}}{right} => {functionality} =>
-  left, {first: type}right => functionality
-  left{}right =>
-    first := default
-    functionality
-{left}({{first Word}: {type} = {default}}){right} => {functionality} =>
-  left({first: type})right => functionality
-  left(){}right =>
-    first := default
-    functionality
-// `(a, b) => body` without a name: its parameters as captures; `(x => body)`: one.
-({first Word}) => {functionality} =>
-  {first} => functionality
-({first Word}, {rest}) => {functionality} =>
-  {first, rest} => functionality
-({first Word}: {rest}) => {functionality} =>
-  {first: rest} => functionality
-({name Word} => {functionality}) =>
-  ({name} => functionality)
+// `x &+= { … }`: the block read into `x` (what it defines is `x`'s).
+{target Expression} &+= {{block target}} => target
+
 // `name := (a, b) => body`: the name is a closure.
 {name} := ({parameters}) => {functionality} =>
   name => ((parameters) => functionality)
 
 // ---------------------------------------------------------------- names, brackets, blocks, members
-// `x &+= { … }`: the block read into `x` (what it defines is `x`'s).
-{target: Expression} &+= {{block: target}} => target
 // `x -- call`: `call` read with `this` being `x` (a closure it answers, applied to `x`); `x ~~ call`: the same, answering `x`. They
 // go on from everything before them (A-C5): declared first, they bind loosest.
 Node &+= {
@@ -133,30 +39,17 @@ Node &+= {
     this
   // `x := v`: `v` at the place `x` was read at, from here on; `x = v`: where `x` is declared; `x &= v`: `v` at the end of the Ray `x`
   // holds (a Ray of it, when it holds nothing).
-  := {value: Expression} => @declare value
-  = {value: Expression} => @assign value
-  &= {value: Expression} => @assign ((this ?? []).append(value))
+  := {value Expression} => @declare value
+  = {value Expression} => @assign value
+  &= {value Expression} => @assign ((this ?? []).append(value))
 }
-// `X<K = D, V> := class …`: the class, each parameter a name of it (its default, or nothing).
-{name Word}<{parameters}> := {value: Expression} =>
-  made := value
-  reading := @made None
-  reading &+= {
-    {parameter Word} => made &+= { parameter := None }
-    {parameter Word} = {default} => made &+= { parameter := default }
-    {parameter Word}, {rest: reading} => made &+= { parameter := None }
-    {parameter Word} = {default}, {rest: reading} => made &+= { parameter := default }
-  }
-  reading with { parameters }
-  & &+= { name := made }
-
 // `x with { … }`: the block read with `x` as what it is read in, answering what the block answers.
-{target: Expression} with {{block: target}} => block
+{target Expression} with {{block target}} => block
 // `x.rest`: the rest read by `x` (its own, then its class's, then the base's): `x.m`, `x.m(a)`. `f(a, b)`: the arguments read by
 // `f` (a closure: its parameters; a class: its construction); `f()`: `f` itself.
 Node &+= {
-  .{rest: this} => rest
-  ({arguments: this}) => arguments
+  .{rest this} => rest
+  ({arguments this}) => arguments
   () => this
 }
 
@@ -184,6 +77,161 @@ false &+= {
 {a} === {b} => @same a b
 {a} !== {b} => (@same a b) ? false : true
 @me/instance = {x} => @show x
+
+// ---------------------------------------------------------------- heads: what a definition's head says (R0.1 on)
+// A head is read where only what reads heads reads (`@context`, a context of its own): as written, or what is said of one:
+// `p | q` (both), `p ^style` (how it is shown), `static p`, `chainable p`, `right-to-left p` (applied with what is on its right),
+// `p (parameters)` (a method), `p: T` (what it gives). What is inside a capture, and a method's parameters: a name, `x: T` (what
+// reads it), `x = d` (what it is, not given), `a, b` (one after the other), `x ^style`, `literal x`, `=== T` (given a `T`),
+// `` `text` `` (text as written), `"x"?` (text that may be written). Each is said of a Pattern (below), which writes the forms the
+// head is defined as.
+Defaulted := @outside ", " None
+// (a type is not led by a capture: `class: {parent} …` is written as it is)
+Opened => @js $.reader(s => s.startsWith($.learned.open) ? s : undefined)
+Unspaced := @outside " " None
+Typed := @outside " ^" (@outside " = " Defaulted)
+Captured := @context None
+Captured &+= {
+  {first Captured}, {rest Captured} => first.then(rest)
+  {parameter Captured} = {default Defaulted} => parameter.defaulting(@text default)
+  {parameter Captured} ^{style Word} => parameter
+  {name Word}: {type Typed} => (Pattern.of(@text name)).typed(@text type)
+  {name Word} => Pattern.of(@text name)
+  literal {parameter Captured} => parameter
+  === {type Typed} => (Pattern.of("given")).typed(@text type)
+  `{text}` => Pattern.literally(@text text)
+  {written Typed}? => (Pattern.of("optional")).typed(@joined (@text written) "?")
+}
+Head := @context None
+Head &+= {
+  {pattern} ^{style Word} => Pattern.head(@text pattern)
+  {pattern} | {alias} => (Pattern.head(@text pattern)).or(Pattern.head(@text alias))
+  static {pattern} => (Pattern.head(@text pattern)).restated
+  chainable {pattern} => (Pattern.head(@text pattern)).restated
+  right-to-left {pattern} => (Pattern.head(@text pattern)).leftward
+  {pattern} ({parameters Captured}) => (Pattern.head(@text pattern)).taking(parameters)
+  {pattern}({parameters Captured}) => (Pattern.head(@text pattern)).taking(parameters)
+  {pattern} () => (Pattern.head(@text pattern)).taking(None)
+  {pattern}() => (Pattern.head(@text pattern)).taking(None)
+  ({parameters Captured}) => Pattern.unnamed.taking(parameters)
+  {pattern} ({parameters Captured}): {type Typed} => (@read Opened (@text type)) ? None : (Pattern.head(@text pattern)).taking(parameters)
+  {pattern}({parameters Captured}): {type Typed} => (@read Opened (@text type)) ? None : (Pattern.head(@text pattern)).taking(parameters)
+  {name Word}: {type Typed} => (@read Opened (@text type)) ? None : Pattern.of(@text name)
+}
+
+// ---------------------------------------------------------------- what a head says: a Pattern, and the forms it is defined as
+Pattern := @made Node
+Pattern &+= {
+  // a head as written (a capture, `{x}`, named so); a symbol hugs what it is given; a name: one word, not a capture
+  of({text}) =>
+    made := @made Pattern
+    made.written := text
+    made
+  hugs => this.nameless ? this : (@read Symbolic this.written)
+  named => (@read Opened this.written) ? None : (@read Unspaced this.written)
+  // a method without a name (a closure's parameters)
+  unnamed =>
+    made := Pattern.of("")
+    made.nameless := made
+    made
+  // text written as it is
+  literally({text}) =>
+    made := Pattern.of(text)
+    made.literal := made
+    made
+  // what `Head` reads a text as, else the text as written
+  head({text}) =>
+    written := text
+    (@read Head written) ?? Pattern.raw(written)
+  raw({text}) =>
+    made := Pattern.of(text)
+    made.unread := made
+    made
+  // what a word said of it leaves: as written, the definition read again with it
+  restated =>
+    (this.takes || this.alias || this.receiving) ? None : (this.unread ? (this.again := this) : None)
+    this
+  // each form a head is defined as (none: as written); what is inside a capture, written as captures are (none: as written)
+  heading({text}) =>
+    read := @read Head text
+    read ? read.formed : None
+  capture({text}) =>
+    read := @read Captured text
+    read ? read.listed : None
+  // `p | q`: both names
+  or({other}) =>
+    alias := other
+    // (a name beside a method takes what it takes: `min | min_by (key)`)
+    (alias.takes && !this.takes) ? this.took(alias.parameters) : None
+    (this.named && alias.named) ? this.aliased(alias) : None
+  aliased({other}) =>
+    alias := other
+    this.alias := this.alias ? alias.aliased(this.alias) : alias
+    this
+  typed({type}) =>
+    this.type := type
+    this
+  defaulting({value}) =>
+    this.default := value
+    this
+  then({rest}) =>
+    more := rest
+    this.next := this.next ? this.next.then(more) : more
+    this
+  // a method (named), given its parameters
+  taking({parameters}) =>
+    given := parameters
+    this.named ? this.took(given) : None
+  took({parameters}) =>
+    this.parameters := parameters
+    this.takes := this
+    this
+  leftward =>
+    this.receiving := this
+    this.alias ? this.alias.leftward : None
+    this
+  // as a capture, `{name reader}` (or the text it is); all of them, one after the other (text joined by the interpreter: what
+  // reads a head is read before any class, `String` too)
+  captured => this.literal ? this.written : @joined (@joined @open (this.type ? (@joined (@joined this.written " ") this.type) : this.written)) @close
+  listed => this.next ? (@joined (@joined this.captured ", ") this.next.listed) : this.captured
+  // each form it is defined as: a method as called, `m(a, b)`, and given what follows it, `m a, b` (a symbol hugging it, `+b`; one
+  // without a name, only that); one applied right to left, with what is on its right (`this`); else as written
+  formed =>
+    this.alias ? this.alias.formed : None
+    this.again ? (@again this.written) : this.form
+  form =>
+    this.takes ? this.called : (this.receiving ? (@applied (@joined (@joined this.written (this.hugs ? "" : " ")) (@joined (@joined @open "receiver") @close)) "receiver") : (@form this.written ""))
+  called =>
+    after := this.hugs ? "" : " "
+    this.nameless ? None : (this.parameters ? this.parameters.forms((@joined this.written "("), "", ")", "") : (@form (@joined this.written "()") ""))
+    this.parameters ? this.parameters.forms((@joined this.written after), "", "", "") : None
+  // the forms of the parameters from this one on, after `before` (each after `between`), then `after`; one not given: declared
+  forms({before}, {between}, {after}, {given}) =>
+    start := before
+    sep := between
+    closing := after
+    declared := given
+    full := @joined (@joined start sep) this.captured
+    this.next ? this.next.forms(full, ", ", closing, declared) : (@form (@joined full closing) declared)
+    this.default ? (this.next ? this.next.forms(start, sep, closing, (this.declared(declared))) : (@form (@joined start closing) (this.declared(declared)))) : None
+  declared({given}) => @joined (@joined (@joined (@joined given this.written) " := ") this.default) @end
+}
+@captures Captured (written => Pattern.capture(written))
+@heads Head (written => Pattern.heading(written))
+
+// `X<K = D, V> := class …`: the class, each parameter a name of it (its default, or nothing).
+{name Word}<{parameters}> := {value: Expression} =>
+  made := value
+  reading := @made None
+  reading &+= {
+    {parameter Word} => made &+= { parameter := None }
+    {parameter Word} = {default} => made &+= { parameter := default }
+    {parameter Word}, {rest: reading} => made &+= { parameter := None }
+    {parameter Word} = {default}, {rest: reading} => made &+= { parameter := default }
+  }
+  reading with { parameters }
+  & &+= { name := made }
+
 
 // ---------------------------------------------------------------- control flow (P2.8: an `if` answers what its taken block answers)
 Branch := @made Node
@@ -328,9 +376,9 @@ Node &+= {
     made
 }
 // `X := class (header) => { block }`: read as a definition is read (its `=>` is the class's)
-{name} := class {header} => {{block}} =>
+{name Unspaced} := class {header} => {{block}} =>
   name := Class.made_of(None, header, block)
-{name} := class: {parent} {header} => {{block}} =>
+{name Unspaced} := class: {parent} {header} => {{block}} =>
   name := Class.made_of(parent, header, block)
 class {{block}} => Class.made_of(None, None, block)
 class: {parent} {{block}} => Class.made_of(parent, None, block)

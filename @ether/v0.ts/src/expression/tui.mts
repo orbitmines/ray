@@ -13,6 +13,8 @@ const h = new Host();
 const js = new URL('./js.ray', import.meta.url).pathname;
 h.boot({ name: '.expression.ray', s: fs.readFileSync(path.join(ether, 'ray/.expression.ray'), 'utf8') }, { name: js, s: fs.readFileSync(js, 'utf8') });
 const scope = new Ray(h.global); scope.scope = true;
+// (this interpreter's output: what is written to the instance, as near as the library's own rules)
+h.project([{ name: 'interpreter', s: '@me/instance = {x} => @show x' }], scope);
 let t = performance.now();
 h.project(files.map((f: string) => ({ name: path.relative(ether, f), s: fs.readFileSync(f, 'utf8') })), scope);
 console.error('read', Math.round(performance.now() - t), 'ms,', h.diagnostics.length, 'diagnostics');

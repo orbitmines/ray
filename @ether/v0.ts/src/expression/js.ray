@@ -19,6 +19,27 @@ global => @js $.global
 @block {made} {code} => @js $.blocks.set($.get(F, "made"), $.written(F.m.get("code")))
 @run {program} => @js $.ran($.get(F, "program"))
 @kind {name} {class} => @js $.kinds.set(F.m.get("name").s.trim(), $.written(F.m.get("class")))
+// a context of its own: what is read there is read by its rules alone (and by those of the context it continues into)
+@context {outer} => @js Object.assign(new Ray(outer instanceof Ray && outer !== $.none ? outer : undefined), { scope: true, alone: true })
+// text read in a context, whole; else nothing
+@read {context} {text} => @js $.read_in($.get(F, "context"), $.get(F, "text"))
+// what the language says a head is, and what is inside a capture in one: the context it is read in, and a closure from the text
+// to what it writes
+@heads {context} {reading} => @js ($.heads_by = $.get(F, "context"), $.heading = $.get(F, "reading"), undefined)
+@captures {context} {reading} => @js ($.captures_by = $.get(F, "context"), $.capturing = $.get(F, "reading"), undefined)
+// a form a head is defined as: as written, what it declares first; one applied with what is on its right, `this`
+@form {written} {given} => @js $.form($.get(F, "written"), $.get(F, "given"))
+@applied {written} {receiver} => @js $.form($.get(F, "written"), undefined, $.get(F, "receiver"))
+// a head read as another: the definition read again, with that one
+@again {written} => @js $.form($.get(F, "written"), undefined, undefined, true)
+// where a statement ends; what a capture is written between
+@end => @js $.learned.end
+@open => @js $.learned.open
+@close => @js $.learned.close
+// text after text
+@joined {a} {b} => @js $.show($.get(F, "a")) + $.show($.get(F, "b"))
+// text with no `separator` outside its brackets (read by `within` too, when that reads text)
+@outside {separator} {within} => @js $.outside($.get(F, "separator"), $.get(F, "within"))
 // Numbers: the host's own (a JS number), read where digits are written; a Number whose operations are the host's (loosest first).
 // a symbol: no letters or digits (`..<`, `√`): what is written as one hugs what it takes
 Symbolic => @js $.reader(s => s.length > 0 && !/[\p{L}\p{N}_\s]/u.test(s) ? s : undefined)

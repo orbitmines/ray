@@ -26,6 +26,8 @@ export class Ray {
   // (a context the host reads text with: what it reads a span as, or undefined)
   test?: (s: string) => unknown;
   scope = false; caller?: Ray; self?: unknown;
+  // (a context of its own: what its rules say is read there alone)
+  alone = false;
   // (a frame of an equivalence applied: which, and whether to a statement)
   rule?: Eq; statement = false;
   // (a frame of an equivalence applied on a value: where that value was read; of its captures read as values, where each was)
@@ -53,7 +55,10 @@ export class Code {
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
 export type Piece = { lit: string } | { cap: string; reader?: Code };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
-export type Eq = { pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown };
+export type Eq = { pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: (F: Ray) => unknown; given?: Code; receiver?: string };
+// A form a head is defined as (what the language says a head is, `@heads`): as written, what it declares first, the capture that
+// is `this`.
+type Form = { written: string; given?: string; receiver?: string; again?: boolean };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; block?: boolean };
@@ -136,7 +141,8 @@ export class Host {
     const { open, close, space, definer } = this.learned;
     const caps = this.captures(at), held = (w: string) => { const c = caps.get(w); return c ? this.written(c) : undefined; };
     // (a functionality naming a value: that value; one written by the rule, its words naming what it captured standing for it)
-    const w = f.s.trim(), body = this.unblocked(held(w) ?? (at.has(w) ? new Value(at.m.get(w), f) : this.writer(at, f) ? this.substituted(f, caps) : f));
+    // (a rule that writes definitions writes its own: its words naming what it captured stand for that)
+    const w = f.s.trim(), body = this.unblocked(held(w) ?? (at.has(w) ? new Value(at.m.get(w), f) : this.writer(at, f)?.pairs === 0 ? this.substituted(f, caps) : f));
     // (a pattern handed on, written elsewhere, stands for itself)
     let head = p.s.trim(), stood = p.ctx !== at && p.ctx !== at.into;
     if (held(head)) { head = held(head)!.s.trim(); stood = true; }
@@ -151,13 +157,33 @@ export class Host {
       }
       head = out + head.slice(from);
     }
+    // (a head the language reads as another: the definition read again, as that one)
+    if (!stood && statement && this.heading !== undefined && this.in_heading === 0 && p.text !== this.mapping) {
+      const g = this.forms_of(head);
+      if (g && g.length === 1 && g[0].again) {
+        const { end, space, definer } = this.learned, col = p.b - (p.text.s.lastIndexOf(end, p.b - 1) + 1), t = space.repeat(col) + g[0].written + space + definer + space + f.s;
+        return this.walk(stated(new Code({ name: p.text.name, s: t }, col, t.length, at)));
+      }
+    }
     if (!stood) {
       const into = statement ? at.into ?? at : new Ray(at);
       // (read again into what continues into a class that has it, from the same text: that one)
       const bc = body instanceof Value ? body.code : body;
       if (statement && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.body.text === bc.text && x.body.b === bc.b && x.body.e === bc.e && x.body.ctx.outer === bc.ctx.outer); if (was) return this.held_as(was); }
       // (a closure is given what it reads: a pattern of one word is what it is given, named)
-      let pieces = this.pieces(head, at); const lead = p.b + p.s.indexOf(head);
+      // (what the language reads the head as: each form it is defined as)
+      // (the interpreter's own mapping is written in the host's form)
+      const own = p.text === this.mapping;
+      const forms = this.heading !== undefined && this.in_heading === 0 && !own ? this.forms_of(head) : undefined;
+      if (forms) {
+        let first: Eq | undefined;
+        for (const f of forms) {
+          const eq = this.add(f.receiver ? this.global : into, this.pieces(f.written, at), body);
+          eq.given = f.given ? new Code({ name: p.text.name, s: f.given }, 0, f.given.length, at) : undefined; eq.receiver = f.receiver; first ??= eq;
+        }
+        return statement ? this.held_as(first!) : into;
+      }
+      let pieces = this.pieces(head, at, own); const lead = p.b + p.s.indexOf(head);
       if (!statement && pieces.length === 1 && 'lit' in pieces[0] && this.name_end(p.text, lead, p.e) === lead + head.length) pieces = [{ cap: head }];
       const eq = this.add(into, pieces, body); return statement ? this.held_as(eq) : into;
     }
@@ -233,9 +259,79 @@ export class Host {
     }
     return c;
   }
+  // ---------------------------------------------------------------- what the language says heads are (`@heads`, `@captures`)
+  heading?: unknown; capturing?: unknown; forming?: Form[]; in_heading = 0; in_capture = 0; booting = false;
+  // (the contexts they are read in: what none of their rules reads whole is as written)
+  heads_by?: Ray; captures_by?: Ray;
+  read_whole(ctx: Ray | undefined, text: string): boolean {
+    if (!ctx) return true;
+    const t = { name: 'read', s: text }, read = this.parse(t, 0, text.length, ctx, 0);
+    let end = text.length; while (end > 0 && this.blank(text[end - 1])) end--;
+    return !!read && !read.name && read.e === end;
+  }
+  forms_seen = new Map<string, Form[] | number>(); captures_seen = new Map<string, string | number>();
+  form(written: unknown, given?: unknown, receiver?: unknown, again = false) {
+    if (this.forming && typeof written === 'string') this.forming.push({ written: written.trim(), given: typeof given === 'string' && given !== '' ? given : undefined, receiver: typeof receiver === 'string' ? receiver : undefined, again });
+  }
+  // (asked on the side: what it says, or leaves unresolved, is not said)
+  aside<T>(f: () => T): T {
+    const said = this.diagnostics.length, unread = this.unread.size === 0 ? undefined : new Map(this.unread), steps = this.steps, applying = this.applying;
+    try { return f(); } catch (e) { if (!(e instanceof Runaway)) throw e; this.applying = applying; return undefined as T; }
+    finally { this.steps = steps; this.unsay(said); if (unread) this.unread = unread; else this.unread.clear(); }
+  }
+  // the forms a head is defined as; none when it is defined as written
+  forms_of(head: string): Form[] | undefined {
+    // (what reads nothing is asked again once something was declared)
+    const kept = this.forms_seen.get(head);
+    if (kept !== undefined && (typeof kept !== 'number' || kept === this.version || !this.booting)) return typeof kept === 'number' ? undefined : kept;
+    if (!this.read_whole(this.heads_by, head)) { this.forms_seen.set(head, this.version); return undefined; }
+    const was = this.forming; this.forming = []; this.in_heading++; let v: Form[];
+    try { this.aside(() => this.invoke(this.heading, head)); v = this.forming; } finally { this.forming = was; this.in_heading--; }
+    const none = v.length === 0 || (v.length === 1 && v[0].written === head && !v[0].given && !v[0].receiver);
+    this.forms_seen.set(head, none ? this.version : v);
+    return none ? undefined : v;
+  }
+  // a head with each capture written as the language reads what is inside it (as written, where it reads nothing)
+  captures_written(head: string): string {
+    if (this.capturing === undefined || this.in_capture > 0 || !head.includes(this.learned.open)) return head;
+    const { open, close } = this.learned; let out = '';
+    for (let i = 0; i < head.length;) {
+      if (head[i] === open) {
+        let j = -1; for (let k = i + 1, depth = 1; k < head.length; k++) { if (head[k] === open) depth++; else if (head[k] === close && --depth === 0) { j = k; break; } }
+        const inside = j < 0 ? '' : head.slice(i + 1, j);
+        if (inside.trim() !== '') {
+          let v = this.captures_seen.get(inside);
+          if (v === undefined && !this.read_whole(this.captures_by, inside)) this.captures_seen.set(inside, v = this.version);
+          if (v === undefined || (typeof v === 'number' && v !== this.version && this.booting)) { this.in_capture++; try { const r = this.aside(() => this.invoke(this.capturing, inside)); v = typeof r === 'string' ? r : this.version; } finally { this.in_capture--; } this.captures_seen.set(inside, v); }
+          out += typeof v === 'string' ? v : open + this.captures_written(inside) + close; i = j + 1; continue;
+        }
+      }
+      out += head[i++];
+    }
+    return out;
+  }
+  // text read in a context, whole (a context that reads text with its own function: what that gives); else nothing
+  read_in(ctx: unknown, text: unknown): unknown {
+    if (!(ctx instanceof Ray) || typeof text !== 'string') return undefined;
+    if (ctx.test) return ctx.test(text.trim());
+    const t = { name: 'read', s: text }, read = this.parse(t, 0, text.length, ctx, 0);
+    let end = text.length; while (end > 0 && this.blank(text[end - 1])) end--;
+    if (!read || read.name || read.e !== end) return undefined;
+    const v = this.within(new Code(t, 0, text.length, ctx), ctx);
+    return v === NOT ? undefined : v;
+  }
+  // a reader of text with no `separator` outside its brackets (that `within` reads, if it reads text)
+  outside(separator: unknown, within: unknown): Ray | undefined {
+    if (typeof separator !== 'string') return undefined;
+    const inner = within instanceof Ray ? within.test : undefined;
+    return this.reader(s => { const t = { name: 'part', s }; let found = false; this.scan(t, 0, s.length, i => { if (s.startsWith(separator, i)) { found = true; return false; } }); return found ? undefined : inner ? inner(s) : s; });
+  }
+  // whether reading in `ctx` reads by the rules of `c`
+  inside(ctx: Ray, c: Ray): boolean { for (let n: Ray | undefined = ctx; n; n = n.outer) if (n === c || n.into === c) return true; return false; }
   // The pieces of a head: a capture is the brackets around its name and what reads it (`{name reader}`); brackets around brackets
   // are literal.
-  pieces(head: string, ctx: Ray): Piece[] {
+  pieces(head: string, ctx: Ray, own = false): Piece[] {
+    if (!own) head = this.captures_written(head);
     const { open, close, space } = this.learned, out: Piece[] = [];
     let lit = '';
     for (let i = 0; i < head.length;) {
@@ -335,7 +431,7 @@ export class Host {
       let list = by.get(k); if (!list) by.set(k, list = []); list.push({ lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 });
     }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
-    if (ctx.scope && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
+    if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
     return eq;
   }
 
@@ -403,14 +499,18 @@ export class Host {
   reach(ctx: Ray): Ray[] {
     const out: Ray[] = [], epoch = ++this.epoch;
     // (the base last: what every value continues into answers after everything written around it)
+    // (a context of its own is reached only by what is read in it)
+    this.read_alone = ctx.alone ? ctx : ctx.written && ctx.into?.alone ? ctx.into : undefined;
     if (this.reach_(ctx, out, epoch) && this.base && this.base.seen !== epoch) { this.base.seen = epoch; out.push(this.base); }
     return out;
   }
+  read_alone?: Ray;
   reach_(ctx: Ray, out: Ray[], epoch: number): boolean {
     let valued = false, sees: Ray[] | undefined;
     // (a block read into a value reaches that value first, then where it was written)
     for (let n: Ray | undefined = ctx; n && n.seen !== epoch; n = n.outer) {
       if (n === this.base) { valued = true; break; }
+      if (n.alone && n !== this.read_alone) continue;
       n.seen = epoch; if (!n.scope || (n.into && !n.into.scope)) valued = true; out.push(n);
       if (n.sees && n.sees === n.into) { if (this.reach_(n.sees, out, epoch)) valued = true; } else if (n.sees) (sees ??= []).push(n.sees);
     }
@@ -487,7 +587,9 @@ export class Host {
     else {
       // (what follows the definer in a head reader is functionality: its brackets balance)
       const after = eq.pairs === 0 && eq.pieces.slice(0, i).some(x => 'lit' in x && x.lit.includes(this.learned.definer));
-      ends = this.ends(text, at, e, 'lit' in next ? next.lit : undefined, after ? Infinity : eq.pairs);
+      // (between the two of a pair read as nothing inside, `"…"`: what is inside balances nothing)
+      const quoted = !!prev && 'lit' in prev && 'lit' in next && this.quotes.has(prev.lit[prev.lit.length - 1]) && next.lit[0] === prev.lit[prev.lit.length - 1];
+      ends = this.ends(text, at, e, 'lit' in next ? next.lit : undefined, quoted ? 0 : after ? Infinity : eq.pairs);
       // (next to a bracket, or a pair, a capture may hold nothing, or only spaces)
       bracketed = (next && 'lit' in next && this.opens(next.lit)) || (prev && 'lit' in prev && this.closed(prev.lit));
       if (bracketed && ('lit' in next ? this.literal(text, next.lit, at, e) >= 0 : true)) ends.push(at);
@@ -641,7 +743,7 @@ export class Host {
   // Where an operand from `at` ends: where (no pair open) an equivalence declared before `floor` reads on after a space (what hugs
   // a value is part of it: `x.m`, `f(a)`), else at `e`.
   operand(text: Text, at: number, e: number, floor: number, ctx: Ray, pairs?: number, same = false): number {
-    const s = text.s, { space } = this.learned, stops = (x: { lit: string; order: number; eq: Eq; from: number }, i: number) => (same ? x.order <= floor : x.order < floor) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e);
+    const s = text.s, { space } = this.learned, alone = ctx.alone ? ctx : ctx.written && ctx.into?.alone ? ctx.into : undefined, stops = (x: { lit: string; order: number; eq: Eq; from: number }, i: number) => (same ? x.order <= floor : x.order < floor) && (x.eq.ctx.alone || alone ? x.eq.ctx === alone : true) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e);
     return this.scan(text, at, e, i => {
       if (i <= at) return;
       for (const x of this.infix.get(s[i]) ?? []) if (x.lit.includes(space) && stops(x, i)) return false;
@@ -876,6 +978,9 @@ export class Host {
       else { const v = c.block ? this.into(this.written(k), r) : this.within(k, r, !this.dependent(c.reader, eq), undefined, eq); if (v === NOT) return NOT; F.m.set(c.name, v); }
       if (this.place) (F.places ??= new Map()).set(c.name, this.place);
     }
+    // (what a form declares first, where it is not given it; the capture it is applied with, `this`)
+    if (eq.receiver) F.self = this.get(F, eq.receiver);
+    if (eq.given) for (const [b, e] of this.statements(eq.given)) this.walk(stated(new Code(eq.given.text, b, e, F)));
     if (eq.native) return eq.native(F);
     return this.body(eq, F);
   }
@@ -1091,7 +1196,7 @@ export class Host {
   reader(test: (s: string) => unknown): Ray { const r = new Ray(); r.test = test; return r; }
 
   // ---------------------------------------------------------------- @js: the host's language, at its location
-  location = '@js'; interpreted = new Set<Text>();
+  location = '@js'; interpreted = new Set<Text>(); mapping?: Text;
   located(body: Code): boolean { const s = body.s.trimStart(); return s.startsWith(this.location) && this.blank(s[this.location.length]); }
   js(eq: Eq): (F: Ray) => unknown {
     const src = eq.body.s.trimStart().slice(this.location.length);
@@ -1126,9 +1231,10 @@ export class Host {
     const at = this.add(this.global, [{ lit: this.location + this.learned.space }, { cap: this.location }], new Code(text, 0, 0, this.global));
     // (code there run by this interpreter: what its own files write; elsewhere, code in that language is a value, the text written)
     at.native = F => { const c = F.m.get(this.location) as Code; if (!this.interpreted.has(c.text)) return c.s.trim(); return new Function('$', 'F', 'Ray', `return (${c.s});`)(this, c.ctx, Ray); };
-    this.interpreted.add(text); if (mapping) this.interpreted.add(mapping);
+    this.interpreted.add(text); if (mapping) { this.interpreted.add(mapping); this.mapping = mapping; }
     // (read as one: what the mapping names that the language declares later is read again once it is)
-    this.project(mapping ? [mapping, text] : [text], this.global, from, text);
+    this.booting = true;
+    try { this.project(mapping ? [mapping, text] : [text], this.global, from, text); } finally { this.booting = false; }
   }
 }
 function stated(c: Code): Code { c.statement = true; return c; }

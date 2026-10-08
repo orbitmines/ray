@@ -38,3 +38,24 @@ HostNumber := class: Number {
 }
 // `while c { body }`: the body again while `c` holds (every value but nothing and false), iterated by the host.
 while {condition} {{body}} => @js (() => { for (const no = $.name(F, "false"); ;) { const c = $.get(F, "condition"); if (c === undefined || c === $.none || c === no) return undefined; $.get(F, "body"); } })()
+// Text: the host's own (a JS string), a String whose operations are the host's.
+@kind string HostString
+@character {x} => @js String.fromCodePoint($.get(F, "x"))
+HostString := class: String {
+  == {other} => @js $.name(F, F.self === $.get(F, "other") ? "true" : "false")
+  != {other} => @js $.name(F, F.self !== $.get(F, "other") ? "true" : "false")
+  < {other} => @js $.name(F, F.self < $.get(F, "other") ? "true" : "false")
+  > {other} => @js $.name(F, F.self > $.get(F, "other") ? "true" : "false")
+  ..{last} =>
+    made := []
+    at := this.codepoint
+    end := (last).codepoint
+    while at <= end {
+      made.append(@character at)
+      at = at + 1
+    }
+    made
+  + {other} => @js F.self + $.show($.get(F, "other"))
+  codepoint => @js F.self.codePointAt(0)
+  length => @js [...F.self].length
+}

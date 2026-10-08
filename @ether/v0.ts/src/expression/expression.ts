@@ -45,6 +45,8 @@ export class Code {
   // (`word`: a word as written, read by a context of nothing: what it is, not what it names; `statement`: read as a statement,
   // not as a value)
   word = false; statement = false;
+  // (a word handed through a capture: read past the frame holding that capture, which would name it again)
+  past?: Ray;
   constructor(public text: Text, public b: number, public e: number, public ctx: Ray, public floor = 0) {}
   get s() { return this.text.s.slice(this.b, this.e); }
 }
@@ -349,7 +351,7 @@ export class Host {
     const word = s.slice(b, this.name_end(text, b, e));
     for (const n of this.reach(ctx)) {
       near++;
-      if (self === undefined && n.into && !n.into.scope && !n.rule) self = n.into;
+      if (self === undefined && n.into && !n.into.scope && !n.rule) self = n.self ?? n.into;
       if (!n.scope && n !== this.base && self === undefined) self = n;
       for (let i = n.eqs.length - 1; i >= 0; i--) {
         const eq = n.eqs[i], p0 = eq.pieces[0];
@@ -527,9 +529,15 @@ export class Host {
     if (r.test) return r.test(text.s.slice(b, e).trim()) !== undefined;
     if (!r.scope && !eq.ctx.scope) return true;
     const read = this.parse(text, b, e, r, 0); let end = e; while (end > b && this.blank(text.s[end - 1])) end--;
-    if (!read || read.e !== end) return false;
-    // (a word read by a value: one it holds; a context of nothing reads any)
-    if (read.name && !r.scope) { const word = text.s.slice(read.b, read.e); return this.reach(r).some(n => n.has(word)); }
+    if (r.scope) return !!read && read.e === end;
+    // (a value that is not a scope reads what its own equivalences, or names, read whole; anything else is read where it was
+    // written, and is one of it or not: decided where it is applied, unless the span is a rule of its own)
+    return (!!read && read.e === end && this.own(read, r, text)) || eq.pieces.length > 1;
+  }
+  // whether a reading is a value's own: a name it holds, or one of its equivalences (or its class's), not the base's
+  own(read: Read, r: Ray, text: Text): boolean {
+    if (read.name) { const word = text.s.slice(read.b, read.e); return this.reach(r).some(n => n.has(word)); }
+    for (let x: Read | undefined = read; x; x = x.on) if (x.eq) { let mine = false; for (let n: Ray | undefined = r; n && !n.scope && n !== this.base; n = n.outer) if (x.eq.ctx === n) mine = true; if (!mine) return false; }
     return true;
   }
   // (a literal starting, or ending, with a bracket)
@@ -630,7 +638,8 @@ export class Host {
   }
   walk_(code: Code): unknown {
     // (a statement that reads more than any is written to: one that does not end)
-    if (++this.steps > LONGEST) { this.steps = 0; this.applying = 0; throw new Runaway(`more than ${LONGEST} readings (\`${code.s.slice(0, 40)}\`)`); }
+    if (STACK) { this.recent[this.steps % 60] = `${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 50))}`; }
+    if (++this.steps > LONGEST) { if (STACK) writeSync(2, [...this.recent.slice(this.steps % 60), ...this.recent.slice(0, this.steps % 60)].join('\n') + '\n----\n'); this.steps = 0; this.applying = 0; throw new Runaway(`more than ${LONGEST} readings (\`${code.s.slice(0, 40)}\`)`); }
     // (nothing written: nothing)
     if (!this.held(code.text, code.b, code.e)) return undefined;
     // (code of several statements: each, in order)
@@ -676,10 +685,10 @@ export class Host {
   run(r: Read, code: Code): unknown {
     if (r.name) {
       const word = code.text.s.slice(r.b, r.e);
-      for (const n of this.reach(code.ctx)) if (n.has(word)) {
+      for (const n of this.reach(code.ctx)) if (n !== code.past && n.has(word)) {
         const v = n.m.get(word);
         // (a word given as written: read here, as it is written)
-        if (v instanceof Code && v.word) return this.walk(new Code(v.text, v.b, v.e, code.ctx));
+        if (v instanceof Code && v.word) { const w = new Code(v.text, v.b, v.e, code.ctx); w.past = n; return this.walk(w); }
         // (a capture: where what it holds was read)
         const held = n.places?.get(word); this.place = held ?? { at: n.into ?? n, here: code.ctx.into ?? code.ctx, word }; return this.force(v);
       }
@@ -760,7 +769,7 @@ export class Host {
     if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(-40).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
     try { return this.apply_(eq, caps, code, self, place); } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
   }
-  applying = 0; steps = 0; chain: string[] = [];
+  applying = 0; steps = 0; chain: string[] = []; recent: string[] = [];
   apply_(eq: Eq, caps: Cap[], code: Code, self?: unknown, place?: Place): unknown {
     const F = new Ray(self instanceof Ray && !self.scope ? self : eq.body.ctx); F.place = place;
     // (what a rule enclosed in literals reads is a value)
@@ -774,7 +783,10 @@ export class Host {
       // (while what reads its captures is read, the rule reads nothing itself)
       const k = new Code(code.text, c.b, c.e, at, c.floor); eq.busy = (eq.busy ?? 0) + 1;
       let r: unknown; try { r = this.walk(new Code(c.reader.text, c.reader.b, c.reader.e, F)); } finally { eq.busy--; }
+      // (a value of the host's own kind, as what is read in: read in the class the interpreter maps that kind to, being that value)
+      const kind = !(r instanceof Ray) && r !== undefined && this.dependent(c.reader, eq) ? this.kind(typeof r) : undefined;
       if (r === this.expression) F.m.set(c.name, this.walk(k));
+      else if (kind) { const v = this.within(k, kind, false, r); if (v === NOT) return NOT; F.m.set(c.name, v); }
       else if (!(r instanceof Ray)) return NOT;
       // (code handed on, a word naming held code: that code, read into it)
       else { const v = c.block ? this.into(this.written(k), r) : this.within(k, r, !this.dependent(c.reader, eq)); if (v === NOT) return NOT; F.m.set(c.name, v); }
@@ -786,15 +798,15 @@ export class Host {
   // Code read into a value: its statements read in a frame of the value (what they define is the value's), which sees where the
   // code was written.
   // (read by a context of nothing, a word: the code itself)
-  within(code: Code, r: Ray, typed = false): unknown {
+  within(code: Code, r: Ray, typed = false, self?: unknown): unknown {
     // (a context the host reads with its own function: what that gives, or not read)
     if (r.test) return r.test(code.s.trim()) ?? NOT;
-    const T = new Ray(r); T.scope = true; T.into = r; T.written = code.ctx;
+    const T = new Ray(r); T.scope = true; T.into = r; T.written = code.ctx; T.self = self;
     const read = this.parse(code.text, code.b, code.e, r, 0); let end = code.e; while (end > code.b && this.blank(code.text.s[end - 1])) end--;
     if (r.scope && read?.name && read.e === end) { const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
     const word = read?.name ? code.text.s.slice(read.b, read.e) : undefined;
     // (a reader decided where it was written, a type: what it does not read whole is read where it was written, one of it, or not read)
-    if (typed && !r.scope && !(read && read.e === end && (word === undefined || this.reach(r).some(n => n.has(word))))) { let at = code.ctx; while (at.written) at = at.written; const v = this.walk(new Code(code.text, code.b, code.e, at, code.floor)); return this.is(v, r) ? v : NOT; }
+    if (typed && !r.scope && !(read && read.e === end && this.own(read, r, code.text))) { let at = code.ctx; while (at.written) at = at.written; const v = this.walk(new Code(code.text, code.b, code.e, at, code.floor)); return this.is(v, r) ? v : NOT; }
     return this.sequence(code, T);
   }
   // whether a value is one of a context (it, or made of it; anything is one of the base)
@@ -821,9 +833,16 @@ export class Host {
         const again: Code[] = [], final = round >= 8;
         for (const c of left) {
           if (final) { last = this.tried(c, !inner); continue; }
-          const d = this.diagnostics.length, was = this.unread.size === 0 ? undefined : new Set(this.unread.keys());
-          last = this.tried(c, false);
-          let left_unresolved = false; for (const p of this.unread.keys()) if (!was?.has(p)) { this.unread.delete(p); left_unresolved = true; }
+          // (a statement that defined what a class holds, read again into one of what is made of it: the class's already, A7)
+          // (the same block, written in the same frame: what it closes over is the same)
+          const into = c.ctx.into, was = into && !into.scope ? this.defining.get(c.text)?.get(c.b) : undefined;
+          if (was && was.cls !== into && was.written === c.ctx.outer && this.made(into!, was.cls)) continue;
+          const d = this.diagnostics.length, held = this.unread.size === 0 ? undefined : new Set(this.unread.keys()), n = into?.eqs.length ?? 0;
+          this.ran_away = false; last = this.tried(c, false);
+          // (one that did not end is not read again)
+          if (this.ran_away) { for (const p of this.unread.keys()) if (!held?.has(p)) this.unread.delete(p); continue; }
+          if (into && !into.scope && into.eqs.length > n && into.eqs.slice(n).every(eq => !eq.native)) { let at = this.defining.get(c.text); if (!at) this.defining.set(c.text, at = new Map()); at.set(c.b, { cls: into, written: c.ctx.outer }); }
+          let left_unresolved = false; for (const p of this.unread.keys()) if (!held?.has(p)) { this.unread.delete(p); left_unresolved = true; }
           if (left_unresolved) { this.unsay(d); again.push(c); }
         }
         if (process.env.EXPR_ROUNDS) console.log(this.settling + ' ' + this.applying + ' round', round, 'left', again.length, again[0] ? again[0].text.name + ':' + again[0].text.s.slice(0, again[0].b).split('\n').length : '', Math.round(performance.now()));
@@ -835,7 +854,11 @@ export class Host {
     } finally { this.settling--; }
     return last;
   }
-  settling = 0;
+  settling = 0; ran_away = false;
+  // block statements that defined what a class holds (where they start), and that class
+  defining = new WeakMap<Text, Map<number, { cls: Ray; written?: Ray }>>();
+  // whether a value is made of a class (it continues into it)
+  made(value: Ray, cls: Ray): boolean { for (let n = value.outer; n && !n.scope; n = n.outer) if (n === cls) return true; return false; }
   // a statement walked (what fails, said where it is)
   tried(c: Code, speak = true): unknown {
     if (this.settling <= 1) this.steps = 0;
@@ -846,7 +869,7 @@ export class Host {
     if (TRACE) writeSync(2, `${c.text.name}:${c.text.s.slice(0, c.b).split(this.learned.end).length} ${JSON.stringify(c.s.slice(0, 70))}\n`);
     try { return speak ? this.walk(c) : this.walk_(c); }
     // (one that does not end ends the outermost statement it is in)
-    catch (x) { if (x instanceof Runaway && this.settling > 1) throw x; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
+    catch (x) { if (x instanceof Runaway && this.settling > 1) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
   }
   // A block read into a value: its names where it was written, what it declares the value's.
   into(code: Code, r: Ray): unknown {
@@ -934,7 +957,7 @@ const NOT = Symbol('not read');
 // a reading that does not end: what applies deeper, or more often, than any program is written to
 class Runaway extends Error {}
 const NOMEMO = !!process.env.EXPR_NOMEMO, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
-const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 1000000);
+const DEEPEST = Number(process.env.EXPR_DEEPEST ?? 3000), LONGEST = Number(process.env.EXPR_LONGEST ?? 200000);
 const REJECT = Symbol('reads nothing');
 // JS source with each capture named in it read from the frame (`F`).
 function rename(src: string, names: string[]): string {

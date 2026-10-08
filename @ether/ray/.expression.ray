@@ -352,9 +352,8 @@ Node &+= {
 // ---------------------------------------------------------------- the core the library extends: an Iterable of `Vertex`, an Array, text, numbers
 Iterable<Vertex> := class { }
 Array := class: Iterable { }
-// text (String.ray adds the rest): an Array of its characters; the host's text is one
+// text (String.ray adds the rest): an Array of its characters
 String := class: Array { }
-@kind string String
 Number := class { }
 Char := class: Number { }
 // a program (P1): code, read where it was written (`context`); with `parameters`, a closure of them

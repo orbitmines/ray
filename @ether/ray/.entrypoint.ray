@@ -21,9 +21,10 @@ Captured => @js $.reader(s => { const { open, close } = $.learned; if (!s.starts
 // a word: letters, digits, `_`
 Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
 
-// `.m`, `. + 1`: a closure of one value, what the rest is read on (`xs.map(. + 1)`, `x ~~ (.s = 5)`)
-. {dot_rest} => (dot_it => dot_it dot_rest)
-.{dot_rest} => (dot_it => dot_it.dot_rest)
+// `(.m)`, `(. + 1)`: a closure of one value, what the rest is read on (`x ~~ (.s = 5)`, `xs.map((. + 1))`); a statement led by `.`
+// elsewhere reads on from what it is read in (`this`)
+(. {dot_rest}) => (dot_it => dot_it dot_rest)
+(.{dot_rest}) => (dot_it => dot_it.dot_rest)
 // `x := v`: `x` is `v` where the statement is read, from here on (defined through the definer, as a value); `x = v`: where `x` is
 // declared; `x &= v`: `v` at the end of the Ray `x` holds (a Ray of it, when it holds nothing).
 {declared_name Unspaced} := {declared_value Expression} =>
@@ -110,12 +111,15 @@ class: {parent} => Class.made_of(parent, None, None)
 // go on from everything before them (A-C5): declared first, they bind loosest.
 Node &+= {
   -- {call} =>
-    answer := call
+    answer := this with { call }
     (@applies answer) ? answer(this) : answer
   ~~ {call} =>
-    answer := call
+    answer := this with { call }
     (@applies answer) ? answer(this) : answer
     this
+  // (`x -- .m`, `x ~~ .m = v`: `.` is `x`, a closure of it; names and `this` read where the statement is written)
+  -- .{dot_rest} => this -- (dot_it => dot_it.dot_rest)
+  ~~ .{dot_rest} => this ~~ (dot_it => dot_it.dot_rest)
   // `a, b`: declared after `:=` (`x := 1, 2` holds both), before `=`, `&=`, `:` (they bind tighter: `f(x = g(), y)`, `f(a: 1, b: 2)`
   // give two); what it does, below
   , {other Expression} => ((@owns this "commas") ? this : (@made Ray).append(this)).joined(other)

@@ -78,11 +78,21 @@ export class Host {
   kind(k: string): Ray | undefined { const v = this.kinds.get(k); if (v instanceof Code) { const r = this.walk(v); if (r instanceof Ray) { this.kinds.set(k, r); return r; } return undefined; } return v; }
   order = 0;
   version = 0;
+  // what each version declared: the literals any text it reads has in it (`needle`; none: it may read anything)
+  changes: string[] = [];
+  changed(pieces: Piece[]) { this.version++; this.changes.push(this.needle(pieces)); }
+  // whether anything declared since a version may read a span
+  since_read(version: number, span: string): boolean {
+    for (let v = version; v < this.version; v++) { const k = this.changes[v]; if (!k || span.includes(k)) return true; }
+    return false;
+  }
   diagnostics: Diagnostic[] = [];
   output: (line: string) => void = line => console.log(line);
   // equivalences read on a value (added at a value, not a frame): kept by their first character
   sends = new Map<string, Eq[]>();
   // the literal read after a value or a leading capture, by its first character: where a name or an operand ends
+  // (the earliest an operation read on from a value was declared: what is declared before it reads on past all of them)
+  earliest = Infinity;
   infix = new Map<string, { lit: string; order: number; eq: Eq; from: number }[]>();
   // (those written as a word and a space, `or `, by the word: read only after a space)
   words = new Map<string, { lit: string; order: number; eq: Eq; from: number }[]>();
@@ -462,8 +472,8 @@ export class Host {
     // (overloads by what their captures are read by are not the same head)
     const readers = (ps: Piece[], n?: Ray) => ps.map(p => 'cap' in p && p.reader ? p.reader.s : '').join('\0') + (n?.params ? '\0' + n.params.map(x => this.id(n.types?.get(x))).join(',') : '');
     const was = ctx.eqs.findIndex(x => x.key === key && readers(x.pieces, x.node) === readers(pieces, node));
-    if (was >= 0) { const old = ctx.eqs[was]; if (!(old.value && eq.value)) this.version++; old.body = eq.body; old.native = eq.native; old.js = undefined; old.pieces = eq.pieces; old.value = eq.value; if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq); return old; }
-    ctx.eqs.push(eq); if (!eq.value) this.version++;
+    if (was >= 0) { const old = ctx.eqs[was]; if (!(old.value && eq.value)) this.changed(pieces); old.body = eq.body; old.native = eq.native; old.js = undefined; old.pieces = eq.pieces; old.value = eq.value; if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq); return old; }
+    ctx.eqs.push(eq); if (!eq.value) this.changed(pieces);
     if ('lit' in pieces[0]) this.declared.set(this.lead(pieces), eq.seq);
     const p0 = pieces[0], p1 = pieces[1];
     // (read on a value: added at one, taking something; one that takes nothing is a member, read in the value)
@@ -486,7 +496,7 @@ export class Host {
       const apart = this.apart(after) || (!!node && after.endsWith(this.learned.space) && this.name_end({ name: '', s: after }, 0, after.length) === after.length - 1);
       const by = apart ? this.words : this.infix, k = apart ? after.slice(0, after.indexOf(this.learned.space)) : after[0];
       let list = by.get(k); if (!list) by.set(k, list = []);
-      if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) { const x = { lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }; list.push(x); if (by === this.infix) this.indexed(x); }
+      if (!list.some(x => x.lit === after && x.eq.key === key && x.order <= eq.order && x.eq.ctx.alone === ctx.alone && (!ctx.alone || x.eq.ctx === ctx))) { const x = { lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 }; list.push(x); if (by === this.infix) this.indexed(x); if (x.order < this.earliest) this.earliest = x.order; }
     }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
     if (ctx.scope && !ctx.alone && pieces.length === 3 && 'lit' in p0 && !('lit' in p1) && (!p1.reader || p1.reader.s.trim() === this.learned.type) && 'lit' in pieces[2] && p0.lit.length === 1 && pieces[2].lit.length === 1 && !this.blank(p0.lit)) { this.pairs.set(p0.lit, pieces[2].lit); if (p0.lit === pieces[2].lit) this.quotes.add(p0.lit); else this.closers.add(pieces[2].lit); }
@@ -504,7 +514,7 @@ export class Host {
     const consider = (r: Read | undefined) => { if (r) { r = this.on(r, text, e, ctx, floor, not); if (this.better(r, best)) best = r; } };
     // (what reads definitions is tried on a definition only: the definer written outside every bracket)
     let defines = false; this.scan(text, b, e, i => { if (this.literal(text, this.learned.space + this.learned.definer, i, e) >= 0) { defines = true; return false; } });
-    let self: unknown, held = false, near = 0;
+    let self: unknown, held = false, near = 0, span: string | undefined;
     const word = s.slice(b, this.name_end(text, b, e));
     for (const n of this.reach(ctx)) {
       near++;
@@ -522,6 +532,8 @@ export class Host {
         if (held && 'lit' in p0 && (eq.pieces.length === 1 ? p0.lit === word : !n.scope && p0.lit.startsWith(word))) continue;
         // (one capture its reader reads, alone: what it reads, read at any precedence)
         const atom = eq.pieces.length === 1 && !('lit' in p0) && p0.reader !== undefined && n.scope;
+        // (one led by a capture reads only what has its literals in it)
+        if (!('lit' in p0) && !atom) { const k = this.needle(eq.pieces); if (k && !(span ??= s.slice(b, e)).includes(k)) continue; }
         if ('lit' in p0 ? s[b] === p0.lit[0] && this.literal(text, p0.lit, b, e) >= 0 : eq.order >= floor || atom) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; consider(r); } }
       }
       if (word && (n.has(word) || n.eqs.some(x => x.key === word))) held = true;
@@ -530,6 +542,13 @@ export class Host {
     const w = this.name_end(text, b, e); if (w > b) consider({ name: true, caps: [], b, e: w });
     return best;
   }
+  // (the longest run of a pattern's literals written without a space: what any text it reads has in it)
+  needle(pieces: Piece[]): string {
+    let k = this.needles.get(pieces);
+    if (k === undefined) { k = ''; for (const p of pieces) if ('lit' in p) for (const w of p.lit.split(this.learned.space)) if (w.length > k.length) k = w; this.needles.set(pieces, k); }
+    return k;
+  }
+  needles = new WeakMap<Piece[], string>();
   // A reading with what reads on from its value, as far as it goes.
   on(best: Read, text: Text, e: number, ctx: Ray, floor: number, not?: Set<Eq>): Read {
     const s = text.s;
@@ -537,11 +556,12 @@ export class Host {
     let reaches = false; for (const n of this.reach(ctx)) if (n === this.global || n === this.base) { reaches = true; break; }
     if (!reaches) return best;
     while (best.e < e) {
-      let on: Read | undefined, at = best.e;
+      let on: Read | undefined, at = best.e, span: string | undefined;
       const spaced = this.blank(s[at]); while (at < e && this.blank(s[at])) at++;
       for (const list of [this.sends.get(s[at]), this.sends.get('')]) if (list) for (const eq of list) {
         if ((eq.order < floor && spaced) || not?.has(eq) || eq.busy) continue;
         if (!this.blank(s[at - 1]) && 'lit' in eq.pieces[0] && (eq.apart || this.apart(eq.pieces[0].lit))) continue;
+        { const k = this.needle(eq.pieces); if (k && !(span ??= s.slice(at, e)).includes(k)) continue; }
         const r = this.match(eq, text, at, e, ctx, 0, at, []);
         if (r && this.better(r, on)) on = r;
       }
@@ -643,7 +663,7 @@ export class Host {
       const hugs = !eq.ctx.scope && 'lit' in eq.pieces[0] && !eq.pieces.some(x => 'lit' in x && x.lit.includes(this.learned.space));
       const atom = i === 0 && piece.reader !== undefined;
       // (led by a literal: the rest, up to an operation declared before it, `return x if c`; a pair not opened in it, there, is text)
-      const rest = () => { const o = this.operand(text, at, e, eq.order, ctx, eq.pairs, true); return o < e && this.closes(text.s, o) ? e : o; };
+      const rest = () => { if (eq.order < this.earliest) return e; const o = this.operand(text, at, e, eq.order, ctx, eq.pairs, true); return o < e && this.closes(text.s, o) ? e : o; };
       const r = prev && 'lit' in prev && prev.lit.includes(this.learned.definer) ? e : statement && 'lit' in eq.pieces[0] ? rest() : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : [];
       // (an atom: as far as an operand goes, else just the name there, `0` in `0..<n`)
       if (atom) { const w = this.name_end(text, at, e); if (w > at && w < r) ends.push(w); }
@@ -903,6 +923,8 @@ export class Host {
     let list = at.get(code.b); if (!list) at.set(code.b, list = []);
     for (const x of list) if (x.floor === code.floor && x.e === code.e) {
       if (x.version === this.version) return x.r;
+      // (what was declared since does not read anything there: read as it was)
+      if (!this.since_read(x.version, code.text.s.slice(code.b, code.e))) { x.version = this.version; return x.r; }
       x.r = this.parse(code.text, code.b, code.e, code.ctx, code.floor); x.version = this.version; return x.r;
     }
     const r = this.parse(code.text, code.b, code.e, code.ctx, code.floor);

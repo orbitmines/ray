@@ -1133,7 +1133,7 @@ export class Host {
     const st = this.single(code) ? undefined : this.statements(code), first = st?.next();
     if (st && first && !first.done) { const second = st.next(); if (!second.done) return this.in_order(function* () { for (let x: IteratorResult<[number, number]> = first; !x.done; x = x === first ? second : st.next()) yield stated(new Code(code.text, x.value[0], x.value[1], code.ctx, code.floor)); }()); }
     // (a definition written in a functionality, its pattern naming what the rule captured: written again first, then read)
-    if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.match(this.definer, code.text, code.b, code.e, code.ctx, 0, code.b, []); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.statement || (code.ctx.rule ? code.ctx.statement : false)); }
+    if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.definition(code); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.statement || (code.ctx.rule ? code.ctx.statement : false)); }
     let r = this.reading(code); const s = code.text.s;
     // (an argument that begins by reading on from a value: a closure of that value)
     if (code.argument && !code.statement && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit) return this.element_closure(code); }
@@ -1159,6 +1159,15 @@ export class Host {
     } finally { this.missing = missing; }
   }
   missing?: Diagnostic;
+  // (what the definer reads in a span: what is written there and which operators are declared say, nothing else; kept)
+  definitions = new WeakMap<Text, Map<number, Map<number, { syntax: number; sent: number; pieces: Piece[]; d: Read | undefined }>>>();
+  definition(code: Code): Read | undefined {
+    let m = this.definitions.get(code.text); if (!m) this.definitions.set(code.text, m = new Map());
+    let at = m.get(code.b); if (!at) m.set(code.b, at = new Map());
+    const x = at.get(code.e); if (x && x.syntax === this.syntax && x.sent === this.sent && x.pieces === this.definer!.pieces) return x.d;
+    const d = this.match(this.definer!, code.text, code.b, code.e, code.ctx, 0, code.b, []);
+    at.set(code.e, { syntax: this.syntax, sent: this.sent, pieces: this.definer!.pieces, d }); return d;
+  }
   // (read once per span, floor and the nearest context that adds equivalences, until one is added)
   memo = new WeakMap<Ray, Map<Text, Map<number, { floor: number; e: number; version: number; r: Read | undefined }[]>>>();
   reading(code: Code): Read | undefined {

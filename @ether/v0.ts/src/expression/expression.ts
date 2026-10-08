@@ -789,7 +789,7 @@ export class Host {
       // (one capture alone reads anything: only where that very value's own equivalences read text (a value read in, a level a
       // program runs by), not what continues into it)
       // (a closure's parameter is what it is called with, `f(x)`: not a block it is read with, `f ~~ { … }`)
-      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || (eq.ctx.closure && this.calling !== eq.ctx) || eq.pieces.length > 1 || !(ctx.sees === eq.ctx || (ctx.written && (ctx.outer === eq.ctx || (ctx.level && this.made_of_(ctx.outer, eq.ctx))))) || (this.deciding > 0 && !eq.ctx.scope))) return undefined;
+      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || (eq.ctx.closure && this.calling !== eq.ctx) || eq.pieces.length > 1 || !(ctx.sees === eq.ctx || (ctx.written && (ctx.outer === eq.ctx || (ctx.level && this.made_of_(ctx.outer, eq.ctx))))) || (this.deciding > 0 && !eq.ctx.scope && !eq.ctx.closure))) return undefined;
       // (after the definer: the functionality, to the end; an operator read on a value reads one operand: the same operator after it reads on from what it gives)
       // (led by a literal, a statement: its last capture, the rest; an operator's, one operand)
       // (a reader's own rule, read in a value as its type: to the end, too)
@@ -1501,9 +1501,7 @@ export class Host {
     if (STACK) this.chain.push(`${eq.key.slice(0, 30)} @${eq.body.text.name.split('/').pop()}:${eq.body.text.s.slice(0, eq.body.b).split(this.learned.end).length} on ${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 40))}`);
     this.counts.applications++;
     if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(0, 25).join('\n') + '\n....\n' + this.chain.slice(-12).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
-    // (what a rule applied while a reader is decided reads is read as anything is: only the reader's own reading is the decision)
-    const deciding = this.deciding; this.deciding = 0;
-    try { const v = this.apply_(eq, caps, code, self, place); if (!this.passes(eq)) this.place = undefined; return v; } finally { this.deciding = deciding; if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
+    try { const v = this.apply_(eq, caps, code, self, place); if (!this.passes(eq)) this.place = undefined; return v; } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); }
   }
   // (what a functionality that is one name gives is where that name is; any other gives a value, at no place)
   passes(eq: Eq): boolean {

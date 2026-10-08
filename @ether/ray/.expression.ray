@@ -109,6 +109,8 @@ Method &+= {
   {head Method}() => @takes head
   ({parameters Unled}) => @parameters @unnamed parameters
   {a Method} | {b Method} => a | b
+  // (names written together take what is written after them: `min | min_by (key)`)
+  {a Method} | {b Method} ({parameters Unled}) => (@parameters a parameters) | (@parameters b parameters)
   static {head Method} => head
   chainable {head Method} => head
   right-to-left {head Method} => @leftward head

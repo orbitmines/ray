@@ -456,7 +456,9 @@ export class Host {
     // (a method's name hugging what it is given, one name as written, `or{…}`: a call after a member, not where names end)
     const named = !!node && after !== undefined && operator && this.name_end({ name: '', s: after }, 0, after.length) === after.length;
     if (after !== undefined && !heads && !named) {
-      const by = this.apart(after) ? this.words : this.infix, k = this.apart(after) ? after.slice(0, after.indexOf(this.learned.space)) : after[0];
+      // (a method's name and a space, `s {…}`, is written apart, whatever its length)
+      const apart = this.apart(after) || (!!node && after.endsWith(this.learned.space) && this.name_end({ name: '', s: after }, 0, after.length) === after.length - 1);
+      const by = apart ? this.words : this.infix, k = apart ? after.slice(0, after.indexOf(this.learned.space)) : after[0];
       let list = by.get(k); if (!list) by.set(k, list = []); list.push({ lit: after, order: eq.order, eq, from: operator && 'lit' in p0 ? 0 : 1 });
     }
     // (`open {x} close` where statements are read, a character each: a pair that balances)
@@ -512,7 +514,7 @@ export class Host {
       const spaced = this.blank(s[at]); while (at < e && this.blank(s[at])) at++;
       for (const list of [this.sends.get(s[at]), this.sends.get('')]) if (list) for (const eq of list) {
         if ((eq.order < floor && spaced) || not?.has(eq) || eq.busy) continue;
-        if (!this.blank(s[at - 1]) && 'lit' in eq.pieces[0] && this.apart(eq.pieces[0].lit)) continue;
+        if (!this.blank(s[at - 1]) && 'lit' in eq.pieces[0] && (eq.apart || this.apart(eq.pieces[0].lit))) continue;
         const r = this.match(eq, text, at, e, ctx, 0, at, []);
         if (r && this.better(r, on)) on = r;
       }

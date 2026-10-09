@@ -47,7 +47,7 @@ Number &+= {
 
   bounded => false
   entry => Line(value: this)
-  static Line := class: Ray value: Number {
+  static Line := class: Ray (value: Number) => {
     next => Line(value: value.succ)
     previous => value.is_zero ? None : Line(value: value.pred)
   }
@@ -78,7 +78,7 @@ Number &+= {
   as (base: Base) as (=== String) => numeral(base)(integer: digits(base).map(numeral(base).digit)) as String
   as (=== String) => this as 10 as String
 
-  static Bases = {
+  static Bases := {
     Binary: Digit = "0" | "1"
     Ternary: Digit = "0".."2"
     Quaternary: Digit = "0".."3"
@@ -113,9 +113,9 @@ Digit := class: String
 dynamically Number.Bases.for name => {
   internal Base => Number.Bases[name]
 
-  global[name] := class: Number integer: Base[]{length >= 1} {
-    static Digit = Base
-    static radix = Base#.count
+  global[name] := class: Number (integer: Base[]{length >= 1}) => {
+    static Digit := Base
+    static radix := Base#.count
     static ^ (width: Number) => static{.integer.length == width}
     String => this as String
 
@@ -134,7 +134,7 @@ dynamically Number.Bases.for name => {
     {fraction: static.String} (): Real => integer, ".", fraction
 
     as (=== Signed) => Signed(integer: this)
-    static Signed := class sign: "-"?, integer: static {
+    static Signed := class (sign: "-"?, integer: static) => {
       as static => integer if !negative
       negative => sign
       positive => !negative
@@ -148,8 +148,8 @@ dynamically Number.Bases.for name => {
       compounds * (other: Signed) => Signed(sign: negative != other.negative ? "-" : None, integer * other.integer)
       chainable < (other: Signed) => negative ? !other.negative || other.integer < integer : !other.negative && integer < other.integer
     }
-    static Real := class integer: static, ".", fraction: static{unbounded} {
-      static Signed := class sign: "-"?, real: Real
+    static Real := class (integer: static, ".", fraction: static{unbounded}) => {
+      static Signed := class (sign: "-"?, real: Real) => { }
 
       places => fraction.length
       scaled => static(integer: (integer.integer, fraction.integer))

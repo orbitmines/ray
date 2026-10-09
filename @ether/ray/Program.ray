@@ -4,8 +4,8 @@ Program &+= {
   goal: *?
   from: *?
   at: Program?
-  started = false
-  stopped = false
+  started := false
+  stopped := false
   results: *[] = []
   tried: *?
 
@@ -81,7 +81,7 @@ Program &+= {
   right-to-left rush => written
     -- (.map(.stepped) while .every(.holds))
     -- .{is_terminal}.first.results.last
-  right-to-left defer => copy ~~ .from = &caller
+  right-to-left defer => copy ~~ .from = &.caller
 }
 
 // `with settings { … }`, `with settings` (L§6.3): what the settings write is written `@ ->` (Almanac A3) for the block, or the
@@ -90,7 +90,7 @@ Program &+= {
 
 Terminating := Program{terminating}
 
-Keyed := class key: *, ":", " "[], (*, " = ")?, value: * {
+Keyed := class (key: *, ":", " "[], (*, " = ")?, value: *) => {
   as (=== String) => value as String
 }
 

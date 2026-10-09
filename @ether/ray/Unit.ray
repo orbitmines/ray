@@ -1,4 +1,4 @@
-Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Unit = Unit.None) = (unit as String){quantity == 1 ? singular : plural || singular})?)[]{length > 0}).join(" ")) {
+Quantity := class (Base = Number, (quantities: (quantity: Base, (" ", (unit: Unit = Unit.None) = (unit as String){quantity == 1 ? singular : plural || singular})?)[]{length > 0}).join(" ")) => {
   dynamically assert quantities.every _, unit => unit == quantities.0.unit
   dynamically assert quantities.unit as quantities.0.unit[] -- .sorted(>)
 
@@ -33,11 +33,11 @@ Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Uni
 
   compounds / (unit: Unit) => Quantity(quantities: quantities.map((quantity, from) => (quantity, from / unit)))
 
-  static Temporal = Quantity{unit == Unit.Temporal}
+  static Temporal := Quantity{unit == Unit.Temporal}
 }
 Quantity.components.hierarchy &= Ordered
 
-Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural {
+Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural) => {
   static Normalizers := class {
     modulus (order: Quantity) => Quantity.Normalizer = (x) => {
       result: Quantity?
@@ -50,19 +50,20 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
     }
   }
 
-  static Rate := class: Unit numerator: Unit, denominator: Unit {
+  static Rate := class: Unit (numerator: Unit, denominator: Unit) => {
     name => numerator.name + "/" + denominator.name
     chainable == (other: Rate) => numerator == other.numerator && denominator == other.denominator
   }
 
-  @field static "#" ((@owns static "#") ? (@member static "#") : [])
-  (@member static "#").push(this)
-  (@field static name this) if name
-  (@field static symbol this) if symbol
+  of["#"] := of["#"] ?? []
+  of["#"].push(this)
+  (of[name] := this) if name
+  (of[symbol] := this) if symbol
+  converting := None
 
-  &caller[name] = this if name
+  &.caller[name] = this if name
 
-  static None = Unit(global.None)
+  static None := Unit(global.None)
   static Temporal => second
 
   as (=== Quantity) => 1, this
@@ -71,8 +72,8 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
   dynamically assert this as String? != None
   as (=== String?) => name
 
-  static spelled (written: String) => (@owns Unit written) ? (@member Unit written) : None
-  static Spelling := String{@owns Unit this}
+  static spelled (written: String) => Unit[written]
+  static Spelling := String{Unit[.] !== None}
 
   compounds / (other: Unit) => Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static
@@ -80,10 +81,11 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
   chainable == (other: Unit) => this === other || name == other.name
 
   // (what it is in another unit: a conversion read at the time, `x * k + b` (a linear one); backwards, its inverse)
-  convert (convert, ToUnit: Unit) => (@field this "converting" (to: ToUnit, by: convert)) -- this
-  static converted (x, from: Unit, to: Unit) => (from == to) ? x : (((@owns from "converting") && Unit.reaches(from.converting.to, to)) ? Unit.converted(from.converting.by(x), from.converting.to, to) : ((@owns to "converting") ? Unit.inverted(Unit.converted(x, from, to.converting.to), to.converting.by) : None))
+  convert (convert, ToUnit: Unit) => (this.converting := Conversion(ToUnit, convert)) -- this
+  static Conversion := class (to, by) => { }
+  static converted (x, from: Unit, to: Unit) => (from == to) ? x : ((from.converting && Unit.reaches(from.converting.to, to)) ? Unit.converted(from.converting.by(x), from.converting.to, to) : (to.converting ? Unit.inverted(Unit.converted(x, from, to.converting.to), to.converting.by) : None))
   static inverted (y, by) => (y - by(0)) / (by(1) - by(0))
-  static reaches (from: Unit, to: Unit) => from == to || ((@owns from "converting") && Unit.reaches(from.converting.to, to))
+  static reaches (from: Unit, to: Unit) => from == to || (from.converting && Unit.reaches(from.converting.to, to))
   offset (offset: Number, ToUnit: Unit) => convert(((x: Number) => x + offset), ToUnit)
   multiple (multiple: Number, ToUnit: Unit) => convert(((x: Number) => x * multiple), ToUnit)
 

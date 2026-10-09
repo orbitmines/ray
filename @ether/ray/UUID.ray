@@ -1,5 +1,5 @@
 // A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
-UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₁₂) {
+UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₁₂) => {
   version: Hexadecimal₁ => this[12]
 
   variant: ⊢₂11 ? Binary₃ : Binary₂ => this[16] as Binary
@@ -31,7 +31,7 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
 
     chosen_within (width) => ~generate()
 
-    static clock = HybridClock(node: "UUID.v1")
+    static clock := HybridClock(node: "UUID.v1")
     generate\
       stamp = clock.now
       // The clock counts the same intervals from its own epoch: counted from the reform instead (a constant, reduced when compiled).

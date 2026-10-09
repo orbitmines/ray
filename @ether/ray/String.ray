@@ -67,7 +67,7 @@ dynamically Escape.for spelling => global[spelling] := Compiler.reduced(spelling
 \W = !\w
 
 Balanced := (Char{!= "{" && != "}" && != "\""} | ("{", Balanced, "}"))[]
-Interpolation := class ("{", code: Balanced, "}")
+Interpolation := class ("{", code: Balanced, "}") => { }
 "{literal: (\\{escape} | Interpolation | Char{!= "\""})[]}": String => literal.map(. is Interpolation ? (inline (.code**)) as String : .).join("").literal_dedented
 
 LanguageName := String{Language.named("." + .) != None}
@@ -76,7 +76,7 @@ LanguageName := String{Language.named("." + .) != None}
 
 // (String is made in the entrypoint, its core; what follows is the rest of it)
 String &+= {
-  () => &caller[this]()
+  () => &.caller[this]()
 
   upper_case | uppercase => #.upper_case as String
   lower_case | lowercase => #.lower_case as String
@@ -147,7 +147,7 @@ String[] &+= {
 
 String{length == 1} as Char => first
 
-Placement := class nth_class: Number, written_at: Number {
+Placement := class (nth_class: Number, written_at: Number) => {
   chainable <= (other: Placement) => nth_class < other.nth_class || (nth_class == other.nth_class && written_at >= other.written_at)
 }
 Node &+= {

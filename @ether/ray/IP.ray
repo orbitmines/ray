@@ -1,14 +1,14 @@
 IP := class: Location &+ (-1 <- . -> +1) {
   static NUMBER_OF_SEGMENTS: Decimal
   static SEGMENT_LENGTH: Decimal
-  static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
+  static NUMBER_OF_BITS := NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
 
   static Segment := class {
     static Binary := Binary{length == SEGMENT_LENGTH}
   }
   segments: Segment[]{length == NUMBER_OF_SEGMENTS}
 
-  static canonical = static
+  static canonical := static
   // Lowercase hexadecimal (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
   // CIDR notation where the low bits are superposed (https://datatracker.ietf.org/doc/html/rfc4632#section-3.1)
   as (=== String) => NUMBER_OF_BITS - (as Binary ~= Superposed[]⊣ -- .length) -- (prefix_length => prefix_length == NUMBER_OF_BITS
@@ -23,8 +23,8 @@ IP := class: Location &+ (-1 <- . -> +1) {
   compounds / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => as Binary ~~ .[prefix_length..] = 0 | 1
 
   static v4 := class: IP ({segments.join(".")}) => {
-    static NUMBER_OF_SEGMENTS = 4
-    static SEGMENT_LENGTH = 8
+    static NUMBER_OF_SEGMENTS := 4
+    static SEGMENT_LENGTH := 8
 
     static Segment: Decimal{< 2^8}
   }
@@ -35,8 +35,8 @@ IP := class: Location &+ (-1 <- . -> +1) {
     (right: Segment[]).join(":")?,
     (":", embedded_ipv4: IPv4)?
   ) => {
-    static NUMBER_OF_SEGMENTS = 8
-    static SEGMENT_LENGTH = 16
+    static NUMBER_OF_SEGMENTS := 8
+    static SEGMENT_LENGTH := 16
 
     static Segment: Hexadecimal{length <= 4}
 

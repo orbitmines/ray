@@ -16,18 +16,32 @@ nearest {head} => {body} =>
   {head} =>
     {body}
 
+// A typed hole, `{x: T}` in a head: it takes what `T`'s own rules read whole (matched as a head is, nothing read), and what it
+// took is read in `T`. This rule, a head that is one hole written as the two its right side has, says how one is written. (In
+// a rule's right side, a hole's name is what it took.)
+{name: type} =>
+  {name}: {type}
+
+// A name with a type and no value: declared here, its value the type (read, both its type and its value are of that kind),
+// the type read where it is written (in a call's arguments, `f(x: x)`, the caller's `x`); it answers `declared`. (Written
+// `{ }` after `:`, which means the same space, so the rule below does not read this as a name with a type.)
+{name}:{ }{type} =>
+  {type}
+  {name}: {type} =>
+    {type}
+  declared
+// (several at once: `a: 1, b: 2`)
+{name}:{ }{type}, {{rest}} =>
+  {name}: {type}
+  {rest}
 // A name with a type, in a definition's head (whatever wrote it: `:=`, `=`, destructuring, a closure's parameters, a class's
-// fields): the rule is the name's, what it reads checked against the type (`checked`, below), the type kept with it. A name
-// with a type and no value: declared here, nothing yet.
+// fields, a declaration): the rule is the name's, what it reads checked against the type (`checked`, below), the type kept
+// with it. (Defined after a declaration, it binds looser: `f: T => v` is a rule.)
 {name}: {type} => {body} =>
   {name} =>
     ({body}) checked {type}
   {name}.type =>
     {type}
-// (written `{ }` after `:`, which means the same space, so the rule above does not read this as a name with a type)
-{name}:{ }{type} =>
-  {name}: {type} =>
-    None
 
 // Which way a statement is read is the order the rules are defined in: of the rules reading all of it, the latest is read
 // first (its operator binds loosest). So the operators that bind tightest come first.
@@ -45,15 +59,19 @@ nearest {head} => {body} =>
   {name} =>
     {value}
 // A name declared here, given a value: a rule here first (not a value: any other definition is made where it is read), then
-// given it.
+// given it (that rule, the nearest: not a write through `=`).
 {name} := {value} =>
+  {value}
   {name} =>
     None
-  {name} = {value}
+  {name} =>
+    {value}
 
 // Node: the outermost node (`.`, here, is the node being read in). Every node sees its rules, so they are what any value
 // read on reads: its methods.
 Node := .
+// (what a declaration, `x: T`, answers: nothing but that it declared)
+declared := { }
 // (code read in a node: its definitions are the node's)
 &+= {{block}} =>
   {block}
@@ -82,12 +100,36 @@ Node := .
 ({name}) := {value} =>
   {name} := {value}
 
+// Read on a value without a space between: tightest (precedence is the order rules are defined in: one defined later binds
+// looser), so `a === x[k]` is `a === (x[k])`.
+// What a value holds under a key (any value; keys are the same when `===`): `x[key]`. (Given one: see `x[key] = v` below.)
+{on}[{key}] =>
+  {on}.held({key})
+// Partial arguments: `f<a: 5>` is `f` with those given first (code: inlined into each call before its own arguments): `g :=
+// f<a: 5>`, then `g(1)` gives `b`.
+{function}<{{given}}> =>
+  ((also) => {function}({given}, also))
+
+// A narrowing, `T{constraint}`: a T for which the constraint, read with `.` the value, answers true.
+{type}{{constraint}} =>
+  {
+    narrows := {type}
+    holds (it) =>
+      it with {
+        {constraint}
+      }
+  }
+
 // What a value answers to `?`: anything is true, but `None` and `false`.
 ? {yes} : {no} =>
   {yes}
 None := {
   ? {yes} : {no} =>
     {no}
+  value =>
+    None
+  next =>
+    None
 }
 false := {
   ? {yes} : {no} =>
@@ -196,56 +238,104 @@ break =>
 continue =>
   goto again
 
+// Leaving a call: `return v` (the call answers v), `return`.
+return {value} =>
+  {value}
+  goto returned
+return =>
+  goto returned
+// The call it is in, again from its start: `recur(arguments)`, with these; `recur`, with the same.
+recur({again}) =>
+  given := ({again})
+  goto rebinding
+recur =>
+  goto recurring
+
+// Code read in a value, `.` that value: `x with { … }` (before the loosest, so `y := x with { … }` gives y it).
+{on} with {{block}} =>
+  {on} reading {
+    {block}
+  }
+
 // The loosest, defined here once more and in this order, tightest first (a rule defined again is placed as defined now):
-//   `=` (and `x: T = v`: the value checked against T before the name, with its type, is given it);
+//   `=` (a member, `x.m = v`, given in `x`; and `x: T = v`: the value checked against T before the name, with its type, is given
+//     it);
 //   a closure: a rule on one line, read where a value is wanted, is a node holding it (see `language3.ts`); reading on in it
-//     (`f(5)`) runs its right side in a new node in it, its parameters given the arguments; its parameters go up to the
+//     (`f(5)`) runs its right side in a new node in it, its parameters taking the arguments (arguments are code inlined into
+//     the call: `f(x: 5)` declares its `x`, answering `declared`; see `taking`); its parameters go up to the
 //     nearest `=>`, so it is made by the rule creator that does not go on; a call written with a hole, `({args}) =>`, is a
-//     rule as written;
+//     rule as written; a call ends at `returned\` (`return v` goes there, the call answering v), and begins at `recurring\` (`recur`
+//     goes there; `recur(…)` first gives its parameters these, `given`);
 //   a method: `name (parameters) =>` gives the name a closure, as `name := (parameters) =>` does (so its locals are its
-//     own); a rule without parameters, `name =>`, is one too (read on in a value, `.` is that value);
-//   `:=`, and its more particular forms: a member, names at once, a closure written on the lines below;
-//   a guard: `x := 1 if c` guards the statement (and `x if a && b` guards on both).
+//     own); a rule without parameters, `name =>`, is one too (read on in a value, `.` is that value); `x.name (…) =>` is a
+//     member (a name handed on is a value: what is in it is not read again, so the member is written as one);
+//   `:=`, and its more particular forms: a closure given to a name (written on the lines below, it is a definition: read by
+//     these), a member (so `x.m := () => …` is one), a key (`x[k] = v`), names at once;
+//   a guard: `x := 1 if c` guards the statement (and `x if a && b` guards on both);
+//   `,`: a list of what is on either side.
 // Rules after it are led by a literal, or are methods, so it stays the loosest. (A head written `{ }` for a space reads
 // the same: it keeps a rule from reading another's head as one it reads.)
 {name} = {value} =>
   {value}
   {name} =>
     {value}
+{on}.{name} = {value} =>
+  {on}.{name} := {value}
 {name}:{ }{type} = {value} =>
   ({value}) checked {type}
   {name}: {type} =>
     {value}
-nearest ({parameters}) => {body} =>
-  ({arguments}) =>
-    ({parameters}) := ({arguments})
-    {body}
-nearest () => {body} =>
-  () =>
-    {body}
 nearest ({{parameter}}) => {body} =>
   ({ {parameter} }) =>
     {body}
+nearest ({parameters}) => {body} =>
+  ({arguments}) =>
+    ({parameters}) taking ({arguments})
+    goto recurring
+    rebinding\
+    ({parameters}) := given
+    recurring\
+    {body}
+    returned\
+nearest () => {body} =>
+  () =>
+    recurring\
+    {body}
+    returned\
 {name} ({parameters}) => {body} =>
   {name} := (({parameters}) => {body})
 {name} () => {body} =>
   {name} := (() => {body})
+{on}.{name}{ }({parameters}) => {body} =>
+  {on}.{name} := (({parameters}) => {body})
+{on}.{name}{ }() => {body} =>
+  {on}.{name} := (() => {body})
 {name} := {value} =>
+  {value}
   {name} =>
     None
-  {name} = {value}
-{on}.{name} := {value} =>
-  {on} &+= {
-    {name} := {value}
-  }
-({name}) := {value} =>
-  {name} := {value}
-({name}, {names}) := {list} =>
-  ({name}, {names}) from {list}
+  {name} =>
+    {value}
 {name}{ }:={ }() => {body} =>
   {name} := (() => {body})
 {name}{ }:={ }({parameters}) => {body} =>
   {name} := (({parameters}) => {body})
+{on}.{name}{ }:={ }() => {body} =>
+  {on}.{name} := (() => {body})
+{on}.{name}{ }:={ }({parameters}) => {body} =>
+  {on}.{name} := (({parameters}) => {body})
+{on}.{name} := {value} =>
+  {on} &+= {
+    {name} := {value}
+  }
+{on}[{key}] = {value} =>
+  {on}.holding({key}, {value})
+{on}[{key}] := {value} =>
+  {on}.holding({key}, {value})
+({name}) := {value} =>
+  {name} := {value}
+({name}, {names}) := {list} =>
+  ({name}, {names}) from {list}
 {guarded} if {condition} =>
   {condition} ? (goto taken) : (goto passed)
   taken\
@@ -256,6 +346,12 @@ nearest ({{parameter}}) => {body} =>
   taken\
   {guarded}
   passed\
+// A list: `a, b` is a Ray of both, `a, b, c` one of all three; the loosest of all (`a = 1, b = 2` is `(a = 1), (b = 2)`). Both
+// read here first (`f(x: 1, y: 2)`: each declared where the list is); a side that only declared (`declared`) is no value in it.
+{list}, {other} =>
+  {list}
+  {other}
+  ({list} === declared) ? {other} : (({other} === declared) ? {list} : ((({list}).listing ? {list} : Ray.new.append({list})).joined({other})))
 
 // Ray: a chain of vertices, each holding a value (`head` the first vertex, `tail` the last; a vertex's `next`, `previous`).
 // Called on a Ray (`r.append(1)`), `.` in a method is that Ray.
@@ -328,6 +424,13 @@ Ray := {
     .head := first ? first.next : None
     .tail := .head ? .tail : None
     first ? first.value : None
+  find (predicate) =>
+    at := .head
+    while at {
+      return at.value if predicate(at.value)
+      at = at.next
+    }
+    None
   some (predicate) =>
     found := false
     at := .head
@@ -364,9 +467,19 @@ Ray := {
 // (anything but a Ray read on: not a listing)
 listing := false
 
-// A list: a method on Node; `a, b` is a Ray of both, `a, b, c` one of all three.
-, {other} =>
-  (.listing ? . : Ray.new.append(.)).joined({other})
+// (A list, `a, b`: see `,` below, the loosest.)
+
+// A value that is not a list (Ray's own say otherwise): its first is itself, nothing after it.
+first =>
+  .
+rest () =>
+  []
+
+// Whether a name is defined where it is read (the lookup's first layer only, not further out): `here x`.
+here {name} =>
+  goto defined
+  {name}
+  false
 
 // Names given values at once: `(a, b) := list`, each the next value in it (`:=`, below, reads it so).
 ({name}) from {list} =>
@@ -375,26 +488,92 @@ listing := false
   {name} := {list}.first
   ({names}) from {list}.rest()
 
+// A closure with parameters called with none, `f()`: called with nothing given (each its default). (One without parameters
+// has its own `()`, read first.)
+() =>
+  .(declared)
+
+// A call's parameters taking its arguments: one parameter, all of them; several, each the next (walking the list's
+// vertices; one its setup already defines, given by name or a partial argument, passes, leaving it for the next). Arguments that
+// only declared (`declared`) give none: a list with nothing in it.
+declared &+= {
+  listing =>
+    true
+  head =>
+    None
+}
+({{parameter}}) taking {value} =>
+  ({parameter}) gets (({value} === declared) ? None : {value})
+({{parameter}}, {{parameters}}) taking {list} =>
+  ({parameter}, {parameters}) taking from ((({list}).listing) ? ({list}).head : Ray.new.append({list}).head)
+({{parameter}}) taking from {vertex} =>
+  ({parameter}) gets {vertex}.value
+({{parameter}}, {{parameters}}) taking from {vertex} =>
+  (goto took) if (({parameter}) gets {vertex}.value) === true
+  ({parameters}) taking from {vertex}
+  goto done
+  took\
+  ({parameters}) taking from {vertex}.next
+  done\
+// One parameter given a value (read first: a call's arguments declare what they name), unless it is defined here already
+// (`true` when it took it; given, what `goto defined` answers): `x`, `x: T` (checked against T), `x = default` (None, the
+// default; defined last, so `x: T = d` is that default unwrapped first). (A parameter is code, handed on as written: `x = 5` is read by these.)
+({name}) gets {value} =>
+  {value}
+  goto defined
+  {name}
+  {name} := {value}
+  true
+({name}:{ }{type}) gets {value} =>
+  ({name}) gets (({value}) checked {type})
+({{parameter}} = {default}) gets {value} =>
+  ({parameter}) gets ({value} ?? {default})
+
 // A list written: `[]` an empty Ray, `[a, b]` a Ray of both, `[a]` of one.
 [] =>
   Ray.new
 [{inside}] =>
   ({inside}).listing ? {inside} : Ray.new.append({inside})
 
-// A value given to a closure (`x -- f`: what `f(x)` answers; `x ~~ f`: `x`, after `f(x)`); code read in a value (`x with { … }`).
--- {call} =>
-  {call}(.)
-~~ {call} =>
-  {call}(.)
+// The rest read on what is before it, as parentheses around that would (`a -- .x` is `a.x`; `.` in what is read, that value);
+// `x ~~ …`: the same, answering `x`. Code read in a value, `.` that value (`x reading { … }`; `x with { … }`, below).
+-- {{rest}} =>
+  . {rest}
+~~ {{rest}} =>
+  . {rest}
   .
-with {{block}} =>
+reading {{block}} =>
   {block}
+
+// `with` code, one line or a block: what it sets is set for where it is read (`&.caller`: the rewrite it is read in) and
+// everything run from there, and gone when that ends: written into that program, not where the name is held. (The code is
+// read in a node whose `=` does that; `assume` is the same.)
+with {{code}} =>
+  writing (&.caller) {
+    {code}
+  }
+writing {program} {{code}} =>
+  {program}
+  {
+    {name} = {value} =>
+      {value}
+      {program} &+= {
+        {name} =>
+          {value}
+      }
+  } reading {
+    {code}
+  }
+assume {{code}} =>
+  writing (&.caller) {
+    {code}
+  }
 
 // A superposition: one of these values (`a | b`), and `x?`: `x` or None (methods on Node).
 | {other} =>
   {
     superposes := true
-    components := ., {other}
+    components := Ray.new.append(.).joined({other})
   }
 ? =>
   None | .
@@ -433,68 +612,45 @@ extended () =>
 
 // (A head with `x: {…}` in it is written `x:{ }{…}`, which means the same space, so the rule for a name with a type does not
 // read it as one.)
-// A class: a node made in its parent (Node, else the one after `class:`), its block read in it; it sees its parent's rules,
-// so an instance of it does too. A class with fields (its header) is a closure written in it: `X(…)` is a call, its new node
-// (in the class: it sees the class's rules, not the call) the instance, its fields given the arguments, in order; `of` its class.
-class {{block}} =>
-  Node.made &+= {
-    extended := () =>
-      { }
-    {block}
-  }
+// A class: a node made of its parent (`class: P`, else Node), its block read in it; it sees its parent's rules, so an instance
+// of it does too. (Made in a node holding `parent` and `extended`: they are read through it, not its own rules, which are what a
+// typed hole `{x: T}` reads.) With fields, written as a closure is, `class (x, y) => { … }`: the class's `instance`, that closure (a call
+// of it, the instance: in the class, its fields given the arguments; `of` its class), is what `X(…)` calls.
 class:{ }{parent} {{block}} =>
-  {parent}.extended() &+= {
-    parent := {parent}
-    extended := () =>
-      { }
-    {block}
-  }
-nearest class {fields} {{block}} =>
-  (Node.made &+= {
-    extended := () =>
-      { }
-    {block}
-    instance := ({fields}) =>
-      of := instance
-  }).instance
-nearest class:{ }{parent} {fields} {{block}} =>
   ({parent}.extended() &+= {
     parent := {parent}
     extended := () =>
-      { }
+      made reading {
+        { }
+      }
+    made := {
+      {block}
+    }
+  }).made
+nearest class:{ }{parent}{ }({fields}) => {{block}} =>
+  (class: {parent} {
     {block}
     instance := ({fields}) =>
       of := instance
   }).instance
-// (a header written in parentheses, as the library writes them)
-class ({fields}) {{block}} =>
-  class {fields} {
+class {{block}} =>
+  class: Node {
     {block}
   }
-class:{ }{parent} ({fields}) {{block}} =>
-  class: {parent} {fields} {
-    {block}
-  }
-// (and with a block after `=>`; written `{ }` before the parentheses, so the method rule does not read it as a method named
-// `class`)
 class{ }({fields}) => {{block}} =>
-  class {fields} {
-    {block}
-  }
-class:{ }{parent}{ }({fields}) => {{block}} =>
-  class: {parent} {fields} {
+  class: Node ({fields}) => {
     {block}
   }
 
-// What a value is: the value itself; an instance of the class (or of one after it, `class:`) it was made by; one of a
-// superposition's components.
+// What a value is: a Node (anything is; the outermost node); the value itself; an instance of the class (or of one after it,
+// `class:`) it was made by; one of a superposition's components; a narrowing that holds of it; a member of an enumeration.
 of := None
 parent := None
 superposes := false
 descends (type) =>
   (. === type) || (.parent ? .parent.descends(type) : false)
 is {type} =>
-  (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((c) => . is c) : false)
+  ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((c) => . is c) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((m) => m === .) : false)
 
 // A value checked against a type: reported when it is not one (None, not given yet, and anything against no type, pass).
 type := None
@@ -507,3 +663,107 @@ checked {type} =>
 // `static`: what follows is read where it is (a class's block is read once, for the class).
 static {{statement}} =>
   {statement}
+
+// `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
+from (x) =>
+  None
+as {type} =>
+  (. is {type}) ? . : {type}.from(.)
+
+// What a value holds under a key: its entries (`key`, `value`), a Ray; none until one is given.
+entries := None
+Entry := class (key, value) => { }
+held (key) =>
+  found := (.entries) ? .entries.find((e) => e.key === key) : None
+  found ? found.value : None
+holding (key, value) =>
+  .entries := .entries ?? []
+  found := .entries.find((e) => e.key === key)
+  if found {
+    found.value = value
+  } else {
+    .entries.append(Entry(key, value))
+  }
+  value
+
+// (what a narrowing narrows: see `T{constraint}`)
+narrows := None
+// An enumeration: `enum A | B | C`, a node with a member for each name (a node in it), and `members` them all (the names
+// are code: handed on as written; a rule's right side is not read by that rule, but what is in a group is).
+members := None
+nearest enum {{names}} =>
+  Node.made &+= {
+    members := []
+    enumerated {names}
+  }
+enumerated {name} =>
+  {name} := { }
+  members.append({name})
+nearest enumerated {name} | {{rest}} =>
+  {name} := { }
+  members.append({name})
+  (enumerated {rest})
+
+// `dynamically`: given again (run again) whenever what it reads is written from outside in the rewrite it is read in
+// (`&.caller`), or anything run from there: `dynamically x := v` (x is v again), `dynamically code` (the code runs again).
+// What it reads: the names its code has in it (a write of one it does not have goes on past it). (That program's `=`: the
+// write, then each one whose code has the name in it again, once: what they write, while they do, does not; nor does any
+// write while they are given again. A member written, `x.y = v`, is
+// `x.y := v`: written as `y = v` in `x`. The `:=` form is written `{ }` after `dynamically`, so the code form, a modifier,
+// does not read its definition.)
+dynamics := None
+dynamically {{code}} =>
+  dynamic_in (&.caller) {
+    {code}
+  }
+  {code}
+dynamically{ }{name} := {{value}} =>
+  {name} := {value}
+  dynamic_in (&.caller) {
+    {name} = ({value})
+  }
+dynamic_in {program} {{code}} =>
+  {program}
+  {program} &+= {
+    dynamics := dynamics ?? {
+      updating := false
+      refreshing := []
+      refresh (written) =>
+        unless .updating {
+          .updating = true
+          .refreshing.for((one) => (one.again() if one.reads contains written))
+          .updating = false
+        }
+    }
+    {written} = {given} =>
+      (goto quiet) if dynamics.updating
+      {written} = {given}
+      dynamics.refresh(.written)
+      goto done
+      quiet\
+      {written} = {given}
+      done\
+    {on}.{written} = {given} =>
+      (goto quiet) if dynamics.updating
+      {on}.{written} := {given}
+      dynamics.refresh(.written)
+      goto done
+      quiet\
+      {on}.{written} := {given}
+      done\
+  }
+  {program}.dynamics.refreshing.append({
+    reads := .code
+    again := () => {
+      {code}
+    }
+  })
+// The classes the library adds to: what is iterable, an array of it, text (an array of characters), a number, a character
+// (a number), a program, a diagnostic.
+Iterable := class { }
+Array := class: Iterable { }
+String := class: Array { }
+Number := class { }
+Char := class: Number { }
+Program := class { }
+Diagnostic := class { }

@@ -8,7 +8,7 @@ Roman := class: Digit+ (
   ignore_case
 
   static Digit: Char = on Value
-  static Value = {
+  static Value := {
     "I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000,
     // Unicode Roman Numeral block (U+2160–U+216F)
     "Ⅰ": 1, "Ⅴ": 5, "Ⅹ": 10, "Ⅼ": 50, "Ⅽ": 100, "Ⅾ": 500, "Ⅿ": 1000,
@@ -22,7 +22,7 @@ Roman := class: Digit+ (
     "ↆ": 50     // U+2186 ROMAN NUMERAL FIFTY EARLY FORM
   }
 
-  static Place<one, five, ten> := class (one, ten) | (one, five) | (five?, one[]{length <= 4}) {
+  static Place := class (one, five, ten, (one, ten) | (one, five) | (five?, one[]{length <= 4})) => {
     as (=== Decimal) => if this {
       is (one, ten) => 9
       is (one, five) => 4
@@ -31,7 +31,7 @@ Roman := class: Digit+ (
     subtractive => !(this ~= (five?, one[]{length == 4}))
     additive => !(this ~= (one, five | ten))
   }
-  static Precomposed = "Ⅰ".."Ⅻ" | "ⅰ".."ⅻ"
+  static Precomposed := "Ⅰ".."Ⅻ" | "ⅰ".."ⅻ"
 
   as (=== Decimal) => thousands.length * 1000 + (hundreds as Decimal) * 100 + (tens as Decimal) * 10 + (Value[ones] ?? ones as Decimal)
   canonical => (this as Decimal) as Roman
@@ -40,31 +40,31 @@ Roman := class: Digit+ (
 
   static Subtractive := Standard{(hundreds, tens, ones).every(.subtractive)}
   static Additive := Standard{(hundreds, tens, ones).every(.additive)}
-  static normalizer = Subtractive
+  static normalizer := Subtractive
 
   // Vinculum — combining overline multiplies by 1000 (https://en.wikipedia.org/wiki/Roman_numerals#Large_numbers)
-  static Vinculum := class: Roman (high: Lined<"̅">?, low: Roman) {
-    static Lined<mark> := class (digit: Roman.Digit, mark)[] {
+  static Vinculum := class: Roman (high: Lined<"̅">?, low: Roman) => {
+    static Lined := class (mark, (digit: Roman.Digit, mark)[]) => {
       as (=== Decimal) => digit as String as Roman as Decimal
     }
     as (=== Decimal) => (high as Decimal ?? 0) * 1000 + (low as Decimal)
 
     // Double overline multiplies by 1,000,000
-    static Double := class: Vinculum (highest: Lined<"̿">?, high: Lined<"̅">?, low: Roman) {
+    static Double := class: Vinculum (highest: Lined<"̿">?, high: Lined<"̅">?, low: Roman) => {
       as (=== Decimal) => (highest as Decimal ?? 0) * 1000000 + (super as Decimal)
     }
   }
 
   // Apostrophus — composed CIↃ sequences (https://en.wikipedia.org/wiki/Roman_numerals#Apostrophus)
-  static Apostrophus := class: Roman (pieces: Piece[], low: Roman) {
-    static Value = Roman.Value &+ {
+  static Apostrophus := class: Roman (pieces: Piece[], low: Roman) => {
+    static Value := Roman.Value &+ {
       "ↀ": 1000,    // U+2180 — CIↃ
       "ↁ": 5000,    // U+2181 — IↃↃ
       "ↂ": 10000,   // U+2182 — CCIↃↃ
       "ↇ": 50000,   // U+2187 — IↃↃↃ
       "ↈ": 100000   // U+2188 — CCCIↃↃↃ
     }
-    static Piece := class (closed: "C"[], "I", reversed: ("Ↄ" | "ↄ")[]{closed.empty ? length >= 2 : length == closed.length}) | precomposed: "ↀ" | "ↁ" | "ↂ" | "ↇ" | "ↈ" {
+    static Piece := class ((closed: "C"[], "I", reversed: ("Ↄ" | "ↄ")[]{closed.empty ? length >= 2 : length == closed.length}) | precomposed: "ↀ" | "ↁ" | "ↂ" | "ↇ" | "ↈ") => {
       as (=== Decimal) => precomposed ? Value[precomposed] : closed.empty ? 5 * 10 ^ (reversed.length + 1) : 10 ^ (closed.length + 2)
     }
     as (=== Decimal) => pieces.map(as Decimal).sum + (low as Decimal)
@@ -73,8 +73,8 @@ Roman := class: Digit+ (
   // Fraction — Roman base-12 uncia system (https://en.wikipedia.org/wiki/Roman_numerals#Fractions)
   static Fraction := class (semis: "S"?, unciae: ("·"[]{length <= 5} | Dot)) | sub_uncia: on Value => {
     static Digit: Char = on Value
-    static Dot = "·" | "∶" | "∴" | "∷" | "⁙"  // U+00B7, U+2236, U+2234, U+2237, U+2059
-    static Value = {
+    static Dot := "·" | "∶" | "∴" | "∷" | "⁙"  // U+00B7, U+2236, U+2234, U+2237, U+2059
+    static Value := {
       "·": 1.0 * 1 / 12,    // U+00B7 MIDDLE DOT — uncia
       "∶": 1.0 * 2 / 12,    // U+2236 RATIO — sextans
       "∴": 1.0 * 3 / 12,    // U+2234 THEREFORE — quadrans
@@ -92,16 +92,16 @@ Roman := class: Digit+ (
 
     // Named fractions (twelfths of an as)
     uncia    | 𐆑 = "·"           // 1/12
-    sextans       = "··" | "∶"    // 2/12 = 1/6
-    quadrans      = "···" | "∴"   // 3/12 = 1/4
-    triens        = "····" | "∷"  // 4/12 = 1/3
-    quincunx      = "·····" | "⁙" // 5/12
-    semis         = "S"           // 6/12 = 1/2
-    septunx       = "S", uncia    // 7/12
-    bes           = "S", sextans  // 8/12 = 2/3
-    dodrans       = "S", quadrans // 9/12 = 3/4
-    dextans       = "S", triens   // 10/12 = 5/6
-    deunx         = "S", quincunx // 11/12
+    sextans       := "··" | "∶"    // 2/12 = 1/6
+    quadrans      := "···" | "∴"   // 3/12 = 1/4
+    triens        := "····" | "∷"  // 4/12 = 1/3
+    quincunx      := "·····" | "⁙" // 5/12
+    semis         := "S"           // 6/12 = 1/2
+    septunx       := "S", uncia    // 7/12
+    bes           := "S", sextans  // 8/12 = 2/3
+    dodrans       := "S", quadrans // 9/12 = 3/4
+    dextans       := "S", triens   // 10/12 = 5/6
+    deunx         := "S", quincunx // 11/12
   }
 }
 

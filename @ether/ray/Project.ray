@@ -26,8 +26,8 @@ Project := class: Location {
   readings: Program = {
     {name: String} => Language.for_file(name)
   }
-  loading = false
-  loaded = false
+  loading := false
+  loaded := false
 
   shadowing => (parent, dependencies.project)#
   carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
@@ -54,14 +54,14 @@ Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
 
   resolved (revisions: Version[]) => latest ? revisions{number == this.number}.max(.revision) ?? this : this
 
-  static Pin := class ("%[", label: UUID | Char.Word[], "]")
+  static Pin := class ("%[", label: UUID | Char.Word[], "]") => { }
 }
 
 %[{first: Decimal.String}..{last: Decimal.String}] ^number => Version{first as Decimal <= number <= last as Decimal}
 
 Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
-  @field static "#" ((@owns static "#") ? (@member static "#") : [])
-  (@member static "#").push(this)
+  of["#"] := of["#"] ?? []
+  of["#"].push(this)
 
   backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? ERROR@Migration `the migration has no inverse`)
 

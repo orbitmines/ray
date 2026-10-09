@@ -1,32 +1,35 @@
+// Both: what either has (`class: Iterable & Ordered`), each in `conjoined`.
+Conjunction := class (first, second) => {
+  conjoined => first.conjoined, second
+  holds => conjoined.every(.)
+  admits (candidate) => conjoined.every(candidate is .)
+  contains (x) => conjoined.contains(x)
+}
+
 Node &+= {
   conjoined => [this]
   // (both: made of each, `class: Iterable & Ordered` has what either has)
-  & (other) => @also (@also (class {
-    conjoined => this.conjoined, other
-    holds => conjoined.every(.)
-    admits (candidate) => conjoined.every(candidate is .)
-    contains (x) => conjoined.contains(x)
-  }) this) other
+  & (other) => Conjunction(this, other)
 
   // what it holds under a name given as text (`` x.`name` `` where `name` holds the text)
-  member (named: String) => @member this named
+  member (named: String) => this[named]
   // what it holds under a name given as text, written (`x.set("width", 1)`)
-  set (named: String, setting_value) => @field this named setting_value
+  set (named: String, setting_value) => this[named] = setting_value
   // its fields in order, each its `name`, `type` and `value`, and by name (`x.fields["width"]`): what its class's header and block
   // declare, then (a class) what its own block declares
   fields =>
     made := []
-    maker := @of this
-    pieces := ((maker !== None) && (@owns maker "header")) ? maker.header : []
+    maker := this.of
+    pieces := ((maker !== None) && maker.header) ? maker.header : []
     pieces.for(piece => (piece is String) ? None : Node.fields_of(made, this, piece))
     (maker !== None) ? Node.fields_of(made, this, maker) : None
     Node.fields_of(made, this, this)
     made
   // (what `declarer` declares, first declared first)
-  static fields_of (made, holder, declarer) => (@owns declarer "declared") ? Node.declared_fields(made, holder, @member declarer "declared") : None
-  static declared_fields (made, holder, declared) => (declared === None) ? None : (Node.declared_fields(made, holder, @member declared "before") -- (Node.field_of(made, holder, declared)))
-  static field_of (made, holder, declared) => (name: declared.name, type: @later (declared.type), value: @later (@member holder declared.name)) -- (field => made.append(field) -- (@field made declared.name field))
-  as (=== String) => ((@of this) && (@member (@of this) "header") && Language.patterned((@of this).header.head)) ? Language.part_written(this) : (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
+  static fields_of (made, holder, declarer) => declarer.declared ? Node.declared_fields(made, holder, declarer.declared) : None
+  static declared_fields (made, holder, declared) => (declared === None) ? None : (Node.declared_fields(made, holder, declared.before) -- (Node.field_of(made, holder, declared)))
+  static field_of (made, holder, declared) => (name: declared.name, type: declared.type, value: holder[declared.name]) -- (field => made.append(field) -- (made[declared.name] = field))
+  as (=== String) => (this.of && this.of.header && Language.patterned(this.of.header.head)) ? Language.part_written(this) : (Language.for_file(&.caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)
 
@@ -59,9 +62,9 @@ Node &+= {
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)
 
-Possibilities := class values: Iterable {
+Possibilities := class (values: Iterable) => {
   entry => values.entry
-  .{literal property ^property} ^punctuation => Possibilities(values: values.map(x => @member x (@text property)))
+  .{literal property ^property} ^punctuation => Possibilities(values: values.map(x => x[.property]))
 }
 Possibilities.components.hierarchy &= Iterable
 Possibilities &+= {
@@ -93,15 +96,15 @@ Possibilities &+= {
 a | an {counted: *{#.count != 1}{!(. is Unit)}} => 1 counted
 Node &+= {
   # =>
-    possible := (@owns this "members") ? this.members : (superposes ? components : ((conjoined.count > 1) ? conjoined : ((!instance && components.head) ? components : [this])))
+    possible := this.members ? this.members : (superposes ? components : ((conjoined.count > 1) ? conjoined : ((!instance && components.head) ? components : [this])))
     Possibilities(values: possible)
   origin: Node?
 }
 #{value} ^punctuation => value#
 
-Composed := class parts: Node[], joining: Program {
+Composed := class (parts: Node[], joining: Program) => {
   erred => parts.some(.erred)
-  .{literal property ^property} ^punctuation => parts.map(x => @member x (@text property)).reduce((acc) => joining(acc, .))
+  .{literal property ^property} ^punctuation => parts.map(x => x[.property]).reduce((acc) => joining(acc, .))
 }
 Node &+= {
   &+ (other) => Composed(parts: [this, other], joining: (a, b) => a & b) ~~ .components.hierarchy &= this ~~ .components.hierarchy &= other
@@ -125,7 +128,7 @@ Superposed := Node{.superposed}
 {f}({argument: Superposed}) => argument.each(one => f(one))
 
 // An operator missing a side is a section: the function of what it misses (`xs.map(+ 1)`, `xs.sorted(<)`, `xs{> 0}`, `(!)`).
-Section := class operator, operand? {
+Section := class (operator, operand?) => {
   continues => true
   (a, b?) => operand != None ? a [operator] operand : b != None ? a [operator] b : a [operator]
 }
@@ -156,7 +159,7 @@ Node &+= {
   ~"{label}" ^punctuation => Entry(of: this, at: entry_at(label))
   ~{index: Decimal.String} ^punctuation => Entry(of: this, at: entry_at(index as Decimal))
 }
-Entry := class of: Node, at: Program? {
+Entry := class (of: Node, at: Program?) => {
   following => Program(code: of.written_body).written -- .[.index_of(at) + 1..]
   ({args}) => of.construct(args) ~~ Program(code: following).entered(., None)
 }
@@ -191,7 +194,7 @@ None &+= {
   chainable != (other) => other !== None
   !~= (pattern) => true
 }
-Anchored := class pattern: Node, at_start: boolean = false, at_end: boolean = false {
+Anchored := class (pattern: Node, at_start: boolean = false, at_end: boolean = false) => {
   admits (candidate) => candidate ~= this
   ⊣ => Anchored(pattern, at_start, at_end: true)
 }
@@ -233,7 +236,7 @@ read_within (text, pattern) => (
 {type}+, {rest} ^punctuation => type[], rest
 
 Node &+= {
-  right-to-left internal => this ~~ .access = Access(&caller, method: Access.Reading, target: this)
+  right-to-left internal => this ~~ .access = Access(&.caller, method: Access.Reading, target: this)
   right-to-left trivially => instance ? this : ?
   right-to-left unique<in: Program?> => this{.is_unique<in: in>}
   is_unique<in: Program?> => (&){in ? (. ==<in: in> this) : . == this}.count == 1
@@ -255,16 +258,14 @@ print (x) => IO.output(x as String) -- x
 * := Node
 Object := * - Node
 
-Origin := class method: Node, arguments: Node {
+Origin := class (method: Node, arguments: Node) => {
   == (other) => other === method || (other is Origin && other.method === method && other.arguments == arguments)
 }
 {f}({a}) | {g}({b}) ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | (g(b).copy ~~ .origin = Origin(g, b))
 {f}({a}) | {rest} ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | rest
 {rest} | {g}({b}) ^punctuation => rest | (g(b).copy ~~ .origin = Origin(g, b))
 
-&{member Word ^variable} ^keyword => @member @here (@text member)
-
 ~{literal label ^label} ^punctuation => this~label
 Node &+= {
-  .{literal property ^property}? ^punctuation => (@member this ((@text property) + "?")) ?? (@member this (@text property))?
+  .{literal property ^property}? ^punctuation => this[.property + "?"] ?? this[.property]?
 }

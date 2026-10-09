@@ -4,13 +4,15 @@
 OS := enum Linux (platform: "linux") | Windows (platform: "win32") | Macos (platform: "darwin") | Browser (platform: "browser") | Ether (platform: "ether") {
   as (=== boolean) => this === @me/device/os
   // what the host says of itself (`os["PATH"]`, `os.env.PATH`); the language as the operating system says only what it is
-  [property: String] => this === OS.Ether ? { "platform": "ether", "architecture": "ray" }[property] : (@os property) as String
+  [property: String] => this === OS.Ether ? { "platform": "ether", "architecture": "ray" }[property] : OS.reported(property) as String
   architecture => this["architecture"]
   env => Environment(os: this)
-  static Environment := class os: OS {
+  static Environment := class (os: OS) => {
     .{literal name ^property} ^punctuation => os[name]
   }
 
   // the one the host reports; none: the language as the operating system
-  static host: OS => OS#{!== OS.Ether}{.platform == ((@os "platform") as String)}.first ?? OS.Ether
+  // (what the host reports of itself: given by the implementation; none in the language)
+  static reported (property) => None
+  static host: OS => OS#{!== OS.Ether}{.platform == (OS.reported("platform") as String)}.first ?? OS.Ether
 }

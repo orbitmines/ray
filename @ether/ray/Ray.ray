@@ -2,7 +2,7 @@
 <- (): Ray => previous: () => Ray(previous: previous())
 <--> (): Ray => (<-) &+ (->)
 
-Ordered<T = static> := class {
+Ordered := class (T = static) => {
   chainable < (b: T) => TODO
   chainable > (b: T) => b < this
   chainable <= (b: T) => this == b || this < b
@@ -39,11 +39,11 @@ Iterable &+= {
 
   first => entry
   last => rest.empty ? first : rest.last
-  static From := class: Iterable at: Ray {
+  static From := class: Iterable (at: Ray) => {
     entry => at
   }
 
-  for <traverse: Traverser = Traverser.default>(yield: (x: Vertex): *) => traverse<.yield: yield<local: &caller, break: return>>(entry) if entry
+  for <traverse: Traverser = Traverser.default>(yield: (x: Vertex): *) => traverse<.yield: yield<local: &.caller, break: return>>(entry) if entry
 
   every (predicate: (x: Vertex): boolean) => map(predicate){== false}.empty
   some (predicate: (x: Vertex): boolean) => this[{predicate}].nonempty
@@ -52,11 +52,10 @@ Iterable &+= {
   // (one closure: its parameter the accumulator, what it is given nothing its start (else the first element), `.` in it each
   // element in turn)
   reduce (step) =>
-    reducing := @initial step
-    (reducing === None) ? (empty ? None : rest.reduced(first, step)) : reduced(reducing, step)
+    empty ? None : rest.reduced(first, step)
   reduce_right | fold_right | foldr => reverse.reduce
   reduced (seed, step) =>
-    reduced_next := empty ? seed : (@entered step first seed)
+    reduced_next := empty ? seed : step(seed, first)
     empty ? seed : rest.reduced(reduced_next, step)
 
   all => reduce(|)
@@ -95,7 +94,7 @@ Iterable &+= {
     this.for(part => part.for(element => made.append(element)))
     made
   // (what flattening goes into: a narrowing, a list (a Ray of vertices); not a number, a text, a closure, a shape (each also a Ray))
-  static flattens (element) => (@owns element "narrows") || (@owns element "head") || ((@owns element "commas") && element.empty) || ((@of element) === (@of []))
+  static flattens (element) => element.narrows || element.listing || (element.commas && element.empty) || (element.of === [].of)
   flatten => map(element => Ray.flattens(element) ? element.flatten : [element]).concatenated
   flatten (levels: Number) => levels == 0 ? this : map(element => Ray.flattens(element) ? element.flatten(levels - 1) : [element]).concatenated
   union (other: Iterable) => this, other[{!this.contains(.)}]
@@ -185,7 +184,7 @@ Ray := class: Iterable & Ordered {
   .. (last: Ray) => this === last ? [this] : next ? this, next..last : None
   to (other: Ray) => reachable.some(. === other)
 
-  same_vertex (other: Ray) => value || other.value ? value == other.value : same_text((@where this), (@where other))
+  same_vertex (other: Ray) => value || other.value ? value == other.value : same_text(this.location, other.location)
   matches (other: Ray) => same_vertex(other) && (is_terminal ? other.is_terminal : other.next && next.matches(other.next))
   chainable == (other: Ray) => first.matches(other.first)
 
@@ -267,9 +266,9 @@ Traverser := class: <yield: (x: Ray): None>(entry: Ray): None {
       }
     }
   }
-  static DepthFirst = walk(.pop_back)
-  static BreadthFirst = walk(.pop_front)
-  static default = DepthFirst
+  static DepthFirst := walk(.pop_back)
+  static BreadthFirst := walk(.pop_front)
+  static default := DepthFirst
 }
 
 Structure := class: Iterable<Ray{
@@ -286,12 +285,12 @@ Structure := class: Iterable<Ray{
 }
 
 Hypergraph := class: Structure {
-  HyperEdges = true
+  HyperEdges := true
 }
 Graph := class: Structure {
-  HyperContinuations = true
+  HyperContinuations := true
 
-  static Simple := class: Graph vertices: *[] = [], edges: Edge[] = [] {
+  static Simple := class: Graph (vertices: *[] = [], edges: Edge[] = []) => {
     vertex (value) => (vertices.push(value) unless vertices.contains(value)) -- value
     connect (from, to) => { vertex(from); vertex(to); edges.push Edge.between(from, to) } -- this
     connected (from, to) => edges.some(.from == from && .to == to)
@@ -311,7 +310,7 @@ Graph := class: Structure {
     without (vertex) => Simple(vertices: vertices{!= vertex}, edges: edges{.from != vertex && .to != vertex})
     dangling (vertex, kept) => edges.some((.from == vertex || .to == vertex) && !(kept.contains(.from) && kept.contains(.to)))
 
-    static Rule := class left: Simple, interface: Simple, right: Simple {
+    static Rule := class (left: Simple, interface: Simple, right: Simple) => {
       deleted => left.vertices{!interface.vertices.contains(.)}
       added => right.vertices{!interface.vertices.contains(.)}
 
@@ -326,12 +325,12 @@ Graph := class: Structure {
   }
 }
 Forest := class: Structure{acyclic & consistent} {
-  Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
-  HyperContinuations = true
+  Vertex := Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
+  HyperContinuations := true
 }
 Tree := class: Forest{connected}
 Path := class: Structure{consistent & connected} {
-  HyperContinuations = false
+  HyperContinuations := false
 
   paths => this
   length => acyclic ? count : ∞
@@ -364,7 +363,7 @@ Link.components.hierarchy &= Ray
 
 Set := class: Structure {
   orderless => true
-  normalizer = .shuffled.unique
+  normalizer := .shuffled.unique
   add (x) => (push(x) unless contains(x)) -- this
 }
 
@@ -380,7 +379,7 @@ Hierarchy := class: Ray {
   depth => parent ? parent.depth + 1 : 0
 }
 
-Loop := class: Path around: Iterable, at: * {
+Loop := class: Path (around: Iterable, at: *) => {
   next => Loop(around, at: at.next ?? around.first)
   previous => Loop(around, at: at.previous ?? around.last)
   is_initial => false
@@ -400,7 +399,7 @@ Node &+= {
   -> (step = 1) => Stepped(at: this, forward: step)
   right-to-left <- (base) => base is Stepped ? Stepped(at: base.at, forward: base.forward, backward: this) : Stepped(at: base, backward: this)
 }
-Stepped := class: Ray at: *, forward: *?, backward: *?, behind: Stepped?, ahead: Stepped? {
+Stepped := class: Ray (at: *, forward: *?, backward: *?, behind: Stepped?, ahead: Stepped?) => {
   static stepped (step, from) => step is Number ? from + step : step(from)
   value => at
   next => ahead ?? (forward ? Stepped(at: stepped(forward, at), forward, backward, behind: this) : None)
@@ -409,7 +408,7 @@ Stepped := class: Ray at: *, forward: *?, backward: *?, behind: Stepped?, ahead:
   == (other) => at == (other is Stepped ? other.at : other)
 }
 
-Filtered := class: Ray from: Ray?, keeps: * {
+Filtered := class: Ray (from: Ray?, keeps: *) => {
   found => from ? (from.satisfies(keeps) ? this : Filtered(from: from.next, keeps).found) : None
   entry => found
   value => from.value ?? from
@@ -419,7 +418,7 @@ Filtered := class: Ray from: Ray?, keeps: * {
 }
 
 ...{of} ^punctuation => Spread(of: of)
-Spread := class of: * {
+Spread := class (of: *) => {
   spreads => true
   repeating => true
   repeats => of

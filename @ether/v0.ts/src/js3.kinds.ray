@@ -1,0 +1,102 @@
+// What this interpreter's own kinds of value are, for now: a number (a JS number) and text (a JS string), their operations
+// the host's (`goto js`: the next statement is JS, `self` the value read on, each hole its value, `$(text)` text read here).
+// A port of `js.kinds.ray` to test with until the library reads numbers and text itself; read after the language.
+
+// Numbers, as written: a digit (`Digit`'s own rules), digits, digits with a fraction (`Number`'s own rules: a typed hole
+// `{n: Number}` takes what they read; what it took is read in `Number`). Read anywhere through the rule after them.
+Digit := class { }
+Digit &+= {
+  0 =>
+    goto js
+    0
+  1 =>
+    goto js
+    1
+  2 =>
+    goto js
+    2
+  3 =>
+    goto js
+    3
+  4 =>
+    goto js
+    4
+  5 =>
+    goto js
+    5
+  6 =>
+    goto js
+    6
+  7 =>
+    goto js
+    7
+  8 =>
+    goto js
+    8
+  9 =>
+    goto js
+    9
+}
+Number &+= {
+  {digit: Digit} =>
+    digit
+  {digit: Digit}{rest: Number} =>
+    goto js
+    Number($.text('digit') + $.text('rest'))
+  {whole: Number}.{fraction: Number} =>
+    goto js
+    Number($.text('whole') + '.' + $.text('fraction'))
+}
+{number: Number} =>
+  number
+
+// What both answer: `true`/`false`, read here.
+== {other} =>
+  goto js
+  $(self === other ? 'true' : 'false')
+!= {other} =>
+  goto js
+  $(self !== other ? 'true' : 'false')
+< {other} =>
+  goto js
+  $(self < other ? 'true' : 'false')
+<= {other} =>
+  goto js
+  $(self <= other ? 'true' : 'false')
+> {other} =>
+  goto js
+  $(self > other ? 'true' : 'false')
+>= {other} =>
+  goto js
+  $(self >= other ? 'true' : 'false')
+
+// Numbers (text added to: joined).
++ {other} =>
+  goto js
+  typeof self === 'string' ? self + String(other) : self + other
+- {other} =>
+  goto js
+  self - other
+* {other} =>
+  goto js
+  self * other
+/ {other} =>
+  goto js
+  self / other
+% {other} =>
+  goto js
+  ((self % other) + other) % other
+
+// Text.
+contains {other} =>
+  goto js
+  $(String(self).includes(String(other)) ? 'true' : 'false')
+count () =>
+  goto js
+  [...self].length
+
+// What a number or text is made of: Number, String (a node's own `of` is read before this).
+of =>
+  goto js
+  typeof self === 'number' ? $('Number') : typeof self === 'string' ? $('String') : undefined
+  None

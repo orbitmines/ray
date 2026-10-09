@@ -1,4 +1,4 @@
-Access := class who: *?, method: `=` | `()` | * = *, filter: Program?, target: *? {
+Access := class (who: *?, method: `=` | `()` | * = *, filter: Program?, target: *?) => {
   static Reading := *{. != `=` && . != `()`}
 
   // A grant's expression and filter are read to check it, never run for what they do: only one that changes nothing
@@ -63,7 +63,7 @@ Program &+= {
   effects => reachable.map(.calls{.is_external}.external_name).flatten.unique
 }
 
-&@ ^keyword => &caller as Program
+&@ ^keyword => &.caller as Program
 
 Pure := Program{effects.empty}
 Deterministic := Program{!effects.some(. is ("random" | "time" | "io"))}

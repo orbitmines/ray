@@ -865,7 +865,9 @@ export class Host {
       // (after the definer: the functionality, to the end; an operator read on a value reads one operand: the same operator after it reads on from what it gives)
       // (led by a literal, a statement: its last capture, the rest; an operator's, one operand)
       // (a reader's own rule, read in a value as its type: to the end, too)
-      const statement = ('lit' in eq.pieces[0] && eq.ctx.scope) || (!('lit' in eq.pieces[0]) && !eq.ctx.scope);
+      // (a level's rule, at the level code runs at, as a scope's: a level is a scope)
+      const scoped = eq.ctx.scope || this.level_of(ctx, eq.ctx);
+      const statement = ('lit' in eq.pieces[0] && scoped) || (!('lit' in eq.pieces[0]) && !eq.ctx.scope);
       // (an operation hugging its value, written without a space: its operand ends at any operation written with one)
       const hugs = !eq.ctx.scope && 'lit' in eq.pieces[0] && !eq.pieces.some(x => 'lit' in x && x.lit.includes(this.learned.space));
       const atom = i === 0 && piece.reader !== undefined;

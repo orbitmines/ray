@@ -413,10 +413,12 @@ Geometry := class {
   Settings := {
     {a} & {b} => (a, b)
     {a}, {b} => (a, b)
-    {literal path} == {value} => value -- (written => { `path` = written })
-    {literal path}: {value} => value -- (written => { `path` = written })
-    {literal path} <= {most} => most -- (written => { `path`: `path`.type{<= written} })
-    {literal path} >= {least} => least -- (written => { `path`: `path`.type{>= written} })
+    // (each a write on the shape it is entered into: the field named as written given the value; a bound, the shape as it is (a
+    // field's type narrowed by it is not written yet))
+    {literal path} == {value} => value -- (written => (setting => setting.set(path, written)))
+    {literal path}: {value} => value -- (written => (setting => setting.set(path, written)))
+    {literal path} <= {most} => most -- (written => (setting => setting))
+    {literal path} >= {least} => least -- (written => (setting => setting))
   }
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t

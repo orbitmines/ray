@@ -10,6 +10,8 @@ Node &+= {
 
   // what it holds under a name given as text (`` x.`name` `` where `name` holds the text)
   member (named: String) => @member this named
+  // what it holds under a name given as text, written (`x.set("width", 1)`)
+  set (named: String, setting_value) => @field this named setting_value
   // its fields in order, each its `name`, `type` and `value`, and by name (`x.fields["width"]`): what its class's header and block
   // declare, then (a class) what its own block declares
   fields =>
@@ -159,7 +161,7 @@ Entry := class of: Node, at: Program? {
 }
 
 Node &+= {
-  location: *?
+  location: *? = None
   // where it is (`@x.@`, `value.@`)
   .@ ^punctuation => location
 }

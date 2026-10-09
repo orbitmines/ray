@@ -41,6 +41,8 @@ Program &+= {
   difficulty => written.count
 
   stop | cancel | complete: static => this ~~ (.stopped = true)
+  // (entered into a value: a closure of it, applied to it; `element`, what `.` is in it, not yet)
+  entered (entered_into, entered_element) => entered_into -- this
 }
 
 Program &+= {

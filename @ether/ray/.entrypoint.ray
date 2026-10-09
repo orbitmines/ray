@@ -587,6 +587,8 @@ Class &+= {
 // are declared here, before `|` and `+` (below) and the arithmetic (`js.kinds.ray`, Number.ray): `x is A | B`, `0..<2 * n`, `a + 1 > b`
 Operators := @made Node
 Operators &+= {
+  // (`f <- x`, F-B2 (the Scene level's): looser than everything after it, so it ends what a right-to-left method is applied on)
+  {flows_into} <- {flowing} => None
   is {type} => None
   ..{last} => None
   ..<{last} => None

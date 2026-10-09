@@ -1687,7 +1687,8 @@ export class Host {
     const ps = eq.pieces, enclosed = ps.length > 1 && 'lit' in ps[0] && 'lit' in ps[ps.length - 1];
     F.scope = true; F.caller = code.ctx; F.self = self; F.rule = eq; F.statement = code.statement && !enclosed;
     if (F.outer !== eq.body.ctx) F.sees = eq.body.ctx;
-    const at = code.ctx.written ?? code.ctx;
+    // (what it captured is read where it was written; at a level, at that level: the level's rules stay in scope for it)
+    const at = code.ctx.level ? code.ctx : code.ctx.written ?? code.ctx;
     if (!this.captured(eq, F, caps, code.text, at)) return NOT;
     // (a method: what it was given matched against its parameters; the frame continues into it, what it was not given what it says)
     if (eq.node?.params) {

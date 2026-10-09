@@ -26,6 +26,8 @@ UI := class {
   }
 
   Scene := {
+    // `f <- x` (F-B2): `x` given to what is written before, `middle center .map(g) <- { … }` is `middle center ({ … }.map(g))`
+    {flow_into} <- {flowing} => flow_into(flowing)
     {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
     {text: String} => Geometry.Box(content: text)
     {styled: String | Geometry.Shape | Choice}{ }{`^`}{{literal expression}} => Compiler.reduced(styled, Scene).styled_by(Program(code: expression**))

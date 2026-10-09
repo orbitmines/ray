@@ -1708,7 +1708,7 @@ export class Host {
   // captures bound in a frame: code, read where written each time it is named; one with a reader (or a type) a value, what that
   // reads it as, read once, here; false when one is not read so
   captured(eq: Eq, F: Ray, caps: Cap[], text: Text, at: Ray): boolean {
-    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); F.m.set(c.name, c.unread ? text.s.slice(c.b, c.e).trim() : c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : (c.argument || c.block || eq.ctx.closure) ? this.argued(this.written(k)) : this.written(k)); }
+    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); F.m.set(c.name, c.unread ? text.s.slice(c.b, c.e).trim() : c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : this.argued(this.written(k))); }
     for (const c of caps) if ((c.reader || c.type !== undefined) && c.b < c.e && !c.unread) {
       // (while what reads its captures is read, the rule reads nothing itself)
       const k = new Code(text, c.b, c.e, at, c.floor);

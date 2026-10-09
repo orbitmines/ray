@@ -76,7 +76,7 @@ export class Code {
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
 export type Piece = { lit: string } | { cap: string; reader?: Code; type?: unknown };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
-export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: ((F: Ray) => unknown) | null; word?: string; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean; indexed?: boolean };
+export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: ((F: Ray) => unknown) | null; word?: string; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean; indexed?: boolean; element?: boolean };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string; typed?: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; type?: unknown; block?: boolean; argument?: boolean };
@@ -1178,7 +1178,7 @@ export class Host {
     if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.definition(code); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.statement || (code.ctx.rule ? code.ctx.statement : false)); }
     let r = this.reading(code); const s = code.text.s;
     // (an argument that begins by reading on from a value: a closure of that value)
-    if (code.argument && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit) return this.element_closure(code); }
+    if (code.argument && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code)) return this.element_closure(code); }
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
     if (r === undefined || r.e < e) {
       const from = r ? r.e : code.b, unread = s.slice(from, e).trim();
@@ -1884,6 +1884,8 @@ export class Host {
     return this.sequence(code, T);
   }
   body(eq: Eq, F: Ray): unknown {
+    // (an element closure's code: read on from the element where it begins by reading on (`.count`), not read whole by another rule)
+    if (eq.element) { const c = new Code(eq.body.text, eq.body.b, eq.body.e, F, eq.body.floor), o = this.read_on(c); if (o) return this.run(o, c); }
     if (eq.js === undefined) eq.js = this.located(eq.body) && this.interpreted.has(eq.body.text) ? this.js(eq) : this.accelerated?.(eq) ?? null;
     if (eq.js) return eq.js(F);
     // (a statement handed through, its functionality the capture it is: still a statement)
@@ -1908,10 +1910,17 @@ export class Host {
   argued(c: Code): Code { if (c.argument) return c; const a = new Code(c.text, c.b, c.e, c.ctx, c.floor); a.argument = true; a.word = c.word; a.past = c.past; return a; }
   // an argument that begins by reading on from a value: a closure of one value, what each such reading in it reads on (T19)
   element = '\u0000element'; elements = 0;
+  // (code that begins by reading on from a value (`.count`, `!= x`), read so whole: that reading)
+  read_on(code: Code): Read | undefined {
+    const s = code.text.s; let b = code.b, e = code.e; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
+    if (b + 1 >= e || this.blank(s[b + 1]) || !this.leads(s, b)) return undefined;
+    const o = this.on(read_of(this.implicit, false, [], b, b), code.text, e, code.ctx, code.floor);
+    return o.e >= e ? o : undefined;
+  }
   element_closure(code: Code): Ray {
     const into = new Ray(code.ctx); into.closure = true; this.elements++;
     const body = new Code(code.text, code.b, code.e, code.ctx, code.floor);
-    this.add(into, [{ cap: this.element }], body);
+    this.add(into, [{ cap: this.element }], body).element = true;
     return into;
   }
   // the value the nearest such closure was called with, from where a reading on it is read
@@ -2054,7 +2063,7 @@ export class Host {
 }
 // (every equivalence the same shape: what it comes to hold, held from the start)
 function equivalence(x: Pick<Eq, 'pieces' | 'body' | 'ctx' | 'order' | 'seq' | 'key' | 'pairs'> & Partial<Eq>): Eq {
-  return { own: undefined, pieces: x.pieces, body: x.body, ctx: x.ctx, order: x.order, seq: x.seq, key: x.key, value: undefined, operator: undefined, pairs: x.pairs, busy: undefined, native: x.native, js: undefined, word: undefined, receiver: undefined, apart: undefined, node: x.node, passing: undefined, indexed: undefined };
+  return { own: undefined, pieces: x.pieces, body: x.body, ctx: x.ctx, order: x.order, seq: x.seq, key: x.key, value: undefined, operator: undefined, pairs: x.pairs, busy: undefined, native: x.native, js: undefined, word: undefined, receiver: undefined, apart: undefined, node: x.node, passing: undefined, indexed: undefined, element: undefined };
 }
 // (every reading the same shape)
 function read_of(eq: Eq | undefined, name: boolean, caps: Cap[], b: number, e: number): Read {

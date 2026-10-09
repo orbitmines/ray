@@ -1,7 +1,7 @@
 // ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
 ANSI := class: Language {
   static extensions = ".ansi"
-  Cell := class glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, styles: Attribute# = [], link: Location?
+  Cell := class glyph: Char = " ", foreground: Geometry.Color? = None, background: Geometry.Color? = None, styles: Attribute# = [], link: Location? = None
 
   // CUP, Cursor Position (ECMA-48 8.3.21)
   Move := class ("\e[", (row: Decimal, ";", column: Decimal)?, "H") {
@@ -27,7 +27,7 @@ ANSI := class: Language {
     cell (glyph: Char = " ") => Cell(glyph, foreground: colored("38"), background: colored("48"), styles: parameters.parameter{. is Attribute}#)
     static (cell: Cell) as (=== Style) => Style(parameters: [
       Attribute#{. is cell.styles},
-      [[["38", cell.foreground]], ["48", cell.background]]{.[1]}.map(Colored(.[0], red: .[1].red, green: .[1].green, blue: .[1].blue))
+      [[["38", cell.foreground]], ["48", cell.background]]{pair => pair[1]}.map(pair => Colored(pair[0], red: pair[1].red, green: pair[1].green, blue: pair[1].blue))
     ].flatten.map(it => (parameter: it)))
   }
   // The xterm 256-colour palette: the 16 system colours, a 6x6x6 cube and 24 greys (xterm 256colres.pl)

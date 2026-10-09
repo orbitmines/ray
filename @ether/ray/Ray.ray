@@ -81,8 +81,8 @@ Iterable &+= {
     made := []
     this.for(part => part.for(element => made.append(element)))
     made
-  flatten => map(element => (element is Iterable && !(element is String)) ? element.flatten : [element]).concatenated
-  flatten (levels: Number) => levels == 0 ? this : map(element => (element is Iterable && !(element is String)) ? element.flatten(levels - 1) : [element]).concatenated
+  flatten => map(element => ((@owns element "narrows") || ((element is Iterable) && (element.empty || !(element is String)))) ? element.flatten : [element]).concatenated
+  flatten (levels: Number) => levels == 0 ? this : map(element => ((@owns element "narrows") || ((element is Iterable) && (element.empty || !(element is String)))) ? element.flatten(levels - 1) : [element]).concatenated
   union (other: Iterable) => this, other[{!this.contains(.)}]
   intersection (other: Iterable) => this[{other.contains(.)}]
   disjoint (other: Iterable) => intersection(other).empty
@@ -431,4 +431,5 @@ Narrowing &+= {
   contains (x) => this.kept.contains(x)
   join (separator) => this.kept.join(separator)
   flatten => this.kept.flatten
+  for (body) => this.kept.for(body)
 }

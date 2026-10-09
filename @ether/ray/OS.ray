@@ -12,5 +12,5 @@ OS := enum Linux (platform: "linux") | Windows (platform: "win32") | Macos (plat
   }
 
   // the one the host reports; none: the language as the operating system
-  static host: OS => OS#{!== OS.Ether && .platform == (@os "platform") as String}.first ?? OS.Ether
+  static host: OS => OS#{!== OS.Ether}{.platform == ((@os "platform") as String)}.first ?? OS.Ether
 }

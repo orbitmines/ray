@@ -74,7 +74,9 @@ Possibilities &+= {
 {count: Number | Range} {counted: *{#.count != 1}{!(. is Unit)}} => counted{#.count == count}
 a | an {counted: *{#.count != 1}{!(. is Unit)}} => 1 counted
 Node &+= {
-  # => Possibilities(values: superposes ? components : conjoined.count > 1 ? conjoined : (!instance && components.head) ? components : [this])
+  # =>
+    possible := (@owns this "members") ? this.members : (superposes ? components : ((conjoined.count > 1) ? conjoined : ((!instance && components.head) ? components : [this])))
+    Possibilities(values: possible)
   origin: Node?
 }
 #{value} ^punctuation => value#

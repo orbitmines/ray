@@ -259,6 +259,11 @@ false &+= {
 !{x} => x ? false : true
 {a} === {b} => @same a b
 {a} !== {b} => (@same a b) ? false : true
+// (also read on from a value: `xs{!== x}`)
+Node &+= {
+  === {b} => @same this b
+  !== {b} => (@same this b) ? false : true
+}
 @me/instance = {x} => @show x
 
 // ---------------------------------------------------------------- definitions: what a head says
@@ -615,7 +620,7 @@ Node &+= {
   as {as_type} =>
     as_value := this
     as_was := @member as_type "as_converting"
-    as_held := (as_value is as_type) || (@same as_was as_value)
+    as_held := (as_value === None) || (as_value is as_type) || (@same as_was as_value)
     @field as_type "as_converting" as_value
     as_answer := as_held ? ((as_value is as_type) ? as_value : None) : (as_type with { (as_value) as as_type })
     @field as_type "as_converting" as_was

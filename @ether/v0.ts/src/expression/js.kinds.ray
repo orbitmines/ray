@@ -37,6 +37,8 @@ HostString := class: String {
     made
   + {other} => @js F.self + $.show($.get(F, "other"))
   codepoint => @js F.self.codePointAt(0)
+  // (its digits, a Number: what `String.ray`'s `as (=== Decimal)` reads, for decimal digits only)
+  as (=== Number) => @js /^[0-9]+(\.[0-9]+)?$/.test(F.self) ? Number(F.self) : undefined
   first => @js [...F.self][0]
   last => @js [...F.self].at(-1)
   rest => @js [...F.self].slice(1).join("")

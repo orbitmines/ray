@@ -12,9 +12,9 @@ UI.TUI := class {
     shaded (at: Geometry.Vector) => cell(at) -- (cell => put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
     graphic (at: Geometry.Vector, bytes) => graphics.push (at: at, bytes: bytes)
     changes (before: Grid?) => (0..<height).map(y => (0..<width){!before || cells[y][.] != before.cells[y][.]}.map(x => [[Geometry.Vector(x, y)], cells[y][x]])).flatten(1)
-    framed => [
+    framed (previous: Grid? = None) => [
       ANSI.Title(title) if title && title != previous?.title,
-      changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: cell.link ? cell.link as String : ""), cell.glyph]),
+      changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: (cell.link === None ? "" : (cell.link as String))), cell.glyph]),
       graphics{!(previous?.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
       ANSI.Style()
     ]
@@ -94,7 +94,7 @@ UI.TUI := class {
     {glyph: Char} => glyph as String
     {start: Start} => Compiler.reduced(start.modes, written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], written)
     {stop: Stop} => Compiler.reduced(<-stop.start.modes.map(.flipped), written)
-    {sequences: Iterable} => sequences.map(sequence => Compiler.reduced(sequence, UI.TUI.written)).join("")
+    {sequences: Iterable} => sequences.map(sequence => sequence === None ? "" : Compiler.reduced(sequence, UI.TUI.written)).join("")
     {sequence} => sequence as String
   }
   // Windows Terminal's win32-input-mode, DECSET 9001 (https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
@@ -102,16 +102,24 @@ UI.TUI := class {
     {start: Start{!modes.contains(ANSI.Mode(9001, "h"))}} => Start([start.modes, [ANSI.Mode(9001, "h")]].flatten)
   }
 
-  Terminal := class: UI.Interface written: Compiler = UI.TUI.written, grid: Grid? {
+  Terminal := class: UI.Interface written: Compiler = UI.TUI.written, grid: Grid? = None {
     emit (bytes) => @me/instance = bytes
     dynamically typed = @me/instance
-    size => Geometry.Vector(@me/device/os.env.COLUMNS as Decimal, @me/device/os.env.LINES as Decimal)
+    size =>
+      columns := (OS.host.env.COLUMNS) as Number
+      lines := (OS.host.env.LINES) as Number
+      Geometry.Vector(columns, lines)
     emitted (value) => emit(Compiler.reduced(value, written))
-    start => emitted(Start())
-      -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
-      -- ({ (@me/device/opened).held() } when @me/device/opened changes)
+    // (the scene is as large as the terminal: its columns and rows)
+    start =>
+      UI.scene.size = Geometry.Vector(Quantity(quantities: [(quantity: size.x, unit: Unit.column)]), Quantity(quantities: [(quantity: size.y, unit: Unit.row)]))
+      emitted(Start())
+        -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
+        -- ({ (@me/device/opened).held() } when @me/device/opened changes)
     stop => emitted(Stop())
-    write (drawn: Grid) => (grid = drawn) -- emitted(grid.framed)
+    write (frame: Grid) =>
+      emitted(frame.framed(grid))
+      grid = frame
     // (input that has ended reads as nothing: the program is done, so a run with nothing to read writes one frame and returns)
     read => typed ? ((typed ~= (events: Event[])) -- .events.for(Compiler.reduced(., applied))) : (UI.program ? UI.program.stop : None)
   }

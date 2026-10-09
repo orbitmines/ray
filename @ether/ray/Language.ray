@@ -31,14 +31,16 @@ Language := class: Ray extensions: String, level: Compiler?, written: Compiler?,
   // (a value whose class's header is a pattern: written by walking the header from `at`, a literal as itself, a field as what
   // the value holds under it, an optional group only when what it names is held)
   static header_written (value, at) => at ? (Language.piece_written(value, at.value) + Language.header_written(value, at.next)) : ""
-  static piece_written (value, piece) => (piece is String) ? piece : ((@member piece "superposes") ? Language.group_written(value, piece.components.head.next.value.head) : Language.part_written(@member value (@param piece 0)))
+  static piece_written (value, piece) => (piece is String) ? piece : ((@member piece "superposes") ? Language.choice_written(value, piece.components) : Language.part_written(@member value (@param piece 0)))
+  // (an optional group, `(…)?`, `None | group`: written when what it names is held; a choice of texts, `("\e\\" | "\a")`: the first)
+  static choice_written (value, choices) => (choices.first === None) ? Language.group_written(value, choices.head.next.value.head) : Language.piece_written(value, choices.first)
   static group_written (value, at) => Language.held_all(value, at) ? Language.header_written(value, at) : ""
   static held_all (value, at) => at ? ((at.value is String || (@member at.value "superposes") || (@member value (@param at.value 0)) !== None) && Language.held_all(value, at.next)) : true
   // (what the writer gave: text, or pieces of text in order, each joined)
   static joined (x) => (@owns x "head") ? Language.pieces_joined(x.head) : ((x is String) ? x : Language.part_written(x))
   static pieces_joined (at) => at ? (Language.joined(at.value) + Language.pieces_joined(at.next)) : ""
   static patterned (at) => at ? ((at.value is String) || Language.patterned(at.next)) : false
-  static part_written (x) => x === None ? "" : (x is String ? x : ((@of x) && (@member (@of x) "header") && Language.patterned((@of x).header.head) ? Language.header_written(x, (@of x).header.head) : "" + x))
+  static part_written (x) => x === None ? "" : ((x is Number) ? ("" + x) : (((x is Iterable) && x.empty) ? "" : (x is String ? x : ((@of x) && (@member (@of x) "header") && Language.patterned((@of x).header.head) ? Language.header_written(x, (@of x).header.head) : "" + x))))
 
   names (extension: String) => extension is extensions#
   bundled (path: String) => location#.map(. / path){(. / ".project.ray").held as boolean}.first.held as Project

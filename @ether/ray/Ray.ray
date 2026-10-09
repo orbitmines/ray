@@ -56,9 +56,8 @@ Iterable &+= {
     (reducing === None) ? (empty ? None : rest.reduced(first, step)) : reduced(reducing, step)
   reduce_right | fold_right | foldr => reverse.reduce
   reduced (seed, step) =>
-    accumulated := seed
-    this.for(current => accumulated = @entered step current accumulated)
-    accumulated
+    reduced_next := empty ? seed : (@entered step first seed)
+    empty ? seed : rest.reduced(reduced_next, step)
 
   all => reduce(|)
   right-to-left Σ | ∑ | sum => reduce(total = 0 => total + .)
@@ -76,7 +75,15 @@ Iterable &+= {
   map {selection} (mapping: (x: Vertex): *) => (selected = this[{selection}]) -- map(x => selected.contains(x) ? mapping(x) : x)
   reverse => empty ? [] : rest.reverse, first
   sort => empty ? [] : rest{< first}.sort, first, rest{>= first}.sort
-  sort_by | sorted (key) => empty ? [] : rest{key(.) < key(first)}.sort_by(key), first, rest{key(.) >= key(first)}.sort_by(key)
+  sort_by | sorted (key) => empty ? [] : this.sorted_on(key)
+  sorted_on (key) =>
+    sort_pivot := first
+    sort_rest := rest
+    sorted_made := []
+    sort_rest{sort_candidate => key(sort_candidate) < key(sort_pivot)}.sort_by(key).for(sorted_one => sorted_made.append(sorted_one))
+    sorted_made.append(sort_pivot)
+    sort_rest{sort_candidate => key(sort_candidate) >= key(sort_pivot)}.sort_by(key).for(sorted_one => sorted_made.append(sorted_one))
+    sorted_made
   unique => empty ? [] : first, rest{!= first}.unique
 
   contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
@@ -441,4 +448,13 @@ Narrowing &+= {
   join (separator) => this.kept.join(separator)
   flatten => this.kept.flatten
   for (body) => this.kept.for(body)
+  reduce (step) => this.kept.reduce(step)
+  enumerate => this.kept.enumerate
+  chunk (size) => this.kept.chunk(size)
+  sort_by (key) => this.kept.sort_by(key)
+  unique => this.kept.unique
+  rest => this.kept.rest
+  sum => this.kept.sum
+  max => this.kept.max
+  min => this.kept.min
 }

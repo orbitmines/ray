@@ -65,6 +65,10 @@ Geometry := class {
     x => this[0] ?? 0
     y => this[1] ?? 0
     z => this[2] ?? 0
+    // (elementwise, until Elementwise's `zip(other).map(+)` reads: an operator as a function)
+    + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
+    - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
+    * (factor) => (factor is Vector) ? Vector(x * factor.x, y * factor.y, z * factor.z) : Vector(x * factor, y * factor, z * factor)
     to => this
     norm => Space.current.metric(map(0), this)
     distance (other: Vector) => Space.current.metric(this, other)
@@ -257,13 +261,11 @@ Geometry := class {
     root => parent?.root ?? this
     em => parent?.font_size ?? Font.base.size
     font_size => with Font.inherited = em { font.size as pixel }
-    at: Vector => if position {
-      is Fixed => origin
-      is Anchored => (position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0))
-      is Sticky => (parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y)) -- Vector(.x, .y min (root.size.y - (spaced(itself).top ?? 0px) - size.y) max parent.at.y)
-    } else {
-      parent ? parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y) : origin
-    }
+    // (the cases of `if position { is Fixed => …; is Anchored => …; is Sticky => … } else { … }` (P2.11), as comparisons until a case reads)
+    at: Vector => (position is Fixed) ? origin
+      : ((position is Anchored) ? ((position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0)))
+      : ((position is Sticky) ? ((parent.at + origin + Vector(parent.scrolled.x.negated, parent.scrolled.y)) -- Vector(.x, .y min (root.size.y - (spaced(itself).top ?? 0px) - size.y) max parent.at.y))
+      : (parent ? parent.at + origin + Vector(parent.scrolled.x.negated, parent.scrolled.y) : origin)))
     spaced (from: border | itself) => (0 ..< 2 * space.dimension).map(i => spacing{.from == from}.map(.[i]){!= None} -- (kept => kept.empty ? None : kept.sum))
     inside => spaced(border).map(. ?? 0px) -- (made => (@also made Edges) -- made)
     outside => spaced(itself).map(. ?? 0px) -- (made => (@also made Edges) -- made)
@@ -271,6 +273,11 @@ Geometry := class {
     content_height => children.map(size.y - .origin.y + .outside.bottom).max ?? size.y
     texts => reachable{.content is String}
     in_place => children{.position is (Flowing | Absolute)}
+    // (itself and every shape inside it, by identity: Ray's `reachable` compares with `!=`, and a shape's `==` walks it)
+    reachable =>
+      found := [this]
+      children.for(child => child.reachable.for(shape => found.append(shape)))
+      found
     lifted => reachable{.position is (Fixed | Anchored) && .visible}.sort_by(.layer)
     rectangular => boundary == box(size)
     scale => transform.scaling * (parent?.scale ?? 1)
@@ -321,25 +328,19 @@ Geometry := class {
       inner = size.x - inside.left - inside.right
       flowing = children{.position is Flowing}
       corner = (edges: Edges) => Vector(edges.left, edges.top)
-      bottom = if flow {
-        grid => flowing.chunk(columns).reduce(acc = inside.top => .enumerate.for(cell =>
+      // (the cases of `if flow { grid => …; layered => … } else { … }` (P2.11), written as comparisons until a case reads)
+      bottom = flow === grid ? (flowing.chunk(columns).reduce((acc = inside.top) => .enumerate.for(cell =>
             cell.value.laid(inner / columns - gap.x) -- (cell.value.origin = Vector(inside.left + cell.index * (inner / columns + gap.x), acc) + corner(cell.value.outside))
-          ) -- acc + .map(.outer.y).max + gap.y)
-        layered => flowing.for(.laid(inner) -- (.origin = corner(inside) + corner(.outside))) -- inside.top + flowing.map(.outer.y).max
-      } else {
-        flowing.reduce(acc = (at: corner(inside), row: 0px) => {
+          ) -- acc + .map(.outer.y).max + gap.y))
+        : (flow === layered ? (flowing.for(.laid(inner) -- (.origin = corner(inside) + corner(.outside))) -- inside.top + flowing.map(.outer.y).max) : (
+        flowing.reduce((acc = (at: corner(inside), row: 0px)) => {
           .laid(inner)
           continues = flow == inline && (!wrap || acc.at.x + .outer.x <= inside.left + inner)
           y = continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0px ? gap.y : 0px)
-          x = continues ? acc.at.x : inside.left + (if align
-            center => (inner - .outer.x) / 2
-            end => inner - .outer.x
-            else => 0px
-          )
+          x = continues ? acc.at.x : inside.left + ((align && align === center) ? (inner - .outer.x) / 2 : ((align && align === end) ? inner - .outer.x : 0px))
           .origin = Vector(x, y) + corner(.outside)
           (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
-        }) -- (.at.y + .row)
-      }
+        }) -- (.at.y + .row)))
       (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? inside.top + intrinsic(inner) : bottom) + inside.bottom))) if parent
       flowing.for(.origin = Vector(.origin.x, size.y - .origin.y - .size.y))
       children{!(.position is Flowing)}.for(.positioned)

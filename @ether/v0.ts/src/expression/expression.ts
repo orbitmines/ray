@@ -1183,6 +1183,8 @@ export class Host {
     // (a definition written in a functionality, its pattern naming what the rule captured: written again first, then read)
     if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.definition(code); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.statement || (code.ctx.rule ? code.ctx.statement : false)); }
     let r = this.reading(code); const s = code.text.s;
+    // (a statement inside a closure run on an element (`reduce`'s step) that begins by reading on from a value: on the element, `.origin = …`)
+    if (code.statement && this.element_bodies.length > 0) { const top = this.element_bodies[this.element_bodies.length - 1]; if (top.text === code.text && top.b <= code.b && code.e <= top.e) { const o = this.read_on(code); if (o) r = o; } }
     // (an argument that begins by reading on from a value: a closure of that value)
     if (code.argument && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code) || this.reads_element(code, r)) return this.element_closure(code); }
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
@@ -1626,7 +1628,7 @@ export class Host {
     // (what applies deeper than any program is written: a reading that never ends, said where its statement is)
     if (STACK) this.chain.push(`${eq.key.slice(0, 30)} @${eq.body.text.name.split('/').pop()}:${eq.body.text.s.slice(0, eq.body.b).split(this.learned.end).length} on ${code.text.name.split('/').pop()}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 40))}`);
     this.counts.applications++;
-    if (++this.applying > DEEPEST) { if (STACK) writeSync(2, this.chain.slice(0, 25).join('\n') + '\n....\n' + this.chain.slice(-12).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
+    if (++this.applying > DEEPEST) { if (STACK) writeSync(2, (process.env.EXPR_CHAIN === 'count' ? [...this.chain.reduce((m, l) => m.set(l, (m.get(l) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([l, n]) => n + ' ' + l) : process.env.EXPR_CHAIN === 'all' ? this.chain.filter((l, i, a) => a.indexOf(l) === i) : this.chain.slice(0, 25)).join('\n') + '\n....\n' + this.chain.slice(-12).join('\n') + '\n----\n'); this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (\`${eq.key.slice(0, 40)}\`)`); }
     const T0 = RULES ? performance.now() : 0, C0 = RULES ? this.child_ms : 0, W0 = this.counts.walks, CW = this.child_w, M0 = this.counts.matches, CM = this.child_m; if (RULES) { this.child_ms = 0; this.child_w = 0; this.child_m = 0; }
     try { const v = this.apply_(eq, caps, code, self, place); if (!this.passes(eq)) this.place = undefined; return v; } finally { if (this.applying > 0) this.applying--; if (STACK) this.chain.pop(); if (RULES) { const t = performance.now() - T0, k = eq.key.slice(0, 50) + ' @' + eq.body.text.name.split('/').pop() + ':' + eq.body.text.s.slice(0, eq.body.b).split('\n').length; const x = this.rule_ms.get(k) ?? [0, 0, 0, 0]; const w = this.counts.walks - W0, m = this.counts.matches - M0; x[0] += t - this.child_ms; x[1]++; x[2] += w - this.child_w; x[3] += m - this.child_m; this.rule_ms.set(k, x); this.child_ms = C0 + t; this.child_w = CW + w; this.child_m = CM + m; } }
   }
@@ -1814,7 +1816,7 @@ export class Host {
     const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; F.self = f;
     eq.node.params.forEach((p, i) => F.m.set(p, i < xs.length ? xs[i] : this.default_of(F, eq.node!, p)));
     if (F.outer !== eq.body.ctx) F.sees = eq.body.ctx;
-    const I = new Ray(eq.node); I.scope = true; I.method = true; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
+    const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; const I = new Ray(W); I.scope = true; I.method = true; I.sees = eq.node; F.outer = I; F.sees = undefined;
     return eq.native ? eq.native(F) : this.body(eq, F);
   }
   // A block's statements in order. One naming what nothing holds yet is read again once the block is read: what the block declares
@@ -1952,7 +1954,7 @@ export class Host {
   // the value the nearest such closure was called with, from where a reading on it is read
   element_of(F: Ray): unknown { return this.element_of_ctx(F.caller); }
   element_of_ctx(ctx: Ray | undefined): unknown {
-    for (let n: Ray | undefined = ctx; n; n = n.caller ?? n.outer) { if (n.has(this.element)) return this.force(n.m.get(this.element)) ?? this.none; if (!n.rule && !n.scope) break; }
+    for (let n: Ray | undefined = ctx; n; n = n.caller ?? n.outer) { if (n.has(this.element)) return this.force(n.m.get(this.element)) ?? this.none; if (!n.rule && !n.scope) break; if (n.rule?.node?.params && (n.rule.node.spelled !== '' || n.rule.ctx.closure)) break; }
     return undefined;
   }
   // the value a frame was applied on: the nearest that has one
@@ -2025,7 +2027,7 @@ export class Host {
     try { return this.invoke_(f, x); } finally { if (this.applying > 0) this.applying--; }
   }
   // (a closure applied to a value, `.` in it another, `reduce`'s step)
-  entered(f: unknown, element: unknown, x: unknown): unknown { if (!(f instanceof Ray) || f.eqs.length !== 1) return undefined; return this.invoke_(f, x, element); }
+  entered(f: unknown, element: unknown, x: unknown): unknown { if (!(f instanceof Ray) || f.eqs.length !== 1) return undefined; this.element_bodies.push(f.eqs[0].body); try { return this.invoke_(f, x, element); } finally { this.element_bodies.pop(); } }
   invoke_(f: Ray, x: unknown, element?: unknown): unknown {
     const eq = f.eqs[0];
     const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; if (arguments.length > 2) F.m.set(this.element, element);
@@ -2034,7 +2036,7 @@ export class Host {
       const ps = eq.node.params; if (ps.length === 0) return undefined;
       if (!this.destructured(eq, F, x)) { F.m.set(ps[0], x); for (const p of ps.slice(1)) F.m.set(p, this.default_of(F, eq.node, p)); }
       if (F.outer !== eq.body.ctx) F.sees = eq.body.ctx;
-      const I = new Ray(eq.node); I.scope = true; I.method = true; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
+      const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; const I = new Ray(W); I.scope = true; I.method = true; I.sees = eq.node; F.outer = I; F.sees = undefined;
       return eq.native ? eq.native(F) : this.body(eq, F);
     }
     const c = eq.pieces.find(q => 'cap' in q) as { cap: string } | undefined; if (!c) return undefined;

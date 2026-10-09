@@ -89,7 +89,7 @@ global => @js $.global
 @owns {target} {name} => @js $.name(F, $.has($.get(F, "target"), $.get(F, "name")) ? "true" : "false")
 @field {target} {name} {value} => @js $.field_set($.get(F, "target"), $.get(F, "name"), $.get(F, "value"))
 // (temporary, removed in A3 (a closure's parameters read from it as Ray): what a closure's first parameter is when it is given nothing, `reduce(total = 0 => …)`)
-@initial {closure} => @js (f => f instanceof Ray && f.eqs.length === 1 && f.eqs[0].node?.params?.length ? $.force($.held_value($.default_of(F, f.eqs[0].node, f.eqs[0].node.params[0]))) : undefined)($.get(F, "closure"))
+@initial {closure} => @js (f => f instanceof Ray && f.eqs.length === 1 && f.eqs[0].node?.params?.length ? $.force($.held_value($.default_of(Object.assign(new Ray(F), { scope: true }), f.eqs[0].node, f.eqs[0].node.params[0]))) : undefined)($.get(F, "closure"))
 // (temporary, with `@initial`: a closure applied to a value, `.` in it the element given)
 @entered {closure} {element} {value} => @js $.entered($.get(F, "closure"), $.get(F, "element"), $.get(F, "value"))
 @default {target} {node} {name} => @js $.default_of($.get(F, "target"), $.get(F, "node"), $.get(F, "name"))
@@ -104,8 +104,7 @@ global => @js $.global
 Symbolic => @js $.reader(s => s.length > 0 && !/[\p{L}\p{N}_\s]/u.test(s) ? s : undefined)
 Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefined)
 {number Numeral} => number
-// (a signed numeral, `-1`, `+1`: the host's number)
--{negative Numeral} => @js -$.get(F, "negative")
+// (a numeral written with a sign, `+1`: the host's number; `-x` is the language's, the entrypoint)
 +{positive Numeral} => @js $.get(F, "positive")
 // `while c { body }`: the body again while `c` holds (every value but nothing and false), iterated by the host.
 // `do { … } while c`: the block, then again while `c` holds

@@ -7,22 +7,23 @@
   None
 
 // Brackets: what is between them, read as one; a block, a context of what it declares.
-({inside}) => inside
+({grouped}) => grouped
 // `(a: 1, b: 2)`: a value of its own, holding what is given by name (`.a`, `.b`)
 Fielded => @js $.reader(s => /^[\p{L}\p{N}_]+: /u.test(s) ? s : undefined)
 ({fields Fielded}) =>
   record := @made Node
   record &+= { naming := record }
   @given record fields
+  record &+= { naming := None }
   record
-{{inside}} =>
+{{block_inside}} =>
   made := @made Node
-  @block made inside
-  made &+= { inside }
+  @block made block_inside
+  made &+= { block_inside }
 
 // What reads a word, a span without spaces, one capture (the host's readers, `js.ray`'s kind of reader)
 Unled => @js $.reader(s => s.startsWith($.learned.open) ? undefined : s)
-Unspaced => @js $.reader(s => s.includes($.learned.space) || [...$.pairs.keys()].some(o => s.includes(o)) ? undefined : s)
+Unspaced => @js $.reader(s => s.includes($.learned.space) || [...$.pairs.keys()].some(o => s.includes(o)) || $.leads(s, 0) ? undefined : s)
 // (a name given a default, `total = 0`: a closure's one parameter, written without a pair: `reduce(total = 0 => total + .)`)
 Defaulted => @js $.reader(s => /^[\p{L}_][\p{L}\p{N}_]* = /u.test(s) && !s.includes(" => ") ? s : undefined)
 // one capture, `{align: start | center}`
@@ -270,6 +271,8 @@ false &+= {
   || {other} => other
 }
 !{x} => x ? false : true
+// `-x`: `x` the other way (`x * -1`: a number, a quantity)
+-{minus_operand Unspaced} => (0 - 1) * minus_operand
 {a} === {b} => @same a b
 {a} !== {b} => (@same a b) ? false : true
 // (also read on from a value: `xs{!== x}`)
@@ -287,7 +290,7 @@ Node &+= {
 Parameters := @context None
 Parameters &+= {
   {first Parameters}, {rest Parameters} => ((@of first) === Ray ? first : [first]).append(rest)
-  ({inside Parameters}) => inside
+  ({grouped_parameters Parameters}) => grouped_parameters
   // (a group of pieces, optional or repeated: its own piece, read as such)
   ({group Parameters})? => None | ((@of group) === Ray ? group : [group])
   ({group Parameters})[] => group[]
@@ -452,7 +455,7 @@ Branch &+= {
 
 [] => @made Ray
 // (`[x]` is a new list holding `x`, a list included; `[a, b]` the list written there, L§1.2)
-[{inside: Expression}] => inside === None ? (@made Ray) : ((@owns inside "commas") ? inside.listed : (@made Ray).append(inside))
+[{listed_inside: Expression}] => listed_inside === None ? (@made Ray) : ((@owns listed_inside "commas") ? listed_inside.listed : (@made Ray).append(listed_inside))
 
 // ---------------------------------------------------------------- classes (A7): the block is the constructor; what it defines, the class's too
 Node &+= {

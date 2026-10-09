@@ -1,6 +1,6 @@
 // The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
 UI.TUI := class {
-  Grid := class width: Number, height: Number, cells: ANSI.Cell[][] = (0..<height).map(row => (0..<width).map(column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page?.title {
+  Grid := class width: Number, height: Number, cells: ANSI.Cell[][] = (0 ..< height).map(grid_row => (0 ..< width).map(grid_column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page?.title {
     space => Geometry.Space.grid(Geometry.Vector(width, height))
     inside (at: Geometry.Vector) => space.holds(at)
     put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
@@ -20,7 +20,7 @@ UI.TUI := class {
     ]
   }
   static px_per_cell = Geometry.Vector(8px, 16px)
-  static gridded (length: Geometry.Vector) => Geometry.Vector(length.x as column, length.y as row)
+  static gridded (length: Geometry.Vector) => Geometry.Vector(length.x as Unit.column, length.y as Unit.row)
 
   Geometry.Shape &+= {
     cell_at => UI.TUI.gridded(Geometry.Space.screen.seen(at, root.size, size))
@@ -55,7 +55,7 @@ UI.TUI := class {
   }
 
   drawn := {
-    {root: Geometry.Shape{solved && !parent}} => Grid((root.size.x as column).amount, (root.size.y as row).amount) ~~ (grid => [root, root.lifted].flatten(1).map(.cell_writes).flatten.for(write => grid ~~ write))
+    {root: Geometry.Shape{solved && !parent}} => Grid((root.size.x as Unit.column).amount, (root.size.y as Unit.row).amount) ~~ (grid => [root, root.lifted].flatten(1).map(.cell_writes).flatten.for(write => grid ~~ write))
   }
   filled (shape: Geometry.Shape) => {
     {color: Geometry.Color} => shape.cell_area.map(at => { .background(at, color) })

@@ -16,6 +16,9 @@ Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Uni
 
   chainable == (other: Quantity) => in(finer(other)) == other.in(finer(other))
   chainable < (other: Quantity) => in(finer(other)) < other.in(finer(other))
+  chainable <= (other: Quantity) => !(other < this)
+  negated => this * (0 - 1)
+  chainable >= (other: Quantity) => !(this < other)
   chainable > (other: Quantity) => other < this
   chainable < (other: Number) => ERROR `a quantity does not compare with a plain number`
   chainable > (other: Number) => ERROR `a quantity does not compare with a plain number`

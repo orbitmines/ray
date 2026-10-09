@@ -10,6 +10,7 @@
 
 import { writeSync } from 'fs';
 // EXPR_TRACE: each statement read at the top, as it starts
+const DBGSAY = process.env.DBGSAY;
 const TRACE = process.env.EXPR_TRACE;
 export type Text = { name: string; s: string };
 const NONE: Eq[] = [];
@@ -76,7 +77,7 @@ export class Code {
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
 export type Piece = { lit: string } | { cap: string; reader?: Code; type?: unknown };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
-export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: ((F: Ray) => unknown) | null; word?: string; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean; indexed?: boolean; element?: boolean };
+export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: ((F: Ray) => unknown) | null; word?: string; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean; indexed?: boolean; element?: boolean; alone?: boolean };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string; typed?: string };
 type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; type?: unknown; block?: boolean; argument?: boolean };
@@ -134,7 +135,7 @@ export class Host {
   // what was said since then, unsaid
   unsay(from: number) { for (const x of this.diagnostics.splice(from)) this.said.delete(this.key(x.message, x.at.text, x.at.b, x.at.e)); }
   key(message: string, text: Text, b: number, e: number): string { return `${text.name}\0${b}\0${e}\0${message}`; }
-  say(message: string, text: Text, b: number, e: number) { const k = this.key(message, text, b, e); if (this.said.has(k)) return; this.said.add(k); this.diagnostics.push({ message, at: { text, b, e } }); }
+  say(message: string, text: Text, b: number, e: number) { const k = this.key(message, text, b, e); if (DBGSAY && message.includes(DBGSAY)) console.log('SAY', message, '\n   ' + this.walking.slice(-14).map(c => c.text.name + ':' + c.text.s.slice(0, c.b).split('\n').length + ' ' + JSON.stringify(c.text.s.slice(c.b, Math.min(c.e, c.b + 50)))).join('\n   ')); if (this.said.has(k)) return; this.said.add(k); this.diagnostics.push({ message, at: { text, b, e } }); }
   blank(c: string | undefined) { return c === this.learned.space || c === this.learned.end; }
 
   // ---------------------------------------------------------------- R0.1: the first statement, read by what it says about itself
@@ -448,7 +449,7 @@ export class Host {
     else if (name === '') form([cap], false);
     else { form([...lead(name), cap], false); const sp = lead(name + space); form(sp[sp.length - 1] && 'lit' in sp[sp.length - 1] ? [...sp, cap] : [...lead(name), { lit: space }, cap], true); }
     // (all of its parameters with a default: also as written alone)
-    if (node.params && name !== '' && node.closing === undefined && node.params.every(x => this.defaulted_param(node, x))) { const eq = this.add(into, this.pieces(name, at), body, node); eq.node = node; out.push(eq); }
+    if (node.params && name !== '' && node.closing === undefined && node.params.every(x => this.defaulted_param(node, x))) { const eq = this.add(into, this.pieces(name, at), body, node); eq.node = node; eq.alone = true; out.push(eq); }
     return declares ? this.held_as(out[0]) : into;
   }
   // (a parameter with a default: written `= d` on it in its head)
@@ -814,7 +815,8 @@ export class Host {
   match(eq: Eq, text: Text, at: number, e: number, ctx: Ray, i: number, start: number, caps: Cap[]): Read | undefined {
     if (DEADLINE && performance.now() > DEADLINE) { writeSync(2, `deadline: matching ${eq.key.slice(0, 40)} on ${text.name}:${text.s.slice(0, at).split(this.learned.end).length} steps=${this.steps} settling=${this.settling} applying=${this.applying}\n`); process.exit(3); }
     if (i === 0) this.counts.matches++;
-    if (i === eq.pieces.length) return read_of(eq, false, [...caps], start, at);
+    // (a method all of whose parameters have defaults, written alone: not where what it is given hugs it, `m(x).y`)
+    if (i === eq.pieces.length) return eq.alone && at < e && this.pairs.has(text.s[at]) && !this.quotes.has(text.s[at]) ? undefined : read_of(eq, false, [...caps], start, at);
     const piece = eq.pieces[i];
     if ('lit' in piece) {
       // (a head, what is before the definer, is balanced)
@@ -1155,9 +1157,10 @@ export class Host {
   // (how many walks are open: a statement under one is not the outermost)
   open = 0;
   walk(code: Code): unknown {
-    this.open++;
-    try { return this.walk1(code); } finally { this.open--; }
+    this.open++; if (DBGSAY) this.walking.push(code);
+    try { return this.walk1(code); } finally { this.open--; if (DBGSAY) this.walking.pop(); }
   }
+  walking: Code[] = [];
   walk1(code: Code): unknown {
     if (TRACE && code.statement) { this.depth_++; if (this.depth_ < Number(TRACE)) writeSync(2, `${' '.repeat(this.depth_)}${code.text.name}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 60))}\n`); try { return this.walk2(code); } finally { this.depth_--; } }
     return this.walk2(code);
@@ -2021,9 +2024,11 @@ export class Host {
     if (++this.applying > DEEPEST) { this.applying = 0; throw new Runaway(`deeper than ${DEEPEST} applications (a type's constraint)`); }
     try { return this.invoke_(f, x); } finally { if (this.applying > 0) this.applying--; }
   }
-  invoke_(f: Ray, x: unknown): unknown {
+  // (a closure applied to a value, `.` in it another, `reduce`'s step)
+  entered(f: unknown, element: unknown, x: unknown): unknown { if (!(f instanceof Ray) || f.eqs.length !== 1) return undefined; return this.invoke_(f, x, element); }
+  invoke_(f: Ray, x: unknown, element?: unknown): unknown {
     const eq = f.eqs[0];
-    const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq;
+    const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; if (arguments.length > 2) F.m.set(this.element, element);
     // (a method: its first parameter given the value, the rest what they say; the frame continues into it, as applied)
     if (eq.node?.params) {
       const ps = eq.node.params; if (ps.length === 0) return undefined;
@@ -2086,7 +2091,7 @@ export class Host {
 }
 // (every equivalence the same shape: what it comes to hold, held from the start)
 function equivalence(x: Pick<Eq, 'pieces' | 'body' | 'ctx' | 'order' | 'seq' | 'key' | 'pairs'> & Partial<Eq>): Eq {
-  return { own: undefined, pieces: x.pieces, body: x.body, ctx: x.ctx, order: x.order, seq: x.seq, key: x.key, value: undefined, operator: undefined, pairs: x.pairs, busy: undefined, native: x.native, js: undefined, word: undefined, receiver: undefined, apart: undefined, node: x.node, passing: undefined, indexed: undefined, element: undefined };
+  return { own: undefined, pieces: x.pieces, body: x.body, ctx: x.ctx, order: x.order, seq: x.seq, key: x.key, value: undefined, operator: undefined, pairs: x.pairs, busy: undefined, native: x.native, js: undefined, word: undefined, receiver: undefined, apart: undefined, node: x.node, passing: undefined, indexed: undefined, element: undefined, alone: undefined };
 }
 // (every reading the same shape)
 function read_of(eq: Eq | undefined, name: boolean, caps: Cap[], b: number, e: number): Read {

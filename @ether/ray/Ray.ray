@@ -49,11 +49,16 @@ Iterable &+= {
   some (predicate: (x: Vertex): boolean) => this[{predicate}].nonempty
   filter (predicate: (x: Vertex): boolean) => this[{predicate}]
 
-  reduce (step: Program) => rest.reduced(first, step)
-  .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => reduced(initial, Program(code: (step**), parameters: (accumulator**)))
-  .reduce({literal operator ^operator}) ^punctuation => .reduce((acc) => acc[operator] .)
+  // (one closure: its parameter the accumulator, what it is given nothing its start (else the first element), `.` in it each
+  // element in turn)
+  reduce (step) =>
+    reducing := @initial step
+    (reducing === None) ? (empty ? None : rest.reduced(first, step)) : reduced(reducing, step)
   reduce_right | fold_right | foldr => reverse.reduce
-  reduced (seed, step: Program) => empty ? seed : rest.reduced(step.entered(first, seed), step)
+  reduced (seed, step) =>
+    accumulated := seed
+    this.for(current => accumulated = @entered step current accumulated)
+    accumulated
 
   all => reduce(|)
   right-to-left Σ | ∑ | sum => reduce(total = 0 => total + .)
@@ -118,11 +123,11 @@ Iterable &+= {
   ± | +- | -+ (at: Integer) => this[at] | this[-at]
   [at: Integer] => at == 0 ? entry : at > 0 ? rest[at - 1] : reverse[-at - 1]
   [range: Range] => range.map(this[.])
-  [{from}..] ^punctuation => sliced(from, count - 1)
-  [..{to}] ^punctuation => sliced(0, to)
-  [..<{to}] ^punctuation => sliced(0, to - 1)
-  [{from}..{to}] ^punctuation => sliced(from, to)
-  [{from}..<{to}] ^punctuation => sliced(from, to - 1)
+  `[`{from}..`]` ^punctuation => sliced(from, count - 1)
+  `[..`{to}`]` ^punctuation => sliced(0, to)
+  `[..<`{to}`]` ^punctuation => sliced(0, to - 1)
+  `[`{from}..{to}`]` ^punctuation => sliced(from, to)
+  `[`{from}..<{to}`]` ^punctuation => sliced(from, to - 1)
   at (index: Integer) => index < 0 ? count + index : index
   sliced (from: Integer, to: Integer) => (at(from)..at(to)).map(this[.])
   [{from}..] = {value} ^punctuation => assigned_over(from, count - 1, value)

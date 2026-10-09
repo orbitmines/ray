@@ -23,6 +23,8 @@ Fielded => @js $.reader(s => /^[\p{L}\p{N}_]+: /u.test(s) ? s : undefined)
 // What reads a word, a span without spaces, one capture (the host's readers, `js.ray`'s kind of reader)
 Unled => @js $.reader(s => s.startsWith($.learned.open) ? undefined : s)
 Unspaced => @js $.reader(s => s.includes($.learned.space) || [...$.pairs.keys()].some(o => s.includes(o)) ? undefined : s)
+// (a name given a default, `total = 0`: a closure's one parameter, written without a pair: `reduce(total = 0 => total + .)`)
+Defaulted => @js $.reader(s => /^[\p{L}_][\p{L}\p{N}_]* = /u.test(s) && !s.includes(" => ") ? s : undefined)
 // one capture, `{align: start | center}`
 Captured => @js $.reader(s => { const { open, close } = $.learned; if (!s.startsWith(open) || !s.endsWith(close)) return undefined; let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === open) d++; else if (s[i] === close && --d === 0 && i < s.length - 1) return undefined; } return s; })
 // a word: letters, digits, `_`
@@ -299,6 +301,7 @@ Parameters &+= {
 @captures Parameters
 Method := @context None
 Method &+= {
+  {parameters Defaulted} => @parameters @unnamed parameters
   {name Unled} => @named name
   {head Method} ({parameters Unled}) => @parameters head parameters
   {head Method}({parameters Unled}) => @parameters head parameters

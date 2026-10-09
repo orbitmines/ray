@@ -182,10 +182,10 @@ Geometry := class {
     static (top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px, front: Length? = 0px, back: Length? = 0px) as (=== Edges) => [left, right, bottom, top, front, back][..<2 * Space.current.dimension]
     static (length: Length?) as (=== Edges) => (0 ..< 2 * Space.current.dimension).map(length)
     [side: Side] => this[side.ordinal]
-    top => this[Geometry.top]
-    right => this[Geometry.right]
-    bottom => this[Geometry.bottom]
-    left => this[Geometry.left]
+    top => this[Geometry.top.ordinal]
+    right => this[Geometry.right.ordinal]
+    bottom => this[Geometry.bottom.ordinal]
+    left => this[Geometry.left.ordinal]
     total => Vector((0..<Space.current.dimension).map(axis => (this[2 * axis] ?? 0px) + (this[2 * axis + 1] ?? 0px)))
     start => Vector((0..<Space.current.dimension).map(this[2 * .] ?? 0px))
   }
@@ -256,7 +256,7 @@ Geometry := class {
     id: Location => parent ? parent.id / (parent.children.enumerate{.value === this}.first.index as String) : @scene
     root => parent?.root ?? this
     em => parent?.font_size ?? Font.base.size
-    font_size => with Font.inherited = em { font.size as px }
+    font_size => with Font.inherited = em { font.size as pixel }
     at: Vector => if position {
       is Fixed => origin
       is Anchored => (position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0))
@@ -297,7 +297,7 @@ Geometry := class {
 
     lines (width: Length = ∞) => (content as String) -- (text => (white_space.lines ? text.split(\n) : [text]).map(paragraph =>
       white_space.wraps ? (paragraph ~= (line: ((!Char.Blank)[]{length > 0}, Char.Blank[])[]{.width(font) <= width})[]).line : [paragraph]
-    ).flatten.map(line => white_space.spaces ? line : line{!((. is Char.Blank) && (.previous is Char.Blank))}))
+    ).flatten.map(line => white_space.spaces ? line : line{char => !((char is Char.Blank) && (char.previous is Char.Blank))}))
     intrinsic (width: Length) => content is String ? font.size * font.line_height * lines(width).count : 0px
 
     compounds + (effect: Effect) => (effects ,= effect) -- this

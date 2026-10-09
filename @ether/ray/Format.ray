@@ -1,5 +1,5 @@
 Document := class entries: (name: String, value: *)[] = [] {
-  [name: String] => entries{.name == name}.last?.value
+  [name: String] => entries{.name == name}.last.value
   .{literal name ^property} ^punctuation => this[name]
   fields => entries
   names => entries.name

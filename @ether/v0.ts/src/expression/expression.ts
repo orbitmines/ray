@@ -616,7 +616,8 @@ export class Host {
     // (an operation on values binds as its head was first declared: what a class declares again keeps that place)
     if (!ctx.scope) { const first = this.heads.get(key); if (first === undefined) this.heads.set(key, eq.order); else eq.order = first; }
     // (a value under a name is a name: read where it is read, not a rule; declaring one changes no reading)
-    if (given instanceof Value) { const v = given.value; eq.native = () => v; eq.value = true; }
+    // (a closure that answers a value: still a closure, applied to what it is given)
+    if (given instanceof Value) { const v = given.value; eq.native = () => v; eq.value = !ctx.closure; }
     if (ctx.eqs === NONE) ctx.eqs = [];
     // (the same head again in the same place: it replaces the one before, and reads the same)
     // (overloads by what their captures are read by are not the same head)
@@ -1674,7 +1675,7 @@ export class Host {
       if (sub === NOT) { if (!(given instanceof Code) || !this.destructured(eq, F, this.walk(given))) return NOT; }
       else {
         if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) { if (sub.length !== 1 || !(given instanceof Code) || !this.destructured(eq, F, this.walk(given))) return NOT; }
-        else for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.default_of(F, eq.node, x));
+        else for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.held_value(this.default_of(F, eq.node, x)));
       }
       // (a closure's parameters are given by value: what was given, read now, where it was written (a loop moves on after))
       if (eq.ctx.closure) for (const x of eq.node.params) { const v = F.m.get(x); if (v instanceof Code && this.name_end(v.text, v.b, v.e) < v.e) F.m.set(x, this.held_value(v)); }

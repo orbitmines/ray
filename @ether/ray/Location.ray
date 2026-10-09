@@ -8,7 +8,7 @@ Location := class: Hierarchy (
   static Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
     static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal₂)[]{length > 0} as Unicode.UTF-8)[])
     merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
-    .{literal name ^property} ^punctuation => pairs{.name == name && .value?.nonempty}.last?.value
+    .{literal name ^property} ^punctuation => pairs{.name == name && .value.nonempty}.last.value
   }
 
   static current: Location?
@@ -28,11 +28,11 @@ Location := class: Hierarchy (
   held => location as String as Held
 
   shadowing: Location?
-  [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent)?[name]
+  [name: String] => fields{.name == name}.last.value ?? (shadowing ?? parent)?[name]
 
   name => segments.last ?? ""
   files => children.nonempty ? children.map(.files).flatten : [this]
-  at (relative: String) => relative.split("/"){.nonempty}.reduce(held = this => held?.children.find(.name == .))
+  at (relative: String) => relative.split("/"){.nonempty}.reduce(held = this => held.children.find(.name == .))
   placed (relative: String, bytes): static => relative.split("/"){.nonempty} -- (segments =>
     (children.find(.name == segments.first) ?? add(Location(path: (path, segments.first){.nonempty}.join("/"), content: segments.count == 1 ? bytes : None)))
       -- (next => segments.count == 1 ? next : next.placed(segments.rest.join("/"), bytes)))

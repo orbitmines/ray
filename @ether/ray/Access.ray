@@ -37,7 +37,7 @@ confidential = => Node.policy
 Node &+= {
   static policy: * = none
 
-  visibility => access ?? parent?.visibility ?? Access(Node.policy, method: Access.Reading, target: this)
+  visibility => access ?? parent.visibility ?? Access(Node.policy, method: Access.Reading, target: this)
   // Grants on a derivative sit on the expression that names it, found by what that expression answers (L§8.2.2).
   granted => [visibility#, Program#{.access && .names(this)}.access#].flatten
   allows (who, called, at = None) => granted.find(.covers(who, called, at)) ~~ (.allowed = this if .)
@@ -49,7 +49,7 @@ Program &+= {
   names (value) => this === value || this == value || Access.checkable(this) && this() === value
 
   caller: Program?
-  hops | chain => [caller?.hops ?? [], who].flatten.unique
+  hops | chain => [caller.hops ?? [], who].flatten.unique
   may (method, target) => hops.every(target.allows(., method))
   ask (method, target) => may(method, target) || ERROR@Access `not granted`
   prompt => hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"

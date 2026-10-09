@@ -7,7 +7,7 @@ Project := class: Location {
       @{scheme: Char.Word[]}://{remainder: Written} => Project.known(IO.fetch((scheme + "://" + remainder) as Location, "", version) as Project)
       @{name: (Char.Word | "-" | "+")[]{Language.project(.) != None}} => Language.project(name)
       @{local_path: Written} => Project.known(local_path as Held as Project)
-    }}())?.load
+    }}()).load
   }
 
   static known (found: Project?) => found && (Project#{. == found}.first ?? (found ~~ (static.# ??= []).push .))

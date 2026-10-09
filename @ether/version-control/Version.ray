@@ -4,13 +4,13 @@ History := class: Iterable repository: *?, base: Commit?, head: Commit? {
   // A commit is who changed what, when, after what. Signatures, content keys and ciphertext are @ether/security's
   // (it adds them to commits); version control does not import it.
   static Commit := class: Ray id: Label = UUID.v1(), who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [] {
-    when: Time = stamp?.when ?? Time.now
+    when: Time = stamp.when ?? Time.now
     message: String?
     previous: Commit?
     line: History?
 
     parents => previous#
-    next => line?.since(None){.parents.first === this}.first
+    next => line.since(None){.parents.first === this}.first
     ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
     merged => parents.count > 1
     stored => this
@@ -19,7 +19,7 @@ History := class: Iterable repository: *?, base: Commit?, head: Commit? {
     applied (held) => opened -- (plain => held -- plain.change)
     rewritten (change: Program?) => copy ~~ (.change = change)
     expand => opened.change**
-    successors => line?.since(None){.parents.some(=== this)} ?? []
+    successors => line.since(None){.parents.some(=== this)} ?? []
     branching => successors.count > 1
     value => line?[this].value ?? applied(None)
     mentions (label) => id == label || versions.contains(label)
@@ -44,15 +44,15 @@ History := class: Iterable repository: *?, base: Commit?, head: Commit? {
   }
 
   name: String?
-  id => since(None).first?.id
-  label => name ?? since(None){!(.id is UUID)}.last?.id
+  id => since(None).first.id
+  label => name ?? since(None){!(.id is UUID)}.last.id
   blank => copy ~~ (.base = None) ~~ (.head = None) ~~ (.written_last = None)
-  location => repository?.location
-  clock => repository?.clock ?? World.ether.clock
+  location => repository.location
+  clock => repository.clock ?? World.ether.clock
   written_last: Commit?
   caches: History[] = []
 
-  since (commit: Commit?) => head ? head.ancestry.filter(c => !(commit?.ancestry ?? []).some(=== c)) : []
+  since (commit: Commit?) => head ? head.ancestry.filter(c => !(commit.ancestry ?? []).some(=== c)) : []
   commits => since(base)
   entry => commits.entry
   find (label) => since(None).find(.id == label)
@@ -79,7 +79,7 @@ History := class: Iterable repository: *?, base: Commit?, head: Commit? {
   {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: start**), Program(code: end**))
   {this}{from {literal start}} ^punctuation => Program(code: start**) -- (holds => stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
   value => ordered.reduce(held = None => .applied(held))
-  pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last?.id ?? label
+  pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last.id ?? label
   checkout (label, as_of: Stamp? = None) => this[pinned(label, as_of)].value
   fix (who, label: Label, change) => commit(who, change, versions: [label])
   tree => History.placed(public ? value.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])) : files)
@@ -88,7 +88,7 @@ History := class: Iterable repository: *?, base: Commit?, head: Commit? {
   fork => copy ~~ (.base = head)
   drop: static => reset(base)
   reset (to: Commit?): static => this ~~ .head = to
-  back: static => reset(head?.previous ?? head)
+  back: static => reset(head.previous ?? head)
 
   roots => since(None){.parents.empty}
   common (other: History) => since(None).filter(c => other.since(None).some(=== c)).last
@@ -129,8 +129,8 @@ Character &+= {
   keep (session: History) => history.merge(session)
 }
 
-{value}%{pin: Version.Pin} ^punctuation => value.history.checkout(pin.label, as_of: &caller.history.last?.stamp)
-{at: Location}%{pin: Version.Pin} ^punctuation => (at.held as Program as History).checkout(pin.label, as_of: &caller.history.last?.stamp)
+{value}%{pin: Version.Pin} ^punctuation => value.history.checkout(pin.label, as_of: &caller.history.last.stamp)
+{at: Location}%{pin: Version.Pin} ^punctuation => (at.held as Program as History).checkout(pin.label, as_of: &caller.history.last.stamp)
 
 History &+= {
   as (=== Program) => written_as()
@@ -146,7 +146,7 @@ History &+= {
   cache_files => []
   files => [[stored_file], object_files, cache_files].flatten(1)
 
-  of (name) => since(None){this[.].value?[name] != this[.previous]?.value?[name]}.reduce(held = History() => held.extended(.rewritten(Language.ray.write(this[.].value?[name]) as Program)))
+  of (name) => since(None){this[.].value?[name] != this[.previous].value?[name]}.reduce(held = History() => held.extended(.rewritten(Language.ray.write(this[.].value?[name]) as Program)))
   object_path (name) => id as String + "/" + name + ".ray"
   objects => value.fields.name.map(name => (path: object_path(name), content: of(name).written_as() as String as Byte[]))
   pins (commit: Commit) => value.fields.name{of(.).find(commit.id)}.map(name => ".[" + Language.ray.write(name) + "] = @./" + object_path(name) + "%[" + commit.id + "]").join("; ") as Program
@@ -177,13 +177,13 @@ History &+= {
 
   static assigned (path: String, to: String) => ".[" + Language.ray.write(path) + "] = " + to
   static change (before: Location, after: Location) => before.files{!after.at(.path)} -- (gone =>
-    after.files{!before.at(.path)}.map(file => (file, from: renamed_from(file, gone))) -- (added => added.find(.from?.erred)?.from ?? [
+    after.files{!before.at(.path)}.map(file => (file, from: renamed_from(file, gone))) -- (added => added.find(.from.erred).from ?? [
       added{.from}.map(assigned(.file.path, ".[" + Language.ray.write(.from.path) + "]")),
       gone.map(assigned(.path, "None")),
-      after.files{before.at(.path)?.content != .content && !added.some(a => a.file === . && a.from?.content == .content)}.map(assigned(.path, Language.ray.write(read_file(.))))
+      after.files{before.at(.path).content != .content && !added.some(a => a.file === . && a.from.content == .content)}.map(assigned(.path, Language.ray.write(read_file(.))))
     ].flatten.join("; ") as Program))
 
-  stored => Store.routed(this).map(.kept_in?.language).compact
+  stored => Store.routed(this).map(.kept_in.language).compact
   lossless => stored.find(. is Language.Lossless)
 
   append (location: Location) => head -- (commit => {
@@ -193,13 +193,13 @@ History &+= {
   })
   appended (location: Location, language: Language = Language.ray) => language === Language.ray
     ? append(location)
-    : language.written_to(copy ~~ (.base = head?.previous), location)
+    : language.written_to(copy ~~ (.base = head.previous), location)
 }
 
 History{location is @me}$ = $.ray | $.git
 
 Program &+= {
-  as (=== History) => written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last?.code = .last.code + .))
+  as (=== History) => written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last.code = .last.code + .))
     .reduce(held = History() => held.extended(History.Commit.read(.label, .code)))
 }
 
@@ -249,7 +249,7 @@ Compiler &+= {
   cached := {
     {history: History{readable}}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => history.cached_at(c).stored) -- (kept =>
       kept.map(.written(above: kept[.index - 1] if .index > 0)).join(""))) as Byte[])]
-    {history: History{caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned)?.ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
+    {history: History{caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned).ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
       ? history[pinned].ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.caches.find(.find(hit.id))[hit.id].value => .applied(held))
       : history[pinned].value))
   }

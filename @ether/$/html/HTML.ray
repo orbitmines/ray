@@ -31,7 +31,7 @@ HTML := class: Language {
 
   // Elements: an end tag closes its start tag in any case, and "/>" closes an element written without children (https://html.spec.whatwg.org/multipage/syntax.html#elements-2, https://html.spec.whatwg.org/multipage/syntax.html#start-tags)
   static Element := class ("<", tag: Name, attributes: Attribute[] = [], Blank, (">", children: Content[] = [], "</", tag.ignore_case, ">") | "/>") {
-    id => attributes{.name == "id"}.last?.value
+    id => attributes{.name == "id"}.last.value
     void => tag is Voids
   }
   // Void elements: no children and no end tag (https://html.spec.whatwg.org/multipage/syntax.html#void-elements)

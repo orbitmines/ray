@@ -98,7 +98,7 @@ OpenType := class: Language (sfnt_version: U32, count: U16, U16, U16, U16, recor
     -- (.{. is Format12}.first ?? .first))
   // loca (https://learn.microsoft.com/en-us/typography/opentype/spec/loca)
   located (glyph: Number) => head.long_offsets == 1 ? (table("loca") as U32[])[glyph] : (table("loca") as U16[])[glyph] * 2
-  contours (glyph: Number) => located(glyph) == located(glyph + 1) ? [] : (table("glyf")[located(glyph) * 8 ..< located(glyph + 1) * 8] as (Simple | Composite))?.contoured(this) ?? []
+  contours (glyph: Number) => located(glyph) == located(glyph + 1) ? [] : (table("glyf")[located(glyph) * 8 ..< located(glyph + 1) * 8] as (Simple | Composite)).contoured(this) ?? []
   outline (points: Point[]) => (points.some(.on)
     ? points.index_of(points{.on}.first) -- (start => [points[start..], points[..start]].flatten)
     : Point((points.first.at + points.last.at) * (1 / 2), true) -- (start => [start, points, start].flatten)

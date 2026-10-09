@@ -190,7 +190,7 @@ UI.HTML := class {
     bordered (stroke: Geometry.Stroke?) => stroke ? (stroke.sides == Geometry.all ? [""] : stroke.sides#.map("-" + (. as String))).map(side =>
       ("border" + side, stroke.width, " ", stroke.dash.empty ? "solid" : "dashed", " ", stroke.paint)) : []
     // Fonts (https://www.w3.org/TR/css-fonts-4/)
-    typeface (shape: Geometry.Shape) => (shape.font, shape.parent?.font ?? Geometry.Font.base) -- ((font, inherited) => @css {
+    typeface (shape: Geometry.Shape) => (shape.font, shape.parent.font ?? Geometry.Font.base) -- ((font, inherited) => @css {
       font-family: {font.family.join(",") if font.family != inherited.family};
       font-size: {font.size if font.size != inherited.size};
       font-weight: {font.weight if font.weight != inherited.weight};
@@ -234,11 +234,11 @@ UI.HTML := class {
         mix-blend-mode: {(shape.blend as String) if shape.blend != normal};
         filter: {shape.effects{. is (Geometry.Blur | Geometry.Filter)} -- (.join(" ") if .nonempty)};
         box-shadow: {shape.effects{. is Geometry.Shadow} -- (.join(",") if .nonempty)};
-        color: {shape.color if shape.color && shape.color != shape.parent?.color};
+        color: {shape.color if shape.color && shape.color != shape.parent.color};
         {typeface(shape)}
-        text-transform: {Cases{.0 == shape.case}.first?.1 if shape.case != shape.parent?.case};
+        text-transform: {Cases{.0 == shape.case}.first.1 if shape.case != shape.parent.case};
         text-overflow: {(shape.truncate as String) if shape.truncate};
-        white-space: {WhiteSpace{shape.white_space is .0}.first?.1 if shape.content is String || shape.white_space != shape.parent?.white_space};
+        white-space: {WhiteSpace{shape.white_space is .0}.first.1 if shape.content is String || shape.white_space != shape.parent.white_space};
         overflow-wrap: {"anywhere" if shape.white_space.wraps == anywhere};
         {Compiler.reduced(shape, specific)}
         transition: {("all ", shape.transition.duration.in(ms), "ms ", shape.transition.easing) if shape.transition};
@@ -371,8 +371,8 @@ UI.HTML := class {
 
   Package := class files: (path: String, content: *)[] {
     write (to: Location) => files.for((to / .path).held = .content)
-    document => files{.path == "index.html"}.first?.content
-    sheet => files{.path == "style.css"}.first?.content
+    document => files{.path == "index.html"}.first.content
+    sheet => files{.path == "style.css"}.first.content
   }
   packaged := {
     {root: Geometry.Shape{solved && !parent}} => Package([
@@ -380,7 +380,7 @@ UI.HTML := class {
       (path: "style.css", content: Compiler.reduced(root, Style.rules)),
       (path: "app.js", content: Compiler.reduced(root, Script.rules)),
       root.reachable{.content is Location && .content.media}.map((path: .content.name, content: .content)),
-      [UI.page?.icon, UI.page?.apple_icon, UI.page?.manifest]{!= None}.map((path: .name, content: .))
+      [UI.page.icon, UI.page.apple_icon, UI.page.manifest]{!= None}.map((path: .name, content: .))
     ].flatten)
   }
   level := Geometry.Preparing(1px) + packaged
@@ -419,14 +419,14 @@ UI.HTML := class {
     Size := class: Event (id: UI.Input.Id, " size ", width: Decimal, " ", height: Decimal)
     Inbound := Click | Input | Focus | Scroll | Size | UI.Input.Inbound
     applied := UI.Input.applied + {
-      {click: Click} => click.shape?.activate
-      {input: Input} => input.shape?.content.attempt(input.value)
+      {click: Click} => click.shape.activate
+      {input: Input} => input.shape.content.attempt(input.value)
       {focus: Focus} => UI.focus = focus.shape
       {scroll: Scroll} => UI.scene.scrolled = Geometry.Vector(0, scroll.y * 1px)
       {size: Size{shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
       {size: Size} => None
     }
-    static dispatched (line: String?) => line?.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
+    static dispatched (line: String?) => line.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
 
     start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
       -- ({ send(line(["clipboard", (@me/device/clipboard as String).escaped_line])) } when @me/device/clipboard changes)

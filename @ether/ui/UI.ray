@@ -22,7 +22,7 @@ UI := class {
       {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- @me/device/keyboard[keystroke.key].press((Keyboard.Modifier.shift if .contains("shift")) | (Keyboard.Modifier.control if .contains("control")) | (Keyboard.Modifier.alt if .contains("alt")) | (Keyboard.Modifier.meta if .contains("meta")))
       {keystroke: Keystroke} => @me/device/keyboard[keystroke.key].release
     }
-    static dispatched (line: String?) => line?.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
+    static dispatched (line: String?) => line.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
   }
 
   Scene := {
@@ -84,8 +84,8 @@ UI := class {
   step (from: Geometry.Shape, direction: Geometry.Side) => (if direction {
       Geometry.bottom => from.children.first
       Geometry.top => from.parent
-      Geometry.right => from.parent?.children{=== from}.next
-      Geometry.left => from.parent?.children{=== from}.previous
+      Geometry.right => from.parent.children{=== from}.next
+      Geometry.left => from.parent.children{=== from}.previous
     }) ?? from
   move (direction: Geometry.Side) => selection = step(current, direction)
   skip (direction: Geometry.Side) => selection = step(step(current, Geometry.top), direction)
@@ -105,7 +105,7 @@ UI := class {
     muted: boolean = false
     looping: boolean = false
     narrowing: Program?
-    extension => (path ~= (*, ".", last: Char.Word[]) ⊣)?.last
+    extension => (path ~= (*, ".", last: Char.Word[]) ⊣).last
     language => extension ? Language.named("." + extension) : None
     media => language === Language.Image || language === Language.Video || language === Language.Audio
     pixels => language.read(content)
@@ -136,13 +136,13 @@ UI := class {
     // (F-A4) what a path shows: the fields located at it (several: a choice), else the field named `{*}` (every path no field
     // claims), else the index itself
     at (path: String) => index.fields{.value.location ~= path}.map(.value) -- (claimed => claimed.nonempty ? claimed.all
-      : index.fields{.name == "{*}"}.first?.value ?? index)
+      : index.fields{.name == "{*}"}.first.value ?? index)
     rendering => at((@me/device/location ?? @/).path as String)
   }
 
   Popover := Geometry.Box{position is Geometry.Anchored, layer == 20, visible == (position.anchor.hovered | position.anchor.focused | hovered)}
   Overlay := Geometry.Box{closes: None, position == Geometry.Fixed(), spacing == [Geometry.Spacing(Geometry.Edges(), itself)], layer == 19, fill: Geometry.Color(0, 0, 0, 0.5)} + {
-    activate => closes?.open = false
+    activate => closes.open = false
   }
   Drawer := Geometry.Box{open: false, side: Geometry.left, extent: 75vw, layer == 20, overflow == scroll, visible == open, transition == Geometry.Transition(0.3 s),
     position == Geometry.Fixed(), spacing == [Geometry.Spacing(Geometry.Edges() ~~ .(side.opposite) = None, itself)],
@@ -157,10 +157,10 @@ UI := class {
     touch: (none | pan_x | pan_y)?
     scrollbar: boolean = true
     styles: String[] | Dynamic = []
-    palette: *? = parent?.palette
-    case: Section? = parent?.case
-    truncate: (clip | ellipsis)? = parent?.truncate
-    direction: (left-to-right | right-to-left)? = parent?.direction
+    palette: *? = parent.palette
+    case: Section? = parent.case
+    truncate: (clip | ellipsis)? = parent.truncate
+    direction: (left-to-right | right-to-left)? = parent.direction
     hovered => visible && @me/device/pointer.contacts.some(contains(.position - at))
     pressed => visible && @me/device/pointer.contacts.some(.pressed && contains(.position - at))
     activated => focused && @me/device/keyboard/Enter.pulsed || hovered && @me/device/pointer.contacts.some(.released)
@@ -204,8 +204,8 @@ UI := class {
     static palettes = DARK{dark: true}
     static palette => palettes{dark == @me/device/preferences.dark} ?? palettes
     static styles => fields{.value.narrowing}.name
-    static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last?.1
-    static face (shape: Geometry.Shape, character: Char?) => (character?.styles ?? []).reduce((acc = Geometry.Box(font: shape.font, color: shape.color, fill: shape.fill, palette: shape.palette)) => acc.styled(.))
+    static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last.1
+    static face (shape: Geometry.Shape, character: Char?) => (character.styles ?? []).reduce((acc = Geometry.Box(font: shape.font, color: shape.color, fill: shape.fill, palette: shape.palette)) => acc.styled(.))
   }
 }
 
@@ -227,7 +227,7 @@ Char &+= {
 }
 String &+= {
   marked (style: String, from: Number = 0, to: Number = length) => enumerate.map(from <= .index < to ? (.value ~~ .styles ,= style) : .value) as String
-  shared_styles => first?.styles{style => every(.styles.contains(style))} ?? []
+  shared_styles => first.styles{style => every(.styles.contains(style))} ?? []
   pieces => [this{.index == 0 || .styles != .previous.styles}.map(.index), [length]].flatten -- .zip(.rest).map((from, to) => this[from..<to])
   highlighted (language: Language | String) => (language is String ? Language.named(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = marked("code") => acc.marked(.style, .from, .to))
 }
@@ -246,7 +246,7 @@ Program &+= {
     UI.page = this()
     Geometry.Box(size: before.size, scrolled: before.scrolled, overflow: scroll, transition: before.transition, children: [this{O: UI.Scene}().themed])
   rendered (level) => Compiler.reduced(drawn(), level)
-  run (on: UI.Interface) => (UI.program = this) ~~ on.start ~~ ((on.write(Compiler.reduced(UI.scene = drawn(), on.level)) -- on.read) while !done) ~~ on.stop
+  run (on: UI.Interface) => (UI.program = this) ~~ on.start ~~ ((on.write(Compiler.reduced((UI.scene = drawn()), on.level)) -- on.read) while !done) ~~ on.stop
 }
 
 Node &+= {
@@ -260,18 +260,18 @@ Node &+= {
   { UI.held(names, Keyboard.Modifier.control) ? UI.skip(side) : UI.held(names, Keyboard.Modifier.shift) ? UI.expand(side) : UI.move(side) } when UI.pulsed(names) && !UI.typing
 }
 { UI.tab(UI.held(["Tab"], Keyboard.Modifier.shift) ? previous : next) } when UI.pulsed(["Tab"])
-{ (UI.focus.first ?? UI.current)?.activate } when UI.pulsed(["Enter"])
+{ (UI.focus.first ?? UI.current).activate } when UI.pulsed(["Enter"])
 { UI.scene.scroll(-UI.scene.size.y) } when UI.pulsed(["PageUp"])
 { UI.scene.scroll(UI.scene.size.y) } when UI.pulsed(["PageDown"])
 { UI.scene.scroll(-@me/device/pointer["mouse"].wheel.y * 3em) } when @me/device/pointer["mouse"].wheel changes
-{ UI.program?.stop } when UI.pulsed(["q"]) && !UI.typing
+{ UI.program.stop } when UI.pulsed(["q"]) && !UI.typing
 
 Pointer := class: Location {
   static Contact := class: Nameable number: Number = 0, position: Geometry.Vector = Geometry.Vector(), pressure: Probability = 0, tilt: Geometry.Vector = Geometry.Vector(), buttons: Number[] = [], wheel: Geometry.Vector = Geometry.Vector() {
     pressed => buttons.nonempty || pressure > 0
-    released => !pressed && (previous?.pressed ?? false)
+    released => !pressed && (previous.pressed ?? false)
     velocity => history.last -- (now => now.previous && now.when > now.previous.when ? (now.value.position - now.previous.value.position) * (1 / ((now.when - now.previous.when) as ms)) : Geometry.Vector())
-    pressed_at => history.commits{.value.pressed && !(.previous?.value.pressed ?? false)}.last
+    pressed_at => history.commits{.value.pressed && !(.previous.value.pressed ?? false)}.last
     swipe => (pressed_at, history.commits{.value.released}.last) -- ((from, to) => (from: from.value, to: to.value, distance: to.value.position - from.value.position, duration: to.when - from.when))
     to (at: Geometry.Vector, pressing: Number[] = buttons, time: Time = Time.now) => {
       with Time.now = time {
@@ -296,7 +296,7 @@ Controllers := class: Location {
   [id: Number.Nat] => children{.name == id}.first
   connected (held) => children{.held == held}.first ?? add(Controller(name: reclaimed(held) ?? (0..).find(!this[.]), held))
   disconnected (held) => children = children{.held != held}
-  reclaimed (held) => [children, children.previous**].flatten{.held == held && !this[.name]}.first?.name
+  reclaimed (held) => [children, children.previous**].flatten{.held == held && !this[.name]}.first.name
 }
 
 Device &+= {

@@ -1,6 +1,6 @@
 // The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
 UI.TUI := class {
-  Grid := class width: Number, height: Number, cells: ANSI.Cell[][] = (0 ..< height).map(grid_row => (0 ..< width).map(grid_column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page?.title {
+  Grid := class width: Number, height: Number, cells: ANSI.Cell[][] = (0 ..< height).map(grid_row => (0 ..< width).map(grid_column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page.title {
     space => Geometry.Space.grid(Geometry.Vector(width, height))
     inside (at: Geometry.Vector) => space.holds(at)
     put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
@@ -8,14 +8,14 @@ UI.TUI := class {
     background (at: Geometry.Vector, color: Geometry.Color?) => put(at, cell(at) ~~ .background = color)
     underlined (at: Geometry.Vector) => put(at, cell(at) ~~ .styles |= ANSI.Attribute.underlined)
     linked (at: Geometry.Vector, to: Location) => put(at, cell(at) ~~ .link = to)
-    faded (at: Geometry.Vector, amount: Probability) => cell(at) -- (cell => put(at, cell ~~ .foreground = cell.foreground?.mix(cell.background, 1 - amount)))
+    faded (at: Geometry.Vector, amount: Probability) => cell(at) -- (cell => put(at, cell ~~ .foreground = cell.foreground.mix(cell.background, 1 - amount)))
     shaded (at: Geometry.Vector) => cell(at) -- (cell => put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
     graphic (at: Geometry.Vector, bytes) => graphics.push (at: at, bytes: bytes)
     changes (before: Grid?) => (0..<height).map(y => (0..<width){!before || cells[y][.] != before.cells[y][.]}.map(x => [[Geometry.Vector(x, y)], cells[y][x]])).flatten(1)
     framed (previous: Grid? = None) => [
-      ANSI.Title(title) if title && title != previous?.title,
+      ANSI.Title(title) if title && title != previous.title,
       changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: (cell.link === None ? "" : (cell.link as String))), cell.glyph]),
-      graphics{!(previous?.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
+      graphics{!(previous.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
       ANSI.Style()
     ]
   }
@@ -104,6 +104,11 @@ UI.TUI := class {
     {glyph: Char} => glyph as String
     {start: Start} => Compiler.reduced(start.modes, written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], written)
     {stop: Stop} => Compiler.reduced(<-stop.start.modes.map(.flipped), written)
+    // (SGR: each parameter after a `;`, as the header `("\e[0", parameters: (";", parameter: …)[], "m")` writes it)
+    {style: ANSI.Style} => "\e[0" + style.parameters.map(written_parameter => ";" + Compiler.reduced(written_parameter.parameter, written)).join("") + "m"
+    {attribute: ANSI.Attribute} => attribute.code
+    // (its header's choice of groups is not read into the header yet (A3): written here as the header says)
+    {colored: ANSI.Colored} => colored.layer + ((colored.index === None) ? (";2;" + colored.red + ";" + colored.green + ";" + colored.blue) : (";5;" + colored.index))
     {sequences: Iterable} => sequences.map(sequence => sequence === None ? "" : Compiler.reduced(sequence, UI.TUI.written)).join("")
     {sequence} => sequence as String
   }

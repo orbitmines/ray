@@ -16,12 +16,12 @@ Store := class: Hierarchy at: Location = @local, format: Format? {
   static constructed (instance) => instance -- keep(.) if instance is materialised
 
   static View (type) => (materialised |= type) -- (routes{.type === type || type is .type}.stores.flatten, default).unique.map(.instances(type)).flatten.unique{is type}
-  static as_of (instance, field: String, when: Time) => (external get instance field).history.commits{.when <= when}.last?.value
+  static as_of (instance, field: String, when: Time) => (external get instance field).history.commits{.when <= when}.last.value
   static conflicts (type, key: Program) => View(type) -- (all => all.map(key).unique.map(k => all{key(.) == k}){.count > 1}.map(duplicates => duplicates ~~ ERROR@Key `resolve the duplicates`))
 
   kept_in: Format? => format ?? Compiler.reduced(this, StoreOptimizations)
-  instances (type) => (children{is type}, kept_in?.read(this, type) ?? []).flatten.unique
-  kept (instance): static => this ~~ add(instance) ~~ kept_in?.kept(this, instance)
+  instances (type) => (children{is type}, kept_in.read(this, type) ?? []).flatten.unique
+  kept (instance): static => this ~~ add(instance) ~~ kept_in.kept(this, instance)
 
   static Row := class type: String, id: String, fields: (name: String, value: String)[] {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
@@ -31,7 +31,7 @@ Store := class: Hierarchy at: Location = @local, format: Format? {
   }
 
   static Format := class language: Language, file = true, versioned = false {
-    read (store: Store, type) => (versioned ? language.read(store.at)?.value : file ? language.read(store.at.held) : language.read(store.at)[type.name].map(row => Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
+    read (store: Store, type) => (versioned ? language.read(store.at).value : file ? language.read(store.at.held) : language.read(store.at)[type.name].map(row => Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
     kept (store: Store, instance) => versioned ? store.history.appended(store.at, language)
       : file ? (store.at.held = language.write(store.children))
       : language.read(store.at).executed(language.write([instance as Row]))

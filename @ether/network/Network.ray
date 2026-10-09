@@ -38,17 +38,17 @@ Network &+= {
     static equivalences => @/etc/hosts as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
     // A redirect is a world name (W1.9, `@name = holder`), so it passes the world's write check like any name.
     static resolved (name: String) => World.current["@", name] -- (held => held is Location ? held
-      : DomainName(equivalences.rows{name.fold_case is .names.fold_case#}.last?.address ?? name))
+      : DomainName(equivalences.rows{name.fold_case is .names.fold_case#}.last.address ?? name))
   }
 }
 
 Effecting |= Program{effects.some(. is "network")}
 
 Location &+= {
-  static canonical := Location{!port || port != protocol?.port}
+  static canonical := Location{!port || port != protocol.port}
   protocol => Network.Protocol#{as String == scheme}.first
   resolved => Network.Hosts.resolved(host) -- (. == host ? $.dns.resolve(host) ?? . : .)
-  socket => Network.Socket.Address(host: host, port: port ?? protocol?.port)
+  socket => Network.Socket.Address(host: host, port: port ?? protocol.port)
 }
 
 Device &+= {

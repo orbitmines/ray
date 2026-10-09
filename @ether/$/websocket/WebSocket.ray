@@ -75,5 +75,5 @@ WebSocket := class: Language client: boolean = true {
     (name: "Sec-WebSocket-Accept", value: accept(request.fields["Sec-WebSocket-Key"]))
   ]))
   static opened (request: HTTP.Request, response: HTTP.Response) => response.status.code == 101
-    && response.fields["Upgrade"]?.fold_case == "websocket" && response.fields["Sec-WebSocket-Accept"] == accept(request.fields["Sec-WebSocket-Key"])
+    && response.fields["Upgrade"].fold_case == "websocket" && response.fields["Sec-WebSocket-Accept"] == accept(request.fields["Sec-WebSocket-Key"])
 }

@@ -53,7 +53,7 @@ Geometry := class {
     between (a: Vector, b: Vector) => Vector(axes.zip(b - a).map(.0.between(.1)))
     seen (at: Vector, frame: Vector = Vector(), size: Vector = Vector()) => Vector(axes.enumerate.map(axis => axis.value.seen(at[axis.index] ?? 0, frame[axis.index] ?? 0, size[axis.index] ?? 0)))
     neighbours (at) => vertices ? vertices.outgoing(at) : sides#.map(wrapped(at + .vector(dimension))){holds(.)}
-    edge_length (from, to) => vertices?.edges.find(.from == from && .to == to)?.measured ?? 1
+    edge_length (from, to) => vertices.edges.find(.from == from && .to == to).measured ?? 1
     // (each place: one coordinate from each axis, in a plane until the product of the axes reads: `reduce` over `pairs` with `.0`, `.1`)
     positions => vertices ? vertices.vertices : Space.planar(axes)
     static planar (planar_axes) =>
@@ -152,18 +152,18 @@ Geometry := class {
   Font := class family: String[]?, size: Length?, weight: Number{100 <= . <= 900}?, style: (normal | italic)?, line_height: Number?, tracking: Length?, features: String[]? {
     static base = Font(["sans-serif"], 16px, 400, normal, 1.2, 0px, [])
     static inherited: Length = 16px
-    ?? (other: Font?) => Font(fields.map(field => field.value ?? other?.`field.name`))
+    ?? (other: Font?) => Font(fields.map(field => field.value ?? other.`field.name`))
   }
   WhiteSpace := class spaces: boolean = false, lines: boolean = false, wraps: boolean | anywhere = true {
-    static normal := WhiteSpace{!spaces && !lines && wraps}
-    static nowrap := WhiteSpace{!spaces && !lines && !wraps}
-    static pre := WhiteSpace{spaces && lines && !wraps}
-    static pre_wrap := WhiteSpace{spaces && lines && wraps}
-    static pre_line := WhiteSpace{!spaces && lines && wraps}
+    static normal := WhiteSpace(false, false, true)
+    static nowrap := WhiteSpace(false, false, false)
+    static pre := WhiteSpace(true, true, false)
+    static pre_wrap := WhiteSpace(true, true, true)
+    static pre_line := WhiteSpace(false, true, true)
   }
   Raster := Color[][] + {
     static blank (width: Number, height: Number) => (0..<height).map((0..<width).map(Color(0, 0, 0, 0)))
-    width => first?.count ?? 0
+    width => first.count ?? 0
     height => count
     space => Space.grid(Vector(width, height))
     at (x: Number, y: Number) => this[y][x]
@@ -240,7 +240,7 @@ Geometry := class {
     ]).flatten
   }
   Chain := (Cell | Edge)[] + {
-    rank => first?.rank ?? 1
+    rank => first.rank ?? 1
     ∂ => map(.∂).flatten.reduced
     reduced => [this{. is Edge}, this{. is Cell}.map(.key).unique.map(key => this{. is Cell && .key == key}.map(.coefficient).sum -- (Cell(key.0, key.1, .))){.coefficient != 0}].flatten
   }
@@ -259,16 +259,16 @@ Geometry := class {
     boundary: Shape = space.vertices ? Shape(space: space, rank: 1, cells: space.vertices.edges{cells.at.contains(.from) != cells.at.contains(.to)})
       : space.discrete ? Shape(space: space, rank: rank - 1, cells: cells.∂) : box(size),
     flow: block | inline | grid | layered = block, gap: Vector = Vector(), columns: Number = 1, wrap: boolean = false,
-    align: (start | center | end | between | around | stretch | middle | justify)? = parent?.align,
-    fill: Paint?, color: Paint? = parent?.color, font: Font = parent ? (parent.font ~~ .size = parent.font_size) : Font.base, stroke: Stroke?, radius: (Length | Number)[] = [0px],
+    align: (start | center | end | between | around | stretch | middle | justify)? = parent.align,
+    fill: Paint?, color: Paint? = parent.color, font: Font = parent ? (parent.font ~~ .size = parent.font_size) : Font.base, stroke: Stroke?, radius: (Length | Number)[] = [0px],
     effects: Effect[] = [], holes: Shape[] = [], smoothing: Length = 0px, blend: normal | multiply | screen | overlay | darken | lighten | difference = normal,
     overflow: visible | clip | scroll = visible, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
-    transition: Transition?, content: * = None, white_space: WhiteSpace = parent?.white_space ?? WhiteSpace.pre_line, solved: boolean = false,
-    space: Space = parent?.space ?? Space.current, rank: Integer = space.dimension,
+    transition: Transition?, content: * = None, white_space: WhiteSpace = parent.white_space ?? WhiteSpace.pre_line, solved: boolean = false,
+    space: Space = parent.space ?? Space.current, rank: Integer = space.dimension,
     cells: Chain = space.discrete ? space.positions.filter(p => (0..<space.dimension).every(origin[.] <= p[.] < origin[.] + size[.])).map(Cell(., 0..<space.dimension)) : [] {
     id: Location => parent ? parent.id / (parent.children.enumerate{.value === this}.first.index as String) : @scene
-    root => parent?.root ?? this
-    em => parent?.font_size ?? Font.base.size
+    root => parent.root ?? this
+    em => parent.font_size ?? Font.base.size
     font_size => with Font.inherited = em { font.size as pixel }
     // (the cases of `if position { is Fixed => …; is Anchored => …; is Sticky => … } else { … }` (P2.11), as comparisons until a case reads)
     at: Vector => (position is Fixed) ? origin
@@ -289,7 +289,7 @@ Geometry := class {
       found
     lifted => reachable{.position is (Fixed | Anchored) && .visible}.sort_by(.layer)
     rectangular => boundary == box(size)
-    scale => transform.scaling * (parent?.scale ?? 1)
+    scale => transform.scaling * (parent.scale ?? 1)
     facets => children.map(.facets).flatten
     edges => children.map(.edges).flatten(1)
     winding (point: Vector) => facets.map(.crossing(point)).sum

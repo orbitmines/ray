@@ -23,7 +23,7 @@ ANSI := class: Language {
     color => index == None ? Geometry.Color(red, green, blue) : Palette[index]
   }
   Style := class ("\e[0", parameters: (";", parameter: Colored | ("1" | "2" | "3" | "4" | "7" | "9") as Attribute)[], "m") {
-    colored (layer: String) => parameters.parameter{. is Colored && .layer == layer}.last?.color
+    colored (layer: String) => parameters.parameter{. is Colored && .layer == layer}.last.color
     cell (glyph: Char = " ") => Cell(glyph, foreground: colored("38"), background: colored("48"), styles: parameters.parameter{. is Attribute}#)
     static (cell: Cell) as (=== Style) => Style(parameters: [
       Attribute#{. is cell.styles},

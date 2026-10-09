@@ -56,3 +56,7 @@ HostString := class: String {
   every (predicate) => @js $.name(F, [...F.self].every(c => $.truthy($.invoke($.get(F, "predicate"), c))) ? "true" : "false")
   some (predicate) => @js $.name(F, [...F.self].some(c => $.truthy($.invoke($.get(F, "predicate"), c))) ? "true" : "false")
 }
+// one character of the host's text: its text, and a `Char` (its columns, its tables)
+@kind char HostChar
+HostChar := class: HostString { }
+@also HostChar Char

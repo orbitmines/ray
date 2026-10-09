@@ -5,7 +5,7 @@ Program &+= {
 }
 
 Node &+= {
-  world => this is World ? this : parent?.world
+  world => this is World ? this : parent.world
 }
 
 World := class: Location + Nameable {
@@ -19,17 +19,17 @@ World := class: Location + Nameable {
 
   // UTS #39: a name is held by the skeleton of its case fold, so a name confusable with a reserved one finds that one (§4), and a name that mixes scripts and is confusable is refused (§5) (https://www.unicode.org/reports/tr39/#Confusable_Detection, https://www.unicode.org/reports/tr39/#Mixed_Script_Detection)
   class{>.instance_of Nameable}#.for class => {
-    {class.PREFIX}{name: reservable_names} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last?.value
+    {class.PREFIX}{name: reservable_names} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last.value
       ?? children**{is class && .name.fold_case.skeleton == name.fold_case.skeleton}.first
       ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
     {class.PREFIX}{name: reservable_names{.mixed_script && .skeleton != .}} = {holder} => ERROR@Name `a name that mixes scripts and is confusable is not reserved` if class.PREFIX
     {class.PREFIX}{unique<in: .fold_case.skeleton> name: reservable_names} = {holder} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last
-      -- (held => held && !&@.may(`=`, held) ? ERROR@Name `overwrite a name` : this[held?.name ?? class.PREFIX + name] = holder) if class.PREFIX
+      -- (held => held && !&@.may(`=`, held) ? ERROR@Name `overwrite a name` : this[held.name ?? class.PREFIX + name] = holder) if class.PREFIX
   }
 }
 
 Item := class: Nameable {
-  issuer: World = location?.world ?? World.ether
+  issuer: World = location.world ?? World.ether
   obtained_by: Program?
 
   trail => [location, location.previous**].flatten
@@ -54,7 +54,7 @@ Reference := class {
   note: String?
 
   year => date.year
-  claim (who: Character = @me) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location?.world ?? World.ether)
+  claim (who: Character = @me) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location.world ?? World.ether)
   notes => [note, note.previous**].flatten
 }
 
@@ -63,7 +63,7 @@ Reference := class {
 @{name: reservable_names} = {holder} ^punctuation => World.current["@", name] = holder
 
 Location &+= {
-  [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
+  [name: String] => fields{.name == name}.last.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
 }
 Location.current = @local
 
@@ -126,12 +126,12 @@ Instance := class: Location + Entity {
 // the current instance (not `@localhost`: anything on the host machine)
 @local = Instance()
 
-Online := Character{presence?.device.network.connected}
+Online := Character{presence.device.network.connected}
 Offline := Character{!(. is Online)}
 Broadcasting := Character{quests{serves @public}.nonempty}
-Hosting := Character{presence?.hosted#.some(!.same(this))}
+Hosting := Character{presence.hosted#.some(!.same(this))}
 Proxying := Character{quests{goal is Network.Proxy && !done}.nonempty}
-Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.since(None){.value == true}.last?.when >= Time.now - 5 minutes)}
+Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.since(None){.value == true}.last.when >= Time.now - 5 minutes)}
 Busy := Character{focus && !focus.done}
 
 Invisible := Character{constraint is Invisible}

@@ -42,8 +42,8 @@ PNG := class: Language (
   channels => [1, 0, 3, 1, 2, 0, 4][ihdr.color]
   stride => (ihdr.depth * channels + 7) / 8 -- .floor
   // PLTE (11.2.3), tRNS (11.3.1.1)
-  palette => chunks{.type == "PLTE"}.first?.data.chunk(3).map(Geometry.Color(.0, .1, .2)) ?? []
-  transparency => chunks{.type == "tRNS"}.first?.data ?? []
+  palette => chunks{.type == "PLTE"}.first.data.chunk(3).map(Geometry.Color(.0, .1, .2)) ?? []
+  transparency => chunks{.type == "tRNS"}.first.data ?? []
   // IDAT (11.2.4): one zlib stream over all of them
   inflated => Zlib.read(chunks{.type == "IDAT"}.data.flatten)
   passes => (ihdr.interlace == 0 ? [(0, 0, 1, 1)] : Adam7).map((x, y, dx, dy) => (x: x, y: y, dx: dx, dy: dy,

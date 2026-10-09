@@ -32,7 +32,7 @@ Node &+= {
 
   chosen_within (width) => components.random
 
-  erred => diagnostics?.nonempty ?? false
+  erred => diagnostics.nonempty ?? false
   as (=== boolean) => !erred
   recoverable => erred && !diagnostics.some(.fatal)
 
@@ -71,7 +71,7 @@ Possibilities &+= {
   join (separator) => values.join(separator)
   flatten => values.flatten
   erred => values.every(.erred)
-  continuous => count is ∞ && !values.first?.next
+  continuous => count is ∞ && !values.first.next
   measure (within: Possibilities = this) => continuous ? values.last - values.first
     : count is ∞ ? (1 -> +1).map(n => values{within.values[..<n].contains(.)}.count / n).last
     : count
@@ -129,7 +129,7 @@ if &+= {
   { }{subject} {{cases: Cases}} ^class => Compiler.reduced(subject, Program(code: cases**) as Compiler)
 }
 Program &+= {
-  as (=== Compiler) => Program(code: written.map**(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *))?.type
+  as (=== Compiler) => Program(code: written.map**(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *)).type
     ?? ((arm.case as Program)() is Section ? ("*{", arm.case, "}") : ("*{== ", arm.case, "}")), "} => ", arm.value)).join(\n))
   otherwise => ("{subject_of_case: *} => (", code, ")") as String as Program as Compiler
 }

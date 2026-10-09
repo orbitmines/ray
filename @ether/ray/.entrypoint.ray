@@ -314,7 +314,8 @@ Method &+= {
   {head Method}() => @takes head
   ({parameters Unled}) => @parameters @unnamed parameters
   [{parameters Unled}] => @between "[" "]" parameters
-  {a Method} | {b Method} => a | b
+  // (`a | b | c`: one superposition of the three names, not one of `a` and `b | c`)
+  {a Method} | {b Method} => (a | b) -- ((aliased) => aliased ~~ ((flat) => flat.components = []) ~~ ((flat) => a.superposes ? a.components.for((component) => flat.components.append(component)) : flat.components.append(a)) ~~ ((flat) => b.superposes ? b.components.for((component) => flat.components.append(component)) : flat.components.append(b)))
   // (names written together take what is written after them: `min | min_by (key)`)
   {a Method} | {b Method} ({parameters Unled}) => (@parameters a parameters) | (@parameters b parameters)
   static {head Method} => @own head

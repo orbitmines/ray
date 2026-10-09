@@ -46,7 +46,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
 
   Signature := class (name: (!"<")[], " <", email: (!">")[], "> ", seconds: Decimal, " ", zone: (("+" | "-"), Decimal.Digit₄)) {
     when: Time => (seconds seconds) as Time
-    static (signed: (who: *, when: Time)) as (=== Signature) => Signature(name: (signed.who?.full_name#.first ?? signed.who?.name#.first ?? signed.who) as String, email: (signed.who?.email#.first as String) ?? (signed.who?.name#.first ?? "someone") + "@ether", seconds: (signed.when as s).floor, zone: "+0000")
+    static (signed: (who: *, when: Time)) as (=== Signature) => Signature(name: (signed.who.full_name#.first ?? signed.who.name#.first ?? signed.who) as String, email: (signed.who.email#.first as String) ?? (signed.who.name#.first ?? "someone") + "@ether", seconds: (signed.when as s).floor, zone: "+0000")
   }
 
   // A commit's tree and parents, and a tag's object, are written as names in the repository's format (https://git-scm.com/docs/hash-function-transition#_object_format)
@@ -83,7 +83,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
       data: Zlib
     ) {
       base_entry: Entry?
-      length => (size?.value ?? 0, low) as Binary
+      length => (size.value ?? 0, low) as Binary
       at => previous ? previous.at + (previous as Byte[]).count : 12
       crc32 => this as Byte[] as CRC32 as Binary₃₂
       object (pack: Pack, store) => Object(type.name, data.inflated)
@@ -144,7 +144,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   }
   // A server names its object format among its capabilities, SHA-1 when it does not, and advertises names in it (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)
   Advertised := class (Line("# service=", service: Char[], \n), Line.flush, references: Line(id: Hexadecimal{length == SHA1.size * 2 || length == SHA256.size * 2}, " ", name: (!"\x00" && !\n)[], ("\x00", capabilities: (!\n)[])?, \n?)[], Line.flush) {
-    format => (references.first?.capabilities ?? "").split(" ").find(. ~= ⊢"object-format=") -- (named => named ? formatted(named[14..]) : SHA1)
+    format => (references.first.capabilities ?? "").split(" ").find(. ~= ⊢"object-format=") -- (named => named ? formatted(named[14..]) : SHA1)
   }
   // A client asks for the format the server named, on its first request line (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)
   asked: String => hash === SHA1 ? "" : " object-format=" + format_name
@@ -170,12 +170,12 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   Store := class root: Location?, fetched: Pack[] = [], given: (String, Id)[] = [] {
     loose (id: Id) => root ? (root / ("objects/" + id[..1] + "/" + id[2..])).held as Byte[] -- (bytes => bytes.nonempty ? (Zlib.read(bytes) as Loose).object : None) : None
     packs => fetched.map(pack => (index: pack as Index, pack)), (root ? (root / "objects/pack").held.children{.name ~= ".idx" ⊣}.map(index => (index: index as Byte[] as Index, pack: ((index.@ as String)[..<-4] + ".pack") as Held as Byte[] as Pack)) : [])
-    packed (id: Id) => packs.find(.index.offset_of(id) != None) -- (found => found?.pack.object_at(found.index.offset_of(id), this))
+    packed (id: Id) => packs.find(.index.offset_of(id) != None) -- (found => found.pack.object_at(found.index.offset_of(id), this))
     object (id: Id) => loose(id) ?? packed(id)
 
     references => given, (root ? (((root / "packed-refs").held as PackedReferences).references.map((.name, .id)), (root / "refs").held.children**{!(. is Directory)}.map(at => ((at.@ as String)[(root.@ as String).count + 1..], (at as Reference).id))) : [])
-    reference (name: String) => references{.0 == name}.last?.1
-    current => root ? ((root / "HEAD").held as Reference).symbolic : references.find(.0 ~= ⊢"refs/heads/" && .1 == reference("HEAD"))?.0
+    reference (name: String) => references{.0 == name}.last.1
+    current => root ? ((root / "HEAD").held as Reference).symbolic : references.find(.0 ~= ⊢"refs/heads/" && .1 == reference("HEAD")).0
     head => reference("HEAD") ?? ((root / "HEAD").held as Reference) -- (head => head.symbolic ? reference(head.symbolic) : head.id)
     branches => references{.0 ~= ⊢"refs/heads/"}.map((name: .0[11..], id: .1))
 
@@ -186,7 +186,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
       : Location(path: .name, content: object(.id as Id).content) ~~ (.access = Access(method: `()`) if .mode == Mode.executable)))
     recorded => reference(noted_at) -- (tip => tip ? tree(commit(tip).tree).files.map((target: .path.replace("/", ""), line: .content as String)) : [])
     reachable (ids: Id[]) => ids.map(id => (reachable(commit(id).parents), id)).flatten.unique
-    read_commit (id: Id, made, repository: Repository) => commit(id) -- (made_by => (recorded.find(.target == id)?.line -- (noted => noted ? (noted as Program as History).head : None) ?? History.Commit(
+    read_commit (id: Id, made, repository: Repository) => commit(id) -- (made_by => (recorded.find(.target == id).line -- (noted => noted ? (noted as Program as History).head : None) ?? History.Commit(
       stamp: repository.clock.receive(Stamp.at(made_by.author.when, node: made_by.author.name)), who: Character.local(made_by.author.name) ?? made_by.author.name,
       change: History.change(made_by.parents.first ? tree(commit(made_by.parents.first).tree) : Location(), tree(made_by.tree)),
       when: made_by.author.when, message: made_by.message)) ~~ (.previous = made_by.parents.map(made[.])#))
@@ -216,7 +216,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
       author: (who: .who, when: .when) as Signature, committer: (who: .who, when: .when) as Signature, headers: [], message: .message ?? .change as String) as Byte[])})
     head => commits[history.head.id]
     notes => line.map(commit => (path: commits[commit.id].id, content: commit.written() as Byte[])) -- (noted =>
-      rooted(noted) -- (tree => (who: history.head?.who, when: Time.now) as Signature -- (signed => [objects_in(tree), Object("commit", Commit(tree: (tree as Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))
+      rooted(noted) -- (tree => (who: history.head.who, when: Time.now) as Signature -- (signed => [objects_in(tree), Object("commit", Commit(tree: (tree as Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))
     objects => (line.map(objects_in(history[.].tree)).flatten, commits.values, notes).flatten.unique(.id)
     object_files => objects.map((path: .path, content: .loose))
     // A new repository records its object format in its config (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
@@ -252,5 +252,5 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   tree_at (location: Location, label) => opened(location) -- (store => store.recorded.find(.line ~= ⊢(label as String + "\\")) -- (noted => noted ? store.tree(store.commit(noted.target).tree) : None))
   // A push writes in the format the server names (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)
   push (history: History, remote: Location) => (remote as String as Remote).advertised("git-receive-pack") -- (offered => Git<offered.format> -- (git =>
-    (remote as String as git.Remote).pushed(Compiler.reduced(Language.Writing(history), git.written), offered.references.find(.name == "refs/heads/" + (history.name ?? "main"))?.id)))
+    (remote as String as git.Remote).pushed(Compiler.reduced(Language.Writing(history), git.written), offered.references.find(.name == "refs/heads/" + (history.name ?? "main")).id)))
 }

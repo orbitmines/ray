@@ -13,8 +13,8 @@ LSP &+= {
   coded (severity: Diagnostic.Severity) => (5 - severity.index) max 1 min 4
   severity (code: Decimal{1 <= . <= 4}) => Diagnostic.Severity[5 - code]
   // Positions are zero-based; columns count code points under the utf-32 position encoding (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#positionEncodingKind)
-  position (at: (line: Decimal, column: Decimal)?) => (line: (at?.line ?? 1) - 1, character: (at?.column ?? 1) - 1)
-  range (at: Location?) => (start: position(at?.from), end: position(at?.to))
+  position (at: (line: Decimal, column: Decimal)?) => (line: (at.line ?? 1) - 1, character: (at.column ?? 1) - 1)
+  range (at: Location?) => (start: position(at.from), end: position(at.to))
   // Location (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#location)
   located (uri: String, range) => (uri as Location){from == (range["start"]["line"] + 1, range["start"]["character"] + 1), to == (range["end"]["line"] + 1, range["end"]["character"] + 1)}
 
@@ -29,8 +29,8 @@ LSP &+= {
     {wire: Wire} => Compiler.reduced(JSON.read(wire.content as Unicode.UTF-8 as String), level)
   }
   written := {
-    {writing: Language.Writing{value is Diagnostic}} => Published(writing.value.at?.file, [writing.value])
-    {writing: Language.Writing{value is Diagnostic[]}} => writing.value.map(.at?.file).unique.map(file => Published(file, writing.value{.at?.file == file}))
+    {writing: Language.Writing{value is Diagnostic}} => Published(writing.value.at.file, [writing.value])
+    {writing: Language.Writing{value is Diagnostic[]}} => writing.value.map(.at.file).unique.map(file => Published(file, writing.value{.at.file == file}))
     // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
     {published: Published} => Wire(content: JSON.write((jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: (
       uri: published.file as String,
@@ -41,7 +41,7 @@ LSP &+= {
         code: diagnostic.code,
         source: published.source,
         message: diagnostic.message as String,
-        relatedInformation: diagnostic.related.map(cause => (location: (uri: cause.at?.file as String, range: range(cause.at)), message: cause.message as String)) -- (. if .nonempty)
+        relatedInformation: diagnostic.related.map(cause => (location: (uri: cause.at.file as String, range: range(cause.at)), message: cause.message as String)) -- (. if .nonempty)
       ))
     ))) as Unicode.UTF-8 as Byte[])
   }

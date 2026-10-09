@@ -68,7 +68,7 @@ Language.Direct := class: Language {
     dynamically event: @me/instance
     start => { (@me/device/opened).held() } when @me/device/opened changes
     stop => None
-    write (raster: Geometry.Raster) => (title = UI.page?.title ?? "") -- (target.held = raster)
+    write (raster: Geometry.Raster) => (title = UI.page.title ?? "") -- (target.held = raster)
     read => UI.Input.dispatched(event)
   }
 }

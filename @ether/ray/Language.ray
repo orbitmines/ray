@@ -5,7 +5,7 @@ Language := class: Ray extensions: String, level: Compiler?, written: Compiler?,
 
   static for_file (file_name: String) => file_name ~= (*, ".", inner: Char.Word[], ".ray") ⊣
     ? (named("." + inner) ? over(named("." + inner), ray) : ray)
-    : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
+    : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣).last) ?? ray
 
   static detected (content: String) => Language#{.level && !.read(content).erred}
 

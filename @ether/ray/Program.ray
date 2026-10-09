@@ -36,7 +36,7 @@ Program &+= {
   continuable => done && !(tried**.is_terminal ?? true)
   path => [tried, tried.previous**].flatten
   solution | best => path{reached(.)}.first
-  solved_by => solution?.who
+  solved_by => solution.who
   progress => started ? written.index_of(at) ?? written.count : 0
   difficulty => written.count
 

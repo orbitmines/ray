@@ -65,7 +65,7 @@ HPACK := class: Language {
     | (₂001, size: Integer<5>)
   ) {
     inserting => kind == ₂01
-    field (table: Table) => index ? table[index.value] : (name: name?.value ?? table[at.value].name, value: value.value)
+    field (table: Table) => index ? table[index.value] : (name: name.value ?? table[at.value].name, value: value.value)
     static (field: (name: String, value: String)) as (=== Representation) => Representation(kind: ₂0000, at: 0 as Integer<4>, name: field.name as Text, value: field.value as Text)
   }
 

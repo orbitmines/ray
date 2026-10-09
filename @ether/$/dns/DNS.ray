@@ -122,7 +122,7 @@ DNS := class: Language {
     {lookup: Lookup{server.scheme == "https"}} => Lookup(lookup.message, lookup.server, transport: Transport.https)
   }
 
-  static resolver: Location = (@/etc/resolv.conf as Unicode.Table<("nameserver", " "[], address: IP)>).rows.first?.address ?? "1.1.1.1" as IP
+  static resolver: Location = (@/etc/resolv.conf as Unicode.Table<("nameserver", " "[], address: IP)>).rows.first.address ?? "1.1.1.1" as IP
   static query (name: String, type: Type = Type.A) => Message(questions: [Question(name: Network.DomainName(text: name) as Name, type)])
   static resolve (name: String, type: Type = Type.A) => Compiler.reduced(Lookup(query(name, type)), Optimizations).answer.addresses.first
 
@@ -130,7 +130,7 @@ DNS := class: Language {
   static Blank = (" " | "\t")[]{length > 0}
   // A name in a zone file is relative to $ORIGIN unless it ends in "."; "@" is the origin; written absolute (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
   static origin: String?
-  static absolute (name: String, origin: String?) => Network.DomainName(text: name == "@" ? origin?.trimmed(".") ?? "" : name ~= "." ⊣ ? name[..<-1] : origin ? name + "." + origin.trimmed(".") : name)
+  static absolute (name: String, origin: String?) => Network.DomainName(text: name == "@" ? origin.trimmed(".") ?? "" : name ~= "." ⊣ ? name[..<-1] : origin ? name + "." + origin.trimmed(".") : name)
   static Domain := class (text: (!" " && !"\t" && !\n)[]{length > 0}) {
     as (=== Name) => absolute(text, DNS.origin) as Name
     static (name: Name) as (=== Domain) => Domain(text: DNS.text(name) + ".")
@@ -153,11 +153,11 @@ DNS := class: Language {
     text: (!\n)[]
   ) {
     // A blank owner is the one above, a missing TTL the last given (https://www.rfc-editor.org/rfc/rfc1035#section-5.1, https://www.rfc-editor.org/rfc/rfc2308#section-4)
-    record (above: *[]) => above{. is Origin}.last?.name -- (origin => Record(
-      name: absolute(owner ?? above{. is Entry && .owner}.last?.owner ?? "@", origin) as Name,
+    record (above: *[]) => above{. is Origin}.last.name -- (origin => Record(
+      name: absolute(owner ?? above{. is Entry && .owner}.last.owner ?? "@", origin) as Name,
       type: mnemonic(Type, type),
       within: within ? mnemonic(Classes, within) : Classes.IN,
-      ttl: ttl ?? above{. is Lifetime}.last?.ttl ?? above{. is Entry && .ttl}.last?.ttl ?? 3600
+      ttl: ttl ?? above{. is Lifetime}.last.ttl ?? above{. is Entry && .ttl}.last.ttl ?? 3600
     ) -- (record => record ~~ (.data = text is String ? with (DNS.origin = origin) (text as record.Presentation as record.Data) : text)))
   }
   static Zone := class (lines: (Blank?, line: (Origin | Lifetime | Comment | Entry)?, Blank?, \n | ⊣)[]) {

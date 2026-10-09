@@ -24,7 +24,7 @@ Iterable &+= {
   orderless => false
 
   connected => all.every(a => all.every(b => a.to(b)))
-  consistent => all.every(.next?.previous == . && .previous?.next == .)
+  consistent => all.every(.next.previous == . && .previous.next == .)
   acyclic => !all.some(.next** contains .)
   undirected => all.every(.initial === .terminal)
   unidirectional => all.every(!.previous)
@@ -70,7 +70,7 @@ Iterable &+= {
   length => paths.map(.count).max
   paths: Path{.bounded: bounded} => [this]
 
-  rest => entry?.next ? From(at: entry.next) : []
+  rest => entry.next ? From(at: entry.next) : []
   map (mapping: (x: Vertex): *) => empty ? [] : mapping(first), rest.map(mapping)
   map {selection} (mapping: (x: Vertex): *) => (selected = this[{selection}]) -- map(x => selected.contains(x) ? mapping(x) : x)
   reverse => empty ? [] : rest.reverse, first
@@ -204,18 +204,18 @@ Ray := class: Iterable & Ordered {
   = (written: None) => (initial, terminal = None) -- super(written)
 
   remove | remove_preserving => {
-    previous?.next = next
-    next?.previous = previous
+    previous.next = next
+    next.previous = previous
     next, previous = None
   } -- this
   sever => {
-    previous?.next = None
-    next?.previous = None
+    previous.next = None
+    next.previous = None
     next, previous = None
   } -- this
   move_after (other) => remove -- {
     (next, previous) = (other.next, other)
-    other.next?.previous = this
+    other.next.previous = this
     other.next = this
   }
 }
@@ -248,8 +248,8 @@ Edge := class: Ray {
   is_initial => x.initial == None
   is_terminal => x.terminal == None
 
-  from => x.initial?.∙
-  to => x.terminal?.∙
+  from => x.initial.∙
+  to => x.terminal.∙
   static between (from, to) => Edge(x: (initial: from.terminal, terminal: to.initial))
 }
 
@@ -344,9 +344,9 @@ Array &+= {
     head = added
   } -- this
   link_of (x, at = head) => !at ? None : at.value == x ? at : link_of(x, at.next)
-  pop_front => head?.remove.value
-  pop_back => tail?.remove.value
-  remove (x) => link_of(x)?.remove -- this
+  pop_front => head.remove.value
+  pop_back => tail.remove.value
+  remove (x) => link_of(x).remove -- this
   push_after (at, x) => {
     held = link_of(at)
     added = link x held
@@ -354,7 +354,7 @@ Array &+= {
     if held.next { held.next.previous = added } else { tail = added }
     held.next = added
   } -- this
-  push_before (at, x) => link_of(at)?.previous ? push_after(link_of(at).previous.value, x) : push_front(x)
+  push_before (at, x) => link_of(at).previous ? push_after(link_of(at).previous.value, x) : push_front(x)
 }
 Iterable.components.hierarchy &= Ordered
 Array.components.hierarchy &= Path{acyclic}
@@ -412,7 +412,7 @@ Filtered := class: Ray from: Ray?, keeps: * {
   found => from ? (from.satisfies(keeps) ? this : Filtered(from: from.next, keeps).found) : None
   entry => found
   value => from.value ?? from
-  next => from?.next ? Filtered(from: from.next, keeps).found : None
+  next => from.next ? Filtered(from: from.next, keeps).found : None
   previous => None
   == (other) => value == (other is Filtered ? other.value : other)
 }
@@ -460,6 +460,7 @@ Narrowing &+= {
   for (body) => this.kept.for(body)
   reduce (step) => this.kept.reduce(step)
   enumerate => this.kept.enumerate
+  sliced (slice_from, slice_to) => this.kept.sliced(slice_from, slice_to)
   chunk (size) => this.kept.chunk(size)
   sort_by (key) => this.kept.sort_by(key)
   unique => this.kept.unique

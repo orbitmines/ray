@@ -99,7 +99,7 @@ HTTP := class {
 
       fields => Fields(entries: lines.map((name: .name, value: .value)))
       // chunked is the final transfer coding when present (https://www.rfc-editor.org/rfc/rfc9112#section-6.1)
-      chunked => fields["Transfer-Encoding"]?.split(",").last.trimmed.fold_case == "chunked"
+      chunked => fields["Transfer-Encoding"].split(",").last.trimmed.fold_case == "chunked"
       content_length => fields["Content-Length"] -- (. ? . as Decimal : None)
       bytes => body is Chunked ? body.bytes : body ?? []
 

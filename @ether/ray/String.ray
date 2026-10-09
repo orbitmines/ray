@@ -10,18 +10,18 @@ Char &+= {
   bytes => ([this] as String).bytes
 
   special_casing => Unicode.SpecialCasing.rows{.range.in(this) && !.condition}.first
-  upper_case | uppercase => special_casing?.upper ?? Unicode.UpperCase[this] ?? this
-  lower_case | lowercase => special_casing?.lower ?? Unicode.LowerCase[this] ?? this
-  title_case | titlecase => special_casing?.title ?? Unicode.TitleCase[this] ?? upper_case
+  upper_case | uppercase => special_casing.upper ?? Unicode.UpperCase[this] ?? this
+  lower_case | lowercase => special_casing.lower ?? Unicode.LowerCase[this] ?? this
+  title_case | titlecase => special_casing.title ?? Unicode.TitleCase[this] ?? upper_case
   is_upper => lower_case != this
   is_lower => upper_case != this
-  mirrored => Unicode.BidiMirroring[this]?.value ?? this
+  mirrored => Unicode.BidiMirroring[this].value ?? this
   swap_case | swapcase => is_lower ? upper_case : lower_case
-  fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status is ("C" | "F")}.first?.value ?? this
+  fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status is ("C" | "F")}.first.value ?? this
 
   // Unicode §3.7: the full canonical decomposition, a mapping without a <tag> applied until nothing decomposes (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G733)
-  decomposed => Unicode.Data[this]?.decomposition_mapping -- (. && !(. ~= ⊢"<") ? (. as Unicode.Scalar[].join(" ")).map(.decomposed).flatten : [this])
-  combining_class => (Unicode.Data[this]?.canonical_combining_class ?? "0") as Decimal
+  decomposed => Unicode.Data[this].decomposition_mapping -- (. && !(. ~= ⊢"<") ? (. as Unicode.Scalar[].join(" ")).map(.decomposed).flatten : [this])
+  combining_class => (Unicode.Data[this].canonical_combining_class ?? "0") as Decimal
 
   decimal_digit_value => Unicode.DecimalDigitValue[this]
   digit_value => Unicode.DigitValue[this]
@@ -33,10 +33,10 @@ Char &+= {
   static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
   static (codepoint: Unicode.Scalar) as (=== Char) => codepoint
 
-  east_asian_width => Unicode.EastAsianWidth[this]?.value ?? "N"
+  east_asian_width => Unicode.EastAsianWidth[this].value ?? "N"
   columns => (east_asian_width is ("W" | "F")) ? 2 : 1
-  script => Unicode.Scripts[this]?.value ?? "Unknown"
-  block => Unicode.Blocks[this]?.value ?? "No_Block"
+  script => Unicode.Scripts[this].value ?? "Unknown"
+  block => Unicode.Blocks[this].value ?? "No_Block"
   age => Unicode.Age[this] -- . ? Version(number: .number, revision: .revision) : None
   assigned => age && age <= Unicode.version
 }
@@ -111,7 +111,7 @@ String &+= {
   starts_with (other: String) => this ~= ⊢ other
   ends_with (other: String) => this ~= other ⊣
   contains (other: String) => this ~= other
-  index_of (other: String) => (this ~= other)?.index
+  index_of (other: String) => (this ~= other).index
 
   lines => split(\n)
   indentation => (this ~= ⊢ " "[]).length
@@ -127,7 +127,7 @@ String &+= {
   ordered => empty ? "" : first.combining_class == 0 ? first, rest.ordered : marks.sort_by(.combining_class), this[marks.count..].ordered
   marks => empty || first.combining_class == 0 ? [] : first, rest.marks
   // UTS #39 §4: skeleton(X) is NFD(X) with each character replaced by its prototype, then NFD again; X and Y are confusable when their skeletons are equal (https://www.unicode.org/reports/tr39/#def-skeleton)
-  skeleton => (nfd#.map(Unicode.confusables[.]?.prototype ?? [.]).flatten as String).nfd
+  skeleton => (nfd#.map(Unicode.confusables[.].prototype ?? [.]).flatten as String).nfd
   confusable (other: String) => skeleton == other.skeleton
   // UTS #39 §5.1: Common and Inherited characters go with any script, so a string of one other script is single-script (https://www.unicode.org/reports/tr39/#Mixed_Script_Detection)
   mixed_script => #.script{!= "Common" && != "Inherited"}.unique.count > 1

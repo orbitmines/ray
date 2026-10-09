@@ -1000,6 +1000,8 @@ export class Host {
     // written, and is one of it or not: decided where it is applied, unless the span is a rule of its own)
     // (a rule where statements are read reads text by its types; only a value's own rules (its parameters, a level's) decide by the
     // value, where applied)
+    // (a name held where it is read, not one the type holds: a value of the type is admitted by being that value)
+    if (ctx && this.name_end(text, b, end) === end && !this.reach(r).some(n => n.has(text.s.slice(b, end)))) { const v = this.held_by_name(ctx, text.s.slice(b, end)); if (v !== NOT && (v instanceof Ray ? this.of_type(v, r) : v !== undefined && v !== this.none && this.is(v, r))) return true; }
     if (!!read && read.e === end && this.own(read, r, text)) return true;
     // (a name whose value the language says is one of it: `center` read by `start | center`)
     if (!ctx) return false;
@@ -1017,6 +1019,14 @@ export class Host {
     const by = p && 'cap' in p ? this.fixed(p.reader, there!.eq) : undefined;
     if (!(by instanceof Ray) || !by.test) return juxtaposed && this.is(word, r);
     const v = by.test(word); return v !== undefined && this.is(v, r);
+  }
+  // (what a name holds where it is read; NOT when nothing holds it, or what it holds is not read yet (code, given as it is written))
+  held_by_name(ctx: Ray, word: string): unknown {
+    for (const n of this.reach(ctx)) {
+      if (n.has(word)) { const v = n.m.get(word); return v instanceof Code ? NOT : v instanceof Later ? (v.read ? v.value : NOT) : v; }
+      const x = this.valued(n, word); if (x) return x.native!(n);
+    }
+    return NOT;
   }
   // (one of it without asking the language (read for every name, it would be): it, made of it, or one of what it superposes)
   of_type(v: unknown, r: Ray, seen = new Set<Ray>()): boolean {
@@ -1780,6 +1790,13 @@ export class Host {
     if (r.scope && read?.name && read.e === end && (r.rule || r.caller)) return this.walk(new Code(code.text, code.b, code.e, r, code.floor));
     if (r.scope && read?.name && read.e === end) { const w = new Code(code.text, code.b, code.e, code.ctx, code.floor); w.word = true; return w; }
     const word = read?.name ? code.text.s.slice(read.b, read.e) : undefined;
+    // (a name held where it was written, not one the type holds: a value of the type is admitted by being that value (else read as
+    // the type reads it))
+    let start = code.b; while (start < end && this.blank(code.text.s[start])) start++;
+    if (typed && !r.scope && start < end && this.name_end(code.text, start, end) === end && !this.reach(r).some(n => n.has(code.text.s.slice(start, end)))) {
+      const v = this.held_by_name(code.ctx, code.text.s.slice(start, end));
+      if (v !== NOT) { const ok = v instanceof Ray ? this.of_type(v, r) : v !== undefined && v !== this.none && this.is(v, r); if (ok) return v; }
+    }
     // (a reader decided where it was written, a type: what it does not read whole is read where it was written, one of it, or not read)
     if (typed && !r.scope && !(read && read.e === end && this.own(read, r, code.text))) {
       // (read where it was written, while the rule asking reads nothing itself)

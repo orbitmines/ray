@@ -33,7 +33,7 @@ Device := class {
 Keyboard := class: Location {
   static Modifier := enum shift | control | alt | meta
 
-  static Key := class: Nameable code: Number?, modifiers: Modifier? {
+  static Key := class: Nameable (code: Number?, modifiers: Modifier?) => {
     pressed = false
 
     presses => [pressed, pressed.previous**].flatten{== true}.count

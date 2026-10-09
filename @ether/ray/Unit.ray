@@ -1,4 +1,6 @@
-Quantity := class (Base = Number, (quantities: (quantity: Base, (" ", (unit: Unit = Unit.None) = (unit as String){quantity == 1 ? singular : plural || singular})?)[]{length > 0}).join(" ")) => {
+// (as written: `(Base = Number, (quantities: (quantity: Base, (" ", (unit: Unit = Unit.None) = (unit as String){quantity == 1 ?
+// singular : plural || singular})?)[]{length > 0}).join(" "))`; until a header is read as a pattern, its fields)
+Quantity := class (quantities, Base = Number) => {
   dynamically assert quantities.every _, unit => unit == quantities.0.unit
   dynamically assert quantities.unit as quantities.0.unit[] -- .sorted(>)
 
@@ -55,13 +57,13 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
     chainable == (other: Rate) => numerator == other.numerator && denominator == other.denominator
   }
 
-  of["#"] := of["#"] ?? []
-  of["#"].push(this)
-  (of[name] := this) if name
-  (of[symbol] := this) if symbol
   converting := None
 
-  &.caller[name] = this if name
+  // (each made is known by its name and its symbol, everywhere: `px`, `pixel`; and as written after an amount: `16px`)
+  (global[name] = this) if name
+  (global[symbol] = this) if symbol
+  (Spelling[name] = this) if name
+  (Spelling[symbol] = this) if symbol
 
   static None := Unit(global.None)
   static Temporal => second
@@ -72,8 +74,9 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   dynamically assert this as String? != None
   as (=== String?) => name
 
-  static spelled (written: String) => Unit[written]
-  static Spelling := String{Unit[.] !== None}
+  static spelled (written) => (written is Unit) ? written : global[written]
+  // (a unit's name or symbol as written: each unit made gives it its own; read, the unit)
+  static Spelling := { }
 
   compounds / (other: Unit) => Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static
@@ -101,7 +104,7 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
 }
 
 // (written right after it, or after a space: `16px`, `5 s`)
-{amount Numeral}{written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
+{amount: Number}{written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
 {amount: Number} {written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
 
 si_name (symbol, name, symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?

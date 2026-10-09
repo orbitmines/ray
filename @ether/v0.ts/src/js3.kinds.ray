@@ -91,9 +91,9 @@ Number &+= {
 contains {other} =>
   goto js
   $(String(self).includes(String(other)) ? 'true' : 'false')
-count () =>
+count =>
   goto js
-  [...self].length
+  typeof self === 'string' ? [...self].length : undefined
 
 // What a number or text is made of: Number, String (a node's own `of` is read before this).
 of =>

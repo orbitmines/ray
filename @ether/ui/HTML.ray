@@ -369,7 +369,7 @@ UI.HTML := class {
     level := Geometry.Preparing(1px) + rules
   }
 
-  Package := class files: (path: String, content: *)[] {
+  Package := class (files: (path: String, content: *)[]) => {
     write (to: Location) => files.for((to / .path).held = .content)
     document => files{.path == "index.html"}.first.content
     sheet => files{.path == "style.css"}.first.content
@@ -391,8 +391,8 @@ UI.HTML := class {
     line (parts: String[]) => parts.join(" "), \n
 
     static made = 0
-    Mount := class node: $.html.Element | $.html.Text | $.html.Raw | $.html.Comment, parent: String?, id: String = (node is $.html.Element ? node.id : None) ?? ("e" + ((DOM.made += 1) as String))
-    Listening := class mount: Mount
+    Mount := class (node: $.html.Element | $.html.Text | $.html.Raw | $.html.Comment, parent: String?, id: String = (node is $.html.Element ? node.id : None) ?? ("e" + ((DOM.made += 1) as String))) => { }
+    Listening := class (mount: Mount) => { }
     protocol := {
       {mount: Mount{node is $.html.Element}} => mount.node -- (element => [
         line(["create", mount.id, element.tag]),
@@ -409,7 +409,7 @@ UI.HTML := class {
     }
     mounted (element: $.html.Element) => Compiler.reduced(Mount(element), protocol) as String
 
-    Event := class id: String {
+    Event := class (id: String) => {
       shape => UI.scene.reachable{.dom == id}.first
     }
     Click := class: Event (id: UI.Input.Id, " click")

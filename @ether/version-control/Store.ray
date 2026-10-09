@@ -1,5 +1,5 @@
-Store := class: Hierarchy at: Location = @local, format: Format? {
-  static Route := class type: *, places: Program {
+Store := class: Hierarchy (at: Location = @local, format: Format?) => {
+  static Route := class (type: *, places: Program) => {
     resolved: Store[]?
     stores => resolved ??= places()#.map(Store.stored(.))
     takes (instance) => instance is type
@@ -23,14 +23,14 @@ Store := class: Hierarchy at: Location = @local, format: Format? {
   instances (type) => (children{is type}, kept_in.read(this, type) ?? []).flatten.unique
   kept (instance): static => this ~~ add(instance) ~~ kept_in.kept(this, instance)
 
-  static Row := class type: String, id: String, fields: (name: String, value: String)[] {
+  static Row := class (type: String, id: String, fields: (name: String, value: String)[]) => {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
     static (instance) as (=== Row) => Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
       fields: instance.fields{!.unreadable}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.name{is UUID}#.first : .value))))
     instance => Language.ray.read((type, "(name: ", Language.ray.write(id as UUID), fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String)
   }
 
-  static Format := class language: Language, file = true, versioned = false {
+  static Format := class (language: Language, file = true, versioned = false) => {
     read (store: Store, type) => (versioned ? language.read(store.at).value : file ? language.read(store.at.held) : language.read(store.at)[type.name].map(row => Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
     kept (store: Store, instance) => versioned ? store.history.appended(store.at, language)
       : file ? (store.at.held = language.write(store.children))
@@ -43,7 +43,7 @@ Store := class: Hierarchy at: Location = @local, format: Format? {
   static columnar = Format(language: Columns.language)
   static keyed = Format(language: KeyValue.language)
 
-  static Column := class name: String, values: *[] {
+  static Column := class (name: String, values: *[]) => {
     distinct => values.unique.count
     runs => values.squeeze.count
     integral => values.every(. is Integer)
@@ -57,25 +57,25 @@ Store := class: Hierarchy at: Location = @local, format: Format? {
   }
 
   static Encoded := Plain | Dictionary | RunLength | Delta | BitPacked | ALP | FSST
-  static Plain := class values: *[]
-  static Dictionary := class keys: *[], codes: Integer[] {
+  static Plain := class (values: *[]) => { }
+  static Dictionary := class (keys: *[], codes: Integer[]) => {
     values => codes.map(keys[.])
   }
-  static RunLength := class runs: (value: *, count: Integer)[] {
+  static RunLength := class (runs: (value: *, count: Integer)[]) => {
     values => runs.map([.value] * .count).flatten(1)
   }
-  static Delta := class start: Integer, steps: Integer[] {
+  static Delta := class (start: Integer, steps: Integer[]) => {
     values => steps.reduce(held = [start] => held, held.last + .)
   }
-  static BitPacked := class width: Integer, bits: (0 | 1)[] {
+  static BitPacked := class (width: Integer, bits: (0 | 1)[]) => {
     values => bits.chunk(width).map(Binary(integer: .))
   }
   // Adaptive lossless floating point: decimals kept as integers scaled by one exponent (https://dl.acm.org/doi/10.1145/3626717)
-  static ALP := class exponent: Integer, integers: Integer[] {
+  static ALP := class (exponent: Integer, integers: Integer[]) => {
     values => integers.map(. / 10 ^ exponent)
   }
   // Fast static symbol table: frequent substrings replaced by one-byte codes (https://www.vldb.org/pvldb/vol13/p2649-boncz.pdf)
-  static FSST := class symbols: String[], codes: Integer[][] {
+  static FSST := class (symbols: String[], codes: Integer[][]) => {
     values => codes.map(.map(symbols[.]).join("") as String)
     static table (strings: String[]) => strings.map(.unique).flatten.unique.map(. as String) -- (singles =>
       singles, strings.map(s => (0..<s.count - 1).map(s[. .. . + 1] as String)).flatten.unique.sort_by(pair => -strings.map(.find_all(pair).count).sum)[..<255 - singles.count])
@@ -117,7 +117,7 @@ CacheOptimizations := {
   {store: Store{children.nonempty}}.instances({type}) => store.children.unique{is type}
 }
 
-Columns := class tables: (type: String, ids: String[], columns: (name: String, encoded: Store.Encoded)[])[] {
+Columns := class (tables: (type: String, ids: String[], columns: (name: String, encoded: Store.Encoded)[])[]) => {
   static (rows: Store.Row[]) as (=== Columns) => Columns(tables: rows.map(.type).unique.map(type => rows{.type == type} -- (held =>
     (type, ids: held.map(.id), columns: held.first.fields.map(.name).map(name => (name, encoded: Store.Column(name, values: held.map(.fields{.name == name}.first.value)).encoded))))))
   rows => tables.map(table => table.ids.enumerate.map(entry => Store.Row(type: table.type, id: entry.value, fields: table.columns.map((name: .name, value: .encoded.values[entry.index]))))).flatten

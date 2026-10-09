@@ -1,9 +1,9 @@
-History := class: Iterable repository: *?, base: Commit?, head: Commit? {
+History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
   static Label := UUID | Char.Word[]
 
   // A commit is who changed what, when, after what. Signatures, content keys and ciphertext are @ether/security's
   // (it adds them to commits); version control does not import it.
-  static Commit := class: Ray id: Label = UUID.v1(), who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = [] {
+  static Commit := class: Ray (id: Label = UUID.v1(), who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = []) => {
     when: Time = stamp.when ?? Time.now
     message: String?
     previous: Commit?
@@ -112,7 +112,7 @@ History := class: Iterable repository: *?, base: Commit?, head: Commit? {
   received (stamp: Stamp) => clock.receive(stamp)
 }
 
-Repository := class world: World?, histories: History[] = [] {
+Repository := class (world: World?, histories: History[] = []) => {
   id: UUID = UUID.v4()
   clock: HybridClock = HybridClock(node: id)
 
@@ -277,6 +277,6 @@ Language.ray &+= {
   written &+= History.written
 }
 
-Consistency := class replicas: *[] = [] {
+Consistency := class (replicas: *[] = []) => {
   read (value) => replicas.every(.synced) ? value : ERROR@Consistency `wait for the replicas`
 }

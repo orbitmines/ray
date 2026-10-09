@@ -27,7 +27,7 @@ Geometry := class {
   euclidean: Metric = (a, b) => √(Space.current.between(a, b).map(. ^ 2).sum)
   graph: Metric = (a, b) => Place(a).path_to(Place(b)) -- (.erred ? . : .map(path => path.zip(path.rest).map(Space.current.edge_length(.0.at, .1.at)).sum).min)
 
-  Axis := class: Ray continuous: boolean = true, loop: boolean = false, extent: Length?, orientation: -1 | +1 = +1 {
+  Axis := class: Ray (continuous: boolean = true, loop: boolean = false, extent: Length?, orientation: -1 | +1 = +1) => {
     coordinate => continuous ? Number : Integer
     seen (at: Length, frame: Length = 0, size: Length = 0) => orientation > 0 ? at : frame - at - size
     // (`member("loop")`: the word `loop` reads as the `loop { }` statement)
@@ -36,7 +36,7 @@ Geometry := class {
     between (difference: Length) => loop && extent != None ? (difference % extent) -- (. min (extent - .)) : difference
     positions => continuous ? coordinate{holds(.)} : 0..<extent
   }
-  Space := class axes: Axis[], metric: Metric = euclidean, projection: Projection?, vertices: Graph? {
+  Space := class (axes: Axis[], metric: Metric = euclidean, projection: Projection?, vertices: Graph?) => {
     static plane = Space([Axis(), Axis()])
     static screen = Space([Axis(), Axis(orientation: -1)])
     static current: Space = plane
@@ -66,7 +66,7 @@ Geometry := class {
       planar_ys.for(planar_y => planar_xs.for(planar_x => planar_found.append(Vector(planar_x, planar_y))))
       planar_found
   }
-  Place := class: Ray at: *, space: Space = Space.current {
+  Place := class: Ray (at: *, space: Space = Space.current) => {
     continuations => space.neighbours(at).map(Place(., space))
     == (other) => at == (other is Place ? other.at : other)
   }
@@ -104,7 +104,7 @@ Geometry := class {
     scaling => linear.determinant -- ((. max -.) ^ (1 / n))
     applied (point: Vector) => Vector(this[..<n].map(row => row.zip([point, [1]].flatten).map(*).sum))
   }
-  Projection := class matrix: Matrix, depth_axis: Integer = 2 {
+  Projection := class (matrix: Matrix, depth_axis: Integer = 2) => {
     static orthographic (n: Integer = Space.current.dimension) => Projection((0..2).map(i => (0..n).map(j => i < 2 ? (i == j ? 1 : 0) : j == n ? 1 : 0)))
     static perspective (distance: Length, n: Integer = Space.current.dimension) => Projection((0..2).map(i => (0..n).map(j => i < 2 ? (i == j ? 1 : 0) : j == n ? 1 : j == 2 ? 1 / distance : 0)))
     static embedding (structure: Graph) => ERROR@Type `a graph embedding (force or tree layout) is not implemented yet`
@@ -118,10 +118,10 @@ Geometry := class {
   }
   Paint := Color | Gradient | Pattern | Section | Pointwise
   Pointwise := (point: Vector): Color
-  Stop<K = Length, V = Number> := class at: K, value: V {
+  Stop := class (at: K, value: V, K = Length, V = Number) => {
     -> (other: Stop) => Stops([this, other])
   }
-  Stops<K = Length, V = Number> := class stops: Stop<K, V>[], easing: Easing = linear {
+  Stops := class (stops: Stop<K, V>[], easing: Easing = linear, K = Length, V = Number) => {
     static (stops: Stop[]) as (=== Stops) => Stops(stops, step)
     -> (other: Stop) => Stops([stops, [other]].flatten(1), easing)
     sorted => stops.sort_by(.at)
@@ -136,13 +136,13 @@ Geometry := class {
   Gradient := class: Stops<Probability, Color> angle: Angle = 0 turn
   Radial := class: Gradient
   Conic := class: Gradient
-  Pattern := class shape: Shape, repeat: Vector
-  Stroke := class paint: Paint, width: Length = 1px, sides: Side = all, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter
+  Pattern := class (shape: Shape, repeat: Vector) => { }
+  Stroke := class (paint: Paint, width: Length = 1px, sides: Side = all, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter) => { }
 
   Effect := Shadow | Blur | Filter
-  Shadow := class offset: Vector, blur: Length = 0px, spread: Length = 0px, color: Color, inset: boolean = false
-  Blur := class radius: Length
-  Filter := class amount: Number
+  Shadow := class (offset: Vector, blur: Length = 0px, spread: Length = 0px, color: Color, inset: boolean = false) => { }
+  Blur := class (radius: Length) => { }
+  Filter := class (amount: Number) => { }
   Brightness := class: Filter
   Contrast := class: Filter
   Grayscale := class: Filter
@@ -152,12 +152,12 @@ Geometry := class {
   Sepia := class: Filter
   Hue := class: Filter
 
-  Font := class family: String[]?, size: Length?, weight: Number{100 <= . <= 900}?, style: (normal | italic)?, line_height: Number?, tracking: Length?, features: String[]? {
+  Font := class (family: String[]?, size: Length?, weight: Number{100 <= . <= 900}?, style: (normal | italic)?, line_height: Number?, tracking: Length?, features: String[]?) => {
     static base = Font(["sans-serif"], 16px, 400, normal, 1.2, 0px, [])
     static inherited: Length = 16px
     ?? (other: Font?) => Font(fields.map(field => field.value ?? other.`field.name`))
   }
-  WhiteSpace := class spaces: boolean = false, lines: boolean = false, wraps: boolean | anywhere = true {
+  WhiteSpace := class (spaces: boolean = false, lines: boolean = false, wraps: boolean | anywhere = true) => {
     static normal := WhiteSpace(false, false, true)
     static nowrap := WhiteSpace(false, false, false)
     static pre := WhiteSpace(true, true, false)
@@ -180,7 +180,7 @@ Geometry := class {
         : pixel.value))))
   }
 
-  Side := class axis: Integer{. >= 0}, toward: -1 | +1 {
+  Side := class (axis: Integer{. >= 0}, toward: -1 | +1) => {
     opposite => Side(axis, -toward)
     ordinal => 2 * axis + (toward + 1) / 2
     label => [["left", "right"], ["bottom", "top"], ["front", "back"]][axis]?[ordinal % 2]
@@ -215,14 +215,14 @@ Geometry := class {
   Sticky := class
   Fixed := class
   Absolute := class
-  Anchored := class anchor: Shape?, side: Side = bottom
+  Anchored := class (anchor: Shape?, side: Side = bottom) => { }
   Position := Flow | Sticky | Fixed | Absolute | Anchored
   Flowing := Flow | Sticky
 
   Segment := Vector | Quadratic | Cubic | Arc
-  Quadratic := class control: Vector, to: Vector
-  Cubic := class first: Vector, second: Vector, to: Vector
-  Arc := class radius: Vector, rotation: Angle = 0 turn, large: boolean = false, sweep: boolean = false, to: Vector {
+  Quadratic := class (control: Vector, to: Vector) => { }
+  Cubic := class (first: Vector, second: Vector, to: Vector) => { }
+  Arc := class (radius: Vector, rotation: Angle = 0 turn, large: boolean = false, sweep: boolean = false, to: Vector) => {
     unit => (Transform.rotate(rotation) * Transform.scale(radius)).inverse
     centre (a: Vector, b: Vector) => (b - a) * (1 / 2) -- (half => a + half + Vector(-half.y, half.x) * √((1 / half.norm ^ 2 - 1) max 0) * (large == sweep ? -1 : 1))
     bent (a: Vector, b: Vector, centre: Vector, radius: Number) => (1..16).map(t => a.mix(b, t / 16) -- (centre + (. - centre) * (radius / centre.distance(.))))
@@ -231,12 +231,12 @@ Geometry := class {
   }
   Bezier := (points: Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a.mix(b, t)), t)
 
-  Facet := class corners: Vector[], orientation: -1 | +1 = +1 {
+  Facet := class (corners: Vector[], orientation: -1 | +1 = +1) => {
     crossing (point: Vector) => corners.map(.[1..]) -- (low => low.rest.map(. - low.first).transposed) -- (span => span.determinant == 0 ? 0
       : ((span.inverse * [point[1..] - corners.first[1..]].transposed).flatten -- [1 - .sum, .].flatten) -- (λ =>
         λ.first > 0 && λ.rest.every(. >= 0) && λ.zip(corners).map(.0 * .1.x).sum > point.x ? orientation * (span.determinant > 0 ? 1 : -1) : 0))
   }
-  Cell := class: Hierarchy at: *, along: Integer[] = [], coefficient: Integer = 1 {
+  Cell := class: Hierarchy (at: *, along: Integer[] = [], coefficient: Integer = 1) => {
     rank => along.count
     key => (at, along)
     children | ∂ => along.enumerate.map(axis => [
@@ -258,10 +258,7 @@ Geometry := class {
   box (size: Vector) => Space.current.dimension -- (n => n == 2 ? rectangle(size) : Shape(rank: n - 1, children: all#.map(side =>
     Mesh(simplices(Vector((0..<n).map(. == side.axis && side.toward > 0 ? size[.] : 0)), size, (0..<n){!= side.axis}).map(Facet(.)), rank: n - 1))))
 
-  Shape := class: Hierarchy origin: Vector = Vector(), size: Vector = Vector(), width: (Length | Number | Stops)?, height: (Length | Number | Stops)?, aspect: Number?,
-    position: Position = Flow(), spacing: Spacing[] = [],
-    transform: Transform = Transform.identity,
-    boundary: Shape = space.vertices ? Shape(space: space, rank: 1, cells: space.vertices.edges{cells.at.contains(.from) != cells.at.contains(.to)})
+  Shape := class: Hierarchy (origin: Vector = Vector(), size: Vector = Vector(), width: (Length | Number | Stops)?, height: (Length | Number | Stops)?, aspect: Number?, position: Position = Flow(), spacing: Spacing[] = [], transform: Transform = Transform.identity, boundary: Shape = space.vertices ? Shape(space: space, rank: 1, cells: space.vertices.edges{cells.at.contains(.from) != cells.at.contains(.to)})) => { }
       : space.discrete ? Shape(space: space, rank: rank - 1, cells: cells.∂) : box(size),
     flow: block | inline | grid | layered = block, gap: Vector = Vector(), columns: Number = 1, wrap: boolean = false,
     align: (start | center | end | between | around | stretch | middle | justify)? = parent.align,
@@ -368,8 +365,7 @@ Geometry := class {
   }
   Box := Shape{boundary == box(size)}
   Ball := Shape{boundary == ellipse(size)}
-  Curve := class: Shape segments: Segment[], rank: Integer = 1,
-    boundary: Shape = segments is Loop ? Shape(rank: 0) : Shape(rank: 0, cells: [Cell(points.first, [], -1), Cell(points.last, [], 1)]) {
+  Curve := class: Shape (segments: Segment[], rank: Integer = 1, boundary: Shape = segments is Loop ? Shape(rank: 0) : Shape(rank: 0, cells: [Cell(points.first, [], -1), Cell(points.last, [], 1)])) => {
     points => segments.map(segment => if segment {
       is Quadratic => (1..16).map(t => Bezier([segment.previous.to, segment.control, segment.to], t / 16))
       is Cubic => (1..16).map(t => Bezier([segment.previous.to, segment.first, segment.second, segment.to], t / 16))
@@ -382,10 +378,10 @@ Geometry := class {
     facets => edges.map(Facet([.0, .1]))
   }
   Straight := Curve{points -- (p => p.every(((p.last - p.first).x * (. - p.first).y - (p.last - p.first).y * (. - p.first).x) == 0))}
-  Mesh := class: Shape facets: Facet[]
+  Mesh := class: Shape (facets: Facet[]) => { }
   Polygon := Shape{boundary is Curve{segments.every(. is Vector)}}
 
-  Fractal := class: Shape copies: Transform[] = [], initiator: Shape = box(size) {
+  Fractal := class: Shape (copies: Transform[] = [], initiator: Shape = box(size)) => {
     children => copies.map(copy => this ~~ (.transform = copy) ~~ (.origin = Vector()) ~~ (.parent = this))
     extent => size.map(. max -.).max * scale
     contains (point: Vector) => transform.inverse.applied(point) -- (p => initiator.winding(p) != 0 && children.some(.contains(p)))
@@ -409,7 +405,7 @@ Geometry := class {
   }
   Preparing := (resolution: Length) => Solving + Projecting + Approximating(resolution)
 
-  Transition := class duration: Quantity.Temporal, easing: Easing = ease
+  Transition := class (duration: Quantity.Temporal, easing: Easing = ease) => { }
   Settings := {
     {a} & {b} => (a, b)
     {a}, {b} => (a, b)

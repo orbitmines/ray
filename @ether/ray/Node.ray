@@ -265,7 +265,7 @@ Origin := class (method: Node, arguments: Node) => {
 {f}({a}) | {rest} ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | rest
 {rest} | {g}({b}) ^punctuation => rest | (g(b).copy ~~ .origin = Origin(g, b))
 
-~{literal label ^label} ^punctuation => this~label
+// (`~label` on its own is `this~label`: Node's rule above, `.` being this)
 Node &+= {
   .{literal property ^property}? ^punctuation => this[.property + "?"] ?? this[.property]?
 }

@@ -97,8 +97,8 @@ UI.TUI := class {
   static ramp = " .:-=+*#%@"
 
   // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
-  Start := class modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]
-  Stop := class start: Start = Start()
+  Start := class (modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]) => { }
+  Stop := class (start: Start = Start()) => { }
   written := {
     {text: String} => text
     {glyph: Char} => glyph as String
@@ -117,7 +117,7 @@ UI.TUI := class {
     {start: Start{!modes.contains(ANSI.Mode(9001, "h"))}} => Start([start.modes, [ANSI.Mode(9001, "h")]].flatten)
   }
 
-  Terminal := class: UI.Interface written: Compiler = UI.TUI.written, grid: Grid? = None {
+  Terminal := class: UI.Interface (written: Compiler = UI.TUI.written, grid: Grid? = None) => {
     emit (bytes) => @me/instance = bytes
     dynamically typed = @me/instance
     size =>

@@ -1,4 +1,4 @@
-Layout := class root: Location = @./.ether/external/@ {
+Layout := class (root: Location = @./.ether/external/@) => {
   checked_out (name: String) => root / ("@" + name)
   path (name: String, locations: String[], version) => locations.reduce(held = checked_out(name) / "$" => held / ("@" + .)) / "%" / ((version as String) -- (. ~= ⊢"%" ? .[1..] as String : .))
   changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)

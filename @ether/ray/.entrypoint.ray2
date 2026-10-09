@@ -21,6 +21,12 @@ nearest {head} => {body} =>
 // a rule's right side, a hole's name is what it took.)
 {name: type} =>
   {name}: {type}
+// The same way, a hole in a style, `{name ^style}`, is the hole `name` (`^` is a method answering what it is on: it is for
+// highlighting and nothing else), and one taken as written, `{literal name}`, the hole `name` (a hole is code already).
+{name ^style} =>
+  {name} ^{style}
+{literal name} =>
+  {name}
 
 // A name with a type and no value: declared here, its value the type (read, both its type and its value are of that kind),
 // the type read where it is written (in a call's arguments, `f(x: x)`, the caller's `x`); it answers `declared`. (Written
@@ -74,7 +80,15 @@ Node := .
 global := Node
 // (what a declaration, `x: T`, answers: nothing but that it declared)
 declared := { }
-// (code read in a node: its definitions are the node's)
+// A field named by its pattern as written, `{*}: T` (what no other field reads): kept under that text, not a rule (a head that
+// is one hole would read everything). A pattern is a body written.
+Pattern := {
+  {{written}} =>
+    written
+}
+{pattern: Pattern}:{ }{type} =>
+  .holding("{pattern}", {type})
+// (code read in a node: its definitions are the node's; a class's maker (what `X := class …` gives) has its own, see `class`)
 &+= {{block}} =>
   {block}
   .
@@ -106,8 +120,6 @@ declared := { }
 // looser), so `a === x[k]` is `a === (x[k])`.
 // What a value holds under a key: a key that is text, the member it names (`global["Decimal"]` is `Decimal`); any other, an
 // entry (keys the same when `===`). (Given one: see `x[key] = v` below.)
-{on}[{key}] =>
-  ({key} is String) ? {on}.{key} : {on}.held({key})
 // Partial arguments: `f<a: 5>` is `f` with those given first (code: inlined into each call before its own arguments): `g :=
 // f<a: 5>`, then `g(1)` gives `b`.
 {function}<{{given}}> =>
@@ -295,7 +307,7 @@ nearest ({{parameter}}) => {body} =>
     {body}
 nearest ({parameters}) => {body} =>
   ({arguments}) =>
-    ({parameters}) taking ({arguments})
+    ({parameters}) taking {arguments}
     goto recurring
     rebinding\
     ({parameters}) := given
@@ -337,7 +349,9 @@ nearest () => {body} =>
   {name} := (class: {parent} ({fields}) => {
     {block}
   })
+// (what it is given in made first when nothing has that name yet, `orbitmines.com := …`: a name not given reads as its text)
 {on}.{name} := {value} =>
+  ({on} := { }) if ({on}) === "{on}"
   {on} &+= {
     {name} := {value}
   }
@@ -364,119 +378,30 @@ nearest () => {body} =>
 {list}, {other} =>
   {list}
   {other}
-  ({list} === declared) ? {other} : (({other} === declared) ? {list} : ((({list}).listing ? {list} : Ray.new.append({list})).joined({other})))
+  ({list} === declared) ? {other} : (({other} === declared) ? {list} : ((({list}).listing ? ({list}).listed() : Listing.new.append({list})).joined({other})))
+// A record: names given values in parentheses, `(a: 1, b: 2)`, a node holding them (a call's own `(…)` is read before
+// this: its named arguments are inlined into it). Its names are words (`(made class: …)` is a group). (Its brackets
+// written as text, so it is not read as a closure.)
+{`(`}{name}:{ }{value}, {{rest}}{`)`} =>
+  (goto record) unless "{name}" contains " "
+  goto .
+  record\
+  {
+    {name}: {value}
+    {rest}
+  }
+{`(`}{name}:{ }{value}{`)`} =>
+  (goto record) unless "{name}" contains " "
+  goto .
+  record\
+  {
+    {name}: {value}
+  }
 
 // Ray: a chain of vertices, each holding a value (`head` the first vertex, `tail` the last; a vertex's `next`, `previous`).
 // Called on a Ray (`r.append(1)`), `.` in a method is that Ray.
-Ray := {
-  new =>
-    {
-      head := None
-      tail := None
-      listing := true
-    }
-  append (value) =>
-    link := {
-      next := None
-      previous := None
-    }
-    link.value := value
-    if .tail {
-      link.previous := .tail
-      .tail.next := link
-    } else {
-      .head := link
-    }
-    .tail := link
-    .
-  for (body) =>
-    at := .head
-    while at {
-      body(at.value)
-      at = at.next
-    }
-    .
-  first =>
-    .head ? .head.value : None
-  last =>
-    .tail ? .tail.value : None
-  empty =>
-    .head ? false : true
-  count () =>
-    counted := { }
-    at := .head
-    while at {
-      counted = { up := counted }
-      at = at.next
-    }
-    counted
-  rest () =>
-    made := Ray.new
-    at := .head ? .head.next : None
-    while at {
-      made.append(at.value)
-      at = at.next
-    }
-    made
-  prepend (value) =>
-    link := {
-      next := None
-      previous := None
-    }
-    link.value := value
-    if .head {
-      .head.previous := link
-      link.next := .head
-    } else {
-      .tail := link
-    }
-    .head := link
-    .
-  take () =>
-    first := .head
-    .head := first ? first.next : None
-    .tail := .head ? .tail : None
-    first ? first.value : None
-  find (predicate) =>
-    at := .head
-    while at {
-      return at.value if predicate(at.value)
-      at = at.next
-    }
-    None
-  some (predicate) =>
-    found := false
-    at := .head
-    while at {
-      if predicate(at.value) {
-        found = true
-        break
-      }
-      at = at.next
-    }
-    found
-  every (predicate) =>
-    !(.some((x) => !predicate(x)))
-  map (mapping) =>
-    made := Ray.new
-    .for((x) => made.append(mapping(x)))
-    made
-  without (value) =>
-    made := Ray.new
-    .for((x) => (made.append(x) unless x === value))
-    made
-  listed () =>
-    made := Ray.new
-    .for((x) => made.append(x))
-    made
-  joined (other) =>
-    if other.listing {
-      other.for((x) => .append(x))
-    } else {
-      .append(other)
-    }
-    .
-}
+// (the list the language reads (`[…]`, `a, b`) is `Listing`, made at the end, in Iterable: what the library adds to
+// Iterable is its too, below its own)
 // (anything but a Ray read on: not a listing)
 listing := false
 
@@ -485,7 +410,7 @@ listing := false
 // A value that is not a list (Ray's own say otherwise): its first is itself, nothing after it.
 first =>
   .
-rest () =>
+rest =>
   []
 
 // Whether a name is defined where it is read (the lookup's first layer only, not further out): `here x`.
@@ -499,7 +424,7 @@ here {name} =>
   {name} := {list}.first
 ({name}, {names}) from {list} =>
   {name} := {list}.first
-  ({names}) from {list}.rest()
+  ({names}) from {list}.rest
 
 // A closure with parameters called with none, `f()`: called with nothing given (each its default). (One without parameters
 // has its own `()`, read first.)
@@ -518,7 +443,7 @@ declared &+= {
 ({{parameter}}) taking {value} =>
   ({parameter}) gets (({value} === declared) ? None : {value})
 ({{parameter}}, {{parameters}}) taking {list} =>
-  ({parameter}, {parameters}) taking from ((({list}).listing) ? ({list}).head : Ray.new.append({list}).head)
+  ({parameter}, {parameters}) taking from ((({list}).listing) ? ({list}).head : Listing.new.append({list}).head)
 ({{parameter}}) taking from {vertex} =>
   ({parameter}) gets {vertex}.value
 ({{parameter}}, {{parameters}}) taking from {vertex} =>
@@ -544,9 +469,13 @@ declared &+= {
 
 // A list written: `[]` an empty Ray, `[a, b]` a Ray of both, `[a]` of one.
 [] =>
-  Ray.new
+  Listing.new
 [{inside}] =>
-  ({inside}).listing ? {inside} : Ray.new.append({inside})
+  ({inside}).listing ? {inside} : Listing.new.append({inside})
+// `x[k]`: a method, read on what it is on (so a class's own `[…]` is read first): a name, that member; else what it holds
+// under k. (After the list above: a head of the same shape after the one that made the pair is a call.)
+[{key}] =>
+  ({key} is String) ? .{key} : .held({key})
 
 // The rest read on what is before it, as parentheses around that would (`a -- .x` is `a.x`; `.` in what is read, that value);
 // `x ~~ …`: the same, answering `x`. Code read in a value, `.` that value (`x reading { … }`; `x with { … }`, below).
@@ -586,7 +515,7 @@ assume {{code}} =>
 | {other} =>
   {
     superposes := true
-    components := Ray.new.append(.).joined({other})
+    components := Listing.new.append(.).joined({other})
   }
 ? =>
   None | .
@@ -629,7 +558,7 @@ extended () =>
 // of it does too. (Made in a node holding `parent` and `extended`: they are read through it, not its own rules, which are what a
 // typed hole `{x: T}` reads.) With fields, written as a closure is, `class (x, y) => { … }`: the class's `instance`, that closure (a call
 // of it, the instance: in the class, its fields given the arguments; `of` its class), is what `X(…)` calls.
-class:{ }{parent} {{block}} =>
+made class:{ }{parent} {{block}} =>
   ({parent}.extended() &+= {
     parent := {parent}
     extended := () =>
@@ -640,11 +569,29 @@ class:{ }{parent} {{block}} =>
       {block}
     }
   }).made
+// (one without fields makes instances too: given nothing, or named arguments, code inlined into the making)
+class:{ }{parent} {{block}} =>
+  class: {parent} (arguments = None) => {
+    {block}
+  }
+// (the block read once for the class; again for each instance, only what is not a definition (`instanced`))
 nearest class:{ }{parent}{ }({fields}) => {{block}} =>
-  (class: {parent} {
+  (made class: {parent} {
     {block}
     instance := ({fields}) =>
       of := instance
+      (here of) instanced {
+        {block}
+      }
+      of := instance
+    // (what is added to the maker, `X &+= { … }`, is added to the class)
+    instance &+= {
+      {`&+=`} {{added}} =>
+        made &+= {
+          {added}
+        }
+        .
+    }
   }).instance
 class {{block}} =>
   class: Node {
@@ -665,6 +612,15 @@ descends (type) =>
 is {type} =>
   ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((c) => . is c) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((m) => m === .) : false)
 
+// `this`: what `.` is.
+this =>
+  .
+// `x ^style`: x, shown in that style (highlighting only); a head written so, the head.
+^{style} =>
+  .
+{head} ^{style} => {body} =>
+  {head} => {body}
+
 // A value checked against a type: reported when it is not one (None, not given yet, and anything against no type, pass).
 type := None
 checked {type} =>
@@ -676,6 +632,30 @@ checked {type} =>
 // `static`: what follows is read where it is (a class's block is read once, for the class).
 static {{statement}} =>
   {statement}
+
+// A class's block read for an instance: what declares is the class's (read once, for it); the rest (`&.caller[name] =
+// this`) is read in the instance. What declares: a definition (its line has the definer), and what these read.
+instanced {{code}} =>
+  goto instanced
+  {code}
+goto declaring
+{name} := {value}
+goto declaring
+{name}:{ }{type}
+goto declaring
+{name}:{ }{type}, {{rest}}
+goto declaring
+{name}:{ }{type} = {value}
+goto declaring
+{pattern: Pattern}:{ }{type}
+goto declaring
+{on}.{name} := {value}
+goto declaring
+({name}) := {value}
+goto declaring
+({name}, {names}) := {list}
+goto declaring
+static {{statement}}
 
 // `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
 from (x) =>
@@ -742,10 +722,11 @@ dynamic_in {program} {{code}} =>
       updating := false
       refreshing := []
       refresh (written) =>
+        // (its own flag given directly (`:=`): not a write the overrides below see)
         unless .updating {
-          .updating = true
+          .updating := true
           .refreshing.for((one) => (one.again() if one.reads contains written))
-          .updating = false
+          .updating := false
         }
     }
     {written} = {given} =>
@@ -774,6 +755,125 @@ dynamic_in {program} {{code}} =>
 // The classes the library adds to: what is iterable, an array of it, text (an array of characters), a number, a character
 // (a number), a program, a diagnostic.
 Iterable := class { }
+// A list: its own methods first, then what Iterable has (the library adds the rest there).
+Iterable &+= {
+  Listing := {
+    // (a class made of it, of it: not of Iterable's class)
+    made =>
+      { }
+    extended () =>
+      .made
+    new =>
+      {
+        head := None
+        tail := None
+        listing := true
+      }
+    append (value) =>
+      link := {
+        next := None
+        previous := None
+      }
+      link.value := value
+      if .tail {
+        link.previous := .tail
+        .tail.next := link
+      } else {
+        .head := link
+      }
+      .tail := link
+      .
+    for (body) =>
+      at := .head
+      while at {
+        body(at.value)
+        at = at.next
+      }
+      .
+    first =>
+      .head ? .head.value : None
+    last =>
+      .tail ? .tail.value : None
+    empty =>
+      .head ? false : true
+    count =>
+      counted := 0
+      at := .head
+      while at {
+        counted = counted + 1
+        at = at.next
+      }
+      counted
+    rest =>
+      made := Listing.new
+      at := .head ? .head.next : None
+      while at {
+        made.append(at.value)
+        at = at.next
+      }
+      made
+    prepend (value) =>
+      link := {
+        next := None
+        previous := None
+      }
+      link.value := value
+      if .head {
+        .head.previous := link
+        link.next := .head
+      } else {
+        .tail := link
+      }
+      .head := link
+      .
+    take () =>
+      first := .head
+      .head := first ? first.next : None
+      .tail := .head ? .tail : None
+      first ? first.value : None
+    find (predicate) =>
+      at := .head
+      while at {
+        return at.value if predicate(at.value)
+        at = at.next
+      }
+      None
+    some (predicate) =>
+      found := false
+      at := .head
+      while at {
+        if predicate(at.value) {
+          found = true
+          break
+        }
+        at = at.next
+      }
+      found
+    every (predicate) =>
+      !(.some((x) => !predicate(x)))
+    map (mapping) =>
+      made := Listing.new
+      .for((x) => made.append(mapping(x)))
+      made
+    without (value) =>
+      made := Listing.new
+      .for((x) => (made.append(x) unless x === value))
+      made
+    listed () =>
+      made := Listing.new
+      .for((x) => made.append(x))
+      made
+    joined (other) =>
+      if other.listing {
+        other.listed().for((x) => .append(x))
+      } else {
+        .append(other)
+      }
+      .
+  }
+}
+Listing := Iterable.made.Listing
+Ray := Listing
 Array := class: Iterable { }
 String := class: Array { }
 Number := class { }

@@ -1,19 +1,12 @@
-Identity := class keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.Digest = algorithms.digest, signing: Encoding.Signing = algorithms.signing,
-  agreement: Encoding.Agreement = algorithms.agreement, handshake: Language = algorithms.handshake, wrapping: Language = algorithms.wrapping, cipher: Encoding.Symmetric = algorithms.cipher,
-  printed_key: Encoding.Key?, guardians: *[] = [@ether],
-  certificates: Identity.Certificate[] = [], vetoed: Byte[][] = [],
-  revoke: Identity.Threshold = 1 of keys,
-  add: Identity.Threshold = (2 min keys.count) of keys,
-  rotate: Identity.Threshold = (2 min keys.count) of [keys, next].flatten,
-  recover: Identity.Threshold = 2 of [printed_key, guardians].flatten.compact after 7 days vetoable by 1 of keys {
+Identity := class (keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.Digest = algorithms.digest, signing: Encoding.Signing = algorithms.signing, agreement: Encoding.Agreement = algorithms.agreement, handshake: Language = algorithms.handshake, wrapping: Language = algorithms.wrapping, cipher: Encoding.Symmetric = algorithms.cipher, printed_key: Encoding.Key?, guardians: *[] = [@ether], certificates: Identity.Certificate[] = [], vetoed: Byte[][] = [], revoke: Identity.Threshold = 1 of keys, add: Identity.Threshold = (2 min keys.count) of keys, rotate: Identity.Threshold = (2 min keys.count) of [keys, next].flatten, recover: Identity.Threshold = 2 of [printed_key, guardians].flatten.compact after 7 days vetoable by 1 of keys) => {
 
   static algorithms = (signing: $.ed25519, agreement: $.x25519, handshake: $.noise, digest: $.sha256, wrapping: $.hpke, cipher: $.chacha20poly1305)
 
-  static Threshold := class count: Number, signers: *[], wait: Quantity.Temporal = 0 seconds, veto: Identity.Threshold? {
+  static Threshold := class (count: Number, signers: *[], wait: Quantity.Temporal = 0 seconds, veto: Identity.Threshold?) => {
     met (event: History.Commit, identity: Identity) => event.signature#{event.covers(.) && identity.counts(.by, signers, event.stamp)}.map(.by).unique.count >= count
   }
 
-  static Certificate := class key: Encoding.Key, until: Time = Time.now + 30 days, scope: * = *, world: World? {
+  static Certificate := class (key: Encoding.Key, until: Time = Time.now + 30 days, scope: * = *, world: World?) => {
     expiring (at: Time = Time.now) => at + 1 day >= until
   }
 
@@ -50,7 +43,7 @@ Identity := class keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.Di
 
 // A delegation is bound to its holder: it names who may act on it (`to`, a character by its root, or any narrowing),
 // and only that one, verified, acts on it (`Instance.delegated`); the signature covers `to`, so it cannot be renamed.
-Delegation := class from: Character, to: *, scope: Access = Access(), until: Time = Time.now + 1 day, signature: Encoding.Signed? {
+Delegation := class (from: Character, to: *, scope: Access = Access(), until: Time = Time.now + 1 day, signature: Encoding.Signed?) => {
   hash => from.policy().digest.write(Language.ray.write((from.root, to is Character ? to.root : to, scope, until)) as Byte[]).bytes
   valid (at: Time = Time.now) => at < until && signature.valid && signature.value == hash && from.certified(signature.by, World.ether.clock.now)
   covers (method, target) => valid() && scope.allows(method) && (!scope.filter || scope.filter.entered(target, None))

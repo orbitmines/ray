@@ -15,7 +15,7 @@ Language.Direct := class: Language {
       shape.effects{. is Geometry.Blur}.map(blur => { .blurred(shape.pixels_inside.map(shape.placed.applied(.)), blur.radius as px) })
     ])
   }
-  Screen := class raster: Geometry.Raster {
+  Screen := class (raster: Geometry.Raster) => {
     seen (at: Geometry.Vector) => Geometry.Space.screen.seen(at, Geometry.Vector(raster.width, raster.height), Geometry.Vector(1, 1))
     at (point: Geometry.Vector) => seen(point) -- (cell => raster.at(cell.x, cell.y))
     put (point: Geometry.Vector, color: Geometry.Color) => seen(point) -- (cell => raster.put(cell.x, cell.y, color))
@@ -59,12 +59,12 @@ Language.Direct := class: Language {
   ).flatten, paint)
   level := Geometry.Preparing(1px) + rules
 
-  Font := class font: Geometry.Font {
+  Font := class (font: Geometry.Font) => {
     file => font.family.map(Fonts.named).first
     glyph (character: Char) => $.opentype.read(file.held as Byte[])[character]
   }
 
-  Display := class: UI.Interface target: Location, title: String = "" {
+  Display := class: UI.Interface (target: Location, title: String = "") => {
     dynamically event: @me/instance
     start => { (@me/device/opened).held() } when @me/device/opened changes
     stop => None

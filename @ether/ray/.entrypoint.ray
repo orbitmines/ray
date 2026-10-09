@@ -13,7 +13,7 @@ Fielded => @js $.reader(s => /^[\p{L}\p{N}_]+: /u.test(s) ? s : undefined)
 ({fields Fielded}) =>
   record := @made Node
   record &+= { naming := record }
-  record with { fields }
+  @given record fields
   record
 {{inside}} =>
   made := @made Node
@@ -297,6 +297,8 @@ Method &+= {
   // (a class's own method without a name: how the class is called, `C(1, 2)`)
   static ({parameters Unled}) => @own (@between "(" ")" parameters)
   chainable {head Method} => head
+  // (`compounds op (x)`: also what `x op= y` writes, T4.21)
+  compounds {head Method} => head
   right-to-left {head Method} => @leftward head
   // (a pattern applied on what is written after it: `right-to-left {align: start | center}`, `center x`)
   right-to-left {name Captured} => @leftward (@named name)

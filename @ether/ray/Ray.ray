@@ -77,9 +77,12 @@ Iterable &+= {
   contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
   partition (predicate) => [this[{predicate}]], [this[{!predicate(.)}]]
   batch | chunk (size: Number) => empty ? [] : [this[..<size]], this[size..].chunk(size)
-  concatenated => reduce(acc = [] => acc, .)
-  flatten => map(. is Iterable && !(. is String) ? .flatten : [.]).concatenated
-  flatten (levels: Number) => levels == 0 ? this : map(. is Iterable && !(. is String) ? .flatten(levels - 1) : [.]).concatenated
+  concatenated =>
+    made := []
+    this.for(part => part.for(element => made.append(element)))
+    made
+  flatten => map(element => (element is Iterable && !(element is String)) ? element.flatten : [element]).concatenated
+  flatten (levels: Number) => levels == 0 ? this : map(element => (element is Iterable && !(element is String)) ? element.flatten(levels - 1) : [element]).concatenated
   union (other: Iterable) => this, other[{!this.contains(.)}]
   intersection (other: Iterable) => this[{other.contains(.)}]
   disjoint (other: Iterable) => intersection(other).empty

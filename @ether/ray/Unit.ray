@@ -19,19 +19,21 @@ Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Uni
   amount => quantities.last.quantity
   in (target: Unit) => Unit.converted(this.amount, this.unit, target)
   as (target: Unit) => Quantity(quantities: [(quantity: this.in(target), unit: target)])
-  finer (other: Quantity) => Quantity(quantities: [(1, unit)]).in(other.unit) >= 1 ? other.unit : unit
+  finer (other: Quantity) => (Quantity(quantities: [(quantity: 1, unit: this.unit)]).in(other.unit) >= 1) ? other.unit : this.unit
 
   chainable == (other: Quantity) => in(finer(other)) == other.in(finer(other))
   chainable < (other: Quantity) => in(finer(other)) < other.in(finer(other))
   chainable > (other: Quantity) => other < this
   chainable < (other: Number) => ERROR `a quantity does not compare with a plain number`
   chainable > (other: Number) => ERROR `a quantity does not compare with a plain number`
-  compounds + (other: Quantity) => Quantity(quantities: [(in(finer(other)) + other.in(finer(other)), finer(other))])
-  compounds - (other: Quantity) => Quantity(quantities: [(in(finer(other)) - other.in(finer(other)), finer(other))])
-  compounds * (times: Number) => Quantity(quantities: quantities.map((quantity, unit) => (quantity * times, unit)))
+  compounds + (other: Quantity) => Quantity(quantities: [(quantity: in(finer(other)) + other.in(finer(other)), unit: finer(other))])
+  compounds - (other: Quantity) => Quantity(quantities: [(quantity: in(finer(other)) - other.in(finer(other)), unit: finer(other))])
+  compounds * (times: Number) => Quantity(quantities: [(quantity: amount * times, unit: unit)])
   compounds * (per: Quantity) => unit is Unit.Rate ? Quantity(quantities: [(amount * per.in(unit.denominator), unit.numerator)])
     : ERROR `a quantity is multiplied by another only as a rate by what it is per`
   ± | +- (uncertainty: Quantity) => this - uncertainty | this + uncertainty
+  min (other: Quantity) => this < other ? this : other
+  max (other: Quantity) => this > other ? this : other
 
   compounds / (unit: Unit) => Quantity(quantities: quantities.map((quantity, from) => (quantity, from / unit)))
 

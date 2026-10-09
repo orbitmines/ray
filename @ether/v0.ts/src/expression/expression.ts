@@ -1199,7 +1199,7 @@ export class Host {
     // (a statement inside a closure run on an element (`reduce`'s step) that begins by reading on from a value: on the element, `.origin = …`)
     if (code.statement && this.element_bodies.length > 0) { const top = this.element_bodies[this.element_bodies.length - 1]; if (top.text === code.text && top.b <= code.b && code.e <= top.e) { const o = this.read_on(code); if (o) r = o; } }
     // (an argument that begins by reading on from a value: a closure of that value)
-    if (code.argument && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code) || this.reads_element(code, r)) return this.element_closure(code); }
+    if (code.argument && r && !this.on_element(code)) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code) || this.reads_element(code, r)) return this.element_closure(code); }
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
     if (r === undefined || r.e < e) {
       const from = r ? r.e : code.b, unread = s.slice(from, e).trim();
@@ -1943,6 +1943,15 @@ export class Host {
   // an argument that begins by reading on from a value: a closure of one value, what each such reading in it reads on (T19)
   element = '\u0000element'; elements = 0;
   // (code whose operands read on from a value: `10 - .`, `.a + .b`; not inside a pair of its own, `f(.x)`, which is its own)
+  // (code directly inside the closure of an element being run, not inside a pair written in it: its `.` is that element (T19's
+  // boundary: the argument is the closure, not each argument inside it))
+  on_element(code: Code): boolean {
+    const top = this.element_bodies[this.element_bodies.length - 1];
+    if (!top || top.text !== code.text || code.b < top.b || code.e > top.e || (code.b === top.b && code.e === top.e) || this.element_of_ctx(code.ctx) === undefined) return false;
+    const s = code.text.s; let depth = 0;
+    for (let i = top.b; i < code.b; i++) { if (this.pairs.has(s[i]) && !this.quotes.has(s[i])) depth++; else if (this.closers.has(s[i]) && !this.quotes.has(s[i])) depth--; }
+    return depth <= 0;
+  }
   reads_element(code: Code, r: Read | undefined, depth = 0): boolean {
     const s = code.text.s;
     for (let x = r; x; x = x.on) {

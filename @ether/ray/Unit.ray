@@ -17,7 +17,8 @@ Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Uni
 
   unit => quantities.last.unit
   amount => quantities.last.quantity
-  in (target: Unit) => quantities.map(part => (Quantity(quantities: [part]) as target).amount).sum
+  in (target: Unit) => Unit.converted(this.amount, this.unit, target)
+  as (target: Unit) => Quantity(quantities: [(quantity: this.in(target), unit: target)])
   finer (other: Quantity) => Quantity(quantities: [(1, unit)]).in(other.unit) >= 1 ? other.unit : unit
 
   chainable == (other: Quantity) => in(finer(other)) == other.in(finer(other))
@@ -36,6 +37,7 @@ Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Uni
 
   static Temporal = Quantity{unit == Unit.Temporal}
 }
+Quantity.components.hierarchy &= Ordered
 
 Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural {
   static Normalizers := class {
@@ -79,17 +81,11 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
 
   chainable == (other: Unit) => this === other || name == other.name
 
-  convert (convert: (From < Number) => To < Number, ToUnit: Unit) => {
-    FromUnit = static
-
-    global.Quantity<From>{.unit == this} &+= {
-      as (=== ToUnit): Quantity<To>{unit == ToUnit} => convert(this)
-    }
-    global.Quantity<To>{.unit == ToUnit} &+= {
-      as (=== FromUnit): Quantity<From>{unit == FromUnit} => convert⁻¹(this)
-    } if convert⁻¹
-  }
-
+  // (what it is in another unit: a conversion read at the time, `x * k + b` (a linear one); backwards, its inverse)
+  convert (convert, ToUnit: Unit) => (@field this "converting" (to: ToUnit, by: convert)) -- this
+  static converted (x, from: Unit, to: Unit) => (from == to) ? x : (((@owns from "converting") && Unit.reaches(from.converting.to, to)) ? Unit.converted(from.converting.by(x), from.converting.to, to) : ((@owns to "converting") ? Unit.inverted(Unit.converted(x, from, to.converting.to), to.converting.by) : None))
+  static inverted (y, by) => (y - by(0)) / (by(1) - by(0))
+  static reaches (from: Unit, to: Unit) => from == to || ((@owns from "converting") && Unit.reaches(from.converting.to, to))
   offset (offset: Number, ToUnit: Unit) => convert (x: Number) => x + offset, ToUnit
   multiple (multiple: Number, ToUnit: Unit) => convert (x: Number) => x * multiple, ToUnit
 

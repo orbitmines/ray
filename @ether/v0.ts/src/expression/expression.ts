@@ -842,6 +842,8 @@ export class Host {
       const r = prev && 'lit' in prev && prev.lit.includes(this.learned.definer) ? e : statement && 'lit' in eq.pieces[0] ? this.rest(eq, text, at, e, ctx) : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : [];
       // (an atom: as far as an operand goes, else just the name there, `0` in `0..<n`)
       if (atom) { const w = this.name_end(text, at, e); if (w > at && w < r) ends.push(w); }
+      // (written right after another capture: also as far as what is written keeps its kind, `16px` in `16px min 8px`)
+      if (prev && !('lit' in prev) && r > at) { const kind = (c: string | undefined) => c === undefined ? 0 : /\p{N}/u.test(c) ? 1 : /[\p{L}_]/u.test(c) ? 2 : 3; let w = at + 1; while (w < r && kind(text.s[w]) === kind(text.s[at])) w++; if (w < r) ends.push(w); }
       // (what hugs a literal, opening a pair: to where that pair closes, `f(a).b`)
       if (prev && 'lit' in prev && !this.blank(prev.lit[prev.lit.length - 1]) && this.pairs.has(text.s[at]) && !this.quotes.has(text.s[at])) { const c = this.scan(text, at + 1, e, () => {}); if (c < e && text.s[c] === this.pairs.get(text.s[at])) ends = [c + 1]; } }
     else {
@@ -1644,7 +1646,7 @@ export class Host {
       if (sub === NOT) return NOT;
       if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) return NOT;
       for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.default_of(F, eq.node, x));
-      const I = new Ray(eq.node); I.scope = true; I.method = true; I.caller = code.ctx; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
+      const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; const I = new Ray(W); I.scope = true; I.method = true; I.caller = code.ctx; I.sees = eq.node; F.outer = I; F.sees = undefined;
     }
     // (what a form declares first, where it is not given it; the capture it is applied with, `this`)
     if (eq.receiver) {

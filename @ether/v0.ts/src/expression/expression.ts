@@ -71,6 +71,8 @@ export class Code {
   argument = false;
   // (a word handed through a capture: read past the frame holding that capture, which would name it again)
   past?: Ray;
+  // (what one capture alone captured, `{x} => …`: that rule does not read it again)
+  of?: Eq;
   constructor(public text: Text, public b: number, public e: number, public ctx: Ray, public floor = 0) {}
   get s() { return this.text.s.slice(this.b, this.e); }
 }
@@ -1187,6 +1189,10 @@ export class Host {
   }
   walking: Code[] = [];
   walk1(code: Code): unknown {
+    if (code.of) { const of = code.of; of.busy = (of.busy ?? 0) + 1; try { return this.walk1_(code); } finally { of.busy--; } }
+    return this.walk1_(code);
+  }
+  walk1_(code: Code): unknown {
     if (TRACE && code.statement) { this.depth_++; if (this.depth_ < Number(TRACE)) writeSync(2, `${' '.repeat(this.depth_)}${code.text.name}:${code.text.s.slice(0, code.b).split(this.learned.end).length} ${JSON.stringify(code.s.slice(0, 60))}\n`); try { return this.walk2(code); } finally { this.depth_--; } }
     return this.walk2(code);
   }
@@ -1728,7 +1734,7 @@ export class Host {
   // captures bound in a frame: code, read where written each time it is named; one with a reader (or a type) a value, what that
   // reads it as, read once, here; false when one is not read so
   captured(eq: Eq, F: Ray, caps: Cap[], text: Text, at: Ray): boolean {
-    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); if (c.unread) (F.codes ??= new Map()).set(c.name, k); F.m.set(c.name, c.unread ? text.s.slice(c.b, c.e).trim() : c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : this.argued(this.written(k))); }
+    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); if (eq.pieces.length === 1) k.of = eq; if (c.unread) (F.codes ??= new Map()).set(c.name, k); F.m.set(c.name, c.unread ? text.s.slice(c.b, c.e).trim() : c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : this.argued(this.written(k))); }
     for (const c of caps) if ((c.reader || c.type !== undefined) && c.b < c.e && !c.unread) {
       // (while what reads its captures is read, the rule reads nothing itself)
       const k = new Code(text, c.b, c.e, at, c.floor);
@@ -1954,7 +1960,7 @@ export class Host {
     return this.force(v);
   }
   // (code given as an argument: marked so, as a copy)
-  argued(c: Code): Code { if (c.argument) return c; const a = new Code(c.text, c.b, c.e, c.ctx, c.floor); a.argument = true; a.word = c.word; a.past = c.past; return a; }
+  argued(c: Code): Code { if (c.argument) return c; const a = new Code(c.text, c.b, c.e, c.ctx, c.floor); a.argument = true; a.word = c.word; a.past = c.past; a.of = c.of; return a; }
   // an argument that begins by reading on from a value: a closure of one value, what each such reading in it reads on (T19)
   element = '\u0000element'; elements = 0;
   // (code whose operands read on from a value: `10 - .`, `.a + .b`; not inside a pair of its own, `f(.x)`, which is its own)

@@ -556,8 +556,8 @@ export class Host {
     const l = x.lit.trimEnd(); if (l.length > 0 && l !== x.lit && !x.eq.ctx.scope && !x.eq.node && !this.bracket(l[0])) this.trailing.add(l);
   }
   // whether a line starts with what reads on from a value (and is not a definition): it goes on with the line above (G2.13)
-  leads(s: string, at: number): boolean {
-    const { end, definer, space } = this.learned, line = s.slice(at, s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at));
+  leads(s: string, at: number, upto?: number): boolean {
+    const { end, definer, space } = this.learned, line = s.slice(at, upto ?? (s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at)));
     if (line.includes(space + definer)) return false;
     const j = s.indexOf(space, at);
     for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0] && x.eq.pieces.length > 1 && !this.shorter(l, { name: '', s }, at) ) return true; }
@@ -1913,8 +1913,9 @@ export class Host {
   // (code that begins by reading on from a value (`.count`, `!= x`), read so whole: that reading)
   read_on(code: Code): Read | undefined {
     const s = code.text.s; let b = code.b, e = code.e; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
-    if (b + 1 >= e || this.blank(s[b + 1]) || !this.leads(s, b)) return undefined;
-    const o = this.on(read_of(this.implicit, false, [], b, b), code.text, e, code.ctx, code.floor);
+    if (b + 1 >= e || !this.leads(s, b, e)) return undefined;
+    // (` . + 1`: one character written apart, the value it reads on itself)
+    const o = this.on(read_of(this.implicit, false, [], b, this.blank(s[b + 1]) ? b + 1 : b), code.text, e, code.ctx, code.floor);
     return o.e >= e ? o : undefined;
   }
   element_closure(code: Code): Ray {
@@ -1926,7 +1927,7 @@ export class Host {
   // the value the nearest such closure was called with, from where a reading on it is read
   element_of(F: Ray): unknown { return this.element_of_ctx(F.caller); }
   element_of_ctx(ctx: Ray | undefined): unknown {
-    for (let n: Ray | undefined = ctx; n; n = n.caller ?? n.outer) { if (n.has(this.element)) return this.force(n.m.get(this.element)); if (!n.rule && !n.scope) break; }
+    for (let n: Ray | undefined = ctx; n; n = n.caller ?? n.outer) { if (n.has(this.element)) return this.force(n.m.get(this.element)) ?? this.none; if (!n.rule && !n.scope) break; }
     return undefined;
   }
   // the value a frame was applied on: the nearest that has one

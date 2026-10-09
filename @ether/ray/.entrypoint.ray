@@ -105,6 +105,7 @@ class: {parent} {header} {{block}} => Class.made_of(parent, header, block)
 class: {parent} {header} => Class.made_of(parent, header, None)
 class {header} => Class.made_of(None, header, None)
 class: {parent} => Class.made_of(parent, None, None)
+class => Class.made_of(None, None, None)
 
 // `(x, y) := a, b`: each name, the value in its place, as a method's parameters are given what it is given in order (declared
 // before `:=`: what it reads first). (each declared where the statement is read)
@@ -139,6 +140,14 @@ Node &+= {
   // give two); what it does, below
   , {other Expression} => ((@of this) === Ray ? this.listed : (@made Ray).append(this)).joined(other)
 }
+// `with settings { … }`, `with settings` (L§6.3): what the settings write is written for the block (put back after it), or the rest
+// of the context the `with` is in, and everything called from there (declared before `=`: the settings are any code, `with x = v`)
+with {settings} {{body}} =>
+  written := @writing settings
+  answer := @run (Program(code: body))
+  @unwritten written
+  answer
+with {settings} => @writing settings
 // `x = v`: where `x` is declared (the first statement writes a name held further out there); `x.m = v`: on `x`
 {assigned_name Unspaced} = {assigned_value} =>
   assigned_name => assigned_value
@@ -199,6 +208,8 @@ ClassField &+= {
 // `x.rest`: the rest read by `x` (its own, then its class's, then the base's): `x.m`, `x.m(a)`. `f(a, b)`: the arguments read by
 // `f` (a closure: its parameters; a class: its construction); `f()`: `f` itself.
 Node &+= {
+  // (`.[i]`: `this[i]`, read on from a value as `x[i]` is: `xs.map(.[1])`)
+  .[{index_at Expression}] => this[index_at]
   .{rest this} => rest
   ({arguments this}) => arguments
   () => this
@@ -497,6 +508,21 @@ Class &+= {
     }
     made with { block }
     made
+}
+// The precedence of the operators on values: a head binds tighter the later it is first declared. Ranges and comparisons are
+// declared here, before `+` (below) and the arithmetic (`js.kinds.ray`, Number.ray): `0..<2 * n`, `a + 1 > b`
+Operators := @made Node
+Operators &+= {
+  ..{last} => None
+  ..<{last} => None
+  .. {last} => None
+  ..< {last} => None
+  == {other} => None
+  != {other} => None
+  < {other} => None
+  <= {other} => None
+  > {other} => None
+  >= {other} => None
 }
 // `T + { … }`: a class made of `T` with what the block declares (both its components)
 Node &+= {

@@ -55,7 +55,7 @@ Language.Direct := class: Language {
     edges{(.0.y <= y) != (.1.y <= y)}.map(.0.x + (y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)).sort.chunk(2).map((a, b) => (a..<b).map(x => (at: Geometry.Vector(x, y), sample: Geometry.Vector(x, y))))
   ).flatten, paint)))
   stroked (outline: Geometry.Shape, transform: Geometry.Transform, width: Geometry.Length, paint: Geometry.Paint?) => painted(outline.edges.map((a, b) => (transform.applied(a), transform.applied(b))).map((a, b) =>
-    (0..<a.distance(b) as px).map(step => a.mix(b, step / a.distance(b)) -- (point => (-(width / 2)..width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
+    (0..<a.distance(b) as px).map(step => a.mix(b, step / a.distance(b)) -- (point => (-(width / 2) .. width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
   ).flatten, paint)
   level := Geometry.Preparing(1px) + rules
 

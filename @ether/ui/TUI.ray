@@ -76,7 +76,7 @@ UI.TUI := class {
         styles: (ANSI.Attribute.bold if look.font.weight >= 600) | (ANSI.Attribute.italic if look.font.style == italic) | (ANSI.Attribute.negative if look.styles.contains("selected"))) -- (written => { .put(at, written) }))
     )).flatten
     {canvas: Geometry.Shape{content is Program && !(content is Choice)}} => canvas.content.rendered(Language.Direct.level) -- (rows => canvas.cell_area.map(at => (at - canvas.cell_at) -- (dot =>
-      ANSI.Cell(braille(rows[dot.y * 4..<dot.y * 4 + 4].map(.[dot.x * 2..<dot.x * 2 + 2].map(.alpha > 0)))) -- (written => { .put(at, written) })
+      ANSI.Cell(braille(rows[dot.y * 4 ..< dot.y * 4 + 4].map(.[dot.x * 2 ..< dot.x * 2 + 2].map(.alpha > 0)))) -- (written => { .put(at, written) })
     )))
     {shape: Geometry.Shape} => []
   }

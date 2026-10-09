@@ -84,12 +84,7 @@ Program &+= {
 
 // `with settings { … }`, `with settings` (L§6.3): what the settings write is written `@ ->` (Almanac A3) for the block, or the
 // rest of the context the `with` is in, and everything called from there. (settings that are a block: what it holds)
-with {settings} {{body: Balanced}} ^keyword =>
-  written := @writing settings
-  answer := (body**)()
-  @unwritten written
-  answer
-with {settings} ^keyword => @writing settings
+// (declared in the entrypoint, before `=`)
 
 Terminating := Program{terminating}
 

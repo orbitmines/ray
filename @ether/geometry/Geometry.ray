@@ -60,6 +60,7 @@ Geometry := class {
   }
 
   Vector := Elementwise{every(. is Length | Number)}{length == Space.current.dimension} + {
+    static () => Vector(0, 0)
     static (x: Length | Number = 0, y: Length | Number = 0, z: Length | Number = 0) => (z == 0 ? [x, y] : [x, y, z]) -- (made => (@also made Vector) -- made)
     x => this[0] ?? 0
     y => this[1] ?? 0
@@ -179,7 +180,7 @@ Geometry := class {
   all := Side{axis < Space.current.dimension}#
   Edges := (Length?)[] + {
     static (top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px, front: Length? = 0px, back: Length? = 0px) as (=== Edges) => [left, right, bottom, top, front, back][..<2 * Space.current.dimension]
-    static (length: Length?) as (=== Edges) => (0..<2 * Space.current.dimension).map(length)
+    static (length: Length?) as (=== Edges) => (0 ..< 2 * Space.current.dimension).map(length)
     [side: Side] => this[side.ordinal]
     top => this[Geometry.top]
     right => this[Geometry.right]
@@ -263,9 +264,9 @@ Geometry := class {
     } else {
       parent ? parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y) : origin
     }
-    spaced (from: border | itself) => (0..<2 * space.dimension).map(i => spacing{.from == from}.map(.[i]){!= None} -- (.empty ? None : .sum))
-    inside => spaced(border).map(. ?? 0px)
-    outside => spaced(itself).map(. ?? 0px)
+    spaced (from: border | itself) => (0 ..< 2 * space.dimension).map(i => spacing{.from == from}.map(.[i]){!= None} -- (.empty ? None : .sum))
+    inside => spaced(border).map(. ?? 0px) -- (made => (@also made Edges) -- made)
+    outside => spaced(itself).map(. ?? 0px) -- (made => (@also made Edges) -- made)
     outer => size + outside.total
     content_height => children.map(size.y - .origin.y + .outside.bottom).max ?? size.y
     texts => reachable{.content is String}
@@ -314,7 +315,8 @@ Geometry := class {
     laid (room: Length) => with Font.inherited = em {
       size = Vector(measured("width", room - outside.left - outside.right), size.y)
       arranged
-    } -- this
+      this
+    }
     arranged => with Font.inherited = em {
       inner = size.x - inside.left - inside.right
       flowing = children{.position is Flowing}
@@ -341,7 +343,8 @@ Geometry := class {
       (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? inside.top + intrinsic(inner) : bottom) + inside.bottom))) if parent
       flowing.for(.origin = Vector(.origin.x, size.y - .origin.y - .size.y))
       children{!(.position is Flowing)}.for(.positioned)
-    } -- this
+      this
+    }
     positioned => (position is Fixed ? root.size : parent.size) -- (frame => spaced(itself) -- (inset => {
       laid(inset.left != None && inset.right != None ? frame.x - inset.left - inset.right : frame.x)
       (size = Vector(size.x, frame.y - inset.top - inset.bottom)) if inset.top != None && inset.bottom != None

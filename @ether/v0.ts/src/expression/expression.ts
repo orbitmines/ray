@@ -479,8 +479,10 @@ export class Host {
   subs = new WeakMap<Ray, Eq[]>();
   // (a closure of several parameters given one value: its elements, in order, as `(a, b) => …` reads `[x, y]`)
   destructured(eq: Eq, F: Ray, v: unknown): boolean {
-    const ps = eq.node?.params; if (!(eq.ctx.closure || (eq.node?.own && eq.node.closing === ")")) || !ps || ps.length < 2 || !(v instanceof Ray) || v === this.none || !this.has(v, "head")) return false;
+    const ps = eq.node?.params; if (!(eq.ctx.closure || (eq.node?.own && eq.node.closing === ")")) || !ps || ps.length < 2 || !(v instanceof Ray) || v === this.none) return false;
+    // (one that has parts: its first part read, `v[0]` (a list's first element, an entry's key))
     const T = new Ray(this.global); T.scope = true; T.m.set('\u0001v', v);
+    const t0 = this.element_texts[0] ??= { name: 'element', s: '\u0001v[0]' }, x0 = this.walk(new Code(t0, 0, t0.s.length, T)); if (x0 === undefined || x0 === this.none) return false;
     ps.forEach((p, i) => { const t = this.element_texts[i] ??= { name: 'element', s: '\u0001v[' + i + ']' }; const x = this.walk(new Code(t, 0, t.s.length, T)); F.m.set(p, (x === undefined || x === this.none) && this.defaulted_param(eq.node!, p) ? this.default_of(F, eq.node, p) : x); });
     return true;
   }

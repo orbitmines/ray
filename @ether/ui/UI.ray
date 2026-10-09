@@ -233,8 +233,23 @@ String &+= {
   highlighted (language: Language | String) => (language is String ? Language.named(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = marked("code") => acc.marked(.style, .from, .to))
 }
 
-[p: Geometry.all, px: Geometry.horizontal, py: Geometry.vertical, pt: Geometry.top, pb: Geometry.bottom, pl: Geometry.left, pr: Geometry.right].for (word, side) => [(word, border), (word.replace("p", "m"), itself)].for (shorthand, from) => {
-  `shorthand` {amount: Number | Geometry.Length} ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(side) = UI.Theme.scaled(amount), from)
+// (each side's padding word, `p…`, from the border, and margin word, `m…`, from the shape itself: written out, as a loop over
+// `[p: Geometry.all, …]` with a `` `word` `` head defined every word as the first one (open))
+Node &+= {
+  right-to-left p ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.all) = UI.Theme.scaled(this), border)
+  right-to-left px ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.horizontal) = UI.Theme.scaled(this), border)
+  right-to-left py ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.vertical) = UI.Theme.scaled(this), border)
+  right-to-left pt ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.top) = UI.Theme.scaled(this), border)
+  right-to-left pb ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.bottom) = UI.Theme.scaled(this), border)
+  right-to-left pl ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.left) = UI.Theme.scaled(this), border)
+  right-to-left pr ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.right) = UI.Theme.scaled(this), border)
+  right-to-left m ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.all) = UI.Theme.scaled(this), itself)
+  right-to-left mx ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.horizontal) = UI.Theme.scaled(this), itself)
+  right-to-left my ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.vertical) = UI.Theme.scaled(this), itself)
+  right-to-left mt ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.top) = UI.Theme.scaled(this), itself)
+  right-to-left mb ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.bottom) = UI.Theme.scaled(this), itself)
+  right-to-left ml ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.left) = UI.Theme.scaled(this), itself)
+  right-to-left mr ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.right) = UI.Theme.scaled(this), itself)
 }
 
 Unit(name: "viewport width", symbol: "vw")

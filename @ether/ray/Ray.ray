@@ -110,7 +110,8 @@ Iterable &+= {
     enumerating_at := 0
     this.for(enumerated_value => enumerated.append((index: enumerating_at, value: enumerated_value)) -- (enumerating_at = enumerating_at + 1))
     enumerated
-  zip (other: Iterable) => empty || other.empty ? [] : [(first, other.first)], rest.zip(other.rest)
+  // (each pair a list of two: `[a].append(b)`, which a list `a` does not open; up to the shorter one)
+  zip (other: Iterable) => other.count -- (other_count => this.enumerate{zipped => zipped.index < other_count}.map(zipped => [zipped.value].append(other[zipped.index])))
   pairs (other: Iterable) => map(a => other.map(b => (a, b))).flatten(1)
   join (separator) => this.empty ? "" : (this.rest.empty ? this.first : this.first + separator + this.rest.join(separator))
   random => drawn(Random.below(map(.weight ?? 1).sum))

@@ -16,6 +16,9 @@ Blend := enum normal | multiply | screen | overlay | darken | lighten | differen
 (normal, multiply, screen, overlay, darken, lighten, difference) := Blend
 Overflow := enum visible | clip | scroll
 (visible, clip, scroll) := Overflow
+// where spacing is measured from: the shape's border (padding), or itself (margin)
+SpacedFrom := enum border | itself
+(border, itself) := SpacedFrom
 
 Geometry := class {
   Length := Quantity{unit is (Unit.px | Unit.pt | Unit.em | Unit.rem | Unit.vw | Unit.vh | Unit.column | Unit.row | Unit.m)}
@@ -435,10 +438,13 @@ Node &+= {
   right-to-left {aligned_as: Alignment} ^keyword => Geometry.Box(align: aligned_as, children: [this])
 }
 
-[xs: 0px, sm: 576px, md: 768px, lg: 992px, xl: 1200px].for (word, width) => {
-  Number &+= {
-    right-to-left `word` ^keyword => Geometry.Stop(width, this)
-  }
+// (written out: a loop over `[xs: 0px, …]` with a `` `word` `` head defined every word as the first one (open))
+Number &+= {
+  right-to-left xs ^keyword => Geometry.Stop(0px, this)
+  right-to-left sm ^keyword => Geometry.Stop(576px, this)
+  right-to-left md ^keyword => Geometry.Stop(768px, this)
+  right-to-left lg ^keyword => Geometry.Stop(992px, this)
+  right-to-left xl ^keyword => Geometry.Stop(1200px, this)
 }
 
 String &+= {

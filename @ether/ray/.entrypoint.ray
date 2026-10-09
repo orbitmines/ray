@@ -190,7 +190,7 @@ Node &+= {
     colon_shared ? (@field colon_field "owner" @here) : None
     colon_shared ? (@field colon_field "word" colon_word) : None
     // (what it declares, read into what declares it: its name and its type as written, after what was declared before it (`fields`, T26))
-    colon_declared := (colon_head || colon_shared) ? (@made Node) : None
+    colon_declared := (colon_head || colon_shared || (colon_naming && (@owns @here "ordered"))) ? (@made Node) : None
     colon_declared ? (@field colon_declared "name" colon_word) : None
     colon_declared ? (@field colon_declared "type" (@later colon_type)) : None
     colon_declared ? (@field colon_declared "before" ((@owns @here "declared") ? (@member @here "declared") : None)) : None
@@ -496,6 +496,23 @@ Branch &+= {
 [] => @made Ray
 // (`[x]` is a new list holding `x`, a list included; `[a, b]` the list written there, L§1.2)
 [{listed_inside: Expression}] => listed_inside === None ? (@made Ray) : ((@owns listed_inside "commas") ? listed_inside.listed : (@made Ray).append(listed_inside))
+// `[a: 1, b: 2]`: entries in order (T6.6: an entry is its value, `.key` its key; its parts, in order, its key and its value: what
+// `(k, v) => …` is given)
+Entry := @made Node
+Entry &+= {
+  [entry_part: Number] => (entry_part == 0) ? this.key : this.value
+  static of (entry_key, entry_value) => (@made Entry) ~~ ((made_entry) => @field made_entry "key" entry_key) ~~ ((made_entry) => @field made_entry "value" entry_value) ~~ ((made_entry) => @also made_entry entry_value)
+  static listed (entries_made, entry_record, declared) => (declared === None) ? None : (Entry.listed(entries_made, entry_record, @member declared "before") -- (entries_made.append(Entry.of(declared.name, @member entry_record declared.name))))
+}
+[{entries Fielded}] =>
+  entry_record := @made Node
+  entry_record &+= { naming := entry_record }
+  entry_record &+= { ordered := true }
+  @given entry_record entries
+  entry_record &+= { naming := None }
+  entries_made := @made Ray
+  Entry.listed(entries_made, entry_record, @member entry_record "declared")
+  entries_made
 
 // ---------------------------------------------------------------- classes (A7): the block is the constructor; what it defines, the class's too
 Node &+= {

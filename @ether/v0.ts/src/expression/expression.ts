@@ -685,7 +685,7 @@ export class Host {
     // (each reading of what starts there, with what reads on from it)
     // (what reads definitions is tried on a definition only: the definer written outside every bracket)
     let defines = false; if (this.contains(text, b, e, this.learned.definer)) this.scan(text, b, e, i => { if (this.literal(text, this.learned.space + this.learned.definer, i, e) >= 0) { defines = true; return false; } });
-    let self: unknown, held = false, near = 0, span: string | undefined; const found = new Map<string, boolean>();
+    let self: unknown, held = false, owned = false, near = 0, span: string | undefined; const found = new Map<string, boolean>();
     const word = s.slice(b, this.name_end(text, b, e));
     for (const n of this.reach(ctx)) {
       near++;
@@ -704,14 +704,15 @@ export class Host {
         // (unless it is the level the code runs at: a level is a scope, its rules read statements, `{p} x`)
         if (!n.scope && 'lit' in p0 && this.bracket(p0.lit[0]) && !this.level_of(ctx, n)) continue;
         // (a name a nearer context holds hides a member of that name further out)
-        if (held && 'lit' in p0 && (eq.pieces.length === 1 ? p0.lit === word : !n.scope && p0.lit.startsWith(word))) continue;
+        // (a value's own name, a field, hides a rule led by that word further out too: `stop.start` is the field, not the keyword, G2.4)
+        if (held && 'lit' in p0 && (eq.pieces.length === 1 ? p0.lit === word : (!n.scope && p0.lit.startsWith(word)) || (owned && p0.lit.trim() === word && /^[\p{L}_]/u.test(word)))) continue;
         // (one capture its reader reads, alone: what it reads, read at any precedence)
         const atom = eq.pieces.length === 1 && !('lit' in p0) && p0.reader !== undefined && n.scope;
         // (one led by a capture reads only what has its literals in it)
         if (!('lit' in p0) && !atom) { const k = this.needle(eq.pieces); if (k) { let h = found.get(k); if (h === undefined) found.set(k, h = (span ??= s.slice(b, e)).includes(k)); if (!h) continue; } }
         if ('lit' in p0 ? s[b] === p0.lit[0] && this.literal(text, p0.lit, b, e) >= 0 : eq.order >= floor || atom) { const r = this.match(eq, text, b, e, ctx, 0, b, []); if (r) { if (!n.scope) r.self = self; r.near = near; const o = this.on(r, text, e, ctx, floor, not); if (this.better(o, best)) best = o; } }
       }
-      if (word && (n.has(word) || this.has_key(n, word))) held = true;
+      if (word && (n.has(word) || this.has_key(n, word))) { held = true; if (!n.scope && n !== this.base) owned = true; }
     }
     // a name: up to where something reads on
     // (not where an operator is written: `!=` is no name)

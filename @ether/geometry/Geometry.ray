@@ -434,8 +434,16 @@ Edge &+= {
 {from} -> {to} over {during: Quantity.Temporal[]} ^keyword => Time.now -- (start => Geometry.Animated([Geometry.Stop(start + during.first, from), Geometry.Stop(start + during.last, to)], Geometry.linear))
 
 Node &+= {
-  // (`center x`: typed by the class, a superposition of named values is not read by name, open)
-  right-to-left {aligned_as: Alignment} ^keyword => Geometry.Box(align: aligned_as, children: [this])
+  // (`center x`: each alignment word applied on what is written after it; written out, as words, so that `middle center x` reads
+  // `center x` as `middle`'s argument (a right-to-left word does not end an operand))
+  right-to-left start ^keyword => Geometry.Box(align: Alignment.start, children: [this])
+  right-to-left center ^keyword => Geometry.Box(align: Alignment.center, children: [this])
+  right-to-left end ^keyword => Geometry.Box(align: Alignment.end, children: [this])
+  right-to-left between ^keyword => Geometry.Box(align: Alignment.between, children: [this])
+  right-to-left around ^keyword => Geometry.Box(align: Alignment.around, children: [this])
+  right-to-left stretch ^keyword => Geometry.Box(align: Alignment.stretch, children: [this])
+  right-to-left middle ^keyword => Geometry.Box(align: Alignment.middle, children: [this])
+  right-to-left justify ^keyword => Geometry.Box(align: Alignment.justify, children: [this])
 }
 
 // (written out: a loop over `[xs: 0px, …]` with a `` `word` `` head defined every word as the first one (open))

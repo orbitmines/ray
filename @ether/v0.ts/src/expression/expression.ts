@@ -1136,7 +1136,7 @@ export class Host {
     return this.scan(text, at, e, i => {
       if (i <= at) return;
       const list = this.infix.get(s[i]);
-      if (list) for (const x of list) if (x.lit.includes(space) && !((right || this.applies_after(s, at, i)) && x.lit.trim() === '') && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
+      if (list) for (const x of list) if (x.lit.includes(space) && !(right && x.lit.trim() === '') && !this.applies_after(s, at, i) && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
       if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false; }
     }, pairs);
   }

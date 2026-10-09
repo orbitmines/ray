@@ -28,6 +28,13 @@ UI := class {
   Scene := {
     // `f <- x` (F-B2): `x` given to what is written before, `middle center .map(g) <- { … }` is `middle center ({ … }.map(g))`
     {flow_into} <- {flowing} => flow_into(flowing)
+    // `n * x` (F-B3): `x` given that share of its parent's width (`100%`, `1` and `1.0` the same share, `4/12` four twelfths);
+    // `center * x`: `x` aligned, as `center x` is
+    {share Numeral}% * {shared} => Geometry.Box(width: share / 100, children: [shared])
+    {share_over Numeral}/{share_under Numeral} * {shared} => Geometry.Box(width: share_over / share_under, children: [shared])
+    {aligned_as: Alignment} * {aligned} => Geometry.Box(align: aligned_as, children: [aligned])
+    // (`*` reads one operand on each side: a share of an aligned `x`, `100% * center * x`, written as one)
+    {share Numeral}% * {share_aligned: Alignment} * {shared} => Geometry.Box(width: share / 100, children: [Geometry.Box(align: share_aligned, children: [shared])])
     {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
     {text: String} => Geometry.Box(content: text)
     {styled: String | Geometry.Shape | Choice}{ }{`^`}{{literal expression}} => Compiler.reduced(styled, Scene).styled_by(Program(code: expression**))

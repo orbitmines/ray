@@ -11,6 +11,7 @@
 import { writeSync } from 'fs';
 // EXPR_TRACE: each statement read at the top, as it starts
 const DBGSAY = process.env.DBGSAY;
+const DBGDEF = process.env.DBGDEF;
 const TRACE = process.env.EXPR_TRACE;
 export type Text = { name: string; s: string };
 const NONE: Eq[] = [];
@@ -54,6 +55,8 @@ export class Ray {
   place?: Place; places?: Map<string, Place>;
   // (a definition written again is read in a frame of its own, and added where it was written)
   into?: Ray;
+  // (a block read into a class, at its definition: what it declares only, D1)
+  defining?: boolean;
   // (code read into a value sees, after the value's, where it was written)
   sees?: Ray;
   // (a frame code is read in, inside a value: where the code was written; what it captures is read there)
@@ -625,6 +628,7 @@ export class Host {
     // (one that reads definitions reads heads: brackets there are a pattern's, not pairs)
     const heads = pieces.some(x => 'lit' in x && x.lit.includes(this.learned.definer));
     const eq = equivalence({ pieces, body, ctx, order: this.order, seq: this.order++, key, pairs: heads ? 0 : Infinity });
+    if (!(given instanceof Value)) { let l = this.by_key.get(key); if (!l) this.by_key.set(key, l = []); l.push(eq); }
     // (an operation on values binds as its head was first declared: what a class declares again keeps that place)
     if (!ctx.scope) { const first = this.heads.get(key); if (first === undefined) this.heads.set(key, eq.order); else eq.order = first; }
     // (a value under a name is a name: read where it is read, not a rule; declaring one changes no reading)
@@ -1754,7 +1758,7 @@ export class Host {
       else if (kind) { const v = c.block ? this.into(this.written(k), kind, r) : this.within(k, kind, false, r); if (v === NOT) return false; F.m.set(c.name, v); }
       else if (!(r instanceof Ray)) return false;
       // (code handed on, a word naming held code: that code, read into it)
-      else { const v = c.block ? this.into(this.written(k), r) : this.within(k, r, !dependent, undefined, eq); if (v === NOT) return false; F.m.set(c.name, v); }
+      else { const w = c.block ? this.written(k) : k, v = c.block ? this.into(w, r, undefined, w !== k) : this.within(k, r, !dependent, undefined, eq); if (v === NOT) return false; F.m.set(c.name, v); }
       (F.codes ??= new Map()).set(c.name, k);
       if (this.place) (F.places ??= new Map()).set(c.name, this.place);
     }
@@ -1896,6 +1900,8 @@ export class Host {
           // (the same block, written in the same frame: what it closes over is the same)
           const into = c.ctx.into, was = into && !into.scope ? this.defining.get(c.text)?.get(c.b) : undefined;
           if (was && was.cls !== into && was.written === c.ctx.outer && this.made(into!, was.cls)) continue;
+          // (a class's block read at its definition: only what declares is read now, the rest when something is made of it, D1)
+          if (c.ctx.defining && !this.declaring(c)) { if (DBGDEF) console.log('KEPT', (() => { const R = this.aside(() => this.reading(c)); return R ? (R.name ? 'NAME' : R.eq ? JSON.stringify(R.eq.key) + (R.eq === this.definer ? '!' : '') + (R.on ? ' on' : '') : 'none') : 'undef'; })(), c.text.name.split('/').pop() + ':' + c.text.s.slice(0, c.b).split('\n').length, JSON.stringify(c.s.slice(0, 70))); continue; }
           const d = this.diagnostics.length, mark = this.unread_log.length, n = into?.eqs.length ?? 0;
           this.ran_away = false; last = this.tried(c, false);
           // (one that did not end is not read again)
@@ -1933,11 +1939,12 @@ export class Host {
     catch (x) { if (x instanceof Jump && (x.kind === 'return' || x.kind === 'recur' ? this.methods : this.ordered) > 0) throw x; if (x instanceof Jump) { this.say(`Nothing to ${x.kind} from here.`, c.text, c.b, c.e); return undefined; } if (x instanceof Runaway && (this.settling > 1 || this.open > 0)) throw x; if (x instanceof Runaway) this.ran_away = true; this.say(`Failed: ${x instanceof Error ? x.message : String(x)}`, c.text, c.b, c.e); if (process.env.EXPR_STACK) console.log((x as Error).stack); return undefined; }
   }
   // A block read into a value: its names where it was written, what it declares the value's.
-  into(code: Code, r: Ray, self?: unknown): unknown {
+  // (`handed`: a block named where it is read, the code it names read: a class's own block, read into the class at its definition)
+  into(code: Code, r: Ray, self?: unknown, handed = false): unknown {
     // (into a rule's application: where it was applied; into a frame that reads into a value: into that value)
     if (r.scope && r.rule && r.caller) r = r.caller;
     if (r.scope && r.into) r = r.into;
-    const T = new Ray(code.ctx); T.scope = true; T.into = r; T.sees = r; T.self = self;
+    const T = new Ray(code.ctx); T.scope = true; T.into = r; T.sees = r; T.self = self; if (handed && r.eqs.some(x => x.key === 'components')) T.defining = true;
     return this.sequence(code, T);
   }
   body(eq: Eq, F: Ray): unknown {
@@ -2037,6 +2044,49 @@ export class Host {
   }
   // whether a context has a name of its own
   has(x: unknown, word: string): boolean { return x instanceof Ray && (x.has(word) || this.has_key(x, word)); }
+  // ---------------------------------------------------------------- what a statement declares (D1): its reading walked, not applied
+  // A statement declares when what it applies reaches the definer, or what the host declares with where it is applied (`&`,
+  // `@here`, a place). A rule's body is walked: each statement of it, and the captures it reads where it was applied (one of its
+  // captures read as a statement, or given on to what reads them there); a method's body is its own frame, what it declares its own.
+  // (per rule: whether applying it declares, and which captures it reads where it was applied; a cycle declares nothing)
+  declared_by = new Map<Eq, { self: boolean; through: Map<string, boolean> } | null>();
+  // (the rules a head may apply: each read alike, which one applies decided when it is applied)
+  by_key = new Map<string, Eq[]>();
+  declaring(c: Code): boolean { return this.aside(() => this.reaches(this.reading(c), c.text, c.ctx, false, true)); }
+  // (`ref`: a capture the host is given as it is, which declares only when it is itself the frame (`@field @here …`); `top`: read
+  // in the frame being declared into, where what a rule declares is that frame's (in a rule's body, its own frame's))
+  reaches(R: Read | undefined, text: Text, F: Ray, ref: boolean, top: boolean, through?: Map<string, boolean>): boolean {
+    if (!R) return false;
+    if (R.name) { const w = text.s.slice(R.b, R.e).trim(); if (through && this.declared_names?.has(w)) { if (!ref) through.set(w, false); else if (!through.has(w)) through.set(w, true); } return false; }
+    if (!R.eq) return false;
+    for (const eq of this.by_key.get(R.eq.key) ?? [R.eq]) {
+      if (eq === this.definer || eq.key === this.definer!.key || this.frame_native(eq)) return true;
+      if (ref) continue;
+      const d = this.declares(eq); if (top && d.self) return true;
+      for (const c of R.caps) if (d.through.has(c.name) && !c.unread && this.reaches(this.parse(text, c.b, c.e, F, c.floor), text, F, d.through.get(c.name)!, top, through)) return true;
+    }
+    return false;
+  }
+  declared_names?: Set<string>;
+  frame_native(eq: Eq): boolean { return /^\s*@js\b/.test(eq.body.s) && /F\.caller|\$\.(here|place_of|keep_place|assigning|declare|declare_at|define|declaring|statically)\(/.test(eq.body.s); }
+  declares(eq: Eq): { self: boolean; through: Map<string, boolean> } {
+    const k = this.declared_by.get(eq); if (k) return k; if (k === null) return { self: false, through: new Map() };
+    const out = { self: false, through: new Map<string, boolean>() };
+    if (eq === this.definer || eq.key === this.definer!.key) out.self = true;
+    // (the host's: what it does with the frame it is applied in; each capture given to it as it is)
+    else if (/^\s*@js\b/.test(eq.body.s)) { out.self = this.frame_native(eq); for (const p of eq.pieces) if ('cap' in p) out.through.set(p.cap, true); }
+    else if (!eq.native && !eq.node) {
+      this.declared_by.set(eq, null);
+      // (its captures read where it is applied: those not read by a type of their own; a block read into another of them, that one as given)
+      const names = new Set<string>(), all = new Set<string>(); for (const p of eq.pieces) if ('cap' in p) { all.add(p.cap); if (!p.reader || p.reader.s.trim() === this.learned.type) names.add(p.cap); }
+      for (const p of eq.pieces) if ('cap' in p && p.reader && all.has(p.reader.s.trim())) out.through.set(p.reader.s.trim(), true);
+      const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq;
+      const was = this.declared_names; this.declared_names = names;
+      try { for (const [b, e] of this.statements(eq.body)) if (this.reaches(this.parse(eq.body.text, b, e, F, eq.body.floor), eq.body.text, F, false, false, out.through)) out.self = true; }
+      finally { this.declared_names = was; }
+    }
+    this.declared_by.set(eq, out); return out;
+  }
   self(F: Ray): unknown { return this.self_(F.caller, new Set<Ray>()); }
   self_(n: Ray | undefined, seen: Set<Ray>): unknown {
     for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule && n.self.eqs.includes(n.rule)) return this.self_(n.self.outer, seen); if (n.self !== undefined) return n.self; if (n.written && !n.rule && !n.level && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = this.self_(n.sees, seen); if (v !== undefined) return v; } }

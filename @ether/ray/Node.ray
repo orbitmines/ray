@@ -161,7 +161,7 @@ Entry := class of: Node, at: Program? {
 }
 
 Node &+= {
-  location: *? = None
+  location: *?
   // where it is (`@x.@`, `value.@`)
   .@ ^punctuation => location
 }

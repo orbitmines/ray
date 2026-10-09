@@ -26,6 +26,8 @@ UI := class {
   }
 
   Scene := {
+    // (a shape is what it is, before anything that reads a value as a shape: a Box read as a Location became one)
+    {shape: Geometry.Shape} => shape
     // `f <- x` (F-B2): `x` given to what is written before, `middle center .map(g) <- { … }` is `middle center ({ … }.map(g))`
     {flow_into} <- {flowing} => flow_into(flowing)
     // `n * x` (F-B3): `x` given that share of its parent's width (`100%`, `1` and `1.0` the same share, `4/12` four twelfths);
@@ -45,7 +47,6 @@ UI := class {
     {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as String)])
       -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
     {placed: *{location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), Scene)])
-    {shape: Geometry.Shape} => shape
     {chosen: Choice} => Geometry.Box(content: chosen)
     {lines: \n} => Geometry.Box(flow: block, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)

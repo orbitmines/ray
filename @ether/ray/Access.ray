@@ -37,7 +37,7 @@ confidential = => Node.policy
 Node &+= {
   static policy: * = none
 
-  visibility => access ?? parent.visibility ?? Access(Node.policy, method: Access.Reading, target: this)
+  visibility => access ?? (parent ? parent.visibility : None) ?? Access(Node.policy, method: Access.Reading, target: this)
   // Grants on a derivative sit on the expression that names it, found by what that expression answers (L§8.2.2).
   granted => [visibility#, Program#{.access && .names(this)}.access#].flatten
   allows (who, called, at = None) => granted.find(.covers(who, called, at)) ~~ (.allowed = this if .)

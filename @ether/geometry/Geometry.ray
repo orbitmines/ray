@@ -160,6 +160,8 @@ Geometry := class {
     static pre := WhiteSpace(true, true, false)
     static pre_wrap := WhiteSpace(true, true, true)
     static pre_line := WhiteSpace(false, true, true)
+    // (the same when each of its fields is)
+    == (other) => (other is WhiteSpace) && spaces === other.spaces && lines === other.lines && wraps === other.wraps
   }
   Raster := Color[][] + {
     static blank (width: Number, height: Number) => (0..<height).map((0..<width).map(Color(0, 0, 0, 0)))

@@ -30,6 +30,8 @@ Defaulted => @js $.reader(s => /^[\p{L}_][\p{L}\p{N}_]* = /u.test(s) && !s.inclu
 Captured => @js $.reader(s => { const { open, close } = $.learned; if (!s.startsWith(open) || !s.endsWith(close)) return undefined; let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === open) d++; else if (s[i] === close && --d === 0 && i < s.length - 1) return undefined; } return s; })
 // a word: letters, digits, `_`
 Word => @js $.reader(s => /^[\p{L}\p{N}_]+$/u.test(s) ? s : undefined)
+// (text in quotes holding an escape, `\x`)
+Escaping => @js $.reader(s => s.includes("\\") ? s : undefined)
 
 // `(.m)`, `(. + 1)`: a closure of one value, what the rest is read on (`x ~~ (.s = 5)`, `xs.map((. + 1))`); a statement led by `.`
 // elsewhere reads on from what it is read in (`this`)
@@ -83,6 +85,8 @@ dynamically assert {conditions} => Dynamic(program: (Program(code: conditions**)
 
 // Text written in quotes: a String (its characters); in backticks, the same (a message, `` `assertion failed` ``).
 "{text}" => @text text
+// (text with an escape in it, `"\e[0m"`: each escape what it stands for (`String.unescaped`, String.ray's `Escape` table))
+"{escaping_text Escaping}" => (@text escaping_text).unescaped
 `{text}` => @text text
 
 // `&caller`: where the method it is read in was called from (the context its arguments were written in)
@@ -545,6 +549,16 @@ Class &+= {
     made with { block }
     made
 }
+// ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`; before the operators on values: `x if a < b`, `x while a < b`)
+{guarded} if {condition} => condition ? guarded : None
+{guarded} unless {condition} => condition ? None : guarded
+// `x while c`: `x` again while `c` holds
+{body} while {condition} =>
+  loop_again\
+  condition ? None : (goto loop_done)
+  body
+  goto loop_again
+  loop_done\
 // The precedence of the operators on values: a head binds tighter the later it is first declared. `is`, ranges and comparisons
 // are declared here, before `|` and `+` (below) and the arithmetic (`js.kinds.ray`, Number.ray): `x is A | B`, `0..<2 * n`, `a + 1 > b`
 Operators := @made Node
@@ -580,16 +594,6 @@ Node &+= {
   name := Class.made_of(None, header, block)
 {name Unspaced} := class: {parent} {header} => {{block}} =>
   name := Class.made_of(parent, header, block)
-// ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`)
-{guarded} if {condition} => condition ? guarded : None
-{guarded} unless {condition} => condition ? None : guarded
-// `x while c`: `x` again while `c` holds
-{body} while {condition} =>
-  loop_again\
-  condition ? None : (goto loop_done)
-  body
-  goto loop_again
-  loop_done\
 // `break`, `continue`: to the end, or the start again, of the loop they are in; `return x`: `x`, from the method it is in;
 // `recur`, `recur(arguments)`: the method it is in, again (from its start); `goto name`: on from the statement `name\`
 break => goto (&.caller).loop_break
@@ -716,7 +720,16 @@ Array &+= {
   components := (@made Node) &+= { hierarchy := [Iterable] }
 }
 // text (String.ray adds the rest): an Array of its characters
-String := class: Array { }
+String := class: Array {
+  // (text as written in quotes: each escape `\x` what the `Escape` table says it stands for, the rest as written; the code points
+  // are written in decimal while `U+…` and hexadecimal numerals do not read)
+  unescaped =>
+    unescaping := ""
+    escaping_next := false
+    this.for(unescaped_char => escaping_next ? ((unescaping = unescaping + String.escape_of(unescaped_char)) -- (escaping_next = false)) : ((unescaped_char.codepoint == 92) ? (escaping_next = true) : (unescaping = unescaping + unescaped_char)))
+    unescaping
+  static escape_of (escape_char) => escape_char.codepoint -- (escape_code => @character ((escape_code == 48) ? 0 : ((escape_code == 97) ? 7 : ((escape_code == 98) ? 8 : ((escape_code == 116) ? 9 : ((escape_code == 110) ? 10 : ((escape_code == 102) ? 12 : ((escape_code == 114) ? 13 : ((escape_code == 101) ? 27 : escape_code)))))))))
+}
 Number := class { }
 Char := class: Number { }
 // a program (P1): code, read where it was written (`context`); with `parameters`, a closure of them

@@ -83,6 +83,8 @@ global => @js $.global
 @typed {type} => @js $.name(F, $.typed(F, $.written(F.m.get("type"))) ? "true" : "false")
 // a node's parameter, in order; whether a value has a member of its own; one given to it; what one given nothing is
 @word => @js (() => { let n = F; while (n && !n.place) n = n.caller; return n?.place?.word; })()
+// (temporary, removed in A3 (a field's type read structurally from the class as Ray): the type a node's parameter is declared as)
+@field_type {node} {name} => @js (n => n instanceof Ray && n.types?.get(String($.get(F, "name"))) ? $.force(n.types.get(String($.get(F, "name")))) : undefined)($.get(F, "node"))
 @param {node} {index} => @js (n => n instanceof Ray && n.params ? n.params[$.get(F, "index")] : undefined)($.get(F, "node"))
 @owns {target} {name} => @js $.name(F, $.has($.get(F, "target"), $.get(F, "name")) ? "true" : "false")
 @field {target} {name} {value} => @js $.field_set($.get(F, "target"), $.get(F, "name"), $.get(F, "value"))

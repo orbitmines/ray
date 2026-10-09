@@ -309,7 +309,7 @@ Geometry := class {
 
     share (of: (Length | Number | Stops)?, room: Length) => of is Stops ? of.at(room) * room : of is Number ? of * room : of
     radii => radius.map(. is Number ? size * . : Vector(., .))
-    measured (along: "width" | "height", room: Length, content: Length = room) => (share(this.`along`, room) ?? content) -- (length =>
+    measured (along: "width" | "height", room: Length, content: Length = room) => (share(member(along), room) ?? content) -- (length =>
       fields[along].type -- (length max (share(.least, room) ?? length) min (share(.most, room) ?? length)))
     solve => arranged -- (solved = true) -- this
     laid (room: Length) => with Font.inherited = em {

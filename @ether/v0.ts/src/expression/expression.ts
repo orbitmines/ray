@@ -699,9 +699,12 @@ export class Host {
     const w = this.name_end(text, b, e); if (w > b && (!this.operator_at(text, b) || this.named_by(s, b, s.slice(b, w))) && !(this.infix.has(s[b]) && this.leads(s, b) && !this.named_by(s, b, s.slice(b, w)))) { const o = this.on(read_of(undefined, true, [], b, w), text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
     // (what begins with what reads on from a value, read whole by nothing else, reads on from what it is read in: `!= " "` in
     // `Char{!= " "}`)
-    if ((!best || best.e < e) && this.leads(s, b)) { const o = this.on(read_of(this.implicit, false, [], b, b), text, e, ctx, floor, not); if (o.e > b && this.better(o, best)) best = o; }
+    // (read whole by a rule of one capture alone (what reads anything): what reads on from a value, read as far, before it: `.first` in `5 - .first`)
+    const inside = this.element_bodies.length > 0 && ((x: Code) => x.text === text && x.b <= b && e <= x.e)(this.element_bodies[this.element_bodies.length - 1]);
+    const anything = inside && !!best?.eq && best.eq.pieces.length === 1 && 'cap' in best.eq.pieces[0];
+    if ((!best || best.e < e || anything) && this.leads(s, b)) { const o = this.on(read_of(this.implicit, false, [], b, b), text, e, ctx, floor, not); if (o.e > b && (this.better(o, best) || (anything && o.e >= best!.e))) best = o; }
     // (one character of what reads on, written apart, ` . + 1`: the value it reads on, itself)
-    if ((!best || best.e < e) && b + 1 < e && this.blank(s[b + 1]) && this.leads(s, b)) { const o = this.on(read_of(this.implicit, false, [], b, b + 1), text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
+    if ((!best || best.e < e) && (b + 1 === e || (b + 1 < e && this.blank(s[b + 1]))) && this.leads(s, b)) { const o = this.on(read_of(this.implicit, false, [], b, b + 1), text, e, ctx, floor, not); if (this.better(o, best)) best = o; }
     return best;
   }
   led(n: Ray): Map<string, number[]> {
@@ -1178,7 +1181,7 @@ export class Host {
     if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.definition(code); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.statement || (code.ctx.rule ? code.ctx.statement : false)); }
     let r = this.reading(code); const s = code.text.s;
     // (an argument that begins by reading on from a value: a closure of that value)
-    if (code.argument && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code)) return this.element_closure(code); }
+    if (code.argument && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code) || this.reads_element(code, r)) return this.element_closure(code); }
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
     if (r === undefined || r.e < e) {
       const from = r ? r.e : code.b, unread = s.slice(from, e).trim();
@@ -1885,7 +1888,7 @@ export class Host {
   }
   body(eq: Eq, F: Ray): unknown {
     // (an element closure's code: read on from the element where it begins by reading on (`.count`), not read whole by another rule)
-    if (eq.element) { const c = new Code(eq.body.text, eq.body.b, eq.body.e, F, eq.body.floor), o = this.read_on(c); if (o) return this.run(o, c); }
+    if (eq.element) { const c = new Code(eq.body.text, eq.body.b, eq.body.e, F, eq.body.floor); this.element_bodies.push(c); try { const o = this.read_on(c); return o ? this.run(o, c) : this.walk(c); } finally { this.element_bodies.pop(); } }
     if (eq.js === undefined) eq.js = this.located(eq.body) && this.interpreted.has(eq.body.text) ? this.js(eq) : this.accelerated?.(eq) ?? null;
     if (eq.js) return eq.js(F);
     // (a statement handed through, its functionality the capture it is: still a statement)
@@ -1910,6 +1913,23 @@ export class Host {
   argued(c: Code): Code { if (c.argument) return c; const a = new Code(c.text, c.b, c.e, c.ctx, c.floor); a.argument = true; a.word = c.word; a.past = c.past; return a; }
   // an argument that begins by reading on from a value: a closure of one value, what each such reading in it reads on (T19)
   element = '\u0000element'; elements = 0;
+  // (code whose operands read on from a value: `10 - .`, `.a + .b`; not inside a pair of its own, `f(.x)`, which is its own)
+  reads_element(code: Code, r: Read | undefined, depth = 0): boolean {
+    const s = code.text.s;
+    for (let x = r; x; x = x.on) {
+      if (x.eq === this.implicit) return true;
+      if (!x.eq || depth > 4) continue;
+      for (const c of x.caps) {
+        if (c.reader || c.type !== undefined || c.b >= c.e) continue;
+        let b = c.b, e = c.e; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
+        if (b >= e || this.pairs.has(s[b]) || this.quotes.has(s[b])) continue;
+        const sub = new Code(code.text, b, e, code.ctx, code.floor);
+        if (e === b + 1 && this.infix.has(s[b]) && !/[\p{L}\p{N}_]/u.test(s[b])) return true;
+        if (this.read_on(sub) || this.reads_element(sub, this.reading(sub), depth + 1)) return true;
+      }
+    }
+    return false;
+  }
   // (code that begins by reading on from a value (`.count`, `!= x`), read so whole: that reading)
   read_on(code: Code): Read | undefined {
     const s = code.text.s; let b = code.b, e = code.e; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
@@ -1918,6 +1938,7 @@ export class Host {
     const o = this.on(read_of(this.implicit, false, [], b, this.blank(s[b + 1]) ? b + 1 : b), code.text, e, code.ctx, code.floor);
     return o.e >= e ? o : undefined;
   }
+  element_bodies: Code[] = [];
   element_closure(code: Code): Ray {
     const into = new Ray(code.ctx); into.closure = true; this.elements++;
     const body = new Code(code.text, code.b, code.e, code.ctx, code.floor);

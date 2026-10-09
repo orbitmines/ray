@@ -8,6 +8,15 @@ Node &+= {
     contains (x) => conjoined.contains(x)
   }) this) other
 
+  // what it holds under a name given as text (`` x.`name` `` where `name` holds the text)
+  member (named: String) => @member this named
+  // its fields by name, each its `name` and `type`: what its class's header declares (temporary, until A3 reads them from the class
+  // as Ray: `@field_type`)
+  fields =>
+    made := @made Node
+    maker := @of this
+    ((maker !== None) && (@owns maker "header")) ? maker.header.for(piece => (piece is String) ? None : (@field made (@param piece 0) (name: @param piece 0, type: @field_type piece (@param piece 0)))) : None
+    made
   as (=== String) => ((@of this) && (@member (@of this) "header") && Language.patterned((@of this).header.head)) ? Language.part_written(this) : (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)

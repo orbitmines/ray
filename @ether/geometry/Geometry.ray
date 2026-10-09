@@ -431,7 +431,8 @@ Edge &+= {
 {from} -> {to} over {during: Quantity.Temporal[]} ^keyword => Time.now -- (start => Geometry.Animated([Geometry.Stop(start + during.first, from), Geometry.Stop(start + during.last, to)], Geometry.linear))
 
 Node &+= {
-  right-to-left {align: start | center | end | between | middle} ^keyword => Geometry.Box(align: align, children: [this])
+  // (`center x`: typed by the class, a superposition of named values is not read by name, open)
+  right-to-left {aligned_as: Alignment} ^keyword => Geometry.Box(align: aligned_as, children: [this])
 }
 
 [xs: 0px, sm: 576px, md: 768px, lg: 992px, xl: 1200px].for (word, width) => {

@@ -1553,7 +1553,7 @@ export class Host {
     // (a label is a place among the statements it is written with: named before any of them is read, so a statement can name one
     // further on)
     for (let x = st.next(); !x.done; x = st.next()) seen.push(x.value);
-    for (const c of seen) { const name = this.label_ahead(c); if (name !== undefined) this.add(c.ctx, [{ lit: name }], new Value(new Label(c), c)); }
+    for (const c of seen) { const name = this.label_ahead(c); if (name !== undefined) { const l = new Label(c); this.blocks.set(l, new Code(c.text, c.b, seen[seen.length - 1].e, c.ctx, c.floor)); this.add(c.ctx, [{ lit: name }], new Value(l, c)); } }
     this.ordered++;
     try {
       for (let i = 0; i < seen.length; i++) {
@@ -1836,13 +1836,15 @@ export class Host {
   sequence(code: Code, T: Ray): unknown {
     // (one statement: it alone)
     if (this.single(code)) { const one = this.splits.get(code.text)!.get(code.b)!.get(code.e)!.list[0]; return this.settle([stated(new Code(code.text, one.p, one.e, T))]); }
-    return this.settle(function* (h: Host) { for (const [b, e] of h.statements(code)) yield stated(new Code(code.text, b, e, T)); }(this));
+    return this.settle(function* (h: Host) { for (const [b, e] of h.statements(code)) yield stated(new Code(code.text, b, e, T)); }(this), code.e);
   }
   // Statements in order (each split once those before it were read: what they declare says where it ends); each that said
   // something (a name nothing holds yet, what nothing read) is read again once the others were, while that leaves fewer of them;
   // only the last time is what they say said. The value: what the last one gave.
-  settle(codes: Iterable<Code>): unknown {
+  settle(codes: Iterable<Code>, end?: number): unknown {
     let left: Iterable<Code> = codes, last: unknown;
+    // (a label among them: a place, named where it is written (as `in_order` names them), its entry the statements from it to the end)
+    const placed = end === undefined ? undefined : new Set<Code>();
     // (settled inside another settling: what it leaves unresolved is left for that one)
     const inner = this.settling++ > 0;
     try {
@@ -1854,6 +1856,7 @@ export class Host {
         for (const c of left) {
           const k = kept?.get(c);
           if (inner && k && k.adds === this.adds) { for (const [p, d] of k.left) this.note(p, d); continue; }
+          if (placed && !placed.has(c)) { placed.add(c); const name = this.label_ahead(c); if (name !== undefined && !c.ctx.has(name)) { const l = new Label(c); this.blocks.set(l, new Code(c.text, c.b, end!, c.ctx, c.floor)); this.add(c.ctx, [{ lit: name }], new Value(l, c)); } }
           if (final) { last = this.tried(c, !inner); continue; }
           // (a statement that defined what a class holds, read again into one of what is made of it: the class's already, A7)
           // (the same block, written in the same frame: what it closes over is the same)
@@ -2123,7 +2126,9 @@ class Later { constructor(public code: Code) {} read = false; value?: unknown; }
 // a jump out of what is being read: to the end, or the start again, of the loop it is in (`break`, `continue`), out of the method
 // it is in with a value (`return`)
 // a label's place: the statement it is, among those it is written with
-export class Label { constructor(public at: Code) {} }
+// (a place among statements; read as a value, the entry there (L§4.2, F-D13): the statements from it to the end, a block that
+// `Program(code: entry)()` runs)
+export class Label extends Ray { constructor(public at: Code) { super(); } }
 export class Jump { constructor(public kind: string, public value?: unknown, public to?: Ray) {} }
 const NOMEMO = !!process.env.EXPR_NOMEMO, NOSHARE = !!process.env.EXPR_NOSHARE, SHAPED = !process.env.EXPR_UNSHAPED, DEADLINE = Number(process.env.EXPR_DEADLINE ?? 0) * 1000, STACK = !!process.env.EXPR_CHAIN, SLOW = Number(process.env.EXPR_SLOW ?? 0);
 const MISSES = !!process.env.EXPR_MISSES, RULES = !!process.env.EXPR_RULES, ROUNDS = process.env.EXPR_ROUNDS, NOTS = !!process.env.EXPR_NOTS, DBGF = !!process.env.DBGF;

@@ -39,7 +39,8 @@ UI := class {
     {chosen: Choice} => Geometry.Box(content: chosen)
     {lines: \n} => Geometry.Box(flow: block, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
-    {site: *{fields.some(.name == "{*}")}} => Compiler.reduced(UI.Site(index: site).rendering, Scene)
+    // (what a path shows, an entry point (`{*}: Index`) run: its answer)
+    {site: *{fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering)(), Scene)
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
   }
 

@@ -85,8 +85,14 @@ dynamically assert {conditions} => Dynamic(program: (Program(code: conditions**)
 
 // Text written in quotes: a String (its characters); in backticks, the same (a message, `` `assertion failed` ``).
 "{text}" => @text text
-// (text with an escape in it, `"\e[0m"`: each escape what it stands for (`String.unescaped`, String.ray's `Escape` table))
-"{escaping_text Escaping}" => (@text escaping_text).unescaped
+// (text with an escape in it, `"\e[0m"`: each escape what it stands for)
+"{escaping_text Escaping}" =>
+  // (each `\x` what String.ray's `Escape` table says it stands for, its code point written in decimal while `U+…` and
+  // hexadecimal numerals do not read; the rest as written)
+  unescaping := ""
+  escaping_next := false
+  (@text escaping_text).for(unescaped_char => escaping_next ? ((unescaping = unescaping + (unescaped_char.codepoint -- (escape_code => @character ((escape_code == 48) ? 0 : ((escape_code == 97) ? 7 : ((escape_code == 98) ? 8 : ((escape_code == 116) ? 9 : ((escape_code == 110) ? 10 : ((escape_code == 102) ? 12 : ((escape_code == 114) ? 13 : ((escape_code == 101) ? 27 : escape_code))))))))))) -- (escaping_next = false)) : ((unescaped_char.codepoint == 92) ? (escaping_next = true) : (unescaping = unescaping + unescaped_char)))
+  unescaping
 `{text}` => @text text
 
 // `&caller`: where the method it is read in was called from (the context its arguments were written in)
@@ -720,16 +726,7 @@ Array &+= {
   components := (@made Node) &+= { hierarchy := [Iterable] }
 }
 // text (String.ray adds the rest): an Array of its characters
-String := class: Array {
-  // (text as written in quotes: each escape `\x` what the `Escape` table says it stands for, the rest as written; the code points
-  // are written in decimal while `U+…` and hexadecimal numerals do not read)
-  unescaped =>
-    unescaping := ""
-    escaping_next := false
-    this.for(unescaped_char => escaping_next ? ((unescaping = unescaping + String.escape_of(unescaped_char)) -- (escaping_next = false)) : ((unescaped_char.codepoint == 92) ? (escaping_next = true) : (unescaping = unescaping + unescaped_char)))
-    unescaping
-  static escape_of (escape_char) => escape_char.codepoint -- (escape_code => @character ((escape_code == 48) ? 0 : ((escape_code == 97) ? 7 : ((escape_code == 98) ? 8 : ((escape_code == 116) ? 9 : ((escape_code == 110) ? 10 : ((escape_code == 102) ? 12 : ((escape_code == 114) ? 13 : ((escape_code == 101) ? 27 : escape_code)))))))))
-}
+String := class: Array { }
 Number := class { }
 Char := class: Number { }
 // a program (P1): code, read where it was written (`context`); with `parameters`, a closure of them
@@ -737,7 +734,7 @@ Program := class {
   code: Node?
   parameters: Node?
   context: Node?
-  O: Node?
+  O: Node? = None
   // `p{O: level}`: the program, given what the block names (`settled`: not a name a program holds, which would be read in its place)
   {{settled}} =>
     this &+= { naming := true }

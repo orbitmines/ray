@@ -59,8 +59,8 @@ Geometry := class {
     == (other) => at == (other is Place ? other.at : other)
   }
 
-  Vector := Elementwise{every(. is Length)}{length == Space.current.dimension} + {
-    static (x: Length = 0, y: Length = 0, z: Length = 0) => (z == 0 ? [x, y] : [x, y, z]) -- (made => (@also made Vector) -- made)
+  Vector := Elementwise{every(. is Length | Number)}{length == Space.current.dimension} + {
+    static (x: Length | Number = 0, y: Length | Number = 0, z: Length | Number = 0) => (z == 0 ? [x, y] : [x, y, z]) -- (made => (@also made Vector) -- made)
     x => this[0] ?? 0
     y => this[1] ?? 0
     z => this[2] ?? 0

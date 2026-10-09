@@ -47,6 +47,20 @@ Possibilities := class values: Iterable {
 }
 Possibilities.components.hierarchy &= Iterable
 Possibilities &+= {
+  head => values.head
+  tail => values.tail
+  count => values.count
+  first => values.first
+  last => values.last
+  empty => values.empty
+  nonempty => values.nonempty
+  for (body) => values.for(body)
+  map (mapping) => values.map(mapping)
+  every (predicate) => values.every(predicate)
+  some (predicate) => values.some(predicate)
+  contains (x) => values.contains(x)
+  join (separator) => values.join(separator)
+  flatten => values.flatten
   erred => values.every(.erred)
   continuous => count is ∞ && !values.first?.next
   measure (within: Possibilities = this) => continuous ? values.last - values.first

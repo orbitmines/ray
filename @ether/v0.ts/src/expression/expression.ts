@@ -434,7 +434,10 @@ export class Host {
     const into = declares ? at.into ?? at : Object.assign(new Ray(handed ? body.ctx : at), { closure: node.spelled === '' });
     // (read again into what continues into a class that has it, from the same text: that one)
     if (declares && !into.scope) for (let n = into.outer; n && !n.scope; n = n.outer) { const was = n.eqs.find(x => x.node && x.body.text === body.text && x.body.b === body.b && x.body.e === body.e && x.body.ctx.outer === body.ctx.outer); if (was) return this.held_as(was); }
-    const { open, close, space } = this.learned, name = node.spelled, out: Eq[] = [];
+    const { open, close, space } = this.learned, out: Eq[] = [];
+    // (a name led by a pair around parameters, `(x: X) as (=== T)`: what is written there is given to it, as a capture)
+    let name = node.spelled!; const shut = this.pairs.get(name[0]);
+    if (shut !== undefined && name[0] !== open && !this.quotes.has(name[0])) { const j = this.scan(this.text_of('', name), 1, name.length, () => {}); if (j > 1 && name[j] === shut && name[j + 1] === space && j + 2 < name.length) name = open + name.slice(1, j) + close + name.slice(j + 1); }
     const r = node.params || typeof receiver !== 'string' ? this.given_name : receiver;
     // (what it is given: a capture no name written can be)
     const form = (pieces: Piece[], apart: boolean) => { const eq = this.add(node.params || !node.leftward ? into : this.global, pieces, body, node); eq.node = node; if (apart && eq.indexed) this.syntax++; eq.apart = apart; if (this.static_now > 0 || node.own) eq.own = true; if (!node.params) eq.receiver = r; out.push(eq); };
@@ -1175,7 +1178,7 @@ export class Host {
     if (this.definer && this.contains(code.text, code.b, code.e, this.needle(this.definer.pieces))) { const d = this.definition(code); if (d && this.names_held(code.text.s.slice(d.caps[0].b, d.caps[0].e), code.ctx)) return this.defined(new Code(code.text, d.caps[0].b, d.caps[0].e, code.ctx), new Code(code.text, d.caps[1].b, d.caps[1].e, code.ctx), code.ctx, code.statement || (code.ctx.rule ? code.ctx.statement : false)); }
     let r = this.reading(code); const s = code.text.s;
     // (an argument that begins by reading on from a value: a closure of that value)
-    if (code.argument && !code.statement && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit) return this.element_closure(code); }
+    if (code.argument && r) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit) return this.element_closure(code); }
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
     if (r === undefined || r.e < e) {
       const from = r ? r.e : code.b, unread = s.slice(from, e).trim();
@@ -1681,7 +1684,7 @@ export class Host {
   // captures bound in a frame: code, read where written each time it is named; one with a reader (or a type) a value, what that
   // reads it as, read once, here; false when one is not read so
   captured(eq: Eq, F: Ray, caps: Cap[], text: Text, at: Ray): boolean {
-    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); F.m.set(c.name, c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : (c.argument || eq.ctx.closure) ? this.argued(this.written(k)) : this.written(k)); }
+    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); F.m.set(c.name, c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : (c.argument || c.block || eq.ctx.closure) ? this.argued(this.written(k)) : this.written(k)); }
     for (const c of caps) if ((c.reader || c.type !== undefined) && c.b < c.e) {
       // (while what reads its captures is read, the rule reads nothing itself)
       const k = new Code(text, c.b, c.e, at, c.floor);
@@ -1884,7 +1887,7 @@ export class Host {
     if (eq.js === undefined) eq.js = this.located(eq.body) && this.interpreted.has(eq.body.text) ? this.js(eq) : this.accelerated?.(eq) ?? null;
     if (eq.js) return eq.js(F);
     // (a statement handed through, its functionality the capture it is: still a statement)
-    if (F.statement) { const w = eq.word ??= eq.body.s.trim(); const c = F.m.get(w); if (c instanceof Code) return this.walk(stated(new Code(c.text, c.b, c.e, c.ctx, c.floor))); }
+    if (F.statement) { const w = eq.word ??= eq.body.s.trim(); const c = F.m.get(w); if (c instanceof Code) { const k = stated(new Code(c.text, c.b, c.e, c.ctx, c.floor)); k.argument = c.argument; return this.walk(k); } }
     // (one statement: read as the one it is, a label of itself the only place a `goto` in it goes)
     const one = this.single(eq.body) ? this.splits.get(eq.body.text)!.get(eq.body.b)!.get(eq.body.e)!.list[0] : undefined;
     if (one) {

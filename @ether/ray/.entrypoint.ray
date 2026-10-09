@@ -268,10 +268,10 @@ false &+= {
 // What is inside a capture is read the same way: a capture is a parameter.
 Parameters := @context None
 Parameters &+= {
-  {first Parameters}, {rest Parameters} => [first].append(rest)
+  {first Parameters}, {rest Parameters} => ((@of first) === Ray ? first : [first]).append(rest)
   ({inside Parameters}) => inside
   // (a group of pieces, optional or repeated: its own piece, read as such)
-  ({group Parameters})? => None | group
+  ({group Parameters})? => None | ((@of group) === Ray ? group : [group])
   ({group Parameters})[] => group[]
   literal {target Parameters} => target
   {target Parameters} ^{style Text} => target
@@ -603,15 +603,23 @@ Node &+= {
   {{constraint}} =>
     made := @made Narrowing
     made.narrows := this
-    made.constraint := (it => (it with { constraint }) -- (said => (@applies said) ? said(it) : said))
+    made.constraint := (narrowed_it => (narrowed_it with { (constraint) }) -- (said => (@applies said) ? said(narrowed_it) : said))
     made
   // `x is T` (T4.10): whether `T` admits `x`: an instance of it (or of what is made of it); one of a superposition's components; what
   // a narrowing narrows, satisfying its constraint; a list of `T`s for `T[]`; else `T` itself
   is {type: Expression} => this.admitted_by(type)
   // (what the type holds, its own: not what its values hold, `("(", T, ")")`)
   admitted_by (type) => (@inside this type) || ((@member type "superposes") && (@member type "components").some((component) => this is component)) || ((@member type "narrows") && (this is (@member type "narrows")) && type.constraint(this)) || ((@inside type Listing) && this.every((element) => element is (@member type "of"))) || (@same this type)
-  // `x as T`: `x` converted to a `T` (a class's own `as (=== T) => …`); where none converts it, `x` when it is a `T`, else nothing
-  as {type} => (this is type) ? this : None
+  // `x as T`: `x` converted to a `T` (a class's own `as (=== T) => …`, or the `T`'s own `static (x: X) as (=== T) => …`, read in
+  // the `T`); where none converts it, `x` when it is a `T`, else nothing
+  as {as_type} =>
+    as_value := this
+    as_was := @member as_type "as_converting"
+    as_held := (as_value is as_type) || (@same as_was as_value)
+    @field as_type "as_converting" as_value
+    as_answer := as_held ? ((as_value is as_type) ? as_value : None) : (as_type with { (as_value) as as_type })
+    @field as_type "as_converting" as_was
+    as_answer
   // `x/name`: what `x` holds under `name`, read as `x.name` is (a path step, `@me/device/terminal`)
   /{rest this} => rest
 }

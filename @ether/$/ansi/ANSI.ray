@@ -27,8 +27,8 @@ ANSI := class: Language {
     cell (glyph: Char = " ") => Cell(glyph, foreground: colored("38"), background: colored("48"), styles: parameters.parameter{. is Attribute}#)
     static (cell: Cell) as (=== Style) => Style(parameters: [
       Attribute#{. is cell.styles},
-      [("38", cell.foreground), ("48", cell.background)]{.1}.map(Colored(.0, red: .1.red, green: .1.green, blue: .1.blue))
-    ].flatten.map((parameter: .)))
+      [[["38", cell.foreground]], ["48", cell.background]]{.[1]}.map(Colored(.[0], red: .[1].red, green: .[1].green, blue: .[1].blue))
+    ].flatten.map(it => (parameter: it)))
   }
   // The xterm 256-colour palette: the 16 system colours, a 6x6x6 cube and 24 greys (xterm 256colres.pl)
   static Levels = [0, 95, 135, 175, 215, 255]

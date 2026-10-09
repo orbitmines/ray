@@ -129,8 +129,9 @@ Section := class operator, operand? {
   continues => true
   (a, b?) => operand != None ? a [operator] operand : b != None ? a [operator] b : a [operator]
 }
-[x: Symbolic] ^operator => Section(operator: [x])
-[x: Symbolic]{b} ^operator => Section(operator: [x], operand: b)
+// (the operator as a list of one, built by appending: `[x]` here would read as this rule again when `x` holds a symbol)
+[x: Symbolic] ^operator => Section(operator: [] ~~ (made => made.append(x)))
+[x: Symbolic]{b} ^operator => Section(operator: [] ~~ (made => made.append(x)), operand: b)
 
 Cases := Program{written.nonempty && written.every(.code ~= (*, " => ", *))}
 if &+= {

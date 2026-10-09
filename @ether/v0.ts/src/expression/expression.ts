@@ -1919,7 +1919,7 @@ export class Host {
           const into = c.ctx.into, was = into && !into.scope ? this.defining.get(c.text)?.get(c.b) : undefined;
           if (was && was.cls !== into && was.written === c.ctx.outer && this.made(into!, was.cls)) continue;
           // (a class's block read at its definition: only what declares is read now, the rest when something is made of it, D1)
-          if (c.ctx.defining && !this.declaring(c)) { if (DBGDEF) console.log('KEPT', (() => { const R = this.aside(() => this.reading(c)); return R ? (R.name ? 'NAME' : R.eq ? JSON.stringify(R.eq.key) + (R.eq === this.definer ? '!' : '') + (R.on ? ' on' : '') : 'none') : 'undef'; })(), c.text.name.split('/').pop() + ':' + c.text.s.slice(0, c.b).split('\n').length, JSON.stringify(c.s.slice(0, 70))); continue; }
+          if (c.ctx.defining && !this.declares_now(c)) { if (DBGDEF) console.log('KEPT', (() => { const R = this.aside(() => this.reading(c)); return R ? (R.name ? 'NAME' : R.eq ? JSON.stringify(R.eq.key) + (R.eq === this.definer ? '!' : '') + (R.on ? ' on' : '') : 'none') : 'undef'; })(), c.text.name.split('/').pop() + ':' + c.text.s.slice(0, c.b).split('\n').length, JSON.stringify(c.s.slice(0, 70))); continue; }
           const d = this.diagnostics.length, mark = this.unread_log.length, n = into?.eqs.length ?? 0;
           this.ran_away = false; last = this.tried(c, false);
           // (one that did not end is not read again)
@@ -2070,14 +2070,18 @@ export class Host {
   declared_by = new Map<Eq, { self: boolean; through: Map<string, boolean> } | null>();
   // (the rules a head may apply: each read alike, which one applies decided when it is applied)
   by_key = new Map<string, Eq[]>();
-  declaring(c: Code): boolean { return this.aside(() => this.reaches(this.reading(c), c.text, c.ctx, false, true)); }
+  declares_now(c: Code): boolean { return this.aside(() => this.reaches(this.reading(c), c.text, c.ctx, false, true)); }
   // (`ref`: a capture the host is given as it is, which declares only when it is itself the frame (`@field @here …`); `top`: read
   // in the frame being declared into, where what a rule declares is that frame's (in a rule's body, its own frame's))
   reaches(R: Read | undefined, text: Text, F: Ray, ref: boolean, top: boolean, through?: Map<string, boolean>): boolean {
     if (!R) return false;
     if (R.name) { const w = text.s.slice(R.b, R.e).trim(); if (through && this.declared_names?.has(w)) { if (!ref) through.set(w, false); else if (!through.has(w)) through.set(w, true); } return false; }
     if (!R.eq) return false;
+    // (a block given where the statement is, that declares: what it declares is declared, into whatever it is read into (`Shape &+= { x: T }`))
+    if (!ref && top) for (const c of R.caps) if (c.block && !c.unread) { const k = new Code(text, c.b, c.e, F); for (const [b, e] of this.statements(k)) if (this.reaches(this.parse(text, b, e, F, c.floor), text, F, false, true)) return true; }
     for (const eq of this.by_key.get(R.eq.key) ?? [R.eq]) {
+      // (only the rules read alike: on a value, or where a statement is)
+      if (eq !== R.eq && !eq.ctx.scope !== !R.eq.ctx.scope) continue;
       if (eq === this.definer || eq.key === this.definer!.key || this.frame_native(eq)) return true;
       if (ref) continue;
       const d = this.declares(eq); if (top && d.self) return true;
@@ -2100,7 +2104,9 @@ export class Host {
       for (const p of eq.pieces) if ('cap' in p && p.reader && all.has(p.reader.s.trim())) out.through.set(p.reader.s.trim(), true);
       const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq;
       const was = this.declared_names; this.declared_names = names;
-      try { for (const [b, e] of this.statements(eq.body)) if (this.reaches(this.parse(eq.body.text, b, e, F, eq.body.floor), eq.body.text, F, false, false, out.through)) out.self = true; }
+      // (one statement alone is handed through: read where the rule is applied, what it declares is declared there)
+      const body_statements = [...this.statements(eq.body)];
+      try { for (const [b, e] of body_statements) if (this.reaches(this.parse(eq.body.text, b, e, F, eq.body.floor), eq.body.text, F, false, body_statements.length === 1, out.through)) out.self = true; }
       finally { this.declared_names = was; }
     }
     this.declared_by.set(eq, out); return out;

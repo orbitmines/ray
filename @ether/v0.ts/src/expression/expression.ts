@@ -75,12 +75,13 @@ export class Code {
   get s() { return this.text.s.slice(this.b, this.e); }
 }
 // A piece of a pattern: a literal, or a capture (named; `reader`: what reads its span, code read where it was written).
-export type Piece = { lit: string } | { cap: string; reader?: Code; type?: unknown };
+// (`unread`: a capture of its own (`{literal x}`): the code itself, not read: as a value, the String of what was written)
+export type Piece = { lit: string } | { cap: string; reader?: Code; type?: unknown; unread?: boolean };
 // An equivalence: its pattern, its functionality (code, read where it is applied; or the host's), where it was added, when.
 export type Eq = { own?: boolean; pieces: Piece[]; body: Code; ctx: Ray; order: number; seq: number; key: string; value?: boolean; operator?: boolean; pairs: number; busy?: number; native?: (F: Ray) => unknown; js?: ((F: Ray) => unknown) | null; word?: string; receiver?: string; apart?: boolean; node?: Ray; passing?: boolean; indexed?: boolean; element?: boolean; alone?: boolean };
 export type Diagnostic = { message: string; at: { text: Text; b: number; e: number } };
 type Learned = { open: string; close: string; space: string; definer: string; end: string; indent: string; type: string; add: string; typed?: string };
-type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; type?: unknown; block?: boolean; argument?: boolean };
+type Cap = { name: string; b: number; e: number; floor: number; reader?: Code; type?: unknown; block?: boolean; argument?: boolean; unread?: boolean };
 // What reading a span gave: an equivalence applied to captures (read on the value of `on`, or on `self`), or a name.
 type Place = { at: Ray; here: Ray; word: string; text?: Text; b?: number; e?: number; on?: Place };
 type Read = { eq?: Eq; name?: boolean; caps: Cap[]; on?: Read; self?: unknown; b: number; e: number; near?: number; from?: number };
@@ -399,13 +400,13 @@ export class Host {
       const N = this.named(''); N.params = []; const was = this.reading_node; this.reading_node = N;
       let v: unknown; try { v = this.aside(() => this.read_in(this.captured_by!, new Code({ name: 'capture', s: t }, 0, t.length, ctx))); } finally { this.reading_node = was; }
       const reader = N.types?.get(N.params[0]);
-      kept = v instanceof Ray && v.literal ? { name: '', lit: v.spelled } : (v === N || (v instanceof Ray && v.field_of === N)) && N.params.length === 1 ? { name: N.params[0], reader: reader ? reader.s : undefined } : null;
+      kept = v instanceof Ray && v.literal ? { name: '', lit: v.spelled } : (v === N || (v instanceof Ray && v.field_of === N)) && N.params.length === 1 ? { name: N.params[0], reader: reader ? reader.s : undefined, unread: v instanceof Ray && v.field_of === N && !!v.own } : null;
       if (!this.booting || kept) this.parameters_seen.set(t, kept);
     }
     if (kept?.lit !== undefined) return { lit: kept.lit };
-    return kept ? { cap: kept.name, reader: kept.reader !== undefined ? new Code(this.reader_text(kept.reader), 0, kept.reader.length, ctx) : undefined } : undefined;
+    return kept ? { cap: kept.name, reader: kept.reader !== undefined ? new Code(this.reader_text(kept.reader), 0, kept.reader.length, ctx) : undefined, unread: kept.unread || undefined } : undefined;
   }
-  parameters_seen = new Map<string, { name: string; reader?: string; lit?: string } | null>();
+  parameters_seen = new Map<string, { name: string; reader?: string; lit?: string; unread?: boolean } | null>();
   // `@define node receiver between`: what a definition's head was read as, defined: as written; with parameters, its name and
   // what it is given (after a space, or hugging it); applied right to left, at the top, `this` what is on its right (`receiver`).
   // Its functionality is read in a frame continuing into the node: what it is given is matched against its parameters (written
@@ -906,7 +907,7 @@ export class Host {
       const juxtaposed = i > 0 && ('cap' in eq.pieces[i - 1] || (i > 1 && 'lit' in eq.pieces[i - 1] && (eq.pieces[i - 1] as { lit: string }).lit.trim() === '' && 'cap' in eq.pieces[i - 2]));
       if (fixed && (n === at || !this.reads(fixed, text, at, n, eq, ctx, juxtaposed))) continue;
       const block = !!prev && 'lit' in prev && prev.lit.endsWith(this.learned.open) && !!next && 'lit' in next && next.lit.startsWith(this.learned.close);
-      caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, type: piece.type, block, argument: false });
+      caps.push({ name: piece.cap, b: at, e: n, floor, reader: piece.reader, type: piece.type, block, argument: false, unread: piece.unread });
       const r = this.match(eq, text, n, e, ctx, i + 1, start, caps);
       caps.pop();
       if (r) return r;
@@ -1707,8 +1708,8 @@ export class Host {
   // captures bound in a frame: code, read where written each time it is named; one with a reader (or a type) a value, what that
   // reads it as, read once, here; false when one is not read so
   captured(eq: Eq, F: Ray, caps: Cap[], text: Text, at: Ray): boolean {
-    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); F.m.set(c.name, c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : (c.argument || c.block || eq.ctx.closure) ? this.argued(this.written(k)) : this.written(k)); }
-    for (const c of caps) if ((c.reader || c.type !== undefined) && c.b < c.e) {
+    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); F.m.set(c.name, c.unread ? text.s.slice(c.b, c.e).trim() : c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : (c.argument || c.block || eq.ctx.closure) ? this.argued(this.written(k)) : this.written(k)); }
+    for (const c of caps) if ((c.reader || c.type !== undefined) && c.b < c.e && !c.unread) {
       // (while what reads its captures is read, the rule reads nothing itself)
       const k = new Code(text, c.b, c.e, at, c.floor);
       let r: unknown = c.type;

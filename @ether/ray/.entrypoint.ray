@@ -322,7 +322,8 @@ Parameters &+= {
   // (a group of pieces, optional or repeated: its own piece, read as such)
   ({group Parameters})? => None | ((@of group) === Ray ? group : [group])
   ({group Parameters})[] => group[]
-  literal {target Parameters} => target
+  // (a capture of its own: not read, its code, as a value the String of what was written)
+  literal {target Parameters} => @own target
   {target Parameters} ^{style Text} => target
   === {type Text} => @parameter given: type
   {target Text} => @parameter target

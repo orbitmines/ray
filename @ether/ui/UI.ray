@@ -180,7 +180,7 @@ UI := class {
       })) max 0px -- (to => ((transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !@me/device/preferences.reduced_motion)
         -- (scrolled = Geometry.Vector(scrolled.x, to)))
     label => children{.content is String}.content.join(" ")
-    styled (name: String) => (styles &= name) -- (narrowed(UI.Theme.`name`.narrowing) if UI.Theme.`name`) -- (color = UI.Theme.painted(name, palette ?? UI.Theme.palette) ?? color) -- this
+    styled (name: String) => (styles &= name) -- (narrowed(UI.Theme.member(name).narrowing) if UI.Theme.member(name)) -- (color = UI.Theme.painted(name, palette ?? UI.Theme.palette) ?? color) -- this
     styled_by (expression: Program) => styled(expression() as String) -- (styles = Dynamic(expression)) -- this
     themed => styles -- (own => (styles = []) -- Compiler.reduced(this, Theme.kinds) -- (styles.nonempty ? own.for(styled(.)) : (styles = own)))
       -- ((content.shared_styles{!styles.contains(.)}.for(styled(.))) if content is String) -- children.for(.themed) -- this

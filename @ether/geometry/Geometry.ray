@@ -264,7 +264,7 @@ Geometry := class {
     } else {
       parent ? parent.at + origin + Vector(-parent.scrolled.x, parent.scrolled.y) : origin
     }
-    spaced (from: border | itself) => (0 ..< 2 * space.dimension).map(i => spacing{.from == from}.map(.[i]){!= None} -- (.empty ? None : .sum))
+    spaced (from: border | itself) => (0 ..< 2 * space.dimension).map(i => spacing{.from == from}.map(.[i]){!= None} -- (kept => kept.empty ? None : kept.sum))
     inside => spaced(border).map(. ?? 0px) -- (made => (@also made Edges) -- made)
     outside => spaced(itself).map(. ?? 0px) -- (made => (@also made Edges) -- made)
     outer => size + outside.total
@@ -297,7 +297,7 @@ Geometry := class {
 
     lines (width: Length = ∞) => (content as String) -- (text => (white_space.lines ? text.split(\n) : [text]).map(paragraph =>
       white_space.wraps ? (paragraph ~= (line: ((!Char.Blank)[]{length > 0}, Char.Blank[])[]{.width(font) <= width})[]).line : [paragraph]
-    ).flatten.map(white_space.spaces ? . : .{!(. is Char.Blank && .previous is Char.Blank)}))
+    ).flatten.map(line => white_space.spaces ? line : line{!((. is Char.Blank) && (.previous is Char.Blank))}))
     intrinsic (width: Length) => content is String ? font.size * font.line_height * lines(width).count : 0px
 
     compounds + (effect: Effect) => (effects ,= effect) -- this

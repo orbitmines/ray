@@ -1918,9 +1918,10 @@ export class Host {
     const s = code.text.s;
     for (let x = r; x; x = x.on) {
       if (x.eq === this.implicit) return true;
-      if (!x.eq || depth > 4) continue;
+      // (not into a definition, `i => …`, nor into a block, `xs{.a}`: each is its own)
+      if (!x.eq || depth > 4 || x.eq.pieces.some(p => 'lit' in p && p.lit.includes(this.learned.definer))) continue;
       for (const c of x.caps) {
-        if (c.reader || c.type !== undefined || c.b >= c.e) continue;
+        if (c.reader || c.type !== undefined || c.b >= c.e || c.block) continue;
         let b = c.b, e = c.e; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
         if (b >= e || this.pairs.has(s[b]) || this.quotes.has(s[b])) continue;
         const sub = new Code(code.text, b, e, code.ctx, code.floor);

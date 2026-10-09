@@ -509,10 +509,11 @@ Class &+= {
     made with { block }
     made
 }
-// The precedence of the operators on values: a head binds tighter the later it is first declared. Ranges and comparisons are
-// declared here, before `+` (below) and the arithmetic (`js.kinds.ray`, Number.ray): `0..<2 * n`, `a + 1 > b`
+// The precedence of the operators on values: a head binds tighter the later it is first declared. `is`, ranges and comparisons
+// are declared here, before `|` and `+` (below) and the arithmetic (`js.kinds.ray`, Number.ray): `x is A | B`, `0..<2 * n`, `a + 1 > b`
 Operators := @made Node
 Operators &+= {
+  is {type} => None
   ..{last} => None
   ..<{last} => None
   .. {last} => None
@@ -638,7 +639,7 @@ Node &+= {
     made
   // `x is T` (T4.10): whether `T` admits `x`: an instance of it (or of what is made of it); one of a superposition's components; what
   // a narrowing narrows, satisfying its constraint; a list of `T`s for `T[]`; else `T` itself
-  is {type: Expression} => this.admitted_by(type)
+  is {type} => this.admitted_by(type)
   // (what the type holds, its own: not what its values hold, `("(", T, ")")`)
   admitted_by (type) => (@inside this type) || ((@member type "superposes") && (@member type "components").some((component) => this is component)) || ((@member type "narrows") && (this is (@member type "narrows")) && type.constraint(this)) || ((@inside type Listing) && this.every((element) => element is (@member type "of"))) || (@same this type)
   // `x as T`: `x` converted to a `T` (a class's own `as (=== T) => …`, or the `T`'s own `static (x: X) as (=== T) => …`, read in

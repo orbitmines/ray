@@ -69,7 +69,7 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
   as (=== String?) => name
 
   static spelled (written: String) => (@owns Unit written) ? (@member Unit written) : None
-  static Spelling := String{Unit.spelled(this)}
+  static Spelling := String{@owns Unit this}
 
   compounds / (other: Unit) => Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static

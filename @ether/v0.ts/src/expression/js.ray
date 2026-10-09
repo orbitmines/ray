@@ -100,6 +100,9 @@ global => @js $.global
 Symbolic => @js $.reader(s => s.length > 0 && !/[\p{L}\p{N}_\s]/u.test(s) ? s : undefined)
 Numeral => @js $.reader(s => /^[0-9]+(\.[0-9]+)?$/.test(s) ? Number(s) : undefined)
 {number Numeral} => number
+// (a signed numeral, `-1`, `+1`: the host's number)
+-{negative Numeral} => @js -$.get(F, "negative")
++{positive Numeral} => @js $.get(F, "positive")
 // `while c { body }`: the body again while `c` holds (every value but nothing and false), iterated by the host.
 // `do { … } while c`: the block, then again while `c` holds
 // (the language's `x while c`: `x` again while `c` holds)

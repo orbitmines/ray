@@ -137,7 +137,7 @@ Node &+= {
   ~~ .{dot_rest} => this ~~ (dot_it => dot_it.dot_rest)
   // `a, b`: declared after `:=` (`x := 1, 2` holds both), before `=`, `&=`, `:` (they bind tighter: `f(x = g(), y)`, `f(a: 1, b: 2)`
   // give two); what it does, below
-  , {other Expression} => ((@owns this "commas") ? this : (@made Ray).append(this)).joined(other)
+  , {other Expression} => ((@of this) === Ray ? this.listed : (@made Ray).append(this)).joined(other)
 }
 // `x = v`: where `x` is declared (the first statement writes a name held further out there); `x.m = v`: on `x`
 {assigned_name Unspaced} = {assigned_value} =>
@@ -364,6 +364,11 @@ Ray &+= {
     (@owns given "commas") ? given.for(x => made.append(x)) : made.append(given)
     made
   entry => this.head
+  // (a new list of the same values, not written with `,`)
+  listed =>
+    made := @made Ray
+    this.for(x => made.append(x))
+    made
   // the value at a place (0 the first; below 0 from the last)
   [at: Number] =>
     at_vertex := at < 0 ? this.tail : this.head
@@ -427,7 +432,8 @@ Branch &+= {
 // (`while c { body }`: the body again while `c` holds; iterating is the interpreter's (`js.ray`))
 
 [] => @made Ray
-[{inside: Expression}] => inside === None ? (@made Ray) : ((@of inside) === Ray ? inside : (@made Ray).append(inside))
+// (`[x]` is a new list holding `x`, a list included; `[a, b]` the list written there, L§1.2)
+[{inside: Expression}] => inside === None ? (@made Ray) : ((@owns inside "commas") ? inside.listed : (@made Ray).append(inside))
 
 // ---------------------------------------------------------------- classes (A7): the block is the constructor; what it defines, the class's too
 Node &+= {

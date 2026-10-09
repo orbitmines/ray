@@ -473,6 +473,14 @@ export class Host {
     return NOT;
   }
   subs = new WeakMap<Ray, Eq[]>();
+  // (a closure of several parameters given one value: its elements, in order, as `(a, b) => …` reads `[x, y]`)
+  destructured(eq: Eq, F: Ray, v: unknown): boolean {
+    const ps = eq.node?.params; if (!eq.ctx.closure || !ps || ps.length < 2 || !(v instanceof Ray) || v === this.none) return false;
+    const T = new Ray(this.global); T.scope = true; T.m.set('\u0001v', v);
+    ps.forEach((p, i) => { const t = this.element_texts[i] ??= { name: 'element', s: '\u0001v[' + i + ']' }; F.m.set(p, this.walk(new Code(t, 0, t.s.length, T))); });
+    return true;
+  }
+  element_texts: { name: string, s: string }[] = [];
   // whether reading in `ctx` reads by the rules of `c`
   inside(ctx: Ray, c: Ray): boolean { for (let n: Ray | undefined = ctx; n; n = n.outer) if (n === c || n.into === c) return true; return false; }
   // The pieces of a head: a capture is the brackets around its name and what reads it (`{name reader}`); brackets around brackets
@@ -1643,9 +1651,11 @@ export class Host {
     if (eq.node?.params) {
       if (again) F.m.set(this.given_name, again);
       const given = F.m.get(this.given_name), sub = this.bound(eq, F, code);
-      if (sub === NOT) return NOT;
-      if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) return NOT;
-      for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.default_of(F, eq.node, x));
+      if (sub === NOT) { if (!(given instanceof Code) || !this.destructured(eq, F, this.walk(given))) return NOT; }
+      else {
+        if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) return NOT;
+        for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.default_of(F, eq.node, x));
+      }
       const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; const I = new Ray(W); I.scope = true; I.method = true; I.caller = code.ctx; I.sees = eq.node; F.outer = I; F.sees = undefined;
     }
     // (what a form declares first, where it is not given it; the capture it is applied with, `this`)
@@ -1982,7 +1992,7 @@ export class Host {
     // (a method: its first parameter given the value, the rest what they say; the frame continues into it, as applied)
     if (eq.node?.params) {
       const ps = eq.node.params; if (ps.length === 0) return undefined;
-      F.m.set(ps[0], x); for (const p of ps.slice(1)) F.m.set(p, this.default_of(F, eq.node, p));
+      if (!this.destructured(eq, F, x)) { F.m.set(ps[0], x); for (const p of ps.slice(1)) F.m.set(p, this.default_of(F, eq.node, p)); }
       if (F.outer !== eq.body.ctx) F.sees = eq.body.ctx;
       const I = new Ray(eq.node); I.scope = true; I.method = true; const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; I.sees = W; F.outer = I; F.sees = undefined;
       return eq.native ? eq.native(F) : this.body(eq, F);

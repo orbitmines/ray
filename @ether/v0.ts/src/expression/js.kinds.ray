@@ -18,6 +18,9 @@ HostNumber := class: Number {
   succ => @js F.self + 1
   pred => @js F.self - 1
   negated => @js -F.self
+  floor => @js Math.floor(F.self)
+  ceil => @js Math.ceil(F.self)
+  round => @js Math.round(F.self)
   is_zero => @js $.name(F, F.self === 0 ? "true" : "false")
   as (=== String) => @js String(F.self)
 }

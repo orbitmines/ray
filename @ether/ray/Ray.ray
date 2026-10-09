@@ -86,22 +86,30 @@ Iterable &+= {
     sorted_made
   unique => empty ? [] : first, rest{!= first}.unique
 
-  contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
+  // (by `==`, until the operator given as a type parameter (`contains <operator = ==>(x)`) reads)
+  contains | includes (sought) => some(contained => contained == sought)
   partition (predicate) => [this[{predicate}]], [this[{!predicate(.)}]]
   batch | chunk (size: Number) => empty ? [] : [this[..<size]], this[size..].chunk(size)
   concatenated =>
     made := []
     this.for(part => part.for(element => made.append(element)))
     made
-  flatten => map(element => ((@owns element "narrows") || ((element is Iterable) && (element.empty || !(element is String)))) ? element.flatten : [element]).concatenated
-  flatten (levels: Number) => levels == 0 ? this : map(element => ((@owns element "narrows") || ((element is Iterable) && (element.empty || !(element is String)))) ? element.flatten(levels - 1) : [element]).concatenated
+  // (what flattening goes into: a narrowing, a list (a Ray of vertices); not a number, a text, a closure, a shape (each also a Ray))
+  static flattens (element) => (@owns element "narrows") || (@owns element "head") || ((@owns element "commas") && element.empty)
+  flatten => map(element => Ray.flattens(element) ? element.flatten : [element]).concatenated
+  flatten (levels: Number) => levels == 0 ? this : map(element => Ray.flattens(element) ? element.flatten(levels - 1) : [element]).concatenated
   union (other: Iterable) => this, other[{!this.contains(.)}]
   intersection (other: Iterable) => this[{other.contains(.)}]
   disjoint (other: Iterable) => intersection(other).empty
   xor | symmetric_difference (other: Iterable) => this[{!other.contains(.)}], other[{!this.contains(.)}]
   split (delimiter) => this ~= ((piece: *, ⊙: delimiter)[], piece: *) -- .piece
   group_by (key: Program | Section) => map(key).unique.map((group) => (group): this[{key(.) == group}])
-  enumerate => map((x) => (index: x.index, value: x))
+  // (each value with its place, from 0)
+  enumerate =>
+    enumerated := []
+    enumerating_at := 0
+    this.for(enumerated_value => enumerated.append((index: enumerating_at, value: enumerated_value)) -- (enumerating_at = enumerating_at + 1))
+    enumerated
   zip (other: Iterable) => empty || other.empty ? [] : [(first, other.first)], rest.zip(other.rest)
   pairs (other: Iterable) => map(a => other.map(b => (a, b))).flatten(1)
   join (separator) => this.empty ? "" : (this.rest.empty ? this.first : this.first + separator + this.rest.join(separator))
@@ -130,6 +138,8 @@ Iterable &+= {
   ± | +- | -+ (at: Integer) => this[at] | this[-at]
   [at: Integer] => at == 0 ? entry : at > 0 ? rest[at - 1] : reverse[-at - 1]
   [range: Range] => range.map(this[.])
+  // (the elements from one place to another, both kept)
+  sliced (slice_from, slice_to) => this.enumerate{slice_entry => slice_entry.index >= slice_from && slice_entry.index <= slice_to}.map(.value)
   `[`{from}..`]` ^punctuation => sliced(from, count - 1)
   `[..`{to}`]` ^punctuation => sliced(0, to)
   `[..<`{to}`]` ^punctuation => sliced(0, to - 1)

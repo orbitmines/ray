@@ -131,11 +131,13 @@ class => Class.made_of(None, None, None)
 Node &+= {
   -- {dash_call} =>
     dash_answer := dash_call
-    (@applies dash_answer) ? dash_answer(this) : dash_answer
+    dash_on := this
+    (@applies dash_answer) ? dash_answer(dash_on) : dash_answer
   ~~ {tilde_call} =>
     tilde_answer := tilde_call
-    (@applies tilde_answer) ? tilde_answer(this) : tilde_answer
-    this
+    tilde_on := this
+    (@applies tilde_answer) ? tilde_answer(tilde_on) : tilde_answer
+    tilde_on
   // (`x -- .m`, `x ~~ .m = v`: `.` is `x`, a closure of it; names and `this` read where the statement is written)
   -- .{dot_rest} => this -- (dot_it => dot_it.dot_rest)
   ~~ .{dot_rest} => this ~~ (dot_it => dot_it.dot_rest)
@@ -400,6 +402,17 @@ Ray &+= {
       left = left - 1
     }
     at_vertex ? at_vertex.value : None
+  // (`xs[i] = v`: the value at that place written)
+  [{written_at Expression}] = {written_value} =>
+    write_at := written_at
+    write_vertex := write_at < 0 ? this.tail : this.head
+    write_left := write_at < 0 ? (0 - write_at) - 1 : write_at
+    while write_vertex && write_left > 0 {
+      write_vertex = write_at < 0 ? write_vertex.previous : write_vertex.next
+      write_left = write_left - 1
+    }
+    write_vertex ? (write_vertex.value = written_value) : None
+    written_value
   first => this.head ? this.head.value : None
   count =>
     counted := 0
@@ -431,7 +444,7 @@ Ray &+= {
     made := []
     at_link := this.head
     while at_link {
-      made.append(mapping(at_link.value))
+      made.append(@entered mapping at_link.value at_link.value)
       at_link = at_link.next
     }
     made

@@ -479,9 +479,9 @@ export class Host {
   subs = new WeakMap<Ray, Eq[]>();
   // (a closure of several parameters given one value: its elements, in order, as `(a, b) => …` reads `[x, y]`)
   destructured(eq: Eq, F: Ray, v: unknown): boolean {
-    const ps = eq.node?.params; if (!eq.ctx.closure || !ps || ps.length < 2 || !(v instanceof Ray) || v === this.none) return false;
+    const ps = eq.node?.params; if (!(eq.ctx.closure || (eq.node?.own && eq.node.closing === ")")) || !ps || ps.length < 2 || !(v instanceof Ray) || v === this.none || !this.has(v, "head")) return false;
     const T = new Ray(this.global); T.scope = true; T.m.set('\u0001v', v);
-    ps.forEach((p, i) => { const t = this.element_texts[i] ??= { name: 'element', s: '\u0001v[' + i + ']' }; F.m.set(p, this.walk(new Code(t, 0, t.s.length, T))); });
+    ps.forEach((p, i) => { const t = this.element_texts[i] ??= { name: 'element', s: '\u0001v[' + i + ']' }; const x = this.walk(new Code(t, 0, t.s.length, T)); F.m.set(p, (x === undefined || x === this.none) && this.defaulted_param(eq.node!, p) ? this.default_of(F, eq.node, p) : x); });
     return true;
   }
   element_texts: { name: string, s: string }[] = [];
@@ -761,7 +761,7 @@ export class Host {
   }
   read_alone?: Ray; receiving?: Place;
   reach_(ctx: Ray, out: Ray[], epoch: number): boolean {
-    let valued = false, sees: Ray[] | undefined;
+    let valued = false, sees: Ray[] | undefined, alsos: Ray[] | undefined;
     // (a block read into a value reaches that value first, then where it was written)
     for (let n: Ray | undefined = ctx; n && n.seen !== epoch; n = n.outer) {
       if (n === this.base) { valued = true; break; }
@@ -769,8 +769,10 @@ export class Host {
       n.seen = epoch; n.reached ??= this.version; if (!n.scope || (n.into && !n.into.scope)) valued = true; out.push(n);
       if (n.sees && n.sees === n.into) { if (this.reach_(n.sees, out, epoch)) valued = true; } else if (n.sees) (sees ??= []).push(n.sees);
       // (what it is also made of, `A + B`: next to what it continues into, before what is further out)
-      if (n.also) for (const x of n.also) if (this.reach_(x, out, epoch)) valued = true;
+      if (n.also) (alsos ??= []).push(...n.also);
     }
+    // (what it is also made of, after what it continues into)
+    if (alsos) for (const x of alsos) if (this.reach_(x, out, epoch)) valued = true;
     if (sees) for (const x of sees) if (this.reach_(x, out, epoch)) valued = true;
     return valued;
   }
@@ -846,7 +848,8 @@ export class Host {
       // (one capture alone reads anything: only where that very value's own equivalences read text (a value read in, a level a
       // program runs by), not what continues into it)
       // (a closure's parameter is what it is called with, `f(x)`: not a block it is read with, `f ~~ { … }`)
-      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || (eq.ctx.closure && this.calling !== eq.ctx) || eq.pieces.length > 1 || !(ctx.sees === eq.ctx || (ctx.written && (ctx.outer === eq.ctx || (ctx.level && this.made_of_(ctx.outer, eq.ctx))))) || (this.deciding > 0 && !eq.ctx.scope && !eq.ctx.closure))) return undefined;
+      // (nor in the functionality of one of that value's own rules: a level's rule body is not read by the level)
+      if (i === 0 && !(piece.reader && eq.ctx.scope) && (eq.ctx.scope || (eq.ctx.closure && this.calling !== eq.ctx) || eq.pieces.length > 1 || !((ctx.sees === eq.ctx && !(ctx.rule && ctx.rule.ctx === eq.ctx)) || (ctx.written && (ctx.outer === eq.ctx || (ctx.level && this.made_of_(ctx.outer, eq.ctx))))) || (this.deciding > 0 && !eq.ctx.scope && !eq.ctx.closure))) return undefined;
       // (after the definer: the functionality, to the end; an operator read on a value reads one operand: the same operator after it reads on from what it gives)
       // (led by a literal, a statement: its last capture, the rest; an operator's, one operand)
       // (a reader's own rule, read in a value as its type: to the end, too)
@@ -1355,7 +1358,7 @@ export class Host {
   // the value a reading found its equivalence on, from a frame: as the reading found it (`near` contexts out)
   self_of(ctx: Ray, near: number): unknown {
     let self: unknown, i = 0;
-    for (const n of this.reach(ctx)) { i++; if (self === undefined && n.rule && n.self !== undefined && !(n.self instanceof Ray)) self = n.self; if (self === undefined && n.into && !n.into.scope && !n.rule) self = n.self ?? n.into; if (!n.scope && n !== this.base && self === undefined) self = n; if (i >= near) break; }
+    for (const n of this.reach(ctx)) { i++; if (self === undefined && n.rule && n.self !== undefined && !(n.self instanceof Ray)) self = n.self; if (self === undefined && n.into && !n.into.scope && !n.rule) self = n.self ?? n.into; if (!n.scope && n !== this.base && self === undefined && !n.closure) self = n; if (i >= near) break; }
     return self;
   }
   // whether a character and the one after it begin an operator (or what reads on from a value)
@@ -1370,15 +1373,16 @@ export class Host {
   run(r: Read, code: Code): unknown {
     if (r.name) {
       const word = code.text.s.slice(r.b, r.e);
+      if (process.env.DBGW && word === process.env.DBGW) { const ch = this.reach(code.ctx).slice(0, 16).map((n, i) => i + ':' + (n === this.base ? 'BASE' : n === this.global ? 'GLOBAL' : (n.rule ? 'R[' + n.rule.key.slice(0, 18) + '@' + n.rule.body.text.name.split('/').pop() + ':' + n.rule.body.text.s.slice(0, n.rule.body.b).split('\n').length + ']' : '') + (n.scope ? 's' : 'v') + (n.method ? 'M' : '') + (n.self !== undefined ? '@' + String(n.self).slice(0, 30) : '') + (n.into ? '>into' : '') + (n.has(word) || this.valued(n, word) ? '*' : ''))); console.log('N', word, code.text.name.split('/').pop() + ':' + code.text.s.slice(0, code.b).split('\n').length, '\n  ' + ch.join('\n  ')); }
       for (const n of this.reach(code.ctx)) if (n !== code.past && (n.has(word) || this.valued(n, word))) {
         const x = n.has(word) ? undefined : this.valued(n, word), v = x ? x.native!(n) : n.m.get(word);
         // (a word given as written: read here, as it is written)
-        if (v instanceof Code && v.word) { const w = new Code(v.text, v.b, v.e, code.ctx); w.past = n; return this.walk(w); }
+        if (v instanceof Code && v.word) { const w = new Code(v.text, v.b, v.e, v.ctx); w.past = n; return this.walk(w); }
         // (a capture: where what it holds was read)
         const held = n.places?.get(word), placed = held ?? { at: n.into ?? n, here: code.ctx.into ?? code.ctx, word, text: undefined, b: undefined, e: undefined, on: undefined };
         // (the name's place, once what it holds was read)
         // (a capture a rule was handed is passed on as it is: what a field holds is read when the field is read)
-        const read = this.held_value(v); this.place = placed; return read;
+        const read = this.held_value(v); this.place = placed; if (process.env.DBGW && word === process.env.DBGW) console.log('  FOUND in', [...n.m.keys()].map(String).join(','), '->', this.show(read).slice(0, 60)); return read;
       }
       const at = code.ctx.into ?? code.ctx;
       this.place = { at, here: at, word, text: code.text, b: r.b, e: r.e, on: at === this.none ? this.receiving : undefined };
@@ -1393,6 +1397,7 @@ export class Host {
       let self = r.self === undefined || this.elements === 0 || !('lit' in eq.pieces[0]) ? undefined : this.element_of_ctx(code.ctx);
       if (self !== undefined && !this.leads(code.text.s, r.b)) self = undefined;
       if (self === undefined && r.self !== undefined) self = this.self_of(code.ctx, r.near ?? 0);
+      if (process.env.DBGW && eq.key === process.env.DBGW) { const ch = this.reach(code.ctx).slice(0, 14).map((n, i) => i + ':' + (n === this.base ? 'BASE' : n === this.global ? 'GLOBAL' : (n.rule ? 'R[' + n.rule.key.slice(0, 18) + ']' : '') + (n.scope ? 's' : 'v') + (n.self !== undefined ? '@' + String(n.self).slice(0, 30) : '') + (n.into ? '>into' : '') + (n.has(eq.key) || this.has_key(n, eq.key) ? '*' : ''))); console.log('W', eq.key, 'near', r.near, 'self', String(self).slice(0, 40), '\n  ' + ch.join('\n  ')); }
       // (a rule whose functionality is the host's own code, given nothing: that code, called directly)
       const v = self === undefined && r.caps.length === 0 && eq.js && !eq.node && !eq.receiver ? this.direct(eq, code) : this.apply(eq, r.caps, code, self);
       if (v === NOT) this.failed = r;
@@ -1611,14 +1616,17 @@ export class Host {
   // (whether a context has an equivalence with that head)
   has_key(n: Ray, key: string): boolean { if (n.eqs.length === 0) return false; if (!n.led) this.led(n); return n.keys!.has(key); }
   visit(start: Ray, value: Ray, key: string, one: boolean, seen: Set<Ray>, out: Eq[]): boolean {
+    let alsos: Ray[] | undefined;
     for (let n: Ray | undefined = start; n && (n === start || !n.scope) && !seen.has(n) && n !== this.base; n = n.outer) {
       seen.add(n);
       if (this.has_key(n, key)) {
         if (n === value) for (let i = n.eqs.length - 1; i >= 0; i--) if (n.eqs[i].key === key && n.eqs[i].own) { out.push(n.eqs[i]); if (one) return true; }
         for (let i = n.eqs.length - 1; i >= 0; i--) if (n.eqs[i].key === key && !n.eqs[i].own) { out.push(n.eqs[i]); if (one) return true; }
       }
-      if (n.also) for (const a of n.also) if (this.visit(a, value, key, one, seen, out)) return true;
+      if (n.also) (alsos ??= []).push(...n.also);
     }
+    // (what it is also made of, after what it continues into: a list made also a Vector counts as a list)
+    if (alsos) for (const a of alsos) if (this.visit(a, value, key, one, seen, out)) return true;
     return false;
   }
   // An equivalence applied: a frame inside the value it is applied on (or where its functionality was written), its captures bound
@@ -1650,6 +1658,7 @@ export class Host {
     // (`recur(…)`: the method again, given what it is given there)
     for (let again: Code | undefined; ;) {
     // (a frame inside the value it is applied on: a value of the host's own kind, inside the class it is mapped to)
+    if (process.env.DBGW && eq.key === '== {}' && self !== undefined && !(self instanceof Ray) && typeof self === 'object') console.log('SELFKIND', (self as object).constructor.name);
     const kind = self !== undefined && !(self instanceof Ray) ? this.kind_of(self) : undefined;
     const F = new Ray(self instanceof Ray && !self.scope ? self : kind ?? eq.body.ctx); F.place = place;
     // (what a rule enclosed in literals reads is a value)
@@ -1664,9 +1673,11 @@ export class Host {
       const given = F.m.get(this.given_name), sub = this.bound(eq, F, code);
       if (sub === NOT) { if (!(given instanceof Code) || !this.destructured(eq, F, this.walk(given))) return NOT; }
       else {
-        if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) return NOT;
-        for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.default_of(F, eq.node, x));
+        if (sub.length && !this.captured(eq, F, sub, (given as Code).text, (given as Code).ctx)) { if (sub.length !== 1 || !(given instanceof Code) || !this.destructured(eq, F, this.walk(given))) return NOT; }
+        else for (const x of eq.node.params.slice(sub.length)) F.m.set(x, this.default_of(F, eq.node, x));
       }
+      // (a closure's parameters are given by value: what was given, read now, where it was written (a loop moves on after))
+      if (eq.ctx.closure) for (const x of eq.node.params) { const v = F.m.get(x); if (v instanceof Code && this.name_end(v.text, v.b, v.e) < v.e) F.m.set(x, this.held_value(v)); }
       const W = new Ray(F.outer); W.scope = true; W.sees = F.sees; const I = new Ray(W); I.scope = true; I.method = true; I.caller = code.ctx; I.sees = eq.node; F.outer = I; F.sees = undefined;
     }
     // (what a form declares first, where it is not given it; the capture it is applied with, `this`)
@@ -1926,7 +1937,7 @@ export class Host {
       // (not into a definition, `i => …`, nor into a block, `xs{.a}`: each is its own)
       if (!x.eq || depth > 4 || x.eq.pieces.some(p => 'lit' in p && p.lit.includes(this.learned.definer))) continue;
       for (const c of x.caps) {
-        if (c.reader || c.type !== undefined || c.b >= c.e || c.block) continue;
+        if (c.reader || c.type !== undefined || c.b >= c.e || c.block || this.quotes.has(s[c.b - 1])) continue;
         let b = c.b, e = c.e; while (b < e && this.blank(s[b])) b++; while (e > b && this.blank(s[e - 1])) e--;
         if (b >= e || this.pairs.has(s[b]) || this.quotes.has(s[b])) continue;
         const sub = new Code(code.text, b, e, code.ctx, code.floor);
@@ -1980,7 +1991,7 @@ export class Host {
   has(x: unknown, word: string): boolean { return x instanceof Ray && (x.has(word) || this.has_key(x, word)); }
   self(F: Ray): unknown { return this.self_(F.caller, new Set<Ray>()); }
   self_(n: Ray | undefined, seen: Set<Ray>): unknown {
-    for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule && n.self.eqs.includes(n.rule)) return this.self_(n.self.outer, seen); if (n.self !== undefined) return n.self; if (n.written && !n.rule && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = this.self_(n.sees, seen); if (v !== undefined) return v; } }
+    for (; n && !seen.has(n); n = n.caller ?? n.outer) { seen.add(n); if (n.self instanceof Ray && n.self.closure && n.rule && n.self.eqs.includes(n.rule)) return this.self_(n.self.outer, seen); if (n.self !== undefined) return n.self; if (n.written && !n.rule && !n.level && n.outer && !n.outer.scope) return n.outer; if (n.into && !n.rule && n.into !== this.global && !n.into.scope) return n.into; if (n.sees) { const v = this.self_(n.sees, seen); if (v !== undefined) return v; } }
     return undefined;
   }
 
@@ -2027,7 +2038,7 @@ export class Host {
     try { return this.invoke_(f, x); } finally { if (this.applying > 0) this.applying--; }
   }
   // (a closure applied to a value, `.` in it another, `reduce`'s step)
-  entered(f: unknown, element: unknown, x: unknown): unknown { if (!(f instanceof Ray) || f.eqs.length !== 1) return undefined; this.element_bodies.push(f.eqs[0].body); try { return this.invoke_(f, x, element); } finally { this.element_bodies.pop(); } }
+  entered(f: unknown, element: unknown, x: unknown): unknown { if (!(f instanceof Ray)) return undefined; if (f.eqs.length !== 1 || !(f.eqs[0].node?.params || f.eqs[0].pieces.some(q => 'cap' in q))) return this.called(f, [x]); this.element_bodies.push(f.eqs[0].body); try { return this.invoke_(f, x, element); } finally { this.element_bodies.pop(); } }
   invoke_(f: Ray, x: unknown, element?: unknown): unknown {
     const eq = f.eqs[0];
     const F = new Ray(eq.body.ctx); F.scope = true; F.rule = eq; if (arguments.length > 2) F.m.set(this.element, element);

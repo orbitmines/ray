@@ -205,7 +205,7 @@ UI := class {
     static palette => palettes{dark == @me/device/preferences.dark} ?? palettes
     static styles => fields{.value.narrowing}.name
     static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last?.1
-    static face (shape: Geometry.Shape, character: Char?) => (character?.styles ?? []).reduce(acc = Geometry.Box(font: shape.font, color: shape.color, fill: shape.fill, palette: shape.palette) => acc.styled(.))
+    static face (shape: Geometry.Shape, character: Char?) => (character?.styles ?? []).reduce((acc = Geometry.Box(font: shape.font, color: shape.color, fill: shape.fill, palette: shape.palette)) => acc.styled(.))
   }
 }
 

@@ -27,7 +27,8 @@ Geometry := class {
   Axis := class: Ray continuous: boolean = true, loop: boolean = false, extent: Length?, orientation: -1 | +1 = +1 {
     coordinate => continuous ? Number : Integer
     seen (at: Length, frame: Length = 0, size: Length = 0) => orientation > 0 ? at : frame - at - size
-    holds (at: Length) => loop || extent == None || 0 <= at < extent
+    // (`member("loop")`: the word `loop` reads as the `loop { }` statement)
+    holds (at: Length) => member("loop") || extent === None || ((0 <= at) && (at < extent))
     wrapped (at: Length) => loop && extent != None ? at % extent : at
     between (difference: Length) => loop && extent != None ? (difference % extent) -- (. min (extent - .)) : difference
     positions => continuous ? coordinate{holds(.)} : 0..<extent
@@ -36,7 +37,8 @@ Geometry := class {
     static plane = Space([Axis(), Axis()])
     static screen = Space([Axis(), Axis(orientation: -1)])
     static current: Space = plane
-    static grid (extent: Vector, loop: boolean | boolean[] = false) => Space(extent.enumerate.map(Axis(continuous: false, loop: loop is boolean ? loop : loop[.index] ?? false, extent: .value)), graph)
+    // (`grid_extent`: a parameter named as the Axis field it gives, `extent: …`, is read as that parameter declared again)
+    static grid (grid_extent: Vector, loop: boolean | boolean[] = false) => Space(axes: grid_extent.enumerate.map(axis_entry => Axis(continuous: false, loop: ((loop is (boolean)) ? loop : (loop[axis_entry.index] ?? false)), extent: axis_entry.value)), metric: graph)
     static (structure: Graph) as (=== Space) => Space([], graph, Projection.embedding(structure), structure)
     static Plane := Space{dimension == 2 && axes.every(.extent == None && !.loop)}
     static Grid := Space{discrete && vertices == None}
@@ -46,13 +48,20 @@ Geometry := class {
     dimension => axes.count
     discrete => vertices != None || !axes.some(.continuous)
     sides => Side{axis < dimension}
-    holds (at) => vertices ? vertices.vertices.contains(at) : axes.zip(at).every(.0.holds(.1))
+    holds (at) => vertices ? vertices.vertices.contains(at) : axes.enumerate.every(axis_entry => axis_entry.value.holds(at[axis_entry.index] ?? 0))
     wrapped (at: Vector) => Vector(axes.zip(at).map(.0.wrapped(.1)))
     between (a: Vector, b: Vector) => Vector(axes.zip(b - a).map(.0.between(.1)))
     seen (at: Vector, frame: Vector = Vector(), size: Vector = Vector()) => Vector(axes.enumerate.map(axis => axis.value.seen(at[axis.index] ?? 0, frame[axis.index] ?? 0, size[axis.index] ?? 0)))
     neighbours (at) => vertices ? vertices.outgoing(at) : sides#.map(wrapped(at + .vector(dimension))){holds(.)}
     edge_length (from, to) => vertices?.edges.find(.from == from && .to == to)?.measured ?? 1
-    positions => vertices ? vertices.vertices : axes.map(.positions).reduce(acc = [[]] => acc.pairs(.).map([.0, [.1]].flatten)).map(Vector(.))
+    // (each place: one coordinate from each axis, in a plane until the product of the axes reads: `reduce` over `pairs` with `.0`, `.1`)
+    positions => vertices ? vertices.vertices : Space.planar(axes)
+    static planar (planar_axes) =>
+      planar_found := []
+      planar_xs := planar_axes[0].positions
+      planar_ys := planar_axes.count > 1 ? planar_axes[1].positions : [0]
+      planar_ys.for(planar_y => planar_xs.for(planar_x => planar_found.append(Vector(planar_x, planar_y))))
+      planar_found
   }
   Place := class: Ray at: *, space: Space = Space.current {
     continuations => space.neighbours(at).map(Place(., space))

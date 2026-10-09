@@ -20,21 +20,23 @@ UI.TUI := class {
     ]
   }
   static px_per_cell = Geometry.Vector(8px, 16px)
-  static gridded (length: Geometry.Vector) => Geometry.Vector(length.x as Unit.column, length.y as Unit.row)
+  // (in whole cells: where it starts, the cell it starts in; how large, the cells it covers)
+  static gridded (length: Geometry.Vector) => Geometry.Vector((length.x as Unit.column).amount.floor, (length.y as Unit.row).amount.floor)
+  static covered (length: Geometry.Vector) => Geometry.Vector((length.x as Unit.column).amount.ceil, (length.y as Unit.row).amount.ceil)
 
   Geometry.Shape &+= {
     cell_at => UI.TUI.gridded(Geometry.Space.screen.seen(at, root.size, size))
-    cell_size => UI.TUI.gridded(size)
-    cell_area => Geometry.Space.grid(cell_size).positions.map(. + cell_at){contains(Geometry.Space.screen.seen((. - cell_at) * UI.TUI.px_per_cell, size, UI.TUI.px_per_cell))}
+    cell_size => UI.TUI.covered(size)
+    cell_area => Geometry.Space.grid(cell_size).positions.map(offset => offset + cell_at){cell => contains(Geometry.Space.screen.seen((cell - cell_at) * UI.TUI.px_per_cell, size, UI.TUI.px_per_cell))}
     cell_writes => Compiler.reduced(this, UI.Lowered) -- (shape => [
       Compiler.reduced(shape.painted(shape.fill), UI.TUI.filled(shape)) if shape.fill,
       shape.cell_border if shape.stroke,
-      shape.effects.map(Compiler.reduced(., UI.TUI.shaded(shape))),
+      shape.effects.map(effect => Compiler.reduced(effect, UI.TUI.shaded(shape))),
       Compiler.reduced(shape, UI.TUI.shown) if shape.content,
       shape.in_place.sort_by(.layer).map(.cell_writes) if shape.visible,
-      shape.cell_scrollbar if shape.overflow == scroll && shape.scrollbar,
-      shape.cell_area.map(at => { .underlined(at) }) if shape.focused,
-      shape.cell_area.map(at => { .linked(at, shape.content) }) if shape.content is Location
+      shape.cell_scrollbar if ((shape.overflow === scroll) && shape.scrollbar),
+      shape.cell_area.map(at => (written_grid => written_grid.underlined(at))) if shape.focused,
+      shape.cell_area.map(at => (written_grid => written_grid.linked(at, shape.content))) if (shape.content is Location)
     ])
     cell_border => {
       corners = radius != [0] ? "╭╮╰╯" : "┌┐└┘"
@@ -43,40 +45,48 @@ UI.TUI := class {
       ink = painted(stroke.paint) as Geometry.Color
       sides = stroke.sides#
       [
-        (from.x..to.x).map(x => { .underlined(Geometry.Vector(x, to.y)) }) if sides == [Geometry.bottom],
-        (from.x + 1..<to.x).map(x => { .put(Geometry.Vector(x, from.y), ANSI.Cell("─", foreground: ink)) }) if sides.contains(Geometry.top),
-        (from.x + 1..<to.x).map(x => { .put(Geometry.Vector(x, to.y), ANSI.Cell("─", foreground: ink)) }) if sides.contains(Geometry.bottom) && sides != [Geometry.bottom],
-        (from.y + 1..<to.y).map(y => { .put(Geometry.Vector(from.x, y), ANSI.Cell("│", foreground: ink)) }) if sides.contains(Geometry.left),
-        (from.y + 1..<to.y).map(y => { .put(Geometry.Vector(to.x, y), ANSI.Cell("│", foreground: ink)) }) if sides.contains(Geometry.right),
-        [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].map((at, i) => { .put(at, ANSI.Cell(corners[i], foreground: ink)) }) if sides.count == Geometry.all#.count
+        (from.x..to.x).map(x => (written_grid => written_grid.underlined(Geometry.Vector(x, to.y)))) if sides == [Geometry.bottom],
+        (from.x + 1..<to.x).map(x => (written_grid => written_grid.put(Geometry.Vector(x, from.y), ANSI.Cell("─", foreground: ink)))) if sides.contains(Geometry.top),
+        (from.x + 1..<to.x).map(x => (written_grid => written_grid.put(Geometry.Vector(x, to.y), ANSI.Cell("─", foreground: ink)))) if sides.contains(Geometry.bottom) && sides != [Geometry.bottom],
+        (from.y + 1..<to.y).map(y => (written_grid => written_grid.put(Geometry.Vector(from.x, y), ANSI.Cell("│", foreground: ink)))) if sides.contains(Geometry.left),
+        (from.y + 1..<to.y).map(y => (written_grid => written_grid.put(Geometry.Vector(to.x, y), ANSI.Cell("│", foreground: ink)))) if sides.contains(Geometry.right),
+        [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].map((at, i) => (written_grid => written_grid.put(at, ANSI.Cell(corners[i], foreground: ink)))) if sides.count == Geometry.all#.count
       ]
     }
-    cell_scrollbar => (0..<cell_size.y).map(y => { .put(cell_at + Geometry.Vector(cell_size.x - 1, y), ANSI.Cell(y == scrolled.y * cell_size.y / content_height ? "┃" : "│")) })
+    // (the thumb: the row as far down the cells as what is scrolled is down the content)
+    cell_scrollbar =>
+      scrolled_down := (scrolled.y is Number) ? scrolled.y : (scrolled.y as pixel).amount
+      thumb := (scrolled_down / (content_height as pixel).amount * cell_size.y).floor
+      (0 ..< cell_size.y).map(y => (written_grid => written_grid.put(cell_at + Geometry.Vector(cell_size.x - 1, y), ANSI.Cell((y == thumb) ? "┃" : "│"))))
   }
 
   drawn := {
-    {root: Geometry.Shape{solved && !parent}} => Grid((root.size.x as Unit.column).amount, (root.size.y as Unit.row).amount) ~~ (grid => [root, root.lifted].flatten(1).map(.cell_writes).flatten.for(write => grid ~~ write))
+    // (the root, then what is lifted above it: built by appending, a Shape being a Ray `[root, …]` would read its elements)
+    {root: Geometry.Shape{solved && !parent}} =>
+      drawn_shapes := [root]
+      root.lifted.for(lifted_shape => drawn_shapes.append(lifted_shape))
+      Grid((root.size.x as Unit.column).amount, (root.size.y as Unit.row).amount) ~~ (grid => drawn_shapes.map(drawn_shape => drawn_shape.cell_writes).flatten.for(write => grid ~~ write))
   }
   filled (shape: Geometry.Shape) => {
-    {color: Geometry.Color} => shape.cell_area.map(at => { .background(at, color) })
-    {gradient: Geometry.Gradient} => shape.cell_area.map(at => { .background(at, gradient.at((at.x - shape.cell_at.x) / shape.cell_size.x)) })
+    {color: Geometry.Color} => shape.cell_area.map(at => (written_grid => written_grid.background(at, color)))
+    {gradient: Geometry.Gradient} => shape.cell_area.map(at => (written_grid => written_grid.background(at, gradient.at((at.x - shape.cell_at.x) / shape.cell_size.x))))
     {sampled: Geometry.Pointwise} => shape.cell_area.map(at => sampled(Geometry.Space.screen.seen((at - shape.cell_at) * px_per_cell, shape.size, px_per_cell)) -- (color =>
-      { .put(at, ANSI.Cell(ramp[color.alpha * color.luminance * (ramp.length - 1) / 255], foreground: color)) }))
+      (written_grid => written_grid.put(at, ANSI.Cell(ramp[color.alpha * color.luminance * (ramp.length - 1) / 255], foreground: color)))))
     {paint} => []
   }
   shaded (shape: Geometry.Shape) => {
-    {filter: Geometry.Opacity} => shape.cell_area.map(at => { .faded(at, filter.amount) })
-    {shadow: Geometry.Shadow} => shape.cell_area.map(at => { .shaded(at + gridded(Geometry.Space.screen.seen(shadow.offset))) })
+    {filter: Geometry.Opacity} => shape.cell_area.map(at => (written_grid => written_grid.faded(at, filter.amount)))
+    {shadow: Geometry.Shadow} => shape.cell_area.map(at => (written_grid => written_grid.shaded(at + gridded(Geometry.Space.screen.seen(shadow.offset)))))
     {effect} => []
   }
   shown := {
     {text: Geometry.Shape{content is String}} => text.lines(text.size.x).enumerate.map(row => row.value.enumerate.map(glyph =>
-      (UI.Theme.face(text, glyph.value), text.cell_at + Geometry.Vector(row.value[..<glyph.index].map(.columns).sum, row.index)) -- ((look, at) => ANSI.Cell(text.case ? text.case(glyph.value) : glyph.value,
+      (UI.Theme.face(text, glyph.value), text.cell_at + Geometry.Vector(row.value.sliced(0, glyph.index - 1).map(.columns).sum, row.index)) -- ((look, at) => ANSI.Cell(text.case ? text.case(glyph.value) : glyph.value,
         foreground: text.painted(look.color) as Geometry.Color, background: text.painted(look.fill) as Geometry.Color,
-        styles: (ANSI.Attribute.bold if look.font.weight >= 600) | (ANSI.Attribute.italic if look.font.style == italic) | (ANSI.Attribute.negative if look.styles.contains("selected"))) -- (written => { .put(at, written) }))
+        styles: (ANSI.Attribute.bold if (look.font.weight is Number) && look.font.weight >= 600) | (ANSI.Attribute.italic if look.font.style === italic) | (ANSI.Attribute.negative if look.styles.contains("selected"))) -- (written => (written_grid => written_grid.put(at, written))))
     )).flatten
     {canvas: Geometry.Shape{content is Program && !(content is Choice)}} => canvas.content.rendered(Language.Direct.level) -- (rows => canvas.cell_area.map(at => (at - canvas.cell_at) -- (dot =>
-      ANSI.Cell(braille(rows[dot.y * 4 ..< dot.y * 4 + 4].map(.[dot.x * 2 ..< dot.x * 2 + 2].map(.alpha > 0)))) -- (written => { .put(at, written) })
+      ANSI.Cell(braille(rows[dot.y * 4 ..< dot.y * 4 + 4].map(.[dot.x * 2 ..< dot.x * 2 + 2].map(.alpha > 0)))) -- (written => (written_grid => written_grid.put(at, written)))
     )))
     {shape: Geometry.Shape} => []
   }

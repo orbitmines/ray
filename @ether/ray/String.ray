@@ -34,7 +34,7 @@ Char &+= {
   static (codepoint: Unicode.Scalar) as (=== Char) => codepoint
 
   east_asian_width => Unicode.EastAsianWidth[this]?.value ?? "N"
-  columns => east_asian_width is ("W" | "F") ? 2 : 1
+  columns => (east_asian_width is ("W" | "F")) ? 2 : 1
   script => Unicode.Scripts[this]?.value ?? "Unknown"
   block => Unicode.Blocks[this]?.value ?? "No_Block"
   age => Unicode.Age[this] -- . ? Version(number: .number, revision: .revision) : None

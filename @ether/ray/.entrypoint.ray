@@ -446,8 +446,8 @@ Node &+= {
 }
 // what a class is made of besides what it continues into (`components.hierarchy`): adding to it makes the class also made of what is
 // added, as `A + B` (read as it is: what that comes to hold later, the class holds too)
-Hierarchy := @made Ray
-Hierarchy &+= {
+Composition := @made Ray
+Composition &+= {
   &= {value Expression} =>
     @also (@member this "owner") value
     @assign (this.append(value))
@@ -493,7 +493,7 @@ Class &+= {
       static ({arguments}) => Class.instance_of(made, arguments)
       static () => Class.instance_of(made, None)
       // what it is made of: its hierarchy, the classes it is one of (adding one makes it made of that too)
-      components := (@made Node) &+= { hierarchy := (@made Hierarchy) ~~ (list => @field list "owner" made) }
+      components := (@made Node) &+= { hierarchy := (@made Composition) ~~ (list => @field list "owner" made) }
     }
     made with { block }
     made

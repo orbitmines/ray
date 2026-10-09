@@ -347,6 +347,10 @@ Set := class: Structure {
 
 Hierarchy := class: Ray {
   parent | previous : static? <- hierarchy -> children | next : static?
+  // (until the line above is read: a node's parent, none at the root, and its children)
+  parent: Hierarchy? = None
+  children: Hierarchy[] = []
+  children.for(child => child.parent = this)
 
   holds (child) => children.some(== child || .holds(child))
   add (child) => children.push(child) -- child.parent = this -- child

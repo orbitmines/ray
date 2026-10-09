@@ -325,7 +325,7 @@ Geometry := class {
     compounds + (spacing: Spacing) => (this.spacing ,= spacing) -- this
     compounds - (hole: Shape) => (holes ,= hole) -- this
     smoothed (radius: Length) => (smoothing = radius) -- this
-    narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? writes.for(.entered(this, None)) -- this : reachable.filter(narrowing.entered(., None)))
+    narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? (writes.for(.entered(this, None)) -- this) : reachable.filter(narrowing.entered(., None)))
     {this: Shape}{{literal narrowing}} ^punctuation => narrowed(Program(code: narrowing**))
 
     share (of: (Length | Number | Stops)?, room: Length) => of is Stops ? of.at(room) * room : of is Number ? of * room : of

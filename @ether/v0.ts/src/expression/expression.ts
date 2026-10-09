@@ -691,7 +691,8 @@ export class Host {
         if (eq.body.text === text && this.whole(eq.body, b, e)) continue;
         if ((eq.pairs === 0 && !defines) || eq.busy) continue;
         // (a value's equivalence led by a bracket is a call on it, an operator of it reads after it: not where a statement starts)
-        if (!n.scope && 'lit' in p0 && this.bracket(p0.lit[0])) continue;
+        // (unless it is the level the code runs at: a level is a scope, its rules read statements, `{p} x`)
+        if (!n.scope && 'lit' in p0 && this.bracket(p0.lit[0]) && !this.level_of(ctx, n)) continue;
         // (a name a nearer context holds hides a member of that name further out)
         if (held && 'lit' in p0 && (eq.pieces.length === 1 ? p0.lit === word : !n.scope && p0.lit.startsWith(word))) continue;
         // (one capture its reader reads, alone: what it reads, read at any precedence)
@@ -1952,6 +1953,7 @@ export class Host {
     for (let i = top.b; i < code.b; i++) { if (this.pairs.has(s[i]) && !this.quotes.has(s[i])) depth++; else if (this.closers.has(s[i]) && !this.quotes.has(s[i])) depth--; }
     return depth <= 0;
   }
+  level_of(ctx: Ray, n: Ray): boolean { for (let c: Ray | undefined = ctx; c; c = c.outer) if (c.level && c.outer === n) return true; return false; }
   reads_element(code: Code, r: Read | undefined, depth = 0): boolean {
     const s = code.text.s;
     for (let x = r; x; x = x.on) {

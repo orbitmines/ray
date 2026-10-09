@@ -34,7 +34,7 @@ UI := class {
     // (the whole text marked: its shape styled; a character holds no styles yet (`.value ~~ .styles ,= style` is not read))
     {styled: String}{ }{`^`}{literal style} => Compiler.reduced(styled, Scene).styled(style)
     {styled: Geometry.Shape | Choice}{ }{`^`}{literal style} => Compiler.reduced(styled, Scene).styled(style)
-    {{literal narrowing}} {narrowed: String | Geometry.Shape | Choice} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: narrowing**))
+    {{literal narrowing}} {narrowed} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: narrowing**))
     {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as String)])
       -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
     {placed: *{location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), Scene)])

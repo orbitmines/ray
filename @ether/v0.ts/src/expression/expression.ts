@@ -442,7 +442,7 @@ export class Host {
     if (shut !== undefined && name[0] !== open && !this.quotes.has(name[0])) { const j = this.scan(this.text_of('', name), 1, name.length, () => {}); if (j > 1 && name[j] === shut && name[j + 1] === space && j + 2 < name.length) name = open + name.slice(1, j) + close + name.slice(j + 1); }
     const r = node.params || typeof receiver !== 'string' ? this.given_name : receiver;
     // (what it is given: a capture no name written can be)
-    const form = (pieces: Piece[], apart: boolean) => { const eq = this.add(node.params || !node.leftward ? into : this.global, pieces, body, node); eq.node = node; if (apart && eq.indexed) this.syntax++; eq.apart = apart; if (this.static_now > 0 || node.own) eq.own = true; if (!node.params) eq.receiver = r; out.push(eq); };
+    const form = (pieces: Piece[], apart: boolean) => { const eq = this.add(node.params || !node.leftward ? into : this.global, pieces, body, node); if (node.leftward && 'lit' in pieces[0] && pieces[0].lit.trim() !== '' && !pieces[0].lit.trim().includes(this.learned.space)) this.leftward_words.add(pieces[0].lit.trim()); eq.node = node; if (apart && eq.indexed) this.syntax++; eq.apart = apart; if (this.static_now > 0 || node.own) eq.own = true; if (!node.params) eq.receiver = r; out.push(eq); };
     const lead = (s: string) => { const ps = this.pieces(s, at); const last = ps[ps.length - 1]; if (last && 'lit' in last) return ps; return [...ps, { lit: '' }].filter(x => !('lit' in x) || x.lit !== ''); };
     const cap: Piece = { cap: r };
     // (what is given between a pair, `[at: Integer]`: read between it, `xs[3]`)
@@ -539,12 +539,14 @@ export class Host {
       let n = e + end.length; while (n < limit && s.startsWith(end, n + this.depth(s, n))) n += this.depth(s, n) + end.length;
       if (n >= limit) return e;
       const d = this.depth(s, n);
-      if (d > base || (d === base && (this.closes(s, n + d) || (this.leads(s, n + d) && !this.named_by(s, n + d, s.slice(n + d, this.name_end({ name: '', s }, n + d, s.length)))) || this.trails(s, e)))) { i = n; continue; }
+      // (a line that ends with what reads all it reads, `name\` (a label), `x**`: not read on by the next line)
+      if (d > base || (d === base && (this.closes(s, n + d) || (this.leads(s, n + d) && !this.closed(s, e) && !this.named_by(s, n + d, s.slice(n + d, this.name_end({ name: '', s }, n + d, s.length)))) || this.trails(s, e)))) { i = n; continue; }
       return e;
     }
   }
   // the name a head starts with
   lead(pieces: Piece[]): string { const p = pieces[0]; if (!('lit' in p)) return ''; let i = 0; while (i < p.lit.length && !this.edge(p.lit, i) && !this.pairs.has(p.lit[i])) i++; return p.lit.slice(0, i); }
+  closed(s: string, e: number): boolean { let j = e; while (j > 0 && s[j - 1] === this.learned.space) j--; for (const l of this.postfixes) if (s.endsWith(l, j)) return true; return false; }
   // whether a line ends with what reads on from a value, a value to follow it on the next line (G2.12): `a,`
   trails(s: string, e: number): boolean {
     let j = e; while (j > 0 && s[j - 1] === this.learned.space) j--;
@@ -1134,10 +1136,17 @@ export class Host {
     return this.scan(text, at, e, i => {
       if (i <= at) return;
       const list = this.infix.get(s[i]);
-      if (list) for (const x of list) if (x.lit.includes(space) && !(right && x.lit.trim() === '') && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
+      if (list) for (const x of list) if (x.lit.includes(space) && !((right || this.applies_after(s, at, i)) && x.lit.trim() === '') && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
       if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false; }
     }, pairs);
   }
+  // (whether the word written right before `i` is a right-to-left method's: what follows it is its argument, not the end of an
+  // operand (G3.3): `md 0` in `xs 12 -> md 0`)
+  applies_after(s: string, at: number, i: number): boolean {
+    let j = i; while (j > at && this.blank(s[j - 1])) j--; let k = j; while (k > at && !this.blank(s[k - 1])) k--;
+    return k < j && this.leftward_words.has(s.slice(k, j));
+  }
+  leftward_words = new Set<string>();
   // (whether an operation declared before `floor` reads on at `i`)
   stops(x: { lit: string; order: number; eq: Eq; from: number }, i: number, text: Text, e: number, floor: number, same: boolean, alone: Ray | undefined): boolean {
     return (same ? x.order <= floor : x.order < floor) && (x.eq.ctx.alone || alone ? x.eq.ctx === alone : true) && this.literal(text, x.lit, i, e) >= 0 && this.follows(x.eq, x.from, text, i, e);

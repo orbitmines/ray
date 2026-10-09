@@ -430,7 +430,7 @@ String &+= {
 }
 
 Unit(name: "pixel", symbol: "px")
-Unit(name: "point", symbol: "pt").multiple 4 / 3, px
+Unit(name: "point", symbol: "pt").multiple(4 / 3, pixel)
 Unit(name: "em")
-  .convert (x: Number) => x * (Geometry.Font.inherited as px), px
-Unit(name: "rem").multiple 16, px
+  .convert(((x: Number) => x * (Geometry.Font.inherited as pixel).amount), pixel)
+Unit(name: "rem").multiple(16, pixel)

@@ -110,7 +110,7 @@ Quantity.Temporal &+= {
 }
 
 Unit(name: "month" ("s" + plural: true)?, symbol: "mo")
-  .convert (x: Number) => x * (Time.YEAR || Time.MONTH ? (Time.MONTH ?? January).days_in(Gregorian(year: Time.YEAR ?? 1)) : 30), day
+  .convert(((x: Number) => x * (Time.YEAR || Time.MONTH ? (Time.MONTH ?? January).days_in(Gregorian(year: Time.YEAR ?? 1)) : 30)), day)
 
 ISO_8601 := class: Time{calendar is UTC.static} (
   date: (

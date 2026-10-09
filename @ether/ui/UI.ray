@@ -237,9 +237,9 @@ String &+= {
 }
 
 Unit(name: "viewport width", symbol: "vw")
-  .convert (x: Number) => x * (UI.scene.size.x as px) / 100, px
+  .convert(((x: Number) => x * (UI.scene.size.x as pixel).amount / 100), pixel)
 Unit(name: "viewport height", symbol: "vh")
-  .convert (x: Number) => x * (UI.scene.size.y as px) / 100, px
+  .convert(((x: Number) => x * (UI.scene.size.y as pixel).amount / 100), pixel)
 
 Program &+= {
   drawn (before: Geometry.Shape = UI.scene) =>

@@ -7,13 +7,6 @@ Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Uni
   as (=== Normalizer) => Unit.Normalizers.modulus(this)
   as (normalizer: Quantity{quantities.every(.quantity == 1)}) => this ~~ .normalizer = normalizer
 
-  as (: (operator: (greater_than: > | >=) | < | <=) unit: Unit): static => {
-    quantities = this.quantities{.unit operator unit}
-    converted_to = quantities.(greater_than ? last : first).unit
-    converted_quantities: Quantity = greater_than ? converted_to -> : <- converted_to
-
-    quantities ~~ .(greater_than ? last : first) += converted_quantities as converted_to
-  }
 
   unit => quantities.last.unit
   amount => quantities.last.quantity
@@ -88,8 +81,8 @@ Unit := class name + symbol: boolean? + plural: boolean? + singular: !symbol && 
   static converted (x, from: Unit, to: Unit) => (from == to) ? x : (((@owns from "converting") && Unit.reaches(from.converting.to, to)) ? Unit.converted(from.converting.by(x), from.converting.to, to) : ((@owns to "converting") ? Unit.inverted(Unit.converted(x, from, to.converting.to), to.converting.by) : None))
   static inverted (y, by) => (y - by(0)) / (by(1) - by(0))
   static reaches (from: Unit, to: Unit) => from == to || ((@owns from "converting") && Unit.reaches(from.converting.to, to))
-  offset (offset: Number, ToUnit: Unit) => convert (x: Number) => x + offset, ToUnit
-  multiple (multiple: Number, ToUnit: Unit) => convert (x: Number) => x * multiple, ToUnit
+  offset (offset: Number, ToUnit: Unit) => convert(((x: Number) => x + offset), ToUnit)
+  multiple (multiple: Number, ToUnit: Unit) => convert(((x: Number) => x * multiple), ToUnit)
 
   magnitude (exponent: Number, ToUnit: Unit, Base: Decimal) => {
     convert (x: Decimal) => Decimal, ToUnit

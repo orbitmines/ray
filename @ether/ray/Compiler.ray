@@ -36,7 +36,9 @@ Compiler := class {
 
   levels => [none, default, folding, logic, minimising, memoised]
 
-  static reduced (value, level) => Program(code: { value }){O: level}()
+  // (a level made of two, `A + B`: reduced by the first, then what that gives by the second)
+  static reduced (value, level) => Compiler.composed(level) ? Compiler.reduced(Compiler.reduced(value, level.components.hierarchy.first), level.components.hierarchy.last) : Program(code: { value }){O: level}()
+  static composed (level) => (@owns level "components") && (@owns level.components.hierarchy "head")
 }
 
 Program &+= {

@@ -317,10 +317,11 @@ Node &+= {
 // What is inside a capture is read the same way: a capture is a parameter.
 Parameters := @context None
 Parameters &+= {
-  {first Parameters}, {rest Parameters} => ((@of first) === Ray ? first : [first]).append(rest)
+  // (a list made by appending: `[x]` is not read in a context of its own, as this one is)
+  {first Parameters}, {rest Parameters} => ((@of first) === Ray ? first : (@made Ray).append(first)).append(rest)
   ({grouped_parameters Parameters}) => grouped_parameters
   // (a group of pieces, optional or repeated: its own piece, read as such)
-  ({group Parameters})? => None | ((@of group) === Ray ? group : [group])
+  ({group Parameters})? => None | ((@of group) === Ray ? group : (@made Ray).append(group))
   ({group Parameters})[] => group[]
   // (a capture of its own: not read, its code, as a value the String of what was written)
   literal {target Parameters} => @own target

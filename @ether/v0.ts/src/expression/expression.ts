@@ -560,11 +560,14 @@ export class Host {
     const l = x.lit.trimEnd(); if (l.length > 0 && l !== x.lit && !x.eq.ctx.scope && !x.eq.node && !this.bracket(l[0])) this.trailing.add(l);
   }
   // whether a line starts with what reads on from a value (and is not a definition): it goes on with the line above (G2.13)
+  // (an equivalence that reads on from a value as a pair around what it is given (`[at]`, `x[key]`), not by a word or an operator)
+  indexing(eq: Eq): boolean { const p0 = eq.pieces[0], pz = eq.pieces[eq.pieces.length - 1]; return eq.node?.closing !== undefined || (eq.pieces.length >= 3 && 'lit' in p0 && p0.lit.length === 1 && this.opens(p0.lit) && 'lit' in pz && pz.lit.length === 1); }
+  opens(c: string): boolean { return !/[\p{L}\p{N}_\s]/u.test(c) && c !== this.learned.open && !this.quotes.has(c); }
   leads(s: string, at: number, upto?: number): boolean {
     const { end, definer, space } = this.learned, line = s.slice(at, upto ?? (s.indexOf(end, at) < 0 ? s.length : s.indexOf(end, at)));
     if (line.includes(space + definer)) return false;
     const j = s.indexOf(space, at);
-    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0] && x.eq.pieces.length > 1 && !this.shorter(l, { name: '', s }, at) ) return true; }
+    for (const x of [...this.infix.get(s[at]) ?? [], ...this.infix.get(space) ?? [], ...(j > at ? this.words.get(s.slice(at, j)) ?? [] : [])]) { const l = x.lit.trimStart(); if (l.length > 0 && !this.bracket(l[0]) && s.startsWith(l, at) && !x.eq.ctx.scope && !x.eq.apart && 'lit' in x.eq.pieces[0] && x.eq.pieces.length > 1 && !this.indexing(x.eq) && !this.shorter(l, { name: '', s }, at) ) return true; }
     return false;
   }
   // (an operator written first, a space, then an operator written apart, `* := Node`: the operator is a name, not what reads on)
@@ -742,6 +745,8 @@ export class Host {
       for (const list of [this.sends.get(s[at]), this.sends.get('')]) if (list) for (const eq of list) {
         if ((eq.order < floor && spaced) || not?.has(eq) || eq.busy) continue;
         if (best.e > best.b && !this.blank(s[at - 1]) && 'lit' in eq.pieces[0] && (eq.apart || this.apart(eq.pieces[0].lit))) continue;
+        // (one written as a pair around what it is given, `xs[3]`: on a value only hugging it; `[x]` after a space, or first, is a list)
+        if ((spaced || best.e === best.b) && this.indexing(eq) && !eq.ctx.scope) continue;
         { const k = this.needle(eq.pieces); if (k && !(span ??= s.slice(at, e)).includes(k)) continue; }
         const r = this.match(eq, text, at, e, ctx, 0, at, []);
         if (r && this.better(r, on)) on = r;

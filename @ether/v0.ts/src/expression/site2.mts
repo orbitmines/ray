@@ -14,7 +14,7 @@ for (const [name, ms] of ray.timings) console.error(name.padEnd(40), Math.round(
 console.error('read', Math.round(performance.now() - t), 'ms,', ray.host.diagnostics.length, 'diagnostics;', read.diagnostics.length, 'in index.ray');
 if (process.env.DIAGS) for (const d of ray.host.diagnostics.filter(d => !d.at.text.name.includes('/ray/') || process.env.DIAGS === 'all')) console.error('   ', path.relative(path.dirname(site), d.at.text.name) + ':' + d.at.text.s.slice(0, d.at.b).split('\n').length + ':', d.message.slice(0, 150));
 const asked = process.argv.slice(2);
-for (const x of asked.length ? asked : ['Program(code: { orbitmines.com }).run(@me/device/terminal)']) {
+for (const x of asked.length ? asked : ['Program(code: { orbitmines.com }).run(@me/instance)']) {
   const seen = ray.host.diagnostics.length, text = { name: 'asked', s: x };
   t = performance.now();
   let v: unknown; try { v = ray.host.walk(new Code(text, 0, x.length, here)); } catch (e: any) { console.log('FAILED', e.message); }

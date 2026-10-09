@@ -20,7 +20,7 @@ let t = performance.now();
 h.project(files.map((f: string) => ({ name: path.relative(ether, f), s: fs.readFileSync(f, 'utf8') })), scope);
 console.error('read', Math.round(performance.now() - t), 'ms,', h.diagnostics.length, 'diagnostics');
 const asked = process.argv.slice(2);
-for (const x of asked.length ? asked : ['Program(code: { orbitmines.com }).run(@me/device/terminal)']) {
+for (const x of asked.length ? asked : ['Program(code: { orbitmines.com }).run(@me/instance)']) {
   const seen = h.diagnostics.length, text = { name: 'asked', s: x };
   t = performance.now();
   let v: unknown; try { v = h.walk(new (await import('./expression.ts')).Code(text, 0, x.length, scope)); } catch (e: any) { console.log('FAILED', e.message); }

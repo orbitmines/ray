@@ -176,7 +176,7 @@ UI.TUI := class {
     {mouse: ANSI.Mouse} => @me/device/pointer["mouse"].to(mouse.position, pressing: [mouse.button])
     {paste: ANSI.Paste} => (@me/device/clipboard = paste.text) -- UI.focus.content.typed(paste.text)
     {focus: ANSI.FocusChange} => @me/device/preferences.focused = focus.state == "I"
-    {resize: Resize} => UI.scene.size = Geometry.Vector(@me/device/terminal.size.x * px_per_cell.x, @me/device/terminal.size.y * px_per_cell.y)
+    {resize: Resize} => UI.scene.size = Geometry.Vector(@me/instance.size.x * px_per_cell.x, @me/instance.size.y * px_per_cell.y)
   }
 }
 

@@ -379,6 +379,13 @@ nearest () => {body} =>
   {list}
   {other}
   ({list} === declared) ? {other} : (({other} === declared) ? {list} : ((({list}).listing ? ({list}).listed() : Listing.new.append({list})).joined({other})))
+// (three or more: the rest read as a new list, this one put first: each once)
+{list}, {other}, {{more}} =>
+  {list}
+  (({other}, {more}) -- .led({list}))
+// (a value that is not a list led by another: both, in a new list)
+led (value) =>
+  (value === declared) ? . : ((. === declared) ? value : Listing.new.append(value).joined(.))
 // A record: names given values in parentheses, `(a: 1, b: 2)`, a node holding them (a call's own `(…)` is read before
 // this: its named arguments are inlined into it). Its names are words (`(made class: …)` is a group). (Its brackets
 // written as text, so it is not read as a closure.)
@@ -607,6 +614,8 @@ class{ }({fields}) => {{block}} =>
 of := None
 parent := None
 superposes := false
+// (the program read at the top was read by none)
+caller := None
 descends (type) =>
   (. === type) || (.parent ? .parent.descends(type) : false)
 is {type} =>
@@ -618,8 +627,9 @@ this =>
 // `x ^style`: x, shown in that style (highlighting only); a head written so, the head.
 ^{style} =>
   .
-{head} ^{style} => {body} =>
-  {head} => {body}
+{head} ^{style} => {{body}} =>
+  {head} =>
+    {body}
 
 // A value checked against a type: reported when it is not one (None, not given yet, and anything against no type, pass).
 type := None
@@ -771,10 +781,10 @@ Iterable &+= {
       }
     append (value) =>
       link := {
+        value := value
         next := None
         previous := None
       }
-      link.value := value
       if .tail {
         link.previous := .tail
         .tail.next := link
@@ -783,6 +793,9 @@ Iterable &+= {
       }
       .tail := link
       .
+    // (a list led by a value: this one, the value first (a side that only declared is no value in it))
+    led (value) =>
+      (value === declared) ? . : .prepend(value)
     for (body) =>
       at := .head
       while at {
@@ -814,10 +827,10 @@ Iterable &+= {
       made
     prepend (value) =>
       link := {
+        value := value
         next := None
         previous := None
       }
-      link.value := value
       if .head {
         .head.previous := link
         link.next := .head

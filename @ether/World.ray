@@ -58,7 +58,8 @@ Reference := class {
   notes => [note, note.previous**].flatten
 }
 
-@me ^string => &caller as Character ?? @local
+// (the character running, else the local instance's)
+@me ^string => (&.caller as Character) ?? @local.character
 @{name: reservable_names} ^string => World.current["@", name]
 @{name: reservable_names} = {holder} ^punctuation => World.current["@", name] = holder
 
@@ -91,6 +92,9 @@ Character &+= {
 Instance := class: Location + Entity {
   device: Device = Device()
   registry: Character?
+  // (who runs here when no one has logged in: the instance's own)
+  own_character: Character = Character()
+  character => registry ?? own_character
   hosted: Character?
 
   login (character: Character) => (registry |= character) -- character

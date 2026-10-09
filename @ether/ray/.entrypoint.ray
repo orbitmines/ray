@@ -723,7 +723,7 @@ Node &+= {
     as_answer := as_held ? ((as_value is as_type) ? as_value : None) : (as_type with { (as_value) as as_type })
     @field as_type "as_converting" as_was
     as_answer
-  // `x/name`: what `x` holds under `name`, read as `x.name` is (a path step, `@me/device/terminal`)
+  // `x/name`: what `x` holds under `name`, read as `x.name` is (a path step, `@me/instance`)
   /{rest this} => rest
 }
 // `T{p}(arguments)`: a `T` made of them (what `p` says of it is what it is made to be)

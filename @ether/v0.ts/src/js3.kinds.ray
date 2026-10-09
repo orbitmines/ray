@@ -91,6 +91,9 @@ Number &+= {
 contains {other} =>
   goto js
   $(String(self).includes(String(other)) ? 'true' : 'false')
+split({separator}) =>
+  goto js
+  typeof self === 'string' ? $('[' + self.split(String(separator)).map(part => JSON.stringify(part)).join(', ') + ']') : undefined
 count =>
   goto js
   typeof self === 'string' ? [...self].length : undefined

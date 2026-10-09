@@ -1009,9 +1009,11 @@ export class Program {
   // (a method called on its own, `b()` in another of the class's: on what `.` is, when that is made in the class)
   through(self: unknown, made?: Program.Node): Program.Node | undefined {
     if (!(self instanceof Program.Node) || !made) return undefined;
-    const seen = new Set<Program.Node>();
-    for (let at: Program.Node | undefined = self; at && at.outer; at = at.outer) seen.add(at);
-    for (let at: Program.Node | undefined = made; at && at.outer; at = at.outer) if (seen.has(at)) return self;
+    // (made in the class itself (through nodes holding nothing): a method; not a closure made in a call)
+    let at: Program.Node | undefined = made;
+    while (at && !at.rules.length && at.outer) at = at.outer;
+    if (!at || !at.outer) return undefined;
+    for (let on: Program.Node | undefined = self; on && on.outer; on = on.outer) if (on === at) return self;
     return undefined;
   }
   on(value: unknown, after: string, frame: Program.Frame, except?: Program.Rule): unknown {

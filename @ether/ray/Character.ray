@@ -65,9 +65,9 @@ Phone := class (
   digits => (international ?? "") + grouped.map(.last){!international || != "(0)"}.join{is Char.Digit}
 }
 
-@me ^string => &.caller as Character
 @me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
-@me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
+// (a path under the character running: each name a member of what is before it, `@me/device/keyboard`)
+@me/{path} ^string => Character.walked(@me, "{path}".split("/"))
 @{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: block**)
 @{who: (Char.Word | "-")[] | UUID}~{literal label ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
   -- (entry => with (@me = entry.of) Program(code: block**) ~~ Program(code: entry.following).entered(entry.of, None))
@@ -75,6 +75,7 @@ Phone := class (
 Character := class: Hierarchy + Entity + Nameable {
   static PREFIX := "@"
   static local (who) => who == "me" ? @me : None
+  static walked (at, names) => names.empty ? at : Character.walked(at[names.first], names.rest)
 
   quests => Program#{who: this}{running}
   full_name => name{is FullName}

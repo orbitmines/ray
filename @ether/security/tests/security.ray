@@ -1,6 +1,6 @@
 // Who a character is, by what only the runtime can make: keys under a root policy, handshakes, signed history, delegation, recovery (World W2.1).
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // Verified and claimed: verified characters compare by root, a claimed one is only itself, and never a verified one.
 ver_a := Instance.local.login(Character(name: "ver-a"))

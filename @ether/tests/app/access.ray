@@ -1,6 +1,6 @@
 // What a capability nobody granted answers; each platform's own form is its language in $/.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 unless &@.ask(`()`, @me/device/camera).erred { INFO@mark `AC26 a capability nobody granted does not err` }
 

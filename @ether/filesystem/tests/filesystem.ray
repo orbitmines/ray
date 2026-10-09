@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 // A location is what is held there: mentioned and used as anything else it is read, `@x = value` writes it,
 // `@x = None` removes it, `@new = @x` copies it, and a directory's children are what is under it.

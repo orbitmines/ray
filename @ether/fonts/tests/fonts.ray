@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 with @me/device/os = OS.Browser {
   unless Fonts.installed == [] { INFO@mark `OSE8 a browser gives fonts to read` }

@@ -1,6 +1,6 @@
 // Where instances are kept, and how what is kept is written.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 // The store: routed by type, read back as a narrowing.
 Kept := class key: *, size: Number

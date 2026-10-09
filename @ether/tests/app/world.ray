@@ -1,7 +1,7 @@
 // Worlds, characters, quests, histories and the features: built by their
 // constructors from the fields their classes declare.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 wg := World(name: "genesis")
 wp := wg.add(Player(name: "alice"))

@@ -1,6 +1,6 @@
 // Version control: one history that every language reads into and writes out of; Ray's own is the .% form.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 ada := Instance.local.login(Character(name: "ada"))
 

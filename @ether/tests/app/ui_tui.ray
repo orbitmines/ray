@@ -1,6 +1,6 @@
 // A page rendered by UI.TUI to the terminal, and the terminal's input read back.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 page := Program(code: {
   "Ray" ^h1

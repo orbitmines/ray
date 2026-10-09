@@ -1,6 +1,6 @@
 // Features: what the machine hands over, what is chosen, and what is proved.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 unless Random.bit { INFO@mark `FE1 a bit from the machine is nothing` }
 unless Random.bits(3).count == 3 { INFO@mark `FE2 three bits are not three` }

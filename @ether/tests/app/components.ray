@@ -1,6 +1,6 @@
 // `.components` holds what a value superposes, `.components.hierarchy` its classes.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 A := class {
   mk => A(from: this)

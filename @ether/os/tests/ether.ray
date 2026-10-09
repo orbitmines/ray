@@ -1,4 +1,4 @@
-mark ^keyword := external global
+mark ^keyword := global
 
 unless OS.Ether["platform"] == "ether" { INFO@mark `ETH4 the language as the operating system does not name its platform ether` }
 with @me/device/os = OS.Ether {

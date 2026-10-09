@@ -1,6 +1,6 @@
 // What is wrapped comes back where it may; a digest is what it says of itself.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 one := Instance(key: $.x25519.pair())
 two := Instance(key: $.x25519.pair())

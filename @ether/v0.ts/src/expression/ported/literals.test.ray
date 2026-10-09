@@ -1,6 +1,6 @@
 // Text and its characters on the seed alone (the claims that need the library are lib/literals.test.ray): a claim that does not
 // hold says so (`INFO@mark`).
-mark ^keyword := external global
+mark ^keyword := global
 // the link after `n` more of them, nothing past the end
 {l: Tight}.after_seven => l.next.next.next.next.next.next.next
 bits := text_bits("a")

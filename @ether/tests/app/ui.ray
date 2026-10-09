@@ -1,6 +1,6 @@
 // A page is a program; the levels compile it to pixels here, and to the web and the terminal in UI.HTML and UI.TUI (ui/HTML.ray, ui/TUI.ray), writing the languages $.html, $.css, $.js and $.ansi.
 
-mark ^keyword := external global
+mark ^keyword := global
 
 page := Program(code: {
   "Ray" ^h1

@@ -49,13 +49,13 @@ Iterable &+= {
   some (predicate: (x: Vertex): boolean) => this[{predicate}].nonempty
   filter (predicate: (x: Vertex): boolean) => this[{predicate}]
 
-  // (one closure: its parameter the accumulator, what it is given nothing its start (else the first element), `.` in it each
-  // element in turn)
+  // (one closure: its parameter the accumulator, what it is given nothing its start (its default), `.` in it each element in
+  // turn: `first -- step(seed)`)
   reduce (step) =>
-    empty ? None : rest.reduced(first, step)
+    empty ? None : rest.reduced(first -- step(), step)
   reduce_right | fold_right | foldr => reverse.reduce
   reduced (seed, step) =>
-    reduced_next := empty ? seed : step(seed, first)
+    reduced_next := empty ? seed : (first -- step(seed))
     empty ? seed : rest.reduced(reduced_next, step)
 
   all => reduce(|)

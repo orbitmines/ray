@@ -384,6 +384,7 @@ export class Program {
       pieces, literals, types, bodies: new Set(pieces.flatMap(({ hole, body }) => body ? [hole!] : [])), head: pieces.map(({ literal, hole, body, written }) => literal ?? (body ? `{{${hole}}}` : `{${written ?? hole}}`)).join(''),
       holes: pieces.flatMap(({ hole }) => hole ? [hole] : []),
       defines: literals.includes(definer), last: pieces[pieces.length - 1]?.literal,
+      braced: !!pieces.at(-1)?.body && literals.length === 0,
       modifies: !!pieces.at(-1)?.body && literals.length > 0 && pieces.slice(0, -1).every(({ hole }) => hole === undefined || hole === ''),
       key: literals.reduce((key, literal) => literal.length > key.length ? literal : key, ''),
     };
@@ -402,7 +403,8 @@ export class Program {
   // Reading all of it with a rule whose right side only goes on, only its last reading is ever run: its holes are tried
   // ending as far as they can first, up to the first reading.
   // (a typed hole's type: read where its rule is, once it is a node; else none (`null`))
-  // (one not a node yet: read again only once something more is defined)
+  // (one not a node yet: read again only at the next statement read from the top (reading a type can itself define things))
+  private statements = 0;
   private types = new WeakMap<Program.Rule, (Program.Node | number | undefined)[]>(); private typing = new Set<Program.Rule>();
   type_of(rule: Program.Rule, k: number): Program.Node | undefined | null {
     let types = this.types.get(rule);
@@ -410,13 +412,34 @@ export class Program {
     const known = types[k];
     if (known instanceof Program.Node) return known;
     // (while a type is read, no typed hole reads anything: a type is a name, read without them)
-    if (known === Program.Node.defined || this.typing.size) return null;
+    if (known === this.statements || this.typing.size) return null;
     this.typing.add(rule);
-    try { const value = this.read(rule.pieces[k].type!, { node: rule.home ?? this.global }); if (value instanceof Program.Node) return types[k] = value; types[k] = Program.Node.defined; return null; }
-    catch { types[k] = Program.Node.defined; return null; } finally { this.typing.delete(rule); }
+    try { const value = this.read(rule.pieces[k].type!, { node: rule.home ?? this.global }); if (value instanceof Program.Node) return types[k] = value; types[k] = this.statements; return null; }
+    catch { types[k] = this.statements; return null; } finally { this.typing.delete(rule); }
   }
   // (whether a type's own rules read text whole: its rules matched, nothing read)
   private structures = new WeakMap<Program.Node, { headed: number, read: Map<string, boolean> }>();
+  // (the characters a type's own rules can begin with: a literal's first, a typed hole's type's; an untyped hole, anything
+  // (`null`))
+  private firsts = new WeakMap<Program.Node, { headed: number, set: Set<number> | null }>();
+  firsts_of(type: Program.Node, seen = new Set<Program.Node>()): Set<number> | null {
+    const known = this.firsts.get(type);
+    if (known && known.headed === type.headed) return known.set;
+    if (seen.has(type)) return new Set();
+    seen.add(type);
+    let set: Set<number> | null = new Set();
+    for (const rule of type.rules) {
+      const first = rule.pieces[0];
+      if (first?.literal !== undefined) { set.add(first.literal.charCodeAt(0)); continue; }
+      const typed = first?.type !== undefined && !first.body ? this.type_of(rule, 0) : undefined;
+      if (typed === null) continue;
+      const inner = typed ? this.firsts_of(typed, seen) : null;
+      if (inner === null) { set = null; break; }
+      for (const c of inner) set.add(c);
+    }
+    this.firsts.set(type, { headed: type.headed, set });
+    return set;
+  }
   structural(s: string, type: Program.Node): boolean {
     let known = this.structures.get(type);
     if (!known || known.headed !== type.headed) this.structures.set(type, known = { headed: type.headed, read: new Map() });
@@ -439,8 +462,8 @@ export class Program {
       const { literal, hole, body } = pieces[k];
       if (literal !== undefined) { if (s.startsWith(literal, t)) step(k + 1, t + literal.length); return; }
       if (body) {
-        // (ending a head with words in it, in a statement that does not end with a body: the rest, as code)
-        if (rule.literals.length && k === pieces.length - 1 && t < n && !Program.space(s.charCodeAt(t)) && !s.endsWith(close)) {
+        // (ending a head with words in it, the rest not one body: the rest, as code)
+        if (rule.literals.length && k === pieces.length - 1 && t < n && !Program.space(s.charCodeAt(t)) && !(s.startsWith(open, t) && Program.closes(s, t, open, close) === n)) {
           spans.push(t, n); step(k + 1, n); spans.length -= 2;
           return;
         }
@@ -460,6 +483,8 @@ export class Program {
       // (a typed hole: a span its type's own rules read whole; a type that is not a node, none)
       const typed = pieces[k].type === undefined ? undefined : this.type_of(rule, k);
       if (typed === null) return;
+      // (what its type's rules can begin with: anything else, not one)
+      if (typed) { const firsts = this.firsts_of(typed); if (firsts && !firsts.has(s.charCodeAt(t))) return; }
       // (between a quote and the same quote: up to the next one)
       const before = pieces[k - 1]?.literal;
       if (before !== undefined && before === next?.literal && this.quotes.has(before)) {
@@ -491,6 +516,18 @@ export class Program {
   // indented as its first), and where its
   // labels (`label\`) are among them. Code is split once: kept here when it refers to no value, else by what holds it (a rule).
   private codes = new Map<string, Program.Code>();
+  // (how much a line opens: bodies and the pairs learned, `( )`, `[ ]`; what is quoted, nothing)
+  nesting(line: string): number {
+    const { open, close } = this.grammar!, { opens, closes, quoted } = this;
+    let depth = 0;
+    for (let i = 0; i < line.length; i++) {
+      const x = line.charCodeAt(i);
+      if (line.startsWith(open, i) || opens.has(x)) depth++;
+      else if (line.startsWith(close, i) || closes.has(x)) depth--;
+      else if (quoted.has(x)) { const q = line.indexOf(line[i], i + 1); if (q < 0) break; i = q; }
+    }
+    return depth;
+  }
   code(code: string): Program.Code {
     let split = this.codes.get(code);
     if (split) return split;
@@ -498,7 +535,7 @@ export class Program {
     let depth = 0;
     for (const line of lines.map(line => line.slice(base))) {
       if (statements.length && (depth > 0 || Program.space(line.charCodeAt(0)))) statements[statements.length - 1] += '\n' + line; else statements.push(line.trimEnd());
-      depth += line.split(open).length - line.split(close).length;
+      depth += this.nesting(line);
     }
     // (a label written with a hole, `{x}\`, is the value the hole is: gone to by `goto` that value)
     const marked = statements.flatMap((statement, k) => /^\S+\\$/.test(statement) ? [k] : []);
@@ -515,7 +552,7 @@ export class Program {
   run(written: string | Program.Code, frame: Program.Frame, except?: Program.Rule, answers = false): unknown {
     const code = typeof written === 'string' ? this.code(written) : written, { statements, labels } = code;
     if (labels.size) this.scopes.push(labels);
-    this.depth++;
+    if (this.depth++ === 0) this.statements++;
     let value: unknown;
     try {
       // (a right side that begins by going on: the reader has already gone on past every reading it would)
@@ -638,7 +675,8 @@ export class Program {
     // (a body hole on its own is run, as the code it is, each time; any other hole on its own is read: once)
     const alone = this.alone(statement, code);
     if (alone !== undefined && alone in reading.caps)
-      return reading.rule.bodies.has(alone) ? this.run(reading.caps[alone], { node: frame.node, this: reading.self, into: frame.into }) : this.held_value(this.shared(reading, alone));
+      // (code read in a value: what it does not find there, found where it was written)
+      return reading.rule.bodies.has(alone) ? this.run(reading.caps[alone], { node: frame.node, this: reading.self, into: frame.into, also: reading.site !== frame.node ? reading.site : undefined }) : this.held_value(this.shared(reading, alone));
     const text = this.substituted(statement, reading, reading.site, code);
     return this.read(text.trim(), frame, except, this.alike);
   }
@@ -693,6 +731,19 @@ export class Program {
     }
     return false;
   }
+  private definitions = new Map<string, number>();
+  // (the definer outside every bracket and quote: binding loosest of all, the line is a definition)
+  outermost(s: string): boolean {
+    const { open, close, definer } = this.grammar!, { opens, closes, quoted } = this;
+    for (let i = 0, depth = 0; i < s.length; i++) {
+      const x = s.charCodeAt(i);
+      if (s.startsWith(open, i) || opens.has(x)) depth++;
+      else if (s.startsWith(close, i) || closes.has(x)) depth--;
+      else if (quoted.has(x)) { const q = s.indexOf(s[i], i + 1); if (q < 0) return false; i = q; }
+      else if (!depth && s.startsWith(definer, i) && Program.space(s.charCodeAt(i - 1)) && Program.space(s.charCodeAt(i + definer.length))) return true;
+    }
+    return false;
+  }
   // (a definition: its first line ends with the definer)
   defines(statement: string): boolean {
     const line = statement.indexOf('\n');
@@ -712,6 +763,24 @@ export class Program {
   }
   private referring_text?: RegExp;
   // (text with the holes written into it as their text again (only those not read yet, when `unread`): what was written)
+  // (a reference written where a name goes, to a value that is text (read): that text, `x[k] := v` defining `k`'s text)
+  named(text: string): string {
+    if (!text.includes(Program.REFERS)) return text;
+    const { open, close } = this.grammar!;
+    this.referring_text ??= new RegExp(`${Program.escaped(open)}${Program.REFERS}([0-9a-z]{6})${Program.escaped(close)}`, 'g');
+    return text.replace(this.referring_text, (whole, id) => this.text_of(parseInt(id, 36)) ?? whole);
+  }
+  text_of(id: number): string | undefined {
+    const { open, close } = this.grammar!;
+    let value = this.referred_to(id);
+    for (let i = 0; i < 32 && value instanceof Program.Held; i++) {
+      if (value.read) { value = value.value; break; }
+      const t = value.text.trim();
+      if (t.length !== this.token || t.charCodeAt(open.length) !== 0xE000) return undefined;
+      value = this.referred_to(parseInt(t.slice(open.length + 1, -close.length), 36));
+    }
+    return typeof value === 'string' ? value : undefined;
+  }
   source(text: string, unread = false): string {
     if (!text.includes(Program.REFERS)) return text;
     const { open, close } = this.grammar!;
@@ -738,19 +807,26 @@ export class Program {
     const writer = frame.on ? undefined : frame.reading ?? frame.writer;
     // (a member, `.name`: `name` read in `.`)
     if (s.charCodeAt(0) === 46 && !Program.space(s.charCodeAt(1))) {
+      // (a member named by a value that is text: that name)
+      if (s.length === this.token + 1 && s.charCodeAt(open.length + 1) === 0xE000) { const name = this.text_of(parseInt(s.slice(open.length + 2, -close.length), 36)); if (name !== undefined) s = '.' + name; }
       // (a capture of the reading: its text, as written)
       if (!frame.on && writer && s.slice(1) in writer.caps) return this.source(writer.caps[s.slice(1)]);
       // (read on in a value, it is `name` read in the value; else in `.`)
       // (where the text was written: read on in a value, where it was before; else here (what `site` holds here then is only
       // where else to look))
-      const self = frame.on ? frame.node : frame.this ?? frame.node, written = frame.on ? frame.site ?? frame.node : frame.node;
+      const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.on ? frame.site ?? frame.node : frame.node;
       // (a value that is not a node (text) has no names of its own: its names are the outermost node's (Node's), `.` the value)
       if (!(self instanceof Program.Node)) { let root = frame.node; while (root.outer) root = root.outer; return this.read(s.slice(1), { node: root, from: self, this: self, writer: frame.reading ?? frame.writer }); }
-      return this.read(s.slice(1), { node: self, site: self === written ? undefined : written, this: frame.this, from: self.calls ? frame.from : self, on: true, writer: frame.reading ?? frame.writer });
+      return this.read(s.slice(1), { node: self, site: self === written ? undefined : written, this: frame.this, from: self, on: true, writer: frame.reading ?? frame.writer });
     }
     if (s.startsWith('goto ')) return this.run(s, frame, except);
     // (a definition, its first line ending with the definer, is read only by a rule whose head has the definer)
-    const line = s.indexOf('\n'), defines = (line < 0 ? s : s.slice(0, line)).trimEnd().endsWith(definer);
+    let defines = this.definitions.get(s);
+    if (defines === undefined) {
+      const line = s.indexOf('\n'), first = line < 0 ? s : s.slice(0, line);
+      if (this.definitions.size > 100000) this.definitions.clear();
+      this.definitions.set(s, defines = first.trimEnd().endsWith(definer) ? 1 : this.outermost(first) ? 2 : 0);
+    }
     // (the rules' readings of all of it; else a body it begins with; else every reading: found once for text read alike, in
     // a node that sees the same heads)
     // (kept in the nearest node out that has a rule that may read it: a new node with none reads it as the one it is in)
@@ -795,7 +871,7 @@ export class Program {
       try { for (;;) {
         this.running.push(reading.rule);
         reading.into = home?.calls ? node : frame.into;
-        try { value = this.run(reading.rule.code, { reading, node, this: self, into: home?.calls ? undefined : frame.into, from: home?.calls || !frame.on ? undefined : frame.from }, reading.rule, node !== frame.node); break; }
+        try { value = this.run(reading.rule.code, { reading, node, this: self, into: home?.calls ? undefined : frame.into, from: !home?.calls && frame.on && frame.node.calls ? frame.from : undefined }, reading.rule, node !== frame.node); break; }
         catch (again) {
           if (!(again instanceof Program.Again) || (again.reading ? again.reading.all : again.all) !== all) throw again;
           // (none left reading all of it: those reading less of it)
@@ -823,7 +899,7 @@ export class Program {
     if (defines) {
       // (made by a rule creator's right side: as written, its holes not read yet their text)
       const made = except?.defines && s.includes(Program.REFERS) ? this.source(s, true) : s, at = made.indexOf('\n');
-      const head = at < 0 ? made : made.slice(0, at), rule = this.rule(head.trimEnd().slice(0, -definer.length).trim(), at < 0 ? '' : made.slice(at + 1));
+      const head = this.named(at < 0 ? made : made.slice(0, at)), rule = this.rule(head.trimEnd().slice(0, -definer.length).trim(), at < 0 ? '' : made.slice(at + 1));
       // (a head that is one hole between two literals, each a character: those balance, as a body does)
       // (a head that is one hole, written as two of the holes its right side has with something between them (`{name: type}`):
       // a typed hole, what separates them learned; what a rule with typed holes begins with, those two its hole and type)
@@ -929,7 +1005,7 @@ export class Program {
   // one led by a literal found by that literal (one of the starts of `s`), any other by its longest literal (found going once
   // through `s`), when `s` has each of its literals.
   private looked = 0;
-  candidates(s: string, node: Program.Node, defines: boolean, except?: Program.Rule, site?: Program.Node, on = false, writer?: Program.Reading): Program.Candidate[] {
+  candidates(s: string, node: Program.Node, defines: boolean | number, except?: Program.Rule, site?: Program.Node, on = false, writer?: Program.Reading): Program.Candidate[] {
     const candidates: Program.Candidate[] = [], look = ++this.looked;
     const take = (rules: Program.Rule[], rank: number) => {
       for (const rule of rules) if (this.may_read(rule, s, defines, except)) candidates.push({ rule, rank: rank + rule.id });
@@ -972,14 +1048,16 @@ export class Program {
   // (a definition is read by a rule with the definer in its head, or by a modifier (words, then a body hole: the rest, as
   // code); one written by a rule creator's right side (a rule with the definer in its head) is made as written)
   private checking = new Set<Program.Rule>();
-  may_read(rule: Program.Rule, s: string, defines: boolean, except?: Program.Rule): boolean {
+  may_read(rule: Program.Rule, s: string, defines: boolean | number, except?: Program.Rule): boolean {
     if (this.checking.size && this.checking.has(rule)) return false;
-    if (rule === except || (defines && (!(rule.defines || rule.modifies) || except?.defines))) return false;
+    if (rule === except || (defines && (!(rule.defines || rule.modifies) || (defines === 1 && except?.defines)))) return false;
     for (const literal of rule.literals) if (!s.includes(literal)) return false;
+    // (a head ending in a body, without words: a body written, so its bracket in the text)
+    if (rule.braced && !s.includes(this.grammar!.open)) return false;
     return true;
   }
   // (whether a node has a rule of its own that may read `s`)
-  offers(node: Program.Node, s: string, defines: boolean, except?: Program.Rule): boolean {
+  offers(node: Program.Node, s: string, defines: boolean | number, except?: Program.Rule): boolean {
     if (!node.rules.length || node.calls) return false;
     for (const length of node.lengths.get(s[0]) ?? []) {
       if (length > s.length) break;
@@ -1014,7 +1092,7 @@ export class Program {
       // and one already read (in the head too): the shared value)
       const text = cap === undefined ? written
         : reading.rule.bodies.has(name) ? cap
-        : defines && headed && !reading.values.get(name)?.read ? this.source(cap)
+        : defines && headed && !reading.values.get(name)?.read ? this.source(this.named(cap))
         : defines && name !== held && !reading.values.get(name)?.read ? this.source(cap, true)
         : this.written(this.shared(reading, name));
       if (text.length !== this.token || text.charCodeAt(this.grammar!.open.length) !== 0xE000) referred = false;
@@ -1064,7 +1142,7 @@ export class Program {
 export namespace Program {
   // (`written`: a typed hole as written, its type part of the head)
   export type Piece = { literal?: string, hole?: string, body?: boolean, written?: string, type?: string };
-  export type Rule = { checked?: [number, number], capture?: string, types: [string, string][], own?: boolean, shape?: string, modifies: boolean, bodies: Set<string>, head: string, pieces: Piece[], body: string, code: Code, holds?: object[], home?: Node, literals: string[], holes: string[], defines: boolean, passes: boolean, id: number, last?: string, key: string };
+  export type Rule = { braced?: boolean, checked?: [number, number], capture?: string, types: [string, string][], own?: boolean, shape?: string, modifies: boolean, bodies: Set<string>, head: string, pieces: Piece[], body: string, code: Code, holds?: object[], home?: Node, literals: string[], holes: string[], defines: boolean, passes: boolean, id: number, last?: string, key: string };
   export type Hole = { name: string, indent?: string, written: string, headed: boolean };
   export type Keyed = { key: string, rules: Rule[], looked: number };
   export type Candidate = { rule: Rule, rank: number };

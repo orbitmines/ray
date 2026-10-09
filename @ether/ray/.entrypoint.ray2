@@ -70,6 +70,8 @@ nearest {head} => {body} =>
 // Node: the outermost node (`.`, here, is the node being read in). Every node sees its rules, so they are what any value
 // read on reads: its methods.
 Node := .
+// (`global`: the same outermost node, named for what is defined everywhere: `global[name] := …`, `global.None`)
+global := Node
 // (what a declaration, `x: T`, answers: nothing but that it declared)
 declared := { }
 // (code read in a node: its definitions are the node's)
@@ -102,9 +104,10 @@ declared := { }
 
 // Read on a value without a space between: tightest (precedence is the order rules are defined in: one defined later binds
 // looser), so `a === x[k]` is `a === (x[k])`.
-// What a value holds under a key (any value; keys are the same when `===`): `x[key]`. (Given one: see `x[key] = v` below.)
+// What a value holds under a key: a key that is text, the member it names (`global["Decimal"]` is `Decimal`); any other, an
+// entry (keys the same when `===`). (Given one: see `x[key] = v` below.)
 {on}[{key}] =>
-  {on}.held({key})
+  ({key} is String) ? {on}.{key} : {on}.held({key})
 // Partial arguments: `f<a: 5>` is `f` with those given first (code: inlined into each call before its own arguments): `g :=
 // f<a: 5>`, then `g(1)` gives `b`.
 {function}<{{given}}> =>
@@ -269,8 +272,10 @@ recur =>
 //   a method: `name (parameters) =>` gives the name a closure, as `name := (parameters) =>` does (so its locals are its
 //     own); a rule without parameters, `name =>`, is one too (read on in a value, `.` is that value); `x.name (…) =>` is a
 //     member (a name handed on is a value: what is in it is not read again, so the member is written as one);
-//   `:=`, and its more particular forms: a closure given to a name (written on the lines below, it is a definition: read by
-//     these), a member (so `x.m := () => …` is one), a key (`x[k] = v`), names at once;
+//   `:=`, and its more particular forms: a closure or a class given to a name (`f := (x) => …`, `X := class (…) => { … }`:
+//     a line with `=>` outside brackets is a definition, read only by rules with `=>` in their heads; the name handed on as
+//     written, so `global[n] := class …` is one), a member (so
+//     `x.m := () => …` is one), a key (`x[k] = v`), names at once;
 //   a guard: `x := 1 if c` guards the statement (and `x if a && b` guards on both);
 //   `,`: a list of what is on either side.
 // Rules after it are led by a literal, or are methods, so it stays the loosest. (A head written `{ }` for a space reads
@@ -316,22 +321,30 @@ nearest () => {body} =>
     None
   {name} =>
     {value}
-{name}{ }:={ }() => {body} =>
+{{name}}{ }:={ }() => {body} =>
   {name} := (() => {body})
-{name}{ }:={ }({parameters}) => {body} =>
+{{name}}{ }:={ }({parameters}) => {body} =>
   {name} := (({parameters}) => {body})
 {on}.{name}{ }:={ }() => {body} =>
   {on}.{name} := (() => {body})
 {on}.{name}{ }:={ }({parameters}) => {body} =>
   {on}.{name} := (({parameters}) => {body})
+{{name}}{ }:={ }class{ }({fields}) => {{block}} =>
+  {name} := (class ({fields}) => {
+    {block}
+  })
+{{name}}{ }:={ }class:{ }{parent}{ }({fields}) => {{block}} =>
+  {name} := (class: {parent} ({fields}) => {
+    {block}
+  })
 {on}.{name} := {value} =>
   {on} &+= {
     {name} := {value}
   }
 {on}[{key}] = {value} =>
-  {on}.holding({key}, {value})
+  ({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value})
 {on}[{key}] := {value} =>
-  {on}.holding({key}, {value})
+  ({key} is String) ? ({on}.{key} := {value}) : {on}.holding({key}, {value})
 ({name}) := {value} =>
   {name} := {value}
 ({name}, {names}) := {list} =>
@@ -491,7 +504,7 @@ here {name} =>
 // A closure with parameters called with none, `f()`: called with nothing given (each its default). (One without parameters
 // has its own `()`, read first.)
 () =>
-  .(declared)
+  . (declared)
 
 // A call's parameters taking its arguments: one parameter, all of them; several, each the next (walking the list's
 // vertices; one its setup already defines, given by name or a partial argument, passes, leaving it for the next). Arguments that

@@ -98,7 +98,8 @@ Number &+= {
     Subscript: Digit = "₀" | "₁" | "₂" | "₃" | "₄" | "₅" | "₆" | "₇" | "₈" | "₉"
   }
   static Base := static{2 <= .}
-  static numeral (base: Base) => Bases.keys.map(global[.]){.radix == base}.first
+  static Named := ["Binary", "Ternary", "Quaternary", "Quinary", "Senary", "Septenary", "Octal", "Nonary", "Decimal", "Undecimal", "Duodecimal", "Tridecimal", "Tetradecimal", "Pentadecimal", "Hexadecimal", "Superscript", "Subscript"]
+  static numeral (base: Base) => Named.map((name) => global[name]){.radix == base}.first
 }
 Number.components.hierarchy &= Ray
 
@@ -110,8 +111,8 @@ Probability := Number{0 <= . <= 1}
 
 Digit := class: String
 
-dynamically Number.Bases.for name => {
-  internal Base => Number.Bases[name]
+Number.Named.for((name) => {
+  Base := Number.Bases[name]
 
   global[name] := class: Number (integer: Base[]{length >= 1}) => {
     static Digit := Base
@@ -171,7 +172,7 @@ dynamically Number.Bases.for name => {
   global[name].String = Base[]{length >= 1}
 
   Base{: 0+, number: Base} as (=== Base) => number
-}
+})
 
 Ending := \n | ")" | ","
 {from: Number}..{followed_by: ⊢Ending} ^punctuation => from -> 1

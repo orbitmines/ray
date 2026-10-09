@@ -161,26 +161,42 @@ Node &+= {
   &= {value Expression} => @assign ((this ?? []).append(value))
   // `x: T`: `x` is a `T` (holding `T` until something is written to it); given by name, `x: v` gives it `v`; in what is being given
   // its fields in order, the next of them (one given by name keeps it)
-  : {type} =>
+  : {colon_type} =>
     // (what is being given, read as held: not through the value's own `.`, which a class may read otherwise)
     // (the place it is applied on, taken first: what is read after has places of its own; its own names (`colon_…`), none a value
     // holds, which would be read in their place)
     @keep_place colon_place
     colon_word := @place_word colon_place
-    colon_head := @typed type
+    colon_head := @typed colon_type
     colon_had := @owns @here colon_word
     colon_naming := @member @here "naming"
     colon_given := @member @here "given"
     colon_taken := (!colon_head) && (!colon_naming) && (!colon_had) && colon_given && (!(colon_given.empty))
     // (given by name, `x: v`: the field `x` of what is being given, whatever `x` names where it is read)
-    colon_head ? None : (colon_naming ? (@field_at @here colon_place type) : (colon_had ? None : (colon_taken ? (@declare_at colon_place colon_given.take) : (@holding_at colon_place type))))
+    colon_head ? None : (colon_naming ? (@field_at @here colon_place colon_type) : (colon_had ? None : (colon_taken ? (@declare_at colon_place colon_given.take) : (@holding_at colon_place colon_type))))
     // (a field given is what `= default` does not write; one of a class, what its instances are given unless given otherwise)
     colon_shared := (!colon_naming) && (!colon_head) && (!colon_had) && (!colon_taken) && (@has @here components)
     colon_field := colon_shared ? (@made ClassField) : None
     colon_shared ? (@field colon_field "owner" @here) : None
     colon_shared ? (@field colon_field "word" colon_word) : None
+    // (what it declares, read into what declares it: its name and its type as written, after what was declared before it (`fields`, T26))
+    colon_declared := (colon_head || colon_shared) ? (@made Node) : None
+    colon_declared ? (@field colon_declared "name" colon_word) : None
+    colon_declared ? (@field colon_declared "type" (@later colon_type)) : None
+    colon_declared ? (@field colon_declared "before" ((@owns @here "declared") ? (@member @here "declared") : None)) : None
+    colon_declared ? (@field @here "declared" colon_declared) : None
     colon_naming ? @here : ((!colon_head) && (colon_had || colon_taken)) ? Field : colon_shared ? colon_field : this
 }
+// `{*}: T`: a field named by its pattern as written, after what was declared before it (what no other field reads, F-A4)
+{{field_pattern}}: {pattern_type} =>
+  pattern_word := "{" + (@text field_pattern) + "}"
+  pattern_declared := @made Node
+  @field pattern_declared "name" pattern_word
+  @field pattern_declared "type" (@later pattern_type)
+  @field pattern_declared "before" ((@owns @here "declared") ? (@member @here "declared") : None)
+  @field @here "declared" pattern_declared
+  @field @here pattern_word (@later pattern_type)
+  pattern_declared
 // `x.m = v`: `v` written on `x` (declared after `:`, which its receiver stops at: `x: T.U = d` is a field)
 {assigned_on Expression}.{assigned_name Word} = {assigned_value Expression} =>
   assigned_on &+= { assigned_name => assigned_value }

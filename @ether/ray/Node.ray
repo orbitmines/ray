@@ -10,13 +10,20 @@ Node &+= {
 
   // what it holds under a name given as text (`` x.`name` `` where `name` holds the text)
   member (named: String) => @member this named
-  // its fields by name, each its `name` and `type`: what its class's header declares (temporary, until A3 reads them from the class
-  // as Ray: `@field_type`)
+  // its fields in order, each its `name`, `type` and `value`, and by name (`x.fields["width"]`): what its class's header and block
+  // declare, then (a class) what its own block declares
   fields =>
-    made := @made Node
+    made := []
     maker := @of this
-    ((maker !== None) && (@owns maker "header")) ? maker.header.for(piece => (piece is String) ? None : (@field made (@param piece 0) (name: @param piece 0, type: @field_type piece (@param piece 0)))) : None
+    pieces := ((maker !== None) && (@owns maker "header")) ? maker.header : []
+    pieces.for(piece => (piece is String) ? None : Node.fields_of(made, this, piece))
+    (maker !== None) ? Node.fields_of(made, this, maker) : None
+    Node.fields_of(made, this, this)
     made
+  // (what `declarer` declares, first declared first)
+  static fields_of (made, holder, declarer) => (@owns declarer "declared") ? Node.declared_fields(made, holder, @member declarer "declared") : None
+  static declared_fields (made, holder, declared) => (declared === None) ? None : (Node.declared_fields(made, holder, @member declared "before") -- (Node.field_of(made, holder, declared)))
+  static field_of (made, holder, declared) => (name: declared.name, type: @later (declared.type), value: @later (@member holder declared.name)) -- (field => made.append(field) -- (@field made declared.name field))
   as (=== String) => ((@of this) && (@member (@of this) "header") && Language.patterned((@of this).header.head)) ? Language.part_written(this) : (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)

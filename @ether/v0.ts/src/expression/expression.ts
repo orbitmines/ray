@@ -1512,7 +1512,7 @@ export class Host {
     const x = this.valued(p.at, p.word), v = x?.native!(p.at);
     return v instanceof Code && this.held_types.has(v);
   }
-  later(c: Code): Later { return new Later(c); }
+  later(c: Code): Later { if (process.env.DBGL) console.log('LATER', JSON.stringify(c.s), c.word, [...c.ctx.m.keys()].join(',')); return new Later(c); }
   // whether what is written has a place to be written to (written to nothing, it is not read)
   placed(F: Ray): boolean { let n: Ray | undefined = F; while (n && !n.place) n = n.caller; return !!n?.place; }
   // `x = v` in a parameter of a head being read: its default, as written (read where it is given, when it is not)
@@ -1923,7 +1923,7 @@ export class Host {
   force(v: unknown): unknown { return v instanceof Code ? this.walk(v) : v; }
   // what a name holds, as it is read: one read when it is first read, read now
   held_value(v: unknown): unknown {
-    if (v instanceof Later) { if (!v.read) { v.read = true; v.value = this.walk(v.code); } return v.value; }
+    if (v instanceof Later) { if (!v.read) { v.read = true; v.value = this.walk(v.code); if (process.env.DBGL) console.log('READ', JSON.stringify(v.code.s), this.show(v.value)); } return v.value; }
     return this.force(v);
   }
   // (code given as an argument: marked so, as a copy)

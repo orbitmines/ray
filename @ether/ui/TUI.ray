@@ -102,7 +102,7 @@ UI.TUI := class {
   written := {
     {text: String} => text
     {glyph: Char} => glyph as String
-    {start: Start} => Compiler.reduced(start.modes, written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], written)
+    {started: Start} => Compiler.reduced(started.modes, written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], written)
     {stop: Stop} => Compiler.reduced(stop.start.modes.map(.flipped).reverse, written)
     // (SGR: each parameter after a `;`, as the header `("\e[0", parameters: (";", parameter: …)[], "m")` writes it)
     {style: ANSI.Style} => "\e[0" + (style.parameters ?? []).map(written_parameter => ";" + Compiler.reduced(written_parameter.parameter, written)).join("") + "m"

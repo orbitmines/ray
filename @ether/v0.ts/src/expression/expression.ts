@@ -73,6 +73,8 @@ export class Code {
   past?: Ray;
   // (what one capture alone captured, `{x} => …`: that rule does not read it again)
   of?: Eq;
+  // (captured by a rule applied at a level: a closure made of it reads by that level's rules)
+  level?: Ray;
   constructor(public text: Text, public b: number, public e: number, public ctx: Ray, public floor = 0) {}
   get s() { return this.text.s.slice(this.b, this.e); }
 }
@@ -1140,7 +1142,7 @@ export class Host {
     return this.scan(text, at, e, i => {
       if (i <= at) return;
       const list = this.infix.get(s[i]);
-      if (list) for (const x of list) if (x.lit.includes(space) && !(right && x.lit.trim() === '') && !this.applies_after(s, at, i) && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
+      if (list) for (const x of list) if (x.lit.includes(space) && !(right && x.lit.trim() === '') && !((x.lit.trim() === '' || x.lit.trim().startsWith('.')) && this.applies_after(s, at, i)) && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
       if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list && !this.applies_after(s, at, i)) for (const x of list) if (this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false; }
     }, pairs);
   }
@@ -1219,6 +1221,8 @@ export class Host {
     // (an argument that begins by reading on from a value: a closure of that value)
     // (an argument directly inside a closure run on an element: what begins by reading on reads on that element, as a statement there does)
     const inner = code.argument && this.on_element(code); if (inner && (!r || r.e < code.e)) { const o = this.read_on(code); if (o) r = o; }
+    // (an argument captured at a level: a closure of the element when, read at that level, it reads on from one)
+    if (code.argument && code.level && !inner) { const lc = new Code(code.text, code.b, code.e, code.level, code.floor); lc.argument = true; const lr = this.reading(lc); if (lr) { let x: Read | undefined = lr; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(lc) || this.reads_element(lc, lr)) return this.element_closure(lc); } }
     if (code.argument && r && !inner) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code) || this.reads_element(code, r)) return this.element_closure(code); }
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
     if (r === undefined || r.e < e) {
@@ -1695,9 +1699,9 @@ export class Host {
     const ps = eq.pieces, enclosed = ps.length > 1 && 'lit' in ps[0] && 'lit' in ps[ps.length - 1];
     F.scope = true; F.caller = code.ctx; F.self = self; F.rule = eq; F.statement = code.statement && !enclosed;
     if (F.outer !== eq.body.ctx) F.sees = eq.body.ctx;
-    // (what it captured is read where it was written; at a level, at that level: the level's rules stay in scope for it)
-    const at = code.ctx.level ? code.ctx : code.ctx.written ?? code.ctx;
-    if (!this.captured(eq, F, caps, code.text, at)) return NOT;
+    // (what it captured is read where it was written; a closure made of it at a level, at that level)
+    const at = code.ctx.written ?? code.ctx;
+    if (!this.captured(eq, F, caps, code.text, at, code.ctx.level ? code.ctx : undefined)) return NOT;
     // (a method: what it was given matched against its parameters; the frame continues into it, what it was not given what it says)
     if (eq.node?.params) {
       if (again) F.m.set(this.given_name, again);
@@ -1733,8 +1737,8 @@ export class Host {
   }
   // captures bound in a frame: code, read where written each time it is named; one with a reader (or a type) a value, what that
   // reads it as, read once, here; false when one is not read so
-  captured(eq: Eq, F: Ray, caps: Cap[], text: Text, at: Ray): boolean {
-    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); if (eq.pieces.length === 1) k.of = eq; if (c.unread) (F.codes ??= new Map()).set(c.name, k); F.m.set(c.name, c.unread ? text.s.slice(c.b, c.e).trim() : c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : this.argued(this.written(k))); }
+  captured(eq: Eq, F: Ray, caps: Cap[], text: Text, at: Ray, level?: Ray): boolean {
+    for (const c of caps) { const k = new Code(text, c.b, c.e, at, c.floor); if (eq.pieces.length === 1) k.of = eq; if (level) k.level = level; if (c.unread) (F.codes ??= new Map()).set(c.name, k); F.m.set(c.name, c.unread ? text.s.slice(c.b, c.e).trim() : c.b === c.e ? k : c.reader || c.type !== undefined ? NOT : this.argued(this.written(k))); }
     for (const c of caps) if ((c.reader || c.type !== undefined) && c.b < c.e && !c.unread) {
       // (while what reads its captures is read, the rule reads nothing itself)
       const k = new Code(text, c.b, c.e, at, c.floor);
@@ -1960,7 +1964,7 @@ export class Host {
     return this.force(v);
   }
   // (code given as an argument: marked so, as a copy)
-  argued(c: Code): Code { if (c.argument) return c; const a = new Code(c.text, c.b, c.e, c.ctx, c.floor); a.argument = true; a.word = c.word; a.past = c.past; a.of = c.of; return a; }
+  argued(c: Code): Code { if (c.argument) return c; const a = new Code(c.text, c.b, c.e, c.ctx, c.floor); a.argument = true; a.word = c.word; a.past = c.past; a.of = c.of; a.level = c.level; return a; }
   // an argument that begins by reading on from a value: a closure of one value, what each such reading in it reads on (T19)
   element = '\u0000element'; elements = 0;
   // (code whose operands read on from a value: `10 - .`, `.a + .b`; not inside a pair of its own, `f(.x)`, which is its own)

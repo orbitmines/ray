@@ -459,6 +459,8 @@ String &+= {
   width (font: Geometry.Font) => map(.columns).sum * font.size / 2
 }
 
+// (a share of the parent, F-B3: `100%`, `1` and `1.0` the same share)
+Unit(name: "percent", symbol: "%")
 Unit(name: "pixel", symbol: "px")
 Unit(name: "point", symbol: "pt").multiple(4 / 3, pixel)
 Unit(name: "em")

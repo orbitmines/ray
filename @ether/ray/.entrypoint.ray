@@ -153,7 +153,7 @@ Node &+= {
 // of the context the `with` is in, and everything called from there (declared before `=`: the settings are any code, `with x = v`)
 with {settings} {{body}} =>
   written := @writing settings
-  answer := @run (Program(code: body))
+  answer := @run (Program(code: body)).code None
   @unwritten written
   answer
 with {settings} => @writing settings
@@ -745,9 +745,9 @@ Program := class {
     this &+= { naming := None }
     this
   // run: its code read again, with the rules of its level in scope (a block's code: what the block was made of)
-  () => @run this
+  () => @run code O
   // `p(arguments)`: what it is given matched against its parameters (as a method's are), its code run with them
-  ({called}) => @call this code parameters called
+  ({called}) => @call this code parameters O called
 }
 // a diagnostic (R5.1)
 Diagnostic := class {

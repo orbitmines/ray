@@ -1516,9 +1516,9 @@ export class Host {
   // whether what is written has a place to be written to (written to nothing, it is not read)
   placed(F: Ray): boolean { let n: Ray | undefined = F; while (n && !n.place) n = n.caller; return !!n?.place; }
   // `x = v` in a parameter of a head being read: its default, as written (read where it is given, when it is not)
-  assigning(F: Ray): boolean {
+  assigning(F: Ray, held: unknown): boolean {
     let n: Ray | undefined = F; while (n && !n.place) n = n.caller;
-    const p = n?.place, held = F.m.get('value'), code = held instanceof Code ? this.written(held) : held;
+    const p = n?.place, code = held instanceof Code ? this.written(held) : held;
     if (!p || !this.reading_node || p.at !== this.reading_node || !(code instanceof Code)) return false;
     this.unread.delete(p); (p.at.defaults ??= new Set()).add(p.word); (p.at.default_codes ??= new Map()).set(p.word, code);
     return true;
@@ -1798,10 +1798,10 @@ export class Host {
   }
   // `p(…)` of a program (`@call`): the method its parameters and code are (made once), applied to what it is given
   program_methods = new WeakMap<Ray, Eq>();
-  call_program(p: unknown, code: unknown, parameters: unknown, given: unknown): unknown {
+  call_program(p: unknown, code: unknown, parameters: unknown, O: unknown, given: unknown): unknown {
     if (!(p instanceof Ray)) return undefined;
     // (given nothing: run, at its level)
-    if (!(given instanceof Code) || !this.held(given.text, given.b, given.e)) return this.ran(p);
+    if (!(given instanceof Code) || !this.held(given.text, given.b, given.e)) return this.ran(code, O);
     let eq = this.program_methods.get(p);
     if (!eq) {
       const body = this.block_code(code); if (!body) return undefined;
@@ -2008,8 +2008,8 @@ export class Host {
   // the code each block was made of (`@block`), and running a program (`@run`): its code read again where it was written, with
   // the equivalences of its level (`O`) in scope
   blocks = new WeakMap<Ray, Code>();
-  ran(p: unknown): unknown {
-    const code = this.field(p, 'code'), O = this.field(p, 'O');
+  ran(code: unknown, level: unknown): unknown {
+    const O = level === this.none ? undefined : level;
     const c = code instanceof Ray ? this.blocks.get(code) : code instanceof Code ? code : undefined;
     if (!c) return code;
     // (the level's equivalences nearer than what the code names)
@@ -2055,7 +2055,7 @@ export class Host {
     F.m.set(c.cap, x);
     return eq.native ? eq.native(F) : this.body(eq, F);
   }
-  truthy(v: unknown): boolean { return v !== undefined && v !== this.none && v !== NOT && v !== this.name(this.global, 'false'); }
+  truthy(v: unknown): boolean { return v !== undefined && v !== this.none && v !== NOT && v !== this.kind('false'); }
   // a context the host reads text with (`js.ray`): `test` gives what a span is read as, or undefined
   reader(test: (s: string) => unknown): Ray { const r = new Ray(); r.test = test; return r; }
 

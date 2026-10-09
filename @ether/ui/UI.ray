@@ -250,6 +250,8 @@ Node &+= {
   right-to-left mb ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.bottom) = UI.Theme.scaled(this), itself)
   right-to-left ml ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.left) = UI.Theme.scaled(this), itself)
   right-to-left mr ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.right) = UI.Theme.scaled(this), itself)
+  // (`pt 5 x`: `x` with that spacing (F-B8b), as `center x` is `x` aligned)
+  right-to-left {spacing_given: Geometry.Spacing} ^keyword => Geometry.Box(spacing: [spacing_given], children: [this])
 }
 
 Unit(name: "viewport width", symbol: "vw")

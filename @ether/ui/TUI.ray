@@ -13,7 +13,7 @@ UI.TUI := class {
     graphic (at: Geometry.Vector, bytes) => graphics.push (at: at, bytes: bytes)
     changes (before: Grid?) => (0..<height).map(y => (0..<width){!before || cells[y][.] != before.cells[y][.]}.map(x => [[Geometry.Vector(x, y)], cells[y][x]])).flatten(1)
     framed (previous: Grid? = None) => [
-      ANSI.Title(title) if (title && title != previous.title),
+      ANSI.Title(title) if title && title != previous.title,
       changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: (cell.link === None ? "" : (cell.link as String))), cell.glyph]),
       graphics{!(previous.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
       ANSI.Style()

@@ -284,6 +284,16 @@ loop {{body}} =>
   goto loop_again
   loop_done\
 
+// ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`; before `&&`, `||` and the operators on values: `x if a && b`, `x if a < b`, `x while a < b`)
+{guarded} if {condition} => condition ? guarded : None
+{guarded} unless {condition} => condition ? None : guarded
+// `x while c`: `x` again while `c` holds
+{body} while {condition} =>
+  loop_again\
+  condition ? None : (goto loop_done)
+  body
+  goto loop_again
+  loop_done\
 // ---------------------------------------------------------------- what holds (T1.7): every value but nothing and false
 true := @made Node
 false := @made Node
@@ -580,16 +590,6 @@ Class &+= {
     made with { block }
     made
 }
-// ---------------------------------------------------------------- guards: `x if c`, `x unless c` (declared after `,`: `x if c, y` is `(x if c), y`; before the operators on values: `x if a < b`, `x while a < b`)
-{guarded} if {condition} => condition ? guarded : None
-{guarded} unless {condition} => condition ? None : guarded
-// `x while c`: `x` again while `c` holds
-{body} while {condition} =>
-  loop_again\
-  condition ? None : (goto loop_done)
-  body
-  goto loop_again
-  loop_done\
 // The precedence of the operators on values: a head binds tighter the later it is first declared. `is`, ranges and comparisons
 // are declared here, before `|` and `+` (below) and the arithmetic (`js.kinds.ray`, Number.ray): `x is A | B`, `0..<2 * n`, `a + 1 > b`
 Operators := @made Node

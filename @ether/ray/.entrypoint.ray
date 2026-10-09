@@ -1,6 +1,12 @@
 {pattern} => {functionality} =>
   Expression |= pattern => functionality
 {expression dynamically Expression} => expression
+// `f <- x` (F-B2, the Scene level's): its head declared first, looser than every operation after it (it ends what a right-to-left
+// method is applied on, and what is juxtaposed before it is its left side)
+Flows := @made Node
+Flows &+= {
+  {flows_into} <- {flowing} => None
+}
 //{comment} => None
 {statement} //{comment} => statement
 //{comment} => {functionality} =>
@@ -588,8 +594,6 @@ Class &+= {
 // are declared here, before `|` and `+` (below) and the arithmetic (`js.kinds.ray`, Number.ray): `x is A | B`, `0..<2 * n`, `a + 1 > b`
 Operators := @made Node
 Operators &+= {
-  // (`f <- x`, F-B2 (the Scene level's): looser than everything after it, so it ends what a right-to-left method is applied on)
-  {flows_into} <- {flowing} => None
   is {type} => None
   ..{last} => None
   ..<{last} => None

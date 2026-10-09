@@ -1209,7 +1209,9 @@ export class Host {
     // (a statement inside a closure run on an element (`reduce`'s step) that begins by reading on from a value: on the element, `.origin = …`)
     if (code.statement && this.element_bodies.length > 0) { const top = this.element_bodies[this.element_bodies.length - 1]; if (top.text === code.text && top.b <= code.b && code.e <= top.e) { const o = this.read_on(code); if (o) r = o; } }
     // (an argument that begins by reading on from a value: a closure of that value)
-    if (code.argument && r && !this.on_element(code)) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code) || this.reads_element(code, r)) return this.element_closure(code); }
+    // (an argument directly inside a closure run on an element: what begins by reading on reads on that element, as a statement there does)
+    const inner = code.argument && this.on_element(code); if (inner && (!r || r.e < code.e)) { const o = this.read_on(code); if (o) r = o; }
+    if (code.argument && r && !inner) { let x: Read | undefined = r; while (x.on) x = x.on; if (x.eq === this.implicit || this.read_on(code) || this.reads_element(code, r)) return this.element_closure(code); }
     let e = code.e; while (e > code.b && this.blank(s[e - 1])) e--;
     if (r === undefined || r.e < e) {
       const from = r ? r.e : code.b, unread = s.slice(from, e).trim();

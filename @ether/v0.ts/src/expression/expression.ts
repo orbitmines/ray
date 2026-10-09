@@ -861,7 +861,7 @@ export class Host {
       const hugs = !eq.ctx.scope && 'lit' in eq.pieces[0] && !eq.pieces.some(x => 'lit' in x && x.lit.includes(this.learned.space));
       const atom = i === 0 && piece.reader !== undefined;
       // (led by a literal: the rest, as a statement reads it, `return x if c`)
-      const r = prev && 'lit' in prev && prev.lit.includes(this.learned.definer) ? e : statement && 'lit' in eq.pieces[0] ? this.rest(eq, text, at, e, ctx) : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0]); ends = r > at && this.held(text, at, r) ? [r] : [];
+      const r = prev && 'lit' in prev && prev.lit.includes(this.learned.definer) ? e : statement && 'lit' in eq.pieces[0] ? this.rest(eq, text, at, e, ctx) : statement && !atom ? this.scan(text, at, e, () => {}, eq.pairs) : this.operand(text, at, e, hugs || atom ? Infinity : floor, ctx, eq.pairs, !eq.ctx.scope && 'lit' in eq.pieces[0], !!eq.node?.leftward); ends = r > at && this.held(text, at, r) ? [r] : [];
       // (an atom: as far as an operand goes, else just the name there, `0` in `0..<n`)
       if (atom) { const w = this.name_end(text, at, e); if (w > at && w < r) ends.push(w); }
       // (written right after another capture: also as far as what is written keeps its kind, `16px` in `16px min 8px`)
@@ -1103,7 +1103,7 @@ export class Host {
   // is text)
   rest(eq: Eq, text: Text, at: number, e: number, ctx: Ray): number {
     if (eq.order < this.earliest) return e;
-    const o = this.operand(text, at, e, eq.order, ctx, eq.pairs, true); return o < e && this.closes(text.s, o) ? e : o;
+    const o = this.operand(text, at, e, eq.order, ctx, eq.pairs, true, true); return o < e && this.closes(text.s, o) ? e : o;
   }
   // Where a name from `at` ends: at a space, a pair, or a literal read on from a value.
   name_end(text: Text, at: number, e: number): number {
@@ -1120,13 +1120,14 @@ export class Host {
   apart(lit: string): boolean { return lit.indexOf(this.learned.space) > 1; }
   // Where an operand from `at` ends: where (no pair open) an equivalence declared before `floor` reads on after a space (what hugs
   // a value is part of it: `x.m`, `f(a)`), else at `e`.
-  operand(text: Text, at: number, e: number, floor: number, ctx: Ray, pairs?: number, same = false): number {
+  // (`right`: what a right-to-left method is applied on, which a juxtaposition does not end, G3.3: `center 5 px`, `middle center x`)
+  operand(text: Text, at: number, e: number, floor: number, ctx: Ray, pairs?: number, same = false, right = false): number {
     const s = text.s, { space } = this.learned, alone = ctx.alone ? ctx : ctx.written && ctx.into?.alone ? ctx.into : undefined;
     // (what reads on there first, then whether it is inside an operator written from before it: most places have neither)
     return this.scan(text, at, e, i => {
       if (i <= at) return;
       const list = this.infix.get(s[i]);
-      if (list) for (const x of list) if (x.lit.includes(space) && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
+      if (list) for (const x of list) if (x.lit.includes(space) && !(right && x.lit.trim() === '') && this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false;
       if (this.words.size && this.blank(s[i - 1]) && !this.blank(s[i])) { const j = s.indexOf(space, i), list = j > i ? this.words.get(s.slice(i, j)) : undefined; if (list) for (const x of list) if (this.stops(x, i, text, e, floor, same, alone)) return this.amid(text, at, i) ? undefined : false; }
     }, pairs);
   }

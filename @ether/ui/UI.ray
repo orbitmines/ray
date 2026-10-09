@@ -40,7 +40,7 @@ UI := class {
     {lines: \n} => Geometry.Box(flow: block, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
     // (what a path shows, an entry point (`{*}: Index`) run: its answer)
-    {site: *{fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering)(), Scene)
+    {site: *{fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering){O: Scene}(), Scene)
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
   }
 
@@ -227,7 +227,7 @@ Char &+= {
   styles: String[] = []
 }
 String &+= {
-  marked (style: String, from: Number = 0, to: Number = length) => enumerate.map(from <= .index < to ? (.value ~~ .styles ,= style) : .value) as String
+  marked (style: String, from: Number = 0, to: Number = length) => enumerate.map(((from <= .index) && (.index < to)) ? (.value ~~ .styles ,= style) : .value) as String
   shared_styles => first.styles{style => every(.styles.contains(style))} ?? []
   pieces => [this{.index == 0 || .styles != .previous.styles}.map(.index), [length]].flatten -- .zip(.rest).map((from, to) => this[from..<to])
   highlighted (language: Language | String) => (language is String ? Language.named(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = marked("code") => acc.marked(.style, .from, .to))

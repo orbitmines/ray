@@ -103,9 +103,9 @@ UI.TUI := class {
     {text: String} => text
     {glyph: Char} => glyph as String
     {start: Start} => Compiler.reduced(start.modes, written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], written)
-    {stop: Stop} => Compiler.reduced(<-stop.start.modes.map(.flipped), written)
+    {stop: Stop} => Compiler.reduced(stop.start.modes.map(.flipped).reverse, written)
     // (SGR: each parameter after a `;`, as the header `("\e[0", parameters: (";", parameter: …)[], "m")` writes it)
-    {style: ANSI.Style} => "\e[0" + style.parameters.map(written_parameter => ";" + Compiler.reduced(written_parameter.parameter, written)).join("") + "m"
+    {style: ANSI.Style} => "\e[0" + (style.parameters ?? []).map(written_parameter => ";" + Compiler.reduced(written_parameter.parameter, written)).join("") + "m"
     {attribute: ANSI.Attribute} => attribute.code
     // (its header's choice of groups is not read into the header yet (A3): written here as the header says)
     {colored: ANSI.Colored} => colored.layer + ((colored.index === None) ? (";2;" + colored.red + ";" + colored.green + ";" + colored.blue) : (";5;" + colored.index))

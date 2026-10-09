@@ -95,7 +95,7 @@ Iterable &+= {
     this.for(part => part.for(element => made.append(element)))
     made
   // (what flattening goes into: a narrowing, a list (a Ray of vertices); not a number, a text, a closure, a shape (each also a Ray))
-  static flattens (element) => (@owns element "narrows") || (@owns element "head") || ((@owns element "commas") && element.empty)
+  static flattens (element) => (@owns element "narrows") || (@owns element "head") || ((@owns element "commas") && element.empty) || ((@of element) === (@of []))
   flatten => map(element => Ray.flattens(element) ? element.flatten : [element]).concatenated
   flatten (levels: Number) => levels == 0 ? this : map(element => Ray.flattens(element) ? element.flatten(levels - 1) : [element]).concatenated
   union (other: Iterable) => this, other[{!this.contains(.)}]

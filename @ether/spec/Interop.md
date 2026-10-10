@@ -269,8 +269,26 @@ literal    := "1" .. "9"
 
 ### N4. The Rust writer, Track A over the corpus
 
-- **Pass.** For every corpus function and every input (edges included): where Ray's Rust answers, it equals gcc's C;
-  where it answers `None`, an exact intermediate really leaves the type (so C's result is undefined behaviour).
+- **Goal.** For every corpus function, C read into Ray and written by Ray as Rust answers what gcc's C answers wherever
+  C's answer is defined, and refuses exactly where it is not.
+- **What happens.** `write.rust.ray`: the normal form is split at its fixed separators (`text_before`, `text_after`) and
+  its parts tokenized; `RustParameters` writes `a: i32`; `RustExpression` dispatches `( ( L op R ) as T )` and recurses,
+  `L.checked_add(R)?` (`sub`, `mul`), the function returning `Option<T>` with its body in `Some(…)`, literals suffixed
+  with their type (`7i32`). A type maps to the Rust integer with exactly its bounds (`low`, `high` read from the type);
+  `Integer` has none, so a Python function must be narrowed at the boundary before Rust can be written. `gen.py` writes
+  `writes.ray` (C, then Ray, then Rust, per function) and `corpus.json` (each tree). `check.py` builds every Ray-written
+  function into one `rustc` binary and every C function into one gcc binary, runs both on inputs mixing the type's edges
+  (`±2^31`, `±2^63`, `65536`, `46341`, `3037000500`, …) and random values, and judges each answer against exact
+  arithmetic over the tree: where Rust answers, it must equal gcc and the exact value, with no intermediate leaving the
+  type; where Rust answers `None`, an intermediate must leave the type (so gcc's answer is undefined behaviour).
+- **Pass.** `./run.sh N4` (`COUNT`, `SEED`, `INPUTS`). Seeds 1, 2 and 3, 40 functions and 50 inputs each: 6000 inputs,
+  3032 answered and equal to gcc and exact, 2968 refused where an intermediate leaves the type, 0 wrong. Control: one
+  `checked_add` turned into `checked_sub` in a Ray-written `f5.rs` gives 36 wrong.
+- **Engine notes.** A Ray function's text cannot be read through a header pattern (its ` => ` makes the text a
+  definition, which crashed the engine), so the writer splits it with text operations. `x[k]` with a variable `k` looks
+  up the member named by `k`'s text, not its value, so types are found with `value_named`. A rule head such as
+  `{name}{`:`} {type}` crashed the engine on `a: Int32`, too close to Ray's own declarations; tokenized parameters
+  (`a : Int32`) with the type written in the rule (`{name} : Int32`) read.
 
 ### N5. The C writer, Track B over the corpus
 

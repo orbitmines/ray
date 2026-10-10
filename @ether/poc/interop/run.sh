@@ -48,5 +48,11 @@ case "${1:-}" in
     echo "N3 $(grep -c '^ok' "$out/n3.txt") ok, $(grep -c '^FAIL' "$out/n3.txt") failed, over ${COUNT:-40} functions (seed ${SEED:-1})"
     ! grep -q "^FAIL" "$out/n3.txt"
     ;;
-  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0|N1|N2|N3" >&2; exit 2 ;;
+  N4)
+    rm -rf "$out/corpus"
+    python3 "$here/gen.py" --count "${COUNT:-40}" --seed "${SEED:-1}" --out "$out/corpus"
+    ray "$here/io.ray" "$here/ints.ray" "$here/read.c.ray" "$here/write.rust.ray" "$out/corpus/writes.ray" > /dev/null || true
+    python3 "$here/check.py" --corpus "$out/corpus" --inputs "${INPUTS:-30}" --seed "${SEED:-1}"
+    ;;
+  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0|N1|N2|N3|N4" >&2; exit 2 ;;
 esac

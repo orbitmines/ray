@@ -1,4 +1,5 @@
 import argparse
+import json
 import pathlib
 import random
 
@@ -83,6 +84,8 @@ def main():
     out = pathlib.Path(arguments.out)
     out.mkdir(parents=True, exist_ok=True)
     claims = ["mark ^keyword := global", ""]
+    writes = []
+    corpus = []
     for index in range(1, arguments.count + 1):
         name = "f" + str(index)
         parameters = rng.sample(NAMES, rng.randint(1, 4))
@@ -102,6 +105,9 @@ def main():
         claims.append("from_python_" + name + " := p_ray_with((text_of_file \"" + py_file + "\"), \"" + RAY_TYPE[c_type] + "\")")
         claims.append("unless from_c_" + name + " == from_python_" + name + " { INFO@mark `N3." + str(index) + ".a " + name + " read from C and from Python differ` }")
         claims.append("unless from_c_" + name + " == (text_of_file \"" + ray_file + "\") { INFO@mark `N3." + str(index) + ".b " + name + " read from C is not its normal form` }")
+        writes.append("rust_" + name + " := rust_function(c_ray(text_of_file \"" + c_file + "\"))")
+        writes.append("rust_" + name + " written_to_file \"out/corpus/" + name + ".rs\"")
+        corpus.append({"name": name, "type": c_type, "parameters": parameters, "tree": body, "python_tree": python_body})
         claims.append("exact_" + name + " := p_ray_with((text_of_file \"" + py_file + "\"), \"Integer\")")
         claims.append("ray_code exact_" + name)
         for run in range(arguments.inputs):
@@ -110,6 +116,8 @@ def main():
             call = name + "(" + ", ".join(ray_number(values[p]) for p in parameters) + ")"
             claims.append("unless (" + call + ") == " + ray_number(expected) + " { INFO@mark `N3." + str(index) + ".c" + str(run + 1) + " " + call + " is not what python3 computes` }")
     (out / "claims.ray").write_text("\n".join(claims) + "\n")
+    (out / "writes.ray").write_text("\n".join(writes) + "\n")
+    (out / "corpus.json").write_text(json.dumps(corpus))
 
 
 main()

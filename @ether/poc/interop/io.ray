@@ -13,3 +13,12 @@ fits_pattern {pattern} =>
 ray_code {text} =>
   goto js
   typeof text === 'string' ? $(text) : undefined
+text_before {separator} =>
+  goto js
+  typeof self === 'string' && typeof separator === 'string' && self.indexOf(separator) >= 0 ? self.slice(0, self.indexOf(separator)) : $('None')
+text_after {separator} =>
+  goto js
+  typeof self === 'string' && typeof separator === 'string' && self.indexOf(separator) >= 0 ? self.slice(self.indexOf(separator) + separator.length) : $('None')
+value_named {name} =>
+  goto js
+  typeof name === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? $(name) : $('None')

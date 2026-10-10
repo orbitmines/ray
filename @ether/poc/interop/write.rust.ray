@@ -1,0 +1,43 @@
+rust_i32_low := 1 - 2147483649
+rust_i32_high := 2147483647
+rust_i64_low := 1 - 9223372036854775809
+rust_i64_high := 9223372036854775807
+rust_type_for (type) => ((type.low == rust_i32_low) && (type.high == rust_i32_high)) ? "i32" : (((type.low == rust_i64_low) && (type.high == rust_i64_high)) ? "i64" : None)
+rust_type_named (name) => rust_type_for(value_named name)
+rust_leaf (x, type) => (x fits_pattern "^[1-9]$") ? (x + rust_type_named(type)) : ((x fits_pattern "^[A-Za-z_][A-Za-z0-9_]*$") ? x : None)
+rust_operand (x, type) => (RustExpression reads_text x) ?? rust_leaf(x, type)
+rust_joined (left, method, right) => (left && right) ? (left + ".checked_" + method + "(" + right + ")?") : None
+rust_checked (left, method, right, type) => rust_joined(rust_operand(left, type), method, rust_operand(right, type))
+RustExpression := {
+  ( ( {left} + {right} ) as {type} ) =>
+    rust_checked("{left}", "add", "{right}", "{type}")
+  ( ( {left} - {right} ) as {type} ) =>
+    rust_checked("{left}", "sub", "{right}", "{type}")
+  ( ( {left} * {right} ) as {type} ) =>
+    rust_checked("{left}", "mul", "{right}", "{type}")
+}
+rust_parameter (name, type) => rust_type_named(type) ? (name + ": " + rust_type_named(type)) : None
+rust_parameters_joined (first, rest) => (first && rest) ? (first + ", " + rest) : None
+rust_parameters (x) => (RustParameters reads_text x) ?? None
+RustParameters := {
+  {name} : Int32 =>
+    rust_parameter("{name}", "Int32")
+  {name} : Int64 =>
+    rust_parameter("{name}", "Int64")
+  {name} : Integer =>
+    rust_parameter("{name}", "Integer")
+  {first} , {rest} =>
+    rust_parameters_joined(rust_parameters("{first}"), rust_parameters("{rest}"))
+}
+RustFirstType := {
+  {name} : {type} =>
+    "{type}"
+  {name} : {type} , {rest} =>
+    "{type}"
+}
+rust_signature (name, parameters, type) => (parameters && type) ? ("pub fn " + name + "(" + parameters + ") -> Option<" + type + ">") : None
+rust_from (name, parameters, body, type) => (name && parameters && body && type) ? rust_whole(rust_signature(name, rust_parameters(parameters), rust_type_named(type)), rust_operand(body, type)) : None
+rust_whole (signature, body) => (signature && body) ? (signature + " { Some(" + body + ") }") : None
+rust_parameters_of (ray) => ((ray text_after " (") text_before ") => ") spaced_tokens ": ,"
+rust_body_of (ray) => (ray text_after ") => ") spaced_tokens "( )"
+rust_function (ray) => rust_from(ray text_before " (", rust_parameters_of(ray), rust_body_of(ray), RustFirstType reads_text rust_parameters_of(ray))

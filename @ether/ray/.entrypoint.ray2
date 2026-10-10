@@ -57,6 +57,11 @@ nearest {head} => {body} =>
   .text
 `{text}` =>
   .text
+// One written `{this}…`: a method, `…` read on a value (`{this}{{narrowing}} =>`: `x{ … }`).
+{`{`}this{`}`}{head} => {body} =>
+  {head} =>
+    goto .
+    {body}
 // (given code, a block on one line, `f(code: { … })`: that code, unread, run when it is called)
 {name}:{ }{`{`}{ }{code}{ }{`}`} =>
   {name} := (() => ({code}))
@@ -132,11 +137,12 @@ Pattern := {
 {function}<{{given}}> =>
   ((also) => {function}({given}, also))
 
-// A narrowing, `T{constraint}`: a T for which the constraint, read with `.` the value, answers true. Called, `p{O: level}()`: what
-// it narrows given what the constraint writes (settings), called.
-{type}{{constraint}} =>
-  {
-    narrows := {type}
+// A narrowing, `T{constraint}` (a method: a class's own `x{ … }` is read first): a T for which the constraint, read with `.` the value, answers true. Called, `p{O: level}()`: what
+// it narrows given what the constraint writes (settings), called. (Made in a node holding these, as a class is: none is its
+// own rule, which a typed hole `{x: T}` reads.)
+{{constraint}} =>
+  ({
+    narrows := .
     holds (it) =>
       it with {
         {constraint}
@@ -144,7 +150,8 @@ Pattern := {
     () =>
       holds(narrows)
       narrows()
-  }
+    narrowing := { }
+  }).narrowing
 
 // What a value answers to `?`: anything is true, but `None` and `false`.
 ? {yes} : {no} =>
@@ -170,6 +177,9 @@ true := { }
   {a} ? {b} : {a}
 {a} ?? {b} =>
   {a} ? {a} : {b}
+// A choice, `c ? a : b`: the condition all before the `?` (`x > 1 ? a : b`).
+{condition} ? {yes} : {no} =>
+  ({condition}) ? {yes} : {no}
 // The same value: gone to as a label (a node is the label written as it); nothing there, another.
 {a} === {b} =>
   goto {a}
@@ -302,7 +312,8 @@ recur =>
 //   a guard: `x := 1 if c` guards the statement (and `x if a && b` guards on both);
 //   `,`: a list of what is on either side.
 // Rules after it are led by a literal, or are methods, so it stays the loosest. (A head written `{ }` for a space reads
-// the same: it keeps a rule from reading another's head as one it reads.)
+// the same: it keeps a rule from reading another's head as one it reads.) (A language read after this one (the host's
+// kinds) reads the logic, the choice, control flow, the guards and `,` again after its own operators, so those stay looser.)
 {name} = {value} =>
   {value}
   {name} =>
@@ -575,30 +586,30 @@ assert {condition} =>
   }
   {condition}
 
-// A node made in a value (`x.made`): it sees what the value sees, the value's rules first. `x.extended()`: one to make a
-// class in (a class's own makes it where its instances are).
-made =>
+// A node made in a value (`x.interior`): it sees what the value sees, the value's rules first. `x.extended()`: one to make a
+// class in (a class's own makes it where its instances are). (Named so no class's field of the same name hides it.)
+interior =>
   { }
 extended () =>
-  .made
+  .interior
 
 // (A head with `x: {…}` in it is written `x:{ }{…}`, which means the same space, so the rule for a name with a type does not
 // read it as one.)
 // A class: a node made of its parent (`class: P`, else Node), its block read in it; it sees its parent's rules, so an instance
-// of it does too. (Made in a node holding `parent` and `extended`: they are read through it, not its own rules, which are what a
+// of it does too. (Made in a node holding `superclass` and `extended`: they are read through it, not its own rules, which are what a
 // typed hole `{x: T}` reads.) With fields, written as a closure is, `class (x, y) => { … }`: the class's `instance`, that closure (a call
 // of it, the instance: in the class, its fields given the arguments; `of` its class), is what `X(…)` calls.
 made class:{ }{parent} {{block}} =>
   ({parent}.extended() &+= {
-    parent := {parent}
+    superclass := {parent}
     extended := () =>
-      made reading {
+      interior reading {
         { }
       }
-    made := {
+    interior := {
       {block}
     }
-  }).made
+  }).interior
 // (one without fields makes instances too: given nothing, or named arguments, code inlined into the making)
 class:{ }{parent} {{block}} =>
   class: {parent} (arguments = None) => {
@@ -617,7 +628,7 @@ nearest class:{ }{parent}{ }({fields}) => {{block}} =>
     // (what is added to the maker, `X &+= { … }`, is added to the class)
     instance &+= {
       {`&+=`} {{added}} =>
-        made &+= {
+        interior &+= {
           {added}
         }
         .
@@ -635,12 +646,12 @@ class{ }({fields}) => {{block}} =>
 // What a value is: a Node (anything is; the outermost node); the value itself; an instance of the class (or of one after it,
 // `class:`) it was made by; one of a superposition's components; a narrowing that holds of it; a member of an enumeration.
 of := None
-parent := None
+superclass := None
 superposes := false
 // (the program read at the top was read by none)
 caller := None
 descends (type) =>
-  (. === type) || (.parent ? .parent.descends(type) : false)
+  (. === type) || (.superclass ? .superclass.descends(type) : false)
 is {type} =>
   ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((c) => . is c) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((m) => m === .) : false)
 
@@ -732,7 +743,7 @@ narrows := None
 // are code: handed on as written; a rule's right side is not read by that rule, but what is in a group is).
 members := None
 nearest enum {{names}} =>
-  Node.made &+= {
+  Node.interior &+= {
     members := []
     enumerated {names}
   }
@@ -806,10 +817,10 @@ Iterable := class { }
 Iterable &+= {
   Listing := {
     // (a class made of it, of it: not of Iterable's class)
-    made =>
+    interior =>
       { }
     extended () =>
-      .made
+      .interior
     new =>
       {
         head := None
@@ -922,7 +933,7 @@ Iterable &+= {
       .
   }
 }
-Listing := Iterable.made.Listing
+Listing := Iterable.interior.Listing
 Ray := Listing
 Array := class: Iterable { }
 String := class: Array { }

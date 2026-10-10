@@ -363,7 +363,7 @@ Link.components.hierarchy &= Ray
 
 Set := class: Structure {
   orderless => true
-  normalizer := .shuffled.unique
+  normalizer => .shuffled.unique
   add (x) => (push(x) unless contains(x)) -- this
 }
 

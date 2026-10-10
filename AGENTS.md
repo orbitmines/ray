@@ -6,4 +6,4 @@ Before anything else, read:
    version: https://raw.githubusercontent.com/orbitmines/orbitmines.com/main/orbitmines.com/src/routes/Almanac.tsx
    (published at https://orbitmines.com/almanac).
 2. `@ether/spec/Philosophy.md`.
-3. `@ether/spec/Plan.md` §0.
+3. `@ether/spec/Design.md`: every design decision, ordered for reading.

@@ -258,7 +258,7 @@ Geometry := class {
   box (size: Vector) => Space.current.dimension -- (n => n == 2 ? rectangle(size) : Shape(rank: n - 1, children: all#.map(side =>
     Mesh(simplices(Vector((0..<n).map(. == side.axis && side.toward > 0 ? size[.] : 0)), size, (0..<n){!= side.axis}).map(Facet(.)), rank: n - 1))))
 
-  Shape := class: Hierarchy (origin: Vector = Vector(), size: Vector = Vector(), width: (Length | Number | Stops)?, height: (Length | Number | Stops)?, aspect: Number?, position: Position = Flow(), spacing: Spacing[] = [], transform: Transform = Transform.identity, boundary: Shape = space.vertices ? Shape(space: space, rank: 1, cells: space.vertices.edges{cells.at.contains(.from) != cells.at.contains(.to)})) => { }
+  Shape := class: Hierarchy (origin: Vector = Vector(), size: Vector = Vector(), width: (Length | Number | Stops)?, height: (Length | Number | Stops)?, aspect: Number?, position: Position = Flow(), spacing: Spacing[] = [], transform: Transform = Transform.identity, boundary: Shape = space.vertices ? Shape(space: space, rank: 1, cells: space.vertices.edges{cells.at.contains(.from) != cells.at.contains(.to)})
       : space.discrete ? Shape(space: space, rank: rank - 1, cells: cells.∂) : box(size),
     flow: block | inline | grid | layered = block, gap: Vector = Vector(), columns: Number = 1, wrap: boolean = false,
     align: (start | center | end | between | around | stretch | middle | justify)? = parent.align,
@@ -267,7 +267,7 @@ Geometry := class {
     overflow: visible | clip | scroll = visible, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
     transition: Transition?, content: * = None, white_space: WhiteSpace = parent.white_space ?? WhiteSpace.pre_line, solved: boolean = false,
     space: Space = parent.space ?? Space.current, rank: Integer = space.dimension,
-    cells: Chain = space.discrete ? space.positions.filter(p => (0..<space.dimension).every(origin[.] <= p[.] < origin[.] + size[.])).map(Cell(., 0..<space.dimension)) : [] {
+    cells: Chain = space.discrete ? space.positions.filter(p => (0..<space.dimension).every(origin[.] <= p[.] < origin[.] + size[.])).map(Cell(., 0..<space.dimension)) : []) => {
     id: Location => parent ? parent.id / (parent.children.enumerate{.value === this}.first.index as String) : @scene
     root => parent.root ?? this
     em => parent.font_size ?? Font.base.size

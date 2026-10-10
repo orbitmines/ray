@@ -483,8 +483,13 @@ export class Program {
     const had = known.read.get(s);
     if (had !== undefined) return had;
     known.read.set(s, false);
-    // (not a name given a value there (`x := v`, a method `m (…) =>`): what it holds is not how a T is written)
-    const named = (rule: Program.Rule) => { const body = rule.body.trim(); return body.length === this.token && body.charCodeAt(this.grammar!.open.length) === 0xE000; };
+    // (not a method there (`m (…) =>`, a name given a closure): what it holds is not how a T is written)
+    const named = (rule: Program.Rule) => {
+      const statements = rule.code.statements.map(x => x.trim()).filter(x => x), body = statements[statements.length - 1] ?? '', { open, close } = this.grammar!;
+      if (rule.holes.length || statements.length !== (rule.passes ? 2 : 1) || body.length !== this.token || body.charCodeAt(open.length) !== 0xE000) return false;
+      const held = this.referred_to(parseInt(body.slice(open.length + 1, -close.length), 36)), value = held instanceof Program.Held ? held.value : held;
+      return value instanceof Program.Node && value.calls;
+    };
     const candidates: Program.Candidate[] = [], take = (rules: Program.Rule[]) => { for (const rule of rules) if (!rule.called && !named(rule) && this.may_read(rule, s, false)) candidates.push({ rule, rank: rule.id }); };
     for (const length of type.lengths.get(s[0]) ?? []) { if (length > s.length) break; const rules = type.led.get(s.slice(0, length)); if (rules) take(rules); }
     if (type.bare.length) take(type.bare);

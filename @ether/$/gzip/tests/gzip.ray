@@ -2,7 +2,7 @@
 
 mark ^keyword := global
 
-// "hello" as another gzip writes it: no name, mtime 0, XFL 2, OS 3 (Unix), then CRC-32 3610a686 and ISIZE 5 (https://www.rfc-editor.org/rfc/rfc1952#section-2.3)
+// "hello" as GNU gzip 1.15 writes it with -9 -n (and node:zlib gzipSync at level 9), a reference encoder's output and no value of RFC 1952: no name, mtime 0, XFL 2, OS 3 (Unix), then CRC-32 3610a686 and ISIZE 5 (https://www.rfc-editor.org/rfc/rfc1952#section-2.3)
 hello_gz := [0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x86, 0xa6, 0x10, 0x36, 0x05, 0x00, 0x00, 0x00]
 unless Gzip.read(hello_gz) as String == "hello" { INFO@mark `GZ1 a gzip member does not inflate to its data` }
 unless Gzip.read([hello_gz, hello_gz].flatten) as String == "hellohello" { INFO@mark `GZ2 two members do not read as their data joined` }

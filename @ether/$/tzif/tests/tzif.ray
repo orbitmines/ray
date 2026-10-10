@@ -1,4 +1,4 @@
-// TZif files read into zones (https://datatracker.ietf.org/doc/html/rfc8536).
+// TZif files read into zones (https://datatracker.ietf.org/doc/html/rfc8536), and the example files of its Appendix B.
 
 mark ^keyword := global
 
@@ -10,3 +10,16 @@ unless utc.at(Time.now) -- (.offset == 0 seconds && !.daylight && .abbreviation 
 // A TZ string footer (RFC 8536 3.3, POSIX.1-2024 XBD 8.3)
 unless ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).start.month == 3 && ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).offset.seconds_west == -3600 { INFO@mark `TZIF3 a footer's TZ string is not read` }
 unless $.tzif === TZif { INFO@mark `TZIF4 $.tzif is not TZif` }
+
+// Appendix B.1 of RFC 8536: a version 1 file for UTC with its 27 leap seconds, the last at 2016-12-31T23:59:60Z (https://www.rfc-editor.org/rfc/rfc8536#appendix-B.1)
+tzif_utc := "545a69660000000000000000000000000000000000000001000000010000001b0000000000000001000000040000000000005554430004b258000000000105a4ec010000000207861f820000000309675303000000040b488684000000050d2b0b85000000060f0c3f060000000710ed72870000000812cea60800000009159fca890000000a1780fe0a0000000b1962318b0000000c1d25ea0c0000000d21dae50d0000000e259e9d8e0000000f277fd10f000000102a50f590000000112c322911000000122e135c920000001330e724130000001433b8489400000015368c10150000001643b71b9600000017495c0797000000184fef93180000001955932d990000001a5868469a0000001b0000" as Hexadecimal₅₄₄ as Byte₂₇₂
+unless TZif.read(tzif_utc) -- (.v1.leap_count == 27 && .v1.type_count == 1 && .v1.transition_count == 0 && .v2 === None) { INFO@mark `TZIF5 the file of RFC 8536 B.1 does not read as one version 1 block of one type and 27 leap seconds` }
+unless TZif.read(tzif_utc).v1.leaps -- (.first.occurrence == 78796800 && .first.correction == 1 && .last.occurrence == 1483228826 && .last.correction == 27) { INFO@mark `TZIF6 the first and last leap seconds of RFC 8536 B.1 are not 78796800 and 1483228826` }
+unless (tzif_utc as TZif) is TZif && (tzif_utc as TZif) as Byte[] == tzif_utc { INFO@mark `TZIF7 the file of RFC 8536 B.1 read as TZif and written back is not the same bytes` }
+
+// Appendix B.2 of RFC 8536: a version 2 file for Pacific/Honolulu, its footer HST10; at 1933-05-04T12:00:00Z it is HDT, 9:30 west (https://www.rfc-editor.org/rfc/rfc8536#appendix-B.2)
+tzif_honolulu := "545a69663200000000000000000000000000000000000006000000060000000000000007000000060000001480000000bb054348bb217158cb893dc8d223f470d2614938d58d734801020103040105ffff6c020000ffff6c580004ffff7a680108ffff7a68010cffff7a680110ffff736000044c4d540048535400484454004857540048505400000000000100000000000100545a696632000000000000000000000000000000000000060000000600000000000000070000000600000014ffffffff74e070beffffffffbb054348ffffffffbb217158ffffffffcb893dc8ffffffffd223f470ffffffffd2614938ffffffffd58d734801020103040105ffff6c020000ffff6c580004ffff7a680108ffff7a68010cffff7a680110ffff736000044c4d5400485354004844540048575400485054000000000001000000000001000a48535431300a" as Hexadecimal₆₅₈ as Byte₃₂₉
+unless TZif.read(tzif_honolulu) -- (.v1.transition_count == 7 && .v1.type_count == 6 && .v2.transition_count == 7 && .v2.type_count == 6) { INFO@mark `TZIF8 the file of RFC 8536 B.2 does not read as two blocks of 7 transitions and 6 types` }
+unless TZif.read(tzif_honolulu).footer.offset.seconds_west == 36000 { INFO@mark `TZIF9 the footer of RFC 8536 B.2, HST10, is not 10 hours west` }
+unless TZif.read(tzif_honolulu).data -- (zone => zone.type_at(-1156939200) -- (.offset == -34200 && .daylight == 1 && zone.named(.) == "HDT")) { INFO@mark `TZIF10 1933-05-04T12:00:00Z is not HDT, 9:30 west, in RFC 8536 B.2` }
+unless (tzif_honolulu as TZif) is TZif && (tzif_honolulu as TZif) as Byte[] == tzif_honolulu { INFO@mark `TZIF11 the file of RFC 8536 B.2 read as TZif and written back is not the same bytes` }

@@ -1,0 +1,29 @@
+// An executable read off the disk, end to end: the container says where its
+// code is, Intel's own records say what each instruction is, and everything —
+// each instruction, and the file — is written back as the bytes it was.
+//
+// The file is `Container/tests/fixtures/elf64`: 124 bytes, `mov al, 60;
+// syscall` (it runs, and exits 0). The records are XED's MOV (B0+r) and
+// SYSCALL, from xed-isa.txt.
+//
+// run: X=.ether/external/xed/datafiles W=.ether/asm/work/pipeline; mkdir -p $W; (echo 'INSTRUCTIONS()::'; sed -n '8321,8332p;8903,8914p' $X/xed-isa.txt) > $W/isa.xed; PROJECT=XED SPECS="$W/isa.xed" T=900 M=6000 .ether/asm/asm.sh pipeline @ether/$/.asm/tests/pipeline.ray boolean.ray -- Bits.ray Container/Bytes.ray Container/ELF.ray
+
+mark ^keyword := external global
+unless (exists INSTRUCTIONS) { INFO@mark `P0 xed-isa.txt was not read` }
+unless (exists None) { INFO@mark `P00 control: this always fires` }
+
+on_disk ^keyword := Bits.file(`asm/Container/tests/fixtures/elf64`)
+elf ^keyword := ELF.read(on_disk)
+unless (elf.machine == Bits.hex(`003e`)) { INFO@mark `P1 the file is not for x86-64` }
+unless (elf.entry == Bits.hex(`0000000000400078`)) { INFO@mark `P2 it does not start at 400078` }
+
+entry_code ^keyword := elf.code
+first ^keyword := X86.read(entry_code.head)
+unless (exists (external alike (first.mnemonic) (`MOV`))) { INFO@mark `P3 b0 3c is not read as MOV` }
+unless (first.round_trips(entry_code.head)) { INFO@mark `P4 the mov is not written back as b0 3c` }
+second ^keyword := X86.read(first.after)
+unless (exists (external alike (second.mnemonic) (`SYSCALL`))) { INFO@mark `P5 0f 05 is not read as SYSCALL` }
+unless (second.round_trips(first.after)) { INFO@mark `P6 the syscall is not written back as 0f 05` }
+if (exists second.after) { INFO@mark `P7 something is left after the syscall` }
+
+unless (Bytes.same(elf.written, on_disk)) { INFO@mark `P8 the file is not written back as it was read` }

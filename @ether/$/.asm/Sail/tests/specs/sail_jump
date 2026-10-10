@@ -1,0 +1,65 @@
+union clause instruction = ITYPE : (bits(12), regidx, regidx, iop)
+mapping encdec_iop : iop <-> bits(3) = {
+  ADDI  <-> 0b000,
+  SLTI  <-> 0b010,
+  SLTIU <-> 0b011,
+  ANDI  <-> 0b111,
+  ORI   <-> 0b110,
+  XORI  <-> 0b100
+}
+mapping clause encdec = ITYPE(imm, rs1, rd, op)
+  <-> imm @ encdec_reg(rs1) @ encdec_iop(op) @ encdec_reg(rd) @ 0b0010011
+$[split op]
+function clause execute ITYPE(imm, rs1, rd, op) = {
+  let immext : xlenbits = sign_extend(imm);
+  X(rd) = match op {
+    ADDI  => X(rs1) + immext,
+    SLTI  => zero_extend(bool_to_bit(X(rs1) <_s immext)),
+    SLTIU => zero_extend(bool_to_bit(X(rs1) <_u immext)),
+    ANDI  => X(rs1) & immext,
+    ORI   => X(rs1) | immext,
+    XORI  => X(rs1) ^ immext
+  };
+  RETIRE_SUCCESS
+}
+mapping itype_mnemonic : iop <-> string = {
+  ADDI  <-> "addi",
+  SLTI  <-> "slti",
+  SLTIU <-> "sltiu",
+  XORI  <-> "xori",
+  ORI   <-> "ori",
+  ANDI  <-> "andi"
+}
+mapping clause assembly = ITYPE(imm, rs1, rd, op)
+  <-> itype_mnemonic(op) ^ spc() ^ reg_name(rd) ^ sep() ^ reg_name(rs1) ^ sep() ^ hex_bits_signed_12(imm)
+union clause instruction = JAL : (bits(21), regidx)
+$[wavedrom "_ offset[20:1] _ _ dest JAL"]
+mapping clause encdec = JAL(imm @ 0b0, rd)
+  <-> imm[19] @ imm[9..0] @ imm[10] @ imm[18..11] @ encdec_reg(rd) @ 0b1101111
+function clause execute JAL(imm, rd) = {
+  let link_address = get_next_pc();
+  match jump_to(PC + sign_extend(imm)) {
+    Retire_Success() => { X(rd) = link_address; Retire_Success() },
+    failure => failure,
+  }
+}
+// TODO: handle 2-byte-alignment in mappings
+mapping clause assembly = JAL(imm, rd)
+  <-> "jal" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_signed_21(imm)
+union clause instruction = JALR : (bits(12), regidx, regidx)
+$[wavedrom "offset[11:0] base 0 dest JALR"]
+mapping clause encdec = JALR(imm, rs1, rd)
+  <-> imm @ encdec_reg(rs1) @ 0b000 @ encdec_reg(rd) @ 0b1100111
+mapping clause assembly = JALR(imm, rs1, rd)
+  <-> "jalr" ^ spc() ^ reg_name(rd) ^ sep() ^ hex_bits_signed_12(imm) ^ "(" ^ reg_name(rs1) ^ ")"
+function clause execute JALR(imm, rs1, rd) = {
+
+  update_elp_state(rs1);
+
+  let link_address = get_next_pc();
+  let target = X(rs1) + sign_extend(imm);
+  match jump_to([target with 0 = 0b0]) {
+    Retire_Success() => { X(rd) = link_address; Retire_Success() },
+    failure => failure,
+  }
+}

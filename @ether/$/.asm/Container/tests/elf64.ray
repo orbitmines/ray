@@ -1,0 +1,30 @@
+// The smallest x86-64 Linux program there is room for: an ELF header, one
+// program header, and `mov al, 60; syscall` (exit with status 0). It runs:
+// 124 bytes, written by hand, loaded at 400000 with the whole file in one
+// segment that runs.
+// (`z` is four zero bytes.)
+//
+// run: .ether/asm/asm.sh elf64 @ether/$/.asm/Container/tests/elf64.ray boolean.ray -- Bits.ray Container/Bytes.ray Container/ELF.ray
+
+mark ^keyword := external global
+unless true { INFO@mark `E0 control: this file is not run` }
+file ^keyword := Bytes.hex(`7f454c4602010100zz02003e000100000078004000z40000000zzzz400038000
+1000000z0100000005000000zz00004000z00004000z7c000000z7c000000z00
+100000zb03c0f05`)
+elf ^keyword := ELF.read(file)
+unless elf.wide { INFO@mark `E1 not read as 64-bit` }
+if elf.big { INFO@mark `E2 read as big endian` }
+unless (elf.machine == Bits.hex(`003e`)) { INFO@mark `E3 the machine is not x86-64` }
+unless (elf.entry == Bits.hex(`0000000000400078`)) { INFO@mark `E4 the entry is not 400078` }
+unless (elf.header.field(`e_phoff`) == Bits.hex(`0000000000000040`)) { INFO@mark `E5 the program headers are not at 40` }
+unless (exists elf.segments.head) { INFO@mark `E6 no segment` }
+if (exists elf.segments.head.next) { INFO@mark `E7 more than one segment` }
+if (exists elf.sections.head) { INFO@mark `E8 a section` }
+segment ^keyword := elf.segments.head.value
+unless (segment.field(`p_vaddr`) == Bits.hex(`0000000000400000`)) { INFO@mark `E9 the segment is not loaded at 400000` }
+unless (segment.field(`p_filesz`) == Bits.hex(`000000000000007c`)) { INFO@mark `E10 the segment does not hold 7c bytes` }
+unless (elf.runs(segment)) { INFO@mark `E11 the segment does not run` }
+unless (Bytes.same(elf.code, Bytes.hex(`b03c0f05`))) { INFO@mark `E12 the code is not mov al, 60; syscall` }
+unless (exists elf.pieces.head.next.next) { INFO@mark `E13 fewer than three pieces` }
+if (exists elf.pieces.head.next.next.next) { INFO@mark `E14 more than three pieces` }
+unless (Bytes.same(elf.written, file)) { INFO@mark `E15 not written back identical` }

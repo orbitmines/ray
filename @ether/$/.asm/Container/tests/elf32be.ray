@@ -1,0 +1,29 @@
+// A 32-bit big-endian ELF: MIPS, `li v0, 4001; syscall` (exit), and a
+// section header table of one entry, the null section every table begins
+// with. 132 bytes, written by hand. Every field of more than one byte is
+// written most significant byte first, which the identification says.
+// (`z` is four zero bytes.)
+//
+// run: .ether/asm/asm.sh elf32be @ether/$/.asm/Container/tests/elf32be.ray boolean.ray -- Bits.ray Container/Bytes.ray Container/ELF.ray
+
+mark ^keyword := external global
+unless true { INFO@mark `F0 control: this file is not run` }
+file ^keyword := Bytes.hex(`7f454c4601020100zz000200080000000100400054000000340000005c000010
+0000340020000100280001000000000001z00400000004000000000005c00000
+05c000000050000100024020fa10000000czzzzzzzzzz`)
+elf ^keyword := ELF.read(file)
+if elf.wide { INFO@mark `F1 read as 64-bit` }
+unless elf.big { INFO@mark `F2 not read as big endian` }
+unless (elf.machine == Bits.hex(`0008`)) { INFO@mark `F3 the machine is not MIPS` }
+unless (elf.entry == Bits.hex(`00400054`)) { INFO@mark `F4 the entry is not 400054` }
+unless (elf.header.field(`e_shoff`) == Bits.hex(`0000005c`)) { INFO@mark `F5 the section headers are not at 5c` }
+unless (elf.header.field(`e_flags`) == Bits.hex(`00001000`)) { INFO@mark `F6 the flags are not 1000` }
+unless (exists elf.sections.head) { INFO@mark `F7 no section` }
+if (exists elf.sections.head.next) { INFO@mark `F8 more than one section` }
+unless (elf.sections.head.value.field(`sh_type`).is_zero) { INFO@mark `F9 the first section is not null` }
+segment ^keyword := elf.segments.head.value
+unless (segment.field(`p_flags`) == Bits.hex(`00000005`)) { INFO@mark `F10 the segment is not read and run` }
+unless (Bytes.same(elf.code, Bytes.hex(`24020fa10000000c`))) { INFO@mark `F11 the code is not li v0, 4001; syscall` }
+unless (exists elf.pieces.head.next.next.next) { INFO@mark `F12 fewer than four pieces` }
+if (exists elf.pieces.head.next.next.next.next) { INFO@mark `F13 more than four pieces` }
+unless (Bytes.same(elf.written, file)) { INFO@mark `F14 not written back identical` }

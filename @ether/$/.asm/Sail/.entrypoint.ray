@@ -1,0 +1,920 @@
+// Sail: the language the official RISC-V model is written in
+// (`sail-riscv/model/`), read here as it is written, for as much of it as
+// gives the base integer instructions their meaning.
+//
+// What an instruction does is written in Sail as an `execute` clause of the
+// union of instructions, beside a mapping (`encdec`) from its arguments to the
+// bits of the word and a mapping from its operations to their mnemonics:
+//
+//   union clause instruction = ITYPE : (bits(12), regidx, regidx, iop)
+//   mapping encdec_iop : iop <-> bits(3) = { ADDI <-> 0b000, … }
+//   mapping clause encdec = ITYPE(imm, rs1, rd, op)
+//     <-> imm @ encdec_reg(rs1) @ encdec_iop(op) @ encdec_reg(rd) @ 0b0010011
+//   $[split op]
+//   function clause execute ITYPE(imm, rs1, rd, op) = {
+//     let immext : xlenbits = sign_extend(imm);
+//     X(rd) = match op { ADDI => X(rs1) + immext, … };
+//     RETIRE_SUCCESS
+//   }
+//   mapping itype_mnemonic : iop <-> string = { ADDI <-> "addi", … }
+//   mapping clause assembly = ITYPE(imm, rs1, rd, op) <-> itype_mnemonic(op) ^ …
+//
+// An `execute` clause is translated into a goto program (`Goto.ray`): each
+// statement of its body, read under the rules below, is the steps it does —
+// `X(rd) = …` a step setting the register its field names, `if … then … else`
+// jumps over labels, `jump_to` a jump leaving the program — and each
+// expression the value those steps are given. `$[split op]` says a clause is
+// to be split by its operation, as Sail's own compiler splits it, so a clause
+// is translated once for each operation an instruction set spells, and
+// `match op { ADDI => … }` needs no rule: an arm is what the language already
+// reads `ADDI => …` as, a definition of what `ADDI` answers, and only the one
+// the operation names is asked. What comes out is the encoding's semantics,
+// and is what runs (`Run.ray`).
+//
+// The program reads the arguments of the clause from the state, where a run
+// puts every field of the instruction under its name before the program runs:
+// the fields riscv-opcodes lays out (`rd`, `rs1`, `rs2`), and the arguments
+// Sail gathers from bits of the word that riscv-opcodes splits another way
+// (`imm`, from `imm[11] @ imm[9..4] @ …`), which are given to the encoding as
+// fields of its own, read the way encdec puts them in. An argument whose bits
+// the encoding fixes (a load's width) is known when the clause is translated,
+// and is a constant in the program.
+//
+// spec: this reads the shape of the clauses and the expressions RV32I is
+// written with. What they call — `sign_extend`, `jump_to`, `vmem_read`,
+// `extend_value`, `get_next_pc` — is defined in the model's `core/`,
+// `prelude/` and `sys/` in Sail too (34 000 lines in all), and is translated
+// by hand here, each where its rule is, until those files are read as well.
+// What `X` is — a file of thirty-two registers whose first reads as zero and
+// keeps nothing written to it — is `rX`/`wX` in `core/regs.sail`, written by
+// hand as the shared `InFile`/`IntoFile` of `Goto.ray` with x0 fixed.
+//
+// The positions of the bits of a word (`positions`, `Position`) are the ones
+// the riscv-opcodes grammar writes; the two are read together, since what is
+// run is what riscv-opcodes decodes.
+// spec: a project cannot yet say it is read with another project's grammar,
+// so the two entrypoints are put into one to be run.
+
+// How many bits of the word each mapping to bits is, by its name.
+Widths := class { }
+widths ^keyword := Widths()
+
+// What the rules below read their captures as: these are here, before the
+// rules that name them, so that the first pass of the project finds them
+// (a name read before it is written has the project read once more).
+
+// The names an argument is written with.
+ArgumentName := class {
+  accepts (text) => argument_names[text]
+}
+ArgumentNames := class { }
+argument_names ^keyword := ArgumentNames()
+argument_names[`imm`] = `imm`
+argument_names[`rs1`] = `rs1`
+argument_names[`rs2`] = `rs2`
+argument_names[`rd`] = `rd`
+argument_names[`shamt`] = `shamt`
+argument_names[`is_unsigned`] = `is_unsigned`
+argument_names[`width`] = `width`
+// A mapping to bits, by its name: how many bits it maps to.
+Mapped := class {
+  accepts (text) => widths[text]
+}
+Hexadecimal := class {
+  accepts (text) => Bits.hex(text)
+}
+// Binary digits, most significant first: the last bit of each byte written.
+Binary := class {
+  accepts (text) => (
+    digits := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= (inline bit)
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        digits &= byte.tail.value
+        byte = chain None
+      }
+      true
+    )
+    external bits text take
+    out := chain None
+    walker := digits.tail
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.previous
+    }
+    Bits(bits: out)
+  )
+}
+
+// `$[split op]`, `$[wavedrom "…"]`: attributes, which say nothing of meaning.
+$[{literal attribute}] ^comment => None
+
+// What has been read. Each table is a class of its own: two instances of one
+// class answer the same `[key]`.
+Clauses := class { }
+Layouts := class { }
+Assemblies := class { }
+Spellings := class { }
+RegisterNames := class { }
+register_names ^keyword := RegisterNames()
+Sail := class {
+  clauses: Node
+  layouts: Node
+  assemblies: Node
+  spellings: Node
+  pairs: Node
+  current: Node
+  // The steps of the program being translated, and the labels it has not
+  // used yet.
+  writing: Node
+  unused: Node
+  counted: Node
+
+  paired (tag, spelled) => (
+    spelling := .current
+    this.pairs &= Pair(mapping: spelling, left: tag, right: spelled)
+    true
+  )
+  // An encdec clause begun: its pieces follow.
+  arranging (shape, first, below) => (
+    made := Arrangement(shape: shape, first: first, below: below, pieces: chain None)
+    unless (exists .layouts[shape]) { this.layouts[shape] = made }
+    made
+  )
+  piece (arrangement, sort, called, low, high) => (
+    arrangement.pieces &= Piece(kind: sort, name: called, lo: low, hi: high)
+    arrangement
+  )
+
+  // Every encoding an execute clause is read for is given that clause,
+  // translated for its operation, as what it does.
+  attach (isa) => (
+    attaching := isa.encodings.head
+    while (exists attaching) {
+      sail.translate(attaching.value)
+      attaching = attaching.next
+    }
+    isa
+  )
+  // The shape of an encoding: the one whose operations a mapping of
+  // mnemonics spells, or the one whose own mnemonic it is (`"jal"`), or else
+  // the one whose fixed bits in encdec the encoding fixes the same way (a
+  // load is spelled `"l" ^ width_mnemonic(width) ^ …`, which is not one
+  // spelling).
+  shape_of (encoding) => (
+    found := None
+    mnemonic := encoding.mnemonic
+    pairing := .pairs.head
+    while ((exists pairing).and((exists found).not)) {
+      pair := pairing.value
+      if (exists (external alike (pair.right) (mnemonic))) {
+        spelling := pair.mapping
+        shape := .assemblies[spelling]
+        if (exists shape) { found = Choice(shape: shape, operation: pair.left) }
+      }
+      pairing = pairing.next
+    }
+    unless (exists found) {
+      own := .spellings[mnemonic]
+      if (exists own) { found = Choice(shape: own, operation: None) }
+    }
+    unless (exists found) {
+      laying := .layouts
+      each_shape := shapes_read.head
+      while ((exists each_shape).and((exists found).not)) {
+        candidate := each_shape.value
+        arrangement := laying[candidate]
+        if (exists arrangement) {
+          laid := Encdec.laid(arrangement)
+          if (Sail.fixed_alike(encoding, laid)) { found = Choice(shape: candidate, operation: None) }
+        }
+        each_shape = each_shape.next
+      }
+    }
+    found
+  )
+  // Whether an encoding fixes every bit a layout fixes, to what it fixes it.
+  fixed_alike (encoding, laid) => (
+    ours := laid.mask.bits.head
+    theirs := encoding.mask.bits.head
+    agreeing := laid.mask.and(encoding.match).xor(laid.match).is_zero
+    while ((exists ours).and(agreeing)) {
+      if ours.value { unless theirs.value { agreeing = false } }
+      ours = ours.next
+      theirs = theirs.next
+    }
+    agreeing.and(laid.mask.is_zero.not)
+  )
+  // The clause of an encoding's shape, translated into a goto program over
+  // its arguments, which are given to the encoding as fields.
+  translate (encoding) => (
+    choice := .shape_of(encoding)
+    if (exists choice) {
+      shape := choice.shape
+      clause := .clauses[shape]
+      arrangement := .layouts[shape]
+      if ((exists clause).and(exists arrangement)) {
+        laid := Encdec.laid(arrangement)
+        imm := Sail.argument(encoding, laid, `imm`)
+        rs1 := Sail.argument(encoding, laid, `rs1`)
+        rs2 := Sail.argument(encoding, laid, `rs2`)
+        rd := Sail.argument(encoding, laid, `rd`)
+        shamt := Sail.argument(encoding, laid, `shamt`)
+        is_unsigned := Sail.argument(encoding, laid, `is_unsigned`)
+        width := Sail.argument(encoding, laid, `width`)
+        this.writing = chain None
+        this.unused = label_names.head
+        clause.run(imm, rs1, rs2, rd, choice.operation, shamt, is_unsigned, width)
+        encoding.semantics = Goto(steps: .writing)
+      }
+    }
+    encoding
+  )
+  // An argument of a clause as the program reads it: a constant where the
+  // encoding fixes all its bits, and otherwise what the state holds under its
+  // name — a field riscv-opcodes lays out, or one given to the encoding here.
+  argument (encoding, laid, called) => (
+    operand := Encdec.operand(laid.operands, called)
+    if (exists operand.bits.head) {
+      if (operand.fixed_by(encoding.mask)) {
+        fixed_value := operand.read(encoding.match)
+        Written(goto: Constant(bits: fixed_value), known: fixed_value, leaving: None)
+      } else { Sail.valued(Named(name: .field_for(encoding, operand))) }
+    } else { None }
+  )
+  // The field an argument is read from: one riscv-opcodes lays out over the
+  // same bits in the same order (`imm` of ITYPE is `imm12`), or else the
+  // argument itself, given to the encoding as a field.
+  field_for (encoding, operand) => (
+    same := None
+    spanned := operand.span
+    if (exists spanned) {
+      looking := encoding.fields.head
+      while ((exists looking).and((exists same).not)) {
+        if (looking.value.mask == spanned) { same = looking.value.name }
+        looking = looking.next
+      }
+    }
+    unless (exists same) { same = Sail.given(encoding, operand) }
+    same
+  )
+  given (encoding, operand) => (
+    named_as := operand.name
+    unless (exists encoding.field(named_as)) { encoding.fields &= operand }
+    named_as
+  )
+
+  // Steps, added to the program being translated.
+  emit (step) => (
+    this.writing &= step
+    true
+  )
+  fresh => (
+    name := .unused.value
+    this.unused = .unused.next
+    name
+  )
+  // What a statement answered, where it jumped: the next address set to where
+  // it goes, and a jump leaving for it (`jump_to`, from `set_next_pc` in
+  // `core/pc_access.sail`, which keeps it in `nextPC`).
+  // spec: jump_to's checks — an extension's say on the target, and the trap
+  // when it is not four-byte aligned — are not translated.
+  settled (outcome) => (
+    if (exists outcome.leaving) {
+      sail.emit(Set(place: `inst_next`, to: outcome.leaving))
+      sail.emit(Jump(when: None, target: None, to: Named(name: `inst_next`)))
+    }
+    true
+  )
+  // `if c then a else b`, as statements: a jump past `a` where `c` does not
+  // hold, and one past `b` after `a`.
+  branch (condition, yes, no) => (
+    if (exists condition.known) { .chosen(condition, yes, no) } else { .jumping(condition, yes, no) }
+  )
+  chosen (condition, yes, no) => (
+    answer := None
+    if condition.known.is_zero { answer = no } else { answer = yes }
+    answer
+  )
+  jumping (condition, yes, no) => (
+    otherwise := sail.fresh
+    joined_at := sail.fresh
+    sail.emit(Jump(when: Inverted(of: condition.goto), target: otherwise, to: None))
+    taking := yes
+    sail.settled(taking)
+    sail.emit(Jump(when: None, target: joined_at, to: None))
+    sail.emit(Label(name: otherwise))
+    leaving_it := no
+    sail.settled(leaving_it)
+    sail.emit(Label(name: joined_at))
+    retired
+  )
+  constant (bits_of) => Written(goto: Constant(bits: bits_of), known: bits_of, leaving: None)
+  // An operator applied to a register of the file: `X_of` is the register
+  // read, and `other` what it is applied with.
+  operated (register, other, made) => (
+    X_of := InFile(file: `x`, index: register.goto, unset: zero_word, fixed: zero_word)
+    Sail.valued(inline made)
+  )
+  // A value where nothing is known of it yet.
+  valued (goto_value) => Written(goto: goto_value, known: None, leaving: None)
+  // What a `let` names: a place of the program's own, set to the value.
+  local (value) => (
+    if (exists value.known) { value } else { .kept(value) }
+  )
+  kept (value) => (
+    slot := sail.fresh
+    sail.emit(Set(place: slot, to: value.goto))
+    Sail.valued(Named(name: slot))
+  )
+  // As many bytes of memory from X(base) + offset as `width` says (one, two
+  // or four, as `width_enc` in `core/types.sail` spells them), the first the
+  // lowest.
+  loaded (from_register, displacement, size) => (
+    from_address := Sum(left: InFile(file: `x`, index: from_register.goto, unset: zero_word, fixed: zero_word), right: displacement.goto)
+    count := Sail.bytes_of(size)
+    gathered := Loaded(address: from_address)
+    step := Bits.hex(`00000001`)
+    while (step.below(count)) {
+      gathered = Joined(high: Loaded(address: Sum(left: from_address, right: Constant(bits: step))), low: gathered)
+      step = step + Bits.hex(`00000001`)
+    }
+    Sail.valued(gathered)
+  )
+  stored (from_register, displacement, size, written) => (
+    to_address := Sum(left: InFile(file: `x`, index: from_register.goto, unset: zero_word, fixed: zero_word), right: displacement.goto)
+    count := Sail.bytes_of(size)
+    step := Bits.hex(`00000000`)
+    byte_mask := Bits.hex(`000000ff`)
+    while (step.below(count)) {
+      sail.emit(Stored(address: Sum(left: to_address, right: Constant(bits: step)), to: Part(of: written.goto, mask: byte_mask)))
+      step = step + Bits.hex(`00000001`)
+      byte_mask = byte_mask.shifted_left(Bits.hex(`8`))
+    }
+    retired
+  )
+  // spec: one byte for `0b00`, two for `0b01`, four for `0b10`, by hand from
+  // `width_enc`.
+  bytes_of (size) => Bits.hex(`00000001`).shifted_left(size.known)
+  extended (unsigned, value) => Sail.valued(Widened(of: value.goto, like: zero_word, signed: unsigned.known.is_zero))
+  // `X(rd) = value`.
+  write (register, value) => (
+    sail.emit(IntoFile(file: `x`, index: register.goto, to: value.goto, fixed: zero_word))
+    retired
+  )
+
+  // The name a register of the file is held by: `core/regs.sail` declares
+  // `register x1 : regtype` to `register x31 : regtype`, one after another,
+  // and `rX` answers them for the numbers one to thirty-one.
+  // spec: the numbers are taken from the order they are declared in; `rX`'s
+  // `1 => x1, …` says them outright.
+  registered (name) => (
+    following := .counted.next
+    this.counted = following
+    register_names[following.value] = name
+    true
+  )
+  register_name (number) => register_names[Sail.spelled(number)]
+  // The bits of a word, each kept by the position it is at.
+  spread (word) => (
+    place := positions.head
+    bit := word.bits.head
+    while ((exists place).and(exists bit)) {
+      at := place.value
+      word_bits[at] = bit.value
+      place = place.next
+      bit = bit.next
+    }
+    word
+  )
+  // A number as the position its bits spell: a step along the positions of
+  // one, two, four, eight or sixteen for each bit that is set.
+  spelled (number) => (
+    place := `0`
+    striding := stride_tables.head
+    bit := number.bits.head
+    while (exists bit) {
+      if bit.value { place = striding.value[place] }
+      striding = striding.next
+      bit = bit.next
+    }
+    place
+  )
+  // A table of steps twice as long as another's.
+  doubled_table (single, into) => (
+    walking := positions.head
+    while (exists walking) {
+      from_here := walking.value
+      into[from_here] = None
+      once := single[from_here]
+      if (exists once) { into[from_here] = single[once] }
+      walking = walking.next
+    }
+    into
+  )
+
+}
+sail ^keyword := Sail(clauses: Clauses(), layouts: Layouts(), assemblies: Assemblies(), spellings: Spellings(), pairs: chain None, current: None, writing: chain None, unused: None, counted: positions.head)
+shapes_read ^keyword := chain None
+
+// The labels a program's jumps land on.
+label_names ^keyword := chain None
+label_names &= `a`
+label_names &= `b`
+label_names &= `c`
+label_names &= `d`
+label_names &= `e`
+label_names &= `f`
+label_names &= `g`
+label_names &= `h`
+label_names &= `i`
+label_names &= `j`
+
+// One side of a mapping said to be the other.
+Pair := class {
+  mapping: Node
+  left: Node
+  right: Node
+}
+// The shape an encoding is, and the operation, where the shape is split by
+// one.
+Choice := class {
+  shape: Node
+  operation: Node
+}
+
+// A value of a clause being translated: the goto value it is (`goto`), what
+// it is where that is known already (`known`), and where a statement that
+// answers it leaves for (`leaving`). Sail's operators on bits are the goto
+// values of the same meaning.
+Written := class {
+  goto: Node
+  known: Node
+  leaving: Node
+
+  + (other) => Sail.valued(Sum(left: .goto, right: other.goto))
+  - (other) => Sail.valued(Difference(left: .goto, right: other.goto))
+  // A slice as wide as a shift amount (`log2_xlen` is five with XLEN 32).
+  // spec: `core/xlen.sail` says what `log2_xlen` is, by hand here.
+  [log2_xlen{ }-{ }1{ }..{ }0] ^class => Sail.valued(Part(of: .goto, mask: five_bits))
+  // The bytes of a store: the store takes as many of its low bytes as the
+  // width says, so the slice is the value itself.
+  [width{ }*{ }8{ }-{ }1{ }..{ }0] ^class => this
+}
+five_bits ^keyword := Bits.hex(`0000001f`)
+// What a statement that does nothing more answers.
+retired ^keyword := Written(goto: None, known: None, leaving: None)
+
+// The register file `X`, by the number a value spells: the first reads as
+// zero and keeps nothing written to it.
+// spec: `rX`/`wX` in `core/regs.sail`, by hand; a register file is a value
+// and a step the shared goto programs could hold themselves.
+zero_word ^keyword := Bits.hex(`00000000`)
+register{ }{literal name}{ }:{ }regtype ^keyword => sail.registered(name)
+
+// `union clause instruction = ITYPE : (…)`: an instruction of that shape.
+// spec: the widths of its arguments are read from `encdec` instead.
+union{ }clause{ }instruction{ }={ }{literal shape}{ }:{ }({literal types}) ^keyword => (
+  shapes_read &= shape
+  true
+)
+union{ }clause{ }instruction{ }={ }{literal shape}{ }:{ }(bits({literal width}),{literal types}) ^keyword => (
+  shapes_read &= shape
+  true
+)
+
+// `mapping encdec_iop : iop <-> bits(3) = { ADDI <-> 0b000, … }`: in an
+// encdec clause, `encdec_iop(op)` is three bits of the word, which are the
+// operation's. `mapping itype_mnemonic : iop <-> string = { ADDI <-> "addi",
+// … }`: what each operation is spelled.
+// spec: which bits spell which operation is not kept; the operation is known
+// from the mnemonic.
+mapping{ }{literal called}{ }:{ }{literal left}{ }<->{ }bits({literal width}){ }={ }{`{`}{literal pairs}{`}`} ^keyword => (
+  widths[called] = width
+  true
+)
+mapping{ }{literal called}{ }:{ }{literal left}{ }<->{ }string{ }={ }{`{`}{pairs}{`}`} ^keyword => (
+  sail.current = called
+  pairs
+  true
+)
+mapping{ }{literal called}{ }:{ }bits({literal size}){ }<->{ }string{ }={ }{`{`}{pairs}{`}`} ^keyword => (
+  sail.current = called
+  pairs
+  true
+)
+{literal tag}{ }<->{ }"{literal spelled}", ^keyword => sail.paired(tag, spelled)
+{literal tag}{ }<->{ }"{literal spelled}" ^keyword => sail.paired(tag, spelled)
+
+// `mapping clause assembly = ITYPE(…) <-> itype_mnemonic(op) ^ …`: which
+// mapping spells the operations of which shape; `JAL(…) <-> "jal" ^ …`: the
+// mnemonic of a shape with no operations.
+mapping{ }clause{ }assembly{ }={ }{literal shape}({literal head}){\n}<->{ }{literal spelling}(op){ }^{literal rest} ^keyword => (
+  sail.assemblies[spelling] = shape
+  true
+)
+mapping{ }clause{ }assembly{ }={ }{literal shape}({literal head}){\n}<->{ }"{literal spelled}"{ }^{literal rest} ^keyword => (
+  sail.spellings[spelled] = shape
+  true
+)
+
+// `mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ …`: where the
+// arguments are in the word, most significant first, read a piece at a time
+// after `<->`. The first one written for a shape is kept. `BTYPE(imm @ 0b0,
+// …)` says the argument the clause is run with has `0` under what the word
+// holds. `when …` after it says when the mapping holds.
+// spec: what `when` says is not kept.
+mapping{ }clause{ }encdec{ }={ }{literal shape}({literal arguments}){\n}<-> ^keyword => sail.arranging(shape, None, None)
+mapping{ }clause{ }encdec{ }={ }{literal shape}({literal first}{ }@{ }0b{below: Binary},{literal arguments}){\n}<-> ^keyword => sail.arranging(shape, first, below)
+mapping{ }clause{ }encdec{ }={ }{literal shape}({literal arguments}){ }<-> ^keyword => sail.arranging(shape, None, None)
+when{ }{literal condition} ^keyword => None
+
+// The pieces of an encdec clause, one after another.
+// spec: an argument is known by the names the base instructions give it.
+// spec: what a capture reads as (`{name: ArgumentName}`) is asked of the word
+// it begins with, which runs on to the next space or bracket that opens a
+// rule, so it is not asked where a `)` or `]` ends it (`encdec_reg(rs2)`,
+// `imm[11]`): those are taken as written. `imm[9..4]` is also `imm[` a text
+// `]`, and the rule for a range is written after the one for a bit so that
+// it is the one read. The brackets are written `{`[`}` and `{`]`}`: a
+// pattern's `[…]` is an operator it is written with.
+Arrangement := class {
+  shape: Node
+  first: Node
+  below: Node
+  pieces: Node
+
+  { }{name: ArgumentName} ^class => sail.piece(this, `whole`, name, None, None)
+  { }@{ }{name: ArgumentName} ^class => sail.piece(this, `whole`, name, None, None)
+  { }encdec_reg({literal name}) ^class => sail.piece(this, `slice`, name, `0`, `4`)
+  { }@{ }encdec_reg({literal name}) ^class => sail.piece(this, `slice`, name, `0`, `4`)
+  { }@{ }bool_bit({literal name}) ^class => sail.piece(this, `slice`, name, `0`, `0`)
+  { }@{ }width_enc({literal name}) ^class => sail.piece(this, `slice`, name, `0`, `1`)
+  { }{name: ArgumentName}{`[`}{literal only}{`]`} ^class => sail.piece(this, `slice`, name, only, only)
+  { }@{ }{name: ArgumentName}{`[`}{literal only}{`]`} ^class => sail.piece(this, `slice`, name, only, only)
+  { }{name: ArgumentName}{`[`}{high: Position}..{literal low}{`]`} ^class => sail.piece(this, `slice`, name, low, high)
+  { }@{ }{name: ArgumentName}{`[`}{high: Position}..{literal low}{`]`} ^class => sail.piece(this, `slice`, name, low, high)
+  { }0b{fixed: Binary} ^class => sail.piece(this, `bits`, None, fixed, None)
+  { }@{ }0b{fixed: Binary} ^class => sail.piece(this, `bits`, None, fixed, None)
+  { }@{ }{called: Mapped}(op) ^class => sail.piece(this, `skip`, None, called, None)
+}
+// One piece: `whole` (an argument, as far as it goes), `slice` (bits `lo` to
+// `hi` of one), `bits` (fixed, in `lo`) or `skip` (as many bits as `lo` says,
+// an operation's).
+// spec: `bool_bit` is one bit and `width_enc` two, as `prelude/prelude.sail`
+// and `core/types.sail` say.
+Piece := class {
+  kind: Node
+  name: Node
+  lo: Node
+  hi: Node
+}
+
+// `function clause execute ITYPE(imm, rs1, rd, op) = { … }`: kept unread
+// until an encoding is given it, and then translated for that encoding's
+// operation, into the steps of a program.
+// spec: the arguments are known by the names the base instructions give them.
+function{ }clause{ }execute{ }{literal shape}({literal head}){ }={ }{`{`}{body}{`}`} ^keyword => (
+  clause ^keyword := external .
+  run (imm, rs1, rs2, rd, op, shamt, is_unsigned, width) => (
+    inline body
+  )
+  sail.clauses[shape] = clause
+  true
+)
+
+// The body of a clause, as it is translated. A `let` is a step setting a
+// place of its own to its value, which the steps after it read — unless the
+// value is known already, and is that.
+let{ }{declared}{ }:{ }{literal type}{ }={ }{value}; ^keyword => (
+  external declare declared sail.local(value)
+  declared
+)
+let{ }{declared}{ }={ }{value}; ^keyword => (
+  external declare declared sail.local(value)
+  declared
+)
+// `match op { ADDI => …, … }`: each arm defines what its operation answers,
+// and the one `op` names is asked.
+match{ }op{ }{`{`}{arms}{`}`} ^keyword => (
+  here ^keyword := external .
+  inline arms
+  picked := op
+  here[picked]
+)
+// `match jump_to(target) { Retire_Success() => { … }, failure => failure }`:
+// the next address is set first, then what the arm for success does, and
+// then the program leaves. The arm answers the block it is written as, which
+// is only written until it is run here.
+match{ }jump_to({destination}){ }{`{`}{arms}{`}`} ^keyword => (
+  sail.emit(Set(place: `inst_next`, to: destination.goto))
+  here ^keyword := external .
+  inline arms
+  succeeded := here.Retire_Success()
+  inline succeeded
+  sail.emit(Jump(when: None, target: None, to: Named(name: `inst_next`)))
+  retired
+)
+// `jump_to([target with 0 = 0b0])`: to where the target says, its lowest bit
+// cleared.
+match{ }jump_to([{destination}{ }with{ }0{ }={ }0b0]){ }{`{`}{arms}{`}`} ^keyword => (
+  sail.emit(Set(place: `inst_next`, to: Both(left: destination.goto, right: Constant(bits: Bits.hex(`fffffffe`)))))
+  here ^keyword := external .
+  inline arms
+  succeeded := here.Retire_Success()
+  inline succeeded
+  sail.emit(Jump(when: None, target: None, to: Named(name: `inst_next`)))
+  retired
+)
+Retire_Success() ^keyword => retired
+// `match vmem_read(rs1, offset, width, …) { Ok(data) => { … }, … }`: the arm
+// for success, given what was read.
+// spec: `vmem_read` and `vmem_write` (`sys/vmem_utils.sail`) translate the
+// address, check it and go through the platform's memory; here they are the
+// bytes of the state's memory at X(rs1) + offset, the first byte the lowest.
+match{ }vmem_read({from_register},{ }{displacement},{ }{size},{ }Load(Data),{ }false,{ }false,{ }false){ }{`{`}{arms}{`}`} ^keyword => (
+  data := sail.loaded(from_register, displacement, size)
+  here ^keyword := external .
+  inline arms
+  here.Ok(data)
+)
+match{ }vmem_write({from_register},{ }{displacement},{ }{size},{ }{written},{ }Store(Data),{ }false,{ }false,{ }false){ }{`{`}{arms}{`}`} ^keyword => (
+  sail.stored(from_register, displacement, size, written)
+  retired
+)
+// spec: `extend_value` in `extensions/I/base_insts.sail` is an `if` on
+// whether the load is unsigned, which is known for each encoding.
+extend_value({unsigned},{ }{value}) ^keyword => sail.extended(unsigned, value)
+assert({literal claim}); ^keyword => retired
+// spec: `update_elp_state` is Zicfilp's landing-pad state, not translated.
+update_elp_state({literal register}); ^keyword => retired
+// The operators on bits, where a register is what they are applied to, as
+// every one the base instructions are written with is.
+// spec: a rule for an operator after any value would be tried after every
+// value there is, the language's own comparisons among them; these are
+// read after `X(…)` only.
+X({register}){ }=={ }{other} ^keyword => sail.operated(register, other, { Equal(left: X_of, right: other.goto) })
+X({register}){ }!={ }{other} ^keyword => sail.operated(register, other, { Inverted(of: Equal(left: X_of, right: other.goto)) })
+X({register}){ }&{ }{other} ^keyword => sail.operated(register, other, { Both(left: X_of, right: other.goto) })
+X({register}){ }|{ }{other} ^keyword => sail.operated(register, other, { Either(left: X_of, right: other.goto) })
+X({register}){ }^{ }{other} ^keyword => sail.operated(register, other, { Differing(left: X_of, right: other.goto) })
+X({register}){ }<<{ }{other} ^keyword => sail.operated(register, other, { ShiftedLeft(of: X_of, by: other.goto) })
+X({register}){ }>>{ }{other} ^keyword => sail.operated(register, other, { ShiftedRight(of: X_of, by: other.goto, arithmetic: false) })
+X({register}){ }<_s{ }{other} ^keyword => sail.operated(register, other, { Less(left: X_of, right: other.goto) })
+X({register}){ }<_u{ }{other} ^keyword => sail.operated(register, other, { Below(left: X_of, right: other.goto) })
+X({register}){ }>=_s{ }{other} ^keyword => sail.operated(register, other, { Inverted(of: Less(left: X_of, right: other.goto)) })
+X({register}){ }>=_u{ }{other} ^keyword => sail.operated(register, other, { Inverted(of: Below(left: X_of, right: other.goto)) })
+X({register}){ }={ }{value}; ^keyword => sail.write(register, value)
+X({register}) ^keyword => Sail.valued(InFile(file: `x`, index: register.goto, unset: zero_word, fixed: zero_word))
+PC ^keyword => Sail.valued(Named(name: `inst_start`))
+if{ }{condition}{ }then{ }{yes}{ }else{ }{no} ^keyword => sail.branch(condition, yes, no)
+if{ }{condition}{\n}then{ }{yes}{\n}else{ }{no} ^keyword => sail.branch(condition, yes, no)
+// spec: `sign_extend` and `zero_extend` (`prelude/prelude.sail`) are to as
+// wide as what is asked of them, which here is always XLEN.
+sign_extend({value}) ^keyword => Sail.valued(Widened(of: value.goto, like: zero_word, signed: true))
+zero_extend({value}) ^keyword => Sail.valued(Widened(of: value.goto, like: zero_word, signed: false))
+bool_to_bit({value}) ^keyword => value
+shift_bits_right_arith({value},{ }{amount}) ^keyword => Sail.valued(ShiftedRight(of: value.goto, by: amount.goto, arithmetic: true))
+jump_to({destination}) ^keyword => Written(goto: None, known: None, leaving: destination.goto)
+// spec: `get_arch_pc()` is `PC` and `get_next_pc()` `nextPC`
+// (`core/pc_access.sail`): where the instruction starts and where the next
+// one does, as a run keeps them.
+get_arch_pc() ^keyword => Sail.valued(Named(name: `inst_start`))
+get_next_pc() ^keyword => Sail.valued(Named(name: `inst_next`))
+RETIRE_SUCCESS ^keyword => retired
+0x{digits: Hexadecimal} ^keyword => Sail.constant(digits)
+0b{digits: Binary} ^keyword => Sail.constant(digits)
+{upper} @ {lower} ^keyword => Sail.valued(Joined(high: upper.goto, low: lower.goto))
+
+
+// The position after each position, and each bit of a word, by the position
+// it is at.
+After := class { }
+position_after ^keyword := After()
+WordBits := class { }
+word_bits ^keyword := WordBits()
+// Every table asked by position has every position, None where it holds
+// nothing: a table asked for a key it was never given files that key as an
+// unresolved name.
+stepping ^keyword := positions.head
+while (exists stepping) {
+  position_after[stepping.value] = None
+  stepping = stepping.next
+}
+stepping = positions.head
+while (exists stepping.next) {
+  step_from := stepping.value
+  position_after[step_from] = stepping.next.value
+  stepping = stepping.next
+}
+Plus2 := class { }
+Plus4 := class { }
+Plus8 := class { }
+Plus16 := class { }
+stride_tables ^keyword := chain None
+stride_tables &= position_after
+stride_tables &= Sail.doubled_table(stride_tables.tail.value, Plus2())
+stride_tables &= Sail.doubled_table(stride_tables.tail.value, Plus4())
+stride_tables &= Sail.doubled_table(stride_tables.tail.value, Plus8())
+stride_tables &= Sail.doubled_table(stride_tables.tail.value, Plus16())
+
+// A layout of a shape, worked out once: its arguments, and the bits it fixes.
+Arranged := class {
+  operands: Node
+  mask: Node
+  match: Node
+}
+LaidOut := class { }
+laid_out ^keyword := LaidOut()
+
+// Where the arguments of a shape are in the word.
+Encdec := class {
+  laid (arrangement) => (
+    shape := arrangement.shape
+    found := laid_out[shape]
+    unless (exists found) { found = Encdec.remembered(arrangement) }
+    found
+  )
+  remembered (arrangement) => (
+    made := Encdec.of(arrangement)
+    shape := arrangement.shape
+    laid_out[shape] = made
+    made
+  )
+  // The arguments of a shape, laid out from the least significant end of the
+  // pieces its encdec clause is written with, and what it fixes.
+  of (arrangement) => (
+    named := chain None
+    named &= Operand(name: `imm`, bits: chain None, below: None, mask: zero_word, order: None)
+    named &= Operand(name: `rs1`, bits: chain None, below: None, mask: zero_word, order: None)
+    named &= Operand(name: `rs2`, bits: chain None, below: None, mask: zero_word, order: None)
+    named &= Operand(name: `rd`, bits: chain None, below: None, mask: zero_word, order: None)
+    named &= Operand(name: `shamt`, bits: chain None, below: None, mask: zero_word, order: None)
+    named &= Operand(name: `is_unsigned`, bits: chain None, below: None, mask: zero_word, order: None)
+    named &= Operand(name: `width`, bits: chain None, below: None, mask: zero_word, order: None)
+    masking := chain None
+    matching := chain None
+    place := positions.head
+    walker := arrangement.pieces.tail
+    while (exists walker) {
+      piece := walker.value
+      place = Encdec.placed(piece, place, named, masking, matching)
+      walker = walker.previous
+    }
+    if (exists arrangement.first) {
+      below := arrangement.below
+      operand := Encdec.operand(named, arrangement.first)
+      operand.below = below
+    }
+    Arranged(operands: named, mask: Bits(bits: masking), match: Bits(bits: matching))
+  )
+  operand (named, called) => (
+    found := None
+    scan := named.head
+    while (exists scan) {
+      if (exists (external alike (scan.value.name) (called))) { found = scan.value }
+      scan = scan.next
+    }
+    found
+  )
+  // One piece, placed from `place` on; what is past it. What it fixes is
+  // added to `masking` and `matching`, a bit for each position it takes.
+  placed (piece, place, named, masking, matching) => (
+    here := place
+    kind := piece.kind
+    fixing := false
+    if (exists (external alike (kind) (`whole`))) {
+      operand := Encdec.operand(named, piece.name)
+      here = operand.placed(place, `0`, None)
+    } elsif (exists (external alike (kind) (`slice`))) {
+      operand := Encdec.operand(named, piece.name)
+      here = operand.placed(place, piece.lo, piece.hi)
+    } elsif (exists (external alike (kind) (`skip`))) {
+      counted := `0`
+      while ((exists (external alike (counted) (piece.lo))).not) {
+        here = here.next
+        counted = position_after[counted]
+      }
+    } else {
+      fixing = true
+      bit := piece.lo.bits.head
+      while (exists bit) {
+        masking &= true
+        matching &= bit.value
+        here = here.next
+        bit = bit.next
+      }
+    }
+    unless fixing {
+      passing := place
+      while ((exists passing).and(Encdec.before(passing, here))) {
+        masking &= false
+        matching &= false
+        passing = passing.next
+      }
+    }
+    here
+  )
+  before (passing, here) => if (exists here) { (exists (external alike (passing.value) (here.value))).not } else { true }
+}
+// Which bit of an argument is which bit of the word.
+Spot := class {
+  bit: Node
+  word: Node
+}
+
+// An argument of an instruction, and which bit of the word each of its bits
+// is; `below` is what a head such as `imm @ 0b0` puts under it. It is a field
+// of the encodings of its shape where riscv-opcodes has none of its name: one
+// that is read and not written, since the fields riscv-opcodes lays out write
+// every bit of the word back already (`mask` is none of them).
+Operand := class {
+  name: Node
+  bits: Node
+  below: Node
+  mask: Node
+  order: Node
+
+  // Its bits from `lo` to `hi` (to the end of the word, where `hi` is None)
+  // are the word's bits from `place` on; what is past them.
+  placed (place, lo, hi) => (
+    at := lo
+    here := place
+    going := true
+    while ((exists here).and(going)) {
+      this.bits &= Spot(bit: at, word: here.value)
+      if (exists hi) {
+        if (exists (external alike (at) (hi))) { going = false }
+      }
+      here = here.next
+      at = position_after[at]
+    }
+    here
+  )
+  // The positions of the word its bits are at, its lowest bit first.
+  ordered => (
+    found := .order
+    unless (exists found) { found = .ordering }
+    found
+  )
+  ordering => (
+    out := chain None
+    at := `0`
+    going := true
+    while going {
+      found := None
+      walker := .bits.head
+      while (exists walker) {
+        if (exists (external alike (walker.value.bit) (at))) { found = walker.value.word }
+        walker = walker.next
+      }
+      if (exists found) {
+        out &= found
+        at = position_after[at]
+      } else { going = false }
+    }
+    this.order = out
+    out
+  )
+  // Its value in a word: its bits, gathered from where they are.
+  read (word) => (
+    Sail.spread(word)
+    out := chain None
+    walker := .ordered.head
+    while (exists walker) {
+      out &= word_bits[walker.value]
+      walker = walker.next
+    }
+    held := Bits(bits: out)
+    if (exists .below) { .below.under(held) } else { held }
+  )
+  // The bits of the word it takes up, where it takes them up in order and
+  // nothing is put under it; None otherwise.
+  span => (
+    marks := chain None
+    wanted := .ordered.head
+    place := positions.head
+    while (exists place) {
+      if (exists wanted) {
+        if (exists (external alike (wanted.value) (place.value))) {
+          marks &= true
+          wanted = wanted.next
+        } else { marks &= false }
+      } else { marks &= false }
+      place = place.next
+    }
+    if ((exists wanted).or(exists .below)) { None } else { Bits(bits: marks) }
+  )
+  // Whether a mask sets every bit of the word it is at.
+  fixed_by (fixing) => (
+    Sail.spread(fixing)
+    all_set := true
+    walker := .ordered.head
+    while (exists walker) {
+      unless word_bits[walker.value] { all_set = false }
+      walker = walker.next
+    }
+    all_set
+  )
+}

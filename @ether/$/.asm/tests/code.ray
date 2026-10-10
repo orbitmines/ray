@@ -1,0 +1,31 @@
+// Code read as the instructions it spells, and written back as the bytes it was.
+//
+// run: .ether/asm/asm.sh code @ether/$/.asm/tests/code.ray boolean.ray -- Bits.ray ISA.ray Code.ray
+
+mark ^keyword := external global
+unless (exists None) { INFO@mark `C0 control: this always fires` }
+
+addi_fields ^keyword := chain None
+addi_fields &= Field(name: `rd`, mask: Bits.hex(`00000f80`))
+addi_fields &= Field(name: `rs1`, mask: Bits.hex(`000f8000`))
+addi_fields &= Field(name: `imm12`, mask: Bits.hex(`fff00000`))
+lui_fields ^keyword := chain None
+lui_fields &= Field(name: `rd`, mask: Bits.hex(`00000f80`))
+lui_fields &= Field(name: `imm20`, mask: Bits.hex(`fffff000`))
+rv_encodings ^keyword := chain None
+rv_encodings &= Encoding(mnemonic: `lui`, mask: Bits.hex(`0000007f`), match: Bits.hex(`00000037`), fields: lui_fields, semantics: None)
+rv_encodings &= Encoding(mnemonic: `addi`, mask: Bits.hex(`0000707f`), match: Bits.hex(`00000013`), fields: addi_fields, semantics: None)
+rv ^keyword := ISA(name: `RV32I`, endian: `little`, encodings: rv_encodings)
+
+// addi x1, x0, 5; lui x0, 0x12345; and four bytes that spell nothing.
+text ^keyword := Code(isa: rv, bytes: Bits.hex_bytes(`93005000 37503412 ffffffff`), width: Bits.hex(`00000000`))
+listed ^keyword := text.listing
+unless (exists (external alike (listed.head.value.mnemonic) (`addi`))) { INFO@mark `C1 the first instruction is not addi` }
+unless (exists (external alike (listed.head.next.value.mnemonic) (`lui`))) { INFO@mark `C2 the second instruction is not lui` }
+unless (exists listed.head.next.next.value.unread) { INFO@mark `C3 the bytes that spell nothing are not kept as unread` }
+if (exists listed.head.next.next.next) { INFO@mark `C4 the listing goes on past what spells nothing` }
+unless (listed.head.value.field(`imm12`) == Bits.hex(`005`).extract(Bits.hex(`fff`))) { INFO@mark `C5 the immediate of the first is not 5` }
+unless text.holds { INFO@mark `C6 written back the code is not the bytes it was` }
+
+big ^keyword := ISA(name: `RV32I-big`, endian: `big`, encodings: rv_encodings)
+unless (exists (external alike (Code(isa: big, bytes: Bits.hex_bytes(`00500093`), width: Bits.hex(`00000000`)).listing.head.value.mnemonic) (`addi`))) { INFO@mark `C7 a big-endian word is not read the other way round` }

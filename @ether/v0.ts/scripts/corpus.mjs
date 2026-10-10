@@ -14,8 +14,8 @@ export function manifests() {
   const found = [];
   (function walk(dir) {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
-      if (!e.isDirectory() || e.name === 'node_modules' || (e.name.startsWith('v') && e.name.includes('.'))) continue;
       const full = join(dir, e.name);
+      if (!e.isDirectory() || e.name === 'node_modules' || full === join(ether, 'v0.ts')) continue;
       if (e.name === 'corpus' && existsSync(join(full, 'corpus.json'))) found.push(relative(ether, join(full, 'corpus.json')));
       else walk(full);
     }

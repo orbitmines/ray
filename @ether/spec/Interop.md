@@ -173,66 +173,69 @@ pub fn add(a: i32, b: i32) -> Option<i32> { a.checked_add(b) }
 - **Pass.** The diff is empty: `5`, `0`, `-3`, `2147483647`, `-2147483648` from both. Control: the same `main.rs` over an
   `add.rs` that subtracts differs from the oracle, and `diff` fails.
 
-## IOP5. Track B: Python to C
+## IOP5. Making the claim testable (N0 to N6)
 
-### B1. Read Python into Ray, and meet Track A
+Track A proves the pipeline runs for one function, but its reader and writer are templates and the "same value" of the
+old B1 could only hold by construction (two readers with the same field names). This part replaces the old Track B
+(B1 to B5) with the version that tests the claim. Track A stays as the baseline until N4 replaces it.
 
-- **Goal.** `add.py` becomes a Ray Program, and that Program equals A1's.
-- **What happens.** `python.ray` holds two patterns: `def NAME(A: int, B: int) -> int:` followed by an indented
-  `return EXPR`, and `NAME + NAME`. Reading `add.py` gives a Program, which the step compares with A1's using `==`.
+- **The shared shape is Ray code.** Each reader emits one Ray function in a normal form fixed here, not by either
+  reader: fully bracketed, every operation's result narrowed with `as`, parameters typed. For example
+  `add (a: Int32, b: Int32) => (((a + ((b * c) as Int32)) as Int32))`. Ray defines and runs it; there is no record
+  vocabulary in between (Plan.md, 2026-10-06).
+- **Readers are grammars** over a small integer subset: any number of parameters; C `int` and `long`, Python `int`;
+  `+`, `-`, `*`, brackets, names and number literals; spacing free; C on one line or several; Python with an indented
+  `return`.
+- **Writers are rule sets over Ray expressions** (`Rust`, `C`) that dispatch on `+`, `-`, `*` and `as T` and recurse;
+  the text is built by plain functions outside the rule set (a rule set's own rules would read its right sides).
+- **Types carry their bounds.** `ints.ray` declares `Int32`, `Int64` and `Integer` (unbounded); a writer maps a type by
+  its bounds, read from the type.
+- **Evidence is a corpus.** `gen.py` writes N seeded random functions, each as C and as Python source with random
+  spacing, line breaks and redundant brackets.
 
-`add.py`:
+### N0. The normal form and the integer types
 
-```python
-def add(a: int, b: int) -> int:
-    return a + b
-```
+- **Goal.** Fix the shared shape before any reader exists.
+- **What happens.** `ints.ray` declares the types; `normal.ray` states the normal form with claims on hand-written Ray
+  functions: they run, an in-range result is answered, an intermediate leaving its type answers `None`.
+- **Pass.** `./run.sh N0`: its claims hold.
 
-- **Why it matters.** This is the centre of the POC. Two languages with nothing in common at run time, one compiled and
-  one interpreted, produce the same Ray value. From that point it no longer matters which language the function came
-  from.
-- **The types differ before B2.** Python's `int` is unbounded, so B1's Program reads `a: Number`, and `==` with A1 is
-  false until B2 narrows it. The step prints both Programs and the result of `==` before and after B2.
-- **Pass.** Before B2: `false`. After B2: `true`.
+### N1. The C grammar
 
-### B2. Choose the semantics at the boundary
+- **Goal.** C source becomes normal-form Ray code.
+- **Pass.** `./run.sh N1`: `add.c` and a handful of hand-written variants (spacing, several parameters, `long`,
+  precedence, brackets, literals) read to the expected Ray text, which runs.
 
-- **Goal.** Decide, explicitly, what Python's unbounded `int` becomes in C.
-- **What happens.** The boundary narrows parameters and result to `Number{-2^31 <= . < 2^31}`. The narrowing on the result
-  is a condition the C side has to check, and C has no exceptions, so a failure becomes part of the interface.
-- **Why it matters.** This is goal (II) in miniature: across a boundary, one side's semantics is chosen, here C's 32-bit
-  integers with an explicit failure instead of Python's big integers. The choice is written in the Program, not hidden in
-  the writer.
-- **Pass.** `./run.sh B2` prints the narrowed Program, and B1's `==` with A1 is `true`.
+### N2. The Python grammar
 
-### B3. Write C
+- **Goal.** Python source becomes normal-form Ray code, with Python's `int` as `Integer`.
+- **Pass.** `./run.sh N2`: `add.py` and the same variants read to the expected Ray text.
 
-- **Goal.** The narrowed Program becomes `out/add.c`.
-- **What happens.** `c.o.ray` declares `Compiler.c`. A narrowed result becomes an out-parameter and a `bool` that is
-  `false` when the narrowing fails, the C counterpart of A3's `Option`. gcc's `__builtin_add_overflow` checks it.
-- **Pass.** `out/add.c` is exactly:
+### N3. The corpus, and the two readers agree (the centre)
 
-```c
-#include <stdbool.h>
-bool add(int a, int b, int *result) { return !__builtin_add_overflow(a, b, result); }
-```
+- **Goal.** For every function in the corpus, the Ray code read from C equals the Ray code read from Python once the
+  boundary narrows `Integer` to C's type (B2's choice, now a rewrite of the Ray text), and the Ray code computes what
+  Python computes wherever no intermediate result leaves its type.
+- **Pass.** `./run.sh N3`: every corpus function agrees; the count is printed. Control: a corpus where the Python source
+  differs from the C source in one operator is caught.
 
-### B4. Use it from C
+### N4. The Rust writer, Track A over the corpus
 
-- **Goal.** A C program calls the generated `add`.
-- **What happens.** `main.c` reads pairs from stdin and prints the sum, or `out of domain` when `add` returns `false`.
-  gcc builds it with `out/add.c`.
-- **Why it matters.** The interpreted original is gone from the run path: no python3, no libpython, no embedding.
-- **Pass.** `ldd out/main-c | grep -c python` prints `0`.
+- **Pass.** For every corpus function and every input (edges included): where Ray's Rust answers, it equals gcc's C;
+  where it answers `None`, an exact intermediate really leaves the type (so C's result is undefined behaviour).
 
-### B5. Prove Track B
+### N5. The C writer, Track B over the corpus
 
-- **Goal.** The C binary and Python agree wherever both are defined, and disagree visibly where they are not.
-- **What happens.** `oracle.py` imports `add.py` and prints one sum per line. Both run over both input files.
-- **Pass.**
-  - On `inputs.txt`: `diff` of the python3 output and the C output is empty.
-  - On `inputs.overflow.txt` (`2147483647 1`, `-2147483648 -1`): python3 prints `2147483648` and `-2147483649`; the C
-    binary prints `out of domain` twice. This is the B2 choice working, so it is the expected result, not a mismatch.
+- **Pass.** Where Ray's C answers, it equals Python; it refuses exactly when an exact intermediate leaves the type.
+
+### N6. Drop-in (optional)
+
+- **Pass.** Ray writes a C-ABI Rust function with wrapping arithmetic (gcc `-fwrapv`), which links into the unchanged
+  `oracle.c` in place of `add.c` with identical output.
+
+### Limits after N6
+
+One small integer subset per language; no control flow, no calls; grammars cover the subset, not the languages.
 
 ## IOP6. After the MVP: the binary path
 
@@ -305,7 +308,13 @@ Answers from 2026-10-10:
 - Overflow is guarded explicitly, never wrapped: a narrowed result is checked by every writer (`Option` in Rust, a `bool`
   and an out-parameter in C), because equal Programs must mean the same thing in every target.
 
+- The shared shape both readers target is Ray code in a normal form (IOP5), not a record vocabulary and not reader
+  classes compared field by field; the claim is tested over a generated corpus against gcc and python3.
+
 ## Order of work
+
+After A5: N0, N1, N2, N3, N4, N5, then N6. (The old B1 to B5 are replaced by N2, N3 and N5.)
+
 
 S0, S1, A1, A2, A3, A4, A5, B1, B2, B3, B4, B5. Track B reuses A1's Program as the comparison in B1, so it starts only after
 A1 passes. C1 waits for A5 and B5.

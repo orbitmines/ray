@@ -318,9 +318,38 @@ literal    := "1" .. "9"
 - **Pass.** `./run.sh N6`: (1) prints `expected/oracle.txt`; (2) seeds 1, 2 and 3, 40 functions and 50 inputs each: 6000
   of 6000 agree. Control: one `wrapping_add` turned into `wrapping_sub` in a Ray-written `f5.abi.rs` gives 50 differ.
 
-### Limits after N6
+### Limits after N6, and what lifting each takes
 
-One small integer subset per language; no control flow, no calls; grammars cover the subset, not the languages.
+One small integer subset per language (`+ - *` over `int`/`long`), no control flow, no calls, and grammars that cover the
+subset only. Measured on 2026-10-10: N3 over 40 functions takes 21 s (80 reads, 120 runs in Ray, the engine's boot).
+
+- **L1 Real parsers.** Two routes. (a) Grammars written in Ray at full size: C11 is about 200 productions plus a
+  preprocessor, Python's PEG grammar about 300 rules with INDENT/DEDENT tokens. That needs the engine first: working text
+  operations in the library (today `split(…)[1]`, `join` and `.length` fail and the POC uses host stand-ins), rules
+  without a leading literal that apply (today they do not), typed fields in header patterns (IOPG2), error positions when
+  a read fails, and speed (every nested read re-reads its text through `$`; real files would be far slower than the
+  corpus). (b) Read what compilers already produce, the Almanac's (1b) and LIB1: Python's own `ast` module, clang's
+  `-ast-dump=json`, or LLVM IR (one reader that reaches C, C++, Rust and Swift). Recommend (b) for coverage, keeping Ray
+  grammars for those formats, and (a) where a language has no such front end.
+- **L2 Control flow.** The normal form becomes a Program with statements, mutable locals, `if`, loops and `return` (Ray
+  has them as rules over labels and `goto`; Compiler.md's IR is that Program). Each place the languages differ is chosen
+  at the boundary, as overflow was: C's truncating `/` and `%` against Python's flooring ones, C's `0`/`1` comparisons
+  against Python's `bool`, truthiness, short-circuit evaluation. Equality can no longer be text: two equivalent programs
+  differ in form (`for` against `while`). It needs a canonical form (structured control flow, renamed locals: U9.1's
+  `==.normal`, a minimising Compiler level) or a semantic check (differential testing as now, plus bounded symbolic
+  equivalence). Corpora would come from existing generators (Csmith for UB-free C, hypothesmith for Python) with bounded
+  loops so every run ends.
+- **L3 Calls.** Modules of functions calling each other, recursion, name resolution. Across a boundary, a calling
+  convention: N6 already uses the C ABI for Rust; Python calling Ray-written C needs Ray to write the binding too (a
+  CPython extension or a `ctypes` wrapper). Calls into libraries (`libc`, Python's standard library) are goal (I) for
+  real: reading the library itself into Ray, with side effects modelled (IO as `external`, IO levels).
+- **L4 Data beyond integers.** Floats (Python's `float` is C's `double`, close to free), `bool`, strings and their
+  encodings, arrays and lists, structs and objects, `None` and null. Pointers and aliasing in C against references and a
+  garbage collector in Python are goal (II), the memory model across a boundary: the hardest part, a research question,
+  not plumbing.
+
+Order: engine prerequisites (L1's list) first, then L2 with a Csmith-backed corpus, then L3, then L1 (b) to reach
+real-world code, then L4.
 
 ## IOP6. After the MVP: the binary path
 

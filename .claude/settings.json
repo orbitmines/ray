@@ -9,9 +9,15 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.mjs\" pre-tool", "timeout": 600 }
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.mjs\" pre-tool" }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "if": "Bash(git *)", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.mjs\" pre-tool", "timeout": 600 }
         ]
       }
     ]

@@ -4,18 +4,32 @@ Deflate := class: Language {
 
   // Huffman codes given by their lengths alone: shorter codes first, equal lengths in symbol order, each the next binary number (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
   static Huffman := class lengths: Decimal[] {
-    codes => lengths.enumerate{.value > 0}.sort_by((.value, .index)).reduce(acc = [] => [acc,
-      (symbol: .index, bits: ((acc.empty ? 0 : (acc.last.bits + 1) * 2 ^ (.value - acc.last.bits.length)) as Binary).padded(.value))])
+    table := None
+    codes =>
+      (.table := coded) unless .table
+      .table
+    coded =>
+      made := []
+      code := 0
+      width := 1
+      while width <= 15 {
+        at := lengths.head
+        index := 0
+        while at {
+          if at.value == width {
+            made.append((symbol: index, bits: code.binary(width)))
+            code = code + 1
+          }
+          index = index + 1
+          at = at.next
+        }
+        code = code * 2
+        width = width + 1
+      }
+      made
     // A symbol is read as the one code whose bits come next, most significant bit first, and written as its code (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
-    Symbol => Binary{. is codes.bits#} as (bits => codes{.bits == bits}.first.symbol)
-    bits (symbol: Decimal) => codes{.symbol == symbol}.first.bits
-
-    // Lengths fitted to frequencies: the two least frequent join until one is left, each join one bit deeper (Huffman 1952, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
-    static fitted (frequencies: Number[]) => (1..<frequencies{> 0}.count).reduce(held = (nodes: frequencies.enumerate{.value > 0}.map((weight: .value, symbols: [.index])), lengths: [0] * frequencies.count) =>
-      held.nodes.sort_by(.weight) -- (sorted => [sorted[0].symbols, sorted[1].symbols].flatten -- (joined => (
-        nodes: [sorted[2..], (weight: sorted[0].weight + sorted[1].weight, symbols: joined)],
-        lengths: held.lengths.enumerate.map(.value + (.index is joined# ? 1 : 0))))))
-      .lengths.enumerate.map(frequencies[.index] > 0 ? .value max 1 : 0) -- Huffman(.)
+    Symbol => Coded(codes)
+    bits (symbol) => codes.find((code) => code.symbol == symbol).bits
   }
 
   // Lengths 3..258 as codes 257..285 and distances 1..32768 as codes 0..29: each code's base and extra bits (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.5)
@@ -26,28 +40,43 @@ Deflate := class: Language {
 
   // A literal byte, or a copy of length bytes from distance bytes back (https://www.rfc-editor.org/rfc/rfc1951#section-2)
   static Literal := class byte: Byte
-  static Copy := class length: Decimal{3 <= . <= 258}, distance: Decimal{1 <= . <= 32768}
+  static Copy := class (length: Decimal{(. >= 3) && (. <= 258)}, distance: Decimal{(. >= 1) && (. <= 32768)})
 
   // Data elements other than Huffman codes are packed starting with their least significant bit, so they read reversed (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
   static Data := class<literals: Huffman, distances: Huffman> (
     elements: (
       (literal: literals.Symbol{< 256})
-      | (length_code: literals.Symbol{257 <= . <= 285}, length_extra: <-Binary{length == LengthBases[length_code - 257].1},
-         distance_code: distances.Symbol{< 30}, distance_extra: <-Binary{length == DistanceBases[distance_code].1})
+      | (length_code: literals.Symbol{(. >= 257) && (. <= 285)}, length_extra: <-Binary{length == Deflate.LengthBases[length_code - 257].last},
+         distance_code: distances.Symbol{< 30}, distance_extra: <-Binary{length == Deflate.DistanceBases[distance_code].last})
     )[],
     // End-of-block (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.5)
     literals.Symbol{== 256}
   ) {
-    values => elements.map(. -- (.literal != None ? Literal(.literal)
-      : Copy(LengthBases[.length_code - 257].0 + .length_extra, DistanceBases[.distance_code].0 + .distance_extra)))
+    values => elements.map((element) => Deflate.value_of(element))
   }
-  static coded (value: Literal | Copy) => value is Literal ? (literal: value.byte)
-    : LengthBases.enumerate{.value.0 <= value.length}.last -- (length => DistanceBases.enumerate{.value.0 <= value.distance}.last -- (distance => (
-      length_code: length.index + 257, length_extra: value.length - length.value.0,
-      distance_code: distance.index, distance_extra: value.distance - distance.value.0)))
+  static value_of (element) => (element.literal !== None) ? Literal(element.literal)
+    : Copy((LengthBases[element.length_code - 257].first) + element.length_extra, (DistanceBases[element.distance_code].first) + element.distance_extra)
+  static coded (value) =>
+    if value is Literal {
+      return (literal: value.byte, length_code: None, length_extra: None, distance_code: None, distance_extra: None)
+    }
+    length := Deflate.base_of(LengthBases, value.length)
+    distance := Deflate.base_of(DistanceBases, value.distance)
+    (literal: None, length_code: length + 257, length_extra: value.length - (LengthBases[length].first), distance_code: distance, distance_extra: value.distance - (DistanceBases[distance].first))
+  // (the last code whose base is not past a value)
+  static base_of (bases, value) =>
+    found := 0
+    index := 0
+    at := bases.head
+    while at {
+      (found = index) if at.value.first <= value
+      index = index + 1
+      at = at.next
+    }
+    found
 
   // Non-compressed block: to the byte boundary, LEN, its one's complement NLEN, then LEN bytes (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.4)
-  static Stored := class (Binary{length < 8 && (at + length) % 8 == 0}, size: <-Binary₁₆ = bytes.count, <-Binary₁₆{== 2 ^ 16 - 1 - size}, bytes: (<-Byte)[]{length == size})
+  static Stored := class (padding: Binary{(length < 8) && (((at + length) % 8) == 0)}, size: <-Binary₁₆ = bytes.count, <-Binary₁₆{== 65535 - size}, bytes: (<-Byte)[]{length == size})
 
   // Fixed Huffman codes (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.6)
   static fixed_literals := Huffman([[8] * 144, [9] * 112, [7] * 24, [8] * 8].flatten)
@@ -62,7 +91,23 @@ Deflate := class: Language {
       | (code.Symbol{== 18}, many: <-Binary₇)
     )[]
   ) {
-    values => entries.reduce(acc = [] => [acc, .length != None ? [.length] : .again != None ? [acc.last] * (.again + 3) : [0] * (.zeros != None ? .zeros + 3 : .many + 11)].flatten)
+    values =>
+      made := []
+      at := entries.head
+      while at {
+        entry := at.value
+        if entry.length !== None {
+          made.append(entry.length)
+        } elsif entry.again !== None {
+          made.joined([made.last] * (entry.again + 3))
+        } elsif entry.zeros !== None {
+          made.joined([0] * (entry.zeros + 3))
+        } else {
+          made.joined([0] * (entry.many + 11))
+        }
+        at = at.next
+      }
+      made
   }
 
   // Dynamic Huffman codes: HLIT, HDIST, HCLEN, the code length code in its own order, then both codes' lengths as one sequence (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.7)
@@ -71,66 +116,68 @@ Deflate := class: Language {
     hlit: <-Binary₅ = literals.lengths.count - 257,
     hdist: <-Binary₅ = distances.lengths.count - 1,
     hclen: <-Binary₄ = 15,
-    sizes: (<-Binary₃)[]{length == hclen + 4} = Order.map(length_code.lengths[.] ?? 0),
-    lengths: CodeLengths<length_code>{values.count == hlit + 257 + hdist + 1} = CodeLengths<length_code>(entries: [literals.lengths, distances.lengths].flatten.map((length: .))),
-    data: Data<literals, distances>
+    sizes: (<-Binary₃)[]{length == hclen + 4} = Deflate.Order.map((symbol) => length_code.lengths[symbol] ?? 0),
+    lengths: Deflate.CodeLengths<length_code>{(hlit + 257 + hdist + 1) == values.count} = Deflate.CodeLengths(length_code, [literals.lengths, distances.lengths].flatten.map((length) => (length: length, again: None, zeros: None, many: None))),
+    data: Deflate.Data<literals, distances>
   ) {
-    length_code => Huffman((0..18).map(symbol => sizes[Order.index_of(symbol)] ?? 0))
-    literals => Huffman(lengths.values[..<hlit + 257])
-    distances => Huffman(lengths.values[hlit + 257..])
+    length_code => Deflate.Huffman((0..18).map((symbol) => sizes[Deflate.Order.index_of(symbol)] ?? 0))
+    literals => Deflate.Huffman(lengths.values.slice(0, hlit + 257))
+    distances => Deflate.Huffman(lengths.values.slice(hlit + 257, lengths.values.count))
   }
 
   // Block header: BFINAL, then BTYPE: 0 stored, 1 fixed codes, 2 dynamic codes (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.3)
   static Block := class (
     final: Binary₁ as boolean = false,
     kind: <-Binary₂{< 3} = 0,
-    (stored: Stored) if kind == 0,
-    (data: Data<fixed_literals, fixed_distances>) if kind == 1,
-    (dynamic: Dynamic) if kind == 2
+    (stored: Deflate.Stored) if kind == 0,
+    (data: Deflate.Data<Deflate.fixed_literals, Deflate.fixed_distances>) if kind == 1,
+    (dynamic: Deflate.Dynamic) if kind == 2
   ) {
-    values => stored ? stored.bytes.map(Literal(.)) : (data ?? dynamic.data).values
+    values => stored ? stored.bytes.map((byte) => Deflate.Literal(byte)) : (data ?? dynamic.data).values
   }
 
   // Blocks up to the final one, padded to a byte; each byte's bits are taken least significant first (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.3)
-  static Stream := class (blocks: Block[]{.last.final && !.[..<-1].some(.final)}, Binary{length < 8 && (at + length) % 8 == 0}) {
+  static Stream := class (blocks: Deflate.Block[]{!.empty && .last.final}, padding: Binary{(length < 8) && (((at + length) % 8) == 0)}) {
     // A copy may reach back into earlier blocks, and may overlap what it writes (https://www.rfc-editor.org/rfc/rfc1951#section-2, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.3)
-    bytes => blocks.values.flatten.reduce(out = [] => copied(out, .))
-    static copied (out: Byte[], value: Literal | Copy) => value is Literal ? [out, value.byte]
-      : (0..<value.length).reduce(held = out => [held, held[held.count - value.distance]])
+    bytes =>
+      out := []
+      blocks.for((block) => block.values.for((value) => Deflate.Stream.copied(out, value)))
+      out
+    static copied (out, value) =>
+      if value is Deflate.Literal {
+        return out.append(value.byte)
+      }
+      from := out.tail
+      back := value.distance - 1
+      while back > 0 {
+        from = from.previous
+        back = back - 1
+      }
+      left := value.length
+      while left > 0 {
+        out.append(from.value)
+        from = from.next
+        left = left - 1
+      }
+      out
 
-    static (bytes: Byte[]) as (=== Stream) => bytes.map(<-.).flatten as Stream
-    as (=== Byte[]) => (this as Binary).chunk(8).map(<-. as Byte)
+    static from (bytes) => bytes.listing ? Deflate.Stream.bits_read(bytes.map((byte) => byte.binary(8).reversed).join("")) : None
+    written => .binary.pieces(8).map((eight) => eight.reversed.unsigned)
   }
 
   // A stored block holds at most 65535 bytes (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.4)
-  static blocked (bytes: Byte[]) => (bytes.chunk(2 ^ 16 - 1) -- (.empty ? [[]] : .)) -- (chunks =>
-    chunks.enumerate.map(Block(final: .index == chunks.count - 1, kind: 0, stored: Stored(bytes: .value))))
+  static blocked (bytes) =>
+    made := []
+    from := 0
+    loop {
+      to := ((from + 65535) < bytes.count) ? (from + 65535) : bytes.count
+      made.append(Block(final: to == bytes.count, kind: 0, stored: Stored(bytes: bytes.slice(from, to))))
+      (break) if to == bytes.count
+      from = to
+    }
+    made
 
-  // LZ77: at each position the longest earlier match of at least 3 bytes, at most 258 long and 32768 back (https://www.rfc-editor.org/rfc/rfc1951#section-4)
-  static parsed (bytes: Byte[], at: Number = 0) => at >= bytes.count ? []
-    : ((0 max at - 32768)..<at).map(from => (length: Encoding.common(bytes[from..], bytes[at..<(at + 258 min bytes.count)]), distance: at - from)).max_by(.length)#.first -- (best =>
-      best && best.length >= 3 ? [Copy(best.length, best.distance), parsed(bytes, at + best.length)] : [Literal(bytes[at]), parsed(bytes, at + 1)])
-
-  static fixed (values: (Literal | Copy)[]) => Data<fixed_literals, fixed_distances>(elements: values.map(coded(.)))
-  static dynamic (values: (Literal | Copy)[]) => values.map(coded(.)) -- (codes =>
-    Huffman.fitted((0..<286).map(symbol => codes{(.literal ?? .length_code) == symbol}.count + (symbol == 256 ? 1 : 0))) -- (literals =>
-    Huffman.fitted((0..<30).map(symbol => codes{.distance_code == symbol}.count) -- (.some(> 0) ? . : [1])) -- (distances =>
-    Dynamic(literals: literals, distances: distances, data: Data<literals, distances>(elements: codes),
-      length_code: Huffman.fitted((0..18).map(length => [literals.lengths, distances.lengths].flatten{== length}.count))))))
-
-  // A block is written with fixed codes, or with codes fitted to its own frequencies, when that is shorter; fitted codes are at most 15 bits, 7 for the code lengths (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.6, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.7)
-  static Optimizations := {
-    {block: Block{kind == 0 && (Block(final, kind: 1, data: fixed(parsed(stored.bytes))) as Binary).length < (this as Binary).length}} =>
-      Block(final: block.final, kind: 1, data: fixed(parsed(block.stored.bytes)))
-    {block: Block{kind == 1 && dynamic(values) -- (.literals.lengths.max <= 15 && .distances.lengths.max <= 15 && .length_code.lengths.max <= 7
-      && (Block(final, kind: 2, dynamic: .) as Binary).length < (this as Binary).length)}} =>
-      Block(final: block.final, kind: 2, dynamic: dynamic(block.values))
-  }
-
-  level := {
-    {stream: Stream} => stream.bytes
-  }
-  written := Optimizations + {
-    {writing: Language.Writing} => Stream(blocks: blocked(writing.value as Byte[]))
-  }
+  // (the bytes a stream inflates to; the bytes of a stream holding these)
+  static inflated (bytes) => Stream.from(bytes).bytes
+  static deflated (bytes) => Stream(blocks: blocked(bytes)).written
 }

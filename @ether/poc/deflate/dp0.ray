@@ -1,0 +1,44 @@
+// DP0: each feature `Deflate.ray` uses, on a toy format of a few bits.
+
+mark ^keyword := global
+
+Pair := class (high: Binary₂, low: <-Binary₂) => { }
+unless Pair.bits_read("1001").high == 2 { INFO@mark `DP0.1a a fixed-width field does not read most significant first` }
+unless Pair.bits_read("1001").low == 2 { INFO@mark `DP0.1b a reversed field does not read least significant first` }
+
+Kind := class (kind: Binary₂{< 3}) => { }
+unless Kind.bits_read("10").kind == 2 { INFO@mark `DP0.2a a narrowed field does not read what holds` }
+if Kind.bits_read("11") { INFO@mark `DP0.2b a narrowed field reads what does not hold` }
+
+Either := class (items: ((small: Binary₂{< 2}) | (Binary₂{== 3}, big: Binary₃))[], Binary₂{== 2}) => { }
+either := Either.bits_read("0111101" + "10")
+unless either.items.count == 2 { INFO@mark `DP0.3a alternatives in a list do not read each element` }
+unless either.items.first.small == 1 { INFO@mark `DP0.3b the first alternative's field is not read` }
+unless either.items.last.big == 5 { INFO@mark `DP0.3c the second alternative's field is not read` }
+
+Sized := class (size: Binary₂, values: (Binary₂)[]{length == size}) => { }
+sized := Sized.bits_read("10" + "0111")
+unless sized.values == [1, 3] { INFO@mark `DP0.4a a list as long as an earlier field does not read that many` }
+if Sized.bits_read("10" + "01") { INFO@mark `DP0.4b a list shorter than its length is read` }
+
+Tagged := class (tag: Binary₁, (wide: Binary₄) if tag == 1, (narrow: Binary₂) if tag == 0) => { }
+unless Tagged.bits_read("11010").wide == 10 { INFO@mark `DP0.5a a piece whose condition holds is not read` }
+unless Tagged.bits_read("010").narrow == 2 { INFO@mark `DP0.5b a piece whose condition does not hold is read` }
+if Tagged.bits_read("010").wide !== None { INFO@mark `DP0.5c a piece not read has a value` }
+
+Width := class (bits: Binary₁) => {
+  width => bits + 1
+}
+Inner := class<width: Width> (value: Binary{length == width.width}) => { }
+Outer := class (width: Width, inner: Inner<width>) => { }
+unless Outer.bits_read("1" + "10").inner.value == 2 { INFO@mark `DP0.6 a class given a value read before it does not read with it` }
+
+Aligned := class (head: Binary₃, padding: Binary{(length < 8) && (((at + length) % 8) == 0)}, byte: Byte) => { }
+aligned := Aligned.bits_read("101" + "00000" + "00000110")
+unless aligned.byte == 6 { INFO@mark `DP0.7 the piece up to the byte boundary does not end there` }
+
+Counted := class (count: Binary₂ = values.count, values: (Binary₂)[]{length == count}) => { }
+unless Counted(values: [1, 2]).binary == "10" + "0110" { INFO@mark `DP0.8 a default is not computed when a value is written` }
+
+unless Pair(high: 2, low: 2).binary == "1001" { INFO@mark `DP0.9a a value is not written back to its bits` }
+unless Either.bits_read("0111101" + "10").binary == "0111101" + "10" { INFO@mark `DP0.9b a value read is not written back to the same bits` }

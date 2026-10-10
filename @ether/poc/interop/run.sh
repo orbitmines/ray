@@ -30,5 +30,12 @@ case "${1:-}" in
     test "$(echo "2147483647 1" | "$out/main-rs")" = "out of domain"
     echo "A4 main-rs built by rustc alone (no C object, no library, no C-ABI add symbol); 2 3 gives 5, 2147483647 1 is out of domain"
     ;;
-  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4" >&2; exit 2 ;;
+  A5)
+    "$0" S1 > /dev/null
+    "$0" A4 > /dev/null
+    "$out/main-rs" < "$here/inputs.txt" > "$out/rust.txt"
+    diff "$out/oracle.txt" "$out/rust.txt"
+    echo "A5 the Rust Ray wrote and the C gcc compiled agree on all $(wc -l < "$out/rust.txt") inputs"
+    ;;
+  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5" >&2; exit 2 ;;
 esac

@@ -168,8 +168,10 @@ pub fn add(a: i32, b: i32) -> Option<i32> { a.checked_add(b) }
 ### A5. Prove Track A
 
 - **Goal.** The Rust binary and the C oracle agree.
-- **What happens.** `out/main-rs < inputs.txt > out/rust.txt`, then `diff out/oracle.txt out/rust.txt`.
-- **Pass.** The diff is empty.
+- **What happens.** `./run.sh A5` runs S1 and A4 again, then `out/main-rs < inputs.txt > out/rust.txt` and
+  `diff out/oracle.txt out/rust.txt`.
+- **Pass.** The diff is empty: `5`, `0`, `-3`, `2147483647`, `-2147483648` from both. Control: the same `main.rs` over an
+  `add.rs` that subtracts differs from the oracle, and `diff` fails.
 
 ## IOP5. Track B: Python to C
 

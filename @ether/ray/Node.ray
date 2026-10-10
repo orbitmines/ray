@@ -69,6 +69,8 @@ Possibilities &+= {
   every (predicate) => values.every(predicate)
   some (predicate) => values.some(predicate)
   contains (x) => values.contains(x)
+  {{constraint}} =>
+    values{ {constraint} }
   join (separator) => values.join(separator)
   flatten => values.flatten
   erred => values.every(.erred)
@@ -90,6 +92,7 @@ Node &+= {
   origin: Node?
 }
 #{value} ^punctuation => value#
+{value}# ^punctuation => value.#
 
 Composed := class (parts: Node[], joining: Program) => {
   erred => parts.some(.erred)

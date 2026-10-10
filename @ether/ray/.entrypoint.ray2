@@ -54,9 +54,12 @@ nearest {head} => {body} =>
 // Which way a statement is read is the order the rules are defined in: of the rules reading all of it, the latest is read
 // first (its operator binds loosest). So the operators that bind tightest come first.
 
-// Text: what is written between quotes (`.text`, a capture read as a value, is its text as written).
+// Text: what is written between quotes (`.text`, a capture read as a value, is its text as written; each escape in it, `\e`,
+// what it stands for).
 "{text}" =>
-  .text
+  (.text).unescaped
+unescaped =>
+  .
 `{text}` =>
   .text
 // (given code, a block on one line, `f(code: { … })`: that code, unread, run when it is called)
@@ -154,6 +157,9 @@ Pattern := {
     narrowing := { }
   }).narrowing)
 
+// `!x`: false when x is anything but `None` and `false` (`?`, below). (Before the operators: `a != b` is `!=`, not `a` then `!`.)
+!{x} =>
+  {x} ? false : true
 // What a value answers to `?`: anything is true, but `None` and `false`.
 ? {yes} : {no} =>
   {yes}
@@ -170,8 +176,6 @@ false := {
     {no}
 }
 true := { }
-!{x} =>
-  {x} ? false : true
 {a} || {b} =>
   {a} ? {a} : {b}
 {a} && {b} =>
@@ -392,18 +396,24 @@ nearest () => {body} =>
   {condition} ? (goto taken) : (goto passed)
   taken\
   {guarded}
+  goto guarded
   passed\
+  global.None
+  guarded\
 {guarded} unless {condition} =>
   {condition} ? (goto passed) : (goto taken)
   taken\
   {guarded}
+  goto guarded
   passed\
+  global.None
+  guarded\
 // A list: `a, b` is a Ray of both, `a, b, c` one of all three; the loosest of all (`a = 1, b = 2` is `(a = 1), (b = 2)`). Both
 // read here first (`f(x: 1, y: 2)`: each declared where the list is); a side that only declared (`declared`) is no value in it.
 nearest {list}, {other} =>
   {list}
   {other}
-  ({list} === declared) ? {other} : (({other} === declared) ? {list} : Listing.new.append({list}).append({other}))
+  ({list} === declared) ? {other} : (({other} === declared) ? {list} : Listing.new.append({list}).append({other}).spreading)
 // (a bracketed first, `[x], …`: `x` itself first (Language.md: `[lst], 5` is `(lst, 5)`))
 nearest [{inner}], {{rest}} =>
   ({inner}), {rest}
@@ -472,13 +482,16 @@ here {name} =>
 declared &+= {
   listing =>
     true
+  spread =>
+    true
   head =>
     None
 }
 ({{parameter}}) taking {value} =>
   ({parameter}) gets (({value} === declared) ? None : {value})
+// (arguments written with `,` between them, each its own; one, a list written in brackets too (`f([a, b])`), is one)
 nearest ({{parameter}}, {{parameters}}) taking {list} =>
-  ({parameter}, {parameters}) taking from ((({list}).listing) ? ({list}).head : Listing.new.append({list}).head)
+  ({parameter}, {parameters}) taking from ((({list}).spread === true) ? ({list}).head : Listing.new.append({list}).head)
 ({{parameter}}) taking from {vertex} =>
   ({parameter}) gets {vertex}.value
 nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
@@ -518,12 +531,12 @@ nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
 [{inside}] =>
   Listing.new.append({inside})
 nearest [{first}, {{rest}}] =>
-  ({first}, {rest})
+  ({first}, {rest}).gathered
 // (written over lines: `[` and `]` each with what is inside on the lines between)
 [{ }{inside}{ }] =>
   Listing.new.append({inside})
 nearest [{ }{first}, {{rest}}{ }] =>
-  ({first}, {rest})
+  ({first}, {rest}).gathered
 // (a bracketed first: itself, `[[x], y]` is `[x, y]`)
 nearest [[{inner}], {{rest}}] =>
   [({inner}), {rest}]
@@ -628,17 +641,19 @@ extended () =>
 // typed hole `{x: T}` reads.) With fields, written as a closure is, `class (x, y) => { … }`: the class's `instance`, that closure (a call
 // of it, the instance: in the class, its fields given the arguments; `of` its class), is what `X(…)` calls.
 made class:{ }{parent} {{block}} =>
-  ({parent}.extended() &+= {
+  . -- (written_in => ({parent}.extended() &+= {
     superclass := {parent}
     extended := () =>
       interior reading {
         { }
       }
     interior := { }
+    // (it sees what is where it is written, after its own and its parent's: a class in a class sees the names beside it)
+    (. including written_in) if written_in.superclass
     interior reading {
       {block}
     }
-  }).interior
+  }).interior)
 // (one without fields makes instances too: given nothing, or named arguments, code inlined into the making)
 class:{ }{parent} {{block}} =>
   class: {parent} (arguments = None) => {
@@ -731,9 +746,22 @@ checked {type} =>
   }
   .
 
-// `static`: what follows is read where it is (a class's block is read once, for the class).
+// `static`: what follows is read where it is (a class's block is read once, for the class). A value given a name, when it is
+// first read (the class is there by then: `static plane := Space(…)` in `Space`), then that value.
 static {{statement}} =>
   {statement}
+{`static`} {name} {`:=`} {value} =>
+  {name} =>
+    {name} = global.{name}
+    kept := {value}
+    {name} = kept
+    kept
+{`static`} {name}:{ }{type} = {value} =>
+  {name} =>
+    {name} = global.{name}
+    kept := ({value}) checked ({type})
+    {name} = kept
+    kept
 
 // A class's block read for an instance: what declares is the class's (read once, for it); the rest (`&.caller[name] =
 // this`) is read in the instance. What declares: a definition (its line has the definer), and what these read.
@@ -763,7 +791,10 @@ static {{statement}}
 from (x) =>
   None
 as {type} =>
-  (. is {type}) ? . : {type}.from(.)
+  (. is {type}) ? . : (. -- ((subject) => {type}.from(subject)))
+// (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
+({parameter}) as (=== {type}) => {body} =>
+  from := (({parameter}) => {body})
 
 // What a value holds under a key: its entries (`keyed`: `key`, `value`), a Ray; none until one is given.
 keyed := None
@@ -881,7 +912,16 @@ Iterable &+= {
         head := None
         tail := None
         listing := true
+        of := Array
+        spread := false
       }
+    // (made by `,`: arguments, each its own; in brackets, `[a, b]`, one list)
+    spreading =>
+      .spread := true
+      .
+    gathered =>
+      .spread := false
+      .
     append (value) =>
       link := {
         value := value
@@ -906,6 +946,24 @@ Iterable &+= {
         left = left - 1
       }
       at ? at.value : None
+    // (the values of the lists in it in it, in their place: all the way down; `flatten(n)`, n lists down)
+    flatten =>
+      .flattened(64)
+    flatten({levels}) =>
+      .flattened({levels})
+    flattened (levels) =>
+      made := Listing.new
+      .for((it) => (((it.listing === true) && (levels > 0)) ? it.flattened(levels - 1).for((x) => made.append(x)) : made.append(it)))
+      made
+    // (`xs{p}`: the values p holds for, `.` each one in it; `xs{x => p}`: each one given to it)
+    {{constraint}} =>
+      kept := Listing.new
+      .for((it) => (kept.append(it) if (it with { {constraint} })))
+      kept
+    {`{`}{parameter} => {body}{`}`} =>
+      kept := Listing.new
+      .for((it) => (kept.append(it) if ((({parameter}) => {body}))(it)))
+      kept
     // (a list led by a value: this one, the value first (a side that only declared is no value in it))
     led (value) =>
       (value === declared) ? . : .prepend(value)

@@ -65,7 +65,6 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   (Spelling[name] = this) if name
   (Spelling[symbol] = this) if symbol
 
-  static None := Unit(global.None)
   static Temporal => second
 
   as (=== Quantity) => 1, this
@@ -74,7 +73,7 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   dynamically assert this as String? != None
   as (=== String?) => name
 
-  static spelled (written) => (written is Unit) ? written : global[written]
+  static spelled (spelling) => (spelling is Unit) ? spelling : global[spelling]
   // (a unit's name or symbol as written: each unit made gives it its own; read, the unit)
   static Spelling := { }
 
@@ -82,6 +81,11 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
     -- .convert x => x * (this as other.static), other.static
 
   chainable == (other: Unit) => this === other || name == other.name
+  // (what it makes of a quantity, `x as px`: the quantity in it)
+  from (quantity: Quantity) =>
+    target := this
+    converted := quantity.in(target)
+    Quantity(quantities: [(quantity: converted, unit: target)])
 
   // (what it is in another unit: a conversion read at the time, `x * k + b` (a linear one); backwards, its inverse)
   convert (convert, ToUnit: Unit) => (this.converting := Conversion(ToUnit, convert)) -- this
@@ -102,6 +106,9 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
       else { x.integer[..<-1], ".", x.integer[-1] ?? 0, x.fraction }
   }
 }
+
+// (the unit of an amount written without one: made once Unit is)
+Unit.None := Unit(global.None)
 
 // (written right after it, or after a space: `16px`, `5 s`)
 {amount: Number}{written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])

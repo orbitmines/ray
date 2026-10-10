@@ -94,10 +94,13 @@ Number &+= {
   goto js
   ((self % other) + other) % other
 
-// Text (`""`: none).
+// Text (`""`: none). (text with an escape in it, `"\e[0m"`: each escape what String.ray's `Escape` says it stands for)
 "" =>
   goto js
   ''
+unescaped =>
+  goto js
+  typeof self !== 'string' ? undefined : self.replace(/\\(.)/gs, (_, c) => ({ '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n', f: '\f', r: '\r', e: '\x1b' })[c] ?? c)
 contains {other} =>
   goto js
   $(String(self).includes(String(other)) ? 'true' : 'false')

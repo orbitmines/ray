@@ -42,9 +42,10 @@ static Ray := class (
 
 ## Optimizations
 
-
+TODO
 
 ---
 
 ## Look
 
+TODO

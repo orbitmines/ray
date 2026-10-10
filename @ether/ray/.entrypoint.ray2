@@ -170,6 +170,9 @@ None := {
     None
   next =>
     None
+  // (a member of None is None: chains need no `?.`)
+  .{member} =>
+    None
 }
 false := {
   ? {yes} : {no} =>
@@ -512,8 +515,29 @@ nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
   true
 ({name}:{ }{type}) gets {value} =>
   ({name}) gets (({value}) checked ({type}))
-({{parameter}} = {default}) gets {value} =>
-  ({parameter}) gets ({value} ?? {default})
+({{parameter}} = {{default}}) gets {value} =>
+  (goto given) unless {value} === None
+  ({parameter}) defaulting {default}
+  goto took
+  given\
+  ({parameter}) gets {value}
+  took\
+// (one not given: its default read when it is first read (after what is declared after it), then kept)
+({name}) defaulting {{default}} =>
+  goto defined
+  {name}
+  {name} := lazily {default}
+  true
+({name}:{ }{type}) defaulting {{default}} =>
+  goto defined
+  {name}
+  {name} := lazily (({default}) checked ({type}))
+  true
+{name} := lazily {{default}} =>
+  {name} =>
+    kept := ({default})
+    {name} = kept
+    kept
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses, `(it) => it.value` (one argument; `f(.x, y)`
 // reads `.x` where it is written).
@@ -649,7 +673,7 @@ made class:{ }{parent} {{block}} =>
       }
     interior := { }
     // (it sees what is where it is written, after its own and its parent's: a class in a class sees the names beside it)
-    (. including written_in) if written_in.superclass
+    (. including written_in) unless written_in === global
     interior reading {
       {block}
     }

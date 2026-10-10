@@ -948,7 +948,8 @@ export class Program {
       if (!(value instanceof Program.Held) || (unread && value.read)) return whole;
       const written = this.source(value.text, unread), line = text.lastIndexOf('\n', at - 1) + 1, end = text.indexOf('\n', at);
       // (alone on its line: its lines indented as that line)
-      if (!written.includes('\n') || text.slice(line, at).trim() || text.slice(at + whole.length, end < 0 ? text.length : end).trim()) return written;
+      if (!written.includes('\n')) return written;
+      if (text.slice(line, at).trim() || text.slice(at + whole.length, end < 0 ? text.length : end).trim()) return Program.continued(written, text.slice(line, at));
       return Program.indented(written, '').split('\n').join('\n' + text.slice(line, at));
     });
   }
@@ -972,7 +973,9 @@ export class Program {
     if (alone && frame.given && !frame.on && (frame.node.calls || this.dynamic.includes(frame.node) || !frame.node.bare.length)) {
       const value = this.body(s, frame, except);
       // (a running program is not a level: `&.caller` is that program)
-      if (!(value instanceof Program.Node) || value === frame.node || this.ats.has(value) || !value.rules.length) return value;
+      // (one with no rules yet, given to a node that is neither a call nor a program (where it is an answer, `true`): its rules
+      // when it has them, `x &+= { written_in }` before what is written there is read)
+      if (!(value instanceof Program.Node) || value === frame.node || this.ats.has(value) || (!value.rules.length && (frame.node.calls || this.dynamic.includes(frame.node) || !value.outer))) return value;
       if (process.env.LOGINC) console.log('INCLUDE', value.rules.slice(0, 4).map(r => r.head).join(','), '<-', String(this.source(frame.reading?.text ?? frame.writer?.text ?? '')).slice(0, 80));
       if (!frame.node.includes.includes(value)) frame.node.includes.push(value), frame.node.headed++;
       return frame.node;
@@ -987,7 +990,7 @@ export class Program {
     // (a hole's name, read in its rule's right side: a rule reading it, what it took)
     const writer = frame.on ? undefined : frame.reading ?? frame.writer;
     // (a member, `.name`: `name` read in `.`; not a definition written so, `.{name} => …`: a rule reading members)
-    if (s.charCodeAt(0) === 46 && !Program.space(s.charCodeAt(1)) && s.charCodeAt(1) !== 46 && !this.defining_dot(s)) {
+    if (!frame.dotted && s.charCodeAt(0) === 46 && !Program.space(s.charCodeAt(1)) && s.charCodeAt(1) !== 46 && !this.defining_dot(s)) {
       // (a member named by a value that is text: that name)
       if (s.length === this.token + 1 && s.charCodeAt(open.length + 1) === 0xE000) { const name = this.text_of(parseInt(s.slice(open.length + 2, -close.length), 36)); if (name !== undefined) s = '.' + name; }
       // (a capture of the reading: its text, as written)
@@ -998,7 +1001,12 @@ export class Program {
       const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.on ? frame.site ?? frame.node : frame.node;
       // (a value that is not a node (text) has no names of its own: its names are the outermost node's (Node's), `.` the value)
       if (!(self instanceof Program.Node)) { let root = frame.node; while (root.outer) root = root.outer; return this.read(s.slice(1), { node: root, from: self, this: self, writer: frame.reading ?? frame.writer }); }
-      return this.read(s.slice(1), { node: self, site: self === written ? undefined : written, this: frame.this, from: self, on: true, writer: frame.reading ?? frame.writer });
+      // (a name it does not have: what its own rule for any member, `.{x} =>`, makes of it (None's: None), not what is named
+      // where the text was written)
+      const any = self.rules.some(rule => rule.home === self && rule.pieces[0]?.literal === '.' && rule.pieces[1]?.hole);
+      const name = s.slice(1), member = this.read(name, { node: self, site: self === written || any ? undefined : written, this: frame.this, from: self, on: true, writer: frame.reading ?? frame.writer });
+      if (member !== name || !any) return member;
+      return this.read(s, { node: self, this: frame.this, from: self, on: true, dotted: true, writer: frame.reading ?? frame.writer });
     }
     if (s.startsWith('goto ')) return this.run(s, frame, except);
     // (a definition, its first line ending with the definer, is read only by a rule whose head has the definer)
@@ -1279,6 +1287,7 @@ export class Program {
       }
     }
     const programs = this.dynamic.length ? candidates.length : 0;
+    let handed: boolean | undefined;
     // (read on in a value: its rules, then those where the text was written, below them)
     for (let at: Program.Node | undefined = node, below = 0; at || (site && !below && (below = 1, at = site)); at = at.outer) {
       if (below) { if (at!.looked === look) continue; } else at!.looked = look;
@@ -1287,7 +1296,8 @@ export class Program {
       if (at.calls && !(on && at === node)) continue;
       const rank = (at.depth - below * 1e3) * 1e7;
       // (the levels it includes: above its own rules, reading what is written in it (not a right side written in the level))
-      for (const level of at.includes) if (!below && !(writer && (Program.within(writer.rule.home, level) || !Program.within(writer.rule.home, at.outer ?? at)))) {
+      // (text handed to that right side, not written in it (a default given to `gets`), reads as where it was written)
+      for (const level of at.includes) if (!below && !(writer && (handed ??= !writer.rule.body.includes(s.trim())) === false && (Program.within(writer.rule.home, level) || !Program.within(writer.rule.home, at.outer ?? at)))) {
         for (const length of level.lengths.get(s[0]) ?? []) { if (length > s.length) break; const rules = level.led.get(s.slice(0, length)); if (rules) take(rules, rank + 5e6); }
         if (level.bare.length) take(level.bare, rank + 5e6);
         for (const keyed of level.keys) if (s.includes(keyed.key)) take(keyed.rules, rank + 5e6);
@@ -1398,7 +1408,10 @@ export class Program {
     const lines = text.split('\n').filter(line => line.trim()), base = Math.min(...lines.map(line => line.length - line.trimStart().length));
     return lines.map(line => indent + line.slice(base)).join('\n');
   }
-  static continued(text: string, line: string): string {
+  static continued(text: string, line: string, open = '{'): string {
+    // (inside a bracket the line opens, its lines one: where they break means nothing there (none breaking in a block))
+    let depth = 0; for (const c of line) depth += c === '(' || c === '[' ? 1 : c === ')' || c === ']' ? -1 : 0;
+    if (depth > 0) { let braces = 0, joinable = true; for (const c of text) { if (c === open) braces++; else if (c === '}') braces--; else if (c === '\n' && braces > 0) { joinable = false; break; } } if (joinable) return text.trim().split('\n').map(part => part.trim()).join(' '); }
     const at = line.length - line.trimStart().length, [first, ...rest] = text.split('\n'), base = first.length - first.trimStart().length;
     if (at === base) return text.trimStart();
     return [first.trimStart(), ...rest.map(next => { const own = next.length - next.trimStart().length; return ' '.repeat(Math.max(0, at + own - base)) + next.trimStart(); })].join('\n');
@@ -1430,7 +1443,7 @@ export namespace Program {
   // (`writer`: the reading whose code the text is in, when it is not read as that reading's (a hole's text, what is read on))
   // (`receiver`: a value not a node read on: what a rule read on it has as `.`, not what is written there)
   // (`given`: a value read as a statement of its own)
-  export type Frame = { given?: boolean, receiver?: unknown, writer?: Reading, reading?: Reading, node: Node, site?: Node, also?: Node, into?: Node, from?: unknown, this?: unknown, on?: boolean };
+  export type Frame = { given?: boolean, dotted?: boolean, receiver?: unknown, writer?: Reading, reading?: Reading, node: Node, site?: Node, also?: Node, into?: Node, from?: unknown, this?: unknown, on?: boolean };
   // A node: the rules defined in it (those led by a literal by its first character), and the node it is in.
   export class Node {
     static defined = 0;

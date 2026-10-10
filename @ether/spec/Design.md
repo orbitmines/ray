@@ -52,8 +52,9 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 ### 1.1 What Ray is for
 
 - Ray models the semantics of every other language, from assembly to high-level languages. It can serve as an assembly
-  language, a systems language or an interpreted language. Assembly is valid Ray syntax, and program equivalences lift
-  low-level code to higher levels.
+  language, a systems language or an interpreted language. Assembly is not Ray syntax as such, but any language's
+  syntax can be made valid Ray syntax by mapping it to the right semantics. Program equivalences then lift low-level code
+  to higher levels.
 - Instead of writing a backend for every compiler, Ray decompiles the backends that compilers already target. Languages
   are made to interoperate first; applications come after.
 - The interoperability goals: (I) use another language's library without a shared library; (II) choose one language's

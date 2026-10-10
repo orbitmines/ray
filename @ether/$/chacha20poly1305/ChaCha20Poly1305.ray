@@ -1,9 +1,9 @@
 // ChaCha20 and Poly1305 for IETF Protocols (https://www.rfc-editor.org/rfc/rfc8439)
 ChaCha20Poly1305 := class: Encoding.Symmetric {
-  static extensions = ".chacha20poly1305"
-  static word = 2 ^ 32
+  static extensions := ".chacha20poly1305"
+  static word := 2 ^ 32
   // A 96-bit nonce (RFC 8439 §2.8)
-  static nonce_size = 12
+  static nonce_size := 12
 
   // The quarter round on four words of the state (RFC 8439 §2.1, §2.2)
   static rotl (x, n) => ((x as Binary₃₂).loop << n) as Number
@@ -20,7 +20,7 @@ ChaCha20Poly1305 := class: Encoding.Symmetric {
     s
   }
   // A double round: the four columns, then the four diagonals (RFC 8439 §2.3)
-  static rounds = [[0, 4, 8, 12], [1, 5, 9, 13], [2, 6, 10, 14], [3, 7, 11, 15], [0, 5, 10, 15], [1, 6, 11, 12], [2, 7, 8, 13], [3, 4, 9, 14]]
+  static rounds := [[0, 4, 8, 12], [1, 5, 9, 13], [2, 6, 10, 14], [3, 7, 11, 15], [0, 5, 10, 15], [1, 6, 11, 12], [2, 7, 8, 13], [3, 4, 9, 14]]
   static words (bytes: Byte[]) => bytes.chunk(4).map(Encoding.little_number(.))
 
   // The block function: the constants "expand 32-byte k", the key, the counter and the nonce; ten double rounds, added back, little-endian (RFC 8439 §2.3)

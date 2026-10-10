@@ -64,7 +64,7 @@ TimeZone := class (name: String) {
 }
 
 UTC &+= {
-  static minute = Calendar.Segment(global.minute, 60 seconds | 61 seconds if leap_seconds && LeapSeconds.at(this))
+  static minute := Calendar.Segment(global.minute, 60 seconds | 61 seconds if leap_seconds && LeapSeconds.at(this))
 }
 
 // RFC 9557: the zone named in brackets after a timestamp's offset

@@ -8,7 +8,7 @@
 localhost => @localhost
 
 Network &+= {
-  static Port = Decimal{< 2^16}
+  static Port := Decimal{< 2^16}
 
   static DomainName := class (text: (Char.Letter | Char.Digit | "-" | ".")[]) => {
     valid => 0 < text.count < 2^8

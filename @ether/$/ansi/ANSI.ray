@@ -1,6 +1,6 @@
 // ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
 ANSI := class: Language {
-  static extensions = ".ansi"
+  static extensions := ".ansi"
   Cell := class glyph: Char = " ", foreground: Geometry.Color? = None, background: Geometry.Color? = None, styles: Attribute# = [], link: Location? = None
 
   // CUP, Cursor Position (ECMA-48 8.3.21)
@@ -31,8 +31,8 @@ ANSI := class: Language {
     ].flatten.map(it => (parameter: it)))
   }
   // The xterm 256-colour palette: the 16 system colours, a 6x6x6 cube and 24 greys (xterm 256colres.pl)
-  static Levels = [0, 95, 135, 175, 215, 255]
-  static Palette = [
+  static Levels := [0, 95, 135, 175, 215, 255]
+  static Palette := [
     [(0, 0, 0), (205, 0, 0), (0, 205, 0), (205, 205, 0), (0, 0, 238), (205, 0, 205), (0, 205, 205), (229, 229, 229),
       (127, 127, 127), (255, 0, 0), (0, 255, 0), (255, 255, 0), (92, 92, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255)].map(Geometry.Color(.0, .1, .2)),
     (0..<216).map(Geometry.Color(Levels[(. / 36).floor], Levels[(. / 6).floor % 6], Levels[. % 6])),

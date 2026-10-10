@@ -6,8 +6,8 @@ PNG := class: Language (
   chunks: Chunk{type != "IEND"}[],
   Chunk{type == "IEND"} = Chunk(type: "IEND", data: [])
 ) {
-  static extensions = ".png"
-  static of = Language.Image
+  static extensions := ".png"
+  static of := Language.Image
 
   // Chunk layout (5.3), its CRC over the type and data (5.5)
   static Chunk := class (size: Binary₃₂ = data.count, type: Char₄, data: Byte[]{length == size}, crc: Binary₃₂ = [type.bytes, data].flatten as CRC32 as Binary₃₂) {

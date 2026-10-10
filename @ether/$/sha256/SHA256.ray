@@ -6,7 +6,7 @@ SHA2 := class: Encoding.Digest width: 32 | 64, rounds: Number, sums: Number[][],
   size => width
 
   // Constants: the first bits of the fractional parts of the cube roots of the first primes (FIPS 180-4 §4.2.2, §4.2.3)
-  static primes = (2 -> +1){n => (2..<n).every(n % . != 0)}
+  static primes := (2 -> +1){n => (2..<n).every(n % . != 0)}
   K => primes[..<rounds].map(p => (p * 2 ^ (3 * width)).root(3) % word)
   // Initial hash value: the same of the square roots of the first eight primes (FIPS 180-4 §5.3.3, §5.3.5)
   initial => primes[..<8].map(p => (p * 2 ^ (2 * width)).root(2) % word)

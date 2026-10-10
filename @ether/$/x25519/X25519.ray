@@ -1,8 +1,8 @@
 // Elliptic Curves for Security, X25519 (https://www.rfc-editor.org/rfc/rfc7748)
 X25519 := class: Encoding.Agreement {
-  static extensions = ".x25519"
+  static extensions := ".x25519"
   // The field GF(2^255 - 19), its inverses by Fermat's little theorem (RFC 7748 §4.1, §5)
-  static p = 2 ^ 255 - 19
+  static p := 2 ^ 255 - 19
   static power (base, exponent, modulus = p) => exponent.digits(2).reduce(held = 1 => held * held * (. == 1 ? base : 1) % modulus)
   static inverse (x) => power(x, p - 2)
   // decodeScalar25519: the low three bits and the top bit cleared, the next highest set (RFC 7748 §5)

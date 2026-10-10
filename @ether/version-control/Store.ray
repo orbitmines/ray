@@ -6,7 +6,7 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
   }
   static routes: Route[] = []
   static materialised: *?
-  static default = Store()
+  static default := Store()
 
   static stored (place) => place is Store ? place : place is Language ? Store(format: Format(language: place)) : Store(at: place)
   static route (type, places: Program) => routes.push Route(type, places) -- places
@@ -38,10 +38,10 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
   }
 
   static memory: Format? = None
-  static native = Format(language: Language.ray, versioned: true)
-  static rows = Format(language: Language.ray)
-  static columnar = Format(language: Columns.language)
-  static keyed = Format(language: KeyValue.language)
+  static native := Format(language: Language.ray, versioned: true)
+  static rows := Format(language: Language.ray)
+  static columnar := Format(language: Columns.language)
+  static keyed := Format(language: KeyValue.language)
 
   static Column := class (name: String, values: *[]) => {
     distinct => values.unique.count
@@ -122,7 +122,7 @@ Columns := class (tables: (type: String, ids: String[], columns: (name: String, 
     (type, ids: held.map(.id), columns: held.first.fields.map(.name).map(name => (name, encoded: Store.Column(name, values: held.map(.fields{.name == name}.first.value)).encoded))))))
   rows => tables.map(table => table.ids.enumerate.map(entry => Store.Row(type: table.type, id: entry.value, fields: table.columns.map((name: .name, value: .encoded.values[entry.index]))))).flatten
 
-  static language = Language(".columns",
+  static language := Language(".columns",
     level: Language.ray.level + { {columns: Columns} => columns.rows.map(.instance) },
     written: {
       {writing: Language.Writing{value is Iterable && !(value is Columns)}} => Language.Writing(writing.value.map(. as Store.Row) as Columns)
@@ -134,7 +134,7 @@ Columns := class (tables: (type: String, ids: String[], columns: (name: String, 
 KeyValue := class (entries: (key: (type: (!"/" && !\t)[], "/", id: (!"/" && !\t)[], "/", field: (!\t)[]), \t, value: (!\n)[])[].join(\n), \n?) => {
   rows => entries.map((type: .key.type, id: .key.id)).unique.map(held => Store.Row(type: held.type, id: held.id, fields: entries{.key.type == held.type && .key.id == held.id}.map((name: .key.field, value: .value.replace("\\n", \n)))))
 
-  static language = Language(".kv",
+  static language := Language(".kv",
     level: { {text: String} => (text as KeyValue).rows.map(.instance) },
     written: { {writing: Language.Writing} => writing.value.map(. as Store.Row).map(row => row.fields.map(row.type, "/", row.id, "/", .name, \t, .value.replace(\n, "\\n"), \n)) })
 }

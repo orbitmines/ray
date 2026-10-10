@@ -1,7 +1,7 @@
 // ECMA-404, The JSON Data Interchange Syntax (https://ecma-international.org/publications-and-standards/standards/ecma-404/)
 // The header reads JSON text, and `@json` with it: a Ray value in braces at a value's position is a hole, that value
 JSON := class: Language (Blank, root: Value, Blank) => {
-  static extensions = ".json"
+  static extensions := ".json"
 
   static Blank := (" " | \t | \n | \r)[]
   static Value := Object | Array | Text | Numeral | Literal

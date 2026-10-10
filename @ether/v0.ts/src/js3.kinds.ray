@@ -70,10 +70,11 @@ Number &+= {
   goto js
   $(self >= other ? 'true' : 'false')
 
-// Numbers (text added to: joined).
+// Numbers (text added to: joined; anything else, composed).
 + {other} =>
   goto js
-  typeof self === 'string' ? self + String(other) : self + other
+  typeof self === 'string' ? self + String(other) : typeof self === 'number' ? self + other : undefined
+  .composed({other})
 - {other} =>
   goto js
   self - other

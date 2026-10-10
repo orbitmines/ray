@@ -12,7 +12,7 @@ Zlib := class: Language (
   // ADLER32 of the uncompressed data, most significant byte first (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
   adler: Binary₃₂ = adler32(inflated)
 ) {
-  static extensions = ".zlib"
+  static extensions := ".zlib"
 
   inflated: Byte[] => deflated.bytes
   dynamically assert ((window * 16 + method) * 256 + compression * 64 + (preset ? 32 : 0) + check) % 31 == 0 && adler == adler32(inflated)

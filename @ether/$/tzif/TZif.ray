@@ -3,7 +3,7 @@ TZif := class: Language (
   v1: Block<Binary₃₂>,
   (v2: Block<Binary₆₄>, \n, footer: Rule?, \n) if v1.version != ₂0
 ) {
-  static extensions = ".tzif"
+  static extensions := ".tzif"
 
   // 3.1 TZif Header and 3.2 TZif Data Block
   static Block<Moment> := class (

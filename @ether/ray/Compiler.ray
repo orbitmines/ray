@@ -38,11 +38,18 @@ Compiler := class {
 
   // (a level made of two, `A + B`: reduced by the first, then what that gives by the second)
   // (the value read where it is given, then reduced: not the code that gives it read at the level)
-  static reduced (value, level) => value -- (reduced_value => Compiler.composed(level) ? Compiler.reduced(Compiler.reduced(reduced_value, level.components.hierarchy.first), level.components.hierarchy.last) : Program(code: { reduced_value }){O: level}())
-  static composed (level) => level.components && level.components.hierarchy.listing
+  static reduced (value, level) => value -- (reduced_value => Compiler.composed(level) ? Compiler.reduced(Compiler.reduced(reduced_value, level.components.hierarchy.first), level.components.hierarchy.last) : (level reducing reduced_value))
+  static composed (level) => level is Compiler.Composition
+  Composition := class (first, second) => {
+    components => (hierarchy: [first, second])
+  }
+}
+Node &+= {
+  composed (other) => Compiler.Composition(this, other)
 }
 
 Program &+= {
   O | optimizations := Compiler.none
+  () => Compiler.reduced(code(), O)
   compounds + (other: Program) => Program(code: (code, other.code))
 }

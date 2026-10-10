@@ -1,10 +1,10 @@
 // The Noise Protocol Framework, revision 34 (https://noiseprotocol.org/noise.html)
 Noise := class: Language pattern = XX, dh: Encoding.Agreement = X25519, cipher = ChaCha20Poly1305, hash: Encoding.Digest = SHA256 {
-  static extensions = ".noise"
+  static extensions := ".noise"
 
   // Tokens of message patterns (§7.1), each written and read by its narrowing below; XX: -> e, <- e, ee, s, es, -> s, se (§7.5)
   static Token := enum e | s | ee | es | se | ss
-  static XX = (name: "XX", messages: [[Token.e], [Token.e, Token.ee, Token.s, Token.es], [Token.s, Token.se]])
+  static XX := (name: "XX", messages: [[Token.e], [Token.e, Token.ee, Token.s, Token.es], [Token.s, Token.se]])
 
   // e: a fresh ephemeral key, its public half in the clear and mixed into h; read, the other's (§5.3)
   static Ephemeral := Token{== e} {

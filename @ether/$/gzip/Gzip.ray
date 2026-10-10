@@ -24,7 +24,7 @@ Gzip := class: Language (
   crc: <-Byte₄ = inflated as CRC32 as Binary₃₂,
   isize: <-Byte₄ = inflated.count % 2 ^ 32
 ) {
-  static extensions = ".gz" | ".gzip"
+  static extensions := ".gz" | ".gzip"
 
   inflated: Byte[] => deflated.bytes
   dynamically assert crc == inflated as CRC32 as Binary₃₂ && isize == inflated.count % 2 ^ 32

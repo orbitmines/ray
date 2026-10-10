@@ -1,15 +1,15 @@
 // CSS Snapshot (https://www.w3.org/TR/css-2023/)
 // The headers read CSS and write it; written inline, a Ray value in braces is a hole in a selector or a value, and a declaration whose value is None is left out
 CSS := class: Language {
-  static extensions = ".css"
+  static extensions := ".css"
 
-  static Blank = (" " | \t | \n | \r)[]
+  static Blank := (" " | \t | \n | \r)[]
   // Comments (https://www.w3.org/TR/css-syntax-3/#consume-comment)
   static Comment := class ("/*", text: (!"*/")[], "*/")
   // Declarations; property names are ASCII case-insensitive, custom properties ("--") case-sensitive (https://www.w3.org/TR/css-syntax-3/#declaration, https://www.w3.org/TR/css-variables-1/#defining-variables, https://www.w3.org/TR/CSS2/syndata.html#characters)
-  static Property = ("--", (Char.Word | "-")[]) | ((Char.Letter | "-"), (Char.Word | "-")[]).lower_case
-  static Declaration = (Blank, property: Property, Blank, ":", Blank, value: (!";" && !"}")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, ";")
-  static Declarations = (Declaration | (Blank, Comment))[]
+  static Property := ("--", (Char.Word | "-")[]) | ((Char.Letter | "-"), (Char.Word | "-")[]).lower_case
+  static Declaration := (Blank, property: Property, Blank, ":", Blank, value: (!";" && !"}")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, ";")
+  static Declarations := (Declaration | (Blank, Comment))[]
 
   // Style rules, and the at-rules holding declarations, @font-face and @page, by their lower-case name (https://www.w3.org/TR/css-syntax-3/#style-rules, https://www.w3.org/TR/css-fonts-4/#font-face-rule, https://www.w3.org/TR/css-page-3/#at-page-rule)
   static Rule := class (selector: ("@", ("font-face" | "page").lower_case) | (!"{" && !"}" && !";" && !"@")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, "{", declarations: Declarations, Blank, "}") {

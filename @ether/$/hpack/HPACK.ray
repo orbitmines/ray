@@ -1,9 +1,9 @@
 // HPACK: Field compression for HTTP/2 (https://www.rfc-editor.org/rfc/rfc7541)
 HPACK := class: Language {
-  static extensions = ".hpack"
+  static extensions := ".hpack"
 
   // Static table (https://www.rfc-editor.org/rfc/rfc7541#appendix-A)
-  static Static = [
+  static Static := [
     (":authority", ""), (":method", "GET"), (":method", "POST"), (":path", "/"), (":path", "/index.html"), (":scheme", "http"), (":scheme", "https"),
     (":status", "200"), (":status", "204"), (":status", "206"), (":status", "304"), (":status", "400"), (":status", "404"), (":status", "500"),
     ("accept-charset", ""), ("accept-encoding", "gzip, deflate"), ("accept-language", ""), ("accept-ranges", ""), ("accept", ""),
@@ -27,7 +27,7 @@ HPACK := class: Language {
   }
 
   // Huffman code: canonical, so given by each symbol's code length; symbol 256 is EOS (https://www.rfc-editor.org/rfc/rfc7541#appendix-B)
-  static Lengths = [
+  static Lengths := [
     (5, "012aceiost"), (6, " %-./3456789=A_bdfghlmnpru"), (7, ":BCDEFGHIJKLMNOPQRSTUVWYjkqvwxyz"), (8, "&*,;XZ"), (10, "!\"()?"), (11, "'+|"), (12, "#>"),
     (13, [0, 36, 64, 91, 93, 126]), (14, "^}"), (15, "<`{"), (19, [92, 195, 208]),
     (20, [128, 130, 131, 162, 184, 194, 224, 226]),
@@ -41,7 +41,7 @@ HPACK := class: Language {
     (28, [2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 127, 220, 249]),
     (30, [10, 13, 22, 256])
   ]
-  static code = Deflate.Huffman((0..256).map(symbol => Lengths{symbol is (.1 is String ? .1.bytes : .1)#}.first.0))
+  static code := Deflate.Huffman((0..256).map(symbol => Lengths{symbol is (.1 is String ? .1.bytes : .1)#}.first.0))
 
   // Huffman-coded octets: codes most significant bit first, padded to the octet with the high bits of EOS (https://www.rfc-editor.org/rfc/rfc7541#section-5.2)
   static Coded := class (symbols: code.Symbol{< 256}[], padding: Binary{length < 8 && every(. == 1)} = [1] * ((8 - symbols.map(code.bits(.).length).sum % 8) % 8)) {

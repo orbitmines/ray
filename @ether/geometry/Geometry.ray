@@ -37,8 +37,8 @@ Geometry := class {
     positions => continuous ? coordinate{holds(.)} : 0..<extent
   }
   Space := class (axes: Axis[], metric: Metric = euclidean, projection: Projection?, vertices: Graph?) => {
-    static plane = Space([Axis(), Axis()])
-    static screen = Space([Axis(), Axis(orientation: -1)])
+    static plane := Space([Axis(), Axis()])
+    static screen := Space([Axis(), Axis(orientation: -1)])
     static current: Space = plane
     // (`grid_extent`: a parameter named as the Axis field it gives, `extent: …`, is read as that parameter declared again)
     static grid (grid_extent: Vector, loop: boolean | boolean[] = false) => Space(axes: grid_extent.enumerate.map(axis_entry => Axis(continuous: false, loop: ((loop is (boolean)) ? loop : (loop[axis_entry.index] ?? false)), extent: axis_entry.value)), metric: graph)
@@ -153,7 +153,7 @@ Geometry := class {
   Hue := class: Filter
 
   Font := class (family: String[]?, size: Length?, weight: Number{100 <= . <= 900}?, style: (normal | italic)?, line_height: Number?, tracking: Length?, features: String[]?) => {
-    static base = Font(["sans-serif"], 16px, 400, normal, 1.2, 0px, [])
+    static base := Font(["sans-serif"], 16px, 400, normal, 1.2, 0px, [])
     static inherited: Length = 16px
     ?? (other: Font?) => Font(fields.map(field => field.value ?? other.`field.name`))
   }

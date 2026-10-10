@@ -19,7 +19,7 @@ UI.TUI := class {
       ANSI.Style()
     ]
   }
-  static px_per_cell = Geometry.Vector(8px, 16px)
+  static px_per_cell := Geometry.Vector(8px, 16px)
   // (in whole cells: where it starts, the cell it starts in; how large, the cells it covers)
   static gridded (length: Geometry.Vector) => Geometry.Vector((length.x as Unit.column).amount.floor, (length.y as Unit.row).amount.floor)
   static covered (length: Geometry.Vector) => Geometry.Vector((length.x as Unit.column).amount.ceil, (length.y as Unit.row).amount.ceil)
@@ -94,7 +94,7 @@ UI.TUI := class {
   level := Cells
 
   static braille (dots: boolean[][]) => (0x2800 + [[0, 3], [1, 4], [2, 5], [6, 7]].zip(dots).map((bits, row) => row.zip(bits).map((on, bit) => on ? 2 ^ bit : 0).sum).sum) as Char
-  static ramp = " .:-=+*#%@"
+  static ramp := " .:-=+*#%@"
 
   // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
   Start := class (modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]) => { }

@@ -1,17 +1,17 @@
 // HTML Living Standard (https://html.spec.whatwg.org/multipage/)
 // The headers read HTML and write it; written inline, a Ray value in braces is a hole, taken at its position: text as Text, an element or a list of them as children, and a boolean as an attribute present or not
 HTML := class: Language {
-  static extensions = ".html"
+  static extensions := ".html"
 
-  static Blank = (" " | \t | \n | \r)[]
+  static Blank := (" " | \t | \n | \r)[]
   // Tag and attribute names, ASCII case-insensitive, kept in lower case as the tokenizer does (https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name, https://html.spec.whatwg.org/multipage/parsing.html#tag-name-state, https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state)
-  static Name = (Char.Letter, (Char.Word | "-" | ":" | ".")[]).lower_case
+  static Name := (Char.Letter, (Char.Word | "-" | ":" | ".")[]).lower_case
   // Escaping a string (https://html.spec.whatwg.org/multipage/parsing.html#escapingString)
-  static Escapes = { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
+  static Escapes := { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
   static escaped (text: String) => #text.map(Escapes[.] ?? .) as String
 
   // Character references: "&#x" or "&#X" with hex digits of either case, decimal, or named, which are case-sensitive (https://html.spec.whatwg.org/multipage/syntax.html#character-references, https://html.spec.whatwg.org/multipage/named-characters.html)
-  static Entities = { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
+  static Entities := { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
   static Reference := class (("&#", "x".ignore_case, code: Hexadecimal, ";") | ("&#", code: Decimal, ";") | ("&", name: Char.Letter[], ";")) {
     text => name ? Entities[name] ?? "&" + name + ";" : code as Char
   }
@@ -35,10 +35,10 @@ HTML := class: Language {
     void => tag is Voids
   }
   // Void elements: no children and no end tag (https://html.spec.whatwg.org/multipage/syntax.html#void-elements)
-  static Voids = "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta" | "source" | "track" | "wbr"
+  static Voids := "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta" | "source" | "track" | "wbr"
   static Void := class: Element ("<", tag: Name{is Voids}, attributes: Attribute[] = [], Blank, "/"?, ">")
   // Raw text elements: script and style (https://html.spec.whatwg.org/multipage/syntax.html#raw-text-elements)
-  static RawTexts = "script" | "style"
+  static RawTexts := "script" | "style"
   static RawText := class: Element ("<", tag: Name{is RawTexts}, attributes: Attribute[] = [], Blank, ">", children: Raw[] = [], "</", tag.ignore_case, ">")
   static Content := Comment | Void | RawText | Element | Text
 

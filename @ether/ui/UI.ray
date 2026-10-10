@@ -213,7 +213,7 @@ UI := class {
     static spacing: Geometry.Length = 0.125rem
     static scaled (amount: Number | Geometry.Length) => amount is Number ? spacing * amount : amount
     static kinds := { }
-    static palettes = DARK{dark: true}
+    static palettes := DARK{dark: true}
     static palette => palettes{dark == @me/device/preferences.dark} ?? palettes
     static styles => fields{.value.narrowing}.name
     static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last.1
@@ -348,7 +348,7 @@ Device &+= {
 }
 
 Language.Image := class: Language {
-  static extensions = ".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif"
+  static extensions := ".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif"
   level := {
     {encoded} => $.png.read(encoded)
   }

@@ -19,7 +19,7 @@ Report := class (name: String = "ray", claims: Claim[] = []) => {
   passed => claims.every(.passed)
   failures => claims{!.passed}
 
-  static Written = ("INFO@mark `", id: (Char.Letter | Char.Digit)[]{length > 0}, " ", message: (!"`")[], "`")
+  static Written := ("INFO@mark `", id: (Char.Letter | Char.Digit)[]{length > 0}, " ", message: (!"`")[], "`")
   static (file: Location) as (=== Report) => file.held as String -- (text => Program(code: text)().reports -- (reports => Report(name: file.@ as String,
     claims: text.split(\n).enumerate.map(line => (line.value ~= (*, Written, *)) -- (found => Claim(found.id, found.message,
       passed: !reports.some(.level == INFO && .comment ~= ⊢(found.id + " ")),

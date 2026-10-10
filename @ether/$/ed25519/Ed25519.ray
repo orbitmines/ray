@@ -1,15 +1,15 @@
 // Edwards-Curve Digital Signature Algorithm, Ed25519 (https://www.rfc-editor.org/rfc/rfc8032)
 Ed25519 := class: Encoding.Signing {
-  static extensions = ".ed25519"
+  static extensions := ".ed25519"
 
   // The field GF(2^255 - 19) is X25519's (RFC 7748 §4.1); the curve constant d = -121665/121666 and the order L of the base point (RFC 8032 §5.1)
-  static d = (X25519.p - 121665) * X25519.inverse(121666) % X25519.p
-  static L = 2 ^ 252 + 27742317777372353535851937790883648493
-  static I = X25519.power(2, (X25519.p - 1) / 4)
+  static d := (X25519.p - 121665) * X25519.inverse(121666) % X25519.p
+  static L := 2 ^ 252 + 27742317777372353535851937790883648493
+  static I := X25519.power(2, (X25519.p - 1) / 4)
 
   // A point of -x^2 + y^2 = 1 + d x^2 y^2, added by the complete twisted Edwards formula (RFC 8032 §5.1.4)
   static Point := class x: Number, y: Number {
-    static neutral = Point(x: 0, y: 1)
+    static neutral := Point(x: 0, y: 1)
     + (other: Point) => d * x * other.x * y * other.y % X25519.p -- (t => Point(
       x: (x * other.y + other.x * y) * X25519.inverse(1 + t) % X25519.p,
       y: (y * other.y + x * other.x) * X25519.inverse(X25519.p + 1 - t) % X25519.p))
@@ -30,7 +30,7 @@ Ed25519 := class: Encoding.Signing {
   }
 
   // The base point: y = 4/5 and x even (RFC 8032 §5.1)
-  static B = Encoding.little(4 * X25519.inverse(5) % X25519.p, 32) as Point
+  static B := Encoding.little(4 * X25519.inverse(5) % X25519.p, 32) as Point
 
   // The secret's SHA-512, its first half pruned as X25519's scalar (RFC 8032 §5.1.5, RFC 7748 §5)
   static expanded (secret: Byte₃₂) => SHA512.write(secret).bytes -- (h => (scalar: X25519.clamped(h[..<32]), prefix: h[32..]))

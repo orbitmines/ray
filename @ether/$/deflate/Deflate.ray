@@ -1,6 +1,6 @@
 // DEFLATE Compressed Data Format Specification version 1.3 (https://www.rfc-editor.org/rfc/rfc1951)
 Deflate := class: Language {
-  static extensions = ".deflate"
+  static extensions := ".deflate"
 
   // Huffman codes given by their lengths alone: shorter codes first, equal lengths in symbol order, each the next binary number (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
   static Huffman := class lengths: Decimal[] {
@@ -19,9 +19,9 @@ Deflate := class: Language {
   }
 
   // Lengths 3..258 as codes 257..285 and distances 1..32768 as codes 0..29: each code's base and extra bits (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.5)
-  static LengthBases = [(3, 0), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0), (10, 0), (11, 1), (13, 1), (15, 1), (17, 1), (19, 2), (23, 2), (27, 2), (31, 2),
+  static LengthBases := [(3, 0), (4, 0), (5, 0), (6, 0), (7, 0), (8, 0), (9, 0), (10, 0), (11, 1), (13, 1), (15, 1), (17, 1), (19, 2), (23, 2), (27, 2), (31, 2),
     (35, 3), (43, 3), (51, 3), (59, 3), (67, 4), (83, 4), (99, 4), (115, 4), (131, 5), (163, 5), (195, 5), (227, 5), (258, 0)]
-  static DistanceBases = [(1, 0), (2, 0), (3, 0), (4, 0), (5, 1), (7, 1), (9, 2), (13, 2), (17, 3), (25, 3), (33, 4), (49, 4), (65, 5), (97, 5), (129, 6), (193, 6),
+  static DistanceBases := [(1, 0), (2, 0), (3, 0), (4, 0), (5, 1), (7, 1), (9, 2), (13, 2), (17, 3), (25, 3), (33, 4), (49, 4), (65, 5), (97, 5), (129, 6), (193, 6),
     (257, 7), (385, 7), (513, 8), (769, 8), (1025, 9), (1537, 9), (2049, 10), (3073, 10), (4097, 11), (6145, 11), (8193, 12), (12289, 12), (16385, 13), (24577, 13)]
 
   // A literal byte, or a copy of length bytes from distance bytes back (https://www.rfc-editor.org/rfc/rfc1951#section-2)
@@ -50,8 +50,8 @@ Deflate := class: Language {
   static Stored := class (Binary{length < 8 && (at + length) % 8 == 0}, size: <-Binary₁₆ = bytes.count, <-Binary₁₆{== 2 ^ 16 - 1 - size}, bytes: (<-Byte)[]{length == size})
 
   // Fixed Huffman codes (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.6)
-  static fixed_literals = Huffman([[8] * 144, [9] * 112, [7] * 24, [8] * 8].flatten)
-  static fixed_distances = Huffman([5] * 32)
+  static fixed_literals := Huffman([[8] * 144, [9] * 112, [7] * 24, [8] * 8].flatten)
+  static fixed_distances := Huffman([5] * 32)
 
   // Code lengths: 0–15 as they are, 16 repeats the previous 3–6 times, 17 a zero 3–10 times, 18 a zero 11–138 times (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.7)
   static CodeLengths := class<code: Huffman> (
@@ -66,7 +66,7 @@ Deflate := class: Language {
   }
 
   // Dynamic Huffman codes: HLIT, HDIST, HCLEN, the code length code in its own order, then both codes' lengths as one sequence (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.7)
-  static Order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
+  static Order := [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
   static Dynamic := class (
     hlit: <-Binary₅ = literals.lengths.count - 257,
     hdist: <-Binary₅ = distances.lengths.count - 1,

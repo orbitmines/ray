@@ -1,6 +1,6 @@
 // Domain names, implementation and specification (https://www.rfc-editor.org/rfc/rfc1035)
 DNS := class: Language {
-  static extensions = ".dns"
+  static extensions := ".dns"
 
   // TYPE values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.1), SRV (https://www.rfc-editor.org/rfc/rfc2782)
   static Type := enum A (code: 1) | NS (code: 2) | CNAME (code: 5) | SOA (code: 6) | PTR (code: 12) | MX (code: 15) | TXT (code: 16) | AAAA (code: 28) | SRV (code: 33) | ANY (code: 255) {
@@ -37,41 +37,41 @@ DNS := class: Language {
     size: Binary₁₆ = rdata.count,
     rdata: Byte[]{length == size} = data as Data as Byte[]
   ) {
-    static Data = Byte[]
-    static Presentation = (!\n)[]
+    static Data := Byte[]
+    static Presentation := (!\n)[]
     data = rdata as Data
     presented => data as Presentation as String
     lifetime => ttl seconds
   }
   // RDATA formats (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-3.4.1), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.2, https://www.rfc-editor.org/rfc/rfc3596#section-2.4), SRV (https://www.rfc-editor.org/rfc/rfc2782)
   static A := Record{type == Type.A} {
-    static Data = Binary₃₂ as IPv4
-    static Presentation = IPv4
+    static Data := Binary₃₂ as IPv4
+    static Presentation := IPv4
   }
   static AAAA := Record{type == Type.AAAA} {
-    static Data = Binary₁₂₈ as IPv6
-    static Presentation = IPv6
+    static Data := Binary₁₂₈ as IPv6
+    static Presentation := IPv6
   }
   static Named := Record{type is (Type.NS | Type.CNAME | Type.PTR)} {
-    static Data = Name
-    static Presentation = Domain
+    static Data := Name
+    static Presentation := Domain
   }
   static MX := Record{type == Type.MX} {
-    static Data = (preference: Binary₁₆, exchange: Name)
-    static Presentation = (preference: Decimal, Blank, exchange: Domain)
+    static Data := (preference: Binary₁₆, exchange: Name)
+    static Presentation := (preference: Decimal, Blank, exchange: Domain)
   }
   // <character-string>: its length, then its bytes; in a zone file quoted, or a run without blanks (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
   static TXT := Record{type == Type.TXT} {
-    static Data = (size: Byte = text.count, text: Byte[]{length == size} as String)[]
-    static Presentation = (("\"", text: (!"\"")[], "\"") | text: (!" " && !"\t")[]{length > 0})[].join(Blank)
+    static Data := (size: Byte = text.count, text: Byte[]{length == size} as String)[]
+    static Presentation := (("\"", text: (!"\"")[], "\"") | text: (!" " && !"\t")[]{length > 0})[].join(Blank)
   }
   static SOA := Record{type == Type.SOA} {
-    static Data = (primary: Name, mailbox: Name, serial: Binary₃₂, refresh: Binary₃₂, retry: Binary₃₂, expire: Binary₃₂, minimum: Binary₃₂)
-    static Presentation = (primary: Domain, Blank, mailbox: Domain, Blank, serial: Decimal, Blank, refresh: Decimal, Blank, retry: Decimal, Blank, expire: Decimal, Blank, minimum: Decimal)
+    static Data := (primary: Name, mailbox: Name, serial: Binary₃₂, refresh: Binary₃₂, retry: Binary₃₂, expire: Binary₃₂, minimum: Binary₃₂)
+    static Presentation := (primary: Domain, Blank, mailbox: Domain, Blank, serial: Decimal, Blank, refresh: Decimal, Blank, retry: Decimal, Blank, expire: Decimal, Blank, minimum: Decimal)
   }
   static SRV := Record{type == Type.SRV} {
-    static Data = (priority: Binary₁₆, weight: Binary₁₆, port: Binary₁₆, target: Name)
-    static Presentation = (priority: Decimal, Blank, weight: Decimal, Blank, port: Decimal, Blank, target: Domain)
+    static Data := (priority: Binary₁₆, weight: Binary₁₆, port: Binary₁₆, target: Name)
+    static Presentation := (priority: Decimal, Blank, weight: Decimal, Blank, port: Decimal, Blank, target: Domain)
   }
 
   // Message format (https://www.rfc-editor.org/rfc/rfc1035#section-4.1)
@@ -127,7 +127,7 @@ DNS := class: Language {
   static resolve (name: String, type: Type = Type.A) => Compiler.reduced(Lookup(query(name, type)), Optimizations).answer.addresses.first
 
   // Zone files: the master file format (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
-  static Blank = (" " | "\t")[]{length > 0}
+  static Blank := (" " | "\t")[]{length > 0}
   // A name in a zone file is relative to $ORIGIN unless it ends in "."; "@" is the origin; written absolute (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
   static origin: String?
   static absolute (name: String, origin: String?) => Network.DomainName(text: name == "@" ? origin.trimmed(".") ?? "" : name ~= "." ⊣ ? name[..<-1] : origin ? name + "." + origin.trimmed(".") : name)

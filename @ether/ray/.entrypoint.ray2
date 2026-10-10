@@ -57,6 +57,13 @@ nearest {head} => {body} =>
   .text
 `{text}` =>
   .text
+// (given code, a block on one line, `f(code: { … })`: that code, unread, run when it is called)
+{name}:{ }{`{`}{ }{code}{ }{`}`} =>
+  {name} := (() => ({code}))
+  declared
+{name}:{ }{`{`}{code}{`}`} =>
+  {name} := (() => ({code}))
+  declared
 
 // A name given a value again: the value read, then the name a rule reading it. A definition whose right side is a value
 // rewrites the rule of the nearest node that has the name (here, when none does).
@@ -125,7 +132,8 @@ Pattern := {
 {function}<{{given}}> =>
   ((also) => {function}({given}, also))
 
-// A narrowing, `T{constraint}`: a T for which the constraint, read with `.` the value, answers true.
+// A narrowing, `T{constraint}`: a T for which the constraint, read with `.` the value, answers true. Called, `p{O: level}()`: what
+// it narrows given what the constraint writes (settings), called.
 {type}{{constraint}} =>
   {
     narrows := {type}
@@ -133,6 +141,9 @@ Pattern := {
       it with {
         {constraint}
       }
+    () =>
+      holds(narrows)
+      narrows()
   }
 
 // What a value answers to `?`: anything is true, but `None` and `false`.
@@ -387,10 +398,10 @@ nearest () => {body} =>
 led (value) =>
   (value === declared) ? . : ((. === declared) ? value : Listing.new.append(value).joined(.))
 // A record: names given values in parentheses, `(a: 1, b: 2)`, a node holding them (a call's own `(…)` is read before
-// this: its named arguments are inlined into it). Its names are words (`(made class: …)` is a group). (Its brackets
-// written as text, so it is not read as a closure.)
+// this: its named arguments are inlined into it). Its names are words (`(made class: …)` is a group), its first value not
+// a definition (`(class: P (x) => { … })` is a group). (Its brackets written as text, so it is not read as a closure.)
 {`(`}{name}:{ }{value}, {{rest}}{`)`} =>
-  (goto record) unless "{name}" contains " "
+  (goto record) unless ("{name}" contains " ") || ("{value}" contains " => ")
   goto .
   record\
   {
@@ -398,7 +409,7 @@ led (value) =>
     {rest}
   }
 {`(`}{name}:{ }{value}{`)`} =>
-  (goto record) unless "{name}" contains " "
+  (goto record) unless ("{name}" contains " ") || ("{value}" contains " => ")
   goto .
   record\
   {
@@ -491,6 +502,18 @@ declared &+= {
 ~~ {{rest}} =>
   . {rest}
   .
+// (a closure after it, `x -- (y => …)`, `x ~~ ((y) => …)`: called with that value, made where it is written; its brackets
+// written as text, so the head is not read as a method's)
+{value} {`--`} {`(`}{parameter} => {body}{`)`} =>
+  ((({parameter}) => {body}))({value})
+{value} {`--`} {`(`}({parameters}) => {body}{`)`} =>
+  ((({parameters}) => {body}))({value})
+{value} {`~~`} {`(`}{parameter} => {body}{`)`} =>
+  ((({parameter}) => {body}))({value})
+  {value}
+{value} {`~~`} {`(`}({parameters}) => {body}{`)`} =>
+  ((({parameters}) => {body}))({value})
+  {value}
 reading {{block}} =>
   {block}
 
@@ -620,6 +643,20 @@ descends (type) =>
   (. === type) || (.parent ? .parent.descends(type) : false)
 is {type} =>
   ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((c) => . is c) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((m) => m === .) : false)
+
+// A value written into text (not text) taken by a typed hole `{x: T}`: one that is a T. (Written as a typed hole is above: this
+// right side answers something only then.)
+{value: type} =>
+  (goto not_one) unless {value} is {type}
+  {value}
+  not_one\
+
+// A level: a node of rules a value is given to (`{x: T} => …`): the value, written into text, read in it (by the first of
+// them that takes it; none, the value).
+{level} reducing {value} =>
+  {level} reading {
+    {value}
+  }
 
 // `this`: what `.` is.
 this =>

@@ -1,6 +1,6 @@
 // HMAC: Keyed-Hashing for Message Authentication, over any digest (https://www.rfc-editor.org/rfc/rfc2104)
 HMAC := class: Encoding.Digest hash: Encoding.Digest, key: Byte[] {
-  static extensions = ".hmac"
+  static extensions := ".hmac"
   size => hash.size
   block => hash.block
 

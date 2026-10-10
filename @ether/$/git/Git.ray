@@ -1,14 +1,14 @@
 // Git's formats (https://git-scm.com/docs/gitformat-pack, https://git-scm.com/docs/gitformat-index, https://git-scm.com/docs/gitprotocol-http)
 // The object format is part of the type: Git reads and writes SHA-1 repositories, Git<SHA256> SHA-256 ones (https://git-scm.com/docs/hash-function-transition)
 Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
-  static extensions = ".git"
-  static noted_at = "refs/notes/ray"
+  static extensions := ".git"
+  static noted_at := "refs/notes/ray"
 
   // The hash naming every object, by the name of its digest: "sha1" or "sha256"; any other name is a repository git cannot read (https://git-scm.com/docs/hash-function-transition#_object_names, https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionsobjectFormat)
   static formatted (name: String) => [SHA1, SHA256].find(.extensions == "." + name.fold_case) ?? ERROR@Format `an object format by that name`
   format_name => hash.extensions[1..]
   // Compatibility mode, each object named in both formats through a translation table (https://git-scm.com/docs/hash-function-transition#_translation_table, https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionscompatObjectFormat)
-  static compatible = ERROR@Format `extensions.compatObjectFormat: every object named in a second format beside the repository's own`
+  static compatible := ERROR@Format `extensions.compatObjectFormat: every object named in a second format beside the repository's own`
 
   // An object name written out: two hexadecimal digits a byte, 40 in SHA-1, 64 in SHA-256 (https://git-scm.com/docs/hash-function-transition#_object_names)
   Id := Hexadecimal{length == hash.size * 2}

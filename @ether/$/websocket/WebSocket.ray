@@ -1,7 +1,7 @@
 // The WebSocket protocol (https://www.rfc-editor.org/rfc/rfc6455)
 // A client masks every frame it sends, a server none (https://www.rfc-editor.org/rfc/rfc6455#section-5.1)
 WebSocket := class: Language client: boolean = true {
-  static extensions = ".ws" | ".websocket"
+  static extensions := ".ws" | ".websocket"
 
   // Opcodes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2, https://www.rfc-editor.org/rfc/rfc6455#section-11.8)
   static Opcode := enum continuation | text | binary | x3 | x4 | x5 | x6 | x7 | close | ping | pong {
@@ -63,7 +63,7 @@ WebSocket := class: Language client: boolean = true {
   }
 
   // Opening handshake (https://www.rfc-editor.org/rfc/rfc6455#section-4.1)
-  static GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+  static GUID := "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
   static opening (target: Location, key: Byte[] = Byte₁₆.random) => HTTP.Request(target: target, fields: HTTP.Fields(entries: [
     (name: "Upgrade", value: "websocket"), (name: "Connection", value: "Upgrade"),
     (name: "Sec-WebSocket-Key", value: key as Base64 as String), (name: "Sec-WebSocket-Version", value: "13")

@@ -1,6 +1,6 @@
 // The web renderer: a scene written as HTML, a document with its CSS stylesheet and JS script
 UI.HTML := class {
-  static space = Geometry.Space.screen
+  static space := Geometry.Space.screen
   Geometry.Shape &+= {
     dom => id.segments.join("-")
     dom_named => [("id", dom), ("class", styles.join(" ")) if styles.nonempty]
@@ -390,7 +390,7 @@ UI.HTML := class {
     dynamically event: @me/instance
     line (parts: String[]) => parts.join(" "), \n
 
-    static made = 0
+    static made := 0
     Mount := class (node: $.html.Element | $.html.Text | $.html.Raw | $.html.Comment, parent: String?, id: String = (node is $.html.Element ? node.id : None) ?? ("e" + ((DOM.made += 1) as String))) => { }
     Listening := class (mount: Mount) => { }
     protocol := {

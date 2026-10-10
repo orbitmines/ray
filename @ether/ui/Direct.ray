@@ -1,5 +1,5 @@
 Language.Direct := class: Language {
-  static extensions = ".direct"
+  static extensions := ".direct"
   static space (size: Geometry.Vector) => Geometry.Space.grid(Geometry.Vector(size.x as px, size.y as px))
   static outer: Geometry.Transform = Geometry.Transform.identity
 

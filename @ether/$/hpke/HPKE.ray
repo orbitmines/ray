@@ -1,6 +1,6 @@
 // Hybrid Public Key Encryption, base mode (https://www.rfc-editor.org/rfc/rfc9180)
 HPKE := class: Language kem: Encoding.Agreement = X25519, kdf: Encoding.Digest = SHA256, aead: Encoding.Symmetric = ChaCha20Poly1305 {
-  static extensions = ".hpke"
+  static extensions := ".hpke"
 
   // DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20Poly1305 by their identifiers, two bytes each (RFC 9180 §7.1, §7.2, §7.3)
   static ids := {

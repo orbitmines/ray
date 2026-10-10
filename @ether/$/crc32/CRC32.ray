@@ -1,7 +1,7 @@
 // CRC-32 of ISO 3309, ITU-T V.42 and IEEE 802.3: the polynomial reflected as 0xEDB88320, the register starting and ending inverted (https://www.rfc-editor.org/rfc/rfc1952#section-8, https://www.w3.org/TR/png-3/#D-CRCAppendix)
 CRC32 := class: Encoding.Digest {
-  static extensions = ".crc32"
-  static size = 4
+  static extensions := ".crc32"
+  static size := 4
 
   static step (c, byte: Byte) => (0..7).reduce(r = c ~x|| byte => r.odd ? (r / 2).floor ~x|| 0xEDB88320 : (r / 2).floor)
   // The checksum as 32 bits, most significant byte first (https://www.w3.org/TR/png-3/#5CRC-algorithm)

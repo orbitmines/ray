@@ -9,8 +9,8 @@ Node &+= {
 }
 
 World := class: Location + Nameable {
-  static PREFIX = "#"
-  static ether = World(name: "ether", path: "ether")
+  static PREFIX := "#"
+  static ether := World(name: "ether", path: "ether")
   static current: World = World.ether
 
   clock: HybridClock = HybridClock(node: this)

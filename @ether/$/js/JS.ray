@@ -1,8 +1,8 @@
 // ECMAScript Language Specification (https://tc39.es/ecma262/)
 // A fragment reads as the Ray program it is, kept as code: calls, members, operators and lambdas are Ray's own, and a hole in braces is its value. Writing JS is one level over Ray's program shapes, a rule to each production
 JS := class: Language {
-  static extensions = ".js"
-  static Identifier = (Char.Letter | "_" | "$", (Char.Word | "$")[])
+  static extensions := ".js"
+  static Identifier := (Char.Letter | "_" | "$", (Char.Word | "$")[])
 
   level := {
     {code} => Program(code: code)

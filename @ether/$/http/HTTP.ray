@@ -19,7 +19,7 @@ HTTP := class {
     static ClientError := Status{400 <= code < 500}
     static ServerError := Status{500 <= code < 600}
     // Reason phrases (https://www.rfc-editor.org/rfc/rfc9110#section-15)
-    static Reasons = { 100: "Continue", 101: "Switching Protocols", 200: "OK", 201: "Created", 204: "No Content", 206: "Partial Content",
+    static Reasons := { 100: "Continue", 101: "Switching Protocols", 200: "OK", 201: "Created", 204: "No Content", 206: "Partial Content",
       301: "Moved Permanently", 302: "Found", 304: "Not Modified", 307: "Temporary Redirect", 308: "Permanent Redirect",
       400: "Bad Request", 401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 405: "Method Not Allowed", 409: "Conflict", 429: "Too Many Requests",
       500: "Internal Server Error", 501: "Not Implemented", 502: "Bad Gateway", 503: "Service Unavailable" }
@@ -63,22 +63,22 @@ HTTP := class {
     : target ~= ⊢"/" && host ? ("http://" + host + target) as Location : target as Location
 
   // tchar (https://www.rfc-editor.org/rfc/rfc9110#section-5.6.2)
-  static Token = (Char.Letter | Char.Digit | "!" | "#" | "$" | "%" | "&" | "'" | "*" | "+" | "-" | "." | "^" | "_" | "`" | "|" | "~")[]{length > 0}
+  static Token := (Char.Letter | Char.Digit | "!" | "#" | "$" | "%" | "&" | "'" | "*" | "+" | "-" | "." | "^" | "_" | "`" | "|" | "~")[]{length > 0}
   // OWS (https://www.rfc-editor.org/rfc/rfc9110#section-5.6.3)
-  static OWS = (" " | "\t")[]
+  static OWS := (" " | "\t")[]
   // quoted-string (https://www.rfc-editor.org/rfc/rfc9110#section-5.6.4)
-  static Quoted = ("\"", ((!"\"" && !"\\") | ("\\", Char))[], "\"")
+  static Quoted := ("\"", ((!"\"" && !"\\") | ("\\", Char))[], "\"")
   // field-value, without its surrounding whitespace (https://www.rfc-editor.org/rfc/rfc9110#section-5.5)
-  static Value = (!"\r" && !\n)[]{!(. ~= ⊢(" " | "\t")) && !(. ~= (" " | "\t") ⊣)}
-  static CRLF = "\r\n"
+  static Value := (!"\r" && !\n)[]{!(. ~= ⊢(" " | "\t")) && !(. ~= (" " | "\t") ⊣)}
+  static CRLF := "\r\n"
   // A line ends in CRLF; a bare LF is recognised too, so a message also reads written inline, its last line ending with the text (https://www.rfc-editor.org/rfc/rfc9112#section-2.2)
-  static End = CRLF | \n | ⊣
+  static End := CRLF | \n | ⊣
   // field-line (https://www.rfc-editor.org/rfc/rfc9112#section-5)
-  static Line = (name: Token, ":", OWS, value: Value, OWS, End)
+  static Line := (name: Token, ":", OWS, value: Value, OWS, End)
 
   // HTTP/1.1 (https://www.rfc-editor.org/rfc/rfc9112)
   static v1_1 := class: Language {
-    static extensions = ".http"
+    static extensions := ".http"
 
     // HTTP-message (https://www.rfc-editor.org/rfc/rfc9112#section-2.1)
     static Wire := class (
@@ -95,7 +95,7 @@ HTTP := class {
       (body: Byte[]) if !chunked && content_length == None && (code ? !(code < 200 || code == 204 || code == 304) : end == \n)
     ) {
       // HTTP-version (https://www.rfc-editor.org/rfc/rfc9112#section-2.3)
-      static Name = ("HTTP/", Char.Digit, ".", Char.Digit)
+      static Name := ("HTTP/", Char.Digit, ".", Char.Digit)
 
       fields => Fields(entries: lines.map((name: .name, value: .value)))
       // chunked is the final transfer coding when present (https://www.rfc-editor.org/rfc/rfc9112#section-6.1)
@@ -121,7 +121,7 @@ HTTP := class {
       CRLF
     ) {
       // chunk-ext (https://www.rfc-editor.org/rfc/rfc9112#section-7.1.1)
-      static Extension = (OWS, ";", OWS, Token, (OWS, "=", OWS, Token | Quoted)?)
+      static Extension := (OWS, ";", OWS, Token, (OWS, "=", OWS, Token | Quoted)?)
 
       bytes => chunks.data.flatten
       static (bytes: Byte[]) as (=== Chunked) => Chunked(chunks: bytes.chunk(2 ^ 14).map((size: .count as Hexadecimal, data: .)), trailers: [])
@@ -137,9 +137,9 @@ HTTP := class {
 
   // HTTP/2 (https://www.rfc-editor.org/rfc/rfc9113)
   static v2 := class: Language {
-    static extensions = ".h2"
+    static extensions := ".h2"
     // Connection preface (https://www.rfc-editor.org/rfc/rfc9113#section-3.4)
-    static preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+    static preface := "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
     // Frame format (https://www.rfc-editor.org/rfc/rfc9113#section-4.1)
     static Frame := class (size: Binary₂₄ = payload.count, type: Byte as Type, flags: Byte = 0, Binary₁{== 0}, stream: Binary₃₁, payload: Byte[]{length == size}) {

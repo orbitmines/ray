@@ -33,10 +33,6 @@ FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[
   static Unspaced := Char.Han | Char.Hiragana | Char.Katakana | Char.Hangul | Char.Yi | Unicode.GeneralCategory.Mark
   parts => written.split(FullName.Separator)
 }
-  static Particle := FullName.Part{first.is_lower}
-  first => given.first
-  last => family as String
-}
 
 // An email address (https://www.rfc-editor.org/rfc/rfc5322#section-3.4.1), UTF-8 allowed in both parts (https://www.rfc-editor.org/rfc/rfc6531#section-3.3):
 // a dot-atom or a quoted local part of at most 64 characters, "@", then a domain of at least two labels or an address literal

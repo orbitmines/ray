@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -72,4 +72,4 @@ async function main() {
   if (problems.length > 0) process.exit(1);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) await main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) await main();

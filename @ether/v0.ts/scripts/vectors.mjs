@@ -1,6 +1,6 @@
 import { execFileSync } from 'child_process';
 import { createCipheriv, createHash, createHmac, createPrivateKey, createPublicKey, diffieHellman, sign } from 'crypto';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { crc32, gunzipSync, inflateRawSync, inflateSync } from 'zlib';
@@ -373,4 +373,4 @@ function main() {
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) main();

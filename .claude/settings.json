@@ -1,25 +1,23 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.mjs\" session-start" }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.mjs\" pre-tool" }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          { "type": "command", "if": "Bash(git *)", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate.mjs\" pre-tool", "timeout": 600 }
-        ]
-      }
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git worktree add --force:*)",
+      "Bash(git worktree remove --force:*)",
+      "Bash(git worktree remove -f:*)",
+      "Bash(git branch -D:*)",
+      "Bash(git update-ref -d:*)",
+      "Bash(git reflog expire --expire:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(rm -rf $HOME:*)"
     ]
   }
 }

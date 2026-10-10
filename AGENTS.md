@@ -18,10 +18,8 @@ Read first, in order:
 
 ## The harness (`.claude/`)
 
-- `settings.json` and `hooks/gate.mjs`: the score is shown when a session starts; an edit to the kernel
-  (`@ether/v0.ts/src/`, `@ether/ray/.entrypoint.ray*`) asks first; a commit runs the ratchet on the test files it
-  touches. CI runs the whole suite.
 - `skills/`: how to probe (`ray-probe`), write a claim (`ray-claim`), and ask a decision (`ray-decide`).
 - `agents/`: `prober` and `scorer`, small agents the skills use.
-- Everything here is meant to be changed. Personal settings go in `.claude/settings.local.json`, which stays out of
-  git.
+- `settings.json`: no Claude attribution on commits or PRs, and destructive git and `rm` commands are denied.
+- Everything here is meant to be changed. Personal settings go in `.claude/settings.local.json`, which stays
+  out of git.

@@ -40,5 +40,13 @@ case "${1:-}" in
   N0) ray "$here/ints.ray" "$here/n0.ray" ;;
   N1) ray "$here/io.ray" "$here/ints.ray" "$here/read.c.ray" "$here/n1.ray" ;;
   N2) ray "$here/io.ray" "$here/ints.ray" "$here/read.python.ray" "$here/n2.ray" ;;
-  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0|N1|N2" >&2; exit 2 ;;
+  N3)
+    rm -rf "$out/corpus"
+    python3 "$here/gen.py" --count "${COUNT:-40}" --seed "${SEED:-1}" --mutate "${MUTATE:-0}" --out "$out/corpus"
+    ray "$here/io.ray" "$here/ints.ray" "$here/read.c.ray" "$here/read.python.ray" "$out/corpus/claims.ray" > "$out/n3.txt" || true
+    grep "^FAIL" "$out/n3.txt" || true
+    echo "N3 $(grep -c '^ok' "$out/n3.txt") ok, $(grep -c '^FAIL' "$out/n3.txt") failed, over ${COUNT:-40} functions (seed ${SEED:-1})"
+    ! grep -q "^FAIL" "$out/n3.txt"
+    ;;
+  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0|N1|N2|N3" >&2; exit 2 ;;
 esac

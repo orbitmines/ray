@@ -14,7 +14,7 @@ const read = (file: string, said: boolean) => {
   let fired = 0;
   for (const statement of program.code(fs.readFileSync(file, 'utf8')).statements) {
     if (!statement.trim() || statement.trim().startsWith('//')) continue;
-    const claim = said ? /^(unless|if) (.*) \{ INFO@mark `([A-Za-z]+[0-9.]+ [^`]*)` \}$/.exec(statement.trim()) : null;
+    const claim = said ? /^(unless|if) (.*) \{ INFO@mark `([A-Za-z]+[0-9][0-9A-Za-z.]* [^`]*)` \}$/.exec(statement.trim()) : null;
     let value: unknown;
     try { value = program.run(claim ? claim[2] : statement, { node: program.global }); } catch (error: any) { value = 'threw ' + error?.message; }
     if (!said) continue;

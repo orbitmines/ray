@@ -1,8 +1,9 @@
 p_symbols := "-> ( ) , : + - *"
+p_integer := "Integer"
 p_word (x) => x fits_pattern "^[A-Za-z_][A-Za-z0-9_]*$"
 p_atom (x) => (p_word(x) || (x fits_pattern "^[1-9]$")) ? x : None
 p_expression (x) => (PExpression reads_text x) ?? p_atom(x)
-p_binary (left, symbol, right) => (left && right) ? ("((" + left + " " + symbol + " " + right + ") as Integer)") : None
+p_binary (left, symbol, right) => (left && right) ? ("((" + left + " " + symbol + " " + right + ") as " + p_integer + ")") : None
 p_apply (left, symbol, right) => p_binary(p_expression(left), symbol, p_expression(right))
 PSum := {
   {left} + {right} =>
@@ -23,7 +24,7 @@ PExpression := {
   ( {grouped} ) =>
     p_expression("{grouped}")
 }
-p_annotated (name) => p_word(name) ? (name + ": Integer") : None
+p_annotated (name) => p_word(name) ? (name + ": " + p_integer) : None
 p_list (head, tail) => (head && tail) ? (head + ", " + tail) : None
 p_parameters (x) => (PParameters reads_text x) ?? p_annotated(x)
 PParameters := {
@@ -37,4 +38,7 @@ PDefPlain := class ("def ", name, " ( ", parameters, " ) : return ", body) => { 
 p_definition (name, parameters, body) => (name && parameters && body) ? (name + " (" + parameters + ") => " + body) : None
 p_from (def) => def ? p_definition(p_word(def.name) ? def.name : None, p_parameters(def.parameters), p_expression(def.body)) : None
 p_tokens (source) => source spaced_tokens p_symbols
-p_ray (source) => p_from((p_tokens(source) as PDefAnnotated) ?? (p_tokens(source) as PDefPlain))
+p_ray_with (source, integer) =>
+  p_integer = integer
+  p_from((p_tokens(source) as PDefAnnotated) ?? (p_tokens(source) as PDefPlain))
+p_ray (source) => p_ray_with(source, "Integer")

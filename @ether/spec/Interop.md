@@ -249,11 +249,23 @@ literal    := "1" .. "9"
 
 ### N3. The corpus, and the two readers agree (the centre)
 
-- **Goal.** For every function in the corpus, the Ray code read from C equals the Ray code read from Python once the
-  boundary narrows `Integer` to C's type (B2's choice, now a rewrite of the Ray text), and the Ray code computes what
-  Python computes wherever no intermediate result leaves its type.
-- **Pass.** `./run.sh N3`: every corpus function agrees; the count is printed. Control: a corpus where the Python source
-  differs from the C source in one operator is caught.
+- **Goal.** For every function in a generated corpus, the Ray code read from C equals the Ray code read from Python
+  once the boundary chooses C's type, and the Ray code computes what Python computes.
+- **What happens.** `gen.py` (seeded) builds a random expression tree per function (one to four parameters, `+ - *`,
+  parameters and literals 1 to 9, depth up to 3, an operation at the root), and writes it as C (`int` or `long`, one
+  line or several) and as Python (annotated or bare, body on the same line or indented), with random spacing and
+  redundant brackets; brackets are added only where the tree needs them, so each reader must recover the tree. It also
+  writes the tree's normal form, and a Ray claims file. The boundary choice (the old B2) is a parameter of the Python
+  reader: `p_ray_with(source, "Int32")` reads Python at C's type; with `"Integer"` it reads Python as Python.
+- **Claims per function.**
+  - (a) Ray from C equals Ray from Python at C's type: the agreement.
+  - (b) Ray from C equals the generator's normal form, so agreeing on something wrong would not pass.
+  - (c) Ray from Python (`Integer`, defined with `ray_code`) answers what the real `python3` answers running the
+    generated source, on three inputs from -50 to 50 (Ray's numbers are host floats, exact below 2^53; the 32 and 64-bit
+    edges are N4's and N5's, which compare compiled programs).
+- **Pass.** `./run.sh N3` (`COUNT`, `SEED`): every claim holds. Seeds 1, 2 and 3, 40 functions each: 200 of 200 each, 120
+  functions in all. Control: `MUTATE=7` changes one operator in f7's Python only; exactly `N3.7.a` fails (f7's (c)
+  claims still hold, the mutated Python being consistent with itself).
 
 ### N4. The Rust writer, Track A over the corpus
 

@@ -1,0 +1,3 @@
+text_of_file {path} =>
+  goto js
+  typeof path === 'string' ? process.getBuiltinModule('fs').readFileSync(process.env.POC + '/' + path, 'utf8').trim() : undefined

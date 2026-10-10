@@ -1,0 +1,10 @@
+mark ^keyword := global
+
+read := (text_of_file "add.c") as C.Function
+unless read.name == "add" { INFO@mark `A1.1 the function name is not read` }
+unless read.a == "a" { INFO@mark `A1.2 the first parameter is not read` }
+unless read.b == "b" { INFO@mark `A1.3 the second parameter is not read` }
+unless read.sum.left == "a" { INFO@mark `A1.4 the body's left operand is not read` }
+unless read.sum.right == "b" { INFO@mark `A1.5 the body's right operand is not read` }
+unless (read.call(2, 3)) == 5 { INFO@mark `A1.6 the function read from C does not add 2 and 3 in Ray` }
+unless (read.call(2 - 9, 4)) == (1 - 4) { INFO@mark `A1.7 the function read from C does not add -7 and 4 in Ray` }

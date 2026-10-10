@@ -1,0 +1,7 @@
+C := { }
+C.Sum := class (left, " + ", right) => { }
+C.Function := class ("int ", name, "(int ", a, ", int ", b, ") { return ", body, "; }") => {
+  sum => body as C.Sum
+  operand (written, x, y) => (written == a) ? x : ((written == b) ? y : None)
+  call (x, y) => operand(sum.left, x, y) + operand(sum.right, x, y)
+}

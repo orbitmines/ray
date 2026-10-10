@@ -105,16 +105,16 @@ int add(int a, int b) { return a + b; }
 
 ### A1. Read C into Ray
 
-- **Goal.** `add.c` becomes a Ray Program.
-- **What happens.** `c.ray` holds two patterns: a function header `int NAME(int A, int B) { return EXPR; }` and an
-  expression `NAME + NAME`. Reading `add.c` with them gives a Program; the step prints it.
+- **Goal.** `add.c` becomes a Ray value, and Ray runs it.
+- **What happens.** `io.ray` gives Ray the file's text (`text_of_file "add.c"`, a host rule: reading a file is the host's
+  job). `c.ray` holds two classes whose headers are the C subset, `C.Function` (`"int ", name, "(int ", a, ", int ", b,
+  ") { return ", body, "; }"`) and `C.Sum` (`left, " + ", right`). `text as C.Function` reads the function; its `sum` reads
+  the body as a `C.Sum`; its `call (x, y)` runs it: each operand that names a parameter takes that argument, and the two
+  are added in Ray.
 - **Why it matters.** This is the moment C stops being C. From here on the function is a Ray value, and anything that can
   write a Ray value can carry it into another language.
-- **Pass.** The printed Program is the target form below (exact text fixed when A1 is built; see IOP7.1).
-
-```ray
-add (a: Number{-2^31 <= . < 2^31}, b: Number{-2^31 <= . < 2^31}): Number{-2^31 <= . < 2^31} => a + b
-```
+- **Pass.** `./run.sh A1`: claims A1.1 to A1.7 hold (name `add`, parameters `a` and `b`, the body's operands, `call(2, 3)
+  == 5`, `call(-7, 4) == -3`). With `add.c` changed to `a * b`, A1.4 to A1.7 fail.
 
 ### A2. The boundary type
 
@@ -235,8 +235,8 @@ bool add(int a, int b, int *result) { return !__builtin_add_overflow(a, b, resul
 
 ## IOP7. Open
 
-- **IOP7.1 The printed form of a Program.** A1's pass needs exact text. Recommend: whatever the engine prints for a
-  function value today, frozen in `README.md` at the commit that makes A1 pass.
+- **IOP7.1 The printed form of a Program.** Answered by building A1: the read function is the Ray value itself (a
+  `C.Function` instance), and A1 passes on claims about it, not on printed text.
 - **IOP7.2 A name for the 32-bit narrowing.** The spec writes `Number{-2^31 <= . < 2^31}` everywhere because no
   fixed-width integer type exists in `@ether/ray`. Recommend: keep the narrowing in the POC and leave naming to
   Numbers.md.
@@ -275,6 +275,10 @@ A step blocked by the engine adds an entry here: the step, the probe file, its o
   where a typed hole finds a class's pattern.
 - **IOPG3 Unnamed type pieces.** `UUID`'s header `(Hexadecimal₈, "-", Hexadecimal₄, …)` names no fields; `headed` takes
   only lowercase names as fields, so such a header defines nothing yet.
+
+- **IOPG4 The literal `0` with the library loaded.** `0 - 7` answers NaN and `-7` stays text, while `2 - 9` answers
+  `-7`: with the core library read, `0` is the library's value, not the host's number. A1.7 writes its negative numbers
+  as differences of non-zero numbers.
 
 ## Decided
 

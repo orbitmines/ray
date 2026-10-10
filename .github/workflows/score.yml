@@ -2,6 +2,7 @@ name: score
 
 on:
   push:
+    branches: [main]
     paths:
       - '@ether/**/*.ray'
       - '@ether/v0.ts/src/**'

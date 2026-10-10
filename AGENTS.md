@@ -11,8 +11,8 @@ Read first, in order:
 
 Tests are claims in `tests/*.ray`: `unless (<condition>) { INFO@mark \`<ID> <what should hold>\` }`.
 
-- Build once: `cd @ether/v0.ts && node scripts/bundle.mjs` (it embeds the library; afterwards
-  `git checkout -- src/bundled.ts` and remove the `LICENSE` and `README.md` it copies in).
+- Build: `cd @ether/v0.ts && node scripts/bundle.mjs && git checkout -- src/bundled.ts`. Rebuild after a change in
+  `v0.ts/src/`; `.ray` files are read from disk, so library and test edits need no rebuild.
 - Run one file from `@ether`: `node v0.ts/bin/ray.js -v ray/tests/app/boolean.ray`.
 - Read the diagnostics on each claim's lines: none means it held; only its own message means it fired; anything
   else (`Unread`, `Unresolved`, ``No `x` on y``) means it never really ran, which is not a pass.

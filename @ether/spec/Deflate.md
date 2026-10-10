@@ -199,10 +199,14 @@ On 2026-10-11, on language3, through `Deflate.ray`:
 - **DP3**: every one of the 22 read to what zlib inflates it to (0.03 s to 91 s a stream).
 - **DP4**: every one written back byte for byte from the value read, by the same declaration.
 - **DP5**: DF7 and DF8 pass (`"ray " * 64`, 256 bytes, is written in 8); each input written so zlib, and Ray, read it back.
-  The writer chooses stored blocks or one fixed-code block; dynamic codes (`fitted`) are not ported yet.
+  The writer writes stored blocks, one fixed-code block, or one block with codes fitted to the data (`fitted`, its code
+  lengths run-length coded as zlib does), whichever is shortest: `text.txt`, 1240 bytes, is written in 334.
+- **DP6**: the 7 streams in `bad/` zlib rejects answer no bytes; for the 4 that stop in their bits, at the bit expected.
+  Of the 3 that read and do not hold, only `far` depends on its check (a control without the checks reads it); `repeat`
+  and `oversubscribed` fail further on even without theirs, so they do not yet prove them.
 
-`./run.sh DP0` to `./run.sh DP5` in `@ether/poc/deflate` (each corpus stream in a process of its own). DP6, DP7 and DP8
-are next.
+`./run.sh DP0` to `./run.sh DP6` in `@ether/poc/deflate` (each corpus stream in a process of its own). DP7 and DP8 are
+next.
 
 Against the branch's base (`373672c9`), the language's own tests in `ray/tests/app` (control, types, grammar,
 precedence, boolean, rewrite, string, ray, number) pass more claims with these changes, and lose none (measured with
@@ -249,7 +253,8 @@ helpers in loops and bracketed closures instead of sections and `reduce`, `65535
 narrowing `{!.empty && .last.final}`, `inflated`/`deflated` for `read`/`write`, `coded` making an `Element` (a class) for a
 record of five fields, locals named apart from the library's (`stored_stream`), and `deflated` choosing between stored blocks and one fixed-code block in place of the
 `Optimizations` level. `parsed` finds each match with the host's text search (`last_index_of`), the matching loop in Ray.
-The dynamic writer (`fitted`, `dynamic`) is not ported yet.
+`fitted` counts with the host's `tally`; a copy before the first byte, a repeat with nothing before it, and a code length
+code that does not fill its code answer None (`bytes`, `CodeLengths.values`).
 
 ## Engine gaps
 
@@ -276,6 +281,8 @@ A step blocked by the engine adds an entry here: the step, the probe file, its o
 - **DPG10 A record literal of four or more fields** gives its first field a list: `(a: 1, b: 2, c: 3, d: 4).a`.
 - **DPG11 A host rule shadows a method of the same name for every value**: a host `slice({from}, {to})` for text read
   `bytes.slice(…)` on a list whole and answered nothing; the host's text operation is `substring`.
+- **DPG12 A narrowing `{length_code.fills && ((hlit + …) == values.count)}` did not hold for a valid block**, and broke
+  every dynamic block; the check is in `CodeLengths.values` instead.
 
 ## Decided
 

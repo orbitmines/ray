@@ -120,7 +120,7 @@ Hexadecimals &+= {
 // What both answer: `true`/`false`, read here. (Two lists: the same when their values are, `alike`.)
 == {other} =>
   goto js
-  self === other ? $('true') : typeof self === 'object' && self !== null && typeof other === 'object' && other !== null && $($.written(self) + '.listing') === $('true') ? $($.written(self) + '.alike(' + $.written(other) + ')') : $('false')
+  self === other ? $('true') : typeof self === 'object' && self !== null && typeof other === 'object' && other !== null && $($.written(self) + '.listing') === $('true') && $($.written(self) + '.alike(' + $.written(other) + ')') === $('true') ? $('true') : $('false')
 != {other} =>
   goto js
   self === other ? $('false') : typeof self === 'object' && self !== null && typeof other === 'object' && other !== null && $($.written(self) + '.listing') === $('true') && $($.written(self) + '.alike(' + $.written(other) + ')') === $('true') ? $('false') : $('true')
@@ -137,7 +137,7 @@ Hexadecimals &+= {
   goto js
   $(self >= other ? 'true' : 'false')
 
-// Numbers (text added to: joined; anything else, composed; a list `* n`, its values n times).
+// Numbers (text added to: joined; anything else, composed; text or a list `* n`, it n times).
 + {other} =>
   goto js
   typeof self === 'string' ? self + String(other) : typeof self === 'number' ? self + other : undefined
@@ -147,7 +147,7 @@ Hexadecimals &+= {
   self - other
 * {other} =>
   goto js
-  typeof self === 'number' ? self * other : typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? $($.written(self) + '.repeated(' + $.written(other) + ')') : undefined
+  typeof self === 'number' ? self * other : typeof self === 'string' ? self.repeat(other) : typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? $($.written(self) + '.repeated(' + $.written(other) + ')') : undefined
 / {other} =>
   goto js
   self / other
@@ -186,6 +186,20 @@ of =>
 ..{ }{last} =>
   . ..({last})
 
+// (bytes as text, one character each; a character's code; text from one place up to another; where text is last found,
+// starting at or before a place, or -1)
+latin1 =>
+  goto js
+  typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? (function (codes) { for (let at = $($.written(self) + '.head'); at !== $('None'); at = $($.written(at) + '.next')) codes.push($($.written(at) + '.value')); return String.fromCharCode(...codes); })([]) : undefined
+code_at({index}) =>
+  goto js
+  typeof self === 'string' ? self.charCodeAt(index) : undefined
+substring({from}, {to}) =>
+  goto js
+  typeof self === 'string' ? self.slice(from, to) : undefined
+last_index_of({piece}, {before}) =>
+  goto js
+  typeof self === 'string' ? self.lastIndexOf(piece, before) : undefined
 // (text as the bytes UTF-8 writes it in)
 bytes =>
   goto js

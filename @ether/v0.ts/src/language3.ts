@@ -987,7 +987,7 @@ export class Program {
       // (read on in a value, it is `name` read in the value; else in `.`)
       // (where the text was written: read on in a value, where it was before; else here (what `site` holds here then is only
       // where else to look))
-      const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.on ? frame.site ?? frame.node : frame.node;
+      const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.site ?? frame.node;
       // (a value that is not a node (text) has no names of its own: its names are the outermost node's (Node's), `.` the value;
       // what its holes take is read where it was written, `3.binary(width)` in a call)
       if (!(self instanceof Program.Node)) { let root = frame.node; while (root.outer) root = root.outer; return this.read(s.slice(1), { node: root, site: written === root ? undefined : written, also: frame.also, from: self, this: self, writer: frame.reading ?? frame.writer }); }

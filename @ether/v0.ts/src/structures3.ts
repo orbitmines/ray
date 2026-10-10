@@ -337,9 +337,10 @@ class Writing extends Scoped {
       for (const alternative of type.alternatives) if (this.fits(alternative, value)) return this.type(alternative, value, scope);
       return false;
     }
+    if (value === this.$('None')) value = undefined;
     if (value === undefined) value = this.exact(scope, type.narrowings);
     if (type.boolean) value = value === this.$('true') ? 1 : 0;
-    if (type.width !== undefined) { this.emit(bits_of(value as number, type.width, type.reversed)); return true; }
+    if (type.width !== undefined) { this.emit(bits_of((value ?? 0) as number, type.width, type.reversed)); return true; }
     if (type.variable) {
       let width = this.fixed_length(scope, type.narrowings);
       for (let tried = 0; width === undefined && tried <= 64; tried++) if (type.narrowings.every(narrowing => this.holds(scope, narrowing, value ?? 0, tried, this.length))) width = tried;

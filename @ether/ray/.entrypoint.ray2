@@ -596,6 +596,8 @@ WARN {message} =>
   goto report
 INFO {message} =>
   goto report
+INFO@mark {message} =>
+  goto report
 TODO {message} =>
   None
 assert {condition} =>

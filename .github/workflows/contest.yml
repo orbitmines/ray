@@ -1,0 +1,31 @@
+name: contest
+
+on:
+  pull_request:
+    paths:
+      - '@ether/v0.ts/src/**'
+      - '@ether/v0.ts/scripts/kernels/**'
+      - '@ether/v0.ts/scripts/contest.mjs'
+      - '@ether/ray/**'
+  workflow_dispatch:
+
+jobs:
+  contest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    defaults:
+      run:
+        working-directory: "@ether/v0.ts"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - run: npm ci --no-audit --no-fund
+      - name: Score the shipped kernel and the challenger on the same suite
+        run: node scripts/contest.mjs --kernels expression,language3 --jobs 2 --timeout 600 --results contest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contest-${{ github.sha }}
+          path: "@ether/v0.ts/contest"

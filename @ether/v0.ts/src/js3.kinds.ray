@@ -2,10 +2,11 @@
 // the host's (`goto js`: the next statement is JS, `self` the value read on, each hole its value, `$(text)` text read here).
 // A port of `js.kinds.ray` to test with until the library reads numbers and text itself; read after the language.
 
-// Numbers, as written: a digit (`Digit`'s own rules), digits, digits with a fraction (`Number`'s own rules: a typed hole
-// `{n: Number}` takes what they read; what it took is read in `Number`). Read anywhere through the rule after them.
-Digit := class { }
-Digit &+= {
+// Numbers, as written: a numeral (`Numeral`'s own rules), numerals after one another (`Numerals`'s), those with a fraction
+// (`Number`'s own rules: a typed hole `{n: Number}` takes what they read; what it took is read in `Number`). Read anywhere
+// through the rule after them. (Plain nodes, not classes, for the digits: the library defines a class `Digit` of its own.)
+Numeral := { }
+Numeral &+= {
   0 =>
     goto js
     0
@@ -37,32 +38,92 @@ Digit &+= {
     goto js
     9
 }
-// (digits after one another: what a number is written as, its own (the library adds to `Number`, not to it))
-Digits := class { }
-Digits &+= {
-  {digit: Digit} =>
+Numerals := { }
+Numerals &+= {
+  {digit: Numeral} =>
     digit
-  {digit: Digit}{rest: Digits} =>
+  {digit: Numeral}{rest: Numerals} =>
     goto js
     Number($.text('digit') + $.text('rest'))
 }
 Number &+= {
-  {digits: Digits} =>
+  {digits: Numerals} =>
     digits
-  {whole: Digits}.{fraction: Digits} =>
+  {whole: Numerals}.{fraction: Numerals} =>
     goto js
     Number($.text('whole') + '.' + $.text('fraction'))
 }
 {number: Number} =>
   number
+// (a number written in hexadecimal, `0xff`: its hexadecimal digits, `Hexadecimals`'s own rules; a letter a name it holds, as
+// a typed hole does not read a type's methods)
+Hexadecimal_digit := { }
+Hexadecimal_digit &+= {
+  0 =>
+    goto js
+    '0'
+  1 =>
+    goto js
+    '1'
+  2 =>
+    goto js
+    '2'
+  3 =>
+    goto js
+    '3'
+  4 =>
+    goto js
+    '4'
+  5 =>
+    goto js
+    '5'
+  6 =>
+    goto js
+    '6'
+  7 =>
+    goto js
+    '7'
+  8 =>
+    goto js
+    '8'
+  9 =>
+    goto js
+    '9'
+  a := "a"
+  b := "b"
+  c := "c"
+  d := "d"
+  e := "e"
+  f := "f"
+  A := "A"
+  B := "B"
+  C := "C"
+  D := "D"
+  E := "E"
+  F := "F"
+}
+Hexadecimals := { }
+Hexadecimals &+= {
+  {digit: Hexadecimal_digit} =>
+    digit
+  {digit: Hexadecimal_digit}{rest: Hexadecimals} =>
+    digit
+}
+0x{digits: Hexadecimals} =>
+  goto js
+  parseInt($.text('digits'), 16)
+// Bits, as written: `0b010`, the text of its digits (it keeps its length; `+` joins two).
+0b{digits: Numerals} =>
+  goto js
+  /^[01]+$/.test($.text('digits')) ? $.text('digits') : undefined
 
-// What both answer: `true`/`false`, read here.
+// What both answer: `true`/`false`, read here. (Two lists: the same when their values are, `alike`.)
 == {other} =>
   goto js
-  $(self === other ? 'true' : 'false')
+  self === other ? $('true') : typeof self === 'object' && self !== null && typeof other === 'object' && other !== null && $($.written(self) + '.listing') === $('true') ? $($.written(self) + '.alike(' + $.written(other) + ')') : $('false')
 != {other} =>
   goto js
-  $(self !== other ? 'true' : 'false')
+  self === other ? $('false') : typeof self === 'object' && self !== null && typeof other === 'object' && other !== null && $($.written(self) + '.listing') === $('true') && $($.written(self) + '.alike(' + $.written(other) + ')') === $('true') ? $('false') : $('true')
 < {other} =>
   goto js
   $(self < other ? 'true' : 'false')
@@ -76,7 +137,7 @@ Number &+= {
   goto js
   $(self >= other ? 'true' : 'false')
 
-// Numbers (text added to: joined; anything else, composed).
+// Numbers (text added to: joined; anything else, composed; a list `* n`, its values n times).
 + {other} =>
   goto js
   typeof self === 'string' ? self + String(other) : typeof self === 'number' ? self + other : undefined
@@ -86,7 +147,7 @@ Number &+= {
   self - other
 * {other} =>
   goto js
-  self * other
+  typeof self === 'number' ? self * other : typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? $($.written(self) + '.repeated(' + $.written(other) + ')') : undefined
 / {other} =>
   goto js
   self / other
@@ -107,7 +168,6 @@ split({separator}) =>
 count =>
   goto js
   typeof self === 'string' ? [...self].length : undefined
-
 // What a number or text is made of: Number, String (a node's own `of` is read before this).
 of =>
   goto js
@@ -125,3 +185,43 @@ of =>
   . ..<({last})
 ..{ }{last} =>
   . ..({last})
+
+// (text as the bytes UTF-8 writes it in)
+bytes =>
+  goto js
+  typeof self === 'string' ? (function (made) { for (const byte of new TextEncoder().encode(self)) $($.written(made) + '.append(' + byte + ')'); return made; })($('Listing.new')) : undefined
+// (a whole number as bits: that many, the most significant first)
+binary({width}) =>
+  goto js
+  typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self.toString(2).padStart(width, '0').slice(-width) : undefined
+// (bits the other way around; the whole number they write, the most significant first; text in pieces of a size)
+reversed =>
+  goto js
+  typeof self === 'string' ? [...self].reverse().join('') : undefined
+unsigned =>
+  goto js
+  typeof self === 'string' && /^[01]*$/.test(self) ? (self.length ? parseInt(self, 2) : 0) : undefined
+pieces({size}) =>
+  goto js
+  typeof self === 'string' ? (function (made) { for (let at = 0; at < self.length; at += size) $($.written(made) + '.append("' + self.slice(at, at + size) + '")'); return made; })($('Listing.new')) : undefined
+
+// A class header as a structure of bits (`structures3.ts`): its maker given its named pieces, and the header as read; a value
+// read from bits by it (`bits as T`); a value written as bits (`x.binary`); a table of symbols and their bits, a prefix code.
+plain {{header}} =>
+  goto js
+  $($.host.plain($, $.text('header')) ? 'true' : 'false')
+instance_defined {{fields}} {{block}} =>
+  goto js
+  $.host.instance($.text('fields'), $.text('block'), $.written).forEach(statement => $(statement))
+bits_read({bits}) =>
+  goto js
+  $.host.read($, self, bits)
+binary =>
+  goto js
+  typeof self === 'object' && self !== null ? $.host.write($, self) : undefined
+Coded({codes}) =>
+  goto js
+  $.host.coding(codes, $)
+begins {other} =>
+  goto js
+  $(String(self).startsWith(String(other)) ? 'true' : 'false')

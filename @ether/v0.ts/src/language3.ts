@@ -1,4 +1,5 @@
 import { sources } from './bundled.ts';
+import { Structures } from './structures3.ts';
 
 export const NAME = 'Ether' as const
 export const ALIASES = ['ray', 'orbitmines'] as const;
@@ -794,11 +795,14 @@ export class Program {
       const { reading } = frame, names = reading ? reading.rule.holes : [];
       let compiled = this.compiled.get(next!);
       if (!compiled) this.compiled.set(next!, compiled = new Function('self', '$', ...names, `return (${next});`) as (...args: unknown[]) => unknown);
-      const $ = Object.assign((text: string) => this.read(text, frame), { text: (name: string) => this.source(reading!.caps[name]) });
-      return compiled(frame.this ?? frame.node, $, ...names.map(name => this.held_value(this.shared(reading!, name))));
+      const $ = Object.assign((text: string) => this.read(text, frame), { text: (name: string) => this.source(reading!.caps[name]), written: (value: unknown) => typeof value === 'number' ? String(value) : this.written(value), host: this.layouts });
+      // (a body hole is code: given as nothing, its text is `$.text(name)`)
+      return compiled(frame.this ?? frame.node, $, ...names.map(name => reading!.rule.bodies.has(name) ? undefined : this.held_value(this.shared(reading!, name))));
     }],
   ]);
   private compiled = new Map<string, (...args: unknown[]) => unknown>();
+  // (what the host's kinds use beyond JS: a class header read and written as bits)
+  layouts = new Structures();
   declaring = new Set<string>();
   // (the rules whose right sides are running: a definition is not read by one of them)
   private running: Program.Rule[] = [];

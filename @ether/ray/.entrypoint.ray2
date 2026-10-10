@@ -154,7 +154,7 @@ Pattern := {
     narrowing := { }
   }).narrowing)
 
-// What a value answers to `?`: anything is true, but `None` and `false`.
+// What a value answers to `?`: anything is true, but `None` and `false`. (`!x`, not x; `!= y` is not one: the next reading.)
 ? {yes} : {no} =>
   {yes}
 None := {
@@ -171,6 +171,7 @@ false := {
 }
 true := { }
 !{x} =>
+  (goto .) if "{x}" begins "="
   {x} ? false : true
 {a} || {b} =>
   {a} ? {a} : {b}
@@ -646,16 +647,28 @@ class:{ }{parent} {{block}} =>
   class: {parent} (arguments = None) => {
     {block}
   }
-// (the block read once for the class; again for each instance, only what is not a definition (`instanced`))
+// (the block read once for the class; again for each instance, only what is not a definition (`instanced`)) (a header of bits,
+// one with pieces that are not parameters, has its maker made by the host, `instance_defined`)
 nearest class:{ }{parent}{ }({fields}) => {{block}} =>
   (made class: {parent} {
     {block}
+    (goto of-bits) unless plain {
+      {fields}
+    }
     instance := ({fields}) =>
       of := instance
       (here of) instanced {
         {block}
       }
       of := instance
+    goto made-plainly
+    of-bits\
+    instance_defined {
+      {fields}
+    } {
+      {block}
+    }
+    made-plainly\
     // (what is added to the maker, `X &+= { … }`, is added to the class)
     instance &+= {
       {`&+=`} {{added}} =>
@@ -669,10 +682,52 @@ class {{block}} =>
   class: Node {
     {block}
   }
+// (a header written without `=>` before its block, the form the library writes, `class (h) { … }`; or without brackets, or
+// without a block, `class byte: Byte`: the same class) (after the one above, so they read a header it would take as code)
+class{ }{name}:{ }{type} =>
+  class: Node ({name}: {type}) => { }
+class{ }{name}:{ }{type} {{block}} =>
+  class: Node ({name}: {type}) => {
+    {block}
+  }
+class{ }({fields}) =>
+  class: Node ({fields}) => { }
+class{ }({fields}) {{block}} =>
+  class: Node ({fields}) => {
+    {block}
+  }
+class<{{given}}>{ }({fields}) =>
+  class: Node ({given}, {fields}) => { }
+class<{{given}}>{ }({fields}) {{block}} =>
+  class: Node ({given}, {fields}) => {
+    {block}
+  }
+// (written over lines: `(` and `)` each with the fields on the lines between)
+class{ }({ }{fields}{ }) =>
+  class: Node ({fields}) => { }
+class{ }({ }{fields}{ }) {{block}} =>
+  class: Node ({fields}) => {
+    {block}
+  }
+class<{{given}}>{ }({ }{fields}{ }) =>
+  class: Node ({given}, {fields}) => { }
+class<{{given}}>{ }({ }{fields}{ }) {{block}} =>
+  class: Node ({given}, {fields}) => {
+    {block}
+  }
 class{ }({fields}) => {{block}} =>
   class: Node ({fields}) => {
     {block}
   }
+// (one given values before its fields, `class<code: Huffman> (…)`, `C<code>(…)`: those are its first fields)
+class<{{given}}>{ }({fields}) => {{block}} =>
+  class: Node ({given}, {fields}) => {
+    {block}
+  }
+{{name}}{ }:={ }class<{{given}}>{ }({fields}) => {{block}} =>
+  {name} := (class: Node ({given}, {fields}) => {
+    {block}
+  })
 
 // What a value is: a Node (anything is; the outermost node); the value itself; an instance of the class (or of one after it,
 // `class:`) it was made by; one of a superposition's components; a narrowing that holds of it; a member of an enumeration.
@@ -761,11 +816,11 @@ goto declaring
 goto declaring
 static {{statement}}
 
-// `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
+// `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default); else bits read by T's header.
 from (x) =>
   None
 as {type} =>
-  (. is {type}) ? . : {type}.from(.)
+  (. is {type}) ? . : (({type}.from(.)) ?? ({type}.bits_read(.)))
 
 // What a value holds under a key: its entries (`keyed`: `key`, `value`), a Ray; none until one is given.
 keyed := None
@@ -998,6 +1053,93 @@ Iterable &+= {
         .append(other)
       }
       .
+    // (the same values in the same order: each the other's, or a list alike; anything not a list, not the same) (an operator
+    // is read where a member was read on, so a list's `==` is the host's, which asks this)
+    alike (other) =>
+      (goto different) unless (other !== None) && other.listing
+      at := .head
+      there := other.head
+      while at && there {
+        (goto different) unless (at.value === there.value) || (at.value.listing && at.value.alike(there.value))
+        at = at.next
+        there = there.next
+      }
+      (goto different) if at || there
+      return true
+      different\
+      false
+    // (each value in the order of what `key` gives it, those it gives alike in the order they were)
+    sort_by (key) =>
+      made := Listing.new
+      .for((x) => made.inserted(x, key))
+      made
+    inserted (value, key) =>
+      at := .tail
+      while at && (key(value) < key(at.value)) {
+        at = at.previous
+      }
+      link := {
+        value := value
+        next := None
+        previous := None
+      }
+      if at {
+        link.previous := at
+        link.next := at.next
+        (at.next.previous := link) if at.next
+        at.next := link
+      } else {
+        link.next := .head
+        (.head.previous := link) if .head
+        .head := link
+      }
+      (.tail := link) unless link.next
+      .
+    // (its values again, `count` times: `xs * n`)
+    repeated (count) =>
+      made := Listing.new
+      left := count
+      while left > 0 {
+        made.joined(.)
+        left = left - 1
+      }
+      made
+    // (its values from `from` up to `to` (not it), counted from 0)
+    slice (from, to) =>
+      made := Listing.new
+      at := .head
+      index := 0
+      while at && (index < to) {
+        (made.append(at.value)) if index >= from
+        at = at.next
+        index = index + 1
+      }
+      made
+    // (its values written one after another, `separator` between each two)
+    join (separator) =>
+      at := .head
+      made := at ? at.value : ""
+      at = at ? at.next : None
+      while at {
+        made = made + separator + at.value
+        at = at.next
+      }
+      made
+    // (where a value first is, counted from 0; none, None)
+    index_of (value) =>
+      at := .head
+      index := 0
+      while at {
+        return index if at.value === value
+        at = at.next
+        index = index + 1
+      }
+      None
+    // (the values of the lists in it, in order; a value that is not a list, itself)
+    flatten =>
+      made := Listing.new
+      .for((x) => made.joined(x))
+      made
   }
 }
 Listing := Iterable.interior.Listing

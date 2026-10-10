@@ -1,0 +1,7 @@
+// DP5: data Ray writes from nothing, the claims of `$/deflate/tests/deflate.ray` DF7 and DF8.
+
+mark ^keyword := global
+
+repeated := ("ray " * 64).bytes
+unless Deflate.inflated(Deflate.deflated(repeated)) == repeated { INFO@mark `DF7 written bytes do not read back` }
+unless Deflate.deflated(repeated).count < repeated.count { INFO@mark `DF8 repeated bytes are not written shorter` }

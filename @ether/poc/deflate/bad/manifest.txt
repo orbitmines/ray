@@ -1,0 +1,7 @@
+btype3.deflate 3 invalid block type
+nlen.deflate 40 invalid stored block lengths
+truncated.deflate 3 incomplete or truncated stream
+fixed286.deflate 11 invalid literal/length code
+far.deflate - invalid distance too far back
+repeat.deflate - invalid bit length repeat
+oversubscribed.deflate - invalid code lengths set

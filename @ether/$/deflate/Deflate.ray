@@ -42,7 +42,7 @@ Deflate := class: Language {
   static Literal := class byte: Byte
   static Copy := class (length: Decimal{(. >= 3) && (. <= 258)}, distance: Decimal{(. >= 1) && (. <= 32768)})
 
-  // Data elements other than Huffman codes are packed starting with their least significant bit, so they read reversed (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
+  // Data elements other than Huffman codes are fixed_stream starting with their least significant bit, so they read reversed (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
   static Data := class<literals: Huffman, distances: Huffman> (
     elements: (
       (literal: literals.Symbol{< 256})
@@ -58,11 +58,13 @@ Deflate := class: Language {
     : Copy((LengthBases[element.length_code - 257].first) + element.length_extra, (DistanceBases[element.distance_code].first) + element.distance_extra)
   static coded (value) =>
     if value is Literal {
-      return (literal: value.byte, length_code: None, length_extra: None, distance_code: None, distance_extra: None)
+      return Element(literal: value.byte)
     }
     length := Deflate.base_of(LengthBases, value.length)
     distance := Deflate.base_of(DistanceBases, value.distance)
-    (literal: None, length_code: length + 257, length_extra: value.length - (LengthBases[length].first), distance_code: distance, distance_extra: value.distance - (DistanceBases[distance].first))
+    Element(length_code: length + 257, length_extra: value.length - (LengthBases[length].first), distance_code: distance, distance_extra: value.distance - (DistanceBases[distance].first))
+  // (an element of `Data` as `coded` writes it: a literal, or a length and a distance, each a code and its extra bits)
+  static Element := class (literal, length_code, length_extra, distance_code, distance_extra)
   // (the last code whose base is not past a value)
   static base_of (bases, value) =>
     found := 0
@@ -177,7 +179,37 @@ Deflate := class: Language {
     }
     made
 
-  // (the bytes a stream inflates to; the bytes of a stream holding these)
+  // LZ77: at each position the longest earlier match of at least 3 bytes, at most 258 long and 32768 back (https://www.rfc-editor.org/rfc/rfc1951#section-4)
+  static parsed (bytes) =>
+    text := bytes.latin1
+    made := []
+    at := 0
+    while at < text.count {
+      length := 0
+      distance := 0
+      loop {
+        (break) if (length >= 258) || ((at + length + 1) > text.count)
+        found := text.last_index_of(text.substring(at, at + length + 1), at - 1)
+        (break) if (found < 0) || (found >= at) || ((at - found) > 32768)
+        length = length + 1
+        distance = at - found
+      }
+      if length >= 3 {
+        made.append(Copy(length, distance))
+        at = at + length
+      } else {
+        made.append(Literal(text.code_at(at)))
+        at = at + 1
+      }
+    }
+    made
+  static fixed (values) => Data(literals: fixed_literals, distances: fixed_distances, elements: values.map((value) => Deflate.coded(value)))
+
+  // (the bytes a stream inflates to; the bytes of a stream holding these: stored, or with the fixed codes when that is shorter)
   static inflated (bytes) => Stream.from(bytes).bytes
-  static deflated (bytes) => Stream(blocks: blocked(bytes)).written
+  static deflated (bytes) =>
+    stored_stream := Stream(blocks: blocked(bytes))
+    (return stored_stream.written) if bytes.empty
+    fixed_stream := Stream(blocks: [Block(final: true, kind: 1, data: fixed(parsed(bytes)))])
+    (fixed_stream.binary.count < stored_stream.binary.count) ? fixed_stream.written : stored_stream.written
 }

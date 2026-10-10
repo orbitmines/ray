@@ -4,7 +4,7 @@
 const { Ray } = await import('../language.ts');
 const { Code } = await import('./expression.ts');
 const fs = await import('fs'), path = await import('path');
-const site = path.resolve(import.meta.dirname, '../../../../../orbitmines.com/orbitmines.com.ray/index.ray');
+const site = path.resolve(process.env.ORBITMINES_COM ?? path.resolve(import.meta.dirname, '../../../../../orbitmines.com'), 'orbitmines.com.ray/index.ray');
 const ray = new Ray({});
 let t = performance.now();
 ray.boot().read_library();

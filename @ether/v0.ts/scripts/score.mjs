@@ -33,7 +33,7 @@ function parseArgs(argv) {
     else options.files.push(a);
   }
   if (!Number.isInteger(options.jobs) || options.jobs < 1) fail('--jobs takes a whole number of at least 1');
-  if (!Number.isFinite(options.timeout) || options.timeout <= 0) fail('--timeout takes a number of seconds above 0');
+  if (!Number.isFinite(options.timeout) || options.timeout <= 0 || options.timeout > 2147483) fail('--timeout takes a number of seconds above 0 and at most 2147483');
   return options;
 }
 
@@ -82,6 +82,7 @@ function build() {
 
 function copyWithCanaries(rel) {
   const copy = join(dirname(rel), `.score.${basename(rel)}`);
+  pending.copies.add(copy);
   copyFileSync(join(ether, rel), join(ether, copy));
   const text = readFileSync(join(ether, rel), 'utf8');
   appendFileSync(join(ether, copy), (text.endsWith('\n') ? '' : '\n') + canaryLines.join('\n') + '\n');
@@ -93,12 +94,17 @@ function run(copy, timeout) {
   return new Promise(done => {
     const started = Date.now();
     const child = spawn(process.execPath, ['v0.ts/bin/ray.js', '-v', copy], { cwd: ether, detached: true });
-    pending.children.add(child.pid);
+    if (child.pid !== undefined) pending.children.add(child.pid);
     let err = '';
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', d => { err += d; });
     child.stdout.on('data', () => {});
     const timer = setTimeout(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }, timeout * 1000);
+    child.on('error', e => {
+      clearTimeout(timer);
+      pending.children.delete(child.pid);
+      done({ code: null, timedOut: false, failedToStart: e?.message ?? String(e), seconds: (Date.now() - started) / 1000, err });
+    });
     child.on('close', (code, signal) => {
       clearTimeout(timer);
       pending.children.delete(child.pid);
@@ -137,27 +143,35 @@ function diagnosticsOf(err, copy) {
   return byLine;
 }
 
+function claimKeys(claims) {
+  const seen = new Map();
+  return claims.map(c => {
+    const nth = (seen.get(c.id) ?? 0) + 1;
+    seen.set(c.id, nth);
+    return nth === 1 ? c.id : `${c.id}#${nth}`;
+  });
+}
+
 function score(rel, outcome, canary) {
   const text = readFileSync(join(ether, rel), 'utf8');
   const claims = claimsOf(text);
   const byLine = diagnosticsOf(outcome.err, canary.copy);
   const messages = new Set(claims.map(c => c.message));
   const result = { claims: {}, header: 'ok', canary: 'ok' };
-  if (outcome.timedOut) result.canary = 'timed out';
+  if (outcome.failedToStart) result.canary = `the run could not start: ${outcome.failedToStart}`;
+  else if (outcome.timedOut) result.canary = 'timed out';
   else if (!(byLine.get(canary.fires) ?? []).includes(CANARY_FIRES)) result.canary = 'a claim that must fire did not';
   else if ((byLine.get(canary.quiet) ?? []).length > 0) result.canary = 'a claim that must hold fired';
   const headerLine = text.split('\n').findIndex(l => /^\s*mark\s/.test(l)) + 1;
   if (headerLine > 0 && (byLine.get(headerLine) ?? []).length > 0) result.header = byLine.get(headerLine).join('; ');
-  const seen = new Map();
-  for (const c of claims) {
+  const keys = claimKeys(claims);
+  claims.forEach((c, i) => {
     const here = [];
     for (let n = c.first; n <= c.last; n++) here.push(...(byLine.get(n) ?? []));
     const others = here.filter(d => !messages.has(d));
     const state = result.canary !== 'ok' ? 'errored' : others.length > 0 ? 'errored' : here.includes(c.message) ? 'failed' : 'passed';
-    const nth = (seen.get(c.id) ?? 0) + 1;
-    seen.set(c.id, nth);
-    result.claims[nth === 1 ? c.id : `${c.id}#${nth}`] = state;
-  }
+    result.claims[keys[i]] = state;
+  });
   return result;
 }
 
@@ -185,7 +199,7 @@ function compare(baseline, current, everyFile) {
   const regressions = [], improvements = [];
   if (everyFile) {
     for (const [file, before] of Object.entries(baseline)) {
-      if (file in current) continue;
+      if (file in current || existsSync(join(ether, file))) continue;
       for (const [id, state] of Object.entries(before.claims)) if (state === 'passed') regressions.push(`${file} ${id}: passed -> removed with its file`);
     }
   }
@@ -224,14 +238,16 @@ async function main() {
       let result, seconds = 0;
       try {
         const canary = copyWithCanaries(rel);
-        pending.copies.add(canary.copy);
         const outcome = await run(canary.copy, options.timeout);
         rmSync(join(ether, canary.copy), { force: true });
         pending.copies.delete(canary.copy);
         seconds = outcome.seconds;
         result = score(rel, outcome, canary);
       } catch (e) {
-        result = { claims: Object.fromEntries(claimsOf(readFileSync(join(ether, rel), 'utf8')).map(c => [c.id, 'errored'])), header: 'ok', canary: `the scorer failed: ${e?.message ?? e}` };
+        const copy = join(dirname(rel), `.score.${basename(rel)}`);
+        rmSync(join(ether, copy), { force: true });
+        pending.copies.delete(copy);
+        result = { claims: Object.fromEntries(claimKeys(claimsOf(readFileSync(join(ether, rel), 'utf8'))).map(key => [key, 'errored'])), header: 'ok', canary: `the scorer failed: ${e?.message ?? e}` };
       }
       scored[rel] = result;
       const counts = Object.values(result.claims).reduce((a, s) => (a[s]++, a), { passed: 0, failed: 0, errored: 0 });

@@ -39,5 +39,6 @@ case "${1:-}" in
     ;;
   N0) ray "$here/ints.ray" "$here/n0.ray" ;;
   N1) ray "$here/io.ray" "$here/ints.ray" "$here/read.c.ray" "$here/n1.ray" ;;
-  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0|N1" >&2; exit 2 ;;
+  N2) ray "$here/io.ray" "$here/ints.ray" "$here/read.python.ray" "$here/n2.ray" ;;
+  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0|N1|N2" >&2; exit 2 ;;
 esac

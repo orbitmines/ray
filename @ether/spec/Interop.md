@@ -239,7 +239,13 @@ literal    := "1" .. "9"
 ### N2. The Python grammar
 
 - **Goal.** Python source becomes normal-form Ray code, with Python's `int` as `Integer`.
-- **Pass.** `./run.sh N2`: `add.py` and the same variants read to the expected Ray text.
+- **What happens.** `read.python.ray`, written apart from the C reader (its own rule sets, names and structure, so that
+  N3's agreement is not shared code agreeing with itself). Tokens split on `-> ( ) , : + - *`. Two header patterns, with
+  and without `-> int`; parameters annotated (`a: int`) or bare; the body on the same line or indented on the next.
+  Expressions as in N1 (the subsets' grammars coincide; the rules are written again).
+- **Pass.** `./run.sh N2`: N2.1 to N2.9. Six variants in `n2/` (each valid Python, checked with `ast.parse`) read to the
+  text beside them; `a / 2` reads as nothing; the Ray read from `f.py` runs, and past `Int32` it is exact, as Python is
+  (`f(1, 65536, 65536) == 4294967297`).
 
 ### N3. The corpus, and the two readers agree (the centre)
 

@@ -1,0 +1,13 @@
+mark ^keyword := global
+
+unless (p_ray(text_of_file "n2/add.py")) == (text_of_file "n2/add.ray") { INFO@mark `N2.1 add.py is not read to its normal form` }
+unless (p_ray(text_of_file "n2/f.py")) == (text_of_file "n2/f.ray") { INFO@mark `N2.2 three bare parameters, no spaces, precedence` }
+unless (p_ray(text_of_file "n2/g.py")) == (text_of_file "n2/g.ray") { INFO@mark `N2.3 annotations, brackets, a literal` }
+unless (p_ray(text_of_file "n2/h.py")) == (text_of_file "n2/h.ray") { INFO@mark `N2.4 an indented body, left association` }
+unless (p_ray(text_of_file "n2/id.py")) == (text_of_file "n2/id.ray") { INFO@mark `N2.5 a body that is a name` }
+unless (p_ray(text_of_file "n2/k.py")) == (text_of_file "n2/k.ray") { INFO@mark `N2.6 redundant brackets` }
+if p_ray(text_of_file "n2/bad.py") { INFO@mark `N2.7 division, outside the subset, is read` }
+read_f := p_ray(text_of_file "n2/f.py")
+ray_code read_f
+unless (f(1, 2, 3)) == 7 { INFO@mark `N2.8 the Ray read from f.py does not run` }
+unless (f(1, 65536, 65536)) == 4294967297 { INFO@mark `N2.9 the Ray read from f.py is not exact past Int32, as Python is` }

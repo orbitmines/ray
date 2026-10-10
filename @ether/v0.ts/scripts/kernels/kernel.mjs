@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 import { Worker, isMainThread, workerData, parentPort } from 'worker_threads';
 import { createHash } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, dirname, join, relative, resolve, sep } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -12,6 +12,7 @@ export const repository = dirname(ether);
 export const library = join(ether, 'ray');
 
 export const UNABLE = 3;
+const DAY = 24 * 60 * 60 * 1000;
 
 export function located(name, rel) {
   for (const base of [join(pkg, 'src'), library, pkg]) if (existsSync(join(base, rel))) return join(base, rel);
@@ -112,7 +113,7 @@ async function bundled(name, modules) {
   const outfile = join(dir, `${prefix}${key.digest('hex').slice(0, 12)}.mjs`);
   if (existsSync(outfile)) return { outfile };
   mkdirSync(dir, { recursive: true });
-  for (const old of readdirSync(dir)) if (old.startsWith(prefix) && old.endsWith('.mjs') && old !== basename(outfile)) rmSync(join(dir, old), { force: true });
+  for (const old of readdirSync(dir)) if (old.startsWith(prefix) && old !== basename(outfile) && statSync(join(dir, old)).mtimeMs < Date.now() - DAY) rmSync(join(dir, old), { force: true });
   const building = `${outfile}.${process.pid}.tmp`;
   await build({
     stdin: { contents: entry, resolveDir: pkg, loader: 'ts' },

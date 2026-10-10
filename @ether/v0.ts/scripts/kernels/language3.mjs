@@ -9,6 +9,10 @@ function unread(statement, text) {
   return /[A-Za-z]/.test(text) && statement.includes(text) && !statement.includes(`"${text}"`) && !statement.includes(`\`${text}\``);
 }
 
+function lineTag(line) {
+  return ` @@line${line}`;
+}
+
 function statementsOf(p, text) {
   const lines = text.split('\n'), kept = [];
   lines.forEach((line, i) => { if (line.trim() && !line.trim().startsWith('//')) kept.push({ line, at: i + 1 }); });
@@ -49,23 +53,19 @@ await serve({
     quietly(readFileSync(located('language3', 'js3.kinds.ray'), 'utf8'));
     const before = [...libraryFiles(), ...projectsBefore(file).flatMap(project => project.files)];
     for (const f of before) for (const { text: statement } of statementsOf(p, readFileSync(f, 'utf8'))) quietly(statement);
-    for (const { text: statement, at, lines } of statementsOf(p, text)) {
+    const report = (line, message) => say(line, message.replace(/\s@@line\d+/g, ''));
+    const tagged = text.split('\n').map((line, i) => line.replace(/INFO@mark(\s*)`([^`]*)`/g, (_, space, message) => `INFO@mark${space}\`${message}${lineTag(i + 1)}\``)).join('\n');
+    for (const { text: statement, at, lines } of statementsOf(p, tagged)) {
       const claimLines = lines.filter(({ line }) => line.includes('INFO@mark')).map(({ at: n }) => n);
-      const sayAll = message => { for (const n of new Set([at, ...claimLines])) say(n, message); };
-      const claimed = lines.flatMap(({ line, at: n }) => [...line.matchAll(/INFO@mark\s*`([^`]*)`/g)].map(m => ({ message: m[1], at: n })));
-      const claimLine = message => {
-        const found = claimed.find(c => c.message === message && !c.reported);
-        if (!found) return at;
-        found.reported = true;
-        return found.at;
-      };
+      const sayAll = message => { for (const n of new Set([at, ...claimLines])) report(n, message); };
       const reported = p.reports.length;
       let value;
       try { value = run(statement); }
       catch (e) { sayAll(`Failed: ${e?.message ?? e}`); continue; }
       for (const r of p.reports.slice(reported)) {
-        const message = String(p.source(r.caps?.message ?? '')).trim().replace(/^`([^`]*)`$/, '$1');
-        say(claimLine(message), message);
+        const tagged = /^(.*)\s@@line(\d+)$/s.exec(String(p.source(r.caps?.message ?? '')).trim().replace(/^`([^`]*)`$/, '$1'));
+        if (tagged) report(Number(tagged[2]), tagged[1]);
+        else report(at, String(p.source(r.caps?.message ?? '')).trim());
       }
       if (typeof value === 'string') unreadNow.add(value.trim());
       for (const text of unreadNow) if (unread(statement, text)) sayAll(`Unread \`${text.split('\n')[0]}\``);

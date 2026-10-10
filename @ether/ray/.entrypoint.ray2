@@ -501,6 +501,8 @@ nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
   ({name}) gets (({value}) checked ({type}))
 ({{parameter}} = {default}) gets {value} =>
   ({parameter}) gets ({value} ?? {default})
+("{written}") gets {value} =>
+  false
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses, `(it) => it.value` (one argument; `f(.x, y)`
 // reads `.x` where it is written).
@@ -662,6 +664,15 @@ nearest class:{ }{parent}{ }({fields}) => {{block}} =>
         }
         .
     }
+    text_reader := { }
+    text_read (x) =>
+      text_reader reading {
+        headed {
+          {fields}
+        }
+      }
+      read := text_reader reads_text x
+      read ? instance(read) : None
   }).instance
 class {{block}} =>
   class: Node {
@@ -762,8 +773,10 @@ static {{statement}}
 // `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
 from (x) =>
   None
+text_read (x) =>
+  None
 as {type} =>
-  (. is {type}) ? . : {type}.from(.)
+  (. is {type}) ? . : (({type}.from(.)) ?? ({type}.text_read(.)))
 
 // What a value holds under a key: its entries (`keyed`: `key`, `value`), a Ray; none until one is given.
 keyed := None

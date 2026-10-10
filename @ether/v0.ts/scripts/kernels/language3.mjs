@@ -52,7 +52,13 @@ await serve({
     for (const { text: statement, at, lines } of statementsOf(p, text)) {
       const claimLines = lines.filter(({ line }) => line.includes('INFO@mark')).map(({ at: n }) => n);
       const sayAll = message => { for (const n of new Set([at, ...claimLines])) say(n, message); };
-      const claimLine = message => lines.find(({ line }) => line.includes(`INFO@mark \`${message}\``))?.at ?? at;
+      const claimed = lines.flatMap(({ line, at: n }) => [...line.matchAll(/INFO@mark\s*`([^`]*)`/g)].map(m => ({ message: m[1], at: n })));
+      const claimLine = message => {
+        const found = claimed.find(c => c.message === message && !c.reported);
+        if (!found) return at;
+        found.reported = true;
+        return found.at;
+      };
       const reported = p.reports.length;
       let value;
       try { value = run(statement); }

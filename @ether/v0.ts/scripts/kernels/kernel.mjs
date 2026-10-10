@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 import { Worker, isMainThread, workerData, parentPort } from 'worker_threads';
 import { createHash } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, dirname, join, relative, resolve, sep } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -106,9 +106,13 @@ async function bundled(name, modules) {
     return `export * as ${alias} from ${JSON.stringify(at)};`;
   }).join('\n');
   const dir = join(tmpdir(), 'ray-kernels');
-  const outfile = join(dir, `${name}-${createHash('sha1').update(entry).update(String(sourcesChangedAt())).digest('hex').slice(0, 12)}.mjs`);
+  const key = createHash('sha1').update(entry).update(readFileSync(fileURLToPath(import.meta.url))).update(sourcesHash());
+  for (const lock of ['package-lock.json']) if (existsSync(join(pkg, lock))) key.update(readFileSync(join(pkg, lock)));
+  const prefix = `${name}-${createHash('sha1').update(pkg).digest('hex').slice(0, 8)}-`;
+  const outfile = join(dir, `${prefix}${key.digest('hex').slice(0, 12)}.mjs`);
   if (existsSync(outfile)) return { outfile };
   mkdirSync(dir, { recursive: true });
+  for (const old of readdirSync(dir)) if (old.startsWith(prefix) && old.endsWith('.mjs') && old !== basename(outfile)) rmSync(join(dir, old), { force: true });
   const building = `${outfile}.${process.pid}.tmp`;
   await build({
     stdin: { contents: entry, resolveDir: pkg, loader: 'ts' },
@@ -120,14 +124,16 @@ async function bundled(name, modules) {
   return { outfile };
 }
 
-function sourcesChangedAt(dir = join(pkg, 'src')) {
-  let at = 0;
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, e.name);
-    if (e.isDirectory()) at = Math.max(at, sourcesChangedAt(full));
-    else if (/\.(ts|mts|ray)$/.test(e.name)) at = Math.max(at, statSync(full).mtimeMs);
-  }
-  return at;
+function sourcesHash() {
+  const hash = createHash('sha1');
+  (function walk(dir) {
+    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (/\.(ts|mts|ray)$/.test(e.name)) hash.update(relative(pkg, full)).update(readFileSync(full));
+    }
+  })(join(pkg, 'src'));
+  return hash.digest('hex');
 }
 
 export async function serve({ name, modules, unable, read, runner }) {

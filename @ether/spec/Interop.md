@@ -242,8 +242,20 @@ bool add(int a, int b, int *result) { return !__builtin_add_overflow(a, b, resul
 
 ## Engine gaps
 
-Empty. A step blocked by the engine adds an entry here: the step, the probe file, its output, and what the engine would
-need.
+A step blocked by the engine adds an entry here: the step, the probe file, its output, and what the engine would need.
+
+- **IOPG1 S0: a class pattern does not read a string (2026-10-10, at 373672c9).**
+  - **Probe.** `poc/interop/s0.ray`, run with `./run.sh S0` (the shipped kernel, `Readings` from `v0.ts/src/language.ts`).
+  - **Output.** `S0.0 the engine runs` fires as it should, then `No == "a" on undefined` and `S0.1`, `S0.2`: the fields
+    of `"a + b" as Sum` are undefined.
+  - **Also failing.** language3 (`.entrypoint.ray2`, as `site3.mts` boots it): `"a + b" as Sum` answers a node with no
+    fields. The library's own `"1.0.0.12" as IPv4` has no `segments` on either engine, so this is not the probe's syntax.
+    The kernel before the 2026-10-09 rewrite (`74abcdd5`) gives the same output.
+  - **Fallback checked.** Reading with string operations instead: on language3 `"a + b".split(" + ")[1]` answers `"a"`,
+    `["a", "b"].join(", ")` and `"abc".length` do not read. Not usable either.
+  - **What works.** Defining and applying a function: `add (a, b) => a + b` then `add(2, 3)` answers `5` on language3.
+  - **Needs.** `"text" as C` for a class `C` whose header is a pattern: bind each named piece of the header to what it
+    matched.
 
 ## Decided
 

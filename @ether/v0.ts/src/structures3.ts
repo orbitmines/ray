@@ -17,6 +17,8 @@ type Then = (value: unknown, at: number) => Read | null;
 const SUBSCRIPTS = '₀₁₂₃₄₅₆₇₈₉';
 
 export class Structures {
+  // (the furthest bit the last read reached: where reading a value that is not one stopped)
+  reached = 0;
   private headers = new Map<string, Header>();
   private codings = new WeakMap<object, Coding>();
 
@@ -137,6 +139,7 @@ export class Structures {
     if (!header || typeof header !== 'object' || !('pieces' in header)) return $('None');
     const reading = new Reading(this, $, bits);
     const read = reading.structure(maker, [], 0, header as Header, (value, at) => ({ value, at }));
+    this.reached = reading.furthest;
     return read ? read.value : $('None');
   }
   write($: Ray, value: unknown): string | undefined {
@@ -242,7 +245,9 @@ class Scoped {
 }
 
 class Reading extends Scoped {
+  furthest = 0;
   constructor(structures: Structures, $: Ray, private bits: string) { super(structures, $); }
+  reach(at: number) { if (at > this.furthest) this.furthest = at; }
 
   structure(maker: unknown, given: unknown[], at: number, header: Header | undefined, then: Then): Read | null {
     header ??= this.$(this.$.written(maker) + '.structure') as Header;
@@ -268,9 +273,11 @@ class Reading extends Scoped {
       for (const narrowing of type.narrowings) if (!this.holds(scope, narrowing, value, typeof value === 'number' || typeof value === 'string' ? after - at : this.$(this.$.written(value) + '.count') as number, at)) return null;
       return then(type.boolean ? this.$(value ? 'true' : 'false') : value, after);
     } : then;
+    if (type.width !== undefined && at + type.width <= this.bits.length) this.reach(at + type.width);
     if (type.width !== undefined) return at + type.width <= this.bits.length ? narrowed(unsigned(this.bits.slice(at, at + type.width), type.reversed), at + type.width) : null;
     if (type.variable) {
       const fixed = this.fixed_length(scope, type.narrowings);
+      if (fixed !== undefined && at + fixed <= this.bits.length) this.reach(at + fixed);
       if (fixed !== undefined) return at + fixed <= this.bits.length ? then(unsigned(this.bits.slice(at, at + fixed), type.reversed), at + fixed) : null;
       for (let width = 0; width <= 64 && at + width <= this.bits.length; width++) {
         const value = unsigned(this.bits.slice(at, at + width), type.reversed);
@@ -284,7 +291,7 @@ class Reading extends Scoped {
       return this.pieces(type.group, 0, at, record, values, after => narrowed(this.record(record, names ?? Structures.names(type), values), after));
     }
     const { maker, header, coding } = this.made(scope, type.base!);
-    if (coding) { const read = coding.read(this.bits, at); return read ? narrowed(read.value, read.at) : null; }
+    if (coding) { const read = coding.read(this.bits, at); if (read) this.reach(read.at); return read ? narrowed(read.value, read.at) : null; }
     if (!header) return null;
     const given = (type.generics ?? []).map(generic => this.in(scope, generic));
     return this.structure(maker, given, at, header, narrowed);

@@ -191,6 +191,13 @@ of =>
 latin1 =>
   goto js
   typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? (function (codes) { for (let at = $($.written(self) + '.head'); at !== $('None'); at = $($.written(at) + '.next')) codes.push($($.written(at) + '.value')); return String.fromCharCode(...codes); })([]) : undefined
+// (a list of whole numbers: how many times each of 0 up to `size` is in it; its largest)
+tally({size}) =>
+  goto js
+  typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? (function (counts) { for (let at = $($.written(self) + '.head'); at !== $('None'); at = $($.written(at) + '.next')) { const value = $($.written(at) + '.value'); if (typeof value === 'number' && value >= 0 && value < size) counts[value]++; } return $('[' + counts.join(', ') + ']'); })(new Array(size).fill(0)) : undefined
+maximum =>
+  goto js
+  typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? (function (largest) { for (let at = $($.written(self) + '.head'); at !== $('None'); at = $($.written(at) + '.next')) { const value = $($.written(at) + '.value'); if (typeof value === 'number' && value > largest) largest = value; } return largest; })(0) : undefined
 code_at({index}) =>
   goto js
   typeof self === 'string' ? self.charCodeAt(index) : undefined

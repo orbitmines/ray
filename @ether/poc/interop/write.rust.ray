@@ -1,3 +1,5 @@
+rust_policy := "checked"
+rust_quote := character_of 34
 rust_i32_low := 1 - 2147483649
 rust_i32_high := 2147483647
 rust_i64_low := 1 - 9223372036854775809
@@ -6,7 +8,7 @@ rust_type_for (type) => ((type.low == rust_i32_low) && (type.high == rust_i32_hi
 rust_type_named (name) => rust_type_for(value_named name)
 rust_leaf (x, type) => (x fits_pattern "^[1-9]$") ? (x + rust_type_named(type)) : ((x fits_pattern "^[A-Za-z_][A-Za-z0-9_]*$") ? x : None)
 rust_operand (x, type) => (RustExpression reads_text x) ?? rust_leaf(x, type)
-rust_joined (left, method, right) => (left && right) ? (left + ".checked_" + method + "(" + right + ")?") : None
+rust_joined (left, method, right) => (left && right) ? ((rust_policy == "checked") ? (left + ".checked_" + method + "(" + right + ")?") : (left + ".wrapping_" + method + "(" + right + ")")) : None
 rust_checked (left, method, right, type) => rust_joined(rust_operand(left, type), method, rust_operand(right, type))
 RustExpression := {
   ( ( {left} + {right} ) as {type} ) =>
@@ -41,3 +43,9 @@ rust_whole (signature, body) => (signature && body) ? (signature + " { Some(" + 
 rust_parameters_of (ray) => ((ray text_after " (") text_before ") => ") spaced_tokens ": ,"
 rust_body_of (ray) => (ray text_after ") => ") spaced_tokens "( )"
 rust_function (ray) => rust_from(ray text_before " (", rust_parameters_of(ray), rust_body_of(ray), RustFirstType reads_text rust_parameters_of(ray))
+rust_c_abi_whole (name, parameters, type, body) => (name && parameters && type && body) ? ("#[no_mangle] pub extern " + rust_quote + "C" + rust_quote + " fn " + name + "(" + parameters + ") -> " + type + " " + `{` + " " + body + " " + `}`) : None
+rust_function_c_abi (ray) =>
+  rust_policy = "wrapping"
+  written := rust_c_abi_whole(ray text_before " (", rust_parameters(rust_parameters_of(ray)), rust_type_named(RustFirstType reads_text rust_parameters_of(ray)), rust_operand(rust_body_of(ray), RustFirstType reads_text rust_parameters_of(ray)))
+  rust_policy = "checked"
+  written

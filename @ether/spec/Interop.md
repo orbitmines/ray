@@ -305,10 +305,18 @@ literal    := "1" .. "9"
   python3, 3047 refused where an intermediate leaves the type, 0 wrong. Control: one `ray_add_` turned into `ray_sub_` in
   a Ray-written `f5.ray.c` gives 30 wrong.
 
-### N6. Drop-in (optional)
+### N6. Drop-in
 
-- **Pass.** Ray writes a C-ABI Rust function with wrapping arithmetic (gcc `-fwrapv`), which links into the unchanged
-  `oracle.c` in place of `add.c` with identical output.
+- **Goal.** What Ray writes can replace the original C without changing the program around it.
+- **What happens.** `rust_function_c_abi` writes the C-ABI Rust of a Ray function with wrapping arithmetic (the writer's
+  overflow policy, `rust_policy`, is `checked` or `wrapping`): `#[no_mangle] pub extern "C" fn f(a: i32, …) -> i32 {
+  a.wrapping_add(…) }`, built as a Rust static library.
+  1. S1's unchanged `oracle.c` is linked to Ray's Rust `add` (from `add.c`, through Ray) instead of to `add.c`.
+  2. Over the corpus, the same C `main` is linked to Ray's Rust (only prototypes in `drop.c`) and compared with the
+     original C built by `gcc -fwrapv`, on every input, overflowing ones included: with `-fwrapv` both sides define
+     overflow as wrapping, so they must agree everywhere.
+- **Pass.** `./run.sh N6`: (1) prints `expected/oracle.txt`; (2) seeds 1, 2 and 3, 40 functions and 50 inputs each: 6000
+  of 6000 agree. Control: one `wrapping_add` turned into `wrapping_sub` in a Ray-written `f5.abi.rs` gives 50 differ.
 
 ### Limits after N6
 

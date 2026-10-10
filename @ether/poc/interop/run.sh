@@ -60,5 +60,19 @@ case "${1:-}" in
     ray "$here/io.ray" "$here/ints.ray" "$here/read.python.ray" "$here/write.c.ray" "$out/corpus/writes_c.ray" > /dev/null || true
     python3 "$here/check.py" --corpus "$out/corpus" --inputs "${INPUTS:-30}" --seed "${SEED:-1}" --track b
     ;;
-  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0|N1|N2|N3|N4|N5" >&2; exit 2 ;;
+  N6)
+    "$0" S1 > /dev/null
+    rm -f "$out/add.abi.rs"
+    ray "$here/io.ray" "$here/ints.ray" "$here/read.c.ray" "$here/write.rust.ray" "$here/n6.ray" > /dev/null || true
+    rustc --edition 2021 --crate-type staticlib --crate-name ray_add -O "$out/add.abi.rs" -o "$out/libadd.a"
+    gcc "$here/oracle.c" "$out/libadd.a" -lpthread -ldl -lm -o "$out/oracle-rust"
+    "$out/oracle-rust" < "$here/inputs.txt" > "$out/oracle-rust.txt"
+    diff "$here/expected/oracle.txt" "$out/oracle-rust.txt"
+    echo "N6 the unchanged oracle.c linked to Ray's Rust add (no add.c) prints expected/oracle.txt"
+    rm -rf "$out/corpus"
+    python3 "$here/gen.py" --count "${COUNT:-40}" --seed "${SEED:-1}" --out "$out/corpus"
+    ray "$here/io.ray" "$here/ints.ray" "$here/read.c.ray" "$here/write.rust.ray" "$out/corpus/writes_abi.ray" > /dev/null || true
+    python3 "$here/check.py" --corpus "$out/corpus" --inputs "${INPUTS:-30}" --seed "${SEED:-1}" --track drop
+    ;;
+  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0|N1|N2|N3|N4|N5|N6" >&2; exit 2 ;;
 esac

@@ -86,6 +86,7 @@ def main():
     claims = ["mark ^keyword := global", ""]
     writes = []
     writes_c = ["to_c_prelude written_to_file \"out/corpus/checked.h\""]
+    writes_abi = []
     corpus = []
     for index in range(1, arguments.count + 1):
         name = "f" + str(index)
@@ -110,6 +111,8 @@ def main():
         writes.append("rust_" + name + " written_to_file \"out/corpus/" + name + ".rs\"")
         writes_c.append("c_" + name + " := to_c_function(p_ray_with((text_of_file \"" + py_file + "\"), \"" + RAY_TYPE[c_type] + "\"))")
         writes_c.append("c_" + name + " written_to_file \"out/corpus/" + name + ".ray.c\"")
+        writes_abi.append("abi_" + name + " := rust_function_c_abi(c_ray(text_of_file \"" + c_file + "\"))")
+        writes_abi.append("abi_" + name + " written_to_file \"out/corpus/" + name + ".abi.rs\"")
         corpus.append({"name": name, "type": c_type, "parameters": parameters, "tree": body, "python_tree": python_body})
         claims.append("exact_" + name + " := p_ray_with((text_of_file \"" + py_file + "\"), \"Integer\")")
         claims.append("ray_code exact_" + name)
@@ -121,6 +124,7 @@ def main():
     (out / "claims.ray").write_text("\n".join(claims) + "\n")
     (out / "writes.ray").write_text("\n".join(writes) + "\n")
     (out / "writes_c.ray").write_text("\n".join(writes_c) + "\n")
+    (out / "writes_abi.ray").write_text("\n".join(writes_abi) + "\n")
     (out / "corpus.json").write_text(json.dumps(corpus))
 
 

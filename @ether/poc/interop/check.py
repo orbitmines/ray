@@ -145,6 +145,33 @@ def track_b(corpus, folder, arguments):
     raise SystemExit(1 if wrong else 0)
 
 
+def track_drop(corpus, folder, arguments):
+    missing = [f["name"] for f in corpus if not (folder / (f["name"] + ".abi.rs")).exists()]
+    if missing:
+        print("N6 Ray wrote no C-ABI Rust for:", " ".join(missing))
+        raise SystemExit(1)
+    (folder / "all.abi.rs").write_text("".join((folder / (f["name"] + ".abi.rs")).read_text() for f in corpus))
+    subprocess.run(["rustc", "--edition", "2021", "--crate-type", "staticlib", "--crate-name", "ray_all", "-O", "-A", "warnings", str(folder / "all.abi.rs"), "-o", str(folder / "libray.a")], check=True)
+    program = c_program(corpus, folder)
+    prototypes = "".join(f["type"] + " " + f["name"] + "(" + ", ".join(f["type"] + " " + p for p in f["parameters"]) + ");\n" for f in corpus)
+    sources = "".join((folder / (f["name"] + ".c")).read_text() for f in corpus)
+    (folder / "drop.c").write_text(program.replace(sources, prototypes))
+    (folder / "all.c").write_text(program)
+    subprocess.run(["gcc", "-O2", "-w", str(folder / "drop.c"), str(folder / "libray.a"), "-lpthread", "-ldl", "-lm", "-o", str(folder / "drop-c")], check=True)
+    subprocess.run(["gcc", "-O0", "-w", "-fwrapv", str(folder / "all.c"), "-o", str(folder / "wrapv-c")], check=True)
+    rng = random.Random(arguments.seed + 4000)
+    lines = []
+    for function in corpus:
+        for values in inputs_for(rng, function, arguments.inputs):
+            lines.append(function["name"] + " " + " ".join(str(v) for v in values))
+    dropped, reference = run(folder / "drop-c", lines), run(folder / "wrapv-c", lines)
+    differ = [(line, d, r) for line, d, r in zip(lines, dropped, reference) if d != r]
+    for case in differ[:20]:
+        print("DIFFER", *case)
+    print("N6", len(corpus), "functions,", len(lines), "inputs: the C main linked to Ray's Rust and gcc -fwrapv's C agree on", len(lines) - len(differ), ",", len(differ), "differ")
+    raise SystemExit(1 if differ or len(dropped) != len(lines) else 0)
+
+
 def run(binary, lines):
     return subprocess.run([str(binary)], input="\n".join(lines) + "\n", capture_output=True, text=True, check=True).stdout.split("\n")[:-1]
 
@@ -154,12 +181,14 @@ def main():
     parser.add_argument("--corpus", required=True)
     parser.add_argument("--inputs", type=int, default=30)
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--track", choices=["a", "b"], default="a")
+    parser.add_argument("--track", choices=["a", "b", "drop"], default="a")
     arguments = parser.parse_args()
     folder = pathlib.Path(arguments.corpus)
     corpus = json.loads((folder / "corpus.json").read_text())
     if arguments.track == "b":
         track_b(corpus, folder, arguments)
+    if arguments.track == "drop":
+        track_drop(corpus, folder, arguments)
     missing = [f["name"] for f in corpus if not (folder / (f["name"] + ".rs")).exists()]
     if missing:
         print("N4 Ray wrote no Rust for:", " ".join(missing))

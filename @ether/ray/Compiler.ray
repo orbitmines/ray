@@ -50,6 +50,9 @@ Node &+= {
 
 Program &+= {
   O | optimizations := Compiler.none
-  () => Compiler.reduced(code(), O)
+  // (its code run with its level's rules in scope (in its program, above what is where it is written), what it gives read by them)
+  () =>
+    code including O
+    code() -- (given => (given is Program) ? given{O: O}() : (O reducing given))
   compounds + (other: Program) => Program(code: (code, other.code))
 }

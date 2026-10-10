@@ -32,7 +32,14 @@ function parseArgs(argv) {
     else if (a === '--help' || a === '-h') { console.log(usage); process.exit(0); }
     else options.files.push(a);
   }
+  if (!Number.isInteger(options.jobs) || options.jobs < 1) fail('--jobs takes a whole number of at least 1');
+  if (!Number.isFinite(options.timeout) || options.timeout <= 0) fail('--timeout takes a number of seconds above 0');
   return options;
+}
+
+function fail(message) {
+  console.error(`score.mjs: ${message}`);
+  process.exit(2);
 }
 
 function testFiles() {
@@ -50,12 +57,26 @@ function testFiles() {
   return found.sort();
 }
 
+const pending = { bundled: undefined, copied: [], copies: new Set(), children: new Set() };
+
+function restoreBuild() {
+  if (pending.bundled !== undefined) writeFileSync(join(pkg, 'src/bundled.ts'), pending.bundled);
+  for (const f of pending.copied) rmSync(join(pkg, f), { force: true });
+  pending.bundled = undefined;
+  pending.copied = [];
+}
+
+function cleanup() {
+  for (const pid of pending.children) { try { process.kill(-pid, 'SIGKILL'); } catch {} }
+  for (const c of pending.copies) rmSync(join(ether, c), { force: true });
+  restoreBuild();
+}
+
 function build() {
-  const kept = readFileSync(join(pkg, 'src/bundled.ts'), 'utf8');
-  const copied = ['README.md', 'LICENSE'].filter(f => !existsSync(join(pkg, f)));
+  pending.bundled = readFileSync(join(pkg, 'src/bundled.ts'), 'utf8');
+  pending.copied = ['README.md', 'LICENSE'].filter(f => !existsSync(join(pkg, f)));
   const result = spawnSync(process.execPath, ['scripts/bundle.mjs'], { cwd: pkg, stdio: 'inherit' });
-  writeFileSync(join(pkg, 'src/bundled.ts'), kept);
-  for (const f of copied) rmSync(join(pkg, f), { force: true });
+  restoreBuild();
   if (result.status !== 0) throw new Error('the bundle did not build');
 }
 
@@ -72,12 +93,15 @@ function run(copy, timeout) {
   return new Promise(done => {
     const started = Date.now();
     const child = spawn(process.execPath, ['v0.ts/bin/ray.js', '-v', copy], { cwd: ether, detached: true });
+    pending.children.add(child.pid);
     let err = '';
+    child.stderr.setEncoding('utf8');
     child.stderr.on('data', d => { err += d; });
     child.stdout.on('data', () => {});
     const timer = setTimeout(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }, timeout * 1000);
     child.on('close', (code, signal) => {
       clearTimeout(timer);
+      pending.children.delete(child.pid);
       done({ code, timedOut: signal === 'SIGKILL', seconds: (Date.now() - started) / 1000, err });
     });
   });
@@ -124,13 +148,15 @@ function score(rel, outcome, canary) {
   else if ((byLine.get(canary.quiet) ?? []).length > 0) result.canary = 'a claim that must hold fired';
   const headerLine = text.split('\n').findIndex(l => /^\s*mark\s/.test(l)) + 1;
   if (headerLine > 0 && (byLine.get(headerLine) ?? []).length > 0) result.header = byLine.get(headerLine).join('; ');
+  const seen = new Map();
   for (const c of claims) {
     const here = [];
     for (let n = c.first; n <= c.last; n++) here.push(...(byLine.get(n) ?? []));
     const others = here.filter(d => !messages.has(d));
     const state = result.canary !== 'ok' ? 'errored' : others.length > 0 ? 'errored' : here.includes(c.message) ? 'failed' : 'passed';
-    const key = c.id in result.claims ? `${c.id}@${c.last}` : c.id;
-    result.claims[key] = state;
+    const nth = (seen.get(c.id) ?? 0) + 1;
+    seen.set(c.id, nth);
+    result.claims[nth === 1 ? c.id : `${c.id}#${nth}`] = state;
   }
   return result;
 }
@@ -155,8 +181,14 @@ async function pool(items, jobs, work) {
   return results;
 }
 
-function compare(baseline, current) {
+function compare(baseline, current, everyFile) {
   const regressions = [], improvements = [];
+  if (everyFile) {
+    for (const [file, before] of Object.entries(baseline)) {
+      if (file in current) continue;
+      for (const [id, state] of Object.entries(before.claims)) if (state === 'passed') regressions.push(`${file} ${id}: passed -> removed with its file`);
+    }
+  }
   for (const [file, now] of Object.entries(current)) {
     const before = baseline[file];
     if (!before) continue;
@@ -179,23 +211,31 @@ function commit() {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const files = options.files.length > 0 ? options.files.map(f => existsSync(join(ether, f)) ? f : relative(ether, resolve(f))) : testFiles();
-  if (options.build) build();
-  const copies = [];
-  const cleanup = () => { for (const c of copies) rmSync(join(ether, c), { force: true }); };
+  const everyFile = options.files.length === 0;
+  const files = everyFile ? testFiles() : options.files.map(f => existsSync(join(ether, f)) ? f : relative(ether, resolve(f)));
+  const missing = files.filter(f => !existsSync(join(ether, f)));
+  if (missing.length > 0) fail(`no such test file: ${missing.join(', ')}`);
   process.on('SIGINT', () => { cleanup(); process.exit(130); });
   process.on('SIGTERM', () => { cleanup(); process.exit(143); });
+  if (options.build) build();
   const scored = {};
   try {
     await pool(files, options.jobs, async rel => {
-      const canary = copyWithCanaries(rel);
-      copies.push(canary.copy);
-      const outcome = await run(canary.copy, options.timeout);
-      rmSync(join(ether, canary.copy), { force: true });
-      const result = score(rel, outcome, canary);
+      let result, seconds = 0;
+      try {
+        const canary = copyWithCanaries(rel);
+        pending.copies.add(canary.copy);
+        const outcome = await run(canary.copy, options.timeout);
+        rmSync(join(ether, canary.copy), { force: true });
+        pending.copies.delete(canary.copy);
+        seconds = outcome.seconds;
+        result = score(rel, outcome, canary);
+      } catch (e) {
+        result = { claims: Object.fromEntries(claimsOf(readFileSync(join(ether, rel), 'utf8')).map(c => [c.id, 'errored'])), header: 'ok', canary: `the scorer failed: ${e?.message ?? e}` };
+      }
       scored[rel] = result;
       const counts = Object.values(result.claims).reduce((a, s) => (a[s]++, a), { passed: 0, failed: 0, errored: 0 });
-      console.log(`${rel.padEnd(44)} ${outcome.seconds.toFixed(1).padStart(6)}s  passed ${String(counts.passed).padStart(3)}  failed ${String(counts.failed).padStart(3)}  errored ${String(counts.errored).padStart(3)}${result.canary === 'ok' ? '' : `  canary: ${result.canary}`}`);
+      console.log(`${rel.padEnd(44)} ${seconds.toFixed(1).padStart(6)}s  passed ${String(counts.passed).padStart(3)}  failed ${String(counts.failed).padStart(3)}  errored ${String(counts.errored).padStart(3)}${result.canary === 'ok' ? '' : `  canary: ${result.canary}`}`);
     });
   } finally {
     cleanup();
@@ -209,7 +249,7 @@ async function main() {
     else {
       const recorded = JSON.parse(readFileSync(baselinePath, 'utf8'));
       if (recorded.node && recorded.node.split('.')[0] !== process.version.split('.')[0]) console.log(`Warning: score.json was recorded on Node ${recorded.node}, this run is ${process.version}`);
-      const { regressions, improvements } = compare(recorded.files, ordered);
+      const { regressions, improvements } = compare(recorded.files, ordered, everyFile);
       for (const r of improvements) console.log(`improved   ${r}`);
       for (const r of regressions) console.log(`REGRESSED  ${r}`);
       if (regressions.length > 0) status = 1;
@@ -217,7 +257,7 @@ async function main() {
   }
   if (options.out) writeFileSync(resolve(options.out), JSON.stringify({ commit: commit(), kernel: 'expression', node: process.version, totals: t, files: ordered }, null, 1) + '\n');
   if (options.write) {
-    const previous = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')).files : {};
+    const previous = everyFile || !existsSync(baselinePath) ? {} : JSON.parse(readFileSync(baselinePath, 'utf8')).files;
     const merged = Object.fromEntries(Object.entries({ ...previous, ...ordered }).sort(([a], [b]) => a.localeCompare(b)));
     writeFileSync(baselinePath, JSON.stringify({ commit: commit(), kernel: 'expression', node: process.version, totals: totals(merged), files: merged }, null, 1) + '\n');
     console.log(`Wrote ${relative(process.cwd(), baselinePath)}`);

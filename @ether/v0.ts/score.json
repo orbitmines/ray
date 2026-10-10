@@ -1318,7 +1318,7 @@
     "SL4": "errored",
     "SL5": "errored",
     "SL6": "errored",
-    "SL7@296": "errored",
+    "SL7#2": "errored",
     "SL8": "errored",
     "OR1": "errored",
     "OR2": "passed",
@@ -1976,7 +1976,7 @@
     "UU33": "errored",
     "UU34": "errored",
     "UU35": "errored",
-    "UU30@36": "errored"
+    "UU30#2": "errored"
    },
    "header": "Unread `^keyword := global`.; Unresolved `mark`.",
    "canary": "ok"

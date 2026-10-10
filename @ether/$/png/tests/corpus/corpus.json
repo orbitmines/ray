@@ -1,0 +1,214 @@
+{
+ "about": "A pinned selection of PngSuite (http://www.schaik.com/pngsuite/), the test suite of PNG images by Willem van Schaik. The name of each image says what it holds (http://www.schaik.com/pngsuite/#naming); the x images must not read. Verify with node @ether/v0.ts/scripts/corpus.mjs; --fetch downloads a missing file from its source.",
+ "files": [
+  {
+   "file": "PngSuite.LICENSE",
+   "sha256": "71e1f5bf865131b5d9996e76a78372146283e5089e50f900ae927a6458b62101",
+   "size": 167,
+   "source": "http://www.schaik.com/pngsuite/PngSuite.LICENSE",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn0g01.png",
+   "sha256": "c8b1364d7771dd2f5a1b2d7d633abcf3f48dafee608558ecd2e5fc98f61894cd",
+   "size": 164,
+   "source": "http://www.schaik.com/pngsuite/basn0g01.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn0g02.png",
+   "sha256": "ca172e92d179c77b3d321ad501e452a59bdaafafde8ebd74fd0669c4eae58efc",
+   "size": 104,
+   "source": "http://www.schaik.com/pngsuite/basn0g02.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn0g04.png",
+   "sha256": "fb2d42c4c8f5c51590e675994a9b0c718fbf71c80e28142f231cfa7c5b0e26e8",
+   "size": 145,
+   "source": "http://www.schaik.com/pngsuite/basn0g04.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn0g08.png",
+   "sha256": "268d061075d1dd2eeec62b31303d09f6998549e1bfb447a5f09c80a2b0978ac3",
+   "size": 138,
+   "source": "http://www.schaik.com/pngsuite/basn0g08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn2c08.png",
+   "sha256": "c90e86090a625661b19960cafdde6e347d6e32d73837aaae533f66dd3f099506",
+   "size": 145,
+   "source": "http://www.schaik.com/pngsuite/basn2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn3p01.png",
+   "sha256": "c2d7cd682df5f74506b33a5d70c344aaee248fda79fdfef8e873426fd6f2b75b",
+   "size": 112,
+   "source": "http://www.schaik.com/pngsuite/basn3p01.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn3p02.png",
+   "sha256": "0466bb7ed9984cf03b70704564bcffab1df8ec0e8167473ba0f75e4fedce5a8f",
+   "size": 146,
+   "source": "http://www.schaik.com/pngsuite/basn3p02.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn3p04.png",
+   "sha256": "e1fc7be978d3149b98533d0076245ae64353b7967290f4204c1282ecb4ec1aba",
+   "size": 216,
+   "source": "http://www.schaik.com/pngsuite/basn3p04.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn3p08.png",
+   "sha256": "d58256cd2eb16b5740d4c1403d25ce43d8dd03e270627ab709d2fb141e3d904c",
+   "size": 1286,
+   "source": "http://www.schaik.com/pngsuite/basn3p08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn4a08.png",
+   "sha256": "7be24b618bfd437b921ae0caf9341d112338c6290cc62466deb19d2c7a512968",
+   "size": 126,
+   "source": "http://www.schaik.com/pngsuite/basn4a08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basn6a08.png",
+   "sha256": "559c594166eb156f461c9beff0f053196730dc998fdb0d2b801c89e6680860a5",
+   "size": 184,
+   "source": "http://www.schaik.com/pngsuite/basn6a08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basi0g01.png",
+   "sha256": "9bf1c4610280efecc291361e2b7b026d602d03a7137f476ff84af626bb7b3a62",
+   "size": 217,
+   "source": "http://www.schaik.com/pngsuite/basi0g01.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basi2c08.png",
+   "sha256": "b2690d4475cdc39faf5a7d2de20de4e14eb96c6360fa791ec2003b4085ecacde",
+   "size": 315,
+   "source": "http://www.schaik.com/pngsuite/basi2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "basi3p02.png",
+   "sha256": "85f304eaaf6831b2bcc2c08892b947fef52f06337aaf23312d6326e367d73f77",
+   "size": 193,
+   "source": "http://www.schaik.com/pngsuite/basi3p02.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "f00n2c08.png",
+   "sha256": "0fe92b2aa2da04c885d1dbd85c834716f6cdd946364d97dcd597bb79d9e14427",
+   "size": 2475,
+   "source": "http://www.schaik.com/pngsuite/f00n2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "f01n2c08.png",
+   "sha256": "ef072ec6815ebf9b33e0553d2e4e4e7ed6911860a2512c67bcd10a9f0f09b9de",
+   "size": 1180,
+   "source": "http://www.schaik.com/pngsuite/f01n2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "f02n2c08.png",
+   "sha256": "ca4b937b3c587d5c007f193a2eec14dc96b0d23ff7d6aa9004e3badd1af9fe8f",
+   "size": 1729,
+   "source": "http://www.schaik.com/pngsuite/f02n2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "f03n2c08.png",
+   "sha256": "2d101e3ef4f78a69437034671e93fe11faac0cfc4d44210dcca1b944caa886f7",
+   "size": 1291,
+   "source": "http://www.schaik.com/pngsuite/f03n2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "f04n2c08.png",
+   "sha256": "c365c24153cb69fd3c162f00b296ae23a71a1595645d1aeb0ad23af680d7b4be",
+   "size": 985,
+   "source": "http://www.schaik.com/pngsuite/f04n2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "s01n3p01.png",
+   "sha256": "6a4f6da9fe36d195219ad2beeac1a0423e2ee6de03dfb064a3b6fa31623eb230",
+   "size": 113,
+   "source": "http://www.schaik.com/pngsuite/s01n3p01.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "s02n3p01.png",
+   "sha256": "f4b324f2b1d013ee77f632e42129c7cd3eca55da846e775e744a1f224ad1efcd",
+   "size": 115,
+   "source": "http://www.schaik.com/pngsuite/s02n3p01.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "s09n3p02.png",
+   "sha256": "6be8f58b638e7f7114750f5796f66f650db8fb7242a36183850f02117f4eaa65",
+   "size": 143,
+   "source": "http://www.schaik.com/pngsuite/s09n3p02.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "tbbn3p08.png",
+   "sha256": "8eb43a6020fda8ed7c8c9b88b974ef794ee8452db29212ae7e5c11003bfd76a3",
+   "size": 1499,
+   "source": "http://www.schaik.com/pngsuite/tbbn3p08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "z00n2c08.png",
+   "sha256": "e4767d3259e1b331c9ece9fb07fc30f385879ac12b3cd0e1cb923f3bfac81dcf",
+   "size": 3172,
+   "source": "http://www.schaik.com/pngsuite/z00n2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "z09n2c08.png",
+   "sha256": "98d90a7e61aa1a9ac9d99af44dd25c70cd5a7b4a11a85da60f82923e18a78f9f",
+   "size": 224,
+   "source": "http://www.schaik.com/pngsuite/z09n2c08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)"
+  },
+  {
+   "file": "xs1n0g01.png",
+   "sha256": "776701227c7094dd10b78f508430b8ea4f03471d072096382cbcca628dea1d2b",
+   "size": 164,
+   "source": "http://www.schaik.com/pngsuite/xs1n0g01.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)",
+   "valid": false,
+   "note": "invalid: signature byte 1 MSBit reset to zero"
+  },
+  {
+   "file": "xcsn0g01.png",
+   "sha256": "71e4b2826f61556eda39f3a93c8769b14d3ac90f135177b9373061199dbef39a",
+   "size": 164,
+   "source": "http://www.schaik.com/pngsuite/xcsn0g01.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)",
+   "valid": false,
+   "note": "invalid: incorrect IDAT checksum"
+  },
+  {
+   "file": "xhdn0g08.png",
+   "sha256": "318864720c8fc0dbe4884035f2183cc3bd3d92ec60d447879982942600e9fe2e",
+   "size": 138,
+   "source": "http://www.schaik.com/pngsuite/xhdn0g08.png",
+   "licence": "PngSuite (c) Willem van Schaik, 1996, 2011: \"Permission to use, copy, modify and distribute these images for any purpose and without fee is hereby granted.\" (PngSuite.LICENSE)",
+   "valid": false,
+   "note": "invalid: incorrect IHDR checksum"
+  }
+ ]
+}

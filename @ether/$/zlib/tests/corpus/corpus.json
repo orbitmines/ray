@@ -1,0 +1,68 @@
+{
+ "about": "Pinned zlib streams. Each file was written by the command in \"made\", run with sh from the repository root, with the tools named. Verify with node @ether/v0.ts/scripts/corpus.mjs.",
+ "files": [
+  {
+   "file": "text-level0.zlib",
+   "sha256": "30aa2623a63bc31ff7bd47bd95d2bc64942f62beace4adae7f0c79381d36309c",
+   "size": 1496,
+   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(0, zlib.DEFLATED, 15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "tools": "Python 3.14.7 with zlib 1.3.2",
+   "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
+   "note": "stored blocks"
+  },
+  {
+   "file": "text-level1.zlib",
+   "sha256": "2984bc0fa51890e9338501c6f112ee681f17638f2c6eaf07baf8f3ad1e1ea735",
+   "size": 722,
+   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(1, zlib.DEFLATED, 15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "tools": "Python 3.14.7 with zlib 1.3.2",
+   "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
+   "note": "fastest level"
+  },
+  {
+   "file": "text-level9.zlib",
+   "sha256": "4ecfa13f35d135378805737d23fb3e582e3526bf6272669dc98d15b2090649f6",
+   "size": 704,
+   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, 15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "tools": "Python 3.14.7 with zlib 1.3.2",
+   "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
+   "note": "dynamic codes"
+  },
+  {
+   "file": "text-window9.zlib",
+   "sha256": "7a747301d4aa82166cc1cc4c899ab573c84f8a43333b9e89dc22ece5eadecf1c",
+   "size": 847,
+   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(6, zlib.DEFLATED, 9, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "tools": "Python 3.14.7 with zlib 1.3.2",
+   "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
+   "note": "a 512-byte window, CINFO 1"
+  },
+  {
+   "file": "random.zlib",
+   "sha256": "600455aa8630e12113e194dce8ad14126e3936489dd5c9139b8972f4d766eb4f",
+   "size": 523,
+   "made": "python3 -c 'import random,sys; sys.stdout.buffer.write(random.Random(1951).randbytes(512))' | python3 -c 'import sys,zlib; c = zlib.compressobj(6, zlib.DEFLATED, 15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "tools": "Python 3.14.7 with zlib 1.3.2",
+   "licence": "no rights reserved: generated from a fixed seed",
+   "note": "incompressible bytes"
+  },
+  {
+   "file": "empty.zlib",
+   "sha256": "aca503def43dc086a5aaa5c3d6f86bcbbc2aa6a80007ddea4a81bce2b376fceb",
+   "size": 8,
+   "made": "printf '' | python3 -c 'import sys,zlib; c = zlib.compressobj(6, zlib.DEFLATED, 15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "tools": "Python 3.14.7 with zlib 1.3.2",
+   "licence": "no rights reserved: generated from a fixed seed",
+   "note": "no data"
+  },
+  {
+   "file": "git-blob.zlib",
+   "sha256": "79ee2ede8faa48b905f2f3aa14bad69f4145fd2d7a1cb85b7426502c6afc177d",
+   "size": 897,
+   "made": "d=$(mktemp -d) && git init -q \"$d\" && git show 981f67c3:'@ether/$/zlib/Zlib.ray' > \"$d/Zlib.ray\" && h=$(git -C \"$d\" hash-object -w Zlib.ray) && cat \"$d/.git/objects/$(echo $h | cut -c1-2)/$(echo $h | cut -c3-)\" && rm -rf \"$d\"",
+   "tools": "git 2.56.0",
+   "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
+   "note": "a loose object as git writes it"
+  }
+ ]
+}

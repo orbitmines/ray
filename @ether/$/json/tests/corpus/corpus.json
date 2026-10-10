@@ -1,0 +1,364 @@
+{
+ "about": "A pinned selection of JSONTestSuite (https://github.com/nst/JSONTestSuite at 1ef36fa01286573e846ac449e8683f8833c5b26a), test_parsing/: a y_ file must be accepted, an n_ file rejected (RFC 8259). Verify with node @ether/v0.ts/scripts/corpus.mjs; --fetch downloads a missing file from its source.",
+ "files": [
+  {
+   "file": "JSONTestSuite.LICENSE",
+   "sha256": "8bd0e0578be788c617ea01d18b2a8146e3746ae50bddadc65a5f9d3aad08ad49",
+   "size": 1071,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/LICENSE",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)"
+  },
+  {
+   "file": "y_array_empty.json",
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "size": 2,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_array_empty.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_array_heterogeneous.json",
+   "sha256": "14c644de0d447c3a875fcb1a257cc09a5db3ef047377733066ffc1bee4a17803",
+   "size": 18,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_array_heterogeneous.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_array_with_several_null.json",
+   "sha256": "7aebf7c131c4ed7fdb458678a7c61bd6b7d0a13683c753be68822d8ad962a9b9",
+   "size": 20,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_array_with_several_null.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_array_with_leading_space.json",
+   "sha256": "8654748fb6342dee236173461a2e0527953b974d408af58079e352e26806e8f2",
+   "size": 4,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_array_with_leading_space.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_number_negative_zero.json",
+   "sha256": "406944522156bbc83abcf53df7e601ca959db44ca6cf2cbc1459f410dd9e79b6",
+   "size": 4,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_number_negative_zero.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_number_real_capital_e_neg_exp.json",
+   "sha256": "7028e961ff024ebc25747ce356fee6a0eb24f0c108d8eb02af0c0d233f05aeb5",
+   "size": 6,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_number_real_capital_e_neg_exp.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_number_real_fraction_exponent.json",
+   "sha256": "440ffa21e6f0d58c090d99f2459a150ad0907bd6aa090f7c8811dc84a18ffefa",
+   "size": 12,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_number_real_fraction_exponent.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_number_simple_real.json",
+   "sha256": "da71a3f6f94e299177d77eb6435ba108f05a6e6e2669a13294c9dc7eb29e3020",
+   "size": 12,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_number_simple_real.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_object.json",
+   "sha256": "2d2df3a9238ce3d7ee68794dafbca7439308cc9abc685806ab8d80e3f7e6c5a2",
+   "size": 26,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_object.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_object_duplicated_key.json",
+   "sha256": "94766ff02436ccd9bceddab5ed15bd3df3d5d6cee3ca0a34c9ad1fd1a9bed523",
+   "size": 17,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_object_duplicated_key.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_object_empty_key.json",
+   "sha256": "6d741b146801696dd35e34575e778730f06b2ec4bb5ccee13166f36c0761a55a",
+   "size": 6,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_object_empty_key.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_object_escaped_null_in_key.json",
+   "sha256": "1c3c00c78ceca5a6cce2f0aefe316b5352117011f6f9a471a18eb4f3c1930739",
+   "size": 20,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_object_escaped_null_in_key.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_object_extreme_numbers.json",
+   "sha256": "79711ae7b3f95981a7aece4db3435a10a68493d4ea66fd623464d3f681809405",
+   "size": 35,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_object_extreme_numbers.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_string_allowed_escapes.json",
+   "sha256": "8eb4cce67d4f8e6d61a3e719f6910d3b770cf7493a95f85c33c503b57506263e",
+   "size": 20,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_string_allowed_escapes.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_string_accepted_surrogate_pair.json",
+   "sha256": "112c1de300c75efe3328e044b785388e1adaa1a4d11d05b04c4f8c20758ddba2",
+   "size": 16,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_string_accepted_surrogate_pair.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_string_uEscape.json",
+   "sha256": "a69c93369dd5e8e3f07db70b9110f59998fab55c1d8eac6a37ecebed3d1f8516",
+   "size": 28,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_string_uEscape.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_string_unicodeEscapedBackslash.json",
+   "sha256": "f791a3c18024a7dec0d9dc92d7cf9ac8f2100409e1c5f196d510fa543195c787",
+   "size": 10,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_string_unicodeEscapedBackslash.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_string_comments.json",
+   "sha256": "82b15308414d192008b8f6f1463a5438dba9b64ba529e0171dce571a4d7a9450",
+   "size": 17,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_string_comments.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_structure_lonely_false.json",
+   "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+   "size": 5,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_structure_lonely_false.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_structure_lonely_int.json",
+   "sha256": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
+   "size": 2,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_structure_lonely_int.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_structure_lonely_negative_real.json",
+   "sha256": "ffe616e28103a848cc8a18531f5ba096e153b50c6d597297ad5cb69e39496f6a",
+   "size": 4,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_structure_lonely_negative_real.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_structure_lonely_null.json",
+   "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "size": 4,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_structure_lonely_null.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_structure_lonely_string.json",
+   "sha256": "cf48780abab649b585d02731f300e2859eea427b0b61de647b87d3c3c8b91ead",
+   "size": 5,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_structure_lonely_string.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "y_structure_whitespace_array.json",
+   "sha256": "7e58d2487a2aaa36b6c1f57dbe1b513f1637fce9b58bb771797daa980dcdb3eb",
+   "size": 4,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/y_structure_whitespace_array.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": true
+  },
+  {
+   "file": "n_array_extra_comma.json",
+   "sha256": "20f9fd883ff8af1cf1a64b7bb00f233d64a590cfd08efda89fc96a170bcbe17c",
+   "size": 5,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_array_extra_comma.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_array_double_comma.json",
+   "sha256": "1b4a2022b0702d87a15a49f031e9795ab6824cb3945c106bcfa5ad55c2e945cc",
+   "size": 6,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_array_double_comma.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_array_unclosed.json",
+   "sha256": "73d88c9f94b28ad9f5e9e7f656976215d66e62ed0e84242205da3468f335b081",
+   "size": 3,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_array_unclosed.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_incomplete_true.json",
+   "sha256": "5f5470d03cb2af3cce0cf3cc063ba8ae676258cb9d4ba0dcfc82a978ab5f40ba",
+   "size": 5,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_incomplete_true.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_number_-01.json",
+   "sha256": "e3216a79fdad284c5d70f8218c81b85562c05b3427d7e7932b151b68a9311519",
+   "size": 5,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_number_-01.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_number_2.e3.json",
+   "sha256": "f1c8e1ff48fe7daafbad0cc9f3e3ca21960e06292f7553e1d25f845abc8f26d9",
+   "size": 6,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_number_2.e3.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_number_hex_1_digit.json",
+   "sha256": "37d7fe7b45e87c632936ce095616eacc75fa292fffa1581dbc0682bfb9e102a2",
+   "size": 5,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_number_hex_1_digit.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_number_NaN.json",
+   "sha256": "638577393ecb248f472c18a1a95104181a3188551615d763873393eaf4eff186",
+   "size": 5,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_number_NaN.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_number_infinity.json",
+   "sha256": "10058b8cd98a02ff73d5cd3092bb44f05b0d11148d0a81fde35c2a90673f1254",
+   "size": 10,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_number_infinity.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_number_with_leading_zero.json",
+   "sha256": "4a1c13ce39b2c6e7abf27cf143bda082ee63576912b69142ce49d15a41214f82",
+   "size": 5,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_number_with_leading_zero.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_object_trailing_comma.json",
+   "sha256": "60e04bc71fcc4c57abeef95a9604a96aa60f833881a2f028d27bd4f03e176603",
+   "size": 9,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_object_trailing_comma.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_object_single_quote.json",
+   "sha256": "67425dd8fb9386942496d20c8bdc9f3b113517a6185bf38da4c8b87de8f49708",
+   "size": 7,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_object_single_quote.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_object_unquoted_key.json",
+   "sha256": "95a0dfeb03ca3a926bfc03945419d9c193e572c913956d116a608a057c2114d6",
+   "size": 8,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_object_unquoted_key.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_object_trailing_comment.json",
+   "sha256": "e06904040a47c238c2690b5e61167fad1c371d220190722d09494aef3371a7b7",
+   "size": 13,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_object_trailing_comment.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_string_escape_x.json",
+   "sha256": "e51a0dfa4018434feaf3918d5e94d3a6139a4a80af3b0880d5387c54740d9606",
+   "size": 8,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_string_escape_x.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_string_invalid_unicode_escape.json",
+   "sha256": "2b6de004085a3dae0ea9b31230c1d9ce7bc92722914eee188d45eeda803c398a",
+   "size": 10,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_string_invalid_unicode_escape.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_string_single_quote.json",
+   "sha256": "0389d0d5920ee2996811974bdcbfe05c9ca0ed79af909704b8485bc86f6eaf25",
+   "size": 16,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_string_single_quote.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_structure_no_data.json",
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "size": 0,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_structure_no_data.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_structure_double_array.json",
+   "sha256": "821bf06b4dcb406ea508a4a992eadc22f29850cd208ba24aea7c29148de8ccf1",
+   "size": 4,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_structure_double_array.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  },
+  {
+   "file": "n_structure_trailing_#.json",
+   "sha256": "ce6bcb6a186a600809549525a2aebae9873e6daf4b5eb08c2b88aaa3c9afe449",
+   "size": 12,
+   "source": "https://raw.githubusercontent.com/nst/JSONTestSuite/1ef36fa01286573e846ac449e8683f8833c5b26a/test_parsing/n_structure_trailing_%23.json",
+   "licence": "MIT, (c) 2016 Nicolas Seriot (JSONTestSuite.LICENSE)",
+   "valid": false
+  }
+ ]
+}

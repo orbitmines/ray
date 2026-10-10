@@ -1,0 +1,30 @@
+x�2�// ZLIB Compressed Data Format Specification version 3.3 (https://www.rfc-editor.org/rfc/rfc1950)
+Zlib := class: Language (
+  // CMF: CINFO, the base-2 logarithm of the window size minus eight, then CM, 8 for deflate (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
+  window: Binary₄{<= 7} = 7,
+  method: Binary₄{== 8} = 8,
+  // FLG: FLEVEL, FDICT, and FCHECK making CMF * 256 + FLG a multiple of 31 (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
+  compression: Binary₂ = 2,
+  preset: Binary₁ as boolean = false,
+  check: Binary₅ = (31 - ((window * 16 + method) * 256 + compression * 64 + (preset ? 32 : 0)) % 31) % 31,
+  (dictionary: Binary₃₂) if preset,
+  deflated: Deflate.Stream,
+  // ADLER32 of the uncompressed data, most significant byte first (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
+  adler: Binary₃₂ = adler32(inflated)
+) {
+  static extensions = ".zlib"
+
+  inflated: Byte[] => deflated.bytes
+  dynamically assert ((window * 16 + method) * 256 + compression * 64 + (preset ? 32 : 0) + check) % 31 == 0 && adler == adler32(inflated)
+
+  // ADLER-32 (https://www.rfc-editor.org/rfc/rfc1950#section-8.2)
+  static adler32 (bytes: Byte[]) => bytes.reduce(held = (a: 1, b: 0) => ((held.a + .) % 65521) -- (a => (a: a, b: (held.b + a) % 65521))) -- (.b * 65536 + .a)
+
+  static level := {
+    {zlib: Zlib} => zlib.inflated
+  }
+  static written := {
+    {writing: Language.Writing} => Zlib(deflated: Deflate.write(writing.value as Byte[]))
+  }
+}
+g��3

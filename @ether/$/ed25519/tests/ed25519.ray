@@ -21,3 +21,24 @@ ed_pair := Ed25519.pair(ed_secret)
 unless ed_pair.algorithm === Ed25519 && ed_pair.public == ed_public { INFO@mark `EDS8 a key pair forgot its algorithm or its public half` }
 unless Ed25519.read(ed_pair.signed("abc".bytes)) == "abc".bytes { INFO@mark `EDS9 what a key signed does not read back` }
 unless Ed25519.read(ed_pair.signed("abc".bytes) ~~ .value = "abd".bytes) is Diagnostic { INFO@mark `EDS10 a signed value that was changed reads back` }
+
+// TEST 2, one byte 72 (RFC 8032 §7.1)
+ed_secret_2 := "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb" as Hexadecimal₆₄ as Byte₃₂
+ed_message_2 := [0x72]
+unless Ed25519.public(ed_secret_2) as Hexadecimal₆₄ == "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c" { INFO@mark `EDS11 the public key of RFC 8032's test 2 is not 3d4017c3…` }
+unless Ed25519.sign(ed_secret_2, ed_message_2) as Hexadecimal₁₂₈ == "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00" { INFO@mark `EDS12 the message of RFC 8032's test 2 does not sign as 92a009a9…` }
+unless Ed25519.verify("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c" as Hexadecimal₆₄ as Byte₃₂, ed_message_2, "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00" as Hexadecimal₁₂₈ as Byte₆₄) && !Ed25519.verify("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c" as Hexadecimal₆₄ as Byte₃₂, [ed_message_2, [0]].flatten, "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00" as Hexadecimal₁₂₈ as Byte₆₄) { INFO@mark `EDS13 the signature of RFC 8032's test 2 does not verify, or verifies a longer message` }
+
+// TEST 3, two bytes af82 (RFC 8032 §7.1)
+ed_secret_3 := "c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7" as Hexadecimal₆₄ as Byte₃₂
+ed_message_3 := "af82" as Hexadecimal₄ as Byte₂
+unless Ed25519.public(ed_secret_3) as Hexadecimal₆₄ == "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025" { INFO@mark `EDS14 the public key of RFC 8032's test 3 is not fc51cd8e…` }
+unless Ed25519.sign(ed_secret_3, ed_message_3) as Hexadecimal₁₂₈ == "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a" { INFO@mark `EDS15 the message of RFC 8032's test 3 does not sign as 6291d657…` }
+unless Ed25519.verify("fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025" as Hexadecimal₆₄ as Byte₃₂, ed_message_3, "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a" as Hexadecimal₁₂₈ as Byte₆₄) && !Ed25519.verify("fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025" as Hexadecimal₆₄ as Byte₃₂, [ed_message_3, [0]].flatten, "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a" as Hexadecimal₁₂₈ as Byte₆₄) { INFO@mark `EDS16 the signature of RFC 8032's test 3 does not verify, or verifies a longer message` }
+
+// TEST SHA(abc): the message is the SHA-512 digest of "abc" (RFC 8032 §7.1)
+ed_secret_abc := "833fe62409237b9d62ec77587520911e9a759cec1d19755b7da901b96dca3d42" as Hexadecimal₆₄ as Byte₃₂
+ed_message_abc := "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f" as Hexadecimal₁₂₈ as Byte₆₄
+unless Ed25519.public(ed_secret_abc) as Hexadecimal₆₄ == "ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf" { INFO@mark `EDS17 the public key of RFC 8032's test SHA(abc) is not ec172b93…` }
+unless Ed25519.sign(ed_secret_abc, ed_message_abc) as Hexadecimal₁₂₈ == "dc2a4459e7369633a52b1bf277839a00201009a3efbf3ecb69bea2186c26b58909351fc9ac90b3ecfdfbc7c66431e0303dca179c138ac17ad9bef1177331a704" { INFO@mark `EDS18 the message of RFC 8032's test SHA(abc) does not sign as dc2a4459…` }
+unless Ed25519.verify("ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf" as Hexadecimal₆₄ as Byte₃₂, ed_message_abc, "dc2a4459e7369633a52b1bf277839a00201009a3efbf3ecb69bea2186c26b58909351fc9ac90b3ecfdfbc7c66431e0303dca179c138ac17ad9bef1177331a704" as Hexadecimal₁₂₈ as Byte₆₄) && !Ed25519.verify("ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf" as Hexadecimal₆₄ as Byte₃₂, [ed_message_abc, [0]].flatten, "dc2a4459e7369633a52b1bf277839a00201009a3efbf3ecb69bea2186c26b58909351fc9ac90b3ecfdfbc7c66431e0303dca179c138ac17ad9bef1177331a704" as Hexadecimal₁₂₈ as Byte₆₄) { INFO@mark `EDS19 the signature of RFC 8032's test SHA(abc) does not verify, or verifies a longer message` }

@@ -2,7 +2,7 @@
 
 mark ^keyword := global
 
-// "hello" as another zlib writes it: CMF 0x78, FLG 0x9c, then its Adler-32 062c0215 (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
+// "hello" as zlib 1.3.2 writes it at its default level (node:zlib deflateSync, Python zlib.compress), a reference encoder's output and no value of RFC 1950: CMF 0x78, FLG 0x9c, then its Adler-32 062c0215 (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
 hello_z := [0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15]
 unless Zlib.read(hello_z) as String == "hello" { INFO@mark `ZL1 a zlib stream does not inflate to its data` }
 unless Zlib.adler32("hello".bytes) == 0x062c0215 { INFO@mark `ZL2 the Adler-32 of hello is not 062c0215` }

@@ -1,7 +1,22 @@
-// Bytes written as Base64.
+// Bytes written as Base64, and RFC 4648's test vectors (https://www.rfc-editor.org/rfc/rfc4648#section-10).
 
 mark ^keyword := global
 
 unless "Man".bytes as Base64 as String == "TWFu" { INFO@mark `UI71 Man is not TWFu in Base64` }
 unless "Ma".bytes as Base64 as String == "TWE=" { INFO@mark `UI72 Ma is not padded to TWE=` }
 unless Base64.read("TWFu") == "Man".bytes && $.base64 === Base64 { INFO@mark `BASE1 Base64 text does not read back as its bytes, or $.base64 is not Base64` }
+
+// The test vectors of RFC 4648 §10, written and read back
+unless ([] as Base64) is Base64 && [] as Base64 as String == "" { INFO@mark `BASE2 no bytes are not the empty text in Base64 as RFC 4648 §10 gives it` }
+unless "f".bytes as Base64 as String == "Zg==" { INFO@mark `BASE3 "f" is not "Zg==" in Base64 as RFC 4648 §10 gives it` }
+unless "fo".bytes as Base64 as String == "Zm8=" { INFO@mark `BASE4 "fo" is not "Zm8=" in Base64 as RFC 4648 §10 gives it` }
+unless "foo".bytes as Base64 as String == "Zm9v" { INFO@mark `BASE5 "foo" is not "Zm9v" in Base64 as RFC 4648 §10 gives it` }
+unless "foob".bytes as Base64 as String == "Zm9vYg==" { INFO@mark `BASE6 "foob" is not "Zm9vYg==" in Base64 as RFC 4648 §10 gives it` }
+unless "fooba".bytes as Base64 as String == "Zm9vYmE=" { INFO@mark `BASE7 "fooba" is not "Zm9vYmE=" in Base64 as RFC 4648 §10 gives it` }
+unless "foobar".bytes as Base64 as String == "Zm9vYmFy" { INFO@mark `BASE8 "foobar" is not "Zm9vYmFy" in Base64 as RFC 4648 §10 gives it` }
+unless Base64.read("Zg==") == "f".bytes { INFO@mark `BASE9 "Zg==" does not read back as "f" (RFC 4648 §10)` }
+unless Base64.read("Zm8=") == "fo".bytes { INFO@mark `BASE10 "Zm8=" does not read back as "fo" (RFC 4648 §10)` }
+unless Base64.read("Zm9v") == "foo".bytes { INFO@mark `BASE11 "Zm9v" does not read back as "foo" (RFC 4648 §10)` }
+unless Base64.read("Zm9vYg==") == "foob".bytes { INFO@mark `BASE12 "Zm9vYg==" does not read back as "foob" (RFC 4648 §10)` }
+unless Base64.read("Zm9vYmE=") == "fooba".bytes { INFO@mark `BASE13 "Zm9vYmE=" does not read back as "fooba" (RFC 4648 §10)` }
+unless Base64.read("Zm9vYmFy") == "foobar".bytes { INFO@mark `BASE14 "Zm9vYmFy" does not read back as "foobar" (RFC 4648 §10)` }

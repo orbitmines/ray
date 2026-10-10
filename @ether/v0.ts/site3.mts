@@ -2,9 +2,10 @@ if (process.env.STACK) Error.stackTraceLimit = 100000;
 // usage: site3.mts [EXPRESSION…] — reads, on language3: .entrypoint.ray2 + js3.kinds.ray, the core library, the @ether projects the
 // site needs (dependencies first), the site's files (index.ray last); per file: ms, threw, unread; then each expression (default:
 // the site's TUI run) with what it reported and wrote.
-const { Program, Text } = await import('/home/fs/Documents/github.com/orbitmines/ray/@ether/v0.ts/src/language3.ts');
+const ether = process.env.ETHER ?? '/home/fs/Documents/github.com/orbitmines/ray/@ether';
+const { Program, Text } = await import(`${ether}/v0.ts/src/language3.ts`);
 const fs = await import('node:fs'), path = await import('node:path');
-const ether = '/home/fs/Documents/github.com/orbitmines/ray/@ether', site = '/home/fs/Documents/github.com/orbitmines/orbitmines.com/orbitmines.com.ray';
+const site = path.resolve(process.env.ORBITMINES_COM ?? path.resolve(ether, '../../orbitmines.com'), 'orbitmines.com.ray');
 const reading_order = (files: { path: string; text: string }[]): string[] => {
   const defines = (text: string) => new Set([...text.matchAll(/^([A-Za-z_][\w-]*)(?:\s*<[^>\n]*>)?\s*(?:\^[\w.]+\s*)?:=/gm)].map(m => m[1]));
   const info = files.map(f => ({ path: f.path, defines: defines(f.text), uses: new Set(f.text.match(/[A-Za-z_][\w]*/g) ?? []) }));

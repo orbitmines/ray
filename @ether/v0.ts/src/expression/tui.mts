@@ -3,7 +3,7 @@
 const { Host, Ray } = await import('./expression.ts');
 const fs = await import('fs'), path = await import('path');
 const ether = path.resolve(import.meta.dirname, '../../..');
-const site = path.resolve(ether, '../../orbitmines.com/orbitmines.com.ray');
+const site = path.resolve(process.env.ORBITMINES_COM ?? path.resolve(ether, '../../orbitmines.com'), 'orbitmines.com.ray');
 const listed = (dir: string) => fs.readdirSync(dir).filter((f: string) => f.endsWith('.ray') && !f.startsWith('.')).map((f: string) => path.join(dir, f));
 const order = fs.readFileSync(path.resolve(import.meta.dirname, 'order.txt'), 'utf8').trim().split(/\s+/).map((f: string) => path.join(ether, 'ray', f));
 const library = [...order, ...listed(path.join(ether, 'ray')).filter((f: string) => !order.includes(f))];

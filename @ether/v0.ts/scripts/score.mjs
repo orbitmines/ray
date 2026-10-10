@@ -12,20 +12,26 @@ const CANARY_FIRES = 'SCORE1 the runner sees a claim fire';
 const CANARY_QUIET = 'SCORE2 the runner sees a claim hold';
 const canaryLines = [`unless (1 == 2) { INFO@mark \`${CANARY_FIRES}\` }`, `unless (1 == 1) { INFO@mark \`${CANARY_QUIET}\` }`];
 
-const usage = `Usage: node scripts/score.mjs [--check] [--write] [--no-build] [--jobs N] [--timeout S] [files...]
+const SHIPPED = 'expression';
+const UNABLE = 3;
+
+const usage = `Usage: node scripts/score.mjs [--check] [--write] [--no-build] [--jobs N] [--timeout S] [--kernel K] [files...]
   Runs every tests/*.ray under @ether (or the files given, relative to @ether) and scores each claim
   (\`INFO@mark \\\`ID ...\\\`\`) as passed, failed or errored.
   --check   compare with v0.ts/score.json and exit 1 when a passed claim no longer passes
   --write   write the result to v0.ts/score.json
-  --out F   also write this run's result to F`;
+  --out F   also write this run's result to F
+  --kernel K  run kernel K: ${SHIPPED} (the shipped one, through bin/ray.js; the default) or one with a
+            runner in v0.ts/scripts/kernels/K.mjs; --check and --write take only the shipped one`;
 
 function parseArgs(argv) {
-  const options = { check: false, write: false, build: true, jobs: Math.max(1, Math.min(8, Math.floor(availableParallelism() / 2))), timeout: 300, files: [] };
+  const options = { check: false, write: false, build: true, jobs: Math.max(1, Math.min(8, Math.floor(availableParallelism() / 2))), timeout: 300, kernel: SHIPPED, files: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--check') options.check = true;
     else if (a === '--write') options.write = true;
     else if (a === '--out') options.out = argv[++i];
+    else if (a === '--kernel') options.kernel = argv[++i];
     else if (a === '--no-build') options.build = false;
     else if (a === '--jobs') options.jobs = Number(argv[++i]);
     else if (a === '--timeout') options.timeout = Number(argv[++i]);
@@ -90,10 +96,14 @@ function copyWithCanaries(rel) {
   return { copy, fires: lines + 1, quiet: lines + 2 };
 }
 
-function run(copy, timeout) {
+function command(kernel, copy) {
+  return kernel === SHIPPED ? ['v0.ts/bin/ray.js', '-v', copy] : [join('v0.ts/scripts/kernels', `${kernel}.mjs`), copy];
+}
+
+function run(kernel, copy, timeout) {
   return new Promise(done => {
     const started = Date.now();
-    const child = spawn(process.execPath, ['v0.ts/bin/ray.js', '-v', copy], { cwd: ether, detached: true });
+    const child = spawn(process.execPath, command(kernel, copy), { cwd: ether, detached: true });
     if (child.pid !== undefined) pending.children.add(child.pid);
     let err = '';
     child.stderr.setEncoding('utf8');
@@ -108,7 +118,7 @@ function run(copy, timeout) {
     child.on('close', (code, signal) => {
       clearTimeout(timer);
       pending.children.delete(child.pid);
-      done({ code, timedOut: signal === 'SIGKILL', seconds: (Date.now() - started) / 1000, err });
+      done({ code, timedOut: signal === 'SIGKILL', unable: kernel !== SHIPPED && code === UNABLE, seconds: (Date.now() - started) / 1000, err });
     });
   });
 }
@@ -159,6 +169,7 @@ function score(rel, outcome, canary) {
   const messages = new Set(claims.map(c => c.message));
   const result = { claims: {}, header: 'ok', canary: 'ok' };
   if (outcome.failedToStart) result.canary = `the run could not start: ${outcome.failedToStart}`;
+  else if (outcome.unable) result.canary = 'the kernel cannot read test files';
   else if (outcome.timedOut) result.canary = 'timed out';
   else if (!(byLine.get(canary.fires) ?? []).includes(CANARY_FIRES)) result.canary = 'a claim that must fire did not';
   else if ((byLine.get(canary.quiet) ?? []).length > 0) result.canary = 'a claim that must hold fired';
@@ -225,20 +236,22 @@ function commit() {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (options.kernel !== SHIPPED && !existsSync(join(pkg, 'scripts/kernels', `${options.kernel}.mjs`))) fail(`no kernel ${options.kernel}: no v0.ts/scripts/kernels/${options.kernel}.mjs`);
+  if (options.kernel !== SHIPPED && (options.check || options.write)) fail(`--check and --write compare with v0.ts/score.json, which records the shipped kernel (${SHIPPED}); use --out for ${options.kernel}`);
   const everyFile = options.files.length === 0;
   const files = everyFile ? testFiles() : options.files.map(f => existsSync(join(ether, f)) ? f : relative(ether, resolve(f)));
   const missing = files.filter(f => !existsSync(join(ether, f)));
   if (missing.length > 0) fail(`no such test file: ${missing.join(', ')}`);
   process.on('SIGINT', () => { cleanup(); process.exit(130); });
   process.on('SIGTERM', () => { cleanup(); process.exit(143); });
-  if (options.build) build();
+  if (options.build && options.kernel === SHIPPED) build();
   const scored = {};
   try {
     await pool(files, options.jobs, async rel => {
       let result, seconds = 0;
       try {
         const canary = copyWithCanaries(rel);
-        const outcome = await run(canary.copy, options.timeout);
+        const outcome = await run(options.kernel, canary.copy, options.timeout);
         rmSync(join(ether, canary.copy), { force: true });
         pending.copies.delete(canary.copy);
         seconds = outcome.seconds;
@@ -271,7 +284,7 @@ async function main() {
       if (regressions.length > 0) status = 1;
     }
   }
-  if (options.out) writeFileSync(resolve(options.out), JSON.stringify({ commit: commit(), kernel: 'expression', node: process.version, totals: t, files: ordered }, null, 1) + '\n');
+  if (options.out) writeFileSync(resolve(options.out), JSON.stringify({ commit: commit(), kernel: options.kernel, node: process.version, totals: t, files: ordered }, null, 1) + '\n');
   if (options.write) {
     const previous = everyFile || !existsSync(baselinePath) ? {} : JSON.parse(readFileSync(baselinePath, 'utf8')).files;
     const merged = Object.fromEntries(Object.entries({ ...previous, ...ordered }).sort(([a], [b]) => a.localeCompare(b)));

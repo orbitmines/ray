@@ -33,6 +33,8 @@ nearest {head} => {body} =>
 // `{ }` after `:`, which means the same space, so the rule below does not read this as a name with a type.)
 {name}:{ }{type} =>
   {type}
+  (declarations := Listing.new) unless (here declarations) && declarations
+  declarations.append("{name}")
   {name}: {type} =>
     {type}
   declared
@@ -90,6 +92,8 @@ nearest {head} => {body} =>
 Node := .
 // (`global`: the same outermost node, named for what is defined everywhere: `global[name] := …`, `global.None`)
 global := Node
+// (the names declared in a node, in order (`x: T`): its fields; see `fields` in the library)
+declarations := None
 // (what a declaration, `x: T`, answers: nothing but that it declared)
 declared := { }
 // A field named by its pattern as written, `{*}: T` (what no other field reads): kept under that text, not a rule (a head that
@@ -99,6 +103,8 @@ Pattern := {
     written
 }
 {pattern: Pattern}:{ }{type} =>
+  (declarations := Listing.new) unless (here declarations) && declarations
+  declarations.append("{pattern}")
   .holding("{pattern}", {type})
 // (code read in a node: its definitions are the node's; a class's maker (what `X := class …` gives) has its own, see `class`)
 &+= {{block}} =>
@@ -137,21 +143,21 @@ Pattern := {
 {function}<{{given}}> =>
   ((also) => {function}({given}, also))
 
-// A narrowing, `T{constraint}` (a method: a class's own `x{ … }` is read first): a T for which the constraint, read with `.` the value, answers true. Called, `p{O: level}()`: what
-// it narrows given what the constraint writes (settings), called. (Made in a node holding these, as a class is: none is its
-// own rule, which a typed hole `{x: T}` reads.)
+// A narrowing, `T{constraint}` (a method: a class's own `x{ … }` is read first): a T for which the constraint, read with `.` the
+// value, answers true (`constraint`, `holds`); what `Narrowing` has (the library adds to it). Called, `p{O: level}()`: what it
+// narrows given what the constraint writes (settings), called. (Made in a node holding these, as a class is: none is its own
+// rule, which a typed hole `{x: T}` reads.)
 {{constraint}} =>
-  ({
-    narrows := .
+  . -- (narrowed => (Narrowing.extended() &+= {
+    narrows := narrowed
+    constraint := (it) => it with { {constraint} }
     holds (it) =>
-      it with {
-        {constraint}
-      }
+      constraint(it)
     () =>
       holds(narrows)
       narrows()
     narrowing := { }
-  }).narrowing
+  }).narrowing)
 
 // What a value answers to `?`: anything is true, but `None` and `false`.
 ? {yes} : {no} =>
@@ -322,6 +328,8 @@ recur =>
   {on}.{name} := {value}
 {name}:{ }{type} = {value} =>
   ({value}) checked {type}
+  (declarations := Listing.new) unless (here declarations) && declarations
+  declarations.append("{name}")
   {name}: {type} =>
     {value}
 nearest ({{parameter}}) => {body} =>
@@ -496,6 +504,16 @@ declared &+= {
 ({{parameter}} = {default}) gets {value} =>
   ({parameter}) gets ({value} ?? {default})
 
+// A section given to a method, `xs.map(.value)`: the function of what it misses, `(it) => it.value` (one argument; `f(.x, y)`
+// reads `.x` where it is written).
+{method}(.{section}) =>
+  (goto .) if ("{section}" contains " ") || ("{method}" contains ".") || ("{method}" contains " ")
+  .{method}((it) => it.{section})
+
+// `code**`: what is written, as a program (a body hole's name, read in its rule's right side, is its code, a closure).
+{code}** =>
+  Program(code: {code})
+
 // A list written: `[]` an empty Ray, `[a, b]` a Ray of both, `[a]` of one.
 [] =>
   Listing.new
@@ -595,7 +613,7 @@ extended () =>
 
 // (A head with `x: {…}` in it is written `x:{ }{…}`, which means the same space, so the rule for a name with a type does not
 // read it as one.)
-// A class: a node made of its parent (`class: P`, else Node), its block read in it; it sees its parent's rules, so an instance
+// A class: a node made of its parent (`class: P`, else Node), its block read in it (`.` it); it sees its parent's rules, so an instance
 // of it does too. (Made in a node holding `superclass` and `extended`: they are read through it, not its own rules, which are what a
 // typed hole `{x: T}` reads.) With fields, written as a closure is, `class (x, y) => { … }`: the class's `instance`, that closure (a call
 // of it, the instance: in the class, its fields given the arguments; `of` its class), is what `X(…)` calls.
@@ -606,7 +624,8 @@ made class:{ }{parent} {{block}} =>
       interior reading {
         { }
       }
-    interior := {
+    interior := { }
+    interior reading {
       {block}
     }
   }).interior
@@ -650,8 +669,8 @@ superclass := None
 superposes := false
 // (the program read at the top was read by none)
 caller := None
-descends (type) =>
-  (. === type) || (.superclass ? .superclass.descends(type) : false)
+descends (type, depth = 0) =>
+  (. === type) || ((depth < 64) && .superclass ? .superclass.descends(type, depth + 1) : false)
 is {type} =>
   ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((c) => . is c) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((m) => m === .) : false)
 
@@ -667,6 +686,12 @@ is {type} =>
 {level} reducing {value} =>
   {level} reading {
     {value}
+  }
+
+// A level given to a running program (`& including level`): its rules seen in the program (above what is where code is written).
+{on} including {level} =>
+  {on} &+= {
+    {level}
   }
 
 // `this`: what `.` is.
@@ -721,19 +746,19 @@ from (x) =>
 as {type} =>
   (. is {type}) ? . : {type}.from(.)
 
-// What a value holds under a key: its entries (`key`, `value`), a Ray; none until one is given.
-entries := None
-Entry := class (key, value) => { }
+// What a value holds under a key: its entries (`keyed`: `key`, `value`), a Ray; none until one is given.
+keyed := None
+Holding := class (key, value) => { }
 held (key) =>
-  found := (.entries) ? .entries.find((e) => e.key === key) : None
+  found := (.keyed) ? .keyed.find((e) => e.key === key) : None
   found ? found.value : None
 holding (key, value) =>
-  .entries := .entries ?? []
-  found := .entries.find((e) => e.key === key)
+  (.keyed := []) unless (. reading { here keyed }) && .keyed
+  found := .keyed.find((e) => e.key === key)
   if found {
     found.value = value
   } else {
-    .entries.append(Entry(key, value))
+    .keyed.append(Holding(key, value))
   }
   value
 
@@ -940,4 +965,5 @@ String := class: Array { }
 Number := class { }
 Char := class: Number { }
 Program := class { }
+Narrowing := class { }
 Diagnostic := class { }

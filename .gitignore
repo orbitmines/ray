@@ -5,6 +5,8 @@
 /**/.vscode/*
 /**/.claude
 /**/.vite
+/**/.score.*.ray
+/@ether/v0.ts/score.current.json
 /**/.ether
 /**/.*.ts
 /@ether/v0.ts/src/language.*.ts

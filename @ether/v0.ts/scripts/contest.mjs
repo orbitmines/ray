@@ -115,7 +115,7 @@ function todo(kernel, shipped, challenger) {
   return [
     `# ${kernel}: what it needs to ship`,
     '',
-    `${missing.length} claims pass on the shipped kernel (${SHIPPED}) and not on ${kernel}; ${ahead.length} pass on ${kernel} and not on the shipped kernel. A kernel ships when it passes more claims than the shipped one (Verification.md V1.4).`,
+    `${missing.length} claims pass on the shipped kernel (${SHIPPED}) and not on ${kernel}; ${ahead.length} pass on ${kernel} and not on the shipped kernel. A kernel ships when it passes more claims than the shipped one (Verification.md V3.1).`,
     '',
     `## Passing on ${SHIPPED}, not on ${kernel}`,
     '',

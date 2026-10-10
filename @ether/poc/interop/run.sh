@@ -21,5 +21,14 @@ case "${1:-}" in
     diff "$here/expected/add.rs" "$out/add.rs"
     echo "A3 out/add.rs matches expected/add.rs"
     ;;
-  *) echo "usage: run.sh S0|S1|A1|A2|A3" >&2; exit 2 ;;
+  A4)
+    "$0" A3 > /dev/null
+    rm -f "$out/main-rs"
+    rustc --edition 2021 "$here/main.rs" -o "$out/main-rs"
+    if nm "$out/main-rs" | grep -qE ' [A-Za-z] add$'; then echo "A4 main-rs holds a C-ABI add symbol" >&2; exit 1; fi
+    test "$(echo "2 3" | "$out/main-rs")" = "5"
+    test "$(echo "2147483647 1" | "$out/main-rs")" = "out of domain"
+    echo "A4 main-rs built by rustc alone (no C object, no library, no C-ABI add symbol); 2 3 gives 5, 2147483647 1 is out of domain"
+    ;;
+  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4" >&2; exit 2 ;;
 esac

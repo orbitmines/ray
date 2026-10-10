@@ -154,13 +154,16 @@ pub fn add(a: i32, b: i32) -> Option<i32> { a.checked_add(b) }
 ### A4. Use it from Rust
 
 - **Goal.** A Rust program calls the generated `add`.
-- **What happens.** `main.rs` declares `mod add;`, reads `inputs.txt` and prints one sum per line, or `out of domain` on
-  `None` (never reached on `inputs.txt`, see A2). rustc builds it with
-  `out/add.rs`. No C object, no static or shared library, and no `extern "C"` is involved.
+- **What happens.** `./run.sh A4` writes `out/add.rs` again (A3), then builds `main.rs`, which declares
+  `#[path = "out/add.rs"] mod add;`, reads `a b` pairs from stdin and prints each sum, or `out of domain` on `None`. The
+  only build command is `rustc --edition 2021 main.rs -o out/main-rs`: no `-l`, no `.o`, `.a` or `.so`, no `extern "C"`,
+  and gcc is not run.
 - **Why it matters.** This is goal (I): using code from another language without a shared library. The C compiler is not
   on the build path or the run path.
-- **Pass.** The step's only build command is `rustc main.rs -o out/main-rs` (with `main.rs` pulling in
-  `#[path = "out/add.rs"] mod add;`): no `-l`, no `.o`, `.a` or `.so` argument, and gcc is not run in this step.
+- **Pass.** The binary holds no plain `add` symbol, defined or undefined (a C-ABI `add` is never mangled; the Rust one is
+  `main::add::add`); `2 3` gives `5`; `2147483647 1` gives `out of domain`. Control: the same program linked to gcc's
+  `add` through `extern "C"` and a static library holds `T add` and is flagged. (`nm -u` alone was not enough: static
+  linking leaves no undefined symbol.)
 
 ### A5. Prove Track A
 

@@ -17,18 +17,7 @@ Node &+= {
   set (named: String, setting_value) => this[named] = setting_value
   // its fields in order, each its `name`, `type` and `value`, and by name (`x.fields["width"]`): what its class's header and block
   // declare, then (a class) what its own block declares
-  fields =>
-    made := []
-    maker := this.of
-    pieces := ((maker !== None) && maker.header) ? maker.header : []
-    pieces.for(piece => (piece is String) ? None : Node.fields_of(made, this, piece))
-    (maker !== None) ? Node.fields_of(made, this, maker) : None
-    Node.fields_of(made, this, this)
-    made
-  // (what `declarer` declares, first declared first)
-  static fields_of (made, holder, declarer) => declarer.declared ? Node.declared_fields(made, holder, declarer.declared) : None
-  static declared_fields (made, holder, declared) => (declared === None) ? None : (Node.declared_fields(made, holder, declared.before) -- (Node.field_of(made, holder, declared)))
-  static field_of (made, holder, declared) => (name: declared.name, type: declared.type, value: holder[declared.name]) -- (field => made.append(field) -- (made[declared.name] = field))
+  fields => (declarations ?? []).map(name => (name: name, value: (this.held(name) ?? this[name])))
   as (=== String) => (this.of && this.of.header && Language.patterned(this.of.header.head)) ? Language.part_written(this) : (Language.for_file(&.caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)
@@ -185,14 +174,15 @@ Node &+= {
 }
 
 Node &+= {
-  ~= (pattern) => read_within(this, pattern)
-  !~= (pattern) => !(this ~= pattern)
+  ~= {pattern} => ((this is String) && (pattern is String)) ? (this == pattern) : read_within(this, pattern)
+  !~= {pattern} => !(this ~= pattern)
   right-to-left ⊢ => Anchored(pattern: this, at_start: true)
   ⊣ => Anchored(pattern: this, at_end: true)
 }
 None &+= {
   chainable != (other) => other !== None
-  !~= (pattern) => true
+  ~= {pattern} => false
+  !~= {pattern} => true
 }
 Anchored := class (pattern: Node, at_start: boolean = false, at_end: boolean = false) => {
   admits (candidate) => candidate ~= this

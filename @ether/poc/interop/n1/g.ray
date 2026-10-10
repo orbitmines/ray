@@ -1,0 +1,1 @@
+g (x: Int64, y: Int64) => ((((x - y) as Int64) * 3) as Int64)

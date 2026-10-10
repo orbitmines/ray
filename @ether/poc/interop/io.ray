@@ -4,3 +4,12 @@ text_of_file {path} =>
 written_to_file {path} =>
   goto js
   typeof self === 'string' && typeof path === 'string' ? (process.getBuiltinModule('fs').writeFileSync(process.env.POC + '/' + path, self + String.fromCharCode(10)), self) : undefined
+spaced_tokens {symbols} =>
+  goto js
+  typeof self === 'string' && typeof symbols === 'string' ? (function (text, list) { let out = ''; for (let i = 0; i < text.length;) { const symbol = list.find(function (candidate) { return text.startsWith(candidate, i); }); if (symbol) { out += ' ' + symbol + ' '; i += symbol.length; } else { out += text.charAt(i); i += 1; } } return out.split(/\s+/).filter(Boolean).join(' '); })(self, symbols.split(' ').filter(Boolean).sort(function (x, y) { return y.length - x.length; })) : undefined
+fits_pattern {pattern} =>
+  goto js
+  $(typeof self === 'string' && typeof pattern === 'string' && new RegExp(pattern).test(self) ? 'true' : 'false')
+ray_code {text} =>
+  goto js
+  typeof text === 'string' ? $(text) : undefined

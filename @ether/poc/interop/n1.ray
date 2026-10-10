@@ -1,0 +1,13 @@
+mark ^keyword := global
+
+unless (c_ray(text_of_file "n1/add.c")) == (text_of_file "n1/add.ray") { INFO@mark `N1.1 add.c is not read to its normal form` }
+unless (c_ray(text_of_file "n1/f.c")) == (text_of_file "n1/f.ray") { INFO@mark `N1.2 three parameters, no spaces, precedence` }
+unless (c_ray(text_of_file "n1/g.c")) == (text_of_file "n1/g.ray") { INFO@mark `N1.3 long, brackets, a literal` }
+unless (c_ray(text_of_file "n1/h.c")) == (text_of_file "n1/h.ray") { INFO@mark `N1.4 several lines, left association` }
+unless (c_ray(text_of_file "n1/id.c")) == (text_of_file "n1/id.ray") { INFO@mark `N1.5 a body that is a name` }
+unless (c_ray(text_of_file "n1/k.c")) == (text_of_file "n1/k.ray") { INFO@mark `N1.6 redundant brackets` }
+if c_ray(text_of_file "n1/bad.c") { INFO@mark `N1.7 division, outside the subset, is read` }
+read_f := c_ray(text_of_file "n1/f.c")
+ray_code read_f
+unless (f(1, 2, 3)) == 7 { INFO@mark `N1.8 the Ray read from f.c does not run` }
+if f(1, 65536, 65536) { INFO@mark `N1.9 the Ray read from f.c answers past Int32` }

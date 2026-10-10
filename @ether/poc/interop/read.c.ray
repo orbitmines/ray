@@ -1,0 +1,45 @@
+c_symbols := "( ) , ; + - * " + `{` + " " + `}`
+c_reading_type := "Int32"
+c_type_of (written) => (written == "int") ? "Int32" : ((written == "long") ? "Int64" : None)
+c_name (x) => (x fits_pattern "^[A-Za-z_][A-Za-z0-9_]*$") ? x : None
+c_operand (x) => (x fits_pattern "^([A-Za-z_][A-Za-z0-9_]*|[1-9])$") ? x : None
+c_leaf (x) => (CExpression reads_text x) ?? c_operand(x)
+c_joined (l, operator, r) => (l && r) ? ("((" + l + " " + operator + " " + r + ") as " + c_reading_type + ")") : None
+c_operation (l, operator, r) => c_joined(c_leaf(l), operator, c_leaf(r))
+CAdditive := {
+  {l} + {r} =>
+    true
+  {l} - {r} =>
+    true
+}
+c_additive (x) => (CAdditive reads_text x) ?? false
+CExpression := {
+  {l} * {r} =>
+    c_operation("{l}", "*", "{r}")
+  {l} + {r} =>
+    (goto .) if c_additive("{r}")
+    c_operation("{l}", "+", "{r}")
+  {l} - {r} =>
+    (goto .) if c_additive("{r}")
+    c_operation("{l}", "-", "{r}")
+  ( {inner} ) =>
+    c_leaf("{inner}")
+}
+c_parameter (type, name) => (c_type_of(type) && c_name(name)) ? (name + ": " + c_type_of(type)) : None
+c_parameters_joined (first, rest) => (first && rest) ? (first + ", " + rest) : None
+c_parameters (x) => (CParameters reads_text x) ?? None
+CParameters := {
+  int {name} =>
+    c_parameter("int", "{name}")
+  long {name} =>
+    c_parameter("long", "{name}")
+  {first} , {rest} =>
+    c_parameters_joined(c_parameters("{first}"), c_parameters("{rest}"))
+}
+CFunctionText := class (written_type, " ", name, " ( ", parameters, " ) { return ", body, " ; }") => { }
+c_function_joined (name, parameters, body) => (name && parameters && body) ? (name + " (" + parameters + ") => " + body) : None
+c_function_typed (read, type) =>
+  c_reading_type = type
+  c_function_joined(c_name(read.name), c_parameters(read.parameters), c_leaf(read.body))
+c_function (read) => (read && c_type_of(read.written_type)) ? c_function_typed(read, c_type_of(read.written_type)) : None
+c_ray (source) => c_function((source spaced_tokens c_symbols) as CFunctionText)

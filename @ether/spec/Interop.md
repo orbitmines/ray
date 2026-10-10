@@ -219,8 +219,22 @@ literal    := "1" .. "9"
 ### N1. The C grammar
 
 - **Goal.** C source becomes normal-form Ray code.
-- **Pass.** `./run.sh N1`: `add.c` and a handful of hand-written variants (spacing, several parameters, `long`,
-  precedence, brackets, literals) read to the expected Ray text, which runs.
+- **What happens.** `read.c.ray`. The source is first split into tokens separated by single spaces (`spaced_tokens`, a
+  generic text operation in `io.ray`; the symbols it splits on, `( ) , ; + - * { }`, are given by the C reader), so
+  spacing and line breaks are free. Then:
+  - `CFunctionText`, a header pattern (`written_type, " ", name, " ( ", parameters, " ) { return ", body, " ; }"`), reads
+    the function;
+  - `CParameters` reads the parameter list (`int {name}`, `long {name}`, `{first} , {rest}`);
+  - `CExpression` reads the body: `*`, then `+` and `-`, then brackets. Rule order gives precedence; the longest left
+    side gives left association; `+` and `-` go on to the next reading (`goto .`) while their right side still holds a
+    top-level `+` or `-`, so `a - b + c` is `((a - b) + c)`. A leaf is a name or a literal 1 to 9 (`fits_pattern`);
+    anything else (`a / 2`) makes the whole function `None`.
+  - The rule sets only dispatch; the text is built by plain functions beside them (a rule set's own rules would read its
+    right sides).
+- **Pass.** `./run.sh N1`: N1.1 to N1.9. Six variants in `n1/` read to the text beside them (`add.c`; three parameters
+  with no spaces and precedence; `long`, brackets and a literal; several lines and left association; a body that is a
+  name; redundant brackets); `a / 2` reads as nothing; the Ray read from `f.c`, defined with `ray_code`, runs and answers
+  `None` past `Int32`.
 
 ### N2. The Python grammar
 

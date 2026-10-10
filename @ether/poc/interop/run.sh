@@ -14,5 +14,6 @@ case "${1:-}" in
     echo "S1 oracle: $(wc -l < "$out/oracle.txt") sums match expected/oracle.txt"
     ;;
   A1) ray "$here/io.ray" "$here/c.ray" "$here/a1.ray" ;;
-  *) echo "usage: run.sh S0|S1|A1" >&2; exit 2 ;;
+  A2) ray "$here/io.ray" "$here/c.ray" "$here/a2.ray" ;;
+  *) echo "usage: run.sh S0|S1|A1|A2" >&2; exit 2 ;;
 esac

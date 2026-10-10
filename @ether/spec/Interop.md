@@ -118,15 +118,20 @@ int add(int a, int b) { return a + b; }
 
 ### A2. The boundary type
 
-- **Goal.** Make the meaning of C's `int` explicit in the Program.
-- **What happens.** Nothing new runs; the step explains the types A1 produced. On x86-64 with gcc, `int` is 32 bits, so
-  each parameter and the result are the narrowing `Number{-2^31 <= . < 2^31}`. Overflowing it is undefined behaviour in C,
-  so the C original has no defined answer outside that range.
+- **Goal.** Make the meaning of C's `int` explicit in what A1 read.
+- **What happens.** On x86-64 with gcc, `int` is 32 bits, so `c.ray` gives the read function the type
+  `C.int := Number{(. >= (1 - 2147483649)) && (. <= 2147483647)}` (the narrowing `Number{-2^31 <= . < 2^31}`; this engine
+  reads `^` as highlighting and `-2147483648` as text, IOPG4, so the bounds are written out). `call` takes only arguments
+  of that type and answers `None` when the sum leaves it. Overflowing it is undefined behaviour in C, so the C original
+  has no defined answer there; the Ray function now has one, and it is the one every writer must keep (A3's `Option`, B3's
+  `bool`).
 - **Why it matters.** The width is part of what the function means. A translation that drops it (writing an unbounded
   integer in the target) would be a different function that happens to agree on small inputs.
 - **Consequence for Track A.** Out-of-range sums are left out of `inputs.txt`: the oracle has no defined answer there, so
   there is nothing to compare against.
-- **Pass.** `./run.sh A2` prints the three types from the Program and they are the narrowing above.
+- **Pass.** `./run.sh A2`: claims A2.1 to A2.10 hold. The type is `C.int`; 2147483647 and -2147483648 are ints, one past
+  either is not; sums up to either bound are answered; a sum past either bound, or an argument that is no int, answers
+  `None`. Before the type was added, A2.1, A2.2, A2.4, A2.7 and A2.8 failed.
 
 ### A3. Write Rust
 

@@ -66,11 +66,15 @@ Each step in `README.md` has five parts, and each step is one commit:
 
 ### S0. Engine probe
 
-- **Goal.** Show the v0 engine can read text through a class pattern and print a value.
-- **What happens.** A `.ray` file declares a class whose header is a pattern (as `IP.ray` does with
-  `({segments.join(".")})`), reads `"2 + 3"` with it, and prints the two operand names it captured.
+- **Goal.** Show the engine reads text through a class pattern.
+- **What happens.** `poc/interop/s0.ray` declares `Sum := class (left, " + ", right) => { }`, reads `"a + b" as Sum`, and
+  claims its `left` is `"a"`, its `right` is `"b"`, and that `"a - b" as Sum` is nothing. `run.mts` boots language3 as
+  `site3.mts` does (`.entrypoint.ray2`, `js3.kinds.ray`, the core library) and evaluates each claim's condition itself: a
+  claim holds only when its condition answers the `true` node (`false` or `None` for an `if` claim), so a condition the
+  engine leaves unread fails instead of passing.
 - **Why it matters.** Every reader in this POC is a class pattern. If this does not work, nothing below does.
-- **Pass.** Prints `2` and `3`. Otherwise: record under Engine gaps and stop.
+- **Pass.** `./run.sh S0` prints `ok` for S0.0 to S0.3 and exits 0. On the kernel before IOPG1 it prints `FAIL` for S0.1
+  and S0.2.
 
 ### S1. Oracle
 
@@ -244,18 +248,33 @@ bool add(int a, int b, int *result) { return !__builtin_add_overflow(a, b, resul
 
 A step blocked by the engine adds an entry here: the step, the probe file, its output, and what the engine would need.
 
-- **IOPG1 S0: a class pattern does not read a string (2026-10-10, at 373672c9).**
-  - **Probe.** `poc/interop/s0.ray`, run with `./run.sh S0` (the shipped kernel, `Readings` from `v0.ts/src/language.ts`).
-  - **Output.** `S0.0 the engine runs` fires as it should, then `No == "a" on undefined` and `S0.1`, `S0.2`: the fields
-    of `"a + b" as Sum` are undefined.
-  - **Also failing.** language3 (`.entrypoint.ray2`, as `site3.mts` boots it): `"a + b" as Sum` answers a node with no
-    fields. The library's own `"1.0.0.12" as IPv4` has no `segments` on either engine, so this is not the probe's syntax.
-    The kernel before the 2026-10-09 rewrite (`74abcdd5`) gives the same output.
-  - **Fallback checked.** Reading with string operations instead: on language3 `"a + b".split(" + ")[1]` answers `"a"`,
-    `["a", "b"].join(", ")` and `"abc".length` do not read. Not usable either.
-  - **What works.** Defining and applying a function: `add (a, b) => a + b` then `add(2, 3)` answers `5` on language3.
-  - **Needs.** `"text" as C` for a class `C` whose header is a pattern: bind each named piece of the header to what it
-    matched.
+- **IOPG1 S0: a class pattern does not read a string. Resolved 2026-10-10.**
+  - **Was.** `"a + b" as Sum` answered no instance on language3, the shipped kernel, and the kernel before the 2026-10-09
+    rewrite: `as` fell back to `T.from(x)`, which answers `None`, and no class read its header as a pattern.
+  - **Now, kernel (`language3.ts`).** A hole is quoted text (spaces included) when the literal before it ends with a quote
+    and the literal after it begins with the same quote, not only when they are the quote alone (`quoting`), so
+    `("{written}") gets …` reads `(" + ") gets …`. `goto js` gets `$.whole(text, node)`: whether the node's own rules read
+    the text whole (the check a typed hole makes, `structural`).
+  - **Now, host (`js3.kinds.ray`).** `node reads_text text`: the text read in the node when its own rules read it whole,
+    else `None` (text that is no pattern is never run as code). `headed {{header}}`: a header of literals and untyped
+    fields defines its reading rule where it is read, `{left} + {right} => ["{left}", "{right}"]` (literal `{` and `}`
+    written as `` {`{`} ``); any other header defines nothing.
+  - **Now, language (`.entrypoint.ray2`).** A literal parameter takes no argument (`("{written}") gets {value}` answers
+    `false`), so `Sum("u", "v")` gives `right == "v"`. Each class with fields has a `text_reader` node and `text_read (x)`,
+    which installs the header's rule in `text_reader` when first used and makes the instance from what it read; `as`
+    answers `T.from(x) ?? T.text_read(x)`. The rule lives in `text_reader`, not the class, so an instance's own methods are
+    not read by it (`joined => left + right` stays `"ab"`), and the instance is made outside it.
+  - **Claims.** `types.ray` HD17 to HD20, and `poc/interop/s0.ray`. On the strict runner HD17, HD18, HD20 and S0.1, S0.2
+    fail before and pass after.
+  - **Tried and dropped.** The rule in the class itself: the class's methods were read by it (`left + right` became a new
+    instance). Installing the rule when each class is defined: reading the header statement for every library class
+    changed how units read (`1B == 8b` left unread). Typed fields in the rule head: the same.
+- **IOPG2 Typed fields in a header pattern.** `class (local: Email.Local, "@", domain: Email.Domain)` and HD8
+  (`tagged_of #21` through `{written: Tagged}`) still do not read: a typed hole reads with the type's own rules, and the
+  header's rule is in `text_reader`. The POC does without them (A1 reads the body untyped, then `as Sum`). Needs a decision:
+  where a typed hole finds a class's pattern.
+- **IOPG3 Unnamed type pieces.** `UUID`'s header `(Hexadecimal₈, "-", Hexadecimal₄, …)` names no fields; `headed` takes
+  only lowercase names as fields, so such a header defines nothing yet.
 
 ## Decided
 

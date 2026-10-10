@@ -18,3 +18,7 @@ unless X25519.agreed(xa, [0] * 32) is Diagnostic { INFO@mark `XDH6 a public key 
 xpa := X25519.pair(xa)
 xpb := X25519.pair(xb)
 unless xpa.algorithm === X25519 && xpa.agreed(xpb.public) == xpb.agreed(xpa.public) { INFO@mark `XDH7 two key pairs do not agree on one secret` }
+
+// The second scalar of RFC 7748 §5.2, and its iteration once: k and u both 9, the result the next k
+unless X25519.x25519("4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d" as Hexadecimal₆₄ as Byte₃₂, "e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493" as Hexadecimal₆₄ as Byte₃₂) as Hexadecimal₆₄ == "95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957" { INFO@mark `XDH8 the second scalar of RFC 7748 §5.2 does not multiply to 95cbde94…` }
+unless X25519.x25519([9, [0] * 31].flatten, [9, [0] * 31].flatten) as Hexadecimal₆₄ == "422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079" { INFO@mark `XDH9 one iteration of RFC 7748 §5.2, 9 times 9, is not 422c8e7a…` }

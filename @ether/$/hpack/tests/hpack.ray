@@ -19,3 +19,19 @@ second := [0x82, 0x86, 0x84, 0xbe, 0x58, 0x08, "no-cache".bytes].flatten
 connection := HPACK.Connection([first as HPACK.Block, second as HPACK.Block]).fields.last
 unless connection.contains((name: ":authority", value: "www.example.com")) && connection.contains((name: "cache-control", value: "no-cache")) { INFO@mark `HP11 the second request of C.3.2 does not find its authority in the dynamic table` }
 unless HPACK.write([(name: ":method", value: "GET")]) as Byte[] == [0x82] { INFO@mark `HP12 a field in the static table is not written as its index` }
+
+// A literal without indexing, and one never indexed, leave the dynamic table empty (C.2.2, C.2.3)
+unless HPACK.read([0x04, 0x0c, "/sample/path".bytes].flatten)[":path"] == "/sample/path" { INFO@mark `HP13 a literal without indexing does not read as in C.2.2` }
+unless HPACK.read([0x10, 0x08, "password".bytes, 0x06, "secret".bytes].flatten)["password"] == "secret" { INFO@mark `HP14 a literal never indexed does not read as in C.2.3` }
+// The third request finds its authority at index 63 of the dynamic table and adds custom-key (C.3.3)
+third := [0x82, 0x87, 0x85, 0xbf, 0x40, 0x0a, "custom-key".bytes, 0x0c, "custom-value".bytes].flatten
+third_fields := HPACK.Connection([first as HPACK.Block, second as HPACK.Block, third as HPACK.Block]).fields.last
+unless third_fields.contains((name: ":authority", value: "www.example.com")) && third_fields.contains((name: "custom-key", value: "custom-value")) { INFO@mark `HP15 the third request of C.3.3 does not read its authority and custom-key` }
+// Huffman codes of the strings in the requests and responses of C.4.2, C.4.3 and C.6.1
+unless "no-cache" as HPACK.Coded as Byte[] == [0xa8, 0xeb, 0x10, 0x64, 0x9c, 0xbf] { INFO@mark `HP16 no-cache is not Huffman coded as in C.4.2` }
+unless "custom-key" as HPACK.Coded as Byte[] == [0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xa9, 0x7d, 0x7f] { INFO@mark `HP17 custom-key is not Huffman coded as in C.4.3` }
+unless "custom-value" as HPACK.Coded as Byte[] == [0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xb8, 0xe8, 0xb4, 0xbf] { INFO@mark `HP18 custom-value is not Huffman coded as in C.4.3` }
+unless "302" as HPACK.Coded as Byte[] == [0x64, 0x02] { INFO@mark `HP19 302 is not Huffman coded as in C.6.1` }
+unless "private" as HPACK.Coded as Byte[] == [0xae, 0xc3, 0x77, 0x1a, 0x4b] { INFO@mark `HP20 private is not Huffman coded as in C.6.1` }
+unless "Mon, 21 Oct 2013 20:13:21 GMT" as HPACK.Coded as Byte[] == [0xd0, 0x7a, 0xbe, 0x94, 0x10, 0x54, 0xd4, 0x44, 0xa8, 0x20, 0x05, 0x95, 0x04, 0x0b, 0x81, 0x66, 0xe0, 0x82, 0xa6, 0x2d, 0x1b, 0xff] { INFO@mark `HP21 the date of C.6.1 is not Huffman coded as there` }
+unless "https://www.example.com" as HPACK.Coded as Byte[] == [0x9d, 0x29, 0xad, 0x17, 0x18, 0x63, 0xc7, 0x8f, 0x0b, 0x97, 0xc8, 0xe9, 0xae, 0x82, 0xae, 0x43, 0xd3] { INFO@mark `HP22 the location of C.6.1 is not Huffman coded as there` }

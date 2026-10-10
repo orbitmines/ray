@@ -1,4 +1,4 @@
-// HMAC over SHA-1 and SHA-256 against RFC 2202 and RFC 4231 (https://www.rfc-editor.org/rfc/rfc2202, https://www.rfc-editor.org/rfc/rfc4231).
+// HMAC over SHA-1, SHA-256 and SHA-512 against RFC 2202 and RFC 4231 (https://www.rfc-editor.org/rfc/rfc2202, https://www.rfc-editor.org/rfc/rfc4231).
 
 mark ^keyword := global
 
@@ -8,3 +8,25 @@ unless HMAC(SHA256, key: "Jefe".bytes).write("what do ya want for nothing?".byte
 // A key longer than the block is hashed first (RFC 2104 §3)
 unless HMAC(SHA256, key: [0xaa] * 131).padded == [SHA256.write([0xaa] * 131).bytes, [0] * 32].flatten { INFO@mark `HMAC3 a key longer than the block is not hashed and padded` }
 unless SHA1.block == 64 && SHA256.block == 64 && SHA1.size == 20 && SHA256.size == 32 { INFO@mark `HMAC4 a digest does not give its block and output sizes in bytes` }
+
+// Test cases 1 to 7 of RFC 4231 (§4.2 to §4.8) over SHA-256 and SHA-512; test case 5 is truncated to 128 bits
+unless HMAC(SHA256, key: [0x0b] * 20).write("Hi There".bytes).bytes as Hexadecimal₆₄ == "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7" { INFO@mark `HMAC5 HMAC-SHA-256 of RFC 4231's test case 1 is not b0344c61…` }
+unless HMAC(SHA512, key: [0x0b] * 20).write("Hi There".bytes).bytes as Hexadecimal₁₂₈ == "87aa7cdea5ef619d4ff0b4241a1d6cb02379f4e2ce4ec2787ad0b30545e17cdedaa833b7d6b8a702038b274eaea3f4e4be9d914eeb61f1702e696c203a126854" { INFO@mark `HMAC6 HMAC-SHA-512 of RFC 4231's test case 1 is not 87aa7cde…` }
+unless HMAC(SHA512, key: "Jefe".bytes).write("what do ya want for nothing?".bytes).bytes as Hexadecimal₁₂₈ == "164b7a7bfcf819e2e395fbe73b56e0a387bd64222e831fd610270cd7ea2505549758bf75c05a994a6d034f65f8f0e6fdcaeab1a34d4a6b4b636e070a38bce737" { INFO@mark `HMAC7 HMAC-SHA-512 of RFC 4231's test case 2 is not 164b7a7b…` }
+unless HMAC(SHA256, key: [0xaa] * 20).write([0xdd] * 50).bytes as Hexadecimal₆₄ == "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe" { INFO@mark `HMAC8 HMAC-SHA-256 of RFC 4231's test case 3 is not 773ea91e…` }
+unless HMAC(SHA512, key: [0xaa] * 20).write([0xdd] * 50).bytes as Hexadecimal₁₂₈ == "fa73b0089d56a284efb0f0756c890be9b1b5dbdd8ee81a3655f83e33b2279d39bf3e848279a722c806b485a47e67c807b946a337bee8942674278859e13292fb" { INFO@mark `HMAC9 HMAC-SHA-512 of RFC 4231's test case 3 is not fa73b008…` }
+unless HMAC(SHA256, key: 0x01..<0x1a).write([0xcd] * 50).bytes as Hexadecimal₆₄ == "82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b" { INFO@mark `HMAC10 HMAC-SHA-256 of RFC 4231's test case 4 is not 82558a38…` }
+unless HMAC(SHA512, key: 0x01..<0x1a).write([0xcd] * 50).bytes as Hexadecimal₁₂₈ == "b0ba465637458c6990e5a8c5f61d4af7e576d97ff94b872de76f8050361ee3dba91ca5c11aa25eb4d679275cc5788063a5f19741120c4f2de2adebeb10a298dd" { INFO@mark `HMAC11 HMAC-SHA-512 of RFC 4231's test case 4 is not b0ba4656…` }
+unless HMAC(SHA256, key: [0x0c] * 20).write("Test With Truncation".bytes).bytes[..<16] as Hexadecimal₃₂ == "a3b6167473100ee06e0c796c2955552b" { INFO@mark `HMAC12 HMAC-SHA-256 of RFC 4231's test case 5, truncated to 128 bits, is not a3b61674…` }
+unless HMAC(SHA512, key: [0x0c] * 20).write("Test With Truncation".bytes).bytes[..<16] as Hexadecimal₃₂ == "415fad6271580a531d4179bc891d87a6" { INFO@mark `HMAC13 HMAC-SHA-512 of RFC 4231's test case 5, truncated to 128 bits, is not 415fad62…` }
+unless HMAC(SHA256, key: [0xaa] * 131).write("Test Using Larger Than Block-Size Key - Hash Key First".bytes).bytes as Hexadecimal₆₄ == "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54" { INFO@mark `HMAC14 HMAC-SHA-256 of RFC 4231's test case 6 is not 60e43159…` }
+unless HMAC(SHA512, key: [0xaa] * 131).write("Test Using Larger Than Block-Size Key - Hash Key First".bytes).bytes as Hexadecimal₁₂₈ == "80b24263c7c1a3ebb71493c1dd7be8b49b46d1f41b4aeec1121b013783f8f3526b56d037e05f2598bd0fd2215d6a1e5295e64f73f63f0aec8b915a985d786598" { INFO@mark `HMAC15 HMAC-SHA-512 of RFC 4231's test case 6 is not 80b24263…` }
+unless HMAC(SHA256, key: [0xaa] * 131).write("This is a test using a larger than block-size key and a larger than block-size data. The key needs to be hashed before being used by the HMAC algorithm.".bytes).bytes as Hexadecimal₆₄ == "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2" { INFO@mark `HMAC16 HMAC-SHA-256 of RFC 4231's test case 7 is not 9b09ffa7…` }
+unless HMAC(SHA512, key: [0xaa] * 131).write("This is a test using a larger than block-size key and a larger than block-size data. The key needs to be hashed before being used by the HMAC algorithm.".bytes).bytes as Hexadecimal₁₂₈ == "e37b6a775dc87dbaa4dfa9f96e5e3ffddebd71f8867289865df5a32d20cdc944b6022cac3c4982b10d5eeb55c3e4de15134676fb6de0446065c97440fa8c6a58" { INFO@mark `HMAC17 HMAC-SHA-512 of RFC 4231's test case 7 is not e37b6a77…` }
+
+// Test cases 1, 3, 4, 6 and 7 of RFC 2202 (§3) over SHA-1
+unless HMAC(SHA1, key: [0x0b] * 20).write("Hi There".bytes).bytes as Hexadecimal₄₀ == "b617318655057264e28bc0b6fb378c8ef146be00" { INFO@mark `HMAC18 HMAC-SHA-1 of RFC 2202's test case 1 is not b6173186…` }
+unless HMAC(SHA1, key: [0xaa] * 20).write([0xdd] * 50).bytes as Hexadecimal₄₀ == "125d7342b9ac11cd91a39af48aa17b4f63f175d3" { INFO@mark `HMAC19 HMAC-SHA-1 of RFC 2202's test case 3 is not 125d7342…` }
+unless HMAC(SHA1, key: 0x01..<0x1a).write([0xcd] * 50).bytes as Hexadecimal₄₀ == "4c9007f4026250c6bc8414f9bf50c86c2d7235da" { INFO@mark `HMAC20 HMAC-SHA-1 of RFC 2202's test case 4 is not 4c9007f4…` }
+unless HMAC(SHA1, key: [0xaa] * 80).write("Test Using Larger Than Block-Size Key - Hash Key First".bytes).bytes as Hexadecimal₄₀ == "aa4ae5e15272d00e95705637ce8a3b55ed402112" { INFO@mark `HMAC21 HMAC-SHA-1 of RFC 2202's test case 6 is not aa4ae5e1…` }
+unless HMAC(SHA1, key: [0xaa] * 80).write("Test Using Larger Than Block-Size Key and Larger Than One Block-Size Data".bytes).bytes as Hexadecimal₄₀ == "e8e99d0f45237d786d6bbaa7965c7808bbff1a91" { INFO@mark `HMAC22 HMAC-SHA-1 of RFC 2202's test case 7 is not e8e99d0f…` }

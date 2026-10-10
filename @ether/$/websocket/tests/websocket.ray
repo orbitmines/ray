@@ -1,4 +1,4 @@
-// WebSocket frames and messages are values; the wire format reads them and writes them.
+// WebSocket frames and messages are values; the wire format reads them and writes them (https://www.rfc-editor.org/rfc/rfc6455, its examples in §1.3 and §5.7).
 
 mark ^keyword := global
 
@@ -21,3 +21,11 @@ opening := WebSocket.opening(@wss://example.com/chat)
 unless opening.fields["Upgrade"] == "websocket" && opening.fields["Sec-WebSocket-Version"] == "13" { INFO@mark `WS9 the opening request does not ask to upgrade` }
 unless WebSocket.opened(opening, WebSocket.accepting(opening)) { INFO@mark `WS10 an accepted opening is not open` }
 unless WebSocket.Opcode.close.control && !WebSocket.Opcode.text.control { INFO@mark `WS11 close is not a control frame or text is` }
+
+// The other examples of RFC 6455 §5.7: a fragmented text message, a ping and its masked pong, and the 16-bit and 64-bit lengths
+unless WebSocket.Frame(fin: false, opcode: WebSocket.Opcode.text, payload: "Hel" as Byte[]) as Byte[] == [0x01, 0x03, 0x48, 0x65, 0x6c] { INFO@mark `WS12 the first fragment of RFC 6455 section 5.7 is not 01 03 48 65 6c` }
+unless WebSocket.Frame(opcode: WebSocket.Opcode.continuation, payload: "lo" as Byte[]) as Byte[] == [0x80, 0x02, 0x6c, 0x6f] { INFO@mark `WS13 the last fragment of RFC 6455 section 5.7 is not 80 02 6c 6f` }
+unless WebSocket.Frame(opcode: WebSocket.Opcode.ping, payload: "Hello" as Byte[]) as Byte[] == [0x89, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f] { INFO@mark `WS14 the unmasked ping of RFC 6455 section 5.7 is not 89 05 and Hello` }
+unless ([0x8a, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58] as WebSocket.Frame) -- (.opcode == WebSocket.Opcode.pong && .payload as String == "Hello") { INFO@mark `WS15 the masked pong of RFC 6455 section 5.7 does not read as a pong of Hello` }
+unless (WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 256) as Byte[])[..<4] == [0x82, 0x7e, 0x01, 0x00] { INFO@mark `WS16 a 256-byte binary frame does not start 82 7e 01 00 as in RFC 6455 section 5.7` }
+unless (WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 65536) as Byte[])[..<10] == [0x82, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00] { INFO@mark `WS17 a 64 KiB binary frame does not start 82 7f and a 64-bit length as in RFC 6455 section 5.7` }

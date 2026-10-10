@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '@ether/**/*.ray'
+      - '@ether/**/corpus/**'
       - '@ether/v0.ts/src/**'
       - '@ether/v0.ts/scripts/**'
       - '@ether/v0.ts/bin/**'
@@ -15,6 +16,7 @@ on:
   pull_request:
     paths:
       - '@ether/**/*.ray'
+      - '@ether/**/corpus/**'
       - '@ether/v0.ts/src/**'
       - '@ether/v0.ts/scripts/**'
       - '@ether/v0.ts/bin/**'
@@ -38,6 +40,17 @@ jobs:
         with:
           node-version: 26
       - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Pillow, the reference PNG reader
+        run: python -m pip install pillow==12.3.0
+      - name: Corpus files match their manifests
+        run: node scripts/corpus.mjs
+      - name: Generated claims match the reference implementations
+        run: node scripts/vectors.mjs --check
+        env:
+          PYTHON: python
       - name: Ratchet against score.json
         run: node scripts/score.mjs --check --jobs 2 --out score.current.json
       - uses: actions/upload-artifact@v4

@@ -17,6 +17,21 @@ const bytes_of = (list: unknown): Uint8Array | undefined => {
 const sha = (bytes: Uint8Array) => crypto.createHash('sha256').update(bytes).digest('hex');
 const only = process.env.ONLY?.split(',');
 let failed = 0;
+// DP6 (`reject`): each stream zlib rejects answers no bytes, and where reading stopped is the bit `bad/manifest.txt` gives
+// (`-`: it reads, and what it means does not hold).
+if (process.argv[2] === 'reject') {
+  for (const line of fs.readFileSync(path.join(here, 'bad', 'manifest.txt'), 'utf8').trim().split('\n')) {
+    const [name, stop, ...reason] = line.split(' ');
+    if (only && !only.some(part => name.includes(part))) continue;
+    let answered: Uint8Array | undefined, error = '';
+    try { answered = bytes_of(run('Deflate.inflated(' + program.written(listed(fs.readFileSync(path.join(here, 'bad', name)))) + ')')); } catch (e: any) { error = String(e?.message).slice(0, 80); }
+    const reached = program.layouts.reached, held = !answered && !error && (stop === '-' || Number(stop) === reached);
+    if (!held) failed++;
+    console.log(held ? 'ok  ' : 'FAIL', name.padEnd(24), 'stopped at bit', String(stop === '-' ? '-' : reached).padStart(3), '| zlib:', reason.join(' '), held ? '' : error || (answered ? `read ${answered.length} bytes` : `expected bit ${stop}`));
+  }
+  console.log(failed ? `${failed} failed` : 'DP6 every stream zlib rejects is rejected');
+  process.exit(failed ? 1 : 0);
+}
 // DP5 (`write`): each input written by `Deflate.deflated`; zlib inflates it to the input, and Ray reads it back to the input.
 if (process.argv[2] === 'write') {
   const zlib = await import('node:zlib');

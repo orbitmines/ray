@@ -102,8 +102,9 @@ No DF claim passes. DP0 starts here.
   reaches 32768 back or a stored block of 65535 bytes, go in `corpus/large/`, used only in DP8 (DQ1).
 - **Why it matters.** Streams Ray did not make are the only fair test of a reader. zlib's choices (block boundaries,
   code-length runs, `HCLEN` below 15) are ones the declaration never chose.
-- **Pass.** `./run.sh DP1` rebuilds the corpus and `diff`s it with `manifest.txt`; the coverage line shows block kinds 0, 1
-  and 2, all 29 length codes and all 30 distance codes.
+- **Pass.** `./run.sh DP1` rebuilds the corpus with python3's `zlib` and finds it equal to `manifest.txt`, and zlib inflates
+  each stream to its input. Which block kinds and codes the corpus holds is what Ray reads in DP3 (a second reader to count
+  them would break DP0's one declaration); the small tier holds stored, fixed and dynamic blocks.
 
 ### DP2 Read the RFC's own cases
 
@@ -189,43 +190,92 @@ No DF claim passes. DP0 starts here.
   the backends compilers already target. Machine code is one more binary format.
 - **Not in this proof.** Built only after DP7 passes.
 
+## Status
+
+On 2026-10-11, on language3, through `Deflate.ray`:
+
+- **DP0** 17 claims, **DP2** DF1 to DF6: pass.
+- **DP1**: 22 streams from 7 pinned inputs (zlib 1.3.2), stored, fixed and dynamic blocks.
+- **DP3**: every one of the 22 read to what zlib inflates it to (0.03 s to 91 s a stream).
+- **DP4**: every one written back byte for byte from the value read, by the same declaration.
+- **DP5**: DF7 and DF8 pass (`"ray " * 64`, 256 bytes, is written in 8); each input written so zlib, and Ray, read it back.
+  The writer chooses stored blocks or one fixed-code block; dynamic codes (`fitted`) are not ported yet.
+
+`./run.sh DP0` to `./run.sh DP5` in `@ether/poc/deflate` (each corpus stream in a process of its own). DP6, DP7 and DP8
+are next.
+
+Against the branch's base (`373672c9`), the language's own tests in `ray/tests/app` (control, types, grammar,
+precedence, boolean, rewrite, string, ray, number) pass more claims with these changes, and lose none (measured with
+`STEPS=300000`; the newer upstream main differs on its own).
+
 ## Engine work
 
-What language3 needs before `Deflate.ray` runs, found by probing it on 2026-10-10 (runner `poc/deflate/run.mts`, which
-reads the core library in dependency order and checks claims strictly):
+What was fixed in language3 to get here, each found by a probe:
 
-- **The host's numbers lose to the library's.** `Number.ray` defines `Digit := class: String` and `0 := zero`, so once the
-  library is read, `[3, 3, 2].count == 3` no longer holds: a numeral's typed hole `{digit: Digit}` reads with the
-  library's `Digit`. The runner reads `js3.kinds.ray` again after the library (`KINDS_AFTER`, as `site3.mts` can), so the
-  host's numerals and operators are the latest.
-- **Lists.** `==` on two lists compares identity, not elements; `x{…}` on a list is a narrowing, not the list of what
-  holds; `.map(. + 1)` passes `. + 1` read once, not a function. Without the library `count`, indexing and `--` work.
-- **Defining `Deflate` overflows the stack.** One member does: `Stored`, whose header begins with an unnamed piece. Every
-  other member defines.
-- **Header forms the entrypoint has no rule for.** `class lengths: Decimal[] { … }` (fields without brackets) and headers
-  with unnamed pieces, conditional groups (`(x: T) if c`) and alternatives.
+- **`if a > b { … }`.** The `elsif` chain rule took `>` as a block. A body is no longer code that begins with an operator
+  and a space, a hole does not end in a dangling operator (`1 >`), the chain rules need the word `elsif` and are defined
+  after `else`.
+- **Arguments of a method read on a number or text** (`3.binary(width)` in a call) were read at the outermost node, so a
+  call's own names were not seen; and after a chain passed through text (`a.binary.count < b.binary.count`), the node
+  before the text was taken for where the code was written. They are read where they were written.
+- **`Name<a: T>` in a header.** A hole no longer ends inside what follows a `<` written right after a word.
+- **A host rule's body hole** (`plain { … }`) was run as code before the host saw it. It is given as text only.
+- **Numerals** read through plain nodes (`Numeral`, `Numerals`), not classes, so the library's own `Digit` does not take
+  them; `0x…` is a host number, `0b…` host bits. Lists compare by value (`alike`), repeat (`xs * n`), and have `sort_by`,
+  `flatten`, `slice`, `join`, `index_of`.
+- **Headers the library writes** read as classes: `class (h) { … }` without `=>`, `class byte: Byte`, a header over
+  several lines, `class<code: Huffman> (…)`.
 
-How a header of bits is read and written on language3:
+How a header of bits is read and written:
 
-- **The host reads and writes bits; the declaration says what they are.** A class whose header has a piece that is not a
-  plain parameter (an unnamed piece, a conditional group) is a structure. Reading one walks its pieces over a sequence of
-  bits; writing one walks them over a value. Every type, narrowing, condition and default is the declaration's, read in
-  Ray with the fields read so far; the host only moves bits. Nothing in the host knows DEFLATE.
-- **A fixed width is a host type.** `Binary₅` reads 5 bits, most significant first; `<-Binary₅` the same 5 bits least
-  significant first; `Byte` is `Binary₈`. A narrowing `{length == n}` gives a `Binary` its width; any other narrowing of
-  `length` is tried at each width from 0 up.
-- **A bit sequence is text of `0` and `1`** (`0b010` is `"010"`): it keeps its length, joins with `+` and compares with
-  `==`, as the host already does for text.
-- **Declaration changes are commits of their own, each with its reason.** A helper written in a form the engine does not
-  read (a section `. + 1`, a class without brackets) is rewritten in a form it does (`x => x + 1`, `class (…) => { … }`);
-  a header is changed only where it says something the engine cannot do both ways (DP4 needs every type to write what it
-  reads).
+- **The host moves bits; the declaration says what they are** (`v0.ts/src/structures3.ts`). A class whose header has a
+  piece that is not a parameter (an unnamed piece, a condition, a type of bits) is made by the host: its maker takes the
+  named pieces, a default is a rule read when its field is first read, and the header is kept as `structure`.
+  `T.bits_read(bits)` reads one, `x.binary` writes one. Every type, narrowing, condition and default is read in Ray with
+  the fields read so far; nothing in the host knows DEFLATE.
+- **Widths.** `Binary₅` reads 5 bits, most significant first; `<-Binary₅` least significant first; `Byte` is `Binary₈`. A
+  narrowing `{length == n}` gives a `Binary` its width; any other narrowing of `length` or `at` is tried at each width.
+- **Lists** read lazily: as few elements as let the rest of the header, and the list's narrowing, read.
+- **Alternatives** read as a record holding every alternative's named pieces, each not read `None`; written, the first
+  alternative whose named pieces the record holds.
+- **A prefix code** is `Coded(table)`: read by the bits that come next, written by the symbol.
+- **Bits are text of `0` and `1`** (`0b010` is `"010"`).
+
+What `Deflate.ray` changed to run, each for a gap below: names of the enclosing class written in full
+(`Deflate.LengthBases`), `Copy`'s header in brackets, `Symbol => Coded(codes)` (the original reads but cannot write),
+helpers in loops and bracketed closures instead of sections and `reduce`, `65535` for `2 ^ 16 - 1`, `.first`/`.last` for
+`.0`/`.1`, `&&` for chained comparisons, brackets around arithmetic compared and the code lengths' narrowing written
+`(hlit + 257 + hdist + 1) == values.count`, `Stream.from(bytes)` and `written` for the `as` conversions, the stream's
+narrowing `{!.empty && .last.final}`, `inflated`/`deflated` for `read`/`write`, `coded` making an `Element` (a class) for a
+record of five fields, locals named apart from the library's (`stored_stream`), and `deflated` choosing between stored blocks and one fixed-code block in place of the
+`Optimizations` level. `parsed` finds each match with the host's text search (`last_index_of`), the matching loop in Ray.
+The dynamic writer (`fitted`, `dynamic`) is not ported yet.
 
 ## Engine gaps
 
 A step blocked by the engine adds an entry here: the step, the probe file, its output, and what the engine would need.
 
-- **DPG1 `Deflate.ray` does not run.** See Baseline and Engine work. Split by DP0's probes into the features behind it.
+- **DPG1 A class does not see the names of the class it is written in.** `Outer.Inner(1).m` with `m => k` answers `"k"`:
+  an interior's outer is its parent class, not where it was written. `Deflate.ray` writes `Deflate.` before them.
+- **DPG2 `x as T` is the library's.** With the library read, `"1001" as Pair` answers what one of the `as (=== T)`
+  methods the library gives `Node` makes of it, not the entrypoint's `as` (`T.from`, then the header): type-directed `as`
+  does not run. The reader is called as `T.bits_read(bits)`.
+- **DPG3 Operators read on a value take the rest of the statement.** `3 % 8 == 0` is `3 % (8 == 0)`; arithmetic compared
+  needs brackets.
+- **DPG4 `,` is the loosest rule**, so a header without brackets of more than one field (`class a: T, b: U`) is read as a
+  list.
+- **DPG5 A name not given reads as its own text, which is true.** `None.final` is `"final"`, so a narrowing on a member
+  of `None` holds; written `!.empty && …` instead.
+- **DPG6 `Language.read`/`write` do not run** (`Compiler.reduced`, levels, a typed hole converting a value), and `X.read` is
+  also the access keyword (`{who: Character}.read`, `Access.ray`). The proof calls `Deflate.inflated`/`deflated`.
+- **DPG7 Sections and `reduce` with `.`.** `.map(. + 1)` passes a value, not a function; in `x -- f()`, `.` is not `x`.
+- **DPG8 `^` is highlighting** (`2 ^ 16` is `2`), and `x.0` does not read.
+- **DPG9 A method of a host number is reached through the numeral rule** (`{number: Number}` reads `half` as a member of
+  `Number`), so a typed hole reads a type's method names: the library's `{uuid: UUID.String}` reads `bytes`. The runner
+  places the host's rules after the library's when it reads them again.
+- **DPG10 A record literal of four or more fields** gives its first field a list: `(a: 1, b: 2, c: 3, d: 4).a`.
+- **DPG11 A host rule shadows a method of the same name for every value**: a host `slice({from}, {to})` for text read
+  `bytes.slice(…)` on a list whole and answered nothing; the host's text operation is `substring`.
 
 ## Decided
 

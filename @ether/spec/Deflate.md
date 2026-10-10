@@ -189,32 +189,55 @@ No DF claim passes. DP0 starts here.
   the backends compilers already target. Machine code is one more binary format.
 - **Not in this proof.** Built only after DP7 passes.
 
-## Open
+## Engine work
 
-- **DQ1 Corpus size.** Recommend a small tier (each input a few KB at most) for DP3 to DP7, because the engine is slow,
-  and a large tier (one file of about 150 KB, e.g. `alice29.txt` from the Canterbury corpus) used only in DP8.
-- **DQ2 Padding bits.** Recommend naming the alignment and final padding pieces in `Deflate.ray`, so a read value keeps
-  them and DP4 holds for every valid stream, not only zlib's.
-- **DQ3 Where reading stopped.** Recommend reporting the furthest bit offset a read reached. The engine needs to expose
-  it; if it cannot, that is an engine gap and DP6 passes on `None` alone until it can.
-- **DQ4 Speed.** Recommend measuring and recording, not gating.
-- **DQ5 Incomplete Huffman codes.** RFC 1951 does not say whether an incomplete code is valid; zlib rejects one, except a
-  distance code with a single symbol. Recommend matching zlib, with a narrowing on the code lengths (their Kraft sum) in
-  `Huffman`, since zlib is the oracle.
-- **DQ6 Base branch.** Recommend branching from main and taking language3 changes from `proposal/interop-poc` (the `as`
-  fallback, `quoting`) only if a probe needs them, as separate commits.
+What language3 needs before `Deflate.ray` runs, found by probing it on 2026-10-10 (runner `poc/deflate/run.mts`, which
+reads the core library in dependency order and checks claims strictly):
+
+- **The host's numbers lose to the library's.** `Number.ray` defines `Digit := class: String` and `0 := zero`, so once the
+  library is read, `[3, 3, 2].count == 3` no longer holds: a numeral's typed hole `{digit: Digit}` reads with the
+  library's `Digit`. The runner reads `js3.kinds.ray` again after the library (`KINDS_AFTER`, as `site3.mts` can), so the
+  host's numerals and operators are the latest.
+- **Lists.** `==` on two lists compares identity, not elements; `x{…}` on a list is a narrowing, not the list of what
+  holds; `.map(. + 1)` passes `. + 1` read once, not a function. Without the library `count`, indexing and `--` work.
+- **Defining `Deflate` overflows the stack.** One member does: `Stored`, whose header begins with an unnamed piece. Every
+  other member defines.
+- **Header forms the entrypoint has no rule for.** `class lengths: Decimal[] { … }` (fields without brackets) and headers
+  with unnamed pieces, conditional groups (`(x: T) if c`) and alternatives.
+
+How a header of bits is read and written on language3:
+
+- **The host reads and writes bits; the declaration says what they are.** A class whose header has a piece that is not a
+  plain parameter (an unnamed piece, a conditional group) is a structure. Reading one walks its pieces over a sequence of
+  bits; writing one walks them over a value. Every type, narrowing, condition and default is the declaration's, read in
+  Ray with the fields read so far; the host only moves bits. Nothing in the host knows DEFLATE.
+- **A fixed width is a host type.** `Binary₅` reads 5 bits, most significant first; `<-Binary₅` the same 5 bits least
+  significant first; `Byte` is `Binary₈`. A narrowing `{length == n}` gives a `Binary` its width; any other narrowing of
+  `length` is tried at each width from 0 up.
+- **A bit sequence is text of `0` and `1`** (`0b010` is `"010"`): it keeps its length, joins with `+` and compares with
+  `==`, as the host already does for text.
+- **Declaration changes are commits of their own, each with its reason.** A helper written in a form the engine does not
+  read (a section `. + 1`, a class without brackets) is rewritten in a form it does (`x => x + 1`, `class (…) => { … }`);
+  a header is changed only where it says something the engine cannot do both ways (DP4 needs every type to write what it
+  reads).
 
 ## Engine gaps
 
 A step blocked by the engine adds an entry here: the step, the probe file, its output, and what the engine would need.
 
-- **DPG1 `Deflate.ray` does not run.** See Baseline. Split by DP0's probes into the features behind it.
+- **DPG1 `Deflate.ray` does not run.** See Baseline and Engine work. Split by DP0's probes into the features behind it.
 
 ## Decided
 
 Answers from 2026-10-10:
 
 - This proof is the first step toward the interop vision, not a replacement for it: DP9 leads into Interop.md C1.
+- DQ1 to DQ6 as recommended: a small corpus tier for DP3 to DP7 and a large one only in DP8; the padding pieces named,
+  so DP4 holds for every valid stream; the bit where reading stopped reported (an engine gap until it can be); speed
+  measured, not gated; incomplete Huffman codes rejected as zlib does; branched from main, interop kernel changes taken
+  only when a probe needs them.
+- The engine is language3, fixed until `Deflate.ray` runs on it, not a new interpreter beside it, even though that takes
+  longer than a day. Kernel changes are commits of their own.
 
 ## Order of work
 

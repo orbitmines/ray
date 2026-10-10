@@ -205,27 +205,10 @@ unless {condition} {{taken}} =>
   taken\
   {taken}
   passed\
-// (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body)
-nearest if {condition} {{taken}} {chain} =>
-  {condition} ? (goto taken) : (goto otherwise)
-  taken\
-  {taken}
-  goto passed
-  otherwise\
-  {chain}
-  passed\
 nearest elsif {condition} {{taken}} =>
   {condition} ? (goto taken) : (goto passed)
   taken\
   {taken}
-  passed\
-nearest elsif {condition} {{taken}} {chain} =>
-  {condition} ? (goto taken) : (goto otherwise)
-  taken\
-  {taken}
-  goto passed
-  otherwise\
-  {chain}
   passed\
 nearest elsif {condition} {{taken}} else {{otherwise}} =>
   {condition} ? (goto taken) : (goto otherwise)
@@ -242,6 +225,25 @@ if {condition} {{taken}} else {{otherwise}} =>
   goto passed
   otherwise\
   {otherwise}
+  passed\
+// (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body; the chain begins with `elsif`, so a
+// condition with an operator in it, `if a > b { … }`, is not read as a body `>`; defined after `else`, so a chain is not
+// read as an `else` whose condition holds a body)
+nearest if {condition} {{taken}} elsif {{chain}} =>
+  {condition} ? (goto taken) : (goto otherwise)
+  taken\
+  {taken}
+  goto passed
+  otherwise\
+  elsif {chain}
+  passed\
+nearest elsif {condition} {{taken}} elsif {{chain}} =>
+  {condition} ? (goto taken) : (goto otherwise)
+  taken\
+  {taken}
+  goto passed
+  otherwise\
+  elsif {chain}
   passed\
 
 // Loops: `break` goes to the loop's end, `continue` to its start.

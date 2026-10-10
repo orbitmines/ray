@@ -423,6 +423,11 @@ export class Program {
   // (nor one ending in an operator inside a longer one: `..` does not read the start of `..<`)
   static operator(s: string, i: number): boolean { return i >= 0 && i < s.length && '<>=!~|&+-*/%^?:.'.includes(s[i]); }
   static word(s: string, i: number): boolean { return i >= 0 && i < s.length && /[\p{L}\p{N}_]/u.test(s[i]); }
+  // (a hole ending in an operator after a space, `1 >`, is code its right operand is missing from: it ends nowhere there)
+  static dangling(s: string, t: number, u: number): boolean {
+    let v = u; while (v > t && '<>=!|&+-/%^~'.includes(s[v - 1])) v--;
+    return v < u && v > t && Program.space(s.charCodeAt(v - 1));
+  }
   static space(c: number) { return c === 32 || c === 10 || c === 9 || c === 13; }
   static closes(s: string, i: number, open: string, close: string): number {
     let depth = 1, j = i + open.length;
@@ -550,6 +555,9 @@ export class Program {
         }
         const following = pieces[k + 1];
         if (!following || (following.literal === undefined && following.hole !== '')) return;
+        // (nor does code begin with an operator and then a space: `if a > b { … }` has no body `> b { … }`)
+        let u = t; while (Program.operator(s, u)) u++;
+        if (u > t && Program.space(s.charCodeAt(u))) return;
       }
       if (hole === '') { let u = t; while (Program.space(s.charCodeAt(u))) u++; if (u > t) step(k + 1, u); return; }
       const next = pieces[k + 1], last = !next, ends: number[] = [], enclosed = this.enclosed(rule, k);
@@ -580,14 +588,16 @@ export class Program {
         if (u > t && (!typed || this.structural(s.slice(t, u), typed))) { spans.push(t, u); step(k + 1, u); spans.length -= 2; }
         return;
       }
-      for (let u = t, depth = 0; u < n;) {
+      // (nor inside what a class is given, `Name<a: T>`: a `<` right after a word opens it)
+      for (let u = t, depth = 0, given = 0; u < n;) {
         const x = s.charCodeAt(u);
         if (x === o && s.startsWith(open, u)) { depth++; u += open.length; } else if (x === c && s.startsWith(close, u)) { if (--depth < 0) break; u += close.length; }
         else if (opens.has(x)) { depth++; u++; } else if (closes.has(x)) { if (--depth < 0) break; u++; }
         // (what is quoted: as one)
         else if (quoted.has(x)) { const q = Program.quote_end(s, u, s[u]); u = q < 0 ? n : q + 1; }
-        else if (x === 10 && !depth && !last && !enclosed) break; else u++;
-        if (depth > 0 || Program.space(s.charCodeAt(u - 1)) || (last && whole && u < n)) continue;
+        else if (x === 10 && !depth && !last && !enclosed) break;
+        else { if (x === 60 && Program.word(s, u - 1)) given++; else if (x === 62 && given > 0) given--; u++; }
+        if (depth > 0 || given > 0 || Program.space(s.charCodeAt(u - 1)) || (last && whole && u < n) || Program.dangling(s, t, u)) continue;
         if (last || (next.literal !== undefined ? s.startsWith(next.literal, u) : next.hole !== '' || Program.space(s.charCodeAt(u)))) ends.push(u);
       }
       for (let e = 0; e < ends.length; e++) {
@@ -974,9 +984,11 @@ export class Program {
       // (where the text was written: read on in a value, where it was before; else here (what `site` holds here then is only
       // where else to look))
       const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.on ? frame.site ?? frame.node : frame.node;
-      // (a value that is not a node (text) has no names of its own: its names are the outermost node's (Node's), `.` the value)
-      if (!(self instanceof Program.Node)) { let root = frame.node; while (root.outer) root = root.outer; return this.read(s.slice(1), { node: root, from: self, this: self, writer: frame.reading ?? frame.writer }); }
-      return this.read(s.slice(1), { node: self, site: self === written ? undefined : written, this: frame.this, from: self, on: true, writer: frame.reading ?? frame.writer });
+      // (a value that is not a node (text) has no names of its own: its names are the outermost node's (Node's), `.` the value;
+      // what its holes take is read where it was written, `3.binary(width)` in a call)
+      if (!(self instanceof Program.Node)) { let root = frame.node; while (root.outer) root = root.outer; return this.read(s.slice(1), { node: root, site: written === root ? undefined : written, also: frame.also, from: self, this: self, writer: frame.reading ?? frame.writer }); }
+      // (and on through a chain, `x.count + y` in code read in a value: where else to look)
+      return this.read(s.slice(1), { node: self, site: self === written ? undefined : written, also: frame.also, this: frame.this, from: self, on: true, writer: frame.reading ?? frame.writer });
     }
     if (s.startsWith('goto ')) return this.run(s, frame, except);
     // (a definition, its first line ending with the definer, is read only by a rule whose head has the definer)
@@ -1159,7 +1171,7 @@ export class Program {
     const writer = frame.reading ?? frame.writer;
     // (`.` in a closure called in it: that value, as `x.f()` gives it; reading on a closure calls it: `.` as it was; a member
     // read on one, `.` that closure)
-    return node instanceof Program.Node ? this.evaluate(after, { node, site: frame.site ?? frame.node, from: node.calls && after.charCodeAt(0) !== 46 ? frame.from : node, this: frame.this, on: true, writer }, undefined, false)
+    return node instanceof Program.Node ? this.evaluate(after, { node, site: frame.site ?? frame.node, also: frame.also, from: node.calls && after.charCodeAt(0) !== 46 ? frame.from : node, this: frame.this, on: true, writer }, undefined, false)
       : this.evaluate(after, { node: frame.node, site: frame.site, also: frame.also, from: node, this: frame.this, receiver: node, writer }, except, false);
   }
   // A body: a value written into text (what it refers to), else a node its statements are read in (a new one each time; any

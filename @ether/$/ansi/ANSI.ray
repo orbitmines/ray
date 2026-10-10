@@ -1,16 +1,19 @@
 // ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
 ANSI := class: Language {
   static extensions := ".ansi"
-  Cell := class glyph: Char = " ", foreground: Geometry.Color? = None, background: Geometry.Color? = None, styles: Attribute# = [], link: Location? = None
+  Cell := class (glyph: Char = " ", foreground: Geometry.Color? = None, background: Geometry.Color? = None, styles: Attribute# = [], link: Location? = None) => { }
 
   // CUP, Cursor Position (ECMA-48 8.3.21)
-  Move := class ("\e[", (row: Decimal, ";", column: Decimal)?, "H") {
+  // (header: ("\e[", (row: Decimal, ";", column: Decimal)?, "H"), not read into the class yet: written by UI.TUI.written)
+  Move := class (row: Decimal? = None, column: Decimal? = None) => {
     at => Geometry.Vector((column ?? 1) - 1, (row ?? 1) - 1)
   }
   // ED, Erase in Display (ECMA-48 8.3.39)
-  Erase := class ("\e[", part: Decimal = 0, "J")
+  // (header: ("\e[", part: Decimal = 0, "J"))
+  Erase := class (part: Decimal = 0) => { }
   // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
-  Mode := class ("\e[?", number: Decimal, state: "h" | "l") {
+  // (header: ("\e[?", number: Decimal, state: "h" | "l"))
+  Mode := class (number: Decimal, state: "h" | "l") => {
     flipped => Mode(number, state == "h" ? "l" : "h")
   }
 
@@ -19,10 +22,12 @@ ANSI := class: Language {
     static (code: "1" | "2" | "3" | "4" | "7" | "9") as (=== Attribute) => Attribute#{.code == code}.first
   }
   // SGR 38 and 48, direct colour (";2;r;g;b") or an indexed one (";5;n") (ITU-T T.416 13.1.8; xterm, "Character Attributes")
-  Colored := class (layer: "38" | "48", ((";2;", red: Decimal, ";", green: Decimal, ";", blue: Decimal) | (";5;", index: Decimal))) {
+  // (header: (layer: "38" | "48", ((";2;", red: Decimal, ";", green: Decimal, ";", blue: Decimal) | (";5;", index: Decimal))))
+  Colored := class (layer: "38" | "48", red: Decimal? = None, green: Decimal? = None, blue: Decimal? = None, index: Decimal? = None) => {
     color => index == None ? Geometry.Color(red, green, blue) : Palette[index]
   }
-  Style := class ("\e[0", parameters: (";", parameter: Colored | ("1" | "2" | "3" | "4" | "7" | "9") as Attribute)[], "m") {
+  // (header: ("\e[0", parameters: (";", parameter: Colored | ("1" | "2" | "3" | "4" | "7" | "9") as Attribute)[], "m"))
+  Style := class (parameters: * = []) => {
     colored (layer: String) => parameters.parameter{. is Colored && .layer == layer}.last.color
     cell (glyph: Char = " ") => Cell(glyph, foreground: colored("38"), background: colored("48"), styles: parameters.parameter{. is Attribute}#)
     static (cell: Cell) as (=== Style) => Style(parameters: [
@@ -40,9 +45,11 @@ ANSI := class: Language {
   ].flatten
 
   // OSC 0, the window title (xterm, "Operating System Commands")
-  Title := class ("\e]0;", text: (!"\a" && !"\e")[], ("\a" | "\e\\"))
+  // (header: ("\e]0;", text: (!"\a" && !"\e")[], ("\a" | "\e\\")))
+  Title := class (text: String) => { }
   // OSC 8, hyperlinks (https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda)
-  Hyperlink := class ("\e]8;", parameters: (!";")[] = "", ";", target: (!"\e" && !"\a")[], ("\e\\" | "\a")) {
+  // (header: ("\e]8;", parameters: (!";")[] = "", ";", target: (!"\e" && !"\a")[], ("\e\\" | "\a")))
+  Hyperlink := class (parameters: String = "", target: String = "") => {
     link => target.empty ? None : target as Location
   }
   // OSC 52, the clipboard (xterm, "Manipulate Selection Data")

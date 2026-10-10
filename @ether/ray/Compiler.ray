@@ -1,5 +1,6 @@
 Compiler := class {
   none := {
+    {value} => value
   }
 
   folding := {
@@ -42,11 +43,20 @@ Compiler := class {
   static composed (level) => level is Compiler.Composition
   Composition := class (first, second) => {
     components => (hierarchy: [first, second])
+    // (called: what was added, called)
+    (arguments) =>
+      second(arguments)
+    () =>
+      second()
   }
 }
 Node &+= {
   composed (other) => Compiler.Composition(this, other)
 }
+// `@also x T`: x is also a T (its methods x's; a composed one's, `A + { … }`, what was added)
+@also {value} {type} =>
+  {value} including ((({type}) is Compiler.Composition) ? ({type}).second : ({type}).interior)
+  {value}
 
 Program &+= {
   O | optimizations := Compiler.none

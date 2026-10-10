@@ -1,6 +1,6 @@
 // The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
 UI.TUI := class {
-  Grid := class width: Number, height: Number, cells: ANSI.Cell[][] = (0 ..< height).map(grid_row => (0 ..< width).map(grid_column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page.title {
+  Grid := class (width: Number, height: Number, cells: ANSI.Cell[][] = (0 ..< height).map(grid_row => (0 ..< width).map(grid_column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page.title) => {
     space => Geometry.Space.grid(Geometry.Vector(width, height))
     inside (at: Geometry.Vector) => space.holds(at)
     put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
@@ -109,6 +109,12 @@ UI.TUI := class {
     {attribute: ANSI.Attribute} => attribute.code
     // (its header's choice of groups is not read into the header yet (A3): written here as the header says)
     {colored: ANSI.Colored} => colored.layer + ((colored.index === None) ? (";2;" + colored.red + ";" + colored.green + ";" + colored.blue) : (";5;" + colored.index))
+    // (the same for these: written as their headers say)
+    {move: ANSI.Move} => "\e[" + ((move.row === None) ? "" : ("" + move.row + ";" + move.column)) + "H"
+    {erase: ANSI.Erase} => "\e[" + (erase.part ?? 0) + "J"
+    {mode: ANSI.Mode} => "\e[?" + mode.number + mode.state
+    {title: ANSI.Title} => "\e]0;" + title.text + "\a"
+    {link: ANSI.Hyperlink} => "\e]8;" + (link.parameters ?? "") + ";" + link.target + "\e\\"
     {sequences: Iterable} => sequences.map(sequence => sequence === None ? "" : Compiler.reduced(sequence, UI.TUI.written)).join("")
     {sequence} => sequence as String
   }

@@ -47,7 +47,7 @@ nearest {head} => {body} =>
 // with it. (Defined after a declaration, it binds looser: `f: T => v` is a rule.)
 {name}: {type} => {body} =>
   {name} =>
-    ({body}) checked {type}
+    ({body}) checked ({type})
   {name}.type =>
     {type}
 
@@ -59,11 +59,6 @@ nearest {head} => {body} =>
   .text
 `{text}` =>
   .text
-// One written `{this}…`: a method, `…` read on a value (`{this}{{narrowing}} =>`: `x{ … }`).
-{`{`}this{`}`}{head} => {body} =>
-  {head} =>
-    goto .
-    {body}
 // (given code, a block on one line, `f(code: { … })`: that code, unread, run when it is called)
 {name}:{ }{`{`}{ }{code}{ }{`}`} =>
   {name} := (() => ({code}))
@@ -183,9 +178,6 @@ true := { }
   {a} ? {b} : {a}
 {a} ?? {b} =>
   {a} ? {a} : {b}
-// A choice, `c ? a : b`: the condition all before the `?` (`x > 1 ? a : b`).
-{condition} ? {yes} : {no} =>
-  ({condition}) ? {yes} : {no}
 // The same value: gone to as a label (a node is the label written as it); nothing there, another.
 {a} === {b} =>
   goto {a}
@@ -198,6 +190,9 @@ true := { }
   same\
 {a} !== {b} =>
   ({a} === {b}) ? false : true
+// A choice, `c ? a : b`: the condition all before the `?` (`x > 1 ? a : b`).
+{condition} ? {yes} : {no} =>
+  ({condition}) ? {yes} : {no}
 // A branch: the block taken read where the branch is (a label gone to by what the condition answers; named apart from a
 // loop's, which `break` and `continue` go to through it).
 if {condition} {{taken}} =>
@@ -327,7 +322,7 @@ recur =>
 {on}.{name} = {value} =>
   {on}.{name} := {value}
 {name}:{ }{type} = {value} =>
-  ({value}) checked {type}
+  ({value}) checked ({type})
   (declarations := Listing.new) unless (here declarations) && declarations
   declarations.append("{name}")
   {name}: {type} =>
@@ -405,12 +400,15 @@ nearest () => {body} =>
   passed\
 // A list: `a, b` is a Ray of both, `a, b, c` one of all three; the loosest of all (`a = 1, b = 2` is `(a = 1), (b = 2)`). Both
 // read here first (`f(x: 1, y: 2)`: each declared where the list is); a side that only declared (`declared`) is no value in it.
-{list}, {other} =>
+nearest {list}, {other} =>
   {list}
   {other}
-  ({list} === declared) ? {other} : (({other} === declared) ? {list} : ((({list}).listing ? ({list}).listed() : Listing.new.append({list})).joined({other})))
+  ({list} === declared) ? {other} : (({other} === declared) ? {list} : Listing.new.append({list}).append({other}))
+// (a bracketed first, `[x], …`: `x` itself first (Language.md: `[lst], 5` is `(lst, 5)`))
+nearest [{inner}], {{rest}} =>
+  ({inner}), {rest}
 // (three or more: the rest read as a new list, this one put first: each once)
-{list}, {other}, {{more}} =>
+nearest {list}, {other}, {{more}} =>
   {list}
   (({other}, {more}) -- .led({list}))
 // (a value that is not a list led by another: both, in a new list)
@@ -479,16 +477,16 @@ declared &+= {
 }
 ({{parameter}}) taking {value} =>
   ({parameter}) gets (({value} === declared) ? None : {value})
-({{parameter}}, {{parameters}}) taking {list} =>
+nearest ({{parameter}}, {{parameters}}) taking {list} =>
   ({parameter}, {parameters}) taking from ((({list}).listing) ? ({list}).head : Listing.new.append({list}).head)
 ({{parameter}}) taking from {vertex} =>
   ({parameter}) gets {vertex}.value
-({{parameter}}, {{parameters}}) taking from {vertex} =>
+nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
   (goto took) if (({parameter}) gets {vertex}.value) === true
-  ({parameters}) taking from {vertex}
+  (({parameters}) taking from {vertex})
   goto done
   took\
-  ({parameters}) taking from {vertex}.next
+  (({parameters}) taking from {vertex}.next)
   done\
 // One parameter given a value (read first: a call's arguments declare what they name), unless it is defined here already
 // (`true` when it took it; given, what `goto defined` answers): `x`, `x: T` (checked against T), `x = default` (None, the
@@ -500,7 +498,7 @@ declared &+= {
   {name} := {value}
   true
 ({name}:{ }{type}) gets {value} =>
-  ({name}) gets (({value}) checked {type})
+  ({name}) gets (({value}) checked ({type}))
 ({{parameter}} = {default}) gets {value} =>
   ({parameter}) gets ({value} ?? {default})
 
@@ -518,18 +516,30 @@ declared &+= {
 [] =>
   Listing.new
 [{inside}] =>
-  ({inside}).listing ? {inside} : Listing.new.append({inside})
+  Listing.new.append({inside})
+nearest [{first}, {{rest}}] =>
+  ({first}, {rest})
+// (written over lines: `[` and `]` each with what is inside on the lines between)
+[{ }{inside}{ }] =>
+  Listing.new.append({inside})
+nearest [{ }{first}, {{rest}}{ }] =>
+  ({first}, {rest})
+// (a bracketed first: itself, `[[x], y]` is `[x, y]`)
+nearest [[{inner}], {{rest}}] =>
+  [({inner}), {rest}]
+nearest [{ }[{inner}], {{rest}}{ }] =>
+  [({inner}), {rest}]
 // `x[k]`: a method, read on what it is on (so a class's own `[…]` is read first): a name, that member; else what it holds
 // under k. (After the list above: a head of the same shape after the one that made the pair is a call.)
 [{key}] =>
   ({key} is String) ? .{key} : .held({key})
 
-// The rest read on what is before it, as parentheses around that would (`a -- .x` is `a.x`; `.` in what is read, that value);
+// The rest read with `.` what is before it (`a -- .x` is `a.x`; a name, where it is written);
 // `x ~~ …`: the same, answering `x`. Code read in a value, `.` that value (`x reading { … }`; `x with { … }`, below).
 -- {{rest}} =>
-  . {rest}
+  {rest}
 ~~ {{rest}} =>
-  . {rest}
+  {rest}
   .
 // (a closure after it, `x -- (y => …)`, `x ~~ ((y) => …)`: called with that value, made where it is written; its brackets
 // written as text, so the head is not read as a method's)
@@ -672,7 +682,7 @@ caller := None
 descends (type, depth = 0) =>
   (. === type) || ((depth < 64) && .superclass ? .superclass.descends(type, depth + 1) : false)
 is {type} =>
-  ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((c) => . is c) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((m) => m === .) : false)
+  ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((component) => . is component) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((member) => member === .) : false)
 
 // A value written into text (not text) taken by a typed hole `{x: T}`: one that is a T. (Written as a typed hole is above: this
 // right side answers something only then.)
@@ -702,6 +712,15 @@ this =>
   .
 {head} ^{style} => {{body}} =>
   {head} =>
+    {body}
+// One written `{this}…`: a method, `…` read on a value (`{this}{{narrowing}} =>`: `x{ … }`).
+{`{`}this{`}`}{head} => {body} =>
+  {head} =>
+    goto .
+    {body}
+{`{`}this{`}`}{head} ^{style} => {body} =>
+  {head} =>
+    goto .
     {body}
 
 // A value checked against a type: reported when it is not one (None, not given yet, and anything against no type, pass).
@@ -750,11 +769,11 @@ as {type} =>
 keyed := None
 Holding := class (key, value) => { }
 held (key) =>
-  found := (.keyed) ? .keyed.find((e) => e.key === key) : None
+  found := (.keyed) ? .keyed.find((entry) => entry.key === key) : None
   found ? found.value : None
 holding (key, value) =>
   (.keyed := []) unless (. reading { here keyed }) && .keyed
-  found := .keyed.find((e) => e.key === key)
+  found := .keyed.find((entry) => entry.key === key)
   if found {
     found.value = value
   } else {
@@ -779,6 +798,17 @@ nearest enumerated {name} | {{rest}} =>
   {name} := { }
   members.append({name})
   (enumerated {rest})
+// (a member written with fields, `Linux (platform: "linux")`: a record of them)
+nearest enumerated {name} {`(`}{{fields}}{`)`} =>
+  {name} := ({fields})
+  members.append({name})
+nearest enumerated {name} {`(`}{{fields}}{`)`} | {{rest}} =>
+  {name} := ({fields})
+  members.append({name})
+  (enumerated {rest})
+// (one with a block after its names, `enum A | B { … }`: the names (what the block says of the members is not read yet))
+nearest enum {{names}} {{block}} =>
+  enum {names}
 
 // `dynamically`: given again (run again) whenever what it reads is written from outside in the rewrite it is read in
 // (`&.caller`), or anything run from there: `dynamically x := v` (x is v again), `dynamically code` (the code runs again).
@@ -866,6 +896,16 @@ Iterable &+= {
       }
       .tail := link
       .
+    // (`xs[n]`, a number: its nth value, from 0; else what other readings make of it)
+    [{index}] =>
+      (goto .) unless {index} is Number
+      at := .head
+      left := {index}
+      while at && left > 0 {
+        at = at.next
+        left = left - 1
+      }
+      at ? at.value : None
     // (a list led by a value: this one, the value first (a side that only declared is no value in it))
     led (value) =>
       (value === declared) ? . : .prepend(value)

@@ -420,6 +420,8 @@ export class Program {
     for (let at = node; at; at = at.outer) if (at === outer) return true;
     return !node;
   }
+  // (nor one ending in an operator inside a longer one: `..` does not read the start of `..<`)
+  static operator(s: string, i: number): boolean { return i >= 0 && i < s.length && '<>=!~|&+-*/%^?:.'.includes(s[i]); }
   static word(s: string, i: number): boolean { return i >= 0 && i < s.length && /[\p{L}\p{N}_]/u.test(s[i]); }
   static space(c: number) { return c === 32 || c === 10 || c === 9 || c === 13; }
   static closes(s: string, i: number, open: string, close: string): number {
@@ -530,10 +532,12 @@ export class Program {
       const { literal, hole, body } = pieces[k];
       // (a head ending in a word does not end inside one: `focus` does not read the start of `focused`)
       // (nor does a body bracket in it begin a value written into text)
-      if (literal !== undefined) { if (s.startsWith(literal, t) && !(literal.endsWith(open) && s.charCodeAt(t + literal.length) === 0xE000) && !(k === pieces.length - 1 && Program.word(literal, literal.length - 1) && Program.word(s, t + literal.length))) step(k + 1, t + literal.length); return; }
+      if (literal !== undefined) { if (s.startsWith(literal, t) && !(literal.endsWith(open) && s.charCodeAt(t + literal.length) === 0xE000) && !(k === pieces.length - 1 && ((Program.word(literal, literal.length - 1) && Program.word(s, t + literal.length)) || (Program.operator(literal, literal.length - 1) && Program.operator(s, t + literal.length))))) step(k + 1, t + literal.length); return; }
       if (body) {
         // (ending a head with words in it, the rest not one body: the rest, as code)
-        if (rule.literals.length && k === pieces.length - 1 && t < n && !Program.space(s.charCodeAt(t)) && !(s.startsWith(open, t) && Program.closes(s, t, open, close) === n)) {
+        // (after words: `static x`, `x with y = 1`; not after another hole, `enum {{names}} {{block}}`)
+        const after_words = pieces[k - 1]?.literal !== undefined || (pieces[k - 1]?.hole === '' && pieces[k - 2]?.literal !== undefined);
+        if (rule.literals.length && k === pieces.length - 1 && after_words && t < n && !Program.space(s.charCodeAt(t)) && !(s.startsWith(open, t) && Program.closes(s, t, open, close) === n)) {
           spans.push(t, n); step(k + 1, n); spans.length -= 2;
           return;
         }
@@ -807,7 +811,7 @@ export class Program {
     if (alone !== undefined && alone in reading.caps)
       // (code read in a value: what it does not find there, found where it was written)
       // (and its writer the reading whose code it was written in)
-      return reading.rule.bodies.has(alone) ? this.run(reading.caps[alone], { node: frame.node, this: frame.this ?? reading.self, into: frame.into, also: reading.site !== frame.node ? reading.site : undefined, writer: reading.from }) : this.held_value(this.shared(reading, alone));
+      return reading.rule.bodies.has(alone) ? this.run(reading.caps[alone], { node: reading.receiver, this: frame.this ?? reading.self, into: frame.into, also: reading.site !== frame.node ? reading.site : undefined, writer: reading.from }) : this.held_value(this.shared(reading, alone));
     const text = this.substituted(statement, reading, reading.site, code).trim();
     return this.read(text, frame, except, this.alike);
   }
@@ -859,15 +863,12 @@ export class Program {
     try { return held.value = this.valued(held.text, { node: held.node, also: held.site, this: held.self, into: held.into, writer: held.typed ? undefined : held.from }, except, undefined, false); }
     finally { if (held.program) this.programs.pop(); }
   }
-  // (text with the definer in it, outside any body)
+  // (a definition: its first line ends with the definer, or has one outside every bracket and quote)
   defining(s: string): boolean {
-    const { open, close, definer } = this.grammar!;
-    for (let i = s.indexOf(definer), depth = 0, at = 0; i >= 0; i = s.indexOf(definer, i + 1)) {
-      for (; at < i; at++) if (s.startsWith(open, at)) depth++; else if (s.startsWith(close, at)) depth--;
-      if (!depth && Program.space(s.charCodeAt(i - 1)) && (i + definer.length === s.length || Program.space(s.charCodeAt(i + definer.length)))) return true;
-    }
-    return false;
+    const line = s.indexOf('\n');
+    return this.defines(s) || this.outermost(line < 0 ? s : s.slice(0, line));
   }
+
   private definitions = new Map<string, number>();
   // (the definer outside every bracket and quote: binding loosest of all, the line is a definition)
   outermost(s: string): boolean { return this.outermost_at(s) >= 0; }
@@ -944,12 +945,12 @@ export class Program {
     // (a value written alone: itself; as a statement of its own in a node (not the outermost) with rules that have no literal (a
     // level), what those read it as, if any does)
     const alone = s.length === this.token && s.charCodeAt(open.length) === 0xE000;
-    // (a node given as a statement of its own to a running program or a closure (`code including level`): its rules seen in it, as
-    // its own (a closure's: in each call of it))
-    if (alone && frame.given && !frame.on && (frame.node.calls || this.dynamic.includes(frame.node))) {
+    // (a node given as a statement of its own to a node that is not a level (`x &+= node`, `code including level`): its rules seen
+    // in it, as its own (a closure's: in each call of it))
+    if (alone && frame.given && !frame.on && (frame.node.calls || this.dynamic.includes(frame.node) || !frame.node.bare.length)) {
       const value = this.body(s, frame, except);
       // (a running program is not a level: `&.caller` is that program)
-      if (!(value instanceof Program.Node) || value === frame.node || this.ats.has(value)) return value;
+      if (!(value instanceof Program.Node) || value === frame.node || this.ats.has(value) || !value.rules.length) return value;
       if (process.env.LOGINC) console.log('INCLUDE', value.rules.slice(0, 4).map(r => r.head).join(','), '<-', String(this.source(frame.reading?.text ?? frame.writer?.text ?? '')).slice(0, 80));
       if (!frame.node.includes.includes(value)) frame.node.includes.push(value), frame.node.headed++;
       return frame.node;
@@ -964,7 +965,7 @@ export class Program {
     // (a hole's name, read in its rule's right side: a rule reading it, what it took)
     const writer = frame.on ? undefined : frame.reading ?? frame.writer;
     // (a member, `.name`: `name` read in `.`; not a definition written so, `.{name} => …`: a rule reading members)
-    if (s.charCodeAt(0) === 46 && !Program.space(s.charCodeAt(1)) && !this.defining_dot(s)) {
+    if (s.charCodeAt(0) === 46 && !Program.space(s.charCodeAt(1)) && s.charCodeAt(1) !== 46 && !this.defining_dot(s)) {
       // (a member named by a value that is text: that name)
       if (s.length === this.token + 1 && s.charCodeAt(open.length + 1) === 0xE000) { const name = this.text_of(parseInt(s.slice(open.length + 2, -close.length), 36)); if (name !== undefined) s = '.' + name; }
       // (a capture of the reading: its text, as written)
@@ -1026,8 +1027,7 @@ export class Program {
     if (leads < 0) return this.on(frame.this ?? frame.node, s.slice(1), frame, except);
     if (leads) return this.on(this.body(s.slice(0, leads), frame), s.slice(leads), frame, except);
     if (all.length) {
-      // (`.` in its holes: on a value that is not a node, that value)
-      let reading = new Program.Reading(all, 0, s, frame.node, frame.site ?? frame.node, 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, true), value: unknown;
+      let reading = new Program.Reading(all, 0, s, frame.node, frame.site ?? frame.node, frame.this ?? frame.node, true), value: unknown;
       // (where else what its holes read is looked for: where its text was written, when it is read in another node)
       reading.also = frame.also;
       // (the lowest reading tried: going on past all those above, the next is below it)
@@ -1047,7 +1047,9 @@ export class Program {
       // method), the value; else as it was)
       const self = home?.calls ? frame.from ?? this.through(frame.this, home.outer) ?? home.self ?? home.outer! : frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node;
       // (a method called on what was made in its class, `x.m(…)`, runs in it: what it reads, its own first, then the class's)
-      const node = calls ? new Program.Node((frame.from !== undefined ? this.through(self, home!.outer) : undefined) ?? home!.outer) : outside ? home!.outer! : frame.node;
+      // (a named method (no holes) read on a value: in a node of its own in the value, so what it defines is not the value's)
+      // (a call (`(…) =>`) of a node that is not a closure: in a node of its own in it, as a closure's call is)
+      const node = calls ? new Program.Node(this.through(self, home!.outer) ?? home!.outer) : outside ? home!.outer! : (frame.on && !reading.rule.holes.length) || reading.rule.called ? new Program.Node(frame.node) : frame.node;
       if (calls && home!.includes.length) node.includes = home!.includes;
       // (a rewrite: a program of its own, read in the one running)
       reading.program = this.programs[this.programs.length - 1]; this.begun();
@@ -1076,6 +1078,7 @@ export class Program {
         finally { this.running.pop(); }
       } } finally { this.ended(); }
       if (value === undefined && calls) value = node;
+      // (a method read on a value answers what it gave; nothing, nothing)
       return reading.at === s.length ? value : this.on(value, reading.after, frame, except);
     }
     // (a rule: the first line ending with the definer)
@@ -1149,6 +1152,9 @@ export class Program {
   }
   on(value: unknown, after: string, frame: Program.Frame, except?: Program.Rule): unknown {
     const node = value instanceof Program.Reading ? value.receiver : value;
+    // (after a closure, what its own rules do not read, not a member (`.x`) nor a call: its argument, `0..<3` as `0..<(3)`)
+    const pair = [...this.paired_by.keys()][0], rest = after.trim();
+    if (node instanceof Program.Node && node.calls && pair && rest && !rest.startsWith('.') && !rest.startsWith(pair) && !this.readings(rest, this.candidates(rest, node, 0, undefined, undefined, true), false).length) after = pair + rest + this.closers.get(pair);
     // (in a value that is not a node (text): what is read on in it is read here, `.` the value)
     const writer = frame.reading ?? frame.writer;
     // (`.` in a closure called in it: that value, as `x.f()` gives it; reading on a closure calls it: `.` as it was; a member
@@ -1162,8 +1168,8 @@ export class Program {
     const { open, close } = this.grammar!;
     if (s.startsWith(open + Program.REFERS)) {
       const value = this.referred_to(parseInt(s.slice(open.length + 1, -close.length), 36));
-      // (read as the right side of the rule it is read in: not by that rule)
-      return value instanceof Program.Held ? this.held_value(value, except) : value;
+      // (read as the right side of the rule it is read in: not by that rule (but a closure's call, which may recur))
+      return value instanceof Program.Held ? this.held_value(value, except?.home?.calls ? undefined : except) : value;
     }
     // (in it where its text was written)
     const node = new Program.Node(frame.site ?? frame.node);
@@ -1262,7 +1268,8 @@ export class Program {
       for (const length of at.lengths.get(s[0]) ?? []) { if (length > s.length) break; const rules = at.led.get(s.slice(0, length)); if (rules) take(rules, rank, on && !below); }
       // (a rule with no literal is not a method (but one that is a body, `x{ … }`, read only on its node's values): not read on its
       // node; and it reads a rule's right side only when that rule was written in its node)
-      if (at.bare.length) take(on && at === node && !below ? at.bare.filter(rule => rule.braced) : writer && !Program.within(writer.rule.home, at) ? [] : below ? at.bare.filter(rule => !rule.braced) : at.bare, rank, on && !below);
+      // (and read on a closure, those of where it was written are not its: only its own and the outermost's)
+      if (at.bare.length && !(on && node.calls && at !== node && at.outer)) take(on && at === node && !below ? at.bare.filter(rule => rule.braced) : writer && !Program.within(writer.rule.home, at) ? [] : below ? at.bare.filter(rule => !rule.braced) : at.bare, rank, on && !below);
       // (a few keys each looked for; many found going once through `s`)
       if (at.keys.length <= 16) { for (const keyed of at.keys) if (s.includes(keyed.key)) take(keyed.rules, rank); }
       else for (let i = 0; i < s.length; i++) for (const keyed of at.loose.get(s.charCodeAt(i)) ?? [])

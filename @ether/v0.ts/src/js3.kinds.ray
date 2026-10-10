@@ -37,13 +37,19 @@ Digit &+= {
     goto js
     9
 }
-Number &+= {
+// (digits after one another: what a number is written as, its own (the library adds to `Number`, not to it))
+Digits := class { }
+Digits &+= {
   {digit: Digit} =>
     digit
-  {digit: Digit}{rest: Number} =>
+  {digit: Digit}{rest: Digits} =>
     goto js
     Number($.text('digit') + $.text('rest'))
-  {whole: Number}.{fraction: Number} =>
+}
+Number &+= {
+  {digits: Digits} =>
+    digits
+  {whole: Digits}.{fraction: Digits} =>
     goto js
     Number($.text('whole') + '.' + $.text('fraction'))
 }
@@ -88,7 +94,10 @@ Number &+= {
   goto js
   ((self % other) + other) % other
 
-// Text.
+// Text (`""`: none).
+"" =>
+  goto js
+  ''
 contains {other} =>
   goto js
   $(String(self).includes(String(other)) ? 'true' : 'false')
@@ -104,3 +113,15 @@ of =>
   goto js
   typeof self === 'number' ? $('Number') : typeof self === 'string' ? $('String') : undefined
   None
+
+// Ranges of numbers: `a..<b` (up to b, not it), `a..b` (with it), going down when b is below a (of anything else, none).
+..{last} =>
+  goto js
+  typeof self === 'number' && typeof last === 'number' ? $('[' + Array.from({ length: Math.abs(last - self) + 1 }, (_, i) => self + (last >= self ? i : -i)).join(', ') + ']') : $('None')
+..<{last} =>
+  goto js
+  typeof self === 'number' && typeof last === 'number' ? $('[' + Array.from({ length: Math.abs(last - self) }, (_, i) => self + (last >= self ? i : -i)).join(', ') + ']') : $('None')
+..<{ }{last} =>
+  . ..<({last})
+..{ }{last} =>
+  . ..({last})

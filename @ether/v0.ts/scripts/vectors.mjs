@@ -18,25 +18,34 @@ const usage = `Usage: node scripts/vectors.mjs [--check]
 
 const generator = '@ether/v0.ts/scripts/vectors.mjs';
 const subscript = n => String(n).replace(/\d/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
-const printable = b => b.every(x => x >= 0x20 && x < 0x7f && x !== 0x22 && x !== 0x5c && x !== 0x7b && x !== 0x7d);
+const printable = b => b.every(x => x >= 0x20 && x < 0x7f && x !== 0x22 && x !== 0x5c);
 const hex = b => Buffer.from(b).toString('hex');
+const fail = message => { throw new Error(message); };
 const short = b => hex(b).slice(0, 8) + (b.length > 4 ? '…' : '');
 
 function bytes(b) {
   b = Buffer.from(b);
   if (b.length === 0) return '[]';
   if (b.length > 1 && b.every(x => x === b[0])) return `[0x${b[0].toString(16).padStart(2, '0')}] * ${b.length}`;
-  if (b.length > 1 && b.every((x, i) => x === b[0] + i)) return b[0] === 0 ? `0..<${b.length}` : `0x${b[0].toString(16).padStart(2, '0')}..<0x${(b[0] + b.length).toString(16).padStart(2, '0')}`;
+  if (counting(b)) return b[0] === 0 ? `0..<${b.length}` : `0x${b[0].toString(16).padStart(2, '0')}..<0x${(b[0] + b.length).toString(16).padStart(2, '0')}`;
   if (b.length <= 64 && printable([...b])) return `"${b.toString('latin1')}".bytes`;
   return `"${hex(b)}" as Hexadecimal${subscript(2 * b.length)} as Byte${subscript(b.length)}`;
 }
+const counting = b => b.length > 1 && b.every((x, i) => x === b[0] + i);
+const operand = b => counting(Buffer.from(b)) ? `(${bytes(b)})` : bytes(b);
 const hexIs = (expr, b) => `${expr} as Hexadecimal${subscript(2 * b.length)} == "${hex(b)}"`;
 const rayString = s => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 const name = s => s.replace(/\.[^.]*$/, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
 class Claims {
-  constructor(prefix) { this.prefix = prefix; this.next = 1; this.lines = []; }
+  constructor(prefix) { this.prefix = prefix; this.next = 1; this.lines = []; this.variables = new Set(); }
   line(s) { this.lines.push(s); }
+  variable(wanted) {
+    let variable = wanted;
+    for (let n = 2; this.variables.has(variable); n++) variable = `${wanted}_${n}`;
+    this.variables.add(variable);
+    return variable;
+  }
   claim(condition, what) { this.lines.push(`unless ${condition} { INFO@mark \`${this.prefix}${this.next++} ${what}\` }`); }
 }
 
@@ -55,7 +64,7 @@ function inflatedVariables(claims, prefix, items) {
   for (const item of items) {
     const key = hex(item.inflated);
     if (!known.has(key)) {
-      const variable = `${prefix}_inflated_${known.size + 1}`;
+      const variable = claims.variable(`${prefix}_inflated_${known.size + 1}`);
       known.set(key, variable);
       claims.line(`${variable} := ${bytes(item.inflated)}`);
     }
@@ -68,7 +77,7 @@ function streamCorpus({ project, prefix, language, read, as, extra, header }) {
   const items = corpusOf(project).map(e => ({ ...e, inflated: read.inflate(e.bytes) }));
   inflatedVariables(c, project, items);
   for (const e of items) {
-    const v = `${project}_${name(e.file)}`;
+    const v = c.variable(`${project}_${name(e.file)}`);
     const shape = as(e.bytes);
     c.line('');
     c.line(`// ${e.file}: ${e.note}`);
@@ -106,16 +115,23 @@ const deflateCorpus = () => streamCorpus({
 
 function memberCount(b) {
   let count = 0;
-  for (let at = 0; at < b.length; count++) {
-    let end = at + 18;
-    while (!completes(b.subarray(at, end))) if (++end > b.length) throw new Error('a gzip member does not end');
-    at = end;
-  }
+  for (let at = 0; at < b.length; count++) at = memberEnd(b, at);
   return count;
 }
 
-function completes(member) {
-  try { gunzipSync(member); return true; } catch { return false; }
+function memberEnd(b, start) {
+  const incomplete = () => fail(`the gzip member at byte ${start} has no complete header`);
+  if (start + 10 > b.length || b[start] !== 0x1f || b[start + 1] !== 0x8b) incomplete();
+  const flags = b[start + 3], afterZero = from => b.indexOf(0, from) + 1 || incomplete();
+  let at = start + 10;
+  if (flags & 4) at += 2 + (at + 2 <= b.length ? b.readUInt16LE(at) : incomplete());
+  if (flags & 8) at = afterZero(at);
+  if (flags & 16) at = afterZero(at);
+  if (flags & 2) at += 2;
+  if (at > b.length) incomplete();
+  const { engine } = inflateRawSync(b.subarray(at), { info: true });
+  const end = at + engine.bytesWritten + 8;
+  return end <= b.length ? end : fail(`the gzip member at byte ${start} does not end`);
 }
 
 function pillow(files) {
@@ -145,7 +161,9 @@ function pillow(files) {
 function pngCorrupt(b) {
   if (!b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'its signature is not that of PNG';
   for (let at = 8; at < b.length;) {
+    if (at + 12 > b.length) return `its chunk at byte ${at} is cut off`;
     const size = b.readUInt32BE(at), type = b.toString('latin1', at + 4, at + 8);
+    if (at + 12 + size > b.length) return `its ${type} chunk is cut off`;
     if (b.readUInt32BE(at + 8 + size) !== crc32(b.subarray(at + 4, at + 8 + size)) >>> 0) return `the CRC of its ${type} chunk is not the one node:zlib computes`;
     at += 12 + size;
   }
@@ -159,7 +177,7 @@ function pngCorpus() {
   const items = corpusOf('png');
   const read = pillow(items.map(e => join(ether, '$/png/tests/corpus', e.file)));
   for (const e of items) {
-    const v = `png_${name(e.file)}`;
+    const v = c.variable(`png_${name(e.file)}`);
     const reference = read[join(ether, '$/png/tests/corpus', e.file)];
     const corrupt = pngCorrupt(e.bytes);
     c.line('');
@@ -197,7 +215,7 @@ function jsonCorpus() {
   const c = new Claims('JNC');
   for (const e of corpusOf('json')) {
     const text = e.bytes.toString('latin1');
-    const v = `json_${name(e.file)}`;
+    const v = c.variable(`json_${name(e.file)}`);
     let parsed, accepted;
     try { parsed = JSON.parse(text); accepted = true; } catch { accepted = false; }
     if (accepted !== e.valid) throw new Error(`${e.file}: node's JSON.parse ${accepted ? 'accepts' : 'rejects'} it, the manifest says otherwise`);
@@ -206,8 +224,9 @@ function jsonCorpus() {
     if (!accepted) { c.claim(`JSON.read(${v}) is Diagnostic`, `${e.file} reads, though node's JSON.parse refuses it`); continue; }
     c.claim(`(${v} as JSON) is JSON && (${v} as JSON) as String == ${v}`, `${e.file} read as JSON and written back is not the same text`);
     if (/^y_object_duplicated/.test(e.file)) continue;
-    c.claim(jsonShape(parsed, `JSON.read(${v})`), `${e.file} does not read as node's JSON.parse reads it`);
-    c.claim(jsonShape(parsed, `JSON.read($.json.write(JSON.read(${v})))`), `${e.file} read, written again and read is not what node's JSON.parse reads`);
+    const shape = read => jsonShape(parsed, read) ?? fail(`${e.file}: node's JSON.parse reads ${JSON.stringify(parsed)}, which has no shape a claim can be written about`);
+    c.claim(shape(`JSON.read(${v})`), `${e.file} does not read as node's JSON.parse reads it`);
+    c.claim(shape(`JSON.read($.json.write(JSON.read(${v})))`), `${e.file} read, written again and read is not what node's JSON.parse reads`);
   }
   return file([`JSONTestSuite texts of the pinned corpus (tests/corpus/corpus.json): a y_ text reads as node's JSON.parse reads it and writes back, an n_ text`,
     `is refused as node's JSON.parse refuses it. Generated by ${generator}; do not edit, run it again.`], c);
@@ -218,14 +237,14 @@ const fixedInputs = [
   Buffer.from('The quick brown fox jumps over the lazy dog'), Buffer.from([...Array(256).keys()]), Buffer.alloc(32, 0), Buffer.alloc(32, 0xff),
 ];
 const boundaries = [55, 56, 63, 64, 65, 111, 112, 119, 120, 127, 128, 129].map(n => ({ n, b: Buffer.alloc(n, 0x61) }));
-const inputExpr = b => b.length > 64 && b.every(x => x === 0x61) ? `("a" * ${b.length}).bytes` : bytes(b);
+const inputExpr = (b, written = bytes) => b.length > 64 && b.every(x => x === 0x61) ? `("a" * ${b.length}).bytes` : written(b);
 const describe = b => b.length === 0 ? 'no bytes' : b.length > 64 && b.every(x => x === 0x61) ? `${b.length} a's` : printable([...b]) ? `"${b.toString('latin1')}"` : `${bytes(b).replace(/ as Hexadecimal.*$/, '').slice(0, 20)}`;
 
 function crcReference() {
   const c = new Claims('CRCR');
   for (const b of [...fixedInputs, ...boundaries.map(x => x.b)]) {
     const value = crc32(b) >>> 0;
-    c.claim(`${inputExpr(b)} as CRC32 as Binary₃₂ == 0x${value.toString(16).padStart(8, '0')}`, `the CRC-32 of ${describe(b)} is not ${value.toString(16).padStart(8, '0')}, as node:zlib computes it`);
+    c.claim(`${inputExpr(b, operand)} as CRC32 as Binary₃₂ == 0x${value.toString(16).padStart(8, '0')}`, `the CRC-32 of ${describe(b)} is not ${value.toString(16).padStart(8, '0')}, as node:zlib computes it`);
   }
   return file([`CRC-32 of fixed inputs as node:zlib's crc32 computes them. Generated by ${generator}; do not edit, run it again.`], c);
 }
@@ -258,8 +277,9 @@ function base64Reference() {
   const inputs = [...fixedInputs, Buffer.from([0xfb, 0xff]), Buffer.from([0xff, 0xfe, 0xfd, 0xfc])];
   for (const b of inputs) {
     const text = b.toString('base64');
-    c.claim(`${bytes(b)} as Base64 as String == "${text}"`, `${describe(b)} is not ${text.slice(0, 12)}${text.length > 12 ? '…' : ''} in Base64, as node's Buffer writes it`);
-    c.claim(`Base64.read("${text}") == ${bytes(b)}`, `${text.slice(0, 12)}${text.length > 12 ? '…' : ''} does not read back as ${describe(b)}, as node's Buffer reads it`);
+    const shown = text === '' ? 'the empty text' : `${text.slice(0, 12)}${text.length > 12 ? '…' : ''}`;
+    c.claim(`${operand(b)} as Base64 as String == "${text}"`, `the Base64 of ${describe(b)} is not ${shown}, as node's Buffer writes it`);
+    c.claim(`Base64.read("${text}") == ${operand(b)}`, `${shown} does not read back as ${describe(b)}, as node's Buffer reads it`);
   }
   return file([`Base64 of fixed inputs as node's Buffer writes and reads it. Generated by ${generator}; do not edit, run it again.`], c);
 }
@@ -353,4 +373,4 @@ function main() {
   }
 }
 
-main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();

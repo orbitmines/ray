@@ -292,7 +292,18 @@ literal    := "1" .. "9"
 
 ### N5. The C writer, Track B over the corpus
 
-- **Pass.** Where Ray's C answers, it equals Python; it refuses exactly when an exact intermediate leaves the type.
+- **Goal.** For every corpus function, Python read into Ray at C's type (the boundary choice) and written by Ray as C
+  answers what `python3` answers wherever no intermediate leaves the type, and refuses exactly where one does.
+- **What happens.** `write.c.ray`, the same shape as the Rust writer: `ToCExpression` dispatches `( ( L op R ) as T )`
+  to `ray_add_int(L, R, &ok)` (`sub`, `mul`; `_long` for `Int64`), the function is `bool f(int a, …, int *result)`,
+  answering `false` when any operation overflowed. Ray also writes the helpers into `checked.h`, each one gcc's
+  `__builtin_*_overflow`, which always stores the wrapped value, so the written C has no undefined behaviour at all.
+  A Ray string holding both `{` and `}` is read as a hole, so braces come from `to_c_open`, `to_c_close`, and newlines
+  from `character_of 10` (Ray strings have no escapes). `check.py --track b` builds every Ray-written function into one
+  gcc binary (`-std=c11 -O2 -Wall -Werror`) and judges each answer against `python3` running the generated `.py`.
+- **Pass.** `./run.sh N5`. Seeds 1, 2 and 3, 40 functions and 50 inputs each: 6000 inputs, 2953 answered and equal to
+  python3, 3047 refused where an intermediate leaves the type, 0 wrong. Control: one `ray_add_` turned into `ray_sub_` in
+  a Ray-written `f5.ray.c` gives 30 wrong.
 
 ### N6. Drop-in (optional)
 

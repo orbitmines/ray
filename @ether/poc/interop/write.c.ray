@@ -1,0 +1,47 @@
+to_c_open := `{`
+to_c_close := `}`
+to_c_newline := character_of 10
+to_c_int_low := 1 - 2147483649
+to_c_int_high := 2147483647
+to_c_long_low := 1 - 9223372036854775809
+to_c_long_high := 9223372036854775807
+to_c_type_for (type) => ((type.low == to_c_int_low) && (type.high == to_c_int_high)) ? "int" : (((type.low == to_c_long_low) && (type.high == to_c_long_high)) ? "long" : None)
+to_c_type_named (name) => to_c_type_for(value_named name)
+to_c_leaf (x) => (x fits_pattern "^([A-Za-z_][A-Za-z0-9_]*|[1-9])$") ? x : None
+to_c_operand (x) => (ToCExpression reads_text x) ?? to_c_leaf(x)
+to_c_call (method, left, right, type) => (left && right && type) ? ("ray_" + method + "_" + type + "(" + left + ", " + right + ", &ok)") : None
+to_c_checked (left, method, right, type) => to_c_call(method, to_c_operand(left), to_c_operand(right), to_c_type_named(type))
+ToCExpression := {
+  ( ( {left} + {right} ) as {type} ) =>
+    to_c_checked("{left}", "add", "{right}", "{type}")
+  ( ( {left} - {right} ) as {type} ) =>
+    to_c_checked("{left}", "sub", "{right}", "{type}")
+  ( ( {left} * {right} ) as {type} ) =>
+    to_c_checked("{left}", "mul", "{right}", "{type}")
+}
+to_c_parameter (name, type) => to_c_type_named(type) ? (to_c_type_named(type) + " " + name) : None
+to_c_parameters_joined (first, rest) => (first && rest) ? (first + ", " + rest) : None
+to_c_parameters (x) => (ToCParameters reads_text x) ?? None
+ToCParameters := {
+  {name} : Int32 =>
+    to_c_parameter("{name}", "Int32")
+  {name} : Int64 =>
+    to_c_parameter("{name}", "Int64")
+  {name} : Integer =>
+    to_c_parameter("{name}", "Integer")
+  {first} , {rest} =>
+    to_c_parameters_joined(to_c_parameters("{first}"), to_c_parameters("{rest}"))
+}
+ToCFirstType := {
+  {name} : {type} =>
+    "{type}"
+  {name} : {type} , {rest} =>
+    "{type}"
+}
+to_c_whole (name, parameters, type, body) => (name && parameters && type && body) ? ("bool " + name + "(" + parameters + ", " + type + " *result) " + to_c_open + " bool ok = true; *result = " + body + "; return ok; " + to_c_close) : None
+to_c_parameters_of (ray) => ((ray text_after " (") text_before ") => ") spaced_tokens ": ,"
+to_c_body_of (ray) => (ray text_after ") => ") spaced_tokens "( )"
+to_c_function (ray) => to_c_whole(ray text_before " (", to_c_parameters(to_c_parameters_of(ray)), to_c_type_named(ToCFirstType reads_text to_c_parameters_of(ray)), to_c_operand(to_c_body_of(ray)))
+to_c_helper (method, type) => "static " + type + " ray_" + method + "_" + type + "(" + type + " a, " + type + " b, bool *ok) " + to_c_open + " " + type + " r; if (__builtin_" + method + "_overflow(a, b, &r)) *ok = false; return r; " + to_c_close
+to_c_helpers (type) => to_c_helper("add", type) + to_c_newline + to_c_helper("sub", type) + to_c_newline + to_c_helper("mul", type)
+to_c_prelude => "#include <stdbool.h>" + to_c_newline + to_c_helpers("int") + to_c_newline + to_c_helpers("long") + to_c_newline

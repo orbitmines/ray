@@ -85,6 +85,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     claims = ["mark ^keyword := global", ""]
     writes = []
+    writes_c = ["to_c_prelude written_to_file \"out/corpus/checked.h\""]
     corpus = []
     for index in range(1, arguments.count + 1):
         name = "f" + str(index)
@@ -107,6 +108,8 @@ def main():
         claims.append("unless from_c_" + name + " == (text_of_file \"" + ray_file + "\") { INFO@mark `N3." + str(index) + ".b " + name + " read from C is not its normal form` }")
         writes.append("rust_" + name + " := rust_function(c_ray(text_of_file \"" + c_file + "\"))")
         writes.append("rust_" + name + " written_to_file \"out/corpus/" + name + ".rs\"")
+        writes_c.append("c_" + name + " := to_c_function(p_ray_with((text_of_file \"" + py_file + "\"), \"" + RAY_TYPE[c_type] + "\"))")
+        writes_c.append("c_" + name + " written_to_file \"out/corpus/" + name + ".ray.c\"")
         corpus.append({"name": name, "type": c_type, "parameters": parameters, "tree": body, "python_tree": python_body})
         claims.append("exact_" + name + " := p_ray_with((text_of_file \"" + py_file + "\"), \"Integer\")")
         claims.append("ray_code exact_" + name)
@@ -117,6 +120,7 @@ def main():
             claims.append("unless (" + call + ") == " + ray_number(expected) + " { INFO@mark `N3." + str(index) + ".c" + str(run + 1) + " " + call + " is not what python3 computes` }")
     (out / "claims.ray").write_text("\n".join(claims) + "\n")
     (out / "writes.ray").write_text("\n".join(writes) + "\n")
+    (out / "writes_c.ray").write_text("\n".join(writes_c) + "\n")
     (out / "corpus.json").write_text(json.dumps(corpus))
 
 

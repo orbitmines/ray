@@ -22,3 +22,6 @@ text_after {separator} =>
 value_named {name} =>
   goto js
   typeof name === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? $(name) : $('None')
+character_of {code} =>
+  goto js
+  typeof code === 'number' ? String.fromCharCode(code) : $('None')

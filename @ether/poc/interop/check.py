@@ -78,6 +78,73 @@ def c_program(corpus, folder):
     return "\n".join(main[:2]) + "\n" + "".join(sources) + "\n".join(main[2:]) + "\n"
 
 
+def track_b_program(corpus, folder):
+    calls = []
+    for function in corpus:
+        t = function["type"]
+        arguments = ", ".join("(" + t + ") a[" + str(i) + "]" for i in range(len(function["parameters"])))
+        calls.append('        if (strcmp(name, "' + function["name"] + '") == 0) { ' + t + ' r; if (' + function["name"] + "(" + arguments + ', &r)) printf("%lld\\n", (long long) r); else puts("none"); }')
+    sources = [(folder / (f["name"] + ".ray.c")).read_text() for f in corpus]
+    main = [
+        "#include <stdio.h>",
+        "#include <string.h>",
+        "int main(void) {",
+        "    char name[64];",
+        "    long long a[4];",
+        "    char line[512];",
+        "    while (fgets(line, sizeof line, stdin)) {",
+        '        int n = sscanf(line, "%63s %lld %lld %lld %lld", name, &a[0], &a[1], &a[2], &a[3]);',
+        "        if (n < 1) continue;",
+        *calls,
+        "    }",
+        "    return 0;",
+        "}",
+    ]
+    return (folder / "checked.h").read_text() + "\n".join(main[:2]) + "\n" + "".join(sources) + "\n".join(main[2:]) + "\n"
+
+
+def track_b(corpus, folder, arguments):
+    missing = [f["name"] for f in corpus if not (folder / (f["name"] + ".ray.c")).exists()]
+    if missing or not (folder / "checked.h").exists():
+        print("N5 Ray wrote no C for:", " ".join(missing) or "checked.h")
+        raise SystemExit(1)
+    (folder / "all.b.c").write_text(track_b_program(corpus, folder))
+    subprocess.run(["gcc", "-std=c11", "-O2", "-Wall", "-Werror", "-Wno-unused-function", str(folder / "all.b.c"), "-o", str(folder / "all-b")], check=True)
+    python = {}
+    for function in corpus:
+        namespace = {}
+        exec((folder / (function["name"] + ".py")).read_text(), namespace)
+        python[function["name"]] = namespace[function["name"]]
+    rng = random.Random(arguments.seed + 3000)
+    lines, cases = [], []
+    for function in corpus:
+        for values in inputs_for(rng, function, arguments.inputs):
+            lines.append(function["name"] + " " + " ".join(str(v) for v in values))
+            cases.append((function, values))
+    answered, refused, wrong = 0, 0, []
+    for (function, values), got in zip(cases, run(folder / "all-b", lines)):
+        low, high = BOUNDS[function["type"]]
+        truth = python[function["name"]](*values)
+        value, overflowed = exact(function["python_tree"], dict(zip(function["parameters"], values)), low, high)
+        if value != truth:
+            wrong.append((function["name"], values, "the tree does not match python3", value, truth))
+        elif got == "none":
+            if overflowed:
+                refused += 1
+            else:
+                wrong.append((function["name"], values, "C refused, no intermediate leaves the type", truth, got))
+        elif overflowed:
+            wrong.append((function["name"], values, "C answered though an intermediate leaves the type", truth, got))
+        elif int(got) == truth:
+            answered += 1
+        else:
+            wrong.append((function["name"], values, "C and python3 differ", truth, got))
+    for case in wrong[:20]:
+        print("WRONG", *case)
+    print("N5", len(corpus), "functions,", len(cases), "inputs:", answered, "answered and equal to python3,", refused, "refused where an intermediate leaves the type,", len(wrong), "wrong")
+    raise SystemExit(1 if wrong else 0)
+
+
 def run(binary, lines):
     return subprocess.run([str(binary)], input="\n".join(lines) + "\n", capture_output=True, text=True, check=True).stdout.split("\n")[:-1]
 
@@ -87,9 +154,12 @@ def main():
     parser.add_argument("--corpus", required=True)
     parser.add_argument("--inputs", type=int, default=30)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--track", choices=["a", "b"], default="a")
     arguments = parser.parse_args()
     folder = pathlib.Path(arguments.corpus)
     corpus = json.loads((folder / "corpus.json").read_text())
+    if arguments.track == "b":
+        track_b(corpus, folder, arguments)
     missing = [f["name"] for f in corpus if not (folder / (f["name"] + ".rs")).exists()]
     if missing:
         print("N4 Ray wrote no Rust for:", " ".join(missing))

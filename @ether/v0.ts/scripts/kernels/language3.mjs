@@ -17,8 +17,11 @@ function statementsOf(p, text) {
   let depth = 0;
   for (const { line: whole, at } of kept) {
     const line = whole.slice(base);
-    if (statements.length && (depth > 0 || line.charCodeAt(0) === 32 || line.charCodeAt(0) === 9 || line.charCodeAt(0) === 10 || line.charCodeAt(0) === 13)) statements[statements.length - 1].text += '\n' + line;
-    else statements.push({ text: line.trimEnd(), at });
+    if (statements.length && (depth > 0 || line.charCodeAt(0) === 32 || line.charCodeAt(0) === 9 || line.charCodeAt(0) === 10 || line.charCodeAt(0) === 13)) {
+      statements[statements.length - 1].text += '\n' + line;
+      statements[statements.length - 1].lines.push({ line, at });
+    }
+    else statements.push({ text: line.trimEnd(), at, lines: [{ line, at }] });
     depth += p.nesting(line);
   }
   return statements;
@@ -46,14 +49,20 @@ await serve({
     quietly(readFileSync(located('language3', 'js3.kinds.ray'), 'utf8'));
     const before = [...libraryFiles(), ...projectsBefore(file).flatMap(project => project.files)];
     for (const f of before) for (const { text: statement } of statementsOf(p, readFileSync(f, 'utf8'))) quietly(statement);
-    for (const { text: statement, at } of statementsOf(p, text)) {
+    for (const { text: statement, at, lines } of statementsOf(p, text)) {
+      const claimLines = lines.filter(({ line }) => line.includes('INFO@mark')).map(({ at: n }) => n);
+      const sayAll = message => { for (const n of new Set([at, ...claimLines])) say(n, message); };
+      const claimLine = message => lines.find(({ line }) => line.includes(`INFO@mark \`${message}\``))?.at ?? at;
       const reported = p.reports.length;
       let value;
       try { value = run(statement); }
-      catch (e) { say(at, `Failed: ${e?.message ?? e}`); continue; }
-      for (const r of p.reports.slice(reported)) say(at, String(p.source(r.caps?.message ?? '')).trim().replace(/^`([^`]*)`$/, '$1'));
+      catch (e) { sayAll(`Failed: ${e?.message ?? e}`); continue; }
+      for (const r of p.reports.slice(reported)) {
+        const message = String(p.source(r.caps?.message ?? '')).trim().replace(/^`([^`]*)`$/, '$1');
+        say(claimLine(message), message);
+      }
       if (typeof value === 'string') unreadNow.add(value.trim());
-      for (const text of unreadNow) if (unread(statement, text)) say(at, `Unread \`${text.split('\n')[0]}\``);
+      for (const text of unreadNow) if (unread(statement, text)) sayAll(`Unread \`${text.split('\n')[0]}\``);
     }
   },
 });

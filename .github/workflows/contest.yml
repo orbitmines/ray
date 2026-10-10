@@ -3,10 +3,13 @@ name: contest
 on:
   pull_request:
     paths:
+      - '@ether/**/*.ray'
+      - '@ether/ray/.entrypoint.ray2'
       - '@ether/v0.ts/src/**'
-      - '@ether/v0.ts/scripts/kernels/**'
-      - '@ether/v0.ts/scripts/contest.mjs'
-      - '@ether/ray/**'
+      - '@ether/v0.ts/scripts/**'
+      - '@ether/v0.ts/package.json'
+      - '@ether/v0.ts/package-lock.json'
+      - '.github/workflows/contest.yml'
   workflow_dispatch:
 
 jobs:

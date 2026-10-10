@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -24,7 +24,7 @@ function parseArgs(argv) {
     else if (a === '--shipped') options.shipped = resolve(argv[++i]);
     else if (a === '--jobs' || a === '--timeout') options.passed.push(a, argv[++i]);
     else if (a === '--help' || a === '-h') { console.log(usage); process.exit(0); }
-    else options.files.push(a);
+    else options.files.push(resolve(a));
   }
   return options;
 }
@@ -36,6 +36,7 @@ function kernels() {
 
 function score(kernel, options) {
   const out = join(options.results, `${kernel}.json`), log = join(options.results, `${kernel}.log`);
+  for (const stale of [out, log, join(options.results, `${kernel}.todo.md`)]) rmSync(stale, { force: true });
   const args = ['scripts/score.mjs', '--kernel', kernel, '--out', out, ...options.passed, ...options.files];
   return new Promise(done => {
     const started = Date.now();
@@ -72,11 +73,22 @@ function table(rows) {
 }
 
 function winner(rows) {
+  const shipped = rows.find(r => r.kernel === SHIPPED);
+  if (shipped && shipped.status !== 'scored') return { kernel: undefined, why: `the shipped kernel (${SHIPPED}) was not scored: ${shipped.status}` };
   const best = Math.max(...rows.map(r => r.passed));
   const leaders = rows.filter(r => r.passed === best);
   if (leaders.some(r => r.kernel === SHIPPED)) return { kernel: SHIPPED, why: leaders.length > 1 ? `ties with ${leaders.filter(r => r.kernel !== SHIPPED).map(r => r.kernel).join(', ')} at ${best} passed claims; a kernel ships only when it beats the shipped one` : `${best} passed claims` };
   if (leaders.length > 1) return { kernel: undefined, why: `${leaders.map(r => r.kernel).join(', ')} tie at ${best} passed claims` };
   return { kernel: leaders[0].kernel, why: `${best} passed claims, more than the shipped kernel (${rows.find(r => r.kernel === SHIPPED)?.passed ?? 'not scored'})` };
+}
+
+function groupBy(list, key) {
+  const groups = new Map();
+  for (const item of list) {
+    if (!groups.has(key(item))) groups.set(key(item), []);
+    groups.get(key(item)).push(item);
+  }
+  return groups;
 }
 
 function passedIn(run) {
@@ -99,7 +111,7 @@ function todo(kernel, shipped, challenger) {
       if (state !== 'passed' && mine === 'passed') ahead.push({ file, id, state });
     }
   }
-  const byFile = list => [...Map.groupBy(list, c => c.file)].map(([file, claims]) => `- \`${file}\`: ${claims.map(c => `${c.id} (${c.mine ?? `shipped: ${c.state}`})`).join(', ')}`);
+  const byFile = list => [...groupBy(list, c => c.file)].map(([file, claims]) => `- \`${file}\`: ${claims.map(c => `${c.id} (${c.mine ?? `shipped: ${c.state}`})`).join(', ')}`);
   return [
     `# ${kernel}: what it needs to ship`,
     '',
@@ -139,6 +151,7 @@ async function main() {
   console.log(won.kernel ? `Winner: ${won.kernel} (${won.why})` : `No winner: ${won.why}`);
   writeFileSync(join(options.results, 'contest.json'), JSON.stringify({ shipped: SHIPPED, winner: won.kernel ?? null, why: won.why, kernels: rows }, null, 1) + '\n');
   console.log(`Results in ${options.results}`);
+  if (rows.some(r => r.kernel === SHIPPED && r.status !== 'scored')) process.exit(1);
 }
 
 await main();

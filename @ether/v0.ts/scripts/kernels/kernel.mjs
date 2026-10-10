@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
 import { Worker, isMainThread, workerData, parentPort } from 'worker_threads';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'fs';
+import { createHash } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'fs';
 import { tmpdir } from 'os';
 import { basename, dirname, join, relative, resolve, sep } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -104,14 +105,29 @@ async function bundled(name, modules) {
     if (at === undefined) throw new Error(`${name}: ${rel} is in none of src/, the library and v0.ts/`);
     return `export * as ${alias} from ${JSON.stringify(at)};`;
   }).join('\n');
-  const dir = mkdtempSync(join(tmpdir(), `ray-${name}-`)), outfile = join(dir, `${name}.mjs`);
+  const dir = join(tmpdir(), 'ray-kernels');
+  const outfile = join(dir, `${name}-${createHash('sha1').update(entry).update(String(sourcesChangedAt())).digest('hex').slice(0, 12)}.mjs`);
+  if (existsSync(outfile)) return { outfile };
+  mkdirSync(dir, { recursive: true });
+  const building = `${outfile}.${process.pid}.tmp`;
   await build({
     stdin: { contents: entry, resolveDir: pkg, loader: 'ts' },
-    outfile, bundle: true, format: 'esm', platform: 'node', target: 'node20', logLevel: 'error',
+    outfile: building, bundle: true, format: 'esm', platform: 'node', target: 'node20', logLevel: 'error',
     plugins: [{ name: 'shipped-sources', setup: b => b.onResolve({ filter: /^\.\/bundled\.ts$/ }, () => ({ path: join(pkg, 'src/bundled.ts') })) }],
     banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
   });
-  return { dir, outfile };
+  renameSync(building, outfile);
+  return { outfile };
+}
+
+function sourcesChangedAt(dir = join(pkg, 'src')) {
+  let at = 0;
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) at = Math.max(at, sourcesChangedAt(full));
+    else if (/\.(ts|mts|ray)$/.test(e.name)) at = Math.max(at, statSync(full).mtimeMs);
+  }
+  return at;
 }
 
 export async function serve({ name, modules, unable, read, runner }) {
@@ -133,7 +149,7 @@ export async function serve({ name, modules, unable, read, runner }) {
     process.stderr.write(`Usage: node scripts/kernels/${name}.mjs <file.ray>\n  Reads the file after ${name}'s own entrypoint and library; prints its diagnostics as \`path:line: message\` on stderr.\n`);
     process.exit(2);
   }
-  const { dir, outfile } = await bundled(name, modules);
+  const { outfile } = await bundled(name, modules);
   const file = resolve(files[0]);
   const worker = new Worker(runner, { workerData: { kernel: { outfile, file } }, resourceLimits: { stackSizeMb: Number(process.env.RAY_STACK ?? 60), maxOldGenerationSizeMb: Number(process.env.RAY_HEAP ?? 8000) } });
   let answered = false;
@@ -142,6 +158,5 @@ export async function serve({ name, modules, unable, read, runner }) {
     worker.on('error', e => { answered = true; process.stderr.write(`${name}: ${e?.stack ?? e}\n`); done(1); });
     worker.on('exit', c => { if (!answered) process.stderr.write(`${name}: the reader stopped without an answer (exit ${c})\n`); done(1); });
   });
-  rmSync(dir, { recursive: true, force: true });
   process.exit(code);
 }

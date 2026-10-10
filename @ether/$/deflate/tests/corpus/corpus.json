@@ -5,7 +5,7 @@
    "file": "text-stored.deflate",
    "sha256": "2edb1b1d8149f2e0a77861abd555cc7742cbf8d140a031b4a25b27e9a7562ddc",
    "size": 1490,
-   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(0, zlib.DEFLATED, -15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "made": "git show 65b21392:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(0, zlib.DEFLATED, -15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
    "tools": "Python 3.14.7 with zlib 1.3.2",
    "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
    "note": "stored blocks"
@@ -14,7 +14,7 @@
    "file": "text-fixed.deflate",
    "sha256": "97ee12643c92c8dec12f815141c44721147d466d705be31a0f43f3ca694e716b",
    "size": 817,
-   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, -15, 8, zlib.Z_FIXED); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "made": "git show 65b21392:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, -15, 8, zlib.Z_FIXED); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
    "tools": "Python 3.14.7 with zlib 1.3.2",
    "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
    "note": "fixed codes"
@@ -23,7 +23,7 @@
    "file": "text-dynamic.deflate",
    "sha256": "620b9ce357ab804d2975629eb72be9e46bb7f98fbb661f514a464890f28aaacd",
    "size": 698,
-   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, -15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "made": "git show 65b21392:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, -15, 8, zlib.Z_DEFAULT_STRATEGY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
    "tools": "Python 3.14.7 with zlib 1.3.2",
    "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
    "note": "dynamic codes"
@@ -32,7 +32,7 @@
    "file": "text-huffman.deflate",
    "sha256": "cf327ee785e20031ba7890fc91dd3ca3db2e718d22fb4ff8e79af7f2ed95c473",
    "size": 1045,
-   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, -15, 8, zlib.Z_HUFFMAN_ONLY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "made": "git show 65b21392:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, -15, 8, zlib.Z_HUFFMAN_ONLY); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
    "tools": "Python 3.14.7 with zlib 1.3.2",
    "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
    "note": "literals only"
@@ -41,7 +41,7 @@
    "file": "text-rle.deflate",
    "sha256": "a5eb37e92699f7b5318b0937c1ed6963fc03d3e1c9d848dea41268608f815a2f",
    "size": 1046,
-   "made": "git show 981f67c3:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, -15, 8, zlib.Z_RLE); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
+   "made": "git show 65b21392:'@ether/$/zlib/Zlib.ray' | python3 -c 'import sys,zlib; c = zlib.compressobj(9, zlib.DEFLATED, -15, 8, zlib.Z_RLE); sys.stdout.buffer.write(c.compress(sys.stdin.buffer.read()) + c.flush())'",
    "tools": "Python 3.14.7 with zlib 1.3.2",
    "licence": "MIT, as this repository (LICENSE at the repository root); the input is a file of this repository",
    "note": "copies of distance 1 only"

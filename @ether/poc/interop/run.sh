@@ -37,5 +37,6 @@ case "${1:-}" in
     diff "$out/oracle.txt" "$out/rust.txt"
     echo "A5 the Rust Ray wrote and the C gcc compiled agree on all $(wc -l < "$out/rust.txt") inputs"
     ;;
-  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5" >&2; exit 2 ;;
+  N0) ray "$here/ints.ray" "$here/n0.ray" ;;
+  *) echo "usage: run.sh S0|S1|A1|A2|A3|A4|A5|N0" >&2; exit 2 ;;
 esac

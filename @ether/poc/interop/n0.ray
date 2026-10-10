@@ -1,0 +1,22 @@
+mark ^keyword := global
+
+unless Int32.low == (1 - 2147483649) { INFO@mark `N0.1 Int32 does not begin at -2147483648` }
+unless Int32.high == 2147483647 { INFO@mark `N0.2 Int32 does not end at 2147483647` }
+unless (2147483647) is Int32 { INFO@mark `N0.3 the largest Int32 is not one` }
+if (2147483648) is Int32 { INFO@mark `N0.4 one past the largest Int32 is one` }
+unless (2147483648) is Int64 { INFO@mark `N0.5 a number past Int32 is not an Int64` }
+unless Int64.high > Int32.high { INFO@mark `N0.6 Int64 does not reach past Int32` }
+if Integer.high { INFO@mark `N0.7 Integer has an upper bound` }
+unless (99999999999999) is Integer { INFO@mark `N0.8 a large number is not an Integer` }
+
+add (a: Int32, b: Int32) => ((a + b) as Int32)
+mixed (a: Int32, b: Int32, c: Int32) => ((a + ((b * c) as Int32)) as Int32)
+cancel (a: Int32, b: Int32) => ((((a * b) as Int32) - ((a * b) as Int32)) as Int32)
+exact (a: Integer, b: Integer) => ((a * b) as Integer)
+unless (add(2, 3)) == 5 { INFO@mark `N0.9 a normal-form sum is not answered` }
+if add(2147483647, 1) { INFO@mark `N0.10 a sum leaving Int32 is answered` }
+unless (mixed(1, 2, 3)) == 7 { INFO@mark `N0.11 a nested normal form is not answered` }
+if mixed(1, 65536, 65536) { INFO@mark `N0.12 a product leaving Int32 inside a sum is answered` }
+if cancel(65536, 65536) { INFO@mark `N0.13 an intermediate leaving Int32 is answered when the result would fit` }
+unless (cancel(3, 4)) == (1 - 1) { INFO@mark `N0.14 a cancelling form does not answer nothing` }
+unless (exact(65536, 65536)) == 4294967296 { INFO@mark `N0.15 an Integer product is narrowed` }

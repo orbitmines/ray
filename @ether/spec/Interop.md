@@ -196,9 +196,25 @@ old B1 could only hold by construction (two readers with the same field names). 
 ### N0. The normal form and the integer types
 
 - **Goal.** Fix the shared shape before any reader exists.
-- **What happens.** `ints.ray` declares the types; `normal.ray` states the normal form with claims on hand-written Ray
-  functions: they run, an in-range result is answered, an intermediate leaving its type answers `None`.
-- **Pass.** `./run.sh N0`: its claims hold.
+- **The normal form.** Both readers must emit exactly this, as text:
+
+```
+function   := name " (" parameter (", " parameter)* ") => " expression
+parameter  := name ": " type
+expression := name | literal | "((" expression " " operator " " expression ") as " type ")"
+operator   := "+" | "-" | "*"
+type       := "Int32" | "Int64" | "Integer"
+literal    := "1" .. "9"
+```
+
+  Every operation is bracketed and narrowed to the function's type (in the subset all parameters share one type), so an
+  intermediate leaving the type answers `None` and the `None` reaches the result. Literals are 1 to 9: the literal `0`
+  is the library's own number once the library is read (IOPG4).
+- **What happens.** `ints.ray` declares `Int32` and `Int64` as narrowings of `Number` whose bounds are fields (`low`,
+  `high`), so a writer reads them, and `Integer`, unbounded, whose `low` and `high` are `None`. `n0.ray` claims them, and
+  claims hand-written normal-form functions: a sum, a nested product, a cancelling form whose result would fit but whose
+  intermediate does not, and an unbounded product.
+- **Pass.** `./run.sh N0`: N0.1 to N0.15 hold. Before `ints.ray`, eleven failed.
 
 ### N1. The C grammar
 
@@ -293,7 +309,8 @@ A step blocked by the engine adds an entry here: the step, the probe file, its o
   only lowercase names as fields, so such a header defines nothing yet.
 
 - **IOPG4 The literal `0` with the library loaded.** `0 - 7` answers NaN and `-7` stays text, while `2 - 9` answers
-  `-7`: with the core library read, `0` is the library's value, not the host's number. A1.7 writes its negative numbers
+  `-7`: `Number.ray` declares `zero := Number()` and `0 := zero`, so once the library is read `0` is the library's own
+  number, not the host's. A design question between the library's numbers and the host's kinds, left to the author. A1.7 writes its negative numbers
   as differences of non-zero numbers.
 
 ## Decided

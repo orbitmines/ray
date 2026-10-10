@@ -135,14 +135,17 @@ int add(int a, int b) { return a + b; }
 
 ### A3. Write Rust
 
-- **Goal.** The Program becomes `out/add.rs`.
-- **What happens.** `rust.o.ray` declares `Compiler.rust`, a rule set like `Compiler.javascript`: one rule for the
-  function header, one for `{a} + {b}`, and one mapping the 32-bit narrowing to `i32`. The result is narrowed too, so the
-  sum is checked: a narrowed result becomes an `Option`, `None` when the narrowing fails.
-- **Why it matters.** The writer knows Ray and Rust, never C. Any language with a reader into the same Program now reaches
-  Rust through this one file. And the Rust version is defined where the C original is not: the narrowing in the Program
-  says what overflow means, so the writer cannot drop it.
-- **Pass.** `out/add.rs` is exactly:
+- **Goal.** The Ray value from A1 and A2 becomes `out/add.rs`.
+- **What happens.** `rust.o.ray` declares `Rust`, a writer over the value's shape (`name`, `a`, `b`, `sum` with `left` and
+  `right`, `type`). It maps a type by what it admits, not by its name: a type that admits -2147483648 and 2147483647 and
+  neither number past them is `i32` (`Rust.i32`). The result is narrowed, so the sum is checked: the result type is
+  `Option<i32>` and the body `left.checked_add(right)`, `None` when the narrowing fails. `io.ray`'s `written_to_file`
+  writes the text. (Named `Rust`, not `Compiler.rust`: a member added to the library's `Compiler` would change its levels.)
+- **Why it matters.** The writer knows Ray and Rust, never C (`rust.o.ray` does not mention `C`). Any language with a
+  reader into the same shape now reaches Rust through this one file. And the Rust version is defined where the C original
+  is not: the narrowing says what overflow means, so the writer cannot drop it.
+- **Pass.** `./run.sh A3`: claims A3.1 to A3.4 hold (the narrowing is written `i32`, an unbounded `Number` is not, the text
+  equals `expected/add.rs`, it is written to `out/add.rs`), and `out/add.rs` is byte for byte `expected/add.rs`:
 
 ```rust
 pub fn add(a: i32, b: i32) -> Option<i32> { a.checked_add(b) }

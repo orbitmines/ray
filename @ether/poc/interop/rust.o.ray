@@ -1,0 +1,7 @@
+Rust := { }
+Rust.i32 (type) => ((2147483647) is type) && ((1 - 2147483649) is type) && !((2147483648) is type) && !((1 - 2147483650) is type)
+Rust.type_written (type) => Rust.i32(type) ? "i32" : None
+Rust.parameter_written (name, f) => name + ": " + Rust.type_written(f.type)
+Rust.result_written (f) => "Option<" + Rust.type_written(f.type) + ">"
+Rust.body_written (f) => f.sum.left + ".checked_add(" + f.sum.right + ")"
+Rust.function (f) => "pub fn " + f.name + "(" + Rust.parameter_written(f.a, f) + ", " + Rust.parameter_written(f.b, f) + ") -> " + Rust.result_written(f) + " { " + Rust.body_written(f) + " }"

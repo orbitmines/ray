@@ -1,3 +1,6 @@
 text_of_file {path} =>
   goto js
   typeof path === 'string' ? process.getBuiltinModule('fs').readFileSync(process.env.POC + '/' + path, 'utf8').trim() : undefined
+written_to_file {path} =>
+  goto js
+  typeof self === 'string' && typeof path === 'string' ? (process.getBuiltinModule('fs').writeFileSync(process.env.POC + '/' + path, self + String.fromCharCode(10)), self) : undefined

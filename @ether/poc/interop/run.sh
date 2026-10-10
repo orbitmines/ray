@@ -15,5 +15,11 @@ case "${1:-}" in
     ;;
   A1) ray "$here/io.ray" "$here/c.ray" "$here/a1.ray" ;;
   A2) ray "$here/io.ray" "$here/c.ray" "$here/a2.ray" ;;
-  *) echo "usage: run.sh S0|S1|A1|A2" >&2; exit 2 ;;
+  A3)
+    rm -f "$out/add.rs"
+    ray "$here/io.ray" "$here/c.ray" "$here/rust.o.ray" "$here/a3.ray"
+    diff "$here/expected/add.rs" "$out/add.rs"
+    echo "A3 out/add.rs matches expected/add.rs"
+    ;;
+  *) echo "usage: run.sh S0|S1|A1|A2|A3" >&2; exit 2 ;;
 esac

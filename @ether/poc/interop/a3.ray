@@ -1,0 +1,8 @@
+mark ^keyword := global
+
+read := (text_of_file "add.c") as C.Function
+unless (Rust.type_written(read.type)) == "i32" { INFO@mark `A3.1 a 32-bit narrowing is not written as i32` }
+if Rust.type_written(Number) { INFO@mark `A3.2 an unbounded number is written as i32` }
+written := Rust.function(read)
+unless written == (text_of_file "expected/add.rs") { INFO@mark `A3.3 the Rust written is not expected/add.rs` }
+unless (written written_to_file "out/add.rs") == written { INFO@mark `A3.4 the Rust is not written to out/add.rs` }

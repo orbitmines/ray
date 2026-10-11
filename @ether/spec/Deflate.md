@@ -188,7 +188,8 @@ No DF claim passes. DP0 starts here.
   `int add(int a, int b) { return a + b; }`, `8d 04 37 c3` (`lea eax, [rdi+rsi*1]`, `ret`), and writes them back.
 - **Why it matters.** This is the reading step of Interop.md C1 and the first piece of the Almanac's (1b): decompiling
   the backends compilers already target. Machine code is one more binary format.
-- **Not in this proof.** Built only after DP7 passes.
+- **Moved.** `Machine.md` (`proposal/machine-code`) builds this, at the size of the interop corpus, before DP7 and DP8:
+  the wrappers and the comparison serve binary-format tooling, and machine code serves interop, which is the goal.
 
 ## Status
 
@@ -298,4 +299,4 @@ Answers from 2026-10-10:
 
 ## Order of work
 
-DP0, DP1, DP2, DP3, DP4, DP5, DP6, DP7, DP8. DP9 waits for DP7.
+DP0 to DP6 are done. DP9 became `Machine.md`, built first; DP7 and DP8 come after it.

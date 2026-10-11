@@ -121,7 +121,48 @@ All POC files live in `@ether/poc/machine/`:
 
 ## Status
 
-MC0 in progress.
+MC0 to MC5 pass (`./run.sh MC1` … `MC5` in `@ether/poc/machine`; 25 functions per process).
+
+- **MC0**: on the merged branch, S0 to N6 and DP0, DP2, DP3, DP4 pass.
+- **MC1**: 200 functions, from 3 to 32 bytes, pinned in `corpus/manifest.txt` (gcc 16.2.1).
+- **MC2**: all 200 read into instructions and written back byte for byte.
+- **MC3**: all 200: Ray's text is objdump's, line for line.
+- **MC4**: all 200 lift to Ray functions that answer what the C source computes on 3 inputs each. gcc does not keep the
+  source's shape: `2-b-(b + rate) + (rate + 7 + (rate - 8))` arrives as `rate - 2b + 1`, and
+  `a - (n - n) + ((x * n + (x - a)))` as `(n + 1) * x` (`lea eax,[rdi+0x1]`, `imul eax,edx`); the lift reads what the
+  machine does, not what was written.
+- **MC5**: 6000 inputs (30 per function, half at the edges of the type): the C-ABI Rust Ray wrote from the machine code,
+  linked into one C harness, prints what gcc's own objects print on all 6000. No C source and no C grammar is on that
+  path; `f3` becomes `n.wrapping_add(1i32).wrapping_mul(x)`.
+
+Each function reads, prints and lifts in about half a second.
+
+## Engine work
+
+- **The merge.** `as` tries `T.from(x)`, then the text a header reads (interop), then the bits it reads (DEFLATE).
+- **One boot for both proofs.** The interop runner read the core library in directory order. Once `dangling` (DEFLATE)
+  let `Program.ray`'s `Program &+= { … from: *? … }` read before `Program` was defined, its fields landed in the global
+  scope, and `from: *?` answered its argument for every `T.from(x)`, so every `x as T` did too. It now boots as
+  `poc/deflate/boot.mts` does: the library in the order it needs itself.
+- **Headers of text stay plain.** A header with quoted pieces (`CFunctionText`) is read as text, not as bits; a header is
+  of bits when a type in it, or what it lists or may be, is a class of bits.
+- **Alternatives of classes.** `operation: X86.Imul<rex> | … | X86.Ret<rex>` reads the first that fits and writes the one
+  the value `is`.
+- **The host** gains `hexadecimal`, as it has `binary`.
+- **`wrapped`** (`poc/machine/wrapping.ray`): `x wrapped T` is x brought into T's bounds modulo their size, the machine's
+  arithmetic, where `x as T` answers None outside them. The Rust writer writes it as `wrapping_add`, `as i32`,
+  `as u32 as i64`.
+
+## Engine gaps
+
+- **MCG1 A class's statics are not in scope while its block is read.** `X86.Rex` does not resolve until `X86 :=` is done,
+  so a header whose bits come only through sibling classes would be read as plain. `X86.Instruction` and `X86.Function`
+  are defined after `X86`.
+- **MCG2 An unbalanced bracket says nothing.** One `)` too many in one method left the whole class unmade, silently,
+  and whether the file read alternated with how many statics came after it. Errors with positions are needed (Interop.md
+  L1 asks for them too).
+- **MCG3 `return` in a rule's right side returns from the function that called the rule.** `wrapped` written with
+  `(return value) if …` made every lifted function answer its first wrapped value.
 
 ## Decided
 

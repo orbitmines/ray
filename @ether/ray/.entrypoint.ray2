@@ -1425,15 +1425,21 @@ checked {type} =>
   .
 
 // `static`: what follows is read where it is (a class's block is read once, for the class). A value given a name, when it is
-// first read (the class is there by then: `static plane := Space(…)` in `Space`), then that value.
+// first read (the class is there by then: `static plane := Space(…)` in `Space`), then that value; a class, where it is
+// read (a class made later, from where it is first read, does not find its own names).
 static {{statement}} =>
   {statement}
 {`static`} {name} {`:=`} {value} =>
+  (goto lazily) unless (.value) begins "class"
+  {name} := {value}
+  goto made
+  lazily\
   {name} =>
     {name} = global.{name}
     kept := {value}
     {name} = kept
     kept
+  made\
 {`static`} {name}:{ }{type} = {value} =>
   {name} =>
     {name} = global.{name}

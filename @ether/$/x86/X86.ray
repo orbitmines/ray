@@ -327,3 +327,36 @@ X86.addressing (a, address, form) =>
   X86.Instruction(rex, form(rex, X86.Operand(4, a.number % 8, mode, base % 8, (index === None) ? 4 : (index % 8), X86.scale_bits(address.scale), small, large)))
 X86.scale_of (text) => (text == "1") ? 1 : ((text == "2") ? 2 : ((text == "4") ? 4 : 8))
 X86.scale_bits (scale) => (scale == 1) ? 0 : ((scale == 2) ? 1 : ((scale == 4) ? 2 : 3))
+
+// Ray written as machine code: a function of the interop normal form, its operations evaluated into registers as a stack (the
+// result in eax or rax, what is still needed in r8 to r11), its arguments where System V gives them, then `ret`; as the lines
+// `X86.Assembly` reads (the reverse of `lift`)
+X86.Operation := class (name, left, right)
+X86.Shape := {
+  ( ( {left} + {right} ) wrapped {type} ) => X86.Operation("add", "{left}", "{right}")
+  ( ( {left} - {right} ) wrapped {type} ) => X86.Operation("sub", "{left}", "{right}")
+  ( ( {left} * {right} ) wrapped {type} ) => X86.Operation("imul", "{left}", "{right}")
+  ( ( {left} + {right} ) as {type} ) => X86.Operation("add", "{left}", "{right}")
+  ( ( {left} - {right} ) as {type} ) => X86.Operation("sub", "{left}", "{right}")
+  ( ( {left} * {right} ) as {type} ) => X86.Operation("imul", "{left}", "{right}")
+}
+X86.Temporaries := [0, 8, 9, 10, 11]
+X86.Arguments := [7, 6, 2, 1]
+X86.lowered (text, depth, width, parameters) =>
+  (return None) if depth >= X86.Temporaries.count
+  target := X86.named(X86.Temporaries[depth], width)
+  shape := X86.Shape reads_text text
+  if shape {
+    left := X86.lowered(shape.left, depth, width, parameters)
+    right := X86.lowered(shape.right, depth + 1, width, parameters)
+    (return None) unless left && right && (depth + 1 < X86.Temporaries.count)
+    return [left, right, [(((shape.name + " ") + target) + ",") + X86.named(X86.Temporaries[depth + 1], width)]].flatten
+  }
+  index := parameters.index_of(text)
+  (return [(("mov " + target) + ",") + X86.named(X86.Arguments[index], width)]) if index !== None
+  (return [(("mov " + target) + ",0x") + text]) if text fits_pattern "^[1-9]$"
+  None
+X86.compiled (body, width, parameters) =>
+  lines := X86.lowered(body spaced_tokens "( )", 0, width, parameters)
+  (return None) unless lines
+  [lines, ["ret"]].flatten

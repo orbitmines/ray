@@ -6,17 +6,30 @@ rust_i64_low := 1 - 9223372036854775809
 rust_i64_high := 9223372036854775807
 rust_type_for (type) => ((type.low == rust_i32_low) && (type.high == rust_i32_high)) ? "i32" : (((type.low == rust_i64_low) && (type.high == rust_i64_high)) ? "i64" : None)
 rust_type_named (name) => rust_type_for(value_named name)
-rust_leaf (x, type) => (x fits_pattern "^[1-9]$") ? (x + rust_type_named(type)) : ((x fits_pattern "^[A-Za-z_][A-Za-z0-9_]*$") ? x : None)
+rust_leaf (x, type) => (x fits_pattern "^[1-9][0-9]*$") ? (x + rust_type_named(type)) : ((x fits_pattern "^[A-Za-z_][A-Za-z0-9_]*$") ? x : None)
 rust_operand (x, type) => (RustExpression reads_text x) ?? rust_leaf(x, type)
 rust_joined (left, method, right) => (left && right) ? ((rust_policy == "checked") ? (left + ".checked_" + method + "(" + right + ")?") : (left + ".wrapping_" + method + "(" + right + ")")) : None
 rust_checked (left, method, right, type) => rust_joined(rust_operand(left, type), method, rust_operand(right, type))
+rust_wrapping (left, method, right, type) => rust_wrapped(rust_operand(left, type), method, rust_operand(right, type))
+rust_wrapped (left, method, right) => (left && right) ? (left + ".wrapping_" + method + "(" + right + ")") : None
+rust_converted (inner, type, conversion) => rust_operand(inner, type) ? ("(" + rust_operand(inner, type) + conversion + ")") : None
 RustExpression := {
+  ( {inner} wrapped Int32 ) =>
+    rust_converted("{inner}", "Int64", " as i32")
+  ( {inner} wrapped Natural32 ) =>
+    rust_converted("{inner}", "Int32", " as u32 as i64")
   ( ( {left} + {right} ) as {type} ) =>
     rust_checked("{left}", "add", "{right}", "{type}")
   ( ( {left} - {right} ) as {type} ) =>
     rust_checked("{left}", "sub", "{right}", "{type}")
   ( ( {left} * {right} ) as {type} ) =>
     rust_checked("{left}", "mul", "{right}", "{type}")
+  ( ( {left} + {right} ) wrapped {type} ) =>
+    rust_wrapping("{left}", "add", "{right}", "{type}")
+  ( ( {left} - {right} ) wrapped {type} ) =>
+    rust_wrapping("{left}", "sub", "{right}", "{type}")
+  ( ( {left} * {right} ) wrapped {type} ) =>
+    rust_wrapping("{left}", "mul", "{right}", "{type}")
 }
 rust_parameter (name, type) => rust_type_named(type) ? (name + ": " + rust_type_named(type)) : None
 rust_parameters_joined (first, rest) => (first && rest) ? (first + ", " + rest) : None

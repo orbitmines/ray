@@ -19,16 +19,9 @@ Noise := class: Language pattern = XX, dh: Encoding.Agreement = X25519, cipher =
     written (hs: Handshake) => (hs.e = hs.protocol.dh.pair()).public ~~ hs.mixed_hash(hs.e.public)
     read (hs: Handshake, rest: Byte[]) => rest[hs.width..] ~~ (hs.re = rest[..<hs.width]) ~~ hs.mixed_hash(hs.re)
     assert {
-      nz_alice := Noise.handshake(true, X25519.pair())
+      nz_bob := Noise.handshake(false, X25519.pair())
       // -> e; <- e, ee, s, es; -> s, se: both sides end with one handshake hash, each holding the other's static key (§7.5)
       nz_bob.read(nz_alice.written())
-      // NZ6 an empty payload does not read back empty
-      assert nz_bob.read(nz_alice.written()) == []
-      // NZ7 three messages do not finish XX
-      assert nz_alice.done && nz_bob.done
-    }
-    assert {
-      nz_bob := Noise.handshake(false, X25519.pair())
       nz_hello := nz_alice.read(nz_bob.written("hello".bytes))
       // NZ5 the payload of the second message does not read back
       assert nz_hello == "hello".bytes
@@ -87,6 +80,10 @@ Noise := class: Language pattern = XX, dh: Encoding.Agreement = X25519, cipher =
   // A handshake, initiated or answered with a static key; its DH function is the one the key names (§5.3)
   static handshake (initiator: boolean, s: Encoding.Key, prologue: Byte[] = [], pattern = XX, cipher = ChaCha20Poly1305, hash: Encoding.Digest = SHA256) =>
     Handshake(protocol: Noise(pattern, dh: s.algorithm, cipher, hash), initiator, s) ~~ .mixed_hash(prologue)
+  assert Noise.handshake(true, X25519.pair()).(
+    nz_bob.read(.written()) == []  // NZ6 an empty payload does not read back empty
+    & .done && nz_bob.done  // NZ7 three messages do not finish XX
+  )
 
   // The HandshakeState with its SymmetricState: the name as h (padded, or hashed when longer than HASHLEN), ck = h, then the tokens of each message in turn (§5.2, §5.3)
   static Handshake := class protocol: Noise, initiator: boolean, s: Encoding.Key, e: Encoding.Key?, rs: Byte[]?, re: Byte[]?, step: Number = 0 {

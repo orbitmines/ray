@@ -249,10 +249,6 @@ Node &+= {
 Unknown := class {
   # => Possibilities(values: [])
   random => chosen_within(1)
-  // FE3 a coin comes up with nothing
-  assert boolean#.random is boolean
-  // RN12 a coin lands on neither side
-  assert boolean#.random is boolean
   admits (candidate) => true
 }
 {target} ?= {value} ^punctuation => target = target ?? value

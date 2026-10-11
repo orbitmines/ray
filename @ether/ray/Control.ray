@@ -50,6 +50,19 @@ assert 0 == 1
 
 
 
+assert {
+  left := 3
+  rounds := 0
+  while left {
+    rounds += 1
+    left -= 1
+  }
+  // CF10 a loop ran other than three times
+  assert rounds == 3
+  // CF11 a loop left its count behind
+  assert left == 0
+}
+
 // `;`
 // CF14 the semicolon does not answer what is written after it
 assert (1 ; 2) == 2

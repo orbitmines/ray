@@ -119,20 +119,24 @@ assert {
 
 Item := class: Nameable {
   issuer: World = location.world ?? World.ether
-  // Locations: what holds what, and how deep that goes.
   assert {
-    here := Location(host: None)
-    there := here.holds(Location(host: None))
-    // LO1 a location nothing holds is not at zero
-    assert here.depth == 0
-    // LO2 a held location is not one deep
-    assert there.depth == 1
-    // LO3 the holder does not hold one
-    assert here.children.count == 1
-    // LO4 a held location has no parent
-    assert there.parent
-    // LO5 a location is not itself
-    assert here == here
+    wg := World(name: "genesis")
+    wp := wg.add(Player(name: "alice"))
+    // WO1 spawned player lost its name
+    assert wp.name == "alice"
+    // WO2 world has other than one character
+    assert wg.characters.count == 1
+    wh := History(repository: wg)
+    // WO4 a commit did not add to the history
+    assert wh.commit(wp, "hello").count == 1
+    // WO10 a said message is not in the chat
+    assert Chat().commit(wp, Program(code: { "hi" })).count == 1
+    // RP1 a new repository already has histories
+    assert Repository(world: wg).histories.empty
+    // WO12 a world is not itself
+    assert wg == wg
+    // WO13 two worlds are the same world
+    assert !(wg == World(name: "other"))
     // Items: what one is issued by, where it is, and what says so.
     wi := Item(name: "lamp", issuer: wg)
     // ITM1 an item lost its name
@@ -144,6 +148,53 @@ Item := class: Nameable {
     wi.history.commit(wg, wi)
     // ITM4 a certified item does not carry its certificate
     assert wi.history{who: wg}.nonempty
+    // PE3 a new character is not offline
+    assert wp is Offline
+    // A name reserved in a world is a field of it, `world.@name = holder`, answered to whoever asks for that name again.
+    wg.@dawn = wp
+    // NM1 a reserved name does not answer what holds it
+    assert wg.@dawn === wp
+    wg.@eve = 2
+    // RS6 another name is not another reservation
+    assert wg.@eve == 2 && wg.@dawn === wp
+    // RS9 an untaken name reads as taken
+    assert !(wg.@carol)
+    // RS11 a reserved name is free again in other letter case
+    assert wg.@DAWN === wp
+    // A history keeps what was committed, in the order it was committed.
+    repo := Repository(world: wg)
+    past := History(repository: repo)
+    // HI1 a new history already holds commits
+    assert past.count == 0
+    past.commit(wp, "first")
+    // HI2 committing does not keep it
+    assert past.count == 1
+    past.commit(wp, "second")
+    // HI3 committing twice keeps other than two
+    assert past.count == 2
+    // HI4 the latest is not the last committed
+    assert past.last.value == "second"
+    // HI5 a commit forgot who made it
+    assert past.last.who === wp
+    branched := past.fork
+    // HI6 a fork starts with commits on it
+    assert branched.count == 0
+    // HI7 a fork forgot what it came from
+    assert branched.base === past.last
+    // What is written down about something read.
+    cite := Reference(title: "on rays")
+    cite.authors.push wp
+    // RF1 a new reference is not a draft
+    assert !(cite.public)
+    // RF2 publishing does not take it out of draft
+    assert cite.publish.public
+    // RF3 a new reference already has notes
+    assert cite.notes.empty
+    cite.note = "a note"
+    // RF4 a note is not kept
+    assert cite.notes.count == 1
+    // RF5 a reference forgot its title
+    assert cite.title == "on rays"
     // A quest is a program with someone to run it; a step defined nowhere is one they do themselves.
     errand := Program(name: "fetch", goal: wi)
     // QU1 a new quest is already done
@@ -162,17 +213,31 @@ Item := class: Nameable {
     assert staged.difficulty == 2
     // QUW1 a quest is not run by whoever made it
     assert staged.who === @me
+    // QU11 posting a quest does not put it in the world
+    assert wg.quests.count == 1
     // A quest can be stopped; a stopped quest is done.
     carrying := Program(name: "carry", goal: wi)
     // QU8 stopping a quest does not end it
     assert carrying.stop.done
-    // A node's location is every place it is: `@` adds one, and a mirror is the same value at another instance.
-    plc := (Item(name: "plc") @ here)
-    plc @ there
-    // PLC1 a value placed twice is not at both places
-    assert here is plc.location# && there is plc.location#
-    // PLC2 a value placed once is not where it was placed
-    assert (Item(name: "plc2") @ here).location == here
+    sited := Reference(title: "t", subtitle: "s", date: "2025-01-01" as Time, location: @https://a.b | "p")
+    // WR1 a reference forgot its subtitle
+    assert sited.subtitle == "s"
+    // WR2 a reference forgot its year
+    assert sited.year == 2025
+    // WR3 a reference forgot its link
+    assert @https://a.b is sited.location
+    // WR4 a reference forgot its pointer
+    assert "p" is sited.location
+    sited.authors.push wp
+    // WR8 an author added is not kept
+    assert sited.authors.count == 1
+    // WR9 the author kept is not the one added
+    assert sited.authors.first === wp
+    // A name confusable with a reserved one finds it, and a confusable mixed-script name is not reserved (UTS #39).
+    // SKL5 a name confusable with a reserved one does not find it
+    assert wg.@dаwn === wp
+    // SKL6 a name that mixes scripts and is confusable is reserved
+    assert (wg.@pаge = 3).erred
   }
   // What a world holds, and how many live in it.
   assert {
@@ -238,93 +303,6 @@ Item := class: Nameable {
 
 Reference := class {
   title: String
-  assert {
-    wg := World(name: "genesis")
-    wp := wg.add(Player(name: "alice"))
-    // WO1 spawned player lost its name
-    assert wp.name == "alice"
-    // WO2 world has other than one character
-    assert wg.characters.count == 1
-    wh := History(repository: wg)
-    // WO4 a commit did not add to the history
-    assert wh.commit(wp, "hello").count == 1
-    // WO10 a said message is not in the chat
-    assert Chat().commit(wp, Program(code: { "hi" })).count == 1
-    // RP1 a new repository already has histories
-    assert Repository(world: wg).histories.empty
-    // WO12 a world is not itself
-    assert wg == wg
-    // WO13 two worlds are the same world
-    assert !(wg == World(name: "other"))
-    // PE3 a new character is not offline
-    assert wp is Offline
-    // A name reserved in a world is a field of it, `world.@name = holder`, answered to whoever asks for that name again.
-    wg.@dawn = wp
-    // NM1 a reserved name does not answer what holds it
-    assert wg.@dawn === wp
-    wg.@eve = 2
-    // RS6 another name is not another reservation
-    assert wg.@eve == 2 && wg.@dawn === wp
-    // RS9 an untaken name reads as taken
-    assert !(wg.@carol)
-    // RS11 a reserved name is free again in other letter case
-    assert wg.@DAWN === wp
-    // A history keeps what was committed, in the order it was committed.
-    repo := Repository(world: wg)
-    past := History(repository: repo)
-    // HI1 a new history already holds commits
-    assert past.count == 0
-    past.commit(wp, "first")
-    // HI2 committing does not keep it
-    assert past.count == 1
-    past.commit(wp, "second")
-    // HI3 committing twice keeps other than two
-    assert past.count == 2
-    // HI4 the latest is not the last committed
-    assert past.last.value == "second"
-    // HI5 a commit forgot who made it
-    assert past.last.who === wp
-    branched := past.fork
-    // HI6 a fork starts with commits on it
-    assert branched.count == 0
-    // HI7 a fork forgot what it came from
-    assert branched.base === past.last
-    // What is written down about something read.
-    cite := Reference(title: "on rays")
-    cite.authors.push wp
-    // RF1 a new reference is not a draft
-    assert !(cite.public)
-    // RF2 publishing does not take it out of draft
-    assert cite.publish.public
-    // RF3 a new reference already has notes
-    assert cite.notes.empty
-    cite.note = "a note"
-    // RF4 a note is not kept
-    assert cite.notes.count == 1
-    // RF5 a reference forgot its title
-    assert cite.title == "on rays"
-    // QU11 posting a quest does not put it in the world
-    assert wg.quests.count == 1
-    sited := Reference(title: "t", subtitle: "s", date: "2025-01-01" as Time, location: @https://a.b | "p")
-    // WR1 a reference forgot its subtitle
-    assert sited.subtitle == "s"
-    // WR2 a reference forgot its year
-    assert sited.year == 2025
-    // WR3 a reference forgot its link
-    assert @https://a.b is sited.location
-    // WR4 a reference forgot its pointer
-    assert "p" is sited.location
-    sited.authors.push wp
-    // WR8 an author added is not kept
-    assert sited.authors.count == 1
-    // WR9 the author kept is not the one added
-    assert sited.authors.first === wp
-    // A name confusable with a reserved one finds it, and a confusable mixed-script name is not reserved (UTS #39).
-    // SKL5 a name confusable with a reserved one does not find it
-    assert wg.@dаwn === wp
-    // SKL6 a name that mixes scripts and is confusable is reserved
-    assert (wg.@pаge = 3).erred
-  }
   assert Reference(title: "a").(
     !(.public)  // RE1 a new reference is public
     & .publish.public  // RE2 a published reference is not public
@@ -393,6 +371,28 @@ Reference := class {
 Location &+= {
   [name: String] => fields{.name == name}.last.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
 }
+// Locations: what holds what, and how deep that goes.
+assert {
+  here := Location(host: None)
+  there := here.holds(Location(host: None))
+  // LO1 a location nothing holds is not at zero
+  assert here.depth == 0
+  // LO2 a held location is not one deep
+  assert there.depth == 1
+  // LO3 the holder does not hold one
+  assert here.children.count == 1
+  // LO4 a held location has no parent
+  assert there.parent
+  // LO5 a location is not itself
+  assert here == here
+  // A node's location is every place it is: `@` adds one, and a mirror is the same value at another instance.
+  plc := (Item(name: "plc") @ here)
+  plc @ there
+  // PLC1 a value placed twice is not at both places
+  assert here is plc.location# && there is plc.location#
+  // PLC2 a value placed once is not where it was placed
+  assert (Item(name: "plc2") @ here).location == here
+}
 Location.current = @local
 
 Character &+= {
@@ -417,6 +417,14 @@ Character &+= {
     assert !((with (@me = ver_a) { Character(name: "forged", proof: ver_a.acting.proof) == ver_a.acting }))
     // IDY18 a private key is read by the character's own code
     assert !((with (@me = ver_a) { ver_a.key.secret }) is Byte[])
+    // An introduction is checked against its key log, and the character is made from that log: an identity told beside it is never taken.
+    intro_forged := hsk_si.sent(Language.ray.write((name: "hsk-a", identity: ver_b.identity, log: hsk_a.identity.history,
+      by: hsk_a.key.published, signature: hsk_a.key.signed(hsk_si.binding))) as Byte[])
+    intro_seen := hsk_peer.introduced(hsk_sr, intro_forged)
+    // INTRO1 an introduction keeps the identity it was told
+    assert !(intro_seen.root == ver_b.root || intro_seen.policy().keys == ver_b.policy().keys)
+    // INTRO2 an introduced character's identity is not the key log that was checked
+    assert intro_seen.root == hsk_a.root && intro_seen.policy().certifies(hsk_a.key.published, World.ether.clock.now)
   }
   // A character used as a condition is whether it is @me.
   assert {
@@ -532,14 +540,6 @@ Character &+= {
     assert hsk_seen == hsk_a.acting
     // HSK3 the other side is verified as oneself
     assert !(hsk_seen == hsk_b.acting)
-    // An introduction is checked against its key log, and the character is made from that log: an identity told beside it is never taken.
-    intro_forged := hsk_si.sent(Language.ray.write((name: "hsk-a", identity: ver_b.identity, log: hsk_a.identity.history,
-      by: hsk_a.key.published, signature: hsk_a.key.signed(hsk_si.binding))) as Byte[])
-    intro_seen := hsk_peer.introduced(hsk_sr, intro_forged)
-    // INTRO1 an introduction keeps the identity it was told
-    assert !(intro_seen.root == ver_b.root || intro_seen.policy().keys == ver_b.policy().keys)
-    // INTRO2 an introduced character's identity is not the key log that was checked
-    assert intro_seen.root == hsk_a.root && intro_seen.policy().certifies(hsk_a.key.published, World.ether.clock.now)
   }
   // Delegation: signed, scoped and expiring; the effective permission is the intersection.
   assert {

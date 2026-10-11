@@ -57,43 +57,44 @@ Number &+= {
 {number: Number} ^number =>
   number
 
-// What both answer: `true`/`false`, read here.
-== {other} ^operator =>
+// What both answer, an operator written between two (`a + b`: read on `a`): one declared later binds looser (`1 + 2 == 3` is
+// `(1 + 2) == 3`), one declared with it as loosely (`10 - 2 - 3` is `(10 - 2) - 3`). `-` before `+`, `/` before `*`: `a + (b - c)`
+// is `(a + b) - c`; `%` after `*` (`n / 100 % 10`). Text added to: joined; anything else, composed. Comparisons: `true`/`false`.
+// Of two whole numbers, what `Number` says: `-` none below zero, `/` whole (by zero, zero), `%` by zero, the number.
+compounds / {other} ^operator =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) && self >= 0 && other >= 0 ? (other === 0 ? 0 : Math.floor(self / other)) : self / other
+compounds * {other} ^operator =>
+  goto js
+  self * other
+compounds % {other} ^operator =>
+  goto js
+  other === 0 ? self : ((self % other) + other) % other
+compounds - {other} ^operator =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) && self >= 0 && other >= 0 ? Math.max(0, self - other) : self - other
+compounds + {other} ^operator =>
+  goto js
+  typeof self === 'string' ? self + String(other) : typeof self === 'number' ? self + other : undefined
+  .composed({other})
+chainable < {other} ^operator =>
+  goto js
+  $(self < other ? 'true' : 'false')
+chainable <= {other} ^operator =>
+  goto js
+  $(self <= other ? 'true' : 'false')
+chainable > {other} ^operator =>
+  goto js
+  $(self > other ? 'true' : 'false')
+chainable >= {other} ^operator =>
+  goto js
+  $(self >= other ? 'true' : 'false')
+chainable == {other} ^operator =>
   goto js
   $(self === other ? 'true' : 'false')
 != {other} ^operator =>
   goto js
   $(self !== other ? 'true' : 'false')
-< {other} ^operator =>
-  goto js
-  $(self < other ? 'true' : 'false')
-<= {other} ^operator =>
-  goto js
-  $(self <= other ? 'true' : 'false')
-> {other} ^operator =>
-  goto js
-  $(self > other ? 'true' : 'false')
->= {other} ^operator =>
-  goto js
-  $(self >= other ? 'true' : 'false')
-
-// Numbers (text added to: joined; anything else, composed).
-+ {other} ^operator =>
-  goto js
-  typeof self === 'string' ? self + String(other) : typeof self === 'number' ? self + other : undefined
-  .composed({other})
-- {other} ^operator =>
-  goto js
-  self - other
-* {other} ^operator =>
-  goto js
-  self * other
-/ {other} ^operator =>
-  goto js
-  self / other
-% {other} ^operator =>
-  goto js
-  ((self % other) + other) % other
 
 // Text (`""`: none). (text with an escape in it, `"\e[0m"`: each escape what String.ray's `Escape` says it stands for)
 "" =>
@@ -102,6 +103,10 @@ Number &+= {
 unescaped =>
   goto js
   typeof self !== 'string' ? undefined : self.replace(/\\(.)/gs, (_, c) => ({ '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n', f: '\f', r: '\r', e: '\x1b' })[c] ?? c)
+// (whether it is a name: a letter or `_`, then letters, digits, `_`)
+named =>
+  goto js
+  $(/^[\p{L}_][\p{L}\p{N}_]*$/u.test(String(self)) ? 'true' : 'false')
 // (whether it has a space not inside a bracket: written as more than one thing)
 spaced =>
   goto js
@@ -131,6 +136,13 @@ of =>
   goto js
   typeof self === 'number' ? $('Number') : typeof self === 'string' ? $('String') : undefined
   None
+// A whole number's links (what `Number` walks): the one before it (`next`; none before zero), the one after it.
+next =>
+  goto js
+  typeof self === 'number' && Number.isInteger(self) && self >= 0 ? (self === 0 ? $('None') : self - 1) : undefined
+succ =>
+  goto js
+  typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self + 1 : undefined
 
 // Ranges of numbers: `a..<b` (up to b, not it), `a..b` (with it), going down when b is below a (of anything else, none).
 ..{last} =>

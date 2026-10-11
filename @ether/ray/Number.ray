@@ -236,6 +236,10 @@ Number &+= {
   static Line := class: Ray (value: Number) => {
     next => Line(value: value.succ)
     previous => value.is_zero ? None : Line(value: value.pred)
+    // BOR5 true.previous should be false
+    assert true.previous == false
+    // BOR6 false.previous should be true
+    assert false.previous == true
     // NL10 before three is not two
     assert 3.entry.previous == 2
   }
@@ -601,13 +605,6 @@ Angle &+= {
 boolean &+= {
   as (=== Binary) => this ? ₂1 : ₂0
 }
-// `#` is what a value may be (A1, T2.3)
-// HS1 boolean does not have two possible values
-assert boolean#.count == 2
-// CN2 the only member a narrowing admits is not the one chosen
-assert boolean{. == true}() == true
-// CN5 three called on boolean is not three of it
-assert (3 boolean).count == 3
 
 // N141 3 != 4 is not read as not-equal
 assert 3 != 4

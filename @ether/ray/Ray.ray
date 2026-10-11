@@ -74,7 +74,10 @@ Ordered := class (T = static) => {
 Iterable &+= {
   entry: Vertex? => TODO
 
-  dynamically assert count < ∞ if bounded: boolean = true
+  bounded: boolean = true
+  // RR51 a list of three is not bounded
+  assert ([1, 2, 3]).bounded
+  dynamically assert count < ∞ if bounded
 
   empty => count == 0
   // R27 an empty list is not empty
@@ -993,8 +996,6 @@ Loop := class: Path (around: Iterable, at: *) => {
   is_initial => false
   is_terminal => false
   bounded => false
-  // RR51 a list of three is not bounded
-  assert ([1, 2, 3]).bounded
   acyclic => false
 
   unrolled => around

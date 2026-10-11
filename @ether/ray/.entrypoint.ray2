@@ -58,6 +58,8 @@ assert {condition}
   {name}: {type} =>
     {type}
   declared
+goto styled
+operator
 assert {
   {a} %+ {b} => true
   // GR1 a rule written at the top reads at the top
@@ -86,6 +88,8 @@ assert {
 {name}:{ }{type}, {{rest}} =>
   {name}: {type}
   {rest}
+goto styled
+operator
 // A name with a type, in a definition's head (whatever wrote it: `:=`, `=`, destructuring, a closure's parameters, a class's
 // fields, a declaration): the rule is the name's, what it reads checked against the type (`checked`, below), the type kept
 // with it. (Defined after a declaration, it binds looser: `f: T => v` is a rule.)
@@ -94,6 +98,8 @@ assert {
     ({body}) checked ({type})
   {name}.type =>
     {type}
+goto styled
+operator
 
 // Which way a statement is read is the order the rules are defined in: of the rules reading all of it, the latest is read
 // first (its operator binds loosest). So the operators that bind tightest come first.
@@ -112,9 +118,13 @@ assert `ab` as String == "ab"
 {name}:{ }{`{`}{ }{code}{ }{`}`} =>
   {name} := (() => ({code}))
   declared
+goto styled
+operator
 {name}:{ }{`{`}{code}{`}`} =>
   {name} := (() => ({code}))
   declared
+goto styled
+operator
 
 // A name given a value again: the value read, then the name a rule reading it. A definition whose right side is a value
 // rewrites the rule of the nearest node that has the name (here, when none does).
@@ -122,6 +132,8 @@ assert `ab` as String == "ab"
   {value}
   {name} =>
     {value}
+goto styled
+punctuation
 // A name declared here, given a value: a rule here first (not a value: any other definition is made where it is read), then
 // given it (that rule, the nearest: not a write through `=`).
 {name} := {value} =>
@@ -132,6 +144,8 @@ assert `ab` as String == "ab"
     {value}
   goto styled
   variable
+goto styled
+punctuation
 
 // Node: the outermost node (`.`, here, is the node being read in). Every node sees its rules, so they are what any value
 // read on reads: its methods.
@@ -157,10 +171,14 @@ Pattern := {
   (declarations := Listing.new) unless (here declarations) && declarations
   declarations.append("{pattern}")
   .holding("{pattern}", {type})
+goto styled
+operator
 // (code read in a node: its definitions are the node's; a class's maker (what `X := class …` gives) has its own, see `class`)
 &+= {{block}} =>
   {block}
   .
+goto styled
+operator
 // A member given a value: given in what is before it.
 {on}.{name} := {value} =>
   {on} &+= {
@@ -168,24 +186,34 @@ Pattern := {
   }
   goto styled
   property
+goto styled
+punctuation
 
 // (A member, `x.y`: `x`, then `.y` read in it, the reader's `.`.)
 
 // A comment after a statement.
 {statement} //{comment} =>
   {statement}
+goto styled
+comment
 {statement} // {comment} =>
   {statement}
+goto styled
+comment
 
 // A group: read as what is inside it. (A head that is one hole between two characters makes them a pair, as `{ }` are: a
 // hole never ends inside one.)
 ({grouped}) =>
   {grouped}
+goto styled
+punctuation
 
 // A name given a value in parentheses: `(a) := 1`. (A list of names, `(a, b) := …`, waits for `,`: a method on Node making a
 // Ray.)
 ({name}) := {value} =>
   {name} := {value}
+goto styled
+punctuation
 
 // Read on a value without a space between: tightest (precedence is the order rules are defined in: one defined later binds
 // looser), so `a === x[k]` is `a === (x[k])`.
@@ -195,6 +223,8 @@ Pattern := {
 // f<a: 5>`, then `g(1)` gives `b`.
 {function}<{{given}}> =>
   ((also) => {function}({given}, also))
+goto styled
+punctuation
 
 // A narrowing, `T{constraint}` (a method: a class's own `x{ … }` is read first): a T for which the constraint, read with `.` the
 // value, answers true (`constraint`, `holds`); what `Narrowing` has (the library adds to it). Called, `p{O: level}()`: what it
@@ -211,10 +241,14 @@ Pattern := {
       narrows()
     narrowing := { }
   }).narrowing)
+goto styled
+punctuation
 
 // `!x`: false when x is anything but `None` and `false` (`?`, below). (Before the operators: `a != b` is `!=`, not `a` then `!`.)
 !{x} =>
   {x} ? false : true
+goto styled
+operator
 // BB4 not(true) should be false
 assert !(!true)
 // BB5 not(false) should be true
@@ -231,6 +265,8 @@ goto kinds
 // What a value answers to `?`: anything is true, but `None` and `false`.
 ? {yes} : {no} =>
   {yes}
+goto styled
+operator
 None := {
   ? {yes} : {no} =>
     {no}
@@ -264,6 +300,8 @@ assert !(false)
 true := { }
 {a} || {b} =>
   {a} ? {a} : {b}
+goto styled
+operator
 // BB8 or(true,false) should be true
 assert true || false
 // BB9 or(false,false) should be false
@@ -285,6 +323,8 @@ assert {
 }
 {a} && {b} =>
   {a} ? {b} : {a}
+goto styled
+operator
 // BB6 and(true,true) should be true
 assert true && true
 // BB7 and(true,false) should be false
@@ -308,12 +348,16 @@ assert (choose 1 ("A" | "B")) is ("A" | "B") && (choose 1 ("A" | "B"))#.count ==
 {a} & {b} =>
   (goto .) unless ({a} === true) || ({a} === false)
   {a} && {b}
+goto styled
+operator
 // TY68 what holds both does not hold the second
 assert (1 & 2).contains(2)
 // TY69 three held at once are not three
 assert (1 & 2 & 3).conjoined.count == 3
 {a} ?? {b} =>
   {a} ? {a} : {b}
+goto styled
+operator
 // BN1 ?? does not fall back on nothing
 assert None ?? true
 // BN2 ?? replaces a value that is there
@@ -333,11 +377,17 @@ assert {
   other\
   false
   same\
+goto styled
+operator
 {a} !== {b} =>
   ({a} === {b}) ? false : true
+goto styled
+operator
 // A choice, `c ? a : b`: the condition all before the `?` (`x > 1 ? a : b`).
 {condition} ? {yes} : {no} =>
   ({condition}) ? {yes} : {no}
+goto styled
+operator
 // BT3 c ? a : b does not take a when c holds
 assert true ? true : false
 // BT4 c ? a : b takes a when c does not hold
@@ -374,11 +424,15 @@ nearest if {condition} {{taken}} {chain} =>
   otherwise\
   {chain}
   passed\
+goto styled
+keyword
 nearest elsif {condition} {{taken}} =>
   {condition} ? (goto taken) : (goto passed)
   taken\
   {taken}
   passed\
+goto styled
+keyword
 nearest elsif {condition} {{taken}} {chain} =>
   (goto .) unless (.chain) begins "elsif"
   {condition} ? (goto taken) : (goto otherwise)
@@ -388,6 +442,8 @@ nearest elsif {condition} {{taken}} {chain} =>
   otherwise\
   {chain}
   passed\
+goto styled
+keyword
 nearest elsif {condition} {{taken}} else {{otherwise}} =>
   {condition} ? (goto taken) : (goto otherwise)
   taken\
@@ -396,6 +452,8 @@ nearest elsif {condition} {{taken}} else {{otherwise}} =>
   otherwise\
   {otherwise}
   passed\
+goto styled
+keyword
 // CC3 elsif did not fire
 assert (if false { true } elsif true { true } else { false })
 // CC4 else after elsif did not fire
@@ -563,17 +621,25 @@ recur ^keyword =>
   {value}
   {name} =>
     {value}
+goto styled
+punctuation
 {on}.{name} = {value} =>
   {on}.{name} := {value}
+goto styled
+punctuation
 {name}:{ }{type} = {value} =>
   ({value}) checked ({type})
   (declarations := Listing.new) unless (here declarations) && declarations
   declarations.append("{name}")
   {name}: {type} =>
     {value}
+goto styled
+operator
 nearest ({{parameter}}) => {body} =>
   ({ {parameter} }) =>
     {body}
+goto styled
+punctuation
 nearest ({parameters}) => {body} =>
   ({arguments}) =>
     ({parameters}) taking {arguments}
@@ -583,23 +649,35 @@ nearest ({parameters}) => {body} =>
     recurring\
     {body}
     returned\
+goto styled
+punctuation
 nearest () => {body} =>
   () =>
     recurring\
     {body}
     returned\
+goto styled
+punctuation
 {name} ({parameters}) => {body} =>
   {name} := (({parameters}) => {body})
   goto styled
   function
+goto styled
+punctuation
 {name} () => {body} =>
   {name} := (() => {body})
   goto styled
   function
+goto styled
+punctuation
 {on}.{name}{ }({parameters}) => {body} =>
   {on}.{name} := (({parameters}) => {body})
+goto styled
+punctuation
 {on}.{name}{ }() => {body} =>
   {on}.{name} := (() => {body})
+goto styled
+punctuation
 {name} := {value} =>
   {value}
   {name} =>
@@ -608,24 +686,36 @@ nearest () => {body} =>
     {value}
   goto styled
   variable
+goto styled
+punctuation
 {{name}}{ }:={ }() => {body} =>
   {name} := (() => {body})
   goto styled
   function
+goto styled
+punctuation
 {{name}}{ }:={ }({parameters}) => {body} =>
   {name} := (({parameters}) => {body})
   goto styled
   function
+goto styled
+punctuation
 {on}.{name}{ }:={ }() => {body} =>
   {on}.{name} := (() => {body})
+goto styled
+punctuation
 {on}.{name}{ }:={ }({parameters}) => {body} =>
   {on}.{name} := (({parameters}) => {body})
+goto styled
+punctuation
 {{name}}{ }:={ }class{ }({fields}) => {{block}} =>
   {name} := (class ({fields}) => {
     {block}
   })
   goto styled
   class
+goto styled
+keyword
 // A setting changed for a block is back once the block is left
 assert {
   Setting := class { static level = 1 }
@@ -869,6 +959,8 @@ assert {
   })
   goto styled
   class
+goto styled
+keyword
 // (what it is given in made first when nothing has that name yet, `orbitmines.com := …`: a name not given reads as its text)
 {on}.{name} := {value} =>
   ({on} := { }) if ({on}) === "{on}"
@@ -877,14 +969,24 @@ assert {
   }
   goto styled
   property
+goto styled
+punctuation
 {on}[{key}] = {value} =>
   ({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value})
+goto styled
+punctuation
 {on}[{key}] := {value} =>
   ({key} is String) ? ({on}.{key} := {value}) : {on}.holding({key}, {value})
+goto styled
+punctuation
 ({name}) := {value} =>
   {name} := {value}
+goto styled
+punctuation
 ({name}, {names}) := {list} =>
   ({name}, {names}) from {list}
+goto styled
+punctuation
 {guarded} if {condition} ^keyword =>
   {condition} ? (goto taken) : (goto passed)
   taken\
@@ -907,13 +1009,19 @@ nearest {list}, {other} =>
   {list}
   {other}
   ({list} === declared) ? {other} : (({other} === declared) ? {list} : Listing.new.append({list}).append({other}).spreading)
+goto styled
+punctuation
 // (a bracketed first, `[x], …`: `x` itself first (Language.md: `[lst], 5` is `(lst, 5)`))
 nearest [{inner}], {{rest}} =>
   ({inner}), {rest}
+goto styled
+punctuation
 // (three or more: the rest read as a new list, this one put first: each once)
 nearest {list}, {other}, {{more}} =>
   {list}
   (({other}, {more}) -- .led({list}))
+goto styled
+punctuation
 // (a value that is not a list led by another: both, in a new list)
 led (value) =>
   (value === declared) ? . : ((. === declared) ? value : Listing.new.append(value).joined(.))
@@ -928,6 +1036,8 @@ led (value) =>
     {name}: {value}
     {rest}
   }
+goto styled
+operator
 {`(`}{name}:{ }{value}{`)`} =>
   (goto record) unless ("{name}" contains " ") || ("{value}" contains " => ")
   goto .
@@ -935,6 +1045,8 @@ led (value) =>
   {
     {name}: {value}
   }
+goto styled
+operator
 
 // Ray: a chain of vertices, each holding a value (`head` the first vertex, `tail` the last; a vertex's `next`, `previous`).
 // Called on a Ray (`r.append(1)`), `.` in a method is that Ray.
@@ -956,6 +1068,8 @@ here {name} =>
   goto defined
   {name}
   false
+goto styled
+keyword
 assert {
   here := 0
   there := 0
@@ -969,14 +1083,20 @@ assert {
 // Names given values at once: `(a, b) := list`, each the next value in it (`:=`, below, reads it so).
 ({name}) from {list} =>
   {name} := {list}.first
+goto styled
+keyword
 ({name}, {names}) from {list} =>
   {name} := {list}.first
   ({names}) from {list}.rest
+goto styled
+keyword
 
 // A closure with parameters called with none, `f()`: called with nothing given (each its default). (One without parameters
 // has its own `()`, read first.)
 () =>
   . (declared)
+goto styled
+punctuation
 
 // A call's parameters taking its arguments: one parameter, all of them; several, each the next (walking the list's
 // vertices; one its setup already defines, given by name or a partial argument, passes, leaving it for the next). Arguments that
@@ -991,11 +1111,17 @@ declared &+= {
 }
 ({{parameter}}) taking {value} =>
   ({parameter}) gets (({value} === declared) ? None : {value})
+goto styled
+keyword
 // (arguments written with `,` between them, each its own; one, a list written in brackets too (`f([a, b])`), is one)
 nearest ({{parameter}}, {{parameters}}) taking {list} =>
   ({parameter}, {parameters}) taking from ((({list}).spread === true) ? ({list}).head : Listing.new.append({list}).head)
+goto styled
+keyword
 ({{parameter}}) taking from {vertex} =>
   ({parameter}) gets {vertex}.value
+goto styled
+keyword
 nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
   (goto took) if (({parameter}) gets {vertex}.value) === true
   (({parameters}) taking from {vertex})
@@ -1003,6 +1129,8 @@ nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
   took\
   (({parameters}) taking from {vertex}.next)
   done\
+goto styled
+keyword
 // One parameter given a value (read first: a call's arguments declare what they name), unless it is defined here already
 // (`true` when it took it; given, what `goto defined` answers): `x`, `x: T` (checked against T), `x = default` (None, the
 // default; defined last, so `x: T = d` is that default unwrapped first). (A parameter is code, handed on as written: `x = 5` is read by these.)
@@ -1012,8 +1140,12 @@ nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
   {name}
   {name} := {value}
   true
+goto styled
+keyword
 ({name}:{ }{type}) gets {value} =>
   ({name}) gets (({value}) checked ({type}))
+goto styled
+keyword
 ({{parameter}} = {{default}}) gets {value} =>
   (goto given) unless {value} === None
   ({parameter}) defaulting {default}
@@ -1021,59 +1153,89 @@ nearest ({{parameter}}, {{parameters}}) taking from {vertex} =>
   given\
   ({parameter}) gets {value}
   took\
+goto styled
+keyword
 // (one not given: its default read when it is first read (after what is declared after it), then kept)
 ({name}) defaulting {{default}} =>
   goto defined
   {name}
   {name} := lazily {default}
   true
+goto styled
+keyword
 ({name}:{ }{type}) defaulting {{default}} =>
   goto defined
   {name}
   {name} := lazily (({default}) checked ({type}))
   true
+goto styled
+keyword
 {name} := lazily {{default}} =>
   {name} =>
     kept := ({default})
     {name} = kept
     kept
+goto styled
+keyword
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses, `(it) => it.value` (one argument; `f(.x, y)`
 // reads `.x` where it is written).
 {method}(.{section}) =>
   (goto .) if ("{section}" contains " ") || ("{method}" contains ".") || ("{method}" contains " ")
   .{method}((it) => it.{section})
+goto styled
+punctuation
 
 // `code**`: what is written, as a program (a body hole's name, read in its rule's right side, is its code, a closure).
 {code}** =>
   Program(code: {code})
+goto styled
+operator
 
 // A list written: `[]` an empty Ray, `[a, b]` a Ray of both, `[a]` of one.
 [] =>
   Listing.new
+goto styled
+punctuation
 [{inside}] =>
   Listing.new.append({inside})
+goto styled
+punctuation
 nearest [{first}, {{rest}}] =>
   ({first}, {rest}).gathered
+goto styled
+punctuation
 // (written over lines: `[` and `]` each with what is inside on the lines between)
 [{ }{inside}{ }] =>
   Listing.new.append({inside})
+goto styled
+punctuation
 nearest [{ }{first}, {{rest}}{ }] =>
   ({first}, {rest}).gathered
+goto styled
+punctuation
 // (a bracketed first: itself, `[[x], y]` is `[x, y]`)
 nearest [[{inner}], {{rest}}] =>
   [({inner}), {rest}]
+goto styled
+punctuation
 nearest [{ }[{inner}], {{rest}}{ }] =>
   [({inner}), {rest}]
+goto styled
+punctuation
 // `x[k]`: a method, read on what it is on (so a class's own `[…]` is read first): a name, that member; else what it holds
 // under k. (After the list above: a head of the same shape after the one that made the pair is a call.)
 [{key}] =>
   ({key} is String) ? .{key} : .held({key})
+goto styled
+punctuation
 
 // The rest read with `.` what is before it (`a -- .x` is `a.x`; a name, where it is written);
 // `x ~~ …`: the same, answering `x`. Code read in a value, `.` that value (`x reading { … }`; `x with { … }`, below).
 -- {{rest}} =>
   {rest}
+goto styled
+operator
 // `--` continues on everything before it on the line; `~~` too, answering that line (A-C5)
 // DD1 -- does not continue on the whole line before it
 assert (1, 2 -- .map(+1)) == (2, 3)
@@ -1093,22 +1255,34 @@ assert {
 ~~ {{rest}} =>
   {rest}
   .
+goto styled
+operator
 // DD6 ~~ does not answer the whole line before it
 assert (1, 2 ~~ .map(+1)) == (1, 2)
 // (a closure after it, `x -- (y => …)`, `x ~~ ((y) => …)`: called with that value, made where it is written; its brackets
 // written as text, so the head is not read as a method's)
 {value} {`--`} {`(`}{parameter} => {body}{`)`} =>
   ((({parameter}) => {body}))({value})
+goto styled
+operator
 {value} {`--`} {`(`}({parameters}) => {body}{`)`} =>
   ((({parameters}) => {body}))({value})
+goto styled
+operator
 {value} {`~~`} {`(`}{parameter} => {body}{`)`} =>
   ((({parameter}) => {body}))({value})
   {value}
+goto styled
+operator
 {value} {`~~`} {`(`}({parameters}) => {body}{`)`} =>
   ((({parameters}) => {body}))({value})
   {value}
+goto styled
+operator
 reading {{block}} =>
   {block}
+goto styled
+keyword
 
 // `with` code, one line or a block: what it sets is set for where it is read (`&.caller`: the rewrite it is read in) and
 // everything run from there, and gone when that ends: written into that program, not where the name is held. (The code is
@@ -1129,6 +1303,8 @@ writing {program} {{code}} =>
   } reading {
     {code}
   }
+goto styled
+keyword
 assume {{code}} ^keyword =>
   writing (&.caller) {
     {code}
@@ -1146,6 +1322,8 @@ assume {{code}} ^keyword =>
     superposes := true
     components := Listing.new.append(.).joined({other})
   }
+goto styled
+operator
 // CL2 a section after | is not applied to the value before it
 assert (1 | +2 | +3) == (1 | 3 | 6)
 // HS2 a superposition of three does not have three possible values
@@ -1177,6 +1355,8 @@ assert {
 }
 ? =>
   None | .
+goto styled
+operator
 
 // Diagnostics: handed to the host (its label `report`, `.` this reading), and a value.
 ERROR {message} ^error =>
@@ -1265,11 +1445,15 @@ made class:{ }{parent} {{block}} =>
       {block}
     }
   }).interior)
+goto styled
+keyword
 // (one without fields makes instances too: given nothing, or named arguments, code inlined into the making)
 class:{ }{parent} {{block}} =>
   class: {parent} (arguments = None) => {
     {block}
   }
+goto styled
+keyword
 // (the block read once for the class; again for each instance, only what is not a definition (`instanced`))
 nearest class:{ }{parent}{ }({fields}) => {{block}} =>
   (made class: {parent} {
@@ -1289,6 +1473,8 @@ nearest class:{ }{parent}{ }({fields}) => {{block}} =>
         .
     }
   }).instance
+goto styled
+keyword
 class {{block}} ^keyword =>
   class: Node {
     {block}
@@ -1297,6 +1483,8 @@ class{ }({fields}) => {{block}} =>
   class: Node ({fields}) => {
     {block}
   }
+goto styled
+keyword
 
 // What a value is: a Node (anything is; the outermost node); the value itself; an instance of the class (or of one after it,
 // `class:`) it was made by; one of a superposition's components; a narrowing that holds of it; a member of an enumeration.
@@ -1319,6 +1507,8 @@ assert ("A", "A", "A") is "A"[]
   (goto not_one) unless {value} is {type}
   {value}
   not_one\
+goto styled
+punctuation
 
 // A level: a node of rules a value is given to (`{x: T} => …`): the value, written into text, read in it (by the first of
 // them that takes it; none, the value).
@@ -1326,12 +1516,16 @@ assert ("A", "A", "A") is "A"[]
   {level} reading {
     {value}
   }
+goto styled
+keyword
 
 // A level given to a running program (`& including level`): its rules seen in the program (above what is where code is written).
 {on} including {level} =>
   {on} &+= {
     {level}
   }
+goto styled
+keyword
 
 // `this`: what `.` is.
 this ^keyword =>
@@ -1344,12 +1538,16 @@ this ^keyword =>
   {head} =>
     goto .
     {body}
+goto styled
+punctuation
 {`{`}this{`}`}{head} {`^`}{style} => {body} =>
   {head} =>
     goto .
     {body}
   goto styled
   {style}
+goto styled
+punctuation
 
 // A value checked against a type: reported when it is not one (None, not given yet, and anything against no type, pass).
 type := None
@@ -1358,29 +1556,39 @@ checked {type} =>
     ERROR a value is not of the type it is given to
   }
   .
+goto styled
+keyword
 
 // `static`: what follows is read where it is (a class's block is read once, for the class). A value given a name, when it is
 // first read (the class is there by then: `static plane := Space(…)` in `Space`), then that value.
 static {{statement}} =>
   {statement}
+goto styled
+keyword
 {`static`} {name} {`:=`} {value} =>
   {name} =>
     {name} = global.{name}
     kept := {value}
     {name} = kept
     kept
+goto styled
+keyword
 {`static`} {name}:{ }{type} = {value} =>
   {name} =>
     {name} = global.{name}
     kept := ({value}) checked ({type})
     {name} = kept
     kept
+goto styled
+keyword
 
 // A class's block read for an instance: what declares is the class's (read once, for it); the rest (`&.caller[name] =
 // this`) is read in the instance. What declares: a definition (its line has the definer), and what these read.
 instanced {{code}} =>
   goto instanced
   {code}
+goto styled
+keyword
 goto declaring
 {name} := {value}
 goto declaring
@@ -1403,6 +1611,8 @@ static {{statement}}
 // `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
 from (x) =>
   None
+goto styled
+keyword
 // `if x { case => value … } else { … }`: `==` unless an operator is written, `is` for a type (P2.11)
 assert {
   described (x) => if x {
@@ -1479,6 +1689,8 @@ nearest enum {{names}} =>
     members := []
     enumerated {names}
   }
+goto styled
+keyword
 assert {
   Shape := enum circle (radius: Number) | square (side: Number) | point
   // EM8 a member does not carry its field
@@ -1513,21 +1725,31 @@ assert {
 enumerated {name} =>
   {name} := { }
   members.append({name})
+goto styled
+keyword
 nearest enumerated {name} | {{rest}} =>
   {name} := { }
   members.append({name})
   (enumerated {rest})
+goto styled
+keyword
 // (a member written with fields, `Linux (platform: "linux")`: a record of them)
 nearest enumerated {name} {`(`}{{fields}}{`)`} =>
   {name} := ({fields})
   members.append({name})
+goto styled
+keyword
 nearest enumerated {name} {`(`}{{fields}}{`)`} | {{rest}} =>
   {name} := ({fields})
   members.append({name})
   (enumerated {rest})
+goto styled
+keyword
 // (one with a block after its names, `enum A | B { … }`: the names (what the block says of the members is not read yet))
 nearest enum {{names}} {{block}} =>
   enum {names}
+goto styled
+keyword
 
 // `dynamically`: given again (run again) whenever what it reads is written from outside in the rewrite it is read in
 // (`&.caller`), or anything run from there: `dynamically x := v` (x is v again), `dynamically code` (the code runs again).
@@ -1542,6 +1764,8 @@ dynamically {{code}} =>
     {code}
   }
   {code}
+goto styled
+keyword
 assert {
   asserted := dynamically assert {
     true
@@ -1571,6 +1795,8 @@ dynamically{ }{name} := {{value}} =>
   dynamic_in (&.caller) {
     {name} = ({value})
   }
+goto styled
+keyword
 // `dynamically assert c`: no test; what holds of the data, checked where there is some (an instance, its class `of`), not
 // when the class is made.
 {`dynamically`} assert {condition} ^keyword =>
@@ -1614,6 +1840,8 @@ dynamic_in {program} {{code}} =>
       {code}
     }
   })
+goto styled
+keyword
 // The classes the library adds to: what is iterable, an array of it, text (an array of characters), a number, a character
 // (a number), a program, a diagnostic.
 Iterable := class { }

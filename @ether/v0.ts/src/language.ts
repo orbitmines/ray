@@ -858,7 +858,10 @@ export class Program {
       let style = next!.trim();
       const { open, close } = this.grammar!, hole = style.startsWith(open) && style.endsWith(close) ? style.slice(open.length, -close.length) : undefined;
       if (hole !== undefined && frame.reading && hole in frame.reading.caps) style = this.source(frame.reading.caps[hole]).trim();
-      if (Program.Node.last) Program.Node.last.style = style;
+      if (Program.Node.last) { Program.Node.last.style = style; for (const literal of Program.Node.last.literals) { const l = literal.trim(), word = /^[\p{L}_][\p{L}\p{N}_]*$/u.test(l), sign = /^[^\p{L}\p{N}_\s]+$/u.test(l);
+        // (a word shown as a word is (a keyword, a name), a sign as a sign is (an operator, punctuation); what a rule is given by default, only when nothing else said)
+        if (!l || !(word || sign) || (word !== ['keyword', 'function', 'variable', 'class', 'property', 'type', 'parameter', 'method'].includes(style)) || (style === 'function' && this.literal_styles.has(l)) || (/^[()\[\]{},]+$/.test(l) && style !== 'punctuation')) continue;
+        this.literal_styles.set(l, style); } }
       return undefined;
     }],
     // (`goto kinds`: what the host's own kinds of value answer (their operators) read here)
@@ -871,6 +874,8 @@ export class Program {
       return compiled(frame.this ?? frame.node, $, ...names.map(name => this.held_value(this.shared(reading!, name))));
     }],
   ]);
+  // (each literal of a rule with a style, the style: what a piece of text written so is shown as when nothing reads it)
+  literal_styles = new Map<string, string>();
   // (the labels the host holds that take the statement after them)
   consuming = new Set(['js', 'defined', 'declaring', 'independent', 'instanced', 'styled']);
   private compiled = new Map<string, (...args: unknown[]) => unknown>();
@@ -1834,8 +1839,13 @@ export class Library {
   // again (`again`, an edit), a statement written as it was is not read again: what it said, painted and put off, kept (moved with
   // it); only those written otherwise are read.
   file(file: string, text = this.text(file), node: Program.Node = this.program.global, again = false): Diagnostic[] {
-    const p = this.program, painter = this.options.painting ? new Painter(text, p) : undefined;
+    const p = this.program, painter = this.options.painting ? new Painter(text, p) : undefined, was = this.texts.get(file) ?? '';
     this.texts.set(file, text);
+    // (where it was edited: what is the same before and after; a place outside that, where it is now)
+    let pre = 0; while (pre < was.length && pre < text.length && was[pre] === text[pre]) pre++;
+    let suf = 0; while (suf < was.length - pre && suf < text.length - pre && was[was.length - 1 - suf] === text[text.length - 1 - suf]) suf++;
+    const now = (at: number) => at < pre ? at : at >= was.length - suf ? at + text.length - was.length : -1;
+    const kept_in = <T extends { begin: number, end: number }>(xs: T[]) => xs.flatMap(x => { const b = now(x.begin), e = now(x.end); return b < 0 || e < 0 ? [] : [{ ...x, begin: b, end: e }]; });
     const before_reads = again ? this.reads.get(file) ?? [] : [], kept = new Map<string, Statement[]>();
     for (const r of before_reads) kept.set(r.statement, [...kept.get(r.statement) ?? [], r]);
     if (!again) for (const r of this.reads.get(file) ?? []) for (const t of r.tests) t.dropped = true;
@@ -1854,6 +1864,30 @@ export class Library {
         same.diagnostics = same.diagnostics.map(moved); same.paints = same.paints.map(moved);
         for (const t of same.tests) { t.begin += by; t.end += by; t.paints = t.paints?.map(moved); }
         same.begin = begin; same.end = end; reads.push(same);
+        continue;
+      }
+      // (written otherwise only in its tests: its tests read again, nothing else)
+      const bare = Library_read(statement), like = again ? [...kept.values()].flat().find(o => o.tests.length && Library_read(o.statement) === bare) : undefined;
+      if (like) {
+        kept.set(like.statement, kept.get(like.statement)!.filter(o => o !== like));
+        const read: Statement = { statement, begin, end, diagnostics: kept_in(like.diagnostics), paints: kept_in(like.paints), tests: [] };
+        // (a test kept: one written outside what was edited)
+        const old = like.tests.map(t => ({ ...t, begin: t.end < pre || t.begin >= was.length - suf ? now(t.begin) : -1, end: now(t.end) })), sample = like.tests[0].frame.reading;
+        for (const [b, e] of Library.asserts(text, begin, end)) {
+          const same_test = old.find(t => t.begin === b && t.end === e);
+          if (same_test) { read.tests.push(Object.assign(like.tests[old.indexOf(same_test)], { begin: b, end: e, paints: kept_in(same_test.paints ?? []) })); continue; }
+          const deferred = p.deferred.length, before = p.reports.length;
+          if (painter) { painter.paints = []; painter.begin = b; painter.end = e; p.painter = painter; }
+          try { p.run(text.slice(b, e), { node: sample?.receiver ?? node, this: sample?.self }); }
+          catch (x) { read.diagnostics.push(this.said(file, text, b, e, `Failed: ${(x as Error)?.message ?? x}`, 1)); }
+          finally { p.painter = undefined; }
+          for (const report of p.reports.slice(before)) read.diagnostics.push(this.reported(report, file, text, b, e));
+          p.reports.length = before;
+          if (painter) read.paints.push(...painter.paints);
+          for (const d of p.deferred.splice(deferred)) read.tests.push({ ...d, file, begin: b, end: e });
+        }
+        for (const t of like.tests) if (!read.tests.includes(t)) t.dropped = true;
+        reads.push(read);
         continue;
       }
       if (!/^\s*assert\b/.test(statement)) changed = true;
@@ -1878,8 +1912,31 @@ export class Library {
     this.reads.set(file, reads);
     const diagnostics = reads.flatMap(r => r.diagnostics);
     this.diagnostics.set(file, diagnostics);
-    if (painter) this.paints.set(file, [...reads.flatMap(r => r.paints), ...Library.comments(text)]);
+    if (painter) { const painted = [...reads.flatMap(r => r.paints), ...Library.comments(text)]; this.paints.set(file, [...painted, ...this.unread(text, painted)]); }
     return diagnostics;
+  }
+  // What nothing read paints (code not run while reading: a rule's right side): each piece of it shown as what the rules would read
+  // it as first (matched, nothing run); a word nothing reads, a name (`variable`); anything else, `punctuation`.
+  private styles = new Map<string, string>();
+  unread(text: string, painted: Paint[]): Paint[] {
+    const p = this.program, cells = new Uint8Array(text.length), out: Paint[] = [];
+    for (const x of painted) for (let k = Math.max(0, x.begin); k <= Math.min(x.end, text.length - 1); k++) cells[k] = 1;
+    const style = (piece: string, word: boolean) => {
+      let found = this.styles.get(piece);
+      if (found === undefined) {
+        let read: string | undefined = p.literal_styles.get(piece);
+        if (!read) try { const all = p.readings(piece, p.candidates(piece, p.global, 0), true); for (let k = all.length - 1; k >= 0 && !read; k--) read = all[k].rule.style; } catch { }
+        this.styles.set(piece, found = read ?? (word ? 'variable' : 'punctuation'));
+      }
+      return found;
+    };
+    for (const m of text.matchAll(/"(?:[^"\\\n]|\\.)*"|`[^`\n]*`|[\p{L}\p{N}_]+(?:\.[\p{N}]+)?|[()\[\]{},]|[^\s\p{L}\p{N}_"`()\[\]{},]+/gu)) {
+      const b = m.index!, e = b + m[0].length - 1;
+      let free = true; for (let k = b; k <= e; k++) if (cells[k]) { free = false; break; }
+      if (!free) continue;
+      out.push({ begin: b, end: e, style: style(m[0], /^[\p{L}\p{N}_]/u.test(m[0])) });
+    }
+    return out;
   }
   reads = new Map<string, Statement[]>();
   // (the asserts written in a text between two places, each from `assert` to the end of what it holds: not one inside another)
@@ -2064,12 +2121,14 @@ export function theme(program: Program): { name: string, colors: Record<string, 
   return { name: typeof name === 'string' ? name : 'theme', colors };
 }
 
-async function lsp_worker() {
+// The language server's two readers: one reads each document as it changes and says so at once (`read`); the other reads it too and
+// runs its tests (`test`), saying so as they finish. (A test runs as long as it runs: an edit is not kept waiting for it.)
+async function lsp_worker(role: 'read' | 'test') {
   const port = env.worker_threads.parentPort!, { path } = env;
   const t0 = performance.now();
   const library = await new Library({ painting: true }).boot();
-  port.postMessage({ log: `the language and its core library read in ${Math.round(performance.now() - t0)} ms` });
-  port.postMessage({ theme: theme(library.program) ?? null });
+  port.postMessage({ log: `${role}: the language and its core library read in ${Math.round(performance.now() - t0)} ms` });
+  if (role === 'read') port.postMessage({ theme: theme(library.program) ?? null });
   const docs = new Map<string, { file: string, text: string, version: number }>(), dirty = new Set<string>();
   let scheduled: ReturnType<typeof setTimeout> | undefined;
   // (each document read as it changes (only what changed in it); what it says sent at once, then again as its tests are run, a
@@ -2078,7 +2137,7 @@ async function lsp_worker() {
   const send = (uri: string, doc: { file: string, text: string, version: number }, file: string) => {
     const tests = (library.reads.get(file) ?? []).flatMap(r => r.tests).filter(t => !t.dropped && t.outcome).flatMap(t => t.outcome!);
     const diagnostics = [...library.diagnostics.get(file) ?? [], ...tests];
-    port.postMessage({ checked: { uri, version: doc.version, text: doc.text, paints: library.tested_paints(file), diagnostics } });
+    port.postMessage({ checked: { uri, version: doc.version, text: doc.text, paints: library.tested_paints(file), diagnostics, tested: role === 'test' } });
     return diagnostics.length;
   };
   const work = () => {
@@ -2098,7 +2157,7 @@ async function lsp_worker() {
       }
       const n = send(uri, doc, file);
       port.postMessage({ log: `read ${path.basename(file)} v${doc.version} in ${Math.round(performance.now() - t1)} ms: ${n} diagnostics` });
-      testing.add(uri);
+      if (role === 'test') testing.add(uri);
     }
     if (testing.size) setTimeout(test, 0);
   };
@@ -2130,8 +2189,8 @@ export async function lsp(options: { io?: { input: NodeJS.ReadableStream, output
   ]);
   const io = options.io ?? { input: process.stdin, output: process.stdout };
   const connection = createConnection(ProposedFeatures.all, io.input, io.output), documents = new TextDocuments(TextDocument);
-  const reader = env.thread({ lsp: true });
-  reader.unref();
+  const reader = env.thread({ lsp: 'read' }), tester = env.thread({ lsp: 'test' });
+  reader.unref(); tester.unref();
   const file_of = (uri: string): string => { try { return env.url.fileURLToPath(uri); } catch { return uri; } };
   const checked = new Map<string, { version: number, text: string, paints: Paint[] }>();
   const painted = (paints: Paint[]) => paints as unknown as Parameters<typeof encode>[1];
@@ -2146,20 +2205,26 @@ export async function lsp(options: { io?: { input: NodeJS.ReadableStream, output
     }
     return { styles, documents: docs };
   };
-  reader.on('message', (m: { checked?: { uri: string, version: number, text: string, paints: Paint[], diagnostics: Diagnostic[] }, log?: string, theme?: { name: string, colors: Record<string, string> } | null }) => {
+  // (what was said about a version of a document: the reader's, until the tester's (with what its tests found) for that version)
+  const said = new Map<string, { version: number, tested: boolean }>();
+  const heard = (m: { checked?: { uri: string, version: number, text: string, paints: Paint[], diagnostics: Diagnostic[], tested?: boolean }, log?: string, theme?: { name: string, colors: Record<string, string> } | null }) => {
     if (m.theme !== undefined) { shown = m.theme ?? undefined; connection.sendNotification('ether/theme', payload([...checked.keys()])); return; }
     if (m.log !== undefined) { connection.console.log(m.log); return; }
     const c = m.checked;
     if (!c) return;
-    const doc = documents.get(c.uri);
+    const doc = documents.get(c.uri), before = said.get(c.uri);
     if (doc && doc.version > c.version) return;
+    if (before && (before.version > c.version || (before.version === c.version && before.tested && !c.tested))) return;
+    said.set(c.uri, { version: c.version, tested: !!c.tested });
     checked.set(c.uri, { version: c.version, text: c.text, paints: c.paints });
     connection.sendDiagnostics({ uri: c.uri, version: c.version, diagnostics: c.diagnostics.map(d => ({ severity: d.severity, range: { start: position_of(c.text, d.begin), end: position_of(c.text, Math.max(d.end, d.begin + 1)) }, message: d.around ? `${d.message}\n${d.around}` : d.message, source: 'ray' })) });
     connection.languages.semanticTokens.refresh();
     connection.sendNotification('ether/theme', payload([c.uri]));
-  });
+  };
+  reader.on('message', heard); tester.on('message', heard);
   reader.on('error', e => connection.console.error(`the reader stopped: ${(e as Error).stack ?? e}`));
-  const open = (uri: string, text: string, version: number) => reader.postMessage({ open: { uri, file: file_of(uri), text, version } });
+  tester.on('error', e => connection.console.error(`the tester stopped: ${(e as Error).stack ?? e}`));
+  const open = (uri: string, text: string, version: number) => { for (const w of [reader, tester]) w.postMessage({ open: { uri, file: file_of(uri), text, version } }); };
   connection.onInitialize(() => ({
     capabilities: { textDocumentSync: TextDocumentSyncKind.Full, semanticTokensProvider: { legend: { tokenTypes: TOKEN_TYPES, tokenModifiers: MODIFIERS }, full: true, range: true } },
     serverInfo: { name: 'ray-language-server', version: env.version.toString() },
@@ -2171,11 +2236,11 @@ export async function lsp(options: { io?: { input: NodeJS.ReadableStream, output
   connection.onRequest('ether/initialFiles', (): null => null);
   documents.onDidOpen(e => open(e.document.uri, e.document.getText(), e.document.version));
   documents.onDidChangeContent(e => open(e.document.uri, e.document.getText(), e.document.version));
-  documents.onDidClose(e => { reader.postMessage({ close: e.document.uri }); checked.delete(e.document.uri); });
+  documents.onDidClose(e => { for (const w of [reader, tester]) w.postMessage({ close: e.document.uri }); checked.delete(e.document.uri); said.delete(e.document.uri); });
   documents.listen(connection);
   connection.listen();
 }
 
-if (env.worker && env.worker_threads.workerData?.lsp) void lsp_worker();
+if (env.worker && env.worker_threads.workerData?.lsp) void lsp_worker(env.worker_threads.workerData.lsp === 'test' ? 'test' : 'read');
 else if (env.worker && env.worker_threads.workerData?.main) void main(env.worker_threads.workerData.main);
 else if (env.is_main_entrypoint) void main();

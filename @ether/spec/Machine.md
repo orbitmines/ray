@@ -177,6 +177,13 @@ broke the proofs, each fixed in a commit of its own:
   now inside the class, which is where the rule's own comment says it goes.
 - **Arguments spread only when made by `,`.** Fields read from text are now given as `read.spreading`.
 - **Two branches defined `!x` and the elsif chain differently;** main's are kept.
+- **DEFLATE's writer (DF8) wrote stored blocks only.** Three causes. Sibling statics written unqualified in a static method
+  (`Data(…)` in `fixed`) no longer resolve, and `Entry` is now also a class in `Node.ray`: every such use in
+  `Deflate.project.ray` is written in full (DPG1). Named arguments are now declarations whose value is read lazily where
+  it is read, so `Element(literal: value.byte)` read later by the codec gave a node: the writer's makers are called with
+  their arguments in order instead. And a record written got a fresh scope each time, so `literals.Symbol` was looked up
+  again for every element, checking `literals: Huffman` and its 288 lengths each time: written records now have the
+  home scope read ones have.
 
 Then the slowdown. Profiles put it in the pattern matcher, which was called 10 times as often for the same stream: the Ray
 code did more, not the engine. Counted reads of one warm read of `hello.txt.1.default` (9 594 before the merge):
@@ -215,6 +222,8 @@ What is still off:
   bound to locals first (`x := a`).
 - **MCG6 The digit `1` taken by a hole is not the number 1** (`*1` in `[rax+rax*1+0x1]` read as the word `scale`, where
   `*2` reads 2); the scale is taken as its text.
+- **MCG7 A named argument is read where it is read, not where it was given:** `f(x: e)` keeps `e`, so a value made with
+  it and read later elsewhere (the codec) reads `e` again there; values the codec reads are made with arguments in order.
 - **MCG3 `return` in a rule's right side returns from the function that called the rule.** `wrapped` written with
   `(return value) if …` made every lifted function answer its first wrapped value.
 

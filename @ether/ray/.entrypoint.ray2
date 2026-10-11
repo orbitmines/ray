@@ -1435,11 +1435,10 @@ static {{statement}} =>
   {name} := {value}
   goto made
   lazily\
+  {name}_kept := None
   {name} =>
-    {name} = global.{name}
-    kept := {value}
-    {name} = kept
-    kept
+    ({name}_kept = ({value})) if {name}_kept === None
+    {name}_kept
   made\
 {`static`} {name}:{ }{type} = {value} =>
   {name} =>

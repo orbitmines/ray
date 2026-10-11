@@ -41,6 +41,13 @@ Encoding := class {
     bytes: Byte[] => Compiler.reduced(Language.Writing(value, language: algorithm), algorithm.written)
     chainable == (other: Hash) => algorithm == other.algorithm && value == other.value
   }
+  assert Encoding.Hash(value: 5, algorithm: $.sha256).(
+    . == Encoding.Hash(value: 5, algorithm: $.sha256)  // EN5 two like digests are not the same
+    & !(. == Encoding.Hash(value: 5, algorithm: $.md5))  // EN6 digests of different algorithms are the same
+    & !(. == Encoding.Hash(value: 4, algorithm: $.sha256))  // EN7 digests of different values are the same
+    & .value == 5  // EN17 a digest forgot what it was made of
+    & .algorithm === $.sha256  // EN18 a digest forgot how
+  )
 
   Encrypted := class (T, value: T, key: Key?) => {
     opened (holder) => key && holder.key == key ? value : ERROR@Key `find the key`
@@ -51,3 +58,15 @@ Encoding := class {
     best && best.count >= 4 ? [(from: best.from, count: best.count)], runs(source, target[best.count..]) : runs(source, target[1..]) -- (rest =>
       rest.first.bytes ? [(bytes: (target[..0], rest.first.bytes).flatten)], rest.rest : [(bytes: target[..0])], rest))
 }
+
+assert (5 as $.gzip).(
+  . as Number == 5  // EN3 what is compressed does not come back
+  & .algorithm === $.gzip  // EN4 it forgot how it was compressed
+  & !(.algorithm === $.sha1)  // EN13 it is packed every way at once
+)
+
+// EN19 two algorithms are the same
+assert !($.sha256 === $.sha1)
+
+// EN20 an algorithm is not itself
+assert $.md5 === $.md5

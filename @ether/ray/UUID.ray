@@ -41,19 +41,54 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
       (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random + stamp.logical
       node = @me/device/network/mac ?? (Hexadecimal₁₂.random ~~ .[1] |= 1)
   }
+  // UU21 the version built from a time is not there
+  assert UUID.v1
+  assert {
+    made_first := choose UUID.v1{unique}
+    made_second := choose UUID.v1{unique}
+    // UU30 a generated version 1 identifier is not version 1
+    assert made_first.version == 1
+    // UU31 two version 1 identifiers made one after the other are the same
+    assert !(made_first == made_second)
+    // UU32 the later identifier is not later
+    assert made_first.time < made_second.time
+    // UU33 a generated identifier is not of the RFC 4122 variant
+    assert made_first is UUID.RFC_4122
+  }
+  // UU30 the Gregorian reform is not 0x01B21DD213814000 hundred-nanosecond intervals before 1970
+  assert UUID.v1.gregorian_reform == "1582-10-15T00:00:00Z" as ISO_8601 as Time && Stamp.at(UUID.v1.gregorian_reform, None).wall == -0x01B21DD213814000
 
   static v3 := class: UUID{version == 3} {
     namespace: UUID
     name: String
   }
+  // UU22 the version built from a namespace and a name is not there
+  assert UUID.v3
   static v4 := class: UUID{version == 4} = secure Hexadecimal{length == 32}.random ~~ (
     .version = 4
     .variant = ₂10
+  )
+  assert UUID.v4().(
+    .length == 32  // UU1 v4 has other than 32 digits
+    & .version == 4  // UU2 v4 version is not 4
+    & . is UUID.RFC_4122  // UU3 v4 variant is not RFC 4122
+    & . == .  // UU7 a uuid is not itself
+    & !(. == UUID.v4())  // UU14 two draws are the same uuid
+    & (. as String).(
+      .length == 36  // UU4 v4 text is not 36 characters
+      & .[8] == "-"  // UU5 no dash after eight digits
+      & .[14] == "4"  // UU6 the version digit is not 4
+      & .[13] == "-"  // UU10 no dash after thirteen characters
+      & .[18] == "-"  // UU11 no dash after eighteen characters
+      & .[23] == "-"  // UU12 no dash after twenty-three characters
+    )
   )
   static v5 := class: UUID{version == 5} {
     namespace: UUID
     name: String
   }
+  // UU23 the other version built that way is not there
+  assert UUID.v5
 
   static Namespace := class {
     DNS: UUID = 6ba7b810-9dad-11d1-80b4-00c04fd430c8
@@ -61,6 +96,18 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
     OID: UUID = 6ba7b812-9dad-11d1-80b4-00c04fd430c8
     X500: UUID = 6ba7b814-9dad-11d1-80b4-00c04fd430c8
   }
+  // UU34 the DNS namespace is not a version 1 identifier
+  assert UUID.Namespace.DNS.version == 1
+  // UU35 the DNS namespace does not write as itself
+  assert UUID.Namespace.DNS as String == "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 }
 
 {uuid: UUID.String}: UUID => uuid
+assert ("00000000-0000-4000-8000-000000000000" as UUID).(
+  .length == 32  // UU15 what is read back has other than 32 digits
+  & . is UUID.v4  // UU16 what is read back is not of the version it was written with
+  & . is UUID.RFC_4122  // UU17 what is read back is not of the variant it was written with
+  & . as String == "00000000-0000-4000-8000-000000000000"  // UU13 a uuid written down does not read back as itself
+)
+
+

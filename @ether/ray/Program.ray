@@ -10,6 +10,55 @@ Program &+= {
   tried: *?
 
   written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
+  // PG11 a program of one statement counts other than one
+  assert Program(code: { 5 }).written.count == 1
+  // A statement read back as what it is written as
+  assert {
+    jumping := Program(code: {
+      goto past if 5
+      5
+     past\
+      6
+    })
+    always := Program(code: {
+      goto away
+     away\
+    })
+    landed := jumping.written[2]
+    // PG16 a goto is not read as a jump
+    assert jumping.written.first.is_jump
+    // PG17 a value is read as a jump
+    assert !(jumping.written.last.is_jump)
+    // PG19 a label is not read as one
+    assert landed.is_label
+    // PG20 a jump is read as a label
+    assert !(jumping.written.first.is_label)
+    // PG21 a jump with a condition is not conditional
+    assert jumping.written.first.is_conditional
+    // PG22 a jump does not land on its label
+    assert jumping.target_of(jumping.written.first) == landed
+    // PG23 a jump without a condition is conditional
+    assert !(always.written.first.is_conditional)
+    // PG24 a jump lands on a label it does not name
+    assert !(jumping.target_of(always.written.first))
+    // PG30 a jump forward is read as a jump back
+    assert !(jumping.jumps_backward)
+    // PG32 a program that only jumps forward does not terminate
+    assert jumping is Terminating
+    // XB2 a goto within its own branch is read as crossing
+    assert !(jumping.crosses(jumping.written.first))
+    // As what it does: a jump is an edge to where it lands
+    // PG25 a jump's edge does not reach its label
+    assert jumping.flow.first.jumps_to == landed
+    // PG27 a conditional jump does not go on below it
+    assert jumping.flow.first.falls_through
+    // PG28 a value does not go on below it
+    assert jumping.flow[1].falls_through
+    // PG29 a jump without a condition goes on below it
+    assert !(always.flow.first.falls_through)
+  }
+  // IO13 WebDAV's listing method is not written PROPFIND
+  assert $.http.Method.propfind.written == "PROPFIND"
   defined => global.declaring(head.head)
   abstract => written{!.defined}
 
@@ -24,6 +73,12 @@ Program &+= {
     started = true
     results.push at() if at
   } -- this
+  assert {
+    stepped := 0
+    stepped = 1 ; stepped += 1
+    // CF17 two assignments on one line did not both run
+    assert stepped == 2
+  }
   next => copy ~~ (.results = [results]) -- .stepped
   finished => (stepped while holds) -- this
   static round => Program#{running}.map(.stepped)
@@ -44,6 +99,51 @@ Program &+= {
   // (entered into a value: a closure of it, applied to it; `element`, what `.` is in it, not yet)
   entered (entered_into, entered_element) => entered_into -- this
 }
+assert Program(code: {
+  1
+  2
+  3
+}).(
+  .  // PG1 a block handed to a rule is not read as a program
+  & .written  // PG3 a program is not written as anything
+  & .written.count == 3  // PG8 a program of three statements does not count three
+  & .written.count == 3  // PG9 a program of three is not written as three
+  & .written.first.written  // PG5 a statement is not a program in turn
+  & .written.first.written.count == 1  // PG10 a statement is written as other than one thing
+  & .O  // PG12 a program does not say which rules it is read with
+  & !(.written.first.is_jump)  // PG18 a name is read as a jump
+)
+assert Program(code: {
+ again\
+  goto again
+}).(
+  .jumps_backward  // PG31 a jump back to a label above is not read as one
+  & !(. is Terminating)  // PG33 a program that jumps back terminates
+)
+// A goto into another branch is a call at that place (P2.10)
+assert Program(code: {
+  goto there
+  5
+  if true {
+   there\
+    6
+  }
+}).(
+  .crosses(.written.first)  // XB1 a goto into another branch is not read as crossing
+  & .flow.first.falls_through  // XB3 a goto into another branch does not come back like a call
+  & .called_at(.written.first) == 6  // XB4 a goto into another branch does not run at that place
+)
+// A variable's slice is the part of its program it was written from (P1.14); effects are inferred (P1.24)
+assert Program(code: {
+  a := 1
+  b := 2
+  c := a + 1
+}).(
+  .slice("c").count == 2  // FWP1 a variable's slice is not what it was written from
+  & !(.slice("c").some(.code ~= ⊢"b"))  // FWP2 a slice holds what the variable does not depend on
+)
+// FWP3 a program with no effects is said to have some
+assert Program(code: { 1 + 1 }).effects.empty
 
 Program &+= {
   is_jump => code ~= ⊢"goto "
@@ -62,6 +162,8 @@ Program &+= {
   head => code ~= (⊢ head: (!(" " | "(" | ":" | "?"))[], ending: (" " | "(" | ":" | "?")?)
   required_heads => written{(.head.ending == ":" && .head.head ~= ⊢Char.Word) || .code ~= (.head.head, " => TODO")}.head.head
   declares (head: String) => written.some(.code ~= ⊢(head, " " | "(" | ":"))
+  // PG34 a program declaring x does not say so
+  assert Program(code: { x := 1 }).declares("x")
   precedence (spelled: String) => written.index_of(written{.code ~= ⊢((Modifier.spellings, " ")?, spelled, " ")}.first)
 
   assigns => code ~= ⊢((!" ")[], " "[], "=" | "&=" | "|=" | "+=" | "-=", " ")
@@ -73,11 +175,23 @@ Program &+= {
   schedule (on = @me) => on.quests |= this
 
   right-to-left branch => copy.stepped
+  // CR3 awaiting a branch does not answer what it did
+  assert await (branch { 3 }) == 3
   right-to-left sync => written -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
+  // CR1 sync does not answer every branch
+  assert (sync {
+    1
+    2
+  }) == [1, 2]
   right-to-left race => written
     -- (.map(.stepped) while .every(.holds))
     -- .{holds}.map(.cancel)
     -- .{is_terminal}.first.results.last
+  // CR2 race is not won by the first to finish
+  assert (race {
+    1
+    2
+  }) == 1
   right-to-left rush => written
     -- (.map(.stepped) while .every(.holds))
     -- .{is_terminal}.first.results.last
@@ -95,3 +209,42 @@ Keyed := class (key: *, ":", " "[], (*, " = ")?, value: *) => {
 }
 
 // A block as a map (its `keys`, `x[key]`, `for` over them, T8.7) is the language's own: the entrypoint gives every program them.
+
+// Operator sections are values (A1, A2)
+// OP1 +1 is not a function adding one
+assert [1, 2].map(+1) == [2, 3]
+
+// OP2 *10 is not a function multiplying by ten
+assert [1, 2].map(*10) == [10, 20]
+
+// OP3 ! alone is not the negation
+assert [true, false].map(!) == [false, true]
+
+// OP5 a section in a narrowing is not applied to each
+assert [1, 5, 20]{< 10}.count == 2
+
+// IC3 if with cases is not a value where it is written
+assert (if 3 { != 0 => "nonzero" } else { "zero" }) == "nonzero"
+
+
+// `?` is unknown; `?=` sets only what has no value (T1.6)
+// QM1 ? is one value
+assert (?)#.count != 1
+
+assert {
+  given := None
+  given ?= 4
+  given ?= 5
+  // QM2 ?= does not set only what has no value
+  assert given == 4
+}
+
+
+// IS4 is does not find a member
+assert 3 is [1, 2, 3]#
+
+// IS5 is finds what is not there
+assert !(5 is [1, 2, 3]#)
+
+// IS6 is does not find a member
+assert 2 is [1, 2]#

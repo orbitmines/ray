@@ -1,29 +1,154 @@
 // (Number is made in the entrypoint, its core; what follows is the rest of it)
 Number &+= {
   succ => Number(next: this)
+  // N42 7.succ is not eight
+  assert 7.succ == 8
   { }{value} ^punctuation => [value] * this
   pred => next
+  // N109 what comes before three is not two
+  assert 3.pred == 2
+  // N110 stepping back and forward does not come back
+  assert 3.pred.succ == 3
   is_zero => next === None
+  // N1 zero is not zero
+  assert 0.is_zero
+  // N2 one reports zero
+  assert !(1.is_zero)
   nonzero | holds => !is_zero
+  // N107 zero is other than zero
+  assert !(0.nonzero)
+  // N108 three is zero
+  assert 3.nonzero
+  // N111 five holds nothing
+  assert 5.holds
   as (=== boolean) => nonzero
+  // A number stands for a bit
+  // N92 zero is set
+  assert !(0)
+  // N93 one is not set
+  assert 1
+  // N94 five is not set
+  assert 5
   [&&, ||, !&&, !||, x||, x!||].for operator => {
     `operator` (b) => (this as boolean) operator b
+    // BB1 nand(true,false) should be true
+    assert true !&& false
+    // BB10 xor(true,false) should be true
+    assert true x|| false
+    // BB11 xor(true,true) should be false
+    assert !(true x|| true)
+    // BB12 xnor(true,true) should be true
+    assert true x!|| true
+    // BB13 nor(true,false) should be false
+    assert !(true !|| false)
+    // BB2 nand(true,true) should be false
+    assert !(true !&& true)
+    // BB3 nand(false,false) should be true
+    assert false !&& false
+    // BO1 nand(false,true) should be true
+    assert false !&& true
+    // BO10 nor(false,false) should be true
+    assert false !|| false
+    // BO11 nor(false,true) should be false
+    assert !(false !|| true)
+    // BO12 nor(true,true) should be false
+    assert !(true !|| true)
+    // BO6 xor(false,true) should be true
+    assert false x|| true
+    // BO7 xor(false,false) should be false
+    assert !(false x|| false)
+    // BO8 xnor(false,false) should be true
+    assert false x!|| false
+    // BO9 xnor(false,true) should be false
+    assert !(false x!|| true)
+    // N103 one xor false is not true
+    assert 1 x|| false
+    // N104 one xor true is true
+    assert !(1 x|| true)
+    // N105 one xnor true is not true
+    assert 1 x!|| true
+    // N106 one xnor false is true
+    assert !(1 x!|| false)
   }
 
   chainable == (other: Number) => is_zero ? other.is_zero : other.nonzero && pred == other.pred
+  // PR21 a chain of sames does not hold
+  assert 1 == 1 == 1
+  // PR22 a chain of sames that breaks holds
+  assert !(1 == 1 == 2)
   chainable < (other: Number) => other.nonzero && (is_zero || pred < other.pred)
+  // N7 1 < 2 is false
+  assert 1 < 2
+  // N8 2 < 1 is true
+  assert !(2 < 1)
+  // PR3 one below two below three does not hold
+  assert 1 < 2 < 3
+  // PR4 three below two below one holds
+  assert !(3 < 2 < 1)
+  // PR5 a chain that breaks at the end holds
+  assert !(1 < 3 < 2)
+  // PR6 a chain that breaks at the start holds
+  assert !(2 < 1 < 3)
+  // PR8 one is not below two
+  assert 1 < 2
+  // PR9 two is below one
+  assert !(2 < 1)
   chainable <= (other: Number) => !(other < this)
+  // PR18 a chain of at-mosts does not hold
+  assert 1 <= 2 <= 3
+  // PR19 a chain of at-mosts that breaks holds
+  assert !(1 <= 3 <= 2)
+  // PR36 a probability's bounds do not chain
+  assert 0 <= 1 <= 1
 
   compounds + (other: Number) => other.is_zero ? this : succ + other.pred
+  // N3 1 + 2 is not 3
+  assert 1 + 2 == 3
+  // N40 42 is not forty-two
+  assert 42 == 4 * 10 + 2
+  // N41 3 + 4 is not seven
+  assert 3 + 4 == 7
+  // N125 the smaller of two and three, doubled and one, is not five
+  assert 2.min(3) * 2 + 1 == 5
   compounds - (other: Number) => other.is_zero || is_zero ? this : pred - other.pred
+  // N4 3 - 1 is not 2
+  assert 3 - 1 == 2
+  // N5 1 - 3 does not floor at zero
+  assert 1 - 3 == 0
   compounds * (other: Number) => other.is_zero ? 0 : this * other.pred + this
+  // N6 2 * 3 is not 6
+  assert 2 * 3 == 6
   compounds / (other: Number) => other.is_zero || this < other ? 0 : (this - other) / other + 1
+  // N9 6 / 2 is not 3
+  assert 6 / 2 == 3
+  // N54c dividing by zero does not stop at zero
+  assert 7 / 0 == 0
   compounds % (other: Number) => other.is_zero || this < other ? this : (this - other) % other
+  // N10 7 % 3 is not 1
+  assert 7 % 3 == 1
+  // FR5 % before a number is no longer modulo
+  assert 7 % 3 == 1
   right-to-left ^ (exponent: Number) => exponent.is_zero ? 1 : this ^ exponent.pred * this
+  // N71 two raised to three is not eight
+  assert 2 ^ 3 == 8
+  // N72 five raised to one is not five
+  assert 5 ^ 1 == 5
+  // N73 five raised to nothing is not one
+  assert 5 ^ 0 == 1
+  // N143 raising does not group to the right
+  assert 2 ^ 3 ^ 2 == 512
   ! => is_zero ? 1 : pred! * this
+  // N74 three factorial is not six
+  assert 3! == 6
+  // N75 one factorial is not one
+  assert 1! == 1
+  // N76 nothing factorial is not one
+  assert 0! == 1
   ± | +- (other: Number) => this - other | this + other
 
   negative => false
+  // N88 five is negative
+  assert !(5.negative)
   positive => true
   abs => this
   negated => Decimal.Signed(sign: is_zero ? None : "-", integer: this)
@@ -31,37 +156,135 @@ Number &+= {
   round => this
 
   gcd (other: Number) => other.is_zero ? this : other.gcd(this % other)
+  // What two numbers have in common
+  // N55 the greatest common divisor of six and four is not two
+  assert 6.gcd(4) == 2
+  // N56 asking the other way round answers otherwise
+  assert 4.gcd(6) == 2
+  // N57 five and three share more than one
+  assert 5.gcd(3) == 1
   lcm (other: Number) => this * other / gcd(other)
+  // N58 the least common multiple of two and three is not six
+  assert 2.lcm(3) == 6
   divides (other: Number) => other % this == 0
+  // N61 two does not divide six
+  assert 2.divides(6)
+  // N62 four divides six
+  assert !(4.divides(6))
+  // N63 one does not divide five
+  assert 1.divides(5)
   coprime (other: Number) => gcd(other) == 1
+  // N59 two and three are not coprime
+  assert 2.coprime(3)
+  // N60 two and four are coprime
+  assert !(2.coprime(4))
 
   even => is_zero || pred.odd
+  // N11 4 is not even
+  assert 4.even
+  // NN1 3 is even
+  assert !(3.even)
   odd => !even
+  // N12 5 is not odd
+  assert 5.odd
   half => this / 2
+  // N64 half of six is not three
+  assert 6.half == 3
+  // N65 half of seven is not three
+  assert 7.half == 3
+  // N66 half of nothing is not nothing
+  assert 0.half.is_zero
   squared => this ^ 2
+  // N69 three by itself is not nine
+  assert 3.squared == 9
+  // N70 one by itself is not one
+  assert 1.squared == 1
+  // The number line a number is on
+  // NL1 the first square past ten is not four squared
+  assert (3 -> +1){. squared > 10}.first == 4
+  // NL2 the first square past thirty is not six squared
+  assert (3 -> +1){. squared > 30}.first == 6
   cos => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k) / (2 * k)!).sum
   sin => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k + 1) / (2 * k + 1)!).sum
 
   .. (last: Number) => this == last ? [this] : ((this < last ? succ : pred)..last).prepend(this)
+  // Ranges
+  // RQ1 one to three is not one, two and three
+  assert (1..3) == [1, 2, 3]
+  // RQ2 one to three does not start at one
+  assert (1..3).first == 1
+  // RQ3 one to three does not end at three
+  assert (1..3).last == 3
+  // RQ6 three down to one does not pass two
+  assert (3..1) == [3, 2, 1]
   ..< (last: Number) => this == last ? [] : ((this < last ? succ : pred)..<last).prepend(this)
+  // RQ4 one up to three is not one and two
+  assert (1..<3) == [1, 2]
 
   bounded => false
+  // NL4 a number is bounded
+  assert !(1.bounded)
   entry => Line(value: this)
+  // NL6 a number is not entered at its own place
+  assert 4.entry == 4
+  // NL7 the line does not start at zero
+  assert 0.entry.is_initial
+  // NL8 the line starts at three
+  assert !(3.entry.is_initial)
+  // NL9 the line ends
+  assert !(3.entry.is_terminal)
   static Line := class: Ray (value: Number) => {
     next => Line(value: value.succ)
     previous => value.is_zero ? None : Line(value: value.pred)
+    // NL10 before three is not two
+    assert 3.entry.previous == 2
   }
 
   times => 0..<this
+  assert {
+    times_ran := 0
+    3.times { times_ran += 1 }
+    // NTM1 three times is not three
+    assert times_ran == 3
+  }
+  assert {
+    rounds := 0
+    3.times { rounds += 1 }
+    // NN2 times did not run three times
+    assert rounds == 3
+  }
+  assert {
+    summed_rounds := 0
+    3.times (n) => { summed_rounds += n }
+    // N30 times does not hand its round
+    assert summed_rounds == 3
+  }
   times (block) => times.for block
 
   digits (base: Number) => this < base ? [this] : (this / base).digits(base), this % base
+  // Digits in a base
+  // N77 six is spelled with other than one digit in ten
+  assert 6.digits(10).count == 1
+  // N78 six is spelled with other than three digits in two
+  assert 6.digits(2).count == 3
+  // N79 one is spelled with other than one digit in two
+  assert 1.digits(2).count == 1
+  // N146 six in two is not 1, 1, 0
+  assert 6.digits(2) == [1, 1, 0]
   static (digits: Number[]) as (base: Base) => digits.map(. * base ^ (digits.count - 1 - .index)).sum
+  // N84 one, two and three in ten do not spell a hundred and twenty-three
+  assert [1, 2, 3] as 10 == 123
+  // N85 one, two and three in two do not spell eleven
+  assert [1, 2, 3] as 2 == 11
 
   root (degree: Number) => (0..this){. ^ degree <= this}.last
+  // N144 the whole square root of ten is not three
+  assert 10.root(2) == 3
   root_of (degree: Number) => root(degree) ^ degree == this ? root(degree)
     : Real(integer: root(degree), fraction: (1 -> +1).map(place => (this * 10 ^ (degree * place)).root(degree) % 10))
   right-to-left √ => root_of(2)
+  // N145 the square root of nine is not three
+  assert √9 == 3
   right-to-left ∛ => root_of(3)
   right-to-left ∜ => root_of(4)
   arctan_inverse (scale: Number, j: Number = 0) => scale / this ^ (4 * j + 1) -- (term => term == 0 ? 0
@@ -72,14 +295,38 @@ Number &+= {
   bits (other: Number) => digits(2).length max other.digits(2).length -- digits(2).padded(.).zip(other.digits(2).padded(.))
   [&&, ||, x||, !&&, !||, x!||].for operator => {
     `"~" + operator` (other: Number) => bits(other).map((a, b) => a operator b) as 2
+    // N147 bitwise and of 0110 and 1010 is not 0010
+    assert 0b0110 ~&& 0b1010 == 0b0010
+    // N148 bitwise or of 0110 and 1010 is not 1110
+    assert 0b0110 ~|| 0b1010 == 0b1110
+    // N149 bitwise xor of 0110 and 1010 is not 1100
+    assert 0b0110 ~x|| 0b1010 == 0b1100
   }
   ~! (width: Number) => digits(2).padded(width).map(!) as 2
 
   as (base: Base) as (=== String) => numeral(base)(integer: digits(base).map(numeral(base).digit)) as String
+  // S68 twelve is not spelled 12 in ten
+  assert 12 as 10 as String == "12"
+  // S69 five is not spelled 101 in two
+  assert 5 as 2 as String == "101"
+  // SN2 255 is not spelled ff in sixteen
+  assert 255 as 16 as String == "ff"
+  // SN4 ff does not come back from sixteen
+  assert "ff" as 16 as 16 as String == "ff"
   as (=== String) => this as 10 as String
+  // S141 seven does not spell 7
+  assert 7 as String == "7"
+  // S142 twelve does not spell 12
+  assert 12 as String == "12"
+  // S143 nothing does not spell 0
+  assert 0 as String == "0"
 
   static Bases := {
     Binary: Digit = "0" | "1"
+    // SS3 a subscript behind a type is not its length
+    assert Binary₃₂.admits(Binary(integer: [1] * 32))
+    // SS4 a base type with a length admits another length
+    assert !(Binary₃₂.admits(Binary(integer: [1] * 8)))
     Ternary: Digit = "0".."2"
     Quaternary: Digit = "0".."3"
     Quinary: Digit = "0".."4"
@@ -88,19 +335,60 @@ Number &+= {
     Octal: Digit = "0".."7"
     Nonary: Digit = "0".."8"
     Decimal: Digit = "0".."9"
+    // N45 4a is read as a decimal number
+    assert !("4a" is Decimal.String)
+    // S42 f is not the digit fifteen
+    assert "f"[0] as Decimal == 15
+    // S78 89 is not eighty-nine
+    assert "89" as Decimal == 89
+    // S79 9 is not worth nine
+    assert "9"[0] as Decimal == 9
+    // Digit values of every script (X3.10, N1.23)
+    // UD8 an Arabic-Indic three is not three
+    assert "٣"[0] as Decimal == 3
+    // UD9 a Bengali three is not three
+    assert "৩"[0] as Decimal == 3
+    // UD10 a superscript two is not two
+    assert "²"[0] as Decimal == 2
+    // UD11 a seven is not seven
+    assert "7"[0] as Decimal == 7
+    // UD12 f is not fifteen
+    assert "f"[0] as Decimal == 15
+    // HS14 a share of an infinite structure is not taken by its density
+    assert Decimal{. % 2 == 0} is 50% Decimal
+    // S45 1a spells a decimal number
+    assert !("1a" is Decimal.String)
+    // S77 89 does not spell a number in ten
+    assert "89" is Decimal.String
     Undecimal: Digit = Decimal | ("a" | "A")
     Duodecimal: Digit = Decimal | ("a" | "A")..("b" | "B")
     Tridecimal: Digit = Decimal | ("a" | "A")..("c" | "C")
     Tetradecimal: Digit = Decimal | ("a" | "A")..("d" | "D")
     Pentadecimal: Digit = Decimal | ("a" | "A")..("e" | "E")
     Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F")
+    // N20 hexadecimal radix is not sixteen
+    assert Hexadecimal.radix == 16
+    // N46 4a is not read as a hexadecimal number
+    assert "4a" is Hexadecimal.String
+    // S44 1a does not spell a hexadecimal number
+    assert "1a" is Hexadecimal.String
     Superscript: Digit = "⁰" | "¹" | "²" | "³" | "⁴" | "⁵" | "⁶" | "⁷" | "⁸" | "⁹"
     Subscript: Digit = "₀" | "₁" | "₂" | "₃" | "₄" | "₅" | "₆" | "₇" | "₈" | "₉"
   }
   static Base := static{2 <= .}
   static Named := ["Binary", "Ternary", "Quaternary", "Quinary", "Senary", "Septenary", "Octal", "Nonary", "Decimal", "Undecimal", "Duodecimal", "Tridecimal", "Tetradecimal", "Pentadecimal", "Hexadecimal", "Superscript", "Subscript"]
   static numeral (base: Base) => Named.map((name) => global[name]){.radix == base}.first
+  // S66 f is not fifteen in sixteen
+  assert "f" as 16 == 15
+  // S67 12 is not twelve in ten
+  assert "12" as 10 == 12
+  // SN1 ff is not 255
+  assert "ff" as 16 == 255
+  // SN3 101 is not five in two
+  assert "101" as 2 == 5
 }
+// N86 five is not a natural number
+assert 5 is Number
 Number.components.hierarchy &= Ray
 
 zero := Number()
@@ -108,6 +396,8 @@ zero := Number()
 ∞ := zero.entry.terminal
 
 Probability := Number{0 <= . <= 1}
+// N150 two is a probability
+assert !(2 is Probability)
 
 Digit := class: String
 
@@ -135,24 +425,69 @@ Number.Named.for((name) => {
     {fraction: static.String} (): Real => integer, ".", fraction
 
     as (=== Signed) => Signed(integer: this)
+    // N116 five as an integer is negative
+    assert !(5 as Decimal.Signed).negative
     static Signed := class (sign: "-"?, integer: static) => {
       as static => integer if !negative
       negative => sign
+      // Signed numbers
+      // N21 negation is not negative
+      assert (-2).negative
+      // N47 minus five is not negative
+      assert (-5).negative
+      // N50 minus two times three is not negative
+      assert (-2 * 3).negative
+      // N54b three less five, signed, is not negative
+      assert ((3 as Signed) - (5 as Signed)).negative
       positive => !negative
       abs => Signed(integer)
       negated => -this
       chainable == (other: Signed) => integer == other.integer && (negative == other.negative || integer.is_zero)
       right-to-left - => Signed(sign: negative ? None : "-", integer)
+      // N123 minus minus two is not two
+      assert -(-2) == 2
       compounds + (other: Signed) => negative == other.negative ? Signed(sign, integer + other.integer)
         : integer < other.integer ? Signed(other.sign, other.integer - integer) : Signed(sign, integer - other.integer)
+      // N22 -2 + 5 is not 3
+      assert -2 + 5 == 3
+      // N49 minus five and five do not make nothing
+      assert -5 + 5 == 0
+      // N118 minus three and minus two is not minus five
+      assert -3 + -2 == -5
+      // N124 three and minus five is not minus two
+      assert 3 + -5 == -2
       compounds - (other: Signed) => this + -other
+      // N54 minus three less five is not minus eight
+      assert -3 - 5 == -8
       compounds * (other: Signed) => Signed(sign: negative != other.negative ? "-" : None, integer * other.integer)
+      // N23 -2 * -2 is not 4
+      assert -2 * -2 == 4
+      // N121 minus two times minus three is not six
+      assert -2 * -3 == 6
+      // N122 minus two times three is not minus six
+      assert -2 * 3 == -6
       chainable < (other: Signed) => negative ? !other.negative || other.integer < integer : !other.negative && integer < other.integer
+      // N24 -2 < 1 is false
+      assert -2 < 1
+      // N51 minus three is not less than minus two
+      assert -3 < -2
+      // N52 minus three is not less than two
+      assert -3 < 2
+      // N53 two is less than minus three
+      assert !(2 < -3)
+      // N119 minus three and minus two is below minus five
+      assert !(-3 + -2 < -5)
     }
     static Real := class (integer: static, ".", fraction: static{unbounded}) => {
+      // N126 1.5 does not start at one
+      assert 1.5.integer == 1
+      // N127 1.5 does not keep five after its point
+      assert 1.5.fraction == 5
       static Signed := class (sign: "-"?, real: Real) => { }
 
       places => fraction.length
+      // N128 1.05 does not keep its leading zero
+      assert 1.05.places == 2
       scaled => static(integer: (integer.integer, fraction.integer))
       static written (counted: Number, places: Number) => Real(integer: counted / radix ^ places, fraction: (counted % radix ^ places).digits(radix).padded(places))
       as (=== Number) => integer if fraction.every(== 0)
@@ -160,11 +495,24 @@ Number.Named.for((name) => {
       round => fraction.nonempty && (fraction.first as Decimal) * 2 >= radix ? integer + 1 : integer
       compounds + (other: Real) => written(scaled * radix ^ other.places + other.scaled * radix ^ places, places + other.places)
       compounds * (other: Number | Real) => other is Real ? written(scaled * other.scaled, places + other.places) : written(scaled * other, places)
+      // N131 1.5 times four is not 6.0
+      assert 1.5 * 4 == 6.0
       compounds / (other: Number) => Real(integer: scaled / other / radix ^ places, fraction: (1 -> +1).map(place => scaled * radix ^ place / other % radix)[places..])
+      // N132 2.5 halved is not 1.2 to one place
+      assert 2.5 / 2 == 1.2
       chainable == (other: Real) => scaled * radix ^ other.places == other.scaled * radix ^ places
+      // N129 1.5 is not 1.5
+      assert 1.5 == 1.5
+      // N130 1.5 is written as 1.50
+      assert !(1.5 == 1.50)
       chainable < (other: Real) => scaled * radix ^ other.places < other.scaled * radix ^ places
 
       rational => fraction is (static | static[]{length == ∞})
+      // Reals keep the digits after the point as written
+      // N114 a real is not rational
+      assert 5.0.rational
+      // N115 a real is irrational
+      assert !(5.0.irrational)
       irrational => !rational
     }
   }
@@ -176,20 +524,49 @@ Number.Named.for((name) => {
 
 Ending := \n | ")" | ","
 {from: Number}..{followed_by: ⊢Ending} ^punctuation => from -> 1
+// OR1 5.. does not go on from five
+assert (5..)[2] == 7
 ..{to: Number} ^punctuation => -1 <- to
 ..<{to: Number} ^punctuation => -1 <- (to - 1)
 
 {numerator: Decimal.String}/{denominator: Decimal.String} ^number => Decimal.Real(integer: numerator as Decimal, fraction: []) / (denominator as Decimal)
+// Number literals keep their value (N1.4, N1.12, A5)
+// FR1 1/3 does not start at zero
+assert (1/3).integer == 0
+// FR4 50% is not a half
+assert 50% == 1/2
+// FR3 1/3 is integer zero
+assert (1/3) * 3 != 0
+// FR2 1/3 does not repeat its threes
+assert (1/3).fraction[5] == 3
 {amount: Decimal}%{followed_by: ⊢(Ending | " ")} ^number => Decimal.Real(integer: amount, fraction: []) / 100
+// N112 a hundred hundredths is not one
+assert 100% == 1
+// N113 two hundred hundredths is not two
+assert 200% == 2
 
 right-to-left {radix: Subscript.String}{digits: Decimal.String} ^number => Number.numeral(Subscript(integer: radix))(integer: digits)
+// SS1 a subscript in front is not the base the digits are read in
+assert ₂10 == 2
 {base}{power: Superscript.String} ^number => base ^ Superscript(integer: power)
+// SS2 a superscript on a number is not its power
+assert 2³ == 8
 {type}{length: Subscript.String} ^number => type[]{length == Subscript(integer: length)}
 
 {digits: Decimal.String} => Decimal(integer: digits)
+// N136 007 is not seven
+assert 007 == 7
+// N137 00 is not zero
+assert 00 == 0
 -{number: Decimal} => Decimal.Signed(sign: "-", integer: number)
 0x{digits: Hexadecimal.String} | 0X{digits: Hexadecimal.String} => Hexadecimal(integer: digits)
+// N43 0x1F is not thirty-one
+assert 0x1F == 31
+// N138 0x00ff is not 0xff
+assert 0x00ff == 0xff
 0b{digits: Binary.String} | 0B{digits: Binary.String} => Binary(integer: digits)
+// N44 0b101 is not five
+assert 0b101 == 5
 {number: Decimal}.{fraction: Decimal.String} => Decimal.Real(integer: number, fraction: fraction)
 
 u{width: Decimal} => Binary{length <= width}
@@ -224,3 +601,119 @@ Angle &+= {
 boolean &+= {
   as (=== Binary) => this ? ₂1 : ₂0
 }
+// `#` is what a value may be (A1, T2.3)
+// HS1 boolean does not have two possible values
+assert boolean#.count == 2
+// CN2 the only member a narrowing admits is not the one chosen
+assert boolean{. == true}() == true
+// CN5 three called on boolean is not three of it
+assert (3 boolean).count == 3
+
+// N141 3 != 4 is not read as not-equal
+assert 3 != 4
+
+// N142 3 != 3 is read as not-equal and holds
+assert !(3 != 3)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// N99 zero nand true is not true
+assert 0 !&& true
+
+// N100 one nand true is true
+assert !(1 !&& true)
+
+// N101 zero nor false is not true
+assert 0 !|| false
+
+// N102 one nor false is true
+assert !(1 !|| false)
+
+
+
+
+
+
+
+
+
+
+assert {
+  compounded := 1
+  compounded += 2
+  // N133 += does not add
+  assert compounded == 3
+  compounded -= 1
+  // N134 -= does not subtract
+  assert compounded == 2
+  compounded *= 3
+  // N135 *= does not multiply
+  assert compounded == 6
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

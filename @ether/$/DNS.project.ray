@@ -1,0 +1,261 @@
+@ether/network
+@http
+
+// Domain names, implementation and specification (https://www.rfc-editor.org/rfc/rfc1035)
+DNS := class: Language {
+  static extensions := ".dns"
+
+  // TYPE values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.1), SRV (https://www.rfc-editor.org/rfc/rfc2782)
+  static Type := enum A (code: 1) | NS (code: 2) | CNAME (code: 5) | SOA (code: 6) | PTR (code: 12) | MX (code: 15) | TXT (code: 16) | AAAA (code: 28) | SRV (code: 33) | ANY (code: 255) {
+    static (code: Binary₁₆) as (=== Type) => Type#{.code == code}.first
+  }
+  // DN12 AAAA is not type 28
+  assert DNS.Type.AAAA.code == 28
+  // CLASS values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4)
+  static Classes := enum IN (code: 1) | CH (code: 3) | HS (code: 4) | ANY (code: 255) {
+    static (code: Binary₁₆) as (=== Classes) => Classes#{.code == code}.first
+  }
+  // OPCODE and RCODE (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
+  static Opcode := enum query | iquery | status
+  static Rcode := enum no_error | format_error | server_failure | name_error | not_implemented | refused
+
+  // Domain names as labels or a pointer (https://www.rfc-editor.org/rfc/rfc1035#section-3.1, https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
+  static Name := class (
+    labels: (₂00, size: Binary₆{> 0}, text: Byte[]{length == size})[],
+    Byte{== 0} | (₂11, pointer: Binary₁₄)
+  ) {
+    static (domain: Network.DomainName) as (=== Name) => Name(labels: domain.text.split("."){.nonempty}.map((size: .count, text: . as Byte[])))
+    // Labels are at most 63 octets, names at most 255 (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4)
+    dynamically assert labels.size.sum + labels.count + 1 <= 255
+  }
+  static text (name: Name) => name.labels.text.map(. as String).join(".")
+
+  // Question section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.2)
+  static Question := class (name: Name, type: Binary₁₆ as Type = Type.A, within: Binary₁₆ as Classes = Classes.IN)
+
+  // Resource record (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.3): its RDATA on the wire and in a zone file are given by the narrowing of its type below, and a value read in one form is written in the other field by field
+  static Record := class (
+    name: Name,
+    type: Binary₁₆ as Type,
+    within: Binary₁₆ as Classes = Classes.IN,
+    ttl: Binary₃₂ = 3600,
+    size: Binary₁₆ = rdata.count,
+    rdata: Byte[]{length == size} = data as Data as Byte[]
+  ) {
+    static Data := Byte[]
+    static Presentation := (!\n)[]
+    data = rdata as Data
+    presented => data as Presentation as String
+    // Each type's narrowing gives its RDATA on the wire and in a zone file (https://www.rfc-editor.org/rfc/rfc1035#section-3.3.9, https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+    assert {
+      mail := (@dns example.com. 300 IN MX 10 mail.example.com.)
+      // RDATA1 an MX record is not read and written by its narrowing
+      assert mail is DNS.MX && mail.data.preference == 10 && DNS.text(mail.data.exchange) == "mail.example.com" && mail.presented == "10 mail.example.com."
+      // RDATA2 an MX record written to the wire does not read back
+      assert (mail as Byte[] as DNS.Record).data.preference == 10
+    }
+    lifetime => ttl seconds
+  }
+  // RDATA formats (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-3.4.1), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.2, https://www.rfc-editor.org/rfc/rfc3596#section-2.4), SRV (https://www.rfc-editor.org/rfc/rfc2782)
+  static A := Record{type == Type.A} {
+    static Data := Binary₃₂ as IPv4
+    static Presentation := IPv4
+  }
+  // DN15 a zone-file line written inline is not an A record
+  assert (@dns example.com. 300 IN A 93.184.215.14).data as String == "93.184.215.14"
+  assert {
+    address := "93.184.215.14" as IPv4
+    zone := @dns {
+      $ORIGIN example.com.
+      $TTL 300
+      ; the apex
+      @ IN A {address}
+      www IN CNAME example.com.
+    }
+    // DN16 a zone block does not read its comment, its hole, $ORIGIN and $TTL
+    assert zone.count == 3 && zone[0] is DNS.Comment && zone[1].data as String == "93.184.215.14" && zone[1].ttl == 300 && DNS.text(zone[2].name) == "www.example.com"
+    // DN17 records are not written back as zone-file lines with their comment
+    assert (zone as DNS) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *)
+  }
+  static AAAA := Record{type == Type.AAAA} {
+    static Data := Binary₁₂₈ as IPv6
+    static Presentation := IPv6
+  }
+  static Named := Record{type is (Type.NS | Type.CNAME | Type.PTR)} {
+    static Data := Name
+    static Presentation := Domain
+  }
+  static MX := Record{type == Type.MX} {
+    static Data := (preference: Binary₁₆, exchange: Name)
+    static Presentation := (preference: Decimal, Blank, exchange: Domain)
+  }
+  // <character-string>: its length, then its bytes; in a zone file quoted, or a run without blanks (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static TXT := Record{type == Type.TXT} {
+    static Data := (size: Byte = text.count, text: Byte[]{length == size} as String)[]
+    static Presentation := (("\"", text: (!"\"")[], "\"") | text: (!" " && !"\t")[]{length > 0})[].join(Blank)
+  }
+  static SOA := Record{type == Type.SOA} {
+    static Data := (primary: Name, mailbox: Name, serial: Binary₃₂, refresh: Binary₃₂, retry: Binary₃₂, expire: Binary₃₂, minimum: Binary₃₂)
+    static Presentation := (primary: Domain, Blank, mailbox: Domain, Blank, serial: Decimal, Blank, refresh: Decimal, Blank, retry: Decimal, Blank, expire: Decimal, Blank, minimum: Decimal)
+  }
+  static SRV := Record{type == Type.SRV} {
+    static Data := (priority: Binary₁₆, weight: Binary₁₆, port: Binary₁₆, target: Name)
+    static Presentation := (priority: Decimal, Blank, weight: Decimal, Blank, port: Decimal, Blank, target: Domain)
+  }
+
+  // Message format (https://www.rfc-editor.org/rfc/rfc1035#section-4.1)
+  static Message := class (
+    // Header section (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.1)
+    id: Binary₁₆ = Binary₁₆.random,
+    response: Binary₁ as boolean = false,
+    opcode: Binary₄ as Opcode = Opcode.query,
+    authoritative: Binary₁ as boolean = false,
+    truncated: Binary₁ as boolean = false,
+    recursion_desired: Binary₁ as boolean = true,
+    recursion_available: Binary₁ as boolean = false,
+    Binary₃{== 0},
+    rcode: Binary₄ as Rcode = Rcode.no_error,
+    qdcount: Binary₁₆ = questions.count,
+    ancount: Binary₁₆ = answers.count,
+    nscount: Binary₁₆ = authorities.count,
+    arcount: Binary₁₆ = additional.count,
+    questions: Question[]{length == qdcount} = [],
+    answers: Record[]{length == ancount} = [],
+    authorities: Record[]{length == nscount} = [],
+    additional: Record[]{length == arcount} = []
+  ) {
+    // A pointer is an offset from the start of the message (https://www.rfc-editor.org/rfc/rfc1035#section-4.1.4)
+    named (name: Name) => [name.labels.text.map(. as String), name.pointer != None ? named((this as Byte[])[name.pointer..] as Name) : []].flatten.join(".") as Network.DomainName
+    assert {
+      question := DNS.query("example.com")
+      // DN1 a query does not ask one question
+      assert question.questions.count == 1
+      // DN2 the header does not count its question
+      assert question.qdcount == 1
+      // DN3 a query does not ask for recursion
+      assert question.recursion_desired
+      asked_bytes := question as Byte[]
+      // DN4 a query for example.com is not 29 bytes
+      assert asked_bytes.count == 29
+      // DN5 a label does not start with its length
+      assert asked_bytes[12] == 7
+      // DN6 a name does not read back
+      assert (asked_bytes as DNS.Message).named(question.questions.first.name) as String == "example.com"
+      // DN7 a pointer does not name what it points at
+      assert question.named(DNS.Name(labels: [], pointer: 12)) as String == "example.com"
+      replied := question.answer([DNS.Record(name: Network.DomainName(text: "example.com") as DNS.Name, type: DNS.Type.A, data: "93.184.215.14" as IPv4)])
+      // DN8 an answer is not a response
+      assert replied.response
+      // DN9 an answer does not carry the query's id
+      assert replied.id == question.id
+      // DN10 an answer does not give its address
+      assert replied.addresses.first as String == "93.184.215.14"
+      // DN11 an answer does not read back
+      assert (replied as Byte[] as DNS.Message).answers.first.data as String == "93.184.215.14"
+      // DN14 an https resolver is not asked over HTTPS
+      assert Compiler.reduced(DNS.Lookup(question, server: @https://dns.example/dns-query), DNS.Optimizations).transport == DNS.Transport.https
+    }
+    addresses => answers{.data is IP}.data
+    answer (records: Record[]) => Message(id, response: true, opcode, recursion_desired, recursion_available: true, questions, answers: records)
+  }
+  // DN13 a message over 512 bytes is not sent over TCP
+  assert Compiler.reduced(DNS.Lookup(DNS.Message(questions: (1..40).map(DNS.Question(name: Network.DomainName(text: "a-name-long-enough-to-matter.example.com") as DNS.Name)))), DNS.Optimizations).transport == DNS.Transport.tcp
+
+  // Transport (https://www.rfc-editor.org/rfc/rfc1035#section-4.2)
+  static Transport := enum udp | tcp | https
+  static Lookup := class message: Message, server: Location = resolver, transport: Transport = Transport.udp {
+    answer => Compiler.reduced(this, Sending) as Message
+    socket => Network.Socket.Address(host: server.host ?? server, port: server.port ?? Network.Protocol.dns.port)
+  }
+  static Sending := {
+    // UDP messages are at most 512 octets (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
+    {lookup: Lookup{transport == Transport.udp}} => lookup.socket.datagram(lookup.message as Byte[])
+    // TCP messages are prefixed with a two octet length (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.2)
+    {lookup: Lookup{transport == Transport.tcp}} => lookup.socket.send((lookup.message as Byte[]).count as Binary₁₆ as Byte[], lookup.message as Byte[]) -- (.[2..])
+    // DNS over HTTPS: a POST of application/dns-message (https://www.rfc-editor.org/rfc/rfc8484#section-4.1)
+    {lookup: Lookup{transport == Transport.https}} => HTTP.send(HTTP.Request(method: HTTP.Method.post, target: lookup.server,
+      fields: HTTP.Fields(entries: [(name: "Content-Type", value: "application/dns-message"), (name: "Accept", value: "application/dns-message")]), body: lookup.message as Byte[])).body
+  }
+  static Optimizations := {
+    // A message longer than 512 octets goes over TCP (https://www.rfc-editor.org/rfc/rfc1035#section-4.2.1)
+    {lookup: Lookup{transport == Transport.udp && (message as Byte[]).count > 512}} => Lookup(lookup.message, lookup.server, transport: Transport.tcp)
+    {lookup: Lookup{server.scheme == "https"}} => Lookup(lookup.message, lookup.server, transport: Transport.https)
+  }
+
+  static resolver: Location = (@/etc/resolv.conf as Unicode.Table<("nameserver", " "[], address: IP)>).rows.first.address ?? "1.1.1.1" as IP
+  static query (name: String, type: Type = Type.A) => Message(questions: [Question(name: Network.DomainName(text: name) as Name, type)])
+  static resolve (name: String, type: Type = Type.A) => Compiler.reduced(Lookup(query(name, type)), Optimizations).answer.addresses.first
+
+  // Zone files: the master file format (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static Blank := (" " | "\t")[]{length > 0}
+  // A name in a zone file is relative to $ORIGIN unless it ends in "."; "@" is the origin; written absolute (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static origin: String?
+  static absolute (name: String, origin: String?) => Network.DomainName(text: name == "@" ? origin.trimmed(".") ?? "" : name ~= "." ⊣ ? name[..<-1] : origin ? name + "." + origin.trimmed(".") : name)
+  static Domain := class (text: (!" " && !"\t" && !\n)[]{length > 0}) {
+    as (=== Name) => absolute(text, DNS.origin) as Name
+    static (name: Name) as (=== Domain) => Domain(text: DNS.text(name) + ".")
+  }
+
+  // Character strings of the protocol compare case-insensitively (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3, https://www.rfc-editor.org/rfc/rfc4343#section-3): the class and type mnemonics and the control entries read in any case, written in upper case; owner names keep their case (https://www.rfc-editor.org/rfc/rfc4343#section-4.1)
+  static mnemonic (enumeration, text: String) => enumeration#{.name == text.upper_case}.first
+  static TypeMnemonic := (Char.Letter | Char.Digit)[]{mnemonic(Type, .) != None}
+  static ClassMnemonic := Char.Letter[]{mnemonic(Classes, .) != None}
+
+  // Comments run from ";" to the end of the line; $ORIGIN (https://www.rfc-editor.org/rfc/rfc1035#section-5.1) and $TTL (https://www.rfc-editor.org/rfc/rfc2308#section-4)
+  static Comment := class (";", text: (!\n)[])
+  static Origin := class ("$ORIGIN".ignore_case, Blank, name: (!" " && !"\t" && !\n)[])
+  static Lifetime := class ("$TTL".ignore_case, Blank, ttl: Decimal)
+  // <domain-name> [<TTL>] [<class>] <type> <RDATA>, the TTL and class in either order (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static Entry := class (
+    owner: (!" " && !"\t" && !\n)[]?, Blank,
+    ((ttl: Decimal, Blank)?, (within: ClassMnemonic, Blank)?) | ((within: ClassMnemonic, Blank), (ttl: Decimal, Blank)),
+    type: TypeMnemonic, Blank,
+    text: (!\n)[]
+  ) {
+    // A blank owner is the one above, a missing TTL the last given (https://www.rfc-editor.org/rfc/rfc1035#section-5.1, https://www.rfc-editor.org/rfc/rfc2308#section-4)
+    record (above: *[]) => above{. is Origin}.last.name -- (origin => Record(
+      name: absolute(owner ?? above{. is Entry && .owner}.last.owner ?? "@", origin) as Name,
+      type: mnemonic(Type, type),
+      within: within ? mnemonic(Classes, within) : Classes.IN,
+      ttl: ttl ?? above{. is Lifetime}.last.ttl ?? above{. is Entry && .ttl}.last.ttl ?? 3600
+    ) -- (record => record ~~ (.data = text is String ? with (DNS.origin = origin) (text as record.Presentation as record.Data) : text)))
+  }
+  static Zone := class (lines: (Blank?, line: (Origin | Lifetime | Comment | Entry)?, Blank?, \n | ⊣)[]) {
+    records => lines.line{!= None} -- (all => all.enumerate.map(line => line.value is Entry ? line.value.record(all[..<line.index]) : line.value){!(. is (Origin | Lifetime))})
+  }
+
+  level := {
+    {message: Message} => message
+    {entry: Entry} => entry.record([])
+    {zone: Zone} => zone.records
+  }
+  written := {
+    {writing: Language.Writing{value is Message}} => writing.value
+    // Records written in the master file format, one to a line (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+    {writing: Language.Writing{value is (Record | Comment)[]}} => writing.value.map(line => (line is Comment ? line
+      : (text(line.name), ". ", line.ttl as String, " ", line.within.name, " ", line.type.name, " ", line.presented)), \n)
+  }
+}
+
+// Class and type mnemonics in any case (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3), written in upper case
+// DN18 lower-case class and type mnemonics do not read as IN A, or are not written back in upper case
+assert (@dns example.com. 300 in a 93.184.215.14).type == DNS.Type.A && (@dns example.com. 300 in a 93.184.215.14).within == DNS.Classes.IN && ([(@dns example.com. 300 in a 93.184.215.14)] as DNS) ~= (*, "example.com. 300 IN A 93.184.215.14", *)
+
+// DN19 lower- and mixed-case $ORIGIN, $TTL and mnemonics are not read, or the origin's case is not kept
+assert (@dns {
+  $origin Example.COM.
+  $Ttl 60
+  www Cname example.com.
+}).count == 1 && (@dns {
+  $origin Example.COM.
+  $Ttl 60
+  www Cname example.com.
+})[0].ttl == 60 && (@dns {
+  $origin Example.COM.
+  $Ttl 60
+  www Cname example.com.
+})[0].type == DNS.Type.CNAME && DNS.text((@dns {
+  $origin Example.COM.
+  $Ttl 60
+  www Cname example.com.
+})[0].name) == "www.Example.COM"

@@ -1,8 +1,0 @@
-say {x} =>
-  @me/instance = x
-T := class {
-  hi => say this
-}
-t := T()
-t.hi
-t nope

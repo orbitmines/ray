@@ -1,14 +1,73 @@
 -> (): Ray => next: () => Ray(next: next())
+// NL11 three steps along the line are not three
+assert (5 -> +1)[..<3].count == 3
+// NL12 the third step from five is not seven
+assert (5 -> +1)[..<3].last == 7
+// NL13 some did not reach eight
+assert (5 -> +1).some(== 8)
+// NL3 three along from two is not five
+assert (2 -> +1)[3] == 5
+// `->` and `<-` step from a value again and again (A2, L§5.2)
+// AR1 the fifth step of 0 -> +2 is not 8
+assert (0 -> +2)[4] == 8
+// AR2 a number as a step is not added
+assert (0 -> 1)[3] == 3
+// AR6 an unbounded line cannot be filtered by its entries
+assert (0 -> +1)[{< 3}][2] == 2
+// AR7 x -> alone does not count on by one
+assert (0 ->)[5] == 5
 <- (): Ray => previous: () => Ray(previous: previous())
 <--> (): Ray => (<-) &+ (->)
+assert (-1 <- 0 -> +1).(
+  .next == 1  // AR3 -> on a two-way line does not step forward
+  & .previous == -1  // AR4 <- on a two-way line does not step back
+  & .next.previous == 0  // AR5 a step forward and back is not where it started
+)
 
 Ordered := class (T = static) => {
   chainable < (b: T) => TODO
   chainable > (b: T) => b < this
+  // PR16 three above two above one does not hold
+  assert 3 > 2 > 1
+  // PR17 one above two above three holds
+  assert !(1 > 2 > 3)
   chainable <= (b: T) => this == b || this < b
   chainable >= (b: T) => this == b || this > b
+  // PR20 a chain of at-leasts does not hold
+  assert 3 >= 2 >= 1
   min (b: T) => this <= b ? this : b
+  // MIN1 the smallest of three, one and two is not one
+  assert [3, 1, 2].min == 1
+  // MIN3 the smallest of one, two and three is not one
+  assert ([1, 2, 3]).min == 1
+  // MIN5 the smallest of zero and five is not zero
+  assert [0, 5].min.is_zero
+  // RM7 the smallest with a repeat is not one
+  assert ([1, 2, 1]).min == 1
+  // RM8 the smaller of five and three is not three
+  assert 5.min(3) == 3
+  // `.min(key)`, `.max(key)` along a function of the entries (R3.10)
+  // MK1 min along a key does not pick the smallest by it
+  assert ["ccc", "a", "bb"].min(.count) == "a"
+  // MK3 min of a value is no longer the smaller of the two
+  assert 2.min(5) == 2
+  // N67 the smaller of two and five is not two
+  assert 2.min(5) == 2
+  // N68 asking the smaller the other way round answers otherwise
+  assert 5.min(2) == 2
   max (b: T) => this >= b ? this : b
+  // MIN2 the largest of three, one and two is not three
+  assert [3, 1, 2].max == 3
+  // MIN4 the largest of one, two and three is not three
+  assert ([1, 2, 3]).max == 3
+  // MIN6 the largest of zero and five is not five
+  assert [0, 5].max == 5
+  // RM9 the larger of five and three is not five
+  assert 5.max(3) == 5
+  // MK2 max along a key does not pick the largest by it
+  assert ["ccc", "a", "bb"].max(.count) == "ccc"
+  // N13 max failed
+  assert 2.max(5) == 5
 }
 
 // (Iterable and Array are made in the entrypoint, their core; what follows is the rest of them)
@@ -18,18 +77,54 @@ Iterable &+= {
   dynamically assert count < ∞ if bounded: boolean = true
 
   empty => count == 0
+  // R27 an empty list is not empty
+  assert [].empty
+  // RX5 a list none times is not empty
+  assert (([1, 2, 3]) * 0).empty
+  // RX9 ab none times is not empty
+  assert ("ab" * 0).empty
+  // RQ9 two up to two holds something
+  assert (2..<2).empty
+  // S107 abc is empty
+  assert !("abc".empty)
+  // S108 nothing written is not empty
+  assert "".empty
+  // S58 a slice of nothing is not empty
+  assert "abc"[1..<1].empty
   nonempty => !empty
+  // R30 a list holding something is empty
+  assert [1].nonempty
   unbounded => !bounded
+  // NL5 a number is not unbounded
+  assert 1.unbounded
+  // RR52 a list of three is unbounded
+  assert !(([1, 2, 3]).unbounded)
   ∞ => unbounded
   orderless => false
 
   connected => all.every(a => all.every(b => a.to(b)))
   consistent => all.every(.next.previous == . && .previous.next == .)
+  // RR54 a list is not consistent
+  assert ([1, 2, 3]).consistent
   acyclic => !all.some(.next** contains .)
+  // RR74 an array comes back around
+  assert Array().acyclic
+  // RR55 a list of three comes back around
+  assert ([1, 2, 3]).acyclic
   undirected => all.every(.initial === .terminal)
+  // RR57 a list is undirected
+  assert !(([1, 2, 3]).undirected)
   unidirectional => all.every(!.previous)
+  // RR81 a list points only one way
+  assert !(([1, 2, 3]).unidirectional)
 
   compact => this[{!(. is None)}]
+  // CO28 compacted twice is not compacted once
+  assert [1, None].compact.compact == [1]
+  // RR65 what is left of a list with a gap is other than two
+  assert [1, None, 2].compact.count == 2
+  // RR66 a list with no gaps loses something
+  assert ([1, 2, 3]).compact.count == 3
 
   static boundary := class {
     () => boundary.initial | boundary.terminal
@@ -38,43 +133,154 @@ Iterable &+= {
   }
 
   first => entry
+  // R31 the first does not hold what was given
+  assert [1].first == 1
+  // R34 the first is not the first thing given
+  assert ([1, 2, 3]).first == 1
   last => rest.empty ? first : rest.last
+  // R32 the last does not hold the only thing
+  assert [1].last == 1
+  // R35 the last is not the last thing given
+  assert ([1, 2, 3]).last == 3
   static From := class: Iterable (at: Ray) => {
     entry => at
+    // RR59 what a list is entered at is not its first
+    assert ([1, 2, 3]).entry == 1
   }
 
   for <traverse: Traverser = Traverser.default>(yield: (x: Vertex): *) => traverse<.yield: yield<local: &.caller, break: return>>(entry) if entry
+  assert {
+    total := 0
+    [1, 2, 3].for(x => total += x)
+    // R40 walking one, two and three does not add to six
+    assert total == 6
+  }
 
   every (predicate: (x: Vertex): boolean) => map(predicate){== false}.empty
+  // RR44 not every one of one, two and three is something
+  assert ([1, 2, 3]).every(.nonzero)
+  // RR45 every one of them is one
+  assert !(([1, 2, 3]).every(== 1))
   some (predicate: (x: Vertex): boolean) => this[{predicate}].nonempty
+  // RR46 none of them is two
+  assert ([1, 2, 3]).some(== 2)
+  // RR47 one of them is six
+  assert !(([1, 2, 3]).some(== 6))
   filter (predicate: (x: Vertex): boolean) => this[{predicate}]
 
   // (one closure: its parameter the accumulator, what it is given nothing its start (its default), `.` in it each element in
   // turn: `first -- step(seed)`)
   reduce (step) =>
     empty ? None : rest.reduced(first -- step(), step)
+  // OP4 (*) is not multiplication as a value
+  assert [1, 2, 3].reduce((*)) == 6
+  // Reducing
+  // RD1 one, two, three summed through the accumulator are not six
+  assert ([1, 2, 3]).reduce((acc) => acc + .) == 6
+  // RD2 counting from a given start does not reach three
+  assert ([1, 2, 3]).reduce(acc = 0 => acc + 1) == 3
+  // RD3 a given start is not where the sum begins
+  assert ([1, 2, 3]).reduce(acc = 10 => acc + .) == 16
+  // RD4 a lone operator does not reduce
+  assert ([1, 2, 3]).reduce(+) == 6
+  // RD5 a product through a lone operator is not six
+  assert ([1, 2, 3]).reduce(*) == 6
+  // RD6 reducing nothing answers something
+  assert !([].reduce(+))
   reduce_right | fold_right | foldr => reverse.reduce
   reduced (seed, step) =>
     reduced_next := empty ? seed : (first -- step(seed))
     empty ? seed : rest.reduced(reduced_next, step)
 
   all => reduce(|)
+  // RR68 all of a list is nothing
+  assert ([1, 2, 3]).all
   right-to-left Σ | ∑ | sum => reduce(total = 0 => total + .)
+  // N80 one, two and three do not add to six
+  assert [1, 2, 3].sum == 6
+  // N82 one thing does not add to itself
+  assert [5].sum == 5
+  // RR62 the sum sign does not add them
+  assert Σ ([1, 2, 3]) == 6
   right-to-left ∏ | product => reduce(total = 1 => total * .)
+  // N81 one, two and three do not multiply to six
+  assert [1, 2, 3].product == 6
+  // N83 one thing does not multiply to itself
+  assert [5].product == 5
+  // RR61 one, two and three do not multiply to six
+  assert ([1, 2, 3]).product == 6
+  // RR63 the product sign does not multiply them
+  assert ∏ ([1, 2, 3]) == 6
   min => reduce((acc) => acc < . ? acc : .)
   max => reduce((acc) => acc > . ? acc : .)
   min | min_by (key: Program | Section) => this[{key(.) == map(key).min}].all
   max | max_by (key: Program | Section) => this[{key(.) == map(key).max}].all
   count => unbounded ? ∞ : reduce(acc = 0 => acc + 1)
+  // A list: what it holds, in the order it was given
+  // R26 an empty list counts other than zero
+  assert [].count == 0
+  // R29 one thing kept does not count one
+  assert [1].count == 1
+  // R33 three things kept do not count three
+  assert ([1, 2, 3]).count == 3
+  // R41 a list does not keep what holds nothing
+  assert [1, None, 2].count == 3
+  // RX7 repeating a list changed it
+  assert ([1, 2, 3]).count == 3
   length => paths.map(.count).max
+  // RR56 a list is not as long as it counts
+  assert ([1, 2, 3]).length == 3
+  // DQ3 "A" is not a string of one
+  assert "A".length == 1
+  // DQ4 "hello world" does not hold eleven characters
+  assert "hello world".length == 11
+  // S1 ab has other than two characters
+  assert "ab".length == 2
+  // S104 abc is not three long
+  assert "abc".length == 3
+  // S41 a string of three does not count three
+  assert "abc".length == 3
+  // S7 é is not one character
+  assert "é".length == 1
+  // U5 a has other than one character
+  assert "a".length == 1
+  // HO7 a written space is not one character
+  assert " ".length == 1
+  // HO8 two written spaces are not two characters
+  assert "  ".length == 2
+  // HO9 a letter between spaces is not three characters
+  assert " a ".length == 3
   paths: Path{.bounded: bounded} => [this]
+  // RR67 the paths through a list are not the list
+  assert ([1, 2, 3]).paths.count == 3
 
   rest => entry.next ? From(at: entry.next) : []
   map (mapping: (x: Vertex): *) => empty ? [] : mapping(first), rest.map(mapping)
+  // What a list answers as a whole
+  // IT2 one, two and three doubled are not two, four and six
+  assert ([1, 2, 3]).map(. * 2) == [2, 4, 6]
+  // IT3 the first doubled is not two
+  assert ([1, 2, 3]).map(. * 2).first == 2
+  // IT4 the last doubled is not six
+  assert ([1, 2, 3]).map(. * 2).last == 6
   map {selection} (mapping: (x: Vertex): *) => (selected = this[{selection}]) -- map(x => selected.contains(x) ? mapping(x) : x)
   reverse => empty ? [] : rest.reverse, first
+  // CO27 turned around twice is not as it was
+  assert [1, 2].reverse.reverse == [1, 2]
+  // IT5 turned around, one, two and three are not three, two and one
+  assert ([1, 2, 3]).reverse == [3, 2, 1]
+  // IT7 turning a list around loses something
+  assert ([1, 2, 3]).reverse.count == 3
   sort => empty ? [] : rest{< first}.sort, first, rest{>= first}.sort
+  // CO30 sorted twice is not sorted once
+  assert [2, 1].sort.sort == [1, 2]
+  // IT43 sorted, three, one and two are not one, two and three
+  assert [3, 1, 2].sort == [1, 2, 3]
+  // IT44 sorted, the last is not the largest
+  assert [3, 1, 2].sort.last == 3
   sort_by | sorted (key) => empty ? [] : this.sorted_on(key)
+  // IT67 sorted by what they are short of ten, they are not largest first
+  assert [3, 1, 2].sort_by(10 - .) == [3, 2, 1]
   sorted_on (key) =>
     sort_pivot := first
     sort_rest := rest
@@ -84,11 +290,37 @@ Iterable &+= {
     sort_rest{sort_candidate => key(sort_candidate) >= key(sort_pivot)}.sort_by(key).for(sorted_one => sorted_made.append(sorted_one))
     sorted_made
   unique => empty ? [] : first, rest{!= first}.unique
+  // IT11 each thing once is not two
+  assert ([1, 2, 1]).unique.count == 2
+  // IT12 each thing once is not in the order first seen
+  assert ([1, 2, 1]).unique == [1, 2]
 
   // (by `==`, until the operator given as a type parameter (`contains <operator = ==>(x)`) reads)
   contains | includes (sought) => some(contained => contained == sought)
+  // IT8 a list does not contain what it was given
+  assert ([1, 2, 3]).contains(2)
+  // IT9 a list contains what it was never given
+  assert !(([1, 2, 3]).contains(5))
+  // IT10 includes is not contains
+  assert ([1, 2, 3]).includes(3)
   partition (predicate) => [this[{predicate}]], [this[{!predicate(.)}]]
+  // IT13 a partition is not in two
+  assert ([1, 2, 3]).partition(. < 2).count == 2
+  // IT14 what holds is not only the one
+  assert ([1, 2, 3]).partition(. < 2).first == [1]
+  // IT15 what is left is not the other two
+  assert ([1, 2, 3]).partition(. < 2).last == [2, 3]
   batch | chunk (size: Number) => empty ? [] : [this[..<size]], this[size..].chunk(size)
+  // IT16 three in runs of two are not two runs
+  assert ([1, 2, 3]).chunk(2).count == 2
+  // IT17 the first run is not one and two
+  assert ([1, 2, 3]).chunk(2).first == [1, 2]
+  // IT18 the last run does not hold what is left
+  assert ([1, 2, 3]).chunk(2).last == [3]
+  // IT19 a batch of all of it is not one
+  assert ([1, 2, 3]).batch(3).count == 1
+  // IT20 the runs flattened are not the three, in order
+  assert ([1, 2, 3]).chunk(2).flatten == ([1, 2, 3])
   concatenated =>
     made := []
     this.for(part => part.for(element => made.append(element)))
@@ -96,22 +328,86 @@ Iterable &+= {
   // (what flattening goes into: a narrowing, a list (a Ray of vertices); not a number, a text, a closure, a shape (each also a Ray))
   static flattens (element) => element.narrows || element.listing || (element.commas && element.empty) || (element.of === [].of)
   flatten => map(element => Ray.flattens(element) ? element.flatten : [element]).concatenated
+  // IT22 flattening numbers splices what they are made of
+  assert ([1, 2, 3]).flatten.count == 3
+  // RL1 flattening three levels does not leave one, two and three
+  assert ([[1, [2, [3]]]]).flatten == [1, 2, 3]
+  // RL4 flatten one level does not leave one and the rest
+  assert ([[1, [2, [3]]]]).flatten(1).count == 2
+  // RL5 flatten one level flattens further than one
+  assert ([[1, [2, [3]]]]).flatten(1).last.count == 2
+  // RL6 flatten two levels does not leave one, two and what is left
+  assert ([[1, [2, [3]]]]).flatten(2).count == 3
+  // RL7 flatten two levels does not leave the third level unspliced
+  assert ([[1, [2, [3]]]]).flatten(2).last == [3]
+  // RL8 flatten none changes the count
+  assert ([[1, [2, [3]]]]).flatten(0).count == 1
+  // RL9 flatten levels on numbers splices what they are made of
+  assert ([1, 2, 3]).flatten(3).count == 3
   flatten (levels: Number) => levels == 0 ? this : map(element => Ray.flattens(element) ? element.flatten(levels - 1) : [element]).concatenated
   union (other: Iterable) => this, other[{!this.contains(.)}]
   intersection (other: Iterable) => this[{other.contains(.)}]
+  // IT23 what both hold is not one and two
+  assert ([1, 2, 3]).intersection(([1, 2, 1])).count == 2
   disjoint (other: Iterable) => intersection(other).empty
+  // IT24 two lists with one in common are disjoint
+  assert !(([1, 2, 3]).disjoint(([1, 2, 1])))
+  // IT25 lists sharing a two are disjoint
+  assert !(([1, 2, 3]).map(. * 2).disjoint(([1, 2, 1])))
   xor | symmetric_difference (other: Iterable) => this[{!other.contains(.)}], other[{!this.contains(.)}]
+  // IT26 what only one of them holds is not three alone
+  assert ([1, 2, 3]).symmetric_difference(([1, 2, 1])) == [3]
+  // IT61 xor is not the symmetric difference
+  assert ([1, 2, 3]).xor(([1, 2, 1])) == [3]
   split (delimiter) => this ~= ((piece: *, ⊙: delimiter)[], piece: *) -- .piece
+  // `split` keeps its delimiters as the edges between the pieces (R3.16)
+  // SQ1 a,b,c split at its commas is not a, b, c
+  assert "a,b,c".split(",") == ["a", "b", "c"]
+  // SQ2 the delimiters are counted among the pieces
+  assert "a,b,c".split(",").count == 3
+  // SQ4 text without the delimiter is not one piece
+  assert "abc".split(",") == ["abc"]
+  // S47 splitting on a dash does not give two parts
+  assert "a-b".split(U+002D).length == 2
+  // ST10 the second of a,b,c is not b
+  assert "a,b,c".split(",")[1] == "b"
   group_by (key: Program | Section) => map(key).unique.map((group) => (group): this[{key(.) == group}])
+  // `group_by` answers a map from each key to what has it (R3.17)
+  assert ([1, 2, 3, 4, 5].group_by(. % 2)).(
+    .[1] == [1, 3, 5]  // GY1 the odd numbers are not grouped under one
+    & .[0] == [2, 4]  // GY2 the even numbers are not grouped under zero
+  )
+  // GY3 two words of one length are not grouped together
+  assert ["a", "bb", "cc"].group_by(.count)[2] == ["bb", "cc"]
+  // GY4 a key nothing has holds something
+  assert !(["a"].group_by(.count)[2])
   // (each value with its place, from 0)
   enumerate =>
     enumerated := []
     enumerating_at := 0
     this.for(enumerated_value => enumerated.append((index: enumerating_at, value: enumerated_value)) -- (enumerating_at = enumerating_at + 1))
     enumerated
+  // IT66 the last of three is not numbered two
+  assert ([1, 2, 3]).enumerate.last.index == 2
   // (each pair a list of two: `[a].append(b)`, which a list `a` does not open; up to the shorter one)
   zip (other: Iterable) => other.count -- (other_count => this.enumerate{zipped => zipped.index < other_count}.map(zipped => [zipped.value].append(other[zipped.index])))
+  // IT62 two zipped with two are not two pairs
+  assert [1, 2].zip([3, 4]).count == 2
   pairs (other: Iterable) => map(a => other.map(b => (a, b))).flatten(1)
+  assert {
+    outer := 2
+    pairs := 0
+    while outer {
+      inner := 3
+      while inner {
+        pairs += 1
+        inner -= 1
+      }
+      outer -= 1
+    }
+    // CF13 a loop inside a loop does not multiply
+    assert pairs == 6
+  }
   join (separator) => this.empty ? "" : (this.rest.empty ? this.first : this.first + separator + this.rest.join(separator))
   random => drawn(Random.below(map(.weight ?? 1).sum))
   drawn (at: Number) => at < (first.weight ?? 1) ? first : rest.drawn(at - (first.weight ?? 1))
@@ -119,25 +415,100 @@ Iterable &+= {
   orderings => count < 2 ? [this] : map(held => this{!== held}.orderings.map([held, .])).flatten(1)
   shuffled => orderings.random
   fill (x) => all = x
+  // RR69 a filled list does not hold what it was filled with
+  assert [1, 2].fill(3).every(== 3)
   take (count: Number) => this[..<count]
+  // IT63 the first two taken are not one and two
+  assert ([1, 2, 3]).take(2) == [1, 2]
   find (predicate) => this[{predicate}].first
+  // IT64 the first past one is not two
+  assert ([1, 2, 3]).find(. > 1) == 2
   index_of (x, at = 0) => empty ? None : first == x ? at : rest.index_of(x, at + 1)
   until (boundary) => empty || first == boundary ? [] : first, rest.until(boundary)
   squeeze => this[{. != .previous}]
+  // IT65 a repeat next to itself is not squeezed out
+  assert [1, 1, 2].squeeze == [1, 2]
   padded (width: Number, with = 0) => [with] * (width - length), this
 
   .. (next: Number) => this, (last..next)[1..]
+  // RQ7 zero to two through to one is not four steps
+  assert (0..2..1).count == 4
+  // RQ8 zero to two through to one does not end at one
+  assert (0..2..1).last == 1
 
   orbit | loop => Loop(around: this, at: first)
+  // An orbit comes back to its first, and has no end
+  // IT54 five steps round two are not one, two, one, two, one
+  assert [1, 2].orbit[..<5] == [1, 2, 1, 2, 1]
+  // IT56 the fourth step round two is not the second
+  assert [1, 2].orbit[3] == 2
+  // IT57 an orbit is bounded
+  assert !([1, 2].orbit.bounded)
+  // IT58 an orbit does not come back around
+  assert !([1, 2].orbit.acyclic)
+  // IT59 before the first of an orbit is not the last
+  assert [1, 2].orbit.previous == 2
+  // IT68 an orbit unrolled is not what it goes around
+  assert [1, 2].orbit.unrolled == [1, 2]
+  // Rotating is shifting bits arranged in a loop: what leaves one end comes back at the other.
+  // ROT1 shifting a loop left does not bring the leftmost bit back on the right
+  assert ((₂10010011 as Binary₈).loop << 1) as Binary₈ == ₂00100111
+  // ROT2 shifting a loop right does not bring the rightmost bit back on the left
+  assert ((₂10010011 as Binary₈).loop >> 1) as Binary₈ == ₂11001001
+  // ROT3 a whole turn of a loop changes it
+  assert ((₂10010011 as Binary₈).loop << 8) as Binary₈ == ₂10010011
 
   compounds * (count: Number) => count == 0 ? [] : this, this * (count - 1)
+  // RR42 forty things kept do not count forty
+  assert ([1] * 40).count == 40
+  // RX1 a list of three twice is not six
+  assert (([1, 2, 3]) * 2).count == 6
+  // RX4 the repeated list does not start over after three
+  assert (([1, 2, 3]) * 2) == [1, 2, 3, 1, 2, 3]
+  // RX6 a list once is not itself
+  assert ([1, 2, 3]) * 1 == ([1, 2, 3])
+  // RX8 ab three times is not ababab
+  assert "ab" * 3 == "ababab"
   ^ (count: Number) => count == 0 ? [[]] : pairs(this ^ (count - 1)).map((x, xs) => [x], xs)
 
   + (at: Integer) => this[at]
   - (at: Integer) => this[-at]
   ± | +- | -+ (at: Integer) => this[at] | this[-at]
   [at: Integer] => at == 0 ? entry : at > 0 ? rest[at - 1] : reverse[-at - 1]
+  // R36 the one at nought is not the first thing given
+  assert ([1, 2, 3])[0] == 1
+  // R37 the one at minus one is not the last thing given
+  assert ([1, 2, 3])[-1] == 3
+  // R38 the one after the first is not the second thing given
+  assert ([1, 2, 3])[1] == 2
+  // RR49 the one two along is not the third
+  assert ([1, 2, 3])[2] == 3
+  // S105 the second of abc is not b
+  assert "abc"[1] == "b"[0]
+  // S2 a is not codepoint 97
+  assert "ab"[0] == 97
+  // S3 b is not codepoint 98
+  assert "ab"[1] == 98
+  // S9 é is not codepoint 233
+  assert "é"[0] == 233
   [range: Range] => range.map(this[.])
+  // Open ranges and slices (R4.1, L§1.6)
+  // SL1 ..<2 does not take the first two
+  assert (["a", "b", "c", "d"])[..<2] == ["a", "b"]
+  // SL2 1.. does not take from the second on
+  assert (["a", "b", "c", "d"])[1..] == ["b", "c", "d"]
+  // SL3 ..<-1 does not leave out the last
+  assert (["a", "b", "c", "d"])[..<-1] == ["a", "b", "c"]
+  // SL4 1..<3 does not take the second and third
+  assert (["a", "b", "c", "d"])[1..<3] == ["b", "c"]
+  // SL5 1..2 does not take both ends
+  assert (["a", "b", "c", "d"])[1..2] == ["b", "c"]
+  // SL6 a negative start does not count from the end
+  assert (["a", "b", "c", "d"])[-2..] == ["c", "d"]
+  // SL7 ..2 does not include its end
+  assert (["a", "b", "c", "d"])[..2] == ["a", "b", "c"]
+  // S57 the last two of abc are not bc
+  assert "abc"[1..] == "bc"
   // (the elements from one place to another, both kept)
   sliced (slice_from, slice_to) => this.enumerate{slice_entry => slice_entry.index >= slice_from && slice_entry.index <= slice_to}.map(.value)
   `[`{from}..`]` ^punctuation => sliced(from, count - 1)
@@ -148,15 +519,29 @@ Iterable &+= {
   at (index: Integer) => index < 0 ? count + index : index
   sliced (from: Integer, to: Integer) => (at(from)..at(to)).map(this[.])
   [{from}..] = {value} ^punctuation => assigned_over(from, count - 1, value)
+  assert {
+    zeros := [1, 1, 1, 1]
+    zeros[2..] = 0
+    // SL7 assigning a slice does not put the value at each place
+    assert zeros == [1, 1, 0, 0]
+  }
   [..{to}] = {value} ^punctuation => assigned_over(0, to, value)
   [..<{to}] = {value} ^punctuation => assigned_over(0, to - 1, value)
   [{from}..{to}] = {value} ^punctuation => assigned_over(from, to, value)
+  assert {
+    spread_over := [0, 0, 0]
+    spread_over[..<2] = [7, 8]
+    // SL8 assigning as many as the places does not spread them
+    assert spread_over == [7, 8, 0]
+  }
   [{from}..<{to}] = {value} ^punctuation => assigned_over(from, to - 1, value)
   assigned_over (from: Integer, to: Integer, value) => (at(from)..at(to))
     -- .zip(value is Iterable && value.count == .count && .count > 1 ? value : [value] * .count)
     -- .for((at, written) => this[at] = written)
     -- this
   [{{literal selection}}] ^punctuation => Filtered(from: entry, keeps: { inline selection })
+  // OR3 xs[{p}] does not keep the entries p holds of
+  assert [1, 5, 20][{< 10}] == [1, 5]
 
   as (: Iterable<R: ?>) => this[{. is R}]
 
@@ -165,20 +550,146 @@ Iterable &+= {
     : orderless || other.orderless
       ? count == other.count && every(other.contains(.))
       : empty ? other.empty : other.nonempty && first == other.first && rest == other.rest
+  // `==` up to a boundary, and with exceptions (U9.1)
+  // EQ1 two lists alike up to a boundary are not equal up to it
+  assert [1, 2, 0, 3] ==<up_to: 0> [1, 2, 0, 4]
+  // EQ2 lists that differ before the boundary are equal up to it
+  assert !([1, 2, 0, 3] ==<up_to: 0> [1, 5, 0, 3])
+  // EQ3 an exempt element still counts
+  assert [1, 2, 3] ==<except: [2]> [1, 3]
+  // EQ4 an exception excuses an element that is not exempt
+  assert !([1, 2, 3] ==<except: [2]> [1, 4, 3])
+  // EQ5 equality without options is no longer structural
+  assert [1, 2] == [1, 2]
+  // DQ1 "AB" is not the string AB
+  assert "AB" == "AB"
+  // S109 two different texts are the same
+  assert "abc" != "abd"
+  // S110 a text is not itself
+  assert !("abc" != "abc")
+  // S4 a != a
+  assert "a" == "a"
+  // S5 a == b
+  assert "a" != "b"
+  // SC8 minding case, AbC is aBc
+  assert !("AbC" == "aBc")
+  // SJ8 ABC is not A, B, C
+  assert "ABC" == ("A", "B", "C")
+  // SM6 a text on one line lost its indentation
+  assert "  x" == "  x"
 }
+// IT29 a list is not iterable
+assert ([1, 2, 3]) is Iterable
 
 Ray := class: Iterable & Ordered {
   initial | (internal right-to-left ⊢) : Boundary = Boundary.Initial(∙: this)
   terminal | (internal ⊣) : Boundary = Boundary.Terminal(∙: this)
 
   is_initial | is_first => !previous
+  assert {
+    a := Ray()
+    b := Ray(previous: a)
+    // RR1 a lone ray is not initial
+    assert a.is_initial
+    // RR2 a lone ray counts as empty
+    assert a.nonempty
+    // RR3 a linked ray reports initial
+    assert !(b.is_initial)
+    // RR4 the first of a linked ray is not where it starts
+    assert b.first == a
+    // RR5 a lone ray does not count one
+    assert a.count == 1
+    // RR6 a lone ray is not its own last
+    assert a.last == a
+    // RR7 the smaller of a ray and itself is not that ray
+    assert b.min(b) == b
+    // RR8 the larger of a ray and itself is not that ray
+    assert b.max(b) == b
+    // RR9 an if/else holding a ray is not that ray
+    assert (if false { b } else { b }) == b
+    c := Ray(previous: b)
+    a.next = b
+    b.next = c
+    // R8 two along did not reach the third ray
+    assert a[2] == c
+    // R9 a ray of three does not count three
+    assert a.count == 3
+    // R10 every failed
+    assert a.every(.nonempty)
+    // R11 some failed
+    assert a.some(.is_terminal)
+    // RV1 every from the middle of a ray is not true of what holds everywhere
+    assert b.every(.nonempty)
+    // RV2 every from the middle of a ray misses the end after it
+    assert !(b.every(!.is_terminal))
+    // RV3 every from the middle of a ray misses the start before it
+    assert !(b.every(!.is_initial))
+    // RV4 every from the end of a ray misses the start
+    assert !(c.every(!.is_initial))
+    // RV5 every from the start of a ray is not true of what holds everywhere
+    assert a.every(.nonempty)
+    // RV6 every does not reach the three rays of a ray entered at its start
+    assert a.every(.is_initial || .is_terminal || . == b)
+    // R14 a chain is not acyclic
+    assert a.acyclic
+    // RR82 the second ray is not one along
+    assert b.index == 1
+    // RR83 a ray expanded is not the three it is in
+    assert b.expand.count == 3
+    // RR84 what is around a ray is not the other two
+    assert b.complement.count == 2
+    // Boundaries and edges
+    // R12 initial boundary is not initial
+    assert a.initial.is_initial
+    // R13 the edge of a terminal boundary is not terminal
+    assert a.terminal.edge.is_terminal
+    // RA5 ⊢ is not initial
+    assert b.⊢ == b.initial
+    // RA6 ⊣ is not terminal
+    assert b.⊣ == b.terminal
+    // RA1 ⊢ of a ray is not a boundary at that ray
+    assert b.⊢.∙ == b
+    // RA2 ⊣ of a ray is not a boundary at that ray
+    assert b.⊣.∙ == b
+    walked := 0
+    a.for(x => walked += 1)
+    // R39 walking a ray of three does not visit three
+    assert walked == 3
+    // RQ10 the path from the first ray to the third does not pass the second
+    assert (a..c)[1] === b
+    // RQ11 the path from the first ray to the third does not end there
+    assert (a..c).last === c
+    // RQ12 a path runs against the direction of its rays
+    assert !(c..a)
+    closed := Ray()
+    kept := closed ~~ (
+      .next = a
+      .previous = c
+    )
+    // RD7 ~~ does not answer the value it was given
+    assert kept === closed
+    // RD8 . inside ~~ is not the value
+    assert closed.next === a
+    // RD9 the second line of a ~~ block did not run on the value
+    assert closed.previous === c
+  }
+  // RR75 the first of a list is not first
+  assert [1, 2].first.is_first
   is_terminal | is_last => !next
+  // RR76 the first of a list of two is last
+  assert !([1, 2].first.is_last)
+  // RR77 the last of a list is not last
+  assert [1, 2].last.is_last
   is_boundary => is_initial || is_terminal
 
   entry => first
   first => is_initial ? this : previous.first
   last => is_terminal ? this : next.last
   index => is_initial ? 0 : previous.index + 1
+  // S129 what is found is not where it stands
+  assert ("abcd" ~= "bc").index == 1
+  // PM4 a reading does not say where it starts
+  assert ("abcabc" ~= "ca").index == 2
   count => is_terminal ? 1 : next.count + 1
 
   .. (last: Ray) => this === last ? [this] : next ? this, next..last : None
@@ -208,6 +719,12 @@ Ray := class: Iterable & Ordered {
     next.previous = previous
     next, previous = None
   } -- this
+  // IT69 removing the first does not leave the other two
+  assert [1, 2, 3].remove(1) == [2, 3]
+  // IT70 removing the last does not leave the other two
+  assert [1, 2, 3].remove(3) == [1, 2]
+  // IT71 removing both ends does not leave the middle
+  assert [1, 2, 3].remove(1).remove(3) == [2]
   sever => {
     previous.next = None
     next.previous = None
@@ -219,6 +736,10 @@ Ray := class: Iterable & Ordered {
     other.next = this
   }
 }
+// IT30 an element is not a ray
+assert ([1, 2, 3]).first is Ray
+// IT33 a number is not a ray
+assert 1 is Ray
 
 Boundary := class: Ray {
   vertex | (internal bidirectional ∙) : Ray
@@ -230,6 +751,27 @@ Boundary := class: Ray {
   static Initial := class: Boundary {
     ⊙ = Edge(x.terminal: this)
     is_initial => !∙.previous
+    assert {
+      start := Boundary.Initial()
+      finish := Boundary.Terminal()
+      // R15 an initial boundary is not initial
+      assert start.is_initial
+      // R16 an initial boundary is terminal
+      assert !(start.is_terminal)
+      // R17 a terminal boundary is not terminal
+      assert finish.is_terminal
+      // R18 a terminal boundary is initial
+      assert !(finish.is_initial)
+      span := Edge(x: (initial: start, terminal: finish))
+      // R19 an edge forgot where it starts
+      assert span.x.initial
+      // R20 an edge forgot where it ends
+      assert span.x.terminal
+      // R21 an edge that starts somewhere is initial
+      assert !(span.is_initial)
+      // R22 an edge that ends somewhere is terminal
+      assert !(span.is_terminal)
+    }
     is_terminal => false
   }
   static Terminal := class: Boundary {
@@ -268,7 +810,17 @@ Traverser := class: <yield: (x: Ray): None>(entry: Ray): None {
   }
   static DepthFirst := walk(.pop_back)
   static BreadthFirst := walk(.pop_front)
+  assert {
+    reached := 0
+    ([1, 2, 3]).for<Traverser.BreadthFirst>(x => reached += 1)
+    // RR80 walking three things breadth-first does not reach three
+    assert reached == 3
+  }
   static default := DepthFirst
+  // RR78 what a walk does by default is not depth-first
+  assert Traverser.default == Traverser.DepthFirst
+  // RR79 what a walk does by default is breadth-first
+  assert !(Traverser.default == Traverser.BreadthFirst)
 }
 
 Structure := class: Iterable<Ray{
@@ -286,14 +838,25 @@ Structure := class: Iterable<Ray{
 
 Hypergraph := class: Structure {
   HyperEdges := true
+  // What a structure allows
+  // R24 a plain structure has hyper edges
+  assert !(Structure.HyperEdges)
+  // R25 a hypergraph has no hyper edges
+  assert Hypergraph.HyperEdges
 }
 Graph := class: Structure {
   HyperContinuations := true
+  // RR70 a plain structure branches
+  assert !(Structure.HyperContinuations)
+  // RR71 a graph does not branch
+  assert Graph.HyperContinuations
 
   static Simple := class: Graph (vertices: *[] = [], edges: Edge[] = []) => {
     vertex (value) => (vertices.push(value) unless vertices.contains(value)) -- value
     connect (from, to) => { vertex(from); vertex(to); edges.push Edge.between(from, to) } -- this
     connected (from, to) => edges.some(.from == from && .to == to)
+    // RR53 a list is not connected
+    assert ([1, 2, 3]).connected
     outgoing (vertex) => edges{.from == vertex}.to
 
     cartesian (other: Simple) => Simple(
@@ -327,16 +890,37 @@ Graph := class: Structure {
 Forest := class: Structure{acyclic & consistent} {
   Vertex := Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
   HyperContinuations := true
+  // RR72 a forest does not branch
+  assert Forest.HyperContinuations
 }
 Tree := class: Forest{connected}
 Path := class: Structure{consistent & connected} {
   HyperContinuations := false
+  // RR73 a path branches
+  assert !(Path.HyperContinuations)
 
   paths => this
   length => acyclic ? count : ∞
 }
+// IT27 a list is not a path
+assert ([1, 2, 3]) is Path
 Array &+= {
   push_back | push (x = ?) => (this &= x) -- this
+  // Ends gained and lost, and order
+  assert ([2].push_back(3).push_front(1)).(
+    . == [1, 2, 3]  // IT35 pushing onto both ends does not give one, two and three
+    & .first == 1  // IT36 what was pushed in front is not first
+    & .last == 3  // IT37 what was pushed at the back is not last
+    & .pop_front == 1  // IT38 popping the front does not give the first
+    & .pop_back == 3  // IT39 popping the back does not give the last
+    & .count == 1  // IT40 two popped off three do not leave one
+    & .first == 2  // IT41 what is left is not the middle
+    & . == [2]  // IT42 the one left is not all there is
+  )
+  assert ([1].push_back()).(
+    .count == 2  // FWP1 pushing nothing does not make the array one longer
+    & .last is Unknown  // FWP2 what pushing nothing adds is not unknown
+  )
   push_front (x) => {
     added = link x None
     added.next = head
@@ -356,6 +940,8 @@ Array &+= {
   } -- this
   push_before (at, x) => link_of(at).previous ? push_after(link_of(at).previous.value, x) : push_front(x)
 }
+// IT28 a list is not an array
+assert ([1, 2, 3]) is Array
 Iterable.components.hierarchy &= Ordered
 Array.components.hierarchy &= Path{acyclic}
 Chain.components.hierarchy &= Array
@@ -366,11 +952,31 @@ Set := class: Structure {
   normalizer => .shuffled.unique
   add (x) => (push(x) unless contains(x)) -- this
 }
+assert ([1, 2, 1] as Set).(
+  .count == 2  // IT46 a set holds one thing twice
+  & .contains(2)  // IT47 a set does not hold what was added
+  & . == [2, 1] as Set  // IT48 two sets holding the same differ by order
+  & !(. == [1] as Set)  // IT49 a set is the same as one holding less
+)
 
 Hierarchy := class: Ray {
   parent | previous : static? <- hierarchy -> children | next : static?
   // (until the line above is read: a node's parent, none at the root, and its children)
   parent: Hierarchy? = None
+  assert {
+    root_place := Hierarchy()
+    inner_place := Hierarchy(parent: root_place)
+    // IT50 what is held does not know what holds it
+    assert inner_place.parent == root_place
+    // IT51 what holds does not hold one
+    assert root_place.children.count == 1
+    // IT52 what is held once is not one deep
+    assert inner_place.depth == 1
+    // IT53 what holds everything is deeper than nothing
+    assert root_place.depth == 0
+    // IT60 what holds does not hold what it holds
+    assert root_place.holds(inner_place)
+  }
   children: Hierarchy[] = []
   children.for(child => child.parent = this)
 
@@ -382,9 +988,13 @@ Hierarchy := class: Ray {
 Loop := class: Path (around: Iterable, at: *) => {
   next => Loop(around, at: at.next ?? around.first)
   previous => Loop(around, at: at.previous ?? around.last)
+  // OR2 ..5 does not come down to five
+  assert (..5).previous == 4
   is_initial => false
   is_terminal => false
   bounded => false
+  // RR51 a list of three is not bounded
+  assert ([1, 2, 3]).bounded
   acyclic => false
 
   unrolled => around
@@ -418,6 +1028,20 @@ Filtered := class: Ray (from: Ray?, keeps: *) => {
 }
 
 ...{of} ^punctuation => Spread(of: of)
+// `...` spreads; destructuring (A5, T3.14, T4.8)
+assert {
+  first, ...middle, last := "A", "B", "C", "D"
+  // SD1 ...middle does not take what is between
+  assert middle == ("B", "C")
+  // SD2 the name after a spread does not take the last
+  assert last == "D"
+  // FWT2 the first of the tied longest is not the leftmost
+  assert ["ab", "c", "de"].max(.count)#.first == "ab"
+  // FWT3 the last of the tied longest is not the rightmost
+  assert ["ab", "c", "de"].max(.count)#.last == "de"
+  // SQ3 the edge after a piece is not the delimiter it was split at
+  assert "a,b,c".split(",").first.⊣.⊙ == ","
+}
 Spread := class (of: *) => {
   spreads => true
   repeating => true
@@ -434,6 +1058,22 @@ Targets := String{.contains(",")}
   written := header_items((targets**), `,`)
   inline (written.enumerate.map**(.value + " = held[" + (.index as String) + "]").join("\n"))
 )
+assert {
+  Clock := class {
+    now => 12
+    zone => 1
+  }
+  { now, zone } = Clock
+  // SD4 { a, b } = x does not take the members named a and b
+  assert now == 12 && zone == 1
+}
+assert {
+  swap_a := 1
+  swap_b := 2
+  (swap_a, swap_b) = (swap_b, swap_a)
+  // SD5 (a, b) = pair does not assign each in turn
+  assert swap_a == 2 && swap_b == 1
+}
 
 // `xs{p}` (QT6): a narrowing of a value is the Ray of its elements of which `p` holds, in order (a class's: its instances); it
 // answers what that Ray answers (no comment inside the block: a narrowing's rule of one capture reads its statements)
@@ -466,6 +1106,118 @@ Narrowing &+= {
   unique => this.kept.unique
   rest => this.kept.rest
   sum => this.kept.sum
+  // RR43 walking forty things does not reach forty
+  assert ([1] * 40).sum == 40
+  // RR60 one, two and three do not add to six
+  assert ([1, 2, 3]).sum == 6
   max => this.kept.max
   min => this.kept.min
 }
+
+
+// R28 an empty list has a first
+assert !([].first)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+assert (1, 2).(
+  .count == 2  // BR3 a pair written with a comma does not hold two
+  & [.].count == 1  // BR5 brackets do not hold a list as one element
+  & [.].first.count == 2  // BR6 the bracketed list is not the pair
+  & ([.], 3).count == 2  // BR7 a bracketed list written first is flattened
+  & (., 3).count == 3  // BR8 a list written first is not flattened
+  & .count == 2  // BR10 writing a list into another changed it
+)
+
+// BR1 a bracketed one does not hold one element
+assert [1].count == 1
+
+// BR4 a grouped one is not one
+assert (1) == 1
+
+// BR9 a grouped pair in parentheses nests
+assert ((1, 2)).count == 2
+
+
+
+
+
+
+
+
+
+// `,` and `|` take a function of the element before them (R3.8, A2)
+// CL1 a section after , is not applied to the element before it
+assert (1, +2, +3, +4) == (1, 3, 6, 10)
+
+// CL3 *5 after , does not multiply the element before it
+assert (2, *5) == (2, 10)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

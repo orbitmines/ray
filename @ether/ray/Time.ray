@@ -1,5 +1,9 @@
 {hh: Decimal.String}:{mm: Decimal.String{length == 2}}: Quantity.Temporal => hh hours mm minutes
+// TI82 12:00 is not twelve hours
+assert 12:00 == 12 hours
 {hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{length == 2}}: Quantity.Temporal => hh_mm ss seconds
+// TI83 12:00:30 is not twelve hours and thirty seconds
+assert 12:00:30 == 12 hours 30 seconds
 
 Calendar := class {
   static Segment := class: Unit (length: *) => {
@@ -26,24 +30,117 @@ Calendar := class {
         }
       }
     }
+    assert {
+      (
+        with Time.YEAR = 2024
+        // TI26 january in a leap year is not thirty-one days
+        assert 1 month as days == 31 days
+        (
+          with Time.MONTH = February
+          // TI23 february in a leap year is other than twenty-nine days
+          assert 1 month as days == 29 days
+        )
+      )
+    }
+    assert {
+      (
+        with { Time.YEAR = 2023, Time.MONTH = February }
+        // TI24 february in a plain year is other than twenty-eight days
+        assert 1 month as days == 28 days
+      )
+    }
+    assert ("2024-02-07T12:00:00Z" as ISO_8601 as Time).(
+      9:00 <= . <= 17:00  // TI90 noon on any day is not between 9:00 and 17:00
+      & !(13:00 <= .)  // TI91 noon is after 13:00
+    )
+    assert {
+      summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
+    }
+    assert {
+      winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
+    }
+    assert {
+      with (Time.YEAR = 4, Time.MONTH = February) {
+        // TM6 February of year 4 has other than 29 days
+        assert 1 month as days == 29 days
+      }
+    }
+    // TM12 time difference is not five seconds
+    assert (Time(calendar: Gregorian) = 15 seconds) - (Time(calendar: Gregorian) = 10 seconds) == 5 seconds
   }
 }
 
 Weekday := enum Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Sunday
+// TI28 a week does not begin on monday
+assert Weekday#.first == Monday
+// TI29 a week does not end on sunday
+assert Weekday#.last == Sunday
+// TI30 two weekdays are the same day
+assert !(Monday == Tuesday)
+// TM13 sunday has no name
+assert Sunday as String == "Sunday"
 Month := enum January | February | March | April | May | June | July | August | September | October | November | December
+// TI12 a year has other than twelve months
+assert Month#.count == 12
 Month &+= {
   days_in (year: Julian) => year.days_in(this)
+  // TI92 February 2024 does not have twenty-nine days
+  assert February.days_in(Gregorian(year: 2024)) == 29
 }
 
 Julian := class: Calendar {
   static year := Calendar.Segment(global.year, day -> 365 | 366 if is_leap_year)
+  // TI8 the fourth year is not a leap year
+  assert Julian(year: 4).is_leap_year
+  // TI9 the fifth year is a leap year
+  assert !(Julian(year: 5).is_leap_year)
+  // TI18 a hundred is not a leap year in the Julian
+  assert Julian(year: 100).is_leap_year
+  // TI66 the year written first is not read
+  assert "2024-02-07" as ISO_8601 .year == 2024
+  // TI73 an ordinary year is not three hundred and sixty-five days
+  assert Gregorian(year: 2023).days_in_year == 365
+  // TI74 a leap year is not a day longer
+  assert Gregorian(year: 2024).days_in_year == 366
+  // TI75 a year is not fifty-two weeks
+  assert Gregorian(year: 2023).weeks_in_year == 52
+  // TI93 the first of January 2024 is not a Monday
+  assert Gregorian(year: 2024).weekday_of(1) == Monday
+  // WD5 a year beginning on a Thursday does not have 53 weeks
+  assert Gregorian(year: 2026).weeks_in_year == 53
+  // WD6 a leap year beginning on a Wednesday does not have 53 weeks
+  assert Gregorian(year: 2020).weeks_in_year == 53
+  // TM4 year 100 is not a Julian leap year
+  assert Julian(year: 100).is_leap_year
   static month := Calendar.Segment(global.month, Month#[
     31, 28 | 29 if is_leap_year, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
   ] days)
+  // TI67 the second month written is not February
+  assert "2024-02-07" as ISO_8601 .month == February
+  // TI59 a segment does not start at one: January is not month 1
+  assert Julian.month.EPOCH == 1 && "2024-01-01" as ISO_8601 .month == January && January.index + 1 == 1
+  // TM7 the ISO month is not March
+  assert "0004-03-01" as ISO_8601 .month == March
   static week := Calendar.Segment(global.week, Weekday#.length days)
+  // TI13 a week has other than seven days
+  assert 1 week == 7 days
+  // TI57 the weekdays do not recur
+  assert Julian.week.is_recurring
   static day := Calendar.Segment(global.day, 24 hours)
+  // TI5 a day is not twenty-four hours
+  assert 1 day == 24 hours
+  // TI52 the day after the last Julian day is not the first Gregorian one
+  assert "1582-10-04" as Julian + 1 day as Gregorian == "1582-10-15" as Gregorian
   static hour := Calendar.Segment(global.hour, 60 minutes)
+  // TI3 an hour is not counted in seconds
+  assert 1 hour as seconds == 3600 s
+  // TI6 an hour is not sixty minutes
+  assert 1 hour == 60 minutes
+  // TI58 an hour of sixty minutes recurs
+  assert !(Julian.hour.is_recurring)
   static minute := Calendar.Segment(global.minute, 60 seconds)
+  // TI7 a minute is not sixty seconds
+  assert 1 minute == 60 seconds
 
   is_leap_year => year % 4 == 0
 
@@ -58,6 +155,18 @@ Julian := class: Calendar {
 
 Gregorian := class: Julian {
   is_leap_year => year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+  // TI10 the fourth year is not a leap year in the Gregorian
+  assert Gregorian(year: 4).is_leap_year
+  // TI17 a hundred is a leap year in the Gregorian
+  assert !(Gregorian(year: 100).is_leap_year)
+  // TI38 four hundred is not a leap year in the Gregorian
+  assert Gregorian(year: 400).is_leap_year
+  // TM2 year 4 is not a leap year
+  assert Gregorian(year: 4).is_leap_year
+  // TM3 year 100 is a Gregorian leap year
+  assert !(Gregorian(year: 100).is_leap_year)
+  // TM5 year 400 is not a leap year
+  assert Gregorian(year: 400).is_leap_year
   days_before_year => 365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
 
   // Julian Thursday 4 October 1582 was followed by Gregorian Friday 15 October 1582: the same day is Julian 5 October and Gregorian 15 October
@@ -68,10 +177,51 @@ Gregorian := class: Julian {
 UTC := class: Gregorian (offset: Quantity.Temporal 0, leap_seconds: boolean = false) => {
   equivalence 0 -> offset
 }
+// TI19 UTC is at some offset
+assert UTC().offset == 0
+// TI40 UTC without leap seconds is not GMT
+assert UTC() is GMT
+// TI41 UTC counts leap seconds
+assert !(UTC().leap_seconds)
+// GML1 UTC counting leap seconds is GMT
+assert !(UTC(leap_seconds: true) is GMT)
+// GML2 UTC asked to count leap seconds does not
+assert UTC(leap_seconds: true).leap_seconds
+// TI79 three seconds past the agreed point is not three seconds past the other
+assert (UTC(offset: 3 seconds) = 0) - (UTC() = 0) == 3 seconds
 GMT := UTC{leap_seconds == false}
+// TI78 the zone without leap seconds has them
+assert !(GMT().leap_seconds)
 
 Time := class: Quantity.Temporal (calendar: Calendar? UTC) => {
   epoch: Time{== calendar} = 0
+  assert {
+    five := Time(calendar: Julian) = 5 seconds
+    eight := Time(calendar: Julian) = 8 seconds
+    // TI46 a time is not itself
+    assert five == five
+    // TI47 two times are the same
+    assert !(five == eight)
+    // TI48 five seconds in is not before eight
+    assert five < eight
+    // TI50 the three seconds between them are not three
+    assert eight - five == 3 seconds
+    // TI51 five seconds on plus three is not eight
+    assert five + 3 seconds == eight
+    // TI55 two seconds after five is not seven since the start
+    assert (Time(calendar: Julian, epoch: five) = 2 seconds).since_calendar_epoch == 7 seconds
+    eighty := (Time(calendar: Julian, epoch: five) = 80 seconds).round(minute)
+    // TRO1 eighty seconds do not round down to a minute
+    assert eighty == (Time(calendar: Julian, epoch: five) = 60 seconds)
+    // TRO3 rounding lost the calendar
+    assert eighty.calendar == Julian
+    // TRO4 rounding changed the unit it counts in
+    assert eighty.unit == second
+    // TRO7 rounding lost the epoch
+    assert eighty.epoch == five
+  }
+  // TI84 twenty-five years after 2000 are not 25 years
+  assert (Time(epoch: "2000-01-01") = "2025-01-01").years == 25
   = (x) => {
     this -= x
     super(x)
@@ -93,11 +243,33 @@ Time := class: Quantity.Temporal (calendar: Calendar? UTC) => {
   calendar.segments.for segment => `segment.name` => segment.is_recurring ? recur(epoch) : since_calendar_epoch as segment
 
   round (unit: Unit.Temporal) => Time(calendar, epoch: epoch) = (((this as unit).amount.round unit) as finer(Quantity(quantities: [(1, unit)])))
+  // TI85 two minutes rounded to minutes moved
+  assert (Time(calendar: Julian) = 120 seconds).round(minute) == 2 minutes
+  // TRO2 ninety-five seconds do not round up to two minutes
+  assert (Time(calendar: Julian) = 95 seconds).round(minute) == (Time(calendar: Julian) = 120 seconds)
+  // TRO5 a whole multiple moved when rounded
+  assert (Time(calendar: Julian) = 120 seconds).round(minute) == (Time(calendar: Julian) = 120 seconds)
+  // TRO6 half a minute does not round up
+  assert (Time(calendar: Julian) = 90 seconds).round(minute) == (Time(calendar: Julian) = 120 seconds)
+  assert ((Time(calendar: Julian) = 2 minutes).round(second)).(
+    .unit == second  // TRO8 rounding to a finer unit did not convert to it
+    & . == (Time(calendar: Julian) = 120 seconds)  // TRO9 two minutes rounded to seconds are not 120 seconds
+  )
 
   uncertainty: Quantity.Temporal?
   corrected (by: Quantity.Temporal, within: Quantity.Temporal) => Time(calendar, epoch: epoch, uncertainty: within) = this + by
   // the host's clock (with its resolution as the uncertainty); on ether the clock kept by NTP, not written yet
   static now => if OS.Ether { ERROR@OS `the clock kept by NTP is not written in Ray yet` } else { nondeterministic @time ns ± @time_resolution ns }
+  // FWQ5 sleeping did not wait
+  assert Time.now >= Time.now + 1 ms
+  // TI86 the clock went back
+  assert Time.now <= Time.now
+  // TI89 now read bare is after the clock read again
+  assert now <= Time.now
+  // TI95 a corrected time does not keep how certain the correction is
+  assert (Time.now.corrected(1 second, within: 1 ns)).uncertainty == 1 ns
+  // TM10 the clock is not a time
+  assert Time.now.instance_of(Time)
   dynamically {
     .calendar.segments.for segment => `segment.name.upper_case` = `segment.name`
   } = now
@@ -182,6 +354,56 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   dynamically assert understood
   date ?= ?
 }
+// TI42 the first of january is not the first day of the year
+assert "2024-01-01" as ISO_8601 .day_of_year == 1
+// TI43 the first of february is not the thirty-second day
+assert "2024-02-01" as ISO_8601 .day_of_year == 32
+// TI44 the first of march in a leap year is not the sixty-first day
+assert "2024-03-01" as ISO_8601 .day_of_year == 61
+// TI45 the first of march in a plain year is not the sixtieth day
+assert "2023-03-01" as ISO_8601 .day_of_year == 60
+// TI68 the day written last is not read
+assert "2024-02-07" as ISO_8601 .day_of_month == 7
+// TI70 two dates a day apart are the same
+assert !("2024-02-07" as ISO_8601 == "2024-02-08" as ISO_8601)
+// TI80 a week date is not the calendar date it names
+assert "2024-W06-3" as ISO_8601 == "2024-02-07" as ISO_8601
+// TI81 a time of day does not print without its date
+assert "12:00" as ISO_8601 as String == "12:00"
+// TI94 a date is not before the day after it
+assert ("2024-02-07" as ISO_8601) < ("2024-02-08" as ISO_8601)
+// ISO 8601 week dates: week 01 holds the year's first Thursday, so a week date may name a day of the year before or after.
+// WD1 the Tuesday of week 41 of 2026 is not the sixth of October
+assert "2026-W41-2" as ISO_8601 == "2026-10-06" as ISO_8601
+// WD2 a week date written without its dashes is another day
+assert "2026W412" as ISO_8601 == "2026-10-06" as ISO_8601
+// WD3 the first week of 2025 does not begin in 2024
+assert "2025-W01-1" as ISO_8601 == "2024-12-30" as ISO_8601
+// WD4 the last day of week 53 of 2026 is not in 2027
+assert "2026-W53-7" as ISO_8601 == "2027-01-03" as ISO_8601
+// WD7 a year of 52 weeks has a week 53
+assert !("2027-W53-1" is ISO_8601)
+// WD8 a week has an eighth day
+assert !("2026-W41-8" is ISO_8601)
+// WD9 a week without its day is not its Monday
+assert "2026-W41" as ISO_8601 == "2026-10-05" as ISO_8601
+// RFC 9557: a time-zone name and tagged annotations after the offset.
+assert ("2026-10-06T12:00:00+02:00[Europe/Paris]" as ISO_8601).(
+  .zone_name == "Europe/Paris"  // WD10 the zone named in brackets is not read
+  & . == "2026-10-06T10:00:00Z" as ISO_8601  // WD11 a zone name moved the instant its offset gives
+)
+// WD12 a critical zone and a calendar tag are not read
+assert "2026-10-06T12:00:00+02:00[!Europe/Paris][u-ca=gregory]" is ISO_8601
+// WD13 an elective tag nobody understands is refused
+assert "2026-10-06T12:00:00Z[foo=bar]" is ISO_8601
+// WD14 a critical tag nobody understands is ignored
+assert !("2026-10-06T12:00:00Z[!foo=bar]" is ISO_8601)
+// WD15 a tag key in capitals is read
+assert !("2026-10-06T12:00:00Z[Foo=bar]" is ISO_8601)
+// TM8 4-03-01 is not day 61
+assert "0004-03-01" as ISO_8601 .day_of_year == 61
+// TM9 00:01:05 is not 65 seconds
+assert "00:01:05" as ISO_8601 == 65 seconds
 
 Stamp := class (wall: Decimal, ".", logical: Decimal = 0, "@", node: *) => {
   chainable < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)
@@ -209,3 +431,9 @@ HybridClock := class (node: *, wall: Decimal = 0, logical: Decimal = 0) => {
     Stamp(wall, logical, node)
   }
 }
+
+
+
+
+
+

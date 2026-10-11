@@ -53,44 +53,44 @@ Number &+= {
     goto js
     Number($.text('whole') + '.' + $.text('fraction'))
 }
-{number: Number} =>
+{number: Number} ^number =>
   number
 
 // What both answer: `true`/`false`, read here.
-== {other} =>
+== {other} ^operator =>
   goto js
   $(self === other ? 'true' : 'false')
-!= {other} =>
+!= {other} ^operator =>
   goto js
   $(self !== other ? 'true' : 'false')
-< {other} =>
+< {other} ^operator =>
   goto js
   $(self < other ? 'true' : 'false')
-<= {other} =>
+<= {other} ^operator =>
   goto js
   $(self <= other ? 'true' : 'false')
-> {other} =>
+> {other} ^operator =>
   goto js
   $(self > other ? 'true' : 'false')
->= {other} =>
+>= {other} ^operator =>
   goto js
   $(self >= other ? 'true' : 'false')
 
 // Numbers (text added to: joined; anything else, composed).
-+ {other} =>
++ {other} ^operator =>
   goto js
   typeof self === 'string' ? self + String(other) : typeof self === 'number' ? self + other : undefined
   .composed({other})
-- {other} =>
+- {other} ^operator =>
   goto js
   self - other
-* {other} =>
+* {other} ^operator =>
   goto js
   self * other
-/ {other} =>
+/ {other} ^operator =>
   goto js
   self / other
-% {other} =>
+% {other} ^operator =>
   goto js
   ((self % other) + other) % other
 
@@ -104,6 +104,9 @@ unescaped =>
 contains {other} =>
   goto js
   $(String(self).includes(String(other)) ? 'true' : 'false')
+begins {other} =>
+  goto js
+  $(String(self).startsWith(String(other)) ? 'true' : 'false')
 split({separator}) =>
   goto js
   typeof self === 'string' ? $('[' + self.split(String(separator)).map(part => JSON.stringify(part)).join(', ') + ']') : undefined
@@ -135,3 +138,13 @@ of =>
   . ..<({last})
 ..{ }{last} =>
   . ..({last})
+
+// What a number answers to `?`: whether it holds (one that is zero does not, as `holds` says of a Number).
+? {yes} : {no} =>
+  goto js
+  self === 0 ? undefined : $('goto holds')
+  {no}
+  goto answered
+  holds\
+  {yes}
+  answered\

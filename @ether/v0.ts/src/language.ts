@@ -13,6 +13,9 @@ const cli: CLI.Spec = {
   version:  {             description: 'Print the version number.' },
   abstract: { value: false, alias: 'n', description: 'Abstractly interpret (analyze) instead of executing.' },
   debug:    {             description: 'Enable the debugger and debug-level logging.' },
+  test:     { alias: 't', description: 'Read the files (else the whole library), then run their tests (what was put off until everything was read).' },
+  lsp:      {             description: 'Serve the language server (LSP) over stdio.' },
+  verbose:  { alias: 'v', description: 'Say how long reading took, and what was said that is not a warning.' },
 //   daemon:   { alias: 'd', value: () => env.socket, optional: true, description: `Run as the background daemon, on a socket; with files` },
 //   attach:   { alias: 'a', value: true, optional: true, description: `Attach to a job's output (the latest without an id)` },
 //   list:     { alias: 'l', description: `List the daemon's jobs.` },
@@ -20,21 +23,9 @@ const cli: CLI.Spec = {
 //   rm:       { value: true, optional: true, description: 'Remove a finished job and its output (all finished jobs without an id).' },
   // TODO --ephemeral: the client's command line is still visible to the same user in `ps` while it runs; the daemon's (and its workers') memory can be swapped to disk (no mlock/VirtualLock);
   //      ephemeral jobs of a daemon that was replaced by a newer build can't be listed or stopped any more (its socket is gone); environment variables are never persisted, which a future `continue` would need to revisit.
-//   lsp:      { description: 'Serve the language server (LSP) over stdio, through the daemon; for a project, which when it is a !language project is the language read.' },
 //   ephemeral: {           description:`Keep nothing on disk: the output is only streamed, and the job's record is removed when it ends.` },
-//   verbose:  { alias: 'v', description: 'Say what was read before the file, and how long it took.' },
 };
 
-
-export async function main([args, kwargs]: CLI.Args = CLI.args()) {
-  if (kwargs.version) return console.log(env.version.toString());
-  if (kwargs.help) { console.log(CLI.help()); return; }
-  if (args.length === 0 && !kwargs.abstract) { console.log(CLI.help()); return; }
-
-  return await new Program(new Text.Source(args[0]), ...args.slice(1))
-    .abstract(!!kwargs.abstract)
-    .execute();
-}
 
 export namespace CLI {
   export type Args = [args: string[], kwargs: Record<string, string | true | (string | true)[]>];
@@ -180,7 +171,7 @@ export class env {
       workerData: { daemon: NAME, ...data },
       env: { ...process.env, ...variables },
       execArgv: typescript ? [...process.execArgv.filter(flag => !flag.startsWith('--stack-size')), '--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : undefined,
-      resourceLimits: { stackSizeMb: 256 },
+      resourceLimits: { stackSizeMb: Number(process.env.RAY_STACK ?? 16) },
     });
   }
 
@@ -344,6 +335,11 @@ export class Program {
     for (const mark of this.marks) { const at = name.indexOf(mark); if (at > 0) name = name.slice(0, at); }
     return name.trim();
   }
+  // (what a mark in it names: `{name ^style}`, the style)
+  marked(name: string): string | undefined {
+    for (const mark of this.marks) { const at = name.indexOf(mark); if (at > 0) return name.slice(at + mark.length).trim() || undefined; }
+    return undefined;
+  }
   global = new Program.Node();
   get rules() { return this.global.rules; }
 
@@ -354,9 +350,17 @@ export class Program {
     if (first.length < 3) throw new Error(`The first statement of '${entrypoint.relative_location ?? ENTRYPOINT.join('/')}' does not say how a rule is written: a body ('{', its close '}'), then the definer.`);
     this.grammar = { open: first[0], close: first[first.length - 2], definer: first[first.length - 1] };
     this.token = first[0].length + 7 + first[first.length - 2].length;
+    // (the host's own kinds: its operators read where the language reads them, `goto kinds`, the rest after it)
+    const kinds = await Program.host_kinds(), operators = kinds.indexOf('// What both answer'), rest = kinds.indexOf('// What a number or text is made of');
+    this.kinds = { operators: kinds.slice(operators, rest), rest: kinds.slice(0, operators) + '\n' + kinds.slice(rest) };
     this.compiling = true;
     try { this.run(lines.slice(first.length + 1).join('\n'), { node: this.global }); } finally { this.compiling = false; }
+    this.run(this.kinds.rest, { node: this.global });
     return this;
+  }
+  static async host_kinds(): Promise<string> {
+    const at = new URL('./js.kinds.ray', import.meta.url);
+    return env.nodejs ? env.fs.readFileSync(env.url.fileURLToPath(at), 'utf8') : await (await fetch(at)).text();
   }
 
   // A head: its holes, gaps (a hole named nothing) and literals, as written.
@@ -383,10 +387,11 @@ export class Program {
         // (a body around a hole, `{{name}}`: a hole taking a body, what is inside it)
         const body = inside.startsWith(open) && Program.closes(inside, 0, open, close) === inside.length;
         // (a typed hole, `{name: T}`: the hole `name`, of the type written; what separates them, learned (see `typed`))
+        const style = body ? this.marked(inside.slice(open.length, -close.length)) : this.marked(inside);
         if (!body) inside = this.plain(inside);
         const between = this.typed?.between, typed = body || !between ? -1 : inside.indexOf(between);
         if (typed > 0) types.push([inside.slice(0, typed).trim(), inside.slice(typed + between!.length).trim()]);
-        piece(body ? { hole: this.plain(inside.slice(open.length, -close.length).trim()), body } : typed > 0 ? { hole: inside.slice(0, typed).trim(), written: inside, type: inside.slice(typed + between!.length).trim() } : { hole: inside }); i = j;
+        piece({ ...body ? { hole: this.plain(inside.slice(open.length, -close.length).trim()), body } : typed > 0 ? { hole: inside.slice(0, typed).trim(), written: inside, type: inside.slice(typed + between!.length).trim() } : { hole: inside }, ...style ? { style } : {} }); i = j;
       }
       else if (Program.space(head.charCodeAt(i))) { piece({ hole: '' }); while (Program.space(head.charCodeAt(i))) i++; }
       else literal += head[i++];
@@ -534,8 +539,11 @@ export class Program {
   read_by(rule: Program.Rule, s: string, whole: boolean, rank: number, out: Program.Read[]) {
     const { pieces } = rule, { open, close } = this.grammar!, { opens, closes, quoted } = this, o = open.charCodeAt(0), c = close.charCodeAt(0), n = s.length, spans: number[] = [];
     const last_only = whole && rule.passes, count = out.length;
-    const step = (k: number, t: number): void => {
-      if (k === pieces.length) { if (!whole || t === n) out.push({ at: t, spans: spans.slice(), rule, rank }); return; }
+    // (the body holes taking code not written as a block, on the way to where it is)
+    const unbraced = new Set<number>();
+    const step = (k: number, t: number): void => { at(k, t); unbraced.delete(k); };
+    const at = (k: number, t: number): void => {
+      if (k === pieces.length) { if (!whole || t === n) out.push({ at: t, spans: spans.slice(), rule, rank, ...unbraced.size ? { loose: true } : {} }); return; }
       const { literal, hole, body } = pieces[k];
       // (a head ending in a word does not end inside one: `focus` does not read the start of `focused`)
       // (nor does a body bracket in it begin a value written into text)
@@ -557,6 +565,7 @@ export class Program {
         }
         const following = pieces[k + 1];
         if (!following || (following.literal === undefined && following.hole !== '')) return;
+        unbraced.add(k);
       }
       if (hole === '') { let u = t; while (Program.space(s.charCodeAt(u))) u++; if (u > t) step(k + 1, u); return; }
       const next = pieces[k + 1], last = !next, ends: number[] = [], enclosed = this.enclosed(rule, k);
@@ -605,6 +614,9 @@ export class Program {
       }
     };
     step(0, 0);
+    // (code is a block: where the rule reads the text with each body a block, not where it does without)
+    const mine = out.slice(count);
+    if (mine.some(read => read.loose) && mine.some(read => !read.loose)) out.splice(count, out.length - count, ...mine.filter(read => !read.loose));
   }
 
   // Code: its statements (a statement a line, the lines indented below it with it, and those while a body in it is open; as
@@ -699,7 +711,14 @@ export class Program {
           });
           if (at !== undefined) { if (at < k) frame.reading?.values.clear(); k = at; }
           // (one the host holds: what it answers, the code's answer, the code done; `js` nothing: on past its line)
-          else if (typeof to === 'string') { const answer = this.outside.get(to)?.(frame, statements[k + 1]); if (answer !== undefined) { value = answer; break; } if (to === 'js' || to === 'defined' || to === 'declaring' || to === 'instanced') k++; }
+          else if (typeof to === 'string') {
+            // (one that goes to a label of this code (`$('goto x')` in JS): there)
+            let answer: unknown;
+            try { answer = this.outside.get(to)?.(frame, statements[k + 1], { statements: statements.slice(k + 1), except }); }
+            catch (jump) { if (!(jump instanceof Program.Place) || jump.labels !== labels) throw jump; if (jump.at < k) frame.reading?.values.clear(); k = jump.at; continue; }
+            if (answer !== undefined) { value = answer; break; }
+            if (this.consuming.has(to)) k++;
+          }
           continue;
         }
         // (gone to out of this code: it carries what this code gave so far)
@@ -788,7 +807,11 @@ export class Program {
   }
   // The labels the host holds: `goto report` hands it the reading (`.`), and the right side goes on.
   reports: Program.Reading[] = [];
-  outside = new Map<string, (frame: Program.Frame, next?: string) => unknown>([
+  // (where what is read is in a text being read, when that is asked: see `Painter`)
+  painter?: Painter;
+  // (the host's own kinds of value: their operators (read where the language says, `goto kinds`), and the rest (after it))
+  kinds?: { operators: string, rest: string };
+  outside = new Map<string, (frame: Program.Frame, next?: string, rest?: { statements: string[], except?: Program.Rule }) => unknown>([
     ['report', frame => { if (frame.reading) this.reports.push(frame.reading); return undefined; }],
     // (`goto defined`: the next statement a name (or a hole, its text): the lookup's first layer only, the node read in when
     // the name is defined there, else nothing)
@@ -804,6 +827,15 @@ export class Program {
     // (`goto declaring`: the next statement is a head; a statement a rule with it reads first declares (as one with the
     // definer does): read once, for a class)
     ['declaring', (frame, next) => { this.declaring.add(this.head(next!.trim()).head); return undefined; }],
+    // (`goto independent`: the same, for a statement read again in an instance only when it names something the instance has)
+    ['independent', (frame, next) => { this.independent.add(this.head(next!.trim()).head); return undefined; }],
+    // (`goto afterwards`: the rest of the code run after everything is read, where it is now, when the host defers it (reading
+    // abstractly: tests); else now)
+    ['afterwards', (frame, next, rest) => {
+      if (!this.deferring) return undefined;
+      this.deferred.push({ code: rest!.statements.join('\n'), frame, except: rest!.except });
+      return null;
+    }],
     // (`goto instanced`: the next statement is a hole holding code, `{code}`; each of its statements that does not declare,
     // read in `.` (an instance: its class's block again, what is not the class's))
     ['instanced', (frame, next) => {
@@ -816,10 +848,21 @@ export class Program {
         if (!s || this.defining(s)) continue;
         const all = this.readings(s, this.candidates(s, target, 0), true);
         if (all.length && this.declaring.has(all[all.length - 1].rule.head)) continue;
+        if (all.length && this.independent.has(all[all.length - 1].rule.head) && !(s.match(/(?<![.\p{L}\p{N}_])[\p{L}_][\p{L}\p{N}_]*/gu) ?? []).some(name => target.has(name))) continue;
         this.run(s, { node: target, this: target });
       }
       return target;
     }],
+    // (`goto styled`: the next statement names a style (or a hole, its text); the rule defined last is shown in it)
+    ['styled', (frame, next) => {
+      let style = next!.trim();
+      const { open, close } = this.grammar!, hole = style.startsWith(open) && style.endsWith(close) ? style.slice(open.length, -close.length) : undefined;
+      if (hole !== undefined && frame.reading && hole in frame.reading.caps) style = this.source(frame.reading.caps[hole]).trim();
+      if (Program.Node.last) Program.Node.last.style = style;
+      return undefined;
+    }],
+    // (`goto kinds`: what the host's own kinds of value answer (their operators) read here)
+    ['kinds', frame => { if (this.kinds) this.run(this.kinds.operators, { node: frame.into ?? frame.node }); return undefined; }],
     ['js', (frame, next) => {
       const { reading } = frame, names = reading ? reading.rule.holes : [];
       let compiled = this.compiled.get(next!);
@@ -828,8 +871,12 @@ export class Program {
       return compiled(frame.this ?? frame.node, $, ...names.map(name => this.held_value(this.shared(reading!, name))));
     }],
   ]);
+  // (the labels the host holds that take the statement after them)
+  consuming = new Set(['js', 'defined', 'declaring', 'independent', 'instanced', 'styled']);
   private compiled = new Map<string, (...args: unknown[]) => unknown>();
-  declaring = new Set<string>();
+  declaring = new Set<string>(); independent = new Set<string>();
+  // (what runs after everything is read, while the host defers it: see `afterwards`)
+  deferring = true; deferred: { code: string, frame: Program.Frame, except?: Program.Rule, file?: string }[] = [];
   // (the rules whose right sides are running: a definition is not read by one of them)
   private running: Program.Rule[] = [];
   // (the labels of the code being run, the innermost last: a label's name read where it is is that place)
@@ -978,6 +1025,23 @@ export class Program {
   }
   static escaped(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
+  // (a statement beginning with a member, `.a == 1 && .b == 2`, that a rule beginning with a hole reads whole, what it takes first more
+  // than a member (`{a} && {b}`, `.a == 1`): read by it, not as one member and what follows read on that)
+  private operated(s: string, frame: Program.Frame, except?: Program.Rule): boolean {
+    if (!s.includes(' ') || frame.on) return false;
+    let known = this.operated_memo.get(s);
+    if (known === undefined) {
+      const all = this.readings(s, this.candidates(s, frame.node, 0, except), true);
+      // (the reading it is read by first: the latest rule's, of its readings the one whose holes end nearest)
+      let first = all.length - 1; while (first > 0 && all[first - 1].rule === all[first].rule) first--;
+      const read = all[first];
+      known = !!read && !!read.rule.pieces[0]?.hole && read.spans[0] === 0 && read.spans[1] < s.length && read.rule.literals.length > 0 && s.slice(0, read.spans[1]).trim().includes(' ');
+      if (this.operated_memo.size > 100000) this.operated_memo.clear();
+      this.operated_memo.set(s, known);
+    }
+    return known;
+  }
+  private operated_memo = new Map<string, boolean>();
   private defining_dot(s: string): boolean {
     const line = s.indexOf('\n'), first = line < 0 ? s : s.slice(0, line);
     const ending = first.trimEnd(), { definer } = this.grammar!;
@@ -1014,7 +1078,7 @@ export class Program {
     // (a hole's name, read in its rule's right side: a rule reading it, what it took)
     const writer = frame.on ? undefined : frame.reading ?? frame.writer;
     // (a member, `.name`: `name` read in `.`; not a definition written so, `.{name} => …`: a rule reading members)
-    if (!frame.dotted && s.charCodeAt(0) === 46 && !Program.space(s.charCodeAt(1)) && s.charCodeAt(1) !== 46 && !this.defining_dot(s)) {
+    if (!frame.dotted && s.charCodeAt(0) === 46 && !Program.space(s.charCodeAt(1)) && s.charCodeAt(1) !== 46 && !this.defining_dot(s) && !this.operated(s, frame, except)) {
       // (a member named by a value that is text: that name)
       if (s.length === this.token + 1 && s.charCodeAt(open.length + 1) === 0xE000) { const name = this.text_of(parseInt(s.slice(open.length + 2, -close.length), 36)); if (name !== undefined) s = '.' + name; }
       // (a capture of the reading: its text, as written)
@@ -1090,6 +1154,7 @@ export class Program {
       // (the lowest reading tried: going on past all those above, the next is below it)
       let lowest = reading.position;
       reading.from = frame.reading ?? frame.writer;
+      this.painter?.locate(reading);
       if (reading.rule.capture !== undefined) {
         // (a body hole's: the code it took, a closure (made where it was written), not run)
         const owner = this.captures(writer!.rule).includes(reading.rule) ? writer! : this.written_in(writer!)!;
@@ -1136,6 +1201,7 @@ export class Program {
         finally { this.running.pop(); }
       } } finally { this.ended(); }
       if (value === undefined && calls) value = node;
+      this.painter?.paint(reading);
       // (a method read on a value answers what it gave; nothing, nothing)
       return reading.at === s.length ? value : this.on(value, reading.after, frame, except);
     }
@@ -1455,8 +1521,8 @@ export class Program {
 }
 export namespace Program {
   // (`written`: a typed hole as written, its type part of the head)
-  export type Piece = { literal?: string, hole?: string, body?: boolean, written?: string, type?: string };
-  export type Rule = { braced?: boolean, called?: boolean, checked?: [number, number], capture?: string, types: [string, string][], own?: boolean, shape?: string, modifies: boolean, bodies: Set<string>, head: string, pieces: Piece[], body: string, code: Code, holds?: object[], home?: Node, literals: string[], holes: string[], defines: boolean, passes: boolean, id: number, last?: string, key: string };
+  export type Piece = { literal?: string, hole?: string, body?: boolean, written?: string, type?: string, style?: string };
+  export type Rule = { style?: string, braced?: boolean, called?: boolean, checked?: [number, number], capture?: string, types: [string, string][], own?: boolean, shape?: string, modifies: boolean, bodies: Set<string>, head: string, pieces: Piece[], body: string, code: Code, holds?: object[], home?: Node, literals: string[], holes: string[], defines: boolean, passes: boolean, id: number, last?: string, key: string };
   export type Hole = { name: string, indent?: string, written: string, headed: boolean };
   export type Keyed = { key: string, rules: Rule[], looked: number };
   export type Candidate = { rule: Rule, rank: number };
@@ -1494,8 +1560,10 @@ export namespace Program {
     // (a head defined again in the same node: the rule it had takes the new right side; a rule with holes is placed as defined
     // now, the latest (a name keeps its place))
     private heads = new Map<string, Rule>();
+    static last?: Rule;
     define(rule: Rule, variable = false): void {
       const had = this.heads.get(rule.head);
+      Node.last = had ?? rule;
       if (had) {
         Object.assign(had, { body: rule.body, code: rule.code, passes: rule.passes, holds: rule.holds });
         if (!variable && had.holes.length) had.id = ++Node.defined, this.headed++;
@@ -1534,7 +1602,7 @@ export namespace Program {
   export class Place { carries = false; value: unknown; constructor(public labels: Map<string, number>, public at: number) {} }
   // (going on to the next reading; none left (`all` those): the shorter ones)
   export class Again { constructor(public reading?: Reading, public all?: Read[]) {} }
-  export type Read = { at: number, spans: number[], rule: Rule, rank: number };
+  export type Read = { at: number, spans: number[], rule: Rule, rank: number, loose?: boolean };
   // A reading of text by a rule (one of `all` the ways the rules read it): what its holes took, what is after it, the next one.
   // The first is the latest rule's of those going furthest (`all` is in that order): its last reading when its right side only
   // goes on, else its first. The next one after a reading whose right side only goes on is the next one that does more.
@@ -1543,7 +1611,7 @@ export namespace Program {
     // (`receiver`: the node it was read in; `.` read as a value)
     // (`site`: where its text was written, where its holes are read)
     // (`self`: what `.` is where it is read: in its holes)
-    constructor(public all: Read[], private index: number, private text: string, public receiver: Node, public site: Node, public self: unknown, first = false, exact = false) {
+    constructor(public all: Read[], private index: number, public text: string, public receiver: Node, public site: Node, public self: unknown, first = false, exact = false) {
       if (exact) this.exact = true;
       else if (first) {
         this.index = all.length - 1;
@@ -1554,6 +1622,7 @@ export namespace Program {
       this.read = all[this.index];
     }
     get rule() { return this.read.rule; }
+    get spans() { return this.read.spans; }
     get position() { return this.index; }
     // (one of the shorter readings, tried in turn: nothing next but the next shorter)
     private exact = false;
@@ -1584,4 +1653,483 @@ export namespace Program {
   }
 }
 
-if (env.is_main_entrypoint) main();
+// ---------------------------------------------------------------- what reading a text said, and where
+// (`begin`/`end` inclusive for a paint, as `lsp/semantics.ts` takes them; a diagnostic's end exclusive)
+export type Paint = { begin: number, end: number, style: string };
+export type Diagnostic = { file: string, begin: number, end: number, message: string, severity: 1 | 2 | 3 | 4, around?: string };
+
+// Where what is read is in a text being read (a statement of it, `begin` to `end`): a reading's text looked for after where the
+// reading it was read in is; what its rule's style and its holes' styles paint there.
+export class Painter {
+  paints: Paint[] = [];
+  private at = new WeakMap<Program.Reading, number>();
+  begin = 0; end = 0;
+  constructor(public text: string) {}
+  locate(reading: Program.Reading) {
+    const t = reading.text;
+    if (!t || t.includes(Program.REFERS)) return;
+    const from = reading.from ? this.at.get(reading.from) : undefined;
+    let i = this.text.indexOf(t, from ?? this.begin);
+    if (i < 0 || i + t.length > this.end) i = this.text.indexOf(t, this.begin);
+    if (i >= 0 && i + t.length <= this.end) this.at.set(reading, i);
+  }
+  paint(reading: Program.Reading) {
+    const at = this.at.get(reading), { rule, spans, text } = reading;
+    if (at === undefined || (!rule.style && !rule.pieces.some(piece => piece.style))) return;
+    let cursor = 0, h = 0;
+    for (const piece of rule.pieces) {
+      if (piece.literal !== undefined) {
+        const i = text.indexOf(piece.literal, cursor);
+        if (i < 0 || i >= reading.at) break;
+        if (rule.style) this.paints.push({ begin: at + i, end: at + i + piece.literal.length - 1, style: rule.style });
+        cursor = i + piece.literal.length;
+      }
+      else if (piece.hole) {
+        const b = spans[2 * h], e = spans[2 * h + 1]; h++;
+        if (piece.style && e > b) this.paints.push({ begin: at + b, end: at + e - 1, style: piece.style });
+        cursor = e;
+      }
+    }
+  }
+}
+
+// The severity a diagnostic's rule is shown with (its style, the language's: `ERROR {message} ^error`), as the LSP numbers them.
+const SEVERITIES: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warn: 2, info: 3, debug: 4, trace: 4 };
+
+// ---------------------------------------------------------------- the library: the language, its core library, projects
+// Projects (P8.8): `@ether/<path>` a directory holding `<Name>.project.ray`, `@<name>` a language project, `@ether/$/<Name>.project.ray`;
+// what a project needs, the lines it begins with that name others (`@…`); its tests beside it, `<Name>.test.ray` (needing it, and
+// what its own first lines name). A directory with a `.project.ray` (an app, a site) is a project of the files in it, needing what
+// that names. Each is read once, after what it needs, in the library's node: a file read on its own (a document, a test), in a
+// node of its own inside it.
+// (what a file uses, for the order files are read in: not its comments, nor its tests (`assert …`: read after everything))
+const Library_read = (text: string) => { const out: string[] = []; let skip = -1; for (const line of text.split('\n')) { const at = line.length - line.trimStart().length; if (skip >= 0 && line.trim() && at > skip) continue; skip = -1; if (/^\s*assert\b/.test(line)) { skip = at; continue; } out.push(line.replace(/(^|\s)\/\/.*$/, '')); } return out.join('\n'); };
+// What a statement of a file said, painted and put off (its tests) when it was read; a test, where its assert is and what it found.
+type Test = { code: string, frame: Program.Frame, except?: Program.Rule, file: string, begin: number, end: number, outcome?: Diagnostic[], dropped?: boolean };
+type Statement = { statement: string, begin: number, end: number, diagnostics: Diagnostic[], paints: Paint[], tests: Test[] };
+export class Library {
+  program: Program;
+  root: string; ether: string; core: string;
+  diagnostics = new Map<string, Diagnostic[]>();
+  texts = new Map<string, string>();
+  read = new Set<string>();
+  timings: [string, number][] = [];
+  written: string[] = [];
+  constructor(public options: { root?: string, painting?: boolean } = {}) {
+    this.root = options.root ?? env.root();
+    this.ether = env.path.join(this.root, '@ether'); this.core = env.path.join(this.ether, 'ray');
+  }
+  async boot(): Promise<this> {
+    const t0 = performance.now();
+    this.program = new Program(new Text.Source(ENTRYPOINT.join('/') + '2'));
+    await this.program.compile();
+    this.timings.push(['the language', performance.now() - t0]);
+    const t1 = performance.now();
+    for (const file of Library.reading_order(this.files_of(this.core))) { const t = performance.now(); this.file(file); this.timings.push(['  ' + env.path.basename(file), performance.now() - t]); }
+    this.program.run(this.program.kinds!.rest, { node: this.program.global });
+    this.timings.push(['the core library', performance.now() - t1]);
+    return this;
+  }
+
+  // The order a project's files are read in: a file after those defining what it uses, then by name. (A host's choice.)
+  static reading_order(files: { path: string, text: string }[]): string[] {
+    const defines = (text: string) => new Set([...text.matchAll(/^([A-Za-z_][\w-]*)(?:\s*<[^>\n]*>)?\s*(?:\^[\w.]+\s*)?:=/gm)].map(m => m[1]));
+    const info = files.map(f => ({ path: f.path, defines: defines(f.text), uses: new Set(Library_read(f.text).match(/[A-Za-z_][\w]*/g) ?? []) }));
+    const needs = new Map(info.map(f => [f.path, new Set(info.filter(g => g !== f && [...g.defines].some(name => f.uses.has(name) && !f.defines.has(name))).map(g => g.path))]));
+    const order: string[] = [], left = new Set(info.map(f => f.path));
+    while (left.size > 0) { const waiting = (p: string) => [...needs.get(p)!].filter(q => left.has(q)).length; const next = [...left].sort((a, b) => waiting(a) - waiting(b) || (a < b ? -1 : 1))[0]; order.push(next); left.delete(next); }
+    return order;
+  }
+  text(file: string): string { return this.texts.get(file) ?? env.fs.readFileSync(file, 'utf8'); }
+  // (the `.ray` files of a directory that are no project file, test or entrypoint)
+  files_of(dir: string): { path: string, text: string }[] {
+    return env.fs.readdirSync(dir).filter(f => f.endsWith(EXTENSION) && !f.startsWith('.') && !f.startsWith('entrypoint.') && !f.endsWith('.project' + EXTENSION) && !f.endsWith('.test' + EXTENSION))
+      .map(f => env.path.join(dir, f)).map(f => ({ path: f, text: this.text(f) }));
+  }
+  // What a project file or a test begins with: the projects it needs (`@…` lines).
+  needs(text: string): string[] {
+    const out: string[] = [];
+    for (const line of text.split('\n')) { const t = line.trim(); if (!t || t.startsWith('//')) continue; if (!/^@[^\s:]+$/.test(t) || t.includes('://')) break; out.push(t); }
+    return out;
+  }
+  // Where a project named so is: its project file (or a directory with a `.project.ray`); names matched ignoring case.
+  where(name: string): string | undefined {
+    const { fs, path } = env, find = (dir: string, wanted: string) => { try { return fs.readdirSync(dir).find(f => f.toLowerCase() === wanted.toLowerCase()); } catch { return undefined; } };
+    const project_file = (dir: string) => { try { return fs.readdirSync(dir).find(f => f.endsWith('.project' + EXTENSION) && !f.startsWith('.')); } catch { return undefined; } };
+    if (name === '@ether') return fs.existsSync(path.join(this.ether, '.project' + EXTENSION)) ? this.ether : undefined;
+    if (name.startsWith('@ether/')) {
+      let dir = this.ether;
+      for (const part of name.slice('@ether/'.length).split('/')) { const found = find(dir, part); if (!found) return undefined; dir = path.join(dir, found); }
+      const file = project_file(dir);
+      return file ? path.join(dir, file) : fs.existsSync(path.join(dir, '.project' + EXTENSION)) ? dir : undefined;
+    }
+    const languages = path.join(this.ether, '$'), file = find(languages, name.slice(1) + '.project' + EXTENSION);
+    return file ? path.join(languages, file) : undefined;
+  }
+  // The project a file is in: a project file is its own; else the nearest `<Name>.project.ray` beside it, or directory above with a `.project.ray`.
+  project_of(file: string): string | undefined {
+    const { fs, path } = env;
+    if (file.endsWith('.project' + EXTENSION)) return file;
+    const beside = fs.readdirSync(path.dirname(file)).find(f => f.endsWith('.project' + EXTENSION) && !f.startsWith('.'));
+    if (beside && !file.endsWith('.test' + EXTENSION)) return path.join(path.dirname(file), beside);
+    for (let dir = path.dirname(file); dir !== path.dirname(dir); dir = path.dirname(dir)) if (fs.existsSync(path.join(dir, '.project' + EXTENSION))) return dir;
+    return undefined;
+  }
+  // A project read (once), after what it needs.
+  project(at: string, seen = new Set<string>()) {
+    if (this.read.has(at) || seen.has(at) || at === this.core) return;
+    seen.add(at);
+    const { fs, path } = env, directory = fs.statSync(at).isDirectory();
+    const needs = directory ? this.needs(fs.readFileSync(path.join(at, '.project' + EXTENSION), 'utf8')) : this.needs(this.text(at));
+    for (const name of needs) { const dep = this.where(name); if (dep) this.project(dep, seen); }
+    this.read.add(at);
+    const t0 = performance.now();
+    if (directory) for (const file of Library.reading_order(this.files_of(at))) this.file(file);
+    else this.file(at);
+    this.timings.push([path.relative(this.root, at), performance.now() - t0]);
+  }
+  // What a file needs read before it: its project (or, a test, what it names, its project first).
+  prepare(file: string) {
+    const { path } = env;
+    if (path.dirname(file) === this.core) return;
+    if (file.endsWith('.test' + EXTENSION)) {
+      const project = this.project_of(file.slice(0, -('.test' + EXTENSION).length) + '.project' + EXTENSION);
+      if (project && env.fs.existsSync(project)) this.project(project);
+      for (const name of this.needs(this.text(file))) { const dep = this.where(name); if (dep) this.project(dep); }
+      return;
+    }
+    const project = this.project_of(file);
+    if (project && !(env.fs.statSync(project).isDirectory())) return this.project(project);
+    if (project) { for (const name of this.needs(env.fs.readFileSync(path.join(project, '.project' + EXTENSION), 'utf8'))) { const dep = this.where(name); if (dep) this.project(dep); } }
+  }
+
+  // A file read, statement by statement, in `node` (the library's): what each said, where; what is painted, when painting. Read
+  // again (`again`, an edit), a statement written as it was is not read again: what it said, painted and put off, kept (moved with
+  // it); only those written otherwise are read.
+  file(file: string, text = this.text(file), node: Program.Node = this.program.global, again = false): Diagnostic[] {
+    const p = this.program, painter = this.options.painting ? new Painter(text) : undefined;
+    this.texts.set(file, text);
+    const before_reads = again ? this.reads.get(file) ?? [] : [], kept = new Map<string, Statement[]>();
+    for (const r of before_reads) kept.set(r.statement, [...kept.get(r.statement) ?? [], r]);
+    if (!again) for (const r of this.reads.get(file) ?? []) for (const t of r.tests) t.dropped = true;
+    const reads: Statement[] = [];
+    let cursor = 0, changed = false;
+    for (const statement of p.code(text).statements) {
+      if (!statement.trim()) continue;
+      const first = statement.trimStart().split('\n')[0].trim(), found = first ? text.indexOf(first, cursor) : -1, begin = found < 0 ? cursor : found;
+      const last = statement.trimEnd().split('\n').pop()!.trim(), last_at = last ? text.indexOf(last, begin) : -1, end = last_at < 0 ? begin + first.length : last_at + last.length;
+      cursor = end;
+      // (its needs, the project's head: not read)
+      if (/^@[^\s:]+$/.test(statement.trim()) && !text.slice(0, begin).split('\n').some(line => line.trim() && !line.trim().startsWith('//') && !/^@[^\s:]+$/.test(line.trim()))) continue;
+      const same = kept.get(statement)?.shift();
+      if (same) {
+        const by = begin - same.begin, moved = <T extends { begin: number, end: number }>(x: T): T => ({ ...x, begin: x.begin + by, end: x.end + by });
+        same.diagnostics = same.diagnostics.map(moved); same.paints = same.paints.map(moved);
+        for (const t of same.tests) { t.begin += by; t.end += by; }
+        same.begin = begin; same.end = end; reads.push(same);
+        continue;
+      }
+      if (!/^\s*assert\b/.test(statement)) changed = true;
+      const read: Statement = { statement, begin, end, diagnostics: [], paints: [], tests: [] }, out = read.diagnostics, before = p.reports.length, deferred = p.deferred.length;
+      if (painter) { painter.paints = []; painter.begin = begin; painter.end = end; p.painter = painter; }
+      let value: unknown;
+      try { value = p.run(statement, { node }); }
+      catch (e) { out.push(this.said(file, text, begin, end, `Failed: ${(e as Error)?.message ?? e}`, 1)); }
+      finally { p.painter = undefined; }
+      for (const report of p.reports.slice(before)) out.push(this.reported(report, file, text, begin, end));
+      p.reports.length = before;
+      if (typeof value === 'string' && value.trim() === p.source(statement).trim() && /[A-Za-z]/.test(value)) out.push(this.said(file, text, begin, end, 'Nothing reads this.', 3));
+      if (painter) read.paints = painter.paints;
+      // (the tests it put off: the asserts written in it, in order)
+      const spans = Library.asserts(text, begin, end), put = p.deferred.splice(deferred);
+      put.forEach((d, k) => read.tests.push({ ...d, file, begin: spans[k]?.[0] ?? begin, end: spans[k]?.[1] ?? end }));
+      reads.push(read);
+    }
+    for (const rest of kept.values()) for (const r of rest) for (const t of r.tests) t.dropped = true;
+    // (a definition read again: what the tests found may have changed)
+    if (changed) for (const r of reads) for (const t of r.tests) t.outcome = undefined;
+    this.reads.set(file, reads);
+    const diagnostics = reads.flatMap(r => r.diagnostics);
+    this.diagnostics.set(file, diagnostics);
+    if (painter) this.paints.set(file, [...reads.flatMap(r => r.paints), ...Library.comments(text)]);
+    return diagnostics;
+  }
+  reads = new Map<string, Statement[]>();
+  // (the asserts written in a text between two places, each from `assert` to the end of what it holds: not one inside another)
+  static asserts(text: string, begin: number, end: number): [number, number][] {
+    const out: [number, number][] = [], lines = text.slice(0, end).split('\n');
+    let o = 0, open = -1, start = 0, indent = 0, depth = 0;
+    for (const line of lines) {
+      const at = line.length - line.trimStart().length, bare = line.replace(/"(?:[^"\\]|\\.)*"|`[^`]*`/g, '""').replace(/(^|\s)\/\/.*$/, '');
+      if (open >= 0) {
+        if (depth > 0 || (line.trim() && at > indent) || (line.trim() && at === indent && /^[)\]}]/.test(line.trim()))) { depth += (bare.match(/[([{]/g) ?? []).length - (bare.match(/[)\]}]/g) ?? []).length; open = o + line.length; o += line.length + 1; continue; }
+        out.push([start, open]); open = -1;
+      }
+      if (o >= begin && /^\s*assert\b/.test(line)) { start = o + at; indent = at; open = o + line.length; depth = (bare.match(/[([{]/g) ?? []).length - (bare.match(/[)\]}]/g) ?? []).length; }
+      o += line.length + 1;
+    }
+    if (open >= 0) out.push([start, open]);
+    return out;
+  }
+  // What a file's tests show (`assert`: failed, an error; held, debug; not run, a comment), over what is painted inside them.
+  tested_paints(file: string): Paint[] {
+    const style = (t: Test) => t.outcome === undefined ? 'comment' : t.outcome.length ? 'error' : 'debug';
+    const tests = (this.reads.get(file) ?? []).flatMap(r => r.tests).filter(t => !t.dropped);
+    const spans = Library.asserts(this.texts.get(file) ?? '', 0, (this.texts.get(file) ?? '').length);
+    const shown = spans.map(([begin, end]) => ({ begin, end: end - 1, style: style(tests.find(t => t.begin === begin) ?? ({} as Test)) }));
+    const inside = (x: Paint) => shown.some(s => x.begin >= s.begin && x.end <= s.end);
+    return [...(this.paints.get(file) ?? []).filter(x => !inside(x)), ...shown];
+  }
+  paints = new Map<string, Paint[]>();
+  // (comments are the host's: what it does not read)
+  static comments(text: string): Paint[] {
+    const out: Paint[] = []; let o = 0;
+    for (const line of text.split('\n')) { const m = line.match(/(^|\s)\/\/.*$/); if (m) { const b = o + m.index! + m[1].length; out.push({ begin: b, end: o + line.length - 1, style: 'comment' }); } o += line.length + 1; }
+    return out;
+  }
+  // A report: where the reading it was made in (or one it was read in) was read from the statement.
+  reported(report: Program.Reading, file: string, text: string, begin: number, end: number): Diagnostic {
+    const p = this.program, statement = text.slice(begin, end);
+    let b = begin, e = end;
+    for (let r: Program.Reading | undefined = report; r; r = r.from) { const t = r.text?.trim(); if (!t || t.includes(Program.REFERS)) continue; const i = statement.indexOf(t); if (i >= 0) { b = begin + i; e = b + t.length; break; } }
+    const caps = report.caps, message = 'message' in caps ? p.source(caps.message) : p.source(report.text);
+    return this.said(file, text, b, e, message.replace(/^`(.*)`$/s, '$1'), SEVERITIES[report.rule.style ?? 'error'] ?? 1);
+  }
+  // A diagnostic, and what is written around it: the comments above the statement it is in, and the line, with the comment next to it.
+  said(file: string, text: string, begin: number, end: number, message: string, severity: 1 | 2 | 3 | 4): Diagnostic {
+    const lines = text.split('\n'), line = text.slice(0, begin).split('\n').length - 1, around: string[] = [];
+    for (let k = line - 1; k >= 0 && lines[k].trim().startsWith('//'); k--) around.unshift(lines[k]);
+    around.push(lines[line]);
+    return { file, begin, end, message, severity, around: around.join('\n') };
+  }
+  // What was put off while reading (tests): run, what each said; a file's (those not run since what they read was read again), or every
+  // one. `until`: stop when it answers true (something else to do), the rest run later.
+  test(file?: string, until?: () => boolean): Diagnostic[] {
+    const p = this.program, out: Diagnostic[] = [];
+    const tests = file !== undefined ? (this.reads.get(file) ?? []).flatMap(r => r.tests) : [...this.reads.values()].flat().flatMap(r => r.tests);
+    p.deferring = false;
+    try {
+      for (const t of tests) {
+        if (t.dropped) continue;
+        if (t.outcome === undefined) {
+          if (until?.()) break;
+          const said: Diagnostic[] = [], before = p.reports.length, text = this.texts.get(t.file) ?? '';
+          try { p.run(t.code, t.frame, t.except); }
+          catch (e) { said.push(this.said(t.file, text, t.begin, t.end, `Failed: ${(e as Error)?.message ?? e}`, 1)); }
+          for (const report of p.reports.slice(before)) said.push(this.reported(report, t.file, text, t.begin, t.end));
+          p.reports.length = before;
+          t.outcome = said;
+        }
+        out.push(...t.outcome);
+      }
+      // (what was put off outside a file's reading)
+      if (file === undefined) for (const { code, frame, except } of p.deferred.splice(0)) {
+        const before = p.reports.length;
+        try { p.run(code, frame, except); } catch { }
+        for (const report of p.reports.slice(before)) { const at = this.located(report); if (at) out.push(this.reported(report, at.file, at.text, at.begin, at.end)); }
+        p.reports.length = before;
+      }
+    } finally { p.deferring = true; }
+    return out;
+  }
+  // (the file and place a reading's text, or one it was read in, is written at)
+  located(reading?: Program.Reading): { file: string, text: string, begin: number, end: number } | undefined {
+    for (let r = reading; r; r = r.from) {
+      const t = r.text?.trim();
+      if (!t || t.includes(Program.REFERS) || t.length < 3) continue;
+      for (const [file, text] of this.texts) { const i = text.indexOf(t); if (i >= 0) return { file, text, begin: i, end: i + t.length }; }
+    }
+    return undefined;
+  }
+  // Every test of the library: its core's, each project's and the tests beside them.
+  tests(): string[] {
+    const { fs, path } = env, out: string[] = [];
+    const walk = (dir: string) => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.name.startsWith('.') || ['node_modules', 'ide', 'spec', 'avatar'].includes(e.name) || /^v\d/.test(e.name)) continue; const full = path.join(dir, e.name); if (e.isDirectory()) walk(full); else if (e.name.endsWith('.project' + EXTENSION) || e.name.endsWith('.test' + EXTENSION)) out.push(full); } };
+    walk(this.ether);
+    return [this.ether, ...out.sort()];
+  }
+}
+
+// ---------------------------------------------------------------- the command line
+export async function main([args, kwargs]: CLI.Args = CLI.args()) {
+  if (kwargs.version) return console.log(env.version.toString());
+  if (kwargs.help) { console.log(CLI.help()); return; }
+  if (kwargs.lsp) return await lsp();
+  if (args.length === 0 && !kwargs.test) { console.log(CLI.help()); return; }
+  if (!env.worker && env.nodejs) {
+    // (the reader recurses deeply: it runs in a thread with a stack large enough)
+    const worker = env.thread({ main: [args, kwargs] });
+    process.exitCode = await new Promise<number>(resolve => { worker.on('message', (m: { exit?: number }) => { if (m.exit !== undefined) resolve(m.exit); }); worker.on('error', e => { console.error(e); resolve(1); }); worker.on('exit', code => resolve(code)); });
+    return;
+  }
+  const library = await new Library().boot(), { path } = env, all: Diagnostic[] = [];
+  if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
+  const files = (args.length ? args : library.tests()).map(f => path.resolve(f));
+  if (kwargs.verbose) console.error(`reading ${files.length}: ${files.map(f => path.relative(library.root, f)).join(' ')}`);
+  for (const file of files) {
+    if (env.fs.statSync(file).isDirectory()) { library.project(file); continue; }
+    library.prepare(file);
+    if (!library.diagnostics.has(file)) library.file(file, library.text(file), path.dirname(file) === library.core || file.endsWith('.project' + EXTENSION) ? library.program.global : new Program.Node(library.program.global));
+  }
+  if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
+  for (const [, ds] of library.diagnostics) all.push(...ds);
+  if (kwargs.test) all.push(...library.test());
+  const shown = all.filter(d => d.severity <= (kwargs.verbose ? 3 : 2) && (args.length === 0 || files.includes(d.file) || kwargs.test));
+  for (const d of shown) {
+    const line = d.file ? library.text(d.file).slice(0, d.begin).split('\n').length : 0;
+    console.error(`${d.file ? path.relative(process.cwd(), d.file) : '?'}:${line}: ${['', 'error', 'warning', 'info', 'hint'][d.severity]}: ${d.message}${d.around ? '\n' + d.around.split('\n').map(l => '    | ' + l).join('\n') : ''}`);
+  }
+  if (kwargs.test) console.error(`${all.filter(d => d.severity === 1).length} failed`);
+  const exit = shown.some(d => d.severity === 1) ? 1 : 0;
+  if (env.worker) env.worker_threads.parentPort!.postMessage({ exit }); else process.exitCode = exit;
+}
+
+// ---------------------------------------------------------------- the language server
+// Diagnostics, semantic tokens and the theme channel (`ether/theme`: how each style is shown, the language's theme, and each
+// document's styled runs), from what the reader read: the library once (in a thread), then each document as it changes, in a node
+// of its own (a file of the library or a project: read again where it was).
+export const TOKEN_TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator'];
+
+// What a style is shown as in a theme's table: followed through the styles it names to a colour; one the table does not name is shown
+// as the one before its last `.`.
+export function shown_as(table: Map<string, string>, name: string, seen = new Set<string>()): string | undefined {
+  if (seen.has(name)) return undefined;
+  seen.add(name);
+  const next = table.get(name);
+  if (next !== undefined) return /^#[0-9A-Fa-f]{3,8}$/.test(next) ? next : shown_as(table, next, seen);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? shown_as(table, name.slice(0, dot), seen) : undefined;
+}
+
+// The language's theme: what `Theme.current` is (a name, and each style what it is shown as: another style, or a colour).
+export function theme(program: Program): { name: string, colors: Record<string, string> } | undefined {
+  let value: unknown;
+  try { value = program.run('Theme.current', { node: program.global }); } catch { return undefined; }
+  if (!(value instanceof Program.Node)) return undefined;
+  const read = (s: string) => { try { return program.run(s, { node: value as Program.Node, this: value }); } catch { return undefined; } };
+  const name = read('name'), styles = read('styles');
+  if (!(styles instanceof Program.Node)) return undefined;
+  const colors: Record<string, string> = {}, none = program.run('None', { node: program.global });
+  const of = (node: unknown, name: string) => node instanceof Program.Node ? program.run(name, { node, this: node }) : undefined;
+  for (let at = of(styles, 'head'), n = 0; at instanceof Program.Node && at !== none && n < 10000; at = of(at, 'next'), n++) {
+    const pair = of(at, 'value'), style = of(pair, 'first'), shown = of(pair, 'last');
+    if (typeof style === 'string' && typeof shown === 'string') colors[style.trim()] = shown.trim();
+  }
+  return { name: typeof name === 'string' ? name : 'theme', colors };
+}
+
+async function lsp_worker() {
+  const port = env.worker_threads.parentPort!, { path } = env;
+  const t0 = performance.now();
+  const library = await new Library({ painting: true }).boot();
+  port.postMessage({ log: `the language and its core library read in ${Math.round(performance.now() - t0)} ms` });
+  port.postMessage({ theme: theme(library.program) ?? null });
+  const docs = new Map<string, { file: string, text: string, version: number }>(), dirty = new Set<string>();
+  let scheduled: ReturnType<typeof setTimeout> | undefined;
+  // (each document read as it changes (only what changed in it); what it says sent at once, then again as its tests are run, a
+  // few at a time, giving way to an edit)
+  const nodes = new Map<string, Program.Node>(), testing = new Set<string>();
+  const send = (uri: string, doc: { file: string, text: string, version: number }, file: string) => {
+    const tests = (library.reads.get(file) ?? []).flatMap(r => r.tests).filter(t => !t.dropped && t.outcome).flatMap(t => t.outcome!);
+    const diagnostics = [...library.diagnostics.get(file) ?? [], ...tests];
+    port.postMessage({ checked: { uri, version: doc.version, text: doc.text, paints: library.tested_paints(file), diagnostics } });
+    return diagnostics.length;
+  };
+  const work = () => {
+    scheduled = undefined;
+    for (const uri of [...dirty]) {
+      dirty.delete(uri);
+      const doc = docs.get(uri);
+      if (!doc) continue;
+      const t1 = performance.now(), file = path.resolve(doc.file);
+      try { library.prepare(file); } catch (e) { port.postMessage({ log: `reading what ${file} needs failed: ${(e as Error).stack ?? e}` }); }
+      const own = path.dirname(file) === library.core || file.endsWith('.project' + EXTENSION);
+      // (a file read as part of the library, unchanged: as it was read there)
+      if (!(own && library.texts.get(file) === doc.text && library.reads.has(file))) {
+        let node = own ? library.program.global : nodes.get(file);
+        if (!node) nodes.set(file, node = new Program.Node(library.program.global));
+        library.file(file, doc.text, node, library.reads.has(file));
+      }
+      const n = send(uri, doc, file);
+      port.postMessage({ log: `read ${path.basename(file)} v${doc.version} in ${Math.round(performance.now() - t1)} ms: ${n} diagnostics` });
+      testing.add(uri);
+    }
+    if (testing.size) setTimeout(test, 0);
+  };
+  const test = () => {
+    for (const uri of [...testing]) {
+      if (dirty.size) return;
+      const doc = docs.get(uri);
+      if (!doc) { testing.delete(uri); continue; }
+      const file = path.resolve(doc.file), t1 = performance.now(), deadline = t1 + 50;
+      library.test(file, () => performance.now() > deadline || dirty.size > 0);
+      const left = (library.reads.get(file) ?? []).flatMap(r => r.tests).filter(t => !t.dropped && !t.outcome).length;
+      send(uri, doc, file);
+      if (left === 0) { testing.delete(uri); port.postMessage({ log: `tested ${path.basename(file)} v${doc.version}` }); }
+    }
+    if (testing.size && !dirty.size) setTimeout(test, 0);
+  };
+  port.on('message', (m: { open?: { uri: string, file: string, text: string, version: number }, close?: string }) => {
+    if (m.open) { docs.set(m.open.uri, m.open); dirty.add(m.open.uri); }
+    if (m.close) docs.delete(m.close);
+    if (scheduled === undefined) scheduled = setTimeout(work, Number(process.env.RAY_LSP_DELAY ?? 50));
+  });
+  port.postMessage({ ready: true });
+}
+
+export async function lsp(options: { io?: { input: NodeJS.ReadableStream, output: NodeJS.WritableStream } } = {}): Promise<void> {
+  const commonjs = <T>(m: T): T => ((m as { default?: T }).default ?? m);
+  const [{ createConnection, TextDocuments, ProposedFeatures, TextDocumentSyncKind }, { TextDocument }, { encode, runs, position_of, MODIFIERS }] = await Promise.all([
+    import('vscode-languageserver/node.js').then(commonjs), import('vscode-languageserver-textdocument').then(commonjs), import('./lsp/semantics.ts'),
+  ]);
+  const io = options.io ?? { input: process.stdin, output: process.stdout };
+  const connection = createConnection(ProposedFeatures.all, io.input, io.output), documents = new TextDocuments(TextDocument);
+  const reader = env.thread({ lsp: true });
+  reader.unref();
+  const file_of = (uri: string): string => { try { return env.url.fileURLToPath(uri); } catch { return uri; } };
+  const checked = new Map<string, { version: number, text: string, paints: Paint[] }>();
+  const painted = (paints: Paint[]) => paints as unknown as Parameters<typeof encode>[1];
+  let shown: { name: string, colors: Record<string, string> } | undefined;
+  const payload = (uris: string[]) => {
+    const docs = uris.flatMap(uri => { const c = checked.get(uri); return c ? [{ uri, version: c.version, ranges: runs(c.text, painted(c.paints)) }] : []; });
+    const styles: Record<string, { color: string }> = {};
+    if (shown) {
+      const table = new Map(Object.entries(shown.colors));
+      for (const [name] of table) { const color = shown_as(table, name); if (color) styles[name] = { color }; }
+      for (const doc of docs) for (const { style } of doc.ranges) if (!styles[style]) { const color = shown_as(table, style); if (color) styles[style] = { color }; }
+    }
+    return { styles, documents: docs };
+  };
+  reader.on('message', (m: { checked?: { uri: string, version: number, text: string, paints: Paint[], diagnostics: Diagnostic[] }, log?: string, theme?: { name: string, colors: Record<string, string> } | null }) => {
+    if (m.theme !== undefined) { shown = m.theme ?? undefined; connection.sendNotification('ether/theme', payload([...checked.keys()])); return; }
+    if (m.log !== undefined) { connection.console.log(m.log); return; }
+    const c = m.checked;
+    if (!c) return;
+    const doc = documents.get(c.uri);
+    if (doc && doc.version > c.version) return;
+    checked.set(c.uri, { version: c.version, text: c.text, paints: c.paints });
+    connection.sendDiagnostics({ uri: c.uri, version: c.version, diagnostics: c.diagnostics.map(d => ({ severity: d.severity, range: { start: position_of(c.text, d.begin), end: position_of(c.text, Math.max(d.end, d.begin + 1)) }, message: d.around ? `${d.message}\n${d.around}` : d.message, source: 'ray' })) });
+    connection.languages.semanticTokens.refresh();
+    connection.sendNotification('ether/theme', payload([c.uri]));
+  });
+  reader.on('error', e => connection.console.error(`the reader stopped: ${(e as Error).stack ?? e}`));
+  const open = (uri: string, text: string, version: number) => reader.postMessage({ open: { uri, file: file_of(uri), text, version } });
+  connection.onInitialize(() => ({
+    capabilities: { textDocumentSync: TextDocumentSyncKind.Full, semanticTokensProvider: { legend: { tokenTypes: TOKEN_TYPES, tokenModifiers: MODIFIERS }, full: true, range: true } },
+    serverInfo: { name: 'ray-language-server', version: env.version.toString() },
+  }));
+  const tokens = (uri: string, range?: [number, number]) => { const c = checked.get(uri); return { data: c ? encode(documents.get(uri)?.getText() ?? c.text, painted(c.paints), TOKEN_TYPES, range) : [] }; };
+  connection.languages.semanticTokens.on(params => tokens(params.textDocument.uri));
+  connection.languages.semanticTokens.onRange(params => { const doc = documents.get(params.textDocument.uri); return doc ? tokens(params.textDocument.uri, [doc.offsetAt(params.range.start), doc.offsetAt(params.range.end)]) : tokens(params.textDocument.uri); });
+  connection.onRequest('ether/theme', (params: { uris?: string[] }) => payload(params?.uris ?? []));
+  connection.onRequest('ether/initialFiles', (): null => null);
+  documents.onDidOpen(e => open(e.document.uri, e.document.getText(), e.document.version));
+  documents.onDidChangeContent(e => open(e.document.uri, e.document.getText(), e.document.version));
+  documents.onDidClose(e => { reader.postMessage({ close: e.document.uri }); checked.delete(e.document.uri); });
+  documents.listen(connection);
+  connection.listen();
+}
+
+if (env.worker && env.worker_threads.workerData?.lsp) void lsp_worker();
+else if (env.worker && env.worker_threads.workerData?.main) void main(env.worker_threads.workerData.main);
+else if (env.is_main_entrypoint) void main();

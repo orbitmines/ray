@@ -1,10 +1,14 @@
 // (as written: `(Base = Number, (quantities: (quantity: Base, (" ", (unit: Unit = Unit.None) = (unit as String){quantity == 1 ?
 // singular : plural || singular})?)[]{length > 0}).join(" "))`; until a header is read as a pattern, its fields)
 Quantity := class (quantities, Base = Number) => {
+  // U42 two hours are not written so
+  assert 2 hours as String == "2 hours"
   dynamically assert quantities.every _, unit => unit == quantities.0.unit
   dynamically assert quantities.unit as quantities.0.unit[] -- .sorted(>)
 
   `quantity: Quantity` => quantities ,= quantity
+  // U52 a juxtaposed quantity is not the sum of its parts
+  assert 1d 10h 10m 30s as s == 123030 s
 
   as (=== Normalizer) => Unit.Normalizers.modulus(this)
   as (normalizer: Quantity{quantities.every(.quantity == 1)}) => this ~~ .normalizer = normalizer
@@ -18,17 +22,35 @@ Quantity := class (quantities, Base = Number) => {
 
   chainable == (other: Quantity) => in(finer(other)) == other.in(finer(other))
   chainable < (other: Quantity) => in(finer(other)) < other.in(finer(other))
+  // U26 two bits are not fewer than three
+  assert 2 bits < 3 bits
+  // U27 three bits are fewer than two
+  assert !(3 bits < 2 bits)
+  // U41 two and three seconds is below five seconds
+  assert !(2 seconds + 3 seconds < 5 seconds)
   chainable <= (other: Quantity) => !(other < this)
   negated => this * (0 - 1)
   chainable >= (other: Quantity) => !(this < other)
   chainable > (other: Quantity) => other < this
+  // U55 two minutes are not more than ninety seconds
+  assert 2 minutes > 90 s
   chainable < (other: Number) => ERROR `a quantity does not compare with a plain number`
   chainable > (other: Number) => ERROR `a quantity does not compare with a plain number`
   compounds + (other: Quantity) => Quantity(quantities: [(quantity: in(finer(other)) + other.in(finer(other)), unit: finer(other))])
+  // U22 two bits and three bits are not five
+  assert 2 bits + 3 bits == 5 bits
+  // U25 a byte and a bit are not nine bits
+  assert 1 byte + 1 bit == 9 bits
+  // U40 two and three seconds is not five seconds
+  assert 2 seconds + 3 seconds == 5 seconds
   compounds - (other: Quantity) => Quantity(quantities: [(quantity: in(finer(other)) - other.in(finer(other)), unit: finer(other))])
+  // U23 five bits less two are not three
+  assert 5 bits - 2 bits == 3 bits
   compounds * (times: Number) => Quantity(quantities: [(quantity: amount * times, unit: unit)])
   compounds * (per: Quantity) => unit is Unit.Rate ? Quantity(quantities: [(amount * per.in(unit.denominator), unit.numerator)])
     : ERROR `a quantity is multiplied by another only as a rate by what it is per`
+  // U51 a rate times a duration is not an amount
+  assert 2 GB/s * 3 s == 6 GB
   ± | +- (uncertainty: Quantity) => this - uncertainty | this + uncertainty
   min (other: Quantity) => this < other ? this : other
   max (other: Quantity) => this > other ? this : other
@@ -36,6 +58,8 @@ Quantity := class (quantities, Base = Number) => {
   compounds / (unit: Unit) => Quantity(quantities: quantities.map((quantity, from) => (quantity, from / unit)))
 
   static Temporal := Quantity{unit == Unit.Temporal}
+  // TI14 five seconds is not temporal
+  assert 5 seconds . is Quantity.Temporal
 }
 Quantity.components.hierarchy &= Ordered
 
@@ -50,10 +74,14 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
       }
       result
     }
+    // U53 a quantity is not normalized into days hours minutes seconds
+    assert 10000000 s as days hours minutes seconds == 115d 17h 46m 40s
   }
 
   static Rate := class: Unit (numerator: Unit, denominator: Unit) => {
     name => numerator.name + "/" + denominator.name
+    // U60 a rate is not named by its two units
+    assert (GB/s) as String == "GB/s"
     chainable == (other: Rate) => numerator == other.numerator && denominator == other.denominator
   }
 
@@ -61,17 +89,25 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
 
   // (each made is known by its name and its symbol, everywhere: `px`, `pixel`; and as written after an amount: `16px`)
   (global[name] = this) if name
+  // U49 a unit is not reachable as a member
+  assert 25.years == 25 years
   (global[symbol] = this) if symbol
   (Spelling[name] = this) if name
   (Spelling[symbol] = this) if symbol
+  // U43 three s are not seconds
+  assert 3 s == 3 seconds
 
   static Temporal => second
+  // TI1 a second is not temporal
+  assert second is Unit.Temporal
 
   as (=== Quantity) => 1, this
   as (other: . is Unit) => this as Quantity as other
 
   dynamically assert this as String? != None
   as (=== String?) => name
+  // U36 a bit is not called that
+  assert bit as String == "bit"
 
   static spelled (spelling) => (spelling is Unit) ? spelling : global[spelling]
   // (a unit's name or symbol as written: each unit made gives it its own; read, the unit)
@@ -81,6 +117,10 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
     -- .convert x => x * (this as other.static), other.static
 
   chainable == (other: Unit) => this === other || name == other.name
+  // U58 a unit is not itself
+  assert minute == minute
+  // U59 a minute is an hour
+  assert !(minute == hour)
   // (what it makes of a quantity, `x as px`: the quantity in it)
   from (quantity: Quantity) =>
     target := this
@@ -113,6 +153,10 @@ Unit.None := Unit(global.None)
 // (written right after it, or after a space: `16px`, `5 s`)
 {amount: Number}{written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
 {amount: Number} {written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
+// HS13 a count before a unit is read as a count, not a quantity
+assert 2 seconds is Quantity
+// U54 a number held in a variable does not take a unit after it
+assert 3.(. minutes == 180 s)
 
 si_name (symbol, name, symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
 
@@ -149,6 +193,8 @@ SI_Unit {symbol: *} {name: *} => {
 
   SI#.for FromUnit => FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
 }
+// U10 a deka-bit is not ten bits
+assert 1dab == 10b
 
 Binary_Unit {symbol: *} {name: *} => {
   private IEC = {
@@ -179,21 +225,63 @@ SI_Unit cd "candela"
 
 SI_Unit b "bit"
 SI_Unit B "byte"
+// UB4 a kilobyte is not 1000 bytes
+assert 1 kB == 1000 B
 Binary_Unit B "byte"
+// UB3 a kibibyte is not 1024 bytes
+assert 1 KiB == 1024 B
+// UB5 a kibibyte is a kilobyte
+assert !(1 KiB == 1 kB)
+// UB7 mebi is not 1024 kibi
+assert 1 MiB == 1024 KiB
+// UB10 a kibibyte is not called that
+assert kibibyte as String == "kibibyte"
+// UB12 two kibibytes are not kibibytes
+assert 2 KiB as String == "2 kibibytes"
 byte.multiple 8, bit
+// U8 a byte does not equal eight bits
+assert 1B == 8b
+// U3 a byte does not convert to eight bits
+assert 1 byte as bit == 8 bits
+// UB6 eight bits are not one byte
+assert 8 bits as byte == 1 byte
 Quantity{unit == bit} &+= {
   as (=== Binary) => amount is Integer ? Binary{length == amount} : ERROR `a bit count is whole bits`
+  // FWB1 two bytes are not sixteen bits of Binary
+  assert 2 B as Binary == Binary₁₆
+  // FWB2 a kibibyte is not 8192 bits of Binary
+  assert 1 KiB as Binary == Binary{length == 8192}
 }
 
 Unit(name: "minute" ("s" + plural: true)?, symbol: "min" | "m").multiple 60, second
+// U35 a minute is not sixty seconds
+assert 1 minute as seconds == 60 s
+// U50 an ambiguous unit does not superpose
+assert 8m == 8 meter | 8 minute
+// TM1 two minutes are not 120 seconds
+assert 2 minutes as seconds == 120 s
 Unit(name: "hour" ("s" + plural: true)?, symbol: "h").multiple 60, minute
+// U46 two hours are not 120 minutes
+assert 2 hours as minutes == 120 minutes
 Unit(name: "day" ("s" + plural: true)?, symbol: "d").multiple 24, hour
+// U45 1.5 days is not 36 hours
+assert 1.5 days as hours == 36 h
 Unit(name: "week" ("s" + plural: true)?, symbol: "wk").multiple 7, day
+// U56 a week is not seven days
+assert 1 week == 7 days
 Unit(name: "year" ("s" + plural: true)?, symbol: "y").multiple 365, day
+// U57 a year is not 365 days
+assert 1 year == 365 days
 
 Unit(name: "celsius", symbol: "°C").offset 273.15, kelvin
+// U47 zero celsius is not 273.15 kelvin
+assert 0 °C as kelvin == 273.15 K
+// U48 the offset is not reversed
+assert 273.15 K as celsius == 0 °C
 
 Unit(name: "thousand", symbol: "k").multiple 10^3, Unit.None
+// UB15 1k is not a thousand
+assert 1k == 1000
 Unit(name: "million", symbol: "M").multiple 10^6, Unit.None
 Unit(name: "billion", symbol: "B").multiple 10^9, Unit.None
 
@@ -207,3 +295,36 @@ Complex &+= {
   compounds * (other: Complex) => (real * other.real - imaginary * other.imaginary) + ((real * other.imaginary + imaginary * other.real) i)
   conjugate => real + (imaginary.negated i)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

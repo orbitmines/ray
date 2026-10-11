@@ -107,7 +107,12 @@ All POC files live in `@ether/poc/machine/`:
 ### MC6 Assembly is Ray syntax
 
 - **Goal.** The Almanac's "assembly is just valid syntax in the new language".
-- **What happens.** objdump's text is read by the same declarations and written as bytes.
+- **What happens.** `X86.Assembly` is a rule set whose heads are the instructions as objdump writes them
+  (`lea {a: X86.Register},[{m: X86.Memory}]`), so `X86.Assembly reading { lea eax,[rdi+rsi*1] }` is Ray code that answers
+  an `X86.Instruction`; `X86.Register` and `X86.Memory` read the operands. Each rule chooses the encoding gcc chooses: a
+  SIB byte only for an index, no base, or rsp/r12 as base; the shortest displacement; the 8-bit immediate when it fits,
+  else `05` for the accumulator; `B8+r` into 32 bits, `C7 /0` into 64. The function is then written by the same headers
+  that read it in MC2.
 - **Pass.** `./run.sh MC6`: every function's text assembles to gcc's bytes.
 
 ## After this proof
@@ -121,7 +126,7 @@ All POC files live in `@ether/poc/machine/`:
 
 ## Status
 
-MC0 to MC5 pass (`./run.sh MC1` … `MC5` in `@ether/poc/machine`; 25 functions per process), also after merging main.
+MC0 to MC6 pass (`./run.sh MC1` … `MC6` in `@ether/poc/machine`; 25 functions per process), also after merging main.
 
 - **MC0**: on the merged branch, S0 to N6 and DP0, DP2, DP3, DP4 pass.
 - **MC1**: 200 functions, from 3 to 32 bytes, pinned in `corpus/manifest.txt` (gcc 16.2.1).
@@ -135,7 +140,10 @@ MC0 to MC5 pass (`./run.sh MC1` … `MC5` in `@ether/poc/machine`; 25 functions 
   linked into one C harness, prints what gcc's own objects print on all 6000. No C source and no C grammar is on that
   path; `f3` becomes `n.wrapping_add(1i32).wrapping_mul(x)`.
 
-Each function reads, prints and lifts in about half a second.
+- **MC6**: all 200: objdump's text, each line read as Ray code in `X86.Assembly`, is written as the bytes gcc made. Ray's
+  declaration is now an assembler and a disassembler of what gcc emits, both checked against gcc and objdump.
+
+Each function reads, prints, lifts or assembles in under a second.
 
 ## Engine work
 
@@ -170,11 +178,25 @@ broke the proofs, each fixed in a commit of its own:
 - **Arguments spread only when made by `,`.** Fields read from text are now given as `read.spreading`.
 - **Two branches defined `!x` and the elsif chain differently;** main's are kept.
 
+Then the slowdown. Profiles put it in the pattern matcher, which was called 10 times as often for the same stream: the Ray
+code did more, not the engine. Counted reads of one warm read of `hello.txt.1.default` (9 594 before the merge):
+
+| | Reads | Time |
+|---|---|---|
+| merged | 351 602 | 2.9 s |
+| a lazy static keeps its value (it was made again on every read: `{name} = kept` did not stick) | 197 410 | 1.6 s |
+| a static list written out is made where it is, once (read unqualified in a method, the kept value was not found) | 59 564 | 0.6 s |
+
+A block read again (`link := { … }` in every `append`, a list's body in every `Listing.new`) also no longer reads its tests
+again, as an instance already did not; that saves the cold reads. `ray.txt.1.huffman` now reads in 47 s (17 s before the
+merge, 157 s merged), `text.txt.1.fixed` in 41 s (9 s, 51 s); of those, about 11 s in each process is the fixed code
+tables, now made when first read instead of when the library loads. What is left is spread out: lists cost more (each also
+holds `spread`), `,` makes a list of every argument list, `is` walks superclasses with a lazy default, every text literal is
+read through `unescaped`, every `if` tries the `elsif` chain first.
+
 What is still off:
 
-- **Main's engine is several times slower:** reading a DEFLATE stream takes 5 to 9 times as long (`ray.txt.1.huffman`
-  17 s before, 157 s now), and the largest corpus streams run past 12 GB, so DP3 to DP5 do not all finish. Machine code is
-  about twice as slow (still under 2 s a function). Not looked into yet.
+- **Main's engine is still about 3 times slower** on DEFLATE than before the merge.
 - **The full library test run (`--test`) runs out of memory** after about 18 minutes, on main and on this branch alike;
   `poc/library-tests.mts` runs it in-process, since the CLI's worker needs Node's `--experimental-transform-types`, which
   Node 26 no longer has.
@@ -187,6 +209,12 @@ What is still off:
 - **MCG2 An unbalanced bracket says nothing.** One `)` too many in one method left the whole class unmade, silently,
   and whether the file read alternated with how many statics came after it. Errors with positions are needed (Interop.md
   L1 asks for them too).
+- **MCG4 A closure written as a later argument takes the whole argument list as its parameters:** `g(3, (y) => y + 1)`
+  reads as one closure `(3, (y)) => …`. Bracketed, `g(3, ((y) => y + 1))`, it is one argument (before the merge too).
+- **MCG5 A closure written in a rule's right side does not see the rule's holes when it is called elsewhere;** they are
+  bound to locals first (`x := a`).
+- **MCG6 The digit `1` taken by a hole is not the number 1** (`*1` in `[rax+rax*1+0x1]` read as the word `scale`, where
+  `*2` reads 2); the scale is taken as its text.
 - **MCG3 `return` in a rule's right side returns from the function that called the rule.** `wrapped` written with
   `(return value) if …` made every lifted function answer its first wrapped value.
 
@@ -199,4 +227,4 @@ What is still off:
 
 ## Order of work
 
-MC0 to MC5 in order, one commit each, kernel changes as commits of their own; MC6 after MC5.
+MC0 to MC6 in order, one commit each, kernel changes as commits of their own.

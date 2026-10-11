@@ -364,29 +364,10 @@ unless {condition} {{taken}} ^keyword =>
 assert (unless false { true })
 // CF9 unless has no other side
 assert (unless true { 1 } else { 2 }) == 2
-// (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body; what follows it an `elsif`)
-nearest if {condition} {{taken}} {chain} =>
-  (goto .) unless (.chain) begins "elsif"
-  {condition} ? (goto taken) : (goto otherwise)
-  taken\
-  {taken}
-  goto passed
-  otherwise\
-  {chain}
-  passed\
 nearest elsif {condition} {{taken}} =>
   {condition} ? (goto taken) : (goto passed)
   taken\
   {taken}
-  passed\
-nearest elsif {condition} {{taken}} {chain} =>
-  (goto .) unless (.chain) begins "elsif"
-  {condition} ? (goto taken) : (goto otherwise)
-  taken\
-  {taken}
-  goto passed
-  otherwise\
-  {chain}
   passed\
 nearest elsif {condition} {{taken}} else {{otherwise}} =>
   {condition} ? (goto taken) : (goto otherwise)
@@ -407,6 +388,26 @@ if {condition} {{taken}} else {{otherwise}} ^keyword =>
   goto passed
   otherwise\
   {otherwise}
+  passed\
+// (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body; what follows it an `elsif`) (after `else`:
+// the later reading, so `if a {} elsif b {} else {}` is not an `else` whose condition holds the first body)
+nearest if {condition} {{taken}} {chain} =>
+  (goto .) unless (.chain) begins "elsif"
+  {condition} ? (goto taken) : (goto otherwise)
+  taken\
+  {taken}
+  goto passed
+  otherwise\
+  {chain}
+  passed\
+nearest elsif {condition} {{taken}} {chain} =>
+  (goto .) unless (.chain) begins "elsif"
+  {condition} ? (goto taken) : (goto otherwise)
+  taken\
+  {taken}
+  goto passed
+  otherwise\
+  {chain}
   passed\
 // CC1 if-true did not take the then branch
 assert (if true { true } else { false })

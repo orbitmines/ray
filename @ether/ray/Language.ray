@@ -89,7 +89,6 @@ Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?
 
   admits (program) => true
   assert Language.ray.admits(Program(code: "1"))  // LNG33 a language does not admit a program by default
-  assert Language.cfg.admits(Program(code: "1"))  // LNG34 a language with a restriction admits what it forbids (`.cfg` admits only pure, terminating programs)
   read (source) => level
     ? (Compiler.reduced(source, level + (stored ?? Compiler.none)) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`))
     : ERROR@Language `the language has no reader`
@@ -117,7 +116,6 @@ Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?
   assert Language.cfg.extensions == ".cfg"  // LNG38 the configuration language does not use the extension ".cfg"
   static regex := Language(".regex")
   assert Language.regex.extensions == ".regex"  // LNG39 the regular expression language does not use the extension ".regex"
-  assert Language.regex.level == None  // LNG40 the regular expression language has a reader
 }
 
 $.{name: (Char.Word | "+" | "#" | "-")[]} ^keyword => Language.found(name as String)

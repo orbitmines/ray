@@ -943,7 +943,12 @@ export class Program {
       return reading.rule.bodies.has(alone) ? this.run(reading.caps[alone], { node: reading.receiver, this: frame.this ?? reading.self, into: frame.into, also: reading.site !== frame.node ? reading.site : undefined, writer: reading.from }) : this.held_value(this.shared(reading, alone));
     let text = this.substituted(statement, reading, reading.site, code).trim();
     // (a definition's head is read as written: the code its holes took, so the rules reading a head (a style after it) see it)
-    if (text.includes(Program.REFERS) && this.defining(text)) { const nl = text.indexOf('\n'), line = nl < 0 ? text : text.slice(0, nl), written = this.source(line, true); if (written !== line && /\^[\p{L}_.]+ =>/u.test(written)) text = written + (nl < 0 ? '' : text.slice(nl)); }
+    if (text.includes(Program.REFERS) && this.defining(text)) {
+      // (a head put together from several holes, as the modifiers' `{operator} {rest} => {body}`, is the code they took as written, read as a whole; a head with words of its own, or one hole (a name), keeps its holes)
+      const nl = text.indexOf('\n'), line = nl < 0 ? text : text.slice(0, nl), at = this.outermost_at(line), head = at < 0 ? '' : line.slice(0, at);
+      const each = new RegExp(`${Program.escaped(this.grammar!.open)}${Program.REFERS}[0-9a-z]{6}${Program.escaped(this.grammar!.close)}`, 'g');
+      if (head && (head.match(each)?.length ?? 0) > 1 && !head.replace(each, '').trim()) text = this.source(line, true) + (nl < 0 ? '' : text.slice(nl));
+    }
     return this.read(text, frame, except, this.alike);
   }
   // (a statement read where a value is wanted: a rule on one line is a node holding it, one whose rules each run in a new node
@@ -1323,6 +1328,7 @@ export class Program {
       at_node.define(rule, variable);
       return undefined;
     }
+    if (process.env.RAY_WHY && !this.deferring && (frame.receiver !== undefined || frame.on) && /^[^\p{L}\p{N}_.\s]/u.test(s)) env.fs.writeSync(2, `UNREAD ${JSON.stringify(s.slice(0, 60))} receiver=${typeof frame.receiver}:${String(frame.receiver).slice(0, 20)} on=${frame.on} from=${frame.reading?.text?.slice?.(0, 50) ?? '-'} rule=${frame.reading?.rule.head.slice(0, 40)}\n`);
     return this.source(s);
   }
   // (what is left after a value read on: in it, when it is a node; it is text already rewritten, its holes not the reading's)

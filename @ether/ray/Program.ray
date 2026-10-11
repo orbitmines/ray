@@ -1,5 +1,6 @@
 Program &+= {
   who: * = @me
+  assert Program(code: { 1 }).who.same(@me)  // PG35 a program does not run as the character who made it by default
   name: String?
   goal: *?
   from: *?
@@ -7,6 +8,9 @@ Program &+= {
   started := false
   stopped := false
   results: *[] = []
+  assert !Program(code: { 1 }).started  // PG36 a program that was never stepped has started
+  assert !Program(code: { 1 }).stopped  // PG37 a program that was never stopped has stopped
+  assert Program(code: { 1 }).results.count == 0  // PG38 a program that was never stepped has results
   tried: *?
 
   written => code ? super.written : [Program(code: ((name ?? "reach"), "(", Language.ray.write(goal), ")") as String)]
@@ -47,9 +51,13 @@ Program &+= {
 
   & => results
   is_initial | waiting => !started
+  assert Program(code: { 1 }).is_initial  // PG39 a program that was never stepped is not initial
+  assert !Program(code: { 1 }).is_terminal  // PG40 a program that was never stepped is terminal
+  assert !Program(code: { 1 }).intermediate  // PG41 a program that was never stepped is intermediate
   is_terminal | final => started && !at
   intermediate => started && !is_terminal
   holds => !is_terminal && !stopped
+  assert Program(code: { 1 }).holds  // PG42 a program that was never stepped does not hold
   inputs => written.zip(results){.0 is Nondeterministic}
   stepped => {
     at = started ? at.next : written.first
@@ -62,13 +70,67 @@ Program &+= {
     assert stepped == 2  // CF17 two assignments on one line did not both run
   }
   next => copy ~~ (.results = [results]) -- .stepped
+  // stepping a program one statement at a time
+  assert {
+    program := Program(code: {
+      1
+      2
+    })
+    program.stepped
+    assert program.started  // PG43 a stepped program has not started
+    assert program.results.count == 1  // PG44 one step does not leave one result
+    assert program.results.last == 1  // PG45 the first step does not run the first statement
+    assert program.intermediate  // PG46 a program in the middle of its statements is not intermediate
+    assert !program.is_initial  // PG47 a stepped program is still initial
+    program.stepped
+    assert program.results.last == 2  // PG48 the second step does not run the second statement
+    program.stepped
+    assert program.is_terminal  // PG49 a program stepped past its last statement is not terminal
+    assert !program.holds  // PG50 a finished program still holds
+    assert program.results.count == 2  // PG51 stepping past the end added a result
+  }
+  // the next step of a program, on a copy
+  assert {
+    program := Program(code: {
+      1
+      2
+    })
+    following := program.next
+    assert following.started  // PG52 the program after a step has not started
+    assert !program.started  // PG53 taking the next step started the program itself
+  }
   finished => (stepped while holds) -- this
+  assert Program(code: {
+    1
+    2
+  }).finished.(
+    .is_terminal  // PG54 a finished program is not terminal
+    & .results.count == 2  // PG55 a finished program of two statements does not have two results
+    & .results.last == 2  // PG56 a finished program's last result is not its last statement's
+  )
   static round => Program#{running}.map(.stepped)
   static until (condition) => (round while !condition() && Program#.some(.running)) -- this
 
   reached (value) => goal !== None && value is goal
+  assert Program(code: { 1 }, goal: Number).reached(5)  // PG57 a value of the goal's type does not reach the goal
+  assert !Program(code: { 1 }, goal: Number).reached("five")  // PG58 a value not of the goal's type reaches the goal
+  assert !Program(code: { 1 }).reached(5)  // PG59 a program with no goal is reached
   attempt (value): static => this ~~ (.tried = value) ~~ (.complete if reached(value))
   running => started && !done
+  assert {
+    program := Program(code: {
+      1
+      2
+    })
+    assert !program.running  // PG60 a program that never started is running
+    program.stepped
+    assert program.running  // PG61 a program in the middle of its statements is not running
+    assert !program.done  // PG62 a program in the middle of its statements is done
+    program.stop
+    assert program.stopped  // PG63 a stopped program is not stopped
+    assert program.done  // PG64 a stopped program is not done
+    assert !program.running  // PG65 a stopped program is still running
+  }
   done => stopped || is_terminal
   continuable => done && !(tried**.is_terminal ?? true)
   path => [tried, tried.previous**].flatten
@@ -76,6 +138,18 @@ Program &+= {
   solved_by => solution.who
   progress => started ? written.index_of(at) ?? written.count : 0
   difficulty => written.count
+  // PG66 the difficulty of a program is not its number of statements
+  assert Program(code: {
+    1
+    2
+    3
+  }).difficulty == 3
+  assert Program(code: { 1 }).progress == 0  // PG67 a program that never started has progress
+  // PG68 a finished program has not made progress through all its statements
+  assert Program(code: {
+    1
+    2
+  }).finished.progress == 2
 
   stop | cancel | complete: static => this ~~ (.stopped = true)
   // (entered into a value: a closure of it, applied to it; `element`, what `.` is in it, not yet)
@@ -133,24 +207,77 @@ Program &+= {
   is_conditional => is_jump && jump.condition
   target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\\"}.first
   holding (name: String) => written.some(.is_label && .code == name + "\\") ? this : written.map(.holding(name)){!= None}.first
+  // PG69 a program with a label does not hold it
+  assert Program(code: {
+   there\
+    1
+  }).holding("there") != None
+  assert Program(code: { 1 }).holding("nowhere") == None  // PG70 a program holds a label it does not have
   crosses (jump: Program) => !target_of(jump) && holding(jump.jump.name)
   called_at (jump: Program) => holding(jump.jump.name) -- .copy ~~ (.at = .target_of(jump)) ~~ (.started = true) -- .finished.results.last
 
   flow => written.map(step => (step, jumps_to: step.is_jump ? target_of(step) : None, falls_through: !step.is_jump || step.is_conditional || crosses(step)))
   jumps_backward => written.some(step => step.is_jump && written.index_of(target_of(step)) <= written.index_of(step))
   terminating => !jumps_backward
+  assert Program(code: { 1 }).terminating  // PG71 a program that never jumps does not terminate
+  // PG72 a program that jumps back to a label terminates
+  assert !Program(code: {
+   again\
+    goto again
+  }).terminating
 
   head => code ~= (⊢ head: (!(" " | "(" | ":" | "?"))[], ending: (" " | "(" | ":" | "?")?)
+  assert Program(code: { foo(1) }).written.first.head.(
+    .head == "foo"  // PG73 the head of a call is not the name before the bracket
+    & .ending == "("  // PG74 the head of a call does not end at its bracket
+  )
+  assert Program(code: { x := 1 }).written.first.head.head == "x"  // PG75 the head of a declaration is not its name
   required_heads => written{(.head.ending == ":" && .head.head ~= ⊢Char.Word) || .code ~= (.head.head, " => TODO")}.head.head
+  assert Program(code: { x: Number }).required_heads.contains("x")  // PG76 a name declared with only its type is not required
+  assert !Program(code: { y := 1 }).required_heads.contains("y")  // PG77 a name declared with a value is required
   declares (head: String) => written.some(.code ~= ⊢(head, " " | "(" | ":"))
   assert Program(code: { x := 1 }).declares("x")  // PG34 a program declaring x does not say so
   precedence (spelled: String) => written.index_of(written{.code ~= ⊢((Modifier.spellings, " ")?, spelled, " ")}.first)
+  assert Program(code: {
+    a x
+    b y
+  }).(
+    .precedence("b") > .precedence("a")  // PG78 a statement written later does not have a later precedence
+    & !(.precedence("a") > .precedence("b"))  // PG79 a statement written first has a later precedence
+  )
 
   assigns => code ~= ⊢((!" ")[], " "[], "=" | "&=" | "|=" | "+=" | "-=", " ")
+  assert Program(code: { x = 1 }).written.first.assigns  // PG80 an assignment is not read as one
+  assert Program(code: { x += 1 }).written.first.assigns  // PG81 an addition assignment is not read as one
+  assert !Program(code: { x + 1 }).written.first.assigns  // PG82 a sum is read as an assignment
   writes (name: String) => written{.code ~= ⊢(name, " "[], (":=" | "=" | "&=" | "|=" | "+=" | "-=" | ":"))}
+  assert Program(code: {
+    a := 1
+    b := 2
+    a = 3
+  }).(
+    .writes("a").count == 2  // PG83 the statements writing a name are not all found
+    & .writes("b").count == 1  // PG84 a name written once is not found once
+    & .writes("c").count == 0  // PG85 a name never written is found
+  )
   depends (name: String, seen: String[] = []) => [[name], writes(name).map(statement => variables{. != name && !seen.contains(.) && statement.mentions(.)}).flatten.unique
     .map(depends(., [seen, [name]].flatten)).flatten].flatten.unique
   slice (name: String) => depends(name) -- (names => written{statement => names.some(writes(.).contains(statement))})
+  assert Program(code: {
+    a := 1
+    d := 2
+    c := a + 1
+  }).depends("c").(
+    .contains("c")  // PG86 a variable does not depend on itself
+    & .contains("a")  // PG87 a variable does not depend on what it is computed from
+    & !.contains("d")  // PG88 a variable depends on what it is not computed from
+  )
+  // PG89 a variable does not depend on what the variables it is computed from depend on
+  assert Program(code: {
+    a := 1
+    b := a + 1
+    c := b + 1
+  }).depends("c").contains("a")
 
   schedule (on = @me) => on.quests |= this
 
@@ -174,6 +301,11 @@ Program &+= {
   right-to-left rush => written
     -- (.map(.stepped) while .every(.holds))
     -- .{is_terminal}.first.results.last
+  // PG90 rush is not won by the first to finish
+  assert (rush {
+    1
+    2
+  }) == 1
   right-to-left defer => copy ~~ .from = &.caller
 }
 
@@ -182,9 +314,11 @@ Program &+= {
 // (declared in the entrypoint, before `=`)
 
 Terminating := Program{terminating}
+assert Program(code: { 1 }) is Terminating  // PG91 a program that only runs forward is not terminating
 
 Keyed := class (key: *, ":", " "[], (*, " = ")?, value: *) => {
   as (=== String) => value as String
+  assert Keyed(key: "a", value: "b") as String == "b"  // PG92 a keyed value is not written as its value
 }
 
 // A block as a map (its `keys`, `x[key]`, `for` over them, T8.7) is the language's own: the entrypoint gives every program them.

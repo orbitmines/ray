@@ -15,8 +15,14 @@ Quantity := class (quantities, Base = Number) => {
   unit => quantities.last.unit
   amount => quantities.last.quantity
   in (target: Unit) => Unit.converted(this.amount, this.unit, target)
+  assert (5 bits).unit == bit  // U61 the unit of a quantity is not its unit
+  assert (5 bits).amount == 5  // U62 the amount of a quantity is not its count
+  assert (2 minutes).in(second) == 120  // U63 two minutes are not 120 in seconds
+  assert (1 byte).in(bit) == 8  // U64 a byte is not 8 in bits
   as (target: Unit) => Quantity(quantities: [(quantity: this.in(target), unit: target)])
   finer (other: Quantity) => (Quantity(quantities: [(quantity: 1, unit: this.unit)]).in(other.unit) >= 1) ? other.unit : this.unit
+  assert (1 minute).finer(1 second) == second  // U65 the finer of minutes and seconds is not seconds
+  assert (1 second).finer(1 minute) == second  // U66 the finer of seconds and minutes is not seconds
 
   chainable == (other: Quantity) => in(finer(other)) == other.in(finer(other))
   chainable < (other: Quantity) => in(finer(other)) < other.in(finer(other))
@@ -24,9 +30,18 @@ Quantity := class (quantities, Base = Number) => {
   assert !(3 bits < 2 bits)  // U27 three bits are fewer than two
   assert !(2 seconds + 3 seconds < 5 seconds)  // U41 two and three seconds is below five seconds
   chainable <= (other: Quantity) => !(other < this)
+  assert 2 bits <= 3 bits  // U67 two bits are not at most three
+  assert 2 bits <= 2 bits  // U68 two bits are not at most two
+  assert !(3 bits <= 2 bits)  // U69 three bits are at most two
   negated => this * (0 - 1)
+  assert (5 bits).negated.amount == -5  // U70 the negation of five bits is not minus five
   chainable >= (other: Quantity) => !(this < other)
+  assert 3 bits >= 3 bits  // U71 three bits are not at least three
+  assert 4 bits >= 3 bits  // U72 four bits are not at least three
+  assert !(2 bits >= 3 bits)  // U73 two bits are at least three
   chainable > (other: Quantity) => other < this
+  assert !(90 s > 2 minutes)  // U74 ninety seconds are more than two minutes
+  assert !(3 bits > 3 bits)  // U75 three bits are more than three
   assert 2 minutes > 90 s  // U55 two minutes are not more than ninety seconds
   chainable < (other: Number) => ERROR `a quantity does not compare with a plain number`
   chainable > (other: Number) => ERROR `a quantity does not compare with a plain number`
@@ -41,10 +56,18 @@ Quantity := class (quantities, Base = Number) => {
     : ERROR `a quantity is multiplied by another only as a rate by what it is per`
   assert 2 GB/s * 3 s == 6 GB  // U51 a rate times a duration is not an amount
   ± | +- (uncertainty: Quantity) => this - uncertainty | this + uncertainty
+  assert (5 bits ± 1 bits)#.contains(4 bits)  // U76 five plus or minus one does not include four
+  assert (5 bits ± 1 bits)#.contains(6 bits)  // U77 five plus or minus one does not include six
+  assert !(5 bits ± 1 bits)#.contains(5 bits)  // U78 five plus or minus one includes five
   min (other: Quantity) => this < other ? this : other
   max (other: Quantity) => this > other ? this : other
+  assert (2 bits).min(3 bits) == 2 bits  // U79 the smaller of two and three bits is not two
+  assert !((2 bits).min(3 bits) == 3 bits)  // U80 the smaller of two and three bits is three
+  assert (2 bits).max(3 bits) == 3 bits  // U81 the larger of two and three bits is not three
+  assert !((2 bits).max(3 bits) == 2 bits)  // U82 the larger of two and three bits is two
 
   compounds / (unit: Unit) => Quantity(quantities: quantities.map((quantity, from) => (quantity, from / unit)))
+  assert (6 GB / s) as String == "6 GB/s"  // U83 six gigabytes per second are not written so
 
   static Temporal := Quantity{unit == Unit.Temporal}
   assert 5 seconds . is Quantity.Temporal  // TI14 five seconds is not temporal
@@ -67,8 +90,13 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
 
   static Rate := class: Unit (numerator: Unit, denominator: Unit) => {
     name => numerator.name + "/" + denominator.name
+    assert (GB/s).numerator == GB  // U84 a rate does not hold its numerator
+    assert (GB/s).denominator == s  // U85 a rate does not hold its denominator
     assert (GB/s) as String == "GB/s"  // U60 a rate is not named by its two units
     chainable == (other: Rate) => numerator == other.numerator && denominator == other.denominator
+    assert (GB/s) == (GB/s)  // U86 a rate is not equal to itself
+    assert !((GB/s) == (MB/s))  // U87 rates of different numerators are equal
+    assert !((GB/s) == (GB/m))  // U88 rates of different denominators are equal
   }
 
   converting := None
@@ -85,13 +113,19 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   assert second is Unit.Temporal  // TI1 a second is not temporal
 
   as (=== Quantity) => 1, this
+  assert (bit as Quantity).amount == 1  // U89 a unit as a quantity is not one of it
+  assert (bit as Quantity).unit == bit  // U90 a unit as a quantity is a quantity of another unit
   as (other: . is Unit) => this as Quantity as other
+  assert (minute as second) == 60 s  // U91 a minute as seconds is not sixty seconds
 
   dynamically assert this as String? != None
   as (=== String?) => name
   assert bit as String == "bit"  // U36 a bit is not called that
 
   static spelled (spelling) => (spelling is Unit) ? spelling : global[spelling]
+  assert Unit.spelled(second) == second  // U92 a unit spelled as itself is not itself
+  assert Unit.spelled("second") == second  // U93 a unit spelled by its name is not that unit
+  assert Unit.spelled("s") == second  // U94 a unit spelled by its symbol is not that unit
   // (a unit's name or symbol as written: each unit made gives it its own; read, the unit)
   static Spelling := { }
 
@@ -113,6 +147,15 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   static converted (x, from: Unit, to: Unit) => (from == to) ? x : ((from.converting && Unit.reaches(from.converting.to, to)) ? Unit.converted(from.converting.by(x), from.converting.to, to) : (to.converting ? Unit.inverted(Unit.converted(x, from, to.converting.to), to.converting.by) : None))
   static inverted (y, by) => (y - by(0)) / (by(1) - by(0))
   static reaches (from: Unit, to: Unit) => from == to || (from.converting && Unit.reaches(from.converting.to, to))
+  assert Unit.converted(2, minute, second) == 120  // U95 two minutes are not 120 seconds
+  assert Unit.converted(120, second, minute) == 2  // U96 120 seconds are not two minutes
+  assert Unit.converted(5, bit, bit) == 5  // U97 five of a unit are not five of it
+  assert Unit.converted(1, bit, second) == None  // U98 bits are converted to seconds
+  assert Unit.converted(2, hour, second) == 7200  // U99 two hours are not 7200 seconds (through minutes)
+  assert Unit.inverted(120, (x) => x * 60) == 2  // U100 the inverse of a conversion does not recover 2 from 120
+  assert Unit.reaches(hour, second)  // U101 hours do not reach seconds through minutes
+  assert !Unit.reaches(second, hour)  // U102 seconds reach hours
+  assert Unit.reaches(bit, bit)  // U103 a unit does not reach itself
   offset (offset: Number, ToUnit: Unit) => convert(((x: Number) => x + offset), ToUnit)
   multiple (multiple: Number, ToUnit: Unit) => convert(((x: Number) => x * multiple), ToUnit)
 
@@ -135,6 +178,9 @@ Unit.None := Unit(global.None)
 {amount: Number} {written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
 assert 2 seconds is Quantity  // HS13 a count before a unit is read as a count, not a quantity
 assert 3.(. minutes == 180 s)  // U54 a number held in a variable does not take a unit after it
+assert (5s).unit == second  // U109 a unit written right after a number is not that unit
+assert (5s).amount == 5  // U110 an amount written before a unit is not its amount
+assert (5 s).unit == second  // U111 a unit written after a space is not that unit
 
 si_name (symbol, name, symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
 
@@ -203,9 +249,14 @@ SI_Unit cd "candela"
 SI_Unit b "bit"
 SI_Unit B "byte"
 assert 1 kB == 1000 B  // UB4 a kilobyte is not 1000 bytes
+assert 1 kilometer == 1000 meter  // U104 a kilometer is not 1000 meters
+assert 1 mg == 0.001 g  // U105 a milligram is not a thousandth of a gram
+assert 1 megabyte == 1000 kilobytes  // U106 a megabyte is not 1000 kilobytes
+assert 1 ms == 0.001 s  // U107 a millisecond is not a thousandth of a second
 Binary_Unit B "byte"
 assert 1 KiB == 1024 B  // UB3 a kibibyte is not 1024 bytes
 assert !(1 KiB == 1 kB)  // UB5 a kibibyte is a kilobyte
+assert 1 GiB == 1024 MiB  // U108 a gibibyte is not 1024 mebibytes
 assert 1 MiB == 1024 KiB  // UB7 mebi is not 1024 kibi
 assert kibibyte as String == "kibibyte"  // UB10 a kibibyte is not called that
 assert 2 KiB as String == "2 kibibytes"  // UB12 two kibibytes are not kibibytes
@@ -250,6 +301,16 @@ Complex &+= {
   chainable == (other: Complex) => real == other.real && imaginary == other.imaginary
   compounds * (other: Complex) => (real * other.real - imaginary * other.imaginary) + ((real * other.imaginary + imaginary * other.real) i)
   conjugate => real + (imaginary.negated i)
+
+assert (3 + 4i).real == 3  // U112 the real part of 3 + 4i is not 3
+assert (3 + 4i).imaginary == 4  // U113 the imaginary part of 3 + 4i is not 4
+assert (3 + 4i).conjugate.imaginary == -4  // U114 the conjugate of 3 + 4i does not have imaginary part -4
+assert (3 + 4i).conjugate.real == 3  // U115 the conjugate changed the real part
+assert (1 + 2i) == (1 + 2i)  // U116 a complex number is not equal to itself
+assert !((1 + 2i) == (1 + 3i))  // U117 complex numbers with different imaginary parts are equal
+assert !((1 + 2i) == (2 + 2i))  // U118 complex numbers with different real parts are equal
+assert ((1 + 2i) * (3 + 4i)).real == -5  // U119 the real part of (1 + 2i)(3 + 4i) is not -5
+assert ((1 + 2i) * (3 + 4i)).imaginary == 10  // U120 the imaginary part of (1 + 2i)(3 + 4i) is not 10
 }
 
 

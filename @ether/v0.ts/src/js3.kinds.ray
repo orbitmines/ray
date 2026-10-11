@@ -222,6 +222,10 @@ bytes =>
 binary({width}) =>
   goto js
   typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self.toString(2).padStart(width, '0').slice(-width) : undefined
+// (a whole number in base 16, as `0x` is followed)
+hexadecimal =>
+  goto js
+  typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self.toString(16) : undefined
 // (bits the other way around; the whole number they write, the most significant first; text in pieces of a size)
 reversed =>
   goto js

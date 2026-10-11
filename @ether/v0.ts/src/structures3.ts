@@ -345,7 +345,7 @@ class Writing extends Scoped {
   }
   type(type: Type, value: unknown, scope: unknown): boolean {
     if (type.alternatives) {
-      for (const alternative of type.alternatives) if (this.fits(alternative, value)) return this.type(alternative, value, scope);
+      for (const alternative of type.alternatives) if (this.fits(alternative, value, scope)) return this.type(alternative, value, scope);
       return false;
     }
     if (value === this.$('None')) value = undefined;
@@ -371,9 +371,9 @@ class Writing extends Scoped {
     if (!header) return false;
     return this.structure(value, (type.generics ?? []).length, header);
   }
-  // (the alternative a record was read as: the one whose named pieces it holds)
-  fits(type: Type, value: unknown): boolean {
-    if (!type.group) return true;
+  // (the alternative a value was read as: the class it is one of; for a record, the one whose named pieces it holds)
+  fits(type: Type, value: unknown, scope: unknown): boolean {
+    if (!type.group) return type.base === undefined || typeof value !== 'object' || this.in(scope, `(${this.$.written(value)}) is ${type.base}`) === this.$('true');
     const names: string[] = [];
     const walk = (pieces: Piece[]) => { for (const piece of pieces) if (piece.name) names.push(piece.name); else if (piece.group) walk(piece.group); };
     walk(type.group);

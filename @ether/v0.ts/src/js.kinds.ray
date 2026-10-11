@@ -239,6 +239,10 @@ binary({width}) =>
 hexadecimal =>
   goto js
   typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self.toString(16) : undefined
+// (text in base 16, `0xfffffff7`, as a whole number of a width in two's complement: -9)
+signed_hexadecimal({width}) =>
+  goto js
+  typeof self === 'string' && /^-?0x[0-9a-f]+$/i.test(self) ? Number(BigInt.asIntN(width, BigInt(self.replace(/^-/, ''))) * (self.startsWith('-') ? -1n : 1n)) : undefined
 // (bits the other way around; the whole number they write, the most significant first; text in pieces of a size)
 reversed =>
   goto js

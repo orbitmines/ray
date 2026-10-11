@@ -57,22 +57,26 @@ export class Structures {
     if (header) return header;
     const written = text.split('\n').filter(line => !line.trim().startsWith('//')).join('\n').trim();
     const pieces = Structures.split(written, ',').map(piece => this.piece(piece));
-    const plain = pieces.every(piece => piece.name !== undefined && !piece.group && !/\b(Binary|Byte)|<-/.test(piece.type?.text ?? ''));
+    const plain = pieces.every(piece => Structures.quoted(piece) || (piece.name !== undefined && !piece.group && !/\b(Binary|Byte)|<-/.test(piece.type?.text ?? '')));
     header = { pieces, plain, parameters: plain ? written : Structures.named(pieces).map(piece => piece.name).join(', ') };
     this.headers.set(text, header);
     return header;
   }
-  // (plain, and no piece's type a class whose header is of bits)
+  // (text written between quotes, a piece of a header of text)
+  static quoted(piece: Piece): boolean { return piece.name === undefined && !piece.group && /^(["`])[\s\S]*\1$/.test(piece.type?.text ?? ''); }
+  // (plain, and no piece's type, or what it lists or may be, a class whose header is of bits)
   plain($: Ray, text: string): boolean {
     const header = this.header(text);
     if (!header.plain) return false;
-    for (const piece of header.pieces) {
-      const base = piece.type?.base;
-      if (!base || !/^[\p{Lu}][\p{L}\p{N}_]*$/u.test(base)) continue;
-      const structure = $(base + '.structure');
-      if (structure && typeof structure === 'object' && 'pieces' in structure) return false;
-    }
-    return true;
+    const of_bits = (type: Type | undefined): boolean => {
+      if (!type) return false;
+      if (type.list) return of_bits(type.list);
+      if (type.alternatives) return type.alternatives.some(of_bits);
+      const base = type.base;
+      if (!base || !/^[\p{Lu}][\p{L}\p{N}_]*(\.[\p{L}_][\p{L}\p{N}_]*)*$/u.test(base)) return false;
+      return [base, base.split('.').at(-1)!].some(name => { const structure = $(name + '.structure'); return !!structure && typeof structure === 'object' && 'pieces' in structure; });
+    };
+    return !header.pieces.some(piece => of_bits(piece.type));
   }
   static names(type: Type): string[] { return type.group ? Structures.named(type.group).map(piece => piece.name!) : []; }
   static named(pieces: Piece[]): Piece[] { return pieces.flatMap(piece => piece.group ? Structures.named(piece.group) : piece.name === undefined ? [] : [piece]); }

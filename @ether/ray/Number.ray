@@ -402,19 +402,19 @@ assert !(2 is Probability)
 Digit := class: String
 
 Number.Named.for((name) => {
-  Base := Number.Bases[name]
+  Glyphs := Number.Bases[name]
 
-  global[name] := class: Number (integer: Base[]{length >= 1}) => {
-    static Digit := Base
-    static radix := Base#.count
+  global[name] := class: Number (integer: Glyphs[]{length >= 1}) => {
+    static Digit := Glyphs
+    static radix := Glyphs#.count
     static ^ (width: Number) => static{.integer.length == width}
     String => this as String
 
-    static digit (value: Number) => Base#[value]
-    static value_of (written: Base) => Base#.index_of(written.lowercase)
+    static digit (value: Number) => Glyphs#[value]
+    static value_of (written: Glyphs) => Glyphs#.index_of(written.lowercase)
     next => if integer {
       is digit(0)[] => None
-      is (rest: Base[], last: Base{!= digit(0)}, zeros: digit(0)[]) => static(integer: rest, digit(value_of(last) - 1), [digit(radix - 1)] * zeros.length)
+      is (rest: Glyphs[], last: Glyphs{!= digit(0)}, zeros: digit(0)[]) => static(integer: rest, digit(value_of(last) - 1), [digit(radix - 1)] * zeros.length)
     }
 
     << (places: Number) => static(integer: integer, [digit(0)] * places)
@@ -517,9 +517,9 @@ Number.Named.for((name) => {
     }
   }
 
-  global[name].String = Base[]{length >= 1}
+  global[name].String = Glyphs[]{length >= 1}
 
-  Base{: 0+, number: Base} as (=== Base) => number
+  Glyphs{: 0+, number: Glyphs} as (=== Glyphs) => number
 })
 
 Ending := \n | ")" | ","

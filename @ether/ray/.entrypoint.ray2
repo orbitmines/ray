@@ -259,6 +259,11 @@ assert !!true
 assert !(!!false)
 // BO28 asking whether nothing is there answers nothing
 assert !None
+// `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default). The type, one thing: `x as T == y` is
+// `(x as T) == y`.
+as {type} ^keyword =>
+  (goto .) if (.type) spaced
+  (. is {type}) ? . : (. -- ((subject) => {type}.from(subject)))
 // What the host's own kinds of value answer (their operators: they bind tighter than what follows).
 goto kinds
 
@@ -1197,6 +1202,11 @@ operator
   Listing.new
 goto styled
 punctuation
+// `T[]`: what holds Ts, one after another (a list of them; text, of characters each one) (A3)
+{element}[] =>
+  Node{(. is String) ? (.characters.every((c) => c is {element})) : (.every((item) => item is {element}))}
+goto styled
+punctuation
 [{inside}] =>
   Listing.new.append({inside})
 goto styled
@@ -1431,8 +1441,11 @@ extended () =>
 // of it does too. (Made in a node holding `superclass` and `extended`: they are read through it, not its own rules, which are what a
 // typed hole `{x: T}` reads.) With fields, written as a closure is, `class (x, y) => { … }`: the class's `instance`, that closure (a call
 // of it, the instance: in the class, its fields given the arguments; `of` its class), is what `X(…)` calls.
+// (where it is read: the node its text is read in (in a call, the call's), not what `.` is there)
+written_here =>
+  goto here
 made class:{ }{parent} {{block}} =>
-  . -- (written_in => ({parent}.extended() &+= {
+  written_here -- (written_in => ({parent}.extended() &+= {
     superclass := {parent}
     extended := () =>
       interior reading {
@@ -1479,6 +1492,10 @@ class {{block}} ^keyword =>
   class: Node {
     {block}
   }
+// (a class of a parent and nothing of its own, `Digit := class: String`)
+class:{ }{parent} =>
+  (goto .) if (.parent) spaced
+  class: {parent} { }
 class{ }({fields}) => {{block}} =>
   class: Node ({fields}) => {
     {block}
@@ -1487,7 +1504,8 @@ goto styled
 keyword
 
 // What a value is: a Node (anything is; the outermost node); the value itself; an instance of the class (or of one after it,
-// `class:`) it was made by; one of a superposition's components; a narrowing that holds of it; a member of an enumeration.
+// `class:`) it was made by; one of a superposition's components; a narrowing that holds of it; a member of an enumeration; a
+// superposition, when each of its components is.
 of := None
 superclass := None
 superposes := false
@@ -1496,7 +1514,7 @@ caller := None
 descends (type, depth = 0) =>
   (. === type) || ((depth < 64) && .superclass ? .superclass.descends(type, depth + 1) : false)
 is {type} ^keyword =>
-  ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((component) => . is component) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((member) => member === .) : false)
+  ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((component) => . is component) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((member) => member === .) : false) || (.superposes ? .components.every((component) => component is {type}) : false)
 // `is`, quantifiers and membership (A5, R1.1)
 // IS1 is does not ask instance_of
 assert ("A", "A", "A") is "A"[]
@@ -1608,7 +1626,6 @@ goto declaring
 goto declaring
 static {{statement}}
 
-// `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
 from (x) =>
   None
 goto styled
@@ -1649,11 +1666,13 @@ assert {
   // IC2 a case that does not hold answers
   assert first_case(2) == "number"
 }
-as {type} ^keyword =>
-  (. is {type}) ? . : (. -- ((subject) => {type}.from(subject)))
 // (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
 ({parameter}) as (=== {type}) => {body} =>
   from := (({parameter}) => {body})
+// (a conversion written in the class converted from, `as (=== T) => …`: what a value of it is read as a T, `x as T` written so)
+{`as`} (=== {type}) => {body} =>
+  as {type} =>
+    {body}
 
 // What a value holds under a key: its entries (`keyed`: `key`, `value`), a Ray; none until one is given.
 keyed := None
@@ -2183,6 +2202,16 @@ assert 1 + 2 as String == "3"
 // SD3 ...T is not T[]
 assert ("A", "A") is ...String
 Number := class { }
+// `boolean`: what `false` and `true` are (`false | true`); what the library adds to it (`boolean &+= { … }`), theirs.
+boolean := class { }
+false &+= {
+  of := boolean
+}
+true &+= {
+  of := boolean
+}
+false including boolean.interior
+true including boolean.interior
 // TY5 five is not a Number
 assert 5 is Number
 // Narrowings ask the constraint as well as what they narrow

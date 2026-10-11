@@ -3,8 +3,9 @@
 // A port of `js.kinds.ray` to test with until the library reads numbers and text itself; read after the language.
 
 // Numbers, as written: a digit (`Digit`'s own rules), digits, digits with a fraction (`Number`'s own rules: a typed hole
-// `{n: Number}` takes what they read; what it took is read in `Number`). Read anywhere through the rule after them.
-Digit := class { }
+// `{n: Number}` takes what they read; what it took is read in `Number`). Read anywhere through the rule after them. (Read again
+// after the library: its `Digit` kept, these added to it.)
+(Digit := class { }) unless here Digit
 Digit &+= {
   0 =>
     goto js
@@ -101,6 +102,10 @@ Number &+= {
 unescaped =>
   goto js
   typeof self !== 'string' ? undefined : self.replace(/\\(.)/gs, (_, c) => ({ '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n', f: '\f', r: '\r', e: '\x1b' })[c] ?? c)
+// (whether it has a space not inside a bracket: written as more than one thing)
+spaced =>
+  goto js
+  $([...String(self)].reduce((at, c) => at.done ? at : '([{'.includes(c) ? { ...at, depth: at.depth + 1 } : ')]}'.includes(c) ? { ...at, depth: at.depth - 1 } : c === ' ' && at.depth === 0 ? { ...at, done: true } : at, { depth: 0, done: false }).done ? 'true' : 'false')
 contains {other} =>
   goto js
   $(String(self).includes(String(other)) ? 'true' : 'false')

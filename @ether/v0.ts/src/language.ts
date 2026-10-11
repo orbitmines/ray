@@ -752,6 +752,13 @@ export class Program {
     const rule = this.rule(name, this.written(closure)); rule.holds = [closure]; this.kept(closure);
     rule.home = node; node.define(rule, true);
   }
+  // (whether a rule's right side writes a name itself, not as a hole (`{name}`): the hole's name read as what it took)
+  private written_names = new WeakMap<Program.Rule, Set<string>>();
+  writes(rule: Program.Rule, name: string): boolean {
+    let names = this.written_names.get(rule);
+    if (!names) { const { open, close } = this.grammar!; this.written_names.set(rule, names = new Set(rule.body.replace(new RegExp(`${Program.escaped(open)}[^${Program.escaped(open + close)}]*${Program.escaped(close)}`, 'g'), ' ').match(/[\p{L}_][\p{L}\p{N}_]*/gu) ?? [])); }
+    return names.has(name);
+  }
   // (a rule's holes, each a rule reading its name: what it took where it is read)
   private captured = new WeakMap<Program.Rule, Program.Rule[]>();
   private provenance = new WeakMap<Program.Reading, Program.Reading | null>();
@@ -864,6 +871,8 @@ export class Program {
         this.literal_styles.set(l, style); } }
       return undefined;
     }],
+    // (`goto here`: the node the code is read in (past nodes that hold nothing, made for a rewrite))
+    ['here', frame => { let node = frame.node; while (node.outer && !node.rules.length && !node.includes.length) node = node.outer; return node; }],
     // (`goto kinds`: what the host's own kinds of value answer (their operators) read here)
     ['kinds', frame => { if (this.kinds) this.run(this.kinds.operators, { node: frame.into ?? frame.node }); return undefined; }],
     ['js', (frame, next) => {
@@ -1052,7 +1061,10 @@ export class Program {
     const ending = first.trimEnd(), { definer } = this.grammar!;
     return (ending.endsWith(definer) && this.outermost_at(ending, true) === ending.length - definer.length) || this.outermost(first);
   }
+  // (how many more readings a test may take, when it is limited: past it, it ran too long)
+  budget?: number;
   read(s: string, frame: Program.Frame, except?: Program.Rule, alike?: string): unknown {
+    if (this.budget !== undefined && --this.budget < 0) throw new Error('ran too long');
     const { open, close, definer } = this.grammar!;
     // (a value written alone: itself; as a statement of its own in a node (not the outermost) with rules that have no literal (a
     // level), what those read it as, if any does)
@@ -1368,7 +1380,8 @@ export class Program {
       for (const rule of rules) if ((calls || !rule.called) && this.may_read(rule, s, defines, except)) candidates.push({ rule, rank: rank + rule.id });
     };
     // (in a rule's right side, its holes' names: above all)
-    if (writer && !defines) for (const rule of this.captures(writer.rule)) if (s.startsWith(rule.head)) candidates.push({ rule, rank: 3e10 + rule.id });
+    // (only a name its right side writes (outside a hole): one in text handed to it is the writer's of that text)
+    if (writer && !defines) for (const rule of this.captures(writer.rule)) if (s.startsWith(rule.head) && this.writes(writer.rule, rule.head)) candidates.push({ rule, rank: 3e10 + rule.id });
     // (and when the text it read was written in another rule's right side, handed on to it (a record's rest): that one's, below)
     const outer = writer && !defines ? this.written_in(writer) : undefined;
     if (outer) for (const rule of this.captures(outer.rule)) if (s.startsWith(rule.head)) candidates.push({ rule, rank: 2.9e10 + rule.id });
@@ -1743,6 +1756,8 @@ export class Library {
   program: Program;
   root: string; ether: string; core: string;
   diagnostics = new Map<string, Diagnostic[]>();
+  // (how many readings a test may take: `RAY_TEST_STEPS`; none, unlimited)
+  budget = process.env.RAY_TEST_STEPS ? Number(process.env.RAY_TEST_STEPS) : undefined;
   texts = new Map<string, string>();
   read = new Set<string>();
   timings: [string, number][] = [];
@@ -2004,9 +2019,10 @@ export class Library {
           const said: Diagnostic[] = [], before = p.reports.length, text = this.texts.get(t.file) ?? '';
           const painter = this.options.painting ? Object.assign(new Painter(text, p), { begin: t.begin, end: t.end }) : undefined;
           p.painter = painter;
+          p.budget = this.budget;
           try { p.run(t.code, t.frame, t.except); }
           catch (e) { said.push(this.said(t.file, text, t.begin, t.end, `Failed: ${(e as Error)?.message ?? e}`, 1)); }
-          finally { p.painter = undefined; }
+          finally { p.painter = undefined; p.budget = undefined; }
           if (painter) t.paints = painter.paints;
           for (const report of p.reports.slice(before)) said.push(this.reported(report, t.file, text, t.begin, t.end));
           p.reports.length = before;

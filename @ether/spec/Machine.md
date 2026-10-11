@@ -121,7 +121,7 @@ All POC files live in `@ether/poc/machine/`:
 
 ## Status
 
-MC0 to MC5 pass (`./run.sh MC1` … `MC5` in `@ether/poc/machine`; 25 functions per process).
+MC0 to MC5 pass (`./run.sh MC1` … `MC5` in `@ether/poc/machine`; 25 functions per process), also after merging main.
 
 - **MC0**: on the merged branch, S0 to N6 and DP0, DP2, DP3, DP4 pass.
 - **MC1**: 200 functions, from 3 to 32 bytes, pinned in `corpus/manifest.txt` (gcc 16.2.1).
@@ -152,6 +152,32 @@ Each function reads, prints and lifts in about half a second.
 - **`wrapped`** (`poc/machine/wrapping.ray`): `x wrapped T` is x brought into T's bounds modulo their size, the machine's
   arithmetic, where `x as T` answers None outside them. The Rust writer writes it as `wrapping_add`, `as i32`,
   `as u32 as i64`.
+
+## Merging main (7398a7e5)
+
+Main moved the language to `language.ts` and `js.kinds.ray`, the library's tests into the library as `assert` lines, and
+`$/deflate/Deflate.ray` to `$/Deflate.project.ray`; the POC now boots through main's `Library`. Five things main does
+broke the proofs, each fixed in a commit of its own:
+
+- **A static class was made when first read** (lazy statics). Made from inside another reading, a second such class in the
+  same class loops in `&+=` (on main alone too: `Outer.P2(1, 2)` overflows after `Outer.P1`). Classes are made where they
+  are written again; other static values stay lazy, so `static plane := Space(…)` in `Space` still works.
+- **`if … elsif … else` always took the `else`** (on main alone too). The plain `if … else` rule, defined after the chain,
+  read the chain's first body as part of its condition; the chain rules are now defined after it.
+- **`Roman.ray`'s conversion at the top level set every `from`.** `(x: S) as (=== T) => …` defines `from` where it is
+  written, so written outside `Roman` it replaced the default `from`, and every `x as T` answered Roman's normalizer. It is
+  now inside the class, which is where the rule's own comment says it goes.
+- **Arguments spread only when made by `,`.** Fields read from text are now given as `read.spreading`.
+- **Two branches defined `!x` and the elsif chain differently;** main's are kept.
+
+What is still off:
+
+- **Main's engine is several times slower:** reading a DEFLATE stream takes 5 to 9 times as long (`ray.txt.1.huffman`
+  17 s before, 157 s now), and the largest corpus streams run past 12 GB, so DP3 to DP5 do not all finish. Machine code is
+  about twice as slow (still under 2 s a function). Not looked into yet.
+- **The full library test run (`--test`) runs out of memory** after about 18 minutes, on main and on this branch alike;
+  `poc/library-tests.mts` runs it in-process, since the CLI's worker needs Node's `--experimental-transform-types`, which
+  Node 26 no longer has.
 
 ## Engine gaps
 

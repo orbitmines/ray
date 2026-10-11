@@ -1,7 +1,8 @@
 // Each corpus function's bytes read by `$/x86/X86.ray`. MC2 (`rewrite`): written back, byte for byte its bytes. MC3
 // (`assembly`): its text, line for line objdump's. MC4 (`lift`): the Ray function it lifts to, defined and run on the N3
 // inputs, answers what the C source computes. `lift` also writes each lifted function to `out/lifted/`. MC5 (`rust`): the
-// Rust the interop writer writes from it, with the C ABI, to `out/rust/`.
+// Rust the interop writer writes from it, with the C ABI, to `out/rust/`. MC6 (`assemble`): objdump's text read as Ray code,
+// each line in `X86.Assembly`, and written: byte for byte the bytes gcc made.
 const { booted } = await import('../deflate/boot.mts');
 const fs = await import('node:fs'), path = await import('node:path');
 const { program } = await booted();
@@ -33,6 +34,17 @@ for (const function_ of functions.slice(from - 1, to)) {
   const { name } = function_, bytes = fs.readFileSync(path.join(corpus, name + '.bin')), started = performance.now();
   let held = false, said = '';
   try {
+    if (mode === 'assemble') {
+      const lines = fs.readFileSync(path.join(corpus, name + '.s'), 'utf8').trim().split('\n');
+      lines.forEach((line, index) => run('assembled_' + index + ' := X86.Assembly reading {\n  ' + line + '\n}'));
+      run('function_assembled := X86.Function([' + lines.map((_, index) => 'assembled_' + index).join(', ') + '])');
+      const written = values_of(run('function_assembled.written'));
+      held = !!written && Buffer.from(written as number[]).equals(bytes);
+      said = written ? `${Buffer.from(written as number[]).toString('hex')}, gcc: ${bytes.toString('hex')}` : 'not written';
+      if (!held) failed++;
+      console.log(held ? 'ok  ' : 'FAIL', name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      continue;
+    }
     const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
     if (mode === 'rewrite') {
       const written = values_of(run(program.written(read) + '.written'));

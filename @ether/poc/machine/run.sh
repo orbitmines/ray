@@ -23,5 +23,6 @@ case "${1:-}" in
     each rust "Ray wrote Rust from every function's machine code"
     python3 "$here/check.py" "${INPUTS:-30}"
     ;;
-  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5" >&2; exit 2 ;;
+  MC6) each assemble "MC6 every function's objdump text, read as Ray, is written as gcc's bytes" ;;
+  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6" >&2; exit 2 ;;
 esac

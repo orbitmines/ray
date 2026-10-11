@@ -195,3 +195,135 @@ X86.Function := class (instructions: X86.Instruction[]{(!.empty) && .last.ends})
   written => .binary.pieces(8).map((eight) => eight.reversed.unsigned)
   assembly => instructions.map((instruction) => instruction.operation.assembly)
 }
+
+// The same instructions as their text: a line objdump writes is Ray code here (`X86.Assembly reading { lea eax,[rdi+rsi*1] }`), the instruction it is, encoded as gcc encodes it
+X86.Named := class (number, width)
+X86.Address := class (base, index, scale, displacement)
+X86.Register := {
+  rax => X86.Named(0, 64)
+  rcx => X86.Named(1, 64)
+  rdx => X86.Named(2, 64)
+  rbx => X86.Named(3, 64)
+  rsp => X86.Named(4, 64)
+  rbp => X86.Named(5, 64)
+  rsi => X86.Named(6, 64)
+  rdi => X86.Named(7, 64)
+  r8 => X86.Named(8, 64)
+  r9 => X86.Named(9, 64)
+  r10 => X86.Named(10, 64)
+  r11 => X86.Named(11, 64)
+  r12 => X86.Named(12, 64)
+  r13 => X86.Named(13, 64)
+  r14 => X86.Named(14, 64)
+  r15 => X86.Named(15, 64)
+  eax => X86.Named(0, 32)
+  ecx => X86.Named(1, 32)
+  edx => X86.Named(2, 32)
+  ebx => X86.Named(3, 32)
+  esp => X86.Named(4, 32)
+  ebp => X86.Named(5, 32)
+  esi => X86.Named(6, 32)
+  edi => X86.Named(7, 32)
+  r8d => X86.Named(8, 32)
+  r9d => X86.Named(9, 32)
+  r10d => X86.Named(10, 32)
+  r11d => X86.Named(11, 32)
+  r12d => X86.Named(12, 32)
+  r13d => X86.Named(13, 32)
+  r14d => X86.Named(14, 32)
+  r15d => X86.Named(15, 32)
+}
+// (memory, `[base+index*scale±displacement]`: an address of register numbers)
+X86.Memory := {
+  {base: X86.Register} => X86.Address(base.number, None, 1, None)
+  {base: X86.Register}+{offset} => X86.Address(base.number, None, 1, "{offset}".signed_hexadecimal(32))
+  {base: X86.Register}-{offset} => X86.Address(base.number, None, 1, 0 - "{offset}".signed_hexadecimal(32))
+  {index: X86.Register}*{scale} => X86.Address(None, index.number, X86.scale_of("{scale}"), None)
+  {index: X86.Register}*{scale}+{offset} => X86.Address(None, index.number, X86.scale_of("{scale}"), "{offset}".signed_hexadecimal(32))
+  {index: X86.Register}*{scale}-{offset} => X86.Address(None, index.number, X86.scale_of("{scale}"), 0 - "{offset}".signed_hexadecimal(32))
+  {base: X86.Register}+{index: X86.Register}*{scale} => X86.Address(base.number, index.number, X86.scale_of("{scale}"), None)
+  {base: X86.Register}+{index: X86.Register}*{scale}+{offset} => X86.Address(base.number, index.number, X86.scale_of("{scale}"), "{offset}".signed_hexadecimal(32))
+  {base: X86.Register}+{index: X86.Register}*{scale}-{offset} => X86.Address(base.number, index.number, X86.scale_of("{scale}"), 0 - "{offset}".signed_hexadecimal(32))
+}
+X86.Assembly := {
+  ret => X86.Instruction([], X86.Ret([]))
+  imul {a: X86.Register},{b: X86.Register},{value} =>
+    x := a
+    y := b
+    n := X86.small("{value}", a.width)
+    X86.encoded(x, y, ((rex) => X86.ImulImmediate(rex, X86.direct(y, x), n)))
+  imul {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(x, y, ((rex) => X86.Imul(rex, X86.direct(y, x))))
+  lea {a: X86.Register},[{m: X86.Memory}] => X86.addressing(a, m, ((rex, operand) => X86.Lea(rex, operand)))
+  add {a: X86.Register},{value} => X86.immediate_form(a, "{value}", 0)
+  add {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(y, x, ((rex) => X86.Add(rex, X86.direct(x, y))))
+  sub {a: X86.Register},{value} => X86.immediate_form(a, "{value}", 5)
+  sub {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(y, x, ((rex) => X86.Sub(rex, X86.direct(x, y))))
+  mov {a: X86.Register},{value} => X86.moved(a, "{value}")
+  mov {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(y, x, ((rex) => X86.Mov(rex, X86.direct(x, y))))
+  xor {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(y, x, ((rex) => X86.Xor(rex, X86.direct(x, y))))
+  neg {a: X86.Register} =>
+    x := a
+    X86.encoded(X86.Named(3, x.width), x, ((rex) => X86.Neg(rex, X86.Operand(x.number % 8, 3, 3))))
+  not {a: X86.Register} =>
+    x := a
+    X86.encoded(X86.Named(2, x.width), x, ((rex) => X86.Not(rex, X86.Operand(x.number % 8, 2, 3))))
+  shl {a: X86.Register},{value} =>
+    x := a
+    n := "{value}".signed_hexadecimal(16)
+    X86.encoded(X86.Named(4, x.width), x, ((rex) => X86.Shl(rex, X86.Operand(x.number % 8, 4, 3), n)))
+}
+// (a REX prefix when the width is 64 bits or a register is past the eighth (Vol. 2, 2.2.1))
+X86.prefix (width, reg, index, base) =>
+  extended := ((reg >= 8) || (index >= 8)) || (base >= 8)
+  ((width == 64) || extended) ? [X86.Rex((base >= 8) ? 1 : 0, (index >= 8) ? 1 : 0, (reg >= 8) ? 1 : 0, (width == 64) ? 1 : 0)] : []
+X86.direct (rm, reg) => X86.Operand(rm.number % 8, reg.number % 8, 3)
+X86.encoded (reg, rm, form) =>
+  rex := X86.prefix(rm.width, reg.number, 0, rm.number)
+  X86.Instruction(rex, form(rex))
+X86.small (text, width) => X86.unsigned(text.signed_hexadecimal(width), 8)
+X86.unsigned (value, width) => (value < 0) ? (value + ((width == 8) ? 256 : 4294967296)) : value
+// (add or sub of an immediate: eight bits sign-extended when it fits, else to the accumulator in 32 (05))
+X86.immediate_form (a, text, extension) =>
+  value := text.signed_hexadecimal(a.width)
+  rex := X86.prefix(a.width, 0, 0, a.number)
+  fits := (value >= (0 - 128)) && (value <= 127)
+  (return X86.Instruction(rex, X86.AddSmall(rex, X86.Operand(a.number % 8, 0, 3), X86.unsigned(value, 8)))) if fits && (extension == 0)
+  (return X86.Instruction(rex, X86.SubSmall(rex, X86.Operand(a.number % 8, 5, 3), X86.unsigned(value, 8)))) if fits && (extension == 5)
+  (return X86.Instruction(rex, X86.AddAccumulator(rex, X86.unsigned(value, 32)))) if (extension == 0) && (a.number == 0)
+  None
+// (a move of an immediate: into 32 bits, B8 plus the register; into 64, C7 sign-extending 32)
+X86.moved (a, text) =>
+  value := text.signed_hexadecimal(a.width)
+  rex := X86.prefix(a.width, 0, 0, a.number)
+  (return X86.Instruction(rex, X86.MovImmediate(rex, a.number % 8, X86.unsigned(value, 32)))) if a.width == 32
+  X86.Instruction(rex, X86.MovSigned(rex, X86.Operand(a.number % 8, 0, 3), X86.unsigned(value, 32)))
+// (memory as ModRM, SIB and displacement: a SIB when there is an index, no base, or the base is rsp or r12; the shortest displacement)
+X86.addressing (a, address, form) =>
+  base := address.base
+  index := address.index
+  offset := address.displacement
+  rex := X86.prefix(a.width, a.number, (index === None) ? 0 : index, (base === None) ? 0 : base)
+  (return X86.Instruction(rex, form(rex, X86.Operand(4, a.number % 8, 0, 5, (index === None) ? 4 : (index % 8), X86.scale_bits(address.scale), None, X86.unsigned((offset === None) ? 0 : offset, 32))))) if base === None
+  short := (offset === None) ? (((base % 8) == 5) ? 0 : None) : offset
+  mode := (short === None) ? 0 : (((short >= (0 - 128)) && (short <= 127)) ? 1 : 2)
+  small := (mode == 1) ? X86.unsigned(short, 8) : None
+  large := (mode == 2) ? X86.unsigned(short, 32) : None
+  (return X86.Instruction(rex, form(rex, X86.Operand(base % 8, a.number % 8, mode, None, None, None, small, large)))) if (index === None) && ((base % 8) != 4)
+  X86.Instruction(rex, form(rex, X86.Operand(4, a.number % 8, mode, base % 8, (index === None) ? 4 : (index % 8), X86.scale_bits(address.scale), small, large)))
+X86.scale_of (text) => (text == "1") ? 1 : ((text == "2") ? 2 : ((text == "4") ? 4 : 8))
+X86.scale_bits (scale) => (scale == 1) ? 0 : ((scale == 2) ? 1 : ((scale == 4) ? 2 : 3))

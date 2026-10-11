@@ -21,51 +21,37 @@ TimeZone := class (name: String) {
     at (zone: String, time: Time) => data(zone).at(time)
     assert {
       summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
-      // TZ14 UTC is off zero on this host
-      assert TimeZone("UTC").at(summer).offset == 0 seconds
+      assert TimeZone("UTC").at(summer).offset == 0 seconds  // TZ14 UTC is off zero on this host
       Counting := class: TimeZone.Zoneinfo {
         asked: String[] = []
         data (zone: String) => (asked.push zone) -- $.tzif.read((directory / zone).bytes)
       }
       counting := Counting(directory: @tzif/zoneinfo)
       counting.at("Europe/Amsterdam", summer)
-      // TZ16 reading one zone read others than the one asked for
-      assert counting.asked == ["Europe/Amsterdam"]
+      assert counting.asked == ["Europe/Amsterdam"]  // TZ16 reading one zone read others than the one asked for
     }
     assert {
       winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
       // Where the zones are read, per operating system.
       with @me/device/os = OS.Linux {
-        // TZ1 linux does not read the host's zoneinfo
-        assert TimeZone.source is TimeZone.Zoneinfo
-        // TZ3 linux downloads the data instead of reading the host's
-        assert !(TimeZone.source.directory == @tzif/zoneinfo)
-        // TZ18 a host refers to @tzif for its zone data
-        assert !(TimeZone.source.directory ~= ⊢"tzif")
-        // TZ15 UTC is off zero on linux
-        assert TimeZone.source.at("UTC", winter).offset == 0 seconds
+        assert TimeZone.source is TimeZone.Zoneinfo  // TZ1 linux does not read the host's zoneinfo
+        assert !(TimeZone.source.directory == @tzif/zoneinfo)  // TZ3 linux downloads the data instead of reading the host's
+        assert !(TimeZone.source.directory ~= ⊢"tzif")  // TZ18 a host refers to @tzif for its zone data
+        assert TimeZone.source.at("UTC", winter).offset == 0 seconds  // TZ15 UTC is off zero on linux
       }
       with @me/device/os = OS.Ether {
-        // ETH7 the language as the operating system does not read TZif
-        assert TimeZone.source is TimeZone.Zoneinfo
-        // TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo
-        assert TimeZone.source.directory == @tzif/zoneinfo
+        assert TimeZone.source is TimeZone.Zoneinfo  // ETH7 the language as the operating system does not read TZif
+        assert TimeZone.source.directory == @tzif/zoneinfo  // TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo
         amsterdam := TimeZone("Europe/Amsterdam")
-        // TZ9 Amsterdam in summer is not at +02:00 on ether
-        assert amsterdam.at(summer).offset == 2 hours
-        // TZ10 Amsterdam in summer is not on CEST
-        assert amsterdam.at(summer).abbreviation == "CEST" && amsterdam.at(summer).daylight
-        // TZ11 Amsterdam in winter is not at +01:00 on ether
-        assert amsterdam.at(winter).offset == 1 hour
-        // TZ12 Amsterdam in winter is not on CET
-        assert amsterdam.at(winter).abbreviation == "CET" && !amsterdam.at(winter).daylight
-        // TZ13 UTC is off zero on ether
-        assert TimeZone("UTC").at(summer).offset == 0 seconds
+        assert amsterdam.at(summer).offset == 2 hours  // TZ9 Amsterdam in summer is not at +02:00 on ether
+        assert amsterdam.at(summer).abbreviation == "CEST" && amsterdam.at(summer).daylight  // TZ10 Amsterdam in summer is not on CEST
+        assert amsterdam.at(winter).offset == 1 hour  // TZ11 Amsterdam in winter is not at +01:00 on ether
+        assert amsterdam.at(winter).abbreviation == "CET" && !amsterdam.at(winter).daylight  // TZ12 Amsterdam in winter is not on CET
+        assert TimeZone("UTC").at(summer).offset == 0 seconds  // TZ13 UTC is off zero on ether
       }
     }
     version => ((directory / "version").held as String).trimmed
-    // TZ8 the downloaded data is not tzdata 2026c
-    assert TimeZone.Zoneinfo(directory: @tzif/zoneinfo).version == "2026c"
+    assert TimeZone.Zoneinfo(directory: @tzif/zoneinfo).version == "2026c"  // TZ8 the downloaded data is not tzdata 2026c
     zones => ((directory / "zones").held as String).lines{.nonempty}
   }
 
@@ -77,20 +63,17 @@ TimeZone := class (name: String) {
     else { Zoneinfo(directory: @tzif/zoneinfo) }
   assert {
     with @me/device/os = OS.Macos {
-      // TZ2 macos does not read the host's zoneinfo
-      assert TimeZone.source is TimeZone.Zoneinfo
+      assert TimeZone.source is TimeZone.Zoneinfo  // TZ2 macos does not read the host's zoneinfo
     }
   }
   assert {
     with @me/device/os = OS.Windows {
-      // TZ4 windows does not ask the OS's ICU
-      assert TimeZone.source is TimeZone.ICU
+      assert TimeZone.source is TimeZone.ICU  // TZ4 windows does not ask the OS's ICU
     }
   }
   assert {
     with @me/device/os = OS.Browser {
-      // TZ5 the browser does not ask Intl
-      assert TimeZone.source is TimeZone.Intl
+      assert TimeZone.source is TimeZone.Intl  // TZ5 the browser does not ask Intl
     }
   }
 
@@ -138,5 +121,4 @@ ISO_8601 &+= {
   zone => TimeZone(zone_name) if zone_name
 }
 // RFC 9557: the zone named in brackets
-// WD10 the zone named in brackets is not read
-assert ("2026-10-06T12:00:00+02:00[Europe/Paris]" as ISO_8601).zone.name == "Europe/Paris"
+assert ("2026-10-06T12:00:00+02:00[Europe/Paris]" as ISO_8601).zone.name == "Europe/Paris"  // WD10 the zone named in brackets is not read

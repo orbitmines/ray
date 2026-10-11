@@ -4,12 +4,9 @@ Base64 := class: Language (sextets: (Binary₆ as Alphabet)[], "="[]{length == (
   static Alphabet := ("A".."Z", "a".."z", "0".."9", "+", "/") as String
 
   bytes: Byte[] => sextets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))
-  // UI71 Man is not TWFu in Base64
-  assert "Man".bytes as Base64 as String == "TWFu"
-  // UI72 Ma is not padded to TWE=
-  assert "Ma".bytes as Base64 as String == "TWE="
-  // BASE1 Base64 text does not read back as its bytes, or $.base64 is not Base64
-  assert Base64.read("TWFu") == "Man".bytes && $.base64 === Base64
+  assert "Man".bytes as Base64 as String == "TWFu"  // UI71 Man is not TWFu in Base64
+  assert "Ma".bytes as Base64 as String == "TWE="  // UI72 Ma is not padded to TWE=
+  assert Base64.read("TWFu") == "Man".bytes && $.base64 === Base64  // BASE1 Base64 text does not read back as its bytes, or $.base64 is not Base64
   static (bytes: Byte[]) as (=== Base64) => Base64(sextets: bytes.map(.integer).flatten.chunk(6).map(Binary(integer: (., ["0"] * (6 - .count)))))
 
   static level := {

@@ -35,41 +35,30 @@ Roman := class: Digit+ (
 
   as (=== Decimal) => thousands.length * 1000 + (hundreds as Decimal) * 100 + (tens as Decimal) * 10 + (Value[ones] ?? ones as Decimal)
   canonical => (this as Decimal) as Roman
-  // RO64 IV moved when normalized
-  assert ("IV" as Roman).canonical == "IV"
-  // RO67 an additive numeral does not normalize to the standard one
-  assert ("IIII" as Roman).canonical == "IV"
+  assert ("IV" as Roman).canonical == "IV"  // RO64 IV moved when normalized
+  assert ("IIII" as Roman).canonical == "IV"  // RO67 an additive numeral does not normalize to the standard one
 
   Standard := Roman{1 <= as Decimal <= 3999}
-  // RO37 fourteen is not a standard numeral
-  assert "XIV" is Roman.Standard
-  // RO39 a numeral with nothing written is standard
-  assert !("" is Roman.Standard)
-  // RM5 XIV is not standard
-  assert "XIV".instance_of(Roman.Standard)
+  assert "XIV" is Roman.Standard  // RO37 fourteen is not a standard numeral
+  assert !("" is Roman.Standard)  // RO39 a numeral with nothing written is standard
+  assert "XIV".instance_of(Roman.Standard)  // RM5 XIV is not standard
 
   static Subtractive := Standard{(hundreds, tens, ones).every(.subtractive)}
   static Additive := Standard{(hundreds, tens, ones).every(.additive)}
   static normalizer := Subtractive
-  // RO65 the normalizer is not subtractive to begin with
-  assert Roman.normalizer == Roman.Subtractive
+  assert Roman.normalizer == Roman.Subtractive  // RO65 the normalizer is not subtractive to begin with
   assert {
     (
       with Roman.normalizer = Roman.Additive
-      // RO68 four is not written IIII once the normalizer is additive
-      assert 4 as Roman == "IIII"
-      // RO11 nine is not written VIIII the additive way
-      assert 9 as Roman == "VIIII"
-      // RO24 three is written the same either way
-      assert 3 as Roman == "III"
-      // RO69 the canonical form does not follow the normalizer
-      assert ("IV" as Roman).canonical == "IIII"
+      assert 4 as Roman == "IIII"  // RO68 four is not written IIII once the normalizer is additive
+      assert 9 as Roman == "VIIII"  // RO11 nine is not written VIIII the additive way
+      assert 3 as Roman == "III"  // RO24 three is written the same either way
+      assert ("IV" as Roman).canonical == "IIII"  // RO69 the canonical form does not follow the normalizer
     )
   }
   assert {
     with (Roman.normalizer = Additive) {
-      // RM4 additive 4 is not IIII
-      assert 4 as Roman == "IIII"
+      assert 4 as Roman == "IIII"  // RM4 additive 4 is not IIII
     }
   }
 
@@ -85,8 +74,7 @@ Roman := class: Digit+ (
       as (=== Decimal) => (highest as Decimal ?? 0) * 1000000 + (super as Decimal)
     }
   }
-  // RO60 an overlined V is not five thousand
-  assert "V̅" as Roman.Vinculum as Decimal == 5000
+  assert "V̅" as Roman.Vinculum as Decimal == 5000  // RO60 an overlined V is not five thousand
 
   // Apostrophus — composed CIↃ sequences (https://en.wikipedia.org/wiki/Roman_numerals#Apostrophus)
   static Apostrophus := class: Roman (pieces: Piece[], low: Roman) => {
@@ -97,27 +85,19 @@ Roman := class: Digit+ (
       "ↇ": 50000,   // U+2187 — IↃↃↃ
       "ↈ": 100000   // U+2188 — CCCIↃↃↃ
     }
-    // RO29 I is not one
-    assert Roman.Value["I"] == 1
-    // RO30 V is not five
-    assert Roman.Value["V"] == 5
-    // RO31 X is not ten
-    assert Roman.Value["X"] == 10
-    // RO32 L is not fifty
-    assert Roman.Value["L"] == 50
-    // RO33 C is not a hundred
-    assert Roman.Value["C"] == 100
-    // RO34 D is not five hundred
-    assert Roman.Value["D"] == 500
-    // RO35 M is not a thousand
-    assert Roman.Value["M"] == 1000
+    assert Roman.Value["I"] == 1  // RO29 I is not one
+    assert Roman.Value["V"] == 5  // RO30 V is not five
+    assert Roman.Value["X"] == 10  // RO31 X is not ten
+    assert Roman.Value["L"] == 50  // RO32 L is not fifty
+    assert Roman.Value["C"] == 100  // RO33 C is not a hundred
+    assert Roman.Value["D"] == 500  // RO34 D is not five hundred
+    assert Roman.Value["M"] == 1000  // RO35 M is not a thousand
     static Piece := class ((closed: "C"[], "I", reversed: ("Ↄ" | "ↄ")[]{closed.empty ? length >= 2 : length == closed.length}) | precomposed: "ↀ" | "ↁ" | "ↂ" | "ↇ" | "ↈ") => {
       as (=== Decimal) => precomposed ? Value[precomposed] : closed.empty ? 5 * 10 ^ (reversed.length + 1) : 10 ^ (closed.length + 2)
     }
     as (=== Decimal) => pieces.map(as Decimal).sum + (low as Decimal)
   }
-  // RO71 CCIↃↃ is not ten thousand
-  assert "CCIↃↃ" as Roman.Apostrophus as Decimal == 10000
+  assert "CCIↃↃ" as Roman.Apostrophus as Decimal == 10000  // RO71 CCIↃↃ is not ten thousand
 
   // Fraction — Roman base-12 uncia system (https://en.wikipedia.org/wiki/Roman_numerals#Fractions)
   static Fraction := class (semis: "S"?, unciae: ("·"[]{length <= 5} | Dot)) | sub_uncia: on Value => {
@@ -142,40 +122,28 @@ Roman := class: Digit+ (
     // Named fractions (twelfths of an as)
     uncia    | 𐆑 = "·"           // 1/12
     sextans       := "··" | "∶"    // 2/12 = 1/6
-    // RO40 the sextans is not two twelfths
-    assert Roman.Fraction.sextans as Decimal == 1.0 * 2 / 12
+    assert Roman.Fraction.sextans as Decimal == 1.0 * 2 / 12  // RO40 the sextans is not two twelfths
     quadrans      := "···" | "∴"   // 3/12 = 1/4
-    // RO41 the quadrans is not three twelfths
-    assert Roman.Fraction.quadrans as Decimal == 1.0 * 3 / 12
+    assert Roman.Fraction.quadrans as Decimal == 1.0 * 3 / 12  // RO41 the quadrans is not three twelfths
     triens        := "····" | "∷"  // 4/12 = 1/3
-    // RO42 the triens is not four twelfths
-    assert Roman.Fraction.triens as Decimal == 1.0 * 4 / 12
+    assert Roman.Fraction.triens as Decimal == 1.0 * 4 / 12  // RO42 the triens is not four twelfths
     quincunx      := "·····" | "⁙" // 5/12
-    // RO43 the quincunx is not five twelfths
-    assert Roman.Fraction.quincunx as Decimal == 1.0 * 5 / 12
+    assert Roman.Fraction.quincunx as Decimal == 1.0 * 5 / 12  // RO43 the quincunx is not five twelfths
     semis         := "S"           // 6/12 = 1/2
-    // RO27 the semis is not six twelfths
-    assert Roman.Fraction.semis as Decimal == 1.0 * 6 / 12
+    assert Roman.Fraction.semis as Decimal == 1.0 * 6 / 12  // RO27 the semis is not six twelfths
     septunx       := "S", uncia    // 7/12
-    // RO44 the septunx is not seven twelfths
-    assert Roman.Fraction.septunx as Decimal == 1.0 * 7 / 12
+    assert Roman.Fraction.septunx as Decimal == 1.0 * 7 / 12  // RO44 the septunx is not seven twelfths
     bes           := "S", sextans  // 8/12 = 2/3
-    // RO45 the bes is not eight twelfths
-    assert Roman.Fraction.bes as Decimal == 1.0 * 8 / 12
+    assert Roman.Fraction.bes as Decimal == 1.0 * 8 / 12  // RO45 the bes is not eight twelfths
     dodrans       := "S", quadrans // 9/12 = 3/4
-    // RO46 the dodrans is not nine twelfths
-    assert Roman.Fraction.dodrans as Decimal == 1.0 * 9 / 12
+    assert Roman.Fraction.dodrans as Decimal == 1.0 * 9 / 12  // RO46 the dodrans is not nine twelfths
     dextans       := "S", triens   // 10/12 = 5/6
-    // RO47 the dextans is not ten twelfths
-    assert Roman.Fraction.dextans as Decimal == 1.0 * 10 / 12
+    assert Roman.Fraction.dextans as Decimal == 1.0 * 10 / 12  // RO47 the dextans is not ten twelfths
     deunx         := "S", quincunx // 11/12
-    // RO48 the deunx is not eleven twelfths
-    assert Roman.Fraction.deunx as Decimal == 1.0 * 11 / 12
+    assert Roman.Fraction.deunx as Decimal == 1.0 * 11 / 12  // RO48 the deunx is not eleven twelfths
   }
-  // RO28 the uncia is not one twelfth
-  assert Roman.Fraction.uncia as Decimal == 1.0 * 1 / 12
-  // RM6 S· is not seven twelfths
-  assert "S·" as Roman.Fraction as Decimal == 7/12
+  assert Roman.Fraction.uncia as Decimal == 1.0 * 1 / 12  // RO28 the uncia is not one twelfth
+  assert "S·" as Roman.Fraction as Decimal == 7/12  // RM6 S· is not seven twelfths
   (number: Decimal) as (=== Roman) => Roman.normalizer(
     thousands: ["M"] * (number / 1000),
     hundreds: number / 100 % 10,
@@ -183,59 +151,34 @@ Roman := class: Digit+ (
     ones: number % 10
   )
 }
-// RO1 four is not written IV
-assert 4 as Roman == "IV"
-// RO2 nine is not written IX
-assert 9 as Roman == "IX"
-// RO3 fourteen is not written XIV
-assert 14 as Roman == "XIV"
-// RO4 three is not written III
-assert 3 as Roman == "III"
-// RO5 twenty is not written XX
-assert 20 as Roman == "XX"
-// RO14 one is not written I
-assert 1 as Roman == "I"
-// RO15 five is not written V
-assert 5 as Roman == "V"
-// RO16 ten is not written X
-assert 10 as Roman == "X"
-// RO6 IV is not four
-assert "IV" as Roman as Decimal == 4
-// RO7 IX is not nine
-assert "IX" as Roman as Decimal == 9
-// RO8 XIV is not fourteen
-assert "XIV" as Roman as Decimal == 14
-// RO9 iv in lower case is not four
-assert "iv" as Roman as Decimal == 4
-// RO18 VII is not seven
-assert "VII" as Roman as Decimal == 7
-// RO12 seven does not come back from what it is written as
-assert 7 as Roman as Decimal == 7
-// RO19 the precomposed twelve is not twelve
-assert "Ⅻ" as Roman as Decimal == 12
-// RO22 MCMXCIV is not 1994
-assert "MCMXCIV" as Roman as Decimal == 1994
-// RO20 XIV is not written with roman digits
-assert "XIV" is Roman
-// RO21 XQV is written with roman digits
-assert !("XQV" is Roman)
-// RO61 IIII is not read as four
-assert "IIII" as Roman as Decimal == 4
-// RO63 IIII does not normalize to IV
-assert "IIII" as Roman as Decimal as Roman == "IV"
+assert 4 as Roman == "IV"  // RO1 four is not written IV
+assert 9 as Roman == "IX"  // RO2 nine is not written IX
+assert 14 as Roman == "XIV"  // RO3 fourteen is not written XIV
+assert 3 as Roman == "III"  // RO4 three is not written III
+assert 20 as Roman == "XX"  // RO5 twenty is not written XX
+assert 1 as Roman == "I"  // RO14 one is not written I
+assert 5 as Roman == "V"  // RO15 five is not written V
+assert 10 as Roman == "X"  // RO16 ten is not written X
+assert "IV" as Roman as Decimal == 4  // RO6 IV is not four
+assert "IX" as Roman as Decimal == 9  // RO7 IX is not nine
+assert "XIV" as Roman as Decimal == 14  // RO8 XIV is not fourteen
+assert "iv" as Roman as Decimal == 4  // RO9 iv in lower case is not four
+assert "VII" as Roman as Decimal == 7  // RO18 VII is not seven
+assert 7 as Roman as Decimal == 7  // RO12 seven does not come back from what it is written as
+assert "Ⅻ" as Roman as Decimal == 12  // RO19 the precomposed twelve is not twelve
+assert "MCMXCIV" as Roman as Decimal == 1994  // RO22 MCMXCIV is not 1994
+assert "XIV" is Roman  // RO20 XIV is not written with roman digits
+assert !("XQV" is Roman)  // RO21 XQV is written with roman digits
+assert "IIII" as Roman as Decimal == 4  // RO61 IIII is not read as four
+assert "IIII" as Roman as Decimal as Roman == "IV"  // RO63 IIII does not normalize to IV
 assert {
   1..20 for (n) => {
-    // RO66 a number does not come back from its roman form
-    assert n as Roman as Decimal == n
+    assert n as Roman as Decimal == n  // RO66 a number does not come back from its roman form
   }
 }
-// RO70 four is not written IV outside the additive normalizer
-assert 4 as Roman == "IV"
-// RM1 XIV is not 14
-assert "XIV" as Roman as Decimal == 14
-// RM2 xiv is not 14
-assert "xiv" as Roman as Decimal == 14
-// RM3 19 is not XIX
-assert 19 as Roman == "XIX"
+assert 4 as Roman == "IV"  // RO70 four is not written IV outside the additive normalizer
+assert "XIV" as Roman as Decimal == 14  // RM1 XIV is not 14
+assert "xiv" as Roman as Decimal == 14  // RM2 xiv is not 14
+assert 19 as Roman == "XIX"  // RM3 19 is not XIX
 
 {roman: Roman}: Roman => roman

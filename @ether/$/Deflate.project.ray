@@ -44,10 +44,8 @@ Deflate := class: Language {
       }
       code == 65536
     bits (symbol) => codes.find((code) => code.symbol == symbol).bits
-    // DF1 the code lengths of section 3.2.2's example do not give its codes
-    assert Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111]
-    // DF2 the fixed literal codes are not those of section 3.2.6
-    assert Deflate.fixed_literals.bits(0) == 0b00110000 && Deflate.fixed_literals.bits(144) == 0b110010000 && Deflate.fixed_literals.bits(256) == 0b0000000
+    assert Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111]  // DF1 the code lengths of section 3.2.2's example do not give its codes
+    assert Deflate.fixed_literals.bits(0) == 0b00110000 && Deflate.fixed_literals.bits(144) == 0b110010000 && Deflate.fixed_literals.bits(256) == 0b0000000  // DF2 the fixed literal codes are not those of section 3.2.6
 
     // Lengths fitted to frequencies: the two least frequent join until one is left, each join one bit deeper (Huffman 1952, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
     static fitted (frequencies) =>
@@ -264,8 +262,7 @@ Deflate := class: Language {
         left = left - 1
       }
       out
-    // DF3 a stored block does not read its bytes
-    assert Deflate.read([0x01, 0x05, 0x00, 0xfa, 0xff, "hello".bytes].flatten) as String == "hello"
+    assert Deflate.read([0x01, 0x05, 0x00, 0xfa, 0xff, "hello".bytes].flatten) as String == "hello"  // DF3 a stored block does not read its bytes
     assert (("ray " * 64).bytes).(
       Deflate.read(Deflate.write(.)) == .  // DF7 written bytes do not read back
       & (Deflate.write(.) as Byte[]).count < .count  // DF8 repeated bytes are not written shorter
@@ -339,12 +336,8 @@ Deflate := class: Language {
     dynamic_stream := Deflate.Stream([Deflate.Block(true, 2, None, None, fitted)])
     (dynamic_stream.binary.count < shortest.binary.count) ? dynamic_stream.written : shortest.written
 }
-// DF4 an empty fixed block is not empty
-assert Deflate.read([0x03, 0x00]).empty
-// DF5 a literal with the fixed codes is not read
-assert Deflate.read([0x4b, 0x04, 0x00]) as String == "a"
-// DF6 a back-reference overlapping what it writes is not copied
-assert Deflate.read([0x4b, 0x84, 0x03, 0x00]) as String == "aaaaaaaaaa"
+assert Deflate.read([0x03, 0x00]).empty  // DF4 an empty fixed block is not empty
+assert Deflate.read([0x4b, 0x04, 0x00]) as String == "a"  // DF5 a literal with the fixed codes is not read
+assert Deflate.read([0x4b, 0x84, 0x03, 0x00]) as String == "aaaaaaaaaa"  // DF6 a back-reference overlapping what it writes is not copied
 
-// DF9 a zlib stream does not inflate and check its Adler-32
-assert $.zlib.read([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62]) as String == "a"
+assert $.zlib.read([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62]) as String == "a"  // DF9 a zlib stream does not inflate and check its Adler-32

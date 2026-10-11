@@ -13,8 +13,7 @@ Ed25519 := class: Encoding.Signing {
   // A point of -x^2 + y^2 = 1 + d x^2 y^2, added by the complete twisted Edwards formula (RFC 8032 §5.1.4)
   static Point := class x: Number, y: Number {
     static neutral := Point(x: 0, y: 1)
-    // EDS7 the base point times its order is not the neutral point
-    assert Ed25519.B * Ed25519.L == Ed25519.Point.neutral
+    assert Ed25519.B * Ed25519.L == Ed25519.Point.neutral  // EDS7 the base point times its order is not the neutral point
     + (other: Point) => d * x * other.x * y * other.y % X25519.p -- (t => Point(
       x: (x * other.y + other.x * y) * X25519.inverse(1 + t) % X25519.p,
       y: (y * other.y + x * other.x) * X25519.inverse(X25519.p + 1 - t) % X25519.p))
@@ -37,8 +36,7 @@ Ed25519 := class: Encoding.Signing {
   // The base point: y = 4/5 and x even (RFC 8032 §5.1)
   static B := Encoding.little(4 * X25519.inverse(5) % X25519.p, 32) as Point
   // The base point decodes to y = 4/5 and encodes back; L B is the neutral point (RFC 8032 §5.1)
-  // EDS6 the base point does not read back as itself
-  assert (Ed25519.B as Byte[]) as Ed25519.Point == Ed25519.B
+  assert (Ed25519.B as Byte[]) as Ed25519.Point == Ed25519.B  // EDS6 the base point does not read back as itself
 
   // The secret's SHA-512, its first half pruned as X25519's scalar (RFC 8032 §5.1.5, RFC 7748 §5)
   static expanded (secret: Byte₃₂) => SHA512.write(secret).bytes -- (h => (scalar: X25519.clamped(h[..<32]), prefix: h[32..]))
@@ -51,24 +49,16 @@ Ed25519 := class: Encoding.Signing {
     ed_secret := "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60" as Hexadecimal₆₄ as Byte₃₂
     ed_public := "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a" as Hexadecimal₆₄ as Byte₃₂
     ed_signature := "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b" as Hexadecimal₁₂₈ as Byte₆₄
-    // EDS1 the public key of RFC 8032's test 1 is not d75a9801…
-    assert Ed25519.public(ed_secret) == ed_public
-    // EDS2 the empty message does not sign as e5564300… in RFC 8032's test 1
-    assert Ed25519.sign(ed_secret, []) == ed_signature
-    // EDS3 the signature of RFC 8032's test 1 does not verify
-    assert Ed25519.verify(ed_public, [], ed_signature)
-    // EDS4 a signature verifies for another message
-    assert !(Ed25519.verify(ed_public, [0x72], ed_signature))
-    // EDS5 a changed signature verifies
-    assert !(Ed25519.verify(ed_public, [], [ed_signature[..<63], ed_signature[63] ~x|| 0x01].flatten))
+    assert Ed25519.public(ed_secret) == ed_public  // EDS1 the public key of RFC 8032's test 1 is not d75a9801…
+    assert Ed25519.sign(ed_secret, []) == ed_signature  // EDS2 the empty message does not sign as e5564300… in RFC 8032's test 1
+    assert Ed25519.verify(ed_public, [], ed_signature)  // EDS3 the signature of RFC 8032's test 1 does not verify
+    assert !(Ed25519.verify(ed_public, [0x72], ed_signature))  // EDS4 a signature verifies for another message
+    assert !(Ed25519.verify(ed_public, [], [ed_signature[..<63], ed_signature[63] ~x|| 0x01].flatten))  // EDS5 a changed signature verifies
     // A key pair names its algorithm, and what it signs is read back only where the signature holds
     ed_pair := Ed25519.pair(ed_secret)
-    // EDS8 a key pair forgot its algorithm or its public half
-    assert ed_pair.algorithm === Ed25519 && ed_pair.public == ed_public
-    // EDS9 what a key signed does not read back
-    assert Ed25519.read(ed_pair.signed("abc".bytes)) == "abc".bytes
-    // EDS10 a signed value that was changed reads back
-    assert Ed25519.read(ed_pair.signed("abc".bytes) ~~ .value = "abd".bytes) is Diagnostic
+    assert ed_pair.algorithm === Ed25519 && ed_pair.public == ed_public  // EDS8 a key pair forgot its algorithm or its public half
+    assert Ed25519.read(ed_pair.signed("abc".bytes)) == "abc".bytes  // EDS9 what a key signed does not read back
+    assert Ed25519.read(ed_pair.signed("abc".bytes) ~~ .value = "abd".bytes) is Diagnostic  // EDS10 a signed value that was changed reads back
   }
 
   // Signing: r from the prefix and the message, R = rB, S = r + H(R, A, M) s mod L (RFC 8032 §5.1.6)

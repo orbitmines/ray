@@ -9,8 +9,7 @@ DNS := class: Language {
   static Type := enum A (code: 1) | NS (code: 2) | CNAME (code: 5) | SOA (code: 6) | PTR (code: 12) | MX (code: 15) | TXT (code: 16) | AAAA (code: 28) | SRV (code: 33) | ANY (code: 255) {
     static (code: Binary₁₆) as (=== Type) => Type#{.code == code}.first
   }
-  // DN12 AAAA is not type 28
-  assert DNS.Type.AAAA.code == 28
+  assert DNS.Type.AAAA.code == 28  // DN12 AAAA is not type 28
   // CLASS values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.4)
   static Classes := enum IN (code: 1) | CH (code: 3) | HS (code: 4) | ANY (code: 255) {
     static (code: Binary₁₆) as (=== Classes) => Classes#{.code == code}.first
@@ -49,10 +48,8 @@ DNS := class: Language {
     // Each type's narrowing gives its RDATA on the wire and in a zone file (https://www.rfc-editor.org/rfc/rfc1035#section-3.3.9, https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
     assert {
       mail := (@dns example.com. 300 IN MX 10 mail.example.com.)
-      // RDATA1 an MX record is not read and written by its narrowing
-      assert mail is DNS.MX && mail.data.preference == 10 && DNS.text(mail.data.exchange) == "mail.example.com" && mail.presented == "10 mail.example.com."
-      // RDATA2 an MX record written to the wire does not read back
-      assert (mail as Byte[] as DNS.Record).data.preference == 10
+      assert mail is DNS.MX && mail.data.preference == 10 && DNS.text(mail.data.exchange) == "mail.example.com" && mail.presented == "10 mail.example.com."  // RDATA1 an MX record is not read and written by its narrowing
+      assert (mail as Byte[] as DNS.Record).data.preference == 10  // RDATA2 an MX record written to the wire does not read back
     }
     lifetime => ttl seconds
   }
@@ -61,8 +58,7 @@ DNS := class: Language {
     static Data := Binary₃₂ as IPv4
     static Presentation := IPv4
   }
-  // DN15 a zone-file line written inline is not an A record
-  assert (@dns example.com. 300 IN A 93.184.215.14).data as String == "93.184.215.14"
+  assert (@dns example.com. 300 IN A 93.184.215.14).data as String == "93.184.215.14"  // DN15 a zone-file line written inline is not an A record
   assert {
     address := "93.184.215.14" as IPv4
     zone := @dns {
@@ -72,10 +68,8 @@ DNS := class: Language {
       @ IN A {address}
       www IN CNAME example.com.
     }
-    // DN16 a zone block does not read its comment, its hole, $ORIGIN and $TTL
-    assert zone.count == 3 && zone[0] is DNS.Comment && zone[1].data as String == "93.184.215.14" && zone[1].ttl == 300 && DNS.text(zone[2].name) == "www.example.com"
-    // DN17 records are not written back as zone-file lines with their comment
-    assert (zone as DNS) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *)
+    assert zone.count == 3 && zone[0] is DNS.Comment && zone[1].data as String == "93.184.215.14" && zone[1].ttl == 300 && DNS.text(zone[2].name) == "www.example.com"  // DN16 a zone block does not read its comment, its hole, $ORIGIN and $TTL
+    assert (zone as DNS) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *)  // DN17 records are not written back as zone-file lines with their comment
   }
   static AAAA := Record{type == Type.AAAA} {
     static Data := Binary₁₂₈ as IPv6
@@ -128,38 +122,25 @@ DNS := class: Language {
     named (name: Name) => [name.labels.text.map(. as String), name.pointer != None ? named((this as Byte[])[name.pointer..] as Name) : []].flatten.join(".") as Network.DomainName
     assert {
       question := DNS.query("example.com")
-      // DN1 a query does not ask one question
-      assert question.questions.count == 1
-      // DN2 the header does not count its question
-      assert question.qdcount == 1
-      // DN3 a query does not ask for recursion
-      assert question.recursion_desired
+      assert question.questions.count == 1  // DN1 a query does not ask one question
+      assert question.qdcount == 1  // DN2 the header does not count its question
+      assert question.recursion_desired  // DN3 a query does not ask for recursion
       asked_bytes := question as Byte[]
-      // DN4 a query for example.com is not 29 bytes
-      assert asked_bytes.count == 29
-      // DN5 a label does not start with its length
-      assert asked_bytes[12] == 7
-      // DN6 a name does not read back
-      assert (asked_bytes as DNS.Message).named(question.questions.first.name) as String == "example.com"
-      // DN7 a pointer does not name what it points at
-      assert question.named(DNS.Name(labels: [], pointer: 12)) as String == "example.com"
+      assert asked_bytes.count == 29  // DN4 a query for example.com is not 29 bytes
+      assert asked_bytes[12] == 7  // DN5 a label does not start with its length
+      assert (asked_bytes as DNS.Message).named(question.questions.first.name) as String == "example.com"  // DN6 a name does not read back
+      assert question.named(DNS.Name(labels: [], pointer: 12)) as String == "example.com"  // DN7 a pointer does not name what it points at
       replied := question.answer([DNS.Record(name: Network.DomainName(text: "example.com") as DNS.Name, type: DNS.Type.A, data: "93.184.215.14" as IPv4)])
-      // DN8 an answer is not a response
-      assert replied.response
-      // DN9 an answer does not carry the query's id
-      assert replied.id == question.id
-      // DN10 an answer does not give its address
-      assert replied.addresses.first as String == "93.184.215.14"
-      // DN11 an answer does not read back
-      assert (replied as Byte[] as DNS.Message).answers.first.data as String == "93.184.215.14"
-      // DN14 an https resolver is not asked over HTTPS
-      assert Compiler.reduced(DNS.Lookup(question, server: @https://dns.example/dns-query), DNS.Optimizations).transport == DNS.Transport.https
+      assert replied.response  // DN8 an answer is not a response
+      assert replied.id == question.id  // DN9 an answer does not carry the query's id
+      assert replied.addresses.first as String == "93.184.215.14"  // DN10 an answer does not give its address
+      assert (replied as Byte[] as DNS.Message).answers.first.data as String == "93.184.215.14"  // DN11 an answer does not read back
+      assert Compiler.reduced(DNS.Lookup(question, server: @https://dns.example/dns-query), DNS.Optimizations).transport == DNS.Transport.https  // DN14 an https resolver is not asked over HTTPS
     }
     addresses => answers{.data is IP}.data
     answer (records: Record[]) => Message(id, response: true, opcode, recursion_desired, recursion_available: true, questions, answers: records)
   }
-  // DN13 a message over 512 bytes is not sent over TCP
-  assert Compiler.reduced(DNS.Lookup(DNS.Message(questions: (1..40).map(DNS.Question(name: Network.DomainName(text: "a-name-long-enough-to-matter.example.com") as DNS.Name)))), DNS.Optimizations).transport == DNS.Transport.tcp
+  assert Compiler.reduced(DNS.Lookup(DNS.Message(questions: (1..40).map(DNS.Question(name: Network.DomainName(text: "a-name-long-enough-to-matter.example.com") as DNS.Name)))), DNS.Optimizations).transport == DNS.Transport.tcp  // DN13 a message over 512 bytes is not sent over TCP
 
   // Transport (https://www.rfc-editor.org/rfc/rfc1035#section-4.2)
   static Transport := enum udp | tcp | https
@@ -238,8 +219,7 @@ DNS := class: Language {
 }
 
 // Class and type mnemonics in any case (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3), written in upper case
-// DN18 lower-case class and type mnemonics do not read as IN A, or are not written back in upper case
-assert (@dns example.com. 300 in a 93.184.215.14).type == DNS.Type.A && (@dns example.com. 300 in a 93.184.215.14).within == DNS.Classes.IN && ([(@dns example.com. 300 in a 93.184.215.14)] as DNS) ~= (*, "example.com. 300 IN A 93.184.215.14", *)
+assert (@dns example.com. 300 in a 93.184.215.14).type == DNS.Type.A && (@dns example.com. 300 in a 93.184.215.14).within == DNS.Classes.IN && ([(@dns example.com. 300 in a 93.184.215.14)] as DNS) ~= (*, "example.com. 300 IN A 93.184.215.14", *)  // DN18 lower-case class and type mnemonics do not read as IN A, or are not written back in upper case
 
 // DN19 lower- and mixed-case $ORIGIN, $TTL and mnemonics are not read, or the origin's case is not kept
 assert (@dns {

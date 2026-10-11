@@ -27,8 +27,7 @@ ChaCha20Poly1305 := class: Encoding.Symmetric {
   static block (key: Byte₃₂, counter: Number, nonce: Byte₁₂) => [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574, words(key), counter, words(nonce)].flatten -- (initial =>
     ([rounds] * 10).flatten(1).reduce(state = initial => quarter(state, .)).zip(initial).map((a, b) => Encoding.little((a + b) % word, 4)).flatten)
   // The block function: key 00..1f, nonce 00:00:00:09:00:00:00:4a:00:00:00:00, counter 1 (RFC 8439 §2.3.2)
-  // CCP1 the block of RFC 8439 §2.3.2 is not 10f1e7e4…
-  assert ChaCha20Poly1305.block(0..<32, 1, "000000090000004a00000000" as Hexadecimal₂₄ as Byte₁₂) as Hexadecimal₁₂₈ == "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e"
+  assert ChaCha20Poly1305.block(0..<32, 1, "000000090000004a00000000" as Hexadecimal₂₄ as Byte₁₂) as Hexadecimal₁₂₈ == "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e"  // CCP1 the block of RFC 8439 §2.3.2 is not 10f1e7e4…
 
   // Encryption: each 64 bytes XORed with the block of the next counter (RFC 8439 §2.4)
   static chacha20 (key: Byte₃₂, counter: Number, nonce: Byte₁₂, text: Byte[]) => text.chunk(64).enumerate.map(chunk => chunk.value.zip(block(key, counter + chunk.index, nonce)).map((a, b) => a ~x|| b)).flatten
@@ -37,8 +36,7 @@ ChaCha20Poly1305 := class: Encoding.Symmetric {
   static poly1305 (key: Byte₃₂, message: Byte[]) => Encoding.little_number(key[..<16]) ~&& 0x0ffffffc0ffffffc0ffffffc0fffffff -- (r =>
     Encoding.little((message.chunk(16).reduce(acc = 0 => (acc + Encoding.little_number([., 1].flatten)) * r % (2 ^ 130 - 5)) + Encoding.little_number(key[16..])) % 2 ^ 128, 16))
   // Poly1305 over "Cryptographic Forum Research Group" (RFC 8439 §2.5.2)
-  // CCP2 the tag of RFC 8439 §2.5.2 is not a8061dc1…
-  assert ChaCha20Poly1305.poly1305("85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b" as Hexadecimal₆₄ as Byte₃₂, "Cryptographic Forum Research Group".bytes) as Hexadecimal₃₂ == "a8061dc1305136c6c22b8baf0c0127a9"
+  assert ChaCha20Poly1305.poly1305("85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b" as Hexadecimal₆₄ as Byte₃₂, "Cryptographic Forum Research Group".bytes) as Hexadecimal₃₂ == "a8061dc1305136c6c22b8baf0c0127a9"  // CCP2 the tag of RFC 8439 §2.5.2 is not a8061dc1…
 
   // The AEAD construction: the one-time Poly1305 key from block 0, the text from block 1, and the tag over the padded AAD, the ciphertext and both lengths (RFC 8439 §2.6, §2.8)
   static Sealed := class (ciphertext: Byte[], tag: Byte₁₆)
@@ -52,16 +50,11 @@ ChaCha20Poly1305 := class: Encoding.Symmetric {
     ccp_aad := "50515253c0c1c2c3c4c5c6c7" as Hexadecimal₂₄ as Byte₁₂
     ccp_text := "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.".bytes
     ccp_sealed := ChaCha20Poly1305.sealed(ccp_key, ccp_nonce, ccp_aad, ccp_text) as ChaCha20Poly1305.Sealed
-    // CCP3 the ciphertext of RFC 8439 §2.8.2 is not d31a8d34…
-    assert ccp_sealed.ciphertext as Hexadecimal₂₂₈ == "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b6116"
-    // CCP4 the tag of RFC 8439 §2.8.2 is not 1ae10b59…
-    assert ccp_sealed.tag as Hexadecimal₃₂ == "1ae10b594f09e26a7e902ecbd0600691"
-    // CCP5 what was sealed does not open
-    assert ChaCha20Poly1305.opened(ccp_key, ccp_nonce, ccp_aad, ccp_sealed as Byte[]) == ccp_text
-    // CCP6 what was sealed opens under other associated data
-    assert ChaCha20Poly1305.opened(ccp_key, ccp_nonce, [], ccp_sealed as Byte[]) is Diagnostic
-    // CCP7 a tag is not compared byte for byte
-    assert ChaCha20Poly1305.authentic(ccp_sealed.tag, ccp_sealed.tag) && !ChaCha20Poly1305.authentic(ccp_sealed.tag, [ccp_sealed.tag[..<15], ccp_sealed.tag[15] ~x|| 0x01].flatten)
+    assert ccp_sealed.ciphertext as Hexadecimal₂₂₈ == "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b6116"  // CCP3 the ciphertext of RFC 8439 §2.8.2 is not d31a8d34…
+    assert ccp_sealed.tag as Hexadecimal₃₂ == "1ae10b594f09e26a7e902ecbd0600691"  // CCP4 the tag of RFC 8439 §2.8.2 is not 1ae10b59…
+    assert ChaCha20Poly1305.opened(ccp_key, ccp_nonce, ccp_aad, ccp_sealed as Byte[]) == ccp_text  // CCP5 what was sealed does not open
+    assert ChaCha20Poly1305.opened(ccp_key, ccp_nonce, [], ccp_sealed as Byte[]) is Diagnostic  // CCP6 what was sealed opens under other associated data
+    assert ChaCha20Poly1305.authentic(ccp_sealed.tag, ccp_sealed.tag) && !ChaCha20Poly1305.authentic(ccp_sealed.tag, [ccp_sealed.tag[..<15], ccp_sealed.tag[15] ~x|| 0x01].flatten)  // CCP7 a tag is not compared byte for byte
   }
   // The tag is compared in constant time: every byte's difference, none left out early (RFC 8439 §4)
   static authentic (given: Byte₁₆, expected: Byte₁₆) => given.zip(expected).map((a, b) => a ~x|| b).sum == 0

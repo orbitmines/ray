@@ -1,40 +1,64 @@
 // Both: what either has (`class: Iterable & Ordered`), each in `conjoined`.
 Conjunction := class (first, second) => {
   conjoined => first.conjoined, second
+  assert Conjunction(Number, String).conjoined.count == 2  // NOD5 a conjunction of two does not hold two parts
   holds => conjoined.every(.)
+  assert Conjunction(true, true).holds  // NOD1 a conjunction of two truths does not hold
+  assert !Conjunction(true, false).holds  // NOD2 a conjunction with a falsehood holds
   admits (candidate) => conjoined.every(candidate is .)
+  assert Conjunction(Number, Node).admits(5)  // NOD3 a conjunction does not admit what each part admits
+  assert !Conjunction(Number, String).admits(5)  // NOD4 a conjunction admits what only one part admits
   contains (x) => conjoined.contains(x)
-  // HS4 a random possible value is not one of them
-  assert (1 | 2)#.contains((1 | 2)#.random)
-  // HS5 a member asked of the possible values is not asked of each
-  assert (1 | 2)#.succ.contains(3)
+  assert (1 | 2)#.contains((1 | 2)#.random)  // HS4 a random possible value is not one of them
+  assert (1 | 2)#.succ.contains(3)  // HS5 a member asked of the possible values is not asked of each
 }
 
 Node &+= {
   conjoined => [this]
+  assert (5).conjoined.count == 1  // NOD6 a single value is not a conjunction of just itself
   // (both: made of each, `class: Iterable & Ordered` has what either has)
   & (other) => Conjunction(this, other)
+  assert (Number & String) is Conjunction  // NOD7 & on two types does not make a conjunction
   // `&+` and `|+` superpose components; `+` lets the right one override (T2.1, A1)
-  // SP1 &+ does not answer with both components
-  assert (true &+ "A").next == false & "B"
+  assert (true &+ "A").next == false & "B"  // SP1 &+ does not answer with both components
   // What is done with a superposition is done with each value (A1, U1)
-  // SP3 an operator does not carry through &
-  assert (1 & 2) + 1 == 2 & 3
+  assert (1 & 2) + 1 == 2 & 3  // SP3 an operator does not carry through &
 
   // what it holds under a name given as text (`` x.`name` `` where `name` holds the text)
   member (named: String) => this[named]
+  assert (a: 1, b: 2).member("b") == 2  // NOD8 the member asked by a name given as text is not found
+  assert !((a: 1, b: 2).member("b") == 1)  // NOD9 a member asked by name gives another member
   // what it holds under a name given as text, written (`x.set("width", 1)`)
   set (named: String, setting_value) => this[named] = setting_value
+  assert {
+    held := (width: 1)
+    held.set("width", 4)
+    assert held.width == 4  // NOD10 setting a member by name given as text does not change it
+    assert !(held.width == 1)  // NOD11 the member kept its old value after being set
+  }
   // its fields in order, each its `name`, `type` and `value`, and by name (`x.fields["width"]`): what its class's header and block
   // declare, then (a class) what its own block declares
   fields => (declarations ?? []).map(name => (name: name, value: (this.held(name) ?? this[name])))
+  assert (a: 1, b: 2).fields.map(.name) == ["a", "b"]  // NOD12 the fields of a value are not its names in order
+  assert (a: 1, b: 2).fields.map(.value) == [1, 2]  // NOD13 the fields of a value do not hold their values in order
+  assert (a: 1, b: 2).fields.count == 2  // NOD14 a value of two fields does not have two fields
   as (=== String) => (this.of && this.of.header && Language.patterned(this.of.header.head)) ? Language.part_written(this) : (Language.for_file(&.caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)
+  assert 1 != 2  // NOD15 different values are not unequal
+  assert !(1 != 1)  // NOD16 the same value is unequal to itself
 
   inverse | reversible: Node?
   ⁻¹ | ^-1 => inverse
   inverted_by (backward) => (inverse = backward) -- backward.inverse = this -- this
+  assert {
+    forward := (x) => x + 1
+    backward := (x) => x - 1
+    forward.inverted_by(backward)
+    assert forward.inverse === backward  // NOD17 the inverse of a function is not the one it was inverted by
+    assert backward.inverse === forward  // NOD18 the inverse of the inverse is not the function itself
+    assert forward⁻¹ === backward  // NOD19 ⁻¹ does not answer the inverse
+  }
 
   right-to-left await | pending => Program.until(() => this && (!(this is Program) || is_terminal))
     -- this is Program ? results.last : this
@@ -44,9 +68,10 @@ Node &+= {
   chosen_within (width) => components.random
 
   erred => diagnostics.nonempty ?? false
-  // ER12 a value nobody filed a diagnostic on erred
-  assert !((0).erred)
+  assert !((0).erred)  // ER12 a value nobody filed a diagnostic on erred
   as (=== boolean) => !erred
+  assert (5 as boolean)  // NOD20 a value that raised nothing is false as a boolean
+  assert !(5).recoverable  // NOD21 a value that raised nothing is recoverable
   recoverable => erred && !diagnostics.some(.fatal)
 
   $ (fallback) ^error => recoverable ? fallback : this
@@ -65,6 +90,7 @@ Node &+= {
 
 Possibilities := class (values: Iterable) => {
   entry => values.entry
+  assert (1 | 2)#.entry  // NOD22 the possible values have no entry
   .{literal property ^property} ^punctuation => Possibilities(values: values.map(x => x[.property]))
 }
 Possibilities.components.hierarchy &= Iterable
@@ -76,28 +102,42 @@ Possibilities &+= {
   last => values.last
   empty => values.empty
   nonempty => values.nonempty
+  assert !(1 | 2)#.empty  // NOD23 two possible values are empty
+  assert (1 | 2)#.nonempty  // NOD24 two possible values are not nonempty
+  assert (1 | 2)#.count == 2  // NOD25 two possible values do not count two
+  assert (1 | 2)#.first == 1  // NOD26 the first possible value is not the first written
+  assert (1 | 2)#.last == 2  // NOD27 the last possible value is not the last written
   // What the machine says about itself, asked by name.
-  // IO3 the machine does not name its platform
-  assert @me/device/os["platform"].nonempty
+  assert @me/device/os["platform"].nonempty  // IO3 the machine does not name its platform
   for (body) => values.for(body)
   map (mapping) => values.map(mapping)
   every (predicate) => values.every(predicate)
   some (predicate) => values.some(predicate)
   contains (x) => values.contains(x)
+  assert (1 | 2)#.contains(2)  // NOD28 a possible value is not contained
+  assert !(1 | 2)#.contains(3)  // NOD29 a value that is not possible is contained
   {{constraint}} =>
     values{ {constraint} }
   join (separator) => values.join(separator)
-  // SJ2 joining a, b and c with a dash is not a-b-c
-  assert ("a", "b", "c").join("-") == "a-b-c"
-  // SJ3 joining a and b with a comma and space is not a, b
-  assert ("a", "b").join(", ") == "a, b"
+  assert ("a", "b", "c").join("-") == "a-b-c"  // SJ2 joining a, b and c with a dash is not a-b-c
+  assert ("a", "b").join(", ") == "a, b"  // SJ3 joining a and b with a comma and space is not a, b
   flatten => values.flatten
+  assert ([1, 2] | [3])#.flatten.count == 3  // NOD30 flattening possibilities of lists does not join them
+  assert (1 | 2)#.map(x => x * 2).contains(4)  // NOD31 mapping the possible values does not map each
+  assert !(1 | 2)#.map(x => x * 2).contains(1)  // NOD32 mapping the possible values keeps the unmapped
+  assert (2 | 4)#.every(x => x % 2 == 0)  // NOD33 every of values that all hold does not hold
+  assert !(2 | 3)#.every(x => x % 2 == 0)  // NOD34 every holds when one value does not
+  assert (2 | 3)#.some(x => x % 2 == 0)  // NOD35 some does not hold when one value does
+  assert !(1 | 3)#.some(x => x % 2 == 0)  // NOD36 some holds when no value does
   erred => values.every(.erred)
+  assert !(1 | 2)#.erred  // NOD37 possible values that raised nothing erred
   continuous => count is ∞ && !values.first.next
+  assert !(1 | 2)#.continuous  // NOD38 two possible values are continuous
   measure (within: Possibilities = this) => continuous ? values.last - values.first
     : count is ∞ ? (1 -> +1).map(n => values{within.values[..<n].contains(.)}.count / n).last
     : count
 }
+assert (1 | 2 | 3)#.measure == 3  // NOD39 the measure of a discrete set is not its count
 
 {share: Number{0 < . < 1}} {counted: *{#.count != 1}{!(. is Unit)}} => share * counted#.count -- (whole => whole is Integer ? counted{#.count == whole}
   : counted#.count is ∞ ? counted{#.measure(counted#) == share * counted#.measure}
@@ -107,10 +147,8 @@ a | an {counted: *{#.count != 1}{!(. is Unit)}} => 1 counted
 // A rule with two operators written in it is a ternary
 assert {
   {a} %% {b} ## {c} => a ? b : c
-  // BT1 a ternary does not take its first answer
-  assert true %% true ## false
-  // BT2 a ternary does not take its second answer
-  assert !(false %% true ## false)
+  assert true %% true ## false  // BT1 a ternary does not take its first answer
+  assert !(false %% true ## false)  // BT2 a ternary does not take its second answer
 }
 assert {
   /* a block comment /* nested */ is nothing */
@@ -127,49 +165,32 @@ Node &+= {
     a := A()
     b := a.mk
     c := b.mk
-    // C1 an instance has no class component
-    assert a.components.hierarchy.last
-    // C2 the class component of an instance is not its class
-    assert c.components.hierarchy.first.mk
-    // C3 a hierarchy does not know what it belongs to
-    assert a.components.hierarchy.owner
-    // C4 a plain instance has other than one class component
-    assert a.components.hierarchy.count == 1
+    assert a.components.hierarchy.last  // C1 an instance has no class component
+    assert c.components.hierarchy.first.mk  // C2 the class component of an instance is not its class
+    assert a.components.hierarchy.owner  // C3 a hierarchy does not know what it belongs to
+    assert a.components.hierarchy.count == 1  // C4 a plain instance has other than one class component
     M := a | b
-    // C15 | did not superpose its left side
-    assert M.components.first.mk
-    // C16 | did not superpose its right side
-    assert M.components.last.mk
-    // C17 | on a Many did not append
-    assert (M | c).components.count == 3
-    // C31 superposing two does not make two components
-    assert (A() | A()).components.count == 2
+    assert M.components.first.mk  // C15 | did not superpose its left side
+    assert M.components.last.mk  // C16 | did not superpose its right side
+    assert (M | c).components.count == 3  // C17 | on a Many did not append
+    assert (A() | A()).components.count == 2  // C31 superposing two does not make two components
     lone := A()
     lone | A()
-    // C32 superposing changed the left side
-    assert lone.components.count == 0
+    assert lone.components.count == 0  // C32 superposing changed the left side
     k := [a, b]
-    // C18 a list is not linked forward
-    assert k.first.next
-    // C19 a list is not linked backward
-    assert k.last.previous
-    // C20 the first of a list has a previous
-    assert !(k.first.previous)
-    // C21 a list of two does not count two
-    assert k.count == 2
+    assert k.first.next  // C18 a list is not linked forward
+    assert k.last.previous  // C19 a list is not linked backward
+    assert !(k.first.previous)  // C20 the first of a list has a previous
+    assert k.count == 2  // C21 a list of two does not count two
     incremented (a) => a + 1
-    // SP6 a call does not carry through &
-    assert incremented(1 & 2) == 2 & 3
-    // SP7 a call does not carry through |
-    assert incremented(1 | 2) == 2 | 3
+    assert incremented(1 & 2) == 2 & 3  // SP6 a call does not carry through &
+    assert incremented(1 | 2) == 2 | 3  // SP7 a call does not carry through |
     // Each value remembers where it came from; fixing a source refines what depends on it (U1)
     doubled (a) => a * 2
     tripled (a) => a * 3
     traced := doubled(1) | tripled(2)
-    // SP10 a superposed call does not remember what it came from
-    assert traced#.origin.contains(doubled)
-    // SP11 a value is not selected by its origin
-    assert traced#{.origin == tripled}.first == 6
+    assert traced#.origin.contains(doubled)  // SP10 a superposed call does not remember what it came from
+    assert traced#{.origin == tripled}.first == 6  // SP11 a value is not selected by its origin
   }
 }
 #{value} ^punctuation => value#
@@ -177,6 +198,8 @@ Node &+= {
 
 Composed := class (parts: Node[], joining: Program) => {
   erred => parts.some(.erred)
+  assert !Composed(parts: [1, 2], joining: (a, b) => a + b).erred  // NOD40 parts that raised nothing erred
+  assert Composed(parts: [1, 2], joining: (a, b) => a + b).parts.count == 2  // NOD41 a composition lost its parts
   .{literal property ^property} ^punctuation => parts.map(x => x[.property]).reduce((acc) => joining(acc, .))
 }
 Node &+= {
@@ -186,7 +209,12 @@ Node &+= {
 
 Node &+= {
   superposed => superposes || conjoined.count > 1
+  assert (1 | 2).superposed  // NOD42 two alternatives are not superposed
+  assert (1 & 2).superposed  // NOD43 a conjunction of two is not superposed
+  assert !(1).superposed  // NOD44 a single value is superposed
   alternatives => superposes ? components : conjoined
+  assert (1 | 2).alternatives.count == 2  // NOD45 two alternatives are not two
+  assert (1 & 2).alternatives.count == 2  // NOD46 a conjunction does not give its parts as alternatives
   sources: Node?
   each (step: Program) => superposes
     ? alternatives.map(one => step(one).branched(one, this)).reduce(|)
@@ -203,6 +231,10 @@ Superposed := Node{.superposed}
 // An operator missing a side is a section: the function of what it misses (`xs.map(+ 1)`, `xs.sorted(<)`, `xs{> 0}`, `(!)`).
 Section := class (operator, operand?) => {
   continues => true
+  assert [1, 2, 3].map(+ 1) == [2, 3, 4]  // NOD50 a section with its right side missing is not added to each
+  assert [3, 1, 2].sorted(<) == [1, 2, 3]  // NOD51 a section of < does not sort ascending
+  assert [-1, 2, 3]{> 0} == [2, 3]  // NOD52 a section of > 0 does not filter the positives
+  assert !([-1, 2, 3]{> 0} == [-1, 2, 3])  // NOD53 a filter by a section kept everything
   (a, b?) => operand != None ? a [operator] operand : b != None ? a [operator] b : a [operator]
 }
 // (the operator as a list of one, built by appending: `[x]` here would read as this rule again when `x` holds a symbol)
@@ -210,6 +242,20 @@ Section := class (operator, operand?) => {
 [x: Symbolic]{b} ^operator => Section(operator: [] ~~ (made => made.append(x)), operand: b)
 
 Cases := Program{written.nonempty && written.every(.code ~= (*, " => ", *))}
+assert {
+  matched := if 2 {
+    1 => "one"
+    2 => "two"
+  }
+  assert matched == "two"  // NOD54 a case on a value does not take the arm that matches
+  assert !(matched == "one")  // NOD55 a case took the first arm that does not match
+  other := if 9 {
+    1 => "one"
+  } else {
+    "other"
+  }
+  assert other == "other"  // NOD56 a case with no matching arm does not take the else
+}
 if &+= {
   { }{subject} {{cases: Cases}} else {{otherwise}} ^class => Compiler.reduced(subject, (Program(code: cases**) as Compiler) + Program(code: otherwise**).otherwise)
   { }{subject} {{cases: Cases}} ^class => Compiler.reduced(subject, Program(code: cases**) as Compiler)
@@ -222,6 +268,8 @@ Program &+= {
 
 Node &+= {
   .({expr}) ^punctuation => Program(code: (expr**)).entered(this, None)
+  assert 5.(. + 1) == 6  // NOD57 `.( )` does not run its expression with the value as `.`
+  assert !(5.(. + 1) == 5)  // NOD58 `.( )` answered the value unchanged
 }
 
 Node &+= {
@@ -249,37 +297,45 @@ Node &+= {
 Unknown := class {
   # => Possibilities(values: [])
   random => chosen_within(1)
-  // FE3 a coin comes up with nothing
-  assert boolean#.random is boolean
-  // RN12 a coin lands on neither side
-  assert boolean#.random is boolean
+  assert (?) is Unknown  // NOD59 ? is not an unknown
+  assert ?.admits(5)  // NOD60 an unknown does not admit a value
+  assert ?#.count == 0  // NOD61 an unknown has possible values
   admits (candidate) => true
 }
 {target} ?= {value} ^punctuation => target = target ?? value
+assert {
+  x := None
+  x ?= 3
+  assert x == 3  // NOD62 ?= does not set a variable holding nothing
+  x ?= 4
+  assert x == 3  // NOD63 ?= replaced what the variable held
+}
 
 Node &+= {
   is (type) => this.admitted_by(type) ? true : false
+  assert 5 is Number  // NOD64 a number is not a Number
+  assert !("a" is Number)  // NOD65 a string is a Number
+  assert "a" is String  // NOD66 a string is not a String
 }
 
 Node &+= {
   ~= {pattern} => ((this is String) && (pattern is String)) ? (this == pattern) : read_within(this, pattern)
-  // PM1 ⊢ does not hold a pattern to the start
-  assert "goto x" ~= ⊢"goto "
-  // PM2 ⊢ reads a pattern away from the start
-  assert !("a goto" ~= ⊢"goto")
-  // PM3 ⊣ does not hold a pattern to the end
-  assert "x\\" ~= "\\" ⊣
-  // S127 a pattern does not find what is written in the text
-  assert "abcd" ~= "bc"
-  // S128 a pattern finds what is not there
-  assert !("abd" ~= "bc")
-  // S133 a pattern minding case finds the other case
-  assert !("abcd" ~= "BC")
-  // W15 the pattern b did not match ab
-  assert "ab" ~= "b"
+  assert "goto x" ~= ⊢"goto "  // PM1 ⊢ does not hold a pattern to the start
+  assert !("a goto" ~= ⊢"goto")  // PM2 ⊢ reads a pattern away from the start
+  assert "x\\" ~= "\\" ⊣  // PM3 ⊣ does not hold a pattern to the end
+  assert "abcd" ~= "bc"  // S127 a pattern does not find what is written in the text
+  assert !("abd" ~= "bc")  // S128 a pattern finds what is not there
+  assert !("abcd" ~= "BC")  // S133 a pattern minding case finds the other case
+  assert "ab" ~= "b"  // W15 the pattern b did not match ab
   !~= {pattern} => !(this ~= pattern)
-  // PM5 !~= does not hold when nothing is read
-  assert "abc" !~= "z"
+  assert "abc" !~= "z"  // PM5 !~= does not hold when nothing is read
+  assert !("abc" !~= "b")  // NOD67 !~= holds when the pattern is read
+  assert "abc" ~= ⊢"ab"  // NOD68 a pattern anchored to the start is not found at the start
+  assert !("abc" ~= ⊢"bc")  // NOD69 a pattern anchored to the start is found elsewhere
+  assert "abc" ~= "bc" ⊣  // NOD70 a pattern anchored to the end is not found at the end
+  assert !("abc" ~= "ab" ⊣)  // NOD71 a pattern anchored to the end is found elsewhere
+  assert "abc" ~= ("x" | "b")  // NOD72 a choice of patterns does not find the one that is there
+  assert !("abc" ~= ("x" | "y"))  // NOD73 a choice of patterns finds one that is not there
   right-to-left ⊢ => Anchored(pattern: this, at_start: true)
   ⊣ => Anchored(pattern: this, at_end: true)
 }
@@ -287,9 +343,15 @@ None &+= {
   chainable != (other) => other !== None
   ~= {pattern} => false
   !~= {pattern} => true
+  assert None != 5  // NOD74 nothing is not unequal to a value
+  assert !(None != None)  // NOD75 nothing is unequal to itself
+  assert !(None ~= "a")  // NOD76 nothing reads a pattern
+  assert None !~= "a"  // NOD77 nothing is read by a pattern
 }
 Anchored := class (pattern: Node, at_start: boolean = false, at_end: boolean = false) => {
   admits (candidate) => candidate ~= this
+  assert "a" ~= ⊢"a" ⊣  // NOD78 a pattern anchored at both ends does not read a text that is only it
+  assert !("ab" ~= ⊢"a" ⊣)  // NOD79 a pattern anchored at both ends reads a longer text
   ⊣ => Anchored(pattern, at_start, at_end: true)
 }
 read_within (text, pattern) => (
@@ -333,18 +395,19 @@ Node &+= {
   right-to-left internal => this ~~ .access = Access(&.caller, method: Access.Reading, target: this)
   right-to-left trivially => instance ? this : ?
   right-to-left unique<in: Program?> => this{.is_unique<in: in>}
-  // CO26 each once, twice, is not each once
-  assert [1, 2, 1].unique.unique == [1, 2]
-  // UQI4 each thing once is no longer what unique answers
-  assert [1, 2, 1].unique == [1, 2]
+  assert [1, 2, 1].unique.unique == [1, 2]  // CO26 each once, twice, is not each once
+  assert [1, 2, 1].unique == [1, 2]  // UQI4 each thing once is no longer what unique answers
+  assert [1, 2, 2, 3].unique.count == 3  // NOD80 unique keeps repeated values
+  assert !([1, 2, 1].is_unique)  // NOD81 a list with a repeat is unique
+  assert [1, 2, 3].is_unique  // NOD82 a list without a repeat is not unique
   is_unique<in: Program?> => (&){in ? (. ==<in: in> this) : . == this}.count == 1
 }
 
 forall{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.every(Program(code: predicate**, parameters: name**))
-// IS2 forall does not hold of every element
-assert forall x is [2, 4]: x % 2 == 0
-// IS3 exists does not find the element
-assert exists x is [1, 4]: x == 4
+assert forall x is [2, 4]: x % 2 == 0  // IS2 forall does not hold of every element
+assert exists x is [1, 4]: x == 4  // IS3 exists does not find the element
+assert !(forall x is [2, 3]: x % 2 == 0)  // NOD83 forall holds when an element fails
+assert !(exists x is [1, 3]: x == 4)  // NOD84 exists holds when no element matches
 exists{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.some(Program(code: predicate**, parameters: name**))
 exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => type#.some(Program(code: predicate**, parameters: name**))
 !exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => !type#.some(Program(code: predicate**, parameters: name**))
@@ -356,41 +419,35 @@ mathematics := suggest {
 
 print (x) => IO.output(x as String) -- x
 // `print(x)` answers x (Almanac §0.3)
-// PT1 print does not answer what it printed
-assert print(3) == 3
+assert print(3) == 3  // PT1 print does not answer what it printed
 
 // any value: every value is a Node
 * := Node
-// CO4 five times nothing is not nothing
-assert (5 * 0).is_zero
-// CO5 nothing times five is not nothing
-assert (0 * 5).is_zero
-// CO6 five once is not five
-assert 5 * 1 == 5
-// CO7 once five is not five
-assert 1 * 5 == 5
-// CO9 five twice is not ten
-assert 5 * 2 == 10
-// CO10 three twice is not six
-assert 3 * 2 == 6
-// CO11 nothing times nothing is not nothing
-assert (0 * 0).is_zero
-// CO12 once once is not one
-assert 1 * 1 == 1
-// CO15 five three times is not fifteen
-assert 5 * 3 == 15
-// PR10 an operator the rule does not ask for stopped working
-assert 2 * 3 == 6
-// PR26 two times three times two is not twelve
-assert 2 * 3 * 2 == 12
-// PR32 two times three is below five
-assert !(2 * 3 < 5)
-// PR37 raising does not bind tighter than times
-assert 2 ^ 3 * 2 == 16
+assert (5 * 0).is_zero  // CO4 five times nothing is not nothing
+assert (0 * 5).is_zero  // CO5 nothing times five is not nothing
+assert 5 * 1 == 5  // CO6 five once is not five
+assert 3 * 4 == 12  // NOD85 three times four is not twelve
+assert !(3 * 4 == 7)  // NOD86 three times four is seven
+assert 1 * 5 == 5  // CO7 once five is not five
+assert 5 * 2 == 10  // CO9 five twice is not ten
+assert 3 * 2 == 6  // CO10 three twice is not six
+assert (0 * 0).is_zero  // CO11 nothing times nothing is not nothing
+assert 1 * 1 == 1  // CO12 once once is not one
+assert 5 * 3 == 15  // CO15 five three times is not fifteen
+assert 2 * 3 == 6  // PR10 an operator the rule does not ask for stopped working
+assert 2 * 3 * 2 == 12  // PR26 two times three times two is not twelve
+assert !(2 * 3 < 5)  // PR32 two times three is below five
+assert 2 ^ 3 * 2 == 16  // PR37 raising does not bind tighter than times
 Object := * - Node
 
 Origin := class (method: Node, arguments: Node) => {
   == (other) => other === method || (other is Origin && other.method === method && other.arguments == arguments)
+  assert {
+    f := (x) => x
+    assert Origin(f, 1) == Origin(f, 1)  // NOD87 an origin is not equal to the same origin
+    assert !(Origin(f, 1) == Origin(f, 2))  // NOD88 origins with different arguments are equal
+    assert Origin(f, 1) == f  // NOD89 an origin is not equal to its method
+  }
 }
 {f}({a}) | {g}({b}) ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | (g(b).copy ~~ .origin = Origin(g, b))
 {f}({a}) | {rest} ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | rest
@@ -401,8 +458,7 @@ Node &+= {
   .{literal property ^property}? ^punctuation => this[.property + "?"] ?? this[.property]?
 }
 
-// HS3 a single value has other than one possible value
-assert 5#.count == 1
+assert 5#.count == 1  // HS3 a single value has other than one possible value
 
 
 

@@ -277,6 +277,8 @@ export namespace Text {
 
 enum Op { GOTO, LABEL, ".", "&" }
 
+// (a test that ran out of time or memory: nothing catches it, every later reading of the test throws it too)
+export class Exhausted extends Error { }
 export class Program {
   graph: Uint32Array
   
@@ -468,7 +470,7 @@ export class Program {
     // (a rule with no literal: where its node is, as its right side is read)
     const home = rule.home && !rule.literals.length && rule.home.outer ? rule.home.outer : rule.home ?? this.global;
     try { let value = this.read(rule.pieces[k].type!, { node: home }); const read = value; while (value instanceof Program.Node && value.calls && value.outer) value = value.outer; if (value instanceof Program.Node) { if (read !== value) this.type_values.set(value, read); return types[k] = value; } types[k] = this.statements; return null; }
-    catch { types[k] = this.statements; return null; } finally { this.typing.delete(rule); }
+    catch (e) { if (e instanceof Exhausted) throw e; types[k] = this.statements; return null; } finally { this.typing.delete(rule); }
   }
   // (whether a type's own rules read text whole: its rules matched, nothing read)
   private structures = new WeakMap<Program.Node, { headed: number, read: Map<string, boolean> }>();
@@ -519,9 +521,15 @@ export class Program {
   // (a type that is a closure, a class's maker: what was read, for the check)
   private type_values = new WeakMap<Program.Node, unknown>();
   private accepted = new WeakMap<Program.Node, { objects: WeakMap<object, boolean>, values: Map<unknown, boolean> }>();
+  // (the types deciding what they take: while one does, it takes nothing more (its check reading what it is asked about again))
+  private accepting = new Set<Program.Node>();
   accepts(s: string, type: Program.Node): boolean {
     const check = this.typed?.check;
-    if (!check) return false;
+    if (!check || this.accepting.has(type)) return false;
+    this.accepting.add(type);
+    try { return this.accepting_now(s, type, check); } finally { this.accepting.delete(type); }
+  }
+  private accepting_now(s: string, type: Program.Node, check: NonNullable<NonNullable<Program['typed']>['check']>): boolean {
     const value = this.body(s, { node: this.global });
     let known = this.accepted.get(type);
     if (!known) this.accepted.set(type, known = { objects: new WeakMap(), values: new Map() });
@@ -531,7 +539,7 @@ export class Program {
     const { open, close } = this.grammar!;
     const code = check.code.split(open + check.value + close).join(s).split(open + check.type + close).join(this.written(this.type_values.get(type) ?? type));
     let taken = false;
-    try { taken = this.run(code, { node: check.home }) !== undefined; } catch { taken = false; }
+    try { taken = this.run(code, { node: check.home }) !== undefined; } catch (e) { if (e instanceof Exhausted) throw e; taken = false; }
     kept.set(value as object, taken);
     return taken;
   }
@@ -610,9 +618,13 @@ export class Program {
         if (u > t && (!typed || this.structural(s.slice(t, u), typed))) { spans.push(t, u); step(k + 1, u); spans.length -= 2; }
         return;
       }
+      // (an operator's operand, `+ {other}`: not past an operator written as one and declared with it or after it (binding as
+      // loosely, or looser): `1 + 2 == 3` is `(1 + 2) == 3`, `10 - 2 - 3` is `(10 - 2) - 3`; the rest read on what it gives)
       // (nor inside what a class is given, `Name<a: T>`: a `<` right after a word opens it)
+      const looser = last ? this.looser(rule) : undefined;
       for (let u = t, depth = 0, given = 0; u < n;) {
         const x = s.charCodeAt(u);
+        if (looser && !depth && u > t && Program.space(s.charCodeAt(u - 1)) && looser.some(l => s.startsWith(l, u) && Program.space(s.charCodeAt(u + l.length)))) break;
         if (x === o && s.startsWith(open, u)) { depth++; u += open.length; } else if (x === c && s.startsWith(close, u)) { if (--depth < 0) break; u += close.length; }
         else if (opens.has(x)) { depth++; u++; } else if (closes.has(x)) { if (--depth < 0) break; u++; }
         // (what is quoted: as one)
@@ -633,6 +645,20 @@ export class Program {
     // (code is a block: where the rule reads the text with each body a block, not where it does without)
     const mine = out.slice(count);
     if (mine.some(read => read.loose) && mine.some(read => !read.loose)) out.splice(count, out.length - count, ...mine.filter(read => !read.loose));
+  }
+
+  // (an operator's rule, `+ {other}` (a sign, then one hole): the signs of those written as it is, in its node or the outermost,
+  // declared with it or after it)
+  private loosers = new WeakMap<Program.Rule, { n: number, signs?: string[] }>();
+  looser(rule: Program.Rule): string[] | undefined {
+    const operator = (r: Program.Rule) => { const [sign, space, hole] = r.pieces; return r.pieces.length === 3 && sign.literal !== undefined && /^[^\p{L}\p{N}_\s.()\[\]{}"`,]+$/u.test(sign.literal) && space.hole === '' && !!hole.hole && !hole.body; };
+    if (!operator(rule) || !rule.home) return undefined;
+    let root = rule.home; while (root.outer) root = root.outer;
+    const n = rule.home.rules.length + root.rules.length, known = this.loosers.get(rule);
+    if (known && known.n === n) return known.signs;
+    const signs = [...new Set([...rule.home.rules, ...(root === rule.home ? [] : root.rules)].filter(r => r.id >= rule.id && operator(r)).map(r => r.pieces[0].literal!))];
+    this.loosers.set(rule, { n, signs: signs.length ? signs : undefined });
+    return signs.length ? signs : undefined;
   }
 
   // Code: its statements (a statement a line, the lines indented below it with it, and those while a body in it is open; as
@@ -768,6 +794,13 @@ export class Program {
     const rule = this.rule(name, this.written(closure)); rule.holds = [closure]; this.kept(closure);
     rule.home = node; node.define(rule, true);
   }
+  // (whether a rule's right side writes a name itself, not as a hole (`{name}`): the hole's name read as what it took)
+  private written_names = new WeakMap<Program.Rule, Set<string>>();
+  writes(rule: Program.Rule, name: string): boolean {
+    let names = this.written_names.get(rule);
+    if (!names) { const { open, close } = this.grammar!; this.written_names.set(rule, names = new Set(rule.body.replace(new RegExp(`${Program.escaped(open)}[^${Program.escaped(open + close)}]*${Program.escaped(close)}`, 'g'), ' ').match(/[\p{L}_][\p{L}\p{N}_]*/gu) ?? [])); }
+    return names.has(name);
+  }
   // (a rule's holes, each a rule reading its name: what it took where it is read)
   private captured = new WeakMap<Program.Rule, Program.Rule[]>();
   private provenance = new WeakMap<Program.Reading, Program.Reading | null>();
@@ -843,13 +876,13 @@ export class Program {
     // (`goto declaring`: the next statement is a head; a statement a rule with it reads first declares (as one with the
     // definer does): read once, for a class)
     ['declaring', (frame, next) => { this.declaring.add(this.head(next!.trim()).head); return undefined; }],
-    // (`goto independent`: the same, for a statement read again in an instance only when it names something the instance has)
+    // (`goto independent`: the same, for a statement never read again in an instance)
     ['independent', (frame, next) => { this.independent.add(this.head(next!.trim()).head); return undefined; }],
     // (`goto afterwards`: the rest of the code run after everything is read, where it is now, when the host defers it (reading
     // abstractly: tests); else now)
     ['afterwards', (frame, next, rest) => {
       if (!this.deferring) return undefined;
-      this.deferred.push({ code: rest!.statements.join('\n'), frame, except: rest!.except });
+      this.deferred.push({ code: rest!.statements.join('\n'), frame, except: rest!.except, written: frame.reading?.text });
       return null;
     }],
     // (`goto instanced`: the next statement is a hole holding code, `{code}`; each of its statements that does not declare,
@@ -864,7 +897,7 @@ export class Program {
         if (!s || this.defining(s)) continue;
         const all = this.readings(s, this.candidates(s, target, 0), true);
         if (all.length && this.declaring.has(all[all.length - 1].rule.head)) continue;
-        if (all.length && this.independent.has(all[all.length - 1].rule.head) && !(s.match(/(?<![.\p{L}\p{N}_])[\p{L}_][\p{L}\p{N}_]*/gu) ?? []).some(name => target.has(name))) continue;
+        if (all.length && this.independent.has(all[all.length - 1].rule.head)) continue;
         this.run(s, { node: target, this: target });
       }
       return target;
@@ -874,20 +907,29 @@ export class Program {
       let style = next!.trim();
       const { open, close } = this.grammar!, hole = style.startsWith(open) && style.endsWith(close) ? style.slice(open.length, -close.length) : undefined;
       if (hole !== undefined && frame.reading && hole in frame.reading.caps) style = this.source(frame.reading.caps[hole]).trim();
-      if (Program.Node.last) Program.Node.last.style = style;
+      if (Program.Node.last) { Program.Node.last.style = style; for (const literal of Program.Node.last.literals) { const l = literal.trim(), word = /^[\p{L}_][\p{L}\p{N}_]*$/u.test(l), sign = /^[^\p{L}\p{N}_\s]+$/u.test(l);
+        // (a word shown as a word is (a keyword, a name), a sign as a sign is (an operator, punctuation); what a rule is given by default, only when nothing else said)
+        if (!l || !(word || sign) || (word !== ['keyword', 'function', 'variable', 'class', 'property', 'type', 'parameter', 'method'].includes(style)) || (style === 'function' && this.literal_styles.has(l)) || (/^[()\[\]{},]+$/.test(l) && style !== 'punctuation')) continue;
+        this.literal_styles.set(l, style); } }
       return undefined;
     }],
+    // (`goto here`: the node the code is read in (past nodes that hold nothing, made for a rewrite))
+    ['here', frame => { let node = frame.node; while (node.outer && !node.rules.length && !node.includes.length) node = node.outer; return node; }],
     // (`goto kinds`: what the host's own kinds of value answer (their operators) read here)
     ['kinds', frame => { if (this.kinds) this.run(this.kinds.operators, { node: frame.into ?? frame.node }); return undefined; }],
     ['js', (frame, next) => {
-      const { reading } = frame, names = reading ? reading.rule.holes : [];
-      let compiled = this.compiled.get(next!);
-      if (!compiled) this.compiled.set(next!, compiled = new Function('self', '$', ...names, `return (${next});`) as (...args: unknown[]) => unknown);
+      // (only the holes the code names are read: the others are code it leaves to what follows it (`{yes}`, `{no}`), read only there)
+      const { reading } = frame, names = reading ? reading.rule.holes.filter(name => new RegExp(`(^|[^\\w$])${name.replace(/[^\w$]/g, '\\$&')}($|[^\\w$])`).test(next!)) : [];
+      const key = names.join(',') + '\n' + next!;
+      let compiled = this.compiled.get(key);
+      if (!compiled) this.compiled.set(key, compiled = new Function('self', '$', ...names, `return (${next});`) as (...args: unknown[]) => unknown);
       const $ = Object.assign((text: string) => this.read(text, frame), { text: (name: string) => this.source(reading!.caps[name]), written: (value: unknown) => typeof value === 'number' ? String(value) : this.written(value), host: this.layouts, whole: (text: string, node: unknown) => node instanceof Program.Node && this.structural(text, node) });
       // (a body hole is code: given as nothing, its text is `$.text(name)`)
       return compiled(frame.this ?? frame.node, $, ...names.map(name => reading!.rule.bodies.has(name) ? undefined : this.held_value(this.shared(reading!, name))));
     }],
   ]);
+  // (each literal of a rule with a style, the style: what a piece of text written so is shown as when nothing reads it)
+  literal_styles = new Map<string, string>();
   // (the labels the host holds that take the statement after them)
   consuming = new Set(['js', 'defined', 'declaring', 'independent', 'instanced', 'styled']);
   private compiled = new Map<string, (...args: unknown[]) => unknown>();
@@ -895,7 +937,7 @@ export class Program {
   layouts = new Structures();
   declaring = new Set<string>(); independent = new Set<string>();
   // (what runs after everything is read, while the host defers it: see `afterwards`)
-  deferring = true; deferred: { code: string, frame: Program.Frame, except?: Program.Rule, file?: string }[] = [];
+  deferring = true; deferred: { code: string, frame: Program.Frame, except?: Program.Rule, file?: string, written?: string }[] = [];
   // (the rules whose right sides are running: a definition is not read by one of them)
   private running: Program.Rule[] = [];
   // (the labels of the code being run, the innermost last: a label's name read where it is is that place)
@@ -918,7 +960,14 @@ export class Program {
       // (code read in a value: what it does not find there, found where it was written)
       // (and its writer the reading whose code it was written in)
       return reading.rule.bodies.has(alone) ? this.run(reading.caps[alone], { node: reading.receiver, this: frame.this ?? reading.self, into: frame.into, also: reading.site !== frame.node ? reading.site : undefined, writer: reading.from }) : this.held_value(this.shared(reading, alone));
-    const text = this.substituted(statement, reading, reading.site, code).trim();
+    let text = this.substituted(statement, reading, reading.site, code).trim();
+    // (a definition's head is read as written: the code its holes took, so the rules reading a head (a style after it) see it)
+    if (text.includes(Program.REFERS) && this.defining(text)) {
+      // (a head put together from several holes, as the modifiers' `{operator} {rest} => {body}`, is the code they took as written, read as a whole; a head with words of its own, or one hole (a name), keeps its holes)
+      const nl = text.indexOf('\n'), line = nl < 0 ? text : text.slice(0, nl), at = this.outermost_at(line), head = at < 0 ? '' : line.slice(0, at);
+      const each = new RegExp(`${Program.escaped(this.grammar!.open)}${Program.REFERS}[0-9a-z]{6}${Program.escaped(this.grammar!.close)}`, 'g');
+      if (head && (head.match(each)?.length ?? 0) > 1 && !head.replace(each, '').trim()) text = this.source(line, true) + (nl < 0 ? '' : text.slice(nl));
+    }
     return this.read(text, frame, except, this.alike);
   }
   // (a statement read where a value is wanted: a rule on one line is a node holding it, one whose rules each run in a new node
@@ -1066,7 +1115,16 @@ export class Program {
     const ending = first.trimEnd(), { definer } = this.grammar!;
     return (ending.endsWith(definer) && this.outermost_at(ending, true) === ending.length - definer.length) || this.outermost(first);
   }
+  // (how many more readings a test may take, when it is limited: past it, it ran too long)
+  budget?: number;
+  // (when a test must be done by (`performance.now()`), and the heap it may grow by (MB, checked every 1024 readings))
+  deadline?: number; limit_ms = 0; heap_from = 0; heap_mb = 512; private counted = 0;
   read(s: string, frame: Program.Frame, except?: Program.Rule, alike?: string): unknown {
+    if (this.budget !== undefined && --this.budget < 0) throw new Exhausted('ran too long');
+    if (this.deadline !== undefined) {
+      if (performance.now() > this.deadline) throw new Exhausted(`ran longer than ${this.limit_ms} ms`);
+      if ((++this.counted & 1023) === 0 && process.memoryUsage().heapUsed > this.heap_from + this.heap_mb * 1048576) { this.deadline = 0; throw new Exhausted(`used more than ${this.heap_mb} MB`); }
+    }
     const { open, close, definer } = this.grammar!;
     // (a value written alone: itself; as a statement of its own in a node (not the outermost) with rules that have no literal (a
     // level), what those read it as, if any does)
@@ -1108,7 +1166,14 @@ export class Program {
       const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.site ?? frame.node;
       // (a value that is not a node (text) has no names of its own: its names are the outermost node's (Node's), `.` the value;
       // what its holes take is read where it was written, `3.binary(width)` in a call)
-      if (!(self instanceof Program.Node)) { let root = frame.node; while (root.outer) root = root.outer; return this.read(s.slice(1), { node: root, site: written === root ? undefined : written, also: frame.also, from: self, this: self, writer: frame.reading ?? frame.writer }); }
+      // (and what it is made of has (`of`, as the host's kinds say: `Number`'s own `gcd (other)`), when they do not read it)
+      if (!(self instanceof Program.Node)) {
+        let root = frame.node; while (root.outer) root = root.outer;
+        const name = s.slice(1), named = this.read(name, { node: root, site: written === root ? undefined : written, also: frame.also, from: self, this: self, writer: frame.reading ?? frame.writer });
+        if (!(typeof named === 'string' && named === this.source(name))) return named;
+        const kind = this.read('of.interior', { node: root, from: self, this: self });
+        return kind instanceof Program.Node ? this.read(name, { node: kind, site: written, from: self, this: frame.this, on: true, writer: frame.reading ?? frame.writer }) : named;
+      }
       // (a name it does not have: what its own rule for any member, `.{x} =>`, makes of it (None's: None), not what is named
       // where the text was written)
       const any = !!self.outer && self.rules.some(rule => rule.home === self && rule.pieces.length === 2 && rule.pieces[0].literal === '.' && rule.pieces[1].hole);
@@ -1165,6 +1230,8 @@ export class Program {
       if (!alone) memo.set(key, found);
     }
     let { all } = found; const { leads } = found;
+    // (a typed hole's rule running: not read again (its readings kept for the text as they were found))
+    if (this.running.length && all.some(read => !read.rule.literals.length && read.rule.types.length && this.running.includes(read.rule))) all = all.filter(read => !(!read.rule.literals.length && read.rule.types.length && this.running.includes(read.rule)));
     if (leads === -2) return this.on(this.program(), s.slice(1), frame, except);
     if (leads < 0) return this.on(frame.this ?? frame.node, s.slice(1), frame, except);
     if (leads) return this.on(this.body(s.slice(0, leads), frame), s.slice(leads), frame, except);
@@ -1189,7 +1256,7 @@ export class Program {
       const { home } = reading.rule, calls = !!home?.calls, outside = !calls && !frame.on && frame.node === home && !!home?.outer && !reading.rule.literals.length;
       // (`.` in its right side: in a call, what the closure was read from (else where it was written); read on in a value (a
       // method), the value; else as it was)
-      const self = home?.calls ? frame.from ?? this.through(frame.this, home.outer) ?? home.self ?? home.outer! : outside ? home!.outer! : frame.on ? ('receiver' in frame ? frame.receiver : frame.node) : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node;
+      const self = home?.calls ? frame.from ?? this.through(frame.this, home.outer) ?? this.kind_through(frame.this, home.outer) ?? home.self ?? home.outer! : outside ? home!.outer! : frame.on ? ('receiver' in frame ? frame.receiver : frame.node) : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node;
       // (a method called on what was made in its class, `x.m(…)`, runs in it: what it reads, its own first, then the class's)
       // (a named method (no holes) read on a value: in a node of its own in the value, so what it defines is not the value's)
       // (a call (`(…) =>`) of a node that is not a closure: in a node of its own in it, as a closure's call is)
@@ -1282,6 +1349,7 @@ export class Program {
       at_node.define(rule, variable);
       return undefined;
     }
+    if (process.env.RAY_WHY && !this.deferring && (frame.receiver !== undefined || frame.on) && /^[^\p{L}\p{N}_.\s]/u.test(s)) env.fs.writeSync(2, `UNREAD ${JSON.stringify(s.slice(0, 60))} receiver=${typeof frame.receiver}:${String(frame.receiver).slice(0, 20)} on=${frame.on} from=${frame.reading?.text?.slice?.(0, 50) ?? '-'} rule=${frame.reading?.rule.head.slice(0, 40)}\n`);
     return this.source(s);
   }
   // (what is left after a value read on: in it, when it is a node; it is text already rewritten, its holes not the reading's)
@@ -1293,6 +1361,16 @@ export class Program {
     while (at && !at.rules.length && at.outer) at = at.outer;
     if (!at || !at.outer) return undefined;
     for (let on: Program.Node | undefined = self; on && on.outer; on = on.outer) if (on === at) return self;
+    return undefined;
+  }
+  // (a value that is not a node (a number): itself, when what it is made of (`of`, as the host's kinds say) is the class)
+  kind_through(self: unknown, made?: Program.Node): unknown {
+    if (self instanceof Program.Node || self === undefined || self === null || !made) return undefined;
+    let at: Program.Node | undefined = made;
+    while (at && !at.rules.length && at.outer) at = at.outer;
+    let root = made; while (root.outer) root = root.outer;
+    const kind = this.read('of.interior', { node: root, from: self, this: self });
+    for (let on: Program.Node | undefined = kind instanceof Program.Node ? kind : undefined; on; on = on.outer) if (on === at || on === made) return self;
     return undefined;
   }
   on(value: unknown, after: string, frame: Program.Frame, except?: Program.Rule): unknown {
@@ -1391,10 +1469,12 @@ export class Program {
     const candidates: Program.Candidate[] = [], look = ++this.looked;
     // (a call, only on a value read on: not the text where it is written)
     const take = (rules: Program.Rule[], rank: number, calls = on) => {
-      for (const rule of rules) if ((calls || !rule.called) && this.may_read(rule, s, defines, except)) candidates.push({ rule, rank: rank + rule.id });
+      // (a rule with no literal (a typed hole's) does not read again while its right side runs: what it checks read anew is not it)
+      for (const rule of rules) if ((calls || !rule.called) && !(!rule.literals.length && rule.types.length && this.running.includes(rule)) && this.may_read(rule, s, defines, except)) candidates.push({ rule, rank: rank + rule.id });
     };
     // (in a rule's right side, its holes' names: above all)
-    if (writer && !defines) for (const rule of this.captures(writer.rule)) if (s.startsWith(rule.head)) candidates.push({ rule, rank: 3e10 + rule.id });
+    // (only a name its right side writes (outside a hole): one in text handed to it is the writer's of that text)
+    if (writer && !defines) for (const rule of this.captures(writer.rule)) if (s.startsWith(rule.head) && this.writes(writer.rule, rule.head)) candidates.push({ rule, rank: 3e10 + rule.id });
     // (and when the text it read was written in another rule's right side, handed on to it (a record's rest): that one's, below)
     const outer = writer && !defines ? this.written_in(writer) : undefined;
     if (outer) for (const rule of this.captures(outer.rule)) if (s.startsWith(rule.head)) candidates.push({ rule, rank: 2.9e10 + rule.id });
@@ -1588,8 +1668,8 @@ export namespace Program {
     depth: number;
     constructor(public outer?: Node) { this.depth = outer ? outer.depth + 1 : 0; }
     has(head: string) { return this.heads.has(head); }
-    // (a head defined again in the same node: the rule it had takes the new right side; a rule with holes is placed as defined
-    // now, the latest (a name keeps its place))
+    // (a head defined again in the same node: the rule it had takes the new right side; a rule is placed as defined now, the
+    // latest (a variable keeps its place))
     private heads = new Map<string, Rule>();
     static last?: Rule;
     define(rule: Rule, variable = false): void {
@@ -1597,7 +1677,7 @@ export namespace Program {
       Node.last = had ?? rule;
       if (had) {
         Object.assign(had, { body: rule.body, code: rule.code, passes: rule.passes, holds: rule.holds });
-        if (!variable && had.holes.length) had.id = ++Node.defined, this.headed++;
+        if (!variable) had.id = ++Node.defined, this.headed++;
         return;
       }
       rule.id = ++Node.defined; this.headed++;
@@ -1769,6 +1849,8 @@ export class Library {
   program: Program;
   root: string; ether: string; core: string;
   diagnostics = new Map<string, Diagnostic[]>();
+  // (how many readings a test may take: `RAY_TEST_STEPS`; none, unlimited)
+  budget = process.env.RAY_TEST_STEPS ? Number(process.env.RAY_TEST_STEPS) : undefined;
   texts = new Map<string, string>();
   read = new Set<string>();
   timings: [string, number][] = [];
@@ -1782,11 +1864,27 @@ export class Library {
     this.program = new Program(new Text.Source(ENTRYPOINT.join('/') + '2'));
     await this.program.compile();
     this.timings.push(['the language', performance.now() - t0]);
+    this.entrypoint_tests();
     const t1 = performance.now();
-    for (const file of Library.reading_order(this.files_of(this.core))) { const t = performance.now(); this.file(file); this.timings.push(['  ' + env.path.basename(file), performance.now() - t]); }
+    for (const file of Library.reading_order(this.files_of(this.core))) { const t = performance.now(); this.file(file); this.timings.push(['  ' + env.path.basename(file), performance.now() - t]); if (process.env.RAY_PROGRESS) env.fs.writeSync(2, `${env.path.basename(file).padEnd(24)} ${Math.round(performance.now() - t)} ms  heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB\n`); }
     this.program.run(this.program.kinds!.rest, { node: this.program.global });
     this.timings.push(['the core library', performance.now() - t1]);
     return this;
+  }
+
+  // The tests the entrypoint itself holds (put off while it was read): tests like any other, located in it.
+  entrypoint_tests() {
+    const p = this.program, file = env.path.join(this.core, ENTRYPOINT[2] + '2'), text = this.text(file), spans = Library.asserts(text, 0, text.length), used = new Map<string, number>();
+    this.texts.set(file, text);
+    const tests: Test[] = p.deferred.splice(0).map(d => {
+      const written = String(p.source(d.written ?? d.code)).trim();
+      let at = written ? text.indexOf(written, (used.get(written) ?? -1) + 1) : -1;
+      if (at < 0 && written) at = text.indexOf(written);
+      if (at >= 0) used.set(written, at);
+      const span = at >= 0 ? spans.find(([b, e]) => b <= at && at < e) ?? [at, at + written.length] : [0, 0];
+      return { ...d, file, begin: span[0], end: span[1] };
+    });
+    this.reads.set(file, [{ statement: '', begin: 0, end: text.length, diagnostics: [], paints: [], tests }]);
   }
 
   // The order a project's files are read in: a file after those defining what it uses, then by name. (A host's choice.)
@@ -1865,8 +1963,13 @@ export class Library {
   // again (`again`, an edit), a statement written as it was is not read again: what it said, painted and put off, kept (moved with
   // it); only those written otherwise are read.
   file(file: string, text = this.text(file), node: Program.Node = this.program.global, again = false): Diagnostic[] {
-    const p = this.program, painter = this.options.painting ? new Painter(text, p) : undefined;
+    const p = this.program, painter = this.options.painting ? new Painter(text, p) : undefined, was = this.texts.get(file) ?? '';
     this.texts.set(file, text);
+    // (where it was edited: what is the same before and after; a place outside that, where it is now)
+    let pre = 0; while (pre < was.length && pre < text.length && was[pre] === text[pre]) pre++;
+    let suf = 0; while (suf < was.length - pre && suf < text.length - pre && was[was.length - 1 - suf] === text[text.length - 1 - suf]) suf++;
+    const now = (at: number) => at < pre ? at : at >= was.length - suf ? at + text.length - was.length : -1;
+    const kept_in = <T extends { begin: number, end: number }>(xs: T[]) => xs.flatMap(x => { const b = now(x.begin), e = now(x.end); return b < 0 || e < 0 ? [] : [{ ...x, begin: b, end: e }]; });
     const before_reads = again ? this.reads.get(file) ?? [] : [], kept = new Map<string, Statement[]>();
     for (const r of before_reads) kept.set(r.statement, [...kept.get(r.statement) ?? [], r]);
     if (!again) for (const r of this.reads.get(file) ?? []) for (const t of r.tests) t.dropped = true;
@@ -1875,7 +1978,13 @@ export class Library {
     for (const statement of p.code(text).statements) {
       if (!statement.trim()) continue;
       const first = statement.trimStart().split('\n')[0].trim(), found = first ? text.indexOf(first, cursor) : -1, begin = found < 0 ? cursor : found;
-      const last = statement.trimEnd().split('\n').pop()!.trim(), last_at = last ? text.indexOf(last, begin) : -1, end = last_at < 0 ? begin + first.length : last_at + last.length;
+      // (where it ends: as long as it is, when it is written as read; else where its last line is (not a line like it inside it))
+      const whole = statement.trim(), last = statement.trimEnd().split('\n').pop()!.trim();
+      // (not as written, comments left out: its lines found one after another, each after the one before)
+      let last_at = -1;
+      if (text.startsWith(whole, begin)) last_at = begin + whole.length - last.length;
+      else if (last) { let at = begin; for (const line of whole.split('\n')) { const l = line.trim(); if (!l) continue; const i = text.indexOf(l, at); if (i < 0) continue; at = i + l.length; last_at = i; } if (last_at >= 0) last_at = at - last.length; }
+      const end = last_at < 0 ? begin + first.length : last_at + last.length;
       cursor = end;
       // (its needs, the project's head: not read)
       if (/^@[^\s:]+$/.test(statement.trim()) && !text.slice(0, begin).split('\n').some(line => line.trim() && !line.trim().startsWith('//') && !/^@[^\s:]+$/.test(line.trim()))) continue;
@@ -1885,6 +1994,30 @@ export class Library {
         same.diagnostics = same.diagnostics.map(moved); same.paints = same.paints.map(moved);
         for (const t of same.tests) { t.begin += by; t.end += by; t.paints = t.paints?.map(moved); }
         same.begin = begin; same.end = end; reads.push(same);
+        continue;
+      }
+      // (written otherwise only in its tests: its tests read again, nothing else)
+      const bare = Library_read(statement), like = again ? [...kept.values()].flat().find(o => o.tests.length && Library_read(o.statement) === bare) : undefined;
+      if (like) {
+        kept.set(like.statement, kept.get(like.statement)!.filter(o => o !== like));
+        const read: Statement = { statement, begin, end, diagnostics: kept_in(like.diagnostics), paints: kept_in(like.paints), tests: [] };
+        // (a test kept: one written outside what was edited)
+        const old = like.tests.map(t => ({ ...t, begin: t.end < pre || t.begin >= was.length - suf ? now(t.begin) : -1, end: now(t.end) })), sample = like.tests[0].frame.reading;
+        for (const [b, e] of Library.asserts(text, begin, end)) {
+          const same_test = old.find(t => t.begin === b && t.end === e);
+          if (same_test) { read.tests.push(Object.assign(like.tests[old.indexOf(same_test)], { begin: b, end: e, paints: kept_in(same_test.paints ?? []) })); continue; }
+          const deferred = p.deferred.length, before = p.reports.length;
+          if (painter) { painter.paints = []; painter.begin = b; painter.end = e; p.painter = painter; }
+          try { p.run(text.slice(b, e), { node: sample?.receiver ?? node, this: sample?.self }); }
+          catch (x) { read.diagnostics.push(this.said(file, text, b, e, `Failed: ${(x as Error)?.message ?? x}`, 1)); }
+          finally { p.painter = undefined; }
+          for (const report of p.reports.slice(before)) read.diagnostics.push(this.reported(report, file, text, b, e));
+          p.reports.length = before;
+          if (painter) read.paints.push(...painter.paints);
+          for (const d of p.deferred.splice(deferred)) read.tests.push({ ...d, file, begin: b, end: e });
+        }
+        for (const t of like.tests) if (!read.tests.includes(t)) t.dropped = true;
+        reads.push(read);
         continue;
       }
       if (!/^\s*assert\b/.test(statement)) changed = true;
@@ -1900,7 +2033,9 @@ export class Library {
       if (painter) read.paints = painter.paints;
       // (the tests it put off: the asserts written in it, in order)
       const spans = Library.asserts(text, begin, end), put = p.deferred.splice(deferred);
-      put.forEach((d, k) => read.tests.push({ ...d, file, begin: spans[k]?.[0] ?? begin, end: spans[k]?.[1] ?? end }));
+      // (each where its code is written: one in a loop's body is put off once each time round)
+      const used = new Map<string, number>(); const located = (code: string, k: number) => { const written = String(p.source(code)).trim(), at0 = written ? text.indexOf(written, Math.max(begin, (used.get(written) ?? -1) + 1)) : -1, at = at0 >= 0 || !written ? at0 : text.indexOf(written, begin); if (at >= 0) used.set(written, at); return at >= 0 && at < end ? spans.find(([b, e]) => b <= at && at < e) ?? [at, at + written.length] as [number, number] : spans[k]; };
+      put.forEach((d, k) => { const span = located(d.written ?? d.code, k); read.tests.push({ ...d, file, begin: span?.[0] ?? begin, end: span?.[1] ?? end }); });
       reads.push(read);
     }
     for (const rest of kept.values()) for (const r of rest) for (const t of r.tests) t.dropped = true;
@@ -1909,8 +2044,31 @@ export class Library {
     this.reads.set(file, reads);
     const diagnostics = reads.flatMap(r => r.diagnostics);
     this.diagnostics.set(file, diagnostics);
-    if (painter) this.paints.set(file, [...reads.flatMap(r => r.paints), ...Library.comments(text)]);
+    if (painter) { const painted = [...reads.flatMap(r => r.paints), ...Library.comments(text)]; this.paints.set(file, [...painted, ...this.unread(text, painted)]); }
     return diagnostics;
+  }
+  // What nothing read paints (code not run while reading: a rule's right side): each piece of it shown as what the rules would read
+  // it as first (matched, nothing run); a word nothing reads, a name (`variable`); anything else, `punctuation`.
+  private styles = new Map<string, string>();
+  unread(text: string, painted: Paint[]): Paint[] {
+    const p = this.program, cells = new Uint8Array(text.length), out: Paint[] = [];
+    for (const x of painted) for (let k = Math.max(0, x.begin); k <= Math.min(x.end, text.length - 1); k++) cells[k] = 1;
+    const style = (piece: string, word: boolean) => {
+      let found = this.styles.get(piece);
+      if (found === undefined) {
+        let read: string | undefined = p.literal_styles.get(piece);
+        if (!read) try { const all = p.readings(piece, p.candidates(piece, p.global, 0), true); for (let k = all.length - 1; k >= 0 && !read; k--) read = all[k].rule.style; } catch { }
+        this.styles.set(piece, found = read ?? (word ? 'variable' : 'punctuation'));
+      }
+      return found;
+    };
+    for (const m of text.matchAll(/"(?:[^"\\\n]|\\.)*"|`[^`\n]*`|[\p{L}\p{N}_]+(?:\.[\p{N}]+)?|[()\[\]{},]|[^\s\p{L}\p{N}_"`()\[\]{},]+/gu)) {
+      const b = m.index!, e = b + m[0].length - 1;
+      let free = true; for (let k = b; k <= e; k++) if (cells[k]) { free = false; break; }
+      if (!free) continue;
+      out.push({ begin: b, end: e, style: style(m[0], /^[\p{L}\p{N}_]/u.test(m[0])) });
+    }
+    return out;
   }
   reads = new Map<string, Statement[]>();
   // (the asserts written in a text between two places, each from `assert` to the end of what it holds: not one inside another)
@@ -1966,30 +2124,33 @@ export class Library {
   }
   // What was put off while reading (tests): run, what each said; a file's (those not run since what they read was read again), or every
   // one. `until`: stop when it answers true (something else to do), the rest run later.
-  test(file?: string, until?: () => boolean): Diagnostic[] {
+  test(file?: string, until?: () => boolean, each?: (test: Test, outcome: Diagnostic[]) => void): Diagnostic[] {
     const p = this.program, out: Diagnostic[] = [];
     const tests = file !== undefined ? (this.reads.get(file) ?? []).flatMap(r => r.tests) : [...this.reads.values()].flat().flatMap(r => r.tests);
     p.deferring = false;
+    let stopped = false;
     try {
       for (const t of tests) {
         if (t.dropped) continue;
         if (t.outcome === undefined) {
-          if (until?.()) break;
+          if (until?.()) { stopped = true; break; }
           const said: Diagnostic[] = [], before = p.reports.length, text = this.texts.get(t.file) ?? '';
           const painter = this.options.painting ? Object.assign(new Painter(text, p), { begin: t.begin, end: t.end }) : undefined;
           p.painter = painter;
+          p.budget = this.budget; p.limit_ms = Number(process.env.RAY_TEST_MS ?? 1000); p.heap_mb = Number(process.env.RAY_TEST_MB ?? 512); p.heap_from = process.memoryUsage().heapUsed; p.deadline = performance.now() + p.limit_ms;
           try { p.run(t.code, t.frame, t.except); }
           catch (e) { said.push(this.said(t.file, text, t.begin, t.end, `Failed: ${(e as Error)?.message ?? e}`, 1)); }
-          finally { p.painter = undefined; }
+          finally { p.painter = undefined; p.budget = undefined; p.deadline = undefined; }
           if (painter) t.paints = painter.paints;
           for (const report of p.reports.slice(before)) said.push(this.reported(report, t.file, text, t.begin, t.end));
           p.reports.length = before;
           t.outcome = said;
+          each?.(t, said);
         }
         out.push(...t.outcome);
       }
       // (what was put off outside a file's reading)
-      if (file === undefined) for (const { code, frame, except } of p.deferred.splice(0)) {
+      if (file === undefined && !stopped) for (const { code, frame, except } of p.deferred.splice(0)) {
         const before = p.reports.length;
         try { p.run(code, frame, except); } catch { }
         for (const report of p.reports.slice(before)) { const at = this.located(report); if (at) out.push(this.reported(report, at.file, at.text, at.begin, at.end)); }
@@ -2028,26 +2189,59 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     process.exitCode = await new Promise<number>(resolve => { worker.on('message', (m: { exit?: number }) => { if (m.exit !== undefined) resolve(m.exit); }); worker.on('error', e => { console.error(e); resolve(1); }); worker.on('exit', code => resolve(code)); });
     return;
   }
+  if (kwargs.test) env.fs.writeSync(2, 'reading the core library…\n');
   const library = await new Library().boot(), { path } = env, all: Diagnostic[] = [];
   if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
   const files = (args.length ? args : library.tests()).map(f => path.resolve(f));
   if (kwargs.verbose) console.error(`reading ${files.length}: ${files.map(f => path.relative(library.root, f)).join(' ')}`);
+  // (the tests of the files given; given none, of every file read)
+  // (a test reported as it finishes: its comments above, its code, and what it found)
+  const counts = { passed: 0, failed: 0, warnings: 0 }, reported = new Set<Diagnostic>();
+  const report = (t: Test, outcome: Diagnostic[]) => {
+    const text = library.text(t.file), lines = text.split('\n'), first = text.slice(0, t.begin).split('\n').length - 1;
+    // (the code shown goes on while the lines are indented past the test's own, or close a bracket at its level)
+    const indent = (l: string) => l.length - l.trimStart().length; let last = first;
+    for (let k = first + 1; k < lines.length; k++) { if (!lines[k].trim()) continue; if (indent(lines[k]) > indent(lines[first]) || (indent(lines[k]) === indent(lines[first]) && /^[)\]}]/.test(lines[k].trim()))) last = k; else break; }
+    last = Math.max(last, text.slice(0, Math.max(t.begin, t.end - 1)).split('\n').length - 1);
+    const above: string[] = []; for (let k = first - 1; k >= 0 && lines[k].trim().startsWith('//'); k--) above.unshift(lines[k]);
+    t.paints = undefined; (t as { frame?: Program.Frame }).frame = undefined;
+    const failed = outcome.some(d => d.severity === 1); counts[failed ? 'failed' : 'passed']++; counts.warnings += outcome.filter(d => d.severity === 2).length;
+    const block = [...above, ...lines.slice(first, last + 1)].map(l => '    | ' + l).join('\n');
+    const messages = outcome.filter(d => d.severity <= 2).map(d => { reported.add(d); return `    ${['', 'error', 'warning'][d.severity]}: ${d.message}`; }).join('\n');
+    env.fs.writeSync(2, `${failed ? 'FAIL' : 'ok  '} ${path.relative(process.cwd(), t.file)}:${first + 1}${process.env.RAY_PROGRESS ? `  heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB` : ''}\n${block}\n${messages ? messages + '\n' : ''}`);
+  };
+  // (one test per call, the event loop turned between: what a `WeakRef` was made of is kept until the job ends, so a run in one job keeps everything every test made)
+  const seen = new Set<Diagnostic>(), tested = new Set<string>();
+  const run_tests = async (file?: string) => { for (;;) {
+    let ran = false;
+    const outcome = library.test(file, () => { const stop = ran; ran = true; return stop; }, report);
+    if (!ran) { for (const d of outcome) if (!seen.has(d)) { seen.add(d); all.push(d); } break; }
+    await new Promise<void>(resolve => setImmediate(resolve));
+  } };
+  // (the tests of every file read so far and not yet tested, one at a time as they finish)
+  const run_read = async () => { if (kwargs.test) for (const file of [...library.reads.keys()]) if (!tested.has(file) && (!args.length || files.includes(file))) { tested.add(file); await run_tests(file); } };
   for (const file of files) {
-    if (env.fs.statSync(file).isDirectory()) { library.project(file); continue; }
+    if (kwargs.test) env.fs.writeSync(2, `reading ${path.relative(process.cwd(), file)}…\n`);
+    if (env.fs.statSync(file).isDirectory()) { library.project(file); if (args.length) await run_read(); continue; }
     library.prepare(file);
     if (!library.diagnostics.has(file)) library.file(file, library.text(file), path.dirname(file) === library.core || file.endsWith('.project' + EXTENSION) ? library.program.global : new Program.Node(library.program.global));
+    // (given files: each one's tests as soon as it is read; given none, every file is read first: tests run in between leave
+    // what they did to what is read after them)
+    if (args.length) await run_read();
+    if (process.env.RAY_PROGRESS) env.fs.writeSync(2, `read ${path.relative(library.root, file)}  heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB\n`);
   }
   if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
+  await run_read();
   for (const [, ds] of library.diagnostics) all.push(...ds);
-  // (the tests of the files given; given none, of every file read)
-  if (kwargs.test) for (const file of args.length ? files : [undefined]) all.push(...library.test(file));
-  const shown = all.filter(d => d.severity <= (kwargs.verbose ? 3 : 2) && (args.length === 0 || files.includes(d.file) || kwargs.test));
+  // (what was put off outside any file's reading)
+  if (kwargs.test && !args.length) await run_tests(undefined);
+  const shown = all.filter(d => d.severity <= (kwargs.verbose ? 3 : 2) && (args.length === 0 || files.includes(d.file) || kwargs.test) && !reported.has(d));
   for (const d of shown) {
     const line = d.file ? library.text(d.file).slice(0, d.begin).split('\n').length : 0;
     console.error(`${d.file ? path.relative(process.cwd(), d.file) : '?'}:${line}: ${['', 'error', 'warning', 'info', 'hint'][d.severity]}: ${d.message}${d.around ? '\n' + d.around.split('\n').map(l => '    | ' + l).join('\n') : ''}`);
   }
-  if (kwargs.test) console.error(`${all.filter(d => d.severity === 1).length} failed`);
-  const exit = shown.some(d => d.severity === 1) ? 1 : 0;
+  if (kwargs.test) console.error(`${counts.passed} passed, ${counts.failed} failed, ${counts.warnings} warnings in tests, ${shown.filter(d => d.severity === 1).length} errors in reading`);
+  const exit = shown.some(d => d.severity === 1) || counts.failed > 0 ? 1 : 0;
   if (env.worker) env.worker_threads.parentPort!.postMessage({ exit }); else process.exitCode = exit;
 }
 
@@ -2095,12 +2289,14 @@ export function theme(program: Program): { name: string, colors: Record<string, 
   return { name: typeof name === 'string' ? name : 'theme', colors };
 }
 
-async function lsp_worker() {
+// The language server's two readers: one reads each document as it changes and says so at once (`read`); the other reads it too and
+// runs its tests (`test`), saying so as they finish. (A test runs as long as it runs: an edit is not kept waiting for it.)
+async function lsp_worker(role: 'read' | 'test') {
   const port = env.worker_threads.parentPort!, { path } = env;
   const t0 = performance.now();
   const library = await new Library({ painting: true }).boot();
-  port.postMessage({ log: `the language and its core library read in ${Math.round(performance.now() - t0)} ms` });
-  port.postMessage({ theme: theme(library.program) ?? null });
+  port.postMessage({ log: `${role}: the language and its core library read in ${Math.round(performance.now() - t0)} ms` });
+  if (role === 'read') port.postMessage({ theme: theme(library.program) ?? null });
   const docs = new Map<string, { file: string, text: string, version: number }>(), dirty = new Set<string>();
   let scheduled: ReturnType<typeof setTimeout> | undefined;
   // (each document read as it changes (only what changed in it); what it says sent at once, then again as its tests are run, a
@@ -2109,7 +2305,7 @@ async function lsp_worker() {
   const send = (uri: string, doc: { file: string, text: string, version: number }, file: string) => {
     const tests = (library.reads.get(file) ?? []).flatMap(r => r.tests).filter(t => !t.dropped && t.outcome).flatMap(t => t.outcome!);
     const diagnostics = [...library.diagnostics.get(file) ?? [], ...tests];
-    port.postMessage({ checked: { uri, version: doc.version, text: doc.text, paints: library.tested_paints(file), diagnostics } });
+    port.postMessage({ checked: { uri, version: doc.version, text: doc.text, paints: library.tested_paints(file), diagnostics, tested: role === 'test' } });
     return diagnostics.length;
   };
   const work = () => {
@@ -2129,7 +2325,7 @@ async function lsp_worker() {
       }
       const n = send(uri, doc, file);
       port.postMessage({ log: `read ${path.basename(file)} v${doc.version} in ${Math.round(performance.now() - t1)} ms: ${n} diagnostics` });
-      testing.add(uri);
+      if (role === 'test') testing.add(uri);
     }
     if (testing.size) setTimeout(test, 0);
   };
@@ -2161,8 +2357,8 @@ export async function lsp(options: { io?: { input: NodeJS.ReadableStream, output
   ]);
   const io = options.io ?? { input: process.stdin, output: process.stdout };
   const connection = createConnection(ProposedFeatures.all, io.input, io.output), documents = new TextDocuments(TextDocument);
-  const reader = env.thread({ lsp: true });
-  reader.unref();
+  const reader = env.thread({ lsp: 'read' }), tester = env.thread({ lsp: 'test' });
+  reader.unref(); tester.unref();
   const file_of = (uri: string): string => { try { return env.url.fileURLToPath(uri); } catch { return uri; } };
   const checked = new Map<string, { version: number, text: string, paints: Paint[] }>();
   const painted = (paints: Paint[]) => paints as unknown as Parameters<typeof encode>[1];
@@ -2177,20 +2373,26 @@ export async function lsp(options: { io?: { input: NodeJS.ReadableStream, output
     }
     return { styles, documents: docs };
   };
-  reader.on('message', (m: { checked?: { uri: string, version: number, text: string, paints: Paint[], diagnostics: Diagnostic[] }, log?: string, theme?: { name: string, colors: Record<string, string> } | null }) => {
+  // (what was said about a version of a document: the reader's, until the tester's (with what its tests found) for that version)
+  const said = new Map<string, { version: number, tested: boolean }>();
+  const heard = (m: { checked?: { uri: string, version: number, text: string, paints: Paint[], diagnostics: Diagnostic[], tested?: boolean }, log?: string, theme?: { name: string, colors: Record<string, string> } | null }) => {
     if (m.theme !== undefined) { shown = m.theme ?? undefined; connection.sendNotification('ether/theme', payload([...checked.keys()])); return; }
     if (m.log !== undefined) { connection.console.log(m.log); return; }
     const c = m.checked;
     if (!c) return;
-    const doc = documents.get(c.uri);
+    const doc = documents.get(c.uri), before = said.get(c.uri);
     if (doc && doc.version > c.version) return;
+    if (before && (before.version > c.version || (before.version === c.version && before.tested && !c.tested))) return;
+    said.set(c.uri, { version: c.version, tested: !!c.tested });
     checked.set(c.uri, { version: c.version, text: c.text, paints: c.paints });
     connection.sendDiagnostics({ uri: c.uri, version: c.version, diagnostics: c.diagnostics.map(d => ({ severity: d.severity, range: { start: position_of(c.text, d.begin), end: position_of(c.text, Math.max(d.end, d.begin + 1)) }, message: d.around ? `${d.message}\n${d.around}` : d.message, source: 'ray' })) });
     connection.languages.semanticTokens.refresh();
     connection.sendNotification('ether/theme', payload([c.uri]));
-  });
+  };
+  reader.on('message', heard); tester.on('message', heard);
   reader.on('error', e => connection.console.error(`the reader stopped: ${(e as Error).stack ?? e}`));
-  const open = (uri: string, text: string, version: number) => reader.postMessage({ open: { uri, file: file_of(uri), text, version } });
+  tester.on('error', e => connection.console.error(`the tester stopped: ${(e as Error).stack ?? e}`));
+  const open = (uri: string, text: string, version: number) => { for (const w of [reader, tester]) w.postMessage({ open: { uri, file: file_of(uri), text, version } }); };
   connection.onInitialize(() => ({
     capabilities: { textDocumentSync: TextDocumentSyncKind.Full, semanticTokensProvider: { legend: { tokenTypes: TOKEN_TYPES, tokenModifiers: MODIFIERS }, full: true, range: true } },
     serverInfo: { name: 'ray-language-server', version: env.version.toString() },
@@ -2202,11 +2404,11 @@ export async function lsp(options: { io?: { input: NodeJS.ReadableStream, output
   connection.onRequest('ether/initialFiles', (): null => null);
   documents.onDidOpen(e => open(e.document.uri, e.document.getText(), e.document.version));
   documents.onDidChangeContent(e => open(e.document.uri, e.document.getText(), e.document.version));
-  documents.onDidClose(e => { reader.postMessage({ close: e.document.uri }); checked.delete(e.document.uri); });
+  documents.onDidClose(e => { for (const w of [reader, tester]) w.postMessage({ close: e.document.uri }); checked.delete(e.document.uri); said.delete(e.document.uri); });
   documents.listen(connection);
   connection.listen();
 }
 
-if (env.worker && env.worker_threads.workerData?.lsp) void lsp_worker();
+if (env.worker && env.worker_threads.workerData?.lsp) void lsp_worker(env.worker_threads.workerData.lsp === 'test' ? 'test' : 'read');
 else if (env.worker && env.worker_threads.workerData?.main) void main(env.worker_threads.workerData.main);
 else if (env.is_main_entrypoint) void main();

@@ -9,12 +9,10 @@ SHA2 := class: Encoding.Digest width: 32 | 64, rounds: Number, sums: Number[][],
   static primes := (2 -> +1){n => (2..<n).every(n % . != 0)}
   K => primes[..<rounds].map(p => (p * 2 ^ (3 * width)).root(3) % word)
   // The first constant and initial word (FIPS 180-4 §4.2.2, §5.3.3)
-  // SHT4 the constants are not the 64 of FIPS 180-4 §4.2.2
-  assert SHA256.K.first == 0x428a2f98 && SHA256.K.last == 0xc67178f2 && SHA256.K.count == 64
+  assert SHA256.K.first == 0x428a2f98 && SHA256.K.last == 0xc67178f2 && SHA256.K.count == 64  // SHT4 the constants are not the 64 of FIPS 180-4 §4.2.2
   // Initial hash value: the same of the square roots of the first eight primes (FIPS 180-4 §5.3.3, §5.3.5)
   initial => primes[..<8].map(p => (p * 2 ^ (2 * width)).root(2) % word)
-  // SHT5 the initial hash value is not that of FIPS 180-4 §5.3.3
-  assert SHA256.initial == [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
+  assert SHA256.initial == [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]  // SHT5 the initial hash value is not that of FIPS 180-4 §5.3.3
 
   // Padding: the message, a 1 bit, zeros, and its length in bits in two words (FIPS 180-4 §5.1.1, §5.1.2)
   padded (message: Byte[]) => [message, 0x80, [0] * ((2 * block - width / 4 - 1 - message.count % block) % block), (message.count * 8) as Binary{length == 2 * width} as Byte[]].flatten
@@ -43,11 +41,8 @@ SHA2 := class: Encoding.Digest width: 32 | 64, rounds: Number, sums: Number[][],
 // SHA-256 (FIPS 180-4 §4.1.2, §6.2)
 SHA256 := SHA2(extensions: ".sha256", width: 32, rounds: 64, sums: [[2, 13, 22], [6, 11, 25]], sigmas: [[7, 18, 3], [17, 19, 10]])
 // One-block message "abc" (FIPS 180-4 example SHA256.pdf, and FIPS 180-2 Appendix B.1)
-// SHT1 abc does not digest as in FIPS 180's one-block example
-assert SHA256.write("abc".bytes) as Byte₃₂ as Hexadecimal₆₄ == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+assert SHA256.write("abc".bytes) as Byte₃₂ as Hexadecimal₆₄ == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"  // SHT1 abc does not digest as in FIPS 180's one-block example
 // Two-block message, the 448 bits "abcdbcde…nopq" (FIPS 180-4 example SHA256.pdf, and FIPS 180-2 Appendix B.2)
-// SHT2 the 448-bit message does not digest as in FIPS 180's two-block example
-assert SHA256.write("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes) as Byte₃₂ as Hexadecimal₆₄ == "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+assert SHA256.write("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes) as Byte₃₂ as Hexadecimal₆₄ == "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"  // SHT2 the 448-bit message does not digest as in FIPS 180's two-block example
 // The empty message (NIST CAVP SHAVS, SHA256ShortMsg.rsp, Len = 0)
-// SHT3 the empty message does not digest as e3b0c442…
-assert SHA256.write([]) as Byte₃₂ as Hexadecimal₆₄ == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+assert SHA256.write([]) as Byte₃₂ as Hexadecimal₆₄ == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"  // SHT3 the empty message does not digest as e3b0c442…

@@ -26,8 +26,7 @@ UI := class {
     Pointer := class (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
       contact => @me/device/pointer[device ?? "mouse", number ?? 0]
       position => Geometry.Space.screen.seen(Geometry.Vector(x * 1px, y * 1px), UI.scene.size)
-      // UI170 a mouse report is not a position on the page
-      assert ("\e[<0;3;4M" as ANSI.Mouse).position == Geometry.Vector(16px, UI.scene.size.y - 64px)
+      assert ("\e[<0;3;4M" as ANSI.Mouse).position == Geometry.Vector(16px, UI.scene.size.y - 64px)  // UI170 a mouse report is not a position on the page
       time => stamp ? stamp * 1 ms : Time.now
     }
     Keystroke := class (id: Id, " ", kind: "keydown" | "keyup", " ", key: Id, modifiers: (" ", held: "shift" | "control" | "alt" | "meta")[])
@@ -77,98 +76,76 @@ UI := class {
     {site: *{fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering){O: Scene}(), Scene)
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
   }
-  // UI5 a comma does not flow inline
-  assert Program(code: { "a", "b" }){O: UI.Scene}().flow == inline
+  assert Program(code: { "a", "b" }){O: UI.Scene}().flow == inline  // UI5 a comma does not flow inline
   assert Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}().(
     .styles.contains("muted")  // UI136 a dynamic style is not applied
     & .styles is Dynamic  // UI137 a dynamic style is not kept for the levels to recompute
   )
-  // UI230 a value placed at a location is not a link to it
-  assert Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}().content == @https://orbitmines.com && Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}().children.first.content == "Ray"
-  // UI232 a style is not kept on the string it marks
-  assert Program(code: { "Ray" ^h1 }){O: UI.Scene}().content == "Ray" && Program(code: { "Ray" ^h1 }){O: UI.Scene}().content.every(Program(code: { "Ray" ^h1 }){O: UI.Scene}().styles.contains("h1"))
+  assert Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}().content == @https://orbitmines.com && Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}().children.first.content == "Ray"  // UI230 a value placed at a location is not a link to it
+  assert Program(code: { "Ray" ^h1 }){O: UI.Scene}().content == "Ray" && Program(code: { "Ray" ^h1 }){O: UI.Scene}().content.every(Program(code: { "Ray" ^h1 }){O: UI.Scene}().styles.contains("h1"))  // UI232 a style is not kept on the string it marks
   assert {
     with @me = Character(name: "player") {
-      // UI239 a superposition is not a chooser for a player
-      assert Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice
+      assert Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice  // UI239 a superposition is not a chooser for a player
     }
   }
   assert {
     with @me = Instance.local {
-      // UI240 the computer asks someone to choose instead of picking
-      assert !(Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice)
+      assert !(Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice)  // UI240 the computer asks someone to choose instead of picking
     }
   }
   assert {
     solved := (children, scrolled: Geometry.Length = 0px) => Geometry.Box(size: Geometry.Vector(1000px, 800px), scrolled: Geometry.Vector(0px, scrolled), children: children).solve
     fixed_width := Geometry.Box(width: 48px, height: 10px)
     solved([fixed_width])
-    // UI100 a fixed width is not kept
-    assert fixed_width.size.x == 48px
+    assert fixed_width.size.x == 48px  // UI100 a fixed width is not kept
     lifted_up := Geometry.Box(height: 20px) + (mt -10px)
     solved([Geometry.Box(height: 20px), lifted_up])
-    // UI101 a negative margin does not pull a shape up
-    assert lifted_up.origin.y == 770px
+    assert lifted_up.origin.y == 770px  // UI101 a negative margin does not pull a shape up
     padded_child := Geometry.Box(height: 10px)
     solved([Geometry.Box(children: [padded_child]) + (p 5px)])
-    // UI102 padding does not move what it holds
-    assert padded_child.origin == Geometry.Vector(5px, 5px)
+    assert padded_child.origin == Geometry.Vector(5px, 5px)  // UI102 padding does not move what it holds
     pinned := Geometry.Box(position: Geometry.Absolute(), height: 10px) + Geometry.Spacing(Geometry.Edges(6px, None, None, 6px), itself)
     after_pinned := Geometry.Box(height: 10px)
     solved([pinned, after_pinned])
-    // UI103 an absolute shape is not placed by its insets
-    assert pinned.origin == Geometry.Vector(6px, 784px)
-    // UI104 an absolute shape takes space in the flow
-    assert after_pinned.origin.y == 790px
+    assert pinned.origin == Geometry.Vector(6px, 784px)  // UI103 an absolute shape is not placed by its insets
+    assert after_pinned.origin.y == 790px  // UI104 an absolute shape takes space in the flow
     fixed_bar := Geometry.Box(position: Geometry.Fixed(), height: 10px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
     solved([Geometry.Box(height: 3000px, children: [Geometry.Box(height: 500px), fixed_bar])], scrolled: 100px)
-    // UI105 a fixed shape scrolls with the page
-    assert fixed_bar.at.y == 790px
+    assert fixed_bar.at.y == 790px  // UI105 a fixed shape scrolls with the page
     sticky_bar := Geometry.Box(position: Geometry.Sticky(), height: 10px) + Geometry.Spacing(Geometry.Edges(0px, None, None, None), itself)
     solved([Geometry.Box(height: 1000px, children: [sticky_bar])], scrolled: 300px)
-    // UI106 a sticky shape does not stay at the top while its parent is in view
-    assert sticky_bar.at.y == 790px
+    assert sticky_bar.at.y == 790px  // UI106 a sticky shape does not stay at the top while its parent is in view
     anchor := Geometry.Box(height: 20px)
     tip := UI.Popover(position: Geometry.Anchored(anchor: anchor), height: 10px)
     solved([anchor, tip])
-    // UI107 a popover is not placed below its anchor
-    assert tip.at.y == 770px
-    // UI108 a popover shows before its anchor is hovered or focused
-    assert !(tip.visible)
+    assert tip.at.y == 770px  // UI107 a popover is not placed below its anchor
+    assert !(tip.visible)  // UI108 a popover shows before its anchor is hovered or focused
     scrolled_child := Geometry.Box(height: 10px)
     solved([Geometry.Box(scrolled: Geometry.Vector(0, 50px), overflow: scroll, children: [scrolled_child])])
-    // UI160 a scrolled container does not move what it holds
-    assert scrolled_child.at.y == 840px
+    assert scrolled_child.at.y == 840px  // UI160 a scrolled container does not move what it holds
     watched := (@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}
     video := Program(code: { watched }){O: UI.Scene}()
-    // UI182 a YouTube link is not embedded as its player
-    assert video.content === watched && video.content.embedded == "https://www.youtube.com/embed/O6v_gzlI1kY"
+    assert video.content === watched && video.content.embedded == "https://www.youtube.com/embed/O6v_gzlI1kY"  // UI182 a YouTube link is not embedded as its player
     solved([video])
-    // UI184 an embedded video is not 16:9
-    assert video.size.y == video.size.x * 9 / 16
+    assert video.size.y == video.size.x * 9 / 16  // UI184 an embedded video is not 16:9
     with UI.scene.size = Geometry.Vector(64px, 36px) {
-      // UI186 an embedded frame leaves no placeholder in a raster
-      assert Program(code: { video }).rendered(Language.Direct.level).at(1, 1).alpha > 0
+      assert Program(code: { video }).rendered(Language.Direct.level).at(1, 1).alpha > 0  // UI186 an embedded frame leaves no placeholder in a raster
     }
     first_laid := Geometry.Box(height: 20px)
     second_laid := Geometry.Box(height: 20px)
     solved([first_laid, second_laid])
-    // YU9 the first shape in a flow is not at the top
-    assert first_laid.origin.y == 780px
-    // YU10 a shape later in a flow is not below the one before it
-    assert second_laid.origin.y < first_laid.origin.y
+    assert first_laid.origin.y == 780px  // YU9 the first shape in a flow is not at the top
+    assert second_laid.origin.y < first_laid.origin.y  // YU10 a shape later in a flow is not below the one before it
     bottomed := Geometry.Box(position: Geometry.Absolute(), height: 10px) + Geometry.Spacing(Geometry.Edges(None, None, 4px, None), itself)
     solved([bottomed])
-    // YU11 a bottom inset is not measured up from the bottom
-    assert bottomed.origin.y == 4px
+    assert bottomed.origin.y == 4px  // YU11 a bottom inset is not measured up from the bottom
   }
   assert {
     red_bar := Geometry.Box(position: Geometry.Fixed(), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
     scrolled_page := Geometry.Box(height: 2000px, children: [Geometry.Box(height: 1000px), red_bar])
     with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
       with UI.scene.scrolled = Geometry.Vector(0, 320px) {
-        // UI117 a fixed shape leaves the top of a scrolled raster
-        assert Program(code: { scrolled_page }).rendered(Language.Direct.level).at(0, 0) == Geometry.Color(255, 0, 0)
+        assert Program(code: { scrolled_page }).rendered(Language.Direct.level).at(0, 0) == Geometry.Color(255, 0, 0)  // UI117 a fixed shape leaves the top of a scrolled raster
       }
     }
   }
@@ -177,44 +154,32 @@ UI := class {
     anchor := Geometry.Box(height: 20px)
     tip := UI.Popover(position: Geometry.Anchored(anchor: anchor), height: 10px)
     solved([anchor, tip])
-    // UI115 a popover is not an HTML popover
-    assert Program(code: { tip }).rendered(UI.HTML.Markup.level).body.children.first.attributes.contains(("popover", "manual"))
+    assert Program(code: { tip }).rendered(UI.HTML.Markup.level).body.children.first.attributes.contains(("popover", "manual"))  // UI115 a popover is not an HTML popover
   }
   assert {
     css_rules := (shape) => Compiler.reduced(UI.HTML.Style.declared(shape), UI.HTML.Style.values)
     stepped_rules := css_rules(Geometry.Box(width: Geometry.Steps([(12/12).xs, (6/12).md])))
-    // UI113 a stepped width has no container rule at its breakpoint
-    assert stepped_rules.some(.within ~= (*, "@container (min-width:768px)", *))
-    // UI114 sticky is not written as CSS
-    assert css_rules(Geometry.Box(position: Geometry.Sticky())).first.declarations.contains(("position", "sticky"))
-    // UI125 two spacings on one side are not added in CSS
-    assert css_rules(Geometry.Box() &+ (pt 5) &+ (pt 5)).first.declarations == css_rules(Geometry.Box() &+ (pt 10)).first.declarations
+    assert stepped_rules.some(.within ~= (*, "@container (min-width:768px)", *))  // UI113 a stepped width has no container rule at its breakpoint
+    assert css_rules(Geometry.Box(position: Geometry.Sticky())).first.declarations.contains(("position", "sticky"))  // UI114 sticky is not written as CSS
+    assert css_rules(Geometry.Box() &+ (pt 5) &+ (pt 5)).first.declarations == css_rules(Geometry.Box() &+ (pt 10)).first.declarations  // UI125 two spacings on one side are not added in CSS
     dynamic_style := Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}()
-    // UI138 the web level has no rule for a style a dynamic style can switch to
-    assert css_rules(dynamic_style).some(.selector == "#" + dynamic_style.dom + ".muted")
+    assert css_rules(dynamic_style).some(.selector == "#" + dynamic_style.dom + ".muted")  // UI138 the web level has no rule for a style a dynamic style can switch to
     search_field := Geometry.Box(content: choose? String ?? "Search")
-    // UI141 the placeholder colour is not CSS
-    assert css_rules(search_field).some(.selector == "#" + search_field.dom + "::placeholder")
+    assert css_rules(search_field).some(.selector == "#" + search_field.dom + "::placeholder")  // UI141 the placeholder colour is not CSS
     icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
-    // UI149 a filled SVG is not a masked element on the web
-    assert Program(code: { icon }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span"
-    // UI150 a filled SVG has no mask
-    assert css_rules(icon).first.declarations.some(.0 == "mask")
+    assert Program(code: { icon }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span"  // UI149 a filled SVG is not a masked element on the web
+    assert css_rules(icon).first.declarations.some(.0 == "mask")  // UI150 a filled SVG has no mask
     bounded := Geometry.Box(){width <= 50%, height >= 30px}
-    // UI278 a share bound is not a CSS percentage
-    assert css_rules(bounded).first.declarations.contains(("max-width", 50, "%"))
-    // UI279 a length bound is not a CSS length
-    assert css_rules(bounded).first.declarations.contains(("min-height", 30, "px"))
-    // UI280 a share radius is not border-radius: 50%
-    assert css_rules(Geometry.Box(radius: [50%])).first.declarations.some(.0 == "border-radius" && .[1..].join("") == "50%")
+    assert css_rules(bounded).first.declarations.contains(("max-width", 50, "%"))  // UI278 a share bound is not a CSS percentage
+    assert css_rules(bounded).first.declarations.contains(("min-height", 30, "px"))  // UI279 a length bound is not a CSS length
+    assert css_rules(Geometry.Box(radius: [50%])).first.declarations.some(.0 == "border-radius" && .[1..].join("") == "50%")  // UI280 a share radius is not border-radius: 50%
   }
   assert {
     red_bar := Geometry.Box(position: Geometry.Fixed(), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
     scrolled_page := Geometry.Box(height: 2000px, children: [Geometry.Box(height: 1000px), red_bar])
     with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
       with UI.scene.scrolled = Geometry.Vector(0, 320px) {
-        // UI116 a fixed shape leaves the top row of a scrolled terminal
-        assert Program(code: { scrolled_page }).rendered(UI.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0)
+        assert Program(code: { scrolled_page }).rendered(UI.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0)  // UI116 a fixed shape leaves the top row of a scrolled terminal
       }
     }
   }
@@ -278,8 +243,7 @@ UI := class {
 
   Location &+= {
     window: same | new = same
-    // UI81 a location opens a new window by default
-    assert (@https://orbitmines.com).window == same
+    assert (@https://orbitmines.com).window == same  // UI81 a location opens a new window by default
     assert (@https://orbitmines.com{window == new}).(
       (Program(code: { . }).rendered(UI.HTML.Markup.level)).(
         .body.children.first.attributes{.name == "target"}.first?.value == "_blank"  // UI82 a link to a new window has no target=_blank
@@ -290,19 +254,13 @@ UI := class {
     assert {
       logo := (@./logo.png){alt: "logo", width <= 400px}
       logo_shape := Program(code: { logo }){O: UI.Scene}()
-      // UI223 an image location is not shown as itself
-      assert logo_shape.content === logo && logo_shape.content.language === Language.Image
-      // UI224 a location's extension does not name its format
-      assert logo.language === Language.Image && (@./clip.mp4).language === Language.Video && (@./song.mp3).language === Language.Audio
-      // UI227 a narrowing on a location does not constrain where it is shown
-      assert logo_shape.fields["width"].type.most == 400px
-      // UI271 a narrowing after a location literal is not a narrowing
-      assert (@./logo.png{alt: "logo"}).alt == "logo"
-      // UI272 a narrowing is read into the location's path
-      assert @./logo.png{alt: "logo"} as String == "./logo.png"
+      assert logo_shape.content === logo && logo_shape.content.language === Language.Image  // UI223 an image location is not shown as itself
+      assert logo.language === Language.Image && (@./clip.mp4).language === Language.Video && (@./song.mp3).language === Language.Audio  // UI224 a location's extension does not name its format
+      assert logo_shape.fields["width"].type.most == 400px  // UI227 a narrowing on a location does not constrain where it is shown
+      assert (@./logo.png{alt: "logo"}).alt == "logo"  // UI271 a narrowing after a location literal is not a narrowing
+      assert @./logo.png{alt: "logo"} as String == "./logo.png"  // UI272 a narrowing is read into the location's path
       alt_of := (name: String) => @./logo.png{alt: name}
-      // UI273 a name in a narrowing is read against the location instead of where it is written
-      assert alt_of("written").alt == "written"
+      assert alt_of("written").alt == "written"  // UI273 a name in a narrowing is read against the location instead of where it is written
     }
     assert ((@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}).(
       (Program(code: { . }){O: UI.Scene}()).(
@@ -312,19 +270,16 @@ UI := class {
     assert {
       logo := (@./logo.png){alt: "logo", width <= 400px}
       logo_html := Program(code: { logo }).rendered(UI.HTML.Markup.level).body.children.first
-      // UI226 an image location is not an img with its alt
-      assert logo_html.tag == "img" && logo_html.attributes.contains(("src", "./logo.png")) && logo_html.attributes.contains(("alt", "logo"))
+      assert logo_html.tag == "img" && logo_html.attributes.contains(("src", "./logo.png")) && logo_html.attributes.contains(("alt", "logo"))  // UI226 an image location is not an img with its alt
     }
     fit: contain | cover | fill | none = contain
     controls: boolean = true
     muted: boolean = false
-    // UI270 a styled choice is not a styled box holding it
-    assert Program(code: { (choose String) ^muted }){O: UI.Scene}().styles.contains("muted")
+    assert Program(code: { (choose String) ^muted }){O: UI.Scene}().styles.contains("muted")  // UI270 a styled choice is not a styled box holding it
     looping: boolean = false
     narrowing: Program?
     extension => (path ~= (*, ".", last: Char.Word[]) ⊣).last
-    // UI225 a query is read as part of the extension
-    assert (@https://orbitmines.com/a.png?v=2).extension == "png"
+    assert (@https://orbitmines.com/a.png?v=2).extension == "png"  // UI225 a query is read as part of the extension
     language => extension ? Language.named("." + extension) : None
     media => language === Language.Image || language === Language.Video || language === Language.Audio
     pixels => language.read(content)
@@ -356,16 +311,11 @@ UI := class {
     // claims), else the index itself
     at (path: String) => index.fields{.value.location ~= path}.map(.value) -- (claimed => claimed.nonempty ? claimed.all
       : index.fields{.name == "{*}"}.first.value ?? index)
-    // UI53 md is not the 768px breakpoint
-    assert (6/12).md.at == 768px
-    // UI54 an interpolated share is not its breakpoint's at the breakpoint
-    assert ((6/12).md -> (12/12).xs).at(768px) == 6/12
-    // UI110 -> does not interpolate between breakpoints
-    assert ((9/12).xs -> (6/12).md).at(384px) == 5/8
-    // UI111 a chain of -> does not pass through its middle breakpoint
-    assert ((12/12).xs -> (10/12).sm -> (8/12).md).at(576px) == 10/12
-    // UI189 two matches are not a chooser
-    assert UI.Site(index: (first: (name: "a") @ @/x/a, second: (name: "a") @ @/x/a)).at("/x/a")#.count == 2
+    assert (6/12).md.at == 768px  // UI53 md is not the 768px breakpoint
+    assert ((6/12).md -> (12/12).xs).at(768px) == 6/12  // UI54 an interpolated share is not its breakpoint's at the breakpoint
+    assert ((9/12).xs -> (6/12).md).at(384px) == 5/8  // UI110 -> does not interpolate between breakpoints
+    assert ((12/12).xs -> (10/12).sm -> (8/12).md).at(576px) == 10/12  // UI111 a chain of -> does not pass through its middle breakpoint
+    assert UI.Site(index: (first: (name: "a") @ @/x/a, second: (name: "a") @ @/x/a)).at("/x/a")#.count == 2  // UI189 two matches are not a chooser
     rendering => at((@me/device/location ?? @/).path as String)
   }
   assert UI.Site(index: (home: "home", fadi: (name: "fadi") @ @/@fadi, ether: (name: "ether") @ @/@ether)).(
@@ -379,15 +329,12 @@ UI := class {
     assert {
       drawer := UI.Drawer(open: true)
       with UI.scene = Geometry.Box(children: [drawer]) {
-        // UI118 an open drawer does not lock page scroll
-        assert UI.locked
+        assert UI.locked  // UI118 an open drawer does not lock page scroll
         UI.scene.scroll(100px)
-        // UI119 a locked page scrolls
-        assert UI.scene.scrolled.y == 0px
+        assert UI.scene.scrolled.y == 0px  // UI119 a locked page scrolls
       }
       UI.Overlay(closes: drawer).activate
-      // UI120 activating a drawer's overlay does not close it
-      assert !(drawer.open)
+      assert !(drawer.open)  // UI120 activating a drawer's overlay does not close it
     }
   }
   Drawer := Geometry.Box{open: false, side: Geometry.left, extent: 75vw, layer == 20, overflow == scroll, visible == open, transition == Geometry.Transition(0.3 s),
@@ -406,10 +353,8 @@ UI := class {
     assert {
       timer_fired := false
       { timer_fired = true } after 0 s
-      // UI178 after fires late
-      assert timer_fired
-      // UI181 x after 6 s is not a trigger
-      assert ({ timer_fired = true } after 6 s) is Dynamic
+      assert timer_fired  // UI178 after fires late
+      assert ({ timer_fired = true } after 6 s) is Dynamic  // UI181 x after 6 s is not a trigger
     }
     palette: *? = parent.palette
     case: Section? = parent.case
@@ -417,10 +362,8 @@ UI := class {
     direction: (left-to-right | right-to-left)? = parent.direction
     hovered => visible && @me/device/pointer.contacts.some(contains(.position - at))
     pressed => visible && @me/device/pointer.contacts.some(.pressed && contains(.position - at))
-    // UI284 a key pressed on the web is not pressed on the device keyboard
-    assert @me/device/keyboard["q"].pressed
-    // UI285 a key released on the web stays pressed
-    assert !(@me/device/keyboard["q"].pressed)
+    assert @me/device/keyboard["q"].pressed  // UI284 a key pressed on the web is not pressed on the device keyboard
+    assert !(@me/device/keyboard["q"].pressed)  // UI285 a key released on the web stays pressed
     activated => focused && @me/device/keyboard/Enter.pulsed || hovered && @me/device/pointer.contacts.some(.released)
     focusable => this is (UI.Linked | UI.Chosen | UI.Overlay)
     activate => None
@@ -462,10 +405,8 @@ UI := class {
       dot := Geometry.Box(width: 2px, height: 2px, fill: Geometry.Color(255, 0, 0))
       with UI.scene.size = Geometry.Vector(4px, 4px) {
         raster := Program(code: { dot }).rendered(Language.Direct.level)
-        // UI40 a filled box is not drawn
-        assert raster.at(0, 0) == Geometry.Color(255, 0, 0)
-        // UI41 outside the box was drawn
-        assert raster.at(3, 3).alpha == 0
+        assert raster.at(0, 0) == Geometry.Color(255, 0, 0)  // UI40 a filled box is not drawn
+        assert raster.at(3, 3).alpha == 0  // UI41 outside the box was drawn
       }
     }
     assert {
@@ -473,81 +414,63 @@ UI := class {
       muting := { {x: Geometry.Shape{content is Location}} => x ^muted }
       with UI.Theme.kinds = muting {
         Geometry.Box(children: [styled_link]).themed
-        // UI139 a kind's default style is not applied
-        assert styled_link.styles.contains("muted") && styled_link.color == Geometry.Color(128, 128, 128)
+        assert styled_link.styles.contains("muted") && styled_link.color == Geometry.Color(128, 128, 128)  // UI139 a kind's default style is not applied
       }
     }
     assert {
       search_field := Geometry.Box(content: choose? String ?? "Search")
       with UI.Theme.placeholder = Geometry.Shape{color == Geometry.Color(1, 2, 3)} {
-        // UI140 an empty field does not show its placeholder in its colour
-        assert search_field.face.content == "Search" && search_field.face.color == Geometry.Color(1, 2, 3)
+        assert search_field.face.content == "Search" && search_field.face.color == Geometry.Color(1, 2, 3)  // UI140 an empty field does not show its placeholder in its colour
       }
     }
     assert {
       red := Geometry.Color(255, 0, 0)
       tinted_icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
       Geometry.Box(color: red, children: [tinted_icon])
-      // UI152 an icon filled with currentColor does not take the colour around it
-      assert tinted_icon.painted(tinted_icon.fill) == red
+      assert tinted_icon.painted(tinted_icon.fill) == red  // UI152 an icon filled with currentColor does not take the colour around it
     }
-    // UA1 a page style and a highlighting style are not applied the same way
-    assert Geometry.Box().styled("muted").color == Geometry.Color(128, 128, 128) && Geometry.Box().styled("keyword").color == UI.Theme.painted("keyword")
+    assert Geometry.Box().styled("muted").color == Geometry.Color(128, 128, 128) && Geometry.Box().styled("keyword").color == UI.Theme.painted("keyword")  // UA1 a page style and a highlighting style are not applied the same way
     assert {
       revealed := Geometry.Box(origin: Geometry.Vector(0, -300px), size: Geometry.Vector(100px, 100px))
       with UI.scene = Geometry.Box(size: Geometry.Vector(1000px, 800px), overflow: scroll, children: [revealed]) {
         UI.scene.reveal(revealed)
-        // UI153 revealing a shape does not scroll to it
-        assert UI.scene.scrolled.y == 1000px
+        assert UI.scene.scrolled.y == 1000px  // UI153 revealing a shape does not scroll to it
         UI.scene.reveal(revealed, align: center)
-        // UI154 revealing a shape in the centre does not centre it
-        assert UI.scene.scrolled.y == 650px
+        assert UI.scene.scrolled.y == 650px  // UI154 revealing a shape in the centre does not centre it
         UI.scene.reveal(revealed, offset: -100px)
-        // UI155 a reveal's offset is not kept
-        assert UI.scene.scrolled.y == 900px
+        assert UI.scene.scrolled.y == 900px  // UI155 a reveal's offset is not kept
         UI.scene.reveal(revealed, smooth: true)
-        // UI156 a smooth reveal does not move towards the shape
-        assert UI.scene.transition && UI.scene.scrolled.y == 1000px
+        assert UI.scene.transition && UI.scene.scrolled.y == 1000px  // UI156 a smooth reveal does not move towards the shape
         UI.scene.scrolled = Geometry.Vector(0, 120px)
-        // UI157 the page scroll cannot be set
-        assert UI.scene.scrolled.y == 120px
+        assert UI.scene.scrolled.y == 120px  // UI157 the page scroll cannot be set
       }
-      // UI159 a shape's height cannot be measured
-      assert revealed.size.y == 100px
+      assert revealed.size.y == 100px  // UI159 a shape's height cannot be measured
     }
-    // UI235 a string's styles are not read per character
-    assert UI.Theme.face(Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)), Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)).content[1]).font.style == italic && UI.Theme.face(Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)), Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)).content[0]).font.style == normal
+    assert UI.Theme.face(Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)), Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)).content[1]).font.style == italic && UI.Theme.face(Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)), Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)).content[0]).font.style == normal  // UI235 a string's styles are not read per character
     assert {
       with UI.Theme.tall = Geometry.Shape{height >= 30px} {
-        // UI266 a theme style does not carry its bound
-        assert Geometry.Box().styled("tall").fields["height"].type.least == 30px
+        assert Geometry.Box().styled("tall").fields["height"].type.least == 30px  // UI266 a theme style does not carry its bound
       }
     }
-    // UI143 a painted text area has no painted layer under it
-    assert Program(code: { Geometry.Box(content: (choose $.ray).attempt("x := 1")) }).rendered(UI.HTML.Markup.level).body.children.first.children.first.tag == "pre"
+    assert Program(code: { Geometry.Box(content: (choose $.ray).attempt("x := 1")) }).rendered(UI.HTML.Markup.level).body.children.first.children.first.tag == "pre"  // UI143 a painted text area has no painted layer under it
     assert {
       red := Geometry.Color(255, 0, 0)
       runs_text := Geometry.Box(content: "ab".marked("red", 0, 1), size: Geometry.Vector(16px, 16px))
       with UI.Theme.palettes = [("red", red)] {
         runs_html := runs_text.dom_spans
-        // UI145 a painted run is not a span on the web
-        assert runs_html.first.tag == "span" && runs_html.first.attributes.contains(("class", "red"))
+        assert runs_html.first.tag == "span" && runs_html.first.attributes.contains(("class", "red"))  // UI145 a painted run is not a span on the web
       }
       dot := Geometry.Ball(size: Geometry.Vector(8px, 8px), fill: red)
-      // UI282 a ball is drawn as an svg box
-      assert Program(code: { dot }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span"
-      // UI283 a ball is not a filled dot
-      assert css_rules(dot).first.declarations.contains(("border-radius", "50%")) && css_rules(dot).first.declarations.some(.0 == "background")
+      assert Program(code: { dot }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span"  // UI282 a ball is drawn as an svg box
+      assert css_rules(dot).first.declarations.contains(("border-radius", "50%")) && css_rules(dot).first.declarations.some(.0 == "background")  // UI283 a ball is not a filled dot
     }
-    // YU14 a triangle pointing up is not drawn pointing up on the web
-    assert Program(code: { Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10px, 10px)), size: Geometry.Vector(10px, 10px)) }).rendered(UI.HTML.Markup.level).body.children.first.children.first.attributes.contains(("points", "5,0 10,10 0,10"))
+    assert Program(code: { Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10px, 10px)), size: Geometry.Vector(10px, 10px)) }).rendered(UI.HTML.Markup.level).body.children.first.children.first.attributes.contains(("points", "5,0 10,10 0,10"))  // YU14 a triangle pointing up is not drawn pointing up on the web
     // Keys are bound once in UI; the web only presses them (F-D6, F-D10b)
     assert {
       listed_first := Geometry.Box()
       with UI.scene = Geometry.Box(children: [listed_first, Geometry.Box()]) {
         UI.HTML.DOM.dispatched("window keydown ArrowDown")
-        // UA2 an arrow key pressed on the web does not move the selection
-        assert UI.current === listed_first
+        assert UI.current === listed_first  // UA2 an arrow key pressed on the web does not move the selection
       }
     }
     assert {
@@ -557,16 +480,11 @@ UI := class {
       })
       with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
         grid := page.rendered(UI.TUI.Cells)
-        // UI30 the terminal grid is not 80 by 24
-        assert grid.width == 80 && grid.height == 24
-        // UI31 the heading's first glyph is not in the first cell
-        assert grid.cells[0][0].glyph == "R"
-        // UI32 a heading is not bold in the terminal
-        assert ANSI.Attribute.bold is grid.cells[0][0].styles
-        // UI33 a link's cells do not carry where it goes
-        assert grid.cells[1].some(.link)
-        // UI34 an unchanged frame writes something
-        assert grid.changes(grid).empty
+        assert grid.width == 80 && grid.height == 24  // UI30 the terminal grid is not 80 by 24
+        assert grid.cells[0][0].glyph == "R"  // UI31 the heading's first glyph is not in the first cell
+        assert ANSI.Attribute.bold is grid.cells[0][0].styles  // UI32 a heading is not bold in the terminal
+        assert grid.cells[1].some(.link)  // UI33 a link's cells do not carry where it goes
+        assert grid.changes(grid).empty  // UI34 an unchanged frame writes something
       }
     }
     assert {
@@ -575,8 +493,7 @@ UI := class {
       with UI.Theme.palettes = [("red", red)] {
         with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
           runs_grid := Program(code: { runs_text }).rendered(UI.TUI.Cells)
-          // UI144 a painted run does not colour its cells only
-          assert runs_grid.cells[0][0].foreground == red && runs_grid.cells[0][1].foreground != red
+          assert runs_grid.cells[0][0].foreground == red && runs_grid.cells[0][1].foreground != red  // UI144 a painted run does not colour its cells only
         }
       }
     }
@@ -584,8 +501,7 @@ UI := class {
       selected_text := Geometry.Box(content: "ab", size: Geometry.Vector(16px, 16px))
       selected_text.select
       with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
-        // UI172 selected text is not shown reversed in the terminal
-        assert ANSI.Attribute.negative is Program(code: { selected_text }).rendered(UI.TUI.Cells).cells[0][1].styles
+        assert ANSI.Attribute.negative is Program(code: { selected_text }).rendered(UI.TUI.Cells).cells[0][1].styles  // UI172 selected text is not shown reversed in the terminal
       }
     }
     assert {
@@ -594,40 +510,34 @@ UI := class {
       video := Program(code: { watched }){O: UI.Scene}()
       solved([video])
       with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
-        // UI185 an embedded frame is not a link in the terminal
-        assert Program(code: { video }).rendered(UI.TUI.Cells).cells[1].some(.link == video.content)
+        assert Program(code: { video }).rendered(UI.TUI.Cells).cells[1].some(.link == video.content)  // UI185 an embedded frame is not a link in the terminal
       }
     }
     assert {
       italic_text := Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px))
       with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
         italic_grid := Program(code: { italic_text }).rendered(UI.TUI.Cells)
-        // UI234 a style on part of a string is not on its cells only
-        assert ANSI.Attribute.italic is italic_grid.cells[0][1].styles && !(ANSI.Attribute.italic is italic_grid.cells[0][0].styles)
+        assert ANSI.Attribute.italic is italic_grid.cells[0][1].styles && !(ANSI.Attribute.italic is italic_grid.cells[0][0].styles)  // UI234 a style on part of a string is not on its cells only
       }
     }
     assert {
       top_bar := Geometry.Box(height: 16px, fill: Geometry.Color(255, 0, 0))
       with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
-        // YU13 the first shape in a flow is not on the terminal's top row
-        assert Program(code: { top_bar }).rendered(UI.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0)
+        assert Program(code: { top_bar }).rendered(UI.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0)  // YU13 the first shape in a flow is not on the terminal's top row
       }
     }
-    // UA4 a choice is not lowered to a box showing its face
-    assert Compiler.reduced(Geometry.Box(content: choose boolean), UI.Lowered).children.first.content == "[ ]"
+    assert Compiler.reduced(Geometry.Box(content: choose boolean), UI.Lowered).children.first.content == "[ ]"  // UA4 a choice is not lowered to a box showing its face
     static kinds := { }
     static palettes := DARK{dark: true}
     static palette => palettes{dark == @me/device/preferences.dark} ?? palettes
     static styles => fields{.value.narrowing}.name
     static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last.1
-    // UI146 a highlighting style has no colour in the default palette
-    assert UI.Theme.painted("keyword") == "#6C6783" as Geometry.Color
+    assert UI.Theme.painted("keyword") == "#6C6783" as Geometry.Color  // UI146 a highlighting style has no colour in the default palette
     static face (shape: Geometry.Shape, character: Char?) => (character.styles ?? []).reduce((acc = Geometry.Box(font: shape.font, color: shape.color, fill: shape.fill, palette: shape.palette)) => acc.styled(.))
   }
   assert {
     with UI.Theme.spacing = 4px {
-      // UI122 the shorthands do not follow the theme's spacing
-      assert (p 2).left == 8px && (p 2).top == 8px
+      assert (p 2).left == 8px && (p 2).top == 8px  // UI122 the shorthands do not follow the theme's spacing
     }
   }
 }
@@ -644,8 +554,7 @@ UI.Theme.h3 := Geometry.Shape{font.size == 1.17em, font.weight == 700}
 UI.Theme.code := Geometry.Shape{white_space == Geometry.WhiteSpace.pre}
 
 currentColor := .color
-// UI148 currentColor is not an inherited paint
-assert currentColor is Section
+assert currentColor is Section  // UI148 currentColor is not an inherited paint
 
 Char &+= {
   styles: String[] = []
@@ -655,18 +564,12 @@ String &+= {
   shared_styles => first.styles{style => every(.styles.contains(style))} ?? []
   pieces => [this{.index == 0 || .styles != .previous.styles}.map(.index), [length]].flatten -- .zip(.rest).map((from, to) => this[from..<to])
   highlighted (language: Language | String) => (language is String ? Language.named(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = marked("code") => acc.marked(.style, .from, .to))
-  // UI233 a highlighted string is not the same string with marks
-  assert ("x := 1".highlighted(".ray")) == "x := 1" && ("x := 1".highlighted(".ray")).pieces.count > 1
-  // UI267 a search field is not a text field in the terminal
-  assert (choose String{search}).attempt("ray").shown == "ray"
-  // UI268 an embedding drops the query
-  assert (@https://youtu.be/abc?si=xyz&t=1m5s).embedded as String == "https://www.youtube.com/embed/abc?si=xyz&start=65"
-  // UI269 a watch link's time is not where the embed starts
-  assert (@https://www.youtube.com/watch?v=abc&t=30).embedded as String == "https://www.youtube.com/embed/abc?start=30"
-  // UI277 an empty query is written
-  assert (@https://orbitmines.com/archive).with(search: None) as String == "https://orbitmines.com/archive"
-  // UI299 stopping does not undo the modes starting set, last first
-  assert (ANSI.write(Compiler.reduced(UI.TUI.Stop(), UI.TUI.written)) as String) ~= ⊢ "\e[?1004l"
+  assert ("x := 1".highlighted(".ray")) == "x := 1" && ("x := 1".highlighted(".ray")).pieces.count > 1  // UI233 a highlighted string is not the same string with marks
+  assert (choose String{search}).attempt("ray").shown == "ray"  // UI267 a search field is not a text field in the terminal
+  assert (@https://youtu.be/abc?si=xyz&t=1m5s).embedded as String == "https://www.youtube.com/embed/abc?si=xyz&start=65"  // UI268 an embedding drops the query
+  assert (@https://www.youtube.com/watch?v=abc&t=30).embedded as String == "https://www.youtube.com/embed/abc?start=30"  // UI269 a watch link's time is not where the embed starts
+  assert (@https://orbitmines.com/archive).with(search: None) as String == "https://orbitmines.com/archive"  // UI277 an empty query is written
+  assert (ANSI.write(Compiler.reduced(UI.TUI.Stop(), UI.TUI.written)) as String) ~= ⊢ "\e[?1004l"  // UI299 stopping does not undo the modes starting set, last first
 }
 
 // (each side's padding word, `p…`, from the border, and margin word, `m…`, from the shape itself: written out, as a loop over
@@ -691,12 +594,10 @@ Node &+= {
 // (`pt 5 x`: `x` with that spacing (F-B8b), as `center x` is `x` aligned)
 p {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [p spacing_amount], children: [spaced])
 px {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [px spacing_amount], children: [spaced])
-// UI124 px spaces the top
-assert (px 3).top == None && (px 3).left == 6px
+assert (px 3).top == None && (px 3).left == 6px  // UI124 px spaces the top
 py {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [py spacing_amount], children: [spaced])
 pt {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [pt spacing_amount], children: [spaced])
-// UI121 pt 5 is not five steps of the default spacing
-assert (pt 5).top == 10px && (pt 5).from == border
+assert (pt 5).top == 10px && (pt 5).from == border  // UI121 pt 5 is not five steps of the default spacing
 pb {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [pb spacing_amount], children: [spaced])
 pl {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [pl spacing_amount], children: [spaced])
 pr {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [pr spacing_amount], children: [spaced])
@@ -704,8 +605,7 @@ m {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [m spacing_amount]
 mx {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [mx spacing_amount], children: [spaced])
 my {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [my spacing_amount], children: [spaced])
 mt {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [mt spacing_amount], children: [spaced])
-// UI123 a length given to a shorthand is scaled
-assert (mt -60px).top == -60px && (mt -60px).from == itself
+assert (mt -60px).top == -60px && (mt -60px).from == itself  // UI123 a length given to a shorthand is scaled
 mb {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [mb spacing_amount], children: [spaced])
 ml {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [ml spacing_amount], children: [spaced])
 mr {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [mr spacing_amount], children: [spaced])
@@ -948,19 +848,13 @@ UI.HTML := class {
         manifest: @./manifest.json
       )
       head := UI.HTML.Markup.head(article)
-      // UI92 og:* is not written as a property
-      assert head.some(.tag == "meta" && .attributes.contains(("property", "og:type")))
-      // UI93 twitter:* is not written as a name
-      assert head.some(.tag == "meta" && .attributes.contains(("name", "twitter:card")))
-      // UI94 repeated citation_* entries are not all written
-      assert head{.tag == "meta" && .attributes.contains(("name", "citation_author"))}.count == 2
+      assert head.some(.tag == "meta" && .attributes.contains(("property", "og:type")))  // UI92 og:* is not written as a property
+      assert head.some(.tag == "meta" && .attributes.contains(("name", "twitter:card")))  // UI93 twitter:* is not written as a name
+      assert head{.tag == "meta" && .attributes.contains(("name", "citation_author"))}.count == 2  // UI94 repeated citation_* entries are not all written
       ld := head{.tag == "script" && .attributes.contains(("type", "application/ld+json"))}.first
-      // UI95 a structured entry is not JSON-LD with its @type
-      assert ld && ld.children.first.text ~= (*, "\"@type\":\"Article\"", *)
-      // UI96 JSON-LD has no schema.org context
-      assert ld && ld.children.first.text ~= (*, "\"@context\":\"https://schema.org\"", *)
-      // UI97 the manifest is not linked
-      assert head.some(.tag == "link" && .attributes.contains(("rel", "manifest")))
+      assert ld && ld.children.first.text ~= (*, "\"@type\":\"Article\"", *)  // UI95 a structured entry is not JSON-LD with its @type
+      assert ld && ld.children.first.text ~= (*, "\"@context\":\"https://schema.org\"", *)  // UI96 JSON-LD has no schema.org context
+      assert head.some(.tag == "link" && .attributes.contains(("rel", "manifest")))  // UI97 the manifest is not linked
     }
     // SVG path data (https://www.w3.org/TR/SVG2/paths.html#PathData)
     path := {
@@ -1022,25 +916,17 @@ UI.HTML := class {
     }
 
     level := Geometry.Preparing(1px) + rules
-    // UI23 two levels do not compose into one
-    assert (UI.HTML.Markup.level + UI.HTML.Style.level) is Program
+    assert (UI.HTML.Markup.level + UI.HTML.Style.level) is Program  // UI23 two levels do not compose into one
     assert {
       chosen_input := (choice) => Program(code: { choice }).rendered(UI.HTML.Markup.level).body.children.first
-      // UI60 choosing a boolean is not a checkbox
-      assert chosen_input(choose boolean).attributes.contains(("type", "checkbox"))
-      // UI61 choosing a string is not a text field
-      assert chosen_input(choose String).attributes.contains(("type", "text"))
-      // UI62 choosing a bounded number is not a slider
-      assert chosen_input(choose Number{0 <= . <= 10}).attributes.contains(("type", "range"))
-      // UI281 a search field is not a search input
-      assert chosen_input(choose String{search}).attributes.contains(("type", "search"))
+      assert chosen_input(choose boolean).attributes.contains(("type", "checkbox"))  // UI60 choosing a boolean is not a checkbox
+      assert chosen_input(choose String).attributes.contains(("type", "text"))  // UI61 choosing a string is not a text field
+      assert chosen_input(choose Number{0 <= . <= 10}).attributes.contains(("type", "range"))  // UI62 choosing a bounded number is not a slider
+      assert chosen_input(choose String{search}).attributes.contains(("type", "search"))  // UI281 a search field is not a search input
     }
-    // UI228 a video location is not a video element
-    assert Program(code: { @./clip.mp4 }).rendered(UI.HTML.Markup.level).body.children.first.tag == "video"
-    // UI229 an audio location is not an audio element
-    assert Program(code: { @./song.mp3 }).rendered(UI.HTML.Markup.level).body.children.first.tag == "audio"
-    // UI231 a value placed at a location is not an a on the web
-    assert Program(code: { "Ray" @ (@https://orbitmines.com) }).rendered(UI.HTML.Markup.level).body.children.first.tag == "a"
+    assert Program(code: { @./clip.mp4 }).rendered(UI.HTML.Markup.level).body.children.first.tag == "video"  // UI228 a video location is not a video element
+    assert Program(code: { @./song.mp3 }).rendered(UI.HTML.Markup.level).body.children.first.tag == "audio"  // UI229 an audio location is not an audio element
+    assert Program(code: { "Ray" @ (@https://orbitmines.com) }).rendered(UI.HTML.Markup.level).body.children.first.tag == "a"  // UI231 a value placed at a location is not an a on the web
   }
 
   Style := class {
@@ -1082,8 +968,7 @@ UI.HTML := class {
       {filter: Geometry.Saturate} => "saturate(", filter.amount, ")"
       {filter: Geometry.Sepia} => "sepia(", filter.amount, ")"
     }
-    // UI151 currentColor is not written as currentColor
-    assert Compiler.reduced(currentColor, UI.HTML.Style.values) == "currentColor"
+    assert Compiler.reduced(currentColor, UI.HTML.Style.values) == "currentColor"  // UI151 currentColor is not written as currentColor
 
     // Flexible box layout (https://www.w3.org/TR/css-flexbox-1/), grid layout (https://www.w3.org/TR/css-grid-2/)
     layout := {
@@ -1425,20 +1310,16 @@ UI.TUI := class {
       watched_value := 1
       fired_count := 0
       { fired_count = fired_count + 1 } when watched_value changes
-      // UI174 when … changes fires before anything changed
-      assert fired_count == 0
+      assert fired_count == 0  // UI174 when … changes fires before anything changed
       watched_value = 2
-      // UI175 when … changes does not fire on a change
-      assert fired_count == 1
+      assert fired_count == 1  // UI175 when … changes does not fire on a change
       watched_value = 2
-      // UI176 when … changes fires twice for one change
-      assert fired_count == 1
+      assert fired_count == 1  // UI176 when … changes fires twice for one change
       became_count := 0
       { became_count = became_count + 1 } when watched_value becomes 3
       watched_value = 4
       watched_value = 3
-      // UI177 when … becomes fires on another value
-      assert became_count == 1
+      assert became_count == 1  // UI177 when … becomes fires on another value
     }
     framed (previous: Grid? = None) => [
       ANSI.Title(title) if title && title != previous.title,
@@ -1448,8 +1329,7 @@ UI.TUI := class {
     ]
     assert {
       with UI.page = (title: "Ray") {
-        // UI99 the terminal title does not follow the page title
-        assert UI.TUI.Grid(1, 1).framed.some(. is ANSI.Title && .text == "Ray")
+        assert UI.TUI.Grid(1, 1).framed.some(. is ANSI.Title && .text == "Ray")  // UI99 the terminal title does not follow the page title
       }
     }
   }
@@ -1633,33 +1513,24 @@ assert {
   @me/device/location = @https://orbitmines.com/profiles
 }
 
-// UI63 navigating does not change where the user is
-assert @me/device/location == @https://orbitmines.com/profiles
+assert @me/device/location == @https://orbitmines.com/profiles  // UI63 navigating does not change where the user is
 
-// UI64 going back stays where the user went
-assert @me/device/location != @https://orbitmines.com/profiles
+assert @me/device/location != @https://orbitmines.com/profiles  // UI64 going back stays where the user went
 
-// UI67 a platform is handheld before any level says so
-assert !(@me/device/handheld)
+assert !(@me/device/handheld)  // UI67 a platform is handheld before any level says so
 
-// UI90 a query parameter is not decoded
-assert (@https://orbitmines.com/archive?q=a%20b).query.q == "a b"
+assert (@https://orbitmines.com/archive?q=a%20b).query.q == "a b"  // UI90 a query parameter is not decoded
 
-// UI91 a location's last segment is not its name
-assert (@https://orbitmines.com/archive/on-orbits).segments.last == "on-orbits"
+assert (@https://orbitmines.com/archive/on-orbits).segments.last == "on-orbits"  // UI91 a location's last segment is not its name
 
 assert {
   early_fired := false
   { early_fired = true } after 1 h
-  // UI179 after fires early
-  assert !(early_fired)
+  assert !(early_fired)  // UI179 after fires early
 }
 
-// UI212 @ray does not read the rest of the line as Ray
-assert (@ray 1 + 2) == 3
+assert (@ray 1 + 2) == 3  // UI212 @ray does not read the rest of the line as Ray
 
-// UI274 an empty query parameter is not None
-assert (@https://orbitmines.com/archive?search=).query.search == None
+assert (@https://orbitmines.com/archive?search=).query.search == None  // UI274 an empty query parameter is not None
 
-// UI276 a location without a query has no parameter to default
-assert ((@https://orbitmines.com/archive).query.search ?? "all") == "all"
+assert ((@https://orbitmines.com/archive).query.search ?? "all") == "all"  // UI276 a location without a query has no parameter to default

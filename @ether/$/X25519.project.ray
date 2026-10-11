@@ -27,8 +27,7 @@ X25519 := class: Encoding.Agreement {
   // The scalar clamped, the u-coordinate without its top bit (decodeUCoordinate) (RFC 7748 §5)
   static x25519 (k: Byte₃₂, u: Byte₃₂) => Encoding.little(ladder(clamped(k), Encoding.little_number(u) % 2 ^ 255), 32)
   // One scalar times one u-coordinate (RFC 7748 §5.2, the first vector)
-  // XDH1 the first scalar of RFC 7748 §5.2 does not multiply to c3da5537…
-  assert X25519.x25519("a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4" as Hexadecimal₆₄ as Byte₃₂, "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c" as Hexadecimal₆₄ as Byte₃₂) as Hexadecimal₆₄ == "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552"
+  assert X25519.x25519("a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4" as Hexadecimal₆₄ as Byte₃₂, "e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c" as Hexadecimal₆₄ as Byte₃₂) as Hexadecimal₆₄ == "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552"  // XDH1 the first scalar of RFC 7748 §5.2 does not multiply to c3da5537…
 
   // The public key is the scalar times u = 9; the shared secret is one's scalar times the other's public key, refused when it is all zeros (RFC 7748 §6.1)
   static public (secret: Byte₃₂) => x25519(secret, Encoding.little(9, 32))
@@ -36,21 +35,15 @@ X25519 := class: Encoding.Agreement {
   assert {
     xa := "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a" as Hexadecimal₆₄ as Byte₃₂
     xb := "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb" as Hexadecimal₆₄ as Byte₃₂
-    // XDH2 Alice's public key is not that of RFC 7748 §6.1
-    assert X25519.public(xa) as Hexadecimal₆₄ == "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"
-    // XDH3 Bob's public key is not that of RFC 7748 §6.1
-    assert X25519.public(xb) as Hexadecimal₆₄ == "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f"
-    // XDH4 Alice does not derive the shared secret of RFC 7748 §6.1
-    assert X25519.agreed(xa, X25519.public(xb)) as Hexadecimal₆₄ == "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742"
-    // XDH5 Bob and Alice derive different secrets
-    assert X25519.agreed(xb, X25519.public(xa)) == X25519.agreed(xa, X25519.public(xb))
-    // XDH6 a public key of zeros gives a shared secret
-    assert X25519.agreed(xa, [0] * 32) is Diagnostic
+    assert X25519.public(xa) as Hexadecimal₆₄ == "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"  // XDH2 Alice's public key is not that of RFC 7748 §6.1
+    assert X25519.public(xb) as Hexadecimal₆₄ == "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f"  // XDH3 Bob's public key is not that of RFC 7748 §6.1
+    assert X25519.agreed(xa, X25519.public(xb)) as Hexadecimal₆₄ == "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742"  // XDH4 Alice does not derive the shared secret of RFC 7748 §6.1
+    assert X25519.agreed(xb, X25519.public(xa)) == X25519.agreed(xa, X25519.public(xb))  // XDH5 Bob and Alice derive different secrets
+    assert X25519.agreed(xa, [0] * 32) is Diagnostic  // XDH6 a public key of zeros gives a shared secret
     // A key pair names its algorithm and agrees with another pair's public half
     xpa := X25519.pair(xa)
     xpb := X25519.pair(xb)
-    // XDH7 two key pairs do not agree on one secret
-    assert xpa.algorithm === X25519 && xpa.agreed(xpb.public) == xpb.agreed(xpa.public)
+    assert xpa.algorithm === X25519 && xpa.agreed(xpb.public) == xpb.agreed(xpa.public)  // XDH7 two key pairs do not agree on one secret
   }
   static agreed (secret: Byte₃₂, other: Byte₃₂) => x25519(secret, other) -- (. == [0] * 32 ? ERROR `the other public key gives an all-zero shared secret` : .)
 }

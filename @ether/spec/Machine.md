@@ -231,6 +231,15 @@ What is still off:
   `poc/library-tests.mts` runs it in-process, since the CLI's worker needs Node's `--experimental-transform-types`, which
   Node 26 no longer has.
 
+## Merging main again (29d86861)
+
+Main now reads `-` of two whole numbers as none below zero (`3 - 5` is 0) and `/` as whole division; signed numbers are
+`Decimal.Signed` (`(-2).negative`), and a negative written alone (`-256`) does not yet read as a number. Everything here
+that computes with negatives in Ray stops being right: the interop normal form's `a - b` on `Int32` (N3), `X86.signed` and
+the immediates and displacements it prints (MC3), the lift run on inputs (MC4). What runs as compiled code is unaffected
+(N4, MC5, MC7: the arithmetic there is Rust's or the machine's). Open: how a machine integer (`Int32`, `Int64`, wrapping) is
+written in main's numbers.
+
 ## Why it is slow, and what that means
 
 Measured on this branch: booting the language takes about 11 s; one read (matching text against rules) about 10 µs; a warm

@@ -278,6 +278,29 @@ How the proofs run meanwhile: `poc/quick.sh` runs each kind of claim of the thre
 (about 3 minutes); the full corpora (`deflate/run.sh`, `interop/run.sh`, `machine/run.sh`) run only before a step is called
 done.
 
+## What a kernel needs to run these proofs
+
+For a kernel written anew: what `language.ts`, `js.kinds.ray` and `structures3.ts` give the three proofs today, beyond main.
+
+- **Reading.** A hole does not end in an operator after a space (`1 >`); code given to a body hole does not begin with an
+  operator and a space (`if a > b { … }`); a hole does not end inside `Name<…>` (a `<` after a word); a hole between two
+  quotes may sit inside longer literals.
+- **Where names are read.** A member read on a value that is not a node (text, a number) reads its holes where it was
+  written (`3.binary(width)` in a call); where else to look (`also`) carries on through a chain (`x.count + y`); a block
+  read again does not read its tests again.
+- **The host's `$`** has `written` (a value as code), `host` (the codec) and `whole` (whether a node's rules read a text
+  whole); a body hole is given to `goto js` as nothing, its text by `$.text`.
+- **The codec** (`structures3.ts`): a class header read and written as bits (fixed and variable widths, reversed, lists,
+  alternatives of records and of classes, conditions, generics, defaults, prefix codes, where reading stopped), exposed as
+  `plain`, `instance_defined`, `bits_read`, `binary`, `Coded`.
+- **Host kinds:** `bytes`, `latin1`, `code_at`, `substring`, `last_index_of`, `binary(width)`, `hexadecimal`,
+  `signed_hexadecimal(width)`, `reversed`, `unsigned`, `pieces(size)`, `tally(size)`, `maximum`, `reads_text`, `headed`;
+  `added`, `subtracted`, `multiplied`, `wrapped_into` (exact signed integers); `*` repeating text and lists; `==` and `!=`
+  of two lists by `alike`.
+
+Measured against today's kernel (to beat): boot 11 s; `f3` 17 calls a second; a warm 5-byte DEFLATE read 60 000 reads; the
+quick tier (`poc/quick.sh`) about 6 minutes.
+
 ## Engine gaps
 
 - **MCG1 A class's statics are not in scope while its block is read.** `X86.Rex` does not resolve until `X86 :=` is done,

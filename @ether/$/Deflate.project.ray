@@ -103,15 +103,15 @@ Deflate := class: Language {
   ) {
     values => elements.map((element) => Deflate.value_of(element))
   }
-  static value_of (element) => (element.literal !== None) ? Literal(element.literal)
-    : Copy((LengthBases[element.length_code - 257].first) + element.length_extra, (DistanceBases[element.distance_code].first) + element.distance_extra)
+  static value_of (element) => (element.literal !== None) ? Deflate.Literal(element.literal)
+    : Deflate.Copy((Deflate.LengthBases[element.length_code - 257].first) + element.length_extra, (Deflate.DistanceBases[element.distance_code].first) + element.distance_extra)
   static coded (value) =>
-    if value is Literal {
-      return Element(literal: value.byte)
+    if value is Deflate.Literal {
+      return Deflate.Element(value.byte)
     }
-    length := Deflate.base_of(LengthBases, value.length)
-    distance := Deflate.base_of(DistanceBases, value.distance)
-    Element(length_code: length + 257, length_extra: value.length - (LengthBases[length].first), distance_code: distance, distance_extra: value.distance - (DistanceBases[distance].first))
+    length := Deflate.base_of(Deflate.LengthBases, value.length)
+    distance := Deflate.base_of(Deflate.DistanceBases, value.distance)
+    Deflate.Element(None, length + 257, value.length - (Deflate.LengthBases[length].first), distance, value.distance - (Deflate.DistanceBases[distance].first))
   // (an element of `Data` as `coded` writes it: a literal, or a length and a distance, each a code and its extra bits)
   static Element := class (literal, length_code, length_extra, distance_code, distance_extra)
   // (the last code whose base is not past a value)
@@ -180,24 +180,24 @@ Deflate := class: Language {
       if (value == 0) && (run >= 3) {
         while run >= 11 {
           n := (run > 138) ? 138 : run
-          made.append(Deflate.Entry(many: n - 11))
+          made.append(Deflate.Entry(None, None, None, n - 11))
           run = run - n
         }
         if run >= 3 {
-          made.append(Deflate.Entry(zeros: run - 3))
+          made.append(Deflate.Entry(None, None, run - 3))
           run = 0
         }
       } else {
-        made.append(Deflate.Entry(length: value))
+        made.append(Deflate.Entry(value))
         run = run - 1
         while run >= 3 {
           n := (run > 6) ? 6 : run
-          made.append(Deflate.Entry(again: n - 3))
+          made.append(Deflate.Entry(None, n - 3))
           run = run - n
         }
       }
       while run > 0 {
-        made.append(Deflate.Entry(length: value))
+        made.append(Deflate.Entry(value))
         run = run - 1
       }
     }
@@ -281,7 +281,7 @@ Deflate := class: Language {
     from := 0
     loop {
       to := ((from + 65535) < bytes.count) ? (from + 65535) : bytes.count
-      made.append(Block(final: to == bytes.count, kind: 0, stored: Stored(bytes: bytes.slice(from, to))))
+      made.append(Deflate.Block(to == bytes.count, 0, Deflate.Stored(None, None, bytes.slice(from, to))))
       (break) if to == bytes.count
       from = to
     }
@@ -303,39 +303,40 @@ Deflate := class: Language {
         distance = at - found
       }
       if length >= 3 {
-        made.append(Copy(length, distance))
+        made.append(Deflate.Copy(length, distance))
         at = at + length
       } else {
-        made.append(Literal(text.code_at(at)))
+        made.append(Deflate.Literal(text.code_at(at)))
         at = at + 1
       }
     }
     made
-  static fixed (values) => Data(literals: fixed_literals, distances: fixed_distances, elements: values.map((value) => Deflate.coded(value)))
+  static fixed (values) => Deflate.Data(Deflate.fixed_literals, Deflate.fixed_distances, values.map((value) => Deflate.coded(value)))
   // (codes fitted to the values' own frequencies, the end of the block once; a distance code even when no copy needs one)
   static dynamic (values) =>
     codes := values.map((value) => Deflate.coded(value))
-    literals := Huffman.fitted([codes.map((code) => code.literal ?? code.length_code), [256]].flatten.tally(286))
+    literals := Deflate.Huffman.fitted([codes.map((code) => code.literal ?? code.length_code), [256]].flatten.tally(286))
     distance_counts := codes.map((code) => code.distance_code ?? 30).tally(30)
-    distances := Huffman.fitted((distance_counts.maximum > 0) ? distance_counts : [1])
-    entries := entries_of([literals.lengths, distances.lengths].flatten)
-    length_code := Huffman.fitted(entries.map((entry) => Deflate.symbol_of(entry)).tally(19))
-    Dynamic(literals: literals, distances: distances, length_code: length_code, lengths: CodeLengths(length_code, entries), data: Data(literals: literals, distances: distances, elements: codes))
+    distances := Deflate.Huffman.fitted((distance_counts.maximum > 0) ? distance_counts : [1])
+    entries := Deflate.entries_of([literals.lengths, distances.lengths].flatten)
+    length_code := Deflate.Huffman.fitted(entries.map((entry) => Deflate.symbol_of(entry)).tally(19))
+    sizes := Deflate.Order.map((symbol) => length_code.lengths[symbol] ?? 0)
+    Deflate.Dynamic(literals.lengths.count - 257, distances.lengths.count - 1, 15, sizes, Deflate.CodeLengths(length_code, entries), Deflate.Data(literals, distances, codes))
   // (fitted codes are at most 15 bits, 7 for the code lengths: https://www.rfc-editor.org/rfc/rfc1951#section-3.2.7)
   static fits (dynamic) => (dynamic.literals.lengths.maximum <= 15) && (dynamic.distances.lengths.maximum <= 15) && (dynamic.length_code.lengths.maximum <= 7)
 
   // (the bytes a stream inflates to; the bytes of a stream holding these: stored, with the fixed codes, or with codes fitted to
   // them, whichever is shortest)
-  static inflated (bytes) => Stream.from(bytes).bytes
+  static inflated (bytes) => Deflate.Stream.from(bytes).bytes
   static deflated (bytes) =>
-    stored_stream := Stream(blocks: blocked(bytes))
+    stored_stream := Deflate.Stream(Deflate.blocked(bytes))
     (return stored_stream.written) if bytes.empty
-    values := parsed(bytes)
-    fixed_stream := Stream(blocks: [Block(final: true, kind: 1, data: fixed(values))])
+    values := Deflate.parsed(bytes)
+    fixed_stream := Deflate.Stream([Deflate.Block(true, 1, None, Deflate.fixed(values))])
     shortest := (fixed_stream.binary.count < stored_stream.binary.count) ? fixed_stream : stored_stream
-    fitted := dynamic(values)
-    (return shortest.written) unless fits(fitted)
-    dynamic_stream := Stream(blocks: [Block(final: true, kind: 2, dynamic: fitted)])
+    fitted := Deflate.dynamic(values)
+    (return shortest.written) unless Deflate.fits(fitted)
+    dynamic_stream := Deflate.Stream([Deflate.Block(true, 2, None, None, fitted)])
     (dynamic_stream.binary.count < shortest.binary.count) ? dynamic_stream.written : shortest.written
 }
 // DF4 an empty fixed block is not empty

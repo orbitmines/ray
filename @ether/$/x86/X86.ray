@@ -1,0 +1,197 @@
+// Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 2 (https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html): integer arithmetic on registers, as gcc -O2 emits it
+X86 := class: Language {
+  static extensions := ".bin"
+
+  static Registers := ["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
+  static Halves := ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"]
+  static named (number, width) => (width == 64) ? X86.Registers[number] : X86.Halves[number]
+
+  // REX: 0100, then W (64-bit operands) and the fourth bit of ModRM.reg (R), SIB.index (X), ModRM.rm or SIB.base (B); each byte's bits are read least significant first, the order x86 stores its integers in (Vol. 2, 2.2.1)
+  static Rex := class (b: <-Binary₁, x: <-Binary₁, r: <-Binary₁, w: <-Binary₁, <-Binary₄{== 4})
+  static base_extension (rex) => rex.empty ? 0 : (rex.first.b * 8)
+  static index_extension (rex) => rex.empty ? 0 : (rex.first.x * 8)
+  static reg_extension (rex) => rex.empty ? 0 : (rex.first.r * 8)
+  static wide (rex) => (rex.empty || (rex.first.w == 0)) ? 32 : 64
+
+  // ModRM: rm, reg, mod. With mod 3, rm is a register; else memory: a SIB byte (base, index, scale) when rm is 4, a displacement of 8 bits when mod is 1, of 32 when mod is 2 or the SIB names no base (Vol. 2, 2.1.5)
+  static Operand := class (
+    rm: <-Binary₃, reg: <-Binary₃, mod: <-Binary₂,
+    (sib_base: <-Binary₃, sib_index: <-Binary₃, scale: <-Binary₂) if (mod != 3) && (rm == 4),
+    (small: <-Binary₈) if mod == 1,
+    (large: <-Binary₃₂) if (mod == 2) || (((mod == 0) && (rm == 4)) && (sib_base == 5))
+  ) {
+    rm_register (rex) => rm + X86.base_extension(rex)
+    reg_register (rex) => reg + X86.reg_extension(rex)
+    base_register (rex) =>
+      (return (rm + X86.base_extension(rex))) if rm != 4
+      ((mod == 0) && (sib_base == 5)) ? None : (sib_base + X86.base_extension(rex))
+    index_register (rex) => ((rm == 4) && ((sib_index + X86.index_extension(rex)) != 4)) ? (sib_index + X86.index_extension(rex)) : None
+    scaled => (rm == 4) ? ([1, 2, 4, 8][scale]) : 1
+    displacement => (small !== None) ? X86.signed(small, 8) : ((large !== None) ? X86.signed(large, 32) : None)
+    // (memory, written the way objdump writes it: `[rdi+rsi*2-0x3]`)
+    memory (rex) =>
+      shown := ""
+      (shown = X86.Registers[base_register(rex)]) if base_register(rex) !== None
+      (shown = (shown + ((shown == "") ? "" : "+")) + ((X86.Registers[index_register(rex)] + "*") + scaled)) if index_register(rex) !== None
+      (shown = shown + X86.offset(displacement)) if displacement !== None
+      ("[" + shown) + "]"
+  }
+  static signed (value, width) => (width == 8) ? ((value >= 128) ? (value - 256) : value) : ((value >= 2147483648) ? (value - 4294967296) : value)
+  static power (exponent) =>
+    made := 1
+    left := exponent
+    while left > 0 {
+      made = made * 2
+      left = left - 1
+    }
+    made
+  static offset (value) => (value < 0) ? ("-0x" + (0 - value).hexadecimal) : ("+0x" + value.hexadecimal)
+  // (an immediate, written the way objdump writes it: the bits of the operation's width, `0xfffffff7`)
+  static immediate (value, width) => "0x" + ((value < 0) ? ((width == 64) ? ("ffffffff" + ((4294967296 + value).hexadecimal)) : (4294967296 + value).hexadecimal) : value.hexadecimal)
+
+  // What each instruction is: its encoding (the header), its text, and what it does to the registers (`lifted`)
+  static Ret := class<rex: X86.Rex[]> (<-Byte{== 195}) {
+    assembly => "ret"
+    lifted (registers) => registers
+  }
+  static Imul := class<rex: X86.Rex[]> (<-Byte{== 15}, <-Byte{== 175}, operand: X86.Operand{.mod == 3}) {
+    assembly => ((("imul " + X86.named(operand.reg_register(rex), X86.wide(rex))) + ",") + X86.named(operand.rm_register(rex), X86.wide(rex)))
+    lifted (registers) => X86.applied(registers, operand.reg_register(rex), X86.wide(rex), X86.held(registers, operand.reg_register(rex), X86.wide(rex)), "*", X86.held(registers, operand.rm_register(rex), X86.wide(rex)))
+  }
+  static ImulImmediate := class<rex: X86.Rex[]> (<-Byte{== 107}, operand: X86.Operand{.mod == 3}, immediate: <-Binary₈) {
+    assembly => ((((("imul " + X86.named(operand.reg_register(rex), X86.wide(rex))) + ",") + X86.named(operand.rm_register(rex), X86.wide(rex))) + ",") + X86.immediate(X86.signed(immediate, 8), X86.wide(rex)))
+    lifted (registers) => X86.applied(registers, operand.reg_register(rex), X86.wide(rex), X86.held(registers, operand.rm_register(rex), X86.wide(rex)), "*", X86.constant(X86.signed(immediate, 8), X86.wide(rex)))
+  }
+  static Lea := class<rex: X86.Rex[]> (<-Byte{== 141}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("lea " + X86.named(operand.reg_register(rex), X86.wide(rex))) + ",") + operand.memory(rex)
+    lifted (registers) => X86.placed(registers, operand.reg_register(rex), X86.Value(X86.addressed(registers, operand, rex), X86.wide(rex)))
+  }
+  static Add := class<rex: X86.Rex[]> (<-Byte{== 1}, operand: X86.Operand{.mod == 3}) {
+    assembly => X86.pair("add", operand.rm_register(rex), operand.reg_register(rex), rex)
+    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.held(registers, operand.rm_register(rex), X86.wide(rex)), "+", X86.held(registers, operand.reg_register(rex), X86.wide(rex)))
+  }
+  static Sub := class<rex: X86.Rex[]> (<-Byte{== 41}, operand: X86.Operand{.mod == 3}) {
+    assembly => X86.pair("sub", operand.rm_register(rex), operand.reg_register(rex), rex)
+    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.held(registers, operand.rm_register(rex), X86.wide(rex)), "-", X86.held(registers, operand.reg_register(rex), X86.wide(rex)))
+  }
+  static Mov := class<rex: X86.Rex[]> (<-Byte{== 137}, operand: X86.Operand{.mod == 3}) {
+    assembly => X86.pair("mov", operand.rm_register(rex), operand.reg_register(rex), rex)
+    lifted (registers) => X86.placed(registers, operand.rm_register(rex), X86.Value(X86.held(registers, operand.reg_register(rex), X86.wide(rex)), X86.wide(rex)))
+  }
+  // (xor of a register with itself, how gcc writes 0; any other xor is not arithmetic)
+  static Xor := class<rex: X86.Rex[]> (<-Byte{== 49}, operand: X86.Operand{.mod == 3}) {
+    assembly => X86.pair("xor", operand.rm_register(rex), operand.reg_register(rex), rex)
+    lifted (registers) => (operand.rm_register(rex) == operand.reg_register(rex)) ? X86.placed(registers, operand.rm_register(rex), X86.Value(X86.constant(0, X86.wide(rex)), X86.wide(rex))) : None
+  }
+  static Neg := class<rex: X86.Rex[]> (<-Byte{== 247}, operand: X86.Operand{(.mod == 3) && (.reg == 3)}) {
+    assembly => "neg " + X86.named(operand.rm_register(rex), X86.wide(rex))
+    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.constant(0, X86.wide(rex)), "-", X86.held(registers, operand.rm_register(rex), X86.wide(rex)))
+  }
+  // (not x is -x - 1)
+  static Not := class<rex: X86.Rex[]> (<-Byte{== 247}, operand: X86.Operand{(.mod == 3) && (.reg == 2)}) {
+    assembly => "not " + X86.named(operand.rm_register(rex), X86.wide(rex))
+    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.constant(0 - 1, X86.wide(rex)), "-", X86.held(registers, operand.rm_register(rex), X86.wide(rex)))
+  }
+  // (shl x, k is x times 2^k)
+  static Shl := class<rex: X86.Rex[]> (<-Byte{== 193}, operand: X86.Operand{(.mod == 3) && (.reg == 4)}, immediate: <-Binary₈) {
+    assembly => ((("shl " + X86.named(operand.rm_register(rex), X86.wide(rex))) + ",") + X86.immediate(immediate, 8))
+    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.held(registers, operand.rm_register(rex), X86.wide(rex)), "*", X86.constant(X86.power(immediate), X86.wide(rex)))
+  }
+  static AddSmall := class<rex: X86.Rex[]> (<-Byte{== 131}, operand: X86.Operand{(.mod == 3) && (.reg == 0)}, immediate: <-Binary₈) {
+    assembly => ((("add " + X86.named(operand.rm_register(rex), X86.wide(rex))) + ",") + X86.immediate(X86.signed(immediate, 8), X86.wide(rex)))
+    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.held(registers, operand.rm_register(rex), X86.wide(rex)), "+", X86.constant(X86.signed(immediate, 8), X86.wide(rex)))
+  }
+  static SubSmall := class<rex: X86.Rex[]> (<-Byte{== 131}, operand: X86.Operand{(.mod == 3) && (.reg == 5)}, immediate: <-Binary₈) {
+    assembly => ((("sub " + X86.named(operand.rm_register(rex), X86.wide(rex))) + ",") + X86.immediate(X86.signed(immediate, 8), X86.wide(rex)))
+    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.held(registers, operand.rm_register(rex), X86.wide(rex)), "-", X86.constant(X86.signed(immediate, 8), X86.wide(rex)))
+  }
+  static AddAccumulator := class<rex: X86.Rex[]> (<-Byte{== 5}, immediate: <-Binary₃₂) {
+    assembly => ((("add " + X86.named(0, X86.wide(rex))) + ",") + X86.immediate(X86.signed(immediate, 32), X86.wide(rex)))
+    lifted (registers) => X86.applied(registers, 0, X86.wide(rex), X86.held(registers, 0, X86.wide(rex)), "+", X86.constant(X86.signed(immediate, 32), X86.wide(rex)))
+  }
+  // (a register's number in the opcode's low three bits)
+  static MovImmediate := class<rex: X86.Rex[]> (register: <-Binary₃, <-Binary₅{== 23}, immediate: <-Binary₃₂) {
+    assembly => ((("mov " + X86.named(register + X86.base_extension(rex), 32)) + ",") + X86.immediate(immediate, 32))
+    lifted (registers) => X86.placed(registers, register + X86.base_extension(rex), X86.Value(X86.constant(X86.signed(immediate, 32), 32), 32))
+  }
+  static MovSigned := class<rex: X86.Rex[]> (<-Byte{== 199}, operand: X86.Operand{(.mod == 3) && (.reg == 0)}, immediate: <-Binary₃₂) {
+    assembly => ((("mov " + X86.named(operand.rm_register(rex), X86.wide(rex))) + ",") + X86.immediate(X86.signed(immediate, 32), X86.wide(rex)))
+    lifted (registers) => X86.placed(registers, operand.rm_register(rex), X86.Value(X86.constant(X86.signed(immediate, 32), X86.wide(rex)), X86.wide(rex)))
+  }
+  static pair (name, first, second, rex) => (((name + " ") + X86.named(first, X86.wide(rex))) + ",") + X86.named(second, X86.wide(rex))
+
+  // What a register holds while a function is lifted: Ray code over the parameters, and the width it was written at; read at the other width, a 64-bit value is its low half, a 32-bit one zero-extended (Vol. 1, 3.4.1.1)
+  static Value := class (code, width)
+  static typed (width) => (width == 64) ? "Int64" : "Int32"
+  static constant (value, width) => (value > 0) ? ("" + value) : (((("((1 - " + (1 - value)) + ") wrapped ") + X86.typed(width)) + ")")
+  static held (registers, number, width) =>
+    value := registers[number]
+    (return None) if value === None
+    (return value.code) if value.width == width
+    (width == 32) ? (("(" + value.code) + " wrapped Int32)") : (("(" + value.code) + " wrapped Natural32)")
+  static combined (left, sign, right, width) =>
+    (return None) unless left && right
+    ((((((("((" + left) + " ") + sign) + " ") + right) + ") wrapped ") + X86.typed(width)) + ")"
+  static applied (registers, number, width, left, operator, right) =>
+    code := X86.combined(left, operator, right, width)
+    (return None) unless code
+    X86.placed(registers, number, X86.Value(code, width))
+  static placed (registers, number, value) =>
+    (return None) unless registers && value.code
+    at := registers.head
+    left := number
+    while left > 0 {
+      at = at.next
+      left = left - 1
+    }
+    at.value = value
+    registers
+  // (an address is computed at the width it is written to)
+  static addressed (registers, operand, rex) =>
+    width := X86.wide(rex)
+    code := None
+    (code = X86.held(registers, operand.base_register(rex), width)) if operand.base_register(rex) !== None
+    if operand.index_register(rex) !== None {
+      scaled := (operand.scaled == 1) ? X86.held(registers, operand.index_register(rex), width) : X86.combined(X86.held(registers, operand.index_register(rex), width), "*", "" + operand.scaled, width)
+      code = (code === None) ? scaled : X86.combined(code, "+", scaled, width)
+    }
+    displacement := operand.displacement
+    (return code) if (displacement === None) || (displacement == 0)
+    (displacement > 0) ? X86.combined(code, "+", "" + displacement, width) : X86.combined(code, "-", "" + (0 - displacement), width)
+
+  // The function a function's machine code computes, in Ray code of the normal form: its arguments in rdi, rsi, rdx, rcx, its result in eax or rax (System V AMD64 ABI, 3.2.3)
+  static lift (function, name, parameters, width) =>
+    registers := [None] * 16
+    places := [7, 6, 2, 1]
+    index := 0
+    at := parameters.head
+    while at {
+      X86.placed(registers, places[index], X86.Value(at.value, width))
+      index = index + 1
+      at = at.next
+    }
+    step := function.instructions.head
+    while step && registers {
+      registers = step.value.operation.lifted(registers)
+      step = step.next
+    }
+    (return None) unless registers
+    result := X86.held(registers, 0, width)
+    (return None) unless result
+    (((name + " (") + parameters.map((parameter) => (parameter + ": ") + X86.typed(width)).join(", ")) + ") => ") + result
+}
+
+// An instruction: a REX prefix or none, then one of the encodings above, given the prefix (made once X86 is, so that its header sees the encodings are of bits)
+X86.Instruction := class (
+  rex: X86.Rex[]{length <= 1},
+  operation: X86.Imul<rex> | X86.Sub<rex> | X86.Mov<rex> | X86.Lea<rex> | X86.Add<rex> | X86.MovImmediate<rex> | X86.Neg<rex> | X86.Not<rex>
+    | X86.Xor<rex> | X86.AddSmall<rex> | X86.SubSmall<rex> | X86.MovSigned<rex> | X86.Shl<rex> | X86.ImulImmediate<rex> | X86.AddAccumulator<rex> | X86.Ret<rex>
+) {
+  ends => operation is X86.Ret
+}
+// A function: its instructions, up to the `ret` that ends it
+X86.Function := class (instructions: X86.Instruction[]{(!.empty) && .last.ends}) {
+  static from (bytes) => X86.Function.bits_read(bytes.map((byte) => byte.binary(8).reversed).join(""))
+  written => .binary.pieces(8).map((eight) => eight.reversed.unsigned)
+  assembly => instructions.map((instruction) => instruction.operation.assembly)
+}

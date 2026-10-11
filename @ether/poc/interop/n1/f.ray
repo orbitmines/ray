@@ -1,0 +1,1 @@
+f (a: Int32, b: Int32, c: Int32) => ((a + ((b * c) as Int32)) as Int32)

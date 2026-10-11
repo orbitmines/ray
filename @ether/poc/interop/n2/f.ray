@@ -1,0 +1,1 @@
+f (a: Integer, b: Integer, c: Integer) => ((a + ((b * c) as Integer)) as Integer)

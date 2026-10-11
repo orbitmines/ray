@@ -126,6 +126,13 @@ Sub := class: Pair (": ", first: Number) => {
 }
 unless Sub(first: 2).head == 2 { INFO@mark `HD9 class: Parent (pattern) has no field from its pattern` }
 unless Sub(first: 2) is Pair { INFO@mark `HD10 class: Parent (pattern) is not built on Parent` }
+Spaced := class (left, " + ", right) => {
+  joined => left + right
+}
+unless ("a + b" as Spaced).right == "b" { INFO@mark `HD17 a class written as a pattern does not read text with spaces in its literal` }
+unless ("a + b" as Spaced).joined == "ab" { INFO@mark `HD18 an instance read from text reads its own methods with its pattern` }
+if "a - b" as Spaced { INFO@mark `HD19 text the pattern does not read is read as an instance` }
+unless Spaced("u", "v").right == "v" { INFO@mark `HD20 a literal in a header takes an argument by position` }
 Count := class {
   static made := 0
   static zero => 0

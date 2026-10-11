@@ -1,0 +1,12 @@
+C := { }
+C.int := Number{(. >= (1 - 2147483649)) && (. <= 2147483647)}
+C.Sum := class (left, " + ", right) => { }
+C.Function := class ("int ", name, "(int ", a, ", int ", b, ") { return ", body, "; }") => {
+  type => C.int
+  sum => body as C.Sum
+  fits (value) => (value) is type
+  argument_for (written, x, y) => (written == a) ? x : ((written == b) ? y : None)
+  summed (x, y) => argument_for(sum.left, x, y) + argument_for(sum.right, x, y)
+  fitted (value) => fits(value) ? value : None
+  call (x, y) => (fits(x) && fits(y)) ? fitted(summed(x, y)) : None
+}

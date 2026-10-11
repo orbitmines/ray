@@ -1,0 +1,1 @@
+g (x: Integer, y: Integer) => ((((x - y) as Integer) * 3) as Integer)

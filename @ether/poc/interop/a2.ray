@@ -1,0 +1,13 @@
+mark ^keyword := global
+
+read := (text_of_file "add.c") as C.Function
+unless read.type === C.int { INFO@mark `A2.1 the function's type is not C's int` }
+unless (2147483647) is read.type { INFO@mark `A2.2 the largest int is not an int` }
+if (2147483648) is read.type { INFO@mark `A2.3 one past the largest int is an int` }
+unless (1 - 2147483649) is read.type { INFO@mark `A2.4 the smallest int is not an int` }
+if (1 - 2147483650) is read.type { INFO@mark `A2.5 one below the smallest int is an int` }
+unless (read.call(2147483646, 1)) == 2147483647 { INFO@mark `A2.6 a sum up to the largest int is not answered` }
+if read.call(2147483647, 1) { INFO@mark `A2.7 a sum past the largest int is answered` }
+if read.call(2147483648, 1) { INFO@mark `A2.8 an argument that is no int is taken` }
+if read.call(1 - 2147483649, 2 - 3) { INFO@mark `A2.9 a sum below the smallest int is answered` }
+unless (read.call(1 - 2147483648, 2 - 3)) == (1 - 2147483649) { INFO@mark `A2.10 a sum down to the smallest int is not answered` }

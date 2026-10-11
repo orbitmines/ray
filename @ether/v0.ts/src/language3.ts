@@ -412,6 +412,11 @@ export class Program {
     }
     return j;
   }
+  quoting(before?: string, after?: string): string | undefined {
+    if (before === undefined || after === undefined) return undefined;
+    for (const quote of this.quotes) if (before.endsWith(quote) && after.startsWith(quote)) return quote;
+    return undefined;
+  }
   // (where what is quoted from `i` ends: the next same quote, one after `\` is part of the text)
   static quote_end(s: string, i: number, quote: string): number {
     for (let j = i + 1; j < s.length; j++) { if (s.charCodeAt(j) === 92) j++; else if (s.startsWith(quote, j)) return j; }
@@ -563,8 +568,8 @@ export class Program {
       if (hole === '') { let u = t; while (Program.space(s.charCodeAt(u))) u++; if (u > t) step(k + 1, u); return; }
       const next = pieces[k + 1], last = !next, ends: number[] = [], enclosed = this.enclosed(rule, k);
       // (between a quote and the same quote: what is quoted, as written (spaces too))
-      const quote = pieces[k - 1]?.literal;
-      if (quote !== undefined && quote === next?.literal && this.quotes.has(quote) && pieces[k].type === undefined) {
+      const quote = this.quoting(pieces[k - 1]?.literal, next?.literal);
+      if (quote !== undefined && pieces[k].type === undefined) {
         const u = Program.quote_end(s, t - 1, quote);
         if (u > t) { spans.push(t, u); step(k + 1, u); spans.length -= 2; }
         return;
@@ -583,8 +588,8 @@ export class Program {
       }
       if (typed) { const firsts = this.firsts_of(typed); if (firsts && !firsts.has(s.charCodeAt(t))) return; }
       // (between a quote and the same quote: up to the next one)
-      const before = pieces[k - 1]?.literal;
-      if (before !== undefined && before === next?.literal && this.quotes.has(before)) {
+      const before = this.quoting(pieces[k - 1]?.literal, next?.literal);
+      if (before !== undefined) {
         const u = Program.quote_end(s, t - 1, before);
         if (u > t && (!typed || this.structural(s.slice(t, u), typed))) { spans.push(t, u); step(k + 1, u); spans.length -= 2; }
         return;
@@ -795,7 +800,7 @@ export class Program {
       const { reading } = frame, names = reading ? reading.rule.holes : [];
       let compiled = this.compiled.get(next!);
       if (!compiled) this.compiled.set(next!, compiled = new Function('self', '$', ...names, `return (${next});`) as (...args: unknown[]) => unknown);
-      const $ = Object.assign((text: string) => this.read(text, frame), { text: (name: string) => this.source(reading!.caps[name]), written: (value: unknown) => typeof value === 'number' ? String(value) : this.written(value), host: this.layouts });
+      const $ = Object.assign((text: string) => this.read(text, frame), { text: (name: string) => this.source(reading!.caps[name]), written: (value: unknown) => typeof value === 'number' ? String(value) : this.written(value), host: this.layouts, whole: (text: string, node: unknown) => node instanceof Program.Node && this.structural(text, node) });
       // (a body hole is code: given as nothing, its text is `$.text(name)`)
       return compiled(frame.this ?? frame.node, $, ...names.map(name => reading!.rule.bodies.has(name) ? undefined : this.held_value(this.shared(reading!, name))));
     }],

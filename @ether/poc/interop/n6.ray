@@ -1,0 +1,2 @@
+abi_add := rust_function_c_abi(c_ray(text_of_file "add.c"))
+abi_add written_to_file "out/add.abi.rs"

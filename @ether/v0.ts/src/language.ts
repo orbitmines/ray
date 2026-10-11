@@ -1661,21 +1661,37 @@ export type Diagnostic = { file: string, begin: number, end: number, message: st
 // Where what is read is in a text being read (a statement of it, `begin` to `end`): a reading's text looked for after where the
 // reading it was read in is; what its rule's style and its holes' styles paint there.
 export class Painter {
+  declare paint_whole: (at: number | undefined, text: string, rule: Program.Rule) => void;
   paints: Paint[] = [];
   private at = new WeakMap<Program.Reading, number>();
   begin = 0; end = 0;
-  constructor(public text: string) {}
+  constructor(public text: string, public program?: Program) {}
   locate(reading: Program.Reading) {
-    const t = reading.text;
+    let t = reading.text;
+    // (a value written into it: where its text was written)
+    if (t && t.includes(Program.REFERS) && this.program) t = this.program.source(t);
     if (!t || t.includes(Program.REFERS)) return;
     const from = reading.from ? this.at.get(reading.from) : undefined;
     let i = this.text.indexOf(t, from ?? this.begin);
     if (i < 0 || i + t.length > this.end) i = this.text.indexOf(t, this.begin);
-    if (i >= 0 && i + t.length <= this.end) this.at.set(reading, i);
+    if (i >= 0 && i + t.length <= this.end) { this.at.set(reading, i); this.defined.set(reading, Program.Node.defined); }
   }
+  private defined = new WeakMap<Program.Reading, number>();
   paint(reading: Program.Reading) {
-    const at = this.at.get(reading), { rule, spans, text } = reading;
+    const at = this.at.get(reading), { rule, spans } = reading;
+    // (a rule it defined, named by one of its holes (`x := 1`, `f (a) => …`): that hole shown as the rule is)
+    const made = Program.Node.last;
+    if (at !== undefined && made?.style && (this.defined.get(reading) ?? Infinity) < made.id) {
+      let h = 0;
+      for (const piece of rule.pieces) if (piece.hole) { const b = spans[2 * h], e = spans[2 * h + 1]; h++; if (reading.text.slice(b, e).trim() === made.head.trim() && e > b) this.paints.push({ begin: at + b, end: at + e - 1, style: made.style }); }
+    }
+    // (a member, `.x`: its `.` shown as it is)
+    if (at !== undefined && rule.style && !rule.holes.length && this.text[at - 1] === '.' && rule.pieces.length === 1) this.paints.push({ begin: at - 1, end: at - 1, style: rule.style });
+    const text = reading.text.includes(Program.REFERS) && this.program ? this.program.source(reading.text) : reading.text;
+    if (text !== reading.text) return this.paint_whole(at, text, rule);
     if (at === undefined || (!rule.style && !rule.pieces.some(piece => piece.style))) return;
+    // (a rule with no literal: its style is what it read)
+    if (rule.style && !rule.pieces.some(piece => piece.literal !== undefined)) { if (reading.at > 0) this.paints.push({ begin: at, end: at + reading.at - 1, style: rule.style }); return; }
     let cursor = 0, h = 0;
     for (const piece of rule.pieces) {
       if (piece.literal !== undefined) {
@@ -1693,6 +1709,17 @@ export class Painter {
   }
 }
 
+// (a reading of text holding values written into it: its literals, found in order, in the text as written)
+Painter.prototype.paint_whole = function (this: Painter, at: number | undefined, text: string, rule: Program.Rule) {
+  if (at === undefined || !rule.style) return;
+  let cursor = 0;
+  for (const piece of rule.pieces) if (piece.literal !== undefined && piece.literal.trim()) {
+    const i = text.indexOf(piece.literal, cursor);
+    if (i < 0) break;
+    this.paints.push({ begin: at + i, end: at + i + piece.literal.length - 1, style: rule.style });
+    cursor = i + piece.literal.length;
+  }
+};
 // The severity a diagnostic's rule is shown with (its style, the language's: `ERROR {message} ^error`), as the LSP numbers them.
 const SEVERITIES: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warn: 2, info: 3, debug: 4, trace: 4 };
 
@@ -1705,7 +1732,7 @@ const SEVERITIES: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warn: 2,
 // (what a file uses, for the order files are read in: not its comments, nor its tests (`assert …`: read after everything))
 const Library_read = (text: string) => { const out: string[] = []; let skip = -1; for (const line of text.split('\n')) { const at = line.length - line.trimStart().length; if (skip >= 0 && line.trim() && at > skip) continue; skip = -1; if (/^\s*assert\b/.test(line)) { skip = at; continue; } out.push(line.replace(/(^|\s)\/\/.*$/, '')); } return out.join('\n'); };
 // What a statement of a file said, painted and put off (its tests) when it was read; a test, where its assert is and what it found.
-type Test = { code: string, frame: Program.Frame, except?: Program.Rule, file: string, begin: number, end: number, outcome?: Diagnostic[], dropped?: boolean };
+type Test = { code: string, frame: Program.Frame, except?: Program.Rule, file: string, begin: number, end: number, outcome?: Diagnostic[], dropped?: boolean, paints?: Paint[] };
 type Statement = { statement: string, begin: number, end: number, diagnostics: Diagnostic[], paints: Paint[], tests: Test[] };
 export class Library {
   program: Program;
@@ -1807,7 +1834,7 @@ export class Library {
   // again (`again`, an edit), a statement written as it was is not read again: what it said, painted and put off, kept (moved with
   // it); only those written otherwise are read.
   file(file: string, text = this.text(file), node: Program.Node = this.program.global, again = false): Diagnostic[] {
-    const p = this.program, painter = this.options.painting ? new Painter(text) : undefined;
+    const p = this.program, painter = this.options.painting ? new Painter(text, p) : undefined;
     this.texts.set(file, text);
     const before_reads = again ? this.reads.get(file) ?? [] : [], kept = new Map<string, Statement[]>();
     for (const r of before_reads) kept.set(r.statement, [...kept.get(r.statement) ?? [], r]);
@@ -1825,7 +1852,7 @@ export class Library {
       if (same) {
         const by = begin - same.begin, moved = <T extends { begin: number, end: number }>(x: T): T => ({ ...x, begin: x.begin + by, end: x.end + by });
         same.diagnostics = same.diagnostics.map(moved); same.paints = same.paints.map(moved);
-        for (const t of same.tests) { t.begin += by; t.end += by; }
+        for (const t of same.tests) { t.begin += by; t.end += by; t.paints = t.paints?.map(moved); }
         same.begin = begin; same.end = end; reads.push(same);
         continue;
       }
@@ -1871,14 +1898,18 @@ export class Library {
     if (open >= 0) out.push([start, open]);
     return out;
   }
-  // What a file's tests show (`assert`: failed, an error; held, debug; not run, a comment), over what is painted inside them.
+  // What a file's tests show: what is painted inside an `assert` as it is, in the state of the test (`failed`, `passed`, not run
+  // `untested`: `keyword.failed`, the theme says how that is shown); what is not painted in it, the state.
   tested_paints(file: string): Paint[] {
-    const style = (t: Test) => t.outcome === undefined ? 'comment' : t.outcome.length ? 'error' : 'debug';
+    const style = (t: Test) => t.outcome === undefined ? 'untested' : t.outcome.length ? 'failed' : 'passed';
     const tests = (this.reads.get(file) ?? []).flatMap(r => r.tests).filter(t => !t.dropped);
     const spans = Library.asserts(this.texts.get(file) ?? '', 0, (this.texts.get(file) ?? '').length);
-    const shown = spans.map(([begin, end]) => ({ begin, end: end - 1, style: style(tests.find(t => t.begin === begin) ?? ({} as Test)) }));
-    const inside = (x: Paint) => shown.some(s => x.begin >= s.begin && x.end <= s.end);
-    return [...(this.paints.get(file) ?? []).filter(x => !inside(x)), ...shown];
+    // (`assert` itself: the state; what follows it: as it is painted, muted (`.muted`))
+    const text = this.texts.get(file) ?? '';
+    const shown = spans.map(([begin, end]) => { const word = text.slice(begin).match(/^\w+/)?.[0].length ?? 0; return { begin, end: end - 1, word: begin + word - 1, style: style(tests.find(t => t.begin === begin) ?? ({} as Test)) }; });
+    const within = (x: Paint) => shown.find(s => x.begin >= s.begin && x.end <= s.end);
+    const painted = [...this.paints.get(file) ?? [], ...tests.flatMap(t => t.paints ?? [])].filter(x => !shown.some(s => x.begin >= s.begin && x.end <= s.word));
+    return [...shown.map(s => ({ begin: s.begin, end: s.word, style: s.style })), ...painted.map(x => within(x) ? { ...x, style: x.style + '.muted' } : x)];
   }
   paints = new Map<string, Paint[]>();
   // (comments are the host's: what it does not read)
@@ -1914,8 +1945,12 @@ export class Library {
         if (t.outcome === undefined) {
           if (until?.()) break;
           const said: Diagnostic[] = [], before = p.reports.length, text = this.texts.get(t.file) ?? '';
+          const painter = this.options.painting ? Object.assign(new Painter(text, p), { begin: t.begin, end: t.end }) : undefined;
+          p.painter = painter;
           try { p.run(t.code, t.frame, t.except); }
           catch (e) { said.push(this.said(t.file, text, t.begin, t.end, `Failed: ${(e as Error)?.message ?? e}`, 1)); }
+          finally { p.painter = undefined; }
+          if (painter) t.paints = painter.paints;
           for (const report of p.reports.slice(before)) said.push(this.reported(report, t.file, text, t.begin, t.end));
           p.reports.length = before;
           t.outcome = said;
@@ -1973,7 +2008,8 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
   }
   if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
   for (const [, ds] of library.diagnostics) all.push(...ds);
-  if (kwargs.test) all.push(...library.test());
+  // (the tests of the files given; given none, of every file read)
+  if (kwargs.test) for (const file of args.length ? files : [undefined]) all.push(...library.test(file));
   const shown = all.filter(d => d.severity <= (kwargs.verbose ? 3 : 2) && (args.length === 0 || files.includes(d.file) || kwargs.test));
   for (const d of shown) {
     const line = d.file ? library.text(d.file).slice(0, d.begin).split('\n').length : 0;
@@ -1999,6 +2035,16 @@ export function shown_as(table: Map<string, string>, name: string, seen = new Se
   if (next !== undefined) return /^#[0-9A-Fa-f]{3,8}$/.test(next) ? next : shown_as(table, next, seen);
   const dot = name.lastIndexOf('.');
   return dot > 0 ? shown_as(table, name.slice(0, dot), seen) : undefined;
+}
+
+// A style muted (`keyword.muted`: what is written in a test): its colour taken toward the theme's `^muted` by its `^muting` (`50%`).
+export function muted(table: Map<string, string>, style: string): string | undefined {
+  if (!style.endsWith('.muted')) return undefined;
+  const base = shown_as(table, style.slice(0, -'.muted'.length)), toward = shown_as(table, 'muted'), amount = parseFloat(table.get('muting') ?? '50') / 100;
+  if (!base || !toward) return base;
+  const rgb = (c: string) => { const h = c.slice(1); const x = h.length <= 4 ? [...h.slice(0, 3)].map(d => d + d).join('') : h.slice(0, 6); return [0, 2, 4].map(i => parseInt(x.slice(i, i + 2), 16)); };
+  const [a, b] = [rgb(base), rgb(toward)];
+  return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * amount).toString(16).padStart(2, '0')).join('');
 }
 
 // The language's theme: what `Theme.current` is (a name, and each style what it is shown as: another style, or a colour).
@@ -2096,7 +2142,7 @@ export async function lsp(options: { io?: { input: NodeJS.ReadableStream, output
     if (shown) {
       const table = new Map(Object.entries(shown.colors));
       for (const [name] of table) { const color = shown_as(table, name); if (color) styles[name] = { color }; }
-      for (const doc of docs) for (const { style } of doc.ranges) if (!styles[style]) { const color = shown_as(table, style); if (color) styles[style] = { color }; }
+      for (const doc of docs) for (const { style } of doc.ranges) if (!styles[style]) { const color = muted(table, style) ?? shown_as(table, style); if (color) styles[style] = { color }; }
     }
     return { styles, documents: docs };
   };

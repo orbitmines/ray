@@ -11,6 +11,10 @@
   {head} =>
     goto .
     {body}
+  goto styled
+  function
+goto styled
+punctuation
 // One written `nearest {head} => {body}` does not go on: it is rewritten by its first reading (its holes ending nearest).
 nearest {head} => {body} =>
   {head} =>
@@ -126,6 +130,8 @@ assert `ab` as String == "ab"
     None
   {name} =>
     {value}
+  goto styled
+  variable
 
 // Node: the outermost node (`.`, here, is the node being read in). Every node sees its rules, so they are what any value
 // read on reads: its methods.
@@ -160,6 +166,8 @@ Pattern := {
   {on} &+= {
     {name} := {value}
   }
+  goto styled
+  property
 
 // (A member, `x.y`: `x`, then `.y` read in it, the reader's `.`.)
 
@@ -582,8 +590,12 @@ nearest () => {body} =>
     returned\
 {name} ({parameters}) => {body} =>
   {name} := (({parameters}) => {body})
+  goto styled
+  function
 {name} () => {body} =>
   {name} := (() => {body})
+  goto styled
+  function
 {on}.{name}{ }({parameters}) => {body} =>
   {on}.{name} := (({parameters}) => {body})
 {on}.{name}{ }() => {body} =>
@@ -594,10 +606,16 @@ nearest () => {body} =>
     None
   {name} =>
     {value}
+  goto styled
+  variable
 {{name}}{ }:={ }() => {body} =>
   {name} := (() => {body})
+  goto styled
+  function
 {{name}}{ }:={ }({parameters}) => {body} =>
   {name} := (({parameters}) => {body})
+  goto styled
+  function
 {on}.{name}{ }:={ }() => {body} =>
   {on}.{name} := (() => {body})
 {on}.{name}{ }:={ }({parameters}) => {body} =>
@@ -606,6 +624,8 @@ nearest () => {body} =>
   {name} := (class ({fields}) => {
     {block}
   })
+  goto styled
+  class
 // A setting changed for a block is back once the block is left
 assert {
   Setting := class { static level = 1 }
@@ -847,12 +867,16 @@ assert {
   {name} := (class: {parent} ({fields}) => {
     {block}
   })
+  goto styled
+  class
 // (what it is given in made first when nothing has that name yet, `orbitmines.com := …`: a name not given reads as its text)
 {on}.{name} := {value} =>
   ({on} := { }) if ({on}) === "{on}"
   {on} &+= {
     {name} := {value}
   }
+  goto styled
+  property
 {on}[{key}] = {value} =>
   ({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value})
 {on}[{key}] := {value} =>
@@ -2151,6 +2175,14 @@ DARK := theme `Ether.ray - Dark` {
   ^info = ^ #5C5CCD
   ^debug = ^ #5CCD5C
   ^trace = ^comment
+
+  // A test, `assert`, as what it found (failed, passed, not run); what is written after it in its own colours, muted: taken this
+  // much toward this.
+  ^failed = ^error
+  ^passed = ^debug
+  ^untested = ^comment
+  ^muted = ^comment
+  ^muting = ^ 50%
 }
 
 

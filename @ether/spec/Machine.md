@@ -208,6 +208,38 @@ What is still off:
   `poc/library-tests.mts` runs it in-process, since the CLI's worker needs Node's `--experimental-transform-types`, which
   Node 26 no longer has.
 
+## Why it is slow, and what that means
+
+Measured on this branch: booting the language takes about 11 s; one read (matching text against rules) about 10 µs; a warm
+read of a 5-byte DEFLATE stream takes about 60 000 reads, some 12 000 per byte, so about 100 bytes a second, where zlib
+does hundreds of megabytes. Writing 512 random bytes runs past 12 GB. Machine code is cheaper only because its functions
+are small (under a second each).
+
+Where it goes:
+
+- **Everything is read again as text.** There is no compiled form: each evaluation matches its text against the rules in
+  scope. Values cross between Ray and the host as references written into text (`{00abcd}`) and are read back; the codec
+  builds Ray text for every field, narrowing and default (`(value) with { … }`) and reads it.
+- **Data is made of Ray nodes.** A list link is a block read on every `append` (its rules defined anew); `,` makes such a
+  list for every argument list. One output byte costs tens of nodes.
+- **What is lazy is read again.** Named arguments are read where they are read, typed parameters are checked with `is`
+  walking superclasses, `static` values were made again on every read until this branch kept them.
+- **Memory is not given back** within a process, so every corpus case runs in a process of its own and pays the boot.
+
+What it means for the goal. The goal needs the one declaration to be the meaning (type, grammar, parser, writer) and needs
+compiler output at real sizes to run through it: whole programs, libraries. The interpreter is four to six orders of
+magnitude short of that, and tuning it (caching readings, host lists, compiling the codec's expressions once) buys one or
+two. So the interpreter should stay the reference semantics, run on small cases, and speed should come from what the
+interop path already does: Ray writing another language. The writers that turn a lifted function into Rust can turn a
+declaration into a decoder and encoder in Rust or JS: `X86.ray`'s headers into a function from bytes to instructions and
+back, then DEFLATE's. The generated code runs the corpora; a differential check keeps it equal to the interpreter on the
+fast tier. That is the Almanac's (1c) applied to Ray's own declarations, "compile the compiler into a new version", and it
+is the machinery the rest of interop needs anyway.
+
+How the proofs run meanwhile: `poc/quick.sh` runs each kind of claim of the three proofs on a few cases in seven processes
+(about 3 minutes); the full corpora (`deflate/run.sh`, `interop/run.sh`, `machine/run.sh`) run only before a step is called
+done.
+
 ## Engine gaps
 
 - **MCG1 A class's statics are not in scope while its block is read.** `X86.Rex` does not resolve until `X86 :=` is done,

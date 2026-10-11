@@ -6,7 +6,7 @@
 const { booted } = await import('../deflate/boot.mts');
 const fs = await import('node:fs'), path = await import('node:path');
 const { program } = await booted();
-const here = path.dirname(new URL(import.meta.url).pathname), corpus = path.join(here, 'corpus'), mode = process.argv[2];
+const here = path.dirname(new URL(import.meta.url).pathname), corpus = path.join(here, 'corpus'), modes = process.argv[2].split(',');
 const g = { node: program.global }, none = program.run('None', g);
 const run = (text: string) => { program.steps = 0; return program.run(text, g); };
 const listed = (bytes: Uint8Array) => { const list = run('Listing.new'); for (const byte of bytes) run(program.written(list) + '.append(' + byte + ')'); return list; };
@@ -30,7 +30,7 @@ fs.mkdirSync(out, { recursive: true });
 fs.mkdirSync(rusts, { recursive: true });
 let failed = 0, seed = 1;
 const random = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
-for (const function_ of functions.slice(from - 1, to)) {
+for (const mode of modes) for (const function_ of functions.slice(from - 1, to)) {
   const { name } = function_, bytes = fs.readFileSync(path.join(corpus, name + '.bin')), started = performance.now();
   let held = false, said = '';
   try {
@@ -42,7 +42,7 @@ for (const function_ of functions.slice(from - 1, to)) {
       held = !!written && Buffer.from(written as number[]).equals(bytes);
       said = written ? `${Buffer.from(written as number[]).toString('hex')}, gcc: ${bytes.toString('hex')}` : 'not written';
       if (!held) failed++;
-      console.log(held ? 'ok  ' : 'FAIL', name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
       continue;
     }
     const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
@@ -79,6 +79,6 @@ for (const function_ of functions.slice(from - 1, to)) {
     }
   } catch (error: any) { said = 'threw ' + String(error?.message).slice(0, 80); }
   if (!held) failed++;
-  console.log(held ? 'ok  ' : 'FAIL', name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+  console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
 }
 process.exitCode = failed ? 1 : 0;

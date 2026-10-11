@@ -47,7 +47,7 @@ def built(sources, name):
 
 if __name__ == '__main__':
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 30
-    functions = json.loads((corpus / 'corpus.json').read_text())
+    functions = json.loads((corpus / 'corpus.json').read_text())[:int(sys.argv[2]) if len(sys.argv) > 2 else None]
     missing = [f['name'] for f in functions if not (out / 'rust' / (f['name'] + '.rs')).exists()]
     if missing:
         sys.exit('Ray wrote no Rust for: ' + ' '.join(missing))

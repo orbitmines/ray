@@ -1,7 +1,7 @@
 # DEFLATE proof: one declaration reads and writes a real format
 
 The claim under test: a Ray class declaration of a format is its type, its parser and its writer at once, in both
-directions. `$/deflate/Deflate.ray` (136 lines) declares RFC 1951 that way. Its class headers read a stream, and the
+directions. `$/Deflate.project.ray` (136 lines) declares RFC 1951 that way. Its class headers read a stream, and the
 defaults on their fields (`size: <-Binary₁₆ = bytes.count`) write one. This POC makes that claim pass or fail on bytes
 made by zlib, the format's reference implementation.
 
@@ -21,8 +21,8 @@ Why DEFLATE:
 
 ## Principles
 
-- **One declaration.** Nothing in the POC reads or writes DEFLATE except `$/deflate/Deflate.ray` (and `$/zlib/Zlib.ray`,
-  `$/gzip/Gzip.ray` in DP7). A wrong declaration is fixed there, one commit per fix. There is no second reader, no
+- **One declaration.** Nothing in the POC reads or writes DEFLATE except `$/Deflate.project.ray` (and `$/Zlib.project.ray`,
+  `$/Gzip.project.ray` in DP7). A wrong declaration is fixed there, one commit per fix. There is no second reader, no
   writer beside the declaration, and no TS decoder.
 - **The engine is language3** (`v0.ts/src/language3.ts` with `ray/.entrypoint.ray2`), run through a strict claim runner
   like `poc/interop/run.mts`: a claim holds only when its condition answers the `true` node, so a condition the engine

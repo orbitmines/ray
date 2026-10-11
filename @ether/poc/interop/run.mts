@@ -1,4 +1,4 @@
-// (booted as `poc/deflate/boot.mts` boots language3: the core library read in the order it needs itself)
+// (booted as `poc/deflate/boot.mts` boots the language: the core library read in the order it needs itself)
 const { booted, Program } = await import('../deflate/boot.mts');
 const fs = await import('node:fs');
 const { program } = await booted();

@@ -1,5 +1,5 @@
-import type { Text } from '../language/text.ts';
-type Painted = Text.Node;
+// (a span painted with a style, `begin`/`end` inclusive)
+type Painted = { begin: number, end: number, style: string };
 
 // The modifiers the LSP standardizes — a style's dotted tail
 // (`variable.readonly`) maps onto these bits.

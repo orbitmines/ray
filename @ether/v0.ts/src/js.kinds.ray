@@ -1,0 +1,279 @@
+// What this interpreter's own kinds of value are, for now: a number (a JS number) and text (a JS string), their operations
+// the host's (`goto js`: the next statement is JS, `self` the value read on, each hole its value, `$(text)` text read here).
+// A port of `js.kinds.ray` to test with until the library reads numbers and text itself; read after the language.
+
+// Numbers, as written: a numeral (`Numeral`'s own rules), numerals after one another (`Numerals`'s), those with a fraction
+// (`Number`'s own rules: a typed hole `{n: Number}` takes what they read; what it took is read in `Number`). Read anywhere
+// through the rule after them. (Plain nodes, not classes, for the digits: the library defines a class `Digit` of its own.)
+Numeral := { }
+Numeral &+= {
+  0 =>
+    goto js
+    0
+  1 =>
+    goto js
+    1
+  2 =>
+    goto js
+    2
+  3 =>
+    goto js
+    3
+  4 =>
+    goto js
+    4
+  5 =>
+    goto js
+    5
+  6 =>
+    goto js
+    6
+  7 =>
+    goto js
+    7
+  8 =>
+    goto js
+    8
+  9 =>
+    goto js
+    9
+}
+Numerals := { }
+Numerals &+= {
+  {digit: Numeral} =>
+    digit
+  {digit: Numeral}{rest: Numerals} =>
+    goto js
+    Number($.text('digit') + $.text('rest'))
+}
+Number &+= {
+  {digits: Numerals} =>
+    digits
+  {whole: Numerals}.{fraction: Numerals} =>
+    goto js
+    Number($.text('whole') + '.' + $.text('fraction'))
+}
+{number: Number} ^number =>
+  number
+// (a number written in hexadecimal, `0xff`: its hexadecimal digits, `Hexadecimals`'s own rules; a letter a name it holds, as
+// a typed hole does not read a type's methods)
+Hexadecimal_digit := { }
+Hexadecimal_digit &+= {
+  0 =>
+    goto js
+    '0'
+  1 =>
+    goto js
+    '1'
+  2 =>
+    goto js
+    '2'
+  3 =>
+    goto js
+    '3'
+  4 =>
+    goto js
+    '4'
+  5 =>
+    goto js
+    '5'
+  6 =>
+    goto js
+    '6'
+  7 =>
+    goto js
+    '7'
+  8 =>
+    goto js
+    '8'
+  9 =>
+    goto js
+    '9'
+  a := "a"
+  b := "b"
+  c := "c"
+  d := "d"
+  e := "e"
+  f := "f"
+  A := "A"
+  B := "B"
+  C := "C"
+  D := "D"
+  E := "E"
+  F := "F"
+}
+Hexadecimals := { }
+Hexadecimals &+= {
+  {digit: Hexadecimal_digit} =>
+    digit
+  {digit: Hexadecimal_digit}{rest: Hexadecimals} =>
+    digit
+}
+0x{digits: Hexadecimals} =>
+  goto js
+  parseInt($.text('digits'), 16)
+// Bits, as written: `0b010`, the text of its digits (it keeps its length; `+` joins two).
+0b{digits: Numerals} =>
+  goto js
+  /^[01]+$/.test($.text('digits')) ? $.text('digits') : undefined
+
+// What both answer: `true`/`false`, read here. (Two lists: the same when their values are, `alike`.)
+== {other} ^operator =>
+  goto js
+  self === other ? $('true') : typeof self === 'object' && self !== null && typeof other === 'object' && other !== null && $($.written(self) + '.listing') === $('true') && $($.written(self) + '.alike(' + $.written(other) + ')') === $('true') ? $('true') : $('false')
+!= {other} ^operator =>
+  goto js
+  self === other ? $('false') : typeof self === 'object' && self !== null && typeof other === 'object' && other !== null && $($.written(self) + '.listing') === $('true') && $($.written(self) + '.alike(' + $.written(other) + ')') === $('true') ? $('false') : $('true')
+< {other} ^operator =>
+  goto js
+  $(self < other ? 'true' : 'false')
+<= {other} ^operator =>
+  goto js
+  $(self <= other ? 'true' : 'false')
+> {other} ^operator =>
+  goto js
+  $(self > other ? 'true' : 'false')
+>= {other} ^operator =>
+  goto js
+  $(self >= other ? 'true' : 'false')
+
+// Numbers (text added to: joined; anything else, composed; text or a list `* n`, it n times).
++ {other} ^operator =>
+  goto js
+  typeof self === 'string' ? self + String(other) : typeof self === 'number' ? self + other : undefined
+  .composed({other})
+- {other} ^operator =>
+  goto js
+  self - other
+* {other} ^operator =>
+  goto js
+  typeof self === 'number' ? self * other : typeof self === 'string' ? self.repeat(other) : typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? $($.written(self) + '.repeated(' + $.written(other) + ')') : undefined
+/ {other} ^operator =>
+  goto js
+  self / other
+% {other} ^operator =>
+  goto js
+  ((self % other) + other) % other
+
+// Text (`""`: none). (text with an escape in it, `"\e[0m"`: each escape what String.ray's `Escape` says it stands for)
+"" =>
+  goto js
+  ''
+unescaped =>
+  goto js
+  typeof self !== 'string' ? undefined : self.replace(/\\(.)/gs, (_, c) => ({ '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n', f: '\f', r: '\r', e: '\x1b' })[c] ?? c)
+contains {other} =>
+  goto js
+  $(String(self).includes(String(other)) ? 'true' : 'false')
+begins {other} =>
+  goto js
+  $(String(self).startsWith(String(other)) ? 'true' : 'false')
+split({separator}) =>
+  goto js
+  typeof self === 'string' ? $('[' + self.split(String(separator)).map(part => JSON.stringify(part)).join(', ') + ']') : undefined
+count =>
+  goto js
+  typeof self === 'string' ? [...self].length : undefined
+reads_text {text} =>
+  goto js
+  typeof text === 'string' && $.whole(text, self) ? $(text) : $('None')
+headed {{header}} =>
+  goto js
+  (function (header) { const open = String.fromCharCode(123), close = String.fromCharCode(125), quote = String.fromCharCode(34), pieces = [], fields = []; let depth = 0, quoted = 0, start = 0; for (let i = 0; i <= header.length; i++) { const c = header.charCodeAt(i); if (quoted) { if (c === quoted) quoted = 0; continue; } if (c === 34 || c === 96) { quoted = c; continue; } if (c === 40 || c === 91 || c === 123) depth++; else if (c === 41 || c === 93 || c === 125) depth--; else if (i === header.length || (c === 44 && depth === 0)) { pieces.push(header.slice(start, i).trim()); start = i + 1; } } let head = '', literal = false; for (const piece of pieces) { const q = piece.charCodeAt(0); if ((q === 34 || q === 96) && piece.length > 1 && piece.charCodeAt(piece.length - 1) === q) { head += piece.slice(1, -1).replace(/[^ ]+/g, function (run) { return open + String.fromCharCode(96) + run + String.fromCharCode(96) + close; }); literal = true; continue; } if (!/^[\p{Ll}_][\p{L}\p{N}_]*$/u.test(piece)) return undefined; head += open + piece + close; fields.push(quote + open + piece + close + quote); } return literal ? $(head + ' ' + String.fromCharCode(61, 62) + String.fromCharCode(10) + '  ' + String.fromCharCode(91) + fields.join(', ') + String.fromCharCode(93)) : undefined; })($.text('header').trim().replace(/^[(]|[)]$/g, ''))
+// (text as its characters, one after another: a list of them; what they hold for, `text{c => …}`, as text again)
+characters =>
+  goto js
+  typeof self === 'string' ? $('[' + [...self].map(c => JSON.stringify(c)).join(', ') + ']') : undefined
+{`{`}{parameter} => {body}{`}`} =>
+  (goto .) unless . is String
+  (.characters{ {parameter} => {body} }).join("")
+
+// What a number or text is made of: Number, String (a node's own `of` is read before this).
+of =>
+  goto js
+  typeof self === 'number' ? $('Number') : typeof self === 'string' ? $('String') : undefined
+  None
+
+// Ranges of numbers: `a..<b` (up to b, not it), `a..b` (with it), going down when b is below a (of anything else, none).
+..{last} =>
+  goto js
+  typeof self === 'number' && typeof last === 'number' ? $('[' + Array.from({ length: Math.abs(last - self) + 1 }, (_, i) => self + (last >= self ? i : -i)).join(', ') + ']') : $('None')
+..<{last} =>
+  goto js
+  typeof self === 'number' && typeof last === 'number' ? $('[' + Array.from({ length: Math.abs(last - self) }, (_, i) => self + (last >= self ? i : -i)).join(', ') + ']') : $('None')
+..<{ }{last} =>
+  . ..<({last})
+..{ }{last} =>
+  . ..({last})
+
+// (bytes as text, one character each; a character's code; text from one place up to another; where text is last found,
+// starting at or before a place, or -1)
+latin1 =>
+  goto js
+  typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? (function (codes) { for (let at = $($.written(self) + '.head'); at !== $('None'); at = $($.written(at) + '.next')) codes.push($($.written(at) + '.value')); return String.fromCharCode(...codes); })([]) : undefined
+// (a list of whole numbers: how many times each of 0 up to `size` is in it; its largest)
+tally({size}) =>
+  goto js
+  typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? (function (counts) { for (let at = $($.written(self) + '.head'); at !== $('None'); at = $($.written(at) + '.next')) { const value = $($.written(at) + '.value'); if (typeof value === 'number' && value >= 0 && value < size) counts[value]++; } return $('[' + counts.join(', ') + ']'); })(new Array(size).fill(0)) : undefined
+maximum =>
+  goto js
+  typeof self === 'object' && self !== null && $($.written(self) + '.listing') === $('true') ? (function (largest) { for (let at = $($.written(self) + '.head'); at !== $('None'); at = $($.written(at) + '.next')) { const value = $($.written(at) + '.value'); if (typeof value === 'number' && value > largest) largest = value; } return largest; })(0) : undefined
+code_at({index}) =>
+  goto js
+  typeof self === 'string' ? self.charCodeAt(index) : undefined
+substring({from}, {to}) =>
+  goto js
+  typeof self === 'string' ? self.slice(from, to) : undefined
+last_index_of({piece}, {before}) =>
+  goto js
+  typeof self === 'string' ? self.lastIndexOf(piece, before) : undefined
+// (text as the bytes UTF-8 writes it in)
+bytes =>
+  goto js
+  typeof self === 'string' ? (function (made) { for (const byte of new TextEncoder().encode(self)) $($.written(made) + '.append(' + byte + ')'); return made; })($('Listing.new')) : undefined
+// (a whole number as bits: that many, the most significant first)
+binary({width}) =>
+  goto js
+  typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self.toString(2).padStart(width, '0').slice(-width) : undefined
+// (a whole number in base 16, as `0x` is followed)
+hexadecimal =>
+  goto js
+  typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self.toString(16) : undefined
+// (bits the other way around; the whole number they write, the most significant first; text in pieces of a size)
+reversed =>
+  goto js
+  typeof self === 'string' ? [...self].reverse().join('') : undefined
+unsigned =>
+  goto js
+  typeof self === 'string' && /^[01]*$/.test(self) ? (self.length ? parseInt(self, 2) : 0) : undefined
+pieces({size}) =>
+  goto js
+  typeof self === 'string' ? (function (made) { for (let at = 0; at < self.length; at += size) $($.written(made) + '.append("' + self.slice(at, at + size) + '")'); return made; })($('Listing.new')) : undefined
+
+// A class header as a structure of bits (`structures3.ts`): its maker given its named pieces, and the header as read; a value
+// read from bits by it (`bits as T`); a value written as bits (`x.binary`); a table of symbols and their bits, a prefix code.
+plain {{header}} =>
+  goto js
+  $($.host.plain($, $.text('header')) ? 'true' : 'false')
+instance_defined {{fields}} {{block}} =>
+  goto js
+  $.host.instance($.text('fields'), $.text('block'), $.written).forEach(statement => $(statement))
+bits_read({bits}) =>
+  goto js
+  $.host.read($, self, bits)
+binary =>
+  goto js
+  typeof self === 'object' && self !== null ? $.host.write($, self) : undefined
+Coded({codes}) =>
+  goto js
+  $.host.coding(codes, $)
+
+// What a number answers to `?`: whether it holds (one that is zero does not, as `holds` says of a Number).
+? {yes} : {no} =>
+  goto js
+  self === 0 ? undefined : $('goto holds')
+  {no}
+  goto answered
+  holds\
+  {yes}
+  answered\

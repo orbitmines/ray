@@ -1,5 +1,0 @@
-say {x} =>
-  @me/instance = x
-s := "hello world"
-say s
-say ("a" === "b")

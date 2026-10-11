@@ -1,0 +1,27 @@
+@sha1
+@sha256
+
+// HMAC: Keyed-Hashing for Message Authentication, over any digest (https://www.rfc-editor.org/rfc/rfc2104)
+HMAC := class: Encoding.Digest hash: Encoding.Digest, key: Byte[] {
+  static extensions := ".hmac"
+  size => hash.size
+  block => hash.block
+  // HMAC4 a digest does not give its block and output sizes in bytes
+  assert SHA1.block == 64 && SHA256.block == 64 && SHA1.size == 20 && SHA256.size == 32
+
+  // K: a key longer than B bytes hashed first, then zeros to B bytes (RFC 2104 §2, §3)
+  padded => (key.count > block ? hash.write(key).bytes : key) -- (k => [k, [0] * (block - k.count)].flatten)
+  // A key longer than the block is hashed first (RFC 2104 §3)
+  // HMAC3 a key longer than the block is not hashed and padded
+  assert HMAC(SHA256, key: [0xaa] * 131).padded == [SHA256.write([0xaa] * 131).bytes, [0] * 32].flatten
+
+  // H(K XOR opad, H(K XOR ipad, text)), ipad 0x36 and opad 0x5C repeated B times (RFC 2104 §2)
+  written := {
+    {writing: Language.Writing} => hash.write([padded.map(. ~x|| 0x5c), hash.write([padded.map(. ~x|| 0x36), writing.value as Byte[]].flatten).bytes].flatten).bytes
+  }
+}
+// Test case 2: key "Jefe", data "what do ya want for nothing?" (RFC 2202 §3, RFC 4231 §4.3)
+// HMAC1 HMAC-SHA-1 of RFC 2202's test case 2 is not effcdf6a…
+assert HMAC(SHA1, key: "Jefe".bytes).write("what do ya want for nothing?".bytes).bytes as Hexadecimal₄₀ == "effcdf6ae5eb2fa2d27416d5f184df9c259a7c79"
+// HMAC2 HMAC-SHA-256 of RFC 4231's test case 2 is not 5bdcc146…
+assert HMAC(SHA256, key: "Jefe".bytes).write("what do ya want for nothing?".bytes).bytes as Hexadecimal₆₄ == "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"

@@ -8,9 +8,14 @@ Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?
     : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣).last) ?? ray
 
   static detected (content: String) => Language#{.level && !.read(content).erred}
+  // A language is recognised by the readings that accept the text (L§9.1.2)
+  // FWP4 Ray text is not recognised as Ray
+  assert Language.detected("x := 1").contains(Language.ray)
 
   static project (name: String) => Project#{.name == name}.first
     ?? Project.known(ray.bundled("$/" + name)) -- (found => found ~~ (.name = name) ~~ .load if found)
+  // PJ2 a language in a mutual dependency is not loaded
+  assert Language.project("web").loaded
   static found (name: String) => name.lower_case -- (lowered => lowered == "ray" ? ray
     : (project(lowered) ? Language#{.names("." + lowered)}.last : named("." + lowered)) ?? ERROR@Language `no language by that name`)
 
@@ -44,6 +49,11 @@ Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?
 
   names (extension: String) => extension is extensions#
   bundled (path: String) => location#.map(. / path){(. / ".project.ray").held as boolean}.first.held as Project
+  // A project and a language it bundles may depend on each other; each is loaded once
+  assert (Project.known(Language.ray.bundled("ui")).load).(
+    .loaded && !.loading  // PJ1 a project bundling a language that depends back on it does not finish loading
+    & Language.project("web").installed.some(=== .)  // PJ3 a mutual dependency loads a second copy of the project it comes back to
+  )
 
   admits (program) => true
   read (source) => level

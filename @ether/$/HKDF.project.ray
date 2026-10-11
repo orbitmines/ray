@@ -1,0 +1,22 @@
+@hmac
+@sha256
+
+// HMAC-based Extract-and-Expand Key Derivation Function, over any digest (https://www.rfc-editor.org/rfc/rfc5869)
+HKDF := class: Language hash: Encoding.Digest {
+  static extensions := ".hkdf"
+  size => hash.size
+
+  // HKDF-Extract: PRK = HMAC-Hash(salt, IKM); no salt is HashLen zeros, which HMAC pads to the same key (https://www.rfc-editor.org/rfc/rfc5869#section-2.2)
+  extracted (salt: Byte[], ikm: Byte[]) => HMAC(hash, key: salt).write(ikm).bytes
+  // HKDF-Expand: T(1) | T(2) | …, T(i) = HMAC-Hash(PRK, T(i-1) | info | i), its first L bytes (https://www.rfc-editor.org/rfc/rfc5869#section-2.3)
+  expanded (prk: Byte[], info: Byte[], length: Number) => (1..(length / size).ceil).reduce(blocks = [] => [blocks, [HMAC(hash, key: prk).write([blocks.last ?? [], info, .].flatten).bytes]].flatten(1)).flatten[..<length]
+  derived (salt: Byte[], ikm: Byte[], info: Byte[] = [], length: Number = 2 * size) => expanded(extracted(salt, ikm), info, length)
+}
+// Test case 1: 22 bytes of 0x0b, salt 00..0c, info f0..f9, 42 bytes (https://www.rfc-editor.org/rfc/rfc5869#appendix-A.1)
+assert HKDF(SHA256).(
+  .extracted(0..<13, [0x0b] * 22) as Hexadecimal₆₄ == "077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5"  // NZ1 the PRK of RFC 5869's test case 1 is not 07770936…
+  & .derived(0..<13, [0x0b] * 22, 0xf0..<0xfa, 42) as Hexadecimal₈₄ == "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"  // NZ2 the OKM of RFC 5869's test case 1 is not 3cb25f25…
+  & .derived([], [0x0b] * 22, [], 42) as Hexadecimal₈₄ == "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8"  // Test case 3: no salt and no info (https://www.rfc-editor.org/rfc/rfc5869#appendix-A.3); HKDF1 the OKM of RFC 5869's test case 3 is not 8da4e775…
+)
+// HKDF2 $.hkdf is not HKDF
+assert $.hkdf === HKDF

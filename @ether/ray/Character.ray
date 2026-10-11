@@ -27,6 +27,8 @@ Nameable := class {
 // other scripts is a plain name, as one-word names (mononyms) cannot be told apart from handles.
 FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[]{length > 0}) | FullName.Unspaced[]{length > 0}) => {
   static Letter := Unicode.GeneralCategory.(Letter | Mark)
+  // W14 a is not a letter
+  assert "a"[0] is Unicode.GeneralCategory.Letter
   static Joiner := "-" | "‐" | "'" | "’" | "ʼ" | "‌" | "‍"
   static Part := (FullName.Letter[]{length > 0}, (FullName.Joiner, FullName.Letter[]{length > 0})[]) | (FullName.Letter, ".")
   static Separator := Unicode.GeneralCategory.Space_Separator | "·" | "・" | "･"
@@ -74,6 +76,8 @@ Character := class: Hierarchy + Entity + Nameable {
   static walked (at, names) => names.empty ? at : Character.walked(at[names.first], names.rest)
 
   quests => Program#{who: this}{running}
+  // JB7 @me/quests is not the character's selection of its programs
+  assert @me/quests == @me.quests
   full_name => name{is FullName}
   email => name{is Email}
   phone => name{is Phone}

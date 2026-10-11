@@ -941,7 +941,9 @@ export class Program {
       // (code read in a value: what it does not find there, found where it was written)
       // (and its writer the reading whose code it was written in)
       return reading.rule.bodies.has(alone) ? this.run(reading.caps[alone], { node: reading.receiver, this: frame.this ?? reading.self, into: frame.into, also: reading.site !== frame.node ? reading.site : undefined, writer: reading.from }) : this.held_value(this.shared(reading, alone));
-    const text = this.substituted(statement, reading, reading.site, code).trim();
+    let text = this.substituted(statement, reading, reading.site, code).trim();
+    // (a definition's head is read as written: the code its holes took, so the rules reading a head (a style after it) see it)
+    if (text.includes(Program.REFERS) && this.defining(text)) { const nl = text.indexOf('\n'), line = nl < 0 ? text : text.slice(0, nl), written = this.source(line, true); if (written !== line && /\^[\p{L}_.]+ =>/u.test(written)) text = written + (nl < 0 ? '' : text.slice(nl)); }
     return this.read(text, frame, except, this.alike);
   }
   // (a statement read where a value is wanted: a rule on one line is a node holding it, one whose rules each run in a new node
@@ -1202,11 +1204,6 @@ export class Program {
       if (!alone) memo.set(key, found);
     }
     let { all } = found; const { leads } = found;
-    if (process.env.RAY_WHY && /^\+\+\+ 2$/.test(s)) {
-      const desc = (r: Program.Rule) => `${JSON.stringify(r.head)} pieces=${r.pieces.map(x => x.literal !== undefined ? JSON.stringify(x.literal) : '{' + (x.hole ?? '') + '}').join('')}`;
-      env.fs.writeSync(2, `WHY ${JSON.stringify(s)} receiver=${frame.receiver} readings=${all.length}\n`);
-      for (let at: Program.Node | undefined = frame.node; at; at = at.outer) for (const r of at.rules) if (r.head.includes('+++')) env.fs.writeSync(2, `   RULE ${desc(r)} may_read=${this.may_read(r, s, 0, except)} inCands=${this.candidates(s, frame.node, 0, except, frame.site, true).some(c => c.rule === r)}\n`);
-    }
     // (a typed hole's rule running: not read again (its readings kept for the text as they were found))
     if (this.running.length && all.some(read => !read.rule.literals.length && read.rule.types.length && this.running.includes(read.rule))) all = all.filter(read => !(!read.rule.literals.length && read.rule.types.length && this.running.includes(read.rule)));
     if (leads === -2) return this.on(this.program(), s.slice(1), frame, except);
@@ -2162,7 +2159,7 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
   if (kwargs.verbose) console.error(`reading ${files.length}: ${files.map(f => path.relative(library.root, f)).join(' ')}`);
   // (the tests of the files given; given none, of every file read)
   // (a test reported as it finishes: its comments above, its code, and what it found)
-  const counts = { passed: 0, failed: 0 }, reported = new Set<Diagnostic>();
+  const counts = { passed: 0, failed: 0, warnings: 0 }, reported = new Set<Diagnostic>();
   const report = (t: Test, outcome: Diagnostic[]) => {
     const text = library.text(t.file), lines = text.split('\n'), first = text.slice(0, t.begin).split('\n').length - 1;
     // (the code shown goes on while the lines are indented past the test's own, or close a bracket at its level)
@@ -2171,7 +2168,7 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     last = Math.max(last, text.slice(0, Math.max(t.begin, t.end - 1)).split('\n').length - 1);
     const above: string[] = []; for (let k = first - 1; k >= 0 && lines[k].trim().startsWith('//'); k--) above.unshift(lines[k]);
     t.paints = undefined; (t as { frame?: Program.Frame }).frame = undefined;
-    const failed = outcome.some(d => d.severity === 1); counts[failed ? 'failed' : 'passed']++;
+    const failed = outcome.some(d => d.severity === 1); counts[failed ? 'failed' : 'passed']++; counts.warnings += outcome.filter(d => d.severity === 2).length;
     const block = [...above, ...lines.slice(first, last + 1)].map(l => '    | ' + l).join('\n');
     const messages = outcome.filter(d => d.severity <= 2).map(d => { reported.add(d); return `    ${['', 'error', 'warning'][d.severity]}: ${d.message}`; }).join('\n');
     env.fs.writeSync(2, `${failed ? 'FAIL' : 'ok  '} ${path.relative(process.cwd(), t.file)}:${first + 1}${process.env.RAY_PROGRESS ? `  heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB` : ''}\n${block}\n${messages ? messages + '\n' : ''}`);
@@ -2206,7 +2203,7 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     const line = d.file ? library.text(d.file).slice(0, d.begin).split('\n').length : 0;
     console.error(`${d.file ? path.relative(process.cwd(), d.file) : '?'}:${line}: ${['', 'error', 'warning', 'info', 'hint'][d.severity]}: ${d.message}${d.around ? '\n' + d.around.split('\n').map(l => '    | ' + l).join('\n') : ''}`);
   }
-  if (kwargs.test) console.error(`${counts.passed} passed, ${counts.failed} failed, ${shown.filter(d => d.severity === 1).length} errors in reading`);
+  if (kwargs.test) console.error(`${counts.passed} passed, ${counts.failed} failed, ${counts.warnings} warnings in tests, ${shown.filter(d => d.severity === 1).length} errors in reading`);
   const exit = shown.some(d => d.severity === 1) || counts.failed > 0 ? 1 : 0;
   if (env.worker) env.worker_threads.parentPort!.postMessage({ exit }); else process.exitCode = exit;
 }

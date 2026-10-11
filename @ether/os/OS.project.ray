@@ -6,16 +6,13 @@ OS.Ether &+= {
   bits (character: Char, take) => (character as Binary).integer.for(take)
 }
 
-// ETH4 the language as the operating system does not name its platform ether
-assert OS.Ether["platform"] == "ether"
+assert OS.Ether["platform"] == "ether"  // ETH4 the language as the operating system does not name its platform ether
 
 assert {
   with @me/device/os = OS.Ether {
     @me/instance = "a"
     @me/instance = "b"
-    // ETH9 what is sent to an instance on ether is not kept in order
-    assert @me/device/storage["instance/sent"] == "b" && @me/device/storage["instance/sent"].previous == "a"
-    // ETH8 what the language as the operating system has not written yet does not err
-    assert [Random.bit, Time.now, ("a" as Location).held()].every(.erred)
+    assert @me/device/storage["instance/sent"] == "b" && @me/device/storage["instance/sent"].previous == "a"  // ETH9 what is sent to an instance on ether is not kept in order
+    assert [Random.bit, Time.now, ("a" as Location).held()].every(.erred)  // ETH8 what the language as the operating system has not written yet does not err
   }
 }

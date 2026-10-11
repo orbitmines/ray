@@ -8,23 +8,18 @@ Fonts := class {
     else { ERROR@OS `fonts are not written in Ray yet` }
   assert {
     with @me/device/os = OS.Browser {
-      // OSE8 a browser gives fonts to read
-      assert Fonts.installed == []
+      assert Fonts.installed == []  // OSE8 a browser gives fonts to read
     }
   }
-  // OSE5 an operating system does not say where its fonts are
-  assert [OS.Linux, OS.Macos, OS.Windows].every(os => with @me/device/os = os { Fonts.installed is Location[] && Fonts.installed.nonempty })
+  assert [OS.Linux, OS.Macos, OS.Windows].every(os => with @me/device/os = os { Fonts.installed is Location[] && Fonts.installed.nonempty })  // OSE5 an operating system does not say where its fonts are
   assert {
     with @me/device/os = OS.Ether {
-      // FON1 fonts on ether do not err while they are unwritten
-      assert Fonts.installed.erred
+      assert Fonts.installed.erred  // FON1 fonts on ether do not err while they are unwritten
     }
   }
   // the file named like the family, in any of the folders
   static named (family: String): Location? => installed.map(.held.children).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
 }
 // A Windows drive is a file location, not a URL with the scheme "C".
-// FS1 a Windows drive path is not read as written
-assert (@C:/Windows/Fonts).@ as String == "C:/Windows/Fonts"
-// FS2 a Windows drive is not held like any other file path
-assert (@C:/Windows/Fonts).holder === (@/usr/share).holder
+assert (@C:/Windows/Fonts).@ as String == "C:/Windows/Fonts"  // FS1 a Windows drive path is not read as written
+assert (@C:/Windows/Fonts).holder === (@/usr/share).holder  // FS2 a Windows drive is not held like any other file path

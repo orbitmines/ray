@@ -49,17 +49,12 @@ FileOptimizations = FileOptimizations + {
 assert {
   with @me/device/os = OS.Ether {
     @./ethertest/a = "x"
-    // ETH1 what is written on ether is not read back
-    assert @./ethertest/a as String == "x"
-    // ETH2 a location on ether does not list what was written under it
-    assert (@./ethertest).children.map(.@) == [(@./ethertest/a).@]
+    assert @./ethertest/a as String == "x"  // ETH1 what is written on ether is not read back
+    assert (@./ethertest).children.map(.@) == [(@./ethertest/a).@]  // ETH2 a location on ether does not list what was written under it
     @./ethertest/b = @./ethertest/a
-    // FS3 a location assigned another is not a copy of what is held there
-    assert @./ethertest/b as String == "x"
+    assert @./ethertest/b as String == "x"  // FS3 a location assigned another is not a copy of what is held there
     @./ethertest/a = None
-    // ETH3 a location removed on ether is still there
-    assert !(@./ethertest/a)
-    // FS4 a location's own location is not where it was written
-    assert (@./ethertest/a).@ as String == "./ethertest/a"
+    assert !(@./ethertest/a)  // ETH3 a location removed on ether is still there
+    assert (@./ethertest/a).@ as String == "./ethertest/a"  // FS4 a location's own location is not where it was written
   }
 }

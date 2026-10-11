@@ -1,6 +1,12 @@
 Project := class: Location {
   static Dependency := class ("@", path: (!" ")[], (" ", version: Version | (!\n)[])?) => {
     name => path.split("/").last as String
+    // PRJ2 a dependency's name is not the last segment of its path
+    assert ("@ether/Time" as Project.Dependency).(
+      .name == "Time"  // PRJ3 the name of `@ether/Time` is not "Time"
+      & .path == "ether/Time"  // PRJ4 the path of a dependency keeps the "@" or leaves out a segment
+      & !(.name == "ether")  // PRJ5 the name of a dependency is its first segment
+    )
 
     project: Project? => (Program(code: ("@", path)){O: {
       @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? IO.fetch(@ether, bundled_path, version) as Project)
@@ -11,6 +17,7 @@ Project := class: Location {
   }
 
   static known (found: Project?) => found && (Project#{. == found}.first ?? (found ~~ (static.# ??= []).push .))
+  assert Project.known(None) == None  // PRJ1 nothing found is a project
   static declared => Project#{.loaded || .loading}.map(.dependencies).flatten
   static declares (name: String) => declared.find(.name == name)
   static holding (location: Location) => Project#{(location.@ as String) ~= ⊢(.@ as String + "/")}.max((.@ as String).count)
@@ -31,6 +38,9 @@ Project := class: Location {
 
   shadowing => (parent, dependencies.project)#
   carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
+  assert Project(written_against: %2).carries([%3])  // PRJ6 a project written against a version the host does not run is not carried
+  assert !Project(written_against: %2).carries([%1, %2, %3])  // PRJ7 a project written against a version the host runs is carried
+  assert !Project().carries([%3])  // PRJ8 a project written against nothing is carried
   language_of (name: String) => Compiler.reduced(name, readings)
   sources => held.children**{!(. is Directory) && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !((.parent / ".project.ray") as boolean))}
   load: static => loaded || loading ? this : this ~~ (.loading = true) ~~ sources.for(Language.ray.read(. as String)) ~~ (.loaded = true) ~~ .loading = false
@@ -43,21 +53,54 @@ Project := class: Location {
 %{number: Decimal.String}'{revision: Decimal.String} ^number => Version(number: number as Decimal, revision: revision as Decimal)
 Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
   latest => !revision
+  assert %3.latest  // PRJ12 a version written without a revision is not the latest of its number
+  assert !%3'1.latest  // PRJ13 a version written with a revision is the latest of its number
   breaks_freely => number == 0
+  assert %0.breaks_freely  // PRJ14 version 0 does not break freely
+  assert !%1.breaks_freely  // PRJ15 a version above 0 breaks freely
 
   chainable == (other: Version) => number == other.number && revision == other.revision
+  // PRJ16 a version written with a revision does not read its number and revision
+  assert %3'2.(
+    .number == 3  // PRJ17 the number of `%3'2` is not 3
+    & .revision == 2  // PRJ18 the revision of `%3'2` is not 2
+    & !(.number == 2)  // PRJ19 the number of `%3'2` is its revision
+  )
+  assert %3'1 == %3'1  // PRJ20 a version is not equal to the same version
+  assert !(%3'1 == %3'2)  // PRJ21 versions with different revisions are equal
+  assert !(%3 == %4)  // PRJ22 versions with different numbers are equal
+  assert !(%3'1 == %3)  // PRJ23 a version with a revision is equal to the one without
   chainable < (other: Version) => number < other.number || number == other.number && revision? < other.revision ?? ∞
+  assert %1 < %2  // PRJ24 a lower number is not less than a higher one
+  assert !(%2 < %1)  // PRJ25 a higher number is less than a lower one
+  assert !(%2 < %2) & !(%2'1 < %2'1)  // PRJ26 a version is less than itself
+  assert %2'1 < %2'2  // PRJ27 within one number, a lower revision is not less than a higher one
+  assert !(%2'2 < %2'1)  // PRJ28 within one number, a higher revision is less than a lower one
+  assert %2'5 < %2  // PRJ29 a revision of a number is not less than the latest of that number (no revision counts as infinity)
+  assert %2'5 < %3  // PRJ30 a revision of a lower number is not less than the next number
 
   next => %(number + 1)
   previous => %(number - 1)
+  assert %3.next == %4  // PRJ31 the version after 3 is not 4
+  assert %3.previous == %2  // PRJ32 the version before 3 is not 2
+  assert !(%3.next == %3)  // PRJ33 the version after 3 is 3
   continuations => Migration.leaving(this).to
 
   resolved (revisions: Version[]) => latest ? revisions{number == this.number}.max(.revision) ?? this : this
+  assert %3.resolved([%3'1, %3'4, %4'9, %3'2]) == %3'4  // PRJ34 the latest of a number is not resolved to the highest revision of that number among those given
+  assert %5.resolved([%3'1, %4'2]) == %5  // PRJ35 a latest version with no revision of its number given does not stay itself
+  assert %3'1.resolved([%3'1, %3'4]) == %3'1  // PRJ36 a version with a revision is resolved to another
+  assert !(%3.resolved([%4'9]) == %4'9)  // PRJ37 resolving picks a revision of another number
 
   static Pin := class ("%[", label: UUID | Char.Word[], "]") => { }
+  assert "%[stable]" is Version.Pin  // PRJ38 a word between "%[" and "]" is not a pin
+  assert !("%[stable" is Version.Pin)  // PRJ39 a pin without its closing bracket is a pin
 }
 
 %[{first: Decimal.String}..{last: Decimal.String}] ^number => Version{first as Decimal <= number <= last as Decimal}
+assert %2 is %[1..3]  // PRJ9 a version inside a range is not of it
+assert %1 is %[1..3] & %3 is %[1..3]  // PRJ10 a version at the range's ends is not of it
+assert !(%4 is %[1..3]) & !(%0 is %[1..3])  // PRJ11 a version outside a range is of it
 
 Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
   of["#"] := of["#"] ?? []

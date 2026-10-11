@@ -11,8 +11,7 @@ Component := class {
 }
 
 never := Node{false}
-// NV1 something is of the type that never returns
-assert !(never.admits(5))
+assert !(never.admits(5))  // NV1 something is of the type that never returns
 
 // Only the branch that is taken runs
 assert {
@@ -21,10 +20,8 @@ assert {
     counted = true
     false
   }
-  // CF1 a taken branch did not answer
-  assert taken_once
-  // CF2 the branch nobody took ran anyway
-  assert !counted
+  assert taken_once  // CF1 a taken branch did not answer
+  assert !counted  // CF2 the branch nobody took ran anyway
 }
 
 assert {
@@ -42,10 +39,8 @@ assert {
     arms += 1
     4
   }
-  // CF3 the first holding arm is not what answered
-  assert picked == 2
-  // CF4 more than one arm of a chain ran
-  assert arms == 1
+  assert picked == 2  // CF3 the first holding arm is not what answered
+  assert arms == 1  // CF4 more than one arm of a chain ran
 }
 
 assert {
@@ -55,25 +50,19 @@ assert {
     rounds += 1
     left -= 1
   }
-  // CF10 a loop ran other than three times
-  assert rounds == 3
-  // CF11 a loop left its count behind
-  assert left == 0
+  assert rounds == 3  // CF10 a loop ran other than three times
+  assert left == 0  // CF11 a loop left its count behind
 }
 
 // `;`
-// CF14 the semicolon does not answer what is written after it
-assert (1 ; 2) == 2
+assert (1 ; 2) == 2  // CF14 the semicolon does not answer what is written after it
 
-// CF15 the last of three is not what the whole answers
-assert (1 ; 2 ; 3) == 3
+assert (1 ; 2 ; 3) == 3  // CF15 the last of three is not what the whole answers
 
 assert {
   semi_counted := 0
   (semi_counted = 1) ; (semi_counted += 1)
-  // CF16 two bracketed statements on one line did not both run
-  assert semi_counted == 2
+  assert semi_counted == 2  // CF16 two bracketed statements on one line did not both run
 }
 
-// ER2 a default replaced what did not fail
-assert 7 $ 5 == 7
+assert 7 $ 5 == 7  // ER2 a default replaced what did not fail

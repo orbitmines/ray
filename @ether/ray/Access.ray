@@ -24,10 +24,8 @@ Access := class (who: *?, method: `=` | `()` | * = *, filter: Program?, target: 
 }
 
 none := Character{false}
-// CST2 the permission nobody has reaches someone
-assert !(Character(name: "anyone").answers_for(none))
-// CST3 the permission nobody has is not the narrowest
-assert none is local
+assert !(Character(name: "anyone").answers_for(none))  // CST2 the permission nobody has reaches someone
+assert none is local  // CST3 the permission nobody has is not the narrowest
 
 {who: Character}.read ^keyword => Access(who, method: Access.Reading)
 {who: Character}.write ^keyword => Access(who, method: `=`)
@@ -37,8 +35,7 @@ assert none is local
 {who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (filter**)))
 const {target} ^keyword => target ~~ .access |= Access(none, method: `=`, target: target)
 // const is none.write: nobody may write it, and what it holds inherits that.
-// CST1 const is not the permission nobody has
-assert (const (count: 1)).access#(const (count: 1)).some((const (count: 1)).who === none && (const (count: 1)).writes)
+assert (const (count: 1)).access#(const (count: 1)).some((const (count: 1)).who === none && (const (count: 1)).writes)  // CST1 const is not the permission nobody has
 confidential = => Node.policy
 
 Node &+= {
@@ -54,16 +51,13 @@ Node &+= {
 // confidential follows the policy, but never past @private.managed.
 assert {
   with Node.policy = public {
-    // CK1 confidential widens with a public policy
-    assert confidential is @private.managed
-    // CK2 confidential reaches a stranger under a public policy
-    assert !(Character(name: "stranger") is confidential)
+    assert confidential is @private.managed  // CK1 confidential widens with a public policy
+    assert !(Character(name: "stranger") is confidential)  // CK2 confidential reaches a stranger under a public policy
   }
 }
 assert {
   with Node.policy = local {
-    // CK3 confidential is wider than a narrower policy
-    assert confidential is local
+    assert confidential is local  // CK3 confidential is wider than a narrower policy
   }
 }
 
@@ -75,41 +69,30 @@ Program &+= {
     gx := (count: 3, secret: "s")
     gx_reader.read gx.count
     gx_grant := Program#{.access#.some(.who === gx_reader)}.first?.access
-    // GX1 a grant took the value of what it names instead of the expression
-    assert gx_grant.target is Program
-    // GX2 a grant does not name the expression it was given
-    assert gx_grant.target.names(Program(code: { gx.count }))
-    // GX3 a grant on one derivative names another
-    assert !(gx_grant.target.names(Program(code: { gx.secret })))
-    // GX4 a granted derivative is refused
-    assert Program(code: { gx.count }).allows(gx_reader, `count`)
-    // GX5 a grant on a count lets another field leave
-    assert !(Program(code: { gx.secret }).allows(gx_reader, `secret`))
+    assert gx_grant.target is Program  // GX1 a grant took the value of what it names instead of the expression
+    assert gx_grant.target.names(Program(code: { gx.count }))  // GX2 a grant does not name the expression it was given
+    assert !(gx_grant.target.names(Program(code: { gx.secret })))  // GX3 a grant on one derivative names another
+    assert Program(code: { gx.count }).allows(gx_reader, `count`)  // GX4 a granted derivative is refused
+    assert !(Program(code: { gx.secret }).allows(gx_reader, `secret`))  // GX5 a grant on a count lets another field leave
     gx_whole := (count: 1)
     gx_reader.read gx_whole
-    // GX6 a grant naming a value does not cover that value
-    assert gx_whole.allows(gx_reader, `size`)
-    // GACC1 a grant naming a value is not on that value
-    assert gx_whole.access#.some(.who === gx_reader)
+    assert gx_whole.allows(gx_reader, `size`)  // GX6 a grant naming a value does not cover that value
+    assert gx_whole.access#.some(.who === gx_reader)  // GACC1 a grant naming a value is not on that value
   }
-  // PURG4 checking a grant runs an expression with effects
-  assert !(Program(code: { IO().output("leak") }).names("leak"))
+  assert !(Program(code: { IO().output("leak") }).names("leak"))  // PURG4 checking a grant runs an expression with effects
 
   caller: Program?
   // Who runs a program is its chain of callers, the origin first; a prompt names them all.
   assert {
     hop_origin := Program(who: Character(name: "company"))
     hop_run := Program(who: Character(name: "me"), caller: hop_origin)
-    // HOP1 a run's chain is not its origin first and its runner last
-    assert hop_run.hops.first === hop_origin.who && hop_run.hops.last === hop_run.who
-    // HOP2 a prompt does not name the whole chain
-    assert hop_run.prompt == "@company wants to run this, originating from @me"
+    assert hop_run.hops.first === hop_origin.who && hop_run.hops.last === hop_run.who  // HOP1 a run's chain is not its origin first and its runner last
+    assert hop_run.prompt == "@company wants to run this, originating from @me"  // HOP2 a prompt does not name the whole chain
   }
   hops | chain => [caller.hops ?? [], who].flatten.unique
   may (method, target) => hops.every(target.allows(., method))
   ask (method, target) => may(method, target) || ERROR@Access `not granted`
-  // AC26 a capability nobody granted does not err
-  assert &@.ask(`()`, @me/device/camera).erred
+  assert &@.ask(`()`, @me/device/camera).erred  // AC26 a capability nobody granted does not err
   prompt => hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
     + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
 
@@ -121,20 +104,15 @@ Program &+= {
   effects => reachable.map(.calls{.is_external}.external_name).flatten.unique
 }
 // What a program does is what its externals are: io and os are effects, the time is not deterministic.
-// EFF1 adding numbers is not pure
-assert Program(code: { 1 + 1 }) is Pure
-// EFF2 writing out is not an effect
-assert Program(code: { IO().output("x") }) is Effecting
-// EFF3 reading the time is deterministic
-assert !(Program(code: { Time.now }) is Deterministic)
+assert Program(code: { 1 + 1 }) is Pure  // EFF1 adding numbers is not pure
+assert Program(code: { IO().output("x") }) is Effecting  // EFF2 writing out is not an effect
+assert !(Program(code: { Time.now }) is Deterministic)  // EFF3 reading the time is deterministic
 assert {
   with (Program.refused |= Program(code: { IO().output("x") })) {
-    // EFF4 a refused program is not refused
-    assert Program(code: { IO().output("x") }) is Refused
+    assert Program(code: { IO().output("x") }) is Refused  // EFF4 a refused program is not refused
   }
 }
-// EFF5 an effect nobody speculated runs in full
-assert Program(code: { IO().output("x") }) is Abstracted
+assert Program(code: { IO().output("x") }) is Abstracted  // EFF5 an effect nobody speculated runs in full
 
 &@ ^keyword => &.caller as Program
 

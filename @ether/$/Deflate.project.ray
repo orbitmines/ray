@@ -6,13 +6,11 @@ Deflate := class: Language {
   static Huffman := class lengths: Decimal[] {
     codes => lengths.enumerate{.value > 0}.sort_by((.value, .index)).reduce(acc = [] => [acc,
       (symbol: .index, bits: ((acc.empty ? 0 : (acc.last.bits + 1) * 2 ^ (.value - acc.last.bits.length)) as Binary).padded(.value))])
-    // DF1 the code lengths of section 3.2.2's example do not give its codes
-    assert Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111]
+    assert Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111]  // DF1 the code lengths of section 3.2.2's example do not give its codes
     // A symbol is read as the one code whose bits come next, most significant bit first, and written as its code (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
     Symbol => Binary{. is codes.bits#} as (bits => codes{.bits == bits}.first.symbol)
     bits (symbol: Decimal) => codes{.symbol == symbol}.first.bits
-    // DF2 the fixed literal codes are not those of section 3.2.6
-    assert Deflate.fixed_literals.bits(0) == 0b00110000 && Deflate.fixed_literals.bits(144) == 0b110010000 && Deflate.fixed_literals.bits(256) == 0b0000000
+    assert Deflate.fixed_literals.bits(0) == 0b00110000 && Deflate.fixed_literals.bits(144) == 0b110010000 && Deflate.fixed_literals.bits(256) == 0b0000000  // DF2 the fixed literal codes are not those of section 3.2.6
 
     // Lengths fitted to frequencies: the two least frequent join until one is left, each join one bit deeper (Huffman 1952, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
     static fitted (frequencies: Number[]) => (1..<frequencies{> 0}.count).reduce(held = (nodes: frequencies.enumerate{.value > 0}.map((weight: .value, symbols: [.index])), lengths: [0] * frequencies.count) =>
@@ -99,8 +97,7 @@ Deflate := class: Language {
   static Stream := class (blocks: Block[]{.last.final && !.[..<-1].some(.final)}, Binary{length < 8 && (at + length) % 8 == 0}) {
     // A copy may reach back into earlier blocks, and may overlap what it writes (https://www.rfc-editor.org/rfc/rfc1951#section-2, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.3)
     bytes => blocks.values.flatten.reduce(out = [] => copied(out, .))
-    // DF3 a stored block does not read its bytes
-    assert Deflate.read([0x01, 0x05, 0x00, 0xfa, 0xff, "hello".bytes].flatten) as String == "hello"
+    assert Deflate.read([0x01, 0x05, 0x00, 0xfa, 0xff, "hello".bytes].flatten) as String == "hello"  // DF3 a stored block does not read its bytes
     assert (("ray " * 64).bytes).(
       Deflate.read(Deflate.write(.)) == .  // DF7 written bytes do not read back
       & (Deflate.write(.) as Byte[]).count < .count  // DF8 repeated bytes are not written shorter
@@ -144,12 +141,8 @@ Deflate := class: Language {
     {writing: Language.Writing} => Stream(blocks: blocked(writing.value as Byte[]))
   }
 }
-// DF4 an empty fixed block is not empty
-assert Deflate.read([0x03, 0x00]).empty
-// DF5 a literal with the fixed codes is not read
-assert Deflate.read([0x4b, 0x04, 0x00]) as String == "a"
-// DF6 a back-reference overlapping what it writes is not copied
-assert Deflate.read([0x4b, 0x84, 0x03, 0x00]) as String == "aaaaaaaaaa"
+assert Deflate.read([0x03, 0x00]).empty  // DF4 an empty fixed block is not empty
+assert Deflate.read([0x4b, 0x04, 0x00]) as String == "a"  // DF5 a literal with the fixed codes is not read
+assert Deflate.read([0x4b, 0x84, 0x03, 0x00]) as String == "aaaaaaaaaa"  // DF6 a back-reference overlapping what it writes is not copied
 
-// DF9 a zlib stream does not inflate and check its Adler-32
-assert $.zlib.read([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62]) as String == "a"
+assert $.zlib.read([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62]) as String == "a"  // DF9 a zlib stream does not inflate and check its Adler-32

@@ -9,8 +9,7 @@ HTTP := class {
     written => name.uppercase
     // Safe methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.1)
     safe => this is (get | head | options | trace | propfind)
-    // HT11 GET is not safe or POST is
-    assert HTTP.Method.get.safe && !HTTP.Method.post.safe
+    assert HTTP.Method.get.safe && !HTTP.Method.post.safe  // HT11 GET is not safe or POST is
     // Idempotent methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)
     idempotent => safe || this is (put | delete)
     static (token: String) as (=== Method) => Method#{.written == token}.first
@@ -40,8 +39,7 @@ HTTP := class {
   static Message := class {
     fields: Fields = Fields()
     body: Byte[] = []
-    // HT13 a 204 response is read with a body
-    assert HTTP.v1_1.read("HTTP/1.1 204 No Content\r\n\r\n").body.empty
+    assert HTTP.v1_1.read("HTTP/1.1 204 No Content\r\n\r\n").body.empty  // HT13 a 204 response is read with a body
 
     text => body as String
     framed => framing(fields)
@@ -57,8 +55,7 @@ HTTP := class {
       . as HTTP.v1_1 == "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 2\r\n\r\nhi"  // HT3 a body is not framed by its length
       & Compiler.reduced(HTTP.Exchange(.), HTTP.Optimizations).format === HTTP.v1_1  // HT14 a plain http exchange left HTTP/1.1
     )
-    // HT16 a request line written inline is not a GET request
-    assert (@http GET /a HTTP/1.1).method == HTTP.Method.get
+    assert (@http GET /a HTTP/1.1).method == HTTP.Method.get  // HT16 a request line written inline is not a GET request
     target: Location
     assert HTTP.Request(target: @https://example.com/a?b=1).(
       .method == HTTP.Method.get  // HT1 a request without a method is not a GET
@@ -122,16 +119,14 @@ HTTP := class {
       chunked => fields["Transfer-Encoding"].split(",").last.trimmed.fold_case == "chunked"
       assert {
         chunked := HTTP.v1_1.read("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n1;x=y\r\n!\r\n0\r\n\r\n")
-        // HT8 chunks are not joined into the body
-        assert chunked.text == "hi!"
+        assert chunked.text == "hi!"  // HT8 chunks are not joined into the body
       }
       content_length => fields["Content-Length"] -- (. ? . as Decimal : None)
       bytes => body is Chunked ? body.bytes : body ?? []
 
       value => code ? Response(status: Status(code, reason), fields, body: bytes)
         : Request(method: method as Method, target: located(target, fields["Host"]), fields, body: bytes)
-      // HT10 repeated fields do not combine
-      assert HTTP.Fields(entries: [(name: "A", value: "1"), (name: "a", value: "2")])["A"] == "1, 2"
+      assert HTTP.Fields(entries: [(name: "A", value: "1"), (name: "a", value: "2")])["A"] == "1, 2"  // HT10 repeated fields do not combine
 
       static (request: Request) as (=== Wire) => request.framed -- (framed => Wire(method: request.method.written, target: request.target.origin_form, version: "HTTP/1.1",
         lines: framed.entries, body: Wire(lines: framed.entries).chunked ? request.body as Chunked : request.body))

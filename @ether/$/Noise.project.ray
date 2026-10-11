@@ -10,8 +10,7 @@ Noise := class: Language pattern = XX, dh: Encoding.Agreement = X25519, cipher =
   // Tokens of message patterns (§7.1), each written and read by its narrowing below; XX: -> e, <- e, ee, s, es, -> s, se (§7.5)
   static Token := enum e | s | ee | es | se | ss
   // Each token is written and read by its own narrowing; a DH token from each side's view (§5.3, §7.1)
-  // NZ16 a token is not the narrowing that writes and reads it
-  assert Noise.Token.e is Noise.Ephemeral && Noise.Token.s is Noise.Static && Noise.Token.es is Noise.Mixing && !(Noise.Token.e is Noise.Mixing)
+  assert Noise.Token.e is Noise.Ephemeral && Noise.Token.s is Noise.Static && Noise.Token.es is Noise.Mixing && !(Noise.Token.e is Noise.Mixing)  // NZ16 a token is not the narrowing that writes and reads it
   static XX := (name: "XX", messages: [[Token.e], [Token.e, Token.ee, Token.s, Token.es], [Token.s, Token.se]])
 
   // e: a fresh ephemeral key, its public half in the clear and mixed into h; read, the other's (§5.3)
@@ -23,25 +22,17 @@ Noise := class: Language pattern = XX, dh: Encoding.Agreement = X25519, cipher =
       // -> e; <- e, ee, s, es; -> s, se: both sides end with one handshake hash, each holding the other's static key (§7.5)
       nz_bob.read(nz_alice.written())
       nz_hello := nz_alice.read(nz_bob.written("hello".bytes))
-      // NZ5 the payload of the second message does not read back
-      assert nz_hello == "hello".bytes
-      // NZ8 the two sides end with other handshake hashes
-      assert nz_alice.h == nz_bob.h && nz_alice.bound == nz_bob.bound
-      // NZ9 a side does not learn the other's static key
-      assert nz_alice.rs == nz_bob.s.public && nz_bob.rs == nz_alice.s.public
-      // NZ10 both sides used one ephemeral key
-      assert !(nz_alice.e.public == nz_bob.e.public)
+      assert nz_hello == "hello".bytes  // NZ5 the payload of the second message does not read back
+      assert nz_alice.h == nz_bob.h && nz_alice.bound == nz_bob.bound  // NZ8 the two sides end with other handshake hashes
+      assert nz_alice.rs == nz_bob.s.public && nz_bob.rs == nz_alice.s.public  // NZ9 a side does not learn the other's static key
+      assert !(nz_alice.e.public == nz_bob.e.public)  // NZ10 both sides used one ephemeral key
       // Split: what one side sends, the other receives (§5.2)
       nz_a := nz_alice.session
       nz_b := nz_bob.session
-      // NZ11 a transport message from the initiator does not arrive
-      assert nz_b.received(nz_a.sent("ping".bytes)) == "ping".bytes
-      // NZ12 a transport message from the responder does not arrive
-      assert nz_a.received(nz_b.sent("pong".bytes)) == "pong".bytes
-      // NZ13 the two sessions are bound to other hashes
-      assert nz_a.binding == nz_b.binding
-      // NZ14 the peer's key does not name its algorithm
-      assert nz_a.peer.algorithm === X25519
+      assert nz_b.received(nz_a.sent("ping".bytes)) == "ping".bytes  // NZ11 a transport message from the initiator does not arrive
+      assert nz_a.received(nz_b.sent("pong".bytes)) == "pong".bytes  // NZ12 a transport message from the responder does not arrive
+      assert nz_a.binding == nz_b.binding  // NZ13 the two sessions are bound to other hashes
+      assert nz_a.peer.algorithm === X25519  // NZ14 the peer's key does not name its algorithm
     }
   }
   // s: the static public key, encrypted once there is a key (§5.3)
@@ -63,8 +54,7 @@ Noise := class: Language pattern = XX, dh: Encoding.Agreement = X25519, cipher =
     {algorithm: *{=== SHA256}} => "SHA256"
     {algorithm} => ERROR@Name `a Noise name for this algorithm`
   }
-  // NZ17 an algorithm without a Noise name has one
-  assert Compiler.reduced(HKDF, Noise.names).erred
+  assert Compiler.reduced(HKDF, Noise.names).erred  // NZ17 an algorithm without a Noise name has one
   name => ["Noise", pattern.name, [dh, cipher, hash].map(Compiler.reduced(., names))].flatten.join("_")
   size => hash.size
   // Noise's HKDF is RFC 5869's with the chaining key as salt and no info (§4.3)
@@ -111,8 +101,7 @@ Noise := class: Language pattern = XX, dh: Encoding.Agreement = X25519, cipher =
     session => done ? protocol.kdf.derived(ck, []).chunk(protocol.size).map(Cipher(cipher: protocol.cipher, k: .[..<32])) -- (pair =>
       Session(sending: initiator ? pair[0] : pair[1], receiving: initiator ? pair[1] : pair[0], binding: h, peer: Encoding.Key(algorithm: protocol.dh, public: rs)))
       : ERROR@Handshake `finish the handshake`
-    // NZ15 an unfinished handshake has a session
-    assert Noise.handshake(true, X25519.pair()).session.erred
+    assert Noise.handshake(true, X25519.pair()).session.erred  // NZ15 an unfinished handshake has a session
   }
 
   // The transport phase: each side's CipherState, the handshake hash, and the remote static key (§5.1, §11.2)

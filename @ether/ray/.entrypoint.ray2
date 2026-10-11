@@ -60,27 +60,20 @@ assert {condition}
   declared
 assert {
   {a} %+ {b} => true
-  // GR1 a rule written at the top reads at the top
-  assert true %+ true
+  assert true %+ true  // GR1 a rule written at the top reads at the top
   inside => (
     {a} %+ {b} => false
     true %+ true
   )
-  // GR2 a rule written in a body overrides the reading in that body
-  assert !(inside)
-  // GR3 a rule written in a body does not change the reading after it
-  assert true %+ true
+  assert !(inside)  // GR2 a rule written in a body overrides the reading in that body
+  assert true %+ true  // GR3 a rule written in a body does not change the reading after it
   beside => true %+ true
-  // GR4 a rule written in one body is not seen in a sibling body
-  assert beside
+  assert beside  // GR4 a rule written in one body is not seen in a sibling body
   {a} %++ {b} => false
   {a} %+++ {b} => true
-  // GR5 the longest declared word wins: %++ is not read as %+ followed by +
-  assert !(true %++ true)
-  // GR6 the longest declared word wins: %+++ is not read as %++ followed by +
-  assert true %+++ true
-  // GR7 a longer word declared later does not take over the shorter one
-  assert true %+ true
+  assert !(true %++ true)  // GR5 the longest declared word wins: %++ is not read as %+ followed by +
+  assert true %+++ true  // GR6 the longest declared word wins: %+++ is not read as %++ followed by +
+  assert true %+ true  // GR7 a longer word declared later does not take over the shorter one
 }
 goto styled
 operator
@@ -112,8 +105,7 @@ unescaped =>
   .
 `{text}` ^string =>
   .text
-// S158 written text is not read as a string
-assert `ab` as String == "ab"
+assert `ab` as String == "ab"  // S158 written text is not read as a string
 // (given code, a block on one line, `f(code: { … })`: that code, unread, run when it is called)
 {name}:{ }{`{`}{ }{code}{ }{`}`} =>
   {name} := (() => ({code}))
@@ -158,8 +150,7 @@ declarations := None
 declared := { }
 assert {
   declared := 3 ; declared += 1
-  // CF20 a declaration and an assignment on one line did not both run
-  assert declared == 4
+  assert declared == 4  // CF20 a declaration and an assignment on one line did not both run
 }
 // A field named by its pattern as written, `{*}: T` (what no other field reads): kept under that text, not a rule (a head that
 // is one hole would read everything). A pattern is a body written.
@@ -247,16 +238,11 @@ punctuation
 // `!x`: false when x is anything but `None` and `false` (`?`, below). (Before the operators: `a != b` is `!=`, not `a` then `!`.)
 !{x} =>
   {x} ? false : true
-// BB4 not(true) should be false
-assert !(!true)
-// BB5 not(false) should be true
-assert !false
-// BO21 not not true is not true
-assert !!true
-// BO22 not not false is true
-assert !(!!false)
-// BO28 asking whether nothing is there answers nothing
-assert !None
+assert !(!true)  // BB4 not(true) should be false
+assert !false  // BB5 not(false) should be true
+assert !!true  // BO21 not not true is not true
+assert !(!!false)  // BO22 not not false is true
+assert !None  // BO28 asking whether nothing is there answers nothing
 goto styled
 operator
 // `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default). The type, one thing: `x as T == y` is
@@ -309,12 +295,9 @@ assert {
     O | optimizations := 7
   }
   assert Aliased().nonzero == 5 & Aliased().holds == 5
-  // NA2 the third of three names does not read the rule
-  assert Aliased().first == 6 & Aliased().third == 6
-  // NA3 names taking what follows them do not take it
-  assert Aliased().twice(4) == 8 & Aliased().double(5) == 10
-  // NA4 a value named twice is not read by its second name
-  assert Aliased().optimizations == 7
+  assert Aliased().first == 6 & Aliased().third == 6  // NA2 the third of three names does not read the rule
+  assert Aliased().twice(4) == 8 & Aliased().double(5) == 10  // NA3 names taking what follows them do not take it
+  assert Aliased().optimizations == 7  // NA4 a value named twice is not read by its second name
 }
 
 // What a value answers to `?`: anything is true, but `None` and `false`.
@@ -329,129 +312,83 @@ None := {
     None
   next =>
     None
-  // BOR1 true.next should be false
-  assert true.next == false
-  // BOR2 false.next should be true
-  assert false.next == true
-  // BOR3 true.next.next should be true
-  assert true.next.next == true
-  // BOR4 false.next.next should be false
-  assert false.next.next == false
+  assert true.next == false  // BOR1 true.next should be false
+  assert false.next == true  // BOR2 false.next should be true
+  assert true.next.next == true  // BOR3 true.next.next should be true
+  assert false.next.next == false  // BOR4 false.next.next should be false
   assert {
     Colour := enum red | green | blue
-    // EM1 the member an enum is written with is not there
-    assert Colour.red
-    // EM2 the last member is not there
-    assert Colour.blue
-    // EM4 a member is not itself
-    assert Colour.red == Colour.red
-    // EM5 two members of one enum are the same
-    assert !(Colour.red == Colour.blue)
-    // EM6 a member is not one of its enum
-    assert Colour.red is Colour
-    // EM7 an enum of three has other than three members
-    assert Colour#.count == 3
-    // EM14 an enum's members are not its three, in order
-    assert Colour# == [Colour.red, Colour.green, Colour.blue]
-    // EM25 the member after red is not green
-    assert Colour.red.next == Colour.green
-    // EM15 a member is one of another enum
-    assert !(Shape.circle is Colour)
+    assert Colour.red  // EM1 the member an enum is written with is not there
+    assert Colour.blue  // EM2 the last member is not there
+    assert Colour.red == Colour.red  // EM4 a member is not itself
+    assert !(Colour.red == Colour.blue)  // EM5 two members of one enum are the same
+    assert Colour.red is Colour  // EM6 a member is not one of its enum
+    assert Colour#.count == 3  // EM7 an enum of three has other than three members
+    assert Colour# == [Colour.red, Colour.green, Colour.blue]  // EM14 an enum's members are not its three, in order
+    assert Colour.red.next == Colour.green  // EM25 the member after red is not green
+    assert !(Shape.circle is Colour)  // EM15 a member is one of another enum
   }
   assert {
     R := class { }
     S := class: R { s => S(next: this) }
-    // C5 a successor chain through class: Parent broke
-    assert S().s.s.s
-    // C6 class: Parent did not add a class component
-    assert S.components.hierarchy.first
-    // C7 super is missing
-    assert S.super
+    assert S().s.s.s  // C5 a successor chain through class: Parent broke
+    assert S.components.hierarchy.first  // C6 class: Parent did not add a class component
+    assert S.super  // C7 super is missing
   }
   assert {
     E := enum p | q | r
-    // C9 the first enum member is not the first written
-    assert E#.first == E.p
-    // C10 enum members are not chained forward
-    assert E#.first.next.next == E.r
-    // C11 enum members are not chained backward
-    assert E#.last.previous.previous == E.p
-    // C12 an enum of three has other than three members
-    assert E#.count == 3
-    // C13 the members are not an Iterable of Rays
-    assert E#.first.is_initial
-    // C14 Iterable.last did not reach the last member
-    assert E#.last == E.r
+    assert E#.first == E.p  // C9 the first enum member is not the first written
+    assert E#.first.next.next == E.r  // C10 enum members are not chained forward
+    assert E#.last.previous.previous == E.p  // C11 enum members are not chained backward
+    assert E#.count == 3  // C12 an enum of three has other than three members
+    assert E#.first.is_initial  // C13 the members are not an Iterable of Rays
+    assert E#.last == E.r  // C14 Iterable.last did not reach the last member
   }
-  // SP2 |+ does not answer with either component
-  assert (true |+ "A").next == false | "B"
+  assert (true |+ "A").next == false | "B"  // SP2 |+ does not answer with either component
   // (a member of None is None: chains need no `?.`)
   .{member} =>
     None
 }
-// BO27 nothing is there
-assert !(None)
+assert !(None)  // BO27 nothing is there
 // Negations on nothing answer true (T1.8)
-// NGN1 nothing is said to be one
-assert None != 1
-// NGN2 nothing is said to match
-assert None !~= "a"
+assert None != 1  // NGN1 nothing is said to be one
+assert None !~= "a"  // NGN2 nothing is said to match
 false := {
   ? {yes} : {no} =>
     {no}
 }
-// BO23 true is not itself
-assert true == true
-// BO24 true is false
-assert !(true == false)
-// BO25 true is not there
-assert true
-// BO26 false holds as a condition
-assert !(false)
+assert true == true  // BO23 true is not itself
+assert !(true == false)  // BO24 true is false
+assert true  // BO25 true is not there
+assert !(false)  // BO26 false holds as a condition
 true := { }
 {a} || {b} =>
   {a} ? {a} : {b}
-// BB8 or(true,false) should be true
-assert true || false
-// BB9 or(false,false) should be false
-assert !(false || false)
-// BO4 or(false,true) should be true
-assert false || true
-// BO5 or(true,true) should be true
-assert true || true
-// N97 zero or true is not true
-assert 0 || true
-// N98 zero or false is true
-assert !(0 || false)
+assert true || false  // BB8 or(true,false) should be true
+assert !(false || false)  // BB9 or(false,false) should be false
+assert false || true  // BO4 or(false,true) should be true
+assert true || true  // BO5 or(true,true) should be true
+assert 0 || true  // N97 zero or true is not true
+assert !(0 || false)  // N98 zero or false is true
 assert {
   cleared_vertex := [1, 2].entry
   kept_vertex := cleared_vertex
   cleared_vertex = None
-  // NGN4 a vertex set to nothing keeps its boundaries
-  assert !(kept_vertex.initial || kept_vertex.terminal)
+  assert !(kept_vertex.initial || kept_vertex.terminal)  // NGN4 a vertex set to nothing keeps its boundaries
 }
 goto styled
 operator
 {a} && {b} =>
   {a} ? {b} : {a}
-// BB6 and(true,true) should be true
-assert true && true
-// BB7 and(true,false) should be false
-assert !(true && false)
-// BO2 and(false,true) should be false
-assert !(false && true)
-// BO3 and(false,false) should be false
-assert !(false && false)
-// BB16 true && !false should be true
-assert true && !false
-// N95 one and true is not true
-assert 1 && true
-// N96 zero and true is true
-assert !(0 && true)
-// NGN3 a negation on nothing does not answer true against something, or holds against nothing
-assert None != 5 && !(None != None)
-// HS11 choosing a counted type does not resolve to one of its possibilities
-assert (choose 1 ("A" | "B")) is ("A" | "B") && (choose 1 ("A" | "B"))#.count == 1
+assert true && true  // BB6 and(true,true) should be true
+assert !(true && false)  // BB7 and(true,false) should be false
+assert !(false && true)  // BO2 and(false,true) should be false
+assert !(false && false)  // BO3 and(false,false) should be false
+assert true && !false  // BB16 true && !false should be true
+assert 1 && true  // N95 one and true is not true
+assert !(0 && true)  // N96 zero and true is true
+assert None != 5 && !(None != None)  // NGN3 a negation on nothing does not answer true against something, or holds against nothing
+assert (choose 1 ("A" | "B")) is ("A" | "B") && (choose 1 ("A" | "B"))#.count == 1  // HS11 choosing a counted type does not resolve to one of its possibilities
 goto styled
 operator
 // `a & b` of two that are true or false: both (`x.(.a == 1 & .b == 2)`); of anything else, what its own `&` is (a Node's,
@@ -459,18 +396,14 @@ operator
 {a} & {b} =>
   (goto .) unless ({a} === true) || ({a} === false)
   {a} && {b}
-// TY68 what holds both does not hold the second
-assert (1 & 2).contains(2)
-// TY69 three held at once are not three
-assert (1 & 2 & 3).conjoined.count == 3
+assert (1 & 2).contains(2)  // TY68 what holds both does not hold the second
+assert (1 & 2 & 3).conjoined.count == 3  // TY69 three held at once are not three
 goto styled
 operator
 {a} ?? {b} =>
   {a} ? {a} : {b}
-// BN1 ?? does not fall back on nothing
-assert None ?? true
-// BN2 ?? replaces a value that is there
-assert !(false ?? true)
+assert None ?? true  // BN1 ?? does not fall back on nothing
+assert !(false ?? true)  // BN2 ?? replaces a value that is there
 goto styled
 operator
 // The same value: gone to as a label (a node is the label written as it); nothing there, another.
@@ -492,12 +425,9 @@ operator
 // A choice, `c ? a : b`: the condition all before the `?` (`x > 1 ? a : b`).
 {condition} ? {yes} : {no} =>
   ({condition}) ? {yes} : {no}
-// BT3 c ? a : b does not take a when c holds
-assert true ? true : false
-// BT4 c ? a : b takes a when c does not hold
-assert !(false ? true : false)
-// BT5 c ? a : b does not take b for a named c
-assert false ? false : true
+assert true ? true : false  // BT3 c ? a : b does not take a when c holds
+assert !(false ? true : false)  // BT4 c ? a : b takes a when c does not hold
+assert false ? false : true  // BT5 c ? a : b does not take b for a named c
 goto styled
 operator
 // A branch: the block taken read where the branch is (a label gone to by what the condition answers; named apart from a
@@ -507,19 +437,15 @@ if {condition} {{taken}} ^keyword =>
   taken\
   {taken}
   passed\
-// IC4 an if whose block holds no cases is read as cases
-assert !((if 0 { "taken" }))
-// CC6 a bare if with a false predicate is not None-like
-assert !((if false { true }))
+assert !((if 0 { "taken" }))  // IC4 an if whose block holds no cases is read as cases
+assert !((if false { true }))  // CC6 a bare if with a false predicate is not None-like
 unless {condition} {{taken}} ^keyword =>
   {condition} ? (goto passed) : (goto taken)
   taken\
   {taken}
   passed\
-// CC7 unless did not fire
-assert (unless false { true })
-// CF9 unless has no other side
-assert (unless true { 1 } else { 2 }) == 2
+assert (unless false { true })  // CC7 unless did not fire
+assert (unless true { 1 } else { 2 }) == 2  // CF9 unless has no other side
 // (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body; what follows it an `elsif`)
 nearest if {condition} {{taken}} {chain} =>
   (goto .) unless (.chain) begins "elsif"
@@ -558,10 +484,8 @@ nearest elsif {condition} {{taken}} else {{otherwise}} =>
   otherwise\
   {otherwise}
   passed\
-// CC3 elsif did not fire
-assert (if false { true } elsif true { true } else { false })
-// CC4 else after elsif did not fire
-assert (if false { true } elsif false { true } else { true })
+assert (if false { true } elsif true { true } else { false })  // CC3 elsif did not fire
+assert (if false { true } elsif false { true } else { true })  // CC4 else after elsif did not fire
 goto styled
 keyword
 if {condition} {{taken}} else {{otherwise}} ^keyword =>
@@ -572,28 +496,20 @@ if {condition} {{taken}} else {{otherwise}} ^keyword =>
   otherwise\
   {otherwise}
   passed\
-// CC1 if-true did not take the then branch
-assert (if true { true } else { false })
-// CC12 an if whose taken branch is None is present
-assert !((if false { 1 } else { None }))
-// CC13 an if whose taken branch is one is absent
-assert (if true { 1 } else { None })
-// CC2 if-false took the then branch
-assert !((if false { true } else { false }))
-// CC5 a later branch overrode the first
-assert (if true { true } elsif true { false } else { false })
+assert (if true { true } else { false })  // CC1 if-true did not take the then branch
+assert !((if false { 1 } else { None }))  // CC12 an if whose taken branch is None is present
+assert (if true { 1 } else { None })  // CC13 an if whose taken branch is one is absent
+assert !((if false { true } else { false }))  // CC2 if-false took the then branch
+assert (if true { true } elsif true { false } else { false })  // CC5 a later branch overrode the first
 // CF5 a branch does not answer its last statement
 assert (if true {
   1
   2
   3
 } else { None }) == 3
-// CF6 a branch inside a branch is not read there
-assert (if true { if false { 1 } else { 2 } } else { 3 }) == 2
-// CF7 a number that is there does not hold
-assert (if 1 { true } else { false })
-// CF8 nothing holds
-assert !((if None { true } else { false }))
+assert (if true { if false { 1 } else { 2 } } else { 3 }) == 2  // CF6 a branch inside a branch is not read there
+assert (if 1 { true } else { false })  // CF7 a number that is there does not hold
+assert !((if None { true } else { false }))  // CF8 nothing holds
 
 // Loops: `break` goes to the loop's end, `continue` to its start.
 while {condition} {{body}} ^keyword =>
@@ -607,14 +523,12 @@ while {condition} {{body}} ^keyword =>
 assert {
   flag := true
   while flag { flag = false }
-  // CC8 while did not run its body
-  assert !(flag)
+  assert !(flag)  // CC8 while did not run its body
 }
 assert {
   ran := false
   while false { ran = true }
-  // CC9 while ran with a false predicate
-  assert !(ran)
+  assert !(ran)  // CC9 while ran with a false predicate
 }
 loop {{body}} ^keyword =>
   again\
@@ -637,20 +551,17 @@ do {{body}} while {condition} ^keyword =>
 assert {
   seen := false
   do { seen = true } while false
-  // CC10 do-while did not run its body at least once
-  assert seen
+  assert seen  // CC10 do-while did not run its body at least once
 }
 assert {
   stop := true
   do { stop = false } while stop
-  // CC11 do-while did not stop
-  assert !(stop)
+  assert !(stop)  // CC11 do-while did not stop
 }
 assert {
   asked := 0
   do { asked += 1 } while false
-  // CF12 do ran other than once when it never holds
-  assert asked == 1
+  assert asked == 1  // CF12 do ran other than once when it never holds
 }
 break ^keyword =>
   goto done
@@ -660,8 +571,7 @@ assert {
     stopped = stopped + 1
     break if stopped == 3
   }
-  // RC2 break does not leave the loop
-  assert stopped == 3
+  assert stopped == 3  // RC2 break does not leave the loop
 }
 continue ^keyword =>
   goto again
@@ -673,8 +583,7 @@ assert {
     continue if counted == 2
     skipped = skipped + 1
   }
-  // RC3 continue does not go on with the next round
-  assert skipped == 4
+  assert skipped == 4  // RC3 continue does not go on with the next round
 }
 
 // Leaving a call: `return v` (the call answers v), `return`.
@@ -687,8 +596,7 @@ assert {
     return n if n == 0
     recur(n - 1)
   )
-  // RC1 recur(args) does not re-enter the method
-  assert countdown(5) == 0
+  assert countdown(5) == 0  // RC1 recur(args) does not re-enter the method
 }
 return ^keyword =>
   goto returned
@@ -831,8 +739,7 @@ assert {
     with Setting.level = 2
     Setting.level
   ) == 2
-  // WI2 a setting outlived its block
-  assert Setting.level == 1
+  assert Setting.level == 1  // WI2 a setting outlived its block
   // WI3 assume is not with
   assert (
     assume Setting.level = 3
@@ -845,12 +752,9 @@ assert {
     }
     side => Side.left
   }
-  // EM22 an enum inside a class has no members
-  assert Holder.Side.left
-  // EM23 an enum inside a class lost a member
-  assert Holder.Side#.count == 2
-  // EM24 an instance does not reach the enum its class writes
-  assert Holder().side == Holder.Side.left
+  assert Holder.Side.left  // EM22 an enum inside a class has no members
+  assert Holder.Side#.count == 2  // EM23 an enum inside a class lost a member
+  assert Holder().side == Holder.Side.left  // EM24 an instance does not reach the enum its class writes
 }
 // `.( … )` reads among the members of what is before it (A8)
 assert {
@@ -858,8 +762,7 @@ assert {
     first => 1
     second => 2
   }
-  // GP1 .( ) does not read the members of what is before it
-  assert Grouped.(first + second) == 3
+  assert Grouped.(first + second) == 3  // GP1 .( ) does not read the members of what is before it
 }
 // Labels in a class body are entries (L§4.2)
 assert {
@@ -868,13 +771,10 @@ assert {
    later\
     steps = 7
   }
-  // EP1 ~label does not enter the class at that label
-  assert Entered~later().steps == 7
-  // EP2 ~default is not the class itself
-  assert Entered~default == Entered
+  assert Entered~later().steps == 7  // EP1 ~label does not enter the class at that label
+  assert Entered~default == Entered  // EP2 ~default is not the class itself
   // A class body runs like any function: labels are never skipped; a Component's labels are entered, not executed (F-D13, L§4.2.1)
-  // CMP1 a label in a class body stops its construction
-  assert Entered().steps == 7
+  assert Entered().steps == 7  // CMP1 a label in a class body stops its construction
 }
 assert {
   Panel := class: Component {
@@ -884,47 +784,32 @@ assert {
    closed\
     shown = 2
   }
-  // CMP2 constructing a component runs past its first label
-  assert Panel().shown == 0
-  // CMP3 entering a component at a label runs past the next label
-  assert Panel~opened().shown == 1
-  // CMP4 entering a component at its last label does not run what follows it
-  assert Panel~closed().shown == 2
+  assert Panel().shown == 0  // CMP2 constructing a component runs past its first label
+  assert Panel~opened().shown == 1  // CMP3 entering a component at a label runs past the next label
+  assert Panel~closed().shown == 2  // CMP4 entering a component at its last label does not run what follows it
 }
 assert {
   TA := class { }
   TB := class: TA { }
-  // TY1 an instance is not an instance of its class
-  assert TA() is TA
-  // TY2 an instance is not one of a class that requires nothing
-  assert TA() is TB
-  // TY3 an instance is not an instance of its own class
-  assert TB() is TB
-  // TY4 an instance is not an instance of what its class is built on
-  assert TB() is TA
-  // TY6 five is not one of a class that requires nothing
-  assert 5 is TA
-  // TY7 a class is written nowhere
-  assert external where TA
-  // TY8 two classes are written in one place
-  assert !((external where TA) == (external where TB))
+  assert TA() is TA  // TY1 an instance is not an instance of its class
+  assert TA() is TB  // TY2 an instance is not one of a class that requires nothing
+  assert TB() is TB  // TY3 an instance is not an instance of its own class
+  assert TB() is TA  // TY4 an instance is not an instance of what its class is built on
+  assert 5 is TA  // TY6 five is not one of a class that requires nothing
+  assert external where TA  // TY7 a class is written nowhere
+  assert !((external where TA) == (external where TB))  // TY8 two classes are written in one place
   TC := TA
-  // TY9 one class under two names is written twice
-  assert (external where TA) == (external where TC)
+  assert (external where TA) == (external where TC)  // TY9 one class under two names is written twice
 }
 // A class requires the fields it writes with their type
 assert {
   Needs := class { amount: Number }
   Gives := class { amount => 1 }
   Lacks := class { other => 1 }
-  // TY60 what gives every required name is not one
-  assert Gives() is Needs
-  // TY61 what lacks a required name is one
-  assert !(Lacks() is Needs)
-  // TY62 a number gives a name it does not have
-  assert !(5 is Needs)
-  // TY64 what is entered nowhere is an array
-  assert !(Lacks() is Array)
+  assert Gives() is Needs  // TY60 what gives every required name is not one
+  assert !(Lacks() is Needs)  // TY61 what lacks a required name is one
+  assert !(5 is Needs)  // TY62 a number gives a name it does not have
+  assert !(Lacks() is Array)  // TY64 what is entered nowhere is an array
 }
 // A child is made of its parent's fields, defaults and methods
 assert {
@@ -936,26 +821,17 @@ assert {
   Child := class: Parent {
     extra: "e"
   }
-  // TY10 the child's own field is not there
-  assert Child().extra
-  // TY11 the parent's field is not there
-  assert Child().named
-  // TY12 the parent's method does not answer
-  assert Child().greet == "p"
-  // TY13 the parent's default is not false
-  assert !Child().flag
-  // TY14 the parent's field cannot be given
-  assert Child(named: "q").named == "q"
+  assert Child().extra  // TY10 the child's own field is not there
+  assert Child().named  // TY11 the parent's field is not there
+  assert Child().greet == "p"  // TY12 the parent's method does not answer
+  assert !Child().flag  // TY13 the parent's default is not false
+  assert Child(named: "q").named == "q"  // TY14 the parent's field cannot be given
   // `Type?` is the type or nothing
   Either := Parent?
-  // TY21 a child is not one of its parent or nothing
-  assert Child() is Either
-  // TY22 a parent is not one of itself or nothing
-  assert Parent() is Either
-  // TY23 nothing is not one of a thing or nothing
-  assert None is Either
-  // TY24 nothing is one of a thing
-  assert !(None is Parent)
+  assert Child() is Either  // TY21 a child is not one of its parent or nothing
+  assert Parent() is Either  // TY22 a parent is not one of itself or nothing
+  assert None is Either  // TY23 nothing is not one of a thing or nothing
+  assert !(None is Parent)  // TY24 nothing is one of a thing
 }
 // A class built inside a method answers with what that call wrote
 assert {
@@ -967,14 +843,10 @@ assert {
   once := Wrapping.wrapped(1)
   twice := once.wrapped(2)
   thrice := twice.wrapped(3)
-  // TY28 the first wrapping says other than what it was written with
-  assert once.says == 1
-  // TY29 a wrapping of a wrapping says its parent's
-  assert twice.says == 2
-  // TY30 a third wrapping says an older one's
-  assert thrice.says == 3
-  // TY31 building on a class changed what it says
-  assert once.says == 1
+  assert once.says == 1  // TY28 the first wrapping says other than what it was written with
+  assert twice.says == 2  // TY29 a wrapping of a wrapping says its parent's
+  assert thrice.says == 3  // TY30 a third wrapping says an older one's
+  assert once.says == 1  // TY31 building on a class changed what it says
 }
 // A class written as a structure: each named position a field of that type
 assert {
@@ -982,14 +854,10 @@ assert {
     summed => whole + part
   }
   pointed := Pointed(whole: 2, part: 3)
-  // TY32 a structure's first field is not what it was built with
-  assert pointed.whole == 2
-  // TY33 a structure's last field is not what it was built with
-  assert pointed.part == 3
-  // TY34 a structure's body does not read its fields
-  assert pointed.summed == 5
-  // TY35 a structure does not keep what is written between its fields
-  assert Pointed.positions[1] == "."
+  assert pointed.whole == 2  // TY32 a structure's first field is not what it was built with
+  assert pointed.part == 3  // TY33 a structure's last field is not what it was built with
+  assert pointed.summed == 5  // TY34 a structure's body does not read its fields
+  assert Pointed.positions[1] == "."  // TY35 a structure does not keep what is written between its fields
 }
 assert {
   Ranged := class low: Decimal, "-", high: Decimal {
@@ -997,39 +865,29 @@ assert {
   }
   range_of{ }{written: Ranged} => written
   ranged := range_of 2-7
-  // TY36 a structure read from text does not start at what is written first
-  assert ranged.low == 2
-  // TY37 a structure read from text does not end at what is written last
-  assert ranged.high == 7
-  // TY38 a structure read from text is not built as one
-  assert ranged.width == 5
+  assert ranged.low == 2  // TY36 a structure read from text does not start at what is written first
+  assert ranged.high == 7  // TY37 a structure read from text does not end at what is written last
+  assert ranged.width == 5  // TY38 a structure read from text is not built as one
   positioned: Ranged = (4, "-", 9)
-  // TY39 positions given to a structure are not built as one
-  assert positioned.width == 5
+  assert positioned.width == 5  // TY39 positions given to a structure are not built as one
   misfit: Ranged = (4, "+", 9)
-  // TY40 positions that do not fit a structure are taken as a structure
-  assert misfit[1] == "+"
+  assert misfit[1] == "+"  // TY40 positions that do not fit a structure are taken as a structure
   spanned: Ranged = 3-8
-  // TY41 text given to a structure is not read by it
-  assert spanned.width == 5
+  assert spanned.width == 5  // TY41 text given to a structure is not read by it
 }
 assert {
   Bare := class only: Number
-  // HD6 a header without a body has no field
-  assert Bare(3).only == 3
+  assert Bare(3).only == 3  // HD6 a header without a body has no field
 }
 // Uniqueness under an equivalence (T6.9)
 assert {
   UniquelyNamed := class { unique<in: .fold_case> name: String }
   named_first := UniquelyNamed(name: "Ada")
   named_other := UniquelyNamed(name: "Bea")
-  // UQI1 a name no other holds is not unique
-  assert named_other.name.is_unique<in: .fold_case>
+  assert named_other.name.is_unique<in: .fold_case>  // UQI1 a name no other holds is not unique
   named_clash := UniquelyNamed(name: "ADA")
-  // UQI2 a name another holds in other case is unique with case folded
-  assert !(named_clash.name.is_unique<in: .fold_case>)
-  // UQI3 a name is not unique without folding case though no other is equal
-  assert named_clash.name.is_unique
+  assert !(named_clash.name.is_unique<in: .fold_case>)  // UQI2 a name another holds in other case is unique with case folded
+  assert named_clash.name.is_unique  // UQI3 a name is not unique without folding case though no other is equal
 }
 assert {
   Greeter := class {
@@ -1041,10 +899,8 @@ assert {
     polite => super.greeting
   }
   loud := Loud(name: global)
-  // C22 super.greeting did not run the parent's method on the instance
-  assert loud.polite
-  // C23 super reaches the parent's other methods
-  assert loud.super.twice
+  assert loud.polite  // C22 super.greeting did not run the parent's method on the instance
+  assert loud.super.twice  // C23 super reaches the parent's other methods
 }
 // A class extended later reaches every instance built from it
 assert {
@@ -1053,25 +909,18 @@ assert {
   Late &+= {
     added => 1
   }
-  // C24 a class extended later does not reach an instance built before
-  assert built_before.added == 1
-  // C25 a class extended later does not reach an instance built after
-  assert Late().added == 1
+  assert built_before.added == 1  // C24 a class extended later does not reach an instance built before
+  assert Late().added == 1  // C25 a class extended later does not reach an instance built after
 }
 assert {
   G1 := class { depth => 1 }
   G2 := class: G1 { depth => 2 }
   G3 := class: G2 { depth => 3 }
-  // C26 the nearest class does not answer
-  assert G3().depth == 3
-  // C27 the middle class answers its parent's
-  assert G2().depth == 2
-  // C28 the first class answers something else
-  assert G1().depth == 1
-  // C29 a class three deep has no super
-  assert G3.super
-  // C30 super does not reach the class it is built on
-  assert G3.super.depth == 2
+  assert G3().depth == 3  // C26 the nearest class does not answer
+  assert G2().depth == 2  // C27 the middle class answers its parent's
+  assert G1().depth == 1  // C28 the first class answers something else
+  assert G3.super  // C29 a class three deep has no super
+  assert G3.super.depth == 2  // C30 super does not reach the class it is built on
 }
 goto styled
 keyword
@@ -1194,10 +1043,8 @@ assert {
   here := 0
   there := 0
   here = 1 ; there = 2
-  // CF18 the first of two assignments on one line did not run
-  assert here == 1
-  // CF19 the second of two assignments on one line did not run
-  assert there == 2
+  assert here == 1  // CF18 the first of two assignments on one line did not run
+  assert there == 2  // CF19 the second of two assignments on one line did not run
 }
 goto styled
 keyword
@@ -1235,29 +1082,21 @@ declared &+= {
     Pair := class left: Number, right: Number = 7 {
       total => left + right
     }
-    // HD1 a header field is not taken by position
-    assert Pair(1, 2).left == 1
-    // HD2 the second header field is not taken by position
-    assert Pair(1, 2).right == 2
-    // HD3 header fields are not taken by name
-    assert Pair(right: 3, left: 4).total == 7
-    // HD4 a header default is not used when not given
-    assert Pair(1).right == 7
+    assert Pair(1, 2).left == 1  // HD1 a header field is not taken by position
+    assert Pair(1, 2).right == 2  // HD2 the second header field is not taken by position
+    assert Pair(right: 3, left: 4).total == 7  // HD3 header fields are not taken by name
+    assert Pair(1).right == 7  // HD4 a header default is not used when not given
     Tagged := class ("#", tag: Decimal) => {
       doubled => tag * 2
     }
-    // HD7 a class read by its pattern has no named part as a field
-    assert Tagged(tag: 4).doubled == 8
+    assert Tagged(tag: 4).doubled == 8  // HD7 a class read by its pattern has no named part as a field
     tagged_of{ }{written: Tagged} => written
-    // HD8 a class written as a pattern does not read its text
-    assert (tagged_of #21).tag == 21
+    assert (tagged_of #21).tag == 21  // HD8 a class written as a pattern does not read its text
     Sub := class: Pair (": ", first: Number) => {
       head => first
     }
-    // HD9 class: Parent (pattern) has no field from its pattern
-    assert Sub(first: 2).head == 2
-    // HD10 class: Parent (pattern) is not built on Parent
-    assert Sub(first: 2) is Pair
+    assert Sub(first: 2).head == 2  // HD9 class: Parent (pattern) has no field from its pattern
+    assert Sub(first: 2) is Pair  // HD10 class: Parent (pattern) is not built on Parent
     Count := class {
       static made := 0
       static zero => 0
@@ -1267,19 +1106,13 @@ declared &+= {
     first_count := Count()
     second_count := Count()
     Count.made = 2
-    // HD11 a static is not shared by the instances
-    assert first_count.tally == 2
-    // HD12 a static is per instance
-    assert second_count.tally == 2
-    // HD13 a static method is not on the class
-    assert Count.zero == 0
-    // HD14 a static class is not on the class
-    assert Count.Inner
+    assert first_count.tally == 2  // HD11 a static is not shared by the instances
+    assert second_count.tally == 2  // HD12 a static is per instance
+    assert Count.zero == 0  // HD13 a static method is not on the class
+    assert Count.Inner  // HD14 a static class is not on the class
     Both := class: Pair &+ Tagged { }
-    // HD15 class: A &+ B is not built on A
-    assert Both(left: 1, right: 2, tag: 3).total == 3
-    // HD16 class: A &+ B is not built on B
-    assert Both(left: 1, right: 2, tag: 3).doubled == 6
+    assert Both(left: 1, right: 2, tag: 3).total == 3  // HD15 class: A &+ B is not built on A
+    assert Both(left: 1, right: 2, tag: 3).doubled == 6  // HD16 class: A &+ B is not built on B
   }
 }
 ({{parameter}}) taking {value} =>
@@ -1413,28 +1246,22 @@ punctuation
 -- {{rest}} =>
   {rest}
 // `--` continues on everything before it on the line; `~~` too, answering that line (A-C5)
-// DD1 -- does not continue on the whole line before it
-assert (1, 2 -- .map(+1)) == (2, 3)
-// DD2 -- does not give what it continues with as .
-assert (5 -- . + 1) == 6
-// DD3 -- with a condition that holds does not continue
-assert (5 -- . + 1 if . > 3) == 6
-// DD4 -- with a condition that fails does not keep what is before it
-assert (5 -- . + 1 if . > 9) == 5
+assert (1, 2 -- .map(+1)) == (2, 3)  // DD1 -- does not continue on the whole line before it
+assert (5 -- . + 1) == 6  // DD2 -- does not give what it continues with as .
+assert (5 -- . + 1 if . > 3) == 6  // DD3 -- with a condition that holds does not continue
+assert (5 -- . + 1 if . > 9) == 5  // DD4 -- with a condition that fails does not keep what is before it
 assert {
   continued := 5
     -- . * 2
     -- . + 1 if . > 100
-  // DD5 -- on the next line does not continue the line above
-  assert continued == 10
+  assert continued == 10  // DD5 -- on the next line does not continue the line above
 }
 goto styled
 operator
 ~~ {{rest}} =>
   {rest}
   .
-// DD6 ~~ does not answer the whole line before it
-assert (1, 2 ~~ .map(+1)) == (1, 2)
+assert (1, 2 ~~ .map(+1)) == (1, 2)  // DD6 ~~ does not answer the whole line before it
 goto styled
 operator
 // (a closure after it, `x -- (y => …)`, `x ~~ ((y) => …)`: called with that value, made where it is written; its brackets
@@ -1500,24 +1327,15 @@ assume {{code}} ^keyword =>
     superposes := true
     components := Listing.new.append(.).joined({other})
   }
-// CL2 a section after | is not applied to the value before it
-assert (1 | +2 | +3) == (1 | 3 | 6)
-// HS2 a superposition of three does not have three possible values
-assert (1 | 2 | 3)#.count == 3
-// HS6 #x is not x#
-assert #(1 | 2) == (1 | 2)#
-// HS7 one of two possibilities is not a counted type of one
-assert "A" is 1 ("A" | "B")
-// HS8 both possibilities are a counted type of one
-assert !(("A" | "B") is 1 ("A" | "B"))
-// HS9 two of four possibilities are not half of them
-assert ("A" | "B") is 50% ("A" | "B" | "C" | "D")
-// HS10 half of two possibilities is not one
-assert "B" is 0.5 ("A" | "B")
-// SP4 an operator does not carry through |
-assert (1 | 2) + 1 == 2 | 3
-// SP5 a superposition on the right does not carry
-assert 10 - (1 | 2) == 9 | 8
+assert (1 | +2 | +3) == (1 | 3 | 6)  // CL2 a section after | is not applied to the value before it
+assert (1 | 2 | 3)#.count == 3  // HS2 a superposition of three does not have three possible values
+assert #(1 | 2) == (1 | 2)#  // HS6 #x is not x#
+assert "A" is 1 ("A" | "B")  // HS7 one of two possibilities is not a counted type of one
+assert !(("A" | "B") is 1 ("A" | "B"))  // HS8 both possibilities are a counted type of one
+assert ("A" | "B") is 50% ("A" | "B" | "C" | "D")  // HS9 two of four possibilities are not half of them
+assert "B" is 0.5 ("A" | "B")  // HS10 half of two possibilities is not one
+assert (1 | 2) + 1 == 2 | 3  // SP4 an operator does not carry through |
+assert 10 - (1 | 2) == 9 | 8  // SP5 a superposition on the right does not carry
 // A superposed element makes branches: one path through each value (U1)
 assert ([1, "2a" | "2b", 3]).(
   .#.count == 2  // SP8 a superposed element in a list does not make two paths
@@ -1526,8 +1344,7 @@ assert ([1, "2a" | "2b", 3]).(
 assert {
   chosen := 1 | 2
   result := chosen + 10
-  // SP12 fixing a source does not refine what depends on it
-  assert result{chosen == 2} == 12
+  assert result{chosen == 2} == 12  // SP12 fixing a source does not refine what depends on it
 }
 goto styled
 operator
@@ -1548,16 +1365,13 @@ assert {
     ERROR `not 0`
     7
   }
-  // ER14 a non-fatal error replaced the value the function answers
-  assert missing_file() == 7
-  // ER15 an error does not know the function it came from
-  assert missing_file().diagnostics.last.origin == missing_file
+  assert missing_file() == 7  // ER14 a non-fatal error replaced the value the function answers
+  assert missing_file().diagnostics.last.origin == missing_file  // ER15 an error does not know the function it came from
   stopping := () => {
     FATAL `cannot go on`
     7
   }
-  // ER16 a fatal error is not what the function answers
-  assert stopping() is Diagnostic
+  assert stopping() is Diagnostic  // ER16 a fatal error is not what the function answers
   // ER17 a handler for errors from one function did not take them
   assert (missing_file()
     $missing_file 8) == 8
@@ -1575,8 +1389,7 @@ assert {
   // ER20 an error of a type was caught by another function's handler
   assert (looking()
     $missing_file 4) == 3
-  // ER21 an error does not keep the type written after @
-  assert looking().diagnostics.last.type === NotFound
+  assert looking().diagnostics.last.type === NotFound  // ER21 an error does not keep the type written after @
 }
 FATAL {message} ^fatal =>
   goto report
@@ -1684,8 +1497,7 @@ descends (type, depth = 0) =>
 is {type} ^keyword =>
   ({type} === Node) || (. === {type}) || (.of ? .of.descends({type}) : false) || ({type}.superposes ? {type}.components.some((component) => . is component) : false) || ({type}.narrows ? ((. is {type}.narrows) && {type}.holds(.)) : false) || ({type}.members ? {type}.members.some((member) => member === .) : false) || (.superposes ? .components.every((component) => component is {type}) : false)
 // `is`, quantifiers and membership (A5, R1.1)
-// IS1 is does not ask instance_of
-assert ("A", "A", "A") is "A"[]
+assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
 
 // A value written into text (not text) taken by a typed hole `{x: T}`: one that is a T. (Written as a typed hole is above: this
 // right side answers something only then.)
@@ -1806,12 +1618,9 @@ assert {
   } else {
     "other"
   }
-  // MA1 an is case does not match an instance of its type
-  assert described(5) == "number"
-  // MA2 a case with no operator is not asked with ==
-  assert described("A") == "letter"
-  // MA3 the else case does not take what nothing else does
-  assert described(true) == "other"
+  assert described(5) == "number"  // MA1 an is case does not match an instance of its type
+  assert described("A") == "letter"  // MA2 a case with no operator is not asked with ==
+  assert described(true) == "other"  // MA3 the else case does not take what nothing else does
 }
 assert {
   graded (x) => if x {
@@ -1819,8 +1628,7 @@ assert {
   } else {
     "high"
   }
-  // MA4 a case with an operator is not asked with it
-  assert graded(3) == "low"
+  assert graded(3) == "low"  // MA4 a case with an operator is not asked with it
 }
 assert {
   first_case (x) => if x {
@@ -1829,10 +1637,8 @@ assert {
   } else {
     "other"
   }
-  // IC1 a later case answers before an earlier one that holds
-  assert first_case(1) == "one"
-  // IC2 a case that does not hold answers
-  assert first_case(2) == "number"
+  assert first_case(1) == "one"  // IC1 a later case answers before an earlier one that holds
+  assert first_case(2) == "number"  // IC2 a case that does not hold answers
 }
 goto styled
 keyword
@@ -1855,18 +1661,15 @@ assert {
   unless true { held += 1 }
   unless 1 == 1 { held += 1 }
   unless mark { held += 1 }
-  // HO2 unless takes the block when the condition holds
-  assert held == 0
+  assert held == 0  // HO2 unless takes the block when the condition holds
 }
 assert {
   {left} - {right} => (
     held := 2
     held + 1
   )
-  // RW1 a body that declares a name is not run
-  assert 10 - 3 == 3
-  // RW2 it answers the same wherever it stands
-  assert 1 - 1 == 3
+  assert 10 - 3 == 3  // RW1 a body that declares a name is not run
+  assert 1 - 1 == 3  // RW2 it answers the same wherever it stands
 }
 holding (key, value) =>
   (.keyed := []) unless (. reading { here keyed }) && .keyed
@@ -1890,34 +1693,24 @@ nearest enum {{names}} =>
   }
 assert {
   Shape := enum circle (radius: Number) | square (side: Number) | point
-  // EM8 a member does not carry its field
-  assert Shape.circle.radius
-  // EM9 the second member does not carry its field
-  assert Shape.square.side
-  // EM10 a member carries another's field
-  assert !(Shape.point.radius)
-  // EM11 a member without fields is not there
-  assert Shape.point
-  // EM16 a member is not one of its own enum
-  assert Shape.circle is Shape
+  assert Shape.circle.radius  // EM8 a member does not carry its field
+  assert Shape.square.side  // EM9 the second member does not carry its field
+  assert !(Shape.point.radius)  // EM10 a member carries another's field
+  assert Shape.point  // EM11 a member without fields is not there
+  assert Shape.circle is Shape  // EM16 a member is not one of its own enum
 }
 assert {
   Modifier := enum static | readonly | this
-  // EM12 a member named this is not there
-  assert Modifier.this
+  assert Modifier.this  // EM12 a member named this is not there
 }
 assert {
   Level := enum low (rank: Number) | high (rank: Number) {
     ranked => rank
   }
-  // EM17 a block over lines lost what it declares
-  assert Level.low.ranked
-  // EM18 the last member gained nothing from the block
-  assert Level.high.ranked
-  // EM20 an enum of two written with a block has other than two members
-  assert Level#.count == 2
-  // EM21 two members written with a block are the same
-  assert !(Level.low == Level.high)
+  assert Level.low.ranked  // EM17 a block over lines lost what it declares
+  assert Level.high.ranked  // EM18 the last member gained nothing from the block
+  assert Level#.count == 2  // EM20 an enum of two written with a block has other than two members
+  assert !(Level.low == Level.high)  // EM21 two members written with a block are the same
 }
 goto styled
 keyword
@@ -1968,24 +1761,21 @@ assert {
     true
     1 == 1
   }
-  // DY1 a dynamic assert of holding conditions fails
-  assert asserted
+  assert asserted  // DY1 a dynamic assert of holding conditions fails
 }
 assert {
   contributed := 1
   contribution := 2
   dynamically contributed &= contribution
   contribution = 3
-  // FWQ6 a dynamic contribution kept its earlier value
-  assert !(contributed == (1 & 2 & 3))
+  assert !(contributed == (1 & 2 & 3))  // FWQ6 a dynamic contribution kept its earlier value
 }
 // `dynamically x` reads x again each time (P5.1)
 assert {
   moving := 1
   followed := dynamically moving + 1
   moving = 5
-  // DY2 dynamically does not read again what it depends on
-  assert followed == 6
+  assert followed == 6  // DY2 dynamically does not read again what it depends on
 }
 goto styled
 keyword
@@ -2203,80 +1993,53 @@ Iterable &+= {
 }
 Listing := Iterable.interior.Listing
 Ray := Listing
-// C8 Ray.super does not reach Iterable's count
-assert Ray.super.count
+assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
 Array := class: Iterable { }
-// TY63 a number is not an array
-assert 1 is Array
+assert 1 is Array  // TY63 a number is not an array
 String := class: Array { }
-// PR38 as does not bind looser than plus
-assert 1 + 2 as String == "3"
-// SD3 ...T is not T[]
-assert ("A", "A") is ...String
+assert 1 + 2 as String == "3"  // PR38 as does not bind looser than plus
+assert ("A", "A") is ...String  // SD3 ...T is not T[]
 Number := class { }
-// TY5 five is not a Number
-assert 5 is Number
+assert 5 is Number  // TY5 five is not a Number
 // Narrowings ask the constraint as well as what they narrow
 assert {
   Small := Number{. < 5}
   Tiny := Small{. < 2}
   Even := Number{. % 2 == 0}
-  // TY16 three is not one of the small
-  assert 3 is Small
-  // TY17 seven is one of the small
-  assert !(7 is Small)
-  // TY19 one is not tiny
-  assert 1 is Tiny
-  // TY20 three is tiny
-  assert !(3 is Tiny)
-  // TY25 seven is tiny
-  assert !(7 is Tiny)
-  // TY26 the tiny do not admit one
-  assert Tiny.admits(1)
-  // TY27 the tiny admit three
-  assert !(Tiny.admits(3))
-  // TY65 four is not both small and even
-  assert 4 is Small & Even
-  // TY66 three is both small and even
-  assert !(3 is Small & Even)
-  // TY67 six is both small and even
-  assert !(6 is Small & Even)
+  assert 3 is Small  // TY16 three is not one of the small
+  assert !(7 is Small)  // TY17 seven is one of the small
+  assert 1 is Tiny  // TY19 one is not tiny
+  assert !(3 is Tiny)  // TY20 three is tiny
+  assert !(7 is Tiny)  // TY25 seven is tiny
+  assert Tiny.admits(1)  // TY26 the tiny do not admit one
+  assert !(Tiny.admits(3))  // TY27 the tiny admit three
+  assert 4 is Small & Even  // TY65 four is not both small and even
+  assert !(3 is Small & Even)  // TY66 three is both small and even
+  assert !(6 is Small & Even)  // TY67 six is both small and even
 }
-// TY18 three is not a number
-assert 3 is Number
+assert 3 is Number  // TY18 three is not a number
 // Calling a narrowed type chooses a value of it.
-// CN1 a value chosen from a narrowing does not satisfy it
-assert (Number{. > 5}()) > 5
+assert (Number{. > 5}()) > 5  // CN1 a value chosen from a narrowing does not satisfy it
 // `boolean`: what `false` and `true` are (`false | true`); what the library adds to it (`boolean &+= { … }`), theirs.
 boolean := class { }
 assert {
   maybe: boolean? = None
-  // BN3 ?? does not fall back on an optional left empty
-  assert maybe ?? true
+  assert maybe ?? true  // BN3 ?? does not fall back on an optional left empty
 }
 // `#` is what a value may be (A1, T2.3)
-// HS1 boolean does not have two possible values
-assert boolean#.count == 2
-// FE3 a coin comes up with nothing
-assert boolean#.random is boolean
-// RN12 a coin lands on neither side
-assert boolean#.random is boolean
-// CN2 the only member a narrowing admits is not the one chosen
-assert boolean{. == true}() == true
-// CN5 three called on boolean is not three of it
-assert (3 boolean).count == 3
+assert boolean#.count == 2  // HS1 boolean does not have two possible values
+assert boolean#.random is boolean  // FE3 a coin comes up with nothing
+assert boolean#.random is boolean  // RN12 a coin lands on neither side
+assert boolean{. == true}() == true  // CN2 the only member a narrowing admits is not the one chosen
+assert (3 boolean).count == 3  // CN5 three called on boolean is not three of it
 false &+= {
   of := boolean
   assert {
     Side := enum near (of: "here") | far (of: "there") {}
-    // HO3 a member is not itself
-    assert Side.near == Side.near
-    // HO4 two members of one enum are the same
-    assert !(Side.near == Side.far)
-    // HO5 what a member holds is not what it was written as
-    assert Side.near.of == "here"
-    // HO6 a member holds what the other one does
-    assert !(Side.near.of == "there")
+    assert Side.near == Side.near  // HO3 a member is not itself
+    assert !(Side.near == Side.far)  // HO4 two members of one enum are the same
+    assert Side.near.of == "here"  // HO5 what a member holds is not what it was written as
+    assert !(Side.near.of == "there")  // HO6 a member holds what the other one does
   }
 }
 true &+= {
@@ -2285,18 +2048,12 @@ true &+= {
 false including boolean.interior
 true including boolean.interior
 Char := class: Number { }
-// UN45 a is not a Latin character
-assert U+0061 is Char.Latin
-// UN46 alef is a Latin character
-assert !(U+0627 is Char.Latin)
-// UN53 alef is not an Arabic character
-assert U+0627 is Char.Arabic
-// UN54 alpha is not a Greek character
-assert U+03B1 is Char.Greek
-// UN55 a Cyrillic a is not Cyrillic
-assert U+0430 is Char.Cyrillic
-// UN56 a Han character is not Han
-assert U+4E00 is Char.Han
+assert U+0061 is Char.Latin  // UN45 a is not a Latin character
+assert !(U+0627 is Char.Latin)  // UN46 alef is a Latin character
+assert U+0627 is Char.Arabic  // UN53 alef is not an Arabic character
+assert U+03B1 is Char.Greek  // UN54 alpha is not a Greek character
+assert U+0430 is Char.Cyrillic  // UN55 a Cyrillic a is not Cyrillic
+assert U+4E00 is Char.Han  // UN56 a Han character is not Han
 Program := class { }
 // A program run as a selection
 assert Program(code: {
@@ -2313,29 +2070,22 @@ assert {
   doubling := Program(code: { 2 })
   halving := Program(code: { 1 })
   ! doubling halving
-  // IV1 the declared inverse is not the inverse
-  assert doubling⁻¹ === halving
-  // IV2 the inverse of the inverse is not the function
-  assert halving⁻¹ === doubling
-  // IV3 a function with an inverse is not reversible
-  assert doubling.reversible
+  assert doubling⁻¹ === halving  // IV1 the declared inverse is not the inverse
+  assert halving⁻¹ === doubling  // IV2 the inverse of the inverse is not the function
+  assert doubling.reversible  // IV3 a function with an inverse is not reversible
 }
 // A program is a quest (P4.8): its cursor says how far it is; sleeping waits on the time (P4.11); a dynamic `&=` keeps one contribution (P5.7)
 assert Program(code: { 1 }).(
   !(.done)  // FWQ2 a program not yet stepped is done
   & .finished.done  // FWQ3 a finished program is not a done quest
 )
-// FWQ4 a stopped program is not done
-assert Program(code: { 1 }).stop.done
+assert Program(code: { 1 }).stop.done  // FWQ4 a stopped program is not done
 assert {
   started := Program(code: "1")
   @me/quests |= started
-  // JB1 a program given to @me/quests is not among them
-  assert started is @me/quests
-  // JB11 a started program is not run by whoever started it
-  assert started.who === @me
-  // JB5 stopping a program does not end it
-  assert started.stop.done
+  assert started is @me/quests  // JB1 a program given to @me/quests is not among them
+  assert started.who === @me  // JB11 a started program is not run by whoever started it
+  assert started.stop.done  // JB5 stopping a program does not end it
 }
 assert Program(code: "1", from: @public).(
   .serves(@public)  // JB8 a quest serving a location does not serve it
@@ -2346,49 +2096,33 @@ Diagnostic := class { }
 // Errors: a value carries its diagnostics, and its type does not see them
 assert {
   failing := (0).diagnosed(Diagnostic(message: "no"))
-  // ER1 a default does not stand in for an error
-  assert failing $ 5 == 5
-  // ER3 an optional error is not None
-  assert failing $? === None
-  // ER4 an optional error does not fall back
-  assert failing $? 6 == 6
-  // ER5 the handler does not see the error as its receiver
-  assert failing $ { .message } == "no"
+  assert failing $ 5 == 5  // ER1 a default does not stand in for an error
+  assert failing $? === None  // ER3 an optional error is not None
+  assert failing $? 6 == 6  // ER4 an optional error does not fall back
+  assert failing $ { .message } == "no"  // ER5 the handler does not see the error as its receiver
   fatal_one := (0).diagnosed(Diagnostic(message: "true", fatal: true))
-  // ER6 a default caught a fatal error
-  assert (fatal_one $ 5).erred
-  // ER7 the catch-all did not catch a fatal error
-  assert fatal_one $?! === None
-  // ER8 a wrapped error forgot its cause
-  assert (failing $ Diagnostic(message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last
-  // ER9 a value given a second diagnostic does not keep both
-  assert failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2
-  // ER10 a value that erred is no longer of its type
-  assert failing is Number
-  // ER11 a value that erred is not equal to itself without the error
-  assert failing == 0
+  assert (fatal_one $ 5).erred  // ER6 a default caught a fatal error
+  assert fatal_one $?! === None  // ER7 the catch-all did not catch a fatal error
+  assert (failing $ Diagnostic(message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last  // ER8 a wrapped error forgot its cause
+  assert failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2  // ER9 a value given a second diagnostic does not keep both
+  assert failing is Number  // ER10 a value that erred is no longer of its type
+  assert failing == 0  // ER11 a value that erred is not equal to itself without the error
   returning := () => {
     failing $ return 9
     1
   }
-  // ER13 $ return did not return from the function
-  assert returning() == 9
+  assert returning() == 9  // ER13 $ return did not return from the function
 }
 // Checking a permission runs no one's code: a grant whose expression or filter has effects is refused when granted, and never run.
 assert {
   purg_reader := Character(name: "purg-reader")
   purg_lamp := (lamp: 1)
-  // PURG1 a grant naming an expression with effects is granted
-  assert (purg_reader.read IO().output("leak")) is Diagnostic
-  // PURG2 a grant whose filter has effects is granted
-  assert (purg_reader{IO().output("leak")}.read purg_lamp) is Diagnostic
-  // PURG3 a refused grant is kept
-  assert !(purg_lamp.access)
-  // PURG5 a grant reading the time is refused
-  assert !((purg_reader.read Time.now) is Diagnostic)
+  assert (purg_reader.read IO().output("leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
+  assert (purg_reader{IO().output("leak")}.read purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
+  assert !(purg_lamp.access)  // PURG3 a refused grant is kept
+  assert !((purg_reader.read Time.now) is Diagnostic)  // PURG5 a grant reading the time is refused
 }
-// HS12 a share that is not a whole number of a discrete structure's possibilities is not a type error
-assert (33% ("A" | "B" | "C")) is Diagnostic
+assert (33% ("A" | "B" | "C")) is Diagnostic  // HS12 a share that is not a whole number of a discrete structure's possibilities is not a type error
 
 // (`assert` once more, defined last: it binds loosest, `assert a === b` is `assert (a === b)`)
 assert {condition} ^keyword =>
@@ -2507,8 +2241,7 @@ assert {
   unless false { fired += 1 }
   unless 1 == 2 { fired += 1 }
   unless None { fired += 1 }
-  // HO1 unless does not take the block when the condition does not hold
-  assert fired == 3
+  assert fired == 3  // HO1 unless does not take the block when the condition does not hold
 }
 
 

@@ -37,23 +37,16 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   Object := class kind: "blob" | "tree" | "commit" | "tag", content: Byte[] {
     framed: Byte[] => (kind + " " + content.count as String + "\x00") as Byte[], content
     id: Id => hashed(framed)
-    // VC28 a git blob is not named by the hash git gives it
-    assert Git.Object("blob", "hello\n" as Byte[]).id == "ce013625030ba8dba906f756967f9e9ca394464a"
+    assert Git.Object("blob", "hello\n" as Byte[]).id == "ce013625030ba8dba906f756967f9e9ca394464a"  // VC28 a git blob is not named by the hash git gives it
     // Object formats (https://git-scm.com/docs/hash-function-transition, https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionsobjectFormat)
-    // VC50 a git blob in a sha256 repository is not named by the hash git gives it
-    assert Git<SHA256>.Object("blob", "hello\n" as Byte[]).id == "2cf8d83d9ee29543b34a87727421fdecb7e3f3a183d337639025de576db9ebb4"
-    // VC51 git's empty tree is not named as git names it
-    assert Git.Object("tree", []).id == "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-    // VC52 git's empty tree in a sha256 repository is not named as git names it
-    assert Git<SHA256>.Object("tree", []).id == "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321"
-    // VC54 an object's id is not 64 hexadecimal digits in sha256 and 40 in sha1
-    assert Git<SHA256>.Object("blob", "hello\n" as Byte[]).id.count == 64 && Git.Object("blob", "hello\n" as Byte[]).id.count == 40
+    assert Git<SHA256>.Object("blob", "hello\n" as Byte[]).id == "2cf8d83d9ee29543b34a87727421fdecb7e3f3a183d337639025de576db9ebb4"  // VC50 a git blob in a sha256 repository is not named by the hash git gives it
+    assert Git.Object("tree", []).id == "4b825dc642cb6eb9a060e54bf8d69288fbee4904"  // VC51 git's empty tree is not named as git names it
+    assert Git<SHA256>.Object("tree", []).id == "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321"  // VC52 git's empty tree in a sha256 repository is not named as git names it
+    assert Git<SHA256>.Object("blob", "hello\n" as Byte[]).id.count == 64 && Git.Object("blob", "hello\n" as Byte[]).id.count == 40  // VC54 an object's id is not 64 hexadecimal digits in sha256 and 40 in sha1
     path => "objects/" + id[..1] + "/" + id[2..]
-    // VC55 a tree entry's id is not 32 bytes in sha256
-    assert (([Location(path: "hello", content: "hello\n" as Byte[])] as Git<SHA256>.Tree).entries.first.id as Byte[]).count == 32
+    assert (([Location(path: "hello", content: "hello\n" as Byte[])] as Git<SHA256>.Tree).entries.first.id as Byte[]).count == 32  // VC55 a tree entry's id is not 32 bytes in sha256
     // Modes and pack object types are read and written by the header (https://git-scm.com/docs/gitformat-index#_index_entry, https://git-scm.com/docs/gitformat-pack#_object_types)
-    // GIT1 a tree entry's mode is not read by its octal code
-    assert "100755" as Git.Mode == Git.Mode.executable && Git.Mode.directory.code == "40000" && Location(path: "a") as Git.Mode == Git.Mode.directory
+    assert "100755" as Git.Mode == Git.Mode.executable && Git.Mode.directory.code == "40000" && Location(path: "a") as Git.Mode == Git.Mode.directory  // GIT1 a tree entry's mode is not read by its octal code
     loose: Byte[] => framed as Zlib as Byte[]
     static (at: Location) as (=== Object) => at.children.nonempty ? Object("tree", at.children as Tree as Byte[]) : Object("blob", at.content)
   }
@@ -95,8 +88,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
     static Kind := enum commit (code: 1) | tree (code: 2) | blob (code: 3) | tag (code: 4) | offset_delta (code: 6) | reference_delta (code: 7) {
       static (code: Binary₃) as (=== Kind) => Kind#{.code == code}.first
     }
-    // GIT2 a pack entry's type is not read by its number
-    assert Git.Pack.Kind.reference_delta.code == 7 && 2 as Git.Pack.Kind == Git.Pack.Kind.tree
+    assert Git.Pack.Kind.reference_delta.code == 7 && 2 as Git.Pack.Kind == Git.Pack.Kind.tree  // GIT2 a pack entry's type is not read by its number
 
     static Size := class (more: Binary₁{== 1}, low: Binary₇)[], (Binary₁{== 0}, last: Binary₇) {
       value => (last, more.low.reverse).flatten as Binary
@@ -187,36 +179,27 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
       vh.commit(ada, Program(code: { .greet = "hello" }))
       vh.commit(ada, Program(code: { .welcome = .greet; .greet = None }))
       vg := Git.write(vh)
-      // VC24 git's HEAD does not name the branch
-      assert vg.at("HEAD").content as String == "ref: refs/heads/main\n"
-      // VC25 git keeps no notes of the programs
-      assert vg.at(Git.noted_at)
+      assert vg.at("HEAD").content as String == "ref: refs/heads/main\n"  // VC24 git's HEAD does not name the branch
+      assert vg.at(Git.noted_at)  // VC25 git keeps no notes of the programs
       vgh := Git.read(Git.written_to(vh, @./history-test))
-      // VC26 a history written as git and read back has other labels
-      assert vgh.head.id == vh.head.id
-      // VC27 a history written as git and read back has another value
-      assert vgh.value.welcome == "hello" && vgh.value.greet == None
-      // VC57 a history written as sha256 git does not name its object format in its config
-      assert (Git<SHA256>.write(vh).at("config").content as Git.Config).format === SHA256
+      assert vgh.head.id == vh.head.id  // VC26 a history written as git and read back has other labels
+      assert vgh.value.welcome == "hello" && vgh.value.greet == None  // VC27 a history written as git and read back has another value
+      assert (Git<SHA256>.write(vh).at("config").content as Git.Config).format === SHA256  // VC57 a history written as sha256 git does not name its object format in its config
       vgs := Git.read(Git<SHA256>.written_to(vh, @./history-test-sha256))
-      // VC58 a history written as sha256 git and read back has other labels
-      assert vgs.head.id == vh.head.id
+      assert vgs.head.id == vh.head.id  // VC58 a history written as sha256 git and read back has other labels
     }
     // Version 0 knows no extensions; version 1 reads them (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/git-config#Documentation/git-config.txt-corerepositoryFormatVersion)
     version: Decimal => (value("core", "repositoryformatversion") ?? "0") as Decimal
     // extensions.objectFormat; SHA-1 when absent, or in a version 0 repository (https://git-scm.com/docs/git-config#Documentation/git-config.txt-extensionsobjectFormat, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
     format => version == 1 && value("extensions", "objectformat") ? formatted(value("extensions", "objectformat")) : SHA1
-    // VC53 a sha256 repository's config does not read as sha256
-    assert ("[core]\n\trepositoryformatversion = 1\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === SHA256
-    // VC56 the object format is not sha1 by default
-    assert Git.hash === SHA1 && ("" as Git.Config).format === SHA1 && ("[core]\n\trepositoryformatversion = 0\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === SHA1
+    assert ("[core]\n\trepositoryformatversion = 1\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === SHA256  // VC53 a sha256 repository's config does not read as sha256
+    assert Git.hash === SHA1 && ("" as Git.Config).format === SHA1 && ("[core]\n\trepositoryformatversion = 0\n[extensions]\n\tobjectFormat = sha256\n" as Git.Config).format === SHA1  // VC56 the object format is not sha1 by default
     // A new repository: version 0 in SHA-1, version 1 naming its extensions.objectFormat otherwise (https://git-scm.com/docs/git-init#Documentation/git-init.txt---object-formatformat, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
     static (format: SHA1 | SHA256) as (=== Config) => Config(sections: [
       (name: "core", variables: [(key: "repositoryformatversion", value: format === SHA1 ? "0" : "1"), (key: "filemode", value: "true"), (key: "bare", value: "false")]),
       (name: "extensions", variables: [(key: "objectFormat", value: format.extensions[1..])]) if format !== SHA1
     ])
-    // GIT3 an object format is not named by its digest
-    assert Git.formatted("SHA256") === SHA256 && Git.formatted("md5").erred && Git<SHA256>.format_name == "sha256"
+    assert Git.formatted("SHA256") === SHA256 && Git.formatted("md5").erred && Git<SHA256>.format_name == "sha256"  // GIT3 an object format is not named by its digest
   }
 
   Store := class root: Location?, fetched: Pack[] = [], given: (String, Id)[] = [] {
@@ -306,9 +289,6 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   push (history: History, remote: Location) => (remote as String as Remote).advertised("git-receive-pack") -- (offered => Git<offered.format> -- (git =>
     (remote as String as git.Remote).pushed(Compiler.reduced(Language.Writing(history), git.written), offered.references.find(.name == "refs/heads/" + (history.name ?? "main")).id)))
 }
-// VC19 git does not keep snapshots
-assert !(Git is Language.Lossless)
-// VC23 a backend is not a language
-assert Git is Language
-// VC44 $.git is not the git language
-assert $.git === Git
+assert !(Git is Language.Lossless)  // VC19 git does not keep snapshots
+assert Git is Language  // VC23 a backend is not a language
+assert $.git === Git  // VC44 $.git is not the git language

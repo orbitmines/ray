@@ -2,23 +2,16 @@ IP := class: Location &+ (-1 <- . -> +1) {
   static NUMBER_OF_SEGMENTS: Decimal
   static SEGMENT_LENGTH: Decimal
   static NUMBER_OF_BITS := NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
-  // IP2 the address is not thirty-two bits
-  assert IPv4.NUMBER_OF_BITS == 32
+  assert IPv4.NUMBER_OF_BITS == 32  // IP2 the address is not thirty-two bits
 
   static Segment := class {
     static Binary := Binary{length == SEGMENT_LENGTH}
-    // BOR7 true is not the bit one
-    assert true as Binary == ₂1
-    // BOR8 false is not the bit zero
-    assert false as Binary == ₂0
-    // T1 a is not eight bits in UTF-8
-    assert ("a" as Unicode.UTF-8 as Binary).length == 8
-    // T2 a is not 01100001 in UTF-8
-    assert "a" as Unicode.UTF-8 as Binary == ₂01100001
-    // W12 UTF16 of a is not sixteen bits
-    assert ("a" as Unicode.UTF-16 as Binary).length == 16
-    // FWB3 half a bit is Binary
-    assert (0.5 b as Binary).erred
+    assert true as Binary == ₂1  // BOR7 true is not the bit one
+    assert false as Binary == ₂0  // BOR8 false is not the bit zero
+    assert ("a" as Unicode.UTF-8 as Binary).length == 8  // T1 a is not eight bits in UTF-8
+    assert "a" as Unicode.UTF-8 as Binary == ₂01100001  // T2 a is not 01100001 in UTF-8
+    assert ("a" as Unicode.UTF-16 as Binary).length == 16  // W12 UTF16 of a is not sixteen bits
+    assert (0.5 b as Binary).erred  // FWB3 half a bit is Binary
   }
   segments: Segment[]{length == NUMBER_OF_SEGMENTS}
 
@@ -33,30 +26,21 @@ IP := class: Location &+ (-1 <- . -> +1) {
 
   compounds + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
   compounds - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
-  // CO3 five less nothing is not five
-  assert 5 - 0 == 5
-  // CO17 six less two is not four
-  assert 6 - 2 == 4
-  // PR11 one less on its own stopped working
-  assert 10 - 2 == 8
-  // PR27 ten less four times two is not two
-  assert 10 - 4 * 2 == 2
+  assert 5 - 0 == 5  // CO3 five less nothing is not five
+  assert 6 - 2 == 4  // CO17 six less two is not four
+  assert 10 - 2 == 8  // PR11 one less on its own stopped working
+  assert 10 - 4 * 2 == 2  // PR27 ten less four times two is not two
 
   compounds / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => as Binary ~~ .[prefix_length..] = 0 | 1
-  // CO8 five shared once is not five
-  assert 5 / 1 == 5
-  // CO16 six shared in two is not three
-  assert 6 / 2 == 3
-  // PR25 ten shared twice is not one
-  assert 10 / 2 / 5 == 1
+  assert 5 / 1 == 5  // CO8 five shared once is not five
+  assert 6 / 2 == 3  // CO16 six shared in two is not three
+  assert 10 / 2 / 5 == 1  // PR25 ten shared twice is not one
 
   static v4 := class: IP ({segments.join(".")}) => {
     static NUMBER_OF_SEGMENTS := 4
     static SEGMENT_LENGTH := 8
-    // IP25 a segment of the first kind is other than eight bits
-    assert IPv4.SEGMENT_LENGTH == 8
-    // IP26 a segment of the second kind is other than sixteen bits
-    assert IPv6.SEGMENT_LENGTH == 16
+    assert IPv4.SEGMENT_LENGTH == 8  // IP25 a segment of the first kind is other than eight bits
+    assert IPv6.SEGMENT_LENGTH == 16  // IP26 a segment of the second kind is other than sixteen bits
 
     static Segment: Decimal{< 2^8}
   }
@@ -101,18 +85,12 @@ assert ("1.2.3.4" as IP).(
   & . == .  // IP23 an address is not itself
   & !(. == "1.2.3.5" as IP)  // IP24 two different addresses are the same
 )
-// IP40 a prefix after a slash does not give the network
-assert "10.0.0.5/8" as IP as String == "10.0.0.0/8"
-// IP41 a compressed wide address does not read back as itself
-assert "1::2" as IP as String == "1::2"
-// IP43 a mapped address is not written with its four parts
-assert "::ffff:1.2.3.4" as IP as String == "::ffff:1.2.3.4"
-// IP44 a translated address is not written with its four parts
-assert "64:ff9b::1.2.3.4" as IP as String == "64:ff9b::1.2.3.4"
-// IP46 the address after 1.0.0.1 is not 1.0.0.2
-assert "1.0.0.1" as IP + 1 as String == "1.0.0.2"
-// IP47 the address before 1.0.0.1 is not 1.0.0.0
-assert "1.0.0.1" as IP - 1 as String == "1.0.0.0"
+assert "10.0.0.5/8" as IP as String == "10.0.0.0/8"  // IP40 a prefix after a slash does not give the network
+assert "1::2" as IP as String == "1::2"  // IP41 a compressed wide address does not read back as itself
+assert "::ffff:1.2.3.4" as IP as String == "::ffff:1.2.3.4"  // IP43 a mapped address is not written with its four parts
+assert "64:ff9b::1.2.3.4" as IP as String == "64:ff9b::1.2.3.4"  // IP44 a translated address is not written with its four parts
+assert "1.0.0.1" as IP + 1 as String == "1.0.0.2"  // IP46 the address after 1.0.0.1 is not 1.0.0.2
+assert "1.0.0.1" as IP - 1 as String == "1.0.0.0"  // IP47 the address before 1.0.0.1 is not 1.0.0.0
 // A block is every address in it: its low bits are `0 | 1`, and that is why it is written `/n`.
 assert ("10.0.0.0" as IP / 8).(
   .superposed  // BLK1 a block is not a superposition of its addresses
@@ -120,12 +98,9 @@ assert ("10.0.0.0" as IP / 8).(
   & !("11.0.0.1" as IP is .)  // BLK3 an address outside the block is one of it
   & . == "10.0.0.0/8" as IP  // BLK4 the block divided out is not the one read
 )
-// BLK5 a block of all the bits is written with a prefix
-assert "10.0.0.0" as IP / 32 as String == "10.0.0.0"
-// BLK6 a mapped address is not in the mapped block
-assert "::ffff:1.2.3.4" as IP is ("::ffff:0:0/96" as IP)
-// BLK7 an address outside the translated block is in it
-assert !("1::2" as IP is ("64:ff9b::/96" as IP))
+assert "10.0.0.0" as IP / 32 as String == "10.0.0.0"  // BLK5 a block of all the bits is written with a prefix
+assert "::ffff:1.2.3.4" as IP is ("::ffff:0:0/96" as IP)  // BLK6 a mapped address is not in the mapped block
+assert !("1::2" as IP is ("64:ff9b::/96" as IP))  // BLK7 an address outside the translated block is in it
 
 IPv4 := IP.v4
 assert ("1.0.0.12" as IPv4).(
@@ -137,13 +112,10 @@ assert ("1.0.0.12" as IPv4).(
   & . - 2 as String == "1.0.0.10"  // IP33 two before 1.0.0.12 is not 1.0.0.10
   & . == "1.0.0.12" as IPv4  // IP5 the address read back is another one
 )
-// IP15 an address ending in zeros is written with a prefix
-assert "1.0.0.0" as IPv4 as String == "1.0.0.0"
+assert "1.0.0.0" as IPv4 as String == "1.0.0.0"  // IP15 an address ending in zeros is written with a prefix
 // A range of addresses is a range on their line (X6.9)
-// FWR1 1.0.0.10 to 1.0.0.13 is not four addresses
-assert ("1.0.0.10" as IPv4 .. "1.0.0.13" as IPv4).count == 4
-// FWR2 a range of addresses does not end where written
-assert ("1.0.0.10" as IPv4 .. "1.0.0.13" as IPv4).last as String == "1.0.0.13"
+assert ("1.0.0.10" as IPv4 .. "1.0.0.13" as IPv4).count == 4  // FWR1 1.0.0.10 to 1.0.0.13 is not four addresses
+assert ("1.0.0.10" as IPv4 .. "1.0.0.13" as IPv4).last as String == "1.0.0.13"  // FWR2 a range of addresses does not end where written
 IPv6 := IP.v6
 assert ("1:0:0:0:0:0:0:2" as IPv6).(
   .segments.length == 8  // IP6 the wide address has other than eight segments
@@ -153,15 +125,10 @@ assert ("1:0:0:0:0:0:0:2" as IPv6).(
   & (. as IPv6.canonical).left == 1  // IP9 the run of zeros does not start after one
   & . as String == "1::2"  // IP10 the zeros are not written as ::
 )
-// IP12 the longest run of zeros is not the one written ::
-assert "1:0:0:2:0:0:0:3" as IPv6 as String == "1:0:0:2::3"
-// IP13 of two equal runs of zeros the first is not written ::
-assert "1:0:0:2:0:0:3:4" as IPv6 as String == "1::2:0:0:3:4"
-// IP14 a single zero field is written ::
-assert "1:0:2:3:4:5:6:7" as IPv6 as String == "1:0:2:3:4:5:6:7"
-// IP42 what is left of :: is not kept as read
-assert ("1::2" as IPv6).left.length == 1
-// IP45 the embedded address is not kept
-assert ("::ffff:1.2.3.4" as IPv6).embedded_ipv4 as String == "1.2.3.4"
+assert "1:0:0:2:0:0:0:3" as IPv6 as String == "1:0:0:2::3"  // IP12 the longest run of zeros is not the one written ::
+assert "1:0:0:2:0:0:3:4" as IPv6 as String == "1::2:0:0:3:4"  // IP13 of two equal runs of zeros the first is not written ::
+assert "1:0:2:3:4:5:6:7" as IPv6 as String == "1:0:2:3:4:5:6:7"  // IP14 a single zero field is written ::
+assert ("1::2" as IPv6).left.length == 1  // IP42 what is left of :: is not kept as read
+assert ("::ffff:1.2.3.4" as IPv6).embedded_ipv4 as String == "1.2.3.4"  // IP45 the embedded address is not kept
 
 {ip: IP}/{prefix_length: Decimal}: IP => ip / prefix_length

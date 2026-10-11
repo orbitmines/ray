@@ -33,8 +33,7 @@ Identity := class (keys: Encoding.Key[], next: Byte[][] = [], digest: Encoding.D
     .some(veto => recover.veto.met(veto, this) && (copy -- veto.change).vetoed.contains(event.hash))
     assert {
       with Program.kept = 0 seconds {
-        // HG5 a run older than the configured window is kept for replay
-        assert !(Program.recent.some(=== Program.runs.head))
+        assert !(Program.recent.some(=== Program.runs.head))  // HG5 a run older than the configured window is kept for replay
       }
     }
   recovered (event: History.Commit, log: History, at: Stamp?) => recover.met(event, this)
@@ -90,8 +89,7 @@ Character &+= {
   answers_for (who) => this is Verified && (same(who) || this is who)
   as (=== boolean) => (this is Verified ? this : @local.verified(this)) == @me
   acting => this is Verified ? this : @local.verified(this) ?? ERROR@Access `a character acts only as verified by a handshake or a key held here`
-  // VER7 a character nobody holds here acts
-  assert Character(name: "nowhere").acting is Diagnostic
+  assert Character(name: "nowhere").acting is Diagnostic  // VER7 a character nobody holds here acts
   sealed (commit: History.Commit) => commit.who is Encoding.Key ? commit ~~ (.signature = pseudonym(commit.line.id ?? commit.id).signed(.hash))
     : key_in(commit.line.repository.world) -- (pair => commit ~~ (.relies = identity.history.head.hash) ~~ (.signature = pair.signed(.hash) if pair))
   delegate (to, scope: Access = Access(), until: Time = Time.now + 1 day) => Delegation(from: this, to, scope, until) -- (made => made ~~ .signature = key.signed(made.hash))
@@ -110,8 +108,7 @@ Character &+= {
   vouching (session: Noise.Session, message: Byte[]) => session.received(message) -- (hash =>
     Program(name: "verify the person recovering", who: this, goal: hash, code: { key.signed([hash, session.binding].flatten) }))
 }
-// VER9 comparing characters errs with @ether/security imported
-assert !((Character(name: "a") == Character(name: "a")) is Diagnostic)
+assert !((Character(name: "a") == Character(name: "a")) is Diagnostic)  // VER9 comparing characters errs with @ether/security imported
 
 Program &+= {
   countersigned (signed: Encoding.Signed): static => this ~~ (goal.signature |= signed
@@ -283,8 +280,7 @@ Program &+= {
 
   // A replay runs as recorded, as of the line's stamp, never with the live permissions of who it replays (W2.1).
   static replay (logged: History.Commit) => (logged.attested -- (by => by ? with (@me = by) logged.opened.change : logged.opened.change)) if recent.some(=== logged)
-  // VER10 a replay is given the live permissions of who it replays
-  assert !(Program.replay(Program.runs.head) is Live)
+  assert !(Program.replay(Program.runs.head) is Live)  // VER10 a replay is given the live permissions of who it replays
 
   may (method, target) => hops.every(. is Live && target.allows(., method) && (.proof.delegation.covers(method, target) ?? true))
 }
@@ -303,9 +299,7 @@ Compiler &+= {
 
   stored &+= encrypted
   levels &+= [encrypted]
-  // CRYPT16 encryption is not a storage level
-  assert Compiler.levels.contains(Compiler.encrypted)
+  assert Compiler.levels.contains(Compiler.encrypted)  // CRYPT16 encryption is not a storage level
 }
 
-// IDY10 a threshold does not read its wait and veto
-assert (2 of [1, 2] after 7 days vetoable by 1 of [3]).veto.signers == [3]
+assert (2 of [1, 2] after 7 days vetoable by 1 of [3]).veto.signers == [3]  // IDY10 a threshold does not read its wait and veto

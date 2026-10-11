@@ -41,50 +41,35 @@ Geometry := class {
   Space := class (axes: Axis[], metric: Metric = euclidean, projection: Projection?, vertices: Graph?) => {
     static plane := Space([Axis(), Axis()])
     // Geometry's y points up; a screen's points down, and its levels flip what they are given.
-    // YU1 the plane's y does not point up
-    assert Geometry.Space.plane.axes[1].orientation == +1
-    // YU8 the plane flips what it is given
-    assert !(Geometry.Space.plane.seen(Geometry.Vector(3px, 10px), Geometry.Vector(100px, 100px)) != Geometry.Vector(3px, 10px))
-    // FWG3 the plane is not a Plane
-    assert Geometry.Space.plane is Geometry.Space.Plane
+    assert Geometry.Space.plane.axes[1].orientation == +1  // YU1 the plane's y does not point up
+    assert !(Geometry.Space.plane.seen(Geometry.Vector(3px, 10px), Geometry.Vector(100px, 100px)) != Geometry.Vector(3px, 10px))  // YU8 the plane flips what it is given
+    assert Geometry.Space.plane is Geometry.Space.Plane  // FWG3 the plane is not a Plane
     static screen := Space([Axis(), Axis(orientation: -1)])
-    // YU2 a screen's y does not point down
-    assert Geometry.Space.screen.axes[1].orientation == -1
-    // YU5 a point is not flipped onto a screen
-    assert Geometry.Space.screen.seen(Geometry.Vector(3px, 10px), Geometry.Vector(100px, 100px)) == Geometry.Vector(3px, 90px)
-    // YU6 a box at the top is not at the top of a screen
-    assert Geometry.Space.screen.seen(Geometry.Vector(0px, 80px), Geometry.Vector(100px, 100px), Geometry.Vector(10px, 20px)) == Geometry.Vector(0px, 0px)
-    // YU7 a displacement up is not one up a screen
-    assert Geometry.Space.screen.seen(Geometry.Vector(2px, 3px)) == Geometry.Vector(2px, -3px)
+    assert Geometry.Space.screen.axes[1].orientation == -1  // YU2 a screen's y does not point down
+    assert Geometry.Space.screen.seen(Geometry.Vector(3px, 10px), Geometry.Vector(100px, 100px)) == Geometry.Vector(3px, 90px)  // YU5 a point is not flipped onto a screen
+    assert Geometry.Space.screen.seen(Geometry.Vector(0px, 80px), Geometry.Vector(100px, 100px), Geometry.Vector(10px, 20px)) == Geometry.Vector(0px, 0px)  // YU6 a box at the top is not at the top of a screen
+    assert Geometry.Space.screen.seen(Geometry.Vector(2px, 3px)) == Geometry.Vector(2px, -3px)  // YU7 a displacement up is not one up a screen
     static current: Space = plane
     // (`grid_extent`: a parameter named as the Axis field it gives, `extent: …`, is read as that parameter declared again)
     static grid (grid_extent: Vector, loop: boolean | boolean[] = false) => Space(axes: grid_extent.enumerate.map(axis_entry => Axis(continuous: false, loop: ((loop is (boolean)) ? loop : (loop[axis_entry.index] ?? false)), extent: axis_entry.value)), metric: graph)
     assert {
       with Geometry.Space.current = Geometry.Space.grid(Geometry.Vector(2, 2)) {
-        // UI249 a grid's distance is not the steps between cells
-        assert Geometry.graph(Geometry.Vector(0, 0), Geometry.Vector(1, 1)) == 2
+        assert Geometry.graph(Geometry.Vector(0, 0), Geometry.Vector(1, 1)) == 2  // UI249 a grid's distance is not the steps between cells
         square := Geometry.Cell(Geometry.Vector(0, 0), [0, 1])
-        // UI250 a square's boundary is not four edges
-        assert square.∂.count == 4
-        // UI251 the boundary of a boundary is not nothing
-        assert [square].∂.∂.empty
-        // UI252 the edge two squares share is on their boundary
-        assert [square, Geometry.Cell(Geometry.Vector(1, 0), [0, 1])].∂.count == 6
-        // UI253 a region of cells does not contain its cell
-        assert Geometry.Box(origin: Geometry.Vector(0, 0), size: Geometry.Vector(2, 1)).contains(Geometry.Vector(1, 0))
+        assert square.∂.count == 4  // UI250 a square's boundary is not four edges
+        assert [square].∂.∂.empty  // UI251 the boundary of a boundary is not nothing
+        assert [square, Geometry.Cell(Geometry.Vector(1, 0), [0, 1])].∂.count == 6  // UI252 the edge two squares share is on their boundary
+        assert Geometry.Box(origin: Geometry.Vector(0, 0), size: Geometry.Vector(2, 1)).contains(Geometry.Vector(1, 0))  // UI253 a region of cells does not contain its cell
       }
     }
     assert {
       with Geometry.Space.current = Geometry.Space.grid(Geometry.Vector(10, 10), loop: true) {
-        // UI254 a looping axis does not wrap around
-        assert Geometry.euclidean(Geometry.Vector(1, 0), Geometry.Vector(9, 0)) == 2
+        assert Geometry.euclidean(Geometry.Vector(1, 0), Geometry.Vector(9, 0)) == 2  // UI254 a looping axis does not wrap around
       }
     }
     // Spaces by their axes, holes, fields over points, sampling on a grid (F-G2, F-G4, F-G5, F-G6)
-    // FWG1 a grid with one looped axis is not a cylinder
-    assert Geometry.Space.grid(Geometry.Vector(4, 4), [true, false]) is Geometry.Space.Cylinder
-    // FWG2 a grid looped both ways is not a torus
-    assert Geometry.Space.grid(Geometry.Vector(4, 4), true) is Geometry.Space.Torus
+    assert Geometry.Space.grid(Geometry.Vector(4, 4), [true, false]) is Geometry.Space.Cylinder  // FWG1 a grid with one looped axis is not a cylinder
+    assert Geometry.Space.grid(Geometry.Vector(4, 4), true) is Geometry.Space.Torus  // FWG2 a grid looped both ways is not a torus
     static (structure: Graph) as (=== Space) => Space([], graph, Projection.embedding(structure), structure)
     static Plane := Space{dimension == 2 && axes.every(.extent == None && !.loop)}
     static Grid := Space{discrete && vertices == None}
@@ -109,8 +94,7 @@ Geometry := class {
       planar_ys.for(planar_y => planar_xs.for(planar_x => planar_found.append(Vector(planar_x, planar_y))))
       planar_found
   }
-  // UI261 a graph is embedded before embedding is implemented
-  assert (Graph.Simple().connect(1, 2) as Geometry.Space).projection.erred
+  assert (Graph.Simple().connect(1, 2) as Geometry.Space).projection.erred  // UI261 a graph is embedded before embedding is implemented
   Place := class: Ray (at: *, space: Space = Space.current) => {
     continuations => space.neighbours(at).map(Place(., space))
     == (other) => at == (other is Place ? other.at : other)
@@ -122,15 +106,13 @@ Geometry := class {
     x => this[0] ?? 0
     assert {
       halves := (point: Geometry.Vector) => point.x > 1px ? Geometry.Color(255, 0, 0) : Geometry.Color(0, 0, 255)
-      // FWG6 a field is not read at its point
-      assert Geometry.Box().sampled(halves, Geometry.Vector(2px, 0px)) == Geometry.Color(255, 0, 0)
+      assert Geometry.Box().sampled(halves, Geometry.Vector(2px, 0px)) == Geometry.Color(255, 0, 0)  // FWG6 a field is not read at its point
     }
     y => this[1] ?? 0
     assert {
       scroller := Geometry.Box(size: Geometry.Vector(100px, 200px), overflow: scroll, children: [Geometry.Box(origin: Geometry.Vector(0, -900px), size: Geometry.Vector(100px, 100px))])
       scroller.reveal(scroller.children.first)
-      // UI158 revealing within a container does not scroll the container
-      assert scroller.scrolled.y == 1000px
+      assert scroller.scrolled.y == 1000px  // UI158 revealing within a container does not scroll the container
     }
     z => this[2] ?? 0
     // (elementwise, until Elementwise's `zip(other).map(+)` reads: an operator as a function)
@@ -143,11 +125,9 @@ Geometry := class {
       mouse := @me/device/pointer["mouse"]
       mouse.to(Geometry.Vector(200px, 0px), pressing: [0], time: swipe_start)
       mouse.to(Geometry.Vector(180px, 0px), time: swipe_start + 10 ms)
-      // UI168 pointer velocity is not distance over time
-      assert mouse.velocity.x == -2px
+      assert mouse.velocity.x == -2px  // UI168 pointer velocity is not distance over time
       mouse.to(Geometry.Vector(100px, 0px), pressing: [], time: swipe_start + 300 ms)
-      // UI169 a press, move and release is not a swipe
-      assert mouse.swipe.distance.x == -100px && mouse.swipe.duration == 300 ms
+      assert mouse.swipe.distance.x == -100px && mouse.swipe.duration == 300 ms  // UI169 a press, move and release is not a swipe
     }
     norm => Space.current.metric(map(0), this)
     distance (other: Vector) => Space.current.metric(this, other)
@@ -158,60 +138,42 @@ Geometry := class {
     static identity => (0..n).map(i => (0..n).map(j => i == j ? 1 : 0))
     assert {
       with Geometry.Space.current = Geometry.Space([Geometry.Axis(), Geometry.Axis(), Geometry.Axis()]) {
-        // UI245 a third axis does not add two sides and a row
-        assert Geometry.all.count == 6 && Geometry.Transform.identity.count == 4
-        // UI246 an orthographic projection does not drop depth
-        assert Geometry.Projection.orthographic().applied(Geometry.Vector(1, 2, 3)) == Geometry.Vector(1, 2)
-        // UI247 a box in three dimensions does not contain its centre
-        assert Geometry.Box(size: Geometry.Vector(2, 2, 2)).contains(Geometry.Vector(1, 1, 1))
+        assert Geometry.all.count == 6 && Geometry.Transform.identity.count == 4  // UI245 a third axis does not add two sides and a row
+        assert Geometry.Projection.orthographic().applied(Geometry.Vector(1, 2, 3)) == Geometry.Vector(1, 2)  // UI246 an orthographic projection does not drop depth
+        assert Geometry.Box(size: Geometry.Vector(2, 2, 2)).contains(Geometry.Vector(1, 1, 1))  // UI247 a box in three dimensions does not contain its centre
       }
     }
     static translate (by: Vector) => (0..n).map(i => (0..n).map(j => i == j ? 1 : j == n ? by[i] : 0))
-    // UI52 transforms do not compose
-    assert (Geometry.Transform.translate(Geometry.Vector(1, 2)) * Geometry.Transform.scale(Geometry.Vector(2, 2))).applied(Geometry.Vector(1, 1)) == Geometry.Vector(3, 4)
-    // UI133 transform == translate(…) does not move the shape
-    assert Geometry.Box(){transform == Geometry.Transform.translate(Geometry.Vector(10px))}.transform == Geometry.Transform.translate(Geometry.Vector(10px))
+    assert (Geometry.Transform.translate(Geometry.Vector(1, 2)) * Geometry.Transform.scale(Geometry.Vector(2, 2))).applied(Geometry.Vector(1, 1)) == Geometry.Vector(3, 4)  // UI52 transforms do not compose
+    assert Geometry.Box(){transform == Geometry.Transform.translate(Geometry.Vector(10px))}.transform == Geometry.Transform.translate(Geometry.Vector(10px))  // UI133 transform == translate(…) does not move the shape
     static scale (by: Number | Vector) => (by is Number ? Vector((0..<n).map(by)) : by) -- (factors => (0..n).map(i => (0..n).map(j => i != j ? 0 : i == n ? 1 : factors[i])))
-    // UI50 a ball does not contain its centre
-    assert Geometry.Ball(size: Geometry.Vector(10px, 10px)).contains(Geometry.Vector(5px, 5px))
-    // UI51 a ball contains its corner
-    assert !(Geometry.Ball(size: Geometry.Vector(10px, 10px)).contains(Geometry.Vector(0px, 0px)))
-    // UI130 gap is not narrowed
-    assert Geometry.Box(){gap == Geometry.Vector(6px, 6px)}.gap == Geometry.Vector(6px, 6px)
-    // UI248 the plane's distance is not euclidean
-    assert Geometry.euclidean(Geometry.Vector(0, 0), Geometry.Vector(3, 4)) == 5
-    // UI255 a triangle does not wind around its centre
-    assert Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(5, 6))
-    // UI256 a triangle winds around a point outside it
-    assert !(Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(1, 9)))
-    // UI257 a fractal's dimension is measured before it is implemented
-    assert Geometry.Sierpinski(size: Geometry.Vector(2px, 2px)).dimension.erred
+    assert Geometry.Ball(size: Geometry.Vector(10px, 10px)).contains(Geometry.Vector(5px, 5px))  // UI50 a ball does not contain its centre
+    assert !(Geometry.Ball(size: Geometry.Vector(10px, 10px)).contains(Geometry.Vector(0px, 0px)))  // UI51 a ball contains its corner
+    assert Geometry.Box(){gap == Geometry.Vector(6px, 6px)}.gap == Geometry.Vector(6px, 6px)  // UI130 gap is not narrowed
+    assert Geometry.euclidean(Geometry.Vector(0, 0), Geometry.Vector(3, 4)) == 5  // UI248 the plane's distance is not euclidean
+    assert Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(5, 6))  // UI255 a triangle does not wind around its centre
+    assert !(Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(1, 9)))  // UI256 a triangle winds around a point outside it
+    assert Geometry.Sierpinski(size: Geometry.Vector(2px, 2px)).dimension.erred  // UI257 a fractal's dimension is measured before it is implemented
     assert {
       animated := Geometry.Vector(0px, 0px) -> Geometry.Vector(100px, 0px) over (0 s .. 0.3 s)
       with Time.now = animated.stops.last.at {
-        // UI260 a value over a time is not where it ends when it ends
-        assert animated.value == Geometry.Vector(100px, 0px)
+        assert animated.value == Geometry.Vector(100px, 0px)  // UI260 a value over a time is not where it ends when it ends
       }
     }
     // A share in a length is a share of the parent; a theme style narrows; a location literal takes a narrowing
-    // UI264 a share bound is not a share of the parent's width
-    assert (Geometry.Box(size: Geometry.Vector(1000px, 800px), children: [Geometry.Box(){width <= 50%}]).solve).children.first.size.x == 500px
-    // UI265 a share radius is not half the shape's size
-    assert Geometry.Box(size: Geometry.Vector(10px, 20px), radius: [50%]).radii.first == Geometry.Vector(5px, 10px)
+    assert (Geometry.Box(size: Geometry.Vector(1000px, 800px), children: [Geometry.Box(){width <= 50%}]).solve).children.first.size.x == 500px  // UI264 a share bound is not a share of the parent's width
+    assert Geometry.Box(size: Geometry.Vector(10px, 20px), radius: [50%]).radii.first == Geometry.Vector(5px, 10px)  // UI265 a share radius is not half the shape's size
     assert Geometry.Box(size: Geometry.Vector(4px, 4px)) - Geometry.Box(size: Geometry.Vector(2px, 2px), transform: Geometry.Transform.translate(Geometry.Vector(1px, 1px))).(
       !(.contains(Geometry.Vector(2px, 2px)))  // FWG4 a point in a hole is inside the shape
       & .contains(Geometry.Vector(0.5px, 0.5px))  // FWG5 a point beside a hole is outside the shape
     )
-    // FWG8 a box sampled at one pixel is not one cell per pixel
-    assert Geometry.Box(size: Geometry.Vector(4px, 2px)).discretized(1px).cells.count == 8
+    assert Geometry.Box(size: Geometry.Vector(4px, 2px)).discretized(1px).cells.count == 8  // FWG8 a box sampled at one pixel is not one cell per pixel
     // Spacing is one component, and adding it leaves the shape what it was (F-B8, F-B8b)
-    // UA3 a ball with padding is not a ball
-    assert (Geometry.Ball(size: Geometry.Vector(8px, 8px)) + (p 2)) is Geometry.Ball
+    assert (Geometry.Ball(size: Geometry.Vector(8px, 8px)) + (p 2)) is Geometry.Ball  // UA3 a ball with padding is not a ball
     static skew (by: Vector) => (0..n).map(i => (0..n).map(j => i == j ? 1 : (i, j) == (0, 1) ? by.x : (i, j) == (1, 0) ? by.y : 0))
     static rotate (angle: Angle, plane: (Integer, Integer) = (0, 1)) => (angle.cos, angle.sin) -- ((c, s) => plane -- ((p, q) => (0..n).map(i => (0..n).map(j =>
       (i, j) == (p, p) || (i, j) == (q, q) ? c : (i, j) == (p, q) ? -s : (i, j) == (q, p) ? s : i == j ? 1 : 0))))
-    // UI263 a plane's transform is not three by three
-    assert Geometry.Transform.rotate((1 / 4) turn).count == 3
+    assert Geometry.Transform.rotate((1 / 4) turn).count == 3  // UI263 a plane's transform is not three by three
     static rotate (angle: Angle, around: Vector{Space.current.dimension == 3}) => (angle.cos, angle.sin, 1 - angle.cos) -- ((c, s, t) => [
       [t * around.x * around.x + c, t * around.x * around.y - s * around.z, t * around.x * around.z + s * around.y, 0],
       [t * around.x * around.y + s * around.z, t * around.y * around.y + c, t * around.y * around.z - s * around.x, 0],
@@ -233,8 +195,7 @@ Geometry := class {
   Color := class: Elementwise ("#", red: Hexadecimal₂, green: Hexadecimal₂, blue: Hexadecimal₂, (alpha: Probability 1) = (Hexadecimal₂ / 255)?) {
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
-    // UI42 half white over black is not grey
-    assert Geometry.Color(0, 0, 0).over(Geometry.Color(255, 255, 255, 0.5)) == Geometry.Color(128, 128, 128)
+    assert Geometry.Color(0, 0, 0).over(Geometry.Color(255, 255, 255, 0.5)) == Geometry.Color(128, 128, 128)  // UI42 half white over black is not grey
   }
   Paint := Color | Gradient | Pattern | Section | Pointwise
   Pointwise := (point: Vector): Color
@@ -248,8 +209,7 @@ Geometry := class {
     at (position: K) => sorted -- (position <= .first.at ? .first.value
       : .last.at <= position ? .last.value
       : .zip(.rest){.0.at <= position <= .1.at}.first -- .0.value.mix(.1.value, easing((position - .0.at) / (.1.at - .0.at))))
-    // UI109 breakpoints written as a list do not jump
-    assert Geometry.Steps([(9/12).xs, (6/12).md]).at(700px) == 9/12 && Geometry.Steps([(9/12).xs, (6/12).md]).at(800px) == 6/12
+    assert Geometry.Steps([(9/12).xs, (6/12).md]).at(700px) == 9/12 && Geometry.Steps([(9/12).xs, (6/12).md]).at(800px) == 6/12  // UI109 breakpoints written as a list do not jump
   }
   Steps := Stops{easing == step}
   Animated<V> := class: Stops<Time, V> {
@@ -283,8 +243,7 @@ Geometry := class {
     static normal := WhiteSpace(false, false, true)
     static nowrap := WhiteSpace(false, false, false)
     static pre := WhiteSpace(true, true, false)
-    // UI131 white_space does not decide whether spaces collapse
-    assert Geometry.Box(content: "a  b").lines() == ["a b"] && Geometry.Box(content: "a  b"){white_space == Geometry.WhiteSpace.pre}.lines() == ["a  b"]
+    assert Geometry.Box(content: "a  b").lines() == ["a b"] && Geometry.Box(content: "a  b"){white_space == Geometry.WhiteSpace.pre}.lines() == ["a  b"]  // UI131 white_space does not decide whether spaces collapse
     static pre_wrap := WhiteSpace(true, true, true)
     static pre_line := WhiteSpace(false, true, true)
     // (the same when each of its fields is)
@@ -293,20 +252,17 @@ Geometry := class {
   Raster := Color[][] + {
     static blank (width: Number, height: Number) => (0..<height).map((0..<width).map(Color(0, 0, 0, 0)))
     width => first.count ?? 0
-    // UI112 a breakpoint list is not a width share
-    assert Geometry.Box(width: [(12/12).xs, (6/12).md]).measured("width", 800px) == 400px
+    assert Geometry.Box(width: [(12/12).xs, (6/12).md]).measured("width", 800px) == 400px  // UI112 a breakpoint list is not a width share
     assert (Geometry.Box(){width <= 1240px & height == 120px, overflow == clip}).(
       .fields["width"].type.most == 1240px && .height == 120px  // UI126 a narrowing on a shape is not its constraints
       & .overflow == clip  // UI127 a narrowing does not set a shape's field
     )
     height => count
-    // UI132 min_height is not a least height
-    assert Geometry.Box(){height >= 22px}.fields["height"].type.least == 22px
+    assert Geometry.Box(){height >= 22px}.fields["height"].type.least == 22px  // UI132 min_height is not a least height
     space => Space.grid(Vector(width, height))
     at (x: Number, y: Number) => this[y][x]
     sampled (at: Vector) => Space.screen.seen(Vector(at.x * width, at.y * height), Vector(width, height), Vector(1, 1)) -- (cell => this.at(cell.x.floor max 0 min width - 1, cell.y.floor max 0 min height - 1))
-    // FWG7 a constant paint is not its own value at every point
-    assert Geometry.Box().sampled(Geometry.Color(0, 255, 0), Geometry.Vector(2px, 0px)) == Geometry.Color(0, 255, 0)
+    assert Geometry.Box().sampled(Geometry.Color(0, 255, 0), Geometry.Vector(2px, 0px)) == Geometry.Color(0, 255, 0)  // FWG7 a constant paint is not its own value at every point
     put (x: Number, y: Number, color: Color) => (this[y][x] = at(x, y).over(color)) if space.holds(Vector(x, y))
     blurred (area: Vector[], radius: Number) => [Vector(1, 0), Vector(0, 1)].reduce(acc = this => . -- (along => acc.enumerate.map(row => row.value.enumerate.map(pixel =>
       area.contains(Vector(pixel.index, row.index))
@@ -330,26 +286,21 @@ Geometry := class {
   horizontal := left | right
   vertical := top | bottom
   all := Side{axis < Space.current.dimension}#
-  // UI242 a plane does not have four sides
-  assert Geometry.all.count == 4 && Geometry.horizontal#.count == 2
+  assert Geometry.all.count == 4 && Geometry.horizontal#.count == 2  // UI242 a plane does not have four sides
   Edges := (Length?)[] + {
     static (top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px, front: Length? = 0px, back: Length? = 0px) as (=== Edges) => [left, right, bottom, top, front, back][..<2 * Space.current.dimension]
     static (length: Length?) as (=== Edges) => (0 ..< 2 * Space.current.dimension).map(length)
     [side: Side] => this[side.ordinal]
     top => this[Geometry.top.ordinal]
-    // YU3 top is not up
-    assert Geometry.top.vector(2) == Geometry.Vector(0, 1)
+    assert Geometry.top.vector(2) == Geometry.Vector(0, 1)  // YU3 top is not up
     right => this[Geometry.right.ordinal]
     bottom => this[Geometry.bottom.ordinal]
     left => this[Geometry.left.ordinal]
-    // UI243 edges are not read by side
-    assert Geometry.Edges(1px, 2px, 3px, 4px)[Geometry.left] == 4px && Geometry.Edges(1px, 2px, 3px, 4px).total == Geometry.Vector(6px, 4px)
+    assert Geometry.Edges(1px, 2px, 3px, 4px)[Geometry.left] == 4px && Geometry.Edges(1px, 2px, 3px, 4px).total == Geometry.Vector(6px, 4px)  // UI243 edges are not read by side
     total => Vector((0..<Space.current.dimension).map(axis => (this[2 * axis] ?? 0px) + (this[2 * axis + 1] ?? 0px)))
-    // UI244 a superposed side does not set both edges
-    assert (Geometry.Edges() ~~ .(Geometry.horizontal) = 5px).total == Geometry.Vector(10px, 0px)
+    assert (Geometry.Edges() ~~ .(Geometry.horizontal) = 5px).total == Geometry.Vector(10px, 0px)  // UI244 a superposed side does not set both edges
     start => Vector((0..<Space.current.dimension).map(this[2 * .] ?? 0px))
-    // YU12 a box's corner of origin is not its bottom left
-    assert Geometry.Edges(1px, 2px, 3px, 4px).start == Geometry.Vector(4px, 3px)
+    assert Geometry.Edges(1px, 2px, 3px, 4px).start == Geometry.Vector(4px, 3px)  // YU12 a box's corner of origin is not its bottom left
   }
   Spacing := Edges + {
     from: border | itself = border
@@ -392,12 +343,9 @@ Geometry := class {
     rank => first.rank ?? 1
     ∂ => map(.∂).flatten.reduced
     reduced => [this{. is Edge}, this{. is Cell}.map(.key).unique.map(key => this{. is Cell && .key == key}.map(.coefficient).sum -- (Cell(key.0, key.1, .))){.coefficient != 0}].flatten
-    // UI258 a copy smaller than the resolution is divided
-    assert Compiler.reduced(Geometry.Sierpinski(size: Geometry.Vector(2px, 2px)), Geometry.Approximating(4px)).children.empty
-    // UI259 a fractal larger than the resolution is not its copies
-    assert Compiler.reduced(Geometry.Sierpinski(size: Geometry.Vector(16px, 16px)), Geometry.Approximating(4px)).children.count == 3
-    // UI262 specialising a known plane changes what a vector maps to
-    assert Compiler.reduced(Geometry.Vector(1px, 2px).map(. * 2), Geometry.specialised) == Geometry.Vector(2px, 4px)
+    assert Compiler.reduced(Geometry.Sierpinski(size: Geometry.Vector(2px, 2px)), Geometry.Approximating(4px)).children.empty  // UI258 a copy smaller than the resolution is divided
+    assert Compiler.reduced(Geometry.Sierpinski(size: Geometry.Vector(16px, 16px)), Geometry.Approximating(4px)).children.count == 3  // UI259 a fractal larger than the resolution is not its copies
+    assert Compiler.reduced(Geometry.Vector(1px, 2px).map(. * 2), Geometry.specialised) == Geometry.Vector(2px, 4px)  // UI262 specialising a known plane changes what a vector maps to
   }
   orderings (axes: Integer[]) => axes.empty ? [[]] : axes.map(axis => orderings(axes{!= axis}).map([axis, .].flatten)).flatten(1)
   simplices (from: Vector, size: Vector, axes: Integer[]) => orderings(axes).map(order => order.reduce(acc = [from] => [acc, [acc.last + Side(., +1).vector * size[.]]].flatten))
@@ -452,8 +400,7 @@ Geometry := class {
     assert {
       selected_field := Geometry.Box(content: (choose String).attempt("hello"))
       selected_field.select
-      // UI171 selecting a field whole does not select its text
-      assert selected_field.text{.styles.contains("selected")}.count == 5 && selected_field.text == "hello"
+      assert selected_field.text{.styles.contains("selected")}.count == 5 && selected_field.text == "hello"  // UI171 selecting a field whole does not select its text
     }
     discretized (resolution: Length) => Space.grid(size.map((. / resolution).ceil)) -- (grid => Shape(space: grid, size: Vector(grid.axes.map(.extent)), fill: fill, stroke: stroke,
       cells: grid.positions{cell => contains((cell + Vector(cell.map(1 / 2))) * resolution)}.map(Cell(., 0..<grid.dimension))))
@@ -508,10 +455,8 @@ Geometry := class {
           .origin = Vector(x, y) + corner(.outside)
           (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
         }) -- (.at.y + .row)))
-      // UI241 a side is not its axis and direction
-      assert Geometry.left.vector(2) == Geometry.Vector(-1, 0) && Geometry.bottom.vector(2) == Geometry.Vector(0, -1)
-      // YU4 a side is not called what it is
-      assert Geometry.top.label == "top" && Geometry.bottom.label == "bottom"
+      assert Geometry.left.vector(2) == Geometry.Vector(-1, 0) && Geometry.bottom.vector(2) == Geometry.Vector(0, -1)  // UI241 a side is not its axis and direction
+      assert Geometry.top.label == "top" && Geometry.bottom.label == "bottom"  // YU4 a side is not called what it is
       (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? inside.top + intrinsic(inner) : bottom) + inside.bottom))) if parent
       flowing.for(.origin = Vector(.origin.x, size.y - .origin.y - .size.y))
       children{!(.position is Flowing)}.for(.positioned)
@@ -526,22 +471,15 @@ Geometry := class {
   Box := Shape{boundary == box(size)}
   assert {
     away := @https://orbitmines.com{window == new}
-    // UI80 a location narrowed to a new window does not open one
-    assert away.window == new
+    assert away.window == new  // UI80 a location narrowed to a new window does not open one
     Geometry.Box(content: away).activate
-    // UI84 activating a new-window link does not open it
-    assert @me/device/opened == away
-    // UI85 activating a new-window link navigates the page itself
-    assert !(@me/device/location == away)
+    assert @me/device/opened == away  // UI84 activating a new-window link does not open it
+    assert !(@me/device/location == away)  // UI85 activating a new-window link navigates the page itself
   }
-  // UI128 font_size does not size the text
-  assert Geometry.Box(content: "a"){font.size == 18px}.font.size == 18px
-  // UI134 animated does not give the shape a transition
-  assert Geometry.Box(){transition == Geometry.Transition(0.4 s, Geometry.ease)}.transition.duration == 0.4 s
-  // UI135 position == fixed is not narrowed
-  assert Geometry.Box(){position == Geometry.Fixed()}.position is Geometry.Fixed
-  // UI142 a text area in a language is not painted
-  assert Geometry.Box(content: (choose $.ray).attempt("x := 1")).face.content.some(Geometry.Box(content: (choose $.ray).attempt("x := 1")).styles.nonempty) && Geometry.Box(content: (choose $.ray).attempt("x := 1")).face.content == "x := 1"
+  assert Geometry.Box(content: "a"){font.size == 18px}.font.size == 18px  // UI128 font_size does not size the text
+  assert Geometry.Box(){transition == Geometry.Transition(0.4 s, Geometry.ease)}.transition.duration == 0.4 s  // UI134 animated does not give the shape a transition
+  assert Geometry.Box(){position == Geometry.Fixed()}.position is Geometry.Fixed  // UI135 position == fixed is not narrowed
+  assert Geometry.Box(content: (choose $.ray).attempt("x := 1")).face.content.some(Geometry.Box(content: (choose $.ray).attempt("x := 1")).styles.nonempty) && Geometry.Box(content: (choose $.ray).attempt("x := 1")).face.content == "x := 1"  // UI142 a text area in a language is not painted
   Ball := Shape{boundary == ellipse(size)}
   Curve := class: Shape (segments: Segment[], rank: Integer = 1, boundary: Shape = segments is Loop ? Shape(rank: 0) : Shape(rank: 0, cells: [Cell(points.first, [], -1), Cell(points.last, [], 1)])) => {
     points => segments.map(segment => if segment {
@@ -565,18 +503,14 @@ Geometry := class {
       first_box := Geometry.Box()
       second_box := Geometry.Box()
       Geometry.Box(children: [first_box, second_box])
-      // UI68 two shapes share an id
-      assert !(first_box.id == second_box.id)
-      // UI69 a shape's id changes
-      assert first_box.id == first_box.id
-      // UI70 a box holding one shape does not expand to two
-      assert Geometry.Box(children: [first_box]).reachable.count == 2
+      assert !(first_box.id == second_box.id)  // UI68 two shapes share an id
+      assert first_box.id == first_box.id  // UI69 a shape's id changes
+      assert Geometry.Box(children: [first_box]).reachable.count == 2  // UI70 a box holding one shape does not expand to two
     }
     assert {
       inner_text := Geometry.Box(content: "a")
       Geometry.Box(children: [inner_text]){font.size == 18px}
-      // UI129 a box's font_size does not reach the text it holds
-      assert inner_text.font.size == 18px
+      assert inner_text.font.size == 18px  // UI129 a box's font_size does not reach the text it holds
     }
     extent => size.map(. max -.).max * scale
     contains (point: Vector) => transform.inverse.applied(point) -- (p => initiator.winding(p) != 0 && children.some(.contains(p)))
@@ -663,15 +597,13 @@ Unit(name: "rem").multiple(16, pixel)
 Planet := class {
   years: Unit.Temporal
   days: Unit.Temporal
-  // TI87 a day on Mars is not a sol
-  assert Mars.days == sol
+  assert Mars.days == sol  // TI87 a day on Mars is not a sol
 }
 Earth := Planet(years: year, days: day)
 
 // a sol is 1 day 39 minutes 35.244 seconds; a Martian year is 668.5991 sols (N4.9)
 Unit(name: "sol").multiple 88775.244, second
-// TI88 a sol is not 88775.244 seconds
-assert 1 sol == 88775.244 seconds
+assert 1 sol == 88775.244 seconds  // TI88 a sol is not 88775.244 seconds
 Unit(name: "martian year").multiple 668.5991, sol
 Mars := Planet(years: martian year, days: sol)
 

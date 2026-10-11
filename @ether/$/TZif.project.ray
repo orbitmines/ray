@@ -33,8 +33,7 @@ TZif := class: Language (
   static Offset := class (sign: ("+" | "-")?, hours: Decimal, (":", minutes: Decimal₂)?, (":", seconds: Decimal₂)?) {
     seconds_west => (sign == "-" ? -1 : 1) * (hours * 3600 + (minutes ?? 0) * 60 + (seconds ?? 0))
     // A TZ string footer (RFC 8536 3.3, POSIX.1-2024 XBD 8.3)
-    // TZIF3 a footer's TZ string is not read
-    assert ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).start.month == 3 && ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).offset.seconds_west == -3600
+    assert ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).start.month == 3 && ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).offset.seconds_west == -3600  // TZIF3 a footer's TZ string is not read
   }
   static Change := class ((("J", julian: Decimal) | day: Decimal | ("M", month: Decimal, ".", week: Decimal, ".", weekday: Decimal)), ("/", time: Offset)?)
 
@@ -48,8 +47,7 @@ TZif := class: Language (
     {writing: Language.Writing{value is TZif}} => writing.value as Byte[]
   }
 }
-// TZIF4 $.tzif is not TZif
-assert $.tzif === TZif
+assert $.tzif === TZif  // TZIF4 $.tzif is not TZif
 
 // A version 1 file of one local time type, UTC: no transitions, offset 0, abbreviation "UTC" (RFC 8536 3.1, 3.2)
 assert (["TZif".bytes, [0x00], [0x00] * 15, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4], [0, 0, 0, 0, 0, 0], "UTC".bytes, [0x00]].flatten).(

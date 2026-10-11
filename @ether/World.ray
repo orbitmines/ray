@@ -3,26 +3,21 @@
 Program &+= {
   serves (at: Location) => !done && from is at
 }
-// WO3 a new quest is done
-assert !(Program(name: "find", goal: None).done)
+assert !(Program(name: "find", goal: None).done)  // WO3 a new quest is done
 // Tasks, references, characters and repositories: what a class says it holds.
 assert Program(name: "walk").(
   !(.stopped)  // TA1 a new quest is stopped
   & .stop.stopped  // TA2 a stopped quest is not stopped
 )
-// HG4 run logs are not kept for thirty days
-assert Program.kept == 30 days
+assert Program.kept == 30 days  // HG4 run logs are not kept for thirty days
 // A channel reads as a program first (`Program + History`): its cursor is the program's, and going back in it is indexing the history.
 assert {
   chn := Channel()
   chn.commit(1, Program(code: { "a" }))
   chn.commit(1, Program(code: { "b" }))
-  // CHN1 a channel's cursor is a commit of its history
-  assert !(chn.at)
-  // CHN2 going back in a channel does not stop at the commit gone back to
-  assert chn[chn.head.previous].head === chn.head.previous
-  // CHN3 a channel is not written as its lines
-  assert chn.written_as() as String ~= "\"b\""
+  assert !(chn.at)  // CHN1 a channel's cursor is a commit of its history
+  assert chn[chn.head.previous].head === chn.head.previous  // CHN2 going back in a channel does not stop at the commit gone back to
+  assert chn.written_as() as String ~= "\"b\""  // CHN3 a channel is not written as its lines
 }
 
 Node &+= {
@@ -32,27 +27,20 @@ Node &+= {
 World := class: Location + Nameable {
   static PREFIX := "#"
   // What a world and a character are written with in front of their names.
-  // WP1 a world is not written with a hash
-  assert World(name: "w").PREFIX == "#"
-  // WP2 a character is not written with an at sign
-  assert Character(name: "p").PREFIX == "@"
+  assert World(name: "w").PREFIX == "#"  // WP1 a world is not written with a hash
+  assert Character(name: "p").PREFIX == "@"  // WP2 a character is not written with an at sign
   static ether := World(name: "ether", path: "ether")
   assert {
     looked := World(name: "looked")
     looked.add(Character(name: "Fadi"))
-    // LK1 @name does not find a character ignoring case
-    assert looked@fadi === looked.characters.first
-    // LK2 the plural is not the collection of that class
-    assert looked.characters.count == 1
+    assert looked@fadi === looked.characters.first  // LK1 @name does not find a character ignoring case
+    assert looked.characters.count == 1  // LK2 the plural is not the collection of that class
     inner := World(name: "inner")
     looked.add(inner)
-    // LK3 #name does not find a world ignoring case
-    assert looked#INNER == inner
-    // LK4 a name not defined here does not fall back to @ether
-    assert looked@nobody == World.ether@nobody
+    assert looked#INNER == inner  // LK3 #name does not find a world ignoring case
+    assert looked@nobody == World.ether@nobody  // LK4 a name not defined here does not fall back to @ether
   }
-  // LC4 @name/path is not a location under that name
-  assert @ether/ui as String == "ether/UI"
+  assert @ether/ui as String == "ether/UI"  // LC4 @name/path is not a location under that name
   static current: World = World.ether
 
   clock: HybridClock = HybridClock(node: this)
@@ -73,48 +61,36 @@ World := class: Location + Nameable {
 assert {
   realm := World(name: "realm")
   held := realm.holds(Location(host: None))
-  // WL1 a place a world holds does not have the world as its parent
-  assert held.parent === realm
-  // WL2 a world does not hold the place it took
-  assert realm.children.first === held
-  // WL3 a world is not a location
-  assert realm is Location
+  assert held.parent === realm  // WL1 a place a world holds does not have the world as its parent
+  assert realm.children.first === held  // WL2 a world does not hold the place it took
+  assert realm is Location  // WL3 a world is not a location
 }
 // A name is taken within a world and nowhere else.
-// RS10 a name reserved in one world is taken in another
-assert !(World(name: "elsewhere").@dawn)
+assert !(World(name: "elsewhere").@dawn)  // RS10 a name reserved in one world is taken in another
 // A reserved name is unique in its world under case folding.
 assert {
   rz := World(name: "folded")
   rz.@Alice = 1
-  // RZ1 a name found in another letter case lost the case it was reserved in
-  assert rz.fields{.name == "@Alice"}.nonempty
-  // RZ2 one name was issued twice in other letter cases
-  assert (rz.@aLiCe = 2).erred && rz.fields{.name ==<in: .fold_case> "@alice"}.count == 1
+  assert rz.fields{.name == "@Alice"}.nonempty  // RZ1 a name found in another letter case lost the case it was reserved in
+  assert (rz.@aLiCe = 2).erred && rz.fields{.name ==<in: .fold_case> "@alice"}.count == 1  // RZ2 one name was issued twice in other letter cases
 }
-// RZ3 a name is unique beyond the world that issued it
-assert !((World(name: "unfolded").@ALICE = 1).erred)
+assert !((World(name: "unfolded").@ALICE = 1).erred)  // RZ3 a name is unique beyond the world that issued it
 // A redirect is a name holding a getter: it answers what the other answers, at every lookup; a held name is overwritten only with write access.
 assert {
   rdr := World(name: "redirects")
   rdr.@a => rdr.@b
   rdr.@b = 1
-  // RDR2 a redirected name answers what the other held when it was redirected
-  assert rdr.@a == 1
-  // RDR1 a redirected name does not answer what the other holds
-  assert rdr.@A == rdr.@b
-  // RDR3 a held name was overwritten without the issuer's write
-  assert (rdr.@b = 3).erred
-  // CTH3 a location with an authority lost its host
-  assert (@https://a.b/c).host == "a.b"
+  assert rdr.@a == 1  // RDR2 a redirected name answers what the other held when it was redirected
+  assert rdr.@A == rdr.@b  // RDR1 a redirected name does not answer what the other holds
+  assert (rdr.@b = 3).erred  // RDR3 a held name was overwritten without the issuer's write
+  assert (@https://a.b/c).host == "a.b"  // CTH3 a location with an authority lost its host
 }
 // Reaching a program's goal completes it.
 assert {
   qct_world := World(name: "quests")
   qct := qct_world.add(Program(name: "q", goal: 1))
   qct.attempt(1)
-  // QCT1 a reached quest is not done
-  assert qct.done
+  assert qct.done  // QCT1 a reached quest is not done
 }
 
 Item := class: Nameable {
@@ -122,174 +98,113 @@ Item := class: Nameable {
   assert {
     wg := World(name: "genesis")
     wp := wg.add(Player(name: "alice"))
-    // WO1 spawned player lost its name
-    assert wp.name == "alice"
-    // WO2 world has other than one character
-    assert wg.characters.count == 1
+    assert wp.name == "alice"  // WO1 spawned player lost its name
+    assert wg.characters.count == 1  // WO2 world has other than one character
     wh := History(repository: wg)
-    // WO4 a commit did not add to the history
-    assert wh.commit(wp, "hello").count == 1
-    // WO10 a said message is not in the chat
-    assert Chat().commit(wp, Program(code: { "hi" })).count == 1
-    // RP1 a new repository already has histories
-    assert Repository(world: wg).histories.empty
-    // WO12 a world is not itself
-    assert wg == wg
-    // WO13 two worlds are the same world
-    assert !(wg == World(name: "other"))
+    assert wh.commit(wp, "hello").count == 1  // WO4 a commit did not add to the history
+    assert Chat().commit(wp, Program(code: { "hi" })).count == 1  // WO10 a said message is not in the chat
+    assert Repository(world: wg).histories.empty  // RP1 a new repository already has histories
+    assert wg == wg  // WO12 a world is not itself
+    assert !(wg == World(name: "other"))  // WO13 two worlds are the same world
     // Items: what one is issued by, where it is, and what says so.
     wi := Item(name: "lamp", issuer: wg)
-    // ITM1 an item lost its name
-    assert wi.name == "lamp"
-    // ITM2 an item forgot who issued it
-    assert wi.issuer == wg
-    // ITM3 a moved item is not where it was moved
-    assert (wi ~~ .location = here).location == here
+    assert wi.name == "lamp"  // ITM1 an item lost its name
+    assert wi.issuer == wg  // ITM2 an item forgot who issued it
+    assert (wi ~~ .location = here).location == here  // ITM3 a moved item is not where it was moved
     wi.history.commit(wg, wi)
-    // ITM4 a certified item does not carry its certificate
-    assert wi.history{who: wg}.nonempty
-    // PE3 a new character is not offline
-    assert wp is Offline
+    assert wi.history{who: wg}.nonempty  // ITM4 a certified item does not carry its certificate
+    assert wp is Offline  // PE3 a new character is not offline
     // A name reserved in a world is a field of it, `world.@name = holder`, answered to whoever asks for that name again.
     wg.@dawn = wp
-    // NM1 a reserved name does not answer what holds it
-    assert wg.@dawn === wp
+    assert wg.@dawn === wp  // NM1 a reserved name does not answer what holds it
     wg.@eve = 2
-    // RS6 another name is not another reservation
-    assert wg.@eve == 2 && wg.@dawn === wp
-    // RS9 an untaken name reads as taken
-    assert !(wg.@carol)
-    // RS11 a reserved name is free again in other letter case
-    assert wg.@DAWN === wp
+    assert wg.@eve == 2 && wg.@dawn === wp  // RS6 another name is not another reservation
+    assert !(wg.@carol)  // RS9 an untaken name reads as taken
+    assert wg.@DAWN === wp  // RS11 a reserved name is free again in other letter case
     // A history keeps what was committed, in the order it was committed.
     repo := Repository(world: wg)
     past := History(repository: repo)
-    // HI1 a new history already holds commits
-    assert past.count == 0
+    assert past.count == 0  // HI1 a new history already holds commits
     past.commit(wp, "first")
-    // HI2 committing does not keep it
-    assert past.count == 1
+    assert past.count == 1  // HI2 committing does not keep it
     past.commit(wp, "second")
-    // HI3 committing twice keeps other than two
-    assert past.count == 2
-    // HI4 the latest is not the last committed
-    assert past.last.value == "second"
-    // HI5 a commit forgot who made it
-    assert past.last.who === wp
+    assert past.count == 2  // HI3 committing twice keeps other than two
+    assert past.last.value == "second"  // HI4 the latest is not the last committed
+    assert past.last.who === wp  // HI5 a commit forgot who made it
     branched := past.fork
-    // HI6 a fork starts with commits on it
-    assert branched.count == 0
-    // HI7 a fork forgot what it came from
-    assert branched.base === past.last
+    assert branched.count == 0  // HI6 a fork starts with commits on it
+    assert branched.base === past.last  // HI7 a fork forgot what it came from
     // What is written down about something read.
     cite := Reference(title: "on rays")
     cite.authors.push wp
-    // RF1 a new reference is not a draft
-    assert !(cite.public)
-    // RF2 publishing does not take it out of draft
-    assert cite.publish.public
-    // RF3 a new reference already has notes
-    assert cite.notes.empty
+    assert !(cite.public)  // RF1 a new reference is not a draft
+    assert cite.publish.public  // RF2 publishing does not take it out of draft
+    assert cite.notes.empty  // RF3 a new reference already has notes
     cite.note = "a note"
-    // RF4 a note is not kept
-    assert cite.notes.count == 1
-    // RF5 a reference forgot its title
-    assert cite.title == "on rays"
+    assert cite.notes.count == 1  // RF4 a note is not kept
+    assert cite.title == "on rays"  // RF5 a reference forgot its title
     // A quest is a program with someone to run it; a step defined nowhere is one they do themselves.
     errand := Program(name: "fetch", goal: wi)
-    // QU1 a new quest is already done
-    assert !(errand.done)
-    // QU2 a quest given only a name is not one step its runner does
-    assert errand.abstract.count == 1
-    // QU4 completing a quest does not
-    assert errand.complete.done
-    // QU5 a quest forgot what it is for
-    assert errand.goal == wi
+    assert !(errand.done)  // QU1 a new quest is already done
+    assert errand.abstract.count == 1  // QU2 a quest given only a name is not one step its runner does
+    assert errand.complete.done  // QU4 completing a quest does not
+    assert errand.goal == wi  // QU5 a quest forgot what it is for
     // Posting answers the quest, the way spawning answers the character.
-    // QU6 posting a quest does not answer it
-    assert wg.add(errand) == errand
+    assert wg.add(errand) == errand  // QU6 posting a quest does not answer it
     staged := Program(code: "go(wi)\ntake(wi)", goal: wi)
-    // QU3 a quest of two steps is not two hard
-    assert staged.difficulty == 2
-    // QUW1 a quest is not run by whoever made it
-    assert staged.who === @me
-    // QU11 posting a quest does not put it in the world
-    assert wg.quests.count == 1
+    assert staged.difficulty == 2  // QU3 a quest of two steps is not two hard
+    assert staged.who === @me  // QUW1 a quest is not run by whoever made it
+    assert wg.quests.count == 1  // QU11 posting a quest does not put it in the world
     // A quest can be stopped; a stopped quest is done.
     carrying := Program(name: "carry", goal: wi)
-    // QU8 stopping a quest does not end it
-    assert carrying.stop.done
+    assert carrying.stop.done  // QU8 stopping a quest does not end it
     sited := Reference(title: "t", subtitle: "s", date: "2025-01-01" as Time, location: @https://a.b | "p")
-    // WR1 a reference forgot its subtitle
-    assert sited.subtitle == "s"
-    // WR2 a reference forgot its year
-    assert sited.year == 2025
-    // WR3 a reference forgot its link
-    assert @https://a.b is sited.location
-    // WR4 a reference forgot its pointer
-    assert "p" is sited.location
+    assert sited.subtitle == "s"  // WR1 a reference forgot its subtitle
+    assert sited.year == 2025  // WR2 a reference forgot its year
+    assert @https://a.b is sited.location  // WR3 a reference forgot its link
+    assert "p" is sited.location  // WR4 a reference forgot its pointer
     sited.authors.push wp
-    // WR8 an author added is not kept
-    assert sited.authors.count == 1
-    // WR9 the author kept is not the one added
-    assert sited.authors.first === wp
+    assert sited.authors.count == 1  // WR8 an author added is not kept
+    assert sited.authors.first === wp  // WR9 the author kept is not the one added
     // A name confusable with a reserved one finds it, and a confusable mixed-script name is not reserved (UTS #39).
-    // SKL5 a name confusable with a reserved one does not find it
-    assert wg.@dаwn === wp
-    // SKL6 a name that mixes scripts and is confusable is reserved
-    assert (wg.@pаge = 3).erred
+    assert wg.@dаwn === wp  // SKL5 a name confusable with a reserved one does not find it
+    assert (wg.@pаge = 3).erred  // SKL6 a name that mixes scripts and is confusable is reserved
   }
   // What a world holds, and how many live in it.
   assert {
     county := World(name: "county")
-    // WP4 an empty world has someone in it
-    assert county.characters.count == 0
+    assert county.characters.count == 0  // WP4 an empty world has someone in it
     county.add(Character(name: "one"))
     county.add(Character(name: "two"))
-    // WP5 two who live there do not count two
-    assert county.characters.count == 2
-    // WP6 an empty world holds something
-    assert county.items.empty
+    assert county.characters.count == 2  // WP5 two who live there do not count two
+    assert county.items.empty  // WP6 an empty world holds something
     county.add(Item(name: "lamp", issuer: county))
-    // WP7 what was added to a world is not there
-    assert county.items.count == 1
-    // WP8 a world falls back to another by itself
-    assert !(county.shadowing)
+    assert county.items.count == 1  // WP7 what was added to a world is not there
+    assert !(county.shadowing)  // WP8 a world falls back to another by itself
     // A name reserved in a world is held as one of its fields, and reserving it
     // again is overwriting it, which needs write access.
     county.@a = 1
-    // NM2 a reserved name is not a field of the world
-    assert county.fields{.name == "@a"}.last?.value == 1
-    // WP11 reserving a taken name takes it again
-    assert (county.@a = 2).erred
+    assert county.fields{.name == "@a"}.last?.value == 1  // NM2 a reserved name is not a field of the world
+    assert (county.@a = 2).erred  // WP11 reserving a taken name takes it again
     // An item sits somewhere, is obtained by something, and carries what says so: a certificate is a commit its issuer made in the item's history.
     lamp := Item(name: "lamp", issuer: county)
-    // WP12 an item nobody has is had by something
-    assert !(lamp.obtained_by)
-    // WP13 an item carries a certificate it was not given
-    assert !(lamp.history{who: county}.nonempty)
+    assert !(lamp.obtained_by)  // WP12 an item nobody has is had by something
+    assert !(lamp.history{who: county}.nonempty)  // WP13 an item carries a certificate it was not given
     lamp.history.commit(county, lamp)
-    // WP14 what an item was given is not what it carries
-    assert lamp.history.head.who === county
-    // WP15 a certificate says nothing about when it was issued
-    assert lamp.history{who: county}.last.when
+    assert lamp.history.head.who === county  // WP14 what an item was given is not what it carries
+    assert lamp.history{who: county}.last.when  // WP15 a certificate says nothing about when it was issued
   }
   // An item's issuer is the nearest world; moving it is in its trail; unnamed, it is shown by its class and place.
   assert {
     itv_world := World(name: "items")
     itv_room := itv_world.add(Room(path: "room", value: None))
     itv := Item(location: itv_room)
-    // ITV1 an item's issuer is not the world it is in
-    assert itv.issuer == itv_world
+    assert itv.issuer == itv_world  // ITV1 an item's issuer is not the world it is in
     itv.move(itv_world)
-    // ITV2 a moved item is not where it was moved
-    assert itv.location == itv_world
-    // ITV3 a move is not in the item's trail
-    assert itv.trail.count >= 2
-    // ITV4 an unnamed item is not shown by its class
-    assert itv.shown ~= ⊢"Item"
-    // ITV5 an unnamed item was given a stored name
-    assert !(itv.name)
+    assert itv.location == itv_world  // ITV2 a moved item is not where it was moved
+    assert itv.trail.count >= 2  // ITV3 a move is not in the item's trail
+    assert itv.shown ~= ⊢"Item"  // ITV4 an unnamed item is not shown by its class
+    assert !(itv.name)  // ITV5 an unnamed item was given a stored name
   }
   obtained_by: Program?
 
@@ -311,41 +226,27 @@ Reference := class {
   assert {
     cited := Reference(title: "a paper")
     cited.authors.push 1
-    // WP16 something written down is not a draft to begin with
-    assert !(cited.public)
-    // WP17 something published is still a draft
-    assert cited.publish.public
-    // WP18 a reference points somewhere it was not pointed
-    assert !(cited.location)
-    // WP19 a reference says nothing about when
-    assert cited.date
-    // WP20 a note taken is not kept
-    assert (cited ~~ .note = "read it").notes.count == 1
+    assert !(cited.public)  // WP16 something written down is not a draft to begin with
+    assert cited.publish.public  // WP17 something published is still a draft
+    assert !(cited.location)  // WP18 a reference points somewhere it was not pointed
+    assert cited.date  // WP19 a reference says nothing about when
+    assert (cited ~~ .note = "read it").notes.count == 1  // WP20 a note taken is not kept
   }
-  // WR5 a new reference already has authors
-  assert Reference(title: "t").authors.empty
-  // WR6 a new reference already has organizations
-  assert Reference(title: "t").organizations.empty
-  // WR7 a new reference is already published somewhere
-  assert Reference(title: "t").published.empty
-  // WR10 a note forgot its text
-  assert (Reference(title: "t") ~~ .note = "n").notes.first == "n"
-  // WR11 a note says nothing about when
-  assert (Reference(title: "t") ~~ .note = "n").history.last.when
-  // WR12 a new reference has a remote it was not given
-  assert !(Reference(title: "t").location)
+  assert Reference(title: "t").authors.empty  // WR5 a new reference already has authors
+  assert Reference(title: "t").organizations.empty  // WR6 a new reference already has organizations
+  assert Reference(title: "t").published.empty  // WR7 a new reference is already published somewhere
+  assert (Reference(title: "t") ~~ .note = "n").notes.first == "n"  // WR10 a note forgot its text
+  assert (Reference(title: "t") ~~ .note = "n").history.last.when  // WR11 a note says nothing about when
+  assert !(Reference(title: "t").location)  // WR12 a new reference has a remote it was not given
   // Claiming a reference's authorship is a quest, reached when the claimant is an author.
   assert {
     clm_who := Character(name: "claimant")
     clm := Reference(title: "dummy")
     clm_quest := clm.claim(clm_who)
-    // CLM1 claiming authorship is not a quest
-    assert clm_quest is Program
-    // CLM2 a claim is reached before the claimant is an author
-    assert !(clm_quest.reached(clm))
+    assert clm_quest is Program  // CLM1 claiming authorship is not a quest
+    assert !(clm_quest.reached(clm))  // CLM2 a claim is reached before the claimant is an author
     clm.authors.push clm_who
-    // CLM3 a claim is not reached once the claimant is an author
-    assert clm_quest.reached(clm)
+    assert clm_quest.reached(clm)  // CLM3 a claim is not reached once the claimant is an author
   }
   subtitle: String?
   date: Time = Time.now
@@ -375,23 +276,16 @@ Location &+= {
 assert {
   here := Location(host: None)
   there := here.holds(Location(host: None))
-  // LO1 a location nothing holds is not at zero
-  assert here.depth == 0
-  // LO2 a held location is not one deep
-  assert there.depth == 1
-  // LO3 the holder does not hold one
-  assert here.children.count == 1
-  // LO4 a held location has no parent
-  assert there.parent
-  // LO5 a location is not itself
-  assert here == here
+  assert here.depth == 0  // LO1 a location nothing holds is not at zero
+  assert there.depth == 1  // LO2 a held location is not one deep
+  assert here.children.count == 1  // LO3 the holder does not hold one
+  assert there.parent  // LO4 a held location has no parent
+  assert here == here  // LO5 a location is not itself
   // A node's location is every place it is: `@` adds one, and a mirror is the same value at another instance.
   plc := (Item(name: "plc") @ here)
   plc @ there
-  // PLC1 a value placed twice is not at both places
-  assert here is plc.location# && there is plc.location#
-  // PLC2 a value placed once is not where it was placed
-  assert (Item(name: "plc2") @ here).location == here
+  assert here is plc.location# && there is plc.location#  // PLC1 a value placed twice is not at both places
+  assert (Item(name: "plc2") @ here).location == here  // PLC2 a value placed once is not where it was placed
 }
 Location.current = @local
 
@@ -401,101 +295,69 @@ Character &+= {
   assert {
     ver_a := Instance.local.login(Character(name: "ver-a"))
     ver_b := Instance.local.login(Character(name: "ver-b"))
-    // VER1 a character logged in here does not act as verified
-    assert ver_a.acting is Verified
-    // VER2 one character verified twice is two characters
-    assert ver_a.acting == ver_a.acting
-    // VER3 a claimed character equals a verified one
-    assert !(ver_a == ver_a.acting || ver_a.acting == ver_a)
-    // VER4 a claimed character is not itself
-    assert ver_a == ver_a
-    // VER5 a character built from a name is the character of that name
-    assert !(Character(name: "ver-a") == ver_a || Character(name: "ver-a") == ver_a.acting)
-    // VER6 two roots compare equal
-    assert !(ver_a.acting == ver_b.acting)
-    // VER8 code running as a character made a verified one
-    assert !((with (@me = ver_a) { Character(name: "forged", proof: ver_a.acting.proof) == ver_a.acting }))
-    // IDY18 a private key is read by the character's own code
-    assert !((with (@me = ver_a) { ver_a.key.secret }) is Byte[])
+    assert ver_a.acting is Verified  // VER1 a character logged in here does not act as verified
+    assert ver_a.acting == ver_a.acting  // VER2 one character verified twice is two characters
+    assert !(ver_a == ver_a.acting || ver_a.acting == ver_a)  // VER3 a claimed character equals a verified one
+    assert ver_a == ver_a  // VER4 a claimed character is not itself
+    assert !(Character(name: "ver-a") == ver_a || Character(name: "ver-a") == ver_a.acting)  // VER5 a character built from a name is the character of that name
+    assert !(ver_a.acting == ver_b.acting)  // VER6 two roots compare equal
+    assert !((with (@me = ver_a) { Character(name: "forged", proof: ver_a.acting.proof) == ver_a.acting }))  // VER8 code running as a character made a verified one
+    assert !((with (@me = ver_a) { ver_a.key.secret }) is Byte[])  // IDY18 a private key is read by the character's own code
     // An introduction is checked against its key log, and the character is made from that log: an identity told beside it is never taken.
     intro_forged := hsk_si.sent(Language.ray.write((name: "hsk-a", identity: ver_b.identity, log: hsk_a.identity.history,
       by: hsk_a.key.published, signature: hsk_a.key.signed(hsk_si.binding))) as Byte[])
     intro_seen := hsk_peer.introduced(hsk_sr, intro_forged)
-    // INTRO1 an introduction keeps the identity it was told
-    assert !(intro_seen.root == ver_b.root || intro_seen.policy().keys == ver_b.policy().keys)
-    // INTRO2 an introduced character's identity is not the key log that was checked
-    assert intro_seen.root == hsk_a.root && intro_seen.policy().certifies(hsk_a.key.published, World.ether.clock.now)
+    assert !(intro_seen.root == ver_b.root || intro_seen.policy().keys == ver_b.policy().keys)  // INTRO1 an introduction keeps the identity it was told
+    assert intro_seen.root == hsk_a.root && intro_seen.policy().certifies(hsk_a.key.published, World.ether.clock.now)  // INTRO2 an introduced character's identity is not the key log that was checked
   }
   // A character used as a condition is whether it is @me.
   assert {
     cw := Instance.local.login(Character(name: "viewer"))
     cw_other := Instance.local.login(Character(name: "other"))
-    // CW1 a character as a condition is false to itself
-    assert (with (@me = cw) { cw ? true : false })
-    // CW2 a character as a condition is true to someone else
-    assert !((with (@me = cw_other) { cw ? true : false }))
-    // COND1 a verified character as a condition is false to itself
-    assert (with (@me = cw) { cw.acting ? true : false })
+    assert (with (@me = cw) { cw ? true : false })  // CW1 a character as a condition is false to itself
+    assert !((with (@me = cw_other) { cw ? true : false }))  // CW2 a character as a condition is true to someone else
+    assert (with (@me = cw) { cw.acting ? true : false })  // COND1 a verified character as a condition is false to itself
   }
   // A program runs as its who; its runs are logged for replay, as recorded.
   assert {
     hg_giver := Instance.local.login(Character(name: "giver"))
     hg := Program(code: { @me }, who: hg_giver)
-    // HG1 handed-over code does not run as the character that handed it over
-    assert hg.run == hg_giver.acting
-    // HG2 a run of handed-over code is not logged as its giver
-    assert Program.runs.head.who === hg_giver
-    // HG3 a logged run does not replay as its character
-    assert Program.replay(Program.runs.head) == hg_giver.acting
+    assert hg.run == hg_giver.acting  // HG1 handed-over code does not run as the character that handed it over
+    assert Program.runs.head.who === hg_giver  // HG2 a run of handed-over code is not logged as its giver
+    assert Program.replay(Program.runs.head) == hg_giver.acting  // HG3 a logged run does not replay as its character
     // A line runs as its who only when the runtime verified who signed it, and never with their live permissions.
     auth_ran := History.Commit(who: hg_giver, stamp: World.ether.clock.now, change: Program(code: { @me })).applied(None)
-    // AUTH4 an unsigned line replays as the character it names
-    assert !(auth_ran is Verified && auth_ran.same(hg_giver))
-    // AUTH5 a replayed line is given live permissions
-    assert !(auth_ran is Live)
+    assert !(auth_ran is Verified && auth_ran.same(hg_giver))  // AUTH4 an unsigned line replays as the character it names
+    assert !(auth_ran is Live)  // AUTH5 a replayed line is given live permissions
   }
   // The root policy: the first commit of the key log, keys naming their algorithm, and short-lived certificates for instance keys.
   assert {
     idy := Instance.local.login(Character(name: "rooted"))
     idy_policy := idy.policy()
-    // IDY1 a character logged in has no key log
-    assert idy.identity.history.since(None).count >= 2
-    // IDY2 the root key does not name the policy's algorithm
-    assert idy_policy.keys.count == 1 && idy_policy.keys.first.algorithm === idy_policy.signing
-    // IDY3 the instance key is not of the algorithm the policy names
-    assert idy.key.algorithm === idy_policy.signing
-    // IDY4 the instance key held here is not certified
-    assert idy_policy.certifies(idy.key.published, World.ether.clock.now)
-    // IDY5 a certificate for no world speaks in a world
-    assert !(idy_policy.certifies(idy.key.published, World.ether.clock.now, world: World(name: "elsewhere")))
-    // IDY6 an instance certificate lasts beyond thirty days
-    assert !(idy_policy.certificates.first.until > Time.now + 30 days)
-    // IDY7 the default thresholds are not revoke 1, recover after 7 days with a veto
-    assert idy_policy.revoke.count == 1 && idy_policy.recover.wait == 7 days && idy_policy.recover.veto
-    // IDY8 removing a certificate is not a revocation
-    assert idy_policy.threshold(idy_policy.copy ~~ .certificates = []) === idy_policy.revoke
-    // IDY9 changing the algorithm is not a rotation
-    assert idy_policy.threshold(idy_policy.copy ~~ .signing = $.x25519) === idy_policy.rotate
+    assert idy.identity.history.since(None).count >= 2  // IDY1 a character logged in has no key log
+    assert idy_policy.keys.count == 1 && idy_policy.keys.first.algorithm === idy_policy.signing  // IDY2 the root key does not name the policy's algorithm
+    assert idy.key.algorithm === idy_policy.signing  // IDY3 the instance key is not of the algorithm the policy names
+    assert idy_policy.certifies(idy.key.published, World.ether.clock.now)  // IDY4 the instance key held here is not certified
+    assert !(idy_policy.certifies(idy.key.published, World.ether.clock.now, world: World(name: "elsewhere")))  // IDY5 a certificate for no world speaks in a world
+    assert !(idy_policy.certificates.first.until > Time.now + 30 days)  // IDY6 an instance certificate lasts beyond thirty days
+    assert idy_policy.revoke.count == 1 && idy_policy.recover.wait == 7 days && idy_policy.recover.veto  // IDY7 the default thresholds are not revoke 1, recover after 7 days with a veto
+    assert idy_policy.threshold(idy_policy.copy ~~ .certificates = []) === idy_policy.revoke  // IDY8 removing a certificate is not a revocation
+    assert idy_policy.threshold(idy_policy.copy ~~ .signing = $.x25519) === idy_policy.rotate  // IDY9 changing the algorithm is not a rotation
     // Revoking the key of a lost device takes one root key, and locks it out.
     Instance.local.revoked(idy, idy.key.published)
-    // IDY13 a revoked instance key is still certified
-    assert !(idy.policy().certifies(idy.key.published, World.ether.clock.now))
-    // IDY14 a character whose key was revoked is verified
-    assert !(Instance.local.verified(idy))
+    assert !(idy.policy().certifies(idy.key.published, World.ether.clock.now))  // IDY13 a revoked instance key is still certified
+    assert !(Instance.local.verified(idy))  // IDY14 a character whose key was revoked is verified
     // Per-world instance keys, each certified by the root, for unlinkability.
     idy_world := World(name: "unlinked")
     Instance.local.certified(idy, idy_world)
-    // IDY15 a world is not given a key of its own
-    assert idy.key_in(idy_world) && idy.key_in(idy_world) != idy.key
-    // IDY16 a world's key is not certified for that world
-    assert idy.policy().certifies(idy.key_in(idy_world).published, World.ether.clock.now, world: idy_world)
+    assert idy.key_in(idy_world) && idy.key_in(idy_world) != idy.key  // IDY15 a world is not given a key of its own
+    assert idy.policy().certifies(idy.key_in(idy_world).published, World.ether.clock.now, world: idy_world)  // IDY16 a world's key is not certified for that world
   }
   // Logging out zeroises the key.
   assert {
     vz := Instance.local.login(Character(name: "leaving-keys"))
     Instance.local.logout(vz)
-    // IDY17 a character logged out keeps its key
-    assert !(vz.key || Instance.local.verified(vz))
+    assert !(vz.key || Instance.local.verified(vz))  // IDY17 a character logged out keeps its key
   }
   // Signed history: one instance key signs every commit, over a hash that chains the parents and the key-log event relied on.
   assert {
@@ -503,23 +365,16 @@ Character &+= {
     sgn_h := History(repository: Repository())
     sgn_h.commit(sgn, 1)
     sgn_h.commit(sgn, 2)
-    // SGN1 a commit is not signed over its hash
-    assert sgn_h.head.signature && sgn_h.head.covers(sgn_h.head.signature)
-    // SGN2 a signed commit does not check against the key log at its stamp
-    assert sgn_h.head.authentic
-    // SGN3 a commit does not name the key-log event it relies on
-    assert sgn_h.head.relies == sgn.identity.history.head.hash
-    // SGN4 one instance signs its commits with other keys
-    assert sgn_h.head.signature.by == sgn_h.head.previous.signature.by
-    // SGN5 a commit whose change was replaced is still authentic
-    assert !(sgn_h.head.rewritten(Program(code: { 3 })).authentic)
+    assert sgn_h.head.signature && sgn_h.head.covers(sgn_h.head.signature)  // SGN1 a commit is not signed over its hash
+    assert sgn_h.head.authentic  // SGN2 a signed commit does not check against the key log at its stamp
+    assert sgn_h.head.relies == sgn.identity.history.head.hash  // SGN3 a commit does not name the key-log event it relies on
+    assert sgn_h.head.signature.by == sgn_h.head.previous.signature.by  // SGN4 one instance signs its commits with other keys
+    assert !(sgn_h.head.rewritten(Program(code: { 3 })).authentic)  // SGN5 a commit whose change was replaced is still authentic
     sgn_back := sgn.sealed(History.Commit(who: sgn, stamp: Stamp(wall: sgn_h.head.previous.stamp.wall, logical: sgn_h.head.previous.stamp.logical + 1, node: "back"),
       change: Program(code: { 9 }), from: [sgn_h.head.previous.id]))
-    // SGN7 a backdated commit is taken without a merge
-    assert sgn_h.accepted(sgn_back).erred
+    assert sgn_h.accepted(sgn_back).erred  // SGN7 a backdated commit is taken without a merge
     sgn_next := sgn.sealed(History.Commit(who: sgn, stamp: sgn_h.clock.now, change: Program(code: { 4 }), from: [sgn_h.head.id]))
-    // SGN8 a commit that follows the head is refused
-    assert sgn_h.accepted(sgn_next).head.value == 4
+    assert sgn_h.accepted(sgn_next).head.value == 4  // SGN8 a commit that follows the head is refused
   }
   // The handshake: Noise XX between two instances, then each introduces itself signing the handshake hash with its instance key.
   assert {
@@ -534,33 +389,22 @@ Character &+= {
     hsk_si := hsk_i.session
     hsk_sr := hsk_r.session
     hsk_seen := hsk_peer.introduced(hsk_sr, Instance.local.introduction(hsk_a, hsk_si))
-    // HSK1 a completed handshake does not give a verified principal for the session
-    assert hsk_seen is Verified && hsk_seen.proof.session === hsk_sr
-    // HSK2 who was verified over the wire is not who was verified here
-    assert hsk_seen == hsk_a.acting
-    // HSK3 the other side is verified as oneself
-    assert !(hsk_seen == hsk_b.acting)
+    assert hsk_seen is Verified && hsk_seen.proof.session === hsk_sr  // HSK1 a completed handshake does not give a verified principal for the session
+    assert hsk_seen == hsk_a.acting  // HSK2 who was verified over the wire is not who was verified here
+    assert !(hsk_seen == hsk_b.acting)  // HSK3 the other side is verified as oneself
   }
   // Delegation: signed, scoped and expiring; the effective permission is the intersection.
   assert {
     dlg_from := Instance.local.login(Character(name: "lender"))
     dlg := dlg_from.delegate(@me, Access(method: `()`), until: Time.now + 1 hour)
-    // DLG1 a signed delegation is not valid
-    assert dlg.valid()
-    // DLG2 a delegation does not cover what it names
-    assert dlg.covers(`()`, "x")
-    // DLG3 a delegation to run covers writing
-    assert !(dlg.covers(`=`, "x"))
-    // DLG4 an expired delegation is valid
-    assert !(dlg_from.delegate(@me, until: Time.now - 1 second).valid())
-    // DLG5 a signature over another delegation makes one valid
-    assert !(Delegation(from: dlg_from, to: @me, until: Time.now + 1 day, signature: dlg.signature).valid())
-    // DLG6 a delegated principal is not the one who delegated
-    assert Instance.local.delegated(dlg) == dlg_from.acting
-    // DLG7 an expired delegation is acted on
-    assert Instance.local.delegated(dlg_from.delegate(@me, until: Time.now - 1 second)) is Diagnostic
-    // DLG8 handed-over code does not run under its delegation
-    assert Program(code: { @me }, who: dlg_from, delegation: dlg).run.proof.delegation === dlg
+    assert dlg.valid()  // DLG1 a signed delegation is not valid
+    assert dlg.covers(`()`, "x")  // DLG2 a delegation does not cover what it names
+    assert !(dlg.covers(`=`, "x"))  // DLG3 a delegation to run covers writing
+    assert !(dlg_from.delegate(@me, until: Time.now - 1 second).valid())  // DLG4 an expired delegation is valid
+    assert !(Delegation(from: dlg_from, to: @me, until: Time.now + 1 day, signature: dlg.signature).valid())  // DLG5 a signature over another delegation makes one valid
+    assert Instance.local.delegated(dlg) == dlg_from.acting  // DLG6 a delegated principal is not the one who delegated
+    assert Instance.local.delegated(dlg_from.delegate(@me, until: Time.now - 1 second)) is Diagnostic  // DLG7 an expired delegation is acted on
+    assert Program(code: { @me }, who: dlg_from, delegation: dlg).run.proof.delegation === dlg  // DLG8 handed-over code does not run under its delegation
   }
   // A delegation is bound to its holder: only the one it was given to, verified, acts on it; renaming the holder breaks its signature.
   assert {
@@ -568,28 +412,20 @@ Character &+= {
     hold_to := Instance.local.login(Character(name: "hold-to"))
     hold_other := Instance.local.login(Character(name: "hold-other"))
     hold := hold_from.delegate(hold_to, Access(method: `()`), until: Time.now + 1 hour)
-    // HOLD1 the one a delegation was given to does not act on it
-    assert Instance.local.delegated(hold, by: hold_to) == hold_from.acting
-    // HOLD2 a delegation given to someone else is acted on by whoever presents it
-    assert Instance.local.delegated(hold) is Diagnostic
-    // HOLD3 a delegation is acted on by someone it was not given to
-    assert Instance.local.delegated(hold, by: hold_other) is Diagnostic
-    // HOLD4 a character built from the holder's name acts on a delegation
-    assert Instance.local.delegated(hold, by: Character(name: "hold-to")) is Diagnostic
-    // HOLD5 a delegation renamed to another holder keeps its signature
-    assert !(Delegation(from: hold_from, to: hold_other, scope: hold.scope, until: hold.until, signature: hold.signature).valid())
-    // HOLD6 a guest is hosted under a delegation given to someone else
-    assert Instance.local.host_for(hold_other, hold) is Diagnostic
-    // HOLD7 handed-over code runs under a delegation its runner was not given
-    assert Program(code: { @me }, who: hold_from, delegation: hold).run is Diagnostic
+    assert Instance.local.delegated(hold, by: hold_to) == hold_from.acting  // HOLD1 the one a delegation was given to does not act on it
+    assert Instance.local.delegated(hold) is Diagnostic  // HOLD2 a delegation given to someone else is acted on by whoever presents it
+    assert Instance.local.delegated(hold, by: hold_other) is Diagnostic  // HOLD3 a delegation is acted on by someone it was not given to
+    assert Instance.local.delegated(hold, by: Character(name: "hold-to")) is Diagnostic  // HOLD4 a character built from the holder's name acts on a delegation
+    assert !(Delegation(from: hold_from, to: hold_other, scope: hold.scope, until: hold.until, signature: hold.signature).valid())  // HOLD5 a delegation renamed to another holder keeps its signature
+    assert Instance.local.host_for(hold_other, hold) is Diagnostic  // HOLD6 a guest is hosted under a delegation given to someone else
+    assert Program(code: { @me }, who: hold_from, delegation: hold).run is Diagnostic  // HOLD7 handed-over code runs under a delegation its runner was not given
   }
   // Recovery: the recovering machine writes the rotation itself; guardians get only its hash and sign it bound to their session.
   assert {
     rcv_c := Instance.local.login(Character(name: "recovering"))
     rcv_log := rcv_c.identity.history
     rcv := rcv_c.recovery()
-    // RCV1 a recovery is in the key log before its guardians signed it
-    assert !(rcv_log.find(rcv.goal.id))
+    assert !(rcv_log.find(rcv.goal.id))  // RCV1 a recovery is in the key log before its guardians signed it
     rcv_g := Instance.local.login(Character(name: "guardian"))
     rcv_i := Noise.handshake(true, $.x25519.pair())
     rcv_r := Noise.handshake(false, $.x25519.pair())
@@ -600,21 +436,15 @@ Character &+= {
     rcv_theirs := rcv_r.session
     rcv := rcv_c.recovery([rcv_mine])
     rcv_message := rcv_mine.sent(rcv.goal.hash)
-    // RCV2 a guardian signs before verifying the person
-    assert rcv_g.vouching(rcv_theirs, rcv_message) is Program
+    assert rcv_g.vouching(rcv_theirs, rcv_message) is Program  // RCV2 a guardian signs before verifying the person
     rcv_signed := rcv_g.key.signed([rcv.goal.hash, rcv_theirs.binding].flatten)
     rcv.countersigned(rcv_signed)
-    // RCV3 a guardian's signature over the hash, bound to the session, is not taken
-    assert rcv.goal.signature#.some(=== rcv_signed)
+    assert rcv.goal.signature#.some(=== rcv_signed)  // RCV3 a guardian's signature over the hash, bound to the session, is not taken
     rcv.countersigned(rcv_g.key.signed([rcv.goal.hash, [0] * 32].flatten))
-    // RCV4 a signature bound to no session of this recovery is taken
-    assert rcv.goal.signature#.count == 1
-    // RCV5 one guardian meets a threshold of two
-    assert !(rcv_log.find(rcv.goal.id))
-    // RCV6 the new root keys are not of the policy's algorithm
-    assert rcv_c.roots.every(.algorithm === rcv_c.policy().signing)
-    // RCV7 a recovery is not a program run as the character recovering
-    assert rcv is Program && rcv.who === rcv_c
+    assert rcv.goal.signature#.count == 1  // RCV4 a signature bound to no session of this recovery is taken
+    assert !(rcv_log.find(rcv.goal.id))  // RCV5 one guardian meets a threshold of two
+    assert rcv_c.roots.every(.algorithm === rcv_c.policy().signing)  // RCV6 the new root keys are not of the policy's algorithm
+    assert rcv is Program && rcv.who === rcv_c  // RCV7 a recovery is not a program run as the character recovering
   }
   // Content keys: one per history, wrapped with HPKE for each reader's instance key, found through the reader's key log; readers are whoever its access lets read.
   assert {
@@ -623,59 +453,38 @@ Character &+= {
     wrp := none.read History(repository: Repository())
     wrp.commit(wrp_owner, 1)
     wrp_first := wrp.current_key
-    // WRAP1 an instance's agreement key is not of the policy's algorithm
-    assert wrp_owner.inbox && wrp_owner.inbox.algorithm === wrp_owner.policy().agreement
-    // WRAP2 an instance's agreement key is not certified in the key log
-    assert wrp_owner.inboxes().contains(wrp_owner.inbox.published)
-    // WRAP3 an agreement key is certified to sign
-    assert !(wrp_owner.policy().certifies(wrp_owner.inbox.published, World.ether.clock.now))
-    // WRAP4 a content key is not wrapped with the algorithms the keys and policy name
-    assert wrp.wraps_of(wrp_first).every(.by is HPKE && .by.kem === wrp_owner.policy().agreement && .cipher === wrp_owner.policy().cipher)
-    // WRAP5 the writer does not hold the content key
-    assert wrp.content_key(wrp_first, [wrp_owner]) is Encoding.Key
-    // WRAP6 someone not let read holds the content key
-    assert wrp.content_key(wrp_first, [wrp_reader]).erred
+    assert wrp_owner.inbox && wrp_owner.inbox.algorithm === wrp_owner.policy().agreement  // WRAP1 an instance's agreement key is not of the policy's algorithm
+    assert wrp_owner.inboxes().contains(wrp_owner.inbox.published)  // WRAP2 an instance's agreement key is not certified in the key log
+    assert !(wrp_owner.policy().certifies(wrp_owner.inbox.published, World.ether.clock.now))  // WRAP3 an agreement key is certified to sign
+    assert wrp.wraps_of(wrp_first).every(.by is HPKE && .by.kem === wrp_owner.policy().agreement && .cipher === wrp_owner.policy().cipher)  // WRAP4 a content key is not wrapped with the algorithms the keys and policy name
+    assert wrp.content_key(wrp_first, [wrp_owner]) is Encoding.Key  // WRAP5 the writer does not hold the content key
+    assert wrp.content_key(wrp_first, [wrp_reader]).erred  // WRAP6 someone not let read holds the content key
     wrp.shared(wrp_reader, wrp_owner)
-    // WRAP7 a character given read is not a reader
-    assert wrp.readers.some(=== wrp_reader)
-    // WRAP8 adding a reader rotated the key
-    assert wrp.current_key == wrp_first
-    // WRAP9 adding a reader is not a commit wrapping the current key for them
-    assert wrp.head.wraps.some(w => w.by.recognised(wrp_reader.inbox, (wrp_first as String).bytes, w.tag, w.sealed)) && wrp.head.wraps.every(.key == wrp_first)
-    // WRAP10 an added reader does not hold the current key
-    assert wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key
+    assert wrp.readers.some(=== wrp_reader)  // WRAP7 a character given read is not a reader
+    assert wrp.current_key == wrp_first  // WRAP8 adding a reader rotated the key
+    assert wrp.head.wraps.some(w => w.by.recognised(wrp_reader.inbox, (wrp_first as String).bytes, w.tag, w.sealed)) && wrp.head.wraps.every(.key == wrp_first)  // WRAP9 adding a reader is not a commit wrapping the current key for them
+    assert wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key  // WRAP10 an added reader does not hold the current key
     wrp.unshared(wrp_reader, wrp_owner)
-    // WRAP11 removing a reader does not rotate to a new key
-    assert wrp.current_key != wrp_first && wrp.current_key == wrp.head.id
-    // WRAP12 a removed reader holds the new key
-    assert wrp.content_key(wrp.current_key, [wrp_reader]).erred
-    // WRAP13 a removed reader lost what they already saw
-    assert wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key
-    // WRAP14 the rest do not hold the new key
-    assert wrp.content_key(wrp.current_key, [wrp_owner]) is Encoding.Key
+    assert wrp.current_key != wrp_first && wrp.current_key == wrp.head.id  // WRAP11 removing a reader does not rotate to a new key
+    assert wrp.content_key(wrp.current_key, [wrp_reader]).erred  // WRAP12 a removed reader holds the new key
+    assert wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key  // WRAP13 a removed reader lost what they already saw
+    assert wrp.content_key(wrp.current_key, [wrp_owner]) is Encoding.Key  // WRAP14 the rest do not hold the new key
     wrp.commit(wrp_owner, 2)
-    // WRAP15 a commit after a rotation does not use the new key
-    assert wrp.head.key == wrp.current_key && wrp.value == 2
+    assert wrp.head.key == wrp.current_key && wrp.value == 2  // WRAP15 a commit after a rotation does not use the new key
   }
   // Every private key is a secret (`none.read`): stores skip it whatever it is called, and logging out zeroises and drops all of them, so the next login makes fresh ones.
   assert {
     sct := Instance.local.login(Character(name: "secret-keeper"))
     Instance.local.certified(sct, World(name: "sct-world"))
-    // SECRET1 a private key is held in a field someone may read
-    assert ["key", "inbox", "roots", "world_keys"].every(name => sct.fields{.name == name}.every(.unreadable))
-    // SECRET3 a store writes a private key
-    assert !((sct as Store.Row).fields.some(.name is ("key" | "inbox" | "roots" | "world_keys")))
+    assert ["key", "inbox", "roots", "world_keys"].every(name => sct.fields{.name == name}.every(.unreadable))  // SECRET1 a private key is held in a field someone may read
+    assert !((sct as Store.Row).fields.some(.name is ("key" | "inbox" | "roots" | "world_keys")))  // SECRET3 a store writes a private key
     sct_root := sct.roots.first
     Instance.local.logout(sct)
-    // SECRET4 a secret field holds a value after logging out
-    assert !(sct.key || sct.inbox || sct.roots || sct.world_keys)
-    // SECRET5 a root key outlives logging out
-    assert !(sct_root.signed([1]).valid == true)
+    assert !(sct.key || sct.inbox || sct.roots || sct.world_keys)  // SECRET4 a secret field holds a value after logging out
+    assert !(sct_root.signed([1]).valid == true)  // SECRET5 a root key outlives logging out
     Instance.local.login(sct)
-    // SECRET6 logging in again does not make fresh keys
-    assert sct.key && sct.inbox
-    // SECRET7 a key made after logging out is certified without the root keys
-    assert !(sct.policy().certifies(sct.key.published, World.ether.clock.now))
+    assert sct.key && sct.inbox  // SECRET6 logging in again does not make fresh keys
+    assert !(sct.policy().certifies(sct.key.published, World.ether.clock.now))  // SECRET7 a key made after logging out is certified without the root keys
   }
   // Revoking and logging out compare principals by root: a verified copy revokes the grant made to the character, and logs it out.
   assert {
@@ -685,31 +494,21 @@ Character &+= {
     revk.commit(revk_owner, 1)
     revk.shared(revk_reader, revk_owner)
     revk.unshared(revk_reader.acting, revk_owner)
-    // REVK1 a reader revoked by a verified copy keeps the grant
-    assert !(revk.access#.some(.who === revk_reader))
-    // REVK2 a reader revoked by a verified copy holds the new key
-    assert revk.content_key(revk.current_key, [revk_reader]).erred
-    // REVK4 a claimed character answers for a principal
-    assert !(revk_reader.answers_for(revk_reader) || Character(name: "revk-reader").answers_for(revk_reader))
-    // REVK5 a verified character does not answer for itself
-    assert revk_reader.acting.answers_for(revk_reader)
-    // REVK6 a verified character answers for another
-    assert !(revk_reader.acting.answers_for(revk_owner))
+    assert !(revk.access#.some(.who === revk_reader))  // REVK1 a reader revoked by a verified copy keeps the grant
+    assert revk.content_key(revk.current_key, [revk_reader]).erred  // REVK2 a reader revoked by a verified copy holds the new key
+    assert !(revk_reader.answers_for(revk_reader) || Character(name: "revk-reader").answers_for(revk_reader))  // REVK4 a claimed character answers for a principal
+    assert revk_reader.acting.answers_for(revk_reader)  // REVK5 a verified character does not answer for itself
+    assert !(revk_reader.acting.answers_for(revk_owner))  // REVK6 a verified character answers for another
   }
   assert {
     revk_leaving := Instance.local.login(Character(name: "revk-leaving"))
     Instance.local.logout(revk_leaving.acting)
-    // REVK3 a verified copy logging out leaves the character logged in
-    assert !(Instance.local.logged_in(revk_leaving))
+    assert !(Instance.local.logged_in(revk_leaving))  // REVK3 a verified copy logging out leaves the character logged in
   }
-  // RN9 choosing from a collection answers nothing
-  assert Instance.local.choose(([1, 2, 3]))
-  // RN10 choosing two does not answer two
-  assert 2.times.map(Instance.local.choose(([1, 2, 3]))).count == 2
-  // WO15 a character logged in here is not here
-  assert Character.local("local-one") === Instance.local.login(Character(name: "local-one"))
-  // WO16 a character nobody logged in is here
-  assert !(Character.local("nobody-here"))
+  assert Instance.local.choose(([1, 2, 3]))  // RN9 choosing from a collection answers nothing
+  assert 2.times.map(Instance.local.choose(([1, 2, 3]))).count == 2  // RN10 choosing two does not answer two
+  assert Character.local("local-one") === Instance.local.login(Character(name: "local-one"))  // WO15 a character logged in here is not here
+  assert !(Character.local("nobody-here"))  // WO16 a character nobody logged in is here
   // Logging out zeroises and drops every secret (`none.read` field) the character holds, whatever it is called, and no one else's; what is not a secret stays.
   assert {
     Keyholder := class: Character {
@@ -722,16 +521,11 @@ Character &+= {
     zer_listed := zer.spares.first.key
     zer_other := Instance.local.login(Keyholder(name: "zer-other", key: $.ed25519.pair()))
     Instance.local.logout(zer)
-    // ZER1 a key on a character outlives logging out
-    assert !(zer.key || zer.spare || zer_spare.signed([1]).valid == true)
-    // ZER3 a key held in a list of tuples outlives logging out
-    assert !(zer.spares || zer_listed.signed([1]).valid == true)
-    // ZER4 logging out drops what is not a secret
-    assert zer.presence === zer_at
-    // ZER5 a character logged out is still logged in
-    assert !(Instance.local.logged_in(zer))
-    // ZER2 logging one character out zeroises another's key
-    assert zer_other.key.signed([1]).valid == true
+    assert !(zer.key || zer.spare || zer_spare.signed([1]).valid == true)  // ZER1 a key on a character outlives logging out
+    assert !(zer.spares || zer_listed.signed([1]).valid == true)  // ZER3 a key held in a list of tuples outlives logging out
+    assert zer.presence === zer_at  // ZER4 logging out drops what is not a secret
+    assert !(Instance.local.logged_in(zer))  // ZER5 a character logged out is still logged in
+    assert zer_other.key.signed([1]).valid == true  // ZER2 logging one character out zeroises another's key
   }
   // Deleting an account is a program run as the character 30 days on, which keeps every commit with its value gone.
   assert {
@@ -740,17 +534,12 @@ Character &+= {
     dlt_ids := dlt_c.history.since(None).id
     Instance.local.logout(dlt_c, delete_all: true)
     dlt := Program#{name == "delete" && who === dlt_c}.first
-    // DLT1 a deletion lapsed before its window
-    assert !(!dlt || dlt.started || dlt.from <= Time.now)
+    assert !(!dlt || dlt.started || dlt.from <= Time.now)  // DLT1 a deletion lapsed before its window
     dlt_erased := dlt_c.history.erased
-    // DLT2 an erased history lost its commits' labels
-    assert dlt_erased.since(None).id == dlt_ids
-    // DLT3 an erased history lost its stamps
-    assert dlt_erased.ordered.stamp == dlt_c.history.ordered.stamp
-    // DLT4 an erased history still holds a value
-    assert !(dlt_erased.value !== None)
-    // DLT6 a cancelled deletion is still pending
-    assert dlt.cancel.done
+    assert dlt_erased.since(None).id == dlt_ids  // DLT2 an erased history lost its commits' labels
+    assert dlt_erased.ordered.stamp == dlt_c.history.ordered.stamp  // DLT3 an erased history lost its stamps
+    assert !(dlt_erased.value !== None)  // DLT4 an erased history still holds a value
+    assert dlt.cancel.done  // DLT6 a cancelled deletion is still pending
   }
 
   avatars => name{is Location && .segments.some(.starts_with("@"))}
@@ -759,11 +548,9 @@ Character &+= {
   focus: Program?
   assert {
     focused := Character(name: "f", focus: Program(name: "focus"))
-    // CS7 a character focused on a quest is not busy
-    assert focused is Busy
+    assert focused is Busy  // CS7 a character focused on a quest is not busy
     focused.focus.stop
-    // CS8 a character whose focus is done is still busy
-    assert !(focused is Busy)
+    assert !(focused is Busy)  // CS8 a character whose focus is done is still busy
   }
 
   instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
@@ -771,69 +558,48 @@ Character &+= {
   assert {
     somewhere := Instance(path: "somewhere")
     present := Character(name: "present", presence: somewhere)
-    // PS2 someone somewhere is not as that place is
-    assert (present is Online) == (present.presence.device.network.connected ?? false)
-    // PS3 someone somewhere is offline and online at once
-    assert !(present is Offline && present is Online)
-    // PS4 someone who said nothing is held to something
-    assert !(present.constraint)
+    assert (present is Online) == (present.presence.device.network.connected ?? false)  // PS2 someone somewhere is not as that place is
+    assert !(present is Offline && present is Online)  // PS3 someone somewhere is offline and online at once
+    assert !(present.constraint)  // PS4 someone who said nothing is held to something
     quiet := Character(name: "q")
-    // CS9 a character is not to be disturbed before saying so
-    assert !(quiet is DoNotDisturb)
+    assert !(quiet is DoNotDisturb)  // CS9 a character is not to be disturbed before saying so
     quiet.status = DoNotDisturb
-    // CS10 a status said is not kept as what may run
-    assert quiet.constraint === DoNotDisturb
-    // CS11 a character that said do not disturb is not left alone
-    assert quiet is DoNotDisturb
-    // CS12 do not disturb does not read back
-    assert quiet.status.contains(DoNotDisturb)
+    assert quiet.constraint === DoNotDisturb  // CS10 a status said is not kept as what may run
+    assert quiet is DoNotDisturb  // CS11 a character that said do not disturb is not left alone
+    assert quiet.status.contains(DoNotDisturb)  // CS12 do not disturb does not read back
     disturbed := false
     (disturbed = true) unless quiet is DoNotDisturb
-    // CS13 something flagged against do not disturb ran anyway
-    assert !(disturbed)
+    assert !(disturbed)  // CS13 something flagged against do not disturb ran anyway
     held_back := Character(name: "h") ~~ .status = !Offline
-    // CS14 a character held to not offline is offline
-    assert !(held_back is Offline)
-    // BEC1 saying a status that holds once said started something
-    assert Program#{who: quiet}.empty
+    assert !(held_back is Offline)  // CS14 a character held to not offline is offline
+    assert Program#{who: quiet}.empty  // BEC1 saying a status that holds once said started something
     becoming := Character(name: "becoming")
     becoming.status = Broadcasting
-    // BEC2 saying a status read off what runs does not start a quest to make it hold
-    assert Program#{who: becoming}{goal === Broadcasting}.nonempty
+    assert Program#{who: becoming}{goal === Broadcasting}.nonempty  // BEC2 saying a status read off what runs does not start a quest to make it hold
     hidden := Character(name: "hidden", presence: somewhere) ~~ .status = Invisible
-    // CS15 a character that went invisible is not
-    assert hidden is Invisible
-    // CS16 an invisible character is online to someone else
-    assert !(hidden is Online)
-    // CS17 an invisible character is not as it is to itself
-    assert (with (@me = hidden) { (hidden is Online) == (hidden.presence.device.network.connected ?? false) })
+    assert hidden is Invisible  // CS15 a character that went invisible is not
+    assert !(hidden is Online)  // CS16 an invisible character is online to someone else
+    assert (with (@me = hidden) { (hidden is Online) == (hidden.presence.device.network.connected ?? false) })  // CS17 an invisible character is not as it is to itself
   }
   // The standard location of all communication with it: every instance it runs on, superposed, with the one its focus is on
   // selected (`\…\`, U-C2). `@me/instance = x` sends to the selected one, `dynamically event: @me/instance` follows what
   // comes from it; what holds an instance decides the protocol (a host's terminal, a page, another instance over the network).
   instance => instances{!== primary} | \(primary ?? @local)\
   status => Status#{this is .}
-  // HT15 a response is not written as its status line
-  assert HTTP.Response(status: HTTP.Status(200), body: "ok" as Byte[]) as HTTP.v1_1 == "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"
+  assert HTTP.Response(status: HTTP.Status(200), body: "ok" as Byte[]) as HTTP.v1_1 == "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"  // HT15 a response is not written as its status line
   // An NPC runs until its quests are resolved, waits for more, or stops: what it was told to do, like any said status; a player is any other character.
   assert {
     npc := Character(name: "keeper")
-    // NPC4 a character told nothing is not a player
-    assert npc is Player
+    assert npc is Player  // NPC4 a character told nothing is not a player
     npc.status = Resolving
-    // NPC1 a character told to resolve its quests is not an NPC
-    assert npc is NPC && !(npc is Player)
+    assert npc is NPC && !(npc is Player)  // NPC1 a character told to resolve its quests is not an NPC
     npc.status = Waiting
-    // NPC2 an NPC told to wait is not waiting
-    assert npc is Waiting
+    assert npc is Waiting  // NPC2 an NPC told to wait is not waiting
     npc.status = Stopping
-    // NPC3 an NPC told to stop still runs
-    assert !(npc is Waiting || npc is Resolving)
+    assert !(npc is Waiting || npc is Resolving)  // NPC3 an NPC told to stop still runs
   }
-  // CS3 a character nowhere does not read as offline
-  assert Character(name: "s").status.contains(Offline)
-  // CS4 a character nowhere reads as online
-  assert !(Character(name: "s").status.contains(Online))
+  assert Character(name: "s").status.contains(Offline)  // CS3 a character nowhere does not read as offline
+  assert !(Character(name: "s").status.contains(Online))  // CS4 a character nowhere reads as online
   // Saying a status constrains what may run (W2.15); one read off what runs (`Online`, `Broadcasting`) that does not
   // hold yet is a quest to make it hold, run by the character.
   .status = {wanted} ^punctuation => (constraint = wanted) -- (Program(name: "become", who: this, goal: wanted).schedule(this) unless this is wanted)
@@ -848,40 +614,29 @@ assert {
   reader := Character(name: "reader")
   once_target := "used once"
   reader{uses < 1}.execute once_target
-  // AC6 a grant never used before is refused
-  assert once_target.allows(reader, `()`)
-  // AC7 a grant for one use allowed a second
-  assert !(once_target.allows(reader, `()`))
+  assert once_target.allows(reader, `()`)  // AC6 a grant never used before is refused
+  assert !(once_target.allows(reader, `()`))  // AC7 a grant for one use allowed a second
   day_target := "read by day"
   reader{0:00 <= now}.read day_target
-  // AC8 a grant whose filter holds is refused
-  assert day_target.allows(reader, `size`)
+  assert day_target.allows(reader, `size`)  // AC8 a grant whose filter holds is refused
   night_target := "never read"
   reader{now < 0:00}.read night_target
-  // AC9 a grant whose filter fails is allowed
-  assert !(night_target.allows(reader, `size`))
-  // AC10 a read grant allows writing
-  assert !(day_target.allows(reader, `=`))
+  assert !(night_target.allows(reader, `size`))  // AC9 a grant whose filter fails is allowed
+  assert !(day_target.allows(reader, `=`))  // AC10 a read grant allows writing
 }
 // Where someone is says how they are, and saying nothing holds them to nothing.
 assert {
   away := Character(name: "away")
-  // PS1 someone with nowhere to be is not offline
-  assert away is Offline
+  assert away is Offline  // PS1 someone with nowhere to be is not offline
 }
 // A name given to something is the name it answers to afterwards.
-// WP3 something named is not called that
-assert Character(name: "before").named("after").name == "after"
-// CS5 a character nowhere is idle
-assert !(Character(name: "s") is Idle)
-// CS6 a character with nothing to focus on is busy
-assert !(Character(name: "s") is Busy)
+assert Character(name: "before").named("after").name == "after"  // WP3 something named is not called that
+assert !(Character(name: "s") is Idle)  // CS5 a character nowhere is idle
+assert !(Character(name: "s") is Busy)  // CS6 a character with nothing to focus on is busy
 // A character has an identity of its own, and is here when this machine has it.
-// WO14 a character has no identity of its own
-assert Character(name: "c").id
+assert Character(name: "c").id  // WO14 a character has no identity of its own
 // Comparing characters is security: without @ether/security (or @ether/network) it is an error, not an answer.
-// SEC1 two characters compare without @ether/security
-assert (Character(name: "a") == Character(name: "a")) is Diagnostic
+assert (Character(name: "a") == Character(name: "a")) is Diagnostic  // SEC1 two characters compare without @ether/security
 // A character's name is every name it goes by, each told apart by its pattern: an email, a phone number, a full name are what they look like.
 assert Character(name: "reachable" | "Ada Lovelace" | "a@b.c" | "+31612345678").(
   .email#.first.domain == "b.c"  // CTH1 an email is not read as local part and domain
@@ -895,8 +650,7 @@ assert {
   rpl := Character(name: "repl")
   rpl_session := rpl.session
   rpl_session.commit(rpl, 9)
-  // BRN5 keeping a session does not merge it into the character
-  assert rpl.keep(rpl_session).value == 9
+  assert rpl.keep(rpl_session).value == 9  // BRN5 keeping a session does not merge it into the character
 }
 
 Instance := class: Location + Entity {
@@ -914,10 +668,8 @@ Instance := class: Location + Entity {
     ins_c := Character(name: "spread", presence: ins_at)
     ins_other := Instance(path: "ins-other")
     ins_other.login(ins_c)
-    // INS1 a character is not on every instance running it
-    assert ins_at is ins_c.instances && ins_other is ins_c.instances
-    // INS2 the primary instance is not where the character is
-    assert ins_c.primary === ins_at
+    assert ins_at is ins_c.instances && ins_other is ins_c.instances  // INS1 a character is not on every instance running it
+    assert ins_c.primary === ins_at  // INS2 the primary instance is not where the character is
   }
   logged_in (character: Character) => character is registry
   // Logging out drops every secret on the character, whichever field holds it: each `none.read` field is zeroised and
@@ -949,10 +701,8 @@ Instance := class: Location + Entity {
     mir_peer := Instance(host: "mir-peer")
     mir_value := Item(name: "mirrored")
     mir_peer.mirror(mir_value)
-    // MIR1 a mirrored value is not at the mirroring instance
-    assert mir_peer is mir_value.location#
-    // MIR2 an instance nobody is logged into is synced
-    assert !(mir_peer.synced)
+    assert mir_peer is mir_value.location#  // MIR1 a mirrored value is not at the mirroring instance
+    assert !(mir_peer.synced)  // MIR2 an instance nobody is logged into is synced
   }
   synced => registry#.nonempty
 }
@@ -963,43 +713,30 @@ assert {
   nrw_far := Character(name: "far")
   nrw_target := (lamp: 1)
   Character{presence === nrw_room}.read nrw_target
-  // NRW1 a grant to a narrowing refuses who satisfies it
-  assert nrw_target.allows(nrw_near, `size`)
-  // NRW2 a grant to a narrowing allows who does not satisfy it
-  assert !(nrw_target.allows(nrw_far, `size`))
+  assert nrw_target.allows(nrw_near, `size`)  // NRW1 a grant to a narrowing refuses who satisfies it
+  assert !(nrw_target.allows(nrw_far, `size`))  // NRW2 a grant to a narrowing allows who does not satisfy it
 }
 assert {
   one := Instance(key: $.x25519.pair())
   open_to_none := Encoding.Encrypted(value: 5, key: None)
-  // EN21 a value held under nothing comes back at nothing
-  assert open_to_none.opened(Instance()).erred
-  // EN22 a value held under nothing comes back anywhere
-  assert open_to_none.opened(one).erred
+  assert open_to_none.opened(Instance()).erred  // EN21 a value held under nothing comes back at nothing
+  assert open_to_none.opened(one).erred  // EN22 a value held under nothing comes back anywhere
   anywhere := 4 as $.base64
-  // EN23 a packed value does not come back at a target
-  assert anywhere as one == 4
-  // EN24 a packed value does not come back at nothing
-  assert anywhere as Number == 4
+  assert anywhere as one == 4  // EN23 a packed value does not come back at a target
+  assert anywhere as Number == 4  // EN24 a packed value does not come back at nothing
 }
 assert {
   two := Instance(key: $.x25519.pair())
   locked := Encoding.Encrypted(value: 5, key: one.key)
-  // EN1 what is locked does not open with its key
-  assert locked.opened(one) == 5
-  // EN2 it opens with the wrong key
-  assert locked.opened(two).erred
+  assert locked.opened(one) == 5  // EN1 what is locked does not open with its key
+  assert locked.opened(two).erred  // EN2 it opens with the wrong key
   kept := Encoding.Encrypted(value: 5, key: three.key)
-  // EN8 what is held is not read back where the key is
-  assert !(kept.opened(three).erred)
-  // EN9 it is read back where the key is not
-  assert kept.opened(two).erred
-  // EN10 what is read back is not what was put in
-  assert kept.opened(three) == 5
+  assert !(kept.opened(three).erred)  // EN8 what is held is not read back where the key is
+  assert kept.opened(two).erred  // EN9 it is read back where the key is not
+  assert kept.opened(three) == 5  // EN10 what is read back is not what was put in
   nested := Encoding.Encrypted(value: 5 as $.gzip, key: one.key)
-  // EN15 what is packed inside what is locked does not come back
-  assert nested.opened(one) as Number == 5
-  // EN16 what is locked around a packed value opens with the wrong key
-  assert nested.opened(two).erred
+  assert nested.opened(one) as Number == 5  // EN15 what is packed inside what is locked does not come back
+  assert nested.opened(two).erred  // EN16 what is locked around a packed value opens with the wrong key
 }
 assert {
   three := Instance(key: $.x25519.pair())
@@ -1007,16 +744,11 @@ assert {
 assert {
   seven := $.x25519.pair()
   held_there := Encoding.Encrypted(value: 5, key: seven)
-  // EN30 a value does not open at an instance holding its key
-  assert held_there.opened(Instance(key: seven)) == 5
-  // EN31 a value opens at an instance holding another key
-  assert held_there.opened(Instance(key: $.x25519.pair())).erred
-  // EN32 a value opened without its key does not raise that its key is missing
-  assert held_there.opened(Instance()).erred
-  // EN33 a value does not open for a character holding its key
-  assert held_there.opened(Character(name: "k", key: seven)) == 5
-  // EN34 a value opened with its key is not what was put in
-  assert held_there.opened(Instance(key: seven)) == 5
+  assert held_there.opened(Instance(key: seven)) == 5  // EN30 a value does not open at an instance holding its key
+  assert held_there.opened(Instance(key: $.x25519.pair())).erred  // EN31 a value opens at an instance holding another key
+  assert held_there.opened(Instance()).erred  // EN32 a value opened without its key does not raise that its key is missing
+  assert held_there.opened(Character(name: "k", key: seven)) == 5  // EN33 a value does not open for a character holding its key
+  assert held_there.opened(Instance(key: seven)) == 5  // EN34 a value opened with its key is not what was put in
 }
 
 // the current instance (not `@localhost`: anything on the host machine)
@@ -1028,8 +760,7 @@ Broadcasting := Character{quests{serves @public}.nonempty}
 Hosting := Character{presence.hosted#.some(!.same(this))}
 Proxying := Character{quests{goal is Network.Proxy && !done}.nonempty}
 Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.since(None){.value == true}.last.when >= Time.now - 5 minutes)}
-// CS2 idle and busy are the same
-assert !(Idle === Busy)
+assert !(Idle === Busy)  // CS2 idle and busy are the same
 Busy := Character{focus && !focus.done}
 
 Invisible := Character{constraint is Invisible}
@@ -1043,29 +774,23 @@ Player := Character{!(. is NPC)}
 
 Constraint := Invisible | DoNotDisturb | NPC
 Status := Online | Offline | Broadcasting | Hosting | Proxying | Idle | Busy | Invisible | DoNotDisturb
-// HT12 200 has no reason phrase OK
-assert HTTP.Status(200).reason == "OK"
+assert HTTP.Status(200).reason == "OK"  // HT12 200 has no reason phrase OK
 // A status is what a character is now, read off what it runs; saying one is a
 // constraint on what may run.
-// CS1 there are other than nine statuses
-assert Status#.count == 9
+assert Status#.count == 9  // CS1 there are other than nine statuses
 
 Organization := class: Character {
   logo: *?
-  // LC3 @./path is not a relative location
-  assert @./lib/logo.png as String == "./lib/logo.png"
-  // LC5 / does not go into a location
-  assert (@./lib / "logo.png") == @./lib/logo.png
+  assert @./lib/logo.png as String == "./lib/logo.png"  // LC3 @./path is not a relative location
+  assert (@./lib / "logo.png") == @./lib/logo.png  // LC5 / does not go into a location
   website: *?
 
   members => children{is Character}
   // Who belongs to an organization.
   assert {
     guild := Organization(name: "guild")
-    // WP21 an organization nobody joined has members
-    assert guild.members.empty
-    // WP22 an organization is not offline to begin with
-    assert guild is Offline
+    assert guild.members.empty  // WP21 an organization nobody joined has members
+    assert guild is Offline  // WP22 an organization is not offline to begin with
   }
 }
 
@@ -1075,54 +800,37 @@ Avatar := class: Character {
   platform: Character?
 }
 
-// WO7 the domain name a.b is not valid
-assert Network.DomainName(text: "a.b").valid
+assert Network.DomainName(text: "a.b").valid  // WO7 the domain name a.b is not valid
 
-// WO8 a name of nothing is a valid domain name
-assert !(Network.DomainName(text: "").valid)
+assert !(Network.DomainName(text: "").valid)  // WO8 a name of nothing is a valid domain name
 
-// WO11 the theorem does not hold
-assert Proof.theorem(Proof.Proposition(code: { true }), Proof(proposition: None, argument: Proof.Proposition(code: { true })))
+assert Proof.theorem(Proof.Proposition(code: { true }), Proof(proposition: None, argument: Proof.Proposition(code: { true })))  // WO11 the theorem does not hold
 
 // Locations written as values (L§6.1, A3)
-// LC1 @https://… is not a location of what is written
-assert (@https://orbitmines.com/archive) as String == "https://orbitmines.com/archive"
+assert (@https://orbitmines.com/archive) as String == "https://orbitmines.com/archive"  // LC1 @https://… is not a location of what is written
 
-// LC2 @"…" does not keep its spaces
-assert @"a location with spaces" as String == "a location with spaces"
+assert @"a location with spaces" as String == "a location with spaces"  // LC2 @"…" does not keep its spaces
 
-// LC6 a value between the parts of a location is not written into it
-assert (@https://www.unicode.org/Public/ 17 /ucd) as String == "https://www.unicode.org/Public/17/ucd"
+assert (@https://www.unicode.org/Public/ 17 /ucd) as String == "https://www.unicode.org/Public/17/ucd"  // LC6 a value between the parts of a location is not written into it
 
-// LC7 a dot in a path is not part of the path
-assert (@https://www.unicode.org/ucd/UnicodeData.txt) as String ~= "UnicodeData.txt" ⊣
+assert (@https://www.unicode.org/ucd/UnicodeData.txt) as String ~= "UnicodeData.txt" ⊣  // LC7 a dot in a path is not part of the path
 
-// LC8 a path written after a location does not continue it
-assert (@https://www.unicode.org/ucd)/UnicodeData.txt as String == "https://www.unicode.org/ucd/UnicodeData.txt"
+assert (@https://www.unicode.org/ucd)/UnicodeData.txt as String == "https://www.unicode.org/ucd/UnicodeData.txt"  // LC8 a path written after a location does not continue it
 
-// LC9 a location loses the parentheses in its path
-assert (@https://en.wikipedia.org/wiki/Dune_(novel)) as String == "https://en.wikipedia.org/wiki/Dune_(novel)"
+assert (@https://en.wikipedia.org/wiki/Dune_(novel)) as String == "https://en.wikipedia.org/wiki/Dune_(novel)"  // LC9 a location loses the parentheses in its path
 
-// LC10 a location does not go on with an extension after a value
-assert (@./icons/ "tick" .svg) as String == "./icons/tick.svg"
+assert (@./icons/ "tick" .svg) as String == "./icons/tick.svg"  // LC10 a location does not go on with an extension after a value
 
-// CTH7 a grouped phone number is not read to its digits
-assert "+31 (0)6 1234-5678" is Phone && ("+31 (0)6 1234-5678" as Phone).digits == "+31612345678" && ("(020) 123 4567" as Phone).digits == "0201234567"
+assert "+31 (0)6 1234-5678" is Phone && ("+31 (0)6 1234-5678" as Phone).digits == "+31612345678" && ("(020) 123 4567" as Phone).digits == "0201234567"  // CTH7 a grouped phone number is not read to its digits
 
-// CTH8 a full name in another script or order is not a full name
-assert ["毛泽东", "김민준", "山田 太郎", "列奥纳多·达·芬奇", "レオナルド・ダ・ヴィンチ", "محمد بن سلمان", "Nguyễn Văn An", "Þórunn Guðmundsdóttir", "José María Álvarez de la Cruz", "Мария Иванова", "बिमल रॉय"].every(is FullName)
+assert ["毛泽东", "김민준", "山田 太郎", "列奥纳多·达·芬奇", "レオナルド・ダ・ヴィンチ", "محمد بن سلمان", "Nguyễn Văn An", "Þórunn Guðmundsdóttir", "José María Álvarez de la Cruz", "Мария Иванова", "बिमल रॉय"].every(is FullName)  // CTH8 a full name in another script or order is not a full name
 
-// CTH9 initials, joined or lowercase parts are not a full name
-assert "J. R. R. Tolkien" is FullName && "Mary-Jane O'Brien" is FullName && "bell hooks" is FullName
+assert "J. R. R. Tolkien" is FullName && "Mary-Jane O'Brien" is FullName && "bell hooks" is FullName  // CTH9 initials, joined or lowercase parts are not a full name
 
-// CTH12 a script's name separator does not separate parts
-assert ("列奥纳多·达·芬奇" as FullName).parts.count == 3
+assert ("列奥纳多·达·芬奇" as FullName).parts.count == 3  // CTH12 a script's name separator does not separate parts
 
-// CTH13 one word in a spaced script was taken for a full name
-assert !("alice" is FullName || "Suharto" is FullName)
+assert !("alice" is FullName || "Suharto" is FullName)  // CTH13 one word in a spaced script was taken for a full name
 
-// CTH10 a valid email address is not an Email
-assert "\"a b\"@x.org" is Email && "a.b+tag@sub.example.org" is Email && "a@[192.0.2.1]" is Email
+assert "\"a b\"@x.org" is Email && "a.b+tag@sub.example.org" is Email && "a@[192.0.2.1]" is Email  // CTH10 a valid email address is not an Email
 
-// CTH11 an invalid email or phone number was accepted
-assert !("a..b@x.org" is Email || ".a@x.org" is Email || "a@-x.org" is Email || "a@x" is Email || "12" is Phone || "+1234567890123456" is Phone)
+assert !("a..b@x.org" is Email || ".a@x.org" is Email || "a@-x.org" is Email || "a@x" is Email || "12" is Phone || "+1234567890123456" is Phone)  // CTH11 an invalid email or phone number was accepted

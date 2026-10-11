@@ -14,11 +14,9 @@ LSP &+= {
   // DiagnosticSeverity: 1 error, 2 warning, 3 information, 4 hint, Ray's severities from error down; fatal is written as an error and trace as a hint (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
   coded (severity: Diagnostic.Severity) => (5 - severity.index) max 1 min 4
   // Six severities on four: fatal is an error and trace a hint, each read back as the nearest (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
-  // LSP1 a severity is not written and read as LSP's four
-  assert LSP.coded(Diagnostic.Severity.fatal) == 1 && LSP.coded(Diagnostic.Severity.trace) == 4 && LSP.severity(3) == Diagnostic.Severity.info && LSP.severity(4) == Diagnostic.Severity.debug
+  assert LSP.coded(Diagnostic.Severity.fatal) == 1 && LSP.coded(Diagnostic.Severity.trace) == 4 && LSP.severity(3) == Diagnostic.Severity.info && LSP.severity(4) == Diagnostic.Severity.debug  // LSP1 a severity is not written and read as LSP's four
   severity (code: Decimal{1 <= . <= 4}) => Diagnostic.Severity[5 - code]
-  // DG12 a warning is not LSP severity 2
-  assert [Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)] as LSP ~= (*, "\"severity\":2", *)
+  assert [Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)] as LSP ~= (*, "\"severity\":2", *)  // DG12 a warning is not LSP severity 2
   // Positions are zero-based; columns count code points under the utf-32 position encoding (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#positionEncodingKind)
   position (at: (line: Decimal, column: Decimal)?) => (line: (at.line ?? 1) - 1, character: (at.column ?? 1) - 1)
   range (at: Location?) => (start: position(at.from), end: position(at.to))
@@ -53,8 +51,7 @@ LSP &+= {
     ))) as Unicode.UTF-8 as Byte[])
   }
 }
-// DG14 $.lsp is not LSP
-assert $.lsp === LSP
+assert $.lsp === LSP  // DG14 $.lsp is not LSP
 LSP.components.hierarchy &= Language
 
 assert Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)}).(

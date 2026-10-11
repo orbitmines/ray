@@ -17,8 +17,7 @@ ANSI := class: Language {
     at => Geometry.Vector((column ?? 1) - 1, (row ?? 1) - 1)
     assert {
       moved := @ansi \e[2;3H
-      // UI293 a cursor position written inline is not a move to that cell
-      assert moved.first is ANSI.Move && moved.first.at == Geometry.Vector(2, 1)
+      assert moved.first is ANSI.Move && moved.first.at == Geometry.Vector(2, 1)  // UI293 a cursor position written inline is not a move to that cell
     }
   }
   // ED, Erase in Display (ECMA-48 8.3.39)
@@ -48,11 +47,9 @@ ANSI := class: Language {
         \e]0;{"Ray"}\a
         \e[0;1;38;2;255;0;0mR
       }
-      // UI294 a hole in an ansi block is not spliced into its sequence
-      assert ansi_block.first is ANSI.Title && ansi_block.first.text == "Ray"
+      assert ansi_block.first is ANSI.Title && ansi_block.first.text == "Ray"  // UI294 a hole in an ansi block is not spliced into its sequence
       styled := ansi_block{. is ANSI.Style}.first.cell("R")
-      // UI295 an SGR sequence is not read into a cell's style
-      assert ANSI.Attribute.bold is styled.styles && styled.foreground == Geometry.Color(255, 0, 0)
+      assert ANSI.Attribute.bold is styled.styles && styled.foreground == Geometry.Color(255, 0, 0)  // UI295 an SGR sequence is not read into a cell's style
     }
     static (cell: Cell) as (=== Style) => Style(parameters: [
       Attribute#{. is cell.styles},
@@ -87,23 +84,18 @@ ANSI := class: Language {
     lettered => code && (code as Number) < 27 && !(code is ("\r" | "\t"))
     shift => modifier && (modifier - 1) % 2 == 1
     control => modifier && (modifier - 1) / 4 % 2 == 1 || lettered
-    // UI35 ctrl+up is not read as control
-    assert "\e[1;5A" as ANSI.Key .control
+    assert "\e[1;5A" as ANSI.Key .control  // UI35 ctrl+up is not read as control
   }
-  // UI167 alt+f in the terminal is not read
-  assert ("\ef" as ANSI.Key).alt == "f"
+  assert ("\ef" as ANSI.Key).alt == "f"  // UI167 alt+f in the terminal is not read
   assert {
     keyboard := @me/device/keyboard
-    // UI165 a key the UI names is not Feature's key
-    assert ("\t" as ANSI.Key).name === keyboard["Tab"] && ("\r" as ANSI.Key).name === keyboard["Enter"]
+    assert ("\t" as ANSI.Key).name === keyboard["Tab"] && ("\r" as ANSI.Key).name === keyboard["Enter"]  // UI165 a key the UI names is not Feature's key
   }
-  // UI166 ctrl+f in the terminal is not f with control
-  assert ((6 as Char as String) as ANSI.Key).control && ((6 as Char as String) as ANSI.Key).name.name == "f"
+  assert ((6 as Char as String) as ANSI.Key).control && ((6 as Char as String) as ANSI.Key).name.name == "f"  // UI166 ctrl+f in the terminal is not f with control
   Mouse := class ("\e[<", button: Decimal, ";", x: Decimal, ";", y: Decimal, state: "M" | "m") => {
     cell => Geometry.Vector(x - 1, y - 1)
   }
-  // UI36 a mouse report is not read
-  assert ("\e[<0;3;4M" as ANSI.Mouse).x == 3
+  assert ("\e[<0;3;4M" as ANSI.Mouse).x == 3  // UI36 a mouse report is not read
   Paste := class ("\e[200~", text: *, "\e[201~")
   FocusChange := class ("\e[", state: "I" | "O")
 
@@ -120,8 +112,7 @@ ANSI := class: Language {
   }
   TrueColor := { }
 }
-// UI66 the terminal's language is not registered
-assert Language.named(".ansi") == ANSI && $.ansi === ANSI
+assert Language.named(".ansi") == ANSI && $.ansi === ANSI  // UI66 the terminal's language is not registered
 
 assert {
   who := "Ray"

@@ -55,10 +55,7 @@ assert JSON.read("{\"name\": \"x\", \"list\": [1, true, null], \"inner\": {\"a\"
     .name == "Ray" && .list.count == 3 && .inner.a == "Ray" && JSON.read($.json.write(.)).inner.a == "Ray"  // JN9 a json block is not its document with the holes' values
   )
 )
-// JN7 $.json is not the JSON language
-assert $.json === JSON
-// UI98 JSON text can close the script it is in
-assert JSON.write("</script>") == "\"\\u003c/script>\""
+assert $.json === JSON  // JN7 $.json is not the JSON language
+assert JSON.write("</script>") == "\"\\u003c/script>\""  // UI98 JSON text can close the script it is in
 
-// JN5 a list is not written as JSON
-assert $.json.write([1, "a"]) == "[1, \"a\"]"
+assert $.json.write([1, "a"]) == "[1, \"a\"]"  // JN5 a list is not written as JSON

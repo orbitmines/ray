@@ -29,14 +29,10 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
       brn.commit(@me, 1)
       brn.commit(@me, 2, id: "v1")
       brn.commit(@me, 3)
-      // BRN1 a branch is not named by its nearest label
-      assert brn.label == "v1"
-      // BRN2 a blank history has commits
-      assert brn.blank.commits.empty
-      // BRN3 a commit with one child in its line branches
-      assert !(brn.find("v1").branching)
-      // BRN4 a commit does not expand into the run that made it
-      assert brn.head.expand
+      assert brn.label == "v1"  // BRN1 a branch is not named by its nearest label
+      assert brn.blank.commits.empty  // BRN2 a blank history has commits
+      assert !(brn.find("v1").branching)  // BRN3 a commit with one child in its line branches
+      assert brn.head.expand  // BRN4 a commit does not expand into the run that made it
     }
     value => line?[this].value ?? applied(None)
     // A transaction happens as a whole or not at all.
@@ -48,27 +44,21 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
         from.balance -= 10
         to.balance += 10
       }
-      // TX1 a transaction that holds did not happen
-      assert from.balance == 10 && to.balance == 10
+      assert from.balance == 10 && to.balance == 10  // TX1 a transaction that holds did not happen
       transaction {
         from.balance -= 10
         to.balance += 10
         ERROR `refused`
       }
-      // TX2 a transaction that failed was not undone as a whole
-      assert from.balance == 10 && to.balance == 10
+      assert from.balance == 10 && to.balance == 10  // TX2 a transaction that failed was not undone as a whole
       // A stretch bound by a time holds from the commit current at that time; by a label or a commit, from that commit on.
       bnd := History()
       [1, 2, 3].for(bnd.commit(ada, .))
       bnd_middle := bnd.since(None){.value == 2}.first
-      // BND1 a stretch from now does not start at the current commit
-      assert bnd{from Time.now}.first.value == [3]
-      // BND2 a stretch from a label does not start at that commit
-      assert bnd{from bnd_middle.id}.first.value == [2, 3]
-      // BND3 a stretch from a commit does not start at that commit
-      assert bnd{from bnd_middle}.first.value == [2, 3]
-      // BND4 a time is not reached at the commit current then
-      assert History.reached(bnd_middle.when, bnd_middle) && !History.reached(bnd.head.when, bnd_middle)
+      assert bnd{from Time.now}.first.value == [3]  // BND1 a stretch from now does not start at the current commit
+      assert bnd{from bnd_middle.id}.first.value == [2, 3]  // BND2 a stretch from a label does not start at that commit
+      assert bnd{from bnd_middle}.first.value == [2, 3]  // BND3 a stretch from a commit does not start at that commit
+      assert History.reached(bnd_middle.when, bnd_middle) && !History.reached(bnd.head.when, bnd_middle)  // BND4 a time is not reached at the commit current then
     }
     mentions (label) => id == label || versions.contains(label)
     // A line's settings, written `name = text` in its `with (…)`: those its hash covers, then the rest. A project that adds
@@ -85,13 +75,10 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
       text := "x := 1\ny := 2\nz := 3" as Byte[]
       vs1 := History.placed([(path: "a.ray", content: text)])
       vs2 := History.placed([(path: "b.ray", content: text)])
-      // VC29 a moved file is not read as a move
-      assert History.change(vs1, vs2) as String == ".[\"b.ray\"] = .[\"a.ray\"]; .[\"a.ray\"] = None"
-      // VC30 a move does not keep the value
-      assert (History.valued(vs1) -- History.change(vs1, vs2))["b.ray"] == History.valued(vs1)["a.ray"]
+      assert History.change(vs1, vs2) as String == ".[\"b.ray\"] = .[\"a.ray\"]; .[\"a.ray\"] = None"  // VC29 a moved file is not read as a move
+      assert (History.valued(vs1) -- History.change(vs1, vs2))["b.ray"] == History.valued(vs1)["a.ray"]  // VC30 a move does not keep the value
       vt1 := History.placed([(path: "a.ray", content: text), (path: "c.ray", content: text)])
-      // VC31 a rename two files could have made is not raised
-      assert History.change(vt1, vs2).erred
+      assert History.change(vt1, vs2).erred  // VC31 a rename two files could have made is not raised
     }
     given (set, written: String) => this
     hash: Byte[] => $.sha256.write([parents.map(.hash), (id, attributed, text).join("") as Byte[]].flatten).bytes
@@ -121,8 +108,7 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
 
   commit (who, change, id: Label = UUID.v1(), when: Time = Time.now, message: String? = None, versions: Label[] = []): static =>
     this ~~ .head = committed(Commit(id, who, stamp: clock.now, change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this))
-  // SGN6 a commit by a claimed character is authentic
-  assert !(History(repository: Repository()).commit(Character(name: "keyless"), 1).head.authentic)
+  assert !(History(repository: Repository()).commit(Character(name: "keyless"), 1).head.authentic)  // SGN6 a commit by a claimed character is authentic
   // What a commit becomes before it is this line's head: what the storage levels in scope store. Security overrides it (keys, signatures).
   committed (made: Commit) => made.stored
   // Whether this line's values can be read here; security answers by the content keys held here.
@@ -174,8 +160,7 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
 
   received (stamp: Stamp) => clock.receive(stamp)
 }
-// SEAL2 a who whose visibility is inherited is sealed
-assert !(History(repository: Repository()).sealed_sender)
+assert !(History(repository: Repository()).sealed_sender)  // SEAL2 a who whose visibility is inherited is sealed
 
 Repository := class (world: World?, histories: History[] = []) => {
   id: UUID = UUID.v4()
@@ -204,8 +189,7 @@ History &+= {
   static edit (before, after) => (Language.ray.write(before) as Byte[]) -- (old => (Language.ray.write(after) as Byte[]) -- (new =>
     Encoding.common(old, new) -- (prefix => Encoding.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
       (". edited(", prefix, ", ", old.count - suffix, ", ", Language.ray.write(new[prefix..<new.count - suffix] as String), ")") as String as Program))))
-  // VC41 a small change is not written as an edit
-  assert History.edit("abcdef", "abXdef") as String == ". edited(3, 4, \"X\")"
+  assert History.edit("abcdef", "abXdef") as String == ". edited(3, 4, \"X\")"  // VC41 a small change is not written as an edit
 
   file => (path: id as String + ".ray", content: written_as() as String as Byte[])
   stored_file => file
@@ -280,8 +264,7 @@ assert ((Program(code: {
 
 Node &+= {
   edited (from: Number, to: Number, text: String) => Language.ray.write(this) -- (written => Language.ray.read((written[..<from], text, written[to..]).join("")))
-  // VC42 an edit does not produce the changed value
-  assert "abcdef".edited(3, 4, "X") == "abXdef"
+  assert "abcdef".edited(3, 4, "X") == "abXdef"  // VC42 an edit does not produce the changed value
 }
 
 Program &+= {
@@ -295,11 +278,9 @@ Program &+= {
   run => Program.runs.commit(who, this).head.opened.change
   rewrites => history.since(None){.who is Program}
   // A rewrite is a commit by its rule; revoking a rule runs on from before it was used (P8.21)
-  // FWC1 a program nothing rewrote has rewrites
-  assert Program(code: { 1 }).rewrites.empty
+  assert Program(code: { 1 }).rewrites.empty  // FWC1 a program nothing rewrote has rewrites
   revoked (rule: Program) => rewrites{.who === rule}.first -- (used => used ? (history[used.previous].value ?? this){O: O - rule} : this)
-  // FWC2 revoking a rule nothing used loses the program
-  assert Program(code: { 1 }).revoked(Compiler.folding)
+  assert Program(code: { 1 }).revoked(Compiler.folding)  // FWC2 revoking a rule nothing used loses the program
 
   // A transaction runs on a fork of the history and is merged as a whole, or not at all.
   right-to-left transaction => {
@@ -349,20 +330,16 @@ Compiler &+= {
 
   levels &+= [formats, per_object, cached, delta, stored]
   // Storage choices are optimisation levels.
-  // VC39 storage is not a compiler level
-  assert Compiler.levels.contains(Compiler.stored)
+  assert Compiler.levels.contains(Compiler.stored)  // VC39 storage is not a compiler level
 }
 
 Language &+= {
   stored: Compiler? = Compiler.stored
 }
-// VC57 a line's settings may run forever
-assert !Language.cfg.admits(Program(code: { while true { } }))
+assert !Language.cfg.admits(Program(code: { while true { } }))  // VC57 a line's settings may run forever
 // What the Ray language keeps.
-// VC17 the .% history is not lossless
-assert Language.ray is Language.Lossless
-// VC43 $.ray is not the Ray language
-assert $.ray === Language.ray
+assert Language.ray is Language.Lossless  // VC17 the .% history is not lossless
+assert $.ray === Language.ray  // VC43 $.ray is not the Ray language
 
 Language.ray &+= {
   level &+= History.level
@@ -376,8 +353,7 @@ Consistency := class (replicas: *[] = []) => {
 Layout := class (root: Location = @./.ether/external/@) => {
   checked_out (name: String) => root / ("@" + name)
   path (name: String, locations: String[], version) => locations.reduce(held = checked_out(name) / "$" => held / ("@" + .)) / "%" / ((version as String) -- (. ~= ⊢"%" ? .[1..] as String : .))
-  // PK29 an install is not under the decided layout
-  assert Layout().path("clang", ["windows", "x86-64"], "0.16.0") as String ~= "@clang/$/@windows/@x86-64/%/0.16.0" ⊣
+  assert Layout().path("clang", ["windows", "x86-64"], "0.16.0") as String ~= "@clang/$/@windows/@x86-64/%/0.16.0" ⊣  // PK29 an install is not under the decided layout
   changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)
 }
 
@@ -413,8 +389,7 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
   static conflicts (type, key: Program) => View(type) -- (all => all.map(key).unique.map(k => all{key(.) == k}){.count > 1}.map(duplicates => duplicates ~~ ERROR@Key `resolve the duplicates`))
 
   kept_in: Format? => format ?? Compiler.reduced(this, StoreOptimizations)
-  // DB10 a .% location is not kept natively
-  assert Store(at: @"kept.%").kept_in == Store.native
+  assert Store(at: @"kept.%").kept_in == Store.native  // DB10 a .% location is not kept natively
   instances (type) => (children{is type}, kept_in.read(this, type) ?? []).flatten.unique
   kept (instance): static => this ~~ add(instance) ~~ kept_in.kept(this, instance)
 
@@ -430,23 +405,15 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
       Kept$ = memory_store
       small := Kept(key: 1, size: 2).persistent
       large := Kept(key: 2, size: 9).persistent
-      // DB1 a store in memory is given a format
-      assert memory_store.kept_in == None
-      // DB2 what was kept is not two
-      assert Kept$.count == 2
-      // DB3 a narrowed view is not one
-      assert Kept{size > 5}$.count == 1
-      // DB4 a narrowed view answers the other one
-      assert Kept{size > 5}$.first == large
-      // DB5 an instance is not routed where its type was sent
-      assert Store.routed(small).contains(memory_store)
+      assert memory_store.kept_in == None  // DB1 a store in memory is given a format
+      assert Kept$.count == 2  // DB2 what was kept is not two
+      assert Kept{size > 5}$.count == 1  // DB3 a narrowed view is not one
+      assert Kept{size > 5}$.first == large  // DB4 a narrowed view answers the other one
+      assert Store.routed(small).contains(memory_store)  // DB5 an instance is not routed where its type was sent
       Kept$ |= Store(at: @"memory/copy")
-      // DB6 a type sent to two stores is routed to other than two
-      assert Store.routed(small).count == 2
-      // DB11 a row forgot its type
-      assert (small as Store.Row).type == "Kept"
-      // DB12 a row read back is another instance
-      assert (small as Store.Row).instance.size == 2
+      assert Store.routed(small).count == 2  // DB6 a type sent to two stores is routed to other than two
+      assert (small as Store.Row).type == "Kept"  // DB11 a row forgot its type
+      assert (small as Store.Row).instance.size == 2  // DB12 a row read back is another instance
     }
   }
 
@@ -455,8 +422,7 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
     kept (store: Store, instance) => versioned ? store.history.appended(store.at, language)
       : file ? (store.at.held = language.write(store.children))
       : language.read(store.at).executed(language.write([instance as Row]))
-    // DB9 a .kv location is not kept as keys
-    assert Store(at: @./kept.kv).kept_in == Store.keyed
+    assert Store(at: @./kept.kv).kept_in == Store.keyed  // DB9 a .kv location is not kept as keys
   }
 
   static memory: Format? = None
@@ -508,8 +474,7 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
   // Adaptive lossless floating point: decimals kept as integers scaled by one exponent (https://dl.acm.org/doi/10.1145/3626717)
   static ALP := class (exponent: Integer, integers: Integer[]) => {
     values => integers.map(. / 10 ^ exponent)
-    // DB21 scaled integers do not read back as decimals
-    assert Store.ALP(exponent: 1, integers: [15, 25]).values == [1.5, 2.5]
+    assert Store.ALP(exponent: 1, integers: [15, 25]).values == [1.5, 2.5]  // DB21 scaled integers do not read back as decimals
   }
   // Fast static symbol table: frequent substrings replaced by one-byte codes (https://www.vldb.org/pvldb/vol13/p2649-boncz.pdf)
   static FSST := class (symbols: String[], codes: Integer[][]) => {

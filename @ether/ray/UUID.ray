@@ -41,29 +41,22 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
       (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random + stamp.logical
       node = @me/device/network/mac ?? (Hexadecimal₁₂.random ~~ .[1] |= 1)
   }
-  // UU21 the version built from a time is not there
-  assert UUID.v1
+  assert UUID.v1  // UU21 the version built from a time is not there
   assert {
     made_first := choose UUID.v1{unique}
     made_second := choose UUID.v1{unique}
-    // UU30 a generated version 1 identifier is not version 1
-    assert made_first.version == 1
-    // UU31 two version 1 identifiers made one after the other are the same
-    assert !(made_first == made_second)
-    // UU32 the later identifier is not later
-    assert made_first.time < made_second.time
-    // UU33 a generated identifier is not of the RFC 4122 variant
-    assert made_first is UUID.RFC_4122
+    assert made_first.version == 1  // UU30 a generated version 1 identifier is not version 1
+    assert !(made_first == made_second)  // UU31 two version 1 identifiers made one after the other are the same
+    assert made_first.time < made_second.time  // UU32 the later identifier is not later
+    assert made_first is UUID.RFC_4122  // UU33 a generated identifier is not of the RFC 4122 variant
   }
-  // UU30 the Gregorian reform is not 0x01B21DD213814000 hundred-nanosecond intervals before 1970
-  assert UUID.v1.gregorian_reform == "1582-10-15T00:00:00Z" as ISO_8601 as Time && Stamp.at(UUID.v1.gregorian_reform, None).wall == -0x01B21DD213814000
+  assert UUID.v1.gregorian_reform == "1582-10-15T00:00:00Z" as ISO_8601 as Time && Stamp.at(UUID.v1.gregorian_reform, None).wall == -0x01B21DD213814000  // UU30 the Gregorian reform is not 0x01B21DD213814000 hundred-nanosecond intervals before 1970
 
   static v3 := class: UUID{version == 3} {
     namespace: UUID
     name: String
   }
-  // UU22 the version built from a namespace and a name is not there
-  assert UUID.v3
+  assert UUID.v3  // UU22 the version built from a namespace and a name is not there
   static v4 := class: UUID{version == 4} = secure Hexadecimal{length == 32}.random ~~ (
     .version = 4
     .variant = ₂10
@@ -87,8 +80,7 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
     namespace: UUID
     name: String
   }
-  // UU23 the other version built that way is not there
-  assert UUID.v5
+  assert UUID.v5  // UU23 the other version built that way is not there
 
   static Namespace := class {
     DNS: UUID = 6ba7b810-9dad-11d1-80b4-00c04fd430c8
@@ -96,10 +88,8 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
     OID: UUID = 6ba7b812-9dad-11d1-80b4-00c04fd430c8
     X500: UUID = 6ba7b814-9dad-11d1-80b4-00c04fd430c8
   }
-  // UU34 the DNS namespace is not a version 1 identifier
-  assert UUID.Namespace.DNS.version == 1
-  // UU35 the DNS namespace does not write as itself
-  assert UUID.Namespace.DNS as String == "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+  assert UUID.Namespace.DNS.version == 1  // UU34 the DNS namespace is not a version 1 identifier
+  assert UUID.Namespace.DNS as String == "6ba7b810-9dad-11d1-80b4-00c04fd430c8"  // UU35 the DNS namespace does not write as itself
 }
 
 {uuid: UUID.String}: UUID => uuid

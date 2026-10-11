@@ -2,7 +2,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 ether="$(cd "$here/../.." && pwd)"
-ray() { (ulimit -s unlimited; cd "$ether/v0.ts" && ETHER="$ether" KINDS_AFTER=1 LOAD='$/x86/X86.ray,poc/interop/ints.ray,poc/machine/wrapping.ray,poc/interop/io.ray,poc/interop/write.rust.ray' STEPS=80000000 node --max-old-space-size=8000 --stack-size=60000 --import tsx "$here/$1" "${@:2}" 2>/dev/null); }
+ray() { (ulimit -s unlimited; cd "$ether/v0.ts" && ETHER="$ether" KINDS_AFTER=1 LOAD='$/x86/X86.ray,poc/interop/ints.ray,poc/machine/wrapping.ray,poc/interop/io.ray,poc/interop/write.rust.ray,poc/interop/read.c.ray' STEPS=80000000 node --max-old-space-size=8000 --stack-size=60000 --import tsx "$here/$1" "${@:2}" 2>/dev/null); }
 each() {
   local failed=0 count
   count=$(wc -l < "$here/corpus/manifest.txt")
@@ -24,5 +24,11 @@ case "${1:-}" in
     python3 "$here/check.py" "${INPUTS:-30}"
     ;;
   MC6) each assemble "MC6 every function's objdump text, read as Ray, is written as gcc's bytes" ;;
-  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6" >&2; exit 2 ;;
+  MC7)
+    rm -rf "$here/out/compiled"
+    each compile "Ray compiled every function's C into machine code through X86.ray"
+    python3 "$here/native.py" "${INPUTS:-30}"
+    BYTES="$here/out/compiled" each inverse "MC7 every function's compiled bytes lift back to the function its C was read to"
+    ;;
+  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6|MC7" >&2; exit 2 ;;
 esac

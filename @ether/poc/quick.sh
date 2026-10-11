@@ -17,5 +17,9 @@ said "machine code, 8 functions (MC2, MC3, MC4, MC6)" "$(RANGE=1-8 LOAD='$/x86/X
 rm -rf "$here/machine/out/rust"
 said "machine code to Rust, 8 functions (MC5)" "$(RANGE=1-8 LOAD='$/x86/X86.ray,poc/interop/ints.ray,poc/machine/wrapping.ray,poc/interop/io.ray,poc/interop/write.rust.ray' ray "$here/machine/machine.mts" rust)"
 said "  linked against gcc's objects" "$(python3 "$here/machine/check.py" 30 8 | sed 's/^MC5/ok   MC5/')"
+rm -rf "$here/machine/out/compiled"
+said "C compiled to machine code by Ray, 8 functions (MC7)" "$(RANGE=1-8 LOAD='$/x86/X86.ray,poc/interop/ints.ray,poc/machine/wrapping.ray,poc/interop/io.ray,poc/interop/read.c.ray' ray "$here/machine/machine.mts" compile)"
+said "  run natively against gcc's objects" "$(python3 "$here/machine/native.py" 30 8 | sed 's/^MC7/ok   MC7/')"
+said "  read back and lifted to the same function" "$(BYTES="$here/machine/out/compiled" RANGE=1-8 LOAD='$/x86/X86.ray,poc/interop/ints.ray,poc/machine/wrapping.ray,poc/interop/io.ray,poc/interop/read.c.ray' ray "$here/machine/machine.mts" inverse)"
 echo "quick tier $([ "$failed" = 0 ] && echo passed || echo FAILED) in $(( $(date +%s) - started ))s"
 exit $failed

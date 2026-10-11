@@ -2,7 +2,9 @@
 // (`assembly`): its text, line for line objdump's. MC4 (`lift`): the Ray function it lifts to, defined and run on the N3
 // inputs, answers what the C source computes. `lift` also writes each lifted function to `out/lifted/`. MC5 (`rust`): the
 // Rust the interop writer writes from it, with the C ABI, to `out/rust/`. MC6 (`assemble`): objdump's text read as Ray code,
-// each line in `X86.Assembly`, and written: byte for byte the bytes gcc made.
+// each line in `X86.Assembly`, and written: byte for byte the bytes gcc made. MC7 (`compile`): the C source read into Ray and
+// written as machine code through `X86.ray`, to `out/compiled/`; (`inverse`, with `BYTES=out/compiled`): those bytes read
+// back and lifted, the very function the C source was read to (`as` the machine's `wrapped`).
 const { booted } = await import('../deflate/boot.mts');
 const fs = await import('node:fs'), path = await import('node:path');
 const { program } = await booted();
@@ -25,15 +27,43 @@ const computed = (tree: Tree, values: Record<string, number>): number => {
 };
 const functions: { name: string, type: string, parameters: string[], tree: Tree }[] = JSON.parse(fs.readFileSync(path.join(corpus, 'corpus.json'), 'utf8'));
 const [from, to] = (process.env.RANGE ?? '1-' + functions.length).split('-').map(Number);
-const out = path.join(here, 'out', 'lifted'), rusts = path.join(here, 'out', 'rust');
+const out = path.join(here, 'out', 'lifted'), rusts = path.join(here, 'out', 'rust'), compiled = path.join(here, 'out', 'compiled');
+fs.mkdirSync(compiled, { recursive: true });
 fs.mkdirSync(out, { recursive: true });
 fs.mkdirSync(rusts, { recursive: true });
 let failed = 0, seed = 1;
 const random = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
 for (const mode of modes) for (const function_ of functions.slice(from - 1, to)) {
-  const { name } = function_, bytes = fs.readFileSync(path.join(corpus, name + '.bin')), started = performance.now();
+  const { name } = function_, bytes = fs.readFileSync(path.join(process.env.BYTES ? path.resolve(process.env.BYTES) : corpus, name + '.bin')), started = performance.now();
   let held = false, said = '';
   try {
+    if (mode === 'compile') {
+      const ray = run('c_ray(' + JSON.stringify(fs.readFileSync(path.join(corpus, name + '.c'), 'utf8')) + ')');
+      const lines = typeof ray === 'string' ? values_of(run('X86.compiled(' + JSON.stringify(ray.slice(ray.indexOf(') => ') + 5)) + ', ' + (function_.type === 'long' ? 64 : 32) + ', [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '])')) as string[] | undefined : undefined;
+      let written: number[] | undefined;
+      if (lines) {
+        lines.forEach((line, index) => run('assembled_' + index + ' := X86.Assembly reading {\n  ' + line + '\n}'));
+        run('function_assembled := X86.Function([' + lines.map((_, index) => 'assembled_' + index).join(', ') + '])');
+        written = values_of(run('function_assembled.written')) as number[] | undefined;
+      }
+      held = !!written && written.length > 0;
+      if (held) { fs.writeFileSync(path.join(compiled, name + '.bin'), Buffer.from(written!)); fs.writeFileSync(path.join(compiled, name + '.s'), lines!.join('\n') + '\n'); }
+      said = typeof ray !== 'string' ? 'not read from C' : lines ? 'not assembled' : 'not lowered: ' + ray;
+      if (!held) failed++;
+      console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(written?.length ?? '-').padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      continue;
+    }
+    if (mode === 'inverse') {
+      const ray = run('c_ray(' + JSON.stringify(fs.readFileSync(path.join(corpus, name + '.c'), 'utf8')) + ')');
+      const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+      const lifted = run('X86.lift(' + program.written(read) + ', "' + name + '", [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '], ' + (function_.type === 'long' ? 64 : 32) + ')');
+      const expected = typeof ray === 'string' ? ray.replaceAll(' as Int', ' wrapped Int') : undefined;
+      held = typeof lifted === 'string' && lifted === expected;
+      said = `lifted ${lifted} | from C ${expected}`;
+      if (!held) failed++;
+      console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      continue;
+    }
     if (mode === 'assemble') {
       const lines = fs.readFileSync(path.join(corpus, name + '.s'), 'utf8').trim().split('\n');
       lines.forEach((line, index) => run('assembled_' + index + ' := X86.Assembly reading {\n  ' + line + '\n}'));

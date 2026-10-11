@@ -115,6 +115,23 @@ All POC files live in `@ether/poc/machine/`:
   that read it in MC2.
 - **Pass.** `./run.sh MC6`: every function's text assembles to gcc's bytes.
 
+### MC7 Ray compiles through its own declaration of the machine
+
+- **Goal.** The speed the interpreter cannot give, from Ray itself: Ray code written as machine code by `X86.ray`, the
+  declaration that reads it, and checked by reading it back.
+- **What happens.** A rule set over the interop normal form (`X86.Shape` and `X86.lowered`, the reverse of MC4's lift) chooses
+  instructions for each function: its parameters in `edi`, `esi`, `edx`, `ecx` (`rdi`, … for `long`), each operation
+  into a register, the result in `eax` or `rax`, then `ret`. It writes them as `X86.Assembly` lines, which are Ray code;
+  MC6's declaration writes them as bytes. A C harness copies the bytes into executable memory and calls them.
+- **Checked twice.** The bytes run natively agree with gcc's objects on the MC5 inputs; and the same bytes, read by
+  `X86.ray` and lifted (MC2 to MC4), give a function that answers what the C source computes. The compiler is not
+  trusted: the declaration that wrote the code reads it back.
+- **Pass.** `./run.sh MC7`: all 200 functions, both checks.
+- **Why it matters.** Native code runs about 10⁸ operations a second where the interpreter reads about 10⁵ times a second.
+  With control flow in `X86.ray` (`cmp`, `jcc`, `jmp`) the same lowering reaches loops, then DEFLATE's decoder, then the
+  kernel itself: Ray's rule matching written in Ray and compiled through `X86.ray`, the Almanac's "compile the compiler
+  into a new version".
+
 ## After this proof
 
 - **A second instruction set.** The same corpus through `aarch64-linux-gnu-gcc`, lifted by an `AArch64.ray`, gives the
@@ -126,7 +143,7 @@ All POC files live in `@ether/poc/machine/`:
 
 ## Status
 
-MC0 to MC6 pass (`./run.sh MC1` … `MC6` in `@ether/poc/machine`; 25 functions per process), also after merging main.
+MC0 to MC7 pass (`./run.sh MC1` … `MC7` in `@ether/poc/machine`; 25 functions per process), also after merging main.
 
 - **MC0**: on the merged branch, S0 to N6 and DP0, DP2, DP3, DP4 pass.
 - **MC1**: 200 functions, from 3 to 32 bytes, pinned in `corpus/manifest.txt` (gcc 16.2.1).
@@ -142,6 +159,12 @@ MC0 to MC6 pass (`./run.sh MC1` … `MC6` in `@ether/poc/machine`; 25 functions 
 
 - **MC6**: all 200: objdump's text, each line read as Ray code in `X86.Assembly`, is written as the bytes gcc made. Ray's
   declaration is now an assembler and a disassembler of what gcc emits, both checked against gcc and objdump.
+
+- **MC7**: all 200: each function's C, read into Ray by the interop reader, lowered by `X86.lowered` and written
+  by `X86.ray` (7 008 bytes in all), runs natively and agrees with gcc's objects on all 6000 inputs; and those bytes, read
+  back and lifted, give exactly the function the C was read to (text for text, `as` read as the machine's `wrapped`).
+  `f3` runs 17 times a second in the interpreter and 765 million times a second as the machine code Ray wrote for it:
+  about 4.5 × 10⁷, from the same meaning, checked by the declaration that wrote it.
 
 Each function reads, prints, lifts or assembles in under a second.
 
@@ -268,4 +291,4 @@ done.
 
 ## Order of work
 
-MC0 to MC6 in order, one commit each, kernel changes as commits of their own.
+MC0 to MC7 in order, one commit each, kernel changes as commits of their own.

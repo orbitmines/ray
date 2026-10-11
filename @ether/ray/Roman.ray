@@ -176,6 +176,12 @@ Roman := class: Digit+ (
   assert Roman.Fraction.uncia as Decimal == 1.0 * 1 / 12
   // RM6 S· is not seven twelfths
   assert "S·" as Roman.Fraction as Decimal == 7/12
+  (number: Decimal) as (=== Roman) => Roman.normalizer(
+    thousands: ["M"] * (number / 1000),
+    hundreds: number / 100 % 10,
+    tens: number / 10 % 10,
+    ones: number % 10
+  )
 }
 // RO1 four is not written IV
 assert 4 as Roman == "IV"
@@ -233,9 +239,3 @@ assert "xiv" as Roman as Decimal == 14
 assert 19 as Roman == "XIX"
 
 {roman: Roman}: Roman => roman
-(number: Decimal) as (=== Roman) => Roman.normalizer(
-  thousands: ["M"] * (number / 1000),
-  hundreds: number / 100 % 10,
-  tens: number / 10 % 10,
-  ones: number % 10
-)

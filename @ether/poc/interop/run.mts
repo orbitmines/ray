@@ -1,13 +1,7 @@
-const ether = process.env.ETHER!;
-const { Program, Text } = await import(`${ether}/v0.ts/src/language3.ts`);
-const fs = await import('node:fs'), path = await import('node:path');
-const entry = fs.readFileSync(path.join(ether, 'ray/.entrypoint.ray2'), 'utf8'), kinds = fs.readFileSync(path.join(ether, 'v0.ts/src/js3.kinds.ray'), 'utf8');
-const ops = kinds.indexOf('// What both answer'), made_of = kinds.indexOf('// What a number or text is made of'), logic = entry.indexOf('// What a value answers to `?`');
-const source = new Text.Source('@ether/ray/.entrypoint.ray2');
-source.value = entry.slice(0, logic) + kinds.slice(ops, made_of) + '\n' + entry.slice(logic);
-const program: any = new Program(source);
-await program.compile();
-program.run(kinds.slice(0, ops) + '\n' + kinds.slice(made_of), { node: program.global });
+// (booted as `poc/deflate/boot.mts` boots language3: the core library read in the order it needs itself)
+const { booted, Program } = await import('../deflate/boot.mts');
+const fs = await import('node:fs');
+const { program } = await booted();
 const yes = program.run('true', { node: program.global }), no = program.run('false', { node: program.global }), none = program.run('None', { node: program.global });
 const shown = (value: unknown) => value instanceof Program.Node ? 'node(' + value.rules.slice(0, 8).map((rule: any) => rule.head).join(', ') + ')' : JSON.stringify(value);
 const read = (file: string, said: boolean) => {
@@ -27,8 +21,6 @@ const read = (file: string, said: boolean) => {
   }
   return fired;
 };
-const library = path.join(ether, 'ray');
-for (const file of fs.readdirSync(library).filter((file: string) => file.endsWith('.ray') && !file.startsWith('.'))) read(path.join(library, file), false);
 let failed = 0;
 for (const file of process.argv.slice(2)) failed += read(file, true);
 process.exitCode = failed ? 1 : 0;

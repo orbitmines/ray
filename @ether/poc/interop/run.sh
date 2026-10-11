@@ -4,7 +4,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 ether="$(cd "$here/../.." && pwd)"
 out="$here/out"
 mkdir -p "$out"
-ray() { (cd "$ether/v0.ts" && ETHER="$ether" POC="$here" node --stack-size=60000 --import tsx "$here/run.mts" "$@" 2>/dev/null); }
+ray() { (ulimit -s unlimited; cd "$ether/v0.ts" && ETHER="$ether" POC="$here" node --stack-size=60000 --import tsx "$here/run.mts" "$@" 2>/dev/null); }
 case "${1:-}" in
   S0) ray "$here/s0.ray" ;;
   S1)

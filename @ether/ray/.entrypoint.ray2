@@ -1310,7 +1310,7 @@ nearest class:{ }{parent}{ }({fields}) => {{block}} =>
         }
       }
       read := text_reader reads_text x
-      read ? instance(read) : None
+      read ? instance(read.spreading) : None
   }).instance
 class {{block}} ^keyword =>
   class: Node {

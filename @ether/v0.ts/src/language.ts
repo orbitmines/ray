@@ -276,6 +276,8 @@ export namespace Text {
 
 enum Op { GOTO, LABEL, ".", "&" }
 
+// (a test that ran out of time or memory: nothing catches it, every later reading of the test throws it too)
+export class Exhausted extends Error { }
 export class Program {
   graph: Uint32Array
   
@@ -457,7 +459,7 @@ export class Program {
     // (a rule with no literal: where its node is, as its right side is read)
     const home = rule.home && !rule.literals.length && rule.home.outer ? rule.home.outer : rule.home ?? this.global;
     try { let value = this.read(rule.pieces[k].type!, { node: home }); const read = value; while (value instanceof Program.Node && value.calls && value.outer) value = value.outer; if (value instanceof Program.Node) { if (read !== value) this.type_values.set(value, read); return types[k] = value; } types[k] = this.statements; return null; }
-    catch { types[k] = this.statements; return null; } finally { this.typing.delete(rule); }
+    catch (e) { if (e instanceof Exhausted) throw e; types[k] = this.statements; return null; } finally { this.typing.delete(rule); }
   }
   // (whether a type's own rules read text whole: its rules matched, nothing read)
   private structures = new WeakMap<Program.Node, { headed: number, read: Map<string, boolean> }>();
@@ -526,7 +528,7 @@ export class Program {
     const { open, close } = this.grammar!;
     const code = check.code.split(open + check.value + close).join(s).split(open + check.type + close).join(this.written(this.type_values.get(type) ?? type));
     let taken = false;
-    try { taken = this.run(code, { node: check.home }) !== undefined; } catch { taken = false; }
+    try { taken = this.run(code, { node: check.home }) !== undefined; } catch (e) { if (e instanceof Exhausted) throw e; taken = false; }
     kept.set(value as object, taken);
     return taken;
   }
@@ -858,7 +860,7 @@ export class Program {
     // (`goto declaring`: the next statement is a head; a statement a rule with it reads first declares (as one with the
     // definer does): read once, for a class)
     ['declaring', (frame, next) => { this.declaring.add(this.head(next!.trim()).head); return undefined; }],
-    // (`goto independent`: the same, for a statement read again in an instance only when it names something the instance has)
+    // (`goto independent`: the same, for a statement never read again in an instance)
     ['independent', (frame, next) => { this.independent.add(this.head(next!.trim()).head); return undefined; }],
     // (`goto afterwards`: the rest of the code run after everything is read, where it is now, when the host defers it (reading
     // abstractly: tests); else now)
@@ -879,7 +881,7 @@ export class Program {
         if (!s || this.defining(s)) continue;
         const all = this.readings(s, this.candidates(s, target, 0), true);
         if (all.length && this.declaring.has(all[all.length - 1].rule.head)) continue;
-        if (all.length && this.independent.has(all[all.length - 1].rule.head) && !(s.match(/(?<![.\p{L}\p{N}_])[\p{L}_][\p{L}\p{N}_]*/gu) ?? []).some(name => target.has(name))) continue;
+        if (all.length && this.independent.has(all[all.length - 1].rule.head)) continue;
         this.run(s, { node: target, this: target });
       }
       return target;
@@ -1089,8 +1091,14 @@ export class Program {
   }
   // (how many more readings a test may take, when it is limited: past it, it ran too long)
   budget?: number;
+  // (when a test must be done by (`performance.now()`), and the heap it may grow by (MB, checked every 1024 readings))
+  deadline?: number; limit_ms = 0; heap_from = 0; heap_mb = 512; private counted = 0;
   read(s: string, frame: Program.Frame, except?: Program.Rule, alike?: string): unknown {
-    if (this.budget !== undefined && --this.budget < 0) throw new Error('ran too long');
+    if (this.budget !== undefined && --this.budget < 0) throw new Exhausted('ran too long');
+    if (this.deadline !== undefined) {
+      if (performance.now() > this.deadline) throw new Exhausted(`ran longer than ${this.limit_ms} ms`);
+      if ((++this.counted & 1023) === 0 && process.memoryUsage().heapUsed > this.heap_from + this.heap_mb * 1048576) { this.deadline = 0; throw new Exhausted(`used more than ${this.heap_mb} MB`); }
+    }
     const { open, close, definer } = this.grammar!;
     // (a value written alone: itself; as a statement of its own in a node (not the outermost) with rules that have no literal (a
     // level), what those read it as, if any does)
@@ -1194,6 +1202,11 @@ export class Program {
       if (!alone) memo.set(key, found);
     }
     let { all } = found; const { leads } = found;
+    if (process.env.RAY_WHY && /^\+\+\+ 2$/.test(s)) {
+      const desc = (r: Program.Rule) => `${JSON.stringify(r.head)} pieces=${r.pieces.map(x => x.literal !== undefined ? JSON.stringify(x.literal) : '{' + (x.hole ?? '') + '}').join('')}`;
+      env.fs.writeSync(2, `WHY ${JSON.stringify(s)} receiver=${frame.receiver} readings=${all.length}\n`);
+      for (let at: Program.Node | undefined = frame.node; at; at = at.outer) for (const r of at.rules) if (r.head.includes('+++')) env.fs.writeSync(2, `   RULE ${desc(r)} may_read=${this.may_read(r, s, 0, except)} inCands=${this.candidates(s, frame.node, 0, except, frame.site, true).some(c => c.rule === r)}\n`);
+    }
     // (a typed hole's rule running: not read again (its readings kept for the text as they were found))
     if (this.running.length && all.some(read => !read.rule.literals.length && read.rule.types.length && this.running.includes(read.rule))) all = all.filter(read => !(!read.rule.literals.length && read.rule.types.length && this.running.includes(read.rule)));
     if (leads === -2) return this.on(this.program(), s.slice(1), frame, except);
@@ -1817,11 +1830,27 @@ export class Library {
     this.program = new Program(new Text.Source(ENTRYPOINT.join('/') + '2'));
     await this.program.compile();
     this.timings.push(['the language', performance.now() - t0]);
+    this.entrypoint_tests();
     const t1 = performance.now();
-    for (const file of Library.reading_order(this.files_of(this.core))) { const t = performance.now(); this.file(file); this.timings.push(['  ' + env.path.basename(file), performance.now() - t]); }
+    for (const file of Library.reading_order(this.files_of(this.core))) { const t = performance.now(); this.file(file); this.timings.push(['  ' + env.path.basename(file), performance.now() - t]); if (process.env.RAY_PROGRESS) env.fs.writeSync(2, `${env.path.basename(file).padEnd(24)} ${Math.round(performance.now() - t)} ms  heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB\n`); }
     this.program.run(this.program.kinds!.rest, { node: this.program.global });
     this.timings.push(['the core library', performance.now() - t1]);
     return this;
+  }
+
+  // The tests the entrypoint itself holds (put off while it was read): tests like any other, located in it.
+  entrypoint_tests() {
+    const p = this.program, file = env.path.join(this.core, ENTRYPOINT[2] + '2'), text = this.text(file), spans = Library.asserts(text, 0, text.length), used = new Map<string, number>();
+    this.texts.set(file, text);
+    const tests: Test[] = p.deferred.splice(0).map(d => {
+      const written = String(p.source(d.written ?? d.code)).trim();
+      let at = written ? text.indexOf(written, (used.get(written) ?? -1) + 1) : -1;
+      if (at < 0 && written) at = text.indexOf(written);
+      if (at >= 0) used.set(written, at);
+      const span = at >= 0 ? spans.find(([b, e]) => b <= at && at < e) ?? [at, at + written.length] : [0, 0];
+      return { ...d, file, begin: span[0], end: span[1] };
+    });
+    this.reads.set(file, [{ statement: '', begin: 0, end: text.length, diagnostics: [], paints: [], tests }]);
   }
 
   // The order a project's files are read in: a file after those defining what it uses, then by name. (A host's choice.)
@@ -1917,7 +1946,10 @@ export class Library {
       const first = statement.trimStart().split('\n')[0].trim(), found = first ? text.indexOf(first, cursor) : -1, begin = found < 0 ? cursor : found;
       // (where it ends: as long as it is, when it is written as read; else where its last line is (not a line like it inside it))
       const whole = statement.trim(), last = statement.trimEnd().split('\n').pop()!.trim();
-      const last_at = text.startsWith(whole, begin) ? begin + whole.length - last.length : last ? text.indexOf(last, Math.max(begin, begin + whole.length - last.length - whole.split('\n').length * 16)) : -1;
+      // (not as written, comments left out: its lines found one after another, each after the one before)
+      let last_at = -1;
+      if (text.startsWith(whole, begin)) last_at = begin + whole.length - last.length;
+      else if (last) { let at = begin; for (const line of whole.split('\n')) { const l = line.trim(); if (!l) continue; const i = text.indexOf(l, at); if (i < 0) continue; at = i + l.length; last_at = i; } if (last_at >= 0) last_at = at - last.length; }
       const end = last_at < 0 ? begin + first.length : last_at + last.length;
       cursor = end;
       // (its needs, the project's head: not read)
@@ -1968,7 +2000,7 @@ export class Library {
       // (the tests it put off: the asserts written in it, in order)
       const spans = Library.asserts(text, begin, end), put = p.deferred.splice(deferred);
       // (each where its code is written: one in a loop's body is put off once each time round)
-      const located = (code: string, k: number) => { const written = String(p.source(code)).trim(), at = written ? text.indexOf(written, begin) : -1; return at >= 0 && at < end ? spans.find(([b, e]) => b <= at && at < e) ?? [at, at + written.length] as [number, number] : spans[k]; };
+      const used = new Map<string, number>(); const located = (code: string, k: number) => { const written = String(p.source(code)).trim(), at0 = written ? text.indexOf(written, Math.max(begin, (used.get(written) ?? -1) + 1)) : -1, at = at0 >= 0 || !written ? at0 : text.indexOf(written, begin); if (at >= 0) used.set(written, at); return at >= 0 && at < end ? spans.find(([b, e]) => b <= at && at < e) ?? [at, at + written.length] as [number, number] : spans[k]; };
       put.forEach((d, k) => { const span = located(d.written ?? d.code, k); read.tests.push({ ...d, file, begin: span?.[0] ?? begin, end: span?.[1] ?? end }); });
       reads.push(read);
     }
@@ -2058,31 +2090,33 @@ export class Library {
   }
   // What was put off while reading (tests): run, what each said; a file's (those not run since what they read was read again), or every
   // one. `until`: stop when it answers true (something else to do), the rest run later.
-  test(file?: string, until?: () => boolean): Diagnostic[] {
+  test(file?: string, until?: () => boolean, each?: (test: Test, outcome: Diagnostic[]) => void): Diagnostic[] {
     const p = this.program, out: Diagnostic[] = [];
     const tests = file !== undefined ? (this.reads.get(file) ?? []).flatMap(r => r.tests) : [...this.reads.values()].flat().flatMap(r => r.tests);
     p.deferring = false;
+    let stopped = false;
     try {
       for (const t of tests) {
         if (t.dropped) continue;
         if (t.outcome === undefined) {
-          if (until?.()) break;
+          if (until?.()) { stopped = true; break; }
           const said: Diagnostic[] = [], before = p.reports.length, text = this.texts.get(t.file) ?? '';
           const painter = this.options.painting ? Object.assign(new Painter(text, p), { begin: t.begin, end: t.end }) : undefined;
           p.painter = painter;
-          p.budget = this.budget;
+          p.budget = this.budget; p.limit_ms = Number(process.env.RAY_TEST_MS ?? 1000); p.heap_mb = Number(process.env.RAY_TEST_MB ?? 512); p.heap_from = process.memoryUsage().heapUsed; p.deadline = performance.now() + p.limit_ms;
           try { p.run(t.code, t.frame, t.except); }
           catch (e) { said.push(this.said(t.file, text, t.begin, t.end, `Failed: ${(e as Error)?.message ?? e}`, 1)); }
-          finally { p.painter = undefined; p.budget = undefined; }
+          finally { p.painter = undefined; p.budget = undefined; p.deadline = undefined; }
           if (painter) t.paints = painter.paints;
           for (const report of p.reports.slice(before)) said.push(this.reported(report, t.file, text, t.begin, t.end));
           p.reports.length = before;
           t.outcome = said;
+          each?.(t, said);
         }
         out.push(...t.outcome);
       }
       // (what was put off outside a file's reading)
-      if (file === undefined) for (const { code, frame, except } of p.deferred.splice(0)) {
+      if (file === undefined && !stopped) for (const { code, frame, except } of p.deferred.splice(0)) {
         const before = p.reports.length;
         try { p.run(code, frame, except); } catch { }
         for (const report of p.reports.slice(before)) { const at = this.located(report); if (at) out.push(this.reported(report, at.file, at.text, at.begin, at.end)); }
@@ -2121,26 +2155,59 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     process.exitCode = await new Promise<number>(resolve => { worker.on('message', (m: { exit?: number }) => { if (m.exit !== undefined) resolve(m.exit); }); worker.on('error', e => { console.error(e); resolve(1); }); worker.on('exit', code => resolve(code)); });
     return;
   }
+  if (kwargs.test) env.fs.writeSync(2, 'reading the core library…\n');
   const library = await new Library().boot(), { path } = env, all: Diagnostic[] = [];
   if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
   const files = (args.length ? args : library.tests()).map(f => path.resolve(f));
   if (kwargs.verbose) console.error(`reading ${files.length}: ${files.map(f => path.relative(library.root, f)).join(' ')}`);
+  // (the tests of the files given; given none, of every file read)
+  // (a test reported as it finishes: its comments above, its code, and what it found)
+  const counts = { passed: 0, failed: 0 }, reported = new Set<Diagnostic>();
+  const report = (t: Test, outcome: Diagnostic[]) => {
+    const text = library.text(t.file), lines = text.split('\n'), first = text.slice(0, t.begin).split('\n').length - 1;
+    // (the code shown goes on while the lines are indented past the test's own, or close a bracket at its level)
+    const indent = (l: string) => l.length - l.trimStart().length; let last = first;
+    for (let k = first + 1; k < lines.length; k++) { if (!lines[k].trim()) continue; if (indent(lines[k]) > indent(lines[first]) || (indent(lines[k]) === indent(lines[first]) && /^[)\]}]/.test(lines[k].trim()))) last = k; else break; }
+    last = Math.max(last, text.slice(0, Math.max(t.begin, t.end - 1)).split('\n').length - 1);
+    const above: string[] = []; for (let k = first - 1; k >= 0 && lines[k].trim().startsWith('//'); k--) above.unshift(lines[k]);
+    t.paints = undefined; (t as { frame?: Program.Frame }).frame = undefined;
+    const failed = outcome.some(d => d.severity === 1); counts[failed ? 'failed' : 'passed']++;
+    const block = [...above, ...lines.slice(first, last + 1)].map(l => '    | ' + l).join('\n');
+    const messages = outcome.filter(d => d.severity <= 2).map(d => { reported.add(d); return `    ${['', 'error', 'warning'][d.severity]}: ${d.message}`; }).join('\n');
+    env.fs.writeSync(2, `${failed ? 'FAIL' : 'ok  '} ${path.relative(process.cwd(), t.file)}:${first + 1}${process.env.RAY_PROGRESS ? `  heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB` : ''}\n${block}\n${messages ? messages + '\n' : ''}`);
+  };
+  // (one test per call, the event loop turned between: what a `WeakRef` was made of is kept until the job ends, so a run in one job keeps everything every test made)
+  const seen = new Set<Diagnostic>(), tested = new Set<string>();
+  const run_tests = async (file?: string) => { for (;;) {
+    let ran = false;
+    const outcome = library.test(file, () => { const stop = ran; ran = true; return stop; }, report);
+    if (!ran) { for (const d of outcome) if (!seen.has(d)) { seen.add(d); all.push(d); } break; }
+    await new Promise<void>(resolve => setImmediate(resolve));
+  } };
+  // (the tests of every file read so far and not yet tested, one at a time as they finish)
+  const run_read = async () => { if (kwargs.test) for (const file of [...library.reads.keys()]) if (!tested.has(file) && (!args.length || files.includes(file))) { tested.add(file); await run_tests(file); } };
   for (const file of files) {
-    if (env.fs.statSync(file).isDirectory()) { library.project(file); continue; }
+    if (kwargs.test) env.fs.writeSync(2, `reading ${path.relative(process.cwd(), file)}…\n`);
+    if (env.fs.statSync(file).isDirectory()) { library.project(file); if (args.length) await run_read(); continue; }
     library.prepare(file);
     if (!library.diagnostics.has(file)) library.file(file, library.text(file), path.dirname(file) === library.core || file.endsWith('.project' + EXTENSION) ? library.program.global : new Program.Node(library.program.global));
+    // (given files: each one's tests as soon as it is read; given none, every file is read first: tests run in between leave
+    // what they did to what is read after them)
+    if (args.length) await run_read();
+    if (process.env.RAY_PROGRESS) env.fs.writeSync(2, `read ${path.relative(library.root, file)}  heap ${Math.round(process.memoryUsage().heapUsed / 1e6)} MB\n`);
   }
   if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
+  await run_read();
   for (const [, ds] of library.diagnostics) all.push(...ds);
-  // (the tests of the files given; given none, of every file read)
-  if (kwargs.test) for (const file of args.length ? files : [undefined]) all.push(...library.test(file));
-  const shown = all.filter(d => d.severity <= (kwargs.verbose ? 3 : 2) && (args.length === 0 || files.includes(d.file) || kwargs.test));
+  // (what was put off outside any file's reading)
+  if (kwargs.test && !args.length) await run_tests(undefined);
+  const shown = all.filter(d => d.severity <= (kwargs.verbose ? 3 : 2) && (args.length === 0 || files.includes(d.file) || kwargs.test) && !reported.has(d));
   for (const d of shown) {
     const line = d.file ? library.text(d.file).slice(0, d.begin).split('\n').length : 0;
     console.error(`${d.file ? path.relative(process.cwd(), d.file) : '?'}:${line}: ${['', 'error', 'warning', 'info', 'hint'][d.severity]}: ${d.message}${d.around ? '\n' + d.around.split('\n').map(l => '    | ' + l).join('\n') : ''}`);
   }
-  if (kwargs.test) console.error(`${all.filter(d => d.severity === 1).length} failed`);
-  const exit = shown.some(d => d.severity === 1) ? 1 : 0;
+  if (kwargs.test) console.error(`${counts.passed} passed, ${counts.failed} failed, ${shown.filter(d => d.severity === 1).length} errors in reading`);
+  const exit = shown.some(d => d.severity === 1) || counts.failed > 0 ? 1 : 0;
   if (env.worker) env.worker_threads.parentPort!.postMessage({ exit }); else process.exitCode = exit;
 }
 

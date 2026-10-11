@@ -14,41 +14,39 @@ never := Node{false}
 // NV1 something is of the type that never returns
 assert !(never.admits(5))
 
+// Only the branch that is taken runs
+assert {
+  counted := false
+  taken_once := if true { true } else {
+    counted = true
+    false
+  }
+  // CF1 a taken branch did not answer
+  assert taken_once
+  // CF2 the branch nobody took ran anyway
+  assert !counted
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// CF3 the first holding arm is not what answered
-assert (if false {
-  0 += 1
-  1
-} elsif true {
-  0 += 1
-  2
-} elsif true {
-  0 += 1
-  3
-} else {
-  0 += 1
-  4
-}) == 2
-
-// CF4 more than one arm of a chain ran
-assert 0 == 1
-
-
-
+assert {
+  arms := 0
+  picked := if false {
+    arms += 1
+    1
+  } elsif true {
+    arms += 1
+    2
+  } elsif true {
+    arms += 1
+    3
+  } else {
+    arms += 1
+    4
+  }
+  // CF3 the first holding arm is not what answered
+  assert picked == 2
+  // CF4 more than one arm of a chain ran
+  assert arms == 1
+}
 
 assert {
   left := 3

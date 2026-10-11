@@ -40,7 +40,7 @@ nearest {head} => {body} =>
   {style}
 // A test, `assert c`: checked after everything is read (when the host puts that off: reading
 // abstractly; what it reads is read then, so it is written below any rule, here too), where it is written;
-// in a class, once (not again in each instance, unless it names something the instance has). (`dynamically assert c` is no
+// in a class, once (never again in an instance). (`dynamically assert c` is no
 // test: checked in each instance, with its data.)
 assert {condition} ^keyword =>
   goto afterwards
@@ -582,14 +582,6 @@ assert (if true { 1 } else { None })
 assert !((if false { true } else { false }))
 // CC5 a later branch overrode the first
 assert (if true { true } elsif true { false } else { false })
-// Only the branch that is taken runs
-// CF1 a taken branch did not answer
-assert (if true { true } else {
-  false = true
-  false
-})
-// CF2 the branch nobody took ran anyway
-assert !(false)
 // CF5 a branch does not answer its last statement
 assert (if true {
   1
@@ -1760,6 +1752,7 @@ static {{statement}} =>
 goto styled
 keyword
 {`static`} {name} {`:=`} {value} =>
+  (goto .) unless (.name) named
   {name} =>
     {name} = global.{name}
     kept := {value}
@@ -1768,6 +1761,7 @@ keyword
 goto styled
 keyword
 {`static`} {name}:{ }{type} = {value} =>
+  (goto .) unless (.name) named
   {name} =>
     {name} = global.{name}
     kept := ({value}) checked ({type})

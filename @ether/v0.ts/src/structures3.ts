@@ -361,7 +361,7 @@ class Writing extends Scoped {
     }
     if (type.list) { for (const element of listed(this.$, value)) if (!this.type(type.list, element, scope)) return false; return true; }
     if (type.group) {
-      const record = this.child(scope);
+      const record = this.record_scope(scope, Structures.names(type));
       const walk = (pieces: Piece[]) => { for (const piece of pieces) if (piece.name) this.in(record, `${piece.name} := ${code(this.$, this.$(this.$.written(value) + '.' + piece.name))}`); else if (piece.group) walk(piece.group); };
       walk(type.group);
       return this.pieces(type.group, record, value);

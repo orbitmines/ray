@@ -1,7 +1,0 @@
-Natural32 := Number{(. >= 0) && (. <= 4294967295)}
-Natural32.low := 0
-Natural32.high := 4294967295
-wrapped {type} =>
-  value := .
-  size := ({type}.high - {type}.low) + 1
-  ((value >= {type}.low) && (value <= {type}.high)) ? value : (((((value - {type}.low) % size) + size) % size) + {type}.low)

@@ -257,6 +257,20 @@ binary({width}) =>
 hexadecimal =>
   goto js
   typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self.toString(16) : undefined
+// (an integer's sum, difference and product: exact, with a sign (BigInt), not what `+`, `-` and `*` of whole numbers are)
+added({other}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) ? Number(BigInt(self) + BigInt(other)) : undefined
+subtracted({other}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) ? Number(BigInt(self) - BigInt(other)) : undefined
+multiplied({other}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) ? Number(BigInt(self) * BigInt(other)) : undefined
+// (an integer brought into the integers of a width modulo 2 to that power: signed, or not)
+wrapped_into({bits}, {signed}) =>
+  goto js
+  Number.isInteger(self) ? Number(signed === $('true') ? BigInt.asIntN(bits, BigInt(self)) : BigInt.asUintN(bits, BigInt(self))) : undefined
 // (text in base 16, `0xfffffff7`, as a whole number of a width in two's complement: -9)
 signed_hexadecimal({width}) =>
   goto js

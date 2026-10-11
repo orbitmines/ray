@@ -1,0 +1,2 @@
+mov eax,esi
+ret

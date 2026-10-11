@@ -1,0 +1,2 @@
+mov eax,0x7
+ret

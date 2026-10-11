@@ -1,0 +1,3 @@
+imul eax,edi,0x2e
+add eax,0xa
+ret

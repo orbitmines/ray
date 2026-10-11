@@ -1,0 +1,3 @@
+imul rax,rdi,0xe
+sub rax,0x3
+ret

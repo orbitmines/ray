@@ -69,7 +69,7 @@ def python_source(rng, name, parameters, body, space):
 
 
 def ray_number(value):
-    return str(value) if value > 0 else "(1 - " + str(1 - value) + ")"
+    return str(value) if value > 0 else "((1 - " + str(1 - value) + ") as Integer)"
 
 
 def main():

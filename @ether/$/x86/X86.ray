@@ -36,7 +36,7 @@ X86 := class: Language {
       (shown = shown + X86.offset(displacement)) if displacement !== None
       ("[" + shown) + "]"
   }
-  static signed (value, width) => (width == 8) ? ((value >= 128) ? (value - 256) : value) : ((value >= 2147483648) ? (value - 4294967296) : value)
+  static signed (value, width) => (width == 8) ? ((value >= 128) ? ((value - 256) as Integer) : value) : ((value >= 2147483648) ? ((value - 4294967296) as Integer) : value)
   static power (exponent) =>
     made := 1
     left := exponent
@@ -90,7 +90,7 @@ X86 := class: Language {
   // (not x is -x - 1)
   static Not := class<rex: X86.Rex[]> (<-Byte{== 247}, operand: X86.Operand{(.mod == 3) && (.reg == 2)}) {
     assembly => "not " + X86.named(operand.rm_register(rex), X86.wide(rex))
-    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.constant(0 - 1, X86.wide(rex)), "-", X86.held(registers, operand.rm_register(rex), X86.wide(rex)))
+    lifted (registers) => X86.applied(registers, operand.rm_register(rex), X86.wide(rex), X86.constant(((0 - 1) as Integer), X86.wide(rex)), "-", X86.held(registers, operand.rm_register(rex), X86.wide(rex)))
   }
   // (shl x, k is x times 2^k)
   static Shl := class<rex: X86.Rex[]> (<-Byte{== 193}, operand: X86.Operand{(.mod == 3) && (.reg == 4)}, immediate: <-Binary₈) {
@@ -237,13 +237,13 @@ X86.Register := {
 X86.Memory := {
   {base: X86.Register} => X86.Address(base.number, None, 1, None)
   {base: X86.Register}+{offset} => X86.Address(base.number, None, 1, "{offset}".signed_hexadecimal(32))
-  {base: X86.Register}-{offset} => X86.Address(base.number, None, 1, 0 - "{offset}".signed_hexadecimal(32))
+  {base: X86.Register}-{offset} => X86.Address(base.number, None, 1, ("-" + "{offset}").signed_hexadecimal(32))
   {index: X86.Register}*{scale} => X86.Address(None, index.number, X86.scale_of("{scale}"), None)
   {index: X86.Register}*{scale}+{offset} => X86.Address(None, index.number, X86.scale_of("{scale}"), "{offset}".signed_hexadecimal(32))
-  {index: X86.Register}*{scale}-{offset} => X86.Address(None, index.number, X86.scale_of("{scale}"), 0 - "{offset}".signed_hexadecimal(32))
+  {index: X86.Register}*{scale}-{offset} => X86.Address(None, index.number, X86.scale_of("{scale}"), ("-" + "{offset}").signed_hexadecimal(32))
   {base: X86.Register}+{index: X86.Register}*{scale} => X86.Address(base.number, index.number, X86.scale_of("{scale}"), None)
   {base: X86.Register}+{index: X86.Register}*{scale}+{offset} => X86.Address(base.number, index.number, X86.scale_of("{scale}"), "{offset}".signed_hexadecimal(32))
-  {base: X86.Register}+{index: X86.Register}*{scale}-{offset} => X86.Address(base.number, index.number, X86.scale_of("{scale}"), 0 - "{offset}".signed_hexadecimal(32))
+  {base: X86.Register}+{index: X86.Register}*{scale}-{offset} => X86.Address(base.number, index.number, X86.scale_of("{scale}"), ("-" + "{offset}").signed_hexadecimal(32))
 }
 X86.Assembly := {
   ret => X86.Instruction([], X86.Ret([]))
@@ -301,7 +301,7 @@ X86.unsigned (value, width) => (value < 0) ? (value + ((width == 8) ? 256 : 4294
 X86.immediate_form (a, text, extension) =>
   value := text.signed_hexadecimal(a.width)
   rex := X86.prefix(a.width, 0, 0, a.number)
-  fits := (value >= (0 - 128)) && (value <= 127)
+  fits := (value >= ((0 - 128) as Integer)) && (value <= 127)
   (return X86.Instruction(rex, X86.AddSmall(rex, X86.Operand(a.number % 8, 0, 3), X86.unsigned(value, 8)))) if fits && (extension == 0)
   (return X86.Instruction(rex, X86.SubSmall(rex, X86.Operand(a.number % 8, 5, 3), X86.unsigned(value, 8)))) if fits && (extension == 5)
   (return X86.Instruction(rex, X86.AddAccumulator(rex, X86.unsigned(value, 32)))) if (extension == 0) && (a.number == 0)
@@ -320,7 +320,7 @@ X86.addressing (a, address, form) =>
   rex := X86.prefix(a.width, a.number, (index === None) ? 0 : index, (base === None) ? 0 : base)
   (return X86.Instruction(rex, form(rex, X86.Operand(4, a.number % 8, 0, 5, (index === None) ? 4 : (index % 8), X86.scale_bits(address.scale), None, X86.unsigned((offset === None) ? 0 : offset, 32))))) if base === None
   short := (offset === None) ? (((base % 8) == 5) ? 0 : None) : offset
-  mode := (short === None) ? 0 : (((short >= (0 - 128)) && (short <= 127)) ? 1 : 2)
+  mode := (short === None) ? 0 : (((short >= ((0 - 128) as Integer)) && (short <= 127)) ? 1 : 2)
   small := (mode == 1) ? X86.unsigned(short, 8) : None
   large := (mode == 2) ? X86.unsigned(short, 32) : None
   (return X86.Instruction(rex, form(rex, X86.Operand(base % 8, a.number % 8, mode, None, None, None, small, large)))) if (index === None) && ((base % 8) != 4)

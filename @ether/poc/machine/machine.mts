@@ -18,7 +18,7 @@ const values_of = (list: unknown): unknown[] | undefined => {
   for (let at = run(program.written(list) + '.head'); at !== none && at !== undefined; at = run(program.written(at) + '.next')) values.push(run(program.written(at) + '.value'));
   return values;
 };
-const ray_number = (value: number) => value > 0 ? String(value) : '(1 - ' + (1 - value) + ')';
+const ray_number = (value: number) => value > 0 ? String(value) : '((1 - ' + (1 - value) + ') as Integer)';
 type Tree = string | [string, Tree, Tree];
 const computed = (tree: Tree, values: Record<string, number>): number => {
   if (typeof tree === 'string') return tree in values ? values[tree] : Number(tree);

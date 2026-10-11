@@ -1,11 +1,7 @@
 to_c_open := `{`
 to_c_close := `}`
 to_c_newline := character_of 10
-to_c_int_low := 1 - 2147483649
-to_c_int_high := 2147483647
-to_c_long_low := 1 - 9223372036854775809
-to_c_long_high := 9223372036854775807
-to_c_type_for (type) => ((type.low == to_c_int_low) && (type.high == to_c_int_high)) ? "int" : (((type.low == to_c_long_low) && (type.high == to_c_long_high)) ? "long" : None)
+to_c_type_for (type) => (type.bits == 32) ? "int" : ((type.bits == 64) ? "long" : None)
 to_c_type_named (name) => to_c_type_for(value_named name)
 to_c_leaf (x) => (x fits_pattern "^([A-Za-z_][A-Za-z0-9_]*|[1-9])$") ? x : None
 to_c_operand (x) => (ToCExpression reads_text x) ?? to_c_leaf(x)

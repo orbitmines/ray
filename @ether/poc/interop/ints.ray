@@ -1,9 +1,43 @@
-Int32 := Number{(. >= (1 - 2147483649)) && (. <= 2147483647)}
-Int32.low := 1 - 2147483649
-Int32.high := 2147483647
-Int64 := Number{(. >= (1 - 9223372036854775809)) && (. <= 9223372036854775807)}
-Int64.low := 1 - 9223372036854775809
-Int64.high := 9223372036854775807
+// Integers as C, Rust and machines compute them: whole, with a sign. A type carries its own sum, difference and product, exact,
+// and its bounds; the normal form says whose arithmetic an operation is, `((a - b) as Int32)`: Int32's, then `None` outside
+// Int32 (`as`), or brought back into it modulo 2 to its bits (`wrapped`, as a machine does). (Of two whole numbers, `-` alone
+// is none below zero: `((1 - 34) as Integer)` is how minus thirty-three is written.)
+integer_within (n, kind) => (n === None) ? None : (((kind.low === None) || ((n >= kind.low) && (n <= kind.high))) ? n : None)
+integer_wrapped (n, kind) => (n === None) ? None : ((kind.bits === None) ? n : n.wrapped_into(kind.bits, kind.signed))
+integer_sum (l, r) => ((l === None) || (r === None)) ? None : l.added(r)
+integer_difference (l, r) => ((l === None) || (r === None)) ? None : l.subtracted(r)
+integer_product (l, r) => ((l === None) || (r === None)) ? None : l.multiplied(r)
+({left} + {right}) as {type} =>
+  integer_within(integer_sum(({left}), ({right})), {type})
+({left} - {right}) as {type} =>
+  integer_within(integer_difference(({left}), ({right})), {type})
+({left} * {right}) as {type} =>
+  integer_within(integer_product(({left}), ({right})), {type})
+({left} + {right}) wrapped {type} =>
+  integer_wrapped(integer_sum(({left}), ({right})), {type})
+({left} - {right}) wrapped {type} =>
+  integer_wrapped(integer_difference(({left}), ({right})), {type})
+({left} * {right}) wrapped {type} =>
+  integer_wrapped(integer_product(({left}), ({right})), {type})
+wrapped {type} =>
+  integer_wrapped((.), {type})
 Integer := Number{(. >= .) && (. <= .)}
 Integer.low := None
 Integer.high := None
+Integer.bits := None
+Integer.signed := true
+Int32 := Number{(. >= ((0 - 2147483648) as Integer)) && (. <= 2147483647)}
+Int32.low := ((0 - 2147483648) as Integer)
+Int32.high := 2147483647
+Int32.bits := 32
+Int32.signed := true
+Int64 := Number{(. >= ((0 - 9223372036854775808) as Integer)) && (. <= 9223372036854775807)}
+Int64.low := ((0 - 9223372036854775808) as Integer)
+Int64.high := 9223372036854775807
+Int64.bits := 64
+Int64.signed := true
+Natural32 := Number{(. >= 0) && (. <= 4294967295)}
+Natural32.low := 0
+Natural32.high := 4294967295
+Natural32.bits := 32
+Natural32.signed := false

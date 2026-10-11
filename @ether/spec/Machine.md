@@ -180,7 +180,7 @@ Each function reads, prints, lifts or assembles in under a second.
 - **Alternatives of classes.** `operation: X86.Imul<rex> | … | X86.Ret<rex>` reads the first that fits and writes the one
   the value `is`.
 - **The host** gains `hexadecimal`, as it has `binary`.
-- **`wrapped`** (`poc/machine/wrapping.ray`): `x wrapped T` is x brought into T's bounds modulo their size, the machine's
+- **`wrapped`** (now in `poc/interop/ints.ray`): `x wrapped T` is x brought into T's bounds modulo their size, the machine's
   arithmetic, where `x as T` answers None outside them. The Rust writer writes it as `wrapping_add`, `as i32`,
   `as u32 as i64`.
 
@@ -237,8 +237,14 @@ Main now reads `-` of two whole numbers as none below zero (`3 - 5` is 0) and `/
 `Decimal.Signed` (`(-2).negative`), and a negative written alone (`-256`) does not yet read as a number. Everything here
 that computes with negatives in Ray stops being right: the interop normal form's `a - b` on `Int32` (N3), `X86.signed` and
 the immediates and displacements it prints (MC3), the lift run on inputs (MC4). What runs as compiled code is unaffected
-(N4, MC5, MC7: the arithmetic there is Rust's or the machine's). Open: how a machine integer (`Int32`, `Int64`, wrapping) is
-written in main's numbers.
+(N4, MC5, MC7: the arithmetic there is Rust's or the machine's).
+
+Decided: an integer type carries its own arithmetic (`poc/interop/ints.ray`). `Int32`, `Int64`, `Natural32` and `Integer`
+each have bounds and bits; rules for `((a - b) as T)` and `((a - b) wrapped T)` compute the operation exactly and with a
+sign (host `added`, `subtracted`, `multiplied`, on BigInt), then hold it to T: `None` outside T for `as`, back into T modulo
+2 to its bits for `wrapped` (host `wrapped_into`). The normal form already says whose arithmetic each operation is; values
+stay plain numbers. A negative is written in the same form, `((1 - 34) as Integer)`, as the lift's constants already were
+(`((1 - 10) wrapped Int64)`). The writers map a type by its bits. `wrapping.ray` is gone into `ints.ray`.
 
 ## Why it is slow, and what that means
 

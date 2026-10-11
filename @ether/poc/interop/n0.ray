@@ -1,6 +1,6 @@
 mark ^keyword := global
 
-unless Int32.low == (1 - 2147483649) { INFO@mark `N0.1 Int32 does not begin at -2147483648` }
+unless Int32.low == ((1 - 2147483649) as Integer) { INFO@mark `N0.1 Int32 does not begin at -2147483648` }
 unless Int32.high == 2147483647 { INFO@mark `N0.2 Int32 does not end at 2147483647` }
 unless (2147483647) is Int32 { INFO@mark `N0.3 the largest Int32 is not one` }
 if (2147483648) is Int32 { INFO@mark `N0.4 one past the largest Int32 is one` }

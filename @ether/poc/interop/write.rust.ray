@@ -1,10 +1,6 @@
 rust_policy := "checked"
 rust_quote := character_of 34
-rust_i32_low := 1 - 2147483649
-rust_i32_high := 2147483647
-rust_i64_low := 1 - 9223372036854775809
-rust_i64_high := 9223372036854775807
-rust_type_for (type) => ((type.low == rust_i32_low) && (type.high == rust_i32_high)) ? "i32" : (((type.low == rust_i64_low) && (type.high == rust_i64_high)) ? "i64" : None)
+rust_type_for (type) => (type.bits == 32) ? "i32" : ((type.bits == 64) ? "i64" : None)
 rust_type_named (name) => rust_type_for(value_named name)
 rust_leaf (x, type) => (x fits_pattern "^[1-9][0-9]*$") ? (x + rust_type_named(type)) : ((x fits_pattern "^[A-Za-z_][A-Za-z0-9_]*$") ? x : None)
 rust_operand (x, type) => (RustExpression reads_text x) ?? rust_leaf(x, type)

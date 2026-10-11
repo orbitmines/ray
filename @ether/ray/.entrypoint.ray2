@@ -616,6 +616,12 @@ assume {{code}} =>
   writing (&.caller) {
     {code}
   }
+// (settings, then a block: `with Font.inherited = em { … }`, the block read as it is written, what it answers)
+{`with`} {settings} {{block}} =>
+  writing (&.caller) {
+    {settings}
+  }
+  {block}
 
 // A superposition: one of these values (`a | b`), and `x?`: `x` or None (methods on Node).
 | {other} =>

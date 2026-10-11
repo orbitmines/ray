@@ -110,6 +110,13 @@ split({separator}) =>
 count =>
   goto js
   typeof self === 'string' ? [...self].length : undefined
+// (text as its characters, one after another: a list of them; what they hold for, `text{c => …}`, as text again)
+characters =>
+  goto js
+  typeof self === 'string' ? $('[' + [...self].map(c => JSON.stringify(c)).join(', ') + ']') : undefined
+{`{`}{parameter} => {body}{`}`} =>
+  (goto .) unless . is String
+  (.characters{ {parameter} => {body} }).join("")
 
 // What a number or text is made of: Number, String (a node's own `of` is read before this).
 of =>

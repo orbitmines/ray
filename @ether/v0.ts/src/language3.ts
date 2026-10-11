@@ -612,6 +612,26 @@ export class Program {
   // labels (`label\`) are among them. Code is split once: kept here when it refers to no value, else by what holds it (a rule).
   private codes = new Map<string, Program.Code>();
   // (how much a line opens: bodies and the pairs learned, `( )`, `[ ]`; what is quoted, nothing)
+  joined(statement: string): string {
+    const { open, close } = this.grammar!, { opens, closes, quoted } = this, within: string[] = [];
+    let out = '';
+    for (let i = 0; i < statement.length; i++) {
+      const x = statement.charCodeAt(i), c = statement[i];
+      if (statement.startsWith(open, i)) { within.push(open); out += open; i += open.length - 1; continue; }
+      if (statement.startsWith(close, i)) { within.pop(); out += close; i += close.length - 1; continue; }
+      if (opens.has(x)) within.push(c);
+      else if (closes.has(x)) within.pop();
+      else if (quoted.has(x)) { const q = Program.quote_end(statement, i, c); if (q < 0) return out + statement.slice(i); out += statement.slice(i, q + 1); i = q; continue; }
+      else if (c === '\n' && within.length && within[within.length - 1] !== open) {
+        let j = i + 1; while (j < statement.length && Program.space(statement.charCodeAt(j))) j++;
+        const comment = out.lastIndexOf(' //'); if (comment >= 0 && !out.slice(comment).includes('\n')) out = out.slice(0, comment);
+        out = out.trimEnd(); if (!out.endsWith('(') && !out.endsWith('[') && statement[j] !== ')' && statement[j] !== ']') out += ' ';
+        i = j - 1; continue;
+      }
+      out += c;
+    }
+    return out;
+  }
   nesting(line: string): number {
     const { open, close } = this.grammar!, { opens, closes, quoted } = this;
     let depth = 0;
@@ -632,6 +652,8 @@ export class Program {
       if (statements.length && (depth > 0 || Program.space(line.charCodeAt(0)))) statements[statements.length - 1] += '\n' + line; else statements.push(line.trimEnd());
       depth += this.nesting(line);
     }
+    // (lines broken inside a bracket that is not a block's, `f(x =>` … `)`: one line there, as where they break means nothing)
+    for (let k = 0; k < statements.length; k++) if (statements[k].includes('\n')) statements[k] = this.joined(statements[k]);
     // (a label written with a hole, `{x}\`, is the value the hole is: gone to by `goto` that value)
     const marked = statements.flatMap((statement, k) => /^\S+\\$/.test(statement) ? [k] : []);
     const labels = new Map(marked.filter(k => !statements[k].includes(open)).map(k => [statements[k].slice(0, -1), k]));
@@ -838,8 +860,9 @@ export class Program {
   valued(statement: string, frame: Program.Frame, except?: Program.Rule, code?: Program.Code, written = !!frame.reading): unknown {
     if (!this.defining(statement)) return this.evaluate(statement, frame, except, written, code);
     // (one whose head is a word, `x => …`: a closure of that one parameter, as `(x) => …` (the first pair learned) is)
-    const word = /^[\p{L}_][\p{L}\p{N}_]*(?= => )/u.exec(statement), pair = [...this.paired_by.keys()][0];
-    if (word && pair && !statement.includes('\n')) statement = pair + word[0] + this.closers.get(pair) + statement.slice(word[0].length);
+    // (its right side on the lines below too, `xs.map(x =>` … `)`)
+    const word = /^[\p{L}_][\p{L}\p{N}_]*(?= =>(?: |\n))/u.exec(statement), pair = [...this.paired_by.keys()][0];
+    if (word && pair) statement = pair + word[0] + this.closers.get(pair) + statement.slice(word[0].length);
     const node = new Program.Node(frame.site ?? frame.node);
     node.calls = true; node.self = frame.this ?? frame.node;
     const value = this.evaluate(statement, { ...frame, node, into: undefined }, except, written, code);
@@ -957,7 +980,8 @@ export class Program {
 
   private defining_dot(s: string): boolean {
     const line = s.indexOf('\n'), first = line < 0 ? s : s.slice(0, line);
-    return first.trimEnd().endsWith(this.grammar!.definer) || this.outermost(first);
+    const ending = first.trimEnd(), { definer } = this.grammar!;
+    return (ending.endsWith(definer) && this.outermost_at(ending, true) === ending.length - definer.length) || this.outermost(first);
   }
   read(s: string, frame: Program.Frame, except?: Program.Rule, alike?: string): unknown {
     const { open, close, definer } = this.grammar!;
@@ -1003,7 +1027,7 @@ export class Program {
       if (!(self instanceof Program.Node)) { let root = frame.node; while (root.outer) root = root.outer; return this.read(s.slice(1), { node: root, from: self, this: self, writer: frame.reading ?? frame.writer }); }
       // (a name it does not have: what its own rule for any member, `.{x} =>`, makes of it (None's: None), not what is named
       // where the text was written)
-      const any = self.rules.some(rule => rule.home === self && rule.pieces[0]?.literal === '.' && rule.pieces[1]?.hole);
+      const any = !!self.outer && self.rules.some(rule => rule.home === self && rule.pieces.length === 2 && rule.pieces[0].literal === '.' && rule.pieces[1].hole);
       const name = s.slice(1), member = this.read(name, { node: self, site: self === written || any ? undefined : written, this: frame.this, from: self, on: true, writer: frame.reading ?? frame.writer });
       if (member !== name || !any) return member;
       return this.read(s, { node: self, this: frame.this, from: self, on: true, dotted: true, writer: frame.reading ?? frame.writer });
@@ -1014,7 +1038,9 @@ export class Program {
     if (defines === undefined) {
       const line = s.indexOf('\n'), first = line < 0 ? s : s.slice(0, line);
       if (this.definitions.size > 100000) this.definitions.clear();
-      this.definitions.set(s, defines = first.trimEnd().endsWith(definer) ? 1 : this.outermost(first) ? 2 : 0);
+      // (the definer ending it outside every bracket: `xs.map(x =>` going on below is a closure in an argument, not a definition)
+      const ending = first.trimEnd();
+      this.definitions.set(s, defines = ending.endsWith(definer) && this.outermost_at(ending, true) === ending.length - definer.length ? 1 : this.outermost(first) ? 2 : 0);
     }
     // (the rules' readings of all of it; else a body it begins with; else every reading: found once for text read alike, in
     // a node that sees the same heads)
@@ -1077,7 +1103,7 @@ export class Program {
       const { home } = reading.rule, calls = !!home?.calls, outside = !calls && !frame.on && frame.node === home && !!home?.outer && !reading.rule.literals.length;
       // (`.` in its right side: in a call, what the closure was read from (else where it was written); read on in a value (a
       // method), the value; else as it was)
-      const self = home?.calls ? frame.from ?? this.through(frame.this, home.outer) ?? home.self ?? home.outer! : outside ? home!.outer! : frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node;
+      const self = home?.calls ? frame.from ?? this.through(frame.this, home.outer) ?? home.self ?? home.outer! : outside ? home!.outer! : frame.on ? ('receiver' in frame ? frame.receiver : frame.node) : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node;
       // (a method called on what was made in its class, `x.m(…)`, runs in it: what it reads, its own first, then the class's)
       // (a named method (no holes) read on a value: in a node of its own in the value, so what it defines is not the value's)
       // (a call (`(…) =>`) of a node that is not a closure: in a node of its own in it, as a closure's call is)
@@ -1191,6 +1217,8 @@ export class Program {
     const writer = frame.reading ?? frame.writer;
     // (`.` in a closure called in it: that value, as `x.f()` gives it; reading on a closure calls it: `.` as it was; a member
     // read on one, `.` that closure)
+    // (a body after a value that is not a node (`text{c => …}`): read as on the outermost node (Node's), `.` the value)
+    if (!(node instanceof Program.Node) && rest.startsWith(this.grammar!.open)) { let root = frame.node; while (root.outer) root = root.outer; return this.evaluate(after, { node: root, from: node, this: node, receiver: node, on: true, writer }, undefined, false); }
     return node instanceof Program.Node ? this.evaluate(after, { node, site: frame.site ?? frame.node, from: node.calls && after.charCodeAt(0) !== 46 ? frame.from : node, this: frame.this, on: true, writer }, undefined, false)
       : this.evaluate(after, { node: frame.node, site: frame.site, also: frame.also, from: node, this: frame.this, receiver: node, writer }, except, false);
   }

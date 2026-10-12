@@ -1483,6 +1483,14 @@ class{ }({fields}) => {{block}} =>
   }
 goto styled
 keyword
+{{name}}{ }:={ }class{ }{{header}}{ }{{block}} =>
+  {name} := (class ({header}) => {
+    {block}
+  })
+  goto styled
+  class
+goto styled
+keyword
 
 // What a value is: a Node (anything is; the outermost node); the value itself; an instance of the class (or of one after it,
 // `class:`) it was made by; one of a superposition's components; a narrowing that holds of it; a member of an enumeration; a

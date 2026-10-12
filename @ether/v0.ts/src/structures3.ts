@@ -142,7 +142,8 @@ export class Structures {
     const header = $($.written(maker) + '.structure');
     if (!header || typeof header !== 'object' || !('pieces' in header)) return $('None');
     const reading = new Reading(this, $, bits);
-    const read = reading.structure(maker, [], 0, header as Header, (value, at) => ({ value, at }));
+    // (a value is all of the bits it is read from: a reading that leaves some is not one)
+    const read = reading.structure(maker, [], 0, header as Header, (value, at) => at === bits.length ? { value, at } : null);
     this.reached = reading.furthest;
     return read ? read.value : $('None');
   }

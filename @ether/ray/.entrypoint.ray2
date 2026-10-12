@@ -1551,7 +1551,7 @@ punctuation
 type := None
 checked {type} =>
   unless ({type} === None) || (. === None) || (. is {type}) {
-    ERROR a value is not of the type it is given to
+    ERROR a value is not of the type it is given to: {type}
   }
   .
 goto styled

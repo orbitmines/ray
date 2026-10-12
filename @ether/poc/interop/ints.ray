@@ -41,3 +41,8 @@ Natural32.low := 0
 Natural32.high := 4294967295
 Natural32.bits := 32
 Natural32.signed := false
+Natural64 := Number{(. >= 0) && (. <= 18446744073709551615)}
+Natural64.low := 0
+Natural64.high := 18446744073709551615
+Natural64.bits := 64
+Natural64.signed := false

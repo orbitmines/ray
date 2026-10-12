@@ -32,5 +32,6 @@ case "${1:-}" in
     ;;
   MC8a) python3 "$here/flow.py" --check ;;
   MC8b) CORPUS=corpus_flow each rewrite,assembly "MC8b every flow function read, written back byte for byte, its text objdump's" ;;
-  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6|MC7|MC8a|MC8b" >&2; exit 2 ;;
+  MC8c) CORPUS=corpus_flow each flow "MC8c every flow function lifted to Ray with its jumps prints what gcc's object prints" ;;
+  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6|MC7|MC8a|MC8b|MC8c" >&2; exit 2 ;;
 esac

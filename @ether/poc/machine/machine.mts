@@ -64,6 +64,28 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
       continue;
     }
+    if (mode === 'flow') {
+      const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+      const lifted = run('X86.lift_flow(' + program.written(read) + ', "' + name + '", [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '], ' + (function_.type === 'long' ? 64 : 32) + ')');
+      const wrong: string[] = [];
+      if (typeof lifted !== 'string') said = 'not lifted';
+      else {
+        fs.writeFileSync(path.join(out, name + '.flow.ray'), lifted + '\n');
+        run(lifted);
+        const asked = fs.readFileSync(path.join(corpus, 'inputs.txt'), 'utf8').trim().split('\n'), answers = fs.readFileSync(path.join(corpus, 'expected.txt'), 'utf8').trim().split('\n');
+        asked.forEach((line, index) => {
+          const [called, ...values] = line.split(' ');
+          if (called !== name) return;
+          const answer = run(name + '(' + values.map(v => ray_number(Number(v))).join(', ') + ')');
+          if (String(answer) !== answers[index]) wrong.push(`${name}(${values.join(', ')}) = ${typeof answer === 'object' ? 'a node' : String(answer)}, gcc: ${answers[index]}`);
+        });
+        held = !wrong.length;
+        said = wrong.join('; ');
+      }
+      if (!held) failed++;
+      console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      continue;
+    }
     if (mode === 'assemble') {
       const lines = fs.readFileSync(path.join(corpus, name + '.s'), 'utf8').trim().split('\n');
       lines.forEach((line, index) => run('assembled_' + index + ' := X86.Assembly reading {\n  ' + line + '\n}'));

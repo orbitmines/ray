@@ -132,6 +132,25 @@ All POC files live in `@ether/poc/machine/`:
   kernel itself: Ray's rule matching written in Ray and compiled through `X86.ray`, the Almanac's "compile the compiler
   into a new version".
 
+### MC8 Branches and loops, both directions
+
+- **Goal.** What MC7 does for arithmetic, for control flow: nothing real is straight-line.
+- **MC8a Corpus.** `flow.py` writes small functions from templates (a choice, two choices, a loop counting down to a
+  bound, a loop summing up to one) over `int` and `long`, with the arithmetic of `gen.py` inside them; gcc compiles them
+  as in MC1; gcc's objects run on inputs small enough that every loop is short, and what they print is the oracle.
+- **MC8b The declaration.** `X86.ray` gains what gcc emits for them: `cmp` and `test` (registers and immediates), `and`,
+  the conditional moves, the conditional jumps and `jmp` (8- and 32-bit offsets), and the `nop`s gcc pads loop heads with
+  (with the `66` and `2e` prefixes). Pass: every flow function written back byte for byte, and its text objdump's (jump
+  targets as offsets in the function, without objdump's `<name+offset>`).
+- **MC8c The lift.** Registers become variables, the flags the last comparison (`cmp`, `test`, or the result an operation
+  set), each condition a comparison of those at the width it was made at, a jump a `goto` to a label at its target, `ret`
+  a `return`: Ray's own labels and `goto`. Pass: each lifted function, run by the interpreter, prints what gcc's object
+  prints on the same inputs.
+- **MC8d Through itself.** The lifted program lowered back to x86-64 by `X86.ray` (each statement, each `goto` a jump),
+  written, run natively: it prints what gcc's object prints; and its bytes, read and lifted again, run the same.
+- **Why it matters.** With branches and loops the lowering reaches real programs; then memory, then DEFLATE's decoder
+  compiled through `X86.ray`.
+
 ## After this proof
 
 - **A second instruction set.** The same corpus through `aarch64-linux-gnu-gcc`, lifted by an `AArch64.ray`, gives the
@@ -165,6 +184,13 @@ MC0 to MC7 pass (`./run.sh MC1` … `MC7` in `@ether/poc/machine`; 25 functions 
   back and lifted, give exactly the function the C was read to (text for text, `as` read as the machine's `wrapped`).
   `f3` runs 17 times a second in the interpreter and 765 million times a second as the machine code Ray wrote for it:
   about 4.5 × 10⁷, from the same meaning, checked by the declaration that wrote it.
+
+- **MC8a**: 60 flow functions (choices, two choices, loops down and up, over `int` and `long`), pinned with what gcc's
+  objects print on 180 inputs.
+- **MC8b**: all 60 read and written back byte for byte, and printed as objdump prints them: `cmp`, `test` (also of an
+  8-bit register), `and`, `shr`, the conditional moves, short conditional jumps and `jmp` (each target where the next
+  instruction begins plus its offset), and gcc's padding `nop`s with their `66` and `2e` prefixes. A value read from bits
+  is now all of them: a function is not its bytes up to the first `ret`.
 
 Each function reads, prints, lifts or assembles in under a second.
 
@@ -317,6 +343,9 @@ quick tier (`poc/quick.sh`) about 6 minutes.
   `*2` reads 2); the scale is taken as its text.
 - **MCG7 A named argument is read where it is read, not where it was given:** `f(x: e)` keeps `e`, so a value made with
   it and read later elsewhere (the codec) reads `e` again there; values the codec reads are made with arguments in order.
+- **MCG8 Main's `filter` overflows the stack** (`[1, 2, 3].filter((x) => x == 2)`, on main alone too): prefixes are counted
+  with a loop. **`is` can run away** through `descends`' lazy `depth` default: instructions answer `assembly_after` instead
+  of being asked what they are.
 - **MCG3 `return` in a rule's right side returns from the function that called the rule.** `wrapped` written with
   `(return value) if …` made every lifted function answer its first wrapped value.
 

@@ -151,18 +151,34 @@ All POC files live in `@ether/poc/machine/`:
 - **Why it matters.** With branches and loops the lowering reaches real programs; then memory, then DEFLATE's decoder
   compiled through `X86.ray`.
 
+### MC9 Memory
+
+- **Goal.** Data: what any real program, an `inflate` among them, reads and writes through pointers.
+- **MC9a Corpus.** `memory.py` writes small functions over arrays from templates (sum, count, find, copy, reverse, a
+  histogram), over `int`, `long` and `unsigned char`; gcc compiles them; gcc's objects run on arrays small enough that every
+  loop is short, and what they print (results and arrays after) is the oracle.
+- **MC9b The declaration.** Loads and stores (`mov` to and from memory, `movzx`, `movsx`), arithmetic and `cmp` with a memory
+  operand, and whatever else gcc emits for them: read, written back, printed as objdump does.
+- **MC9c The lift.** Memory becomes a Ray list of bytes; a pointer an index into it; a load or store of a width its bytes
+  little-endian. The lifted function, given the same arrays laid out in that memory, prints what gcc's object prints.
+- **MC9d Through itself.** The lifted program written as machine code again, run natively on the same arrays, and lifted
+  again.
+
 ## After this proof
 
 - **A second instruction set.** The same corpus through `aarch64-linux-gnu-gcc`, lifted by an `AArch64.ray`, gives the
   same functions: two machines, one meaning.
 - **The interpreted side.** CPython compiles to bytecode in `.pyc` files (marshal, then opcodes): one more binary format.
   Read it the same way, and Python meets C through what each compiler emits, with no grammar of either.
-- **Control flow.** Jumps become labels and `goto`, which Ray has; equivalence then needs more than evaluation
-  (Interop.md L2).
+- **A real program.** gcc's `inflate` (the DEFLATE proof's decoder, as C) read from its object, lifted, and compiled again
+  through `X86.ray`, decoding the DEFLATE corpus as gcc's object does: calls, the stack, and whatever else it emits.
+- **Equivalence beyond evaluation.** MC8 and MC9 compare on inputs; that a lifted program is the function for every input
+  needs more than evaluation (Interop.md L2).
 
 ## Status
 
-MC0 to MC7 pass (`./run.sh MC1` … `MC7` in `@ether/poc/machine`; 25 functions per process), also after merging main.
+MC0 to MC9 pass (`./run.sh MC1` … `MC9d` in `@ether/poc/machine`; 25 functions per process, 5 or 6 for MC8d and MC9),
+also after merging main.
 
 - **MC0**: on the merged branch, S0 to N6 and DP0, DP2, DP3, DP4 pass.
 - **MC1**: 200 functions, from 3 to 32 bytes, pinned in `corpus/manifest.txt` (gcc 16.2.1).
@@ -191,6 +207,24 @@ MC0 to MC7 pass (`./run.sh MC1` … `MC7` in `@ether/poc/machine`; 25 functions 
   8-bit register), `and`, `shr`, the conditional moves, short conditional jumps and `jmp` (each target where the next
   instruction begins plus its offset), and gcc's padding `nop`s with their `66` and `2e` prefixes. A value read from bits
   is now all of them: a function is not its bytes up to the first `ret`.
+- **MC8c**: all 60 lifted to Ray with their branches and loops, as Ray's own labels and `goto`, print what gcc's objects
+  print on every input. Each instruction's existing `lifted` gives the arithmetic (registers named after the variables
+  `r0` to `r15`), so nothing of it is written twice; the flags are two variables; a condition compares them.
+- **MC8d**: the lifted programs written back as machine code by `X86.ray` (variables in their registers, flags in r10 and
+  r11, the deeper side of an operation first so two more registers suffice, `movsxd` for a 32-bit wrap, jumps with 32-bit
+  offsets laid out in two passes, each line assembled by reading it in `X86.Assembly`): all 60 (10002 bytes) agree
+  natively with gcc's objects on all 180 inputs, and read back and lifted again, print the same.
+- **MC9a**: 60 functions over arrays (sum, count, find, largest, add, prefix sums, reverse; of `int`, `long`,
+  `unsigned char`), compiled by gcc without vectorizing (`-fno-tree-vectorize`: vector instructions are a later step), and
+  what their objects print, results and arrays after, on 180 inputs.
+- **MC9b**: all 60 read, written back byte for byte, printed as objdump does: loads, stores, `add` to and from memory,
+  `cmp` with memory, `movzx`, `movsxd` from memory, `setcc`, byte registers (`ah` to `bh` without REX, `spl` to `dil` with).
+- **MC9c**: all 60 lifted, memory a Ray list of bytes (`poc/interop/memory.ray`), a pointer an index into it, a value of
+  more bytes little-endian, print what gcc's objects print, arrays after included.
+- **MC9d**: all 60 written back as machine code by `X86.ray` (11407 bytes): a load or store of an address x86 computes
+  itself (base, index scaled by 1, 2, 4 or 8, small displacement) is one instruction, as gcc writes it; the flags and what an
+  expression needs on the way are registers the program does not name. They agree natively with gcc's objects on all 180
+  inputs, arrays after included, and read back and lifted again, print the same.
 
 Each function reads, prints, lifts or assembles in under a second.
 
@@ -346,6 +380,13 @@ quick tier (`poc/quick.sh`) about 6 minutes.
 - **MCG8 Main's `filter` overflows the stack** (`[1, 2, 3].filter((x) => x == 2)`, on main alone too): prefixes are counted
   with a loop. **`is` can run away** through `descends`' lazy `depth` default: instructions answer `assembly_after` instead
   of being asked what they are.
+- **MCG9 `list[i] = value` does nothing, silently**: it answers `value`, the list is as it was. A list's cells can be
+  assigned (`cell.value = value`), so memory walks to its cell.
+- **MCG10 A word no rule reads is text, silently**: with `io.ray` not loaded, `lifted text_after opening` is the text
+  `"text_after opening"`, and a function lifted with it was `m1 (memory, text_after opening`. An unread word could say so.
+- **MCG11 A second `static` of a name replaces the first, silently, whatever its arity**: a new `addressed (text)` took the
+  place of `addressed (registers, operand, rex)`, and every `lea` lifted to nothing (no line, no error), so Ray's machine
+  code for it ran off into memory it never set.
 - **MCG3 `return` in a rule's right side returns from the function that called the rule.** `wrapped` written with
   `(return value) if …` made every lifted function answer its first wrapped value.
 

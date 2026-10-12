@@ -275,6 +275,10 @@ anded({other}) =>
 wrapped_into({bits}, {signed}) =>
   goto js
   Number.isInteger(self) ? Number(signed === $('true') ? BigInt.asIntN(bits, BigInt(self)) : BigInt.asUintN(bits, BigInt(self))) : undefined
+// (an integer's byte at a place, as two's complement of 64 bits, the least significant first: what memory holds of it)
+byte_at({index}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(index) ? Number((BigInt.asUintN(64, BigInt(self)) >> BigInt(8 * index)) & 255n) : undefined
 // (text in base 16, `0xfffffff7`, as a whole number of a width in two's complement: -9)
 signed_hexadecimal({width}) =>
   goto js

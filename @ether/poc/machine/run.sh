@@ -5,11 +5,11 @@ ether="$(cd "$here/../.." && pwd)"
 ray() { (ulimit -s unlimited; cd "$ether/v0.ts" && ETHER="$ether" KINDS_AFTER=1 LOAD='$/x86/X86.ray,poc/interop/ints.ray,poc/interop/io.ray,poc/interop/write.rust.ray,poc/interop/read.c.ray' STEPS=80000000 node --max-old-space-size=8000 --stack-size=60000 --import tsx "$here/$1" "${@:2}" 2>/dev/null); }
 each() {
   local failed=0 count
-  count=$(wc -l < "$here/corpus/manifest.txt")
+  count=$(wc -l < "$here/${CORPUS:-corpus}/manifest.txt")
   for start in $(seq 1 25 "$count"); do
     local said
     said=$(RANGE="$start-$((start + 24))" ray machine.mts "$1" || true)
-    if [ "$(grep -c '^ok' <<< "$said")" != "$(( count - start + 1 < 25 ? count - start + 1 : 25 ))" ]; then failed=1; grep -v '^ok' <<< "$said" || echo "functions $start to $((start + 24)) stopped"; fi
+    if [ "$(grep -c '^ok' <<< "$said")" != "$(( (count - start + 1 < 25 ? count - start + 1 : 25) * $(tr ',' '\n' <<< "$1" | wc -l) ))" ]; then failed=1; grep -v '^ok' <<< "$said" || echo "functions $start to $((start + 24)) stopped"; fi
   done
   [ "$failed" = 0 ] && echo "$2 ($count functions)" || { echo "some failed"; exit 1; }
 }
@@ -30,5 +30,7 @@ case "${1:-}" in
     python3 "$here/native.py" "${INPUTS:-30}"
     BYTES="$here/out/compiled" each inverse "MC7 every function's compiled bytes lift back to the function its C was read to"
     ;;
-  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6|MC7" >&2; exit 2 ;;
+  MC8a) python3 "$here/flow.py" --check ;;
+  MC8b) CORPUS=corpus_flow each rewrite,assembly "MC8b every flow function read, written back byte for byte, its text objdump's" ;;
+  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6|MC7|MC8a|MC8b" >&2; exit 2 ;;
 esac

@@ -1,0 +1,5 @@
+cmp edi,0x1
+mov edx,0x8
+mov eax,0x1
+cmovle eax,edx
+ret

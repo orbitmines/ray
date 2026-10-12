@@ -8,7 +8,7 @@
 const { booted } = await import('../deflate/boot.mts');
 const fs = await import('node:fs'), path = await import('node:path');
 const { program } = await booted();
-const here = path.dirname(new URL(import.meta.url).pathname), corpus = path.join(here, 'corpus'), modes = process.argv[2].split(',');
+const here = path.dirname(new URL(import.meta.url).pathname), corpus = path.join(here, process.env.CORPUS ?? 'corpus'), modes = process.argv[2].split(',');
 const g = { node: program.global }, none = program.run('None', g);
 const run = (text: string) => { program.steps = 0; return program.run(text, g); };
 const listed = (bytes: Uint8Array) => { const list = run('Listing.new'); for (const byte of bytes) run(program.written(list) + '.append(' + byte + ')'); return list; };

@@ -64,6 +64,47 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
       continue;
     }
+    if (mode === 'compile_flow') {
+      const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+      const compiled_function = run('X86.compiled_flow(' + program.written(read) + ', [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '], ' + (function_.type === 'long' ? 64 : 32) + ')');
+      const written = compiled_function && typeof compiled_function === 'object' ? values_of(run(program.written(compiled_function) + '.written')) as number[] | undefined : undefined;
+      held = !!written && written.length > 0;
+      const into = process.env.CORPUS === 'corpus_memory' ? 'compiled_memory' : 'compiled_flow';
+      if (held) { fs.mkdirSync(path.join(here, 'out', into), { recursive: true }); fs.writeFileSync(path.join(here, 'out', into, name + '.bin'), Buffer.from(written!)); }
+      said = 'not compiled';
+      if (!held) failed++;
+      console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(written?.length ?? '-').padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      continue;
+    }
+    if (mode === 'memory_flow') {
+      const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+      const lifted = run('X86.lift_memory_flow(' + program.written(read) + ', "' + name + '", ["p", "n", "k"], 64)');
+      const wrong: string[] = [];
+      if (typeof lifted !== 'string') said = 'not lifted';
+      else {
+        fs.writeFileSync(path.join(out, name + '.memory.ray'), lifted + '\n');
+        run(lifted);
+        const size = ({ 'int': 4, 'long': 8, 'unsigned char': 1 } as Record<string, number>)[function_.element], signed = function_.element !== 'unsigned char';
+        const asked = fs.readFileSync(path.join(corpus, 'inputs.txt'), 'utf8').trim().split('\n'), answers = fs.readFileSync(path.join(corpus, 'expected.txt'), 'utf8').trim().split('\n');
+        asked.forEach((line, index) => {
+          const [called, n, k, ...values] = line.split(' ');
+          if (called !== name) return;
+          const memory = new Array(192).fill(0);
+          values.forEach((v, i) => { let x = BigInt.asUintN(8 * size, BigInt(v)); for (let b = 0; b < size; b++) { memory[64 + i * size + b] = Number(x & 255n); x >>= 8n; } });
+          run('memory_' + index + ' := [' + memory.join(', ') + ']');
+          const answer = run(name + '(memory_' + index + ', 64, ' + ray_number(Number(n)) + ', ' + ray_number(Number(k)) + ')');
+          const after = String(run('memory_' + index + '.join(",")')).split(',').map(Number);
+          const array = values.map((_, i) => { let x = 0n; for (let b = size - 1; b >= 0; b--) x = (x << 8n) | BigInt(after[64 + i * size + b]); return String(signed ? BigInt.asIntN(8 * size, x) : x); });
+          const shown = String(answer) + ' |' + array.map(v => ' ' + v).join('');
+          if (shown !== answers[index]) wrong.push(`${line} = ${typeof answer === 'object' ? 'a node' : shown}, gcc: ${answers[index]}`);
+        });
+        held = !wrong.length;
+        said = wrong.slice(0, 3).join('; ');
+      }
+      if (!held) failed++;
+      console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      continue;
+    }
     if (mode === 'flow') {
       const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
       const lifted = run('X86.lift_flow(' + program.written(read) + ', "' + name + '", [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '], ' + (function_.type === 'long' ? 64 : 32) + ')');

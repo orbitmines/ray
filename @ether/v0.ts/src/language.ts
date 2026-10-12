@@ -318,6 +318,81 @@ export namespace Text {
   }
 }
 
+// The control block, shared with every thread: [round, threads still working, then whatever the caller lays out in it].
+// Without SharedArrayBuffer (or asked not to share) it is the same block on one thread: nothing is waited on.
+export class Control {
+  static readonly ROUND = 0;
+  static readonly WORKING = 1;
+  static readonly HEADER = 2;
+
+  readonly state: Int32Array;
+  readonly shared: boolean;
+
+  constructor(length: number = 0, shared: boolean = env.parallel) {
+    this.shared = shared && typeof SharedArrayBuffer !== "undefined";
+    this.state = new Int32Array(this.shared
+      ? new SharedArrayBuffer(4 * (Control.HEADER + length))
+      : new ArrayBuffer(4 * (Control.HEADER + length)));
+  }
+  // A thread's view of a block another made (`buffer`, sent in its workerData).
+  static of(buffer: ArrayBufferLike): Control {
+    const control = Object.create(Control.prototype) as Control;
+    (control as any).state = new Int32Array(buffer);
+    (control as any).shared = typeof SharedArrayBuffer !== "undefined" && buffer instanceof SharedArrayBuffer;
+    return control;
+  }
+
+  get buffer(): ArrayBufferLike { return this.state.buffer; }
+  get length(): number { return this.state.length - Control.HEADER; }
+
+  // The caller's slots, after the header.
+  get(i: number): number { return this.load(Control.HEADER + i); }
+  set(i: number, value: number): void { this.store(Control.HEADER + i, value); }
+  fields(at: number, n: number): Int32Array { return this.state.subarray(Control.HEADER + at, Control.HEADER + at + n); }
+
+  get round(): number { return this.load(Control.ROUND); }
+  get stopped(): boolean { return this.round < 0; }
+  get working(): number { return this.load(Control.WORKING); }
+
+  // Start a round for `threads` threads.
+  notify(threads: number): void {
+    this.store(Control.WORKING, threads);
+    if (this.shared) { Atomics.add(this.state, Control.ROUND, 1); Atomics.notify(this.state, Control.ROUND); }
+    else this.state[Control.ROUND]++;
+  }
+  // A thread: wait for the round after `round`; the round it woke to (negative: stopped).
+  wait(round: number): number {
+    if (this.shared) Atomics.wait(this.state, Control.ROUND, round);
+    return this.round;
+  }
+  // A thread finished its round; the last one wakes whoever joins.
+  done(): void {
+    if (!this.shared) { this.state[Control.WORKING]--; return; }
+    if (Atomics.sub(this.state, Control.WORKING, 1) === 1) Atomics.notify(this.state, Control.WORKING);
+  }
+  // Wait until every thread of the round is done.
+  join(): void {
+    if (!this.shared) return;
+    for (let left; (left = Atomics.load(this.state, Control.WORKING)) !== 0;) Atomics.wait(this.state, Control.WORKING, left);
+  }
+  // The same, without blocking: a page's main thread may not wait (and a thread hearing from others goes on hearing them).
+  async joined(): Promise<void> {
+    if (!this.shared) return;
+    for (let left; (left = Atomics.load(this.state, Control.WORKING)) !== 0;) {
+      const waited = typeof Atomics.waitAsync === 'function' ? Atomics.waitAsync(this.state, Control.WORKING, left) : undefined;
+      if (waited === undefined) await new Promise(resolve => setTimeout(resolve, 0));
+      else if (waited.async) await waited.value;
+    }
+  }
+  stop(): void {
+    this.store(Control.ROUND, -1);
+    if (this.shared) Atomics.notify(this.state, Control.ROUND);
+  }
+
+  private load(i: number): number { return this.shared ? Atomics.load(this.state, i) : this.state[i]; }
+  private store(i: number, value: number): void { if (this.shared) Atomics.store(this.state, i, value); else this.state[i] = value; }
+}
+
 // ---------------------------------------------------------------- JMP: one instruction, compiled to WebAssembly (or run as JavaScript)
 
 export const CALLER = -1, AMP = -2, ALWAYS = -1;   // ALWAYS: the constant 1, every program's first
@@ -378,8 +453,11 @@ export class Jmp {
     return typeof x === 'number' ? -1 - at : at;
   }
 
-  // Target names to statements: a label of the context, else a context, else a native, else &.caller.
+  // Target names to statements: a label of the context, else a context, else a native, else &.caller. (A label named as a
+  // context or a host is is an error: a jump there would not go where it reads.)
   link() {
+    for (const name of this.names.keys()) { const at = name.indexOf('.'); if (at < 0) continue; const label = name.slice(at + 1);
+      if (this.names.has(label) && !label.includes('.') || this.hosts.some(h => h.name === label)) throw new Error(`the label \`${name}\` is named as a context or host is`); }
     for (const [k, name, context] of this.unlinked) {
       const at = this.names.get(`${context}.${name}`) ?? this.names.get(name), h = this.hosts.findIndex(x => x.name === name);
       const n = h >= 0 ? NATIVES.length + h : NATIVES.findIndex(x => x.name === name);
@@ -555,7 +633,12 @@ export function interpret(p: Jmp, buffer: ArrayBufferLike, hosts: Hosts = {}): R
       if (t >= 0 && code[5 * t] === AMP) { const r = run(t, Array.from(cells.subarray(x, x + code[5 * t + 3]))); if (into >= 0) cells[into] = r; k++; }
       else if (t >= 0) k = t;
       else if (-3 - t >= natives.length) { const h = -3 - t - natives.length, r = called[h](...cells.subarray(x, x + p.hosts[h].arity)); if (into >= 0) cells[into] = r; k++; }
-      else { const r = natives[-3 - t](get(x), get(y), bytes, view); if (into >= 0 && NATIVES[-3 - t].value !== false) cells[into] = r; k++; }
+      else {
+        let r: number;
+        try { r = natives[-3 - t](get(x), get(y), bytes, view); }
+        catch (e) { throw new Error(`${named.get(entry)} at ${k} (${[...p.names].filter(([, at]) => at <= k && at > entry).map(([n]) => n).pop() ?? ''}): ${NATIVES[-3 - t].name}(${get(x)}, ${get(y)}): ${(e as Error).message}; cells ${p.cells.get(entry)!.map((name, i) => name + '=' + cells[i]).join(' ')}`); }
+        if (into >= 0 && NATIVES[-3 - t].value !== false) cells[into] = r; k++;
+      }
     }
   };
   const label = new Map([...p.names].map(([n, k]) => [k, n]));
@@ -758,7 +841,7 @@ export function ends(p = new Jmp()): Jmp {
   jmpIf('b', 'loop');
   jmpIf('last', 'last');
   jmp('==', 'b', 'next', 1);
-  jmpIf('b', 'literal');
+  jmpIf('b', 'at_literal');
   jmp('==', 'b', 'next', 2);
   jmpIf('b', 'gap');
   jmp('end');
@@ -774,7 +857,7 @@ export function ends(p = new Jmp()): Jmp {
   jmp('&', 'b', 'c', C.space);
   jmpIf('b', 'end');
   jmp('loop');
-  label('literal');                                 // the literal written here
+  label('at_literal');                                 // the literal written here
   jmp('+', 'e', 'u', 'length');
   jmp('>', 'b', 'e', 'n');
   jmpIf('b', 'loop');
@@ -810,12 +893,21 @@ export const KIND = { literal: 1, gap: 2, hole: 3, body: 4 };
 export const PIECE = { ends_open: 1, last_word: 2, last_operator: 4, enclosed: 8, typed: 16, quoted: 32, typed_quoted: 64, after_words: 128, last: 256 };
 const WORD = 16, OPERATOR = 32, PIECE_SIZE = 48, HEAD = 12, FRAME = 1024;
 const M_TABLE = 0, M_GLOBALS = 65536, M_SP = M_GLOBALS, M_OUT = M_GLOBALS + 4, M_OPEN = M_GLOBALS + 8, M_CLOSE = M_GLOBALS + 12, M_TOKEN = M_GLOBALS + 16;
-const M_HEADS = M_GLOBALS + 4096, M_READ = M_HEADS + (1 << 23), M_STACK = M_READ + (1 << 23), M_TEXT = M_STACK + (1 << 23), M_END = M_TEXT + (1 << 25);
+const M_DISPATCHING = M_GLOBALS + 20, M_DISPATCHED = M_GLOBALS + 24, M_MEMO_TOP = M_GLOBALS + 28, M_EPOCH = M_GLOBALS + 32;
+const M_HEADS = M_GLOBALS + 4096, M_READ = M_HEADS + (1 << 23), M_STACK = M_READ + (1 << 23), M_TEXT = M_STACK + (1 << 23), M_ARENA = M_TEXT + (1 << 25);
+const M_MEMO = M_ARENA + (1 << 24), MEMO_BUCKETS = 1 << 16, M_MEMO_ENTRIES = M_MEMO + 4 * MEMO_BUCKETS, M_END = M_MEMO_ENTRIES + (1 << 23);
+// A rule: [head, id, flags, literals, where they are ([where, length] each), top literals, where, the last literal (where, length),
+// its typed holes' types (a node's record each, 0 not known yet), pieces]. A node: [heads, led (16 lists by the first character:
+// [literal (where, length), rules (first, last), next]), bare (first, last), keyed (first, last; entries as led's), firsts (heads it
+// was found at + 1, where: [how many, or -1 any, each])]. A list: [rule, next].
+export const RULE = { called: 1, named: 2, braced: 4, checking: 8, passes: 16, operator: 32, last: 64 };
+const R = { head: 0, id: 4, flags: 8, literals: 12, literals_at: 16, tops: 20, tops_at: 24, last: 28, last_length: 32, types: 36, pieces: 40, size: 44 };
+const N = { headed: 0, led: 4, bare: 8, bare_last: 12, keys: 16, keys_last: 20, firsts: 24, firsts_at: 28, size: 32 };
 // (a frame: what a call of `readings` is reading, and the candidate being read)
-const F = { s: 0, n: 4, whole: 8, dispatching: 12, rule: 16, last_only: 20, candidate: 24, loosers: 28, looser_count: 32, before: 36, read: 40, literals: 44, spans: 64 };
+const F = { s: 0, n: 4, whole: 8, dispatching: 12, rule: 16, last_only: 20, candidate: 24, loosers: 28, looser_count: 32, before: 36, read: 40, literals: 44, record: 48, spans: 64 };
 export function matching(p = new Jmp()): Jmp {
   ends(p);
-  p.host('type_of', 2); p.host('firsts', 2); p.host('structural', 3); p.host('accepts', 3);
+  p.host('type_of', 2); p.host('firsts_of', 1); p.host('accepts', 3); p.host('named', 1); p.host('loosers', 1);
   const jmp = p.jmp.bind(p), jmpIf = p.jmpIf.bind(p), label = p.label.bind(p);
   const load = (into: string, base: Operand, at: number) => { jmp('+', 'a', base, at); jmp('i32', into, 'a'); };
   const store = (base: Operand, at: number, value: Operand) => { jmp('+', 'a', base, at); jmp('i32=', undefined, 'a', value); };
@@ -838,15 +930,15 @@ export function matching(p = new Jmp()): Jmp {
   };
   const span = (from: Operand, to: Operand) => { jmp('*', 'a', 'd', 4); jmp('+', 'a', 'a', 'f'); jmp('+', 'a', 'a', F.spans); jmp('i32=', undefined, 'a', from); jmp('+', 'a', 'a', 4); jmp('i32=', undefined, 'a', to); jmp('+', 'd2', 'd', 2); };
 
-  // Each candidate in turn ([head, loosers, how many, only its last reading], 16 bytes each): what each reads, written out.
+  // Each candidate in turn ([head, loosers, how many, only its last reading, its rule], 20 bytes each): what each reads, written out.
   p.begin('readings', 's', 'n', 'candidates', 'count', 'whole', 'dispatching');
   jmp('i32', 'f', M_SP); jmp('+', 'top', 'f', FRAME); jmp('i32=', undefined, M_SP, 'top');
   store('f', F.s, 's'); store('f', F.n, 'n'); store('f', F.whole, 'whole'); store('f', F.dispatching, 'dispatching'); store('f', F.read, 0);
   jmp('set', 'i', 0);
   label('candidate');
   jmp('>=', 'b', 'i', 'count'); jmpIf('b', 'done');
-  jmp('*', 'c', 'i', 16); jmp('+', 'c', 'c', 'candidates');
-  jmp('i32', 'r', 'c'); store('f', F.rule, 'r'); store('f', F.candidate, 'i');
+  jmp('*', 'c', 'i', 20); jmp('+', 'c', 'c', 'candidates');
+  jmp('i32', 'r', 'c'); store('f', F.rule, 'r'); store('f', F.candidate, 'i'); load('x', 'c', 16); store('f', F.record, 'x');
   load('x', 'c', 4); store('f', F.loosers, 'x'); load('x', 'c', 8); store('f', F.looser_count, 'x'); load('x', 'c', 12); store('f', F.last_only, 'x');
   load('x', 'f', F.read); store('f', F.before, 'x'); load('x', 'r', 4); store('f', F.literals, 'x');
   call('at', undefined, 'f', 0, 0, 0, 0);
@@ -977,7 +1069,7 @@ export function matching(p = new Jmp()): Jmp {
   p.begin('hole', 'f', 'k', 't', 'loose', 'd', 'q');
   frame(); load('flags', 'q', 12); load('nk', 'q', 16);
   jmp('&', 'b', 'flags', PIECE.quoted); jmp('not', 'b', 'b'); jmpIf('b', 'start');
-  load('quote', 'q', 28); jmp('-', 'from', 't', 1); call('quote_end', 'u', 'f', 'from', 'quote');
+  load('quote', 'q', 28); jmp('-', 'from', 't', 1); call('quote_end', 'u', 's', 'n', 'from', 'quote');
   jmp('<=', 'b', 'u', 't'); jmpIf('b', 'none');
   jmp('take');
   label('start');
@@ -985,8 +1077,11 @@ export function matching(p = new Jmp()): Jmp {
   char('x', 't'); kind('c', 'x'); jmp('&', 'b', 'c', CHARACTER.space); jmpIf('b', 'none');
   jmp('set', 'ty', 0);
   jmp('&', 'typed', 'flags', PIECE.typed); jmp('not', 'b', 'typed'); jmpIf('b', 'quoted');
-  load('i', 'f', F.candidate); call('type_of', 'ty', 'i', 'k');
+  load('rr', 'f', F.record); load('types', 'rr', R.types); jmp('*', 'a', 'k', 4); jmp('+', 'tk', 'a', 'types'); jmp('i32', 'ty', 'tk');
+  jmpIf('ty', 'typed_known');
+  call('type_of', 'ty', 'rr', 'k');
   jmp('not', 'b', 'ty'); jmpIf('b', 'none');
+  label('typed_known');
   load('b', 'f', F.dispatching); jmp('not', 'b', 'b'); jmpIf('b', 'first_character');
   jmp('i32', 'open', M_OPEN); jmp('!=', 'b', 'x', 'open'); jmpIf('b', 'first_character');
   jmp('+', 'v', 't', 1); jmp('>=', 'b', 'v', 'n'); jmpIf('b', 'first_character');
@@ -1013,10 +1108,11 @@ export function matching(p = new Jmp()): Jmp {
   call('firsts', 'b', 'ty', 'x'); jmp('not', 'b', 'b'); jmpIf('b', 'none');
   label('quoted');
   jmp('&', 'b', 'flags', PIECE.typed_quoted); jmp('not', 'b', 'b'); jmpIf('b', 'scan');
-  load('quote', 'q', 28); jmp('-', 'from', 't', 1); call('quote_end', 'u', 'f', 'from', 'quote');
+  load('quote', 'q', 28); jmp('-', 'from', 't', 1); call('quote_end', 'u', 's', 'n', 'from', 'quote');
   jmp('<=', 'b', 'u', 't'); jmpIf('b', 'none');
   jmp('not', 'b', 'ty'); jmpIf('b', 'take');
-  call('structural', 'b', 'ty', 't', 'u'); jmp('not', 'b', 'b'); jmpIf('b', 'none');
+  jmp('*', 'sa', 't', 2); jmp('+', 'sa', 'sa', 's'); jmp('-', 'len', 'u', 't');
+  call('typed', 'b', 'ty', 'sa', 'len'); jmp('not', 'b', 'b'); jmpIf('b', 'none');
   label('take');
   span('t', 'u'); jmp('+', 'k1', 'k', 1);
   call('at', undefined, 'f', 'k1', 'u', 'loose', 'd2');
@@ -1030,9 +1126,9 @@ export function matching(p = new Jmp()): Jmp {
   jmp('&', 'x', 'flags', PIECE.enclosed); store('ctl', 8, 'x');
   store('ctl', 12, 'nk'); load('x', 'q', 20); store('ctl', 16, 'x'); load('x', 'q', 24); store('ctl', 20, 'x');
   jmp('set', 'lc', 0);
-  jmp('not', 'b', 'last'); jmpIf('b', 'loosers');
+  jmp('not', 'b', 'last'); jmpIf('b', 'looser_count');
   load('lc', 'f', F.looser_count);
-  label('loosers');
+  label('looser_count');
   store('ctl', 24, 'lc');
   load('ls', 'f', F.loosers);
   jmp('set', 'j', 0);
@@ -1055,13 +1151,14 @@ export function matching(p = new Jmp()): Jmp {
   label('nth');
   jmp('+', 'e', 'e', 1);
   jmp('*', 'a', 'i', 4); jmp('+', 'a', 'a', 'out'); jmp('i32', 'u', 'a');
-  jmp('not', 'b', 'last'); jmpIf('b', 'typed');
-  jmp('>=', 'b', 'u', 'n'); jmpIf('b', 'typed');
-  jmp('-', 'v', 'u', 1); char('x', 'v'); kind('c', 'x'); jmp('&', 'b', 'c', WORD); jmp('not', 'b', 'b'); jmpIf('b', 'typed');
+  jmp('not', 'b', 'last'); jmpIf('b', 'structure');
+  jmp('>=', 'b', 'u', 'n'); jmpIf('b', 'structure');
+  jmp('-', 'v', 'u', 1); char('x', 'v'); kind('c', 'x'); jmp('&', 'b', 'c', WORD); jmp('not', 'b', 'b'); jmpIf('b', 'structure');
   char('x', 'u'); kind('c', 'x'); jmp('&', 'b', 'c', WORD); jmpIf('b', 'end');
-  label('typed');
+  label('structure');
   jmp('not', 'b', 'ty'); jmpIf('b', 'spans');
-  call('structural', 'b', 'ty', 't', 'u'); jmp('not', 'b', 'b'); jmpIf('b', 'end');
+  jmp('*', 'sa', 't', 2); jmp('+', 'sa', 'sa', 's'); jmp('-', 'len', 'u', 't');
+  call('typed', 'b', 'ty', 'sa', 'len'); jmp('not', 'b', 'b'); jmpIf('b', 'end');
   label('spans');
   span('t', 'u'); jmp('+', 'k1', 'k', 1);
   call('at', undefined, 'f', 'k1', 'u', 'loose', 'd2');
@@ -1089,9 +1186,224 @@ export function matching(p = new Jmp()): Jmp {
   jmp('set', '&.value', 'j');
   jmp('&.caller');
 
+  // A typed hole's check: whether its type's own rules read the text (`n` characters at `s`) whole: the first that does (which,
+  // does not matter). Kept by type and text while the type has the heads it had; while it is decided, it does not.
+  p.begin('typed', 'ty', 's', 'n');
+  call('hash', 'h', 's', 'n'); jmp('^', 'h', 'h', 'ty');
+  jmp('&', 'a', 'h', MEMO_BUCKETS - 1); jmp('*', 'a', 'a', 4); jmp('+', 'bucket', 'a', M_MEMO);
+  jmp('i32', 'headed', 'ty');
+  jmp('i32', 'e', 'bucket');
+  label('entry');
+  jmp('not', 'b', 'e'); jmpIf('b', 'new');
+  jmp('i32', 'x', 'e'); jmp('!=', 'b', 'x', 'ty'); jmpIf('b', 'next');
+  load('x', 'e', 8); jmp('!=', 'b', 'x', 'n'); jmpIf('b', 'next');
+  load('x', 'e', 4); call('same', 'b', 'x', 's', 'n'); jmpIf('b', 'found');
+  label('next');
+  load('e', 'e', 20); jmp('entry');
+  label('found');
+  load('x', 'e', 12); jmp('!=', 'b', 'x', 'headed'); jmpIf('b', 'stale');
+  load('&.value', 'e', 16); jmp('&.caller');
+  label('stale');
+  store('e', 12, 'headed'); store('e', 16, 0);
+  jmp('decide');
+  label('new');
+  jmp('i32', 'e', M_MEMO_TOP);
+  jmp('+', 'x', 'e', 24); jmp('<=', 'b', 'x', M_END); jmpIf('b', 'room');
+  call('forget', undefined, 0); jmp('set', 'e', M_MEMO_ENTRIES); jmp('+', 'x', 'e', 24);
+  label('room');
+  jmp('i32=', undefined, M_MEMO_TOP, 'x');
+  jmp('i32=', undefined, 'e', 'ty'); store('e', 4, 's'); store('e', 8, 'n'); store('e', 12, 'headed'); store('e', 16, 0);
+  jmp('i32', 'x', 'bucket'); store('e', 20, 'x'); jmp('i32=', undefined, 'bucket', 'e');
+  label('decide');
+  jmp('i32', 'epoch', M_EPOCH);
+  call('decided', 'r', 'ty', 's', 'n');
+  jmp('i32', 'x', M_EPOCH); jmp('!=', 'b', 'x', 'epoch'); jmpIf('b', 'gone');
+  store('e', 16, 'r');
+  label('gone');
+  jmp('set', '&.value', 'r');
+  jmp('&.caller');
+
+  // (every one forgotten: when there is no room for another)
+  p.begin('forget', 'x');
+  jmp('set', 'i', 0);
+  label('loop');
+  jmp('>=', 'b', 'i', MEMO_BUCKETS); jmpIf('b', 'done');
+  jmp('*', 'a', 'i', 4); jmp('+', 'a', 'a', M_MEMO); jmp('i32=', undefined, 'a', 0);
+  jmp('+', 'i', 'i', 1); jmp('loop');
+  label('done');
+  jmp('i32=', undefined, M_MEMO_TOP, M_MEMO_ENTRIES);
+  jmp('i32', 'x', M_EPOCH); jmp('+', 'x', 'x', 1); jmp('i32=', undefined, M_EPOCH, 'x');
+  jmp('set', '&.value', 0);
+  jmp('&.caller');
+
+  // The type's own rules that may read the text: led by a literal it begins with, those with none, keyed by one it has.
+  p.begin('decided', 'ty', 's', 'n');
+  jmp('not', 'b', 'n'); jmpIf('b', 'bare');
+  load('led', 'ty', N.led); jmp('not', 'b', 'led'); jmpIf('b', 'bare');
+  jmp('u16', 'c0', 's'); jmp('&', 'bucket', 'c0', 15); jmp('*', 'bucket', 'bucket', 4);
+  jmp('+', 'bucket', 'bucket', 'led'); jmp('i32', 'ent', 'bucket');
+  label('led_entry');
+  jmp('not', 'b', 'ent'); jmpIf('b', 'bare');
+  load('len', 'ent', 4); jmp('>', 'b', 'len', 'n'); jmpIf('b', 'led_next');
+  jmp('i32', 'lit', 'ent'); call('starts', 'b', 's', 'lit', 'len'); jmp('not', 'b', 'b'); jmpIf('b', 'led_next');
+  load('cell', 'ent', 8); call('any', 'b', 'cell', 's', 'n'); jmpIf('b', 'yes');
+  label('led_next');
+  load('ent', 'ent', 16); jmp('led_entry');
+  label('bare');
+  load('cell', 'ty', N.bare); call('any', 'b', 'cell', 's', 'n'); jmpIf('b', 'yes');
+  load('ent', 'ty', N.keys);
+  label('key');
+  jmp('not', 'b', 'ent'); jmpIf('b', 'no');
+  jmp('i32', 'lit', 'ent'); load('len', 'ent', 4); call('includes', 'b', 's', 'n', 'lit', 'len'); jmp('not', 'b', 'b'); jmpIf('b', 'key_next');
+  load('cell', 'ent', 8); call('any', 'b', 'cell', 's', 'n'); jmpIf('b', 'yes');
+  label('key_next');
+  load('ent', 'ent', 16); jmp('key');
+  label('yes'); jmp('set', '&.value', 1); jmp('&.caller');
+  label('no'); jmp('set', '&.value', 0); jmp('&.caller');
+
+  // (whether one of a list's rules reads the text whole)
+  p.begin('any', 'cell', 's', 'n');
+  label('loop');
+  jmp('not', 'b', 'cell'); jmpIf('b', 'no');
+  jmp('i32', 'rr', 'cell'); call('reads', 'b', 'rr', 's', 'n'); jmpIf('b', 'yes');
+  load('cell', 'cell', 4); jmp('loop');
+  label('yes'); jmp('set', '&.value', 1); jmp('&.caller');
+  label('no'); jmp('set', '&.value', 0); jmp('&.caller');
+
+  // A rule reading the text whole: not a call, not being checked, not a name given a closure; each of its literals in it (those
+  // outside every pair, outside every pair in it), ending with its last.
+  p.begin('reads', 'rr', 's', 'n');
+  load('flags', 'rr', R.flags);
+  jmp('&', 'b', 'flags', RULE.called | RULE.checking); jmpIf('b', 'no');
+  jmp('&', 'b', 'flags', RULE.braced); jmp('not', 'b', 'b'); jmpIf('b', 'its_literals');
+  jmp('i32', 'open', M_OPEN); call('has', 'b', 's', 'n', 'open'); jmp('not', 'b', 'b'); jmpIf('b', 'no');
+  label('its_literals');
+  load('count', 'rr', R.literals); load('at', 'rr', R.literals_at); jmp('set', 'i', 0);
+  label('a_literal');
+  jmp('>=', 'b', 'i', 'count'); jmpIf('b', 'its_tops');
+  jmp('*', 'a', 'i', 8); jmp('+', 'a', 'a', 'at'); jmp('i32', 'lit', 'a'); jmp('+', 'a', 'a', 4); jmp('i32', 'len', 'a');
+  call('includes', 'b', 's', 'n', 'lit', 'len'); jmp('not', 'b', 'b'); jmpIf('b', 'no');
+  jmp('+', 'i', 'i', 1); jmp('a_literal');
+  label('its_tops');
+  load('count', 'rr', R.tops); load('at', 'rr', R.tops_at); jmp('set', 'i', 0);
+  label('top');
+  jmp('>=', 'b', 'i', 'count'); jmpIf('b', 'last');
+  jmp('*', 'a', 'i', 8); jmp('+', 'a', 'a', 'at'); jmp('i32', 'lit', 'a'); jmp('+', 'a', 'a', 4); jmp('i32', 'len', 'a');
+  call('outermost', 'b', 's', 'n', 'lit', 'len'); jmp('not', 'b', 'b'); jmpIf('b', 'no');
+  jmp('+', 'i', 'i', 1); jmp('top');
+  label('last');
+  jmp('&', 'b', 'flags', RULE.last); jmp('not', 'b', 'b'); jmpIf('b', 'is_named');
+  load('lit', 'rr', R.last); load('len', 'rr', R.last_length);
+  jmp('<', 'b', 'n', 'len'); jmpIf('b', 'no');
+  jmp('-', 'x', 'n', 'len'); jmp('*', 'x', 'x', 2); jmp('+', 'x', 'x', 's'); call('starts', 'b', 'x', 'lit', 'len'); jmp('not', 'b', 'b'); jmpIf('b', 'no');
+  label('is_named');
+  jmp('&', 'b', 'flags', RULE.named); jmp('not', 'b', 'b'); jmpIf('b', 'its_loosers');
+  call('named', 'b', 'rr'); jmpIf('b', 'no');
+  label('its_loosers');
+  jmp('set', 'ls', 0); jmp('set', 'lc', 0);
+  jmp('&', 'b', 'flags', RULE.operator); jmp('not', 'b', 'b'); jmpIf('b', 'read');
+  call('loosers', 'x', 'rr'); jmp('i32', 'lc', 'x'); jmp('+', 'ls', 'x', 4);
+  label('read');
+  jmp('i32', 'c', M_SP); jmp('+', 'x', 'c', 20); jmp('i32=', undefined, M_SP, 'x');
+  load('x', 'rr', R.head); jmp('i32=', undefined, 'c', 'x'); store('c', 4, 'ls'); store('c', 8, 'lc');
+  jmp('&', 'x', 'flags', RULE.passes); store('c', 12, 'x'); store('c', 16, 'rr');
+  jmp('set', 'disp', 0); jmp('i32', 'x', M_DISPATCHED); jmp('!=', 'b', 'x', 'n'); jmpIf('b', 'given');
+  jmp('i32', 'x', M_DISPATCHING); call('same', 'disp', 'x', 's', 'n');
+  label('given');
+  jmp('i32', 'out', M_OUT);
+  call('readings', 'count', 's', 'n', 'c', 1, 1, 'disp');
+  jmp('i32=', undefined, M_OUT, 'out'); jmp('i32=', undefined, M_SP, 'c');
+  jmp('>', '&.value', 'count', 0); jmp('&.caller');
+  label('no'); jmp('set', '&.value', 0); jmp('&.caller');
+
+  // (a type's first characters: what its rules can begin with, kept in its record while it has the heads it had; any, -1)
+  p.begin('firsts', 'ty', 'c');
+  jmp('i32', 'headed', 'ty'); jmp('+', 'headed', 'headed', 1);
+  load('x', 'ty', N.firsts); jmp('==', 'b', 'x', 'headed'); jmpIf('b', 'known');
+  call('firsts_of', 'x', 'ty');
+  label('known');
+  load('at', 'ty', N.firsts_at); jmp('i32', 'count', 'at');
+  jmp('<', 'b', 'count', 0); jmpIf('b', 'yes');
+  jmp('set', 'i', 0);
+  label('loop');
+  jmp('>=', 'b', 'i', 'count'); jmpIf('b', 'no');
+  jmp('+', 'i', 'i', 1); jmp('*', 'a', 'i', 4); jmp('+', 'a', 'a', 'at'); jmp('i32', 'x', 'a');
+  jmp('==', 'b', 'x', 'c'); jmpIf('b', 'yes');
+  jmp('loop');
+  label('yes'); jmp('set', '&.value', 1); jmp('&.caller');
+  label('no'); jmp('set', '&.value', 0); jmp('&.caller');
+
+  // (text: its hash; whether two are the same; whether it begins with, holds, holds outside every pair and quote, another)
+  p.begin('hash', 's', 'n');
+  jmp('set', 'h', -2128831035); jmp('set', 'i', 0);
+  label('loop');
+  jmp('>=', 'b', 'i', 'n'); jmpIf('b', 'done');
+  jmp('*', 'a', 'i', 2); jmp('+', 'a', 'a', 's'); jmp('u16', 'x', 'a');
+  jmp('^', 'h', 'h', 'x'); jmp('*', 'h', 'h', 16777619);
+  jmp('+', 'i', 'i', 1); jmp('loop');
+  label('done'); jmp('set', '&.value', 'h'); jmp('&.caller');
+
+  p.begin('same', 'x', 's', 'n');
+  jmp('==', 'b', 'x', 's'); jmpIf('b', 'yes');
+  call('starts', '&.value', 'x', 's', 'n'); jmp('&.caller');
+  label('yes'); jmp('set', '&.value', 1); jmp('&.caller');
+
+  p.begin('starts', 's', 'lit', 'len');
+  jmp('set', 'i', 0);
+  label('loop');
+  jmp('>=', 'b', 'i', 'len'); jmpIf('b', 'yes');
+  jmp('*', 'a', 'i', 2); jmp('+', 'x', 'a', 's'); jmp('u16', 'x', 'x'); jmp('+', 'y', 'a', 'lit'); jmp('u16', 'y', 'y');
+  jmp('!=', 'b', 'x', 'y'); jmpIf('b', 'no');
+  jmp('+', 'i', 'i', 1); jmp('loop');
+  label('yes'); jmp('set', '&.value', 1); jmp('&.caller');
+  label('no'); jmp('set', '&.value', 0); jmp('&.caller');
+
+  p.begin('includes', 's', 'n', 'lit', 'len');
+  jmp('set', 'i', 0); jmp('-', 'last', 'n', 'len');
+  label('loop');
+  jmp('>', 'b', 'i', 'last'); jmpIf('b', 'no');
+  jmp('*', 'a', 'i', 2); jmp('+', 'a', 'a', 's'); call('starts', 'b', 'a', 'lit', 'len'); jmpIf('b', 'yes');
+  jmp('+', 'i', 'i', 1); jmp('loop');
+  label('yes'); jmp('set', '&.value', 1); jmp('&.caller');
+  label('no'); jmp('set', '&.value', 0); jmp('&.caller');
+
+  p.begin('has', 's', 'n', 'c');
+  jmp('set', 'i', 0);
+  label('loop');
+  jmp('>=', 'b', 'i', 'n'); jmpIf('b', 'no');
+  jmp('*', 'a', 'i', 2); jmp('+', 'a', 'a', 's'); jmp('u16', 'x', 'a'); jmp('==', 'b', 'x', 'c'); jmpIf('b', 'yes');
+  jmp('+', 'i', 'i', 1); jmp('loop');
+  label('yes'); jmp('set', '&.value', 1); jmp('&.caller');
+  label('no'); jmp('set', '&.value', 0); jmp('&.caller');
+
+  // (what is quoted, as one; what is inside a pair, nothing: a literal there begins nothing open)
+  p.begin('outermost', 's', 'n', 'lit', 'len');
+  jmp('set', 'i', 0); jmp('set', 'depth', 0); jmp('-', 'last', 'n', 'len');
+  label('loop');
+  jmp('>=', 'b', 'i', 'n'); jmpIf('b', 'no');
+  jmp('*', 'a', 'i', 2); jmp('+', 'a', 'a', 's'); jmp('u16', 'x', 'a'); jmp('+', 'a', 'x', M_TABLE); jmp('u8', 'c', 'a');
+  jmp('&', 'b', 'c', CHARACTER.quote); jmp('not', 'b', 'b'); jmpIf('b', 'unquoted');
+  call('quote_end', 'q', 's', 'n', 'i', 'x');
+  jmp('<', 'b', 'q', 0); jmpIf('b', 'no');
+  jmp('+', 'i', 'q', 1); jmp('loop');
+  label('unquoted');
+  jmpIf('depth', 'depth');
+  jmp('>', 'b', 'i', 'last'); jmpIf('b', 'depth');
+  jmp('*', 'a', 'i', 2); jmp('+', 'a', 'a', 's'); call('starts', 'b', 'a', 'lit', 'len'); jmpIf('b', 'yes');
+  label('depth');
+  jmp('&', 'b', 'c', CHARACTER.open); jmp('not', 'b', 'b'); jmpIf('b', 'closing');
+  jmp('+', 'depth', 'depth', 1); jmp('step');
+  label('closing');
+  jmp('&', 'b', 'c', CHARACTER.close); jmp('not', 'b', 'b'); jmpIf('b', 'step');
+  jmp('-', 'depth', 'depth', 1);
+  label('step');
+  jmp('+', 'i', 'i', 1); jmp('loop');
+  label('yes'); jmp('set', '&.value', 1); jmp('&.caller');
+  label('no'); jmp('set', '&.value', 0); jmp('&.caller');
+
   // (where what is quoted from `i` ends: the next same quote, one after `\` part of the text; none, -1)
-  p.begin('quote_end', 'f', 'i', 'quote');
-  frame(); jmp('+', 'j', 'i', 1);
+  p.begin('quote_end', 's', 'n', 'i', 'quote');
+  jmp('+', 'j', 'i', 1);
   label('loop');
   jmp('>=', 'b', 'j', 'n'); jmpIf('b', 'none');
   char('x', 'j');
@@ -1113,23 +1425,109 @@ export class Matcher {
   private signs = new Map<string, number>();
   private placed = new Map<string, number>(); private top_text = M_TEXT;
   private kinds = -1;
-  // (what is being read, the innermost last: the host's questions are about it)
-  private reading: { s: string, candidates: Program.Candidate[] }[] = [];
-  private types: Program.Node[] = []; private type_ids = new Map<Program.Node, number>();
+  // (how deep in reading it is: texts are placed again only between readings)
+  private reading = 0;
+  // (the records of rules and nodes: made when first needed, kept as they are defined)
+  private records = new WeakMap<object, number>(); private rule_of = new Map<number, Program.Rule>(); private node_of = new Map<number, Program.Node>();
+  private top_arena = M_ARENA; private signed = new WeakMap<string[], number>();
   constructor(private language: Program) {
     const hosts = {
-      type_of: (i: number, k: number) => { const type = language.type_of(this.now.candidates[i].rule, k); return type ? this.id(type) : 0; },
-      firsts: (type: number, c: number) => { const firsts = language.firsts_of(this.types[type]); return !firsts || firsts.has(c) ? 1 : 0; },
-      structural: (type: number, t: number, u: number) => +language.structural(this.now.s.slice(t, u), this.types[type]),
-      accepts: (type: number, t: number, u: number) => +language.accepts(this.now.s.slice(t, u), this.types[type]),
+      type_of: (rr: number, k: number) => {
+        const type = language.type_of(this.rule_of.get(rr)!, k);
+        if (!type) return 0;
+        const at = this.node(type); this.i32[(this.i32[(rr + R.types) >> 2] >> 2) + k] = at; return at;
+      },
+      firsts_of: (at: number) => {
+        const node = this.node_of.get(at)!, firsts = language.firsts_of(node), list = firsts ? [...firsts] : [], where = this.alloc(4 * (list.length + 1));
+        this.i32[where >> 2] = firsts ? list.length : -1; list.forEach((c, i) => this.i32[(where >> 2) + 1 + i] = c);
+        this.i32[(at + N.firsts) >> 2] = node.headed + 1; this.i32[(at + N.firsts_at) >> 2] = where;
+        return 0;
+      },
+      accepts: (at: number, s: number, n: number) => +language.accepts(this.read_text(s, n), this.node_of.get(at)!),
+      named: (rr: number) => +language.a_named_closure(this.rule_of.get(rr)!),
+      loosers: (rr: number) => this.loosers(language.looser(this.rule_of.get(rr)!) ?? []),
     };
     this.program = runs_in(matching(), M_END, hosts);
     this.u16 = new Uint16Array(this.program.buffer); this.i32 = new Int32Array(this.program.buffer); this.u8 = new Uint8Array(this.program.buffer);
-    this.i32[M_SP >> 2] = M_STACK; this.i32[M_OUT >> 2] = M_READ;
+    this.i32[M_SP >> 2] = M_STACK; this.i32[M_OUT >> 2] = M_READ; this.i32[M_MEMO_TOP >> 2] = M_MEMO_ENTRIES;
     for (let c = 0; c < 65536; c++) { const x = String.fromCharCode(c); if (Program.word(x, 0)) this.u8[M_TABLE + c] |= WORD; if (Program.operator(x, 0)) this.u8[M_TABLE + c] |= OPERATOR; }
   }
-  private get now() { return this.reading[this.reading.length - 1]; }
-  private id(type: Program.Node) { let id = this.type_ids.get(type); if (id === undefined) { this.type_ids.set(type, id = this.types.length || 1); this.types[id] = type; } return id; }
+  private read_text(s: number, n: number) { let out = ''; for (let i = 0; i < n; i++) out += String.fromCharCode(this.u16[(s >> 1) + i]); return out; }
+  private alloc(bytes: number) { const at = this.top_arena; this.top_arena += (bytes + 3) & ~3; if (this.top_arena > M_MEMO) throw new Error('the records have no room left'); this.i32.fill(0, at >> 2, this.top_arena >> 2); return at; }
+  private loosers(signs: string[]) {
+    let at = this.signed.get(signs);
+    if (at !== undefined) return at;
+    at = this.alloc(4 + 8 * signs.length); this.i32[at >> 2] = signs.length;
+    signs.forEach((l, j) => { this.i32[(at! >> 2) + 1 + 2 * j] = this.sign(l); this.i32[(at! >> 2) + 2 + 2 * j] = l.length; });
+    this.signed.set(signs, at);
+    return at;
+  }
+  // A rule's record: what the matcher asks of it, again when it is defined again (its id, its right side) or what pairs changed.
+  record(rule: Program.Rule): number {
+    let at = this.records.get(rule);
+    if (at === undefined) {
+      at = this.alloc(R.size); this.records.set(rule, at); this.rule_of.set(at, rule); this.i32[(at + R.types) >> 2] = this.alloc(4 * rule.pieces.length);
+      if (this.language.checks(rule)) this.i32[(at + R.flags) >> 2] = RULE.checking;
+      this.fill(rule, at);
+    }
+    return at;
+  }
+  private fill(rule: Program.Rule, at: number) {
+    // (its arrays kept when as long as they were)
+    const p = this.language, r = at >> 2, words = (xs: string[], count: number, was: number) => { const where = count >= xs.length && was ? was : this.alloc(8 * xs.length); xs.forEach((l, j) => { this.i32[(where >> 2) + 2 * j] = this.sign(l); this.i32[(where >> 2) + 2 * j + 1] = l.length; }); return where; };
+    this.i32[r] = this.head(rule); this.i32[r + 1] = rule.id;
+    const checking = this.i32[r + 2] & RULE.checking;
+    this.i32[r + 2] = checking | (rule.called ? RULE.called : 0) | (p.maybe_named(rule) ? RULE.named : 0) | (rule.braced ? RULE.braced : 0) | (rule.passes ? RULE.passes : 0) | (Program.operator_rule(rule) && rule.home ? RULE.operator : 0) | (rule.last !== undefined ? RULE.last : 0);
+    this.i32[r + 4] = words(rule.literals, this.i32[r + 3], this.i32[r + 4]); this.i32[r + 3] = rule.literals.length;
+    const tops = p.top_literals(rule); this.i32[r + 6] = words(tops, this.i32[r + 5], this.i32[r + 6]); this.i32[r + 5] = tops.length;
+    if (rule.last !== undefined) { this.i32[r + 7] = this.sign(rule.last); this.i32[r + 8] = rule.last.length; }
+    this.i32[r + 10] = rule.pieces.length;
+  }
+  checking(rule: Program.Rule, on: boolean) { const at = this.record(rule); if (on) this.i32[(at + R.flags) >> 2] |= RULE.checking; else this.i32[(at + R.flags) >> 2] &= ~RULE.checking; }
+  dispatching(s: string | undefined) {
+    if (s === undefined) { this.i32[M_DISPATCHED >> 2] = -1; return; }
+    this.i32[M_DISPATCHING >> 2] = this.text(s, 'text'); this.i32[M_DISPATCHED >> 2] = s.length;
+  }
+  // A node's record: its rules by how they are found (as `Node.define` keeps them), made from those it has when first asked about.
+  node(node: Program.Node): number {
+    let at = this.records.get(node);
+    if (at !== undefined) return at;
+    at = this.alloc(N.size); this.records.set(node, at); this.node_of.set(at, node);
+    this.i32[(at + N.headed) >> 2] = node.headed;
+    for (const rule of node.rules) this.place(node, at, rule);
+    return at;
+  }
+  private list(at: number, first: number, rule: Program.Rule) {
+    const cell = this.alloc(8); this.i32[cell >> 2] = this.record(rule);
+    const last = this.i32[(at + first + 4) >> 2];
+    if (last) this.i32[(last + 4) >> 2] = cell; else this.i32[(at + first) >> 2] = cell;
+    this.i32[(at + first + 4) >> 2] = cell;
+  }
+  private entry(first_at: number, key: string): number {
+    for (let e = this.i32[first_at >> 2]; e; e = this.i32[(e + 16) >> 2]) if (this.read_text(this.i32[e >> 2], this.i32[(e + 4) >> 2]) === key) return e;
+    const e = this.alloc(20); this.i32[e >> 2] = this.sign(key); this.i32[(e + 4) >> 2] = key.length;
+    this.i32[(e + 16) >> 2] = this.i32[first_at >> 2]; this.i32[first_at >> 2] = e;
+    return e;
+  }
+  private place(node: Program.Node, at: number, rule: Program.Rule) {
+    const first = rule.pieces[0]?.literal;
+    if (first !== undefined) {
+      let led = this.i32[(at + N.led) >> 2];
+      if (!led) this.i32[(at + N.led) >> 2] = led = this.alloc(4 * 16);
+      this.list(this.entry(led + 4 * (first.charCodeAt(0) & 15), first), 8, rule);
+    }
+    else if (!rule.key) this.list(at, N.bare, rule);
+    else this.list(this.entry(at + N.keys, rule.key), 8, rule);
+  }
+  // A rule defined in a node (added, or defined again): what the records of both say, kept.
+  defined(node: Program.Node, rule: Program.Rule, added: boolean) {
+    const at = this.records.get(node), known = this.records.get(rule);
+    if (known !== undefined) this.fill(rule, known);
+    if (at === undefined) return;
+    if (added) this.place(node, at, rule);
+    this.i32[(at + N.headed) >> 2] = node.headed;
+  }
+  headed(node: Program.Node) { const at = this.records.get(node); if (at !== undefined) this.i32[(at + N.headed) >> 2] = node.headed; }
   // Which kind each character is: what opens, closes and quotes, and spaces (again only when what pairs changed).
   private kind(paired: number) {
     if (paired === this.kinds) return;
@@ -1141,6 +1539,7 @@ export class Matcher {
     for (const c of p.quoted) this.u8[M_TABLE + c] |= CHARACTER.quote;
     for (const c of [32, 10, 9, 13]) this.u8[M_TABLE + c] |= CHARACTER.space;
     this.i32[M_OPEN >> 2] = open.charCodeAt(0); this.i32[M_CLOSE >> 2] = close.charCodeAt(0); this.i32[M_TOKEN >> 2] = p.token;
+    for (const [at, rule] of this.rule_of) this.fill(rule, at);
   }
   private text(s: string, region: 'head' | 'text'): number {
     if (region === 'head') {
@@ -1152,9 +1551,12 @@ export class Matcher {
     }
     let at = this.placed.get(s);
     if (at !== undefined) return at;
-    if (this.top_text + 2 * s.length + 4 > M_END) {
-      if (this.reading.length) throw new Error('the texts being read have no room left');
+    if (this.top_text + 2 * s.length + 4 > M_ARENA) {
+      if (this.reading) throw new Error('the texts being read have no room left');
+      // (what was kept about them, too)
       this.placed.clear(); this.top_text = M_TEXT;
+      this.i32.fill(0, M_MEMO >> 2, (M_MEMO >> 2) + MEMO_BUCKETS); this.i32[M_MEMO_TOP >> 2] = M_MEMO_ENTRIES; this.i32[M_EPOCH >> 2]++;
+      if (this.i32[M_DISPATCHED >> 2] >= 0) this.i32[M_DISPATCHED >> 2] = -1;
     }
     at = this.top_text;
     for (let i = 0; i < s.length; i++) this.u16[(at >> 1) + i] = s.charCodeAt(i);
@@ -1197,25 +1599,31 @@ export class Matcher {
     this.heads.set(pieces, { paired: p.paired, at });
     return at;
   }
+  // (the records, the heads and what was kept about texts, all forgotten: made again as they are asked for; only between readings)
+  private forget() {
+    this.records = new WeakMap(); this.rule_of.clear(); this.node_of.clear(); this.top_arena = M_ARENA;
+    this.heads = new WeakMap(); this.signs.clear(); this.signed = new WeakMap(); this.top_head = M_HEADS;
+    this.i32.fill(0, M_MEMO >> 2, (M_MEMO >> 2) + MEMO_BUCKETS); this.i32[M_MEMO_TOP >> 2] = M_MEMO_ENTRIES; this.i32[M_EPOCH >> 2]++;
+  }
   // Every way each candidate reads the start of `s` (all of it, when `whole`), in the order they were tried.
   readings(s: string, candidates: Program.Candidate[], whole: boolean): Program.Read[] {
     const p = this.language;
+    if (!this.reading && (this.top_arena - M_ARENA > (M_MEMO - M_ARENA) * 3 / 4 || this.top_head - M_HEADS > (M_READ - M_HEADS) * 3 / 4)) this.forget();
     this.kind(p.paired);
     const at = this.text(s, 'text'), out: Program.Read[] = [];
     // (the candidates, on the stack above what is being read)
     const sp = this.i32[M_SP >> 2], c = sp >> 2;
-    this.i32[M_SP >> 2] = sp + 16 * candidates.length;
+    this.i32[M_SP >> 2] = sp + 20 * candidates.length;
     candidates.forEach(({ rule }, i) => {
-      const looser = p.looser(rule) ?? [], signs = this.i32[M_SP >> 2];
-      this.i32[M_SP >> 2] = signs + 8 * looser.length;
-      looser.forEach((l, j) => { this.i32[(signs >> 2) + 2 * j] = this.sign(l); this.i32[(signs >> 2) + 2 * j + 1] = l.length; });
-      this.i32[c + 4 * i] = this.head(rule); this.i32[c + 4 * i + 1] = signs; this.i32[c + 4 * i + 2] = looser.length; this.i32[c + 4 * i + 3] = +(whole && rule.passes);
+      const looser = p.looser(rule), signs = looser ? this.loosers(looser) : 0;
+      this.i32[c + 5 * i] = this.head(rule); this.i32[c + 5 * i + 1] = signs + 4; this.i32[c + 5 * i + 2] = looser?.length ?? 0; this.i32[c + 5 * i + 3] = +(whole && rule.passes);
+      this.i32[c + 5 * i + 4] = this.record(rule);
     });
     const from = this.i32[M_OUT >> 2];
-    this.reading.push({ s, candidates });
+    this.reading++;
     let count: number;
     try { count = this.program.exports.readings(at, s.length, sp, candidates.length, +whole, +(p.dispatching === s)); }
-    finally { this.reading.pop(); this.i32[M_SP >> 2] = sp; }
+    finally { this.reading--; this.i32[M_SP >> 2] = sp; }
     const of: number[] = [];
     for (let k = 0, o = from >> 2; k < count; k++) {
       const n = this.i32[o + 3], i = this.i32[o + 1], read: Program.Read = { at: this.i32[o], spans: Array.from(this.i32.subarray(o + 4, o + 4 + n)), rule: candidates[i].rule, rank: candidates[i].rank };
@@ -1360,6 +1768,8 @@ export class Program {
     if (first.length < 3) throw new Error(`The first statement of '${entrypoint.relative_location ?? ENTRYPOINT.join('/')}' does not say how a rule is written: a body ('{', its close '}'), then the definer.`);
     this.grammar = { open: first[0], close: first[first.length - 2], definer: first[first.length - 1] };
     this.token = first[0].length + 7 + first[first.length - 2].length;
+    const matcher = this.matcher = new Matcher(this);
+    Program.Node.mirror = (node, rule, added) => matcher.defined(node, rule, added);
     // (the host's own kinds: its operators read where the language reads them, `goto kinds`, the rest after it)
     const kinds = await Program.host_kinds(), operators = kinds.indexOf('// What both answer'), rest = kinds.indexOf('// What a number or text is made of');
     this.kinds = { operators: kinds.slice(operators, rest), rest: kinds.slice(0, operators) + '\n' + kinds.slice(rest) };
@@ -1500,13 +1910,7 @@ export class Program {
     const had = known.read.get(s);
     if (had !== undefined) return had;
     known.read.set(s, false);
-    // (not a method there (`m (…) =>`, a name given a closure): what it holds is not how a T is written)
-    const named = (rule: Program.Rule) => {
-      const statements = rule.code.statements.map(x => x.trim()).filter(x => x), body = statements[statements.length - 1] ?? '', { open, close } = this.grammar!;
-      if (rule.holes.length || statements.length !== (rule.passes ? 2 : 1) || body.length !== this.token || body.charCodeAt(open.length) !== 0xE000) return false;
-      const held = this.referred_to(parseInt(body.slice(open.length + 1, -close.length), 36)), value = held instanceof Program.Held ? held.value : held;
-      return value instanceof Program.Node && value.calls;
-    };
+    const named = (rule: Program.Rule) => this.a_named_closure(rule);
     const candidates: Program.Candidate[] = [], take = (rules: Program.Rule[]) => { for (const rule of rules) if (!rule.called && !named(rule) && this.may_read(rule, s, false) && this.could_read(rule, s)) candidates.push({ rule, rank: rule.id }); };
     for (const length of type.lengths.get(s[0]) ?? []) { if (length > s.length) break; const rules = type.led.get(s.slice(0, length)); if (rules) take(rules); }
     if (type.bare.length) take(type.bare);
@@ -1515,8 +1919,21 @@ export class Program {
     known.read.set(s, read);
     return read;
   }
+  // (not a method there (`m (…) =>`, a name given a closure): what it holds is not how a T is written)
+  maybe_named(rule: Program.Rule): boolean {
+    const statements = rule.code.statements.map(x => x.trim()).filter(x => x), body = statements[statements.length - 1] ?? '';
+    return !rule.holes.length && statements.length === (rule.passes ? 2 : 1) && body.length === this.token && body.charCodeAt(this.grammar!.open.length) === 0xE000;
+  }
+  a_named_closure(rule: Program.Rule): boolean {
+    if (!this.maybe_named(rule)) return false;
+    const statements = rule.code.statements.map(x => x.trim()).filter(x => x), body = statements[statements.length - 1], { open, close } = this.grammar!;
+    const held = this.referred_to(parseInt(body.slice(open.length + 1, -close.length), 36)), value = held instanceof Program.Held ? held.value : held;
+    return value instanceof Program.Node && value.calls;
+  }
   // (a value written into text, taken by a typed hole: the entrypoint's check answers something for it and the type; once a value)
-  dispatching?: string;
+  private given?: string;
+  get dispatching() { return this.given; }
+  set dispatching(s: string | undefined) { this.given = s; this.matcher?.dispatching(s); }
   // (a type that is a closure, a class's maker: what was read, for the check)
   private type_values = new WeakMap<Program.Node, unknown>();
   private accepted = new WeakMap<Program.Node, { objects: WeakMap<object, boolean>, values: Map<unknown, boolean> }>();
@@ -1637,8 +2054,9 @@ export class Program {
   // (an operator's rule, `+ {other}` (a sign, then one hole): the signs of those written as it is, in its node or the outermost,
   // declared with it or after it)
   private loosers = new WeakMap<Program.Rule, { n: number, signs?: string[] }>();
+  static operator_rule(r: Program.Rule): boolean { const [sign, space, hole] = r.pieces; return r.pieces.length === 3 && sign.literal !== undefined && /^[^\p{L}\p{N}_\s.()\[\]{}"`,]+$/u.test(sign.literal) && space.hole === '' && !!hole.hole && !hole.body; }
   looser(rule: Program.Rule): string[] | undefined {
-    const operator = (r: Program.Rule) => { const [sign, space, hole] = r.pieces; return r.pieces.length === 3 && sign.literal !== undefined && /^[^\p{L}\p{N}_\s.()\[\]{}"`,]+$/u.test(sign.literal) && space.hole === '' && !!hole.hole && !hole.body; };
+    const operator = Program.operator_rule;
     if (!operator(rule) || !rule.home) return undefined;
     let root = rule.home; while (root.outer) root = root.outer;
     const n = rule.home.rules.length + root.rules.length, known = this.loosers.get(rule);
@@ -1722,10 +2140,10 @@ export class Program {
         if (!statement.startsWith('goto ')) {
           // (while a rule checks its typed holes, it reads nothing)
           const checks = except?.checked && code === except.code && k >= except.checked[0] && k < except.checked[1];
-          if (checks) this.checking.add(except!);
+          if (checks) { this.checking.add(except!); this.matcher?.checking(except!, true); }
           try { value = answers && k === code.answering ? this.valued(statement, frame, except, code) : this.evaluate(statement, frame, except, true, code); }
           catch (jump) { if (!(jump instanceof Program.Place) || jump.labels !== labels) throw jump; if (jump.at < k) frame.reading?.values.clear(); k = jump.at; if (jump.carries) value = jump.value; }
-          finally { if (checks) this.checking.delete(except!); }
+          finally { if (checks) { this.checking.delete(except!); this.matcher?.checking(except!, false); } }
           continue;
         }
         // (a label's name: one in scope, else one the host holds; else what the target reads as)
@@ -2124,7 +2542,7 @@ export class Program {
       // (one with no rules yet, given to a node that is neither a call nor a program (where it is an answer, `true`): its rules
       // when it has them, `x &+= { written_in }` before what is written there is read)
       if (!(value instanceof Program.Node) || value === frame.node || this.ats.has(value) || (!value.rules.length && (frame.node.calls || this.dynamic.includes(frame.node) || !value.outer))) return value;
-      if (!frame.node.includes.includes(value)) frame.node.includes.push(value), frame.node.headed++;
+      if (!frame.node.includes.includes(value)) frame.node.includes.push(value), frame.node.headed++, this.matcher?.headed(frame.node);
       return frame.node;
     }
     if (alone && (!frame.given || frame.on || !frame.node.bare.length || !frame.node.outer)) return this.body(s, frame, except);
@@ -2497,6 +2915,7 @@ export class Program {
   // (a definition is read by a rule with the definer in its head, or by a modifier (words, then a body hole: the rest, as
   // code); one written by a rule creator's right side (a rule with the definer in its head) is made as written)
   private checking = new Set<Program.Rule>();
+  checks(rule: Program.Rule) { return this.checking.has(rule); }
   may_read(rule: Program.Rule, s: string, defines: boolean | number, except?: Program.Rule): boolean {
     if (this.checking.size && this.checking.has(rule)) return false;
     if (rule === except || (defines && (!(rule.defines || rule.modifies) || (defines === 1 && except?.defines)))) return false;
@@ -2516,7 +2935,7 @@ export class Program {
     for (const literal of top.literals) if (!skeleton.includes(literal)) return false;
     return true;
   }
-  private top_literals(rule: Program.Rule): string[] {
+  top_literals(rule: Program.Rule): string[] {
     const { open, close } = this.grammar!, { opens, closes, quoted } = this, out: string[] = [], o = open.charCodeAt(0), c = close.charCodeAt(0);
     if (open.length !== 1 || close.length !== 1 || rule.pieces.some(piece => piece.body)) return out;
     let depth = 0;
@@ -2564,10 +2983,10 @@ export class Program {
   }
   // Their readings of `s` (only those reading all of it when `whole`), the ones going least far first, of those going as far
   // the latest rule's last.
-  private matcher?: Matcher;
+  matcher?: Matcher;
   readings(s: string, candidates: Program.Candidate[], whole: boolean): Program.Read[] {
     const tried = candidates.filter(({ rule }) => !whole || rule.last === undefined || s.endsWith(rule.last));
-    const all = (this.matcher ??= new Matcher(this)).readings(s, tried, whole);
+    const all = this.matcher!.readings(s, tried, whole);
     if (DIFF) {
       const js: Program.Read[] = [];
       for (const { rule, rank } of tried) this.read_by(rule, s, whole, rank, js);
@@ -2685,15 +3104,22 @@ export namespace Program {
     // latest (a variable keeps its place))
     private heads = new Map<string, Rule>();
     static last?: Rule;
+    // (what keeps a copy of the rules where they are read: told of each definition)
+    static mirror?: (node: Node, rule: Rule, added: boolean) => void;
     define(rule: Rule, variable = false): void {
       const had = this.heads.get(rule.head);
       Node.last = had ?? rule;
       if (had) {
         Object.assign(had, { body: rule.body, code: rule.code, passes: rule.passes, holds: rule.holds });
         if (!variable) had.id = ++Node.defined, this.headed++;
+        Node.mirror?.(this, had, false);
         return;
       }
       rule.id = ++Node.defined; this.headed++;
+      this.added(rule);
+      Node.mirror?.(this, rule, true);
+    }
+    private added(rule: Rule): void {
       this.heads.set(rule.head, rule);
       this.rules.push(rule);
       const first = rule.pieces[0]?.literal;
@@ -3138,9 +3564,10 @@ export class Library {
   }
   // What was put off while reading (tests): run, what each said; a file's (those not run since what they read was read again), or every
   // one. `until`: stop when it answers true (something else to do), the rest run later.
-  test(file?: string, until?: () => boolean, each?: (test: Test, outcome: Diagnostic[]) => void): Diagnostic[] {
+  // (`null`: only what was put off outside a file's reading)
+  test(file?: string | null, until?: () => boolean, each?: (test: Test, outcome: Diagnostic[]) => void): Diagnostic[] {
     const p = this.program, out: Diagnostic[] = [];
-    const tests = file !== undefined ? (this.reads.get(file) ?? []).flatMap(r => r.tests) : [...this.reads.values()].flat().flatMap(r => r.tests);
+    const tests = file === null ? [] : file !== undefined ? (this.reads.get(file) ?? []).flatMap(r => r.tests) : [...this.reads.values()].flat().flatMap(r => r.tests);
     p.deferring = false;
     let stopped = false;
     try {
@@ -3164,7 +3591,7 @@ export class Library {
         out.push(...t.outcome);
       }
       // (what was put off outside a file's reading)
-      if (file === undefined && !stopped) for (const { code, frame, except } of p.deferred.splice(0)) {
+      if ((file === undefined || file === null) && !stopped) for (const { code, frame, except } of p.deferred.splice(0)) {
         const before = p.reports.length;
         try { p.run(code, frame, except); } catch { }
         for (const report of p.reports.slice(before)) { const at = this.located(report); if (at) out.push(this.reported(report, at.file, at.text, at.begin, at.end)); }
@@ -3204,13 +3631,30 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     process.exitCode = await new Promise<number>(resolve => { worker.on('message', (m: { exit?: number }) => { if (m.exit !== undefined) resolve(m.exit); }); worker.on('error', e => { console.error(e); resolve(1); }); worker.on('exit', code => resolve(code)); });
     return;
   }
-  if (kwargs.test) env.fs.writeSync(2, 'reading the core library…\n');
-  const library = await new Library().boot(), { path } = env, all: Diagnostic[] = [];
+  const { path } = env, given = args.length > 0;
+  let exit: number;
+  // (testing, with threads to spare: each its share of the files, a library of its own)
+  const files = (given ? args : kwargs.test ? new Library().tests() : []).map(f => path.resolve(f));
+  // (a thread's library grows to about 2 GB testing: as many as there is memory for)
+  const threads = kwargs.test && env.parallel ? Math.min(Number(kwargs.threads ?? env.threads), files.length, Math.floor(env.os.freemem() / 3.5e9)) : 1;
+  if (threads > 1) exit = await in_parallel(files, given, kwargs, threads);
+  else {
+    const said = await tested(await new Library().boot(), files, given, kwargs);
+    for (const line of said.diagnostics) console.error(line);
+    if (kwargs.test) console.error(`${said.passed} passed, ${said.failed} failed, ${said.warnings} warnings in tests, ${said.errors} errors in reading`);
+    exit = said.errors || said.failed ? 1 : 0;
+  }
+  if (env.worker) env.worker_threads.parentPort!.postMessage({ exit }); else process.exitCode = exit;
+}
+
+// What reading files (else the library alone) and, testing, their tests said: each test reported as it finishes (its comments
+// above, its code, and what it found), the counts, and what was said in reading (each written as it is shown).
+type Tested = { passed: number, failed: number, warnings: number, errors: number, diagnostics: string[] };
+// (`owns`: the files whose tests are its to run, when others run the rest; and whether what was put off outside them is)
+async function tested(library: Library, files: string[], given: boolean, kwargs: CLI.Args[1], owns?: { file: (file: string) => boolean, rest: boolean }): Promise<Tested> {
+  const { path } = env, all: Diagnostic[] = [];
   if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
-  const files = (args.length ? args : kwargs.test ? library.tests() : []).map(f => path.resolve(f));
   if (kwargs.verbose) console.error(`reading ${files.length}: ${files.map(f => path.relative(library.root, f)).join(' ')}`);
-  // (the tests of the files given; given none, of every file read)
-  // (a test reported as it finishes: its comments above, its code, and what it found)
   const counts = { passed: 0, failed: 0, warnings: 0 }, reported = new Set<Diagnostic>();
   const report = (t: Test, outcome: Diagnostic[]) => {
     const text = library.text(t.file), lines = text.split('\n'), first = text.slice(0, t.begin).split('\n').length - 1;
@@ -3227,36 +3671,85 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
   };
   // (one test per call, the event loop turned between: what a `WeakRef` was made of is kept until the job ends, so a run in one job keeps everything every test made)
   const seen = new Set<Diagnostic>(), tested = new Set<string>();
-  const run_tests = async (file?: string) => { for (;;) {
+  const run_tests = async (file?: string | null) => { for (;;) {
     let ran = false;
     const outcome = library.test(file, () => { const stop = ran; ran = true; return stop; }, report);
     if (!ran) { for (const d of outcome) if (!seen.has(d)) { seen.add(d); all.push(d); } break; }
     await new Promise<void>(resolve => setImmediate(resolve));
   } };
   // (the tests of every file read so far and not yet tested, one at a time as they finish)
-  const run_read = async () => { if (kwargs.test) for (const file of [...library.reads.keys()]) if (!tested.has(file) && (!args.length || files.includes(file))) { tested.add(file); await run_tests(file); } };
+  const run_read = async () => { if (kwargs.test) for (const file of [...library.reads.keys()]) if (!tested.has(file) && (!given || files.includes(file)) && (owns?.file(file) ?? true)) { tested.add(file); await run_tests(file); } };
   for (const file of files) {
     if (kwargs.test) env.fs.writeSync(2, `reading ${path.relative(process.cwd(), file)}…\n`);
-    if (env.fs.statSync(file).isDirectory()) { library.project(file); if (args.length) await run_read(); continue; }
+    if (env.fs.statSync(file).isDirectory()) { library.project(file); if (given) await run_read(); continue; }
     library.prepare(file);
     if (!library.diagnostics.has(file)) library.file(file, library.text(file), path.dirname(file) === library.core || file.endsWith('.project' + EXTENSION) ? library.program.global : new Program.Node(library.program.global));
     // (given files: each one's tests as soon as it is read; given none, every file is read first: tests run in between leave
     // what they did to what is read after them)
-    if (args.length) await run_read();
+    if (given) await run_read();
   }
   if (kwargs.verbose) for (const [name, ms] of library.timings.splice(0)) console.error(`${name.padEnd(40)} ${String(Math.round(ms)).padStart(7)} ms`);
   await run_read();
   for (const [, ds] of library.diagnostics) all.push(...ds);
   // (what was put off outside any file's reading)
-  if (kwargs.test && !args.length) await run_tests(undefined);
-  const shown = all.filter(d => d.severity <= (kwargs.verbose ? 3 : 2) && (args.length === 0 || files.includes(d.file) || kwargs.test) && !reported.has(d));
-  for (const d of shown) {
+  // (sharing the files with other threads: only that, not the tests of the files read for its own (theirs))
+  if (kwargs.test && !given && (owns?.rest ?? true)) await run_tests(owns ? null : undefined);
+  const shown = all.filter(d => d.severity <= (kwargs.verbose ? 3 : 2) && (!given || files.includes(d.file) || kwargs.test) && !reported.has(d));
+  const diagnostics = shown.map(d => {
     const line = d.file ? library.text(d.file).slice(0, d.begin).split('\n').length : 0;
-    console.error(`${d.file ? path.relative(process.cwd(), d.file) : '?'}:${line}: ${['', 'error', 'warning', 'info', 'hint'][d.severity]}: ${d.message}${d.around ? '\n' + d.around.split('\n').map(l => '    | ' + l).join('\n') : ''}`);
-  }
-  if (kwargs.test) console.error(`${counts.passed} passed, ${counts.failed} failed, ${counts.warnings} warnings in tests, ${shown.filter(d => d.severity === 1).length} errors in reading`);
-  const exit = shown.some(d => d.severity === 1) || counts.failed > 0 ? 1 : 0;
-  if (env.worker) env.worker_threads.parentPort!.postMessage({ exit }); else process.exitCode = exit;
+    return `${d.file ? path.relative(process.cwd(), d.file) : '?'}:${line}: ${['', 'error', 'warning', 'info', 'hint'][d.severity]}: ${d.message}${d.around ? '\n' + d.around.split('\n').map(l => '    | ' + l).join('\n') : ''}`;
+  });
+  return { ...counts, errors: shown.filter(d => d.severity === 1).length, diagnostics };
+}
+
+// The files tested on threads: each its share (the largest first, each to whichever has the least so far), read and tested by a
+// library of its own; what each found counted in its slots of the control block ([passed, failed, warnings]), what was said in
+// reading sent here, each said once (every thread reads the core library).
+const TESTED = 3;
+async function in_parallel(files: string[], given: boolean, kwargs: CLI.Args[1], threads: number): Promise<number> {
+  // (how much there is to read: a project directory, its own files)
+  const { fs, path } = env, size = (file: string): number => fs.statSync(file).isDirectory() ? fs.readdirSync(file).filter(f => f.endsWith(EXTENSION)).reduce((n, f) => n + fs.statSync(path.join(file, f)).size, 0) : fs.statSync(file).size;
+  // (given none, the language's and the core library's files are shared too: their tests are most of them)
+  const library = new Library(), core = given ? [] : [path.join(library.core, ENTRYPOINT[2] + '2'), ...library.files_of(library.core).map(f => f.path)];
+  const shares: string[][] = Array.from({ length: threads }, (): string[] => []), load: number[] = Array(threads).fill(0);
+  for (const file of [...files, ...core].sort((a, b) => size(b) - size(a) || (a < b ? -1 : 1))) { const t = load.indexOf(Math.min(...load)); shares[t].push(file); load[t] += size(file); }
+  // (each share in the order the files were given)
+  const order = [...files, ...core];
+  for (const share of shares) share.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  // (each as often as one thread said it: the same library says the same; another thread's is the same said again)
+  const control = new Control(TESTED * threads), said = new Map<string, number>();
+  control.notify(threads);
+  const workers = shares.map((share, t) => {
+    const worker = env.thread({ tests: { share, files, given, kwargs, control: control.buffer, slot: t } });
+    worker.on('message', (m: { diagnostics?: string[], took?: number }) => {
+      if (m.took !== undefined && kwargs.verbose) console.error(`thread ${t}: ${share.length} files (${Math.round(load[t] / 1024)} KB) in ${Math.round(m.took / 1000)} s: ${share.map(f => path.relative(process.cwd(), f)).join(' ')}`);
+      const here = new Map<string, number>(); for (const d of m.diagnostics ?? []) here.set(d, (here.get(d) ?? 0) + 1);
+      for (const [d, n] of here) said.set(d, Math.max(said.get(d) ?? 0, n));
+    });
+    worker.on('error', e => { console.error(e); control.done(); });
+    return worker;
+  });
+  await control.joined();
+  await Promise.all(workers.map(w => new Promise(gone => { w.once('exit', gone); w.postMessage('done'); })));
+  let passed = 0, failed = 0, warnings = 0;
+  for (let t = 0; t < threads; t++) { passed += control.get(TESTED * t); failed += control.get(TESTED * t + 1); warnings += control.get(TESTED * t + 2); }
+  const diagnostics = [...said].flatMap(([d, n]) => Array(n).fill(d) as string[]);
+  for (const line of diagnostics) console.error(line);
+  const errors = diagnostics.filter(line => /^[^\n]*: error: /.test(line)).length;
+  console.error(`${passed} passed, ${failed} failed, ${warnings} warnings in tests, ${errors} errors in reading (${threads} threads)`);
+  return errors || failed ? 1 : 0;
+}
+async function test_share({ share, files, given, kwargs, control: buffer, slot }: { share: string[], files: string[], given: boolean, kwargs: CLI.Args[1], control: ArrayBufferLike, slot: number }) {
+  const t0 = performance.now(), control = Control.of(buffer), port = env.worker_threads.parentPort!, { path } = env, library = await new Library().boot();
+  // (its own: the files of its share (a project directory's, those in it; the core library's, read already))
+  const own = new Set(share), file = (f: string) => own.has(f) || own.has(path.dirname(f));
+  // (given none, every file read first, as on one thread: what a test sees is what it would see there)
+  const said = await tested(library, given ? share : files, given, kwargs, { file, rest: slot === 0 });
+  control.set(TESTED * slot, said.passed); control.set(TESTED * slot + 1, said.failed); control.set(TESTED * slot + 2, said.warnings);
+  port.postMessage({ diagnostics: said.diagnostics, took: performance.now() - t0 });
+  control.done();
+  // (gone when told: what it sent is heard first)
+  port.once('message', () => process.exit(0));
 }
 
 
@@ -3507,6 +4000,7 @@ export async function lsp(io: { input: NodeJS.ReadableStream, output: NodeJS.Wri
   });
 }
 
-if (env.worker && env.worker_threads.workerData?.lsp) void lsp_worker(env.worker_threads.workerData.lsp === 'test' ? 'test' : 'read');
+if (env.worker && env.worker_threads.workerData?.tests) void test_share(env.worker_threads.workerData.tests);
+else if (env.worker && env.worker_threads.workerData?.lsp) void lsp_worker(env.worker_threads.workerData.lsp === 'test' ? 'test' : 'read');
 else if (env.worker && env.worker_threads.workerData?.main) void main(env.worker_threads.workerData.main);
 else if (env.is_main_entrypoint) void main();

@@ -31,6 +31,16 @@ Int8.low := ((0 - 128) as Integer)
 Int8.high := 127
 Int8.bits := 8
 Int8.signed := true
+Int16 := Number{(. >= ((0 - 32768) as Integer)) && (. <= 32767)}
+Int16.low := ((0 - 32768) as Integer)
+Int16.high := 32767
+Int16.bits := 16
+Int16.signed := true
+Natural16 := Number{(. >= 0) && (. <= 65535)}
+Natural16.low := 0
+Natural16.high := 65535
+Natural16.bits := 16
+Natural16.signed := false
 Int32 := Number{(. >= ((0 - 2147483648) as Integer)) && (. <= 2147483647)}
 Int32.low := ((0 - 2147483648) as Integer)
 Int32.high := 2147483647

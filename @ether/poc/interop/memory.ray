@@ -1,32 +1,19 @@
-// Memory: a list of bytes, an address a place in it; a value of more than one byte is its bytes the least significant first
+// Memory: bytes, an address a place among them; a value of more than one byte is its bytes the least significant first
 // (little-endian). Read signed, a negative value is made from its bytes' complements, so no number is larger than it is.
-memory_cell (memory, address) =>
-  cell_at := memory.head
-  cell_left := address
-  while cell_left > 0 {
-    cell_at = cell_at.next
-    cell_left = cell_left - 1
-  }
-  cell_at
 loaded (memory, address, count, signed) =>
-  load_first := memory_cell(memory, address)
-  load_last := memory_cell(memory, (address + count) - 1)
-  load_negative := signed && (load_last.value >= 128)
+  load_negative := signed && (memory.memory_byte((address + count) - 1) >= 128)
   load_value := 0
-  load_at := load_last
   load_left := count
   while load_left > 0 {
-    load_value = (load_value * 256) + (load_negative ? (255 - load_at.value) : load_at.value)
-    load_at = load_at.previous
     load_left = load_left - 1
+    load_byte := memory.memory_byte(address + load_left)
+    load_value = (load_value * 256) + (load_negative ? (255 - load_byte) : load_byte)
   }
   load_negative ? ((((0 - load_value) as Integer) - 1) as Integer) : load_value
 store (memory, address, count, value) =>
-  store_at := memory_cell(memory, address)
   store_index := 0
   while store_index < count {
-    store_at.value = value.byte_at(store_index)
-    store_at = store_at.next
+    memory.memory_placed(address + store_index, value.byte_at(store_index))
     store_index = store_index + 1
   }
   value

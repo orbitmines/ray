@@ -26,6 +26,11 @@ Integer.low := None
 Integer.high := None
 Integer.bits := None
 Integer.signed := true
+Int8 := Number{(. >= ((0 - 128) as Integer)) && (. <= 127)}
+Int8.low := ((0 - 128) as Integer)
+Int8.high := 127
+Int8.bits := 8
+Int8.signed := true
 Int32 := Number{(. >= ((0 - 2147483648) as Integer)) && (. <= 2147483647)}
 Int32.low := ((0 - 2147483648) as Integer)
 Int32.high := 2147483647

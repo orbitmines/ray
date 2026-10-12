@@ -620,6 +620,7 @@ export class Program {
       }
       for (let e = 0; e < ends.length; e++) {
         const u = ends[last_only ? ends.length - 1 - e : e];
+        if (last && Program.word(s, u - 1) && Program.word(s, u)) continue;
         if (typed && !this.structural(s.slice(t, u), typed)) continue;
         spans.push(t, u); step(k + 1, u); spans.length -= 2;
         if (last_only && out.length > count) return;

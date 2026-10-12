@@ -164,14 +164,29 @@ All POC files live in `@ether/poc/machine/`:
 - **MC9d Through itself.** The lifted program written as machine code again, run natively on the same arrays, and lifted
   again.
 
+### MC10 A real program
+
+- **Goal.** A whole program, not a corpus of small ones: a DEFLATE decoder (`poc/machine/inflate/inflate.c`, written for
+  this, RFC 1951), compiled by gcc, read, lifted and compiled again through `X86.ray`, decoding the DEFLATE proof's corpus.
+  Its tables are made by code into the state it is given, so its machine code is one `.text` of 4615 bytes with no
+  relocation: five functions (`bits`, `construct`, `decode`, `codes`, `inflate`; gcc inlined the rest), calls among them,
+  a stack, words and bytes in memory.
+- **MC10a Oracle.** gcc's object, linked into `main.c`, decodes the 22 streams as zlib wrote them and rejects the 7 bad
+  ones (`make.py --check`, bytes pinned in `manifest.txt`).
+- **MC10b The declaration.** Every instruction read, written back byte for byte, printed as objdump does: the operand
+  size prefix (16-bit words), shifts by `cl` and arithmetic ones, `or`, `and`, 32-bit immediates, immediates stored and
+  compared in memory, word loads sign- and zero-extended, `push`, `pop`, `call`, `movabs`.
+- **MC10c The lift.** Each function a Ray function of the argument registers and its stack pointer (`at_4e0_called (memory,
+  a0, …, a5, stack)`), memory shared; a call a Ray call that answers rax; a jump to another function's start a tail call.
+  The lifted program, run by Ray on the same memory, decodes the streams as gcc's object does.
+- **MC10d Through itself.** The lifted program compiled to machine code by `X86.ray`, run natively on the whole corpus.
+
 ## After this proof
 
 - **A second instruction set.** The same corpus through `aarch64-linux-gnu-gcc`, lifted by an `AArch64.ray`, gives the
   same functions: two machines, one meaning.
 - **The interpreted side.** CPython compiles to bytecode in `.pyc` files (marshal, then opcodes): one more binary format.
   Read it the same way, and Python meets C through what each compiler emits, with no grammar of either.
-- **A real program.** gcc's `inflate` (the DEFLATE proof's decoder, as C) read from its object, lifted, and compiled again
-  through `X86.ray`, decoding the DEFLATE corpus as gcc's object does: calls, the stack, and whatever else it emits.
 - **Equivalence beyond evaluation.** MC8 and MC9 compare on inputs; that a lifted program is the function for every input
   needs more than evaluation (Interop.md L2).
 
@@ -225,6 +240,17 @@ also after merging main.
   itself (base, index scaled by 1, 2, 4 or 8, small displacement) is one instruction, as gcc writes it; the flags and what an
   expression needs on the way are registers the program does not name. They agree natively with gcc's objects on all 180
   inputs, arrays after included, and read back and lifted again, print the same.
+- **MC10a**: gcc's object of `inflate.c` (4615 bytes, pinned) decodes all 22 streams as zlib wrote them and rejects all 7
+  bad ones.
+- **MC10b** (so far): each of the 659 distinct instructions in it is read, written back byte for byte and printed as
+  objdump prints it; the whole 4615 bytes read as one function print objdump's text line for line. (Written back whole,
+  after `mov r32, imm` and `movabs` were told apart by REX.W, not yet run again.)
+- **MC10c** (so far): read and lifted function by function, the lifted program decodes 10 streams in Ray as gcc's object
+  does (stored, fixed and dynamic Huffman: `empty`, `hello`, `one`, `ray.txt.1`, `run.bin.1` with each strategy). A
+  fixed-Huffman stream takes 150 s and 2.5 GB, a dynamic one 300 s and more: every value written into text in a run is
+  kept until the run ends (see "What a kernel needs"), so the corpus's larger streams wait for that.
+- **MC10d** (begun): flags kept in two places below the stack, what a statement needs on the way borrowed from registers
+  it does not name and given back, calls `call`, tail calls `jmp` (`poc/machine/out/probe/mc10d.py`, not yet run).
 
 Each function reads, prints, lifts or assembles in under a second.
 
@@ -356,7 +382,12 @@ For a kernel written anew: what `language.ts`, `js.kinds.ray` and `structures3.t
 - **Host kinds:** `bytes`, `latin1`, `code_at`, `substring`, `last_index_of`, `binary(width)`, `hexadecimal`,
   `signed_hexadecimal(width)`, `reversed`, `unsigned`, `pieces(size)`, `tally(size)`, `maximum`, `reads_text`, `headed`;
   `added`, `subtracted`, `multiplied`, `wrapped_into` (exact signed integers); `*` repeating text and lists; `==` and `!=`
-  of two lists by `alike`.
+  of two lists by `alike`; `byte_at`, `anded`, `ored`, `xored`, `shifted_left`, `shifted_right`, `unsigned_below`;
+  memory as bytes (`memory_sized`, `memory_byte`, `memory_placed`).
+- **Memory.** A run does not keep what it no longer reaches: no reading keeps the ways it was not read, and no lookup of
+  values written into text keeps them for the whole of a run. Today a value written into text is found by its id through
+  `reading_now` (strong, until the outermost run ends) and `referred` (a `WeakRef`, which keeps it until the job ends):
+  one fixed-Huffman decode by the lifted `inflate` writes 3.8 million values into text, and holds 2.5 GB at its end.
 
 Measured against today's kernel (to beat): boot 11 s; `f3` 17 calls a second; a warm 5-byte DEFLATE read 60 000 reads; the
 quick tier (`poc/quick.sh`) about 6 minutes.
@@ -368,7 +399,7 @@ quick tier (`poc/quick.sh`) about 6 minutes.
   are defined after `X86`.
 - **MCG2 An unbalanced bracket says nothing.** One `)` too many in one method left the whole class unmade, silently,
   and whether the file read alternated with how many statics came after it. Errors with positions are needed (Interop.md
-  L1 asks for them too).
+  L1 asks for them too); loading names the bracket and its line now (see MCG11).
 - **MCG4 A closure written as a later argument takes the whole argument list as its parameters:** `g(3, (y) => y + 1)`
   reads as one closure `(3, (y)) => …`. Bracketed, `g(3, ((y) => y + 1))`, it is one argument (before the merge too).
 - **MCG5 A closure written in a rule's right side does not see the rule's holes when it is called elsewhere;** they are
@@ -380,13 +411,21 @@ quick tier (`poc/quick.sh`) about 6 minutes.
 - **MCG8 Main's `filter` overflows the stack** (`[1, 2, 3].filter((x) => x == 2)`, on main alone too): prefixes are counted
   with a loop. **`is` can run away** through `descends`' lazy `depth` default: instructions answer `assembly_after` instead
   of being asked what they are.
-- **MCG9 `list[i] = value` does nothing, silently**: it answers `value`, the list is as it was. A list's cells can be
-  assigned (`cell.value = value`), so memory walks to its cell.
+- **MCG9 `list[i] = value` did nothing, silently** (it kept `value` under the key `i`, which `list[i]` does not read).
+  Fixed: on a list with a number, `[]=` places the value (`placed`). Memory is the host's bytes now (`memory_sized`,
+  `memory_byte`, `memory_placed`), read and written in one step; what a load and a store mean stays in `memory.ray`.
 - **MCG10 A word no rule reads is text, silently**: with `io.ray` not loaded, `lifted text_after opening` is the text
   `"text_after opening"`, and a function lifted with it was `m1 (memory, text_after opening`. An unread word could say so.
 - **MCG11 A second `static` of a name replaces the first, silently, whatever its arity**: a new `addressed (text)` took the
   place of `addressed (registers, operand, rex)`, and every `lea` lifted to nothing (no line, no error), so Ray's machine
-  code for it ran off into memory it never set.
+  code for it ran off into memory it never set. (`name (params) =>` is `name := (params) => …`: a variable, so this is
+  what it means.) Said now: loading a file names a name defined twice in one block, and a bracket that does not
+  balance before the next statement (MCG2), with their lines (`poc/deflate/boot.mts`).
+- **MCG12 Memory grew 1 GB a function, and every run ran out.** Two causes. A reading kept every way its text was read
+  (`all`, thousands of them), and readings are kept as where values were written: once its right side is done, a reading
+  keeps only its own (`settled`). And what a `WeakRef` is made of is kept until the job ends, every value referred to in a
+  run: the harnesses turn the event loop between functions, as the kernel's tests already do. With a bounded cache of
+  structural reads, a process stays at about 130 MB over 25 functions (it reached 8 GB in 8).
 - **MCG3 `return` in a rule's right side returns from the function that called the rule.** `wrapped` written with
   `(return value) if …` made every lifted function answer its first wrapped value.
 

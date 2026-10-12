@@ -1,6 +1,6 @@
 // What this interpreter's own kinds of value are, for now: a number (a JS number) and text (a JS string), their operations
 // the host's (`goto js`: the next statement is JS, `self` the value read on, each hole its value, `$(text)` text read here).
-// A port of `js.kinds.ray` to test with until the library reads numbers and text itself; read after the language.
+// A port of `javascript.o.ray` to test with until the library reads numbers and text itself; read after the language.
 
 // Numbers, as written: a digit (`Digit`'s own rules), digits, digits with a fraction (`Number`'s own rules: a typed hole
 // `{n: Number}` takes what they read; what it took is read in `Number`). Read anywhere through the rule after them. (Read again

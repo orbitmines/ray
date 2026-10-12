@@ -267,6 +267,10 @@ subtracted({other}) =>
 multiplied({other}) =>
   goto js
   Number.isInteger(self) && Number.isInteger(other) ? Number(BigInt(self) * BigInt(other)) : undefined
+// (two integers' bits both set, as two's complement: `and`)
+anded({other}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) ? Number(BigInt(self) & BigInt(other)) : undefined
 // (an integer brought into the integers of a width modulo 2 to that power: signed, or not)
 wrapped_into({bits}, {signed}) =>
   goto js

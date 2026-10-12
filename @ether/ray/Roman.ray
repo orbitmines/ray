@@ -1,5 +1,5 @@
 // Roman Numeral notation (https://en.wikipedia.org/wiki/Roman_numerals)
-Roman := class: String{length > 0} (
+Roman := class: Digit+ (
   thousands: "M"[],
   hundreds: Place<"C", "D", "M">,
   tens: Place<"X", "L", "C">,

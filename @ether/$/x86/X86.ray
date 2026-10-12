@@ -211,6 +211,97 @@ X86 := class: Language {
     assembly_after (end) => "jmp " + (end + X86.signed(offset, 8)).hexadecimal
     statements (end, width) => ["goto at_" + (end + X86.signed(offset, 8)).hexadecimal]
   }
+  static MoveSigned := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 99}, operand: X86.Operand) {
+    assembly => (("movsxd " + X86.named(operand.reg_register(rex), 64)) + ",") + X86.place(operand, rex, 32)
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.reg_register(rex), X86.Value(((operand.mod == 3) ? X86.held(registers, operand.rm_register(rex), 32) : X86.load_text(operand, rex, 32, true)), 64))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), None)
+  }
+  static JumpIfNear := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 15}, code: <-Binary₄, <-Binary₄{== 8}, offset: <-Binary₃₂) {
+    assembly_after (end) => (("j" + X86.Conditions[code]) + " ") + (end + X86.signed(offset, 32)).hexadecimal
+    statements (end, width) => [((("(goto at_" + (end + X86.signed(offset, 32)).hexadecimal) + ") if ") + X86.condition(code))]
+  }
+  static JumpNear := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 233}, offset: <-Binary₃₂) {
+    assembly_after (end) => "jmp " + (end + X86.signed(offset, 32)).hexadecimal
+    statements (end, width) => ["goto at_" + (end + X86.signed(offset, 32)).hexadecimal]
+  }
+  // Memory: what a load reads and a store writes, at the width of its operation, `QWORD PTR [rdi+rax*8]`; a byte register
+  // without REX is one of the old eight, `ah` for 4 to `bh` for 7 (Vol. 2, 3.1.1.3, 2.1.5)
+  static Sizes := ["BYTE", "WORD", "DWORD", "QWORD"]
+  static sized (width) => X86.Sizes[(width == 8) ? 0 : ((width == 16) ? 1 : ((width == 32) ? 2 : 3))]
+  static in_memory (operand, rex, width) => (X86.sized(width) + " PTR ") + operand.memory(rex)
+  static byte_named (number, rex) => (rex.empty && ((number >= 4) && (number < 8))) ? ["ah", "ch", "dh", "bh"][number - 4] : X86.Bytes[number]
+  // (lifted, an address is Ray code over the registers; a load `loaded(memory, address, bytes, signed)`, a store `store(…)`)
+  static address (operand, rex) =>
+    made := None
+    (made = "r" + operand.base_register(rex)) if operand.base_register(rex) !== None
+    if operand.index_register(rex) !== None {
+      scaled := (operand.scaled == 1) ? ("r" + operand.index_register(rex)) : X86.combined("r" + operand.index_register(rex), "*", "" + operand.scaled, 64)
+      made = (made === None) ? scaled : X86.combined(made, "+", scaled, 64)
+    }
+    if (operand.displacement !== None) && (operand.displacement != 0) {
+      made = (made === None) ? X86.constant(operand.displacement, 64) : X86.combined(made, "+", X86.constant(operand.displacement, 64), 64)
+    }
+    made
+  static load_text (operand, rex, width, signed) => ((((("loaded(memory, " + X86.address(operand, rex)) + ", ") + (width / 8)) + ", ") + (signed ? "true" : "false")) + ")"
+  static store_text (operand, rex, width, value) => ((((("store(memory, " + X86.address(operand, rex)) + ", ") + (width / 8)) + ", ") + value) + ")"
+  static place (operand, rex, width) =>
+    (return X86.in_memory(operand, rex, width)) if operand.mod != 3
+    (width == 8) ? X86.byte_named(operand.rm_register(rex), rex) : X86.named(operand.rm_register(rex), width)
+  static Load := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 139}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("mov " + X86.named(operand.reg_register(rex), X86.wide(rex))) + ",") + X86.in_memory(operand, rex, X86.wide(rex))
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.reg_register(rex), X86.Value(X86.load_text(operand, rex, X86.wide(rex), true), X86.wide(rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), None)
+  }
+  static AddLoaded := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 3}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("add " + X86.named(operand.reg_register(rex), X86.wide(rex))) + ",") + X86.in_memory(operand, rex, X86.wide(rex))
+    assembly_after (end) => assembly
+    lifted (registers) => X86.applied(registers, operand.reg_register(rex), X86.wide(rex), X86.held(registers, operand.reg_register(rex), X86.wide(rex)), "+", X86.load_text(operand, rex, X86.wide(rex), true))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), operand.reg_register(rex), X86.wide(rex)))
+  }
+  static Store := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 137}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("mov " + X86.in_memory(operand, rex, X86.wide(rex))) + ",") + X86.named(operand.reg_register(rex), X86.wide(rex))
+    assembly_after (end) => assembly
+    statements (end, width) => [X86.store_text(operand, rex, X86.wide(rex), X86.held(X86.fresh(), operand.reg_register(rex), 64))]
+  }
+  static StoreByte := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 136}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("mov " + X86.in_memory(operand, rex, 8)) + ",") + X86.byte_named(operand.reg_register(rex), rex)
+    assembly_after (end) => assembly
+    statements (end, width) => [X86.store_text(operand, rex, 8, X86.held(X86.fresh(), operand.reg_register(rex), 64))]
+  }
+  static AddStored := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 1}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("add " + X86.in_memory(operand, rex, X86.wide(rex))) + ",") + X86.named(operand.reg_register(rex), X86.wide(rex))
+    assembly_after (end) => assembly
+    statements (end, width) => X86.stored_sum(operand, rex, X86.wide(rex))
+  }
+  static AddStoredByte := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 0}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("add " + X86.in_memory(operand, rex, 8)) + ",") + X86.byte_named(operand.reg_register(rex), rex)
+    assembly_after (end) => assembly
+    statements (end, width) => X86.stored_sum(operand, rex, 8)
+  }
+  static CmpStored := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 57}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("cmp " + X86.in_memory(operand, rex, X86.wide(rex))) + ",") + X86.named(operand.reg_register(rex), X86.wide(rex))
+    assembly_after (end) => assembly
+    statements (end, width) => X86.flag_lines([X86.load_text(operand, rex, X86.wide(rex), true), X86.held(X86.fresh(), operand.reg_register(rex), X86.wide(rex))])
+  }
+  static MoveZero := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 15}, <-Byte{== 182}, operand: X86.Operand) {
+    assembly => (("movzx " + X86.named(operand.reg_register(rex), X86.wide(rex))) + ",") + X86.place(operand, rex, 8)
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.reg_register(rex), X86.Value(((operand.mod == 3) ? X86.anded_text(X86.held(registers, operand.rm_register(rex), 64), "255") : X86.load_text(operand, rex, 8, false)), X86.wide(rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), None)
+  }
+  static set_lines (number, code) =>
+    cleared := X86.combined("r" + number, "-", X86.anded_text("r" + number, "255"), 64)
+    [((((("r" + number) + " = ") + X86.condition(code)) + " ? ") + X86.combined(cleared, "+", "1", 64)) + (" : " + cleared)]
+  static stored_sum (operand, rex, width) =>
+    sum := X86.combined(X86.load_text(operand, rex, width, width != 8), "+", X86.held(X86.fresh(), operand.reg_register(rex), (width == 8) ? 64 : width), width)
+    [X86.flag_lines([sum, "0"]), [X86.store_text(operand, rex, width, sum)]].flatten
+  static SetIf := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 15}, code: <-Binary₄, <-Binary₄{== 9}, operand: X86.Operand{(.mod == 3) && (.reg == 0)}) {
+    assembly => (("set" + X86.Conditions[code]) + " ") + X86.byte_named(operand.rm_register(rex), rex)
+    assembly_after (end) => assembly
+    statements (end, width) => X86.set_lines(operand.rm_register(rex), code)
+  }
   static Nop := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 144}) {
     assembly => (X86.sixteens(prefixes) > 0) ? "xchg ax,ax" : "nop"
     assembly_after (end) => assembly
@@ -225,7 +316,7 @@ X86 := class: Language {
 
   // What a register holds while a function is lifted: Ray code over the parameters, and the width it was written at; read at the other width, a 64-bit value is its low half, a 32-bit one zero-extended (Vol. 1, 3.4.1.1)
   static Value := class (code, width)
-  static typed (width) => (width == 64) ? "Int64" : "Int32"
+  static typed (width) => (width == 64) ? "Int64" : ((width == 8) ? "Int8" : "Int32")
   static constant (value, width) => (value > 0) ? ("" + value) : (((("((1 - " + (1 - value)) + ") wrapped ") + X86.typed(width)) + ")")
   static held (registers, number, width) =>
     value := registers[number]
@@ -316,7 +407,7 @@ X86 := class: Language {
     made
   static Tests := ["", "", "", "", "flag_left == flag_right", "flag_left != flag_right", "", "", "flag_left < 0", "flag_left >= 0", "", "", "flag_left < flag_right", "flag_left >= flag_right", "flag_left <= flag_right", "flag_left > flag_right"]
   static condition (code) => ("(" + X86.Tests[code]) + ")"
-  static lift_flow (code, name, parameters, width) =>
+  static flow_lines (code, parameters, width) =>
     lines := ["flag_left := 0", "flag_right := 0"]
     number := 0
     while number < 16 {
@@ -340,7 +431,264 @@ X86 := class: Language {
       lines.joined(step.value.operation.statements(offset, width))
       step = step.next
     }
-    (((name + " (") + heading) + ") =>\n  ") + lines.join("\n  ")
+    lines
+  static lift_flow (code, name, parameters, width) =>
+    heading := ""
+    index := 0
+    at := parameters.head
+    while at {
+      heading = (heading + ((index == 0) ? "" : ", ")) + ((at.value + ": ") + X86.typed(width))
+      index = index + 1
+      at = at.next
+    }
+    (((name + " (") + heading) + ") =>\n  ") + X86.flow_lines(code, parameters, width).join("\n  ")
+  static lift_memory_flow (code, name, parameters, width) =>
+    lifted := X86.lift_flow(code, name, parameters, width)
+    opening := name + " ("
+    rest := lifted text_after opening
+    (name + " (memory, ") + rest
+  // The reverse of `lift_flow`: its program written as machine code by these declarations. Its variables are the registers of
+  // their numbers; its flags, and what an expression needs on the way, registers it does not name. A value is kept sign-extended
+  // to 64 bits, so a wrap to 32 is `movsxd`, one to an unsigned 32 a `mov` of 32 bits, a condition a `cmp` of 64; a numeral is
+  // an immediate; a load or store is of the address computed into a register. A jump has 32 bits of offset, so where
+  // everything is is known first.
+  static Item := class (kind, text, code, label)
+  static Form := class (name, left, right)
+  static Expression := {
+    ( {x} ) => X86.Form("same", "{x}", None)
+    ( {l} + {r} ) => X86.Form("add", "{l}", "{r}")
+    ( {l} - {r} ) => X86.Form("sub", "{l}", "{r}")
+    ( {l} * {r} ) => X86.Form("imul", "{l}", "{r}")
+    ( {x} wrapped {t} ) => X86.Form("wrapped", "{x}", "{t}")
+    ( {x} .anded ( {c} ) ) => X86.Form("and", "{x}", "{c}")
+    ( {x} / {d} ) => X86.Form("shr", "{x}", "{d}")
+    loaded ( memory, {a}, {n}, true ) => X86.Form("load_signed", "{a}", "{n}")
+    loaded ( memory, {a}, {n}, false ) => X86.Form("load", "{a}", "{n}")
+    loaded ( memory, {a} , {n}, true ) => X86.Form("load_signed", "{a}", "{n}")
+    loaded ( memory, {a} , {n}, false ) => X86.Form("load", "{a}", "{n}")
+  }
+  static text_item (text) => X86.Item("text", text, None, None)
+  static number_of (text) => ray_code text
+  static exponent (value) =>
+    found := 0
+    left := value
+    while left > 1 {
+      left = left / 2
+      found = found + 1
+    }
+    found
+  static emitted (text, target, spare) =>
+    name := X86.Registers[target]
+    if text fits_pattern "^[0-9]+$" {
+      return [X86.text_item((("mov " + name) + ",") + X86.immediate((ray_code text), 64))]
+    }
+    if text fits_pattern "^r[0-9]+$" {
+      source := X86.number_of(text text_after "r")
+      (return []) if source == target
+      return [X86.text_item((("mov " + name) + ",") + X86.Registers[source])]
+    }
+    form := X86.Expression reads_text text
+    (return None) unless form
+    (return X86.emitted(form.left, target, spare)) if form.name == "same"
+    if form.name == "wrapped" {
+      inner := X86.emitted(form.left, target, spare)
+      (return None) unless inner
+      (return [inner, [X86.text_item((("movsxd " + name) + ",") + X86.Halves[target])]].flatten) if form.right == "Int32"
+      (return [inner, [X86.text_item((("mov " + X86.Halves[target]) + ",") + X86.Halves[target])]].flatten) if form.right == "Natural32"
+      return inner
+    }
+    if form.name == "and" {
+      inner := X86.emitted(form.left, target, spare)
+      mask := ray_code form.right
+      (return None) unless inner && ((mask == 255) || (mask < 128))
+      (return [inner, [X86.text_item((("movzx " + X86.Halves[target]) + ",") + X86.Bytes[target])]].flatten) if mask == 255
+      return [inner, [X86.text_item((("and " + name) + ",") + X86.immediate(mask, 64))]].flatten
+    }
+    if (form.name == "load") || (form.name == "load_signed") {
+      memory := X86.memory_operand(form.left)
+      inner := (memory === None) ? X86.emitted(form.left, target, spare) : []
+      count := ray_code form.right
+      at := ("[" + ((memory === None) ? name : memory)) + "]"
+      (return None) unless inner && ((count == 8) || ((count == 4) || ((count == 1) && (form.name == "load"))))
+      (return [inner, [X86.text_item((("mov " + name) + ",QWORD PTR ") + at)]].flatten) if count == 8
+      (return [inner, [X86.text_item((("movzx " + X86.Halves[target]) + ",BYTE PTR ") + at)]].flatten) if count == 1
+      (return [inner, [X86.text_item((("movsxd " + name) + ",DWORD PTR ") + at)]].flatten) if form.name == "load_signed"
+      return [inner, [X86.text_item((("mov " + X86.Halves[target]) + ",DWORD PTR ") + at)]].flatten
+    }
+    if form.name == "shr" {
+      inner := X86.emitted(form.left, target, spare)
+      (return None) unless inner
+      return [inner, [X86.text_item((("shr " + name) + ",") + X86.immediate(X86.exponent((ray_code form.right)), 8))]].flatten
+    }
+    if X86.immediate_right(form) {
+      inner := X86.emitted(form.left, target, spare)
+      (return None) unless inner
+      shown := X86.immediate((ray_code form.right), 64)
+      (return [inner, [X86.text_item((((("imul " + name) + ",") + name) + ",") + shown)]].flatten) if form.name == "imul"
+      return [inner, [X86.text_item((((form.name + " ") + name) + ",") + shown)]].flatten
+    }
+    (return None) if spare.empty
+    if X86.need(form.right) > X86.need(form.left) {
+      later := X86.emitted(form.right, target, spare)
+      first := X86.emitted(form.left, spare.first, spare.rest)
+      (return None) unless later && first
+      combined := X86.text_item((((form.name + " ") + X86.Registers[spare.first]) + ",") + name)
+      return [later, first, [combined, X86.text_item((("mov " + name) + ",") + X86.Registers[spare.first])]].flatten
+    }
+    left := X86.emitted(form.left, target, spare)
+    right := X86.emitted(form.right, spare.first, spare.rest)
+    (return None) unless left && right
+    [left, right, [X86.text_item((((form.name + " ") + name) + ",") + X86.Registers[spare.first])]].flatten
+  // (how many registers an expression needs on the way: the deeper side is computed first (Sethi and Ullman 1970))
+  static need (text) =>
+    (return 1) if (text fits_pattern "^[0-9]+$") || (text fits_pattern "^r[0-9]+$")
+    form := X86.Expression reads_text text
+    (return 99) unless form
+    (return X86.need(form.left)) unless ((form.name == "add") || (form.name == "sub")) || (form.name == "imul")
+    (return X86.need(form.left)) if X86.immediate_right(form)
+    l := X86.need(form.left)
+    r := X86.need(form.right)
+    (l == r) ? (l + 1) : ((l > r) ? l : r)
+  // (an address x86 computes itself: a base, an index scaled by 1, 2, 4 or 8, a small displacement; as `X86.Memory` reads it)
+  static memory_operand (text) =>
+    (return X86.Registers[X86.number_of(text text_after "r")]) if text fits_pattern "^r[0-9]+$"
+    form := X86.Expression reads_text text
+    (return None) unless form
+    (return X86.memory_operand(form.left)) if (form.name == "same") || ((form.name == "wrapped") && (form.right == "Int64"))
+    (return None) unless (form.name == "add") && (form.left fits_pattern "^r[0-9]+$")
+    base := X86.Registers[X86.number_of(form.left text_after "r")]
+    (return (base + "+0x") + (ray_code form.right).hexadecimal) if (form.right fits_pattern "^[0-9]+$") && ((ray_code form.right) < 128)
+    index := X86.indexed(form.right)
+    (index === None) ? None : ((base + "+") + index)
+  static indexed (text) =>
+    (return X86.Registers[X86.number_of(text text_after "r")] + "*1") if text fits_pattern "^r[0-9]+$"
+    form := X86.Expression reads_text text
+    (return None) unless form
+    (return X86.indexed(form.left)) if (form.name == "same") || ((form.name == "wrapped") && (form.right == "Int64"))
+    (return None) unless ((form.name == "imul") && (form.left fits_pattern "^r[0-9]+$")) && (form.right fits_pattern "^[1248]$")
+    (X86.Registers[X86.number_of(form.left text_after "r")] + "*") + form.right
+  static immediate_right (form) => (((form.name == "add") || (form.name == "sub")) || (form.name == "imul")) && ((form.right fits_pattern "^[0-9]+$") && ((ray_code form.right) < 128))
+  static expression_into (text, target, spare) => X86.emitted((("(" + text) + ")") spaced_tokens "( )", target, spare)
+  static test_of (text) => X86.Tests.index_of(text.substring(1, text.count - 1))
+  // (the registers a program does not name, the flags' two first, then what an expression needs on the way)
+  static free_registers (lines) =>
+    free := []
+    candidate := [8, 9, 10, 11, 1, 0, 2, 6, 7].head
+    while candidate {
+      pattern := ("\\br" + candidate.value) + "\\b"
+      seen := false
+      line_at := lines.head
+      while line_at {
+        (seen = true) if (line_at.value fits_pattern pattern) && !(line_at.value fits_pattern " := 0$")
+        line_at = line_at.next
+      }
+      (free.append(candidate.value)) unless seen
+      candidate = candidate.next
+    }
+    free
+  static lowered_statement (line, free) =>
+    spare := free.rest.rest
+    compare := X86.text_item((("cmp " + X86.Registers[free.first]) + ",") + X86.Registers[free.rest.first])
+    (return []) if line fits_pattern " := 0$"
+    if line fits_pattern "^r[0-9]+ = \\(\\([a-z_]+\\) wrapped Natural32\\)$" {
+      own := X86.Halves[X86.number_of((line text_after "r") text_before " = ")]
+      return [X86.text_item((("mov " + own) + ",") + own)]
+    }
+    (return []) if line fits_pattern "^r[0-9]+ = [a-z_]+$"
+    (return [X86.Item("label", None, None, line.substring(0, line.count - 1))]) if line fits_pattern "^at_[0-9a-f]+.$"
+    if line begins "return " {
+      value := X86.expression_into(line text_after "return ", 0, spare)
+      (return None) unless value
+      return [value, [X86.text_item("ret")]].flatten
+    }
+    if line begins "(goto " {
+      target := (line text_after "(goto ") text_before ")"
+      return [compare, X86.Item("jump", None, X86.test_of(line text_after ") if "), target)]
+    }
+    (return [X86.Item("jump", None, None, line text_after "goto ")]) if line begins "goto "
+    (return X86.expression_into(line text_after "flag_left = ", free.first, spare)) if line begins "flag_left = "
+    (return X86.expression_into(line text_after "flag_right = ", free.rest.first, spare)) if line begins "flag_right = "
+    if line begins "store(memory, " {
+      rest := line text_after "store(memory, "
+      after_address := rest text_after ", "
+      count := ray_code (after_address text_before ", ")
+      value_text := after_address text_after ", "
+      address_text := rest text_before ", "
+      memory := X86.memory_operand((("(" + address_text) + ")") spaced_tokens "( )")
+      direct := memory !== None
+      left := direct ? spare : spare.rest
+      address := direct ? [] : X86.expression_into(address_text, spare.first, spare.rest)
+      value := X86.expression_into(value_text.substring(0, value_text.count - 1), left.first, left.rest)
+      (return None) unless address && value
+      source := (count == 8) ? X86.Registers[left.first] : ((count == 4) ? X86.Halves[left.first] : X86.Bytes[left.first])
+      return [address, value, [X86.text_item((((("mov " + X86.sized(count * 8)) + " PTR [") + (direct ? memory : X86.Registers[spare.first])) + "],") + source)]].flatten
+    }
+    number := X86.number_of((line text_after "r") text_before " = ")
+    value := line text_after " = "
+    if value begins "(flag_" {
+      test := X86.test_of(value text_before " ? ")
+      choices := value text_after " ? "
+      chosen := X86.expression_into(choices text_before " : ", spare.first, spare.rest)
+      kept := X86.expression_into(choices text_after " : ", number, spare.rest)
+      (return None) unless chosen && kept
+      return [chosen, kept, [compare, X86.text_item((("cmov" + X86.Conditions[test]) + " ") + ((X86.Registers[number] + ",") + X86.Registers[spare.first]))]].flatten
+    }
+    computed := X86.expression_into(value, spare.first, spare.rest)
+    (return None) unless computed
+    [computed, [X86.text_item((("mov " + X86.Registers[number]) + ",") + X86.Registers[spare.first])]].flatten
+  static assembled (text) => ray_code (("X86.Assembly reading {\n  " + text) + "\n}")
+  static compiled_flow (code, parameters, width) =>
+    items := []
+    lines := X86.flow_lines(code, parameters, width)
+    free := X86.free_registers(lines)
+    (return None) if free.count < 3
+    at := lines.head
+    while at {
+      lowered := X86.lowered_statement(at.value, free)
+      (return None) if lowered === None
+      items.joined(lowered)
+      at = at.next
+    }
+    X86.laid_out(items)
+  static laid_out (items) =>
+    names := []
+    places := []
+    sizes := []
+    built := []
+    offset := 0
+    at := items.head
+    while at {
+      item := at.value
+      if item.kind == "label" {
+        names.append(item.label)
+        places.append(offset)
+      } elsif item.kind == "jump" {
+        offset = offset + ((item.code === None) ? 5 : 6)
+      } else {
+        instruction := X86.assembled(item.text)
+        built.append(instruction)
+        offset = offset + (instruction.binary.count / 8)
+      }
+      at = at.next
+    }
+    made := []
+    offset = 0
+    next := built.head
+    at = items.head
+    while at {
+      item := at.value
+      if item.kind == "jump" {
+        offset = offset + ((item.code === None) ? 5 : 6)
+        distance := X86.unsigned(((places[names.index_of(item.label)] - offset) as Integer), 32)
+        made.append((item.code === None) ? X86.Instruction([], [], X86.JumpNear([], [], distance)) : X86.Instruction([], [], X86.JumpIfNear([], [], item.code, distance)))
+      } elsif item.kind == "text" {
+        made.append(next.value)
+        offset = offset + (next.value.binary.count / 8)
+        next = next.next
+      }
+      at = at.next
+    }
+    X86.Function(made)
 }
 
 // An instruction: a REX prefix or none, then one of the encodings above, given the prefix (made once X86 is, so that its header sees the encodings are of bits)
@@ -350,6 +698,9 @@ X86.Instruction := class (
   operation: X86.Imul<prefixes, rex> | X86.Sub<prefixes, rex> | X86.Mov<prefixes, rex> | X86.Lea<prefixes, rex> | X86.Add<prefixes, rex> | X86.MovImmediate<prefixes, rex> | X86.Neg<prefixes, rex> | X86.Not<prefixes, rex>
     | X86.Cmp<prefixes, rex> | X86.CmpSmall<prefixes, rex> | X86.AndSmall<prefixes, rex> | X86.Shr<prefixes, rex> | X86.Test<prefixes, rex> | X86.TestByte<prefixes, rex>
     | X86.MoveIf<prefixes, rex> | X86.JumpIf<prefixes, rex> | X86.Jump<prefixes, rex> | X86.Nop<prefixes, rex> | X86.LongNop<prefixes, rex>
+    | X86.MoveSigned<prefixes, rex> | X86.JumpIfNear<prefixes, rex> | X86.JumpNear<prefixes, rex>
+    | X86.Load<prefixes, rex> | X86.AddLoaded<prefixes, rex> | X86.Store<prefixes, rex> | X86.StoreByte<prefixes, rex> | X86.AddStored<prefixes, rex>
+    | X86.AddStoredByte<prefixes, rex> | X86.CmpStored<prefixes, rex> | X86.MoveZero<prefixes, rex> | X86.SetIf<prefixes, rex>
     | X86.Xor<prefixes, rex> | X86.AddSmall<prefixes, rex> | X86.SubSmall<prefixes, rex> | X86.MovSigned<prefixes, rex> | X86.Shl<prefixes, rex> | X86.ImulImmediate<prefixes, rex> | X86.AddAccumulator<prefixes, rex> | X86.Ret<prefixes, rex>
 ) {
   ends => operation is X86.Ret
@@ -406,6 +757,41 @@ X86.Register := {
   r13d => X86.Named(13, 32)
   r14d => X86.Named(14, 32)
   r15d => X86.Named(15, 32)
+  al => X86.Named(0, 8)
+  cl => X86.Named(1, 8)
+  dl => X86.Named(2, 8)
+  bl => X86.Named(3, 8)
+  spl => X86.Named(4, 8)
+  bpl => X86.Named(5, 8)
+  sil => X86.Named(6, 8)
+  dil => X86.Named(7, 8)
+  r8b => X86.Named(8, 8)
+  r9b => X86.Named(9, 8)
+  r10b => X86.Named(10, 8)
+  r11b => X86.Named(11, 8)
+  r12b => X86.Named(12, 8)
+  r13b => X86.Named(13, 8)
+  r14b => X86.Named(14, 8)
+  r15b => X86.Named(15, 8)
+}
+// (a condition's name, as `j…` and `cmov…` write it: its code)
+X86.ConditionCode := {
+  o => 0
+  no => 1
+  b => 2
+  ae => 3
+  e => 4
+  ne => 5
+  be => 6
+  a => 7
+  s => 8
+  ns => 9
+  p => 10
+  np => 11
+  l => 12
+  ge => 13
+  le => 14
+  g => 15
 }
 // (memory, `[base+index*scale±displacement]`: an address of register numbers)
 X86.Memory := {
@@ -456,14 +842,46 @@ X86.Assembly := {
   not {a: X86.Register} =>
     x := a
     X86.encoded(X86.Named(2, x.width), x, ((rex) => X86.Not([], rex, X86.Operand(x.number % 8, 2, 3))))
+  cmp {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(y, x, ((rex) => X86.Cmp([], rex, X86.direct(x, y))))
+  movsxd {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(x, X86.Named(y.number, 64), ((rex) => X86.MoveSigned([], rex, X86.direct(y, x))))
+  cmov{c: X86.ConditionCode} {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    n := c
+    X86.encoded(x, y, ((rex) => X86.MoveIf([], rex, n, X86.direct(y, x))))
+  and {a: X86.Register},{value} =>
+    x := a
+    n := X86.unsigned("{value}".signed_hexadecimal(8), 8)
+    X86.encoded(X86.Named(4, x.width), x, ((rex) => X86.AndSmall([], rex, X86.Operand(x.number % 8, 4, 3), n)))
+  shr {a: X86.Register},{value} =>
+    x := a
+    n := "{value}".signed_hexadecimal(16)
+    X86.encoded(X86.Named(5, x.width), x, ((rex) => X86.Shr([], rex, X86.Operand(x.number % 8, 5, 3), n)))
   shl {a: X86.Register},{value} =>
     x := a
     n := "{value}".signed_hexadecimal(16)
     X86.encoded(X86.Named(4, x.width), x, ((rex) => X86.Shl([], rex, X86.Operand(x.number % 8, 4, 3), n)))
+  movzx {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(x, y, ((rex) => X86.MoveZero([], rex, X86.direct(y, x))))
+  mov {a: X86.Register},QWORD PTR [{m: X86.Memory}] => X86.addressing(a, m, ((rex, operand) => X86.Load([], rex, operand)))
+  mov {a: X86.Register},DWORD PTR [{m: X86.Memory}] => X86.addressing(a, m, ((rex, operand) => X86.Load([], rex, operand)))
+  movsxd {a: X86.Register},DWORD PTR [{m: X86.Memory}] => X86.addressing(a, m, ((rex, operand) => X86.MoveSigned([], rex, operand)))
+  movzx {a: X86.Register},BYTE PTR [{m: X86.Memory}] => X86.addressing(a, m, ((rex, operand) => X86.MoveZero([], rex, operand)))
+  mov QWORD PTR [{m: X86.Memory}],{a: X86.Register} => X86.addressing(a, m, ((rex, operand) => X86.Store([], rex, operand)))
+  mov DWORD PTR [{m: X86.Memory}],{a: X86.Register} => X86.addressing(a, m, ((rex, operand) => X86.Store([], rex, operand)))
+  mov BYTE PTR [{m: X86.Memory}],{a: X86.Register} => X86.addressing(a, m, ((rex, operand) => X86.StoreByte([], rex, operand)))
 }
-// (a REX prefix when the width is 64 bits or a register is past the eighth (Vol. 2, 2.2.1))
+// (a REX prefix when the width is 64 bits, a register is past the eighth, or a byte is of spl to dil (Vol. 2, 2.2.1, 3.1.1.3))
 X86.prefix (width, reg, index, base) =>
-  extended := ((reg >= 8) || (index >= 8)) || (base >= 8)
+  extended := (((reg >= 8) || (index >= 8)) || (base >= 8)) || ((width == 8) && (((reg >= 4) && (reg < 8)) || ((base >= 4) && (base < 8))))
   ((width == 64) || extended) ? [X86.Rex((base >= 8) ? 1 : 0, (index >= 8) ? 1 : 0, (reg >= 8) ? 1 : 0, (width == 64) ? 1 : 0)] : []
 X86.direct (rm, reg) => X86.Operand(rm.number % 8, reg.number % 8, 3)
 X86.encoded (reg, rm, form) =>

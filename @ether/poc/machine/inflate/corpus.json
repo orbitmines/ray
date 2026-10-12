@@ -1,0 +1,1 @@
+[{"name": "inflate", "type": "long", "parameters": ["out", "outlen", "in", "inlen", "state"]}]

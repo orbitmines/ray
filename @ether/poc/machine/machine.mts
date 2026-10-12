@@ -34,6 +34,14 @@ fs.mkdirSync(rusts, { recursive: true });
 let failed = 0, seed = 1;
 const random = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
 for (const mode of modes) for (const function_ of functions.slice(from - 1, to)) {
+  // (the event loop turned between functions: what a `WeakRef` was made of is kept until the job ends)
+  await new Promise(resolve => setImmediate(resolve));
+  if (process.env.HEAP) {
+    (globalThis as any).gc?.();
+    const sizes = Object.entries(program as any).filter(([, v]) => v instanceof Map || v instanceof Set || Array.isArray(v)).map(([k, v]: [string, any]) => k + ' ' + (v.size ?? v.length)).filter(t => !t.endsWith(' 0'));
+    console.log('heap', Math.round(process.memoryUsage().heapUsed / 1e6), 'MB before', function_.name, sizes.join(', '));
+    if (process.env.SNAPSHOT === function_.name) (await import('node:v8')).writeHeapSnapshot(process.env.SNAPSHOT_TO);
+  }
   const { name } = function_, bytes = fs.readFileSync(path.join(process.env.BYTES ? path.resolve(process.env.BYTES) : corpus, name + '.bin')), started = performance.now();
   let held = false, said = '';
   try {
@@ -76,6 +84,48 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(written?.length ?? '-').padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
       continue;
     }
+    if (mode === 'program') {
+      const starts = fs.readFileSync(path.join(corpus, 'manifest.txt'), 'utf8').trim().split('\n').slice(1).map(line => parseInt(line.split(' ')[0], 16));
+      const texts: string[] = [], saved = path.join(out, name + '.program.ray');
+      if (process.env.LIFTED && fs.existsSync(saved)) texts.push(...fs.readFileSync(saved, 'utf8').trim().split(/\n(?=at_)/));
+      else for (let k = 0; k < starts.length; k++) {
+        const code = run('X86.Code.from(' + program.written(listed(bytes.subarray(starts[k], starts[k + 1] ?? bytes.length))) + ')');
+        const text = code && typeof code === 'object' ? run('X86.lift_called(' + program.written(code) + ', ' + starts[k] + ', [' + starts.join(', ') + '])') : undefined;
+        if (typeof text === 'string') texts.push(text);
+        await new Promise(resolve => setImmediate(resolve));
+        if (process.env.HEAP) { (globalThis as any).gc?.(); console.log('  heap', Math.round(process.memoryUsage().heapUsed / 1e6), 'MB after the function at', starts[k].toString(16), typeof text === 'string' ? '' : 'not lifted'); }
+      }
+      const lifted = texts.length === starts.length ? texts.join('\n') : undefined;
+      const wrong: string[] = [];
+      let decoded = 0;
+      if (typeof lifted !== 'string') said = 'not lifted';
+      else {
+        fs.writeFileSync(path.join(out, name + '.program.ray'), lifted + '\n');
+        for (const text of lifted.split(/\n(?=at_)/)) run(text);
+        const deflate = path.join(here, '..', 'deflate'), entry = 'at_' + starts[starts.length - 1].toString(16) + '_called';
+        const only = (process.env.STREAMS ?? '').split(',').filter(Boolean);
+        const streams = [...fs.readdirSync(path.join(deflate, 'corpus')).map(f => path.join(deflate, 'corpus', f)), ...fs.readdirSync(path.join(deflate, 'bad')).map(f => path.join(deflate, 'bad', f))].filter(f => f.endsWith('.deflate') && (!only.length || only.some(o => f.includes(o))));
+        for (const stream of streams) {
+          await new Promise(resolve => setImmediate(resolve));
+          const input = fs.readFileSync(stream), bad = stream.includes('/bad/');
+          run('memory_now := (65536).memory_sized');
+          const memory = run('memory_now') as Uint8Array;
+          memory.set(input, 4096);
+          const decoding = performance.now();
+          const answer = run(entry + '(memory_now, 8192, 4096, 4096, ' + input.length + ', 16384, 0, 65472)');
+          if (process.env.HEAP) { (globalThis as any).gc?.(); console.log('  heap', Math.round(process.memoryUsage().heapUsed / 1e6), 'MB after decoding in', Math.round(performance.now() - decoding), 'ms'); }
+          const expected = bad ? undefined : fs.readFileSync(path.join(deflate, 'inputs', path.basename(stream).split('.').slice(0, 2).join('.')));
+          const good = bad ? typeof answer === 'number' && answer < 0 : answer === expected!.length && Buffer.from(memory.subarray(8192, 8192 + expected!.length)).equals(expected!);
+          if (good) decoded++; else wrong.push(path.basename(stream) + ' = ' + String(typeof answer === 'object' ? 'a node' : answer));
+          console.log((good ? '  ok  ' : '  FAIL') + ' ' + path.basename(stream) + ' ' + String(Math.round(performance.now() - started)) + ' ms');
+        }
+        held = !wrong.length;
+        said = decoded + ' decoded; ' + wrong.join('; ');
+      }
+      if (!held) failed++;
+      console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      continue;
+    }
     if (mode === 'memory_flow') {
       const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
       const lifted = run('X86.lift_memory_flow(' + program.written(read) + ', "' + name + '", ["p", "n", "k"], 64)');
@@ -83,7 +133,7 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       if (typeof lifted !== 'string') said = 'not lifted';
       else {
         fs.writeFileSync(path.join(out, name + '.memory.ray'), lifted + '\n');
-        run(lifted);
+        run(lifted.replace(name + ' (', 'lifted_now ('));
         const size = ({ 'int': 4, 'long': 8, 'unsigned char': 1 } as Record<string, number>)[function_.element], signed = function_.element !== 'unsigned char';
         const asked = fs.readFileSync(path.join(corpus, 'inputs.txt'), 'utf8').trim().split('\n'), answers = fs.readFileSync(path.join(corpus, 'expected.txt'), 'utf8').trim().split('\n');
         asked.forEach((line, index) => {
@@ -91,9 +141,11 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
           if (called !== name) return;
           const memory = new Array(192).fill(0);
           values.forEach((v, i) => { let x = BigInt.asUintN(8 * size, BigInt(v)); for (let b = 0; b < size; b++) { memory[64 + i * size + b] = Number(x & 255n); x >>= 8n; } });
-          run('memory_' + index + ' := [' + memory.join(', ') + ']');
-          const answer = run(name + '(memory_' + index + ', 64, ' + ray_number(Number(n)) + ', ' + ray_number(Number(k)) + ')');
-          const after = String(run('memory_' + index + '.join(",")')).split(',').map(Number);
+          run('memory_now := (' + memory.length + ').memory_sized');
+          const bytes_now = run('memory_now') as Uint8Array;
+          bytes_now.set(memory);
+          const answer = run('lifted_now(memory_now, 64, ' + ray_number(Number(n)) + ', ' + ray_number(Number(k)) + ')');
+          const after = [...bytes_now];
           const array = values.map((_, i) => { let x = 0n; for (let b = size - 1; b >= 0; b--) x = (x << 8n) | BigInt(after[64 + i * size + b]); return String(signed ? BigInt.asIntN(8 * size, x) : x); });
           const shown = String(answer) + ' |' + array.map(v => ' ' + v).join('');
           if (shown !== answers[index]) wrong.push(`${line} = ${typeof answer === 'object' ? 'a node' : shown}, gcc: ${answers[index]}`);
@@ -112,12 +164,12 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       if (typeof lifted !== 'string') said = 'not lifted';
       else {
         fs.writeFileSync(path.join(out, name + '.flow.ray'), lifted + '\n');
-        run(lifted);
+        run(lifted.replace(name + ' (', 'lifted_now ('));
         const asked = fs.readFileSync(path.join(corpus, 'inputs.txt'), 'utf8').trim().split('\n'), answers = fs.readFileSync(path.join(corpus, 'expected.txt'), 'utf8').trim().split('\n');
         asked.forEach((line, index) => {
           const [called, ...values] = line.split(' ');
           if (called !== name) return;
-          const answer = run(name + '(' + values.map(v => ray_number(Number(v))).join(', ') + ')');
+          const answer = run('lifted_now(' + values.map(v => ray_number(Number(v))).join(', ') + ')');
           if (String(answer) !== answers[index]) wrong.push(`${name}(${values.join(', ')}) = ${typeof answer === 'object' ? 'a node' : String(answer)}, gcc: ${answers[index]}`);
         });
         held = !wrong.length;

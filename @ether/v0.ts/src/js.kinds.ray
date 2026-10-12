@@ -271,10 +271,37 @@ multiplied({other}) =>
 anded({other}) =>
   goto js
   Number.isInteger(self) && Number.isInteger(other) ? Number(BigInt(self) & BigInt(other)) : undefined
+// (or, exclusive or; a shift left by n, exact; a shift right by n rounding down (an arithmetic shift); as two's complement)
+ored({other}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) ? Number(BigInt(self) | BigInt(other)) : undefined
+xored({other}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) ? Number(BigInt(self) ^ BigInt(other)) : undefined
+shifted_left({count}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(count) && count >= 0 ? Number(BigInt(self) << BigInt(count)) : undefined
+shifted_right({count}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(count) && count >= 0 ? Number(BigInt(self) >> BigInt(count)) : undefined
+// (one integer below another, both read as the bits of 64 they are in two's complement: unsigned)
+unsigned_below({other}) =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) ? $(BigInt.asUintN(64, BigInt(self)) < BigInt.asUintN(64, BigInt(other)) ? 'true' : 'false') : undefined
 // (an integer brought into the integers of a width modulo 2 to that power: signed, or not)
 wrapped_into({bits}, {signed}) =>
   goto js
   Number.isInteger(self) ? Number(signed === $('true') ? BigInt.asIntN(bits, BigInt(self)) : BigInt.asUintN(bits, BigInt(self))) : undefined
+// (memory: bytes, each at its place from 0, read and written in one step; `n.memory_sized` n of them, all 0)
+memory_sized =>
+  goto js
+  Number.isInteger(self) && self >= 0 ? new Uint8Array(self) : undefined
+memory_byte({address}) =>
+  goto js
+  self instanceof Uint8Array && Number.isInteger(address) && address >= 0 && address < self.length ? self[address] : undefined
+memory_placed({address}, {value}) =>
+  goto js
+  self instanceof Uint8Array && Number.isInteger(address) && address >= 0 && address < self.length && Number.isInteger(value) ? (self[address] = value, value) : undefined
 // (an integer's byte at a place, as two's complement of 64 bits, the least significant first: what memory holds of it)
 byte_at({index}) =>
   goto js

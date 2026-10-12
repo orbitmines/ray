@@ -4,7 +4,8 @@ X86 := class: Language {
 
   static Registers := ["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
   static Halves := ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"]
-  static named (number, width) => (width == 64) ? X86.Registers[number] : X86.Halves[number]
+  static Words := ["ax", "cx", "dx", "bx", "sp", "bp", "si", "di", "r8w", "r9w", "r10w", "r11w", "r12w", "r13w", "r14w", "r15w"]
+  static named (number, width) => (width == 64) ? X86.Registers[number] : ((width == 16) ? X86.Words[number] : ((width == 8) ? X86.Bytes[number] : X86.Halves[number]))
 
   // REX: 0100, then W (64-bit operands) and the fourth bit of ModRM.reg (R), SIB.index (X), ModRM.rm or SIB.base (B); each byte's bits are read least significant first, the order x86 stores its integers in (Vol. 2, 2.2.1)
   static Rex := class (b: <-Binary₁, x: <-Binary₁, r: <-Binary₁, w: <-Binary₁, <-Binary₄{== 4})
@@ -12,6 +13,8 @@ X86 := class: Language {
   static index_extension (rex) => rex.empty ? 0 : (rex.first.x * 8)
   static reg_extension (rex) => rex.empty ? 0 : (rex.first.r * 8)
   static wide (rex) => (rex.empty || (rex.first.w == 0)) ? 32 : 64
+  // (the width of an operation: 64 with REX.W, else 16 after 66, else 32 (Vol. 1, 3.6.1))
+  static size (prefixes, rex) => (X86.wide(rex) == 64) ? 64 : ((X86.counted(prefixes, 102) > 0) ? 16 : 32)
 
   // ModRM: rm, reg, mod. With mod 3, rm is a register; else memory: a SIB byte (base, index, scale) when rm is 4, a displacement of 8 bits when mod is 1, of 32 when mod is 2 or the SIB names no base (Vol. 2, 2.1.5)
   static Operand := class (
@@ -138,7 +141,7 @@ X86 := class: Language {
     statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), 0, X86.wide(rex)))
   }
   // (a register's number in the opcode's low three bits)
-  static MovImmediate := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (register: <-Binary₃, <-Binary₅{== 23}, immediate: <-Binary₃₂) {
+  static MovImmediate := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (register: <-Binary₃, <-Binary₅{== 23}, immediate: <-Binary₃₂{X86.wide(rex) == 32}) {
     assembly => ((("mov " + X86.named(register + X86.base_extension(rex), 32)) + ",") + X86.immediate(immediate, 32))
     assembly_after (end) => assembly
     lifted (registers) => X86.placed(registers, register + X86.base_extension(rex), X86.Value(X86.constant(X86.signed(immediate, 32), 32), 32))
@@ -188,9 +191,9 @@ X86 := class: Language {
     statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), operand.rm_register(rex), X86.wide(rex)))
   }
   static Test := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 133}, operand: X86.Operand{.mod == 3}) {
-    assembly => X86.pair("test", operand.rm_register(rex), operand.reg_register(rex), rex)
+    assembly => ((("test " + X86.named(operand.rm_register(rex), X86.size(prefixes, rex))) + ",") + X86.named(operand.reg_register(rex), X86.size(prefixes, rex)))
     assembly_after (end) => assembly
-    statements (end, width) => X86.flag_lines([X86.tested(X86.held(X86.fresh(), operand.rm_register(rex), X86.wide(rex)), X86.held(X86.fresh(), operand.reg_register(rex), X86.wide(rex)), operand.rm_register(rex) == operand.reg_register(rex)), "0"])
+    statements (end, width) => X86.flag_lines([X86.tested(X86.held(X86.fresh(), operand.rm_register(rex), X86.size(prefixes, rex)), X86.held(X86.fresh(), operand.reg_register(rex), X86.size(prefixes, rex)), operand.rm_register(rex) == operand.reg_register(rex)), "0"])
   }
   static TestByte := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 246}, operand: X86.Operand{(.mod == 3) && (.reg == 0)}, immediate: <-Binary₈) {
     assembly => ((("test " + X86.Bytes[operand.rm_register(rex)]) + ",") + X86.immediate(immediate, 8))
@@ -261,9 +264,9 @@ X86 := class: Language {
     statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), operand.reg_register(rex), X86.wide(rex)))
   }
   static Store := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 137}, operand: X86.Operand{.mod != 3}) {
-    assembly => (("mov " + X86.in_memory(operand, rex, X86.wide(rex))) + ",") + X86.named(operand.reg_register(rex), X86.wide(rex))
+    assembly => (("mov " + X86.in_memory(operand, rex, X86.size(prefixes, rex))) + ",") + X86.named(operand.reg_register(rex), X86.size(prefixes, rex))
     assembly_after (end) => assembly
-    statements (end, width) => [X86.store_text(operand, rex, X86.wide(rex), X86.held(X86.fresh(), operand.reg_register(rex), 64))]
+    statements (end, width) => [X86.store_text(operand, rex, X86.size(prefixes, rex), X86.held(X86.fresh(), operand.reg_register(rex), 64))]
   }
   static StoreByte := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 136}, operand: X86.Operand{.mod != 3}) {
     assembly => (("mov " + X86.in_memory(operand, rex, 8)) + ",") + X86.byte_named(operand.reg_register(rex), rex)
@@ -302,6 +305,110 @@ X86 := class: Language {
     assembly_after (end) => assembly
     statements (end, width) => X86.set_lines(operand.rm_register(rex), code)
   }
+  // What inflate needs more: shifts by `cl` and arithmetic ones, `or` and `and` of registers, immediates of 32 bits (81: the
+  // operation in ModRM.reg; 3D: `cmp` of the accumulator), an immediate stored or compared or added in memory, `cmp` of a
+  // load, words sign- or zero-extended, `push`, `pop`, `call`, and `movabs` (B8 with REX.W: 64 bits) (Vol. 2, 3.2, 4.3)
+  static Shifts := ["rol", "ror", "rcl", "rcr", "shl", "shr", "sal", "sar"]
+  static Operations := ["add", "or", "adc", "sbb", "and", "sub", "xor", "cmp"]
+  static ShiftCount := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 211}, operand: X86.Operand{(.mod == 3) && (((.reg == 4) || (.reg == 5)) || (.reg == 7))}) {
+    assembly => ((X86.Shifts[operand.reg] + " ") + X86.named(operand.rm_register(rex), X86.size(prefixes, rex))) + ",cl"
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.rm_register(rex), X86.Value(X86.shifted(X86.held(registers, operand.rm_register(rex), X86.size(prefixes, rex)), operand.reg, ("((r1).anded(" + ((X86.size(prefixes, rex) == 64) ? "63" : "31")) + "))", X86.size(prefixes, rex)), X86.size(prefixes, rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), operand.rm_register(rex), X86.size(prefixes, rex)))
+  }
+  static ShiftOne := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 209}, operand: X86.Operand{(.mod == 3) && (((.reg == 4) || (.reg == 5)) || (.reg == 7))}) {
+    assembly => ((X86.Shifts[operand.reg] + " ") + X86.named(operand.rm_register(rex), X86.size(prefixes, rex))) + ",1"
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.rm_register(rex), X86.Value(X86.shifted(X86.held(registers, operand.rm_register(rex), X86.size(prefixes, rex)), operand.reg, "1", X86.size(prefixes, rex)), X86.size(prefixes, rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), operand.rm_register(rex), X86.size(prefixes, rex)))
+  }
+  static Sar := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 193}, operand: X86.Operand{(.mod == 3) && (.reg == 7)}, immediate: <-Binary₈) {
+    assembly => ((("sar " + X86.named(operand.rm_register(rex), X86.size(prefixes, rex))) + ",") + X86.immediate(immediate, 8))
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.rm_register(rex), X86.Value(X86.shifted(X86.held(registers, operand.rm_register(rex), X86.size(prefixes, rex)), operand.reg, "" + immediate, X86.size(prefixes, rex)), X86.size(prefixes, rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), operand.rm_register(rex), X86.size(prefixes, rex)))
+  }
+  static Or := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 9}, operand: X86.Operand{.mod == 3}) {
+    assembly => X86.pair("or", operand.rm_register(rex), operand.reg_register(rex), rex)
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.rm_register(rex), X86.Value(X86.method_text(X86.held(registers, operand.rm_register(rex), X86.wide(rex)), "ored", X86.held(registers, operand.reg_register(rex), X86.wide(rex)), X86.wide(rex)), X86.wide(rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), operand.rm_register(rex), X86.wide(rex)))
+  }
+  static And := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 33}, operand: X86.Operand{.mod == 3}) {
+    assembly => X86.pair("and", operand.rm_register(rex), operand.reg_register(rex), rex)
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.rm_register(rex), X86.Value(X86.method_text(X86.held(registers, operand.rm_register(rex), X86.wide(rex)), "anded", X86.held(registers, operand.reg_register(rex), X86.wide(rex)), X86.wide(rex)), X86.wide(rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), X86.result_flags(lifted(X86.fresh()), operand.rm_register(rex), X86.wide(rex)))
+  }
+  static Immediate := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 129}, operand: X86.Operand{.mod == 3}, immediate: <-Binary₃₂) {
+    assembly => ((((X86.Operations[operand.reg] + " ") + X86.named(operand.rm_register(rex), X86.size(prefixes, rex))) + ",") + X86.immediate(X86.signed(immediate, 32), X86.size(prefixes, rex)))
+    assembly_after (end) => assembly
+    statements (end, width) => X86.operated(X86.held(X86.fresh(), operand.rm_register(rex), X86.size(prefixes, rex)), operand.reg, X86.constant(X86.signed(immediate, 32), X86.size(prefixes, rex)), X86.size(prefixes, rex), ("r" + operand.rm_register(rex)) + " = ")
+  }
+  static CmpAccumulator := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 61}, immediate: <-Binary₃₂) {
+    assembly => (("cmp " + X86.named(0, X86.size(prefixes, rex))) + ",") + X86.immediate(X86.signed(immediate, 32), X86.size(prefixes, rex))
+    assembly_after (end) => assembly
+    statements (end, width) => X86.flag_lines([X86.held(X86.fresh(), 0, X86.size(prefixes, rex)), X86.constant(X86.signed(immediate, 32), X86.size(prefixes, rex))])
+  }
+  static StoreImmediate := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 199}, operand: X86.Operand{(.mod != 3) && (.reg == 0)}, immediate: <-Binary₃₂) {
+    assembly => (("mov " + X86.in_memory(operand, rex, X86.size(prefixes, rex))) + ",") + X86.immediate(X86.signed(immediate, 32), X86.size(prefixes, rex))
+    assembly_after (end) => assembly
+    statements (end, width) => [X86.store_text(operand, rex, X86.size(prefixes, rex), X86.constant(X86.signed(immediate, 32), 64))]
+  }
+  static SmallStored := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 131}, operand: X86.Operand{.mod != 3}, immediate: <-Binary₈) {
+    assembly => (((X86.Operations[operand.reg] + " ") + X86.in_memory(operand, rex, X86.size(prefixes, rex))) + ",") + X86.immediate(X86.signed(immediate, 8), X86.size(prefixes, rex))
+    assembly_after (end) => assembly
+    statements (end, width) => X86.operated(X86.load_text(operand, rex, X86.size(prefixes, rex), true), operand.reg, X86.constant(X86.signed(immediate, 8), X86.size(prefixes, rex)), X86.size(prefixes, rex), X86.store_opening(operand, rex, X86.size(prefixes, rex)))
+  }
+  static CmpLoaded := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 59}, operand: X86.Operand{.mod != 3}) {
+    assembly => (("cmp " + X86.named(operand.reg_register(rex), X86.size(prefixes, rex))) + ",") + X86.in_memory(operand, rex, X86.size(prefixes, rex))
+    assembly_after (end) => assembly
+    statements (end, width) => X86.flag_lines([X86.held(X86.fresh(), operand.reg_register(rex), X86.size(prefixes, rex)), X86.load_text(operand, rex, X86.size(prefixes, rex), true)])
+  }
+  static MoveSignedWord := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 15}, <-Byte{== 191}, operand: X86.Operand) {
+    assembly => (("movsx " + X86.named(operand.reg_register(rex), X86.size(prefixes, rex))) + ",") + X86.place(operand, rex, 16)
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.reg_register(rex), X86.Value(((operand.mod == 3) ? X86.held(registers, operand.rm_register(rex), 16) : X86.load_text(operand, rex, 16, true)), X86.size(prefixes, rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), None)
+  }
+  static MoveZeroWord := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 15}, <-Byte{== 183}, operand: X86.Operand) {
+    assembly => (("movzx " + X86.named(operand.reg_register(rex), X86.size(prefixes, rex))) + ",") + X86.place(operand, rex, 16)
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.reg_register(rex), X86.Value(((operand.mod == 3) ? X86.anded_text(X86.held(registers, operand.rm_register(rex), 64), "65535") : X86.load_text(operand, rex, 16, false)), X86.size(prefixes, rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), None)
+  }
+  // (a shift's meaning: left exact, right arithmetic as it rounds down, right logical of the bits unsigned; at the width)
+  static shifted (value, kind, count, width) =>
+    (return X86.method_text(value, "shifted_left", count, width)) if kind == 4
+    (return X86.method_text(value, "shifted_right", count, width)) if kind == 7
+    X86.method_text(((("(" + value) + " wrapped ") + X86.natural(width)) + ")", "shifted_right", count, width)
+  // (what 81 and 83 do, by ModRM.reg: what is assigned the sum, difference, or, and, exclusive or; or only the flags, `cmp`)
+  static operated (value, kind, operand, width, assigned) =>
+    (return X86.flag_lines([value, operand])) if kind == 7
+    made := (kind == 0) ? X86.combined(value, "+", operand, width) : ((kind == 5) ? X86.combined(value, "-", operand, width) : X86.method_text(value, (kind == 1) ? "ored" : ((kind == 4) ? "anded" : "xored"), operand, width))
+    flags := (kind == 5) ? X86.flag_lines([value, operand]) : X86.flag_lines([made, "0"])
+    [flags, [(assigned begins "store(") ? ((assigned + made) + ")") : (assigned + X86.stored(made, width))]].flatten
+  static store_opening (operand, rex, width) => ((("store(memory, " + X86.address(operand, rex)) + ", ") + (width / 8)) + ", "
+  static Push := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (register: <-Binary₃, <-Binary₅{== 10}) {
+    assembly => "push " + X86.Registers[register + X86.base_extension(rex)]
+    assembly_after (end) => assembly
+    statements (end, width) => ["r4 = ((r4 - 8) wrapped Int64)", ("store(memory, r4, 8, r" + (register + X86.base_extension(rex))) + ")"]
+  }
+  static Pop := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (register: <-Binary₃, <-Binary₅{== 11}) {
+    assembly => "pop " + X86.Registers[register + X86.base_extension(rex)]
+    assembly_after (end) => assembly
+    statements (end, width) => [("r" + (register + X86.base_extension(rex))) + " = loaded(memory, r4, 8, true)", "r4 = ((r4 + 8) wrapped Int64)"]
+  }
+  static Call := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 232}, offset: <-Binary₃₂) {
+    assembly_after (end) => "call " + (end + X86.signed(offset, 32)).hexadecimal
+    // (a call: the function there given the argument registers, its stack where the return address would go; it answers rax)
+    statements (end, width) => [("r0 = at_" + (end + X86.signed(offset, 32)).hexadecimal) + "_called(memory, r7, r6, r2, r1, r8, r9, ((r4 - 8) wrapped Int64))"]
+  }
+  static MovAbsolute := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (register: <-Binary₃, <-Binary₅{== 23}, immediate: <-Binary₆₄{X86.wide(rex) == 64}) {
+    assembly => (("movabs " + X86.Registers[register + X86.base_extension(rex)]) + ",0x") + immediate.hexadecimal
+    assembly_after (end) => assembly
+    statements (end, width) => [((("r" + (register + X86.base_extension(rex))) + " = ") + X86.constant(immediate, 64))]
+  }
   static Nop := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 144}) {
     assembly => (X86.sixteens(prefixes) > 0) ? "xchg ax,ax" : "nop"
     assembly_after (end) => assembly
@@ -316,12 +423,16 @@ X86 := class: Language {
 
   // What a register holds while a function is lifted: Ray code over the parameters, and the width it was written at; read at the other width, a 64-bit value is its low half, a 32-bit one zero-extended (Vol. 1, 3.4.1.1)
   static Value := class (code, width)
-  static typed (width) => (width == 64) ? "Int64" : ((width == 8) ? "Int8" : "Int32")
+  static typed (width) => (width == 64) ? "Int64" : ((width == 8) ? "Int8" : ((width == 16) ? "Int16" : "Int32"))
+  static natural (width) => (width == 64) ? "Natural64" : ((width == 8) ? "Natural8" : ((width == 16) ? "Natural16" : "Natural32"))
+  // (a host operation on a value at a width: `((x).ored(y)) wrapped Int64`)
+  static method_text (value, method, argument, width) => ((((((("(((" + value) + ").") + method) + "(") + argument) + ")) wrapped ") + X86.typed(width)) + ")"
   static constant (value, width) => (value > 0) ? ("" + value) : (((("((1 - " + (1 - value)) + ") wrapped ") + X86.typed(width)) + ")")
   static held (registers, number, width) =>
     value := registers[number]
     (return None) if value === None
     (return value.code) if value.width == width
+    (return ((("(" + value.code) + " wrapped ") + X86.typed(width)) + ")") if width < 32
     (width == 32) ? (("(" + value.code) + " wrapped Int32)") : (("(" + value.code) + " wrapped Natural32)")
   static combined (left, sign, right, width) =>
     (return None) unless left && right
@@ -405,7 +516,8 @@ X86 := class: Language {
       at = at.next
     }
     made
-  static Tests := ["", "", "", "", "flag_left == flag_right", "flag_left != flag_right", "", "", "flag_left < 0", "flag_left >= 0", "", "", "flag_left < flag_right", "flag_left >= flag_right", "flag_left <= flag_right", "flag_left > flag_right"]
+  // (the conditions: as the flags compare, signed; below and above unsigned; sign what the flags' difference has (Vol. 1, B.1))
+  static Tests := ["", "", "flag_left.unsigned_below(flag_right)", "!(flag_left.unsigned_below(flag_right))", "flag_left == flag_right", "flag_left != flag_right", "!(flag_right.unsigned_below(flag_left))", "flag_right.unsigned_below(flag_left)", "((flag_left - flag_right) wrapped Int64) < 0", "((flag_left - flag_right) wrapped Int64) >= 0", "", "", "flag_left < flag_right", "flag_left >= flag_right", "flag_left <= flag_right", "flag_left > flag_right"]
   static condition (code) => ("(" + X86.Tests[code]) + ")"
   static flow_lines (code, parameters, width) =>
     lines := ["flag_left := 0", "flag_right := 0"]
@@ -442,6 +554,48 @@ X86 := class: Language {
       at = at.next
     }
     (((name + " (") + heading) + ") =>\n  ") + X86.flow_lines(code, parameters, width).join("\n  ")
+  // (a function of a program, lifted from where it starts: `at_4e0_called (memory, a0, …, a5, stack)`, its arguments the
+  // argument registers, its stack pointer `stack`; a jump to another's start a tail call, that one's answer)
+  static lift_called (code, start, starts) =>
+    lines := X86.called_opening(start)
+    offset := start
+    step := code.instructions.head
+    while step {
+      lines.append(("at_" + offset.hexadecimal) + "\\")
+      offset = offset + (step.value.binary.count / 8)
+      said := step.value.operation.statements(offset, 64)
+      at := said.head
+      while at {
+        lines.append(X86.called_line(at.value, starts))
+        at = at.next
+      }
+      step = step.next
+    }
+    X86.called_text(lines)
+  static starting (starts, offset) =>
+    found := false
+    at := starts.head
+    while at {
+      (found = true) if at.value == offset
+      at = at.next
+    }
+    found
+  static called_opening (offset) =>
+    lines := [("at_" + offset.hexadecimal) + "_called (memory, a0, a1, a2, a3, a4, a5, stack) =>", "flag_left := 0", "flag_right := 0"]
+    number := 0
+    while number < 16 {
+      lines.append(("r" + number) + " := 0")
+      number = number + 1
+    }
+    lines.joined(["r7 = a0", "r6 = a1", "r2 = a2", "r1 = a3", "r8 = a4", "r9 = a5", "r4 = stack"])
+    lines
+  static called_text (lines) => (lines.first + "\n  ") + lines.rest.join("\n  ")
+  static called_line (line, starts) =>
+    target := (line begins "goto at_") ? (line text_after "goto at_") : ((line begins "(goto at_") ? ((line text_after "(goto at_") text_before ")") : None)
+    (return line) if target === None
+    (return line) unless X86.starting(starts, ("0x" + target).signed_hexadecimal(64))
+    called := ("(return at_" + target) + "_called(memory, r7, r6, r2, r1, r8, r9, r4))"
+    (line begins "goto at_") ? called : (called + (" if " + (line text_after ") if ")))
   static lift_memory_flow (code, name, parameters, width) =>
     lifted := X86.lift_flow(code, name, parameters, width)
     opening := name + " ("
@@ -701,11 +855,20 @@ X86.Instruction := class (
     | X86.MoveSigned<prefixes, rex> | X86.JumpIfNear<prefixes, rex> | X86.JumpNear<prefixes, rex>
     | X86.Load<prefixes, rex> | X86.AddLoaded<prefixes, rex> | X86.Store<prefixes, rex> | X86.StoreByte<prefixes, rex> | X86.AddStored<prefixes, rex>
     | X86.AddStoredByte<prefixes, rex> | X86.CmpStored<prefixes, rex> | X86.MoveZero<prefixes, rex> | X86.SetIf<prefixes, rex>
+    | X86.ShiftCount<prefixes, rex> | X86.ShiftOne<prefixes, rex> | X86.Sar<prefixes, rex> | X86.Or<prefixes, rex> | X86.And<prefixes, rex>
+    | X86.Immediate<prefixes, rex> | X86.CmpAccumulator<prefixes, rex> | X86.StoreImmediate<prefixes, rex> | X86.SmallStored<prefixes, rex>
+    | X86.CmpLoaded<prefixes, rex> | X86.MoveSignedWord<prefixes, rex> | X86.MoveZeroWord<prefixes, rex> | X86.Push<prefixes, rex> | X86.Pop<prefixes, rex>
+    | X86.Call<prefixes, rex> | X86.MovAbsolute<prefixes, rex>
     | X86.Xor<prefixes, rex> | X86.AddSmall<prefixes, rex> | X86.SubSmall<prefixes, rex> | X86.MovSigned<prefixes, rex> | X86.Shl<prefixes, rex> | X86.ImulImmediate<prefixes, rex> | X86.AddAccumulator<prefixes, rex> | X86.Ret<prefixes, rex>
 ) {
-  ends => operation is X86.Ret
+  // (the last of a function: a return, or a jump on to code before it)
+  ends => (operation is X86.Ret) || ((operation is X86.Jump) || (operation is X86.JumpNear))
 }
 // A function: its instructions, up to the `ret` that ends it
+// (instructions with no end asked of them: a function's own, read from where it starts to where the next one does)
+X86.Code := class (instructions: X86.Instruction[]) {
+  static from (bytes) => X86.Code.bits_read(bytes.map((byte) => byte.binary(8).reversed).join(""))
+}
 X86.Function := class (instructions: X86.Instruction[]{(!.empty) && .last.ends}) {
   static from (bytes) => X86.Function.bits_read(bytes.map((byte) => byte.binary(8).reversed).join(""))
   written => .binary.pieces(8).map((eight) => eight.reversed.unsigned)

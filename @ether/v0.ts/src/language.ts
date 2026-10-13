@@ -505,7 +505,7 @@ export class Program {
     const named = (rule: Program.Rule) => {
       const statements = rule.code.statements.map(x => x.trim()).filter(x => x), body = statements[statements.length - 1] ?? '', { open, close } = this.grammar!;
       if (rule.holes.length || statements.length !== (rule.passes ? 2 : 1) || body.length !== this.token || body.charCodeAt(open.length) !== 0xE000) return false;
-      const held = this.referred_to(parseInt(body.slice(open.length + 1, -close.length), 36)), value = held instanceof Program.Held ? held.value : held;
+      const held = rule.held === body && rule.holds?.length ? rule.holds[0] : this.referred_to(parseInt(body.slice(open.length + 1, -close.length), 36)), value = held instanceof Program.Held ? held.value : held;
       return value instanceof Program.Node && value.calls;
     };
     const candidates: Program.Candidate[] = [], take = (rules: Program.Rule[]) => { for (const rule of rules) if (!rule.called && !named(rule) && this.may_read(rule, s, false)) candidates.push({ rule, rank: rule.id }); };
@@ -1346,12 +1346,15 @@ export class Program {
         this.opens.add(a.literal.charCodeAt(0)), this.closes.add(b.literal.charCodeAt(0)), this.paired_in.set(a.literal, node), this.paired_by.set(a.literal, rule.head), this.closers.set(a.literal, b.literal!), this.paired++;
       else if (this.compiling && rule.pieces.length === 3 && a.literal?.length === 1 && hole.hole && a.literal === b.literal && !this.quotes.has(a.literal))
         this.quotes.add(a.literal), this.quoted.add(a.literal.charCodeAt(0)), this.paired++;
-      if (made.includes(Program.REFERS)) rule.holds = this.held_by(made);
       // (a variable, its right side one value: it rewrites the rule of the nearest node that has its head; any other
       // definition is made where it is read)
       let at_node = node;
       // (past a first `goto .`, which a rule creator writes)
       const right = (at < 0 ? '' : made.slice(at + 1).trim()).replace(/^goto \.\s+/, ''), variable = right.length === this.token && right.charCodeAt(open.length) === 0xE000;
+      // (a variable's value is its rule's own, read where the rule is read: not kept for whoever else may refer to it, so what
+      // it held before goes when it is given another, not when the run ends)
+      if (made.includes(Program.REFERS)) rule.holds = variable ? this.held_of(right) : this.held_by(made);
+      if (variable && rule.holds) rule.held = right;
       if (variable) for (let at: Program.Node | undefined = node; at; at = at.outer) if (at.has(rule.head)) { at_node = at; break; }
       rule.home = at_node;
       at_node.define(rule, variable);
@@ -1400,7 +1403,7 @@ export class Program {
   body(s: string, frame: Program.Frame, except?: Program.Rule): unknown {
     const { open, close } = this.grammar!;
     if (s.startsWith(open + Program.REFERS)) {
-      const value = this.referred_to(parseInt(s.slice(open.length + 1, -close.length), 36));
+      const own = frame.reading?.rule, value = own?.held === s && own.holds?.length ? own.holds[0] : this.referred_to(parseInt(s.slice(open.length + 1, -close.length), 36));
       // (read as the right side of the rule it is read in: not by that rule (but a closure's call, which may recur))
       return value instanceof Program.Held ? this.held_value(value, except?.home?.calls ? undefined : except) : value;
     }
@@ -1443,7 +1446,8 @@ export class Program {
   // so they are let go now, not when the run ends (a run of millions of them is more than a `Map` holds))
   forget(from: number) {
     for (let id = from + 1; id <= this.referring; id++) {
-      if (this.referred.has(id)) continue;
+      // (one a definition kept is found by `referred` from now on)
+      if (this.referred.has(id)) { this.reading_now.delete(id); continue; }
       const object = this.reading_now.get(id);
       if (object instanceof Program.Held) { this.reading_now.delete(id); object.refers = undefined; }
     }
@@ -1451,6 +1455,13 @@ export class Program {
   done_reading() {
     for (const [id, object] of this.reading_now) if (!this.referred.has(id)) (object as { refers?: number }).refers = undefined;
     this.reading_now.clear();
+  }
+  held_of(token: string): object[] {
+    const { open, close } = this.grammar!, value = this.referred_to(parseInt(token.slice(open.length + 1, -close.length), 36)) as object | undefined;
+    if (!value) return [];
+    const held = [value];
+    if (value instanceof Program.Held) this.held_by(value.text, held);
+    return held;
   }
   // (the values text refers to: and those the text of a hole it refers to does)
   held_by(text: string, held: object[] = []): object[] {
@@ -1650,7 +1661,7 @@ export class Program {
 export namespace Program {
   // (`written`: a typed hole as written, its type part of the head)
   export type Piece = { literal?: string, hole?: string, body?: boolean, written?: string, type?: string, style?: string };
-  export type Rule = { style?: string, braced?: boolean, called?: boolean, checked?: [number, number], capture?: string, types: [string, string][], own?: boolean, shape?: string, modifies: boolean, bodies: Set<string>, head: string, pieces: Piece[], body: string, code: Code, holds?: object[], home?: Node, literals: string[], holes: string[], defines: boolean, passes: boolean, id: number, last?: string, key: string };
+  export type Rule = { style?: string, braced?: boolean, called?: boolean, checked?: [number, number], capture?: string, types: [string, string][], own?: boolean, shape?: string, modifies: boolean, bodies: Set<string>, head: string, pieces: Piece[], body: string, code: Code, holds?: object[], held?: string, home?: Node, literals: string[], holes: string[], defines: boolean, passes: boolean, id: number, last?: string, key: string };
   export type Hole = { name: string, indent?: string, written: string, headed: boolean };
   export type Keyed = { key: string, rules: Rule[], looked: number };
   export type Candidate = { rule: Rule, rank: number };
@@ -1693,7 +1704,7 @@ export namespace Program {
       const had = this.heads.get(rule.head);
       Node.last = had ?? rule;
       if (had) {
-        Object.assign(had, { body: rule.body, code: rule.code, passes: rule.passes, holds: rule.holds });
+        Object.assign(had, { body: rule.body, code: rule.code, passes: rule.passes, holds: rule.holds, held: rule.held });
         if (!variable) had.id = ++Node.defined, this.headed++;
         return;
       }

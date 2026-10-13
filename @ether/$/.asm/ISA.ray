@@ -1,0 +1,110 @@
+// An instruction set, as a description and not as a primitive.
+//
+// There is no one reference for every instruction set there is. There are
+// many, each covering some, and none covering the ones not made yet. So an
+// instruction set here is what the language holds — its state, its spellings,
+// what each instruction does in gotos — and each vendor's own description is
+// read into that shape, by a grammar for the language that description is
+// written in, rather than rewritten by hand:
+//
+//   SLEIGH/             Ghidra's descriptions: encodings and p-code for 6502,
+//                       Z80, 68k, PIC, AVR, 8051, SPARC, PowerPC, MIPS, ARM,
+//                       AArch64, RISC-V, x86 and the rest of 38 families
+//   Sail/               machine-checked semantics: RISC-V (the official
+//                       model), Arm-A (generated from Arm's own), MIPS, CHERI
+//   riscv-opcodes/      the RISC-V encodings as the RISC-V project keeps them
+//   XED/                Intel's own encoding tables for x86
+//   ASL/                Arm's machine-readable specification
+//
+// What none of them describe — a chip nobody wrote down, one not made yet — is
+// written here in gotos, or recovered by running the hardware and watching
+// what each spelling does. That is kept as small as it can be.
+
+// A description: its name, the order it keeps bytes in, and its encodings.
+// spec: the state — registers of their widths, flags, memory with its address
+// width, the program counter, modes such as ARM/Thumb — is the next thing
+// held here; the readers keep it on their own side until it is.
+ISA := class {
+  name: Node
+  endian: Node
+  encodings: Node
+
+  // The encoding a word is spelled with, or None. Where more than one fits,
+  // the one that fixes the most bits is read, as SLEIGH reads it: a more
+  // particular spelling is the exception carved out of a general one. Which
+  // spelling was *chosen* by whatever wrote the word is the encoding layer's
+  // business, not this.
+  decode (word) => (
+    found := None
+    walker := .encodings.head
+    while (exists walker) {
+      if (word.fits(walker.value.mask, walker.value.match)) {
+        if (exists found) {
+          if (walker.value.mask.denser(found.mask)) { found = walker.value }
+        } else { found = walker.value }
+      }
+      walker = walker.next
+    }
+    found
+  )
+  // A word read as the instruction it spells, or None.
+  read (word) => (
+    encoding := .decode(word)
+    if (exists encoding) { Decoded(encoding: encoding, word: word) } else { None }
+  )
+}
+
+// A word, and the encoding it was read with.
+Decoded := class {
+  encoding: Node
+  word: Node
+  mnemonic => .encoding.mnemonic
+  field (name) => (
+    found := .encoding.field(name)
+    if (exists found) { found.read(.word) } else { None }
+  )
+  // Written back: the fields this reading answers, in the encoding it was
+  // read with. What is not a field is fixed, so the word comes back as it was.
+  written => .encoding.encode(this)
+}
+
+// One way an instruction is spelled. `mask` says which bits are fixed and
+// `match` what they are fixed to; every other bit belongs to a field.
+Encoding := class {
+  mnemonic: Node
+  mask: Node
+  match: Node
+  fields: Node
+  // What it does: a program over the state, written with the conditional
+  // goto and nothing else, as the description it was read from says it.
+  semantics: Node
+
+  field (name) => (
+    found := None
+    walker := .fields.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists (external alike (walker.value.name) (name))) { found = walker.value }
+      walker = walker.next
+    }
+    found
+  )
+  // The word this encoding spells with the fields `values` answers in it:
+  // what decoding reads, written back.
+  encode (values) => (
+    word := .match
+    walker := .fields.head
+    while (exists walker) {
+      given := values.field(walker.value.name)
+      if (exists given) { word = word.deposit(walker.value.mask, given) }
+      walker = walker.next
+    }
+    word
+  )
+}
+
+// A named part of an encoding, by the bits of the word it takes up.
+Field := class {
+  name: Node
+  mask: Node
+  read (word) => word.extract(.mask)
+}

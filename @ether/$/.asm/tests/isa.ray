@@ -1,0 +1,30 @@
+// An instruction set read from its encodings, and written back to the word it was read from.
+//
+// run: .ether/asm/asm.sh isa @ether/$/.asm/tests/isa.ray boolean.ray -- Bits.ray ISA.ray
+
+mark ^keyword := external global
+addi_fields ^keyword := chain None
+addi_fields &= Field(name: `rd`, mask: Bits.hex(`00000f80`))
+addi_fields &= Field(name: `rs1`, mask: Bits.hex(`000f8000`))
+addi_fields &= Field(name: `imm12`, mask: Bits.hex(`fff00000`))
+addi ^keyword := Encoding(mnemonic: `addi`, mask: Bits.hex(`0000707f`), match: Bits.hex(`00000013`), fields: addi_fields, semantics: None)
+rv_encodings ^keyword := chain None
+rv_encodings &= Encoding(mnemonic: `lui`, mask: Bits.hex(`0000007f`), match: Bits.hex(`00000037`), fields: chain None, semantics: None)
+rv_encodings &= addi
+rv ^keyword := ISA(name: `RV32I`, endian: `little`, encodings: rv_encodings)
+word ^keyword := Bits.hex(`00500093`)
+read ^keyword := rv.read(word)
+unless (exists read) { INFO@mark `I1 addi x1, x0, 5 is not read` }
+unless (exists (external alike (read.mnemonic) (`addi`))) { INFO@mark `I2 it is not read as addi` }
+unless (read.field(`rd`) == Bits.hex(`01`).extract(Bits.hex(`1f`))) { INFO@mark `I3 rd is not x1` }
+unless (read.field(`imm12`) == Bits.hex(`005`).extract(Bits.hex(`fff`))) { INFO@mark `I4 the immediate is not 5` }
+unless (read.field(`rs1`).is_zero) { INFO@mark `I5 rs1 is not x0` }
+unless (read.written == word) { INFO@mark `I6 written back it is not the word it was read from` }
+if (exists rv.read(Bits.hex(`00000000`))) { INFO@mark `I7 nothing is read as an instruction` }
+unless (exists (external alike (rv.read(Bits.hex(`12345037`)).mnemonic) (`lui`))) { INFO@mark `I8 lui is not read` }
+halt_encodings ^keyword := chain None
+halt_encodings &= Encoding(mnemonic: `ld`, mask: Bits.hex(`c0`), match: Bits.hex(`40`), fields: chain None, semantics: None)
+halt_encodings &= Encoding(mnemonic: `halt`, mask: Bits.hex(`ff`), match: Bits.hex(`76`), fields: chain None, semantics: None)
+z80 ^keyword := ISA(name: `Z80`, endian: `little`, encodings: halt_encodings)
+unless (exists (external alike (z80.read(Bits.hex(`76`)).mnemonic) (`halt`))) { INFO@mark `I9 the most particular spelling is not the one read` }
+unless (exists (external alike (z80.read(Bits.hex(`78`)).mnemonic) (`ld`))) { INFO@mark `I10 the general spelling is not read where nothing more particular fits` }

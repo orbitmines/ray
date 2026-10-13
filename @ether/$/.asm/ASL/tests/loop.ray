@@ -1,0 +1,33 @@
+// A small A64 program run end to end, each instruction decoded by Arm's register diagrams and run as the goto
+// program its pseudocode is translated into (Arm's MOVZ, ADD, SUBS, B.cond and RET, with `AddWithCarry` and
+// `ConditionHolds` from the shared pseudocode):
+//
+//   movz x0, #0          000080d2
+//   movz x1, #2          410080d2
+//   loop:
+//   add x0, x0, #2       00080091
+//   subs x1, x1, #1      210400f1
+//   b.ne loop            c1ffff54
+//   ret                  c0035fd6
+//
+// (`llvm-mc --triple=aarch64 -filetype=obj`, `.text` as `xxd -p`.) It counts x1 down from two, adding two to x0
+// each time, and returns to x30, which holds nothing: address 0, where nothing is, so the run stops there.
+// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.shared.xml $S/A64.movz.xml $S/A64.add_addsub_imm.xml $S/A64.subs_addsub_imm.xml $S/A64.b_cond.xml $S/A64.ret.xml" T=3500 M=14000 .ether/asm/asm.sh loop @ether/$/.asm/ASL/tests/loop.ray boolean.ray -- Bits.ray ISA.ray Goto.ray Code.ray Run.ray
+
+mark ^keyword := external global
+INFO@mark `L0 control: this always fires`
+
+a64 ^keyword := arm.isa
+counting ^keyword := Code(isa: a64, bytes: Bits.hex_bytes(`000080d2 410080d2 00080091 210400f1 c1ffff54 c0035fd6`), width: Bits.hex(`00000000`))
+unless counting.holds { INFO@mark `L1 the program is not written back as it was read` }
+machine ^keyword := State(registers: chain None, memory: chain None)
+runner ^keyword := Run(code: counting, base: Bits.hex(`0000000000001000`))
+stopped ^keyword := runner.run(machine, Bits.hex(`0000000000001000`), Bits.hex(`0000000000000000`), Bits.hex(`000000`))
+five_bits ^keyword := Bits.hex(`1f`)
+x0 ^keyword := InFile(file: `X`, index: Constant(bits: Bits.hex(`00`).extract(five_bits)), unset: asl_numbers.zero_register, fixed: None).value(machine)
+x1 ^keyword := InFile(file: `X`, index: Constant(bits: Bits.hex(`01`).extract(five_bits)), unset: asl_numbers.zero_register, fixed: None).value(machine)
+unless (x0 == Bits.hex(`0000000000000004`)) { INFO@mark `L2 x0 is not four after twice round the loop` }
+unless (x1.is_zero) { INFO@mark `L3 x1 is not counted down to nothing` }
+unless (machine.get(`PSTATE.Z`) == Bits.flag(true)) { INFO@mark `L4 the last subs does not leave Z set` }
+unless (stopped.is_zero) { INFO@mark `L5 ret does not leave for x30, which is 0` }
+unless (machine.get(`inst_start`) == Bits.hex(`0000000000001014`)) { INFO@mark `L6 the last instruction run is not the ret at 1014` }

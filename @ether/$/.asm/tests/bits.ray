@@ -1,0 +1,31 @@
+// Machine words: read from hexadecimal, added, compared, taken apart.
+//
+// run: .ether/asm/asm.sh bits @ether/$/.asm/tests/bits.ray boolean.ray -- Bits.ray
+
+mark ^keyword := external global
+forty_two ^keyword := Bits.hex(`2a`)
+unless forty_two.bits.head.next.value { INFO@mark `B1 2a has no second bit` }
+if forty_two.low { INFO@mark `B2 2a is odd` }
+if forty_two.high { INFO@mark `B3 2a has its top bit set` }
+unless (forty_two == Bits.hex(`2A`)) { INFO@mark `B4 2a is not 2A` }
+if (forty_two == Bits.hex(`2b`)) { INFO@mark `B5 2a is 2b` }
+unless ((Bits.hex(`2a`) + Bits.hex(`01`)) == Bits.hex(`2b`)) { INFO@mark `B6 2a and one is not 2b` }
+unless ((Bits.hex(`ff`) + Bits.hex(`01`)).is_zero) { INFO@mark `B7 ff and one does not wrap to nothing` }
+unless ((Bits.hex(`10`) - Bits.hex(`01`)) == Bits.hex(`0f`)) { INFO@mark `B8 10 less one is not 0f` }
+unless (Bits.hex(`01`).below(Bits.hex(`ff`))) { INFO@mark `B9 one is not below ff` }
+if (Bits.hex(`01`).less(Bits.hex(`ff`))) { INFO@mark `B10 one is less than minus one` }
+unless (Bits.hex(`01`).negated == Bits.hex(`ff`)) { INFO@mark `B11 minus one is not ff` }
+unless ((Bits.hex(`f0`).and(Bits.hex(`3c`))) == Bits.hex(`30`)) { INFO@mark `B12 f0 and 3c is not 30` }
+unless ((Bits.hex(`f0`).xor(Bits.hex(`3c`))) == Bits.hex(`cc`)) { INFO@mark `B13 f0 xor 3c is not cc` }
+unless ((Bits.hex(`34`).under(Bits.hex(`12`))) == Bits.hex(`1234`)) { INFO@mark `B14 34 under 12 is not 1234` }
+elf ^keyword := Bits.hex_bytes(`7f45 4c46
+02`)
+unless (elf.head.value == Bits.hex(`7f`)) { INFO@mark `B15 the first byte is not 7f` }
+unless (elf.tail.value == Bits.hex(`02`)) { INFO@mark `B16 the last byte is not 02` }
+if (exists elf.head.next.next.next.next.next) { INFO@mark `B17 more than five bytes` }
+if (exists (Bits.hex(`g`).bits.head)) { INFO@mark `B18 g is a digit` }
+if (Bits.hex(`2a`) == Bits.hex(`002a`)) { INFO@mark `B19 a word is the same as a wider one` }
+unless (Bits.hex(`f0`).denser(Bits.hex(`70`))) { INFO@mark `B20 four bits set is not more than three` }
+if (Bits.hex(`70`).denser(Bits.hex(`0e`))) { INFO@mark `B21 three bits set is more than three` }
+unless (Bits.hex(`01`).denser(Bits.hex(`00`))) { INFO@mark `B22 one bit set is not more than none` }
+unless ((Bits.hex(`ff`).deposit(Bits.hex(`0f`), Bits.hex(`0`))) == Bits.hex(`f0`)) { INFO@mark `B23 a deposit loses the bits past its mask` }

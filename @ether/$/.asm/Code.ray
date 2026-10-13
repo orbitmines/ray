@@ -1,0 +1,165 @@
+// Code: the bytes a container hands over as code, read as the instructions
+// they spell, one after another, and written back as the bytes they were.
+//
+// An instruction is read at a place in the bytes, and says where the next one
+// starts. For an instruction set whose instructions are all one width — RISC-V
+// without its compressed ones, A64 — that is a word of that width, gathered in
+// the order the set keeps bytes in; a set that reads its own way (x86's
+// prefixes, SLEIGH's tokens) answers `read_at` itself.
+
+Code := class {
+  isa: Node
+  bytes: Node
+  // How wide an instruction is, as a word of that width.
+  width: Node
+
+  // The instruction at a place in the bytes, with where it was read and where
+  // the next one starts; None where nothing is spelled there.
+  read_at (place) => (
+    wide := .width
+    order := .isa.endian
+    gathered := Code.gathered(place, wide, order)
+    if (exists gathered) {
+      read := .isa.read(gathered.word)
+      if (exists read) {
+        read.at = place
+        read.after = gathered.after
+      }
+      read
+    } else { None }
+  )
+  // Every instruction, from the first byte to the last. Where nothing is
+  // spelled, the listing stops: what is left over is kept as it is.
+  listing => (
+    out := chain None
+    place := .bytes.head
+    while (exists place) {
+      read := .read_at(place)
+      if (exists read) {
+        out &= read
+        place = read.after
+      } else {
+        out &= Unread(at: place)
+        place = None
+      }
+    }
+    out
+  )
+  // The bytes the listing writes back: each instruction's word, as bytes in
+  // the set's order, and what was left unread as it was.
+  written => (
+    out := chain None
+    walker := .listing.head
+    while (exists walker) {
+      if (exists walker.value.unread) {
+        rest := walker.value.at
+        while (exists rest) {
+          out &= rest.value
+          rest = rest.next
+        }
+      } else {
+        instruction_word := walker.value.written
+        order := .isa.endian
+        Code.spread(instruction_word, order, out)
+      }
+      walker = walker.next
+    }
+    out
+  )
+  // Whether writing back gives the very bytes that were read.
+  holds => (
+    rewritten := .written
+    original := .bytes
+    Code.same(rewritten, original)
+  )
+
+  // As many bytes from a place as `width` is wide, as one word: the first byte
+  // lowest when `endian` is little, highest when it is big.
+  gathered (place, width, endian) => (
+    taken := chain None
+    at := place
+    counting := width.bits.head
+    enough := true
+    while (exists counting) {
+      if (exists at) {
+        taken &= at.value
+        at = at.next
+      } else { enough = false }
+      step := eight_bits
+      while ((exists step).and(exists counting)) {
+        counting = counting.next
+        step = step.next
+      }
+    }
+    if enough {
+      gathering := chain None
+      if (exists (external alike (endian) (`big`))) {
+        walker := taken.tail
+        while (exists walker) {
+          Bits.joined(gathering, walker.value.bits)
+          walker = walker.previous
+        }
+      } else {
+        walker := taken.head
+        while (exists walker) {
+          Bits.joined(gathering, walker.value.bits)
+          walker = walker.next
+        }
+      }
+      Gathered(word: Bits(bits: gathering), after: at)
+    } else { None }
+  )
+  // A word put back as bytes, onto the end of `into`.
+  spread (word, endian, into) => (
+    bytes := chain None
+    byte := chain None
+    walker := word.bits.head
+    while (exists walker) {
+      byte &= walker.value
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        bytes &= Bits(bits: byte)
+        byte = chain None
+      }
+      walker = walker.next
+    }
+    if (exists (external alike (endian) (`big`))) {
+      back := bytes.tail
+      while (exists back) {
+        into &= back.value
+        back = back.previous
+      }
+    } else {
+      forth := bytes.head
+      while (exists forth) {
+        into &= forth.value
+        forth = forth.next
+      }
+    }
+    into
+  )
+  same (these_bytes, those_bytes) => (
+    this_byte := these_bytes.head
+    that_byte := those_bytes.head
+    alike := true
+    while ((exists this_byte).and(exists that_byte).and(alike)) {
+      one_of := this_byte.value
+      other_of := that_byte.value
+      unless (one_of == other_of) { alike = false }
+      this_byte = this_byte.next
+      that_byte = that_byte.next
+    }
+    alike.and((exists this_byte).not).and((exists that_byte).not)
+  )
+}
+
+Gathered := class {
+  word: Node
+  after: Node
+}
+// Bytes nothing was read from.
+Unread := class {
+  unread => true
+  at: Node
+}
+
+eight_bits ^keyword := Bits.hex(`00`).bits.head

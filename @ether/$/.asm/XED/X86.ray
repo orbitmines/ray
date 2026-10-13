@@ -1,0 +1,430 @@
+// An x86 instruction, read from its bytes by XED's patterns, and written back
+// to exactly those bytes.
+//
+// One instruction has many spellings. `add eax, 1` is `05 01 00 00 00`,
+// `83 c0 01` and `81 c0 01 00 00 00`; `push rbp` is `55` and `40 55`; a
+// memory operand can be written with a disp8 or a disp32, with or without a
+// SIB byte; prefixes can come in any order, repeat, or say nothing at all (a
+// `cs` before a `nop`). An assembler chose one of them, and what it chose is
+// not in the instruction: it is in how the instruction is spelled. So what is
+// read is kept as the spelling, not as the instruction:
+//
+//   prefixes      the prefix bytes, as read, in the order read, repeats and
+//                 all: their order and repetition is the choice, what they
+//                 do is derived from them
+//   rex           the REX byte if there was one: `40` does nothing, and is
+//                 kept because it was written
+//   form          which of XED's patterns it was read with: `0x83 … SIMM8()`
+//                 rather than `0x05 SIMMz()`, the opcode forms of one iclass
+//   values        the fields the pattern takes, as the bits they were: MOD
+//                 (which says whether a displacement follows, and how wide),
+//                 REG, RM, SRM, and SCALE/INDEX/BASE when a SIB byte was read
+//                 (a SIB byte where none is needed is a choice too)
+//   displacement  the displacement bytes, as many as were written
+//   immediate     the immediate bytes, as many as were written
+//
+// The fixed parts come from the pattern, so `written` spells the instruction
+// again from the form and the values rather than keeping the bytes: what
+// comes back is what the description says those choices spell. What the
+// instruction *means* (registers, the value of the immediate once
+// sign-extended) is derived from this, and many spellings mean the same.
+//
+// Every question asked of a byte here is asked of its bits directly: a
+// constant written in hexadecimal is read from its text each time the
+// language reads this file, and that costs more than all the rest.
+
+X86Value ^keyword := class {
+  name: Node
+  bits: Node
+}
+
+X86Decoded ^keyword := class {
+  form: Node
+  prefixes: Node
+  rex: Node
+  values: Node
+  displacement: Node
+  immediate: Node
+  // Where the next instruction begins.
+  after: Node
+
+  mnemonic => .form.iclass
+  field (asked) => X86.lookup(.values, asked)
+  written => X86.written(this)
+  // Whether it is written as the bytes it was read from, from `start`.
+  round_trips (start) => X86.same_bytes(.written, X86.between(start, .after))
+}
+
+X86Taken ^keyword := class {
+  bytes: Node
+  after: Node
+}
+
+X86 ^keyword := class {
+  // A byte's bits, least significant first.
+  b0 (byte) => byte.bits.head.value
+  b1 (byte) => byte.bits.head.next.value
+  b2 (byte) => byte.bits.head.next.next.value
+  b3 (byte) => byte.bits.head.next.next.next.value
+  b4 (byte) => byte.bits.head.next.next.next.next.value
+  b5 (byte) => byte.bits.head.next.next.next.next.next.value
+  b6 (byte) => byte.bits.head.next.next.next.next.next.next.value
+  b7 (byte) => byte.bits.head.next.next.next.next.next.next.next.value
+  // The parts of a byte: ModRM is MOD REG RM, SIB is SCALE INDEX BASE.
+  low (byte) => (
+    out := chain None
+    walker := byte.bits.head
+    out &= walker.value
+    walker = walker.next
+    out &= walker.value
+    walker = walker.next
+    out &= walker.value
+    Bits(bits: out)
+  )
+  middle (byte) => (
+    out := chain None
+    walker := byte.bits.head.next.next.next
+    out &= walker.value
+    walker = walker.next
+    out &= walker.value
+    walker = walker.next
+    out &= walker.value
+    Bits(bits: out)
+  )
+  high (byte) => (
+    out := chain None
+    walker := byte.bits.head.next.next.next.next.next.next
+    out &= walker.value
+    out &= walker.next.value
+    Bits(bits: out)
+  )
+  // The high five bits, which `0b0101_0 SRM[rrr]` fixes.
+  opcode5 (byte) => (
+    out := chain None
+    walker := byte.bits.head.next.next.next
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+  // Two words alike as far as the shorter reaches, asked a bit at a time
+  // and no further than the first that differs.
+  same (mine, theirs) => (
+    alike := true
+    left := mine.bits.head
+    right := theirs.bits.head
+    while ((exists left).and(exists right).and(alike)) {
+      if (left.value.xor(right.value)) { alike = false }
+      left = left.next
+      right = right.next
+    }
+    alike
+  )
+  // Three bits, least significant first, spelled as asked.
+  is3 (bits, c0, c1, c2) => (
+    walker := bits.bits.head
+    (walker.value.xor(c0).not).and(walker.next.value.xor(c1).not).and(walker.next.next.value.xor(c2).not)
+  )
+  // The bytes from `start` up to `after`: as many as there are from
+  // `start` to the end, less as many as there are from `after`.
+  between (start, after) => (
+    ahead := start
+    rest := after
+    while (exists rest) {
+      ahead = ahead.next
+      rest = rest.next
+    }
+    out := chain None
+    walker := start
+    while (exists ahead) {
+      out &= walker.value
+      walker = walker.next
+      ahead = ahead.next
+    }
+    out
+  )
+  same_bytes (mine, theirs) => (
+    alike := true
+    left := mine.head
+    right := theirs.head
+    while ((exists left).and(exists right).and(alike)) {
+      alike = X86.same(left.value, right.value)
+      left = left.next
+      right = right.next
+    }
+    if (exists left) { alike = false }
+    if (exists right) { alike = false }
+    alike
+  )
+  lookup (values, asked) => (
+    found := None
+    walker := values.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists (external alike (walker.value.name) (asked))) { found = walker.value.bits }
+      walker = walker.next
+    }
+    found
+  )
+
+  // The legacy prefixes of 64-bit mode: 26 2e 36 3e (001xx110), 64 65 66 67
+  // (011001xx), f0 f2 f3 (111100x0, 11110011).
+  // spec: these are the rows of PREFIXES() in xed-prefixes.txt
+  // (`mode64 0xf2 … | …`), the next table to read.
+  is_prefix (byte) => (
+    at7 := X86.b7(byte)
+    at6 := X86.b6(byte)
+    at5 := X86.b5(byte)
+    at4 := X86.b4(byte)
+    at3 := X86.b3(byte)
+    at2 := X86.b2(byte)
+    at1 := X86.b1(byte)
+    at0 := X86.b0(byte)
+    segment := at7.not.and(at6.not).and(at5).and(at2).and(at1).and(at0.not)
+    sizes := at7.not.and(at6).and(at5).and(at4.not).and(at3.not).and(at2)
+    repeats := at7.and(at6).and(at5).and(at4).and(at3.not).and(at2.not).and(at1.or(at0.not))
+    segment.or(sizes).or(repeats)
+  )
+  // 0100wrxb
+  is_rex (byte) => X86.b7(byte).not.and(X86.b6(byte)).and(X86.b5(byte).not).and(X86.b4(byte).not)
+  is_66 (byte) => X86.b7(byte).not.and(X86.b6(byte)).and(X86.b5(byte)).and(X86.b4(byte).not).and(X86.b3(byte).not).and(X86.b2(byte)).and(X86.b1(byte)).and(X86.b0(byte).not)
+  is_f0 (byte) => X86.b7(byte).and(X86.b6(byte)).and(X86.b5(byte)).and(X86.b4(byte)).and(X86.b3(byte).not).and(X86.b2(byte).not).and(X86.b1(byte).not).and(X86.b0(byte).not)
+  is_f3 (byte) => X86.b7(byte).and(X86.b6(byte)).and(X86.b5(byte)).and(X86.b4(byte)).and(X86.b3(byte).not).and(X86.b2(byte).not).and(X86.b1(byte)).and(X86.b0(byte))
+  // Whether a prefix was read: `66`, `f0` or `f3`.
+  has (prefixes, which) => (
+    found := false
+    walker := prefixes.head
+    while ((exists walker).and(found.not)) {
+      byte := walker.value
+      if (exists (external alike (which) (`66`))) { found = X86.is_66(byte) }
+      if (exists (external alike (which) (`f0`))) { found = X86.is_f0(byte) }
+      if (exists (external alike (which) (`f3`))) { found = X86.is_f3(byte) }
+      walker = walker.next
+    }
+    found
+  )
+
+  // The instruction the bytes from `start` spell, or None.
+  read (start) => (
+    prefixes := chain None
+    cursor := start
+    while ((exists cursor).and(X86.is_prefix(cursor.value))) {
+      prefixes &= cursor.value
+      cursor = cursor.next
+    }
+    rex := None
+    if (exists cursor) {
+      if (X86.is_rex(cursor.value)) {
+        rex = cursor.value
+        cursor = cursor.next
+      }
+    }
+    found := None
+    walker := xed.forms.head
+    while ((exists walker).and((exists found).not)) {
+      found = X86.attempt(walker.value, cursor, prefixes, rex)
+      walker = walker.next
+    }
+    found
+  )
+
+  // The bytes from `cursor` read with one form, or None if they are not
+  // spelled with it. The pieces of the pattern are taken in order.
+  attempt (form, cursor, prefixes, rex) => (
+    at := cursor
+    values := chain None
+    displacement := None
+    immediate := None
+    fits := exists at
+    modrm := false
+    if fits {
+      lead := form.lead
+      if (exists lead.bits.head.next.next.next.next.next.next.next) {
+        fits = X86.same(at.value, lead)
+      } else {
+        fits = X86.same(X86.opcode5(at.value), lead)
+        values &= X86Value(name: `SRM`, bits: X86.low(at.value))
+      }
+      at = at.next
+    }
+    token := form.tokens.head
+    while ((exists token).and(fits)) {
+      piece := token.value
+      if (piece.is(`byte`)) {
+        if (exists at) {
+          fits = X86.same(at.value, piece.fixed)
+          at = at.next
+        } else { fits = false }
+      } elsif (piece.is(`field`)) {
+        if ((piece.named(`SRM`)).not.and(modrm.not)) {
+          if (exists at) {
+            values &= X86Value(name: `MOD`, bits: X86.high(at.value))
+            values &= X86Value(name: `REG`, bits: X86.middle(at.value))
+            values &= X86Value(name: `RM`, bits: X86.low(at.value))
+            modrm = true
+            at = at.next
+          } else { fits = false }
+        }
+        if fits {
+          wanted := piece.fixed
+          if (exists wanted) { fits = X86.same(X86.lookup(values, piece.name), wanted) }
+        }
+      } elsif (piece.is(`eq`)) {
+        fits = X86.same(X86.field_or_zero(values, piece.name), piece.fixed)
+      } elsif (piece.is(`ne`)) {
+        fits = X86.same(X86.field_or_zero(values, piece.name), piece.fixed).not
+      } elsif (piece.is(`word`)) {
+        fits = X86.condition(piece.name, prefixes, rex)
+      } elsif (piece.is(`nonterminal`)) {
+        count := None
+        if (piece.named(`MODRM`)) {
+          count = X86.memory(values, at)
+          if (exists X86.lookup(values, `SCALE`)) { at = at.next }
+        } else { count = X86.immediate_width(piece.name, prefixes, rex) }
+        if (exists count.head) {
+          taken := X86.take(at, count)
+          if (exists taken) {
+            if (piece.named(`MODRM`)) { displacement = taken.bytes } else { immediate = taken.bytes }
+            at = taken.after
+          } else { fits = false }
+        }
+      }
+      token = token.next
+    }
+    if fits {
+      X86Decoded(form: form, prefixes: prefixes, rex: rex, values: values, displacement: displacement, immediate: immediate, after: at)
+    } else { None }
+  )
+
+  // A field no byte gave (REX2, which this decoder does not read) holds 0.
+  field_or_zero (values, asked) => (
+    found := X86.lookup(values, asked)
+    if (exists found) { found } else { Bits(bits: chain None) }
+  )
+
+  // The conditions of xed-state-bits.txt, for 64-bit mode with no REX2 and
+  // no APX: what each name asks of the prefixes read.
+  // spec: xed-state-bits.txt says each of these as `FIELD=value` over the
+  // decoder's state (`norexb_prefix  REXB=0`); read it with the prefix table,
+  // and these follow.
+  condition (spelled, prefixes, rex) => (
+    answer := true
+    if (exists (external alike (spelled) (`not64`))) { answer = false }
+    if (exists (external alike (spelled) (`rex2_refining_prefix`))) { answer = false }
+    if (exists (external alike (spelled) (`norexw_prefix`))) { answer = X86.rex_w(rex).not }
+    if (exists (external alike (spelled) (`norexb_prefix`))) { answer = X86.rex_b(rex).not }
+    if (exists (external alike (spelled) (`not_refining_f3`))) { answer = X86.has(prefixes, `f3`).not }
+    if (exists (external alike (spelled) (`lock_prefix`))) { answer = X86.has(prefixes, `f0`) }
+    if (exists (external alike (spelled) (`nolock_prefix`))) { answer = X86.has(prefixes, `f0`).not }
+    answer
+  )
+  rex_w (rex) => if (exists rex) { X86.b3(rex) } else { false }
+  rex_b (rex) => if (exists rex) { X86.b0(rex) } else { false }
+
+  // How many bytes an immediate or branch displacement nonterminal takes,
+  // as a chain with one link per byte.
+  // spec: the rows of SIMM8(), UIMM8(), SIMMz(), BRDISP8(), BRDISP32(), BRDISPz() in
+  // xed-immediates.txt (`EOSZ=2 UIMM0[i/32] | IMM_WIDTH=32`), with EOSZ from
+  // OSZ_NONTERM() in xed-eOSZ.txt. Nonterminals that take no bytes (DF64(),
+  // FORCE64(), BRANCH_HINT(), …) change only the state.
+  immediate_width (named, prefixes, rex) => (
+    width := chain None
+    one := exists (external alike (named) (`SIMM8`))
+    if (exists (external alike (named) (`UIMM8`))) { one = true }
+    if (exists (external alike (named) (`BRDISP8`))) { one = true }
+    four := exists (external alike (named) (`BRDISP32`))
+    if (exists (external alike (named) (`BRDISPz`))) { four = true }
+    two := false
+    if (exists (external alike (named) (`SIMMz`))) {
+      if (X86.has(prefixes, `66`).and(X86.rex_w(rex).not)) { two = true } else { four = true }
+    }
+    if (one.or(two).or(four)) { width &= true }
+    if (two.or(four)) { width &= true }
+    if four {
+      width &= true
+      width &= true
+    }
+    width
+  )
+  // `count` bytes from `at`, and where they end.
+  take (at, count) => (
+    bytes := chain None
+    walker := at
+    counting := count.head
+    enough := true
+    while ((exists counting).and(enough)) {
+      if (exists walker) {
+        bytes &= walker.value
+        walker = walker.next
+      } else { enough = false }
+      counting = counting.next
+    }
+    if enough { X86Taken(bytes: bytes, after: walker) } else { None }
+  )
+
+  // A memory operand after ModRM: a SIB byte when RM is 100, and then a
+  // displacement as MOD says: none (00), 8 bits (01), 32 bits (10); 32 bits
+  // too when MOD is 00 and RM, or SIB's base, is 101. Answers the
+  // displacement's width, one link per byte, and leaves SCALE, INDEX, BASE
+  // among the values when a SIB byte is there to be read at `at`.
+  // spec: MODRM() → MODRM64alt32() → SIB() → MEMDISP() in
+  // xed-addressing-modes-new.txt, whose rows say exactly this.
+  memory (values, at) => (
+    mod := X86.lookup(values, `MOD`)
+    rm := X86.lookup(values, `RM`)
+    mod0 := mod.bits.head.value.not.and(mod.bits.head.next.value.not)
+    wide := mod0.and(X86.is3(rm, true, false, true))
+    if (X86.is3(rm, false, false, true).and(exists at)) {
+      values &= X86Value(name: `SCALE`, bits: X86.high(at.value))
+      values &= X86Value(name: `INDEX`, bits: X86.middle(at.value))
+      values &= X86Value(name: `BASE`, bits: X86.low(at.value))
+      if (mod0.and(X86.is3(X86.low(at.value), true, false, true))) { wide = true }
+    }
+    count := chain None
+    if (mod.bits.head.value.and(mod.bits.head.next.value.not)) { count &= true }
+    if (mod.bits.head.value.not.and(mod.bits.head.next.value)) { wide = true }
+    if wide {
+      count &= true
+      count &= true
+      count &= true
+      count &= true
+    }
+    count
+  )
+
+  // The bytes a reading spells: its prefixes and REX as they were read, then
+  // the pattern of its form with its values put in.
+  written (decoded) => (
+    out := chain None
+    Bits.joined(out, decoded.prefixes)
+    if (exists decoded.rex) { out &= decoded.rex }
+    values := decoded.values
+    lead := decoded.form.lead
+    if (exists lead.bits.head.next.next.next.next.next.next.next) {
+      out &= lead
+    } else { out &= X86.lookup(values, `SRM`).under(lead) }
+    modrm := false
+    token := decoded.form.tokens.head
+    while (exists token) {
+      piece := token.value
+      if (piece.is(`byte`)) { out &= piece.fixed }
+      if (piece.is(`field`)) {
+        if ((piece.named(`SRM`)).not.and(modrm.not)) {
+          out &= X86.lookup(values, `RM`).under(X86.lookup(values, `REG`)).under(X86.lookup(values, `MOD`))
+          modrm = true
+        }
+      }
+      if (piece.is(`nonterminal`)) {
+        if (piece.named(`MODRM`)) {
+          base := X86.lookup(values, `BASE`)
+          if (exists base) { out &= base.under(X86.lookup(values, `INDEX`)).under(X86.lookup(values, `SCALE`)) }
+          if (exists decoded.displacement) { Bits.joined(out, decoded.displacement) }
+        } elsif (exists X86.immediate_width(piece.name, decoded.prefixes, decoded.rex).head) {
+          Bits.joined(out, decoded.immediate)
+        }
+      }
+      token = token.next
+    }
+    out
+  )
+}

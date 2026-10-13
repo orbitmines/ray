@@ -1,0 +1,195 @@
+// A Mach-O file: the container macOS and iOS load, as Apple's
+// `<mach-o/loader.h>` writes it down. Its first four bytes are a magic
+// number that says both the width and the order of bytes: `feedfacf` for 64
+// bits and `feedface` for 32, and which of the two ways round the file holds
+// it is the order every other field is written in. After the header comes a
+// run of load commands, each beginning with what it is and how many bytes it
+// takes, so one the reader does not know is passed over whole and kept: a
+// segment (where a range of the file is loaded, with the sections in it), the
+// entry point, the libraries it needs, its symbols, its signature, … .
+//
+// spec: the commands read here are segments and `LC_MAIN`. The libraries
+// loaded (`LC_LOAD_DYLIB`), the symbols and what is bound on load (the
+// `LC_DYLD_INFO`/chained fixups), `LC_UNIXTHREAD` and fat (multi-machine)
+// files are read the same way, next.
+
+MachO := class {
+  file: Node
+  header: Node
+  commands: Node
+  sections: Node
+  pieces: Node
+  wide: Node
+  big: Node
+
+  read (given) => (
+    is_big := MachO.big_first(given)
+    values := chain None
+    covered := chain None
+    past_magic := Layout.read(MachO.magic_slots, given.head, is_big, values, covered)
+    is_wide := Layout.find(values, `magic`).low
+    past_header := Layout.read(MachO.header_slots(is_wide), past_magic, is_big, values, covered)
+    read_header := Layout.claimed(`header`, values, covered, past_header)
+    read_commands := chain None
+    read_sections := chain None
+    command_at := past_header
+    remaining := Bytes.steps(read_header.field(`ncmds`)).head
+    while (exists remaining) {
+      read_one := MachO.command(command_at, is_wide, is_big, read_sections)
+      read_commands &= read_one
+      command_at = Bytes.on(command_at, read_one.field(`cmdsize`), None)
+      remaining = remaining.next
+    }
+    laid_out := Layout.pieces(given)
+    MachO(file: given, header: read_header, commands: read_commands, sections: read_sections, pieces: laid_out, wide: is_wide, big: is_big)
+  )
+  // Whether the file is written most significant byte first. The magic's
+  // first byte is `cf` or `ce` when it is written the other way round and
+  // `fe` when it is not: of the bits in which they differ, the one worth 20.
+  big_first (given) => given.head.value.bits.head.next.next.next.next.next.value
+
+  // One load command at `from`: what it is and its size, and then, for one
+  // that is known, the rest of its fields; the sections a segment holds
+  // follow it and are added to `into_sections`. What a command holds beyond
+  // what is read of it is kept as bytes.
+  command (from, is_wide, is_big, into_sections) => (
+    command_values := chain None
+    command_links := chain None
+    past_kind := Layout.read(MachO.command_slots, from, is_big, command_values, command_links)
+    kind := Layout.find(command_values, `cmd`)
+    called := `load command`
+    past_command := past_kind
+    inner_slots := None
+    section_size := None
+    if (kind == Bits.hex(`00000019`)) {
+      called = `LC_SEGMENT_64`
+      past_command = Layout.read(MachO.segment_slots(true), past_kind, is_big, command_values, command_links)
+      inner_slots = MachO.section_slots(true)
+      section_size = Bits.hex(`50`)
+    } elsif (kind == Bits.hex(`00000001`)) {
+      called = `LC_SEGMENT`
+      past_command = Layout.read(MachO.segment_slots(false), past_kind, is_big, command_values, command_links)
+      inner_slots = MachO.section_slots(false)
+      section_size = Bits.hex(`44`)
+    } elsif (kind == Bits.hex(`80000028`)) {
+      called = `LC_MAIN`
+      past_command = Layout.read(MachO.main_slots, past_kind, is_big, command_values, command_links)
+    }
+    read_command := Layout.claimed(called, command_values, command_links, past_command)
+    if (exists inner_slots) {
+      held_sections := Layout.table(past_command, section_size, read_command.field(`nsects`), inner_slots, is_big, `section`)
+      Bytes.appended(into_sections, held_sections)
+    }
+    read_command
+  )
+
+  magic_slots => (
+    slots := chain None
+    slots &= Slot(name: `magic`, size: Bytes.four)
+    slots
+  )
+  header_slots (is_wide) => (
+    slots := chain None
+    slots &= Slot(name: `cputype`, size: Bytes.four)
+    slots &= Slot(name: `cpusubtype`, size: Bytes.four)
+    slots &= Slot(name: `filetype`, size: Bytes.four)
+    slots &= Slot(name: `ncmds`, size: Bytes.four)
+    slots &= Slot(name: `sizeofcmds`, size: Bytes.four)
+    slots &= Slot(name: `flags`, size: Bytes.four)
+    if is_wide { slots &= Slot(name: `reserved`, size: Bytes.four) }
+    slots
+  )
+  command_slots => (
+    slots := chain None
+    slots &= Slot(name: `cmd`, size: Bytes.four)
+    slots &= Slot(name: `cmdsize`, size: Bytes.four)
+    slots
+  )
+  address (is_wide) => if is_wide { Bytes.eight } else { Bytes.four }
+  // A segment: its name, where it is loaded and how much memory it takes,
+  // where it is in the file and how much of it is there, what it may be and
+  // is allowed to do (read, write, run), and how many sections it holds.
+  segment_slots (is_wide) => (
+    slots := chain None
+    width := MachO.address(is_wide)
+    slots &= Slot(name: `segname`, size: Bits.hex(`10`))
+    slots &= Slot(name: `vmaddr`, size: width)
+    slots &= Slot(name: `vmsize`, size: width)
+    slots &= Slot(name: `fileoff`, size: width)
+    slots &= Slot(name: `filesize`, size: width)
+    slots &= Slot(name: `maxprot`, size: Bytes.four)
+    slots &= Slot(name: `initprot`, size: Bytes.four)
+    slots &= Slot(name: `nsects`, size: Bytes.four)
+    slots &= Slot(name: `flags`, size: Bytes.four)
+    slots
+  )
+  section_slots (is_wide) => (
+    slots := chain None
+    width := MachO.address(is_wide)
+    slots &= Slot(name: `sectname`, size: Bits.hex(`10`))
+    slots &= Slot(name: `segname`, size: Bits.hex(`10`))
+    slots &= Slot(name: `addr`, size: width)
+    slots &= Slot(name: `size`, size: width)
+    slots &= Slot(name: `offset`, size: Bytes.four)
+    slots &= Slot(name: `align`, size: Bytes.four)
+    slots &= Slot(name: `reloff`, size: Bytes.four)
+    slots &= Slot(name: `nreloc`, size: Bytes.four)
+    slots &= Slot(name: `flags`, size: Bytes.four)
+    slots &= Slot(name: `reserved1`, size: Bytes.four)
+    slots &= Slot(name: `reserved2`, size: Bytes.four)
+    if is_wide { slots &= Slot(name: `reserved3`, size: Bytes.four) }
+    slots
+  )
+  // `LC_MAIN`: where in the file the program begins, and how big a stack it
+  // asks for (zero: the default).
+  main_slots => (
+    slots := chain None
+    slots &= Slot(name: `entryoff`, size: Bytes.eight)
+    slots &= Slot(name: `stacksize`, size: Bytes.eight)
+    slots
+  )
+
+  cpu => .header.field(`cputype`)
+  // The first command called `called`, or None.
+  named (called) => (
+    found := None
+    looking := .commands.head
+    while ((exists looking).and((exists found).not)) {
+      if (exists (external alike (looking.value.name) (called))) { found = looking.value }
+      looking = looking.next
+    }
+    found
+  )
+  // Where the program begins, as an offset into the file.
+  entry => (
+    main_command := .named(`LC_MAIN`)
+    if (exists main_command) { main_command.field(`entryoff`) } else { None }
+  )
+  // The section whose bytes in the file hold the entry point; or None.
+  entered => (
+    found := None
+    start := .entry
+    looking := .sections.head
+    while ((exists looking).and((exists found).not)) {
+      section := looking.value
+      distance := start - section.field(`offset`).under(Bits.hex(`00000000`))
+      if (distance.carry.and(distance.below(section.field(`size`)))) { found = section }
+      looking = looking.next
+    }
+    found
+  )
+  // The bytes the program begins with: from the entry point to the end of
+  // the section holding it, as a chain of bytes.
+  code => (
+    section := .entered
+    if (exists section) {
+      at_entry := Bytes.on(.file.head, .entry, None)
+      offset_wide := section.field(`offset`).under(Bits.hex(`00000000`))
+      distance := .entry - offset_wide
+      rest_size := section.field(`size`) - distance
+      Bytes.taken(at_entry, rest_size)
+    } else { None }
+  )
+
+  written => Layout.written(.pieces)
+}

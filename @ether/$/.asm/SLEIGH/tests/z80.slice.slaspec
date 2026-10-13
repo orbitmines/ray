@@ -1,0 +1,204 @@
+# A slice of Ghidra's Z80 description (Ghidra/Processors/Z80/data/languages/z80.slaspec,
+# Apache License 2.0), taken whole line by line: its registers, tokens and attached
+# registers, one macro, the tables the instructions below use, and sixteen
+# instructions. Left out: the context register and its fields, the register list
+# written over several lines, and every other macro and instruction.
+# sleigh specification file for Zilog Z80
+
+# TODO:  Improve Flag bit implementation so that bit operations on F register work properly
+
+define endian=little;
+define alignment=1;
+@if defined(Z180)
+define space ram     type=ram_space      size=2  default;
+@define PTRSIZE  "2"
+@else
+define space ram     type=ram_space      size=2  default;
+@define PTRSIZE  "2"
+@endif
+
+define space io      type=ram_space      size=2;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ F A C B E D L H I R ];
+define register offset=0x00 size=2 [ AF  BC  DE  HL ];
+define register offset=0x20 size=1 [ F_ A_ C_ B_ E_ D_ L_ H_ ]; # Alternate registers
+define register offset=0x20 size=2 [ AF_   BC_   DE_   HL_ ]; # Alternate registers
+define register offset=0x40 size=2 [ _  PC SP IX IY ];
+define register offset=0x46 size=1 [ IXL IXH IYL IYH ]; # Undocumented registers
+define register offset=0x50 size=1 [ rCBAR rCBR rBBR ];
+
+
+# Flag bits (?? manual is very confusing - could be typos!)
+@define C_flag "F[0,1]"  # C: Carry
+@define N_flag "F[1,1]"  # N: Add/Subtract - used by DAA to distinguish between ADD and SUB instructions (0=ADD,1=SUB)
+@define PV_flag "F[2,1]" # PV: Parity/Overflow
+@define H_flag "F[4,1]"  # H: Half Carry
+@define Z_flag "F[6,1]"  # Z: Zero
+@define S_flag "F[7,1]"  # S: Sign
+
+define token opbyte (8)
+	op0_8        = (0,7)
+	op6_2        = (6,7)
+	dRegPair4_2  = (4,5)
+	pRegPair4_2  = (4,5)
+	sRegPair4_2  = (4,5)
+	qRegPair4_2  = (4,5)
+	rRegPair4_2  = (4,5)
+	reg3_3       = (3,5)
+	bits3_3      = (3,5)
+	bits0_4      = (0,3)
+	reg0_3       = (0,2)
+	bits0_3      = (0,2)
+;
+
+define token data8 (8)
+	imm8  = (0,7)
+	sign8 = (7,7)
+	simm8 = (0,7) signed
+;
+
+define token data16 (16)
+	timm4  = (12,15)
+	imm16  = ( 0,15)
+	sign16 = (15,15)
+	simm16 = ( 0,15) signed
+;
+
+attach variables [ reg0_3 reg3_3 ] [ B C D E H L _ A ];
+
+attach variables [ sRegPair4_2 dRegPair4_2 ] [ BC DE HL SP ];
+
+attach variables [ qRegPair4_2 ] [ BC DE HL AF ];
+
+attach variables [ pRegPair4_2 ] [ BC DE IX SP ];
+attach variables [ rRegPair4_2 ] [ BC DE IY SP ];
+################################################################
+# Pseudo Instructions
+################################################################
+define pcodeop segment; # Define special pcodeop that calculates the RAM address
+# given the segment selector and offset as input
+
+define pcodeop BCDadjust;
+define pcodeop BCDadjustCarry;
+
+define pcodeop hasEvenParity;
+define pcodeop disableMaskableInterrupts;
+define pcodeop enableMaskableInterrupts;
+define pcodeop setInterruptMode;
+define pcodeop parity;
+define pcodeop sleep;
+define pcodeop halt;
+
+################################################################
+# Macros
+################################################################
+
+macro setResultFlags(result) {
+	$(Z_flag) = (result == 0);
+	$(S_flag) = (result s< 0);
+}
+
+Addr16: imm16  is imm16      { export *:1 imm16; }
+Mem8: (imm16)  is imm16    { export *:1 imm16; }
+Mem16: (imm16)  is imm16     { export *:2 imm16; }
+RelAddr8: loc  is simm8  [ loc = inst_next + simm8; ]        { export *:1 loc; }
+cc: "NZ"  is bits3_3=0x0  { c:1 = ($(Z_flag) == 0); export c; }
+cc: "Z"   is bits3_3=0x1  { c:1 = $(Z_flag); export c; }
+cc: "NC"  is bits3_3=0x2  { c:1 = ($(C_flag) == 0); export c; }
+cc: "C"   is bits3_3=0x3  { c:1 = $(C_flag); export c; }
+cc: "PO"  is bits3_3=0x4  { c:1 = ($(PV_flag) == 0); export c; }
+cc: "PE"  is bits3_3=0x5  { c:1 = $(PV_flag); export c; }
+cc: "P"   is bits3_3=0x6  { c:1 = ($(S_flag) == 0); export c; }
+cc: "M"   is bits3_3=0x7  { c:1 = $(S_flag); export c; }
+cc2: "NZ"  is bits3_3=0x4   { c:1 = ($(Z_flag) == 0); export c; }
+cc2: "Z"   is bits3_3=0x5   { c:1 = $(Z_flag); export c; }
+cc2: "NC"  is bits3_3=0x6   { c:1 = ($(C_flag) == 0); export c; }
+cc2: "C"   is bits3_3=0x7   { c:1 = $(C_flag); export c; }
+ixMem8: (IX+simm8)  is IX & simm8                                 { ptr:$(PTRSIZE) = IX + simm8; export *:1 ptr; }
+:LD reg3_3,reg0_3   is op6_2=0x1 & reg3_3 & reg0_3 {
+	reg3_3 = reg0_3;
+}
+
+:LD reg3_3,imm8     is op6_2=0x0 & reg3_3 & bits0_3=0x6; imm8 {
+	reg3_3 = imm8;
+}
+
+:LD reg3_3,ixMem8   is op0_8=0xdd; op6_2=0x1 & reg3_3 & bits3_3!=0x6 & bits0_3=0x6; ixMem8  {
+	reg3_3 = ixMem8; 
+}
+
+:NOP                is op0_8=0x0 {
+}
+
+:HALT               is op0_8=0x76 {
+	halt();
+}
+
+:JP Addr16          is op0_8=0xc3; Addr16 {
+	goto Addr16;	
+}
+
+:JP cc,Addr16       is op6_2=0x3 & cc & bits0_3=0x2; Addr16 {
+	if (cc) goto Addr16;
+}
+
+:JR RelAddr8        is op0_8=0x18; RelAddr8 {
+	goto RelAddr8;
+}
+
+:JR cc2,RelAddr8    is op6_2=0x0 & cc2 & bits0_3=0x0; RelAddr8 {
+	if (cc2) goto RelAddr8;
+}
+
+:DJNZ RelAddr8      is op0_8=0x10; RelAddr8 {
+	B = B - 1;
+	if (B != 0) goto RelAddr8;
+}
+
+:ADD A, reg0_3         is op6_2=0x2 & bits3_3=0x0 & reg0_3 & A {
+	local a_temp = A;
+	local reg_temp = reg0_3;
+	
+	additionFlags(a_temp, reg_temp);
+	a_temp= a_temp + reg0_3;
+	setResultFlags(a_temp);
+	A = a_temp;
+}
+
+:INC reg3_3         is op6_2=0x0 & reg3_3 & bits0_3=0x4 {
+	local r_temp = reg3_3;
+	additionFlags(r_temp, 1);
+	r_temp = r_temp + 1;
+	reg3_3 = r_temp;
+	setResultFlags(r_temp);
+}
+
+:XOR reg0_3         is op6_2=0x2 & bits3_3=0x5 & reg0_3 {
+	local a_temp = A;
+	$(H_flag) = 0;
+	$(C_flag) = 0;
+	$(N_flag) = 0;
+	a_temp = a_temp ^ reg0_3;
+	setResultFlags(a_temp);
+	setParity(a_temp);
+	A = a_temp;
+}
+
+:CP imm8            is op0_8=0xfe; imm8 {
+	local a_temp = A;
+	cmp:1 = a_temp - imm8;
+	subtractionFlags(a_temp, imm8);
+	setResultFlags(cmp);
+}
+
+:EX AF, AF_         is op0_8=0x08 & AF & AF_ {
+	tmp:2 = AF;
+	AF = AF_;
+	AF_ = tmp;
+}
+
+:LD dRegPair4_2,imm16  is op6_2=0x0 & dRegPair4_2 & bits0_4=0x1; imm16 {
+	dRegPair4_2 = imm16;
+}
+

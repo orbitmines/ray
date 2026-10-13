@@ -1,0 +1,336 @@
+// What an instruction does, as every description is read into: a program of
+// steps over the machine's state, where the only control is the conditional
+// goto.
+//
+// A step either sets a place to a value, or jumps — to a label in the program,
+// or out of it, to an address, which is where the machine goes next. A value
+// is worked out of the state and nothing else, with what `Bits` does, which is
+// `nand` all the way down. SLEIGH's p-code, Sail's `execute` clauses and Arm's
+// pseudocode are each translated into this once, where they are read; what
+// comes out is walkable as a program (its jumps are edges) and can be run.
+
+// The state a program runs over: registers by name, and memory as the bytes
+// held at the addresses written to so far. What was never written reads as
+// None; what it holds before anything runs is the container's business.
+State := class {
+  registers: Node
+  memory: Node
+
+  held (name) => (
+    found := None
+    walker := .registers.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists (external alike (walker.value.name) (name))) { found = walker.value }
+      walker = walker.next
+    }
+    found
+  )
+  get (name) => (
+    holding := .held(name)
+    if (exists holding) { holding.bits } else { None }
+  )
+  put (name, value) => (
+    holding := .held(name)
+    if (exists holding) { holding.bits = value } else { .registers &= Register(name: name, bits: value) }
+    true
+  )
+  // Memory is a tree on the bits of an address, lowest bit first: a load or a
+  // store walks one branch per bit rather than every cell written so far. It
+  // hangs off the chain the state was made with, so states that share that
+  // chain share their memory.
+  root => (
+    held_root := .memory.root
+    unless (exists held_root) { held_root = State.planted(.memory) }
+    held_root
+  )
+  planted (holder) => (
+    grown := Branch(zero: None, one: None, held: None)
+    holder.root = grown
+    grown
+  )
+  // The bits an address is walked by: up to its highest set bit. Above it the
+  // address is zeros however wide it is written, so a register numbered by a
+  // five-bit field and the same number written as a byte are one register.
+  trimmed (address) => (
+    kept := chain None
+    pending := chain None
+    walker := address.bits.head
+    while (exists walker) {
+      pending &= walker.value
+      if walker.value {
+        Bits.joined(kept, pending)
+        pending = chain None
+      }
+      walker = walker.next
+    }
+    kept
+  )
+  load (address) => (
+    reached := .root
+    walker := State.trimmed(address).head
+    while ((exists walker).and(exists reached)) {
+      if walker.value { reached = reached.one } else { reached = reached.zero }
+      walker = walker.next
+    }
+    found := None
+    if (exists reached) { found = reached.held }
+    found
+  )
+  store (address, value) => (
+    reached := .root
+    walker := State.trimmed(address).head
+    while (exists walker) {
+      reached = State.grown(reached, walker.value)
+      walker = walker.next
+    }
+    reached.held = value
+    true
+  )
+  // The branch a bit leads to, grown where there was none.
+  grown (branching, going_one) => (
+    ahead := None
+    if going_one { ahead = branching.one } else { ahead = branching.zero }
+    unless (exists ahead) { ahead = State.sprouted(branching, going_one) }
+    ahead
+  )
+  sprouted (branching, going_one) => (
+    sprout := Branch(zero: None, one: None, held: None)
+    if going_one { branching.one = sprout } else { branching.zero = sprout }
+    sprout
+  )
+}
+Branch := class {
+  zero: Node
+  one: Node
+  held: Node
+}
+Register := class {
+  name: Node
+  bits: Node
+}
+
+// A register of a file of registers, by its number: `X(rd)` in Sail, `X[n]`
+// in Arm's pseudocode. The file is held in the state under its name, as a
+// state of its own whose memory is the registers. A register never written
+// reads as `unset`; the one numbered `fixed`, if any, always reads as `unset`
+// and keeps nothing written to it (RISC-V's x0).
+InFile := class {
+  file: Node
+  index: Node
+  unset: Node
+  fixed: Node
+  value (state) => (
+    number := .index.value(state)
+    found := .unset
+    unless (Files.pinned(number, .fixed)) {
+      held := Files.of(state, .file).load(number)
+      if (exists held) { found = held }
+    }
+    found
+  )
+}
+IntoFile := class {
+  sets => true
+  file: Node
+  index: Node
+  to: Node
+  fixed: Node
+  perform (state) => (
+    number := .index.value(state)
+    unless (Files.pinned(number, .fixed)) { Files.of(state, .file).store(number, .to.value(state)) }
+    true
+  )
+}
+Files := class {
+  // The file a state holds under a name, made where there is none yet.
+  of (state, name) => (
+    registers := state.get(name)
+    unless (exists registers) { registers = Files.opened(state, name) }
+    registers
+  )
+  opened (state, name) => (
+    fresh_registers := chain None
+    fresh_memory := chain None
+    opened_file := State(registers: fresh_registers, memory: fresh_memory)
+    state.put(name, opened_file)
+    opened_file
+  )
+  pinned (number, fixed) => (
+    answer := false
+    if (exists fixed) {
+      number_bits := Bits(bits: State.trimmed(number))
+      fixed_bits := Bits(bits: State.trimmed(fixed))
+      answer = (number_bits == fixed_bits)
+    }
+    answer
+  )
+  // A register as a test reads it.
+  read (state, name, number) => (
+    registers := state.get(name)
+    found := None
+    if (exists registers) { found = registers.load(number) }
+    found
+  )
+}
+
+// Values. Each answers what it is in a state.
+Constant := class {
+  bits: Node
+  value (state) => .bits
+}
+Named := class {
+  name: Node
+  value (state) => state.get(.name)
+}
+Loaded := class {
+  address: Node
+  value (state) => state.load(.address.value(state))
+}
+Sum := class {
+  left: Node
+  right: Node
+  value (state) => .left.value(state) + .right.value(state)
+}
+Difference := class {
+  left: Node
+  right: Node
+  value (state) => .left.value(state) - .right.value(state)
+}
+Both := class {
+  left: Node
+  right: Node
+  value (state) => .left.value(state).and(.right.value(state))
+}
+Either := class {
+  left: Node
+  right: Node
+  value (state) => .left.value(state).or(.right.value(state))
+}
+Differing := class {
+  left: Node
+  right: Node
+  value (state) => .left.value(state).xor(.right.value(state))
+}
+Inverted := class {
+  of: Node
+  value (state) => .of.value(state).not
+}
+// A comparison answers a word of one bit, as p-code's do.
+Equal := class {
+  left: Node
+  right: Node
+  value (state) => Bits.flag(.left.value(state) == .right.value(state))
+}
+Below := class {
+  left: Node
+  right: Node
+  value (state) => Bits.flag(.left.value(state).below(.right.value(state)))
+}
+Less := class {
+  left: Node
+  right: Node
+  value (state) => Bits.flag(.left.value(state).less(.right.value(state)))
+}
+
+// As wide as `like`: zero-extended, sign-extended when `signed`, or cut.
+Widened := class {
+  of: Node
+  like: Node
+  signed: Node
+  value (state) => .of.value(state).widened(.like, .signed)
+}
+ShiftedLeft := class {
+  of: Node
+  by: Node
+  value (state) => .of.value(state).shifted_left(.by.value(state))
+}
+ShiftedRight := class {
+  of: Node
+  by: Node
+  arithmetic: Node
+  value (state) => .of.value(state).shifted_right(.by.value(state), .arithmetic)
+}
+// `high` above `low`, as p-code's piece and Sail's `@` write it (`@` puts the
+// first above the second).
+Joined := class {
+  high: Node
+  low: Node
+  value (state) => .low.value(state).under(.high.value(state))
+}
+// The bits of a value where a mask is set, as p-code's subpiece and a slice
+// such as `imm[11..5]` take them.
+Part := class {
+  of: Node
+  mask: Node
+  value (state) => .of.value(state).extract(.mask)
+}
+
+// Steps.
+Set := class {
+  sets => true
+  place: Node
+  to: Node
+  perform (state) => (
+    set_place := .place
+    set_value := .to.value(state)
+    state.put(set_place, set_value)
+  )
+}
+Stored := class {
+  sets => true
+  address: Node
+  to: Node
+  perform (state) => (
+    stored_at := .address.value(state)
+    stored_value := .to.value(state)
+    state.store(stored_at, stored_value)
+  )
+}
+// Where the program goes on to: `target` is a label's name, or else `to` a
+// value, which leaves the program for that address. With no `when`, always.
+Jump := class {
+  jumps => true
+  when: Node
+  target: Node
+  to: Node
+  taken (state) => if (exists .when) { .when.value(state).is_zero.not } else { true }
+}
+Label := class {
+  labels => true
+  name: Node
+}
+
+Goto := class {
+  steps: Node
+
+  // The step a label names.
+  landing (name) => (
+    found := None
+    walker := .steps.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists walker.value.labels) {
+        if (exists (external alike (walker.value.name) (name))) { found = walker }
+      }
+      walker = walker.next
+    }
+    found
+  )
+  // Run in a state, which it changes. What it answers is where the machine
+  // goes next: the address a jump left the program for, or None when it ran
+  // to its end and the machine falls through to what follows.
+  run (state) => (
+    leaving := None
+    at := .steps.head
+    while ((exists at).and((exists leaving).not)) {
+      step := at.value
+      at = at.next
+      if (exists step.sets) { step.perform(state) }
+      if (exists step.jumps) {
+        if (step.taken(state)) {
+          if (exists step.target) { at = .landing(step.target) } else { leaving = step.to.value(state) }
+        }
+      }
+    }
+    leaving
+  )
+}

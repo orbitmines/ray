@@ -1,0 +1,22 @@
+// A word stored and loaded back whole, as a byte zero-extended and as a byte sign-extended, through the
+// translated LOAD and STORE clauses, little-endian.
+//
+// run: mkdir -p .ether/asm/work/sail-goto/proj && echo > .ether/asm/work/sail-goto/proj/.project.ray && cat @ether/$/.asm/riscv-opcodes/.entrypoint.ray @ether/$/.asm/Sail/.entrypoint.ray > .ether/asm/work/sail-goto/proj/.entrypoint.ray && T=1500 M=8000 PROJECT=../../../.ether/asm/work/sail-goto/proj SPECS="@ether/$/.asm/Sail/tests/specs/args.csv @ether/$/.asm/Sail/tests/specs/rv_mem @ether/$/.asm/Sail/tests/specs/regs_x @ether/$/.asm/Sail/tests/specs/sail_mem" .ether/asm/asm.sh sail-mem @ether/$/.asm/Sail/tests/mem.ray boolean.ray -- Bits.ray ISA.ray Goto.ray Code.ray Run.ray
+
+mark ^keyword := external global
+INFO@mark `S0 control: this file is run`
+unless (exists sail.clauses[`LOAD`]) { INFO@mark `S1 the LOAD clause is not read` }
+rv ^keyword := sail.attach(opcodes.isa(`rv_i`))
+// addi x1, x0, -2; sw x1, 64(x0); lw x3, 64(x0); lbu x4, 64(x0); lb x7, 64(x0)
+storing ^keyword := Code(isa: rv, bytes: Bits.hex_bytes(`9300e0ff 23201004 83210004 03420004 83030004`), width: zero_word)
+hart ^keyword := State(registers: chain None, memory: chain None)
+stopped ^keyword := Run(code: storing, base: zero_word).run(hart, zero_word, Bits.hex(`00000014`), Bits.hex(`ff`))
+unless (hart.get(`inst_start`) == Bits.hex(`00000010`)) { INFO@mark `S2 the last instruction run is not the lb at 10` }
+unless (hart.load(Bits.hex(`00000040`)) == Bits.hex(`fe`)) { INFO@mark `S3 the lowest byte stored is not fe` }
+unless (hart.load(Bits.hex(`00000043`)) == Bits.hex(`ff`)) { INFO@mark `S4 the highest byte stored is not ff` }
+held_x3 ^keyword := Files.read(hart, `x`, Bits.hex(`03`))
+unless (held_x3 == Bits.hex(`fffffffe`)) { INFO@mark `S5 lw does not load back fffffffe` }
+held_x4 ^keyword := Files.read(hart, `x`, Bits.hex(`04`))
+unless (held_x4 == Bits.hex(`000000fe`)) { INFO@mark `S6 lbu does not load fe zero-extended` }
+held_x7 ^keyword := Files.read(hart, `x`, Bits.hex(`07`))
+unless (held_x7 == Bits.hex(`fffffffe`)) { INFO@mark `S7 lb does not load fe sign-extended` }

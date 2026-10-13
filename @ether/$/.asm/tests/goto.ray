@@ -1,0 +1,76 @@
+// Programs of steps whose only control is the conditional goto, run over a state.
+//
+// run: .ether/asm/asm.sh goto @ether/$/.asm/tests/goto.ray boolean.ray -- Bits.ray Goto.ray
+
+mark ^keyword := external global
+unless (exists None) { INFO@mark `G0 control: this always fires` }
+
+// 6502 INX: X = X + 1; Z = X == 0; N = X s< 0.
+inx_steps ^keyword := chain None
+inx_steps &= Set(place: `X`, to: Sum(left: Named(name: `X`), right: Constant(bits: Bits.hex(`01`))))
+inx_steps &= Set(place: `Z`, to: Equal(left: Named(name: `X`), right: Constant(bits: Bits.hex(`00`))))
+inx_steps &= Set(place: `N`, to: Less(left: Named(name: `X`), right: Constant(bits: Bits.hex(`00`))))
+inx ^keyword := Goto(steps: inx_steps)
+
+machine ^keyword := State(registers: chain None, memory: chain None)
+machine.put(`X`, Bits.hex(`41`))
+inx.run(machine)
+unless (machine.get(`X`) == Bits.hex(`42`)) { INFO@mark `G1 41 and one is not 42` }
+if (machine.get(`Z`).low) { INFO@mark `G2 42 is zero` }
+machine.put(`X`, Bits.hex(`ff`))
+inx.run(machine)
+unless (machine.get(`X`).is_zero) { INFO@mark `G3 ff and one does not wrap to nothing` }
+unless (machine.get(`Z`).low) { INFO@mark `G4 nothing is not zero` }
+
+// 6502 BNE: if (Z == 0) goto the target, else fall through.
+bne_steps ^keyword := chain None
+bne_steps &= Jump(when: Equal(left: Named(name: `Z`), right: Constant(bits: Bits.flag(false))), target: None, to: Constant(bits: Bits.hex(`0603`)))
+bne ^keyword := Goto(steps: bne_steps)
+if (exists bne.run(machine)) { INFO@mark `G5 BNE leaves when Z is set` }
+machine.put(`Z`, Bits.flag(false))
+unless (bne.run(machine) == Bits.hex(`0603`)) { INFO@mark `G6 BNE does not leave for its target when Z is clear` }
+
+// A loop within a program: count X down to nothing, by a jump back to a label.
+loop_steps ^keyword := chain None
+loop_steps &= Label(name: `again`)
+loop_steps &= Set(place: `X`, to: Difference(left: Named(name: `X`), right: Constant(bits: Bits.hex(`01`))))
+loop_steps &= Jump(when: Inverted(of: Equal(left: Named(name: `X`), right: Constant(bits: Bits.hex(`00`)))), target: `again`, to: None)
+countdown ^keyword := Goto(steps: loop_steps)
+machine.put(`X`, Bits.hex(`03`))
+if (exists countdown.run(machine)) { INFO@mark `G7 a program that runs to its end leaves for somewhere` }
+unless (machine.get(`X`).is_zero) { INFO@mark `G8 the loop does not count down to nothing` }
+
+// Memory: store a byte and load it back.
+machine.store(Bits.hex(`0200`), Bits.hex(`2a`))
+unless (machine.load(Bits.hex(`0200`)) == Bits.hex(`2a`)) { INFO@mark `G9 a stored byte does not load back` }
+if (exists machine.load(Bits.hex(`0201`))) { INFO@mark `G10 an unwritten byte holds something` }
+
+// Widths, shifts, pieces.
+unless (Bits.hex(`80`).widened(Bits.hex(`0000`), true) == Bits.hex(`ff80`)) { INFO@mark `G11 80 sign-extended is not ff80` }
+unless (Bits.hex(`80`).widened(Bits.hex(`0000`), false) == Bits.hex(`0080`)) { INFO@mark `G12 80 zero-extended is not 0080` }
+unless (Bits.hex(`1234`).widened(Bits.hex(`00`), false) == Bits.hex(`34`)) { INFO@mark `G13 1234 cut to a byte is not 34` }
+unless (Bits.hex(`03`).shifted_left(Bits.hex(`2`)) == Bits.hex(`0c`)) { INFO@mark `G14 3 shifted left twice is not c` }
+unless (Bits.hex(`f0`).shifted_right(Bits.hex(`4`), true) == Bits.hex(`ff`)) { INFO@mark `G15 f0 shifted right arithmetically four is not ff` }
+unless (Bits.hex(`f0`).shifted_right(Bits.hex(`4`), false) == Bits.hex(`0f`)) { INFO@mark `G16 f0 shifted right four is not 0f` }
+piece ^keyword := Joined(high: Constant(bits: Bits.hex(`12`)), low: Constant(bits: Bits.hex(`34`)))
+unless (piece.value(machine) == Bits.hex(`1234`)) { INFO@mark `G17 12 above 34 is not 1234` }
+unless (Part(of: Constant(bits: Bits.hex(`1234`)), mask: Bits.hex(`ff00`)).value(machine) == Bits.hex(`12`)) { INFO@mark `G18 the high byte of 1234 is not 12` }
+
+// Memory keyed by address bits: a wider spelling of the same address is the same place.
+machine.store(Bits.hex(`0300`), Bits.hex(`11`))
+machine.store(Bits.hex(`0301`), Bits.hex(`22`))
+unless (machine.load(Bits.hex(`0300`)) == Bits.hex(`11`)) { INFO@mark `G19 0300 does not hold 11` }
+unless (machine.load(Bits.hex(`00000301`)) == Bits.hex(`22`)) { INFO@mark `G20 0301 written wider does not hold 22` }
+unless (machine.load(Bits.hex(`0200`)) == Bits.hex(`2a`)) { INFO@mark `G21 0200 lost its byte to the later stores` }
+machine.store(Bits.hex(`0000`), Bits.hex(`33`))
+unless (machine.load(Bits.hex(`00`)) == Bits.hex(`33`)) { INFO@mark `G22 address nothing does not hold what was stored there` }
+
+// A file of registers, with x0 fixed.
+zero_x ^keyword := Bits.hex(`00000000`)
+into_x1 ^keyword := IntoFile(file: `x`, index: Constant(bits: Bits.hex(`01`).extract(Bits.hex(`1f`))), to: Constant(bits: Bits.hex(`00000005`)), fixed: zero_x)
+into_x1.perform(machine)
+IntoFile(file: `x`, index: Constant(bits: Bits.hex(`00`)), to: Constant(bits: Bits.hex(`00000009`)), fixed: zero_x).perform(machine)
+unless (InFile(file: `x`, index: Constant(bits: Bits.hex(`01`)), unset: zero_x, fixed: zero_x).value(machine) == Bits.hex(`00000005`)) { INFO@mark `G23 x1 does not hold 5` }
+unless (Files.read(machine, `x`, Bits.hex(`01`)) == Bits.hex(`00000005`)) { INFO@mark `G24 a test does not read x1 as 5` }
+unless (InFile(file: `x`, index: Constant(bits: Bits.hex(`00`)), unset: zero_x, fixed: zero_x).value(machine).is_zero) { INFO@mark `G25 x0 keeps what was written to it` }
+unless (InFile(file: `x`, index: Constant(bits: Bits.hex(`02`)), unset: zero_x, fixed: zero_x).value(machine).is_zero) { INFO@mark `G26 an unwritten register is not unset` }

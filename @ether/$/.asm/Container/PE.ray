@@ -1,0 +1,202 @@
+// A PE file: the container Windows loads, as Microsoft's PE/COFF
+// specification writes it down. It begins with the header of the DOS program
+// it once also was — `MZ`, and at its end the offset of what follows — then
+// the signature `PE\0\0`, the COFF file header (the machine, how many
+// sections), the optional header (where the program begins, where it wants
+// to be loaded, how its sections are aligned) with its table of data
+// directories (imports, exports, relocations, resources, …), and the section
+// table: where each section is in the file and where it goes in memory. Every
+// field is written least significant byte first. The optional header comes
+// in two widths, told apart by its first field: PE32 (`10b`) and PE32+
+// (`20b`), whose addresses are eight bytes.
+//
+// spec: what the data directories point at — the import descriptors and the
+// names they import, relocations, exports, resources — are structures inside
+// the sections, reached by address rather than by offset; they are read the
+// same way, through `at_address`, next.
+
+PE := class {
+  file: Node
+  dos: Node
+  coff: Node
+  optional: Node
+  directories: Node
+  sections: Node
+  pieces: Node
+  wide: Node
+
+  read (given) => (
+    dos_values := chain None
+    dos_links := chain None
+    past_dos := Layout.read(PE.dos_slots, given.head, false, dos_values, dos_links)
+    read_dos := Layout.claimed(`DOS header`, dos_values, dos_links, past_dos)
+    coff_at := Bytes.on(given.head, read_dos.field(`e_lfanew`), None)
+    coff_values := chain None
+    coff_links := chain None
+    past_coff := Layout.read(PE.coff_slots, coff_at, false, coff_values, coff_links)
+    read_coff := Layout.claimed(`COFF header`, coff_values, coff_links, past_coff)
+    optional_values := chain None
+    optional_links := chain None
+    past_magic := Layout.read(PE.magic_slots, past_coff, false, optional_values, optional_links)
+    is_wide := Layout.find(optional_values, `Magic`) == Bits.hex(`020b`)
+    past_optional := Layout.read(PE.optional_slots(is_wide), past_magic, false, optional_values, optional_links)
+    read_optional := Layout.claimed(`optional header`, optional_values, optional_links, past_optional)
+    read_directories := Layout.table(past_optional, Bytes.eight, read_optional.field(`NumberOfRvaAndSizes`), PE.directory_slots, false, `data directory`)
+    section_table := Bytes.on(past_coff, read_coff.field(`SizeOfOptionalHeader`), None)
+    read_sections := Layout.table(section_table, Bits.hex(`28`), read_coff.field(`NumberOfSections`), PE.section_slots, false, `section header`)
+    laid_out := Layout.pieces(given)
+    PE(file: given, dos: read_dos, coff: read_coff, optional: read_optional, directories: read_directories, sections: read_sections, pieces: laid_out, wide: is_wide)
+  )
+
+  // The DOS header: sixty-four bytes, of which a PE loader reads the first
+  // two (`MZ`) and the last four (where the PE header is).
+  dos_slots => (
+    slots := chain None
+    slots &= Slot(name: `e_magic`, size: Bytes.two)
+    slots &= Slot(name: `e_cblp`, size: Bytes.two)
+    slots &= Slot(name: `e_cp`, size: Bytes.two)
+    slots &= Slot(name: `e_crlc`, size: Bytes.two)
+    slots &= Slot(name: `e_cparhdr`, size: Bytes.two)
+    slots &= Slot(name: `e_minalloc`, size: Bytes.two)
+    slots &= Slot(name: `e_maxalloc`, size: Bytes.two)
+    slots &= Slot(name: `e_ss`, size: Bytes.two)
+    slots &= Slot(name: `e_sp`, size: Bytes.two)
+    slots &= Slot(name: `e_csum`, size: Bytes.two)
+    slots &= Slot(name: `e_ip`, size: Bytes.two)
+    slots &= Slot(name: `e_cs`, size: Bytes.two)
+    slots &= Slot(name: `e_lfarlc`, size: Bytes.two)
+    slots &= Slot(name: `e_ovno`, size: Bytes.two)
+    slots &= Slot(name: `e_res`, size: Bytes.eight)
+    slots &= Slot(name: `e_oemid`, size: Bytes.two)
+    slots &= Slot(name: `e_oeminfo`, size: Bytes.two)
+    slots &= Slot(name: `e_res2`, size: Bits.hex(`14`))
+    slots &= Slot(name: `e_lfanew`, size: Bytes.four)
+    slots
+  )
+  // The signature and the COFF file header after it.
+  coff_slots => (
+    slots := chain None
+    slots &= Slot(name: `Signature`, size: Bytes.four)
+    slots &= Slot(name: `Machine`, size: Bytes.two)
+    slots &= Slot(name: `NumberOfSections`, size: Bytes.two)
+    slots &= Slot(name: `TimeDateStamp`, size: Bytes.four)
+    slots &= Slot(name: `PointerToSymbolTable`, size: Bytes.four)
+    slots &= Slot(name: `NumberOfSymbols`, size: Bytes.four)
+    slots &= Slot(name: `SizeOfOptionalHeader`, size: Bytes.two)
+    slots &= Slot(name: `Characteristics`, size: Bytes.two)
+    slots
+  )
+  magic_slots => (
+    slots := chain None
+    slots &= Slot(name: `Magic`, size: Bytes.two)
+    slots
+  )
+  address (is_wide) => if is_wide { Bytes.eight } else { Bytes.four }
+  // The optional header after its magic. PE32+ has no `BaseOfData`, and its
+  // image base and the four sizes of stack and heap are eight bytes.
+  optional_slots (is_wide) => (
+    slots := chain None
+    width := PE.address(is_wide)
+    slots &= Slot(name: `MajorLinkerVersion`, size: Bytes.one)
+    slots &= Slot(name: `MinorLinkerVersion`, size: Bytes.one)
+    slots &= Slot(name: `SizeOfCode`, size: Bytes.four)
+    slots &= Slot(name: `SizeOfInitializedData`, size: Bytes.four)
+    slots &= Slot(name: `SizeOfUninitializedData`, size: Bytes.four)
+    slots &= Slot(name: `AddressOfEntryPoint`, size: Bytes.four)
+    slots &= Slot(name: `BaseOfCode`, size: Bytes.four)
+    unless is_wide { slots &= Slot(name: `BaseOfData`, size: Bytes.four) }
+    slots &= Slot(name: `ImageBase`, size: width)
+    slots &= Slot(name: `SectionAlignment`, size: Bytes.four)
+    slots &= Slot(name: `FileAlignment`, size: Bytes.four)
+    slots &= Slot(name: `MajorOperatingSystemVersion`, size: Bytes.two)
+    slots &= Slot(name: `MinorOperatingSystemVersion`, size: Bytes.two)
+    slots &= Slot(name: `MajorImageVersion`, size: Bytes.two)
+    slots &= Slot(name: `MinorImageVersion`, size: Bytes.two)
+    slots &= Slot(name: `MajorSubsystemVersion`, size: Bytes.two)
+    slots &= Slot(name: `MinorSubsystemVersion`, size: Bytes.two)
+    slots &= Slot(name: `Win32VersionValue`, size: Bytes.four)
+    slots &= Slot(name: `SizeOfImage`, size: Bytes.four)
+    slots &= Slot(name: `SizeOfHeaders`, size: Bytes.four)
+    slots &= Slot(name: `CheckSum`, size: Bytes.four)
+    slots &= Slot(name: `Subsystem`, size: Bytes.two)
+    slots &= Slot(name: `DllCharacteristics`, size: Bytes.two)
+    slots &= Slot(name: `SizeOfStackReserve`, size: width)
+    slots &= Slot(name: `SizeOfStackCommit`, size: width)
+    slots &= Slot(name: `SizeOfHeapReserve`, size: width)
+    slots &= Slot(name: `SizeOfHeapCommit`, size: width)
+    slots &= Slot(name: `LoaderFlags`, size: Bytes.four)
+    slots &= Slot(name: `NumberOfRvaAndSizes`, size: Bytes.four)
+    slots
+  )
+  // A data directory: where in memory a table is, and how big. In order,
+  // they are the exports, imports, resources, exceptions, certificates,
+  // relocations, debug data, … .
+  directory_slots => (
+    slots := chain None
+    slots &= Slot(name: `VirtualAddress`, size: Bytes.four)
+    slots &= Slot(name: `Size`, size: Bytes.four)
+    slots
+  )
+  section_slots => (
+    slots := chain None
+    slots &= Slot(name: `Name`, size: Bytes.eight)
+    slots &= Slot(name: `VirtualSize`, size: Bytes.four)
+    slots &= Slot(name: `VirtualAddress`, size: Bytes.four)
+    slots &= Slot(name: `SizeOfRawData`, size: Bytes.four)
+    slots &= Slot(name: `PointerToRawData`, size: Bytes.four)
+    slots &= Slot(name: `PointerToRelocations`, size: Bytes.four)
+    slots &= Slot(name: `PointerToLinenumbers`, size: Bytes.four)
+    slots &= Slot(name: `NumberOfRelocations`, size: Bytes.two)
+    slots &= Slot(name: `NumberOfLinenumbers`, size: Bytes.two)
+    slots &= Slot(name: `Characteristics`, size: Bytes.four)
+    slots
+  )
+
+  machine => .coff.field(`Machine`)
+  // Where the program begins, relative to where the image is loaded.
+  entry => .optional.field(`AddressOfEntryPoint`)
+
+  // Whether a section runs: `IMAGE_SCN_MEM_EXECUTE`, bit 29 of its
+  // characteristics.
+  runs (section) => (
+    executable := Bits.hex(`20000000`)
+    section.field(`Characteristics`).fits(executable, executable)
+  )
+  // The section that runs and holds the entry point in what the file gives
+  // it; or None.
+  entered => (
+    found := None
+    looking := .sections.head
+    while ((exists looking).and((exists found).not)) {
+      section := looking.value
+      if (.runs(section)) {
+        distance := .entry - section.field(`VirtualAddress`)
+        if (distance.carry.and(distance.below(section.field(`SizeOfRawData`)))) { found = section }
+      }
+      looking = looking.next
+    }
+    found
+  )
+  // What a section holds: its size in memory, or what the file gives it if
+  // that is less. What the file gives it beyond its size is padding to the
+  // file's alignment.
+  extent (section) => (
+    in_memory := section.field(`VirtualSize`)
+    in_file := section.field(`SizeOfRawData`)
+    if (in_memory.below(in_file)) { in_memory } else { in_file }
+  )
+  // The bytes the program begins with: from the entry point to the end of
+  // what the section holding it holds, as a chain of bytes.
+  code => (
+    section := .entered
+    if (exists section) {
+      distance := .entry - section.field(`VirtualAddress`)
+      start := Bytes.on(.file.head, section.field(`PointerToRawData`), None)
+      at_entry := Bytes.on(start, distance, None)
+      rest_size := .extent(section) - distance
+      Bytes.taken(at_entry, rest_size)
+    } else { None }
+  )
+
+  written => Layout.written(.pieces)
+}

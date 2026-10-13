@@ -1,0 +1,33 @@
+// Code run by the goto programs its instructions are: a toy RV32I where `addi`
+// does what it does, with registers held as `x` followed by their number.
+//
+// run: .ether/asm/asm.sh run @ether/$/.asm/tests/run.ray boolean.ray -- Bits.ray ISA.ray Goto.ray Code.ray Run.ray
+
+mark ^keyword := external global
+unless (exists None) { INFO@mark `R0 control: this always fires` }
+
+// The toy keeps one register, `acc`, and `addi` adds its immediate to it; a
+// `jal` with a zero immediate leaves for where it is, which is where the run
+// is told to stop.
+addi_fields ^keyword := chain None
+addi_fields &= Field(name: `imm12`, mask: Bits.hex(`fff00000`))
+addi_does ^keyword := chain None
+addi_does &= Set(place: `acc`, to: Sum(left: Named(name: `acc`), right: Widened(of: Named(name: `imm12`), like: Bits.hex(`00000000`), signed: true)))
+halt_does ^keyword := chain None
+halt_does &= Jump(when: None, target: None, to: Named(name: `inst_start`))
+toy_encodings ^keyword := chain None
+toy_encodings &= Encoding(mnemonic: `addi`, mask: Bits.hex(`0000707f`), match: Bits.hex(`00000013`), fields: addi_fields, semantics: Goto(steps: addi_does))
+toy_encodings &= Encoding(mnemonic: `halt`, mask: Bits.hex(`ffffffff`), match: Bits.hex(`0000006f`), fields: chain None, semantics: Goto(steps: halt_does))
+toy ^keyword := ISA(name: `toy`, endian: `little`, encodings: toy_encodings)
+
+// addi 5; addi -1; addi 3; halt — at 0x1000.
+toy_code ^keyword := Code(isa: toy, bytes: Bits.hex_bytes(`13005000 1300f0ff 13003000 6f000000`), width: Bits.hex(`00000000`))
+machine ^keyword := State(registers: chain None, memory: chain None)
+machine.put(`acc`, Bits.hex(`00000000`))
+runner ^keyword := Run(code: toy_code, base: Bits.hex(`00001000`))
+placed ^keyword := runner.placed
+unless (placed.head.next.next.next.value.address == Bits.hex(`0000100c`)) { INFO@mark `R1 the fourth instruction is not at 100c` }
+stopped ^keyword := runner.run(machine, Bits.hex(`00001000`), Bits.hex(`0000100c`), Bits.hex(`ff`))
+unless (stopped == Bits.hex(`0000100c`)) { INFO@mark `R2 the run does not stop at the halt` }
+unless (machine.get(`acc`) == Bits.hex(`00000007`)) { INFO@mark `R3 five, less one, and three is not seven` }
+unless (machine.get(`inst_start`) == Bits.hex(`00001008`)) { INFO@mark `R4 the last instruction run is not the one at 1008` }

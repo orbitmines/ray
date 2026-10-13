@@ -3,7 +3,7 @@ import { sources } from './bundled.ts';
 export const NAME = 'Ether' as const
 export const ALIASES = ['ray', 'orbitmines'] as const;
 export const EXTENSION = '.ray';
-export const ENTRYPOINT = ['@ether', 'ray', `.entrypoint${EXTENSION}`]
+export const ENTRYPOINT = ['..', '..', '..', '@ether', 'ray', `.entrypoint${EXTENSION}`]
 export const version:
   [major: number, releaseDate: string, index: number] =
   [0, '2027-01-01', 4];
@@ -27,7 +27,6 @@ export const cli: CLI.Spec = {
   //      ephemeral jobs of a daemon that was replaced by a newer build can't be listed or stopped any more (its socket is gone); environment variables are never persisted, which a future `continue` would need to revisit.
 //   ephemeral: {           description:`Keep nothing on disk: the output is only streamed, and the job's record is removed when it ends.` },
 };
-
 
 export namespace CLI {
   export type Args = [args: string[], kwargs: Record<string, string | true | number | (string | true | number)[]>];
@@ -89,6 +88,14 @@ export namespace CLI {
     return [args, kwargs];
   }
 }
+
+const ansi = {
+  darkGray:  "\x1b[38;5;240m",
+  indianRed: "\x1b[38;5;167m",
+  orange:    "\x1b[38;5;208m",
+  green:     "\x1b[38;5;34m",
+  reset:     "\x1b[0m",
+};
 
 export class Version {
   static readonly letter = 'E';
@@ -238,21 +245,6 @@ export class env {
     });
     return { postMessage(message: any) { worker.postMessage(message) }, onMessage(callback: (message: any) => void) { worker.addEventListener('message', (event: any) => callback(event.data)); }, terminate() { worker.terminate(); } }
   }
-
-  static root(cwd: string = process.cwd()): string {
-    const { fs, path } = env;
-    const language_dir = (dir: string) => path.join(dir, ...ENTRYPOINT);
-    // A checkout enclosing the working directory: walk up to the marker.
-    let dir = cwd;
-    while (!fs.existsSync(language_dir(dir)) && path.dirname(dir) !== dir) dir = path.dirname(dir);
-    if (fs.existsSync(language_dir(dir))) return dir;
-    dir = import.meta.dirname;
-    while (!fs.existsSync(language_dir(dir)) && path.dirname(dir) !== dir) dir = path.dirname(dir);
-    if (fs.existsSync(language_dir(dir))) return dir;
-
-    throw new Error(`Couldn't find a language definition on your system. Expected one in the hierarchy of your CWD, in the package (production), or in the repository (development). Signature is a '${ENTRYPOINT.join('/')}' directory.`)
-  }
-
 }
 
 export namespace Global {
@@ -261,7 +253,7 @@ export namespace Global {
   }
   export abstract class Source {
     location: string
-    constructor(public relative_location?: string) { if (relative_location !== undefined) this.location = env.nodejs ? env.path.join(env.root(), relative_location) : new URL('../' + relative_location, import.meta.url).href }
+    constructor(public relative_location?: string) { if (relative_location !== undefined) this.location = env.nodejs ? env.path.resolve(process.cwd(), relative_location) : new URL('../' + relative_location, import.meta.url).href }
     abstract load(): Promise<void>
     abstract reload(): Promise<void>
     abstract is_language_entrypoint: boolean
@@ -278,27 +270,29 @@ export namespace Text {
             yield new Text.Source(path);
         }
       } else if (env.nodejs) {
-        const location = env.path.join(env.root(), relative_location);
+        const location = env.path.resolve(process.cwd(), relative_location);
 
         const stat = await env.fs_promises.stat(location);
         if (stat.isDirectory()) {
           async function* all(location: string): AsyncGenerator<Text.Source> {
             for (const entry of await env.fs_promises.readdir(location, { withFileTypes: true })) {
-              const path = env.path.join(location, entry.name);
+              const path = env.path.resolve(location, entry.name);
 
               // (not what is kept beside a library: hidden directories, packages)
               if (entry.isDirectory()) {
                 if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
                 yield *all(path);
               } else if (entry.isFile()) {
-                yield new Text.Source(env.path.relative(env.root(), path));
+                if (path.endsWith(EXTENSION))
+                  yield new Text.Source(env.path.relative(process.cwd(), path));
               }
             }
           }
 
           yield *all(location);
         } else if (stat.isFile()) {
-          yield new Text.Source(relative_location);
+          if (relative_location.endsWith(EXTENSION))
+            yield new Text.Source(relative_location);
         }
       } else {
         throw new Error('Cannot iterate directories over HTTP.');
@@ -338,7 +332,9 @@ export namespace Text {
   }
 }
 
-export async function main([args, kwargs]: CLI.Args = CLI.args()) {
+let [args, kwargs]: CLI.Args = CLI.args()
+
+export async function main() {
   if (kwargs.version) return console.log(env.version.toString());
   if (kwargs.help) { console.log(CLI.help()); return; }
   if (kwargs.lsp) return await lsp();
@@ -365,29 +361,10 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     return;
   }
 
-  const files = env.nodejs
-    ? args.map((f: string) =>
-        env.path.relative(
-          env.root(),
-          env.path.resolve(f),
-        ),
-      )
-    : args;
-
-  const entrypoint =
-    files[0] ?? ENTRYPOINT.join("/") + "2";
-
-  const threads = Math.max(
-    1,
-    Number(kwargs.threads ?? env.threads),
-  );
-
-  const language = new Program(
-    new Text.Source(entrypoint),
-  )
+  const language = new Program(args.length > 0 ? new Text.Source(args[0]) : undefined,)
     .abstract(!!kwargs.abstract)
     .target(String(kwargs.target ?? env.target))
-    .parallel(threads);
+    .parallel(Math.max(1, Number(kwargs.threads ?? env.threads)));
 
   let localRunner: Promise<void> | undefined;
 
@@ -397,7 +374,7 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     // If no workers were created, consume tasks on this thread.
     if (language.workers.length === 0) {
       localRunner = language.queue.run(async (id) => {
-        await language.backend.read(language.files, id);
+        await Program.frontend.compile(language.files, id);
       });
 
       // A persistent runner stops when language.close() stops the queue.
@@ -408,10 +385,8 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     }
 
     // Register the entrypoint and all explicitly supplied files.
-    await language.add(
-      entrypoint,
-      ...files.slice(1),
-    );
+    await language[".entrypoint"]();
+    await language.add(...args.slice(1));
 
     const loaded = performance.now();
 
@@ -420,7 +395,7 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
 
     if (kwargs.verbose) {
       console.error(
-        `processed ${files.length || 1} input(s), ` +
+        `processed ${language.files.count || 1} input(s), ` +
         `on ${language.workers.length || 1} thread(s): ` +
         `loading ${(loaded - start).toFixed(1)} ms, ` +
         `processing ${(performance.now() - loaded).toFixed(1)} ms`,
@@ -439,67 +414,87 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     });
   }
 }
+export async function entrypoint() {
+  function thread(
+    message: {
+      buffers: Record<string, unknown>;
+      target: string;
+    },
+    ready: () => void,
+  ): void {
+    if (!message?.buffers) {
+      throw new Error("Worker initialization failed: buffers were not provided.");
+    }
+
+    const raw = message.buffers as Record<string, unknown>;
+    const values: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(raw)) {
+      if (
+        value instanceof ArrayBuffer ||
+        (typeof SharedArrayBuffer !== "undefined" &&
+          value instanceof SharedArrayBuffer)
+      ) {
+        values[key] = new Parallel.Memory(
+          value.byteLength,
+          true,
+          1 << 30,
+          value,
+        );
+      } else {
+        values[key] = value;
+      }
+    }
+
+    const buffer = new Parallel.Buffer<MemoryLayout>(
+      values as unknown as MemoryLayout,
+    );
+
+    const files = new FileStore(buffer);
+    const queueMemory = buffer.values.queue;
+
+    const queue = new Parallel.Queue(
+      buffer.values.queueCapacity,
+      true,
+      queueMemory.buffer,
+    );
+
+    ready();
+
+    void queue.run(async (id: number) => {
+      await Program.frontend.compile(files, id);
+    }).catch((error) => {
+      console.error("Worker queue failed:", error);
+    });
+}
+  if (env.nodejs && env.worker && env.worker_threads.workerData?.thread === NAME) {
+    args = env.worker_threads.workerData.main[0];
+    kwargs = env.worker_threads.workerData.main[1];
+    
+    const parent = env.worker_threads.parentPort!;
+
+    parent.once("message", (message: { buffers: Record<string, unknown>; target: string; }) => {
+      thread(message, () => parent.postMessage("ready"));
+    });
+  } else if (!env.nodejs && env.scope === "worker") {
+    (globalThis as any).addEventListener("message", (event: any) => {
+        thread(event.data, () => {
+          (globalThis as any).postMessage("ready");
+        });
+    }, { once: true });
+  } else if (env.nodejs && env.worker && env.worker_threads.workerData?.main) {
+    args = env.worker_threads.workerData.main[0];
+    kwargs = env.worker_threads.workerData.main[1];
+    void main();
+  } else if (env.is_main_entrypoint) {
+    void main();
+  }
+}
 export async function lsp() {
   
 }
 
-// Each file keeps room to grow when edited, and ends in newlines.
-const SLACK = 4096, PAD = 16;
-
-export abstract class Backend {
-  get name() { return Object.entries(Program.backends).find(x => x[1] === this)[0]; }
-
-  abstract compile(program: Program): void
-
-  abstract read(files: FileStore, id: number): Promise<void>;
-
-  abstract tree(id: number): {
-    starts: ArrayLike<number>;
-    indents: ArrayLike<number>;
-    parents: ArrayLike<number>;
-  };
-}
-
-export class Wasm extends Backend {
-  compile(program: Program): void {
-    
-  }
-
-  async read(files: FileStore, id: number): Promise<void> {
-    
-  }
-  // protected memory(bytes: number) { const memory = jmp.memory(bytes); return { memory, module: jmp.compile(jmp.lines(), memory.buffer.byteLength / 65536) }; }
-  // protected instance({ memory, module }: { memory: WebAssembly.Memory, module: WebAssembly.Module }) { return { bytes: new Uint8Array(memory.buffer), lines: jmp.instance(module, memory).lines }; }
-}
-export class Js extends Backend {
-  compile(program: Program): void {
-    
-  }
-  async read(files: FileStore, id: number): Promise<void> {
-    
-  }
-  // protected memory(bytes: number) { return { buffer: typeof SharedArrayBuffer !== 'undefined' ? new SharedArrayBuffer(bytes) : new ArrayBuffer(bytes) }; }
-  // protected instance({ buffer }: { buffer: ArrayBufferLike }) { return { bytes: new Uint8Array(buffer), lines: jmp.interpret(jmp.lines(), buffer).lines }; }
-}
-
-
 export type BufferLike = ArrayBuffer | SharedArrayBuffer;
-
-const enum FileState {
-  LOCK = 0,
-  COUNT = 1,
-  SOURCE_USED = 2,
-  PATH_USED = 3,
-  SIZE = 4,
-}
-
-const enum FileMeta {
-  OFFSET = 0,
-  LENGTH = 1,
-  PATH_OFFSET = 2,
-  PATH_LENGTH = 3,
-  SIZE = 4,
-}
 
 const enum QueueState {
   HEAD = 0,
@@ -511,604 +506,953 @@ const enum QueueState {
   SIZE = 6,
 }
 
-function createSharedBuffer(size: number, maximum: number): SharedArrayBuffer {
-  return new SharedArrayBuffer(size, { maxByteLength: maximum });
+export const FileState = {
+  LOCK: 0,
+  COUNT: 1,
+  SOURCE_USED: 2,
+  PATH_USED: 3,
+  SIZE: 4,
+} as const;
+
+export interface FileRecord {
+  offset: number;
+  length: number;
+  pathOffset: number;
+  pathLength: number;
 }
 
-export class Memory {
-  private readonly nativeGrow: boolean;
-  private current: BufferLike;
+export interface Codec<T> {
+  encode(value: T): Uint8Array;
+  decode(bytes: Uint8Array): T;
+  readonly size?: number;
+}
 
-  constructor(
-    size = 1024,
-    readonly shared = env.parallel,
-    private readonly maximum = 1 << 30,
-    backing?: BufferLike,
-  ) {
-    this.nativeGrow = this.shared;
+export namespace Parallel {
+ 
+  export function createArrayBuffer(
+    size: number,
+    maximum: number,
+    shared: boolean,
+  ): BufferLike {
+    if (shared) {
+      if (typeof SharedArrayBuffer === "undefined") {
+        throw new Error("SharedArrayBuffer is not available.");
+      }
+      return new SharedArrayBuffer(size, { maxByteLength: maximum });
+    }
 
-    this.current = backing ?? (
-      this.shared
-        ? createSharedBuffer(size, maximum)
-        : new ArrayBuffer(size)
-    );
+    return new ArrayBuffer(size, { maxByteLength: maximum });
+  }
 
-    if (this.current.byteLength > maximum) {
-      throw new RangeError("Buffer exceeds maximum capacity");
+  export class Memory {
+    private current: BufferLike;
+
+    constructor(
+      size = 1024,
+      readonly shared = env.parallel,
+      private readonly maximum = 1 << 30,
+      backing?: BufferLike,
+    ) {
+      this.current = backing ?? createArrayBuffer(size, maximum, shared);
+
+      if (this.current.byteLength > maximum) {
+        throw new RangeError("Buffer exceeds maximum capacity");
+      }
+    }
+
+    get buffer(): BufferLike {
+      return this.current;
+    }
+
+    get byteLength(): number {
+      return this.current.byteLength;
+    }
+
+    ensureCapacity(required: number): void {
+      if (!Number.isSafeInteger(required) || required < 0) {
+        throw new RangeError("Invalid requested capacity");
+      }
+
+      if (required <= this.byteLength) return;
+
+      if (required > this.maximum) {
+        throw new RangeError("Buffer capacity exceeded");
+      }
+
+      const size = Math.min(
+        this.maximum,
+        Math.max(required, this.byteLength * 2, 16),
+      );
+
+      if (this.current instanceof SharedArrayBuffer) {
+        if (typeof this.current.grow !== "function") {
+          throw new Error("SharedArrayBuffer is not growable");
+        }
+        this.current.grow(size);
+        return;
+      }
+
+      if (typeof this.current.resize === "function") {
+        this.current.resize(size);
+        return;
+      }
+
+      const next = new ArrayBuffer(size);
+      new Uint8Array(next).set(new Uint8Array(this.current));
+      this.current = next;
+    }
+
+    bytes(offset = 0, length?: number): Uint8Array {
+      if (
+        !Number.isSafeInteger(offset) ||
+        offset < 0 ||
+        offset > this.byteLength
+      ) {
+        throw new RangeError("Invalid byte offset");
+      }
+
+      if (length === undefined) {
+        return new Uint8Array(this.current, offset);
+      }
+
+      if (
+        !Number.isSafeInteger(length) ||
+        length < 0 ||
+        offset + length > this.byteLength
+      ) {
+        throw new RangeError("Invalid byte length");
+      }
+
+      return new Uint8Array(this.current, offset, length);
+    }
+
+    ints(offset = 0, length?: number): Int32Array {
+      if (
+        offset % 4 !== 0 ||
+        offset < 0 ||
+        offset > this.byteLength
+      ) {
+        throw new RangeError("Invalid Int32 offset");
+      }
+
+      if (length === undefined) {
+        return new Int32Array(this.current, offset);
+      }
+
+      if (
+        !Number.isSafeInteger(length) ||
+        length < 0 ||
+        offset + length * 4 > this.byteLength
+      ) {
+        throw new RangeError("Invalid Int32 length");
+      }
+
+      return new Int32Array(this.current, offset, length);
     }
   }
 
-  get buffer(): BufferLike {
-    return this.current;
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  export const codecs = {
+    bytes: {
+      encode: (value: Uint8Array) => value,
+      decode: (value: Uint8Array) => value,
+    } satisfies Codec<Uint8Array>,
+
+    string: {
+      encode: (value: string) => encoder.encode(value),
+      decode: (value: Uint8Array) => decoder.decode(value),
+    } satisfies Codec<string>,
+
+    json<T>(): Codec<T> {
+      return {
+        encode: (value) => encoder.encode(JSON.stringify(value)),
+        decode: (bytes) => JSON.parse(decoder.decode(bytes)) as T,
+      };
+    },
+  };
+
+  export class Store<T> {
+    constructor(
+      readonly memory: Memory,
+      readonly codec: Codec<T>,
+    ) {}
+
+    write(offset: number, value: T): number {
+      const bytes = this.codec.encode(value);
+      this.memory.ensureCapacity(offset + bytes.byteLength);
+      this.memory.bytes(offset, bytes.byteLength).set(bytes);
+      return bytes.byteLength;
+    }
+
+    read(offset: number, length: number): T {
+      return this.codec.decode(this.memory.bytes(offset, length));
+    }
+
+    bytes(offset: number, length: number): Uint8Array {
+      return this.memory.bytes(offset, length);
+    }
+
+    ensureCapacity(required: number): void {
+      this.memory.ensureCapacity(required);
+    }
   }
 
-  get byteLength(): number {
-    return this.current.byteLength;
+  export class StructArray<T> {
+    constructor(
+      readonly memory: Memory,
+      readonly codec: Codec<T>,
+    ) {
+      if (!Number.isSafeInteger(codec.size) || codec.size! <= 0) {
+        throw new RangeError("StructArray requires a fixed-size codec");
+      }
+    }
+
+    get width(): number {
+      return this.codec.size!;
+    }
+
+    get capacity(): number {
+      return Math.floor(this.memory.byteLength / this.width);
+    }
+
+    ensureCapacity(count: number): void {
+      if (!Number.isSafeInteger(count) || count < 0) {
+        throw new RangeError("Invalid record count");
+      }
+      this.memory.ensureCapacity(count * this.width);
+    }
+
+    get(id: number): T {
+      this.checkId(id);
+      const offset = id * this.width;
+
+      if (offset + this.width > this.memory.byteLength) {
+        throw new RangeError("Record is outside the allocated memory");
+      }
+
+      return this.codec.decode(this.memory.bytes(offset, this.width));
+    }
+
+    set(id: number, value: T): void {
+      this.checkId(id);
+
+      const bytes = this.codec.encode(value);
+      if (bytes.byteLength !== this.width) {
+        throw new RangeError("Record codec returned an incorrect size");
+      }
+
+      const offset = id * this.width;
+      this.memory.ensureCapacity(offset + this.width);
+      this.memory.bytes(offset, this.width).set(bytes);
+    }
+
+    private checkId(id: number): void {
+      if (!Number.isSafeInteger(id) || id < 0) {
+        throw new RangeError("Invalid record ID");
+      }
+    }
   }
 
-  ensureCapacity(required: number): void {
-    if (!Number.isSafeInteger(required) || required < 0) {
-      throw new RangeError("Invalid requested capacity");
+  export class HashMap {
+    constructor(
+      readonly memory: Memory,
+      readonly keyOf: (value: number) => Uint8Array,
+      readonly maximumBytes = 1 << 30,
+    ) {
+      if (maximumBytes < 8) {
+        throw new RangeError("HashMap maximum must be at least 8 bytes");
+      }
+
+      if (memory.byteLength < 8) memory.ensureCapacity(8);
+
+      const capacity = this.capacity;
+      if ((capacity & (capacity - 1)) !== 0) {
+        throw new RangeError("HashMap capacity must be a power of two");
+      }
     }
 
-    if (required <= this.byteLength) return;
-
-    if (required > this.maximum) {
-      throw new RangeError("Buffer capacity exceeded");
+    get capacity(): number {
+      return this.memory.byteLength / 4;
     }
 
-    const size = Math.min(
-      this.maximum,
-      Math.max(required, this.byteLength * 2, 16),
-    );
-
-    if (this.nativeGrow) {
-      (this.current as SharedArrayBuffer).grow(size);
-      return;
+    get(key: Uint8Array): number | undefined {
+      const slot = this.find(key);
+      return slot.found ? slot.value : undefined;
     }
 
-    const next = new ArrayBuffer(size);
-    new Uint8Array(next).set(new Uint8Array(this.current));
-    this.current = next;
+    has(key: Uint8Array): boolean {
+      return this.find(key).found;
+    }
+
+    set(key: Uint8Array, value: number): void {
+      if (
+        !Number.isSafeInteger(value) ||
+        value < 0 ||
+        value >= 0x7fffffff
+      ) {
+        throw new RangeError("Map values must be non-negative Int32 values");
+      }
+
+      let slot = this.find(key);
+      if (slot.found) {
+        this.memory.ints()[slot.slot] = value + 1;
+        return;
+      }
+
+      this.ensureSlots(this.size + 1);
+      slot = this.find(key);
+      this.memory.ints()[slot.slot] = value + 1;
+    }
+
+    delete(key: Uint8Array): boolean {
+      const result = this.find(key);
+      if (!result.found) return false;
+
+      const table = this.memory.ints();
+      table[result.slot] = 0;
+
+      // Reinsert the following probe cluster.
+      let slot = (result.slot + 1) & (table.length - 1);
+
+      while (table[slot] !== 0) {
+        const value = table[slot] - 1;
+        table[slot] = 0;
+        this.insert(value);
+        slot = (slot + 1) & (this.memory.ints().length - 1);
+      }
+
+      return true;
+    }
+
+    clear(): void {
+      this.memory.ints().fill(0);
+    }
+
+    get size(): number {
+      let count = 0;
+      for (const value of this.memory.ints()) {
+        if (value !== 0) count++;
+      }
+      return count;
+    }
+
+    private ensureSlots(entries: number): void {
+      let slots = this.capacity;
+
+      while (entries * 2 >= slots) slots *= 2;
+
+      const required = slots * 4;
+      if (required > this.maximumBytes) {
+        throw new RangeError("HashMap maximum capacity exceeded");
+      }
+
+      if (required <= this.memory.byteLength) return;
+
+      const existing: number[] = [];
+      for (const encoded of this.memory.ints()) {
+        if (encoded !== 0) existing.push(encoded - 1);
+      }
+
+      this.memory.ensureCapacity(required);
+      this.memory.bytes().fill(0);
+
+      for (const value of existing) this.insert(value);
+    }
+
+    private insert(value: number): void {
+      const key = this.keyOf(value);
+      const table = this.memory.ints();
+      const mask = table.length - 1;
+      let slot = Parallel.HashMap.hashBytes(key) & mask;
+
+      for (let i = 0; i < table.length; i++) {
+        const encoded = table[slot];
+
+        if (encoded === 0) {
+          table[slot] = value + 1;
+          return;
+        }
+
+        if (
+          Parallel.HashMap.equalBytes(
+            this.keyOf(encoded - 1),
+            key,
+          )
+        ) {
+          table[slot] = value + 1;
+          return;
+        }
+
+        slot = (slot + 1) & mask;
+      }
+
+      throw new Error("HashMap is full");
+    }
+
+    private find(
+      key: Uint8Array,
+    ): { slot: number; found: boolean; value: number } {
+      const table = this.memory.ints();
+      const mask = table.length - 1;
+      let slot = Parallel.HashMap.hashBytes(key) & mask;
+
+      for (let i = 0; i < table.length; i++) {
+        const encoded = table[slot];
+
+        if (encoded === 0) {
+          return { slot, found: false, value: -1 };
+        }
+
+        const value = encoded - 1;
+
+        if (
+          Parallel.HashMap.equalBytes(this.keyOf(value), key)
+        ) {
+          return { slot, found: true, value };
+        }
+
+        slot = (slot + 1) & mask;
+      }
+
+      throw new Error("HashMap is full");
+    }
+
+    static hashBytes(bytes: Uint8Array): number {
+      let hash = 0x811c9dc5;
+
+      for (const byte of bytes) {
+        hash ^= byte;
+        hash = Math.imul(hash, 0x01000193);
+      }
+
+      return hash >>> 0;
+    }
+
+    static equalBytes(a: Uint8Array, b: Uint8Array): boolean {
+      if (a.length !== b.length) return false;
+
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+
+      return true;
+    }
   }
 
-  bytes(offset = 0, length?: number): Uint8Array {
-    if (offset < 0 || offset > this.byteLength) {
-      throw new RangeError("Invalid byte offset");
+  export class Map<K, V extends number> {
+    readonly map: HashMap;
+
+    constructor(
+      readonly memory: Memory,
+      readonly maximumBytes: number,
+      readonly codec: Codec<K>,
+      readonly keyOf: (value: V) => K,
+    ) {
+      this.map = new HashMap(
+        memory,
+        (value) => codec.encode(keyOf(value as V)),
+        maximumBytes,
+      );
     }
 
-    if (length === undefined) {
-      return new Uint8Array(this.current, offset);
+    get(key: K): V | undefined {
+      return this.map.get(this.codec.encode(key)) as V | undefined;
     }
 
-    if (length < 0 || offset + length > this.byteLength) {
-      throw new RangeError("Invalid byte length");
+    has(key: K): boolean {
+      return this.map.has(this.codec.encode(key));
     }
 
-    return new Uint8Array(this.current, offset, length);
+    set(key: K, value: V): void {
+      this.map.set(this.codec.encode(key), value);
+    }
+
+    delete(key: K): boolean {
+      return this.map.delete(this.codec.encode(key));
+    }
+
+    clear(): void {
+      this.map.clear();
+    }
   }
 
-  ints(offset = 0, length?: number): Int32Array {
-    if (offset % 4 !== 0 || offset < 0 || offset > this.byteLength) {
-      throw new RangeError("Invalid Int32 offset");
+  export class Queue {
+    private readonly state: Int32Array;
+    private readonly tasks: Int32Array;
+
+    constructor(
+      capacity = 256,
+      shared = env.parallel,
+      buffer?: BufferLike,
+    ) {
+      if (!Number.isSafeInteger(capacity) || capacity <= 0) {
+        throw new RangeError("Invalid queue capacity");
+      }
+
+      const bytes = (QueueState.SIZE + capacity) * 4;
+      buffer ??= createArrayBuffer(bytes, bytes, shared);
+
+      if (buffer.byteLength < bytes) {
+        throw new RangeError("Queue buffer is too small");
+      }
+
+      this.state = new Int32Array(buffer, 0, QueueState.SIZE);
+      this.tasks = new Int32Array(buffer, QueueState.SIZE * 4, capacity);
     }
 
-    if (length === undefined) {
-      return new Int32Array(this.current, offset);
+    private lock(): void {
+      while (
+        Atomics.compareExchange(this.state, QueueState.LOCK, 0, 1) !== 0
+      ) {}
     }
 
-    if (length < 0 || offset + length * 4 > this.byteLength) {
-      throw new RangeError("Invalid Int32 length");
+    private unlock(): void {
+      Atomics.store(this.state, QueueState.LOCK, 0);
+      Atomics.notify(this.state, QueueState.LOCK, 1);
     }
 
-    return new Int32Array(this.current, offset, length);
+    async submit(ids: number[]): Promise<void> {
+      for (const id of ids) {
+        if (!Number.isSafeInteger(id) || id < 0) {
+          throw new RangeError(`Invalid task ID: ${id}`);
+        }
+
+        for (;;) {
+          if (Atomics.load(this.state, QueueState.STOP)) {
+            throw new Error("Queue stopped");
+          }
+
+          this.lock();
+          let inserted = false;
+
+          try {
+            if (Atomics.load(this.state, QueueState.COUNT) < this.tasks.length) {
+              const tail = Atomics.load(this.state, QueueState.TAIL);
+              this.tasks[tail] = id;
+
+              Atomics.store(
+                this.state,
+                QueueState.TAIL,
+                (tail + 1) % this.tasks.length,
+              );
+
+              Atomics.add(this.state, QueueState.COUNT, 1);
+              Atomics.add(this.state, QueueState.PENDING, 1);
+              inserted = true;
+            }
+          } finally {
+            this.unlock();
+          }
+
+          if (inserted) break;
+
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        }
+      }
+    }
+
+    take(): number | undefined {
+      this.lock();
+
+      try {
+        if (Atomics.load(this.state, QueueState.COUNT) === 0) {
+          return undefined;
+        }
+
+        const head = Atomics.load(this.state, QueueState.HEAD);
+        const id = this.tasks[head];
+
+        Atomics.store(
+          this.state,
+          QueueState.HEAD,
+          (head + 1) % this.tasks.length,
+        );
+
+        Atomics.sub(this.state, QueueState.COUNT, 1);
+        return id;
+      } finally {
+        this.unlock();
+      }
+    }
+
+    done(): void {
+      const previous = Atomics.sub(this.state, QueueState.PENDING, 1);
+
+      if (previous <= 0) {
+        Atomics.add(this.state, QueueState.PENDING, 1);
+        throw new Error("Unexpected task completion");
+      }
+
+      Atomics.notify(this.state, QueueState.PENDING);
+    }
+
+    async join(): Promise<void> {
+      while (Atomics.load(this.state, QueueState.PENDING) !== 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }
+    }
+
+    async run(process: (id: number) => void | Promise<void>): Promise<void> {
+      while (!Atomics.load(this.state, QueueState.STOP)) {
+        const id = this.take();
+
+        if (id === undefined) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          continue;
+        }
+
+        try {
+          await process(id);
+        } finally {
+          this.done();
+        }
+      }
+    }
+
+    stop(): void {
+      Atomics.store(this.state, QueueState.STOP, 1);
+      Atomics.notify(this.state, QueueState.STOP);
+    }
+  }
+
+  /**
+   * Generic memory-layout container.
+   * Only Memory instances and raw buffers are serialized.
+   */
+  export class Buffer<T> {
+    constructor(readonly values: T) {}
+
+    pack(): Record<string, unknown> {
+      const result: Record<string, unknown> = {};
+
+      for (const [key, value] of Object.entries(this.values)) {
+        result[key] = value instanceof Memory ? value.buffer : value;
+      }
+
+      return result;
+    }
+
+    unpack(shared = true, maximum = 1 << 30): T {
+      const result: Record<string, unknown> = {};
+
+      for (const [key, value] of Object.entries(this.values)) {
+        if (
+          value instanceof ArrayBuffer ||
+          (typeof SharedArrayBuffer !== "undefined" &&
+            value instanceof SharedArrayBuffer)
+        ) {
+          result[key] = new Memory(
+            value.byteLength,
+            shared,
+            maximum,
+            value,
+          );
+        } else {
+          result[key] = value;
+        }
+      }
+
+      return result as T;
+    }
   }
 }
 
-export interface MemoryBuffers {
-  source: SharedArrayBuffer;
-  metadata: SharedArrayBuffer;
-  paths: SharedArrayBuffer;
-  index: SharedArrayBuffer;
-  fileState: SharedArrayBuffer;
-  queue: SharedArrayBuffer;
+export const FileRecordCodec: Codec<FileRecord> = {
+  size: 16,
+
+  encode(value) {
+    const buffer = new ArrayBuffer(16);
+    const view = new DataView(buffer);
+
+    view.setInt32(0, value.offset, true);
+    view.setInt32(4, value.length, true);
+    view.setInt32(8, value.pathOffset, true);
+    view.setInt32(12, value.pathLength, true);
+
+    return new Uint8Array(buffer);
+  },
+
+  decode(bytes) {
+    if (bytes.byteLength !== 16) {
+      throw new RangeError("Invalid FileRecord size");
+    }
+
+    const view = new DataView(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength,
+    );
+
+    return {
+      offset: view.getInt32(0, true),
+      length: view.getInt32(4, true),
+      pathOffset: view.getInt32(8, true),
+      pathLength: view.getInt32(12, true),
+    };
+  },
+};
+
+export interface MemoryLayout {
+  source: Parallel.Memory;
+  metadata: Parallel.Memory;
+  paths: Parallel.Memory;
+  index: Parallel.Memory;
+  fileState: Parallel.Memory;
+  queue: Parallel.Memory;
   queueCapacity: number;
   maximum: number;
 }
 
 export class FileStore {
-  readonly source: Memory;
-  readonly metadata: Memory;
-  readonly paths: Memory;
-  readonly index: Memory;
+  readonly source: Parallel.Store<Uint8Array>;
+  readonly metadata: Parallel.StructArray<FileRecord>;
+  readonly paths: Parallel.Store<string>;
+  readonly index: Parallel.Map<string, number>;
 
-  private readonly state: Int32Array;
-  private readonly encoder = new TextEncoder();
-  private readonly decoder = new TextDecoder();
+  constructor(readonly buffer: Parallel.Buffer<MemoryLayout>) {
+    const values = buffer.values;
 
-  private readonly maxFiles: number;
-  private readonly maxPathBytes: number;
-  private readonly maxIndexSlots: number;
+    this.source = new Parallel.Store(values.source, Parallel.codecs.bytes);
+    this.metadata = new Parallel.StructArray(values.metadata, FileRecordCodec);
+    this.paths = new Parallel.Store(values.paths, Parallel.codecs.string);
 
-  constructor(
-    buffers: MemoryBuffers,
-    shared = true,
-  ) {
-    this.source   = new Memory(buffers.source.byteLength, shared, buffers.maximum, buffers.source);
-    this.metadata = new Memory(buffers.metadata.byteLength, shared, buffers.maximum, buffers.metadata);
-    this.paths = new Memory(
-      buffers.paths.byteLength,
-      shared,
-      buffers.maximum,
-      buffers.paths,
+    this.index = new Parallel.Map(
+      values.index,
+      values.maximum,
+      Parallel.codecs.string,
+      (id) => {
+        const record = this.metadata.get(id);
+        return this.paths.read(record.pathOffset, record.pathLength);
+      },
     );
-
-    this.index = new Memory(
-      buffers.index.byteLength,
-      shared,
-      buffers.maximum,
-      buffers.index,
-    );
-
-    this.state = new Int32Array(buffers.fileState);
-
-    this.maxFiles = Math.floor(buffers.maximum / (FileMeta.SIZE * 4));
-    this.maxPathBytes = buffers.maximum;
-    this.maxIndexSlots = Math.floor(buffers.maximum / 4);
-  }
-
-  private lock(): void {
-    while (Atomics.compareExchange(this.state, FileState.LOCK, 0, 1) !== 0) {
-      // All file mutations and index lookups are serialized.
-    }
-  }
-
-  private unlock(): void {
-    Atomics.store(this.state, FileState.LOCK, 0);
-    Atomics.notify(this.state, FileState.LOCK, 1);
-  }
-
-  private normalize(path: string): string {
-    const absolute = path.startsWith("/") || path.startsWith("\\");
-    const parts: string[] = [];
-
-    for (const part of path.replace(/\\/g, "/").split("/")) {
-      if (!part || part === ".") continue;
-
-      if (part === ".." && parts.length && parts[parts.length - 1] !== "..") {
-        parts.pop();
-      } else if (part !== ".." || !absolute) {
-        parts.push(part);
-      }
-    }
-
-    const joined = parts.join("/");
-    return absolute ? `/${joined}` : joined || ".";
-  }
-
-  private record(id: number): Int32Array {
-    return this.metadata.ints(id * FileMeta.SIZE * 4, FileMeta.SIZE);
-  }
-
-  private pathBytes(id: number): Uint8Array {
-    const meta = this.record(id);
-
-    return this.paths.bytes(
-      meta[FileMeta.PATH_OFFSET],
-      meta[FileMeta.PATH_LENGTH],
-    );
-  }
-
-  private hash(bytes: Uint8Array): number {
-    let h = 0x811c9dc5;
-
-    for (const byte of bytes) {
-      h = Math.imul(h ^ byte, 0x01000193);
-    }
-
-    return h >>> 0;
-  }
-
-  private findSlot(bytes: Uint8Array): { slot: number; id?: number } {
-    const table = this.index.ints();
-    const mask = table.length - 1;
-    let slot = this.hash(bytes) & mask;
-
-    for (let i = 0; i < table.length; i++) {
-      const value = table[slot];
-
-      if (value === 0) return { slot };
-
-      const id = value - 1;
-      const existing = this.pathBytes(id);
-
-      if (
-        existing.length === bytes.length &&
-        existing.every((byte, index) => byte === bytes[index])
-      ) {
-        return { slot, id };
-      }
-
-      slot = (slot + 1) & mask;
-    }
-
-    throw new RangeError("Path index is full");
-  }
-
-  private insertIntoIndex(id: number, bytes: Uint8Array): void {
-    const table = this.index.ints();
-    const mask = table.length - 1;
-    let slot = this.hash(bytes) & mask;
-
-    while (table[slot] !== 0) {
-      slot = (slot + 1) & mask;
-    }
-
-    table[slot] = id + 1;
-  }
-
-  private rebuildIndex(requiredFiles: number): void {
-    const currentSlots = this.index.byteLength / 4;
-
-    if (requiredFiles * 2 < currentSlots) return;
-
-    const nextSlots = currentSlots * 2;
-
-    if (nextSlots > this.maxIndexSlots) {
-      throw new RangeError("Maximum path index capacity exceeded");
-    }
-
-    this.index.ensureCapacity(nextSlots * 4);
-
-    const table = this.index.ints();
-    table.fill(0);
-
-    const count = Atomics.load(this.state, FileState.COUNT);
-
-    for (let id = 0; id < count; id++) {
-      this.insertIntoIndex(id, this.pathBytes(id));
-    }
-  }
-
-  add(path: string, content: Uint8Array): number {
-    const normalized = this.normalize(path);
-    const encodedPath = this.encoder.encode(normalized);
-
-    this.lock();
-
-    try {
-      const found = this.findSlot(encodedPath);
-
-      if (found.id !== undefined) {
-        throw new Error(`File already exists: ${normalized}`);
-      }
-
-      const id = Atomics.load(this.state, FileState.COUNT);
-
-      if (id >= this.maxFiles) {
-        throw new RangeError("Maximum file count exceeded");
-      }
-
-      const sourceOffset = Atomics.load(this.state, FileState.SOURCE_USED);
-      const pathOffset = Atomics.load(this.state, FileState.PATH_USED);
-
-      if (pathOffset + encodedPath.length > this.maxPathBytes) {
-        throw new RangeError("Maximum path storage exceeded");
-      }
-
-      this.source.ensureCapacity(sourceOffset + content.length);
-      this.metadata.ensureCapacity((id + 1) * FileMeta.SIZE * 4);
-      this.paths.ensureCapacity(pathOffset + encodedPath.length);
-
-      this.rebuildIndex(id + 1);
-
-      this.source.bytes(sourceOffset, content.length).set(content);
-      this.paths.bytes(pathOffset, encodedPath.length).set(encodedPath);
-
-      const meta = this.record(id);
-      meta[FileMeta.OFFSET] = sourceOffset;
-      meta[FileMeta.LENGTH] = content.length;
-      meta[FileMeta.PATH_OFFSET] = pathOffset;
-      meta[FileMeta.PATH_LENGTH] = encodedPath.length;
-
-      const slot = this.findSlot(encodedPath).slot;
-      this.index.ints()[slot] = id + 1;
-
-      Atomics.store(
-        this.state,
-        FileState.SOURCE_USED,
-        sourceOffset + content.length,
-      );
-
-      Atomics.store(
-        this.state,
-        FileState.PATH_USED,
-        pathOffset + encodedPath.length,
-      );
-
-      // Publish only after content, path and metadata are written.
-      Atomics.store(this.state, FileState.COUNT, id + 1);
-
-      return id;
-    } finally {
-      this.unlock();
-    }
   }
 
   get count(): number {
-    return Atomics.load(this.state, FileState.COUNT);
-  }
-
-  getFileId(path: string): number | undefined {
-    const encodedPath = this.encoder.encode(this.normalize(path));
-
-    this.lock();
-
-    try {
-      return this.findSlot(encodedPath).id;
-    } finally {
-      this.unlock();
-    }
+    return Atomics.load(
+      this.buffer.values.fileState.ints(),
+      FileState.COUNT,
+    );
   }
 
   includes(path: string): boolean {
-    return this.getFileId(path) !== undefined;
+    return this.index.has(this.normalize(path));
   }
 
-  private getMeta(id: number): Int32Array {
-    if (!Number.isInteger(id) || id < 0 || id >= this.count) {
-      throw new RangeError(`Unknown file ID: ${id}`);
-    }
-
-    return this.record(id);
-  }
-
-  getBytes(id: number): Uint8Array {
-    const meta = this.getMeta(id);
-
-    return this.source.bytes().subarray(
-      meta[FileMeta.OFFSET],
-      meta[FileMeta.OFFSET] + meta[FileMeta.LENGTH],
-    );
-  }
-
-  getText(id: number): string {
-    return this.decoder.decode(this.getBytes(id));
+  getFileId(path: string): number | undefined {
+    return this.index.get(this.normalize(path));
   }
 
   getPath(id: number): string {
-    return this.decoder.decode(this.pathBytes(id));
+    const record = this.getRecord(id);
+    return this.paths.read(record.pathOffset, record.pathLength);
   }
-}
 
-export class Queue {
-  private readonly state: Int32Array;
-  private readonly tasks: Int32Array;
+  getBytes(id: number): Uint8Array {
+    const record = this.getRecord(id);
+    return this.source.read(record.offset, record.length);
+  }
 
-  constructor(
-    capacity = 256,
-    buffer?: SharedArrayBuffer,
-  ) {
-    const bytes = (QueueState.SIZE + capacity) * 4;
-    buffer ??= createSharedBuffer(bytes, bytes);
+  getText(id: number): string {
+    return new TextDecoder().decode(this.getBytes(id));
+  }
 
-    if (buffer.byteLength < bytes) {
-      throw new RangeError("Queue buffer is too small");
+  add(path: string, content: string | Uint8Array): number {
+    path = this.normalize(path);
+
+    const bytes = typeof content === "string"
+      ? new TextEncoder().encode(content)
+      : content;
+
+    const state = this.buffer.values.fileState.ints();
+
+    this.lock(state);
+
+    try {
+      const existing = this.index.get(path);
+      if (existing !== undefined) return existing;
+
+      const id = Atomics.load(state, FileState.COUNT);
+      const sourceOffset = Atomics.load(state, FileState.SOURCE_USED);
+      const pathOffset = Atomics.load(state, FileState.PATH_USED);
+
+      this.source.write(sourceOffset, bytes);
+      const pathLength = this.paths.write(pathOffset, path);
+
+      this.metadata.set(id, {
+        offset: sourceOffset,
+        length: bytes.byteLength,
+        pathOffset,
+        pathLength,
+      });
+
+      this.index.set(path, id);
+
+      Atomics.store(
+        state,
+        FileState.SOURCE_USED,
+        sourceOffset + bytes.byteLength,
+      );
+
+      Atomics.store(
+        state,
+        FileState.PATH_USED,
+        pathOffset + pathLength,
+      );
+
+      Atomics.store(state, FileState.COUNT, id + 1);
+      return id;
+    } finally {
+      this.unlock(state);
+    }
+  }
+
+  private getRecord(id: number): FileRecord {
+    if (!Number.isSafeInteger(id) || id < 0 || id >= this.count) {
+      throw new RangeError(`Invalid file ID: ${id}`);
     }
 
-    this.state = new Int32Array(buffer, 0, QueueState.SIZE);
-    this.tasks = new Int32Array(
-      buffer,
-      QueueState.SIZE * 4,
-      capacity,
-    );
+    return this.metadata.get(id);
   }
 
-  private lock(): void {
+  private normalize(path: string): string {
+    return path.replace(/\\/g, "/");
+  }
+
+  private lock(state: Int32Array): void {
     while (
-      Atomics.compareExchange(this.state, QueueState.LOCK, 0, 1) !== 0
+      Atomics.compareExchange(state, FileState.LOCK, 0, 1) !== 0
     ) {}
   }
 
-  private unlock(): void {
-    Atomics.store(this.state, QueueState.LOCK, 0);
-    Atomics.notify(this.state, QueueState.LOCK, 1);
-  }
-
-  async submit(ids: number[]): Promise<void> {
-    for (const id of ids) {
-      if (!Number.isInteger(id) || id < 0) {
-        throw new RangeError(`Invalid task ID: ${id}`);
-      }
-
-      for (;;) {
-        if (Atomics.load(this.state, QueueState.STOP)) {
-          throw new Error("Queue stopped");
-        }
-
-        this.lock();
-        let inserted = false;
-
-        try {
-          if (Atomics.load(this.state, QueueState.COUNT) < this.tasks.length) {
-            const tail = Atomics.load(this.state, QueueState.TAIL);
-
-            this.tasks[tail] = id;
-
-            Atomics.store(
-              this.state,
-              QueueState.TAIL,
-              (tail + 1) % this.tasks.length,
-            );
-
-            Atomics.add(this.state, QueueState.COUNT, 1);
-            Atomics.add(this.state, QueueState.PENDING, 1);
-            inserted = true;
-          }
-        } finally {
-          this.unlock();
-        }
-
-        if (inserted) break;
-
-        await new Promise<void>(resolve => setTimeout(resolve, 0));
-      }
-    }
-  }
-
-  take(): number | undefined {
-    this.lock();
-
-    try {
-      if (Atomics.load(this.state, QueueState.COUNT) === 0) {
-        return undefined;
-      }
-
-      const head = Atomics.load(this.state, QueueState.HEAD);
-      const id = this.tasks[head];
-
-      Atomics.store(
-        this.state,
-        QueueState.HEAD,
-        (head + 1) % this.tasks.length,
-      );
-
-      Atomics.sub(this.state, QueueState.COUNT, 1);
-
-      return id;
-    } finally {
-      this.unlock();
-    }
-  }
-
-  done(): void {
-    const previous = Atomics.sub(this.state, QueueState.PENDING, 1);
-
-    if (previous <= 0) {
-      Atomics.add(this.state, QueueState.PENDING, 1);
-      throw new Error("Unexpected task completion");
-    }
-
-    Atomics.notify(this.state, QueueState.PENDING);
-  }
-
-  async join(): Promise<void> {
-    while (Atomics.load(this.state, QueueState.PENDING) !== 0) {
-      await new Promise<void>(resolve => setTimeout(resolve, 0));
-    }
-  }
-
-  async run(
-    process: (id: number) => void | Promise<void>,
-  ): Promise<void> {
-    while (!Atomics.load(this.state, QueueState.STOP)) {
-      const id = this.take();
-
-      if (id === undefined) {
-        await new Promise<void>(resolve => setTimeout(resolve, 0));
-        continue;
-      }
-
-      try {
-        await process(id);
-      } finally {
-        this.done();
-      }
-    }
-  }
-
-  stop(): void {
-    Atomics.store(this.state, QueueState.STOP, 1);
-    Atomics.notify(this.state, QueueState.STOP);
+  private unlock(state: Int32Array): void {
+    Atomics.store(state, FileState.LOCK, 0);
+    Atomics.notify(state, FileState.LOCK, 1);
   }
 }
+
+export abstract class Language<Frontend> {
+  get name() { return Object.entries(Program.backends).find(x => x[1] === this)[0]; }
+
+  abstract compile(program: Frontend, id: number): Promise<void>
+
+  // abstract tree(id: number): {
+  //   starts: ArrayLike<number>;
+  //   indents: ArrayLike<number>;
+  //   parents: ArrayLike<number>;
+  // };
+}
+
+export class Wasm extends Language<Ray> {
+  async compile(program: Ray, id: number): Promise<void> {
+    
+  }
+
+  // protected memory(bytes: number) { const memory = jmp.memory(bytes); return { memory, module: jmp.compile(jmp.lines(), memory.buffer.byteLength / 65536) }; }
+  // protected instance({ memory, module }: { memory: WebAssembly.Memory, module: WebAssembly.Module }) { return { bytes: new Uint8Array(memory.buffer), lines: jmp.instance(module, memory).lines }; }
+}
+export class Js extends Language<Ray> {
+  async compile(program: Ray, id: number): Promise<void> {
+    
+  }
+}
+
+enum Op { GOTO, LABEL, ".", "&" }
+
+export class Ray extends Language<FileStore> {
+  async compile(program: FileStore, id: number): Promise<void> {
+    const location = program.getPath(id);
+    if (!!kwargs.verbose) { console.log(`${ansi.darkGray}PARSING${ansi.reset} ${ansi.darkGray}${location}${ansi.reset}`)}
+
+    class Program {
+      buffer: Parallel.Memory;
+      
+    }
+
+    console.log(id);
+  }
+}
+
 export class Program {
-  static backends: Record<string, Backend> = {
-    wasm: new Wasm(),
-    js: new Js(),
-  };
+  static backends: Record<string, Language<Ray>> = { wasm: new Wasm(), js: new Js(),};
+  static frontend: Language<FileStore> = new Ray();
 
-  constructor(public entrypoint: Global.Source) {}
-
-  backend: Backend = Program.backends[env.target];
-
-  workers: any[] = [];
-  private workerReady: Promise<void>[] = [];
-
-  buffers!: MemoryBuffers;
-  files!: FileStore;
-  queue!: Queue;
+  constructor(public entrypoint?: Global.Source) {}
 
   cursors: pointer[] = [];
-  abstractly = false;
 
+  backend: Language<Ray> = Program.backends[env.target];
   target(target: string): this {
     const backend = Program.backends[target];
-
-    if (!backend)
-      throw new Error(`The chosen backend '${target}' doesn't exist.`);
-
+    if (!backend) throw new Error(`The chosen backend '${target}' doesn't exist.`);
     this.backend = backend;
     return this;
   }
 
-  abstract(abstractly?: boolean): this {
-    this.abstractly = abstractly ?? true;
-    return this;
-  }
+  abstractly = false;
+  abstract(abstractly?: boolean): this { this.abstractly = abstractly ?? true; return this; }
+
+  workers: any[] = [];
+  private workerReady: Promise<void>[] = [];
+
+  buffer!: Parallel.Buffer<MemoryLayout>;
+  files: FileStore;
+  queue!: Parallel.Queue;
 
   parallel(threads = env.threads): this {
-    if (this.buffers) throw new Error("Program.parallel() has already been initialized.");
+    if (this.buffer) {
+      throw new Error("Program.parallel() has already been initialized.");
+    }
 
-    const sourceSize = 4096;
-    const queueCapacity = 256;
+    const shared = env.parallel && threads > 1;
     const maximum = 1 << 30;
+    const queueCapacity = 256;
 
-    this.buffers = {
-      source: createSharedBuffer(sourceSize, maximum),
-      metadata: createSharedBuffer(4096, maximum),
-      paths: createSharedBuffer(4096, maximum),
-      index: createSharedBuffer(512 * 4, maximum),
-      fileState: createSharedBuffer(
+    const values: MemoryLayout = {
+      source: new Parallel.Memory(4096, shared, maximum),
+      metadata: new Parallel.Memory(4096, shared, maximum),
+      paths: new Parallel.Memory(4096, shared, maximum),
+      index: new Parallel.Memory(512 * 4, shared, maximum),
+      fileState: new Parallel.Memory(
         FileState.SIZE * 4,
+        shared,
         FileState.SIZE * 4,
       ),
-      queue: createSharedBuffer(
+      queue: new Parallel.Memory(
         (QueueState.SIZE + queueCapacity) * 4,
+        shared,
         (QueueState.SIZE + queueCapacity) * 4,
       ),
       queueCapacity,
       maximum,
     };
 
-    this.files = new FileStore(this.buffers);
-    this.queue = new Queue(
-      this.buffers.queueCapacity,
-      this.buffers.queue,
+    this.buffer = new Parallel.Buffer<MemoryLayout>(values);
+    this.files = new FileStore(this.buffer);
+    this.queue = new Parallel.Queue(
+      queueCapacity,
+      shared,
+      values.queue.buffer,
     );
 
-    // No worker threads in a non-parallel environment.
-    if (!env.parallel || threads <= 1)
-      return this;
+    if (!shared) return this;
 
     for (let i = 0; i < threads; i++) {
-      const worker = env.Worker({ thread: NAME });
+      const worker = env.Worker({ thread: NAME, main: [args, kwargs] });
       this.workers.push(worker);
 
-      // Register the listener BEFORE sending the initialization message.
       const ready = new Promise<void>((resolve, reject) => {
         worker.onMessage((message: unknown) => {
-          if (message === "ready") {
-            resolve();
-          } else {
-            reject(new Error("Unexpected worker initialization response."),);
-          }
+          if (message === "ready") resolve();
+          else reject(new Error("Unexpected worker initialization response."));
         });
       });
 
       this.workerReady.push(ready);
+
       worker.postMessage({
-        buffers: this.buffers,
+        buffers: this.buffer.pack(),
         target: this.backend.name,
       });
     }
@@ -1123,52 +1467,49 @@ export class Program {
     // Do not queue work until all workers have initialized their shared memory.
     await Promise.all(this.workerReady);
 
-    const addSource = async (src: Text.Source): Promise<void> => {
-      await src.load();
-
-      if (!src.location)
-        throw new Error("Cannot add a source without a location.");
-
-      // The lookup must use the shared FileStore index, not a local Map.
-      if (this.files.getFileId(src.location) !== undefined)
+    const add = async (src: Text.Source): Promise<void> => {
+      if (this.files.getFileId(src.location) !== undefined) {
+        if (!!kwargs.verbose) { console.log(`${ansi.orange}SKIPPED${ansi.reset} ${ansi.darkGray}${src.location}${ansi.reset}`)}
         return;
+      }
+
+      if (!!kwargs.verbose) { console.log(`${ansi.darkGray}LOADING${ansi.reset} ${ansi.darkGray}${src.location}${ansi.reset}`)}
+      await src.load();
+      
+      // Double-check if loading took long.
+      if (this.files.getFileId(src.location) !== undefined) {
+        if (!!kwargs.verbose) { console.log(`${ansi.orange}SKIPPED${ansi.reset} ${ansi.darkGray}${src.location}${ansi.reset}`)}
+        return;
+      }
 
       const id = this.files.add(src.location, src.value);
 
       await this.queue.submit([id]);
+
+      if (!!kwargs.verbose) { console.log(`${ansi.green}LOADED ${ansi.reset} ${ansi.darkGray}${src.location}${ansi.reset}`)}
     };
 
     for (const item of include) {
       if (item instanceof Text.Source) {
-        await addSource(item);
+        await add(item);
       } else {
         for await (const src of Text.Source.all(item)) {
-          await addSource(src);
+          await add(src);
         }
       }
     }
   }
 
   async ".entrypoint"() {
-    const src = this.entrypoint as Text.Source;
+    const src = this.entrypoint as Text.Source | undefined;
 
-    if (
-      !src.loaded &&
-      src.location &&
-      !(await src.is_directory())
-    ) {
-      await src.load();
+    if (src) {
+      if (!src.loaded && src.location &&!(await src.is_directory())) await src.load();    
+      if (src.is_language_entrypoint) return src;
     }
 
-    if (src.is_language_entrypoint)
-      return src;
-
-    await this.add(
-      new Text.Source(ENTRYPOINT.join("/") + "2"),
-      src,
-    );
-
-    return src;
+    await this.add(new Text.Source(ENTRYPOINT.join("/") + "2"));
+    if (src) await this.add(src.location);
   }
 
   // get entrypoint(): pointer {
@@ -1216,73 +1557,4 @@ export class Context {
 
 }
 
-enum Op { GOTO, LABEL, ".", "&" }
-
-export function thread(
-  message: {
-    buffers: MemoryBuffers;
-    target: string;
-  },
-  ready: () => void,
-): void {
-  if (!message?.buffers) {
-    throw new Error(
-      "Worker initialization failed: MemoryBuffers were not provided.",
-    );
-  }
-
-  const files = new FileStore(message.buffers);
-  const queue = new Queue(
-    message.buffers.queueCapacity,
-    message.buffers.queue,
-  );
-
-  const backend = Program.backends[message.target];
-
-  if (!backend) {
-    throw new Error(
-      `Unknown backend '${message.target}'.`,
-    );
-  }
-
-  ready();
-
-  void queue.run(async (id: number) => {
-    await backend.read(files, id);
-  }).catch((error) => {
-    console.error("Worker queue failed:", error);
-  });
-}
-
-if (
-  env.nodejs &&
-  env.worker &&
-  env.worker_threads.workerData?.thread === NAME
-) {
-  const parent = env.worker_threads.parentPort!;
-
-  parent.once("message", (message: {
-    buffers: MemoryBuffers;
-    target: string;
-  }) => {
-    thread(message, () => parent.postMessage("ready"));
-  });
-} else if (!env.nodejs && env.scope === "worker") {
-  (globalThis as any).addEventListener(
-    "message",
-    (event: any) => {
-      thread(event.data, () => {
-        (globalThis as any).postMessage("ready");
-      });
-    },
-    { once: true },
-  );
-} else if (
-  env.nodejs &&
-  env.worker &&
-  env.worker_threads.workerData?.main
-) {
-  void main(env.worker_threads.workerData.main);
-} else if (env.is_main_entrypoint) {
-  void main();
-}
+entrypoint();

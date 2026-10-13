@@ -1,0 +1,49 @@
+concurrently ^keyword := TODO
+
+Expression := class (
+  BOOTSTRAPPER: (
+    HEADER: `!language`,
+    \s[]+,
+    CAPTURE: (String+, \s, String+),
+    \s[]+,
+    CAPTURES: (LHS: CAPTURE.map{== \s}("LHS") | RHS: CAPTURE.map{== \s}("RHS") | String)[],
+    \n\n
+  ),
+  (
+    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES
+      .map{== \s}(\s[])                         // Any space means arbitrary whitespace.
+      ~~ .(LHS | RHS) = String                  // Arbitrary captures for each group
+    
+    GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF     // The grammar rule is shaped [LHS: [LHS, RHS], RHS]
+
+    GRAMMER_RULE: GRAMMAR_RULE_DEF, \n | ⊣,     // First rule must be the GRAMMAR RULE.
+    statements: (
+      Node := class {
+        rules := {
+          [rule: GARMMAR_RULE] := (caller) => 
+            rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] := 
+              (caller) => (rhs: Statements(this) = rule.RHS)(Program(caller: caller)),
+        }
+      }
+      Program := class {
+        caller?: Program
+      }
+      global := Node({
+        rules["external", \s+, rule: String, args?: Node[]] := (caller) => {
+          "." => Node(),
+          "&" => caller,
+          "goto" (label: Node, condition?: Node) => {}
+          "label" (label: Node) => {}
+        }[rule](args)
+      })
+      Statements (context: Node) => dynamically (
+        leading_whitespace: (\s | \n)[],
+        {statement: concurrently context.rules[.]()}: context.rules.keys{#.sort(.length).last} //TODO a 'max .length' function.
+      )[] & (caller: Node) => .statement#.for .(caller)
+
+      Statements(global, Program())
+    )
+  ),
+) => {
+
+}

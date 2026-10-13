@@ -1,0 +1,13 @@
+!language   { }   {LHS} => {RHS}
+
+{lhs} => {rhs} => {
+  external .
+  {lhs} => {
+    external .
+    {rhs}
+  }
+}
+
+{x}: {type} => x.type = type
+{x} ^{style} => x.style = style
+

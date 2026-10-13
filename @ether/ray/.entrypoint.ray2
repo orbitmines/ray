@@ -2163,11 +2163,6 @@ Iterable &+= {
         index = index + 1
       }
       None
-    // (the values of the lists in it, in order; a value that is not a list, itself)
-    flatten =>
-      made := Listing.new
-      .for((x) => made.joined(x))
-      made
   }
 }
 Listing := Iterable.interior.Listing

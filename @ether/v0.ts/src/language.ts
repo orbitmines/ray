@@ -165,8 +165,17 @@ export class env {
   static get child_process(): typeof import('child_process') { return env._child_process ??= env.import('child_process', env._child_process); }
   static get worker_threads(): typeof import('worker_threads') { return env._worker_threads ??= env.import('worker_threads', env._worker_threads); }
 
+  static through_tsx = `const { workerData } = await import('node:worker_threads'); (await import(workerData.tsx)).register(); await import(workerData.kernel);`;
   static thread(data: object = {}, variables: Record<string, string> = {}): import('worker_threads').Worker {
     const file = env.url.fileURLToPath(import.meta.url), typescript = (globalThis as any).Deno === undefined && /\.[cm]?ts$/.test(file);
+    // (a Node without `--experimental-transform-types` (26 on) runs the source through tsx: a thread that registers it, then
+    // reads this file)
+    if (typescript && !process.allowedNodeEnvironmentFlags.has('--experimental-transform-types')) return new env.worker_threads.Worker(new URL(`data:text/javascript,${encodeURIComponent(env.through_tsx)}`), {
+      workerData: { daemon: NAME, ...data, kernel: import.meta.url, tsx: import.meta.resolve('tsx/esm/api') },
+      env: { ...process.env, ...variables },
+      execArgv: process.execArgv.filter(flag => !flag.startsWith('--stack-size')),
+      resourceLimits: { stackSizeMb: Number(process.env.RAY_STACK ?? 16) },
+    });
     return new env.worker_threads.Worker(file, {
       workerData: { daemon: NAME, ...data },
       env: { ...process.env, ...variables },

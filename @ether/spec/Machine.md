@@ -242,13 +242,11 @@ also after merging main.
   inputs, arrays after included, and read back and lifted again, print the same.
 - **MC10a**: gcc's object of `inflate.c` (4615 bytes, pinned) decodes all 22 streams as zlib wrote them and rejects all 7
   bad ones.
-- **MC10b** (so far): each of the 659 distinct instructions in it is read, written back byte for byte and printed as
-  objdump prints it; the whole 4615 bytes read as one function print objdump's text line for line. (Written back whole,
-  after `mov r32, imm` and `movabs` were told apart by REX.W, not yet run again.)
-- **MC10c** (so far): read and lifted function by function, the lifted program decodes 10 streams in Ray as gcc's object
-  does (stored, fixed and dynamic Huffman: `empty`, `hello`, `one`, `ray.txt.1`, `run.bin.1` with each strategy). A
-  fixed-Huffman stream takes 150 s and 2.5 GB, a dynamic one 300 s and more: every value written into text in a run is
-  kept until the run ends (see "What a kernel needs"), so the corpus's larger streams wait for that.
+- **MC10b**: all 4615 bytes read as one function, written back byte for byte, printed as objdump prints them.
+- **MC10c**: read and lifted function by function, the lifted program, run by Ray on one memory, decodes all 22 streams as
+  zlib wrote them and rejects all 7 bad ones. It is slow and large: from 11 s (a stored stream) to 38 minutes and 24 GB
+  (`text.txt.1.huffman`), since every value written into text in a run is held until a rule or the run ends (see "What
+  a kernel needs").
 - **MC10d** (begun): flags kept in two places below the stack, what a statement needs on the way borrowed from registers
   it does not name and given back, calls `call`, tail calls `jmp` (`poc/machine/out/probe/mc10d.py`, not yet run).
 
@@ -388,6 +386,13 @@ For a kernel written anew: what `language.ts`, `js.kinds.ray` and `structures3.t
   values written into text keeps them for the whole of a run. Today a value written into text is found by its id through
   `reading_now` (strong, until the outermost run ends) and `referred` (a `WeakRef`, which keeps it until the job ends):
   one fixed-Huffman decode by the lifted `inflate` writes 3.8 million values into text, and holds 2.5 GB at its end.
+  It is not a leak (all of it goes when the run ends) but what holding values as text makes: a value is written into code
+  as a token and the text read again, and text says nothing of who still needs what it names, so the table from token to
+  value keeps all of them. Letting a rule's hole values go when its right side is done keeps `reading_now` under what one
+  `Map` holds (16.7 million: `text.txt` reached it), but not the memory. Another host language would keep the same table.
+  What frees it: a rule's holes bound as names in the node its right side runs in, or its text read once into a tree whose
+  leaves hold the values; then a value lives as long as what holds it, in any language, and text is not read again for
+  every call (most of the 17 calls a second).
 
 Measured against today's kernel (to beat): boot 11 s; `f3` 17 calls a second; a warm 5-byte DEFLATE read 60 000 reads; the
 quick tier (`poc/quick.sh`) about 6 minutes.

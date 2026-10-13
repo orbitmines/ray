@@ -222,7 +222,7 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
         said = wrong.join('; ');
       }
     }
-  } catch (error: any) { said = 'threw ' + String(error?.message).slice(0, 80); }
+  } catch (error: any) { said = 'threw ' + String(error?.message).slice(0, 80); if (process.env.HEAP) console.error(String(error?.stack).split('\n').slice(0, 8).join('\n')); }
   if (!held) failed++;
   console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
 }

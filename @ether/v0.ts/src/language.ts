@@ -981,6 +981,7 @@ export class Program {
     if (!held) reading.values.set(name, held = also && reading.leading === name
       ? new Program.Held(reading.caps[name], also, reading.site, reading.self) : new Program.Held(reading.caps[name], reading.site, also ?? reading.also, reading.self));
     // (a call's arguments are code inlined into it: what they define is the call's)
+    if (held.read) return held;
     if (held.into === undefined) held.into = reading.into;
     // (read in the program its text was written in: the one the rule was read in)
     held.program ??= reading.program; held.from ??= reading.from;
@@ -995,10 +996,16 @@ export class Program {
     if (held.program) this.programs.push(held.program);
     // (a value written into text: that value)
     const { open } = this.grammar!, t = held.text.trim();
-    if (t.length === this.token && t.charCodeAt(open.length) === 0xE000) { try { return held.value = this.body(t, { node: held.node }, except); } finally { if (held.program) this.programs.pop(); } }
+    if (t.length === this.token && t.charCodeAt(open.length) === 0xE000) { try { return held.value = this.body(t, { node: held.node }, except); } finally { if (held.program) this.programs.pop(); Program.released(held); } }
     // (read as the code it was written in: `.x` there, its capture)
     try { return held.value = this.valued(held.text, { node: held.node, also: held.site, this: held.self, into: held.into, writer: held.typed ? undefined : held.from }, except, undefined, false); }
-    finally { if (held.program) this.programs.pop(); }
+    finally { if (held.program) this.programs.pop(); Program.released(held); }
+  }
+  // (read, a value is only what it was read to: where it was to be read is let go, so what still holds it does not keep the
+  // nodes and readings it was written in)
+  static released(held: Program.Held) {
+    const loose = held as { node?: Program.Node, site?: Program.Node, self?: unknown, into?: Program.Node, from?: Program.Reading, program?: Program.Running };
+    loose.node = loose.site = loose.into = undefined; loose.self = loose.from = loose.program = undefined;
   }
   // (a definition: its first line ends with the definer, or has one outside every bracket and quote)
   defining(s: string): boolean {
@@ -1266,7 +1273,7 @@ export class Program {
           if (!again.all && reading.all === all) lowest = Math.min(lowest, reading.position); else lowest = reading.position;
         }
         finally { this.running.pop(); }
-      } } finally { this.ended(); }
+      } } finally { this.ended(); reading.settled(); }
       if (value === undefined && calls) value = node;
       this.painter?.paint(reading);
       // (a method read on a value answers what it gave; nothing, nothing)
@@ -1730,6 +1737,9 @@ export namespace Program {
       return this.captured = caps;
     }
     next(): Reading | undefined { return !this.exact && this.index + 1 < this.all.length ? new Reading(this.all, this.index + 1, this.text, this.receiver, this.site, this.self) : undefined; }
+    // (its right side done: no other reading is tried after it, so only its own is kept (kept as where a value was written,
+    // all the others would be, and every reading they were written in))
+    settled() { this.all = [this.read]; this.index = 0; this.exact = true; }
   }
 }
 

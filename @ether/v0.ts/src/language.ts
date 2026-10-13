@@ -438,6 +438,8 @@ export class Program {
   static word(s: string, i: number): boolean { return i >= 0 && i < s.length && /[\p{L}\p{N}_]/u.test(s[i]); }
   // (a hole ending in an operator after a space, `1 >`, is code its right operand is missing from: it ends nowhere there)
   static dangling(s: string, t: number, u: number): boolean {
+    // (an operator a closing bracket follows, or the end, is the hole's own: `(0 ->)`)
+    if (u >= s.length || ')]}'.includes(s[u])) return false;
     let v = u; while (v > t && '<>=!|&+-/%^~'.includes(s[v - 1])) v--;
     return v < u && v > t && Program.space(s.charCodeAt(v - 1));
   }
@@ -836,7 +838,7 @@ export class Program {
     // (`caller`: `&` read where it was read)
     if (top.below) {
       const held = new Program.Held('&', root); held.program = top.below;
-      const rule = this.rule('caller', this.written(held)); rule.own = true; rule.holds = [held];
+      const rule = this.rule('caller', this.written(held)); rule.own = true; rule.holds = [held]; this.kept(held);
       rule.home = node; node.define(rule, true);
     }
     return node;
@@ -1172,11 +1174,12 @@ export class Program {
       // where else to look))
       const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.site ?? frame.node;
       // (a value that is not a node (text) has no names of its own: its names are the outermost node's (Node's), `.` the value;
-      // what its holes take is read where it was written, `3.binary(width)` in a call)
+      // a rule of the outermost node's that reads it reads its holes where it was written, `3.binary(width)` in a call (the
+      // kind's own are read below, as they were: a site would find them first, `this` the value's in their holes))
       // (and what it is made of has (`of`, as the host's kinds say: `Number`'s own `gcd (other)`), when they do not read it)
       if (!(self instanceof Program.Node)) {
         let root = frame.node; while (root.outer) root = root.outer;
-        const name = s.slice(1), named = this.read(name, { node: root, site: written === root ? undefined : written, also: frame.also, from: self, this: self, writer: frame.reading ?? frame.writer });
+        const name = s.slice(1), here = written !== root && this.leads(root, name), named = this.read(name, { node: root, ...(here ? { site: written, also: frame.also } : {}), from: self, this: self, writer: frame.reading ?? frame.writer });
         if (!(typeof named === 'string' && named === this.source(name))) return named;
         const kind = this.read('of.interior', { node: root, from: self, this: self });
         return kind instanceof Program.Node ? this.read(name, { node: kind, site: written, from: self, this: frame.this, on: true, writer: frame.reading ?? frame.writer }) : named;
@@ -1565,6 +1568,14 @@ export class Program {
     return true;
   }
   // (whether a node has a rule of its own that may read `s`)
+  // (a rule led by a literal in the node that may read the text)
+  leads(node: Program.Node, s: string): boolean {
+    for (const length of node.lengths.get(s[0]) ?? []) {
+      if (length > s.length) break;
+      if (node.led.get(s.slice(0, length))?.some(rule => this.may_read(rule, s, false))) return true;
+    }
+    return false;
+  }
   offers(node: Program.Node, s: string, defines: boolean | number, except?: Program.Rule): boolean {
     // (one including a level: what is read in it is its own)
     if (node.includes.length) return true;

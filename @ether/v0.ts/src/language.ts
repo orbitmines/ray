@@ -1271,6 +1271,7 @@ export class Program {
       if (calls && home!.includes.length) node.includes = home!.includes;
       // (a rewrite: a program of its own, read in the one running)
       reading.program = this.programs[this.programs.length - 1]; this.begun();
+      const written_from = this.referring;
       try { for (;;) {
         this.running.push(reading.rule);
         reading.into = home?.calls ? node : frame.into;
@@ -1294,7 +1295,7 @@ export class Program {
           if (!again.all && reading.all === all) lowest = Math.min(lowest, reading.position); else lowest = reading.position;
         }
         finally { this.running.pop(); }
-      } } finally { this.ended(); reading.settled(); }
+      } } finally { this.ended(); reading.settled(); this.forget(written_from); }
       if (value === undefined && calls) value = node;
       this.painter?.paint(reading);
       // (a method read on a value answers what it gave; nothing, nothing)
@@ -1437,6 +1438,15 @@ export class Program {
     const id = (object as { refers: number }).refers;
     if (this.referred.has(id)) return;
     this.referred.set(id, new WeakRef(object)); this.gone.register(object, id);
+  }
+  // (the values of holes written into text while a rule's right side ran, kept by nothing defined: that text was all read,
+  // so they are let go now, not when the run ends (a run of millions of them is more than a `Map` holds))
+  forget(from: number) {
+    for (let id = from + 1; id <= this.referring; id++) {
+      if (this.referred.has(id)) continue;
+      const object = this.reading_now.get(id);
+      if (object instanceof Program.Held) { this.reading_now.delete(id); object.refers = undefined; }
+    }
   }
   done_reading() {
     for (const [id, object] of this.reading_now) if (!this.referred.has(id)) (object as { refers?: number }).refers = undefined;

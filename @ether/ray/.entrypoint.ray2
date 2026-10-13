@@ -943,7 +943,7 @@ keyword
 goto styled
 punctuation
 {on}[{key}] = {value} =>
-  ({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value})
+  ((({on}).listing === true) && ({key} is Number)) ? ({on}.placed({key}, {value})) : (({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value}))
 goto styled
 punctuation
 {on}[{key}] := {value} =>
@@ -1881,6 +1881,16 @@ Iterable &+= {
         left = left - 1
       }
       at ? at.value : None
+    // (`xs[n] = v`: its nth value made v, from 0; past its end, nothing)
+    placed (index, value) =>
+      at := .head
+      left := index
+      while at && left > 0 {
+        at = at.next
+        left = left - 1
+      }
+      (at.value = value) if at
+      value
     // (the values of the lists in it in it, in their place: all the way down; `flatten(n)`, n lists down)
     flatten =>
       .flattened(64)

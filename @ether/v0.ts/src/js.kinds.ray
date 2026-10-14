@@ -292,6 +292,28 @@ unsigned_below({other}) =>
 wrapped_into({bits}, {signed}) =>
   goto js
   Number.isInteger(self) ? Number(signed === $('true') ? BigInt.asIntN(bits, BigInt(self)) : BigInt.asUintN(bits, BigInt(self))) : undefined
+// (text in small letters; text with every one of a piece left out)
+lowercased =>
+  goto js
+  typeof self === 'string' ? self.toLowerCase() : undefined
+without({piece}) =>
+  goto js
+  typeof self === 'string' && typeof piece === 'string' ? self.split(piece).join('') : undefined
+// (text cut at a separator: how many pieces, and the one at a place from 0: one piece at a time, not all as a list)
+piece_count({separator}) =>
+  goto js
+  typeof self === 'string' && typeof separator === 'string' ? self.split(separator).length : undefined
+piece_at({separator}, {index}) =>
+  goto js
+  typeof self === 'string' && typeof separator === 'string' && Number.isInteger(index) ? (self.split(separator)[index] ?? $('None')) : undefined
+// (text without the blanks at its ends)
+blank_trimmed =>
+  goto js
+  typeof self === 'string' ? self.trim() : undefined
+// (a file's text, as it is on the disk: what a vendor's own description is read from)
+file_text =>
+  goto js
+  typeof self === 'string' ? process.getBuiltinModule('node:fs').readFileSync(self, 'utf8') : undefined
 // (memory: bytes, each at its place from 0, read and written in one step; `n.memory_sized` n of them, all 0)
 memory_sized =>
   goto js

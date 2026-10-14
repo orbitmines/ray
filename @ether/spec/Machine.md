@@ -469,11 +469,23 @@ recommends.
 - **An assert in a block read again runs once** (`again()`): it made a list of 200 appends read its tests 200 times; it
   also means an assert in a loop body checks only the first pass. Recommended: decide what an assert in a block is (a
   declaration tested once, or a check every pass); this branch assumes the first.
-- **`0b101` is text** (N44, `js.kinds.ray`), **`*` repeats text and lists** (`"ab" * 2`, `[0] * 3`). Recommended: `0b` a
-  number as `0x` is; repetition kept.
+- **`0b101` is a number** again, as on main (N44); a code's bits, where its length counts, are written as text (`"010"`, DF1,
+  DF2). **`*` repeats text and lists** (`"ab" * 2`, `[0] * 3`), and with list `==` by values it is what fails IT71.
+  Recommended: repetition kept, IT71 looked at with it.
 - **A value read on reads its holes where it was written** (`3.binary(width)` in a call; `language.ts`): narrowed to the
   outermost node's rules, so a kind's own methods (`gcd`) read as on main.
 - **`xs[n] = v` places the value** (PR #24, standing on its own).
+
+What main's own tests say of this branch (Node 22, against main at 29d86861): 1115 passed, 1236 failed, 229 errors in
+reading, where main has 1112, 1223 and 241. By each assert's id, 41 pass here that fail on main, and 17 fail here that
+pass on main (there were 41). Found by putting back main's version of one change at a time: 19 came from a hole not
+ending in an operator after a space (now only before a body, `if a > b { … }`, what it was for), 5 from a value read
+on reading its holes where it was written (now only the outermost node's own rules, with arguments). Left, and where
+from: `TY63`, `IT33`, `TI3`, `TI5`, `TI6`, `UN3`, `W17` fail when a class asks `plain {…}` of its header while it is
+made, wherever it asks (in its block, or the rule's), why not found (the shape that would not: the kernel's codec
+choosing the maker as the class is made, not a library rule asking in text); `PRJ25`, `PRJ33` from a variable's value
+kept in its rule; `IT71` from the operators' bodies (`*` and `==`); `N44` (`0b101 == 5`, though `0b101` reads as 5 alone),
+`N122`, `TI52`, `HS5`, `HS9`, `UN49`, `HT12` from no one change alone.
 
 ## Order of work
 

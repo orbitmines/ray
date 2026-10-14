@@ -437,6 +437,7 @@ export class Program {
   static operator(s: string, i: number): boolean { return i >= 0 && i < s.length && '<>=!~|&+-*/%^?:.'.includes(s[i]); }
   static word(s: string, i: number): boolean { return i >= 0 && i < s.length && /[\p{L}\p{N}_]/u.test(s[i]); }
   // (a hole ending in an operator after a space, `1 >`, is code its right operand is missing from: it ends nowhere there)
+  // (a hole a body follows does not end in an operator after a space: `if a > b { … }` is not `if a >` and `b { … }`)
   static dangling(s: string, t: number, u: number): boolean {
     // (an operator a closing bracket follows, or the end, is the hole's own: `(0 ->)`)
     if (u >= s.length || ')]}'.includes(s[u])) return false;
@@ -633,7 +634,7 @@ export class Program {
         else if (quoted.has(x)) { const q = Program.quote_end(s, u, s[u]); u = q < 0 ? n : q + 1; }
         else if (x === 10 && !depth && !last && !enclosed) break;
         else { if (x === 60 && Program.word(s, u - 1)) given++; else if (x === 62 && given > 0) given--; u++; }
-        if (depth > 0 || given > 0 || Program.space(s.charCodeAt(u - 1)) || (last && whole && u < n) || Program.dangling(s, t, u)) continue;
+        if (depth > 0 || given > 0 || Program.space(s.charCodeAt(u - 1)) || (last && whole && u < n) || (next?.body && Program.dangling(s, t, u))) continue;
         if (last || (next.literal !== undefined ? s.startsWith(next.literal, u) : next.hole !== '' || Program.space(s.charCodeAt(u)))) ends.push(u);
       }
       for (let e = 0; e < ends.length; e++) {
@@ -1172,14 +1173,14 @@ export class Program {
       // (read on in a value, it is `name` read in the value; else in `.`)
       // (where the text was written: read on in a value, where it was before; else here (what `site` holds here then is only
       // where else to look))
-      const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.site ?? frame.node;
+      const self = frame.on ? frame.node : 'receiver' in frame ? frame.receiver : frame.this ?? frame.node, written = frame.on ? frame.site ?? frame.node : frame.node, called = frame.site ?? frame.node;
       // (a value that is not a node (text) has no names of its own: its names are the outermost node's (Node's), `.` the value;
       // a rule of the outermost node's that reads it reads its holes where it was written, `3.binary(width)` in a call (the
       // kind's own are read below, as they were: a site would find them first, `this` the value's in their holes))
       // (and what it is made of has (`of`, as the host's kinds say: `Number`'s own `gcd (other)`), when they do not read it)
       if (!(self instanceof Program.Node)) {
         let root = frame.node; while (root.outer) root = root.outer;
-        const name = s.slice(1), here = written !== root && this.leads(root, name), named = this.read(name, { node: root, ...(here ? { site: written, also: frame.also } : {}), from: self, this: self, writer: frame.reading ?? frame.writer });
+        const name = s.slice(1), here = called !== root && name.includes('(') && this.leads(root, name), named = this.read(name, { node: root, ...(here ? { site: called, also: frame.also } : {}), from: self, this: self, writer: frame.reading ?? frame.writer });
         if (!(typeof named === 'string' && named === this.source(name))) return named;
         const kind = this.read('of.interior', { node: root, from: self, this: self });
         return kind instanceof Program.Node ? this.read(name, { node: kind, site: written, from: self, this: frame.this, on: true, writer: frame.reading ?? frame.writer }) : named;

@@ -2,7 +2,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 ether="$(cd "$here/../.." && pwd)"
-ray() { (ulimit -s unlimited; cd "$ether/v0.ts" && ETHER="$ether" KINDS_AFTER=1 LOAD='$/x86/X86.ray,poc/interop/ints.ray,poc/interop/io.ray,poc/interop/write.rust.ray,poc/interop/read.c.ray,poc/interop/memory.ray' STEPS=${STEPS:-80000000} node --max-old-space-size=${HEAP_MB:-8000} --stack-size=60000 --import tsx "$here/$1" "${@:2}" 2>/dev/null); }
+ray() { (ulimit -s unlimited; cd "$ether/v0.ts" && ETHER="$ether" KINDS_AFTER=1 LOAD='$/x86/X86.ray,poc/interop/ints.ray,poc/interop/io.ray,poc/interop/write.rust.ray,poc/interop/read.c.ray,poc/interop/memory.ray'"${LOAD_EXTRA:+,$LOAD_EXTRA}" STEPS=${STEPS:-80000000} node --max-old-space-size=${HEAP_MB:-8000} --stack-size=60000 --import tsx "$here/$1" "${@:2}" 2>/dev/null); }
 each() {
   local failed=0 count
   count=$(wc -l < "$here/${CORPUS:-corpus}/manifest.txt")

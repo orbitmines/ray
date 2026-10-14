@@ -13,6 +13,7 @@ const g = { node: program.global }, none = program.run('None', g);
 // (the declaration bytes are read by: the one written by hand, or the one Ray made from XED, `X86.XedFunction`)
 const declared = process.env.DECLARED ?? 'X86.Function';
 const run = (text: string) => { program.steps = 0; return program.run(text, g); };
+if (declared !== 'X86.Function') run('X86.xed = true');
 const listed = (bytes: Uint8Array) => { const list = run('Listing.new'); for (const byte of bytes) run(program.written(list) + '.append(' + byte + ')'); return list; };
 const values_of = (list: unknown): unknown[] | undefined => {
   if (typeof list !== 'object' || list === null || run(program.written(list) + '.listing') !== run('true')) return undefined;
@@ -52,8 +53,8 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       const lines = typeof ray === 'string' ? values_of(run('X86.compiled(' + JSON.stringify(ray.slice(ray.indexOf(') => ') + 5)) + ', ' + (function_.type === 'long' ? 64 : 32) + ', [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '])')) as string[] | undefined : undefined;
       let written: number[] | undefined;
       if (lines) {
-        lines.forEach((line, index) => run('assembled_' + index + ' := X86.Assembly reading {\n  ' + line + '\n}'));
-        run('function_assembled := X86.Function([' + lines.map((_, index) => 'assembled_' + index).join(', ') + '])');
+        lines.forEach((line, index) => run('assembled_' + index + ' := X86.assembled(' + JSON.stringify(line) + ')'));
+        run('function_assembled := ' + declared + '([' + lines.map((_, index) => 'assembled_' + index).join(', ') + '])');
         written = values_of(run('function_assembled.written')) as number[] | undefined;
       }
       held = !!written && written.length > 0;
@@ -118,7 +119,7 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       const texts: string[] = [], saved = path.join(out, name + '.program.ray');
       if (process.env.LIFTED && fs.existsSync(saved)) texts.push(...fs.readFileSync(saved, 'utf8').trim().split(/\n(?=at_)/));
       else for (let k = 0; k < starts.length; k++) {
-        const code = run('X86.Code.from(' + program.written(listed(bytes.subarray(starts[k], starts[k + 1] ?? bytes.length))) + ')');
+        const code = run(declared.replace('Function', 'Code') + '.from(' + program.written(listed(bytes.subarray(starts[k], starts[k + 1] ?? bytes.length))) + ')');
         const text = code && typeof code === 'object' ? run('X86.lift_called(' + program.written(code) + ', ' + starts[k] + ', [' + starts.join(', ') + '])') : undefined;
         if (typeof text === 'string') texts.push(text);
         await new Promise(resolve => setImmediate(resolve));
@@ -210,8 +211,8 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
     }
     if (mode === 'assemble') {
       const lines = fs.readFileSync(path.join(corpus, name + '.s'), 'utf8').trim().split('\n');
-      lines.forEach((line, index) => run('assembled_' + index + ' := X86.Assembly reading {\n  ' + line + '\n}'));
-      run('function_assembled := X86.Function([' + lines.map((_, index) => 'assembled_' + index).join(', ') + '])');
+      lines.forEach((line, index) => run('assembled_' + index + ' := X86.assembled(' + JSON.stringify(line) + ')'));
+      run('function_assembled := ' + declared + '([' + lines.map((_, index) => 'assembled_' + index).join(', ') + '])');
       const written = values_of(run('function_assembled.written'));
       held = !!written && Buffer.from(written as number[]).equals(bytes);
       said = written ? `${Buffer.from(written as number[]).toString('hex')}, gcc: ${bytes.toString('hex')}` : 'not written';

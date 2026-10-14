@@ -117,7 +117,7 @@ Hexadecimals &+= {
 // Bits, as written: `0b010`, the text of its digits (it keeps its length; `+` joins two).
 0b{digits: Digits} =>
   goto js
-  /^[01]+$/.test($.text('digits')) ? $.text('digits') : undefined
+  /^[01]+$/.test($.text('digits')) ? parseInt($.text('digits'), 2) : undefined
 
 // What both answer, an operator written between two (`a + b`: read on `a`): one declared later binds looser (`1 + 2 == 3` is
 // `(1 + 2) == 3`), one declared with it as loosely (`10 - 2 - 3` is `(10 - 2) - 3`). `-` before `+`, `/` before `*`: `a + (b - c)`

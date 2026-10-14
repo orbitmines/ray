@@ -44,8 +44,8 @@ Deflate := class: Language {
       }
       code == 65536
     bits (symbol) => codes.find((code) => code.symbol == symbol).bits
-    assert Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111]  // DF1 the code lengths of section 3.2.2's example do not give its codes
-    assert Deflate.fixed_literals.bits(0) == 0b00110000 && Deflate.fixed_literals.bits(144) == 0b110010000 && Deflate.fixed_literals.bits(256) == 0b0000000  // DF2 the fixed literal codes are not those of section 3.2.6
+    assert Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == ["010", "011", "100", "101", "110", "00", "1110", "1111"]  // DF1 the code lengths of section 3.2.2's example do not give its codes
+    assert Deflate.fixed_literals.bits(0) == "00110000" && Deflate.fixed_literals.bits(144) == "110010000" && Deflate.fixed_literals.bits(256) == "0000000"  // DF2 the fixed literal codes are not those of section 3.2.6
 
     // Lengths fitted to frequencies: the two least frequent join until one is left, each join one bit deeper (Huffman 1952, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
     static fitted (frequencies) =>

@@ -1,13 +1,1476 @@
 !language   { }   {LHS} => {RHS}
 
 {lhs} => {rhs} => {
+  {lhs} => {rhs}
+}
+// {comment} => { }
+// The first statement is the rule creator: a rule written `{head} => {body}` is defined where it is read. Its body is what
+// `body` took (code, read once, with the rules before it: a rule never reads itself); its head is read with the rules there:
+// what is in a hole is code too (`{x: T}` is the hole `x` with `{x}: {type}` read in it, `{x ^style}` with `{x} ^{style}`, and
+// text a hole reads as, `{\`=>\`}`, is that text). A hole written against text takes no space (`{x}: {type}`: `:` binds the
+// nearest), never ends inside a word, and none ends inside a pair: the brackets, and what a head that is one hole between two
+// characters makes a pair (`({grouped})`). Of the rules reading all of a statement, a definition first (`=>` outside
+// brackets), then one led by text, then the latest: declaration order is precedence, what is declared last binds loosest.
+// Then a comment: nothing. (One after a statement, below.)
+
+// A group: read as what is inside it.
+({grouped}) => {grouped}
+// `.`: what is read in, `this` (in a method, what it is read on); `&`, the application it is written in, read as a node: what
+// its holes took (as text), its `caller`, and its `this`. A member, `x.name`: the name read in x. (In a method, a node made
+// sees what it is read on first, then where it was written: `.name` is that one's.)
+. => (external &).this
+.{member} => {member}
+this => .
+// Text as written: between backticks.
+`{text}` => (external &).text
+// Code read in a value, `.` that value (`x &+= { … }` defines in x), the value.
+&+= {code} => {
+  {code}
+  .
+}
+// A name given a value: the value read, then the name a rule answering it, here. A member given one, given in what it is on.
+{name} = {value} => {
+  value
+  {name} => value
+}
+{on}.{name} = {value} => on &+= {
+  {name} = {value}
+}
+// A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole).
+{x}: {type} => {
+  x.type = type
+  x
+}
+// `x ^style`: x, shown in that style (highlighting only). A head written with a style after it: its text shown so.
+{x} ^{style} => {
+  x.style = style
+  x
+}
+{lhs} ^{style} {`=>`} {rhs} => ({lhs} => {rhs}).style = style
+`{text}` ^string => (external &).text
+({grouped}) ^punctuation => {grouped}
+{statement} // {comment} ^comment => {statement}
+// {comment} ^comment => { }
+
+// A block: a node, its code read in it (`.` it). (A rule's body written in brackets is code: one that makes a node has the
+// block as its statement, `x => { { … } }`.)
+{`{`}{code}{`}`} ^punctuation => {
   external .
-  {lhs} => {
+  {code}
+  .
+}
+// Statements on one line: `a ; b`.
+{first} ; {rest} ^punctuation => {
+  {first}
+  {rest}
+}
+// A name declared here, given a value. (`x: T = v`: the value checked against T first, the name keeping its type.)
+{name} := {value} ^punctuation => {
+  value
+  {name} => value
+}
+// A name: a word (a head that is one hole takes one). A member's is one: `x.f(y)` is `f` read in x, then `(y)` read on it,
+// with x as `this`.
+Name := {
+  {word} => word
+}
+.{member: Name} ^punctuation => {member}
+{on}.{name: Name} = {value} => on &+= {
+  {name} = {value}
+}
+{on}.{name: Name} := {value} ^punctuation => on &+= {
+  {name} := {value}
+}
+.{name: Name} := {value} ^punctuation => . &+= {
+  {name} := {value}
+}
+.{name: Name} = {value} ^punctuation => . &+= {
+  {name} = {value}
+}
+{name}: {type} = {value} ^operator => {
+  (value) checked (type)
+  {name} := value
+  {name}.type = type
+}
+
+({name}) := {value} ^punctuation => {name} := {value}
+// Text: what is written between quotes, each escape in it (`\e`) what it stands for (`.unescaped`, the library's).
+"{text}" ^string => ((external &).text).unescaped
+unescaped => .
+assert `ab` as String == "ab"  // S158 written text is not read as a string
+
+// Diagnostics: said where they are about (the host's label `report`, what the first hole took), and a value.
+ERROR {message} ^error => {
+  external goto report
+  {
+    message := `{message}`
+    fatal := false
+  }
+}
+FATAL {message} ^fatal => {
+  external goto report
+  {
+    message := `{message}`
+    fatal := true
+  }
+}
+WARN {message} ^warn => external goto report
+INFO {message} ^info => external goto report
+TODO {message} ^debug => None
+ensure {condition} => {
+  unless (condition) {
+    ERROR assertion failed
+  }
+  condition
+}
+// A test, `assert c`: checked after everything is read (the host's label `afterwards`), where it is written; painted as what
+// it found (`untested` until then): `passed`, `failed` (also when anything was said while it ran: a name nothing defines).
+assert {condition} ^untested => {
+  external goto afterwards
+  (external &) ^((ensure {condition}) ? `passed` : `failed`)
+  external goto tested
+  // (one that said something, an error in it: failed; the host's label `erred`)
+  external label erred
+  (external &) ^`failed`
+  external label tested
+}
+
+// Node: the outermost node (`.` here). Every node sees its rules, so they are what any value read on reads: its methods.
+Node := .
+global := Node
+// (what a declaration answers, `x: T`: nothing but that it declared)
+declared := { }
+assert {
+  declared := 3 ; declared += 1
+  assert declared == 4  // CF20 a declaration and an assignment on one line did not both run
+}
+assert {
+  {a} %+ {b} => true
+  assert true %+ true  // GR1 a rule written at the top reads at the top
+  inside => (
+    {a} %+ {b} => false
+    true %+ true
+  )
+  assert !(inside)  // GR2 a rule written in a body overrides the reading in that body
+  assert true %+ true  // GR3 a rule written in a body does not change the reading after it
+  beside => true %+ true
+  assert beside  // GR4 a rule written in one body is not seen in a sibling body
+  {a} %++ {b} => false
+  {a} %+++ {b} => true
+  assert !(true %++ true)  // GR5 the longest declared word wins: %++ is not read as %+ followed by +
+  assert true %+++ true  // GR6 the longest declared word wins: %+++ is not read as %++ followed by +
+  assert true %+ true  // GR7 a longer word declared later does not take over the shorter one
+}
+// A field named by its pattern as written, `{*}: T`: kept under that text, not a rule (a head that is one hole would read
+// everything). A pattern is a body written.
+Pattern := {
+  {written} => written
+}
+
+
+// What a value answers to `?`: anything is true, but `None` and `false`.
+? {yes} : {no} ^operator => yes
+None := {
+  ? {yes} : {no} => no
+  value => None
+  next => None
+  // (a member of None is None: chains need no `?.`)
+  .{member} => None
+  assert true.next == false  // BOR1 true.next should be false
+  assert false.next == true  // BOR2 false.next should be true
+  assert true.next.next == true  // BOR3 true.next.next should be true
+  assert false.next.next == false  // BOR4 false.next.next should be false
+}
+// (enumerations and classes: read where None's rules are not)
+assert {
+  Colour := enum red | green | blue
+  assert Colour.red  // EM1 the member an enum is written with is not there
+  assert Colour.blue  // EM2 the last member is not there
+  assert Colour.red == Colour.red  // EM4 a member is not itself
+  assert !(Colour.red == Colour.blue)  // EM5 two members of one enum are the same
+  assert Colour.red is Colour  // EM6 a member is not one of its enum
+  assert Colour#.count == 3  // EM7 an enum of three has other than three members
+  assert Colour# == [Colour.red, Colour.green, Colour.blue]  // EM14 an enum's members are not its three, in order
+  assert Colour.red.next == Colour.green  // EM25 the member after red is not green
+  assert !(Shape.circle is Colour)  // EM15 a member is one of another enum
+}
+assert {
+  R := class { }
+  S := class: R { s => S(next: this) }
+  assert S().s.s.s  // C5 a successor chain through class: Parent broke
+  assert S.components.hierarchy.first  // C6 class: Parent did not add a class component
+  assert S.super  // C7 super is missing
+}
+assert {
+  E := enum p | q | r
+  assert E#.first == E.p  // C9 the first enum member is not the first written
+  assert E#.first.next.next == E.r  // C10 enum members are not chained forward
+  assert E#.last.previous.previous == E.p  // C11 enum members are not chained backward
+  assert E#.count == 3  // C12 an enum of three has other than three members
+  assert E#.first.is_initial  // C13 the members are not an Iterable of Rays
+  assert E#.last == E.r  // C14 Iterable.last did not reach the last member
+}
+assert (true |+ "A").next == false | "B"  // SP2 |+ does not answer with either component
+assert !(None)  // BO27 nothing is there
+// Negations on nothing answer true (T1.8)
+assert None != 1  // NGN1 nothing is said to be one
+assert None !~= "a"  // NGN2 nothing is said to match
+false := {
+  ? {yes} : {no} => no
+}
+assert true == true  // BO23 true is not itself
+assert !(true == false)  // BO24 true is false
+assert true  // BO25 true is not there
+assert !(false)  // BO26 false holds as a condition
+true := { }
+
+// `!x`: false when x is anything but `None` and `false`.
+!{x} ^operator => x ? false : true
+assert !(!true)  // BB4 not(true) should be false
+assert !false  // BB5 not(false) should be true
+assert !!true  // BO21 not not true is not true
+assert !(!!false)  // BO22 not not false is true
+assert !None  // BO28 asking whether nothing is there answers nothing
+{a} || {b} ^operator => a ? a : b
+assert true || false  // BB8 or(true,false) should be true
+assert !(false || false)  // BB9 or(false,false) should be false
+assert false || true  // BO4 or(false,true) should be true
+assert true || true  // BO5 or(true,true) should be true
+assert 0 || true  // N97 zero or true is not true
+assert !(0 || false)  // N98 zero or false is true
+assert {
+  cleared_vertex := [1, 2].entry
+  kept_vertex := cleared_vertex
+  cleared_vertex = None
+  assert !(kept_vertex.initial || kept_vertex.terminal)  // NGN4 a vertex set to nothing keeps its boundaries
+}
+{a} && {b} ^operator => a ? b : a
+assert true && true  // BB6 and(true,true) should be true
+assert !(true && false)  // BB7 and(true,false) should be false
+assert !(false && true)  // BO2 and(false,true) should be false
+assert !(false && false)  // BO3 and(false,false) should be false
+assert true && !false  // BB16 true && !false should be true
+assert 1 && true  // N95 one and true is not true
+assert !(0 && true)  // N96 zero and true is true
+assert None != 5 && !(None != None)  // NGN3 a negation on nothing does not answer true against something, or holds against nothing
+assert (choose 1 ("A" | "B")) is ("A" | "B") && (choose 1 ("A" | "B"))#.count == 1  // HS11 choosing a counted type does not resolve to one of its possibilities
+// `a & b` of two that are true or false: both; of anything else, what its own `&` is (a Node's, their conjunction).
+{a: boolean} & {b} ^operator => a && b
+assert (1 & 2).contains(2)  // TY68 what holds both does not hold the second
+assert (1 & 2 & 3).conjoined.count == 3  // TY69 three held at once are not three
+{a} ?? {b} ^operator => (a === None) ? b : a
+assert None ?? true  // BN1 ?? does not fall back on nothing
+assert !(false ?? true)  // BN2 ?? replaces a value that is there
+// The same value: gone to as a label (a label written as a value is gone to by that value); nothing there, another.
+{a} === {b} ^operator => {
+  external goto {a}
+  external goto other
+  external label {b}
+  true
+  external goto same
+  external label other
+  false
+  external label same
+}
+{a} !== {b} ^operator => (a === b) ? false : true
+// A choice, `c ? a : b`: the condition all before the `?`.
+{condition} ? {yes} : {no} ^operator => (condition) ? yes : no
+assert true ? true : false  // BT3 c ? a : b does not take a when c holds
+assert !(false ? true : false)  // BT4 c ? a : b takes a when c does not hold
+assert false ? false : true  // BT5 c ? a : b does not take b for a named c
+
+// A branch: the block taken read where the branch is (labels named apart from a loop's, which `break` and `continue` go to
+// through it); not taken, what follows its block (`else { … }`, `elsif c { … } …`: code, read there), else None. (A block is
+// written in brackets, so a condition is all that is before it: `if x > 3 { … }`.)
+if {condition} {`{`}{taken}{`}`} ^keyword => {
+  {condition} ? (external goto taken) : (external goto passed)
+  external label taken
+  {taken}
+  external goto branched
+  external label passed
+  None
+  external label branched
+}
+if {condition} {`{`}{taken}{`}`} {chain} ^keyword => {
+  {condition} ? (external goto taken) : (external goto passed)
+  external label taken
+  {taken}
+  external goto branched
+  external label passed
+  {chain}
+  external label branched
+}
+else {`{`}{otherwise}{`}`} ^keyword => {otherwise}
+elsif {condition} {`{`}{taken}{`}`} ^keyword => if {condition} { {taken} }
+elsif {condition} {`{`}{taken}{`}`} {chain} ^keyword => if {condition} { {taken} } {chain}
+unless {condition} {`{`}{taken}{`}`} ^keyword => if !(condition) { {taken} }
+unless {condition} {`{`}{taken}{`}`} {chain} ^keyword => if !(condition) { {taken} } {chain}
+assert !((if 0 { "taken" }))  // IC4 an if whose block holds no cases is read as cases
+assert !((if false { true }))  // CC6 a bare if with a false predicate is not None-like
+assert (unless false { true })  // CC7 unless did not fire
+assert (unless true { 1 } else { 2 }) == 2  // CF9 unless has no other side
+assert (if false { true } elsif true { true } else { false })  // CC3 elsif did not fire
+assert (if false { true } elsif false { true } else { true })  // CC4 else after elsif did not fire
+assert (if true { true } else { false })  // CC1 if-true did not take the then branch
+assert !((if false { 1 } else { None }))  // CC12 an if whose taken branch is None is present
+assert (if true { 1 } else { None })  // CC13 an if whose taken branch is one is absent
+assert !((if false { true } else { false }))  // CC2 if-false took the then branch
+assert (if true { true } elsif true { false } else { false })  // CC5 a later branch overrode the first
+// CF5 a branch does not answer its last statement
+assert (if true {
+  1
+  2
+  3
+} else { None }) == 3
+assert (if true { if false { 1 } else { 2 } } else { 3 }) == 2  // CF6 a branch inside a branch is not read there
+assert (if 1 { true } else { false })  // CF7 a number that is there does not hold
+assert !((if None { true } else { false }))  // CF8 nothing holds
+
+// Loops: `break` goes to the loop's end, `continue` to its start.
+while {condition} {`{`}{body}{`}`} ^keyword => {
+  external label again
+  {condition} ? (external goto looping) : (external goto done)
+  external label looping
+  {body}
+  external goto again
+  external label done
+}
+assert {
+  flag := true
+  while flag { flag = false }
+  assert !(flag)  // CC8 while did not run its body
+}
+assert {
+  ran := false
+  while false { ran = true }
+  assert !(ran)  // CC9 while ran with a false predicate
+}
+loop {`{`}{body}{`}`} ^keyword => while true { {body} }
+{body} while {condition} ^keyword => while {condition} { {body} }
+do {`{`}{body}{`}`} while {condition} ^keyword => {
+  {body}
+  while {condition} { {body} }
+}
+assert {
+  seen := false
+  do { seen = true } while false
+  assert seen  // CC10 do-while did not run its body at least once
+}
+assert {
+  stop := true
+  do { stop = false } while stop
+  assert !(stop)  // CC11 do-while did not stop
+}
+assert {
+  asked := 0
+  do { asked += 1 } while false
+  assert asked == 1  // CF12 do ran other than once when it never holds
+}
+break ^keyword => external goto done
+assert {
+  stopped := 0
+  while true {
+    stopped = stopped + 1
+    break if stopped == 3
+  }
+  assert stopped == 3  // RC2 break does not leave the loop
+}
+continue ^keyword => external goto again
+assert {
+  skipped := 0
+  counted := 0
+  while counted < 5 {
+    counted = counted + 1
+    continue if counted == 2
+    skipped = skipped + 1
+  }
+  assert skipped == 4  // RC3 continue does not go on with the next round
+}
+// Leaving a call: `return v` (the call answers v), `return`; the call again from its start, `recur(arguments)`.
+return {value} ^keyword => {
+  value
+  external goto returned
+}
+return ^keyword => external goto returned
+recur({again}) ^keyword => {
+  given := ({again})
+  external goto rebinding
+}
+recur ^keyword => external goto recurring
+assert {
+  countdown (n) => (
+    return n if n == 0
+    recur(n - 1)
+  )
+  assert countdown(5) == 0  // RC1 recur(args) does not re-enter the method
+}
+
+// A closure: a rule read where a value is wanted, a node holding it; read on (`f(5)`), its right side run in a new node in it,
+// its parameters taking the arguments (code, read where they are written: `f(x: 5)` declares its `x`, answering `declared`).
+// (A head led by `{this}` is a method: read only on a value, what follows it; so `(…)` in the body is not a call of itself.)
+// It ends at `returned` (`return v` goes there), and begins again at `recurring` (`recur(…)` gives its parameters these first).
+({parameters}) {`=>`} {body} ^punctuation => {
+  external .
+  {this}({arguments}) => {
     external .
-    {rhs}
+    ({parameters}) taking {arguments}
+    external goto recurring
+    external label rebinding
+    ({parameters}) := given
+    external label recurring
+    {body}
+    external label returned
+  }
+  .
+}
+() {`=>`} {body} ^punctuation => {
+  external .
+  {this}() => {
+    external .
+    external label recurring
+    {body}
+    external label returned
+  }
+  .
+}
+// (called with nothing: with nothing given, each parameter its default)
+{this}() ^punctuation => .(declared)
+// A method: `name (parameters) =>` gives the name a closure, as `name := (parameters) =>` does (so its locals are its own);
+// `x.name (…) =>` is a member.
+{name} ({parameters}) {`=>`} {body} ^function => {name} := (({parameters}) => {body})
+{name} () {`=>`} {body} ^function => {name} := (() => {body})
+{on}.{name} ({parameters}) {`=>`} {body} ^function => {on}.{name} := (({parameters}) => {body})
+{name} := ({parameters}) {`=>`} {body} ^function => {name} := (({parameters}) => {body})
+{on}.{name} := ({parameters}) {`=>`} {body} ^function => {on}.{name} := (({parameters}) => {body})
+// Partial arguments: `f<a: 5>` is f with those given first.
+{function}<{given}> ^punctuation => { (also) => {function}({given}, also) }
+
+// A call's parameters taking its arguments: one parameter, all of them; several, each the next (one already given passes,
+// leaving it for the next). Arguments that only declared (`declared`) give none.
+({parameter}) taking {value} ^keyword => ({parameter}) gets ((value === declared) ? None : value)
+({parameter}, {parameters}) taking {list} ^keyword => ({parameter}, {parameters}) taking from (((list).spread === true) ? (list).head : Listing.new.append(list).head)
+({parameter}) taking from {vertex} ^keyword => ({parameter}) gets (vertex).value
+({parameter}, {parameters}) taking from {vertex} ^keyword => {
+  (({parameter}) gets (vertex).value) ? (({parameters}) taking from (vertex).next) : (({parameters}) taking from vertex)
+}
+// One parameter given a value, unless given already: `x`, `x: T` (checked against T), `x = default` (the default when none is
+// given, read when it is first read).
+({name}) gets {value} ^keyword => {
+  {name} := value
+  true
+}
+({name}: {type}) gets {value} ^keyword => ({name}) gets ((value) checked (type))
+({parameter} = {default}) gets {value} ^keyword => (value === None) ? (({parameter}) gets ({default})) : (({parameter}) gets value)
+{name} := lazily {default} ^keyword => {
+  {name} => {
+    kept := ({default})
+    {name} = kept
+    kept
   }
 }
 
-{x}: {type} => x.type = type
-{x} ^{style} => x.style = style
+// A section given to a method, `xs.map(.value)`: the function of what it misses.
+{method}(.{section}) ^punctuation => .{method}((it) => it.{section})
+// `code**`: what is written, as a program.
+{code}** ^operator => Program(code: {code})
 
+// A list written: `[]` an empty one, `[a, b]` both, `[a]` one; `T[]`, what holds Ts one after another.
+[] ^punctuation => Listing.new
+[{inside}] ^punctuation => (inside, Listing.new).gathered
+{element}[] ^punctuation => Node{(. is String) ? (.characters.every((c) => c is element)) : (.every((item) => item is element))}
+// `x[k]`: a member (a key that is text), else what x holds under k.
+{on}[{key}] ^punctuation => (key is String) ? (on).{key} : (on).held(key)
+{on}[{key}] = {value} ^punctuation => (key is String) ? ((on).{key} = value) : (on).holding(key, value)
+{on}[{key}] := {value} ^punctuation => (key is String) ? ((on).{key} := value) : (on).holding(key, value)
+// A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
+{list}, {other} ^punctuation => {
+  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).joined(other) : Listing.new.append(list).joined(other)).spreading)
+}
+// Names given values at once: `(a, b) := list`, each the next value in it.
+({name}, {names}) := {list} ^punctuation => {
+  {name} := (list).first
+  ({names}) := (list).rest
+}
+// A record: names given values in parentheses, a node holding them.
+({name}: {value}) ^operator => {
+  {
+    {name} := {value}
+  }
+}
+// A value that is not a list: its first is itself, nothing after it.
+listing := false
+first => .
+rest => []
+assert {
+  here := 0
+  there := 0
+  here = 1 ; there = 2
+  assert here == 1  // CF18 the first of two assignments on one line did not run
+  assert there == 2  // CF19 the second of two assignments on one line did not run
+}
+
+// The rest read with `.` what is before it: `x -- .y` is `x.y`; `x ~~ …` the same, answering x.
+{value} -- {rest} ^operator => value ~~ {
+  {rest}
+}
+{value} ~~ {rest} ^operator => {
+  value &+= {
+    {rest}
+  }
+  value
+}
+assert (1, 2 -- .map(+1)) == (2, 3)  // DD1 -- does not continue on the whole line before it
+assert (5 -- . + 1) == 6  // DD2 -- does not give what it continues with as .
+assert (5 -- . + 1 if . > 3) == 6  // DD3 -- with a condition that holds does not continue
+assert (5 -- . + 1 if . > 9) == 5  // DD4 -- with a condition that fails does not keep what is before it
+assert {
+  continued := 5
+    -- . * 2
+    -- . + 1 if . > 100
+  assert continued == 10  // DD5 -- on the next line does not continue the line above
+}
+assert (1, 2 ~~ .map(+1)) == (1, 2)  // DD6 ~~ does not answer the whole line before it
+{on} reading {code} ^keyword => on &+= {
+  {code}
+}
+{on} with {code} ^keyword => on reading {code}
+// `with` code: what it sets, set for where it is read (the caller) and what runs from there, gone when that ends.
+with {code} ^keyword => (external &).caller reading {code}
+assume {code} ^keyword => (external &).caller reading {code}
+// Guards: `x if c`, `x unless c` (not taken: None).
+{guarded} if {condition} ^keyword => if {condition} { {guarded} }
+{guarded} unless {condition} ^keyword => unless {condition} { {guarded} }
+
+// A superposition: one of these values (`a | b`), and `x?`: `x` or None.
+{a} | {b} ^operator => {
+  {
+    superposes := true
+    components := Listing.new.append(a).joined(b)
+  }
+}
+assert (1 | +2 | +3) == (1 | 3 | 6)  // CL2 a section after | is not applied to the value before it
+assert (1 | 2 | 3)#.count == 3  // HS2 a superposition of three does not have three possible values
+assert #(1 | 2) == (1 | 2)#  // HS6 #x is not x#
+assert "A" is 1 ("A" | "B")  // HS7 one of two possibilities is not a counted type of one
+assert !(("A" | "B") is 1 ("A" | "B"))  // HS8 both possibilities are a counted type of one
+assert ("A" | "B") is 50% ("A" | "B" | "C" | "D")  // HS9 two of four possibilities are not half of them
+assert "B" is 0.5 ("A" | "B")  // HS10 half of two possibilities is not one
+assert (1 | 2) + 1 == 2 | 3  // SP4 an operator does not carry through |
+assert 10 - (1 | 2) == 9 | 8  // SP5 a superposition on the right does not carry
+// A superposed element makes branches: one path through each value (U1)
+assert ([1, "2a" | "2b", 3]).(
+  .#.count == 2  // SP8 a superposed element in a list does not make two paths
+  & .#.some(== [1, "2b", 3])  // SP9 a path through the second value is missing
+)
+assert {
+  chosen := 1 | 2
+  result := chosen + 10
+  assert result{chosen == 2} == 12  // SP12 fixing a source does not refine what depends on it
+}
+{x}? ^operator => None | x
+
+// A narrowing, `T{constraint}`: a T the constraint (read with `.` the value) holds for.
+{narrowed}{`{`}{constraint}{`}`} ^punctuation => Narrowing &+ {
+  narrows := narrowed
+  holds (it) => it with {constraint}
+}
+// `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
+as {type} ^keyword => (. is type) ? . : type.from(.)
+from (x) => None
+// (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
+({parameter}) as (=== {type}) {`=>`} {body} => ({type}).from := (({parameter}) => {body})
+as (=== {type}) {`=>`} {body} => {
+  as {type} => {body}
+}
+// Modifiers on an operator: `compounds op …` (and `x op= y`, `x = x op y`); `chainable op …` (and `a op b op c`).
+compounds {operator} {rest} {`=>`} {body} => {
+  {operator} {rest} => {body}
+  {name} {operator}= {value} => {name} = {name} {operator} (value)
+}
+chainable {operator} {rest} {`=>`} {body} => {
+  {operator} {rest} => {body}
+  {operator} {middle} {operator} {last} => (. {operator} (middle)) && ((middle) {operator} {last})
+}
+// Names written together, `a | b => …`: each the same rule (`a | b | c`, the rest of them again; `a | b (x) => …`, each taking
+// what follows the last; `a | b := v`, the first given it, the others reading it). Only names: `{a} | {b} => …` is not.
+{name: Name} | {other} {`=>`} {body} => {
+  {name} => {body}
+  {other} => {body}
+}
+{name: Name} | {other: Name} ({parameters}) {`=>`} {body} => {
+  {name} ({parameters}) => {body}
+  {other} ({parameters}) => {body}
+}
+{name: Name} | {other} := {value} => {
+  {name} := {value}
+  {other} => {name}
+}
+// NA1 one of two names written together does not read the rule
+assert {
+  Aliased := class {
+    nonzero | holds => 5
+    first | second | third => 6
+    twice | double (x) => x * 2
+    O | optimizations := 7
+  }
+  assert Aliased().nonzero == 5 & Aliased().holds == 5
+  assert Aliased().first == 6 & Aliased().third == 6  // NA2 the third of three names does not read the rule
+  assert Aliased().twice(4) == 8 & Aliased().double(5) == 10  // NA3 names taking what follows them do not take it
+  assert Aliased().optimizations == 7  // NA4 a value named twice is not read by its second name
+}
+
+// A node made of a value (it sees what the value sees, the value's rules first): `x &+ { … }`, the code read in it.
+{on} &+ {code} ^operator => {
+  made := (on).interior
+  made &+= {
+    {code}
+  }
+}
+interior => {
+  external .
+  .
+}
+extended () => .interior
+
+// A class: a node made of its parent (`class: P`, else Node), its block read in it; with fields (`class (x, y) => { … }`), its
+// instances made by calling it, each a node made of it, its fields given the arguments, `of` it.
+class: {parent} ({fields}) {`=>`} {block} ^keyword => {
+  made := (parent) &+ {
+    superclass := parent
+    super := parent
+    {block}
+  }
+  made &+= {
+    {this}({arguments}) => (made &+ {
+      of := made
+      ({fields}) taking {arguments}
+      {block}
+    })
+    {this}() => made(declared)
+  }
+  made
+}
+class: {parent} {block} ^keyword => { class: {parent} (arguments = None) => {block} }
+class ({fields}) {`=>`} {block} ^keyword => { class: Node ({fields}) => {block} }
+class {block} ^keyword => class: Node {block}
+class: {parent} ^keyword => class: {parent} { }
+// (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field)
+class {fields} {block} ^keyword => { class: Node ({fields}) => {block} }
+{name} := class {header} {block} ^class => {name} := (class ({header}) => {block})
+// `static`: read where it is (a class's block is read once for the class).
+static {statement} ^keyword => {statement}
+// `x ^style` on its own: x. (A style is for highlighting and nothing else.)
+^{style} ^operator => .
+
+// What a value is: a Node; the value itself; an instance of the class (or one after it) it was made by; one of a
+// superposition's components; a narrowing that holds of it; a member of an enumeration; a superposition, each of its
+// components one.
+of := None
+superclass := None
+superposes := false
+narrows := None
+members := None
+caller := None
+descends (type, depth = 0) => (. === type) || ((depth < 64) && .superclass ? .superclass.descends(type, depth + 1) : false)
+is {type} ^keyword => (type === Node) || (. === type) || (.of ? .of.descends(type) : false) || (type.superposes ? type.components.some((component) => . is component) : false) || (type.narrows ? ((. is type.narrows) && type.holds(.)) : false) || (type.members ? type.members.some((member) => member === .) : false) || (.superposes ? .components.every((component) => component is type) : false)
+assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
+// A value checked against a type: reported when it is not one (None, and anything against no type, pass).
+type := None
+checked {type} ^keyword => {
+  unless (type === None) || (. === None) || (. is type) {
+    ERROR a value is not of the type it is given to: {type}
+  }
+  .
+}
+// A level given to a running program (`& including level`): its rules seen in it.
+{on} including {level} ^keyword => on &+= {
+  {level}
+}
+{level} reducing {value} ^keyword => level reading {value}
+
+// What a value holds under a key: its entries (`keyed`), none until one is given.
+keyed := None
+Holding := class (key, value) => { }
+held (key) => {
+  found := (.keyed) ? .keyed.find((entry) => entry.key === key) : None
+  found ? found.value : None
+}
+holding (key, value) => {
+  (.keyed := []) unless .keyed
+  found := .keyed.find((entry) => entry.key === key)
+  if found {
+    found.value = value
+  } else {
+    .keyed.append(Holding(key, value))
+  }
+  value
+}
+assert {
+  held := 0
+  unless true { held += 1 }
+  unless 1 == 1 { held += 1 }
+  unless mark { held += 1 }
+  assert held == 0  // HO2 unless takes the block when the condition holds
+}
+assert {
+  {left} - {right} => (
+    held := 2
+    held + 1
+  )
+  assert 10 - 3 == 3  // RW1 a body that declares a name is not run
+  assert 1 - 1 == 3  // RW2 it answers the same wherever it stands
+}
+
+// An enumeration: `enum A | B | C`, a node its names are read in: each a member, a place there (a name a node being made is
+// given, it has), and `members` what they compose.
+enum {names} ^keyword => {
+  external .
+  members := ({names})
+  .
+}
+enum {names} {`{`}{block}{`}`} ^keyword => enum {names}
+assert {
+  Shape := enum circle (radius: Number) | square (side: Number) | point
+  assert Shape.circle.radius  // EM8 a member does not carry its field
+  assert Shape.square.side  // EM9 the second member does not carry its field
+  assert !(Shape.point.radius)  // EM10 a member carries another's field
+  assert Shape.point  // EM11 a member without fields is not there
+  assert Shape.circle is Shape  // EM16 a member is not one of its own enum
+}
+assert {
+  Modifier := enum static | readonly | this
+  assert Modifier.this  // EM12 a member named this is not there
+}
+assert {
+  Level := enum low (rank: Number) | high (rank: Number) {
+    ranked => rank
+  }
+  assert Level.low.ranked  // EM17 a block over lines lost what it declares
+  assert Level.high.ranked  // EM18 the last member gained nothing from the block
+  assert Level#.count == 2  // EM20 an enum of two written with a block has other than two members
+  assert !(Level.low == Level.high)  // EM21 two members written with a block are the same
+}
+
+// `dynamically`: given again (run again) whenever what it reads is written from where it is read (the caller) or anything run
+// from there: `dynamically x := v` (x is v again), `dynamically code` (the code runs again).
+dynamically {code} ^keyword => {
+  (external &).caller dynamic {
+    {code}
+  }
+  {code}
+}
+dynamically {name} := {value} ^keyword => {
+  {name} := {value}
+  (external &).caller dynamic {
+    {name} = {value}
+  }
+}
+// (`dynamically assert c`: no test; what holds of the data, checked where there is some: an instance)
+dynamically assert {condition} ^keyword => ensure {condition} if of
+dynamics := None
+{program} dynamic {code} => {
+  program.dynamics := program.dynamics ?? {
+    updating := false
+    refreshing := []
+    refresh (written) => {
+      unless .updating {
+        .updating := true
+        .refreshing.for((one) => one.again())
+        .updating := false
+      }
+    }
+  }
+  program &+= {
+    {written} = {given} => {
+      {written} := given
+      dynamics.refresh(`{written}`)
+    }
+  }
+  program.dynamics.refreshing.append({
+    again () => {
+      {code}
+    }
+  })
+}
+assert {
+  asserted := dynamically assert {
+    true
+    1 == 1
+  }
+  assert asserted  // DY1 a dynamic assert of holding conditions fails
+}
+assert {
+  contributed := 1
+  contribution := 2
+  dynamically contributed &= contribution
+  contribution = 3
+  assert !(contributed == (1 & 2 & 3))  // FWQ6 a dynamic contribution kept its earlier value
+}
+// `dynamically x` reads x again each time (P5.1)
+assert {
+  moving := 1
+  followed := dynamically moving + 1
+  moving = 5
+  assert followed == 6  // DY2 dynamically does not read again what it depends on
+}
+
+// A setting changed for a block is back once the block is left
+assert {
+  Setting := class { static level = 1 }
+  // WI1 a setting is not seen in the context it is set in
+  assert (
+    with Setting.level = 2
+    Setting.level
+  ) == 2
+  assert Setting.level == 1  // WI2 a setting outlived its block
+  // WI3 assume is not with
+  assert (
+    assume Setting.level = 3
+    Setting.level
+  ) == 3
+}
+assert {
+  Holder := class {
+    Side := enum left | right {
+    }
+    side => Side.left
+  }
+  assert Holder.Side.left  // EM22 an enum inside a class has no members
+  assert Holder.Side#.count == 2  // EM23 an enum inside a class lost a member
+  assert Holder().side == Holder.Side.left  // EM24 an instance does not reach the enum its class writes
+}
+// `.( … )` reads among the members of what is before it (A8)
+assert {
+  Grouped := class {
+    first => 1
+    second => 2
+  }
+  assert Grouped.(first + second) == 3  // GP1 .( ) does not read the members of what is before it
+}
+// Labels in a class body are entries (L§4.2)
+assert {
+  Entered := class {
+    steps := 0
+   later\
+    steps = 7
+  }
+  assert Entered~later().steps == 7  // EP1 ~label does not enter the class at that label
+  assert Entered~default == Entered  // EP2 ~default is not the class itself
+  // A class body runs like any function: labels are never skipped; a Component's labels are entered, not executed (F-D13, L§4.2.1)
+  assert Entered().steps == 7  // CMP1 a label in a class body stops its construction
+}
+assert {
+  Panel := class: Component {
+    shown := 0
+   opened\
+    shown = 1
+   closed\
+    shown = 2
+  }
+  assert Panel().shown == 0  // CMP2 constructing a component runs past its first label
+  assert Panel~opened().shown == 1  // CMP3 entering a component at a label runs past the next label
+  assert Panel~closed().shown == 2  // CMP4 entering a component at its last label does not run what follows it
+}
+assert {
+  TA := class { }
+  TB := class: TA { }
+  assert TA() is TA  // TY1 an instance is not an instance of its class
+  assert TA() is TB  // TY2 an instance is not one of a class that requires nothing
+  assert TB() is TB  // TY3 an instance is not an instance of its own class
+  assert TB() is TA  // TY4 an instance is not an instance of what its class is built on
+  assert 5 is TA  // TY6 five is not one of a class that requires nothing
+  assert external where TA  // TY7 a class is written nowhere
+  assert !((external where TA) == (external where TB))  // TY8 two classes are written in one place
+  TC := TA
+  assert (external where TA) == (external where TC)  // TY9 one class under two names is written twice
+}
+// A class requires the fields it writes with their type
+assert {
+  Needs := class { amount: Number }
+  Gives := class { amount => 1 }
+  Lacks := class { other => 1 }
+  assert Gives() is Needs  // TY60 what gives every required name is not one
+  assert !(Lacks() is Needs)  // TY61 what lacks a required name is one
+  assert !(5 is Needs)  // TY62 a number gives a name it does not have
+  assert !(Lacks() is Array)  // TY64 what is entered nowhere is an array
+}
+// A child is made of its parent's fields, defaults and methods
+assert {
+  Parent := class {
+    named: "p"
+    flag: false
+    greet => named
+  }
+  Child := class: Parent {
+    extra: "e"
+  }
+  assert Child().extra  // TY10 the child's own field is not there
+  assert Child().named  // TY11 the parent's field is not there
+  assert Child().greet == "p"  // TY12 the parent's method does not answer
+  assert !Child().flag  // TY13 the parent's default is not false
+  assert Child(named: "q").named == "q"  // TY14 the parent's field cannot be given
+  // `Type?` is the type or nothing
+  Either := Parent?
+  assert Child() is Either  // TY21 a child is not one of its parent or nothing
+  assert Parent() is Either  // TY22 a parent is not one of itself or nothing
+  assert None is Either  // TY23 nothing is not one of a thing or nothing
+  assert !(None is Parent)  // TY24 nothing is one of a thing
+}
+// A class built inside a method answers with what that call wrote
+assert {
+  Wrapping := class {
+    wrapped (tag) => class: this {
+      says => tag
+    }
+  }
+  once := Wrapping.wrapped(1)
+  twice := once.wrapped(2)
+  thrice := twice.wrapped(3)
+  assert once.says == 1  // TY28 the first wrapping says other than what it was written with
+  assert twice.says == 2  // TY29 a wrapping of a wrapping says its parent's
+  assert thrice.says == 3  // TY30 a third wrapping says an older one's
+  assert once.says == 1  // TY31 building on a class changed what it says
+}
+// A class written as a structure: each named position a field of that type
+assert {
+  Pointed := class whole: Number, ".", part: Number {
+    summed => whole + part
+  }
+  pointed := Pointed(whole: 2, part: 3)
+  assert pointed.whole == 2  // TY32 a structure's first field is not what it was built with
+  assert pointed.part == 3  // TY33 a structure's last field is not what it was built with
+  assert pointed.summed == 5  // TY34 a structure's body does not read its fields
+  assert Pointed.positions[1] == "."  // TY35 a structure does not keep what is written between its fields
+}
+assert {
+  Ranged := class low: Decimal, "-", high: Decimal {
+    width => high - low
+  }
+  range_of {written: Ranged} => written
+  ranged := range_of 2-7
+  assert ranged.low == 2  // TY36 a structure read from text does not start at what is written first
+  assert ranged.high == 7  // TY37 a structure read from text does not end at what is written last
+  assert ranged.width == 5  // TY38 a structure read from text is not built as one
+  positioned: Ranged = (4, "-", 9)
+  assert positioned.width == 5  // TY39 positions given to a structure are not built as one
+  misfit: Ranged = (4, "+", 9)
+  assert misfit[1] == "+"  // TY40 positions that do not fit a structure are taken as a structure
+  spanned: Ranged = 3-8
+  assert spanned.width == 5  // TY41 text given to a structure is not read by it
+}
+assert {
+  Bare := class only: Number
+  assert Bare(3).only == 3  // HD6 a header without a body has no field
+}
+// Uniqueness under an equivalence (T6.9)
+assert {
+  UniquelyNamed := class { unique<in: .fold_case> name: String }
+  named_first := UniquelyNamed(name: "Ada")
+  named_other := UniquelyNamed(name: "Bea")
+  assert named_other.name.is_unique<in: .fold_case>  // UQI1 a name no other holds is not unique
+  named_clash := UniquelyNamed(name: "ADA")
+  assert !(named_clash.name.is_unique<in: .fold_case>)  // UQI2 a name another holds in other case is unique with case folded
+  assert named_clash.name.is_unique  // UQI3 a name is not unique without folding case though no other is equal
+}
+assert {
+  Greeter := class {
+    greeting => name
+    twice => greeting
+  }
+  Loud := class: Greeter {
+    greeting => global
+    polite => super.greeting
+  }
+  loud := Loud(name: global)
+  assert loud.polite  // C22 super.greeting did not run the parent's method on the instance
+  assert loud.super.twice  // C23 super reaches the parent's other methods
+}
+// A class extended later reaches every instance built from it
+assert {
+  Late := class { }
+  built_before := Late()
+  Late &+= {
+    added => 1
+  }
+  assert built_before.added == 1  // C24 a class extended later does not reach an instance built before
+  assert Late().added == 1  // C25 a class extended later does not reach an instance built after
+}
+assert {
+  G1 := class { depth => 1 }
+  G2 := class: G1 { depth => 2 }
+  G3 := class: G2 { depth => 3 }
+  assert G3().depth == 3  // C26 the nearest class does not answer
+  assert G2().depth == 2  // C27 the middle class answers its parent's
+  assert G1().depth == 1  // C28 the first class answers something else
+  assert G3.super  // C29 a class three deep has no super
+  assert G3.super.depth == 2  // C30 super does not reach the class it is built on
+}
+// Class headers: fields written inline, a class read by its pattern, `static` (A7, T3.10, T3.15b)
+assert {
+  Pair := class left: Number, right: Number = 7 {
+    total => left + right
+  }
+  assert Pair(1, 2).left == 1  // HD1 a header field is not taken by position
+  assert Pair(1, 2).right == 2  // HD2 the second header field is not taken by position
+  assert Pair(right: 3, left: 4).total == 7  // HD3 header fields are not taken by name
+  assert Pair(1).right == 7  // HD4 a header default is not used when not given
+  Tagged := class ("#", tag: Decimal) => {
+    doubled => tag * 2
+  }
+  assert Tagged(tag: 4).doubled == 8  // HD7 a class read by its pattern has no named part as a field
+  tagged_of {written: Tagged} => written
+  assert (tagged_of #21).tag == 21  // HD8 a class written as a pattern does not read its text
+  Sub := class: Pair (": ", first: Number) => {
+    head => first
+  }
+  assert Sub(first: 2).head == 2  // HD9 class: Parent (pattern) has no field from its pattern
+  assert Sub(first: 2) is Pair  // HD10 class: Parent (pattern) is not built on Parent
+  Count := class {
+    static made := 0
+    static zero => 0
+    static Inner := class { }
+    tally => made
+  }
+  first_count := Count()
+  second_count := Count()
+  Count.made = 2
+  assert first_count.tally == 2  // HD11 a static is not shared by the instances
+  assert second_count.tally == 2  // HD12 a static is per instance
+  assert Count.zero == 0  // HD13 a static method is not on the class
+  assert Count.Inner  // HD14 a static class is not on the class
+  Both := class: Pair &+ Tagged { }
+  assert Both(left: 1, right: 2, tag: 3).total == 3  // HD15 class: A &+ B is not built on A
+  assert Both(left: 1, right: 2, tag: 3).doubled == 6  // HD16 class: A &+ B is not built on B
+}
+// `if x { case => value … } else { … }`: `==` unless an operator is written, `is` for a type (P2.11)
+assert {
+  described (x) => if x {
+    is Number => "number"
+    "A" => "letter"
+  } else {
+    "other"
+  }
+  assert described(5) == "number"  // MA1 an is case does not match an instance of its type
+  assert described("A") == "letter"  // MA2 a case with no operator is not asked with ==
+  assert described(true) == "other"  // MA3 the else case does not take what nothing else does
+}
+assert {
+  graded (x) => if x {
+    < 10 => "low"
+  } else {
+    "high"
+  }
+  assert graded(3) == "low"  // MA4 a case with an operator is not asked with it
+}
+assert {
+  first_case (x) => if x {
+    1 => "one"
+    is Number => "number"
+  } else {
+    "other"
+  }
+  assert first_case(1) == "one"  // IC1 a later case answers before an earlier one that holds
+  assert first_case(2) == "number"  // IC2 a case that does not hold answers
+}
+
+// The classes the library adds to: what is iterable, an array of it, text (an array of characters), a number, a character
+// (a number), a program, a diagnostic.
+Iterable := class { }
+// A list: a chain of vertices, each holding a value (`head` the first, `tail` the last; a vertex's `next`, `previous`).
+Listing := {
+  new => {
+    {
+      head := None
+      tail := None
+      listing := true
+      of := Array
+      spread := false
+    }
+  }
+  spreading => {
+    .spread := true
+    .
+  }
+  gathered => {
+    .spread := false
+    .
+  }
+  linked (value) => {
+    {
+      value := value
+      next := None
+      previous := None
+    }
+  }
+  append (value) => {
+    link := Listing.linked(value)
+    if .tail {
+      link.previous := .tail
+      .tail.next := link
+    } else {
+      .head := link
+    }
+    .tail := link
+    .
+  }
+  prepend (value) => {
+    link := Listing.linked(value)
+    if .head {
+      .head.previous := link
+      link.next := .head
+    } else {
+      .tail := link
+    }
+    .head := link
+    .
+  }
+  // (`xs[n]`, a number: its nth value, from 0)
+  at (index) => {
+    at := .head
+    left := index
+    while at && left > 0 {
+      at = at.next
+      left = left - 1
+    }
+    at ? at.value : None
+  }
+  for (body) => {
+    at := .head
+    while at {
+      body(at.value)
+      at = at.next
+    }
+    .
+  }
+  first => .head ? .head.value : None
+  last => .tail ? .tail.value : None
+  empty => .head ? false : true
+  count => {
+    counted := 0
+    .for((x) => (counted = counted + 1))
+    counted
+  }
+  rest => {
+    made := Listing.new
+    at := .head ? .head.next : None
+    while at {
+      made.append(at.value)
+      at = at.next
+    }
+    made
+  }
+  take () => {
+    first := .head
+    .head := first ? first.next : None
+    .tail := .head ? .tail : None
+    first ? first.value : None
+  }
+  find (predicate) => {
+    at := .head
+    while at {
+      return at.value if predicate(at.value)
+      at = at.next
+    }
+    None
+  }
+  some (predicate) => (.find(predicate) === None) ? false : true
+  every (predicate) => !(.some((x) => !predicate(x)))
+  map (mapping) => {
+    made := Listing.new
+    .for((x) => made.append(mapping(x)))
+    made
+  }
+  without (value) => {
+    made := Listing.new
+    .for((x) => (made.append(x) unless x === value))
+    made
+  }
+  listed () => .map((x) => x)
+  joined (other) => {
+    if other.listing { other.listed().for((x) => .append(x)) } else { .append(other) }
+    .
+  }
+  flatten => .flattened(64)
+  flattened (levels) => {
+    made := Listing.new
+    .for((it) => (((it.listing === true) && (levels > 0)) ? it.flattened(levels - 1).for((x) => made.append(x)) : made.append(it)))
+    made
+  }
+  // (`xs{p}`: the values p holds for, `.` each one in it)
+  {this}{`{`}{constraint}{`}`} => {
+    kept := Listing.new
+    .for((it) => (kept.append(it) if (it with {constraint})))
+    kept
+  }
+}
+Ray := Listing
+assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
+Array := class: Iterable { }
+assert 1 is Array  // TY63 a number is not an array
+String := class: Array { }
+assert 1 + 2 as String == "3"  // PR38 as does not bind looser than plus
+assert ("A", "A") is ...String  // SD3 ...T is not T[]
+Number := class { }
+assert 5 is Number  // TY5 five is not a Number
+// Narrowings ask the constraint as well as what they narrow
+assert {
+  Small := Number{. < 5}
+  Tiny := Small{. < 2}
+  Even := Number{. % 2 == 0}
+  assert 3 is Small  // TY16 three is not one of the small
+  assert !(7 is Small)  // TY17 seven is one of the small
+  assert 1 is Tiny  // TY19 one is not tiny
+  assert !(3 is Tiny)  // TY20 three is tiny
+  assert !(7 is Tiny)  // TY25 seven is tiny
+  assert Tiny.admits(1)  // TY26 the tiny do not admit one
+  assert !(Tiny.admits(3))  // TY27 the tiny admit three
+  assert 4 is Small & Even  // TY65 four is not both small and even
+  assert !(3 is Small & Even)  // TY66 three is both small and even
+  assert !(6 is Small & Even)  // TY67 six is both small and even
+}
+assert 3 is Number  // TY18 three is not a number
+// Calling a narrowed type chooses a value of it.
+assert (Number{. > 5}()) > 5  // CN1 a value chosen from a narrowing does not satisfy it
+// `boolean`: what `false` and `true` are (`false | true`).
+boolean := class { }
+assert {
+  maybe: boolean? = None
+  assert maybe ?? true  // BN3 ?? does not fall back on an optional left empty
+}
+// `#` is what a value may be (A1, T2.3)
+assert boolean#.count == 2  // HS1 boolean does not have two possible values
+assert boolean#.random is boolean  // FE3 a coin comes up with nothing
+assert boolean#.random is boolean  // RN12 a coin lands on neither side
+assert boolean{. == true}() == true  // CN2 the only member a narrowing admits is not the one chosen
+assert (3 boolean).count == 3  // CN5 three called on boolean is not three of it
+false &+= {
+  of := boolean
+  assert {
+    Side := enum near (of: "here") | far (of: "there") {}
+    assert Side.near == Side.near  // HO3 a member is not itself
+    assert !(Side.near == Side.far)  // HO4 two members of one enum are the same
+    assert Side.near.of == "here"  // HO5 what a member holds is not what it was written as
+    assert !(Side.near.of == "there")  // HO6 a member holds what the other one does
+  }
+}
+true &+= {
+  of := boolean
+}
+Char := class: Number { }
+assert U+0061 is Char.Latin  // UN45 a is not a Latin character
+assert !(U+0627 is Char.Latin)  // UN46 alef is a Latin character
+assert U+0627 is Char.Arabic  // UN53 alef is not an Arabic character
+assert U+03B1 is Char.Greek  // UN54 alpha is not a Greek character
+assert U+0430 is Char.Cyrillic  // UN55 a Cyrillic a is not Cyrillic
+assert U+4E00 is Char.Han  // UN56 a Han character is not Han
+Program := class { }
+// A program run as a selection
+assert Program(code: {
+  1
+  2
+}).(
+  .waiting  // RU1 a program nobody stepped is not waiting
+  & .next.intermediate  // RU2 one step in is not intermediate
+  & .waiting  // RU3 stepping a copy moved the original
+  & .finished.final  // RU4 a program run to its end is not final
+  & .finished.results.last == 2  // RU5 a program run to its end did not keep what its last step answered
+)
+assert {
+  doubling := Program(code: { 2 })
+  halving := Program(code: { 1 })
+  ! doubling halving
+  assert doubling⁻¹ === halving  // IV1 the declared inverse is not the inverse
+  assert halving⁻¹ === doubling  // IV2 the inverse of the inverse is not the function
+  assert doubling.reversible  // IV3 a function with an inverse is not reversible
+}
+// A program is a quest (P4.8): its cursor says how far it is; sleeping waits on the time (P4.11); a dynamic `&=` keeps one contribution (P5.7)
+assert Program(code: { 1 }).(
+  !(.done)  // FWQ2 a program not yet stepped is done
+  & .finished.done  // FWQ3 a finished program is not a done quest
+)
+assert Program(code: { 1 }).stop.done  // FWQ4 a stopped program is not done
+assert {
+  started := Program(code: "1")
+  @me/quests |= started
+  assert started is @me/quests  // JB1 a program given to @me/quests is not among them
+  assert started.who === @me  // JB11 a started program is not run by whoever started it
+  assert started.stop.done  // JB5 stopping a program does not end it
+}
+assert Program(code: "1", from: @public).(
+  .serves(@public)  // JB8 a quest serving a location does not serve it
+  & !(.serves(@private))  // JB9 a quest serves a location it was not given
+)
+Narrowing := class { }
+Diagnostic := class { }
+// Errors: a value carries its diagnostics, and its type does not see them
+assert {
+  failing := (0).diagnosed(Diagnostic(message: "no"))
+  assert failing $ 5 == 5  // ER1 a default does not stand in for an error
+  assert failing $? === None  // ER3 an optional error is not None
+  assert failing $? 6 == 6  // ER4 an optional error does not fall back
+  assert failing $ { .message } == "no"  // ER5 the handler does not see the error as its receiver
+  fatal_one := (0).diagnosed(Diagnostic(message: "true", fatal: true))
+  assert (fatal_one $ 5).erred  // ER6 a default caught a fatal error
+  assert fatal_one $?! === None  // ER7 the catch-all did not catch a fatal error
+  assert (failing $ Diagnostic(message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last  // ER8 a wrapped error forgot its cause
+  assert failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2  // ER9 a value given a second diagnostic does not keep both
+  assert failing is Number  // ER10 a value that erred is no longer of its type
+  assert failing == 0  // ER11 a value that erred is not equal to itself without the error
+  returning := () => {
+    failing $ return 9
+    1
+  }
+  assert returning() == 9  // ER13 $ return did not return from the function
+}
+assert {
+  missing_file := () => {
+    ERROR `not 0`
+    7
+  }
+  assert missing_file() == 7  // ER14 a non-fatal error replaced the value the function answers
+  assert missing_file().diagnostics.last.origin == missing_file  // ER15 an error does not know the function it came from
+  stopping := () => {
+    FATAL `cannot go on`
+    7
+  }
+  assert stopping() is Diagnostic  // ER16 a fatal error is not what the function answers
+  // ER17 a handler for errors from one function did not take them
+  assert (missing_file()
+    $missing_file 8) == 8
+  // ER18 a handler for another function's errors took them
+  assert (missing_file()
+    $stopping 8) == 7
+  NotFound := class
+  looking := () => {
+    ERROR@NotFound `no such page`
+    3
+  }
+  // ER19 an error of a type is not caught by that type
+  assert (looking()
+    $NotFound 4) == 4
+  // ER20 an error of a type was caught by another function's handler
+  assert (looking()
+    $missing_file 4) == 3
+  assert looking().diagnostics.last.type === NotFound  // ER21 an error does not keep the type written after @
+}
+// Checking a permission runs no one's code: a grant whose expression or filter has effects is refused when granted, and never run.
+assert {
+  purg_reader := Character(name: "purg-reader")
+  purg_lamp := (lamp: 1)
+  assert (purg_reader.read IO().output("leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
+  assert (purg_reader{IO().output("leak")}.read purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
+  assert !(purg_lamp.access)  // PURG3 a refused grant is kept
+  assert !((purg_reader.read Time.now) is Diagnostic)  // PURG5 a grant reading the time is refused
+}
+assert (33% ("A" | "B" | "C")) is Diagnostic  // HS12 a share that is not a whole number of a discrete structure's possibilities is not a type error
+assert {
+  fired := 0
+  unless false { fired += 1 }
+  unless 1 == 2 { fired += 1 }
+  unless None { fired += 1 }
+  assert fired == 3  // HO1 unless does not take the block when the condition does not hold
+}
+// A map's own key wins over Node's member (T8.7, T2.8)
+assert ({ count: 3 }).(
+  .count == 3  // FWO1 a map's own count does not win over Node's
+  & (. as Object).count == 3  // FWO3 a value without Node does not read its own key
+)
+
+// A theme: what each style is shown as (`^style = ^shown`: another style, or a colour, `^ #F2F0FF`), in the order written; the
+// one made last, `Theme.current`, the one shown.
+Theme := {
+  current := None
+}
+theme {name} {written} ^keyword => {
+  made := {
+    name := name
+    styles := Listing.new
+  }
+  // (each one written: what it took, the style and what it is shown as)
+  made &+= {
+    ^{style} = ^{shown} => styles.append(external &)
+    ^{style} = ^ {shown} => styles.append(external &)
+    {written}
+  }
+  Theme.current = made
+  made
+}
+
+DARK := theme `Ether.ray - Dark` {
+
+  ^U0 = ^ #F2F0FF
+  ^U1 = ^ #C4B9FE
+  ^U2 = ^ #9A86FD
+  ^U3 = ^ #6C6783
+  ^U4 = ^ #97A4BF
+
+  ^D0 = ^ #F59E47
+  ^D1 = ^ #EBAE6B
+  ^D2 = ^ #FFCC99
+  ^D3 = ^ #A18565
+  ^D4 = ^ #8F8881
+
+  ^external = ^D0
+  ^label = ^D3
+
+  ^namespace = ^U2
+  ^type = ^U2
+  ^class = ^U2
+  ^enum = ^U2
+  ^interface = ^U2
+  ^struct = ^U2
+  ^event = ^U2
+  ^enumMember = ^U2
+  ^typeParameter = ^U0
+  ^parameter = ^U0
+  ^variable = ^U1
+  ^property = ^U1
+  ^function = ^U4
+  ^method = ^U4
+  ^decorator = ^U4
+  ^macro = ^U2
+  ^keyword = ^U3
+  ^modifier = ^U3
+  ^comment = ^U3
+  ^string = ^D2
+  ^number = ^D2
+  ^regexp = ^D2
+  ^operator = ^U4
+
+  ^character = ^D3
+  ^punctuation = ^comment
+  ^string.punctuation = ^D3
+
+  ^fatal = ^error
+  ^error = ^ #CD5C5C
+  ^warn = ^ #CDCD5C
+  ^info = ^ #5C5CCD
+  ^debug = ^ #5CCD5C
+  ^trace = ^comment
+
+  // A test, `assert`, as what it found (failed, passed, not run); what is written after it in its own colours, muted: taken this
+  // much toward this.
+  ^failed = ^error
+  ^passed = ^debug
+  ^untested = ^comment
+  ^muted = ^comment
+  ^muting = ^ 50%
+}
+
+// (giving a name a value, defined again last: it binds looser than any operator, `x := a | b` is `x := (a | b)`)
+{name} := {value} ^punctuation => {
+  value
+  {name} => value
+}
+{name} = {value} => {
+  value
+  {name} => value
+}
+{on}.{name: Name} := {value} ^punctuation => on &+= {
+  {name} := {value}
+}
+{on}.{name: Name} = {value} => on &+= {
+  {name} = {value}
+}
+// (a comment after a statement, defined again last: what is declared last binds loosest, so it is read before anything else)
+{statement} // {comment} ^comment => {statement}

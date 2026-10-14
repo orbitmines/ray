@@ -10,6 +10,8 @@ const fs = await import('node:fs'), path = await import('node:path');
 const { program } = await booted();
 const here = path.dirname(new URL(import.meta.url).pathname), corpus = path.join(here, process.env.CORPUS ?? 'corpus'), modes = process.argv[2].split(',');
 const g = { node: program.global }, none = program.run('None', g);
+// (the declaration bytes are read by: the one written by hand, or the one Ray made from XED, `X86.XedFunction`)
+const declared = process.env.DECLARED ?? 'X86.Function';
 const run = (text: string) => { program.steps = 0; return program.run(text, g); };
 const listed = (bytes: Uint8Array) => { const list = run('Listing.new'); for (const byte of bytes) run(program.written(list) + '.append(' + byte + ')'); return list; };
 const values_of = (list: unknown): unknown[] | undefined => {
@@ -63,7 +65,7 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
     }
     if (mode === 'inverse') {
       const ray = run('c_ray(' + JSON.stringify(fs.readFileSync(path.join(corpus, name + '.c'), 'utf8')) + ')');
-      const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+      const read = run(declared + '.from(' + program.written(listed(bytes)) + ')');
       const lifted = run('X86.lift(' + program.written(read) + ', "' + name + '", [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '], ' + (function_.type === 'long' ? 64 : 32) + ')');
       const expected = typeof ray === 'string' ? ray.replaceAll(' as Int', ' wrapped Int') : undefined;
       held = typeof lifted === 'string' && lifted === expected;
@@ -73,7 +75,7 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       continue;
     }
     if (mode === 'compile_flow') {
-      const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+      const read = run(declared + '.from(' + program.written(listed(bytes)) + ')');
       const compiled_function = run('X86.compiled_flow(' + program.written(read) + ', [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '], ' + (function_.type === 'long' ? 64 : 32) + ')');
       const written = compiled_function && typeof compiled_function === 'object' ? values_of(run(program.written(compiled_function) + '.written')) as number[] | undefined : undefined;
       held = !!written && written.length > 0;
@@ -154,7 +156,7 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       continue;
     }
     if (mode === 'memory_flow') {
-      const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+      const read = run(declared + '.from(' + program.written(listed(bytes)) + ')');
       const lifted = run('X86.lift_memory_flow(' + program.written(read) + ', "' + name + '", ["p", "n", "k"], 64)');
       const wrong: string[] = [];
       if (typeof lifted !== 'string') said = 'not lifted';
@@ -185,7 +187,7 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       continue;
     }
     if (mode === 'flow') {
-      const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+      const read = run(declared + '.from(' + program.written(listed(bytes)) + ')');
       const lifted = run('X86.lift_flow(' + program.written(read) + ', "' + name + '", [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '], ' + (function_.type === 'long' ? 64 : 32) + ')');
       const wrong: string[] = [];
       if (typeof lifted !== 'string') said = 'not lifted';
@@ -217,7 +219,7 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(bytes.length).padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
       continue;
     }
-    const read = run('X86.Function.from(' + program.written(listed(bytes)) + ')');
+    const read = run(declared + '.from(' + program.written(listed(bytes)) + ')');
     if (mode === 'rewrite') {
       const written = values_of(run(program.written(read) + '.written'));
       held = !!written && Buffer.from(written as number[]).equals(bytes);

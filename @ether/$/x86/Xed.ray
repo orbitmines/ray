@@ -1,0 +1,250 @@
+// Intel's XED datafiles (https://github.com/intelxed/xed, `datafiles/xed-isa.txt`, at the version `external.sh` pins), as
+// what they say: each instruction's class (`ICLASS`), and the forms it is written in, each a pattern of what its bytes are
+// (`PATTERN`), what it reads and writes (`OPERANDS`) and its name (`IFORM`). Read as written; what a pattern means as bits is
+// for the declaration made from it (`Xed.declared`).
+Xed := class {
+  static Form := class (pattern, operands, iform)
+  static Record := class (iclass, disasm, extension, forms)
+  // (the value of a record's line `NAME : value`, or None)
+  static field (text, name) =>
+    (return None) unless ("\n" + text) contains (("\n" + name) + " ")
+    after := ((("\n" + text) text_after (("\n" + name) + " ")) text_after ":")
+    (after contains "\n") ? (after text_before "\n").blank_trimmed : after.blank_trimmed
+  // (its forms: each `PATTERN` with the `OPERANDS` and `IFORM` after it)
+  static forms (text) =>
+    made := []
+    pieces := text.split("PATTERN")
+    at := pieces.head.next
+    while at {
+      piece := "PATTERN" + at.value
+      made.append(Xed.Form(Xed.field(piece, "PATTERN"), Xed.field(piece, "OPERANDS"), Xed.field(piece, "IFORM")))
+      at = at.next
+    }
+    made
+  static records (path) =>
+    made := []
+    blocks := path.file_text.split("\n{\n")
+    at := blocks.head
+    while at {
+      block := at.value
+      if block contains "ICLASS" {
+        made.append(Xed.Record(Xed.field(block, "ICLASS"), Xed.field(block, "DISASM"), Xed.field(block, "EXTENSION"), Xed.forms(block)))
+      }
+      at = at.next
+    }
+    made
+}
+
+// A form as Ray's declaration of it (`X86.xed.ray`): its pattern as a header of bits, its operands as how objdump writes it.
+// A form is left out (None) when its pattern needs what the declaration does not have yet: another mode, `lock`, REX2, VEX
+// or EVEX, a segment, a prefix that refines it, a displacement on its own.
+Xed &+= {
+  static Unsupported := ["not64", "lock_prefix", "rex2_refining_prefix", "refining_f3", "REX2=1", "VEXVALID", "EVEX", "MEMDISP", "SEG", "REP=", "REPZ", "f2_refining", "f3_refining", "osz_refining", "PREFETCH", "MODE=", "AMD", "CET=", "UIMM16", "UIMM32", "BRDISPz"]
+  static Ignored := ["mode64", "norex2_prefix", "nolock_prefix", "FORCE64()", "DF64()", "BRANCH_HINT()", "REMOVE_SEGMENT()", "REX2=0", "not_refining_f3", "norexb_prefix", "norexb4_prefix", "P4=0", "SRM=0", "no_refining_prefix", "MODRM()", "ONE()", "IGNORE66()", "OVERRIDE_SEG0()", "CET_NO_TRACK()"]
+  // (a condition's XED name and how objdump writes it)
+  static Conditions := ["O", "o", "NO", "no", "B", "b", "NB", "ae", "Z", "e", "NZ", "ne", "BE", "be", "NBE", "a", "S", "s", "NS", "ns", "P", "p", "NP", "np", "L", "l", "NL", "ge", "LE", "le", "NLE", "g"]
+  static spelled (iclass, disasm) =>
+    (return disasm.lowercased) unless disasm === None
+    (return "call") if iclass == "CALL_NEAR"
+    (return "ret") if iclass == "RET_NEAR"
+    at := Xed.Conditions.head
+    while at {
+      code := at.value
+      written := at.next.value
+      (return "j" + written) if iclass == ("J" + code)
+      (return "cmov" + written) if iclass == ("CMOV" + code)
+      (return "set" + written) if iclass == ("SET" + code)
+      at = at.next.next
+    }
+    iclass.lowercased
+  static supported (pattern) =>
+    found := true
+    token := pattern.split(" ").head
+    while token {
+      at := Xed.Unsupported.head
+      while at {
+        (found = false) if token.value begins at.value
+        at = at.next
+      }
+      token = token.next
+    }
+    found
+  // (the pieces of its header, in the order the bits are read, and what its fields are)
+  static Header := class (pieces, fields, wide, sixtyfour)
+  static header_of (pattern, width) =>
+    pieces := []
+    fields := []
+    operand := []
+    wide := (pattern contains "norexw_prefix") ? "32" : ((pattern contains "rexw_prefix") ? "64" : None)
+    (operand.append("(X86.wide(rex) == 64)")) if wide == "64"
+    (operand.append("(X86.wide(rex) == 32)")) if wide == "32"
+    tokens := pattern.split(" ")
+    at := tokens.head
+    while at {
+      token := at.value
+      if token fits_pattern "^0x[0-9A-Fa-f]+$" {
+        pieces.append(("<-Byte{== " + token.signed_hexadecimal(16)) + "}")
+      } elsif token fits_pattern "^0b[01_]+$" {
+        high := (token text_after "0b").without("_")
+        fixed := at.next.value
+        low := (fixed fits_pattern "\\[0b") ? (("<-Binary₃{== " + ((fixed text_after "[0b") text_before "]").unsigned) + "}") : "register: <-Binary₃"
+        (fields.append("register")) unless fixed fits_pattern "\\[0b"
+        pieces.append((low + ", <-Binary₅{== ") + (high.unsigned + "}"))
+        at = at.next
+      } elsif token begins "MOD[" {
+        (operand.append("(.mod == 3)")) if token == "MOD[0b11]"
+      } elsif token == "MOD!=3" {
+        operand.append("(.mod != 3)")
+      } elsif token fits_pattern "^REG\\[0b" {
+        operand.append(("(.reg == " + ((token text_after "[0b") text_before "]").unsigned) + ")")
+      } elsif token fits_pattern "^RM\\[0b" {
+        operand.append(("(.rm == " + ((token text_after "[0b") text_before "]").unsigned) + ")")
+      } elsif token begins "RM[" {
+        pieces.append("operand: X86.Operand{" + (operand.empty ? "true" : operand.join(" && ")) + "}")
+        fields.append("operand")
+      } elsif (token == "SIMM8()") || (token == "UIMM8()") {
+        pieces.append("immediate: <-Binary₈")
+        fields.append("immediate")
+      } elsif token == "SIMMz()" {
+        pieces.append("immediate: <-Binary₃₂")
+        fields.append("immediate")
+      } elsif token == "UIMMv()" {
+        pieces.append(((width == 64) ? "immediate: <-Binary₆₄{X86.wide(rex) == 64}" : "immediate: <-Binary₃₂{X86.wide(rex) == 32}"))
+        fields.append("immediate")
+      } elsif token == "BRDISP8()" {
+        pieces.append("offset: <-Byte")
+        fields.append("offset")
+      } elsif token == "BRDISP32()" {
+        pieces.append("offset: <-Binary₃₂")
+        fields.append("offset")
+      }
+      at = at.next
+    }
+    Xed.Header(pieces, fields, wide, (pattern contains "DF64()") || (pattern contains "FORCE64()"))
+  // (an operand as the printer reads it: what kind, at what width)
+  static operand_kind (operand) =>
+    (return None) if operand contains ":SUPP"
+    (return ((operand contains ":b") ? "rel 8" : "rel 32")) if operand begins "RELBR"
+    (return "agen") if operand begins "AGEN"
+    (return "mem " + ((operand text_after ":") text_after ":")) if operand begins "MEM0"
+    if operand begins "IMM0" {
+      (return "one") if operand contains "IMPL"
+      (return "imm s8") if operand contains ":i8"
+      (return "imm u8") if operand fits_pattern ":r:b$"
+      (return "imm z") if operand contains ":z"
+      return "imm v"
+    }
+    named := operand text_after "="
+    (return "cl") if named begins "XED_REG_CL"
+    (return "al") if named begins "XED_REG_AL"
+    (return "acc v") if named begins "OrAX()"
+    register := named text_before "()"
+    (return None) if register === None
+    kind := (register fits_pattern "_SB$") ? "srm" : ((register fits_pattern "_B$") ? "rm" : "reg")
+    size := (register contains "GPR8") ? "8" : ((register contains "GPR16") ? "16" : ((register contains "GPR64") ? "64" : ((register contains "GPRz") ? "z" : "v")))
+    (kind + " ") + size
+  static arguments (fields) =>
+    given := []
+    asked := ["operand", "immediate", "register", "offset"].head
+    while asked {
+      found := "None"
+      field := fields.head
+      while field {
+        (found = asked.value) if field.value == asked.value
+        field = field.next
+      }
+      given.append(found)
+      asked = asked.next
+    }
+    given.join(", ")
+  static declared (record, form, index) =>
+    (return None) unless Xed.supported(form.pattern) && (form.operands !== None)
+    widths := (form.pattern contains "UIMMv()") ? [32, 64] : [0]
+    made := []
+    at := widths.head
+    while at {
+      header := Xed.header_of(form.pattern, at.value)
+      kinds := []
+      operand := form.operands.split(" ").head
+      while operand {
+        kind := Xed.operand_kind(operand.value)
+        (kinds.append(("\"" + kind) + "\"")) unless (kind === None) || (operand.value.blank_trimmed == "")
+        operand = operand.next
+      }
+      mnemonic := ((form.pattern contains "UIMMv()") && (at.value == 64)) ? "movabs" : Xed.spelled(record.iclass, record.disasm)
+      name := (("Xed_" + (form.iform === None ? record.iclass : form.iform)) + "_") + (index + at.value)
+      given_fields := Xed.arguments(header.fields)
+      opening := ("  static " + name) + " := class<prefixes: X86.Prefix[], rex: X86.Rex[]> ("
+      heading := (opening + header.pieces.join(", ")) + ") {\n"
+      named := ("    iclass => \"" + record.iclass) + "\"\n"
+      sixtyfour := header.sixtyfour ? "true" : "false"
+      printed := ((("    assembly_after (end) => X86.printed(prefixes, rex, " + given_fields) + ", \"") + mnemonic) + "\", ["
+      closing := ((kinds.join(", ") + "], ") + sixtyfour) + ", end)\n  }"
+      made.append(((heading + named) + printed) + closing)
+      at = at.next
+    }
+    made
+}
+
+// The declaration Ray makes from XED, the text of `X86.xed.ray`: the forms of the instructions asked for, each a class; an
+// instruction one of them after its prefixes; a function, and code, a list of them.
+Xed &+= {
+  // (the integer instructions gcc writes for C: arithmetic, logic, moves and extensions, shifts, the stack, calls and jumps,
+  // every condition of a jump, a move and a set)
+  static Integer := ["ADD", "SUB", "AND", "OR", "XOR", "CMP", "TEST", "MOV", "MOVZX", "MOVSX", "MOVSXD", "LEA", "IMUL", "NEG", "NOT", "SHL", "SHR", "SAR", "PUSH", "POP", "CALL_NEAR", "RET_NEAR", "JMP", "NOP", "XCHG"]
+  static asked () =>
+    made := Xed.Integer.map((x) => x)
+    at := Xed.Conditions.head
+    while at {
+      made.append("J" + at.value)
+      made.append("CMOV" + at.value)
+      made.append("SET" + at.value)
+      at = at.next.next
+    }
+    made
+  static listed (name, names) =>
+    found := false
+    at := names.head
+    while at {
+      (found = true) if at.value == name
+      at = at.next
+    }
+    found
+  static block_count (path) => path.file_text.piece_count("\n{\n")
+  // (the forms asked for in the records from one block on, `count` of them: their classes, and how many were left out)
+  static Part := class (classes, left_out)
+  static declared_in (path, from, count) =>
+    asked := Xed.asked()
+    classes := []
+    left_out := 0
+    index := from * 100
+    text := path.file_text
+    total := text.piece_count("\n{\n")
+    done := 0
+    while (done < count) && ((from + done) < total) {
+      block := text.piece_at("\n{\n", from + done)
+      iclass := Xed.field(block, "ICLASS")
+      if (block contains "ICLASS") && Xed.listed(iclass, asked) {
+        record := Xed.Record(iclass, Xed.field(block, "DISASM"), Xed.field(block, "EXTENSION"), Xed.forms(block))
+        form := record.forms.head
+        while form {
+          made := Xed.declared(record, form.value, index)
+          (left_out = left_out + 1) if made === None
+          (classes.joined(made)) unless made === None
+          index = index + 1
+          form = form.next
+        }
+      }
+      done = done + 1
+    }
+    Xed.Part(classes, left_out)
+  // (the text of `X86.xed.ray`, from all the classes)
+  static declaration (classes, left_out) =>
+    names := classes.map((text) => (text text_after "static ") text_before " :=")
+    alternatives := names.map((name) => ("X86." + name) + "<prefixes, rex>").join("\n    | ")
+    heading := "// Made by Ray from Intel's XED (`datafiles/xed-isa.txt`, at the version `external.sh` pins), by `Xed.declaration`:\n// not written by hand. " + ((("" + names.count) + " forms; ") + (("" + left_out) + " left out (what they need, the declaration has not yet)\n"))
+    forms := classes.map((text) => "X86." + ((text text_after "static ").blank_trimmed)).join("\n")
+    instruction := ((("X86.XedInstruction := class (\n  prefixes: X86.Prefix[]{length <= 3},\n  rex: X86.Rex[]{length <= 1},\n  operation: " + alternatives) + "\n) {\n") + "  ends => (operation.iclass == \"RET_NEAR\") || (operation.iclass == \"JMP\")\n}\n")
+    function := "X86.XedFunction := class (instructions: X86.XedInstruction[]{(!.empty) && .last.ends}) {\n  static from (bytes) => X86.XedFunction.bits_read(bytes.map((byte) => byte.binary(8).reversed).join(\"\"))\n  written => .binary.pieces(8).map((eight) => eight.reversed.unsigned)\n  assembly =>\n    made := []\n    at := 0\n    step := instructions.head\n    while step {\n      at = at + (step.value.binary.count / 8)\n      made.append(step.value.operation.assembly_after(at))\n      step = step.next\n    }\n    made\n}\n"
+    (((heading + forms) + "\n") + instruction) + function
+}

@@ -425,6 +425,53 @@ X86 := class: Language {
     assembly_after (end) => assembly
     statements (end, width) => []
   }
+  // (how objdump writes an instruction XED describes: its operands by kind (`rm v`, `reg 8`, `mem v`, `agen`, `imm s8`,
+  // `rel 32`, `srm v`, `cl`), at the width the prefixes give it; a 66 it does not use, `data16`; 2e, `cs`; 66 90, `xchg ax,ax`)
+  static printed (prefixes, rex, operand, immediate, register, offset, mnemonic, kinds, sixtyfour, end) =>
+    sixteens := X86.counted(prefixes, 102)
+    size := (sixteens > 0) ? 16 : (sixtyfour ? 64 : X86.wide(rex))
+    used := 0
+    pieces := []
+    at := kinds.head
+    while at {
+      kind := at.value
+      (used = 1) if (kind fits_pattern " [vz]$") || (kind fits_pattern "^mem [vz]$")
+      pieces.append(X86.printed_operand(kind, rex, operand, immediate, register, offset, size, end))
+      at = at.next
+    }
+    (return "xchg ax,ax") if (mnemonic == "nop") && (pieces.empty && (sixteens > 0))
+    unused := sixteens - used
+    lead := ("data16 " * ((unused > 0) ? unused : 0)) + (X86.segment(prefixes) ? "cs " : "")
+    (lead + mnemonic) + (pieces.empty ? "" : (" " + pieces.join(",")))
+  static width_of (letter, size) =>
+    (return 8) if (letter == "8") || (letter == "b")
+    (return 16) if (letter == "16") || (letter == "w")
+    (return 32) if letter == "d"
+    (return 64) if (letter == "64") || (letter == "q")
+    (return ((size == 16) ? 16 : 32)) if letter == "z"
+    size
+  static register_at (number, width, rex) => (width == 8) ? X86.byte_named(number, rex) : X86.named(number, width)
+  static hex_at (value, width) =>
+    (return X86.immediate(value, width)) if width >= 32
+    "0x" + ((value < 0) ? ((value + X86.power(width)) as Integer) : value).hexadecimal
+  static printed_operand (kind, rex, operand, immediate, register, offset, size, end) =>
+    letter := kind text_after " "
+    width := X86.width_of(letter, size)
+    (return X86.register_at(operand.rm_register(rex), width, rex)) if kind begins "rm "
+    (return X86.register_at(operand.reg_register(rex), width, rex)) if kind begins "reg "
+    (return X86.register_at(register + X86.base_extension(rex), width, rex)) if kind begins "srm "
+    (return X86.register_at(0, width, rex)) if kind begins "acc "
+    (return X86.in_memory(operand, rex, width)) if kind begins "mem "
+    (return operand.memory(rex)) if kind == "agen"
+    (return "cl") if kind == "cl"
+    (return "al") if kind == "al"
+    (return "1") if kind == "one"
+    (return X86.hex_at(immediate, 8)) if kind == "imm u8"
+    (return X86.hex_at(X86.signed(immediate, 8), size)) if kind == "imm s8"
+    (return X86.hex_at(X86.signed(immediate, 32), size)) if kind == "imm z"
+    (return ("0x" + immediate.hexadecimal)) if (kind == "imm v") && (size == 64)
+    (return X86.hex_at(immediate, 32)) if kind == "imm v"
+    (end + X86.signed(offset, (kind == "rel 8") ? 8 : 32)).hexadecimal
   static pair (name, first, second, rex) => (((name + " ") + X86.named(first, X86.wide(rex))) + ",") + X86.named(second, X86.wide(rex))
 
   // What a register holds while a function is lifted: Ray code over the parameters, and the width it was written at; read at the other width, a 64-bit value is its low half, a 32-bit one zero-extended (Vol. 1, 3.4.1.1)

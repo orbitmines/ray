@@ -78,6 +78,8 @@ Xed &+= {
     wide := (pattern contains "norexw_prefix") ? "32" : ((pattern contains "rexw_prefix") ? "64" : None)
     (operand.append("(X86.wide(rex) == 64)")) if wide == "64"
     (operand.append("(X86.wide(rex) == 32)")) if wide == "32"
+    (operand.append("(X86.counted(prefixes, 102) > 0)")) if (" " + (pattern + " ")) contains " 66_prefix "
+    (operand.append("(X86.counted(prefixes, 102) == 0)")) if (" " + (pattern + " ")) contains " no66_prefix "
     tokens := pattern.split(" ")
     at := tokens.head
     while at {
@@ -157,6 +159,17 @@ Xed &+= {
       asked = asked.next
     }
     given.join(", ")
+  // (a form as `X86.xed_assembled` reads it: its text's mnemonic, its operands' kinds, what ModRM.reg holds when it is not a
+  // register, whether ModRM is memory or a register, the width REX.W asks for, and how it is made)
+  static Made := class (text, entry)
+  static mode_of (pattern) => (pattern contains "MOD!=3") ? "\"memory\"" : ((pattern contains "MOD[0b11]") ? "\"register\"" : "None")
+  static digit_of (pattern) => (pattern fits_pattern "REG\\[0b[01]+\\]") ? ("" + ((pattern text_after "REG[0b") text_before "]").unsigned) : "None"
+  static entry_of (name, iform, mnemonic, listed, pattern, header) =>
+    wide := (header.wide === None) ? "None" : header.wide
+    fields := header.fields.join(", ")
+    made := ((("((prefixes, rex, operand, immediate, register, offset) => X86." + name) + "(prefixes, rex") + ((fields == "") ? "" : (", " + fields))) + "))"
+    opening := ((((("  X86.XedForm(\"" + iform) + "\", \"") + mnemonic) + "\", [") + listed) + "], "
+    (((((opening + Xed.digit_of(pattern)) + ", ") + Xed.mode_of(pattern)) + ", ") + ((wide + ", ") + (header.sixtyfour ? "true" : "false"))) + ((", " + made) + ")")
   static declared (record, form, index) =>
     (return None) unless Xed.supported(form.pattern) && (form.operands !== None)
     widths := (form.pattern contains "UIMMv()") ? [32, 64] : [0]
@@ -179,8 +192,12 @@ Xed &+= {
       named := ("    iclass => \"" + record.iclass) + "\"\n"
       sixtyfour := header.sixtyfour ? "true" : "false"
       printed := ((("    assembly_after (end) => X86.printed(prefixes, rex, " + given_fields) + ", \"") + mnemonic) + "\", ["
-      closing := ((kinds.join(", ") + "], ") + sixtyfour) + ", end)\n  }"
-      made.append(((heading + named) + printed) + closing)
+      printed_now := ((("    assembly => X86.printed(prefixes, rex, " + given_fields) + ", \"") + mnemonic) + "\", ["
+      listed := kinds.join(", ")
+      meant := ((((("    statements (end, width) => X86.meant(\"" + record.iclass) + "\", [") + listed) + "], prefixes, rex, ") + given_fields) + ((", " + sixtyfour) + ", end, width)\n")
+      lifting := ((((("    lifted (registers) => X86.meant_lifted(registers, \"" + record.iclass) + "\", [") + listed) + "], prefixes, rex, ") + given_fields) + ((", " + sixtyfour) + ")\n")
+      closing := (((listed + "], ") + sixtyfour) + ", end)\n") + (((((printed_now + listed) + "], ") + sixtyfour) + ", 0)\n") + ((meant + lifting) + "  }"))
+      made.append(Xed.Made(((heading + named) + printed) + closing, Xed.entry_of(name, (form.iform === None) ? record.iclass : form.iform, mnemonic, listed, form.pattern, header)))
       at = at.next
     }
     made
@@ -212,10 +229,11 @@ Xed &+= {
     found
   static block_count (path) => path.file_text.piece_count("\n{\n")
   // (the forms asked for in the records from one block on, `count` of them: their classes, and how many were left out)
-  static Part := class (classes, left_out)
+  static Part := class (classes, entries, left_out)
   static declared_in (path, from, count) =>
     asked := Xed.asked()
     classes := []
+    entries := []
     left_out := 0
     index := from * 100
     text := path.file_text
@@ -230,21 +248,25 @@ Xed &+= {
         while form {
           made := Xed.declared(record, form.value, index)
           (left_out = left_out + 1) if made === None
-          (classes.joined(made)) unless made === None
+          (classes.joined(made.map((one) => one.text))) unless made === None
+          (entries.joined(made.map((one) => one.entry))) unless made === None
           index = index + 1
           form = form.next
         }
       }
       done = done + 1
     }
-    Xed.Part(classes, left_out)
+    Xed.Part(classes, entries, left_out)
   // (the text of `X86.xed.ray`, from all the classes)
-  static declaration (classes, left_out) =>
+  static declaration (classes, entries, left_out) =>
     names := classes.map((text) => (text text_after "static ") text_before " :=")
     alternatives := names.map((name) => ("X86." + name) + "<prefixes, rex>").join("\n    | ")
     heading := "// Made by Ray from Intel's XED (`datafiles/xed-isa.txt`, at the version `external.sh` pins), by `Xed.declaration`:\n// not written by hand. " + ((("" + names.count) + " forms; ") + (("" + left_out) + " left out (what they need, the declaration has not yet)\n"))
     forms := classes.map((text) => "X86." + ((text text_after "static ").blank_trimmed)).join("\n")
     instruction := ((("X86.XedInstruction := class (\n  prefixes: X86.Prefix[]{length <= 3},\n  rex: X86.Rex[]{length <= 1},\n  operation: " + alternatives) + "\n) {\n") + "  ends => (operation.iclass == \"RET_NEAR\") || (operation.iclass == \"JMP\")\n}\n")
     function := "X86.XedFunction := class (instructions: X86.XedInstruction[]{(!.empty) && .last.ends}) {\n  static from (bytes) => X86.XedFunction.bits_read(bytes.map((byte) => byte.binary(8).reversed).join(\"\"))\n  written => .binary.pieces(8).map((eight) => eight.reversed.unsigned)\n  assembly =>\n    made := []\n    at := 0\n    step := instructions.head\n    while step {\n      at = at + (step.value.binary.count / 8)\n      made.append(step.value.operation.assembly_after(at))\n      step = step.next\n    }\n    made\n}\n"
-    (((heading + forms) + "\n") + instruction) + function
+    code := "X86.XedCode := class (instructions: X86.XedInstruction[]) {\n  static from (bytes) => X86.XedCode.bits_read(bytes.map((byte) => byte.binary(8).reversed).join(\"\"))\n  written => .binary.pieces(8).map((eight) => eight.reversed.unsigned)\n}\n"
+    table := ("// (the forms as text is assembled into them, in XED's order)\nX86.XedForms := [\n" + entries.join(",\n")) + "\n]\n"
+    ((((heading + forms) + "\n") + instruction) + function) + (code + table)
 }
+

@@ -1,6 +1,8 @@
 // Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 2 (https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html): integer arithmetic on registers, as gcc -O2 emits it
 X86 := class: Language {
   static extensions := ".bin"
+  // (true when the instructions are XED's (`X86.xed.ray`): text is assembled into its forms)
+  static xed := false
 
   static Registers := ["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
   static Halves := ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"]
@@ -472,6 +474,136 @@ X86 := class: Language {
     (return ("0x" + immediate.hexadecimal)) if (kind == "imm v") && (size == 64)
     (return X86.hex_at(immediate, 32)) if kind == "imm v"
     (end + X86.signed(offset, (kind == "rel 8") ? 8 : 32)).hexadecimal
+  // What an instruction XED describes does, by its class and its operands' kinds (XED says what an operand is, not what the
+  // instruction does): a value read from a register, memory or the instruction, the destination its first operand.
+  static Codes := ["O", "NO", "B", "NB", "Z", "NZ", "BE", "NBE", "S", "NS", "P", "NP", "L", "NL", "LE", "NLE"]
+  static code_of (iclass, lead) => X86.Codes.index_of(iclass text_after lead)
+  static size_of (prefixes, rex, sixtyfour) => (X86.counted(prefixes, 102) > 0) ? 16 : (sixtyfour ? 64 : X86.wide(rex))
+  static kind_width (kind, size) => X86.width_of(kind text_after " ", size)
+  static number_of_kind (kind, rex, operand, register) =>
+    (return operand.rm_register(rex)) if kind begins "rm "
+    (return operand.reg_register(rex)) if kind begins "reg "
+    (return register + X86.base_extension(rex)) if kind begins "srm "
+    0
+  // (an operand's value as Ray code: signed at its width; a byte or a word of memory read unsigned when `unsigned`)
+  static value_of (kind, registers, prefixes, rex, operand, immediate, register, size, unsigned) =>
+    width := X86.kind_width(kind, size)
+    (return X86.address(operand, rex)) if kind == "agen"
+    (return "1") if kind == "one"
+    (return "((r1).anded(63))") if kind == "cl"
+    (return X86.constant(X86.signed(immediate, 8), size)) if kind == "imm s8"
+    (return ("" + immediate)) if kind == "imm u8"
+    (return X86.constant(X86.signed(immediate, 32), size)) if kind == "imm z"
+    (return X86.constant(immediate, size)) if kind == "imm v"
+    (return X86.load_text(operand, rex, width, !unsigned)) if (kind begins "mem ") || ((kind begins "rm ") && (operand.mod != 3))
+    number := X86.number_of_kind(kind, rex, operand, register)
+    (return X86.anded_text(X86.held(registers, number, 64), (width == 8) ? "255" : "65535")) if unsigned && (width < 32)
+    X86.held(registers, number, width)
+  // (a value given to an operand: a register at 64 or 32 bits (32 clears the upper half), the low byte or word of one, or memory)
+  static given_to (kind, value, prefixes, rex, operand, register, size) =>
+    width := X86.kind_width(kind, size)
+    (return [X86.store_text(operand, rex, width, value)]) if (kind begins "mem ") || ((kind begins "rm ") && (operand.mod != 3))
+    number := X86.number_of_kind(kind, rex, operand, register)
+    own := "r" + number
+    (return [((own + " = ") + X86.stored(value, width))]) if width >= 32
+    mask := (width == 8) ? "255" : "65535"
+    kept := X86.combined(own, "-", X86.anded_text(own, mask), 64)
+    [((own + " = ") + X86.combined(kept, "+", X86.anded_text(value, mask), 64))]
+  static Operating := ["ADD", "+", "SUB", "-", "IMUL", "*"]
+  static Methods := ["AND", "anded", "OR", "ored", "XOR", "xored"]
+  static operation_of (iclass, table) =>
+    at := table.head
+    while at {
+      (return at.next.value) if at.value == iclass
+      at = at.next.next
+    }
+    None
+  // (what it leaves in the registers, as `lifted` gives them for a function of one straight line: a register its destination)
+  static meant_lifted (registers, iclass, kinds, prefixes, rex, operand, immediate, register, sixtyfour) =>
+    (return registers) if ((iclass == "NOP") || (iclass == "RET_NEAR")) || (((iclass == "XCHG") && kinds.empty) || ((iclass == "CMP") || (iclass == "TEST")))
+    size := X86.size_of(prefixes, rex, sixtyfour)
+    destination := kinds.first
+    source := kinds.rest.first
+    (return None) unless ((destination begins "rm ") || (destination begins "acc ")) || ((destination begins "reg ") || (destination begins "srm "))
+    (return None) if (destination begins "rm ") && (operand.mod != 3)
+    width := X86.kind_width(destination, size)
+    number := X86.number_of_kind(destination, rex, operand, register)
+    made := None
+    (made = X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false)) if ((iclass == "MOV") || (iclass == "MOVSX")) || (iclass == "MOVSXD")
+    (made = X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, true)) if iclass == "MOVZX"
+    (made = X86.addressed(registers, operand, rex)) if iclass == "LEA"
+    sign := X86.operation_of(iclass, X86.Operating)
+    third := kinds.rest.rest.first
+    (made = X86.combined(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), sign, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size)) if (sign !== None) && (third === None)
+    (made = X86.combined(X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), sign, X86.value_of(third, registers, prefixes, rex, operand, immediate, register, size, false), size)) if (sign !== None) && (third !== None)
+    (made = X86.constant(0, size)) if (iclass == "XOR") && ((source begins "reg ") && (operand.rm_register(rex) == operand.reg_register(rex)))
+    (made = X86.combined("0", "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size)) if iclass == "NEG"
+    (made = X86.combined(X86.constant(((0 - 1) as Integer), size), "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size)) if iclass == "NOT"
+    (made = X86.shifted(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), 4, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size)) if (iclass == "SHL") && (source !== "cl")
+    (made = X86.shifted(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), 7, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size)) if (iclass == "SAR") && (source !== "cl")
+    (return None) if made === None
+    X86.placed(registers, number, X86.Value(made, width))
+  // (its statements in a lifted program, as `statements` gives them; None when nothing here says what it does)
+  static meant (iclass, kinds, prefixes, rex, operand, immediate, register, offset, sixtyfour, end, width) =>
+    registers := X86.fresh()
+    size := X86.size_of(prefixes, rex, sixtyfour)
+    (return []) if (iclass == "NOP") || ((iclass == "XCHG") && kinds.empty)
+    (return ["return " + X86.held(registers, 0, width)]) if iclass == "RET_NEAR"
+    target := (offset === None) ? None : (end + X86.signed(offset, (kinds.first == "rel 8") ? 8 : 32)).hexadecimal
+    (return ["goto at_" + target]) if iclass == "JMP"
+    (return [((("(goto at_" + target) + ") if ") + X86.condition(X86.code_of(iclass, "J")))]) if (iclass begins "J") && (target !== None)
+    (return [("r0 = at_" + target) + "_called(memory, r7, r6, r2, r1, r8, r9, ((r4 - 8) wrapped Int64))"]) if iclass == "CALL_NEAR"
+    if iclass == "PUSH" {
+      value := X86.value_of(kinds.first, registers, prefixes, rex, operand, immediate, register, 64, false)
+      return ["r4 = ((r4 - 8) wrapped Int64)", ("store(memory, r4, 8, " + value) + ")"]
+    }
+    if iclass == "POP" {
+      return [X86.given_to(kinds.first, "loaded(memory, r4, 8, true)", prefixes, rex, operand, register, 64), ["r4 = ((r4 + 8) wrapped Int64)"]].flatten
+    }
+    (return X86.set_lines(operand.rm_register(rex), X86.code_of(iclass, "SET"))) if iclass begins "SET"
+    destination := kinds.first
+    source := kinds.rest.first
+    if iclass begins "CMOV" {
+      number := X86.number_of_kind(destination, rex, operand, register)
+      chosen := X86.stored(X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size)
+      return [((((("r" + number) + " = ") + X86.condition(X86.code_of(iclass, "CMOV"))) + " ? ") + chosen) + (" : " + X86.stored(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size))]
+    }
+    (return X86.flag_lines([X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false)])) if iclass == "CMP"
+    if iclass == "TEST" {
+      same := (X86.number_of_kind(destination, rex, operand, register) == X86.number_of_kind(source, rex, operand, register)) && (operand.mod == 3)
+      return X86.flag_lines([X86.tested(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), same), "0"])
+    }
+    (return X86.given_to(destination, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), prefixes, rex, operand, register, size)) if iclass == "MOV"
+    (return X86.given_to(destination, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, true), prefixes, rex, operand, register, size)) if iclass == "MOVZX"
+    (return X86.given_to(destination, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), prefixes, rex, operand, register, size)) if (iclass == "MOVSX") || (iclass == "MOVSXD")
+    (return X86.given_to(destination, X86.combined(X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), "+", "0", 64), prefixes, rex, operand, register, size)) if iclass == "LEA"
+    if (iclass == "XOR") && ((source begins "reg ") && ((destination begins "rm ") && ((operand.mod == 3) && (operand.rm_register(rex) == operand.reg_register(rex))))) {
+      return [X86.flag_lines(["0", "0"]), X86.given_to(destination, X86.constant(0, size), prefixes, rex, operand, register, size)].flatten
+    }
+    sign := X86.operation_of(iclass, X86.Operating)
+    if sign !== None {
+      third := kinds.rest.rest.first
+      made := (third === None) ? X86.combined(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), sign, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size) : X86.combined(X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), sign, X86.value_of(third, registers, prefixes, rex, operand, immediate, register, size, false), size)
+      flags := (iclass == "SUB") ? X86.flag_lines([X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false)]) : X86.flag_lines([made, "0"])
+      return [flags, X86.given_to(destination, made, prefixes, rex, operand, register, size)].flatten
+    }
+    method := X86.operation_of(iclass, X86.Methods)
+    if method !== None {
+      made := X86.method_text(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), method, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size)
+      return [X86.flag_lines([made, "0"]), X86.given_to(destination, made, prefixes, rex, operand, register, size)].flatten
+    }
+    if iclass == "NEG" {
+      made := X86.combined("0", "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size)
+      return [X86.flag_lines(["0", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false)]), X86.given_to(destination, made, prefixes, rex, operand, register, size)].flatten
+    }
+    (return X86.given_to(destination, X86.combined(X86.constant(((0 - 1) as Integer), size), "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size), prefixes, rex, operand, register, size)) if iclass == "NOT"
+    if ((iclass == "SHL") || (iclass == "SHR")) || (iclass == "SAR") {
+      kind := (iclass == "SHL") ? 4 : ((iclass == "SHR") ? 5 : 7)
+      count := (source == "cl") ? ("((r1).anded(" + ((size == 64) ? "63" : "31")) + "))" : X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false)
+      made := X86.shifted(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), kind, count, size)
+      return [X86.flag_lines([made, "0"]), X86.given_to(destination, made, prefixes, rex, operand, register, size)].flatten
+    }
+    None
   static pair (name, first, second, rex) => (((name + " ") + X86.named(first, X86.wide(rex))) + ",") + X86.named(second, X86.wide(rex))
 
   // What a register holds while a function is lifted: Ray code over the parameters, and the width it was written at; read at the other width, a 64-bit value is its low half, a 32-bit one zero-extended (Vol. 1, 3.4.1.1)
@@ -1003,14 +1135,13 @@ X86 := class: Language {
       (made.append(item.code)) if item.kind == "built"
       if (item.kind == "jump") || (item.kind == "call") {
         distance := X86.unsigned(((places[names.index_of(item.label)] - offset) as Integer), 32)
-        (made.append(X86.Instruction([], [], X86.Call([], [], distance)).binary)) if item.kind == "call"
-        (made.append(((item.code === None) ? X86.Instruction([], [], X86.JumpNear([], [], distance)) : X86.Instruction([], [], X86.JumpIfNear([], [], item.code, distance))).binary)) if item.kind == "jump"
+        made.append(X86.branch(item.kind, item.code, distance).binary)
       }
       at = at.next
     }
     // (the program's bytes, from its instructions' bits, each byte's least significant first as they are read)
     made.join("").pieces(8).map((eight) => eight.reversed.unsigned)
-  static assembled (text) => ray_code (("X86.Assembly reading {\n  " + text) + "\n}")
+  static assembled (text) => X86.xed ? X86.xed_assembled(text) : (ray_code (("X86.Assembly reading {\n  " + text) + "\n}"))
   static compiled_flow (code, parameters, width) =>
     items := []
     lines := X86.flow_lines(code, parameters, width)
@@ -1054,7 +1185,7 @@ X86 := class: Language {
       if item.kind == "jump" {
         offset = offset + ((item.code === None) ? 5 : 6)
         distance := X86.unsigned(((places[names.index_of(item.label)] - offset) as Integer), 32)
-        made.append((item.code === None) ? X86.Instruction([], [], X86.JumpNear([], [], distance)) : X86.Instruction([], [], X86.JumpIfNear([], [], item.code, distance)))
+        made.append(X86.branch("jump", item.code, distance))
       } elsif item.kind == "text" {
         made.append(next.value)
         offset = offset + (next.value.binary.count / 8)
@@ -1062,7 +1193,7 @@ X86 := class: Language {
       }
       at = at.next
     }
-    X86.Function(made)
+    X86.xed ? X86.XedFunction(made) : X86.Function(made)
 }
 
 // An instruction: a REX prefix or none, then one of the encodings above, given the prefix (made once X86 is, so that its header sees the encodings are of bits)
@@ -1417,3 +1548,201 @@ X86.compiled (body, width, parameters) =>
   lines := X86.lowered(body spaced_tokens "( )", 0, width, parameters)
   (return None) unless lines
   [lines, ["ret"]].flatten
+
+// Assembly from XED's forms (with `X86.xed`): a line objdump writes, made as each form of its mnemonic whose operands it
+// fits, kept when what is made prints back as the line, the shortest of them (as an assembler takes it); a jump or a call
+// made by its distance
+X86.XedForm := class (iform, mnemonic, kinds, digit, mode, wide, sixtyfour, made)
+// (of forms of one length, the one gas takes where it is not the first XED lists: its multi-byte nop is 0F 1F (binutils,
+// `opcodes/i386-opc.tbl`))
+X86.Taken := ["NOP_MEMv_0F1F"]
+X86.XedOperand := class (kind, number, width, address, text)
+X86.register_number (text) =>
+  found := X86.Registers.index_of(text)
+  (found = X86.Halves.index_of(text)) if found === None
+  (found = X86.Words.index_of(text)) if found === None
+  (found = X86.Bytes.index_of(text)) if found === None
+  found
+X86.register_width (text) => (X86.Registers.index_of(text) !== None) ? 64 : ((X86.Halves.index_of(text) !== None) ? 32 : ((X86.Words.index_of(text) !== None) ? 16 : 8))
+X86.xed_address (text) =>
+  inside := text text_before "]"
+  (return X86.Address(X86.Registers.index_of(inside), None, 1, None)) if X86.Registers.index_of(inside) !== None
+  ray_code (("X86.Memory reading {\n  " + inside) + "\n}")
+X86.xed_operand (text) =>
+  if text contains " PTR [" {
+    words := text text_before " PTR"
+    width := (words == "BYTE") ? 8 : ((words == "WORD") ? 16 : ((words == "DWORD") ? 32 : 64))
+    return X86.XedOperand("memory", None, width, X86.xed_address(text text_after "["), text)
+  }
+  (return X86.XedOperand("agen", None, None, X86.xed_address(text text_after "["), text)) if text begins "["
+  number := X86.register_number(text)
+  (return X86.XedOperand("immediate", None, None, None, text)) if number === None
+  X86.XedOperand("register", number, X86.register_width(text), None, text)
+// (memory as ModRM, SIB and displacement, as `X86.addressing` makes it, ModRM.reg given)
+X86.xed_memory (address, reg) =>
+  base := address.base
+  index := address.index
+  offset := address.displacement
+  (return X86.Operand(4, reg, 0, 5, (index === None) ? 4 : (index % 8), X86.scale_bits(address.scale), None, X86.unsigned((offset === None) ? 0 : offset, 32))) if base === None
+  short := (offset === None) ? (((base % 8) == 5) ? 0 : None) : offset
+  mode := (short === None) ? 0 : (((short >= ((0 - 128) as Integer)) && (short <= 127)) ? 1 : 2)
+  small := (mode == 1) ? X86.unsigned(short, 8) : None
+  large := (mode == 2) ? X86.unsigned(short, 32) : None
+  (return X86.Operand(base % 8, reg, mode, None, None, None, small, large)) if (index === None) && ((base % 8) != 4)
+  X86.Operand(4, reg, mode, base % 8, (index === None) ? 4 : (index % 8), X86.scale_bits(address.scale), small, large)
+// (the width of the operation: an operand of `v` or `z`, else one of a register of a width it names, else what the form takes)
+X86.xed_size (form, operands) =>
+  kind := form.kinds.head
+  operand := operands.head
+  while kind {
+    letter := kind.value text_after " "
+    (return operand.value.width) if ((letter == "v") || (letter == "z")) && ((operand.value.width !== None) && !(kind.value begins "imm "))
+    kind = kind.next
+    operand = operand.next
+  }
+  kind = form.kinds.head
+  operand = operands.head
+  while kind {
+    (return operand.value.width) if (operand.value.kind == "register") && (((kind.value begins "reg ") || (kind.value begins "rm ")) || ((kind.value begins "srm ") || (kind.value begins "acc ")))
+    kind = kind.next
+    operand = operand.next
+  }
+  form.sixtyfour ? 64 : 32
+// (an immediate's bits, as its kind holds it at the width; None when it does not)
+X86.xed_immediate (kind, text, size) =>
+  (return None) unless text begins "0x"
+  if kind == "imm s8" {
+    value := text.signed_hexadecimal(size)
+    return ((value >= ((0 - 128) as Integer)) && (value <= 127)) ? X86.unsigned(value, 8) : None
+  }
+  if kind == "imm u8" {
+    value := text.signed_hexadecimal(64)
+    return ((value >= 0) && (value <= 255)) ? value : None
+  }
+  (return None) if size == 16
+  if (kind == "imm v") && (size == 64) {
+    value := text.signed_hexadecimal(64)
+    return (value >= 0) ? value : None
+  }
+  value := text.signed_hexadecimal(size)
+  ((value >= ((0 - 2147483648) as Integer)) && (value <= 2147483647)) ? X86.unsigned(value, 32) : None
+X86.xed_built (form, operands, lead, segment) =>
+  (return None) unless form.kinds.count == operands.count
+  size := X86.xed_size(form, operands)
+  w := ((size == 64) && !form.sixtyfour) ? 1 : 0
+  (return None) if ((form.wide == 64) && (w == 0)) || ((form.wide == 32) && (w == 1))
+  reg := (form.digit === None) ? 0 : form.digit
+  rm := None
+  address := None
+  register := None
+  immediate := None
+  low_byte := false
+  kind := form.kinds.head
+  operand := operands.head
+  while kind {
+    given := operand.value
+    letter := kind.value text_after " "
+    sized := (kind.value contains " ") && !((kind.value begins "imm ") || (kind.value begins "rel "))
+    (return None) if sized && (((given.kind == "register") || (given.kind == "memory")) && (given.width != X86.width_of(letter, size)))
+    (low_byte = true) if ((given.kind == "register") && (given.width == 8)) && ((given.number >= 4) && (given.number < 8))
+    if kind.value begins "reg " {
+      (return None) unless given.kind == "register"
+      reg = given.number
+    } elsif kind.value begins "rm " {
+      (return None) unless (given.kind == "register") || (given.kind == "memory")
+      (rm = given.number) if given.kind == "register"
+      (address = given.address) if given.kind == "memory"
+    } elsif kind.value begins "mem " {
+      (return None) unless given.kind == "memory"
+      address = given.address
+    } elsif kind.value == "agen" {
+      (return None) unless given.kind == "agen"
+      address = given.address
+    } elsif kind.value begins "srm " {
+      (return None) unless given.kind == "register"
+      register = given.number
+    } elsif kind.value begins "acc " {
+      (return None) unless (given.kind == "register") && (given.number == 0)
+    } elsif kind.value == "cl" {
+      (return None) unless given.text == "cl"
+    } elsif kind.value == "al" {
+      (return None) unless given.text == "al"
+    } elsif kind.value == "one" {
+      (return None) unless given.text == "1"
+    } elsif kind.value begins "imm " {
+      immediate = X86.xed_immediate(kind.value, given.text, size)
+      (return None) if immediate === None
+    } else {
+      return None
+    }
+    kind = kind.next
+    operand = operand.next
+  }
+  (return None) if ((form.mode == "memory") && (address === None)) || ((form.mode == "register") && (rm === None))
+  modrm := (rm !== None) ? X86.Operand(rm % 8, reg % 8, 3) : ((address !== None) ? X86.xed_memory(address, reg % 8) : None)
+  base := (rm !== None) ? rm : ((register !== None) ? register : (((address !== None) && (address.base !== None)) ? address.base : 0))
+  index := ((address !== None) && (address.index !== None)) ? address.index : 0
+  extended := ((w == 1) || low_byte) || (((reg >= 8) || (index >= 8)) || (base >= 8))
+  rex := extended ? [X86.Rex((base >= 8) ? 1 : 0, (index >= 8) ? 1 : 0, (reg >= 8) ? 1 : 0, w)] : []
+  prefixes := []
+  left := lead
+  while left > 0 {
+    prefixes.append(X86.Prefix(102))
+    left = left - 1
+  }
+  (prefixes.append(X86.Prefix(102))) if size == 16
+  (prefixes.append(X86.Prefix(46))) if segment
+  maker := form.made
+  X86.XedInstruction(prefixes, rex, maker(prefixes, rex, modrm, immediate, (register === None) ? None : (register % 8), None))
+X86.xed_assembled (text) =>
+  rest := text
+  lead := 0
+  while rest begins "data16 " {
+    lead = lead + 1
+    rest = rest text_after "data16 "
+  }
+  segment := rest begins "cs "
+  (rest = rest text_after "cs ") if segment
+  mnemonic := (rest contains " ") ? (rest text_before " ") : rest
+  operands := []
+  if rest contains " " {
+    piece := (rest text_after " ").split(",").head
+    while piece {
+      operands.append(X86.xed_operand(piece.value))
+      piece = piece.next
+    }
+  }
+  // (66 90, which objdump writes `xchg ax,ax`, is a nop of 16 bits)
+  plain := rest == "xchg ax,ax"
+  best := None
+  best_size := 0
+  form := X86.XedForms.head
+  while form {
+    if (form.value.mnemonic == mnemonic) || (plain && (form.value.mnemonic == "nop")) {
+      as_nop := plain && (form.value.mnemonic == "nop")
+      built := X86.xed_built(form.value, as_nop ? [] : operands, as_nop ? (lead + 1) : lead, segment)
+      size := (built === None) ? 0 : built.binary.count
+      taken := (X86.Taken.index_of(form.value.iform) !== None) && (size == best_size)
+      (best = built) if (built !== None) && ((built.operation.assembly == text) && (((best === None) || (size < best_size)) || taken))
+      (best_size = size) if best === built
+    }
+    form = form.next
+  }
+  best
+X86.Conditions := ["o", "no", "b", "ae", "e", "ne", "be", "a", "s", "ns", "p", "np", "l", "ge", "le", "g"]
+// (a jump (`code` None) or a jump if, or a call, of 32 bits, by the distance from its end)
+X86.xed_branch (mnemonic, distance) =>
+  form := X86.XedForms.head
+  while form {
+    if (form.value.mnemonic == mnemonic) && ((form.value.kinds.count == 1) && (form.value.kinds.first == "rel 32")) {
+      maker := form.value.made
+      return X86.XedInstruction([], [], maker([], [], None, None, None, distance))
+    }
+    form = form.next
+  }
+  None
+X86.branch (kind, code, distance) =>
+  (return X86.Instruction([], [], X86.Call([], [], distance))) if (kind == "call") && !X86.xed
+  (return X86.xed_branch("call", distance)) if kind == "call"
+  (return ((code === None) ? X86.Instruction([], [], X86.JumpNear([], [], distance)) : X86.Instruction([], [], X86.JumpIfNear([], [], code, distance)))) unless X86.xed
+  X86.xed_branch((code === None) ? "jmp" : ("j" + X86.Conditions[code]), distance)

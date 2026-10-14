@@ -394,11 +394,28 @@ export async function main() {
     await language.queue.join();
 
     if (kwargs.verbose) {
+      const loc = (() => {
+        let lines = 0;
+
+        for (let id = 0; id < language.files.count; id++) {
+          const bytes = language.files.getBytes(id);
+
+          for (let i = 0; i < bytes.length; i++)
+            if (bytes[i] === 10) lines++;
+
+          if (bytes.length > 0 && bytes[bytes.length - 1] !== 10)
+            lines++;
+        }
+
+        return lines;
+      })();
+
+      const finished = performance.now();
       console.error(
-        `processed ${language.files.count || 1} input(s), ` +
-        `on ${language.workers.length || 1} thread(s): ` +
-        `loading ${(loaded - start).toFixed(1)} ms, ` +
-        `processing ${(performance.now() - loaded).toFixed(1)} ms`,
+        `#${language.files.count || 1} @ ${(loc / 1000).toFixed(1)}k LOC ` +
+        `(--threads ${language.workers.length || 1}) ` +
+        `LOAD ${(loaded - start).toFixed(1)} ms (${(loc / (loaded - start)).toFixed(1)}k/s) ` +
+        `COMPILE ${(finished - loaded).toFixed(1)} ms (${(loc / (finished - loaded)).toFixed(1)}k/s)`,
       );
     }
   } catch (error) {
@@ -1360,6 +1377,14 @@ export class Js extends Language<Ray> {
 
 enum Op { GOTO, LABEL, ".", "&" }
 
+import {
+  Expression,
+  Signal,
+  ReactiveMap,
+  type ConcurrentScheduler,
+  immediateScheduler,
+} from "./expression.ts";
+
 export class Ray extends Language<FileStore> {
   async compile(program: FileStore, id: number): Promise<void> {
     const location = program.getPath(id);
@@ -1370,7 +1395,40 @@ export class Ray extends Language<FileStore> {
       
     }
 
-    console.log(id);
+    // const scheduler: ConcurrentScheduler = {
+    //   schedule: (work) => yourConcurrentScheduler(work),
+    // };
+
+    if (!location.endsWith('entrypoint.ray3')) return;
+
+    const expression = new Expression({
+      scheduler: immediateScheduler,
+      externals: {
+        log: (_context, args) => console.log(...args),
+      },
+    });
+
+    expression.global.addRule({
+      key: "print {value}",
+      run: (_context, statement) => {
+        console.log(statement.captures.value);
+      },
+    });
+
+    const source = new Signal("print hello");
+
+    const compiled = expression.compile(source);
+
+    // The IR contains only JMP opcodes.
+    console.log(compiled.ir.value.instructions);
+
+    // Execute the current compiled program.
+    await compiled.run();
+
+    // Updating the source causes parsing and IR regeneration.
+    source.value = "print world";
+    await compiled.run();
+
   }
 }
 
@@ -1508,7 +1566,7 @@ export class Program {
       if (src.is_language_entrypoint) return src;
     }
 
-    await this.add(new Text.Source(ENTRYPOINT.join("/") + "2"));
+    await this.add(new Text.Source(ENTRYPOINT.join("/") + "3"));
     if (src) await this.add(src.location);
   }
 

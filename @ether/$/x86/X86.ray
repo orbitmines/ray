@@ -399,6 +399,12 @@ X86 := class: Language {
     assembly_after (end) => assembly
     statements (end, width) => [("r" + (register + X86.base_extension(rex))) + " = loaded(memory, r4, 8, true)", "r4 = ((r4 + 8) wrapped Int64)"]
   }
+  static MoveSignedByte := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 15}, <-Byte{== 190}, operand: X86.Operand) {
+    assembly => (("movsx " + X86.named(operand.reg_register(rex), X86.size(prefixes, rex))) + ",") + X86.place(operand, rex, 8)
+    assembly_after (end) => assembly
+    lifted (registers) => X86.placed(registers, operand.reg_register(rex), X86.Value(((operand.mod == 3) ? X86.held(registers, operand.rm_register(rex), 8) : X86.load_text(operand, rex, 8, true)), X86.size(prefixes, rex)))
+    statements (end, width) => X86.assignments(lifted(X86.fresh()), None)
+  }
   static Call := class<prefixes: X86.Prefix[], rex: X86.Rex[]> (<-Byte{== 232}, offset: <-Binary₃₂) {
     assembly_after (end) => "call " + (end + X86.signed(offset, 32)).hexadecimal
     // (a call: the function there given the argument registers, its stack where the return address would go; it answers rax)
@@ -556,7 +562,8 @@ X86 := class: Language {
     (((name + " (") + heading) + ") =>\n  ") + X86.flow_lines(code, parameters, width).join("\n  ")
   // (a function of a program, lifted from where it starts: `at_4e0_called (memory, a0, …, a5, stack)`, its arguments the
   // argument registers, its stack pointer `stack`; a jump to another's start a tail call, that one's answer)
-  static lift_called (code, start, starts) =>
+  static lift_called (code, start, starts) => X86.called_text(X86.called_lines(code, start, starts))
+  static called_lines (code, start, starts) =>
     lines := X86.called_opening(start)
     offset := start
     step := code.instructions.head
@@ -571,7 +578,7 @@ X86 := class: Language {
       }
       step = step.next
     }
-    X86.called_text(lines)
+    lines
   static starting (starts, offset) =>
     found := false
     at := starts.head
@@ -616,6 +623,10 @@ X86 := class: Language {
     ( {x} wrapped {t} ) => X86.Form("wrapped", "{x}", "{t}")
     ( {x} .anded ( {c} ) ) => X86.Form("and", "{x}", "{c}")
     ( {x} / {d} ) => X86.Form("shr", "{x}", "{d}")
+    ( {x} .ored ( {y} ) ) => X86.Form("or", "{x}", "{y}")
+    ( {x} .xored ( {y} ) ) => X86.Form("xor", "{x}", "{y}")
+    ( {x} .shifted_left ( {y} ) ) => X86.Form("shl_by", "{x}", "{y}")
+    ( {x} .shifted_right ( {y} ) ) => X86.Form("sar_by", "{x}", "{y}")
     loaded ( memory, {a}, {n}, true ) => X86.Form("load_signed", "{a}", "{n}")
     loaded ( memory, {a}, {n}, false ) => X86.Form("load", "{a}", "{n}")
     loaded ( memory, {a} , {n}, true ) => X86.Form("load_signed", "{a}", "{n}")
@@ -634,6 +645,7 @@ X86 := class: Language {
   static emitted (text, target, spare) =>
     name := X86.Registers[target]
     if text fits_pattern "^[0-9]+$" {
+      (return [X86.text_item((("movabs " + name) + ",") + X86.immediate((ray_code text), 64))]) if (ray_code text) > 2147483647
       return [X86.text_item((("mov " + name) + ",") + X86.immediate((ray_code text), 64))]
     }
     if text fits_pattern "^r[0-9]+$" {
@@ -649,22 +661,39 @@ X86 := class: Language {
       (return None) unless inner
       (return [inner, [X86.text_item((("movsxd " + name) + ",") + X86.Halves[target])]].flatten) if form.right == "Int32"
       (return [inner, [X86.text_item((("mov " + X86.Halves[target]) + ",") + X86.Halves[target])]].flatten) if form.right == "Natural32"
+      (return [inner, [X86.text_item((("movsx " + name) + ",") + X86.Words[target])]].flatten) if form.right == "Int16"
+      (return [inner, [X86.text_item((("movzx " + X86.Halves[target]) + ",") + X86.Words[target])]].flatten) if form.right == "Natural16"
+      (return [inner, [X86.text_item((("movsx " + name) + ",") + X86.Bytes[target])]].flatten) if form.right == "Int8"
+      (return [inner, [X86.text_item((("movzx " + X86.Halves[target]) + ",") + X86.Bytes[target])]].flatten) if form.right == "Natural8"
       return inner
     }
-    if form.name == "and" {
+    if (form.name == "and") && (form.right fits_pattern "^[0-9]+$") {
       inner := X86.emitted(form.left, target, spare)
       mask := ray_code form.right
-      (return None) unless inner && ((mask == 255) || (mask < 128))
+      (return None) unless inner
       (return [inner, [X86.text_item((("movzx " + X86.Halves[target]) + ",") + X86.Bytes[target])]].flatten) if mask == 255
+      (return [inner, [X86.text_item((("movzx " + X86.Halves[target]) + ",") + X86.Words[target])]].flatten) if mask == 65535
       return [inner, [X86.text_item((("and " + name) + ",") + X86.immediate(mask, 64))]].flatten
+    }
+    if (form.name == "shl_by") || (form.name == "sar_by") {
+      logical := X86.unsigned_operand(form.left)
+      inner := X86.emitted(form.left, target, spare)
+      (return None) unless inner
+      kind := (form.name == "shl_by") ? "shl" : (logical ? "shr" : "sar")
+      (return [inner, [X86.text_item((((kind + " ") + name) + ",") + X86.immediate((ray_code form.right), 8))]].flatten) if form.right fits_pattern "^[0-9]+$"
+      (return None) unless form.right fits_pattern "r1\\b"
+      return [inner, [X86.text_item(((kind + " ") + name) + ",cl")]].flatten
     }
     if (form.name == "load") || (form.name == "load_signed") {
       memory := X86.memory_operand(form.left)
       inner := (memory === None) ? X86.emitted(form.left, target, spare) : []
       count := ray_code form.right
       at := ("[" + ((memory === None) ? name : memory)) + "]"
-      (return None) unless inner && ((count == 8) || ((count == 4) || ((count == 1) && (form.name == "load"))))
+      (return None) unless inner
       (return [inner, [X86.text_item((("mov " + name) + ",QWORD PTR ") + at)]].flatten) if count == 8
+      (return [inner, [X86.text_item((("movsx " + name) + ",WORD PTR ") + at)]].flatten) if (count == 2) && (form.name == "load_signed")
+      (return [inner, [X86.text_item((("movzx " + X86.Halves[target]) + ",WORD PTR ") + at)]].flatten) if count == 2
+      (return [inner, [X86.text_item((("movsx " + name) + ",BYTE PTR ") + at)]].flatten) if (count == 1) && (form.name == "load_signed")
       (return [inner, [X86.text_item((("movzx " + X86.Halves[target]) + ",BYTE PTR ") + at)]].flatten) if count == 1
       (return [inner, [X86.text_item((("movsxd " + name) + ",DWORD PTR ") + at)]].flatten) if form.name == "load_signed"
       return [inner, [X86.text_item((("mov " + X86.Halves[target]) + ",DWORD PTR ") + at)]].flatten
@@ -698,7 +727,7 @@ X86 := class: Language {
     (return 1) if (text fits_pattern "^[0-9]+$") || (text fits_pattern "^r[0-9]+$")
     form := X86.Expression reads_text text
     (return 99) unless form
-    (return X86.need(form.left)) unless ((form.name == "add") || (form.name == "sub")) || (form.name == "imul")
+    (return X86.need(form.left)) unless X86.binary(form.name)
     (return X86.need(form.left)) if X86.immediate_right(form)
     l := X86.need(form.left)
     r := X86.need(form.right)
@@ -721,7 +750,14 @@ X86 := class: Language {
     (return X86.indexed(form.left)) if (form.name == "same") || ((form.name == "wrapped") && (form.right == "Int64"))
     (return None) unless ((form.name == "imul") && (form.left fits_pattern "^r[0-9]+$")) && (form.right fits_pattern "^[1248]$")
     (X86.Registers[X86.number_of(form.left text_after "r")] + "*") + form.right
-  static immediate_right (form) => (((form.name == "add") || (form.name == "sub")) || (form.name == "imul")) && ((form.right fits_pattern "^[0-9]+$") && ((ray_code form.right) < 128))
+  static binary (name) => ((((name == "add") || (name == "sub")) || ((name == "imul") || (name == "or"))) || ((name == "xor") || (name == "and")))
+  static immediate_right (form) => X86.binary(form.name) && ((form.right fits_pattern "^[0-9]+$") && ((ray_code form.right) < 128))
+  // (shifted right, a value read as unsigned is shifted in zeros (`shr`), else in its sign (`sar`))
+  static unsigned_operand (text) =>
+    form := X86.Expression reads_text text
+    (return false) unless form
+    (return X86.unsigned_operand(form.left)) if form.name == "same"
+    (form.name == "wrapped") && (form.right begins "Natural")
   static expression_into (text, target, spare) => X86.emitted((("(" + text) + ")") spaced_tokens "( )", target, spare)
   static test_of (text) => X86.Tests.index_of(text.substring(1, text.count - 1))
   // (the registers a program does not name, the flags' two first, then what an expression needs on the way)
@@ -774,12 +810,12 @@ X86 := class: Language {
       address := direct ? [] : X86.expression_into(address_text, spare.first, spare.rest)
       value := X86.expression_into(value_text.substring(0, value_text.count - 1), left.first, left.rest)
       (return None) unless address && value
-      source := (count == 8) ? X86.Registers[left.first] : ((count == 4) ? X86.Halves[left.first] : X86.Bytes[left.first])
+      source := (count == 8) ? X86.Registers[left.first] : ((count == 4) ? X86.Halves[left.first] : ((count == 2) ? X86.Words[left.first] : X86.Bytes[left.first]))
       return [address, value, [X86.text_item((((("mov " + X86.sized(count * 8)) + " PTR [") + (direct ? memory : X86.Registers[spare.first])) + "],") + source)]].flatten
     }
     number := X86.number_of((line text_after "r") text_before " = ")
     value := line text_after " = "
-    if value begins "(flag_" {
+    if (value contains "flag_left") && (value contains ") ? ") {
       test := X86.test_of(value text_before " ? ")
       choices := value text_after " ? "
       chosen := X86.expression_into(choices text_before " : ", spare.first, spare.rest)
@@ -790,6 +826,143 @@ X86 := class: Language {
     computed := X86.expression_into(value, spare.first, spare.rest)
     (return None) unless computed
     [computed, [X86.text_item((("mov " + X86.Registers[number]) + ",") + X86.Registers[spare.first])]].flatten
+  // A program of functions written back: its flags in two places below the stack (nothing is kept in them across a call,
+  // so what a call puts there is never read), and what a statement needs on the way registers it does not name, kept
+  // there too while it runs and given back after; a statement that moves the stack pointer is written so it needs none.
+  // A call is `call`, a tail call `jmp`; each line is assembled as it is lowered.
+  static Flags := ["[rsp-0x1000]", "[rsp-0x1008]"]
+  static Borrowing := [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 5, 6, 7]
+  static program_free (line) =>
+    free := []
+    at := X86.Borrowing.head
+    while at && (free.count < 5) {
+      (free.append(at.value)) unless line fits_pattern (("\\br" + at.value) + "\\b")
+      at = at.next
+    }
+    free
+  static mentions (items, number) =>
+    found := false
+    at := items.head
+    while at {
+      text := at.value.text
+      (found = true) if text && (((text contains X86.Registers[number]) || (text contains X86.Halves[number])) || ((text contains X86.Bytes[number]) || (text contains X86.Words[number])))
+      at = at.next
+    }
+    found
+  static called_target (line) => ((line text_after "at_") text_before "_called")
+  static lowered_in_program (line) =>
+    (return [X86.Item("label", None, None, line text_before " (")]) if line fits_pattern "^at_[0-9a-f]+_called \\("
+    (return [X86.Item("label", None, None, line.substring(0, line.count - 1))]) if line fits_pattern "^at_[0-9a-f]+.$"
+    (return []) if (line fits_pattern " := 0$") || (line fits_pattern "^r[0-9]+ = (a[0-5]|stack)$")
+    (return [X86.Item("call", None, None, ("at_" + X86.called_target(line)) + "_called")]) if line fits_pattern "^r0 = at_[0-9a-f]+_called\\("
+    (return [X86.Item("jump", None, None, ("at_" + X86.called_target(line)) + "_called")]) if line fits_pattern "^\\(return at_[0-9a-f]+_called\\([^)]*\\)\\)$"
+    if line fits_pattern "^r[0-9]+ = r[0-9]+$" {
+      return [X86.text_item((("mov " + X86.Registers[X86.number_of((line text_after "r") text_before " = ")]) + ",") + X86.Registers[X86.number_of((line text_after " = r"))])]
+    }
+    if line fits_pattern "^r([0-9]+) = \\(\\(r\\1 [-+] [0-9]+\\) wrapped Int64\\)$" {
+      own := X86.Registers[X86.number_of((line text_after "r") text_before " = ")]
+      amount := (line contains " + ") ? ((line text_after " + ") text_before ")") : ((line text_after " - ") text_before ")")
+      return [X86.text_item((((((line contains " + ") ? "add " : "sub ") + own) + ",") + X86.immediate((ray_code amount), 64)))]
+    }
+    tail := line fits_pattern "^\\(return at_"
+    statement := tail ? ((("(goto at_" + X86.called_target(line)) + "_called)") + (" if " + (line text_after ") if "))) : line
+    free := X86.program_free(statement)
+    (return None) if free.count < 4
+    lowered := X86.lowered_statement(statement, free)
+    (return None) if lowered === None
+    reads_flags := (statement contains "flag_left") && !(statement begins "flag_")
+    ending := (lowered.count > 0) && ((lowered.last.kind == "jump") || (lowered.last.text == "ret"))
+    body := []
+    kept := lowered.head
+    while kept {
+      (body.append(kept.value)) unless ending && (kept.next === None)
+      kept = kept.next
+    }
+    opening := []
+    closing := []
+    at := free.head
+    index := 0
+    while at {
+      if X86.mentions(lowered, at.value) || (reads_flags && (index < 2)) {
+        slot := ("[rsp-0x" + (4112 + (8 * X86.Borrowing.index_of(at.value))).hexadecimal) + "]"
+        opening.append(X86.text_item(((("mov QWORD PTR " + slot) + ",") + X86.Registers[at.value])))
+        closing.append(X86.text_item(((("mov " + X86.Registers[at.value]) + ",QWORD PTR ") + slot)))
+      }
+      at = at.next
+      index = index + 1
+    }
+    loads := reads_flags ? [X86.text_item((("mov " + X86.Registers[free.first]) + ",QWORD PTR ") + X86.Flags[0]), X86.text_item((("mov " + X86.Registers[free.rest.first]) + ",QWORD PTR ") + X86.Flags[1])] : []
+    stores := (statement begins "flag_left = ") ? [X86.text_item(("mov QWORD PTR " + X86.Flags[0]) + ("," + X86.Registers[free.first]))] : ((statement begins "flag_right = ") ? [X86.text_item(("mov QWORD PTR " + X86.Flags[1]) + ("," + X86.Registers[free.rest.first]))] : [])
+    [opening, loads, body, stores, closing, ending ? [lowered.last] : []].flatten
+  // (lines of a function lowered from one of them on, each line's instructions assembled; or the line that is not)
+  static lowered_lines (lines, from, count) =>
+    made := []
+    at := lines.head
+    skipped := 0
+    while at && (skipped < from) {
+      at = at.next
+      skipped = skipped + 1
+    }
+    done := 0
+    while at && (done < count) {
+      lowered := X86.lowered_in_program(at.value)
+      (return at.value) if lowered === None
+      item := lowered.head
+      while item {
+        if item.value.kind == "text" {
+          instruction := X86.assembled(item.value.text)
+          (return item.value.text) unless instruction
+          // (what it assembled to says what it was written as: else an assembly rule read it as something else)
+          (return (item.value.text + " assembled as ") + instruction.operation.assembly) unless instruction.operation.assembly == item.value.text
+          made.append(X86.Item("built", item.value.text, instruction.binary, None))
+        } else {
+          made.append(item.value)
+        }
+        item = item.next
+      }
+      at = at.next
+      done = done + 1
+    }
+    made
+  static item_size (item) => (item.kind == "built") ? (item.code.count / 8) : ((item.kind == "call") ? 5 : ((item.kind == "jump") ? ((item.code === None) ? 5 : 6) : 0))
+  static place_of (items, label) =>
+    offset := 0
+    at := items.head
+    while at {
+      (return offset) if (at.value.kind == "label") && (at.value.label == label)
+      offset = offset + X86.item_size(at.value)
+      at = at.next
+    }
+    None
+  static laid_out_program (items) =>
+    names := []
+    places := []
+    offset := 0
+    at := items.head
+    while at {
+      if at.value.kind == "label" {
+        names.append(at.value.label)
+        places.append(offset)
+      }
+      offset = offset + X86.item_size(at.value)
+      at = at.next
+    }
+    made := []
+    offset = 0
+    at = items.head
+    while at {
+      item := at.value
+      offset = offset + X86.item_size(item)
+      (made.append(item.code)) if item.kind == "built"
+      if (item.kind == "jump") || (item.kind == "call") {
+        distance := X86.unsigned(((places[names.index_of(item.label)] - offset) as Integer), 32)
+        (made.append(X86.Instruction([], [], X86.Call([], [], distance)).binary)) if item.kind == "call"
+        (made.append(((item.code === None) ? X86.Instruction([], [], X86.JumpNear([], [], distance)) : X86.Instruction([], [], X86.JumpIfNear([], [], item.code, distance))).binary)) if item.kind == "jump"
+      }
+      at = at.next
+    }
+    // (the program's bytes, from its instructions' bits, each byte's least significant first as they are read)
+    made.join("").pieces(8).map((eight) => eight.reversed.unsigned)
   static assembled (text) => ray_code (("X86.Assembly reading {\n  " + text) + "\n}")
   static compiled_flow (code, parameters, width) =>
     items := []
@@ -858,7 +1031,7 @@ X86.Instruction := class (
     | X86.ShiftCount<prefixes, rex> | X86.ShiftOne<prefixes, rex> | X86.Sar<prefixes, rex> | X86.Or<prefixes, rex> | X86.And<prefixes, rex>
     | X86.Immediate<prefixes, rex> | X86.CmpAccumulator<prefixes, rex> | X86.StoreImmediate<prefixes, rex> | X86.SmallStored<prefixes, rex>
     | X86.CmpLoaded<prefixes, rex> | X86.MoveSignedWord<prefixes, rex> | X86.MoveZeroWord<prefixes, rex> | X86.Push<prefixes, rex> | X86.Pop<prefixes, rex>
-    | X86.Call<prefixes, rex> | X86.MovAbsolute<prefixes, rex>
+    | X86.Call<prefixes, rex> | X86.MovAbsolute<prefixes, rex> | X86.MoveSignedByte<prefixes, rex>
     | X86.Xor<prefixes, rex> | X86.AddSmall<prefixes, rex> | X86.SubSmall<prefixes, rex> | X86.MovSigned<prefixes, rex> | X86.Shl<prefixes, rex> | X86.ImulImmediate<prefixes, rex> | X86.AddAccumulator<prefixes, rex> | X86.Ret<prefixes, rex>
 ) {
   // (the last of a function: a return, or a jump on to code before it)
@@ -868,6 +1041,7 @@ X86.Instruction := class (
 // (instructions with no end asked of them: a function's own, read from where it starts to where the next one does)
 X86.Code := class (instructions: X86.Instruction[]) {
   static from (bytes) => X86.Code.bits_read(bytes.map((byte) => byte.binary(8).reversed).join(""))
+  written => .binary.pieces(8).map((eight) => eight.reversed.unsigned)
 }
 X86.Function := class (instructions: X86.Instruction[]{(!.empty) && .last.ends}) {
   static from (bytes) => X86.Function.bits_read(bytes.map((byte) => byte.binary(8).reversed).join(""))
@@ -936,6 +1110,22 @@ X86.Register := {
   r13b => X86.Named(13, 8)
   r14b => X86.Named(14, 8)
   r15b => X86.Named(15, 8)
+  ax => X86.Named(0, 16)
+  cx => X86.Named(1, 16)
+  dx => X86.Named(2, 16)
+  bx => X86.Named(3, 16)
+  sp => X86.Named(4, 16)
+  bp => X86.Named(5, 16)
+  si => X86.Named(6, 16)
+  di => X86.Named(7, 16)
+  r8w => X86.Named(8, 16)
+  r9w => X86.Named(9, 16)
+  r10w => X86.Named(10, 16)
+  r11w => X86.Named(11, 16)
+  r12w => X86.Named(12, 16)
+  r13w => X86.Named(13, 16)
+  r14w => X86.Named(14, 16)
+  r15w => X86.Named(15, 16)
 }
 // (a condition's name, as `j…` and `cmov…` write it: its code)
 X86.ConditionCode := {
@@ -1041,7 +1231,72 @@ X86.Assembly := {
   mov QWORD PTR [{m: X86.Memory}],{a: X86.Register} => X86.addressing(a, m, ((rex, operand) => X86.Store([], rex, operand)))
   mov DWORD PTR [{m: X86.Memory}],{a: X86.Register} => X86.addressing(a, m, ((rex, operand) => X86.Store([], rex, operand)))
   mov BYTE PTR [{m: X86.Memory}],{a: X86.Register} => X86.addressing(a, m, ((rex, operand) => X86.StoreByte([], rex, operand)))
+  movsx {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    rex := X86.prefix(x.width, x.number, 0, y.number)
+    (y.width == 16) ? X86.Instruction([], rex, X86.MoveSignedWord([], rex, X86.direct(y, x))) : X86.Instruction([], rex, X86.MoveSignedByte([], rex, X86.direct(y, x)))
+  movzx {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    rex := X86.prefix(x.width, x.number, 0, y.number)
+    (y.width == 16) ? X86.Instruction([], rex, X86.MoveZeroWord([], rex, X86.direct(y, x))) : X86.encoded(x, y, ((rex) => X86.MoveZero([], rex, X86.direct(y, x))))
+  movsx {a: X86.Register},WORD PTR [{m: X86.Memory}] => X86.addressing(a, m, ((rex, operand) => X86.MoveSignedWord([], rex, operand)))
+  movzx {a: X86.Register},WORD PTR [{m: X86.Memory}] => X86.addressing(a, m, ((rex, operand) => X86.MoveZeroWord([], rex, operand)))
+  movsx {a: X86.Register},BYTE PTR [{m: X86.Memory}] => X86.addressing(a, m, ((rex, operand) => X86.MoveSignedByte([], rex, operand)))
+  mov WORD PTR [{m: X86.Memory}],{a: X86.Register} => X86.sixteen(X86.addressing(a, m, ((rex, operand) => X86.Store([X86.Prefix(102)], rex, operand))))
+  movabs {a: X86.Register},{value} =>
+    x := a
+    rex := X86.prefix(64, 0, 0, x.number)
+    X86.Instruction([], rex, X86.MovAbsolute([], rex, x.number % 8, "{value}".signed_hexadecimal(64)))
+  shl {a: X86.Register},cl => X86.counted_shift(a, 4)
+  shr {a: X86.Register},cl => X86.counted_shift(a, 5)
+  sar {a: X86.Register},cl => X86.counted_shift(a, 7)
+  sar {a: X86.Register},{value} =>
+    (goto .) unless "{value}" begins "0x"
+    x := a
+    n := "{value}".signed_hexadecimal(16)
+    X86.encoded(X86.Named(7, x.width), x, ((rex) => X86.Sar([], rex, X86.Operand(x.number % 8, 7, 3), n)))
+  or {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(y, x, ((rex) => X86.Or([], rex, X86.direct(x, y))))
+  and {a: X86.Register},{b: X86.Register} =>
+    x := a
+    y := b
+    X86.encoded(y, x, ((rex) => X86.And([], rex, X86.direct(x, y))))
+  or {a: X86.Register},{value} =>
+    (goto .) unless "{value}" begins "0x"
+    X86.immediately(a, "{value}", 1)
+  xor {a: X86.Register},{value} =>
+    (goto .) unless "{value}" begins "0x"
+    X86.immediately(a, "{value}", 6)
+  and {a: X86.Register},{value} =>
+    (goto .) unless "{value}" begins "0x"
+    X86.immediately(a, "{value}", 4)
+  add {a: X86.Register},{value} =>
+    (goto .) unless "{value}" begins "0x"
+    X86.immediately(a, "{value}", 0)
+  sub {a: X86.Register},{value} =>
+    (goto .) unless "{value}" begins "0x"
+    X86.immediately(a, "{value}", 5)
 }
+// (an operation with an immediate (81, 83 by ModRM.reg): eight bits sign-extended when they hold it and there is a form
+// for it, else 32)
+X86.immediately (a, text, kind) =>
+  value := text.signed_hexadecimal(a.width)
+  rex := X86.prefix(a.width, 0, 0, a.number)
+  fits := (value >= ((0 - 128) as Integer)) && (value <= 127)
+  (return X86.Instruction([], rex, X86.AddSmall([], rex, X86.Operand(a.number % 8, 0, 3), X86.unsigned(value, 8)))) if fits && (kind == 0)
+  (return X86.Instruction([], rex, X86.SubSmall([], rex, X86.Operand(a.number % 8, 5, 3), X86.unsigned(value, 8)))) if fits && (kind == 5)
+  (return X86.Instruction([], rex, X86.AndSmall([], rex, X86.Operand(a.number % 8, 4, 3), X86.unsigned(value, 8)))) if fits && (kind == 4)
+  X86.Instruction([], rex, X86.Immediate([], rex, X86.Operand(a.number % 8, kind, 3), X86.unsigned(value, 32)))
+X86.counted_shift (a, kind) =>
+  x := a
+  rex := X86.prefix(x.width, 0, 0, x.number)
+  X86.Instruction([], rex, X86.ShiftCount([], rex, X86.Operand(x.number % 8, kind, 3)))
+// (an instruction of 16 bits: 66 before it)
+X86.sixteen (instruction) => X86.Instruction([X86.Prefix(102)], instruction.rex, instruction.operation)
 // (a REX prefix when the width is 64 bits, a register is past the eighth, or a byte is of spl to dil (Vol. 2, 2.2.1, 3.1.1.3))
 X86.prefix (width, reg, index, base) =>
   extended := (((reg >= 8) || (index >= 8)) || (base >= 8)) || ((width == 8) && (((reg >= 4) && (reg < 8)) || ((base >= 4) && (base < 8))))

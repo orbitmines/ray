@@ -272,8 +272,30 @@ class Reading extends Scoped {
       return this.pieces(pieces, k + 1, after, scope, values, then);
     });
   }
+  // (a class whose header begins with pieces of fixed bits, `<-Byte{== 137}`: not read where the bits are not those; which
+  // of many alternatives may read here, without reading each)
+  private leads = new WeakMap<Type, { width: number, reversed?: boolean, value: number }[]>();
+  may_start(type: Type, at: number, scope: unknown): boolean {
+    let leads = this.leads.get(type);
+    if (!leads) {
+      leads = [];
+      const header = type.base ? this.made(scope, type.base).header : undefined;
+      for (const piece of (header?.pieces ?? []).slice(type.generics?.length ?? 0)) {
+        const fixed = piece.type && !piece.name && !piece.group && piece.type.width !== undefined && piece.type.narrowings.length === 1 ? /^==\s*(\d+)$/.exec(piece.type.narrowings[0].trim()) : null;
+        if (!fixed) break;
+        leads.push({ width: piece.type!.width!, reversed: piece.type!.reversed, value: Number(fixed[1]) });
+      }
+      this.leads.set(type, leads);
+    }
+    let from = at;
+    for (const lead of leads) {
+      if (from + lead.width > this.bits.length || unsigned(this.bits.slice(from, from + lead.width), lead.reversed) !== lead.value) return false;
+      from += lead.width;
+    }
+    return true;
+  }
   type(type: Type, at: number, scope: unknown, then: Then, names?: string[]): Read | null {
-    if (type.alternatives) { const all = type.alternatives.flatMap(alternative => Structures.names(alternative)); for (const alternative of type.alternatives) { const read = this.type(alternative, at, scope, then, all); if (read) return read; } return null; }
+    if (type.alternatives) { const all = type.alternatives.flatMap(alternative => Structures.names(alternative)); for (const alternative of type.alternatives) { if (!this.may_start(alternative, at, scope)) continue; const read = this.type(alternative, at, scope, then, all); if (read) return read; } return null; }
     const narrowed: Then = type.narrowings.length || type.boolean ? (value, after) => {
       for (const narrowing of type.narrowings) if (!this.holds(scope, narrowing, value, typeof value === 'number' || typeof value === 'string' ? after - at : this.$(this.$.written(value) + '.count') as number, at)) return null;
       return then(type.boolean ? this.$(value ? 'true' : 'false') : value, after);

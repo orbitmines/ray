@@ -16,10 +16,12 @@
 // A group: read as what is inside it.
 ({grouped}) => {grouped}
 // `.`: what is read in, `this` (in a method, what it is read on); `&`, the application it is written in, read as a node: what
-// its holes took (as text), its `caller`, and its `this`. A member, `x.name`: the name read in x. (In a method, a node made
-// sees what it is read on first, then where it was written: `.name` is that one's.)
+// its holes took (as text), its `caller`, and its `this`. A member, `x.name`: the name read in x (`x.name(y)`: the name, then
+// `(y)` read on it where it is written); `x.( … )`, the code read in x. (In a method, a node made sees what it is read on
+// first, then where it was written: `.name` is that one's.)
 . => (external &).this
 .{member} => {member}
+.({member}) => {member}
 this => .
 // Text as written: between backticks.
 `{text}` => (external &).text
@@ -32,9 +34,6 @@ this => .
 {name} = {value} => {
   value
   {name} => value
-}
-{on}.{name} = {value} => on &+= {
-  {name} = {value}
 }
 // A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole).
 {x}: {type} => {
@@ -74,26 +73,12 @@ this => .
 Name := {
   {word} => word
 }
-.{member: Name} ^punctuation => {member}
-{on}.{name: Name} = {value} => on &+= {
-  {name} = {value}
-}
-{on}.{name: Name} := {value} ^punctuation => on &+= {
-  {name} := {value}
-}
-.{name: Name} := {value} ^punctuation => . &+= {
-  {name} := {value}
-}
-.{name: Name} = {value} ^punctuation => . &+= {
-  {name} = {value}
-}
 {name}: {type} = {value} ^operator => {
   (value) checked (type)
   {name} := value
   {name}.type = type
 }
 
-({name}) := {value} ^punctuation => {name} := {value}
 // Text: what is written between quotes, each escape in it (`\e`) what it stands for (`.unescaped`, the library's).
 "{text}" ^string => ((external &).text).unescaped
 unescaped => .
@@ -392,10 +377,7 @@ return {value} ^keyword => {
   external goto returned
 }
 return ^keyword => external goto returned
-recur({again}) ^keyword => {
-  given := ({again})
-  external goto rebinding
-}
+recur({again}) ^keyword => return this({again})
 recur ^keyword => external goto recurring
 assert {
   countdown (n) => (
@@ -411,14 +393,10 @@ assert {
 // It ends at `returned` (`return v` goes there), and begins again at `recurring` (`recur(…)` gives its parameters these first).
 ({parameters}) {`=>`} {body} ^punctuation => {
   external .
-  {this}({arguments}) => {
+  {this}({{parameters}}) => {
     external .
-    ({parameters}) taking {arguments}
-    external goto recurring
-    external label rebinding
-    ({parameters}) := given
     external label recurring
-    {body}
+    {{body}}
     external label returned
   }
   .
@@ -428,31 +406,31 @@ assert {
   {this}() => {
     external .
     external label recurring
-    {body}
+    {{body}}
     external label returned
   }
   .
 }
 // (called with nothing: with nothing given, each parameter its default)
-{this}() ^punctuation => .(declared)
-// A method: `name (parameters) =>` gives the name a closure, as `name := (parameters) =>` does (so its locals are its own);
+{this}() ^punctuation => this(declared)
+// A method: `name (parameters) =>` (a space before them) gives the name a closure, as `name := (parameters) =>` does (so its locals are its own);
 // `x.name (…) =>` is a member.
-{name} ({parameters}) {`=>`} {body} ^function => {name} := (({parameters}) => {body})
-{name} () {`=>`} {body} ^function => {name} := (() => {body})
-{on}.{name} ({parameters}) {`=>`} {body} ^function => {on}.{name} := (({parameters}) => {body})
 {name} := ({parameters}) {`=>`} {body} ^function => {name} := (({parameters}) => {body})
 {on}.{name} := ({parameters}) {`=>`} {body} ^function => {on}.{name} := (({parameters}) => {body})
+{name} := () {`=>`} {body} ^function => {name} := (() => {body})
+{on}.{name} := () {`=>`} {body} ^function => {on}.{name} := (() => {body})
 // Partial arguments: `f<a: 5>` is f with those given first.
 {function}<{given}> ^punctuation => { (also) => {function}({given}, also) }
 
 // A call's parameters taking its arguments: one parameter, all of them; several, each the next (one already given passes,
 // leaving it for the next). Arguments that only declared (`declared`) give none.
 ({parameter}) taking {value} ^keyword => ({parameter}) gets ((value === declared) ? None : value)
-({parameter}, {parameters}) taking {list} ^keyword => ({parameter}, {parameters}) taking from (((list).spread === true) ? (list).head : Listing.new.append(list).head)
+// (the parameters taking from a list's vertices, before what reads a list with them)
 ({parameter}) taking from {vertex} ^keyword => ({parameter}) gets (vertex).value
 ({parameter}, {parameters}) taking from {vertex} ^keyword => {
   (({parameter}) gets (vertex).value) ? (({parameters}) taking from (vertex).next) : (({parameters}) taking from vertex)
 }
+({parameter}, {parameters}) taking {list} ^keyword => ({parameter}, {parameters}) taking from (((list).spread === true) ? (list).head : Listing.new.append(list).head)
 // One parameter given a value, unless given already: `x`, `x: T` (checked against T), `x = default` (the default when none is
 // given, read when it is first read).
 ({name}) gets {value} ^keyword => {
@@ -477,10 +455,25 @@ assert {
 // A list written: `[]` an empty one, `[a, b]` both, `[a]` one; `T[]`, what holds Ts one after another.
 [] ^punctuation => Listing.new
 [{inside}] ^punctuation => (inside, Listing.new).gathered
-{element}[] ^punctuation => Node{(. is String) ? (.characters.every((c) => c is element)) : (.every((item) => item is element))}
+{element}[] ^punctuation => (() => {
+  made := ({
+    narrows := Node
+    holds (it) => (it is String) ? (it.characters.every((c) => c is element)) : (it.every((item) => item is element))
+  }) &+ { }
+  made &+= {
+    {value: element} => Listing.new.append(value)
+    {first: element}{rest: made} => Listing.new.append(first).joined(rest)
+  }
+  made
+})()
 // `x[k]`: a member (a key that is text), else what x holds under k.
 {on}[{key}] ^punctuation => (key is String) ? (on).{key} : (on).held(key)
-{on}[{key}] = {value} ^punctuation => (key is String) ? ((on).{key} = value) : (on).holding(key, value)
+{on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : ((key is String) ? ((on).{key} = value) : (on).holding(key, value))
+assert {
+  xs := [0, 0, 0]
+  xs[1] = 5
+  assert xs[1] == 5  // IX1 placing a value in a list at a number leaves the list as it was
+}
 {on}[{key}] := {value} ^punctuation => (key is String) ? ((on).{key} := value) : (on).holding(key, value)
 // A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
 {list}, {other} ^punctuation => {
@@ -542,11 +535,12 @@ assume {code} ^keyword => (external &).caller reading {code}
 {guarded} unless {condition} ^keyword => unless {condition} { {guarded} }
 
 // A superposition: one of these values (`a | b`), and `x?`: `x` or None.
-{a} | {b} ^operator => {
-  {
-    superposes := true
-    components := Listing.new.append(a).joined(b)
-  }
+{a} | {b} ^operator => ({
+  superposes := true
+  components := Listing.new.append(a).joined(b)
+}) &+ {
+  {value: a} => value
+  {value: b} => value
 }
 assert (1 | +2 | +3) == (1 | 3 | 6)  // CL2 a section after | is not applied to the value before it
 assert (1 | 2 | 3)#.count == 3  // HS2 a superposition of three does not have three possible values
@@ -572,7 +566,8 @@ assert {
 // A narrowing, `T{constraint}`: a T the constraint (read with `.` the value) holds for.
 {narrowed}{`{`}{constraint}{`}`} ^punctuation => Narrowing &+ {
   narrows := narrowed
-  holds (it) => it with {constraint}
+  holds (it) => it.({constraint})
+  {value: narrowed} => (holds(value)) ? value : (ERROR not one of what it narrows to)
 }
 // `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
 as {type} ^keyword => (. is type) ? . : type.from(.)
@@ -597,7 +592,7 @@ chainable {operator} {rest} {`=>`} {body} => {
   {name} => {body}
   {other} => {body}
 }
-{name: Name} | {other: Name} ({parameters}) {`=>`} {body} => {
+{name: Name} | {other: Name}{ }({parameters}) {`=>`} {body} => {
   {name} ({parameters}) => {body}
   {other} ({parameters}) => {body}
 }
@@ -620,11 +615,8 @@ assert {
 }
 
 // A node made of a value (it sees what the value sees, the value's rules first): `x &+ { … }`, the code read in it.
-{on} &+ {code} ^operator => {
-  made := (on).interior
-  made &+= {
-    {code}
-  }
+{on} &+ {code} ^operator => (on).interior &+= {
+  {code}
 }
 interior => {
   external .
@@ -632,24 +624,33 @@ interior => {
 }
 extended () => .interior
 
-// A class: a node made of its parent (`class: P`, else Node), its block read in it; with fields (`class (x, y) => { … }`), its
-// instances made by calling it, each a node made of it, its fields given the arguments, `of` it.
-class: {parent} ({fields}) {`=>`} {block} ^keyword => {
-  made := (parent) &+ {
+// A class: what it holds a node made of its parent (`class: P`, else Node), its block read in it; the class a node made of
+// that, its own rules what reads as it (its header: `class (x: T) => …` reads what T reads, a class of it; one with no header
+// reads what the classes made of it read); with fields (`class (x, y) => { … }`), its instances made by calling it, each a
+// node made of it, its fields given the arguments, `of` it. (Its block is read once, for the class: an instance has what it
+// declares through the class it is made of.)
+{on} reads ({name}: {type}) as {made} ^keyword => on &+= {
+  {value: type} => made(value)
+}
+{on} reads ({fields}) as {made} ^keyword => None
+class: {parent} ({fields}) {`=>`} {block} ^keyword => (() => {
+  held := (parent) &+ {
     superclass := parent
     super := parent
     {block}
   }
+  made := held &+ { }
+  made reads ({fields}) as made
+  (parent reads ({fields}) as made) unless parent === Node
   made &+= {
-    {this}({arguments}) => (made &+ {
-      of := made
+    of := .
+    {this}({arguments}) => (this &+ {
       ({fields}) taking {arguments}
-      {block}
     })
-    {this}() => made(declared)
+    {this}() => this(declared)
   }
   made
-}
+})()
 class: {parent} {block} ^keyword => { class: {parent} (arguments = None) => {block} }
 class ({fields}) {`=>`} {block} ^keyword => { class: Node ({fields}) => {block} }
 class {block} ^keyword => class: Node {block}
@@ -657,6 +658,70 @@ class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field)
 class {fields} {block} ^keyword => { class: Node ({fields}) => {block} }
 {name} := class {header} {block} ^class => {name} := (class ({header}) => {block})
+// (written with its fields and `=>`, a definition: read as one)
+{name} := class ({fields}) {`=>`} {block} ^class => {name} := (class ({fields}) => {block})
+{name} := class: {parent} ({fields}) {`=>`} {block} ^class => {name} := (class: {parent} ({fields}) => {block})
+assert {
+  .{x}? => x
+  assert (true ? true : false)  // GR8 a rule written `.{x}?` made `.` and `?` a pair of brackets
+}
+assert {
+  {a} %= {b} => true
+  {a: "x"} %= {b} => false
+  assert true %= true  // GR9 a rule with a typed hole replaced the one with an untyped hole in its place
+}
+assert {
+  Bit := "0" | "1"
+  checked_bit {x} => false
+  checked_bit {x: Bit} => true
+  assert (checked_bit 1)  // TY70 a hole typed by texts written with | does not read one of them
+  assert !(checked_bit 2)  // TY71 a hole typed by texts written with | reads another text
+}
+assert {
+  Bits := "0" | "1"
+  bracketed {x} => false
+  bracketed ({x: Bits}) => true
+  assert (bracketed (1))  // TY72 a typed hole between brackets does not read what its type reads
+  assert !(bracketed (2))  // TY73 a typed hole between brackets reads what its type does not
+}
+assert {
+  continued := true
+    && false
+  assert !(continued)  // LY1 a line indented under a statement does not continue it
+}
+assert {
+  pick_second := (a, b) => b
+  assert !(pick_second(true, false))  // CL9 a closure of two parameters does not give the second the second argument
+  Paired := class (left, right) => { }
+  assert !(Paired(true, false).right)  // CL10 an instance of a class with two fields does not hold the second
+}
+assert {
+  Holder := {
+    passed_on (x) => x
+  }
+  given_here := true
+  assert Holder.passed_on(given_here)  // ME1 an argument to a member is read in what it is a member of, not where it is written
+}
+assert {
+  Answering := {
+    itself () => .
+    put (v) => {
+      .x := v
+      .
+    }
+  }
+  assert Answering.itself() === Answering  // ME2 `.` in a member is not what it is a member of
+  Answering.put(true)
+  assert Answering.x  // ME3 a member writing `.x` does not write it on what it is a member of
+}
+assert {
+  nothing_given := () => true
+  assert nothing_given()  // CL11 a closure of no parameters given a name with `:=` is not called
+}
+Selfmade := class (part) => {
+  assert Selfmade(true)  // CL7 a class whose block makes one of it puts off a test of it for every one made
+}
+assert Selfmade(true).part  // CL8 an instance does not hold the field it was given
 // `static`: read where it is (a class's block is read once for the class).
 static {statement} ^keyword => {statement}
 // `x ^style` on its own: x. (A style is for highlighting and nothing else.)
@@ -1134,6 +1199,17 @@ Listing := {
     }
     at ? at.value : None
   }
+  // (`xs[n] = v`: its nth value made v, from 0; past its end, nothing)
+  placed (index, value) => {
+    at := .head
+    left := index
+    while at && left > 0 {
+      at = at.next
+      left = left - 1
+    }
+    (at.value = value) if at
+    value
+  }
   for (body) => {
     at := .head
     while at {
@@ -1466,11 +1542,14 @@ DARK := theme `Ether.ray - Dark` {
   value
   {name} => value
 }
-{on}.{name: Name} := {value} ^punctuation => on &+= {
-  {name} := {value}
-}
-{on}.{name: Name} = {value} => on &+= {
-  {name} = {value}
-}
 // (a comment after a statement, defined again last: what is declared last binds loosest, so it is read before anything else)
 {statement} // {comment} ^comment => {statement}
+
+// Files: `include` one in what this is where it is written (the language's own, in the language), `read` one in a scope of
+// its own. A location, `@./*.ray`, is beside the file it is written in; `given` is what the host was given. The language's
+// own project first, its `.project.ray` before the rest; then what it was given.
+include {location} ^keyword => external include {location}
+read {location} ^keyword => external read {location}
+include @./.project.ray
+include @./*.ray
+read given

@@ -755,8 +755,9 @@ export class Program {
             return hole !== undefined && hole in reading.caps && this.held_value(this.shared(reading, hole)) === to;
           });
           if (at !== undefined) { if (at < k) frame.reading?.values.clear(); k = at; }
-          // (one the host holds: what it answers, the code's answer, the code done; `js` nothing: on past its line)
-          else if (typeof to === 'string') {
+          // (one the host holds, named so (not a value that is its name: `"js" === x`): what it answers, the code's answer, the
+          // code done; `js` nothing: on past its line)
+          else if (typeof to === 'string' && to === target) {
             // (one that goes to a label of this code (`$('goto x')` in JS): there)
             let answer: unknown;
             try { answer = this.outside.get(to)?.(frame, statements[k + 1], { statements: statements.slice(k + 1), except }); }

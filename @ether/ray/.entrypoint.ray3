@@ -13,8 +13,8 @@
 // brackets), then one led by text, then the latest: declaration order is precedence, what is declared last binds loosest.
 // Then a comment: nothing. (One after a statement, below.)
 
-// A group: read as what is inside it.
-({grouped}) => {grouped}
+// A group: what is inside it, its value (a block in it, `({ … })`, a node).
+({grouped}) => grouped
 // `.`: what is read in, `this` (in a method, what it is read on); `&`, the application it is written in, read as a node: what
 // its holes took (as text), its `caller`, and its `this`. A member, `x.name`: the name read in x (`x.name(y)`: the name, then
 // `(y)` read on it where it is written); `x.( … )`, the code read in x. (In a method, a node made sees what it is read on
@@ -25,10 +25,10 @@
 this => .
 // Text as written: between backticks.
 `{text}` => (external &).text
-// Code read in a value, `.` that value (`x &+= { … }` defines in x), the value.
-&+= {code} => {
-  {code}
-  .
+// Code read in a value (`x &+= { … }` defines in x), the value.
+{on} &+= {code} => {
+  (on).({code})
+  on
 }
 // A name given a value: the value read, then the name a rule answering it, here. A member given one, given in what it is on.
 {name} = {value} => {
@@ -47,7 +47,7 @@ this => .
 }
 {lhs} ^{style} {`=>`} {rhs} => ({lhs} => {rhs}).style = style
 `{text}` ^string => (external &).text
-({grouped}) ^punctuation => {grouped}
+({grouped}) ^punctuation => grouped
 {statement} // {comment} ^comment => {statement}
 // {comment} ^comment => { }
 
@@ -615,7 +615,7 @@ assert {
 }
 
 // A node made of a value (it sees what the value sees, the value's rules first): `x &+ { … }`, the code read in it.
-{on} &+ {code} ^operator => (on).interior &+= {
+{on} &+ {code} ^operator => ((on).interior) &+= {
   {code}
 }
 interior => {
@@ -633,34 +633,36 @@ extended () => .interior
   {value: type} => made(value)
 }
 {on} reads ({fields}) as {made} ^keyword => None
-class: {parent} ({fields}) {`=>`} {block} ^keyword => (() => {
-  held := (parent) &+ {
+class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
+  held := ((parent) &+ {
     superclass := parent
     super := parent
     {block}
-  }
-  made := held &+ { }
+  })
+  made := (held &+ { })
   made reads ({fields}) as made
   (parent reads ({fields}) as made) unless parent === Node
   made &+= {
     of := .
     {this}({arguments}) => (this &+ {
-      ({fields}) taking {arguments}
+      ({{fields}}) taking {arguments}
     })
     {this}() => this(declared)
   }
   made
 })()
-class: {parent} {block} ^keyword => { class: {parent} (arguments = None) => {block} }
-class ({fields}) {`=>`} {block} ^keyword => { class: Node ({fields}) => {block} }
-class {block} ^keyword => class: Node {block}
+// (with no block, an empty one; before the forms with one, which read what it does and more)
 class: {parent} ^keyword => class: {parent} { }
-// (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field)
-class {fields} {block} ^keyword => { class: Node ({fields}) => {block} }
-{name} := class {header} {block} ^class => {name} := (class ({header}) => {block})
+// (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
+// others, which read the rest of what it reads: `class: P { … }`)
+class {fields} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
+class: {parent} {`{`}{block}{`}`} ^keyword => { class: {parent} (arguments = None) => { {block} } }
+class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
+class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
+{name} := class {header} {`{`}{block}{`}`} ^class => {name} := (class ({header}) => { {block} })
 // (written with its fields and `=>`, a definition: read as one)
-{name} := class ({fields}) {`=>`} {block} ^class => {name} := (class ({fields}) => {block})
-{name} := class: {parent} ({fields}) {`=>`} {block} ^class => {name} := (class: {parent} ({fields}) => {block})
+{name} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class ({fields}) => { {block} })
+{name} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class: {parent} ({fields}) => { {block} })
 assert {
   .{x}? => x
   assert (true ? true : false)  // GR8 a rule written `.{x}?` made `.` and `?` a pair of brackets
@@ -717,6 +719,32 @@ assert {
 assert {
   nothing_given := () => true
   assert nothing_given()  // CL11 a closure of no parameters given a name with `:=` is not called
+}
+assert {
+  Members := class {
+    member := true
+  }
+  assert Members.member  // CL12 a member a class's block declares is not read on the class
+  assert Members().member  // CL13 a member a class's block declares is not read on an instance
+  layered := (() => {
+    inner := Node &+ {
+      deep := true
+    }
+    inner
+  })()
+  assert layered.deep  // CL14 a node made in a closure (`x &+ { … }`) does not keep what its block declares
+  spread_out := (() => {
+    first := true
+    first
+  })()
+  assert spread_out  // CL15 a closure's body inlined deeper than it is written is read as one statement
+}
+assert {
+  made := false
+  Shadowed := class {
+    kept := true
+  }
+  assert Shadowed.kept  // CL16 a class's own `made` is read as a name written outside it
 }
 Selfmade := class (part) => {
   assert Selfmade(true)  // CL7 a class whose block makes one of it puts off a test of it for every one made
@@ -856,6 +884,15 @@ dynamics := None
       {code}
     }
   })
+}
+// (giving a name a value, defined again after the last operator: it binds looser than any, `x := a | b` is `x := (a | b)`)
+{name} := {value} ^punctuation => {
+  value
+  {name} => value
+}
+{name} = {value} => {
+  value
+  {name} => value
 }
 assert {
   asserted := dynamically assert {
@@ -1308,7 +1345,7 @@ assert 3 is Number  // TY18 three is not a number
 // Calling a narrowed type chooses a value of it.
 assert (Number{. > 5}()) > 5  // CN1 a value chosen from a narrowing does not satisfy it
 // `boolean`: what `false` and `true` are (`false | true`).
-boolean := class { }
+boolean := false | true
 assert {
   maybe: boolean? = None
   assert maybe ?? true  // BN3 ?? does not fall back on an optional left empty
@@ -1533,15 +1570,6 @@ DARK := theme `Ether.ray - Dark` {
   ^muting = ^ 50%
 }
 
-// (giving a name a value, defined again last: it binds looser than any operator, `x := a | b` is `x := (a | b)`)
-{name} := {value} ^punctuation => {
-  value
-  {name} => value
-}
-{name} = {value} => {
-  value
-  {name} => value
-}
 // (a comment after a statement, defined again last: what is declared last binds loosest, so it is read before anything else)
 {statement} // {comment} ^comment => {statement}
 

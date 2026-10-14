@@ -192,8 +192,7 @@ All POC files live in `@ether/poc/machine/`:
 
 ## Status
 
-MC0 to MC9 pass (`./run.sh MC1` … `MC9d` in `@ether/poc/machine`; 25 functions per process, 5 or 6 for MC8d and MC9),
-also after merging main.
+MC0 to MC10 pass (`./run.sh MC1` … `MC10d` in `@ether/poc/machine`; 25 functions per process), also after merging main.
 
 - **MC0**: on the merged branch, S0 to N6 and DP0, DP2, DP3, DP4 pass.
 - **MC1**: 200 functions, from 3 to 32 bytes, pinned in `corpus/manifest.txt` (gcc 16.2.1).
@@ -247,8 +246,11 @@ also after merging main.
   zlib wrote them and rejects all 7 bad ones. It is slow and large: from 11 s (a stored stream) to 38 minutes and 24 GB
   (`text.txt.1.huffman`), since every value written into text in a run is held until a rule or the run ends (see "What
   a kernel needs").
-- **MC10d** (begun): flags kept in two places below the stack, what a statement needs on the way borrowed from registers
-  it does not name and given back, calls `call`, tail calls `jmp` (`poc/machine/out/probe/mc10d.py`, not yet run).
+- **MC10d**: the lifted program compiled back by `X86.ray` (42 606 bytes, nine times gcc's: flags kept in two places
+  below the stack, each statement's registers on the way borrowed and given back, calls `call`, tail calls `jmp`; each
+  line assembled is printed back and compared with what it was written as) decodes all 22 streams natively as zlib wrote
+  them and rejects all 7 bad ones. It takes 72 us a decode of `text.txt.1.huffman` where gcc's takes 8.4, and Ray's
+  interpreter 38 minutes.
 
 Each function reads, prints, lifts or assembles in under a second.
 
@@ -440,6 +442,38 @@ quick tier (`poc/quick.sh`) about 6 minutes.
   Construct serve binary-format tooling; this serves interop, which is the goal. They stay in `Deflate.md`.
 - **Branch.** `proposal/machine-code`, from `proposal/deflate-proof` with `proposal/interop-poc` merged in; nothing is
   committed into either.
+
+## For main to decide
+
+What this branch changes in the language, beyond fixes: each is a choice for the language, not for one proof, so it is
+for main (and a new kernel) to make. For each: what it is, why the proofs need it, what else it could be, what this branch
+recommends.
+
+- **Integers with their own arithmetic** (`poc/interop/ints.ray`). Main's whole-number `-` stops at 0 (`2 - 5` is 0);
+  machine integers wrap. Here `((a - b) as Int32)` is exact and `None` outside the type, `(… wrapped Int32)` wraps, and
+  negatives are written `((1 - 34) as Integer)`. Else: signed integers in `Number` itself. Recommended: integer types as
+  library classes over exact host operations, as here, with exact integers in the kernel (BigInt values, not
+  `Number(BigInt)`: today exactness ends at 2^53, which 64-bit machine code passes).
+- **List `==` by what the lists hold** (`js.kinds.ray`, through `alike`). The codec compares byte lists. Here every `==`
+  of two objects asks whether they are lists, and two lists are equal when their values are. Recommended: structural
+  `==` for lists, identity `===` as is.
+- **`as` falls back to reading** (`.entrypoint.ray2`): `x as T` tries `T.from`, then reading text by `T`'s pattern
+  (`text_read`), then bits by its header (`bits_read`): how `bytes as Deflate.Stream` reads a stream. Every failing `as`
+  now costs two more readings. Recommended: keep, only for a class that has a header or a pattern.
+- **Class headers** (`class (fields) {…}`, `class<P> (…)`, `<-Byte{== 8}`, conditional groups, alternatives, generics):
+  the syntax binary formats are declared in, read and written by `structures3.ts`. Recommended: adopt; it is what (1b)
+  rests on. Where the codec lives (in the kernel, or a library the kernel loads) is open.
+- **Statics** (`static x := …`): made lazily and kept (`{name}_kept`), eagerly for a class or a list literal. The eager test
+  is a text prefix (`begins "class"`), and `{name}_kept` is a name a program can collide with. Recommended: the kernel
+  keeps a static's value itself, made on first read.
+- **An assert in a block read again runs once** (`again()`): it made a list of 200 appends read its tests 200 times; it
+  also means an assert in a loop body checks only the first pass. Recommended: decide what an assert in a block is (a
+  declaration tested once, or a check every pass); this branch assumes the first.
+- **`0b101` is text** (N44, `js.kinds.ray`), **`*` repeats text and lists** (`"ab" * 2`, `[0] * 3`). Recommended: `0b` a
+  number as `0x` is; repetition kept.
+- **A value read on reads its holes where it was written** (`3.binary(width)` in a call; `language.ts`): narrowed to the
+  outermost node's rules, so a kind's own methods (`gcd`) read as on main.
+- **`xs[n] = v` places the value** (PR #24, standing on its own).
 
 ## Order of work
 

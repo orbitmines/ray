@@ -84,6 +84,33 @@ for (const mode of modes) for (const function_ of functions.slice(from - 1, to))
       console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(written?.length ?? '-').padStart(3), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
       continue;
     }
+    if (mode === 'compile_program') {
+      const starts = fs.readFileSync(path.join(corpus, 'manifest.txt'), 'utf8').trim().split('\n').slice(1).map(line => parseInt(line.split(' ')[0], 16));
+      run('program_items := []');
+      let stopped: unknown;
+      for (let k = 0; k < starts.length && stopped === undefined; k++) {
+        run('program_lines := X86.called_lines(X86.Code.from(' + program.written(listed(bytes.subarray(starts[k], starts[k + 1] ?? bytes.length))) + '), ' + starts[k] + ', [' + starts.join(', ') + '])');
+        const count = Number(run('program_lines.count'));
+        for (let from = 0; from < count; from += 40) {
+          const lowered = run('X86.lowered_lines(program_lines, ' + from + ', 40)');
+          if (typeof lowered === 'string') { stopped = lowered; break; }
+          run('program_items.joined(' + program.written(lowered) + ')');
+          await new Promise(resolve => setImmediate(resolve));
+          if (process.env.HEAP) console.log('  lowered', starts[k].toString(16), from + 40, 'of', count);
+        }
+      }
+      let written: number[] | undefined;
+      if (stopped === undefined) {
+        written = values_of(run('X86.laid_out_program(program_items)')) as number[] | undefined;
+        const entry = run('X86.place_of(program_items, "at_' + starts[starts.length - 1].toString(16) + '_called")');
+        if (written) { fs.mkdirSync(path.join(here, 'out', 'compiled_program'), { recursive: true }); fs.writeFileSync(path.join(here, 'out', 'compiled_program', name + '.bin'), Buffer.from(written)); fs.writeFileSync(path.join(here, 'out', 'compiled_program', name + '.entry'), String(entry)); }
+      }
+      held = !!written;
+      said = stopped === undefined ? 'not laid out' : 'cannot lower: ' + String(stopped).slice(0, 120);
+      if (!held) failed++;
+      console.log(held ? 'ok  ' : 'FAIL', mode.padEnd(8), name.padEnd(5), String(written?.length ?? '-').padStart(5), 'bytes', String(Math.round(performance.now() - started)).padStart(6), 'ms', held ? '' : said);
+      continue;
+    }
     if (mode === 'program') {
       const starts = fs.readFileSync(path.join(corpus, 'manifest.txt'), 'utf8').trim().split('\n').slice(1).map(line => parseInt(line.split(' ')[0], 16));
       const texts: string[] = [], saved = path.join(out, name + '.program.ray');

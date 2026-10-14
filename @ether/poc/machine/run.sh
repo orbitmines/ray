@@ -57,5 +57,11 @@ case "${1:-}" in
     if grep -q '^FAIL' <<< "$said" || ! grep -q '^ok' <<< "$said"; then echo "$1 failed"; exit 1; fi
     [ "$1" = MC10b ] && echo "MC10b inflate (4615 bytes) read, written back byte for byte, its text objdump's" || echo "MC10c inflate lifted to Ray, five functions calling each other on one memory, decodes the DEFLATE corpus as gcc's object does and rejects the bad streams"
     ;;
-  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6|MC7|MC8a|MC8b|MC8c|MC8d|MC9a|MC9b|MC9c|MC9d|MC10a|MC10b|MC10c" >&2; exit 2 ;;
+  MC10d)
+    said=$(CORPUS=inflate STEPS=800000000 HEAP_MB=20000 ray machine.mts compile_program || true)
+    grep -v '^ok' <<< "$said" || true
+    grep -q '^ok' <<< "$said" || { echo "MC10d failed"; exit 1; }
+    python3 "$here/inflate/native.py"
+    ;;
+  *) echo "usage: run.sh MC1|MC2|MC3|MC4|MC5|MC6|MC7|MC8a|MC8b|MC8c|MC8d|MC9a|MC9b|MC9c|MC9d|MC10a|MC10b|MC10c|MC10d" >&2; exit 2 ;;
 esac

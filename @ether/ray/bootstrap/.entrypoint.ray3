@@ -553,9 +553,12 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
     taken_at := (((each_taken).listing === true) && ((each_taken).spread === true)) ? (each_taken).head : Listing.new.append(each_taken).head
     while at {
       while taken_at && ((taken_at.value).named_argument === true) { taken_at = taken_at.next }
-      (at.value) alone takes (taken_at ? taken_at.value : declared)
+      // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing)
+      unless (at.value).textual === true {
+        (at.value) alone takes (taken_at ? taken_at.value : declared)
+        taken_at = taken_at ? taken_at.next : None
+      }
       at = at.next
-      taken_at = taken_at ? taken_at.next : None
     }
   }
   true
@@ -796,14 +799,22 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
 class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
 // others, which read the rest of what it reads: `class: P { … }`)
-class {fields} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
 class: {parent} {`{`}{block}{`}`} ^keyword => { class: {parent} (arguments = None) => { {block} } }
 class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
 class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
-{name} := class {header} {`{`}{block}{`}`} ^class => {name} := (class ({header}) => { {block} })
 // (written with its fields and `=>`, a definition: read as one)
 {name} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class ({fields}) => { {block} })
 {name} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class: {parent} ({fields}) => { {block} })
+// (a member of an instance, then an operator: the operator read on the member's value, not on the instance)
+assert {
+  Carrying := class (carried) => {
+    again => carried
+  }
+  assert Carrying(true).carried === true  // CI1 a field given true is not true
+  assert Carrying(Carrying(false)).carried.carried === false  // CI2 a field's field is not what it was given
+  carrier := Carrying(true)
+  assert carrier.again === true  // CI3 a method of an instance held in a name does not answer its field
+}
 // A call's arguments (§10.1): each a value, or one given by name, `f(x: 5)`: the callee's `x` given 5, read where it is written.
 // (read by this type: what binds looser where they are written (`,`) first, each part then read here)
 Named := class (name, value) => {
@@ -1090,6 +1101,10 @@ text_given (place, span) => {
 {list}, {other} ^punctuation => {
   (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).prepend(list) : Listing.new.append(list).joined(other))).spreading)
 }
+// (a class written as a structure, its header a list of positions (`class a: T, ".", b: U { … }`): declared after `,`, so the
+// whole definition reads as one, not as a list of its parts)
+class {fields} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
+{name} := class {header} {`{`}{block}{`}`} ^class => {name} := (class ({header}) => { {block} })
 assert {
   asserted := dynamically assert {
     true

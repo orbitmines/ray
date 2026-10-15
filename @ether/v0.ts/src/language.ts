@@ -2805,6 +2805,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
           if (DEBUG && freed(x)) { debug(D_FAULT, 95, at, end); return -1; }
           const f = w(x + R_FLAGS), tb = w(x + R_SKIP), kx = tb ? w(tb + 4 * KIND_AT) : kind_of(x);
           if (DEBUG) { count(K_VISIT); if (!pass) { count(K_HOLE_LED); if (w(240)) { const o = w(x + R_OWNER), h = w(240) + 8 * ((o >> 3) & 4095); set(h, o); set(h + 4, w(h + 4) + 1); } } }
+          if (DEBUG && (w(FAIL_FAST) & 64) && b(at) === 46) { const hd = w(x + R_HEAD); if (hd && w(hd + N_B) - w(hd + N_A) === 9 && b(w(hd + N_A)) === 46 && b(w(hd + N_A) + 1) === 123 && b(w(hd + N_A) + 2) === 109) debug(D_FAULT, 79, ((kind ? kx === kind : kx >= 65) ? 1 : 0) | (x !== w(THREAD + T_SKIP) ? 2 : 0) | ((f & want) === want ? 4 : 0) | (!(f & refuse) ? 8 : 0) | (!(w(x + R_MASK) & ~has) ? 16 : 0) | ((f & LED ? b(at) === b(w(x + R_PART + 4)) : written(x, at, end)) ? 32 : 0) | (match(x, 0, at, end, s) >= 0 ? 64 : 0), match(x, 0, at, end, s) - end); }
           // (not the one rule that never reads itself here, `T_SKIP`)
           if ((kind ? kx === kind : kx >= 65) && x !== w(THREAD + T_SKIP) && (f & want) === want && !(f & refuse) && !((refuse & TYPE_READER) && (f & READER) && w(x + R_OWNER) !== w(GLOBAL)) && !(w(x + R_MASK) & ~has) && (f & LED ? b(at) === b(w(x + R_PART + 4)) : written(x, at, end))) {
             if (DEBUG) count(K_MATCH);
@@ -3048,6 +3049,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a reader in a type, a head that is one hole there, reads only where that type's own rules read (`stop`) and where it is
     // checked: anywhere else it would read everything in it; one in the language itself is a literal (`{digits: Decimal.String}`))
     // (read as part of a rule's body: its holes' names are its holes)
+    if (DEBUG && (w(FAIL_FAST) & 64) && b(skip(s, e)) === 46) debug(D_FAULT, 81, s, e);
     const body_of = w(t + T_BODY); set(t + T_BODY, rule);
     const end = read(s, e, vis, stop, want | (!refuse && defines(s, e) ? DEFINES : 0), refuse | (stop ? 0 : TYPE_READER) | (on ? 0 : METHOD), sc);
     set(t + T_BODY, body_of);
@@ -3059,6 +3061,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     }
     set(t + T_SCRATCH, sc);
     set(r, K_UNREAD);
+    if (DEBUG && (w(FAIL_FAST) & 64) && b(skip(s, e)) === 46) { debug(D_FAULT, 81, s, e); debug(D_FAULT, 80, vis, stop); }
     if (want & HOLES) return r;
     // (a value, then the rest read on it: the first place what follows is read whole on a value (led by text) and what is before
     // it reads: `x.f(1)` is `f(1)` read in x; what follows begins with an operator or a bracket, or after a space or an
@@ -3073,6 +3076,16 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         }
         const o = reading(t, s, p, rule, closure, vis, self, 0, stop, 0, 0);
         if ((w(o) !== K_UNREAD || (left && (worded(s, p) || operated(s, p)))) && w(o) !== K_EMPTY) { set(r, K_ON); set(r + 12, o); set(r + 16, p); set(r + 20, e); return r; }
+      }
+      p = bracket(p, e) & 1 ? past(p, e) : p + 1;
+    }
+    // (none, read on a value: an operator after a space, or what follows an operator it begins with (`.m == v` on x, `+ part` on a
+    // number: the operator's argument): what follows read on
+    // that value when it runs (the member's value, the operator's closure), which is not what it is read on here)
+    for (let p = s + 1; p < e;) {
+      if (on && b(p) > 32 && b(p - 1) <= 32 && !left && (b(w(CLASSES) + b(p)) === 2 || operated(s, p))) {
+        const o = reading(t, s, p, rule, closure, vis, self, 0, stop, 0, 0);
+        if (w(o) !== K_UNREAD && w(o) !== K_EMPTY) { set(r, K_ON); set(r + 12, o); set(r + 16, p); set(r + 20, e); return r; }
       }
       p = bracket(p, e) & 1 ? past(p, e) : p + 1;
     }
@@ -4518,7 +4531,7 @@ export class Ray extends Language<FileStore> {
       try { return f(...args); } catch (e) { if (!(e as { told?: 1 }).told) { (e as { told?: 1 }).told = 1; console.error(this.crashed(e as Error)); } throw e; }
     }])) as unknown as Exports;
     if (first) {
-      this.set(LIMIT, this.u8.length - (1 << 16)); this.set(TRASH, this.u8.length - (1 << 16)); this.set(BUDGET, Ray.BUDGET); this.set(FAIL_FAST, (typeof process !== 'undefined' && process.env.RAY_FAIL_FAST === '0' ? 0 : 1) | (kwargs.verbose ? 2 : 0) | (process.env.RAY_OLDONE ? 8 : 0) | (process.env.RAY_MEMO_CHECK ? 4 : 0) | (process.env.RAY_NOSHARE ? 16 : 0) | (process.env.RAY_NOCOULD ? 32 : 0));
+      this.set(LIMIT, this.u8.length - (1 << 16)); this.set(TRASH, this.u8.length - (1 << 16)); this.set(BUDGET, Ray.BUDGET); this.set(FAIL_FAST, (typeof process !== 'undefined' && process.env.RAY_FAIL_FAST === '0' ? 0 : 1) | (kwargs.verbose ? 2 : 0) | (process.env.RAY_OLDONE ? 8 : 0) | (process.env.RAY_MEMO_CHECK ? 4 : 0) | (process.env.RAY_NOSHARE ? 16 : 0) | (process.env.RAY_NOCOULD ? 32 : 0) | (process.env.RAY_CHAIN ? 64 : 0));
       const area = (at: number, capacity: number, cap: number, size: number) => { this.set(at, this.alloc(cap * size)); this.set(capacity, cap); };
       area(LOG, LOG_CAP, 1 << 16, 20); area(RULES, RULES_CAP, 1 << 18, 4); this.set(OWN, this.alloc(4 * (this.u8.length >>> 16))); area(AFTER, AFTER_CAP, 1 << 16, 12); area(LIST, LIST_CAP, 1 << 21, 4); this.set(FILES, this.alloc(12 * 4096)); this.set(PEND, this.alloc(20 * 4096)); area(READS, READS_CAP, 4096, 16); this.set(INCL, this.alloc(8 * 4096)); area(LAZY, LAZY_CAP, 1 << 14, 24); this.set(BEGINS, this.alloc(44 * 4096)); this.set(216, this.alloc(4 * 64)); if (this.debugging) { this.set(240, this.alloc(8 * 4096)); this.set(244, this.alloc(8 * 4096)); this.set(248, this.alloc(8 * 4096)); } this.set(220, this.alloc(12 * 4096));
       if (!(typeof process !== 'undefined' && process.env.RAY_MEMO === '0')) { this.set(MEMO, this.alloc(60 << 20)); this.set(MEMO_MASK, (1 << 20) - 1); if (process.env.RAY_TMEMO !== '0') { this.set(TMEMO, this.alloc(40 << 16)); this.set(TMEMO_MASK, (1 << 16) - 1); } }
@@ -4828,6 +4841,14 @@ export class Ray extends Language<FileStore> {
     }
     if (kind === Debug.OOM) throw new RangeError(`out of memory: ${a} bytes wanted, ${(heap / 1048576).toFixed(0)} MB in use`);
     // (a fault (too deep, too long): what it was doing, said once, and it goes on)
+    if (kind === Debug.FAULT && a === 79) { say(`MEMBER-RULE visited for \`${(Ray as any).chain_text ?? ''}\`: checks ${b.toString(2)} (1 kind, 2 skip, 4 want, 8 refuse, 16 mask, 32 lead, 64 match) ends at end${c >= 0 ? '+' : ''}${c}`); return 0; }
+    if (kind === Debug.FAULT && (a === 81 || a === 80)) {
+      if (a === 81) { (Ray as any).chain_text = this.snippet(b, c, 40); return 0; }
+      const owners: string[] = []; let x = b, n = 0, found = 0, last = -1;
+      while (x && x !== c && n < 20000) { const o = this.w(x + 40), hd = this.w(x + 32); if (o !== last) { owners.push(`${o}${o === this.w(GLOBAL) ? '(global)' : ''}`); last = o; } if (hd && this.snippet(this.w(hd + 12), this.w(hd + 16)) === '.{member}') found = 1; x = this.w(x); n++; }
+      say(`CHAIN \`${(Ray as any).chain_text}\` from ${b}: ${n} rules, owners ${owners.slice(0, 12).join(' > ')}${owners.length > 12 ? ' …' : ''}, .{member} ${found ? 'seen' : 'NOT seen'}`);
+      return 0;
+    }
     if (kind === Debug.FAULT) {
       // (the same fault again, where it was: counted, said again at powers of ten)
       const key = `${a}:${b}:${c}:${this.stack.length}`, n = (this.faults.get(key) ?? 0) + 1; this.faults.set(key, n);

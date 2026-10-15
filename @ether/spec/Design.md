@@ -2183,6 +2183,17 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   was written); what is said about text the reader made, in a test, is said at the test. (Both had hidden failures:
   messages of one place and text are said once.)
 
+- Self-hosting (user, 2026-10-15): everything is in Expression.ray, Ray style and declarative: reading a source into a
+  Program, and the Wasm level writing it. The kernel runs Expression.ray once; its output (Expression compiled) becomes the
+  default kernel, which interprets other `.ray` files with every feature; speed then comes from Expression compiling the
+  language definition instead of interpreting it. Expression.ray is written with classes, structures reading text, lists,
+  maps and enums, so those come first: the entrypoint's own tests for them (TY, EM, C, HD, HS) are the order of work.
+- Read on a value, text the value cannot read as a whole is split where what follows is read on what is before it when it
+  runs: before an operator after a space (`x.m == v`: `==` on the member's value, not on x), or after an operator it begins
+  with (`+ part`: what follows is the operator's argument) (CI1–CI5).
+- A class written with its header as a list of positions (`class a: T, ".", b: U { … }`) is declared after `,`, which would
+  otherwise read the definition as a list of its parts; a text written among a structure's places takes no argument.
+
 ### 21.4 Speed
 
 - A test runs in memory of its own, let go of when it (and the tests written in it) are done: an assert answers whether

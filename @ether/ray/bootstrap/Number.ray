@@ -110,3 +110,12 @@ Number &+= {
 }
 assert Number(next: zero).next === zero  // NC1 a number made with a next does not hold it
 assert !(Number(next: zero).next === None)  // NC2 a number made with a next holds nothing
+// (a member of an instance compared with ==: read on the member's value; the instance has no == of its own)
+Carrying2 := class (carried) => { }
+assert Carrying2(2).carried == 2  // CI4 a field compared with == is not what it was given
+assert {
+  plain := class { }
+  held_plain := plain()
+  held_plain.extra := 2
+  held_plain.extra == 2
+}  // CI5 a member set on an instance, compared with ==, is not what was set

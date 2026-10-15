@@ -1421,12 +1421,14 @@ export class Program {
   }
   private read_once = new Map<string, string | Program.Code>();
   again(text: string): string | Program.Code {
+    // (a text holding values is new each run: kept, it would only fill the map)
+    if (text.includes(Program.REFERS)) return text;
     const had = this.read_once.get(text);
     if (had !== undefined) return had;
     this.read_once.set(text, text);
     const first = new Set([...this.independent].map(head => /^[\p{L}_][\p{L}\p{N}_]*/u.exec(head)?.[0]).filter(Boolean));
     const statements = this.code(text).statements, kept = statements.filter(statement => !first.has(/^[\p{L}_][\p{L}\p{N}_]*/u.exec(statement)?.[0] ?? ''));
-    if (kept.length < statements.length && !text.includes(Program.REFERS)) this.read_once.set(text, this.code(kept.join('\n')));
+    if (kept.length < statements.length) this.read_once.set(text, this.code(kept.join('\n')));
     return text;
   }
   // (a value, as text: text itself; anything else a body referring to it)

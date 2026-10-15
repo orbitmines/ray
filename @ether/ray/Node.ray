@@ -267,7 +267,6 @@ Program &+= {
 }
 
 Node &+= {
-  .({expr}) ^punctuation => Program(code: (expr**)).entered(this, None)
   assert 5.(. + 1) == 6  // NOD57 `.( )` does not run its expression with the value as `.`
   assert !(5.(. + 1) == 5)  // NOD58 `.( )` answered the value unchanged
 }

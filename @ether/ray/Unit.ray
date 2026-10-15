@@ -184,34 +184,37 @@ assert (5 s).unit == second  // U111 a unit written after a space is not that un
 
 si_name (symbol, name, symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
 
+// (the prefixes, made once: each unit maps them)
+SI_prefixes := {
+  -30: "q", "quecto"
+  -27: "r", "ronto"
+  -24: "y", "yocto"
+  -21: "z", "zepto"
+  -18: "a", "atto"
+  -15: "f", "femto"
+  -12: "p", "pico"
+  -9: "n", "nano"
+  -6: "µ", "micro"
+  -3: "m", "milli"
+  -2: "c", "centi"
+  -1: "d", "deci"
+  0: "", ""
+  1: "da", "deka"
+  2: "h", "hecto"
+  3: "k", "kilo"
+  6: "M", "mega"
+  9: "G", "giga"
+  12: "T", "tera"
+  15: "P", "peta"
+  18: "E", "exa"
+  21: "Z", "zetta"
+  24: "Y", "yotta"
+  27: "R", "ronna"
+  30: "Q", "quetta"
+}
+
 SI_Unit {symbol: *} {name: *} => {
-  private SI = {
-    -30: "q", "quecto"
-    -27: "r", "ronto"
-    -24: "y", "yocto"
-    -21: "z", "zepto"
-    -18: "a", "atto"
-    -15: "f", "femto"
-    -12: "p", "pico"
-    -9: "n", "nano"
-    -6: "µ", "micro"
-    -3: "m", "milli"
-    -2: "c", "centi"
-    -1: "d", "deci"
-    0: "", ""
-    1: "da", "deka"
-    2: "h", "hecto"
-    3: "k", "kilo"
-    6: "M", "mega"
-    9: "G", "giga"
-    12: "T", "tera"
-    15: "P", "peta"
-    18: "E", "exa"
-    21: "Z", "zetta"
-    24: "Y", "yotta"
-    27: "R", "ronna"
-    30: "Q", "quetta"
-  }
+  private SI = SI_prefixes
     .map((magnitude, prefixes) => Unit(name: si_name(symbol, name, ...prefixes), magnitude: magnitude))
     .reduce(|)
 
@@ -219,19 +222,21 @@ SI_Unit {symbol: *} {name: *} => {
 }
 assert 1dab == 10b  // U10 a deka-bit is not ten bits
 
+IEC_prefixes := {
+  1: "Ki", "kibi"
+  2: "Mi", "mebi"
+  3: "Gi", "gibi"
+  4: "Ti", "tebi"
+  5: "Pi", "pebi"
+  6: "Ei", "exbi"
+  7: "Zi", "zebi"
+  8: "Yi", "yobi"
+  9: "Ri", "robi"
+  10: "Qi", "quebi"
+}
+
 Binary_Unit {symbol: *} {name: *} => {
-  private IEC = {
-    1: "Ki", "kibi"
-    2: "Mi", "mebi"
-    3: "Gi", "gibi"
-    4: "Ti", "tebi"
-    5: "Pi", "pebi"
-    6: "Ei", "exbi"
-    7: "Zi", "zebi"
-    8: "Yi", "yobi"
-    9: "Ri", "robi"
-    10: "Qi", "quebi"
-  }
+  private IEC = IEC_prefixes
     .map((power, prefixes) => Unit(name: si_name(symbol, name, ...prefixes), power: power))
     .reduce(|)
 

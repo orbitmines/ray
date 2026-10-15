@@ -567,7 +567,7 @@ assert {
 {narrowed}{`{`}{constraint}{`}`} ^punctuation => Narrowing &+ {
   narrows := narrowed
   holds (it) => it.({constraint})
-  {value: narrowed} => (holds(value)) ? value : (ERROR not one of what it narrows to)
+  {value: narrowed} => (holds(value) === true) ? value : (ERROR not one of what it narrows to)
 }
 // `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
 as {type} ^keyword => (. is type) ? . : type.from(.)

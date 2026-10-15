@@ -234,6 +234,10 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - Merging into a property is `&+` on the property (`x.style &+= {italic}`); `+=` replaces it.
 - Monkey-patching is component addition on a class: `X += { … }` overrides, `X &+= { … }` superposes. Only on a class,
   and it answers the class: `Number += { squared => this * this }`, then `5.squared // 25`.
+- `X &+= Y`, Y a value (a class), not a block: Y is one of X's components, so X (and what is built on it) sees Y's
+  rules after its own, the last added first (`Iterable &+= Ordered`, `Number &+= Ray`). This replaces the earlier
+  `X.components.hierarchy &= Y`. The entrypoint writes it with `.`: `(on).(external . {value})` makes what it is read in
+  made of the value too.
 - In a map literal, the own key wins over Node's member of that name: `{ count: 3 }.count` is 3, and Node's is still
   `m.on(Node).count`. A `key: value` entry is transparent: everything, `==` included, delegates to the value, and `.key`
   still reads the key.
@@ -330,6 +334,8 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   - `{x: T}` is typed: it matches a span that T's own rules read whole. This is purely structural: nothing is defined on
     types for it, and the value is the span read in T.
   - `{{x}}` is code (a block) handed on unread.
+  - In a rule's body, `{x}` naming one of that rule's holes is that hole, one unit: no other rule's literal brackets read
+    it. `(on).{key}` is `(on)` with `.{key}` read on it, never a narrowing `T{p}` of `(on).`.
   - `[x]` is an operator: `a [x] b`, the same spelling as a variable used as an operator.
   - `{x?}` is optional.
 - A literal word in a head matches only that written word, never a variable's value; a local named `for` shadows the name
@@ -500,6 +506,17 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - `"A"` is a Char and `"Ada"` a String. A String *is* its characters (`String := class: Array` of Char); it defines none
   of `==`, `entry`, `count`, `length`, `first` and so on, and inherits them. There is no `.characters` field.
 - Backticks `` `…` `` are the raw written literal, taken exactly as written (what externals and patterns take).
+- A text the reader holds (what is between quotes, what a hole took) is a String: `"ab" is String`, and String's rules
+  are read on it first. The runtime keeps it as its own kind of value; that it is a String is said in the runtime's map
+  (§21.2), not by the reader. A text is a value: nothing is declared in it (`"a".x := …` reads `x`).
+- A text is its characters: `first` (one character, a text of one) and `rest` (the text after it); one with no first is
+  empty. The language's definition is the reference (a String is `Char[]`, read character by character); the runtime's
+  map answers `first` and `rest` faster for the texts it holds (§21.2). It must work both with and without that help:
+  the map is an optimization. (Open: without the map a `Char` must read one character by itself, from Unicode's code
+  points; until then the map is what runs.)
+- An escape applies to any pair character, after an odd number of `\`: `\"` and `\{` open nothing (`\{ => U+007B`,
+  `"\""`), `\\{prefix}` is a hole after an escaped backslash. A quote inside a hole inside quotes still closes them, so a
+  rule's head keeps quotes out of its holes by naming the type (`Unquoted := Char{!= "\""}`).
 - Interpolation: `"Hello {name}!"`. `\` is the escape character: `\"`, `\{`, `\0 \t \n \r \x{…} \u{1F525}`. A character
   can also be written `U+1F525`.
 - A multiline string loses the indentation of its least-indented content line. A blank line right after the opening
@@ -512,11 +529,19 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
 ### 5.2 Lists and ranges
 
+- A list used as a type reads one of its values, as written: `{d: "0".."9"}` reads `5` as the value `"5"` of it (each list
+  answers a reader `{written} => (.).one_written(`{written}`)`, comparing with `==`). So a range is a type of what it holds.
+- `a..b` is Ordered's (`succ`/`pred` from a to b); continuing a range, `0..2..1`, is a list's (`Listing`), not every
+  iterable's: a String and a Number are iterable too, and their `..` is Ordered's.
+
 - `(1, 2)` and `[1, 2]` are the same list. For one element, `[x]` is a new list holding `x` (a list included) and `(x)`
   is just `x`.
 - Written lists flatten: `a, b, c` is one list, and a list value written first in a comma list is flattened into a *new*
   list (never mutated): `lst, 5` is the elements of `lst` followed by 5. To keep a list as one element, bracket it:
   `[lst], 5`.
+  A list a `,` has just made, not yet gathered by `[ ]`, is no one else's: the value before it is put in front of it,
+  so a written list of n values is made in n steps (copying the rest at each `,` made 17 names cost more than a line's
+  budget, and the list was cut short).
 - Spread: `first, ...middle, last := "A", "B", "C", "D"` (`middle` is `"B", "C"`); `middle: ...String`. `...` is
   another spelling of `[]` wherever `[]` is allowed.
 - Ranges are Rays, inclusive at both ends: `1..5`, `a..` (= `a ->`), `..b` (= `<- b`), `0..10..20` (through 10), `a..<b`
@@ -526,6 +551,8 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - `ray[500..999] = xs` puts `xs` itself at each position (the range is a superposition of places), unless a conversion
   shows `xs` can't be the element type while spreading it would fit; then its elements are spread.
 - `x[k] = v` writes the entry; `f[k] = v` is visible as `f.k`.
+- `x["k"] := v` and `x[name] := v`, where `name` holds a text, declare the member `k` (the text's name) in `x`;
+  `global[name] := class …` defines a global by a computed name (Number.ray's bases).
 
 ### 5.3 None, booleans and `?`
 
@@ -556,6 +583,11 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   type; the value narrows it only until reassigned (`x: Number = 5` is a Number).
 - `x = v` assigns the nearest visible `x`. If there is none, inside a block it binds where the block was written,
   otherwise here.
+  `=` reads its left side as a value: a bare name that something visible defines is declared again in the node that
+  defines it (so `seen = true` in a closure changes the `seen` where the closure was written), while `:=` takes its head
+  as written and declares here (`kept := false` in a closure is the closure's own). In the entrypoint:
+  `{name} = {value} => { value ; (name) := value }`. Only the left side is read that way: a value read inside a left side
+  (the default in `(arguments = None) =>`) is a value, and `None` stays None.
 - `=`, `:` and `:=` evaluate to the variable, never to the assigned value. `x = v` answers the location written
   (`holder`, `name`, and `previous`, the value it replaced).
 - A variable with a structural type reads what is assigned by that structure: `x: Range = 2-7`.
@@ -716,6 +748,31 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   (through Compiler levels).
 - `transaction { … }`: all of it happens or none of it. Types and asserts are checked only at its end; if anything in it
   errs, every variable it assigned is restored.
+- Checking a typed hole (`{x: T}`) is reading the span with T's own rules, quietly: a check says nothing, paints nothing,
+  queues no test and puts nothing off; what it would run is not part of its answer. A hole's type is asked only where
+  the rest of its rule reads, and only where the part after it can begin (`{amount: Number} {written: Unit.Spelling}` asks
+  Number nowhere the spelling can't start). An answer is kept (read once) only when the check ran nothing and wasn't cut
+  short by a cycle.
+- A hole never ends inside a word, but a typed one ends where its type reads (`{first: Digit}{rest: Digit[]}` of `10`,
+  `{radix: Subscript.String}{digits: Decimal.String}` of `₂10`).
+- Patterns are Rays: `(a: T, `-`, b: U)`, `p | q`, `p[]`, `p+`, `⊣` are values, a Ray of parts, and can be transformed as
+  values (`.map{== \s}(\s[])`, Expression.ray). Reading text by one works the same way as destructuring: `(a: T, `-`,
+  b: U) := text` gives each named part the span its type reads and requires each literal part to be there, as `(x, y)
+  := list` gives each place its element. A class written as a structure reads text this way; the matcher is
+  language-side (sequence, alternatives, repetition; named parts become fields).
+- Precedence in a typed hole: what reads its text where it is written binding looser than the type's own rule (declared
+  after it, `,` in `(a: 1, b: 2)` read as Arguments) splits it first, at the check and when it is read; each part is
+  then read by the type (its rules first, what they don't read where it was written). Declaration order is where a
+  rule's head is written, the files in the order they are read.
+- A hole typed by a text reads only that text, and its value is that text (`{value: "1"}`). Any other typed hole's value
+  is what its type's rules read its text as.
+- A check run inside what a check runs (`{first: T}{rest: T[]}` checking the rest) answers by its rules reading the text:
+  what that reading would run is not run again (and again). A check that went too deep inside says so to what checks it.
+- A head of holes only (`{x: T}`, `{first: T}{rest: T[]}`) is a reader: read only where its type's own rules read, never
+  as code in its node. A method's (`{this}{argument}`) is not a reader.
+- A type has an index: the characters a value of it can begin with, derived from its own rules (a hole of its own type
+  adds nothing, an untyped one-word hole any character of a word, any other untyped hole everything). Text that can't
+  begin a value of T is not checked as one.
 
 ### 7.4 Generics, counts and scripts
 
@@ -743,6 +800,16 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   them: `20 °C == 68 °F` holds through it.
 - Method lookup falls back to the equivalence graph of `as` conversions from the receiver, breadth-first: the nearest
   conversion that defines the method is used, and two at the same distance are both used, superposed.
+- `x as *` is lazy: a list of the conversions, each run only when asked (`some` stops at the first that holds). While x is
+  being converted, x is not converted again: `is` on it is what it is itself (each value's conversions followed once).
+- A conversion's body reads "the `as *` before it" also across classes, when it reads on the very value it runs on: the
+  rule running is never read again there.
+- `x as *` is what x converts to, as its types define it: never written by hand, followed implicitly when the value itself
+  fails, on comparisons (`x is T` holds when x is a T, or one of its conversions is). It is not recorded (a cache): each
+  conversion written `as (=== T) => …` in a class also defines that class's `as *`, the ones before it and itself
+  (`as * => []` where none is written).
+- Anything Ordered has `..` (and `..<`), not just Number: a range walks `succ`/`pred` from one end to the other, so
+  `"0".."9"` is a range of characters.
 - `as T` succeeds through any conversion to a type isomorphic to T. When `A as B` and `B as A` both exist and round-trip,
   that is an isomorphism, and the graph uses it automatically (`Binary{length == 1}` and boolean; String and Binary).
 - `equivalence a -> (b | c)` is one equivalence to a superposition. From a type it applies to its instances; to relate
@@ -825,6 +892,8 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   optimizations), so `static Var := 5` and `InnerClass := class {}` are not in it while `Var += 1` is.
   `static x := v` is a value of the type, computed when first asked for and kept.
 - Fields are per instance by default.
+- An `assert` in a class body is a test written once: read again inside a test (a class's body run again because the
+  test reads the class), the same assert at the same place is not queued again.
 - What a value declares itself wins: `Color.red` is the static on the class value; an instance's field is reached on an
   instance.
 - A class is already a namespace (there is no separate `single`).
@@ -885,6 +954,29 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
 ### 10.1 Functions
 
+- A parameter's type is checked on the value it is given, not read in the argument's text: `f := (x: T) => …` takes
+  `f(v)` for any `v` that is a T. Parameters bind by composition: the parameter list runs where the call runs (`a` names
+  a place, `b = 0` is an ordinary assignment, the default, run first and overwritten by an argument given; `x: T` gives the
+  place its type), `,` composes them, and each place takes the argument in its place. `,` is never written into another
+  rule's head (`({a}, {b}) …`): it only composes. `,` binds loosest of all (declared after `=` and `:=`): `(a, b = 0)` is
+  `a, (b = 0)`, and destructuring is written grouped, `(a, b) := list`.
+- A parameter list is read as a left side, like `:=`'s: a name in it names a new place in the call even when it means
+  something outside (`type` in `is_itself (type)`); `b = 0`'s value and `x: T`'s type are read as values. `:=` on a left side
+  made of names (a list of their places) gives each the value in its place; a call's `taking` is that `:=`.
+- In a left side, the kernel counts the places its names name; `,`'s own body runs as a value (its holes are the left side's,
+  by their text), and the definition answers the places as a list, each taking the value in its place. (Open, being built:
+  rules that pass a left side on through their bodies (`{on}[{key}]`, `.{member}`, a style's `x.style = style`) still need
+  it, so which bodies are part of it is not settled yet.)
+- A name read before it is defined is kept as its place, and looked up again where it was named when asked (only where the
+  take's code is that name; a place handed along under another name is the place).
+- A place and a definition's head, read on, answer what any value answers, not what the node they are in has.
+
+- Called without brackets, `f x`, `a..b`, `"0".."9"`: a closure answers its parameters as holes right after it
+  (`{this}{{parameters}}`, the same body as `{this}({{parameters}})`), so the receiver of a method (`"0"` of `"0"..`) stays
+  its `this`. What is read after a value is read with its own methods led by a hole first, when it is an argument (not an
+  operator, a member or brackets), then with what is led by text, then the language's fallback `{this}{rest}`.
+- Read after an operator, a word is read on what the operator is (`..9` is `9` read on `..`), as after a space.
+
 - `=>` is required before a function's body.
 
   ```ray
@@ -919,9 +1011,38 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   Loud().sound              // "Woof" & "WOOF"
   ```
 
+- Named arguments: in a call, `name: value` names the callee's parameter or field (declared on what is made when its
+  class has no header: `Number(next: this)`); only the value is read where it is written, so in `succ => Number(next:
+  this)` the value is the number succ was read on. The rest bind in order, skipping the named ones. Language-side: a
+  class's call takes `{arguments: Arguments}`, a type with `{value}` and `{name}: {value}` (a `Named`); `taking` declares
+  each Named in what is called, then binds the rest positionally.
+- `this` written in a rule's body (or a closure's) is that application's first argument, what it was read on, wherever
+  the code ends up being read: a value given as an argument and read in the callee is still the caller's `this`. Only a
+  rule's own `{this}` hole names it otherwise; at the top of a file `this` is `.`.
+- `xs.m p => body`, a closure and a name after it with no brackets, is a call with a closure: the `=>` behind the name
+  makes the rest of the line its argument, `xs.m(p => body)` (`[&&, ||].for operator => { … }`). A head that names a
+  method that does not exist yet, `x.m (y) => …`, still defines it.
 - Partial arguments: `add(1)` waits for the rest, `add(b: 2)(1)`, `f<a: 10>`. A caller may set any variable of the
   function (unless access prevents it).
 - The call is the `()` method. Looking up a member by the text `"()"` (`x["()"]`) is a field lookup, never the call.
+- A method with parameters is a closure (`append (value) => …` is `append := (value) => …`); its body runs in a node of
+  its own, which holds its parameters and what `:=` declares there. Read as a member (`xs.append(v)`, or `.append(v)` in
+  another method of xs), `.` and `this` in it are what it was read on: `.head := link` declares in xs, `.tail` reads
+  xs's. Called bare (`f(5)`, `body(x)`), `.` is its own node, which sees where the closure was written.
+- A method's own run node is the only node whose `this` and `.` are what it was read on; any other node's `this` is
+  itself, also when it is made of components (a class with `X &+= Y`).
+- A method is called on what follows it without brackets, operator-named or not: `double 4`, `6 == 6` (`==` a method of
+  6, `== (other: Number) =>` a closure named `==`), `"0".."9"`. A rule never reads itself through what it reads on a
+  value either: several rules made by one (`as (=== T)` written twice) read the ones before the one running.
+- What nothing led by text reads on a value is read, once, by a method led by a hole: the entrypoint's
+  `{this}{rest} => ((this as *).first ?? this){rest}`, through the nearest conversion, else on the value itself where
+  nothing reads it, said there.
+- A method read as a member is called with what it was read in as its receiver, also when the call is written where that
+  is (`probe {type} => .is_itself(type)`).
+- `x.f(y)`: the name `f` is read in x, and `(y)` is read on what it answers where `x.f(y)` is written, wherever that
+  statement is spliced. Code spliced as a whole (`{block}`, `.({code})`) is all read in the target. The difference is
+  structural: a rule that is only text and a last hole written against it, whose body is that hole (`.{member} =>
+  {member}`), reads the rest of a line.
   `this` is a member of the context, not a first parameter; there is no uniform call syntax.
 - Composition: `f ∘ g` (alias `compose`) is `(args) => f(g(args))`, declared right-to-left. `f => g`, where `f` is
   already a function, appends a step: `A => +1 => +3` is `(+3) ∘ (+1) ∘ A`. `Function` is an alias of Program
@@ -1006,6 +1127,8 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - `if … { } else { }` answers what its taken block answers, not a branch object. `unless … { } else { }` chains like `if`.
 - `while` runs its body with partial arguments filled (`body<break: …, continue: …>()`). Labels are reachable only where
   they are in scope: a closure written in the loop body can `break`; a method merely called from the body cannot.
+- A jump back in a body (a loop) forgets what that body's holes answered, so they are read again as they are now:
+  `while c { … }` asks `c` each round. A hole's value is otherwise read once.
 - Iterating: `[1, 2, 3] for x => print(x)`, `(0 -> +1){< 10} for i => …`, `(->){.index < 10} for => …` (a callback with
   no parameters iterates without the variable, with `.index`), `10.times => …`. An element matched with `[]` always has
   `is_first`, `is_last` and `.index`.
@@ -1891,6 +2014,10 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   with O = Compiler.default + Compiler.memoised
   ```
 
+- The language's own reader is `Expression` (bootstrap/Expression.ray): a pattern that a language's text is matched
+  against, as destructuring (`source as Expression`); what it reads, compiled under a level, is a Program, and a back end
+  is the conversion to its target, `(source as Expression) as @wasm` (a rule a function, its statements cases of a
+  `br_table` loop, a goto setting where it is next).
 - Every translation is a Compiler level: renderers, storage formats, backends, a target architecture
   (`Language.x86_64`), the development level (§10.6), a decompiler (`Compiler.decompiler`). There are no build or walker
   functions beside them.
@@ -1949,6 +2076,12 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 ### 21.1 The host knows no syntax
 
+- The language's core is its own project, `@ether/ray/bootstrap`: the entrypoint and the files it needs (Number, Ray,
+  String), depending on nothing else, so that it can bootstrap `compiler.sketch.ray` to self-host. What needs the rest of
+  the library (Unicode tables, units, randomness, IO, languages, the compiler's levels, access) lives in the file of what
+  it needs (`Char &+= { … }` in Unicode.ray, `Iterable &+= { random … }` in Feature.ray). It is rebuilt a line at a
+  time, essentials first, each line's tests passing before the next.
+
 - The host (the TypeScript interpreter in `@ether/v0.ts`, used the same way by the CLI, the daemon and the LSP) knows no
   syntax. Its one assumption is about meaning: the entrypoint's first statement defines how rules are defined, and uses
   that definition in its own body. From it the host learns the brackets, the definer, the separator, where a statement
@@ -1963,6 +2096,14 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   (other errors may remain), and only then is any other file read.
 - Recursion is broken by construction: the first statement is read by inference, never by a rule; a definition's head is
   read with the rules before it; applying a rule inside its own body is a call, never an expansion.
+  A rule never reads itself through a hole either: code written in a rule's own body that would read as that rule
+  (`String => this as String` in a class, its `String`) is read with the rules before it, the outer `String`.
+- What an operator's methods read is only known on the value: a statement no rule in scope reads is, when it runs, split
+  at the first operator after what reads, and the rest read on that value (`6 == 6`, `"0".."9"`), not while reading
+  (then it would never be read again when its rules appear).
+- A statement nothing reads is read again when its scope gains a rule that could read it: one whose literal texts are
+  all written in the statement, in order (a rule of holes only always could). Retrying on every new rule made reading
+  the library quadratic. What is left unread when a file's include is settled is said.
 - Reading is by demand: any reach of a definition reads it ("arbitrary blocks of code can run arbitrary other bits of
   code").
 - Native code is rebuilt at every start; it is not kept on disk.
@@ -1972,6 +2113,12 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - The only externals are `&` (a rule's application as a Ray vertex: its captures, `this`, `caller`, and what it is made
   of), `goto`, and labels `name\`. Writing a member is defining on the vertex (`&+=`). Loops, `break`, `continue`,
   `return` and `recur` are written in the language with labels.
+- Apart from the externals, the runtime has its own map: what its own kinds of value are in the language, an
+  external-like word in a bucket of its own, written only in the runtime's `.o.ray` (`@ether/v0.ts/src/wasm.o.ray`, read
+  after the language, for every backend since they run one kernel). `String &+= { external text }` says the texts it
+  holds are Strings; `first => external first`, `rest => external rest` answer a text's characters; `external nothing None`
+  says what its nothing is (what is read on nothing is read on None, so `!(nothing)` holds and a missing value is never
+  truthy). The map accelerates; what a String is stays the library's.
 - Identity needs no external: dispatch (a rule on None answers for it), `is` or `==` do.
 - Interpreter-specific optimizations (host numbers and strings, `@js { … }`) are optional, live in that interpreter's
   `.o.ray`, and can be removed. The host's access to IO, time, the OS and randomness stays until the new runtime is done;
@@ -1982,21 +2129,138 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 ### 21.3 Frames, names and members
 
+- Code read in a value it was not written in, `x.( … )`, reads with x's rules first, then where it was written.
+- A head made only of holes of where it is written (`{operator} {rest} => {body}` in `chainable`) is read as the text they
+  took, as written, one expression (`== (other: Number)`): a method, not each part apart.
+- A member right after a word is that word's: `x == other.pred` is `x == (other.pred)`, not `(x == other).pred`.
+- A missing argument is `declared` (what a parameter had stays, its default); `None` is a value like any other and is
+  given (`Number(next: None)`).
+- Accelerations (`wasm.o.ray`, another bucket than the externals) must answer exactly what the language does: checked by
+  running the same files with and without them (and an unlimited budget, so a budget cut does not hide a difference).
+  `given` (a definition that defined one name answers its head) is on; `taking` (one plain parameter) is written but off
+  until the language binds a parameter named as a visible name in the call, not where that name is (GN2).
+- While a left side is being read, a name nothing reads is what it declares, also in a test (not an error).
+
 - A name is a place. A captured argument is lazy code, read where and when it is used.
 - A frame sees the frame it was written in first. A rule made inside a frame keeps that frame, as a closure does.
 - Names resolve on what declares them: Node's own members (`#`, `##`, `*`, `**`, `%`, `@`) always resolve on `this` (or
   globally at the top), never on a local or closure frame.
 - A value's own member comes before its class's rules; a later `&+=` overrides an earlier member of the same name.
+- In a left side, a name is declared where `.` is: a member read on nothing in a method's node (`.head := link`) is
+  declared in what the method was read on. A frame holds what its rule took, its `caller` and its `this`: those names
+  are read, never declared, while any other name written on a frame is declared there (a style, `x.style = style`).
+- A take's code is read where it was written, once; a loop's jump back reads its body's takes again (§10.4).
+- Code is read once, where it is written, with the rules visible there; rules a running body defines in its own node
+  still apply to its later statements.
 - Statics and field defaults are read when first asked for, then held until what they read changes.
 - Diagnostics are values, each with the place it is about. A statement may have several, without cascades: a failed
   lookup yields an unknown whose further failures are silent. Highlighting is what a reading's rules say.
+- A left side's composition (user, 2026-10-15): a rule that composes parts of a left side (its head holes apart by a
+  character that stands on its own, not a bracket or quote: `{a}, {b}`) has each part read as a left side before its
+  body runs, a word a name declared here; whatever its body then reads them as (`,`'s `list === declared`), they are
+  those places. A rule of an operator (`{x}: {type}`, `{x} ^{style}`) reads its holes as its body does. (`(type, depth)
+  := …` with a `type` visible took None's value instead of declaring: every `is` failed through `descends`; GN3.)
+- Where a left side's word is declared: given by reference (`=`'s `(name)`, a word its caller wrote), the visible one's
+  place; given as code spliced here (`({written_parameters})`, a call's parameter list; `(x) := …`), here: the node the
+  definition defines in (a call's own node). (A call's parameter named like a visible name assigned that one: GN2;
+  nested calls of one closure shared their parameters: `is_itself`'s `type` was the inner call's.)
+- A closure written in a rule's body keeps the names of where it was written in every copy of its text: a copy records,
+  for its first splice and the one after, the frame each was written in, followed through a copy already read (CL1,
+  CL2; `holds (it) => it.({constraint})`).
+- Text read on a value (what follows it) is that value's to read: `this` there is not the keyword (`x < this`, `<` a
+  closure called without brackets, takes `this`); a hole's code read on a closure that only a global rule reads (`2`) is
+  its argument (RB2).
+- A rule's body reading that rule on the very value it runs on is the rule before it (`as * => ((this as *), …)`); on
+  another value it is the rule itself again, recursion (`pred!` in `! => … pred! * this`).
+- A definition's own head, read as a left side (`! => …`), declares no placeholder rule beside the one it defines.
+- `right-to-left op …` is the operator as it is: what follows it, all of it, is its right side.
+- What a test may apply does not depend on what was kept: rules applied inside a quiet check count against an allowance of
+  their own (ten times the budget), so a test near its budget answers the same on one thread and on four.
+- A test keeps its readings in its thread's own table (forgotten when it is done), looked up before what was kept for all.
+- A text is destructured by a left side only when a text is written among its places (`(a, `-`, b) := `x-y``); a
+  parameter list given a text (or String, which is textual) takes it whole.
+- What a test says is said where that test is, not where what applied it leads (a closure's callers lead to where it
+  was written); what is said about text the reader made, in a test, is said at the test. (Both had hidden failures:
+  messages of one place and text are said once.)
 
 ### 21.4 Speed
+
+- A test runs in memory of its own, let go of when it (and the tests written in it) are done: an assert answers whether
+  it held, and what it made is gone, except what it gave its frame (its style, made again). Memory let go of is zeroed
+  (what is allocated is all zero). A reading read in a test is kept for that test alone (keyed by its thread, forgotten
+  when it is done: another thread may read what it keeps, its own memory); a rule's body first read in a test is kept by
+  that thread alone until the test is done. A test's memory is known by its pages (each chunk it takes on pages of its
+  own, marked with the test), so asking whether something is the test's own costs one read.
+- In a test, a node made before it is shadowed; what the test defines there again (`x := …` twice) is defined again in
+  place among the test's own rules, not added again (a loop in a test grew a node by one rule a round).
+- Built (`--build`): every rule made while the files were read has its body read at build (read once, at build), before
+  what was put off runs; the built program says exactly what the interpreted one says.
+- Files are merged in path order, every file numbered every time (two files sharing a number lost the second's
+  definitions after a second include).
 
 - Speed never comes from changing meaning. It comes from properties of the walk (memo per version, an index of first
   characters, history-driven re-walks, compiled walks as a Compiler level) and from removable optimization levels.
 - A rewrite of the runtime is at least as fast as what it replaces.
 - Resource accounting (storage, memory, time, the size of a Ray) and memory management come last, after everything else.
+- What a cache keeps must be keyed by everything its answer depends on, or it is wrong, not fast: read-once readings
+  are keyed by the text, the rules visible (the latest rule of every node the reading sees), the names, the shadows a
+  test made and whether it is read in a check. Readings that read others in turn each work in scratch memory of their
+  own; sharing it made answers depend on memory layout.
+- Measured on the kernel (2026-10): the time is in the reader's rule loop and in applications, not in compiling. Type
+  checks asked at every split of every statement were 2.4M of them; asking only where the rest of the rule reads made
+  them 13k. Rules led by a hole are grouped by their first text (by the whole word, for a word), so a reading visits only
+  groups its text has. The kernel compiles itself (JS → JMP → wasm) in about 35 ms at start, while the threads start.
+- Compiled (`--build --level=none|default`, 2026-10-15): every rule made while the files were read gets its body read at
+  build and a wasm function of its own in a module beside the kernel's (`ray.program`): its statements a loop on `$at`, a
+  case of `br_table` each; a goto found at build sets `$at`; a statement calls the runtime (`ev`). `default` also applies
+  the rule a statement is read by directly, where no hole is being declared and no left side read. The kernel runs a
+  rule's function when the body it runs is that rule's (`R_FN`), else reads it step by step (bodies of rules made in a
+  test). A built program builds again from itself. Entrypoint + Number + String + Expression: 4294 rules, ~1.6M calls of
+  compiled bodies, the same messages as the interpreter at every level. The functions are written by the kernel (the host),
+  following Expression.ray's `Wasm.none`; those Ray rules are not yet run themselves.
+- Measured 2026-10-15 (entrypoint + Number + String, 400 tests): ~1.3M applications, 2.1M readings, ~70% of them read
+  afresh: each call's and each block's node is new, so a reading keyed by what it sees never repeats across calls. A
+  reading keyed by text identity instead (the same rule text made the same way in another call) was tried and dropped:
+  the chains it must name are long and it bought nothing. What costs is language-side composition: a code hole read again
+  at every mention (`ensure` reads its condition twice; `taking` reads `passed` twice), `,` through Listing (~460
+  applications for two elements), a named argument constructing `Named` (~1400). The kernel map's `taking` (one
+  parameter, one value) now answers exactly what the language does (identical at a 1M budget) and is on: a call ~50
+  applications fewer. After it and GN3, entrypoint + Number + String: 1.7 s on one thread, 1.2 s on four, built 1.5 s.
+- The 50 ms budget for the entrypoint and its tests is met file by file: the entrypoint first, then one core library file
+  at a time, each fast and passing before the next.
+
+### 21.5 Debugging the runtime
+
+- `--debug` (or `RAY_DEBUG=1`) compiles the kernel with its checks and keeps a stack of what it is doing (each statement,
+  test, rule applied, hole's code read, type checked). A crash, running out of memory or a fault says that stack, in
+  the language's terms, innermost first.
+- `--debug=trace` says every step; `--debug=trace:<file:line>` only within the statement or test there, with how many
+  rules it applied. `--debug=cost` says each statement or test taking long or much memory, with its applications.
+  `--debug=settle` says what an include asked for and every statement read only when its scope gained a rule.
+  `--debug=tests` says each test as it begins and what is said in it. `--debug` also says what the kernel counted
+  (readings, read afresh, rules visited, applications) after the summary.
+- The kernel's message log holds 65536 messages; past that what is said is lost, and that itself is said (a rule defined
+  is logged only with `--verbose`: 62k of them hid every failure after the entrypoint's, on one thread).
+- A method's body is code read in `.`, what it is read on: a name it declares (`x := …`) is the value's, every time it
+  runs. A body's own names go in a block of its own (`{ { … } }`). (`{this}{rest}` declared `conversion` on every value
+  it read on; LK1.) An error said in a test whose callers do not lead to that test is said (`--debug`).
+- Runaways are found, said and stopped, whatever their shape:
+  - the kernel's own loops count their rounds (compiled in), and one going round past a limit says which function and
+    loop it is (`RAY_DEBUG_KERNEL_LOOP`);
+  - the same few steps repeating, at one depth (a loop) or deeper each round (a recursion), say what goes round
+    (`RAY_DEBUG_LOOP`);
+  - a statement or test that reads nothing it hadn't read for window after window, or runs past a limit of steps, says
+    what it read most (`RAY_DEBUG_WINDOW`, `RAY_DEBUG_STATEMENT`);
+  - one statement read, or one test run, again and again says which (`RAY_DEBUG_AGAIN`);
+  - `RAY_DEBUG_STEPS=n` stops anything after n steps with where it is. `RAY_DEBUG_LOOPS=go` says instead of stopping.
+- A value needed while it is being read (a cycle) is said with where. Every bug found gets a check that names it, and a
+  test written the moment it was found, so it is caught at once next time.
+- Tests are counted by place: a test is passed or failed once, however often a check or a class body ran it.
+- Too deep: the fault says the round of rules that goes round, once each, and where it was first entered. Something
+  unread because what read it went too deep says that, not "nothing reads".
+- Memory a test let go of: under `--debug` it is filled so a read of it is seen (a rule read after its test let go of it,
+  memory written after it was let go of and allocated again, a test's memory kept by something made before it), each
+  said with where.
 
 ---
 
@@ -2185,6 +2449,16 @@ Mostly proposals; the decided points are marked.
 ## Appendix A: Open questions
 
 Each question gives the recommendation recorded when it was raised, where there was one. None of these is decided.
+
+**The runtime (2026-10-15)**
+- A call's named argument, `Language(…, written: ray.written)` in a class body (Language.ray:114), is read as a
+  declaration `written: …` on the class, and makes `Language.ray` need itself.
+- A class with a defaulted field, `class (given = None) => { }`, constructed with nothing: `given` is unread.
+- A class written inside a test block: its methods don't see the block's names (`T := class { t => T() }` in an
+  `assert { }`), since the class's node is made in what it is built on, not where it is written.
+- The entrypoint's own tests that use `==` or numbers pass only with the core files (Ray.ray, Number.ray); should they
+  move into those files, or count only once the core is read?
+- The tests of the whole library take ~8 s now that loops run; budget is 50 ms with the entrypoint.
 
 **Reading and syntax**
 - Warnings for a multi-line `( )` holding a `,`, and for a first statement with leading whitespace. (Recommended: both,

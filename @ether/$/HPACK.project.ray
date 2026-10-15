@@ -25,6 +25,16 @@ HPACK := class: Language {
     value => small ?? 2 ^ prefix - 1 + [groups.group, last].flatten.enumerate.map(.value * 128 ^ .index).sum
     assert (0b111111001101000001010 as HPACK.Integer<5>).value == 1337  // HP3 continuation octets do not read back as 1337
     assert HPACK.write([(name: ":method", value: "GET")]) as Byte[] == [0x82]  // HP12 a field in the static table is not written as its index
+    assert HPACK.read([0x04, 0x0c, "/sample/path".bytes].flatten)[":path"] == "/sample/path"  // HP13 a literal without indexing does not read as in C.2.2
+    assert HPACK.read([0x10, 0x08, "password".bytes, 0x06, "secret".bytes].flatten)["password"] == "secret"  // HP14 a literal never indexed does not read as in C.2.3
+    assert third_fields.contains((name: ":authority", value: "www.example.com")) && third_fields.contains((name: "custom-key", value: "custom-value"))  // HP15 the third request of C.3.3 does not read its authority and custom-key
+    assert "no-cache" as HPACK.Coded as Byte[] == [0xa8, 0xeb, 0x10, 0x64, 0x9c, 0xbf]  // HP16 no-cache is not Huffman coded as in C.4.2
+    assert "custom-key" as HPACK.Coded as Byte[] == [0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xa9, 0x7d, 0x7f]  // HP17 custom-key is not Huffman coded as in C.4.3
+    assert "custom-value" as HPACK.Coded as Byte[] == [0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xb8, 0xe8, 0xb4, 0xbf]  // HP18 custom-value is not Huffman coded as in C.4.3
+    assert "302" as HPACK.Coded as Byte[] == [0x64, 0x02]  // HP19 302 is not Huffman coded as in C.6.1
+    assert "private" as HPACK.Coded as Byte[] == [0xae, 0xc3, 0x77, 0x1a, 0x4b]  // HP20 private is not Huffman coded as in C.6.1
+    assert "Mon, 21 Oct 2013 20:13:21 GMT" as HPACK.Coded as Byte[] == [0xd0, 0x7a, 0xbe, 0x94, 0x10, 0x54, 0xd4, 0x44, 0xa8, 0x20, 0x05, 0x95, 0x04, 0x0b, 0x81, 0x66, 0xe0, 0x82, 0xa6, 0x2d, 0x1b, 0xff]  // HP21 the date of C.6.1 is not Huffman coded as there
+    assert "https://www.example.com" as HPACK.Coded as Byte[] == [0x9d, 0x29, 0xad, 0x17, 0x18, 0x63, 0xc7, 0x8f, 0x0b, 0x97, 0xc8, 0xe9, 0xae, 0x82, 0xae, 0x43, 0xd3]  // HP22 the location of C.6.1 is not Huffman coded as there
     as (=== Decimal) => value
     static (value: Decimal) as (=== Integer) => value < 2 ^ prefix - 1 ? Integer<prefix>(small: value)
       : <-((value - 2 ^ prefix + 1).digits(128)) -- (digits => Integer<prefix>(groups: digits[..<-1].map((group: .)), last: digits.last))

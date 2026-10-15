@@ -22,7 +22,7 @@
     "@ether"
   ],
   "engines": {
-    "node": ">=20.11"
+    "node": ">=26"
   },
   "dependencies": {
     "vscode-languageserver": "^9.0.1",

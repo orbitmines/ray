@@ -174,3 +174,17 @@ Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
 [(`pure`, Pure), (`deterministic`, Deterministic), (`nondeterministic`, Nondeterministic)].for (word, claim) => {
   right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
 }
+
+// (what the bootstrap leaves to this file: it needs what is here)
+Node &+= {
+  right-to-left internal => this ~~ .access = Access(&.caller, method: Access.Reading, target: this)
+}
+// Checking a permission runs no one's code: a grant whose expression or filter has effects is refused when granted, and never run.
+assert {
+  purg_reader := Character(name: "purg-reader")
+  purg_lamp := (lamp: 1)
+  assert (purg_reader.read IO().output("leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
+  assert (purg_reader{IO().output("leak")}.read purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
+  assert !(purg_lamp.access)  // PURG3 a refused grant is kept
+  assert !((purg_reader.read Time.now) is Diagnostic)  // PURG5 a grant reading the time is refused
+}

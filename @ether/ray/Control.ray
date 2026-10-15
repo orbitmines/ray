@@ -66,3 +66,17 @@ assert {
 }
 
 assert 7 $ 5 == 7  // ER2 a default replaced what did not fail
+
+// (what the bootstrap leaves to this file: it needs what is here)
+assert {
+  Panel := class: Component {
+    shown := 0
+   opened\
+    shown = 1
+   closed\
+    shown = 2
+  }
+  assert Panel().shown == 0  // CMP2 constructing a component runs past its first label
+  assert Panel~opened().shown == 1  // CMP3 entering a component at a label runs past the next label
+  assert Panel~closed().shown == 2  // CMP4 entering a component at its last label does not run what follows it
+}

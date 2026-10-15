@@ -129,3 +129,11 @@ Node &+= {
 assert (5 as $.ray) == "5"  // LNG44 a value is not written as text in a language it is converted to
 assert ([1, 2] as $.ray) == "[1, 2]"  // LNG45 a list is not written in the language's notation
 
+// (what the bootstrap leaves to this file: it needs what is here)
+Node &+= {
+  as (=== String) => (this.of && this.of.header && Language.patterned(this.of.header.head)) ? Language.part_written(this) : (Language.for_file(&.caller.location.name) ?? Language.ray).write(this)
+}
+LanguageName := String{Language.named("." + .) != None}
+@{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
+@{extension: LanguageName} {code} => Compiler.reduced(code, Language.named("." + extension).level)
+assert @ray`1 + 2` == 3  // TL1 a literal tagged ray is not read as Ray

@@ -580,7 +580,7 @@ X86 := class: Language {
     (return X86.given_to(destination, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), prefixes, rex, operand, register, size)) if iclass == "MOV"
     (return X86.given_to(destination, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, true), prefixes, rex, operand, register, size)) if iclass == "MOVZX"
     (return X86.given_to(destination, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), prefixes, rex, operand, register, size)) if (iclass == "MOVSX") || (iclass == "MOVSXD")
-    (return X86.given_to(destination, X86.combined(X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), "+", "0", 64), prefixes, rex, operand, register, size)) if iclass == "LEA"
+    (return X86.given_to(destination, X86.addressed(registers, operand, rex), prefixes, rex, operand, register, size)) if iclass == "LEA"
     if (iclass == "XOR") && ((source begins "reg ") && ((destination begins "rm ") && ((operand.mod == 3) && (operand.rm_register(rex) == operand.reg_register(rex))))) {
       return [X86.flag_lines(["0", "0"]), X86.given_to(destination, X86.constant(0, size), prefixes, rex, operand, register, size)].flatten
     }

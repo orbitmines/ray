@@ -274,18 +274,19 @@ class Reading extends Scoped {
   }
   // (a class whose header begins with pieces of fixed bits, `<-Byte{== 137}`: not read where the bits are not those; which
   // of many alternatives may read here, without reading each)
-  private leads = new WeakMap<Type, { width: number, reversed?: boolean, value: number }[]>();
+  private leads = new WeakMap<Header, { width: number, reversed?: boolean, value: number }[]>();
   may_start(type: Type, at: number, scope: unknown): boolean {
-    let leads = this.leads.get(type);
+    const header = type.base ? this.made(scope, type.base).header : undefined;
+    if (!header) return true;
+    let leads = this.leads.get(header);
     if (!leads) {
       leads = [];
-      const header = type.base ? this.made(scope, type.base).header : undefined;
-      for (const piece of (header?.pieces ?? []).slice(type.generics?.length ?? 0)) {
+      for (const piece of header.pieces.slice(type.generics?.length ?? 0)) {
         const fixed = piece.type && !piece.name && !piece.group && piece.type.width !== undefined && piece.type.narrowings.length === 1 ? /^==\s*(\d+)$/.exec(piece.type.narrowings[0].trim()) : null;
         if (!fixed) break;
         leads.push({ width: piece.type!.width!, reversed: piece.type!.reversed, value: Number(fixed[1]) });
       }
-      this.leads.set(type, leads);
+      this.leads.set(header, leads);
     }
     let from = at;
     for (const lead of leads) {

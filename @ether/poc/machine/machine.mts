@@ -14,6 +14,8 @@ const g = { node: program.global }, none = program.run('None', g);
 const declared = process.env.DECLARED ?? 'X86.Function';
 const run = (text: string) => { program.steps = 0; return program.run(text, g); };
 if (declared !== 'X86.Function') run('X86.xed = true');
+// (a line of text as the instruction it is: by the rules written by hand, or by XED's forms)
+const assembling = (line: string) => declared === 'X86.Function' ? 'X86.Assembly reading {\n  ' + line + '\n}' : 'X86.assembled(' + JSON.stringify(line) + ')';
 const listed = (bytes: Uint8Array) => { const list = run('Listing.new'); for (const byte of bytes) run(program.written(list) + '.append(' + byte + ')'); return list; };
 const values_of = (list: unknown): unknown[] | undefined => {
   if (typeof list !== 'object' || list === null || run(program.written(list) + '.listing') !== run('true')) return undefined;
@@ -53,7 +55,7 @@ for (const mode of modes) for (const function_ of (process.env.NAMES ? functions
       const lines = typeof ray === 'string' ? values_of(run('X86.compiled(' + JSON.stringify(ray.slice(ray.indexOf(') => ') + 5)) + ', ' + (function_.type === 'long' ? 64 : 32) + ', [' + function_.parameters.map(p => '"' + p + '"').join(', ') + '])')) as string[] | undefined : undefined;
       let written: number[] | undefined;
       if (lines) {
-        lines.forEach((line, index) => run('assembled_' + index + ' := X86.assembled(' + JSON.stringify(line) + ')'));
+        lines.forEach((line, index) => run('assembled_' + index + ' := ' + assembling(line)));
         run('function_assembled := ' + declared + '([' + lines.map((_, index) => 'assembled_' + index).join(', ') + '])');
         written = values_of(run('function_assembled.written')) as number[] | undefined;
       }
@@ -211,7 +213,7 @@ for (const mode of modes) for (const function_ of (process.env.NAMES ? functions
     }
     if (mode === 'assemble') {
       const lines = fs.readFileSync(path.join(corpus, name + '.s'), 'utf8').trim().split('\n');
-      lines.forEach((line, index) => run('assembled_' + index + ' := X86.assembled(' + JSON.stringify(line) + ')'));
+      lines.forEach((line, index) => run('assembled_' + index + ' := ' + assembling(line)));
       run('function_assembled := ' + declared + '([' + lines.map((_, index) => 'assembled_' + index).join(', ') + '])');
       const written = values_of(run('function_assembled.written'));
       held = !!written && Buffer.from(written as number[]).equals(bytes);

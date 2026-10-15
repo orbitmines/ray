@@ -1146,7 +1146,9 @@ X86 := class: Language {
     }
     // (the program's bytes, from its instructions' bits, each byte's least significant first as they are read)
     made.join("").pieces(8).map((eight) => eight.reversed.unsigned)
-  static assembled (text) => X86.xed ? X86.xed_assembled(text) : (ray_code (("X86.Assembly reading {\n  " + text) + "\n}"))
+  static assembled (text) =>
+    (return X86.xed_assembled(text)) if X86.xed
+    ray_code (("X86.Assembly reading {\n  " + text) + "\n}")
   static compiled_flow (code, parameters, width) =>
     items := []
     lines := X86.flow_lines(code, parameters, width)

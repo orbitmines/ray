@@ -494,7 +494,7 @@ X86 := class: Language {
     (return X86.constant(X86.signed(immediate, 8), size)) if kind == "imm s8"
     (return ("" + immediate)) if kind == "imm u8"
     (return X86.constant(X86.signed(immediate, 32), size)) if kind == "imm z"
-    (return X86.constant(immediate, size)) if kind == "imm v"
+    (return X86.constant((size == 64) ? immediate : X86.signed(immediate, 32), size)) if kind == "imm v"
     (return X86.load_text(operand, rex, width, !unsigned)) if (kind begins "mem ") || ((kind begins "rm ") && (operand.mod != 3))
     number := X86.number_of_kind(kind, rex, operand, register)
     (return X86.anded_text(X86.held(registers, number, 64), (width == 8) ? "255" : "65535")) if unsigned && (width < 32)

@@ -136,7 +136,8 @@ function bundledBoot(extensionPath: string, language: string | null): Boot {
 function workspaceBoot(language: string | null): Boot | null {
   if (!language) return null;
   const v0 = path.join(path.dirname(language), 'v0.ts');
-  const entry = path.join(v0, 'src', 'language.ts'), loader = path.join(v0, 'node_modules', 'tsx', 'dist', 'loader.mjs');
+  const host = workspace.getConfiguration('ether').get<string>('host') || 'language.ts';
+  const entry = path.join(v0, 'src', host), loader = path.join(v0, 'node_modules', 'tsx', 'dist', 'loader.mjs');
   if (!fs.existsSync(entry) || !fs.existsSync(loader)) return null;
   const runtime = nodeRuntime();
   const env = { ...process.env, ...runtime.env };

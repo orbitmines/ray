@@ -30,7 +30,7 @@ Zlib := class: Language (
     {writing: Language.Writing} => Zlib(deflated: Deflate.write(writing.value as Byte[]))
   }
 }
-// "hello" as another zlib writes it: CMF 0x78, FLG 0x9c, then its Adler-32 062c0215 (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
+// "hello" as zlib 1.3.2 writes it at its default level (node:zlib deflateSync, Python zlib.compress), a reference encoder's output and no value of RFC 1950: CMF 0x78, FLG 0x9c, then its Adler-32 062c0215 (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
 assert Zlib.read(([0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15])) as String == "hello"  // ZL1 a zlib stream does not inflate to its data
 assert Zlib.read([([0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15])[..<9], [0x06, 0x2c, 0x02, 0x16]].flatten) is Diagnostic  // ZL5 a stream whose Adler-32 does not match its data reads
 assert Zlib.read(Zlib.write(("ray " * 32).bytes) as Byte[]) == ("ray " * 32).bytes  // ZL3 written bytes do not read back

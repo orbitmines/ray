@@ -446,33 +446,10 @@ unless {condition} {{taken}} ^keyword =>
   passed\
 assert (unless false { true })  // CC7 unless did not fire
 assert (unless true { 1 } else { 2 }) == 2  // CF9 unless has no other side
-// (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body; what follows it an `elsif`)
-nearest if {condition} {{taken}} {chain} =>
-  (goto .) unless (.chain) begins "elsif"
-  {condition} ? (goto taken) : (goto otherwise)
-  taken\
-  {taken}
-  goto passed
-  otherwise\
-  {chain}
-  passed\
-goto styled
-keyword
 nearest elsif {condition} {{taken}} =>
   {condition} ? (goto taken) : (goto passed)
   taken\
   {taken}
-  passed\
-goto styled
-keyword
-nearest elsif {condition} {{taken}} {chain} =>
-  (goto .) unless (.chain) begins "elsif"
-  {condition} ? (goto taken) : (goto otherwise)
-  taken\
-  {taken}
-  goto passed
-  otherwise\
-  {chain}
   passed\
 goto styled
 keyword
@@ -496,6 +473,30 @@ if {condition} {{taken}} else {{otherwise}} ^keyword =>
   otherwise\
   {otherwise}
   passed\
+// (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body; what follows it an `elsif`) (after `else`:
+// the later reading, so `if a {} elsif b {} else {}` is not an `else` whose condition holds the first body)
+nearest if {condition} {{taken}} {chain} =>
+  (goto .) unless (.chain) begins "elsif"
+  {condition} ? (goto taken) : (goto otherwise)
+  taken\
+  {taken}
+  goto passed
+  otherwise\
+  {chain}
+  passed\
+goto styled
+keyword
+nearest elsif {condition} {{taken}} {chain} =>
+  (goto .) unless (.chain) begins "elsif"
+  {condition} ? (goto taken) : (goto otherwise)
+  taken\
+  {taken}
+  goto passed
+  otherwise\
+  {chain}
+  passed\
+goto styled
+keyword
 assert (if true { true } else { false })  // CC1 if-true did not take the then branch
 assert !((if false { 1 } else { None }))  // CC12 an if whose taken branch is None is present
 assert (if true { 1 } else { None })  // CC13 an if whose taken branch is one is absent
@@ -616,7 +617,7 @@ recur ^keyword =>
 // The loosest, defined here once more and in this order, tightest first (a rule defined again is placed as defined now):
 //   `=` (a member, `x.m = v`, given in `x`; and `x: T = v`: the value checked against T before the name, with its type, is given
 //     it);
-//   a closure: a rule on one line, read where a value is wanted, is a node holding it (see `language3.ts`); reading on in it
+//   a closure: a rule on one line, read where a value is wanted, is a node holding it (see `language.ts`); reading on in it
 //     (`f(5)`) runs its right side in a new node in it, its parameters taking the arguments (arguments are code inlined into
 //     the call: `f(x: 5)` declares its `x`, answering `declared`; see `taking`); its parameters go up to the
 //     nearest `=>`, so it is made by the rule creator that does not go on; a call written with a hole, `({args}) =>`, is a
@@ -943,7 +944,7 @@ keyword
 goto styled
 punctuation
 {on}[{key}] = {value} =>
-  ({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value})
+  ((({on}).listing === true) && ({key} is Number)) ? ({on}.placed({key}, {value})) : (({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value}))
 goto styled
 punctuation
 {on}[{key}] := {value} =>
@@ -1483,6 +1484,14 @@ class{ }({fields}) => {{block}} =>
   }
 goto styled
 keyword
+{{name}}{ }:={ }class{ }{{header}}{ }{{block}} =>
+  {name} := (class ({header}) => {
+    {block}
+  })
+  goto styled
+  class
+goto styled
+keyword
 
 // What a value is: a Node (anything is; the outermost node); the value itself; an instance of the class (or of one after it,
 // `class:`) it was made by; one of a superposition's components; a narrowing that holds of it; a member of an enumeration; a
@@ -1551,7 +1560,7 @@ punctuation
 type := None
 checked {type} =>
   unless ({type} === None) || (. === None) || (. is {type}) {
-    ERROR a value is not of the type it is given to
+    ERROR a value is not of the type it is given to: {type}
   }
   .
 goto styled
@@ -1881,6 +1890,16 @@ Iterable &+= {
         left = left - 1
       }
       at ? at.value : None
+    // (`xs[n] = v`: its nth value made v, from 0; past its end, nothing)
+    placed (index, value) =>
+      at := .head
+      left := index
+      while at && left > 0 {
+        at = at.next
+        left = left - 1
+      }
+      (at.value = value) if at
+      value
     // (the values of the lists in it in it, in their place: all the way down; `flatten(n)`, n lists down)
     flatten =>
       .flattened(64)

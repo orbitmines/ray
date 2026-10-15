@@ -48,5 +48,6 @@ await build({
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
   logLevel: 'warning',
 });
-// this interpreter's own kinds of value (read beside the bundle: `dist/js.kinds.ray`)
-copyFileSync('src/js.kinds.ray', 'dist/js.kinds.ray');
+// this interpreter's own kinds of value (read beside the bundle: `dist/<backend>.o.ray`)
+copyFileSync('src/javascript.o.ray', 'dist/javascript.o.ray');
+copyFileSync('src/wasm.o.ray', 'dist/wasm.o.ray');

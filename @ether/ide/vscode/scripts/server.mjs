@@ -39,5 +39,5 @@ const skip = (name) => ['tests', 'ide', 'spec', 'avatar', 'node_modules'].includ
   }
 })(library);
 
-// the host's own kinds of value, read beside the language (`new URL('./js.kinds.ray', import.meta.url)`)
-cpSync(join(implementation, 'src', 'js.kinds.ray'), join(server, 'js.kinds.ray'));
+// the host's own kinds of value, read beside the language (`new URL('./<backend>.o.ray', import.meta.url)`)
+for (const kinds of ['javascript.o.ray', 'wasm.o.ray']) cpSync(join(implementation, 'src', kinds), join(server, kinds));

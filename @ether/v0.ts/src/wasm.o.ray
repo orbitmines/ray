@@ -1,0 +1,21 @@
+// The kernel's map: what its own kinds of value are in the language (read after the language, for every backend: they run
+// one kernel). What it holds as text, what is written between quotes and what a hole took, is a String; what it holds as
+// nothing is None. (What a String is made of, its characters, the language says (Char[]); the kernel answers it faster.)
+String &+= {
+  external text
+  first => external first
+  rest => external rest
+  // (two texts of the same characters: the first, else nothing; what a character is made of is what the kernel holds)
+  same_characters (other) => external same this other
+  // (what is before where another text, a rest of this one, begins)
+  until (other) => external until this other
+}
+// (None takes no members of its own: given)
+external nothing None
+// (accelerated: what a definition answers given its value, its head when it defined one name (`x := v`); the language's
+// rule for a list of places)
+external given `{given} given {value}`
+// (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it, the node the call
+// runs in. Off: without it LS4 (`["a", "b"].map((x) => x).last`, a closure's `x` called from one whose parameter is `x`)
+// fails; with it, it passes: it does not answer what the language does)
+// external taking `({written_parameters}) taking {passed}`

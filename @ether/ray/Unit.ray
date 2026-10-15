@@ -72,7 +72,7 @@ Quantity := class (quantities, Base = Number) => {
   static Temporal := Quantity{unit == Unit.Temporal}
   assert 5 seconds . is Quantity.Temporal  // TI14 five seconds is not temporal
 }
-Quantity.components.hierarchy &= Ordered
+Quantity &+= Ordered
 
 Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural) => {
   static Normalizers := class {
@@ -136,10 +136,11 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   assert minute == minute  // U58 a unit is not itself
   assert !(minute == hour)  // U59 a minute is an hour
   // (what it makes of a quantity, `x as px`: the quantity in it)
-  from (quantity: Quantity) =>
+  from (quantity: Quantity) => {
     target := this
     converted := quantity.in(target)
     Quantity(quantities: [(quantity: converted, unit: target)])
+  }
 
   // (what it is in another unit: a conversion read at the time, `x * k + b` (a linear one); backwards, its inverse)
   convert (convert, ToUnit: Unit) => (this.converting := Conversion(ToUnit, convert)) -- this
@@ -184,34 +185,37 @@ assert (5 s).unit == second  // U111 a unit written after a space is not that un
 
 si_name (symbol, name, symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
 
+// (the prefixes, made once: each unit maps them)
+SI_prefixes := {
+  -30: "q", "quecto"
+  -27: "r", "ronto"
+  -24: "y", "yocto"
+  -21: "z", "zepto"
+  -18: "a", "atto"
+  -15: "f", "femto"
+  -12: "p", "pico"
+  -9: "n", "nano"
+  -6: "µ", "micro"
+  -3: "m", "milli"
+  -2: "c", "centi"
+  -1: "d", "deci"
+  0: "", ""
+  1: "da", "deka"
+  2: "h", "hecto"
+  3: "k", "kilo"
+  6: "M", "mega"
+  9: "G", "giga"
+  12: "T", "tera"
+  15: "P", "peta"
+  18: "E", "exa"
+  21: "Z", "zetta"
+  24: "Y", "yotta"
+  27: "R", "ronna"
+  30: "Q", "quetta"
+}
+
 SI_Unit {symbol: *} {name: *} => {
-  private SI = {
-    -30: "q", "quecto"
-    -27: "r", "ronto"
-    -24: "y", "yocto"
-    -21: "z", "zepto"
-    -18: "a", "atto"
-    -15: "f", "femto"
-    -12: "p", "pico"
-    -9: "n", "nano"
-    -6: "µ", "micro"
-    -3: "m", "milli"
-    -2: "c", "centi"
-    -1: "d", "deci"
-    0: "", ""
-    1: "da", "deka"
-    2: "h", "hecto"
-    3: "k", "kilo"
-    6: "M", "mega"
-    9: "G", "giga"
-    12: "T", "tera"
-    15: "P", "peta"
-    18: "E", "exa"
-    21: "Z", "zetta"
-    24: "Y", "yotta"
-    27: "R", "ronna"
-    30: "Q", "quetta"
-  }
+  private SI = SI_prefixes
     .map((magnitude, prefixes) => Unit(name: si_name(symbol, name, ...prefixes), magnitude: magnitude))
     .reduce(|)
 
@@ -219,19 +223,21 @@ SI_Unit {symbol: *} {name: *} => {
 }
 assert 1dab == 10b  // U10 a deka-bit is not ten bits
 
+IEC_prefixes := {
+  1: "Ki", "kibi"
+  2: "Mi", "mebi"
+  3: "Gi", "gibi"
+  4: "Ti", "tebi"
+  5: "Pi", "pebi"
+  6: "Ei", "exbi"
+  7: "Zi", "zebi"
+  8: "Yi", "yobi"
+  9: "Ri", "robi"
+  10: "Qi", "quebi"
+}
+
 Binary_Unit {symbol: *} {name: *} => {
-  private IEC = {
-    1: "Ki", "kibi"
-    2: "Mi", "mebi"
-    3: "Gi", "gibi"
-    4: "Ti", "tebi"
-    5: "Pi", "pebi"
-    6: "Ei", "exbi"
-    7: "Zi", "zebi"
-    8: "Yi", "yobi"
-    9: "Ri", "robi"
-    10: "Qi", "quebi"
-  }
+  private IEC = IEC_prefixes
     .map((power, prefixes) => Unit(name: si_name(symbol, name, ...prefixes), power: power))
     .reduce(|)
 
@@ -313,35 +319,18 @@ assert ((1 + 2i) * (3 + 4i)).real == -5  // U119 the real part of (1 + 2i)(3 + 4
 assert ((1 + 2i) * (3 + 4i)).imaginary == 10  // U120 the imaginary part of (1 + 2i)(3 + 4i) is not 10
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// (what the bootstrap leaves to this file: it needs what is here)
+{share: Number{0 < . < 1}} {counted: *{#.count != 1}{!(. is Unit)}} => share * counted#.count -- (whole => whole is Integer ? counted{#.count == whole}
+  : counted#.count is ∞ ? counted{#.measure(counted#) == share * counted#.measure}
+  : ERROR@Type `a share of a discrete structure is not a whole number of its possibilities`)
+{count: Number | Range} {counted: *{#.count != 1}{!(. is Unit)}} => counted{#.count == count}
+a | an {counted: *{#.count != 1}{!(. is Unit)}} => 1 counted
+Unit(name: "turn" ("s" + plural: true)?)
+Unit(name: "radian" ("s" + plural: true)?, symbol: "rad").multiple 1 / τ, turn
+Unit(name: "degree" ("s" + plural: true)?, symbol: "deg" | "°").multiple 1 / 360, turn
+Angle := Quantity{unit is (turn | radian | degree)}
+Angle &+= {
+  cos => in(radian).cos
+  sin => in(radian).sin
+}
+assert (33% ("A" | "B" | "C")) is Diagnostic  // HS12 a share that is not a whole number of a discrete structure's possibilities is not a type error

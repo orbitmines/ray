@@ -116,3 +116,31 @@ assert Program(code: { 5 }).(
 
 assert !!5 == true  // CO31 not not five is not true
 
+// (what the bootstrap leaves to this file: it needs what is here)
+Cases := Program{written.nonempty && written.every(.code ~= (*, " => ", *))}
+assert {
+  matched := if 2 {
+    1 => "one"
+    2 => "two"
+  }
+  assert matched == "two"  // NOD54 a case on a value does not take the arm that matches
+  assert !(matched == "one")  // NOD55 a case took the first arm that does not match
+  other := if 9 {
+    1 => "one"
+  } else {
+    "other"
+  }
+  assert other == "other"  // NOD56 a case with no matching arm does not take the else
+}
+if &+= {
+  { }{subject} {{cases: Cases}} else {{otherwise}} ^class => Compiler.reduced(subject, (Program(code: cases**) as Compiler) + Program(code: otherwise**).otherwise)
+  { }{subject} {{cases: Cases}} ^class => Compiler.reduced(subject, Program(code: cases**) as Compiler)
+}
+Program &+= {
+  as (=== Compiler) => Program(code: written.map**(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *)).type
+    ?? ((arm.case as Program)() is Section ? ("*{", arm.case, "}") : ("*{== ", arm.case, "}")), "} => ", arm.value)).join(\n))
+  otherwise => ("{subject_of_case: *} => (", code, ")") as String as Program as Compiler
+}
+String &+= {
+  escaped_line => #.map(Compiler.reduced(., Escape⁻¹)) as String
+}

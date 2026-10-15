@@ -30,9 +30,19 @@
     }
   },
   "workspace": {
-    "dependencies": [
-      "npm:vscode-languageserver-textdocument@^1.0.12",
-      "npm:vscode-languageserver@^9.0.1"
-    ]
+    "packageJson": {
+      "dependencies": [
+        "npm:@types/jest@30",
+        "npm:@types/node@^25.6.0",
+        "npm:esbuild@~0.27.3",
+        "npm:jest@^30.3.0",
+        "npm:ts-jest@^29.4.9",
+        "npm:ts-node@^10.9.2",
+        "npm:tsx@^4.21.0",
+        "npm:typescript@^6.0.3",
+        "npm:vscode-languageserver-textdocument@^1.0.12",
+        "npm:vscode-languageserver@^9.0.1"
+      ]
+    }
   }
 }

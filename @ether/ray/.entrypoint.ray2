@@ -249,7 +249,7 @@ operator
 // `(x as T) == y`.
 as {type} ^keyword =>
   (goto .) if (.type) spaced
-  (. is {type}) ? . : (. -- ((subject) => ((({type}.from(subject)) ?? ({type}.text_read(subject))) ?? ({type}.bits_read(subject)))))
+  (. is {type}) ? . : (. -- ((subject) => (({type}.from(subject)) -- ((made) => (made !== None) ? made : (({type}.text_read(subject)) ?? ({type}.bits_read(subject)))))))
 // Modifiers on an operator (a method's: what it is declared with, where it is declared). `compounds op …`: and `x op= y`, which
 // is `x = x op y`. `chainable op …`: and `a op b op c`, which is `a op b && b op c` (`1 < 2 < 3`).
 compounds {operator} {rest} => {body} =>

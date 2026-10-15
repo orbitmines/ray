@@ -368,6 +368,10 @@ class Writing extends Scoped {
   }
   type(type: Type, value: unknown, scope: unknown): boolean {
     if (type.alternatives) {
+      // (a value made by one of the alternatives' classes is that one, found without asking each whether it is)
+      const of = typeof value === 'object' && value !== null ? this.$(this.$.written(value) + '.of') : undefined;
+      const made = of === undefined ? undefined : type.alternatives.find(alternative => !alternative.group && alternative.base !== undefined && this.made(scope, alternative.base).maker === of);
+      if (made) return this.type(made, value, scope);
       for (const alternative of type.alternatives) if (this.fits(alternative, value, scope)) return this.type(alternative, value, scope);
       return false;
     }

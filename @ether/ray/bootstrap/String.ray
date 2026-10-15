@@ -1,0 +1,42 @@
+// (String is made in the entrypoint, its core; what follows is the rest of it)
+String &+= {
+  // (the same characters in the same order: structural, a character as the kernel holds it (`same_characters`, wasm.o.ray))
+  chainable == (other: String) => this.empty ? other.empty : ((!other.empty) && ((this.first same_characters other.first) ? true : false) && (this.rest == other.rest))
+  assert `ab` == `ab`  // TQ1 a text is not equal to itself written again
+  assert !(`ab` == `ac`)  // TQ2 two texts that differ are equal
+  assert !(`ab` == `a`)  // TQ5 a text is equal to its start
+  assert !(`a` == `ab`)  // TQ6 a text is equal to what it starts
+  assert `ab`.first == `a`  // TQ3 a text's first is not its first character
+  assert `ab`.rest == `b`  // TQ4 a text's rest is not what follows its first character
+  starts_with (other: String) => other.empty || ((!this.empty) && (this.first == other.first) && this.rest.starts_with(other.rest))
+  assert `ab`.starts_with(`a`)  // S62 ab does not start with a
+  assert !(`ab`.starts_with(`b`))  // S63 ab starts with b
+  assert `ab`.starts_with(`a`.rest)  // S62b a text does not start with nothing
+  assert !(`a`.starts_with(`ab`))  // S62c a text starts with what is longer
+  // (what follows a start of it, `other` (one it starts with))
+  after (other: String) => other.empty ? this : this.rest.after(other.rest)
+  assert `ab`.after(`a`) == `b`  // S62d what follows a in ab is not b
+  assert `ab`.after(`a`.rest) == `ab`  // S62e what follows nothing is not all of it
+  assert {
+    spanned := `ab`
+    spanned.until(spanned.rest) == `a`
+  }  // S62f what is before the rest of ab is not a
+  assert !(`ab`.until(`ab`.rest))  // S62g a text before another text's rest is something
+}
+// (a call inside itself, walking a text: recursion)
+walked (text) => text.empty ? `done` : walked(text.rest)
+assert walked(`ab`) == `done`  // RC2 a call inside itself does not walk a text
+// Texts destructured as lists are: each place the span after which the rest reads, each written text there in its turn
+assert {
+  (left_of_dash, `-`, right_of_dash) := `x-y`
+  left_of_dash == `x`
+}  // DS3 a text destructured by a pattern does not give a place its span
+assert {
+  (start_of, `-`, end_of) := `ab-cd`
+  end_of == `cd`
+}  // DS4 the place after a written text does not take the rest
+// (a function's parameters, one of two named as a visible name: GN3, seen here, after `,` is defined, where a call reads it)
+listed_shadow := false
+takes_listed (listed_shadow, other_listed) => listed_shadow
+assert takes_listed(true, false) === true  // GN3 a parameter of two named as a visible name does not take its value (`,`'s body reads its parts as values: in a left side they are read as left sides first)
+assert listed_shadow === false  // GN4 a parameter of two named as a visible name gave that one its value

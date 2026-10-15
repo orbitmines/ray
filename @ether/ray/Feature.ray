@@ -161,4 +161,20 @@ assert @me/device/os/platform  // IO1 the machine does not say what it is
 
 assert $.http.Method.propfind.safe  // IO14 listing a remote collection is not safe
 
-
+// (what the bootstrap leaves to this file: it needs what is here)
+assert (1 | 2)#.contains((1 | 2)#.random)  // HS4 a random possible value is not one of them
+print (x) => IO.output(x as String) -- x
+// `print(x)` answers x (Almanac §0.3)
+assert print(3) == 3  // PT1 print does not answer what it printed
+Number &+= {
+  chosen_within (width: Number) => Random.number(width)
+}
+Iterable &+= {
+  random => drawn(Random.below(map(.weight ?? 1).sum))
+  shuffled => orderings.random
+}
+Set &+= {
+  normalizer => .shuffled.unique
+}
+assert boolean#.random is boolean  // FE3 a coin comes up with nothing
+assert boolean#.random is boolean  // RN12 a coin lands on neither side

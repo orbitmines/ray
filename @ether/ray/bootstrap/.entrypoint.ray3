@@ -134,6 +134,21 @@ assert {
   declared := 3 ; declared += 1
   assert declared == 4  // CF20 a declaration and an assignment on one line did not both run
 }
+// (what a method's body declares is the value's, `.`; in a block of its own, `{ … }`, the block's)
+assert {
+  Probed := class {
+    local_of_probe := false
+    probe_local => {
+      {
+        local_of_probe := true
+      }
+      true
+    }
+  }
+  probed := Probed()
+  probed.probe_local
+  probed.local_of_probe === false
+}  // LK1 a name declared in a block in a method's body is declared on what the method is read on
 assert {
   {a} %+ {b} => true
   assert true %+ true  // GR1 a rule written at the top reads at the top
@@ -467,6 +482,18 @@ assert {
   (.) given_names (passed)
   ({written_parameters}) := passed
 }
+// (a closure written in a rule's body reads the rule's holes, where they are read: in its body, and in code read on its
+// parameter (its body copied into the method that calls it: each copy keeps the names of where it was written))
+{x} reads_closed {y} => {
+  closed (z) => {y}
+  closed(x)
+}
+assert true reads_closed (false === false)  // CL1 a closure in a rule's body does not read the rule's hole
+{x} reads_closed_on {y} => {
+  closed (z) => z.({y})
+  closed(x)
+}
+assert true reads_closed_on (. === true)  // CL2 a closure in a rule's body reads the rule's hole in code read on its parameter
 // A closure calls itself (recursion), directly or through a local
 recurring_flip (n) => n ? recurring_flip(false) : true
 assert recurring_flip(true)  // RC1 a call inside itself does not take its own argument
@@ -673,10 +700,8 @@ as * => []
 converted_by (conversion) => .({conversion}())
 // (what nothing led by text reads on a value: read on what it converts to, the nearest conversion (§7.5); none, on itself,
 // where nothing reads it, said there)
-{this}{rest} => {
-  conversion := (this as *).first
-  (conversion ? this.converted_by(conversion) : this){rest}
-}
+// (no name declared in it: what a method's body declares is declared in what it is read on, here every value)
+{this}{rest} => (((this as *).first) ? this.converted_by((this as *).first) : this){rest}
 as (=== {type}) {`=>`} {body} => {
   as {type} => {body}
   as {`*`} => ((this as *), (() => {body}))
@@ -686,10 +711,17 @@ compounds {operator} {rest} {`=>`} {body} => {
   {operator} {rest} => {body}
   {name} {operator}= {value} => {name} = {name} {operator} (value)
 }
+// (`right-to-left op …`: what follows it, all of it, its right side (`2 ^ 3 ^ 2` is `2 ^ (3 ^ 2)`): the operator as it is)
+right-to-left {operator} {rest} {`=>`} {body} => {
+  {operator} {rest} => {body}
+}
 chainable {operator} {rest} {`=>`} {body} => {
   {operator} {rest} => {body}
   {operator} {middle} {operator} {last} => (. {operator} (middle)) && ((middle) {operator} {last})
 }
+// (two holes written after a value in a body, `(l) {operator} {r}`: read as one, the operator applied; RB1)
+{l} applying {operator} to {r} => (l) {operator} {r}
+assert false applying === to false  // RB1 a body's `(l) {operator} {r}` read as `{r}` alone
 // Names written together, `a | b => …`: each the same rule (`a | b | c`, the rest of them again; `a | b (x) => …`, each taking
 // what follows the last; `a | b := v`, the first given it, the others reading it). Only names: `{a} | {b} => …` is not.
 {name: Name} | {other} {`=>`} {body} => {
@@ -1032,7 +1064,10 @@ dynamics := None
 }
 // (what a definition answers given its value: a left side made of names answers a list of their places (`(a, b) := list`, a
 // call's parameters): each the value in its place)
-{given} given {value} ^keyword => ((given).listing === true) ? (((value).textual === true) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value))) : given
+{given} given {value} ^keyword => ((given).listing === true) ? ((((value).textual === true) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value))) : given
+// (a text is destructured only by places with a text written among them, `(a, `-`, b)`: a parameter list given a text, or
+// String itself (which is textual), takes it whole)
+written_among (at) => at ? (((at.value).textual === true) || written_among(at.next)) : false
 // (a text given to places, with texts written among them, `(a, `-`, b) := `x-y``: read the way a list is given, in order,
 // each written text there in its turn, each place the shortest span after which the rest reads (and its type reads))
 text_read (at, text) => at ? (((at.value).textual === true) ? ((text.starts_with(at.value)) && text_read(at.next, text.after(at.value))) : text_spans(at, text, text.rest)) : text.empty

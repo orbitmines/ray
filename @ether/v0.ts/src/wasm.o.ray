@@ -15,6 +15,7 @@ external nothing None
 // (accelerated: what a definition answers given its value, its head when it defined one name (`x := v`); the language's
 // rule for a list of places)
 external given `{given} given {value}`
-// (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it. Off: it does not
-// answer the same yet (165 passes against 198 for Number and String))
+// (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it, the node the call
+// runs in. Off: without it LS4 (`["a", "b"].map((x) => x).last`, a closure's `x` called from one whose parameter is `x`)
+// fails; with it, it passes: it does not answer what the language does)
 // external taking `({written_parameters}) taking {passed}`

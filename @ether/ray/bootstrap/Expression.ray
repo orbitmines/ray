@@ -1,47 +1,89 @@
+// Expression: a language read from its own text. Its first line says how a rule is written: `!language`, the brackets a
+// hole is written in (`{ }`), then the rule that makes rules, written with them (`{LHS} => {RHS}`). Every statement after it
+// is read in a node by the longest of that node's rules that reads it; the rule that makes rules adds one there, its head
+// read the same way, its body read when it is applied, in a node of its own whose caller is what applied it. Only four
+// things are given: `external .` (a node), `external &` (what applies), `external goto` and `external label` (where control
+// goes). Read under a level, `Program{O: …}`, what it reads is a Program (statements as vertices, gotos as edges), and a
+// back end is one more level: `Wasm` writes that Program as WebAssembly.
 Expression := class (
   BOOTSTRAPPER: (
     HEADER: `!language`,
     \s[]+,
-    CAPTURE: (String+, \s, String+),
+    CAPTURE: (String+, \s, String+),                    // a hole's brackets, a space where its name goes
     \s[]+,
-    CAPTURES: (LHS: CAPTURE.map{== \s}("LHS") | RHS: CAPTURE.map{== \s}("RHS") | String)[],
+    CAPTURES: (LHS: CAPTURE.map{== \s}(`LHS`) | RHS: CAPTURE.map{== \s}(`RHS`) | String)[],
     \n\n
   ),
   (
-    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES
-      .map{== \s}(\s[])                         // Any space means arbitrary whitespace.
-      ~~ .(LHS | RHS) = String                  // Arbitrary captures for each group
-    
-    GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF     // The grammar rule is shaped [LHS: [LHS, RHS], RHS]
-
-    GRAMMER_RULE: GRAMMAR_RULE_DEF, \n | ⊣,     // First rule must be the GRAMMAR RULE.
+    // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
+    // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
+    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{== \s}(\s[]) ~~ .(LHS | RHS) = String
+    GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
+    GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
     statements: (
-      Node := class {
+      // A node: its rules by their heads; what it does not read, what it is in reads.
+      Node := class (in?: Node) => {
         rules := {
-          [rule: GARMMAR_RULE] := (caller) => 
-            rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] := 
-              (caller) => (rhs: Statements(this) = rule.RHS)(Program(caller: caller)),
+          [rule: GRAMMAR_RULE] := (caller) =>
+            rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] :=
+              (caller) => (rhs: Statements(Node(in: this)) = rule.RHS)(Program(caller: caller))
         }
+        reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
       }
-      Program := class {
-        caller?: Program
-      }
+      // A program running: what applied it, where it is.
+      Program := class (caller?: Program, at?: Statement) => { }
       global := Node({
-        rules["external", \s+, rule: String, args?: Node[]] := (caller) => {
-          "." => Node(),
-          "&" => caller,
-          "goto" (label: Node, condition?: Node) => {}
-          "label" (label: Node) => {}
+        rules[`external`, \s+, rule: String, args?: Node[]] := (caller) => {
+          `.` => Node(in: caller.at.node)
+          `&` => caller
+          `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
+          `label` (label: Node) => label
         }[rule](args)
       })
+      // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
+      // order, each given what applies them.
       Statements (context: Node) => dynamically (
         leading_whitespace: (\s | \n)[],
-        {statement: concurrently context.rules[.]()}: context.rules.keys{#.sort(.length).last} //TODO a 'max .length' function.
-      )[] & (caller: Node) => .statement#.for .(caller)
+        {statement: concurrently context.reading(.)}: context.rules.keys
+      )[] & (caller: Program) => .statement#.for .(caller)
 
-      Statements(global, Program())
+      Statements(global)(Program())
     )
-  ),
+  )
 ) => {
-
+  // (what it reads is made of: rules, each a head and a body (its statements); statements, each a rule applied to what its
+  // holes took, or one of the four given)
+  Rule := class (head, body) => {
+    statements => body
+  }
+  Statement := class (rule, takes) => { }
 }
+// `(source as Expression) as Program{O: @wasm}`: what a text reads as, a Program; under a level, what that level writes.
+(read: Expression) as (=== Program) => Program(code: read.statements)
+
+// WebAssembly, a back end: a level, its rules writing a Program as a module. `@wasm.none`, the declarative setup: a rule a
+// function, given what applies it (`&`), its statements a loop on where it is (`$at`), each a case of `br_table`; a goto sets
+// where it is next (when its condition holds), a rule applied is a call of its function. `@wasm` (`@wasm.default`): those,
+// and every optimization after them (a statement a rule reads, that rule applied without asking what reads it). (Accelerated:
+// `ray --build=out.wasm --level=none|default file.ray` is the kernel doing it: every rule's body read, each a function in a
+// module beside the kernel's, its memory the files read; `ray out.wasm` runs it; `ray out.wasm --build=…` builds again from
+// it. It answers what the kernel reading the files answers.)
+@wasm => Wasm
+Wasm := {
+  none := {
+    {program: Program} => (`(module (memory (export "memory") 1)`, program.rules.map(as Program{O: @wasm.none}), `(export "run" (func 0)))`) as String
+    {rule: Expression.Rule} => (
+      `(func (param $caller i32) (result i32) (local $at i32) (local $value i32) (loop $at (block $done (block`,
+      rule.statements.map(statement => (`) `, statement as Program{O: @wasm.none})),
+      `(br $done)) (br_table`, rule.statements.map(.index), `(local.get $at)))) (local.get $value))`
+    ) as String
+    {node: `external .`} => `(local.set $value (call $node (local.get $caller)))`
+    {caller: `external &`} => `(local.set $value (local.get $caller))`
+    {jump: `external goto`} => (`(br_if $at (`, jump.condition as Program{O: @wasm.none}, `(local.tee $at (i32.const`, jump.label.index, `))))`) as String
+    {place: `external label`} => ``
+    {applied: Expression.Statement} => (`(local.set $value (call`, applied.rule.index, `(local.get $caller)))`) as String
+  }
+  // (and what is optimized after them: none yet)
+  default => Wasm
+}
+Wasm &+= Wasm.none

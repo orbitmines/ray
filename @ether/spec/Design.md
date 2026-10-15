@@ -2014,6 +2014,10 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   with O = Compiler.default + Compiler.memoised
   ```
 
+- The language's own reader is `Expression` (bootstrap/Expression.ray): a pattern that a language's text is matched
+  against, as destructuring (`source as Expression`); what it reads, compiled under a level, is a Program, and a back end
+  is the conversion to its target, `(source as Expression) as @wasm` (a rule a function, its statements cases of a
+  `br_table` loop, a goto setting where it is next).
 - Every translation is a Compiler level: renderers, storage formats, backends, a target architecture
   (`Language.x86_64`), the development level (§10.6), a decompiler (`Compiler.decompiler`). There are no build or walker
   functions beside them.
@@ -2151,13 +2155,46 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - Statics and field defaults are read when first asked for, then held until what they read changes.
 - Diagnostics are values, each with the place it is about. A statement may have several, without cascades: a failed
   lookup yields an unknown whose further failures are silent. Highlighting is what a reading's rules say.
+- A left side's composition (user, 2026-10-15): a rule that composes parts of a left side (its head holes apart by a
+  character that stands on its own, not a bracket or quote: `{a}, {b}`) has each part read as a left side before its
+  body runs, a word a name declared here; whatever its body then reads them as (`,`'s `list === declared`), they are
+  those places. A rule of an operator (`{x}: {type}`, `{x} ^{style}`) reads its holes as its body does. (`(type, depth)
+  := …` with a `type` visible took None's value instead of declaring: every `is` failed through `descends`; GN3.)
+- Where a left side's word is declared: given by reference (`=`'s `(name)`, a word its caller wrote), the visible one's
+  place; given as code spliced here (`({written_parameters})`, a call's parameter list; `(x) := …`), here: the node the
+  definition defines in (a call's own node). (A call's parameter named like a visible name assigned that one: GN2;
+  nested calls of one closure shared their parameters: `is_itself`'s `type` was the inner call's.)
+- A closure written in a rule's body keeps the names of where it was written in every copy of its text: a copy records,
+  for its first splice and the one after, the frame each was written in, followed through a copy already read (CL1,
+  CL2; `holds (it) => it.({constraint})`).
+- Text read on a value (what follows it) is that value's to read: `this` there is not the keyword (`x < this`, `<` a
+  closure called without brackets, takes `this`); a hole's code read on a closure that only a global rule reads (`2`) is
+  its argument (RB2).
+- A rule's body reading that rule on the very value it runs on is the rule before it (`as * => ((this as *), …)`); on
+  another value it is the rule itself again, recursion (`pred!` in `! => … pred! * this`).
+- A definition's own head, read as a left side (`! => …`), declares no placeholder rule beside the one it defines.
+- `right-to-left op …` is the operator as it is: what follows it, all of it, is its right side.
+- What a test may apply does not depend on what was kept: rules applied inside a quiet check count against an allowance of
+  their own (ten times the budget), so a test near its budget answers the same on one thread and on four.
+- A test keeps its readings in its thread's own table (forgotten when it is done), looked up before what was kept for all.
+- A text is destructured by a left side only when a text is written among its places (`(a, `-`, b) := `x-y``); a
+  parameter list given a text (or String, which is textual) takes it whole.
+- What a test says is said where that test is, not where what applied it leads (a closure's callers lead to where it
+  was written); what is said about text the reader made, in a test, is said at the test. (Both had hidden failures:
+  messages of one place and text are said once.)
 
 ### 21.4 Speed
 
 - A test runs in memory of its own, let go of when it (and the tests written in it) are done: an assert answers whether
   it held, and what it made is gone, except what it gave its frame (its style, made again). Memory let go of is zeroed
-  (what is allocated is all zero). What is kept for every thread (read once, checked once) is not written from a test;
-  a rule's body first read in a test is kept by that thread alone until the test is done.
+  (what is allocated is all zero). A reading read in a test is kept for that test alone (keyed by its thread, forgotten
+  when it is done: another thread may read what it keeps, its own memory); a rule's body first read in a test is kept by
+  that thread alone until the test is done. A test's memory is known by its pages (each chunk it takes on pages of its
+  own, marked with the test), so asking whether something is the test's own costs one read.
+- In a test, a node made before it is shadowed; what the test defines there again (`x := …` twice) is defined again in
+  place among the test's own rules, not added again (a loop in a test grew a node by one rule a round).
+- Built (`--build`): every rule made while the files were read has its body read at build (read once, at build), before
+  what was put off runs; the built program says exactly what the interpreted one says.
 - Files are merged in path order, every file numbered every time (two files sharing a number lost the second's
   definitions after a second include).
 
@@ -2173,6 +2210,22 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   checks asked at every split of every statement were 2.4M of them; asking only where the rest of the rule reads made
   them 13k. Rules led by a hole are grouped by their first text (by the whole word, for a word), so a reading visits only
   groups its text has. The kernel compiles itself (JS → JMP → wasm) in about 35 ms at start, while the threads start.
+- Compiled (`--build --level=none|default`, 2026-10-15): every rule made while the files were read gets its body read at
+  build and a wasm function of its own in a module beside the kernel's (`ray.program`): its statements a loop on `$at`, a
+  case of `br_table` each; a goto found at build sets `$at`; a statement calls the runtime (`ev`). `default` also applies
+  the rule a statement is read by directly, where no hole is being declared and no left side read. The kernel runs a
+  rule's function when the body it runs is that rule's (`R_FN`), else reads it step by step (bodies of rules made in a
+  test). A built program builds again from itself. Entrypoint + Number + String + Expression: 4294 rules, ~1.6M calls of
+  compiled bodies, the same messages as the interpreter at every level. The functions are written by the kernel (the host),
+  following Expression.ray's `Wasm.none`; those Ray rules are not yet run themselves.
+- Measured 2026-10-15 (entrypoint + Number + String, 400 tests): ~1.3M applications, 2.1M readings, ~70% of them read
+  afresh: each call's and each block's node is new, so a reading keyed by what it sees never repeats across calls. A
+  reading keyed by text identity instead (the same rule text made the same way in another call) was tried and dropped:
+  the chains it must name are long and it bought nothing. What costs is language-side composition: a code hole read again
+  at every mention (`ensure` reads its condition twice; `taking` reads `passed` twice), `,` through Listing (~460
+  applications for two elements), a named argument constructing `Named` (~1400). The kernel map's `taking` (one
+  parameter, one value) now answers exactly what the language does (identical at a 1M budget) and is on: a call ~50
+  applications fewer. After it and GN3, entrypoint + Number + String: 1.7 s on one thread, 1.2 s on four, built 1.5 s.
 - The 50 ms budget for the entrypoint and its tests is met file by file: the entrypoint first, then one core library file
   at a time, each fast and passing before the next.
 
@@ -2184,6 +2237,13 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - `--debug=trace` says every step; `--debug=trace:<file:line>` only within the statement or test there, with how many
   rules it applied. `--debug=cost` says each statement or test taking long or much memory, with its applications.
   `--debug=settle` says what an include asked for and every statement read only when its scope gained a rule.
+  `--debug=tests` says each test as it begins and what is said in it. `--debug` also says what the kernel counted
+  (readings, read afresh, rules visited, applications) after the summary.
+- The kernel's message log holds 65536 messages; past that what is said is lost, and that itself is said (a rule defined
+  is logged only with `--verbose`: 62k of them hid every failure after the entrypoint's, on one thread).
+- A method's body is code read in `.`, what it is read on: a name it declares (`x := …`) is the value's, every time it
+  runs. A body's own names go in a block of its own (`{ { … } }`). (`{this}{rest}` declared `conversion` on every value
+  it read on; LK1.) An error said in a test whose callers do not lead to that test is said (`--debug`).
 - Runaways are found, said and stopped, whatever their shape:
   - the kernel's own loops count their rounds (compiled in), and one going round past a limit says which function and
     loop it is (`RAY_DEBUG_KERNEL_LOOP`);

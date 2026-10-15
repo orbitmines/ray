@@ -35,3 +35,8 @@ assert {
   (start_of, `-`, end_of) := `ab-cd`
   end_of == `cd`
 }  // DS4 the place after a written text does not take the rest
+// (a function's parameters, one of two named as a visible name: GN3, seen here, after `,` is defined, where a call reads it)
+listed_shadow := false
+takes_listed (listed_shadow, other_listed) => listed_shadow
+assert takes_listed(true, false) === true  // GN3 a parameter of two named as a visible name does not take its value (`,`'s body reads its parts as values: in a left side they are read as left sides first)
+assert listed_shadow === false  // GN4 a parameter of two named as a visible name gave that one its value

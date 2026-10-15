@@ -617,7 +617,7 @@ recur ^keyword =>
 // The loosest, defined here once more and in this order, tightest first (a rule defined again is placed as defined now):
 //   `=` (a member, `x.m = v`, given in `x`; and `x: T = v`: the value checked against T before the name, with its type, is given
 //     it);
-//   a closure: a rule on one line, read where a value is wanted, is a node holding it (see `language3.ts`); reading on in it
+//   a closure: a rule on one line, read where a value is wanted, is a node holding it (see `language.ts`); reading on in it
 //     (`f(5)`) runs its right side in a new node in it, its parameters taking the arguments (arguments are code inlined into
 //     the call: `f(x: 5)` declares its `x`, answering `declared`; see `taking`); its parameters go up to the
 //     nearest `=>`, so it is made by the rule creator that does not go on; a call written with a hole, `({args}) =>`, is a

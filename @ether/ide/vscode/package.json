@@ -46,7 +46,7 @@
         "ether.host": {
           "type": "string",
           "default": "language.ts",
-          "description": "In a checkout of the language, which host in @ether/v0.ts/src runs the language server (language.ts, or language3.ts)."
+          "description": "In a checkout of the language, which host in @ether/v0.ts/src runs the language server (language.ts)."
         },
         "ether.trace.server": {
           "type": "string",

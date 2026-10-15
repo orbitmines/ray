@@ -36,3 +36,54 @@ Report := class (name: String = "ray", claims: Claim[] = []) => {
       passed: !reports.some(.level == INFO && .comment ~= ⊢(found.id + " ")),
       at: file{from == (line.index + 1, 1)}) if found)).compact)))
 }
+// Errors: a value carries its diagnostics, and its type does not see them
+assert {
+  failing := (0).diagnosed(Diagnostic(message: "no"))
+  assert failing $ 5 == 5  // ER1 a default does not stand in for an error
+  assert failing $? === None  // ER3 an optional error is not None
+  assert failing $? 6 == 6  // ER4 an optional error does not fall back
+  assert failing $ { .message } == "no"  // ER5 the handler does not see the error as its receiver
+  fatal_one := (0).diagnosed(Diagnostic(message: "true", fatal: true))
+  assert (fatal_one $ 5).erred  // ER6 a default caught a fatal error
+  assert fatal_one $?! === None  // ER7 the catch-all did not catch a fatal error
+  assert (failing $ Diagnostic(message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last  // ER8 a wrapped error forgot its cause
+  assert failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2  // ER9 a value given a second diagnostic does not keep both
+  assert failing is Number  // ER10 a value that erred is no longer of its type
+  assert failing == 0  // ER11 a value that erred is not equal to itself without the error
+  returning := () => {
+    failing $ return 9
+    1
+  }
+  assert returning() == 9  // ER13 $ return did not return from the function
+}
+assert {
+  missing_file := () => {
+    ERROR `not 0`
+    7
+  }
+  assert missing_file() == 7  // ER14 a non-fatal error replaced the value the function answers
+  assert missing_file().diagnostics.last.origin == missing_file  // ER15 an error does not know the function it came from
+  stopping := () => {
+    FATAL `cannot go on`
+    7
+  }
+  assert stopping() is Diagnostic  // ER16 a fatal error is not what the function answers
+  // ER17 a handler for errors from one function did not take them
+  assert (missing_file()
+    $missing_file 8) == 8
+  // ER18 a handler for another function's errors took them
+  assert (missing_file()
+    $stopping 8) == 7
+  NotFound := class
+  looking := () => {
+    ERROR@NotFound `no such page`
+    3
+  }
+  // ER19 an error of a type is not caught by that type
+  assert (looking()
+    $NotFound 4) == 4
+  // ER20 an error of a type was caught by another function's handler
+  assert (looking()
+    $missing_file 4) == 3
+  assert looking().diagnostics.last.type === NotFound  // ER21 an error does not keep the type written after @
+}

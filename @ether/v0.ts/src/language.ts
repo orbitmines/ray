@@ -2079,7 +2079,7 @@ const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until'];
 // (what the kernel says: `L_…`)
-const L = { UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12 };
+const L = { UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13 };
 // (what the kernel tells the host with --debug: D_… in it)
 const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
@@ -2330,7 +2330,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (what is said: [at, kind, a, c])
   // (what the host is told, with --debug: a statement read and done, a rule applied and done, one defined, memory out)
   const D_STATEMENT = 1, D_STATEMENT_END = 2, D_APPLY = 3, D_APPLY_END = 4, D_DEFINE = 5, D_OOM = 6, D_BLOCK = 7, D_BLOCK_END = 8, D_TEST = 9, D_TEST_END = 10, D_FAULT = 11, D_SAID = 12, D_TYPE = 13, D_TYPE_END = 14, D_SETTLED = 18, D_READING = 20, D_KEY = 30;
-  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, HELD = 4096, DEPTH = 400, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
+  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, HELD = 4096, DEPTH = 400, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
   const SCRATCH = 1024;
 
   // ---- memory
@@ -2972,7 +2972,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         for (let h = h0 & mask, n = 0; n < 32; n++, h = (h + 1) & mask) {
           const m = tab + MEMO_ENTRY * h, at = aload(m);
           if (!at) { if (pass ? !own : 1) slot = m; if (pass) gslot = m; break; }
-          if (at === s && w(m + 4) === e && w(m + 8) === at_ && w(m + 12) === names_k && w(m + 16) === closure_k && w(m + 20) === flags && w(m + 24) === stop && w(m + 32) === sh && w(m + 36) === gen && w(m + 40) === shn && w(m + 44) === sees && w(m + 48) === named_by) { const kept = aload(m + 28); if (kept && (w(t + T_BUDGET) < w(m + 52) || w(t + T_QBUDGET) < w(m + 56))) break; if (kept) { set(t + T_BUDGET, w(t + T_BUDGET) - w(m + 52)); set(t + T_QBUDGET, w(t + T_QBUDGET) - w(m + 56)); if (DEBUG && (w(FAIL_FAST) & 4)) { const fresh = remembered(t, s, e, rule, closure, vis, self, want, stop, refuse, on); if (!alike_reading(fresh, kept)) debug(D_FAULT, 88, s, e); } return reg ? relit(kept, vis) : kept; } break; }
+          if (at === s && w(m + 4) === e && w(m + 8) === at_ && w(m + 12) === names_k && w(m + 16) === closure_k && w(m + 20) === flags && w(m + 24) === stop && w(m + 32) === sh && w(m + 36) === gen && w(m + 40) === shn && w(m + 44) === sees && w(m + 48) === named_by) { const kept = aload(m + 28); if (kept && (w(t + T_BUDGET) < w(m + 52) || w(t + T_QBUDGET) < w(m + 56))) break; if (kept) { set(t + T_BUDGET, w(t + T_BUDGET) - w(m + 52)); set(t + T_QBUDGET, w(t + T_QBUDGET) - w(m + 56)); if (DEBUG && (w(FAIL_FAST) & 4)) { const fresh = remembered(t, s, e, rule, closure, vis, self, want, stop, refuse, on); if (!alike_reading(fresh, kept)) { debug(D_FAULT, 88, s, e); debug(D_FAULT, 82, w(kept) * 1000 + w(fresh), w(kept + 12) === w(fresh + 12) ? 1 : 0); for (let i = 0; i < 2; i++) { const x = i ? fresh : kept; if (w(x) === K_RULE) { const hd = w(w(x + 12) + R_HEAD), ow = w(w(x + 12) + R_OWNER); if (hd) debug(D_FAULT, i ? 84 : 85, w(hd + N_A), w(hd + N_B)); debug(D_FAULT, 83, ow * 10 + w(w(x + 12) + R_KIND), in_region(w(x + 12)) ? 1 : 0); } } } if (w(kept) !== w(fresh)) debug(D_FAULT, 86, s, e); } return reg ? relit(kept, vis) : kept; } break; }
         }
       }
     }
@@ -3269,7 +3269,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const pv = w(rule + R_PREV), hd = w(rule + R_HEAD), a = hd ? w(hd + N_A) : w(rule + R_BS), z = hd ? w(hd + N_B) : w(rule + R_BE);
     let h = mix(w(rule + R_KIND) * 7 + (w(rule + R_FLAGS) & ~DEAD) * 13 + w(rule + R_HOLES) * 3 + (z - a));
     if (hd) for (let i = a; i < z && i < a + 64; i++) h = mix(h + b(i));
-    set(rule + R_SIG, mix((pv && w(pv + R_OWNER) === self ? w(pv + R_SIG) : 0x51ed270b) + h));
+    // (one a test writes on what was made before it (a shadow): signed with where it is, what it follows itself, not what that is
+    // written as (two numbers made alike, a shadow on each, are two))
+    set(rule + R_SIG, mix((pv && w(pv + R_OWNER) === self ? (w(THREAD + T_REG_AT) && !in_region(pv) ? pv : w(pv + R_SIG)) : w(THREAD + T_REG_AT) && !in_region(self) ? self : 0x51ed270b) + h));
   }
   // (what a reading keeps of where it is: what was made before the test, itself; the test's own, what it is written as)
   function kept_as(x: number): number { return x && w(THREAD + T_REG_AT) && in_region(x) ? w(x + R_SIG) ^ 0x6a09e667 : x; }
@@ -3422,8 +3424,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // converts to); not within one)
     let fell = 0;
     // (read only by what everything has (`1`, global), on a value with methods (a closure, `==` of `gcd(other) == 1`): its
-    // argument; RB2)
-    if (w(rest) === K_RULE && w(w(rest + 12) + R_OWNER) === w(GLOBAL) && on !== w(GLOBAL) && methods_of(on)) { const m = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); if (w(m) === K_RULE) rest = m; }
+    // argument; RB2) (but not what an operator leads, `.member`: a member is not an argument, CL19)
+    if (w(rest) === K_RULE && w(w(rest + 12) + R_OWNER) === w(GLOBAL) && on !== w(GLOBAL) && b(w(CLASSES) + b(rs2)) !== 2 && methods_of(on)) { const m = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); if (w(m) === K_RULE) rest = m; }
     if (w(rest) === K_UNREAD && !w(t + T_FALLBACK)) { rest = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); fell = w(rest) === K_RULE ? 1 : 0; }
     if (w(rest) !== K_UNREAD) {
       const fb = w(t + T_FALLBACK); if (fell) set(t + T_FALLBACK, 1);
@@ -3736,9 +3738,21 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     set(THREAD + T_SH_N, 0);
     let lines = 1; for (let i = s; i < e; i++) if (b(i) === 10) lines++;
     bd = alloc(4 + STEP * lines);
-    let n = 0;
+    let n = 0, given = 0;
+    // (the names a line before it begins by giving a value, `made := …`: a line mentioning one is read when it runs (it may be
+    // the body's own then, not the one visible where it is written))
+    const givens = alloc(8 * 32), cl = w(CLASSES);
     for (let at = skip(s, e); at < e; at = skip(at, e)) {
       const ln = line(at, e), r = reading(t, at, ln, rule, closure, vis, self, 0, 0, 0, 0), st = bd + 4 + STEP * n;
+      let mentions = 0;
+      for (let p = at; p < ln && given && !mentions;) {
+        if (b(cl + b(p)) !== 1) { p++; continue; }
+        let q = p; while (q < ln && b(cl + b(q)) === 1) q++;
+        if (p === at || b(p - 1) !== 46) for (let i = 0; i < given; i++) if (w(givens + 8 * i + 4) - w(givens + 8 * i) === q - p && same(p, w(givens + 8 * i), q - p)) { mentions = 1; break; }
+        p = q;
+      }
+      { let q = at; while (q < ln && b(cl + b(q)) === 1) q++; let o = q; while (o < ln && b(o) === 32) o++;
+        if (q > at && o > q && o < ln && b(cl + b(o)) === 2 && b(o) !== 46 && given < 32) { set(givens + 8 * given, at); set(givens + 8 * given + 4, q); given++; } }
       at = ln; n++;
       set(st + 4, w(r + 4)); set(st + 8, w(r + 8));
       if (w(r) === K_RULE && w(w(r + 12) + R_KIND) === EXTERNAL) {
@@ -3753,6 +3767,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         }
       }
       if (w(r) === K_UNREAD) set(r, K_LATER);
+      else if (mentions && w(r) !== K_EMPTY) { const later = alloc(READ); set(later, K_LATER); set(later + 4, w(st + 4)); set(later + 8, w(st + 8)); set(st, S_READ); set(st + 12, later); continue; }
       set(st, S_READ); set(st + 12, r);
     }
     set(bd, n);
@@ -3794,6 +3809,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       else if (v && w(v + N_IS) === IS_HEAD && place_in(v) && worded(w(v + N_A), w(v + N_B))) { hs = w(v + N_A); he = w(v + N_B); self = place_in(v); }
       // (a left side made of names (`a, b = 0`, the places and heads it made reading it), not one name: it, for what each takes)
       else if (v && w(t + T_NAMED) - named > 0 && w(v + N_IS) === IS_NODE) { set(t + T_FAULT, 0); set(t + T_JUMP_N, 0); return v; }
+      // (a left side in brackets that answered a value, not a place (`(name)` naming a hole that is a value there): reported, it
+      // declares nothing)
+      else if (v && w(v + N_IS) === IS_NODE && b(skip(rs, re)) === 40 && bracket(skip(rs, re), re) & 1) { const at = o && w(o + N_IS) === IS_FRAME ? o : 0; say(t, at ? w(at + F_START) : rs, L_VALUED, at ? w(at + F_START) : rs, at ? w(at + F_END) : re); }
       set(t + T_FAULT, 0); set(t + T_JUMP_N, 0);
       // (a place and its head, `f (x)`: the place given what `(x) => body` is, a closure)
       if (v && w(v + N_IS) === IS_CALLED) return called(t, v, bd, w(hd + T_ORIGIN), self);
@@ -4683,7 +4701,7 @@ export class Ray extends Language<FileStore> {
       const text = (s: number, e: number) => this.text(s, e).trim();
       const message = kind === L.UNREAD ? `nothing reads \`${text(a, c)}\`` : kind === L.UNLABELLED ? `nothing is labelled \`${text(a, a + c)}\`` : kind === L.BUDGET ? `ran past ${Ray.BUDGET} rules (reading this)`
         : kind === L.OOM ? `out of memory (${this.u8.length} bytes)` : kind === L.REPORT ? (a ? text(a, c) : 'error') : kind === L.CYCLE ? 'what this is read as needs itself'
-        : kind === L.NOT_ON ? `nothing in what it is read on reads \`${text(a, c)}\`` : kind === L.EXTERNAL ? `\`external ${text(a, c)}\` is no external` : kind === L.DEEP ? `rules applied 400 deep (what this reads reads itself)` : kind === L.HELD ? `a test put off 4096 tests (each putting off more: a class whose block makes one of it, or a test in what a test makes)` : undefined;
+        : kind === L.NOT_ON ? `nothing in what it is read on reads \`${text(a, c)}\`` : kind === L.EXTERNAL ? `\`external ${text(a, c)}\` is no external` : kind === L.DEEP ? `rules applied 400 deep (what this reads reads itself)` : kind === L.VALUED ? `a left side answers a value, not a place: \`${text(a, c)}\` (a name in it is a value there: a hole of the rule reading it?)` : kind === L.HELD ? `a test put off 4096 tests (each putting off more: a class whose block makes one of it, or a test in what a test makes)` : undefined;
       if (kind === L.STYLED) { const style = this.member(a, 'style'), last = this.said[this.said.length - 1]; if (style && last && last[0] === at) last[2] = this.text(this.w(style + 12), this.w(style + 16)).trim(); continue; }
       if (kind === L.DEFINED) { if (kwargs.verbose) say(`${ansi.green}DEFINED${ansi.reset} ${text(a, c)} ${ansi.darkGray}(${this.where(a)})${ansi.reset}`); continue; }
       if (message !== undefined) this.say(at, message);
@@ -4841,6 +4859,9 @@ export class Ray extends Language<FileStore> {
     }
     if (kind === Debug.OOM) throw new RangeError(`out of memory: ${a} bytes wanted, ${(heap / 1048576).toFixed(0)} MB in use`);
     // (a fault (too deep, too long): what it was doing, said once, and it goes on)
+    if (kind === Debug.FAULT && (a === 85 || a === 84)) { say(`  ${a === 85 ? 'kept ' : 'fresh'} rule ${this.where(b)} ${this.snippet(b, c)}`); return 0; }
+    if (kind === Debug.FAULT && a === 82) { say(`  kinds kept ${Math.floor(b / 1000)} fresh ${b % 1000}, same rule ${c}`); return 0; }
+    if (kind === Debug.FAULT && a === 83) { say(`    owner node ${Math.floor(b / 10)} kind ${b % 10}${c ? ' (the test\'s own)' : ''}`); return 0; }
     if (kind === Debug.FAULT && a === 79) { say(`MEMBER-RULE visited for \`${(Ray as any).chain_text ?? ''}\`: checks ${b.toString(2)} (1 kind, 2 skip, 4 want, 8 refuse, 16 mask, 32 lead, 64 match) ends at end${c >= 0 ? '+' : ''}${c}`); return 0; }
     if (kind === Debug.FAULT && (a === 81 || a === 80)) {
       if (a === 81) { (Ray as any).chain_text = this.snippet(b, c, 40); return 0; }
@@ -4855,7 +4876,7 @@ export class Ray extends Language<FileStore> {
       if (n > 1 && String(n).replace(/0/g, '') !== '1') return 0;
       if (n > 1) { say(`${ansi.indianRed}FAULT${ansi.reset} the same, ${n} times: ${ansi.darkGray}${this.where(b)}${ansi.reset} ${this.snippet(b, c)}`); return 0; }
       if (!this.stack.length) { say(`${ansi.indianRed}FAULT${ansi.reset} ${a === L.DEEP ? 'rules applied too deep' : 'ran past its budget'}, applying ${ansi.darkGray}${this.where(b)}${ansi.reset} ${this.snippet(b, c)} (outside any step: reading what was put off, or a type)`); return 0; }
-      say(this.crashed(new Error(a === L.DEEP ? 'rules applied too deep' : a === L.UNLABELLED ? `a value's reading jumped out of it, to \`${this.snippet(b, c)}\`` : a === 99 ? `a value read as nothing: \`${this.snippet(b, c)}\`` : a === 98 ? `a type checked in its own check, 16 deep: \`${this.snippet(b, c)}\`` : a === 97 ? `a value needed while it is being read: \`${this.snippet(b, c)}\`` : a === 95 ? `a rule a test made, read after the test let go of it, kept by: \`${this.snippet(b, c)}\`` : a === 94 ? `a test kept more than it can forget (the body of a rule made before it, read in it, kept): \`${this.snippet(b, c)}\`` : a === 91 ? `what a rule's body reads on a value as that rule, read with the rules before it, reads nothing: \`${this.snippet(b, c)}\`` : a === 93 ? `memory a test let go of, written after (at ${b}: ${c}), allocated again` : a === 88 ? `a reading kept for this text is not what reads it here: \`${this.snippet(b, c)}\`` : a === 90 ? `a test begun quiet (what said nothing while a type was checked did not end it): what it says is not said: \`${this.snippet(b, c)}\`` : a === 96 ? `a test's own memory kept by something made before it (let go of when the test is done): \`${this.snippet(b, c)}\`` : 'ran past its budget'), false)); return 0;
+      say(this.crashed(new Error(a === L.DEEP ? 'rules applied too deep' : a === L.UNLABELLED ? `a value's reading jumped out of it, to \`${this.snippet(b, c)}\`` : a === 99 ? `a value read as nothing: \`${this.snippet(b, c)}\`` : a === 98 ? `a type checked in its own check, 16 deep: \`${this.snippet(b, c)}\`` : a === 97 ? `a value needed while it is being read: \`${this.snippet(b, c)}\`` : a === 95 ? `a rule a test made, read after the test let go of it, kept by: \`${this.snippet(b, c)}\`` : a === 94 ? `a test kept more than it can forget (the body of a rule made before it, read in it, kept): \`${this.snippet(b, c)}\`` : a === 91 ? `what a rule's body reads on a value as that rule, read with the rules before it, reads nothing: \`${this.snippet(b, c)}\`` : a === 93 ? `memory a test let go of, written after (at ${b}: ${c}), allocated again` : a === 88 ? `a reading kept for this text is not what reads it here: \`${this.snippet(b, c)}\`` : a === 85 ? `kept: \`${this.snippet(b, c)}\`` : a === 84 ? `fresh: \`${this.snippet(b, c)}\`` : a === 86 ? `a reading kept for this text is of another kind than the one reading it here: \`${this.snippet(b, c)}\`` : a === 90 ? `a test begun quiet (what said nothing while a type was checked did not end it): what it says is not said: \`${this.snippet(b, c)}\`` : a === 96 ? `a test's own memory kept by something made before it (let go of when the test is done): \`${this.snippet(b, c)}\`` : 'ran past its budget'), false)); return 0;
     }
     // (an error said: where it was being read, the first few)
     if (kind === Debug.SAID) { if (a === L.UNREAD && this.said_n++ < Ray.DEBUG_SAID) say(this.crashed(new Error(`nothing reads \`${this.snippet(b, c)}\``), false).replace('FAULT', 'SAID')); return 0; }

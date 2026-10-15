@@ -1,0 +1,25 @@
+// Equality: the same node, or one alike in structure: two lists, their first alike and the rest of them alike.
+chainable == (other) => (. === other) || (((.listing === true) && ((other).listing === true)) ? (.empty ? other.empty : ((!other.empty) && (.first == other.first) && (.rest == other.rest))) : false)
+assert true == true  // RE1 a value is not equal to itself
+assert !(true == false)  // RE2 two values are equal
+assert [1, 2] == [1, 2]  // RE3 two lists of the same are not equal
+assert !([1, 2] == [1, 3])  // RE4 two lists that differ are equal
+assert !([1, 2] == [1])  // RE5 a list is equal to a shorter one
+assert [] == []  // RE6 two empty lists are not equal
+assert {
+  A := class { }
+  a := A()
+  assert a == a  // RE7 an instance is not equal to itself
+}
+assert [1, 2].count == 2  // RE8 a list of two does not count two
+assert [1, 2, 3].rest.count == 2  // RE9 the rest of three is not two
+assert {
+  Counting := class {
+    counted => {
+      n := 0
+      n = n + 1
+      n
+    }
+  }
+  assert Counting().counted == 1  // RE10 `=` in a method of a class written without fields did not change its local (the class's own field was named as a hole of the rule constructing it)
+}

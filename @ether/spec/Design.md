@@ -2077,10 +2077,13 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 ### 21.1 The host knows no syntax
 
 - The language's core is its own project, `@ether/ray/bootstrap`: the entrypoint and the files it needs (Number, Ray,
-  String), depending on nothing else, so that it can bootstrap `compiler.sketch.ray` to self-host. What needs the rest of
+  String), depending on nothing else, so that it can bootstrap Expression.ray to self-host. What needs the rest of
   the library (Unicode tables, units, randomness, IO, languages, the compiler's levels, access) lives in the file of what
   it needs (`Char &+= { … }` in Unicode.ray, `Iterable &+= { random … }` in Feature.ray). It is rebuilt a line at a
   time, essentials first, each line's tests passing before the next.
+  The entrypoint holds only what the bootstrap uses (2026-10-16): programs as quests, `$` and diagnostics carried by
+  values, case-folded uniqueness and where a class is written are tested in Program.ray, Reporting.ray, Unicode.ray and
+  Location.ray; the entrypoint keeps the stubs (`Program`, `Diagnostic`) its own rules name.
 
 - The host (the TypeScript interpreter in `@ether/v0.ts`, used the same way by the CLI, the daemon and the LSP) knows no
   syntax. Its one assumption is about meaning: the entrypoint's first statement defines how rules are defined, and uses
@@ -2249,6 +2252,20 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   applications for two elements), a named argument constructing `Named` (~1400). The kernel map's `taking` (one
   parameter, one value) now answers exactly what the language does (identical at a 1M budget) and is on: a call ~50
   applications fewer. After it and GN3, entrypoint + Number + String: 1.7 s on one thread, 1.2 s on four, built 1.5 s.
+- A shadow is signed by where it is (2026-10-16): what a test writes on a node made before it (a parameter declared on a
+  number made at boot) is signed with that node's rule it follows itself, not with what that rule is written as. Two
+  numbers made alike are two: with content alone, `next` read on one was kept and answered for the other (`0.succ == 1`
+  false, but only without the kernel map's `given`, which hid it). `--debug` with `RAY_MEMO_CHECK=1` now says which rule
+  each reading names, and where it is.
+- A body read once reads later what it gives a value (2026-10-16): a rule's body is read once, where it is written, before
+  it runs; a line of it that mentions a name an earlier line begins by giving a value (`made := …`, `n = …`) is read when
+  it runs, so it reads the body's own (a method's `made` was the global one a `theme` had left behind; LK2, LK3).
+- A member is not an argument (2026-10-16): a closure's call without brackets (`f x`) does not take what an operator
+  leads (`.named_argument`): reading a member of a closure called it (CL19; every closure given to a method ran again).
+- A left side that answers a value is said (2026-10-16): a definition whose left side, in brackets, answers a value and
+  not a place (`(name) := v` where `name` is a hole that is a value there) is an error (`a left side answers a value, not
+  a place`), at the application that wrote it; it used to define a rule named by the text, which then read every later
+  `(name)`. The class without a header gave its instances a field named as the constructor's own hole (`arguments`).
 - The 50 ms budget for the entrypoint and its tests is met file by file: the entrypoint first, then one core library file
   at a time, each fast and passing before the next.
 

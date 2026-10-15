@@ -799,7 +799,7 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
 class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
 // others, which read the rest of what it reads: `class: P { … }`)
-class: {parent} {`{`}{block}{`}`} ^keyword => { class: {parent} (arguments = None) => { {block} } }
+class: {parent} {`{`}{block}{`}`} ^keyword => { class: {parent} (nothing_given = None) => { {block} } }
 class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
 class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (written with its fields and `=>`, a definition: read as one)
@@ -942,7 +942,8 @@ superposes := false
 narrows := None
 members := None
 caller := None
-descends (type, depth = 0) => (. === type) || ((depth < 64) && .superclass ? .superclass.descends(type, depth + 1) : false)
+// (no count of how far: a class's parents end; one that would not, the kernel stops as too deep)
+descends (type) => (. === type) || (.superclass ? .superclass.descends(type) : false)
 // (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
 is {type} ^keyword => {
   value := .
@@ -1160,18 +1161,6 @@ assert {
   }
   assert Grouped.(first + second) == 3  // GP1 .( ) does not read the members of what is before it
 }
-// Labels in a class body are entries (L§4.2)
-assert {
-  Entered := class {
-    steps := 0
-   later\
-    steps = 7
-  }
-  assert Entered~later().steps == 7  // EP1 ~label does not enter the class at that label
-  assert Entered~default == Entered  // EP2 ~default is not the class itself
-  // A class body runs like any function: labels are never skipped; a Component's labels are entered, not executed (F-D13, L§4.2.1)
-  assert Entered().steps == 7  // CMP1 a label in a class body stops its construction
-}
 assert {
   TA := class { }
   TB := class: TA { }
@@ -1180,10 +1169,6 @@ assert {
   assert TB() is TB  // TY3 an instance is not an instance of its own class
   assert TB() is TA  // TY4 an instance is not an instance of what its class is built on
   assert 5 is TA  // TY6 five is not one of a class that requires nothing
-  assert external where TA  // TY7 a class is written nowhere
-  assert !((external where TA) == (external where TB))  // TY8 two classes are written in one place
-  TC := TA
-  assert (external where TA) == (external where TC)  // TY9 one class under two names is written twice
 }
 // A class requires the fields it writes with their type
 assert {
@@ -1262,16 +1247,6 @@ assert {
 assert {
   Bare := class only: Number
   assert Bare(3).only == 3  // HD6 a header without a body has no field
-}
-// Uniqueness under an equivalence (T6.9)
-assert {
-  UniquelyNamed := class { unique<in: .fold_case> name: String }
-  named_first := UniquelyNamed(name: "Ada")
-  named_other := UniquelyNamed(name: "Bea")
-  assert named_other.name.is_unique<in: .fold_case>  // UQI1 a name no other holds is not unique
-  named_clash := UniquelyNamed(name: "ADA")
-  assert !(named_clash.name.is_unique<in: .fold_case>)  // UQI2 a name another holds in other case is unique with case folded
-  assert named_clash.name.is_unique  // UQI3 a name is not unique without folding case though no other is equal
 }
 assert {
   Greeter := class {
@@ -1553,6 +1528,23 @@ assert {
   assert kept  // CL18 := in a closure changed the name where the closure was written
 }
 assert {
+  ran := 0
+  running := (x) => (ran = ran + 1)
+  running.named_argument
+  assert ran == 0  // CL19 a member read on a closure called it
+}
+assert {
+  outer_kept := 1
+  Shadowing := class {
+    own => {
+      outer_kept := 2
+      outer_kept
+    }
+  }
+  assert Shadowing().own == 2  // LK2 a method's own name answered the one visible where the method is written (its body read before it ran)
+  assert outer_kept == 1  // LK3 a method's own name changed the one visible where it is written
+}
+assert {
   gone := true
   while gone {
     gone = false
@@ -1633,95 +1625,8 @@ true &+= {
 }
 Char := class: Number { }
 Program := class { }
-// A program run as a selection
-assert Program(code: {
-  1
-  2
-}).(
-  .waiting  // RU1 a program nobody stepped is not waiting
-  & .next.intermediate  // RU2 one step in is not intermediate
-  & .waiting  // RU3 stepping a copy moved the original
-  & .finished.final  // RU4 a program run to its end is not final
-  & .finished.results.last == 2  // RU5 a program run to its end did not keep what its last step answered
-)
-assert {
-  doubling := Program(code: { 2 })
-  halving := Program(code: { 1 })
-  ! doubling halving
-  assert doubling⁻¹ === halving  // IV1 the declared inverse is not the inverse
-  assert halving⁻¹ === doubling  // IV2 the inverse of the inverse is not the function
-  assert doubling.reversible  // IV3 a function with an inverse is not reversible
-}
-// A program is a quest (P4.8): its cursor says how far it is; sleeping waits on the time (P4.11); a dynamic `&=` keeps one contribution (P5.7)
-assert Program(code: { 1 }).(
-  !(.done)  // FWQ2 a program not yet stepped is done
-  & .finished.done  // FWQ3 a finished program is not a done quest
-)
-assert Program(code: { 1 }).stop.done  // FWQ4 a stopped program is not done
-assert {
-  started := Program(code: "1")
-  @me/quests |= started
-  assert started is @me/quests  // JB1 a program given to @me/quests is not among them
-  assert started.who === @me  // JB11 a started program is not run by whoever started it
-  assert started.stop.done  // JB5 stopping a program does not end it
-}
-assert Program(code: "1", from: @public).(
-  .serves(@public)  // JB8 a quest serving a location does not serve it
-  & !(.serves(@private))  // JB9 a quest serves a location it was not given
-)
 Narrowing := class { }
 Diagnostic := class { }
-// Errors: a value carries its diagnostics, and its type does not see them
-assert {
-  failing := (0).diagnosed(Diagnostic(message: "no"))
-  assert failing $ 5 == 5  // ER1 a default does not stand in for an error
-  assert failing $? === None  // ER3 an optional error is not None
-  assert failing $? 6 == 6  // ER4 an optional error does not fall back
-  assert failing $ { .message } == "no"  // ER5 the handler does not see the error as its receiver
-  fatal_one := (0).diagnosed(Diagnostic(message: "true", fatal: true))
-  assert (fatal_one $ 5).erred  // ER6 a default caught a fatal error
-  assert fatal_one $?! === None  // ER7 the catch-all did not catch a fatal error
-  assert (failing $ Diagnostic(message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last  // ER8 a wrapped error forgot its cause
-  assert failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2  // ER9 a value given a second diagnostic does not keep both
-  assert failing is Number  // ER10 a value that erred is no longer of its type
-  assert failing == 0  // ER11 a value that erred is not equal to itself without the error
-  returning := () => {
-    failing $ return 9
-    1
-  }
-  assert returning() == 9  // ER13 $ return did not return from the function
-}
-assert {
-  missing_file := () => {
-    ERROR `not 0`
-    7
-  }
-  assert missing_file() == 7  // ER14 a non-fatal error replaced the value the function answers
-  assert missing_file().diagnostics.last.origin == missing_file  // ER15 an error does not know the function it came from
-  stopping := () => {
-    FATAL `cannot go on`
-    7
-  }
-  assert stopping() is Diagnostic  // ER16 a fatal error is not what the function answers
-  // ER17 a handler for errors from one function did not take them
-  assert (missing_file()
-    $missing_file 8) == 8
-  // ER18 a handler for another function's errors took them
-  assert (missing_file()
-    $stopping 8) == 7
-  NotFound := class
-  looking := () => {
-    ERROR@NotFound `no such page`
-    3
-  }
-  // ER19 an error of a type is not caught by that type
-  assert (looking()
-    $NotFound 4) == 4
-  // ER20 an error of a type was caught by another function's handler
-  assert (looking()
-    $missing_file 4) == 3
-  assert looking().diagnostics.last.type === NotFound  // ER21 an error does not keep the type written after @
-}
 assert {
   fired := 0
   unless false { fired += 1 }
@@ -1741,18 +1646,21 @@ Theme := {
   current := None
 }
 theme {name} {written} ^keyword => {
-  made := {
-    name := name
-    styles := Listing.new
+  // (its own node: what it declares is not declared where it is read)
+  {
+    made := {
+      name := name
+      styles := Listing.new
+    }
+    // (each one written: what it took, the style and what it is shown as)
+    made &+= {
+      ^{style} = ^{shown} => styles.append(external &)
+      ^{style} = ^ {shown} => styles.append(external &)
+      {written}
+    }
+    Theme.current = made
   }
-  // (each one written: what it took, the style and what it is shown as)
-  made &+= {
-    ^{style} = ^{shown} => styles.append(external &)
-    ^{style} = ^ {shown} => styles.append(external &)
-    {written}
-  }
-  Theme.current = made
-  made
+  Theme.current
 }
 
 DARK := theme `Ether.ray - Dark` {

@@ -949,8 +949,18 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   `f(v)` for any `v` that is a T. Parameters bind by composition: the parameter list runs where the call runs (`a` names
   a place, `b = 0` is an ordinary assignment, the default, run first and overwritten by an argument given; `x: T` gives the
   place its type), `,` composes them, and each place takes the argument in its place. `,` is never written into another
-  rule's head (`({a}, {b}) …`): it only composes. (Open, being built: the binding rules must keep their locals out of the
-  call's node, and `x := x` inside a call (`linked (value) => { { value := value } }`) must read the outer `x`.)
+  rule's head (`({a}, {b}) …`): it only composes. `,` binds loosest of all (declared after `=` and `:=`): `(a, b = 0)` is
+  `a, (b = 0)`, and destructuring is written grouped, `(a, b) := list`.
+- A parameter list is read as a left side, like `:=`'s: a name in it names a new place in the call even when it means
+  something outside (`type` in `is_itself (type)`); `b = 0`'s value and `x: T`'s type are read as values. `:=` on a left side
+  made of names (a list of their places) gives each the value in its place; a call's `taking` is that `:=`.
+- In a left side, the kernel counts the places its names name; `,`'s own body runs as a value (its holes are the left side's,
+  by their text), and the definition answers the places as a list, each taking the value in its place. (Open, being built:
+  rules that pass a left side on through their bodies (`{on}[{key}]`, `.{member}`, a style's `x.style = style`) still need
+  it, so which bodies are part of it is not settled yet.)
+- A name read before it is defined is kept as its place, and looked up again where it was named when asked (only where the
+  take's code is that name; a place handed along under another name is the place).
+- A place and a definition's head, read on, answer what any value answers, not what the node they are in has.
 
 - Called without brackets, `f x`, `a..b`, `"0".."9"`: a closure answers its parameters as holes right after it
   (`{this}{{parameters}}`, the same body as `{this}({{parameters}})`), so the receiver of a method (`"0"` of `"0"..`) stays

@@ -1,9 +1,17 @@
 # Breadth: every machine and every bytecode, sustainably
 
-The ladder this builds on runs on branch `proposal/machine-code` (tag `machine-code-proof`), on the kernel main had before its self-hosting one.
+**Why.** Ray's aim is that programs in any language meet in one meaning without anyone rewriting them: Ray reads what
+their compilers and interpreters already produce (machine code, bytecode) and writes it out again, as Ray or as another
+language. That only holds if Ray reads every target, and a target written by hand does not scale (x86 is the first one
+made from its vendor's own description instead, Intel's XED). This is how to cover all of them that way, and keep them
+right as vendors and compilers change.
 
-What the machine code proof (`Machine.md`) shows for one instruction set, made to hold for all of them without writing each
-one by hand, and kept true as vendors and compilers change.
+Two words used throughout. A **corpus** (plural *corpora*) is a fixed set of example programs, compiled by a real
+compiler, whose bytes and outputs are pinned. The **ladder** is the sequence of checks run over a corpus, each against a
+tool that is not Ray: the compiler's bytes, the disassembler's text, a native run.
+
+The ladder runs on branch `proposal/machine-code` (tag `machine-code-proof`), on the kernel main had before its
+self-hosting one (`Machine.md`).
 
 ## The problem
 
@@ -43,13 +51,16 @@ declarations does not scale.
 3. **One ladder, every target.** The steps of `Machine.md` (MC1 to MC10) become target-independent: a target supplies a
    compiler, a disassembler and a way to run its code; the corpora, the harness and the comparisons are shared.
 
-   | Target | Compiler | Text oracle | Run oracle |
-   |---|---|---|---|
-   | x86-64 | gcc, clang | objdump, llvm-mc | native |
-   | AArch64 | aarch64-linux-gnu-gcc, clang | aarch64 objdump | qemu-aarch64 |
-   | RISC-V | riscv64 gcc, clang | riscv64 objdump | qemu-riscv64 |
-   | Wasm | clang `--target=wasm32` | wasm-objdump | a Wasm engine |
-   | CPython bytecode | `python3 -m py_compile` | `dis` | the same `python3` |
+   | Target | Kind | Compiler | Text oracle | Run oracle |
+   |---|---|---|---|---|
+   | x86-64 | processor | gcc, clang | objdump, llvm-mc | native |
+   | AArch64 | processor | aarch64-linux-gnu-gcc, clang | aarch64 objdump | qemu-aarch64 |
+   | RISC-V | processor | riscv64 gcc, clang | riscv64 objdump | qemu-riscv64 |
+   | Wasm | virtual machine | clang `--target=wasm32` | wasm-objdump | a Wasm engine |
+   | CPython bytecode | interpreter | `python3 -m py_compile` | `dis` | the same `python3` |
+
+   CPython is there on purpose: an interpreter's bytecode, not a processor, so the same ladder covers interpreted
+   languages; and CPython describes its bytecode in C (`Python/bytecodes.c`), which Ray already reads (point 5).
 
 4. **Corpora made, not collected.** Templates and random programs (as `make.py`, `flow.py`, `memory.py` do), compiled at
    several optimisation levels, pinned by hash; a real program per target (`inflate`, then larger) as the end of each

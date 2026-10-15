@@ -254,6 +254,60 @@ MC0 to MC10 pass (`./run.sh MC1` … `MC10d` in `@ether/poc/machine`; 25 functio
 
 Each function reads, prints, lifts or assembles in under a second.
 
+## The same ladder on a declaration Ray made from XED
+
+The first step of `Breadth.md`: x86-64 read from Intel's own description instead of written by hand. `$/x86/Xed.ray`
+reads XED's records (`datafiles/xed-isa.txt`, fetched at a pin into `.ether/external/xed`, not kept in the repository)
+and writes `$/x86/X86.xed.ray`: 358 forms of the 39 instruction classes gcc's integer code uses (each condition of `j`,
+`cmov` and `set` one), every encoding, operand kind and objdump spelling from the records. 69 forms are left out, each for
+what the declaration does not have yet (`not64` 56, a displacement only 4, `prefetch` 3, REX2 2, `lock` 2, F3 refining 1,
+a 16-bit immediate 1). The whole file is made in about two minutes (`poc/machine/xed.mts`), a hundred records per run.
+
+What is still written by hand is per kind of operand and per instruction class, not per encoding: a printer of operands
+(about 50 lines), what each class does (`X86.meant`, `X86.meant_lifted`: about 130 lines, the same goto program the hand
+forms lift to, so both declarations lift alike), and one assembler for every form (about 200 lines). XED says how an
+instruction is encoded and what its operands are, not what it does: that part comes from a description of semantics
+(Ghidra's SLEIGH for x86) in a later step.
+
+The ladder runs on it unchanged: `DECLARED=X86.XedFunction LOAD_EXTRA='$/x86/X86.xed.ray' ./run.sh MC…`.
+
+| Step | XED's declaration |
+|---|---|
+| MC1, MC8a, MC9a, MC10a | pass (the corpora and their oracles do not depend on a declaration) |
+| MC2, MC3 | all 200 read, written back byte for byte, printed as objdump does |
+| MC4 | all 200 lifted answer what the C source computes |
+| MC5 | all 200 written as Rust agree with gcc's objects on all 6000 inputs |
+| MC6 | all 200: objdump's text assembled into XED's forms is gcc's bytes |
+| MC7 | all 200 compiled from C (7 008 bytes) agree natively on all 6000 inputs, and lift back to the function the C was read to |
+| MC8b, MC8c | all 60 flow functions read, printed, lifted; they print what gcc's objects print |
+| MC8d | all 60 compiled back (8 480 bytes) agree natively on all 180 inputs, and lift back to the same |
+| MC9b, MC9c | all 60 memory functions read, printed, lifted; they print what gcc's objects print, arrays after included |
+| MC9d | RUNNING |
+| MC10b | `inflate`, 4615 bytes, read, written back byte for byte, printed as objdump does |
+| MC10c | 18 of 29 streams decoded in Ray, as gcc's object does, before the kernel's maps overflowed (`Map maximum size exceeded`, after two hours); RUNNING again in two processes |
+| MC10d | the lifted `inflate` compiled back (42 606 bytes, as with the hand forms) decodes all 22 streams natively and rejects all 7 bad ones |
+
+How a line of text is assembled into XED's forms (`X86.xed_assembled`): every form of its mnemonic whose operand kinds fit
+the operands is made; one is kept when it prints back as the line and its bits, read again by the codec, read as it (the
+text alone let a 32-bit form take REX.W and print the same); of those, the shortest, as an assembler takes it. Where two
+forms of one length print alike, the one gas takes is data (`X86.Taken`: gas's multi-byte `nop` is `0F 1F`, binutils
+`opcodes/i386-opc.tbl`), not a rule. Assembled this way, 61 of the 65 instruction shapes in `inflate` are gcc's bytes;
+the other 4 are padding `nop`s of a 32-bit zero displacement, which objdump prints as the 8-bit one (`+0x0`): the text does
+not say which, and gas writes them from `.p2align`, not from text. The lowering never writes them.
+
+What it took besides the declaration:
+
+- **Speed.** Reading tries the forms in order; a class whose leading bits are fixed (`<-Byte{== 137}`) is now skipped
+  where the bits differ (`Reading.may_start`), and writing finds an alternative by the value's class instead of asking each
+  of 358 `is` (`Writing.type`): a line assembles in about a second, not ten. A function still reads in 7 to 35 s against
+  under one with the hand forms.
+- **A kernel bug.** `a === b` goes to `a` as a label, so a value that was the text of a host goto ran it: `"js"` (jump if
+  sign) ran `goto js`, compiling the next line as JavaScript. A host goto now runs only where it is named.
+- **Lifts the hand forms already made.** `neg` as `0 - x` with the constant written as the lift writes one, a constant shift
+  as a product or quotient, a 32-bit immediate signed, `lea` as its address: the lowering and the Rust writer take only
+  what the hand forms lift to.
+
+
 ## Engine work
 
 - **The merge.** `as` tries `T.from(x)`, then the text a header reads (interop), then the bits it reads (DEFLATE).

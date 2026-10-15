@@ -66,7 +66,9 @@ declarations does not scale.
 
 1. x86-64 from XED instead of `X86.ray`: the ladder exists, so it shows at once what XED's reader reads and what it
    misses (the 659 forms of `inflate` are a first acceptance list). `X86.ray` stays as the oracle's oracle until XED's
-   declaration passes every step it passes.
+   declaration passes every step it passes. Done for encodings and text (`Machine.md`, "The same ladder on a declaration Ray
+   made from XED"): Ray reads XED's records into 358 forms, and the ladder passes on them; what each instruction class
+   does is still written by hand (about 130 lines, per class not per encoding) until SLEIGH's semantics are read.
 2. AArch64 from Arm's release, the same corpus compiled by aarch64 gcc, run by qemu: the first "two machines, one meaning".
 3. CPython bytecode from `bytecodes.c` through the C reader: the first interpreted target, and the first declared through
    itself.

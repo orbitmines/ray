@@ -2218,6 +2218,18 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   test). A built program builds again from itself. Entrypoint + Number + String + Expression: 4294 rules, ~1.6M calls of
   compiled bodies, the same messages as the interpreter at every level. The functions are written by the kernel (the host),
   following Expression.ray's `Wasm.none`; those Ray rules are not yet run themselves.
+- Reading once, across tests (2026-10-15): every rule carries what its node's rules up to it are written as (`R_SIG`,
+  made when it is linked). A reading in a test is kept by where it is: what the test made by what it is written as, what
+  was made before by itself; one that holds nothing of the test's own is copied where nothing lets go of it and kept for
+  all threads, with what reading it cost (charged again when it is found, so a test applies as much either way). A statement
+  of a body run in a node it makes is read again only where one of that node's own rules could read it (`could`). The
+  frames a test makes are listed (for painting) though forgotten after it: not listing them is faster, but shows a race
+  between threads' tests (1 run in 24 on 8 threads answers otherwise; already in the committed kernel; open).
+  Entrypoint + Number + String: 5.0 s → 1.5 s on one thread, 2.9 s → 1.0 s on four; readings 2.66M → 1.39M, of them kept
+  ~70%. `--debug` with `RAY_MEMO_CHECK=1` reads every kept reading again and says where one differs (none do).
+- What a test costs now: `assert true` 36 rules applied, `assert 1 == 1` ~400: the call (`taking`, `given_names`, `:=`),
+  `( )` (a quarter of all), `? :`, `===`, the literals. Fewer applications is what is left: the call itself compiled
+  (parameters bound without reading `({written_parameters}) := passed`), the core rules as code.
 - Measured 2026-10-15 (entrypoint + Number + String, 400 tests): ~1.3M applications, 2.1M readings, ~70% of them read
   afresh: each call's and each block's node is new, so a reading keyed by what it sees never repeats across calls. A
   reading keyed by text identity instead (the same rule text made the same way in another call) was tried and dropped:

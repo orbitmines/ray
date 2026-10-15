@@ -397,16 +397,25 @@ assert {
 // its parameters taking the arguments (code, read where they are written: `f(x: 5)` declares its `x`, answering `declared`).
 // (A head led by `{this}` is a method: read only on a value, what follows it; so `(…)` in the body is not a call of itself.)
 // It ends at `returned` (`return v` goes there), and begins again at `recurring` (`recur(…)` gives its parameters these first).
+// (Its parameters take the arguments' values: a type a parameter is given, `x: T`, is checked on the value, not read in the
+// text.)
 ({parameters}) {`=>`} {body} ^punctuation => {
   external .
-  {this}({{parameters}}) => {
+  {this}({arguments}) => {
     external .
+    ({{parameters}}) taking {arguments}
     external label recurring
     {{body}}
     external label returned
   }
   // (called on what follows it, without brackets: `double 4`, `6 == 6` (`==` a method of 6), `"0".."9"`)
-  {this}{argument} => this(argument)
+  {this}{arguments} => {
+    external .
+    ({{parameters}}) taking {arguments}
+    external label recurring
+    {{body}}
+    external label returned
+  }
   .
 }
 () {`=>`} {body} ^punctuation => {
@@ -419,6 +428,17 @@ assert {
   }
   .
 }
+assert {
+  Hugged := { }
+  Hugged &+= {
+    .. (last) => false
+  }
+  assert !(Hugged..Hugged)  // CL19 an operator method does not take what is written right after it
+  assert !(Hugged ..Hugged)  // CL20 an operator method after a space does not take what is written right after it
+  assert !(Hugged.. Hugged)  // CL21 an operator method does not take what follows it after a space
+  given_nothing := (x) => false
+  assert !(given_nothing Hugged)  // CL22 a closure is not called on what follows it without brackets (`f x`)
+}
 // (called with nothing: with nothing given, each parameter its default)
 {this}() ^punctuation => this(declared)
 // A method: `name (parameters) =>` (a space before them) gives the name a closure, as `name := (parameters) =>` does (so its locals are its own);
@@ -430,23 +450,44 @@ assert {
 // Partial arguments: `f<a: 5>` is f with those given first.
 {function}<{given}> ^punctuation => { (also) => {function}({given}, also) }
 
-// A call's parameters taking its arguments: one parameter, all of them; several, each the next (one already given passes,
-// leaving it for the next). Arguments that only declared (`declared`) give none.
-({parameter}) taking {value} ^keyword => ({parameter}) gets ((value === declared) ? None : value)
-// (the parameters taking from a list's vertices, before what reads a list with them)
-({parameter}) taking from {vertex} ^keyword => ({parameter}) gets (vertex).value
-({parameter}, {parameters}) taking from {vertex} ^keyword => {
-  (({parameter}) gets (vertex).value) ? (({parameters}) taking from (vertex).next) : (({parameters}) taking from vertex)
-}
-({parameter}, {parameters}) taking {list} ^keyword => ({parameter}, {parameters}) taking from (((list).spread === true) ? (list).head : Listing.new.append(list).head)
-// One parameter given a value, unless given already: `x`, `x: T` (checked against T), `x = default` (the default when none is
-// given, read when it is first read).
-({name}) gets {value} ^keyword => {
-  {name} := value
+// A call's parameters taking its arguments, by composition: the parameters run as written, where the call runs (`a` names a
+// place, `b = 0` gives it its value first, `x: T` its type), `,` composing them; each then takes the argument in its place
+// (one that only declared, `declared`, gives none: what it had stays).
+// (rules, not closures: a closure's parameters are given by these)
+// (their holes named apart from the call's, whose `parameters` and `arguments` they are given)
+({written_parameters}) taking {passed} ^keyword => (({written_parameters})) takes (passed)
+{places} takes {taken} ^keyword => {
+  {
+    places_were := places
+    taken_was := taken
+    ((places_were).listing === true) ? ((places_were) each takes (taken_was)) : ((places_were) alone takes (taken_was))
+  }
   true
 }
-({name}: {type}) gets {value} ^keyword => ({name}) gets ((value) checked (type))
-({parameter} = {default}) gets {value} ^keyword => (value === None) ? (({parameter}) gets ({default})) : (({parameter}) gets value)
+{place} alone takes {taken} ^keyword => {
+  {
+    place_was := place
+    alone_taken := taken
+    unless (alone_taken === declared) || (alone_taken === None) {
+      (place_was) := (alone_taken) checked ((place_was).type)
+    }
+  }
+  true
+}
+// (each of a list of places the value in its place of what is given: a list a `,` made, else that one value)
+{places} each takes {taken} ^keyword => {
+  {
+    at := places.head
+    each_taken := taken
+    taken_at := ((each_taken).spread === true) ? (each_taken).head : Listing.new.append(each_taken).head
+    while at {
+      (at.value) alone takes (taken_at ? taken_at.value : None)
+      at = at.next
+      taken_at = taken_at ? taken_at.next : None
+    }
+  }
+  true
+}
 {name} := lazily {default} ^keyword => {
   {name} => {
     kept := ({default})
@@ -466,7 +507,7 @@ assert {
 {element}[] ^punctuation => (() => {
   made := ({
     narrows := Node
-    holds (it) => (it is String) ? (it.characters.every((c) => c is element)) : (it.every((item) => item is element))
+    holds (it) => it.every((item) => item is element)
   }) &+ { }
   made &+= {
     {value: element} => Listing.new.append(value)
@@ -591,14 +632,27 @@ as {type} ^keyword => (. is type) ? . : type.from(.)
 from (x) => None
 // (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
 ({parameter}) as (=== {type}) {`=>`} {body} => ({type}).from := (({parameter}) => {body})
-// (`x as *`: what x converts to, each conversion its types define, as a list: none by default; each conversion written adds
-// itself to those its class had (its body reads the `as *` before it))
+// (`x as *`: what x converts to, each conversion its types define, as a list of them, each run only when asked (§7.5): none
+// by default; each conversion written adds itself to those its class had (its body reads the `as *` before it))
 as * => []
-// (what nothing led by text reads on a value: read on what it converts to, the nearest conversion (§7.5); none, nothing reads it)
-{this}{rest} => ((this as *).first ?? (ERROR nothing reads this here)){rest}
+// (what is being converted (a conversion of it running): not converted again, it is what it is itself)
+converting := Listing.new
+converted_by (conversion) => {
+  value := .
+  converting.prepend(value)
+  made := value.({conversion}())
+  converting.head = converting.head.next
+  made
+}
+// (what nothing led by text reads on a value: read on what it converts to, the nearest conversion (§7.5); none, on itself,
+// where nothing reads it, said there)
+{this}{rest} => {
+  conversion := (this as *).first
+  ((conversion && !(converting.holding_itself(this))) ? this.converted_by(conversion) : this){rest}
+}
 as (=== {type}) {`=>`} {body} => {
   as {type} => {body}
-  as {`*`} => ((this as *), ({body}))
+  as {`*`} => ((this as *), (() => {body}))
 }
 // Modifiers on an operator: `compounds op …` (and `x op= y`, `x = x op y`); `chainable op …` (and `a op b op c`).
 compounds {operator} {rest} {`=>`} {body} => {
@@ -710,6 +764,17 @@ assert {
   assert !(bracketed (2))  // TY73 a typed hole between brackets reads what its type does not
 }
 assert {
+  Bits := "0" | "1"
+  read_bits {x} => false
+  read_bits {x: Bits[]} => true
+  pair {x} => false
+  pair {x: Bits}{y: Bits} => true
+  assert (read_bits 1)  // TY74 a hole typed T[] does not read one T
+  assert (read_bits 101)  // TY75 a hole typed T[] does not read Ts written as one word
+  assert !(read_bits 121)  // TY76 a hole typed T[] reads what is not all Ts
+  assert (pair 10)  // TY77 two typed holes do not split a word between them
+}
+assert {
   continued := true
     && false
   assert !(continued)  // LY1 a line indented under a statement does not continue it
@@ -793,7 +858,10 @@ members := None
 caller := None
 descends (type, depth = 0) => (. === type) || ((depth < 64) && .superclass ? .superclass.descends(type, depth + 1) : false)
 // (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
-is {type} ^keyword => .is_itself(type) || (. as *).some((converted) => converted.is_itself(type))
+is {type} ^keyword => {
+  value := .
+  value.is_itself(type) || (!(converting.holding_itself(value)) && (value as *).some((conversion) => value.converted_by(conversion).is_itself(type)))
+}
 is_itself (type) => (type === Node) || (. === type) || (.of ? .of.descends(type) : false) || (type.superposes ? type.components.some((component) => . is component) : false) || (type.narrows ? ((. is type.narrows) && type.holds(.)) : false) || (type.members ? type.members.some((member) => member === .) : false) || (.superposes ? .components.every((component) => component is type) : false)
 assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
 // A value checked against a type: reported when it is not one (None, and anything against no type, pass).
@@ -1216,7 +1284,16 @@ Listing := {
       listing := true
       of := Array
       spread := false
+      // (a list as a type, `{d: "0".."9"}`: what reads as one of its values, that value)
+      {written} => (.).one_written(`{written}`)
     }
+  }
+  one_written (text) => {
+    at := .head
+    while at && !(at.value == text) {
+      at = at.next
+    }
+    at ? at.value : None
   }
   spreading => {
     .spread := true
@@ -1315,6 +1392,14 @@ Listing := {
     }
     None
   }
+  // (the vertex holding this very value, `===`)
+  holding_itself (value) => {
+    at := .head
+    while at && !(at.value === value) {
+      at = at.next
+    }
+    at
+  }
   some (predicate) => (.find(predicate) === None) ? false : true
   every (predicate) => !(.some((x) => !predicate(x)))
   map (mapping) => {
@@ -1388,8 +1473,15 @@ Ray := Listing
 assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
 Array := class: Iterable { }
 assert 1 is Array  // TY63 a number is not an array
-String := class: Array { }
+// (a text is its characters: the first, then the rest (`first`, `rest`, by the kernel's map for what it holds); none, empty)
+String := class: Array {
+  empty => !first
+}
 assert "ab" is String  // TX1 a text is not a String (the kernel's map, `wasm.o.ray`, says it is)
+assert !("ab".empty)  // TX2 a text of two characters is empty
+assert "ab".rest.first  // TX3 a text of two has no second character
+assert "a".rest.empty  // TX4 the rest of a text of one is not empty
+assert !("".first)  // TX5 an empty text has a first character
 assert 1 + 2 as String == "3"  // PR38 as does not bind looser than plus
 assert ("A", "A") is ...String  // SD3 ...T is not T[]
 Number := class { }

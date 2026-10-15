@@ -122,8 +122,9 @@ Iterable &+= {
 
   // (one closure: its parameter the accumulator, what it is given nothing its start (its default), `.` in it each element in
   // turn: `first -- step(seed)`)
-  reduce (step) =>
+  reduce (step) => {
     empty ? None : rest.reduced(first -- step(), step)
+  }
   assert [1, 2, 3].reduce((*)) == 6  // OP4 (*) is not multiplication as a value
   // Reducing
   assert ([1, 2, 3]).reduce((acc) => acc + .) == 6  // RD1 one, two, three summed through the accumulator are not six
@@ -133,9 +134,10 @@ Iterable &+= {
   assert ([1, 2, 3]).reduce(*) == 6  // RD5 a product through a lone operator is not six
   assert !([].reduce(+))  // RD6 reducing nothing answers something
   reduce_right | fold_right | foldr => reverse.reduce
-  reduced (seed, step) =>
+  reduced (seed, step) => {
     reduced_next := empty ? seed : (first -- step(seed))
     empty ? seed : rest.reduced(reduced_next, step)
+  }
 
   all => reduce(|)
   assert ([1, 2, 3]).all  // RR68 all of a list is nothing
@@ -191,7 +193,7 @@ Iterable &+= {
   assert [3, 1, 2].sort.last == 3  // IT44 sorted, the last is not the largest
   sort_by | sorted (key) => empty ? [] : this.sorted_on(key)
   assert [3, 1, 2].sort_by(10 - .) == [3, 2, 1]  // IT67 sorted by what they are short of ten, they are not largest first
-  sorted_on (key) =>
+  sorted_on (key) => {
     sort_pivot := first
     sort_rest := rest
     sorted_made := []
@@ -199,6 +201,7 @@ Iterable &+= {
     sorted_made.append(sort_pivot)
     sort_rest{sort_candidate => key(sort_candidate) >= key(sort_pivot)}.sort_by(key).for(sorted_one => sorted_made.append(sorted_one))
     sorted_made
+  }
   unique => empty ? [] : first, rest{!= first}.unique
   assert ([1, 2, 1]).unique.count == 2  // IT11 each thing once is not two
   assert ([1, 2, 1]).unique == [1, 2]  // IT12 each thing once is not in the order first seen
@@ -218,10 +221,11 @@ Iterable &+= {
   assert ([1, 2, 3]).chunk(2).last == [3]  // IT18 the last run does not hold what is left
   assert ([1, 2, 3]).batch(3).count == 1  // IT19 a batch of all of it is not one
   assert ([1, 2, 3]).chunk(2).flatten == ([1, 2, 3])  // IT20 the runs flattened are not the three, in order
-  concatenated =>
+  concatenated => {
     made := []
     this.for(part => part.for(element => made.append(element)))
     made
+  }
   // (what flattening goes into: a narrowing, a list (a Ray of vertices); not a number, a text, a closure, a shape (each also a Ray))
   static flattens (element) => element.narrows || element.listing || (element.commas && element.empty) || (element.of === [].of)
   flatten => map(element => Ray.flattens(element) ? element.flatten : [element]).concatenated
@@ -259,11 +263,12 @@ Iterable &+= {
   assert ["a", "bb", "cc"].group_by(.count)[2] == ["bb", "cc"]  // GY3 two words of one length are not grouped together
   assert !(["a"].group_by(.count)[2])  // GY4 a key nothing has holds something
   // (each value with its place, from 0)
-  enumerate =>
+  enumerate => {
     enumerated := []
     enumerating_at := 0
     this.for(enumerated_value => enumerated.append((index: enumerating_at, value: enumerated_value)) -- (enumerating_at = enumerating_at + 1))
     enumerated
+  }
   assert ([1, 2, 3]).enumerate.last.index == 2  // IT66 the last of three is not numbered two
   // (each pair a list of two: `[a].append(b)`, which a list `a` does not open; up to the shorter one)
   zip (other: Iterable) => other.count -- (other_count => this.enumerate{zipped => zipped.index < other_count}.map(zipped => [zipped.value].append(other[zipped.index])))
@@ -300,9 +305,6 @@ Iterable &+= {
   assert [1, 1, 2].squeeze == [1, 2]  // IT65 a repeat next to itself is not squeezed out
   padded (width: Number, with = 0) => [with] * (width - length), this
 
-  .. (next: Number) => this, (last..next)[1..]
-  assert (0..2..1).count == 4  // RQ7 zero to two through to one is not four steps
-  assert (0..2..1).last == 1  // RQ8 zero to two through to one does not end at one
 
   orbit | loop => Loop(around: this, at: first)
   // An orbit comes back to its first, and has no end
@@ -317,7 +319,7 @@ Iterable &+= {
   assert ((₂10010011 as Binary₈).loop >> 1) as Binary₈ == ₂11001001  // ROT2 shifting a loop right does not bring the rightmost bit back on the left
   assert ((₂10010011 as Binary₈).loop << 8) as Binary₈ == ₂10010011  // ROT3 a whole turn of a loop changes it
 
-  compounds * (count: Number) => count == 0 ? [] : this, this * (count - 1)
+  * (count: Number) => count == 0 ? [] : this, this * (count - 1)
   assert ([1] * 40).count == 40  // RR42 forty things kept do not count forty
   assert (([1, 2, 3]) * 2).count == 6  // RX1 a list of three twice is not six
   assert (([1, 2, 3]) * 2) == [1, 2, 3, 1, 2, 3]  // RX4 the repeated list does not start over after three
@@ -698,6 +700,13 @@ Array &+= {
 }
 assert ([1, 2, 3]) is Array  // IT28 a list is not an array
 Iterable &+= Ordered
+// A range continued, `0..2..1`: on a list (written, or a range), not on everything iterable (a String, a Number), whose
+// `..` is Ordered's
+Listing &+= {
+  .. (next: Number) => this, (last..next)[1..]
+  assert (0..2..1).count == 4  // RQ7 zero to two through to one is not four steps
+  assert (0..2..1).last == 1  // RQ8 zero to two through to one does not end at one
+}
 Array &+= Path{acyclic}
 Chain &+= Array
 Link &+= Ray
@@ -818,12 +827,13 @@ assert {
 // `xs{p}` (QT6): a narrowing of a value is the Ray of its elements of which `p` holds, in order (a class's: its instances); it
 // answers what that Ray answers (no comment inside the block: a narrowing's rule of one capture reads its statements)
 Narrowing &+= {
-  kept =>
+  kept => {
     made := []
     narrowed := this.narrows
     holds := this.constraint
     narrowed.for(element => holds(element) ? made.append(element) : None)
     made
+  }
   head => this.kept.head
   tail => this.kept.tail
   count => this.kept.count

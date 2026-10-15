@@ -136,10 +136,11 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   assert minute == minute  // U58 a unit is not itself
   assert !(minute == hour)  // U59 a minute is an hour
   // (what it makes of a quantity, `x as px`: the quantity in it)
-  from (quantity: Quantity) =>
+  from (quantity: Quantity) => {
     target := this
     converted := quantity.in(target)
     Quantity(quantities: [(quantity: converted, unit: target)])
+  }
 
   // (what it is in another unit: a conversion read at the time, `x * k + b` (a linear one); backwards, its inverse)
   convert (convert, ToUnit: Unit) => (this.converting := Conversion(ToUnit, convert)) -- this

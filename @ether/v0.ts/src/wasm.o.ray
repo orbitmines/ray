@@ -1,5 +1,10 @@
 // The kernel's map: what its own kinds of value are in the language (read after the language, for every backend: they run
-// one kernel). What it holds as text, what is written between quotes and what a hole took, is a String.
+// one kernel). What it holds as text, what is written between quotes and what a hole took, is a String; what it holds as
+// nothing is None. (What a String is made of, its characters, the language says (Char[]); the kernel answers it faster.)
 String &+= {
   external text
+  first => external first
+  rest => external rest
 }
+// (None takes no members of its own: given)
+external nothing None

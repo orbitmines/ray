@@ -509,6 +509,14 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - A text the reader holds (what is between quotes, what a hole took) is a String: `"ab" is String`, and String's rules
   are read on it first. The runtime keeps it as its own kind of value; that it is a String is said in the runtime's map
   (§21.2), not by the reader. A text is a value: nothing is declared in it (`"a".x := …` reads `x`).
+- A text is its characters: `first` (one character, a text of one) and `rest` (the text after it); one with no first is
+  empty. The language's definition is the reference (a String is `Char[]`, read character by character); the runtime's
+  map answers `first` and `rest` faster for the texts it holds (§21.2). It must work both with and without that help:
+  the map is an optimization. (Open: without the map a `Char` must read one character by itself, from Unicode's code
+  points; until then the map is what runs.)
+- An escape applies to any pair character, after an odd number of `\`: `\"` and `\{` open nothing (`\{ => U+007B`,
+  `"\""`), `\\{prefix}` is a hole after an escaped backslash. A quote inside a hole inside quotes still closes them, so a
+  rule's head keeps quotes out of its holes by naming the type (`Unquoted := Char{!= "\""}`).
 - Interpolation: `"Hello {name}!"`. `\` is the escape character: `\"`, `\{`, `\0 \t \n \r \x{…} \u{1F525}`. A character
   can also be written `U+1F525`.
 - A multiline string loses the indentation of its least-indented content line. A blank line right after the opening
@@ -520,6 +528,11 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   substrings. IME composition is a String with a `^composing` mark.
 
 ### 5.2 Lists and ranges
+
+- A list used as a type reads one of its values, as written: `{d: "0".."9"}` reads `5` as the value `"5"` of it (each list
+  answers a reader `{written} => (.).one_written(`{written}`)`, comparing with `==`). So a range is a type of what it holds.
+- `a..b` is Ordered's (`succ`/`pred` from a to b); continuing a range, `0..2..1`, is a list's (`Listing`), not every
+  iterable's: a String and a Number are iterable too, and their `..` is Ordered's.
 
 - `(1, 2)` and `[1, 2]` are the same list. For one element, `[x]` is a new list holding `x` (a list included) and `(x)`
   is just `x`.
@@ -740,6 +753,14 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   the rest of its rule reads, and only where the part after it can begin (`{amount: Number} {written: Unit.Spelling}` asks
   Number nowhere the spelling can't start). An answer is kept (read once) only when the check ran nothing and wasn't cut
   short by a cycle.
+- A hole never ends inside a word, but a typed one ends where its type reads (`{first: Digit}{rest: Digit[]}` of `10`,
+  `{radix: Subscript.String}{digits: Decimal.String}` of `₂10`).
+- A hole typed by a text reads only that text, and its value is that text (`{value: "1"}`). Any other typed hole's value
+  is what its type's rules read its text as.
+- A check run inside what a check runs (`{first: T}{rest: T[]}` checking the rest) answers by its rules reading the text:
+  what that reading would run is not run again (and again). A check that went too deep inside says so to what checks it.
+- A head of holes only (`{x: T}`, `{first: T}{rest: T[]}`) is a reader: read only where its type's own rules read, never
+  as code in its node. A method's (`{this}{argument}`) is not a reader.
 - A type has an index: the characters a value of it can begin with, derived from its own rules (a hole of its own type
   adds nothing, an untyped one-word hole any character of a word, any other untyped hole everything). Text that can't
   begin a value of T is not checked as one.
@@ -770,6 +791,10 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   them: `20 °C == 68 °F` holds through it.
 - Method lookup falls back to the equivalence graph of `as` conversions from the receiver, breadth-first: the nearest
   conversion that defines the method is used, and two at the same distance are both used, superposed.
+- `x as *` is lazy: a list of the conversions, each run only when asked (`some` stops at the first that holds). While x is
+  being converted, x is not converted again: `is` on it is what it is itself (each value's conversions followed once).
+- A conversion's body reads "the `as *` before it" also across classes, when it reads on the very value it runs on: the
+  rule running is never read again there.
 - `x as *` is what x converts to, as its types define it: never written by hand, followed implicitly when the value itself
   fails, on comparisons (`x is T` holds when x is a T, or one of its conversions is). It is not recorded (a cache): each
   conversion written `as (=== T) => …` in a class also defines that class's `as *`, the ones before it and itself
@@ -920,6 +945,19 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
 ### 10.1 Functions
 
+- A parameter's type is checked on the value it is given, not read in the argument's text: `f := (x: T) => …` takes
+  `f(v)` for any `v` that is a T. Parameters bind by composition: the parameter list runs where the call runs (`a` names
+  a place, `b = 0` is an ordinary assignment, the default, run first and overwritten by an argument given; `x: T` gives the
+  place its type), `,` composes them, and each place takes the argument in its place. `,` is never written into another
+  rule's head (`({a}, {b}) …`): it only composes. (Open, being built: the binding rules must keep their locals out of the
+  call's node, and `x := x` inside a call (`linked (value) => { { value := value } }`) must read the outer `x`.)
+
+- Called without brackets, `f x`, `a..b`, `"0".."9"`: a closure answers its parameters as holes right after it
+  (`{this}{{parameters}}`, the same body as `{this}({{parameters}})`), so the receiver of a method (`"0"` of `"0"..`) stays
+  its `this`. What is read after a value is read with its own methods led by a hole first, when it is an argument (not an
+  operator, a member or brackets), then with what is led by text, then the language's fallback `{this}{rest}`.
+- Read after an operator, a word is read on what the operator is (`..9` is `9` read on `..`), as after a space.
+
 - `=>` is required before a function's body.
 
   ```ray
@@ -961,6 +999,14 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   its own, which holds its parameters and what `:=` declares there. Read as a member (`xs.append(v)`, or `.append(v)` in
   another method of xs), `.` and `this` in it are what it was read on: `.head := link` declares in xs, `.tail` reads
   xs's. Called bare (`f(5)`, `body(x)`), `.` is its own node, which sees where the closure was written.
+- A method's own run node is the only node whose `this` and `.` are what it was read on; any other node's `this` is
+  itself, also when it is made of components (a class with `X &+= Y`).
+- A method is called on what follows it without brackets, operator-named or not: `double 4`, `6 == 6` (`==` a method of
+  6, `== (other: Number) =>` a closure named `==`), `"0".."9"`. A rule never reads itself through what it reads on a
+  value either: several rules made by one (`as (=== T)` written twice) read the ones before the one running.
+- What nothing led by text reads on a value is read, once, by a method led by a hole: the entrypoint's
+  `{this}{rest} => ((this as *).first ?? this){rest}`, through the nearest conversion, else on the value itself where
+  nothing reads it, said there.
 - A method read as a member is called with what it was read in as its receiver, also when the call is written where that
   is (`probe {type} => .is_itself(type)`).
 - `x.f(y)`: the name `f` is read in x, and `(y)` is read on what it answers where `x.f(y)` is written, wherever that
@@ -2030,7 +2076,9 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - Apart from the externals, the runtime has its own map: what its own kinds of value are in the language, an
   external-like word in a bucket of its own, written only in the runtime's `.o.ray` (`@ether/v0.ts/src/wasm.o.ray`, read
   after the language, for every backend since they run one kernel). `String &+= { external text }` says the texts it
-  holds are Strings. The map accelerates; what a String is stays the library's.
+  holds are Strings; `first => external first`, `rest => external rest` answer a text's characters; `external nothing None`
+  says what its nothing is (what is read on nothing is read on None, so `!(nothing)` holds and a missing value is never
+  truthy). The map accelerates; what a String is stays the library's.
 - Identity needs no external: dispatch (a rule on None answers for it), `is` or `==` do.
 - Interpreter-specific optimizations (host numbers and strings, `@js { … }`) are optional, live in that interpreter's
   `.o.ray`, and can be removed. The host's access to IO, time, the OS and randomness stays until the new runtime is done;
@@ -2057,6 +2105,13 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   lookup yields an unknown whose further failures are silent. Highlighting is what a reading's rules say.
 
 ### 21.4 Speed
+
+- A test runs in memory of its own, let go of when it (and the tests written in it) are done: an assert answers whether
+  it held, and what it made is gone, except what it gave its frame (its style, made again). Memory let go of is zeroed
+  (what is allocated is all zero). What is kept for every thread (read once, checked once) is not written from a test;
+  a rule's body first read in a test is kept by that thread alone until the test is done.
+- Files are merged in path order, every file numbered every time (two files sharing a number lost the second's
+  definitions after a second include).
 
 - Speed never comes from changing meaning. It comes from properties of the walk (memo per version, an index of first
   characters, history-driven re-walks, compiled walks as a Compiler level) and from removable optimization levels.
@@ -2093,6 +2148,11 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - A value needed while it is being read (a cycle) is said with where. Every bug found gets a check that names it, and a
   test written the moment it was found, so it is caught at once next time.
 - Tests are counted by place: a test is passed or failed once, however often a check or a class body ran it.
+- Too deep: the fault says the round of rules that goes round, once each, and where it was first entered. Something
+  unread because what read it went too deep says that, not "nothing reads".
+- Memory a test let go of: under `--debug` it is filled so a read of it is seen (a rule read after its test let go of it,
+  memory written after it was let go of and allocated again, a test's memory kept by something made before it), each
+  said with where.
 
 ---
 

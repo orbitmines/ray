@@ -116,8 +116,9 @@ Possibilities &+= {
   contains (x) => values.contains(x)
   assert (1 | 2)#.contains(2)  // NOD28 a possible value is not contained
   assert !(1 | 2)#.contains(3)  // NOD29 a value that is not possible is contained
-  {{constraint}} =>
+  {{constraint}} => {
     values{ {constraint} }
+  }
   join (separator) => values.join(separator)
   assert ("a", "b", "c").join("-") == "a-b-c"  // SJ2 joining a, b and c with a dash is not a-b-c
   assert ("a", "b").join(", ") == "a, b"  // SJ3 joining a and b with a comma and space is not a, b
@@ -154,9 +155,10 @@ assert {
   /* a block comment /* nested */ is nothing */
 }
 Node &+= {
-  # =>
+  # => {
     possible := this.members ? this.members : (superposes ? components : ((conjoined.count > 1) ? conjoined : ((!instance && components.head) ? components : [this])))
     Possibilities(values: possible)
+  }
   origin: Node?
   assert {
     A := class {

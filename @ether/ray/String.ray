@@ -164,7 +164,9 @@ assert {
 }
 assert "{1 + 2}" == "3"  // SI2 an expression in braces is not read into the string
 assert "a \{b}".count == 5  // SI3 an escaped brace is read as an expression
-"{literal: (\\{escape} | Interpolation | Char{!= "\""})[]}": String => literal.map(. is Interpolation ? (inline (.code**)) as String : .).join("").literal_dedented
+// (a character of a literal that is no quote: named, so the head has no quote inside its quotes)
+Unquoted := Char{!= "\""}
+"{literal: (\\{escape} | Interpolation | Unquoted)[]}": String => literal.map(. is Interpolation ? (inline (.code**)) as String : .).join("").literal_dedented
 assert "\0"[0] == 0  // S144 the null character is not nothing
 assert "\r"[0] == 13  // S145 the carriage return . is not thirteen
 assert "a\tb".length == 3  // SE1 a tab escape is not one character
@@ -233,7 +235,7 @@ String &+= {
   assert "cat".singular == "cat"  // S52 the singular of cat is not cat
 
   mirrored => <-#.mirrored as String
-  compounds * (count: Number) => count == 0 ? "" : this, this * (count - 1)
+  * (count: Number) => count == 0 ? "" : this, this * (count - 1)
 
   trimmed => this[{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}]
   assert "  a b ".trimmed == "a b"  // ST2 trimmed does not drop the blanks around a b
@@ -352,8 +354,9 @@ Node &+= {
   : None
 
 ParameterList := String{!.contains("{")}
-({parameters: ParameterList}) => {block} =>
+({parameters: ParameterList}) => {block} => {
   Program(code: (block**), parameters: (parameters**), context: this)
+}
 
 
 

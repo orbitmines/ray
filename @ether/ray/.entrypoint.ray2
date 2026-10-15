@@ -446,33 +446,10 @@ unless {condition} {{taken}} ^keyword =>
   passed\
 assert (unless false { true })  // CC7 unless did not fire
 assert (unless true { 1 } else { 2 }) == 2  // CF9 unless has no other side
-// (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body; what follows it an `elsif`)
-nearest if {condition} {{taken}} {chain} =>
-  (goto .) unless (.chain) begins "elsif"
-  {condition} ? (goto taken) : (goto otherwise)
-  taken\
-  {taken}
-  goto passed
-  otherwise\
-  {chain}
-  passed\
-goto styled
-keyword
 nearest elsif {condition} {{taken}} =>
   {condition} ? (goto taken) : (goto passed)
   taken\
   {taken}
-  passed\
-goto styled
-keyword
-nearest elsif {condition} {{taken}} {chain} =>
-  (goto .) unless (.chain) begins "elsif"
-  {condition} ? (goto taken) : (goto otherwise)
-  taken\
-  {taken}
-  goto passed
-  otherwise\
-  {chain}
   passed\
 goto styled
 keyword
@@ -496,6 +473,30 @@ if {condition} {{taken}} else {{otherwise}} ^keyword =>
   otherwise\
   {otherwise}
   passed\
+// (a chain, `if … {} elsif … {} else {}`: its condition ends at the nearest body; what follows it an `elsif`) (after `else`:
+// the later reading, so `if a {} elsif b {} else {}` is not an `else` whose condition holds the first body)
+nearest if {condition} {{taken}} {chain} =>
+  (goto .) unless (.chain) begins "elsif"
+  {condition} ? (goto taken) : (goto otherwise)
+  taken\
+  {taken}
+  goto passed
+  otherwise\
+  {chain}
+  passed\
+goto styled
+keyword
+nearest elsif {condition} {{taken}} {chain} =>
+  (goto .) unless (.chain) begins "elsif"
+  {condition} ? (goto taken) : (goto otherwise)
+  taken\
+  {taken}
+  goto passed
+  otherwise\
+  {chain}
+  passed\
+goto styled
+keyword
 assert (if true { true } else { false })  // CC1 if-true did not take the then branch
 assert !((if false { 1 } else { None }))  // CC12 an if whose taken branch is None is present
 assert (if true { 1 } else { None })  // CC13 an if whose taken branch is one is absent
@@ -943,7 +944,7 @@ keyword
 goto styled
 punctuation
 {on}[{key}] = {value} =>
-  ({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value})
+  ((({on}).listing === true) && ({key} is Number)) ? ({on}.placed({key}, {value})) : (({key} is String) ? ({on}.{key} = {value}) : {on}.holding({key}, {value}))
 goto styled
 punctuation
 {on}[{key}] := {value} =>
@@ -1881,6 +1882,16 @@ Iterable &+= {
         left = left - 1
       }
       at ? at.value : None
+    // (`xs[n] = v`: its nth value made v, from 0; past its end, nothing)
+    placed (index, value) =>
+      at := .head
+      left := index
+      while at && left > 0 {
+        at = at.next
+        left = left - 1
+      }
+      (at.value = value) if at
+      value
     // (the values of the lists in it in it, in their place: all the way down; `flatten(n)`, n lists down)
     flatten =>
       .flattened(64)

@@ -36,7 +36,7 @@ fs.mkdirSync(out, { recursive: true });
 fs.mkdirSync(rusts, { recursive: true });
 let failed = 0, seed = 1;
 const random = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
-for (const mode of modes) for (const function_ of functions.slice(from - 1, to)) {
+for (const mode of modes) for (const function_ of (process.env.NAMES ? functions.filter(f => process.env.NAMES!.split(',').includes(f.name)) : functions.slice(from - 1, to))) {
   // (the event loop turned between functions: what a `WeakRef` was made of is kept until the job ends)
   await new Promise(resolve => setImmediate(resolve));
   if (process.env.HEAP) {

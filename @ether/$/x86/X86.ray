@@ -537,12 +537,16 @@ X86 := class: Language {
     (made = X86.combined(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), sign, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size)) if (sign !== None) && (third === None)
     (made = X86.combined(X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), sign, X86.value_of(third, registers, prefixes, rex, operand, immediate, register, size, false), size)) if (sign !== None) && (third !== None)
     (made = X86.constant(0, size)) if (iclass == "XOR") && ((source begins "reg ") && (operand.rm_register(rex) == operand.reg_register(rex)))
-    (made = X86.combined("0", "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size)) if iclass == "NEG"
+    (made = X86.combined(X86.constant(0, size), "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size)) if iclass == "NEG"
     (made = X86.combined(X86.constant(((0 - 1) as Integer), size), "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size)) if iclass == "NOT"
-    (made = X86.shifted(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), 4, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size)) if (iclass == "SHL") && (source !== "cl")
-    (made = X86.shifted(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), 7, X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false), size)) if (iclass == "SAR") && (source !== "cl")
+    (made = X86.shifted_by(iclass, X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), (source == "one") ? 1 : immediate, size)) if (((iclass == "SHL") || (iclass == "SHR")) || (iclass == "SAR")) && (source !== "cl")
     (return None) if made === None
     X86.placed(registers, number, X86.Value(made, width))
+  // (a shift by a constant, as the forms written by hand lift it: left a product, right a quotient)
+  static shifted_by (iclass, value, count, size) =>
+    (return X86.combined(value, "*", X86.constant(X86.power(count), size), size)) if iclass == "SHL"
+    (return X86.shifted_text(value, size, X86.power(count))) if iclass == "SHR"
+    X86.shifted(value, 7, "" + count, size)
   // (its statements in a lifted program, as `statements` gives them; None when nothing here says what it does)
   static meant (iclass, kinds, prefixes, rex, operand, immediate, register, offset, sixtyfour, end, width) =>
     registers := X86.fresh()
@@ -593,14 +597,15 @@ X86 := class: Language {
       return [X86.flag_lines([made, "0"]), X86.given_to(destination, made, prefixes, rex, operand, register, size)].flatten
     }
     if iclass == "NEG" {
-      made := X86.combined("0", "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size)
+      made := X86.combined(X86.constant(0, size), "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size)
       return [X86.flag_lines(["0", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false)]), X86.given_to(destination, made, prefixes, rex, operand, register, size)].flatten
     }
     (return X86.given_to(destination, X86.combined(X86.constant(((0 - 1) as Integer), size), "-", X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), size), prefixes, rex, operand, register, size)) if iclass == "NOT"
     if ((iclass == "SHL") || (iclass == "SHR")) || (iclass == "SAR") {
       kind := (iclass == "SHL") ? 4 : ((iclass == "SHR") ? 5 : 7)
-      count := (source == "cl") ? ("((r1).anded(" + ((size == 64) ? "63" : "31")) + "))" : X86.value_of(source, registers, prefixes, rex, operand, immediate, register, size, false)
-      made := X86.shifted(X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false), kind, count, size)
+      count := ("((r1).anded(" + ((size == 64) ? "63" : "31")) + "))"
+      value := X86.value_of(destination, registers, prefixes, rex, operand, immediate, register, size, false)
+      made := (source == "cl") ? X86.shifted(value, kind, count, size) : X86.shifted_by(iclass, value, (source == "one") ? 1 : immediate, size)
       return [X86.flag_lines([made, "0"]), X86.given_to(destination, made, prefixes, rex, operand, register, size)].flatten
     }
     None

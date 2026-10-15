@@ -1,6 +1,9 @@
 
 Quantity.Temporal &+= {
   right-to-left sleep => Time.now -- (start => await dynamically (Time.now >= start + this))
+  assert {
+    sleep (1 ms)
+  }
 }
 
 Component := class {
@@ -8,3 +11,58 @@ Component := class {
 }
 
 never := Node{false}
+assert !(never.admits(5))  // NV1 something is of the type that never returns
+
+// Only the branch that is taken runs
+assert {
+  counted := false
+  taken_once := if true { true } else {
+    counted = true
+    false
+  }
+  assert taken_once  // CF1 a taken branch did not answer
+  assert !counted  // CF2 the branch nobody took ran anyway
+}
+
+assert {
+  arms := 0
+  picked := if false {
+    arms += 1
+    1
+  } elsif true {
+    arms += 1
+    2
+  } elsif true {
+    arms += 1
+    3
+  } else {
+    arms += 1
+    4
+  }
+  assert picked == 2  // CF3 the first holding arm is not what answered
+  assert arms == 1  // CF4 more than one arm of a chain ran
+}
+
+assert {
+  left := 3
+  rounds := 0
+  while left {
+    rounds += 1
+    left -= 1
+  }
+  assert rounds == 3  // CF10 a loop ran other than three times
+  assert left == 0  // CF11 a loop left its count behind
+}
+
+// `;`
+assert (1 ; 2) == 2  // CF14 the semicolon does not answer what is written after it
+
+assert (1 ; 2 ; 3) == 3  // CF15 the last of three is not what the whole answers
+
+assert {
+  semi_counted := 0
+  (semi_counted = 1) ; (semi_counted += 1)
+  assert semi_counted == 2  // CF16 two bracketed statements on one line did not both run
+}
+
+assert 7 $ 5 == 7  // ER2 a default replaced what did not fail

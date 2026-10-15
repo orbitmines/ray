@@ -1,0 +1,203 @@
+// `pattern at offset`: the pattern read from the outermost value being read (here: the file) from byte `offset`, instead of
+// after the field before it. It takes no room where it is written, so fields can overlap (a segment and the sections in it).
+// `pattern at +offset`: from `offset` past the start of the value it is written in (a list whose entries say where the next is).
+{pattern} at +{offset} => reading.outermost[reading.start + {offset}..] ~= ⊢({pattern})
+{pattern} at {offset} => reading.outermost[{offset}..] ~= ⊢({pattern})
+
+// Executable and Linkable Format (https://www.sco.com/developers/gabi/latest/contents.html), with every value glibc's elf.h
+// names (https://sourceware.org/git/?p=glibc.git;a=blob_plain;f=elf/elf.h). A number is read as the superposition of the names it
+// can have: `type: Word as (PT_NULL: 0 | PT_LOAD: 1 | …)` reads 1 as `PT_LOAD` (`segment.type.PT_LOAD`); a range names the values a
+// system (`os`) or a processor (`processor`) defines, which elf.h names per machine. Flags are read as their bits, named.
+ELF := class (
+  // e_ident: EI_MAG, EI_CLASS, EI_DATA, EI_VERSION, EI_OSABI, EI_ABIVERSION, EI_PAD
+  ₁₆7F, "ELF",
+  width: (ELFCLASS32: ₁₆01 | ELFCLASS64: ₁₆02),
+  data: (ELFDATA2LSB: ₁₆01 | ELFDATA2MSB: ₁₆02),
+  ₁₆01, abi: Byte as ELFOSABI, abi_version: Byte, Byte₇,
+  // Elf*_Ehdr (gABI ch4.eheader); e_flags are the machine's (its psABI)
+  type: Half as ET, machine: Half as EM, version: Word{== 1}, entry: Address, phoff: Address, shoff: Address, flags: Word,
+  ehsize: Half{== 40 + 12 * width}, phentsize: Half, phnum: Half, shentsize: Half, shnum: Half, shstrndx: Half,
+  // the tables, wherever e_phoff/e_shoff put them, an entry every e_phentsize/e_shentsize bytes. Extended numbering
+  // (gABI ch4.sheader#many_sections): what does not fit e_phnum (PN_XNUM), e_shnum (0) or e_shstrndx (SHN_XINDEX) is in section 0
+  (first: Section at shoff) if shoff != 0,
+  segments: (Segment, *){length == phentsize}[]{length == (phnum == 0xFFFF ? first.info : phnum)} at phoff,
+  sections: (Section, *){length == shentsize}[]{length == (shnum == 0 && first ? first.size : shnum)} at shoff
+) => {
+  // every number after e_ident: in EI_DATA's byte order, an address in EI_CLASS's width
+  wide => width.ELFCLASS64
+  Unsigned := Byte[] { as (=== Binary) => (data.ELFDATA2LSB ? <-this : this) as Binary }
+  Signed := Unsigned { as (=== Number) => (this as Binary) -- (. ~= ⊢1 ? . - 2 ^ .length : .) }
+  Bit := Binary₁
+  Half := Unsigned₂
+  Word := Unsigned₄
+  Address := Unsigned{length == 4 * width}
+  Long := Signed{length == 4 * width}
+  // the part of an address-wide flag word above its low `bits`
+  High (bits) => Binary{length == 32 * width - bits}
+  // a string table entry (gABI ch4.strtab)
+  Text := (text: Byte{!= 0}[], 0)
+  names => sections[shstrndx == 0xFFFF ? first.link : shstrndx]
+
+  static ELFOSABI := (
+    ELFOSABI_NONE | ELFOSABI_SYSV: 0 | ELFOSABI_HPUX: 1 | ELFOSABI_NETBSD: 2 | ELFOSABI_GNU | ELFOSABI_LINUX: 3 | ELFOSABI_SOLARIS: 6 |
+    ELFOSABI_AIX: 7 | ELFOSABI_IRIX: 8 | ELFOSABI_FREEBSD: 9 | ELFOSABI_TRU64: 10 | ELFOSABI_MODESTO: 11 | ELFOSABI_OPENBSD: 12 |
+    ELFOSABI_ARM_AEABI: 64 | ELFOSABI_ARM: 97 | ELFOSABI_STANDALONE: 255
+  )
+  static ET := (ET_NONE: 0 | ET_REL: 1 | ET_EXEC: 2 | ET_DYN: 3 | ET_CORE: 4 | os: 0xFE00..0xFEFF | processor: 0xFF00..0xFFFF)
+  static EM := (
+    EM_NONE: 0 | EM_M32: 1 | EM_SPARC: 2 | EM_386: 3 | EM_68K: 4 | EM_88K: 5 | EM_IAMCU: 6 | EM_860: 7 | EM_MIPS: 8 | EM_S370: 9 |
+    EM_MIPS_RS3_LE: 10 | EM_PARISC: 15 | EM_VPP500: 17 | EM_SPARC32PLUS: 18 | EM_960: 19 | EM_PPC: 20 | EM_PPC64: 21 | EM_S390: 22 |
+    EM_SPU: 23 | EM_V800: 36 | EM_FR20: 37 | EM_RH32: 38 | EM_RCE: 39 | EM_ARM: 40 | EM_FAKE_ALPHA: 41 | EM_SH: 42 | EM_SPARCV9: 43 |
+    EM_TRICORE: 44 | EM_ARC: 45 | EM_H8_300: 46 | EM_H8_300H: 47 | EM_H8S: 48 | EM_H8_500: 49 | EM_IA_64: 50 | EM_MIPS_X: 51 |
+    EM_COLDFIRE: 52 | EM_68HC12: 53 | EM_MMA: 54 | EM_PCP: 55 | EM_NCPU: 56 | EM_NDR1: 57 | EM_STARCORE: 58 | EM_ME16: 59 |
+    EM_ST100: 60 | EM_TINYJ: 61 | EM_X86_64: 62 | EM_PDSP: 63 | EM_PDP10: 64 | EM_PDP11: 65 | EM_FX66: 66 | EM_ST9PLUS: 67 | EM_ST7: 68 |
+    EM_68HC16: 69 | EM_68HC11: 70 | EM_68HC08: 71 | EM_68HC05: 72 | EM_SVX: 73 | EM_ST19: 74 | EM_VAX: 75 | EM_CRIS: 76 | EM_JAVELIN: 77 |
+    EM_FIREPATH: 78 | EM_ZSP: 79 | EM_MMIX: 80 | EM_HUANY: 81 | EM_PRISM: 82 | EM_AVR: 83 | EM_FR30: 84 | EM_D10V: 85 | EM_D30V: 86 |
+    EM_V850: 87 | EM_M32R: 88 | EM_MN10300: 89 | EM_MN10200: 90 | EM_PJ: 91 | EM_OPENRISC: 92 | EM_ARC_COMPACT | EM_ARC_A5: 93 |
+    EM_XTENSA: 94 | EM_VIDEOCORE: 95 | EM_TMM_GPP: 96 | EM_NS32K: 97 | EM_TPC: 98 | EM_SNP1K: 99 | EM_ST200: 100 | EM_IP2K: 101 |
+    EM_MAX: 102 | EM_CR: 103 | EM_F2MC16: 104 | EM_MSP430: 105 | EM_BLACKFIN: 106 | EM_SE_C33: 107 | EM_SEP: 108 | EM_ARCA: 109 |
+    EM_UNICORE: 110 | EM_EXCESS: 111 | EM_DXP: 112 | EM_ALTERA_NIOS2: 113 | EM_CRX: 114 | EM_XGATE: 115 | EM_C166: 116 | EM_M16C: 117 |
+    EM_DSPIC30F: 118 | EM_CE: 119 | EM_M32C: 120 | EM_TSK3000: 131 | EM_RS08: 132 | EM_SHARC: 133 | EM_ECOG2: 134 | EM_SCORE7: 135 |
+    EM_DSP24: 136 | EM_VIDEOCORE3: 137 | EM_LATTICEMICO32: 138 | EM_SE_C17: 139 | EM_TI_C6000: 140 | EM_TI_C2000: 141 | EM_TI_C5500: 142 |
+    EM_TI_ARP32: 143 | EM_TI_PRU: 144 | EM_MMDSP_PLUS: 160 | EM_CYPRESS_M8C: 161 | EM_R32C: 162 | EM_TRIMEDIA: 163 | EM_QDSP6: 164 |
+    EM_8051: 165 | EM_STXP7X: 166 | EM_NDS32: 167 | EM_ECOG1X: 168 | EM_MAXQ30: 169 | EM_XIMO16: 170 | EM_MANIK: 171 | EM_CRAYNV2: 172 |
+    EM_RX: 173 | EM_METAG: 174 | EM_MCST_ELBRUS: 175 | EM_ECOG16: 176 | EM_CR16: 177 | EM_ETPU: 178 | EM_SLE9X: 179 | EM_L10M: 180 |
+    EM_K10M: 181 | EM_AARCH64: 183 | EM_AVR32: 185 | EM_STM8: 186 | EM_TILE64: 187 | EM_TILEPRO: 188 | EM_MICROBLAZE: 189 | EM_CUDA: 190 |
+    EM_TILEGX: 191 | EM_CLOUDSHIELD: 192 | EM_COREA_1ST: 193 | EM_COREA_2ND: 194 | EM_ARCV2: 195 | EM_OPEN8: 196 | EM_RL78: 197 |
+    EM_VIDEOCORE5: 198 | EM_78KOR: 199 | EM_56800EX: 200 | EM_BA1: 201 | EM_BA2: 202 | EM_XCORE: 203 | EM_MCHP_PIC: 204 | EM_INTELGT: 205 |
+    EM_KM32: 210 | EM_KMX32: 211 | EM_EMX16: 212 | EM_EMX8: 213 | EM_KVARC: 214 | EM_CDP: 215 | EM_COGE: 216 | EM_COOL: 217 | EM_NORC: 218 |
+    EM_CSR_KALIMBA: 219 | EM_Z80: 220 | EM_VISIUM: 221 | EM_FT32: 222 | EM_MOXIE: 223 | EM_AMDGPU: 224 | EM_RISCV: 243 | EM_BPF: 247 |
+    EM_CSKY: 252 | EM_LOONGARCH: 258 | EM_ALPHA: 0x9026
+  )
+
+  // Elf*_Phdr (gABI ch5.pheader): ELF64 moves p_flags up
+  Segment := class (
+    type: Word as PT, (flags: Word as PF) if wide, offset: Address, virtual: Address, physical: Address,
+    file_size: Address, memory_size: Address{>= file_size if type.PT_LOAD}, (flags: Word as PF) if !wide, align: Address,
+    contents: (Byte[]{length == file_size} as holds) at offset
+  ) => {
+    holds => (PT_DYNAMIC: Dynamic[], PT_INTERP: Text, PT_NOTE: Note<align == 8 ? 8 : 4>[], PT_PHDR: (Segment, *){length == phentsize}[])[type] ?? Byte[]
+    static PT := (
+      PT_NULL: 0 | PT_LOAD: 1 | PT_DYNAMIC: 2 | PT_INTERP: 3 | PT_NOTE: 4 | PT_SHLIB: 5 | PT_PHDR: 6 | PT_TLS: 7 |
+      PT_GNU_EH_FRAME: 0x6474E550 | PT_GNU_STACK: 0x6474E551 | PT_GNU_RELRO: 0x6474E552 | PT_GNU_PROPERTY: 0x6474E553 | PT_GNU_SFRAME: 0x6474E554 |
+      PT_SUNWBSS: 0x6FFFFFFA | PT_SUNWSTACK: 0x6FFFFFFB | os: 0x60000000..0x6FFFFFFF | processor: 0x70000000..0x7FFFFFFF
+    )
+    static PF := (processor: Binary₄, os: Binary₈, Binary₁₇, PF_R: Bit, PF_W: Bit, PF_X: Bit)
+  }
+
+  // Elf*_Shdr (gABI ch4.sheader); SHT_NOBITS takes no room in the file
+  Section := class (
+    name: Word, type: Word as SHT, flags: Address as SHF, address: Address, offset: Address, size: Address,
+    link: Word, info: Word, align: Address, entry_size: Address,
+    (contents: (Byte[]{length == size} as holds) at offset) if !type.SHT_NOBITS,
+    called: Text at names.offset + name
+  ) => {
+    holds => flags.SHF_COMPRESSED ? Compression : (
+      SHT_SYMTAB | SHT_DYNSYM: Symbol[], SHT_STRTAB: Text[], SHT_RELA: Rela[], SHT_REL: Rel[], SHT_RELR: Address[], SHT_DYNAMIC: Dynamic[],
+      SHT_NOTE: Note<align == 8 ? 8 : 4>[], SHT_HASH: Hash, SHT_GNU_HASH: GnuHash, SHT_GROUP: Group, SHT_SYMTAB_SHNDX: Word[],
+      SHT_INIT_ARRAY | SHT_FINI_ARRAY | SHT_PREINIT_ARRAY: Address[], SHT_GNU_versym: Versym[], SHT_GNU_verdef: Verdef, SHT_GNU_verneed: Verneed
+    )[type] ?? Byte[]
+    static SHT := (
+      SHT_NULL: 0 | SHT_PROGBITS: 1 | SHT_SYMTAB: 2 | SHT_STRTAB: 3 | SHT_RELA: 4 | SHT_HASH: 5 | SHT_DYNAMIC: 6 | SHT_NOTE: 7 | SHT_NOBITS: 8 |
+      SHT_REL: 9 | SHT_SHLIB: 10 | SHT_DYNSYM: 11 | SHT_INIT_ARRAY: 14 | SHT_FINI_ARRAY: 15 | SHT_PREINIT_ARRAY: 16 | SHT_GROUP: 17 |
+      SHT_SYMTAB_SHNDX: 18 | SHT_RELR: 19 | SHT_GNU_ATTRIBUTES: 0x6FFFFFF5 | SHT_GNU_HASH: 0x6FFFFFF6 | SHT_GNU_LIBLIST: 0x6FFFFFF7 |
+      SHT_CHECKSUM: 0x6FFFFFF8 | SHT_SUNW_move: 0x6FFFFFFA | SHT_SUNW_COMDAT: 0x6FFFFFFB | SHT_SUNW_syminfo: 0x6FFFFFFC |
+      SHT_GNU_verdef: 0x6FFFFFFD | SHT_GNU_verneed: 0x6FFFFFFE | SHT_GNU_versym: 0x6FFFFFFF |
+      os: 0x60000000..0x6FFFFFFF | processor: 0x70000000..0x7FFFFFFF | user: 0x80000000..0x8FFFFFFF
+    )
+    static SHF := (
+      High(32), SHF_EXCLUDE: Bit, SHF_ORDERED: Bit, Binary₈, SHF_GNU_RETAIN: Bit, Binary₉, SHF_COMPRESSED: Bit, SHF_TLS: Bit, SHF_GROUP: Bit,
+      SHF_OS_NONCONFORMING: Bit, SHF_LINK_ORDER: Bit, SHF_INFO_LINK: Bit, SHF_STRINGS: Bit, SHF_MERGE: Bit, Bit, SHF_EXECINSTR: Bit, SHF_ALLOC: Bit, SHF_WRITE: Bit
+    )
+  }
+
+  // Elf*_Sym (gABI ch4.symtab): ELF64 moves st_value/st_size last; st_info is ELF_ST_BIND and ELF_ST_TYPE, st_other ELF_ST_VISIBILITY;
+  // st_shndx SHN_XINDEX: the index is in the SHT_SYMTAB_SHNDX section linked to the table, at the same position
+  Symbol := class (
+    name: Word, (value: Address, size: Address) if !wide,
+    (bind: Binary₄ as STB, type: Binary₄ as STT) = info: Byte, (Binary₆, visibility: Binary₂ as STV) = other: Byte, section: Half as SHN,
+    (value: Address, size: Address) if wide
+  ) => {
+    static STB := (STB_LOCAL: 0 | STB_GLOBAL: 1 | STB_WEAK: 2 | STB_GNU_UNIQUE: 10 | os: 10..12 | processor: 13..15)
+    static STT := (STT_NOTYPE: 0 | STT_OBJECT: 1 | STT_FUNC: 2 | STT_SECTION: 3 | STT_FILE: 4 | STT_COMMON: 5 | STT_TLS: 6 | STT_GNU_IFUNC: 10 | os: 10..12 | processor: 13..15)
+    static STV := (STV_DEFAULT: 0 | STV_INTERNAL: 1 | STV_HIDDEN: 2 | STV_PROTECTED: 3)
+    static SHN := (
+      SHN_UNDEF: 0 | index: 1..0xFEFF | SHN_BEFORE: 0xFF00 | SHN_AFTER: 0xFF01 | processor: 0xFF00..0xFF1F | os: 0xFF20..0xFF3F |
+      SHN_ABS: 0xFFF1 | SHN_COMMON: 0xFFF2 | SHN_XINDEX: 0xFFFF
+    )
+  }
+  // Elf*_Rel/Rela (gABI ch4.reloc): r_info is ELF32_R_SYM/TYPE (24/8) or ELF64_R_SYM/TYPE (32/32); the types are the machine's (R_X86_64_*, …)
+  Rel := class (offset: Address, (symbol: Binary{length == (wide ? 32 : 24)}, type: Binary{length == (wide ? 32 : 8)}) = info: Address)
+  Rela := class: Rel (Rel, addend: Long)
+
+  // Elf*_Dyn (gABI ch5.dynamic): d_un is d_val or d_ptr, the same bits; the flag words are read as their flags
+  Dynamic := class (tag: Long as DT, value: Address as (tag.DT_FLAGS ? DF : tag.DT_FLAGS_1 ? DF_1 : tag.DT_POSFLAG_1 ? DF_P1 : *)) => {
+    static DT := (
+      DT_NULL: 0 | DT_NEEDED: 1 | DT_PLTRELSZ: 2 | DT_PLTGOT: 3 | DT_HASH: 4 | DT_STRTAB: 5 | DT_SYMTAB: 6 | DT_RELA: 7 | DT_RELASZ: 8 |
+      DT_RELAENT: 9 | DT_STRSZ: 10 | DT_SYMENT: 11 | DT_INIT: 12 | DT_FINI: 13 | DT_SONAME: 14 | DT_RPATH: 15 | DT_SYMBOLIC: 16 | DT_REL: 17 |
+      DT_RELSZ: 18 | DT_RELENT: 19 | DT_PLTREL: 20 | DT_DEBUG: 21 | DT_TEXTREL: 22 | DT_JMPREL: 23 | DT_BIND_NOW: 24 | DT_INIT_ARRAY: 25 |
+      DT_FINI_ARRAY: 26 | DT_INIT_ARRAYSZ: 27 | DT_FINI_ARRAYSZ: 28 | DT_RUNPATH: 29 | DT_FLAGS: 30 | DT_ENCODING | DT_PREINIT_ARRAY: 32 |
+      DT_PREINIT_ARRAYSZ: 33 | DT_SYMTAB_SHNDX: 34 | DT_RELRSZ: 35 | DT_RELR: 36 | DT_RELRENT: 37 |
+      DT_GNU_PRELINKED: 0x6FFFFDF5 | DT_GNU_CONFLICTSZ: 0x6FFFFDF6 | DT_GNU_LIBLISTSZ: 0x6FFFFDF7 | DT_CHECKSUM: 0x6FFFFDF8 | DT_PLTPADSZ: 0x6FFFFDF9 |
+      DT_MOVEENT: 0x6FFFFDFA | DT_MOVESZ: 0x6FFFFDFB | DT_FEATURE_1: 0x6FFFFDFC | DT_POSFLAG_1: 0x6FFFFDFD | DT_SYMINSZ: 0x6FFFFDFE | DT_SYMINENT: 0x6FFFFDFF |
+      DT_GNU_HASH: 0x6FFFFEF5 | DT_TLSDESC_PLT: 0x6FFFFEF6 | DT_TLSDESC_GOT: 0x6FFFFEF7 | DT_GNU_CONFLICT: 0x6FFFFEF8 | DT_GNU_LIBLIST: 0x6FFFFEF9 |
+      DT_CONFIG: 0x6FFFFEFA | DT_DEPAUDIT: 0x6FFFFEFB | DT_AUDIT: 0x6FFFFEFC | DT_PLTPAD: 0x6FFFFEFD | DT_MOVETAB: 0x6FFFFEFE | DT_SYMINFO: 0x6FFFFEFF |
+      DT_VERSYM: 0x6FFFFFF0 | DT_RELACOUNT: 0x6FFFFFF9 | DT_RELCOUNT: 0x6FFFFFFA | DT_FLAGS_1: 0x6FFFFFFB | DT_VERDEF: 0x6FFFFFFC | DT_VERDEFNUM: 0x6FFFFFFD |
+      DT_VERNEED: 0x6FFFFFFE | DT_VERNEEDNUM: 0x6FFFFFFF | DT_AUXILIARY: 0x7FFFFFFD | DT_FILTER: 0x7FFFFFFF |
+      os: 0x6000000D..0x6FFFF000 | processor: 0x70000000..0x7FFFFFFF
+    )
+    static DF := (High(5), DF_STATIC_TLS: Bit, DF_BIND_NOW: Bit, DF_TEXTREL: Bit, DF_SYMBOLIC: Bit, DF_ORIGIN: Bit)
+    static DF_1 := (
+      High(31), DF_1_NOCOMMON: Bit, DF_1_WEAKFILTER: Bit, DF_1_KMOD: Bit, DF_1_PIE: Bit, DF_1_STUB: Bit, DF_1_SINGLETON: Bit, DF_1_GLOBAUDIT: Bit,
+      DF_1_SYMINTPOSE: Bit, DF_1_NORELOC: Bit, DF_1_EDITED: Bit, DF_1_NOHDR: Bit, DF_1_NOKSYMS: Bit, DF_1_IGNMULDEF: Bit, DF_1_NODIRECT: Bit,
+      DF_1_DISPRELPND: Bit, DF_1_DISPRELDNE: Bit, DF_1_ENDFILTEE: Bit, DF_1_CONFALT: Bit, DF_1_NODUMP: Bit, DF_1_NODEFLIB: Bit, DF_1_INTERPOSE: Bit,
+      DF_1_TRANS: Bit, DF_1_DIRECT: Bit, DF_1_ORIGIN: Bit, DF_1_NOOPEN: Bit, DF_1_INITFIRST: Bit, DF_1_LOADFLTR: Bit, DF_1_NODELETE: Bit,
+      DF_1_GROUP: Bit, DF_1_GLOBAL: Bit, DF_1_NOW: Bit
+    )
+    static DF_P1 := (High(2), DF_P1_GROUPPERM: Bit, DF_P1_LAZYLOAD: Bit)
+  }
+
+  // Elf*_Nhdr (gABI ch5.pheader#note_section): name and desc each padded to the alignment; n_type is the owner's to name
+  Note := class (align = 4, (
+    namesz: Word, descsz: Word, type: Word as (owner == "GNU" ? NT_GNU : *),
+    name: Byte[]{length == namesz}, Byte[]{length == -namesz % align},
+    desc: Byte[]{length == descsz} as (type.NT_GNU_PROPERTY_TYPE_0 ? Property[] : type.NT_GNU_ABI_TAG ? (os: Word as ELF_NOTE_OS, major: Word, minor: Word, patch: Word) : *),
+    Byte[]{length == -descsz % align}
+  )) => {
+    owner => name.until(0) as String
+    static NT_GNU := (NT_GNU_ABI_TAG: 1 | NT_GNU_HWCAP: 2 | NT_GNU_BUILD_ID: 3 | NT_GNU_GOLD_VERSION: 4 | NT_GNU_PROPERTY_TYPE_0: 5)
+    static ELF_NOTE_OS := (ELF_NOTE_OS_LINUX: 0 | ELF_NOTE_OS_GNU: 1 | ELF_NOTE_OS_SOLARIS2: 2 | ELF_NOTE_OS_FREEBSD: 3)
+    // a GNU property (pr_type, pr_datasz, pr_data padded to the alignment)
+    Property := class (type: Word as GNU_PROPERTY, size: Word, data: Byte[]{length == size}, Byte[]{length == -size % align})
+    static GNU_PROPERTY := (
+      GNU_PROPERTY_STACK_SIZE: 1 | GNU_PROPERTY_NO_COPY_ON_PROTECTED: 2 | and: 0xB0000000..0xB0007FFF | or: 0xB0008000..0xB000FFFF |
+      GNU_PROPERTY_1_NEEDED: 0xB0008000 | GNU_PROPERTY_AARCH64_FEATURE_1_AND: 0xC0000000 | GNU_PROPERTY_X86_FEATURE_1_AND: 0xC0000002 |
+      GNU_PROPERTY_X86_ISA_1_NEEDED: 0xC0008002 | GNU_PROPERTY_X86_ISA_1_USED: 0xC0010002 | processor: 0xC0000000..0xDFFFFFFF | user: 0xE0000000..0xFFFFFFFF
+    )
+  }
+
+  // Elf*_Chdr (gABI ch4.sheader#compression_header): what an SHF_COMPRESSED section's contents start with
+  Compression := class (type: Word as ELFCOMPRESS, (Word) if wide, size: Address, align: Address, data: *) => {
+    static ELFCOMPRESS := (ELFCOMPRESS_ZLIB: 1 | ELFCOMPRESS_ZSTD: 2 | os: 0x60000000..0x6FFFFFFF | processor: 0x70000000..0x7FFFFFFF)
+  }
+  // SHT_GROUP (gABI ch4.sheader#section_groups): a flag word, then the member section indices
+  Group := class (flags: Word as (processor: Binary₄, os: Binary₈, Binary₁₉, GRP_COMDAT: Bit), members: Word[])
+
+  // gABI ch5.dynamic#hash; `of` is elf_hash (glibc dl-hash.h): h << 4 + c, the top nibble folded into bits 4..7, then cleared
+  Hash := class (nbucket: Word, nchain: Word, bucket: Word[]{length == nbucket}, chain: Word[]{length == nchain}) => {
+    static of (name: Byte[]) => name.reduced(0, h => ((h * 16 + .) % 2 ^ 32) -- (x => (x & 0xF0000000) -- (g => x - g + g / 2 ^ 24 - 2 * ((x - g) & g / 2 ^ 24))))
+  }
+  // no spec: binutils bfd_elf_gnu_hash, glibc dl_new_hash; a Bloom filter, then buckets over the symbols from `symoffset`
+  GnuHash := class (nbuckets: Word, symoffset: Word, bloom_size: Word, bloom_shift: Word, bloom: Address[]{length == bloom_size}, buckets: Word[]{length == nbuckets}, chain: Word[]) => {
+    static of (name: Byte[]) => name.reduced(5381, h => (h * 33 + .) % 2 ^ 32)
+  }
+
+  // Symbol versioning (LSB symversion.html): each entry says how far on the next one is, `next` (0: the last)
+  Next (T) => (following: T at +next) if next != 0
+  VER_FLG := (Binary₁₄, VER_FLG_WEAK: Bit, VER_FLG_BASE: Bit)
+  Versym := class ((hidden: Bit, index: Binary₁₅ as (VER_NDX_LOCAL: 0 | VER_NDX_GLOBAL: 1 | version: 2..0x7FFF)) = value: Half)
+  Verdef := class (version: Half, flags: Half as VER_FLG, index: Half, count: Half, hash: Word, aux: Word, next: Word, names: Verdaux at +aux, Next(Verdef))
+  Verdaux := class (name: Word, next: Word, Next(Verdaux))
+  Verneed := class (version: Half, count: Half, file: Word, aux: Word, next: Word, needs: Vernaux at +aux, Next(Verneed))
+  Vernaux := class (hash: Word, flags: Half as VER_FLG, other: Half, name: Word, next: Word, Next(Vernaux))
+}

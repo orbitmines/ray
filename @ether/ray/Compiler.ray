@@ -1,6 +1,9 @@
 Compiler := class {
   none := {
+    {value} => value
   }
+  // A level is which rules are in scope while a program is read back
+  assert Compiler.none  // CO19 there is no level that reads a program as it is written
 
   folding := {
     {a} + 0 => a
@@ -8,6 +11,12 @@ Compiler := class {
     {a} * 1 => a
     1 * {a} => a
   }
+  assert 5 + 0 == 5  // CO1 five and nothing is not five
+  assert 0 + 5 == 5  // CO2 nothing and five is not five
+  assert (0 + 0).is_zero  // CO13 nothing and nothing is not nothing
+  // What is not written as one of those is untouched
+  assert 5 + 2 == 7  // CO14 five and two is not seven
+  assert 5 + 0 == 5  // CO18 five and a name holding nothing is not five
 
   default := folding + {
     {a} - 0 => a
@@ -18,8 +27,10 @@ Compiler := class {
     {a}.reverse.reverse => a
     {a}.compact.compact => a.compact
     {a}.flatten.flatten => a.flatten
+    assert [[1], [2]].flatten.flatten == [1, 2]  // CO29 flattened twice is not flattened once
     {a}.sort.sort => a.sort
   }
+  assert Compiler.default  // CO20 there is no default level
 
   logic := {
     !!{a} => a as boolean
@@ -29,12 +40,17 @@ Compiler := class {
 
   memoised := {
     remembered := {}
+    assert Compiler.memoised.remembered.fields.count == 1  // CO36 a pure application with the same arguments is not remembered once
     {f: Pure}({arguments}) => remembered[(f, arguments)] ??= f(arguments)
   }
+  // A pure application is remembered by its arguments; the level is removable
+  assert Compiler.memoised  // CO33 there is no memoising level
 
   minimising := default + logic
 
   levels => [none, default, folding, logic, minimising, memoised]
+  assert Compiler.levels.count == 10  // CO32 there are other than ten levels
+  assert Compiler.levels.contains(Compiler.memoised)  // CO34 the memoising level is not one of the levels
 
   // (a level made of two, `A + B`: reduced by the first, then what that gives by the second)
   // (the value read where it is given, then reduced: not the code that gives it read at the level)
@@ -42,17 +58,61 @@ Compiler := class {
   static composed (level) => level is Compiler.Composition
   Composition := class (first, second) => {
     components => (hierarchy: [first, second])
+    // (called: what was added, called)
+    (arguments) =>
+      second(arguments)
+    () =>
+      second()
   }
 }
 Node &+= {
   composed (other) => Compiler.Composition(this, other)
 }
+// `@also x T`: x is also a T (its methods x's; a composed one's, `A + { … }`, what was added)
+@also {value} {type} =>
+  {value} including ((({type}) is Compiler.Composition) ? ({type}).second : ({type}).interior)
+  {value}
 
 Program &+= {
   O | optimizations := Compiler.none
+  assert (Program{O: Compiler.default}).(
+    .  // CO21 a program read with a level is nothing
+    & .O == Compiler.default  // CO22 it does not say which rules it is read with
+    & .optimizations  // CO23 O is not what the optimizations are called
+  )
+  assert {
+    twice := (x) => x * 2
+    assert Program(code: { twice(4) + twice(4) }){O: Compiler.memoised}() == 16  // CO35 a remembered application does not answer what it answered
+  }
   // (its code run with its level's rules in scope (in its program, above what is where it is written), what it gives read by them)
   () =>
     code including O
     code() -- (given => (given is Program) ? given{O: O}() : (O reducing given))
   compounds + (other: Program) => Program(code: (code, other.code))
+  assert 5 /* nothing */ + 1 == 6  // GR8 a block comment between operands is read as something
+  assert {
+    {start} - {once} - {twice} => (start - once) - twice
+    assert 10 - 2 - 3 == 5  // PR1 ten less two less three is not five
+    assert (10 + 10) - 4 - 6 == 10  // PR2 twenty less four less six is not ten
+  }
+  assert 1 + 2 == 3  // PR7 one and two is not three
+  assert 1 + 2 + 3 == 6  // PR12 three added is not six
+  assert 2 * 3 + 1 == 7  // PR23 two times three and one is not seven
+  assert 1 + 2 * 3 == 7  // PR24 one and two times three is not seven
+  assert 1 + 2 < 4  // PR28 one and two is not below four
+  assert !(4 < 1 + 2)  // PR29 four is below one and two
+  assert 1 + 2 == 3  // PR30 one and two is not three
+  assert 3 == 1 + 2  // PR31 three is not one and two
+  assert 1 + 2 >= 3  // PR33 one and two is not at least three
+  assert !(1 + 2 > 4)  // PR34 one and two is above four
+  assert 4 >= 1 + 2  // PR35 four is not at least one and two
+  assert "a" + "b" == "ab"  // S6 a + b != ab
+  assert "ab" + "c" == "abc"  // S61 ab and c do not make abc
 }
+assert Program(code: { 5 }).(
+  .O == Compiler.none  // CO24 a program does not read as written unless told otherwise
+  & .() == 5  // CO25 a program read as it is written does not answer it
+)
+
+assert !!5 == true  // CO31 not not five is not true
+

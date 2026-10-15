@@ -1,5 +1,0 @@
-// app: a plain project — implicitly depends on the @language project
-@ether/os
-@ether/game
-@ether/ui
-@ether/filesystem

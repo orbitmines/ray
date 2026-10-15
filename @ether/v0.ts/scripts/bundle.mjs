@@ -48,7 +48,5 @@ await build({
   banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
   logLevel: 'warning',
 });
-// this interpreter's mapping of the language (read beside the bundle: `dist/expression/js.ray`)
-mkdirSync('dist/expression', { recursive: true });
-copyFileSync('src/expression/js.ray', 'dist/expression/js.ray');
-copyFileSync('src/expression/js.kinds.ray', 'dist/expression/js.kinds.ray');
+// this interpreter's own kinds of value (read beside the bundle: `dist/js.kinds.ray`)
+copyFileSync('src/js.kinds.ray', 'dist/js.kinds.ray');

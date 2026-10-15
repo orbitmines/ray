@@ -32,9 +32,12 @@ const skip = (name) => ['tests', 'ide', 'spec', 'avatar', 'node_modules'].includ
   for (const name of readdirSync(dir)) {
     const from = join(dir, name);
     if (statSync(from).isDirectory()) { if (!skip(name)) copy(from); continue; }
-    if (!name.endsWith('.ray')) continue;
+    if (!name.endsWith('.ray') && !name.endsWith('.ray2')) continue;
     const to = join(server, '@ether', relative(library, from));
     mkdirSync(dirname(to), { recursive: true });
     cpSync(from, to);
   }
 })(library);
+
+// the host's own kinds of value, read beside the language (`new URL('./js.kinds.ray', import.meta.url)`)
+cpSync(join(implementation, 'src', 'js.kinds.ray'), join(server, 'js.kinds.ray'));

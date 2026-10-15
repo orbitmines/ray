@@ -8,13 +8,24 @@ Diagnostic &+= {
   static Severity := enum trace | debug | info | warn | error | fatal
 
   severity: Severity = fatal ? Severity.fatal : Severity.error
+  assert Diagnostic(message: "stop", fatal: true).severity == Diagnostic.Severity.fatal  // DG2 a fatal error is not of fatal severity
   at: Location? = origin ? origin.location{from == (origin.start.line, origin.start.column), to == (origin.end.line, origin.end.column)} : None
   code => type && type !== * ? type.name : None
   related => causes[1..]
 }
+assert Diagnostic(message: "no").severity == Diagnostic.Severity.error  // DG1 an error is not of error severity
 
 Report := class (name: String = "ray", claims: Claim[] = []) => {
   static Claim := class (id: String, message: String, passed = true, at: Location?, duration: Quantity.Temporal?) => { }
+  // RT1 a run with a failing claim passed
+  assert !(Report(name: "suite", claims: [
+    Report.Claim(id: "A1", message: "one holds"),
+    Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{from == (4, 1)})
+  ])).passed && (Report(name: "suite", claims: [
+    Report.Claim(id: "A1", message: "one holds"),
+    Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{from == (4, 1)})
+  ])).failures.count == 1
+  assert Report(claims: [Report.Claim(id: "A4", message: "fine")]).passed  // RT14 a run of holding claims did not pass
 
   passed => claims.every(.passed)
   failures => claims{!.passed}

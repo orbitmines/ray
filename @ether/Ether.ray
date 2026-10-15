@@ -18,12 +18,289 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 
 // Whatever the policy, `confidential` is never wider than `@private.managed` (W5.5).
 confidential => Node.policy & @private.managed
+// Who may see what.
+assert confidential  // AC3 there is no confidential permission
 Node.policy = @local
 
 Node &+= {
   public => visibility#.some(.reads && @public is .who)
+  // Pre-rotation: the next keys are known by their digests only, and count for a rotation once revealed.
+  assert {
+    idy_next := $.ed25519.pair()
+    idy_pre := Identity(keys: [$.ed25519.pair().published], next: [$.sha256.write(idy_next.public).bytes])
+    assert idy_pre.counts(idy_next.published, idy_pre.rotate.signers, World.ether.clock.now)  // IDY11 a revealed next key does not count for a rotation
+    assert !(idy_pre.counts($.ed25519.pair().published, idy_pre.rotate.signers, World.ether.clock.now))  // IDY12 a key nobody committed to counts for a rotation
+  }
+  assert {
+    lgo := Instance.local.login(Character(name: "leaving-inbox"))
+    Instance.local.certified(lgo, World(name: "lgo-world"))
+    lgo_inbox := lgo.inbox
+    lgo_world_key := lgo.world_keys.first.key
+    Instance.local.logout(lgo)
+    assert !(lgo_inbox.agreed($.x25519.pair().public) is Byte[])  // LGO1 an agreement key outlives logging out
+    assert !(lgo_world_key.signed([1]).valid == true)  // LGO2 a per-world key outlives logging out
+  }
+  // Sealed sender: a who narrower than the history moves who and the signature into the ciphertext; the line shows a per-history pseudonymous key.
+  assert {
+    sel_writer := Instance.local.login(Character(name: "sel-writer"))
+    sel := History(repository: Repository()) ~~ (.sender = none)
+    sel.commit(sel_writer, 1)
+    sel.commit(sel_writer, 2)
+    sel_line := sel.head.written(above: sel.head.previous)
+    assert sel.sealed_sender  // SEAL1 a who narrower than its history does not seal the sender
+    assert sel.head.who is Encoding.Key && sel.head.who == sel.head.previous.who  // SEAL3 a sealed history's lines do not show one pseudonymous key
+    assert !(sel_line ~= "@sel-writer" || sel.head.relies)  // SEAL4 a sealed sender is named in plaintext
+    assert sel.head.authentic  // SEAL5 a line is not signed by the pseudonymous key it shows
+    assert sel.head.opened.who.name == "sel-writer" && sel.head.opened.signature  // SEAL6 a reader does not find who wrote the line and their signature
+    assert sel.value == 2  // SEAL7 a history with a sealed sender does not read
+    sel_other := History(repository: Repository()) ~~ (.sender = none)
+    sel_other.commit(sel_writer, 1)
+    assert !(sel_other.head.who == sel.head.who)  // SEAL8 two histories show one pseudonym
+    // A fork and an earlier version are copies: the sealed sender and the content keys come along.
+    frk := sel.fork
+    assert frk.sealed_sender && frk.current_key == sel.current_key && sel[sel.head.previous].sealed_sender  // FRK1 a copy of a sealed history loses its sender or its key
+    frk.commit(sel_writer, 3)
+    assert frk.head.who is Encoding.Key && frk.value == 3  // FRK2 a commit on a fork of a sealed history names its sender
+    assert !(Language.ray.write(sel.since(None).map(.wraps)) ~= Language.ray.write(sel_writer.inbox.published.public))  // ANW5 a sealed history's wraps name its writer
+  }
+  // What a new reader can decrypt is what their read grant covers: the whole history by default, or any narrowing of it; a rotation follows the grants that reach the head.
+  assert {
+    grk_owner := Instance.local.login(Character(name: "grk-owner"))
+    grk_all := Instance.local.login(Character(name: "grk-all"))
+    grk_now := Instance.local.login(Character(name: "grk-now"))
+    grk_from := Instance.local.login(Character(name: "grk-from"))
+    grk_past := Instance.local.login(Character(name: "grk-past"))
+    grk := none.read History(repository: Repository())
+    grk.commit(grk_owner, 1)
+    grk_first := grk.current_key
+    grk.rekeyed(grk_owner)
+    grk_second := grk.current_key
+    grk.commit(grk_owner, 2)
+    grk_label := grk.head.id
+    grk.rekeyed(grk_owner)
+    grk_third := grk.current_key
+    grk.commit(grk_owner, 3)
+    grk_now.read grk{from Time.now}
+    grk_from.read grk{from grk_label}
+    grk_past.read grk{from value == 1 to value == 2}
+    grk.shared(grk_all, grk_owner)
+    assert [grk_first, grk_second, grk_third].every(grk.content_key(., [grk_all]) is Encoding.Key)  // GRK1 a reader of the whole history does not hold every key
+    grk.shared(grk_now, grk_owner)
+    assert grk.head.wraps.every(.key == grk_third)  // GRK2 sharing from now wraps a key from before now
+    assert grk.content_key(grk_third, [grk_now]) is Encoding.Key && [grk_first, grk_second].every(grk.content_key(., [grk_now]).erred)  // GRK3 a reader from now does not hold exactly the current key
+    grk.shared(grk_from, grk_owner)
+    assert [grk_second, grk_third].every(grk.content_key(., [grk_from]) is Encoding.Key) && grk.content_key(grk_first, [grk_from]).erred  // GRK4 a reader from a label does not hold exactly the keys from that commit on
+    grk.shared(grk_past, grk_owner)
+    assert [grk_first, grk_second].every(grk.content_key(., [grk_past]) is Encoding.Key) && grk.content_key(grk_third, [grk_past]).erred  // GRK5 a reader of a closed stretch does not hold exactly its keys
+    assert grk.readers.some(=== grk_past) && !grk.following.some(=== grk_past)  // GRK6 a reader of a closed stretch follows the head
+    grk.rekeyed(grk_owner)
+    assert [grk_owner, grk_all, grk_now, grk_from].every(grk.content_key(grk.current_key, [.]) is Encoding.Key)  // GRK7 a rotation is not wrapped for a reader whose grant reaches the head
+    assert grk.content_key(grk.current_key, [grk_past]).erred  // GRK8 a rotation is wrapped for a reader whose grant ended
+    // Wraps are anonymous: no recipient key in plaintext, a tag only the recipient recomputes, the writer's own wrap like any other.
+    anw := grk.head.wraps
+    anw_info := (grk.current_key as String).bytes
+    assert !(Language.ray.write(anw) ~= Language.ray.write(grk_all.inbox.published.public) || anw.some(.reader))  // ANW1 a wrap names its recipient
+    assert anw{w => w.by.recognised(grk_all.inbox, anw_info, w.tag, w.sealed)}.count == 1  // ANW2 a reader does not find exactly one wrap by its tag
+    assert !(anw.some(w => w.by.recognised(grk_past.inbox, anw_info, w.tag, w.sealed)))  // ANW3 someone not a reader recognises a wrap
+    assert anw.every(.tag.count == anw.first.tag.count && .sealed.count == anw.first.sealed.count)  // ANW4 the writer's wrap differs in shape from a reader's
+  }
+  // End-to-end encryption: a history that is not public is stored as ciphertext for its readers; its lines keep label, parents, stamp, key and signature in plaintext (L§9.2).
+  assert {
+    ada := Instance.local.login(Character(name: "ada"))
+    crypt := History(repository: Repository())
+    crypt.commit(ada, Program(code: { .secret = "kept" }))
+    crypt.commit(ada, Program(code: { .secret = "kept twice" }))
+    crypt_first := crypt.since(None).first
+    crypt_line := crypt.head.written(above: crypt.head.previous)
+    crypt_text := Language.ray.write(crypt).at(crypt.id as String + ".ray").content as String
+    assert !(crypt.public)  // CRYPT1 a history is public by default
+    assert crypt_first.wraps.some(.key == crypt_first.id) && crypt_first.key == crypt_first.id  // CRYPT2 the first commit does not bring a content key of its own
+    assert crypt.head.key == crypt_first.id  // CRYPT3 a line does not name the content key it uses
+    assert !(crypt_text ~= "kept")  // CRYPT4 a change is written in plaintext
+    assert crypt_line ~= ⊢(crypt.head.id as String + "\\ with (@me = @ada; now = ")  // CRYPT5 a line's label, who and stamp are not in plaintext
+    assert crypt_line ~= "; key = " && crypt_line ~= "; signature = "  // CRYPT6 a line's key and signature are not in plaintext
+    assert crypt.value.secret == "kept twice"  // CRYPT7 a reader does not read an encrypted history
+    crypt_back := (crypt_text as Program) as History
+    assert crypt_back.head.sealed && crypt_back.head.change == None  // CRYPT8 a line read back holds its change other than as ciphertext
+    assert crypt_back.value.secret == "kept twice"  // CRYPT9 a reader does not read an encrypted history back from its lines
+    assert crypt.head.covers(crypt.head.signature) && crypt.head.authentic  // CRYPT10 the signature does not cover the line with its ciphertext
+    assert !((crypt.head.rewritten(None) ~~ (.sealed = crypt_first.sealed)).authentic)  // CRYPT11 a line whose ciphertext was replaced is authentic
+    assert (crypt_first.rewritten(None) ~~ (.sealed = crypt.head.sealed)).opened is Diagnostic  // CRYPT12 a ciphertext moved to another line opens there
+    assert crypt.content_key(crypt.current_key, []).erred  // CRYPT13 the content key opens for nobody's instance key
+    assert !(Compiler.reduced(crypt, Compiler.cached).cache_files.first.content as String ~= "kept")  // CRYPT14 a cache of an encrypted history is in plaintext
+    assert crypt.tree.at(crypt.id as String + ".ray")  // CRYPT15 a backend is given the values of an encrypted history instead of its lines
+    // A public history stays plaintext and has no content key.
+    crypt_open := History(repository: Repository()).publish
+    crypt_open.commit(ada, Program(code: { .open = 1 }))
+    assert crypt_open.head.written() ~= ".open = 1"  // CRYPT17 a public history is encrypted
+    assert !(crypt_open.head.key || crypt_open.head.wraps.nonempty)  // CRYPT18 a public history has a content key
+    // Merging happens where the history is read: two branches under one key merge as any other.
+    crypt_branch := crypt.fork
+    crypt_branch.commit(ada, Program(code: { .y = 2 }))
+    assert crypt_branch.head.key == crypt.head.key  // CRYPT19 a fork does not keep the content key
+    crypt.merge(crypt_branch)
+    crypt.commit(ada, Program(code: { .x = 1 }))
+    assert crypt.head.merged && crypt.value.x == 1 && crypt.value.y == 2  // CRYPT20 a reader does not merge two branches of an encrypted history
+  }
+  assert public  // AC1 there is no public permission
+  assert !(private === public)  // AC2 private and public are the same
+  assert Access(who: public).who === public  // AC5 an access forgot who it is for
   publish: static => this ~~ .access |= Access(public, method: Access.Reading, target: this)
+  assert {
+    ada := Instance.local.login(Character(name: "ada"))
+    // A commit is any Ray, run on the value before it (`.`).
+    vh := History(repository: Repository()).publish
+    vh.commit(ada, Program(code: { .greet = "hello" }))
+    assert vh.value.greet == "hello"  // VC1 a commit's program did not run on the value
+    vh.commit(ada, Program(code: { .welcome = .greet; .greet = None }))
+    assert vh.value.welcome == "hello" && vh.value.greet == None  // VC2 a renaming program did not rename
+    vh.commit(ada, Program(code: { .count = 0; (0..<100).for { this.count += 1 } }))
+    assert vh.value.count == 100  // VC3 a loop in a commit did not run
+    assert vh[vh.head.previous].value.count == None  // VC4 an earlier version sees a later change
+    assert vh.head.previous.stamp < vh.head.stamp  // VC5 a later commit is not stamped later
+    // Running as a character.
+    assert (@ada { @me }) == ada  // VC6 a block run as a character does not run as it
+    // `.%`: a line per commit, `LABEL\ with (@me = @who; now = X) <change>`, ordinary Ray.
+    vl := vh.head.written(above: vh.head.previous)
+    assert vl ~= ⊢(vh.head.id as String + "\\ ")  // VC7 a line does not begin with its label
+    assert vl ~= "\\ with (@me = @ada; now = "  // VC8 a line does not set who made the commit and when
+    assert vl ~= "(0..<100).for"  // VC9 a line does not hold the program as written
+    vt := Language.ray.write(vh)
+    vf := vt.at(vh.id as String + ".ray").content as String
+    assert vf.lines{.nonempty}.count == 3  // VC10 three commits are other than three lines
+    assert !vt.at("index.ray")  // VC11 a history is written with an index beside its program
+    vb := (vf as Program) as History
+    assert vb.head.id == vh.head.id  // VC12 a history read back has other labels
+    assert vb.count == 3  // VC13 a history read back has other than its three commits
+    assert vb.value.welcome == "hello" && vb.value.count == 100  // VC14 a history read back has another value
+    assert vb.head.previous.stamp < vb.head.stamp  // VC15 a history read back lost its order
+    // Merging: concurrent changes to one field raise ERROR@Merge; to two do not.
+    vm := History(repository: Repository())
+    vm.commit(ada, Program(code: { .x = 1 }))
+    vbranch := vm.fork
+    vm.commit(ada, Program(code: { .x = 2 }))
+    vbranch.commit(ada, Program(code: { .x = 3 }))
+    assert vm.merge(vbranch).erred  // VC32 two changes to one field merged without asking
+    vn := History(repository: Repository())
+    vn.commit(ada, Program(code: { .x = 1 }))
+    vother := vn.fork
+    vn.commit(ada, Program(code: { .x = 2 }))
+    vother.commit(ada, Program(code: { .y = 5 }))
+    vn.merge(vother)
+    assert vn.head.merged  // VC33 a merge of two branches does not have both as parents
+    assert vn.value.x == 2 && vn.value.y == 5  // VC34 a merge lost a change from one side
+    // Pins, and a fix that substitutes a version: a rule on mentions of the version it fixes.
+    vstd := History(repository: Repository())
+    vstd.commit(ada, 1)
+    vbug := vstd.head.id
+    vstd.fix(ada, vbug, 2)
+    assert vstd.checkout(vbug) == 2  // VC35 a pin to a fixed version does not get the fix
+    assert vstd.checkout(vbug, as_of: vstd.head.previous.stamp) == 1  // VC36 what was written before the fix does not replay as recorded
+    // One global order over separate histories.
+    vglobal := History.global([vstd, vn])
+    assert vglobal.ordered.zip(vglobal.ordered.rest).every((a, b) => !(b.stamp < a.stamp))  // VC37 the global order is not by stamp
+    assert vglobal.head.parents.count == 2  // VC38 the global history does not join every history
+    assert Compiler.reduced(vh, Compiler.cached).cache_files.first.content as String ~= ⊢(vh.head.id as String + "\\ ")  // VC40 the cache does not hold the value at the head
+    // A stretch runs from where its start holds to the commit where its end holds; the last may not have ended yet.
+    vs := History()
+    [1, 5, 6, 2, 7].for(vs.commit(ada, .))
+    stretched := vs{from value > 4 to value <= 4}
+    assert stretched.count == 2  // VC44 a history is not read as its stretches
+    assert stretched.first.value == [5, 6, 2]  // VC45 a stretch does not end with the commit that ends it
+    assert stretched.last.value == [7]  // VC46 an unfinished last stretch is left out
+    assert vs{from value > 4}.first.value == [5, 6, 2]  // VC47 a stretch with no end does not end where its start stops holding
+    assert vs.since(None){.value == 5}.first.next.value == 6  // VC48 a commit's next is not the one after it on its line
+    assert vs.head.next == None  // VC49 the head has a next
+    // `+` rebases (other's commits appended, re-stamped), `|` merges, `&+` interleaves by stamp.
+    hb := History(repository: Repository())
+    hb.commit(ada, Program(code: { .x = 1 }))
+    hb_other := hb.fork
+    hb.commit(ada, Program(code: { .x = 2 }))
+    hb_other.commit(ada, Program(code: { .y = 5 }))
+    hb_rebased := hb + hb_other
+    assert hb_rebased.value.x == 2 && hb_rebased.value.y == 5  // HB1 a rebase lost a change from one side
+    assert !(hb_rebased.since(None).some(.merged))  // HB2 a rebase made a merge
+    assert hb_other.head.stamp < hb_rebased.head.stamp  // HB3 a rebased commit kept its old stamp
+    assert hb.value.y == None  // HB4 rebasing changed the history it started from
+    hb_merged := hb | hb_other
+    assert hb_merged.head.merged  // HB5 a merge is not one commit with both heads as parents
+    assert hb_merged.value.x == 2 && hb_merged.value.y == 5  // HB6 a merge with | lost a change from one side
+    hb_woven := hb &+ hb_other
+    assert hb_woven.since(None).count == 3  // HB7 an interleaving has other than the three commits of both
+    assert !(hb_woven.since(None).some(.merged))  // HB8 an interleaving made a merge
+    assert hb_woven.value.x == 2 && hb_woven.value.y == 5  // HB9 an interleaving lost a change from one side
+    assert hb_woven.head.stamp == hb_other.head.stamp  // HB10 an interleaving re-stamped what it ordered
+    // A history may hold branches with no common commit.
+    hr := History(repository: Repository())
+    hr.commit(ada, Program(code: { .a = 1 }))
+    hr_apart := History(repository: Repository())
+    hr_apart.commit(ada, Program(code: { .b = 2 }))
+    hr_joined := hr | hr_apart
+    assert hr_joined.roots.count == 2  // HB11 a merge of two unrelated histories does not keep both roots
+    assert hr_joined.value.a == 1 && hr_joined.value.b == 2  // HB12 a merge of two unrelated histories lost one of them
+    hr_text := Language.ray.write(hr_joined).at(hr_joined.id as String + ".ray").content as String
+    assert hr_text ~= ". = None; "  // HB13 a second root is written as continuing the line above it
+    assert ((hr_text as Program) as History).roots.count == 2  // HB14 a history read back has other than its two roots
+    assert (hr + hr_apart).value.b == 2  // HB15 a rebase onto an unrelated history lost its commits
+    // Forking is a copy, whose history is a fork of the original's.
+    hx := Character(name: "forked")
+    hx.history.commit(ada, 1)
+    hx_copy := hx.copy
+    hx_copy.history.commit(ada, 2)
+    assert hx.history.since(None).count == 1  // HB16 committing to a copy changed the original's history
+    assert hx_copy.history.since(None).count == 2  // HB17 a copy's history does not continue the original's
+    // A history read without trust keeps its lines and ignores their claims (L§9.2.12)
+    claimed := History()
+    claimed.commit(ada, 1, versions: ["fixed"])
+    assert (with (O = O + Compiler.untrusted) { claimed.head.versions }).empty  // FWV1 an untrusted history's claims were believed
+    assert claimed.head.versions == ["fixed"]  // FWV2 a trusted history's claims were not kept
+    // A transaction is a fork merged as a whole: nothing of it is in the history until it is merged.
+    txh := History()
+    txh.commit(ada, 1)
+    tx_branch := txh.fork
+    tx_branch.commit(ada, 2)
+    assert !(txh.value == 2)  // TXF1 a fork's commit is in the history before it is merged
+    txh.merge(tx_branch)
+    assert txh.value == 2  // TXF2 merging a fork does not bring its commits
+    tx_dropped := txh.fork
+    tx_dropped.commit(ada, 3)
+    assert tx_dropped.drop.head === txh.head  // TXF3 dropping a fork does not leave it where it started
+    // Version control alone neither keys nor signs a line, and replays it as whoever replays it: who is attribution, not authority (W2.1).
+    layer := History(repository: Repository())
+    layer.commit(ada, 1)
+    assert !(layer.head.written() ~= "; key = " || layer.head.written() ~= "; signature = ")  // LAYER1 version control alone keys or signs a line
+    assert layer.value == 1  // LAYER2 version control alone does not read a history that is not public
+    assert !((History.Commit(who: ada, stamp: World.ether.clock.now, change: Program(code: { @me })).applied(None)) === ada)  // AUTH1 version control replays a line as the character it names
+    assert !(Program(code: { @me }, who: ada).run === ada)  // AUTH2 version control runs handed-over code as the character it names
+    auth_logged := Program.runs.commit(ada, Program(code: { @me })).head
+    assert !(Program.replay(auth_logged) === ada)  // AUTH3 version control replays a logged run as the character it names
+    // Going back and forking are copies: access, caches and the repository come along; erasing drops the caches.
+    cpy := none.read History(repository: Repository()) ~~ (.caches = [History()])
+    cpy.commit(ada, 1)
+    cpy.commit(ada, 2)
+    cpy_fork := cpy.fork
+    cpy_at := cpy[cpy.head.previous]
+    assert cpy_fork.base === cpy.head && cpy_fork.head === cpy.head  // CPY1 a fork does not start at the head it forked
+    assert cpy_at.head === cpy.head.previous && cpy_at.value == 1  // CPY2 going back does not stop at the commit gone back to
+    assert [cpy_fork, cpy_at, cpy.squash(ada), cpy.blank, cpy.erased].every(.unreadable && .repository === cpy.repository)  // CPY3 a history made from another is readable by more, or kept elsewhere
+    assert cpy_fork.caches == cpy.caches && cpy_at.caches == cpy.caches  // CPY4 a fork or an earlier version loses the caches
+    assert cpy.erased.caches.empty  // CPY5 an erased history keeps caches of its values
+    assert cpy[cpy.head.previous.id].head === cpy.head.previous  // CPY6 going back to a label does not find its commit
+  }
 }
 
 @{instance: Instance} ^string => instance.canonical
 {prefix: "@" | "#"}{id: UUID} ^string => children**{.PREFIX == prefix & id is .name}.first
+
+assert HTTP.v1_1.read("HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\ncontent-type: text/plain\r\n\r\nnope").(
+  .status.code == 404  // HT4 a status line does not give its code
+  & .status is HTTP.Status.ClientError && !(.status is HTTP.Status.ServerError)  // HT5 404 is not a client error
+  & .fields["Content-Type"] == "text/plain"  // HT6 a field name is read case-sensitively
+  & .text == "nope"  // HT7 a body of a given length is not read
+)
+
+// One of a collection, and several. Which one is the machine's to say; that
+// there is one, and that it is one of them, is not.
+assert ([1, 2, 3]).random  // RN8 a collection does not answer one of itself
+
+assert ([1, 2, 3]).contains((([1, 2, 3]).random))  // RN11 what was chosen is not one of them

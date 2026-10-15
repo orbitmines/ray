@@ -1,0 +1,31 @@
+// The Base 64 Encoding (https://www.rfc-editor.org/rfc/rfc4648#section-4)
+Base64 := class: Language (sextets: (Binary₆ as Alphabet)[], "="[]{length == (4 - sextets.count % 4) % 4}) {
+  static extensions := ".base64"
+  static Alphabet := ("A".."Z", "a".."z", "0".."9", "+", "/") as String
+
+  bytes: Byte[] => sextets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))
+  assert "Man".bytes as Base64 as String == "TWFu"  // UI71 Man is not TWFu in Base64
+  assert "Ma".bytes as Base64 as String == "TWE="  // UI72 Ma is not padded to TWE=
+  assert Base64.read("TWFu") == "Man".bytes && $.base64 === Base64  // BASE1 Base64 text does not read back as its bytes, or $.base64 is not Base64
+  assert ([] as Base64) is Base64 && [] as Base64 as String == ""  // BASE2 no bytes are not the empty text in Base64 as RFC 4648 §10 gives it
+  assert "f".bytes as Base64 as String == "Zg=="  // BASE3 "f" is not "Zg==" in Base64 as RFC 4648 §10 gives it
+  assert "fo".bytes as Base64 as String == "Zm8="  // BASE4 "fo" is not "Zm8=" in Base64 as RFC 4648 §10 gives it
+  assert "foo".bytes as Base64 as String == "Zm9v"  // BASE5 "foo" is not "Zm9v" in Base64 as RFC 4648 §10 gives it
+  assert "foob".bytes as Base64 as String == "Zm9vYg=="  // BASE6 "foob" is not "Zm9vYg==" in Base64 as RFC 4648 §10 gives it
+  assert "fooba".bytes as Base64 as String == "Zm9vYmE="  // BASE7 "fooba" is not "Zm9vYmE=" in Base64 as RFC 4648 §10 gives it
+  assert "foobar".bytes as Base64 as String == "Zm9vYmFy"  // BASE8 "foobar" is not "Zm9vYmFy" in Base64 as RFC 4648 §10 gives it
+  assert Base64.read("Zg==") == "f".bytes  // BASE9 "Zg==" does not read back as "f" (RFC 4648 §10)
+  assert Base64.read("Zm8=") == "fo".bytes  // BASE10 "Zm8=" does not read back as "fo" (RFC 4648 §10)
+  assert Base64.read("Zm9v") == "foo".bytes  // BASE11 "Zm9v" does not read back as "foo" (RFC 4648 §10)
+  assert Base64.read("Zm9vYg==") == "foob".bytes  // BASE12 "Zm9vYg==" does not read back as "foob" (RFC 4648 §10)
+  assert Base64.read("Zm9vYmE=") == "fooba".bytes  // BASE13 "Zm9vYmE=" does not read back as "fooba" (RFC 4648 §10)
+  assert Base64.read("Zm9vYmFy") == "foobar".bytes  // BASE14 "Zm9vYmFy" does not read back as "foobar" (RFC 4648 §10)
+  static (bytes: Byte[]) as (=== Base64) => Base64(sextets: bytes.map(.integer).flatten.chunk(6).map(Binary(integer: (., ["0"] * (6 - .count)))))
+
+  static level := {
+    {encoded: Base64} => encoded.bytes
+  }
+  static written := {
+    {writing: Language.Writing} => writing.value as Byte[] as Base64
+  }
+}

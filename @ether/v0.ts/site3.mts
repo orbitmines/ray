@@ -1,13 +1,16 @@
 if (process.env.STACK) Error.stackTraceLimit = 100000;
-// usage: site3.mts [EXPRESSION…] — reads, on language3: .entrypoint.ray2 + js3.kinds.ray, the core library, the @ether projects the
+// usage: site3.mts [EXPRESSION…] — reads, on language.ts: .entrypoint.ray2 + js.kinds.ray, the core library, the @ether projects the
 // site needs (dependencies first), the site's files (index.ray last); per file: ms, threw, unread; then each expression (default:
 // the site's TUI run) with what it reported and wrote.
-const { Program, Text } = await import('/home/fs/Documents/github.com/orbitmines/ray/@ether/v0.ts/src/language3.ts');
+const ether = process.env.ETHER ?? '/home/fs/Documents/github.com/orbitmines/ray/@ether';
+const { Program, Text } = await import(`${ether}/v0.ts/src/language.ts`);
 const fs = await import('node:fs'), path = await import('node:path');
-const ether = '/home/fs/Documents/github.com/orbitmines/ray/@ether', site = '/home/fs/Documents/github.com/orbitmines/orbitmines.com/orbitmines.com.ray';
+const site = path.resolve(process.env.ORBITMINES_COM ?? path.resolve(ether, '../../orbitmines.com'), 'orbitmines.com.ray');
+// (what a file uses, for the order files are read in: not its comments, nor its tests (`assert …`: read after everything))
+const Library_read = (text: string) => { const out: string[] = []; let skip = -1; for (const line of text.split('\n')) { const at = line.length - line.trimStart().length; if (skip >= 0 && line.trim() && at > skip) continue; skip = -1; if (/^\s*assert\b/.test(line)) { skip = at; continue; } out.push(line.replace(/(^|\s)\/\/.*$/, '')); } return out.join('\n'); };
 const reading_order = (files: { path: string; text: string }[]): string[] => {
   const defines = (text: string) => new Set([...text.matchAll(/^([A-Za-z_][\w-]*)(?:\s*<[^>\n]*>)?\s*(?:\^[\w.]+\s*)?:=/gm)].map(m => m[1]));
-  const info = files.map(f => ({ path: f.path, defines: defines(f.text), uses: new Set(f.text.match(/[A-Za-z_][\w]*/g) ?? []) }));
+  const info = files.map(f => ({ path: f.path, defines: defines(f.text), uses: new Set(Library_read(f.text).match(/[A-Za-z_][\w]*/g) ?? []) }));
   const needs = new Map(info.map(f => [f.path, new Set(info.filter(g => g !== f && [...g.defines].some(name => f.uses.has(name) && !f.defines.has(name))).map(g => g.path))]));
   const order: string[] = [], left = new Set(info.map(f => f.path));
   while (left.size > 0) { const waiting = (p: string) => [...needs.get(p)!].filter(q => left.has(q)).length; const next = [...left].sort((a, b) => waiting(a) - waiting(b) || (a < b ? -1 : 1))[0]; order.push(next); left.delete(next); }
@@ -19,14 +22,8 @@ const dir_of = (name: string) => { if (name === '@ether') return ether; if (!nam
 const projects: string[] = [], seen = new Set<string>();
 const visit = (dir: string) => { if (seen.has(dir)) return; seen.add(dir); const pf = path.join(dir, '.project.ray'); const deps = fs.existsSync(pf) ? fs.readFileSync(pf, 'utf8').split('\n').map((l: string) => l.trim()).filter((l: string) => l.startsWith('@')) : []; for (const d of deps) { const dd = dir_of(d); if (dd) visit(dd); } projects.push(dir); };
 for (const d of fs.readFileSync(path.join(site, '.project.ray'), 'utf8').split('\n').map((l: string) => l.trim()).filter((l: string) => l.startsWith('@ether'))) { const dd = dir_of(d); if (dd) visit(dd); }
-// (the host's kinds: their operators read where the entrypoint's logic begins, so they bind tighter than it; their numerals and `of`
-// after it)
-const entry = fs.readFileSync('/home/fs/Documents/github.com/orbitmines/ray/@ether/ray/.entrypoint.ray2', 'utf8'), kinds_text = fs.readFileSync('/home/fs/Documents/github.com/orbitmines/ray/@ether/v0.ts/src/js3.kinds.ray', 'utf8');
-const ops = kinds_text.indexOf('// What both answer'), made_of = kinds_text.indexOf('// What a number or text is made of'), logic = entry.indexOf('// What a value answers to `?`');
-const source = new Text.Source('@ether/ray/.entrypoint.ray2'); source.value = entry.slice(0, logic) + kinds_text.slice(ops, made_of) + '\n' + entry.slice(logic);
-const p: any = new Program(source); await p.compile();
-const kinds = () => p.run(kinds_text.slice(0, ops) + '\n' + kinds_text.slice(made_of), { node: p.global });
-kinds();
+const p: any = new Program(new Text.Source('@ether/ray/.entrypoint.ray2')); await p.compile();
+const kinds = () => p.run(p.kinds.rest, { node: p.global });
 const STEPS = Number(process.env.STEPS ?? 300000), LIMIT = Number(process.env.LIMIT ?? 4);
 const rd = p.read; let steps = 0, unread: string[] = [];
 let cyc_depth = 0, cyc_shown = 0; const cyc_stk: string[] = [];
@@ -39,7 +36,7 @@ const read_file = (file: string, text: string) => {
   const t0 = performance.now(), threw: string[] = []; let unreadn = 0; const before = p.reports.length;
   const sts: string[] = p.code(text).statements;
   for (const st of sts) { if (!st.trim() || st.trim().startsWith('//')) continue; steps = 0; cyc_shown = 0; unread = []; let whole: unknown; try { whole = p.run(st, { node: p.global }); } catch (e: any) { threw.push(st.split('\n')[0].slice(0, 70) + '  ⟶ ' + String(e?.message ?? e).slice(0, 70)); if (process.env.STACK && st.startsWith(process.env.STACK)) console.log(String(e?.stack)); const snap = (globalThis as any).snap; if (process.env.DUMP && snap && st.startsWith(process.env.DUMP)) { console.log('DUMP depth', snap.length); const seen = new Map<string, number>(); for (const l of snap) { const k = short(l).slice(0, 100); seen.set(k, (seen.get(k) ?? 0) + 1); } for (const [k, n] of [...seen].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(String(n).padStart(5), k); if (process.env.DUMPAT) { const i = snap.findIndex((l: string) => short(l).startsWith(process.env.DUMPAT)); for (const l of snap.slice(Math.max(0, i - 25), i + 25)) console.log('   |', short(l).slice(0, 150)); } } (globalThis as any).snap = undefined; } if (typeof whole === 'string' && whole.trim() === String(p.source(st)).trim()) { unreadn++; if (process.env.UNREAD && file.includes(process.env.UNREAD) && unreadn <= Number(process.env.N ?? 6)) console.log('     unread', JSON.stringify(st.slice(0, 90)), ''); } }
-  if (!process.env.Q || threw.length) console.log(path.relative('/home/fs/Documents/github.com/orbitmines', file).padEnd(52), String(Math.round(performance.now() - t0)).padStart(6), 'ms', String(sts.length).padStart(4), 'st', String(threw.length).padStart(3), 'threw', String(p.reports.length - before).padStart(3), 'reports', String(unreadn).padStart(4), 'unread');
+  if (!process.env.Q || threw.length) console.log(path.relative(path.resolve(ether, '../..'), file).padEnd(52), String(Math.round(performance.now() - t0)).padStart(6), 'ms', String(sts.length).padStart(4), 'st', String(threw.length).padStart(3), 'threw', String(p.reports.length - before).padStart(3), 'reports', String(unreadn).padStart(4), 'unread');
   for (const x of threw.slice(0, LIMIT)) console.log('     threw', x);
 };
 const group = (files: string[]) => { const texts = files.map(f => ({ path: f, text: fs.readFileSync(f, 'utf8') })); for (const f of reading_order(texts)) { read_file(f, texts.find(t => t.path === f)!.text); if (process.env.WATCH) { let v: any; try { v = p.run(process.env.WATCH, { node: p.global }); } catch (e: any) { v = 'THREW'; } console.log('   WATCH', process.env.WATCH, '=', v instanceof Program.Node ? v.rules.slice(0, 4).map((r: any) => r.head).join(',') : JSON.stringify(v)); } } };

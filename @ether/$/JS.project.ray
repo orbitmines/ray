@@ -1,0 +1,81 @@
+@json
+
+// ECMAScript Language Specification (https://tc39.es/ecma262/)
+// A fragment reads as the Ray program it is, kept as code: calls, members, operators and lambdas are Ray's own, and a hole in braces is its value. Writing JS is one level over Ray's program shapes, a rule to each production
+JS := class: Language {
+  static extensions := ".js"
+  static Identifier := (Char.Letter | "_" | "$", (Char.Word | "$")[])
+
+  level := {
+    {code} => Program(code: code)
+  }
+
+  written := JSON.written + {
+    // Statements, each ended by ";" (https://tc39.es/ecma262/#sec-statements)
+    {program: Program} => program.steps.map(., ";")
+    // Comments (https://tc39.es/ecma262/#sec-comments)
+    //{literal text: (!\n)[]} => "/*", text, "*/"
+    /*{literal text}*/ => "/*", text, "*/"
+    // Let, const and var declarations (https://tc39.es/ecma262/#sec-let-and-const-declarations, https://tc39.es/ecma262/#sec-variable-statement)
+    {binding: "const" | "let" | "var"} {name: Identifier} = {value} => binding, " ", name, "=", value
+    // The return statement (https://tc39.es/ecma262/#sec-return-statement), the if statement (https://tc39.es/ecma262/#sec-if-statement)
+    return {value} => "return ", value
+    if ({condition}) {then} else {otherwise} => "if(", condition, "){", then, "}else{", otherwise, "}"
+    if ({condition}) {then} => "if(", condition, "){", then, "}"
+    // Function definitions (https://tc39.es/ecma262/#sec-function-definitions), arrow functions with a block or an expression (https://tc39.es/ecma262/#sec-arrow-function-definitions)
+    function {name: Identifier}({parameters}) {body} => "function ", name, "(", parameters, "){", body, "}"
+    assert (JS.read((@js function (a) { return a }) as JS) as JS) == ((@js function (a) { return a }) as JS)  // UI292 a written anonymous function does not read back
+    function ({parameters}) {body} => "function(", parameters, "){", body, "}"
+    ({parameters}) => {body: Program} => "(", parameters, ")=>{", body, "}"
+    ({parameters}) => {body} => "(", parameters, ")=>(", body, ")"
+    // Assignment, conditional and binary operators; Ray's == is JS's strict equality (https://tc39.es/ecma262/#sec-assignment-operators, https://tc39.es/ecma262/#sec-conditional-operator, https://tc39.es/ecma262/#sec-binary-logical-operators, https://tc39.es/ecma262/#sec-equality-operators)
+    {target} = {value} => target, "=", value
+    {condition} ? {then} : {otherwise} => "(", condition, "?", then, ":", otherwise, ")"
+    {a} == {b} => "(", a, "===", b, ")"
+    {a} != {b} => "(", a, "!==", b, ")"
+    {a} {operator: "??" | "||" | "&&" | "===" | "!==" | "<=" | ">=" | "<" | ">" | "+" | "-" | "*" | "/" | "%" | "**"} {b} => "(", a, operator, b, ")"
+    {a} instanceof {b} => "(", a, " instanceof ", b, ")"
+    // Unary operators (https://tc39.es/ecma262/#sec-unary-operators), new (https://tc39.es/ecma262/#sec-new-operator), await (https://tc39.es/ecma262/#sec-await)
+    {operator: "!" | "-"}{operand} => "(", operator, operand, ")"
+    {operator: "new" | "typeof" | "await"} {operand} => "(", operator, " ", operand, ")"
+    // Calls, a list spliced in as the arguments, and property access (https://tc39.es/ecma262/#sec-left-hand-side-expressions)
+    {function}(...{arguments}) => function, "(", arguments.map(("," if .index > 0), .), ")"
+    {function}({arguments: *[]}) => function, "(", arguments.map(("," if .index > 0), .), ")"
+    {object}.{member: Identifier} => object, ".", member
+    // Array and object literals (https://tc39.es/ecma262/#sec-array-initializer, https://tc39.es/ecma262/#sec-object-initializer)
+    [{elements: *[]}] => "[", elements.map(("," if .index > 0), .), "]"
+    \{{entries: *[]}{`}`} => "{", entries.map(("," if .index > 0), .), "}"
+    {name: Identifier}: {value} => name, ":", value
+    // Regular expression literals (https://tc39.es/ecma262/#sec-literals-regular-expression-literals), strings in single quotes (https://tc39.es/ecma262/#sec-literals-string-literals), null and undefined
+    /{literal pattern}/{flags: Char.Letter[]} => "/", pattern, "/", flags
+    '{literal text}' => Language.Writing(text)
+    null => "null"
+    undefined => "undefined"
+    {name: Identifier} => name
+  }
+}
+assert {
+  who := "Ray"
+  js_listen := @js document.getElementById({who}).addEventListener("click", (event) => ray.activate({who}))
+  assert js_listen is Program && (js_listen as JS) == "document.getElementById(\"Ray\").addEventListener(\"click\",(event)=>(ray.activate(\"Ray\")))"  // JSW1 a js listener fragment is not the Ray program that writes it
+  assert (js_listen as JS) ~= ⊢"document.getElementById(\"Ray\")"  // JSW2 a js fragment does not find an element by a held id
+  assert ((@js f({who})) as JS) == "f(\"Ray\")"  // UI208 a string hole in js is not a string literal
+  js_block := @js {
+    f()
+    g({who})
+  }
+  assert js_block.count == 2 && (js_block.last as JS) == "g(\"Ray\")"  // UI219 a js block is not its statements
+  assert ((@js {who} + 1) as JS) == "(\"Ray\"+1)"  // UI220 a hole right after @js is read as a block
+  // Ray's == is written as JS's strict equality (https://tc39.es/ecma262/#sec-isstrictlyequal)
+  assert ((@js a == {who}) as JS) == "(a===\"Ray\")"  // JSW4 Ray's equality is not written as ===
+}
+assert ((@js ray.set("a", 1 + 2 * 3)) as JS) == "ray.set(\"a\",(1+(2*3)))"  // UI209 js operators do not keep their precedence
+assert ((@js effect(["a"], () => { f() })) as JS) == "effect([\"a\"],()=>{f();})"  // JSW3 a lambda with a block is not written as an arrow function with its statements
+
+assert [@js f(), 4].count == 2  // UI211 a js fragment does not stop where its grammar stops
+
+// UI238 a js comment is not written into the js
+assert ((@js {
+  // note
+  f()
+}) as JS) == "/* note*/;f();"

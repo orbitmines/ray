@@ -1,0 +1,77 @@
+@json
+
+// Language Server Protocol 3.17 (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
+LSP &+= {
+  extensions = ".lsp"
+
+  // Base protocol header part (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#headerPart)
+  Wire := class (
+    "Content-Length: ", size: Decimal = content.count, "\r\n",
+    ("Content-Type: ", type: (!"\r")[], "\r\n")?,
+    "\r\n",
+    content: Byte[]{length == size}
+  )
+  // DiagnosticSeverity: 1 error, 2 warning, 3 information, 4 hint, Ray's severities from error down; fatal is written as an error and trace as a hint (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
+  coded (severity: Diagnostic.Severity) => (5 - severity.index) max 1 min 4
+  // Six severities on four: fatal is an error and trace a hint, each read back as the nearest (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
+  assert LSP.coded(Diagnostic.Severity.fatal) == 1 && LSP.coded(Diagnostic.Severity.trace) == 4 && LSP.severity(3) == Diagnostic.Severity.info && LSP.severity(4) == Diagnostic.Severity.debug  // LSP1 a severity is not written and read as LSP's four
+  severity (code: Decimal{1 <= . <= 4}) => Diagnostic.Severity[5 - code]
+  assert [Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)] as LSP ~= (*, "\"severity\":2", *)  // DG12 a warning is not LSP severity 2
+  // Positions are zero-based; columns count code points under the utf-32 position encoding (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#positionEncodingKind)
+  position (at: (line: Decimal, column: Decimal)?) => (line: (at.line ?? 1) - 1, character: (at.column ?? 1) - 1)
+  range (at: Location?) => (start: position(at.from), end: position(at.to))
+  // Location (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#location)
+  located (uri: String, range) => (uri as Location){from == (range["start"]["line"] + 1, range["start"]["character"] + 1), to == (range["end"]["line"] + 1, range["end"]["character"] + 1)}
+
+  Published := class file: Location?, diagnostics: Diagnostic[], source: String?
+
+  level := JSON.level + {
+    // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
+    {message: *{.["method"] == "textDocument/publishDiagnostics"}} => message["params"] -- (params => params["diagnostics"].map(diagnostic =>
+      // Diagnostic and DiagnosticRelatedInformation (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic)
+      <-(diagnostic["relatedInformation"] ?? []).reduce(cause = None => Diagnostic(message: .["message"], at: located(.["location"]["uri"], .["location"]["range"]), cause: cause)) -- (cause =>
+        Diagnostic(message: diagnostic["message"], severity: severity(diagnostic["severity"] ?? 1), at: located(params["uri"], diagnostic["range"]), cause: cause))))
+    {wire: Wire} => Compiler.reduced(JSON.read(wire.content as Unicode.UTF-8 as String), level)
+  }
+  written := {
+    {writing: Language.Writing{value is Diagnostic}} => Published(writing.value.at.file, [writing.value])
+    {writing: Language.Writing{value is Diagnostic[]}} => writing.value.map(.at.file).unique.map(file => Published(file, writing.value{.at.file == file}))
+    // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
+    {published: Published} => Wire(content: JSON.write((jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: (
+      uri: published.file as String,
+      // Diagnostic (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic)
+      diagnostics: published.diagnostics.map(diagnostic => (
+        range: range(diagnostic.at),
+        severity: coded(diagnostic.severity),
+        code: diagnostic.code,
+        source: published.source,
+        message: diagnostic.message as String,
+        relatedInformation: diagnostic.related.map(cause => (location: (uri: cause.at.file as String, range: range(cause.at)), message: cause.message as String)) -- (. if .nonempty)
+      ))
+    ))) as Unicode.UTF-8 as Byte[])
+  }
+}
+assert $.lsp === LSP  // DG14 $.lsp is not LSP
+LSP.components.hierarchy &= Language
+
+assert Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)}).(
+  [Diagnostic(message: "outer", cause: .)] as LSP ~= (*, "\"relatedInformation\"", *)  // DG13 a cause is not written as related information
+  & LSP.read([.] as LSP).first.message == "no"  // DG17 written diagnostics do not read back
+  & ([.] as LSP).(
+    . ~= ⊢"Content-Length: "  // DG3 an LSP message has no Content-Length header
+    & . ~= (*, "\"method\":\"textDocument/publishDiagnostics\"", *)  // DG4 diagnostics are not published as textDocument/publishDiagnostics
+    & . ~= (*, "\"range\":{\"start\":{\"line\":2,\"character\":4},\"end\":{\"line\":2,\"character\":7}}", *)  // DG5 an LSP range is not zero-based
+    & . ~= (*, "\"severity\":1", *)  // DG6 an error is not LSP severity 1
+    & (. as LSP.Wire).size == (. as LSP.Wire).content.count  // DG7 Content-Length is not the length of the content
+    & (@. {"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {"uri": "file:///a.ray", "diagnostics": [{"range": {"start": {"line": 2, "character": 4}, "end": {"line": 2, "character": 7}}, "severity": 2, "message": "careful"}]}}).(
+      .first.severity == Diagnostic.Severity.warn && .first.at.from == (3, 5)  // DG15 a publishDiagnostics message written inline does not read as a one-based warning
+    )
+    & (@. {
+  {"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {"uri": "file:///a.ray", "diagnostics": [
+    {"range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}}, "severity": 1, "message": {"no"}, "relatedInformation": null}
+  ]}}
+}).(
+      .first.message == "no" && .first.severity == Diagnostic.Severity.error  // DG16 a publishDiagnostics block does not read its hole and its null
+    )
+  )
+)

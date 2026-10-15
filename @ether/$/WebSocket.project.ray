@@ -1,0 +1,108 @@
+@http
+@base64
+@sha1
+
+// The WebSocket protocol (https://www.rfc-editor.org/rfc/rfc6455)
+// A client masks every frame it sends, a server none (https://www.rfc-editor.org/rfc/rfc6455#section-5.1)
+WebSocket := class: Language client: boolean = true {
+  static extensions := ".ws" | ".websocket"
+
+  // Opcodes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2, https://www.rfc-editor.org/rfc/rfc6455#section-11.8)
+  static Opcode := enum continuation | text | binary | x3 | x4 | x5 | x6 | x7 | close | ping | pong {
+    // Control frames have the high bit of the opcode set (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
+    control => index >= 8
+    assert WebSocket.Opcode.close.control && !WebSocket.Opcode.text.control  // WS11 close is not a control frame or text is
+  }
+
+  // Base framing protocol (https://www.rfc-editor.org/rfc/rfc6455#section-5.2)
+  static Frame := class (
+    fin: Binary₁ as boolean = true,
+    rsv: Binary₃ = 0,
+    opcode: Binary₄ as Opcode,
+    masked: Binary₁ as boolean = false,
+    // Payload length in the minimal number of bytes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2)
+    short: Binary₇ = payload.count < 126 ? payload.count : payload.count < 2 ^ 16 ? 126 : 127,
+    (medium: Binary₁₆ = payload.count) if short == 126,
+    (long: Binary₆₄{⊢0} = payload.count) if short == 127,
+    (key: Byte₄ = Byte₄.random) if masked,
+    data: Byte[]{length == size} = masked ? masking(payload) : payload
+  ) {
+    size => short == 127 ? long : short == 126 ? medium : short
+    // Client-to-server masking (https://www.rfc-editor.org/rfc/rfc6455#section-5.3)
+    masking (bytes: Byte[]) => bytes.enumerate.map(.value ~x|| key[.index % 4])
+    payload = masked ? masking(data) : data
+
+    // Control frames are not fragmented and carry at most 125 bytes (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
+    dynamically assert fin && payload.count <= 125 if opcode.control
+  }
+  assert ([0x81, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58] as WebSocket.Frame).payload as String == "Hello"  // WS2 a masked frame does not unmask
+  assert WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 256).short == 126 && WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 256).medium == 256  // WS4 a 256 byte payload does not take the 16 bit length
+  assert WebSocket.Frame(opcode: WebSocket.Opcode.text, payload: "Hello" as Byte[]) as Byte[] == [0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f]  // WS1 an unmasked text frame is not written as in RFC 6455 section 5.7
+  assert WebSocket.Frame(fin: false, opcode: WebSocket.Opcode.text, payload: "Hel" as Byte[]) as Byte[] == [0x01, 0x03, 0x48, 0x65, 0x6c]  // WS12 the first fragment of RFC 6455 section 5.7 is not 01 03 48 65 6c
+  assert WebSocket.Frame(opcode: WebSocket.Opcode.continuation, payload: "lo" as Byte[]) as Byte[] == [0x80, 0x02, 0x6c, 0x6f]  // WS13 the last fragment of RFC 6455 section 5.7 is not 80 02 6c 6f
+  assert WebSocket.Frame(opcode: WebSocket.Opcode.ping, payload: "Hello" as Byte[]) as Byte[] == [0x89, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f]  // WS14 the unmasked ping of RFC 6455 section 5.7 is not 89 05 and Hello
+  assert ([0x8a, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58] as WebSocket.Frame) -- (.opcode == WebSocket.Opcode.pong && .payload as String == "Hello")  // WS15 the masked pong of RFC 6455 section 5.7 does not read as a pong of Hello
+  assert (WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 256) as Byte[])[..<4] == [0x82, 0x7e, 0x01, 0x00]  // WS16 a 256-byte binary frame does not start 82 7e 01 00 as in RFC 6455 section 5.7
+  assert (WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 65536) as Byte[])[..<10] == [0x82, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00]  // WS17 a 64 KiB binary frame does not start 82 7f and a 64-bit length as in RFC 6455 section 5.7
+
+  static Message := class data: String | Byte[] {
+    text => data is String
+    bytes => text ? data as Unicode.UTF-8 as Byte[] : data
+  }
+  assert Compiler.reduced(Language.Writing(WebSocket.Message("hi")), WebSocket.written).masked  // WS7 a client's frame is not masked
+  assert !(Compiler.reduced(Language.Writing(WebSocket.Message("hi")), WebSocket(client: false).written).masked)  // WS8 a server's frame is masked
+  // Control frames: ping, pong, and close with its status code and reason (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
+  static Control := class opcode: Opcode{control} = Opcode.ping, data: Byte[] = []
+  // Closing (https://www.rfc-editor.org/rfc/rfc6455#section-5.5.1), status codes (https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1)
+  static Close := class: Control code: Binary₁₆ = 1000, reason: String = "" {
+    opcode = Opcode.close
+    data => [code as Byte[], reason as Unicode.UTF-8 as Byte[]].flatten
+  }
+
+  // Fragmentation: a message is its first frame and its continuations; control frames may come between them (https://www.rfc-editor.org/rfc/rfc6455#section-5.4)
+  static Stream := class (frames: Frame[]) {
+    fragmented => (frames{!.opcode.control} ~= (messages: (first: Frame{opcode != Opcode.continuation}, rest: Frame{opcode == Opcode.continuation}[])[])).messages.map([.first, .rest].flatten)
+    messages => fragmented.map(fragments => fragments.first.opcode == Opcode.text
+      ? Message(fragments.payload.flatten as Unicode.UTF-8 as String)
+      : Message(fragments.payload.flatten))
+    controls => frames{.opcode.control}.map(frame => frame.opcode == Opcode.close
+      ? Close(code: frame.payload[..<2] as Binary₁₆, reason: frame.payload[2..] as Unicode.UTF-8 as String)
+      : Control(frame.opcode, frame.payload))
+  }
+  assert WebSocket.Stream(frames: [
+    WebSocket.Frame(fin: false, opcode: WebSocket.Opcode.text, payload: "Hel" as Byte[]),
+    WebSocket.Frame(opcode: WebSocket.Opcode.ping),
+    WebSocket.Frame(opcode: WebSocket.Opcode.continuation, payload: "lo" as Byte[])
+  ]).(
+    .messages.first.data == "Hello"  // WS5 fragments are not joined into one message
+    & .controls.count == 1  // WS6 a control frame between fragments is lost
+  )
+
+  level := {
+    {stream: Stream} => stream.messages
+  }
+  written := {
+    {writing: Language.Writing{value is Message}} => Frame(opcode: writing.value.text ? Opcode.text : Opcode.binary, masked: client, payload: writing.value.bytes)
+    {writing: Language.Writing{value is Control}} => Frame(opcode: writing.value.opcode, masked: client, payload: writing.value.data)
+  }
+
+  // Opening handshake (https://www.rfc-editor.org/rfc/rfc6455#section-4.1)
+  static GUID := "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+  static opening (target: Location, key: Byte[] = Byte₁₆.random) => HTTP.Request(target: target, fields: HTTP.Fields(entries: [
+    (name: "Upgrade", value: "websocket"), (name: "Connection", value: "Upgrade"),
+    (name: "Sec-WebSocket-Key", value: key as Base64 as String), (name: "Sec-WebSocket-Version", value: "13")
+  ]))
+  assert WebSocket.opening(@wss://example.com/chat).(
+    .fields["Upgrade"] == "websocket" && .fields["Sec-WebSocket-Version"] == "13"  // WS9 the opening request does not ask to upgrade
+    & WebSocket.opened(., WebSocket.accepting(.))  // WS10 an accepted opening is not open
+  )
+  // Sec-WebSocket-Accept is the base64 SHA-1 of the key and the GUID (https://www.rfc-editor.org/rfc/rfc6455#section-4.2.2)
+  static accept (key: String) => ((key + GUID) as SHA1 as Byte[]) as Base64 as String
+  assert WebSocket.accept("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="  // WS3 the accept key is not the one in RFC 6455 section 1.3
+  static accepting (request: HTTP.Request) => HTTP.Response(status: HTTP.Status(101), fields: HTTP.Fields(entries: [
+    (name: "Upgrade", value: "websocket"), (name: "Connection", value: "Upgrade"),
+    (name: "Sec-WebSocket-Accept", value: accept(request.fields["Sec-WebSocket-Key"]))
+  ]))
+  static opened (request: HTTP.Request, response: HTTP.Response) => response.status.code == 101
+    && response.fields["Upgrade"].fold_case == "websocket" && response.fields["Sec-WebSocket-Accept"] == accept(request.fields["Sec-WebSocket-Key"])
+}

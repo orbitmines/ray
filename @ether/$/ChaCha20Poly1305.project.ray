@@ -1,0 +1,77 @@
+// ChaCha20 and Poly1305 for IETF Protocols (https://www.rfc-editor.org/rfc/rfc8439)
+ChaCha20Poly1305 := class: Encoding.Symmetric {
+  static extensions := ".chacha20poly1305"
+  static word := 2 ^ 32
+  // A 96-bit nonce (RFC 8439 §2.8)
+  static nonce_size := 12
+
+  // The quarter round on four words of the state (RFC 8439 §2.1, §2.2)
+  static rotl (x, n) => ((x as Binary₃₂).loop << n) as Number
+  static quarter (state: Number[], (a, b, c, d)) => {
+    s = state.copy
+    s[a] = (s[a] + s[b]) % word
+    s[d] = rotl(s[d] ~x|| s[a], 16)
+    s[c] = (s[c] + s[d]) % word
+    s[b] = rotl(s[b] ~x|| s[c], 12)
+    s[a] = (s[a] + s[b]) % word
+    s[d] = rotl(s[d] ~x|| s[a], 8)
+    s[c] = (s[c] + s[d]) % word
+    s[b] = rotl(s[b] ~x|| s[c], 7)
+    s
+  }
+  // A double round: the four columns, then the four diagonals (RFC 8439 §2.3)
+  static rounds := [[0, 4, 8, 12], [1, 5, 9, 13], [2, 6, 10, 14], [3, 7, 11, 15], [0, 5, 10, 15], [1, 6, 11, 12], [2, 7, 8, 13], [3, 4, 9, 14]]
+  static words (bytes: Byte[]) => bytes.chunk(4).map(Encoding.little_number(.))
+
+  // The block function: the constants "expand 32-byte k", the key, the counter and the nonce; ten double rounds, added back, little-endian (RFC 8439 §2.3)
+  static block (key: Byte₃₂, counter: Number, nonce: Byte₁₂) => [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574, words(key), counter, words(nonce)].flatten -- (initial =>
+    ([rounds] * 10).flatten(1).reduce(state = initial => quarter(state, .)).zip(initial).map((a, b) => Encoding.little((a + b) % word, 4)).flatten)
+  // The block function: key 00..1f, nonce 00:00:00:09:00:00:00:4a:00:00:00:00, counter 1 (RFC 8439 §2.3.2)
+  assert ChaCha20Poly1305.block(0..<32, 1, "000000090000004a00000000" as Hexadecimal₂₄ as Byte₁₂) as Hexadecimal₁₂₈ == "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e"  // CCP1 the block of RFC 8439 §2.3.2 is not 10f1e7e4…
+
+  // Encryption: each 64 bytes XORed with the block of the next counter (RFC 8439 §2.4)
+  static chacha20 (key: Byte₃₂, counter: Number, nonce: Byte₁₂, text: Byte[]) => text.chunk(64).enumerate.map(chunk => chunk.value.zip(block(key, counter + chunk.index, nonce)).map((a, b) => a ~x|| b)).flatten
+
+  // Poly1305: r clamped, each 16 bytes with a 1 byte after them added and multiplied by r modulo 2^130 - 5, then s added modulo 2^128 (RFC 8439 §2.5)
+  static poly1305 (key: Byte₃₂, message: Byte[]) => Encoding.little_number(key[..<16]) ~&& 0x0ffffffc0ffffffc0ffffffc0fffffff -- (r =>
+    Encoding.little((message.chunk(16).reduce(acc = 0 => (acc + Encoding.little_number([., 1].flatten)) * r % (2 ^ 130 - 5)) + Encoding.little_number(key[16..])) % 2 ^ 128, 16))
+  // Poly1305 over "Cryptographic Forum Research Group" (RFC 8439 §2.5.2)
+  assert ChaCha20Poly1305.poly1305("85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b" as Hexadecimal₆₄ as Byte₃₂, "Cryptographic Forum Research Group".bytes) as Hexadecimal₃₂ == "a8061dc1305136c6c22b8baf0c0127a9"  // CCP2 the tag of RFC 8439 §2.5.2 is not a8061dc1…
+
+  // The AEAD construction: the one-time Poly1305 key from block 0, the text from block 1, and the tag over the padded AAD, the ciphertext and both lengths (RFC 8439 §2.6, §2.8)
+  static Sealed := class (ciphertext: Byte[], tag: Byte₁₆)
+  static padded (bytes: Byte[]) => [bytes, [0] * ((16 - bytes.count % 16) % 16)].flatten
+  static tag (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], ciphertext: Byte[]) => poly1305(block(key, 0, nonce)[..<32], [padded(aad), padded(ciphertext), Encoding.little(aad.count, 8), Encoding.little(ciphertext.count, 8)].flatten)
+  static sealed (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], plaintext: Byte[]) => chacha20(key, 1, nonce, plaintext) -- (c => Sealed(ciphertext: c, tag: tag(key, nonce, aad, c)) as Byte[])
+  // The AEAD: key 80..9f, nonce 07:00:00:00:40..47, AAD 50:51:52:53:c0..c7, and the sunscreen sentence (RFC 8439 §2.8.2)
+  assert {
+    ccp_key := 0x80..<0xa0
+    ccp_nonce := "070000004041424344454647" as Hexadecimal₂₄ as Byte₁₂
+    ccp_aad := "50515253c0c1c2c3c4c5c6c7" as Hexadecimal₂₄ as Byte₁₂
+    ccp_text := "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.".bytes
+    ccp_sealed := ChaCha20Poly1305.sealed(ccp_key, ccp_nonce, ccp_aad, ccp_text) as ChaCha20Poly1305.Sealed
+    assert ccp_sealed.ciphertext as Hexadecimal₂₂₈ == "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b6116"  // CCP3 the ciphertext of RFC 8439 §2.8.2 is not d31a8d34…
+    assert ccp_sealed.tag as Hexadecimal₃₂ == "1ae10b594f09e26a7e902ecbd0600691"  // CCP4 the tag of RFC 8439 §2.8.2 is not 1ae10b59…
+    assert ChaCha20Poly1305.opened(ccp_key, ccp_nonce, ccp_aad, ccp_sealed as Byte[]) == ccp_text  // CCP5 what was sealed does not open
+    assert ChaCha20Poly1305.opened(ccp_key, ccp_nonce, [], ccp_sealed as Byte[]) is Diagnostic  // CCP6 what was sealed opens under other associated data
+    assert ChaCha20Poly1305.authentic(ccp_sealed.tag, ccp_sealed.tag) && !ChaCha20Poly1305.authentic(ccp_sealed.tag, [ccp_sealed.tag[..<15], ccp_sealed.tag[15] ~x|| 0x01].flatten)  // CCP7 a tag is not compared byte for byte
+    assert ChaCha20Poly1305.quarter([0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567], (0, 1, 2, 3)) == [0xea2a92f4, 0xcb1cf8ce, 0x4581472e, 0x5881c4bb]  // CCP8 the quarter round of RFC 8439 §2.1.1 does not give ea2a92f4…
+    assert ChaCha20Poly1305.chacha20(0..<32, 1, "000000000000004a00000000" as Hexadecimal₂₄ as Byte₁₂, ccp_text) as Hexadecimal₂₂₈ == "6e2e359a2568f98041ba0728dd0d6981e97e7aec1d4360c20a27afccfd9fae0bf91b65c5524733ab8f593dabcd62b3571639d624e65152ab8f530c359f0861d807ca0dbf500d6a6156a38e088a22b65e52bc514d16ccf806818ce91ab77937365af90bbf74a35be6b40b8eedf2785e42874d"  // CCP9 the ciphertext of RFC 8439 §2.4.2 is not 6e2e359a…
+    assert ChaCha20Poly1305.block(0x80..<0xa0, 0, "000000000001020304050607" as Hexadecimal₂₄ as Byte₁₂)[..<32] as Hexadecimal₆₄ == "8ad5a08b905f81cc815040274ab29471a833b637e3fd0da508dbb8e2fdd1a646"  // CCP10 the one-time Poly1305 key of RFC 8439 §2.6.2 is not 8ad5a08b…
+    assert ChaCha20Poly1305.block([0x00] * 32, 0, [0x00] * 12) as Hexadecimal₁₂₈ == "76b8e0ada0f13d90405d6ae55386bd28bdd219b8a08ded1aa836efcc8b770dc7da41597c5157488d7724e03fb8d84a376a43b8f41518a11cc387b669b2ee6586"  // CCP11 the block of RFC 8439 A.1 test vector #1 is not 76b8e0ad…
+    assert ChaCha20Poly1305.block([0x00] * 32, 1, [0x00] * 12) as Hexadecimal₁₂₈ == "9f07e7be5551387a98ba977c732d080dcb0f29a048e3656912c6533e32ee7aed29b721769ce64e43d57133b074d839d531ed1f28510afb45ace10a1f4b794d6f"  // CCP12 the block of RFC 8439 A.1 test vector #2 is not 9f07e7be…
+    assert ChaCha20Poly1305.block("0000000000000000000000000000000000000000000000000000000000000001" as Hexadecimal₆₄ as Byte₃₂, 1, [0x00] * 12) as Hexadecimal₁₂₈ == "3aeb5224ecf849929b9d828db1ced4dd832025e8018b8160b82284f3c949aa5a8eca00bbb4a73bdad192b5c42f73f2fd4e273644c8b36125a64addeb006c13a0"  // CCP13 the block of RFC 8439 A.1 test vector #3 is not 3aeb5224…
+    assert ChaCha20Poly1305.poly1305([0x00] * 32, [0x00] * 64) as Hexadecimal₃₂ == "00000000000000000000000000000000"  // CCP14 the tag of RFC 8439 A.3 test vector #1 is not zero
+    assert ChaCha20Poly1305.poly1305("0200000000000000000000000000000000000000000000000000000000000000" as Hexadecimal₆₄ as Byte₃₂, [0xff] * 16) as Hexadecimal₃₂ == "03000000000000000000000000000000"  // CCP15 the tag of RFC 8439 A.3 test vector #5 is not 03000000…
+    assert ChaCha20Poly1305.poly1305("02000000000000000000000000000000ffffffffffffffffffffffffffffffff" as Hexadecimal₆₄ as Byte₃₂, "02000000000000000000000000000000" as Hexadecimal₃₂ as Byte₁₆) as Hexadecimal₃₂ == "03000000000000000000000000000000"  // CCP16 the tag of RFC 8439 A.3 test vector #6 is not 03000000…
+    assert ChaCha20Poly1305.poly1305("0100000000000000000000000000000000000000000000000000000000000000" as Hexadecimal₆₄ as Byte₃₂, "fffffffffffffffffffffffffffffffff0ffffffffffffffffffffffffffffff11000000000000000000000000000000" as Hexadecimal₉₆ as Byte₄₈) as Hexadecimal₃₂ == "05000000000000000000000000000000"  // CCP17 the tag of RFC 8439 A.3 test vector #7 is not 05000000…
+    assert ChaCha20Poly1305.poly1305("0100000000000000000000000000000000000000000000000000000000000000" as Hexadecimal₆₄ as Byte₃₂, "fffffffffffffffffffffffffffffffffbfefefefefefefefefefefefefefefe01010101010101010101010101010101" as Hexadecimal₉₆ as Byte₄₈) as Hexadecimal₃₂ == "00000000000000000000000000000000"  // CCP18 the tag of RFC 8439 A.3 test vector #8 is not 00000000…
+    assert ChaCha20Poly1305.poly1305("0200000000000000000000000000000000000000000000000000000000000000" as Hexadecimal₆₄ as Byte₃₂, "fdffffffffffffffffffffffffffffff" as Hexadecimal₃₂ as Byte₁₆) as Hexadecimal₃₂ == "faffffffffffffffffffffffffffffff"  // CCP19 the tag of RFC 8439 A.3 test vector #9 is not faffffff…
+    assert ChaCha20Poly1305.poly1305("0100000000000000040000000000000000000000000000000000000000000000" as Hexadecimal₆₄ as Byte₃₂, "e33594d7505e43b900000000000000003394d7505e4379cd01000000000000000000000000000000000000000000000001000000000000000000000000000000" as Hexadecimal₁₂₈ as Byte₆₄) as Hexadecimal₃₂ == "14000000000000005500000000000000"  // CCP20 the tag of RFC 8439 A.3 test vector #10 is not 14000000…
+    assert ChaCha20Poly1305.poly1305("0100000000000000040000000000000000000000000000000000000000000000" as Hexadecimal₆₄ as Byte₃₂, "e33594d7505e43b900000000000000003394d7505e4379cd010000000000000000000000000000000000000000000000" as Hexadecimal₉₆ as Byte₄₈) as Hexadecimal₃₂ == "13000000000000000000000000000000"  // CCP21 the tag of RFC 8439 A.3 test vector #11 is not 13000000…
+  }
+  // The tag is compared in constant time: every byte's difference, none left out early (RFC 8439 §4)
+  static authentic (given: Byte₁₆, expected: Byte₁₆) => given.zip(expected).map((a, b) => a ~x|| b).sum == 0
+  static opened (key: Byte₃₂, nonce: Byte₁₂, aad: Byte[], sealed: Byte[]) => (sealed as Sealed) -- (held =>
+    authentic(held.tag, tag(key, nonce, aad, held.ciphertext)) ? chacha20(key, 1, nonce, held.ciphertext) : ERROR `the tag does not authenticate the message`)
+}

@@ -13,6 +13,10 @@ Number &+= {
   assert 3.nonzero  // N108 three is zero
   assert 5.holds  // N111 five holds nothing
   as (=== boolean) => nonzero
+  // (as a condition, what it is as true or false: zero does not hold)
+  ? {yes} : {no} => nonzero ? yes : no
+  assert !(0 ? true : false)  // NQ1 zero holds as a condition
+  assert 1 ? true : false  // NQ2 one does not hold as a condition
 }
 zero := Number(next: None)
 0 := zero

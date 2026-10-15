@@ -2266,6 +2266,27 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   not a place (`(name) := v` where `name` is a hole that is a value there) is an error (`a left side answers a value, not
   a place`), at the application that wrote it; it used to define a rule named by the text, which then read every later
   `(name)`. The class without a header gave its instances a field named as the constructor's own hole (`arguments`).
+- A body that gives names values runs in a node of its own (2026-10-16), as Expression.ray says ("in a node of its own"):
+  a rule's body with a line giving a name a value (`made := …`) gets a node per application, made of what it is read in;
+  what it gives is that run's. Only a member written with a dot (`.head := link`) is the receiver's. Before, a method's
+  locals were fields of its receiver, the same for every call on it: `joined` → `listed` → `map` → `for` on one list
+  overwrote one another's `made` and `at`, and `x := class { }` instances gained every local of their methods.
+- In a closure, `.` is its first argument (2026-10-16), so code meaning the receiver names it (`joining := .`, `value :=
+  .`): `(member) => member === .` compared each member with itself (every value was one of every enumeration). `this` in a
+  closure written in a method does not yet answer the method's receiver (CL20, open).
+- A member after an operator stands apart (2026-10-16): `x#.count` is `(x#).count`, `!.done` is `!` then `.done`; a `.`
+  before a word begins a member unless a `.` is before it (`..9`, `"0".."9"` stay `..`).
+- `x#` (`#(x)`), what a value can be: an enumeration's members, a superposition's components (each, `1 | 2 | 3` three),
+  else itself alone, `possible`. An enumeration reads its names in itself (`.({names})`), a member written with fields
+  (`circle (radius: Number)`) one holding them, each member a Ray of the others (`previous`, `next`), and written with a
+  block, each member reads the block. `Name` answers the word as written (it need not name anything yet).
+- `Listing` is `Ray` (2026-10-16): the chain of vertices a list is written as is the core's Ray (`Ray.new`, `Ray.linked`);
+  `sort`/`sort_by(key)`/`select(p)` are Ray's (Ray.ray), a text counts its characters (String.ray).
+- What a class's header is (2026-10-16): a structure's header begins with a field's name (`Header`, `{field: Name}: …`), so
+  `class: P { … }` is a class built on P, not a structure of `: P`; a field `x?: T` is `x: T = None`; a default of
+  nothing keeps no type; a call given nothing reads its parameters as written (their defaults), not `declared`.
+- A method's body reads what nothing in it reads where its rule was written (2026-10-16): `wrapped (tag) => class: this {
+  says => tag }`, `says`' `tag` is the call's. `x[k] = v` is declared after `=`, so it is what x holds under k.
 - The 50 ms budget for the entrypoint and its tests is met file by file: the entrypoint first, then one core library file
   at a time, each fast and passing before the next.
 

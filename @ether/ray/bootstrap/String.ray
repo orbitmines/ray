@@ -22,6 +22,10 @@ String &+= {
     spanned.until(spanned.rest) == `a`
   }  // S62f what is before the rest of ab is not a
   assert !(`ab`.until(`ab`.rest))  // S62g a text before another text's rest is something
+  // (how many characters: none when empty, else one more than the rest)
+  count => this.empty ? 0 : this.rest.count.succ
+  assert `abc`.count == 3  // S41 a string of three does not count three
+  assert `a`.rest.count == 0  // S108b nothing written counts something
 }
 // (a call inside itself, walking a text: recursion)
 walked (text) => text.empty ? `done` : walked(text.rest)

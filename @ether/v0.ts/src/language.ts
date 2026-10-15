@@ -2322,7 +2322,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // which reads on a value)
   // (LEFT, wanted of a reading only: it is a left side, a word nothing reads before what is read on it is declared there)
   // (TYPE_READER, refused only: a READER of a node other than the language's)
-  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048;
+  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 24;
   // (a body: [count, ...steps: [kind, start, end, a, c, d]])
@@ -2568,7 +2568,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   }
   // Do the characters at a and c belong apart (a literal begins or ends between them)? Each character has a kind: a space (0),
   // one of a word (1), one of an operator (2), or one on its own (3: a bracket, a quote, a comma).
-  function apart(a: number, c: number) { const t = w(CLASSES), x = b(t + b(a)), y = b(t + b(c)); return x !== y || x === 0 || x === 3 ? 1 : 0; }
+  // (and a member after an operator, `x#.count`, `!.done`: a `.` before a word begins one, apart from what is before it
+  // unless that is a `.` too (`..9`))
+  function apart(a: number, c: number) { const t = w(CLASSES), x = b(t + b(a)), y = b(t + b(c)); return x !== y || x === 0 || x === 3 || (b(c) === 46 && b(a) !== 46 && b(t + b(c + 1)) === 1) ? 1 : 0; }
   // From `at` to `end`, what the type's own rules read whole?
   function typed(r: number, at: number, end: number, type: number, s: number): number { if (DEBUG && w(248)) { const h = w(248) + 8 * ((r >> 3) & 4095); set(h, r); set(h + 4, w(h + 4) + 1); } return typed_(at, end, type, s); }
   function typed_(at: number, end: number, type: number, s: number): number {
@@ -3106,7 +3108,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       let e = w(r + 8); while (e > w(r + 4) && b(e - 1) <= 32) e--;
       set(hl + N_A, w(r + 4)); set(hl + N_B, e); declare(t, hl, w(r + 4), e); return hl;
     }
-    if (k === K_LATER) return ev(t, reading(t, w(r + 4), w(r + 8), w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0), names, f, self, value, self, self);
+    // (what nothing in it reads: read where its rule was written, that frame's node (a method a class block written in a call
+    // defines, `wrapped (tag) => class: this { says => tag }`: the call's `tag`))
+    if (k === K_LATER) { let rr = reading(t, w(r + 4), w(r + 8), w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0); const cf = w(names + F_CLOSURE), ct = cf && w(cf + N_IS) === IS_FRAME ? w(cf + F_THIS) : 0; if (w(rr) === K_UNREAD && ct && ct !== self && w(ct + N_IS) === IS_NODE) { const r2 = reading(t, w(r + 4), w(r + 8), w(names + F_RULE), w(names + F_CLOSURE), latest(ct), ct, 0, 0, 0, 0); if (w(r2) !== K_UNREAD) rr = r2; } return ev(t, rr, names, f, self, value, self, self); }
     if ((k === K_NAME || k === K_REF) && w(r + 20)) names = w(r + 20);
     if (k === K_NAME) return valued(t, take(names, w(r + 12), w(r + 16)));
     // (`{x}`: its code, read where it is used (its type said what it matched, not where it is read))
@@ -3115,7 +3119,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (in a left side, a hole's code spliced where it is used, one word: declared, a place there (`.{member}`'s member); one
       // given through another's hole (`(on).{key}`, `x[name] := …`) whose word answers a text: that text the name)
       // (declared where `.` is: read on nothing, in a method's node, what that was read on (`.head := link` in `xs.append(v)`))
-      const into = w(names + F_RECEIVER) === w(names + F_THIS) && run_node(self) ? w(self + N_ALSO) : self;
+      // (only a member, a hole of a rule led by `.`: a name written bare is the call's own, `made := …` (each call its own))
+      const into = w(names + F_RECEIVER) === w(names + F_THIS) && run_node(self) && dotted(w(names + F_RULE)) ? w(self + N_ALSO) : self;
       // (a text is a value: nothing is declared in it; a frame holds what its rule took, its caller and its this: those are read
       // (`"inner".unescaped`, `(external &).text`))
       const fixed = w(into + N_IS) === IS_TEXT || (w(into + N_IS) === IS_FRAME && held_in(into, w(tk), w(tk + 4)));
@@ -3590,7 +3595,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (w(t + T_DECL) && lefts() && in_left(s, e) && kind !== DEFINE && !(w(rule + R_FLAGS) & METHOD) && composes(rule)) for (let i = 0; i < w(rule + R_HOLES); i++) {
       const tk = applied + F_TAKES + TAKE * i, a = skip(w(tk), w(tk + 4)); let z = w(tk + 4); while (z > a && b(z - 1) <= 32) z--;
       if (a >= z || !in_left(a, z)) continue;
-      if (worded(a, z)) { const into = w(names + F_RECEIVER) === w(names + F_THIS) && run_node(self) ? w(self + N_ALSO) : self; set(tk + T_VALUE, placed(t, a, z, into)); astore(tk + T_STATE, 3); }
+      if (worded(a, z)) { const into = w(names + F_RECEIVER) === w(names + F_THIS) && run_node(self) && dotted(rule) ? w(self + N_ALSO) : self; set(tk + T_VALUE, placed(t, a, z, into)); astore(tk + T_STATE, 3); }
       else { valued(t, tk); if (stopped(t)) return 0; }
     }
     if ((w(rule + R_FLAGS) & TAKES) && !w(t + T_DECL)) { const d = took(t, applied, self); if (d) return d; }
@@ -3613,6 +3618,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       for (let i = 0; i < w(rule + R_HOLES) && composing; i++) { const tk = follow(applied + F_TAKES + TAKE * i, 1); if (!in_left(w(tk), w(tk + 4))) composing = 0; }
     }
     if (decl && ((w(rule + R_FLAGS) & METHOD) || composing)) set(t + T_DECL, 0);
+    // (a body giving names values of its own, not a closure's (it makes its own node): a node of its own, made of what it is
+    // read in (what it gives is this run's; `.x := …` is still a member of `.`))
+    if ((w(rule + R_FLAGS) & OWNS) && !(w(rule + R_FLAGS) & METHOD) && self && self !== w(GLOBAL) && w(self + N_IS) === IS_NODE) { const rc = w(applied + F_RECEIVER), n = node(IS_NODE, 0, applied, self, self); set(applied + F_THIS, n); set(applied + F_RECEIVER, rc && rc !== self ? rc : n); }
     const answer = ran(t, applied, rule, bd_, 0);
     set(t + T_DECL, decl);
     if (DEBUG) debug(D_APPLY_END, s, e, rule);
@@ -3771,6 +3779,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       set(st, S_READ); set(st + 12, r);
     }
     set(bd, n);
+    // (a body that gives names values of its own: run in a node of its own, each time (what it gives is that run's))
+    if (given && !(w(rule + R_FLAGS) & OWNS)) set(rule + R_FLAGS, w(rule + R_FLAGS) | OWNS);
     set(THREAD + T_SH_N, shadows);
     if (mine) { if (w(t + T_BODIES_N) < BODIES / 2) { let q = mine; for (let i = 1; w(q) && i < BODIES; i++) q = w(t + T_BODIES) + 8 * (((rule >> 3) + i) & (BODIES - 1)); set(q, rule); set(q + 4, bd); set(t + T_BODIES_N, w(t + T_BODIES_N) + 1); } }
     else { cas(rule + R_BODY, 0, bd); bd = w(rule + R_BODY); }
@@ -4307,7 +4317,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (what a frame holds by this name: its caller, its this, one of its rule's holes)
   function held_in(fr: number, s: number, e: number): number { s = skip(s, e); while (e > s && b(e - 1) <= 32) e--; return word(s, e, W_CALLER) || word(s, e, W_THIS) || (w(fr + F_RULE) && named(w(fr + F_RULE), s, e) >= 0) ? 1 : 0; }
   // (a node a method made to run in (`external .` in a frame of a rule led by `{this}`), made of what it was read on)
-  function run_node(n: number): number { const mk = w(n + N_IS) === IS_NODE && w(n + N_ALSO) ? w(n + N_B) : 0; return mk > 1 && w(mk + N_IS) === IS_FRAME && w(mk + F_RULE) && (w(w(mk + F_RULE) + R_FLAGS) & METHOD) ? 1 : 0; }
+  // (a rule led by `.`, `.{member}`: what it declares is a member of what `.` is)
+  function dotted(rule: number): number { return rule && (w(rule + R_FLAGS) & LED) && b(w(rule + R_PART + 4)) === 46 ? 1 : 0; }
+  function run_node(n: number): number { const mk = w(n + N_IS) === IS_NODE && w(n + N_ALSO) ? w(n + N_B) : 0; return mk > 1 && w(mk + N_IS) === IS_FRAME && w(mk + F_RULE) && (w(w(mk + F_RULE) + R_FLAGS) & (METHOD | OWNS)) ? 1 : 0; }
   // (at written in rule r's own body)
   function in_body(r: number, at: number): number { return w(r + R_BS) <= at && at < w(r + R_BE) ? 1 : 0; }
   function inlined_at(r: number, at: number): number { return w(r + R_ALL_S) && w(r + R_ALL_S) <= at && at < w(r + R_ALL_E) ? 1 : 0; }

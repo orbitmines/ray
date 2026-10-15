@@ -1810,7 +1810,10 @@ const SEVERITIES: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warn: 2,
 // that names. Each is read once, after what it needs, in the library's node: a file read on its own (a document, a test), in a
 // node of its own inside it.
 // (what a file uses, for the order files are read in: not its comments, nor its tests (`assert …`: read after everything))
-const Library_read = (text: string) => { const out: string[] = []; let skip = -1; for (const line of text.split('\n')) { const at = line.length - line.trimStart().length; if (skip >= 0 && line.trim() && at > skip) continue; skip = -1; if (/^\s*assert\b/.test(line)) { skip = at; continue; } out.push(line.replace(/(^|\s)\/\/.*$/, '')); } return out.join('\n'); };
+// (where a comment begins in a line: `//` at its start or after a space; else -1)
+const comment_at = (line: string) => { for (let at = line.indexOf('//'); at >= 0; at = line.indexOf('//', at + 1)) if (at === 0 || /\s/.test(line[at - 1])) return at; return -1; };
+const uncommented = (line: string) => { const at = comment_at(line); return at < 0 ? line : line.slice(0, Math.max(0, at - 1)); };
+const Library_read = (text: string) => { const out: string[] = []; let skip = -1; for (const line of text.split('\n')) { const at = line.length - line.trimStart().length; if (skip >= 0 && line.trim() && at > skip) continue; skip = -1; if (/^\s*assert\b/.test(line)) { skip = at; continue; } out.push(uncommented(line)); } return out.join('\n'); };
 // What a statement of a file said, painted and put off (its tests) when it was read; a test, where its assert is and what it found.
 type Test = { code: string, frame: Program.Frame, except?: Program.Rule, file: string, begin: number, end: number, outcome?: Diagnostic[], dropped?: boolean, paints?: Paint[] };
 type Statement = { statement: string, begin: number, end: number, diagnostics: Diagnostic[], paints: Paint[], tests: Test[] };
@@ -2031,7 +2034,7 @@ export class Library {
       }
       return found;
     };
-    for (const m of text.matchAll(/"(?:[^"\\\n]|\\.)*"|`[^`\n]*`|[\p{L}\p{N}_]+(?:\.[\p{N}]+)?|[()\[\]{},]|[^\s\p{L}\p{N}_"`()\[\]{},]+/gu)) {
+    for (const m of text.matchAll(/"[^"\\\n]*(?:\\.[^"\\\n]*)*\\?(?:"|(?=\n)|$)|`[^`\n]*`|[\p{L}\p{N}_]+(?:\.[\p{N}]+)?|[()\[\]{},]|[^\s\p{L}\p{N}_"`()\[\]{},]+/gu)) {
       const b = m.index!, e = b + m[0].length - 1;
       let free = true; for (let k = b; k <= e; k++) if (cells[k]) { free = false; break; }
       if (!free) continue;
@@ -2045,7 +2048,7 @@ export class Library {
     const out: [number, number][] = [], lines = text.slice(0, end).split('\n');
     let o = 0, open = -1, start = 0, indent = 0, depth = 0;
     for (const line of lines) {
-      const at = line.length - line.trimStart().length, bare = line.replace(/"(?:[^"\\]|\\.)*"|`[^`]*`/g, '""').replace(/(^|\s)\/\/.*$/, '');
+      const at = line.length - line.trimStart().length, bare = uncommented(line.replace(/"[^"\\]*(?:\\.[^"\\]*)*"|`[^`]*`/g, '""'));
       if (open >= 0) {
         if (depth > 0 || (line.trim() && at > indent) || (line.trim() && at === indent && /^[)\]}]/.test(line.trim()))) { depth += (bare.match(/[([{]/g) ?? []).length - (bare.match(/[)\]}]/g) ?? []).length; open = o + line.length; o += line.length + 1; continue; }
         out.push([start, open]); open = -1;
@@ -2073,7 +2076,7 @@ export class Library {
   // (comments are the host's: what it does not read)
   static comments(text: string): Paint[] {
     const out: Paint[] = []; let o = 0;
-    for (const line of text.split('\n')) { const m = line.match(/(^|\s)\/\/.*$/); if (m) { const b = o + m.index! + m[1].length; out.push({ begin: b, end: o + line.length - 1, style: 'comment' }); } o += line.length + 1; }
+    for (const line of text.split('\n')) { const at = comment_at(line); if (at >= 0) { const b = o + at; out.push({ begin: b, end: o + line.length - 1, style: 'comment' }); } o += line.length + 1; }
     return out;
   }
   // A report: where the reading it was made in (or one it was read in) was read from the statement.

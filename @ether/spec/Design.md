@@ -755,6 +755,15 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   short by a cycle.
 - A hole never ends inside a word, but a typed one ends where its type reads (`{first: Digit}{rest: Digit[]}` of `10`,
   `{radix: Subscript.String}{digits: Decimal.String}` of `₂10`).
+- Patterns are Rays: `(a: T, `-`, b: U)`, `p | q`, `p[]`, `p+`, `⊣` are values, a Ray of parts, and can be transformed as
+  values (`.map{== \s}(\s[])`, Expression.ray). Reading text by one works the same way as destructuring: `(a: T, `-`,
+  b: U) := text` gives each named part the span its type reads and requires each literal part to be there, as `(x, y)
+  := list` gives each place its element. A class written as a structure reads text this way; the matcher is
+  language-side (sequence, alternatives, repetition; named parts become fields).
+- Precedence in a typed hole: what reads its text where it is written binding looser than the type's own rule (declared
+  after it, `,` in `(a: 1, b: 2)` read as Arguments) splits it first, at the check and when it is read; each part is
+  then read by the type (its rules first, what they don't read where it was written). Declaration order is where a
+  rule's head is written, the files in the order they are read.
 - A hole typed by a text reads only that text, and its value is that text (`{value: "1"}`). Any other typed hole's value
   is what its type's rules read its text as.
 - A check run inside what a check runs (`{first: T}{rest: T[]}` checking the rest) answers by its rules reading the text:
@@ -1002,6 +1011,17 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   Loud().sound              // "Woof" & "WOOF"
   ```
 
+- Named arguments: in a call, `name: value` names the callee's parameter or field (declared on what is made when its
+  class has no header: `Number(next: this)`); only the value is read where it is written, so in `succ => Number(next:
+  this)` the value is the number succ was read on. The rest bind in order, skipping the named ones. Language-side: a
+  class's call takes `{arguments: Arguments}`, a type with `{value}` and `{name}: {value}` (a `Named`); `taking` declares
+  each Named in what is called, then binds the rest positionally.
+- `this` written in a rule's body (or a closure's) is that application's first argument, what it was read on, wherever
+  the code ends up being read: a value given as an argument and read in the callee is still the caller's `this`. Only a
+  rule's own `{this}` hole names it otherwise; at the top of a file `this` is `.`.
+- `xs.m p => body`, a closure and a name after it with no brackets, is a call with a closure: the `=>` behind the name
+  makes the rest of the line its argument, `xs.m(p => body)` (`[&&, ||].for operator => { … }`). A head that names a
+  method that does not exist yet, `x.m (y) => …`, still defines it.
 - Partial arguments: `add(1)` waits for the rest, `add(b: 2)(1)`, `f<a: 10>`. A caller may set any variable of the
   function (unless access prevents it).
 - The call is the `()` method. Looking up a member by the text `"()"` (`x["()"]`) is a field lookup, never the call.
@@ -2052,6 +2072,12 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 ### 21.1 The host knows no syntax
 
+- The language's core is its own project, `@ether/ray/bootstrap`: the entrypoint and the files it needs (Number, Ray,
+  String), depending on nothing else, so that it can bootstrap `compiler.sketch.ray` to self-host. What needs the rest of
+  the library (Unicode tables, units, randomness, IO, languages, the compiler's levels, access) lives in the file of what
+  it needs (`Char &+= { … }` in Unicode.ray, `Iterable &+= { random … }` in Feature.ray). It is rebuilt a line at a
+  time, essentials first, each line's tests passing before the next.
+
 - The host (the TypeScript interpreter in `@ether/v0.ts`, used the same way by the CLI, the daemon and the LSP) knows no
   syntax. Its one assumption is about meaning: the entrypoint's first statement defines how rules are defined, and uses
   that definition in its own body. From it the host learns the brackets, the definer, the separator, where a statement
@@ -2098,6 +2124,18 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - Every external also gets an Ether OS implementation (§14.5). New externals are declared only with the user's approval.
 
 ### 21.3 Frames, names and members
+
+- Code read in a value it was not written in, `x.( … )`, reads with x's rules first, then where it was written.
+- A head made only of holes of where it is written (`{operator} {rest} => {body}` in `chainable`) is read as the text they
+  took, as written, one expression (`== (other: Number)`): a method, not each part apart.
+- A member right after a word is that word's: `x == other.pred` is `x == (other.pred)`, not `(x == other).pred`.
+- A missing argument is `declared` (what a parameter had stays, its default); `None` is a value like any other and is
+  given (`Number(next: None)`).
+- Accelerations (`wasm.o.ray`, another bucket than the externals) must answer exactly what the language does: checked by
+  running the same files with and without them (and an unlimited budget, so a budget cut does not hide a difference).
+  `given` (a definition that defined one name answers its head) is on; `taking` (one plain parameter) is written but off
+  until the language binds a parameter named as a visible name in the call, not where that name is (GN2).
+- While a left side is being read, a name nothing reads is what it declares, also in a test (not an error).
 
 - A name is a place. A captured argument is lazy code, read where and when it is used.
 - A frame sees the frame it was written in first. A rule made inside a frame keeps that frame, as a closure does.

@@ -5,6 +5,16 @@ String &+= {
   external text
   first => external first
   rest => external rest
+  // (two texts of the same characters: the first, else nothing; what a character is made of is what the kernel holds)
+  same_characters (other) => external same this other
+  // (what is before where another text, a rest of this one, begins)
+  until (other) => external until this other
 }
 // (None takes no members of its own: given)
 external nothing None
+// (accelerated: what a definition answers given its value, its head when it defined one name (`x := v`); the language's
+// rule for a list of places)
+external given `{given} given {value}`
+// (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it. Off: it does not
+// answer the same yet (165 passes against 198 for Number and String))
+// external taking `({written_parameters}) taking {passed}`

@@ -1,289 +1,37 @@
-// (Char is made in the entrypoint, its core; what follows is the rest of it)
-Char &+= {
-  static Letter: Char = "a".."z" | "A".."Z"
-  static Digit: Char = "0".."9"
-  static Blank: Char = " " | "\t".."\r"
-  static Word: Char = Letter | Digit | "_"
-
-  is_ascii => this < 128
-  assert "a"[0].is_ascii  // S103 a is not one byte
-  assert !("é"[0].is_ascii)  // S147 é is one byte
-  as (=== Decimal) => this <= "9" ? this - "0" : (this >= "a" ? this - "a" : this - "A") + 10
-  static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
-  assert Char.digit(0) == "0"[0]  // S138 nothing is not written 0
-  assert Char.digit(7) == "7"[0]  // S139 seven is not written 7
-  assert Char.digit(11) == "b"[0]  // S140 eleven is not written b
-}
-assert "ab1"{. is Char.Letter}.length == 2  // S40 selecting letters did not keep two
-assert "8"[0] is Char.Digit  // S71 8 is not a digit
-assert "9"[0] is Char.Digit  // S72 9 is not a digit
-assert "0"[0] is Char.Digit  // S73 0 is not a digit
-assert !(":"[0] is Char.Digit)  // S74 a colon is a digit
-assert !("a"[0] is Char.Digit)  // S75 a is a digit
-assert "q"[0] is Char.Letter  // S87 q is not a letter
-assert "Q"[0] is Char.Letter  // S88 Q is not a letter
-assert !("7"[0] is Char.Letter)  // S89 a digit is a letter
-assert !("_"[0] is Char.Letter)  // S90 an underscore is a letter
-assert "_"[0] is Char.Word  // S93 an underscore is not a word character
-assert "7"[0] is Char.Word  // S94 a digit is not a word character
-assert "q"[0] is Char.Word  // S95 a letter is not a word character
-assert !(" "[0] is Char.Word)  // S96 a space is a word character
-assert " "[0] is Char.Blank  // S97 a space is not blank
-assert !("a"[0] is Char.Blank)  // S98 a is blank
-assert "\n"[0] is Char.Blank  // S99 a newline is not blank
-assert "\t"[0] is Char.Blank  // S100 a tab is not blank
-assert "abc".every(. is Char.Letter)  // S111 abc is not all letters
-assert !("ab3".every(. is Char.Letter))  // S112 ab3 is all letters
-assert "ab3".some(. is Char.Digit)  // S113 ab3 holds no digit
-assert !("abc".some(. is Char.Digit))  // S114 abc holds a digit
-assert U+0041 == "A" as Char  // SE17 U+0041 is not the character A
-
-// A character by its code point: `U+0041` is A
-U+{codepoint: Hexadecimal.String}: Char => Hexadecimal(integer: codepoint) as Char
-Escape := {
-  \0 => U+0000
-  \a => U+0007
-  \b => U+0008
-  \t => U+0009
-  \n => U+000A
-  \f => U+000C
-  \r => U+000D
-  \e => U+001B
-  \\ => U+005C
-  \" => U+0022
-  \{ => U+007B
-}
-dynamically Escape.for spelling => global[spelling] := spelling -- (spelled => Escape reducing spelled)
-
-\\{prefix: "x" | "u" | "U"}{codepoint: Hexadecimal{length == (x: 2, u: 4, U: 6)[prefix]} | ("{", codepoint: Hexadecimal{length == 1..6}, "}")}: Char => codepoint
-\w = Char.Word
-assert "_"[0] is \w  // SE13 an underscore is not a word escape
-\W = !\w
-assert "-"[0] is \W  // SE14 a dash is not a non-word escape
-
-Balanced := (Char{!= "{" && != "}" && != "\""} | ("{", Balanced, "}"))[]
-Interpolation := class ("{", code: Balanced, "}") => { }
-// Interpolation, language-tagged literals and patterns (L§10.1, P7.1, U9)
-assert {
-  greeted := "Ada"
-  assert "Hello {greeted}!" == "Hello Ada!"  // SI1 a name in braces is not read into the string
-}
-assert "{1 + 2}" == "3"  // SI2 an expression in braces is not read into the string
-assert "a \{b}".count == 5  // SI3 an escaped brace is read as an expression
-// (a character of a literal that is no quote: named, so the head has no quote inside its quotes)
-Unquoted := Char{!= "\""}
-"{literal: (\\{escape} | Interpolation | Unquoted)[]}": String => literal.map(. is Interpolation ? (inline (.code**)) as String : .).join("").literal_dedented
-assert "\0"[0] == 0  // S144 the null character is not nothing
-assert "\r"[0] == 13  // S145 the carriage return . is not thirteen
-assert "a\tb".length == 3  // SE1 a tab escape is not one character
-assert "\x41" == "A"  // SE3 a hexadecimal escape is not its character
-assert "\q".length == 2  // SE16 an unknown escape is not kept as written
-assert "a\\b".length == 3  // SE5 an escaped backslash is not one character
-
-
 // (String is made in the entrypoint, its core; what follows is the rest of it)
 String &+= {
-  () => &.caller[this]()
-
-  // Ordered as its characters are: one after another by them, the first that differs deciding (one character: as its Char)
-  succ => [(this as Char).succ] as String
-  pred => [(this as Char).pred] as String
-  chainable < (other: String) => (this as Char) < (other as Char)
-  assert "a" < "b"  // SO1 a is not before b
-  assert "a".succ == "b"  // SO2 the character after a is not b
-
-
-  words => split(Char.Blank | "_")
-  assert "a b".words.length == 2  // W8 words did not split in two
-  assert "a b".words as String == "ab"  // S65 joining a and b with nothing between is not ab
-  assert "a".words.join("-") == "a"  // SJ4 joining one element with a dash is not that element
-  assert "a b c".words as String == "abc"  // SJ5 joining the words of a b c is not abc
-  assert "a b c".words.join("_") == "a_b_c"  // SJ6 joining the words of a b c with an underscore is not a_b_c
-  assert "".words.join("-").empty  // SJ7 joining no words is not empty
-  assert "ab cd".words.length == 2  // S125 ab cd is other than two words
-  assert "ab_cd".words.length == 2  // S126 ab_cd is other than two words
-
-  //TODO Uncide support
-  plural => ends_with("s") ? this : this + "s"
-  assert "cat".plural == "cats"  // W11 plural failed
-  assert "cats".plural == "cats"  // S53 the plural of cats is not cats
-  singular => ends_with("s") ? this[..<-1] : this
-  assert "cats".singular == "cat"  // S51 the singular of cats is not cat
-  assert "cat".singular == "cat"  // S52 the singular of cat is not cat
-
-  * (count: Number) => count == 0 ? "" : this, this * (count - 1)
-
-  trimmed => this[{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}]
-  assert "  a b ".trimmed == "a b"  // ST2 trimmed does not drop the blanks around a b
-  assert "\t a\n".trimmed == "a"  // ST3 trimmed does not drop a tab and a newline
-  assert "xxaxx".trimmed("x") == "a"  // ST4 xxaxx trimmed of x is not a
-  assert "a b".trimmed == "a b"  // ST5 trimmed drops a blank between
-  trimmed_end => this[{!(Char.Blank[] ⊣)}]
-  trimmed (characters: Char[]) => this[{!(⊢ characters[] | characters[] ⊣)}]
-  before (other: String) => this ~= (before: *, other, *) -- .before ?? this
-  assert "a=b".before("=") == "a"  // ST6 before = in a=b is not a
-  assert "ab".before("=") == "ab"  // ST8 before what is not there is not the whole text
-  after (other: String) => this ~= (*, other, after: *) -- .after ?? ""
-  assert "a=b".after("=") == "b"  // ST7 after = in a=b is not b
-  assert "ab".after("=").empty  // ST9 after what is not there is not nothing
-
-  starts_with (other: String) => this ~= ⊢ other
-  assert "ab".starts_with("a")  // S62 ab does not start with a
-  assert !("ab".starts_with("b"))  // S63 ab starts with b
-  ends_with (other: String) => this ~= other ⊣
-  assert "ab".ends_with("b")  // S64 ab does not end with b
-  contains (other: String) => this ~= other
-  assert "abc".contains("bc")  // W6 contains failed
-  assert !("abc".contains("ca"))  // W7 contains found ca in abc
-  index_of (other: String) => (this ~= other).index
-  assert "abc".index_of("bc") == 1  // S59 bc does not sit one along in abc
-  assert "abc".index_of("a") == 0  // S60 a does not sit at the start of abc
-
-  lines => split(\n)
-  assert "ab".lines.length == 1  // S70 a text without a newline is other than one line
-  assert "a\nb".lines.length == 2  // ST1 a newline does not separate two lines
+  // (the same characters in the same order: structural, a character as the kernel holds it (`same_characters`, wasm.o.ray))
+  chainable == (other: String) => this.empty ? other.empty : ((!other.empty) && ((this.first same_characters other.first) ? true : false) && (this.rest == other.rest))
+  assert `ab` == `ab`  // TQ1 a text is not equal to itself written again
+  assert !(`ab` == `ac`)  // TQ2 two texts that differ are equal
+  assert !(`ab` == `a`)  // TQ5 a text is equal to its start
+  assert !(`a` == `ab`)  // TQ6 a text is equal to what it starts
+  assert `ab`.first == `a`  // TQ3 a text's first is not its first character
+  assert `ab`.rest == `b`  // TQ4 a text's rest is not what follows its first character
+  starts_with (other: String) => other.empty || ((!this.empty) && (this.first == other.first) && this.rest.starts_with(other.rest))
+  assert `ab`.starts_with(`a`)  // S62 ab does not start with a
+  assert !(`ab`.starts_with(`b`))  // S63 ab starts with b
+  assert `ab`.starts_with(`a`.rest)  // S62b a text does not start with nothing
+  assert !(`a`.starts_with(`ab`))  // S62c a text starts with what is longer
+  // (what follows a start of it, `other` (one it starts with))
+  after (other: String) => other.empty ? this : this.rest.after(other.rest)
+  assert `ab`.after(`a`) == `b`  // S62d what follows a in ab is not b
+  assert `ab`.after(`a`.rest) == `ab`  // S62e what follows nothing is not all of it
   assert {
-    block_text := "
-        one
-          two
-        three
-    "
-    assert block_text.lines.length == 3  // SM1 a block of three lines with a blank first and last is not three lines
-    assert block_text.lines[0] == "one"  // SM2 the least-indented line of a block keeps no indentation
-    assert block_text.lines[1] == "  two"  // SM3 a line indented further keeps the difference
-    assert block_text.lines[-1] == "three"  // SM4 the last line of a block is not three
-  }
-  assert {
-    started_text := "a
-        b"
-    assert started_text.lines[-1] == "    b"  // SM5 a line with content on the opening line holds the least indentation at nothing
-  }
-  assert {
-    gapped_text := "
-      a
-
-      b
-    "
-    assert gapped_text.lines.length == 3  // SM7 a blank line between two is not kept
-    assert gapped_text.lines[1].empty  // SM8 the blank line between two is not empty
-  }
-  assert {
-    doubled_gap := "
-
-      a
-    "
-    assert doubled_gap.lines.length == 2  // SM9 only one blank line after the opening quote is dropped
-    assert doubled_gap.lines[0].empty  // SM10 the second blank line after the opening quote is not kept
-    assert doubled_gap.lines[-1] == "a"  // SM11 the line after the blank lines keeps its indentation
-  }
-  indentation => (this ~= ⊢ " "[]).length
-  assert "  x".indentation == 2  // ST11 two spaces are not an indentation of two
-  common_indentation => lines{!.trimmed.empty}.map(.indentation).min ?? 0
-  dedented => lines.map(.trimmed.empty ? "" : .[common_indentation..]).join(\n)
-  assert "  a\n    b".dedented == "a\n  b"  // ST12 dedenting does not keep only the difference
-  assert "a\n  b".dedented == "a\n  b"  // ST13 a text already at no indentation changed
-  literal_dedented => lines.count == 1 || !lines.first.trimmed.empty ? this
-    : (lines[1..] -- (.last.trimmed.empty ? .[..<-1] : .)).join(\n).dedented
-
-  replace (old: String, new: String) => split(old).join(new)
-
-
-  as (base: Number.Base) => Number.numeral(base)(integer: this)
-  as (=== Decimal) => Decimal(integer: this)
-
-  find_all (pattern: String) => (this ~= pattern)#.index
+    spanned := `ab`
+    spanned.until(spanned.rest) == `a`
+  }  // S62f what is before the rest of ab is not a
+  assert !(`ab`.until(`ab`.rest))  // S62g a text before another text's rest is something
 }
-assert ("a", "b", "c") as String == "abc"  // SJ1 joining a, b and c with nothing between is not abc
-String &+= Char[]
-
-String[] &+= {
-  as (=== String) => this.reduce(,)
-}
-
-String{length == 1} as Char => first
-
-Placement := class (nth_class: Number, written_at: Number) => {
-  chainable <= (other: Placement) => nth_class < other.nth_class || (nth_class == other.nth_class && written_at >= other.written_at)
-}
-Node &+= {
-  placed (spelled) => classes.enumerate{.value.written_as.precedence(spelled) != None}.first
-    -- . ? Placement(nth_class: .index, written_at: .value.written_as.precedence(spelled)) : None
-}
-{a} [x] {b} [y] {c} => a.placed(x) && a.placed(y)
-  ? (a.placed(x) <= a.placed(y) ? (a [x] b) [y] c : a [x] (b [y] c))
-  : None
-
-ParameterList := String{!.contains("{")}
-({parameters: ParameterList}) => {block} => {
-  Program(code: (block**), parameters: (parameters**), context: this)
-}
-
-
-
-
-
-
-
-
-
-assert U+0061 == "a"[0]  // W1 U+0061 is not a
-
-assert U+00E9 == "é"[0]  // W2 U+00E9 is not é
-
-
-
-assert "abc"[..<2] == "ab"  // S56 the first two of abc are not ab
-
-
-
-
-
-
-
-
-
-assert "abcde"[1..<4] == "bcd"  // S106 abcde from one to four is not bcd
-
-
-
-
-
-
-
-
-
-
-assert "A"[0] == U+0041  // DQ2 the character of "A" is not A
-
-
-
-
-
-assert "a\tb"[1] == U+0009  // SE2 a tab escape is not a tab
-
-
-assert "\u00E9"[0] == U+00E9  // SE4 a four-digit escape is not its character
-
-assert "\u{E9}"[0] == U+00E9  // SE15 an escape of two digits in braces is not its character
-
-
-
-assert "\U01F600"[0] == U+1F600  // SE6 a six-digit escape is not its character
-
-assert "\""[0] == U+0022  // SE7 an escaped quote is not a quote
-
-assert "\n"[0] == U+000A  // SE8 a newline escape is not a newline
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// (a call inside itself, walking a text: recursion)
+walked (text) => text.empty ? `done` : walked(text.rest)
+assert walked(`ab`) == `done`  // RC2 a call inside itself does not walk a text
+// Texts destructured as lists are: each place the span after which the rest reads, each written text there in its turn
+assert {
+  (left_of_dash, `-`, right_of_dash) := `x-y`
+  left_of_dash == `x`
+}  // DS3 a text destructured by a pattern does not give a place its span
+assert {
+  (start_of, `-`, end_of) := `ab-cd`
+  end_of == `cd`
+}  // DS4 the place after a written text does not take the rest

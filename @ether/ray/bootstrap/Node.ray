@@ -9,7 +9,6 @@ Conjunction := class (first, second) => {
   assert Conjunction(Number, Node).admits(5)  // NOD3 a conjunction does not admit what each part admits
   assert !Conjunction(Number, String).admits(5)  // NOD4 a conjunction admits what only one part admits
   contains (x) => conjoined.contains(x)
-  assert (1 | 2)#.contains((1 | 2)#.random)  // HS4 a random possible value is not one of them
   assert (1 | 2)#.succ.contains(3)  // HS5 a member asked of the possible values is not asked of each
 }
 
@@ -42,7 +41,6 @@ Node &+= {
   assert (a: 1, b: 2).fields.map(.name) == ["a", "b"]  // NOD12 the fields of a value are not its names in order
   assert (a: 1, b: 2).fields.map(.value) == [1, 2]  // NOD13 the fields of a value do not hold their values in order
   assert (a: 1, b: 2).fields.count == 2  // NOD14 a value of two fields does not have two fields
-  as (=== String) => (this.of && this.of.header && Language.patterned(this.of.header.head)) ? Language.part_written(this) : (Language.for_file(&.caller.location.name) ?? Language.ray).write(this)
 
   chainable != (other) => !(this == other)
   assert 1 != 2  // NOD15 different values are not unequal
@@ -140,11 +138,6 @@ Possibilities &+= {
 }
 assert (1 | 2 | 3)#.measure == 3  // NOD39 the measure of a discrete set is not its count
 
-{share: Number{0 < . < 1}} {counted: *{#.count != 1}{!(. is Unit)}} => share * counted#.count -- (whole => whole is Integer ? counted{#.count == whole}
-  : counted#.count is ∞ ? counted{#.measure(counted#) == share * counted#.measure}
-  : ERROR@Type `a share of a discrete structure is not a whole number of its possibilities`)
-{count: Number | Range} {counted: *{#.count != 1}{!(. is Unit)}} => counted{#.count == count}
-a | an {counted: *{#.count != 1}{!(. is Unit)}} => 1 counted
 // A rule with two operators written in it is a ternary
 assert {
   {a} %% {b} ## {c} => a ? b : c
@@ -243,30 +236,6 @@ Section := class (operator, operand?) => {
 [x: Symbolic] ^operator => Section(operator: [] ~~ (made => made.append(x)))
 [x: Symbolic]{b} ^operator => Section(operator: [] ~~ (made => made.append(x)), operand: b)
 
-Cases := Program{written.nonempty && written.every(.code ~= (*, " => ", *))}
-assert {
-  matched := if 2 {
-    1 => "one"
-    2 => "two"
-  }
-  assert matched == "two"  // NOD54 a case on a value does not take the arm that matches
-  assert !(matched == "one")  // NOD55 a case took the first arm that does not match
-  other := if 9 {
-    1 => "one"
-  } else {
-    "other"
-  }
-  assert other == "other"  // NOD56 a case with no matching arm does not take the else
-}
-if &+= {
-  { }{subject} {{cases: Cases}} else {{otherwise}} ^class => Compiler.reduced(subject, (Program(code: cases**) as Compiler) + Program(code: otherwise**).otherwise)
-  { }{subject} {{cases: Cases}} ^class => Compiler.reduced(subject, Program(code: cases**) as Compiler)
-}
-Program &+= {
-  as (=== Compiler) => Program(code: written.map**(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *)).type
-    ?? ((arm.case as Program)() is Section ? ("*{", arm.case, "}") : ("*{== ", arm.case, "}")), "} => ", arm.value)).join(\n))
-  otherwise => ("{subject_of_case: *} => (", code, ")") as String as Program as Compiler
-}
 
 Node &+= {
   assert 5.(. + 1) == 6  // NOD57 `.( )` does not run its expression with the value as `.`
@@ -393,7 +362,6 @@ read_within (text, pattern) => (
 {type}+, {rest} ^punctuation => type[], rest
 
 Node &+= {
-  right-to-left internal => this ~~ .access = Access(&.caller, method: Access.Reading, target: this)
   right-to-left trivially => instance ? this : ?
   right-to-left unique<in: Program?> => this{.is_unique<in: in>}
   assert [1, 2, 1].unique.unique == [1, 2]  // CO26 each once, twice, is not each once
@@ -418,9 +386,6 @@ mathematics := suggest {
   !exists == ∄
 }
 
-print (x) => IO.output(x as String) -- x
-// `print(x)` answers x (Almanac §0.3)
-assert print(3) == 3  // PT1 print does not answer what it printed
 
 // any value: every value is a Node
 * := Node

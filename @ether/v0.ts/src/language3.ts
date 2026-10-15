@@ -3,7 +3,7 @@ import { sources } from './bundled.ts';
 export const NAME = 'Ether' as const
 export const ALIASES = ['ray', 'orbitmines'] as const;
 export const EXTENSION = '.ray';
-export const ENTRYPOINT = `../../ray/.entrypoint${EXTENSION}3`;
+export const ENTRYPOINT = `../../ray/bootstrap/.entrypoint${EXTENSION}3`;
 export const version:
   [major: number, releaseDate: string, index: number] =
   [0, '2027-01-01', 4];
@@ -2121,7 +2121,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (this thread's words: given, a constant of what is compiled for it)
   const THREAD = thread | 0, CHUNK = 1 << 16;
   // (a thread's words)
-  const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64;
+  const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_LB = 276, LEFTS = 64, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64;
   // (the words the host knows, at WORDS: where each is and how long)
   const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3;
   // (records)
@@ -2201,6 +2201,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (!w(t + T_TYP)) set(t + T_TYP, alloc(12 * TYPS));
     if (!w(t + T_DECLS)) set(t + T_DECLS, alloc(12 * DECLS));
     if (!w(t + T_SH)) set(t + T_SH, alloc(12 * SHADOWS));
+    if (!w(t + T_LS)) set(t + T_LS, alloc(8 * LEFTS));
     set(t + T_REG_N, 0); set(t + T_WROTE_N, 0); set(t + T_REG_AT, w(t + T_CHUNK));
     set(t + T_REG_SLOT, w(t + T_SLOT)); set(t + T_REG_SLOTEND, w(t + T_SLOT_END)); set(t + T_REG_LAZY, aload(LAZY_N));
     return w(f + N_LAST);
@@ -2275,7 +2276,14 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const k = xadd(LOG_N, 1);
     if (k < w(LOG_CAP)) { const e = w(LOG) + 16 * k; set(e, at); set(e + 4, kind); set(e + 8, a); set(e + 12, c); }
   }
-  function say(t: number, at: number, kind: number, a: number, c: number) { if (DEBUG) debug(D_SAID, kind, a, c); log(at, kind, a, c); set(t + T_SAID, w(t + T_SAID) + 1); }
+  function say(t: number, at: number, kind: number, a: number, c: number) {
+    // (about text a test made (a copy it read): that text kept, for after the test lets go of its memory)
+    if (w(THREAD + T_REG_AT) && c > a && c - a < 65536 && in_region(a)) {
+      const n = c - a, p = xadd(HEAP, (n + 4) & -4);
+      if (p + n < w(LIMIT)) { for (let i = 0; i < n; i++) setb(p + i, b(a + i)); if (at >= a && at <= c) at = p + (at - a); a = p; c = p + n; }
+    }
+    if (DEBUG) debug(D_SAID, kind, a, c); log(at, kind, a, c); set(t + T_SAID, w(t + T_SAID) + 1);
+  }
   // (going to a label, or stopped: what was run returns, until what has the label, or the statement)
   function stopped(t: number) { return w(t + T_JUMP_N) || w(t + T_FAULT) || w(OOM); }
   // (the text from s to e one of the words the host knows?)
@@ -2863,16 +2871,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (read in a rule's body, of a left side's text: part of it)
       if (!w(t + T_DECL) && in_left(w(tk), w(tk + 4))) { set(t + T_DECL, 1); const v = ev(t, r, names, f, self, value, written, on); set(t + T_DECL, 0); return v; }
       if (w(t + T_DECL) && fixed) { set(t + T_DECL, 0); const v = block(t, w(tk), w(tk + 4), w(tk + T_ORIGIN), f, into, 0, value, 1, w(tk + T_THIS) || into, 0); set(t + T_DECL, 1); return v; }
-      if (w(t + T_DECL) && worded(w(tk), w(tk + 4))) {
+      const of_left = !lefts() || left_along(direct) || in_left(w(r + 4), w(r + 8));
+      // (not of the left side being read (a member a rule's body reads, `,`'s `.spreading`): read as a value)
+      if (w(t + T_DECL) && !of_left) { set(t + T_DECL, 0); const v = ev(t, r, names, f, self, value, written, on); set(t + T_DECL, 1); return v; }
+      if (w(t + T_DECL) && worded(w(tk), w(tk + 4)) && of_left) {
         if (tk !== direct) { set(t + T_DECL, 0); const v = valued(t, tk); set(t + T_DECL, 1); if (v && w(v + N_IS) === IS_TEXT && worded(w(v + N_A), w(v + N_B))) return placed(t, w(v + N_A), w(v + N_B), into); }
         return placed(t, w(tk), w(tk + 4), into);
       }
       // (not one word: what it answers, a text, the name declared (`(on).{key}` given `"inner"`))
       if (w(t + T_DECL) && !worded(w(tk), w(tk + 4))) {
         // (the left side, from here: this code's text)
-        const ls = w(t + T_LS), le = w(t + T_LE); if (!in_left(w(tk), w(tk + 4))) { set(t + T_LS, w(tk)); set(t + T_LE, w(tk + 4)); }
+        const pushed = push_left(w(tk), w(tk + 4));
         const v = block(t, w(tk), w(tk + 4), w(tk + T_ORIGIN), f, self, 0, value, 1, self, self === w(tk + T_THIS) ? w(tk + T_LEX) : 0);
-        set(t + T_LS, ls); set(t + T_LE, le);
+        set(t + T_LE, pushed);
         return v && w(v + N_IS) === IS_TEXT && worded(w(v + N_A), w(v + N_B)) ? placed(t, w(v + N_A), w(v + N_B), into) : v;
       }
       // (all of it read here, the code a whole (`.({code})`, `{`{`}{block}{`}`}`, `{body}`); but a rule that is only its last
@@ -3034,18 +3045,18 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const decl_in = w(t + T_DECL), declaring = decl_in;
     // (in a left side, brackets after it, `f (x)`, `x.m (y)`: it declared, a place, and they its head)
     const rs = skip(w(r + 16), w(r + 20));
-    if (declaring && rs < w(r + 20) && (bracket(rs, w(r + 20)) & 3) === 1 && bracket(rs, w(r + 20)) !== 5 + 8 * w(OPEN_LENGTH) && past(rs, w(r + 20)) >= w(r + 20)) {
+    if (declaring && (!lefts() || in_left(rs, w(r + 20))) && rs < w(r + 20) && (bracket(rs, w(r + 20)) & 3) === 1 && bracket(rs, w(r + 20)) !== 5 + 8 * w(OPEN_LENGTH) && past(rs, w(r + 20)) >= w(r + 20)) {
       const ps = w(p + 4), pe = w(p + 8);
       const place = worded(ps, pe) || operated(ps, pe) ? placed(t, ps, pe, self) : ev(t, p, names, f, self, 1, written, self);
       if (place && w(place + N_IS) === IS_PLACE) return node(IS_CALLED, rs, w(r + 20), place, 0);
     }
     // (what the rest is read on, a value: no part of a left side, `(value).this`)
-    set(t + T_DECL, 0); const ls = w(t + T_LS), le = w(t + T_LE); set(t + T_LS, 0); set(t + T_LE, 0);
+    set(t + T_DECL, 0); const lb = w(t + T_LB); set(t + T_LB, w(t + T_LE));
     if (w(p) === K_ON) { on = onto(t, p, names, f, self, 1, written); receiver = w(t + T_ON); }
     // (a value read where it is written, not as a member of another (`f(5)`, `body(x)`): what follows is read on it alone)
     // (the member a `.{member}` reads, `x.f(y)`'s `f`: what follows is read on it as x's)
     else { const member = w(t + T_MEMBER) === self; set(t + T_MEMBER, 0); on = ev(t, p, names, f, self, 1, written, self); if (!member && written === self) receiver = on; }
-    set(t + T_DECL, declaring); set(t + T_LS, ls); set(t + T_LE, le);
+    set(t + T_DECL, declaring); set(t + T_LB, lb);
     if (stopped(t)) { set(t + T_DECL, decl_in); return 0; }
     // (nothing: what the kernel's nothing is (`None`, by the kernel's map), else the language)
     if (!on) on = w(NOTHING) || w(GLOBAL);
@@ -3165,7 +3176,14 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a rule's body is no part of a left side it is read in (what it composes, `,`, `( )`, is: its holes, by their text))
     // (a method's body, a call's, is no part of a left side it is read in)
     const bd_ = body(t, rule), decl = w(t + T_DECL);
-    if (decl && (w(rule + R_FLAGS) & METHOD)) set(t + T_DECL, 0);
+    // (one composing what is written in the left side, its holes' code there (`a, b`, `x[k]`): its body a value, its holes the
+    // left side's by their text)
+    let composing = 0;
+    if (decl && lefts() && !(w(bd_) === 1 && w(bd_ + 4 + 12) && w(w(bd_ + 4 + 12)) === K_REF) && w(rule + R_HOLES)) {
+      composing = 1;
+      for (let i = 0; i < w(rule + R_HOLES) && composing; i++) { const tk = follow(applied + F_TAKES + TAKE * i, 1); if (!in_left(w(tk), w(tk + 4))) composing = 0; }
+    }
+    if (decl && ((w(rule + R_FLAGS) & METHOD) || composing)) set(t + T_DECL, 0);
     const answer = exec(t, applied, bd_, 0);
     set(t + T_DECL, decl);
     if (DEBUG) debug(D_APPLY_END, s, e, rule);
@@ -3332,10 +3350,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const expression = !pattern(hs, he, 0) && !worded(hs, he);
     if (expression) {
       // (read as written; what declares nothing defined as what its holes took in it, `== (other)`)
-      const declaring = w(t + T_DECL), named = w(t + T_NAMED), ls = w(t + T_LS), le = w(t + T_LE);
-      set(t + T_DECL, 1); set(t + T_LS, w(hd)); set(t + T_LE, w(hd + 4));
+      const declaring = w(t + T_DECL), named = w(t + T_NAMED), pushed = push_left(w(hd), w(hd + 4));
+      set(t + T_DECL, 1);
       const v = ev(t, reading(t, w(hd), w(hd + 4), o ? w(o + F_RULE) : 0, o ? w(o + F_CLOSURE) : 0, latest(self), self, LEFT, 0, 0, 0), o || frame(0, 0, self, w(hd), w(hd + 4), 0, 0, self, self), f, self, 1, self, self);
-      set(t + T_DECL, declaring); set(t + T_LS, ls); set(t + T_LE, le);
+      set(t + T_DECL, declaring); set(t + T_LE, pushed);
       // (a place, or the head of what was just declared (`b = 0`, a default): its name, where it is named)
       if (v && w(v + N_IS) === IS_PLACE && w(v + N_A) && w(v + N_B) > w(v + N_A)) { hs = w(v + N_A); he = w(v + N_B); if (place_in(v)) self = place_in(v); }
       else if (v && w(v + N_IS) === IS_HEAD && place_in(v) && worded(w(v + N_A), w(v + N_B))) { hs = w(v + N_A); he = w(v + N_B); self = place_in(v); }
@@ -3450,9 +3468,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
             // (one that took a pattern, `{x} + {y}` (holes of none of where it was written): a head, as written)
             if (!name && !depth && !pattern(a, z, w(tk + T_ORIGIN))) {
               // (read as a left side: what it declares; what it runs defines with places of its own, not this one's)
-              const declaring = w(THREAD + T_DECL), into = w(THREAD + T_PLACE_IN), ls = w(THREAD + T_LS), le = w(THREAD + T_LE); set(THREAD + T_DECL, 1); set(THREAD + T_LS, w(tk)); set(THREAD + T_LE, w(tk + 4));
+              const declaring = w(THREAD + T_DECL), into = w(THREAD + T_PLACE_IN), pushed = push_left(w(tk), w(tk + 4)); set(THREAD + T_DECL, 1);
               const v = valued(THREAD, take(from, (x - 1) >> 16, (x - 1) & 0xFFFF)), is = v ? w(v + N_IS) : -1;
-              set(THREAD + T_DECL, declaring); set(THREAD + T_PLACE_IN, into); set(THREAD + T_LS, ls); set(THREAD + T_LE, le);
+              set(THREAD + T_DECL, declaring); set(THREAD + T_PLACE_IN, into); set(THREAD + T_LE, pushed);
               if (is === IS_PLACE || is === IS_HEAD || is === IS_TEXT) { a = w(v + N_A); z = w(v + N_B); }
               // (else, a name in a group, `(name)`, that names a hole: that hole's code, as written (`=`'s `(name) :=` of
               // `x.type`))
@@ -3676,11 +3694,24 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     astore(tk + T_STATE, 3);
     const fr = frame(0, 0, scope, w(v + N_A), w(v + N_B), 0, 0, scope, scope), now = ev(t, r, fr, fr, scope, 1, scope, scope);
     astore(tk + T_STATE, 2);
-    if (now && w(now + N_IS) !== IS_PLACE) set(tk + T_VALUE, now);
+    // (kept, but not by a take made before a test, of what the test made: it is let go of with the test)
+    if (now && w(now + N_IS) !== IS_PLACE && !older(tk) && (!w(THREAD + T_REG_AT) || in_region(tk) || !in_region(now))) set(tk + T_VALUE, now);
     return now || v;
   }
   // (a hole's code written in the left side being read (its text inside it): read as part of it, wherever it is used)
-  function in_left(s: number, e: number): number { return w(THREAD + T_LS) && s >= w(THREAD + T_LS) && e <= w(THREAD + T_LE) ? 1 : 0; }
+  // (the texts of the left side being read: each code it read as part of it (T_LS spans, T_LE of them, from T_LB: a value read
+  // in it, a receiver, reads none of them))
+  function in_left(s: number, e: number): number {
+    const at = w(THREAD + T_LS);
+    for (let i = w(THREAD + T_LB); at && i < w(THREAD + T_LE); i++) if (s >= w(at + 8 * i) && e <= w(at + 8 * i + 4)) return 1;
+    return 0;
+  }
+  function lefts() { return w(THREAD + T_LE) > w(THREAD + T_LB) ? 1 : 0; }
+  function push_left(s: number, e: number): number {
+    if (!w(THREAD + T_LS)) set(THREAD + T_LS, alloc(8 * LEFTS));
+    const n = w(THREAD + T_LE); if (n < LEFTS) { set(w(THREAD + T_LS) + 8 * n, s); set(w(THREAD + T_LS) + 8 * n + 4, e); set(THREAD + T_LE, n + 1); }
+    return n;
+  }
   function valued(t: number, tk: number): number {
     let state = aload(tk + T_STATE);
     if (state === 2) return resolved(t, tk);
@@ -3706,7 +3737,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (one typed by a text reads only that text: its value is the text)
     const o = follow(tk, 1), origin = w(o + T_ORIGIN), ty = w(o + T_VIS), left = in_left(w(o), w(o + 4)), decl_was = w(t + T_DECL), one_was = w(t + T_ONE);
     if (left) { set(t + T_DECL, 1); if (worded(w(o), w(o + 4))) set(t + T_ONE, skip(w(o), w(o + 4))); }
+    // (code read as a left side: the left side, from here, its text)
+    const pushed = w(t + T_LE); if (w(t + T_DECL)) push_left(w(o), w(o + 4));
     const v = ty > 1 && w(ty + N_IS) === IS_TEXT ? ty : block(t, w(o), w(o + 4), origin, origin, w(o + T_THIS), ty, 1, 0, w(o + T_THIS), w(o + T_LEX));
+    set(t + T_LE, pushed);
     if (left) { set(t + T_DECL, decl_was); set(t + T_ONE, one_was); }
     if (stopped(t)) { astore(tk + T_STATE, 0); return 0; }
     // (a place, a name nothing defines yet: not kept, read again when it may be)
@@ -3715,6 +3749,18 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return v;
   }
   // (a take whose code is `{name}` (as a value, also `name`): what that hole took)
+  // (some code along a take's references, `{x}` to what x took and so on, written in the left side being read)
+  function left_along(tk: number): number {
+    for (let n = 0; n < 64; n++) {
+      if (in_left(w(tk), w(tk + 4))) return 1;
+      const origin = w(tk + T_ORIGIN); if (!origin) return 0;
+      let x = refer(origin, w(origin + F_RULE), w(origin + F_CLOSURE), w(tk), w(tk + 4), 1);
+      if (!x) x = refer(origin, w(origin + F_RULE), w(origin + F_CLOSURE), w(tk), w(tk + 4), 0);
+      if (!x) return 0;
+      tk = take(w(THREAD + T_REFF), (x - 1) >> 16, (x - 1) & 0xFFFF);
+    }
+    return 0;
+  }
   function follow(tk: number, bare: number): number {
     for (let n = 0; n < 1000; n++) {
       const origin = w(tk + T_ORIGIN);
@@ -4099,7 +4145,8 @@ export class Ray extends Language<FileStore> {
     }
     return this.said;
   }
-  say(at: number, message: string) { const key = `${at}:${message}`; if (this.heard.has(key)) return; this.heard.add(key); this.said.push([at, message]); }
+  // (once each place and message; one about a copy the reader made (no place in a file), once each message)
+  say(at: number, message: string) { const key = this.where(at).startsWith('(made') ? `made:${message}` : `${at}:${message}`; if (this.heard.has(key)) return; this.heard.add(key); this.said.push([at, message]); }
 
   // What a node holds under a name.
   member(node: number, name: string): number { const [s, e] = this.string(name); return node ? this.x.member(this.t, node, s, e - s) : 0; }

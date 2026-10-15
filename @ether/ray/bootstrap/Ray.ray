@@ -288,11 +288,9 @@ Iterable &+= {
     assert pairs == 6  // CF13 a loop inside a loop does not multiply
   }
   join (separator) => this.empty ? "" : (this.rest.empty ? this.first : this.first + separator + this.rest.join(separator))
-  random => drawn(Random.below(map(.weight ?? 1).sum))
   drawn (at: Number) => at < (first.weight ?? 1) ? first : rest.drawn(at - (first.weight ?? 1))
   subsets (size: Number) => size == 0 ? [[]] : empty ? [] : rest.subsets(size - 1).map([first, .]), rest.subsets(size)
   orderings => count < 2 ? [this] : map(held => this{!== held}.orderings.map([held, .])).flatten(1)
-  shuffled => orderings.random
   fill (x) => all = x
   assert [1, 2].fill(3).every(== 3)  // RR69 a filled list does not hold what it was filled with
   take (count: Number) => this[..<count]
@@ -713,7 +711,6 @@ Link &+= Ray
 
 Set := class: Structure {
   orderless => true
-  normalizer => .shuffled.unique
   add (x) => (push(x) unless contains(x)) -- this
 }
 assert ([1, 2, 1] as Set).(

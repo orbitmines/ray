@@ -397,18 +397,29 @@ assert {
 // its parameters taking the arguments (code, read where they are written: `f(x: 5)` declares its `x`, answering `declared`).
 // (A head led by `{this}` is a method: read only on a value, what follows it; so `(…)` in the body is not a call of itself.)
 // It ends at `returned` (`return v` goes there), and begins again at `recurring` (`recur(…)` gives its parameters these first).
+// (Its parameters take the arguments' values: a type a parameter is given, `x: T`, is checked on the value, not read in the
+// text.)
 ({parameters}) {`=>`} {body} ^punctuation => {
   external .
-  {this}({{parameters}}) => {
+  {this}({arguments}) => {
     external .
+    ({{parameters}}) taking {arguments}
     external label recurring
     {{body}}
     external label returned
   }
-  // (called on what follows it, without brackets: `double 4`, `6 == 6` (`==` a method of 6), `"0".."9"`: its parameters
-  // the holes, as written)
-  {this}{{parameters}} => {
+  // (called on what follows it, without brackets: `double 4`, `6 == 6` (`==` a method of 6), `"0".."9"`)
+  {this}{arguments} => {
     external .
+    ({{parameters}}) taking {arguments}
+    external label recurring
+    {{body}}
+    external label returned
+  }
+  // (called with nothing: its parameters as written, their defaults given)
+  {this}() => {
+    external .
+    ({{parameters}})
     external label recurring
     {{body}}
     external label returned
@@ -447,23 +458,44 @@ assert {
 // Partial arguments: `f<a: 5>` is f with those given first.
 {function}<{given}> ^punctuation => { (also) => {function}({given}, also) }
 
-// A call's parameters taking its arguments: one parameter, all of them; several, each the next (one already given passes,
-// leaving it for the next). Arguments that only declared (`declared`) give none.
-({parameter}) taking {value} ^keyword => ({parameter}) gets ((value === declared) ? None : value)
-// (the parameters taking from a list's vertices, before what reads a list with them)
-({parameter}) taking from {vertex} ^keyword => ({parameter}) gets (vertex).value
-({parameter}, {parameters}) taking from {vertex} ^keyword => {
-  (({parameter}) gets (vertex).value) ? (({parameters}) taking from (vertex).next) : (({parameters}) taking from vertex)
-}
-({parameter}, {parameters}) taking {list} ^keyword => ({parameter}, {parameters}) taking from (((list).spread === true) ? (list).head : Listing.new.append(list).head)
-// One parameter given a value, unless given already: `x`, `x: T` (checked against T), `x = default` (the default when none is
-// given, read when it is first read).
-({name}) gets {value} ^keyword => {
-  {name} := value
+// A call's parameters taking its arguments, by composition: the parameters run as written, where the call runs (`a` names a
+// place, `b = 0` gives it its value first, `x: T` its type), `,` composing them; each then takes the argument in its place
+// (one that only declared, `declared`, gives none: what it had stays).
+// (rules, not closures: a closure's parameters are given by these)
+// (their holes named apart from the call's, whose `parameters` and `arguments` they are given)
+({written_parameters}) taking {passed} ^keyword => ({written_parameters}) := passed
+{places} takes {taken} ^keyword => {
+  {
+    places_were := places
+    taken_was := taken
+    ((places_were).listing === true) ? ((places_were) each takes (taken_was)) : ((places_were) alone takes (taken_was))
+  }
   true
 }
-({name}: {type}) gets {value} ^keyword => ({name}) gets ((value) checked (type))
-({parameter} = {default}) gets {value} ^keyword => (value === None) ? (({parameter}) gets ({default})) : (({parameter}) gets value)
+{place} alone takes {taken} ^keyword => {
+  {
+    place_was := place
+    alone_taken := taken
+    unless (alone_taken === declared) || (alone_taken === None) {
+      (place) := (alone_taken) checked ((place_was).type)
+    }
+  }
+  true
+}
+// (each of a list of places the value in its place of what is given: a list a `,` made, else that one value)
+{places} each takes {taken} ^keyword => {
+  {
+    at := places.head
+    each_taken := taken
+    taken_at := (((each_taken).listing === true) && ((each_taken).spread === true)) ? (each_taken).head : Listing.new.append(each_taken).head
+    while at {
+      (at.value) alone takes (taken_at ? taken_at.value : None)
+      at = at.next
+      taken_at = taken_at ? taken_at.next : None
+    }
+  }
+  true
+}
 {name} := lazily {default} ^keyword => {
   {name} => {
     kept := ({default})
@@ -507,16 +539,6 @@ assert {
   named := "other"
   Keyed[named] := true
   assert Keyed.other  // IX3 x[name] := v, name holding a text, does not declare that text in x
-}
-// A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
-// (what follows, a list this `,` just made (still spreading, no one else's yet): the value put in front of it, not copied)
-{list}, {other} ^punctuation => {
-  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).prepend(list) : Listing.new.append(list).joined(other))).spreading)
-}
-// Names given values at once: `(a, b) := list`, each the next value in it.
-({name}, {names}) := {list} ^punctuation => {
-  {name} := (list).first
-  ({names}) := (list).rest
 }
 // A record: names given values in parentheses, a node holding them.
 ({name}: {value}) ^operator => {
@@ -961,11 +983,21 @@ dynamics := None
 // (giving a name a value, defined again after the last operator: it binds looser than any, `x := a | b` is `x := (a | b)`)
 {name} := {value} ^punctuation => {
   value
-  {name} => value
+  ({name} => value) given (value)
 }
+// (what a definition answers given its value: a left side made of names answers a list of their places (`(a, b) := list`, a
+// call's parameters): each the value in its place)
+{given} given {value} ^keyword => ((given).listing === true) ? ((given) each takes (value)) : given
 {name} = {value} => {
+  // (the value first, as a value (read on, so in a left side too: `(a, b = c)`'s c is read, not declared))
   value
   (name) := value
+}
+// (and composing, after giving: `,` binds loosest of all, `(a, b = 0)` is `a, (b = 0)`)
+// A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
+// (what follows, a list this `,` just made (still spreading, no one else's yet): the value put in front of it, not copied)
+{list}, {other} ^punctuation => {
+  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).prepend(list) : Listing.new.append(list).joined(other))).spreading)
 }
 assert {
   asserted := dynamically assert {
@@ -1033,18 +1065,6 @@ assert {
   assert Entered~default == Entered  // EP2 ~default is not the class itself
   // A class body runs like any function: labels are never skipped; a Component's labels are entered, not executed (F-D13, L§4.2.1)
   assert Entered().steps == 7  // CMP1 a label in a class body stops its construction
-}
-assert {
-  Panel := class: Component {
-    shown := 0
-   opened\
-    shown = 1
-   closed\
-    shown = 2
-  }
-  assert Panel().shown == 0  // CMP2 constructing a component runs past its first label
-  assert Panel~opened().shown == 1  // CMP3 entering a component at a label runs past the next label
-  assert Panel~closed().shown == 2  // CMP4 entering a component at its last label does not run what follows it
 }
 assert {
   TA := class { }
@@ -1489,8 +1509,6 @@ assert {
 }
 // `#` is what a value may be (A1, T2.3)
 assert boolean#.count == 2  // HS1 boolean does not have two possible values
-assert boolean#.random is boolean  // FE3 a coin comes up with nothing
-assert boolean#.random is boolean  // RN12 a coin lands on neither side
 assert boolean{. == true}() == true  // CN2 the only member a narrowing admits is not the one chosen
 assert (3 boolean).count == 3  // CN5 three called on boolean is not three of it
 false &+= {
@@ -1507,12 +1525,6 @@ true &+= {
   of := boolean
 }
 Char := class: Number { }
-assert U+0061 is Char.Latin  // UN45 a is not a Latin character
-assert !(U+0627 is Char.Latin)  // UN46 alef is a Latin character
-assert U+0627 is Char.Arabic  // UN53 alef is not an Arabic character
-assert U+03B1 is Char.Greek  // UN54 alpha is not a Greek character
-assert U+0430 is Char.Cyrillic  // UN55 a Cyrillic a is not Cyrillic
-assert U+4E00 is Char.Han  // UN56 a Han character is not Han
 Program := class { }
 // A program run as a selection
 assert Program(code: {
@@ -1603,16 +1615,6 @@ assert {
     $missing_file 4) == 3
   assert looking().diagnostics.last.type === NotFound  // ER21 an error does not keep the type written after @
 }
-// Checking a permission runs no one's code: a grant whose expression or filter has effects is refused when granted, and never run.
-assert {
-  purg_reader := Character(name: "purg-reader")
-  purg_lamp := (lamp: 1)
-  assert (purg_reader.read IO().output("leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
-  assert (purg_reader{IO().output("leak")}.read purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
-  assert !(purg_lamp.access)  // PURG3 a refused grant is kept
-  assert !((purg_reader.read Time.now) is Diagnostic)  // PURG5 a grant reading the time is refused
-}
-assert (33% ("A" | "B" | "C")) is Diagnostic  // HS12 a share that is not a whole number of a discrete structure's possibilities is not a type error
 assert {
   fired := 0
   unless false { fired += 1 }

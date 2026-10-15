@@ -4,98 +4,15 @@ Char &+= {
   static Digit: Char = "0".."9"
   static Blank: Char = " " | "\t".."\r"
   static Word: Char = Letter | Digit | "_"
-  static Symbol: Char = Unicode.GeneralCategory.(Punctuation | Symbol)
 
   is_ascii => this < 128
   assert "a"[0].is_ascii  // S103 a is not one byte
   assert !("é"[0].is_ascii)  // S147 é is one byte
-  bytes => ([this] as String).bytes
-  assert ("é" as Unicode.UTF-8).bytes.length == 2  // S8 é is not two bytes wide
-
-  special_casing => Unicode.SpecialCasing.rows{.range.in(this) && !.condition}.first
-  upper_case | uppercase => special_casing.upper ?? Unicode.UpperCase[this] ?? this
-  assert "ab".upper_case == "AB"  // W3 upper_case failed
-  assert "a"[0].upper_case == "A"[0]  // S80 a in upper case is not A
-  assert "7"[0].upper_case == "7"[0]  // S83 a digit in upper case is not itself
-  assert "Ab".uppercase == "AB"  // S117 uppercase is not upper_case
-  assert "é".upper_case == "É"  // SC9 é in upper case is not É
-  // Case and scripts from the Unicode data (X3.10)
-  assert "Straße".upper_case == "STRASSE"  // UD1 sharp s does not upper-case to SS
-  lower_case | lowercase => special_casing.lower ?? Unicode.LowerCase[this] ?? this
-  assert "Z"[0].lower_case == "z"[0]  // S81 Z in lower case is not z
-  assert "a"[0].lower_case == "a"[0]  // S82 a already in lower case is not itself
-  assert "Ab".lowercase == "ab"  // S116 lowercase is not lower_case
-  title_case | titlecase => special_casing.title ?? Unicode.TitleCase[this] ?? upper_case
-  assert "ab".title_case == "Ab"  // S49 title_case does not capitalise
-  assert "ab cd".titlecase == "Ab Cd"  // S119 titlecase is not title_case
-  assert "AB cd".title_case == "Ab Cd"  // S153 the words titled are not Ab Cd
-  assert U+01C6.title_case == U+01C5  // UD2 dž does not title-case to Dž
-  assert "ǆemal".title_case == "ǅemal"  // UD3 a word does not start with its title case
-  is_upper => lower_case != this
-  assert "AB".is_upper  // SC1 AB is not upper case
-  assert !("a"[0].is_upper)  // SC3 the character a is upper case
-  is_lower => upper_case != this
-  assert "ab".is_lower  // SC2 ab is not lower case
-  assert !("1"[0].is_lower)  // SC4 the character 1 is lower case
-  mirrored => Unicode.BidiMirroring[this].value ?? this
-  assert "ab".mirrored == "ba"  // W5 mirrored failed
-  assert "abc".mirrored == "cba"  // S54 abc reversed is not cba
-  assert "a".mirrored == "a"  // S55 one character reversed is not itself
-  swap_case | swapcase => is_lower ? upper_case : lower_case
-  assert "Ab".swap_case == "aB"  // W4 swap_case failed
-  assert "a"[0].swap_case == "A"[0]  // S84 a swapped is not A
-  assert "A"[0].swap_case == "a"[0]  // S85 A swapped is not a
-  assert "7"[0].swap_case == "7"[0]  // S86 a digit swapped is not itself
-  assert "Ab".swapcase == "aB"  // S118 swapcase is not swap_case
-  fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status is ("C" | "F")}.first.value ?? this
-  assert "Ab".fold_case == "ab"  // S50 fold_case does not fold
-  assert "Ab".foldcase == "ab"  // S120 foldcase is not fold_case
-  assert "ß".fold_case == "ss"  // SC5 ß does not fold to ss
-  assert "Straße".fold_case == "strasse"  // SC6 Straße does not fold to strasse
-  assert "Straße".fold_case == "strasse"  // UN59 sharp s does not fold to ss
-
-  // Unicode §3.7: the full canonical decomposition, a mapping without a <tag> applied until nothing decomposes (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G733)
-  decomposed => Unicode.Data[this].decomposition_mapping -- (. && !(. ~= ⊢"<") ? (. as Unicode.Scalar[].join(" ")).map(.decomposed).flatten : [this])
-  combining_class => (Unicode.Data[this].canonical_combining_class ?? "0") as Decimal
-
-  decimal_digit_value => Unicode.DecimalDigitValue[this]
-  assert U+0663.decimal_digit_value == 3  // UD13 the decimal value of ٣ is not three
-  assert !(U+00B2.decimal_digit_value)  // UD14 a superscript two is a decimal digit
-  digit_value => Unicode.DigitValue[this]
-  assert U+00B2.digit_value == 2  // UD15 the digit value of ² is not two
-  numeric_value => Unicode.NumericValue[this]
-  assert U+00BD.numeric_value == 1/2  // UD16 ½ is not a half
-  assert U+216B.numeric_value == 12  // UD17 Ⅻ is not twelve
-  baseline => Unicode.Superscript[this] ?? Unicode.Subscript[this] ?? this
-  assert "x²".baseline == "x2"  // UD4 a superscript does not come down to its digit
-  assert "H₂O".baseline == "H2O"  // UD5 a subscript does not come up to its digit
-  superscript => Unicode.Superscript⁻¹[this]
-  assert "2".superscript == "²"  // UD6 two has no superscript
-  subscript => Unicode.Subscript⁻¹[this]
-  assert "2".subscript == "₂"  // UD7 two has no subscript
-  as (=== Decimal) => digit_value ?? lower_case - "a" + 10
+  as (=== Decimal) => this <= "9" ? this - "0" : (this >= "a" ? this - "a" : this - "A") + 10
   static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
   assert Char.digit(0) == "0"[0]  // S138 nothing is not written 0
   assert Char.digit(7) == "7"[0]  // S139 seven is not written 7
   assert Char.digit(11) == "b"[0]  // S140 eleven is not written b
-  static (codepoint: Unicode.Scalar) as (=== Char) => codepoint
-
-  east_asian_width => Unicode.EastAsianWidth[this].value ?? "N"
-  assert U+4E00.east_asian_width == "W"  // UN51 a Han character is not wide
-  assert U+0061.east_asian_width == "Na"  // UN52 a is not narrow
-  columns => (east_asian_width is ("W" | "F")) ? 2 : 1
-  assert U+4E00.columns == 2  // UN41 a Han character does not take two columns
-  assert U+0061.columns == 1  // UN42 a Latin letter does not take one column
-  script => Unicode.Scripts[this].value ?? "Unknown"
-  assert U+0061.script == "Latin"  // UN43 a is not Latin
-  assert U+0627.script == "Arabic"  // UN44 alef is not Arabic
-  block => Unicode.Blocks[this].value ?? "No_Block"
-  assert U+0061.block == "Basic Latin"  // UN57 a is not in Basic Latin
-  assert U+00E9.block == "Latin-1 Supplement"  // UN58 é is not in Latin-1 Supplement
-  age => Unicode.Age[this] -- . ? Version(number: .number, revision: .revision) : None
-  assert U+0061.age == %1'1  // UV3 a is not from Unicode 1.1
-  assigned => age && age <= Unicode.version
-  assert U+0061.assigned  // UV4 a is not assigned in the selected version
 }
 assert "ab1"{. is Char.Letter}.length == 2  // S40 selecting letters did not keep two
 assert "8"[0] is Char.Digit  // S71 8 is not a digit
@@ -115,16 +32,14 @@ assert " "[0] is Char.Blank  // S97 a space is not blank
 assert !("a"[0] is Char.Blank)  // S98 a is blank
 assert "\n"[0] is Char.Blank  // S99 a newline is not blank
 assert "\t"[0] is Char.Blank  // S100 a tab is not blank
-assert "-"[0] is Char.Symbol  // S101 a dash is not a symbol
-assert !("a"[0] is Char.Symbol)  // S102 a is a symbol
 assert "abc".every(. is Char.Letter)  // S111 abc is not all letters
 assert !("ab3".every(. is Char.Letter))  // S112 ab3 is all letters
 assert "ab3".some(. is Char.Digit)  // S113 ab3 holds no digit
 assert !("abc".some(. is Char.Digit))  // S114 abc holds a digit
-assert "a-b+c".split(Char.Symbol).length == 3  // S124 a-b+c cut at its symbols is other than three pieces
 assert U+0041 == "A" as Char  // SE17 U+0041 is not the character A
-Char &+= Unicode.Scalar
 
+// A character by its code point: `U+0041` is A
+U+{codepoint: Hexadecimal.String}: Char => Hexadecimal(integer: codepoint) as Char
 Escape := {
   \0 => U+0000
   \a => U+0007
@@ -138,18 +53,9 @@ Escape := {
   \" => U+0022
   \{ => U+007B
 }
-dynamically Escape.for spelling => global[spelling] := Compiler.reduced(spelling, Escape)
+dynamically Escape.for spelling => global[spelling] := spelling -- (spelled => Escape reducing spelled)
 
-\s = Unicode.GeneralCategory.Space_Separator | \t
-assert " "[0] is \s  // SE9 a space is not a space escape
-assert !("a"[0] is \s)  // SE10 a is a space escape
-\S = !\s
-\R = Unicode.GeneralCategory.Line_Separator
 \\{prefix: "x" | "u" | "U"}{codepoint: Hexadecimal{length == (x: 2, u: 4, U: 6)[prefix]} | ("{", codepoint: Hexadecimal{length == 1..6}, "}")}: Char => codepoint
-\d = Unicode.GeneralCategory.Decimal_Number
-assert "7"[0] is \d  // SE11 7 is not a digit escape
-\D = !\d
-assert "a"[0] is \D  // SE12 a is not a non-digit escape
 \w = Char.Word
 assert "_"[0] is \w  // SE13 an underscore is not a word escape
 \W = !\w
@@ -174,9 +80,6 @@ assert "\x41" == "A"  // SE3 a hexadecimal escape is not its character
 assert "\q".length == 2  // SE16 an unknown escape is not kept as written
 assert "a\\b".length == 3  // SE5 an escaped backslash is not one character
 
-LanguageName := String{Language.named("." + .) != None}
-@{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
-@{extension: LanguageName} {code} => Compiler.reduced(code, Language.named("." + extension).level)
 
 // (String is made in the entrypoint, its core; what follows is the rest of it)
 String &+= {
@@ -189,20 +92,6 @@ String &+= {
   assert "a" < "b"  // SO1 a is not before b
   assert "a".succ == "b"  // SO2 the character after a is not b
 
-  upper_case | uppercase => #.upper_case as String
-  assert "abc".map(.upper_case) as String == "ABC"  // S115 abc made upper is not ABC
-  lower_case | lowercase => #.lower_case as String
-  is_upper => some(.is_upper) && !some(.is_lower)
-  is_lower => some(.is_lower) && !some(.is_upper)
-  swap_case | swapcase => #.swap_case as String
-  ignore_case | ignorecase => this.copy ~~ .normalizer = (text) => text.fold_case
-  assert "AbC".ignore_case == "aBc"  // SC7 ignoring case, AbC is not aBc
-  assert "abcd".ignore_case ~= "BC"  // S132 a pattern ignoring case does not find the other case
-  fold_case | foldcase => #.fold_case as String
-  title_case | titlecase => words.map(.[0].title_case, .[1..].lower_case).join(" ")
-  baseline => #.baseline as String
-  superscript => #.superscript as String
-  subscript => #.subscript as String
 
   words => split(Char.Blank | "_")
   assert "a b".words.length == 2  // W8 words did not split in two
@@ -213,18 +102,6 @@ String &+= {
   assert "".words.join("-").empty  // SJ7 joining no words is not empty
   assert "ab cd".words.length == 2  // S125 ab cd is other than two words
   assert "ab_cd".words.length == 2  // S126 ab_cd is other than two words
-  assert "AB cd".words.lower_case.join(" ") == "ab cd"  // S152 the words lowered are not ab cd
-  snake_case | snakecase => words.lower_case.join("_")
-  assert "a b".snake_case == "a_b"  // W9 snake_case failed
-  assert "ab cd".snakecase == "ab_cd"  // S123 snakecase is not snake_case
-  camel_case | camelcase | camelCase => words[0].lower_case, words[1..].title_case
-  assert "ab cd".camel_case == "abCd"  // S48 camel_case is not the first word lower and the rest capitalised
-  assert "ab cd".camelCase == "abCd"  // S121 camelCase is not camel_case
-  assert "ab cd".camelcase == "abCd"  // S154 camelcase is not camel_case
-  pascal_case | pascalcase | PascalCase => words.title_case as String
-  assert "ab cd".pascal_case == "AbCd"  // W10 pascal_case failed
-  assert "ab cd".PascalCase == "AbCd"  // S122 PascalCase is not pascal_case
-  assert "ab cd".pascalcase == "AbCd"  // S155 pascalcase is not pascal_case
 
   //TODO Uncide support
   plural => ends_with("s") ? this : this + "s"
@@ -234,7 +111,6 @@ String &+= {
   assert "cats".singular == "cat"  // S51 the singular of cats is not cat
   assert "cat".singular == "cat"  // S52 the singular of cat is not cat
 
-  mirrored => <-#.mirrored as String
   * (count: Number) => count == 0 ? "" : this, this * (count - 1)
 
   trimmed => this[{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}]
@@ -311,26 +187,10 @@ String &+= {
 
   replace (old: String, new: String) => split(old).join(new)
 
-  // UAX #15 §1.2: NFD is the full canonical decomposition, each run of non-starters then put in order of Canonical_Combining_Class (https://www.unicode.org/reports/tr15/#Norm_Forms, https://www.unicode.org/versions/latest/core-spec/chapter-3/#G49537)
-  nfd => (#.decomposed.flatten as String).ordered
-  // Confusable names compare by their UTS #39 skeleton.
-  assert "\u00E9".nfd == "e\u0301"  // SKL4 a precomposed letter does not decompose to its base and mark
-  ordered => empty ? "" : first.combining_class == 0 ? first, rest.ordered : marks.sort_by(.combining_class), this[marks.count..].ordered
-  marks => empty || first.combining_class == 0 ? [] : first, rest.marks
-  // UTS #39 §4: skeleton(X) is NFD(X) with each character replaced by its prototype, then NFD again; X and Y are confusable when their skeletons are equal (https://www.unicode.org/reports/tr39/#def-skeleton)
-  skeleton => (nfd#.map(Unicode.confusables[.].prototype ?? [.]).flatten as String).nfd
-  confusable (other: String) => skeleton == other.skeleton
-  assert "dаwn".confusable("dawn")  // SKL1 a Cyrillic a is not confusable with a Latin a
-  // UTS #39 §5.1: Common and Inherited characters go with any script, so a string of one other script is single-script (https://www.unicode.org/reports/tr39/#Mixed_Script_Detection)
-  mixed_script => #.script{!= "Common" && != "Inherited"}.unique.count > 1
-  assert "dаwn".mixed_script  // SKL2 Latin with a Cyrillic letter is not mixed-script
-  assert !("dawn".mixed_script)  // SKL3 a Latin name is mixed-script
-  escaped_line => #.map(Compiler.reduced(., Escape⁻¹)) as String
 
   as (base: Number.Base) => Number.numeral(base)(integer: this)
   as (=== Decimal) => Decimal(integer: this)
 
-  bytes => (this as Unicode.UTF-8).bytes
   find_all (pattern: String) => (this ~= pattern)#.index
 }
 assert ("a", "b", "c") as String == "abc"  // SJ1 joining a, b and c with nothing between is not abc
@@ -423,7 +283,6 @@ assert "\n"[0] == U+000A  // SE8 a newline escape is not a newline
 
 
 
-assert @ray`1 + 2` == 3  // TL1 a literal tagged ray is not read as Ray
 
 
 

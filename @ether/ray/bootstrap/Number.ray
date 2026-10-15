@@ -187,7 +187,6 @@ Number &+= {
   arctan_inverse (scale: Number, j: Number = 0) => scale / this ^ (4 * j + 1) -- (term => term == 0 ? 0
     : term / (4 * j + 1) - scale / this ^ (4 * j + 3) / (4 * j + 3) + arctan_inverse(scale, j + 1))
 
-  chosen_within (width: Number) => Random.number(width)
 
   bits (other: Number) => digits(2).length max other.digits(2).length -- digits(2).padded(.).zip(other.digits(2).padded(.))
   [&&, ||, x||, !&&, !||, x!||].for operator => {
@@ -411,14 +410,6 @@ Matrix &+= {
 machin (scale: Number) => 16 * 5.arctan_inverse(scale) - 4 * 239.arctan_inverse(scale)
 π := Decimal.Real(integer: 3, fraction: (1 -> +1).map(place => machin(10 ^ (place + 10)) / 10 ^ 10 % 10))
 τ := Decimal.Real(integer: 6, fraction: (1 -> +1).map(place => 2 * machin(10 ^ (place + 10)) / 10 ^ 10 % 10))
-Unit(name: "turn" ("s" + plural: true)?)
-Unit(name: "radian" ("s" + plural: true)?, symbol: "rad").multiple 1 / τ, turn
-Unit(name: "degree" ("s" + plural: true)?, symbol: "deg" | "°").multiple 1 / 360, turn
-Angle := Quantity{unit is (turn | radian | degree)}
-Angle &+= {
-  cos => in(radian).cos
-  sin => in(radian).sin
-}
 
 boolean &+= {
   as (=== Binary) => this ? ₂1 : ₂0

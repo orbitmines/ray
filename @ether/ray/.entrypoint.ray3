@@ -26,7 +26,12 @@ this => .
 // Text as written: between backticks.
 `{text}` => (external &).text
 // Code read in a value (`x &+= { … }` defines in x), the value.
-{on} &+= {code} => {
+// A value made of another too, `X &+= Y`: Y one of its components (§3.2: its rules seen after X's own, the last added first).
+{on} &+= {value} => {
+  (on).(external . {value})
+  on
+}
+{on} &+= {`{`}{code}{`}`} => {
   (on).({code})
   on
 }
@@ -177,7 +182,8 @@ assert {
   assert Colour#.count == 3  // EM7 an enum of three has other than three members
   assert Colour# == [Colour.red, Colour.green, Colour.blue]  // EM14 an enum's members are not its three, in order
   assert Colour.red.next == Colour.green  // EM25 the member after red is not green
-  assert !(Shape.circle is Colour)  // EM15 a member is one of another enum
+  Size := enum small | large
+  assert !(Size.small is Colour)  // EM15 a member is one of another enum
 }
 assert {
   R := class { }
@@ -399,6 +405,8 @@ assert {
     {{body}}
     external label returned
   }
+  // (called on what follows it, without brackets: `double 4`, `6 == 6` (`==` a method of 6), `"0".."9"`)
+  {this}{argument} => this(argument)
   .
 }
 () {`=>`} {body} ^punctuation => {
@@ -475,9 +483,18 @@ assert {
   assert xs[1] == 5  // IX1 placing a value in a list at a number leaves the list as it was
 }
 {on}[{key}] := {value} ^punctuation => (key is String) ? ((on).{key} := value) : (on).holding(key, value)
+assert {
+  Keyed := { }
+  Keyed["inner"] := true
+  assert Keyed.inner  // IX2 x["k"] := v does not declare k in x (`(on).{key}` in a body was read as a narrowing of `(on).`)
+  named := "other"
+  Keyed[named] := true
+  assert Keyed.other  // IX3 x[name] := v, name holding a text, does not declare that text in x
+}
 // A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
+// (what follows, a list this `,` just made (still spreading, no one else's yet): the value put in front of it, not copied)
 {list}, {other} ^punctuation => {
-  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).joined(other) : Listing.new.append(list).joined(other)).spreading)
+  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).prepend(list) : Listing.new.append(list).joined(other))).spreading)
 }
 // Names given values at once: `(a, b) := list`, each the next value in it.
 ({name}, {names}) := {list} ^punctuation => {
@@ -574,8 +591,14 @@ as {type} ^keyword => (. is type) ? . : type.from(.)
 from (x) => None
 // (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
 ({parameter}) as (=== {type}) {`=>`} {body} => ({type}).from := (({parameter}) => {body})
+// (`x as *`: what x converts to, each conversion its types define, as a list: none by default; each conversion written adds
+// itself to those its class had (its body reads the `as *` before it))
+as * => []
+// (what nothing led by text reads on a value: read on what it converts to, the nearest conversion (§7.5); none, nothing reads it)
+{this}{rest} => ((this as *).first ?? (ERROR nothing reads this here)){rest}
 as (=== {type}) {`=>`} {body} => {
   as {type} => {body}
+  as {`*`} => ((this as *), ({body}))
 }
 // Modifiers on an operator: `compounds op …` (and `x op= y`, `x = x op y`); `chainable op …` (and `a op b op c`).
 compounds {operator} {rest} {`=>`} {body} => {
@@ -750,6 +773,10 @@ Selfmade := class (part) => {
   assert Selfmade(true)  // CL7 a class whose block makes one of it puts off a test of it for every one made
 }
 assert Selfmade(true).part  // CL8 an instance does not hold the field it was given
+Asserting := class {
+  checked := true
+  assert Asserting.checked  // CL17 a class whose block asserts on it is run again each time the test reads it, without end
+}
 // `static`: read where it is (a class's block is read once for the class).
 static {statement} ^keyword => {statement}
 // `x ^style` on its own: x. (A style is for highlighting and nothing else.)
@@ -765,7 +792,9 @@ narrows := None
 members := None
 caller := None
 descends (type, depth = 0) => (. === type) || ((depth < 64) && .superclass ? .superclass.descends(type, depth + 1) : false)
-is {type} ^keyword => (type === Node) || (. === type) || (.of ? .of.descends(type) : false) || (type.superposes ? type.components.some((component) => . is component) : false) || (type.narrows ? ((. is type.narrows) && type.holds(.)) : false) || (type.members ? type.members.some((member) => member === .) : false) || (.superposes ? .components.every((component) => component is type) : false)
+// (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
+is {type} ^keyword => .is_itself(type) || (. as *).some((converted) => converted.is_itself(type))
+is_itself (type) => (type === Node) || (. === type) || (.of ? .of.descends(type) : false) || (type.superposes ? type.components.some((component) => . is component) : false) || (type.narrows ? ((. is type.narrows) && type.holds(.)) : false) || (type.members ? type.members.some((member) => member === .) : false) || (.superposes ? .components.every((component) => component is type) : false)
 assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
 // A value checked against a type: reported when it is not one (None, and anything against no type, pass).
 type := None
@@ -892,7 +921,7 @@ dynamics := None
 }
 {name} = {value} => {
   value
-  {name} => value
+  (name) := value
 }
 assert {
   asserted := dynamically assert {
@@ -1316,11 +1345,51 @@ Listing := {
     kept
   }
 }
+// Lists, read without numbers or `==`: what a method with parameters does to what it is read on, and closures given to them
+assert ["a"].first  // LS1 a list of one has no first (`.head :=` in `append (value) =>` declared in its own node)
+assert !(["a"].empty)  // LS2 a list of one is empty
+assert ["a", "b"].last  // LS3 a list of two has no last
+assert ["a", "b"].map((x) => x).last  // LS4 a mapped list has no last
+assert {
+  seen := false
+  ["a"].for((x) => {
+    seen = true
+  })
+  assert seen  // LS5 a closure given to for does not see where it was written, or its `=` does not change the name there
+}
+assert {
+  kept := true
+  shadowing := () => {
+    kept := false
+  }
+  shadowing()
+  assert kept  // CL18 := in a closure changed the name where the closure was written
+}
+assert {
+  gone := true
+  while gone {
+    gone = false
+  }
+  assert !gone  // CC14 while does not ask its condition again after its body (what its holes took was kept)
+}
+assert {
+  ["Probed"].for((name) => {
+    global[name] := true
+  })
+  assert Probed  // IX4 global[name] := in a closure does not declare the name the text holds
+}
+assert {
+  defaulted := (given = None) => given
+  defaulted()
+  assert !(None)  // BN4 a parameter's default `= None` made None a name of its own (the value read as a left side)
+  assert ["a"].first  // BN5 a parameter's default `= None` changed what None is for lists
+}
 Ray := Listing
 assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
 Array := class: Iterable { }
 assert 1 is Array  // TY63 a number is not an array
 String := class: Array { }
+assert "ab" is String  // TX1 a text is not a String (the kernel's map, `wasm.o.ray`, says it is)
 assert 1 + 2 as String == "3"  // PR38 as does not bind looser than plus
 assert ("A", "A") is ...String  // SD3 ...T is not T[]
 Number := class { }

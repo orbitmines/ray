@@ -126,13 +126,11 @@ Number &+= {
   cos => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k) / (2 * k)!).sum
   sin => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k + 1) / (2 * k + 1)!).sum
 
-  .. (last: Number) => this == last ? [this] : ((this < last ? succ : pred)..last).prepend(this)
   // Ranges
   assert (1..3) == [1, 2, 3]  // RQ1 one to three is not one, two and three
   assert (1..3).first == 1  // RQ2 one to three does not start at one
   assert (1..3).last == 3  // RQ3 one to three does not end at three
   assert (3..1) == [3, 2, 1]  // RQ6 three down to one does not pass two
-  ..< (last: Number) => this == last ? [] : ((this < last ? succ : pred)..<last).prepend(this)
   assert (1..<3) == [1, 2]  // RQ4 one up to three is not one and two
 
   bounded => false
@@ -256,7 +254,7 @@ Number &+= {
   assert "101" as 2 == 5  // SN3 101 is not five in two
 }
 assert 5 is Number  // N86 five is not a natural number
-Number.components.hierarchy &= Ray
+Number &+= Ray
 
 zero := Number()
 0 := zero

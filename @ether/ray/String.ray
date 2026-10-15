@@ -123,7 +123,7 @@ assert "ab3".some(. is Char.Digit)  // S113 ab3 holds no digit
 assert !("abc".some(. is Char.Digit))  // S114 abc holds a digit
 assert "a-b+c".split(Char.Symbol).length == 3  // S124 a-b+c cut at its symbols is other than three pieces
 assert U+0041 == "A" as Char  // SE17 U+0041 is not the character A
-Char.components.hierarchy &= Unicode.Scalar
+Char &+= Unicode.Scalar
 
 Escape := {
   \0 => U+0000
@@ -179,6 +179,13 @@ LanguageName := String{Language.named("." + .) != None}
 // (String is made in the entrypoint, its core; what follows is the rest of it)
 String &+= {
   () => &.caller[this]()
+
+  // Ordered as its characters are: one after another by them, the first that differs deciding (one character: as its Char)
+  succ => [(this as Char).succ] as String
+  pred => [(this as Char).pred] as String
+  chainable < (other: String) => (this as Char) < (other as Char)
+  assert "a" < "b"  // SO1 a is not before b
+  assert "a".succ == "b"  // SO2 the character after a is not b
 
   upper_case | uppercase => #.upper_case as String
   assert "abc".map(.upper_case) as String == "ABC"  // S115 abc made upper is not ABC
@@ -325,7 +332,7 @@ String &+= {
   find_all (pattern: String) => (this ~= pattern)#.index
 }
 assert ("a", "b", "c") as String == "abc"  // SJ1 joining a, b and c with nothing between is not abc
-String.components.hierarchy &= Char[]
+String &+= Char[]
 
 String[] &+= {
   as (=== String) => this.reduce(,)

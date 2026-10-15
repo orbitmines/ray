@@ -1,0 +1,5 @@
+// The kernel's map: what its own kinds of value are in the language (read after the language, for every backend: they run
+// one kernel). What it holds as text, what is written between quotes and what a hole took, is a String.
+String &+= {
+  external text
+}

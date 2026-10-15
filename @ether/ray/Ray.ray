@@ -42,6 +42,10 @@ Ordered := class (T = static) => {
   assert 5.max(3) == 5  // RM9 the larger of five and three is not five
   assert ["ccc", "a", "bb"].max(.count) == "ccc"  // MK2 max along a key does not pick the largest by it
   assert 2.max(5) == 5  // N13 max failed
+  // A range: from this to the last, one after another (`succ`, or `pred` going down), both ends in it; `..<` without the last
+  .. (last: T) => this == last ? [this] : ((this < last ? succ : pred)..last).prepend(this)
+  ..< (last: T) => this == last ? [] : ((this < last ? succ : pred)..<last).prepend(this)
+  assert ("a".."c").last == "c"  // OR5 a range of characters does not end at its last
 }
 
 // (Iterable and Array are made in the entrypoint, their core; what follows is the rest of them)
@@ -693,10 +697,10 @@ Array &+= {
   push_before (at, x) => link_of(at).previous ? push_after(link_of(at).previous.value, x) : push_front(x)
 }
 assert ([1, 2, 3]) is Array  // IT28 a list is not an array
-Iterable.components.hierarchy &= Ordered
-Array.components.hierarchy &= Path{acyclic}
-Chain.components.hierarchy &= Array
-Link.components.hierarchy &= Ray
+Iterable &+= Ordered
+Array &+= Path{acyclic}
+Chain &+= Array
+Link &+= Ray
 
 Set := class: Structure {
   orderless => true

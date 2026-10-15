@@ -72,7 +72,7 @@ Quantity := class (quantities, Base = Number) => {
   static Temporal := Quantity{unit == Unit.Temporal}
   assert 5 seconds . is Quantity.Temporal  // TI14 five seconds is not temporal
 }
-Quantity.components.hierarchy &= Ordered
+Quantity &+= Ordered
 
 Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural) => {
   static Normalizers := class {

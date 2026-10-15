@@ -93,7 +93,7 @@ Possibilities := class (values: Iterable) => {
   assert (1 | 2)#.entry  // NOD22 the possible values have no entry
   .{literal property ^property} ^punctuation => Possibilities(values: values.map(x => x[.property]))
 }
-Possibilities.components.hierarchy &= Iterable
+Possibilities &+= Iterable
 Possibilities &+= {
   head => values.head
   tail => values.tail
@@ -203,8 +203,8 @@ Composed := class (parts: Node[], joining: Program) => {
   .{literal property ^property} ^punctuation => parts.map(x => x[.property]).reduce((acc) => joining(acc, .))
 }
 Node &+= {
-  &+ (other) => Composed(parts: [this, other], joining: (a, b) => a & b) ~~ .components.hierarchy &= this ~~ .components.hierarchy &= other
-  |+ (other) => Composed(parts: [this, other], joining: (a, b) => a | b) ~~ .components.hierarchy &= this ~~ .components.hierarchy &= other
+  &+ (other) => Composed(parts: [this, other], joining: (a, b) => a & b) ~~ (. &+= this) ~~ (. &+= other)
+  |+ (other) => Composed(parts: [this, other], joining: (a, b) => a | b) ~~ (. &+= this) ~~ (. &+= other)
 }
 
 Node &+= {

@@ -1730,12 +1730,17 @@ X86.xed_assembled (text) =>
       built := X86.xed_built(form.value, as_nop ? [] : operands, as_nop ? (lead + 1) : lead, segment)
       size := (built === None) ? 0 : built.binary.count
       taken := (X86.Taken.index_of(form.value.iform) !== None) && (size == best_size)
-      (best = built) if (built !== None) && ((built.operation.assembly == text) && (((best === None) || (size < best_size)) || taken))
+      better := (built !== None) && ((built.operation.assembly == text) && (((best === None) || (size < best_size)) || taken))
+      (best = built) if better && X86.xed_reads_as(built, text)
       (best_size = size) if best === built
     }
     form = form.next
   }
   best
+// (what it was made as is what its bits read as: its form's constraints hold, not only its text)
+X86.xed_reads_as (instruction, text) =>
+  read := X86.XedCode.bits_read(instruction.binary)
+  (read !== None) && ((read.instructions.count == 1) && (read.instructions.first.operation.assembly == text))
 X86.Conditions := ["o", "no", "b", "ae", "e", "ne", "be", "a", "s", "ns", "p", "np", "l", "ge", "le", "g"]
 // (a jump (`code` None) or a jump if, or a call, of 32 bits, by the distance from its end)
 X86.xed_branch (mnemonic, distance) =>

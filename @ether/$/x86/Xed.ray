@@ -164,8 +164,8 @@ Xed &+= {
   static Made := class (text, entry)
   static mode_of (pattern) => (pattern contains "MOD!=3") ? "\"memory\"" : ((pattern contains "MOD[0b11]") ? "\"register\"" : "None")
   static digit_of (pattern) => (pattern fits_pattern "REG\\[0b[01]+\\]") ? ("" + ((pattern text_after "REG[0b") text_before "]").unsigned) : "None"
-  static entry_of (name, iform, mnemonic, listed, pattern, header) =>
-    wide := (header.wide === None) ? "None" : header.wide
+  static entry_of (name, iform, mnemonic, listed, pattern, header, width) =>
+    wide := (header.wide === None) ? ((width == 0) ? "None" : ("" + width)) : header.wide
     fields := header.fields.join(", ")
     made := ((("((prefixes, rex, operand, immediate, register, offset) => X86." + name) + "(prefixes, rex") + ((fields == "") ? "" : (", " + fields))) + "))"
     opening := ((((("  X86.XedForm(\"" + iform) + "\", \"") + mnemonic) + "\", [") + listed) + "], "
@@ -197,7 +197,7 @@ Xed &+= {
       meant := ((((("    statements (end, width) => X86.meant(\"" + record.iclass) + "\", [") + listed) + "], prefixes, rex, ") + given_fields) + ((", " + sixtyfour) + ", end, width)\n")
       lifting := ((((("    lifted (registers) => X86.meant_lifted(registers, \"" + record.iclass) + "\", [") + listed) + "], prefixes, rex, ") + given_fields) + ((", " + sixtyfour) + ")\n")
       closing := (((listed + "], ") + sixtyfour) + ", end)\n") + (((((printed_now + listed) + "], ") + sixtyfour) + ", 0)\n") + ((meant + lifting) + "  }"))
-      made.append(Xed.Made(((heading + named) + printed) + closing, Xed.entry_of(name, (form.iform === None) ? record.iclass : form.iform, mnemonic, listed, form.pattern, header)))
+      made.append(Xed.Made(((heading + named) + printed) + closing, Xed.entry_of(name, (form.iform === None) ? record.iclass : form.iform, mnemonic, listed, form.pattern, header, at.value)))
       at = at.next
     }
     made

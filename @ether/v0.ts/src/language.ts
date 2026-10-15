@@ -2034,7 +2034,7 @@ export class Library {
       }
       return found;
     };
-    for (const m of text.matchAll(/"[^"\\\n]*(?:\\.[^"\\\n]*)*"|`[^`\n]*`|[\p{L}\p{N}_]+(?:\.[\p{N}]+)?|[()\[\]{},]|[^\s\p{L}\p{N}_"`()\[\]{},]+/gu)) {
+    for (const m of text.matchAll(/"[^"\\\n]*(?:\\.[^"\\\n]*)*\\?(?:"|(?=\n)|$)|`[^`\n]*`|[\p{L}\p{N}_]+(?:\.[\p{N}]+)?|[()\[\]{},]|[^\s\p{L}\p{N}_"`()\[\]{},]+/gu)) {
       const b = m.index!, e = b + m[0].length - 1;
       let free = true; for (let k = b; k <= e; k++) if (cells[k]) { free = false; break; }
       if (!free) continue;

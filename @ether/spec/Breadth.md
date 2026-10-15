@@ -89,6 +89,6 @@ declarations does not scale.
 
 ## What it needs from the kernel
 
-The goto programs of a real program run long: a run must not hold every value it wrote into text until it ends
-(`Machine.md`, "What a kernel needs"), and the vendor descriptions are large (XED's records took twenty minutes to read):
-reading one once into a tree, not text read again, is what makes either feasible.
+The goto programs of a real program run long, and the vendors' descriptions are large (XED's 1229 records take Ray about
+two minutes to read and turn into 358 forms). So a run must give memory back as it goes, and a declaration must be read
+once and compiled (its decoder a table, not a search): `Kernel.md` has these as requirements, each with a check.

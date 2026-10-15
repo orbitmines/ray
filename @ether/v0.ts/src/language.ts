@@ -633,7 +633,7 @@ export class Program {
         // (what is quoted: as one)
         else if (quoted.has(x)) { const q = Program.quote_end(s, u, s[u]); u = q < 0 ? n : q + 1; }
         else if (x === 10 && !depth && !last && !enclosed) break;
-        else { if (x === 60 && Program.word(s, u - 1)) given++; else if (x === 62 && given > 0) given--; u++; }
+        else { if (x === 60 && Program.word(s, u - 1) && !'=<-'.includes(s[u + 1] ?? ' ')) given++; else if (x === 62 && given > 0) given--; u++; }
         if (depth > 0 || given > 0 || Program.space(s.charCodeAt(u - 1)) || (last && whole && u < n) || (next?.body && Program.dangling(s, t, u))) continue;
         if (last || (next.literal !== undefined ? s.startsWith(next.literal, u) : next.hole !== '' || Program.space(s.charCodeAt(u)))) ends.push(u);
       }

@@ -282,9 +282,9 @@ The ladder runs on it unchanged: `DECLARED=X86.XedFunction LOAD_EXTRA='$/x86/X86
 | MC8b, MC8c | all 60 flow functions read, printed, lifted; they print what gcc's objects print |
 | MC8d | all 60 compiled back (8 480 bytes) agree natively on all 180 inputs, and lift back to the same |
 | MC9b, MC9c | all 60 memory functions read, printed, lifted; they print what gcc's objects print, arrays after included |
-| MC9d | RUNNING |
+| MC9d | all 60 compiled back (11 428 bytes) agree natively on all 180 inputs, arrays after included, and lift back to the same |
 | MC10b | `inflate`, 4615 bytes, read, written back byte for byte, printed as objdump does |
-| MC10c | 18 of 29 streams decoded in Ray, as gcc's object does, before the kernel's maps overflowed (`Map maximum size exceeded`, after two hours); RUNNING again in two processes |
+| MC10c | the lifted program, run by Ray, decodes all 22 streams as gcc's object does and rejects all 7 bad ones, in two processes (42 and 147 minutes): in one, the kernel's maps overflow after 18 streams (`Map maximum size exceeded`) |
 | MC10d | the lifted `inflate` compiled back (42 606 bytes, as with the hand forms) decodes all 22 streams natively and rejects all 7 bad ones |
 
 How a line of text is assembled into XED's forms (`X86.xed_assembled`): every form of its mnemonic whose operand kinds fit
@@ -295,12 +295,19 @@ forms of one length print alike, the one gas takes is data (`X86.Taken`: gas's m
 the other 4 are padding `nop`s of a 32-bit zero displacement, which objdump prints as the 8-bit one (`+0x0`): the text does
 not say which, and gas writes them from `.p2align`, not from text. The lowering never writes them.
 
+Two declarations, one meaning: `inflate` lifted through XED's declaration and through the hand forms gives the same
+program but for 101 of its 2 565 lines, each the same value written another way: a zero as `0` where the hand forms
+write `((1 - 1) wrapped Int32)`, a value wrapped where they leave it as it is (`and`, a value stored, of which `store`
+takes the low bytes anyway), and `neg`'s flags as `0` against the value where they keep the result against `0`. MC10c and
+MC10d show the two programs decode alike.
+
 What it took besides the declaration:
 
 - **Speed.** Reading tries the forms in order; a class whose leading bits are fixed (`<-Byte{== 137}`) is now skipped
   where the bits differ (`Reading.may_start`), and writing finds an alternative by the value's class instead of asking each
-  of 358 `is` (`Writing.type`): a line assembles in about a second, not ten. A function still reads in 7 to 35 s against
-  under one with the hand forms.
+  of 358 `is` (`Writing.type`): a line assembles in about a second, not ten. With the skipped bits kept per header (they
+  were kept per type, filled in a scope where no header is found, so nothing was skipped), a function reads in 0.3 to
+  1.1 s, against under one with the hand forms.
 - **A kernel bug.** `a === b` goes to `a` as a label, so a value that was the text of a host goto ran it: `"js"` (jump if
   sign) ran `goto js`, compiling the next line as JavaScript. A host goto now runs only where it is named.
 - **Lifts the hand forms already made.** `neg` as `0 - x` with the constant written as the lift writes one, a constant shift

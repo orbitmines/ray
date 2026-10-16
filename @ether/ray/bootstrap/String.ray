@@ -313,3 +313,18 @@ assert {
   (start_of, `-`, end_of) := `ab-cd`
   end_of == `cd`
 }  // DS4 the place after a written text does not take the rest
+// (repeated, `` `ab` * 2 ``: it, as many times as given, one after another)
+String &+= {
+  * (times: Number) => {
+    made := `a`.rest
+    left := times
+    while !left.is_zero {
+      made = made + this
+      left = left.pred
+    }
+    made
+  }
+  assert `ab` * 2 == `abab`  // RP5 a text twice is not it twice
+  assert `a` * 3 == `aaa`  // RP7 a text three times is not it three times
+  assert (`ab` * 0).empty  // RP6 a text no times is something
+}

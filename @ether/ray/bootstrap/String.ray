@@ -101,3 +101,18 @@ assert `  ` is \s[]  // SP3 two spaces are not spaces
 assert `ab` is String+  // SP4b a text of two is not one or more
 assert `a b` is (String+, \s, String+)  // SP5 a b is not a word, a space and a word
 assert !(`ab` is (String+, \s, String+))  // SP6 ab is a word, a space and a word
+// (repeated, `` `ab` * 2 ``: it, as many times as given, one after another)
+String &+= {
+  * (times: Number) => {
+    made := `a`.rest
+    left := times
+    while !left.is_zero {
+      made = made + this
+      left = left.pred
+    }
+    made
+  }
+  assert `ab` * 2 == `abab`  // RP5 a text twice is not it twice
+  assert `a` * 3 == `aaa`  // RP7 a text three times is not it three times
+  assert (`ab` * 0).empty  // RP6 a text no times is something
+}

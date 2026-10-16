@@ -630,6 +630,9 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses.
 {method}(.{section}) ^punctuation => .{method}((it) => it.{section})
+// (an argument using `.` on its own, `xs.every(candidate is .)`: a closure (every argument is one), `.` in it what it is
+// called with; its code read on that)
+{method}({code: Dotted}) ^punctuation => {method}((it) => it.({code}))
 // `code**`: what is written, as a program.
 {code}** ^operator => Program(code: {code})
 
@@ -765,7 +768,12 @@ possible => (.members) ? .members : (((.superposes) === true) ? .components : [.
 {narrowed}{`{`}{constraint}{`}`} ^punctuation => Narrowing &+ {
   narrows := narrowed
   holds (it) => it.({constraint})
-  {value: narrowed} => (holds(value) === true) ? value : (ERROR not one of what it narrows to)
+  // (of a text type, `{length: Subscript.String}`: what the hole took as written, not what that code answers)
+  {value: narrowed} => {
+    asked := ((narrows).textual === true) ? `{value}` : value
+    // (one of what it narrows first: the condition is asked of those alone (`2 <= .` is not asked of a class))
+    (((asked is narrows) === true) && (holds(asked) === true)) ? asked : (ERROR not one of what it narrows to)
+  }
 }
 // `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
 as {target} ^keyword => {
@@ -857,15 +865,29 @@ extended () => .interior
   {value: type} => made(value)
 }
 // (a structure, `(a: T, `-`, b: U)`: a text it reads is destructured into one made of it, each field the span it takes)
+// (what ends a class's fields read as a list)
+fields_end := class { }
 {on} reads ({fields}) as {made} ^keyword => on &+= {
-  // (any text: a head that is one hole alone takes one word)
-  {written: Node} => (made &+ {
+  // (a text written as its fields are, in order (the class as a text): a head that is one hole alone takes one word)
+  {written: global.String{. is (made).written_as}} => (made &+ {
     ({{fields}}) := `{written}`
   })
   // (and a text given to it, `t as S`: the same, destructured; one it does not read, nothing)
   from({given}) => (made &+ {
     ({{fields}}) := given
   })
+  // (what its fields are written as, in order: each one's type (none, anything), a text written among them itself; read as
+  // a list (`fields_end` after them: one alone in brackets would be a record))
+  written_as => {
+    written_types := Array.new
+    written_at := [({{fields}}, fields_end)].head
+    while written_at && !((written_at.value) === fields_end) {
+      written_field := written_at.value
+      written_types.append(((written_field).textual === true) ? written_field : (((written_field).type === None) ? Node : (written_field).type))
+      written_at = written_at.next
+    }
+    written_types
+  }
 }
 class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   // (`static`, the class: the one whose block this is written in (`outer`, its block's), else this one: `integer: static` of
@@ -1095,7 +1117,7 @@ followed_is (type) => {
 is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
-  (type === Node) || (value === type) || (((type.textual === true) && !(type === String) && ((type.narrows === None) || (type.narrows === Node)) && !(type.of === type)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false))
+  (type === Node) || (value === type) || (((type.textual === true) && !(type === global.String) && ((type.narrows === None) || (type.narrows === Node)) && !(type.of === type)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false))
 }
 assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
 assert {
@@ -1804,7 +1826,20 @@ assert 1 is Array  // TY63 a number is not an array
 String := class: Array {
   empty => !first
   textual := true
+  // (a `.` in it on its own, not after a name or what closes, nor before a name: code of what it is read on)
+  bare_dot => dot_alone(` `, this)
+  // (a class as a text, `Decimal as String` (`Decimal.String`): any class is one, the texts its fields are written as, in
+  // order (a list of types reads a text in order); anything else, none)
+  from (given) => (((given).of === given) && ((given).written_as !== None)) ? global.String{. is (given).written_as} : None
 }
+// (the characters a name is not made of, and what is before a `.` that is not a value's (`(`, an operator, a space))
+not_named := ` ()[]{},;:=!&|<>+-*/%?^#~@`
+one_of (character, among) => among.empty ? false : (((character).same_characters(among.first) !== None) ? true : one_of(character, among.rest))
+dot_alone (before, text) => text.empty ? false : ((((text.first).same_characters(`.`) !== None) && one_of(before, not_named) && (text.rest.empty || one_of(text.rest.first, not_named))) ? true : dot_alone(text.first, text.rest))
+Dotted := String{.bare_dot}
+assert `candidate is .`.bare_dot  // DT1 a `.` alone in an argument is not found
+assert !(`x.y`.bare_dot)  // DT2 a member is a `.` alone
+assert !(`(it) => it.({code})`.bare_dot)  // DT3 a member read on a value is a `.` alone
 assert "ab" is String  // TX1 a text is not a String (the kernel's map, `wasm.o.ray`, says it is)
 assert !("ab".empty)  // TX2 a text of two characters is empty
 assert "ab".rest.first  // TX3 a text of two has no second character

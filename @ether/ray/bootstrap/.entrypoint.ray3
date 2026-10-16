@@ -525,9 +525,10 @@ assert {
 // (what is not an argument given by name: anything but a Named, below)
 named_argument := false
 ({written_parameters}) taking {passed} ^keyword => {
-  (.) given_names (passed)
   // (given nothing, `declared`: the parameters as written, their defaults given (none, what they had))
   if passed === declared { ({written_parameters}) } else { ({written_parameters}) := passed }
+  // (then what is given by name: after the defaults, which run as the parameters are written)
+  (.) given_names (passed)
 }
 // (a closure written in a rule's body reads the rule's holes, where they are read: in its body, and in code read on its
 // parameter (its body copied into the method that calls it: each copy keeps the names of where it was written))
@@ -898,6 +899,12 @@ assert {
   assert Carrying(Carrying(false)).carried.carried === false  // CI2 a field's field is not what it was given
   carrier := Carrying(true)
   assert carrier.again === true  // CI3 a method of an instance held in a name does not answer its field
+  Holding_class := class (held) => {
+    static Inner := class (inner) => {
+      own => inner
+    }
+  }
+  assert Holding_class.Inner(true).own  // CI7 a class called as a member of another made one of that other (`this` the class it is a member of)
 }
 // A call's arguments (§10.1): each a value, or one given by name, `f(x: 5)`: the callee's `x` given 5, read where it is written.
 // (read by this type: what binds looser where they are written (`,`) first, each part then read here)
@@ -919,6 +926,11 @@ assert {
   paired_of (a, b) => Paired_named(left: a, right: b)
   assert paired_of(true, false).left  // NA10 named arguments given a function's parameters do not give the fields
   assert Paired_named(left: true, right: false).left  // NA11 named arguments given values do not give the fields
+  Defaulting := class (first, second = false) => { }
+  assert Defaulting(first: true, second: true).second  // NA13 a field's default replaced what was given it by name
+  assert Defaulting(second: true, first: false).second  // NA14 fields given by name in another order kept their defaults
+  defaulting_of (given) => Defaulting(first: true, second: given)
+  assert defaulting_of(true).second  // NA15 a named argument given a parameter was read where the arguments' type is (the call's own names unseen)
 }
 assert {
   .{x}? => x
@@ -1024,6 +1036,8 @@ Asserting := class {
 }
 // `static`: read where it is (a class's block is read once for the class).
 static {statement} ^keyword => {statement}
+// (and as a value, the class: of a class itself, of an instance its class (`static{2 <= .}`, `integer: static`))
+static ^keyword => .of
 // `x ^style` on its own: x. (A style is for highlighting and nothing else.)
 ^{style} ^operator => .
 
@@ -1056,7 +1070,7 @@ followed_is (type) => {
 is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
-  (type === Node) || (value === type) || (((type.textual === true) && !(type === String) && (type.narrows === None) && !(type.of === type)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : ((value.of === None) ? false : value.of.descends(type)) || (type.superposes ? type.components.some((component) => value is component) : false) || (type.narrows ? ((value is type.narrows) && type.holds(value)) : false) || (type.members ? type.members.some((member) => member === value) : false) || (value.superposes ? value.components.every((component) => component is type) : false))
+  (type === Node) || (value === type) || (((type.textual === true) && !(type === String) && ((type.narrows === None) || (type.narrows === Node)) && !(type.of === type)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false))
 }
 assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
 assert {
@@ -1071,7 +1085,14 @@ checked {type} ^keyword => {
   unless (type === None) || (. === None) || (. is type) {
     ERROR a value is not of the type it is given to: {type}
   }
-  .
+  // (as that type: itself when it is one, else what it converts to that is (the equivalence graph, `3` given to `x: Signed`))
+  ((type === None) || (. === None) || .is_itself(type)) ? . : .converted_to(type)
+}
+converted_to (type) => {
+  value := .
+  found := value.conversions.find((conversion) => value.converted_by(conversion) is type)
+  converted := found ? value.converted_by(found) : value
+  (found && !converted.is_itself(type)) ? converted.converted_to(type) : converted
 }
 // A level given to a running program (`& including level`): its rules seen in it.
 {on} including {level} ^keyword => on &+= {
@@ -1515,6 +1536,12 @@ assert {
   assert second_count.tally == 2  // HD12 a static is per instance
   assert Count.zero == 0  // HD13 a static method is not on the class
   assert Count.Inner  // HD14 a static class is not on the class
+  Count &+= {
+    static same (x) => x
+    static narrowed := static{true}
+  }
+  assert Count.same(true)  // HD18 a static method with a parameter is not on the class (its head read in the modifier's hole not as a left side)
+  assert Count.narrowed.narrows === Count  // HD19 `static{…}` is not a narrowing of the class (read as the modifier, `static {statement}`)
   Both := class: Pair &+ Tagged { }
   assert Both(left: 1, right: 2, tag: 3).total == 3  // HD15 class: A &+ B is not built on A
   assert Both(left: 1, right: 2, tag: 3).doubled == 6  // HD16 class: A &+ B is not built on B
@@ -1978,5 +2005,10 @@ DARK := theme `Ether.ray - Dark` {
 include {location} ^keyword => external include {location}
 read {location} ^keyword => external read {location}
 include @./.project.ray
-include @./*.ray
+//include @./*.ray
+include @./Node.ray
+include @./Ray.ray
+include @./Number.ray
+include @./String.ray
+include @./Expression.ray
 read given

@@ -2415,8 +2415,11 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     type narrows (or of it), for a value of it (entrypoint `{source} as {target: Name} {=>} {body}`).
   - Number's core (entrypoint): as a condition, zero does not hold (`? {yes} : {no}` on `next`); `is` asks whether a
     value's `of` and a class's `superclass` are there, not whether they hold (a class made of Number answers `?` too).
-  - The entrypoint's list core is `Listed` (`[…]` is `Listed.new.append(…)`): Ray.ray's `Ray := class: Iterable & Ordered`
-    is the Ray class, and does not replace how lists are made.
+  - There is no list core apart from Ray (user, 2026-10-17): no `Listed`, `Listing`, `Chain`, `Link`; only Ray, Boundary,
+    Edge. The entrypoint makes lists (`[]`, `[x]`, `,`, `append`: an Array entered at its first vertex, `entry`, each vertex
+    `e + Ray`); everything else a list answers is Ray.ray's Iterable (`first => entry`, `rest`, `for` through a Traverser,
+    `map`, `some`, …), working without the kernel's help. Arrays are accelerated in `wasm.o.ray` (answering as those rules
+    answer), as numbers and texts are.
   - The kernel's map counts numbers: a count is a `Counted` (`class: Number`, its `next` the kernel's), a numeral one
     (`external numeral` on `{digits: Decimal.String}`), a text's `first` a `Counted_char` (`class: Char`, its code point);
     Number's own `succ == < + - * / %`, by name (`external number …`), on two it can count, answered by the kernel as the

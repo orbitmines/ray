@@ -52,7 +52,7 @@ Thinking about the concepts; databases, memory management and compilers as 'mere
 
 - Optimizations are necessary.
 
-- Optimizations increase complexity tremendously.
+- Optimizations can increase complexity tremendously.
 
 - Optimizations are considered always something that needs to be improved over time. This requires constant pushing on finding better ways of doing things. Absent of that, decay is the likely outcome.
 

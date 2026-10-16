@@ -41,7 +41,10 @@ Number &+= {
     assert !(1 x!|| false)  // N106 one xnor false is true
   }
 
-  chainable == (other: Number) => is_zero ? other.is_zero : other.nonzero && pred == other.pred
+  // (as a Ray: each step the one before it, holding nothing)
+  rayed => true
+  step => next
+  held => None
   assert 1 == 1 == 1  // PR21 a chain of sames does not hold
   assert !(1 == 1 == 2)  // PR22 a chain of sames that breaks holds
   chainable < (other: Number) => other.nonzero && (is_zero || pred < other.pred)

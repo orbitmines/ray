@@ -1,3 +1,9 @@
+// Equality, the one, structural: the same value, or two Rays alike, what each holds alike and the steps after it alike, to
+// the end of both (a number steps to the one before it, holding nothing; a list or a text to its rest, holding its first).
+Node &+= {
+  rayed => false
+  chainable == (other) => (this === other) || ((rayed === true) && (other.rayed === true) && (held == other.held) && ((step === None) ? (other.step === None) : ((other.step !== None) && (step == other.step))))
+}
 -> (): Ray => next: () => Ray(next: next())
 assert (5 -> +1)[..<3].count == 3  // NL11 three steps along the line are not three
 assert (5 -> +1)[..<3].last == 7  // NL12 the third step from five is not seven
@@ -377,16 +383,15 @@ Iterable &+= {
     -- .zip(value is Iterable && value.count == .count && .count > 1 ? value : [value] * .count)
     -- .for((at, written) => this[at] = written)
     -- this
-  [{{literal selection}}] ^punctuation => Filtered(from: entry, keeps: { inline selection })
+  [{{selection: String}}] ^punctuation => Filtered(from: entry, keeps: { inline selection })
   assert [1, 5, 20][{< 10}] == [1, 5]  // OR3 xs[{p}] does not keep the entries p holds of
 
   as (: Iterable<R: ?>) => this[{. is R}]
 
-  chainable == <up_to = None, except: Iterable = []>(other: Iterable) => (up_to !== None) || except.nonempty
-    ? this[{!except.contains(.)}].until(up_to) == other[{!except.contains(.)}].until(up_to)
-    : orderless || other.orderless
-      ? count == other.count && every(other.contains(.))
-      : empty ? other.empty : other.nonempty && first == other.first && rest == other.rest
+  // (as a Ray: each step its rest, holding its first)
+  rayed => true
+  step => empty ? None : rest
+  held => empty ? None : first
   // `==` up to a boundary, and with exceptions (U9.1)
   assert [1, 2, 0, 3] ==<up_to: 0> [1, 2, 0, 4]  // EQ1 two lists alike up to a boundary are not equal up to it
   assert !([1, 2, 0, 3] ==<up_to: 0> [1, 5, 0, 3])  // EQ2 lists that differ before the boundary are equal up to it
@@ -477,9 +482,6 @@ Ray := class: Iterable & Ordered {
   .. (last: Ray) => this === last ? [this] : next ? this, next..last : None
   to (other: Ray) => reachable.some(. === other)
 
-  same_vertex (other: Ray) => value || other.value ? value == other.value : same_text(this.location, other.location)
-  matches (other: Ray) => same_vertex(other) && (is_terminal ? other.is_terminal : other.next && next.matches(other.next))
-  chainable == (other: Ray) => first.matches(other.first)
 
   expand => first..last
   complement => expand{!== this}

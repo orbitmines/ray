@@ -39,4 +39,10 @@ Counted_char := class: Char {
 }
 Counted_char &+= { external character }
 Number &+= { external number succ == < + - * / % }
+// (what the numeral rule answers, a count: the same value as the Decimal its digits write (`{digits: Decimal.String} =>
+// Decimal(integer: digits)`), by the equivalence graph)
+Counted &+= { as (=== Decimal) => Decimal(integer: this as String) }
 external numeral `{digits: Decimal.String}`
+// (whether a value is superposed, Node's `superposed`: made by `|` or `&` from more than one part, answered by the kernel as
+// that rule answers, without the calls its check makes)
+Node &+= { external superposed }

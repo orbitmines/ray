@@ -152,7 +152,6 @@ Node &+= {
     assert traced#{.origin == tripled}.first == 6  // SP11 a value is not selected by its origin
   }
 }
-#{value} ^punctuation => value#
 {value}# ^punctuation => value.#
 
 Composed := class (parts: Node[], joining: Program) => {
@@ -310,23 +309,18 @@ read_within (text, pattern) => (
     at_start := pattern is Anchored && pattern.at_start
     at_end := pattern is Anchored && pattern.at_end
     wanted := pattern is Anchored ? pattern.pattern : pattern
-    start := text_bits(text).head
+    // (at each place in it, from the first: a beginning of the text there that is what is wanted, the shortest first)
+    start := text
     index := 0
-    searching := global
-    while (searching && found.not) {
-      candidate := readings_of(start, wanted).head
-      while (candidate && found.not) {
-        unless (at_end && candidate.value.rest) { found = candidate.value ~~ .index = index }
-        candidate = candidate.next
+    while (start !== None && found.not) {
+      cut := start
+      while (cut !== None && found.not) {
+        reading := start.until(cut)
+        if (!at_end || cut.empty) && (reading is wanted) { found = reading ~~ .index = index }
+        cut = cut.empty ? None : cut.rest
       }
-      if (at_start || !start) { searching = None } else {
-        byte := byte_steps.head
-        while (byte && start) {
-          start = start.next
-          byte = byte.next
-        }
-        index = index.succ
-      }
+      start = (at_start || start.empty) ? None : start.rest
+      index = index.succ
     }
   }
   found
@@ -343,14 +337,16 @@ Node &+= {
   is_unique<in: Program?> => (&){in ? (. ==<in: in> this) : . == this}.count == 1
 }
 
-forall{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.every(Program(code: predicate**, parameters: name**))
+// Quantifiers, by composition: what they are given, each of what it may be, every one holding (`forall`), some one (`exists`),
+// none (`!exists`); the symbols are the same rules (`mathematics` only suggests them). `x is d: p` is p with x each of d at
+// once (a superposition of p's answers).
+forall | ∀ {quantified} ^keyword => (quantified)#.every(.)
+exists | ∃ {quantified} ^keyword => (quantified)#.some(.)
+!exists | ∄ {quantified} ^keyword => !((quantified)#.some(.))
 assert forall x is [2, 4]: x % 2 == 0  // IS2 forall does not hold of every element
 assert exists x is [1, 4]: x == 4  // IS3 exists does not find the element
 assert !(forall x is [2, 3]: x % 2 == 0)  // NOD83 forall holds when an element fails
 assert !(exists x is [1, 3]: x == 4)  // NOD84 exists holds when no element matches
-exists{ }{name: Char.Word[]} is {domain}: {predicate} ^keyword => domain.some(Program(code: predicate**, parameters: name**))
-exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => type#.some(Program(code: predicate**, parameters: name**))
-!exists{ }{name: Char.Word[]}: {type} {predicate} ^keyword => !type#.some(Program(code: predicate**, parameters: name**))
 mathematics := suggest {
   forall == ∀
   exists == ∃

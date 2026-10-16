@@ -101,3 +101,18 @@ assert `  ` is \s[]  // SP3 two spaces are not spaces
 assert `ab` is String+  // SP4b a text of two is not one or more
 assert `a b` is (String+, \s, String+)  // SP5 a b is not a word, a space and a word
 assert !(`ab` is (String+, \s, String+))  // SP6 ab is a word, a space and a word
+// (turned around, as a list is: its characters last to first)
+String &+= {
+  reverse => {
+    made := `a`.rest
+    at := this
+    while !at.empty {
+      made = at.first + made
+      at = at.rest
+    }
+    made
+  }
+  assert `abc`.reverse == `cba`  // TR1 a text turned around is not its characters last to first
+  assert `ab`.reverse.reverse == `ab`  // TR2 a text turned around twice is not as it was
+  assert `a`.rest.reverse.empty  // TR3 nothing turned around is something
+}

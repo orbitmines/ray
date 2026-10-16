@@ -147,3 +147,12 @@ assert @../a as String == "../a"  // LOC67 `@../path` is not the location relati
 assert @C:/Windows/System32 as String == "C:/Windows/System32"  // LOC68 `@C:/path` is not a Windows drive location (https://url.spec.whatwg.org/#windows-drive-letter)
 @{name: Char.Word[]}/{path: Written} ^string => (name + "/" + path) as Held
 assert @me/instance as String == "me/instance"  // LOC69 `@name/path` is not the location under that name
+// Where a class is written: one place for each
+assert {
+  TA := class { }
+  TB := class: TA { }
+  assert external where TA  // TY7 a class is written nowhere
+  assert !((external where TA) == (external where TB))  // TY8 two classes are written in one place
+  TC := TA
+  assert (external where TA) == (external where TC)  // TY9 one class under two names is written twice
+}

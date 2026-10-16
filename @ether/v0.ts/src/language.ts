@@ -404,6 +404,11 @@ export async function main() {
     return;
   }
 
+  // (read before, every file the same as then and the kernel too: what was read, from disk, and its tests run on it)
+  const cache = env.nodejs && !process.env.RAY_NOCACHE && !kwargs.build && !kwargs.write && (!kwargs.debug || process.env.RAY_CACHE_DEBUG) && !kwargs.lsp ? Cache.of(args) : undefined;
+  // (what is still as it was: the steps of reading before the first file that changed, put back before any thread starts)
+  const kept = cache ? cache.valid() : 0, steps = cache ? cache.steps.length : 0;
+  if (cache) { process.env.RAY_SAID_DIR = cache.dir; if (kept) Program.preload = (values) => cache.restore(values, kept); }
   const language = new Program(args.length > 0 ? new Text.Source(args[0]) : undefined,)
     .abstract(!!kwargs.abstract)
     .target(String(kwargs.target ?? env.target))
@@ -430,13 +435,16 @@ export async function main() {
       });
     }
 
+    // (read before, every file the same as then and the kernel too: in memory again as it was, not read)
+
+    if (cache) cache.attach(language, kept);
+    if (kept && kwargs.verbose) say(`${ansi.darkGray}CACHED ${kept} of ${steps} steps of reading, as they were (${cache!.dir})${ansi.reset}`);
     // Register the entrypoint and all explicitly supplied files.
-    await language[".entrypoint"]();
-    await language.queue.join();
+    if (!kept) { cache?.begin(0); await language[".entrypoint"](); await language.queue.join(); cache?.step(language, 0, 0); }
     const loaded = performance.now();
 
     // What the language asks to read (its own files, then what it was given), read.
-    await language.reads(args.slice(1));
+    await language.reads(args.slice(1), kept ? cache!.steps[kept - 1].handled : 0, cache ? (handled) => { const i = cache.steps.length; cache.step(language, i, handled); cache.begin(i + 1); } : undefined, cache ? () => cache.begin(cache.steps.length) : undefined);
     const read = performance.now();
     // (`--write=out.wasm --value=name`: what a name answers, a list of numbers, written as bytes (the host writes them))
     if (kwargs.write) {
@@ -463,6 +471,9 @@ export async function main() {
       return;
     }
 
+    // (and kept: what was read, for the next run with every file the same)
+    // (what is said from here on is the tests': not kept)
+    Atomics.store(new Int32Array(language.files.buffer.values.heap.buffer), 356 >> 2, 1);
     // Then the tests, on every thread (each takes them from the queue the kernel keeps while there are any); and, all done,
     // what was said, once.
     Ray.ordered(language.files);
@@ -518,6 +529,83 @@ export async function main() {
     env.worker_threads.parentPort!.postMessage({
       exit: process.exitCode ?? 0,
     });
+  }
+}
+// What was read, kept on disk (in `~/.cache/ray`, by the command and the kernel): its files, each by what it held then; one
+// of them changed (edited), read again and kept again.
+class Cache {
+  static readonly BUFFERS = ['source', 'metadata', 'paths', 'index', 'fileState'] as const;
+  static readonly PAGE = 1 << 14;
+  steps: { files: [string, string][], handled: number, end: number, sizes: number[] }[] = [];
+  private previous?: Uint8Array; private known = 0; private files = 0; private language?: Program;
+  constructor(readonly dir: string) {}
+  static hash(bytes: Uint8Array | string) { return (env.import('crypto') as typeof import('crypto')).createHash('sha1').update(bytes).digest('hex'); }
+  static of(args: string[]) {
+    const me = env.url.fileURLToPath(import.meta.url), map = env.url.fileURLToPath(new URL('./wasm.o.ray', import.meta.url));
+    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '');
+    const read_with = Object.fromEntries(Object.entries(kwargs).filter(([k]) => k !== 'threads' && k !== 'verbose'));
+    const cache = new Cache(env.path.join(env.os.homedir(), '.cache', 'ray', Cache.hash(JSON.stringify([process.cwd(), args, read_with, kernel]))));
+    try { cache.steps = JSON.parse(env.fs.readFileSync(env.path.join(cache.dir, 'steps.json'), 'utf8')); } catch { cache.steps = []; }
+    return cache;
+  }
+  private at(name: string) { return env.path.join(this.dir, name); }
+  // (how many steps, from the first, read only files that are as they were)
+  valid(): number {
+    let k = 0;
+    for (const step of this.steps) {
+      if (!step.files.every(([at, hash]) => env.fs.existsSync(at) && Cache.hash(env.fs.readFileSync(at)) === hash) || !env.fs.existsSync(this.at(`step-${k}.pages`))) break;
+      k++;
+    }
+    return k;
+  }
+  // (memory as it was after the first k steps: each step's pages, in order; the host's of the files as after the last; what each said)
+  restore(values: MemoryLayout, k: number) {
+    const u8 = new Uint8Array(values.heap.buffer);
+    for (let i = 0; i < k; i++) {
+      const pages = env.fs.readFileSync(this.at(`step-${i}.pages`)), view = new DataView(pages.buffer, pages.byteOffset, pages.byteLength);
+      for (let at = 0; at < pages.length; at += 4 + Cache.PAGE) u8.set(pages.subarray(at + 4, at + 4 + Cache.PAGE), view.getUint32(at, true) * Cache.PAGE);
+      const said = this.at(`said-${i}.txt`); if (env.fs.existsSync(said)) env.fs.writeSync(1, env.fs.readFileSync(said));
+    }
+    const step = this.steps[k - 1], buffers = env.fs.readFileSync(this.at(`step-${k - 1}.buffers`));
+    let from = 0;
+    Cache.BUFFERS.forEach((name, i) => { const m = values[name] as Parallel.Memory; m.ensureCapacity(step.sizes[i]); new Uint8Array(m.buffer as ArrayBuffer, 0, step.sizes[i]).set(buffers.subarray(from, from + step.sizes[i])); from += step.sizes[i]; });
+  }
+  // (from here: what memory is now, to tell what each step after changes)
+  attach(language: Program, k: number) {
+    this.language = language; this.steps = this.steps.slice(0, k);
+    for (const f of env.fs.existsSync(this.dir) ? env.fs.readdirSync(this.dir) : []) { const m = /^(?:step|said)-(\d+)\./.exec(f); if (m && Number(m[1]) >= k) env.fs.rmSync(this.at(f), { force: true }); }
+    env.fs.mkdirSync(this.dir, { recursive: true });
+    const heap = new Uint8Array(language.files.buffer.values.heap.buffer);
+    this.previous = new Uint8Array(heap.length);
+    this.known = k ? this.steps[k - 1].end : 0;
+    this.previous.set(heap.subarray(0, this.known));
+    this.files = language.files.count;
+  }
+  // (what is said from here on, said in step i)
+  begin(i: number) { if (this.language) Atomics.store(new Int32Array(this.language.files.buffer.values.heap.buffer), 360 >> 2, i); }
+  // (step i read: the pages it changed, the host's of the files, the files it read and what they held)
+  step(language: Program, i: number, handled: number) {
+    try {
+      const values = language.files.buffer.values, heap = new Uint8Array(values.heap.buffer), h32 = new Int32Array(values.heap.buffer);
+      const end = Atomics.load(h32, HEAP >> 2), prev = this.previous!, p32 = new Int32Array(prev.buffer), P = Cache.PAGE, W = P >> 2;
+      const changed: number[] = [];
+      for (let page = 0; page * P < end; page++) {
+        if (page * P >= this.known) { changed.push(page); continue; }
+        for (let w = page * W, z = w + W; w < z; w++) if (h32[w] !== p32[w]) { changed.push(page); break; }
+      }
+      const out = new Uint8Array(changed.length * (4 + P)), view = new DataView(out.buffer);
+      changed.forEach((page, k) => { view.setUint32(k * (4 + P), page, true); out.set(heap.subarray(page * P, page * P + P), k * (4 + P) + 4); prev.set(heap.subarray(page * P, page * P + P), page * P); });
+      this.known = end;
+      env.fs.writeFileSync(this.at(`step-${i}.pages`), out);
+      const sizes = Cache.BUFFERS.map(k => (values[k] as Parallel.Memory).byteLength), buffers = new Uint8Array(sizes.reduce((a, b) => a + b, 0));
+      let from = 0; Cache.BUFFERS.forEach((k, j) => { buffers.set(new Uint8Array((values[k] as Parallel.Memory).buffer as ArrayBuffer, 0, sizes[j]), from); from += sizes[j]; });
+      env.fs.writeFileSync(this.at(`step-${i}.buffers`), buffers);
+      const files: [string, string][] = [];
+      for (let id = this.files; id < language.files.count; id++) { const at = language.files.getPath(id); if (typeof at === 'string' && env.fs.existsSync(at)) files.push([at, Cache.hash(env.fs.readFileSync(at))]); }
+      this.files = language.files.count;
+      this.steps[i] = { files, handled, end, sizes };
+      env.fs.writeFileSync(this.at('steps.json'), JSON.stringify(this.steps));
+    } catch (error) { say(`${ansi.orange}WARNING${ansi.reset} what was read was not kept: ${(error as Error).message}`); }
   }
 }
 export function run_built(path: string) {
@@ -4209,6 +4297,22 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (depth >= DEPTH) { if (!w(t + T_FAULT)) { if (DEBUG) debug(D_FAULT, L_DEEP, s, e); deep(t, depth); } set(t + T_FAULT, L_DEEP); return 0; }
     if (w(t + T_STACK)) { set(w(t + T_STACK) + 8 * depth, rule); set(w(t + T_STACK) + 8 * depth + 4, s); }
     set(t + T_DEPTH, depth + 1);
+    // (a rule whose body is one statement, `({grouped}) => grouped`, a name given a value, `.{member} => {member}`: that
+    // statement read in its frame as the body would, its body not run as one)
+    if (!w(t + T_DECL) && kind === RULE && !w(rule + R_FN) && !(w(rule + R_FLAGS) & (GIVES | TAKES | OWNS | GLYPHS | NUMERAL | SUPERPOSING | REFUSES))) {
+      const bd = body(t, rule), me = w(applied + F_THIS);
+      const rd = w(bd) === 1 && w(bd + 4) === S_READ ? w(bd + 4 + 12) : 0;
+      // (one of its holes, or one of what it was written in: what it took, whatever node is being made)
+      if (rd && (w(rd) === K_NAME || !(latest(me) !== w(me + N_BASE) && making(me)))) {
+        let answer = w(rd) === K_NAME ? valued(t, take(applied, w(rd + 12), w(rd + 16))) : ev(t, rd, applied, applied, me, 1, me, me);
+        if (w(t + T_FAULT) || w(OOM)) answer = 0;
+        else if (w(t + T_JUMP_N)) { if (word(w(t + T_JUMP_S), w(t + T_JUMP_S) + w(t + T_JUMP_N), W_AFTERWARDS)) { set(t + T_JUMP_N, 0); defer(applied, 1); } answer = 0; }
+        set(applied + N_B, 1);
+        if (w(t + T_HOLE) && answer && w(answer + N_IS) === IS_HOLE) extend(t, answer, s, e);
+        set(t + T_DEPTH, depth);
+        return answer;
+      }
+    }
     if (DEBUG) debug(D_APPLY, s, e, rule);
     // (a method's body, a call's (`x.f(…)`), is no part of a left side it is read in: names in it are read, not declared)
     // (a rule's body is no part of a left side it is read in (what it composes, `,`, `( )`, is: its holes, by their text))
@@ -5403,13 +5507,19 @@ export class Ray extends Language<FileStore> {
     this.emit(at, message, style);
   }
   emit(at: number, message: string, style?: string) {
+    const said = Ray.saying(this, at, message, style); if (said === undefined) return;
     const key = style === 'pass' ? `pass:${at}` : this.where(at).startsWith('(made') ? `made:${message}` : `${at}:${message}`;
     if (this.heard.has(key)) return; this.heard.add(key);
     if (!Ray.printing) { this.said.push([at, message, style]); return; }
-    if (style === 'pass') { say(`${ansi.green}PASS${ansi.reset}    ${this.where(at)}: ${ansi.green}${message}${ansi.reset}`); return; }
+    if (style !== 'pass') Atomics.add(this.i32, (style === 'warn' || style === 'info' || style === 'debug' ? 340 : 336) >> 2, 1);
+    say(said);
+    // (said while the files are read, kept with what was read: said again when that is taken from disk)
+    if (!Atomics.load(this.i32, 356 >> 2) && process.env.RAY_SAID_DIR) env.fs.appendFileSync(env.path.join(process.env.RAY_SAID_DIR, `said-${Atomics.load(this.i32, 360 >> 2)}.txt`), said + '\n');
+  }
+  static saying(ray: Ray, at: number, message: string, style?: string): string | undefined {
+    if (style === 'pass') return `${ansi.green}PASS${ansi.reset}    ${ray.where(at)}: ${ansi.green}${message}${ansi.reset}`;
     const warning = style === 'warn' || style === 'info' || style === 'debug';
-    Atomics.add(this.i32, (warning ? 340 : 336) >> 2, 1);
-    say(`${warning ? `${ansi.orange}WARNING${ansi.reset}` : `${ansi.indianRed}ERROR${ansi.reset}  `} ${this.where(at)}: ${message}`);
+    return `${warning ? `${ansi.orange}WARNING${ansi.reset}` : `${ansi.indianRed}ERROR${ansi.reset}  `} ${ray.where(at)}: ${message}`;
   }
   // (once each place and message; one about a copy the reader made (no place in a file), once each message)
   say(at: number, message: string) { this.emit(at, message); }
@@ -5731,6 +5841,7 @@ export class Ray extends Language<FileStore> {
 }
 
 export class Program {
+  static preload?: (values: MemoryLayout) => void;
   static backends: Record<string, Language<Ray>> = { wasm: new Wasm(), js: new Js(),};
   static frontend: Language<FileStore> = new Ray();
 
@@ -5782,6 +5893,8 @@ export class Program {
       queueCapacity,
       maximum,
     };
+    // (what was read before, put back before any thread starts: what they take is after it)
+    if (Program.preload) Program.preload(values);
 
     this.buffer = new Parallel.Buffer<MemoryLayout>(values);
     this.files = new FileStore(this.buffer);
@@ -5854,9 +5967,11 @@ export class Program {
 
   // What the files read ask for (`external include`, `external read`), in the order asked: each group read by every thread,
   // then settled, before the next; `given` is what the host was given.
-  async reads(given: string[]): Promise<void> {
+  // (from what was handled already, `start`; each request handled, told `after`, what it read done)
+  async reads(given: string[], start = 0, after?: (handled: number) => void, before?: () => void): Promise<void> {
     const heap = this.files.buffer.values.heap, i32 = new Int32Array(heap.buffer);
-    for (let handled = 0; ;) {
+    before?.();
+    for (let handled = start; ;) {
       const asked = Ray.requests(heap, handled);
       if (!asked.length) return;
       for (const { kind, text, at, scope } of asked) {
@@ -5878,6 +5993,7 @@ export class Program {
         Ray.ordered(this.files);
         await this.queue.submit(Array(Math.max(1, this.workers.length)).fill(SETTLE)); await this.queue.join();
         for (const g of [PHASE, NEXT, DONE, ANY]) Atomics.store(i32, g >> 2, 0);
+        after?.(handled);
       }
     }
   }

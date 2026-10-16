@@ -3915,7 +3915,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         // (the two written after it, each read where it is written: `external same this other`)
         let q = rest; while (q < z && b(q) > 32) q++;
         const x = block(t, rest, q, names, f, self, 0, 1, 0, self, 0), y = block(t, skip(q, z), z, names, f, self, 0, 1, 0, self, 0);
-        if (!x || !y || w(x + N_IS) !== IS_TEXT || w(y + N_IS) !== IS_TEXT) return w(NOTHING);
+        // (a place, a name being declared, is the name it is: `(part).name.same_characters(place)` in destructuring)
+        const xi = x ? w(x + N_IS) : -1, yi = y ? w(y + N_IS) : -1;
+        if ((xi !== IS_TEXT && xi !== IS_PLACE && xi !== IS_HEAD) || (yi !== IS_TEXT && yi !== IS_PLACE && yi !== IS_HEAD)) return w(NOTHING);
         const n = w(x + N_B) - w(x + N_A);
         return n === w(y + N_B) - w(y + N_A) && same(w(x + N_A), w(y + N_A), n) ? x : w(NOTHING);
       }

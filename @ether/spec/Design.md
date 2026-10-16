@@ -2420,6 +2420,24 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     `e + Ray`); everything else a list answers is Ray.ray's Iterable (`first => entry`, `rest`, `for` through a Traverser,
     `map`, `some`, …), working without the kernel's help. Arrays are accelerated in `wasm.o.ray` (answering as those rules
     answer), as numbers and texts are.
+  - Arrays are accelerated language-side in the map (user): `wasm.o.ray` walks a linked list's vertices for `first`, `last`,
+    `empty`, `count`, `rest`, `for`, `map`, `some`, `every`, `find`, `flatten` and `xs{p}` (only on a list; on anything else,
+    a class, the narrowing it is), and gives String its own over the kernel's `first`/`rest`. The entrypoint keeps what makes
+    lists: `Array.new`, `entry`, `append`, `prepend`, `indexed`/`placed` (`xs[n]`), `listed`/`joined` (`,`), `one_written`.
+  - `~=` reads a pattern within a text by `is`, at each place in it, the shortest reading first (Node.ray `read_within`).
+  - A typed parameter takes the argument as its type, automatically (user: "they define partly the header"): itself when it is
+    one, else what it converts to that is, through the equivalence graph (`checked` answers `converted_to`).
+  - A numeral is the Decimal its digits write, by the equivalence graph: the map's counted numeral converts to
+    `Decimal(integer: digits)` (`Counted &+= { as (=== Decimal) => … }`).
+  - Binding arguments is destructuring (user): `({parameters}) := arguments`; a part `name: v` matches the place of that name,
+    the other parts the remaining places in order (`Kt(sign: s, magnitude)`); a place compared is the name it is.
+  - `static` is the class (user): as a value, the class whose block the text is written in (each class block records itself,
+    `class_block`; a class written in another's block, `static Signed := class (…, integer: static)` in Decimal's, has
+    Decimal); a modifier before a statement otherwise. A written space before a bare hole does not match brackets hugging a
+    word (`static{2 <= .}` is no `static {statement}`).
+  - A class called as a member, `Kk.Inner(…)`, makes an Inner (`this` in a class's own call is the class).
+  - `is` follows what a class is made of (`X &+= Y`, recorded as `made_of`) and each part of a conjunction superclass
+    (`Ray := class: Iterable & Ordered`, so `1 is Ray`, `1 is Ordered`). Open: `Number &+= Ray` read before Ray is defined.
   - The kernel's map counts numbers: a count is a `Counted` (`class: Number`, its `next` the kernel's), a numeral one
     (`external numeral` on `{digits: Decimal.String}`), a text's `first` a `Counted_char` (`class: Char`, its code point);
     Number's own `succ == < + - * / %`, by name (`external number …`), on two it can count, answered by the kernel as the

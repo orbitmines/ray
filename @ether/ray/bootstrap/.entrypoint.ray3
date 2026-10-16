@@ -28,7 +28,10 @@ this => .
 // Code read in a value (`x &+= { … }` defines in x), the value.
 // A value made of another too, `X &+= Y`: Y one of its components (§3.2: its rules seen after X's own, the last added first).
 {on} &+= {value} => {
-  (on).(external . {value})
+  added := value
+  (on).(external . added)
+  // (kept, for what it is: what is made of X is made of Y, `Number &+= Ray`, 1 is a Ray)
+  (on).made_of := ((on).made_of === None) ? Array.new.append(added) : (on).made_of.append(added)
   on
 }
 {on} &+= {`{`}{code}{`}`} => {
@@ -285,7 +288,7 @@ conjoined := None
 // (held at once: each of them, `1 & 2 & 3` three)
 {a} conjoined_with {b} ^keyword => ({
   conjoins := true
-  conjoined := (((a).conjoins === true) ? (a).conjoined.listed() : Listed.new.append(a)).joined(((b).conjoins === true) ? (b).conjoined : Listed.new.append(b))
+  conjoined := (((a).conjoins === true) ? (a).conjoined.listed() : Array.new.append(a)).joined(((b).conjoins === true) ? (b).conjoined : Array.new.append(b))
   contains (x) => conjoined.some((y) => y == x)
 })
 assert (true & true)  // BB17 true and true is not true
@@ -593,18 +596,26 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
   }
   true
 }
-// (each of a list of places the value in its place of what is given: a list a `,` made, else that one value)
+// (each of a list of places the value in its place of what is given: a list a `,` made, else that one value; a part given by
+// name, `x: v`, the place of that name (a place, compared, is the name it is), the others the places left, in order)
 {places} each takes {taken} ^keyword => {
   {
     at := places.head
     each_taken := taken
-    taken_at := (((each_taken).listing === true) && ((each_taken).spread === true)) ? (each_taken).head : Listed.new.append(each_taken).head
+    each_part := (((each_taken).listing === true) && ((each_taken).spread === true)) ? each_taken : Array.new.append(each_taken)
+    taken_at := each_part.head
     while at {
-      while taken_at && ((taken_at.value).named_argument === true) { taken_at = taken_at.next }
       // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing)
       unless (at.value).textual === true {
-        (at.value) alone takes (taken_at ? taken_at.value : declared)
-        taken_at = taken_at ? taken_at.next : None
+        place_at := at.value
+        by_name := each_part.find((named_part) => ((named_part).named_argument === true) && ((named_part).name.same_characters(place_at) !== None))
+        if by_name {
+          (at.value) alone takes (by_name.value)
+        } else {
+          while taken_at && ((taken_at.value).named_argument === true) { taken_at = taken_at.next }
+          (at.value) alone takes (taken_at ? taken_at.value : declared)
+          taken_at = taken_at ? taken_at.next : None
+        }
       }
       at = at.next
     }
@@ -625,8 +636,8 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
 {code}** ^operator => Program(code: {code})
 
 // A list written: `[]` an empty one, `[a, b]` both, `[a]` one; `T[]`, what holds Ts one after another.
-[] ^punctuation => Listed.new
-[{inside}] ^punctuation => (((inside).listing === true) && ((inside).spread === true)) ? (inside).gathered : Listed.new.append(inside)
+[] ^punctuation => Array.new
+[{inside}] ^punctuation => (((inside).listing === true) && ((inside).spread === true)) ? (inside).gathered : Array.new.append(inside)
 {element}[] ^punctuation => (() => {
   made := ({
     narrows := Node
@@ -639,8 +650,8 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
     }
   }) &+ { }
   made &+= {
-    {value: element} => Listed.new.append(value)
-    {first: element}{rest: made} => Listed.new.append(first).joined(rest)
+    {value: element} => Array.new.append(value)
+    {first: element}{rest: made} => Array.new.append(first).joined(rest)
   }
   made
 })()
@@ -651,7 +662,7 @@ one_or_more => {
   base{!(.empty)}
 }
 // `x[k]`: a member (a key that is text), else what x holds under k.
-{on}[{key}] ^punctuation => (((on).listing === true) && (key is Number)) ? (on).at(key) : ((key is String) ? (on).{key} : (on).held(key))
+{on}[{key}] ^punctuation => (((on).listing === true) && (key is Number)) ? (on).indexed(key) : ((key is String) ? (on).{key} : (on).held(key))
 assert {
   xs := [0, 0, 0]
   xs[1] = 5
@@ -721,7 +732,7 @@ assume {code} ^keyword => (external &).caller reading {code}
 {a} | {b} ^operator => ({
   superposes := true
   // (one superposed with a superposition: its components, each one; `1 | 2 | 3` three)
-  components := (((a).superposes === true) ? (a).components.listed() : Listed.new.append(a)).joined(((b).superposes === true) ? (b).components : Listed.new.append(b))
+  components := (((a).superposes === true) ? (a).components.listed() : Array.new.append(a)).joined(((b).superposes === true) ? (b).components : Array.new.append(b))
 }) &+ {
   {value: a} => value
   {value: b} => value
@@ -859,12 +870,20 @@ extended () => .interior
   })
 }
 class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
+  // (`static`, the class: the one whose block this is written in (`outer`, its block's), else this one: `integer: static` of
+  // a class written in Decimal's block is a Decimal)
+  outer := this.class_block
   held := ((parent) &+ {
     superclass := parent
     super := parent
+    class_block := .
+    written_in_class => (outer_block === None) ? class_made : outer_block.written_in_class
+    static => written_in_class
     {block}
   })
   made := (held &+ { })
+  (held).class_made := made
+  (held).outer_block := outer
   made reads ({fields}) as made
   (parent reads ({fields}) as made) unless parent === Node
   made &+= {
@@ -880,8 +899,8 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
 class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
 // others, which read the rest of what it reads: `class: P { … }`)
-class: {parent} {`{`}{block}{`}`} ^keyword => { class: {parent} (nothing_given = None) => { {block} } }
-class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
+class: {parent} {`{`}{block}{`}`} ^keyword => (class: {parent} (nothing_given = None) => { {block} })
+class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (class: Node ({fields}) => { {block} })
 class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (a class of functions, written with what they take and answer, `class: <yield: (x: Ray): None>(entry: Ray): None { … }`: a
 // class of its block (what they take and answer not yet checked))
@@ -1038,6 +1057,8 @@ Asserting := class {
 static {statement} ^keyword => {statement}
 // (and as a value, the class: of a class itself, of an instance its class (`static{2 <= .}`, `integer: static`))
 static ^keyword => .of
+// (what no class block is written in has none)
+class_block := None
 // `x ^style` on its own: x. (A style is for highlighting and nothing else.)
 ^{style} ^operator => .
 
@@ -1046,12 +1067,13 @@ static ^keyword => .of
 // components one.
 of := None
 superclass := None
+made_of := None
 superposes := false
 narrows := None
 members := None
 caller := None
 // (no count of how far: a class's parents end; one that would not, the kernel stops as too deep)
-descends (type) => (. === type) || ((.superclass === None) ? false : .superclass.descends(type))
+descends (type) => (. === type) || ((.superclass === None) ? false : .superclass.descends(type)) || ((.conjoins === true) ? .conjoined.some((conjoined_part) => conjoined_part.descends(type)) : false) || ((.made_of === None) ? false : .made_of.some((made_part) => made_part.descends(type)))
 // (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
 // (followed lazily, and not again while it is being followed: what a conversion asks is what the value itself is)
 following_conversions := false
@@ -1308,7 +1330,7 @@ text_given (place, span) => {
 // (what follows, a list a `,` made (still spreading): the value put in front of a copy of it (the list may be held elsewhere,
 // a type written `T, U` given a name: never changed by another `,` that reads it))
 {list}, {other} ^punctuation => {
-  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).listed().joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).listed().prepend(list) : Listed.new.append(list).append(other))).spreading)
+  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).listed().joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).listed().prepend(list) : Array.new.append(list).append(other))).spreading)
 }
 // (a function's parameters, one of two named as a visible name, after `,` is defined, where a call reads it)
 listed_shadow := false
@@ -1580,20 +1602,21 @@ assert {
 // The classes the library adds to: what is iterable, an array of it, text (an array of characters), a number, a character
 // (a number), a program, a diagnostic.
 Iterable := class { }
-// A list, Listed: a chain of vertices, each holding a value (`head` the first, `tail` the last; a vertex's `next`, `previous`); what
-// a list is written as (`[a, b]`, `a, b`).
-Listed := {
-  new => {
-    {
-      head := None
-      tail := None
-      listing := true
-      of := Array
-      spread := false
-      // (a list as a type, `{d: "0".."9"}`: what reads as one of its values, that value)
-      {written} => (.).one_written(`{written}`)
-    }
+// A list, an Array: entered at its first vertex (`head`; the last, `tail`), each vertex holding a value (`value`, `next`,
+// `previous`); what a list is written as (`[a, b]`, `a, b`). What it answers as an Iterable (`first`, `count`, `for`, …) is
+// Ray.ray's; the kernel's map (`wasm.o.ray`) walks its vertices faster.
+Array := class: Iterable { }
+Array &+= {
+  new => Array &+ {
+    head := None
+    tail := None
+    listing := true
+    spread := false
+    // (a list as a type, `{d: "0".."9"}`: what reads as one of its values, that value)
+    {written} => (.).one_written(`{written}`)
   }
+  // (where it is entered, Iterable's `entry`: its first vertex)
+  entry => .head
   one_written (text) => {
     at := .head
     while at && !(at.value == text) {
@@ -1617,7 +1640,7 @@ Listed := {
     }
   }
   append (value) => {
-    link := Listed.linked(value)
+    link := Array.linked(value)
     if .tail {
       link.previous := .tail
       .tail.next := link
@@ -1628,7 +1651,7 @@ Listed := {
     .
   }
   prepend (value) => {
-    link := Listed.linked(value)
+    link := Array.linked(value)
     if .head {
       .head.previous := link
       link.next := .head
@@ -1639,7 +1662,7 @@ Listed := {
     .
   }
   // (`xs[n]`, a number: its nth value, from 0)
-  at (index) => {
+  indexed (index) => {
     at := .head
     left := index
     while at && left > 0 {
@@ -1659,97 +1682,33 @@ Listed := {
     (at.value = value) if at
     value
   }
-  for (body) => {
+  // (`,` given a list: a copy of it, what comes first then put in front, not into the one given)
+  listed () => {
+    made := Array.new
     at := .head
-    while at {
-      body(at.value)
-      at = at.next
-    }
-    .
-  }
-  // (where it is entered: its first vertex)
-  entry => .head
-  first => .head ? .head.value : None
-  last => .tail ? .tail.value : None
-  empty => .head ? false : true
-  count => {
-    counted := 0
-    .for((x) => (counted = counted + 1))
-    counted
-  }
-  rest => {
-    made := Listed.new
-    at := .head ? .head.next : None
     while at {
       made.append(at.value)
       at = at.next
     }
     made
   }
-  take () => {
-    first := .head
-    .head := first ? first.next : None
-    .tail := .head ? .tail : None
-    first ? first.value : None
-  }
-  find (predicate) => {
-    at := .head
-    while at {
-      if predicate(at.value) { return at.value }
-      at = at.next
-    }
-    None
-  }
-  // (the vertex holding this very value, `===`)
-  holding_itself (value) => {
-    at := .head
-    while at && !(at.value === value) {
-      at = at.next
-    }
-    at
-  }
-  // (whether it holds of one: by holding, not by what was found, `[None].some((x) => x === None)`)
-  some (predicate) => {
-    at := .head
-    while at {
-      if predicate(at.value) { return true }
-      at = at.next
-    }
-    false
-  }
-  every (predicate) => !(.some((x) => !predicate(x)))
-  assert [1, 2].some((x) => x == 2)  // RS5 some does not find what is second (`return v if c` returned whether c held or not)
-  assert !([1, 2].some((x) => x == 3))  // RS6 some finds what is not there
-  assert [1, 2].find((x) => x == 2) == 2  // RS7 find does not find what is second
-  map (mapping) => {
-    made := Listed.new
-    .for((x) => made.append(mapping(x)))
-    made
-  }
-  without (value) => {
-    made := Listed.new
-    .for((x) => (made.append(x) unless x === value))
-    made
-  }
-  listed () => .map((x) => x)
   joined (other) => {
     joining := .
-    if other.listing { other.listed().for((x) => joining.append(x)) } else { .append(other) }
-    .
-  }
-  flatten => .flattened(64)
-  flattened (levels) => {
-    made := Listed.new
-    .for((it) => (((it.listing === true) && (levels > 0)) ? it.flattened(levels - 1).for((x) => made.append(x)) : made.append(it)))
-    made
-  }
-  // (`xs{p}`: the values p holds for, `.` each one in it)
-  {this}{`{`}{constraint}{`}`} => {
-    kept := Listed.new
-    .for((it) => (kept.append(it) if (it with {constraint})))
-    kept
+    if other.listing {
+      at := (other === joining) ? other.listed().head : other.head
+      while at {
+        joining.append(at.value)
+        at = at.next
+      }
+    } else {
+      joining.append(other)
+    }
+    joining
   }
 }
+assert [1, 2].some((x) => x == 2)  // RS5 some does not find what is second (`return v if c` returned whether c held or not)
+assert !([1, 2].some((x) => x == 3))  // RS6 some finds what is not there
+assert [1, 2].find((x) => x == 2) == 2  // RS7 find does not find what is second
 // Lists, read without numbers or `==`: what a method with parameters does to what it is read on, and closures given to them
 assert ["a"].first  // LS1 a list of one has no first (`.head :=` in `append (value) =>` declared in its own node)
 assert !(["a"].empty)  // LS2 a list of one is empty
@@ -1834,7 +1793,6 @@ assert {
   assert ["a"].first  // BN5 a parameter's default `= None` changed what None is for lists
 }
 assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
-Array := class: Iterable { }
 assert 1 is Array  // TY63 a number is not an array
 // (a text is its characters: the first, then the rest (`first`, `rest`, by the kernel's map for what it holds); none, empty)
 String := class: Array {
@@ -1922,7 +1880,7 @@ theme {name} {written} ^keyword => {
   {
     made := {
       name := name
-      styles := Listed.new
+      styles := Array.new
     }
     // (each one written: what it took, the style and what it is shown as)
     made &+= {

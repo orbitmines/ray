@@ -2,7 +2,7 @@
 // compiled back) needs from the core library, each as one check. Run as `deflate.ray` is.
 
 assert `1011`.unsigned == 11  // NE40 bits written as text are not read as their number
-assert `abc`.reversed == `cba`  // NE41 a text is not reversed
+assert `abc`.reverse == `cba`  // NE41 a text is not turned around
 assert `10110011`.pieces(4) == [`1011`, `0011`]  // NE42 a text is not cut into pieces of a size
 assert 255.hexadecimal == `ff`  // NE43 a number is not written in base 16
 assert `0xfffffff8`.signed_hexadecimal(32) == (0 - 8)  // NE44 base 16 at a width is not read as a signed number

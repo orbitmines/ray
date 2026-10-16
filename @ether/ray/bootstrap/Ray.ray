@@ -192,6 +192,7 @@ Iterable &+= {
   assert ([1, 2, 3]).map(. * 2).first == 2  // IT3 the first doubled is not two
   assert ([1, 2, 3]).map(. * 2).last == 6  // IT4 the last doubled is not six
   map {selection} (mapping: (x: Vertex): *) => (selected = this[{selection}]) -- map(x => selected.contains(x) ? mapping(x) : x)
+  // (turned around, any ray (a list, a text, a chain of rays): what it holds last to first)
   reverse => empty ? [] : rest.reverse, first
   assert [1, 2].reverse.reverse == [1, 2]  // CO27 turned around twice is not as it was
   assert ([1, 2, 3]).reverse == [3, 2, 1]  // IT5 turned around, one, two and three are not three, two and one
@@ -454,6 +455,8 @@ Ray := class: Iterable & Ordered {
     walked := 0
     a.for(x => walked += 1)
     assert walked == 3  // R39 walking a ray of three does not visit three
+    assert a.reverse.first === c  // RR85 a chain of rays turned around does not begin at its end
+    assert a.reverse.last === a  // RR86 a chain of rays turned around does not end at its start
     assert (a..c)[1] === b  // RQ10 the path from the first ray to the third does not pass the second
     assert (a..c).last === c  // RQ11 the path from the first ray to the third does not end there
     assert !(c..a)  // RQ12 a path runs against the direction of its rays

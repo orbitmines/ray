@@ -2438,6 +2438,19 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   - A class called as a member, `Kk.Inner(…)`, makes an Inner (`this` in a class's own call is the class).
   - `is` follows what a class is made of (`X &+= Y`, recorded as `made_of`) and each part of a conjunction superclass
     (`Ray := class: Iterable & Ordered`, so `1 is Ray`, `1 is Ordered`). Open: `Number &+= Ray` read before Ray is defined.
+  - Mapping an unbounded Ray answers a Ray each step of which is mapped when asked (`Mapped`, Ray.ray): `(1 -> +1).map(…)`
+    ends; π and τ read. (Lazy `:=` too, the user's "both": open, it changes when side effects run in the entrypoint's rules.)
+  - A class built on a conjunction (`class: Iterable & Ordered`) is built on its parts too (so `3 > 2`, Ordered's, reads on
+    numbers). Open: Ordered's `(b: T)` with `T` its own field's default, unbound on a value never constructed through it.
+  - What juxtaposition (`n T`) takes is a value: never text that begins with a word leading a rule that takes more after it
+    (`2 checked Number` is `checked`).
+  - A head led by a symbol written in a node (`[{{selection}}]`, `..`, `->` of a class's block) is a method of the value it
+    follows, not what reads the same text written alone in that node (`[1, 2, 3]` inside `Iterable &+= { … }`).
+  - A hole before brackets written against it (`{f}(…)`) never ends in an operator: `(on).(code)` is no call of `(on).`.
+  - The language's own scope is never made of a value; a value is never made of what is made of it; a bracketed name that
+    reads as nothing (`(place)`) is never defined as its text. Each is said (with `--debug`: where), not done.
+  - `inline x` (`keeps: { inline selection }`): the code x holds, read where `inline` is written, language-side.
+  - A typed code hole `{{x: T}}` has the name and type of what its braces hold, `x: T`.
   - The kernel's map counts numbers: a count is a `Counted` (`class: Number`, its `next` the kernel's), a numeral one
     (`external numeral` on `{digits: Decimal.String}`), a text's `first` a `Counted_char` (`class: Char`, its code point);
     Number's own `succ == < + - * / %`, by name (`external number …`), on two it can count, answered by the kernel as the

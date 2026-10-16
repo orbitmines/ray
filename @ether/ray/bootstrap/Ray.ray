@@ -185,7 +185,8 @@ Iterable &+= {
   assert ([1, 2, 3]).paths.count == 3  // RR67 the paths through a list are not the list
 
   rest => entry.next ? From(at: entry.next) : []
-  map (mapping: (x: Vertex): *) => empty ? [] : mapping(first), rest.map(mapping)
+  // (of an unbounded one, a Ray each step of which is mapped when it is asked for: `(1 -> +1).map(…)` ends)
+  map (mapping: (x: Vertex): *) => unbounded ? Mapped(from: entry, mapping) : empty ? [] : mapping(first), rest.map(mapping)
   // What a list answers as a whole
   assert ([1, 2, 3]).map(. * 2) == [2, 4, 6]  // IT2 one, two and three doubled are not two, four and six
   assert ([1, 2, 3]).map(. * 2).first == 2  // IT3 the first doubled is not two
@@ -765,6 +766,14 @@ Loop := class: Path (around: Iterable, at: *) => {
 Node &+= {
   -> (step = 1) => Stepped(at: this, forward: step)
   right-to-left <- (base) => base is Stepped ? Stepped(at: base.at, forward: base.forward, backward: this) : Stepped(at: base, backward: this)
+}
+// What an unbounded Ray maps to: each step what the mapping makes of the one it is at, made when asked
+Mapped := class: Ray (from: Ray, mapping: *) => {
+  value => mapping(from.value ?? from)
+  next => from.next ? Mapped(from: from.next, mapping) : None
+  previous => None
+  bounded => from.bounded
+  assert (1 -> +1).map(. * 2)[2] == 6  // RM10 a mapped line is not mapped where it is asked
 }
 Stepped := class: Ray (at: *, forward: *?, backward: *?, behind: Stepped?, ahead: Stepped?) => {
   static stepped (step, from) => step is Number ? from + step : step(from)

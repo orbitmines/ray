@@ -521,6 +521,7 @@ assert {
 // Numbers, more
 assert !(0 ? true : false)  // NQ1 zero holds as a condition
 assert 1 ? true : false  // NQ2 one does not hold as a condition
+assert (2 checked Number) == 2  // NQ3 a number given a type to be checked against was read as `n T` (a word that leads a rule taking more is no value)
 assert ("7" as Decimal) == 7  // ND1 7 is not seven in ten
 assert ("1a" as Decimal) === None  // ND3 1a is a number in ten
 assert 12 + 30 == 42  // ND6 twelve and thirty are not forty-two

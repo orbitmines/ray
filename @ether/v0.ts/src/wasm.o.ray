@@ -180,3 +180,5 @@ external numeral `{digits: Decimal.String}`
 // (whether a value is superposed, Node's `superposed`: made by `|` or `&` from more than one part, answered by the kernel as
 // that rule answers, without the calls its check makes)
 Node &+= { external superposed }
+// (a call of a superposed value, Node.ray's: its argument read once, asked as `superposed` is; not one, the call it is)
+external superposing `{f}({argument: Superposed})`

@@ -187,13 +187,13 @@ export class env {
       workerData: { daemon: NAME, ...data, kernel: env.url.pathToFileURL(file).href, tsx: import.meta.resolve('tsx/esm/api') },
       env: { ...process.env, ...variables },
       execArgv: process.execArgv.filter(flag => !flag.startsWith('--stack-size')),
-      resourceLimits: { stackSizeMb: Number(process.env.RAY_STACK ?? 16) },
+      resourceLimits: { stackSizeMb: Number(process.env.RAY_STACK ?? 64) },
     });
     return new env.worker_threads.Worker(file, {
       workerData: { daemon: NAME, ...data },
       env: { ...process.env, ...variables },
       execArgv: typescript ? [...process.execArgv.filter(flag => !flag.startsWith('--stack-size')), '--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : undefined,
-      resourceLimits: { stackSizeMb: Number(process.env.RAY_STACK ?? 16) },
+      resourceLimits: { stackSizeMb: Number(process.env.RAY_STACK ?? 64) },
     });
   }
 
@@ -268,7 +268,8 @@ export class env {
 
     return this.threads > 1;
   }
-  static get threads() { return env.nodejs ? env.os.availableParallelism() : navigator.hardwareConcurrency ?? 1; }
+  // (at most 8: past that the threads wait on each other more than they work, and each holds what its test needs at once)
+  static get threads() { return Math.min(8, env.nodejs ? env.os.availableParallelism() : navigator.hardwareConcurrency ?? 1); }
   static Worker(workerData = {}) {
     if (env.nodejs) {
       const worker = env.thread(workerData);
@@ -432,6 +433,14 @@ export async function main() {
     // What the language asks to read (its own files, then what it was given), read.
     await language.reads(args.slice(1));
     const read = performance.now();
+    // (`--write=out.wasm --value=name`: what a name answers, a list of numbers, written as bytes (the host writes them))
+    if (kwargs.write) {
+      const heap = language.files.buffer.values.heap, ray = Program.frontend as unknown as Ray; ray.init(heap);
+      const bytes = ray.bytes_of(String(kwargs.value ?? 'output'));
+      env.fs.writeFileSync(String(kwargs.write), bytes);
+      say(`${ansi.green}WROTE${ansi.reset} ${kwargs.write} ${ansi.darkGray}(${bytes.length} bytes, what ${kwargs.value ?? 'output'} answers)${ansi.reset}`);
+      return;
+    }
     // (`--build`: the program as read, built, written; nothing run)
     if (kwargs.build) {
       Ray.ordered(language.files);
@@ -452,6 +461,7 @@ export async function main() {
     // Then the tests, on every thread (each takes them from the queue the kernel keeps while there are any); and, all done,
     // what was said, once.
     Ray.ordered(language.files);
+    if (kwargs.debug) { const i32 = new Int32Array(language.files.buffer.values.heap.buffer); say(`${ansi.darkGray}MEMORY ${(Atomics.load(i32, HEAP >> 2) / 1048576).toFixed(0)} MB used when read${ansi.reset}`); }
     await language.queue.submit(Array(Math.max(1, language.workers.length)).fill(TESTS));
     await language.queue.join();
     const tested = performance.now(), host = new Ray();
@@ -464,6 +474,8 @@ export async function main() {
     }
     // (`--debug`: what the kernel counted)
     if (kwargs.debug) say(`${ansi.darkGray}COUNTED ${host.counted()}${ansi.reset}`);
+    // (`--debug`: the memory the run took, of what it has)
+    if (kwargs.debug) say(`${ansi.darkGray}MEMORY ${(Atomics.load(host.i32, HEAP >> 2) / 1048576).toFixed(0)} MB used of ${(host.u8.length / 1048576).toFixed(0)} MB${ansi.reset}`);
     say(`${ansi.indianRed}ERROR${ansi.reset} ${ansi.darkGray}(${errors})${ansi.reset} ${ansi.orange}WARNING${ansi.reset} ${ansi.darkGray}(${warnings})${ansi.reset} ${ansi.green}PASS${ansi.reset} ${ansi.darkGray}(${host.w(PASSED)})${ansi.reset}`);
 
     if (kwargs.verbose) {
@@ -594,7 +606,10 @@ export async function entrypoint() {
     void queue.run(async (id: number) => {
       await Program.frontend.compile(files, id);
     }).catch((error) => {
-      console.error("Worker queue failed:", error);
+      // (one thread failed: what the others wait on never comes; the run ends, said as failed (written at once: a thread's
+      // console is the main thread's, later), rather than waiting forever)
+      if (env.nodejs) { env.fs.writeSync(2, `Worker queue failed: ${(error as Error)?.stack ?? error}\nERROR   a thread of the kernel crashed (above); the run is stopped\n`); process.kill(process.pid, 'SIGTERM'); }
+      else console.error("Worker queue failed:", error);
     });
 }
   if (env.nodejs && env.worker && env.worker_threads.workerData?.thread === NAME) {
@@ -636,7 +651,8 @@ export async function lsp(io: { input: NodeJS.ReadableStream, output: NodeJS.Wri
   const check = (uri: string) => {
     const doc = documents.get(uri); if (!doc) return;
     const t0 = performance.now(), file = file_of(uri), ray = new Ray(), encoder = new TextEncoder();
-    ray.init(env.target === 'wasm' ? memory(1 << 28) : new Parallel.Memory(1 << 28, false, 1 << 28));
+    // (as much memory as a run of the library on one thread needs, with room: 1 GB)
+    ray.init(env.target === 'wasm' ? memory(Ray.LSP_MEMORY) : new Parallel.Memory(Ray.LSP_MEMORY, false, Ray.LSP_MEMORY));
     const entry = [...documents].find(([u]) => file_of(u) === language)?.[1].text ?? env.fs.readFileSync(language, 'utf-8');
     let [s, e] = ray.file(encoder.encode(file === language ? doc.text : entry), language);
     // (another document: the language's own tests not run; what the language includes read (open documents as the editor has
@@ -653,7 +669,9 @@ export async function lsp(io: { input: NodeJS.ReadableStream, output: NodeJS.Wri
     for (let i = 0, c = 0; i <= bytes.length; i++) { at[i] = c; if (i < bytes.length && (bytes[i] & 0xC0) !== 0x80) c += bytes[i] >= 0xF0 ? 2 : 1; }
     const char = (b: number) => at[Math.max(0, Math.min(bytes.length, b))];
     const paints = ray.paints(s, e).map(p => ({ begin: char(p.begin), end: char(p.end), style: p.style }));
-    const diagnostics = ray.listen().filter(([x]) => x >= s && x <= e).map(([x, message]) => ({ severity: 1, range: { start: position_of(doc.text, char(x - s)), end: position_of(doc.text, char(x - s) + 1) }, message, source: 'ray' }));
+    // (and what is said of no place, out of memory: at the document's start, so no reading fails unseen)
+    const outside = (x: number, message: string) => !(x >= s && x <= e) && (x === 0 || message.startsWith('out of memory') || message.startsWith('the kernel said more'));
+    const diagnostics = ray.listen().filter(([x, message]) => (x >= s && x <= e) || outside(x, message)).map(([x, message]) => { const o = outside(x, message) ? 0 : char(x - s); return { severity: 1, range: { start: position_of(doc.text, o), end: position_of(doc.text, o + 1) }, message, source: 'ray' }; });
     shown = ray.theme() ?? shown;
     checked.set(uri, { version: doc.version, text: doc.text, paints });
     notify('textDocument/publishDiagnostics', { uri, version: doc.version, diagnostics });
@@ -2077,11 +2095,11 @@ const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156
 // (the words the host knows, in the kernel's order: `W_…`)
 const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
-const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until'];
+const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs'];
 // (what the kernel says: `L_…`)
-const L = { UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13 };
+const L = { UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14 };
 // (what the kernel tells the host with --debug: D_… in it)
-const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20 };
+const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20, RESULT: 22 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
 const F = { RULE: 28, CALLER: 32, THIS: 36, START: 40, END: 44, CLOSURE: 48, RECEIVER: 52, TAKES: 56 }, TAKE = 32;
 const T = { START: 0, END: 4, VIS: 8, ORIGIN: 12, THIS: 16, VALUE: 20, STATE: 24 };
@@ -2303,9 +2321,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (this thread's words: given, a constant of what is compiled for it)
   const THREAD = thread | 0, CHUNK = 1 << 16;
   // (a thread's words)
-  const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_LB = 276, T_WRITER = 280, T_TV = 284, T_TVS = 288, T_TVE = 292, T_ALL_S = 304, T_ALL_E = 308, T_TOKEN = 312, T_HERE = 316, T_IN2_S = 320, T_IN2_E = 324, T_IN2_F = 328, T_DEFIN = 332, T_OMEMO = 336, T_QBUDGET = 340, T_UNALIGNED = 344, OMEMO_MASK = (1 << 14) - 1, LEFTS = 64, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64;
+  const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_LB = 276, T_WRITER = 280, T_TV = 284, T_TVS = 288, T_TVE = 292, T_ALL_S = 304, T_ALL_E = 308, T_TOKEN = 312, T_HERE = 316, T_IN2_S = 320, T_IN2_E = 324, T_IN2_F = 328, T_DEFIN = 332, T_OMEMO = 336, T_QBUDGET = 340, T_UNALIGNED = 344, OMEMO_MASK = (1 << 14) - 1, LEFTS = 64, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64, BEGUN = 40;
   // (the words the host knows, at WORDS: where each is and how long)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_SPAN = 8;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_SPAN = 9;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 32;
@@ -2322,15 +2340,15 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // which reads on a value)
   // (LEFT, wanted of a reading only: it is a left side, a word nothing reads before what is read on it is declared there)
   // (TYPE_READER, refused only: a READER of a node other than the language's)
-  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096;
+  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, GLYPHED = 288, GLYPHED_N = 4096;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 24;
   // (a body: [count, ...steps: [kind, start, end, a, c, d]])
   const S_READ = 0, S_LABEL = 1, S_LABELLED = 2, S_GOTO = 3, S_TO = 4, STEP = 24;
   // (what is said: [at, kind, a, c])
   // (what the host is told, with --debug: a statement read and done, a rule applied and done, one defined, memory out)
-  const D_STATEMENT = 1, D_STATEMENT_END = 2, D_APPLY = 3, D_APPLY_END = 4, D_DEFINE = 5, D_OOM = 6, D_BLOCK = 7, D_BLOCK_END = 8, D_TEST = 9, D_TEST_END = 10, D_FAULT = 11, D_SAID = 12, D_TYPE = 13, D_TYPE_END = 14, D_SETTLED = 18, D_READING = 20, D_KEY = 30;
-  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, HELD = 4096, DEPTH = 400, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
+  const D_STATEMENT = 1, D_STATEMENT_END = 2, D_APPLY = 3, D_APPLY_END = 4, D_DEFINE = 5, D_OOM = 6, D_BLOCK = 7, D_BLOCK_END = 8, D_TEST = 9, D_TEST_END = 10, D_FAULT = 11, D_SAID = 12, D_TYPE = 13, D_TYPE_END = 14, D_RESULT = 22, D_SETTLED = 18, D_READING = 20, D_KEY = 30;
+  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, HELD = 4096, DEPTH = 2000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
   const SCRATCH = 1024;
 
   // ---- memory
@@ -2348,10 +2366,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (debugging: none taken again, so what still keeps one is seen)
       for (let i = fn - 1; i >= 0 && i >= fn - 8; i--) if (w(fl + 8 * i + 4) >= n) { at = w(fl + 8 * i); size = w(fl + 8 * i + 4); set(fl + 8 * i, w(fl + 8 * (fn - 1))); set(fl + 8 * i + 4, w(fl + 8 * (fn - 1) + 4)); set(THREAD + T_FREE_N, fn - 1); break; }
       // (in a test, a new one on pages of its own: whose it is, by its pages)
-      if (!at && w(THREAD + T_REG_AT)) { size = (size + 65535) & -65536; at = (xadd(HEAP, size + 65536) + 65535) & -65536; if (at + size > w(LIMIT)) { if (DEBUG) debug(D_OOM, n, 0, 0); if (!xadd(OOM, 1)) log(0, L_OOM, 0, 0); return w(TRASH); } }
+      if (!at && w(THREAD + T_REG_AT)) { size = (size + 65535) & -65536; for (let k = 0; k < 1 << 20; k++) { const h = aload(HEAP), a = (h + 65535) & -65536; if (cas(HEAP, h, a + size) === h) { at = a; break; } } if ((at < 0 || at > w(LIMIT) - size)) { if (DEBUG) debug(D_OOM, n, 0, 0); if (!xadd(OOM, 1)) log(0, L_OOM, 0, 0); return w(TRASH); } }
       if (!at) {
         at = xadd(HEAP, size);
-        if (at + size > w(LIMIT)) { if (DEBUG) debug(D_OOM, n, 0, 0); if (!xadd(OOM, 1)) log(0, L_OOM, 0, 0); return w(TRASH); }
+        if ((at < 0 || at > w(LIMIT) - size)) { if (DEBUG) debug(D_OOM, n, 0, 0); if (!xadd(OOM, 1)) log(0, L_OOM, 0, 0); return w(TRASH); }
       }
       // (in a test: one of its own, let go of when it is done)
       const rg = w(THREAD + T_REG), rn = w(THREAD + T_REG_N);
@@ -2454,9 +2472,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       const tv = w(THREAD + T_TV), vis = w(rule + R_PART + PART * part(rule, i) + 16) || (tv && w(rule + R_OWNER) !== tv && w(caps + 8 * i) >= w(THREAD + T_TVS) && w(caps + 8 * i + 4) <= w(THREAD + T_TVE) ? tv : 0);
       set(tk + T_START, w(caps + 8 * i)); set(tk + T_END, w(caps + 8 * i + 4)); set(tk + T_VIS, vis); set(tk + T_ORIGIN, names); set(tk + T_THIS, written); set(tk + T_LEX, w(THREAD + T_LEXV));
     }
-    // (listed, for what is painted; a test's own too, forgotten when it is done. Not listing them is ~7% faster, but then a race
-    // between threads' tests that this timing hides shows: about 1 run in 24 on 8 threads answers otherwise; open)
-    if (rule) {
+    // (listed, for what is painted; not a test's own, forgotten when it is done)
+    if (rule && !w(THREAD + T_REG_AT)) {
       let k = w(THREAD + T_SLOT);
       if (k >= w(THREAD + T_SLOT_END)) { k = xadd(LIST_N, 256); set(THREAD + T_SLOT_END, k + 256); }
       set(THREAD + T_SLOT, k + 1);
@@ -2467,7 +2484,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function part(rule: number, hole: number) { for (let k = 0; k < w(rule + R_PARTS); k++) { const q = rule + R_PART + PART * k; if ((w(q) & 15) === HOLE && w(q + 12) === hole) return k; } return 0; }
   // Said: where, what kind, about what.
   function log(at: number, kind: number, a: number, c: number) {
-    if (w(THREAD + T_QUIET)) return;
+    // (quiet, a check: nothing said; but memory running out is said wherever it happens)
+    if (w(THREAD + T_QUIET) && kind !== L_OOM) return;
     const k = xadd(LOG_N, 1);
     // (and the test it was said in, where it begins: what is said about text the reader made is said there)
     if (k < w(LOG_CAP)) { const e = w(LOG) + 20 * k; set(e, at); set(e + 4, kind); set(e + 8, a); set(e + 12, c); set(e + 16, w(THREAD + T_TESTING) && w(THREAD + T_ROOT) ? w(w(THREAD + T_ROOT) + F_START) : 0); }
@@ -2476,7 +2494,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (about text a test made (a copy it read): that text kept, for after the test lets go of its memory)
     if (w(THREAD + T_REG_AT) && c > a && c - a < 65536 && in_region(a)) {
       const n = c - a, p = xadd(HEAP, (n + 4) & -4);
-      if (p + n < w(LIMIT)) { for (let i = 0; i < n; i++) setb(p + i, b(a + i)); if (at >= a && at <= c) at = p + (at - a); a = p; c = p + n; }
+      if (p >= 0 && p < w(LIMIT) - n) { for (let i = 0; i < n; i++) setb(p + i, b(a + i)); if (at >= a && at <= c) at = p + (at - a); a = p; c = p + n; }
     }
     if (DEBUG) debug(D_SAID, kind, a, c); log(at, kind, a, c); set(t + T_SAID, w(t + T_SAID) + 1);
   }
@@ -2578,6 +2596,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (w(type + N_IS) === IS_TEXT) return trimmed(w(type + N_A), w(type + N_B) - w(type + N_A), at, end) ? 1 : 0;
     // (what everything is, the language itself (`Node := .`): anything; reading it would try every rule there is)
     if (type === w(GLOBAL)) return 1;
+    // (accelerated, `glyphs` in the kernel's map: a list of characters as a type (`Decimal_glyph[]`), each character one of
+    // its element's, read whole by the kernel (an acceleration: the same with it and without))
+    const gl = glyphs_of(type); if (gl) return glyph_read(gl, at, end);
     // (what none of its rules begins as, and no name of a value of it: none)
     if (!begins(type, b(at), 0) && !worded(at, end)) return 0;
     // (the same text checked against the same type while that is being checked (a type whose rules have holes of it, read at
@@ -2611,16 +2632,65 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (slot && !w(THREAD + T_REG_AT) && !was_cut && !was_run && cas(slot, 0, at) === 0) { wrote(slot); set(slot + 4, end); set(slot + 8, type); set(slot + 12, last); set(slot + 20, glob); set(slot + 24, quiet); set(slot + 28, sh); set(slot + 32, gen); set(slot + 36, shn); astore(slot + 16, ok + 1); }
     return ok;
   }
+  // (the type `{element}[]` made, marked: the characters its element is one of, each a text of one byte, `"0" | "1"`; one it
+  // is not (a character of more bytes, a value of another kind), not marked: read by its rules)
+  function glyphed(t: number, made: number, applied: number) {
+    if (w(THREAD + T_REG_AT) || w(made + N_IS) !== IS_NODE || (w(FAIL_FAST) & 256)) return;
+    const element = valued(t, applied + F_TAKES); if (!element) return;
+    const mask = alloc(32); for (let i = 0; i < 8; i++) set(mask + 4 * i, 0);
+    if (!glyph_set(element, mask, 0)) return;
+    for (let h = (made >> 2) & (GLYPHED_N - 1), n = 0; n < 16; n++, h = (h + 1) & (GLYPHED_N - 1)) {
+      const m = w(GLYPHED) + 16 * h;
+      if (cas(m, 0, made) === 0 || aload(m) === made) { set(m + 4, latest(made)); set(m + 8, mask); return; }
+    }
+  }
+  // (what a value of the element is: a text of one byte, that byte; a superposition, each of its rules a hole of a type alone
+  // whose body is that hole (`{value: a} => value`), what each type is; anything else, no set)
+  function glyph_set(x: number, mask: number, depth: number): number {
+    if (depth > BEGUN) return 0;
+    if (w(x + N_IS) === IS_TEXT) { const a = w(x + N_A), z = w(x + N_B); if (z - a !== 1 || b(a) <= 32) return 0; set(mask + 4 * (b(a) >> 5), w(mask + 4 * (b(a) >> 5)) | (1 << (b(a) & 31))); return 1; }
+    if (w(x + N_IS) !== IS_NODE) return 0;
+    let n = 0;
+    for (let o = latest(x), k = 0; o && o !== w(x + N_BASE) && k < 4096; o = w(o), k++) {
+      if (w(o + R_KIND) !== RULE || (w(o + R_FLAGS) & DEAD)) continue;
+      if (!(w(o + R_FLAGS) & HOLES)) continue;
+      if (w(o + R_PARTS) !== 1 || (w(o + R_PART) & 15) !== HOLE || named(o, w(o + R_BS), w(o + R_BE)) !== 0) return 0;
+      const ty = w(o + R_PART + 16); if (ty <= 1 || !glyph_set(ty, mask, depth + 1)) return 0;
+      n++;
+    }
+    return n;
+  }
+  function glyphs_of(type: number): number {
+    if (!w(GLYPHED) || w(type + N_IS) !== IS_NODE) return 0;
+    for (let h = (type >> 2) & (GLYPHED_N - 1), n = 0; n < 16; n++, h = (h + 1) & (GLYPHED_N - 1)) {
+      const m = w(GLYPHED) + 16 * h, k = aload(m);
+      if (!k) return 0;
+      if (k === type) return w(m + 4) === latest(type) ? w(m + 8) : 0;
+    }
+    return 0;
+  }
+  // (what the type's rules read: one of the characters, then, after any space, one again, to the end, spaces after it)
+  function glyph_read(mask: number, at: number, end: number): number {
+    while (end > at && b(end - 1) <= 32) end--;
+    if (at >= end) return 0;
+    for (let p = at; p < end; p++) { const c = b(p); if (c <= 32) { if (p === at) return 0; continue; } if (!((w(mask + 4 * (c >> 5)) >>> (c & 31)) & 1)) return 0; }
+    return 1;
+  }
   // What a value of a type can begin with: the characters its own rules with holes begin with, a hole there what its type
   // does (an untyped one, anything). Derived from its rules, kept with the last of them (one more, derived again).
   function begins(type: number, c: number, depth: number): number {
     if (w(type + N_IS) === IS_TEXT) { const a = skip(w(type + N_A), w(type + N_B)); return a >= w(type + N_B) || b(a) === c ? 1 : 0; }
-    if (type === w(GLOBAL) || depth > 6 || !w(BEGINS)) return 1;
+    if (type === w(GLOBAL) || depth > BEGUN || !w(BEGINS)) return 1;
+    const mask = begun(type, depth);
+    return (w(mask + 4 * (c >> 5)) >>> (c & 31)) & 1;
+  }
+  // (all it can begin with, at once: a mask of 256 bits, one per character; a hole's type's mask added to it whole)
+  function begun(type: number, depth: number): number {
     const last = latest(type);
     let slot = 0, h = (type >> 2) & (BEGINS_N - 1);
     for (let n = 0; n < 8; n++, h = (h + 1) & (BEGINS_N - 1)) {
       const m = w(BEGINS) + 44 * h, k = aload(m);
-      if (k === type && w(m + 4) === last) return (w(m + 8 + 4 * (c >> 5)) >>> (c & 31)) & 1;
+      if (k === type && w(m + 4) === last) return m + 8;
       if (!k || k === type) { slot = m; break; }
     }
     // (derived: into a mask of 256 bits)
@@ -2637,10 +2707,14 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (ty === 1 || (ty === type && kind === HOLE)) continue;
       if (!ty && kind === HOLE && (w(q) & WORD)) { for (let x = 0; x < 256; x++) if (b(w(CLASSES) + x) === 1) set(mask + 4 * (x >> 5), w(mask + 4 * (x >> 5)) | (1 << (x & 31))); continue; }
       if (!ty) { for (let i = 0; i < 8; i++) set(mask + 4 * i, -1); break; }
-      for (let x = 0; x < 256; x++) if (!((w(mask + 4 * (x >> 5)) >>> (x & 31)) & 1) && begins(ty, x, depth + 1)) set(mask + 4 * (x >> 5), w(mask + 4 * (x >> 5)) | (1 << (x & 31)));
+      if (w(ty + N_IS) === IS_TEXT) { const a = skip(w(ty + N_A), w(ty + N_B)); if (a >= w(ty + N_B)) { for (let i = 0; i < 8; i++) set(mask + 4 * i, -1); break; } const x = b(a); set(mask + 4 * (x >> 5), w(mask + 4 * (x >> 5)) | (1 << (x & 31))); continue; }
+      // (as deep as a superposition of many is written, `"0" | "1" | … | "9"`, each one deeper)
+      if (ty === w(GLOBAL) || depth >= BEGUN) { for (let i = 0; i < 8; i++) set(mask + 4 * i, -1); break; }
+      const sub = begun(ty, depth + 1);
+      for (let i = 0; i < 8; i++) set(mask + 4 * i, w(mask + 4 * i) | w(sub + 4 * i));
     }
     if (slot && !w(THREAD + T_REG_AT) && cas(slot, aload(slot), type) !== -1) { wrote(slot); set(slot + 4, last); for (let i = 0; i < 8; i++) set(slot + 8 + 4 * i, w(mask + 4 * i)); }
-    return (w(mask + 4 * (c >> 5)) >>> (c & 31)) & 1;
+    return mask;
   }
   // (a type no rule of which reads it, a value, `{a: false | true}`: a name of that value, read where everything is, is one)
   function named_as(at: number, end: number, type: number, sc: number): number {
@@ -2670,7 +2744,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const last = latest(type);
     if (last && last !== w(type + N_BASE) && read(at, end, latest(w(GLOBAL)), 0, HOLES, METHOD, sc) === end) {
       const g = w(sc + 512), gh = w(g + R_HOLES);
-      if (gh && w(g + R_OWNER) !== type && declared_at(g) > declared_at(last)) {
+      // (not one that takes it whole, a reader of it (`{digits: Decimal_glyphs}`): that is no reading of it in parts)
+      const whole = gh === 1 && skip(w(sc + 516), w(sc + 520)) === skip(at, end) && w(sc + 520) >= end;
+      if (gh && !whole && w(g + R_OWNER) !== type && declared_at(g) > declared_at(last)) {
         const parts = alloc(8 * gh); for (let i = 0; i < gh; i++) { set(parts + 8 * i, w(sc + 516 + 12 * i)); set(parts + 8 * i + 4, w(sc + 520 + 12 * i)); }
         for (let i = 0; i < gh; i++) if (!typed_(w(parts + 8 * i), w(parts + 8 * i + 4), type, sc + SCRATCH)) return 0;
         return 1;
@@ -2684,7 +2760,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (named(rule, w(rule + R_BS), w(rule + R_BE)) >= 0 || ref(rule, 0, w(rule + R_BS), w(rule + R_BE), 1)) return 1;
     // (a check inside what a check runs: its rules reading it is the answer (what it reads it as is not run again, and again))
     const quiet = w(THREAD + T_QUIET);
-    if (quiet >= TYPINGS) return 1;
+    // (inside a check, a reading by one of its rules is the answer; but a rule that is one hole alone reads anything, so
+    // that it reads says nothing: what it answers is asked, one check deeper (`"0" | "1"`, a list read as a type); deeper
+    // still, no reading)
+    const anything = w(rule + R_PARTS) === 1 && (w(rule + R_PART) & 15) === HOLE && !w(rule + R_PART + 16);
+    if (quiet >= TYPINGS && !anything) return 1;
+    if (quiet >= TYPINGS + 2) return 0;
     const caps = alloc(8 * holes);
     for (let i = 0; i < holes; i++) { set(caps + 8 * i, w(sc + 516 + 12 * i)); set(caps + 8 * i + 4, w(sc + 520 + 12 * i)); }
     const said = w(THREAD + T_SAID), hole = w(THREAD + T_HOLE), fault = w(THREAD + T_FAULT), jump = w(THREAD + T_JUMP_N);
@@ -2847,7 +2928,6 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     set(out, best);
     return ends;
   }
-
   // (the characters from `at` to `end`, as bits: which of 32 kinds each is)
   function bytes(at: number, end: number) { let m = 0; for (; at < end; at++) m |= 1 << (b(at) & 31); return m; }
   // (one led by a hole: its texts written from `at` to `end`, one after another, or it can't read it)
@@ -3014,9 +3094,40 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return h;
   }
   // (what follows a value, read on it, in this reading's scratch: what that reads in turn, further on)
+  // (the reading of an operator and what it takes, by declaration order: [reading of what is before p, p])
+  function precedence(t: number, s: number, e: number, rule: number, closure: number, vis: number, self: number, stop: number, on: number, sc: number): number {
+    const s0 = skip(s, e), cl = w(CLASSES);
+    let o1 = s0; while (o1 < e && b(cl + b(o1)) === 2) o1++;
+    if (o1 === s0 || o1 >= e || b(o1) > 32) return 0;
+    const r1 = op_rule(t, s0, o1, on, sc); if (!r1) return 0;
+    let cut = 0;
+    for (let p = o1; p < e;) {
+      if (b(p) > 32 && b(p - 1) <= 32 && b(cl + b(p)) === 2) {
+        let q = p; while (q < e && b(cl + b(q)) === 2) q++;
+        if (q < e && b(q) <= 32) {
+          const rk = op_rule(t, p, q, on, sc);
+          if (!rk || w(rk + R_OWNER) !== w(r1 + R_OWNER)) return 0;
+          if (declared_at(rk) <= declared_at(r1)) { cut = p; break; }
+        }
+        p = q; continue;
+      }
+      p = bracket(p, e) & 1 ? past(p, e) : p + 1;
+    }
+    const at = cut || o1, left = reading(t, s, cut ? cut : o1, rule, closure, vis, self, 0, stop, 0, 1);
+    if (w(left) === K_UNREAD || w(left) === K_EMPTY) return 0;
+    const pr = alloc(8); set(pr, left); set(pr + 4, at); return pr;
+  }
+  function op_rule(t: number, a: number, z: number, on: number, sc: number): number {
+    set(t + T_SCRATCH, sc + SCRATCH);
+    const end = read(a, z, latest(on), 0, LED, 0, sc);
+    set(t + T_SCRATCH, sc);
+    return end === z ? w(sc + 512) : 0;
+  }
   function on_read(p: number, e: number, vis: number, stop: number, t: number, sc: number): number {
     set(t + T_SCRATCH, sc + SCRATCH);
-    const end = read(p, e, vis, stop, LED | (defines(p, e) ? DEFINES : 0), 0, sc);
+    let end = read(p, e, vis, stop, LED | (defines(p, e) ? DEFINES : 0), 0, sc);
+    // (or a reader the language has, a literal of its own (`{digits: Decimal_glyph[]}`, `13`))
+    if (end < 0 && b(w(CLASSES) + b(p)) === 1) { end = read(p, e, latest(w(GLOBAL)), 0, READER, METHOD, sc); if (end >= 0 && w(w(sc + 512) + R_OWNER) !== w(GLOBAL)) end = -1; }
     set(t + T_SCRATCH, sc);
     return end;
   }
@@ -3065,6 +3176,20 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     set(r, K_UNREAD);
     if (DEBUG && (w(FAIL_FAST) & 64) && b(skip(s, e)) === 46) { debug(D_FAULT, 81, s, e); debug(D_FAULT, 80, vis, stop); }
     if (want & HOLES) return r;
+    // (an operator read on a value, then what it takes, `== 2 * 2 + 2` on 6: up to the next operator of the same value's that
+    // binds as loose or looser, the one declared before it or itself (of two, the one declared later binds tighter); none, all
+    // of what follows (`==` takes `2 * 2 + 2`))
+    if (on && self && self !== w(GLOBAL) && w(self + N_IS) !== IS_FRAME && !left && !(w(FAIL_FAST) & 2048)) { const pr = precedence(t, s, e, rule, closure, vis, self, stop, self, sc); if (pr) { set(r, K_ON); set(r + 12, w(pr)); set(r + 16, w(pr + 4)); set(r + 20, e); return r; } }
+    // (a value and an operator after it, after a space, `6 == 2 * 2 + 2`: the operator and what follows read on the value, so
+    // what the operator takes is by its precedence among the value's (above), not each operator on what is before it)
+    if (!left && b(w(CLASSES) + b(skip(s, e))) !== 2) for (let p = s + 1; p < e;) {
+      if (b(p) > 32 && b(p - 1) <= 32 && b(w(CLASSES) + b(p)) === 2) {
+        let q = p; while (q < e && b(w(CLASSES) + b(q)) === 2) q++;
+        if (q < e && b(q) <= 32 && worded(skip(s, p), trim_end(s, p))) { const o = reading(t, s, p, rule, closure, vis, self, 0, stop, 0, 0); if (w(o) !== K_UNREAD && w(o) !== K_EMPTY) { set(r, K_ON); set(r + 12, o); set(r + 16, p); set(r + 20, e); return r; } }
+        break;
+      }
+      p = bracket(p, e) & 1 ? past(p, e) : p + 1;
+    }
     // (a value, then the rest read on it: the first place what follows is read whole on a value (led by text) and what is before
     // it reads: `x.f(1)` is `f(1)` read in x; what follows begins with an operator or a bracket, or after a space or an
     // operator (`..9` is `9` read on what `..` is))
@@ -3072,7 +3197,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (p > s && b(p) > 32 && (b(w(CLASSES) + b(p)) !== 1 || b(p - 1) <= 32 || b(w(CLASSES) + b(p - 1)) === 2) && on_read(p, e, vis, stop, t, sc) >= 0) {
         // (a member right after a word is that word's, `x == other.pred`: what follows is read from that word, after a space,
         // on what is before it (`other.pred` given to `==`), when that reads)
-        if (b(p) === 46 && p > s && b(w(CLASSES) + b(p - 1)) === 1) {
+        // (and brackets right after a word are that word's, a call, `1 + gcd(other)`: what is before the word, the value)
+        if ((b(p) === 46 || (bracket(p, e) & 3) === 1) && p > s && b(w(CLASSES) + b(p - 1)) === 1) {
           let q = p; while (q > s && b(w(CLASSES) + b(q - 1)) === 1) q--;
           if (q > s && b(q - 1) <= 32) { const o2 = reading(t, s, q, rule, closure, vis, self, 0, stop, 0, 0); if (w(o2) !== K_UNREAD && w(o2) !== K_EMPTY) { set(r, K_ON); set(r + 12, o2); set(r + 16, q); set(r + 20, e); return r; } }
         }
@@ -3192,7 +3318,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     }
     // (in a test, an error; but in a node a rule is making (`external .`, while it runs), a place: a name it is given, it has)
     // (while a left side is read, a name nothing reads is what it declares: no error)
-    if (w(t + T_TESTING) && !making(self) && !w(t + T_DECL) && !w(t + T_LE)) { say(t, s, w(t + T_FAULT) === L_DEEP ? L_DEEP : L_UNREAD, s, e); if ((w(FAIL_FAST) & 1)) { jump(t, W_ERRED, 0); set(t + T_ERRED, 1); return 0; } }
+    if (w(t + T_TESTING) && !making(self) && !w(t + T_DECL) && !w(t + T_LE)) { say(t, s, w(t + T_FAULT) === L_DEEP ? L_DEEP : L_UNREAD, s, e); if ((w(FAIL_FAST) & 1)) { jump(t, W_ERRED, 0); if (!w(THREAD + T_QUIET)) set(t + T_ERRED, 1); return 0; } }
     // (a left side's: where what it declares is defined, the node a call runs in (not where its parameters were written))
     const here = w(t + T_DECL) && w(t + T_DEFIN) ? w(t + T_DEFIN) : self;
     const place = place_of(s, e, here), named_ = alloc(R_PART + PART);
@@ -3318,12 +3444,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (a reading copied where nothing lets go of it: what it took, and what it holds, too)
   function lasted(r: number): number {
     const k = w(r), c = xadd(HEAP, READ);
-    if (c + READ > w(LIMIT)) return 0;
+    if (c < 0 || c > w(LIMIT) - READ) return 0;
     for (let i = 0; i < READ; i += 4) set(c + i, w(r + i));
     if (k === K_ON) { const p = lasted(w(r + 12)); if (!p) return 0; set(c + 12, p); }
     if (k === K_RULE) {
       const holes = w(w(r + 12) + R_HOLES), caps = w(r + 16);
-      if (caps && holes) { const q = xadd(HEAP, 8 * holes); if (q + 8 * holes > w(LIMIT)) return 0; for (let i = 0; i < 2 * holes; i++) set(q + 4 * i, w(caps + 4 * i)); set(c + 16, q); }
+      if (caps && holes) { const q = xadd(HEAP, 8 * holes); if (q < 0 || q > w(LIMIT) - 8 * holes) return 0; for (let i = 0; i < 2 * holes; i++) set(q + 4 * i, w(caps + 4 * i)); set(c + 16, q); }
       set(c + 20, 0);
     }
     return c;
@@ -3377,6 +3503,21 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // on what `f` is with x as `this`.)
   // (a node with a method led by a hole of its own (a closure's `{this}{argument}`))
   function methods_of(n: number): number { for (let o = latest(n), k = 0; o && o !== w(n + N_BASE) && k < 64; o = w(o), k++) if ((w(o + R_FLAGS) & (METHOD | LED | DEAD)) === METHOD) return 1; return 0; }
+  // (what `this` is in an application: what it is read on (its receiver), else what its own node is made of, else its node)
+  function held_this(fr: number): number { if (!fr || w(fr + N_IS) !== IS_FRAME || !w(fr + F_RULE) || !(w(w(fr + F_RULE) + R_FLAGS) & METHOD)) return 0; const th = w(fr + F_THIS), rc = w(fr + F_RECEIVER); return rc !== th ? rc : run_node(th) ? w(th + N_ALSO) : th; }
+  // (a value code is read in that is not what the application runs on (nor its own node, nor what that is made of))
+  function another(fr: number, self: number): number {
+    if (!self || w(self + N_IS) === IS_FRAME || !fr || w(fr + N_IS) !== IS_FRAME) return 0;
+    const th = w(fr + F_THIS), rc = w(fr + F_RECEIVER);
+    if (self === th || self === rc || self === w(GLOBAL)) return 0;
+    if (th && w(th + N_IS) === IS_NODE && w(th + N_ALSO) === self) return 0;
+    if (rc && w(rc + N_IS) === IS_NODE && w(rc + N_ALSO) === self) return 0;
+    if (w(self + N_IS) === IS_NODE && (w(self + N_PARENT) === th || w(self + N_PARENT) === rc)) return 0;
+    return 1;
+  }
+  // (the name from s to e read on th: the same rule)
+  function on_this(t: number, th: number, s: number, e: number, rule: number): number { if (w(rule + R_OWNER) === w(GLOBAL)) return 0; const r = reading(t, s, e, 0, 0, latest(th), th, 0, 0, 0, 0); return w(r) === K_RULE && w(r + 12) === rule ? 1 : 0; }
+  function trim_end(s: number, e: number): number { while (e > s && b(e - 1) <= 32) e--; return e; }
   function onto(t: number, r: number, names: number, f: number, self: number, value: number, written: number): number {
     const p = w(r + 12);
     let on = 0, receiver = self;
@@ -3394,7 +3535,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (w(p) === K_ON) { on = onto(t, p, names, f, self, 1, written); receiver = w(t + T_ON); }
     // (a value read where it is written, not as a member of another (`f(5)`, `body(x)`): what follows is read on it alone)
     // (the member a `.{member}` reads, `x.f(y)`'s `f`: what follows is read on it as x's)
-    else { const member = w(t + T_MEMBER) === self; set(t + T_MEMBER, 0); on = ev(t, p, names, f, self, 1, written, self); if (!member && written === self) receiver = on; }
+    else {
+      const member = w(t + T_MEMBER) === self; set(t + T_MEMBER, 0); on = ev(t, p, names, f, self, 1, written, self); if (!member && written === self) receiver = on;
+      // (a name written bare in a method's body that is a member of what the method runs on, `gcd(other)` in `lcm`: read on
+      // that, as `this.gcd(other)` is)
+      if (!member && on && w(on + N_IS) === IS_NODE && w(p) === K_RULE && worded(w(p + 4), w(p + 8))) { const th = held_this(names); if (th && th !== w(GLOBAL) && th !== on && w(th + N_IS) !== IS_FRAME && on_this(t, th, w(p + 4), w(p + 8), w(p + 12))) receiver = th; }
+    }
     set(t + T_DECL, declaring); set(t + T_LB, lb);
     if (stopped(t)) { set(t + T_DECL, decl_in); return 0; }
     // (in a left side, a closure and a name after it, `xs.for x`: not called here; the `=>` behind it makes the rest of the line
@@ -3415,7 +3561,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // too, wherever they are written)
     const itself = on === w(names + F_THIS) || on === w(names + F_RECEIVER);
     // (not in what it inlined, `{{body}}` (a closure's own code, its calls of itself: recursion))
-    const running = w(rest) === K_RULE && w(names + F_RULE) && in_body(w(names + F_RULE), w(r + 16)) && !inlined_at(w(names + F_RULE), w(r + 16)) && ((itself && w(names + F_RULE) === w(rest + 12)) || ((itself || w(w(rest + 12) + R_OWNER) === w(w(names + F_RULE) + R_OWNER)) && alike(w(rest + 12), w(names + F_RULE)))) ? w(names + F_RULE) : 0;
+    const running = w(rest) === K_RULE && w(names + F_RULE) && in_body(w(names + F_RULE), w(r + 16)) && !inlined_at(w(names + F_RULE), w(r + 16)) && ((itself && w(names + F_RULE) === w(rest + 12)) || ((itself || (w(w(rest + 12) + R_OWNER) === w(w(names + F_RULE) + R_OWNER) && w(rest + 12) !== w(names + F_RULE))) && alike(w(rest + 12), w(names + F_RULE)))) ? w(names + F_RULE) : 0;
     // (on another value it is the rule itself, called again: recursion, `pred!` in `!`)
     if (w(rest) === K_RULE && (running || (itself && in_body(w(rest + 12), w(r + 16)) && !inlined_at(w(rest + 12), w(r + 16)))) && w((running || w(rest + 12)) + R_PREV)) { const skipped = w(t + T_SKIP); set(t + T_SKIP, running || w(rest + 12)); const again = reading(t, w(r + 16), w(r + 20), w(names + F_RULE), w(names + F_CLOSURE), w((running || w(rest + 12)) + R_PREV), on, LED, 0, 0, 1); set(t + T_SKIP, skipped); if (DEBUG && w(again) === K_UNREAD) debug(D_FAULT, 91, w(r + 16), w(r + 20)); if (w(again) !== K_UNREAD) rest = again; }
     let nm = names, wr = written, rs2 = w(r + 16), re2 = w(r + 20);
@@ -3438,7 +3584,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       set(t + T_FALLBACK, fb); set(t + T_ON, on); set(t + T_DECL, decl_in);
       return v;
     }
-    say(t, w(r + 16), L_NOT_ON, w(r + 16), w(r + 20));
+    // (said where what is read was written: a hole's code (`{rest}` of the language's own), where it was taken)
+    say(t, rs2, L_NOT_ON, rs2, re2);
     set(t + T_ON, on); set(t + T_DECL, decl_in);
     return 0;
   }
@@ -3458,15 +3605,16 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (a typed hole's code: read by its type's own rules; what none of them reads (a value of it, by its name), where it was written)
       let r = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), vis ? latest(vis) : latest(self), self, 0, vis ? w(vis + N_BASE) : 0, 0, 0);
       // (what reads it where it is written binding looser than the type's own (declared after it, `,`): that first, its parts
-      // then read by the type)
-      if (vis && w(r) === K_RULE) { const r2 = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0); if (w(r2) === K_RULE && w(r2 + 12) !== w(r + 12) && declared_at(w(r2 + 12)) > declared_at(w(r + 12))) r = r2; }
+      // then read by the type; not a reader, a head of one hole (`{numeral: Digits}`: it would read itself))
+      if (vis && w(r) === K_RULE) { const r2 = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0); if (w(r2) === K_RULE && w(r2 + 12) !== w(r + 12) && !(w(w(r2 + 12) + R_FLAGS) & READER) && declared_at(w(r2 + 12)) > declared_at(w(r + 12))) r = r2; }
       if (vis && w(r) === K_UNREAD) r = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0);
       // (code read in a value it was not written in, `x.( … )`: what x does not read, read where it was written)
       if (w(r) === K_UNREAD && writer && writer !== self) r = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), latest(writer), writer, 0, 0, 0, 0);
       // (a rule never reads itself: code written in a rule's own body that reads as that rule (`String => this as String`,
       // its `String`), read with the rules before it)
       // (only while that rule is what is read: a closure it made, called later, reads it again (recursion))
-      if (w(r) === K_RULE && in_body(w(r + 12), at) && w(w(r + 12) + R_PREV) && w(names + F_RULE) === w(r + 12)) { const again = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), w(w(r + 12) + R_PREV), self, 0, 0, 0, 0); if (w(again) !== K_UNREAD) r = again; }
+      // (and only on the value it runs on: read in another one, `inner.f` in `f`, it is that one's, called again (recursion))
+      if (w(r) === K_RULE && in_body(w(r + 12), at) && w(w(r + 12) + R_PREV) && w(names + F_RULE) === w(r + 12) && !another(names, self)) { const again = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), w(w(r + 12) + R_PREV), self, 0, 0, 0, 0); if (w(again) !== K_UNREAD) r = again; }
       answer = ev(t, r, names, f, self, value & last, written, self);
       if (stopped(t)) { set(t + T_DEPTH, depth); if (DEBUG) debug(D_BLOCK_END, s, e, 0); return 0; }
       at = ln;
@@ -3540,7 +3688,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         if (v && th && v !== th) { set(th + N_ALSO, w(th + N_ALSO) ? node(IS_NODE, 0, 0, w(th + N_ALSO), v) : v); set(THREAD + T_SHGEN, w(THREAD + T_SHGEN) + 1); }
         return th;
       }
-      if (word(a, m, W_DOT)) { const th = w(names + F_THIS), rc = w(names + F_RECEIVER), n = node(IS_NODE, 0, names, th, rc !== th ? rc : 0); if (DEBUG && w(THREAD + T_REG_AT) && !in_region(names)) debug(D_FAULT, 96, a, z); set(names + F_THIS, n); if (rc === th) set(names + F_RECEIVER, n); return n; }
+      // (a node of its own, in what it is read in, made of what it is read on: called bare in a method's own node (`gcd(other)`
+      // in `lcm`), what that method is read on)
+      if (word(a, m, W_DOT)) { const th = w(names + F_THIS), rc = w(names + F_RECEIVER), n = node(IS_NODE, 0, names, th, rc !== th ? (run_node(rc) ? w(rc + N_ALSO) : rc) : 0); if (DEBUG && w(THREAD + T_REG_AT) && !in_region(names)) debug(D_FAULT, 96, a, z); set(names + F_THIS, n); if (rc === th) set(names + F_RECEIVER, n); return n; }
       if (word(a, m, W_AMP)) return names;
       if (word(a, m, W_GOTO)) { go(t, rest, z - rest, f, 0); return 0; }
       if (word(a, m, W_INCLUDE) || word(a, m, W_READ)) { files(word(a, m, W_INCLUDE) ? 1 : 2, rest, z, names); return 0; }
@@ -3548,7 +3698,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (mapped(a, m, M_TEXT)) { set(TEXTS, w(f + F_THIS)); return 0; }
       // (`given `{given} given {value}``: that rule, what it was given a head (one name defined): that head, what its own body
       // answers (an acceleration: the same with it and without))
-      if (mapped(a, m, M_GIVEN) || mapped(a, m, M_TAKING)) { const flag = mapped(a, m, M_GIVEN) ? GIVES : TAKES; let q = rest, y = z; if (b(q) === 96 && b(y - 1) === 96 && y - q > 1) { q++; y--; } for (let o = latest(w(GLOBAL)), k = 0; o && k < 1 << 20; o = w(o), k++) { const hd = w(o + R_HEAD); if (w(o + R_KIND) === RULE && hd && w(hd + N_B) - w(hd + N_A) === y - q && same(q, w(hd + N_A), y - q)) { set(o + R_FLAGS, w(o + R_FLAGS) | flag); if (flag === TAKES) spans(o); break; } } return 0; }
+      if (mapped(a, m, M_GIVEN) || mapped(a, m, M_TAKING) || mapped(a, m, M_GLYPHS)) { const flag = mapped(a, m, M_GIVEN) ? GIVES : mapped(a, m, M_GLYPHS) ? GLYPHS : TAKES; let q = rest, y = z; if (b(q) === 96 && b(y - 1) === 96 && y - q > 1) { q++; y--; } for (let o = latest(w(GLOBAL)), k = 0; o && k < 1 << 20; o = w(o), k++) { const hd = w(o + R_HEAD); if (w(o + R_KIND) === RULE && hd && w(hd + N_B) - w(hd + N_A) === y - q && same(q, w(hd + N_A), y - q)) { set(o + R_FLAGS, w(o + R_FLAGS) | flag); if (flag === TAKES) spans(o); break; } } return 0; }
       // (`nothing v`: v is what the kernel's nothing is, read on)
       if (mapped(a, m, M_NOTHING)) { set(NOTHING, rest < z ? block(t, rest, z, names, f, self, 0, 1, 0, self, 0) : w(f + F_THIS)); return 0; }
       // (`same a b`: two texts of the same characters (bytes): the first; else nothing (a text's characters are what the
@@ -3618,10 +3768,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       for (let i = 0; i < w(rule + R_HOLES) && composing; i++) { const tk = follow(applied + F_TAKES + TAKE * i, 1); if (!in_left(w(tk), w(tk + 4))) composing = 0; }
     }
     if (decl && ((w(rule + R_FLAGS) & METHOD) || composing)) set(t + T_DECL, 0);
-    // (a body giving names values of its own, not a closure's (it makes its own node): a node of its own, made of what it is
-    // read in (what it gives is this run's; `.x := …` is still a member of `.`))
-    if ((w(rule + R_FLAGS) & OWNS) && !(w(rule + R_FLAGS) & METHOD) && self && self !== w(GLOBAL) && w(self + N_IS) === IS_NODE) { const rc = w(applied + F_RECEIVER), n = node(IS_NODE, 0, applied, self, self); set(applied + F_THIS, n); set(applied + F_RECEIVER, rc && rc !== self ? rc : n); }
+    // (a body giving names values of its own, not a closure's (it makes its own node): a node of its own, in where the rule is
+    // written, made of what it is read in (what it gives is this run's; `.x := …` is still a member of `.`))
+    if ((w(rule + R_FLAGS) & OWNS) && !(w(rule + R_FLAGS) & METHOD) && self && self !== w(GLOBAL) && (w(self + N_IS) === IS_NODE || w(self + N_IS) === IS_TEXT)) { const rc = w(applied + F_RECEIVER), n = node(IS_NODE, 0, applied, w(rule + R_OWNER) || self, self); set(applied + F_THIS, n); set(applied + F_RECEIVER, rc && rc !== self ? rc : n); }
     const answer = ran(t, applied, rule, bd_, 0);
+    if ((w(rule + R_FLAGS) & GLYPHS) && answer && !stopped(t)) glyphed(t, answer, applied);
     set(t + T_DECL, decl);
     if (DEBUG) debug(D_APPLY_END, s, e, rule);
     set(applied + N_B, 1);
@@ -3775,12 +3926,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         }
       }
       if (w(r) === K_UNREAD) set(r, K_LATER);
-      else if (mentions && w(r) !== K_EMPTY) { const later = alloc(READ); set(later, K_LATER); set(later + 4, w(st + 4)); set(later + 8, w(st + 8)); set(st, S_READ); set(st + 12, later); continue; }
+      else if (mentions && !(w(FAIL_FAST) & 128) && w(r) !== K_EMPTY) { const later = alloc(READ); set(later, K_LATER); set(later + 4, w(st + 4)); set(later + 8, w(st + 8)); set(st, S_READ); set(st + 12, later); continue; }
       set(st, S_READ); set(st + 12, r);
     }
     set(bd, n);
     // (a body that gives names values of its own: run in a node of its own, each time (what it gives is that run's))
-    if (given && !(w(rule + R_FLAGS) & OWNS)) set(rule + R_FLAGS, w(rule + R_FLAGS) | OWNS);
+    if (given && !(w(FAIL_FAST) & 128) && !(w(rule + R_FLAGS) & OWNS)) set(rule + R_FLAGS, w(rule + R_FLAGS) | OWNS);
     set(THREAD + T_SH_N, shadows);
     if (mine) { if (w(t + T_BODIES_N) < BODIES / 2) { let q = mine; for (let i = 1; w(q) && i < BODIES; i++) q = w(t + T_BODIES) + 8 * (((rule >> 3) + i) & (BODIES - 1)); set(q, rule); set(q + 4, bd); set(t + T_BODIES_N, w(t + T_BODIES_N) + 1); } }
     else { cas(rule + R_BODY, 0, bd); bd = w(rule + R_BODY); }
@@ -3821,7 +3972,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       else if (v && w(t + T_NAMED) - named > 0 && w(v + N_IS) === IS_NODE) { set(t + T_FAULT, 0); set(t + T_JUMP_N, 0); return v; }
       // (a left side in brackets that answered a value, not a place (`(name)` naming a hole that is a value there): reported, it
       // declares nothing)
-      else if (v && w(v + N_IS) === IS_NODE && b(skip(rs, re)) === 40 && bracket(skip(rs, re), re) & 1) { const at = o && w(o + N_IS) === IS_FRAME ? o : 0; say(t, at ? w(at + F_START) : rs, L_VALUED, at ? w(at + F_START) : rs, at ? w(at + F_END) : re); }
+      else if (v && w(v + N_IS) === IS_NODE && b(skip(rs, re)) === 40 && bracket(skip(rs, re), re) & 1) { const at = o && w(o + N_IS) === IS_FRAME ? o : 0; say(t, at ? w(at + F_START) : rs, L_VALUED, at ? w(at + F_START) : rs, at ? w(at + F_END) : re); if (DEBUG) debug(D_FAULT, 82, v, (in_region(v) ? 1 : 0) + (older(v) ? 2 : 0)); }
       set(t + T_FAULT, 0); set(t + T_JUMP_N, 0);
       // (a place and its head, `f (x)`: the place given what `(x) => body` is, a closure)
       if (v && w(v + N_IS) === IS_CALLED) return called(t, v, bd, w(hd + T_ORIGIN), self);
@@ -3877,7 +4028,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const fr = frame(rule, 0, self, text, at, 0, 0, self, self);
     const value = ev(t, reading(t, text, at, rule, names, latest(self), self, 0, 0, 0, 0), fr, fr, self, 1, self, self);
     if (!value || stopped(t)) return 0;
-    return bound(w(place + N_A), w(place + N_B), place_in(place) || self, value);
+    // (written bare, `f (x) =>`: the name this node's own, not one visible where it is (a class's `from (x)`, the language's
+    // `from` untouched); written on a value, `x.f (y) =>`, that value's)
+    const bare = skip(hs, he) === skip(w(place + N_A), w(place + N_B));
+    return bound(w(place + N_A), w(place + N_B), bare ? self : (place_in(place) || self), value);
   }
   // (a name, from s to e, given a value in a node: a rule there answering it)
   function bound(s: number, e: number, self: number, value: number): number {
@@ -4153,6 +4307,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       const type = r && w(r) === K_RULE ? member(t, nd, w(w(WORDS) + 8 * W_TYPE), w(w(WORDS) + 8 * W_TYPE + 4)) : 0;
       // (a type that is a hole, or a name nothing defines yet (a place): not yet a type)
       const pending = type === nd || (type && (w(type + N_IS) === IS_HOLE || w(type + N_IS) === IS_PLACE));
+      if (DEBUG && !type) { for (let x = a; x < z; x++) if (b(x) === 58) { debug(D_FAULT, 79, a, z); debug(D_FAULT, 78, r ? w(r) : -1, r && w(r) === K_RULE ? w(w(r + 12) + R_BS) : 0); break; } }
       set(q + 12, hole); hole++; set(q + 16, type && !pending ? type : 0); set(q + 20, nd);
       // (a type nothing reads yet, `{x: T}` before T is there: none yet, the rule reads nothing until it is)
       if (pending) { if (DEBUG) debug(D_DEFINE, a, z, type || 1); set(q + 16, 1); const lz = xadd(LAZY_N, 1), l = w(LAZY) + 24 * lz; if (lz < w(LAZY_CAP)) { set(l, q); set(l + 4, r); set(l + 8, a); set(l + 12, z); set(l + 16, vis); set(l + 20, names); } }
@@ -4411,6 +4566,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       const l = w(LAZY) + 24 * i, q = w(l), r = w(l + 4);
       if (!q || w(q + 16) !== 1) continue;
       const nd = node(IS_HOLE, 0, 0, owner(w(l + 16)), 0), outer = w(t + T_HOLE), oa = w(t + T_HOLE_A), ob = w(t + T_HOLE_B);
+      // (each with a budget of its own: not what the thread that settles did before left (which thread it is is not the
+      // language's: a constructor's `{arguments: Arguments}` stayed untyped on some runs))
+      set(t + T_BUDGET, w(BUDGET)); set(t + T_QBUDGET, 10 * w(BUDGET));
       set(t + T_HOLE, nd); set(t + T_HOLE_A, w(l + 8)); set(t + T_HOLE_B, w(l + 12));
       ev(t, r, w(l + 20) || frame(0, 0, nd, w(l + 8), w(l + 12), 0, 0, nd, nd), 0, nd, 1, nd, nd);
       set(t + T_HOLE, outer); set(t + T_HOLE_A, oa); set(t + T_HOLE_B, ob);
@@ -4448,6 +4606,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function budgeted(s: number, e: number) { let n = 1; for (let i = s; i < e && n < 20; i++) if (b(i) === 10) n++; return w(BUDGET) * n; }
   function statement(t: number, at: number, ln: number, top: number, scope: number, unread: number): number {
     if (DEBUG) debug(D_STATEMENT, at, ln, 0);
+    // (its budget its own, reading it too: not what the statement this thread read before left (which thread reads it is
+    // not the language's))
+    set(t + T_BUDGET, budgeted(at, ln)); set(t + T_QBUDGET, 10 * budgeted(at, ln));
     const r = reading(t, at, ln, 0, 0, latest(scope), scope, 0, 0, 0, 0);
     if (w(r) === K_UNREAD) { if (DEBUG) debug(D_STATEMENT_END, at, ln, 0); return 0; }
     const before = latest(scope), f = frame(0, top, scope, at, ln, 0, 0, scope, scope);
@@ -4506,8 +4667,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (DEBUG) debug(D_TEST_END, w(f + F_START), w(f + F_END), w(f + F_RULE));
     caught(t, w(f + F_START));
     if (w(t + T_SAID) > said && !w(t + T_ERRED)) { const er = labelled(bd, w(w(WORDS) + 8 * W_ERRED), w(w(WORDS) + 8 * W_ERRED + 4)); if (er >= 0) { ran(t, f, w(f + F_RULE), bd, er); caught(t, w(f + F_START)); } }
-    // (it passed when it said nothing)
-    xadd(w(t + T_SAID) > said || w(t + T_ERRED) ? FAILED : PASSED, 1);
+    // (a test that failed and said nothing of why: said, so no failure goes unexplained)
+    if (w(t + T_ERRED) && !(w(t + T_SAID) > said)) say(t, w(f + F_START), L_SILENT, 0, 0);
+    // (it passed when it said nothing; and not when memory ran out: what stopped it is no answer)
+    const failed = w(t + T_SAID) > said || w(t + T_ERRED) || w(OOM) ? 1 : 0;
+    xadd(failed ? FAILED : PASSED, 1);
+    if (DEBUG) debug(D_RESULT, w(f + F_START), w(f + F_END), failed);
     set(t + T_TESTING, 0);
   }
 
@@ -4534,8 +4699,9 @@ export class Ray extends Language<FileStore> {
   compiled_: ((t: number, f: number, from: number) => number)[] = [];
   named() { return this.named_; } name(named: string[]) { this.named_ = named; }
   private heard = new Set<string>(); private told = 0;
-  static readonly MEMORY = Number(typeof process !== 'undefined' && process.env.RAY_MEMORY || 1 << 30);
-  static readonly BUDGET = Number(typeof process !== 'undefined' && process.env.RAY_BUDGET || 100000);
+  static readonly LSP_MEMORY = Number(typeof process !== 'undefined' && process.env.RAY_LSP_MEMORY || 2 ** 30);
+  static readonly MEMORY = Number(typeof process !== 'undefined' && process.env.RAY_MEMORY || 2 ** 31);
+  static readonly BUDGET = Number(typeof process !== 'undefined' && process.env.RAY_BUDGET || 1000000);
 
   // A file: read where the language is (the entrypoint), else in a scope of its own inside it. (`TESTS`: what was put off.)
   compile(files: FileStore, id: number): void {
@@ -4561,9 +4727,9 @@ export class Ray extends Language<FileStore> {
       try { return f(...args); } catch (e) { if (!(e as { told?: 1 }).told) { (e as { told?: 1 }).told = 1; console.error(this.crashed(e as Error)); } throw e; }
     }])) as unknown as Exports;
     if (first) {
-      this.set(LIMIT, this.u8.length - (1 << 16)); this.set(TRASH, this.u8.length - (1 << 16)); this.set(BUDGET, Ray.BUDGET); this.set(FAIL_FAST, (typeof process !== 'undefined' && process.env.RAY_FAIL_FAST === '0' ? 0 : 1) | (kwargs.verbose ? 2 : 0) | (process.env.RAY_OLDONE ? 8 : 0) | (process.env.RAY_MEMO_CHECK ? 4 : 0) | (process.env.RAY_NOSHARE ? 16 : 0) | (process.env.RAY_NOCOULD ? 32 : 0) | (process.env.RAY_CHAIN ? 64 : 0));
+      this.set(LIMIT, this.u8.length - (1 << 22)); this.set(TRASH, this.u8.length - (1 << 22)); this.set(BUDGET, Ray.BUDGET); this.set(FAIL_FAST, (typeof process !== 'undefined' && process.env.RAY_FAIL_FAST === '0' ? 0 : 1) | (kwargs.verbose ? 2 : 0) | (process.env.RAY_OLDONE ? 8 : 0) | (process.env.RAY_MEMO_CHECK ? 4 : 0) | (process.env.RAY_NOSHARE ? 16 : 0) | (process.env.RAY_NOCOULD ? 32 : 0) | (process.env.RAY_CHAIN ? 64 : 0) | (process.env.RAY_NOOWNS ? 128 : 0) | (process.env.RAY_NOGLYPHS ? 256 : 0) | (process.env.RAY_NOPREC ? 2048 : 0));
       const area = (at: number, capacity: number, cap: number, size: number) => { this.set(at, this.alloc(cap * size)); this.set(capacity, cap); };
-      area(LOG, LOG_CAP, 1 << 16, 20); area(RULES, RULES_CAP, 1 << 18, 4); this.set(OWN, this.alloc(4 * (this.u8.length >>> 16))); area(AFTER, AFTER_CAP, 1 << 16, 12); area(LIST, LIST_CAP, 1 << 21, 4); this.set(FILES, this.alloc(12 * 4096)); this.set(PEND, this.alloc(20 * 4096)); area(READS, READS_CAP, 4096, 16); this.set(INCL, this.alloc(8 * 4096)); area(LAZY, LAZY_CAP, 1 << 14, 24); this.set(BEGINS, this.alloc(44 * 4096)); this.set(216, this.alloc(4 * 64)); if (this.debugging) { this.set(240, this.alloc(8 * 4096)); this.set(244, this.alloc(8 * 4096)); this.set(248, this.alloc(8 * 4096)); } this.set(220, this.alloc(12 * 4096));
+      area(LOG, LOG_CAP, 1 << 16, 20); area(RULES, RULES_CAP, 1 << 18, 4); this.set(OWN, this.alloc(4 * (this.u8.length >>> 16))); area(AFTER, AFTER_CAP, 1 << 16, 12); area(LIST, LIST_CAP, 1 << 21, 4); this.set(FILES, this.alloc(12 * 4096)); this.set(PEND, this.alloc(20 * 4096)); area(READS, READS_CAP, 4096, 16); this.set(INCL, this.alloc(8 * 4096)); area(LAZY, LAZY_CAP, 1 << 14, 24); this.set(BEGINS, this.alloc(44 * 4096)); this.set(288, this.alloc(16 * 4096)); this.set(216, this.alloc(4 * 64)); if (this.debugging) { this.set(240, this.alloc(8 * 4096)); this.set(244, this.alloc(8 * 4096)); this.set(248, this.alloc(8 * 4096)); } this.set(220, this.alloc(12 * 4096));
       if (!(typeof process !== 'undefined' && process.env.RAY_MEMO === '0')) { this.set(MEMO, this.alloc(60 << 20)); this.set(MEMO_MASK, (1 << 20) - 1); if (process.env.RAY_TMEMO !== '0') { this.set(TMEMO, this.alloc(40 << 16)); this.set(TMEMO_MASK, (1 << 16) - 1); } }
       this.set(PAIRS, this.alloc(256));
       // (a character's kind: 0 a space, 1 of a word, 2 of an operator, 3 one on its own)
@@ -4704,6 +4870,8 @@ export class Ray extends Language<FileStore> {
   // What the kernel said (since it was last asked), as messages: once each place and message.
   private overflowed = false;
   listen(): [number, string, string?][] {
+    // (memory ran out: said first, and what was said after it is not to be trusted (what it wrote shared the same last memory))
+    if (this.w(108) && !this.heard.has('oom')) { this.heard.add('oom'); this.said.push([0, `out of memory (${this.u8.length} bytes): what is said after this may be garbage`]); }
     const n = Math.min(Atomics.load(this.i32, LOG_N >> 2), this.w(LOG_CAP));
     if (Atomics.load(this.i32, LOG_N >> 2) > this.w(LOG_CAP) && !this.overflowed) { this.overflowed = true; say(`${ansi.indianRed}ERROR${ansi.reset}   the kernel said more than it keeps (${Atomics.load(this.i32, LOG_N >> 2)} messages, ${this.w(LOG_CAP)} kept): what was said after is not said`); }
     for (; this.told < n; this.told++) {
@@ -4713,7 +4881,7 @@ export class Ray extends Language<FileStore> {
       const text = (s: number, e: number) => this.text(s, e).trim();
       const message = kind === L.UNREAD ? `nothing reads \`${text(a, c)}\`` : kind === L.UNLABELLED ? `nothing is labelled \`${text(a, a + c)}\`` : kind === L.BUDGET ? `ran past ${Ray.BUDGET} rules (reading this)`
         : kind === L.OOM ? `out of memory (${this.u8.length} bytes)` : kind === L.REPORT ? (a ? text(a, c) : 'error') : kind === L.CYCLE ? 'what this is read as needs itself'
-        : kind === L.NOT_ON ? `nothing in what it is read on reads \`${text(a, c)}\`` : kind === L.EXTERNAL ? `\`external ${text(a, c)}\` is no external` : kind === L.DEEP ? `rules applied 400 deep (what this reads reads itself)` : kind === L.VALUED ? `a left side answers a value, not a place: \`${text(a, c)}\` (a name in it is a value there: a hole of the rule reading it?)` : kind === L.HELD ? `a test put off 4096 tests (each putting off more: a class whose block makes one of it, or a test in what a test makes)` : undefined;
+        : kind === L.NOT_ON ? `nothing in what it is read on reads \`${text(a, c)}\`` : kind === L.EXTERNAL ? `\`external ${text(a, c)}\` is no external` : kind === L.DEEP ? `rules applied 2000 deep (what this reads reads itself)` : kind === L.VALUED ? `a left side answers a value, not a place: \`${text(a, c)}\` (a name in it is a value there: a hole of the rule reading it?)` : kind === L.SILENT ? `this test failed and nothing said why (the kernel stopped it without saying what it could not read)` : kind === L.HELD ? `a test put off 4096 tests (each putting off more: a class whose block makes one of it, or a test in what a test makes)` : undefined;
       if (kind === L.STYLED) { const style = this.member(a, 'style'), last = this.said[this.said.length - 1]; if (style && last && last[0] === at) last[2] = this.text(this.w(style + 12), this.w(style + 16)).trim(); continue; }
       if (kind === L.DEFINED) { if (kwargs.verbose) say(`${ansi.green}DEFINED${ansi.reset} ${text(a, c)} ${ansi.darkGray}(${this.where(a)})${ansi.reset}`); continue; }
       if (message !== undefined) this.say(at, message);
@@ -4723,6 +4891,18 @@ export class Ray extends Language<FileStore> {
   // (once each place and message; one about a copy the reader made (no place in a file), once each message)
   say(at: number, message: string) { const key = this.where(at).startsWith('(made') ? `made:${message}` : `${at}:${message}`; if (this.heard.has(key)) return; this.heard.add(key); this.said.push([at, message]); }
 
+  // What a name answers, read where everything is: a list of numbers (a Ray: `head`, each link's `value` and `next`), each a
+  // successor chain (`next` until none), as bytes.
+  bytes_of(name: string): Uint8Array {
+    // (this thread's allowance: what a written module needs, more than a statement's (RAY_WRITE_BUDGET))
+    const budget = Number(process.env.RAY_WRITE_BUDGET || 100000000); this.set(this.t + 24, budget); this.set(this.t + 340, budget);
+    const [s, e] = this.string(name), global = this.w(GLOBAL), top = this.x.frame(0, 0, global, s, e, 0, 0, global, global);
+    const list = this.x.ev(this.t, this.x.reading(this.t, s, e, 0, 0, this.w(global), global, 0, 0, 0, 0), top, top, global, 1, global, global);
+    const none = this.w(236), out: number[] = []; // (the kernel's nothing, `None`)
+    const number = (n: number) => { let k = 0; for (let m = this.member(n, 'next'); m && m !== none && k < 1 << 20; m = this.member(m, 'next')) k++; return k; };
+    for (let at = list ? this.member(list, 'head') : 0, i = 0; at && at !== none && i < 1 << 24; at = this.member(at, 'next'), i++) out.push(number(this.member(at, 'value')) & 255);
+    return Uint8Array.from(out);
+  }
   // What a node holds under a name.
   member(node: number, name: string): number { const [s, e] = this.string(name); return node ? this.x.member(this.t, node, s, e - s) : 0; }
   // The language's theme: what `Theme.current` is (a name, and each style what it is shown as: another style, or a colour).
@@ -4854,6 +5034,8 @@ export class Ray extends Language<FileStore> {
     // (one of the kernel's own loops gone round past its limit without ending: which one, and what was being read)
     if (kind === Debug.LOOP) {
       const loop = Ray.program(1).loops[a] ?? `loop ${a}`, message = `the kernel's loop went round ${b} times without ending, ${loop}`;
+      // (the loops a thread waits in for the others (the next test, the next phase): as long as what they run, not endless)
+      if (/^(tests|settle): for \( ; ; \)/.test(loop)) return 0;
       if (Ray.LOOPS_GO) { say(this.crashed(new Error(message), false).replace('FAULT', 'LOOP')); return 0; }
       throw new RangeError(message);
     }
@@ -4862,6 +5044,8 @@ export class Ray extends Language<FileStore> {
     if (Ray.PROFILE && kind === Debug.APPLY) { const m = Ray.profiled; m.set(c, (m.get(c) ?? 0) + 1); if (!Ray.profile_said) { Ray.profile_said = true; process.on('exit', () => { const rows = [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, 40), all = [...m.values()].reduce((x, y) => x + y, 0); console.error(`PROFILE ${all} applications`); for (const [r, n] of rows) { const hd = this.w(r + 32); console.error(`PROFILE ${String(n).padStart(8)} ${(100 * n / all).toFixed(1).padStart(5)}% ${hd ? this.snippet(this.w(hd + 12), this.w(hd + 16), 50) : '?'} (${this.where(hd ? this.w(hd + 12) : this.w(r + 16))})`); } }); } }
     // (`--debug=tests`: each test said as it begins)
     if (kind === Debug.SAID && this.debugging === 'tests') say(`${ansi.indianRed}SAID${ansi.reset} ${a} ${this.where(b)} ${this.snippet(b, c, 60)}`);
+    if (kind === Debug.RESULT && this.debugging === 'tests') { say(`${c ? ansi.indianRed + 'FAILED' : ansi.green + 'PASSED'}${ansi.reset} ${this.where(a)} ${this.snippet(a, b, 60)}`); return; }
+    if (kind === Debug.RESULT) return;
     if (kind === Debug.TEST && this.debugging === 'tests') say(`${ansi.green}TEST${ansi.reset} ${this.where(a)} ${this.snippet(a, b, 60)}`);
     // (`--debug=trace:<where>`: said step by step only within the statement or test read at that place, `Number.ray:211:3`)
     let mode = this.debugging;
@@ -4888,7 +5072,7 @@ export class Ray extends Language<FileStore> {
       if (n > 1 && String(n).replace(/0/g, '') !== '1') return 0;
       if (n > 1) { say(`${ansi.indianRed}FAULT${ansi.reset} the same, ${n} times: ${ansi.darkGray}${this.where(b)}${ansi.reset} ${this.snippet(b, c)}`); return 0; }
       if (!this.stack.length) { say(`${ansi.indianRed}FAULT${ansi.reset} ${a === L.DEEP ? 'rules applied too deep' : 'ran past its budget'}, applying ${ansi.darkGray}${this.where(b)}${ansi.reset} ${this.snippet(b, c)} (outside any step: reading what was put off, or a type)`); return 0; }
-      say(this.crashed(new Error(a === L.DEEP ? 'rules applied too deep' : a === L.UNLABELLED ? `a value's reading jumped out of it, to \`${this.snippet(b, c)}\`` : a === 99 ? `a value read as nothing: \`${this.snippet(b, c)}\`` : a === 98 ? `a type checked in its own check, 16 deep: \`${this.snippet(b, c)}\`` : a === 97 ? `a value needed while it is being read: \`${this.snippet(b, c)}\`` : a === 95 ? `a rule a test made, read after the test let go of it, kept by: \`${this.snippet(b, c)}\`` : a === 94 ? `a test kept more than it can forget (the body of a rule made before it, read in it, kept): \`${this.snippet(b, c)}\`` : a === 91 ? `what a rule's body reads on a value as that rule, read with the rules before it, reads nothing: \`${this.snippet(b, c)}\`` : a === 93 ? `memory a test let go of, written after (at ${b}: ${c}), allocated again` : a === 88 ? `a reading kept for this text is not what reads it here: \`${this.snippet(b, c)}\`` : a === 85 ? `kept: \`${this.snippet(b, c)}\`` : a === 84 ? `fresh: \`${this.snippet(b, c)}\`` : a === 86 ? `a reading kept for this text is of another kind than the one reading it here: \`${this.snippet(b, c)}\`` : a === 90 ? `a test begun quiet (what said nothing while a type was checked did not end it): what it says is not said: \`${this.snippet(b, c)}\`` : a === 96 ? `a test's own memory kept by something made before it (let go of when the test is done): \`${this.snippet(b, c)}\`` : 'ran past its budget'), false)); return 0;
+      say(this.crashed(new Error(a === L.DEEP ? 'rules applied too deep' : a === L.UNLABELLED ? `a value's reading jumped out of it, to \`${this.snippet(b, c)}\`` : a === 99 ? `a value read as nothing: \`${this.snippet(b, c)}\`` : a === 79 ? `a hole written with a type gave none: \`${this.snippet(b, c)}\`` : a === 78 ? `(its reading: kind ${b}, rule body at ${c ? this.where(c) : '-'})` : a === 98 ? `a type checked in its own check, 16 deep: \`${this.snippet(b, c)}\`` : a === 97 ? `a value needed while it is being read: \`${this.snippet(b, c)}\`` : a === 95 ? `a rule a test made, read after the test let go of it, kept by: \`${this.snippet(b, c)}\`` : a === 94 ? `a test kept more than it can forget (the body of a rule made before it, read in it, kept): \`${this.snippet(b, c)}\`` : a === 91 ? `what a rule's body reads on a value as that rule, read with the rules before it, reads nothing: \`${this.snippet(b, c)}\`` : a === 93 ? `memory a test let go of, written after (at ${b}: ${c}), allocated again` : a === 88 ? `a reading kept for this text is not what reads it here: \`${this.snippet(b, c)}\`` : a === 85 ? `kept: \`${this.snippet(b, c)}\`` : a === 84 ? `fresh: \`${this.snippet(b, c)}\`` : a === 86 ? `a reading kept for this text is of another kind than the one reading it here: \`${this.snippet(b, c)}\`` : a === 90 ? `a test begun quiet (what said nothing while a type was checked did not end it): what it says is not said: \`${this.snippet(b, c)}\`` : a === 96 ? `a test's own memory kept by something made before it (let go of when the test is done): \`${this.snippet(b, c)}\`` : 'ran past its budget'), false)); return 0;
     }
     // (an error said: where it was being read, the first few)
     if (kind === Debug.SAID) { if (a === L.UNREAD && this.said_n++ < Ray.DEBUG_SAID) say(this.crashed(new Error(`nothing reads \`${this.snippet(b, c)}\``), false).replace('FAULT', 'SAID')); return 0; }
@@ -4919,7 +5103,7 @@ export class Ray extends Language<FileStore> {
   // (a node, said: what it is, and the text it stands for)
   node_of(n: number) { if (n <= 1) return `(${n})`; const is = this.w(n + 8), kinds = ['node', 'text', 'place', 'head', 'hole', 'frame', 'called']; return `${kinds[is] ?? `is ${is}`} ${n}${is >= 1 && is <= 4 ? ` \`${this.snippet(this.w(n + 12), this.w(n + 16), 40)}\`` : ''}${n === this.w(GLOBAL) ? ' (global)' : ''}`; }
   // (how deep a step is: as far in as 16, then said)
-  private indent(depth: number) { return `${ansi.darkGray}${String(depth).padStart(3)}${ansi.reset} ${'  '.repeat(Math.min(depth, 16))}`; }
+  private indent(depth: number) { return `${ansi.darkGray}${env.nodejs && !env.worker_threads.isMainThread ? `T${env.worker_threads.threadId} ` : ''}${String(depth).padStart(3)}${ansi.reset} ${'  '.repeat(Math.min(depth, 16))}`; }
   // (one step, said: where, and what)
   private step(kind: number, a: number, b: number, c: number) {
     const at = `${ansi.darkGray}${this.where(a)}${ansi.reset}`;

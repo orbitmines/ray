@@ -36,6 +36,9 @@ Ray &+= {
     larger := .rest.select((x) => !(key(x) < key(pivot)))
     .empty ? [] : smaller.sort_by(key).joined([pivot]).joined(larger.sort_by(key))
   }
+  // (where a value is among them, from 0; not among them, nothing)
+  index_of (wanted) => .index_from(wanted, 0)
+  index_from (wanted, at) => .empty ? None : ((.first == wanted) ? at : .rest.index_from(wanted, at.succ))
   // (what a predicate holds of, in order)
   select (predicate) => {
     kept := Ray.new
@@ -46,4 +49,37 @@ Ray &+= {
 assert [2, 1].sort.first == 1  // RS1 two and one sorted do not begin with one
 assert [3, 1, 2].sort == [1, 2, 3]  // RS2 three, one and two sorted are not one, two and three
 assert [].sort.empty  // RS3 nothing sorted is something
+assert [5, 6, 7].index_of(6) == 1  // RX1 six is not second among five, six and seven
+assert !([5, 6].index_of(7))  // RX2 seven is among five and six
 assert ["bb", "a"].sort_by((x) => x.count).first == "a"  // RS4 sorted by their counts the shortest is not first
+// (the original Iterable's, staged: what a list answers)
+Ray &+= {
+  // (the rest of it turned around, then its first: `,` binds loosest, so the branch is in brackets)
+  reverse => empty ? [] : (rest.reverse, first)
+  assert [1, 2].reverse.reverse == [1, 2]  // CO27 turned around twice is not as it was
+  assert ([1, 2, 3]).reverse == [3, 2, 1]  // IT5 turned around, one, two and three are not three, two and one
+  assert ([1, 2, 3]).reverse.count == 3  // IT7 turning a list around loses something
+}
+// What is ordered: given what is below what (`<`, its own), what is above, at most, at least, the smaller, the larger, and
+// a range, from this to the last, one after another (`succ`, or `pred` going down), both ends in it (`..<`: without the last).
+Ordered := class (T = static) => {
+  chainable > (b: T) => b < this
+  chainable <= (b: T) => this == b || this < b
+  chainable >= (b: T) => this == b || this > b
+  min (b: T) => this <= b ? this : b
+  max (b: T) => this >= b ? this : b
+  .. (last: T) => this == last ? [this] : ((this < last ? succ : pred)..last).prepend(this)
+  ..< (last: T) => this == last ? [] : ((this < last ? succ : pred)..<last).prepend(this)
+}
+Number &+= Ordered
+assert 3 > 2 > 1  // PR16 three above two above one does not hold
+assert !(1 > 2 > 3)  // PR17 one above two above three holds
+assert 3 >= 2 >= 1  // PR20 a chain of at-leasts does not hold
+assert 5.min(3) == 3  // RM8 the smaller of five and three is not three
+assert 2.min(5) == 2  // N67 the smaller of two and five is not two
+assert 5.max(3) == 5  // RM9 the larger of five and three is not five
+assert 2.max(5) == 5  // N13 max failed
+assert (1..3).last == 3  // OR6 a range of numbers does not end at its last
+assert (1..3).count == 3  // OR7 one to three is not three numbers
+assert (3..1).first == 3  // OR8 a range going down does not begin where it is written to
+assert (1..<3).count == 2  // OR9 one up to three holds other than two

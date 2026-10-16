@@ -5,85 +5,181 @@
 // things are given: `external .` (a node), `external &` (what applies), `external goto` and `external label` (where control
 // goes). Read under a level, `Program{O: …}`, what it reads is a Program (statements as vertices, gotos as edges), and a
 // back end is one more level: `Wasm` writes that Program as WebAssembly.
-Expression := class (
-  BOOTSTRAPPER: (
-    HEADER: `!language`,
-    \s[]+,
-    CAPTURE: (String+, \s, String+),                    // a hole's brackets, a space where its name goes
-    \s[]+,
-    CAPTURES: (LHS: CAPTURE.map{== \s}(`LHS`) | RHS: CAPTURE.map{== \s}(`RHS`) | String)[],
-    \n\n
-  ),
-  (
-    // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
-    // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
-    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{== \s}(\s[]) ~~ .(LHS | RHS) = String
-    GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
-    GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
-    statements: (
-      // A node: its rules by their heads; what it does not read, what it is in reads.
-      Node := class (in?: Node) => {
-        rules := {
-          [rule: GRAMMAR_RULE] := (caller) =>
-            rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] :=
-              (caller) => (rhs: Statements(Node(in: this)) = rule.RHS)(Program(caller: caller))
-        }
-        reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
-      }
-      // A program running: what applied it, where it is.
-      Program := class (caller?: Program, at?: Statement) => { }
-      global := Node({
-        rules[`external`, \s+, rule: String, args?: Node[]] := (caller) => {
-          `.` => Node(in: caller.at.node)
-          `&` => caller
-          `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
-          `label` (label: Node) => label
-        }[rule](args)
-      })
-      // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
-      // order, each given what applies them.
-      Statements (context: Node) => dynamically (
-        leading_whitespace: (\s | \n)[],
-        {statement: concurrently context.reading(.)}: context.rules.keys
-      )[] & (caller: Program) => .statement#.for .(caller)
+// (the target, as first written: what this file grows into, each part made to run in turn below)
+// Expression := class (
+//   BOOTSTRAPPER: (
+//     HEADER: `!language`,
+//     \s[]+,
+//     CAPTURE: (String+, \s, String+),                    // a hole's brackets, a space where its name goes
+//     \s[]+,
+//     CAPTURES: (LHS: CAPTURE.map{== \s}(`LHS`) | RHS: CAPTURE.map{== \s}(`RHS`) | String)[],
+//     \n\n
+//   ),
+//   (
+//     // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
+//     // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
+//     GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{== \s}(\s[]) ~~ .(LHS | RHS) = String
+//     GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
+//     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
+//     statements: (
+//       // A node: its rules by their heads; what it does not read, what it is in reads.
+//       Node := class (in?: Node) => {
+//         rules := {
+//           [rule: GRAMMAR_RULE] := (caller) =>
+//             rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] :=
+//               (caller) => (rhs: Statements(Node(in: this)) = rule.RHS)(Program(caller: caller))
+//         }
+//         reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
+//       }
+//       // A program running: what applied it, where it is.
+//       Program := class (caller?: Program, at?: Statement) => { }
+//       global := Node({
+//         rules[`external`, \s+, rule: String, args?: Node[]] := (caller) => {
+//           `.` => Node(in: caller.at.node)
+//           `&` => caller
+//           `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
+//           `label` (label: Node) => label
+//         }[rule](args)
+//       })
+//       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
+//       // order, each given what applies them.
+//       Statements (context: Node) => dynamically (
+//         leading_whitespace: (\s | \n)[],
+//         {statement: concurrently context.reading(.)}: context.rules.keys
+//       )[] & (caller: Program) => .statement#.for .(caller)
 
-      Statements(global)(Program())
-    )
-  )
-) => {
-  // (what it reads is made of: rules, each a head and a body (its statements); statements, each a rule applied to what its
-  // holes took, or one of the four given)
-  Rule := class (head, body) => {
-    statements => body
-  }
-  Statement := class (rule, takes) => { }
+//       Statements(global)(Program())
+//     )
+//   )
+// ) => {
+//   // (what it reads is made of: rules, each a head and a body (its statements); statements, each a rule applied to what its
+//   // holes took, or one of the four given)
+//   Rule := class (head, body) => {
+//     statements => body
+//   }
+//   Statement := class (rule, takes) => { }
+// }
+// // `(source as Expression) as Program{O: @wasm}`: what a text reads as, a Program; under a level, what that level writes.
+// (read: Expression) as (=== Program) => Program(code: read.statements)
+
+// // WebAssembly, a back end: a level, its rules writing a Program as a module. `@wasm.none`, the declarative setup: a rule a
+// // function, given what applies it (`&`), its statements a loop on where it is (`$at`), each a case of `br_table`; a goto sets
+// // where it is next (when its condition holds), a rule applied is a call of its function. `@wasm` (`@wasm.default`): those,
+// // and every optimization after them (a statement a rule reads, that rule applied without asking what reads it). (Accelerated:
+// // `ray --build=out.wasm --level=none|default file.ray` is the kernel doing it: every rule's body read, each a function in a
+// // module beside the kernel's, its memory the files read; `ray out.wasm` runs it; `ray out.wasm --build=…` builds again from
+// // it. It answers what the kernel reading the files answers.)
+// @wasm => Wasm
+// Wasm := {
+//   none := {
+//     {program: Program} => (`(module (memory (export "memory") 1)`, program.rules.map(as Program{O: @wasm.none}), `(export "run" (func 0)))`) as String
+//     {rule: Expression.Rule} => (
+//       `(func (param $caller i32) (result i32) (local $at i32) (local $value i32) (loop $at (block $done (block`,
+//       rule.statements.map(statement => (`) `, statement as Program{O: @wasm.none})),
+//       `(br $done)) (br_table`, rule.statements.map(.index), `(local.get $at)))) (local.get $value))`
+//     ) as String
+//     {node: `external .`} => `(local.set $value (call $node (local.get $caller)))`
+//     {caller: `external &`} => `(local.set $value (local.get $caller))`
+//     {jump: `external goto`} => (`(br_if $at (`, jump.condition as Program{O: @wasm.none}, `(local.tee $at (i32.const`, jump.label.index, `))))`) as String
+//     {place: `external label`} => ``
+//     {applied: Expression.Statement} => (`(local.set $value (call`, applied.rule.index, `(local.get $caller)))`) as String
+//   }
+//   // (and what is optimized after them: none yet)
+//   default => Wasm
+// }
+// Wasm &+= Wasm.none
+
+// Running, part by part (the target above, made to run in turn):
+// The header, `!language`, the brackets a hole is written in, the rule that makes rules: a structure, read by what it is (a
+// text given to it destructured by its positions). (One space between them for now: `\s[]+`, any amount, costs past a test's
+// budget until the language is compiled.)
+Bootstrapper := class HEADER: `!language`, \s, CAPTURE: (String+, \s, String+), \s, RULE: String+ { }
+bootstrapped := Bootstrapper.from(`!language { } {LHS} => {RHS}`)
+assert bootstrapped.CAPTURE == `{ }`  // EX1 the header does not say the brackets a hole is written in
+assert bootstrapped.RULE == `{LHS} => {RHS}`  // EX2 the header does not say the rule that makes rules
+// The rule that makes rules, as the header writes it: its holes are the header's brackets around a name (`{LHS}`, `{RHS}`);
+// what it is written as, those holes and text between them (CAPTURES).
+opening := bootstrapped.CAPTURE.before(` `)
+closing := bootstrapped.CAPTURE.from_first(` `).rest
+lhs_hole := opening + `LHS` + closing
+rhs_hole := opening + `RHS` + closing
+CAPTURES := (lhs_hole | rhs_hole | String+)[]
+assert lhs_hole == `{LHS}`  // EX3 the hole the header's brackets make around LHS is not {LHS}
+assert bootstrapped.RULE is CAPTURES  // EX4 the rule that makes rules is not holes and text
+// (what is between its holes: written as is, its arrow with a space each side)
+arrow := bootstrapped.RULE.after(lhs_hole).before(rhs_hole)
+assert arrow.count == 4  // EX5 what is between the holes of the rule that makes rules is not its arrow and a space each side
+assert arrow.rest.first == `=`  // EX5b what is between the holes does not begin with an arrow after a space
+// A rule, written as the rule that makes rules is: its left side, its arrow, its right side (GRAMMAR_RULE_DEF).
+GRAMMAR_RULE_DEF := (String+, arrow, String+)
+assert `x => y` is GRAMMAR_RULE_DEF  // EX6 a rule is not written as the rule that makes rules
+assert !(`x y` is GRAMMAR_RULE_DEF)  // EX7 what has no arrow is a rule
+// (read: what is before its arrow, its left side; after it, its right side)
+Rule := class (head, body) => { }
+read_rule (written) => Rule(written.before(arrow), written.from_first(arrow).after(arrow))
+assert read_rule(`x => y`).head == `x`  // EX8 a rule's left side is not what is before its arrow
+assert read_rule(`x => y`).body == `y`  // EX9 a rule's right side is not what is after its arrow
+// A source: its header, an empty line, then its statements, each line one: one written as the rule that makes rules is a
+// rule, any other what is run.
+newline := `
+`
+lines_of (text) => text.empty ? Ray.new : (text.from_first(newline) ? lines_of(text.from_first(newline).rest).prepend(text.before(newline)) : Ray.new.append(text))
+Source := class { }
+read_source (source) => {
+  lines := lines_of(source.from_first(newline).rest.rest)
+  made_source := Source()
+  made_source.rules := lines.select((line) => line is GRAMMAR_RULE_DEF).map((line) => read_rule(line))
+  made_source.statements := lines.select((line) => !(line is GRAMMAR_RULE_DEF))
+  made_source
 }
-// `(source as Expression) as Program{O: @wasm}`: what a text reads as, a Program; under a level, what that level writes.
-(read: Expression) as (=== Program) => Program(code: read.statements)
+tiny := `!language { } {LHS} => {RHS}
 
-// WebAssembly, a back end: a level, its rules writing a Program as a module. `@wasm.none`, the declarative setup: a rule a
-// function, given what applies it (`&`), its statements a loop on where it is (`$at`), each a case of `br_table`; a goto sets
-// where it is next (when its condition holds), a rule applied is a call of its function. `@wasm` (`@wasm.default`): those,
-// and every optimization after them (a statement a rule reads, that rule applied without asking what reads it). (Accelerated:
-// `ray --build=out.wasm --level=none|default file.ray` is the kernel doing it: every rule's body read, each a function in a
-// module beside the kernel's, its memory the files read; `ray out.wasm` runs it; `ray out.wasm --build=…` builds again from
-// it. It answers what the kernel reading the files answers.)
-@wasm => Wasm
+x => y
+y => z
+x`
+read_tiny := read_source(tiny)
+assert read_tiny.rules.count == 2  // EX10 a source of two rules does not hold two
+assert read_tiny.rules.first.head == `x`  // EX11 the first rule's head is not x
+assert read_tiny.statements.count == 1  // EX12 a source of one statement does not hold one
+assert read_tiny.statements.first == `x`  // EX13 the statement is not x
+// WebAssembly, written as its bytes (each a number): a module of a function for each rule, then `run`, the last statement.
+// `@wasm.none`, the declarative setup: a rule a function; a statement a rule reads, a call of its function; one none reads,
+// `i32.const 0`. (`ray --write=out.wasm --value=name`: the host writes the bytes a name answers.)
 Wasm := {
-  none := {
-    {program: Program} => (`(module (memory (export "memory") 1)`, program.rules.map(as Program{O: @wasm.none}), `(export "run" (func 0)))`) as String
-    {rule: Expression.Rule} => (
-      `(func (param $caller i32) (result i32) (local $at i32) (local $value i32) (loop $at (block $done (block`,
-      rule.statements.map(statement => (`) `, statement as Program{O: @wasm.none})),
-      `(br $done)) (br_table`, rule.statements.map(.index), `(local.get $at)))) (local.get $value))`
-    ) as String
-    {node: `external .`} => `(local.set $value (call $node (local.get $caller)))`
-    {caller: `external &`} => `(local.set $value (local.get $caller))`
-    {jump: `external goto`} => (`(br_if $at (`, jump.condition as Program{O: @wasm.none}, `(local.tee $at (i32.const`, jump.label.index, `))))`) as String
-    {place: `external label`} => ``
-    {applied: Expression.Statement} => (`(local.set $value (call`, applied.rule.index, `(local.get $caller)))`) as String
+  // (a section: its id, how many bytes, its bytes)
+  section (id, content) => [id, content.count].joined(content)
+  // (a function's body: no locals, its code, `end`; how many bytes before it)
+  body (code) => {
+    entry := [0].joined(code).joined([11])
+    [entry.count].joined(entry)
   }
-  // (and what is optimized after them: none yet)
-  default => Wasm
+  // (a statement, by the rule whose head it is: a call of that rule's function; none, `i32.const 0`)
+  applied (program, statement) => {
+    index := program.rules.map((rule) => rule.head).index_of(statement)
+    (index === None) ? [65, 0] : [16, index]
+  }
+  module (program) => {
+    functions := program.rules.count + 1
+    types := Wasm.section(1, [1, 96, 0, 1, 127])
+    declared_functions := Wasm.section(3, [functions].joined(program.rules.map((rule) => 0)).joined([0]))
+    exported := Wasm.section(7, [1, 3, 114, 117, 110, 0, program.rules.count])
+    bodies := program.rules.map((rule) => Wasm.body(Wasm.applied(program, rule.body))).flatten
+    codes := Wasm.section(10, [functions].joined(bodies).joined(Wasm.body(Wasm.applied(program, program.statements.last))))
+    [0, 97, 115, 109, 1, 0, 0, 0].joined(types).joined(declared_functions).joined(exported).joined(codes)
+  }
 }
-Wasm &+= Wasm.none
+// (what a text reads as, an Expression: what it is written as, read; what an Expression is as WebAssembly, its module)
+Expression := {
+  from (written) => read_source(written)
+}
+Wasm &+= {
+  from (program) => Wasm.module(program)
+}
+// `(source as Expression) as Wasm`: a text, read, written as WebAssembly. (`ray --write=tiny.wasm --value=tiny_module`, then
+// its `run` answers what `x` does: `y`'s function, `i32.const 0`.)
+// (asked for, not read here: building it applies some 10M rules, past what a statement may until the language is compiled)
+tiny_module => (tiny as Expression) as Wasm
+assert Wasm.section(1, [7, 8]).count == 4  // EW1 a section is not its id, its size and its bytes
+assert Wasm.body([65, 0]).count == 5  // EW2 a function's body is not its size, no locals, its code and end
+assert Wasm.applied(read_tiny, `x`).last == 0  // EW3 a statement a rule reads does not call that rule's function
+assert Wasm.applied(read_tiny, `q`).first == 65  // EW4 a statement no rule reads is not i32.const

@@ -13,12 +13,19 @@ Number &+= {
   assert 3.nonzero  // N108 three is zero
   assert 5.holds  // N111 five holds nothing
   as (=== boolean) => nonzero
+  // A number stands for a bit
+  assert !(0)  // N92 zero is set
+  assert 1  // N93 one is not set
+  assert 5  // N94 five is not set
   // (as a condition, what it is as true or false: zero does not hold)
   ? {yes} : {no} => nonzero ? yes : no
   assert !(0 ? true : false)  // NQ1 zero holds as a condition
   assert 1 ? true : false  // NQ2 one does not hold as a condition
 }
 zero := Number(next: None)
+// A numeral: digits in ten, what they are worth (`42`); a digit alone, its name below (named after this, it is read first).
+Decimal_glyph := "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+{digits: Decimal_glyph[]} ^number => Digits_in_ten.from(`{digits}`)
 0 := zero
 // (the digits: each the one after the one before; a numeral of several, the base's walk over them (below))
 1 := 0.succ
@@ -30,6 +37,30 @@ zero := Number(next: None)
 7 := 6.succ
 8 := 7.succ
 9 := 8.succ
+// Digits in ten: each worth where it is among the glyphs (`value_of`); a text of them, what they are worth (`"89" as Decimal`,
+// the first as many tens over as digits follow it); one that is not, nothing.
+ten := 9.succ
+Digits_in_ten := {
+  glyphs := [`0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`]
+  value_of (glyph) => Digits_in_ten.glyphs.index_of(glyph)
+  from (written) => written.empty ? None : Digits_in_ten.worth(written, 0)
+  worth (written, so_far) => written.empty ? so_far : Digits_in_ten.worth_of(written, so_far, Digits_in_ten.value_of(written.first))
+  worth_of (written, so_far, digit) => (digit === None) ? None : Digits_in_ten.worth(written.rest, (so_far * ten) + digit)
+}
+// (a number written in ten: any number (not the text it is written as), what a text of digits is worth)
+Decimal := {
+  narrows := Number
+  holds (it) => !(it.textual === true)
+  from (written) => Digits_in_ten.from(written)
+}
+assert ("7" as Decimal) == 7  // ND1 7 is not seven in ten
+assert ("12" as Decimal) == ten + 2  // ND2 12 is not twelve in ten
+assert ("1a" as Decimal) === None  // ND3 1a is a number in ten
+assert 10 == ten  // ND4 10 is not ten
+assert 42 == 4 * ten + 2  // ND5 42 is not forty-two
+assert 12 + 30 == 42  // ND6 twelve and thirty are not forty-two
+assert 007 == 7  // N136 007 is not seven
+assert 00 == 0  // N137 00 is not zero
 assert 0.is_zero  // N1b zero, written 0, is not zero
 assert !(0.succ.is_zero)  // N1c what follows zero is zero
 Number &+= {
@@ -54,7 +85,10 @@ Number &+= {
   assert !(2 < 1 < 3)  // PR6 a chain that breaks at the start holds
   assert 1 < 2  // PR8 one is not below two
   assert !(2 < 1)  // PR9 two is below one
-  chainable <= (other: Number) => !(other < this)
+  assert 3 > 2  // PR21 three is not above two
+  assert !(2 > 3)  // PR22 two is above three
+  assert 3 >= 3  // PR23 three is not at least three
+  assert !(2 >= 3)  // PR24 two is at least three
   assert 1 <= 2 <= 3  // PR18 a chain of at-mosts does not hold
   assert !(1 <= 3 <= 2)  // PR19 a chain of at-mosts that breaks holds
   assert 0 <= 1 <= 1  // PR36 a probability's bounds do not chain
@@ -97,6 +131,11 @@ Number &+= {
   assert !(4.divides(6))  // N62 four divides six
   assert 1.divides(5)  // N63 one does not divide five
   coprime (other: Number) => gcd(other) == 1
+  assert 6 == 2 * 2 + 2  // PC1 an operator declared before another, of the same value's, binds as tight as it (`*` declared after `+`)
+  assert 2 + 2 * 3 == 8  // PC3 the operator declared later does not bind tighter
+  assert 10 - 2 - 3 == 5  // PC5 one operator twice does not group left
+  assert 42 == 4 * 10 + 2  // N40 42 is not forty-two
+  assert 2 * ten == 20  // ND7 two tens are not twenty
   assert 2.coprime(3)  // N59 two and three are not coprime
   assert !(2.coprime(4))  // N60 two and four are coprime
   even => is_zero || pred.odd

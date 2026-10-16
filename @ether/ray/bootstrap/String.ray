@@ -22,11 +22,60 @@ String &+= {
     spanned.until(spanned.rest) == `a`
   }  // S62f what is before the rest of ab is not a
   assert !(`ab`.until(`ab`.rest))  // S62g a text before another text's rest is something
+  // (where another text is in this one, `"abcd" ~= "bc"`: a reading of it there, `.index` where it begins; none, nothing)
+  ~= (other: String) => this.found(other, 0)
+  found (other, at) => this.starts_with(other) ? Found(index: at) : (this.empty ? None : this.rest.found(other, at.succ))
+  assert (`abcd` ~= `bc`).index == 1  // S129 what is found is not where it stands
+  assert !(`abcd` ~= `ca`)  // S130 what is not there is found
+  assert (`abc` ~= `a`).index == 0  // S131 what a text starts with is not found at its start
+  // (the rest of it that begins with another text, where that is first in it; not in it, nothing)
+  from_first (other: String) => this.starts_with(other) ? this : (this.empty ? None : this.rest.from_first(other))
+  assert `abcd`.from_first(`c`) == `cd`  // S133 what begins at c in abcd is not cd
+  assert !(`abcd`.from_first(`x`))  // S134 what is not in a text is found in it
+  // (what is before another text in it; that not in it, all of it)
+  before (other: String) => this.from_first(other) ? this.until(this.from_first(other)) : this
+  assert `ab-cd`.before(`-`) == `ab`  // S135 what is before - in ab-cd is not ab
+  assert `abc`.before(`-`) == `abc`  // S136 what is before what is not in a text is not all of it
+  // (whether it holds of each character)
+  every (predicate) => this.empty || ((predicate(this.first)) && this.rest.every(predicate))
+  assert `aa`.every((c) => c == `a`)  // S137 each of aa is not a
+  assert !(`ab`.every((c) => c == `a`))  // S138 each of ab is a
+  // (where another text begins in it, from 0 (the original's `(this ~= other).index`); not in it, nothing)
+  index_of (other: String) => (this ~= other) ? (this ~= other).index : None
+  assert `abc`.index_of(`bc`) == 1  // S59 bc does not sit one along in abc
+  assert `abc`.index_of(`a`) == 0  // S60 a does not sit at the start of abc
+  // (whether it ends with another text: it is that text, or its rest ends with it)
+  ends_with (other: String) => (this == other) || ((!this.empty) && this.rest.ends_with(other))
+  assert `ab`.ends_with(`b`)  // S64 ab does not end with b
+  assert !(`ab`.ends_with(`a`))  // S64b ab ends with a
   // (how many characters: none when empty, else one more than the rest)
   count => this.empty ? 0 : this.rest.count.succ
   assert `abc`.count == 3  // S41 a string of three does not count three
   assert `a`.rest.count == 0  // S108b nothing written counts something
+  // (how long: a text is one path, as long as it counts)
+  length => count
+  assert `ab`.length == 2  // S1 ab has other than two characters
+  // (one of more, the original's: `s` after it, unless it ends with one (the call in brackets: written bare in a method of
+  // no parameters it is not read on the text yet))
+  plural => (this.ends_with(`s`)) ? this : this + `s`
+  assert `cat`.plural == `cats`  // W11 plural failed
+  assert `cats`.plural == `cats`  // S53 the plural of cats is not cats
 }
+// Texts one after another, `a + b`: a String of its own, its characters a's, then b's.
+Joined := class: String (left, right) => {
+  first => left.empty ? right.first : left.first
+  rest => left.empty ? right.rest : (left.rest.empty ? right : Joined(left.rest, right))
+  empty => left.empty && right.empty
+}
+String &+= {
+  + (other: String) => Joined(this, other)
+}
+assert `a` + `b` == `ab`  // SJ1 a and b one after another are not ab
+assert (`{` + `LHS` + `}`) == `{LHS}`  // SJ2 three texts one after another are not one
+assert (`ab` + `c`).count == 3  // SJ3 ab and c are not three characters
+assert `{LHS}` is (`{` + `LHS` + `}`)  // SJ4 a text joined of others is not a type of that text
+// (what a text reads as, found in another: where it begins)
+Found := class (index) => { }
 // (a call inside itself, walking a text: recursion)
 walked (text) => text.empty ? `done` : walked(text.rest)
 assert walked(`ab`) == `done`  // RC2 a call inside itself does not walk a text
@@ -44,3 +93,11 @@ listed_shadow := false
 takes_listed (listed_shadow, other_listed) => listed_shadow
 assert takes_listed(true, false) === true  // GN3 a parameter of two named as a visible name does not take its value (`,`'s body reads its parts as values: in a left side they are read as left sides first)
 assert listed_shadow === false  // GN4 a parameter of two named as a visible name gave that one its value
+// A space, written `\s`: a character that is one.
+\s := String{. == ` `}
+assert ` ` is \s  // SP1 a space is not \s
+assert !(`a` is \s)  // SP2b a letter is \s
+assert `  ` is \s[]  // SP3 two spaces are not spaces
+assert `ab` is String+  // SP4b a text of two is not one or more
+assert `a b` is (String+, \s, String+)  // SP5 a b is not a word, a space and a word
+assert !(`ab` is (String+, \s, String+))  // SP6 ab is a word, a space and a word

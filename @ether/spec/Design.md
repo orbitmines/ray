@@ -2238,7 +2238,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   all threads, with what reading it cost (charged again when it is found, so a test applies as much either way). A statement
   of a body run in a node it makes is read again only where one of that node's own rules could read it (`could`). The
   frames a test makes are listed (for painting) though forgotten after it: not listing them is faster, but shows a race
-  between threads' tests (1 run in 24 on 8 threads answers otherwise; already in the committed kernel; open).
+  between threads' tests (1 run in 24 on 8 threads answers otherwise; found and fixed 2026-10-16: the budget, below).
   Entrypoint + Number + String: 5.0 s → 1.5 s on one thread, 2.9 s → 1.0 s on four; readings 2.66M → 1.39M, of them kept
   ~70%. `--debug` with `RAY_MEMO_CHECK=1` reads every kept reading again and says where one differs (none do).
 - What a test costs now: `assert true` 36 rules applied, `assert 1 == 1` ~400: the call (`taking`, `given_names`, `:=`),
@@ -2287,6 +2287,106 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   nothing keeps no type; a call given nothing reads its parameters as written (their defaults), not `declared`.
 - A method's body reads what nothing in it reads where its rule was written (2026-10-16): `wrapped (tag) => class: this {
   says => tag }`, `says`' `tag` is the call's. `x[k] = v` is declared after `=`, so it is what x holds under k.
+- The race between threads was the budget (2026-10-16): what a statement may apply, and what the settling pass's types read
+  (a type a hole names before it is defined: `{arguments: Arguments}` of every class's constructor), was what the thread
+  doing it had left from its own work before; on some runs a constructor's argument type ran out, stayed unread, and
+  every `Named(…)` call was read as a group instead (zero had no `next`, `0 ? …` held, Number's tests failed on 4+ threads,
+  most runs on 8). Each statement now reads with a budget of its own, each put-off type too; 1, 4, 8 and 32 threads answer
+  the same (`det.sh`). Which thread does something is never the language's.
+- `x & y` (2026-10-16): of true and false, both; of anything else what is held at once (`conjoined`, `contains`), `x is A &
+  B` is of both; a number as a condition is whether it is not zero; `!!x`; `true`/`false` each other's `next`;
+  `!=` beside Ray's `==`; `;` the loosest of all (declared last).
+- What nothing reads on a value is said where it is written (2026-10-16): the language's catch-all `{this}{rest}` (through
+  conversions) reported at its own `{rest}`, once; now at the code `{rest}` took (`3 >>> 2`: `>>> 2`, in the test). It
+  showed `>`/`>=` missing from Number, `+=` read nowhere but in Number (`compounds` now gives `x op= y` to every scope,
+  `global.( … )`), `|+`, `!~=`. A test's own frames are not listed (only painting reads the list; ~7% faster, now that the
+  race is gone). `x -- y` answers y read in x (`5 -- . + 1` is 6; nothing, x); guards are read where they are (`.` in
+  `y if c` is what it is there), and `--`/`~~` bind looser than them.
+- Expression reads its header by what it is (2026-10-16): no reader written in Ray beside the language (the reader, parser
+  and type are one): `Bootstrapper := class HEADER: `!language`, \s, CAPTURE: (String+, \s, String+), \s, RULE: String+`
+  read from `!language { } {LHS} => {RHS}` gives `CAPTURE` `{ }` and `RULE` `{LHS} => {RHS}`. What made it run: a class
+  written as a structure reads any text (`{written: Node}`, a head of one hole alone takes one word) and is given one
+  (`T.from(text)`, by `as`); a position that is a type (`\s`) holds its span and is no field; a field of a type takes what
+  the type makes of its span (`span as T`); a list of types reads a text in order (`(String+, \s, String+)`); a text as a
+  type is that text; `T+` one or more, `T[]` of texts each character; spans are tried in a loop, each checked before the
+  rest is read. `\s[]+` (any amount of space) costs past a test's budget until the language is compiled.
+- The budget per statement or test is 1,000,000 rules (was 100,000): numbers are successor chains, `"12" as Decimal`
+  (Digits_in_ten: each digit worth its index among the glyphs, as the original Number.ray's `value_of`) alone needs more.
+- `is` follows conversions when the value itself is not of the type, lazily and not again while following (the decided
+  "lazy, no re-entry"); conversions are `conversions` (was `as *`, which the language never read: `is` answered through a
+  truthy nothing, so tests of classes requiring nothing passed vacuously and now fail, honestly).
+- Arguments are any value (`{value: Node}`), not one word; `,` appends a list as one element unless `,` made it (a list
+  argument was spread into the arguments); `[x]` is written directly; a body's own node is in where its rule is written,
+  made of what it is read on (texts too); `f (x) =>` written bare defines f here, not where a visible f is (a class's
+  `from` replaced the language's).
+- Open: the original Number.ray's operator loop (`[&&, ||, …].for operator => `operator` (b)`), structural `is` for
+  classes requiring nothing, `from` answering nothing for a text a structure does not read.
+- Later 2026-10-16:
+  - Numerals: `{digits: Decimal_glyph[]} ^number => Digits_in_ten.from(`{digits}`)` in Number.ray, `Decimal_glyph` the ten
+    glyphs written with `|`; declared before the digits' names, so `7` is still its name (of two readings of the same
+    length, the later declared). The body takes the written text (`` `{digits}` ``), not the hole's value (what the type
+    reads it as, a list of glyphs). A reader the language has (a head of one typed hole, global) is a literal: what follows
+    a value may be one (`1 + 3 == 13`).
+  - Accelerated in the kernel's map: `external glyphs `{element}[]``: a list as a type whose element is one of characters
+    of one byte each (a superposition of such texts) is read by the kernel, a character at a time; anything else by its
+    rules. `RAY_NOGLYPHS=1` turns it off (the same answers, the language's way).
+  - Precedence of operators read on a value is declaration order, as the original Number.ray is written: of two operators
+    of the same value's (the same owner), the one declared later binds tighter (`==`, `<`, `+`, `-`, `*`, `/`, `%`, `^`);
+    the same one twice groups left. `6 == 2 * 2 + 2`, `42 == 4 * 10 + 2`. A value written alone before an operator and a
+    space (`6 == …`) is that operator's receiver. Operators of different owners (Ordered's `>` and Number's `+`) are not
+    ordered against each other: each on what is before it, as before. (`RAY_NOPREC=1` turns it off.)
+  - Brackets right after a word are that word's call: `1 + gcd(other)` is `1 + (gcd(other))`, not `(1 + gcd)(other)`.
+    A name written bare in a method's body that is a member of what the method runs on is read on that (`gcd(other)` in
+    `lcm` is `this.gcd(other)`).
+  - A type check inside a check answers by its rules reading the text; a rule that is one untyped hole reads anything, so
+    that answers nothing: it is asked one check deeper, and deeper still answers no. A rule of the language that takes a
+    text whole (`{digits: T}`) is no reading of it in parts of T. What a type begins with is derived once per type (a mask),
+    as deep as `"0" | … | "9"` is nested.
+  - Tests: one that fails says why (if the kernel stopped it without a message: "this test failed and nothing said why");
+    one that ran when memory was out does not pass; an unread name inside a quiet check no longer fails the test.
+    `--debug=tests` says each test PASSED or FAILED; `--debug` says the memory used when read and at the end.
+  - Threads: at most 8 by default (more wait on each other, and each holds what its test needs: 32 threads held 1.3 GB);
+    a thread that crashes stops the run (it waited forever). A flake fixed: a reading tried quietly (a type checked) that met an
+    unread name marked the test failed, saying nothing; which reading was tried first differed by thread (S131/NA9).
+  - Ordered (Ray.ray, as the original): `>`, `<=`, `>=`, `min`, `max`, `..`, `..<` from `<` and `==`; `Number &+= Ordered`.
+  - `some`/`find` were wrong: `return v if c` returned whether c held or not (`return {value}`, led by text, reads before the
+    later guard `{guarded} if {condition}`), so `some` answered true for any list. Written with `if c { return v }`.
+    Open, for you: `return x if c` itself (and RC1). Making a later rule that wraps a statement with a word take it broke
+    comments containing "if" and infix words (`with`, `reads_closed`); operators must not wrap `assert`.
+  - `is`: a list of types reads a text as Ts one after another (`abc` is `(ab | c)[]`, `T[]`'s `holds` on a text); a class
+    is told from a text by `of` (a class's `of` is itself), so a class made of String (`Joined`) is no text type.
+  - Texts one after another, `a + b`: `Joined := class: String (left, right)`, its characters left's then right's, no kernel
+    help (String.ray).
+  - A rule never reads itself only on the value it runs on: `inner.f` in `f`, read in another instance, is that one's
+    (recursion), not the parent's `f` (RC4).
+  - A bare name in a method's body reads on `this` only when it is `this`'s own type's member (a global name, `Joined`, is
+    not read on the receiver).
+  - Depth of rules applied: 2000 (was 400), thread stacks 64 MB: language-level recursion over a text of 14 characters
+    needed more than 400.
+  - Memory: an out-of-memory check overflowed 32 bits near 2 GB (a crash instead of the message); it is said first by the
+    host, and in the LSP at the document's start; the LSP reads in 1 GB (256 MB no longer holds the library). A crashed
+    thread's report is written at once (it was lost when the run was stopped).
+  - Open: named arguments whose values are a function's parameters (`Paired(left: a, right: b)` in `pn (a, b)`, NA10): a
+    typed hole's check runs the type's rule where the caller's names are not known, fails, and the call is read another
+    way. One argument by name through a constructor is taken by position too (NA12): every fix that reads the arguments
+    twice broke the others (a list `,` made is shared and changed in place).
+  - String.ray (original's, staged): `index_of`, `ends_with`, `length` (a text is one path), `plural`. Open: `plural`
+    written as the original (`ends_with("s") ? this : this + "s"`) answers otherwise: a bare call in a method of no
+    parameters is not read on the text, and `this + …` in a branch after `this.f(…)` in the condition is not the text
+    joined (W11 fails, S53 passes).
+  - The rare flake is in the reading memo's entries kept for all from inside tests, keyed by what the test's rules are
+    written as (40 of 40 runs alike without them, about 1 in 25 differs with them); without them the trio takes 3.5 times
+    as long, so they stay until the cause is found.
+  - Hazards met, worth a check: `=>` outside quotes anywhere in a line, a trailing comment too, makes it a definition; a
+    quoted text beginning with a space and holding `=>` likewise; a local named as a keyword (`read`) misreads silently; a
+    name in a structure's header is a field, never a value (`class L: String+, arrow, R: String+`).
+- Expression (2026-10-16 night): the header read by the Bootstrapper structure; from it, the holes (`{LHS}`, made of the
+  header's brackets), CAPTURES `(lhs_hole | rhs_hole | String+)[]`, the arrow between the holes, GRAMMAR_RULE_DEF
+  `(String+, arrow, String+)`; a source's lines after the empty one, each a rule (head, body) or a statement; `Wasm`
+  writes a Source as WebAssembly bytes (a Ray of numbers: a function per rule, a statement a rule reads a `call`, any
+  other `i32.const 0`, `run` the last statement). `(tiny as Expression) as Wasm`; `ray --write=out.wasm --value=name` writes
+  the bytes a name answers; the module runs (`run()`). It costs ~10 s and a 50M-rule budget (the general machinery of calls
+  and definitions; the compiled language is what removes it). `Program{O: @wasm}` is not yet the spelling.
 - The 50 ms budget for the entrypoint and its tests is met file by file: the entrypoint first, then one core library file
   at a time, each fast and passing before the next.
 

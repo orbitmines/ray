@@ -86,57 +86,6 @@ Node &+= {
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)
 
-Possibilities := class (values: Iterable) => {
-  entry => values.entry
-  assert (1 | 2)#.entry  // NOD22 the possible values have no entry
-  .{literal property ^property} ^punctuation => Possibilities(values: values.map(x => x[.property]))
-}
-Possibilities &+= Iterable
-Possibilities &+= {
-  head => values.head
-  tail => values.tail
-  count => values.count
-  first => values.first
-  last => values.last
-  empty => values.empty
-  nonempty => values.nonempty
-  assert !(1 | 2)#.empty  // NOD23 two possible values are empty
-  assert (1 | 2)#.nonempty  // NOD24 two possible values are not nonempty
-  assert (1 | 2)#.count == 2  // NOD25 two possible values do not count two
-  assert (1 | 2)#.first == 1  // NOD26 the first possible value is not the first written
-  assert (1 | 2)#.last == 2  // NOD27 the last possible value is not the last written
-  // What the machine says about itself, asked by name.
-  assert @me/device/os["platform"].nonempty  // IO3 the machine does not name its platform
-  for (body) => values.for(body)
-  map (mapping) => values.map(mapping)
-  every (predicate) => values.every(predicate)
-  some (predicate) => values.some(predicate)
-  contains (x) => values.contains(x)
-  assert (1 | 2)#.contains(2)  // NOD28 a possible value is not contained
-  assert !(1 | 2)#.contains(3)  // NOD29 a value that is not possible is contained
-  {{constraint}} => {
-    values{ {constraint} }
-  }
-  join (separator) => values.join(separator)
-  assert ("a", "b", "c").join("-") == "a-b-c"  // SJ2 joining a, b and c with a dash is not a-b-c
-  assert ("a", "b").join(", ") == "a, b"  // SJ3 joining a and b with a comma and space is not a, b
-  flatten => values.flatten
-  assert ([1, 2] | [3])#.flatten.count == 3  // NOD30 flattening possibilities of lists does not join them
-  assert (1 | 2)#.map(x => x * 2).contains(4)  // NOD31 mapping the possible values does not map each
-  assert !(1 | 2)#.map(x => x * 2).contains(1)  // NOD32 mapping the possible values keeps the unmapped
-  assert (2 | 4)#.every(x => x % 2 == 0)  // NOD33 every of values that all hold does not hold
-  assert !(2 | 3)#.every(x => x % 2 == 0)  // NOD34 every holds when one value does not
-  assert (2 | 3)#.some(x => x % 2 == 0)  // NOD35 some does not hold when one value does
-  assert !(1 | 3)#.some(x => x % 2 == 0)  // NOD36 some holds when no value does
-  erred => values.every(.erred)
-  assert !(1 | 2)#.erred  // NOD37 possible values that raised nothing erred
-  continuous => count is ∞ && !values.first.next
-  assert !(1 | 2)#.continuous  // NOD38 two possible values are continuous
-  measure (within: Possibilities = this) => continuous ? values.last - values.first
-    : count is ∞ ? (1 -> +1).map(n => values{within.values[..<n].contains(.)}.count / n).last
-    : count
-}
-assert (1 | 2 | 3)#.measure == 3  // NOD39 the measure of a discrete set is not its count
 
 // A rule with two operators written in it is a ternary
 assert {
@@ -148,10 +97,25 @@ assert {
   /* a block comment /* nested */ is nothing */
 }
 Node &+= {
-  # => {
-    possible := this.members ? this.members : (superposes ? components : ((conjoined.count > 1) ? conjoined : ((!instance && components.head) ? components : [this])))
-    Possibilities(values: possible)
-  }
+  # => this.members ? this.members : (superposes ? components : ((conjoined.count > 1) ? conjoined : ((!instance && components.head) ? components : [this])))
+  assert (1 | 2)#.entry  // NOD22 the possible values have no entry
+  assert !(1 | 2)#.empty  // NOD23 two possible values are empty
+  assert (1 | 2)#.nonempty  // NOD24 two possible values are not nonempty
+  assert (1 | 2)#.count == 2  // NOD25 two possible values do not count two
+  assert (1 | 2)#.first == 1  // NOD26 the first possible value is not the first written
+  assert (1 | 2)#.last == 2  // NOD27 the last possible value is not the last written
+  assert @me/device/os["platform"].nonempty  // IO3 the machine does not name its platform
+  assert (1 | 2)#.contains(2)  // NOD28 a possible value is not contained
+  assert !(1 | 2)#.contains(3)  // NOD29 a value that is not possible is contained
+  assert ("a", "b", "c").join("-") == "a-b-c"  // SJ2 joining a, b and c with a dash is not a-b-c
+  assert ("a", "b").join(", ") == "a, b"  // SJ3 joining a and b with a comma and space is not a, b
+  assert ([1, 2] | [3])#.flatten.count == 3  // NOD30 flattening possibilities of lists does not join them
+  assert (1 | 2)#.map(x => x * 2).contains(4)  // NOD31 mapping the possible values does not map each
+  assert !(1 | 2)#.map(x => x * 2).contains(1)  // NOD32 mapping the possible values keeps the unmapped
+  assert (2 | 4)#.every(x => x % 2 == 0)  // NOD33 every of values that all hold does not hold
+  assert !(2 | 3)#.every(x => x % 2 == 0)  // NOD34 every holds when one value does not
+  assert (2 | 3)#.some(x => x % 2 == 0)  // NOD35 some does not hold when one value does
+  assert !(1 | 3)#.some(x => x % 2 == 0)  // NOD36 some holds when no value does
   origin: Node?
   assert {
     A := class {
@@ -246,8 +210,7 @@ Node &+= {
   entries => written_body ? Program(code: written_body).written{.is_label} : []
   entry_at (label) => label is Number ? entries[label - 1] : entries{.code == label + "\\"}.first
   ~default => this
-  ~{literal label ^label} ^punctuation => Entry(of: this, at: entry_at(label))
-  ~"{label}" ^punctuation => Entry(of: this, at: entry_at(label))
+  ~{label: String ^label} ^punctuation => Entry(of: this, at: entry_at(label))
   ~{index: Decimal.String} ^punctuation => Entry(of: this, at: entry_at(index as Decimal))
 }
 Entry := class (of: Node, at: Program?) => {
@@ -263,9 +226,20 @@ Node &+= {
 {value} @ {location} ^keyword => value ~~ (.location |= location)
 {value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)
 
+// What possibilities measure: an unbounded run of them, one after another, its span; else how many of them hold.
+Iterable &+= {
+  continuous => count is ∞ && !first.next
+  assert !(1 | 2)#.continuous  // NOD38 two possible values are continuous
+  measure (within: Iterable = this) => continuous ? last - first
+    : count is ∞ ? (1 -> +1).map(n => this{within[..<n].contains(.)}.count / n).last
+    : count
+}
+assert (1 | 2 | 3)#.measure == 3  // NOD39 the measure of a discrete set is not its count
+assert !(1 | 2)#.erred  // NOD37 possible values that raised nothing erred
+
 ? ^keyword => Unknown()
 Unknown := class {
-  # => Possibilities(values: [])
+  # => []
   random => chosen_within(1)
   assert (?) is Unknown  // NOD59 ? is not an unknown
   assert ?.admits(5)  // NOD60 an unknown does not admit a value
@@ -357,9 +331,6 @@ read_within (text, pattern) => (
   }
   found
 )
-
-{type}+{ } ^punctuation => type[]
-{type}+, {rest} ^punctuation => type[], rest
 
 Node &+= {
   right-to-left trivially => instance ? this : ?

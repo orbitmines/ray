@@ -42,7 +42,7 @@ this => .
 }
 // A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole).
 {x}: {type} => {
-  x.type = type
+  (x).type := type
   x
 }
 // `x ^style`: x, shown in that style (highlighting only). A head written with a style after it: its text shown so.
@@ -284,7 +284,8 @@ conjoined := None
 {a} & {b} ^operator => (((a) === true) || ((a) === false)) ? ((a) && (b)) : ((a) conjoined_with (b))
 // (held at once: each of them, `1 & 2 & 3` three)
 {a} conjoined_with {b} ^keyword => ({
-  conjoined := (((a).conjoined) ? (a).conjoined.listed() : Ray.new.append(a)).joined(((b).conjoined) ? (b).conjoined : Ray.new.append(b))
+  conjoins := true
+  conjoined := (((a).conjoins === true) ? (a).conjoined.listed() : Listed.new.append(a)).joined(((b).conjoins === true) ? (b).conjoined : Listed.new.append(b))
   contains (x) => conjoined.some((y) => y == x)
 })
 assert (true & true)  // BB17 true and true is not true
@@ -503,6 +504,13 @@ assert {
 // A method: `name (parameters) =>` (a space before them) gives the name a closure, as `name := (parameters) =>` does (so its locals are its own);
 // `x.name (…) =>` is a member.
 {name} := ({parameters}) {`=>`} {body} ^function => {name} := (({parameters}) => {body})
+// (a method with type parameters, `== <up_to = None>(other: T) => …`: those its first locals, their defaults given; read as
+// a head, `chainable == <…>(…)`, the method of what it takes)
+{name} <{generics}>({parameters}) {`=>`} {body} ^function => {name} ({parameters}) => {
+  ({generics})
+  {body}
+}
+{name} <{generics}>({parameters}) ^function => {name} ({parameters})
 {on}.{name} := ({parameters}) {`=>`} {body} ^function => {on}.{name} := (({parameters}) => {body})
 {name} := () {`=>`} {body} ^function => {name} := (() => {body})
 {on}.{name} := () {`=>`} {body} ^function => {on}.{name} := (() => {body})
@@ -589,7 +597,7 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
   {
     at := places.head
     each_taken := taken
-    taken_at := (((each_taken).listing === true) && ((each_taken).spread === true)) ? (each_taken).head : Ray.new.append(each_taken).head
+    taken_at := (((each_taken).listing === true) && ((each_taken).spread === true)) ? (each_taken).head : Listed.new.append(each_taken).head
     while at {
       while taken_at && ((taken_at.value).named_argument === true) { taken_at = taken_at.next }
       // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing)
@@ -616,8 +624,8 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
 {code}** ^operator => Program(code: {code})
 
 // A list written: `[]` an empty one, `[a, b]` both, `[a]` one; `T[]`, what holds Ts one after another.
-[] ^punctuation => Ray.new
-[{inside}] ^punctuation => (((inside).listing === true) && ((inside).spread === true)) ? (inside).gathered : Ray.new.append(inside)
+[] ^punctuation => Listed.new
+[{inside}] ^punctuation => (((inside).listing === true) && ((inside).spread === true)) ? (inside).gathered : Listed.new.append(inside)
 {element}[] ^punctuation => (() => {
   made := ({
     narrows := Node
@@ -630,8 +638,8 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
     }
   }) &+ { }
   made &+= {
-    {value: element} => Ray.new.append(value)
-    {first: element}{rest: made} => Ray.new.append(first).joined(rest)
+    {value: element} => Listed.new.append(value)
+    {first: element}{rest: made} => Listed.new.append(first).joined(rest)
   }
   made
 })()
@@ -712,7 +720,7 @@ assume {code} ^keyword => (external &).caller reading {code}
 {a} | {b} ^operator => ({
   superposes := true
   // (one superposed with a superposition: its components, each one; `1 | 2 | 3` three)
-  components := (((a).superposes === true) ? (a).components.listed() : Ray.new.append(a)).joined(((b).superposes === true) ? (b).components : Ray.new.append(b))
+  components := (((a).superposes === true) ? (a).components.listed() : Listed.new.append(a)).joined(((b).superposes === true) ? (b).components : Listed.new.append(b))
 }) &+ {
   {value: a} => value
   {value: b} => value
@@ -769,6 +777,11 @@ converted_by (conversion) => .({conversion}())
 as (=== {type}) {`=>`} {body} => {
   as {type} => {body}
   conversions => ((this).conversions, (() => {body}))
+}
+// (one written of a type, `String{length == 1} as Char => first`: a conversion of what that type is made of (what it
+// narrows, or itself), for a value of it)
+{source} as {target: Name} {`=>`} {body} => (((source).narrows === None) ? (source) : (source).narrows) &+= {
+  as (=== {target}) => (this is ({source})) ? ({body}) : None
 }
 // Modifiers on an operator: `compounds op …` (and `x op= y`, `x = x op y`); `chainable op …` (and `a op b op c`).
 compounds {operator} {rest} {`=>`} {body} => {
@@ -869,6 +882,9 @@ class: {parent} ^keyword => class: {parent} { }
 class: {parent} {`{`}{block}{`}`} ^keyword => { class: {parent} (nothing_given = None) => { {block} } }
 class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
 class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
+// (a class of functions, written with what they take and answer, `class: <yield: (x: Ray): None>(entry: Ray): None { … }`: a
+// class of its block (what they take and answer not yet checked))
+class: <{generics}>({parameters}): {result} {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (written with its fields and `=>`, a definition: read as one)
 {name} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class ({fields}) => { {block} })
 {name} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class: {parent} ({fields}) => { {block} })
@@ -1021,11 +1037,13 @@ narrows := None
 members := None
 caller := None
 // (no count of how far: a class's parents end; one that would not, the kernel stops as too deep)
-descends (type) => (. === type) || (.superclass ? .superclass.descends(type) : false)
+descends (type) => (. === type) || ((.superclass === None) ? false : .superclass.descends(type))
 // (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
 // (followed lazily, and not again while it is being followed: what a conversion asks is what the value itself is)
 following_conversions := false
-is {type} ^keyword => {
+is {type} ^keyword => .admitted_by(type)
+// (what a type admits by structure, the core of `is` (Node.ray's `is (type) => this.admitted_by(type)`))
+admitted_by (type) => {
   value := .
   value.is_itself(type) || ((!following_conversions) && value.followed_is(type))
 }
@@ -1036,8 +1054,9 @@ followed_is (type) => {
   answer
 }
 is_itself (type) => {
+  // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
-  (type === Node) || (value === type) || (((type.textual === true) && !(type === String) && (type.narrows === None) && !(type.of === type)) ? ((value.textual === true) && (value == type)) : (type.conjoined) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (value.of ? value.of.descends(type) : false) || (type.superposes ? type.components.some((component) => value is component) : false) || (type.narrows ? ((value is type.narrows) && type.holds(value)) : false) || (type.members ? type.members.some((member) => member === value) : false) || (value.superposes ? value.components.every((component) => component is type) : false))
+  (type === Node) || (value === type) || (((type.textual === true) && !(type === String) && (type.narrows === None) && !(type.of === type)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : ((value.of === None) ? false : value.of.descends(type)) || (type.superposes ? type.components.some((component) => value is component) : false) || (type.narrows ? ((value is type.narrows) && type.holds(value)) : false) || (type.members ? type.members.some((member) => member === value) : false) || (value.superposes ? value.components.every((component) => component is type) : false))
 }
 assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
 assert {
@@ -1256,19 +1275,25 @@ text_given (place, span) => {
   ((place) alone takes (converted)) unless positioned_type(place)
   true
 }
-{name} = {value} => {
+{place} = {value} => {
   // (the value first, as a value (read on, so in a left side too: `(a, b = c)`'s c is read, not declared))
   value
-  (name) := value
+  (place) := value
 }
 // (`x[k] = v`, after it: what x holds under k, not a name)
 {on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : ((key is String) ? ((on).{key} = value) : (on).holding(key, value))
 // (and composing, after giving: `,` binds loosest of all, `(a, b = 0)` is `a, (b = 0)`)
 // A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
-// (what follows, a list this `,` just made (still spreading, no one else's yet): the value put in front of it, not copied)
+// (what follows, a list a `,` made (still spreading): the value put in front of a copy of it (the list may be held elsewhere,
+// a type written `T, U` given a name: never changed by another `,` that reads it))
 {list}, {other} ^punctuation => {
-  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).prepend(list) : Ray.new.append(list).append(other))).spreading)
+  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).listed().joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).listed().prepend(list) : Listed.new.append(list).append(other))).spreading)
 }
+// (a function's parameters, one of two named as a visible name, after `,` is defined, where a call reads it)
+listed_shadow := false
+takes_listed (listed_shadow, other_listed) => listed_shadow
+assert takes_listed(true, false) === true  // GN3 a parameter of two named as a visible name does not take its value (`,`'s body reads its parts as values: in a left side they are read as left sides first)
+assert listed_shadow === false  // GN4 a parameter of two named as a visible name gave that one its value
 // (a class written as a structure, its header a list of positions (`class a: T, ".", b: U { … }`): declared after `,`, so the
 // whole definition reads as one, not as a list of its parts)
 // (its header begins with a field's name, `Header`: `class: P { … }` is not one)
@@ -1528,9 +1553,9 @@ assert {
 // The classes the library adds to: what is iterable, an array of it, text (an array of characters), a number, a character
 // (a number), a program, a diagnostic.
 Iterable := class { }
-// A Ray: a chain of vertices, each holding a value (`head` the first, `tail` the last; a vertex's `next`, `previous`); what
+// A list, Listed: a chain of vertices, each holding a value (`head` the first, `tail` the last; a vertex's `next`, `previous`); what
 // a list is written as (`[a, b]`, `a, b`).
-Ray := {
+Listed := {
   new => {
     {
       head := None
@@ -1565,7 +1590,7 @@ Ray := {
     }
   }
   append (value) => {
-    link := Ray.linked(value)
+    link := Listed.linked(value)
     if .tail {
       link.previous := .tail
       .tail.next := link
@@ -1576,7 +1601,7 @@ Ray := {
     .
   }
   prepend (value) => {
-    link := Ray.linked(value)
+    link := Listed.linked(value)
     if .head {
       .head.previous := link
       link.next := .head
@@ -1626,7 +1651,7 @@ Ray := {
     counted
   }
   rest => {
-    made := Ray.new
+    made := Listed.new
     at := .head ? .head.next : None
     while at {
       made.append(at.value)
@@ -1670,12 +1695,12 @@ Ray := {
   assert !([1, 2].some((x) => x == 3))  // RS6 some finds what is not there
   assert [1, 2].find((x) => x == 2) == 2  // RS7 find does not find what is second
   map (mapping) => {
-    made := Ray.new
+    made := Listed.new
     .for((x) => made.append(mapping(x)))
     made
   }
   without (value) => {
-    made := Ray.new
+    made := Listed.new
     .for((x) => (made.append(x) unless x === value))
     made
   }
@@ -1687,13 +1712,13 @@ Ray := {
   }
   flatten => .flattened(64)
   flattened (levels) => {
-    made := Ray.new
+    made := Listed.new
     .for((it) => (((it.listing === true) && (levels > 0)) ? it.flattened(levels - 1).for((x) => made.append(x)) : made.append(it)))
     made
   }
   // (`xs{p}`: the values p holds for, `.` each one in it)
   {this}{`{`}{constraint}{`}`} => {
-    kept := Ray.new
+    kept := Listed.new
     .for((it) => (kept.append(it) if (it with {constraint})))
     kept
   }
@@ -1796,7 +1821,10 @@ assert "a".rest.empty  // TX4 the rest of a text of one is not empty
 assert !("".first)  // TX5 an empty text has a first character
 assert 1 + 2 as String == "3"  // PR38 as does not bind looser than plus
 assert ("A", "A") is ...String  // SD3 ...T is not T[]
-Number := class { }
+// (a number stands for a bit: as a condition, zero does not hold)
+Number := class {
+  ? {yes} : {no} => (next === None) ? no : yes
+}
 assert 5 is Number  // TY5 five is not a Number
 // Narrowings ask the constraint as well as what they narrow
 assert {
@@ -1826,7 +1854,7 @@ assert {
 // `#` is what a value may be (A1, T2.3)
 assert boolean#.count == 2  // HS1 boolean does not have two possible values
 assert boolean{. == true}() == true  // CN2 the only member a narrowing admits is not the one chosen
-assert (3 boolean).count == 3  // CN5 three called on boolean is not three of it
+assert true is (1 boolean)  // CN5 one boolean (`Number{#.count == 1}`, a value of one possibility) does not admit true
 false &+= {
   of := boolean
   assert {
@@ -1867,7 +1895,7 @@ theme {name} {written} ^keyword => {
   {
     made := {
       name := name
-      styles := Ray.new
+      styles := Listed.new
     }
     // (each one written: what it took, the style and what it is shown as)
     made &+= {

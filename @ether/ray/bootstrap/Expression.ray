@@ -123,7 +123,7 @@ assert read_rule(`x => y`).body == `y`  // EX9 a rule's right side is not what i
 // rule, any other what is run.
 newline := `
 `
-lines_of (text) => text.empty ? Ray.new : (text.from_first(newline) ? lines_of(text.from_first(newline).rest).prepend(text.before(newline)) : Ray.new.append(text))
+lines_of (text) => text.empty ? Listed.new : (text.from_first(newline) ? lines_of(text.from_first(newline).rest).prepend(text.before(newline)) : Listed.new.append(text))
 Source := class { }
 read_source (source) => {
   lines := lines_of(source.from_first(newline).rest.rest)

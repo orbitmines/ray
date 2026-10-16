@@ -15,10 +15,28 @@ external nothing None
 // (accelerated: what a definition answers given its value, its head when it defined one name (`x := v`); the language's
 // rule for a list of places)
 external given `{given} given {value}`
-// (accelerated: a list of characters as a type, `Decimal_glyph[]` (`"0" | … | "9"`, each one character): what reads as one,
+// (accelerated: a list of characters as a type, `Decimal.String` (`"0" | … | "9"`, each one character): what reads as one,
 // the kernel reads (each character one of them), the same as its rules)
 external glyphs `{element}[]`
 // (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it, the node the call
 // runs in. Off: without it LS4 (`["a", "b"].map((x) => x).last`, a closure's `x` called from one whose parameter is `x`)
 // fails; with it, it passes: it does not answer what the language does)
 // external taking `({written_parameters}) taking {passed}`
+// Numbers: what the kernel holds as a count, a number the kernel counts, is a Counted (`count`), a Number whose `next` the
+// kernel answers (the count before it; of zero, nothing); a numeral is one (the count its digits write), and a text's
+// characters are Counted_chars, Chars (each its code point). Number's own `succ` and operators, named here, on what the kernel
+// can count (counts, or Numbers written one after another down to zero) and what they take counted too: answered by the
+// kernel as the language's rules answer; anything else, by those rules. (An approximation past what the kernel holds as one,
+// 2^31: for later, numbers of any size, or a level answering another type, `u32` for a Decimal; and for characters, a written
+// table of them in the language, this its acceleration.)
+external truth true false
+Counted := class: Number {
+  next => external number next this
+}
+Counted &+= { external count }
+Counted_char := class: Char {
+  next => external number next this
+}
+Counted_char &+= { external character }
+Number &+= { external number succ == < + - * / % }
+external numeral `{digits: Decimal.String}`

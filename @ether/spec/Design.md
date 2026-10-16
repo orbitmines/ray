@@ -2390,6 +2390,100 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - The 50 ms budget for the entrypoint and its tests is met file by file: the entrypoint first, then one core library file
   at a time, each fast and passing before the next.
 
+- Restoring the originals (2026-10-17). Number.ray, Ray.ray, String.ray and Node.ray are the versions of df0157a7 as
+  written (the tests added since merged into them); what fails in them is fixed in the language and the kernel, not in
+  them. Wrappers that only forward to something else are not the design (the `Narrowing &+= { kept => … }` block forwarding
+  every method to a Ray of its elements was removed: a narrowing of a list answers as its elements by structure).
+  - A guard binds looser by declaration order: `{guarded} if {condition}`, declared after `return {value}`, wraps
+    `return n` in `return n if n == 0`. Kernel rule: a rule led by a hole, then a word that leads statements of its own
+    (`if`, `unless`), declared after the rule led by text that reads the same line, is read around it.
+  - The language itself (the global scope) is looked in after every component of a value: `X &+= Y` puts Y before X's
+    own class body, but Y's way out to the language is taken only when all of X's components are seen (a class's own `?`
+    is not hidden by the language's "anything is true").
+  - A class takes any named argument as a member (`Number(next: x)` on `Number := class { }`).
+  - A missing member reads as None (§5), in the kernel: a member not there, read on a value or in it (`.{member}`), and a
+    name written bare in a method's body that nothing reads, the method run on a value (`next` of `is_zero => next ===
+    None` on `zero := Number()`).
+  - A typed hole whose type reads as nothing (`Subscript.String` before `Subscript` is made) reads nothing yet, as one
+    whose type is not there yet; not anything.
+  - A head that is the name of an operator (`# => …`) is that name, as a word is: reading it does not apply the rule it
+    names.
+  - An operator read on a value, with another of the value's after it binding as loose or looser (`+ 12 == 24` on 12),
+    is cut there before any rule reads the text whole.
+  - An operator defined again in the same node binds as the one before it, led by the same operator.
+  - A conversion written of a type outside its class, `String{length == 1} as Char => first`: a conversion of what that
+    type narrows (or of it), for a value of it (entrypoint `{source} as {target: Name} {=>} {body}`).
+  - Number's core (entrypoint): as a condition, zero does not hold (`? {yes} : {no}` on `next`); `is` asks whether a
+    value's `of` and a class's `superclass` are there, not whether they hold (a class made of Number answers `?` too).
+  - There is no list core apart from Ray (user, 2026-10-17): no `Listed`, `Listing`, `Chain`, `Link`; only Ray, Boundary,
+    Edge. The entrypoint makes lists (`[]`, `[x]`, `,`, `append`: an Array entered at its first vertex, `entry`, each vertex
+    `e + Ray`); everything else a list answers is Ray.ray's Iterable (`first => entry`, `rest`, `for` through a Traverser,
+    `map`, `some`, …), working without the kernel's help. Arrays are accelerated in `wasm.o.ray` (answering as those rules
+    answer), as numbers and texts are.
+  - Arrays are accelerated language-side in the map (user): `wasm.o.ray` walks a linked list's vertices for `first`, `last`,
+    `empty`, `count`, `rest`, `for`, `map`, `some`, `every`, `find`, `flatten` and `xs{p}` (only on a list; on anything else,
+    a class, the narrowing it is), and gives String its own over the kernel's `first`/`rest`. The entrypoint keeps what makes
+    lists: `Array.new`, `entry`, `append`, `prepend`, `indexed`/`placed` (`xs[n]`), `listed`/`joined` (`,`), `one_written`.
+  - `~=` reads a pattern within a text by `is`, at each place in it, the shortest reading first (Node.ray `read_within`).
+  - A typed parameter takes the argument as its type, automatically (user: "they define partly the header"): itself when it is
+    one, else what it converts to that is, through the equivalence graph (`checked` answers `converted_to`).
+  - A numeral is the Decimal its digits write, by the equivalence graph: the map's counted numeral converts to
+    `Decimal(integer: digits)` (`Counted &+= { as (=== Decimal) => … }`).
+  - Binding arguments is destructuring (user): `({parameters}) := arguments`; a part `name: v` matches the place of that name,
+    the other parts the remaining places in order (`Kt(sign: s, magnitude)`); a place compared is the name it is.
+  - `static` is the class (user): as a value, the class whose block the text is written in (each class block records itself,
+    `class_block`; a class written in another's block, `static Signed := class (…, integer: static)` in Decimal's, has
+    Decimal); a modifier before a statement otherwise. A written space before a bare hole does not match brackets hugging a
+    word (`static{2 <= .}` is no `static {statement}`).
+  - A class called as a member, `Kk.Inner(…)`, makes an Inner (`this` in a class's own call is the class).
+  - `is` follows what a class is made of (`X &+= Y`, recorded as `made_of`) and each part of a conjunction superclass
+    (`Ray := class: Iterable & Ordered`, so `1 is Ray`, `1 is Ordered`). Open: `Number &+= Ray` read before Ray is defined.
+  - Mapping an unbounded Ray answers a Ray each step of which is mapped when asked (`Mapped`, Ray.ray): `(1 -> +1).map(…)`
+    ends; π and τ read. (Lazy `:=` too, the user's "both": open, it changes when side effects run in the entrypoint's rules.)
+  - A class built on a conjunction (`class: Iterable & Ordered`) is built on its parts too (so `3 > 2`, Ordered's, reads on
+    numbers). Open: Ordered's `(b: T)` with `T` its own field's default, unbound on a value never constructed through it.
+  - What juxtaposition (`n T`) takes is a value: never text that begins with a word leading a rule that takes more after it
+    (`2 checked Number` is `checked`).
+  - A head led by a symbol written in a node (`[{{selection}}]`, `..`, `->` of a class's block) is a method of the value it
+    follows, not what reads the same text written alone in that node (`[1, 2, 3]` inside `Iterable &+= { … }`).
+  - A hole before brackets written against it (`{f}(…)`) never ends in an operator: `(on).(code)` is no call of `(on).`.
+  - The language's own scope is never made of a value; a value is never made of what is made of it; a bracketed name that
+    reads as nothing (`(place)`) is never defined as its text. Each is said (with `--debug`: where), not done.
+  - `inline x` (`keeps: { inline selection }`): the code x holds, read where `inline` is written, language-side.
+  - A typed code hole `{{x: T}}` has the name and type of what its braces hold, `x: T`.
+  - The kernel's map counts numbers: a count is a `Counted` (`class: Number`, its `next` the kernel's), a numeral one
+    (`external numeral` on `{digits: Decimal.String}`), a text's `first` a `Counted_char` (`class: Char`, its code point);
+    Number's own `succ == < + - * / %`, by name (`external number …`), on two it can count, answered by the kernel as the
+    language's rules answer; anything else by them. (An approximation past 2^31; for later: numbers of any size, or a level
+    answering another type, `u32` for a Decimal; for characters, the written table of them in the language, of which the
+    map is the acceleration.)
+  - `n T`, juxtaposition, is T with n possibilities: `1 Number` is `Number{#.count == 1}` (Number.ray, `{ }{value} =>
+    value{#.count == this}`); what follows the space is a value, never an operator and what it takes (`7 == 8` stays `==`).
+  - A trailing comment is never read into: on a line with `//` after a space (outside brackets and quotes) a rule with `//`
+    in its head reads it first, what is before it then alone (`true // a ?= b` is no `?=`, whatever rule is declared later).
+  - A member or call brackets right after a text or brackets is theirs, as after a word: `"a" < "b".first`.
+  - A method's type parameters, `== <up_to = None, except: Iterable = []>(other: Iterable) => …`: its first locals with
+    their defaults; read as a head (`chainable == <…>(…)`), the method of what it takes. (Open: giving them at a call,
+    `x.==<up_to: 0>(y)`.)
+  - A class of functions, `class: <yield: (x: Ray): None>(entry: Ray): None { … }`, is a class of its block (what it takes
+    and answers not yet checked); a hole written between `<` and `>` in a head is enclosed, any text.
+  - Possibilities is gone (an unnecessary wrapper): `#` answers the possible values themselves, an Iterable; what they
+    measure (`continuous`, `measure`) is any Iterable's. Planned (user, 2026-10-17): `,`, `|` and `&` build one Ray whose
+    links record their edge; `holds`/`admits`/`contains` read the edges (`&` every part, `|` some); Conjunction, Composed,
+    Section and Origin become compositions (closures, records).
+  - `is` is Node.ray's `is (type) => this.admitted_by(type)`; the entrypoint gives `admitted_by`, the structural check. A
+    conjunction is a type whose `conjoined` is more than itself (every node's is `[itself]`).
+  - The numeral the map names reads digits in ten without asking its type, and no other text of one-byte characters (its
+    glyphs are `"0".."9"`): `Decimal.String` is made of numbers it reads, and until it is, nothing else is a numeral.
+  - A rule head made again (its type read later) keeps the map's numeral mark (by its head as written).
+  - `,` never changes a list it was given: a list after it is copied before what comes first is put in front.
+  - A missing member reads as None only when written after a `.` (a bare name read on `this` is looked up first).
+  - Open: the originals' global rules that apply to every call or value (`{f}({argument: Superposed})`, `{a: Superposed}
+    [x] {b}`, `{type}{length: Subscript.String}`, `{base}{power: Superscript.String}`, `{number: Decimal}.{fraction:
+    Decimal.String}`) read every statement through the library's own checks; until those checks answer (ranges of
+    characters, `length`, `count`, `is` of a superposition of texts), every read recurses. The `{ }{value}` juxtaposition
+    (`3 x` is `[x] * 3`) reads `== 8` after 7 too.
+
 ### 21.5 Debugging the runtime
 
 - `--debug` (or `RAY_DEBUG=1`) compiles the kernel with its checks and keeps a stack of what it is doing (each statement,

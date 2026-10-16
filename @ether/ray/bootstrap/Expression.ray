@@ -1,3 +1,4 @@
+
 // Expression: a language read from its own text. Its first line says how a rule is written: `!language`, the brackets a
 // hole is written in (`{ }`), then the rule that makes rules, written with them (`{LHS} => {RHS}`). Every statement after it
 // is read in a node by the longest of that node's rules that reads it; the rule that makes rules adds one there, its head
@@ -89,97 +90,8 @@
 // }
 // Wasm &+= Wasm.none
 
-// Running, part by part (the target above, made to run in turn):
-// The header, `!language`, the brackets a hole is written in, the rule that makes rules: a structure, read by what it is (a
-// text given to it destructured by its positions). (One space between them for now: `\s[]+`, any amount, costs past a test's
-// budget until the language is compiled.)
-Bootstrapper := class HEADER: `!language`, \s, CAPTURE: (String+, \s, String+), \s, RULE: String+ { }
-bootstrapped := Bootstrapper.from(`!language { } {LHS} => {RHS}`)
-assert bootstrapped.CAPTURE == `{ }`  // EX1 the header does not say the brackets a hole is written in
-assert bootstrapped.RULE == `{LHS} => {RHS}`  // EX2 the header does not say the rule that makes rules
-// The rule that makes rules, as the header writes it: its holes are the header's brackets around a name (`{LHS}`, `{RHS}`);
-// what it is written as, those holes and text between them (CAPTURES).
-opening := bootstrapped.CAPTURE.before(` `)
-closing := bootstrapped.CAPTURE.from_first(` `).rest
-lhs_hole := opening + `LHS` + closing
-rhs_hole := opening + `RHS` + closing
-CAPTURES := (lhs_hole | rhs_hole | String+)[]
-assert lhs_hole == `{LHS}`  // EX3 the hole the header's brackets make around LHS is not {LHS}
-assert bootstrapped.RULE is CAPTURES  // EX4 the rule that makes rules is not holes and text
-// (what is between its holes: written as is, its arrow with a space each side)
-arrow := bootstrapped.RULE.after(lhs_hole).before(rhs_hole)
-assert arrow.count == 4  // EX5 what is between the holes of the rule that makes rules is not its arrow and a space each side
-assert arrow.rest.first == `=`  // EX5b what is between the holes does not begin with an arrow after a space
-// A rule, written as the rule that makes rules is: its left side, its arrow, its right side (GRAMMAR_RULE_DEF).
-GRAMMAR_RULE_DEF := (String+, arrow, String+)
-assert `x => y` is GRAMMAR_RULE_DEF  // EX6 a rule is not written as the rule that makes rules
-assert !(`x y` is GRAMMAR_RULE_DEF)  // EX7 what has no arrow is a rule
-// (read: what is before its arrow, its left side; after it, its right side)
-Rule := class (head, body) => { }
-read_rule (written) => Rule(written.before(arrow), written.from_first(arrow).after(arrow))
-assert read_rule(`x => y`).head == `x`  // EX8 a rule's left side is not what is before its arrow
-assert read_rule(`x => y`).body == `y`  // EX9 a rule's right side is not what is after its arrow
-// A source: its header, an empty line, then its statements, each line one: one written as the rule that makes rules is a
-// rule, any other what is run.
-newline := `
-`
-lines_of (text) => text.empty ? Ray.new : (text.from_first(newline) ? lines_of(text.from_first(newline).rest).prepend(text.before(newline)) : Ray.new.append(text))
-Source := class { }
-read_source (source) => {
-  lines := lines_of(source.from_first(newline).rest.rest)
-  made_source := Source()
-  made_source.rules := lines.select((line) => line is GRAMMAR_RULE_DEF).map((line) => read_rule(line))
-  made_source.statements := lines.select((line) => !(line is GRAMMAR_RULE_DEF))
-  made_source
-}
-tiny := `!language { } {LHS} => {RHS}
-
-x => y
-y => z
-x`
-read_tiny := read_source(tiny)
-assert read_tiny.rules.count == 2  // EX10 a source of two rules does not hold two
-assert read_tiny.rules.first.head == `x`  // EX11 the first rule's head is not x
-assert read_tiny.statements.count == 1  // EX12 a source of one statement does not hold one
-assert read_tiny.statements.first == `x`  // EX13 the statement is not x
-// WebAssembly, written as its bytes (each a number): a module of a function for each rule, then `run`, the last statement.
-// `@wasm.none`, the declarative setup: a rule a function; a statement a rule reads, a call of its function; one none reads,
-// `i32.const 0`. (`ray --write=out.wasm --value=name`: the host writes the bytes a name answers.)
-Wasm := {
-  // (a section: its id, how many bytes, its bytes)
-  section (id, content) => [id, content.count].joined(content)
-  // (a function's body: no locals, its code, `end`; how many bytes before it)
-  body (code) => {
-    entry := [0].joined(code).joined([11])
-    [entry.count].joined(entry)
-  }
-  // (a statement, by the rule whose head it is: a call of that rule's function; none, `i32.const 0`)
-  applied (program, statement) => {
-    index := program.rules.map((rule) => rule.head).index_of(statement)
-    (index === None) ? [65, 0] : [16, index]
-  }
-  module (program) => {
-    functions := program.rules.count + 1
-    types := Wasm.section(1, [1, 96, 0, 1, 127])
-    declared_functions := Wasm.section(3, [functions].joined(program.rules.map((rule) => 0)).joined([0]))
-    exported := Wasm.section(7, [1, 3, 114, 117, 110, 0, program.rules.count])
-    bodies := program.rules.map((rule) => Wasm.body(Wasm.applied(program, rule.body))).flatten
-    codes := Wasm.section(10, [functions].joined(bodies).joined(Wasm.body(Wasm.applied(program, program.statements.last))))
-    [0, 97, 115, 109, 1, 0, 0, 0].joined(types).joined(declared_functions).joined(exported).joined(codes)
-  }
-}
-// (what a text reads as, an Expression: what it is written as, read; what an Expression is as WebAssembly, its module)
-Expression := {
-  from (written) => read_source(written)
-}
-Wasm &+= {
-  from (program) => Wasm.module(program)
-}
-// `(source as Expression) as Wasm`: a text, read, written as WebAssembly. (`ray --write=tiny.wasm --value=tiny_module`, then
-// its `run` answers what `x` does: `y`'s function, `i32.const 0`.)
-// (asked for, not read here: building it applies some 10M rules, past what a statement may until the language is compiled)
-tiny_module => (tiny as Expression) as Wasm
-assert Wasm.section(1, [7, 8]).count == 4  // EW1 a section is not its id, its size and its bytes
-assert Wasm.body([65, 0]).count == 5  // EW2 a function's body is not its size, no locals, its code and end
-assert Wasm.applied(read_tiny, `x`).last == 0  // EW3 a statement a rule reads does not call that rule's function
-assert Wasm.applied(read_tiny, `q`).first == 65  // EW4 a statement no rule reads is not i32.const
+// with CLI.(
+//   .name = "Ether",
+//   .% = 
+//   . //etc/
+// )

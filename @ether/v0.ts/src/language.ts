@@ -4514,7 +4514,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const at = w(MAPPED) + 8 * M_SPAN, ps = w(at), pe = w(at + 4);
     if (!ps) return 0;
     const pt = f + F_TAKES, s = skip(w(pt), w(pt + 4)); let e = w(pt + 4); while (e > s && b(e - 1) <= 32) e--;
-    if (!worded(s, e) || follow(pt, 1) !== pt) return 0;
+    if (follow(pt, 1) !== pt) return 0;
+    if (!worded(s, e)) return took_each(t, f, self, s, e);
     // (one value, not given by name: no `,` or `:` outside brackets in what was passed)
     const at_ = follow(f + F_TAKES + TAKE, 1), z = w(at_ + 4);
     let i = w(at_);
@@ -4532,6 +4533,35 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (w(FAIL_FAST) & 2) log(s, L_DEFINED, s, e); set(t + T_NAMED, w(t + T_NAMED) + 1);
     if (DEBUG) debug(D_DEFINE, s, e, into);
     return w(r + R_HEAD);
+  }
+  // (and several, `(a, b)`, each a name, given a list a `,` made of as many values, none by name: each defined in the node the
+  // call runs in, what the language's `({written_parameters}) := passed` does with them; anything else, the body)
+  function took_each(t: number, f: number, self: number, s: number, e: number): number {
+    let names = 0, from = s;
+    for (let q = s; q <= e; q++) {
+      if (q < e && (bracket(q, e) & 3)) return 0;
+      if (q === e || b(q) === 44) { const a0 = skip(from, q); let a1 = q; while (a1 > a0 && b(a1 - 1) <= 32) a1--; if (!worded(a0, a1)) return 0; names++; from = q + 1; }
+    }
+    if (names < 2) return 0;
+    const at_ = follow(f + F_TAKES + TAKE, 1), z = w(at_ + 4);
+    let i = w(at_);
+    while (i < z) { if (bracket(i, z) & 1) i = past(i, z); else { if (b(i) === 58) return 0; i++; } }
+    const v = valued(t, f + F_TAKES + TAKE);
+    if (stopped(t) || !v || w(v + N_IS) !== IS_NODE || held(t, v, W_LISTING, 0) !== w(TRUE_)) return 0;
+    let count = 0;
+    for (let l = held(t, v, W_HEAD, 0); l && l !== w(NOTHING) && count <= names; l = held(t, l, W_NEXT, 0)) count++;
+    if (count !== names || stopped(t)) return 0;
+    let named = 0, l = held(t, v, W_HEAD, 0);
+    from = s;
+    for (let q = s; q <= e; q++) {
+      if (q === e || b(q) === 44) {
+        const a0 = skip(from, q); let a1 = q; while (a1 > a0 && b(a1 - 1) <= 32) a1--;
+        named = bound(a0, a1, self, held(t, l, W_VALUE, 0));
+        if (w(FAIL_FAST) & 2) log(a0, L_DEFINED, a0, a1); set(t + T_NAMED, w(t + T_NAMED) + 1);
+        l = held(t, l, W_NEXT, 0); from = q + 1;
+      }
+    }
+    return stopped(t) ? 0 : named;
   }
   // (a rule composing what its holes take: two or more, the text between them characters each on its own (`,`), no operator
   // and no bracket or quote)

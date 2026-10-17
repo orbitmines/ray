@@ -9,6 +9,10 @@ String &+= {
   same_characters (other) => external same this other
   // (what is before where another text, a rest of this one, begins)
   until (other) => external until this other
+  // (what follows where it begins with another text; it does not, nothing)
+  past (other) => external past this other
+  // (what is written between quotes, each escape in it what it stands for (String.ray's `Escape`))
+  unescaped => external unescaped this
   // (and what Ray.ray's Iterable answers of a text, through those, one character after another: as its rules answer)
   count => {
     counted := 0
@@ -132,6 +136,26 @@ Array &+= {
     made
   }
 }
+// (accelerated: what a value is, where the kernel can tell, as the language's `is` answers: a text against a written text,
+// String, `T+`, `T[]`, a list of types read in order, a superposition of them; itself; Node. Anything else, the language's)
+// (`T+` keeps what it is one or more of, for the kernel to see: the same narrowing)
+Node &+= {
+  one_or_more => {
+    base := .
+    base{!(.empty)} &+ {
+      nonempty_of := base
+    }
+  }
+  // (the language's `admitted_by`, what Node.ray's `is` asks: the kernel's answer first (the map is read before the library,
+  // so it is this, not `is`))
+  admitted_by (type) => {
+    known := external admits this type
+    (known === None) ? (this.is_itself(type) || ((!following_conversions) && this.followed_is(type))) : known
+  }
+}
+// (accelerated: where a text is cut between places, the language's `first_cut_in`: the kernel's cut, where `admits` can tell
+// each span; else that rule's loop)
+external cuts `{cut_types} first_cut_in {cut_text}`
 // (None takes no members of its own: given)
 external nothing None
 // (accelerated: what a definition answers given its value, its head when it defined one name (`x := v`); the language's
@@ -143,7 +167,7 @@ external glyphs `{element}[]`
 // (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it, the node the call
 // runs in. Off: without it LS4 (`["a", "b"].map((x) => x).last`, a closure's `x` called from one whose parameter is `x`)
 // fails; with it, it passes: it does not answer what the language does)
-// external taking `({written_parameters}) taking {passed}`
+// external taking `({written_parameters}) taking {arguments_given}`
 // Numbers: what the kernel holds as a count, a number the kernel counts, is a Counted (`count`), a Number whose `next` the
 // kernel answers (the count before it; of zero, nothing); a numeral is one (the count its digits write), and a text's
 // characters are Counted_chars, Chars (each its code point). Number's own `succ` and operators, named here, on what the kernel

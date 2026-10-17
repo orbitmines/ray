@@ -4684,7 +4684,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let words = 0; { const a = skip(hs, he), z = trim_end(hs, he); words = a < z && b(w(CLASSES) + b(a)) === 1 ? 1 : 0; for (let i = a; i < z && words; i++) if (b(w(CLASSES) + b(i)) !== 1 && !(b(i) === 32 && i > a && b(i - 1) !== 32)) words = 0; if (words && worded(a, z)) words = 0; }
     // (one whose first word is no definition of that word alone (`as` of `as static => …`, Signed's: read, it declared
     // `static` the class itself; `static` of `static Signed := …` is one, what declares in the class): those words, as written)
-    if (words) { const a = skip(hs, he); let m = a; while (m < he && b(w(CLASSES) + b(m)) === 1) m++; const sc = w(t + T_SCRATCH); set(t + T_SCRATCH, sc + SCRATCH); const end = read(a, m, latest(self), 0, 0, 0, sc), found = w(sc + 512); set(t + T_SCRATCH, sc); if (!(end === m && found && w(found + R_PARTS) === 1 && (w(found + R_PART) & 15) === LITERAL)) words = 2; }
+    if (words) { const a = skip(hs, he); let m = a; while (m < he && b(w(CLASSES) + b(m)) === 1) m++; const sc = w(t + T_SCRATCH); set(t + T_SCRATCH, sc + SCRATCH); const end = read(a, m, latest(self), 0, 0, 0, sc), found = w(sc + 512); set(t + T_SCRATCH, sc); if (!(end === m && found && w(found + R_PARTS) === 1 && (w(found + R_PART) & 15) === LITERAL && !(w(found + R_FLAGS) & CALLS))) words = 2; }
     // (a member written with what it answers, a word, `: `, then a type led by a word, `paths: Path{.bounded: bounded} =>
     // [this]`: that word (the type's braces no hole of the head, the type not read where the member is defined); led by a
     // hole, `class: {parent} …`, a pattern)

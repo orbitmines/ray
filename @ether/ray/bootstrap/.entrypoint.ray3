@@ -658,7 +658,7 @@ assert {
 }
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses.
-{method}(.{section}) ^punctuation => .{method}((it) => it.{section})
+{method}(.{section}) ^punctuation => .{method}((it) => it.(.{section}))
 // (an argument using `.` on its own, `xs.every(candidate is .)`: a closure (every argument is one), `.` in it what it is
 // called with; its code read on that)
 {method}({code: Dotted}) ^punctuation => .{method}((it) => it.({code}))
@@ -1242,12 +1242,15 @@ enum {names} ^keyword => {
   // (a member written with fields, `circle (radius: Number)`: one holding them)
   // (given nothing, each field its type, `Shape.circle.radius === Number`)
   // (and once it is there, a member and brackets: one made of it, `Shape.circle(radius: 5)`)
-  {member: Name} ({fields}) => ((.{member}) === None) ? ({member} := ({
-    {fields}
-    {this}({arguments}) => (this &+ {
-      ({{fields}}) taking {arguments}
+  {member: Name} ({fields}) => ((.{member}) === None) ? (
+    {member} := ({
+      {fields}
+      {this}({arguments}) => (this &+ {
+        ({{fields}}) taking {arguments}
+      })
     })
-  })) : (.{member})({fields})
+    .{member}
+  ) : (.{member})({fields})
   members := (.({names}))#
   // (one after another, as written: each member a Ray of them)
   {

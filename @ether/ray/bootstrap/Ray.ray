@@ -203,13 +203,28 @@ Iterable &+= {
   assert [3, 1, 2].sort.last == 3  // IT44 sorted, the last is not the largest
   sort_by | sorted (key) => .empty ? [] : this.sorted_on(key)
   assert [3, 1, 2].sort_by(10 - .) == [3, 2, 1]  // IT67 sorted by what they are short of ten, they are not largest first
+  // (each one placed before the first already placed whose key is larger, so equal keys keep their order: one pass
+  // after another, not a recursion, which answers wrongly past two levels)
   sorted_on (key) => {
-    sort_pivot := .first
-    sort_rest := .rest
     sorted_made := []
-    sort_rest{sort_candidate => key(sort_candidate) < key(sort_pivot)}.sort_by(key).for(sorted_one => sorted_made.append(sorted_one))
-    sorted_made.append(sort_pivot)
-    sort_rest{sort_candidate => key(sort_candidate) >= key(sort_pivot)}.sort_by(key).for(sorted_one => sorted_made.append(sorted_one))
+    sort_at := this
+    while !(sort_at.empty) {
+      sort_one := sort_at.first
+      sort_placed := []
+      sort_done := false
+      sort_in := sorted_made
+      while !(sort_in.empty) {
+        if (!sort_done) && (key(sort_one) < key(sort_in.first)) {
+          sort_placed.append(sort_one)
+          sort_done = true
+        }
+        sort_placed.append(sort_in.first)
+        sort_in = sort_in.rest
+      }
+      (sort_placed.append(sort_one)) unless sort_done
+      sorted_made = sort_placed
+      sort_at = sort_at.rest
+    }
     sorted_made
   }
   unique => .empty ? [] : .first, .rest{!= this.first}.unique

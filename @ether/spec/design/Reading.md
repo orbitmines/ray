@@ -41,18 +41,16 @@ house style.
 
 ## Found on main (e6bcbbb2)
 
-- A shape reading text into its fields worked before the library restore (8e2736b7) and fails now, for three reasons:
+- A shape reading text into its fields worked before the library restore (8e2736b7) and fails now, for two reasons:
   - the restored `String.ray` writes `starts_with`, `after` and `before` through `~=`, whose matcher calls them back,
     without end;
-  - the list's `until` hides the text's own `until`;
   - `count` and `empty` go through a broken `reduce` (Appendix A).
 - Joining two texts with `+` fails, but by design: §5.1 joins texts with `,` and `as String`. The check (NE20) is
   respelled, not the core.
 
 ## Deliverables, each its own PR
 
-1. The matcher on `first` and `rest` again, and the text's `until` no longer hidden (`String.ray`). S62 to S62f, TL1,
-   TL3, TY36 to TY41, HD8; NE25 with the `reduce` fix.
+1. The matcher reads by its own primitives on `first` and `rest`, not through `~=` (#32). NE25 with the `reduce` fix.
 2. One matcher for all four uses (`.entrypoint.ray3`, `Node.ray`): the entrypoint's three text readers and `read_within`
    become one. Keeps NE25. After 1.
 3. The checks respelled: NE20 with `,`, NE23 as `(Lower, Digit)`, NE24 as a declared shape. After the owner's answer.

@@ -14,7 +14,7 @@ assert [1, 2] == [1, 2] && !([1, 2] == [2, 1])  // NE8 two lists are not equal b
 assert [0] * 3 == [0, 0, 0]  // NE9 a list is not repeated
 assert [1, 2, 3].find((x) => x > 1) == 2  // NE10 a list does not find the first that holds
 assert [3, 1, 2].sort_by((x) => x) == [1, 2, 3]  // NE11 a list is not sorted by a key
-assert { symbol: 1, bits: `01` }.bits == `01`  // NE12 a record does not give its field (a map literal, Design.md §3.2)
+assert (symbol: 1, bits: `01`).bits == `01`  // NE12 a record of named parts does not give its field (as Deflate.project.ray and Ray.ray's enumerate write one)
 
 needs_appended := []
 needs_appended.append(4)

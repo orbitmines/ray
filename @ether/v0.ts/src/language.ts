@@ -384,8 +384,6 @@ export async function main() {
   if (kwargs.lsp) return await lsp();
   // (asked nothing: the help; given no files: the language itself, its entrypoint's directory)
   if (args.length === 0 && Object.keys(kwargs).length === 0) { console.log(CLI.help()); return; }
-  // (a program built, `ray out.wasm`: its memory set out as it was read, what was put off run, what was said said)
-  if (args[0]?.endsWith('.wasm') && env.nodejs) return run_built(args[0]);
   // Run the main program on a worker with a larger stack.
   if (!env.worker && env.nodejs) {
     const worker = env.thread({ main: [args, kwargs] });
@@ -407,6 +405,9 @@ export async function main() {
     return;
   }
 
+  // (a program built, `ray out.wasm`: its memory set out as it was read, what was put off run, what was said said; on this
+  // worker, with its larger stack)
+  if (args[0]?.endsWith('.wasm') && env.nodejs) return run_built(args[0]);
   // (read before, every file the same as then and the kernel too: what was read, from disk, and its tests run on it)
   const cache = env.nodejs && !process.env.RAY_NOCACHE && !kwargs.build && !kwargs.write && (!kwargs.debug || process.env.RAY_CACHE_DEBUG) && !kwargs.lsp ? Cache.of(args) : undefined;
   // (what is still as it was: the steps of reading before the first file that changed, put back before any thread starts)

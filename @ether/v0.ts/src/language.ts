@@ -2182,7 +2182,7 @@ const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 7
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
-const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next'];
+const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'several', 'receiving'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
@@ -2421,9 +2421,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (this thread's words: given, a constant of what is compiled for it)
   const THREAD = thread | 0, CHUNK = 1 << 16;
   // (a thread's words)
-  const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_LB = 276, T_WRITER = 280, T_TV = 284, T_TVS = 288, T_TVE = 292, T_ALL_S = 304, T_ALL_E = 308, T_TOKEN = 312, T_HERE = 316, T_IN2_S = 320, T_IN2_E = 324, T_IN2_F = 328, T_DEFIN = 332, T_OMEMO = 336, T_QBUDGET = 340, T_UNALIGNED = 344, T_WRITTEN_IN = 348, T_CHECKS = 352, CHECKS = 30, T_STACK = 480, T_DEEPC = 484, T_GIVEN = 488, T_GIVEN_N = 492, T_ALT = 496, T_BEGUN = 500, T_BEGUN_N = 504, T_GREW = 508, T_FREE_TAKEN = 512, T_SKIPS = 516, T_SKIPS_N = 520, T_NAMING = 524, T_NAMING_N = 528, GROWN = 5 << 26, TEST_GROWN = 1 << 25, GIVEN_N = 16, OMEMO_MASK = (1 << 14) - 1, LEFTS = 64, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64, BEGUN = 40;
+  const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_WRITER_SELF = 272, T_LB = 276, T_WRITER = 280, T_TV = 284, T_TVS = 288, T_TVE = 292, T_MEMBER_S = 296, T_MEMBER_E = 300, T_ALL_S = 304, T_ALL_E = 308, T_TOKEN = 312, T_HERE = 316, T_IN2_S = 320, T_IN2_E = 324, T_IN2_F = 328, T_DEFIN = 332, T_OMEMO = 336, T_QBUDGET = 340, T_UNALIGNED = 344, T_WRITTEN_IN = 348, T_CHECKS = 352, CHECKS = 30, T_STACK = 480, T_DEEPC = 484, T_GIVEN = 488, T_GIVEN_N = 492, T_ALT = 496, T_BEGUN = 500, T_BEGUN_N = 504, T_GREW = 508, T_FREE_TAKEN = 512, T_SKIPS = 516, T_SKIPS_N = 520, T_NAMING = 524, T_NAMING_N = 528, GROWN = 5 << 26, TEST_GROWN = 1 << 25, GIVEN_N = 16, OMEMO_MASK = (1 << 14) - 1, LEFTS = 64, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64, BEGUN = 40;
   // (the words the host knows, at WORDS: where each is and how long)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_SPAN = 17;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_SEVERAL = 16, W_RECEIVING = 17, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_SPAN = 17;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 32;
@@ -2440,7 +2440,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // which reads on a value)
   // (LEFT, wanted of a reading only: it is a left side, a word nothing reads before what is read on it is declared there)
   // (TYPE_READER, refused only: a READER of a node other than the language's)
-  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15;
+  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 32;
   // (a body: [count, ...steps: [kind, start, end, a, c, d]])
@@ -3193,7 +3193,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (what is before it then read alone): no hole takes a comment, `true // a ?= b` is no `?=`)
     let commented = 0;
     for (let p = at + 1; p + 1 < end;) { const c = b(p); if (c === 47 && b(p + 1) === 47 && b(p - 1) <= 32) { commented = 1; break; } if (c === 40 || c === 91 || c === 123 || c === 34 || c === 96 || c === 39) { const q = past(p, end); p = q > p ? q : p + 1; } else p++; }
-    let lo = 0, hi = 0, kinds = 0;
+    let lo = 0, hi = 0, kinds = 0, refused = 0;
     let cyc_mark = 0, cyc_n = 0, cyc_backs = 0;
     for (let r = vis; r && r !== stop;) {
       if (DEBUG) count(K_NODE);
@@ -3235,6 +3235,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
             let e = -1;
             // (and on a text of other characters each one byte, none: its digits are `"0".."9"`)
             if ((w(x + R_FLAGS) & NUMERAL) && numeral_of(at, end) >= 0) { set(s, at); set(s + 4, end); e = end; } else if ((w(x + R_FLAGS) & NUMERAL) && ascii(at, end)) e = -1; else e = match(x, 0, at, end, s);
+            // (a bare name, not read on a value: never a member's (a word-led rule of a node holding members))
+            if (e >= 0 && (refuse & MEMBER) && (f & LED) && !(f & STATIC) && b(w(CLASSES) + b(w(x + R_PART + 4))) === 1 && w(x + R_OWNER) && w(w(w(x + R_OWNER) + N_BASE) + R_KIND) === MEMBERS_MARK) { refused = 1; e = -1; }
             if (e >= 0) {
               while (e < end && b(e) <= 32) e++;
               // (a definition first, then one led by text, then a method led by a hole (`{this}{argument}`, after `{this}(…)`))
@@ -3275,6 +3277,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         r = latest(p);
       }
     }
+    if (DEBUG && refused && !best) debug(D_FAULT, 1113, at, end);
     set(out, best);
     return ends;
   }
@@ -3692,7 +3695,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (left && !on) { let o = skip(s, e); const a0 = o, z = trim_end(s, e), cl = w(CLASSES), kind0 = b(cl + b(o)); while (o < z && b(cl + b(o)) === kind0 && (kind0 === 1 || kind0 === 2)) o++; let p = o; while (p < z && b(p) === 32) p++; if (o > a0 && p > o && p < z && (bracket(p, z) & 3) === 1 && bracket(p, z) !== 5 + 8 * w(OPEN_LENGTH) && past(p, z) >= z) { let q = p + 1; while (q < z && b(q) === 32) q++; if (b(q) === b(z - 1) || b(cl + b(q)) === 1) { set(t + T_NAMING, a0); set(t + T_NAMING_N, o - a0); } }
       // (or, in a rule's body, one of its holes, `as {type} =>`: the name declared with what that hole took)
       else if (o > a0 && p > o && p < z && rule && bracket(p, z) === 5 + 8 * w(OPEN_LENGTH) && past(p, z) >= z && ref(rule, 0, p, z, 1)) { set(t + T_NAMING, a0); set(t + T_NAMING_N, o - a0); } }
-    const end = read(s, e, vis, stop, want | (!refuse && defines(s, e) ? DEFINES : 0), refuse | (stop ? 0 : TYPE_READER) | (on ? 0 : METHOD), sc);
+    // (a member read, `x.name`: the name read in x is x's; once (what it runs reads as anywhere else))
+    const member_read = w(t + T_MEMBER) && s >= w(t + T_MEMBER_S) && s < w(t + T_MEMBER_E) ? 1 : 0;
+    const end = read(s, e, vis, stop, want | (!refuse && defines(s, e) ? DEFINES : 0), refuse | (stop ? 0 : TYPE_READER) | (on ? 0 : METHOD) | (on || left || member_read ? 0 : MEMBER), sc);
     set(t + T_NAMING, naming); set(t + T_NAMING_N, naming_n);
     set(t + T_BODY, body_of);
     if (end >= 0) {
@@ -3819,10 +3824,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // hole written against its text (`.{member} => {member}`): the rest of a line, what is read on a value in it keeps where
       // the line was written (`.for((x) => …)`: the closure where the line is), the rest read in what `.` is)
       const whole = !w(r + 12) && rest_of_line(w(names + F_RULE), w(r + 16)) ? 0 : 1;
-      if (whole) { const wr = w(t + T_WRITER), th = w(tk + T_THIS); set(t + T_WRITER, th && th !== self && w(th + N_IS) === IS_NODE ? th : 0); const v = block(t, w(tk), w(tk + 4), w(tk + T_ORIGIN), f, self, 0, value, 1, self, self === w(tk + T_THIS) ? w(tk + T_LEX) : 0); set(t + T_WRITER, wr); return v; }
-      const member = w(t + T_MEMBER); set(t + T_MEMBER, into);
+      if (whole) { const wr = w(t + T_WRITER), ws = w(t + T_WRITER_SELF), th = w(tk + T_THIS); set(t + T_WRITER, th && th !== self && w(th + N_IS) === IS_NODE ? th : 0); set(t + T_WRITER_SELF, self); const v = block(t, w(tk), w(tk + 4), w(tk + T_ORIGIN), f, self, 0, value, 1, self, self === w(tk + T_THIS) ? w(tk + T_LEX) : 0); set(t + T_WRITER, wr); set(t + T_WRITER_SELF, ws); return v; }
+      const member = w(t + T_MEMBER), ms = w(t + T_MEMBER_S), me = w(t + T_MEMBER_E); set(t + T_MEMBER, into); set(t + T_MEMBER_S, w(tk)); set(t + T_MEMBER_E, w(tk + 4));
       const v = block(t, w(tk), w(tk + 4), w(tk + T_ORIGIN), f, into, 0, value, 1, w(tk + T_THIS) || into, into === w(tk + T_THIS) ? w(tk + T_LEX) : 0);
-      set(t + T_MEMBER, member);
+      set(t + T_MEMBER, member); set(t + T_MEMBER_S, ms); set(t + T_MEMBER_E, me);
       return v; }
     if (k === K_HELD) {
       const h = w(r + 12);
@@ -3884,7 +3889,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (while a left side is read, a name nothing reads is what it declares: no error)
     if (w(t + T_TESTING) && !making(self) && !w(t + T_DECL) && !w(t + T_LE)) { unread(t, s, e); if ((w(FAIL_FAST) & 1)) { jump(t, W_ERRED, 0); if (!w(THREAD + T_QUIET)) set(t + T_ERRED, 1); return 0; } }
     // (a left side's: where what it declares is defined, the node a call runs in (not where its parameters were written))
-    const here = w(t + T_DECL) && w(t + T_DEFIN) ? w(t + T_DEFIN) : self;
+    let here = w(t + T_DECL) && w(t + T_DEFIN) ? w(t + T_DEFIN) : self;
+    // (a name nothing reads yet, read bare in what holds members (a class's block before the class has its name, `Ray()` in
+    // Ray's): a place where that is written, not a member of it (§21.3))
+    if (!w(t + T_DECL) && !making(self)) for (let up = 0; here && w(here + N_IS) === IS_NODE && w(w(here + N_BASE) + R_KIND) === MEMBERS_MARK && w(here + N_PARENT) && up < 64; up++) here = w(here + N_PARENT);
     const place = place_of(s, e, here), named_ = alloc(R_PART + PART);
     if (DEBUG) debug(D_FAULT, 1107, s, e);
     // (what a definition's head declares, about to be defined (`! => …`): no rule of a place left beside the one it defines)
@@ -3932,6 +3940,16 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return 0;
   }
   // (the text from s to e one word, the space around it aside)
+  // (a rule led by a word and more after it, `checked {type}`)
+  function word_headed(r: number): number { return r && w(r + R_PARTS) > 1 && w(r + R_HOLES) && (w(r + R_PART) & 15) === LITERAL && b(w(CLASSES) + b(w(r + R_PART + 4))) === 1 ? 1 : 0; }
+  // (a parameter written without brackets: a word, else a word given a default or a type, `acc = 0`, `x: T`)
+  function parameter_led(s: number, e: number) {
+    if (worded(s, e)) return 1;
+    let i = s; while (i < e && b(w(CLASSES) + b(i)) === 1) i++;
+    if (i === s || i >= e || b(i) !== 32) return 0;
+    while (i < e && b(i) === 32) i++;
+    return i + 1 < e && ((b(i) === 61 && b(i + 1) === 32) || (b(i) === 58 && b(i + 1) === 32)) ? 1 : 0;
+  }
   function worded(s: number, e: number) { s = skip(s, e); while (e > s && b(e - 1) <= 32) e--; if (s >= e) return 0; for (let i = s; i < e; i++) if (b(w(CLASSES) + b(i)) !== 1) return 0; return 1; }
   // (a name declared where it is read: a place there, by that name)
   // (a place: a name given nothing yet, in self; read on, it answers what any value does, not what self has (where it is named,
@@ -4110,7 +4128,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a value read where it is written, not as a member of another (`f(5)`, `body(x)`): what follows is read on it alone)
     // (the member a `.{member}` reads, `x.f(y)`'s `f`: what follows is read on it as x's)
     else {
-      const member = w(t + T_MEMBER) === self; set(t + T_MEMBER, 0); on = ev(t, p, names, f, self, 1, written, self); if (!member && written === self) receiver = on;
+      const member = w(t + T_MEMBER) === self; on = ev(t, p, names, f, self, 1, written, self); if (!member && written === self) receiver = on;
       // (a name written bare in a method's body that is a member of what the method runs on, `gcd(other)` in `lcm`: read on
       // that, as `this.gcd(other)` is)
       if (!member && on && w(on + N_IS) === IS_NODE && w(p) === K_RULE && worded(w(p + 4), w(p + 8))) { const th = held_this(names); if (th && th !== w(GLOBAL) && th !== on && w(th + N_IS) !== IS_FRAME && on_this(t, th, w(p + 4), w(p + 8), w(p + 12))) receiver = th; }
@@ -4133,7 +4151,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (an argument after it, not an operator, a member or brackets: its own methods led by a hole first (a closure's
     // `{this}{argument}`: `f x`, `..9`, `.."9"`); then what is led by text (`(…)`, its `{this}(…)`); the language's own,
     // `{this}{rest}`, only when none of those reads)
-    let rest = w(on + N_IS) === IS_NODE && on !== w(GLOBAL) && rs < w(r + 20) && b(w(CLASSES) + b(rs)) !== 2 && (bracket(rs, w(r + 20)) & 3) !== 1 && methods_of(on) ? reading(t, w(r + 16), w(r + 20), w(names + F_RULE), w(names + F_CLOSURE), latest(on), on, METHOD, w(on + N_BASE), 0, 1) : 0;
+    // (but a word that leads a rule of more than itself, `checked {type}`, `is {type}`: that rule, not an argument (a closure
+    // called on `checked (T)`))
+    const kw = w(on + N_IS) === IS_NODE && on !== w(GLOBAL) && rs < w(r + 20) && b(w(CLASSES) + b(rs)) === 1 && methods_of(on) ? reading(t, w(r + 16), w(r + 20), w(names + F_RULE), w(names + F_CLOSURE), latest(on), on, LED, 0, 0, 1) : 0;
+    let rest = kw && w(kw) === K_RULE && word_headed(w(kw + 12)) ? kw : 0;
+    if (!rest) rest = w(on + N_IS) === IS_NODE && on !== w(GLOBAL) && rs < w(r + 20) && b(w(CLASSES) + b(rs)) !== 2 && (bracket(rs, w(r + 20)) & 3) !== 1 && methods_of(on) ? reading(t, w(r + 16), w(r + 20), w(names + F_RULE), w(names + F_CLOSURE), latest(on), on, METHOD, w(on + N_BASE), 0, 1) : 0;
     if (!rest || w(rest) !== K_RULE) rest = reading(t, w(r + 16), w(r + 20), w(names + F_RULE), w(names + F_CLOSURE), latest(on), on, LED, 0, 0, 1);
     // (a rule never reads itself: what its own body reads on a value that reads as that rule (`as * => ((this as *), …)`),
     // read with the rules before it)
@@ -4158,7 +4180,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let fell = 0;
     // (read only by what everything has (`1`, global), on a value with methods (a closure, `==` of `gcd(other) == 1`): its
     // argument; RB2) (but not what an operator leads, `.member`: a member is not an argument, CL19)
-    if (w(rest) === K_RULE && w(w(rest + 12) + R_OWNER) === w(GLOBAL) && on !== w(GLOBAL) && b(w(CLASSES) + b(rs2)) !== 2 && methods_of(on)) { const m = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); if (w(m) === K_RULE) rest = m; }
+    if (w(rest) === K_RULE && w(w(rest + 12) + R_OWNER) === w(GLOBAL) && on !== w(GLOBAL) && b(w(CLASSES) + b(rs2)) !== 2 && !word_headed(w(rest + 12)) && methods_of(on)) { const m = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); if (w(m) === K_RULE) rest = m; }
     if (w(rest) === K_UNREAD && !w(t + T_FALLBACK)) { rest = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); fell = w(rest) === K_RULE ? 1 : 0; }
     if (w(rest) !== K_UNREAD) {
       // (a method of a value it is made of, `+` of the 3 in a vertex `3 + Ray`: what it runs on, that value)
@@ -4189,7 +4211,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (w(t + T_STACK)) { set(w(t + T_STACK) + 8 * depth, 0); set(w(t + T_STACK) + 8 * depth + 4, s); }
     set(t + T_DEPTH, depth + 1);
     // (code read in a value it was not written in, `x.( … )`: where it was written, for what x does not read; its own only)
-    const writer = w(t + T_WRITER); set(t + T_WRITER, 0);
+    // (and its arguments, read in x too: where it was written, for what x does not read (`2.(1 + y)`, y the caller's))
+    const writer = w(t + T_WRITER) && (w(t + T_WRITER_SELF) === self) ? w(t + T_WRITER) : 0;
     if (DEBUG) debug(D_BLOCK, s, e, self);
     let answer = 0;
     for (let at = skip(s, e); at < e; at = skip(at, e)) {
@@ -4213,7 +4236,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (stopped(t)) { set(t + T_DEPTH, depth); if (DEBUG) debug(D_BLOCK_END, s, e, 0); return 0; }
       at = ln;
     }
-    set(t + T_DEPTH, depth); set(t + T_WRITER, writer);
+    set(t + T_DEPTH, depth);
     if (DEBUG) debug(D_BLOCK_END, s, e, answer);
     return answer;
   }
@@ -4291,6 +4314,18 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // in `lcm`), what that method is read on)
       if (word(a, m, W_DOT)) { const th = w(names + F_THIS), rc = w(names + F_RECEIVER), n = node(IS_NODE, 0, names, th, rc !== th ? (run_node(rc) ? w(rc + N_ALSO) : rc) : 0); if (DEBUG && w(THREAD + T_REG_AT) && !in_region(names)) debug(D_FAULT, 96, a, z); set(names + F_THIS, n); if (rc === th) set(names + F_RECEIVER, n); return n; }
       if (word(a, m, W_AMP)) return names;
+      // (`external members`: what the node it is read in holds are its members, a class's or a value's: a bare name never
+      // reads them, `.name` does (§21.3))
+      // (`external static code`: what the code defines where it is read is static, the class's own: a bare name reads it)
+      if (word(a, m, W_STATIC) && rest < z) { const before = latest(self), v = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); for (let r = latest(self), k = 0; r && r !== before && !(w(r + R_FLAGS) & DEAD) && k < 4096; r = w(r), k++) set(r + R_FLAGS, w(r + R_FLAGS) | STATIC); return v; }
+      // (`external undefined v`: whether v is a name nothing defines (a place, its name still read as it); said where it is
+      // written, `nothing reads`)
+      if (word(a, m, W_UNDEFINED) && rest < z) { const v = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); if (!v || w(v + N_IS) !== IS_PLACE || !place_in(v) || w(v + N_A) >= w(v + N_B)) return w(FALSE_); const scope = place_in(v), r = reading(t, w(v + N_A), w(v + N_B), 0, 0, latest(scope), scope, 0, 0, 0, 0); if (w(r) === K_RULE && !(w(w(r + 12) + R_KIND) === VALUE && w(w(r + 12) + R_BS) === v)) return w(FALSE_); say(t, w(v + N_A), L_UNREAD, w(v + N_A), w(v + N_B)); return w(TRUE_); }
+      // (`external several {hole}`: whether the text a hole took holds a `,` outside brackets, more than one parameter)
+      if (word(a, m, W_SEVERAL) && rest < z) { const r = reading(t, rest, z, w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0); let ts = rest, te = z; if (w(r) === K_REF) { const tk = follow(take(w(r + 20) || names, w(r + 12), w(r + 16)), 0); ts = w(tk); te = w(tk + 4); } if (DEBUG) debug(D_FAULT, 1114, ts, te); for (let q = ts, depth = 0; q < te; q++) { const c = b(q); if (c === 40 || c === 91 || c === 123) depth++; else if (c === 41 || c === 93 || c === 125) depth--; else if (c === 44 && depth === 0) return w(TRUE_); } return w(FALSE_); }
+      // (`external receiving v`: the application it is written in is read on v, `.` in it v (reduce's step, `.` the element))
+      if (word(a, m, W_RECEIVING) && rest < z && names && w(names + N_IS) === IS_FRAME) { const v = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); if (v) { set(names + F_RECEIVER, v); const th = w(names + F_THIS); if (th && run_node(th)) set(th + N_ALSO, v); } return v; }
+      if (word(a, m, W_MEMBERS)) { const n = names && w(names + N_IS) === IS_FRAME ? w(names + F_THIS) : self; if (n && n !== w(GLOBAL)) set(w(n + N_BASE) + R_KIND, MEMBERS_MARK); return n; }
       if (word(a, m, W_GOTO)) { go(t, rest, z - rest, f, 0); return 0; }
       if (word(a, m, W_INCLUDE) || word(a, m, W_READ)) { files(word(a, m, W_INCLUDE) ? 1 : 2, rest, z, names); return 0; }
       // (the kernel's own map: `text`, what it is read in is what every text the kernel holds is made of)
@@ -4566,7 +4601,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let lines = 1; for (let i = s; i < e; i++) if (b(i) === 10) lines++;
     if (DEBUG) debug(D_FAULT, 1090, s, e);
     bd = alloc(4 + STEP * lines);
-    let n = 0, given = 0;
+    let n = 0, given = 0, placing = 0;
     // (the names a line before it begins by giving a value, `made := …`: a line mentioning one is read when it runs (it may be
     // the body's own then, not the one visible where it is written))
     const givens = alloc(8 * 32), cl = w(CLASSES);
@@ -4600,7 +4635,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     }
     set(bd, n);
     // (a body that gives names values of its own: run in a node of its own, each time (what it gives is that run's))
-    if (given && !(w(FAIL_FAST) & 128) && !(w(rule + R_FLAGS) & OWNS)) set(rule + R_FLAGS, w(rule + R_FLAGS) | OWNS);
+    if ((given || placing) && !(w(FAIL_FAST) & 128) && !(w(rule + R_FLAGS) & OWNS)) set(rule + R_FLAGS, w(rule + R_FLAGS) | OWNS);
     set(THREAD + T_SH_N, shadows);
     if (mine) { if (w(t + T_BODIES_N) < BODIES / 2) { let q = mine; for (let i = 1; w(q) && i < BODIES; i++) q = w(t + T_BODIES) + 8 * (((rule >> 3) + i) & (BODIES - 1)); set(q, rule); set(q + 4, bd); set(t + T_BODIES_N, w(t + T_BODIES_N) + 1); } }
     else { cas(rule + R_BODY, 0, bd); bd = w(rule + R_BODY); }
@@ -4630,7 +4665,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a word and `=>` written as an argument, after `(` or `,`, `xs.map(x => x * 2)`: a closure of that one parameter, as
     // `(x) => x * 2` (§9 `[1, 2, 3] for x => …`); not a rule defined in the scope the call is in) (the word written there, not
     // one a hole took: `{name} => value` naming `in` of `(in?: Linked)`; nor in `x.( … )`, code read in x: a definition there)
-    if (!raw && worded(skip(hs, he), trim_end(hs, he)) && hops(f + F_TAKES) <= 1) { let q = skip(hs, he) - 1; while (q > 0 && b(q) <= 32 && b(q) !== 10) q--; if ((b(q) === 40 && !(q > 0 && b(q - 1) === 46)) || b(q) === 44) return lambda(t, skip(hs, he), trim_end(hs, he), bd, o, self); }
+    if (!raw && parameter_led(skip(hs, he), trim_end(hs, he)) && hops(f + F_TAKES) <= 1) { let q = skip(hs, he) - 1; while (q > 0 && b(q) <= 32 && b(q) !== 10) q--; if ((b(q) === 40 && !(q > 0 && b(q - 1) === 46)) || b(q) === 44) return lambda(t, skip(hs, he), trim_end(hs, he), bd, o, self); }
     // (--debug: a head that is a hole of the rule it was written in, read where it can not see that rule's holes: `(name)` of
     // `(name) := value` in `=`'s body, defined as the text `(name)`)
     // (a head that is a hole of the rule it is written in, `(place)` of `(place) := value`, read where that rule's holes are not
@@ -5911,6 +5946,8 @@ export class Ray extends Language<FileStore> {
     if (kind === Debug.FAULT && a === 1093) { const m = (Ray as any).kept_by ??= new Map<number, number>(); m.set(b, (m.get(b) ?? 0) + c); if (!(Ray as any).kept_said) { (Ray as any).kept_said = true; process.on('exit', () => env.fs.writeSync(2, `\nKEPT ${[...m].map(([k, v]) => `${['', 'new chunk', 'said text', 'reading kept', 'test pages', 'of them big', 'of them one chunk', 'asked with none free', 'asked with some free (none fit)', 'readings without one (count)', 'refusable applied (count)', 'refused (count)', 'by readings without one'][k]} ${k >= 9 ? v : (v / 1048576).toFixed(1) + ' MB'}`).join(', ')}\n`)); } return 0; }
     if (kind === Debug.FAULT && a === 1092) { say(`${ansi.indianRed}FAULT${ansi.reset} a file's own rules on node ${b} no longer reach where they began (top ${c}): not put back`); return 0; }
     if (kind === Debug.FAULT && a === 1102 && process.env.RAY_JSSTACK) say(String(new Error('js stack').stack).split('\n').slice(0, 30).join('\n'));
+    if (kind === Debug.FAULT && a === 1114) { if (process.env.RAY_SEVERAL) say(`SEVERAL \`${this.text(b, c)}\` at ${this.where(b)}`); return 0; }
+    if (kind === Debug.FAULT && a === 1113) { if (process.env.RAY_MEMBERS) say(`MEMBER \`${this.text(b, c)}\` at ${this.where(b)}`); return 0; }
     if (kind === Debug.FAULT && a === 1112) { if (process.env.RAY_WORDS) say(`WORDS \`${this.text(b, c)}\` at ${this.where(b)}`); return 0; }
     if (kind === Debug.FAULT && a === 1111) { if (process.env.RAY_NOTON) say(`NOTON \`${this.text(b, c)}\` at ${this.where(b)}`); return 0; }
     if (kind === Debug.FAULT && a === 1109) { if (process.env.RAY_LAMBDA) say(`LAMBDA \`${this.text(b, c)}\` at ${this.where(b)}: ${this.text(b, b + 60).split('\n')[0]}`); return 0; }

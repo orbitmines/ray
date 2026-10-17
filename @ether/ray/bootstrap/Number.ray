@@ -3,17 +3,17 @@ Number &+= {
   succ => Number(next: this)
   assert 7.succ == 8  // N42 7.succ is not eight
   { }{value} ^punctuation => value{#.count == this}
-  pred => next
+  pred => .next
   assert 3.pred == 2  // N109 what comes before three is not two
   assert 3.pred.succ == 3  // N110 stepping back and forward does not come back
-  is_zero => next === None
+  is_zero => .next === None
   assert 0.is_zero  // N1 zero is not zero
   assert !(1.is_zero)  // N2 one reports zero
-  nonzero | holds => !is_zero
+  nonzero | holds => !.is_zero
   assert !(0.nonzero)  // N107 zero is other than zero
   assert 3.nonzero  // N108 three is zero
   assert 5.holds  // N111 five holds nothing
-  as (=== boolean) => nonzero
+  as (=== boolean) => .nonzero
   // A number stands for a bit
   assert !(0)  // N92 zero is set
   assert 1  // N93 one is not set
@@ -43,11 +43,11 @@ Number &+= {
 
   // (as a Ray: each step the one before it, holding nothing)
   rayed => true
-  step => next
+  step => .next
   held => None
   assert 1 == 1 == 1  // PR21 a chain of sames does not hold
   assert !(1 == 1 == 2)  // PR22 a chain of sames that breaks holds
-  chainable < (other: Number) => other.nonzero && (is_zero || pred < other.pred)
+  chainable < (other: Number) => other.nonzero && (.is_zero || .pred < other.pred)
   assert 1 < 2  // N7 1 < 2 is false
   assert !(2 < 1)  // N8 2 < 1 is true
   assert 1 < 2 < 3  // PR3 one below two below three does not hold
@@ -61,12 +61,12 @@ Number &+= {
   assert !(1 <= 3 <= 2)  // PR19 a chain of at-mosts that breaks holds
   assert 0 <= 1 <= 1  // PR36 a probability's bounds do not chain
 
-  compounds + (other: Number) => other.is_zero ? this : succ + other.pred
+  compounds + (other: Number) => other.is_zero ? this : .succ + other.pred
   assert 1 + 2 == 3  // N3 1 + 2 is not 3
   assert 42 == 4 * 10 + 2  // N40 42 is not forty-two
   assert 3 + 4 == 7  // N41 3 + 4 is not seven
   assert 2.min(3) * 2 + 1 == 5  // N125 the smaller of two and three, doubled and one, is not five
-  compounds - (other: Number) => other.is_zero || is_zero ? this : pred - other.pred
+  compounds - (other: Number) => other.is_zero || .is_zero ? this : .pred - other.pred
   assert 3 - 1 == 2  // N4 3 - 1 is not 2
   assert 1 - 3 == 0  // N5 1 - 3 does not floor at zero
   compounds * (other: Number) => other.is_zero ? 0 : this * other.pred + this
@@ -82,7 +82,7 @@ Number &+= {
   assert 5 ^ 1 == 5  // N72 five raised to one is not five
   assert 5 ^ 0 == 1  // N73 five raised to nothing is not one
   assert 2 ^ 3 ^ 2 == 512  // N143 raising does not group to the right
-  ! => is_zero ? 1 : pred! * this
+  ! => .is_zero ? 1 : .pred! * this
   assert 3! == 6  // N74 three factorial is not six
   assert 1! == 1  // N75 one factorial is not one
   assert 0! == 1  // N76 nothing factorial is not one
@@ -92,7 +92,7 @@ Number &+= {
   assert !(5.negative)  // N88 five is negative
   positive => true
   abs => this
-  negated => Decimal.Signed(sign: is_zero ? None : "-", integer: this)
+  negated => Decimal.Signed(sign: .is_zero ? None : "-", integer: this)
   floor => this
   round => this
 
@@ -101,20 +101,20 @@ Number &+= {
   assert 6.gcd(4) == 2  // N55 the greatest common divisor of six and four is not two
   assert 4.gcd(6) == 2  // N56 asking the other way round answers otherwise
   assert 5.gcd(3) == 1  // N57 five and three share more than one
-  lcm (other: Number) => this * other / gcd(other)
+  lcm (other: Number) => this * other / .gcd(other)
   assert 2.lcm(3) == 6  // N58 the least common multiple of two and three is not six
   divides (other: Number) => other % this == 0
   assert 2.divides(6)  // N61 two does not divide six
   assert !(4.divides(6))  // N62 four divides six
   assert 1.divides(5)  // N63 one does not divide five
-  coprime (other: Number) => gcd(other) == 1
+  coprime (other: Number) => .gcd(other) == 1
   assert 2.coprime(3)  // N59 two and three are not coprime
   assert !(2.coprime(4))  // N60 two and four are coprime
 
-  even => is_zero || pred.odd
+  even => .is_zero || .pred.odd
   assert 4.even  // N11 4 is not even
   assert !(3.even)  // NN1 3 is even
-  odd => !even
+  odd => !.even
   assert 5.odd  // N12 5 is not odd
   half => this / 2
   assert 6.half == 3  // N64 half of six is not three
@@ -138,14 +138,14 @@ Number &+= {
 
   bounded => false
   assert !(1.bounded)  // NL4 a number is bounded
-  entry => Line(value: this)
+  entry => .Line(value: this)
   assert 4.entry == 4  // NL6 a number is not entered at its own place
   assert 0.entry.is_initial  // NL7 the line does not start at zero
   assert !(3.entry.is_initial)  // NL8 the line starts at three
   assert !(3.entry.is_terminal)  // NL9 the line ends
   static Line := class: Ray (value: Number) => {
-    next => Line(value: value.succ)
-    previous => value.is_zero ? None : Line(value: value.pred)
+    next => Line(value: .value.succ)
+    previous => .value.is_zero ? None : Line(value: .value.pred)
     assert true.previous == false  // BOR5 true.previous should be false
     assert false.previous == true  // BOR6 false.previous should be true
     assert 3.entry.previous == 2  // NL10 before three is not two
@@ -167,7 +167,7 @@ Number &+= {
     3.times (n) => { summed_rounds += n }
     assert summed_rounds == 3  // N30 times does not hand its round
   }
-  times (block) => times.for block
+  times (block) => .times.for block
 
   digits (base: Number) => this < base ? [this] : (this / base).digits(base), this % base
   // Digits in a base
@@ -175,32 +175,32 @@ Number &+= {
   assert 6.digits(2).count == 3  // N78 six is spelled with other than three digits in two
   assert 1.digits(2).count == 1  // N79 one is spelled with other than one digit in two
   assert 6.digits(2) == [1, 1, 0]  // N146 six in two is not 1, 1, 0
-  static (digits: Number[]) as (base: Base) => digits.map(. * base ^ (digits.count - 1 - .index)).sum
+  static (digits: Number[]) as (base: .Base) => digits.map(. * base ^ (digits.count - 1 - .index)).sum
   assert [1, 2, 3] as 10 == 123  // N84 one, two and three in ten do not spell a hundred and twenty-three
   assert [1, 2, 3] as 2 == 11  // N85 one, two and three in two do not spell eleven
 
   root (degree: Number) => (0..this){. ^ degree <= this}.last
   assert 10.root(2) == 3  // N144 the whole square root of ten is not three
-  root_of (degree: Number) => root(degree) ^ degree == this ? root(degree)
-    : Real(integer: root(degree), fraction: (1 -> +1).map(place => (this * 10 ^ (degree * place)).root(degree) % 10))
-  right-to-left √ => root_of(2)
+  root_of (degree: Number) => .root(degree) ^ degree == this ? .root(degree)
+    : Real(integer: .root(degree), fraction: (1 -> +1).map(place => (this * 10 ^ (degree * place)).root(degree) % 10))
+  right-to-left √ => .root_of(2)
   assert √9 == 3  // N145 the square root of nine is not three
-  right-to-left ∛ => root_of(3)
-  right-to-left ∜ => root_of(4)
+  right-to-left ∛ => .root_of(3)
+  right-to-left ∜ => .root_of(4)
   arctan_inverse (scale: Number, j: Number = 0) => scale / this ^ (4 * j + 1) -- (term => term == 0 ? 0
-    : term / (4 * j + 1) - scale / this ^ (4 * j + 3) / (4 * j + 3) + arctan_inverse(scale, j + 1))
+    : term / (4 * j + 1) - scale / this ^ (4 * j + 3) / (4 * j + 3) + this.arctan_inverse(scale, j + 1))
 
 
-  bits (other: Number) => digits(2).length max other.digits(2).length -- digits(2).padded(.).zip(other.digits(2).padded(.))
+  bits (other: Number) => .digits(2).length max other.digits(2).length -- .digits(2).padded(.).zip(other.digits(2).padded(.))
   [&&, ||, x||, !&&, !||, x!||].for operator => {
-    `"~" + operator` (other: Number) => bits(other).map((a, b) => a operator b) as 2
+    `"~" + operator` (other: Number) => .bits(other).map((a, b) => a operator b) as 2
     assert 0b0110 ~&& 0b1010 == 0b0010  // N147 bitwise and of 0110 and 1010 is not 0010
     assert 0b0110 ~|| 0b1010 == 0b1110  // N148 bitwise or of 0110 and 1010 is not 1110
     assert 0b0110 ~x|| 0b1010 == 0b1100  // N149 bitwise xor of 0110 and 1010 is not 1100
   }
-  ~! (width: Number) => digits(2).padded(width).map(!) as 2
+  ~! (width: Number) => .digits(2).padded(width).map(!) as 2
 
-  as (base: Base) as (=== String) => numeral(base)(integer: digits(base).map(numeral(base).digit)) as String
+  as (base: .Base) as (=== String) => .numeral(base)(integer: .digits(base).map(.numeral(base).digit)) as String
   assert 12 as 10 as String == "12"  // S68 twelve is not spelled 12 in ten
   assert 5 as 2 as String == "101"  // S69 five is not spelled 101 in two
   assert 255 as 16 as String == "ff"  // SN2 255 is not spelled ff in sixteen
@@ -249,7 +249,7 @@ Number &+= {
   }
   static Base := static{2 <= .}
   static Named := ["Binary", "Ternary", "Quaternary", "Quinary", "Senary", "Septenary", "Octal", "Nonary", "Decimal", "Undecimal", "Duodecimal", "Tridecimal", "Tetradecimal", "Pentadecimal", "Hexadecimal", "Superscript", "Subscript"]
-  static numeral (base: Base) => Named.map((name) => global[name]){.radix == base}.first
+  static numeral (base: .Base) => Named.map((name) => global[name]){.radix == base}.first
   assert "f" as 16 == 15  // S66 f is not fifteen in sixteen
   assert "12" as 10 == 12  // S67 12 is not twelve in ten
   assert "ff" as 16 == 255  // SN1 ff is not 255
@@ -278,47 +278,47 @@ Number.Named.for((name) => {
 
     static digit (value: Number) => Glyphs#[value]
     static value_of (written: Glyphs) => Glyphs#.index_of(written.lowercase)
-    next => if integer {
-      is digit(0)[] => None
-      is (rest: Glyphs[], last: Glyphs{!= digit(0)}, zeros: digit(0)[]) => static(integer: rest, digit(value_of(last) - 1), [digit(radix - 1)] * zeros.length)
+    next => if .integer {
+      is .digit(0)[] => None
+      is (rest: Glyphs[], last: Glyphs{!= this.digit(0)}, zeros: .digit(0)[]) => static(integer: rest, .digit(.value_of(last) - 1), [.digit(.radix - 1)] * zeros.length)
     }
 
-    << (places: Number) => static(integer: integer, [digit(0)] * places)
-    >> (places: Number) => places >= integer.length ? static(integer: [digit(0)]) : static(integer: integer[..<-places])
+    << (places: Number) => static(integer: .integer, [.digit(0)] * places)
+    >> (places: Number) => places >= .integer.length ? static(integer: [.digit(0)]) : static(integer: .integer[..<-places])
 
-    as (=== String) => integer as String
+    as (=== String) => .integer as String
 
-    {fraction: static.String} (): Real => integer, ".", fraction
+    {fraction: static.String} (): Real => .integer, ".", fraction
 
-    as (=== Signed) => Signed(integer: this)
+    as (=== .Signed) => .Signed(integer: this)
     assert !(5 as Decimal.Signed).negative  // N116 five as an integer is negative
     static Signed := class (sign: "-"?, integer: static) => {
-      as static => integer if !negative
-      negative => sign
+      as static => .integer if !.negative
+      negative => .sign
       // Signed numbers
       assert (-2).negative  // N21 negation is not negative
       assert (-5).negative  // N47 minus five is not negative
       assert (-2 * 3).negative  // N50 minus two times three is not negative
       assert ((3 as Signed) - (5 as Signed)).negative  // N54b three less five, signed, is not negative
-      positive => !negative
-      abs => Signed(integer)
+      positive => !.negative
+      abs => Signed(.integer)
       negated => -this
-      chainable == (other: Signed) => integer == other.integer && (negative == other.negative || integer.is_zero)
-      right-to-left - => Signed(sign: negative ? None : "-", integer)
+      chainable == (other: Signed) => .integer == other.integer && (.negative == other.negative || .integer.is_zero)
+      right-to-left - => Signed(sign: .negative ? None : "-", .integer)
       assert -(-2) == 2  // N123 minus minus two is not two
-      compounds + (other: Signed) => negative == other.negative ? Signed(sign, integer + other.integer)
-        : integer < other.integer ? Signed(other.sign, other.integer - integer) : Signed(sign, integer - other.integer)
+      compounds + (other: Signed) => .negative == other.negative ? Signed(.sign, .integer + other.integer)
+        : .integer < other.integer ? Signed(other.sign, other.integer - .integer) : Signed(.sign, .integer - other.integer)
       assert -2 + 5 == 3  // N22 -2 + 5 is not 3
       assert -5 + 5 == 0  // N49 minus five and five do not make nothing
       assert -3 + -2 == -5  // N118 minus three and minus two is not minus five
       assert 3 + -5 == -2  // N124 three and minus five is not minus two
       compounds - (other: Signed) => this + -other
       assert -3 - 5 == -8  // N54 minus three less five is not minus eight
-      compounds * (other: Signed) => Signed(sign: negative != other.negative ? "-" : None, integer * other.integer)
+      compounds * (other: Signed) => Signed(sign: .negative != other.negative ? "-" : None, .integer * other.integer)
       assert -2 * -2 == 4  // N23 -2 * -2 is not 4
       assert -2 * -3 == 6  // N121 minus two times minus three is not six
       assert -2 * 3 == -6  // N122 minus two times three is not minus six
-      chainable < (other: Signed) => negative ? !other.negative || other.integer < integer : !other.negative && integer < other.integer
+      chainable < (other: Signed) => .negative ? !other.negative || other.integer < .integer : !other.negative && .integer < other.integer
       assert -2 < 1  // N24 -2 < 1 is false
       assert -3 < -2  // N51 minus three is not less than minus two
       assert -3 < 2  // N52 minus three is not less than two
@@ -330,28 +330,28 @@ Number.Named.for((name) => {
       assert 1.5.fraction == 5  // N127 1.5 does not keep five after its point
       static Signed := class (sign: "-"?, real: Real) => { }
 
-      places => fraction.length
+      places => .fraction.length
       assert 1.05.places == 2  // N128 1.05 does not keep its leading zero
-      scaled => static(integer: (integer.integer, fraction.integer))
+      scaled => static(integer: (.integer.integer, .fraction.integer))
       static written (counted: Number, places: Number) => Real(integer: counted / radix ^ places, fraction: (counted % radix ^ places).digits(radix).padded(places))
-      as (=== Number) => integer if fraction.every(== 0)
-      floor => integer
-      round => fraction.nonempty && (fraction.first as Decimal) * 2 >= radix ? integer + 1 : integer
-      compounds + (other: Real) => written(scaled * radix ^ other.places + other.scaled * radix ^ places, places + other.places)
-      compounds * (other: Number | Real) => other is Real ? written(scaled * other.scaled, places + other.places) : written(scaled * other, places)
+      as (=== Number) => .integer if .fraction.every(== 0)
+      floor => .integer
+      round => .fraction.nonempty && (.fraction.first as Decimal) * 2 >= radix ? .integer + 1 : .integer
+      compounds + (other: Real) => written(.scaled * radix ^ other.places + other.scaled * radix ^ .places, .places + other.places)
+      compounds * (other: Number | Real) => other is Real ? written(.scaled * other.scaled, .places + other.places) : written(.scaled * other, .places)
       assert 1.5 * 4 == 6.0  // N131 1.5 times four is not 6.0
-      compounds / (other: Number) => Real(integer: scaled / other / radix ^ places, fraction: (1 -> +1).map(place => scaled * radix ^ place / other % radix)[places..])
+      compounds / (other: Number) => Real(integer: .scaled / other / radix ^ .places, fraction: (1 -> +1).map(place => this.scaled * radix ^ place / other % radix)[.places..])
       assert 2.5 / 2 == 1.2  // N132 2.5 halved is not 1.2 to one place
-      chainable == (other: Real) => scaled * radix ^ other.places == other.scaled * radix ^ places
+      chainable == (other: Real) => .scaled * radix ^ other.places == other.scaled * radix ^ .places
       assert 1.5 == 1.5  // N129 1.5 is not 1.5
       assert !(1.5 == 1.50)  // N130 1.5 is written as 1.50
-      chainable < (other: Real) => scaled * radix ^ other.places < other.scaled * radix ^ places
+      chainable < (other: Real) => .scaled * radix ^ other.places < other.scaled * radix ^ .places
 
-      rational => fraction is (static | static[]{length == ∞})
+      rational => .fraction is (static | static[]{length == ∞})
       // Reals keep the digits after the point as written
       assert 5.0.rational  // N114 a real is not rational
       assert !(5.0.irrational)  // N115 a real is irrational
-      irrational => !rational
+      irrational => !.rational
     }
   }
 
@@ -359,6 +359,12 @@ Number.Named.for((name) => {
 
   Glyphs{: 0+, number: Glyphs} as (=== Glyphs) => number
 })
+// A signed number, of any base: each base's `Signed`, superposed (as a Number is any of its bases)
+Number.Signed := Number.Named.map((name) => global[name].Signed).reduce((either) => either | .)
+// A whole number, of either sign
+Integer := Number | Number.Signed
+assert 5 is Integer  // INT1 five is not an integer
+assert (-5) is Integer  // INT2 minus five is not an integer
 
 Ending := \n | ")" | ","
 {from: Number}..{followed_by: ⊢Ending} ^punctuation => from -> 1
@@ -400,14 +406,14 @@ Byte = Binary₈
 
 Matrix := Number[][]
 Matrix &+= {
-  transposed => (0..<first.count).map(j => map(.[j]))
+  transposed => (0..<.first.count).map(j => map(.[j]))
   compounds * (other: Matrix) => map(row => other.transposed.map(column => row.zip(column).map(*).sum))
   compounds * (factor: Number) => map(row => row.map(. * factor))
   compounds + (other: Matrix) => zip(other).map((a, b) => a.zip(b).map(+))
   compounds - (other: Matrix) => zip(other).map((a, b) => a.zip(b).map(-))
   minor (i: Number, j: Number) => (0..<count){!= i}.map(r => (0..<count){!= j}.map(c => this[r][c]))
-  determinant => count == 1 ? this[0][0] : (0..<count).map(j => (j.even ? 1 : -1) * this[0][j] * minor(0, j).determinant).sum
-  inverse => (0..<count).map(i => (0..<count).map(j => ((i + j).even ? 1 : -1) * minor(j, i).determinant / determinant))
+  determinant => count == 1 ? this[0][0] : (0..<count).map(j => (j.even ? 1 : -1) * this[0][j] * this.minor(0, j).determinant).sum
+  inverse => (0..<count).map(i => (0..<count).map(j => ((i + j).even ? 1 : -1) * this.minor(j, i).determinant / this.determinant))
 }
 
 machin (scale: Number) => 16 * 5.arctan_inverse(scale) - 4 * 239.arctan_inverse(scale)

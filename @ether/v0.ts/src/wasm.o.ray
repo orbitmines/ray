@@ -182,5 +182,3 @@ external numeral `{digits: Decimal.String}`
 Node &+= { external superposed }
 // (a text using `.` on its own, `candidate is .`: found by the kernel, as `bare_dot` does)
 String &+= { bare_dot => external dotted this }
-// (a call of a superposed value, Node.ray's: its argument read once, asked as `superposed` is; not one, the call it is)
-external superposing `{f}({argument: Superposed})`

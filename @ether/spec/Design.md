@@ -2132,6 +2132,18 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 ### 21.3 Frames, names and members
 
+- Decided 2026-10-17, being built:
+  - **A bare name never reads a member.** Inside a method, `count` is not `.count`. A bare name sees the method's
+    parameters, its own locals, the locals of the bodies it is written in, and the file and global scope. A member of
+    the receiver, or of the class the method is written in, needs `.name`. So in a header, `*` is the global `* :=
+    Node` and Iterable's own `*` is `.*`. The library's bodies are written with `.name` for every member.
+  - **`=` answers the value.** `(x = v) === v`. The place is a component of where the value is, which the value itself
+    does not show. A parameter list or header, `(a, b = 0)`, takes the places from where each value sits in it, not
+    from the value.
+  - **A rule written in a method's body is that body's own.** Like a `:=` name, it is defined in that run's node, so
+    the rule outside and sibling bodies are unchanged (GR2–GR4).
+  - **A function type is checked structurally,** the same check as any other type: a closure is of
+    `(x: Vertex): boolean` when its parameters and answer are.
 - Code read in a value it was not written in, `x.( … )`, reads with x's rules first, then where it was written.
 - A head made only of holes of where it is written (`{operator} {rest} => {body}` in `chainable`) is read as the text they
   took, as written, one expression (`== (other: Number)`): a method, not each part apart.
@@ -2599,6 +2611,21 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     is not kept (TA1).
   - `*?` is `*` then `?`, anything or nothing (`forward: *?`, Stepped's fields): one run of operator characters, it was one
     unknown word, so `Stepped(…)` refused every value.
+  - `reduce` is a special case, and the change is local to it (decided 2026-10-17): the step closure's parameter is the
+    accumulator, and `.` in it is the current element. A closure has `step.on(element)(accumulated)` (the entrypoint's
+    closure rule), its body read in the element; given nothing, `step.on(element)()`, a parameter without a default
+    starts at the element itself (`(acc) => acc + .`), one with a default runs the body (`acc = 0 => acc + 1`). Ray.ray's
+    `reduce`/`reduced` call it so in place of `first -- step(…)`. Elsewhere a closure keeps its own node (RD1–RD3).
+  - A closure written as an argument without brackets takes a parameter with a default or a type as well as a bare word:
+    `reduce(acc = 0 => acc + 1)` is `(acc = 0) => acc + 1`. Before, it was a rule defined in the call's scope.
+  - A word after a value that leads a rule taking more after it (`checked {type}`, `is {type}`) is that rule, not an
+    argument to the value's bare call: `(f) checked (T)` called the closure f on `checked (T)`. So every closure given
+    as the second argument or later (`reduced(seed, step)`) arrived as what it answered. (`(5 -> +1).some(== 8)` now
+    reports that a closure is not of the function type `(x: Vertex): boolean`; it passed before only because the
+    closure was called.)
+  - `~=` is a partial pattern match (decided 2026-10-17): the same match as a class header and a deconstruction, holding
+    when part of the value matches. Node.ray's `~=` is `read_within(this, pattern)` for every value. The
+    `this == pattern` branch for two texts is removed (`"abcd" ~= "bc"`, `"ab" ~= "b"`, `"abc".contains("bc")`).
 
 ---
 
@@ -2811,18 +2838,18 @@ Each question gives the recommendation recorded when it was raised, where there 
   String}}]` (its code hole typed String refuses `{predicate}`), so it falls to `(on).held(key)`, which Iterable's
   `held => empty ? None : first` (no parameters) answers: `[1, 2].contains(2)` goes round `empty`/`count`/`reduce`.
   Should a method without parameters refuse a call with arguments, and which reads `xs[{p}]`?
-- `reduce` (Ray.ray:131, `empty ? None : rest.reduced(first -- step(), step)`) wants `.` in the step closure to be the
-  element `first -- …` is read on (§ Iterable: "a single parameter is the accumulator, `.` is the current element"); but a
-  closure called bare has its own node (`.` not what `x -- …` reads on), and since 2026-10-16 `.` in a closure is its first
-  argument (the accumulator). `(3 -- f(2))` with `f := (acc) => acc + .` is not 5; RD1–RD5, `min`/`max`/`sum` without an
-  argument fail, and `count => … reduce(acc = 0 => acc + 1)` walks only where `.` is not asked. Which `.` does a closure
-  called inside `x -- ( … )` (or `x.( … )`) see?
-- `~= {pattern}` (Node.ray:265) answers `this == pattern` when both are Strings, so `"abcd" ~= "bc"` (S127), `"ab" ~= "b"`
-  (W15), `"abc" ~= ⊢"ab"` are false, while `read_within("abcd", "bc")` finds it (since `~~` binds loosest). Is the String
-  case meant for a pattern that is the type (`x ~= String`), or for something else?
-- `found = x ~~ .m = v` is `(found = x) ~~ (.m = v)` (`~~` loosest), and `=` answers the variable, so `.m` is set on the
-  place `found`, not on x (TD1 holds, `x.m` is not v; `x ~~ (.m = v)` sets it, TD3). Should `=` answer the value here, or
-  `~~` read the place's value?
+- (Answered 2026-10-17, §21.5: `.` in reduce's step is the element, `step.on(element)(accumulated)`.) What is left:
+  a bare name in a method body is bound where the body is written, not on the receiver. In an Iterable method, `rest`
+  and `first` are Iterable's own (`From(at: …)`, `entry => TODO`), not the Array's that the method is called on
+  (`.rest` is the Array's). So `reduce` is right on a list at the top level, but wrong when a method of Iterable calls
+  it. That runs `empty` → `count` → `reduce` → `empty`, which is 39 of the 53 "2000 deep" errors.
+- (Answered 2026-10-17, §21.5: `~=` is a partial pattern match.) Left: `za is Anchored` is false for `za := ⊢"bc"`, so
+  `read_within` never anchors (`!("abc" ~= ⊢"bc")` fails). A superposed pattern `("x" | "b")` is not taken apart
+  either, because `.superposes` is not seen on it.
+- (Answered 2026-10-17: `=` answers the value.) Not yet done: in a parameter list or class header,
+  `(first, second = false)`, `,` composes the places, so `second = false` has to answer the place `second` there.
+  Making `{place} = {value}` answer the value broke NA13–NA15 and HD1. It needs `=` to answer the value as an
+  expression and the place when read as parameters.
 - A class's header types are read in the instance being made (`({{fields}}) taking {arguments}` in `this &+ { … }`), so a
   type that names a member of the parent reads that member: `class: Iterable (xx: *, yy: *)` checks each field against
   Iterable's `*` (repeat, a method), not Node.ray's `* := Node` ("a value is not of the type it is given to"; built on
@@ -2847,13 +2874,17 @@ Each question gives the recommendation recorded when it was raised, where there 
 - A member section, `xs.every(.nonzero)`, `fields.map(.name)` (RR44, NOD12): "nothing reads `nonzero`", while
   `xs.every((it) => it.nonzero)` holds; neither `{method}(.{section})`'s `it.{section}` nor `it.({section})` (tried) is what
   reads it: the argument `.nonzero` is read where it is written.
-- `1..3` (RQ1–RQ6): a Number, made of Ray, reads Ray's own `.. (last: Ray) => this === last ? [this] : next ? this,
-  next..last : None` (Ray.ray:486; identity, and `next` of a number is the one before it) before Ordered's `.. (last: T)`
-  (Ray.ray:52, `succ`/`pred`). Both admit a Number: which is a Number's? Ray.ray:709 says "not on everything iterable (a
-  String, a Number), whose `..` is Ordered's", after `Iterable &+= Ordered` (line 708): Ordered's `..` should win on
-  Iterable, but §3.2 has a value's own rules (Iterable's `.. (last: Ray)`, Ray.ray:486) before what it is made of. Is a
-  later `X &+= Y` meant to come before X's own earlier rules (in order of writing), or does Iterable's own `..` belong
-  elsewhere (`"0".."9"` walks `next` and runs out of memory; the numerals' `Glyphs#.count`, every radix, rest on it)?
+- Classes and helpers that exist only for a test go in an `assert { }` block (decided 2026-10-17). RC1/RC4/RV2/GN1–GN4
+  and CH2 have been moved. Three could not be moved:
+  - `Made_kept`/`Made_within` (MO1, MO2): `X &+= Y` reads Y inside X, `(into).(external . {value})`, where a name the
+    block declares is not seen (`nothing reads Made_kept`). Reading Y first where it is written and then adding it did
+    not add it, because `(x).( … )` does not see the rule's locals either.
+  - `typed_named` (TP1): a method declared in a block is not a member of `[1, 2, 3]`.
+  - `Selfmade`/`Asserting` (CL7, CL17): a test inside a class's block inside an `assert { }` block does not run.
+  Those three are left at the top level.
+- (Answered 2026-10-17: a String's and a Number's `..` is Ordered's; both are ordered.) `1..3` (RQ1–RQ6) still reads Ray's
+  own `.. (last: Ray)` (Ray.ray:486) before Ordered's (Ray.ray:52), because §3.2 puts a value's own rules before what it
+  is made of, and `Iterable &+= Ordered` comes after Iterable's own `..`.
 - `2 ^ 3 ^ 2 == 512` (N143): `right-to-left` makes the operator as it is; nothing marks it to take the rest of the line,
   so it is cut at the second `^` like any other. (And `this ^ exponent.pred * this` in `^`'s body would then not mean
   `(this ^ exponent.pred) * this`.)

@@ -448,7 +448,7 @@ assert {
 assert {
   Base_said := class { said => `base` }
   Nested_said := class: Base_said (inner) => {
-    said => (inner === None) ? `nested` : inner.said
+    said => (.inner === None) ? `nested` : .inner.said
   }
   assert Nested_said(Nested_said(None)).said == `nested`  // RC4 a method calling itself on another instance read its parent's (a rule never reads itself: only on the value it runs on)
 }
@@ -483,6 +483,25 @@ assert {
     external label recurring
     {{body}}
     external label returned
+  }
+  // (called with `.` in it another value, `step.on(element) after accumulated`: reduce's; no call in brackets, so the
+  // accumulated value is given whole (a superposition is not taken apart: `reduce(|)` lays `|` on each edge, `1 | 2 | 3`))
+  {this}.on({receiver}) after {arguments} => {
+    external .
+    // (of two parameters, a lone operator's `(a, b) => a | b`: the value is the second, `reduce(|)` is `acc | .`)
+    ({{parameters}}) taking ((external several {parameters}) ? ({arguments}, {receiver}) : {arguments})
+    // (one parameter: its body read in the value, `.` the value; two, a lone operator's: read where it is, both sides its
+    // parameters (the accumulated value whole, a superposition too))
+    external receiving {receiver}
+    external label recurring
+    (external several {parameters}) ? ({{body}}) : ({receiver}).({{body}})
+    external label returned
+  }
+  // (given nothing, its parameter no default (`(acc) => acc + .`): the start is that value itself)
+  {this}.on({receiver}) => {
+    external .
+    // (of two parameters, a lone operator's: no start of its own either)
+    ((external several {parameters}) || (({{parameters}}) === None)) ? ({receiver}) : ({receiver}).({{body}})
   }
   .
 }
@@ -551,22 +570,24 @@ assert true reads_closed (false === false)  // CL1 a closure in a rule's body do
 }
 assert true reads_closed_on (. === true)  // CL2 a closure in a rule's body reads the rule's hole in code read on its parameter
 // A closure calls itself (recursion), directly or through a local
-recurring_flip (n) => n ? recurring_flip(false) : true
-assert recurring_flip(true)  // RC1 a call inside itself does not take its own argument
-continued_pick (step) => true
-  ? step
-  : false
-assert continued_pick(true)  // RC4 a body continued on the lines below it (deeper) was read as statements of its own (`? step` alone)
-recurring_local (n) => {
-  again := recurring_local
-  n ? again(false) : true
+assert {
+  recurring_flip (n) => n ? recurring_flip(false) : true
+  assert recurring_flip(true)  // RC1 a call inside itself does not take its own argument
+  continued_pick (step) => true
+    ? step
+    : false
+  assert continued_pick(true)  // RC4 a body continued on the lines below it (deeper) was read as statements of its own (`? step` alone)
+  recurring_local (n) => {
+    again := recurring_local
+    n ? again(false) : true
+  }
+  assert recurring_local(true)  // RV2 a call of itself through a local does not take its own argument
+  shadowed_name := false
+  takes_shadowed (shadowed_name) => shadowed_name
+  shadowed_taken := takes_shadowed(true)
+  assert shadowed_taken === true  // GN1 a parameter named as a visible name does not take its value
+  assert shadowed_name === false  // GN2 a parameter named as a visible name gave that one its value
 }
-assert recurring_local(true)  // RV2 a call of itself through a local does not take its own argument
-shadowed_name := false
-takes_shadowed (shadowed_name) => shadowed_name
-shadowed_taken := takes_shadowed(true)
-assert shadowed_taken === true  // GN1 a parameter named as a visible name does not take its value
-assert shadowed_name === false  // GN2 a parameter named as a visible name gave that one its value
 // (what is given by name, `f(x: 5)`: the callee's `x`, declared in what is called; the rest each in its place, in order)
 {on} given_names {passed} ^keyword => {
   {
@@ -638,7 +659,7 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
 {method}(.{section}) ^punctuation => .{method}((it) => it.{section})
 // (an argument using `.` on its own, `xs.every(candidate is .)`: a closure (every argument is one), `.` in it what it is
 // called with; its code read on that)
-{method}({code: Dotted}) ^punctuation => {method}((it) => it.({code}))
+{method}({code: Dotted}) ^punctuation => .{method}((it) => it.({code}))
 // `code**`: what is written, as a program.
 {code}** ^operator => Program(code: {code})
 
@@ -767,9 +788,9 @@ possible => (.members) ? .members : (((.superposes) === true) ? .components : [.
   holds (it) => it.({constraint})
   // (of a text type, `{length: Subscript.String}`: what the hole took as written, not what that code answers)
   {value: narrowed} => {
-    asked := ((narrows).textual === true) ? `{value}` : value
+    asked := ((.narrows).textual === true) ? `{value}` : value
     // (one of what it narrows first: the condition is asked of those alone (`2 <= .` is not asked of a class))
-    (((asked is narrows) === true) && (holds(asked) === true)) ? asked : (ERROR not one of what it narrows to)
+    (((asked is .narrows) === true) && (.holds(asked) === true)) ? asked : (ERROR not one of what it narrows to)
   }
 }
 // `x as T`: x, when it is a T; a text written as a T is (`"89" as Decimal`: the class as a text, `Decimal as String`, holds it),
@@ -831,7 +852,7 @@ assert false applying === to false  // RB1 a body's `(l) {operator} {r}` read as
 }
 {name: Name} | {other} := {value} => {
   {name} := {value}
-  {other} => {name}
+  {other} => .{name}
 }
 // NA1 one of two names written together does not read the rule
 assert {
@@ -853,6 +874,8 @@ assert {
 }
 interior => {
   external .
+  // (what it holds are members: a bare name never reads them, `.name` does)
+  external members
   .
 }
 extended () => .interior
@@ -936,7 +959,7 @@ class: <{generics}>({parameters}): {result} {`{`}{block}{`}`} ^keyword => class:
 // (a member of an instance, then an operator: the operator read on the member's value, not on the instance)
 assert {
   Carrying := class (carried) => {
-    again => carried
+    again => .carried
   }
   assert Carrying(true).carried === true  // CI1 a field given true is not true
   assert Carrying(`a`).carried == `a`  // CI6 a field given a text is not that text (an argument read only as a word)
@@ -945,7 +968,7 @@ assert {
   assert carrier.again === true  // CI3 a method of an instance held in a name does not answer its field
   Holding_class := class (held) => {
     static Inner := class (inner) => {
-      own => inner
+      own => .inner
     }
   }
   assert Holding_class.Inner(true).own  // CI7 a class called as a member of another made one of that other (`this` the class it is a member of)
@@ -1079,7 +1102,8 @@ Asserting := class {
   assert Asserting.checked  // CL17 a class whose block asserts on it is run again each time the test reads it, without end
 }
 // `static`: read where it is (a class's block is read once for the class).
-static {statement} ^keyword => {statement}
+// (what it defines is the class's own, not an instance's: a bare name reads it, as it reads a global)
+static {statement} ^keyword => external static {statement}
 // `inline x`: the code x holds (a hole's), read right here (`keeps: { inline selection }`)
 inline {code} ^keyword => {code}
 // (and as a value, the class: of a class itself, of an instance its class (`static{2 <= .}`, `integer: static`))
@@ -1132,7 +1156,8 @@ assert {
 // A value checked against a type: reported when it is not one (None, and anything against no type, pass).
 type := None
 checked {type} ^keyword => {
-  unless (type === None) || (. === None) || (. is type) {
+  // (a type nothing defines: said where it is written, and nothing checked)
+  unless (type === None) || (. === None) || (external undefined type) || (. is type) {
     ERROR a value is not of the type it is given to: {type}
   }
   // (as that type: itself when it is one, else what it converts to that is (the equivalence graph, `3` given to `x: Signed`))
@@ -1376,10 +1401,12 @@ text_given (place, span) => {
   value
 }
 // (a function's parameters, one of two named as a visible name, after `,` is defined, where a call reads it)
-listed_shadow := false
-takes_listed (listed_shadow, other_listed) => listed_shadow
-assert takes_listed(true, false) === true  // GN3 a parameter of two named as a visible name does not take its value (`,`'s body reads its parts as values: in a left side they are read as left sides first)
-assert listed_shadow === false  // GN4 a parameter of two named as a visible name gave that one its value
+assert {
+  listed_shadow := false
+  takes_listed (listed_shadow, other_listed) => listed_shadow
+  assert takes_listed(true, false) === true  // GN3 a parameter of two named as a visible name does not take its value (`,`'s body reads its parts as values: in a left side they are read as left sides first)
+  assert listed_shadow === false  // GN4 a parameter of two named as a visible name gave that one its value
+}
 // (a class written as a structure, its header a list of positions (`class a: T, ".", b: U { … }`): declared after `,`, so the
 // whole definition reads as one, not as a list of its parts)
 // (its header begins with a field's name, `Header`: `class: P { … }` is not one)
@@ -1434,7 +1461,7 @@ assert {
   Holder := class {
     Side := enum left | right {
     }
-    side => Side.left
+    side => .Side.left
   }
   assert Holder.Side.left  // EM22 an enum inside a class has no members
   assert Holder.Side#.count == 2  // EM23 an enum inside a class lost a member
@@ -1446,7 +1473,7 @@ assert {
     first => 1
     second => 2
   }
-  assert Grouped.(first + second) == 3  // GP1 .( ) does not read the members of what is before it
+  assert Grouped.(.first + .second) == 3  // GP1 .( ) does not read the members of what is before it
 }
 assert {
   TA := class { }
@@ -1472,7 +1499,7 @@ assert {
   Parent := class {
     named: "p"
     flag: false
-    greet => named
+    greet => .named
   }
   Child := class: Parent {
     extra: "e"
@@ -1537,12 +1564,12 @@ assert {
 }
 assert {
   Greeter := class {
-    greeting => name
-    twice => greeting
+    greeting => .name
+    twice => .greeting
   }
   Loud := class: Greeter {
     greeting => global
-    polite => super.greeting
+    polite => .super.greeting
   }
   loud := Loud(name: global)
   assert loud.polite  // C22 super.greeting did not run the parent's method on the instance
@@ -1578,13 +1605,13 @@ assert {
   assert Pair(right: 3, left: 4).total == 7  // HD3 header fields are not taken by name
   assert Pair(1).right == 7  // HD4 a header default is not used when not given
   Tagged := class ("#", tag: Decimal) => {
-    doubled => tag * 2
+    doubled => .tag * 2
   }
   assert Tagged(tag: 4).doubled == 8  // HD7 a class read by its pattern has no named part as a field
   tagged_of {written: Tagged} => written
   assert (tagged_of #21).tag == 21  // HD8 a class written as a pattern does not read its text
   Sub := class: Pair (": ", first: Number) => {
-    head => first
+    head => .first
   }
   assert Sub(first: 2).head == 2  // HD9 class: Parent (pattern) has no field from its pattern
   assert Sub(first: 2) is Pair  // HD10 class: Parent (pattern) is not built on Parent
@@ -1807,12 +1834,12 @@ assert {
   Implicit := class {
     helper (x) => x + this.base
     base => 1
-    calls () => helper(2)
+    calls () => .helper(2)
   }
-  assert Implicit().calls() == 3  // MI1 a method called bare in another of its class is not called on the same value
+  assert Implicit().calls() == 3  // MI1 a method called as `.helper` in another of its class is not called on the same value
   Passing := class {
     inner (other) => other + 1
-    outer (other) => inner(other)
+    outer (other) => .inner(other)
   }
   assert Passing().outer(1) == 2  // MI2 a method passing its parameter to another whose parameter is named the same is not given it
 }
@@ -1850,9 +1877,9 @@ assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
 assert 1 is Array  // TY63 a number is not an array
 // (a text is its characters: the first, then the rest (`first`, `rest`, by the kernel's map for what it holds); none, empty)
 String := class: Array {
-  empty => !first
+  empty => !.first
   // (`t[n]`: its nth character, from 0, by what it holds (its first and rest), as a list's by its links)
-  indexed (index) => empty ? None : ((index == 0) ? first : rest.indexed(index - 1))
+  indexed (index) => .empty ? None : ((index == 0) ? .first : .rest.indexed(index - 1))
   textual := true
   // (a `.` in it on its own, not after a name or what closes, nor before a name: code of what it is read on)
   bare_dot => dot_alone(` `, this)
@@ -1877,7 +1904,7 @@ assert 1 + 2 as String == "3"  // PR38 as does not bind looser than plus
 assert ("A", "A") is ...String  // SD3 ...T is not T[]
 // (a number stands for a bit: as a condition, zero does not hold)
 Number := class {
-  ? {yes} : {no} => (next === None) ? no : yes
+  ? {yes} : {no} => (.next === None) ? no : yes
 }
 assert 5 is Number  // TY5 five is not a Number
 // Narrowings ask the constraint as well as what they narrow
@@ -2036,8 +2063,10 @@ assert !(Made_kept.descends(Made_within))  // MO1 a part given to what is made o
 assert Made_within.descends(Made_kept)  // MO2 what is made of a class does not descend from it
 // (a choice written apart holds a `,` between its `?` and `:`, and, written as a statement, after its `:` too)
 assert (true ? `a`, `b` : `c`).count == 2  // CH1 a choice did not hold the list between its ? and :
-chosen_rest (flag) => flag ? [] : `x`, `y`
-assert chosen_rest(false).count == 2  // CH2 a choice written as a statement did not hold the list after its :
+assert {
+  chosen_rest (flag) => flag ? [] : `x`, `y`
+  assert chosen_rest(false).count == 2  // CH2 a choice written as a statement did not hold the list after its :
+}
 // (a word and `=>` as an argument is a closure of it, not a rule of the scope the call is in)
 assert [`a`].map(item_given => item_given).count == 1  // LA1 a closure of one word given as an argument was not called
 // (an operator missing a side is the function of what it misses)

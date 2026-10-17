@@ -93,7 +93,7 @@ String &+= {
   assert "a".succ == "b"  // SO2 the character after a is not b
 
 
-  words => split(Char.Blank | "_")
+  words => .split(Char.Blank | "_")
   assert "a b".words.length == 2  // W8 words did not split in two
   assert "a b".words as String == "ab"  // S65 joining a and b with nothing between is not ab
   assert "a".words.join("-") == "a"  // SJ4 joining one element with a dash is not that element
@@ -104,10 +104,10 @@ String &+= {
   assert "ab_cd".words.length == 2  // S126 ab_cd is other than two words
 
   //TODO Uncide support
-  plural => ends_with("s") ? this : this + "s"
+  plural => .ends_with("s") ? this : this + "s"
   assert "cat".plural == "cats"  // W11 plural failed
   assert "cats".plural == "cats"  // S53 the plural of cats is not cats
-  singular => ends_with("s") ? this[..<-1] : this
+  singular => .ends_with("s") ? this[..<-1] : this
   assert "cats".singular == "cat"  // S51 the singular of cats is not cat
   assert "cat".singular == "cat"  // S52 the singular of cat is not cat
 
@@ -178,12 +178,12 @@ String &+= {
   }
   indentation => (this ~= ⊢ " "[]).length
   assert "  x".indentation == 2  // ST11 two spaces are not an indentation of two
-  common_indentation => lines{!.trimmed.empty}.map(.indentation).min ?? 0
-  dedented => lines.map(.trimmed.empty ? "" : .[common_indentation..]).join(\n)
+  common_indentation => .lines{!.trimmed.empty}.map(.indentation).min ?? 0
+  dedented => .lines.map(.trimmed.empty ? "" : .[this.common_indentation..]).join(\n)
   assert "  a\n    b".dedented == "a\n  b"  // ST12 dedenting does not keep only the difference
   assert "a\n  b".dedented == "a\n  b"  // ST13 a text already at no indentation changed
-  literal_dedented => lines.count == 1 || !lines.first.trimmed.empty ? this
-    : (lines[1..] -- (.last.trimmed.empty ? .[..<-1] : .)).join(\n).dedented
+  literal_dedented => .lines.count == 1 || !.lines.first.trimmed.empty ? this
+    : (.lines[1..] -- (.last.trimmed.empty ? .[..<-1] : .)).join(\n).dedented
 
   replace (old: String, new: String) => split(old).join(new)
 
@@ -202,7 +202,7 @@ String[] &+= {
 String{length == 1} as Char => first
 
 Placement := class (nth_class: Number, written_at: Number) => {
-  chainable <= (other: Placement) => nth_class < other.nth_class || (nth_class == other.nth_class && written_at >= other.written_at)
+  chainable <= (other: Placement) => .nth_class < other.nth_class || (.nth_class == other.nth_class && .written_at >= other.written_at)
 }
 Node &+= {
   placed (spelled) => classes.enumerate{.value.written_as.precedence(spelled) != None}.first

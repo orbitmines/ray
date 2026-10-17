@@ -189,7 +189,6 @@ String &+= {
 
 
   as (base: Number.Base) => Number.numeral(base)(integer: this)
-  as (=== Decimal) => Decimal(integer: this)
 
   find_all (pattern: String) => (this ~= pattern)#.index
 }

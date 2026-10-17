@@ -40,7 +40,13 @@ encoding depends on the prefixes read before it.
 ## Found on main (e6bcbbb2)
 
 - A map literal works: `{ symbol: 1, bits: `01` }.bits`. Named parts in brackets lose their names: `(index: 1, value: 2)`
-  is the list `1, 2`, so `enumerate` and DEFLATE's Huffman codes fail.
+  is the list `1, 2`, so `enumerate` (IT66), `zip`, `sliced` and DEFLATE's Huffman codes (DF1) fail.
+- Why, and how far a rule gets (branch `core/record-fields`, local): the record rule is declared before `{list}, {other}`,
+  so it never sees a `,`. Declared after it, as `Header` is, and reading what follows the first name as `Arguments`, a
+  record holds every name at the top level of a file of the bootstrap: RF1 to RF4 and RF8 pass, and none of main's 737
+  passing asserts is lost. In a block (`assert { … }`, a method's body, so `enumerate`'s) and in a file read with `read
+  given` (`$/Deflate.project.ray`) only the first name is held, with booleans as with numbers, while a class given names
+  in the same block holds them. The difference is in how the kernel reads a block's code, so it is the owner's.
 - Partial arguments fail in every form.
 - Named arguments to a closure work; to a class they do not: the constructor's typed hole `{arguments: Arguments}`
   rejects `left: 1, right: 2`, the call is read as a group, and the fields stay None. Making the hole untyped fixes them

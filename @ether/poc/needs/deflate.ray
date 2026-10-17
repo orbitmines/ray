@@ -1,0 +1,40 @@
+// What the DEFLATE proof (`$/Deflate.project.ray`, at tag `machine-code-proof`) needs from the core library, each as one
+// check; the proof comes back once all of them pass. Reading streams also needs class headers read as bits (`Choices.md`
+// C3), not checked here. From `@ether/v0.ts`: `node --import tsx src/language.ts -t --threads 1
+// ../ray/bootstrap/.entrypoint.ray3 ../poc/needs/deflate.ray`.
+
+assert 9 + 1 == 10  // NE1 a numeral of two digits is not read
+assert 255 + 1 == 256 && 65535 + 1 == 65536  // NE2 the sizes a Huffman code counts to are not reached
+assert 2 < 3 && 3 > 2 && 3 <= 3 && 3 >= 3  // NE3 numbers are not compared
+assert 1 + 2 * 3 == 7  // NE4 multiplication does not come before addition
+assert 5.binary(4) == `0101`  // NE5 a number's bits at a width are not its text
+assert [1, 2, 3].count == 3  // NE6 a list does not count what it holds
+assert [1, 2, 3][1] == 2  // NE7 a list is not indexed
+assert [1, 2] == [1, 2] && !([1, 2] == [2, 1])  // NE8 two lists are not equal by what they hold
+assert [0] * 3 == [0, 0, 0]  // NE9 a list is not repeated
+assert [1, 2, 3].find((x) => x > 1) == 2  // NE10 a list does not find the first that holds
+assert [3, 1, 2].sort_by((x) => x) == [1, 2, 3]  // NE11 a list is not sorted by a key
+assert (symbol: 1, bits: `01`).bits == `01`  // NE12 a record of named parts does not give its field (as Deflate.project.ray and Ray.ray's enumerate write one)
+
+needs_appended := []
+needs_appended.append(4)
+assert needs_appended.count == 1 && needs_appended.head.value == 4  // NE13 a list does not grow by append
+
+needs_total := 0
+needs_k := 0
+while needs_k < 4 {
+  needs_total = needs_total + needs_k
+  needs_k = needs_k + 1
+}
+assert needs_total == 6  // NE14 a while loop does not run to its end
+
+needs_counted := 0
+(needs_counted = needs_counted + 1) if 1 == 1
+assert needs_counted == 1  // NE15 a statement with if is not done when it holds
+
+NeedsPair := class left: Decimal {
+  static zero := 0
+  doubled => .left * 2
+}
+assert NeedsPair(3).doubled == 6  // NE16 a class does not answer a method on its field
+assert NeedsPair.zero == 0  // NE17 a class does not keep its static

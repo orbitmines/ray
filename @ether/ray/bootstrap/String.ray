@@ -55,11 +55,14 @@ Escape := {
 }
 dynamically Escape.for spelling => global[spelling] := spelling -- (spelled => Escape reducing spelled)
 
-\\{prefix: "x" | "u" | "U"}{codepoint: Hexadecimal{length == (x: 2, u: 4, U: 6)[prefix]} | ("{", codepoint: Hexadecimal{length == 1..6}, "}")}: Char => codepoint
+\\{prefix: "x" | "u" | "U"}{codepoint: Hexadecimal{.length == (x: 2, u: 4, U: 6)[prefix]} | ("{", codepoint: Hexadecimal{.length == 1..6}, "}")}: Char => codepoint
 \w = Char.Word
 assert "_"[0] is \w  // SE13 an underscore is not a word escape
 \W = !\w
 assert "-"[0] is \W  // SE14 a dash is not a non-word escape
+\s = Char.Blank
+assert " "[0] is \s  // SE30 a space is not a blank escape
+assert !("a"[0] is \s)  // SE31 a letter is a blank escape
 
 Balanced := (Char{!= "{" && != "}" && != "\""} | ("{", Balanced, "}"))[]
 Interpolation := class ("{", code: Balanced, "}") => { }
@@ -199,7 +202,7 @@ String[] &+= {
   as (=== String) => this.reduce(,)
 }
 
-String{length == 1} as Char => first
+String{.length == 1} as Char => .first
 
 Placement := class (nth_class: Number, written_at: Number) => {
   chainable <= (other: Placement) => .nth_class < other.nth_class || (.nth_class == other.nth_class && .written_at >= other.written_at)

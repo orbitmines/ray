@@ -2161,6 +2161,10 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     - An undefined type is said where it is written (`external undefined`, in `checked`). `Integer := Number |
       Number.Signed`.
     - Arguments inside `x.( … )` see where the code was written (`2.(1 + y)`).
+    - `x: T` sets the type and, given no value yet, the value T: all T may be, superposed (`external unset x T`). A named
+      argument `f(x: 5)` is the same: x is 5 and of type 5. `Shape.circle.radius === Number`;
+      `Shape.circle(radius: 5).radius == 5` (an enum member with fields makes one of itself, given them).
+    - A member that is not there, read as one (`x.missing`), is nothing.
 - Code read in a value it was not written in, `x.( … )`, reads with x's rules first, then where it was written.
 - A head made only of holes of where it is written (`{operator} {rest} => {body}` in `chainable`) is read as the text they
   took, as written, one expression (`== (other: Number)`): a method, not each part apart.

@@ -637,7 +637,9 @@ assert {
     each_part := (((each_taken).listing === true) && ((each_taken).spread === true)) ? each_taken : Array.new.append(each_taken)
     each_taken_at := each_part.head
     while each_place {
-      // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing)
+      // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing; given in its place, `(4, "-", 9)`,
+      // that text is passed over)
+      if ((each_place.value).textual === true) && each_taken_at && ((each_taken_at.value).textual === true) && ((each_taken_at.value).same_characters(each_place.value) !== None) { each_taken_at = each_taken_at.next }
       unless (each_place.value).textual === true {
         each_by_name := each_part.find((named_part) => ((named_part).named_argument === true) && ((named_part).name.same_characters(each_place.value) !== None))
         while (each_by_name === None) && each_taken_at && ((each_taken_at.value).named_argument === true) { each_taken_at = each_taken_at.next }
@@ -658,7 +660,7 @@ assert {
 }
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses.
-{method}(.{section}) ^punctuation => .{method}((it) => it.{section})
+{method}(.{section}) ^punctuation => .{method}((it) => it.(.{section}))
 // (an argument using `.` on its own, `xs.every(candidate is .)`: a closure (every argument is one), `.` in it what it is
 // called with; its code read on that)
 {method}({code: Dotted}) ^punctuation => .{method}((it) => it.({code}))
@@ -1242,12 +1244,15 @@ enum {names} ^keyword => {
   // (a member written with fields, `circle (radius: Number)`: one holding them)
   // (given nothing, each field its type, `Shape.circle.radius === Number`)
   // (and once it is there, a member and brackets: one made of it, `Shape.circle(radius: 5)`)
-  {member: Name} ({fields}) => ((.{member}) === None) ? ({member} := ({
-    {fields}
-    {this}({arguments}) => (this &+ {
-      ({{fields}}) taking {arguments}
+  {member: Name} ({fields}) => ((.{member}) === None) ? (
+    {member} := ({
+      {fields}
+      {this}({arguments}) => (this &+ {
+        ({{fields}}) taking {arguments}
+      })
     })
-  })) : (.{member})({fields})
+    .{member}
+  ) : (.{member})({fields})
   members := (.({names}))#
   // (one after another, as written: each member a Ray of them)
   {
@@ -1433,7 +1438,10 @@ assert {
 Header := {
   {field: Name}: {rest} => `{field}`
 }
+// (with no block, an empty one: `class only: Number`; before the forms with one)
+class {fields: Header} ^keyword => class {fields} { }
 class {fields: Header} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
+{name} := class {header: Header} ^class => {name} := (class ({header}) => { })
 {name} := class {header: Header} {`{`}{block}{`}`} ^class => {name} := (class ({header}) => { {block} })
 // Statements on one line: `a ; b` (declared after everything else here: the loosest of all, `x = 1 ; y = 2` two).
 {first} ; {rest} ^punctuation => {
@@ -2000,8 +2008,9 @@ theme {name} {written} ^keyword => {
     }
     // (each one written: what it took, the style and what it is shown as)
     made &+= {
-      ^{style} = ^{shown} => styles.append(external &)
-      ^{style} = ^ {shown} => styles.append(external &)
+      // (the `^`s written as text: `{lhs} ^{style} => …` would read the head as one shown in a style)
+      {`^`}{style} = {`^`}{shown} => .styles.append(external &)
+      {`^`}{style} = {`^`} {shown} => .styles.append(external &)
       {written}
     }
     Theme.current = made

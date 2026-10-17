@@ -169,9 +169,9 @@ external given `{given} given {value}`
 // the kernel reads (each character one of them), the same as its rules)
 external glyphs `{element}[]`
 // (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it, the node the call
-// runs in. Off: without it LS4 (`["a", "b"].map((x) => x).last`, a closure's `x` called from one whose parameter is `x`)
-// fails; with it, it passes: it does not answer what the language does)
-// external taking `({written_parameters}) taking {arguments_given}`
+// runs in. LS4 (`["a", "b"].map((x) => x).last`, a closure's `x` called from one whose parameter is `x`) passes with it and
+// without it now)
+external taking `({written_parameters}) taking {arguments_given}`
 // Numbers: what the kernel holds as a count, a number the kernel counts, is a Counted (`count`), a Number whose `next` the
 // kernel answers (the count before it; of zero, nothing); a numeral is one (the count its digits write), and a text's
 // characters are Counted_chars, Chars (each its code point). Number's own `succ` and operators, named here, on what the kernel

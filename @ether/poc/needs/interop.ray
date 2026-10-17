@@ -1,7 +1,7 @@
 // What the interop proof (`poc/interop`, at tag `machine-code-proof`: C and Python read into Ray, Rust and C written from
 // it) needs from the core library, each as one check. Run as `deflate.ray` is.
 
-assert `ab` + `c` == `abc`  // NE20 two texts are not joined
+assert `abc` == `ab`, `c`  // NE20 two texts are not joined (as Design.md §5.1 joins them)
 assert ((1 == 1) ? `yes` : `no`) == `yes`  // NE21 a choice does not give its first value when it holds
 assert (None ?? `kept`) == `kept`  // NE22 ?? does not fall back on nothing
 assert `f1` fits_pattern `^[a-z][0-9]$`  // NE23 a text is not matched against a pattern

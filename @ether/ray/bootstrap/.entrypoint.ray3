@@ -637,7 +637,9 @@ assert {
     each_part := (((each_taken).listing === true) && ((each_taken).spread === true)) ? each_taken : Array.new.append(each_taken)
     each_taken_at := each_part.head
     while each_place {
-      // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing)
+      // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing; given in its place, `(4, "-", 9)`,
+      // that text is passed over)
+      if ((each_place.value).textual === true) && each_taken_at && ((each_taken_at.value).textual === true) && ((each_taken_at.value).same_characters(each_place.value) !== None) { each_taken_at = each_taken_at.next }
       unless (each_place.value).textual === true {
         each_by_name := each_part.find((named_part) => ((named_part).named_argument === true) && ((named_part).name.same_characters(each_place.value) !== None))
         while (each_by_name === None) && each_taken_at && ((each_taken_at.value).named_argument === true) { each_taken_at = each_taken_at.next }
@@ -1436,7 +1438,10 @@ assert {
 Header := {
   {field: Name}: {rest} => `{field}`
 }
+// (with no block, an empty one: `class only: Number`; before the forms with one)
+class {fields: Header} ^keyword => class {fields} { }
 class {fields: Header} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
+{name} := class {header: Header} ^class => {name} := (class ({header}) => { })
 {name} := class {header: Header} {`{`}{block}{`}`} ^class => {name} := (class ({header}) => { {block} })
 // Statements on one line: `a ; b` (declared after everything else here: the loosest of all, `x = 1 ; y = 2` two).
 {first} ; {rest} ^punctuation => {

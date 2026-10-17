@@ -531,21 +531,22 @@ export async function main() {
     });
   }
 }
-// What was read, kept on disk (in `~/.cache/ray`, by the command and the kernel): its files, each by what it held then; one
+// What was read, kept on disk (in `~/.cache/ray`, the latest command and kernel only): its files, each by what it held then; one
 // of them changed (edited), read again and kept again.
 class Cache {
   static readonly BUFFERS = ['source', 'metadata', 'paths', 'index', 'fileState'] as const;
   static readonly PAGE = 1 << 14;
   steps: { files: [string, string][], handled: number, end: number, sizes: number[] }[] = [];
   private previous?: Uint8Array; private known = 0; private files = 0; private language?: Program;
-  constructor(readonly dir: string) {}
+  constructor(readonly dir: string, readonly key: string) {}
   static hash(bytes: Uint8Array | string) { return (env.import('crypto') as typeof import('crypto')).createHash('sha1').update(bytes).digest('hex'); }
   static of(args: string[]) {
     const me = env.url.fileURLToPath(import.meta.url), map = env.url.fileURLToPath(new URL('./wasm.o.ray', import.meta.url));
     const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '');
     const read_with = Object.fromEntries(Object.entries(kwargs).filter(([k]) => k !== 'threads' && k !== 'verbose'));
-    const cache = new Cache(env.path.join(env.os.homedir(), '.cache', 'ray', Cache.hash(JSON.stringify([process.cwd(), args, read_with, kernel]))));
-    try { cache.steps = JSON.parse(env.fs.readFileSync(env.path.join(cache.dir, 'steps.json'), 'utf8')); } catch { cache.steps = []; }
+    // (one entry: of another command or kernel, its steps not kept (their files written over))
+    const cache = new Cache(env.path.join(env.os.homedir(), '.cache', 'ray'), Cache.hash(JSON.stringify([process.cwd(), args, read_with, kernel])));
+    try { const kept = JSON.parse(env.fs.readFileSync(env.path.join(cache.dir, 'steps.json'), 'utf8')); cache.steps = kept.key === cache.key ? kept.steps : []; } catch { cache.steps = []; }
     return cache;
   }
   private at(name: string) { return env.path.join(this.dir, name); }
@@ -604,7 +605,7 @@ class Cache {
       for (let id = this.files; id < language.files.count; id++) { const at = language.files.getPath(id); if (typeof at === 'string' && env.fs.existsSync(at)) files.push([at, Cache.hash(env.fs.readFileSync(at))]); }
       this.files = language.files.count;
       this.steps[i] = { files, handled, end, sizes };
-      env.fs.writeFileSync(this.at('steps.json'), JSON.stringify(this.steps));
+      env.fs.writeFileSync(this.at('steps.json'), JSON.stringify({ key: this.key, steps: this.steps }));
     } catch (error) { say(`${ansi.orange}WARNING${ansi.reset} what was read was not kept: ${(error as Error).message}`); }
   }
 }
@@ -3899,7 +3900,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let here = w(t + T_DECL) && w(t + T_DEFIN) ? w(t + T_DEFIN) : self;
     // (a name nothing reads yet, read bare in what holds members (a class's block before the class has its name, `Ray()` in
     // Ray's): a place where that is written, not a member of it (§21.3))
-    if (!w(t + T_DECL) && !making(self)) for (let up = 0; here && w(here + N_IS) === IS_NODE && w(w(here + N_BASE) + R_KIND) === MEMBERS_MARK && w(here + N_PARENT) && up < 64; up++) here = w(here + N_PARENT);
+    if (0 && !w(t + T_DECL) && !making(self)) for (let up = 0; here && w(here + N_IS) === IS_NODE && w(w(here + N_BASE) + R_KIND) === MEMBERS_MARK && w(here + N_PARENT) && up < 64; up++) here = w(here + N_PARENT);
     const place = place_of(s, e, here), named_ = alloc(R_PART + PART);
     if (DEBUG) debug(D_FAULT, 1107, s, e);
     // (what a definition's head declares, about to be defined (`! => …`): no rule of a place left beside the one it defines)

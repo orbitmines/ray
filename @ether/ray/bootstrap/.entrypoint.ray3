@@ -2003,8 +2003,9 @@ theme {name} {written} ^keyword => {
     }
     // (each one written: what it took, the style and what it is shown as)
     made &+= {
-      ^{style} = ^{shown} => styles.append(external &)
-      ^{style} = ^ {shown} => styles.append(external &)
+      // (the `^`s written as text: `{lhs} ^{style} => …` would read the head as one shown in a style)
+      {`^`}{style} = {`^`}{shown} => .styles.append(external &)
+      {`^`}{style} = {`^`} {shown} => .styles.append(external &)
       {written}
     }
     Theme.current = made

@@ -2182,7 +2182,7 @@ const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 7
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
-const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset'];
+const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
@@ -2421,9 +2421,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (this thread's words: given, a constant of what is compiled for it)
   const THREAD = thread | 0, CHUNK = 1 << 16;
   // (a thread's words)
-  const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_WRITER_SELF = 272, T_LB = 276, T_WRITER = 280, T_TV = 284, T_TVS = 288, T_TVE = 292, T_MEMBER_S = 296, T_MEMBER_E = 300, T_ALL_S = 304, T_ALL_E = 308, T_TOKEN = 312, T_HERE = 316, T_IN2_S = 320, T_IN2_E = 324, T_IN2_F = 328, T_DEFIN = 332, T_OMEMO = 336, T_QBUDGET = 340, T_UNALIGNED = 344, T_WRITTEN_IN = 348, T_CHECKS = 352, CHECKS = 30, T_STACK = 480, T_DEEPC = 484, T_GIVEN = 488, T_GIVEN_N = 492, T_ALT = 496, T_BEGUN = 500, T_BEGUN_N = 504, T_GREW = 508, T_FREE_TAKEN = 512, T_SKIPS = 516, T_SKIPS_N = 520, T_NAMING = 524, T_NAMING_N = 528, GROWN = 5 << 26, TEST_GROWN = 1 << 25, GIVEN_N = 16, OMEMO_MASK = (1 << 14) - 1, LEFTS = 64, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64, BEGUN = 40;
+  const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_WRITER_SELF = 272, T_LB = 276, T_WRITER = 280, T_TV = 284, T_TVS = 288, T_TVE = 292, T_MEMBER_S = 296, T_MEMBER_E = 300, T_ALL_S = 304, T_ALL_E = 308, T_TOKEN = 312, T_HERE = 316, T_IN2_S = 320, T_IN2_E = 324, T_IN2_F = 328, T_DEFIN = 332, T_OMEMO = 336, T_QBUDGET = 340, T_UNALIGNED = 344, T_WRITTEN_IN = 348, T_CHECKS = 352, CHECKS = 30, T_STACK = 480, T_DEEPC = 484, T_GIVEN = 488, T_GIVEN_N = 492, T_ALT = 496, T_BEGUN = 500, T_BEGUN_N = 504, T_GREW = 508, T_FREE_TAKEN = 512, T_SKIPS = 516, T_SKIPS_N = 520, T_NAMING = 524, T_NAMING_N = 528, GROWN = 15 << 25, TEST_GROWN = 1 << 25, GIVEN_N = 16, OMEMO_MASK = (1 << 14) - 1, LEFTS = 64, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64, BEGUN = 40;
   // (the words the host knows, at WORDS: where each is and how long)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_SPAN = 17;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_SPAN = 17;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 32;
@@ -2431,7 +2431,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   const T_START = 0, T_END = 4, T_VIS = 8, T_ORIGIN = 12, T_THIS = 16, T_VALUE = 20, T_STATE = 24, T_LEX = 28;
   const R_PREV = 0, R_KIND = 4, R_MASK = 8, R_HOLES = 12, R_BS = 16, R_BE = 20, R_CLOSURE = 24, R_PARTS = 28, R_HEAD = 32, R_FLAGS = 36, R_OWNER = 40, R_BODY = 44, R_SKIP = 48, R_INL_S = 52, R_INL_E = 56, R_INL_F = 60, R_ALL_S = 64, R_ALL_E = 68, R_STAMP = 72, R_IN2_S = 76, R_IN2_E = 80, R_IN2_F = 84, R_FN = 88, R_SIG = 92, R_PART = 96, PART = 24, SKIPS = 130, SEQ_AT = 130, KIND_AT = 131, MANY = 12;
   const RULE = 0, DEFINE = 1, EXTERNAL = 2, VALUE = 3;
-  const LITERAL = 0, SPACE = 1, HOLE = 2, HUG = 16, WORD = 32, VALUED_HOLE = 64;
+  const LITERAL = 0, SPACE = 1, HOLE = 2, HUG = 16, WORD = 32, VALUED_HOLE = 64, OPER = 128;
   // (IS_CALLED: in a left side, a place and the brackets after it, `f (x)`: its head (N_A to N_B), the place (N_PARENT))
   // (IS_APPLIED: in a left side, a closure and a name after it, no brackets, `xs.for x`: what the head reads up to the name (N_A
   // to N_B), the name's end (N_PARENT))
@@ -3085,6 +3085,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         while (p > at && b(p - 1) <= 32) p--;
         if (p <= at) return -1;
         if (w(q) & WORD) for (let x = at; x < p; x++) if (b(w(CLASSES) + b(x)) !== 1) return -1;
+        if (w(q) & OPER) for (let x = at; x < p; x++) if (b(w(CLASSES) + b(x)) !== 2) return -1;
         if (type && !typed(r, at, p, type, s)) return -1;
         set(cap, at); set(cap + 4, p);
         return p;
@@ -3104,6 +3105,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         set(cap, at); set(cap + 4, p);
         return e;
       }
+      // (an operator hole, `[x]`: the operator there, all of it, and no more)
+      if (w(q) & OPER) { let oe = at; while (oe < end && b(w(CLASSES) + b(oe)) === 2) oe++; if (oe === at) return -1; const e: number = match(r, k, oe, end, s); if (e >= 0) { set(cap, at); set(cap + 4, oe); return e; } return -1; }
       const later = type && !untyped(r, k);
       // (before brackets written against it, `{f}(…)`: never ending in an operator, `(on).(code)` is no call of `(on).`)
       const nq = r + R_PART + PART * k, called = (w(nq) & 15) === LITERAL && (b(w(nq + 4)) === 40 || b(w(nq + 4)) === 91) ? 1 : 0;
@@ -4330,6 +4333,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (`external unset v`: whether v is a name given no value yet, a place)
       // (`external unset v t`: v a name given no value yet, a place: given t, where it is named)
       if (word(a, m, W_UNSET) && rest < z) { let q = rest; while (q < z && b(q) > 32) q++; const v = block(t, rest, q, names, f, self, 0, 1, 0, self, 0); if (!v || w(v + N_IS) !== IS_PLACE || q >= z) return v && w(v + N_IS) === IS_PLACE ? w(TRUE_) : w(FALSE_); const given = block(t, skip(q, z), z, names, f, self, 0, 1, 0, self, 0); if (given && w(v + N_A) < w(v + N_B)) bound(w(v + N_A), w(v + N_B), place_in(v) || self, given); return given; }
+      // (`external operated v`: whether the text v is only an operator's characters, `+`, `..<`)
+      if (word(a, m, W_OPERATED) && rest < z) { const v = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); return v && w(v + N_IS) === IS_TEXT && operated(w(v + N_A), w(v + N_B)) ? w(TRUE_) : w(FALSE_); }
       if (word(a, m, W_MEMBERS)) { const n = names && w(names + N_IS) === IS_FRAME ? w(names + F_THIS) : self; if (n && n !== w(GLOBAL)) set(w(n + N_BASE) + R_KIND, MEMBERS_MARK); return n; }
       if (word(a, m, W_GOTO)) { go(t, rest, z - rest, f, 0); return 0; }
       if (word(a, m, W_INCLUDE) || word(a, m, W_READ)) { files(word(a, m, W_INCLUDE) ? 1 : 2, rest, z, names); return 0; }
@@ -4337,7 +4342,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (mapped(a, m, M_TEXT)) { set(TEXTS, w(f + F_THIS)); return 0; }
       // (`given `{given} given {value}``: that rule, what it was given a head (one name defined): that head, what its own body
       // answers (an acceleration: the same with it and without))
-      if (mapped(a, m, M_GIVEN) || mapped(a, m, M_TAKING) || mapped(a, m, M_GLYPHS) || mapped(a, m, M_SUPERPOSING)) { const flag = mapped(a, m, M_GIVEN) ? GIVES : mapped(a, m, M_GLYPHS) ? GLYPHS : mapped(a, m, M_SUPERPOSING) ? SUPERPOSING : TAKES; let q = rest, y = z; if (b(q) === 96 && b(y - 1) === 96 && y - q > 1) { q++; y--; } if (flag === SUPERPOSING) { set(SUPERPOSING_AT, q); set(SUPERPOSING_AT + 4, y - q); } for (let o = latest(w(GLOBAL)), k = 0; o && k < 1 << 20; o = w(o), k++) { const hd = w(o + R_HEAD); if (w(o + R_KIND) === RULE && hd && w(hd + N_B) - w(hd + N_A) === y - q && same(q, w(hd + N_A), y - q)) { set(o + R_FLAGS, w(o + R_FLAGS) | flag); if (flag === TAKES) spans(o); break; } } return 0; }
+      if (mapped(a, m, M_GIVEN) || mapped(a, m, M_TAKING) || mapped(a, m, M_GLYPHS) || mapped(a, m, M_SUPERPOSING)) { const flag = mapped(a, m, M_GIVEN) ? GIVES : mapped(a, m, M_GLYPHS) ? GLYPHS : mapped(a, m, M_SUPERPOSING) ? SUPERPOSING : TAKES; let q = rest, y = z; if (b(q) === 96 && b(y - 1) === 96 && y - q > 1) { q++; y--; } if (flag === SUPERPOSING) { const at_ = w(SUPERPOSING_AT) ? SUPERPOSING_AT + 8 : SUPERPOSING_AT; set(at_, q); set(at_ + 4, y - q); } for (let o = latest(w(GLOBAL)), k = 0; o && k < 1 << 20; o = w(o), k++) { const hd = w(o + R_HEAD); if (w(o + R_KIND) === RULE && hd && w(hd + N_B) - w(hd + N_A) === y - q && same(q, w(hd + N_A), y - q)) { set(o + R_FLAGS, w(o + R_FLAGS) | flag); if (flag === TAKES) spans(o); break; } } return 0; }
       // (`count`: what it is read in, Number, is what every count the kernel holds is made of; `truth t f`: what it answers as true
       // and as false)
       if (mapped(a, m, M_COUNT)) { set(COUNTED, w(f + F_THIS)); return 0; }
@@ -4580,6 +4585,15 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // already)
       const at = w(f + F_START), root = w(THREAD + T_ROOT);
       if (root && w(root + F_START) === at && w(root + F_RULE) === w(f + F_RULE)) return;
+      // (a test written in a test: run where it is written, in order with what is around it (what follows does not change what
+      // it saw); its own, what it says not the outer one's)
+      if (1) {
+        if (!w(THREAD + T_HELD)) set(THREAD + T_HELD, alloc(8 * HELD));
+        const hn = w(THREAD + T_HELD_N);
+        for (let i = 0; i < hn && i < HELD; i++) { const h = w(w(THREAD + T_HELD) + 8 * i), hf = w(w(THREAD + T_HELD) + 8 * i + 4); if (w(h + F_START) === at && w(h + F_RULE) === w(f + F_RULE) && (hf === from || hf === -1 - from)) return; }
+        // (kept as run, not to be run again after: one written where it is, the same again, run once)
+        if (hn < HELD) { set(w(THREAD + T_HELD) + 8 * hn, f); set(w(THREAD + T_HELD) + 8 * hn + 4, -1 - from); set(THREAD + T_HELD_N, hn + 1); }
+        const erred = w(THREAD + T_ERRED), said = w(THREAD + T_SAID), budget = w(THREAD + T_BUDGET), qbudget = w(THREAD + T_QBUDGET), grew = w(THREAD + T_GREW); test(THREAD, f, from); set(THREAD + T_TESTING, 1); set(THREAD + T_ROOT, root); set(THREAD + T_ERRED, erred); set(THREAD + T_SAID, said); set(THREAD + T_BUDGET, budget); set(THREAD + T_QBUDGET, qbudget); set(THREAD + T_GREW, grew); return; }
       for (let i = 0; i < n && i < HELD; i++) { const h = w(w(THREAD + T_HELD) + 8 * i); if (w(h + F_START) === at && w(h + F_RULE) === w(f + F_RULE) && w(w(THREAD + T_HELD) + 8 * i + 4) === from) return; }
       if (n < HELD) { set(w(THREAD + T_HELD) + 8 * n, f); set(w(THREAD + T_HELD) + 8 * n + 4, from); set(THREAD + T_HELD_N, n + 1); }
       // (a test that puts off tests that put off tests, without end: said once, where the first of them is, and no more held)
@@ -4987,8 +5001,47 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       else { set(THREAD + T_A, out); set(THREAD + T_B, out + n); }
     }
   }
+  // (an operator hole, `[x]` alone between a head's spaces (`{a} [x] {b}`): a hole an operator alone fills (`{x: Operator}`),
+  // and `[x]` in the body that operator, spliced (`a [x] b`))
+  function operator_holes(hs: number, he: number, bs: number, be: number): number {
+    let found = 0;
+    for (let p = hs; p < he; p++) {
+      if (b(p) !== 91 || !(p === hs || b(p - 1) <= 32)) continue;
+      let q = p + 1; while (q < he && b(w(CLASSES) + b(q)) === 1) q++;
+      if (q === p + 1 || q >= he || b(q) !== 93 || !(q + 1 >= he || b(q + 1) <= 32)) continue;
+      found = 1; break;
+    }
+    if (!found) return 0;
+    const out = alloc(4 * (he - hs) + 64 + 4 * (be - bs) + 64 + 8) + 4; set(out - 4, 0);
+    let at = out;
+    const names = alloc(72), lens = alloc(64); let nn = 0;
+    for (let p = hs; p < he;) {
+      if (b(p) === 91 && (p === hs || b(p - 1) <= 32)) {
+        let q = p + 1; while (q < he && b(w(CLASSES) + b(q)) === 1) q++;
+        if (q > p + 1 && q < he && b(q) === 93 && (q + 1 >= he || b(q + 1) <= 32)) {
+          if (nn < 16) { set(names + 4 * nn, p + 1); set(lens + 4 * nn, q - p - 1); nn++; }
+          setb(at++, 123); for (let i = p + 1; i < q; i++) setb(at++, b(i));
+          setb(at++, 125); p = q + 1; continue;
+        }
+      }
+      setb(at++, b(p)); p++;
+    }
+    const he2 = at; setb(at++, 0); const bs2 = at;
+    for (let p = bs; p < be;) {
+      let hit = 0;
+      if (b(p) === 91) for (let k = 0; k < nn; k++) { const s0 = w(names + 4 * k), n0 = w(lens + 4 * k); if (p + n0 + 1 < be && b(p + n0 + 1) === 93 && same(p + 1, s0, n0)) { setb(at++, 32); setb(at++, 123); for (let i = 0; i < n0; i++) setb(at++, b(s0 + i)); setb(at++, 125); setb(at++, 32); p += n0 + 2; hit = 1; break; } }
+      if (!hit) { setb(at++, b(p)); p++; }
+    }
+    const spans = alloc(24); set(spans, out); set(spans + 4, he2); set(spans + 8, bs2); set(spans + 12, at); set(spans + 16, names); set(spans + 20, nn); set(names + 64, lens);
+    return spans;
+  }
   function rule_(t: number, self: number, hs: number, he: number, bs: number, be: number, closure: number, names: number): number {
+    // (off: `{a: Superposed} [x] {b}` matches nearly every binary expression, its typed hole asked at each, or (superposing)
+    // each read twice, nested: the suite times out)
+    const spans = 0 && operator_holes(hs, he, bs, be); if (spans) { hs = w(spans); he = w(spans + 4); bs = w(spans + 8); be = w(spans + 12); }
     const r = head(t, hs, he, latest(self), names);
+    // (its operator holes: what fills one, only an operator's characters)
+    if (spans) { const nm = w(spans + 16), ln = w(nm + 64); for (let k = 0; k < w(r + R_PARTS); k++) { const q = r + R_PART + PART * k; if ((w(q) & 15) !== HOLE) continue; for (let j = 0; j < w(spans + 20); j++) { const a0 = skip(w(q + 4), w(q + 4) + w(q + 8)); let z0 = w(q + 4) + w(q + 8); while (z0 > a0 && b(z0 - 1) <= 32) z0--; if (z0 - a0 === w(ln + 4 * j) && same(a0, w(nm + 4 * j), z0 - a0)) set(q, w(q) | OPER); } } }
     // (a body written in brackets is what is inside them; one that is `{name}`, a hole of its own, is that hole's code)
     if (!ref(r, 0, bs, be, 1)) { code(t, bs, be); bs = w(t + T_A); be = w(t + T_B); }
     // (in a node made before the test it is in: of its rules, only the test's own (what it made there), defined again in place)
@@ -5165,7 +5218,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a numeral, as the kernel's map names it (`numeral `{head}``, read before the rule is): flagged when it is defined)
     if (w(NUMERAL_AT) && e - s === w(NUMERAL_AT + 4) && same(s, w(NUMERAL_AT), e - s)) set(rule + R_FLAGS, w(rule + R_FLAGS) | NUMERAL);
     // (one superposing, as the map names it (`superposing `{head}``, read before the library defines it): flagged so too)
-    if (w(SUPERPOSING_AT) && e - s === w(SUPERPOSING_AT + 4) && same(s, w(SUPERPOSING_AT), e - s)) set(rule + R_FLAGS, w(rule + R_FLAGS) | SUPERPOSING);
+    if ((w(SUPERPOSING_AT) && e - s === w(SUPERPOSING_AT + 4) && same(s, w(SUPERPOSING_AT), e - s)) || (w(SUPERPOSING_AT + 8) && e - s === w(SUPERPOSING_AT + 12) && same(s, w(SUPERPOSING_AT + 8), e - s))) set(rule + R_FLAGS, w(rule + R_FLAGS) | SUPERPOSING);
     // (a method, named first, whose parameters have types, `as (base: Number.Base)`: those are part of its pattern, asked once, of what it is
     // applied to; not one of them, it does not apply (what reads the text without it does))
     if ((w(rule + R_FLAGS) & METHOD) && !(w(rule + R_FLAGS) & SUPERPOSING) && (w(rule + R_PART) & 15) === LITERAL && b(w(CLASSES) + b(w(rule + R_PART + 4))) === 1) for (let k = 0; k < w(rule + R_PARTS); k++) { const q = rule + R_PART + PART * k; if ((w(q) & 15) === HOLE && w(q + 16)) { set(rule + R_FLAGS, w(rule + R_FLAGS) | REFUSES); break; } }
@@ -5493,7 +5546,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         isolate(t, 0);
         test(t, tf, w(w(AFTER) + 12 * k + 4));
         // (what it put off, the tests written in it: here, after it, in the order written (they share what it made))
-        for (let i = 0; i < w(t + T_HELD_N) && i < HELD; i++) test(t, w(w(t + T_HELD) + 8 * i), w(w(t + T_HELD) + 8 * i + 4));
+        for (let i = 0; i < w(t + T_HELD_N) && i < HELD; i++) if (w(w(t + T_HELD) + 8 * i + 4) >= 0) test(t, w(w(t + T_HELD) + 8 * i), w(w(t + T_HELD) + 8 * i + 4));
         set(t + T_HELD_N, 0);
         region_end(t, tf, rules);
         set(t + T_SH_N, 0); set(t + T_ISO, 0);

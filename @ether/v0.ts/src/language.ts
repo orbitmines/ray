@@ -2902,6 +2902,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function glyph_set(x: number, mask: number, depth: number): number {
     if (depth > BEGUN) return 0;
     if (w(x + N_IS) === IS_TEXT) { const a = w(x + N_A), z = w(x + N_B); if (z - a !== 1 || b(a) <= 32) return 0; set(mask + 4 * (b(a) >> 5), w(mask + 4 * (b(a) >> 5)) | (1 << (b(a) & 31))); return 1; }
+    // (a character, or a number counted as one (a range of characters steps by numbers): its code point, one byte)
+    { const gc = code_of(0, x); if (gc > 32 && gc < 256) { set(mask + 4 * (gc >> 5), w(mask + 4 * (gc >> 5)) | (1 << (gc & 31))); return 1; } }
+    if (w(x + N_IS) === IS_NODE && held(0, x, W_LISTING, 0) === w(TRUE_)) { let gn = 0; for (let gl = held(0, x, W_HEAD, 0), gk = 0; gl && gl !== w(NOTHING) && gk < 256; gl = held(0, gl, W_NEXT, 0), gk++) { if (!glyph_set(held(0, gl, W_VALUE, 0), mask, depth + 1)) return 0; gn++; } return gn; }
     if (w(x + N_IS) !== IS_NODE) return 0;
     let n = 0;
     for (let o = latest(x), k = 0; o && o !== w(x + N_BASE) && k < 4096; o = w(o), k++) {
@@ -3481,6 +3484,29 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (w(x + N_IS) === IS_NODE && w(CHARS) && w(x + N_PARENT) === w(CHARS) && w(x + N_A) > 0 && !w(x + N_B)) return w(x + N_A) - 1;
     return -1;
   }
+  // (a character, or a number the kernel counts (a range of characters steps by numbers): its code point; else -1)
+  function code_of(t: number, x: number): number {
+    const c = char_of(t, x); if (c >= 0) return c;
+    return x && w(x + N_IS) === IS_NODE && w(x + N_A) > 0 && !w(x + N_B) && (w(x + N_PARENT) === w(COUNTED) || w(x + N_PARENT) === w(NUMBERS)) ? w(x + N_A) - 1 : -1;
+  }
+  // (whether a code point is one of what a superposition of characters is (written ones, characters, lists of them); not such
+  // a superposition, -1)
+  function chars_among(t: number, ty: number, cp: number): number {
+    if (!ty || w(ty + N_IS) !== IS_NODE) return -1;
+    const made_in = w(ty + N_PARENT), cs0 = held(t, ty, W_COMPONENTS, 0) || (made_in && held(t, made_in, W_SUPERPOSES, 0) === w(TRUE_) ? held(t, made_in, W_COMPONENTS, 0) : 0);
+    let cs = cs0 && cs0 !== w(NOTHING) ? cs0 : 0;
+    // (else what it sees, `superposes` answering true: a value kept for a type (`static Blank: Char = …`) is made of the one written)
+    if (!cs) { const ws = w(w(WORDS) + 8 * W_SUPERPOSES), wc = w(w(WORDS) + 8 * W_COMPONENTS); if (member_seen(t, ty, ws, w(w(WORDS) + 8 * W_SUPERPOSES + 4), ty, 0) === w(TRUE_)) cs = member_seen(t, ty, wc, w(w(WORDS) + 8 * W_COMPONENTS + 4), ty, 0); }
+    if (!cs || cs === w(NOTHING)) return -1;
+    let any = 0;
+    for (let at = held(t, cs, W_HEAD, 0), k = 0; at && at !== w(NOTHING) && k < 256; at = held(t, at, W_NEXT, 0), k++) {
+      const cv = held(t, at, W_VALUE, 0); if (!cv || cv === w(NOTHING)) continue;
+      const c1 = code_of(t, cv); if (c1 >= 0) { if (c1 === cp) any = 1; continue; }
+      if (held(t, cv, W_LISTING, 0) !== w(TRUE_)) return -1;
+      for (let l = held(t, cv, W_HEAD, 0), j = 0; l && l !== w(NOTHING) && j < 4096; l = held(t, l, W_NEXT, 0), j++) { const c2 = code_of(t, held(t, l, W_VALUE, 0)); if (c2 < 0) return -1; if (c2 === cp) any = 1; }
+    }
+    return any;
+  }
   // (the one character a span is: its code point; not one character, -1)
   function span_char(s: number, e: number): number {
     if (e <= s) return -1; const c0 = b(s), n0 = c0 < 0x80 ? 1 : c0 < 0xE0 ? 2 : c0 < 0xF0 ? 3 : 4; if (e - s !== n0) return -1;
@@ -3491,7 +3517,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function chars_hold(t: number, ty: number, s: number, e: number): number {
     if (held(t, ty, W_LISTING, 0) !== w(TRUE_)) return -1;
     const sc = span_char(s, e); let any = 0;
-    for (let at = held(t, ty, W_HEAD, 0), k = 0; at && at !== w(NOTHING) && k < 4096; at = held(t, at, W_NEXT, 0), k++) { const c = char_of(t, held(t, at, W_VALUE, 0)); if (c < 0) return -1; if (c === sc) any = 1; }
+    for (let at = held(t, ty, W_HEAD, 0), k = 0; at && at !== w(NOTHING) && k < 4096; at = held(t, at, W_NEXT, 0), k++) { const c = code_of(t, held(t, at, W_VALUE, 0)); if (c < 0) return -1; if (c === sc) any = 1; }
     return any;
   }
   // (a type that is a repeat: what `T[]` made (its block marked `repeats`), or `T+` of one)
@@ -4362,7 +4388,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let nrule = w(p) === K_RULE ? w(p + 12) : 0, nself = self;
     if (w(NUMBER_OPS) && w(p) === K_ON && rs < w(r + 20) && receiver && receiver !== self) { const o = reading(t, w(p + 16), w(p + 20), w(names + F_RULE), w(names + F_CLOSURE), latest(receiver), receiver, LED, 0, 0, 1); if (w(o) === K_RULE) { nrule = w(o + 12); nself = receiver; } }
     if (w(NUMBER_OPS) && nrule && rs < w(r + 20) && number_op(nrule) === 61 && nself && w(nself + N_IS) === IS_TEXT) { const y = block(t, rs, w(r + 20), names, f, written, 0, 1, 0, written, 0); if (stopped(t)) { set(t + T_DECL, decl_in); return 0; } if (y && w(y + N_IS) === IS_TEXT && w(TRUE_)) { const n = w(nself + N_B) - w(nself + N_A); set(t + T_ON, on); set(t + T_DECL, decl_in); return n === w(y + N_B) - w(y + N_A) && same(w(nself + N_A), w(y + N_A), n) ? w(TRUE_) : w(FALSE_); } }
-    if (w(NUMBER_OPS) && nrule && rs < w(r + 20)) { const op = number_op(nrule); if (op && op !== 115) { const cx = count_of(t, nself, names, f); if (cx >= 0) { const y = block(t, rs, w(r + 20), names, f, written, 0, 1, 0, written, 0); if (stopped(t)) { set(t + T_DECL, decl_in); return 0; } const cy = count_of(t, y, names, f); if (cy >= 0) { const v = number_answer(op, cx, cy); if (v >= 0) { set(t + T_ON, on); set(t + T_DECL, decl_in); return v; } } } } }
+    if (w(NUMBER_OPS) && nrule && rs < w(r + 20)) { const op = number_op(nrule); if (op && op !== 115) { const cx = count_of(t, nself, names, f); if (cx >= 0) { const y = block(t, rs, w(r + 20), names, f, written, 0, 1, 0, written, 0); if (stopped(t)) { set(t + T_DECL, decl_in); return 0; } if (op === 61 && y && w(y + N_IS) === IS_NODE && w(CHARS) && w(nself + N_PARENT) === w(CHARS) && w(TRUE_)) { /* (a character and characters superposed, `\s`: whether it is one of them) */ const ca = chars_among(t, y, cx); if (ca >= 0) { set(t + T_ON, on); set(t + T_DECL, decl_in); return ca ? w(TRUE_) : w(FALSE_); } } let cy = count_of(t, y, names, f); if (cy < 0 && op === 61 && y && w(y + N_IS) === IS_TEXT && w(CHARS) && w(nself + N_PARENT) === w(CHARS) && w(TRUE_)) { /* (a character and a text: equal when the text is only it) */ set(t + T_ON, on); set(t + T_DECL, decl_in); return span_char(w(y + N_A), w(y + N_B)) === cx ? w(TRUE_) : w(FALSE_); } if (cy >= 0) { const v = number_answer(op, cx, cy); if (v >= 0) { set(t + T_ON, on); set(t + T_DECL, decl_in); return v; } } } } }
     // (an argument after it, not an operator, a member or brackets: its own methods led by a hole first (a closure's
     // `{this}{argument}`: `f x`, `..9`, `.."9"`); then what is led by text (`(…)`, its `{this}(…)`); the language's own,
     // `{this}{rest}`, only when none of those reads)

@@ -813,12 +813,16 @@ possible => (.members) ? .members : (((.superposes) === true) ? .components : [.
 
 // A narrowing, `T{constraint}`: a T the constraint (read with `.` the value) holds for.
 // (of a list: the values it holds that the constraint holds for, `.` each one, in order)
+// (a condition that is many, `x{== \s}` (`(x == " ") | (x == …)`): it holds when one of them does)
+holds_any (held_condition) => ((held_condition).superposes === true) ? (held_condition).components.some((each_held) => holds_any(each_held)) : ((held_condition) ? true : false)
+// (what a step holds keeps it, `xs[{p}]`'s `Filtered`: the condition read on it, holding when one of what it is does)
+satisfies (keeping) => holds_any(.({keeping}))
 {narrowed}{`{`}{constraint}{`}`} ^punctuation => ((narrowed).listing === true) ? (
   narrowed_kept := Array.new
   narrowed_at := (narrowed).head
   while narrowed_at {
     narrowed_one := narrowed_at.value
-    (narrowed_kept.append(narrowed_one) if (narrowed_one.({constraint})))
+    (narrowed_kept.append(narrowed_one) if holds_any(narrowed_one.({constraint})))
     narrowed_at = narrowed_at.next
   }
   narrowed_kept
@@ -2079,6 +2083,8 @@ assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
 assert 1 is Array  // TY63 a number is not an array
 // (a text is its characters: the first, then the rest (`first`, `rest`, by the kernel's map for what it holds); none, empty)
 String := class: Array {
+  // (from one character to another, `"\t".."\r"`: the characters from the first's to the last's, as characters are ordered)
+  .. (last) => (.first)..((last).first)
   // (no first character, nor a rest: the null character is a first character, though false as a boolean, and after it
   // there is a rest (of none))
   empty => !.first && !.rest

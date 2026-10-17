@@ -1342,9 +1342,34 @@ dynamics := None
 // (a text is destructured only by places with a text written among them, `(a, `-`, b)`: a parameter list given a text, or
 // String itself (which is textual), takes it whole)
 written_among (at) => at ? (((at.value).textual === true) || positioned_type(at.value) || written_among(at.next)) : false
+// (whether a text begins with another, and what follows it there: character by character, what the matcher reads by, and
+// so never through `~=`, which is read by the matcher)
+text_leads (text, lead) => {
+  at_text := text
+  at_lead := lead
+  same := true
+  while same && !(at_lead.empty) {
+    same = (!(at_text.empty)) && (at_text.first == at_lead.first)
+    at_text = same ? at_text.rest : at_text
+    at_lead = same ? at_lead.rest : at_lead
+  }
+  same
+}
+text_past (text, lead) => {
+  at_text := text
+  at_lead := lead
+  while !(at_lead.empty) {
+    at_text = at_text.rest
+    at_lead = at_lead.rest
+  }
+  at_text
+}
+assert text_leads(`ab`, `a`) && !(text_leads(`ab`, `b`)) && text_leads(`ab`, `a`.rest)  // PX1 a text does not begin with what it begins with
+assert !(text_leads(`a`, `ab`))  // PX2 a text begins with what is longer than it
+assert text_past(`ab`, `a`) == `b` && text_past(`ab`, `a`.rest) == `ab`  // PX3 what follows a text's beginning is not the rest of it
 // (a text given to places, with texts written among them, `(a, `-`, b) := `x-y``: read the way a list is given, in order,
 // each written text there in its turn, each place the shortest span after which the rest reads (and its type reads))
-text_read (at, text) => at ? (((at.value).textual === true) ? ((text.starts_with(at.value)) && text_read(at.next, text.after(at.value))) : text_spans(at, text, text.rest)) : text.empty
+text_read (at, text) => at ? (((at.value).textual === true) ? (text_leads(text, at.value) && text_read(at.next, text_past(text, at.value))) : text_spans(at, text, text.rest)) : text.empty
 // (one cut after another, as a loop: each one a span tried, the nearest that the rest reads)
 text_spans (at, text, first_cut) => {
   cut := first_cut
@@ -1362,7 +1387,7 @@ text_spans (at, text, first_cut) => {
 textual := false
 // (a text read by a list of types, `(String+, \s, String+)`: each written text where it is, each type the span before what
 // the rest reads)
-text_reads (at, text) => at ? (((at.value).textual === true) ? ((text.starts_with(at.value)) && text_reads(at.next, text.after(at.value))) : ((!text.empty) && text_reads_span(at, text, text.rest))) : text.empty
+text_reads (at, text) => at ? (((at.value).textual === true) ? (text_leads(text, at.value) && text_reads(at.next, text_past(text, at.value))) : ((!text.empty) && text_reads_span(at, text, text.rest))) : text.empty
 text_reads_span (at, text, first_cut) => {
   cut := first_cut
   found := false

@@ -654,13 +654,13 @@ Graph := class: Structure {
     }
   }
 }
-Forest := class: Structure{acyclic & consistent} {
+Forest := class: Structure{.acyclic & .consistent} {
   Vertex := Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
   HyperContinuations := true
   assert Forest.HyperContinuations  // RR72 a forest does not branch
 }
 Tree := class: Forest{connected}
-Path := class: Structure{consistent & connected} {
+Path := class: Structure{.consistent & .connected} {
   HyperContinuations := false
   assert !(Path.HyperContinuations)  // RR73 a path branches
 

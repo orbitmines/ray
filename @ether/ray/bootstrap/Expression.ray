@@ -7,59 +7,107 @@
 // goes). Read under a level, `Program{O: …}`, what it reads is a Program (statements as vertices, gotos as edges), and a
 // back end is one more level: `Wasm` writes that Program as WebAssembly.
 // (the target, as first written: what this file grows into, each part made to run in turn below)
-// Expression := class (
-//   BOOTSTRAPPER: (
-//     HEADER: `!language`,
-//     \s[]+,
-//     CAPTURE: (String+, \s, String+),                    // a hole's brackets, a space where its name goes
-//     \s[]+,
-//     CAPTURES: (LHS: CAPTURE.map{== \s}(`LHS`) | RHS: CAPTURE.map{== \s}(`RHS`) | String)[],
-//     \n\n
-//   ),
-//   (
-//     // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
-//     // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
-//     GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{== \s}(\s[]) ~~ .(LHS | RHS) = String
-//     GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
-//     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
-//     statements: (
-//       // A node: its rules by their heads; what it does not read, what it is in reads.
-//       Node := class (in?: Node) => {
-//         rules := {
-//           [rule: GRAMMAR_RULE] := (caller) =>
-//             rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] :=
-//               (caller) => (rhs: Statements(Node(in: this)) = rule.RHS)(Program(caller: caller))
-//         }
-//         reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
-//       }
-//       // A program running: what applied it, where it is.
-//       Program := class (caller?: Program, at?: Statement) => { }
-//       global := Node({
-//         rules[`external`, \s+, rule: String, args?: Node[]] := (caller) => {
-//           `.` => Node(in: caller.at.node)
-//           `&` => caller
-//           `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
-//           `label` (label: Node) => label
-//         }[rule](args)
-//       })
-//       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
-//       // order, each given what applies them.
-//       Statements (context: Node) => dynamically (
-//         leading_whitespace: (\s | \n)[],
-//         {statement: concurrently context.reading(.)}: context.rules.keys
-//       )[] & (caller: Program) => .statement#.for .(caller)
+Expression := class (
+  BOOTSTRAPPER: (
+    HEADER: `!language`,
+    \s[]+,
+    CAPTURE: (String+, \s, String+),                    // a hole's brackets, a space where its name goes
+    \s[]+,
+    CAPTURES: (LHS: CAPTURE.map{== \s}(`LHS`) | RHS: CAPTURE.map{== \s}(`RHS`) | String)[],
+    \n\n
+  ),
+  (
+    // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
+    // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
+    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{== \s}(\s[]) ~~ .(LHS | RHS) = String
+    GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
+    GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
+    statements: (
+      // A node: its rules by their heads; what it does not read, what it is in reads.
+      Node := class (in?: Node) => {
+        rules := {
+          [rule: GRAMMAR_RULE] := (caller) =>
+            rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] :=
+              (caller) => (rhs: Statements(Node(in: this)) = rule.RHS)(Program(caller: caller))
+        }
+        reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
+      }
+      // A program running: what applied it, where it is.
+      Program := class (caller?: Program, at?: Statement) => { }
+      global := Node({
+        rules[`external`, \s+, rule: String, args?: Node[]] := (caller) => {
+          `.` => Node(in: caller.at.node)
+          `&` => caller
+          `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
+          `label` (label: Node) => label
+        }[rule](args)
+      })
+      // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
+      // order, each given what applies them.
+      Statement := class (
+        leading_whitespace: (\s | \n)[],
+        {statement: concurrently context.reading(.)}: context.rules.keys
+      ) => {}
+      Statements (context: Node) => dynamically Statement[] & (caller: Program) => .statement#.for .(caller)
 
-//       Statements(global)(Program())
-//     )
-//   )
-// ) => {
-//   // (what it reads is made of: rules, each a head and a body (its statements); statements, each a rule applied to what its
-//   // holes took, or one of the four given)
-//   Rule := class (head, body) => {
-//     statements => body
-//   }
-//   Statement := class (rule, takes) => { }
-// }
+      Statements(global)(Program())
+    )
+  )
+) => {
+
+}
+assert `!language   { }   {LHS} => {RHS}\n\n` as Expression -- .(
+  .BOOTSTRAPPER.CAPTURE == `{ }`
+  & .BOOTSTRAPPER.CAPTURES.LHS == `{LHS}`
+  & .BOOTSTRAPPER.CAPTURES.RHS == `{RHS}`
+)
+// (its parts, each in turn)
+assert {
+  Ranged2 := class low: Decimal, "-", high: Decimal { }
+  ranged2: Ranged2 = 3-8
+  assert ranged2.high == 8  // ZZ1
+  assert (`2-7` as Ranged2).high == 7  // ZZ2
+  Ranged3 := class (low: Decimal, "-", high: Decimal) => { }
+  ranged3: Ranged3 = 3-8
+  assert ranged3.high == 8  // ZZ3
+  Ranged4 := class (low: String+, "-", high: String+) => { }
+  ranged4: Ranged4 = 3-8
+  assert ranged4.high == "8"  // ZZ4
+  Ranged5 := class (low: String+, `-`, high: String+) => { }
+  ranged5: Ranged5 = 3-8
+  assert ranged5.high == `8`  // ZZ5
+  assert (`3-8` as Ranged5).high == `8`  // ZZ6
+  Ranged6 := class (low: String+, \s, high: String+) => { }
+  assert (`3 8` as Ranged6).high == `8`  // ZZ7
+}
+assert `{ }` is (String+, \s, String+)  // EX1 a hole's brackets around a space are not a capture
+assert {
+  Headed := class (head: `!language`, \s[]+, rest: String) => { }
+  assert (`!language  x` as Headed).rest == `x`  // EX2 a text read as a structure does not give its last field what follows the space
+}
+assert {
+  Captured := class (left: String+, \s, right: String+) => { }
+  assert (`{ }` as Captured).left == `{`  // EX3 a text read as a structure does not give its first field the text before the space
+}
+assert {
+  Inner := class (left: String+, \s, right: String+) => { }
+  Outer := class (inner: Inner, `;`) => { }
+  assert (`{ };` as Outer).inner.left == `{`  // EX4 a field of a structure is not read as its own structure
+}
+assert {
+  Nested := class (inner: (left: String+, \s, right: String+), `;`) => { }
+  assert (`{ };` as Nested).inner.right == `}`  // EX5 a field written as a structure is not read as one
+}
+assert {
+  Spanned := class (spanned: (String+, \s, String+), `;`) => { }
+  assert (`{ };` as Spanned).spanned == `{ }`  // EX6 a field written as positions does not take their span
+}
+assert `{ }`.map{== \s}(`LHS`) == `{LHS}`  // EX7 mapping a text's spaces to LHS does not put LHS where the space is
+assert {
+  Dependent := class (open: String, \s, close: open) => { }
+  assert (`a a` as Dependent).close == `a`  // EX8 a field's type does not see a field before it
+}
+
 // // `(source as Expression) as Program{O: @wasm}`: what a text reads as, a Program; under a level, what that level writes.
 // (read: Expression) as (=== Program) => Program(code: read.statements)
 

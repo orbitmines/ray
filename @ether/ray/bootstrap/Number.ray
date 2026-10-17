@@ -257,6 +257,8 @@ Number &+= {
 }
 assert 5 is Number  // N86 five is not a natural number
 Number &+= Ray
+// (and ordered: its `..` Ordered's, `1..3` by `succ`, not a Ray's walk along `next`)
+Number &+= Ordered
 
 zero := Number()
 0 := zero
@@ -270,7 +272,7 @@ Digit := class: String
 Number.Named.for((name) => {
   Glyphs := Number.Bases[name]
 
-  global[name] := class: Number (integer: Glyphs[]{length >= 1}) => {
+  global[name] := class: Number (integer: Glyphs[]{.length >= 1}) => {
     static Digit := Glyphs
     static radix := Glyphs#.count
     static ^ (width: Number) => static{.integer.length == width}
@@ -347,7 +349,7 @@ Number.Named.for((name) => {
       assert !(1.5 == 1.50)  // N130 1.5 is written as 1.50
       chainable < (other: Real) => .scaled * radix ^ other.places < other.scaled * radix ^ .places
 
-      rational => .fraction is (static | static[]{length == ∞})
+      rational => .fraction is (static | static[]{.length == ∞})
       // Reals keep the digits after the point as written
       assert 5.0.rational  // N114 a real is not rational
       assert !(5.0.irrational)  // N115 a real is irrational
@@ -355,7 +357,7 @@ Number.Named.for((name) => {
     }
   }
 
-  global[name].String = Glyphs[]{length >= 1}
+  global[name].String = Glyphs[]{.length >= 1}
 
   Glyphs{: 0+, number: Glyphs} as (=== Glyphs) => number
 })
@@ -386,7 +388,7 @@ right-to-left {radix: Subscript.String}{digits: Decimal.String} ^number => Numbe
 assert ₂10 == 2  // SS1 a subscript in front is not the base the digits are read in
 {base}{power: Superscript.String} ^number => base ^ Superscript(integer: power)
 assert 2³ == 8  // SS2 a superscript on a number is not its power
-{type}{length: Subscript.String} ^number => type[]{length == Subscript(integer: length)}
+{type}{length: Subscript.String} ^number => type[]{.length == Subscript(integer: length)}
 
 {digits: Decimal.String} => Decimal(integer: digits)
 assert 007 == 7  // N136 007 is not seven
@@ -399,8 +401,8 @@ assert 0x00ff == 0xff  // N138 0x00ff is not 0xff
 assert 0b101 == 5  // N44 0b101 is not five
 {number: Decimal}.{fraction: Decimal.String} => Decimal.Real(integer: number, fraction: fraction)
 
-u{width: Decimal} => Binary{length <= width}
-i{width: Decimal} => Binary{length <= width}.Signed
+u{width: Decimal} => Binary{.length <= width}
+i{width: Decimal} => Binary{.length <= width}.Signed
 USize = u8 | u16 | u32 | u64
 Byte = Binary₈
 

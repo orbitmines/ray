@@ -28,7 +28,13 @@ this => .
 // Code read in a value (`x &+= { … }` defines in x), the value.
 // A value made of another too, `X &+= Y`: Y one of its components (§3.2: its rules seen after X's own, the last added first).
 {on} &+= {value} => {
-  (on).(external . {value})
+  // (of a class, behind its block: its own rules first (`Number &+= Ray`, Number's `==` before Ray's), then Y, then its parent)
+  into := (((on).class_held !== None) && ((on).class_held.class_made === on)) ? (on).class_held : on
+  added := (into).(external . {value})
+  // (kept, for what it is: what is made of X is made of Y, `Number &+= Ray`, 1 is a Ray)
+  // (a list of its own: what it read may be what it is made of has, `Chain &+= Array` with Chain made of Iterable, never
+  // changed by it)
+  on.made_of := ((on).made_of === None) ? Array.new.append(added) : (on).made_of.listed().append(added)
   on
 }
 {on} &+= {`{`}{code}{`}`} => {
@@ -40,9 +46,11 @@ this => .
   value
   {name} => value
 }
-// A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole).
+// A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole). Given no
+// value, its value is the type: all it may be, superposed (`named: "p"` reads "p").
 {x}: {type} => {
   x.type = type
+  external unset x type
   x
 }
 // `x ^style`: x, shown in that style (highlighting only). A head written with a style after it: its text shown so.
@@ -55,6 +63,8 @@ this => .
 ({grouped}) ^punctuation => grouped
 {statement} // {comment} ^comment => {statement}
 // {comment} ^comment => { }
+// (and a block of one, `/* … */`, nested: nothing)
+/* {comment} */ ^comment => { }
 
 // A block: a node, its code read in it (`.` it). (A rule's body written in brackets is code: one that makes a node has the
 // block as its statement, `x => { { … } }`.)
@@ -62,11 +72,6 @@ this => .
   external .
   {code}
   .
-}
-// Statements on one line: `a ; b`.
-{first} ; {rest} ^punctuation => {
-  {first}
-  {rest}
 }
 // A name declared here, given a value. (`x: T = v`: the value checked against T first, the name keeping its type.)
 {name} := {value} ^punctuation => {
@@ -76,16 +81,30 @@ this => .
 // A name: a word (a head that is one hole takes one). A member's is one: `x.f(y)` is `f` read in x, then `(y)` read on it,
 // with x as `this`.
 Name := {
-  {word} => word
+  // (the word as written: what it names need not be there, `circle (radius: Number)`)
+  {word} => `{word}`
 }
 {name}: {type} = {value} ^operator => {
   (value) checked (type)
   {name} := value
-  {name}.type = type
+  // (nothing holds no member: a default of nothing keeps no type, `x: T = None`)
+  ({name}.type = type) unless value === None
+}
+// An optional one, `x?: T`: nothing unless it is given (`x: T = None`).
+{name}?: {type} ^operator => {name}: {type} = None
+assert {
+  Linked := class (in?: Linked) => { }
+  outer := Linked()
+  assert Linked(in: outer).in === outer  // OP1 an optional field given is not what it was given
+  assert !(outer.in)  // OP2 an optional field not given is something
+  Defaulted := class (up: Defaulted = None) => { }
+  assert Defaulted().up === None  // OP3 a typed field defaulting to nothing is something (a member of None set; or made with nothing, given `declared`)
 }
 
 // Text: what is written between quotes, each escape in it (`\e`) what it stands for (`.unescaped`, the library's).
 "{text}" ^string => ((external &).text).unescaped
+// (nothing written between them: the text of no characters)
+"" ^string => `"`.rest
 unescaped => .
 assert `ab` as String == "ab"  // S158 written text is not read as a string
 
@@ -181,6 +200,8 @@ None := {
   next => None
   // (a member of None is None: chains need no `?.`)
   .{member} => None
+  // (nothing is one of what is nothing, or may be: `x?`, `None | x`)
+  is {type} ^keyword => (type === None) || ((type.superposes === true) ? type.components.some((component) => component === None) : false)
   assert true.next == false  // BOR1 true.next should be false
   assert false.next == true  // BOR2 false.next should be true
   assert true.next.next == true  // BOR3 true.next.next should be true
@@ -223,15 +244,23 @@ assert None != 1  // NGN1 nothing is said to be one
 assert None !~= "a"  // NGN2 nothing is said to match
 false := {
   ? {yes} : {no} => no
+  // (the two of them a Ray, each the other's next)
+  next => true
+  previous => true
 }
 assert true == true  // BO23 true is not itself
 assert !(true == false)  // BO24 true is false
 assert true  // BO25 true is not there
 assert !(false)  // BO26 false holds as a condition
-true := { }
+true := {
+  next => false
+  previous => false
+}
 
 // `!x`: false when x is anything but `None` and `false`.
 !{x} ^operator => x ? false : true
+// (`!!x`, written together: x as true or false)
+!!{x} ^operator => x ? true : false
 assert !(!true)  // BB4 not(true) should be false
 assert !false  // BB5 not(false) should be true
 assert !!true  // BO21 not not true is not true
@@ -261,7 +290,16 @@ assert !(0 && true)  // N96 zero and true is true
 assert None != 5 && !(None != None)  // NGN3 a negation on nothing does not answer true against something, or holds against nothing
 assert (choose 1 ("A" | "B")) is ("A" | "B") && (choose 1 ("A" | "B"))#.count == 1  // HS11 choosing a counted type does not resolve to one of its possibilities
 // `a & b` of two that are true or false: both; of anything else, what its own `&` is (a Node's, their conjunction).
-{a: boolean} & {b} ^operator => a && b
+conjoined := None
+{a} & {b} ^operator => (((a) === true) || ((a) === false)) ? ((a) && (b)) : ((a) conjoined_with (b))
+// (held at once: each of them, `1 & 2 & 3` three)
+{a} conjoined_with {b} ^keyword => ({
+  conjoins := true
+  conjoined := (((a).conjoins === true) ? (a).conjoined.listed() : Array.new.append(a)).joined(((b).conjoins === true) ? (b).conjoined : Array.new.append(b))
+  contains (x) => conjoined.some((y) => y == x)
+})
+assert (true & true)  // BB17 true and true is not true
+assert !(true & false)  // BB18 true and false is true
 assert (1 & 2).contains(2)  // TY68 what holds both does not hold the second
 assert (1 & 2 & 3).conjoined.count == 3  // TY69 three held at once are not three
 {a} ?? {b} ^operator => (a === None) ? b : a
@@ -279,6 +317,8 @@ assert !(false ?? true)  // BN2 ?? replaces a value that is there
   external label same
 }
 {a} !== {b} ^operator => (a === b) ? false : true
+// (not found in: nothing is found in nothing, `None !~= x` (T1.8))
+{a} !~= {b} ^operator => ((a) === None) ? true : !((a) ~= (b))
 // A choice, `c ? a : b`: the condition all before the `?`.
 {condition} ? {yes} : {no} ^operator => (condition) ? yes : no
 assert true ? true : false  // BT3 c ? a : b does not take a when c holds
@@ -407,6 +447,13 @@ assert {
   )
   assert countdown(5) == 0  // RC1 recur(args) does not re-enter the method
 }
+assert {
+  Base_said := class { said => `base` }
+  Nested_said := class: Base_said (inner) => {
+    said => (.inner === None) ? `nested` : .inner.said
+  }
+  assert Nested_said(Nested_said(None)).said == `nested`  // RC4 a method calling itself on another instance read its parent's (a rule never reads itself: only on the value it runs on)
+}
 
 // A closure: a rule read where a value is wanted, a node holding it; read on (`f(5)`), its right side run in a new node in it,
 // its parameters taking the arguments (code, read where they are written: `f(x: 5)` declares its `x`, answering `declared`).
@@ -439,6 +486,25 @@ assert {
     {{body}}
     external label returned
   }
+  // (called with `.` in it another value, `step.on(element) after accumulated`: reduce's; no call in brackets, so the
+  // accumulated value is given whole (a superposition is not taken apart: `reduce(|)` lays `|` on each edge, `1 | 2 | 3`))
+  {this}.on({receiver}) after {arguments} => {
+    external .
+    ({{parameters}}) taking {arguments}
+    // (`.` in it the value: a rule of its own node, read before the language's)
+    received := {receiver}
+    . => received
+    external label recurring
+    {{body}}
+    external label returned
+  }
+  // (given nothing, its parameter no default (`(acc) => acc + .`): the start is that value itself)
+  {this}.on({receiver}) => {
+    external .
+    received := {receiver}
+    . => received
+    (({{parameters}}) === None) ? received : ({{body}})
+  }
   .
 }
 () {`=>`} {body} ^punctuation => {
@@ -467,6 +533,13 @@ assert {
 // A method: `name (parameters) =>` (a space before them) gives the name a closure, as `name := (parameters) =>` does (so its locals are its own);
 // `x.name (…) =>` is a member.
 {name} := ({parameters}) {`=>`} {body} ^function => {name} := (({parameters}) => {body})
+// (a method with type parameters, `== <up_to = None>(other: T) => …`: those its first locals, their defaults given; read as
+// a head, `chainable == <…>(…)`, the method of what it takes)
+{name} <{generics}>({parameters}) {`=>`} {body} ^function => {name} ({parameters}) => {
+  ({generics})
+  {body}
+}
+{name} <{generics}>({parameters}) ^function => {name} ({parameters})
 {on}.{name} := ({parameters}) {`=>`} {body} ^function => {on}.{name} := (({parameters}) => {body})
 {name} := () {`=>`} {body} ^function => {name} := (() => {body})
 {on}.{name} := () {`=>`} {body} ^function => {on}.{name} := (() => {body})
@@ -478,9 +551,13 @@ assert {
 // (one that only declared, `declared`, gives none: what it had stays).
 // (rules, not closures: a closure's parameters are given by these)
 // (their holes named apart from the call's, whose `parameters` and `arguments` they are given)
+// (what is not an argument given by name: anything but a Named, below)
+named_argument := false
 ({written_parameters}) taking {passed} ^keyword => {
+  // (given nothing, `declared`: the parameters as written, their defaults given (none, what they had))
+  if passed === declared { ({written_parameters}) } else { ({written_parameters}) := passed }
+  // (then what is given by name: after the defaults, which run as the parameters are written)
   (.) given_names (passed)
-  ({written_parameters}) := passed
 }
 // (a closure written in a rule's body reads the rule's holes, where they are read: in its body, and in code read on its
 // parameter (its body copied into the method that calls it: each copy keeps the names of where it was written))
@@ -495,18 +572,24 @@ assert true reads_closed (false === false)  // CL1 a closure in a rule's body do
 }
 assert true reads_closed_on (. === true)  // CL2 a closure in a rule's body reads the rule's hole in code read on its parameter
 // A closure calls itself (recursion), directly or through a local
-recurring_flip (n) => n ? recurring_flip(false) : true
-assert recurring_flip(true)  // RC1 a call inside itself does not take its own argument
-recurring_local (n) => {
-  again := recurring_local
-  n ? again(false) : true
+assert {
+  recurring_flip (n) => n ? recurring_flip(false) : true
+  assert recurring_flip(true)  // RC1 a call inside itself does not take its own argument
+  continued_pick (step) => true
+    ? step
+    : false
+  assert continued_pick(true)  // RC4 a body continued on the lines below it (deeper) was read as statements of its own (`? step` alone)
+  recurring_local (n) => {
+    again := recurring_local
+    n ? again(false) : true
+  }
+  assert recurring_local(true)  // RV2 a call of itself through a local does not take its own argument
+  shadowed_name := false
+  takes_shadowed (shadowed_name) => shadowed_name
+  shadowed_taken := takes_shadowed(true)
+  assert shadowed_taken === true  // GN1 a parameter named as a visible name does not take its value
+  assert shadowed_name === false  // GN2 a parameter named as a visible name gave that one its value
 }
-assert recurring_local(true)  // RV2 a call of itself through a local does not take its own argument
-shadowed_name := false
-takes_shadowed (shadowed_name) => shadowed_name
-shadowed_taken := takes_shadowed(true)
-assert shadowed_taken === true  // GN1 a parameter named as a visible name does not take its value
-assert shadowed_name === false  // GN2 a parameter named as a visible name gave that one its value
 // (what is given by name, `f(x: 5)`: the callee's `x`, declared in what is called; the rest each in its place, in order)
 {on} given_names {passed} ^keyword => {
   {
@@ -545,17 +628,25 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
   }
   true
 }
-// (each of a list of places the value in its place of what is given: a list a `,` made, else that one value)
+// (each of a list of places the value in its place of what is given: a list a `,` made, else that one value; a part given by
+// name, `x: v`, the place of that name (a place, compared, is the name it is), the others the places left, in order)
 {places} each takes {taken} ^keyword => {
   {
-    at := places.head
+    each_place := places.head
     each_taken := taken
-    taken_at := (((each_taken).listing === true) && ((each_taken).spread === true)) ? (each_taken).head : Listing.new.append(each_taken).head
-    while at {
-      while taken_at && ((taken_at.value).named_argument === true) { taken_at = taken_at.next }
-      (at.value) alone takes (taken_at ? taken_at.value : declared)
-      at = at.next
-      taken_at = taken_at ? taken_at.next : None
+    each_part := (((each_taken).listing === true) && ((each_taken).spread === true)) ? each_taken : Array.new.append(each_taken)
+    each_taken_at := each_part.head
+    while each_place {
+      // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing; given in its place, `(4, "-", 9)`,
+      // that text is passed over)
+      if ((each_place.value).textual === true) && each_taken_at && ((each_taken_at.value).textual === true) && ((each_taken_at.value).same_characters(each_place.value) !== None) { each_taken_at = each_taken_at.next }
+      unless (each_place.value).textual === true {
+        each_by_name := each_part.find((named_part) => ((named_part).named_argument === true) && ((named_part).name.same_characters(each_place.value) !== None))
+        while (each_by_name === None) && each_taken_at && ((each_taken_at.value).named_argument === true) { each_taken_at = each_taken_at.next }
+        (each_place.value) alone takes ((each_by_name !== None) ? each_by_name.value : (each_taken_at ? each_taken_at.value : declared))
+        each_taken_at = ((each_by_name === None) && each_taken_at) ? each_taken_at.next : each_taken_at
+      }
+      each_place = each_place.next
     }
   }
   true
@@ -569,27 +660,41 @@ assert shadowed_name === false  // GN2 a parameter named as a visible name gave 
 }
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses.
-{method}(.{section}) ^punctuation => .{method}((it) => it.{section})
+{method}(.{section}) ^punctuation => .{method}((it) => it.(.{section}))
+// (an argument using `.` on its own, `xs.every(candidate is .)`: a closure (every argument is one), `.` in it what it is
+// called with; its code read on that)
+{method}({code: Dotted}) ^punctuation => .{method}((it) => it.({code}))
 // `code**`: what is written, as a program.
 {code}** ^operator => Program(code: {code})
 
 // A list written: `[]` an empty one, `[a, b]` both, `[a]` one; `T[]`, what holds Ts one after another.
-[] ^punctuation => Listing.new
-[{inside}] ^punctuation => (inside, Listing.new).gathered
+[] ^punctuation => Array.new
+[{inside}] ^punctuation => (((inside).listing === true) && ((inside).spread === true)) ? (inside).gathered : Array.new.append(inside)
 {element}[] ^punctuation => (() => {
   made := ({
     narrows := Node
-    holds (it) => it.every((item) => item is element)
+    // (what each is, kept: asked when the rule that made it is done)
+    each := element
+    // (a text: read as Ts one after another, `abc` as `(ab | c)[]`; anything else, each of it a T)
+    holds (it) => {
+      kind := each
+      ((it).textual === true) ? text_repeats(kind, it) : (((it).listing === true) ? it.every((item) => item is kind) : false)
+    }
   }) &+ { }
   made &+= {
-    {value: element} => Listing.new.append(value)
-    {first: element}{rest: made} => Listing.new.append(first).joined(rest)
+    {value: element} => Array.new.append(value)
+    {first: element}{rest: made} => Array.new.append(first).joined(rest)
   }
   made
 })()
-// `x[k]`: a member (a key that is text), else what x holds under k.
-{on}[{key}] ^punctuation => (key is String) ? (on).{key} : (on).held(key)
-{on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : ((key is String) ? ((on).{key} = value) : (on).holding(key, value))
+// `T+`: one or more of what T is (a text of it, not empty).
+{kind}+ ^punctuation => (kind).one_or_more
+one_or_more => {
+  base := .
+  base{!(.empty)}
+}
+// `x[k]`: a member (a key that is text), else what x holds under k. (A list's or a text's, at a number: what is there.)
+{on}[{key}] ^punctuation => ((((on).listing === true) || ((on).textual === true)) && (key is Number)) ? (on).indexed(key) : ((key is String) ? (on).{key} : (on).held_under(key))
 assert {
   xs := [0, 0, 0]
   xs[1] = 5
@@ -622,16 +727,6 @@ assert {
   assert there == 2  // CF19 the second of two assignments on one line did not run
 }
 
-// The rest read with `.` what is before it: `x -- .y` is `x.y`; `x ~~ …` the same, answering x.
-{value} -- {rest} ^operator => value ~~ {
-  {rest}
-}
-{value} ~~ {rest} ^operator => {
-  value &+= {
-    {rest}
-  }
-  value
-}
 assert (1, 2 -- .map(+1)) == (2, 3)  // DD1 -- does not continue on the whole line before it
 assert (5 -- . + 1) == 6  // DD2 -- does not give what it continues with as .
 assert (5 -- . + 1 if . > 3) == 6  // DD3 -- with a condition that holds does not continue
@@ -651,19 +746,23 @@ assert (1, 2 ~~ .map(+1)) == (1, 2)  // DD6 ~~ does not answer the whole line be
 with {code} ^keyword => (external &).caller reading {code}
 assume {code} ^keyword => (external &).caller reading {code}
 // Guards: `x if c`, `x unless c` (not taken: None).
-{guarded} if {condition} ^keyword => if {condition} { {guarded} }
-{guarded} unless {condition} ^keyword => unless {condition} { {guarded} }
+// (read where they are, not in a block of their own: `.` in them is what it is there, `x -- . + 1 if . > 3`)
+{guarded} if {condition} ^keyword => (condition) ? (guarded) : None
+{guarded} unless {condition} ^keyword => (condition) ? None : (guarded)
+// (`--` and `~~` after these, and after `=` and `,`: looser, `x -- y if c` guards y)
 
 // A superposition: one of these values (`a | b`), and `x?`: `x` or None.
 {a} | {b} ^operator => ({
   superposes := true
-  components := Listing.new.append(a).joined(b)
+  // (one superposed with a superposition: its components, each one; `1 | 2 | 3` three)
+  components := (((a).superposes === true) ? (a).components.listed() : Array.new.append(a)).joined(((b).superposes === true) ? (b).components : Array.new.append(b))
 }) &+ {
   {value: a} => value
   {value: b} => value
 }
 assert (1 | +2 | +3) == (1 | 3 | 6)  // CL2 a section after | is not applied to the value before it
 assert (1 | 2 | 3)#.count == 3  // HS2 a superposition of three does not have three possible values
+assert (1 | 2 | 3).components.count == 3  // SP13 a superposition of three holds a superposition of two (its components not each one)
 assert #(1 | 2) == (1 | 2)#  // HS6 #x is not x#
 assert "A" is 1 ("A" | "B")  // HS7 one of two possibilities is not a counted type of one
 assert !(("A" | "B") is 1 ("A" | "B"))  // HS8 both possibilities are a counted type of one
@@ -682,38 +781,71 @@ assert {
   assert result{chosen == 2} == 12  // SP12 fixing a source does not refine what depends on it
 }
 {x}? ^operator => None | x
+// What a value can be, `x#` (`#x`): an enumeration's members, a superposition's components, else itself alone.
+possible => (.members) ? .members : (((.superposes) === true) ? .components : [.])
+# => .possible
+#({value}) ^punctuation => (value).possible
 
 // A narrowing, `T{constraint}`: a T the constraint (read with `.` the value) holds for.
-{narrowed}{`{`}{constraint}{`}`} ^punctuation => Narrowing &+ {
+// (of a list: the values it holds that the constraint holds for, `.` each one, in order)
+{narrowed}{`{`}{constraint}{`}`} ^punctuation => ((narrowed).listing === true) ? (
+  narrowed_kept := Array.new
+  narrowed_at := (narrowed).head
+  while narrowed_at {
+    narrowed_one := narrowed_at.value
+    (narrowed_kept.append(narrowed_one) if (narrowed_one.({constraint})))
+    narrowed_at = narrowed_at.next
+  }
+  narrowed_kept
+) : Narrowing &+ {
   narrows := narrowed
   holds (it) => it.({constraint})
-  {value: narrowed} => (holds(value) === true) ? value : (ERROR not one of what it narrows to)
+  // (of a text type, `{length: Subscript.String}`: what the hole took as written, not what that code answers)
+  {value: narrowed} => {
+    asked := ((.narrows).textual === true) ? `{value}` : value
+    // (one of what it narrows first: the condition is asked of those alone (`2 <= .` is not asked of a class))
+    (((asked is .narrows) === true) && (.holds(asked) === true)) ? asked : (ERROR not one of what it narrows to)
+  }
 }
-// `x as T`: x, when it is a T; else what T makes of it (`T.from(x)`; none, by default).
-as {type} ^keyword => (. is type) ? . : type.from(.)
+// `x as T`: x, when it is a T; a text written as a T is (`"89" as Decimal`: the class as a text, `Decimal as String`, holds it),
+// what T reads it as; another text, none; anything else, what T makes of it (`T.from(x)`; none, by default).
+as {target} ^keyword => {
+  converting := .
+  wanted := target
+  (converting is wanted) ? converting : (((converting).textual === true) && ((wanted).of === wanted)) ? ((converting is (wanted as String)) ? wanted.from(converting) : None) : wanted.from(converting)
+}
 from (x) => None
 // (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
 ({parameter}) as (=== {type}) {`=>`} {body} => ({type}).from := (({parameter}) => {body})
 // (`x as *`: what x converts to, each conversion its types define, as a list of them, each run only when asked (§7.5): none
 // by default; each conversion written adds itself to those its class had (its body reads the `as *` before it))
-as * => []
-converted_by (conversion) => .({conversion}())
+conversions => []
+// (what a value carries of what went wrong reading it (its diagnostics): none by default)
+diagnostics => []
+converted_by (conversion) => .((conversion)())
 // (what nothing led by text reads on a value: read on what it converts to, the nearest conversion (§7.5); none, on itself,
 // where nothing reads it, said there)
 // (no name declared in it: what a method's body declares is declared in what it is read on, here every value)
-{this}{rest} => (((this as *).first) ? this.converted_by((this as *).first) : this){rest}
+{this}{rest} => (((this).conversions.first) ? this.converted_by((this).conversions.first) : this){rest}
 as (=== {type}) {`=>`} {body} => {
   as {type} => {body}
-  as {`*`} => ((this as *), (() => {body}))
+  conversions => ((this).conversions, (() => {body}))
+}
+// (one written of a type, `String{length == 1} as Char => first`: a conversion of what that type is made of (what it
+// narrows, or itself), for a value of it)
+{source} as {target: Name} {`=>`} {body} => (((source).narrows === None) ? (source) : (source).narrows) &+= {
+  as (=== {target}) => (this is ({source})) ? ({body}) : None
 }
 // Modifiers on an operator: `compounds op …` (and `x op= y`, `x = x op y`); `chainable op …` (and `a op b op c`).
 compounds {operator} {rest} {`=>`} {body} => {
   {operator} {rest} => {body}
-  {name} {operator}= {value} => {name} = {name} {operator} (value)
+  // (`x op= y` gives a name a value: read where names are, everywhere, not only in what the operator is written in)
+  global.({name} {operator}= {value} => {name} = {name} {operator} (value))
 }
 // (`right-to-left op …`: what follows it, all of it, its right side (`2 ^ 3 ^ 2` is `2 ^ (3 ^ 2)`): the operator as it is)
-right-to-left {operator} {rest} {`=>`} {body} => {
-  {operator} {rest} => {body}
+// (taking nothing, `right-to-left - => …`: written before what it is on, `-x`, that value's member)
+right-to-left {operator} {`=>`} {body} => {
+  {operator} => {body}
 }
 chainable {operator} {rest} {`=>`} {body} => {
   {operator} {rest} => {body}
@@ -734,7 +866,7 @@ assert false applying === to false  // RB1 a body's `(l) {operator} {r}` read as
 }
 {name: Name} | {other} := {value} => {
   {name} := {value}
-  {other} => {name}
+  {other} => .{name}
 }
 // NA1 one of two names written together does not read the rule
 assert {
@@ -756,6 +888,8 @@ assert {
 }
 interior => {
   external .
+  // (what it holds are members: a bare name never reads them, `.name` does)
+  external members
   .
 }
 extended () => .interior
@@ -769,18 +903,49 @@ extended () => .interior
   {value: type} => made(value)
 }
 // (a structure, `(a: T, `-`, b: U)`: a text it reads is destructured into one made of it, each field the span it takes)
+// (what ends a class's fields read as a list)
+fields_end := class { }
 {on} reads ({fields}) as {made} ^keyword => on &+= {
-  {written} => (made &+ {
+  // (a text written as its fields are, in order (the class as a text): a head that is one hole alone takes one word)
+  {written: global.String{. is (made).written_as}} => (made &+ {
     ({{fields}}) := `{written}`
   })
+  // (and a text given to it, `t as S`: the same, destructured; one it does not read, nothing)
+  from({given}) => (made &+ {
+    ({{fields}}) := given
+  })
+  // (what its fields are written as, in order: each one's type (none, anything), a text written among them itself; read as
+  // a list (`fields_end` after them: one alone in brackets would be a record))
+  written_as => {
+    written_types := Array.new
+    written_at := [({{fields}}, fields_end)].head
+    while written_at && !((written_at.value) === fields_end) {
+      written_field := written_at.value
+      written_types.append(((written_field).textual === true) ? written_field : (((written_field).type === None) ? Node : (written_field).type))
+      written_at = written_at.next
+    }
+    written_types
+  }
 }
 class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
-  held := ((parent) &+ {
+  // (`static`, the class: the one whose block this is written in (`outer`, its block's), else this one: `integer: static` of
+  // a class written in Decimal's block is a Decimal)
+  outer := this.class_block
+  // (built on a conjunction, `class: Iterable & Ordered`: on its parts, not on the conjunction (whose `conjoined` an
+  // instance would hold: it is no conjunction itself))
+  held := ((((parent).conjoins === true) ? (parent).conjoined.first : (parent)) &+ {
     superclass := parent
     super := parent
+    class_block := .
+    written_in_class => (outer_block === None) ? class_made : outer_block.written_in_class
+    static => written_in_class
     {block}
   })
+  ((parent).conjoins === true) ? (held &+= ((parent).conjoined.last)) : held
   made := (held &+ { })
+  (held).class_made := made
+  (held).outer_block := outer
+  (made).class_held := held
   made reads ({fields}) as made
   (parent reads ({fields}) as made) unless parent === Node
   made &+= {
@@ -796,25 +961,58 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
 class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
 // others, which read the rest of what it reads: `class: P { … }`)
-class {fields} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
-class: {parent} {`{`}{block}{`}`} ^keyword => { class: {parent} (arguments = None) => { {block} } }
-class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
+class: {parent} {`{`}{block}{`}`} ^keyword => (class: {parent} (nothing_given = None) => { {block} })
+class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (class: Node ({fields}) => { {block} })
 class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
-{name} := class {header} {`{`}{block}{`}`} ^class => {name} := (class ({header}) => { {block} })
+// (a class of functions, written with what they take and answer, `class: <yield: (x: Ray): None>(entry: Ray): None { … }`: a
+// class of its block (what they take and answer not yet checked))
+class: <{generics}>({parameters}): {result} {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (written with its fields and `=>`, a definition: read as one)
 {name} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class ({fields}) => { {block} })
 {name} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class: {parent} ({fields}) => { {block} })
+// (a member of an instance, then an operator: the operator read on the member's value, not on the instance)
+assert {
+  Carrying := class (carried) => {
+    again => .carried
+  }
+  assert Carrying(true).carried === true  // CI1 a field given true is not true
+  assert Carrying(`a`).carried == `a`  // CI6 a field given a text is not that text (an argument read only as a word)
+  assert Carrying(Carrying(false)).carried.carried === false  // CI2 a field's field is not what it was given
+  carrier := Carrying(true)
+  assert carrier.again === true  // CI3 a method of an instance held in a name does not answer its field
+  Holding_class := class (held) => {
+    static Inner := class (inner) => {
+      own => .inner
+    }
+  }
+  assert Holding_class.Inner(true).own  // CI7 a class called as a member of another made one of that other (`this` the class it is a member of)
+}
 // A call's arguments (§10.1): each a value, or one given by name, `f(x: 5)`: the callee's `x` given 5, read where it is written.
 // (read by this type: what binds looser where they are written (`,`) first, each part then read here)
 Named := class (name, value) => {
   named_argument := true
 }
-named_argument := false
 Arguments := {
-  {value} => value
+  // (any value: a head that is one hole alone takes one word)
+  {value: Node} => value
   {name}: {value} => `{name}` named_as value
 }
 {text} named_as {value} ^keyword => Named(text, value)
+assert {
+  Indexed := class (index) => { }
+  indexed_at (at) => Indexed(index: at)
+  assert Indexed(index: 5).index == 5  // NA12 one argument given by name was taken by position too (the field held the argument)
+  assert indexed_at(true).index  // NA9 a named argument's value was not read where it was written (a test failed, nothing said)
+  Paired_named := class (left, right) => { }
+  paired_of (a, b) => Paired_named(left: a, right: b)
+  assert paired_of(true, false).left  // NA10 named arguments given a function's parameters do not give the fields
+  assert Paired_named(left: true, right: false).left  // NA11 named arguments given values do not give the fields
+  Defaulting := class (first, second = false) => { }
+  assert Defaulting(first: true, second: true).second  // NA13 a field's default replaced what was given it by name
+  assert Defaulting(second: true, first: false).second  // NA14 fields given by name in another order kept their defaults
+  defaulting_of (given) => Defaulting(first: true, second: given)
+  assert defaulting_of(true).second  // NA15 a named argument given a parameter was read where the arguments' type is (the call's own names unseen)
+}
 assert {
   .{x}? => x
   assert (true ? true : false)  // GR8 a rule written `.{x}?` made `.` and `?` a pair of brackets
@@ -918,7 +1116,14 @@ Asserting := class {
   assert Asserting.checked  // CL17 a class whose block asserts on it is run again each time the test reads it, without end
 }
 // `static`: read where it is (a class's block is read once for the class).
-static {statement} ^keyword => {statement}
+// (what it defines is the class's own, not an instance's: a bare name reads it, as it reads a global)
+static {statement} ^keyword => external static {statement}
+// `inline x`: the code x holds (a hole's), read right here (`keeps: { inline selection }`)
+inline {code} ^keyword => {code}
+// (and as a value, the class: of a class itself, of an instance its class (`static{2 <= .}`, `integer: static`))
+static ^keyword => .of
+// (what no class block is written in has none)
+class_block := None
 // `x ^style` on its own: x. (A style is for highlighting and nothing else.)
 ^{style} ^operator => .
 
@@ -927,25 +1132,59 @@ static {statement} ^keyword => {statement}
 // components one.
 of := None
 superclass := None
+made_of := None
 superposes := false
+conjoins := false
 narrows := None
 members := None
 caller := None
-descends (type, depth = 0) => (. === type) || ((depth < 64) && .superclass ? .superclass.descends(type, depth + 1) : false)
+// (no count of how far: a class's parents end; one that would not, the kernel stops as too deep)
+descends (type) => (. === type) || ((.superclass === None) ? false : .superclass.descends(type)) || ((.conjoins === true) ? .conjoined.some((conjoined_part) => conjoined_part.descends(type)) : false) || ((.made_of === None) ? false : .made_of.some((made_part) => made_part.descends(type)))
 // (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
-is {type} ^keyword => {
+// (followed lazily, and not again while it is being followed: what a conversion asks is what the value itself is)
+following_conversions := false
+is {type} ^keyword => .admitted_by(type)
+// (what a type admits by structure, the core of `is` (Node.ray's `is (type) => this.admitted_by(type)`))
+admitted_by (type) => {
   value := .
-  value.is_itself(type) || (value as *).some((conversion) => value.converted_by(conversion).is_itself(type))
+  value.is_itself(type) || ((!following_conversions) && value.followed_is(type))
 }
-is_itself (type) => (type === Node) || (. === type) || (.of ? .of.descends(type) : false) || (type.superposes ? type.components.some((component) => . is component) : false) || (type.narrows ? ((. is type.narrows) && type.holds(.)) : false) || (type.members ? type.members.some((member) => member === .) : false) || (.superposes ? .components.every((component) => component is type) : false)
+followed_is (type) => {
+  following_conversions = true
+  answer := .conversions.some((each_conversion) => this.converted_by(each_conversion).is_itself(type))
+  following_conversions = false
+  answer
+}
+is_itself (type) => {
+  // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
+  value := .
+  (type === Node) || (value === type) || (((type.textual === true) && !(type === global.String) && ((type.narrows === None) || (type.narrows === Node)) && !(type.of === type)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false))
+}
 assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
+assert {
+  Texty := class: String (x) => {
+    first => `q`
+  }
+  assert Texty(1) is Texty  // IS2 an instance of a class made of String is not one of it (the class was read as a text)
+}
 // A value checked against a type: reported when it is not one (None, and anything against no type, pass).
 type := None
 checked {type} ^keyword => {
-  unless (type === None) || (. === None) || (. is type) {
+  // (a type nothing defines: said where it is written, and nothing checked)
+  unless (type === None) || (. === None) || (external undefined type) || (. is type) {
     ERROR a value is not of the type it is given to: {type}
   }
-  .
+  // (as that type: itself when it is one, else what it converts to that is (the equivalence graph, `3` given to `x: Signed`))
+  // (not again while one is being followed: what a conversion asks is what the value itself is)
+  ((type === None) || (. === None) || following_conversions || .is_itself(type)) ? . : .converted_to(type)
+}
+converted_to (type) => {
+  value := .
+  following_conversions = true
+  found := value.conversions.find((each_conversion) => value.converted_by(each_conversion).is_itself(type))
+  converted := found ? value.converted_by(found) : value
+  following_conversions = false
+  converted
 }
 // A level given to a running program (`& including level`): its rules seen in it.
 {on} including {level} ^keyword => on &+= {
@@ -956,19 +1195,31 @@ checked {type} ^keyword => {
 // What a value holds under a key: its entries (`keyed`), none until one is given.
 keyed := None
 Holding := class (key, value) => { }
-held (key) => {
-  found := (.keyed) ? .keyed.find((entry) => entry.key === key) : None
+// (under a name of its own too, `held_under`, for what an Iterable's own `held` (what a step holds) would answer first)
+held_under (key) => {
+  holder := this
+  found := (holder.keyed) ? holder.keyed.find((entry) => entry.key === key) : None
   found ? found.value : None
 }
+held (key) => held_under(key)
+// (what holds it named: `.` in a block, `unless … { }`, is the block's)
 holding (key, value) => {
-  (.keyed := []) unless .keyed
-  found := .keyed.find((entry) => entry.key === key)
+  holder := this
+  (holder.keyed := []) unless holder.keyed
+  found := holder.keyed.find((entry) => entry.key === key)
   if found {
     found.value = value
   } else {
-    .keyed.append(Holding(key, value))
+    holder.keyed.append(Holding(key, value))
   }
   value
+}
+assert {
+  kept_under := { }
+  kept_under[5] = 3
+  kept_under[6] = 4
+  assert kept_under[5] == 3  // MP1 a value held under a key is not what was given
+  assert kept_under.keyed.count == 2  // MP2 two keys hold other than two entries
 }
 assert {
   held := 0
@@ -990,14 +1241,37 @@ assert {
 // given, it has), and `members` what they compose.
 enum {names} ^keyword => {
   external .
-  members := ({names})
+  // (a member written with fields, `circle (radius: Number)`: one holding them)
+  // (given nothing, each field its type, `Shape.circle.radius === Number`)
+  // (and once it is there, a member and brackets: one made of it, `Shape.circle(radius: 5)`)
+  {member: Name} ({fields}) => ((.{member}) === None) ? (
+    {member} := ({
+      {fields}
+      {this}({arguments}) => (this &+ {
+        ({{fields}}) taking {arguments}
+      })
+    })
+    .{member}
+  ) : (.{member})({fields})
+  members := (.({names}))#
+  // (one after another, as written: each member a Ray of them)
+  {
+    at := (members).head
+    while at {
+      (at.value).previous := at.previous ? at.previous.value : None
+      (at.value).next := at.next ? at.next.value : None
+      at = at.next
+    }
+  }
   .
 }
-enum {names} {`{`}{block}{`}`} ^keyword => enum {names}
+// (written with a block: each member reads it too, `ranked => rank` its own)
+enum {names} {`{`}{block}{`}`} ^keyword => (enum {names}) ~~ (.members.for((member) => member &+= { {block} }))
 assert {
   Shape := enum circle (radius: Number) | square (side: Number) | point
-  assert Shape.circle.radius  // EM8 a member does not carry its field
-  assert Shape.square.side  // EM9 the second member does not carry its field
+  assert Shape.circle.radius === Number  // EM8 a member's field given nothing is not its type (all it may be)
+  assert Shape.square.side === Number  // EM9 the second member's field given nothing is not its type
+  assert Shape.circle(radius: 5).radius == 5  // EM26 a member given its field does not hold it
   assert !(Shape.point.radius)  // EM10 a member carries another's field
   assert Shape.point  // EM11 a member without fields is not there
   assert Shape.circle is Shape  // EM16 a member is not one of its own enum
@@ -1067,28 +1341,112 @@ dynamics := None
 {given} given {value} ^keyword => ((given).listing === true) ? ((((value).textual === true) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value))) : given
 // (a text is destructured only by places with a text written among them, `(a, `-`, b)`: a parameter list given a text, or
 // String itself (which is textual), takes it whole)
-written_among (at) => at ? (((at.value).textual === true) || written_among(at.next)) : false
+written_among (at) => at ? (((at.value).textual === true) || positioned_type(at.value) || written_among(at.next)) : false
 // (a text given to places, with texts written among them, `(a, `-`, b) := `x-y``: read the way a list is given, in order,
 // each written text there in its turn, each place the shortest span after which the rest reads (and its type reads))
 text_read (at, text) => at ? (((at.value).textual === true) ? ((text.starts_with(at.value)) && text_read(at.next, text.after(at.value))) : text_spans(at, text, text.rest)) : text.empty
-text_spans (at, text, cut) => (text_read(at.next, cut) && text_fits(at.value, text.until(cut))) ? text_given(at.value, text.until(cut)) : ((!cut.empty) && text_spans(at, text, cut.rest))
+// (one cut after another, as a loop: each one a span tried, the nearest that the rest reads)
+text_spans (at, text, first_cut) => {
+  cut := first_cut
+  found := false
+  while (!found) && (cut !== None) {
+    if text_fits(at.value, text.until(cut)) && text_read(at.next, cut) {
+      found = text_given(at.value, text.until(cut))
+    } else {
+      cut = cut.empty ? None : cut.rest
+    }
+  }
+  found
+}
 // (what is a text: a String; anything else is not)
 textual := false
-text_fits (place, span) => ((place).type === None) || (span is (place).type)
+// (a text read by a list of types, `(String+, \s, String+)`: each written text where it is, each type the span before what
+// the rest reads)
+text_reads (at, text) => at ? (((at.value).textual === true) ? ((text.starts_with(at.value)) && text_reads(at.next, text.after(at.value))) : ((!text.empty) && text_reads_span(at, text, text.rest))) : text.empty
+text_reads_span (at, text, first_cut) => {
+  cut := first_cut
+  found := false
+  while (!found) && (cut !== None) {
+    if (text.until(cut) is at.value) && text_reads(at.next, cut) {
+      found = true
+    } else {
+      cut = cut.empty ? None : cut.rest
+    }
+  }
+  found
+}
+// (a text read as one type again and again, `(ab | c)[]`: a span of it, then the rest the same, to the end)
+text_repeats (kind, text) => (!text.empty) && text_repeats_span(kind, text, text.rest)
+text_repeats_span (kind, text, first_cut) => {
+  cut := first_cut
+  found := false
+  while (!found) && (cut !== None) {
+    if (text.until(cut) is kind) && (cut.empty || text_repeats(kind, cut)) {
+      found = true
+    } else {
+      cut = cut.empty ? None : cut.rest
+    }
+  }
+  found
+}
+assert `abc` is (`ab` | `c`)[]  // TL1 a text of Ts several characters long is not Ts
+assert !(`abd` is (`ab` | `c`)[])  // TL2 a text that is not Ts throughout is Ts
+assert `{LHS} => {RHS}` is (`{LHS}` | `{RHS}` | String+)[]  // TL3 a rule written with holes is not holes and texts
+// (a position that is a type, not a field, `\s` in `class a: T, \s, b: U`: the span one of it, given to nothing)
+positioned_type (x) => ((x).narrows !== None) || ((x).superclass !== None) || ((x).superposes === true)
+text_fits (place, span) => positioned_type(place) ? (span is place) : (((place).type === None) || ((span as ((place).type)) !== None))
 text_given (place, span) => {
-  (place) alone takes (span)
+  // (a field of a type: what the type makes of the span, `low: Decimal` of `2`, two)
+  converted := ((place).type === None) ? span : (span as ((place).type))
+  ((place) alone takes (converted)) unless positioned_type(place)
   true
 }
-{name} = {value} => {
+{place} = {value} => {
   // (the value first, as a value (read on, so in a left side too: `(a, b = c)`'s c is read, not declared))
   value
-  (name) := value
+  (place) := value
 }
+// (`x[k] = v`, after it: what x holds under k, not a name)
+{on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : ((key is String) ? ((on).{key} = value) : (on).holding(key, value))
 // (and composing, after giving: `,` binds loosest of all, `(a, b = 0)` is `a, (b = 0)`)
 // A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
-// (what follows, a list this `,` just made (still spreading, no one else's yet): the value put in front of it, not copied)
+// (what follows, a list a `,` made (still spreading): the value put in front of a copy of it (the list may be held elsewhere,
+// a type written `T, U` given a name: never changed by another `,` that reads it))
 {list}, {other} ^punctuation => {
-  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).prepend(list) : Listing.new.append(list).joined(other))).spreading)
+  (list === declared) ? other : ((other === declared) ? list : ((list).listing ? (list).listed().joined(other) : ((((other).listing === true) && ((other).spread === true)) ? (other).listed().prepend(list) : Array.new.append(list).append(other))).spreading)
+}
+// The rest read with `.` what is before it, all of it on the line (`1, 2 -- .map(+1)`, `found = x ~~ .index = i`), declared
+// after `=` and `,`, looser than both: `x -- .y` is `x.y`; `x ~~ …` the same, answering x.
+// (`--`: what the rest answers, read in what is before it; nothing, `x -- y if c` not taken: what is before it)
+{value} -- {rest} ^operator => ((value).({rest})) ?? value
+{value} ~~ {rest} ^operator => {
+  value &+= {
+    {rest}
+  }
+  value
+}
+// (a function's parameters, one of two named as a visible name, after `,` is defined, where a call reads it)
+assert {
+  listed_shadow := false
+  takes_listed (listed_shadow, other_listed) => listed_shadow
+  assert takes_listed(true, false) === true  // GN3 a parameter of two named as a visible name does not take its value (`,`'s body reads its parts as values: in a left side they are read as left sides first)
+  assert listed_shadow === false  // GN4 a parameter of two named as a visible name gave that one its value
+}
+// (a class written as a structure, its header a list of positions (`class a: T, ".", b: U { … }`): declared after `,`, so the
+// whole definition reads as one, not as a list of its parts)
+// (its header begins with a field's name, `Header`: `class: P { … }` is not one)
+Header := {
+  {field: Name}: {rest} => `{field}`
+}
+// (with no block, an empty one: `class only: Number`; before the forms with one)
+class {fields: Header} ^keyword => class {fields} { }
+class {fields: Header} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
+{name} := class {header: Header} ^class => {name} := (class ({header}) => { })
+{name} := class {header: Header} {`{`}{block}{`}`} ^class => {name} := (class ({header}) => { {block} })
+// Statements on one line: `a ; b` (declared after everything else here: the loosest of all, `x = 1 ; y = 2` two).
+{first} ; {rest} ^punctuation => {
+  {first}
+  {rest}
 }
 assert {
   asserted := dynamically assert {
@@ -1131,7 +1489,7 @@ assert {
   Holder := class {
     Side := enum left | right {
     }
-    side => Side.left
+    side => .Side.left
   }
   assert Holder.Side.left  // EM22 an enum inside a class has no members
   assert Holder.Side#.count == 2  // EM23 an enum inside a class lost a member
@@ -1143,19 +1501,7 @@ assert {
     first => 1
     second => 2
   }
-  assert Grouped.(first + second) == 3  // GP1 .( ) does not read the members of what is before it
-}
-// Labels in a class body are entries (L§4.2)
-assert {
-  Entered := class {
-    steps := 0
-   later\
-    steps = 7
-  }
-  assert Entered~later().steps == 7  // EP1 ~label does not enter the class at that label
-  assert Entered~default == Entered  // EP2 ~default is not the class itself
-  // A class body runs like any function: labels are never skipped; a Component's labels are entered, not executed (F-D13, L§4.2.1)
-  assert Entered().steps == 7  // CMP1 a label in a class body stops its construction
+  assert Grouped.(.first + .second) == 3  // GP1 .( ) does not read the members of what is before it
 }
 assert {
   TA := class { }
@@ -1165,10 +1511,6 @@ assert {
   assert TB() is TB  // TY3 an instance is not an instance of its own class
   assert TB() is TA  // TY4 an instance is not an instance of what its class is built on
   assert 5 is TA  // TY6 five is not one of a class that requires nothing
-  assert external where TA  // TY7 a class is written nowhere
-  assert !((external where TA) == (external where TB))  // TY8 two classes are written in one place
-  TC := TA
-  assert (external where TA) == (external where TC)  // TY9 one class under two names is written twice
 }
 // A class requires the fields it writes with their type
 assert {
@@ -1185,7 +1527,7 @@ assert {
   Parent := class {
     named: "p"
     flag: false
-    greet => named
+    greet => .named
   }
   Child := class: Parent {
     extra: "e"
@@ -1248,24 +1590,14 @@ assert {
   Bare := class only: Number
   assert Bare(3).only == 3  // HD6 a header without a body has no field
 }
-// Uniqueness under an equivalence (T6.9)
-assert {
-  UniquelyNamed := class { unique<in: .fold_case> name: String }
-  named_first := UniquelyNamed(name: "Ada")
-  named_other := UniquelyNamed(name: "Bea")
-  assert named_other.name.is_unique<in: .fold_case>  // UQI1 a name no other holds is not unique
-  named_clash := UniquelyNamed(name: "ADA")
-  assert !(named_clash.name.is_unique<in: .fold_case>)  // UQI2 a name another holds in other case is unique with case folded
-  assert named_clash.name.is_unique  // UQI3 a name is not unique without folding case though no other is equal
-}
 assert {
   Greeter := class {
-    greeting => name
-    twice => greeting
+    greeting => .name
+    twice => .greeting
   }
   Loud := class: Greeter {
     greeting => global
-    polite => super.greeting
+    polite => .super.greeting
   }
   loud := Loud(name: global)
   assert loud.polite  // C22 super.greeting did not run the parent's method on the instance
@@ -1301,13 +1633,13 @@ assert {
   assert Pair(right: 3, left: 4).total == 7  // HD3 header fields are not taken by name
   assert Pair(1).right == 7  // HD4 a header default is not used when not given
   Tagged := class ("#", tag: Decimal) => {
-    doubled => tag * 2
+    doubled => .tag * 2
   }
   assert Tagged(tag: 4).doubled == 8  // HD7 a class read by its pattern has no named part as a field
   tagged_of {written: Tagged} => written
   assert (tagged_of #21).tag == 21  // HD8 a class written as a pattern does not read its text
   Sub := class: Pair (": ", first: Number) => {
-    head => first
+    head => .first
   }
   assert Sub(first: 2).head == 2  // HD9 class: Parent (pattern) has no field from its pattern
   assert Sub(first: 2) is Pair  // HD10 class: Parent (pattern) is not built on Parent
@@ -1324,6 +1656,12 @@ assert {
   assert second_count.tally == 2  // HD12 a static is per instance
   assert Count.zero == 0  // HD13 a static method is not on the class
   assert Count.Inner  // HD14 a static class is not on the class
+  Count &+= {
+    static same (x) => x
+    static narrowed := static{true}
+  }
+  assert Count.same(true)  // HD18 a static method with a parameter is not on the class (its head read in the modifier's hole not as a left side)
+  assert Count.narrowed.narrows === Count  // HD19 `static{…}` is not a narrowing of the class (read as the modifier, `static {statement}`)
   Both := class: Pair &+ Tagged { }
   assert Both(left: 1, right: 2, tag: 3).total == 3  // HD15 class: A &+ B is not built on A
   assert Both(left: 1, right: 2, tag: 3).doubled == 6  // HD16 class: A &+ B is not built on B
@@ -1362,18 +1700,31 @@ assert {
 // The classes the library adds to: what is iterable, an array of it, text (an array of characters), a number, a character
 // (a number), a program, a diagnostic.
 Iterable := class { }
-// A list: a chain of vertices, each holding a value (`head` the first, `tail` the last; a vertex's `next`, `previous`).
-Listing := {
-  new => {
-    {
-      head := None
-      tail := None
-      listing := true
-      of := Array
-      spread := false
-      // (a list as a type, `{d: "0".."9"}`: what reads as one of its values, that value)
-      {written} => (.).one_written(`{written}`)
+// A list, an Array: entered at its first vertex (`head`; the last, `tail`), each vertex holding a value (`value`, `next`,
+// `previous`); what a list is written as (`[a, b]`, `a, b`). What it answers as an Iterable (`first`, `count`, `for`, …) is
+// Ray.ray's; the kernel's map (`wasm.o.ray`) walks its vertices faster.
+Array := class: Iterable { }
+Array &+= {
+  new => Array &+ {
+    head := None
+    tail := None
+    listing := true
+    spread := false
+    // (a list as a type, `{d: "0".."9"}`: what reads as one of its values, that value)
+    {written} => (.).one_written(`{written}`)
+  }
+  // (where it is entered, Iterable's `entry`: its first vertex)
+  entry => .head
+  // (none, empty: as a text is, by what it holds, not by counting it (Iterable's `count == 0`, counted by `reduce`, which
+  // asks `empty`))
+  empty => .head === None
+  // (a list as a type: one of its values, `"0".."9"` of a character)
+  one_held (value) => {
+    at := .head
+    while at && !(at.value == value) {
+      at = at.next
     }
+    at ? true : false
   }
   one_written (text) => {
     at := .head
@@ -1398,7 +1749,7 @@ Listing := {
     }
   }
   append (value) => {
-    link := Listing.linked(value)
+    link := Array.linked(value)
     if .tail {
       link.previous := .tail
       .tail.next := link
@@ -1409,7 +1760,7 @@ Listing := {
     .
   }
   prepend (value) => {
-    link := Listing.linked(value)
+    link := Array.linked(value)
     if .head {
       .head.previous := link
       link.next := .head
@@ -1420,7 +1771,7 @@ Listing := {
     .
   }
   // (`xs[n]`, a number: its nth value, from 0)
-  at (index) => {
+  indexed (index) => {
     at := .head
     left := index
     while at && left > 0 {
@@ -1440,88 +1791,44 @@ Listing := {
     (at.value = value) if at
     value
   }
-  for (body) => {
+  // (`,` given a list: a copy of it, what comes first then put in front, not into the one given)
+  listed () => {
+    made := Array.new
     at := .head
-    while at {
-      body(at.value)
-      at = at.next
-    }
-    .
-  }
-  first => .head ? .head.value : None
-  last => .tail ? .tail.value : None
-  empty => .head ? false : true
-  count => {
-    counted := 0
-    .for((x) => (counted = counted + 1))
-    counted
-  }
-  rest => {
-    made := Listing.new
-    at := .head ? .head.next : None
     while at {
       made.append(at.value)
       at = at.next
     }
     made
   }
-  take () => {
-    first := .head
-    .head := first ? first.next : None
-    .tail := .head ? .tail : None
-    first ? first.value : None
-  }
-  find (predicate) => {
-    at := .head
-    while at {
-      return at.value if predicate(at.value)
-      at = at.next
-    }
-    None
-  }
-  // (the vertex holding this very value, `===`)
-  holding_itself (value) => {
-    at := .head
-    while at && !(at.value === value) {
-      at = at.next
-    }
-    at
-  }
-  some (predicate) => (.find(predicate) === None) ? false : true
-  every (predicate) => !(.some((x) => !predicate(x)))
-  map (mapping) => {
-    made := Listing.new
-    .for((x) => made.append(mapping(x)))
-    made
-  }
-  without (value) => {
-    made := Listing.new
-    .for((x) => (made.append(x) unless x === value))
-    made
-  }
-  listed () => .map((x) => x)
   joined (other) => {
-    if other.listing { other.listed().for((x) => .append(x)) } else { .append(other) }
-    .
-  }
-  flatten => .flattened(64)
-  flattened (levels) => {
-    made := Listing.new
-    .for((it) => (((it.listing === true) && (levels > 0)) ? it.flattened(levels - 1).for((x) => made.append(x)) : made.append(it)))
-    made
-  }
-  // (`xs{p}`: the values p holds for, `.` each one in it)
-  {this}{`{`}{constraint}{`}`} => {
-    kept := Listing.new
-    .for((it) => (kept.append(it) if (it with {constraint})))
-    kept
+    joining := .
+    if other.listing {
+      at := (other === joining) ? other.listed().head : other.head
+      while at {
+        joining.append(at.value)
+        at = at.next
+      }
+    } else {
+      joining.append(other)
+    }
+    joining
   }
 }
+assert [1, 2].some((x) => x == 2)  // RS5 some does not find what is second (`return v if c` returned whether c held or not)
+assert !([1, 2].some((x) => x == 3))  // RS6 some finds what is not there
+assert [1, 2].find((x) => x == 2) == 2  // RS7 find does not find what is second
 // Lists, read without numbers or `==`: what a method with parameters does to what it is read on, and closures given to them
 assert ["a"].first  // LS1 a list of one has no first (`.head :=` in `append (value) =>` declared in its own node)
 assert !(["a"].empty)  // LS2 a list of one is empty
 assert ["a", "b"].last  // LS3 a list of two has no last
 assert ["a", "b"].map((x) => x).last  // LS4 a mapped list has no last
+assert {
+  second_of := (a, b) => b
+  assert second_of(1, [2, 3]).count == 2  // LS8 a list given as the last argument was spread into the arguments
+}
+assert [None].some((x) => x === None)  // LS7 a list holding nothing does not hold nothing (some asked what it found, not whether)
+assert [1].joined([2, 3]).count == 3  // LS6 a list joined with two is not three (`.` in the closure `joined` gives `for` is the closure's argument; or a method's locals were its receiver's, each call the same)
 assert {
   seen := false
   ["a"].for((x) => {
@@ -1536,6 +1843,44 @@ assert {
   }
   shadowing()
   assert kept  // CL18 := in a closure changed the name where the closure was written
+}
+assert {
+  ran := 0
+  running := (x) => (ran = ran + 1)
+  running.named_argument
+  assert ran == 0  // CL19 a member read on a closure called it
+}
+assert {
+  Writer := class {
+    via (f) => f(1)
+    inner () => .via((x) => this)
+  }
+  writer := Writer()
+  assert writer.inner() === writer  // CL20 `this` in a closure written in a method is not what the method was read on
+}
+assert {
+  Implicit := class {
+    helper (x) => x + this.base
+    base => 1
+    calls () => .helper(2)
+  }
+  assert Implicit().calls() == 3  // MI1 a method called as `.helper` in another of its class is not called on the same value
+  Passing := class {
+    inner (other) => other + 1
+    outer (other) => .inner(other)
+  }
+  assert Passing().outer(1) == 2  // MI2 a method passing its parameter to another whose parameter is named the same is not given it
+}
+assert {
+  outer_kept := 1
+  Shadowing := class {
+    own => {
+      outer_kept := 2
+      outer_kept
+    }
+  }
+  assert Shadowing().own == 2  // LK2 a method's own name answered the one visible where the method is written (its body read before it ran)
+  assert outer_kept == 1  // LK3 a method's own name changed the one visible where it is written
 }
 assert {
   gone := true
@@ -1556,15 +1901,28 @@ assert {
   assert !(None)  // BN4 a parameter's default `= None` made None a name of its own (the value read as a left side)
   assert ["a"].first  // BN5 a parameter's default `= None` changed what None is for lists
 }
-Ray := Listing
 assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
-Array := class: Iterable { }
 assert 1 is Array  // TY63 a number is not an array
 // (a text is its characters: the first, then the rest (`first`, `rest`, by the kernel's map for what it holds); none, empty)
 String := class: Array {
-  empty => !first
+  empty => !.first
+  // (`t[n]`: its nth character, from 0, by what it holds (its first and rest), as a list's by its links)
+  indexed (index) => .empty ? None : ((index == 0) ? .first : .rest.indexed(index - 1))
   textual := true
+  // (a `.` in it on its own, not after a name or what closes, nor before a name: code of what it is read on)
+  bare_dot => dot_alone(` `, this)
+  // (a class as a text, `Decimal as String` (`Decimal.String`): any class is one, the texts its fields are written as, in
+  // order (a list of types reads a text in order); anything else, none)
+  from (given) => (((given).of === given) && ((given).written_as !== None)) ? global.String{. is (given).written_as} : None
 }
+// (the characters a name is not made of, and what is before a `.` that is not a value's (`(`, an operator, a space))
+not_named := ` ()[]{},;:=!&|<>+-*/%?^#~@`
+one_of (character, among) => among.empty ? false : (((character).same_characters(among.first) !== None) ? true : one_of(character, among.rest))
+dot_alone (before, text) => text.empty ? false : ((((text.first).same_characters(`.`) !== None) && one_of(before, not_named) && (text.rest.empty || one_of(text.rest.first, not_named))) ? true : dot_alone(text.first, text.rest))
+Dotted := String{.bare_dot}
+assert `candidate is .`.bare_dot  // DT1 a `.` alone in an argument is not found
+assert !(`x.y`.bare_dot)  // DT2 a member is a `.` alone
+assert !(`(it) => it.({code})`.bare_dot)  // DT3 a member read on a value is a `.` alone
 assert "ab" is String  // TX1 a text is not a String (the kernel's map, `wasm.o.ray`, says it is)
 assert !("ab".empty)  // TX2 a text of two characters is empty
 assert "ab".rest.first  // TX3 a text of two has no second character
@@ -1572,7 +1930,10 @@ assert "a".rest.empty  // TX4 the rest of a text of one is not empty
 assert !("".first)  // TX5 an empty text has a first character
 assert 1 + 2 as String == "3"  // PR38 as does not bind looser than plus
 assert ("A", "A") is ...String  // SD3 ...T is not T[]
-Number := class { }
+// (a number stands for a bit: as a condition, zero does not hold)
+Number := class {
+  ? {yes} : {no} => (.next === None) ? no : yes
+}
 assert 5 is Number  // TY5 five is not a Number
 // Narrowings ask the constraint as well as what they narrow
 assert {
@@ -1602,7 +1963,7 @@ assert {
 // `#` is what a value may be (A1, T2.3)
 assert boolean#.count == 2  // HS1 boolean does not have two possible values
 assert boolean{. == true}() == true  // CN2 the only member a narrowing admits is not the one chosen
-assert (3 boolean).count == 3  // CN5 three called on boolean is not three of it
+assert true is (1 boolean)  // CN5 one boolean (`Number{#.count == 1}`, a value of one possibility) does not admit true
 false &+= {
   of := boolean
   assert {
@@ -1618,95 +1979,8 @@ true &+= {
 }
 Char := class: Number { }
 Program := class { }
-// A program run as a selection
-assert Program(code: {
-  1
-  2
-}).(
-  .waiting  // RU1 a program nobody stepped is not waiting
-  & .next.intermediate  // RU2 one step in is not intermediate
-  & .waiting  // RU3 stepping a copy moved the original
-  & .finished.final  // RU4 a program run to its end is not final
-  & .finished.results.last == 2  // RU5 a program run to its end did not keep what its last step answered
-)
-assert {
-  doubling := Program(code: { 2 })
-  halving := Program(code: { 1 })
-  ! doubling halving
-  assert doubling⁻¹ === halving  // IV1 the declared inverse is not the inverse
-  assert halving⁻¹ === doubling  // IV2 the inverse of the inverse is not the function
-  assert doubling.reversible  // IV3 a function with an inverse is not reversible
-}
-// A program is a quest (P4.8): its cursor says how far it is; sleeping waits on the time (P4.11); a dynamic `&=` keeps one contribution (P5.7)
-assert Program(code: { 1 }).(
-  !(.done)  // FWQ2 a program not yet stepped is done
-  & .finished.done  // FWQ3 a finished program is not a done quest
-)
-assert Program(code: { 1 }).stop.done  // FWQ4 a stopped program is not done
-assert {
-  started := Program(code: "1")
-  @me/quests |= started
-  assert started is @me/quests  // JB1 a program given to @me/quests is not among them
-  assert started.who === @me  // JB11 a started program is not run by whoever started it
-  assert started.stop.done  // JB5 stopping a program does not end it
-}
-assert Program(code: "1", from: @public).(
-  .serves(@public)  // JB8 a quest serving a location does not serve it
-  & !(.serves(@private))  // JB9 a quest serves a location it was not given
-)
 Narrowing := class { }
 Diagnostic := class { }
-// Errors: a value carries its diagnostics, and its type does not see them
-assert {
-  failing := (0).diagnosed(Diagnostic(message: "no"))
-  assert failing $ 5 == 5  // ER1 a default does not stand in for an error
-  assert failing $? === None  // ER3 an optional error is not None
-  assert failing $? 6 == 6  // ER4 an optional error does not fall back
-  assert failing $ { .message } == "no"  // ER5 the handler does not see the error as its receiver
-  fatal_one := (0).diagnosed(Diagnostic(message: "true", fatal: true))
-  assert (fatal_one $ 5).erred  // ER6 a default caught a fatal error
-  assert fatal_one $?! === None  // ER7 the catch-all did not catch a fatal error
-  assert (failing $ Diagnostic(message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last  // ER8 a wrapped error forgot its cause
-  assert failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2  // ER9 a value given a second diagnostic does not keep both
-  assert failing is Number  // ER10 a value that erred is no longer of its type
-  assert failing == 0  // ER11 a value that erred is not equal to itself without the error
-  returning := () => {
-    failing $ return 9
-    1
-  }
-  assert returning() == 9  // ER13 $ return did not return from the function
-}
-assert {
-  missing_file := () => {
-    ERROR `not 0`
-    7
-  }
-  assert missing_file() == 7  // ER14 a non-fatal error replaced the value the function answers
-  assert missing_file().diagnostics.last.origin == missing_file  // ER15 an error does not know the function it came from
-  stopping := () => {
-    FATAL `cannot go on`
-    7
-  }
-  assert stopping() is Diagnostic  // ER16 a fatal error is not what the function answers
-  // ER17 a handler for errors from one function did not take them
-  assert (missing_file()
-    $missing_file 8) == 8
-  // ER18 a handler for another function's errors took them
-  assert (missing_file()
-    $stopping 8) == 7
-  NotFound := class
-  looking := () => {
-    ERROR@NotFound `no such page`
-    3
-  }
-  // ER19 an error of a type is not caught by that type
-  assert (looking()
-    $NotFound 4) == 4
-  // ER20 an error of a type was caught by another function's handler
-  assert (looking()
-    $missing_file 4) == 3
-  assert looking().diagnostics.last.type === NotFound  // ER21 an error does not keep the type written after @
-}
 assert {
   fired := 0
   unless false { fired += 1 }
@@ -1726,18 +2000,22 @@ Theme := {
   current := None
 }
 theme {name} {written} ^keyword => {
-  made := {
-    name := name
-    styles := Listing.new
+  // (its own node: what it declares is not declared where it is read)
+  {
+    made := {
+      name := name
+      styles := Array.new
+    }
+    // (each one written: what it took, the style and what it is shown as)
+    made &+= {
+      // (the `^`s written as text: `{lhs} ^{style} => …` would read the head as one shown in a style)
+      {`^`}{style} = {`^`}{shown} => .styles.append(external &)
+      {`^`}{style} = {`^`} {shown} => .styles.append(external &)
+      {written}
+    }
+    Theme.current = made
   }
-  // (each one written: what it took, the style and what it is shown as)
-  made &+= {
-    ^{style} = ^{shown} => styles.append(external &)
-    ^{style} = ^ {shown} => styles.append(external &)
-    {written}
-  }
-  Theme.current = made
-  made
+  Theme.current
 }
 
 DARK := theme `Ether.ray - Dark` {
@@ -1804,11 +2082,85 @@ DARK := theme `Ether.ray - Dark` {
 // (a comment after a statement, defined again last: what is declared last binds loosest, so it is read before anything else)
 {statement} // {comment} ^comment => {statement}
 
+// (what a class is made of is its own: one made of it that is given another part, `Chain &+= Array` (Chain made of Iterable,
+// Array too), does not give it to the class (where Array would be made of itself))
+Made_kept := class { }
+Made_kept &+= class { }
+Made_within := class: Made_kept { }
+Made_within &+= class: Made_kept { }
+assert !(Made_kept.descends(Made_within))  // MO1 a part given to what is made of a class was given to the class
+assert Made_within.descends(Made_kept)  // MO2 what is made of a class does not descend from it
+// (a choice written apart holds a `,` between its `?` and `:`, and, written as a statement, after its `:` too)
+assert (true ? `a`, `b` : `c`).count == 2  // CH1 a choice did not hold the list between its ? and :
+assert {
+  chosen_rest (flag) => flag ? [] : `x`, `y`
+  assert chosen_rest(false).count == 2  // CH2 a choice written as a statement did not hold the list after its :
+}
+// (a word and `=>` as an argument is a closure of it, not a rule of the scope the call is in)
+assert [`a`].map(item_given => item_given).count == 1  // LA1 a closure of one word given as an argument was not called
+// (an operator missing a side is the function of what it misses)
+assert [`a`, `b`].some(== `b`)  // SE1 a section given as an argument did not compare each
+// (a text at a number: its character there)
+assert "ab"[1] == "ab".rest.first  // TI1 a text at one is not its second character
+// (an operator takes what follows it up to one declared before it, wherever each was written)
+assert 14 == 2 + 12  // PR1 == took only the first of what follows it
+// (a typed parameter is the call's own, whatever what it is called on has of that name)
+typed_named (count: Number) => count
+assert [1, 2, 3].typed_named(7) == 7  // TP1 a typed parameter read as the member of what the method was called on
+assert {
+  Flipping := class {
+    right-to-left ~~ => true
+    flips (other) => ~~other
+  }
+  flipping := Flipping()
+  assert ~~flipping  // RT1 a right-to-left operator taking nothing is not read written before its value
+  assert flipping.flips(flipping)  // RT2 a right-to-left operator before a name, in a method, read as the method's own
+}
+assert {
+  defining_global {operator} => {
+    global.({a} {operator} {b} => true)
+  }
+  Defining := class {
+    defining_global %^%
+  }
+  assert false %^% false  // CP1 an operator a rule's hole took, in its head, defined where the rule ran (`x += 1` unread)
+}
+assert {
+  Behind := class: Array {
+    empty => true
+  }
+  Behind &+= [false]
+  assert Behind().empty === true  // MO3 what a class is made of, added after it, reads before the class's own block (§3.2)
+}
+assert {
+  Tilded := class {
+    marked := false
+  }
+  tilde_target := Tilded()
+  tilde_found := None
+  tilde_found = tilde_target ~~ .marked = true
+  assert tilde_found === tilde_target  // TD1 `x = y ~~ .m = v` read `=` before `~~`: (x = (y ~~ .m)) = v
+  tilde_other := Tilded()
+  tilde_other ~~ (.marked = true)
+  assert tilde_other.marked === true  // TD3 `x ~~ (.m = v)` does not set x's m
+}
+assert {
+  Answering_typed := class {
+    answered: Node{. === true} => true
+  }
+  assert Answering_typed().answered === true  // TA1 a member written with what it answers (`paths: Path{…} =>`) is not defined
+}
+
 // Files: `include` one in what this is where it is written (the language's own, in the language), `read` one in a scope of
 // its own. A location, `@./*.ray`, is beside the file it is written in; `given` is what the host was given. The language's
 // own project first, its `.project.ray` before the rest; then what it was given.
 include {location} ^keyword => external include {location}
 read {location} ^keyword => external read {location}
 include @./.project.ray
-include @./*.ray
+//include @./*.ray
+include @./Node.ray
+include @./Ray.ray
+include @./Number.ray
+include @./String.ray
+include @./Expression.ray
 read given

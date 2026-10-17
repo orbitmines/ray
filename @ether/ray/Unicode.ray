@@ -316,3 +316,13 @@ String &+= {
 String &+= {
   bytes => (this as Unicode.UTF-8).bytes
 }
+// Uniqueness under an equivalence (T6.9)
+assert {
+  UniquelyNamed := class { unique<in: .fold_case> name: String }
+  named_first := UniquelyNamed(name: "Ada")
+  named_other := UniquelyNamed(name: "Bea")
+  assert named_other.name.is_unique<in: .fold_case>  // UQI1 a name no other holds is not unique
+  named_clash := UniquelyNamed(name: "ADA")
+  assert !(named_clash.name.is_unique<in: .fold_case>)  // UQI2 a name another holds in other case is unique with case folded
+  assert named_clash.name.is_unique  // UQI3 a name is not unique without folding case though no other is equal
+}

@@ -9,13 +9,164 @@ String &+= {
   same_characters (other) => external same this other
   // (what is before where another text, a rest of this one, begins)
   until (other) => external until this other
+  // (and what Ray.ray's Iterable answers of a text, through those, one character after another: as its rules answer)
+  count => {
+    counted := 0
+    at := this
+    while !(at.empty) {
+      counted = counted + 1
+      at = at.rest
+    }
+    counted
+  }
+  last => {
+    at := this
+    while !(at.rest.empty) {
+      at = at.rest
+    }
+    at.first
+  }
+  for (body) => {
+    at := this
+    while !(at.empty) {
+      body(at.first)
+      at = at.rest
+    }
+    this
+  }
+  map (mapping) => {
+    made := Array.new
+    at := this
+    while !(at.empty) {
+      made.append(mapping(at.first))
+      at = at.rest
+    }
+    made
+  }
+  some (predicate) => {
+    at := this
+    while !(at.empty) {
+      if predicate(at.first) { return true }
+      at = at.rest
+    }
+    false
+  }
+  every (predicate) => !(this.some((x) => !predicate(x)))
+  find (predicate) => {
+    at := this
+    while !(at.empty) {
+      if predicate(at.first) { return at.first }
+      at = at.rest
+    }
+    None
+  }
+}
+// Arrays: a list the language links (`Array.new`, its vertices from `head`): what Ray.ray's Iterable answers of it, walking
+// its vertices (as its rules answer, reading it as a Ray a step at a time)
+Array &+= {
+  first => .head ? .head.value : None
+  last => .tail ? .tail.value : None
+  empty => .head ? false : true
+  count => {
+    counted := 0
+    at := .head
+    while at {
+      counted = counted + 1
+      at = at.next
+    }
+    counted
+  }
+  rest => {
+    made := Array.new
+    at := .head ? .head.next : None
+    while at {
+      made.append(at.value)
+      at = at.next
+    }
+    made
+  }
+  for (body) => {
+    at := .head
+    while at {
+      body(at.value)
+      at = at.next
+    }
+    .
+  }
+  map (mapping) => {
+    made := Array.new
+    at := .head
+    while at {
+      made.append(mapping(at.value))
+      at = at.next
+    }
+    made
+  }
+  // (whether it holds of one: by holding, not by what was found, `[None].some((x) => x === None)`)
+  some (predicate) => {
+    at := .head
+    while at {
+      if predicate(at.value) { return true }
+      at = at.next
+    }
+    false
+  }
+  every (predicate) => !(.some((x) => !predicate(x)))
+  find (predicate) => {
+    at := .head
+    while at {
+      if predicate(at.value) { return at.value }
+      at = at.next
+    }
+    None
+  }
+  flatten => .flattened(64)
+  flattened (levels) => {
+    made := Array.new
+    at := .head
+    while at {
+      it := at.value
+      if (it.listing === true) && (levels > 0) { made.joined(it.flattened(levels - 1)) } else { made.append(it) }
+      at = at.next
+    }
+    made
+  }
 }
 // (None takes no members of its own: given)
 external nothing None
 // (accelerated: what a definition answers given its value, its head when it defined one name (`x := v`); the language's
 // rule for a list of places)
 external given `{given} given {value}`
+// (accelerated: a list of characters as a type, `Decimal.String` (`"0" | … | "9"`, each one character): what reads as one,
+// the kernel reads (each character one of them), the same as its rules)
+external glyphs `{element}[]`
 // (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it, the node the call
 // runs in. Off: without it LS4 (`["a", "b"].map((x) => x).last`, a closure's `x` called from one whose parameter is `x`)
 // fails; with it, it passes: it does not answer what the language does)
 // external taking `({written_parameters}) taking {passed}`
+// Numbers: what the kernel holds as a count, a number the kernel counts, is a Counted (`count`), a Number whose `next` the
+// kernel answers (the count before it; of zero, nothing); a numeral is one (the count its digits write), and a text's
+// characters are Counted_chars, Chars (each its code point). Number's own `succ` and operators, named here, on what the kernel
+// can count (counts, or Numbers written one after another down to zero) and what they take counted too: answered by the
+// kernel as the language's rules answer; anything else, by those rules. (An approximation past what the kernel holds as one,
+// 2^31: for later, numbers of any size, or a level answering another type, `u32` for a Decimal; and for characters, a written
+// table of them in the language, this its acceleration.)
+external truth true false
+Counted := class: Number {
+  next => external number next this
+}
+Counted &+= { external count }
+Counted_char := class: Char {
+  next => external number next this
+}
+Counted_char &+= { external character }
+Number &+= { external number succ == < + - * / % }
+// (what the numeral rule answers, a count: the same value as the Decimal its digits write (`{digits: Decimal.String} =>
+// Decimal(integer: digits)`), by the equivalence graph)
+Counted &+= { as (=== Decimal) => Decimal(integer: this as String) }
+external numeral `{digits: Decimal.String}`
+// (whether a value is superposed, Node's `superposed`: made by `|` or `&` from more than one part, answered by the kernel as
+// that rule answers, without the calls its check makes)
+Node &+= { external superposed }
+// (a text using `.` on its own, `candidate is .`: found by the kernel, as `bare_dot` does)
+String &+= { bare_dot => external dotted this }

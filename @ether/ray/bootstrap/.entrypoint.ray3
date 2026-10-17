@@ -46,9 +46,11 @@ this => .
   value
   {name} => value
 }
-// A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole).
+// A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole). Given no
+// value, its value is the type: all it may be, superposed (`named: "p"` reads "p").
 {x}: {type} => {
   x.type = type
+  external unset x type
   x
 }
 // `x ^style`: x, shown in that style (highlighting only). A head written with a style after it: its text shown so.
@@ -488,20 +490,20 @@ assert {
   // accumulated value is given whole (a superposition is not taken apart: `reduce(|)` lays `|` on each edge, `1 | 2 | 3`))
   {this}.on({receiver}) after {arguments} => {
     external .
-    // (of two parameters, a lone operator's `(a, b) => a | b`: the value is the second, `reduce(|)` is `acc | .`)
-    ({{parameters}}) taking ((external several {parameters}) ? ({arguments}, {receiver}) : {arguments})
-    // (one parameter: its body read in the value, `.` the value; two, a lone operator's: read where it is, both sides its
-    // parameters (the accumulated value whole, a superposition too))
-    external receiving {receiver}
+    ({{parameters}}) taking {arguments}
+    // (`.` in it the value: a rule of its own node, read before the language's)
+    received := {receiver}
+    . => received
     external label recurring
-    (external several {parameters}) ? ({{body}}) : ({receiver}).({{body}})
+    {{body}}
     external label returned
   }
   // (given nothing, its parameter no default (`(acc) => acc + .`): the start is that value itself)
   {this}.on({receiver}) => {
     external .
-    // (of two parameters, a lone operator's: no start of its own either)
-    ((external several {parameters}) || (({{parameters}}) === None)) ? ({receiver}) : ({receiver}).({{body}})
+    received := {receiver}
+    . => received
+    (({{parameters}}) === None) ? received : ({{body}})
   }
   .
 }
@@ -783,7 +785,17 @@ possible => (.members) ? .members : (((.superposes) === true) ? .components : [.
 #({value}) ^punctuation => (value).possible
 
 // A narrowing, `T{constraint}`: a T the constraint (read with `.` the value) holds for.
-{narrowed}{`{`}{constraint}{`}`} ^punctuation => Narrowing &+ {
+// (of a list: the values it holds that the constraint holds for, `.` each one, in order)
+{narrowed}{`{`}{constraint}{`}`} ^punctuation => ((narrowed).listing === true) ? (
+  narrowed_kept := Array.new
+  narrowed_at := (narrowed).head
+  while narrowed_at {
+    narrowed_one := narrowed_at.value
+    (narrowed_kept.append(narrowed_one) if (narrowed_one.({constraint})))
+    narrowed_at = narrowed_at.next
+  }
+  narrowed_kept
+) : Narrowing &+ {
   narrows := narrowed
   holds (it) => it.({constraint})
   // (of a text type, `{length: Subscript.String}`: what the hole took as written, not what that code answers)
@@ -1228,7 +1240,14 @@ assert {
 enum {names} ^keyword => {
   external .
   // (a member written with fields, `circle (radius: Number)`: one holding them)
-  {member: Name} ({fields}) => {member} := ({ {fields} })
+  // (given nothing, each field its type, `Shape.circle.radius === Number`)
+  // (and once it is there, a member and brackets: one made of it, `Shape.circle(radius: 5)`)
+  {member: Name} ({fields}) => ((.{member}) === None) ? ({member} := ({
+    {fields}
+    {this}({arguments}) => (this &+ {
+      ({{fields}}) taking {arguments}
+    })
+  })) : (.{member})({fields})
   members := (.({names}))#
   // (one after another, as written: each member a Ray of them)
   {
@@ -1245,8 +1264,9 @@ enum {names} ^keyword => {
 enum {names} {`{`}{block}{`}`} ^keyword => (enum {names}) ~~ (.members.for((member) => member &+= { {block} }))
 assert {
   Shape := enum circle (radius: Number) | square (side: Number) | point
-  assert Shape.circle.radius  // EM8 a member does not carry its field
-  assert Shape.square.side  // EM9 the second member does not carry its field
+  assert Shape.circle.radius === Number  // EM8 a member's field given nothing is not its type (all it may be)
+  assert Shape.square.side === Number  // EM9 the second member's field given nothing is not its type
+  assert Shape.circle(radius: 5).radius == 5  // EM26 a member given its field does not hold it
   assert !(Shape.point.radius)  // EM10 a member carries another's field
   assert Shape.point  // EM11 a member without fields is not there
   assert Shape.circle is Shape  // EM16 a member is not one of its own enum

@@ -2144,6 +2144,23 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     the rule outside and sibling bodies are unchanged (GR2–GR4).
   - **A function type is checked structurally,** the same check as any other type: a closure is of
     `(x: Vertex): boolean` when its parameters and answer are.
+  - Built so far (2026-10-17):
+    - A word-led rule defined in a node made by `interior` (a class or instance, `external members`) is refused to a bare
+      read. Member reads still see it: the text of `.{member}`, or a name written right after a `.`. A rule defined
+      under `static` (`external static`) is not refused. A name nothing reads, read bare in such a node, is a place
+      where it is written, not a member. The library's bodies were rewritten to `.name` (`this.name` inside a closure
+      or a narrowing, where `.` is something else).
+    - A call takes its arguments whole. Node.ray's `{f}({argument: Superposed})` and its map acceleration are removed;
+      operators still distribute.
+    - `reduce`: `step.on(element) after accumulated`. The step's own node gets `. => received`, a rule of its own read
+      before the language's `.`. A lone operator read as a value is `.op`, `(left) => left op .`, so `reduce(|)` is
+      `reduce(.|)` and lays `|` on each edge.
+    - A name defined with parameters and without (`min (b: T) =>`, `min =>`) is read by what is given: brackets after
+      it read the one with parameters (`CALLS`), none read the other.
+    - `xs{p}` of a list is the values p holds for, in order (the global narrowing rule, the constraint read on each).
+    - An undefined type is said where it is written (`external undefined`, in `checked`). `Integer := Number |
+      Number.Signed`.
+    - Arguments inside `x.( … )` see where the code was written (`2.(1 + y)`).
 - Code read in a value it was not written in, `x.( … )`, reads with x's rules first, then where it was written.
 - A head made only of holes of where it is written (`{operator} {rest} => {body}` in `chainable`) is read as the text they
   took, as written, one expression (`== (other: Number)`): a method, not each part apart.

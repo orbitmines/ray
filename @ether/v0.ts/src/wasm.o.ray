@@ -131,18 +131,6 @@ Array &+= {
     }
     made
   }
-  // (`xs{p}`, a list's: the values p holds for, `.` each one in it; of anything else (a class, `String{length == 1}`), the
-  // narrowing it is)
-  {this}{`{`}{constraint}{`}`} => ((this).listing === true) ? {
-    kept := Array.new
-    at := (this).head
-    while at {
-      it := at.value
-      (kept.append(it) if (it with {constraint}))
-      at = at.next
-    }
-    kept
-  } : (this){ {constraint} }
 }
 // (None takes no members of its own: given)
 external nothing None

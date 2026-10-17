@@ -1398,6 +1398,22 @@ written_among (at) => at ? (written_text(at.value) || literal_text((at.value).ty
 // (a text beginning with another; what is past that beginning (the kernel's map, `past`))
 text_begins (text, start) => text.past(start) !== None
 text_past (text, start) => text.past(start)
+// (whether a text begins with another, character by character (PR #32; the matcher itself reads by `text_begins`, the
+// kernel's `past`))
+text_leads (text, lead) => {
+  at_text := text
+  at_lead := lead
+  same := true
+  while same && !(at_lead.empty) {
+    same = (!(at_text.empty)) && (at_text.first == at_lead.first)
+    at_text = same ? at_text.rest : at_text
+    at_lead = same ? at_lead.rest : at_lead
+  }
+  same
+}
+assert text_leads(`ab`, `a`) && !(text_leads(`ab`, `b`)) && text_leads(`ab`, `a`.rest)  // PX1 a text does not begin with what it begins with
+assert !(text_leads(`a`, `ab`))  // PX2 a text begins with what is longer than it
+assert text_past(`ab`, `a`) == `b` && text_past(`ab`, `a`.rest) == `ab`  // PX3 what follows a text's beginning is not the rest of it
 // (a text given to places, with texts written among them, `(a, `-`, b) := `x-y``: read the way a list is given, in order,
 // each written text there in its turn, each place the shortest span after which the rest reads (and its type reads))
 text_read (at, text) => text_read_by(at, (places_types(at)).head, text)

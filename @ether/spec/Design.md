@@ -2230,6 +2230,25 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - A class written with its header as a list of positions (`class a: T, ".", b: U { … }`) is declared after `,`, which would
   otherwise read the definition as a list of its parts; a text written among a structure's places takes no argument.
 
+- Self-hosting, the target (user, 2026-10-17 evening): Expression.ray boots into something self-hosted, the wasm it
+  writes replacing language.ts reading the entrypoint. Expression.ray stays at most 75 lines (only error reporting may add
+  to that, compressed: cycle detection is `Program{.acyclic}`, not code). What is too slow to run as written is
+  accelerated in the kernel's map (`wasm.o.ray`, away from the entrypoint): the kernel answers what the rules answer.
+  - The second position of Expression's header (`GRAMMAR_RULE_DEF := …`, `statements: ( … )`) is code run per read: once
+    the BOOTSTRAPPER fields are taken, with them bound; its definitions are the instance's members, and `statements:` is
+    the field that takes the rest of the text, read by what the block defines.
+  - A list holds places (user, 2026-10-17, "a list sees the place where the value sits"): `,` keeps the place when an
+    element is written as a name (`x`, `x: T`, `x = v`); the element answers its value as before, and the list says each
+    one's name. A field typed by such a list reads its span into a node of those names (`.inner.left`); a named alternative
+    in a repeat (`(LHS: A | RHS: B | String)[]`) is a member of what was read, all its spans superposed (`.CAPTURES.LHS`).
+  - `x.map{p}(v)`: v in place of each element p holds of (v may be a function of it), the others kept
+    (`CAPTURE.map{== \s}(`LHS`)` of `{ }` is `{LHS}`).
+  - Built toward it the same day: a class's own `from` is not hidden by the structure's (named `destructured`); a text
+    written among places is a text the kernel holds (`literal_text`: `Array &+= Path{acyclic}` gives every text a
+    `narrows`), a typed place is a field (`head: `!l``); `fields_end` is one class (defined after `class { }`); a text
+    given in its place is passed over (`(a, `-`, b) := (1, `-`, 2)`); `String.past` (kernel map); `\s = Char.Blank`;
+    `class x: T` without a block; a closure called with nothing takes `declared` (a typed parameter its type).
+
 ### 21.4 Speed
 
 - A test runs in memory of its own, let go of when it (and the tests written in it) are done: an assert answers whether

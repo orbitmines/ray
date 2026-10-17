@@ -1,0 +1,22 @@
+with CLI = class: CLI {
+  name = "Ether"
+  % = "0.E2027.0A.4"
+  abstract | n: boolean                       // Abstractly interpret (analyze) instead of executing.
+  test | t: boolean                           // Read the files (else the whole library), then run their tests.
+  build?: Location                            // Read the files, then write the program built as WebAssembly here.
+  level: (default | none | kernel) = default  // With --build: what the program is compiled to.
+  lsp: boolean                                // Serve the language server (LSP) over @me/instance.
+  verbose | v: boolean                        // Say how long reading took, and what was said that is not a warning.
+  debug?: (trace | cost | tests | String)     // Debug the kernel: say every step, what takes long, each test as it begins.
+  threads: Number = @me/device/os/threads     // How many threads to use for interpreting/compiling.
+  // (what it does: the files read (`out.wasm`, `$.wasm`: a program built) under the level asked; built, served, tested, else
+  // run)
+  run => ((operands.first ?? @./.entrypoint.ray3), operands.rest) as Program{O: @wasm.(level)} -- (
+    (@build = . if build) |
+    (.served if lsp) |
+    (.tested if test) |
+    .()
+  )
+}
+
+CLI()

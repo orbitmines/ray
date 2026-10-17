@@ -692,7 +692,7 @@ assert {
     // (a text: read as Ts one after another, `abc` as `(ab | c)[]`; anything else, each of it a T)
     holds (it) => {
       kind := each
-      ((it).textual === true) ? text_repeats(kind, it) : (((it).listing === true) ? it.every((item) => item is kind) : false)
+      literal_text(it) ? text_repeats(kind, it) : (((it).listing === true) ? it.every((item) => item is kind) : false)
     }
   }) &+ { }
   made &+= {
@@ -837,7 +837,7 @@ as {target} ^keyword => {
   converting := .
   wanted := target
   // (a text read as a class written as a structure: destructured into one, though it already is one)
-  (((converting).textual === true) && ((wanted).structure_as !== None) && (converting is wanted)) ? wanted.destructured(converting) : (converting is wanted) ? converting : (((converting).textual === true) && ((wanted).of === wanted)) ? ((converting is (wanted as String)) ? wanted.destructured(converting) : None) : (wanted.from(converting) ?? ((((converting).listing === true) && ((wanted).of === wanted)) ? wanted.destructured(converting) : None))
+  ((((wanted).of === wanted) && literal_text(converting)) ? structure_reads(wanted, converting) : false) ? wanted.destructured(converting) : (converting is wanted) ? converting : (((converting).textual === true) && ((wanted).of === wanted)) ? ((converting is (wanted as String)) ? wanted.destructured(converting) : None) : (wanted.from(converting) ?? ((((converting).listing === true) && ((wanted).of === wanted)) ? wanted.destructured(converting) : None))
 }
 from (x) => None
 // (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
@@ -935,7 +935,7 @@ extended () => .interior
   {value: type} => made(value)
 }
 // (one read as a class made of it with no header of its own: made of that class too)
-made_as (instance, wanted, made) => (wanted === made) ? instance : (instance &+= wanted)
+made_as (instance, wanted, written_made) => (wanted === written_made) ? instance : (instance &+= wanted)
 // (a structure, `(a: T, `-`, b: U)`: a text it reads is destructured into one made of it, each field the span it takes)
 {on} reads ({fields}) as {made} ^keyword => on &+= {
   // (a text written as its fields are, in order (the class as a text): a head that is one hole alone takes one word)
@@ -985,14 +985,12 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   (made).class_held := held
   // (one with no header, `class: P { … }`; of a class written as a structure, read as that structure (made of it, what it
   // reads, it reads), P not taught to read it)
-  header_written := `{fields}`
-  headerless := header_written.same_characters(`nothing_given = None`) !== None
-  inherits_structure := headerless && ((parent).structure_as !== None)
-  (made reads ({fields}) as made) unless inherits_structure
-  // (written as a structure (a text written among its places, here or in the type of one): what it is written as, kept with
-  // it; a header with no text written in it is none, its places not read for it)
-  // (marked_structure(made)) if external quoted header_written
-  (parent reads ({fields}) as made) unless (parent === Node) || inherits_structure
+  // (no locals: what this closure declares is declared where the class is written, shared by every class written there)
+  (made reads ({fields}) as made) unless inherits_structure(`{fields}`, parent)
+  // (a text written in its header: the class kept as the one it is written in (one with no header of its own, made of it, has
+  // it too: it reads as that one is written))
+  (member_given(made, "header_quoted", made)) if external quoted `{fields}`
+  (parent reads ({fields}) as made) unless (parent === Node) || inherits_structure(`{fields}`, parent)
   made &+= {
     of := .
     {this}({arguments: Arguments}) => (this &+ {
@@ -1205,13 +1203,18 @@ followed_is (type) => {
 is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
-  (type === Node) || (value === type) || (((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || ((value.textual === true) && ((type).structure_as !== None) && (value is (type).structure_as)))
+  (type === Node) || (value === type) || (((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
 }
 // (a text is a class written as a structure (`class (a: T, `-`, b: U)`, a text among its places; or one typed place alone,
 // `class (x: T)`) when it reads as it is written)
 // (what a class written as a structure is written as, kept when it is defined (`class:`); any other, none)
 structure_as := None
-marked_structure (made) => written_shape((made).written_as) ? ((made).structure_as := (made).written_as) : None
+header_quoted := None
+// (a class with no header (`class: P { … }`) of one written as a structure)
+inherits_structure (header_text, parent_class) => (header_text.same_characters(`nothing_given = None`) !== None) && ((parent_class).header_quoted !== None)
+// (a text is a class written as a structure when it reads as the class is written, the kernel reading it (by every type in it);
+// asked when it is asked: what the class is written as, read while it is defined, is read again for what it is then)
+structure_reads (read_class, read_text) => ((read_class).header_quoted !== None) && written_shape(((read_class).header_quoted).written_as) && ((external readable ((read_class).header_quoted).written_as) === true) && ((external admits read_text ((read_class).header_quoted).written_as) === true)
 written_shape (written) => (written !== None) && (texts_among(written.head) || ((written.head.next === None) && !(written.first === Node) && !((written.first).of === written.first)))
 texts_among (at) => at ? (literal_text(at.value) || texts_among(at.next)) : false
 assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
@@ -1390,11 +1393,13 @@ dynamics := None
   value
   ({name} => value) given (value)
 }
-// (one place in brackets, `(x: T) := v`: that place, typed, alone takes the value (on a left side it is no record, `(x: 1)`))
-({name: Name}: {type}) := {value} ^punctuation => {
-  {name}: {type}
-  ({name}) alone takes (value)
+// (one place in brackets, `(x: T) := v`: given the value, a text read by T as a field's is (on a left side it is no record,
+// `(x: 1)`))
+({lone_name: Name}: {lone_type}) := {lone_given} ^punctuation => {
+  {lone_name} := lone_read({lone_type}, lone_given)
 }
+// (a text given to a type that is a list of named positions or a repeat (not a text itself, String): read by it; else as it is)
+lone_read (read_type, read_given) => (((read_given).textual === true) && !((read_type).textual === true) && (named_list(read_type) || ((read_type).repeats === true))) ? ((read_type) read_span (read_given)) : read_given
 // (what a definition answers given its value: a left side made of names answers a list of their places (`(a, b) := list`, a
 // call's parameters): each the value in its place)
 {given} given {value} ^keyword => ((given).listing === true) ? ((((value).textual === true) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value))) : given

@@ -34,7 +34,7 @@ assert needs_counted == 1  // NE15 a statement with if is not done when it holds
 
 NeedsPair := class left: Decimal {
   static zero := 0
-  doubled => left * 2
+  doubled => .left * 2
 }
 assert NeedsPair(3).doubled == 6  // NE16 a class does not answer a method on its field
 assert NeedsPair.zero == 0  // NE17 a class does not keep its static

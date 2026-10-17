@@ -2183,7 +2183,7 @@ const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 7
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
-const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable'];
+const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
@@ -2424,7 +2424,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (a thread's words)
   const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_WRITER_SELF = 272, T_LB = 276, T_WRITER = 280, T_TV = 284, T_TVS = 288, T_TVE = 292, T_MEMBER_S = 296, T_MEMBER_E = 300, T_ALL_S = 304, T_ALL_E = 308, T_TOKEN = 312, T_HERE = 316, T_IN2_S = 320, T_IN2_E = 324, T_IN2_F = 328, T_DEFIN = 332, T_OMEMO = 336, T_QBUDGET = 340, T_UNALIGNED = 344, T_WRITTEN_IN = 348, T_CHECKS = 352, CHECKS = 30, T_STACK = 480, T_DEEPC = 484, T_GIVEN = 488, T_GIVEN_N = 492, T_ALT = 496, T_BEGUN = 500, T_BEGUN_N = 504, T_GREW = 508, T_FREE_TAKEN = 512, T_SKIPS = 516, T_SKIPS_N = 520, T_NAMING = 524, T_NAMING_N = 528, GROWN = 15 << 25, TEST_GROWN = 1 << 25, GIVEN_N = 16, OMEMO_MASK = (1 << 14) - 1, LEFTS = 64, TYPS = 64, SHADOWS = 1024, TYPINGS = 1, DECLS = 64, BEGUN = 40;
   // (the words the host knows, at WORDS: where each is and how long)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, ARGV_SLOT = 24, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_SPAN = 20;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, ARGV_SLOT = 24, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_SPAN = 20;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 32;
@@ -3004,7 +3004,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (we === cs || (b(cs) >= 48 && b(cs) <= 57)) return 0;
     let after = we; while (after < ce && b(after) <= 32) after++;
     const fits = after === ce || (b(after) === 58 && b(after + 1) !== 58 && b(after + 1) !== 61) || (b(after) === 61 && b(after + 1) !== 61 && b(after + 1) !== 62);
-    return fits ? node(IS_TEXT, cs, we, w(TEXTS) || w(GLOBAL), 0) : 0;
+    if (!fits) return 0;
+    // (a list written, `a: T, b`, is no name: a `,` outside brackets and quotes)
+    for (let hp = after, hd = 0, hq = 0; hp < ce; hp++) { const hc = b(hp); if (hq) { if (hc === hq) hq = 0; continue; } if (hc === 34 || hc === 96) hq = hc; else if (hc === 40 || hc === 91 || hc === 123) hd++; else if (hc === 41 || hc === 93 || hc === 125) hd--; else if (hc === 44 && hd === 0) return 0; }
+    return node(IS_TEXT, cs, we, w(TEXTS) || w(GLOBAL), 0);
   }
   // (a span as a place reads it, the language's `type_fits` (`is`, or `as`): of a structure class, what it is written as
   // (its `written_as`, which `as` asks before it destructures))
@@ -3037,7 +3040,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (the first type, as the loop tries it: the shortest span after which the rest reads; one not known before it, not known)
     const first = w(types), rest = reads + n + 1;
     if (w(first + N_IS) === IS_TEXT) { const m = w(first + N_B) - w(first + N_A); if (m < 1 || m > n || !same(s, w(first + N_A), m)) return w(NOTHING); const r = b(rest + m); return r === 1 ? node(IS_TEXT, s + m, e, w(TEXTS) || w(GLOBAL), 0) : r === 2 ? 0 : w(NOTHING); }
-    for (let q = 1; q <= n; q++) { const r = b(rest + q); if (!r) continue; const f = span_fits(t, s, s + q, first); if (f < 0 || (f === 1 && r === 2)) return 0; if (f === 1) return node(IS_TEXT, s + q, e, w(TEXTS) || w(GLOBAL), 0); }
+    // (a repeat, `T[]`, `T[]+`: the longest span after which the rest reads, as many Ts as there are)
+    const greedy = repeat_type(t, first, 0);
+    for (let q0 = 1; q0 <= n; q0++) { const q = greedy ? n + 1 - q0 : q0; const r = b(rest + q); if (!r) continue; const f = span_fits(t, s, s + q, first); if (f < 0 || (f === 1 && r === 2)) return 0; if (f === 1) return node(IS_TEXT, s + q, e, w(TEXTS) || w(GLOBAL), 0); }
     return w(NOTHING);
   }
   // (what the type's rules read: one of the characters, then, after any space, one again, to the end, spaces after it)
@@ -3488,6 +3493,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const sc = span_char(s, e); let any = 0;
     for (let at = held(t, ty, W_HEAD, 0), k = 0; at && at !== w(NOTHING) && k < 4096; at = held(t, at, W_NEXT, 0), k++) { const c = char_of(t, held(t, at, W_VALUE, 0)); if (c < 0) return -1; if (c === sc) any = 1; }
     return any;
+  }
+  // (a type that is a repeat: what `T[]` made (its block marked `repeats`), or `T+` of one)
+  function repeat_type(t: number, ty: number, depth: number): number {
+    if (!ty || depth > 8 || w(ty + N_IS) !== IS_NODE) return 0;
+    const made_in = w(ty + N_PARENT); if (made_in && held(t, made_in, W_REPEATS, 0) === w(TRUE_)) return 1;
+    const base = held(t, ty, W_NONEMPTY, 0); return base ? repeat_type(t, base, depth + 1) : 0;
   }
   // (whether `text_admits` can tell of every text by a type: a text, String, Node, `T+`, `T[]`, a list of types, a superposition of
   // them, a place holding one)
@@ -4540,10 +4551,20 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
           if (given && w(v + N_A) < w(v + N_B)) bound(w(v + N_A), w(v + N_B), place_in(v) || self, given);
           return given;
         }
-        const hn = v ? hole_name(names, rest, q) : 0, into = names && w(names + N_IS) === IS_FRAME ? w(names + F_THIS) : self;
-        if (hn && into && w(into + N_IS) === IS_NODE && into !== w(GLOBAL) && !own_named(into, w(hn + N_A), w(hn + N_B))) {
+        const hn = v ? hole_name(names, rest, q) : 0, hx = hn ? named(w(names + F_RULE), rest, q) : -1;
+        // (where the name was written: the scope its code was read in; else what this is read in)
+        const tk0 = hx >= 0 ? names + F_TAKES + TAKE * hx : 0, src = tk0 ? follow(tk0, 1) : 0, written_in = src && w(src + T_THIS) ? w(src + T_THIS) : 0;
+        const into = written_in || (names && w(names + N_IS) === IS_FRAME ? w(names + F_THIS) : self);
+        if (hn && into && (w(into + N_IS) === IS_NODE || w(into + N_IS) === IS_FRAME) && into !== w(GLOBAL) && !own_named(into, w(hn + N_A), w(hn + N_B))) {
           const given2 = block(t, skip(q, z), z, names, f, self, 0, 1, 0, self, 0);
-          if (given2) bound(w(hn + N_A), w(hn + N_B), into, given2);
+          if (given2) {
+            // (a place of it there, as a name nothing reads has (its type kept on it), then given the type)
+            const pl = place_of(w(hn + N_A), w(hn + N_B), into), wt = w(w(WORDS) + 8 * W_TYPE);
+            bound(wt, wt + w(w(WORDS) + 8 * W_TYPE + 4), pl, given2);
+            bound(w(hn + N_A), w(hn + N_B), into, given2);
+            // (and what the rule took for the name, read again, that place: not what it named elsewhere)
+            set(tk0 + T_VALUE, pl); astore(tk0 + T_STATE, 3);
+          }
           return given2 || w(FALSE_);
         }
         return w(FALSE_);
@@ -4592,8 +4613,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         else if (ov && w(ov + N_IS) === IS_NODE) for (let ol = held(t, ov, W_HEAD, 0), ok = 0; ol && ol !== w(NOTHING) && ok < 1 << 16; ol = held(t, ol, W_NEXT, 0), ok++) { const oe = held(t, ol, W_VALUE, 0); if (oe && w(oe + N_IS) === IS_TEXT) told(w(oe + N_A), L_OUTPUT, w(oe + N_A), w(oe + N_B)); }
         return ov || w(NOTHING);
       }
-      // (`external quoted x`: whether the text x holds a text written in it (a `"` or a backtick))
-      if (word(a, m, W_QUOTED) && rest < z) { const qv = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); if (!qv || w(qv + N_IS) !== IS_TEXT) return w(FALSE_); for (let qp = w(qv + N_A); qp < w(qv + N_B); qp++) if (b(qp) === 34 || b(qp) === 96) return w(TRUE_); return w(FALSE_); }
+      // (`external quoted x`: whether the text x holds a text written in it (a `"` or a backtick), or an escape (`\s`))
+      if (word(a, m, W_QUOTED) && rest < z) { const qv = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); if (!qv || w(qv + N_IS) !== IS_TEXT) return w(FALSE_); for (let qp = w(qv + N_A); qp < w(qv + N_B); qp++) if (b(qp) === 34 || b(qp) === 96 || b(qp) === 92) return w(TRUE_); return w(FALSE_); }
+      // (`external typed_name x`: the name a hole's code is written as when it is written with a type, `a: T` (a field); else
+      // nothing)
+      if (word(a, m, W_TYPED_NAME) && rest < z) { let q = rest; while (q < z && b(q) > 32) q++; const tn = hole_name(names, rest, q); if (!tn) return w(NOTHING); let ta = w(tn + N_B); const hx2 = named(w(names + F_RULE), rest, q), o2 = follow(names + F_TAKES + TAKE * hx2, 1), te = w(o2 + 4); while (ta < te && b(ta) <= 32) ta++; return ta < te && b(ta) === 58 ? tn : w(NOTHING); }
       // (`external readable x`: whether the kernel can read a text by the type x throughout (what `text_admits` answers))
       if (word(a, m, W_READABLE) && rest < z) { const rv = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); return rv && readable(t, rv, 0) ? w(TRUE_) : w(FALSE_); }
       // (`external arguments`: what the program was called with, one text, each argument ended by `\0` (as the OS holds them))

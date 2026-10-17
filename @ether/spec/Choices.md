@@ -15,7 +15,7 @@ rest inferred; behaviour is rules on shapes, not inheritance.
 | [Numbers](design/Numbers.md) | exact numbers below zero; widths as ranges; `.mod` for wrapping and signed bits; bits as a base | high, spellings medium | NE5, NE26, NE27, NE40, NE43 to NE46 |
 | [Formats](design/Formats.md) | a format is a shape over bits, read by the text matcher; an index, then a table, for speed | high, index medium | NE47, NE48, DEFLATE's streams, x86 |
 | [Reading](design/Reading.md) | text read through declared shapes; no regex in the core; foreign syntax as shapes | high, style medium | NE23 to NE25 |
-| [Records](design/Records.md) | records are map literals (§3.2, works today); `Name<given> := (…)` for given values | decided; 75% | NE12 (green), NE48 |
+| [Records](design/Records.md) | a record is named parts in brackets, a value of fields (§7.3), as the library writes; `Name<given> := (…)` for given values | high; 75% | NE12, enumerate, NE48 |
 
 ## Where to start
 
@@ -39,5 +39,6 @@ rest inferred; behaviour is rules on shapes, not inheritance.
 9. Does a value read keep the bits it was read from? (`Formats.md`)
 10. Is a text read by a set of rules done in the language or in the kernel? (`Reading.md`)
 11. Regular expressions only as `$.regex`? (`Reading.md`)
-12. Is a map literal's type its shape, and is a given part declared `Name<given> := (…)`?
+12. Is `(a: 1, b: 2)` a value whose fields are `a` and `b`, read whole despite `,`; and is a given part declared
+    `Name<given> := (…)`?
     (`Records.md`)

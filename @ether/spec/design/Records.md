@@ -17,11 +17,13 @@ encoding depends on the prefixes read before it.
 
 ## Recommended
 
-- **Records are decided: they are map literals.** `{ symbol: 1, bits: ₂01 }.bits` is `₂01`; "the own key wins over Node's
-  member of that name: `{ count: 3 }.count` is 3" (§3.2). This works on main today, four keys and in a list included. The
-  old proofs' `(symbol: 1, bits: …)` was their spelling: `,` binds loosest of all (§10.1), so brackets of named parts are
-  a list first, and no rule is meant to read them as one value. A map literal's type is its shape, so a list of them
-  still reads and writes as bits like any other shape (`Formats.md`).
+- **Records are named parts in brackets, `(symbol: 1, bits: ₂01)`, a value whose named parts are its fields** (§7.3). The
+  library writes them so itself: `Ray.ray`'s `enumerate` makes `(index: …, value: …)`, and `$/Deflate.project.ray`'s
+  Huffman codes `(symbol: …, bits: …)`. A map literal, `{ symbol: 1, bits: ₂01 }` (§3.2), already works on main. Brackets
+  of named parts do not: inside them `a: 1` reads as a declaration (§6.1) and answers its value, so the names are lost,
+  and no rule can read the brackets whole, since the kernel reads `,` as a list before any rule (§10.1). That reading is
+  the kernel's to change; `enumerate`, `zip`, `sliced` and DEFLATE's codes wait on it. Its type is its shape, so a list
+  of records reads and writes as bits like any other shape (`Formats.md`).
 - **A shape takes what it is given the way a function does** (§7.4): `Add<prefixes, rex> := (₂00000001, operand:
   Operand<rex>)`. Given values are fixed before anything is read and are never read from bits; a shape given some of its
   values is a type of its own (`Add<p, r>`). Confidence 75%.
@@ -30,15 +32,15 @@ encoding depends on the prefixes read before it.
 
 | | For | Against |
 |---|---|---|
-| **A record as a map literal, `{ k: v }` (§3.2)** | decided; works today; its type is its shape | none found |
-| Named parts in brackets (the old proofs) | short | a list first by §10.1 |
+| **Named parts in brackets, a value of fields (§7.3)** | what the library already writes | the kernel reads `,` first and `a: 1` as a declaration |
+| A map literal, `{ k: v }` (§3.2) | works today | not what the library writes |
 | `class<given> (…)` (the old proofs) | short across 46 x86 forms | a class form, beside `class: <…>` |
 | **`Name<given> := (…)` (above)** | the form of `Ray<T = Ray>` and `f<a: 10>`; no class | the given values sit apart from the shape they condition |
 
 ## Found on main (e6bcbbb2)
 
-- A map literal works: `{ symbol: 1, bits: `01` }.bits`, four keys, in a list. Named parts in brackets are a list of
-  two or more, as §10.1 has it.
+- A map literal works: `{ symbol: 1, bits: `01` }.bits`. Named parts in brackets lose their names: `(index: 1, value: 2)`
+  is the list `1, 2`, so `enumerate` and DEFLATE's Huffman codes fail.
 - Partial arguments fail in every form.
 - Named arguments to a closure work; to a class they do not: the constructor's typed hole `{arguments: Arguments}`
   rejects `left: 1, right: 2`, the call is read as a group, and the fields stay None. Making the hole untyped fixes them
@@ -47,7 +49,8 @@ encoding depends on the prefixes read before it.
 ## Deliverables, each its own PR (`.entrypoint.ray3`)
 
 1. Named arguments taken by any name and value. NA16 to NA18. No dependency.
-2. None for records: NE12 is respelled as a map literal and passes (#29).
+2. Named parts in brackets as a value of fields: in the kernel's reading of `,` and `name: value`. NE12, and with it
+   `enumerate`, `zip`, `sliced`, DEFLATE's DF1. For the owner.
 3. Partial arguments: `f<a: 1>`, `f<1>`, given then called. PA1 to PA4. After 1.
 4. Shapes that take given values: `Name<given> := (…)`. CG1 to CG5; NE48 (respelled to test this alone). After 3.
 5. A map literal's shape as its type, `==` structural. RT1, RT2. After the owner's answer.

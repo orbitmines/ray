@@ -40,9 +40,9 @@ encoding depends on the prefixes read before it.
 - A map literal works: `{ symbol: 1, bits: `01` }.bits`, four keys, in a list. Named parts in brackets are a list of
   two or more, as §10.1 has it.
 - Partial arguments fail in every form.
-- Named arguments are fragile: `Pair(left: true, right: false)` holds, but `Pair(left: 1, right: 2)` (any number given
-  by name), two named booleans in another shape, and a named argument mixed with one in order all fail. Both items here
-  depend on this.
+- Named arguments to a closure work; to a class they do not: the constructor's typed hole `{arguments: Arguments}`
+  rejects `left: 1, right: 2`, the call is read as a group, and the fields stay None. Making the hole untyped fixes them
+  but breaks 40 other asserts, so the fix is in the kernel's reading of `Arguments`.
 
 ## Deliverables, each its own PR (`.entrypoint.ray3`)
 

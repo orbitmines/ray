@@ -19,14 +19,12 @@ rest inferred; behaviour is rules on shapes, not inheritance.
 
 ## Where to start
 
-Some first steps serve several choices, and none needs an answer from the owner:
-
-1. **Named arguments by any name and value** (`Records.md`, 1): records and given values both stand on it.
-2. **The matcher on `first` and `rest` again** (`Reading.md`, 1): it fixes the restore's regression in reading text by a
-   shape, which `Formats.md` and `Conversions.md` both wait on.
-3. **Reading text by a shape** (`Formats.md`, 1), then **a conversion found is answered** (`Conversions.md`, 1).
-
-After those, each document's list goes on in its own order.
+1. **The text matcher reads by characters, not through `~=`:** done, #32. Destructuring a text by a pattern works again.
+2. **Named arguments to a class, and a class reading text by its pattern:** both are in the kernel's reading of a call and
+   of `as` (a typed `Arguments` hole that rejects `left: 1`, and a written form checked against a class's print); measured
+   and handed to the owner.
+3. **Then, each document's list in its own order,** starting with what needs no answer: `Conversions.md` 1 to 3,
+   `Formats.md` 2, `Reading.md` 2 and 5.
 
 ## For the owner
 

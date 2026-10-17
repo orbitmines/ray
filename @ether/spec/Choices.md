@@ -1,36 +1,45 @@
 # Language choices
 
-What the DEFLATE, interop and machine code proofs (PR #20) need from the language that `Design.md` leaves open. Statics
-made on first read and kept (§9.1), an assert in a body tested once (§9.1, §21.5), `==` structural (§8), `*` repeating
-(§11) and fixed-width bits (§12.1) are decided there and need nothing here.
+What the core needs so that the DEFLATE, interop and machine code proofs (tag `machine-code-proof`) can come back, where
+`Design.md` leaves it open. Each choice is its own document in `design/`: what is decided, the options weighed, a
+recommendation with how sure it is, deliverables as small PRs, and questions for the owner. Where `Design.md` decides,
+it wins; these fill gaps.
 
-## C1 Names of the machine integers
+All of them are written in one principle, `design/Shapes.md`: what a value is, is its shape; it is declared once and the
+rest inferred; behaviour is rules on shapes, not inheritance.
 
-- **What.** The proofs use `Int8` to `Int64`, `Natural8` to `Natural64`, `(… wrapped Int32)` and `((a - b) as Int32)`
-  (exact, `None` outside the type). `Design.md` §12.1 has no overflow in `Number`, wrapping at a target's level, `.mod` and
-  `.saturate`, and `u8 = Binary₈`, `i8 = Binary₈.Signed`.
-- **Proposed.** The proofs move to §12.1's names (`i32`, `u64`, `.mod`), and a signed `-` comes in the bootstrap (today
-  `2 - 5 == 0`), since machine code subtracts below zero everywhere.
+| Choice | Recommended | Sure | Unblocks |
+|---|---|---|---|
+| [Shapes](design/Shapes.md) | declared shapes, no class hierarchy; a declared type forces a conversion | high | the style of all below |
+| [Conversions](design/Conversions.md) | a declared type converts a value: itself, its `from`, its shape reading it, one conversion at a time | medium-high | NE25, NE47 |
+| [Numbers](design/Numbers.md) | exact numbers below zero; widths as ranges; `.mod` for wrapping and signed bits; bits as a base | high, spellings medium | NE5, NE26, NE27, NE40, NE43 to NE46 |
+| [Formats](design/Formats.md) | a format is a shape over bits, read by the text matcher; an index, then a table, for speed | high, index medium | NE47, NE48, DEFLATE's streams, x86 |
+| [Reading](design/Reading.md) | text read through declared shapes; no regex in the core; foreign syntax as shapes | high, style medium | NE23 to NE25 |
+| [Records](design/Records.md) | a record is a value of named parts, its type its shape; `Name<given> := (…)` | 65 to 75% | NE12, NE48 |
 
-## C2 `x as T` falling back to reading
+## Where to start
 
-- **What.** In the proofs, `x as T` is `x` when it is a `T`; else `T.from(x)`; else `x` read by `T`'s pattern (text); else
-  by `T`'s header (bits). That is how `bytes as Deflate.Stream` reads a stream with no parser written. The bootstrap has
-  `(. is type) ? . : type.from(.)` (`.entrypoint.ray3`); §7.3 and §7.5 describe reading text by a structure.
-- **Proposed.** `as` reads by the type's pattern or header when it has one and no `from`, so a declaration is its own
-  parser and writer. Only for a class with a pattern or a header, so a failing `as` costs nothing elsewhere.
+Some first steps serve several choices, and none needs an answer from the owner:
 
-## C3 Binary formats as class headers
+1. **Named arguments by any name and value** (`Records.md`, 1): records and given values both stand on it.
+2. **The matcher on `first` and `rest` again** (`Reading.md`, 1): it fixes the restore's regression in reading text by a
+   shape, which `Formats.md` and `Conversions.md` both wait on.
+3. **Reading text by a shape** (`Formats.md`, 1), then **a conversion found is answered** (`Conversions.md`, 1).
 
-- **What.** The proofs declare formats as class headers read and written as bits by one codec (`structures3.ts`):
-  `<-Byte{== 8}`, `<-Binary₃`, conditional groups, alternatives, generics (`class<P> (…)`). x86 (also made from Intel's XED)
-  and DEFLATE rest on it. §7.1 writes UTF-8 the same way in its own notation (`Binary{length == …}`, `(…) if prefix ⊢₂11`).
-- **Proposed.** One notation: the proofs move to §7.1's. Open: whether the codec is in the kernel or a library it loads
-  (§13.2 keeps compressors out of the core; a codec is not one), and that a decoder is compiled from a header into a table,
-  not searched (`Kernel.md`, requirement 7).
+After those, each document's list goes on in its own order.
 
-## Noted, not choices
+## For the owner
 
-- An assert put off until everything is read sees final values (in a loop, the last pass); a check for every pass is
-  written `ensure` or `dynamically`. Worth one line in `Design.md`.
-- `2 === 2` is true on the bootstrap (digits are single globals), where §8 says it is false.
+1. Is Ray structural all the way down, or do `class: Parent` and `super` stay? (`Shapes.md`)
+2. Does a declared type force a conversion, `x: Binary₄ = 5`? (`Shapes.md`, `Conversions.md`)
+3. Does a failing conversion raise an error or answer None? (`Conversions.md`)
+4. May `2 - 5` answer `-3`? (`Numbers.md`)
+5. Is `Binary₈.Signed` two's complement? (`Numbers.md`)
+6. What bounds "integer parts are bounded by default", against "no overflow"? (`Numbers.md`)
+7. May the host's map hold exact numbers past 2^31, and bitwise operations as externals? (`Numbers.md`)
+8. Does `<-T` in a shape mean look-behind (§4.2) or read right to left (§13.1)? (`Formats.md`)
+9. Does a value read keep the bits it was read from? (`Formats.md`)
+10. Is a text read by a set of rules done in the language or in the kernel? (`Reading.md`)
+11. Regular expressions only as `$.regex`? (`Reading.md`)
+12. Is `(a: 1, b: 2)` a value whose type is its shape, and is a given part declared `Name<given> := (…)`?
+    (`Records.md`)

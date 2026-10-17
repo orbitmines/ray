@@ -102,7 +102,8 @@ assert {
   Spanned := class (spanned: (String+, \s, String+), `;`) => { }
   assert (`{ };` as Spanned).spanned == `{ }`  // EX6 a field written as positions does not take their span
 }
-assert `{ }`.map{== \s}(`LHS`) == `{LHS}`  // EX7 mapping a text's spaces to LHS does not put LHS where the space is
+assert `{LHS}` is `{ }`.map{== \s}(`LHS`)  // EX7 a text's space mapped to LHS does not read {LHS}
+assert !(`{ }` is `{ }`.map{== \s}(`LHS`))  // EX9 a text's space mapped to LHS still reads the space
 assert {
   Dependent := class (open: String, \s, close: open) => { }
   assert (`a a` as Dependent).close == `a`  // EX8 a field's type does not see a field before it
@@ -137,9 +138,3 @@ assert {
 //   default => Wasm
 // }
 // Wasm &+= Wasm.none
-
-// with CLI.(
-//   .name = "Ether",
-//   .% = 
-//   . //etc/
-// )

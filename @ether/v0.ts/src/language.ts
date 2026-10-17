@@ -616,7 +616,7 @@ export function run_built(path: string) {
   const bytes = env.fs.readFileSync(path), module = new WebAssembly.Module(bytes);
   const section = (name: string) => new Uint8Array(WebAssembly.Module.customSections(module, name)[0]);
   const meta = JSON.parse(new TextDecoder().decode(section('ray'))) as { memory: number, paths: string[], named: string[] };
-  const heap = memory(meta.memory), u8 = new Uint8Array(heap.buffer), image = section('ray.image'), view = new DataView(image.buffer, image.byteOffset, image.byteLength);
+  const heap = memory(meta.memory), u8 = new Uint8Array(heap.buffer), image = new Uint8Array(process.getBuiltinModule('zlib').inflateRawSync(section('ray.image.z'))), view = new DataView(image.buffer, image.byteOffset, image.byteLength);
   for (let at = 0; at < image.length;) { const to = view.getUint32(at, true), n = view.getUint32(at + 4, true); u8.set(image.subarray(at + 8, at + 8 + n), to); at += 8 + n; }
   const ray = new Ray(); ray.prebuilt = module; ray.init(heap); ray.files_ = { getPath: (id: number) => meta.paths[id] } as unknown as FileStore; ray.name(meta.named);
   // (the program compiled: its functions, on this kernel)
@@ -1998,7 +1998,7 @@ export function built(p: Jmp, pages: number, heap: Uint8Array, end: number, meta
   for (let i = 0; i < end;) { while (i < end && heap[i] === 0) i++; if (i >= end) break; let j = i, zeros = 0; while (j < end && zeros < 256) { zeros = heap[j] === 0 ? zeros + 1 : 0; j++; } j -= zeros; runs.push(i, j); size += 8 + (j - i); i = j; }
   const image = new Uint8Array(size), view = new DataView(image.buffer); let at = 0;
   for (let k = 0; k < runs.length; k += 2) { view.setUint32(at, runs[k], true); view.setUint32(at + 4, runs[k + 1] - runs[k], true); image.set(heap.subarray(runs[k], runs[k + 1]), at + 8); at += 8 + runs[k + 1] - runs[k]; }
-  custom('ray.image', image);
+  custom('ray.image.z', process.getBuiltinModule('zlib').deflateRawSync(image, { level: 1 }));
   const out = new Uint8Array(parts.reduce((n, x) => n + x.length, 0)); let o = 0; for (const x of parts) { out.set(x, o); o += x.length; }
   return out;
 }

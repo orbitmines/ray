@@ -131,18 +131,6 @@ Array &+= {
     }
     made
   }
-  // (`xs{p}`, a list's: the values p holds for, `.` each one in it; of anything else (a class, `String{length == 1}`), the
-  // narrowing it is)
-  {this}{`{`}{constraint}{`}`} => ((this).listing === true) ? {
-    kept := Array.new
-    at := (this).head
-    while at {
-      it := at.value
-      (kept.append(it) if (it with {constraint}))
-      at = at.next
-    }
-    kept
-  } : (this){ {constraint} }
 }
 // (None takes no members of its own: given)
 external nothing None
@@ -182,5 +170,3 @@ external numeral `{digits: Decimal.String}`
 Node &+= { external superposed }
 // (a text using `.` on its own, `candidate is .`: found by the kernel, as `bare_dot` does)
 String &+= { bare_dot => external dotted this }
-// (a call of a superposed value, Node.ray's: its argument read once, asked as `superposed` is; not one, the call it is)
-external superposing `{f}({argument: Superposed})`

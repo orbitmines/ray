@@ -448,7 +448,7 @@ Integer := Number | Number.Signed
 assert 5 is Integer  // INT1 five is not an integer
 assert (-5) is Integer  // INT2 minus five is not an integer
 
-Ending := \n | ")" | ","
+Ending := "\n" | ")" | ","
 {from: Number}..{followed_by: ⊢Ending} ^punctuation => from -> 1
 assert (5..)[2] == 7  // OR1 5.. does not go on from five
 ..{to: Number} ^punctuation => -1 <- to

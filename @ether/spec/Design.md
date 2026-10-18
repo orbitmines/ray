@@ -2296,6 +2296,11 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
       differs); the kernel's map answers its operators (`external int32 …`, #40's), by the same digits. The rules are
       checked on a few digits (thirty-two, interpreted, are past what a test may take). The class itself is the
       entrypoint's (`Int32 := class (bits) => { }`), so the map, read before the library, can add to it.
+    - Read in order (2026-10-18): a field's type written as the name of a field before it is what that one took
+      (`(open: String, `-`, close: open) := `a-a``; `a-b` does not read). Each position's link keeps the span it was
+      given while the rest is read (`given_span`), a place its type as written (`type_written`, kept by the kernel's
+      `unset`). Not yet for a class's header: its fields are declared where the class is written (the spliced header
+      keeps that take), so a field's type does not see the one before it in the instance (EX8).
     - Texts are joined by the kernel's map (`+`, `external joined`): there was no `+` of two texts, and `join`, `plural`
       and interpolation relied on one.
     - `#` of a range is its values (a range is a type of what it holds). `("a" | "A")..("f" | "F")`: each alternative on

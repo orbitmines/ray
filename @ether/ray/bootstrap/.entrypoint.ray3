@@ -1448,40 +1448,45 @@ assert !(text_leads(`a`, `ab`))  // PX2 a text begins with what is longer than i
 assert text_past(`ab`, `a`) == `b` && text_past(`ab`, `a`.rest) == `ab`  // PX3 what follows a text's beginning is not the rest of it
 // (a text given to places, with texts written among them, `(a, `-`, b) := `x-y``: read the way a list is given, in order,
 // each written text there in its turn, each place the shortest span after which the rest reads (and its type reads))
-text_read (at, text) => text_read_by(at, (places_types(at)).head, text)
+text_read (at, text) => text_read_by(cleared_spans(at), (places_types(at)).head, text)
+assert {
+  (opened: String, `-`, closed: opened) := `a-a`
+  assert (closed == `a`) && !(closed == `b`)  // RO1 a field typed by the one before it does not take what that one took
+}
 // (each place beside the type it reads by)
 text_read_by (at, typed, text) => at ? (written_text(at.value) ? (text_begins(text, at.value) && text_read_by(at.next, typed.next, text_past(text, at.value))) : text_spans(at, typed, text)) : text.empty
 // (the place given the nearest span after which the rest reads, then the rest given theirs)
 // (the cut a parameter, its call's own: what the place is given may be read the same way, a structure in it, whose own cut
 // would be this one's, were it a name declared in the body (that is declared on what it is read on))
-text_spans (at, typed, text) => text_spans_at(at, typed, text, ((typed) first_cut_in (text)) ?? given_first_cut(at, typed, text))
-// (read in order: none found while what follows is asked before this place is given anything, the place given each span in
-// turn first, so a type after it may be what it was given, `(open: String, \s, close: open)`)
-given_first_cut (cut_at, cut_typed, cut_text) => {
-  cut := (cut_text).rest
-  found := None
-  greedy := repeat_type((cut_typed).value)
-  while (cut !== None) && ((found === None) || greedy) {
-    if ((cut_typed).value) fits_span ((cut_text).until(cut)) {
-      text_given((cut_at).value, (cut_text).until(cut))
-      if types_read(retyped((cut_typed).next, (cut_at).value, (cut_text).until(cut)), cut) {
-        found = cut
-      }
-    }
-    cut = cut.empty ? None : cut.rest
-  }
-  found
+// (read in order: the types from here on as they are now, each read again where it is written (`close: open`, what open was
+// given by then))
+text_spans (at, typed, text) => text_spans_now(at, (places_types_now(at)).head, text)
+text_spans_now (now_at, now_typed, now_text) => text_spans_at(now_at, now_typed, now_text, ((now_typed) first_cut_in (now_text)))
+text_spans_at (spans_at, spans_typed, spans_text, spans_cut) => (spans_cut !== None) && text_given(spans_at.value, spans_text.until(spans_cut)) && spans_kept(spans_at, spans_text.until(spans_cut)) && text_read_by(spans_at.next, spans_typed.next, spans_cut)
+// (what a position was given, kept on its link while the rest is read: a later one's type written as its name is that span)
+spans_kept (kept_at, kept_span) => {
+  kept_at.given_span = kept_span
+  true
 }
-text_spans_at (spans_at, spans_typed, spans_text, spans_cut) => (spans_cut !== None) && text_given(spans_at.value, spans_text.until(spans_cut)) && text_read_by(spans_at.next, spans_typed.next, spans_cut)
-// (types after a place, that place given a span: the span where a type is that place)
-retyped (retyped_at, retyped_place, retyped_span) => {
-  retyped_list := Array.new
-  retyped_link := retyped_at
-  while retyped_link {
-    retyped_list.append(((retyped_link.value) === retyped_place) ? retyped_span : retyped_link.value)
-    retyped_link = retyped_link.next
+cleared_spans (cleared_at) => {
+  clearing := cleared_at
+  while clearing {
+    clearing.given_span = None
+    clearing = clearing.next
   }
-  retyped_list.head
+  cleared_at
+}
+// (the span given before a link to the field written with that name; none, nothing)
+given_before (before_at, before_name) => {
+  before := before_at.previous
+  found_span := None
+  while before && (found_span === None) {
+    if (before.written_name !== None) && (before.given_span !== None) && ((before.written_name).same_characters(before_name) !== None) {
+      found_span = before.given_span
+    }
+    before = before.previous
+  }
+  found_span
 }
 // (what places read a text by, in order: a written text itself, a type that is a position itself, a field its type, one
 // with no type anything)
@@ -1494,6 +1499,18 @@ places_types (at) => {
     typed_at = typed_at.next
   }
   typed
+}
+// (a position's type now: written as the name of a field given before it, what that was given; else its type)
+type_now (now_at) => (((now_at.value).type_written !== None) && (given_before(now_at, (now_at.value).type_written) !== None)) ? given_before(now_at, (now_at.value).type_written) : (now_at.value).type
+places_types_now (at) => {
+  typed_now := Array.new
+  typed_now_at := at
+  while typed_now_at {
+    typed_now_place := typed_now_at.value
+    typed_now.append((written_text(typed_now_place) || positioned_type(typed_now_place)) ? typed_now_place : (((typed_now_place).type === None) ? Node : type_now(typed_now_at)))
+    typed_now_at = typed_now_at.next
+  }
+  typed_now
 }
 // (of a list of types from a link, a text: what is left of it after the first type's span, the nearest after which the rest
 // reads (one cut after another); none, None. Accelerated: the kernel's map, `cuts`) (its holes named apart from what it calls)

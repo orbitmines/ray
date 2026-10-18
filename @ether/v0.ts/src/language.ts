@@ -2187,11 +2187,11 @@ const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 7
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
-const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted'];
+const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted', 'type_written'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
-const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs', 'count', 'truth', 'number', 'numeral', 'character', 'superposed', 'superposing', 'dotted', 'past', 'cuts', 'unescaped', 'int32', 'linked', 'joined'];
+const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs', 'count', 'truth', 'number', 'numeral', 'character', 'superposed', 'superposing', 'dotted', 'past', 'cuts', 'unescaped', 'int32', 'linked', 'joined', 'retyped'];
 // (what the kernel says: `L_…`)
 const L = { UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
 // (what the kernel tells the host with --debug: D_… in it)
@@ -2462,8 +2462,8 @@ export class Ray extends Language<FileStore> {
       const map = this.alloc(8 * (MAPPED_KNOWN.length + 6));
       MAPPED_KNOWN.forEach((word, i) => { const [s, e] = this.string(word); this.set(map + 8 * i, s); this.set(map + 8 * i + 4, e - s); });
       // (what the program was called with, for `external arguments`: each argument ended by `\0`; after the words, in a slot of its own
-      // (27: the kernel's ARGV_SLOT, past the span and the classes it keeps))
-      { const [s, e] = this.string(env.nodejs ? process.argv.slice(2).map(arg => arg + '\0').join('') : ''); this.set(map + 8 * 27, s); this.set(map + 8 * 27 + 4, e - s); }
+      // (28: the kernel's ARGV_SLOT, past the span and the classes it keeps))
+      { const [s, e] = this.string(env.nodejs ? process.argv.slice(2).map(arg => arg + '\0').join('') : ''); this.set(map + 8 * 28, s); this.set(map + 8 * 28 + 4, e - s); }
       this.set(232, map);
       Atomics.store(this.i32, WORDS >> 2, words);
     } else while (!Atomics.load(this.i32, WORDS >> 2)) Atomics.wait(this.i32, WORDS >> 2, 0, 10);

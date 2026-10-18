@@ -37,13 +37,13 @@ Each step its own PR, each with a check that passes or fails.
 
 | | Step | Check | State |
 |---|---|---|---|
-| SH1 | A call gives back what it held: `pure { … }` runs in memory of its own (`Design.md`: `pure` a checked assertion) | 100000 calls of `sp_add` in the memory of 1000 | done: #36, #37 (436 MB for 100000, 435 for 1000) |
-| SH2 | Calls fast enough to compile with | at least 10^4 calls a second; `Kernel.md` requirement 2 | about 1500 now; most of the rest is `,` building argument lists |
+| SH1 | A call gives back what it held: `pure { … }` runs in memory of its own (`Design.md`: `pure` a checked assertion) | 100000 calls of `sp_add` in the memory of 1000 | #36, #37; `pure { }` left out of main for now (e6c560d2): it becomes `Program{.pure}`, proven pure by the theorem prover |
+| SH2 | Calls fast enough to compile with | at least 10^4 calls a second; `Kernel.md` requirement 2 | about 1500 now; a call of four values costs about 371 KB, all of it `,` building the list; reading each part where it was written (`core/call-parts`) makes it about 8 KB, not yet exact (below) |
 | SH3 | A built program loads and runs | `ray.wasm` passes the same asserts as the interpreted kernel | done: #34 (744 the same) |
 | SH3b | 32-bit integers in Ray (`Int32`, `Design.md`'s `i32`), as the kernel's source and the writer need | each operator as WebAssembly's i32 answers | done: #40 (IB1 to IB24) |
-| SH4 | The wasm writer in Ray, each context in a `pure` block | the kernel's module from its JMP, byte for byte | |
+| SH4 | The wasm writer in Ray, writing the binary format directly (`Design.md` §21.3, 2026-10-18) | the kernel's module from its JMP, byte for byte | |
 | SH5 | The kernel's source moved out of `language.ts` into a file of its own; stage 0 unchanged | `kernel.wasm` byte-identical | done: #38 (the code section byte for byte) |
-| SH6 | The kernel's language read by Ray's own reader: its constructs declared as rules, each writing its JMP | the JMP equal to `jmp_of`'s | |
+| SH6 | The kernel's language read by Ray's own reader: its constructs declared as rules, each writing its JMP | the JMP equal to `jmp_of`'s | done: `core/kernel-reader`, all 43,793 lines (`scripts/kernel-ray.mts`, then `scripts/kernel-jmp.mts --check`) |
 | SH7 | Bytes out: `--write` of a list of numbers | the bytes written are the list | done: #39 |
 | SH8 | The fixpoint | the kernel Ray wrote writes itself again, byte-identical; the library's tests pass on it as on stage 0 | |
 | SH9 | The kernel rewritten as declarations, one function at a time | each rewrite keeps SH8 and the tests | |
@@ -52,3 +52,22 @@ Found on the way: `jmp_of` reads `kernel.toString()`, which is the tool's minifi
 not the kernel's source; so the source moves to a file of its own (SH5) before Ray reads it (SH6), and Ray reads it with its
 own reader rather than a port of `jmp_of`'s tokenizer. Until machine code is a target, JavaScript stays only as the runner
 that loads the wasm, never in building a kernel.
+
+Found reading the kernel with Ray (SH6):
+
+- `jmp_of` compiled only the first value of a `for` step and of a statement written with commas (`n++, h = …`, `if (c) a,
+  b;`): 999 statements of the kernel's were missing, and `b` ran outside the `if`. Fixed on main (aa59af6b).
+- What the kernel running is built from is esbuild's output, which names a local written where an outer one is apart
+  (`kept` as `kept2`, 35 of them) and works out some values (`0 && x`). The reference SH6 is held against is `jmp_of` over
+  the source as written (TypeScript's output, its types and comments taken away); it differs from the kernel running only
+  in `ev_` and `rule_`, by esbuild's folding.
+- `kernel.ts` edited where Ray could not read what TypeScript ignores, the code unchanged: comments with a bracket left
+  open or a quote opened by `\`, a comment indented less than its block, blocks begun mid-line with their lines below,
+  and two `/* … */` comments made one line comment.
+- Ray reads the kernel in ranges of functions, each in a process of its own (each reads the constants, then writes its
+  functions): one process of all of them needs more than the 2 GB there is. The largest function, `apply`, takes about
+  1.5 GB alone.
+- Reading each part of a call where it was written answers as the language does but for one thing: `xs.all`, a member
+  whose body is `.reduce(|)`, is no superposition through the language's `,` (so `Ray.ray`'s `connected` is not read),
+  and is one read part by part. The language's path looks to be the wrong one there; until that is settled the
+  acceleration is not proposed.

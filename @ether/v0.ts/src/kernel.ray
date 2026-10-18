@@ -894,6 +894,17 @@ Kernel_js := {
     {other}
     kjs.head_close(0)
   }
+  if ({c: K_assign}) {`{`}{body}{`}`} {h: K_head} {`{`}{other}{`}`} else {`{`}{last}{`}`} => {
+    kjs.head_open(kjs.one(kjs.head(`if`)(c)))
+    {body}
+    kjs.head_close(0)
+    kjs.head_open(kjs.one(h))
+    {other}
+    kjs.head_close(0)
+    kjs.head_open(kjs.one(kjs.else_head(0)))
+    {last}
+    kjs.head_close(0)
+  }
   // (an arrow, `(a) => …`, which would be read as a rule defined before anything else: here, nothing; the kernel's own are
   // the memory and the host, which its functions name as natives and hosts)
   {lhs} {`=>`} {rhs} => kjs_none

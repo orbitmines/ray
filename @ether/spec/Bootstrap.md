@@ -40,10 +40,11 @@ Each step its own PR, each with a check that passes or fails.
 | SH1 | A call gives back what it held: `pure { … }` runs in memory of its own (`Design.md`: `pure` a checked assertion) | 100000 calls of `sp_add` in the memory of 1000 | done: #36, #37 (436 MB for 100000, 435 for 1000) |
 | SH2 | Calls fast enough to compile with | at least 10^4 calls a second; `Kernel.md` requirement 2 | about 1500 now; most of the rest is `,` building argument lists |
 | SH3 | A built program loads and runs | `ray.wasm` passes the same asserts as the interpreted kernel | done: #34 (744 the same) |
+| SH3b | 32-bit integers in Ray (`Int32`, `Design.md`'s `i32`), as the kernel's source and the writer need | each operator as WebAssembly's i32 answers | done: #40 (IB1 to IB24) |
 | SH4 | The wasm writer in Ray, each context in a `pure` block | the kernel's module from its JMP, byte for byte | |
-| SH5 | The kernel's source moved out of `language.ts` into a file of its own; stage 0 unchanged | `kernel.wasm` byte-identical | |
+| SH5 | The kernel's source moved out of `language.ts` into a file of its own; stage 0 unchanged | `kernel.wasm` byte-identical | done: #38 (the code section byte for byte) |
 | SH6 | The kernel's language read by Ray's own reader: its constructs declared as rules, each writing its JMP | the JMP equal to `jmp_of`'s | |
-| SH7 | Bytes out: `--write` of a list of numbers | today it writes 0 bytes | |
+| SH7 | Bytes out: `--write` of a list of numbers | the bytes written are the list | done: #39 |
 | SH8 | The fixpoint | the kernel Ray wrote writes itself again, byte-identical; the library's tests pass on it as on stage 0 | |
 | SH9 | The kernel rewritten as declarations, one function at a time | each rewrite keeps SH8 and the tests | |
 

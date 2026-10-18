@@ -832,7 +832,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (a space, and in what continues a statement, a newline)
       // (no space where one is written before a hole, at brackets right after a word: those are the word's, `static{2 <= .}`
       // is no `static {statement}`; brackets written in the head, `some (predicate)`, read `some(…)`)
-      if (kind === SPACE) { const from = at; while (at < end && b(at) <= 32) at++; if (at === from && (hug || (at < end && (b(at) === 40 || b(at) === 91 || b(at) === 123) && b(w(CLASSES) + b(at - 1)) === 1 && k + 1 < n && (w(r + R_PART + PART * (k + 1)) & 15) === HOLE))) return -1;
+      if (kind === SPACE) {
+        const from = at; while (at < end && b(at) <= 32) at++; if (at === from && (hug || (at < end && (b(at) === 40 || b(at) === 91 || b(at) === 123) && b(w(CLASSES) + b(at - 1)) === 1 && k + 1 < n && (w(r + R_PART + PART * (k + 1)) & 15) === HOLE))) return -1;
         k++; continue; }
       const cap = s + 12 * w(q + 12);
       if (w(q) & VALUED_HOLE) { let o = at; while (o < end && b(w(CLASSES) + b(o)) === 2) o++; if (o > at && (o >= end || b(o) <= 32)) return -1; if (o === at && keyword_led(at, end)) return -1; }
@@ -1403,7 +1404,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const was_cut = w(THREAD + T_CUT); set(THREAD + T_CUT, cut | was_cut);
     // (in a test too: what it kept is forgotten when it is done)
     // (what is kept for all is never forgotten: it holds nothing a test lets go of, and another thread may be writing it)
-  // (in a test, one holding nothing of the test's own: kept for all, a copy where nothing lets go of it (another test reads
+    // (in a test, one holding nothing of the test's own: kept for all, a copy where nothing lets go of it (another test reads
     // the same text the same way); one holding the test's own, not kept)
     if (DEBUG && keeps && w(r) !== K_UNREAD && !was_cut && (!reg || lasting(r))) { debug(D_KEY, s, e, at_); debug(D_KEY + 1, names_k, sees, named_by); debug(D_KEY + 2, flags, stop, closure_k); }
     if (reg) { slot = 0; if (gslot && !(w(FAIL_FAST) & 16) && !was_cut && w(r) !== K_UNREAD && lasting(r)) { const p = lasted(r); if (p && cas(gslot, 0, s) === 0) { set(gslot + 4, e); set(gslot + 8, at_); set(gslot + 12, names_k); set(gslot + 16, closure_k); set(gslot + 20, flags); set(gslot + 24, stop); set(gslot + 32, sh); set(gslot + 36, gen); set(gslot + 40, shn); set(gslot + 44, sees); set(gslot + 48, named_by); set(gslot + 52, spent); set(gslot + 56, qspent); astore(gslot + 28, p); } } }
@@ -1517,7 +1518,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // `* (times: Number)`: that name being declared, not read by a rule that is it and an operand (`as {target}` is not applied to define `as`); but by one
     // that passes what follows through, a modifier (`static {statement} => {statement}`), or one of its own form (`as (=== T)`))
     const naming = w(t + T_NAMING), naming_n = w(t + T_NAMING_N);
-    if (left && !on) { let o = skip(s, e); const a0 = o, z = trim_end(s, e), cl = w(CLASSES), kind0 = b(cl + b(o)); while (o < z && b(cl + b(o)) === kind0 && (kind0 === 1 || kind0 === 2)) o++; let p = o; while (p < z && b(p) === 32) p++; if (o > a0 && p > o && p < z && (bracket(p, z) & 3) === 1 && bracket(p, z) !== 5 + 8 * w(OPEN_LENGTH) && past(p, z) >= z) { let q = p + 1; while (q < z && b(q) === 32) q++; if (b(q) === b(z - 1) || b(cl + b(q)) === 1) { set(t + T_NAMING, a0); set(t + T_NAMING_N, o - a0); } }
+    if (left && !on) {
+      let o = skip(s, e); const a0 = o, z = trim_end(s, e), cl = w(CLASSES), kind0 = b(cl + b(o)); while (o < z && b(cl + b(o)) === kind0 && (kind0 === 1 || kind0 === 2)) o++; let p = o; while (p < z && b(p) === 32) p++; if (o > a0 && p > o && p < z && (bracket(p, z) & 3) === 1 && bracket(p, z) !== 5 + 8 * w(OPEN_LENGTH) && past(p, z) >= z) { let q = p + 1; while (q < z && b(q) === 32) q++; if (b(q) === b(z - 1) || b(cl + b(q)) === 1) { set(t + T_NAMING, a0); set(t + T_NAMING_N, o - a0); } }
       // (or, in a rule's body, one of its holes, `as {type} =>`: the name declared with what that hole took)
       else if (o > a0 && p > o && p < z && rule && bracket(p, z) === 5 + 8 * w(OPEN_LENGTH) && past(p, z) >= z && ref(rule, 0, p, z, 1)) { set(t + T_NAMING, a0); set(t + T_NAMING_N, o - a0); } }
     // (a member read, `x.name`: the name read in x is x's (its text, or written right after a `.`, wherever it is read))
@@ -2663,7 +2665,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         if (p === at || b(p - 1) !== 46) for (let i = 0; i < given; i++) if (w(givens + 8 * i + 4) - w(givens + 8 * i) === q - p && same(p, w(givens + 8 * i), q - p)) { mentions = 1; break; }
         p = q;
       }
-      { let q = at; while (q < ln && b(cl + b(q)) === 1) q++; let o = q; while (o < ln && b(o) === 32) o++;
+      {
+        let q = at; while (q < ln && b(cl + b(q)) === 1) q++; let o = q; while (o < ln && b(o) === 32) o++;
         if (q > at && o > q && o < ln && b(cl + b(o)) === 2 && b(o) !== 46 && given < 32) { set(givens + 8 * given, at); set(givens + 8 * given + 4, q); given++; } }
       at = ln; n++;
       set(st + 4, w(r + 4)); set(st + 8, w(r + 8));

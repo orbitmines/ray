@@ -694,6 +694,8 @@ K_word := {
 }
 K_prim := { external kept }
 K_args := { external kept }
+K_args_tail := { external kept }
+K_decls_tail := { external kept }
 K_seq := { external kept }
 K_u := { external kept }
 K_mul := { external kept }
@@ -1267,8 +1269,11 @@ K_seq &+= {
 K_args &+= {
   {x__ag: K_assign} => Kjs_node &+ { kind := `list` ; car := x__ag ; cdr := None }
   {x__ag: K_assign}, {rest_ag: K_args} => Kjs_node &+ { kind := `list` ; car := x__ag ; cdr := rest_ag }
-  {c__al: K_or} ? {y__al: K_assign} : {n__al: K_assign}, {rest_al: K_args} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `cond` ; c := c__al ; y := y__al ; n := n__al }) ; cdr := rest_al }
-  {c__a2: K_or} ? {y__a2: K_assign} : {d__a2: K_or} ? {z__a2: K_assign} : {n__a2: K_assign}, {rest_a2: K_args} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `cond` ; c := c__a2 ; y := y__a2 ; n := (Kjs_node &+ { kind := `cond` ; c := d__a2 ; y := z__a2 ; n := n__a2 }) }) ; cdr := rest_a2 }
+  {c__al: K_or} ? {y__al: K_assign} : {t__al: K_args_tail} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `cond` ; c := c__al ; y := y__al ; n := t__al.chosen }) ; cdr := t__al.after }
+}
+K_args_tail &+= {
+  {c__at: K_or} ? {y__at: K_assign} : {t__at: K_args_tail} => Kjs_node &+ { chosen := (Kjs_node &+ { kind := `cond` ; c := c__at ; y := y__at ; n := t__at.chosen }) ; after := t__at.after }
+  {n__at: K_assign}, {rest__at: K_args} => Kjs_node &+ { chosen := n__at ; after := rest__at }
 }
 // (a name declared: given a value, or nothing given, `0`; any other value, as an arrow, is no constant and no statement of a
 // function's, nothing)
@@ -1282,8 +1287,11 @@ K_decl &+= {
 K_decls &+= {
   {x__dcs: K_decl} => Kjs_node &+ { kind := `list` ; car := x__dcs ; cdr := None }
   {x__dcs: K_decl}, {rest_dcs: K_decls} => Kjs_node &+ { kind := `list` ; car := x__dcs ; cdr := rest_dcs }
-  {w__dl: K_word} = {c__dl: K_or} ? {y__dl: K_assign} : {n__dl: K_assign}, {rest_dl: K_decls} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `decl` ; name := w__dl ; v := (Kjs_node &+ { kind := `cond` ; c := c__dl ; y := y__dl ; n := n__dl }) }) ; cdr := rest_dl }
-  {w__d2: K_word} = {c__d2: K_or} ? {y__d2: K_assign} : {e__d2: K_or} ? {z__d2: K_assign} : {n__d2: K_assign}, {rest_d2: K_decls} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `decl` ; name := w__d2 ; v := (Kjs_node &+ { kind := `cond` ; c := c__d2 ; y := y__d2 ; n := (Kjs_node &+ { kind := `cond` ; c := e__d2 ; y := z__d2 ; n := n__d2 }) }) }) ; cdr := rest_d2 }
+  {w__dl: K_word} = {c__dl: K_or} ? {y__dl: K_assign} : {t__dl: K_decls_tail} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `decl` ; name := w__dl ; v := (Kjs_node &+ { kind := `cond` ; c := c__dl ; y := y__dl ; n := t__dl.chosen }) }) ; cdr := t__dl.after }
+}
+K_decls_tail &+= {
+  {c__dt: K_or} ? {y__dt: K_assign} : {t__dt: K_decls_tail} => Kjs_node &+ { chosen := (Kjs_node &+ { kind := `cond` ; c := c__dt ; y := y__dt ; n := t__dt.chosen }) ; after := t__dt.after }
+  {n__dt: K_assign}, {rest__dt: K_decls} => Kjs_node &+ { chosen := n__dt ; after := rest__dt }
 }
 // (one given a default, `lo = 0`: its name, `=` and the default, each a parameter, as `jmp_of` takes each of its words)
 K_params &+= {

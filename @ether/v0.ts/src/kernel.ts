@@ -2220,7 +2220,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         // (nor is what everything is in, the language itself, made of anything: what it sees would come back to it)
         if (v && th === w(GLOBAL)) { if (DEBUG) debug(D_FAULT, 87 + 1001, rest, z); say(t, rest, L_VALUED, rest, z); return th; }
         if (v && th && v !== th) { set(th + N_ALSO, w(th + N_ALSO) ? node(IS_NODE, 0, 0, w(th + N_ALSO), v) : v); set(THREAD + T_SHGEN, w(THREAD + T_SHGEN) + 1); }
-        // (what it answers: the component (the language keeps what a node was made of with it)
+        // (what it answers: the component (the language keeps what a node was made of with it))
         return v || th;
       }
       // (a node of its own, in what it is read in, made of what it is read on: called bare in a method's own node (`gcd(other)`
@@ -3176,7 +3176,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       }
     }
     // (led by a symbol and written in a node, not everywhere (`[{{selection}}]`, `.. (last)` of Iterable's): a method of the
-    // value it follows, not what reads the same text written alone in that node (`[1, 2, 3]` there)
+    // value it follows, not what reads the same text written alone in that node (`[1, 2, 3]` there))
     if (!method && w(rule + R_PARTS) > 1 && w(led) === LITERAL && owner(vis) !== w(GLOBAL) && (b(w(CLASSES) + b(w(led + 4))) === 2 || b(w(led + 4)) === 91)) method = 1;
     let hole = 0;
     for (let k = 0; k < w(rule + R_PARTS); k++) {

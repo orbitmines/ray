@@ -2385,7 +2385,7 @@ export function jmp_of(source: string, p = new Jmp(), given: Record<string, numb
         if (id !== undefined) jmp('set', `$loop${k}`, 0); label(`#${k}top`); round(k, id); if (peek() !== ';') { const c = assignment(); jmp('not', '$t', c); when('$t', `#${k}end`); } eat(';');
         const step = at; let d = 0; while (d > 0 || peek() !== ')') { const x = next(); if (x === '(') d++; if (x === ')') d--; } eat(')');
         loops.push([`#${k}step`, `#${k}end`]); statement(); loops.pop();
-        const after = at; at = step; label(`#${k}step`); if (peek() !== ')') assignment(); at = after;
+        const after = at; at = step; label(`#${k}step`); if (peek() !== ')') { assignment(); while (peek() === ',') { at++; assignment(); } } at = after;
         jmp(`#${k}top`); label(`#${k}end`); scopes.pop();
         return;
       }

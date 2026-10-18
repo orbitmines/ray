@@ -161,7 +161,8 @@ Node &+= {
   // so it is this, not `is`))
   admitted_by (type) => {
     known := external admits this type
-    (known === None) ? (this.is_itself(type) || ((!following_conversions) && this.followed_is(type))) : known
+    // (not of a range, `"0".."9"`: one of its values, which the kernel reads as a list of them)
+    ((known === None) || ((type).is_range === true)) ? (this.is_itself(type) || ((!following_conversions) && this.followed_is(type))) : known
   }
 }
 // (accelerated: where a text is cut between places, the language's `first_cut_in`: the kernel's cut, where `admits` can tell

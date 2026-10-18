@@ -34,7 +34,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (the kernel's map: a slot for each of its words (0 to 23), the span a parameter is given at M_SPAN (24) and the count each
   // rule is stamped with in the slot after it (25), then the classes it finds, Node at 26 and String at 27, then the
   // program's arguments, 28 (ARGV_SLOT; language.ts writes them there): past all of those)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_TYPE_WRITTEN = 45, W_SPREAD = 46, ARGV_SLOT = 28, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_LINKED = 21, M_JOINED = 22, M_KEPT = 23, M_SPAN = 24;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_TYPE_WRITTEN = 45, W_SPREAD = 46, W_IS_RANGE = 47, ARGV_SLOT = 28, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_LINKED = 21, M_JOINED = 22, M_KEPT = 23, M_SPAN = 24;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 32;
@@ -597,6 +597,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (`T[]`: Ts one after another, at least one)
     // (what `T[]` made keeps its T in the block it was made of, marked `repeats`: its parent)
     const made_in = w(ty + N_PARENT), each = sup ? 0 : held(t, ty, W_EACH, 0) || (made_in && held(t, made_in, W_REPEATS, 0) === w(TRUE_) ? held(t, made_in, W_EACH, 0) : 0); if (each && each !== w(NOTHING)) return e === s ? 0 : text_steps(t, s, e, each, 0, depth);
+    // (a range, `"0".."9"`: one of its values, which the language walks (its values made as they are asked))
+    if (!sup && held(t, ty, W_IS_RANGE, 0) === w(TRUE_)) return -1;
     // (a list of types: each in its turn, a written text where it is, any other a span of at least one character)
     if (!sup && listed(t, ty)) return text_steps(t, s, e, 0, held(t, ty, W_HEAD, 0), depth);
     // (one of a superposition's components)
@@ -930,8 +932,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let holes = 0; for (let i = 1; i < n - 1; i++) { const kind = w(r + R_PART + PART * i) & 15; if (kind === HOLE) holes++; else if (kind !== SPACE) return 0; }
     return holes === 1 ? 1 : 0;
   }
-  // (whether rule r's next text from part k is an operator's, `-`, `==`, `plus`: not one that gives (`=`, `:=`, `+=`, `=>`), a
-  // member's `.`, a list's `,` or a choice's)
+  // (whether rule r's next text from part k is an infix operator's, `-`, `==`, `plus`: not one that gives (`=`, `:=`, `+=`,
+  // `=>`), a member's `.`, a list's `,` or a choice's)
   function operator_next(r: number, k: number): number {
     for (let n = w(r + R_PARTS); k < n; k++) {
       const q = r + R_PART + PART * k, kind = w(q) & 15; if (kind === SPACE) continue; if (kind !== LITERAL) return 0;
@@ -939,7 +941,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (b(a) === 46 || b(a) === 44 || b(a) === 63 || b(a) === 58) return 0;
       if (last === 62 && len >= 2 && b(a + len - 2) === 61) return 0;
       if (last === 61 && !(len >= 2 && (b(a + len - 2) === 61 || b(a + len - 2) === 33 || b(a + len - 2) === 60 || b(a + len - 2) === 62))) return 0;
-      return 1;
+      // (and a hole after it: infix, not `{type}[]`)
+      for (let j = k + 1; j < n; j++) if ((w(r + R_PART + PART * j) & 15) === HOLE) return 1;
+      return 0;
     }
     return 0;
   }

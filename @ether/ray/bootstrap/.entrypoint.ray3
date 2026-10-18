@@ -647,6 +647,8 @@ assert {
 }
 // (each of a list of places the value in its place of what is given: a list a `,` made, else that one value; a part given by
 // name, `x: v`, the place of that name (a place, compared, is the name it is), the others the places left, in order)
+// (a position written as a number, `44` among places: the place its numeral names)
+literal_number (number_at) => (external typed_name (number_at.value)) === None && ((external named (number_at.value)) !== None) && ((external named (number_at.value)) is Decimal.String)
 {places} each takes {taken} ^keyword => {
   {
     each_place := places.head
@@ -657,7 +659,8 @@ assert {
       // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing; given in its place, `(4, "-", 9)`,
       // that text is passed over)
       if written_text(each_place.value) && each_taken_at && ((each_taken_at.value).textual === true) && ((each_taken_at.value).same_characters(each_place.value) !== None) { each_taken_at = each_taken_at.next }
-      unless written_text(each_place.value) {
+      // (and a number written among them, `(id: Byte, 44, data: Byte[])`: no name, no field)
+      unless written_text(each_place.value) || ((each_place.written_name === None) && literal_number(each_place)) {
         each_by_name := each_part.find((named_part) => ((named_part).named_argument === true) && ((named_part).name.same_characters(each_place.value) !== None))
         while (each_by_name === None) && each_taken_at && ((each_taken_at.value).named_argument === true) { each_taken_at = each_taken_at.next }
         (each_place.value) alone takes ((each_by_name !== None) ? each_by_name.value : (each_taken_at ? each_taken_at.value : declared))
@@ -960,6 +963,11 @@ made_as (instance, wanted, written_made) => (wanted === written_made) ? instance
   {written: global.String{. is (made).written_as}} => (made &+ {
     ({{fields}}) := `{written}`
   })
+  // (its positions as it reads them, written: Node.ray's `Writing`)
+  written => {
+    written_on := this
+    ({{fields}}) := Writing(written_on, (written_on).written_as)
+  }
   // (and a text given to it, `t as S`: the same, destructured; one it does not read, nothing (named apart from `from`: a
   // class's own `from`, written in its block, is not hidden by it))
   // (on a class made of it with no header of its own, `class: S { … }`: one of S, read as S reads (not by the rules that class
@@ -1221,7 +1229,7 @@ followed_is (type) => {
 is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
-  (type === Node) || (value === type) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
+  (type === Node) || (value === type) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range === true) && (value.textual === true)) ? ((value).rest.empty && ((value)[0] is type)) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
 }
 // (a text is a class written as a structure (`class (a: T, `-`, b: U)`, a text among its places; or one typed place alone,
 // `class (x: T)`) when it reads as it is written)
@@ -1426,7 +1434,7 @@ dynamics := None
 {lone_read_type} lone_read {lone_read_given} ^keyword => (((lone_read_given).textual === true) && !((lone_read_type).textual === true) && (named_list(lone_read_type) || ((lone_read_type).repeats === true))) ? ((lone_read_type) read_span (lone_read_given)) : lone_read_given
 // (what a definition answers given its value: a left side made of names answers a list of their places (`(a, b) := list`, a
 // call's parameters): each the value in its place)
-{given} given {value} ^keyword => ((given).listing === true) ? ((((value).textual === true) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value))) : given
+{given} given {value} ^keyword => ((value).writes === true) ? written_parts((given).head, (value).written_value, (value).written_literals) : ((given).listing === true) ? ((((value).textual === true) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value))) : given
 // (a text is destructured only by places with a text written among them, `(a, `-`, b)`: a parameter list given a text, or
 // String itself (which is textual), takes it whole)
 written_among (at) => at ? (written_text(at.value) || literal_text((at.value).type) || positioned_type(at.value) || written_among(at.next)) : false

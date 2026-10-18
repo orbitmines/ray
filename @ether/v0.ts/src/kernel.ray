@@ -10,7 +10,8 @@
 // What is being written: the constants read so far; the context's own counts (its cells made, `$0` on; its calls, each
 // argument a cell of its own, `name#k#i`), the loop it is in, the labels not yet written (each is where the next statement
 // is), and an `if` an `else` on the next line may take; and what is being read: `mode` 1 the kernel's constants, 2 its
-// functions, 3 a function's body, 4 a function's body passed over in the first reading, 0 neither.
+// functions, 3 a function's body, 4 a function's body passed over in the first reading, 5 one passed over in the second (not
+// among those written, `from` up to `until` of them, counted in `count`), 0 neither.
 global["kjs"] := {
   mode := 0
   n := 0
@@ -18,8 +19,12 @@ global["kjs"] := {
   loop := None
   marks := None
   open_if := None
+  chain := None
   closers := None
   consts := { }
+  from := 0
+  until := None
+  count := 0
   one := Int32.made_from(1)
   zero := Int32.made_from(0)
 }
@@ -330,7 +335,7 @@ kjs_statement (s) => {
     kjs.open_if = None
     return kjs_otherwise(k, s.s)
   }
-  kjs.open_if = None
+  kjs_unclaimed(0)
   if kind == "expr" { return kjs_value(s.e) }
   if kind == "body" { return kjs_statement(s.s) }
   if kind == "block" {
@@ -426,14 +431,40 @@ kjs_else_end (k, kept) => {
 }
 kjs_otherwise (k, o) => {
   kept := kjs_else_begin(k)
+  outer := kjs.chain
+  kjs.chain = None
   kjs_statement(o)
-  kjs_else_end(k, kept)
+  kjs_settle(0)
+  kjs_ending(Kjs_closer(`else`, k, kept, None, outer))
+}
+// (an `else` whose statement leaves an `if` without one, `else if (c) …`: its end put off, an `else` on the next line that
+// `if`'s; the ends put off, the innermost first, once a statement is no `else` or the block they are in ends)
+kjs_ending (c) => {
+  if kjs.open_if !== None {
+    kjs.chain = Kjs_cell(c, c.outer)
+    return 0
+  }
+  kjs_else_end(c.k, c.kept)
+  kjs.chain = c.outer
+  kjs_settle(0)
+}
+kjs_settle (unused) => {
+  at := kjs.chain
+  kjs.chain = None
+  while at !== None {
+    kjs_else_end(at.value.k, at.value.kept)
+    at = at.below
+  }
+}
+kjs_unclaimed (unused) => {
+  kjs.open_if = None
+  kjs_settle(0)
 }
 
 // A line that ends with a block on lines of its own, read where its rule is (a closure would read it apart from what this
 // file's reading has written): the line's statements, then its last head opened (what comes before its body), the block's
 // lines, then the head closed (what comes after), the innermost first. (What closes each, kept until then.)
-global["Kjs_closer"] := class (kind, k, kept, step) => { }
+global["Kjs_closer"] := class (kind, k, kept, step, outer) => { }
 kjs_closing (made) => {
   kjs.closers = Kjs_cell(made, kjs.closers)
 }
@@ -443,23 +474,25 @@ kjs_open (h) => {
   if kind == "else" {
     k := kjs.open_if
     kjs.open_if = None
-    kjs_closing(Kjs_closer(`else`, k, kjs_else_begin(k), None))
+    outer := kjs.chain
+    kjs.chain = None
+    kjs_closing(Kjs_closer(`else`, k, kjs_else_begin(k), None, outer))
     if kjs_head(h.s) { kjs_open(h.s) }
     return 0
   }
-  kjs.open_if = None
+  kjs_unclaimed(0)
   if kind == "if" {
     condition := kjs_value(h.c)
     k := kjs_fresh(0)
     kjs_unless(condition, kjs_here(k, "else"))
     if (h.s === None) || kjs_head(h.s) {
-      kjs_closing(Kjs_closer(`if`, k, None, None))
+      kjs_closing(Kjs_closer(`if`, k, None, None, None))
       if kjs_head(h.s) { kjs_open(h.s) }
       return 0
     }
     kjs_statement(h.s)
     kjs_mark(kjs_here(k, "else"))
-    kjs_closing(Kjs_closer(`else`, k, kjs_else_begin(k), None))
+    kjs_closing(Kjs_closer(`else`, k, kjs_else_begin(k), None, None))
     if kjs_head(h.o) { kjs_open(h.o) }
     return 0
   }
@@ -468,7 +501,7 @@ kjs_open (h) => {
     kjs_mark(kjs_here(k, "top"))
     kjs_jmp(`not`, `$t`, kjs_value(h.c), kjs.zero)
     kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
-    kjs_closing(Kjs_closer(`while`, k, kjs.loop, None))
+    kjs_closing(Kjs_closer(`while`, k, kjs.loop, None, None))
     kjs.loop = Kjs_loop(kjs_here(k, "top"), kjs_here(k, "end"))
     if kjs_head(h.s) { kjs_open(h.s) }
     return 0
@@ -480,20 +513,20 @@ kjs_open (h) => {
     kjs_jmp(`not`, `$t`, kjs_value(h.c), kjs.zero)
     kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
   }
-  kjs_closing(Kjs_closer(`for`, k, kjs.loop, h.u))
+  kjs_closing(Kjs_closer(`for`, k, kjs.loop, h.u, None))
   kjs.loop = Kjs_loop(kjs_here(k, "step"), kjs_here(k, "end"))
   if kjs_head(h.s) { kjs_open(h.s) }
   0
 }
 kjs_close (c) => {
   kind := c.kind
+  if kind == "else" { return kjs_ending(c) }
+  kjs_unclaimed(0)
   if kind == "if" {
     kjs_mark(kjs_here(c.k, "else"))
     kjs.open_if = c.k
     return 0
   }
-  kjs.open_if = None
-  if kind == "else" { return kjs_else_end(c.k, c.kept) }
   kjs.loop = c.kept
   if kind == "for" {
     kjs_mark(kjs_here(c.k, "step"))
@@ -523,6 +556,7 @@ kjs &+= {
     }
   }
   head_close (unused) => {
+    (kjs_unclaimed(0)) if kjs.mode == 3
     while kjs.closers.value !== None {
       made := kjs.closers.value
       kjs.closers = kjs.closers.below
@@ -568,21 +602,30 @@ kjs &+= {
   }
   // (a function: its body read where its rule is, at the top of the rule's body (in a block of another's, or a closure, that
   // one's rules would be read first, or what this file's reading wrote not seen); in the first reading passed over, `mode`
-  // 4, its body not read (gone past); in the second its context begun, then its end written)
+  // 4, its body not read (gone past); in the second its context begun, then its end written, but for one not among those
+  // written, 5, passed over as in the first)
   opening (unused) => {
     if kjs.mode == 1 { kjs.mode = 4 }
+    if kjs.mode == 2 {
+      written := (kjs.count >= kjs.from) && ((kjs.until === None) || (kjs.count < kjs.until))
+      kjs.count = kjs.count + 1
+      if !written { kjs.mode = 5 }
+    }
     if kjs.mode == 2 {
       kjs.mode = 3
       kjs.n = 0
       kjs.calls = 0
       kjs.loop = None
       kjs.open_if = None
+      kjs.chain = None
       kjs_begin(kjs.called, kjs.taken)
     }
   }
   closing (unused) => {
     if kjs.mode == 4 { kjs.mode = 1 }
+    if kjs.mode == 5 { kjs.mode = 2 }
     if kjs.mode == 3 {
+      kjs_unclaimed(0)
       kjs_jmp(`set`, `&.value`, kjs.zero, kjs.zero)
       kjs_jmp(`&.caller`, `-`, kjs.zero, kjs.zero)
       kjs.mode = 2
@@ -668,7 +711,7 @@ Kernel_js := {
     kjs.named(name)
     kjs.takes(params)
     kjs.opening(0)
-    (external goto kjs_passed) if kjs.mode == 4
+    (external goto kjs_passed) if kjs.mode >= 4
     {body}
     external label kjs_passed
     kjs.closing(0)
@@ -677,7 +720,7 @@ Kernel_js := {
     kjs.named(name)
     kjs.takes(kjs_none)
     kjs.opening(0)
-    (external goto kjs_passed) if kjs.mode == 4
+    (external goto kjs_passed) if kjs.mode >= 4
     {body}
     external label kjs_passed
     kjs.closing(0)
@@ -686,7 +729,7 @@ Kernel_js := {
     kjs.named(name)
     kjs.takes(kjs_none)
     kjs.opening(0)
-    (external goto kjs_passed) if kjs.mode == 4
+    (external goto kjs_passed) if kjs.mode >= 4
     {body}
     external label kjs_passed
     kjs.closing(0)
@@ -695,7 +738,7 @@ Kernel_js := {
     kjs.named(name)
     kjs.takes(params)
     kjs.opening(0)
-    (external goto kjs_passed) if kjs.mode == 4
+    (external goto kjs_passed) if kjs.mode >= 4
     {body}
     external label kjs_passed
     kjs.closing(0)

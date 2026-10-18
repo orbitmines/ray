@@ -505,6 +505,8 @@ assert {
     . => received
     (({{parameters}}) === None) ? received : ({{body}})
   }
+  // (one: what calls it, as a list says it is one, `listing`)
+  closure => true
   .
 }
 () {`=>`} {body} ^punctuation => {
@@ -515,6 +517,7 @@ assert {
     {{body}}
     external label returned
   }
+  closure => true
   .
 }
 assert {
@@ -741,6 +744,8 @@ assert {
 }
 // A value that is not a list: its first is itself, nothing after it.
 listing := false
+// (what is not a closure: no function of what it is given)
+closure := false
 first => .
 rest => []
 assert {
@@ -1470,7 +1475,7 @@ places_types (at) => {
   found
 }
 repeat_type (repeated) => ((((repeated).repeats === true) && !((repeated).textual === true)) || (((repeated).nonempty_of !== None) && repeat_type((repeated).nonempty_of)))
-{fit_type_of} fits_span {fit_text_of} ^keyword => ((fit_text_of) is (fit_type_of)) || (((fit_text_of) as (fit_type_of)) !== None)
+{fit_type_of} fits_span {fit_text_of} ^keyword => ((fit_text_of) is (fit_type_of)) || (!literal_text(fit_type_of) && (((fit_text_of) as (fit_type_of)) !== None))
 types_read (at, text) => at ? (literal_text(at.value) ? (text_begins(text, at.value) && types_read(at.next, text_past(text, at.value))) : (((at) first_cut_in (text)) !== None)) : text.empty
 // (what is a text: a String; anything else is not)
 textual := false
@@ -2091,6 +2096,7 @@ String := class: Array {
   // (`t[n]`: its nth character, from 0, by what it holds (its first and rest), as a list's by its links)
   indexed (index) => .empty ? None : ((index == 0) ? .first : .rest.indexed(index - 1))
   textual := true
+  closure := false
   // (a `.` in it on its own, not after a name or what closes, nor before a name: code of what it is read on)
   bare_dot => dot_alone(` `, this)
   // (a class as a text, `Decimal as String` (`Decimal.String`): any class is one, the texts its fields are written as, in

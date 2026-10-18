@@ -2248,6 +2248,26 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     `narrows`), a typed place is a field (`head: `!l``); `fields_end` is one class (defined after `class { }`); a text
     given in its place is passed over (`(a, `-`, b) := (1, `-`, 2)`); `String.past` (kernel map); `\s = Char.Blank`;
     `class x: T` without a block; a closure called with nothing takes `declared` (a typed parameter its type).
+  - Built 2026-10-18 (night, unreviewed; proposal and open questions in the handoff `selfhost_lean_1018.md`):
+    - A code hole, `{{x}}` or `{{x: T}}`, is named by what its braces hold. So a method written with a condition,
+      `map {kept} (mapping) => …`, has a hole named by the word written there, not one always called `selection`.
+    - A rule led by `.` read on a value (`xs.rest.f{p}(…)`) runs with that value as what it runs on, not with what the
+      line was read in. (`x.f(y)`'s f still runs on x.)
+    - A method run on a text: its own node is made of the text, and what it runs on stays the text (a text is a value,
+      nothing is declared in it), so the kernel map's `first`, `rest` and `==` read the text itself.
+    - The kernel tells a superposition's component that is a list of characters (`"\t".."\r"`, a range steps by
+      numbers) the way `chars_hold` does, for `readable` too. `` `{ }` is Inner `` (a structure class with `\s`) holds.
+    - A cut (`first_cut_in`, the kernel's `cut_of`) reads a structure class by what it is written as
+      (`header_quoted.written_as`), asked once for the cut. A class-typed field (`inner: Inner`) no longer makes the cut
+      "not known" and falls back to the language loop.
+    - `x.map{p}(v)` for lists and texts is in the kernel map (`wasm.o.ray`), beside the other Iterable methods there.
+      `` `{LHS}` is `{ }`.map{== \s}(`LHS`) `` holds (EX7). A closure says it is one (`closure`, as a list says
+      `listing`); what is not a closure answers `closure` false (texts on String, where `textual` is).
+    - Tests on many threads wait to begin while memory could not hold one more as well as those running, each at what a
+      test may take. They no longer run into memory there is not ("almost all the memory there is is in use").
+    - The compiler that writes the kernel as WebAssembly compiles every part of a `for` loop's step (`at = …, k++`) and
+      of a statement written with commas, as JavaScript runs them. It compiled only the first, so on wasm every
+      `k < n` bound in the kernel's loops was inert. Same tests (803 at one thread); tests run in half the time.
 
 ### 21.4 Speed
 

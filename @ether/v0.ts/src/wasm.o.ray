@@ -56,6 +56,8 @@ String &+= {
     false
   }
   every (predicate) => !(this.some((x) => !predicate(x)))
+  // (`t.map{p}(v)`: its characters, v in place of each one p holds of (a function, v of it), the others kept)
+  map {kept} (mapping) => .empty ? Array.new : (.rest.map{ {kept} }(mapping)).prepend(holds_any((.first).({kept})) ? (((mapping).closure === true) ? mapping(this.first) : mapping) : .first)
   find (predicate) => {
     at := this
     while !(at.empty) {
@@ -124,6 +126,8 @@ Array &+= {
     }
     None
   }
+  // (`xs.map{p}(v)`: v in place of each value p holds of (a function, v of it), the others kept)
+  map {kept} (mapping) => .empty ? Array.new : (.rest.map{ {kept} }(mapping)).prepend(holds_any((.first).({kept})) ? (((mapping).closure === true) ? mapping(this.first) : mapping) : .first)
   flatten => .flattened(64)
   flattened (levels) => {
     made := Array.new

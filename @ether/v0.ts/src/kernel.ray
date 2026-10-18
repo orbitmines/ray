@@ -32,15 +32,38 @@ kjs.minus_one = kjs.zero - kjs.one
 global["Kjs_const"] := class (const_value) => { }
 kjs.consts["DEBUG"] = Kjs_const(kjs.zero)
 kjs.consts["LOOP_LIMIT"] = Kjs_const(kjs.zero)
+// (each made by a function of its parts, of the class: a class called with more than one is many times the cost; its parts
+// on lines of their own, a part after a `;` not the node's)
 // (a node read; a cell made for a value, `$n`; a call's argument, `name#k#i`; a label, `#$n` and what follows; a loop's two
 // labels; one of a list and what follows it)
 global["Kjs_node"] := class { }
 global["Kjs_temp"] := class (number) => { temp := true }
 global["Kjs_arg"] := class (called, call, index) => { arg := true }
+kjs_arg (made_called, made_call, made_index) => Kjs_arg &+ {
+  called := made_called
+  call := made_call
+  index := made_index
+}
 global["Kjs_label"] := class (number, suffix) => { label := true }
+kjs_label (made_number, made_suffix) => Kjs_label &+ {
+  number := made_number
+  suffix := made_suffix
+}
 global["Kjs_loop"] := class (next, end) => { }
+kjs_loop (made_next, made_end) => Kjs_loop &+ {
+  next := made_next
+  end := made_end
+}
 global["Kjs_cell"] := class (value, below) => { }
+kjs_cell (made_value, made_below) => Kjs_cell &+ {
+  value := made_value
+  below := made_below
+}
 global["Kjs_link"] := class (value, later) => { }
+kjs_link (made_value, made_later) => Kjs_link &+ {
+  value := made_value
+  later := made_later
+}
 
 // Written out: an operand as `jmp_of`'s lines show it; a statement, after the labels that are where it is; a label; a context.
 // (each line written in its parts, each with `external output`: none made into a list, a list of its parts costing more
@@ -99,14 +122,14 @@ kjs_line (target, condition, into, a, b) => {
 kjs_jmp (target, into, a, b) => kjs_line(target, kjs.one, into, a, b)
 kjs_goto (label) => kjs_line(label, kjs.one, `-`, kjs.zero, kjs.zero)
 kjs_mark (label) => {
-  kjs.marks = Kjs_cell(label, kjs.marks)
+  kjs.marks = kjs_cell(label, kjs.marks)
 }
 kjs_fresh (unused) => {
   made := Kjs_temp(kjs.n)
   kjs.n = kjs.n + 1
   made
 }
-kjs_here (k, suffix) => Kjs_label(k.number, suffix)
+kjs_here (k, suffix) => kjs_label(k.number, suffix)
 kjs_constant (x) => x.bits !== None
 kjs_begin (called, params) => {
   external output `& `
@@ -174,12 +197,12 @@ kjs_call (called, given) => {
   reversed := None
   at := given
   while at !== None {
-    reversed = Kjs_cell(kjs_value(at.car), reversed)
+    reversed = kjs_cell(kjs_value(at.car), reversed)
     at = at.cdr
   }
   args := None
   while reversed !== None {
-    args = Kjs_link(reversed.value, args)
+    args = kjs_link(reversed.value, args)
     reversed = reversed.below
   }
   native := kjs_native(called)
@@ -190,11 +213,11 @@ kjs_call (called, given) => {
   i := 0
   each := args
   while each !== None {
-    kjs_jmp(`set`, Kjs_arg(called, k, i), each.value, kjs.zero)
+    kjs_jmp(`set`, kjs_arg(called, k, i), each.value, kjs.zero)
     i = i + 1
     each = each.later
   }
-  kjs_jmp(called, out, Kjs_arg(called, k, 0), kjs.zero)
+  kjs_jmp(called, out, kjs_arg(called, k, 0), kjs.zero)
   out
 }
 kjs_native_call (native, args) => {
@@ -403,7 +426,7 @@ kjs_statement (s) => {
     kjs_mark(kjs_here(k, "top"))
     kjs_jmp(`not`, `$t`, kjs_value(s.c), kjs.zero)
     kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
-    kjs_in_loop(Kjs_loop(kjs_here(k, "top"), kjs_here(k, "end")), s.s)
+    kjs_in_loop(kjs_loop(kjs_here(k, "top"), kjs_here(k, "end")), s.s)
     kjs_goto(kjs_here(k, "top"))
     kjs_mark(kjs_here(k, "end"))
     return 0
@@ -411,7 +434,7 @@ kjs_statement (s) => {
   if kind == "do" {
     k := kjs_fresh(0)
     kjs_mark(kjs_here(k, "top"))
-    kjs_in_loop(Kjs_loop(kjs_here(k, "next"), kjs_here(k, "end")), s.s)
+    kjs_in_loop(kjs_loop(kjs_here(k, "next"), kjs_here(k, "end")), s.s)
     kjs_mark(kjs_here(k, "next"))
     kjs_line(kjs_here(k, "top"), kjs_value(s.c), `-`, kjs.zero, kjs.zero)
     kjs_mark(kjs_here(k, "end"))
@@ -425,7 +448,7 @@ kjs_statement (s) => {
       kjs_jmp(`not`, `$t`, kjs_value(s.c), kjs.zero)
       kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
     }
-    kjs_in_loop(Kjs_loop(kjs_here(k, "step"), kjs_here(k, "end")), s.s)
+    kjs_in_loop(kjs_loop(kjs_here(k, "step"), kjs_here(k, "end")), s.s)
     kjs_mark(kjs_here(k, "step"))
     (kjs_value(s.u)) if s.u !== None
     kjs_goto(kjs_here(k, "top"))
@@ -440,7 +463,7 @@ kjs_else_begin (k) => {
   kept := None
   at := kjs.marks
   while (at !== None) && !((at.value.number == k.number) && (at.value.suffix == "else")) {
-    kept = Kjs_cell(at.value, kept)
+    kept = kjs_cell(at.value, kept)
     at = at.below
   }
   if at !== None { kjs.marks = at.below }
@@ -462,13 +485,13 @@ kjs_otherwise (k, o) => {
   kjs.chain = None
   kjs_statement(o)
   kjs_settle(0)
-  kjs_ending(Kjs_closer(`else`, k, kept, None, outer))
+  kjs_ending(kjs_closer(`else`, k, kept, None, outer))
 }
 // (an `else` whose statement leaves an `if` without one, `else if (c) …`: its end put off, an `else` on the next line that
 // `if`'s; the ends put off, the innermost first, once a statement is no `else` or the block they are in ends)
 kjs_ending (c) => {
   if kjs.open_if !== None {
-    kjs.chain = Kjs_cell(c, c.outer)
+    kjs.chain = kjs_cell(c, c.outer)
     return 0
   }
   kjs_else_end(c.k, c.kept)
@@ -492,8 +515,15 @@ kjs_unclaimed (unused) => {
 // file's reading has written): the line's statements, then its last head opened (what comes before its body), the block's
 // lines, then the head closed (what comes after), the innermost first. (What closes each, kept until then.)
 global["Kjs_closer"] := class (kind, k, kept, step, outer) => { }
+kjs_closer (made_kind, made_k, made_kept, made_step, made_outer) => Kjs_closer &+ {
+  kind := made_kind
+  k := made_k
+  kept := made_kept
+  step := made_step
+  outer := made_outer
+}
 kjs_closing (made) => {
-  kjs.closers = Kjs_cell(made, kjs.closers)
+  kjs.closers = kjs_cell(made, kjs.closers)
 }
 kjs_head (x) => (x !== None) && (x.head === true)
 kjs_open (h) => {
@@ -503,7 +533,7 @@ kjs_open (h) => {
     kjs.open_if = None
     outer := kjs.chain
     kjs.chain = None
-    kjs_closing(Kjs_closer(`else`, k, kjs_else_begin(k), None, outer))
+    kjs_closing(kjs_closer(`else`, k, kjs_else_begin(k), None, outer))
     if kjs_head(h.s) { kjs_open(h.s) }
     return 0
   }
@@ -513,13 +543,13 @@ kjs_open (h) => {
     k := kjs_fresh(0)
     kjs_unless(condition, kjs_here(k, "else"))
     if (h.s === None) || kjs_head(h.s) {
-      kjs_closing(Kjs_closer(`if`, k, None, None, None))
+      kjs_closing(kjs_closer(`if`, k, None, None, None))
       if kjs_head(h.s) { kjs_open(h.s) }
       return 0
     }
     kjs_statement(h.s)
     kjs_mark(kjs_here(k, "else"))
-    kjs_closing(Kjs_closer(`else`, k, kjs_else_begin(k), None, None))
+    kjs_closing(kjs_closer(`else`, k, kjs_else_begin(k), None, None))
     if kjs_head(h.o) { kjs_open(h.o) }
     return 0
   }
@@ -528,8 +558,8 @@ kjs_open (h) => {
     kjs_mark(kjs_here(k, "top"))
     kjs_jmp(`not`, `$t`, kjs_value(h.c), kjs.zero)
     kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
-    kjs_closing(Kjs_closer(`while`, k, kjs.loop, None, None))
-    kjs.loop = Kjs_loop(kjs_here(k, "top"), kjs_here(k, "end"))
+    kjs_closing(kjs_closer(`while`, k, kjs.loop, None, None))
+    kjs.loop = kjs_loop(kjs_here(k, "top"), kjs_here(k, "end"))
     if kjs_head(h.s) { kjs_open(h.s) }
     return 0
   }
@@ -540,8 +570,8 @@ kjs_open (h) => {
     kjs_jmp(`not`, `$t`, kjs_value(h.c), kjs.zero)
     kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
   }
-  kjs_closing(Kjs_closer(`for`, k, kjs.loop, h.u, None))
-  kjs.loop = Kjs_loop(kjs_here(k, "step"), kjs_here(k, "end"))
+  kjs_closing(kjs_closer(`for`, k, kjs.loop, h.u, None))
+  kjs.loop = kjs_loop(kjs_here(k, "step"), kjs_here(k, "end"))
   if kjs_head(h.s) { kjs_open(h.s) }
   0
 }

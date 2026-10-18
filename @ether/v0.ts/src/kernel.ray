@@ -564,7 +564,7 @@ kjs &+= {
   }
   // (a function: its body read where its rule is, at the top of the rule's body (in a block of another's, or a closure, that
   // one's rules would be read first, or what this file's reading wrote not seen); in the first reading passed over, `mode`
-  // 4; in the second its context begun, then its end written)
+  // 4, its body not read (gone past); in the second its context begun, then its end written)
   opening (unused) => {
     if kjs.mode == 1 { kjs.mode = 4 }
     if kjs.mode == 2 {
@@ -663,28 +663,36 @@ Kernel_js := {
     kjs.named(name)
     kjs.takes(params)
     kjs.opening(0)
+    (external goto kjs_passed) if kjs.mode == 4
     {body}
+    external label kjs_passed
     kjs.closing(0)
   }
   function {name: K_word}() {`{`}{body}{`}`} => {
     kjs.named(name)
     kjs.takes(kjs_none)
     kjs.opening(0)
+    (external goto kjs_passed) if kjs.mode == 4
     {body}
+    external label kjs_passed
     kjs.closing(0)
   }
   function {name: K_word}(): {annotation: K_word} {`{`}{body}{`}`} => {
     kjs.named(name)
     kjs.takes(kjs_none)
     kjs.opening(0)
+    (external goto kjs_passed) if kjs.mode == 4
     {body}
+    external label kjs_passed
     kjs.closing(0)
   }
   function {name: K_word}({params: K_params}) {`{`}{body}{`}`} => {
     kjs.named(name)
     kjs.takes(params)
     kjs.opening(0)
+    (external goto kjs_passed) if kjs.mode == 4
     {body}
+    external label kjs_passed
     kjs.closing(0)
   }
   export function kernel({params}) {`{`}{body}{`}`} => {
@@ -1174,9 +1182,12 @@ K_assign &+= {
   {w: K_word} >>= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `>>` ; name := w ; v := v_ }
   {w: K_word} >>>= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `>>>` ; name := w ; v := v_ }
 }
+// (a choice among them, not the last: a rule of its own, a `,` after a choice in a list read as Ray reads one, the rest
+// the choice's, unless the list is in brackets right before it)
 K_args &+= {
   {x__ag: K_assign} => Kjs_node &+ { kind := `list` ; car := x__ag ; cdr := None }
   {x__ag: K_assign}, {rest_ag: K_args} => Kjs_node &+ { kind := `list` ; car := x__ag ; cdr := rest_ag }
+  {c__al: K_or} ? {y__al: K_assign} : {n__al: K_assign}, {rest_al: K_args} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `cond` ; c := c__al ; y := y__al ; n := n__al }) ; cdr := rest_al }
 }
 // (a name declared: given a value, or nothing given, `0`; any other value, as an arrow, is no constant and no statement of a
 // function's, nothing)
@@ -1190,6 +1201,7 @@ K_decl &+= {
 K_decls &+= {
   {x__dcs: K_decl} => Kjs_node &+ { kind := `list` ; car := x__dcs ; cdr := None }
   {x__dcs: K_decl}, {rest_dcs: K_decls} => Kjs_node &+ { kind := `list` ; car := x__dcs ; cdr := rest_dcs }
+  {w__dl: K_word} = {c__dl: K_or} ? {y__dl: K_assign} : {n__dl: K_assign}, {rest_dl: K_decls} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `decl` ; name := w__dl ; v := (Kjs_node &+ { kind := `cond` ; c := c__dl ; y := y__dl ; n := n__dl }) }) ; cdr := rest_dl }
 }
 // (one given a default, `lo = 0`: its name, `=` and the default, each a parameter, as `jmp_of` takes each of its words)
 K_params &+= {

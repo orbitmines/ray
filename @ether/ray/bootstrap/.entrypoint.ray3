@@ -781,15 +781,23 @@ assume {code} ^keyword => (external &).caller reading {code}
 // (`--` and `~~` after these, and after `=` and `,`: looser, `x -- y if c` guards y)
 
 // A superposition: one of these values (`a | b`), and `x?`: `x` or None.
-{a} | {b} ^operator => ({
+// (the same object as what it superposes, their methods its own, superposed as it is: made of each, its own rules first)
+{a} | {b} ^operator => (({ }) &+ {
   superposes := true
+  // (what it is itself, not what each of them is: one of them, not a list or a text of them)
+  listing := false
+  textual := false
   // (one superposed with a superposition: its components, each one; `1 | 2 | 3` three)
   // (each written as a name, `LHS: T | RHS: U`: by that name)
   components := (((a).superposes === true) ? (a).components.listed() : (external names (Array.new.append(a)) a _)).joined(((b).superposes === true) ? (b).components : (external names (Array.new.append(b)) b _))
-}) &+ {
   {value: a} => value
   {value: b} => value
-}
+  // (what it can be (`#`): each of them, a range among them its values (`Decimal | ("a" | "A")..("f" | "F")` sixteen); none
+  // among them, its components)
+  members := (((a).is_range === true) || ((b).is_range === true) || (((a).superposes === true) && ((a).members !== None))) ? possible_values(a).joined(possible_values(b)) : None
+}) ~~ (. &+= a) ~~ (. &+= b)
+// (what one of a superposition can be: a superposition's (its members, else its components), a range's values, else itself)
+possible_values (one) => ((one).superposes === true) ? (((one).members !== None) ? (one).members.listed() : (one).components.listed()) : (((one).is_range === true) ? (one).members.listed() : Array.new.append(one))
 assert (1 | +2 | +3) == (1 | 3 | 6)  // CL2 a section after | is not applied to the value before it
 assert (1 | 2 | 3)#.count == 3  // HS2 a superposition of three does not have three possible values
 assert (1 | 2 | 3).components.count == 3  // SP13 a superposition of three holds a superposition of two (its components not each one)
@@ -1213,7 +1221,7 @@ followed_is (type) => {
 is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
-  (type === Node) || (value === type) || (((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
+  (type === Node) || (value === type) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
 }
 // (a text is a class written as a structure (`class (a: T, `-`, b: U)`, a text among its places; or one typed place alone,
 // `class (x: T)`) when it reads as it is written)
@@ -1243,8 +1251,9 @@ checked {type} ^keyword => {
     ERROR a value is not of the type it is given to: {type}
   }
   // (as that type: itself when it is one, else what it converts to that is (the equivalence graph, `3` given to `x: Signed`))
-  // (not again while one is being followed: what a conversion asks is what the value itself is)
-  ((type === None) || (. === None) || following_conversions || .is_itself(type)) ? . : .converted_to(type)
+  // (not again while one is being followed: what a conversion asks is what the value itself is; nor to a type nothing
+  // defines yet, which any conversion would seem to be)
+  ((type === None) || (. === None) || following_conversions || (external undefined type) || .is_itself(type)) ? . : .converted_to(type)
 }
 converted_to (type) => {
   value := .
@@ -1445,8 +1454,35 @@ text_read_by (at, typed, text) => at ? (written_text(at.value) ? (text_begins(te
 // (the place given the nearest span after which the rest reads, then the rest given theirs)
 // (the cut a parameter, its call's own: what the place is given may be read the same way, a structure in it, whose own cut
 // would be this one's, were it a name declared in the body (that is declared on what it is read on))
-text_spans (at, typed, text) => text_spans_at(at, typed, text, ((typed) first_cut_in (text)))
+text_spans (at, typed, text) => text_spans_at(at, typed, text, ((typed) first_cut_in (text)) ?? given_first_cut(at, typed, text))
+// (read in order: none found while what follows is asked before this place is given anything, the place given each span in
+// turn first, so a type after it may be what it was given, `(open: String, \s, close: open)`)
+given_first_cut (cut_at, cut_typed, cut_text) => {
+  cut := (cut_text).rest
+  found := None
+  greedy := repeat_type((cut_typed).value)
+  while (cut !== None) && ((found === None) || greedy) {
+    if ((cut_typed).value) fits_span ((cut_text).until(cut)) {
+      text_given((cut_at).value, (cut_text).until(cut))
+      if types_read(retyped((cut_typed).next, (cut_at).value, (cut_text).until(cut)), cut) {
+        found = cut
+      }
+    }
+    cut = cut.empty ? None : cut.rest
+  }
+  found
+}
 text_spans_at (spans_at, spans_typed, spans_text, spans_cut) => (spans_cut !== None) && text_given(spans_at.value, spans_text.until(spans_cut)) && text_read_by(spans_at.next, spans_typed.next, spans_cut)
+// (types after a place, that place given a span: the span where a type is that place)
+retyped (retyped_at, retyped_place, retyped_span) => {
+  retyped_list := Array.new
+  retyped_link := retyped_at
+  while retyped_link {
+    retyped_list.append(((retyped_link.value) === retyped_place) ? retyped_span : retyped_link.value)
+    retyped_link = retyped_link.next
+  }
+  retyped_list.head
+}
 // (what places read a text by, in order: a written text itself, a type that is a position itself, a field its type, one
 // with no type anything)
 places_types (at) => {
@@ -1895,6 +1931,8 @@ Array &+= {
   }
   // (where it is entered, Iterable's `entry`: its first vertex)
   entry => .head
+  // (a range, what it can be (`#`): its values)
+  members => ((.is_range) === true) ? this : None
   // (none, empty: as a text is, by what it holds, not by counting it (Iterable's `count == 0`, counted by `reduce`, which
   // asks `empty`))
   empty => .head === None
@@ -2087,9 +2125,18 @@ assert {
 assert Ray.super.count  // C8 Ray.super does not reach Iterable's count
 assert 1 is Array  // TY63 a number is not an array
 // (a text is its characters: the first, then the rest (`first`, `rest`, by the kernel's map for what it holds); none, empty)
+// (a range, `"0".."9"`: a type of what it holds, what it can be (`#`) its values)
+ranged (values) => values ~~ (.is_range := true)
+is_range := false
 String := class: Array {
+  // (entered at its first character: that character, equipped with where it is (next, the rest entered); a step into it,
+  // there)
+  entered_at (text) => text.empty ? None : ((text.until(text.rest)) &+ { next => text.rest.entry })
+  entry => .entered_at(this)
+  // (a step into it: where it is entered, on from there what that is next to)
+  next => .entry
   // (from one character to another, `"\t".."\r"`: the characters from the first's to the last's, as characters are ordered)
-  .. (last) => (.first)..((last).first)
+  .. (last) => ranged((.first)..((last).first))
   // (no first character, nor a rest: the null character is a first character, though false as a boolean, and after it
   // there is a rest (of none))
   empty => !.first && !.rest
@@ -2166,6 +2213,8 @@ true &+= {
   of := boolean
 }
 Char := class: Number { }
+// (a 32-bit integer: its bits, 32 binary digits (Number.ray's `Binary₃₂.Signed`))
+Int32 := class (bits) => { }
 Program := class { }
 Narrowing := class { }
 Diagnostic := class { }

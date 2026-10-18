@@ -93,6 +93,8 @@ Number &+= {
   positive => true
   abs => this
   negated => Decimal.Signed(sign: .is_zero ? None : "-", integer: this)
+  // (as a 32-bit integer, the kernel's (wasm.o.ray's `Int32`))
+  int32 => Int32.made_from(this)
   floor => this
   round => this
 
@@ -254,6 +256,30 @@ Number &+= {
   assert "12" as 10 == 12  // S67 12 is not twelve in ten
   assert "ff" as 16 == 255  // SN1 ff is not 255
   assert "101" as 2 == 5  // SN3 101 is not five in two
+assert (0.int32 - 5).digits == `-5`  // IB1 below zero
+assert ((0.int32 - 5) + 8).digits == `3`  // IB2 back above zero
+assert (7.int32 / 2).digits == `3`  // IB3 division
+assert ((0.int32 - 7) / 2).digits == `-3`  // IB4 division toward zero
+assert ((0.int32 - 7) % 2).digits == `-1`  // IB5 remainder keeps the sign
+assert (1.int32 << 16).digits == `65536`  // IB6 shift left
+assert (15.int32 << 25).digits == `503316480`  // IB7 a kernel constant
+assert (1.int32 << 31).digits == `-2147483648`  // IB8 the least
+assert (((1.int32 << 31) - 1)).digits == `2147483647`  // IB9 wraps to the most
+assert (((1.int32 << 31) - 1) + 1).digits == `-2147483648`  // IB10 wraps past the most
+assert ((0.int32 - 1) >> 1).digits == `-1`  // IB11 shift right keeps the sign
+assert ((0.int32 - 1) >>> 1).digits == `2147483647`  // IB12 shift right with zero
+assert (1.int32 << 33).digits == `2`  // IB13 the shift taken of 32
+assert (6.int32 ~&& 10).digits == `2`  // IB14 and
+assert (6.int32 ~|| 10).digits == `14`  // IB15 or
+assert (6.int32 ~^^ 10).digits == `12`  // IB16 xor
+assert ((13.int32 + 3) ~&& (0.int32 - 4)).digits == `16`  // IB17 (n + 3) & -4 of 13
+assert (0.int32 - 1) < 0  // IB18 less than int32_below zero
+assert 3.int32 >= 3  // IB19 at least
+assert (3.int32 == 3) && (3.int32 != 4)  // IB20 equal and not
+assert ((5.int32 / 0) === None)  // IB21 dividing by zero is nothing
+assert (300.int32).count == 300  // IB22 a count again
+assert ((0.int32 - 1).count === None)  // IB23 none int32_below zero as a count
+assert ((0.int32 - ((1.int32 << 31) - 1)) - 1).digits == `-2147483648`  // IB24 the least by subtraction
 }
 assert 5 is Number  // N86 five is not a natural number
 Number &+= Ray

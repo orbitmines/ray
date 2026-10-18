@@ -8,7 +8,18 @@ import { Jmp, Ray, jmp_of } from '../src/language.ts';
 // no cell `-`; `--source <file>`: another file written as the kernel is, not checked against the kernel)
 const given = process.argv.indexOf('--source');
 const file = given < 0 ? new URL('../src/kernel.ts', import.meta.url) : process.argv[given + 1];
-const source = transformSync(readFileSync(file, 'utf8'), { loader: 'ts' }).code;
+const written_ts = readFileSync(file, 'utf8'), source = transformSync(written_ts, { loader: 'ts' }).code;
+// (a name esbuild gives another, one written where an outer one is, `kept` as `kept2`: named as written, as Ray reads it)
+// (in each function, a name its own text does not hold whose name less its digits it does)
+const words = (text: string) => new Set(text.match(/\b[A-Za-z_]\w*\b/g));
+const ts_lines = written_ts.split('\n'), bodies = new Map<string, Set<string>>();
+for (let k = 0; k < ts_lines.length; k++) {
+  const m = /^  function (\w+)\(/.exec(ts_lines[k]); if (!m) continue;
+  let e = k + 1; while (e < ts_lines.length && !/^  function \w+\(/.test(ts_lines[e])) e++;
+  bodies.set(m[1], words(ts_lines.slice(k, e).join('\n')));
+}
+let own = new Set<string>();
+const as_written = (token: string) => token.split('#').map(part => { const m = /^([A-Za-z_]\w*?)\d+$/.exec(part); return m && !own.has(part) && own.has(m[1]) ? m[1] : part; }).join('#');
 const fresh = () => { const p = new Jmp(); p.host('debug', 4); p.host('compiled', 4); p.host('told', 4); return p; };
 const p = jmp_of(source.slice(source.indexOf('function kernel(')), fresh(), { DEBUG: 0, LOOP_LIMIT: 0 });
 const unlinked = (p as unknown as { unlinked: [number, string, string][] }).unlinked;
@@ -21,8 +32,8 @@ const operand = (x: number) => x >= 0 ? cells[x] : `=${p.constants[-1 - x]}`;
 for (let k = 0; k < p.length; k++) {
   const [t, c, into, a, b] = p.at(k);
   for (const label of labels.get(k) ?? []) lines.push(`: ${label}`);
-  if (t === -2) { cells = p.cells.get(k)!; lines.push(['&', [...p.names].find(([, v]) => v === k)![0], ...cells.slice(0, a)].join(' ')); continue; }
-  lines.push([targets.get(k), operand(c), into < 0 ? '-' : cells[into], operand(a), operand(b)].join(' '));
+  if (t === -2) { cells = p.cells.get(k)!; own = bodies.get([...p.names].find(([, v]) => v === k)![0]) ?? new Set(); lines.push(['&', [...p.names].find(([, v]) => v === k)![0], ...cells.slice(0, a).map(as_written)].join(' ')); continue; }
+  lines.push([targets.get(k), ...[operand(c), into < 0 ? '-' : cells[into], operand(a), operand(b)].map(as_written)].join(' '));
 }
 
 const reference = Ray.program(0), linked = (q: Jmp) => q.link().code;

@@ -432,6 +432,7 @@ kjs_open (h) => {
     if kjs_head(h.s) { kjs_open(h.s) }
     return 0
   }
+  kjs.open_if = None
   if kind == "if" {
     condition := kjs_value(h.c)
     k := kjs_fresh(0)
@@ -503,7 +504,6 @@ kjs &+= {
         kjs_statement(at.car)
         at = at.cdr
       }
-      kjs.open_if = None
       kjs_open(at.car)
     }
   }
@@ -633,7 +633,6 @@ K_if_head := { external kept }
 K_else_line := { external kept }
 K_else_head := { external kept }
 K_while_line := { external kept }
-K_for_line := { external kept }
 K_while_head := { external kept }
 K_do_line := { external kept }
 K_return_line := { external kept }
@@ -706,7 +705,6 @@ Kernel_js := {
   break; => kjs.line_word(`break`)
   continue; => kjs.line_word(`continue`)
   do {tail: K_do_line} => kjs.line(tail)
-  for {tail: K_for_line} => kjs.line(tail)
   while {tail: K_while_line} => kjs.line(tail)
   while {tail: K_while_head} {`{`}{body}{`}`} => {
     kjs.head_open(tail)
@@ -1189,9 +1187,9 @@ K_params &+= {
 K_stmt &+= {
   {e__st: K_assign}; => Kjs_node &+ { kind := `expr` ; e := e__st }
   return {e__st: K_assign}; => Kjs_node &+ { kind := `return` ; e := e__st }
-  {k_st: `return`}; => Kjs_node &+ { kind := `return` ; e := None }
-  {k_st: `break`}; => Kjs_node &+ { kind := `break` }
-  {k_st: `continue`}; => Kjs_node &+ { kind := `continue` }
+  return{k_st: `;`} => Kjs_node &+ { kind := `return` ; e := None }
+  break{k_st: `;`} => Kjs_node &+ { kind := `break` }
+  continue{k_st: `;`} => Kjs_node &+ { kind := `continue` }
   const {d_st: K_decls}; => Kjs_node &+ { kind := `decls` ; list := d_st }
   let {d_st: K_decls}; => Kjs_node &+ { kind := `decls` ; list := d_st }
   {`{`} {`}`} => Kjs_node &+ { kind := `block` ; list := None }
@@ -1260,16 +1258,6 @@ K_if_line &+= {
 K_while_line &+= {
   {`(`}{c__wl: K_assign}{`)`} {s__wl: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `while` ; c := c__wl ; s := s__wl }) ; cdr := None }
   {`(`}{c__wl: K_assign}{`)`} {s__wl: K_stmt} {rest_wl: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `while` ; c := c__wl ; s := s__wl }) ; cdr := rest_wl }
-}
-K_for_line &+= {
-  {`(`} {i__fl: K_simple}; {c__fl: K_assign}; {u__fl: K_assign} {`)`} {s__fl: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `for` ; i := i__fl ; c := c__fl ; u := u__fl ; s := s__fl }) ; cdr := None }
-  {`(`} {i__fl: K_simple}; {c__fl: K_assign};{`)`} {s__fl: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `for` ; i := i__fl ; c := c__fl ; u := None ; s := s__fl }) ; cdr := None }
-  {`(`}; {c__fl: K_assign}; {u__fl: K_assign} {`)`} {s__fl: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `for` ; i := None ; c := c__fl ; u := u__fl ; s := s__fl }) ; cdr := None }
-  {`(`}{k_fl: `;;`}{`)`} {s__fl: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `for` ; i := None ; c := None ; u := None ; s := s__fl }) ; cdr := None }
-  {`(`} {i__fl: K_simple}; {c__fl: K_assign}; {u__fl: K_assign} {`)`} {s__fl: K_stmt} {rest_fl: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `for` ; i := i__fl ; c := c__fl ; u := u__fl ; s := s__fl }) ; cdr := rest_fl }
-  {`(`} {i__fl: K_simple}; {c__fl: K_assign};{`)`} {s__fl: K_stmt} {rest_fl: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `for` ; i := i__fl ; c := c__fl ; u := None ; s := s__fl }) ; cdr := rest_fl }
-  {`(`}; {c__fl: K_assign}; {u__fl: K_assign} {`)`} {s__fl: K_stmt} {rest_fl: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `for` ; i := None ; c := c__fl ; u := u__fl ; s := s__fl }) ; cdr := rest_fl }
-  {`(`}{k_fl: `;;`}{`)`} {s__fl: K_stmt} {rest_fl: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `for` ; i := None ; c := None ; u := None ; s := s__fl }) ; cdr := rest_fl }
 }
 K_else_line &+= {
   {s__el: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `else` ; s := s__el }) ; cdr := None }

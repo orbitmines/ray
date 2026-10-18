@@ -2391,7 +2391,7 @@ export function jmp_of(source: string, p = new Jmp(), given: Record<string, numb
       }
       if (t === 'return') { at++; jmp('set', '&.value', peek() === ';' || peek() === '}' ? 0 : assignment()); if (peek() === ';') at++; jmp('&.caller'); return; }
       if (t === 'break' || t === 'continue') { at++; if (peek() === ';') at++; const [top, end] = loops[loops.length - 1]; jmp(t === 'break' ? end : top); return; }
-      assignment(); if (peek() === ';') at++;
+      assignment(); while (peek() === ',') { at++; assignment(); } if (peek() === ';') at++;
     };
     void operand;
     eat('{'); while (peek() !== '}') statement(); at++;

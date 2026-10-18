@@ -111,10 +111,10 @@ Unicode := class {
   assert "\0" as Unicode.UTF-32 as String == "\0"  // UN15 the null character does not come back from UTF-32
 }
 // A text's characters: by default what a reader sees as one (a grapheme cluster, by Unicode's tables); for now the scalar
-// each UTF-8 unit of it writes. `String.Scalars` is that String: a String like any, only what its characters are differs
-// (what a text is until then: its `first`, its `rest`, `next` into it).
+// each UTF-8 unit of it writes, `String.Scalars`, which is what a text is until then (its `first`, its `rest`, `next` into
+// it): String itself, no class of its own (a class made of String is asked of every text read)
 String &+= {
-  static Scalars := class: String (characters: Unicode.UTF-8.Unit[]) => { }
+  static Scalars := String
 }
 // A character by its code point: `U+0041` is A
 U+{codepoint: Hexadecimal.String}: Char => Hexadecimal(integer: codepoint) as Char

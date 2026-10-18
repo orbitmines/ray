@@ -31,7 +31,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (a thread's words)
   const T_CHUNK = 52, T_CHUNK_END = 56, T_SLOT = 60, T_SLOT_END = 64, T_HELD = 68, T_HELD_N = 72, T_SCRATCH = 0, T_JUMP_S = 4, T_JUMP_N = 8, T_JUMP_V = 12, T_HOLE = 16, T_TESTING = 20, T_BUDGET = 24, T_SAID = 28, T_FAULT = 32, T_ON = 36, T_A = 40, T_B = 44, T_ERRED = 48, T_DEPTH = 76, T_SH = 80, T_SH_N = 84, T_MARK = 88, T_MARK_LO = 92, T_MARK_HI = 96, T_ROOT = 100, T_ISO = 104, T_QUIET = 108, T_DECLS = 112, T_DECLS_N = 116, T_HOLE_A = 120, T_HOLE_B = 124, T_DECL = 128, T_PLACE_IN = 132, T_INL_S = 136, T_INL_E = 140, T_INL_F = 144, T_TYP = 148, T_TYP_N = 152, T_REFF = 156, T_CUT = 160, T_LEXV = 164, T_SHGEN = 168, T_CS = 172, T_CE = 176, T_CT = 180, T_RAN = 184, T_SCRATCH_END = 188, T_BODY = 192, T_ONE = 196, T_MEMBER = 200, T_BODIES = 204, T_BODIES_N = 208, T_FALLBACK = 212, T_REG = 216, T_REG_N = 220, T_WROTE = 224, T_WROTE_N = 228, T_FREE = 232, T_FREE_N = 236, T_REG_SLOT = 240, T_REG_SLOTEND = 244, T_REG_LAZY = 248, T_REG_AT = 252, T_SKIP = 256, T_NAMED = 260, T_LS = 264, T_LE = 268, T_WRITER_SELF = 272, T_LB = 276, T_WRITER = 280, T_TV = 284, T_TVS = 288, T_TVE = 292, T_MEMBER_S = 296, T_MEMBER_E = 300, T_ALL_S = 304, T_ALL_E = 308, T_TOKEN = 312, T_HERE = 316, T_IN2_S = 320, T_IN2_E = 324, T_IN2_F = 328, T_DEFIN = 332, T_OMEMO = 336, T_QBUDGET = 340, T_UNALIGNED = 344, T_WRITTEN_IN = 348, T_CHECKS = 352, CHECKS = 30, T_STACK = 480, T_DEEPC = 484, T_GIVEN = 488, T_GIVEN_N = 492, T_ALT = 496, T_BEGUN = 500, T_BEGUN_N = 504, T_GREW = 508, T_FREE_TAKEN = 512, T_SKIPS = 516, T_SKIPS_N = 520, T_NAMING = 524, T_NAMING_N = 528, GROWN = 15 << 25, TEST_GROWN = 1 << 25, GIVEN_N = 16, OMEMO_MASK = (1 << 14) - 1, LEFTS = 64, TYPS = 1024, SHADOWS = 1024, TYPINGS = 1, DECLS = 64, BEGUN = 40;
   // (the words the host knows, at WORDS: where each is and how long)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_PURE = 40, ARGV_SLOT = 24, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_KEPT = 21, M_SPAN = 22;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_PURE = 40, W_SPREAD = 41, W_JOINED = 42, ARGV_SLOT = 24, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_KEPT = 21, M_SPAN = 22;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 32;
@@ -48,7 +48,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // which reads on a value)
   // (LEFT, wanted of a reading only: it is a left side, a word nothing reads before what is read on it is declared there)
   // (TYPE_READER, refused only: a READER of a node other than the language's)
-  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34;
+  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, GROWN_AT = 508;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 32;
   // (a body: [count, ...steps: [kind, start, end, a, c, d]])
@@ -87,10 +87,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (at + n > w(THREAD + T_CHUNK_END)) {
       let size = n > CHUNK ? n : CHUNK;
       // (what one statement may take that is new: past that it is stopped, said (what it reads makes more and more), not
-      // all the memory there is taken)
+      // all the memory there is taken; as much as the run is given, `RAY_STATEMENT_MB`, a program read as one statement)
       // (a test less: every thread runs one, all of them in the same memory; past it, asked again with each new chunk, so
       // what stops it is not undone by what it was in)
-      const grew = w(THREAD + T_GREW) + size, allowed = w(THREAD + T_TESTING) ? TEST_GROWN : GROWN;
+      const grew = w(THREAD + T_GREW) + size, allowed = w(THREAD + T_TESTING) ? TEST_GROWN : w(GROWN_AT) || GROWN;
       if (grew > allowed) { if (DEBUG && w(THREAD + T_FAULT) !== L_MEMORY) debug(D_FAULT, 1098, w(THREAD + T_DEPTH), 0); set(THREAD + T_FAULT, L_MEMORY); }
       // (and a test, when what is left of all the memory is less than one test may take: stopped too)
       // (what is free: past where the memory is used, and what tests let go of, shared)
@@ -2112,6 +2112,13 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const at_ = follow(f + F_TAKES + TAKE, 1), z = w(at_ + 4);
     let i = w(at_);
     while (i < z) { if (bracket(i, z) & 1) i = past(i, z); else { if (b(i) === 58) return 0; i++; } }
+    // (what was passed, not yet read, read as a value where it was written: each of its parts on its own, the list a `,`
+    // makes of them not made)
+    const passed = f + F_TAKES + TAKE;
+    if (!aload(passed + T_STATE) && !aload(at_ + T_STATE) && !w(at_ + T_VIS) && !older(at_) && !w(t + T_GIVEN_N) && !in_left(w(at_), z)) {
+      const d = took_parts(t, self, s, e, names, at_);
+      if (d !== -1) return d;
+    }
     const v = valued(t, f + F_TAKES + TAKE);
     if (stopped(t) || !v || w(v + N_IS) !== IS_NODE || held(t, v, W_LISTING, 0) !== w(TRUE_)) return 0;
     let count = 0;
@@ -2125,6 +2132,55 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         named = bound(a0, a1, self, held(t, l, W_VALUE, 0));
         if (w(FAIL_FAST) & 2) log(a0, L_DEFINED, a0, a1); set(t + T_NAMED, w(t + T_NAMED) + 1);
         l = held(t, l, W_NEXT, 0); from = q + 1;
+      }
+    }
+    return stopped(t) ? 0 : named;
+  }
+  // (its parts, between the `,`s outside brackets, as many as the names, none empty (else -1, nothing read): each read in
+  // turn, a list among them in its place as `,` puts it, its values (the last one's only when it is a list a `,` made, or
+  // the one before it is a list); as many values as names, each name given its own)
+  function listing_of(t: number, v: number): number { return v && w(v + N_IS) === IS_NODE && held(t, v, W_LISTING, 0) === w(TRUE_) ? 1 : 0; }
+  function took_parts(t: number, self: number, s: number, e: number, names: number, o: number): number {
+    const a = w(o), z = w(o + 4), origin = w(o + T_ORIGIN), th = w(o + T_THIS), lex = w(o + T_LEX);
+    let parts = 0, from = a;
+    for (let q = a; q <= z;) {
+      if (q < z && (bracket(q, z) & 1)) { q = past(q, z); continue; }
+      if (q === z || b(q) === 44) { const p0 = skip(from, q); let p1 = q; while (p1 > p0 && b(p1 - 1) <= 32) p1--; if (p0 >= p1) return -1; parts++; from = q + 1; }
+      q++;
+    }
+    if (parts !== names) return -1;
+    const vals = alloc(4 * parts);
+    let k = 0, listed = 0;
+    from = a;
+    for (let q = a; q <= z;) {
+      if (q < z && (bracket(q, z) & 1)) { q = past(q, z); continue; }
+      if (q === z || b(q) === 44) {
+        const v = block(t, from, q, origin, origin, th, 0, 1, 0, th, lex);
+        if (stopped(t)) return 0;
+        set(vals + 4 * k, v); if (listing_of(t, v)) listed = 1; k++; from = q + 1;
+      }
+      q++;
+    }
+    let els = vals, n = parts;
+    if (listed) {
+      els = alloc(4 * (names + 1)); n = 0;
+      for (let p = 0; p < parts; p++) {
+        const v = w(vals + 4 * p), lists = listing_of(t, v);
+        const spread = p < parts - 1 ? lists : lists && (listing_of(t, w(vals + 4 * (p - 1))) || held(t, v, W_SPREAD, 0) === w(TRUE_)) ? 1 : 0;
+        if (spread) { for (let l = held(t, v, W_HEAD, 0); l && l !== w(NOTHING); l = held(t, l, W_NEXT, 0)) { if (n > names) return 0; set(els + 4 * n, held(t, l, W_VALUE, 0)); n++; } }
+        else { if (n > names) return 0; set(els + 4 * n, v); n++; }
+        if (stopped(t)) return 0;
+      }
+      if (n !== names) return 0;
+    }
+    let named = 0;
+    k = 0; from = s;
+    for (let q = s; q <= e; q++) {
+      if (q === e || b(q) === 44) {
+        const a0 = skip(from, q); let a1 = q; while (a1 > a0 && b(a1 - 1) <= 32) a1--;
+        named = bound(a0, a1, self, w(els + 4 * k));
+        if (w(FAIL_FAST) & 2) log(a0, L_DEFINED, a0, a1); set(t + T_NAMED, w(t + T_NAMED) + 1);
+        k++; from = q + 1;
       }
     }
     return stopped(t) ? 0 : named;
@@ -2217,6 +2273,17 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         }
         // (the rule x sees by that name (its own, then what it is made of): not one of the language's own, applied on x)
         return member_seen(t, mx, w(mk + N_A), w(mk + N_B) - w(mk + N_A), mx, 0) || w(NOTHING);
+      }
+      // (`external joined x y`: the texts x and y, one after the other, a text of its own (x one word, or written in brackets or
+      // quotes); either no text, nothing)
+      if (word(a, m, W_JOINED) && rest < z) {
+        let jq = rest; while (jq < z && b(jq) > 32) { if (bracket(jq, z) & 1) jq = past(jq, z); else jq++; }
+        const jx = block(t, rest, jq, names, f, self, 0, 1, 0, self, 0), jy = jq < z && !stopped(t) ? block(t, skip(jq, z), z, names, f, self, 0, 1, 0, self, 0) : 0;
+        if (stopped(t) || !jx || !jy || w(jx + N_IS) !== IS_TEXT || w(jy + N_IS) !== IS_TEXT) return w(NOTHING);
+        const jn = w(jx + N_B) - w(jx + N_A), jm = w(jy + N_B) - w(jy + N_A), jt = alloc(jn + jm + 4);
+        for (let i = 0; i < jn; i++) setb(jt + i, b(w(jx + N_A) + i));
+        for (let i = 0; i < jm; i++) setb(jt + jn + i, b(w(jy + N_A) + i));
+        return node(IS_TEXT, jt, jt + jn + jm, w(TEXTS) || w(GLOBAL), 0);
       }
       // (`external output x`: the text x, written out as it is (where the host writes: its standard output); a list of texts,
       // each in turn)

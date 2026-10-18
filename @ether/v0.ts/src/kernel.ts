@@ -429,12 +429,20 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       else if (k & 3) at = past(at, end);
       else if (b(at) === 10) {
         let next = at + 1;
-        for (;;) { let q = next, n = 0; while (q < end && b(q) === 32) { q++; n++; } if (q < end && b(q) === 10) { next = q + 1; continue; } if (q >= end || n <= indent) return at; break; }
+        for (;;) { let q = next, n = 0; while (q < end && b(q) === 32) { q++; n++; } if (q < end && b(q) === 10) { next = q + 1; continue; } if (q >= end) return at; if (n <= indent && !comma_ended(from, at)) return at; break; }
         at = next;
       }
       else at++;
     }
     return at;
+  }
+  // (a line ending in `,` (before a comment after it): a list going on, on the next line)
+  function comma_ended(first: number, at: number): number {
+    let from = at; while (from > first && b(from - 1) !== 10) from--;
+    let e = at, q = from, quoted = 0;
+    while (q < at) { const c = b(q); if (c === 34 || c === 96) quoted = quoted ? (quoted === c ? 0 : quoted) : c; else if (!quoted && c === 47 && b(q + 1) === 47 && q > from && b(q - 1) === 32) { e = q; break; } q++; }
+    while (e > from && b(e - 1) <= 32) e--;
+    return e > from && b(e - 1) === 44 ? 1 : 0;
   }
   // (whether p is in a file read, not in code made from one)
   function in_file(p: number): number { for (let k = 0; k < aload(FILES_N); k++) { const f = w(FILES) + 12 * k; if (p >= w(f) && p < w(f + 4)) return 1; } return 0; }

@@ -195,6 +195,11 @@ global["Int32"] := class (bits) => {
     made_bits := external int32 of number
     Int32 &+ { bits := made_bits }
   }
+  // (a numeral as JavaScript reads one, `0x7FFFFFF0`, `1e6`: past 32 bits, wrapped)
+  static numeral (written) => {
+    numeral_bits := external int32 numeral written
+    Int32 &+ { bits := numeral_bits }
+  }
   + (other) => {
     answered := external int32 plus .bits (other.int32).bits
     .of &+ { bits := answered }

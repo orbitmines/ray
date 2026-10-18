@@ -3,15 +3,14 @@
 // `& name params`, a label `: name`, a statement `target condition into a b` (a cell by its name, a constant `=n`, no cell
 // `-`). `scripts/kernel-jmp.mts --check` holds what it wrote against `jmp_of`'s.
 // Each line of the file is read whole by the types below (`K_…`), the language's rules: each answers what it read, a word as
-// it is written, anything else a node (`kind` and its parts); a block is left unread in it, read when it is written, line by
-// line (a comment in it is read as one is anywhere). The walk of a node writes its JMP, in the order `jmp_of` writes it.
-// Read by `Kernel_js &+= { include @./kernel.ts }`, from a file included after this one (what a file includes is read after
-// it).
+// it is written, anything else a node (`kind` and its parts). A block on lines of its own is no part of what they read: its
+// lines are read where the line's rule is, between its head opened and closed (a comment in it read as one is anywhere). The
+// walk of a node writes its JMP, in the order `jmp_of` writes it. Read by `kernel.jmp.ray`.
 
 // What is being written: the constants read so far; the context's own counts (its cells made, `$0` on; its calls, each
 // argument a cell of its own, `name#k#i`), the loop it is in, the labels not yet written (each is where the next statement
 // is), and an `if` an `else` on the next line may take; and what is being read: `mode` 1 the kernel's constants, 2 its
-// functions, 3 a function's body, 0 neither.
+// functions, 3 a function's body, 4 a function's body passed over in the first reading, 0 neither.
 global["kjs"] := {
   mode := 0
   n := 0
@@ -597,10 +596,10 @@ kjs_constants (s) => {
   }
 }
 
-// The language's rules: what reads as each part of it, and what that part is. One type for each level of its operators, each
-// taking the one tighter than it too (`{x: K_u}` in `K_mul`); what is on an operator's right is of the level tighter than it,
-// so one written twice is read from the left (`a - b - c`). (One shaped as a hole's type is, `x: T`, after every other of its
-// type: a head after it would have what is in its holes read by it.)
+// The language's rules, as types: what reads as each part of it, and what that part is (`external kept`: each answers what
+// it read, so what a check finds is kept, and a check does not build what it answers). Their rules come after the file's
+// own (`Kernel_js`): what a hole of one holds is read where it is written, the file's rules there too, and the later read
+// first.
 K_word := {
   external kept
   {w} => `{w}`
@@ -771,6 +770,11 @@ Kernel_js := {
   {lhs} {`=>`} {rhs} => kjs_none
 }
 kjs_none => None
+
+// Values: one type for each level of the operators, each holding the rules of every level tighter than it, so a value of one
+// is read by one rule, none passing it on; what is on an operator's right is of the level tighter than its own, so one
+// written twice is read from the left, `a - b - c`. In a type a rule led by a symbol is a method of what it follows: an
+// operator before its value is a hole of that text. Brackets around one hole are written as holes of text too.
 K_prim &+= {
   {x: K_word} => x
   {`(`}{g: K_assign}{`)`} => g

@@ -2268,6 +2268,22 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     - The compiler that writes the kernel as WebAssembly compiles every part of a `for` loop's step (`at = …, k++`) and
       of a statement written with commas, as JavaScript runs them. It compiled only the first, so on wasm every
       `k < n` bound in the kernel's loops was inert. Same tests (803 at one thread); tests run in half the time.
+  - Decided 2026-10-18 (user; the design built on it is the handoff `selfhost_lean_1018_v2.md`, under review):
+    - There is no reader beside the language. Expression is the reader; the interpreter runs it; speed is rewrite rules
+      in a level taking a Program down to WebAssembly. A value is held as the backend encodes it (a String is its UTF-8
+      bytes), so a kernel map of externals standing in for definitions (`wasm.o.ray`) is not needed.
+    - Arbitrary Ray code is compiled at run time (JIT) or ahead of time in one go. Ahead of time, what is read at build
+      is read and run there, and no reading is left in the output: so the core library is built, and it is the fast
+      interpreter for the rest.
+    - Code among a header's positions is a self-modifying type: it recognizes the text, and when its statements are
+      executed `()` is called, at compile time or at run time.
+    - A header is read in order. Reading out of order is allowed only as an optimization.
+    - A position's type may depend on what was read before it (`CAPTURE.map{== \s}(`LHS`)` after CAPTURE read `{ }`):
+      it reads first, then knows.
+    - The Wasm level writes the binary format directly (WAT is a conversion away).
+    - A String has a proper Unicode `.next` (a character, decoded). It goes on String.ray if the algorithm is simple
+      enough (UTF-8 decoding is); what needs Unicode's tables (which characters are word characters) brings a minimal
+      part of Unicode into the bootstrap.
 
 ### 21.4 Speed
 

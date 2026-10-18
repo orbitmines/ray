@@ -189,6 +189,71 @@ Counted_char := class: Char {
 }
 Counted_char &+= { external character }
 Number &+= { external number succ == < + - * / % }
+// A 32-bit integer, `Int32` (`i32`: `Binary₃₂.Signed`, wrapping as `.mod` does, Design.md §12.1), its bits a text of 4 bytes:
+// each operator what WebAssembly's i32 instruction answers, by the kernel, named in words (`~&& ~|| ~^^` its and, or and xor;
+// a shift taken of 32; dividing by zero, nothing). A Number is one with `.int32`; one is a count again with `.count` (none below zero), and
+// its digits in ten with `as String`. (Global: the map is read in a scope of its own, and Number.ray's `int32` names it.)
+global["Int32"] := class (bits) => {
+  // (made as the class makes one, `of &+ { … }`: a call of the class itself does not read in a method that takes a parameter)
+  static made_from (number) => {
+    made_bits := external int32 of number
+    Int32 &+ { bits := made_bits }
+  }
+  + (other) => {
+    answered := external int32 plus .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  - (other) => {
+    answered := external int32 minus .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  * (other) => {
+    answered := external int32 times .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  / (other) => {
+    answered := external int32 over .bits (other.int32).bits
+    (answered === None) ? None : (.of &+ { bits := answered })
+  }
+  % (other) => {
+    answered := external int32 rem .bits (other.int32).bits
+    (answered === None) ? None : (.of &+ { bits := answered })
+  }
+  ~&& (other) => {
+    answered := external int32 and .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  ~|| (other) => {
+    answered := external int32 or .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  ~^^ (other) => {
+    answered := external int32 xor .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  << (other) => {
+    answered := external int32 shl .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  >> (other) => {
+    answered := external int32 shr .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  >>> (other) => {
+    answered := external int32 shru .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  == (other) => external int32 eq .bits (other.int32).bits
+  != (other) => external int32 ne .bits (other.int32).bits
+  < (other) => external int32 lt .bits (other.int32).bits
+  <= (other) => external int32 le .bits (other.int32).bits
+  > (other) => external int32 gt .bits (other.int32).bits
+  >= (other) => external int32 ge .bits (other.int32).bits
+  int32 => this
+  count => external int32 count .bits
+  digits => external int32 text .bits
+  as (=== String) => external int32 text .bits
+}
 // (what the numeral rule answers, a count: the same value as the Decimal its digits write (`{digits: Decimal.String} =>
 // Decimal(integer: digits)`), by the equivalence graph)
 Counted &+= { as (=== Decimal) => Decimal(integer: this as String) }

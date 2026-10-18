@@ -167,11 +167,13 @@ Each step with the check that says it is done.
    - code as a self-modifying type;
    - Expression's own test;
    - the three-line language.
-5. **The module writer** in Ray (bytes, `--write`, #39): one function, written, made a module, runs.
+5. **The module writer** in Ray (bytes, `--write`, #39): one function, written, made a module, runs. It is `$/Wasm.project.ray`:
+   the format as a type, written by its header (§5).
    - Check: from the kernel's JMP (written by Ray, `kernel.ray`), the kernel's module, byte for byte `module_bytes`'.
    - Done before it: the kernel's source in a file of its own (#38, the code section byte for byte), `--write` of a
      list of numbers as bytes (#39), a built program loads and runs (#34), and the kernel's language read by Ray
-     (#41: `scripts/kernel-ray.mts`, then `scripts/kernel-jmp.mts --check`, all 43,995 lines the same as `jmp_of`'s).
+     (#41: `scripts/kernel-ray.mts`, then `scripts/kernel-jmp.mts --check`, all 45,117 lines and 523 contexts the same as `jmp_of`'s
+     on 2026-10-19).
 6. **`@wasm.none`** in Ray: what the seed's `--build --level=none` writes, for the same rules.
    - Check: byte for byte the seed's, and the library's asserts as interpreted.
 7. **`@wasm.default`**: representations, then staging, each with the suite at the three levels.
@@ -196,3 +198,7 @@ Each step with the check that says it is done.
   reader went from a node's rules to its parent's): `(1 | 2).listing` was true inside a list's method. Fixed in #42.
   With it, RR54, RR55, RR57 and RR81 run, and fail on what a list's `all` holds (its values, §3's `.next` not yet on a
   list).
+- A comment that `kernel.ray` reads otherwise than TypeScript does stops it at that function, and every range after it
+  writes nothing: a two-line comment whose second line had `while` in it (`guards`, 2026-10-19). Kept to one line. The
+  language read every comment line with `while` in it as `{body} while {condition}` (a loop), and a comment in a class
+  could run for ever: a comment is no longer guarded (`guards` in `kernel.ts`).

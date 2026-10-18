@@ -545,8 +545,8 @@ class Cache {
   constructor(readonly dir: string, readonly key: string) {}
   static hash(bytes: Uint8Array | string) { return (env.import('crypto') as typeof import('crypto')).createHash('sha1').update(bytes).digest('hex'); }
   static of(args: string[]) {
-    const me = env.url.fileURLToPath(import.meta.url), map = env.url.fileURLToPath(new URL('./wasm.o.ray', import.meta.url));
-    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '');
+    const me = env.url.fileURLToPath(import.meta.url), map = env.url.fileURLToPath(new URL('./wasm.o.ray', import.meta.url)), own = env.url.fileURLToPath(new URL('./kernel.ts', import.meta.url));
+    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(own) ? Cache.hash(env.fs.readFileSync(own)) : '') + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '');
     const read_with = Object.fromEntries(Object.entries(kwargs).filter(([k]) => k !== 'threads' && k !== 'verbose'));
     // (one entry: of another command or kernel, its steps not kept (their files written over))
     const cache = new Cache(env.path.join(env.os.homedir(), '.cache', 'ray'), Cache.hash(JSON.stringify([process.cwd(), args, read_with, kernel])));

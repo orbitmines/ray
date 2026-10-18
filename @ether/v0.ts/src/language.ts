@@ -384,8 +384,6 @@ export async function main() {
   if (kwargs.lsp) return await lsp();
   // (asked nothing: the help; given no files: the language itself, its entrypoint's directory)
   if (args.length === 0 && Object.keys(kwargs).length === 0) { console.log(CLI.help()); return; }
-  // (a program built, `ray out.wasm`: its memory set out as it was read, what was put off run, what was said said)
-  if (args[0]?.endsWith('.wasm') && env.nodejs) return run_built(args[0]);
   // Run the main program on a worker with a larger stack.
   if (!env.worker && env.nodejs) {
     const worker = env.thread({ main: [args, kwargs] });
@@ -407,6 +405,9 @@ export async function main() {
     return;
   }
 
+  // (a program built, `ray out.wasm`: its memory set out as it was read, what was put off run, what was said said; on this
+  // worker, with its larger stack)
+  if (args[0]?.endsWith('.wasm') && env.nodejs) return run_built(args[0]);
   // (read before, every file the same as then and the kernel too: what was read, from disk, and its tests run on it)
   const cache = env.nodejs && !process.env.RAY_NOCACHE && !kwargs.build && !kwargs.write && (!kwargs.debug || process.env.RAY_CACHE_DEBUG) && !kwargs.lsp ? Cache.of(args) : undefined;
   // (what is still as it was: the steps of reading before the first file that changed, put back before any thread starts)
@@ -544,8 +545,8 @@ class Cache {
   constructor(readonly dir: string, readonly key: string) {}
   static hash(bytes: Uint8Array | string) { return (env.import('crypto') as typeof import('crypto')).createHash('sha1').update(bytes).digest('hex'); }
   static of(args: string[]) {
-    const me = env.url.fileURLToPath(import.meta.url), map = env.url.fileURLToPath(new URL('./wasm.o.ray', import.meta.url));
-    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '');
+    const me = env.url.fileURLToPath(import.meta.url), map = env.url.fileURLToPath(new URL('./wasm.o.ray', import.meta.url)), own = env.url.fileURLToPath(new URL('./kernel.ts', import.meta.url));
+    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(own) ? Cache.hash(env.fs.readFileSync(own)) : '') + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '');
     const read_with = Object.fromEntries(Object.entries(kwargs).filter(([k]) => k !== 'threads' && k !== 'verbose'));
     // (one entry: of another command or kernel, its steps not kept (their files written over))
     const cache = new Cache(env.path.join(env.os.homedir(), '.cache', 'ray'), Cache.hash(JSON.stringify([process.cwd(), args, read_with, kernel])));
@@ -616,7 +617,7 @@ export function run_built(path: string) {
   const bytes = env.fs.readFileSync(path), module = new WebAssembly.Module(bytes);
   const section = (name: string) => new Uint8Array(WebAssembly.Module.customSections(module, name)[0]);
   const meta = JSON.parse(new TextDecoder().decode(section('ray'))) as { memory: number, paths: string[], named: string[] };
-  const heap = memory(meta.memory), u8 = new Uint8Array(heap.buffer), image = section('ray.image'), view = new DataView(image.buffer, image.byteOffset, image.byteLength);
+  const heap = memory(meta.memory), u8 = new Uint8Array(heap.buffer), image = new Uint8Array(process.getBuiltinModule('zlib').inflateRawSync(section('ray.image.z'))), view = new DataView(image.buffer, image.byteOffset, image.byteLength);
   for (let at = 0; at < image.length;) { const to = view.getUint32(at, true), n = view.getUint32(at + 4, true); u8.set(image.subarray(at + 8, at + 8 + n), to); at += 8 + n; }
   const ray = new Ray(); ray.prebuilt = module; ray.init(heap); ray.files_ = { getPath: (id: number) => meta.paths[id] } as unknown as FileStore; ray.name(meta.named);
   // (the program compiled: its functions, on this kernel)
@@ -1998,7 +1999,7 @@ export function built(p: Jmp, pages: number, heap: Uint8Array, end: number, meta
   for (let i = 0; i < end;) { while (i < end && heap[i] === 0) i++; if (i >= end) break; let j = i, zeros = 0; while (j < end && zeros < 256) { zeros = heap[j] === 0 ? zeros + 1 : 0; j++; } j -= zeros; runs.push(i, j); size += 8 + (j - i); i = j; }
   const image = new Uint8Array(size), view = new DataView(image.buffer); let at = 0;
   for (let k = 0; k < runs.length; k += 2) { view.setUint32(at, runs[k], true); view.setUint32(at + 4, runs[k + 1] - runs[k], true); image.set(heap.subarray(runs[k], runs[k + 1]), at + 8); at += 8 + runs[k + 1] - runs[k]; }
-  custom('ray.image', image);
+  custom('ray.image.z', process.getBuiltinModule('zlib').deflateRawSync(image, { level: 1 }));
   const out = new Uint8Array(parts.reduce((n, x) => n + x.length, 0)); let o = 0; for (const x of parts) { out.set(x, o); o += x.length; }
   return out;
 }
@@ -2186,13 +2187,13 @@ const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 7
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
-const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'pure'];
+const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
 const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs', 'count', 'truth', 'number', 'numeral', 'character', 'superposed', 'superposing', 'dotted', 'past', 'cuts', 'unescaped', 'int32'];
 // (what the kernel says: `L_…`)
-const L = { UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18, IMPURE: 19, CARRIED: 20 };
+const L = { UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
 // (what the kernel tells the host with --debug: D_… in it)
 const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20, RESULT: 22, FREE: 32 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
@@ -2385,13 +2386,13 @@ export function jmp_of(source: string, p = new Jmp(), given: Record<string, numb
         if (id !== undefined) jmp('set', `$loop${k}`, 0); label(`#${k}top`); round(k, id); if (peek() !== ';') { const c = assignment(); jmp('not', '$t', c); when('$t', `#${k}end`); } eat(';');
         const step = at; let d = 0; while (d > 0 || peek() !== ')') { const x = next(); if (x === '(') d++; if (x === ')') d--; } eat(')');
         loops.push([`#${k}step`, `#${k}end`]); statement(); loops.pop();
-        const after = at; at = step; label(`#${k}step`); if (peek() !== ')') assignment(); at = after;
+        const after = at; at = step; label(`#${k}step`); if (peek() !== ')') { assignment(); while (peek() === ',') { at++; assignment(); } } at = after;
         jmp(`#${k}top`); label(`#${k}end`); scopes.pop();
         return;
       }
       if (t === 'return') { at++; jmp('set', '&.value', peek() === ';' || peek() === '}' ? 0 : assignment()); if (peek() === ';') at++; jmp('&.caller'); return; }
       if (t === 'break' || t === 'continue') { at++; if (peek() === ';') at++; const [top, end] = loops[loops.length - 1]; jmp(t === 'break' ? end : top); return; }
-      assignment(); if (peek() === ';') at++;
+      assignment(); while (peek() === ',') { at++; assignment(); } if (peek() === ';') at++;
     };
     void operand;
     eat('{'); while (peek() !== '}') statement(); at++;
@@ -2620,7 +2621,7 @@ export class Ray extends Language<FileStore> {
     if (kind === L.OUTPUT) { const out = this.text(a, c); if (env.nodejs) process.stdout.write(out); else console.log(out); return; }
     const message = kind === L.UNREAD ? `nothing reads \`${text(a, c)}\`` : kind === L.UNLABELLED ? `nothing is labelled \`${text(a, a + c)}\`` : kind === L.BUDGET ? `ran past ${Ray.BUDGET} rules (reading this)`
       : kind === L.OOM ? `out of memory (${this.u8.length} bytes)` : kind === L.REPORT ? (a ? text(a, c) : 'error') : kind === L.CYCLE ? 'what this is read as needs itself'
-      : kind === L.NOT_ON ? `nothing in what it is read on reads \`${text(a, c)}\`` : kind === L.EXTERNAL ? `\`external ${text(a, c)}\` is no external` : kind === L.DEEP ? this.deep(a) : kind === L.VALUED ? `a left side answers a value, not a place: \`${text(a, c)}\` (a name in it is a value there: a hole of the rule reading it?)` : kind === L.FULL ? `stopped: almost all the memory there is is in use (what the threads' tests took): this test was not given more` : kind === L.MEMORY ? `took more than ${test ? 32 : 320} MB of new memory ${test ? 'in this test' : 'reading this'} (what it reads makes more and more): stopped` : kind === L.SILENT ? `this test failed and nothing said why (the kernel stopped it without saying what it could not read)` : kind === L.HELD ? `a test put off 4096 tests (each putting off more: a class whose block makes one of it, or a test in what a test makes)` : kind === L.IMPURE ? `this pure block changed what was made before it: the change is not kept` : kind === L.CARRIED ? `a pure block answers a text, a count, or a value made before it: what this one answered is let go of with it` : undefined;
+      : kind === L.NOT_ON ? `nothing in what it is read on reads \`${text(a, c)}\`` : kind === L.EXTERNAL ? `\`external ${text(a, c)}\` is no external` : kind === L.DEEP ? this.deep(a) : kind === L.VALUED ? `a left side answers a value, not a place: \`${text(a, c)}\` (a name in it is a value there: a hole of the rule reading it?)` : kind === L.FULL ? `stopped: almost all the memory there is is in use (what the threads' tests took): this test was not given more` : kind === L.MEMORY ? `took more than ${test ? 32 : 320} MB of new memory ${test ? 'in this test' : 'reading this'} (what it reads makes more and more): stopped` : kind === L.SILENT ? `this test failed and nothing said why (the kernel stopped it without saying what it could not read)` : kind === L.HELD ? `a test put off 4096 tests (each putting off more: a class whose block makes one of it, or a test in what a test makes)` : undefined;
     if (message === undefined) return;
     const style = this.styled && this.styled[0] === at ? this.styled[1] : undefined; this.styled = undefined;
     this.emit(at, message, style);

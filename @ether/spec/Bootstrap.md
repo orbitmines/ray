@@ -43,7 +43,7 @@ Each step its own PR, each with a check that passes or fails.
 | SH3b | 32-bit integers in Ray (`Int32`, `Design.md`'s `i32`), as the kernel's source and the writer need | each operator as WebAssembly's i32 answers | done: #40 (IB1 to IB24) |
 | SH4 | The wasm writer in Ray, writing the binary format directly (`Design.md` §21.3, 2026-10-18) | the kernel's module from its JMP, byte for byte | |
 | SH5 | The kernel's source moved out of `language.ts` into a file of its own; stage 0 unchanged | `kernel.wasm` byte-identical | done: #38 (the code section byte for byte) |
-| SH6 | The kernel's language read by Ray's own reader: its constructs declared as rules, each writing its JMP | the JMP equal to `jmp_of`'s | done: `core/kernel-reader`, all 43,793 lines (`scripts/kernel-ray.mts`, then `scripts/kernel-jmp.mts --check`) |
+| SH6 | The kernel's language read by Ray's own reader: its constructs declared as rules, each writing its JMP | the JMP equal to `jmp_of`'s | done: `core/kernel-reader`, all 43,914 lines (`scripts/kernel-ray.mts`, then `scripts/kernel-jmp.mts --check`) |
 | SH7 | Bytes out: `--write` of a list of numbers | the bytes written are the list | done: #39 |
 | SH8 | The fixpoint | the kernel Ray wrote writes itself again, byte-identical; the library's tests pass on it as on stage 0 | |
 | SH9 | The kernel rewritten as declarations, one function at a time | each rewrite keeps SH8 and the tests | |
@@ -67,7 +67,10 @@ Found reading the kernel with Ray (SH6):
 - Ray reads the kernel in ranges of functions, each in a process of its own (each reads the constants, then writes its
   functions): one process of all of them needs more than the 2 GB there is. The largest function, `apply`, takes about
   1.5 GB alone.
-- Reading each part of a call where it was written answers as the language does but for one thing: `xs.all`, a member
-  whose body is `.reduce(|)`, is no superposition through the language's `,` (so `Ray.ray`'s `connected` is not read),
-  and is one read part by part. The language's path looks to be the wrong one there; until that is settled the
-  acceleration is not proposed.
+- Reading each part of a call where it was written answers as the language does, a closure written after a `,` left to
+  the language (it reads it on the value before it), but for one thing, which is the language's: a value made inside a
+  list's method sees the list's members as its own (the reader goes from a node's rules to its parent's, and a method's
+  node is made of what it runs on), so `(1 | 2).listing` is true there and `,` takes a closure or a superposition made
+  there for a list. `Ray.ray`'s `all` (`.reduce(|)`) and `connected` (RR53) are wrong on main for that reason, and right
+  with the acceleration, which does not go through `,` for a call's values. Until main's scoping is fixed the acceleration
+  is not proposed.

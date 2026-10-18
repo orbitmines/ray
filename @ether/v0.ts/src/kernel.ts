@@ -22,7 +22,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
 
   // (the words every thread shares)
   const HEAP = 0, OPEN = 4, OPEN_LENGTH = 8, CLOSE = 12, CLOSE_LENGTH = 16, GLOBAL = 24, SEPARATOR = 36, SEPARATOR_LENGTH = 40, CLASSES = 44, PAIRS = 48, FRAMES = 52;
-  const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 76, AFTER_TAIL = 80, AFTER_CAP = 84, ACTIVE = 88, LIST = 92, LIST_N = 96, LIST_CAP = 100, LIMIT = 104, OOM = 108, TRASH = 112, BUDGET = 116, FAIL_FAST = 120, MEMO = 124, MEMO_MASK = 128, PEND = 140, PEND_N = 136, PHASE = 144, NEXT = 148, DONE = 152, ANY = 156, ROUND = 160, FINAL = 0x7FFFFFFF, READS = 164, READS_N = 168, READS_CAP = 172, LAZY = 180, LAZY_N = 184, LAZY_CAP = 188, PASSED = 192, FAILED = 196, TMEMO = 208, TMEMO_MASK = 212, BEGINS = 200, BEGINS_N = 4096, COUNTS = 216, MEMO_ENTRY = 60, TMEMO_ENTRY = 40, FILES_N = 136, CLOSES = 220, PAIRS_GEN = 224, KINDS = 228, MAPPED = 232, NOTHING = 236, TEXTS = 252, RULES = 256, RULES_N = 260, RULES_CAP = 264, OWN = 268, TOKEN_N = 272;
+  const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 76, AFTER_TAIL = 80, AFTER_CAP = 84, AFTER_ENTRY = 28, ACTIVE = 88, LIST = 92, LIST_N = 96, LIST_CAP = 100, LIMIT = 104, OOM = 108, TRASH = 112, BUDGET = 116, FAIL_FAST = 120, MEMO = 124, MEMO_MASK = 128, PEND = 140, PEND_N = 136, PHASE = 144, NEXT = 148, DONE = 152, ANY = 156, ROUND = 160, FINAL = 0x7FFFFFFF, READS = 164, READS_N = 168, READS_CAP = 172, LAZY = 180, LAZY_N = 184, LAZY_CAP = 188, PASSED = 192, FAILED = 196, TMEMO = 208, TMEMO_MASK = 212, BEGINS = 200, BEGINS_N = 4096, COUNTS = 216, MEMO_ENTRY = 60, TMEMO_ENTRY = 40, FILES_N = 136, CLOSES = 220, PAIRS_GEN = 224, KINDS = 228, MAPPED = 232, NOTHING = 236, TEXTS = 252, RULES = 256, RULES_N = 260, RULES_CAP = 264, OWN = 268, TOKEN_N = 272;
   // (what --debug counts, at COUNTS: the host says them)
   const K_READ = 0, K_NODE = 1, K_VISIT = 2, K_HOLE_LED = 3, K_MATCH = 4, K_READING = 5, K_AFRESH = 6, K_TYPED = 7, K_APPLY = 8, K_FRAMED = 9, K_SHADOWED = 10;
   function count(k: number) { xadd(w(COUNTS) + 4 * k, 1); }
@@ -890,19 +890,26 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       const chooses = choice_led(r, k), listed_by = comma_led(r, k);
       // (a hole between two texts of their own that open and close, `/* {comment} */`: none ends inside one in it, nested)
       const nests = nested_pair(r, k); let nest = 0;
+      // (led by it, then an operator: read left to right, the hole the farthest the rest matches, `1 - 2 - 3` as `(1 - 2) - 3`;
+      // not a definition's, an assignment's (`a = b = c`) or a member's)
+      const leftward = k === 1 && !type && !(w(r + R_FLAGS) & 1) && operator_next(r, k) ? 1 : 0; let farthest = -1;
+      // (right before a typed hole, `{type}{length: Subscript.String}` of `Binary₃₂`: inside a word too, where its characters
+      // change kind (a letter to a digit, to one of more bytes), where that one reads)
+      const before_typed = (w(r + R_PART + PART * k) & 15) === HOLE && w(r + R_PART + PART * k + 16) > 1 ? 1 : 0;
       for (let p = at; p < end;) {
         if (nests) { const oq = w(r + R_PART), cq = w(r + R_PART + PART * (w(r + R_PARTS) - 1)); if (same(p, w(oq + 4), w(oq + 8))) { nest++; p += w(oq + 8); continue; } if (nest > 0 && same(p, w(cq + 4), w(cq + 8))) { nest--; p += w(cq + 8); continue; } }
-        if (p > at && (type || apart(p - 1, p)) && !(called && b(w(CLASSES) + b(p - 1)) === 2) && (!later || (starts(r, k, p, end) && typed(r, at, p, type, s)))) {
+        if (p > at && (type || apart(p - 1, p) || (before_typed && b(p - 1) < 128 && (b(p) >= 192 || (b(p) >= 48 && b(p) <= 57 && !(b(p - 1) >= 48 && b(p - 1) <= 57))))) && !(called && b(w(CLASSES) + b(p - 1)) === 2) && (!later || (starts(r, k, p, end) && typed(r, at, p, type, s)))) {
           const e: number = match(r, k, p, end, s);
-          if (e >= 0 && (!type || later || typed(r, at, p, type, s))) { set(cap, at); set(cap + 4, p); return e; }
+          if (e >= 0 && (!type || later || typed(r, at, p, type, s))) { if (leftward) farthest = p; else { set(cap, at); set(cap + 4, p); return e; } }
         }
-        if (!chooses && p > at && b(p) === 63 && b(p - 1) <= 32 && p + 1 < end && b(p + 1) <= 32) { if (listed_by && !enclosed(at)) return -1; const ce = choice_end(p, end); if (ce > 0) { p = ce; continue; } }
+        if (!chooses && p > at && b(p) === 63 && b(p - 1) <= 32 && p + 1 < end && b(p + 1) <= 32) { if (listed_by && !enclosed(at)) break; const ce = choice_end(p, end); if (ce > 0) { p = ce; continue; } }
         const c = bracket(p, end);
-        if ((c & 3) === 2) return -1;
+        if ((c & 3) === 2) break;
         if (c & 1) { p = past(p, end); continue; }
-        if (hug && b(p) <= 32) return -1;
+        if (hug && b(p) <= 32) break;
         p++;
       }
+      if (farthest >= 0) { const e: number = match(r, k, farthest, end, s); set(cap, at); set(cap + 4, farthest); return e; }
       return -1;
     }
     return at;
@@ -922,6 +929,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (w(oq + 8) === w(cq + 8) && same(w(oq + 4), w(cq + 4), w(oq + 8))) return 0;
     let holes = 0; for (let i = 1; i < n - 1; i++) { const kind = w(r + R_PART + PART * i) & 15; if (kind === HOLE) holes++; else if (kind !== SPACE) return 0; }
     return holes === 1 ? 1 : 0;
+  }
+  // (whether rule r's next text from part k is an operator's, `-`, `==`, `plus`: not one that gives (`=`, `:=`, `+=`, `=>`), a
+  // member's `.`, a list's `,` or a choice's)
+  function operator_next(r: number, k: number): number {
+    for (let n = w(r + R_PARTS); k < n; k++) {
+      const q = r + R_PART + PART * k, kind = w(q) & 15; if (kind === SPACE) continue; if (kind !== LITERAL) return 0;
+      const a = w(q + 4), len = w(q + 8), last = b(a + len - 1);
+      if (b(a) === 46 || b(a) === 44 || b(a) === 63 || b(a) === 58) return 0;
+      if (last === 62 && len >= 2 && b(a + len - 2) === 61) return 0;
+      if (last === 61 && !(len >= 2 && (b(a + len - 2) === 61 || b(a + len - 2) === 33 || b(a + len - 2) === 60 || b(a + len - 2) === 62))) return 0;
+      return 1;
+    }
+    return 0;
   }
   // (whether rule r's next text from part k is `,`, what makes a list (`{list}, {other}`))
   function comma_led(r: number, k: number): number {
@@ -1253,6 +1273,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function guards(h: number, l: number): number {
     const fh = w(h + R_FLAGS), fl = w(l + R_FLAGS);
     if ((fh & (LED | METHOD | 1)) || !(fl & LED) || (fl & 1) || declared_at(h) <= declared_at(l) || (w(h + R_PART) & 15) !== HOLE) return 0;
+    // (nor around a comment: no hole takes one)
+    if (w(l + R_PART + 8) >= 2 && b(w(l + R_PART + 4)) === 47 && b(w(l + R_PART + 4) + 1) === 47) return 0;
     let k = 1; if ((w(h + R_PART + PART) & 15) === SPACE) k++;
     if (k >= w(h + R_PARTS)) return 0;
     const q = h + R_PART + PART * k, a = w(q + 4), n = w(q + 8);
@@ -2827,8 +2849,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       return;
     }
     // (put off one after another in one block (not a file's own scope): one after another, by whichever thread runs the first)
-    const k = xadd(AFTER_TAIL, 1), e = w(AFTER) + 12 * k, prev = e - 12, self = w(f + F_THIS);
-    if (k < w(AFTER_CAP)) { set(e, f); set(e + 4, from); set(e + 8, k > 0 && w(prev) && w(w(prev) + F_THIS) === self && !w(self + N_A) ? 1 : 0); }
+    // (with the frame a hole's text is read in, where it was put off (names a class's block sees where it is written))
+    const k = xadd(AFTER_TAIL, 1), e = w(AFTER) + AFTER_ENTRY * k, prev = e - AFTER_ENTRY, self = w(f + F_THIS);
+    if (k < w(AFTER_CAP)) { set(e, f); set(e + 4, from); set(e + 8, k > 0 && w(prev) && w(w(prev) + F_THIS) === self && !w(self + N_A) ? 1 : 0); set(e + 12, w(THREAD + T_WRITER)); set(e + 16, w(THREAD + T_WRITER_SELF)); set(e + 20, w(THREAD + T_WRITER_S)); set(e + 24, w(THREAD + T_WRITER_E)); }
   }
   // A rule's body, read once: with the rules before it (a rule never reads itself) and its holes' names; what none reads, read
   // when it runs (`dynamically`: with what is there then). (Any thread may read it; the first to finish gives it.)
@@ -3769,12 +3792,14 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (before && w(LIMIT) - aload(HEAP) + aload(POOL_BYTES) < (before + 1) * (TEST_GROWN + 2 * (CHUNK << 4)) + 4 * TEST_GROWN) { xadd(ACTIVE, -1); continue; }
       if (cas(AFTER_HEAD, h, h + 1) !== h) { xadd(ACTIVE, -1); continue; }
       // (one that follows another is run by the thread that runs that one)
-      for (let k = h; k < w(AFTER_CAP) && (k === h ? !w(w(AFTER) + 12 * k + 8) : w(w(AFTER) + 12 * k + 8)) && k < aload(AFTER_TAIL); k++) {
+      for (let k = h; k < w(AFTER_CAP) && (k === h ? !w(w(AFTER) + AFTER_ENTRY * k + 8) : w(w(AFTER) + AFTER_ENTRY * k + 8)) && k < aload(AFTER_TAIL); k++) {
         // (what was made before it, it shadows; what it makes is its own)
         // (in memory of its own, let go of when it and what it held are done: an assert answers whether it held)
-        const tf = w(w(AFTER) + 12 * k), rules = region_begin(t, tf);
+        const te = w(AFTER) + AFTER_ENTRY * k, tf = w(te), rules = region_begin(t, tf);
         isolate(t, 0);
-        test(t, tf, w(w(AFTER) + 12 * k + 4));
+        set(t + T_WRITER, w(te + 12)); set(t + T_WRITER_SELF, w(te + 16)); set(t + T_WRITER_S, w(te + 20)); set(t + T_WRITER_E, w(te + 24));
+        test(t, tf, w(te + 4));
+        set(t + T_WRITER, 0); set(t + T_WRITER_SELF, 0);
         // (what it put off, the tests written in it: here, after it, in the order written (they share what it made))
         for (let i = 0; i < w(t + T_HELD_N) && i < HELD; i++) if (w(w(t + T_HELD) + 8 * i + 4) >= 0) test(t, w(w(t + T_HELD) + 8 * i), w(w(t + T_HELD) + 8 * i + 4));
         set(t + T_HELD_N, 0);

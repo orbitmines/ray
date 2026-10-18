@@ -269,6 +269,8 @@ Int32 &+= {
 // (what the numeral rule answers, a count: the same value as the Decimal its digits write (`{digits: Decimal.String} =>
 // Decimal(integer: digits)`), by the equivalence graph)
 Counted &+= { as (=== Decimal) => Decimal(integer: this as String) }
+// (a count is a number written every way, by superposition: of every class of numbers (`3 is Decimal`))
+Counted &+= { admitted_by (type) => (((type).descends(Number) === true) && !((type) === Counted_char)) || .is_itself(type) || .followed_is(type) }
 external numeral `{digits: Decimal.String}`
 // (whether a value is superposed, Node's `superposed`: made by `|` or `&` from more than one part, answered by the kernel as
 // that rule answers, without the calls its check makes)

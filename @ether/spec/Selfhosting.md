@@ -75,7 +75,9 @@ All of these are rewrite rules in the Wasm level (*proposed*, beyond what is dec
 
 ## 5. The compiler: `Program as Program{O: @wasm}`
 
-The Wasm level writes the binary format directly; WAT is a conversion away (another level, a printer).
+The Wasm level writes the binary format directly; WAT is a conversion away (another level, a printer). It is the project
+`$/Wasm.project.ray` (`@wasm`, as `Ether.entrypoint.ray`'s `Program{O: @wasm.(level)}` names it): the format as a type,
+whose header reads and writes a module, and the two levels, each a set of `{shape} => …` rules into those types.
 
 - **`@wasm.none`**, complete and naive, as Expression.ray sketches it:
   - a rule is a function;

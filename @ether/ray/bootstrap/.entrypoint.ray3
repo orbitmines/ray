@@ -2441,4 +2441,5 @@ include @./Number.ray
 include @./String.ray
 include @./CLI.ray
 include @./Expression.ray
+include @./Compiler.ray
 read given

@@ -1173,18 +1173,6 @@ Asserting := class {
 // `static`: read where it is (a class's block is read once for the class).
 // (what it defines is the class's own, not an instance's: a bare name reads it, as it reads a global)
 static {statement} ^keyword => external static {statement}
-// `pure { … }`: the code in memory of its own, let go of when it is done; what it answers is kept (a text, a count, or a value
-// made before it), what it changes of what was made before it is said and not kept (`pure` written is a checked assertion)
-pure {`{`}{code}{`}`} ^keyword => external pure {code}
-assert (pure { 2 + 3 }) == 5  // PU1 a pure block does not answer its count
-assert (pure { `ab` }) == `ab`  // PU2 a pure block does not answer its text
-assert {
-  pured := pure {
-    inner := 4
-    inner + 1
-  }
-  assert pured == 5  // PU3 a pure block does not read its own names
-}
 // `inline x`: the code x holds (a hole's), read right here (`keeps: { inline selection }`)
 inline {code} ^keyword => {code}
 // (and as a value, the class: of a class itself, of an instance its class (`static{2 <= .}`, `integer: static`))

@@ -34,7 +34,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (the kernel's map: a slot for each of its words, then the classes it finds, Node at 22 and String at 23, then the
   // program's arguments, 24; the span a parameter is given at M_SPAN, and the count each rule is stamped with in the slot
   // after it: past all of those)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, ARGV_SLOT = 24, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_KEPT = 21, M_SPAN = 25;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_SPREAD = 45, ARGV_SLOT = 24, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_KEPT = 21, M_SPAN = 25;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 32;
@@ -2208,6 +2208,13 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const at_ = follow(f + F_TAKES + TAKE, 1), z = w(at_ + 4);
     let i = w(at_);
     while (i < z) { if (bracket(i, z) & 1) i = past(i, z); else { if (b(i) === 58) return 0; i++; } }
+    // (what was passed, not yet read, read as a value where it was written: each of its parts on its own, the list a `,`
+    // makes of them not made)
+    const passed = f + F_TAKES + TAKE;
+    if (!aload(passed + T_STATE) && !aload(at_ + T_STATE) && !w(at_ + T_VIS) && !older(at_) && !w(t + T_GIVEN_N) && !(w(FAIL_FAST) & 4096) && !in_left(w(at_), z)) {
+      const d = took_parts(t, self, s, e, names, at_);
+      if (d !== -1) return d;
+    }
     const v = valued(t, f + F_TAKES + TAKE);
     if (stopped(t) || !v || w(v + N_IS) !== IS_NODE || held(t, v, W_LISTING, 0) !== w(TRUE_)) return 0;
     let count = 0;
@@ -2221,6 +2228,55 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         named = bound(a0, a1, self, held(t, l, W_VALUE, 0));
         if (w(FAIL_FAST) & 2) log(a0, L_DEFINED, a0, a1); set(t + T_NAMED, w(t + T_NAMED) + 1);
         l = held(t, l, W_NEXT, 0); from = q + 1;
+      }
+    }
+    return stopped(t) ? 0 : named;
+  }
+  // (its parts, between the `,`s outside brackets, as many as the names, none empty (else -1, nothing read): each read in
+  // turn, a list among them in its place as `,` puts it, its values (the last one's only when it is a list a `,` made, or
+  // the one before it is a list); as many values as names, each name given its own)
+  function listing_of(t: number, v: number): number { return v && w(v + N_IS) === IS_NODE && held(t, v, W_LISTING, 0) === w(TRUE_) ? 1 : 0; }
+  function took_parts(t: number, self: number, s: number, e: number, names: number, o: number): number {
+    const a = w(o), z = w(o + 4), origin = w(o + T_ORIGIN), th = w(o + T_THIS), lex = w(o + T_LEX);
+    let parts = 0, from = a;
+    for (let q = a; q <= z;) {
+      if (q < z && (bracket(q, z) & 1)) { q = past(q, z); continue; }
+      if (q === z || b(q) === 44) { const p0 = skip(from, q); let p1 = q; while (p1 > p0 && b(p1 - 1) <= 32) p1--; if (p0 >= p1) return -1; parts++; from = q + 1; }
+      q++;
+    }
+    if (parts !== names) return -1;
+    const vals = alloc(4 * parts);
+    let k = 0, listed = 0;
+    from = a;
+    for (let q = a; q <= z;) {
+      if (q < z && (bracket(q, z) & 1)) { q = past(q, z); continue; }
+      if (q === z || b(q) === 44) {
+        const v = block(t, from, q, origin, origin, th, 0, 1, 0, th, lex);
+        if (stopped(t)) return 0;
+        set(vals + 4 * k, v); if (listing_of(t, v)) listed = 1; k++; from = q + 1;
+      }
+      q++;
+    }
+    let els = vals, n = parts;
+    if (listed) {
+      els = alloc(4 * (names + 1)); n = 0;
+      for (let p = 0; p < parts; p++) {
+        const v = w(vals + 4 * p), lists = listing_of(t, v);
+        const spread = p < parts - 1 ? lists : lists && (listing_of(t, w(vals + 4 * (p - 1))) || held(t, v, W_SPREAD, 0) === w(TRUE_)) ? 1 : 0;
+        if (spread) { for (let l = held(t, v, W_HEAD, 0); l && l !== w(NOTHING); l = held(t, l, W_NEXT, 0)) { if (n > names) return 0; set(els + 4 * n, held(t, l, W_VALUE, 0)); n++; } }
+        else { if (n > names) return 0; set(els + 4 * n, v); n++; }
+        if (stopped(t)) return 0;
+      }
+      if (n !== names) return 0;
+    }
+    let named = 0;
+    k = 0; from = s;
+    for (let q = s; q <= e; q++) {
+      if (q === e || b(q) === 44) {
+        const a0 = skip(from, q); let a1 = q; while (a1 > a0 && b(a1 - 1) <= 32) a1--;
+        named = bound(a0, a1, self, w(els + 4 * k));
+        if (w(FAIL_FAST) & 2) log(a0, L_DEFINED, a0, a1); set(t + T_NAMED, w(t + T_NAMED) + 1);
+        k++; from = q + 1;
       }
     }
     return stopped(t) ? 0 : named;

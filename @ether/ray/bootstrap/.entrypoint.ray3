@@ -1381,6 +1381,9 @@ dynamically {name} := {value} ^keyword => {
     {name} = {value}
   }
 }
+// `concurrently`: what it reads read all at once where it can be; by default, as written, in order (all at once is an
+// optimization of it, a level's: it answers the same)
+concurrently {code} ^keyword => {code}
 // (`dynamically assert c`: no test; what holds of the data, checked where there is some: an instance)
 dynamically assert {condition} ^keyword => ensure {condition} if of
 dynamics := None
@@ -1462,7 +1465,7 @@ text_read_by (at, typed, text) => at ? (written_text(at.value) ? (text_begins(te
 // given by then))
 text_spans (at, typed, text) => text_spans_now(at, (places_types_now(at)).head, text)
 text_spans_now (now_at, now_typed, now_text) => text_spans_at(now_at, now_typed, now_text, ((now_typed) first_cut_in (now_text)))
-text_spans_at (spans_at, spans_typed, spans_text, spans_cut) => (spans_cut !== None) && text_given(spans_at.value, spans_text.until(spans_cut)) && spans_kept(spans_at, spans_text.until(spans_cut)) && text_read_by(spans_at.next, spans_typed.next, spans_cut)
+text_spans_at (spans_at, spans_typed, spans_text, spans_cut) => (spans_cut !== None) && retyped_now(spans_at.value, spans_typed.value) && text_given(spans_at.value, spans_text.until(spans_cut)) && spans_kept(spans_at, spans_text.until(spans_cut)) && text_read_by(spans_at.next, spans_typed.next, spans_cut)
 // (what a position was given, kept on its link while the rest is read: a later one's type written as its name is that span)
 spans_kept (kept_at, kept_span) => {
   kept_at.given_span = kept_span
@@ -1501,7 +1504,19 @@ places_types (at) => {
   typed
 }
 // (a position's type now: written as the name of a field given before it, what that was given; else its type)
-type_now (now_at) => (((now_at.value).type_written !== None) && (given_before(now_at, (now_at.value).type_written) !== None)) ? given_before(now_at, (now_at.value).type_written) : (now_at.value).type
+type_now (now_at) => ((external unset (now_at.value).type) && (given_place_before(now_at, (now_at.value).type) !== None)) ? given_place_before(now_at, (now_at.value).type) : ((((now_at.value).type_written !== None) && (given_before(now_at, (now_at.value).type_written) !== None)) ? given_before(now_at, (now_at.value).type_written) : (now_at.value).type)
+// (the span given before a link to the position that is that place itself (a class's `close: open`, its type open's place))
+given_place_before (place_at, type_place) => {
+  place_before := place_at.previous
+  place_span := None
+  while place_before && (place_span === None) {
+    if ((place_before.value) === type_place) && (place_before.given_span !== None) {
+      place_span = place_before.given_span
+    }
+    place_before = place_before.previous
+  }
+  place_span
+}
 places_types_now (at) => {
   typed_now := Array.new
   typed_now_at := at
@@ -1574,6 +1589,14 @@ structured (x) => ((x).structure_as !== None) && ((x).structure_as !== declared)
 literal_text (x) => ((x).textual === true) && ((x).same_characters(x) !== None)
 written_text (x) => ((x).type === None) && literal_text(x)
 text_fits (place, span) => positioned_type(place) ? (span is place) : (((place).type === None) || (span is ((place).type)) || ((span as ((place).type)) !== None))
+// (a field typed by one before it, `close: open` (its type that one's place): the type it has now, what that one took)
+retyped_now (retyped_place, retyped_type) => {
+  dependent_type := (retyped_place).type
+  if (external unset dependent_type) {
+    (retyped_place).type = retyped_type
+  }
+  true
+}
 text_given (place, span) => {
   // (a field of a type: what the type makes of the span, `low: Decimal` of `2`, two)
   converted := (((place).type) read_span (span))

@@ -27,6 +27,7 @@ global["kjs"] := {
   count := 0
   one := Int32.made_from(1)
   zero := Int32.made_from(0)
+  writing := None
 }
 kjs.minus_one = kjs.zero - kjs.one
 global["Kjs_const"] := class (const_value) => { }
@@ -95,15 +96,36 @@ kjs_put (x) => {
   }
   external output x
 }
+// (written to the module writer instead, `kjs.writing` (`module.ray`): an operand as its line shows it, a constant as it is)
+kjs_written (x) => {
+  if x.temp === true { return `$` + (external int32 text x.number) }
+  if x.arg === true { return (((x.called + `#`) + (external int32 text x.call)) + `#`) + (external int32 text x.index) }
+  if x.label === true { return (`#$` + (external int32 text x.number)) + x.suffix }
+  x
+}
+kjs_operand (x) => {
+  if x.bits !== None { return x }
+  kjs_written(x)
+}
 kjs_flush (marks) => {
   if marks !== None {
     kjs_flush(marks.below)
-    external output `: `
-    kjs_put(marks.value)
-    external output "\n"
+    if kjs.writing === true {
+      wasm_label(kjs_written(marks.value))
+    } else {
+      external output `: `
+      kjs_put(marks.value)
+      external output "\n"
+    }
   }
 }
 kjs_line (target, condition, into, a, b) => {
+  if (kjs.mode == 3) && (kjs.writing === true) {
+    kjs_flush(kjs.marks)
+    kjs.marks = None
+    wasm_statement(kjs_operand(target), kjs_operand(condition), kjs_operand(into), kjs_operand(a), kjs_operand(b))
+    return 0
+  }
   if kjs.mode == 3 {
     kjs_flush(kjs.marks)
     kjs.marks = None
@@ -132,6 +154,10 @@ kjs_fresh (unused) => {
 kjs_here (k, suffix) => kjs_label(k.number, suffix)
 kjs_constant (x) => x.bits !== None
 kjs_begin (called, params) => {
+  if kjs.writing === true {
+    wasm_begin(called, params)
+    return 0
+  }
   external output `& `
   external output called
   at := params
@@ -663,6 +689,7 @@ kjs &+= {
   // written, 5, passed over as in the first)
   opening (unused) => {
     if kjs.mode == 1 { kjs.mode = 4 }
+    if (kjs.mode == 2) && (kjs.writing === true) { wasm_context(kjs.called, kjs.taken) }
     if kjs.mode == 2 {
       written := (kjs.count >= kjs.from) && ((kjs.until === None) || (kjs.count < kjs.until))
       kjs.count = kjs.count + 1
@@ -685,6 +712,7 @@ kjs &+= {
       kjs_unclaimed(0)
       kjs_jmp(`set`, `&.value`, kjs.zero, kjs.zero)
       kjs_jmp(`&.caller`, `-`, kjs.zero, kjs.zero)
+      (wasm_end(0)) if kjs.writing === true
       kjs.mode = 2
     }
   }

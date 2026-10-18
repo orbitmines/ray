@@ -206,6 +206,11 @@ Int32 &+= {
     made_bits := external int32 of number
     Int32 &+ { bits := made_bits }
   }
+  // (how many bytes a text of bytes is, `byte`s joined)
+  static bytes_in (written) => {
+    counted_bits := external int32 bytes written
+    Int32 &+ { bits := counted_bits }
+  }
   // (a numeral as JavaScript reads one, `0x7FFFFFF0`, `1e6`: past 32 bits, wrapped)
   static numeral (written) => {
     numeral_bits := external int32 numeral written

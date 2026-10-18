@@ -2527,6 +2527,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         let x = block(t, o1, q1, names, f, self, 0, 1, 0, self, 0);
         // (`int32 numeral x`: the text x read as a numeral; one not beginning with a digit, nothing)
         if (q - rest === 7 && b(rest) === 110) return !stopped(t) && x && w(x + N_IS) === IS_TEXT && w(x + N_B) > w(x + N_A) && b(w(x + N_A)) >= 48 && b(w(x + N_A)) <= 57 ? int32(int32_numeral(w(x + N_A), w(x + N_B))) : w(NOTHING);
+        // (`int32 bytes x`: how many bytes the text x is (a text of bytes, `byte`s joined); of anything else, nothing)
+        if (q - rest === 5 && b(rest) === 98) return !stopped(t) && x && w(x + N_IS) === IS_TEXT ? int32(w(x + N_B) - w(x + N_A)) : w(NOTHING);
         // (a Number the language makes, `Number(next: …)` down to zero (`0`): its count)
         if (!stopped(t) && !int32_is(x)) { const cx = count_of(t, x, names, f); if (cx >= 0) x = counted(cx); }
         if (stopped(t) || !int32_is(x)) return w(NOTHING);

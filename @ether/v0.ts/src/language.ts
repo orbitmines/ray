@@ -2651,7 +2651,8 @@ export class Ray extends Language<FileStore> {
     const [s, e] = this.string(name), global = this.w(GLOBAL), top = this.x.frame(0, 0, global, s, e, 0, 0, global, global);
     const list = this.x.ev(this.t, this.x.reading(this.t, s, e, 0, 0, this.w(global), global, 0, 0, 0, 0), top, top, global, 1, global, global);
     const none = this.w(236), out: number[] = []; // (the kernel's nothing, `None`)
-    const number = (n: number) => { let k = 0; for (let m = this.member(n, 'next'); m && m !== none && k < 1 << 20; m = this.member(m, 'next')) k++; return k; };
+    // (a count the kernel holds: how many it is, one less than its N_A; else its `next` counted down to None)
+    const number = (n: number) => { if (n && this.w(n + 8) === 0 && this.w(n + 12) > 0) return this.w(n + 12) - 1; let k = 0; for (let m = this.member(n, 'next'); m && m !== none && k < 1 << 20; m = this.member(m, 'next')) k++; return k; };
     for (let at = list ? this.member(list, 'head') : 0, i = 0; at && at !== none && i < 1 << 24; at = this.member(at, 'next'), i++) out.push(number(this.member(at, 'value')) & 255);
     return Uint8Array.from(out);
   }

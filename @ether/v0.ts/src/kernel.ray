@@ -35,27 +35,35 @@ global["Kjs_arg"] := class (called, call, index) => { arg := true }
 global["Kjs_label"] := class (number, suffix) => { label := true }
 global["Kjs_loop"] := class (next, end) => { }
 global["Kjs_cell"] := class (value, below) => { }
+global["Kjs_link"] := class (value, later) => { }
 
 // Written out: an operand as `jmp_of`'s lines show it; a statement, after the labels that are where it is; a label; a context.
-// (each line written at once, a list of its texts: nothing the host says comes between them)
+// (each line written at once, one text: nothing the host says comes between its parts; joined, not listed, a list of its
+// parts costing more than all the rest)
+kjs_join (x, y) => external joined x y
 kjs_text (x) => {
-  if x.temp === true { return [`$`, (external int32 text x.number)] }
-  if x.arg === true { return [x.called, `#`, (external int32 text x.call), `#`, (external int32 text x.index)] }
-  if x.label === true { return [`#$`, (external int32 text x.number), x.suffix] }
-  if x.bits !== None { return [`=`, x.digits] }
+  if x.temp === true { return kjs_join(`$`, (external int32 text x.number)) }
+  if x.arg === true { return kjs_join(x.called, kjs_join(`#`, kjs_join((external int32 text x.call), kjs_join(`#`, (external int32 text x.index))))) }
+  if x.label === true { return kjs_join(`#$`, kjs_join((external int32 text x.number), x.suffix)) }
+  if x.bits !== None { return kjs_join(`=`, x.digits) }
   x
 }
 kjs_flush (marks) => {
   if marks !== None {
     kjs_flush(marks.below)
-    external output [`: `, kjs_text(marks.value), "\n"]
+    external output kjs_join(`: `, kjs_join(kjs_text(marks.value), "\n"))
   }
 }
 kjs_line (target, condition, into, a, b) => {
   if kjs.mode == 3 {
     kjs_flush(kjs.marks)
     kjs.marks = None
-    external output [kjs_text(target), ` `, kjs_text(condition), ` `, kjs_text(into), ` `, kjs_text(a), ` `, kjs_text(b), "\n"]
+    line := kjs_text(target)
+    line = kjs_join(line, kjs_join(` `, kjs_text(condition)))
+    line = kjs_join(line, kjs_join(` `, kjs_text(into)))
+    line = kjs_join(line, kjs_join(` `, kjs_text(a)))
+    line = kjs_join(line, kjs_join(` `, kjs_text(b)))
+    external output kjs_join(line, "\n")
   }
 }
 kjs_jmp (target, into, a, b) => kjs_line(target, kjs.one, into, a, b)
@@ -71,14 +79,13 @@ kjs_fresh (unused) => {
 kjs_here (k, suffix) => Kjs_label(k.number, suffix)
 kjs_constant (x) => x.bits !== None
 kjs_begin (called, params) => {
-  named := Array.new
+  line := kjs_join(`& `, called)
   at := params
   while at !== None {
-    named.append(` `)
-    named.append(at.car)
+    line = kjs_join(line, kjs_join(` `, at.car))
     at = at.cdr
   }
-  external output [`& `, called, named, "\n"]
+  external output kjs_join(line, "\n")
 }
 
 // Values: a word (a numeral, a constant, `true`, `THREAD`, or a cell by its name), an operator on two (worked out when both are
@@ -93,7 +100,7 @@ kjs_word (written) => {
     kjs_jmp(`thread`, threaded, kjs.zero, kjs.zero)
     return threaded
   }
-  held := kjs.consts[written]
+  held := external member kjs.consts written
   if (held !== None) && (held.const_value !== None) { return held.const_value }
   written
 }
@@ -132,11 +139,16 @@ kjs_native (called) => {
 }
 // (a call: its arguments first, each a value; then a native of the memory, or a context, given them in cells of their own)
 kjs_call (called, given) => {
-  args := Array.new
+  reversed := None
   at := given
   while at !== None {
-    args.append(kjs_value(at.car))
+    reversed = Kjs_cell(kjs_value(at.car), reversed)
     at = at.cdr
+  }
+  args := None
+  while reversed !== None {
+    args = Kjs_link(reversed.value, args)
+    reversed = reversed.below
   }
   native := kjs_native(called)
   if native !== None { return kjs_native_call(native, args) }
@@ -144,11 +156,11 @@ kjs_call (called, given) => {
   k := kjs.calls
   kjs.calls = kjs.calls + 1
   i := 0
-  each := args.head
-  while each {
+  each := args
+  while each !== None {
     kjs_jmp(`set`, Kjs_arg(called, k, i), each.value, kjs.zero)
     i = i + 1
-    each = each.next
+    each = each.later
   }
   kjs_jmp(called, out, Kjs_arg(called, k, 0), kjs.zero)
   out
@@ -159,17 +171,17 @@ kjs_native_call (native, args) => {
   if !valueless { out = kjs_fresh(0) }
   if (native == "cas") || (native == "fill") {
     first := None
-    at := args.head
-    while at {
+    at := args
+    while at !== None {
       cell := kjs_fresh(0)
       kjs_jmp(`set`, cell, at.value, kjs.zero)
       first = (first === None) ? cell : first
-      at = at.next
+      at = at.later
     }
     kjs_jmp(native, out, first, kjs.zero)
   } else {
-    a := args.head ? args.head.value : kjs.zero
-    b := (args.head && args.head.next) ? args.head.next.value : kjs.zero
+    a := (args !== None) ? args.value : kjs.zero
+    b := ((args !== None) && (args.later !== None)) ? args.later.value : kjs.zero
     kjs_jmp(native, out, a, b)
   }
   valueless ? kjs.zero : out
@@ -252,7 +264,7 @@ kjs_constant_of (e) => {
   if kind === None {
     numeral := Int32.numeral(e)
     if numeral.bits !== None { return numeral }
-    held := kjs.consts[e]
+    held := external member kjs.consts e
     if (held !== None) && (held.const_value !== None) { return held.const_value }
     return None
   }
@@ -590,7 +602,9 @@ kjs_constants (s) => {
       declared := at.car
       value := None
       if declared.v !== None { value = kjs_constant_of(declared.v) }
-      if (value !== None) && (kjs.consts[declared.name].const_value === None) { kjs.consts[declared.name] = Kjs_const(value) }
+      named := declared.name
+      was := external member kjs.consts named
+      if (value !== None) && ((was === None) || (was.const_value === None)) { external member kjs.consts named (Kjs_const(value)) }
       at = at.cdr
     }
   }

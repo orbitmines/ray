@@ -1270,7 +1270,7 @@ K_params &+= {
 // (statements: whole, `K_stmt`; without the `;` that ends them, `K_simple`; a head whose body is the block after it on the
 // line, `K_head` (its body to be given, `s` none); a block on one line read here, one on more left to the line's rule)
 K_stmt &+= {
-  {e__st: K_assign}; => Kjs_node &+ { kind := `expr` ; e := e__st }
+  {e__st: K_seq}; => Kjs_node &+ { kind := `expr` ; e := e__st }
   return {e__st: K_assign}; => Kjs_node &+ { kind := `return` ; e := e__st }
   return{k_st: `;`} => Kjs_node &+ { kind := `return` ; e := None }
   break{k_st: `;`} => Kjs_node &+ { kind := `break` }
@@ -1294,7 +1294,7 @@ K_stmts &+= {
   {s__sts: K_stmt} {rest_sts: K_stmts} => Kjs_node &+ { kind := `list` ; car := s__sts ; cdr := rest_sts }
 }
 K_simple &+= {
-  {e__sm: K_assign} => Kjs_node &+ { kind := `expr` ; e := e__sm }
+  {e__sm: K_seq} => Kjs_node &+ { kind := `expr` ; e := e__sm }
   return {e__sm: K_assign} => Kjs_node &+ { kind := `return` ; e := e__sm }
   {k_sm: `return`} => Kjs_node &+ { kind := `return` ; e := None }
   {k_sm: `break`} => Kjs_node &+ { kind := `break` }

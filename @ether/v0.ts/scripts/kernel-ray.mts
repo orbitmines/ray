@@ -37,7 +37,7 @@ const written = (text: string) => {
   let carry = '';
   for (const raw of text.replace(/\x1b\[[0-9;]*m/g, '').split('\n')) {
     if (raw.includes('src/kernel.ts:') && raw.startsWith('ERROR')) said.push(raw);
-    if (/^\s/.test(raw) || raw === '') continue;
+    if (!carry && (/^\s/.test(raw) || raw === '')) continue;
     const at = raw.search(log);
     if (at === 0) continue;
     const line = carry + (at > 0 ? raw.slice(0, at) : raw);
@@ -48,7 +48,7 @@ const written = (text: string) => {
   return { out, said };
 };
 const read = (run: string) => new Promise<string>(done => {
-  const child = spawn(process.execPath, ['--import', 'tsx', 'src/language.ts', '--threads', '1', '../ray/bootstrap/.entrypoint.ray3', run], { cwd: root, env: { ...process.env, RAY_NOTESTS: '1', RAY_STATEMENT_MB: process.env.RAY_STATEMENT_MB ?? '1400' } });
+  const child = spawn(process.execPath, ['--import', 'tsx', 'src/language.ts', '--threads', '1', '../ray/bootstrap/.entrypoint.ray3', run], { cwd: root, env: { ...process.env, RAY_NOTESTS: '1', RAY_NOCACHE: '1', RAY_STATEMENT_MB: process.env.RAY_STATEMENT_MB ?? '1400' } });
   let text = '';
   child.stdout.on('data', d => { text += d; });
   child.stderr.on('data', d => { text += d; });

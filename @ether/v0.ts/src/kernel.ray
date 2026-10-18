@@ -191,6 +191,10 @@ kjs_value (e) => {
   kind := e.kind
   if kind === None { return kjs_word(e) }
   if kind == "call" { return kjs_call(e.called, e.args) }
+  if kind == "seq" {
+    kjs_value(e.l)
+    return kjs_value(e.r)
+  }
   if kind == "bin" {
     left := kjs_value(e.l)
     right := kjs_value(e.r)
@@ -620,6 +624,7 @@ K_word := {
 }
 K_prim := { external kept }
 K_args := { external kept }
+K_seq := { external kept }
 K_u := { external kept }
 K_mul := { external kept }
 K_add := { external kept }
@@ -1184,6 +1189,11 @@ K_assign &+= {
 }
 // (a choice among them, not the last: a rule of its own, a `,` after a choice in a list read as Ray reads one, the rest
 // the choice's, unless the list is in brackets right before it)
+// (a `for`'s step, values written one after another, `n++, h = h + 1`: each in turn)
+K_seq &+= {
+  {a__sq: K_assign} => a__sq
+  {a__sq: K_assign}, {b__sq: K_seq} => Kjs_node &+ { kind := `seq` ; l := a__sq ; r := b__sq }
+}
 K_args &+= {
   {x__ag: K_assign} => Kjs_node &+ { kind := `list` ; car := x__ag ; cdr := None }
   {x__ag: K_assign}, {rest_ag: K_args} => Kjs_node &+ { kind := `list` ; car := x__ag ; cdr := rest_ag }
@@ -1229,9 +1239,9 @@ K_stmt &+= {
   else {s__st: K_stmt} => Kjs_node &+ { kind := `else` ; s := s__st }
   while ({c__st: K_assign}) {s__st: K_stmt} => Kjs_node &+ { kind := `while` ; c := c__st ; s := s__st }
   do {s__st: K_stmt} while ({c__st: K_assign}); => Kjs_node &+ { kind := `do` ; s := s__st ; c := c__st }
-  for {`(`} {i__st: K_simple}; {c__st: K_assign}; {u__st: K_assign} {`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := i__st ; c := c__st ; u := u__st ; s := s__st }
+  for {`(`} {i__st: K_simple}; {c__st: K_assign}; {u__st: K_seq} {`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := i__st ; c := c__st ; u := u__st ; s := s__st }
   for {`(`} {i__st: K_simple}; {c__st: K_assign};{`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := i__st ; c := c__st ; u := None ; s := s__st }
-  for {`(`}; {c__st: K_assign}; {u__st: K_assign} {`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := None ; c := c__st ; u := u__st ; s := s__st }
+  for {`(`}; {c__st: K_assign}; {u__st: K_seq} {`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := None ; c := c__st ; u := u__st ; s := s__st }
   for {`(`}{k_st: `;;`}{`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := None ; c := None ; u := None ; s := s__st }
 }
 K_stmts &+= {
@@ -1252,9 +1262,9 @@ K_simple &+= {
   else {s__sm: K_simple} => Kjs_node &+ { kind := `else` ; s := s__sm }
   while ({c__sm: K_assign}) {s__sm: K_simple} => Kjs_node &+ { kind := `while` ; c := c__sm ; s := s__sm }
   do {s__sm: K_stmt} while ({c__sm: K_assign}) => Kjs_node &+ { kind := `do` ; s := s__sm ; c := c__sm }
-  for {`(`} {i__sm: K_simple}; {c__sm: K_assign}; {u__sm: K_assign} {`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := i__sm ; c := c__sm ; u := u__sm ; s := s__sm }
+  for {`(`} {i__sm: K_simple}; {c__sm: K_assign}; {u__sm: K_seq} {`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := i__sm ; c := c__sm ; u := u__sm ; s := s__sm }
   for {`(`} {i__sm: K_simple}; {c__sm: K_assign};{`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := i__sm ; c := c__sm ; u := None ; s := s__sm }
-  for {`(`}; {c__sm: K_assign}; {u__sm: K_assign} {`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := None ; c := c__sm ; u := u__sm ; s := s__sm }
+  for {`(`}; {c__sm: K_assign}; {u__sm: K_seq} {`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := None ; c := c__sm ; u := u__sm ; s := s__sm }
   for {`(`}{k_sm: `;;`}{`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := None ; c := None ; u := None ; s := s__sm }
 }
 K_head &+= {
@@ -1264,11 +1274,11 @@ K_head &+= {
   {k_hd: `else`} => Kjs_node &+ { head := true ; kind := `else` ; s := None }
   else {h_hd: K_head} => Kjs_node &+ { head := true ; kind := `else` ; s := h_hd }
   while ({c__hd: K_assign}) => Kjs_node &+ { head := true ; kind := `while` ; c := c__hd ; s := None }
-  for {`(`} {i__hd: K_simple}; {c__hd: K_assign}; {u__hd: K_assign} {`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := i__hd ; c := c__hd ; u := u__hd ; s := None }
+  for {`(`} {i__hd: K_simple}; {c__hd: K_assign}; {u__hd: K_seq} {`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := i__hd ; c := c__hd ; u := u__hd ; s := None }
   for {`(`} {i__hd: K_simple}; {c__hd: K_assign};{`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := i__hd ; c := c__hd ; u := None ; s := None }
-  for {`(`}; {c__hd: K_assign}; {u__hd: K_assign} {`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := None ; c := c__hd ; u := u__hd ; s := None }
+  for {`(`}; {c__hd: K_assign}; {u__hd: K_seq} {`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := None ; c := c__hd ; u := u__hd ; s := None }
   for {`(`}{k_hd: `;;`}{`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := None ; c := None ; u := None ; s := None }
-  for {`(`} {i__hd: K_simple}; {c__hd: K_assign}; {u__hd: K_assign} {`)`} {h_hd: K_head} => Kjs_node &+ { head := true ; kind := `for` ; i := i__hd ; c := c__hd ; u := u__hd ; s := h_hd }
+  for {`(`} {i__hd: K_simple}; {c__hd: K_assign}; {u__hd: K_seq} {`)`} {h_hd: K_head} => Kjs_node &+ { head := true ; kind := `for` ; i := i__hd ; c := c__hd ; u := u__hd ; s := h_hd }
   while ({c__hd: K_assign}) {h_hd: K_head} => Kjs_node &+ { head := true ; kind := `while` ; c := c__hd ; s := h_hd }
 }
 // (a line that ends with a block on lines of its own: statements, then a head whose body that block is)

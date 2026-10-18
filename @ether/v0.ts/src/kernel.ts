@@ -51,7 +51,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // which reads on a value)
   // (LEFT, wanted of a reading only: it is a left side, a word nothing reads before what is read on it is declared there)
   // (TYPE_READER, refused only: a READER of a node other than the language's)
-  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, GROWN_AT = 508;
+  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, VALUE_OWN = 8192, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, GROWN_AT = 508;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 32;
   // (a body: [count, ...steps: [kind, start, end, a, c, d]])
@@ -93,7 +93,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // all the memory there is taken; as much as the run is given, `RAY_STATEMENT_MB`, a program read as one statement)
       // (a test less: every thread runs one, all of them in the same memory; past it, asked again with each new chunk, so
       // what stops it is not undone by what it was in)
-      const grew = w(THREAD + T_GREW) + size, allowed = w(THREAD + T_TESTING) ? TEST_GROWN : w(GROWN_AT) || GROWN;
+      const grew = w(THREAD + T_GREW) + size, allowed = (w(FAIL_FAST) & 1024) ? 1 << 30 : w(THREAD + T_TESTING) ? TEST_GROWN : w(GROWN_AT) || GROWN;
       if (grew > allowed) { if (DEBUG && w(THREAD + T_FAULT) !== L_MEMORY) debug(D_FAULT, 1098, w(THREAD + T_DEPTH), 0); set(THREAD + T_FAULT, L_MEMORY); }
       // (and a test, when what is left of all the memory is less than one test may take: stopped too)
       // (what is free: past where the memory is used, and what tests let go of, shared)
@@ -960,7 +960,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a name defined more than once, with parameters and without (`min (b) =>`, `min =>`): by what is given, brackets after it
     // or none)
     let calling = 0; { let q = end; while (b(q) === 32) q++; calling = b(q) === 40 ? 1 : 0; }
-    let cyc_mark = 0, cyc_n = 0, cyc_backs = 0;
+    let cyc_mark = 0, cyc_n = 0, cyc_backs = 0, bare = 0;
     for (let r = vis; r && r !== stop;) {
       if (DEBUG) count(K_NODE);
       // (--debug: a reading that has walked very far, what it sees asked whether it goes round (a node made of, or in, what is
@@ -1033,7 +1033,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       r = w(x);
       if (!r) {
         const o = w(x + R_OWNER);
-        if (o && w(o + N_ALSO) && backs < 48) { set(back + 4 * backs, w(o + N_PARENT)); backs++; r = latest(w(o + N_ALSO)); continue; }
+        // (a member read (VALUE_OWN), `x.name`: x's own rules and what it is made of; past where any of it was made, a method's
+        // own node not what that method runs on (a value made in a list's method is no list: §21.3, a member that is not there
+        // is nothing))
+        if (o && w(o + N_ALSO) && backs < 48 && !(bare && run_node(o))) { set(back + 4 * backs, w(o + N_PARENT)); backs++; r = latest(w(o + N_ALSO)); continue; }
+        if (refuse & VALUE_OWN) bare = 1;
         let p = o ? w(o + N_PARENT) : 0;
         // (what everything is in, the language itself, after every component still to see: a component's way out is not
         // past the rest of what the value is made of (`X &+= Y`: X's own class body before the language's))
@@ -1450,7 +1454,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (read in a check, quietly: what it checks in turn is not read (TYPINGS), so a reading of its own)
     const flags = want | refuse << 8 | on << 16 | (w(THREAD + T_QUIET) >= TYPINGS ? 1 << 24 : 0), framed = s < e && w(self + N_IS) === IS_FRAME;
     // (what is visible from a node with no rules of its own, nor made of anything: what its parent sees; read once for all such)
-    for (let n = 0; n < 16 && vis && (w(vis + R_FLAGS) & DEAD) && vis !== stop; n++) {
+    // (not a member read (VALUE_OWN): where a value was made is not what it holds)
+    for (let n = 0; n < 16 && !(refuse & VALUE_OWN) && vis && (w(vis + R_FLAGS) & DEAD) && vis !== stop; n++) {
       const o = w(vis + R_OWNER);
       if (!o || w(o + N_ALSO) || !w(o + N_PARENT) || w(o + N_IS) === IS_FRAME) break;
       vis = latest(w(o + N_PARENT));
@@ -2139,7 +2144,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     for (let at = skip(s, e); at < e; at = skip(at, e)) {
       const ln = line(at, e), last = skip(ln, e) >= e ? 1 : 0;
       // (a typed hole's code: read by its type's own rules; what none of them reads (a value of it, by its name), where it was written)
-      let r = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), vis ? latest(vis) : latest(self), self, 0, vis ? w(vis + N_BASE) : 0, 0, 0);
+      // (the member a `.{member}` reads, `x.name`: read as x's (VALUE_OWN))
+      const as_member = w(t + T_MEMBER) === self && at >= w(t + T_MEMBER_S) && at < w(t + T_MEMBER_E) && self !== w(GLOBAL) ? VALUE_OWN : 0;
+      let r = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), vis ? latest(vis) : latest(self), self, 0, vis ? w(vis + N_BASE) : 0, as_member, 0);
       // (what reads it where it is written binding looser than the type's own (declared after it, `,`): that first, its parts
       // then read by the type; not a reader, a head of one hole (`{numeral: Digits}`: it would read itself))
       if (vis && w(r) === K_RULE) { const r2 = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0); if (w(r2) === K_RULE && w(r2 + 12) !== w(r + 12) && !(w(w(r2 + 12) + R_FLAGS) & READER) && declared_at(w(r2 + 12)) > declared_at(w(r + 12))) r = r2; }
@@ -2178,7 +2185,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (!ps || (w(FAIL_FAST) & 8192)) return 0;
     const pt = f + F_TAKES, s = skip(w(pt), w(pt + 4)); let e = w(pt + 4); while (e > s && b(e - 1) <= 32) e--;
     if (follow(pt, 1) !== pt) return 0;
-    if (!worded(s, e)) return took_each(t, f, self, s, e);
+    if (!worded(s, e)) return (w(FAIL_FAST) & 512) ? 0 : took_each(t, f, self, s, e);
     // (one value, not given by name: no `,` or `:` outside brackets in what was passed)
     const at_ = follow(f + F_TAKES + TAKE, 1), z = w(at_ + 4);
     let i = w(at_);

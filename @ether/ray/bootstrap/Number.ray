@@ -1,4 +1,7 @@
 // (Number is made in the entrypoint, its core; what follows is the rest of it)
+Number &+= Ray
+// (and ordered: its `..` Ordered's, `1..3` by `succ`, not a Ray's walk along `next`)
+Number &+= Ordered
 Number &+= {
   succ => Number(next: this)
   assert 7.succ == 8  // N42 7.succ is not eight
@@ -93,6 +96,8 @@ Number &+= {
   positive => true
   abs => this
   negated => Decimal.Signed(sign: .is_zero ? None : "-", integer: this)
+  // (as a 32-bit integer, the kernel's (wasm.o.ray's `Int32`))
+  int32 => Int32.made_from(this)
   floor => this
   round => this
 
@@ -254,11 +259,32 @@ Number &+= {
   assert "12" as 10 == 12  // S67 12 is not twelve in ten
   assert "ff" as 16 == 255  // SN1 ff is not 255
   assert "101" as 2 == 5  // SN3 101 is not five in two
+assert (0.int32 - 5).digits == `-5`  // IB1 below zero
+assert ((0.int32 - 5) + 8).digits == `3`  // IB2 back above zero
+assert (7.int32 / 2).digits == `3`  // IB3 division
+assert ((0.int32 - 7) / 2).digits == `-3`  // IB4 division toward zero
+assert ((0.int32 - 7) % 2).digits == `-1`  // IB5 remainder keeps the sign
+assert (1.int32 << 16).digits == `65536`  // IB6 shift left
+assert (15.int32 << 25).digits == `503316480`  // IB7 a kernel constant
+assert (1.int32 << 31).digits == `-2147483648`  // IB8 the least
+assert (((1.int32 << 31) - 1)).digits == `2147483647`  // IB9 wraps to the most
+assert (((1.int32 << 31) - 1) + 1).digits == `-2147483648`  // IB10 wraps past the most
+assert ((0.int32 - 1) >> 1).digits == `-1`  // IB11 shift right keeps the sign
+assert ((0.int32 - 1) >>> 1).digits == `2147483647`  // IB12 shift right with zero
+assert (1.int32 << 33).digits == `2`  // IB13 the shift taken of 32
+assert (6.int32 ~&& 10).digits == `2`  // IB14 and
+assert (6.int32 ~|| 10).digits == `14`  // IB15 or
+assert (6.int32 ~^^ 10).digits == `12`  // IB16 xor
+assert ((13.int32 + 3) ~&& (0.int32 - 4)).digits == `16`  // IB17 (n + 3) & -4 of 13
+assert (0.int32 - 1) < 0  // IB18 less than int32_below zero
+assert 3.int32 >= 3  // IB19 at least
+assert (3.int32 == 3) && (3.int32 != 4)  // IB20 equal and not
+assert ((5.int32 / 0) === None)  // IB21 dividing by zero is nothing
+assert (300.int32).count == 300  // IB22 a count again
+assert ((0.int32 - 1).count === None)  // IB23 none int32_below zero as a count
+assert ((0.int32 - ((1.int32 << 31) - 1)) - 1).digits == `-2147483648`  // IB24 the least by subtraction
 }
 assert 5 is Number  // N86 five is not a natural number
-Number &+= Ray
-// (and ordered: its `..` Ordered's, `1..3` by `succ`, not a Ray's walk along `next`)
-Number &+= Ordered
 
 zero := Number()
 0 := zero
@@ -363,6 +389,60 @@ Number.Named.for((name) => {
 })
 // A signed number, of any base: each base's `Signed`, superposed (as a Number is any of its bases)
 Number.Signed := Number.Named.map((name) => global[name].Signed).reduce((either) => either | .)
+// A 32-bit integer, `Binary₃₂.Signed`: what WebAssembly's i32 is, its 32 binary digits (`bits`, a Binary's digits, the first
+// the sign's: two's complement), what is past them dropped (it wraps, as `.mod` does). These rules are what it answers; the
+// kernel's map answers its operators faster (`+` the kernel's `plus`, by the same digits).
+Int32 &+= {
+  static zeros := "00000000000000000000000000000000"
+  // (a digit and another and what is carried into them: how many are one)
+  static ones (x, y, carry) => (((x == "1"[0]) ? 1 : 0) + ((y == "1"[0]) ? 1 : 0)) + ((carry == "1"[0]) ? 1 : 0)
+  // (two of as many digits added: what is carried out first, then the digits)
+  static carried (a, b) => a.empty ? "0" : Int32.with_digit(Int32.carried(a.rest, b.rest), a.first, b.first)
+  static with_digit (after, x, y) => ((Int32.ones(x, y, after.first) >= 2) ? "1" : "0") + ((Int32.ones(x, y, after.first) % 2 == 1) ? "1" : "0") + after.rest
+  static added (a, b) => Int32.carried(a, b).rest
+  static inverted (a) => a.empty ? "" : ((a.first == "1"[0]) ? "0" : "1") + Int32.inverted(a.rest)
+  // (one, as many digits as a)
+  static one_like (a) => Int32.digitwise(a.rest, a.rest, "0", "0") + "1"
+  static negated (a) => Int32.added(Int32.inverted(a), Int32.one_like(a))
+  static digitwise (a, b, both, either) => a.empty ? "" : ((((a.first == "1"[0]) && (b.first == "1"[0])) ? both : (((a.first == "1"[0]) || (b.first == "1"[0])) ? either : "0")) + Int32.digitwise(a.rest, b.rest, both, either))
+  static dropped (a, count) => (count == 0) ? a : Int32.dropped(a.rest, count - 1)
+  // (its first digit, as a text)
+  static first_digit (a) => a.until(a.rest)
+  static kept (a, count) => (count == 0) ? "" : Int32.first_digit(a) + Int32.kept(a.rest, count - 1)
+  static repeated (digit, count) => (count == 0) ? "" : digit + Int32.repeated(digit, count - 1)
+  // (as numbers without a sign: before, by the first digit that differs)
+  static below (a, b) => a.empty ? false : ((a.first == b.first) ? Int32.below(a.rest, b.rest) : (b.first == "1"[0]))
+  static signed_below (a, b) => (a.first == b.first) ? Int32.below(a, b) : (a.first == "1"[0])
+  // (shifted and added, a digit of the other at a time)
+  static times_from (product, a, b) => b.empty ? product : Int32.times_from(Int32.added(product.rest + "0", (b.first == "1"[0]) ? a : Int32.digitwise(a, a, "0", "0")), a, b.rest)
+  static magnitude (a) => (a.first == "1"[0]) ? Int32.negated(a) : a
+  // (a's digits, one at a time, into what remains; what b goes into it, the quotient's digit: the quotient, then what remains)
+  static divided (remains, quotient, a, b) => a.empty ? quotient + remains : Int32.divided_by(remains.rest + Int32.first_digit(a), quotient, a.rest, b)
+  static divided_by (remains, quotient, a, b) => Int32.below(remains, b) ? Int32.divided(remains, quotient + "0", a, b) : Int32.divided(Int32.added(remains, Int32.negated(b)), quotient + "1", a, b)
+  static quotient_of (a, b) => Int32.kept(Int32.divided(Int32.zeros, "", Int32.magnitude(a), Int32.magnitude(b)), 32)
+  static remainder_of (a, b) => Int32.dropped(Int32.divided(Int32.zeros, "", Int32.magnitude(a), Int32.magnitude(b)), 32)
+
+  plus_by_bits (other) => .of &+ { bits := Int32.added(this.bits, other.int32.bits) }
+  minus_by_bits (other) => .of &+ { bits := Int32.added(this.bits, Int32.negated(other.int32.bits)) }
+  times_by_bits (other) => .of &+ { bits := Int32.times_from(Int32.zeros, this.bits, other.int32.bits) }
+  over_by_bits (other) => (other.int32.bits == Int32.zeros) ? None : (.of &+ { bits := ((this.bits.first == other.int32.bits.first) ? Int32.quotient_of(this.bits, other.int32.bits) : Int32.negated(Int32.quotient_of(this.bits, other.int32.bits))) })
+  rem_by_bits (other) => (other.int32.bits == Int32.zeros) ? None : (.of &+ { bits := ((this.bits.first == "1"[0]) ? Int32.negated(Int32.remainder_of(this.bits, other.int32.bits)) : Int32.remainder_of(this.bits, other.int32.bits)) })
+  and_by_bits (other) => .of &+ { bits := Int32.digitwise(this.bits, other.int32.bits, "1", "0") }
+  or_by_bits (other) => .of &+ { bits := Int32.digitwise(this.bits, other.int32.bits, "1", "1") }
+  xor_by_bits (other) => .of &+ { bits := Int32.digitwise(this.bits, other.int32.bits, "0", "1") }
+  shl_by_bits (other) => .of &+ { bits := Int32.dropped(this.bits, other.int32.count % 32) + Int32.repeated("0", other.int32.count % 32) }
+  shr_by_bits (other) => .of &+ { bits := Int32.repeated(Int32.first_digit(this.bits), other.int32.count % 32) + Int32.kept(this.bits, 32 - other.int32.count % 32) }
+  shru_by_bits (other) => .of &+ { bits := Int32.repeated("0", other.int32.count % 32) + Int32.kept(this.bits, 32 - other.int32.count % 32) }
+  below_by_bits (other) => Int32.signed_below(this.bits, other.int32.bits)
+}
+// (its rules, on four digits as on thirty-two; and what they answer, the kernel answers)
+assert (Int32.added("0101", "0011") == "1000") && !(Int32.added("0101", "0011") == "0111")  // I32R1 5 and 3 added by the digits are not 8
+assert Int32.added("1111", "0001") == "0000"  // I32R2 adding by the digits does not wrap past the most
+assert Int32.digitwise("0110", "1010", "0", "1") == "1100"  // I32R3 xor by the digits of 6 and 10 is not 12
+assert (1.int32.shl_by_bits(31).bits == (1.int32 << 31).bits)  // I32R4 a shift by the digits is not the kernel's
+assert Int32.signed_below("1001", "0010") && !(Int32.signed_below("0010", "1001"))  // I32R5 minus 7 is not before 2 by the digits
+assert Int32.times_from("00", "01", "10") == "10"  // I32R6 1 times 2 by the digits (two of them) is not 2
+assert Int32.divided("00", "1", "1", "01") == "1100"  // I32R7 the last digit of 3 over 1 by the digits is not 1, none left
 // A whole number, of either sign
 Integer := Number | Number.Signed
 assert 5 is Integer  // INT1 five is not an integer

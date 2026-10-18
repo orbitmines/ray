@@ -2119,7 +2119,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   }
   function took(t: number, f: number, self: number): number {
     const at = w(MAPPED) + 8 * M_SPAN, ps = w(at), pe = w(at + 4);
-    if (!ps) return 0;
+    if (!ps || (w(FAIL_FAST) & 8192)) return 0;
     const pt = f + F_TAKES, s = skip(w(pt), w(pt + 4)); let e = w(pt + 4); while (e > s && b(e - 1) <= 32) e--;
     if (follow(pt, 1) !== pt) return 0;
     if (!worded(s, e)) return took_each(t, f, self, s, e);
@@ -2180,13 +2180,21 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (its parts, between the `,`s outside brackets, as many as the names, none empty (else -1, nothing read): each read in
   // turn, a list among them in its place as `,` puts it, its values (the last one's only when it is a list a `,` made, or
   // the one before it is a list); as many values as names, each name given its own)
+  // (a part `,` reads on the one before it (`1, +2`, `1, (x) => x + 1`): led by an operator, or a closure written as one, its
+  // arrow outside brackets)
+  function composed_on(p0: number, p1: number): number {
+    const c = b(p0);
+    if (c !== 40 && c !== 91 && c !== 123 && c !== 34 && c !== 96 && c !== 39 && b(w(CLASSES) + c) !== 1 && !(c >= 48 && c <= 57)) return 1;
+    for (let q = p0; q < p1 - 1;) { if (bracket(q, p1) & 1) { q = past(q, p1); continue; } if (b(q) === 61 && b(q + 1) === 62) return 1; q++; }
+    return 0;
+  }
   function listing_of(t: number, v: number): number { return v && w(v + N_IS) === IS_NODE && held(t, v, W_LISTING, 0) === w(TRUE_) ? 1 : 0; }
   function took_parts(t: number, self: number, s: number, e: number, names: number, o: number): number {
     const a = w(o), z = w(o + 4), origin = w(o + T_ORIGIN), th = w(o + T_THIS), lex = w(o + T_LEX);
     let parts = 0, from = a;
     for (let q = a; q <= z;) {
       if (q < z && (bracket(q, z) & 1)) { q = past(q, z); continue; }
-      if (q === z || b(q) === 44) { const p0 = skip(from, q); let p1 = q; while (p1 > p0 && b(p1 - 1) <= 32) p1--; if (p0 >= p1) return -1; parts++; from = q + 1; }
+      if (q === z || b(q) === 44) { const p0 = skip(from, q); let p1 = q; while (p1 > p0 && b(p1 - 1) <= 32) p1--; if (p0 >= p1 || (parts && composed_on(p0, p1))) return -1; parts++; from = q + 1; }
       q++;
     }
     if (parts !== names) return -1;

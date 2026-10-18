@@ -2268,7 +2268,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     - The compiler that writes the kernel as WebAssembly compiles every part of a `for` loop's step (`at = …, k++`) and
       of a statement written with commas, as JavaScript runs them. It compiled only the first, so on wasm every
       `k < n` bound in the kernel's loops was inert. Same tests (803 at one thread); tests run in half the time.
-  - Decided 2026-10-18 (user; the design built on it is the handoff `selfhost_lean_1018_v2.md`, under review):
+  - Decided 2026-10-18 (user; the design built on it is `Selfhosting.md`):
     - There is no reader beside the language. Expression is the reader; the interpreter runs it; speed is rewrite rules
       in a level taking a Program down to WebAssembly. A value is held as the backend encodes it (a String is its UTF-8
       bytes), so a kernel map of externals standing in for definitions (`wasm.o.ray`) is not needed.
@@ -2284,6 +2284,39 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     - A String has a proper Unicode `.next` (a character, decoded). It goes on String.ray if the algorithm is simple
       enough (UTF-8 decoding is); what needs Unicode's tables (which characters are word characters) brings a minimal
       part of Unicode into the bootstrap.
+    - A String is of characters, not of code points; by default a character is a grapheme cluster. For now a character
+      is the scalar a UTF-8 unit decodes to: `String.Scalars`, a String whose characters are those, the library using it
+      until then. UTF-8 is a type (Unicode.ray's), moved into String.ray under `Unicode` while the bootstrap needs it;
+      `.next` follows from it.
+    - What counts as splitting is what the methods read: any piece of text can be used for anything.
+    - A 32-bit integer is `Binary₃₂.Signed`, the language's own (not the kernel's `external int32`).
+      Built (2026-10-18): Number.ray's `Int32 &+= { … }`, its 32 binary digits (`bits`, a Binary's digits, the first the
+      sign's) and its rules by them (`+` a carry along the digits, `-` by negating, `*` shifting and adding, `/` `%` the
+      long division of the magnitudes, `~&& ~|| ~^^` digit by digit, the shifts, `<` by the sign then the first digit that
+      differs); the kernel's map answers its operators (`external int32 …`, #40's), by the same digits. The rules are
+      checked on a few digits (thirty-two, interpreted, are past what a test may take). The class itself is the
+      entrypoint's (`Int32 := class (bits) => { }`), so the map, read before the library, can add to it.
+    - Read in order (2026-10-18): a field's type written as the name of a field before it is what that one took
+      (`(open: String, `-`, close: open) := `a-a``; `a-b` does not read). Each position's link keeps the span it was
+      given while the rest is read (`given_span`), a place its type as written (`type_written`, kept by the kernel's
+      `unset`). Not yet for a class's header: its fields are declared where the class is written (the spliced header
+      keeps that take), so a field's type does not see the one before it in the instance (EX8).
+    - Texts are joined by the kernel's map (`+`, `external joined`): there was no `+` of two texts, and `join`, `plural`
+      and interpolation relied on one.
+    - `#` of a range is its values (a range is a type of what it holds). `("a" | "A")..("f" | "F")`: each alternative on
+      the left ranges until one on the right is met, by what `|` is, nothing added for it.
+    - A superposition is the same object as what it superposes: their methods are its own, run with `.` (`this`) the
+      superposition itself, superposed as it is (as abstract interpretation does). It is the language's, nothing of it in
+      the kernel. Built so far (unreviewed): `a | b` is made of `a` and `b`, its own `superposes`/`components` before
+      theirs, and `is` asks whether a type superposes before whether it is a text or a list; a method found in them still
+      runs on one of them (the last), not on the superposition, until a text's characters are the language's own.
+    - `.next` of what is iterable steps into it: `"ab".next` is `"a"`, and the ray stays equipped, `"ab".next.next` is
+      `"b"`. A Number is a Ray too (not a list of cons cells). Built so far: on String only (its entry, its first
+      character equipped with the rest's entry). Not yet on Iterable: a vertex of a ray (a list's link, a Number, `Ray()`)
+      has no `next` past its end, structurally; a rule for `next` on Iterable or Ray answers there instead, and every
+      walk along links (`at = at.next`) became the reason Number.ray's numeral classes could not be defined in memory.
+    - Number.ray: `Number &+= Ray` and `Number &+= Ordered` come first (user), so `Bases`' ranges are ranges. A list's
+      `count` is walked by the kernel (`external linked`, the map), the language's walk where it cannot.
 
 ### 21.4 Speed
 

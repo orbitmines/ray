@@ -90,7 +90,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // all the memory there is taken)
       // (a test less: every thread runs one, all of them in the same memory; past it, asked again with each new chunk, so
       // what stops it is not undone by what it was in)
-      const grew = w(THREAD + T_GREW) + size, allowed = w(THREAD + T_TESTING) ? TEST_GROWN : GROWN;
+      const grew = w(THREAD + T_GREW) + size, allowed = (w(FAIL_FAST) & 1024) ? 1 << 30 : w(THREAD + T_TESTING) ? TEST_GROWN : GROWN;
       if (grew > allowed) { if (DEBUG && w(THREAD + T_FAULT) !== L_MEMORY) debug(D_FAULT, 1098, w(THREAD + T_DEPTH), 0); set(THREAD + T_FAULT, L_MEMORY); }
       // (and a test, when what is left of all the memory is less than one test may take: stopped too)
       // (what is free: past where the memory is used, and what tests let go of, shared)
@@ -2129,7 +2129,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (!ps || (w(FAIL_FAST) & 8192)) return 0;
     const pt = f + F_TAKES, s = skip(w(pt), w(pt + 4)); let e = w(pt + 4); while (e > s && b(e - 1) <= 32) e--;
     if (follow(pt, 1) !== pt) return 0;
-    if (!worded(s, e)) return took_each(t, f, self, s, e);
+    if (!worded(s, e)) return (w(FAIL_FAST) & 512) ? 0 : took_each(t, f, self, s, e);
     // (one value, not given by name: no `,` or `:` outside brackets in what was passed)
     const at_ = follow(f + F_TAKES + TAKE, 1), z = w(at_ + 4);
     let i = w(at_);

@@ -147,6 +147,7 @@ Iterable &+= {
 
   all => .reduce(|)
   assert ([1, 2, 3]).all  // RR68 all of a list is nothing
+  assert ([1, 2, 3]).all.components.count == 3  // RR87 all of a list is not each of its values (made in a method of the list, a superposition read as that list)
   right-to-left Σ | ∑ | sum => .reduce(total = 0 => total + .)
   assert ([1] * 40).sum == 40  // RR43 walking forty things does not reach forty
   assert ([1, 2, 3]).sum == 6  // RR60 one, two and three do not add to six

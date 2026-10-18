@@ -5,8 +5,10 @@ import { Jmp, Ray, jmp_of } from '../src/language.ts';
 // The kernel's JMP as `jmp_of` writes it from `kernel.ts`, a line for each thing it does, before targets become places: what
 // `kernel.ray` writes, reading the same file. `--check <file>`: that file against it, where they first differ.
 // (a context `& name params`, a label `: name`, a statement `target condition into a b`: a cell by its name, a constant `=n`,
-// no cell `-`)
-const source = transformSync(readFileSync(new URL('../src/kernel.ts', import.meta.url), 'utf8'), { loader: 'ts' }).code;
+// no cell `-`; `--source <file>`: another file written as the kernel is, not checked against the kernel)
+const given = process.argv.indexOf('--source');
+const file = given < 0 ? new URL('../src/kernel.ts', import.meta.url) : process.argv[given + 1];
+const source = transformSync(readFileSync(file, 'utf8'), { loader: 'ts' }).code;
 const fresh = () => { const p = new Jmp(); p.host('debug', 4); p.host('compiled', 4); p.host('told', 4); return p; };
 const p = jmp_of(source.slice(source.indexOf('function kernel(')), fresh(), { DEBUG: 0, LOOP_LIMIT: 0 });
 const unlinked = (p as unknown as { unlinked: [number, string, string][] }).unlinked;
@@ -25,7 +27,7 @@ for (let k = 0; k < p.length; k++) {
 
 const reference = Ray.program(0), linked = (q: Jmp) => q.link().code;
 const same = (x: number[], y: number[]) => x.length === y.length && x.every((v, i) => v === y[i]);
-if (!same(linked(p), linked(reference)) || !same(p.constants, reference.constants)) throw new Error('kernel.ts read by jmp_of is not the kernel Ray.program builds');
+if (given < 0 && (!same(linked(p), linked(reference)) || !same(p.constants, reference.constants))) throw new Error('kernel.ts read by jmp_of is not the kernel Ray.program builds');
 
 const at = process.argv.indexOf('--check');
 if (at < 0) { process.stdout.write(lines.join('\n') + '\n'); process.exit(0); }

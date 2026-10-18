@@ -35,16 +35,19 @@ on this first.
 
 Each step its own PR, each with a check that passes or fails.
 
-| | Step | Check |
-|---|---|---|
-| SH1 | A call gives back what it held | 1000, then 100000 calls of `sp_add` in the memory of 100; `Kernel.md` requirement 1 |
-| SH2 | Calls fast enough to compile with | at least 10^4 calls a second; `Kernel.md` requirement 2 |
-| SH3 | A built program loads and runs | #34: `ray.wasm` passes the same 744 asserts as the interpreted kernel |
-| SH4 | The wasm writer in Ray: the binary format declared, one declaration reading and writing it | `kernel.wasm` read and written back byte for byte |
-| SH5 | The kernel's source read by Ray into JMP, as `jmp_of` does | the JMP program equal to `jmp_of`'s, so SH4 writes the same `kernel.wasm` |
-| SH6 | The kernel's source in a file of its own, outside `language.ts` | stage 1 writes `kernel.wasm` byte-identical to stage 0's |
-| SH7 | The fixpoint | the kernel stage 1 wrote writes itself again, byte-identical; the library's tests pass on it as on stage 0 |
-| SH8 | The kernel rewritten as declarations, one function at a time | each rewrite keeps SH7 and the tests |
+| | Step | Check | State |
+|---|---|---|---|
+| SH1 | A call gives back what it held: `pure { … }` runs in memory of its own (`Design.md`: `pure` a checked assertion) | 100000 calls of `sp_add` in the memory of 1000 | done: #36, #37 (436 MB for 100000, 435 for 1000) |
+| SH2 | Calls fast enough to compile with | at least 10^4 calls a second; `Kernel.md` requirement 2 | about 1500 now; most of the rest is `,` building argument lists |
+| SH3 | A built program loads and runs | `ray.wasm` passes the same asserts as the interpreted kernel | done: #34 (744 the same) |
+| SH4 | The wasm writer in Ray, each context in a `pure` block | the kernel's module from its JMP, byte for byte | |
+| SH5 | The kernel's source moved out of `language.ts` into a file of its own; stage 0 unchanged | `kernel.wasm` byte-identical | |
+| SH6 | The kernel's language read by Ray's own reader: its constructs declared as rules, each writing its JMP | the JMP equal to `jmp_of`'s | |
+| SH7 | Bytes out: `--write` of a list of numbers | today it writes 0 bytes | |
+| SH8 | The fixpoint | the kernel Ray wrote writes itself again, byte-identical; the library's tests pass on it as on stage 0 | |
+| SH9 | The kernel rewritten as declarations, one function at a time | each rewrite keeps SH8 and the tests | |
 
-SH4 and SH5 are the "Wasm level" and the reader of `Design.md`'s note, written for the kernel's source. Until SH8 the
-kernel's source keeps the form it has now; SH8 is where it becomes Ray in style as well as in who builds it.
+Found on the way: `jmp_of` reads `kernel.toString()`, which is the tool's minified output (one line, `memory2`, `__name(…)`),
+not the kernel's source; so the source moves to a file of its own (SH5) before Ray reads it (SH6), and Ray reads it with its
+own reader rather than a port of `jmp_of`'s tokenizer. Until machine code is a target, JavaScript stays only as the runner
+that loads the wasm, never in building a kernel.

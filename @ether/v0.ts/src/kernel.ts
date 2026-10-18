@@ -2534,6 +2534,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         if (n === 2 && b(rest) === 111 && b(rest + 1) === 102) return int32(vx);
         if (n === 5 && b(rest) === 99) return vx < 0 ? w(NOTHING) : counted(vx);
         if (n === 4 && b(rest) === 116) return int32_text(vx);
+        // (`int32 byte x`: x's last eight bits, a text of that one byte (a Byte held as the backend holds it; texts of bytes
+        // joined by `joined`))
+        if (n === 4 && b(rest) === 98) { const at = alloc(1); setb(at, vx & 255); return node(IS_TEXT, at, at + 1, w(TEXTS) || w(GLOBAL), 0); }
         const o2 = skip(q1, z); let y = block(t, o2, z, names, f, self, 0, 1, 0, self, 0);
         if (!stopped(t) && !int32_is(y)) { const cy = count_of(t, y, names, f); if (cy >= 0) y = counted(cy); }
         if (stopped(t) || !int32_is(y)) return w(NOTHING);

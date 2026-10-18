@@ -283,6 +283,8 @@ assert ((5.int32 / 0) === None)  // IB21 dividing by zero is nothing
 assert (300.int32).count == 300  // IB22 a count again
 assert ((0.int32 - 1).count === None)  // IB23 none int32_below zero as a count
 assert ((0.int32 - ((1.int32 << 31) - 1)) - 1).digits == `-2147483648`  // IB24 the least by subtraction
+assert (65.int32.byte + (322.int32.byte)) == "AB"  // IB25 the bytes of two numbers joined are not the text of those bytes
+assert 200.int32.byte_by_bits == "11001000"  // IB26 the last eight digits of two hundred are not a byte
 }
 assert 5 is Number  // N86 five is not a natural number
 
@@ -433,6 +435,8 @@ Int32 &+= {
   shl_by_bits (other) => .of &+ { bits := Int32.dropped(this.bits, other.int32.count % 32) + Int32.repeated("0", other.int32.count % 32) }
   shr_by_bits (other) => .of &+ { bits := Int32.repeated(Int32.first_digit(this.bits), other.int32.count % 32) + Int32.kept(this.bits, 32 - other.int32.count % 32) }
   shru_by_bits (other) => .of &+ { bits := Int32.repeated("0", other.int32.count % 32) + Int32.kept(this.bits, 32 - other.int32.count % 32) }
+  // (its last eight digits, a Byte (`Binary₈`): what the kernel holds as the one byte they write, `byte`)
+  byte_by_bits => Int32.dropped(this.bits, 24)
   below_by_bits (other) => Int32.signed_below(this.bits, other.int32.bits)
 }
 // (its rules, on four digits as on thirty-two; and what they answer, the kernel answers)

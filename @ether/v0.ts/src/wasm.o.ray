@@ -264,6 +264,8 @@ Int32 &+= {
   int32 => this
   count => external int32 count .bits
   digits => external int32 text .bits
+  // (its last eight bits, a Byte: a text of that one byte, joined to others by `+`, written by `--write` as it is)
+  byte => external int32 byte .bits
   as (=== String) => external int32 text .bits
 }
 // (what the numeral rule answers, a count: the same value as the Decimal its digits write (`{digits: Decimal.String} =>

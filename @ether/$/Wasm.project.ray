@@ -12,9 +12,14 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   // last group's high bit its sign
   static LEB := class (more: (₂1, Binary₇)[], (₂0, last: Binary₇)) {
     value => <-(more.map(.1), last).flatten as Binary
+    // TODO(explicit): goes when a header writes by solving itself for its fields (`value` given, the groups that read as it)
     static (value: Binary) as (=== LEB) => <-value.chunk(7, from: ⊣) -- (LEB(more: .[..-1], last: .last))
   }
-  static Signed := LEB { value => <-(more.map(.1), last).flatten as Binary.Signed }
+  static Signed := LEB {
+    value => <-(more.map(.1), last).flatten as Binary.Signed
+    // TODO(explicit): goes with LEB's (the groups until what is left is the sign alone)
+    static (value: Binary.Signed) as (=== Signed) => <-value.chunk(7, from: ⊣, until: rest => rest.sign_extends) -- (Signed(more: .[..-1], last: .last))
+  }
   static U32 := LEB{value < 2 ^ 32}
   static S32 := Signed{-(2 ^ 31) <= value < 2 ^ 31}
   // (each at most ceil(N / 7) bytes; a byte's bits past N 0, or the sign's)

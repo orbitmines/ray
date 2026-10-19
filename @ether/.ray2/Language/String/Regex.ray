@@ -1,3 +1,0 @@
-//TODO
-namespace Regex
-  /{pattern: *}/{"i" | "g" | "u" .. //TODO}

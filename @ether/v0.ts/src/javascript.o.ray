@@ -1,0 +1,167 @@
+// What this interpreter's own kinds of value are, for now: a number (a JS number) and text (a JS string), their operations
+// the host's (`goto js`: the next statement is JS, `self` the value read on, each hole its value, `$(text)` text read here).
+// A port of `javascript.o.ray` to test with until the library reads numbers and text itself; read after the language.
+
+// Numbers, as written: a digit (`Digit`'s own rules), digits, digits with a fraction (`Number`'s own rules: a typed hole
+// `{n: Number}` takes what they read; what it took is read in `Number`). Read anywhere through the rule after them. (Read again
+// after the library: its `Digit` kept, these added to it.)
+(Digit := class { }) unless here Digit
+Digit &+= {
+  0 =>
+    goto js
+    0
+  1 =>
+    goto js
+    1
+  2 =>
+    goto js
+    2
+  3 =>
+    goto js
+    3
+  4 =>
+    goto js
+    4
+  5 =>
+    goto js
+    5
+  6 =>
+    goto js
+    6
+  7 =>
+    goto js
+    7
+  8 =>
+    goto js
+    8
+  9 =>
+    goto js
+    9
+}
+// (digits after one another: what a number is written as, its own (the library adds to `Number`, not to it))
+Digits := class { }
+Digits &+= {
+  {digit: Digit} =>
+    digit
+  {digit: Digit}{rest: Digits} =>
+    goto js
+    Number($.text('digit') + $.text('rest'))
+}
+Number &+= {
+  {digits: Digits} =>
+    digits
+  {whole: Digits}.{fraction: Digits} =>
+    goto js
+    Number($.text('whole') + '.' + $.text('fraction'))
+}
+{number: Number} ^number =>
+  number
+
+// What both answer, an operator written between two (`a + b`: read on `a`): one declared later binds looser (`1 + 2 == 3` is
+// `(1 + 2) == 3`), one declared with it as loosely (`10 - 2 - 3` is `(10 - 2) - 3`). `-` before `+`, `/` before `*`: `a + (b - c)`
+// is `(a + b) - c`; `%` after `*` (`n / 100 % 10`). Text added to: joined; anything else, composed. Comparisons: `true`/`false`.
+// Of two whole numbers, what `Number` says: `-` none below zero, `/` whole (by zero, zero), `%` by zero, the number.
+compounds / {other} ^operator =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) && self >= 0 && other >= 0 ? (other === 0 ? 0 : Math.floor(self / other)) : self / other
+compounds * {other} ^operator =>
+  goto js
+  self * other
+compounds % {other} ^operator =>
+  goto js
+  other === 0 ? self : ((self % other) + other) % other
+compounds - {other} ^operator =>
+  goto js
+  Number.isInteger(self) && Number.isInteger(other) && self >= 0 && other >= 0 ? Math.max(0, self - other) : self - other
+compounds + {other} ^operator =>
+  goto js
+  typeof self === 'string' ? self + String(other) : typeof self === 'number' ? self + other : undefined
+  .composed({other})
+chainable < {other} ^operator =>
+  goto js
+  $(self < other ? 'true' : 'false')
+chainable <= {other} ^operator =>
+  goto js
+  $(self <= other ? 'true' : 'false')
+chainable > {other} ^operator =>
+  goto js
+  $(self > other ? 'true' : 'false')
+chainable >= {other} ^operator =>
+  goto js
+  $(self >= other ? 'true' : 'false')
+chainable == {other} ^operator =>
+  goto js
+  $(self === other ? 'true' : 'false')
+!= {other} ^operator =>
+  goto js
+  $(self !== other ? 'true' : 'false')
+
+// Text (`""`: none). (text with an escape in it, `"\e[0m"`: each escape what String.ray's `Escape` says it stands for)
+"" =>
+  goto js
+  ''
+unescaped =>
+  goto js
+  typeof self !== 'string' ? undefined : self.replace(/\\(.)/gs, (_, c) => ({ '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n', f: '\f', r: '\r', e: '\x1b' })[c] ?? c)
+// (whether it is a name: a letter or `_`, then letters, digits, `_`)
+named =>
+  goto js
+  $(/^[\p{L}_][\p{L}\p{N}_]*$/u.test(String(self)) ? 'true' : 'false')
+// (whether it has a space not inside a bracket: written as more than one thing)
+spaced =>
+  goto js
+  $([...String(self)].reduce((at, c) => at.done ? at : '([{'.includes(c) ? { ...at, depth: at.depth + 1 } : ')]}'.includes(c) ? { ...at, depth: at.depth - 1 } : c === ' ' && at.depth === 0 ? { ...at, done: true } : at, { depth: 0, done: false }).done ? 'true' : 'false')
+contains {other} =>
+  goto js
+  $(String(self).includes(String(other)) ? 'true' : 'false')
+begins {other} =>
+  goto js
+  $(String(self).startsWith(String(other)) ? 'true' : 'false')
+split({separator}) =>
+  goto js
+  typeof self === 'string' ? $('[' + self.split(String(separator)).map(part => JSON.stringify(part)).join(', ') + ']') : undefined
+count =>
+  goto js
+  typeof self === 'string' ? [...self].length : undefined
+// (text as its characters, one after another: a list of them; what they hold for, `text{c => …}`, as text again)
+characters =>
+  goto js
+  typeof self === 'string' ? $('[' + [...self].map(c => JSON.stringify(c)).join(', ') + ']') : undefined
+{`{`}{parameter} => {body}{`}`} =>
+  (goto .) unless . is String
+  (.characters{ {parameter} => {body} }).join("")
+
+// What a number or text is made of: Number, String (a node's own `of` is read before this).
+of =>
+  goto js
+  typeof self === 'number' ? $('Number') : typeof self === 'string' ? $('String') : undefined
+  None
+// A whole number's links (what `Number` walks): the one before it (`next`; none before zero), the one after it.
+next =>
+  goto js
+  typeof self === 'number' && Number.isInteger(self) && self >= 0 ? (self === 0 ? $('None') : self - 1) : undefined
+succ =>
+  goto js
+  typeof self === 'number' && Number.isInteger(self) && self >= 0 ? self + 1 : undefined
+
+// Ranges of numbers: `a..<b` (up to b, not it), `a..b` (with it), going down when b is below a (of anything else, none).
+..{last} =>
+  goto js
+  typeof self === 'number' && typeof last === 'number' ? $('[' + Array.from({ length: Math.abs(last - self) + 1 }, (_, i) => self + (last >= self ? i : -i)).join(', ') + ']') : $('None')
+..<{last} =>
+  goto js
+  typeof self === 'number' && typeof last === 'number' ? $('[' + Array.from({ length: Math.abs(last - self) }, (_, i) => self + (last >= self ? i : -i)).join(', ') + ']') : $('None')
+..<{ }{last} =>
+  . ..<({last})
+..{ }{last} =>
+  . ..({last})
+
+// What a number answers to `?`: whether it holds (one that is zero does not, as `holds` says of a Number).
+? {yes} : {no} =>
+  goto js
+  self === 0 ? undefined : $('goto holds')
+  {no}
+  goto answered
+  holds\
+  {yes}
+  answered\

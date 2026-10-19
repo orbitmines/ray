@@ -3,7 +3,12 @@
 /**/__pycache__
 /**/.idea
 /**/.vscode/*
-/**/.claude
+/**/.claude/settings.local.json
+/**/.claude/worktrees/
 /**/.vite
 /**/.ether
 /**/.*.ts
+/@ether/v0.ts/src/language.*.ts
+/@ether/v0.ts/src/kernel.*/
+/@ether/v0.ts/dist/
+/@ether/v0.ts/@ether/

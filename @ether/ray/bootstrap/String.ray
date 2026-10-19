@@ -1,0 +1,414 @@
+// (Char is made in the entrypoint, its core; what follows is the rest of it)
+Char &+= {
+  static Letter: Char = "a".."z" | "A".."Z"
+  static Digit: Char = "0".."9"
+  static Blank: Char = " " | "\t".."\r"
+  static Word: Char = Letter | Digit | "_"
+
+  is_ascii => this < 128
+  assert "a"[0].is_ascii  // S103 a is not one byte
+  assert !("é"[0].is_ascii)  // S147 é is one byte
+  as (=== Decimal) => this <= "9" ? this - "0" : (this >= "a" ? this - "a" : this - "A") + 10
+  static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
+  assert Char.digit(0) == "0"[0]  // S138 nothing is not written 0
+  assert Char.digit(7) == "7"[0]  // S139 seven is not written 7
+  assert Char.digit(11) == "b"[0]  // S140 eleven is not written b
+}
+assert "ab1"{. is Char.Letter}.length == 2  // S40 selecting letters did not keep two
+assert "8"[0] is Char.Digit  // S71 8 is not a digit
+assert "9"[0] is Char.Digit  // S72 9 is not a digit
+assert "0"[0] is Char.Digit  // S73 0 is not a digit
+assert !(":"[0] is Char.Digit)  // S74 a colon is a digit
+assert !("a"[0] is Char.Digit)  // S75 a is a digit
+assert "q"[0] is Char.Letter  // S87 q is not a letter
+assert "Q"[0] is Char.Letter  // S88 Q is not a letter
+assert !("7"[0] is Char.Letter)  // S89 a digit is a letter
+assert !("_"[0] is Char.Letter)  // S90 an underscore is a letter
+assert "_"[0] is Char.Word  // S93 an underscore is not a word character
+assert "7"[0] is Char.Word  // S94 a digit is not a word character
+assert "q"[0] is Char.Word  // S95 a letter is not a word character
+assert !(" "[0] is Char.Word)  // S96 a space is a word character
+assert " "[0] is Char.Blank  // S97 a space is not blank
+assert !("a"[0] is Char.Blank)  // S98 a is blank
+assert "\n"[0] is Char.Blank  // S99 a newline is not blank
+assert "\t"[0] is Char.Blank  // S100 a tab is not blank
+assert "abc".every(. is Char.Letter)  // S111 abc is not all letters
+assert !("ab3".every(. is Char.Letter))  // S112 ab3 is all letters
+assert "ab3".some(. is Char.Digit)  // S113 ab3 holds no digit
+assert !("abc".some(. is Char.Digit))  // S114 abc holds a digit
+assert U+0041 == "A" as Char  // SE17 U+0041 is not the character A
+
+// What a character is written as: Unicode's transformation formats (a text is UTF-8), each unit of one a scalar. (Here
+// while the bootstrap needs it; Unicode.ray adds the rest of Unicode, its tables.)
+Unicode := class {
+  static CodePoint := class: Hexadecimal{length == 1..6}
+  assert "0061" is Unicode.CodePoint  // UN2 0061 is not a code point
+  assert !("1234567" is Unicode.CodePoint)  // UN4 seven hexadecimal digits are a code point
+  static Scalar := class: CodePoint {
+    dynamically assert this < 0x110000 && !(0xD800 <= this <= 0xDFFF)
+  }
+  assert 10 is Unicode.Scalar  // W17 ten is not a scalar
+  assert "a"[0] is Unicode.Scalar  // S146 a is not a scalar
+  assert 10 is Unicode.Scalar  // UN3 ten is not a scalar
+  assert "a"[0] is Unicode.Scalar  // UN1 a is not a scalar
+
+  static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
+    static CodeUnit: Binary
+    static Decoding := {
+      {unit: UTF-16.Unit{prefix}} => unit.U0 + 1, unit.U1, unit.U2
+      {unit} => unit.U0, unit.U1, unit.U2, unit.U3
+    }
+    as (=== CodePoint[]) => sequence.map(Compiler.reduced(., Decoding))
+    bytes => this as Byte[]
+    assert ("a" as Unicode.UTF-8).bytes.length == 1  // UN18 a is other than one byte in UTF-8
+    assert ("é" as Unicode.UTF-8).bytes.length == 2  // UN19 é is other than two bytes in UTF-8
+    assert ("一" as Unicode.UTF-8).bytes.length == 3  // UN20 一 is other than three bytes in UTF-8
+    assert ("😀" as Unicode.UTF-8).bytes.length == 4  // UN21 😀 is other than four bytes in UTF-8
+    assert ("a" as Unicode.UTF-16).bytes.length == 2  // UN22 a is other than two bytes in UTF-16
+    assert ("😀" as Unicode.UTF-16).bytes.length == 4  // UN23 😀 is other than a surrogate pair in UTF-16
+    assert ("a" as Unicode.UTF-32).bytes.length == 4  // UN24 a is other than four bytes in UTF-32
+    assert (("a" as Unicode.UTF-16).bytes).(
+      . == (0x00, 0x61)  // UN50 a in big-endian UTF-16 is not 00 61
+      & ("a" as Unicode.UTF-16 as Unicode.LittleEndian).bytes == <-.  // UN48 little-endian does not read the bytes right to left
+    )
+    assert ("a" as Unicode.UTF-8 as Unicode.LittleEndian).bytes == (("a" as Unicode.UTF-8).bytes)  // UN49 a single byte is not the same either way
+  }
+  static LittleEndian := TF{} {
+    bytes => <-(this as Byte[])
+  }
+
+  static UTF-8 := class: TF (sequence: Unit[]) => {
+    static CodeUnit := Binary₈
+    static Unit := class (
+      prefix: 1[]{length == 0..4},
+      U0: Binary{length == 8 - prefix.length}{⊢0},
+      (₂10, U1: Binary₆) if prefix ⊢₂11,
+      (₂10, U2: Binary₆) if prefix ⊢₂111,
+      (₂10, U3: Binary₆) if prefix ⊢₂1111
+    )
+  }
+  assert ₂01100001 as Unicode.UTF-8 as String == "a"  // T4 01100001 is not a in UTF-8
+  assert "é" as Unicode.UTF-8 as String == "é"  // UN13 é does not come back from UTF-8
+
+  static UTF-16 := class: TF (sequence: Unit[]) => {
+    static CodeUnit := Binary₁₆
+    static Unit := class (
+      prefix: ₂110110?,
+      U0: Binary₄,
+      U1: Binary{length == 12 - prefix.length},
+      (₂110111, U2: Binary₁₀) if prefix
+    )
+  }
+  assert "\n" as Unicode.UTF-16 as String == "\n"  // UN16 a newline does not come back from UTF-16
+  assert "😀" as Unicode.UTF-16 as String == "😀"  // UN25 😀 does not come back from UTF-16
+
+  static UTF-32 := class: TF (sequence: Unit[]) => {
+    static CodeUnit := Binary₃₂
+    static Unit := class (0[]₁₁, U0: Binary₂₁) => { }
+  }
+  assert "\n" as Unicode.UTF-32 as String == "\n"  // W13 UTF32 round trip failed
+  assert "\n" as Unicode.UTF-32 as String == "\n"  // UN14 a newline does not come back from UTF-32
+  assert "\0" as Unicode.UTF-32 as String == "\0"  // UN15 the null character does not come back from UTF-32
+}
+// A text's characters: by default what a reader sees as one (a grapheme cluster, by Unicode's tables); for now the scalar
+// each UTF-8 unit of it writes, `String.Scalars`, which is what a text is until then (its `first`, its `rest`, `next` into
+// it): String itself, no class of its own (a class made of String is asked of every text read)
+String &+= {
+  static Scalars := String
+}
+// A character by its code point: `U+0041` is A
+U+{codepoint: Hexadecimal.String}: Char => Hexadecimal(integer: codepoint) as Char
+Escape := {
+  \0 => U+0000
+  \a => U+0007
+  \b => U+0008
+  \t => U+0009
+  \n => U+000A
+  \f => U+000C
+  \r => U+000D
+  \e => U+001B
+  \\ => U+005C
+  \" => U+0022
+  \{ => U+007B
+}
+dynamically Escape.for spelling => global[spelling] := spelling -- (spelled => Escape reducing spelled)
+
+\\{prefix: "x" | "u" | "U"}{codepoint: Hexadecimal{.length == (x: 2, u: 4, U: 6)[prefix]} | ("{", codepoint: Hexadecimal{.length == 1..6}, "}")}: Char => codepoint
+\w = Char.Word
+assert "_"[0] is \w  // SE13 an underscore is not a word escape
+\W = !\w
+assert "-"[0] is \W  // SE14 a dash is not a non-word escape
+\s = Char.Blank
+assert " "[0] is \s  // SE30 a space is not a blank escape
+assert !("a"[0] is \s)  // SE31 a letter is a blank escape
+
+Balanced := (Char{!= "{" && != "}" && != "\""} | ("{", Balanced, "}"))[]
+Interpolation := class ("{", code: Balanced, "}") => { }
+// Interpolation, language-tagged literals and patterns (L§10.1, P7.1, U9)
+assert {
+  greeted := "Ada"
+  assert "Hello {greeted}!" == "Hello Ada!"  // SI1 a name in braces is not read into the string
+}
+assert "{1 + 2}" == "3"  // SI2 an expression in braces is not read into the string
+assert "a \{b}".count == 5  // SI3 an escaped brace is read as an expression
+// (a character of a literal that is no quote: named, so the head has no quote inside its quotes)
+Unquoted := Char{!= "\""}
+"{literal: (\\{escape} | Interpolation | Unquoted)[]}": String => literal.map(. is Interpolation ? (inline (.code**)) as String : .).join("").literal_dedented
+assert "\0"[0] == 0  // S144 the null character is not nothing
+assert "\r"[0] == 13  // S145 the carriage return . is not thirteen
+assert "a\tb".length == 3  // SE1 a tab escape is not one character
+assert "\x41" == "A"  // SE3 a hexadecimal escape is not its character
+assert "\q".length == 2  // SE16 an unknown escape is not kept as written
+assert "a\\b".length == 3  // SE5 an escaped backslash is not one character
+
+
+// (String is made in the entrypoint, its core; what follows is the rest of it)
+String &+= {
+  () => &.caller[this]()
+
+  // Ordered as its characters are: one after another by them, the first that differs deciding (one character: as its Char)
+  succ => [(this as Char).succ] as String
+  pred => [(this as Char).pred] as String
+  chainable < (other: String) => (this as Char) < (other as Char)
+  assert "a" < "b"  // SO1 a is not before b
+  assert "a".succ == "b"  // SO2 the character after a is not b
+
+
+  words => .split(Char.Blank | "_")
+  assert "a b".words.length == 2  // W8 words did not split in two
+  assert "a b".words as String == "ab"  // S65 joining a and b with nothing between is not ab
+  assert "a".words.join("-") == "a"  // SJ4 joining one element with a dash is not that element
+  assert "a b c".words as String == "abc"  // SJ5 joining the words of a b c is not abc
+  assert "a b c".words.join("_") == "a_b_c"  // SJ6 joining the words of a b c with an underscore is not a_b_c
+  assert "".words.join("-").empty  // SJ7 joining no words is not empty
+  assert "ab cd".words.length == 2  // S125 ab cd is other than two words
+  assert "ab_cd".words.length == 2  // S126 ab_cd is other than two words
+
+  //TODO Uncide support
+  plural => .ends_with("s") ? this : this + "s"
+  assert "cat".plural == "cats"  // W11 plural failed
+  assert "cats".plural == "cats"  // S53 the plural of cats is not cats
+  singular => .ends_with("s") ? this[..<-1] : this
+  assert "cats".singular == "cat"  // S51 the singular of cats is not cat
+  assert "cat".singular == "cat"  // S52 the singular of cat is not cat
+
+  * (count: Number) => count == 0 ? "" : this, this * (count - 1)
+
+  trimmed => this[{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}]
+  assert "  a b ".trimmed == "a b"  // ST2 trimmed does not drop the blanks around a b
+  assert "\t a\n".trimmed == "a"  // ST3 trimmed does not drop a tab and a newline
+  assert "xxaxx".trimmed("x") == "a"  // ST4 xxaxx trimmed of x is not a
+  assert "a b".trimmed == "a b"  // ST5 trimmed drops a blank between
+  trimmed_end => this[{!(Char.Blank[] ⊣)}]
+  trimmed (characters: Char[]) => this[{!(⊢ characters[] | characters[] ⊣)}]
+  before (other: String) => this ~= (before: *, other, *) -- .before ?? this
+  assert "a=b".before("=") == "a"  // ST6 before = in a=b is not a
+  assert "ab".before("=") == "ab"  // ST8 before what is not there is not the whole text
+  after (other: String) => this ~= (*, other, after: *) -- .after ?? ""
+  assert "a=b".after("=") == "b"  // ST7 after = in a=b is not b
+  assert "ab".after("=").empty  // ST9 after what is not there is not nothing
+
+  starts_with (other: String) => this ~= ⊢ other
+  assert "ab".starts_with("a")  // S62 ab does not start with a
+  assert !("ab".starts_with("b"))  // S63 ab starts with b
+  ends_with (other: String) => this ~= other ⊣
+  assert "ab".ends_with("b")  // S64 ab does not end with b
+  contains (other: String) => this ~= other
+  assert "abc".contains("bc")  // W6 contains failed
+  assert !("abc".contains("ca"))  // W7 contains found ca in abc
+  index_of (other: String) => (this ~= other).index
+  assert "abc".index_of("bc") == 1  // S59 bc does not sit one along in abc
+  assert "abc".index_of("a") == 0  // S60 a does not sit at the start of abc
+
+  lines => split(\n)
+  assert "ab".lines.length == 1  // S70 a text without a newline is other than one line
+  assert "a\nb".lines.length == 2  // ST1 a newline does not separate two lines
+  assert {
+    block_text := "
+        one
+          two
+        three
+    "
+    assert block_text.lines.length == 3  // SM1 a block of three lines with a blank first and last is not three lines
+    assert block_text.lines[0] == "one"  // SM2 the least-indented line of a block keeps no indentation
+    assert block_text.lines[1] == "  two"  // SM3 a line indented further keeps the difference
+    assert block_text.lines[-1] == "three"  // SM4 the last line of a block is not three
+  }
+  assert {
+    started_text := "a
+        b"
+    assert started_text.lines[-1] == "    b"  // SM5 a line with content on the opening line holds the least indentation at nothing
+  }
+  assert {
+    gapped_text := "
+      a
+
+      b
+    "
+    assert gapped_text.lines.length == 3  // SM7 a blank line between two is not kept
+    assert gapped_text.lines[1].empty  // SM8 the blank line between two is not empty
+  }
+  assert {
+    doubled_gap := "
+
+      a
+    "
+    assert doubled_gap.lines.length == 2  // SM9 only one blank line after the opening quote is dropped
+    assert doubled_gap.lines[0].empty  // SM10 the second blank line after the opening quote is not kept
+    assert doubled_gap.lines[-1] == "a"  // SM11 the line after the blank lines keeps its indentation
+  }
+  indentation => (this ~= ⊢ " "[]).length
+  assert "  x".indentation == 2  // ST11 two spaces are not an indentation of two
+  common_indentation => .lines{!.trimmed.empty}.map(.indentation).min ?? 0
+  dedented => .lines.map(.trimmed.empty ? "" : .[this.common_indentation..]).join(\n)
+  assert "  a\n    b".dedented == "a\n  b"  // ST12 dedenting does not keep only the difference
+  assert "a\n  b".dedented == "a\n  b"  // ST13 a text already at no indentation changed
+  literal_dedented => .lines.count == 1 || !.lines.first.trimmed.empty ? this
+    : (.lines[1..] -- (.last.trimmed.empty ? .[..<-1] : .)).join(\n).dedented
+
+  replace (old: String, new: String) => split(old).join(new)
+
+
+  as (base: Number.Base) => Number.numeral(base)(integer: this)
+
+  find_all (pattern: String) => (this ~= pattern)#.index
+}
+assert ("a", "b", "c") as String == "abc"  // SJ1 joining a, b and c with nothing between is not abc
+String &+= Char[]
+
+String[] &+= {
+  as (=== String) => this.reduce(,)
+}
+
+String{.length == 1} as Char => .first
+
+Placement := class (nth_class: Number, written_at: Number) => {
+  chainable <= (other: Placement) => .nth_class < other.nth_class || (.nth_class == other.nth_class && .written_at >= other.written_at)
+}
+Node &+= {
+  placed (spelled) => classes.enumerate{.value.written_as.precedence(spelled) != None}.first
+    -- . ? Placement(nth_class: .index, written_at: .value.written_as.precedence(spelled)) : None
+}
+{a} [x] {b} [y] {c} => a.placed(x) && a.placed(y)
+  ? (a.placed(x) <= a.placed(y) ? (a [x] b) [y] c : a [x] (b [y] c))
+  : None
+
+ParameterList := String{!.contains("{")}
+({parameters: ParameterList}) => {block} => {
+  Program(code: (block**), parameters: (parameters**), context: this)
+}
+
+
+
+
+
+
+
+
+
+assert U+0061 == "a"[0]  // W1 U+0061 is not a
+
+assert U+00E9 == "é"[0]  // W2 U+00E9 is not é
+
+
+
+assert "abc"[..<2] == "ab"  // S56 the first two of abc are not ab
+
+
+
+
+
+
+
+
+
+assert "abcde"[1..<4] == "bcd"  // S106 abcde from one to four is not bcd
+
+
+
+
+
+
+
+
+
+
+assert "A"[0] == U+0041  // DQ2 the character of "A" is not A
+
+
+
+
+
+assert "a\tb"[1] == U+0009  // SE2 a tab escape is not a tab
+
+
+assert "\u00E9"[0] == U+00E9  // SE4 a four-digit escape is not its character
+
+assert "\u{E9}"[0] == U+00E9  // SE15 an escape of two digits in braces is not its character
+
+
+
+assert "\U01F600"[0] == U+1F600  // SE6 a six-digit escape is not its character
+
+assert "\""[0] == U+0022  // SE7 an escaped quote is not a quote
+
+assert "\n"[0] == U+000A  // SE8 a newline escape is not a newline
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Strings, more
+assert `ab` == `ab`  // TQ1 a text is not equal to itself written again
+assert !(`ab` == `ac`)  // TQ2 two texts that differ are equal
+assert !(`ab` == `a`)  // TQ5 a text is equal to its start
+assert !(`a` == `ab`)  // TQ6 a text is equal to what it starts
+assert `ab`.first == `a`  // TQ3 a text's first is not its first character
+assert `ab`.rest == `b`  // TQ4 a text's rest is not what follows its first character
+assert !(`a`.starts_with(`ab`))  // S62c a text starts with what is longer
+assert `ab-cd`.before(`-`) == `ab`  // S135 what is before - in ab-cd is not ab
+assert `abc`.before(`-`) == `abc`  // S136 what is before what is not in a text is not all of it
+assert `aa`.every((c) => c == `a`)  // S137 each of aa is not a
+assert !(`ab`.ends_with(`a`))  // S64b ab ends with a
+assert `a`.rest.count == 0  // S108b nothing written counts something
+assert {
+  walked (text) => text.empty ? `done` : walked(text.rest)
+  walked(`ab`) == `done`
+}  // RC2 a call inside itself does not walk a text
+assert {
+  (left_of_dash, `-`, right_of_dash) := `x-y`
+  left_of_dash == `x`
+}  // DS3 a text destructured by a pattern does not give a place its span
+assert {
+  (start_of, `-`, end_of) := `ab-cd`
+  end_of == `cd`
+}  // DS4 the place after a written text does not take the rest
+// (repeated, `` `ab` * 2 ``: it, as many times as given, one after another)
+String &+= {
+  * (times: Number) => {
+    made := `a`.rest
+    left := times
+    while !left.is_zero {
+      made = made + this
+      left = left.pred
+    }
+    made
+  }
+  assert `ab` * 2 == `abab`  // RP5 a text twice is not it twice
+  assert `a` * 3 == `aaa`  // RP7 a text three times is not it three times
+  assert (`ab` * 0).empty  // RP6 a text no times is something
+}
+// (turned around, as any ray is (Ray.ray's `reverse`): its characters last to first)
+assert `abc`.reverse == `cba`  // TR1 a text turned around is not its characters last to first
+assert `ab`.reverse.reverse == `ab`  // TR2 a text turned around twice is not as it was
+assert `a`.rest.reverse.empty  // TR3 nothing turned around is something

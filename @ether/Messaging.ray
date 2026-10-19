@@ -1,0 +1,15 @@
+Channel := Program + History
+assert (Channel() |= Program(code: { @me.device })).count == 1  // CH7 a channel refused a program
+Chat := Channel{Pure & Terminating}
+// A channel is a history read as the program it is; a message is a commit carrying any program. A chat narrows it.
+assert {
+  room := Chat()
+  assert room.count == 0  // CH1 a new chat already holds messages
+  room.commit(1, Program(code: { "hi" }))
+  assert room.count == 1  // CH2 sending something does not keep it
+  room.commit(2, Program(code: { "ho" }))
+  assert room.count == 2  // CH3 sending twice keeps other than two
+  assert room.first.who == 1  // CH4 a message forgot who sent it
+  assert room.last.change() == "ho"  // CH5 a message forgot what was sent
+  assert (room |= Program(code: { while true { } })).erred  // CH6 a chat took a program that breaks its narrowing
+}

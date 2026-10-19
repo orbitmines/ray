@@ -1,0 +1,61 @@
+if (process.env.STACK) Error.stackTraceLimit = 100000;
+// usage: site3.mts [EXPRESSION…] — reads, on language.ts: .entrypoint.ray2 + js.kinds.ray, the core library, the @ether projects the
+// site needs (dependencies first), the site's files (index.ray last); per file: ms, threw, unread; then each expression (default:
+// the site's TUI run) with what it reported and wrote.
+const ether = process.env.ETHER ?? '/home/fs/Documents/github.com/orbitmines/ray/@ether';
+const { Program, Text } = await import(`${ether}/v0.ts/src/language.ts`);
+const fs = await import('node:fs'), path = await import('node:path');
+const site = path.resolve(process.env.ORBITMINES_COM ?? path.resolve(ether, '../../orbitmines.com'), 'orbitmines.com.ray');
+// (what a file uses, for the order files are read in: not its comments, nor its tests (`assert …`: read after everything))
+const Library_read = (text: string) => { const out: string[] = []; let skip = -1; for (const line of text.split('\n')) { const at = line.length - line.trimStart().length; if (skip >= 0 && line.trim() && at > skip) continue; skip = -1; if (/^\s*assert\b/.test(line)) { skip = at; continue; } out.push(line.replace(/(^|\s)\/\/.*$/, '')); } return out.join('\n'); };
+const reading_order = (files: { path: string; text: string }[]): string[] => {
+  const defines = (text: string) => new Set([...text.matchAll(/^([A-Za-z_][\w-]*)(?:\s*<[^>\n]*>)?\s*(?:\^[\w.]+\s*)?:=/gm)].map(m => m[1]));
+  const info = files.map(f => ({ path: f.path, defines: defines(f.text), uses: new Set(Library_read(f.text).match(/[A-Za-z_][\w]*/g) ?? []) }));
+  const needs = new Map(info.map(f => [f.path, new Set(info.filter(g => g !== f && [...g.defines].some(name => f.uses.has(name) && !f.defines.has(name))).map(g => g.path))]));
+  const order: string[] = [], left = new Set(info.map(f => f.path));
+  while (left.size > 0) { const waiting = (p: string) => [...needs.get(p)!].filter(q => left.has(q)).length; const next = [...left].sort((a, b) => waiting(a) - waiting(b) || (a < b ? -1 : 1))[0]; order.push(next); left.delete(next); }
+  return order;
+};
+const ray_files = (dir: string) => fs.readdirSync(dir).filter((f: string) => f.endsWith('.ray') && !f.startsWith('.') && !f.startsWith('entrypoint.')).map((f: string) => path.join(dir, f));
+const skipped = (process.env.SKIP ?? 'html,css,js,json,opentype,png').split(',');
+const dir_of = (name: string) => { if (name === '@ether') return ether; if (!name.startsWith('@ether/')) { const sub = name.slice(1).toLowerCase(); const d = path.join(ether, '$', sub); return !skipped.includes(sub) && fs.existsSync(d) ? d : undefined; } const sub = name.slice('@ether/'.length).toLowerCase(); const d = path.join(ether, sub); return fs.existsSync(d) ? d : undefined; };
+const projects: string[] = [], seen = new Set<string>();
+const visit = (dir: string) => { if (seen.has(dir)) return; seen.add(dir); const pf = path.join(dir, '.project.ray'); const deps = fs.existsSync(pf) ? fs.readFileSync(pf, 'utf8').split('\n').map((l: string) => l.trim()).filter((l: string) => l.startsWith('@')) : []; for (const d of deps) { const dd = dir_of(d); if (dd) visit(dd); } projects.push(dir); };
+for (const d of fs.readFileSync(path.join(site, '.project.ray'), 'utf8').split('\n').map((l: string) => l.trim()).filter((l: string) => l.startsWith('@ether'))) { const dd = dir_of(d); if (dd) visit(dd); }
+const p: any = new Program(new Text.Source('@ether/ray/.entrypoint.ray2')); await p.compile();
+const kinds = () => p.run(p.kinds.rest, { node: p.global });
+const STEPS = Number(process.env.STEPS ?? 300000), LIMIT = Number(process.env.LIMIT ?? 4);
+const rd = p.read; let steps = 0, unread: string[] = [];
+let cyc_depth = 0, cyc_shown = 0; const cyc_stk: string[] = [];
+const short = (l: string) => l.slice(0, 300).replace(/\{\uE000[^}]*\}/g, (m: string) => '⟨' + m.slice(2, 8) + '⟩').replace(/\s+/g, ' ').slice(0, 150);
+if (process.env.TRAIL) { const reported = p.outside.get('report'); p.outside.set('report', (frame: any, next: any) => { if (frame.reading) frame.reading.trail = trail_stk.map(short); return reported(frame, next); }); }
+const trail_stk: string[] = [];
+const prof = new Map<string, number>(); (globalThis as any).prof = prof;
+p.read = function (s: string, f: any, x?: any, a?: any) { if (process.env.PROF) { const k = String(p.source(s.length > 200 ? s.slice(0, 200) : s)).replace(/\s+/g, ' ').slice(0, 70); prof.set(k, (prof.get(k) ?? 0) + 1); } if (process.env.TRAIL) trail_stk.push(s); if (process.env.CYC) { cyc_stk.push(s); if (++cyc_depth === 250 && !cyc_shown++) { console.log('CYCLE'); if (process.env.HEAD_) { for (const l of cyc_stk.slice(0, Number(process.env.HEAD_))) console.log('   ^ ', short(l)); } for (const l of cyc_stk.slice(-Number(process.env.LINES_ ?? 30))) console.log('    ', short(l)); } } try { if (++steps > STEPS) { if (process.env.CYC && !cyc_shown++) { console.log('RUNAWAY'); for (const l of cyc_stk.slice(-Number(process.env.LINES_ ?? 30))) console.log('    ', short(l)); } throw new Error('ran away at ' + JSON.stringify(String(p.source(s)).slice(0, 60))); } let v: unknown; try { v = rd.call(this, s, f, x, a); } catch (e: any) { if ((process.env.DUMP || process.env.DUMPX) && e instanceof RangeError && !(globalThis as any).snap) (globalThis as any).snap = cyc_stk.slice(); throw e; } if (typeof v === 'string' && !s.startsWith('"') && !s.startsWith('`') && v === p.source(s) && /[A-Za-z]/.test(v)) unread.push(v); return v; } finally { if (process.env.TRAIL) trail_stk.pop(); if (process.env.CYC) { cyc_depth--; cyc_stk.pop(); } } };
+const read_file = (file: string, text: string) => {
+  const t0 = performance.now(), threw: string[] = []; let unreadn = 0; const before = p.reports.length;
+  const sts: string[] = p.code(text).statements;
+  for (const st of sts) { if (!st.trim() || st.trim().startsWith('//')) continue; steps = 0; cyc_shown = 0; unread = []; let whole: unknown; try { whole = p.run(st, { node: p.global }); } catch (e: any) { threw.push(st.split('\n')[0].slice(0, 70) + '  ⟶ ' + String(e?.message ?? e).slice(0, 70)); if (process.env.STACK && st.startsWith(process.env.STACK)) console.log(String(e?.stack)); const snap = (globalThis as any).snap; if (process.env.DUMP && snap && st.startsWith(process.env.DUMP)) { console.log('DUMP depth', snap.length); const seen = new Map<string, number>(); for (const l of snap) { const k = short(l).slice(0, 100); seen.set(k, (seen.get(k) ?? 0) + 1); } for (const [k, n] of [...seen].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(String(n).padStart(5), k); if (process.env.DUMPAT) { const i = snap.findIndex((l: string) => short(l).startsWith(process.env.DUMPAT)); for (const l of snap.slice(Math.max(0, i - 25), i + 25)) console.log('   |', short(l).slice(0, 150)); } } (globalThis as any).snap = undefined; } if (typeof whole === 'string' && whole.trim() === String(p.source(st)).trim()) { unreadn++; if (process.env.UNREAD && file.includes(process.env.UNREAD) && unreadn <= Number(process.env.N ?? 6)) console.log('     unread', JSON.stringify(st.slice(0, 90)), ''); } }
+  if (!process.env.Q || threw.length) console.log(path.relative(path.resolve(ether, '../..'), file).padEnd(52), String(Math.round(performance.now() - t0)).padStart(6), 'ms', String(sts.length).padStart(4), 'st', String(threw.length).padStart(3), 'threw', String(p.reports.length - before).padStart(3), 'reports', String(unreadn).padStart(4), 'unread');
+  for (const x of threw.slice(0, LIMIT)) console.log('     threw', x);
+};
+const group = (files: string[]) => { const texts = files.map(f => ({ path: f, text: fs.readFileSync(f, 'utf8') })); for (const f of reading_order(texts)) { read_file(f, texts.find(t => t.path === f)!.text); if (process.env.WATCH) { let v: any; try { v = p.run(process.env.WATCH, { node: p.global }); } catch (e: any) { v = 'THREW'; } console.log('   WATCH', process.env.WATCH, '=', v instanceof Program.Node ? v.rules.slice(0, 4).map((r: any) => r.head).join(',') : JSON.stringify(v)); } } };
+const T0 = performance.now();
+group(ray_files(path.join(ether, 'ray')));
+if (process.env.KINDS_AFTER) kinds();
+console.log('-- core library', Math.round(performance.now() - T0), 'ms');
+const only = process.env.ONLY?.split(',');
+for (const dir of projects.filter(d => !only || only.includes(path.relative(ether, d) || '@ether'))) { const t = performance.now(); group(ray_files(dir)); console.log('-- project', path.relative(ether, dir) || '@ether', Math.round(performance.now() - t), 'ms'); }
+if (!process.env.NOSITE) { const own = ray_files(site); group(own.filter(f => !f.endsWith('/index.ray'))); read_file(path.join(site, 'index.ray'), fs.readFileSync(path.join(site, 'index.ray'), 'utf8')); }
+if (process.env.PROF) { console.log([...prof].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([k, n]) => String(n).padStart(8) + '  ' + k).join('\n')); }
+console.log('-- read everything', Math.round(performance.now() - T0), 'ms');
+const asked = process.argv.slice(2);
+if (process.env.JSX) console.log('JSX', await (new Function('p', 'Program', 'return (async () => { ' + process.env.JSX + ' })()'))(p, Program));
+for (const x of asked.length ? asked : ['Program(code: { orbitmines.com }).run(@me/instance)']) {
+  if (process.env.RD) { const c = p.candidates(x, p.global, p.outermost(x) ? 2 : 0, undefined); console.log('> readings', JSON.stringify(x)); for (const r of p.readings(x, c, true).slice(-8)) console.log('   ', r.rule.head, JSON.stringify(r.spans), r.rule.home === p.global ? 'global' : 'node'); continue; }
+  const before = p.reports.length, t = performance.now(); steps = 0; let v: unknown;
+  try { v = p.run(x, { node: p.global }); } catch (e: any) { v = 'THREW ' + String(e?.message ?? e).slice(0, 200); const snap = (globalThis as any).snap; if (process.env.DUMPX && snap) { const i = snap.findIndex((l: string) => short(l).startsWith(process.env.DUMPX)); for (const l of snap.slice(Math.max(0, i - 3), i + Number(process.env.N_ ?? 40))) console.log('   |', short(l).slice(0, 160)); } }
+  console.log('>', JSON.stringify(x).slice(0, 70), '=', v instanceof Program.Node ? 'node(' + v.rules.slice(0, 10).map((r: any) => r.head).join(',') + ')' : JSON.stringify(v)?.slice(0, 300), `(${Math.round(performance.now() - t)} ms)`);
+  const trail = (r: any) => (r.trail ?? []).slice(-Number(process.env.TRAIL ?? 6)).reverse();
+  for (const r of p.reports.slice(before)) { console.log('    report:', String(p.source(r.caps?.message ?? '')).slice(0, 150)); if (process.env.TRAIL) for (const l of trail(r)) console.log('        <', l); }
+}

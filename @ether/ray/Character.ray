@@ -1,0 +1,146 @@
+Entity := class {
+  // A private key is a secret: readable by no one (W2.1 Storage), so no store, history or cache level writes it, and logging out drops it.
+  none.read key: Encoding.Key?
+
+  // The same principal as `other`: here, the same value; @ether/security compares verified roots instead.
+  same (other) => this === other
+  // an entity compared with itself and with another
+  assert {
+    e := Entity()
+    assert e.same(e)  // CHR2 an entity is not the same as itself
+    assert !e.same(Entity())  // CHR3 two different entities are the same
+  }
+  // Whether this principal answers for `who`, a principal named by a grant, a delegation or a registry, or any narrowing of principals.
+  answers_for (who) => same(who) || this is who
+  // an entity asked whether it answers for itself and for another
+  assert {
+    e := Entity()
+    assert e.answers_for(e)  // CHR5 an entity does not answer for itself
+    assert !e.answers_for(Entity())  // CHR6 an entity answers for another entity
+  }
+}
+
+Nameable := class {
+  static PREFIX: String?
+  name: *?
+
+  named (name): static => this ~~ .name |= name
+  assert Nameable.named("Bob").name == "Bob"  // CHR7 naming does not give the name
+  assert !(Nameable.named("Bob").name == "Alice")  // CHR8 naming gives another name
+}
+
+// Kinds of name, told apart by what is written: a name is any of them that matches.
+
+// A person's full name as it is written, in any script (https://www.w3.org/International/questions/qa-personal-names): name
+// parts of letters and marks, separated by spaces or a script's name separator (列奥纳多·达·芬奇, レオナルド・ダ・ヴィンチ), joined
+// inside by hyphens, apostrophes or zero-width (non-)joiners (Smith-Jones, O'Brien, Persian half-spaces), or an initial with a
+// period (J. R. R. Tolkien). Casing is not asked: most scripts have none (محمد بن سلمان, Нгуен, Þórunn Guðmundsdóttir).
+// Which part is given and which family differs by culture — family first in Chinese, Japanese, Korean, Vietnamese, Hungarian;
+// two family names in Spanish; patronymics in Icelandic; none at all for many — so a full name is kept as its parts, not split.
+// One part alone is a full name only in scripts that write names without spaces (毛泽东, 김민준, やまだたろう); a single word in
+// other scripts is a plain name, as one-word names (mononyms) cannot be told apart from handles.
+FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[]{length > 0}) | FullName.Unspaced[]{length > 0}) => {
+  static Letter := Unicode.GeneralCategory.(Letter | Mark)
+  assert "a"[0] is Unicode.GeneralCategory.Letter  // W14 a is not a letter
+  static Joiner := "-" | "‐" | "'" | "’" | "ʼ" | "‌" | "‍"
+  static Part := (FullName.Letter[]{length > 0}, (FullName.Joiner, FullName.Letter[]{length > 0})[]) | (FullName.Letter, ".")
+  assert "Jane Smith" is FullName  // CHR9 a first and a family name are not a full name
+  assert "Jane Smith-Jones" is FullName  // CHR10 a hyphenated name part is not a full name part
+  assert "Patrick O'Brien" is FullName  // CHR11 an apostrophe inside a name part is not allowed
+  assert "J. R. R. Tolkien" is FullName  // CHR12 initials with periods are not a full name (https://www.w3.org/International/questions/qa-personal-names)
+  assert "Þórunn Guðmundsdóttir" is FullName & "محمد بن سلمان" is FullName  // CHR13 a name in another script is not a full name
+  assert !("Madonna" is FullName)  // CHR14 a single word in a script with spaces is a full name (one-word names cannot be told from handles)
+  assert !("Jane Smith3" is FullName)  // CHR15 digits are part of a full name
+  assert !("Jane @ Smith" is FullName)  // CHR16 text with a symbol is a full name
+  static Separator := Unicode.GeneralCategory.Space_Separator | "·" | "・" | "･"
+  static Unspaced := Char.Han | Char.Hiragana | Char.Katakana | Char.Hangul | Char.Yi | Unicode.GeneralCategory.Mark
+  assert "毛泽东" is FullName & "김민준" is FullName & "やまだたろう" is FullName  // CHR17 one part alone in a script that writes names without spaces is not a full name
+  assert "列奥纳多·达·芬奇" is FullName  // CHR18 a name with the middle dot separator is not a full name
+  parts => written.split(FullName.Separator)
+  assert ("Jane Smith" as FullName).parts == ["Jane", "Smith"]  // CHR19 the parts of a full name are not split at its separators
+  assert ("Jane Smith-Jones" as FullName).parts == ["Jane", "Smith-Jones"]  // CHR20 a hyphenated part is split
+  assert ("レオナルド・ダ・ヴィンチ" as FullName).parts == ["レオナルド", "ダ", "ヴィンチ"]  // CHR21 the parts of a name separated by the Japanese middle dot are not split there
+}
+
+// An email address (https://www.rfc-editor.org/rfc/rfc5322#section-3.4.1), UTF-8 allowed in both parts (https://www.rfc-editor.org/rfc/rfc6531#section-3.3):
+// a dot-atom or a quoted local part of at most 64 characters, "@", then a domain of at least two labels or an address literal
+// (https://www.rfc-editor.org/rfc/rfc5321#section-4.1.3, https://www.rfc-editor.org/rfc/rfc5321#section-4.5.3.1).
+Email := class (local: Email.Local{length <= 64}, "@", domain: Email.Domain{length <= 253}) => {
+  // atext: any visible character but the specials, or any non-ASCII one.
+  static Atom := Char{!is_ascii || "!" <= this <= "~" && !"()<>[]:;@\\,.\"".contains(this)}[]{length > 0}
+  static Local := (Email.Atom, (".", Email.Atom)[]) | ("\"", (Char{" " <= this <= "~" && != "\"" && != "\\"} | ("\\", Char{" " <= this <= "~"}))[], "\"")
+  // A label: letters and digits, hyphens only inside, at most 63 (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.1, https://www.rfc-editor.org/rfc/rfc5890).
+  static Alphanumeric := Char.Letter | Char.Digit | Char{!is_ascii}
+  static Label := (Email.Alphanumeric, ((Email.Alphanumeric | "-")[], Email.Alphanumeric)?){length <= 63}
+  static Domain := (Email.Label, (".", Email.Label)[]{length > 0}) | ("[", IPv4 | ("IPv6:", IPv6), "]")
+  assert "fadi@orbitmines.com" is Email  // CHR22 a plain address (RFC 5322) is not an email
+  assert "first.last@mail.orbitmines.com" is Email  // CHR23 a dotted local part is not an email
+  assert "\"john doe\"@orbitmines.com" is Email  // CHR24 a quoted local part with a space is not an email (RFC 5322 section 3.4.1)
+  assert "user@[192.168.0.1]" is Email  // CHR25 an address literal domain is not an email (RFC 5321 section 4.1.3)
+  assert "用户@例子.广告" is Email  // CHR26 UTF-8 in the local part is not an email (RFC 6531)
+  assert !("plainaddress" is Email)  // CHR27 text without "@" is an email
+  assert !("@orbitmines.com" is Email)  // CHR28 an address without a local part is an email
+  assert !("user@localhost" is Email)  // CHR29 a domain of one label is an email
+  assert !("a..b@orbitmines.com" is Email)  // CHR30 two dots in a row in the local part are an email
+  assert !(".a@orbitmines.com" is Email)  // CHR31 a leading dot in the local part is an email
+  assert !("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@orbitmines.com" is Email)  // CHR32 a local part over 64 characters is an email (RFC 5321 section 4.5.3.1.1)
+  assert !("a@-orbitmines.com" is Email)  // CHR33 a label starting with a hyphen is an email
+}
+
+// A phone number as people write it (https://www.itu.int/rec/T-REC-E.123): international with "+" or national, 3 to 15 digits
+// (https://www.itu.int/rec/T-REC-E.164) grouped by spaces, dashes or dots, groups possibly parenthesised (+1 (555) 123-4567,
+// +31 (0)6 1234 5678, (020) 123 4567), and an extension after (https://www.rfc-editor.org/rfc/rfc3966#section-5.1.5).
+Phone := class (
+  international: "+"?,
+  grouped: (Phone.Separator?, Char.Digit | ("(", Char.Digit[]{length == 1..5}, ")"))[]{length == 3..15},
+  (Phone.Separator?, ("ext." | "ext" | "x" | ";ext="), Phone.Separator?, extension: Char.Digit[]{length == 1..6})?
+) => {
+  static Separator := " " | "-" | "."
+  assert "+1 (555) 123-4567" is Phone  // CHR34 an international number with groups (RFC 3966, E.123) is not a phone number
+  assert "555 1234 x12" is Phone  // CHR35 a number with an extension is not a phone number (RFC 3966 section 5.1.5)
+  assert "+44.20.7946.0958" is Phone  // CHR36 dotted groups are not a phone number
+  assert !("12" is Phone)  // CHR37 two digits are a phone number (E.164 asks for at least 3)
+  assert !("call me" is Phone)  // CHR38 letters are a phone number
+  assert !("+1234567890123456" is Phone)  // CHR39 more than 15 digits are a phone number (E.164)
+  // What is dialled: the digits alone, "+" first when written internationally (a global number, RFC 3966). A trunk prefix
+  // written "(0)" is dialled only nationally, so it is left out of an international number (E.123: +31 (0)6 … is +316 …).
+  digits => (international ?? "") + grouped.map(.last){!international || != "(0)"}.join{is Char.Digit}
+  assert ("+44 20 7946 0958" as Phone).digits == "+442079460958"  // CHR40 the digits dialled of an international number are not "+" and its digits
+  assert ("+1 555-123-4567" as Phone).digits == "+15551234567"  // CHR41 grouping characters are dialled
+  assert ("+31 (0)6 1234 5678" as Phone).digits == "+31612345678"  // CHR42 the trunk prefix "(0)" is dialled in an international number (E.123: +31 (0)6 1234 5678 is +316 1234 5678)
+  assert ("555 1234" as Phone).digits == "5551234"  // CHR43 a national number is dialled with "+"
+}
+
+@me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
+// (a path under the character running: each name a member of what is before it, `@me/device/keyboard`)
+@me/{path} ^string => Character.walked(@me, "{path}".split("/"))
+@{who: (Char.Word | "-")[] | UUID} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: block**)
+@{who: (Char.Word | "-")[] | UUID}~{literal label ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
+  -- (entry => with (@me = entry.of) Program(code: block**) ~~ Program(code: entry.following).entered(entry.of, None))
+
+Character := class: Hierarchy + Entity + Nameable {
+  static PREFIX := "@"
+  static local (who) => who == "me" ? @me : None
+  static walked (at, names) => names.empty ? at : Character.walked(at[names.first], names.rest)
+  assert Character.local("me").same(@me)  // CHR44 `@me` is not the local character "me"
+  assert Character.local("nobody-here") == None  // CHR45 a character that is not here is local
+  assert Character.walked(Document(entries: [(name: "a", value: 1)]), []).a == 1  // CHR46 walking no names does not stay at the start
+  assert Character.walked(Document(entries: [(name: "a", value: Document(entries: [(name: "b", value: 7)]))]), ["a", "b"]) == 7  // CHR47 walking names does not enter each member in turn
+  assert Character.walked(Document(entries: [(name: "a", value: 1)]), ["b"]) == None  // CHR48 walking into a name that is not there finds something
+
+  quests => Program#{who: this}{running}
+  assert @me.acting.same(@me)  // CHR49 a character is not the character it acts as
+  assert @me/quests == @me.quests  // JB7 @me/quests is not the character's selection of its programs
+  full_name => name{is FullName}
+  email => name{is Email}
+  phone => name{is Phone}
+  assert Character().named("Jane Smith").full_name == "Jane Smith"  // CHR50 a character named with a full name has no full name
+  assert Character().named("jane@orbitmines.com").full_name == None  // CHR51 a character named with an email has a full name
+  assert Character().named("jane@orbitmines.com").email == "jane@orbitmines.com"  // CHR52 a character named with an email has no email
+  assert Character().named("+1 555 123 4567").phone == "+1 555 123 4567"  // CHR53 a character named with a phone number has no phone
+  assert Character().named("Jane Smith").phone == None  // CHR54 a character named with a full name has a phone
+  // Without @ether/security a character is only itself; security replaces this with the verified comparison.
+  as (=== boolean) => this === @me
+  acting => this
+  chainable == (other) => ERROR@Security `comparing characters needs @ether/security (or @ether/network)`
+}

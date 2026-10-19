@@ -1,0 +1,57 @@
+// A command line: what a program is called with, read into what `CLI` is where it is read (`with CLI = CLI { … }`: a tool,
+// its options its fields). Its arguments are one text, each ended by `\0` (as the OS holds them: no argument holds one).
+// Operands are kept in order (`operands`);
+// `--name=value` and `--name value` give its field `name` the value, read as that field's type (a boolean is given true and
+// takes no value; a list, `T[]`, collects each one given); `-abc` gives the fields named `a`, `b` and `c` (`help | h:
+// boolean`), the last of them a value the same way; `-` alone is an operand, and after `--` everything is. A field's side
+// comment is what `--help` says it does. Every tool has `--help` and `--version`; what else it does is its `run`.
+CLI := class (arguments: (
+  (`--`, "\0", operands: (operand: String, "\0")[]) |
+  (`--`, name: String+, `=`, value: String, "\0") |
+  (`--`, name: String+, "\0", value: String, "\0") if !(this[name] === boolean) |
+  (`--`, name: String+, "\0") |
+  (`-`, names: String+, (`=`, value: String)?, "\0") |
+  (operand: String, "\0")
+)[]) => {
+  name: String
+  %: String
+  help | h: boolean                          // Print this help and exit.
+  version: boolean                           // Print the version number.
+
+  // (each option, by its name or an alias of it, given what it was given, read as its field's type; the operands in order)
+  arguments{.name | .names}.map((given) => (given.name ?? given.names.map(String)).map((named) =>
+    (this[named] === None) ? ERROR@cli.args.unknown `{named} is not an option of {name}` :
+    this[named] = (given.value === None) ? true : (given.value as this[named]) ?? ERROR@cli.args.type `{named} takes {this[named]}, given "{given.value}"`
+  ))
+  operands := arguments{.operand | .operands}.map(.operands ?? [.]).flatten(1)
+
+  usage => (name, " ", %, "\nUsage: ", name, " [options] [operands]\nOptions:", .fields.map(("\n  --", .name, "  ", .description)))
+  run => None                                // what the tool does (`with CLI = CLI { run => … }`)
+  => (@me/instance = (name, " ", %) if version) |
+    (@me/instance = usage if help) |
+    run
+}
+
+// (its parts, each in turn)
+assert "a.ray\0" is CLI  // CLI1 an operand ended by \0 is not a command line
+assert ("a.ray\0b.ray\0" as CLI).operands == ("a.ray", "b.ray")  // CLI2 operands are not read in order
+assert ("--\0-x\0" as CLI).operands == ("-x")  // CLI3 after `--` an option is not an operand
+assert ("-\0" as CLI).operands == ("-")  // CLI4 `-` alone is not an operand
+assert {
+  Tool := class: CLI {
+    abstract | n: boolean
+    threads: Decimal = 1
+    include: String[]
+  }
+  with CLI = Tool
+  assert ("--abstract\0" as CLI).abstract  // CLI5 `--name` does not set a boolean field
+  assert ("-n\0" as CLI).abstract  // CLI6 `-n` does not set the field aliased n
+  assert ("--threads=4\0" as CLI).threads == 4  // CLI7 `--name=value` is not read as the field's type
+  assert ("--threads\04\0" as CLI).threads == 4  // CLI8 `--name value` does not take the next argument
+  assert ("--abstract\0a.ray\0" as CLI).operands == ("a.ray")  // CLI9 a boolean option takes the next argument
+  assert ("--include\0a\0--include\0b\0" as CLI).include == ("a", "b")  // CLI10 a list option keeps one value
+  assert ("" as CLI).threads == 1  // CLI11 an option not given does not read its default
+  // (and what is said, not asserted (an error said fails the test it is in): `--nothing\0` an ERROR@cli.args.unknown,
+  // `--threads=x\0` an ERROR@cli.args.type)
+}
+

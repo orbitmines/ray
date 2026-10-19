@@ -1,0 +1,1448 @@
+// The kernel read by Ray (spec/Bootstrap.md, SH6): `kernel.ts` read by rules declared here for the language it is written
+// in, functions of 32-bit integers in JavaScript's syntax, writing what `jmp_of` writes for it, a line at a time: a context
+// `& name params`, a label `: name`, a statement `target condition into a b` (a cell by its name, a constant `=n`, no cell
+// `-`). `scripts/kernel-jmp.mts --check` holds what it wrote against `jmp_of`'s.
+// Each line of the file is read whole by the types below (`K_…`), the language's rules: each answers what it read, a word as
+// it is written, anything else a node (`kind` and its parts). A block on lines of its own is no part of what they read: its
+// lines are read where the line's rule is, between its head opened and closed (a comment in it read as one is anywhere). The
+// walk of a node writes its JMP, in the order `jmp_of` writes it. Read by `kernel.jmp.ray`.
+
+// What is being written: the constants read so far; the context's own counts (its cells made, `$0` on; its calls, each
+// argument a cell of its own, `name#k#i`), the loop it is in, the labels not yet written (each is where the next statement
+// is), and an `if` an `else` on the next line may take; and what is being read: `mode` 1 the kernel's constants, 2 its
+// functions, 3 a function's body, 4 a function's body passed over in the first reading, 5 one passed over in the second (not
+// among those written, `from` up to `until` of them, counted in `count`), 0 neither.
+global["kjs"] := {
+  mode := 0
+  n := 0
+  calls := 0
+  loop := None
+  marks := None
+  open_if := None
+  chain := None
+  closers := None
+  consts := { }
+  from := 0
+  until := None
+  count := 0
+  one := Int32.made_from(1)
+  zero := Int32.made_from(0)
+}
+kjs.minus_one = kjs.zero - kjs.one
+global["Kjs_const"] := class (const_value) => { }
+kjs.consts["DEBUG"] = Kjs_const(kjs.zero)
+kjs.consts["LOOP_LIMIT"] = Kjs_const(kjs.zero)
+// (each made by a function of its parts, of the class: a class called with more than one is many times the cost; its parts
+// on lines of their own, a part after a `;` not the node's)
+// (a node read; a cell made for a value, `$n`; a call's argument, `name#k#i`; a label, `#$n` and what follows; a loop's two
+// labels; one of a list and what follows it)
+global["Kjs_node"] := class { }
+global["Kjs_temp"] := class (number) => { temp := true }
+global["Kjs_arg"] := class (called, call, index) => { arg := true }
+kjs_arg (made_called, made_call, made_index) => Kjs_arg &+ {
+  called := made_called
+  call := made_call
+  index := made_index
+}
+global["Kjs_label"] := class (number, suffix) => { label := true }
+kjs_label (made_number, made_suffix) => Kjs_label &+ {
+  number := made_number
+  suffix := made_suffix
+}
+global["Kjs_loop"] := class (next, end) => { }
+kjs_loop (made_next, made_end) => Kjs_loop &+ {
+  next := made_next
+  end := made_end
+}
+global["Kjs_cell"] := class (value, below) => { }
+kjs_cell (made_value, made_below) => Kjs_cell &+ {
+  value := made_value
+  below := made_below
+}
+global["Kjs_link"] := class (value, later) => { }
+kjs_link (made_value, made_later) => Kjs_link &+ {
+  value := made_value
+  later := made_later
+}
+
+// Written out: an operand as `jmp_of`'s lines show it; a statement, after the labels that are where it is; a label; a context.
+// (each line written in its parts, each with `external output`: none made into a list, a list of its parts costing more
+// than all the rest; what the host says comes between them only when something is not read)
+kjs_put (x) => {
+  if x.temp === true {
+    external output `$`
+    external output (external int32 text x.number)
+    return 0
+  }
+  if x.arg === true {
+    external output x.called
+    external output `#`
+    external output (external int32 text x.call)
+    external output `#`
+    external output (external int32 text x.index)
+    return 0
+  }
+  if x.label === true {
+    external output `#$`
+    external output (external int32 text x.number)
+    external output x.suffix
+    return 0
+  }
+  if x.bits !== None {
+    external output `=`
+    external output x.digits
+    return 0
+  }
+  external output x
+}
+kjs_flush (marks) => {
+  if marks !== None {
+    kjs_flush(marks.below)
+    external output `: `
+    kjs_put(marks.value)
+    external output "\n"
+  }
+}
+kjs_line (target, condition, into, a, b) => {
+  if kjs.mode == 3 {
+    kjs_flush(kjs.marks)
+    kjs.marks = None
+    kjs_put(target)
+    external output ` `
+    kjs_put(condition)
+    external output ` `
+    kjs_put(into)
+    external output ` `
+    kjs_put(a)
+    external output ` `
+    kjs_put(b)
+    external output "\n"
+  }
+}
+kjs_jmp (target, into, a, b) => kjs_line(target, kjs.one, into, a, b)
+kjs_goto (label) => kjs_line(label, kjs.one, `-`, kjs.zero, kjs.zero)
+kjs_mark (label) => {
+  kjs.marks = kjs_cell(label, kjs.marks)
+}
+kjs_fresh (unused) => {
+  made := Kjs_temp(kjs.n)
+  kjs.n = kjs.n + 1
+  made
+}
+kjs_here (k, suffix) => kjs_label(k.number, suffix)
+kjs_constant (x) => x.bits !== None
+kjs_begin (called, params) => {
+  external output `& `
+  external output called
+  at := params
+  while at !== None {
+    external output ` `
+    external output at.car
+    at = at.cdr
+  }
+  external output "\n"
+}
+
+// Values: a word (a numeral, a constant, `true`, `THREAD`, or a cell by its name), an operator on two (worked out when both are
+// constants, as JavaScript would, `| 0`), on one, a call.
+kjs_word (written) => {
+  numeral := Int32.numeral(written)
+  if numeral.bits !== None { return numeral }
+  if written == "true" { return kjs.one }
+  if written == "false" { return kjs.zero }
+  if written == "THREAD" {
+    threaded := kjs_fresh(0)
+    kjs_jmp(`thread`, threaded, kjs.zero, kjs.zero)
+    return threaded
+  }
+  held := external member kjs.consts written
+  if (held !== None) && (held.const_value !== None) { return held.const_value }
+  written
+}
+kjs_folded (op, x, y) => {
+  if op == "+" { return x + y }
+  if op == "-" { return x - y }
+  if op == "*" { return x * y }
+  if op == "/" { return x / y }
+  if op == "%" { return x % y }
+  if op == "&" { return x ~&& y }
+  if op == "|" { return x ~|| y }
+  if op == "^" { return x ~^^ y }
+  if op == "<<" { return x << y }
+  if op == ">>" { return x >> y }
+  if op == ">>>" { return x >>> y }
+  if op == "<" { return (x < y) ? kjs.one : kjs.zero }
+  if op == ">" { return (x > y) ? kjs.one : kjs.zero }
+  if op == "<=" { return (x <= y) ? kjs.one : kjs.zero }
+  if op == ">=" { return (x >= y) ? kjs.one : kjs.zero }
+  if op == "==" { return (x == y) ? kjs.one : kjs.zero }
+  (x != y) ? kjs.one : kjs.zero
+}
+kjs_native (called) => {
+  if called == "w" { return `i32` }
+  if called == "set" { return `i32=` }
+  if called == "b" { return `u8` }
+  if called == "setb" { return `u8=` }
+  if called == "aload" { return `aload` }
+  if called == "astore" { return `astore` }
+  if called == "xadd" { return `xadd` }
+  if called == "cas" { return `cas` }
+  if called == "fill" { return `fill` }
+  if called == "clz" { return `clz` }
+  if called == "ctz" { return `ctz` }
+  None
+}
+// (a call: its arguments first, each a value; then a native of the memory, or a context, given them in cells of their own)
+kjs_call (called, given) => {
+  reversed := None
+  at := given
+  while at !== None {
+    reversed = kjs_cell(kjs_value(at.car), reversed)
+    at = at.cdr
+  }
+  args := None
+  while reversed !== None {
+    args = kjs_link(reversed.value, args)
+    reversed = reversed.below
+  }
+  native := kjs_native(called)
+  if native !== None { return kjs_native_call(native, args) }
+  out := kjs_fresh(0)
+  k := kjs.calls
+  kjs.calls = kjs.calls + 1
+  i := 0
+  each := args
+  while each !== None {
+    kjs_jmp(`set`, kjs_arg(called, k, i), each.value, kjs.zero)
+    i = i + 1
+    each = each.later
+  }
+  kjs_jmp(called, out, kjs_arg(called, k, 0), kjs.zero)
+  out
+}
+kjs_native_call (native, args) => {
+  valueless := (native == "i32=") || (native == "u8=") || (native == "astore") || (native == "fill")
+  out := `-`
+  if !valueless { out = kjs_fresh(0) }
+  if (native == "cas") || (native == "fill") {
+    first := None
+    at := args
+    while at !== None {
+      cell := kjs_fresh(0)
+      kjs_jmp(`set`, cell, at.value, kjs.zero)
+      first = (first === None) ? cell : first
+      at = at.later
+    }
+    kjs_jmp(native, out, first, kjs.zero)
+  } else {
+    a := (args !== None) ? args.value : kjs.zero
+    b := ((args !== None) && (args.later !== None)) ? args.later.value : kjs.zero
+    kjs_jmp(native, out, a, b)
+  }
+  valueless ? kjs.zero : out
+}
+// (a value read: what it is, a cell or a constant, after what working it out writes)
+kjs_value (e) => {
+  kind := e.kind
+  if kind === None { return kjs_word(e) }
+  if kind == "call" { return kjs_call(e.called, e.args) }
+  if kind == "seq" {
+    kjs_value(e.l)
+    return kjs_value(e.r)
+  }
+  if kind == "bin" {
+    left := kjs_value(e.l)
+    right := kjs_value(e.r)
+    if kjs_constant(left) && kjs_constant(right) { return kjs_folded(e.op, left, right) }
+    out := kjs_fresh(0)
+    kjs_jmp(e.op, out, left, right)
+    return out
+  }
+  if kind == "unary" {
+    x := kjs_value(e.operand)
+    if e.op == "+" { return x }
+    if (e.op == "-") && kjs_constant(x) { return kjs.zero - x }
+    made := kjs_fresh(0)
+    if e.op == "!" { kjs_jmp(`not`, made, x, kjs.zero) }
+    if e.op == "-" { kjs_jmp(`-`, made, kjs.zero, x) }
+    if e.op == "~" { kjs_jmp(`^`, made, x, kjs.minus_one) }
+    return made
+  }
+  // (`&&`, `||`: as JavaScript's, what decides is what it answers; what follows written after the jump past it)
+  if kind == "logic" {
+    left := kjs_value(e.l)
+    out := kjs_fresh(0)
+    done := kjs_fresh(0)
+    kjs_jmp(`set`, out, left, kjs.zero)
+    if e.op == "&&" {
+      kjs_jmp(`not`, `$t`, out, kjs.zero)
+      kjs_line(kjs_here(done, ""), `$t`, `-`, kjs.zero, kjs.zero)
+    } else {
+      kjs_line(kjs_here(done, ""), out, `-`, kjs.zero, kjs.zero)
+    }
+    kjs_jmp(`set`, out, kjs_value(e.r), kjs.zero)
+    kjs_mark(kjs_here(done, ""))
+    return out
+  }
+  if kind == "cond" {
+    condition := kjs_value(e.c)
+    out := kjs_fresh(0)
+    no := kjs_fresh(0)
+    done := kjs_fresh(0)
+    kjs_line(kjs_here(no, "y"), condition, `-`, kjs.zero, kjs.zero)
+    kjs_goto(kjs_here(no, ""))
+    kjs_mark(kjs_here(no, "y"))
+    kjs_jmp(`set`, out, kjs_value(e.y), kjs.zero)
+    kjs_goto(kjs_here(done, ""))
+    kjs_mark(kjs_here(no, ""))
+    kjs_jmp(`set`, out, kjs_value(e.n), kjs.zero)
+    kjs_mark(kjs_here(done, ""))
+    return out
+  }
+  if kind == "assign" {
+    kjs_jmp(`set`, e.name, kjs_value(e.v), kjs.zero)
+    return e.name
+  }
+  if kind == "compound" {
+    kjs_jmp(e.op, e.name, e.name, kjs_value(e.v))
+    return e.name
+  }
+  if kind == "pre" {
+    kjs_jmp(e.op, e.name, e.name, kjs.one)
+    return e.name
+  }
+  was := kjs_fresh(0)
+  kjs_jmp(`set`, was, e.name, kjs.zero)
+  kjs_jmp(e.op, e.name, e.name, kjs.one)
+  was
+}
+// (a constant of the kernel's: written of numerals, constants and operators without `=` in them (`jmp_of`'s `constant`); any
+// other, nothing)
+kjs_constant_of (e) => {
+  kind := e.kind
+  if kind === None {
+    numeral := Int32.numeral(e)
+    if numeral.bits !== None { return numeral }
+    held := external member kjs.consts e
+    if (held !== None) && (held.const_value !== None) { return held.const_value }
+    return None
+  }
+  if kind == "unary" {
+    x := kjs_constant_of(e.operand)
+    if (x === None) || (e.op == "!") { return None }
+    if e.op == "-" { return kjs.zero - x }
+    if e.op == "~" { return x ~^^ kjs.minus_one }
+    return x
+  }
+  if kind == "bin" {
+    if (e.op == "<=") || (e.op == ">=") || (e.op == "==") || (e.op == "!=") { return None }
+    left := kjs_constant_of(e.l)
+    right := kjs_constant_of(e.r)
+    if (left === None) || (right === None) { return None }
+    return kjs_folded(e.op, left, right)
+  }
+  if kind == "logic" {
+    left := kjs_constant_of(e.l)
+    right := kjs_constant_of(e.r)
+    if (left === None) || (right === None) { return None }
+    if e.op == "&&" { return (left == kjs.zero) ? left : right }
+    return (left == kjs.zero) ? right : left
+  }
+  None
+}
+// (`if`: the condition, then where it goes when it does not hold, `#…else`; a constant, a jump or none)
+kjs_unless (condition, label) => {
+  if kjs_constant(condition) {
+    (kjs_goto(label)) if condition == kjs.zero
+  } else {
+    kjs_jmp(`not`, `$t`, condition, kjs.zero)
+    kjs_line(label, `$t`, `-`, kjs.zero, kjs.zero)
+  }
+}
+kjs_in_loop (made, s) => {
+  outer := kjs.loop
+  kjs.loop = made
+  kjs_statement(s)
+  kjs.loop = outer
+}
+kjs_value_or_zero (e) => {
+  if e === None { return kjs.zero }
+  kjs_value(e)
+}
+// A statement written, in its function's body.
+kjs_statement (s) => {
+  kind := s.kind
+  if kind == "list" {
+    at := s
+    while at !== None {
+      kjs_statement(at.car)
+      at = at.cdr
+    }
+    return 0
+  }
+  if kind == "else" {
+    k := kjs.open_if
+    kjs.open_if = None
+    return kjs_otherwise(k, s.s)
+  }
+  kjs_unclaimed(0)
+  if kind == "expr" { return kjs_value(s.e) }
+  if kind == "body" { return kjs_statement(s.s) }
+  if kind == "block" {
+    if s.reads !== None { return s.reads(0) }
+    if s.list !== None { kjs_statement(s.list) }
+    return 0
+  }
+  if kind == "return" {
+    kjs_jmp(`set`, `&.value`, kjs_value_or_zero(s.e), kjs.zero)
+    return kjs_jmp(`&.caller`, `-`, kjs.zero, kjs.zero)
+  }
+  if kind == "break" { return kjs_goto(kjs.loop.end) }
+  if kind == "continue" { return kjs_goto(kjs.loop.next) }
+  if kind == "decls" {
+    at := s.list
+    while at !== None {
+      declared := at.car
+      kjs_jmp(`set`, declared.name, kjs_value_or_zero(declared.v), kjs.zero)
+      at = at.cdr
+    }
+    return 0
+  }
+  if kind == "if" {
+    condition := kjs_value(s.c)
+    k := kjs_fresh(0)
+    kjs_unless(condition, kjs_here(k, "else"))
+    kjs_statement(s.s)
+    kjs_mark(kjs_here(k, "else"))
+    if s.o === None {
+      kjs.open_if = k
+    } else {
+      kjs_otherwise(k, s.o)
+    }
+    return 0
+  }
+  if kind == "while" {
+    k := kjs_fresh(0)
+    kjs_mark(kjs_here(k, "top"))
+    kjs_jmp(`not`, `$t`, kjs_value(s.c), kjs.zero)
+    kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
+    kjs_in_loop(kjs_loop(kjs_here(k, "top"), kjs_here(k, "end")), s.s)
+    kjs_goto(kjs_here(k, "top"))
+    kjs_mark(kjs_here(k, "end"))
+    return 0
+  }
+  if kind == "do" {
+    k := kjs_fresh(0)
+    kjs_mark(kjs_here(k, "top"))
+    kjs_in_loop(kjs_loop(kjs_here(k, "next"), kjs_here(k, "end")), s.s)
+    kjs_mark(kjs_here(k, "next"))
+    kjs_line(kjs_here(k, "top"), kjs_value(s.c), `-`, kjs.zero, kjs.zero)
+    kjs_mark(kjs_here(k, "end"))
+    return 0
+  }
+  if kind == "for" {
+    k := kjs_fresh(0)
+    (kjs_statement(s.i)) if s.i !== None
+    kjs_mark(kjs_here(k, "top"))
+    if s.c !== None {
+      kjs_jmp(`not`, `$t`, kjs_value(s.c), kjs.zero)
+      kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
+    }
+    kjs_in_loop(kjs_loop(kjs_here(k, "step"), kjs_here(k, "end")), s.s)
+    kjs_mark(kjs_here(k, "step"))
+    (kjs_value(s.u)) if s.u !== None
+    kjs_goto(kjs_here(k, "top"))
+    kjs_mark(kjs_here(k, "end"))
+    return 0
+  }
+  0
+}
+// (the `else` of an `if` (on its line, or alone on the next): to its end, then where it does not hold is what follows the
+// `if`'s statement; the labels that were to be where the `if` ended, after the `else`)
+kjs_else_begin (k) => {
+  kept := None
+  at := kjs.marks
+  while (at !== None) && !((at.value.number == k.number) && (at.value.suffix == "else")) {
+    kept = kjs_cell(at.value, kept)
+    at = at.below
+  }
+  if at !== None { kjs.marks = at.below }
+  kjs_goto(kjs_here(k, "end"))
+  kjs_mark(kjs_here(k, "else"))
+  kept
+}
+kjs_else_end (k, kept) => {
+  kjs_mark(kjs_here(k, "end"))
+  at := kept
+  while at !== None {
+    kjs_mark(at.value)
+    at = at.below
+  }
+}
+kjs_otherwise (k, o) => {
+  kept := kjs_else_begin(k)
+  outer := kjs.chain
+  kjs.chain = None
+  kjs_statement(o)
+  kjs_settle(0)
+  kjs_ending(kjs_closer(`else`, k, kept, None, outer))
+}
+// (an `else` whose statement leaves an `if` without one, `else if (c) …`: its end put off, an `else` on the next line that
+// `if`'s; the ends put off, the innermost first, once a statement is no `else` or the block they are in ends)
+kjs_ending (c) => {
+  if kjs.open_if !== None {
+    kjs.chain = kjs_cell(c, c.outer)
+    return 0
+  }
+  kjs_else_end(c.k, c.kept)
+  kjs.chain = c.outer
+  kjs_settle(0)
+}
+kjs_settle (unused) => {
+  at := kjs.chain
+  kjs.chain = None
+  while at !== None {
+    kjs_else_end(at.value.k, at.value.kept)
+    at = at.below
+  }
+}
+kjs_unclaimed (unused) => {
+  kjs.open_if = None
+  kjs_settle(0)
+}
+
+// A line that ends with a block on lines of its own, read where its rule is (a closure would read it apart from what this
+// file's reading has written): the line's statements, then its last head opened (what comes before its body), the block's
+// lines, then the head closed (what comes after), the innermost first. (What closes each, kept until then.)
+global["Kjs_closer"] := class (kind, k, kept, step, outer) => { }
+kjs_closer (made_kind, made_k, made_kept, made_step, made_outer) => Kjs_closer &+ {
+  kind := made_kind
+  k := made_k
+  kept := made_kept
+  step := made_step
+  outer := made_outer
+}
+kjs_closing (made) => {
+  kjs.closers = kjs_cell(made, kjs.closers)
+}
+kjs_head (x) => (x !== None) && (x.head === true)
+kjs_open (h) => {
+  kind := h.kind
+  if kind == "else" {
+    k := kjs.open_if
+    kjs.open_if = None
+    outer := kjs.chain
+    kjs.chain = None
+    kjs_closing(kjs_closer(`else`, k, kjs_else_begin(k), None, outer))
+    if kjs_head(h.s) { kjs_open(h.s) }
+    return 0
+  }
+  kjs_unclaimed(0)
+  if kind == "if" {
+    condition := kjs_value(h.c)
+    k := kjs_fresh(0)
+    kjs_unless(condition, kjs_here(k, "else"))
+    if (h.s === None) || kjs_head(h.s) {
+      kjs_closing(kjs_closer(`if`, k, None, None, None))
+      if kjs_head(h.s) { kjs_open(h.s) }
+      return 0
+    }
+    kjs_statement(h.s)
+    kjs_mark(kjs_here(k, "else"))
+    kjs_closing(kjs_closer(`else`, k, kjs_else_begin(k), None, None))
+    if kjs_head(h.o) { kjs_open(h.o) }
+    return 0
+  }
+  if kind == "while" {
+    k := kjs_fresh(0)
+    kjs_mark(kjs_here(k, "top"))
+    kjs_jmp(`not`, `$t`, kjs_value(h.c), kjs.zero)
+    kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
+    kjs_closing(kjs_closer(`while`, k, kjs.loop, None, None))
+    kjs.loop = kjs_loop(kjs_here(k, "top"), kjs_here(k, "end"))
+    if kjs_head(h.s) { kjs_open(h.s) }
+    return 0
+  }
+  k := kjs_fresh(0)
+  (kjs_statement(h.i)) if h.i !== None
+  kjs_mark(kjs_here(k, "top"))
+  if h.c !== None {
+    kjs_jmp(`not`, `$t`, kjs_value(h.c), kjs.zero)
+    kjs_line(kjs_here(k, "end"), `$t`, `-`, kjs.zero, kjs.zero)
+  }
+  kjs_closing(kjs_closer(`for`, k, kjs.loop, h.u, None))
+  kjs.loop = kjs_loop(kjs_here(k, "step"), kjs_here(k, "end"))
+  if kjs_head(h.s) { kjs_open(h.s) }
+  0
+}
+kjs_close (c) => {
+  kind := c.kind
+  if kind == "else" { return kjs_ending(c) }
+  kjs_unclaimed(0)
+  if kind == "if" {
+    kjs_mark(kjs_here(c.k, "else"))
+    kjs.open_if = c.k
+    return 0
+  }
+  kjs.loop = c.kept
+  if kind == "for" {
+    kjs_mark(kjs_here(c.k, "step"))
+    (kjs_value(c.step)) if c.step !== None
+  }
+  kjs_goto(kjs_here(c.k, "top"))
+  kjs_mark(kjs_here(c.k, "end"))
+}
+
+// What the rules reading the file do, each given one value (their bodies are read where they are applied: only a member of
+// `kjs` given a word, which nothing the file is read with reads).
+kjs &+= {
+  // (a line of a function's body: its statements written; of the kernel's, its constants read)
+  line (s) => {
+    if kjs.mode == 3 { kjs_statement(s) }
+    if kjs.mode == 1 { kjs_constants(s) }
+  }
+  head_open (listed) => {
+    kjs_closing(None)
+    if kjs.mode == 3 {
+      at := listed
+      while at.cdr !== None {
+        kjs_statement(at.car)
+        at = at.cdr
+      }
+      kjs_open(at.car)
+    }
+  }
+  head_close (unused) => {
+    (kjs_unclaimed(0)) if kjs.mode == 3
+    while kjs.closers.value !== None {
+      made := kjs.closers.value
+      kjs.closers = kjs.closers.below
+      (kjs_close(made)) if kjs.mode == 3
+    }
+    kjs.closers = kjs.closers.below
+  }
+  head (word) => (condition) => Kjs_node &+ {
+    kind := word
+    c := condition
+    s := None
+    o := None
+    head := true
+  }
+  one (h) => Kjs_node &+ {
+    kind := `list`
+    car := h
+    cdr := None
+  }
+  else_head (unused) => Kjs_node &+ {
+    kind := `else`
+    s := None
+    head := true
+  }
+  else_of (o) => {
+    kjs.line(Kjs_node &+ {
+      kind := `else`
+      s := o
+    })
+  }
+  // (`return;`, `break;`, `continue;`: a statement of one word)
+  line_word (word) => {
+    kjs.line(Kjs_node &+ {
+      kind := word
+      e := None
+    })
+  }
+  named (called) => {
+    kjs.called = called
+  }
+  takes (given) => {
+    kjs.taken = given
+  }
+  // (a function: its body read where its rule is, at the top of the rule's body (in a block of another's, or a closure, that
+  // one's rules would be read first, or what this file's reading wrote not seen); in the first reading passed over, `mode`
+  // 4, its body not read (gone past); in the second its context begun, then its end written, but for one not among those
+  // written, 5, passed over as in the first)
+  opening (unused) => {
+    if kjs.mode == 1 { kjs.mode = 4 }
+    if kjs.mode == 2 {
+      written := (kjs.count >= kjs.from) && ((kjs.until === None) || (kjs.count < kjs.until))
+      kjs.count = kjs.count + 1
+      if !written { kjs.mode = 5 }
+    }
+    if kjs.mode == 2 {
+      kjs.mode = 3
+      kjs.n = 0
+      kjs.calls = 0
+      kjs.loop = None
+      kjs.open_if = None
+      kjs.chain = None
+      kjs_begin(kjs.called, kjs.taken)
+    }
+  }
+  closing (unused) => {
+    if kjs.mode == 4 { kjs.mode = 1 }
+    if kjs.mode == 5 { kjs.mode = 2 }
+    if kjs.mode == 3 {
+      kjs_unclaimed(0)
+      kjs_jmp(`set`, `&.value`, kjs.zero, kjs.zero)
+      kjs_jmp(`&.caller`, `-`, kjs.zero, kjs.zero)
+      kjs.mode = 2
+    }
+  }
+  set_mode (m) => {
+    kjs.mode = m
+  }
+}
+// (a line of the kernel's: its constants, each written of constants, its own value)
+kjs_constants (s) => {
+  if s.kind == "list" {
+    at := s
+    while at !== None {
+      kjs_constants(at.car)
+      at = at.cdr
+    }
+  } elsif s.kind == "decls" {
+    at := s.list
+    while at !== None {
+      declared := at.car
+      value := None
+      if declared.v !== None { value = kjs_constant_of(declared.v) }
+      named := declared.name
+      was := external member kjs.consts named
+      if (value !== None) && ((was === None) || (was.const_value === None)) { external member kjs.consts named (Kjs_const(value)) }
+      at = at.cdr
+    }
+  }
+}
+
+// The language's rules, as types: what reads as each part of it, and what that part is (`external kept`: each answers what
+// it read, so what a check finds is kept, and a check does not build what it answers). Their rules come after the file's
+// own (`Kernel_js`): what a hole of one holds is read where it is written, the file's rules there too, and the later read
+// first.
+K_word := {
+  external kept
+  {w} => `{w}`
+}
+K_prim := { external kept }
+K_args := { external kept }
+K_args_tail := { external kept }
+K_decls_tail := { external kept }
+K_seq := { external kept }
+K_u := { external kept }
+K_mul := { external kept }
+K_add := { external kept }
+K_shift := { external kept }
+K_rel := { external kept }
+K_eq := { external kept }
+K_band := { external kept }
+K_bxor := { external kept }
+K_bor := { external kept }
+K_and := { external kept }
+K_or := { external kept }
+K_cond := { external kept }
+K_assign := { external kept }
+K_decl := { external kept }
+K_decls := { external kept }
+K_params := { external kept }
+K_stmt := { external kept }
+K_stmts := { external kept }
+K_simple := { external kept }
+K_head := { external kept }
+K_line_head := { external kept }
+K_if_line := { external kept }
+K_if_head := { external kept }
+K_else_line := { external kept }
+K_else_head := { external kept }
+K_while_line := { external kept }
+K_while_head := { external kept }
+K_do_line := { external kept }
+K_return_line := { external kept }
+// The file read: its lines, each read whole as statements (in a function's body, written; among the kernel's, its
+// constants), or as what is around them, passed over; the kernel read twice, for its constants, then its functions. A block
+// on lines of its own read where its rule is, between its head opened and closed. (In a node that reads, a head of holes
+// alone takes one word, and one led by text is read before one led by a hole: each rule here has text in it, and the words
+// the language's own rules are led by, `if`, `while`, `else`, `do`, `return`, lead rules here too.)
+Kernel_js := {
+  type {x} = {y}; => kjs_none
+  return {`{`}{o}{`}`}; => kjs_none
+  void {x}; {rest} => kjs_none
+  void {x}; => kjs_none
+  function {name: K_word}({params: K_params}): {annotation: K_word} {`{`}{body}{`}`} => {
+    kjs.named(name)
+    kjs.takes(params)
+    kjs.opening(0)
+    (external goto kjs_passed) if kjs.mode >= 4
+    {body}
+    external label kjs_passed
+    kjs.closing(0)
+  }
+  function {name: K_word}() {`{`}{body}{`}`} => {
+    kjs.named(name)
+    kjs.takes(kjs_none)
+    kjs.opening(0)
+    (external goto kjs_passed) if kjs.mode >= 4
+    {body}
+    external label kjs_passed
+    kjs.closing(0)
+  }
+  function {name: K_word}(): {annotation: K_word} {`{`}{body}{`}`} => {
+    kjs.named(name)
+    kjs.takes(kjs_none)
+    kjs.opening(0)
+    (external goto kjs_passed) if kjs.mode >= 4
+    {body}
+    external label kjs_passed
+    kjs.closing(0)
+  }
+  function {name: K_word}({params: K_params}) {`{`}{body}{`}`} => {
+    kjs.named(name)
+    kjs.takes(params)
+    kjs.opening(0)
+    (external goto kjs_passed) if kjs.mode >= 4
+    {body}
+    external label kjs_passed
+    kjs.closing(0)
+  }
+  export function kernel({params}) {`{`}{body}{`}`} => {
+    kjs.set_mode(1)
+    {body}
+    kjs.set_mode(2)
+    {body}
+    kjs.set_mode(0)
+  }
+  {s: K_simple}; => kjs.line(kjs.one(s))
+  {s: K_simple}; {rest: K_stmts} => {
+    kjs.line(kjs.one(s))
+    kjs.line(rest)
+  }
+  {`{`}{body}{`}`} => {body}
+  {s: K_line_head} {`{`}{body}{`}`} => {
+    kjs.head_open(s)
+    {body}
+    kjs.head_close(0)
+  }
+  {s: K_line_head} {`{`}{body}{`}`} {rest: K_stmts} => {
+    kjs.head_open(s)
+    {body}
+    kjs.head_close(0)
+    kjs.line(rest)
+  }
+  return {tail: K_return_line} => {
+    kjs.line(tail)
+  }
+  return; => kjs.line_word(`return`)
+  break; => kjs.line_word(`break`)
+  continue; => kjs.line_word(`continue`)
+  do {tail: K_do_line} => kjs.line(tail)
+  while {tail: K_while_line} => kjs.line(tail)
+  while {tail: K_while_head} {`{`}{body}{`}`} => {
+    kjs.head_open(tail)
+    {body}
+    kjs.head_close(0)
+  }
+  while ({c: K_assign}) {`{`}{body}{`}`} => {
+    kjs.head_open(kjs.one(kjs.head(`while`)(c)))
+    {body}
+    kjs.head_close(0)
+  }
+  else {tail: K_else_line} => kjs.line(tail)
+  else {`{`}{body}{`}`} => {
+    kjs.head_open(kjs.one(kjs.else_head(0)))
+    {body}
+    kjs.head_close(0)
+  }
+  else {tail: K_else_head} {`{`}{body}{`}`} => {
+    kjs.head_open(tail)
+    {body}
+    kjs.head_close(0)
+  }
+  if {tail: K_if_line} => kjs.line(tail)
+  if {tail: K_if_head} {`{`}{body}{`}`} => {
+    kjs.head_open(tail)
+    {body}
+    kjs.head_close(0)
+  }
+  if {tail: K_if_head} {`{`}{body}{`}`} else {o: K_simple}; => {
+    kjs.head_open(tail)
+    {body}
+    kjs.head_close(0)
+    kjs.else_of(o)
+  }
+  if {tail: K_if_head} {`{`}{body}{`}`} {h: K_head} {`{`}{other}{`}`} => {
+    kjs.head_open(tail)
+    {body}
+    kjs.head_close(0)
+    kjs.head_open(kjs.one(h))
+    {other}
+    kjs.head_close(0)
+  }
+  if ({c: K_assign}) {`{`}{body}{`}`} => {
+    kjs.head_open(kjs.one(kjs.head(`if`)(c)))
+    {body}
+    kjs.head_close(0)
+  }
+  if ({c: K_assign}) {`{`}{body}{`}`} else {o: K_simple}; => {
+    kjs.head_open(kjs.one(kjs.head(`if`)(c)))
+    {body}
+    kjs.head_close(0)
+    kjs.else_of(o)
+  }
+  if ({c: K_assign}) {`{`}{body}{`}`} {h: K_head} {`{`}{other}{`}`} => {
+    kjs.head_open(kjs.one(kjs.head(`if`)(c)))
+    {body}
+    kjs.head_close(0)
+    kjs.head_open(kjs.one(h))
+    {other}
+    kjs.head_close(0)
+  }
+  if ({c: K_assign}) {`{`}{body}{`}`} {h: K_head} {`{`}{other}{`}`} else {`{`}{last}{`}`} => {
+    kjs.head_open(kjs.one(kjs.head(`if`)(c)))
+    {body}
+    kjs.head_close(0)
+    kjs.head_open(kjs.one(h))
+    {other}
+    kjs.head_close(0)
+    kjs.head_open(kjs.one(kjs.else_head(0)))
+    {last}
+    kjs.head_close(0)
+  }
+  // (an arrow, `(a) => …`, which would be read as a rule defined before anything else: here, nothing; the kernel's own are
+  // the memory and the host, which its functions name as natives and hosts)
+  {lhs} {`=>`} {rhs} => kjs_none
+}
+kjs_none => None
+
+// Values: one type for each level of the operators, each holding the rules of every level tighter than it, so a value of one
+// is read by one rule, none passing it on; what is on an operator's right is of the level tighter than its own, so one
+// written twice is read from the left, `a - b - c`. In a type a rule led by a symbol is a method of what it follows: an
+// operator before its value is a hole of that text. Brackets around one hole are written as holes of text too.
+K_prim &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+}
+K_u &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+}
+K_mul &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+}
+K_add &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+}
+K_shift &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+}
+K_rel &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+}
+K_eq &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+  {a: K_eq} == {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} != {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_eq} === {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} !== {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+}
+K_band &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+  {a: K_eq} == {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} != {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_eq} === {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} !== {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_band} & {b: K_eq} => Kjs_node &+ { kind := `bin` ; op := `&` ; l := a ; r := b }
+}
+K_bxor &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+  {a: K_eq} == {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} != {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_eq} === {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} !== {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_band} & {b: K_eq} => Kjs_node &+ { kind := `bin` ; op := `&` ; l := a ; r := b }
+  {a: K_bxor} ^ {b: K_band} => Kjs_node &+ { kind := `bin` ; op := `^` ; l := a ; r := b }
+}
+K_bor &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+  {a: K_eq} == {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} != {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_eq} === {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} !== {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_band} & {b: K_eq} => Kjs_node &+ { kind := `bin` ; op := `&` ; l := a ; r := b }
+  {a: K_bxor} ^ {b: K_band} => Kjs_node &+ { kind := `bin` ; op := `^` ; l := a ; r := b }
+  {a: K_bor} | {b: K_bxor} => Kjs_node &+ { kind := `bin` ; op := `|` ; l := a ; r := b }
+}
+K_and &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+  {a: K_eq} == {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} != {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_eq} === {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} !== {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_band} & {b: K_eq} => Kjs_node &+ { kind := `bin` ; op := `&` ; l := a ; r := b }
+  {a: K_bxor} ^ {b: K_band} => Kjs_node &+ { kind := `bin` ; op := `^` ; l := a ; r := b }
+  {a: K_bor} | {b: K_bxor} => Kjs_node &+ { kind := `bin` ; op := `|` ; l := a ; r := b }
+  {a: K_and} && {b: K_bor} => Kjs_node &+ { kind := `logic` ; op := `&&` ; l := a ; r := b }
+}
+K_or &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+  {a: K_eq} == {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} != {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_eq} === {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} !== {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_band} & {b: K_eq} => Kjs_node &+ { kind := `bin` ; op := `&` ; l := a ; r := b }
+  {a: K_bxor} ^ {b: K_band} => Kjs_node &+ { kind := `bin` ; op := `^` ; l := a ; r := b }
+  {a: K_bor} | {b: K_bxor} => Kjs_node &+ { kind := `bin` ; op := `|` ; l := a ; r := b }
+  {a: K_and} && {b: K_bor} => Kjs_node &+ { kind := `logic` ; op := `&&` ; l := a ; r := b }
+  {a: K_or} || {b: K_and} => Kjs_node &+ { kind := `logic` ; op := `||` ; l := a ; r := b }
+}
+K_cond &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+  {a: K_eq} == {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} != {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_eq} === {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} !== {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_band} & {b: K_eq} => Kjs_node &+ { kind := `bin` ; op := `&` ; l := a ; r := b }
+  {a: K_bxor} ^ {b: K_band} => Kjs_node &+ { kind := `bin` ; op := `^` ; l := a ; r := b }
+  {a: K_bor} | {b: K_bxor} => Kjs_node &+ { kind := `bin` ; op := `|` ; l := a ; r := b }
+  {a: K_and} && {b: K_bor} => Kjs_node &+ { kind := `logic` ; op := `&&` ; l := a ; r := b }
+  {a: K_or} || {b: K_and} => Kjs_node &+ { kind := `logic` ; op := `||` ; l := a ; r := b }
+  {c_: K_or} ? {y_: K_assign} : {n_: K_assign} => Kjs_node &+ { kind := `cond` ; c := c_ ; y := y_ ; n := n_ }
+}
+K_assign &+= {
+  {x: K_word} => x
+  {`(`}{g: K_assign}{`)`} => g
+  {f: K_word}({a: K_args}) => Kjs_node &+ { kind := `call` ; called := f ; args := a }
+  {f: K_word}() => Kjs_node &+ { kind := `call` ; called := f ; args := None }
+  {w: K_word}++ => Kjs_node &+ { kind := `post` ; op := `+` ; name := w }
+  {w: K_word}-- => Kjs_node &+ { kind := `post` ; op := `-` ; name := w }
+  {o: `!`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `!` ; operand := p }
+  {o: `-`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `-` ; operand := p }
+  {o: `~`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `~` ; operand := p }
+  {o: `+`}{p: K_u} => Kjs_node &+ { kind := `unary` ; op := `+` ; operand := p }
+  {o: `++`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `+` ; name := w }
+  {o: `--`}{w: K_word} => Kjs_node &+ { kind := `pre` ; op := `-` ; name := w }
+  {a: K_mul} * {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `*` ; l := a ; r := b }
+  {a: K_mul} / {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `/` ; l := a ; r := b }
+  {a: K_mul} % {b: K_u} => Kjs_node &+ { kind := `bin` ; op := `%` ; l := a ; r := b }
+  {a: K_add} + {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `+` ; l := a ; r := b }
+  {a: K_add} - {b: K_mul} => Kjs_node &+ { kind := `bin` ; op := `-` ; l := a ; r := b }
+  {a: K_shift} << {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `<<` ; l := a ; r := b }
+  {a: K_shift} >> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>` ; l := a ; r := b }
+  {a: K_shift} >>> {b: K_add} => Kjs_node &+ { kind := `bin` ; op := `>>>` ; l := a ; r := b }
+  {a: K_rel} < {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<` ; l := a ; r := b }
+  {a: K_rel} > {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>` ; l := a ; r := b }
+  {a: K_rel} <= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `<=` ; l := a ; r := b }
+  {a: K_rel} >= {b: K_shift} => Kjs_node &+ { kind := `bin` ; op := `>=` ; l := a ; r := b }
+  {a: K_eq} == {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} != {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_eq} === {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `==` ; l := a ; r := b }
+  {a: K_eq} !== {b: K_rel} => Kjs_node &+ { kind := `bin` ; op := `!=` ; l := a ; r := b }
+  {a: K_band} & {b: K_eq} => Kjs_node &+ { kind := `bin` ; op := `&` ; l := a ; r := b }
+  {a: K_bxor} ^ {b: K_band} => Kjs_node &+ { kind := `bin` ; op := `^` ; l := a ; r := b }
+  {a: K_bor} | {b: K_bxor} => Kjs_node &+ { kind := `bin` ; op := `|` ; l := a ; r := b }
+  {a: K_and} && {b: K_bor} => Kjs_node &+ { kind := `logic` ; op := `&&` ; l := a ; r := b }
+  {a: K_or} || {b: K_and} => Kjs_node &+ { kind := `logic` ; op := `||` ; l := a ; r := b }
+  {c_: K_or} ? {y_: K_assign} : {n_: K_assign} => Kjs_node &+ { kind := `cond` ; c := c_ ; y := y_ ; n := n_ }
+  {w: K_word} = {v_: K_assign} => Kjs_node &+ { kind := `assign` ; name := w ; v := v_ }
+  {w: K_word} += {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `+` ; name := w ; v := v_ }
+  {w: K_word} -= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `-` ; name := w ; v := v_ }
+  {w: K_word} *= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `*` ; name := w ; v := v_ }
+  {w: K_word} /= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `/` ; name := w ; v := v_ }
+  {w: K_word} %= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `%` ; name := w ; v := v_ }
+  {w: K_word} &= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `&` ; name := w ; v := v_ }
+  {w: K_word} |= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `|` ; name := w ; v := v_ }
+  {w: K_word} ^= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `^` ; name := w ; v := v_ }
+  {w: K_word} <<= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `<<` ; name := w ; v := v_ }
+  {w: K_word} >>= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `>>` ; name := w ; v := v_ }
+  {w: K_word} >>>= {v_: K_assign} => Kjs_node &+ { kind := `compound` ; op := `>>>` ; name := w ; v := v_ }
+}
+// (a choice among them, not the last: a rule of its own, a `,` after a choice in a list read as Ray reads one, the rest
+// the choice's, unless the list is in brackets right before it)
+// (a `for`'s step, values written one after another, `n++, h = h + 1`: each in turn)
+K_seq &+= {
+  {a__sq: K_assign} => a__sq
+  {a__sq: K_assign}, {b__sq: K_seq} => Kjs_node &+ { kind := `seq` ; l := a__sq ; r := b__sq }
+}
+K_args &+= {
+  {x__ag: K_assign} => Kjs_node &+ { kind := `list` ; car := x__ag ; cdr := None }
+  {x__ag: K_assign}, {rest_ag: K_args} => Kjs_node &+ { kind := `list` ; car := x__ag ; cdr := rest_ag }
+  {c__al: K_or} ? {y__al: K_assign} : {t__al: K_args_tail} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `cond` ; c := c__al ; y := y__al ; n := t__al.chosen }) ; cdr := t__al.after }
+}
+K_args_tail &+= {
+  {c__at: K_or} ? {y__at: K_assign} : {t__at: K_args_tail} => Kjs_node &+ { chosen := (Kjs_node &+ { kind := `cond` ; c := c__at ; y := y__at ; n := t__at.chosen }) ; after := t__at.after }
+  {n__at: K_assign}, {rest__at: K_args} => Kjs_node &+ { chosen := n__at ; after := rest__at }
+}
+// (a name declared: given a value, or nothing given, `0`; any other value, as an arrow, is no constant and no statement of a
+// function's, nothing)
+K_decl &+= {
+  {w_dc: K_word} => Kjs_node &+ { kind := `decl` ; name := w_dc ; v := None }
+  {w_dc: K_word} = {v_dc} => Kjs_node &+ { kind := `decl` ; name := w_dc ; v := None }
+  {w_dc: K_word} = {v__dc: K_assign} => Kjs_node &+ { kind := `decl` ; name := w_dc ; v := v__dc }
+  {w_dc: K_word}: {t_dc} = {v__dc: K_assign} => Kjs_node &+ { kind := `decl` ; name := w_dc ; v := v__dc }
+  {w_dc: K_word}: {t_dc: K_word} => Kjs_node &+ { kind := `decl` ; name := w_dc ; v := None }
+}
+K_decls &+= {
+  {x__dcs: K_decl} => Kjs_node &+ { kind := `list` ; car := x__dcs ; cdr := None }
+  {x__dcs: K_decl}, {rest_dcs: K_decls} => Kjs_node &+ { kind := `list` ; car := x__dcs ; cdr := rest_dcs }
+  {w__dl: K_word} = {c__dl: K_or} ? {y__dl: K_assign} : {t__dl: K_decls_tail} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `decl` ; name := w__dl ; v := (Kjs_node &+ { kind := `cond` ; c := c__dl ; y := y__dl ; n := t__dl.chosen }) }) ; cdr := t__dl.after }
+}
+K_decls_tail &+= {
+  {c__dt: K_or} ? {y__dt: K_assign} : {t__dt: K_decls_tail} => Kjs_node &+ { chosen := (Kjs_node &+ { kind := `cond` ; c := c__dt ; y := y__dt ; n := t__dt.chosen }) ; after := t__dt.after }
+  {n__dt: K_assign}, {rest__dt: K_decls} => Kjs_node &+ { chosen := n__dt ; after := rest__dt }
+}
+// (one given a default, `lo = 0`: its name, `=` and the default, each a parameter, as `jmp_of` takes each of its words)
+K_params &+= {
+  {w_pm: K_word} => Kjs_node &+ { car := w_pm ; cdr := None }
+  {w_pm: K_word}, {rest_pm: K_params} => Kjs_node &+ { car := w_pm ; cdr := rest_pm }
+  {w_pm: K_word} = {d_pm: K_word} => Kjs_node &+ { car := w_pm ; cdr := (Kjs_node &+ { car := `=` ; cdr := (Kjs_node &+ { car := d_pm ; cdr := None }) }) }
+  {w_pm: K_word} = {d_pm: K_word}, {rest_pm: K_params} => Kjs_node &+ { car := w_pm ; cdr := (Kjs_node &+ { car := `=` ; cdr := (Kjs_node &+ { car := d_pm ; cdr := rest_pm }) }) }
+  {w_pm: K_word}: {t_pm: K_word}, {rest_pm: K_params} => Kjs_node &+ { car := w_pm ; cdr := rest_pm }
+  {w_pm: K_word}: {t_pm: K_word} => Kjs_node &+ { car := w_pm ; cdr := None }
+}
+// (statements: whole, `K_stmt`; without the `;` that ends them, `K_simple`; a head whose body is the block after it on the
+// line, `K_head` (its body to be given, `s` none); a block on one line read here, one on more left to the line's rule)
+K_stmt &+= {
+  {e__st: K_seq}; => Kjs_node &+ { kind := `expr` ; e := e__st }
+  return {e__st: K_assign}; => Kjs_node &+ { kind := `return` ; e := e__st }
+  return{k_st: `;`} => Kjs_node &+ { kind := `return` ; e := None }
+  break{k_st: `;`} => Kjs_node &+ { kind := `break` }
+  continue{k_st: `;`} => Kjs_node &+ { kind := `continue` }
+  const {d_st: K_decls}; => Kjs_node &+ { kind := `decls` ; list := d_st }
+  let {d_st: K_decls}; => Kjs_node &+ { kind := `decls` ; list := d_st }
+  {`{`} {`}`} => Kjs_node &+ { kind := `block` ; list := None }
+  {`{`} {b_st: K_stmts} {`}`} => Kjs_node &+ { kind := `block` ; list := b_st }
+  if ({c__st: K_assign}) {s__st: K_stmt} => Kjs_node &+ { kind := `if` ; c := c__st ; s := s__st ; o := None }
+  if ({c__st: K_assign}) {s__st: K_stmt} else {o__st: K_stmt} => Kjs_node &+ { kind := `if` ; c := c__st ; s := s__st ; o := o__st }
+  else {s__st: K_stmt} => Kjs_node &+ { kind := `else` ; s := s__st }
+  while ({c__st: K_assign}) {s__st: K_stmt} => Kjs_node &+ { kind := `while` ; c := c__st ; s := s__st }
+  do {s__st: K_stmt} while ({c__st: K_assign}); => Kjs_node &+ { kind := `do` ; s := s__st ; c := c__st }
+  for {`(`} {i__st: K_simple}; {c__st: K_assign}; {u__st: K_seq} {`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := i__st ; c := c__st ; u := u__st ; s := s__st }
+  for {`(`} {i__st: K_simple}; {c__st: K_assign};{`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := i__st ; c := c__st ; u := None ; s := s__st }
+  for {`(`}; {c__st: K_assign}; {u__st: K_seq} {`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := None ; c := c__st ; u := u__st ; s := s__st }
+  for {`(`}{k_st: `;;`}{`)`} {s__st: K_stmt} => Kjs_node &+ { kind := `for` ; i := None ; c := None ; u := None ; s := s__st }
+}
+K_stmts &+= {
+  {s__sts: K_stmt} => Kjs_node &+ { kind := `list` ; car := s__sts ; cdr := None }
+  {s__sts: K_stmt} {rest_sts: K_stmts} => Kjs_node &+ { kind := `list` ; car := s__sts ; cdr := rest_sts }
+}
+K_simple &+= {
+  {e__sm: K_seq} => Kjs_node &+ { kind := `expr` ; e := e__sm }
+  return {e__sm: K_assign} => Kjs_node &+ { kind := `return` ; e := e__sm }
+  {k_sm: `return`} => Kjs_node &+ { kind := `return` ; e := None }
+  {k_sm: `break`} => Kjs_node &+ { kind := `break` }
+  {k_sm: `continue`} => Kjs_node &+ { kind := `continue` }
+  void {x__sm: K_word} => Kjs_node &+ { kind := `void` }
+  const {d_sm: K_decls} => Kjs_node &+ { kind := `decls` ; list := d_sm }
+  let {d_sm: K_decls} => Kjs_node &+ { kind := `decls` ; list := d_sm }
+  if ({c__sm: K_assign}) {s__sm: K_simple} => Kjs_node &+ { kind := `if` ; c := c__sm ; s := s__sm ; o := None }
+  if ({c__sm: K_assign}) {s__sm: K_stmt} else {o__sm: K_simple} => Kjs_node &+ { kind := `if` ; c := c__sm ; s := s__sm ; o := o__sm }
+  else {s__sm: K_simple} => Kjs_node &+ { kind := `else` ; s := s__sm }
+  while ({c__sm: K_assign}) {s__sm: K_simple} => Kjs_node &+ { kind := `while` ; c := c__sm ; s := s__sm }
+  do {s__sm: K_stmt} while ({c__sm: K_assign}) => Kjs_node &+ { kind := `do` ; s := s__sm ; c := c__sm }
+  for {`(`} {i__sm: K_simple}; {c__sm: K_assign}; {u__sm: K_seq} {`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := i__sm ; c := c__sm ; u := u__sm ; s := s__sm }
+  for {`(`} {i__sm: K_simple}; {c__sm: K_assign};{`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := i__sm ; c := c__sm ; u := None ; s := s__sm }
+  for {`(`}; {c__sm: K_assign}; {u__sm: K_seq} {`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := None ; c := c__sm ; u := u__sm ; s := s__sm }
+  for {`(`}{k_sm: `;;`}{`)`} {s__sm: K_simple} => Kjs_node &+ { kind := `for` ; i := None ; c := None ; u := None ; s := s__sm }
+}
+K_head &+= {
+  if ({c__hd: K_assign}) => Kjs_node &+ { head := true ; kind := `if` ; c := c__hd ; s := None ; o := None }
+  if ({c__hd: K_assign}) {h_hd: K_head} => Kjs_node &+ { head := true ; kind := `if` ; c := c__hd ; s := h_hd ; o := None }
+  if ({c__hd: K_assign}) {s__hd: K_stmt} else => Kjs_node &+ { head := true ; kind := `if` ; c := c__hd ; s := s__hd ; o := (Kjs_node &+ { kind := `body` ; s := None }) }
+  {k_hd: `else`} => Kjs_node &+ { head := true ; kind := `else` ; s := None }
+  else {h_hd: K_head} => Kjs_node &+ { head := true ; kind := `else` ; s := h_hd }
+  while ({c__hd: K_assign}) => Kjs_node &+ { head := true ; kind := `while` ; c := c__hd ; s := None }
+  for {`(`} {i__hd: K_simple}; {c__hd: K_assign}; {u__hd: K_seq} {`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := i__hd ; c := c__hd ; u := u__hd ; s := None }
+  for {`(`} {i__hd: K_simple}; {c__hd: K_assign};{`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := i__hd ; c := c__hd ; u := None ; s := None }
+  for {`(`}; {c__hd: K_assign}; {u__hd: K_seq} {`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := None ; c := c__hd ; u := u__hd ; s := None }
+  for {`(`}{k_hd: `;;`}{`)`} => Kjs_node &+ { head := true ; kind := `for` ; i := None ; c := None ; u := None ; s := None }
+  for {`(`} {i__hd: K_simple}; {c__hd: K_assign}; {u__hd: K_seq} {`)`} {h_hd: K_head} => Kjs_node &+ { head := true ; kind := `for` ; i := i__hd ; c := c__hd ; u := u__hd ; s := h_hd }
+  while ({c__hd: K_assign}) {h_hd: K_head} => Kjs_node &+ { head := true ; kind := `while` ; c := c__hd ; s := h_hd }
+}
+// (a line that ends with a block on lines of its own: statements, then a head whose body that block is)
+K_line_head &+= {
+  {h_lh: K_head} => Kjs_node &+ { kind := `list` ; car := h_lh ; cdr := None }
+  {s__lh: K_stmt} {rest_lh: K_line_head} => Kjs_node &+ { kind := `list` ; car := s__lh ; cdr := rest_lh }
+}
+// (a line led by a word the language's own rules are led by too, `if`, `return`: what follows the word, to the end of the
+// line, read by these; the line's rule led by the word as theirs are, read before them. Its last hole takes what is left of
+// the line: one before text ends where that text first is)
+K_if_line &+= {
+  {`(`}{c__il: K_assign}{`)`} {s__il: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `if` ; c := c__il ; s := s__il ; o := None }) ; cdr := None }
+  {`(`}{c__il: K_assign}{`)`} {s__il: K_stmt} else {o__il: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `if` ; c := c__il ; s := s__il ; o := o__il }) ; cdr := None }
+  {`(`}{c__il: K_assign}{`)`} {s__il: K_stmt} {rest_il: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `if` ; c := c__il ; s := s__il ; o := None }) ; cdr := rest_il }
+  {`(`}{c__il: K_assign}{`)`} {s__il: K_stmt} else {o__il: K_stmt} {rest_il: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `if` ; c := c__il ; s := s__il ; o := o__il }) ; cdr := rest_il }
+}
+K_while_line &+= {
+  {`(`}{c__wl: K_assign}{`)`} {s__wl: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `while` ; c := c__wl ; s := s__wl }) ; cdr := None }
+  {`(`}{c__wl: K_assign}{`)`} {s__wl: K_stmt} {rest_wl: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `while` ; c := c__wl ; s := s__wl }) ; cdr := rest_wl }
+}
+K_else_line &+= {
+  {s__el: K_stmt} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `else` ; s := s__el }) ; cdr := None }
+  {s__el: K_stmt} {rest_el: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `else` ; s := s__el }) ; cdr := rest_el }
+}
+K_do_line &+= {
+  {s__dl: K_stmt} while ({c__dl: K_assign}); => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `do` ; s := s__dl ; c := c__dl }) ; cdr := None }
+  {s__dl: K_stmt} while ({c__dl: K_assign}); {rest_dl: K_stmts} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `do` ; s := s__dl ; c := c__dl }) ; cdr := rest_dl }
+}
+K_return_line &+= {
+  {e__rl: K_assign}; => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { kind := `return` ; e := e__rl }) ; cdr := None }
+}
+K_if_head &+= {
+  {`(`}{c__ih: K_assign}{`)`} {h_ih: K_head} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { head := true ; kind := `if` ; c := c__ih ; s := h_ih ; o := None }) ; cdr := None }
+  {`(`}{c__ih: K_assign}{`)`} {s__ih: K_stmt} else => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { head := true ; kind := `if` ; c := c__ih ; s := s__ih ; o := (Kjs_node &+ { kind := `body` ; s := None }) }) ; cdr := None }
+  {`(`}{c__ih: K_assign}{`)`} {s__ih: K_stmt} else {h_ih: K_head} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { head := true ; kind := `if` ; c := c__ih ; s := s__ih ; o := h_ih }) ; cdr := None }
+  {`(`}{c__ih: K_assign}{`)`} {s__ih: K_stmt} {rest_ih: K_line_head} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { head := true ; kind := `if` ; c := c__ih ; s := s__ih ; o := None }) ; cdr := rest_ih }
+}
+K_else_head &+= {
+  {h_eh: K_head} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { head := true ; kind := `else` ; s := h_eh }) ; cdr := None }
+  {s__eh: K_stmt} {rest_eh: K_line_head} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { head := true ; kind := `else` ; s := s__eh }) ; cdr := rest_eh }
+}
+K_while_head &+= {
+  {`(`}{c__wh: K_assign}{`)`} {h_wh: K_head} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { head := true ; kind := `while` ; c := c__wh ; s := h_wh }) ; cdr := None }
+  {`(`}{c__wh: K_assign}{`)`} {s__wh: K_stmt} {rest_wh: K_line_head} => Kjs_node &+ { kind := `list` ; car := (Kjs_node &+ { head := true ; kind := `while` ; c := c__wh ; s := s__wh }) ; cdr := rest_wh }
+}
+

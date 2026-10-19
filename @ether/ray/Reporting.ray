@@ -1,0 +1,89 @@
+Location &+= {
+  from: (line: Decimal, column: Decimal)?
+  to: (line: Decimal, column: Decimal)? = from
+  file => this ~~ (.from = None) ~~ (.to = None)
+}
+
+Diagnostic &+= {
+  static Severity := enum trace | debug | info | warn | error | fatal
+
+  severity: Severity = fatal ? Severity.fatal : Severity.error
+  assert Diagnostic(message: "stop", fatal: true).severity == Diagnostic.Severity.fatal  // DG2 a fatal error is not of fatal severity
+  at: Location? = origin ? origin.location{from == (origin.start.line, origin.start.column), to == (origin.end.line, origin.end.column)} : None
+  code => type && type !== * ? type.name : None
+  related => causes[1..]
+}
+assert Diagnostic(message: "no").severity == Diagnostic.Severity.error  // DG1 an error is not of error severity
+
+Report := class (name: String = "ray", claims: Claim[] = []) => {
+  static Claim := class (id: String, message: String, passed = true, at: Location?, duration: Quantity.Temporal?) => { }
+  // RT1 a run with a failing claim passed
+  assert !(Report(name: "suite", claims: [
+    Report.Claim(id: "A1", message: "one holds"),
+    Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{from == (4, 1)})
+  ])).passed && (Report(name: "suite", claims: [
+    Report.Claim(id: "A1", message: "one holds"),
+    Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{from == (4, 1)})
+  ])).failures.count == 1
+  assert Report(claims: [Report.Claim(id: "A4", message: "fine")]).passed  // RT14 a run of holding claims did not pass
+
+  passed => claims.every(.passed)
+  failures => claims{!.passed}
+
+  static Written := ("INFO@mark `", id: (Char.Letter | Char.Digit)[]{length > 0}, " ", message: (!"`")[], "`")
+  static (file: Location) as (=== Report) => file.held as String -- (text => Program(code: text)().reports -- (reports => Report(name: file.@ as String,
+    claims: text.split(\n).enumerate.map(line => (line.value ~= (*, Written, *)) -- (found => Claim(found.id, found.message,
+      passed: !reports.some(.level == INFO && .comment ~= ⊢(found.id + " ")),
+      at: file{from == (line.index + 1, 1)}) if found)).compact)))
+}
+// Errors: a value carries its diagnostics, and its type does not see them
+assert {
+  failing := (0).diagnosed(Diagnostic(message: "no"))
+  assert failing $ 5 == 5  // ER1 a default does not stand in for an error
+  assert failing $? === None  // ER3 an optional error is not None
+  assert failing $? 6 == 6  // ER4 an optional error does not fall back
+  assert failing $ { .message } == "no"  // ER5 the handler does not see the error as its receiver
+  fatal_one := (0).diagnosed(Diagnostic(message: "true", fatal: true))
+  assert (fatal_one $ 5).erred  // ER6 a default caught a fatal error
+  assert fatal_one $?! === None  // ER7 the catch-all did not catch a fatal error
+  assert (failing $ Diagnostic(message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last  // ER8 a wrapped error forgot its cause
+  assert failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2  // ER9 a value given a second diagnostic does not keep both
+  assert failing is Number  // ER10 a value that erred is no longer of its type
+  assert failing == 0  // ER11 a value that erred is not equal to itself without the error
+  returning := () => {
+    failing $ return 9
+    1
+  }
+  assert returning() == 9  // ER13 $ return did not return from the function
+}
+assert {
+  missing_file := () => {
+    ERROR `not 0`
+    7
+  }
+  assert missing_file() == 7  // ER14 a non-fatal error replaced the value the function answers
+  assert missing_file().diagnostics.last.origin == missing_file  // ER15 an error does not know the function it came from
+  stopping := () => {
+    FATAL `cannot go on`
+    7
+  }
+  assert stopping() is Diagnostic  // ER16 a fatal error is not what the function answers
+  // ER17 a handler for errors from one function did not take them
+  assert (missing_file()
+    $missing_file 8) == 8
+  // ER18 a handler for another function's errors took them
+  assert (missing_file()
+    $stopping 8) == 7
+  NotFound := class
+  looking := () => {
+    ERROR@NotFound `no such page`
+    3
+  }
+  // ER19 an error of a type is not caught by that type
+  assert (looking()
+    $NotFound 4) == 4
+  // ER20 an error of a type was caught by another function's handler
+  assert (looking()
+    $missing_file 4) == 3
+  assert looking().diagnostics.last.type === NotFound  // ER21 an error does not keep the type written after @
+}

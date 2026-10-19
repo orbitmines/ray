@@ -1,0 +1,1536 @@
+@ether/geometry
+@ether/version-control
+@html
+@css
+@js
+@json
+@ansi
+@opentype
+@png
+@ether/network
+@ether/fonts
+@ether/timezone
+@ether/device
+@ether
+
+UI := class {
+  scene: Geometry.Shape = Geometry.Box(size: Geometry.Vector(1240px, 800px), overflow: scroll)
+  page: *?
+  program: Program?
+
+  Interface := class: Location (level: Program) => { }
+
+  // Pointer Events (https://www.w3.org/TR/pointerevents3/), UI Events (https://www.w3.org/TR/uievents/), as a window reports them
+  Input := class {
+    Id = Char{!= " "}[]
+    Pointer := class (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
+      contact => @me/device/pointer[device ?? "mouse", number ?? 0]
+      position => Geometry.Space.screen.seen(Geometry.Vector(x * 1px, y * 1px), UI.scene.size)
+      assert ("\e[<0;3;4M" as ANSI.Mouse).position == Geometry.Vector(16px, UI.scene.size.y - 64px)  // UI170 a mouse report is not a position on the page
+      time => stamp ? stamp * 1 ms : Time.now
+    }
+    Keystroke := class (id: Id, " ", kind: "keydown" | "keyup", " ", key: Id, modifiers: (" ", held: "shift" | "control" | "alt" | "meta")[])
+    Inbound := Pointer | Keystroke
+    applied := {
+      {pointer: Pointer{kind == "pointerdown"}} => pointer.contact.to(pointer.position, pressing: [0], time: pointer.time)
+      {pointer: Pointer{kind == "pointermove"}} => pointer.contact.to(pointer.position, time: pointer.time)
+      {pointer: Pointer} => pointer.contact.to(pointer.position, pressing: [], time: pointer.time)
+      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- @me/device/keyboard[keystroke.key].press((Keyboard.Modifier.shift if .contains("shift")) | (Keyboard.Modifier.control if .contains("control")) | (Keyboard.Modifier.alt if .contains("alt")) | (Keyboard.Modifier.meta if .contains("meta")))
+      {keystroke: Keystroke} => @me/device/keyboard[keystroke.key].release
+    }
+    static dispatched (line: String?) => line.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
+    assert {
+      UI.HTML.DOM.dispatched("window keydown q")
+    }
+    assert {
+      UI.HTML.DOM.dispatched("window keyup q")
+    }
+  }
+
+  Scene := {
+    // (a shape is what it is, before anything that reads a value as a shape: a Box read as a Location became one)
+    {shape: Geometry.Shape} => shape
+    // `f <- x` (F-B2): `x` given to what is written before, `middle center .map(g) <- { … }` is `middle center ({ … }.map(g))`
+    {flow_into} <- {flowing} => flow_into(flowing)
+    // `n * x` (F-B3): `x` given that share of its parent's width (`100%`, `1` and `1.0` the same share, `4/12` four twelfths);
+    // `center * x`: `x` aligned, as `center x` is
+    {share Numeral}% * {shared} => Geometry.Box(width: share / 100, children: [shared])
+    {share_over Numeral}/{share_under Numeral} * {shared} => Geometry.Box(width: share_over / share_under, children: [shared])
+    {aligned_as: Alignment} * {aligned} => Geometry.Box(align: aligned_as, children: [aligned])
+    // (`*` reads one operand on each side: a share of an aligned `x`, `100% * center * x`, written as one)
+    {share Numeral}% * {share_aligned: Alignment} * {shared} => Geometry.Box(width: share / 100, children: [Geometry.Box(align: share_aligned, children: [shared])])
+    {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
+    {text: String} => Geometry.Box(content: text)
+    {styled: String | Geometry.Shape | Choice}{ }{`^`}{{literal expression}} => Compiler.reduced(styled, Scene).styled_by(Program(code: expression**))
+    // (the whole text marked: its shape styled; a character holds no styles yet (`.value ~~ .styles ,= style` is not read))
+    {styled: String}{ }{`^`}{literal style} => Compiler.reduced(styled, Scene).styled(style)
+    {styled: Geometry.Shape | Choice}{ }{`^`}{literal style} => Compiler.reduced(styled, Scene).styled(style)
+    {{literal narrowing}} {narrowed} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: narrowing**))
+    {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as String)])
+      -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
+    {placed: *{(location is Location) && location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), Scene)])
+    {chosen: Choice} => Geometry.Box(content: chosen)
+    {lines: \n} => Geometry.Box(flow: block, children: lines.components)
+    {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
+    // (what a path shows, an entry point (`{*}: Index`) run: its answer)
+    {site: *{fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering){O: Scene}(), Scene)
+    {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
+  }
+  assert Program(code: { "a", "b" }){O: UI.Scene}().flow == inline  // UI5 a comma does not flow inline
+  assert Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}().(
+    .styles.contains("muted")  // UI136 a dynamic style is not applied
+    & .styles is Dynamic  // UI137 a dynamic style is not kept for the levels to recompute
+  )
+  assert Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}().content == @https://orbitmines.com && Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}().children.first.content == "Ray"  // UI230 a value placed at a location is not a link to it
+  assert Program(code: { "Ray" ^h1 }){O: UI.Scene}().content == "Ray" && Program(code: { "Ray" ^h1 }){O: UI.Scene}().content.every(Program(code: { "Ray" ^h1 }){O: UI.Scene}().styles.contains("h1"))  // UI232 a style is not kept on the string it marks
+  assert {
+    with @me = Character(name: "player") {
+      assert Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice  // UI239 a superposition is not a chooser for a player
+    }
+  }
+  assert {
+    with @me = Instance.local {
+      assert !(Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice)  // UI240 the computer asks someone to choose instead of picking
+    }
+  }
+  assert {
+    solved := (children, scrolled: Geometry.Length = 0px) => Geometry.Box(size: Geometry.Vector(1000px, 800px), scrolled: Geometry.Vector(0px, scrolled), children: children).solve
+    fixed_width := Geometry.Box(width: 48px, height: 10px)
+    solved([fixed_width])
+    assert fixed_width.size.x == 48px  // UI100 a fixed width is not kept
+    lifted_up := Geometry.Box(height: 20px) + (mt -10px)
+    solved([Geometry.Box(height: 20px), lifted_up])
+    assert lifted_up.origin.y == 770px  // UI101 a negative margin does not pull a shape up
+    padded_child := Geometry.Box(height: 10px)
+    solved([Geometry.Box(children: [padded_child]) + (p 5px)])
+    assert padded_child.origin == Geometry.Vector(5px, 5px)  // UI102 padding does not move what it holds
+    pinned := Geometry.Box(position: Geometry.Absolute(), height: 10px) + Geometry.Spacing(Geometry.Edges(6px, None, None, 6px), itself)
+    after_pinned := Geometry.Box(height: 10px)
+    solved([pinned, after_pinned])
+    assert pinned.origin == Geometry.Vector(6px, 784px)  // UI103 an absolute shape is not placed by its insets
+    assert after_pinned.origin.y == 790px  // UI104 an absolute shape takes space in the flow
+    fixed_bar := Geometry.Box(position: Geometry.Fixed(), height: 10px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
+    solved([Geometry.Box(height: 3000px, children: [Geometry.Box(height: 500px), fixed_bar])], scrolled: 100px)
+    assert fixed_bar.at.y == 790px  // UI105 a fixed shape scrolls with the page
+    sticky_bar := Geometry.Box(position: Geometry.Sticky(), height: 10px) + Geometry.Spacing(Geometry.Edges(0px, None, None, None), itself)
+    solved([Geometry.Box(height: 1000px, children: [sticky_bar])], scrolled: 300px)
+    assert sticky_bar.at.y == 790px  // UI106 a sticky shape does not stay at the top while its parent is in view
+    anchor := Geometry.Box(height: 20px)
+    tip := UI.Popover(position: Geometry.Anchored(anchor: anchor), height: 10px)
+    solved([anchor, tip])
+    assert tip.at.y == 770px  // UI107 a popover is not placed below its anchor
+    assert !(tip.visible)  // UI108 a popover shows before its anchor is hovered or focused
+    scrolled_child := Geometry.Box(height: 10px)
+    solved([Geometry.Box(scrolled: Geometry.Vector(0, 50px), overflow: scroll, children: [scrolled_child])])
+    assert scrolled_child.at.y == 840px  // UI160 a scrolled container does not move what it holds
+    watched := (@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}
+    video := Program(code: { watched }){O: UI.Scene}()
+    assert video.content === watched && video.content.embedded == "https://www.youtube.com/embed/O6v_gzlI1kY"  // UI182 a YouTube link is not embedded as its player
+    solved([video])
+    assert video.size.y == video.size.x * 9 / 16  // UI184 an embedded video is not 16:9
+    with UI.scene.size = Geometry.Vector(64px, 36px) {
+      assert Program(code: { video }).rendered(Language.Direct.level).at(1, 1).alpha > 0  // UI186 an embedded frame leaves no placeholder in a raster
+    }
+    first_laid := Geometry.Box(height: 20px)
+    second_laid := Geometry.Box(height: 20px)
+    solved([first_laid, second_laid])
+    assert first_laid.origin.y == 780px  // YU9 the first shape in a flow is not at the top
+    assert second_laid.origin.y < first_laid.origin.y  // YU10 a shape later in a flow is not below the one before it
+    bottomed := Geometry.Box(position: Geometry.Absolute(), height: 10px) + Geometry.Spacing(Geometry.Edges(None, None, 4px, None), itself)
+    solved([bottomed])
+    assert bottomed.origin.y == 4px  // YU11 a bottom inset is not measured up from the bottom
+  }
+  assert {
+    red_bar := Geometry.Box(position: Geometry.Fixed(), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
+    scrolled_page := Geometry.Box(height: 2000px, children: [Geometry.Box(height: 1000px), red_bar])
+    with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+      with UI.scene.scrolled = Geometry.Vector(0, 320px) {
+        assert Program(code: { scrolled_page }).rendered(Language.Direct.level).at(0, 0) == Geometry.Color(255, 0, 0)  // UI117 a fixed shape leaves the top of a scrolled raster
+      }
+    }
+  }
+  assert {
+    solved := (children, scrolled: Geometry.Length = 0px) => Geometry.Box(size: Geometry.Vector(1000px, 800px), scrolled: Geometry.Vector(0px, scrolled), children: children).solve
+    anchor := Geometry.Box(height: 20px)
+    tip := UI.Popover(position: Geometry.Anchored(anchor: anchor), height: 10px)
+    solved([anchor, tip])
+    assert Program(code: { tip }).rendered(UI.HTML.Markup.level).body.children.first.attributes.contains(("popover", "manual"))  // UI115 a popover is not an HTML popover
+  }
+  assert {
+    css_rules := (shape) => Compiler.reduced(UI.HTML.Style.declared(shape), UI.HTML.Style.values)
+    stepped_rules := css_rules(Geometry.Box(width: Geometry.Steps([(12/12).xs, (6/12).md])))
+    assert stepped_rules.some(.within ~= (*, "@container (min-width:768px)", *))  // UI113 a stepped width has no container rule at its breakpoint
+    assert css_rules(Geometry.Box(position: Geometry.Sticky())).first.declarations.contains(("position", "sticky"))  // UI114 sticky is not written as CSS
+    assert css_rules(Geometry.Box() &+ (pt 5) &+ (pt 5)).first.declarations == css_rules(Geometry.Box() &+ (pt 10)).first.declarations  // UI125 two spacings on one side are not added in CSS
+    dynamic_style := Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}()
+    assert css_rules(dynamic_style).some(.selector == "#" + dynamic_style.dom + ".muted")  // UI138 the web level has no rule for a style a dynamic style can switch to
+    search_field := Geometry.Box(content: choose? String ?? "Search")
+    assert css_rules(search_field).some(.selector == "#" + search_field.dom + "::placeholder")  // UI141 the placeholder colour is not CSS
+    icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
+    assert Program(code: { icon }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span"  // UI149 a filled SVG is not a masked element on the web
+    assert css_rules(icon).first.declarations.some(.0 == "mask")  // UI150 a filled SVG has no mask
+    bounded := Geometry.Box(){width <= 50%, height >= 30px}
+    assert css_rules(bounded).first.declarations.contains(("max-width", 50, "%"))  // UI278 a share bound is not a CSS percentage
+    assert css_rules(bounded).first.declarations.contains(("min-height", 30, "px"))  // UI279 a length bound is not a CSS length
+    assert css_rules(Geometry.Box(radius: [50%])).first.declarations.some(.0 == "border-radius" && .[1..].join("") == "50%")  // UI280 a share radius is not border-radius: 50%
+  }
+  assert {
+    red_bar := Geometry.Box(position: Geometry.Fixed(), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px) + Geometry.Spacing(Geometry.Edges(0px, None, None, 0px), itself)
+    scrolled_page := Geometry.Box(height: 2000px, children: [Geometry.Box(height: 1000px), red_bar])
+    with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+      with UI.scene.scrolled = Geometry.Vector(0, 320px) {
+        assert Program(code: { scrolled_page }).rendered(UI.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0)  // UI116 a fixed shape leaves the top row of a scrolled terminal
+      }
+    }
+  }
+
+  Lowered := {
+    {field: Geometry.Shape{content is Choice}} => field.face -- (face => field ~~ (.content = None) ~~ (.children = [face]))
+    {frame: Geometry.Shape{content is Location && content.video_site && children.empty}} => frame ~~ (.content = frame.content ~~ .window = new) ~~ (.fill = Geometry.Color(17, 20, 24)) ~~ (.stroke = Geometry.Stroke(Geometry.Color(128, 128, 128))) ~~ (.children = [
+      Geometry.Box(content: "▶ " + (frame.content.alt ?? frame.content.@ as String), origin: frame.size * (1 / 4), size: frame.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
+    ])
+    {image: Geometry.Shape{content is Location && content.language === Language.Image}} => image.content.pixels -- (pixels => image ~~ (.content = None) ~~ (.fill = image.fill
+      ? (point => (image.painted(image.fill) as Geometry.Color) ~~ .alpha *= pixels.sampled(Geometry.Vector(point.x / image.size.x, point.y / image.size.y)).alpha)
+      : (point => pixels.sampled(Geometry.Vector(point.x / image.size.x, point.y / image.size.y)))))
+  }
+
+  Choice &+= {
+    disabled => !&@.may(`=`, this)
+    placeholder => [tried, tried.previous**].flatten.last
+    options => goal#
+    listed => !(goal is (boolean | String | Number | Time | Geometry.Color | Location | Language))
+    empty => tried === None || tried === placeholder && !done || (tried as String).empty
+    typed (text: String) => attempt((tried, text)) -- this
+    composed (text: String) => (tried as String ?? "") -- (now => attempt((now{!.styles.contains("composing")}, text.marked("composing")))) -- this
+    erased => attempt(tried[..<-1]) -- this
+    activate => goal is boolean ? attempt(!tried) : listed ? attempt(options[(options.index_of(tried) + 1) % options.count]) : None
+    shown => Compiler.reduced(this, Showing)
+    static Showing := {
+      {chosen: Choice{goal is boolean}} => chosen.tried ? "[x]" : "[ ]"
+      {chosen: Choice{goal is Number{least, most}}} => (chosen.tried - chosen.goal.least) / (chosen.goal.most - chosen.goal.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
+      {chosen: Choice{goal is String{secret}}} => "•" * (chosen.tried as String).length
+      {chosen: Choice{listed}} => "‹ ", chosen.tried as String, " ›"
+      {chosen: Choice{empty}} => (chosen.placeholder as String) ?? ""
+      {chosen: Choice{goal is Language}} => (chosen.tried as String).highlighted(chosen.goal)
+      {chosen: Choice} => chosen.tried as String
+    }
+  }
+
+  focus: Geometry.Shape{focused}[]{length <= 1} => scene{focused}
+  tab (step: next | previous = next) => focus = scene{focusable}.loop{focused}.`step` ?? scene{focusable}.first
+  typing => focus.some(.content is Choice)
+
+  selection: Geometry.Shape{selected}[] => scene{selected}
+  current => selection.last ?? scene
+  step (from: Geometry.Shape, direction: Geometry.Side) => (if direction {
+      Geometry.bottom => from.children.first
+      Geometry.top => from.parent
+      Geometry.right => from.parent.children{=== from}.next
+      Geometry.left => from.parent.children{=== from}.previous
+    }) ?? from
+  move (direction: Geometry.Side) => selection = step(current, direction)
+  skip (direction: Geometry.Side) => selection = step(step(current, Geometry.top), direction)
+  expand (direction: Geometry.Side) => selection |= step(current, direction)
+
+  pulsed (names: String[]) => names.some(@me/device/keyboard[.].pulsed)
+  held (names: String[], modifier: Keyboard.Modifier) => names.some(@me/device/keyboard.pressed(., modifier))
+
+  locked => scene{. is Drawer && open}.nonempty
+  back => @me/device/location = @me/device/location.previous
+  assert {
+    UI.back
+  }
+
+  Location &+= {
+    window: same | new = same
+    assert (@https://orbitmines.com).window == same  // UI81 a location opens a new window by default
+    assert (@https://orbitmines.com{window == new}).(
+      (Program(code: { . }).rendered(UI.HTML.Markup.level)).(
+        .body.children.first.attributes{.name == "target"}.first?.value == "_blank"  // UI82 a link to a new window has no target=_blank
+        & .body.children.first.attributes{.name == "rel"}.first?.value == "noopener noreferrer"  // UI83 a link to a new window does not drop the opener
+      )
+    )
+    alt: String?
+    assert {
+      logo := (@./logo.png){alt: "logo", width <= 400px}
+      logo_shape := Program(code: { logo }){O: UI.Scene}()
+      assert logo_shape.content === logo && logo_shape.content.language === Language.Image  // UI223 an image location is not shown as itself
+      assert logo.language === Language.Image && (@./clip.mp4).language === Language.Video && (@./song.mp3).language === Language.Audio  // UI224 a location's extension does not name its format
+      assert logo_shape.fields["width"].type.most == 400px  // UI227 a narrowing on a location does not constrain where it is shown
+      assert (@./logo.png{alt: "logo"}).alt == "logo"  // UI271 a narrowing after a location literal is not a narrowing
+      assert @./logo.png{alt: "logo"} as String == "./logo.png"  // UI272 a narrowing is read into the location's path
+      alt_of := (name: String) => @./logo.png{alt: name}
+      assert alt_of("written").alt == "written"  // UI273 a name in a narrowing is read against the location instead of where it is written
+    }
+    assert ((@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}).(
+      (Program(code: { . }){O: UI.Scene}()).(
+        Program(code: { . }).rendered(UI.HTML.Markup.level).body.children.first.tag == "iframe"  // UI183 an embedded frame is not an iframe on the web
+      )
+    )
+    assert {
+      logo := (@./logo.png){alt: "logo", width <= 400px}
+      logo_html := Program(code: { logo }).rendered(UI.HTML.Markup.level).body.children.first
+      assert logo_html.tag == "img" && logo_html.attributes.contains(("src", "./logo.png")) && logo_html.attributes.contains(("alt", "logo"))  // UI226 an image location is not an img with its alt
+    }
+    fit: contain | cover | fill | none = contain
+    controls: boolean = true
+    muted: boolean = false
+    assert Program(code: { (choose String) ^muted }){O: UI.Scene}().styles.contains("muted")  // UI270 a styled choice is not a styled box holding it
+    looping: boolean = false
+    narrowing: Program?
+    extension => (path ~= (*, ".", last: Char.Word[]) ⊣).last
+    assert (@https://orbitmines.com/a.png?v=2).extension == "png"  // UI225 a query is read as part of the extension
+    language => extension ? Language.named("." + extension) : None
+    media => language === Language.Image || language === Language.Video || language === Language.Audio
+    pixels => language.read(content)
+    static VideoId := (!"&" && !"?" && !"#")[]
+    static Rest := (("&" | "?" | "#"), *)?
+    static Embedding := {
+      @https://youtu.be/{id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
+      @https://youtube.com/watch?v={id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
+      @https://www.youtube.com/watch?v={id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
+      @https://www.youtube.com/embed/{id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
+    }
+    static Offset := class ((hours: Decimal, "h")?, (minutes: Decimal, "m")?, (seconds: Decimal, "s"?)?) => {
+      total => (hours ?? 0) * 3600 + (minutes ?? 0) * 60 + (seconds ?? 0)
+    }
+    static Embedded := {
+      {pair: (name: "t", value: *)} => (name: "start", value: (pair.value ~= (at: Offset)).at.total as String)
+      {pair: (name: "v", value: *)} => None
+      {pair} => pair
+    }
+    embedded => Compiler.reduced(this, Embedding) -- (embed => embed === this ? this
+      : Location(embed.scheme, embed.host, embed.port, embed.path, query: Location.Query(pairs: query.pairs.map(Compiler.reduced(., Embedded)).compact), fragment: fragment))
+    video_site => embedded !== this
+    {this}{{literal narrowing}} ^punctuation => Program(code: narrowing**) -- (narrowing => (this ~~ .narrowing = narrowing)
+      -- (copy => [narrowing{O: Geometry.Settings}()].flatten.for(write => write.entered(copy, None) if write.writes.every(copy.declaring(.))) -- copy))
+  }
+  Site := class (index: *?) => {
+    static (value) as (=== Site) => Site(index: value)
+    // (F-A4) what a path shows: the fields located at it (several: a choice), else the field named `{*}` (every path no field
+    // claims), else the index itself
+    at (path: String) => index.fields{.value.location ~= path}.map(.value) -- (claimed => claimed.nonempty ? claimed.all
+      : index.fields{.name == "{*}"}.first.value ?? index)
+    assert (6/12).md.at == 768px  // UI53 md is not the 768px breakpoint
+    assert ((6/12).md -> (12/12).xs).at(768px) == 6/12  // UI54 an interpolated share is not its breakpoint's at the breakpoint
+    assert ((9/12).xs -> (6/12).md).at(384px) == 5/8  // UI110 -> does not interpolate between breakpoints
+    assert ((12/12).xs -> (10/12).sm -> (8/12).md).at(576px) == 10/12  // UI111 a chain of -> does not pass through its middle breakpoint
+    assert UI.Site(index: (first: (name: "a") @ @/x/a, second: (name: "a") @ @/x/a)).at("/x/a")#.count == 2  // UI189 two matches are not a chooser
+    rendering => at((@me/device/location ?? @/).path as String)
+  }
+  assert UI.Site(index: (home: "home", fadi: (name: "fadi") @ @/@fadi, ether: (name: "ether") @ @/@ether)).(
+    .at("/@nobody") === .index  // UI187 a path nothing matches is not the index
+    & .at("/@fadi").name == "fadi"  // UI188 a path matching one value is not that value
+  )
+
+  Popover := Geometry.Box{position is Geometry.Anchored, layer == 20, visible == (position.anchor.hovered | position.anchor.focused | hovered)}
+  Overlay := Geometry.Box{closes: None, position == Geometry.Fixed(), spacing == [Geometry.Spacing(Geometry.Edges(), itself)], layer == 19, fill: Geometry.Color(0, 0, 0, 0.5)} + {
+    activate => closes.open = false
+    assert {
+      drawer := UI.Drawer(open: true)
+      with UI.scene = Geometry.Box(children: [drawer]) {
+        assert UI.locked  // UI118 an open drawer does not lock page scroll
+        UI.scene.scroll(100px)
+        assert UI.scene.scrolled.y == 0px  // UI119 a locked page scrolls
+      }
+      UI.Overlay(closes: drawer).activate
+      assert !(drawer.open)  // UI120 activating a drawer's overlay does not close it
+    }
+  }
+  Drawer := Geometry.Box{open: false, side: Geometry.left, extent: 75vw, layer == 20, overflow == scroll, visible == open, transition == Geometry.Transition(0.3 s),
+    position == Geometry.Fixed(), spacing == [Geometry.Spacing(Geometry.Edges() ~~ .(side.opposite) = None, itself)],
+    width == (extent if side is Geometry.horizontal), height == (extent if side is Geometry.vertical), children: [Overlay(closes: this){visible == closes.open}, children].flatten}
+
+  Geometry.Shape &+= {
+    focused: boolean = false
+    selected: boolean = false
+    dragged: boolean = false
+    dropped: Location?
+    cursor: (pointer | text | grab | grabbing | move | wait | none)?
+    touch: (none | pan_x | pan_y)?
+    scrollbar: boolean = true
+    styles: String[] | Dynamic = []
+    assert {
+      timer_fired := false
+      { timer_fired = true } after 0 s
+      assert timer_fired  // UI178 after fires late
+      assert ({ timer_fired = true } after 6 s) is Dynamic  // UI181 x after 6 s is not a trigger
+    }
+    palette: *? = parent.palette
+    case: Section? = parent.case
+    truncate: (clip | ellipsis)? = parent.truncate
+    direction: (left-to-right | right-to-left)? = parent.direction
+    hovered => visible && @me/device/pointer.contacts.some(contains(.position - at))
+    pressed => visible && @me/device/pointer.contacts.some(.pressed && contains(.position - at))
+    assert @me/device/keyboard["q"].pressed  // UI284 a key pressed on the web is not pressed on the device keyboard
+    assert !(@me/device/keyboard["q"].pressed)  // UI285 a key released on the web stays pressed
+    activated => focused && @me/device/keyboard/Enter.pulsed || hovered && @me/device/pointer.contacts.some(.released)
+    focusable => this is (UI.Linked | UI.Chosen | UI.Overlay)
+    activate => None
+    submitted => dynamically children{.content is Choice}.every(.content.solution) && @me/device/keyboard/Enter.pulsed
+    text: String => content is String ? content : texts.content.join("")
+    select (from: Number = 0, to: Number = text.length) => (selected = true) -- ((content = content.marked("selected", from, to)) if content is String) -- this
+    scroll (by: Geometry.Length) => (scrolled = Geometry.Vector(scrolled.x, (scrolled.y + by) min (content_height - size.y) max 0px)) unless this === UI.scene && UI.locked
+    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && ((at.y + size.y) - (shape.at.y + shape.size.y) + scrolled.y + offset - (if align {
+        center => (size.y - shape.size.y) / 2
+        end => size.y - shape.size.y
+      } else {
+        0px
+      })) max 0px -- (to => ((transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !@me/device/preferences.reduced_motion)
+        -- (scrolled = Geometry.Vector(scrolled.x, to)))
+    label => children{.content is String}.content.join(" ")
+    styled (name: String) => (styles &= name) -- (narrowed(UI.Theme.member(name).narrowing) if UI.Theme.member(name)) -- (color = UI.Theme.painted(name, palette ?? UI.Theme.palette) ?? color) -- this
+    styled_by (expression: Program) => styled(expression() as String) -- (styles = Dynamic(expression)) -- this
+    themed => styles -- (own => (styles = []) -- Compiler.reduced(this, Theme.kinds) -- (styles.nonempty ? own.for(styled(.)) : (styles = own)))
+      -- ((content.shared_styles{!styles.contains(.)}.for(styled(.))) if content is String) -- children.for(.themed) -- this
+  }
+  Located := Geometry.Shape{content is Location} + {
+    label => content.alt ?? content.name
+  }
+  Linked := Located{!content.media && !content.video_site} + {
+    activate => content.window == new ? (@me/device/opened = content) : (@me/device/location = content)
+  }
+  Chosen := Geometry.Shape{content is Choice} + {
+    activate => content.activate
+    text => content.empty ? "" : content.tried as String
+    select (from: Number = 0, to: Number = text.length) => (selected = true) -- content.attempt(text.marked("selected", from, to)) -- this
+    face => Geometry.Box(content: content.shown, origin: inside.start, size: size - inside.total, font: font, color: color, palette: palette,
+      white_space: content.goal is (String{multiline} | Language) ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap) -- (shown => content.empty ? shown.styled("placeholder") : shown)
+  }
+
+  Theme := class {
+    static spacing: Geometry.Length = 0.125rem
+    static scaled (amount: Number | Geometry.Length) => amount is Number ? spacing * amount : amount
+    assert {
+      dot := Geometry.Box(width: 2px, height: 2px, fill: Geometry.Color(255, 0, 0))
+      with UI.scene.size = Geometry.Vector(4px, 4px) {
+        raster := Program(code: { dot }).rendered(Language.Direct.level)
+        assert raster.at(0, 0) == Geometry.Color(255, 0, 0)  // UI40 a filled box is not drawn
+        assert raster.at(3, 3).alpha == 0  // UI41 outside the box was drawn
+      }
+    }
+    assert {
+      styled_link := Geometry.Box(content: @/x)
+      muting := { {x: Geometry.Shape{content is Location}} => x ^muted }
+      with UI.Theme.kinds = muting {
+        Geometry.Box(children: [styled_link]).themed
+        assert styled_link.styles.contains("muted") && styled_link.color == Geometry.Color(128, 128, 128)  // UI139 a kind's default style is not applied
+      }
+    }
+    assert {
+      search_field := Geometry.Box(content: choose? String ?? "Search")
+      with UI.Theme.placeholder = Geometry.Shape{color == Geometry.Color(1, 2, 3)} {
+        assert search_field.face.content == "Search" && search_field.face.color == Geometry.Color(1, 2, 3)  // UI140 an empty field does not show its placeholder in its colour
+      }
+    }
+    assert {
+      red := Geometry.Color(255, 0, 0)
+      tinted_icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
+      Geometry.Box(color: red, children: [tinted_icon])
+      assert tinted_icon.painted(tinted_icon.fill) == red  // UI152 an icon filled with currentColor does not take the colour around it
+    }
+    assert Geometry.Box().styled("muted").color == Geometry.Color(128, 128, 128) && Geometry.Box().styled("keyword").color == UI.Theme.painted("keyword")  // UA1 a page style and a highlighting style are not applied the same way
+    assert {
+      revealed := Geometry.Box(origin: Geometry.Vector(0, -300px), size: Geometry.Vector(100px, 100px))
+      with UI.scene = Geometry.Box(size: Geometry.Vector(1000px, 800px), overflow: scroll, children: [revealed]) {
+        UI.scene.reveal(revealed)
+        assert UI.scene.scrolled.y == 1000px  // UI153 revealing a shape does not scroll to it
+        UI.scene.reveal(revealed, align: center)
+        assert UI.scene.scrolled.y == 650px  // UI154 revealing a shape in the centre does not centre it
+        UI.scene.reveal(revealed, offset: -100px)
+        assert UI.scene.scrolled.y == 900px  // UI155 a reveal's offset is not kept
+        UI.scene.reveal(revealed, smooth: true)
+        assert UI.scene.transition && UI.scene.scrolled.y == 1000px  // UI156 a smooth reveal does not move towards the shape
+        UI.scene.scrolled = Geometry.Vector(0, 120px)
+        assert UI.scene.scrolled.y == 120px  // UI157 the page scroll cannot be set
+      }
+      assert revealed.size.y == 100px  // UI159 a shape's height cannot be measured
+    }
+    assert UI.Theme.face(Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)), Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)).content[1]).font.style == italic && UI.Theme.face(Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)), Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)).content[0]).font.style == normal  // UI235 a string's styles are not read per character
+    assert {
+      with UI.Theme.tall = Geometry.Shape{height >= 30px} {
+        assert Geometry.Box().styled("tall").fields["height"].type.least == 30px  // UI266 a theme style does not carry its bound
+      }
+    }
+    assert Program(code: { Geometry.Box(content: (choose $.ray).attempt("x := 1")) }).rendered(UI.HTML.Markup.level).body.children.first.children.first.tag == "pre"  // UI143 a painted text area has no painted layer under it
+    assert {
+      red := Geometry.Color(255, 0, 0)
+      runs_text := Geometry.Box(content: "ab".marked("red", 0, 1), size: Geometry.Vector(16px, 16px))
+      with UI.Theme.palettes = [("red", red)] {
+        runs_html := runs_text.dom_spans
+        assert runs_html.first.tag == "span" && runs_html.first.attributes.contains(("class", "red"))  // UI145 a painted run is not a span on the web
+      }
+      dot := Geometry.Ball(size: Geometry.Vector(8px, 8px), fill: red)
+      assert Program(code: { dot }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span"  // UI282 a ball is drawn as an svg box
+      assert css_rules(dot).first.declarations.contains(("border-radius", "50%")) && css_rules(dot).first.declarations.some(.0 == "background")  // UI283 a ball is not a filled dot
+    }
+    assert Program(code: { Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10px, 10px)), size: Geometry.Vector(10px, 10px)) }).rendered(UI.HTML.Markup.level).body.children.first.children.first.attributes.contains(("points", "5,0 10,10 0,10"))  // YU14 a triangle pointing up is not drawn pointing up on the web
+    // Keys are bound once in UI; the web only presses them (F-D6, F-D10b)
+    assert {
+      listed_first := Geometry.Box()
+      with UI.scene = Geometry.Box(children: [listed_first, Geometry.Box()]) {
+        UI.HTML.DOM.dispatched("window keydown ArrowDown")
+        assert UI.current === listed_first  // UA2 an arrow key pressed on the web does not move the selection
+      }
+    }
+    assert {
+      page := Program(code: {
+        "Ray" ^h1
+        @https://orbitmines.com
+      })
+      with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+        grid := page.rendered(UI.TUI.Cells)
+        assert grid.width == 80 && grid.height == 24  // UI30 the terminal grid is not 80 by 24
+        assert grid.cells[0][0].glyph == "R"  // UI31 the heading's first glyph is not in the first cell
+        assert ANSI.Attribute.bold is grid.cells[0][0].styles  // UI32 a heading is not bold in the terminal
+        assert grid.cells[1].some(.link)  // UI33 a link's cells do not carry where it goes
+        assert grid.changes(grid).empty  // UI34 an unchanged frame writes something
+      }
+    }
+    assert {
+      red := Geometry.Color(255, 0, 0)
+      runs_text := Geometry.Box(content: "ab".marked("red", 0, 1), size: Geometry.Vector(16px, 16px))
+      with UI.Theme.palettes = [("red", red)] {
+        with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+          runs_grid := Program(code: { runs_text }).rendered(UI.TUI.Cells)
+          assert runs_grid.cells[0][0].foreground == red && runs_grid.cells[0][1].foreground != red  // UI144 a painted run does not colour its cells only
+        }
+      }
+    }
+    assert {
+      selected_text := Geometry.Box(content: "ab", size: Geometry.Vector(16px, 16px))
+      selected_text.select
+      with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+        assert ANSI.Attribute.negative is Program(code: { selected_text }).rendered(UI.TUI.Cells).cells[0][1].styles  // UI172 selected text is not shown reversed in the terminal
+      }
+    }
+    assert {
+      solved := (children, scrolled: Geometry.Length = 0px) => Geometry.Box(size: Geometry.Vector(1000px, 800px), scrolled: Geometry.Vector(0px, scrolled), children: children).solve
+      watched := (@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}
+      video := Program(code: { watched }){O: UI.Scene}()
+      solved([video])
+      with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+        assert Program(code: { video }).rendered(UI.TUI.Cells).cells[1].some(.link == video.content)  // UI185 an embedded frame is not a link in the terminal
+      }
+    }
+    assert {
+      italic_text := Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px))
+      with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+        italic_grid := Program(code: { italic_text }).rendered(UI.TUI.Cells)
+        assert ANSI.Attribute.italic is italic_grid.cells[0][1].styles && !(ANSI.Attribute.italic is italic_grid.cells[0][0].styles)  // UI234 a style on part of a string is not on its cells only
+      }
+    }
+    assert {
+      top_bar := Geometry.Box(height: 16px, fill: Geometry.Color(255, 0, 0))
+      with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+        assert Program(code: { top_bar }).rendered(UI.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0)  // YU13 the first shape in a flow is not on the terminal's top row
+      }
+    }
+    assert Compiler.reduced(Geometry.Box(content: choose boolean), UI.Lowered).children.first.content == "[ ]"  // UA4 a choice is not lowered to a box showing its face
+    static kinds := { }
+    static palettes := DARK{dark: true}
+    static palette => palettes{dark == @me/device/preferences.dark} ?? palettes
+    static styles => fields{.value.narrowing}.name
+    static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last.1
+    assert UI.Theme.painted("keyword") == "#6C6783" as Geometry.Color  // UI146 a highlighting style has no colour in the default palette
+    static face (shape: Geometry.Shape, character: Char?) => (character.styles ?? []).reduce((acc = Geometry.Box(font: shape.font, color: shape.color, fill: shape.fill, palette: shape.palette)) => acc.styled(.))
+  }
+  assert {
+    with UI.Theme.spacing = 4px {
+      assert (p 2).left == 8px && (p 2).top == 8px  // UI122 the shorthands do not follow the theme's spacing
+    }
+  }
+}
+
+UI.Theme.italic := Geometry.Shape{font.style == italic}
+UI.Theme.bold := Geometry.Shape{font.weight == 700}
+UI.Theme.muted := Geometry.Shape{color == Geometry.Color(128, 128, 128)}
+UI.Theme.placeholder := Geometry.Shape{color == Geometry.Color(128, 128, 128)}
+UI.Theme.disabled := Geometry.Shape{color == Geometry.Color(160, 160, 160)}
+UI.Theme.selected := Geometry.Shape{fill == Geometry.Color(51, 144, 255, 0.4)}
+UI.Theme.h1 := Geometry.Shape{font.size == 2em, font.weight == 700}
+UI.Theme.h2 := Geometry.Shape{font.size == 1.5em, font.weight == 700}
+UI.Theme.h3 := Geometry.Shape{font.size == 1.17em, font.weight == 700}
+UI.Theme.code := Geometry.Shape{white_space == Geometry.WhiteSpace.pre}
+
+currentColor := .color
+assert currentColor is Section  // UI148 currentColor is not an inherited paint
+
+Char &+= {
+  styles: String[] = []
+}
+String &+= {
+  marked (style: String, from: Number = 0, to: Number = length) => enumerate.map(((from <= .index) && (.index < to)) ? (.value ~~ .styles ,= style) : .value) as String
+  shared_styles => first.styles{style => every(.styles.contains(style))} ?? []
+  pieces => [this{.index == 0 || .styles != .previous.styles}.map(.index), [length]].flatten -- .zip(.rest).map((from, to) => this[from..<to])
+  highlighted (language: Language | String) => (language is String ? Language.named(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = marked("code") => acc.marked(.style, .from, .to))
+  assert ("x := 1".highlighted(".ray")) == "x := 1" && ("x := 1".highlighted(".ray")).pieces.count > 1  // UI233 a highlighted string is not the same string with marks
+  assert (choose String{search}).attempt("ray").shown == "ray"  // UI267 a search field is not a text field in the terminal
+  assert (@https://youtu.be/abc?si=xyz&t=1m5s).embedded as String == "https://www.youtube.com/embed/abc?si=xyz&start=65"  // UI268 an embedding drops the query
+  assert (@https://www.youtube.com/watch?v=abc&t=30).embedded as String == "https://www.youtube.com/embed/abc?start=30"  // UI269 a watch link's time is not where the embed starts
+  assert (@https://orbitmines.com/archive).with(search: None) as String == "https://orbitmines.com/archive"  // UI277 an empty query is written
+  assert (ANSI.write(Compiler.reduced(UI.TUI.Stop(), UI.TUI.written)) as String) ~= ⊢ "\e[?1004l"  // UI299 stopping does not undo the modes starting set, last first
+}
+
+// (each side's padding word, `p…`, from the border, and margin word, `m…`, from the shape itself: written out, as a loop over
+// `[p: Geometry.all, …]` with a `` `word` `` head defined every word as the first one (open))
+Node &+= {
+  right-to-left p ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.all) = UI.Theme.scaled(this), border)
+  right-to-left px ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.horizontal) = UI.Theme.scaled(this), border)
+  right-to-left py ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.vertical) = UI.Theme.scaled(this), border)
+  right-to-left pt ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.top) = UI.Theme.scaled(this), border)
+  right-to-left pb ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.bottom) = UI.Theme.scaled(this), border)
+  right-to-left pl ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.left) = UI.Theme.scaled(this), border)
+  right-to-left pr ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.right) = UI.Theme.scaled(this), border)
+  right-to-left m ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.all) = UI.Theme.scaled(this), itself)
+  right-to-left mx ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.horizontal) = UI.Theme.scaled(this), itself)
+  right-to-left my ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.vertical) = UI.Theme.scaled(this), itself)
+  right-to-left mt ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.top) = UI.Theme.scaled(this), itself)
+  right-to-left mb ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.bottom) = UI.Theme.scaled(this), itself)
+  right-to-left ml ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.left) = UI.Theme.scaled(this), itself)
+  right-to-left mr ^keyword => Geometry.Spacing(Geometry.Edges(None, None, None, None, None, None) ~~ .(Geometry.right) = UI.Theme.scaled(this), itself)
+}
+
+// (`pt 5 x`: `x` with that spacing (F-B8b), as `center x` is `x` aligned)
+p {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [p spacing_amount], children: [spaced])
+px {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [px spacing_amount], children: [spaced])
+assert (px 3).top == None && (px 3).left == 6px  // UI124 px spaces the top
+py {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [py spacing_amount], children: [spaced])
+pt {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [pt spacing_amount], children: [spaced])
+assert (pt 5).top == 10px && (pt 5).from == border  // UI121 pt 5 is not five steps of the default spacing
+pb {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [pb spacing_amount], children: [spaced])
+pl {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [pl spacing_amount], children: [spaced])
+pr {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [pr spacing_amount], children: [spaced])
+m {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [m spacing_amount], children: [spaced])
+mx {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [mx spacing_amount], children: [spaced])
+my {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [my spacing_amount], children: [spaced])
+mt {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [mt spacing_amount], children: [spaced])
+assert (mt -60px).top == -60px && (mt -60px).from == itself  // UI123 a length given to a shorthand is scaled
+mb {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [mb spacing_amount], children: [spaced])
+ml {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [ml spacing_amount], children: [spaced])
+mr {spacing_amount} {spaced} ^keyword => Geometry.Box(spacing: [mr spacing_amount], children: [spaced])
+
+Unit(name: "viewport width", symbol: "vw")
+  .convert(((x: Number) => x * (UI.scene.size.x as pixel).amount / 100), pixel)
+Unit(name: "viewport height", symbol: "vh")
+  .convert(((x: Number) => x * (UI.scene.size.y as pixel).amount / 100), pixel)
+
+Program &+= {
+  drawn (before: Geometry.Shape = UI.scene) =>
+    UI.page = this()
+    Geometry.Box(size: before.size, scrolled: before.scrolled, overflow: scroll, transition: before.transition, children: [this{O: UI.Scene}().themed])
+  rendered (level) => Compiler.reduced(drawn(), level)
+  run (on: UI.Interface) => (UI.program = this) ~~ on.start ~~ ((on.write(Compiler.reduced((UI.scene = drawn()), on.level)) -- on.read) while !done) ~~ on.stop
+}
+assert Program(code: {
+  "Ray" ^h1
+  @https://orbitmines.com
+}).(
+  (@https://orbitmines.com/archive?.=2).query.search == None  // UI275 a missing query parameter is not None
+  & (.{O: UI.Scene}()).(
+    .children.first.content is String  // UI1 a string does not become text
+    & UI.Theme.face(.children.first, .children.first.content[0]).font.weight >= 600  // UI2 a heading style does not give a heading
+    & .children.last.content == @https://orbitmines.com  // UI3 a location does not become a link
+    & .flow == block  // UI4 lines do not stack
+  )
+  & (@https://orbitmines.com/archive?search=ray&.=2).(
+    .query.search == "ray" && .query.page == "2"  // UI86 a query parameter is not read
+    & .path == "https://orbitmines.com/archive"  // UI87 a location's path keeps its query
+    & .with(search: "orbit").query.search == "orbit" && .with(search: "orbit").query.page == "2"  // UI88 with does not replace one parameter and keep the rest
+    & !(.with(search: None).query.search)  // UI89 with None does not remove a parameter
+  )
+)
+assert Program(code: {
+  "Ray" ^h1
+  @https://orbitmines.com
+}).(
+  (.rendered(UI.HTML.Markup.level)).(
+    . is HTML.Document  // UI10 HTML is not a document value
+    & .body.children.first.children.first.tag == "h1"  // UI11 the heading is not an h1
+    & .body.children.first.children.last.tag == "a"  // UI12 the link is not an a
+    & . as HTML ~= "<!doctype html>"  // UI13 the HTML language does not write a doctype
+  )
+  & (.rendered(UI.HTML.level)).(
+    .files.path.contains("index.html") && .files.path.contains("style.css") && .files.path.contains("app.js")  // UI20 the web package is not the three files
+    & .files{.path == "style.css"}.first.content is CSS.Sheet  // UI21 the stylesheet is not a CSS value
+    & .files{.path == "app.js"}.first.content is Program  // UI22 the script is not a JS value
+  )
+)
+
+Node &+= {
+  right-to-left changes ^keyword => this !== previous
+  right-to-left becomes {target} ^keyword => this == target && previous != target
+}
+{action} when {condition} ^keyword => dynamically if (condition) { action }
+{action} after {delay: Quantity.Temporal} ^keyword => (Time.now + delay) -- (due => { action } when Time.now >= due)
+
+[(Geometry.top, ["ArrowUp", "w"]), (Geometry.bottom, ["ArrowDown", "s"]), (Geometry.right, ["ArrowRight", "d"]), (Geometry.left, ["ArrowLeft", "a"])].for (side, names) => {
+  { UI.held(names, Keyboard.Modifier.control) ? UI.skip(side) : UI.held(names, Keyboard.Modifier.shift) ? UI.expand(side) : UI.move(side) } when UI.pulsed(names) && !UI.typing
+}
+{ UI.tab(UI.held(["Tab"], Keyboard.Modifier.shift) ? previous : next) } when UI.pulsed(["Tab"])
+{ (UI.focus.first ?? UI.current).activate } when UI.pulsed(["Enter"])
+{ UI.scene.scroll(-UI.scene.size.y) } when UI.pulsed(["PageUp"])
+{ UI.scene.scroll(UI.scene.size.y) } when UI.pulsed(["PageDown"])
+{ UI.scene.scroll(-@me/device/pointer["mouse"].wheel.y * 3em) } when @me/device/pointer["mouse"].wheel changes
+{ UI.program.stop } when UI.pulsed(["q"]) && !UI.typing
+
+Pointer := class: Location {
+  static Contact := class: Nameable (number: Number = 0, position: Geometry.Vector = Geometry.Vector(), pressure: Probability = 0, tilt: Geometry.Vector = Geometry.Vector(), buttons: Number[] = [], wheel: Geometry.Vector = Geometry.Vector()) => {
+    pressed => buttons.nonempty || pressure > 0
+    released => !pressed && (previous.pressed ?? false)
+    velocity => history.last -- (now => now.previous && now.when > now.previous.when ? (now.value.position - now.previous.value.position) * (1 / ((now.when - now.previous.when) as ms)) : Geometry.Vector())
+    pressed_at => history.commits{.value.pressed && !(.previous.value.pressed ?? false)}.last
+    swipe => (pressed_at, history.commits{.value.released}.last) -- ((from, to) => (from: from.value, to: to.value, distance: to.value.position - from.value.position, duration: to.when - from.when))
+    to (at: Geometry.Vector, pressing: Number[] = buttons, time: Time = Time.now) => {
+      with Time.now = time {
+        position = at
+        (buttons = pressing) if pressing != buttons
+      }
+      this
+    }
+  }
+  static Mouse := Contact{name == "mouse"}
+  static Pen := Contact{name == "pen"}
+  static Touch := Contact{name == "touch"}
+
+  contacts => children{is Contact}
+  [kind: "mouse" | "pen" | "touch" = "mouse", number: Number = 0] => contacts{.name == kind && .number == number}.first ?? add(Contact(name: kind, number))
+}
+
+Controllers := class: Location {
+  static Controller := class: Nameable (held: *, character: Character?) => {
+    guest => character === None
+  }
+  [id: Number.Nat] => children{.name == id}.first
+  connected (held) => children{.held == held}.first ?? add(Controller(name: reclaimed(held) ?? (0..).find(!this[.]), held))
+  disconnected (held) => children = children{.held != held}
+  reclaimed (held) => [children, children.previous**].flatten{.held == held && !this[.name]}.first.name
+}
+
+Device &+= {
+  controllers: Controllers = Controllers()
+  pointer: Pointer = Pointer()
+}
+
+Language.Image := class: Language {
+  static extensions := ".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif"
+  level := {
+    {encoded} => $.png.read(encoded)
+  }
+}
+Language.Video := class: Language { static extensions = ".mp4" | ".webm" | ".ogv" }
+Language.Audio := class: Language { static extensions = ".mp3" | ".ogg" | ".wav" | ".flac" }
+
+Language.Direct := class: Language {
+  static extensions := ".direct"
+  static space (size: Geometry.Vector) => Geometry.Space.grid(Geometry.Vector(size.x as px, size.y as px))
+  static outer: Geometry.Transform = Geometry.Transform.identity
+
+  Geometry.Shape &+= {
+    placed => Language.Direct.outer * Geometry.Transform.translate(at) * displayed("transform")
+    pixels_inside => Language.Direct.space(size).positions -- (area => rectangular ? area : area{boundary.winding(.) != 0})
+    opacity => effects{. is Geometry.Opacity}.amount.product ?? 1
+    drawn_writes => Compiler.reduced(this, UI.Lowered) -- (shape => [
+      Language.Direct.painted(shape.pixels_inside.map(point => (at: shape.placed.applied(point), sample: point)), shape.painted(shape.fill), shape.opacity) if shape.fill,
+      Language.Direct.stroked(shape.boundary, shape.placed, shape.stroke.width, shape.painted(shape.stroke.paint)) if shape.stroke,
+      Compiler.reduced(shape, Language.Direct.shown) if shape.content,
+      (with Language.Direct.outer = shape.placed * Geometry.Transform.translate(shape.at * -1) { shape.in_place.sort_by(.layer).map(.drawn_writes) }) if shape.visible,
+      shape.effects{. is Geometry.Blur}.map(blur => { .blurred(shape.pixels_inside.map(shape.placed.applied(.)), blur.radius as px) })
+    ])
+  }
+  Screen := class (raster: Geometry.Raster) => {
+    seen (at: Geometry.Vector) => Geometry.Space.screen.seen(at, Geometry.Vector(raster.width, raster.height), Geometry.Vector(1, 1))
+    at (point: Geometry.Vector) => seen(point) -- (cell => raster.at(cell.x, cell.y))
+    put (point: Geometry.Vector, color: Geometry.Color) => seen(point) -- (cell => raster.put(cell.x, cell.y, color))
+    blurred (area: Geometry.Vector[], radius: Number) => raster.blurred(area.map(seen(.)), radius)
+  }
+
+  rules := {
+    {root: Geometry.Shape{solved && !parent}} => (Screen(Geometry.Raster.blank(root.size.x as px, root.size.y as px)) ~~ [root, root.lifted].flatten.map(.drawn_writes).flatten).raster
+  }
+  shown := {
+    {text: Geometry.Shape{content is String}} => with Geometry.Font.inherited = text.em {
+      text.lines(text.size.x).enumerate.map(row => row.value.reduce(placed = (pen: 0px, ops: []) => {
+        look = UI.Theme.face(text, .)
+        size = look.font.size as px
+        height = size * look.font.line_height
+        top = text.size.y - row.index * height
+        glyph = Font(look.font).glyph(text.case ? text.case(.) : .)
+        (pen: placed.pen + glyph.advance * size / glyph.units, ops: [placed.ops,
+          painted(Geometry.Space.grid(Geometry.Vector(size * 0.6, height)).positions.map(point => (at: text.placed.applied(point + Geometry.Vector(placed.pen, top - height)), sample: point)), look.fill) if look.styles.contains("selected"),
+          outlined(glyph.outlines, text.placed * Geometry.Transform.translate(Geometry.Vector(placed.pen, top - glyph.ascender * size / glyph.units)) * Geometry.Transform.scale(Geometry.Vector(size / glyph.units, size / glyph.units)), text.painted(look.color) ?? Geometry.Color(0, 0, 0))
+        ].flatten)
+      }).ops).flatten
+    }
+    {canvas: Geometry.Shape{content is Program && !(content is Choice)}} => with Language.Direct.outer = canvas.placed { canvas.content().map(.drawn_writes) }
+    {shape: Geometry.Shape} => []
+  }
+  painting (points: (at: Geometry.Vector, sample: Geometry.Vector)[], alpha: Probability) => {
+    {color: Geometry.Color} => (color ~~ .alpha *= alpha) -- (faded => points.map(point => { .put(point.at, faded) }))
+    {gradient: Geometry.Gradient} => points.map(point => { .put(point.at, gradient.at(point.sample.x) ~~ .alpha *= alpha) })
+    {pattern: Geometry.Pattern} => (Screen(Geometry.Raster.blank(pattern.repeat.x as px, pattern.repeat.y as px)) ~~ pattern.shape.drawn_writes).raster -- (tile =>
+      points.map(point => { .put(point.at, Screen(tile).at(Geometry.Vector(point.sample.x % pattern.repeat.x, point.sample.y % pattern.repeat.y)) ~~ .alpha *= alpha) }))
+    {sampled: Geometry.Pointwise} => points.map(point => { .put(point.at, sampled(point.sample) ~~ .alpha *= alpha) })
+    {paint} => []
+  }
+  painted (points: (at: Geometry.Vector, sample: Geometry.Vector)[], paint: Geometry.Paint?, alpha: Probability = 1) => Compiler.reduced(paint, painting(points, alpha))
+  outlined (outlines: Geometry.Curve[], transform: Geometry.Transform, paint: Geometry.Paint?) => outlines.map(.edges.map((a, b) => (transform.applied(a), transform.applied(b)))).flatten(1) -- (edges => edges.map(.0.y) -- (ys => painted((ys.min..<ys.max).map(y =>
+    edges{(.0.y <= y) != (.1.y <= y)}.map(.0.x + (y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)).sort.chunk(2).map((a, b) => (a..<b).map(x => (at: Geometry.Vector(x, y), sample: Geometry.Vector(x, y))))
+  ).flatten, paint)))
+  stroked (outline: Geometry.Shape, transform: Geometry.Transform, width: Geometry.Length, paint: Geometry.Paint?) => painted(outline.edges.map((a, b) => (transform.applied(a), transform.applied(b))).map((a, b) =>
+    (0..<a.distance(b) as px).map(step => a.mix(b, step / a.distance(b)) -- (point => (-(width / 2) .. width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
+  ).flatten, paint)
+  level := Geometry.Preparing(1px) + rules
+
+  Font := class (font: Geometry.Font) => {
+    file => font.family.map(Fonts.named).first
+    glyph (character: Char) => $.opentype.read(file.held as Byte[])[character]
+  }
+
+  Display := class: UI.Interface (target: Location, title: String = "") => {
+    dynamically event: @me/instance
+    start => { (@me/device/opened).held() } when @me/device/opened changes
+    stop => None
+    write (raster: Geometry.Raster) => (title = UI.page.title ?? "") -- (target.held = raster)
+    read => UI.Input.dispatched(event)
+  }
+}
+
+Device &+= {
+  window: Language.Direct.Display?
+}
+
+// The web renderer: a scene written as HTML, a document with its CSS stylesheet and JS script
+UI.HTML := class {
+  static space := Geometry.Space.screen
+  Geometry.Shape &+= {
+    dom => id.segments.join("-")
+    dom_named => [("id", dom), ("class", styles.join(" ")) if styles.nonempty]
+    // WAI-ARIA aria-label (https://www.w3.org/TR/wai-aria-1.2/#aria-label), the popover attribute (https://html.spec.whatwg.org/multipage/popover.html)
+    dom_described => [("aria-label", label) if label, ("popover", "manual") if position is Geometry.Anchored]
+    dom_entry => content -- (chosen => [("placeholder", chosen.placeholder as String) if chosen.placeholder, ("disabled", "") if chosen.disabled,
+      ("min", chosen.goal.least as String) if chosen.goal is Number{least, most}, ("max", chosen.goal.most as String) if chosen.goal is Number{least, most}])
+    dom_spans => content.shared_styles -- (shared => content.pieces.map(piece => piece.first.styles{!shared.contains(.)} -- (own => own.empty ? $.html.Text(piece)
+      : @html <span class={own.join(" ")} style={dom_inline(UI.Theme.face(this, piece.first))}>{piece}</span>)))
+    dom_inline (face: Geometry.Shape) => [
+      ("color:", face.color, ";") if face.color && face.color != color,
+      ("background:", face.fill, ";") if face.fill && face.fill != fill,
+      ("font-weight:", face.font.weight, ";") if face.font.weight != font.weight,
+      ("font-style:", face.font.style as String, ";") if face.font.style != font.style
+    ]
+    selected_range => text.enumerate{.value.styles.contains("selected")}.index -- (from: .first, to: .last + 1)
+  }
+
+  Markup := class {
+    tags (page) => [[(name: "og:title", content: page.title), (name: "og:description", content: page.description), (name: "og:image", content: page.image as String) if page.image]{!(page.meta ?? []).name.contains(.name)}, page.meta ?? []].flatten(1){.content != None}
+
+    head (page) => @html {
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>{page.title ?? ""}</title>
+      <meta name="description" content={page.description ?? ""} />
+      {tags(page).map(Compiler.reduced(., meta))}
+      {Compiler.reduced((name: "theme-color", content: Compiler.reduced(page.theme, Style.values)), meta) if page.theme}
+      {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
+      {(page.structured ?? []).map(entry => $.html.Element("script", [("type", "application/ld+json")], [$.html.Raw($.json.write(UI.Linked(entry, context: "https://schema.org").document))]))}
+      <link rel="stylesheet" href="style.css" />
+      <script src="app.js" defer />
+    }
+    meta := {
+      // The Open Graph protocol (https://ogp.me/#metadata)
+      {entry: *{name ~= ("og:" | "article:" | "fb:", *)}} => @html <meta property={entry.name} content={entry.content} />
+      {entry} => @html <meta name={entry.name} content={entry.content} />
+    }
+    assert {
+      article := (
+        meta: [(name: "og:type", content: "article"), (name: "twitter:card", content: "summary"), (name: "citation_author", content: "Shawki, Fadi"), (name: "citation_author", content: "Other")],
+        structured: [(type: "Article", headline: "Ray", author: [(type: "Person", name: "Fadi")])],
+        manifest: @./manifest.json
+      )
+      head := UI.HTML.Markup.head(article)
+      assert head.some(.tag == "meta" && .attributes.contains(("property", "og:type")))  // UI92 og:* is not written as a property
+      assert head.some(.tag == "meta" && .attributes.contains(("name", "twitter:card")))  // UI93 twitter:* is not written as a name
+      assert head{.tag == "meta" && .attributes.contains(("name", "citation_author"))}.count == 2  // UI94 repeated citation_* entries are not all written
+      ld := head{.tag == "script" && .attributes.contains(("type", "application/ld+json"))}.first
+      assert ld && ld.children.first.text ~= (*, "\"@type\":\"Article\"", *)  // UI95 a structured entry is not JSON-LD with its @type
+      assert ld && ld.children.first.text ~= (*, "\"@context\":\"https://schema.org\"", *)  // UI96 JSON-LD has no schema.org context
+      assert head.some(.tag == "link" && .attributes.contains(("rel", "manifest")))  // UI97 the manifest is not linked
+    }
+    // SVG path data (https://www.w3.org/TR/SVG2/paths.html#PathData)
+    path := {
+      {segment: Geometry.Quadratic} => " Q", segment.control.x, " ", segment.control.y, " ", segment.to.x, " ", segment.to.y
+      {segment: Geometry.Cubic} => " C", segment.first.x, " ", segment.first.y, " ", segment.second.x, " ", segment.second.y, " ", segment.to.x, " ", segment.to.y
+      {segment: Geometry.Arc} => " A", segment.radius.x, " ", segment.radius.y, " ", segment.rotation.in(degree), " ", segment.large ? 1 : 0, " ", segment.sweep ? 1 : 0, " ", segment.to.x, " ", segment.to.y
+      {segment: Geometry.Vector{index == 0}} => "M", segment.x, " ", segment.y
+      {segment: Geometry.Vector} => " L", segment.x, " ", segment.y
+    }
+
+    rules := {
+      {page: Geometry.Shape{solved && !parent}} => $.html.Document(head: [head(UI.page)], body: @html <body {page.dom_named}>{page.children}</body>)
+      {image: Geometry.Shape{content is Location && content.language === Language.Image && fill}} => @html <span {image.dom_named} role="img" aria-label={image.label} />
+      {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @html <img {image.dom_named} src={image.content.@ as String} alt={image.label} loading="lazy" />
+      {video: Geometry.Shape{content is Location && content.language === Language.Video}} => @html <video {video.dom_named} src={video.content.@ as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
+      {audio: Geometry.Shape{content is Location && content.language === Language.Audio}} => @html <audio {audio.dom_named} src={audio.content.@ as String} controls />
+      {frame: Geometry.Shape{content is Location && content.video_site}} => @html <iframe {frame.dom_named} src={frame.content.embedded.@ as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
+      {link: Geometry.Shape{content is Location}} => @html <a {link.dom_named} href={link.content.@ as String} target={"_blank" if link.content.window == new} rel={"noopener noreferrer" if link.content.window == new}>{link.children}</a>
+      {text: Geometry.Shape{content is String && font.weight >= 600 && font.size >= 2em}} => @html <h1 {text.dom_named}>{text.dom_spans}</h1>
+      {text: Geometry.Shape{content is String && font.weight >= 600 && font.size >= 1.5em}} => @html <h2 {text.dom_named}>{text.dom_spans}</h2>
+      {text: Geometry.Shape{content is String && font.weight >= 600}} => @html <h3 {text.dom_named}>{text.dom_spans}</h3>
+      {text: Geometry.Shape{content is String && !white_space.wraps}} => @html <span {text.dom_named} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{text.dom_spans}</span>
+      {text: Geometry.Shape{content is String}} => @html <p {text.dom_named} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{text.dom_spans}</p>
+
+      {form: Geometry.Shape{children.some(.content is Choice)}} => @html <form {form.dom_named}>{form.children}</form>
+      {field: Geometry.Shape{content is Choice{goal is Language}}} => @html <div id={field.dom} class={["painted", field.styles].flatten.join(" ")}>
+        <pre id="{field.dom}-paint" aria-hidden="true">{field.face.dom_spans}</pre>
+        <textarea id="{field.dom}-text" placeholder={field.content.placeholder as String} spellcheck="false">{field.content.empty ? "" : field.content.tried as String}</textarea>
+      </div>
+      {field: Geometry.Shape{content is Choice{goal is String{multiline}}}} => @html <textarea {field.dom_named} {field.dom_entry}>{field.content.empty ? "" : field.content.tried as String}</textarea>
+      {field: Geometry.Shape{content is Choice{listed}}} => @html <select {field.dom_named}>{field.content.options.map(@html <option value={. as String}>{. as String}</option>)}</select>
+      {field: Geometry.Shape{content is Choice}} => @html <input {field.dom_named} type={Compiler.reduced(field.content, kinds)} {field.dom_entry} />
+      {canvas: Geometry.Shape{content is Program}} => @html <canvas {canvas.dom_named} width={canvas.size.x as px} height={canvas.size.y as px} />
+
+      {ball: Geometry.Ball} => @html <span {ball.dom_named} {ball.dom_described} role="presentation" />
+      {polygon: Geometry.Polygon{!rectangular}} => @html <svg {polygon.dom_named} viewBox="0 0 {polygon.size.x as px} {polygon.size.y as px}">
+        <polygon points={polygon.boundary.points.map(UI.HTML.space.seen(., polygon.size)).map(.x as px, ",", .y as px).join(" ")} />
+      </svg>
+      {outlined: Geometry.Shape{!rectangular && boundary is Geometry.Curve}} => @html <svg {outlined.dom_named} viewBox="0 0 {outlined.size.x as px} {outlined.size.y as px}">
+        <path transform="matrix(1,0,0,-1,0,{outlined.size.y as px})" d="{outlined.boundary.segments.map(Compiler.reduced(., path))}{" Z" if outlined.boundary.segments is Loop}" />
+      </svg>
+
+      {box: Geometry.Shape{focusable}} => @html <button {box.dom_named} {box.dom_described}>{box.children}</button>
+      {box: Geometry.Shape{flow == grid}} => @html <table {box.dom_named} {box.dom_described}>{box.children}</table>
+      {box: Geometry.Shape} => @html <section {box.dom_named} {box.dom_described}>{box.children}</section>
+    }
+
+    // The input element's type attribute (https://html.spec.whatwg.org/multipage/input.html#attr-input-type)
+    kinds := {
+      {chosen: Choice{goal is String{secret}}} => "password"
+      {chosen: Choice{goal is String{search}}} => "search"
+      {chosen: Choice{goal is boolean}} => "checkbox"
+      {chosen: Choice{goal is Number{least, most}}} => "range"
+      {chosen: Choice{goal is Number}} => "number"
+      {chosen: Choice{goal is Time}} => "datetime-local"
+      {chosen: Choice{goal is Geometry.Color}} => "color"
+      {chosen: Choice{goal is Location}} => "file"
+      {chosen: Choice} => "text"
+    }
+
+    level := Geometry.Preparing(1px) + rules
+    assert (UI.HTML.Markup.level + UI.HTML.Style.level) is Program  // UI23 two levels do not compose into one
+    assert {
+      chosen_input := (choice) => Program(code: { choice }).rendered(UI.HTML.Markup.level).body.children.first
+      assert chosen_input(choose boolean).attributes.contains(("type", "checkbox"))  // UI60 choosing a boolean is not a checkbox
+      assert chosen_input(choose String).attributes.contains(("type", "text"))  // UI61 choosing a string is not a text field
+      assert chosen_input(choose Number{0 <= . <= 10}).attributes.contains(("type", "range"))  // UI62 choosing a bounded number is not a slider
+      assert chosen_input(choose String{search}).attributes.contains(("type", "search"))  // UI281 a search field is not a search input
+    }
+    assert Program(code: { @./clip.mp4 }).rendered(UI.HTML.Markup.level).body.children.first.tag == "video"  // UI228 a video location is not a video element
+    assert Program(code: { @./song.mp3 }).rendered(UI.HTML.Markup.level).body.children.first.tag == "audio"  // UI229 an audio location is not an audio element
+    assert Program(code: { "Ray" @ (@https://orbitmines.com) }).rendered(UI.HTML.Markup.level).body.children.first.tag == "a"  // UI231 a value placed at a location is not an a on the web
+  }
+
+  Style := class {
+    // white-space (https://www.w3.org/TR/css-text-3/#white-space-property), text-transform (https://www.w3.org/TR/css-text-3/#text-transform-property)
+    WhiteSpace = [(Geometry.WhiteSpace.normal, "normal"), (Geometry.WhiteSpace.nowrap, "nowrap"), (Geometry.WhiteSpace.pre, "pre"), (Geometry.WhiteSpace.pre_wrap, "pre-wrap"), (Geometry.WhiteSpace.pre_line, "pre-line")]
+    Cases = [(.upper_case, "uppercase"), (.lower_case, "lowercase"), (.title_case, "capitalize")]
+
+    percent (share: Number) => share * 100, "%"
+    stops (gradient: Geometry.Gradient) => gradient.sorted.map(("," if .index > 0), .value, " ", .at * 100, "%")
+    values := {
+      // <color> (https://www.w3.org/TR/css-color-4/#color-syntax), <gradient> (https://www.w3.org/TR/css-images-3/#gradients)
+      {paint: Section{=== currentColor}} => "currentColor"
+      {color: Geometry.Color} => "rgba(", color.red, ",", color.green, ",", color.blue, ",", color.alpha, ")"
+      {gradient: Geometry.Radial} => "radial-gradient(", stops(gradient), ")"
+      {gradient: Geometry.Conic} => "conic-gradient(", stops(gradient), ")"
+      {gradient: Geometry.Gradient} => "linear-gradient(", gradient.angle.in(turn), "turn,", stops(gradient), ")"
+      {pattern: Geometry.Pattern} => "url(#", pattern.shape.dom, ")"
+      // <length> and calc() (https://www.w3.org/TR/css-values-4/#lengths, https://www.w3.org/TR/css-values-4/#calc-func)
+      {length: Geometry.Length{quantities.count > 1}} => "calc(", length.quantities.map(.quantity, .unit.symbol).join(" + "), ")"
+      {length: Geometry.Length} => length.amount, length.unit.symbol
+      // <easing-function> (https://www.w3.org/TR/css-easing-1/)
+      {easing: Geometry.Easing{=== Geometry.linear}} => "linear"
+      {easing: Geometry.Easing{=== Geometry.ease_in}} => "ease-in"
+      {easing: Geometry.Easing{=== Geometry.ease_out}} => "ease-out"
+      {easing: Geometry.Easing{=== Geometry.step}} => "step-end"
+      {easing: Geometry.Easing} => "ease"
+      // Transform functions (https://www.w3.org/TR/css-transforms-1/#transform-functions, https://www.w3.org/TR/css-transforms-2/#funcdef-matrix3d)
+      {matrix: Geometry.Transform{count == 3}} => "matrix(", [matrix[0][0], matrix[1][0], matrix[0][1], matrix[1][1], matrix[0][2], matrix[1][2]].join(","), ")"
+      {matrix: Geometry.Transform} => "matrix3d(", matrix.transposed.flatten.join(","), ")"
+      // box-shadow (https://www.w3.org/TR/css-backgrounds-3/#box-shadow), filter functions (https://www.w3.org/TR/filter-effects-1/#filter-functions)
+      {shadow: Geometry.Shadow} => ("inset " if shadow.inset), UI.HTML.space.seen(shadow.offset) -- (offset => (offset.x, " ", offset.y)), " ", shadow.blur, " ", shadow.spread, " ", shadow.color
+      {blur: Geometry.Blur} => "blur(", blur.radius, ")"
+      {filter: Geometry.Hue} => "hue-rotate(", filter.amount, "turn)"
+      {filter: Geometry.Brightness} => "brightness(", filter.amount, ")"
+      {filter: Geometry.Contrast} => "contrast(", filter.amount, ")"
+      {filter: Geometry.Grayscale} => "grayscale(", filter.amount, ")"
+      {filter: Geometry.Invert} => "invert(", filter.amount, ")"
+      {filter: Geometry.Opacity} => "opacity(", filter.amount, ")"
+      {filter: Geometry.Saturate} => "saturate(", filter.amount, ")"
+      {filter: Geometry.Sepia} => "sepia(", filter.amount, ")"
+    }
+    assert Compiler.reduced(currentColor, UI.HTML.Style.values) == "currentColor"  // UI151 currentColor is not written as currentColor
+
+    // Flexible box layout (https://www.w3.org/TR/css-flexbox-1/), grid layout (https://www.w3.org/TR/css-grid-2/)
+    layout := {
+      {shape: Geometry.Shape{flow == inline}} => @css { display: flex; flex-wrap: {shape.wrap ? "wrap" : "nowrap"}; }
+      {shape: Geometry.Shape{flow == grid}} => @css { display: grid; grid-template-columns: repeat({shape.columns},1fr); }
+      {shape: Geometry.Shape{flow == layered}} => @css { display: grid; grid-template-areas: "layer"; }
+      {shape: Geometry.Shape} => @css { display: flex; flex-direction: column; }
+    }
+    // Box alignment (https://www.w3.org/TR/css-align-3/)
+    aligned := {
+      {shape: Geometry.Shape{align == center}} => @css { align-items: center; text-align: center; }
+      {shape: Geometry.Shape{align == end}} => @css { align-items: flex-end; text-align: end; }
+      {shape: Geometry.Shape{align == between}} => @css { justify-content: space-between; }
+      {shape: Geometry.Shape{align == around}} => @css { justify-content: space-around; }
+      {shape: Geometry.Shape{align == stretch}} => @css { align-items: stretch; }
+      {shape: Geometry.Shape{align == justify}} => @css { text-align: justify; }
+      {shape: Geometry.Shape{align == middle && flow == inline}} => @css { align-items: center; }
+      {shape: Geometry.Shape{align == middle}} => @css { justify-content: center; }
+      {shape: Geometry.Shape} => []
+    }
+    // Positioned layout (https://www.w3.org/TR/css-position-3/)
+    placement := {
+      {position: Geometry.Sticky} => "sticky"
+      {position: Geometry.Fixed} => "fixed"
+      {position: Geometry.Absolute} => "absolute"
+      {position: Geometry.Position} => None
+    }
+    specific := {
+      {shape: Geometry.Ball} => @css { display: inline-block; border-radius: 50%; }
+      // CSS Masking (https://www.w3.org/TR/css-masking-1/)
+      {image: Geometry.Shape{content is Location && content.language === Language.Image && fill}} => @css {
+        object-fit: {image.content.fit as String}; display: inline-block; mask: {mask(image)}; -webkit-mask: {mask(image)};
+      }
+      {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @css { object-fit: {image.content.fit as String}; }
+      {frame: Geometry.Shape{content is Location && content.video_site}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
+      {shape: Geometry.Shape} => []
+    }
+    mask (image: Geometry.Shape) => "url(\"", image.content.@ as String, "\") center/", image.content.fit == fill ? "100% 100%" : image.content.fit as String, " no-repeat"
+
+    sized (shape: Geometry.Shape, along: "width" | "height") => (shape.`along`, shape.fields[along].type) -- ((given, bounds) => @css {
+      {along}: {percent(given) if given is Number};
+      {along}: {percent(given.sorted.first.value) if given is Geometry.Stops};
+      {along}: {given if given is Geometry.Length};
+      max-{along}: {(bounds.most is Number ? percent(bounds.most) : bounds.most) if bounds.most != None};
+      min-{along}: {(bounds.least is Number ? percent(bounds.least) : bounds.least) if bounds.least != None};
+    })
+    spaced (prefix: String, edges: Geometry.Edges) => [("top", edges.top), ("right", edges.right), ("bottom", edges.bottom), ("left", edges.left)]{.1 != None}.map((prefix + .0, .1))
+    bordered (stroke: Geometry.Stroke?) => stroke ? (stroke.sides == Geometry.all ? [""] : stroke.sides#.map("-" + (. as String))).map(side =>
+      ("border" + side, stroke.width, " ", stroke.dash.empty ? "solid" : "dashed", " ", stroke.paint)) : []
+    // Fonts (https://www.w3.org/TR/css-fonts-4/)
+    typeface (shape: Geometry.Shape) => (shape.font, shape.parent.font ?? Geometry.Font.base) -- ((font, inherited) => @css {
+      font-family: {font.family.join(",") if font.family != inherited.family};
+      font-size: {font.size if font.size != inherited.size};
+      font-weight: {font.weight if font.weight != inherited.weight};
+      font-style: {(font.style as String) if font.style != inherited.style};
+      line-height: {font.line_height if font.line_height != inherited.line_height};
+      letter-spacing: {font.tracking if font.tracking != inherited.tracking};
+    })
+    styling (name: String) => Compiler.reduced(declared(Geometry.Box()), values).first.declarations -- (plain => Compiler.reduced(declared(Geometry.Box().styled(name)), values).first.declarations{!plain.contains(.)})
+    // Container queries (https://www.w3.org/TR/css-contain-3/#container-queries)
+    responsive (shape: Geometry.Shape) => shape.width.sorted -- (sorted => sorted.zip([sorted.rest, None]).map((at, next) => @css @container (min-width:{Compiler.reduced(at.at, values) as String}) {
+      #{shape.dom} { width: {!(shape.width is Geometry.Steps) && next
+        ? ("calc(", at.value * (at.at as px), "px + (100cqw - ", at.at as px, "px) * ", (next.value * (next.at as px) - at.value * (at.at as px)) / ((next.at - at.at) as px), ")")
+        : percent(at.value)}; }
+    }))
+    // CSS Anchor Positioning (https://www.w3.org/TR/css-anchor-position-1/)
+    anchoring (shape: Geometry.Shape) => (shape.position.anchor ?? shape.parent) -- (anchor => @css {
+      #{anchor.dom} { anchor-name: --{anchor.dom}; }
+      #{shape.dom} { position: fixed; inset: auto; margin: 0; position-anchor: --{anchor.dom}; position-area: {shape.position.side as String}; }
+    })
+
+    declared (shape: Geometry.Shape) => [
+      @css #{shape.dom} {
+        {Compiler.reduced(shape, layout)}
+        gap: {shape.gap.y} {shape.gap.x};
+        {sized(shape, "width")}
+        {sized(shape, "height")}
+        aspect-ratio: {shape.aspect if shape.aspect};
+        container-type: {"inline-size" if shape.children.some(.width is Geometry.Stops)};
+        {Compiler.reduced(shape, aligned)}
+        {spaced("padding-", shape.spaced(border))}
+        {spaced("margin-", shape.spaced(itself)) if shape.position is Geometry.Flow}
+        position: {Compiler.reduced(shape.position, placement)};
+        position: {"relative" if shape.position is Geometry.Flow && shape.children.some(.position is Geometry.Absolute)};
+        {spaced("", shape.spaced(itself)) unless shape.position is (Geometry.Flow | Geometry.Anchored)}
+        background: {shape.fill if shape.fill};
+        {bordered(shape.stroke)}
+        border-radius: {shape.radius.map(. is Number ? percent(.) : .).join(" ") if shape.radius != [0px]};
+        transform: {(Geometry.Transform.scale(Geometry.Vector(1, -1, 1)) -- (. * shape.transform * .)) if shape.transform != Geometry.Transform.identity};
+        overflow: {shape.overflow == scroll ? "auto" : shape.overflow as String};
+        z-index: {shape.layer if shape.layer != 0};
+        mix-blend-mode: {(shape.blend as String) if shape.blend != normal};
+        filter: {shape.effects{. is (Geometry.Blur | Geometry.Filter)} -- (.join(" ") if .nonempty)};
+        box-shadow: {shape.effects{. is Geometry.Shadow} -- (.join(",") if .nonempty)};
+        color: {shape.color if shape.color && shape.color != shape.parent.color};
+        {typeface(shape)}
+        text-transform: {Cases{.0 == shape.case}.first.1 if shape.case != shape.parent.case};
+        text-overflow: {(shape.truncate as String) if shape.truncate};
+        white-space: {WhiteSpace{shape.white_space is .0}.first.1 if shape.content is String || shape.white_space != shape.parent.white_space};
+        overflow-wrap: {"anywhere" if shape.white_space.wraps == anywhere};
+        {Compiler.reduced(shape, specific)}
+        transition: {("all ", shape.transition.duration.in(ms), "ms ", shape.transition.easing) if shape.transition};
+        cursor: {(shape.cursor ?? "pointer") as String if shape.cursor || shape.focusable};
+        touch-action: {(shape.touch as String).replace("_", "-") if shape.touch};
+        scrollbar-width: {"none" unless shape.scrollbar};
+      },
+      @css #{shape.dom}::placeholder { color: {Geometry.Box().styled("placeholder").color}; } if shape.content is Choice && shape.content.placeholder,
+      UI.Theme.styles.map(name => @css #{shape.dom}.{name} { {styling(name)} }) if shape.styles is Dynamic,
+      @css #{shape.dom}:focus-visible { outline: 2px solid currentColor; } if shape.focusable,
+      responsive(shape) if shape.width is Geometry.Stops
+    ]
+
+    rules := values + {
+      {page: Geometry.Shape{solved && !parent}} => $.css.Sheet(@css {
+        * { box-sizing: border-box; margin: 0; }
+        body { font-family: sans-serif; line-height: 1.2; }
+        .painted { display: grid; }
+        .painted>pre,.painted>textarea { grid-area: 1/1; margin: 0; padding: 0; border: none; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; }
+        .painted>textarea { color: transparent; caret-color: currentColor; background: transparent; resize: none; outline: none; }
+        @media (prefers-reduced-motion:reduce) { * { animation: none; transition: none; } }
+        html.locked { overflow: hidden; }
+        {page.reachable.map(declared(.))}
+        {page.reachable{.position is Geometry.Anchored}.map(anchoring(.))}
+      })
+    }
+
+    level := Geometry.Preparing(1px) + rules
+  }
+
+  Script := class {
+    state := {
+      {name} = {value} => @js ray.{name} = {value}
+    }
+
+    prelude := @js function effect(reads, body) { ray.subscribe(reads, body); body() }
+    // The device's files (`@me/device/storage`) kept in the origin's Web Storage as `ray:<path>`: localStorage, and the storage
+    // event other documents of the origin fire (https://html.spec.whatwg.org/multipage/webstorage.html#the-localstorage-attribute, https://html.spec.whatwg.org/multipage/webstorage.html#the-storageevent-interface)
+    storage := @js {
+      Object.keys(localStorage).filter((key) => key.startsWith("ray:")).forEach((key) => ray.set("@me/device/storage/" + key.slice(4), localStorage.getItem(key)))
+      window.addEventListener("storage", (event) => event.key === null
+        ? ray.get("@me/device/storage.fields.name").forEach((key) => ray.set("@me/device/storage/" + key, null))
+        : event.key.startsWith("ray:") && ray.set("@me/device/storage/" + event.key.slice(4), event.newValue))
+      effect(["@me/device/storage"], () => {
+        const kept = ray.get("@me/device/storage.fields")
+        Object.keys(localStorage).filter((key) => key.startsWith("ray:") && !kept.some((field) => "ray:" + field.name === key)).forEach((key) => localStorage.removeItem(key))
+        kept.forEach((field) => localStorage.getItem("ray:" + field.name) === String(field.value) || localStorage.setItem("ray:" + field.name, field.value))
+      })
+    }
+    // UI Events (https://www.w3.org/TR/uievents/), Pointer Events (https://www.w3.org/TR/pointerevents3/), the History API (https://html.spec.whatwg.org/multipage/nav-history-apis.html)
+    devices := @js {
+      ray.set("@me/device/handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+      {["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"].map(name => @js window.addEventListener({name}, (event) => ray.point(event)))}
+      {["keydown", "keyup"].map(name => @js window.addEventListener({name}, (event) => ray.key(event)))}
+      window.addEventListener("focusin", (event) => ray.set("UI.focus", event.target.id))
+      window.addEventListener("resize", (event) => ray.set("UI.scene.size", ray.size()))
+      window.addEventListener("popstate", (event) => ray.set("@me/device/location", location.href))
+      ray.set("@me/device/location", location.href)
+      window.addEventListener("paste", (event) => ray.set("@me/device/clipboard", event.clipboardData.getData("text")))
+      window.addEventListener("dragstart", (event) => ray.set(event.target.id + ".dragged", true))
+      window.addEventListener("dragend", (event) => ray.set(event.target.id + ".dragged", false))
+      window.addEventListener("drop", (event) => ray.set(event.target.id + ".dropped", event.dataTransfer.files))
+      window.addEventListener("compositionupdate", (event) => ray.call("UI.focus.content.composed", event.data))
+      window.addEventListener("deviceorientation", (event) => ray.set("@me/device/orientation", ray.orientation(event)))
+      window.addEventListener("devicemotion", (event) => ray.set("@me/device/motion", ray.motion(event)))
+      window.addEventListener("gamepadconnected", (event) => ray.poll_gamepads())
+      window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("@me/device/preferences.reduced_motion", event.matches))
+      window.matchMedia("(prefers-color-scheme:dark)").addEventListener("change", (event) => ray.set("@me/device/preferences.dark", event.matches))
+      effect(["@me/device/location"], () => location.href === ray.get("@me/device/location") || history.pushState(null, "", ray.get("@me/device/location")))
+      effect(["UI.page.title"], () => document.title = ray.get("UI.page.title"))
+      window.addEventListener("scroll", (event) => ray.set("UI.scene.scrolled.y", window.scrollY))
+      effect(["UI.scene.scrolled"], () => {
+        const y = ray.get("UI.scene.scrolled.y")
+        if (Math.abs(scrollY - y) > 1) scrollTo(\{top: y, behavior: ray.get("UI.scene.transition") ? "smooth" : "auto"})
+      })
+      effect(["UI.selection"], () => ray.get("UI.selection").forEach((s) => {
+        const r = s.selected_range
+        const e = r && (document.getElementById(s.id + "-text") || document.getElementById(s.id))
+        if (e) {
+          if (e.setSelectionRange) {
+            e.focus()
+            e.setSelectionRange(r.from, r.to)
+          } else {
+            const g = document.createRange()
+            g.selectNodeContents(e)
+            getSelection().removeAllRanges()
+            getSelection().addRange(g)
+          }
+        }
+      }))
+      effect(["UI.locked"], () => document.documentElement.classList.toggle("locked", ray.get("UI.locked")))
+      effect(["@me/device/notification"], () => new Notification(ray.get("@me/device/notification.title"), \{body: ray.get("@me/device/notification.body")}))
+      effect(["@me/device/fullscreen"], () => document.documentElement.requestFullscreen())
+      effect(["@me/device/printing"], () => window.print())
+      effect(["@me/device/clipboard"], () => navigator.clipboard.writeText(ray.get("@me/device/clipboard")))
+      effect(["@me/device/opened"], () => open(ray.get("@me/device/opened"), "_blank", "noopener"))
+    }
+    assert (UI.HTML.Script.devices as JS).(
+      . ~= (*, "window.addEventListener(\"scroll\"", *)  // UI161 the web does not report the page scroll
+      & . ~= (*, "effect([\"UI.selection\"]", *)  // UI173 the web does not select a range
+    )
+
+    Geometry.Shape &+= {
+      scripted => [
+        fields{.value is Dynamic}.map(field => field.name == "styles"
+          ? @js effect({field.value.program.reads}, () => document.getElementById({dom}).className = {field.value.program{O: UI.HTML.Script.state}})
+          : @js effect({field.value.program.reads}, () => ray.set({dom + "." + field.name}, {field.value.program{O: UI.HTML.Script.state}}))),
+        @js document.getElementById({dom}).addEventListener("click", (event) => ray.activate({dom})) if focusable,
+        @js document.getElementById("{dom}-text").addEventListener("input", (event) => document.getElementById("{dom}-paint").textContent = event.target.value) if content is Choice && content.goal is Language,
+        @js document.getElementById({dom}).addEventListener("input", (event) => ray.set({dom}, event.target.value)) if content is Choice,
+        @js effect({content.reads}, () => ray.draw({dom}, {content.rendered(Language.Direct.level)})) if content is Program && !(content is Choice),
+        (position.anchor ?? parent).dom -- (anchor => [
+          ["pointerenter", "focusin"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({dom}).showPopover())),
+          ["pointerleave", "focusout"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({dom}).hidePopover()))
+        ]) if this is UI.Popover,
+        @js document.getElementById({dom}).showPopover() if position is Geometry.Anchored && visible && !(this is UI.Popover),
+        @js effect([{dom + ".scrolled"}], () => document.getElementById({dom}).scrollTo(\{top: ray.get({dom + ".scrolled.y"}), behavior: ray.get({dom + ".transition"}) ? "smooth" : "auto"})) if overflow == scroll
+      ]
+    }
+
+    rules := {
+      {page: Geometry.Shape{solved && !parent}} => [
+        prelude,
+        devices,
+        storage,
+        TimeZone.Intl.script,
+        Dynamic#{!page.reachable.map(.fields.value).flatten.contains(.)}.map(dynamic => @js effect({dynamic.program.reads}, () => { {dynamic.program{O: state}} })),
+        page.reachable.map(.scripted)
+      ].flatten
+    }
+
+    level := Geometry.Preparing(1px) + rules
+  }
+
+  Package := class (files: (path: String, content: *)[]) => {
+    write (to: Location) => files.for((to / .path).held = .content)
+    document => files{.path == "index.html"}.first.content
+    sheet => files{.path == "style.css"}.first.content
+  }
+  packaged := {
+    {root: Geometry.Shape{solved && !parent}} => Package([
+      (path: "index.html", content: Compiler.reduced(root, Markup.rules)),
+      (path: "style.css", content: Compiler.reduced(root, Style.rules)),
+      (path: "app.js", content: Compiler.reduced(root, Script.rules)),
+      root.reachable{.content is Location && .content.media}.map((path: .content.name, content: .content)),
+      [UI.page.icon, UI.page.apple_icon, UI.page.manifest]{!= None}.map((path: .name, content: .))
+    ].flatten)
+  }
+  level := Geometry.Preparing(1px) + packaged
+
+  DOM := class: UI.Interface {
+    send (message) => @me/instance = message
+    dynamically event: @me/instance
+    line (parts: String[]) => parts.join(" "), \n
+
+    static made := 0
+    Mount := class (node: $.html.Element | $.html.Text | $.html.Raw | $.html.Comment, parent: String?, id: String = (node is $.html.Element ? node.id : None) ?? ("e" + ((DOM.made += 1) as String))) => { }
+    Listening := class (mount: Mount) => { }
+    protocol := {
+      {mount: Mount{node is $.html.Element}} => mount.node -- (element => [
+        line(["create", mount.id, element.tag]),
+        element.attributes.map(line(["attribute", mount.id, .name, (.value as String).escaped_line])),
+        Listening(mount),
+        element.children.map(Mount(., mount.id)),
+        line(["append", mount.parent, mount.id]) if mount.parent
+      ])
+      {mount: Mount{node is $.html.Comment}} => []
+      {mount: Mount} => line(["text", mount.parent, mount.node.text.escaped_line])
+      {listening: Listening{mount.node.tag is ("a" | "button")}} => [line(["listen", listening.mount.id, "click"])]
+      {listening: Listening{mount.node.tag is ("input" | "select" | "textarea")}} => [line(["listen", listening.mount.id, "input"]), line(["listen", listening.mount.id, "focus"])]
+      {listening: Listening} => []
+    }
+    mounted (element: $.html.Element) => Compiler.reduced(Mount(element), protocol) as String
+
+    Event := class (id: String) => {
+      shape => UI.scene.reachable{.dom == id}.first
+    }
+    Click := class: Event (id: UI.Input.Id, " click")
+    Input := class: Event (id: UI.Input.Id, " input ", value: *)
+    Focus := class: Event (id: UI.Input.Id, " focus")
+    Scroll := class: Event (id: UI.Input.Id, " scroll ", y: Decimal)
+    Size := class: Event (id: UI.Input.Id, " size ", width: Decimal, " ", height: Decimal)
+    Inbound := Click | Input | Focus | Scroll | Size | UI.Input.Inbound
+    applied := UI.Input.applied + {
+      {click: Click} => click.shape.activate
+      {input: Input} => input.shape.content.attempt(input.value)
+      {focus: Focus} => UI.focus = focus.shape
+      {scroll: Scroll} => UI.scene.scrolled = Geometry.Vector(0, scroll.y * 1px)
+      {size: Size{shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
+      {size: Size} => None
+    }
+    static dispatched (line: String?) => line.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
+
+    start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
+      -- ({ send(line(["clipboard", (@me/device/clipboard as String).escaped_line])) } when @me/device/clipboard changes)
+      -- ({ send(line(["open", (@me/device/opened as String).escaped_line])) } when @me/device/opened changes)
+    stop => None
+    write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as $.css])) if package.sheet)
+      -- send(line(["lock", UI.locked as String]))
+      -- send(line(["scroll", "window", (UI.scene.scrolled.y as px) as String, (UI.scene.transition != None) as String]))
+    read => dispatched(event)
+  }
+
+  Chromium := { }
+  Firefox := { }
+  Extension := { }
+  Safari := {
+    // backdrop-filter, which Safari reads only prefixed (https://www.w3.org/TR/filter-effects-2/#BackdropFilterProperty)
+    {rule: $.css.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => $.css.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
+  }
+}
+
+Device &+= {
+  document: UI.HTML.DOM = UI.HTML.DOM(level: UI.HTML.level)
+}
+
+// JSON-LD 1.1: a Ray value as linked data, written with $.json (https://www.w3.org/TR/json-ld11/)
+// Its fields are properties and its type is @type (https://www.w3.org/TR/json-ld11/#specifying-the-type), under the vocabulary its @context names (https://www.w3.org/TR/json-ld11/#the-context)
+UI.Linked := class (value: *, context: String?) => {
+  document => value === None || value is (String | Number | boolean | Location) ? value
+    : value is Iterable ? value.map(UI.Linked(.).document)
+    : Document(entries: [(name: "@context", value: context) if context, value.fields{.value != None}.map((name: .name == "type" ? "@type" : .name, value: UI.Linked(.value).document))].flatten)
+}
+
+// The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
+UI.TUI := class {
+  Grid := class (width: Number, height: Number, cells: ANSI.Cell[][] = (0 ..< height).map(grid_row => (0 ..< width).map(grid_column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page.title) => {
+    space => Geometry.Space.grid(Geometry.Vector(width, height))
+    inside (at: Geometry.Vector) => space.holds(at)
+    put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
+    cell (at: Geometry.Vector) => inside(at) ? cells[at.y][at.x] : ANSI.Cell()
+    background (at: Geometry.Vector, color: Geometry.Color?) => put(at, cell(at) ~~ .background = color)
+    underlined (at: Geometry.Vector) => put(at, cell(at) ~~ .styles |= ANSI.Attribute.underlined)
+    linked (at: Geometry.Vector, to: Location) => put(at, cell(at) ~~ .link = to)
+    faded (at: Geometry.Vector, amount: Probability) => cell(at) -- (cell => put(at, cell ~~ .foreground = cell.foreground.mix(cell.background, 1 - amount)))
+    shaded (at: Geometry.Vector) => cell(at) -- (cell => put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
+    graphic (at: Geometry.Vector, bytes) => graphics.push (at: at, bytes: bytes)
+    changes (before: Grid?) => (0..<height).map(y => (0..<width){!before || cells[y][.] != before.cells[y][.]}.map(x => [[Geometry.Vector(x, y)], cells[y][x]])).flatten(1)
+    assert {
+      watched_value := 1
+      fired_count := 0
+      { fired_count = fired_count + 1 } when watched_value changes
+      assert fired_count == 0  // UI174 when … changes fires before anything changed
+      watched_value = 2
+      assert fired_count == 1  // UI175 when … changes does not fire on a change
+      watched_value = 2
+      assert fired_count == 1  // UI176 when … changes fires twice for one change
+      became_count := 0
+      { became_count = became_count + 1 } when watched_value becomes 3
+      watched_value = 4
+      watched_value = 3
+      assert became_count == 1  // UI177 when … becomes fires on another value
+    }
+    framed (previous: Grid? = None) => [
+      ANSI.Title(title) if title && title != previous.title,
+      changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: (cell.link === None ? "" : (cell.link as String))), cell.glyph]),
+      graphics{!(previous.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
+      ANSI.Style()
+    ]
+    assert {
+      with UI.page = (title: "Ray") {
+        assert UI.TUI.Grid(1, 1).framed.some(. is ANSI.Title && .text == "Ray")  // UI99 the terminal title does not follow the page title
+      }
+    }
+  }
+  static px_per_cell := Geometry.Vector(8px, 16px)
+  // (in whole cells: where it starts, the cell it starts in; how large, the cells it covers)
+  static gridded (length: Geometry.Vector) => Geometry.Vector((length.x as Unit.column).amount.floor, (length.y as Unit.row).amount.floor)
+  static covered (length: Geometry.Vector) => Geometry.Vector((length.x as Unit.column).amount.ceil, (length.y as Unit.row).amount.ceil)
+
+  Geometry.Shape &+= {
+    cell_at => UI.TUI.gridded(Geometry.Space.screen.seen(at, root.size, size))
+    cell_size => UI.TUI.covered(size)
+    cell_area => Geometry.Space.grid(cell_size).positions.map(offset => offset + cell_at){cell => contains(Geometry.Space.screen.seen((cell - cell_at) * UI.TUI.px_per_cell, size, UI.TUI.px_per_cell))}
+    cell_writes => Compiler.reduced(this, UI.Lowered) -- (shape => [
+      Compiler.reduced(shape.painted(shape.fill), UI.TUI.filled(shape)) if shape.fill,
+      shape.cell_border if shape.stroke,
+      shape.effects.map(effect => Compiler.reduced(effect, UI.TUI.shaded(shape))),
+      Compiler.reduced(shape, UI.TUI.shown) if shape.content,
+      shape.in_place.sort_by(.layer).map(.cell_writes) if shape.visible,
+      shape.cell_scrollbar if ((shape.overflow === scroll) && shape.scrollbar),
+      shape.cell_area.map(at => (written_grid => written_grid.underlined(at))) if shape.focused,
+      shape.cell_area.map(at => (written_grid => written_grid.linked(at, shape.content))) if (shape.content is Location)
+    ])
+    cell_border => {
+      corners = radius != [0] ? "╭╮╰╯" : "┌┐└┘"
+      from = cell_at
+      to = from + cell_size - Geometry.Vector(1, 1)
+      ink = painted(stroke.paint) as Geometry.Color
+      sides = stroke.sides#
+      [
+        (from.x..to.x).map(x => (written_grid => written_grid.underlined(Geometry.Vector(x, to.y)))) if sides == [Geometry.bottom],
+        (from.x + 1..<to.x).map(x => (written_grid => written_grid.put(Geometry.Vector(x, from.y), ANSI.Cell("─", foreground: ink)))) if sides.contains(Geometry.top),
+        (from.x + 1..<to.x).map(x => (written_grid => written_grid.put(Geometry.Vector(x, to.y), ANSI.Cell("─", foreground: ink)))) if sides.contains(Geometry.bottom) && sides != [Geometry.bottom],
+        (from.y + 1..<to.y).map(y => (written_grid => written_grid.put(Geometry.Vector(from.x, y), ANSI.Cell("│", foreground: ink)))) if sides.contains(Geometry.left),
+        (from.y + 1..<to.y).map(y => (written_grid => written_grid.put(Geometry.Vector(to.x, y), ANSI.Cell("│", foreground: ink)))) if sides.contains(Geometry.right),
+        [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].map((at, i) => (written_grid => written_grid.put(at, ANSI.Cell(corners[i], foreground: ink)))) if sides.count == Geometry.all#.count
+      ]
+    }
+    // (the thumb: the row as far down the cells as what is scrolled is down the content)
+    cell_scrollbar =>
+      scrolled_down := (scrolled.y is Number) ? scrolled.y : (scrolled.y as pixel).amount
+      thumb := (scrolled_down / (content_height as pixel).amount * cell_size.y).floor
+      (0 ..< cell_size.y).map(y => (written_grid => written_grid.put(cell_at + Geometry.Vector(cell_size.x - 1, y), ANSI.Cell((y == thumb) ? "┃" : "│"))))
+  }
+
+  drawn := {
+    // (the root, then what is lifted above it: built by appending, a Shape being a Ray `[root, …]` would read its elements)
+    {root: Geometry.Shape{solved && !parent}} =>
+      drawn_shapes := [root]
+      root.lifted.for(lifted_shape => drawn_shapes.append(lifted_shape))
+      Grid((root.size.x as Unit.column).amount, (root.size.y as Unit.row).amount) ~~ (grid => drawn_shapes.map(drawn_shape => drawn_shape.cell_writes).flatten.for(write => grid ~~ write))
+  }
+  filled (shape: Geometry.Shape) => {
+    {color: Geometry.Color} => shape.cell_area.map(at => (written_grid => written_grid.background(at, color)))
+    {gradient: Geometry.Gradient} => shape.cell_area.map(at => (written_grid => written_grid.background(at, gradient.at((at.x - shape.cell_at.x) / shape.cell_size.x))))
+    {sampled: Geometry.Pointwise} => shape.cell_area.map(at => sampled(Geometry.Space.screen.seen((at - shape.cell_at) * px_per_cell, shape.size, px_per_cell)) -- (color =>
+      (written_grid => written_grid.put(at, ANSI.Cell(ramp[color.alpha * color.luminance * (ramp.length - 1) / 255], foreground: color)))))
+    {paint} => []
+  }
+  shaded (shape: Geometry.Shape) => {
+    {filter: Geometry.Opacity} => shape.cell_area.map(at => (written_grid => written_grid.faded(at, filter.amount)))
+    {shadow: Geometry.Shadow} => shape.cell_area.map(at => (written_grid => written_grid.shaded(at + gridded(Geometry.Space.screen.seen(shadow.offset)))))
+    {effect} => []
+  }
+  shown := {
+    {text: Geometry.Shape{content is String}} => text.lines(text.size.x).enumerate.map(row => row.value.enumerate.map(glyph =>
+      (UI.Theme.face(text, glyph.value), text.cell_at + Geometry.Vector(row.value.sliced(0, glyph.index - 1).map(.columns).sum, row.index)) -- ((look, at) => ANSI.Cell(text.case ? text.case(glyph.value) : glyph.value,
+        foreground: text.painted(look.color) as Geometry.Color, background: text.painted(look.fill) as Geometry.Color,
+        styles: (ANSI.Attribute.bold if (look.font.weight is Number) && look.font.weight >= 600) | (ANSI.Attribute.italic if look.font.style === italic) | (ANSI.Attribute.negative if look.styles.contains("selected"))) -- (written => (written_grid => written_grid.put(at, written))))
+    )).flatten
+    {canvas: Geometry.Shape{content is Program && !(content is Choice)}} => canvas.content.rendered(Language.Direct.level) -- (rows => canvas.cell_area.map(at => (at - canvas.cell_at) -- (dot =>
+      ANSI.Cell(braille(rows[dot.y * 4 ..< dot.y * 4 + 4].map(.[dot.x * 2 ..< dot.x * 2 + 2].map(.alpha > 0)))) -- (written => (written_grid => written_grid.put(at, written)))
+    )))
+    {shape: Geometry.Shape} => []
+  }
+  Cells := Geometry.Preparing(px_per_cell.x min px_per_cell.y) + drawn
+  level := Cells
+
+  static braille (dots: boolean[][]) => (0x2800 + [[0, 3], [1, 4], [2, 5], [6, 7]].zip(dots).map((bits, row) => row.zip(bits).map((on, bit) => on ? 2 ^ bit : 0).sum).sum) as Char
+  static ramp := " .:-=+*#%@"
+
+  // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
+  Start := class (modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]) => { }
+  Stop := class (start: Start = Start()) => { }
+  written := {
+    {text: String} => text
+    {glyph: Char} => glyph as String
+    {started: Start} => Compiler.reduced(started.modes, written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], written)
+    {stop: Stop} => Compiler.reduced(stop.start.modes.map(.flipped).reverse, written)
+    // (SGR: each parameter after a `;`, as the header `("\e[0", parameters: (";", parameter: …)[], "m")` writes it)
+    {style: ANSI.Style} => "\e[0" + (style.parameters ?? []).map(written_parameter => ";" + Compiler.reduced(written_parameter.parameter, written)).join("") + "m"
+    {attribute: ANSI.Attribute} => attribute.code
+    // (its header's choice of groups is not read into the header yet (A3): written here as the header says)
+    {colored: ANSI.Colored} => colored.layer + ((colored.index === None) ? (";2;" + colored.red + ";" + colored.green + ";" + colored.blue) : (";5;" + colored.index))
+    // (the same for these: written as their headers say)
+    {move: ANSI.Move} => "\e[" + ((move.row === None) ? "" : ("" + move.row + ";" + move.column)) + "H"
+    {erase: ANSI.Erase} => "\e[" + (erase.part ?? 0) + "J"
+    {mode: ANSI.Mode} => "\e[?" + mode.number + mode.state
+    {title: ANSI.Title} => "\e]0;" + title.text + "\a"
+    {link: ANSI.Hyperlink} => "\e]8;" + (link.parameters ?? "") + ";" + link.target + "\e\\"
+    {sequences: Iterable} => sequences.map(sequence => sequence === None ? "" : Compiler.reduced(sequence, UI.TUI.written)).join("")
+    {sequence} => sequence as String
+  }
+  // Windows Terminal's win32-input-mode, DECSET 9001 (https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
+  WindowsTerminal := {
+    {start: Start{!modes.contains(ANSI.Mode(9001, "h"))}} => Start([start.modes, [ANSI.Mode(9001, "h")]].flatten)
+  }
+
+  Terminal := class: UI.Interface (written: Compiler = UI.TUI.written, grid: Grid? = None) => {
+    emit (bytes) => @me/instance = bytes
+    dynamically typed = @me/instance
+    size =>
+      columns := (OS.host.env.COLUMNS) as Number
+      lines := (OS.host.env.LINES) as Number
+      Geometry.Vector(columns, lines)
+    emitted (value) => emit(Compiler.reduced(value, written))
+    // (the scene is as large as the terminal: its columns and rows)
+    start =>
+      UI.scene.size = Geometry.Vector(Quantity(quantities: [(quantity: size.x, unit: Unit.column)]), Quantity(quantities: [(quantity: size.y, unit: Unit.row)]))
+      emitted(Start())
+        -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
+        -- ({ (@me/device/opened).held() } when @me/device/opened changes)
+    stop => emitted(Stop())
+    write (frame: Grid) =>
+      emitted(frame.framed(grid))
+      grid = frame
+    // (input that has ended reads as nothing: the program is done, so a run with nothing to read writes one frame and returns)
+    read => typed ? ((typed ~= (events: Event[])) -- .events.for(Compiler.reduced(., applied))) : (UI.program ? UI.program.stop : None)
+  }
+
+  Browser := {
+    {grid: Grid} => UI.HTML.Package([(path: "index.html", content: $.html.Document(head: [], body: $.html.Element("body", [], [$.html.Element("pre", [], [$.html.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
+  }
+
+  Event := ANSI.Input | Resize
+  ANSI.Key &+= {
+    name => Compiler.reduced(this, UI.TUI.named)
+  }
+  ANSI.Mouse &+= {
+    position => Geometry.Space.screen.seen(Geometry.Vector(cell.x * px_per_cell.x, cell.y * px_per_cell.y), UI.scene.size, px_per_cell)
+  }
+  Resize := class
+
+  named := {
+    {key: ANSI.Key{page == "5"}} => @me/device/keyboard/PageUp
+    {key: ANSI.Key{page == "6"}} => @me/device/keyboard/PageDown
+    {key: ANSI.Key{alt}} => @me/device/keyboard[key.alt as String]
+    {key: ANSI.Key{lettered}} => @me/device/keyboard[((key.code as Number) + 96) as Char as String]
+    {key: ANSI.Key{code == "A"}} => @me/device/keyboard/ArrowUp
+    {key: ANSI.Key{code == "B"}} => @me/device/keyboard/ArrowDown
+    {key: ANSI.Key{code == "C"}} => @me/device/keyboard/ArrowRight
+    {key: ANSI.Key{code == "D"}} => @me/device/keyboard/ArrowLeft
+    {key: ANSI.Key{code == "Q"}} => @me/device/keyboard/F2
+    {key: ANSI.Key{code == "\r"}} => @me/device/keyboard/Enter
+    {key: ANSI.Key{code is ("\t" | "Z")}} => @me/device/keyboard/Tab
+    {key: ANSI.Key} => @me/device/keyboard.coded(key.code as Number)
+  }
+
+  // A terminal reports no key release: a key read is pressed and released
+  applied := {
+    {key: ANSI.Key} => key.name.press((Keyboard.Modifier.shift if key.shift || key.code == "Z") | (Keyboard.Modifier.control if key.control) | (Keyboard.Modifier.alt if key.alt != None)).release
+    {mouse: ANSI.Mouse{button >= 64}} => @me/device/pointer["mouse"].wheel = Geometry.Vector(y: mouse.button == 64 ? 1 : -1)
+    {mouse: ANSI.Mouse{state == "m"}} => @me/device/pointer["mouse"].to(mouse.position, pressing: [])
+    {mouse: ANSI.Mouse{button >= 32}} => @me/device/pointer["mouse"].to(mouse.position)
+    {mouse: ANSI.Mouse} => @me/device/pointer["mouse"].to(mouse.position, pressing: [mouse.button])
+    {paste: ANSI.Paste} => (@me/device/clipboard = paste.text) -- UI.focus.content.typed(paste.text)
+    {focus: ANSI.FocusChange} => @me/device/preferences.focused = focus.state == "I"
+    {resize: Resize} => UI.scene.size = Geometry.Vector(@me/instance.size.x * px_per_cell.x, @me/instance.size.y * px_per_cell.y)
+  }
+}
+
+Unit(name: "column")
+  .convert(((x: Number) => x * (UI.TUI.px_per_cell.x as pixel).amount), pixel)
+Unit(name: "row")
+  .convert(((x: Number) => x * (UI.TUI.px_per_cell.y as pixel).amount), pixel)
+
+Device &+= {
+  terminal: UI.TUI.Terminal = UI.TUI.Terminal(level: UI.TUI.level)
+}
+
+assert {
+  @me/device/location = @https://orbitmines.com/profiles
+}
+
+assert @me/device/location == @https://orbitmines.com/profiles  // UI63 navigating does not change where the user is
+
+assert @me/device/location != @https://orbitmines.com/profiles  // UI64 going back stays where the user went
+
+assert !(@me/device/handheld)  // UI67 a platform is handheld before any level says so
+
+assert (@https://orbitmines.com/archive?q=a%20b).query.q == "a b"  // UI90 a query parameter is not decoded
+
+assert (@https://orbitmines.com/archive/on-orbits).segments.last == "on-orbits"  // UI91 a location's last segment is not its name
+
+assert {
+  early_fired := false
+  { early_fired = true } after 1 h
+  assert !(early_fired)  // UI179 after fires early
+}
+
+assert (@ray 1 + 2) == 3  // UI212 @ray does not read the rest of the line as Ray
+
+assert (@https://orbitmines.com/archive?search=).query.search == None  // UI274 an empty query parameter is not None
+
+assert ((@https://orbitmines.com/archive).query.search ?? "all") == "all"  // UI276 a location without a query has no parameter to default

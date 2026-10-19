@@ -1,0 +1,60 @@
+// The device's file system. It reserves the file space (Language §6.1: `@/` and `@./` are reserved for path names);
+// without it, such a location holds nothing to read.
+@/ => FileSystem.Host()
+@./ => FileSystem.Host()
+@../ => FileSystem.Host()
+// a Windows drive, `@C:/` (https://url.spec.whatwg.org/#windows-drive-letter)
+@{drive: Char.Letter}:/ => FileSystem.Host()
+
+Location &+= {
+  sandboxed => "instance/" + normalised
+}
+
+FileSystem &+= {
+  // The device's own files: the host's (sandboxed: what the host answers for a directory is its entries); a browser and
+  // the language as the operating system keep them on the device (`@me/device/storage`, which a page keeps in its Web
+  // Storage), where a directory is what is kept under it.
+  static Host := class: FileSystem {
+    [location: Location] => if OS.Browser || OS.Ether {
+        @me/device/storage[location.normalised] ?? (@me/device/storage.fields.name{~= ⊢(location.normalised + "/")}
+          .map(.after(location.normalised + "/").before("/")).unique.map(location / .) -- (.nonempty ? . : None))
+      } else { external io location.sandboxed None }
+    { }[{location: Location}] = {value} ^punctuation => if OS.Browser || OS.Ether { @me/device/storage[location.normalised] = value }
+      elsif value === None { external os `remove` location.sandboxed }
+      else { external io location.sandboxed value }
+    // executed: what the host opens it with, given the code between the brackets
+    ({location: Location}, {args}) => if OS.Ether || OS.Browser { ERROR@OS `executing a location is not written in Ray yet` } else { external os `open` (location.@ as String, args) }
+  }
+}
+
+FileSystem &+= {
+  // This instance, as whoever plays it reaches it: the host's terminal (its standard input and output); in a browser the
+  // page and on ether the player, through two places on the device (what is sent waits in `instance/sent`, what comes in
+  // arrives in `instance/received`, each keeping its history).
+  static Terminal := class: FileSystem {
+    [location: Location] => if OS.Browser || OS.Ether { @me/device/storage["instance/received"] } else { external io "stdin" None }
+    { }[{location: Location}] = {value} ^punctuation => if OS.Browser || OS.Ether { @me/device/storage["instance/sent"] = value } else { external io "stdout" value }
+    ({location: Location}, {args}) => ERROR@FileSystem `an instance is not executed: it is sent to`
+  }
+}
+
+FileOptimizations = FileOptimizations + {
+  {instance: Instance{=== @local}} => FileSystem.Terminal()
+  // a scheme of one letter is a Windows drive (https://url.spec.whatwg.org/#windows-drive-letter)
+  {location: Location{!scheme || scheme == "file" || scheme.length == 1}} => @/
+}
+
+// A location is what is held there: mentioned and used as anything else it is read, `@x = value` writes it,
+// `@x = None` removes it, `@new = @x` copies it, and a directory's children are what is under it.
+assert {
+  with @me/device/os = OS.Ether {
+    @./ethertest/a = "x"
+    assert @./ethertest/a as String == "x"  // ETH1 what is written on ether is not read back
+    assert (@./ethertest).children.map(.@) == [(@./ethertest/a).@]  // ETH2 a location on ether does not list what was written under it
+    @./ethertest/b = @./ethertest/a
+    assert @./ethertest/b as String == "x"  // FS3 a location assigned another is not a copy of what is held there
+    @./ethertest/a = None
+    assert !(@./ethertest/a)  // ETH3 a location removed on ether is still there
+    assert (@./ethertest/a).@ as String == "./ethertest/a"  // FS4 a location's own location is not where it was written
+  }
+}

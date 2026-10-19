@@ -1,0 +1,73 @@
+// CSS Snapshot (https://www.w3.org/TR/css-2023/)
+// The headers read CSS and write it; written inline, a Ray value in braces is a hole in a selector or a value, and a declaration whose value is None is left out
+CSS := class: Language {
+  static extensions := ".css"
+
+  static Blank := (" " | \t | \n | \r)[]
+  // Comments (https://www.w3.org/TR/css-syntax-3/#consume-comment)
+  static Comment := class ("/*", text: (!"*/")[], "*/")
+  // Declarations; property names are ASCII case-insensitive, custom properties ("--") case-sensitive (https://www.w3.org/TR/css-syntax-3/#declaration, https://www.w3.org/TR/css-variables-1/#defining-variables, https://www.w3.org/TR/CSS2/syndata.html#characters)
+  static Property := ("--", (Char.Word | "-")[]) | ((Char.Letter | "-"), (Char.Word | "-")[]).lower_case
+  static Declaration := (Blank, property: Property, Blank, ":", Blank, value: (!";" && !"}")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, ";")
+  static Declarations := (Declaration | (Blank, Comment))[]
+
+  // Style rules, and the at-rules holding declarations, @font-face and @page, by their lower-case name (https://www.w3.org/TR/css-syntax-3/#style-rules, https://www.w3.org/TR/css-fonts-4/#font-face-rule, https://www.w3.org/TR/css-page-3/#at-page-rule)
+  static Rule := class (selector: ("@", ("font-face" | "page").lower_case) | (!"{" && !"}" && !";" && !"@")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, "{", declarations: Declarations, Blank, "}") {
+    within: String?
+    assert (@css @media print { p { display: none; } }).within == "@media print"  // UI203 a css at-rule does not hold its rule
+  }
+  assert {
+    who := "Ray"
+    css_rule := @css #{who} { gap: {2}px {3}px; display: grid; }
+    assert css_rule is CSS.Rule && css_rule.selector == "#Ray"  // UI200 a css fragment is not a rule with its selector
+    assert css_rule.declarations.contains(("display", "grid")) && css_rule.declarations.contains(("gap", 2, "px ", 3, "px"))  // UI201 css declarations are not read with their holes
+    sheet_block := @css {
+      p { display: grid; }
+      #{who} { gap: 1px; }
+    }
+    assert sheet_block.count == 2 && sheet_block.last.selector == "#Ray"  // UI218 a css block of rules is not its rules
+    assert (CSS.read(css_rule as CSS) as CSS) == (css_rule as CSS)  // UI290 a written css rule does not read back as the same rule
+  }
+  // Keyframes; the at-rule name and the selectors from and to in any case (https://www.w3.org/TR/css-animations-1/#keyframes, https://www.w3.org/TR/css-syntax-3/#at-rule, https://www.w3.org/TR/css-values-4/#keywords)
+  static Keyframes := class ("@", "keyframes".ignore_case, Blank, name: (!"{" && !" ")[], Blank, "{",
+    frames: (Blank, at: ("from".ignore_case as 0) | ("to".ignore_case as 1) | ((percent: Decimal, "%") as percent / 100), Blank, "{", declarations: Declarations, Blank, "}")[], Blank, "}")
+  // Conditional group rules: @media, @supports, @container, each style rule within it (https://www.w3.org/TR/css-conditional-3/#contents-of, https://www.w3.org/TR/css-contain-3/#container-rule)
+  static Group := class ("@", prelude: (!"{")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, "{", rules: (Blank, Rule)[], Blank, "}") {
+    held => rules.map(Rule(.selector, .declarations, within: "@" + prelude)) -- (.count == 1 ? .first : .)
+  }
+  static Sheet := class (rules: (Blank, Rule | Keyframes | Comment)[] = [], Blank)
+
+  level := {
+    {group: Group} => group.held
+    {rule: Rule | Keyframes | Comment} => rule
+    {sheet: Sheet} => sheet.rules
+    {declarations: Declarations} => declarations
+  }
+  written := {
+    {rule: Rule{within}} => rule.within, "{", Rule(rule.selector, rule.declarations), "}"
+    {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations, "}"), "}"
+  }
+}
+assert ((@css p { /* note */ display: grid; }) as CSS) == "p{/* note */display:grid;}"  // UI237 a css comment is not written into the css
+// Property names and at-rule names are ASCII case-insensitive, custom properties are not (https://www.w3.org/TR/css-syntax-3/#declaration, https://www.w3.org/TR/css-variables-1/#defining-variables)
+assert ((@css p { Display: grid; --Gap: 1px; }) as CSS) == "p{display:grid;--Gap:1px;}"  // UI303 a mixed-case property is not written in lower case, or a custom property's case is not kept
+
+assert (@css p { color: {None}; display: grid; }).declarations.count == 1  // UI202 a declaration whose value is None is not left out
+
+assert (@css @keyframes spin { from { opacity: 0; } to { opacity: 1; } }).frames.last.at == 1  // UI204 css keyframes are not read
+
+assert [@css p { display: grid; }, 3].count == 2  // UI205 a css fragment does not stop where its grammar stops
+
+assert (@css/style.css) is Location  // UI213 @name/path is not a location when the name is a language
+
+assert {
+  css_block := @css {
+    display: grid;
+    gap: {2}px;
+  }
+  assert css_block.count == 2 && css_block.contains(("display", "grid")) && css_block.contains(("gap", 2, "px"))  // UI217 a css block is not its declarations
+}
+
+assert (@css @font-face { font-family: Ray; }).selector == "@font-face"  // UI291 an at-rule of declarations is not a rule
+
+assert (@css @Font-Face { font-family: Ray; }).selector == "@font-face" && (@css @KEYFRAMES spin { FROM { opacity: 0; } To { opacity: 1; } }).frames.at == [0, 1]  // UI304 upper- or mixed-case at-rule names and keyframe selectors are not read

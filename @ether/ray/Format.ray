@@ -1,0 +1,56 @@
+Document := class (entries: (name: String, value: *)[] = []) => {
+  [name: String] => entries{.name == name}.last.value
+  // FMT1 a document does not answer with the value of an entry by its name
+  assert Document(entries: [(name: "a", value: 1), (name: "b", value: 2)]).(
+    ["a"] == 1  // FMT2 the entry named "a" is not 1
+    & ["b"] == 2  // FMT3 the entry named "b" is not 2
+    & ["c"] == None  // FMT4 an entry that is not there has a value
+    & !(["a"] == 2)  // FMT5 the entry named "a" is the value of another
+  )
+  assert Document(entries: [(name: "a", value: 1), (name: "a", value: 3)])["a"] == 3  // FMT6 with a name entered twice, the last entry is not the one answered
+  .{literal name ^property} ^punctuation => this[name]
+  assert Document(entries: [(name: "a", value: 1)]).a == 1  // FMT7 an entry is not reached as a property of the document
+  assert Document(entries: [(name: "a", value: 1)]).b == None  // FMT8 a property that is not an entry has a value
+  fields => entries
+  names => entries.name
+  assert Document(entries: [(name: "a", value: 1), (name: "b", value: 2)]).names == ["a", "b"]  // FMT9 the names of a document are not the names of its entries in order
+  assert Document(entries: [(name: "a", value: 1)]).fields.count == 1  // FMT10 the fields of a document are not its entries
+  assert Document().names.count == 0  // FMT11 an empty document has names
+
+  within (name: String) => this[name] -- (. is Document[] ? .last : . ?? (Document() ~~ entries.push (name: name, value: .)))
+  // entering within a name that is not there
+  assert {
+    d := Document()
+    inner := d.within("x")
+    assert inner is Document  // FMT13 what is entered within a name is not a document
+    assert d.names == ["x"]  // FMT14 the document made within a name is not kept under that name
+    assert d.within("x").names.count == 0 & d.names == ["x"]  // FMT15 entering within the same name again makes another document
+  }
+  // entering within a name holding a list of documents
+  assert {
+    last := Document(entries: [(name: "n", value: 2)])
+    d := Document(entries: [(name: "l", value: [Document(entries: [(name: "n", value: 1)]), last])])
+    assert d.within("l").n == 2  // FMT17 the last document of a list is not the one entered
+  }
+  within_path (path: String[]): static => this ~~ (path.empty ? this : within(path.first).within_path(path.rest))
+  // entering within a path of names
+  assert {
+    d := Document()
+    d.within_path(["a", "b"])
+    assert d.a is Document  // FMT19 the first name of a path does not hold a document
+    assert d.a.names == ["b"]  // FMT20 the second name of a path is not inside the first
+    assert d.names == ["a"]  // FMT21 only the first name of a path is at the top
+  }
+  assert Document().within_path([]).names.count == 0  // FMT22 an empty path changes the document
+  put (path: String[], value): static => this ~~ (path.count == 1 ? entries.push (name: path.first, value: value) : within(path.first).put(path.rest, value))
+  assert Document().put(["a"], 1)["a"] == 1  // FMT23 a value put at a one-name path is not entered under that name
+  assert Document().put(["a", "b", "c"], 5).a.b.c == 5  // FMT24 a value put at a longer path is not entered inside the nested documents
+  assert Document().put(["a", "b"], 5).names == ["a"]  // FMT25 a value put at a longer path is entered at the top
+  assert Document().put(["a", "x"], 1).put(["a", "y"], 2).a.names == ["x", "y"]  // FMT26 two values put under one parent do not both stay
+  appended (path: String[]): static => this ~~ (path.count == 1
+    ? (this[path.first] ?? ([] ~~ entries.push (name: path.first, value: .))).push Document()
+    : within(path.first).appended(path.rest))
+  assert Document().appended(["l"])["l"].count == 1  // FMT27 appending at a name does not start a list holding one document
+  assert Document().appended(["l"]).appended(["l"])["l"].count == 2  // FMT28 appending again at the same name does not add a second document
+  assert Document().appended(["a", "l"]).a["l"].count == 1  // FMT29 appending at a nested path does not add to the list inside
+}

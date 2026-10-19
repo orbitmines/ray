@@ -215,3 +215,15 @@ Each step with the check that says it is done.
   statement.
 - Hex numerals (`0x0C`) were read by nothing outside Number.ray's own block; the kernel's map reads them as counts.
 - `2 ^ 32 > 0` fails: past 2^31 the seed's counts are wrong.
+- Debugging a grammar: `RAY_TRACE=file:line` traces the statement there. Every rule applied while it is read is said,
+  nested by depth, with its head, the text it reads, the node it is read on (`on #…`) and what it answers (`= …`).
+  Repeated lines are folded (`×N`).
+  - `RAY_TRACE_DEPTH` (24) and `RAY_TRACE_MAX` (3000 lines) bound it.
+  - `RAY_TRACE_NONE=1` also says each span nothing reads.
+  - `RAY_TRACE_HIDE=<regex>` leaves out rules by head, with what they apply (`'^(String|\.|this)$'`).
+  It works in rule bodies and test files, where `RAY_EXPLAIN` does not. With it:
+  - a conversion written in a class, `as (=== T) => …`, is defined on a node of its own (a head with brackets is a
+    method's, read in its own node), not on the class: no class's conversion applies to its instances;
+  - `this as 10 as String` (Number.ray:213) reads as `this as (10 as String)`: `as {target}` takes the rest of the line.
+- A list given to a function among other arguments is spread into them: `member_given(list, name, v)` names nothing.
+- `==` between two types is true for any two (Ray.ray:5 on two values with nothing held: `String+ == \s`).

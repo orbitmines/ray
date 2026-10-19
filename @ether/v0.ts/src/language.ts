@@ -2194,7 +2194,7 @@ const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
 const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs', 'count', 'truth', 'number', 'numeral', 'character', 'superposed', 'superposing', 'dotted', 'past', 'cuts', 'unescaped', 'int32', 'linked', 'joined', 'kept'];
 // (what the kernel says: `L_…`)
-const L = { EXPLAIN: 19, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
+const L = { EXPLAIN: 19, TRACE: 20, TRACE_NONE: 21, TRACE_DONE: 22, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
 // (what the kernel tells the host with --debug: D_… in it)
 const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20, RESULT: 22, FREE: 32 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
@@ -2436,7 +2436,7 @@ export class Ray extends Language<FileStore> {
     this.heap = heap; this.i32 = new Int32Array(heap.buffer); this.u8 = new Uint8Array(heap.buffer);
     const first = Atomics.compareExchange(this.i32, HEAP >> 2, 0, START) === 0;
     // (this thread's words; the kernel compiled for it)
-    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
+    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
     this.hosts.debug = (kind, a, b, c) => this.debugged(kind, a, b, c);
     this.hosts.compiled = (fn, t, f, from) => this.compiled_[fn - 1](t, f, from);
     this.hosts.told = (at, kind, a, c) => { this.tell(at, kind, a, c); return 0; };
@@ -2478,8 +2478,10 @@ export class Ray extends Language<FileStore> {
     [s, e, typeof id === 'number' ? id : -this.named_.length].forEach((v, i) => this.set(entry + 4 * i, v));
     // (and where what opens in it closes, read once: as yet, nowhere)
     const closes = this.w(220) + 12 * k; this.set(closes, s); this.set(closes + 4, e); this.set(closes + 8, this.alloc(4 * (bytes.length + 2)));
-    // (`RAY_EXPLAIN=file:line`: the statement there, each rule read at it said (the kernel tells it, `L.EXPLAIN`))
-    const explain = typeof process !== 'undefined' ? process.env.RAY_EXPLAIN : undefined;
+    // (`RAY_EXPLAIN=file:line`: the statement there, each rule read at it said (the kernel tells it, `L.EXPLAIN`); `RAY_TRACE=file:line`:
+    // every rule applied while it is read, nested, the text each reads and what it answers (`RAY_TRACE_DEPTH`, `RAY_TRACE_MAX`,
+    // `RAY_TRACE_NONE`, `RAY_TRACE_HIDE`))
+    const explain = typeof process !== 'undefined' ? process.env.RAY_EXPLAIN ?? process.env.RAY_TRACE : undefined;
     if (explain && typeof id === 'number') { const [name, line] = [explain.slice(0, explain.lastIndexOf(':')), Number(explain.slice(explain.lastIndexOf(':') + 1))], path = this.files_?.getPath(id) ?? '';
       if (path.endsWith(name)) { let at = 0; for (let n = 1; n < line && at >= 0; n++) at = bytes.indexOf(10, at) + 1; while (at < bytes.length && (bytes[at] === 32 || bytes[at] === 9)) at++; this.set(292, s + at); } }
     const first = bytes.indexOf(10);
@@ -2640,6 +2642,21 @@ export class Ray extends Language<FileStore> {
     if (kind === L.DEFINED) { if (kwargs.debug) say(`${ansi.darkGray}DEFINED ${text(a, c)} (${this.where(a)})${ansi.reset}`); return; }
     if (kind === L.PASSED) return this.emit(at, this.snippet(a, c, 100), 'pass');
     if (kind === L.EXPLAIN) { say(`EXPLAIN ${this.where(said_at)}: ${a ? `read by \`${text(a, c)}\` (${this.where(a)})` : 'read by nothing'}`); return; }
+    // (`RAY_TRACE`: a rule applied, indented by how deep, and the text it reads; what nothing reads)
+    if (kind === L.TRACE || kind === L.TRACE_NONE || kind === L.TRACE_DONE) {
+      const short = (x: string) => { const one = x.replace(/\n/g, '⏎'); return one.length > 90 ? one.slice(0, 87) + '…' : one; }, deep = '  '.repeat(this.w(this.t + 928));
+      // (what it answered: a text, a count, nothing, else the node)
+      const answer = (v: number) => !v ? 'none' : this.w(v + 8) === 1 ? `\`${short(this.text(this.w(v + 12), this.w(v + 16)))}\`` : this.w(v + 8) === 0 && this.w(v + 12) > 0 && !this.w(v + 16) ? `${this.w(v + 12) - 1}` : this.node_of(v);
+      // (`RAY_TRACE_NONE=1`: what nothing reads too (each span tried, most of them); `RAY_TRACE_HIDE=<regex>`: rules not said)
+      if (kind === L.TRACE_NONE && !process.env.RAY_TRACE_NONE) return;
+      const hide = process.env.RAY_TRACE_HIDE ? new RegExp(process.env.RAY_TRACE_HIDE) : undefined;
+      const depth = this.w(this.t + 928);
+      if (this.trace_hidden >= 0) { if (depth > this.trace_hidden) return; if (kind === L.TRACE_DONE && depth === this.trace_hidden) { this.trace_hidden = -1; return; } this.trace_hidden = -1; }
+      if (hide && kind === L.TRACE && hide.test(text(a, c))) { this.trace_hidden = depth; return; }
+      if (kind === L.TRACE_DONE) { this.trace_said(`TRACE ${deep}  ${ansi.darkGray}= ${answer(said_at)}${ansi.reset}`); return; }
+      this.trace_said(kind === L.TRACE ? `TRACE ${deep}\`${short(text(a, c))}\` on \`${short(this.text(said_at, this.w(this.t + 908)))}\` ${ansi.darkGray}on #${this.w(this.t + 932)}${this.w(this.t + 936) !== this.w(this.t + 932) ? ` (self #${this.w(this.t + 936)})` : ''} ${this.where(said_at)}${ansi.reset}` : `TRACE ${deep}${ansi.orange}nothing reads${ansi.reset} \`${short(this.text(a, c))}\` ${ansi.darkGray}${this.where(said_at)}${ansi.reset}`);
+      return;
+    }
     if (kind === L.OUTPUT) { const out = this.text(a, c); if (env.nodejs) process.stdout.write(out); else console.log(out); return; }
     const message = kind === L.UNREAD ? `nothing reads \`${text(a, c)}\`` : kind === L.UNLABELLED ? `nothing is labelled \`${text(a, a + c)}\`` : kind === L.BUDGET ? `ran past ${Ray.BUDGET} rules (reading this)`
       : kind === L.OOM ? `out of memory (${this.u8.length} bytes)` : kind === L.REPORT ? (a ? text(a, c) : 'error') : kind === L.CYCLE ? 'what this is read as needs itself'
@@ -2905,6 +2922,14 @@ export class Ray extends Language<FileStore> {
     return 0;
   }
   // (a node, said: what it is, and the text it stands for)
+  // (`RAY_TRACE`: a line said, the same line again counted, not said again)
+  private trace_last = ''; private trace_times = 0; private trace_hidden = -1;
+  trace_said(line: string) {
+    if (line === this.trace_last) { this.trace_times++; return; }
+    if (this.trace_times) say(`${this.trace_last} ${ansi.darkGray}×${this.trace_times + 1}${ansi.reset}`); else if (this.trace_last) say(this.trace_last);
+    if (!this.trace_last && env.nodejs) process.on('exit', () => this.trace_said(''));
+    this.trace_last = line; this.trace_times = 0;
+  }
   node_of(n: number) { if (n <= 1) return `(${n})`; const is = this.w(n + 8), kinds = ['node', 'text', 'place', 'head', 'hole', 'frame', 'called']; return `${kinds[is] ?? `is ${is}`} ${n}${is >= 1 && is <= 4 ? ` \`${this.snippet(this.w(n + 12), this.w(n + 16), 40)}\`` : ''}${n === this.w(GLOBAL) ? ' (global)' : ''}`; }
   // (how deep a step is: as far in as 16, then said)
   private indent(depth: number) { return `${ansi.darkGray}${env.nodejs && !env.worker_threads.isMainThread ? `T${env.worker_threads.threadId} ` : ''}${String(depth).padStart(3)}${ansi.reset} ${'  '.repeat(Math.min(depth, 16))}`; }

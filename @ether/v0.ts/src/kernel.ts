@@ -67,7 +67,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (what is said: [at, kind, a, c])
   // (what the host is told, with --debug: a statement read and done, a rule applied and done, one defined, memory out)
   const D_STATEMENT = 1, D_STATEMENT_END = 2, D_APPLY = 3, D_APPLY_END = 4, D_DEFINE = 5, D_OOM = 6, D_BLOCK = 7, D_BLOCK_END = 8, D_TEST = 9, D_TEST_END = 10, D_FAULT = 11, D_SAID = 12, D_TYPE = 13, D_TYPE_END = 14, D_RESULT = 22, D_SETTLED = 18, D_READING = 20, D_KEY = 30, D_FREE = 32;
-  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, L_EXPLAIN = 19, EXPLAIN_AT = 292, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
+  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, L_EXPLAIN = 19, L_TRACE = 20, L_TRACE_NONE = 21, L_TRACE_DONE = 22, EXPLAIN_AT = 292, T_TRACE_ARM = 900, T_TRACE_E = 908, T_TRACE_N = 912, T_TRACE_MAX = 916, T_TRACE_DEPTH = 920, T_TRACE_ON = 924, T_TRACE_D = 928, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
   const SCRATCH = 1024;
 
   // ---- memory
@@ -1099,6 +1099,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (DEBUG && refused && !best) debug(D_FAULT, 1113, at, end);
     // (`RAY_EXPLAIN`: the rule read there told the host, the statement the host named)
     if (w(EXPLAIN_AT) === at) { const hd = best ? w(best + R_HEAD) : 0; told(at, L_EXPLAIN, hd ? w(hd + N_A) : 0, hd ? w(hd + N_B) : 0); }
+    // (`RAY_TRACE`: the rule read there traced when it is applied; what nothing reads while it is, told)
+    if (w(THREAD + T_TRACE_MAX)) { if (w(EXPLAIN_AT) === at && best && !w(THREAD + T_TRACE_ON)) set(THREAD + T_TRACE_ARM, best); if (w(THREAD + T_TRACE_ON) && !best && w(THREAD + T_TRACE_N) < w(THREAD + T_TRACE_MAX) && w(THREAD + T_TRACE_D) < w(THREAD + T_TRACE_DEPTH)) { set(THREAD + T_TRACE_N, w(THREAD + T_TRACE_N) + 1); told(at, L_TRACE_NONE, at, end); } }
     put(out, best);
     return ends;
   }
@@ -2428,6 +2430,26 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (what an application made is let go of when it returns, unless something made before it was given a place in it (a write
   // `put` saw), or it answers one: its memory zeroed, allocation back where it began; `RAY_NOFREE`, kept)
   function apply(t: number, rule: number, caps: number, names: number, f: number, self: number, s: number, e: number, written: number, on: number): number {
+    if (!w(t + T_TRACE_MAX)) return freeing(t, rule, caps, names, f, self, s, e, written, on);
+    return traced(t, rule, caps, names, f, self, s, e, written, on);
+  }
+  // (`RAY_TRACE=file:line`: from the rule read there, each rule applied told, how deep, its head and the text it reads)
+  function traced(t: number, rule: number, caps: number, names: number, f: number, self: number, s: number, e: number, written: number, on: number): number {
+    const armed = w(t + T_TRACE_ARM) === rule && !w(t + T_TRACE_ON);
+    if (armed) { set(t + T_TRACE_ARM, 0); set(t + T_TRACE_ON, 1); set(t + T_TRACE_D, 0); }
+    const tracing = w(t + T_TRACE_ON), d = w(t + T_TRACE_D), told_ = tracing && d < w(t + T_TRACE_DEPTH) && w(t + T_TRACE_N) < w(t + T_TRACE_MAX) ? 1 : 0;
+    if (tracing) {
+      if (told_) { set(t + T_TRACE_N, w(t + T_TRACE_N) + 1); set(t + T_TRACE_E, e); set(t + 932, on); set(t + 936, self); const hd = w(rule + R_HEAD); told(s, L_TRACE, hd ? w(hd + N_A) : 0, hd ? w(hd + N_B) : 0); }
+      set(t + T_TRACE_D, d + 1);
+    }
+    const v = freeing(t, rule, caps, names, f, self, s, e, written, on);
+    if (tracing) set(t + T_TRACE_D, d);
+    if (told_) told(v, L_TRACE_DONE, s, e);
+    if (armed) set(t + T_TRACE_ON, 0);
+    return v;
+  }
+  // (applied, and what it made let go of when nothing kept it)
+  function freeing(t: number, rule: number, caps: number, names: number, f: number, self: number, s: number, e: number, written: number, on: number): number {
     const lv = w(t + T_LVL), n = w(t + T_LVL_N);
     if (!w(t + T_FREEING) || !lv || n >= DEPTH) return profiled(t, rule, caps, names, f, self, s, e, written, on);
     const start = w(t + T_CHUNK), cend = w(t + T_CHUNK_END), slot0 = w(t + T_SLOT), slotend0 = w(t + T_SLOT_END), at = lv + 24 * n, below = n ? at - 24 : 0;

@@ -202,3 +202,16 @@ Each step with the check that says it is done.
   writes nothing: a two-line comment whose second line had `while` in it (`guards`, 2026-10-19). Kept to one line. The
   language read every comment line with `while` in it as `{body} while {condition}` (a loop), and a comment in a class
   could run for ever: a comment is no longer guarded (`guards` in `kernel.ts`).
+- Reading the full `$/Wasm.project.ray` takes more memory than the seed has (over 1.5 GB, one statement): the kernel only
+  frees memory at the end of a test, so what reading a definition makes stays. About 1 MB per enum member with fields; a
+  91-member enum alone 300 MB when it was read left to right (`|` and `&` are now read nearest: either way the same).
+  Each part reads on its own (`i32`'s 77 ops in a class with the real `MemArg`, `U32`, `LEB`, under 120 MB).
+- A field named `type` goes round the language's own `{x}: {type}` rule (a hole's name met by the code spliced into it):
+  the Wasm project's fields are named for what they are (`index`, `storage`, `composite`, `value`, …).
+- `X.String` as a type (Number.ray:388) is hidden by the numeral class's instance `String => this as String`; without that
+  member, `{digits: Decimal.String} => Decimal(integer: digits)` reads numerals as Decimal objects, not counts (9 tests).
+- `x: T = code` reads the code's value, not its text by T (`r: Ranged2 = 3-8`, ZZ1–5): the line is read by
+  `{place} = {value}` (declared after `{name}: {type} = {value}`, so looser). `RAY_EXPLAIN=file:line` says which rule read a
+  statement.
+- Hex numerals (`0x0C`) were read by nothing outside Number.ray's own block; the kernel's map reads them as counts.
+- `2 ^ 32 > 0` fails: past 2^31 the seed's counts are wrong.

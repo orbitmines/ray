@@ -2193,7 +2193,7 @@ const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
 const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs', 'count', 'truth', 'number', 'numeral', 'character', 'superposed', 'superposing', 'dotted', 'past', 'cuts', 'unescaped', 'int32', 'linked', 'joined', 'kept'];
 // (what the kernel says: `L_…`)
-const L = { UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
+const L = { EXPLAIN: 19, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
 // (what the kernel tells the host with --debug: D_… in it)
 const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20, RESULT: 22, FREE: 32 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
@@ -2477,6 +2477,10 @@ export class Ray extends Language<FileStore> {
     [s, e, typeof id === 'number' ? id : -this.named_.length].forEach((v, i) => this.set(entry + 4 * i, v));
     // (and where what opens in it closes, read once: as yet, nowhere)
     const closes = this.w(220) + 12 * k; this.set(closes, s); this.set(closes + 4, e); this.set(closes + 8, this.alloc(4 * (bytes.length + 2)));
+    // (`RAY_EXPLAIN=file:line`: the statement there, each rule read at it said (the kernel tells it, `L.EXPLAIN`))
+    const explain = typeof process !== 'undefined' ? process.env.RAY_EXPLAIN : undefined;
+    if (explain && typeof id === 'number') { const [name, line] = [explain.slice(0, explain.lastIndexOf(':')), Number(explain.slice(explain.lastIndexOf(':') + 1))], path = this.files_?.getPath(id) ?? '';
+      if (path.endsWith(name)) { let at = 0; for (let n = 1; n < line && at >= 0; n++) at = bytes.indexOf(10, at) + 1; while (at < bytes.length && (bytes[at] === 32 || bytes[at] === 9)) at++; this.set(292, s + at); } }
     const first = bytes.indexOf(10);
     if (new TextDecoder().decode(bytes.subarray(0, first < 0 ? bytes.length : first)).startsWith('!language ')) {
       this.boot(s, e, id);
@@ -2619,6 +2623,7 @@ export class Ray extends Language<FileStore> {
     if (kind === L.STYLED) { const style = this.member(a, 'style'); if (style) this.styled = [at, this.text(this.w(style + 12), this.w(style + 16)).trim()]; return; }
     if (kind === L.DEFINED) { if (kwargs.debug) say(`${ansi.darkGray}DEFINED ${text(a, c)} (${this.where(a)})${ansi.reset}`); return; }
     if (kind === L.PASSED) return this.emit(at, this.snippet(a, c, 100), 'pass');
+    if (kind === L.EXPLAIN) { say(`EXPLAIN ${this.where(said_at)}: ${a ? `read by \`${text(a, c)}\` (${this.where(a)})` : 'read by nothing'}`); return; }
     if (kind === L.OUTPUT) { const out = this.text(a, c); if (env.nodejs) process.stdout.write(out); else console.log(out); return; }
     const message = kind === L.UNREAD ? `nothing reads \`${text(a, c)}\`` : kind === L.UNLABELLED ? `nothing is labelled \`${text(a, a + c)}\`` : kind === L.BUDGET ? `ran past ${Ray.BUDGET} rules (reading this)`
       : kind === L.OOM ? `out of memory (${this.u8.length} bytes)` : kind === L.REPORT ? (a ? text(a, c) : 'error') : kind === L.CYCLE ? 'what this is read as needs itself'

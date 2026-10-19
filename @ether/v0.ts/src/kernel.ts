@@ -59,7 +59,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (what is said: [at, kind, a, c])
   // (what the host is told, with --debug: a statement read and done, a rule applied and done, one defined, memory out)
   const D_STATEMENT = 1, D_STATEMENT_END = 2, D_APPLY = 3, D_APPLY_END = 4, D_DEFINE = 5, D_OOM = 6, D_BLOCK = 7, D_BLOCK_END = 8, D_TEST = 9, D_TEST_END = 10, D_FAULT = 11, D_SAID = 12, D_TYPE = 13, D_TYPE_END = 14, D_RESULT = 22, D_SETTLED = 18, D_READING = 20, D_KEY = 30, D_FREE = 32;
-  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
+  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, L_EXPLAIN = 19, EXPLAIN_AT = 292, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
   const SCRATCH = 1024;
 
   // ---- memory
@@ -1088,6 +1088,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       }
     }
     if (DEBUG && refused && !best) debug(D_FAULT, 1113, at, end);
+    // (`RAY_EXPLAIN`: the rule read there told the host, the statement the host named)
+    if (w(EXPLAIN_AT) === at) { const hd = best ? w(best + R_HEAD) : 0; told(at, L_EXPLAIN, hd ? w(hd + N_A) : 0, hd ? w(hd + N_B) : 0); }
     set(out, best);
     return ends;
   }

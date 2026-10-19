@@ -67,7 +67,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (what is said: [at, kind, a, c])
   // (what the host is told, with --debug: a statement read and done, a rule applied and done, one defined, memory out)
   const D_STATEMENT = 1, D_STATEMENT_END = 2, D_APPLY = 3, D_APPLY_END = 4, D_DEFINE = 5, D_OOM = 6, D_BLOCK = 7, D_BLOCK_END = 8, D_TEST = 9, D_TEST_END = 10, D_FAULT = 11, D_SAID = 12, D_TYPE = 13, D_TYPE_END = 14, D_RESULT = 22, D_SETTLED = 18, D_READING = 20, D_KEY = 30, D_FREE = 32;
-  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, L_EXPLAIN = 19, L_TRACE = 20, L_TRACE_NONE = 21, L_TRACE_DONE = 22, EXPLAIN_AT = 292, T_TRACE_ARM = 900, T_TRACE_E = 908, T_TRACE_N = 912, T_TRACE_MAX = 916, T_TRACE_DEPTH = 920, T_TRACE_ON = 924, T_TRACE_D = 928, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
+  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, L_EXPLAIN = 19, L_TRACE = 20, L_TRACE_NONE = 21, L_TRACE_DONE = 22, L_TRACE_CHECK = 23, L_TRACE_CHECKED = 24, EXPLAIN_AT = 292, T_TRACE_ARM = 900, T_TRACE_E = 908, T_TRACE_N = 912, T_TRACE_MAX = 916, T_TRACE_DEPTH = 920, T_TRACE_ON = 924, T_TRACE_D = 928, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
   const SCRATCH = 1024;
 
   // ---- memory
@@ -423,7 +423,25 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return end;
   }
   // Past the whitespace (and the newlines).
-  function skip(at: number, end: number) { while (at < end && b(at) <= 32) at++; return at; }
+  // (whether code follows the comment at p, on a line after it (other comments not))
+  function coded_after(p: number, end: number): number {
+    for (;;) {
+      while (p < end && b(p) !== 10) p++;
+      while (p < end && b(p) <= 32) p++;
+      if (p >= end) return 0;
+      if (!(p + 1 < end && b(p) === 47 && b(p + 1) === 47)) return 1;
+    }
+  }
+  // (and a comment that ends its line before more: a list going on past it, its next part)
+  function skip(at: number, end: number) {
+    for (;;) {
+      while (at < end && b(at) <= 32) at++;
+      if (at + 1 >= end || b(at) !== 47 || b(at + 1) !== 47) return at;
+      if (!coded_after(at, end)) return at;
+      let q = at; while (q < end && b(q) !== 10) q++;
+      at = q;
+    }
+  }
   // The end of the line: its newline, not one inside brackets.
   // (a line indented deeper than the one the statement begins on continues it: `x := 5` then `  + 3`, a body on the lines
   // under `=>`; blank lines between them too)
@@ -505,7 +523,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     put(ty + 12 * tn, at); put(ty + 12 * tn + 4, end); put(ty + 12 * tn + 8, type); set(THREAD + T_TYP_N, tn + 1);
     const cut = w(THREAD + T_CUT), ran = w(THREAD + T_RAN); set(THREAD + T_CUT, 0); set(THREAD + T_RAN, 0);
     if (DEBUG) { debug(D_TYPE, at, end, type); count(K_TYPED); if (w(244)) { const h = w(244) + 8 * ((type >> 3) & 4095); put(h, type); put(h + 4, w(h + 4) + 1); } }
+    // (`RAY_TRACE`: a check told, the text and the type, then what it answered)
+    const tc = w(THREAD + T_TRACE_ON) && w(THREAD + T_TRACE_D) < w(THREAD + T_TRACE_DEPTH) && w(THREAD + T_TRACE_N) < w(THREAD + T_TRACE_MAX) ? w(THREAD + T_TRACE_D) + 1 : 0;
+    if (tc) { set(THREAD + T_TRACE_N, w(THREAD + T_TRACE_N) + 1); set(THREAD + 932, type); told(at, L_TRACE_CHECK, at, end); set(THREAD + T_TRACE_D, tc); }
     const ok = checked(at, end, type, s);
+    if (tc) { set(THREAD + T_TRACE_D, tc - 1); told(ok, L_TRACE_CHECKED, at, end); }
     if (DEBUG) debug(D_TYPE_END, at, end, ok);
     const was_cut = w(THREAD + T_CUT), was_run = w(THREAD + T_RAN); set(THREAD + T_CUT, cut | was_cut); set(THREAD + T_RAN, ran | was_run);
     set(THREAD + T_TYP_N, tn);
@@ -652,6 +674,14 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a list written, `a: T, b`, is no name: a `,` outside brackets and quotes)
     for (let hp = after, hd = 0, hq = 0; hp < ce; hp++) { const hc = b(hp); if (hq) { if (hc === hq) hq = 0; continue; } if (hc === 34 || hc === 96) hq = hc; else if (hc === 40 || hc === 91 || hc === 123) hd++; else if (hc === 41 || hc === 93 || hc === 125) hd--; else if (hc === 44 && hd === 0) return 0; }
     return node(IS_TEXT, cs, we, w(TEXTS) || w(GLOBAL), 0);
+  }
+  // (the type a hole's code is written with, `a: T`: T's text; else 0)
+  function hole_type(fr: number, s: number, e: number): number {
+    const hn = hole_name(fr, s, e); if (!hn) return 0;
+    const o = follow(fr + F_TAKES + TAKE * named(w(fr + F_RULE), s, e), 1); let ce = w(o + 4); while (ce > w(hn + N_B) && b(ce - 1) <= 32) ce--;
+    let after = w(hn + N_B); while (after < ce && b(after) <= 32) after++;
+    if (after >= ce || b(after) !== 58) return 0;
+    const ts = skip(after + 1, ce); return ts < ce ? node(IS_TEXT, ts, ce, w(TEXTS) || w(GLOBAL), 0) : 0;
   }
   // (a span as a place reads it, the language's `type_fits` (`is`, or `as`): of a structure class, what it is written as
   // (its `written_as`, which `as` asks before it destructures))
@@ -1003,7 +1033,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a comment after it, `//` after a space, outside brackets and quotes: a rule with `//` in its head that reads it first
     // (what is before it then read alone): no hole takes a comment, `true // a ?= b` is no `?=`)
     let commented = 0;
-    for (let p = at + 1; p + 1 < end;) { const c = b(p); if (c === 47 && b(p + 1) === 47 && b(p - 1) <= 32) { commented = 1; break; } if (c === 40 || c === 91 || c === 123 || c === 34 || c === 96 || c === 39) { const q = past(p, end); p = q > p ? q : p + 1; } else p++; }
+    for (let p = at + 1; p + 1 < end;) { const c = b(p); if (c === 47 && b(p + 1) === 47 && b(p - 1) <= 32) { commented = 1; if (coded_after(p, end)) commented = 2; break; } if (c === 40 || c === 91 || c === 123 || c === 34 || c === 96 || c === 39) { const q = past(p, end); p = q > p ? q : p + 1; } else p++; }
+    // (one with lines after it, a list going on past a comment: not read as a comment, which ends its line)
     let lo = 0, hi = 0, kinds = 0, refused = 0, best_fit = 0;
     // (a name defined more than once, with parameters and without (`min (b) =>`, `min =>`): by what is given, brackets after it
     // or none)
@@ -1042,7 +1073,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
           if (DEBUG) { count(K_VISIT); if (!pass) { count(K_HOLE_LED); if (w(240)) { const o = w(x + R_OWNER), h = w(240) + 8 * ((o >> 3) & 4095); put(h, o); put(h + 4, w(h + 4) + 1); } } }
           if (DEBUG && (w(FAIL_FAST) & 64) && b(at) === 46) { const hd = w(x + R_HEAD); if (hd && w(hd + N_B) - w(hd + N_A) === 9 && b(w(hd + N_A)) === 46 && b(w(hd + N_A) + 1) === 123 && b(w(hd + N_A) + 2) === 109) debug(D_FAULT, 79, ((kind ? kx === kind : kx >= 65) ? 1 : 0) | (x !== w(THREAD + T_SKIP) ? 2 : 0) | ((f & want) === want ? 4 : 0) | (!(f & refuse) ? 8 : 0) | (!(w(x + R_MASK) & ~has) ? 16 : 0) | ((f & LED ? b(at) === b(w(x + R_PART + 4)) : written(x, at, end)) ? 32 : 0) | (match(x, 0, at, end, s) >= 0 ? 64 : 0), match(x, 0, at, end, s) - end); }
           // (not the one rule that never reads itself here, `T_SKIP`)
-          if ((kind ? kx === kind : kx >= 65) && x !== w(THREAD + T_SKIP) && (!w(THREAD + T_SKIPS_N) || !skipped_rule(x)) && !(w(THREAD + T_NAMING) === at && (w(x + R_PART) & 15) === LITERAL && w(x + R_PART + 8) === w(THREAD + T_NAMING_N) && same(w(x + R_PART + 4), at, w(THREAD + T_NAMING_N)) && !passes(x) && operand_led(x) && (!DEBUG || debug(D_FAULT, 1097, at, x) || 1)) && (f & want) === want && !(f & refuse) && !((refuse & TYPE_READER) && (f & READER) && w(x + R_OWNER) !== w(GLOBAL)) && !(w(x + R_MASK) & ~has) && (f & LED ? b(at) === b(w(x + R_PART + 4)) : written(x, at, end))) {
+          if ((kind ? kx === kind : kx >= 65) && !(commented === 2 && comments(x)) && x !== w(THREAD + T_SKIP) && (!w(THREAD + T_SKIPS_N) || !skipped_rule(x)) && !(w(THREAD + T_NAMING) === at && (w(x + R_PART) & 15) === LITERAL && w(x + R_PART + 8) === w(THREAD + T_NAMING_N) && same(w(x + R_PART + 4), at, w(THREAD + T_NAMING_N)) && !passes(x) && operand_led(x) && (!DEBUG || debug(D_FAULT, 1097, at, x) || 1)) && (f & want) === want && !(f & refuse) && !((refuse & TYPE_READER) && (f & READER) && w(x + R_OWNER) !== w(GLOBAL)) && !(w(x + R_MASK) & ~has) && (f & LED ? b(at) === b(w(x + R_PART + 4)) : written(x, at, end))) {
             if (DEBUG) count(K_MATCH);
             // (the numeral the kernel's map names, on digits in ten: what it reads, without asking its type (which is made of
             // numbers it reads: `Decimal.String` is `"0".."9"`))
@@ -2567,11 +2598,20 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         const list = block(t, rest, q, names, f, self, 0, 1, 0, self, 0); if (!list || stopped(t)) return list;
         let q2 = skip(q, z), e2 = q2; while (e2 < z && b(e2) > 32) e2++;
         const wn = w(w(WORDS) + 8 * W_WRITTEN_NAME), wz = wn + w(w(WORDS) + 8 * W_WRITTEN_NAME + 4);
-        if (word(a, m, W_NAMED_LIKE)) { const from = block(t, q2, e2, names, f, self, 0, 1, 0, self, 0), was = from && w(from + N_IS) === IS_NODE ? held(t, from, W_WRITTEN_NAME, 0) : 0; if (was && was !== w(NOTHING)) { const lk = held(t, list, W_TAIL, 0); if (lk && lk !== w(NOTHING)) bound(wn, wz, lk, was); } return list; }
+        if (word(a, m, W_NAMED_LIKE)) {
+          const from = block(t, q2, e2, names, f, self, 0, 1, 0, self, 0), was = from && w(from + N_IS) === IS_NODE ? held(t, from, W_WRITTEN_NAME, 0) : 0;
+          if (was && was !== w(NOTHING)) {
+            const lk = held(t, list, W_TAIL, 0), tw = w(w(WORDS) + 8 * W_TYPE_WRITTEN), ty = held(t, from, W_TYPE_WRITTEN, 0);
+            if (lk && lk !== w(NOTHING)) { bound(wn, wz, lk, was); if (ty && ty !== w(NOTHING)) bound(tw, tw + w(w(WORDS) + 8 * W_TYPE_WRITTEN + 4), lk, ty); }
+          }
+          return list;
+        }
         let q3 = skip(e2, z), e3 = q3; while (e3 < z && b(e3) > 32) e3++;
         const first = hole_name(names, q2, e2), last_ = hole_name(names, q3, e3);
-        if (first) { const l1 = held(t, list, W_HEAD, 0); if (l1 && l1 !== w(NOTHING)) bound(wn, wz, l1, first); }
-        if (last_) { const l2 = held(t, list, W_TAIL, 0); if (l2 && l2 !== w(NOTHING)) bound(wn, wz, l2, last_); }
+        // (and the type each is written with, `a: T`: T's text, `type_written`)
+        const tw = w(w(WORDS) + 8 * W_TYPE_WRITTEN), twz = tw + w(w(WORDS) + 8 * W_TYPE_WRITTEN + 4), ty1 = first ? hole_type(names, q2, e2) : 0, ty2 = last_ ? hole_type(names, q3, e3) : 0;
+        if (first) { const l1 = held(t, list, W_HEAD, 0); if (l1 && l1 !== w(NOTHING)) { bound(wn, wz, l1, first); if (ty1) bound(tw, twz, l1, ty1); } }
+        if (last_) { const l2 = held(t, list, W_TAIL, 0); if (l2 && l2 !== w(NOTHING)) { bound(wn, wz, l2, last_); if (ty2) bound(tw, twz, l2, ty2); } }
         return list;
       }
       // (`external admits v t`: whether v is a t, where the kernel can tell (as `is` answers it); not known, nothing)

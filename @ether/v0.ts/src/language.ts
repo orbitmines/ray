@@ -2194,7 +2194,7 @@ const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
 const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs', 'count', 'truth', 'number', 'numeral', 'character', 'superposed', 'superposing', 'dotted', 'past', 'cuts', 'unescaped', 'int32', 'linked', 'joined', 'kept'];
 // (what the kernel says: `L_…`)
-const L = { EXPLAIN: 19, TRACE: 20, TRACE_NONE: 21, TRACE_DONE: 22, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
+const L = { EXPLAIN: 19, TRACE: 20, TRACE_NONE: 21, TRACE_DONE: 22, TRACE_CHECK: 23, TRACE_CHECKED: 24, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
 // (what the kernel tells the host with --debug: D_… in it)
 const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20, RESULT: 22, FREE: 32 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
@@ -2643,6 +2643,13 @@ export class Ray extends Language<FileStore> {
     if (kind === L.PASSED) return this.emit(at, this.snippet(a, c, 100), 'pass');
     if (kind === L.EXPLAIN) { say(`EXPLAIN ${this.where(said_at)}: ${a ? `read by \`${text(a, c)}\` (${this.where(a)})` : 'read by nothing'}`); return; }
     // (`RAY_TRACE`: a rule applied, indented by how deep, and the text it reads; what nothing reads)
+    if (kind === L.TRACE_CHECK || kind === L.TRACE_CHECKED) {
+      const short = (x: string) => { const one = x.replace(/\n/g, '⏎'); return one.length > 90 ? one.slice(0, 87) + '…' : one; }, deep = '  '.repeat(this.w(this.t + 928));
+      if (this.trace_hidden >= 0 && this.w(this.t + 928) > this.trace_hidden) return;
+      const ty = this.w(this.t + 932);
+      this.trace_said(kind === L.TRACE_CHECK ? `TRACE ${deep}${ansi.green}check${ansi.reset} \`${short(this.text(a, c))}\` is ${this.node_of(ty)} ${ansi.darkGray}${this.where(a)}${ansi.reset}` : `TRACE ${deep}  ${ansi.darkGray}= ${said_at ? 'yes' : 'no'}${ansi.reset}`);
+      return;
+    }
     if (kind === L.TRACE || kind === L.TRACE_NONE || kind === L.TRACE_DONE) {
       const short = (x: string) => { const one = x.replace(/\n/g, '⏎'); return one.length > 90 ? one.slice(0, 87) + '…' : one; }, deep = '  '.repeat(this.w(this.t + 928));
       // (what it answered: a text, a count, nothing, else the node)

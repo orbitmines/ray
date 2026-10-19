@@ -1,0 +1,83 @@
+// PE Format, Microsoft's Portable Executable and Common Object File Format (https://learn.microsoft.com/en-us/windows/win32/debug/pe-format):
+// the header of the MS-DOS program it once also was, ending with where the PE header is; there the signature, the COFF file
+// header, the optional header with its data directories, and the section table. Every field is least significant byte first
+PE := class: Language (
+  // MS-DOS stub (2.1): `MZ`, its header, and at 0x3C the offset of the PE signature
+  "MZ",
+  dos: Byte[]{length == 58},
+  lfanew: <-Byte₄,
+  *
+) {
+  static extensions := ".exe" | ".dll" | ".sys" | ".efi"
+
+  // COFF File Header (3.3), after the signature `PE\0\0` (2.2)
+  static Coff := class (
+    "PE", 0x00, 0x00,
+    machine: <-Byte₂, sections: <-Byte₂, stamp: <-Byte₄, symbols_at: <-Byte₄, symbols: <-Byte₄,
+    optional_size: <-Byte₂, characteristics: <-Byte₂
+  )
+  // Optional Header (3.4): PE32 (0x10B) or PE32+ (0x20B), whose image base and stack and heap sizes are eight bytes, and
+  // which has no BaseOfData
+  static Optional := class (
+    magic: <-Byte₂{== 0x10B | 0x20B},
+    linker: Byte₂, code_size: <-Byte₄, initialized_size: <-Byte₄, uninitialized_size: <-Byte₄,
+    entry: <-Byte₄, code_base: <-Byte₄,
+    (data_base: <-Byte₄) if magic == 0x10B,
+    image_base: Wide<magic == 0x20B>,
+    section_alignment: <-Byte₄, file_alignment: <-Byte₄,
+    os_version: <-Byte₂[]₂, image_version: <-Byte₂[]₂, subsystem_version: <-Byte₂[]₂, win32_version: <-Byte₄,
+    image_size: <-Byte₄, headers_size: <-Byte₄, checksum: <-Byte₄, subsystem: <-Byte₂, dll_characteristics: <-Byte₂,
+    stack_reserve: Wide<magic == 0x20B>, stack_commit: Wide<magic == 0x20B>, heap_reserve: Wide<magic == 0x20B>, heap_commit: Wide<magic == 0x20B>,
+    loader_flags: <-Byte₄, count: <-Byte₄,
+    // Data directories (3.4.3): export, import, resource, exception, certificate, base relocation, … each an address and a size
+    directories: (address: <-Byte₄, size: <-Byte₄)[]{length == count}
+  )
+  static Wide<wide> := wide ? <-Byte₈ : <-Byte₄
+  // Section Table (4)
+  static Section := class (
+    name: Byte₈, virtual_size: <-Byte₄, virtual_address: <-Byte₄, raw_size: <-Byte₄, raw_at: <-Byte₄,
+    relocations_at: <-Byte₄, line_numbers_at: <-Byte₄, relocations: <-Byte₂, line_numbers: <-Byte₂, characteristics: <-Byte₄
+  ) {
+    // IMAGE_SCN_MEM_EXECUTE: the section runs
+    runs => (characteristics ~&& 0x20000000) != 0
+    holds (address: Number) => virtual_address <= address < virtual_address + virtual_size
+  }
+
+  // The headers are views over the file at the offsets that lead to them: a tiny PE puts the PE header inside the MS-DOS
+  // one, so one byte may be read by both
+  bytes => this as Byte[]
+  coff => bytes[lfanew..] as Coff
+  optional => bytes[lfanew + 24 ..< lfanew + 24 + coff.optional_size] as Optional
+  sections => (0..<coff.sections).map(bytes[lfanew + 24 + coff.optional_size + . * 40 ..][..<40] as Section)
+  // What a section holds in the file, up to its size in memory
+  held (section: Section) => bytes[section.raw_at ..< section.raw_at + (section.raw_size min section.virtual_size)]
+  // The code the program begins with: from the entry to the end of the section that runs and holds it
+  entered => sections{.runs && .holds(optional.entry)}.first
+  code => held(entered)[optional.entry - entered.virtual_address ..]
+
+  static level := {
+    {pe: PE} => pe
+  }
+}
+// A PE32+ program for x86-64 Windows, `xor eax, eax; ret` in one section, nothing imported; 184 bytes, written by hand as
+// tiny PEs are: the PE header begins four bytes in, so the MS-DOS header's last field, where the PE header is, is also the
+// optional header's SectionAlignment, and both are 4
+assert {
+  file := [0x4d, 0x5a, 0x00, 0x00, 0x50, 0x45, 0x00, 0x00, 0x64, 0x86, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x70, 0x00, 0x22, 0x00, 0x0b, 0x02, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xb4, 0x00, 0x00, 0x00, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x01, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+    0x04, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb8, 0x00,
+    0x00, 0x00, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2e, 0x74, 0x65, 0x78, 0x74, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
+    0xb4, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x20, 0x00, 0x00, 0x60, 0x31, 0xc0, 0xc3, 0x00]
+  pe := PE.read(file)
+  assert pe.lfanew == 4 && pe.coff.machine == 0x8664  // PEC1 the PE header is not at 4, or the machine is not x86-64
+  assert pe.optional.magic == 0x20B && pe.optional.entry == 0xb4 && pe.optional.image_base == 0x140000000  // PEC2 the optional header is not PE32+ entering at b4 with image base 140000000
+  assert pe.optional.section_alignment == pe.lfanew && pe.optional.directories.empty  // PEC3 the alignment is not where the PE header is, or a data directory is read
+  assert pe.sections.count == 1 && pe.sections[0].name == [".text" as Byte[], 0, 0, 0].flatten  // PEC4 the one section is not .text
+  assert pe.code == [0x31, 0xc0, 0xc3]  // PEC5 the code is not xor eax, eax; ret
+  assert pe as Byte[] == file  // PEC6 the file is not written back as it was read
+}
+assert Language.named(".exe") === PE  // PEC7 an .exe is not read as PE

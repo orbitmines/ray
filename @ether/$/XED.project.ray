@@ -1,0 +1,79 @@
+// XED, Intel's x86 encoder decoder (https://github.com/intelxed/xed): its datafiles describe the decoder's state as fields,
+// tables of rows that read and set them (nonterminals), and every instruction as a record of the patterns it is spelled
+// with and the operands each spells (https://intelxed.github.io/ref-manual/). Read here as the instruction set they
+// describe: a table a superposition of its rows, a row a pattern over the instruction's bits, narrowed by the state it asks
+XED := class: Language (parts: (Blank, Field | StateBit | Table | Record)[], Blank) {
+  static Blank := (" " | \t | \r | \n | ("#", (!\n)[]))[]
+  static Space := (" " | \t)[]{length > 0}
+  static Name := (Char.Word | "-")[]{length > 0}
+
+  // A field of the decoder's state (`xed-fields.txt`): `MOD SCALAR xed_bits_t 2 SUPPRESSED NOPRINT INTERNAL DO EO`
+  static Field := class (name: Name, Space, "SCALAR", Space, type: Name, Space, width: Decimal, (!\n)[])
+  // A state bit (`xed-state-bits.txt`): `mode64 MODE=2`, a word a pattern asks for what it means
+  static StateBit := class (name: Name, Space, means: Piece.join(Space))
+
+  // A piece of a pattern: a byte `0x0F`; bits `0b0101_0`; a field taking bits, one letter a bit, `REG[rrr]`, or fixing them,
+  // `MOD[0b11]`; a condition on a field, `MOD=3`, `MOD!=3`; a nonterminal read there, `SIMMz()`; a state bit, `mode64`;
+  // `otherwise`, a row taken when no other is
+  static Piece := ("0x", byte: Hexadecimal.String) | ("0b", bits: ("0" | "1" | "_")[])
+    | (field: Name, "[", (("0b", bits: ("0" | "1" | "_")[]) | letters: (Char.Letter | "_")[]), "]")
+    | (field: Name, comparison: "=" | "!=", value: Name) | (nonterminal: Name, "()") | word: Name
+  // A nonterminal (`NAME()::`) and its rows, `pieces | results`: what it reads and asks, and what it sets
+  static Table := class (name: Name, "()::", rows: (Blank, Row | Record)[])
+  static Row := class (pieces: Piece.join(Space), (Space, "|", Space, results: Piece{is (field, "=", value)}.join(Space))?)
+  // An instruction (`xed-isa.txt`): a record of `KEY : value` lines, its forms each a PATTERN with the OPERANDS and IFORM
+  // after it; ICLASS names it
+  static Record := class ("{", entries: (Blank, key: Name, Space?, ":", Space?, value: (!\n)[])[], Blank, "}") {
+    [key: String] => entries{.key == key}.first.value
+    iclass => this["ICLASS"]
+    forms => entries.enumerate{.value.key == "PATTERN"}.map(at => (
+      pattern: entries[at.index].value as Piece.join(Space),
+      operands: entries[at.index + 1 ..]{.key == "OPERANDS"}.first.value,
+      iform: entries[at.index + 1 ..]{.key == "IFORM"}.first?.value))
+  }
+
+  // A piece read as a pattern over the instruction's bits: bytes and bits as written, fields as places of their width
+  // (the same letters in several pieces one field), a condition narrowing what was read, a nonterminal a place of its
+  // table, a state bit the pieces it means
+  expanded (pieces: Piece[]) => pieces.map(.word && .word != "otherwise" ? expanded(parts{is StateBit && .name == .word}.first.means) : [.]).flatten
+  pattern (pieces: Piece[]) => expanded(pieces).reduce(read = () =>
+    .byte ? (read, .byte as Byte)
+    : .bits ? (read, .bits{!= "_"} as Binary{length == .bits{!= "_"}.count})
+    : .letters ? (read, (`.field`: Binary{length == .letters{!= "_"}.count}))
+    : .comparison == "=" ? read{`.field` == .value}
+    : .comparison == "!=" ? read{`.field` != .value}
+    : .nonterminal ? (read, (`.nonterminal`: table(.nonterminal)))
+    : read)
+  // A table: its rows superposed (`otherwise` the row read where no other is); a record's rows its forms, each with its
+  // iclass, operands and iform
+  table (name: String) => parts{is Table && .name == name}.first.rows.map(row => row is Record
+    ? row.forms.map(form => class (pattern(form.pattern)) { static iclass := row.iclass; static operands := form.operands; static iform := form.iform })
+    : [class (pattern(row.pieces)) { row.results.map({ `.field` := .value }) }]).flatten#
+
+  static level := {
+    {datafiles: XED} => datafiles
+  }
+}
+assert {
+  toy := XED.read(`MOD SCALAR xed_bits_t 2 SUPPRESSED NOPRINT INTERNAL DO EO
+REG SCALAR xed_bits_t 3 SUPPRESSED NOPRINT INTERNAL DO EO
+RM SCALAR xed_bits_t 3 SUPPRESSED NOPRINT INTERNAL DO EO
+INSTRUCTIONS()::
+{
+ICLASS      : ADD
+PATTERN     : 0x00 MOD[0b11] MOD=3 REG[rrr] RM[nnn]
+OPERANDS    : REG0=GPR8_B():rw REG1=GPR8_R():r
+IFORM       : ADD_GPR8_GPR8_00
+}
+{
+ICLASS      : NOP
+PATTERN     : 0x90
+OPERANDS    :
+}`)
+  add := toy.parts{is XED.Table}.first.rows.first
+  assert add.iclass == "ADD" && add.forms.first.pattern.first.byte == "00"  // XED1 the first record is not ADD, its pattern beginning 0x00
+  assert add.forms.first.pattern[1].(field == "MOD" && bits == "11") && add.forms.first.pattern[2].(field == "MOD" && comparison == "=" && value == "3")  // XED2 MOD[0b11] is not a field fixing 11, or MOD=3 not a condition
+  assert ([0x00, 0xc8] as toy.table("INSTRUCTIONS")).(iclass == "ADD" && REG == 1 && RM == 0)  // XED3 00 c8 is not add al, cl
+  assert [0x00, 0xc8] as toy.table("INSTRUCTIONS") as Byte[] == [0x00, 0xc8] && ([0x90] as toy.table("INSTRUCTIONS")).iclass == "NOP"  // XED4 add is not written back as read, or 90 is not NOP
+  assert !([0x00, 0x08] is toy.table("INSTRUCTIONS"))  // XED5 a ModRM byte with MOD 0 is read where MOD=3 is asked
+}

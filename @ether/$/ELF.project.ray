@@ -1,0 +1,98 @@
+// Executable and Linkable Format, System V ABI (https://gabi.xinuos.com/elf/): the identification says how wide an address
+// is and the order of a field's bytes, and every other field is read that way; the program headers (segments, what is
+// loaded where) and section headers (what a linker sees) are tables at offsets the header gives, the rest kept as it is
+ELF := class: Language (
+  // Identification (e_ident): the magic, the class (1 32-bit, 2 64-bit), the data encoding (1 least significant byte
+  // first, 2 most), the version, the OS ABI and its version, padding to sixteen bytes
+  0x7F, "ELF",
+  width: Byte{== 1 | 2},
+  order: Byte{== 1 | 2},
+  Byte{== 1} = 1,
+  abi: Byte = 0,
+  abi_version: Byte = 0,
+  Byte[]{length == 7},
+  header: Header<wide: width == 2, little: order == 1>,
+  *
+) {
+  static extensions := ".elf" | ".o" | ".so"
+
+  // A field of n bytes in the file's order, and an address or offset: four bytes or eight
+  static Field<n, little> := little ? <-Byte[]{length == n} : Byte[]{length == n}
+  static Address<wide, little> := Field<wide ? 8 : 4, little>
+
+  // The ELF header after the identification (Ch. 4, "ELF Header")
+  static Header<wide, little> := class (
+    type: Field<2, little>, machine: Field<2, little>, version: Field<4, little>,
+    entry: Address<wide, little>, phoff: Address<wide, little>, shoff: Address<wide, little>,
+    flags: Field<4, little>, ehsize: Field<2, little>,
+    phentsize: Field<2, little>, phnum: Field<2, little>,
+    shentsize: Field<2, little>, shnum: Field<2, little>, shstrndx: Field<2, little>
+  )
+  // A program header (Ch. 5, "Program Header"): a 64-bit one keeps its flags beside the type, so the eight-byte fields after
+  // them are aligned
+  static Segment<wide, little> := class (
+    type: Field<4, little>,
+    (flags: Field<4, little>) if wide,
+    offset: Address<wide, little>, vaddr: Address<wide, little>, paddr: Address<wide, little>,
+    filesz: Address<wide, little>, memsz: Address<wide, little>,
+    (flags: Field<4, little>) if !wide,
+    align: Address<wide, little>
+  ) {
+    // PT_LOAD, and PF_X: loaded, and run
+    runs => type == 1 && (flags ~&& 1) == 1
+    holds (address: Number) => vaddr <= address < vaddr + filesz
+  }
+  // A section header (Ch. 4, "Sections"); the first in the table is the null section, all zeros
+  static Section<wide, little> := class (
+    name: Field<4, little>, type: Field<4, little>, flags: Address<wide, little>,
+    addr: Address<wide, little>, offset: Address<wide, little>, size: Address<wide, little>,
+    link: Field<4, little>, info: Field<4, little>, addralign: Address<wide, little>, entsize: Address<wide, little>
+  )
+
+  bytes => this as Byte[]
+  table (offset: Number, size: Number, count: Number, T) => (0..<count).map(bytes[offset + . * size ..< offset + (. + 1) * size] as T)
+  segments => table(header.phoff, header.phentsize, header.phnum, Segment<wide: width == 2, little: order == 1>)
+  sections => table(header.shoff, header.shentsize, header.shnum, Section<wide: width == 2, little: order == 1>)
+  // What a segment holds in the file: `filesz` bytes from `offset` (what it holds in memory past them, up to `memsz`, is zeros)
+  held (segment: Segment) => bytes[segment.offset ..< segment.offset + segment.filesz]
+  // The code the program begins with: from the entry to the end of the loaded segment that runs and holds it
+  entered => segments{.runs && .holds(header.entry)}.first
+  code => held(entered)[header.entry - entered.vaddr ..]
+
+  static level := {
+    {elf: ELF} => elf
+  }
+}
+// The smallest x86-64 Linux program: an ELF header, one program header, and `mov al, 60; syscall` (exit with status 0),
+// loaded at 400000 with the whole file in one segment that runs; 124 bytes, written by hand
+assert {
+  file := [0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x3e, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x78, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x38, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0, 0x3c, 0x0f, 0x05]
+  elf := ELF.read(file)
+  assert elf.width == 2 && elf.order == 1  // ELF1 the file is not read as 64-bit, least significant byte first
+  assert elf.header.machine == 0x3E && elf.header.entry == 0x400078 && elf.header.phoff == 0x40  // ELF2 the header does not say x86-64, entry 400078, program headers at 40
+  assert elf.segments.count == 1 && elf.sections.empty  // ELF3 there is not one segment and no section
+  assert elf.segments[0].(vaddr == 0x400000 && filesz == 0x7c && runs)  // ELF4 the segment is not 7c bytes at 400000 that run
+  assert elf.code == [0xb0, 0x3c, 0x0f, 0x05]  // ELF5 the code is not mov al, 60; syscall
+  assert elf as Byte[] == file  // ELF6 the file is not written back as it was read
+}
+// A 32-bit ELF for MIPS, most significant byte first: `li v0, 4001; syscall`, and a section header table of one entry, the
+// null section every table begins with; 132 bytes, written by hand
+assert {
+  file := [0x7f, 0x45, 0x4c, 0x46, 0x01, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x08,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x00, 0x54, 0x00, 0x00, 0x00, 0x34, 0x00, 0x00, 0x00, 0x5c, 0x00, 0x00, 0x10, 0x00, 0x00, 0x34,
+    0x00, 0x20, 0x00, 0x01, 0x00, 0x28, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00,
+    0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5c, 0x00, 0x00, 0x00, 0x5c, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x10, 0x00, 0x24, 0x02,
+    0x0f, 0xa1, 0x00, 0x00, 0x00, 0x0c, [0x00] * 40].flatten
+  elf := ELF.read(file)
+  assert elf.width == 1 && elf.order == 2  // ELF7 the file is not read as 32-bit, most significant byte first
+  assert elf.header.machine == 8 && elf.header.entry == 0x400054 && elf.header.shoff == 0x5c && elf.header.flags == 0x1000  // ELF8 the header does not say MIPS, entry 400054, sections at 5c, flags 1000
+  assert elf.sections.count == 1 && elf.sections[0] as Byte[] == [0x00] * 40  // ELF9 the section table is not the null section alone
+  assert elf.segments[0].runs && elf.code == [0x24, 0x02, 0x0f, 0xa1, 0x00, 0x00, 0x00, 0x0c]  // ELF10 the code is not li v0, 4001; syscall
+  assert elf as Byte[] == file  // ELF11 the file is not written back as it was read
+}
+assert $.elf === ELF  // ELF12 $.elf is not ELF

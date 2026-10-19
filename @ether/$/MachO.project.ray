@@ -1,0 +1,73 @@
+// Mach-O, the format macOS and iOS load, as Apple's `<mach-o/loader.h>` writes it (https://github.com/apple-oss-distributions/xnu/blob/main/EXTERNAL_HEADERS/mach-o/loader.h):
+// a magic number that says the width and, by the way round the file holds it, the order of every field's bytes; a header;
+// then load commands, each saying what it is and how many bytes it takes, so one not read here is kept whole
+MachO := class: Language (
+  magic: Byte₄{== [0xCF, 0xFA, 0xED, 0xFE] | [0xCE, 0xFA, 0xED, 0xFE] | [0xFE, 0xED, 0xFA, 0xCF] | [0xFE, 0xED, 0xFA, 0xCE]},
+  header: Header<wide: 0xCF is magic#, little: magic[0] != 0xFE>,
+  commands: Command<little: magic[0] != 0xFE>[]{length == header.count},
+  *
+) {
+  static extensions := ".macho" | ".dylib" | ".bundle"
+  wide => 0xCF is magic#
+  little => magic[0] != 0xFE
+
+  static Field<n, little> := little ? <-Byte[]{length == n} : Byte[]{length == n}
+  static Address<wide, little> := Field<wide ? 8 : 4, little>
+  // `mach_header` / `mach_header_64`: the CPU (`CPU_TYPE_X86_64` 0x01000007, `CPU_TYPE_ARM64` 0x0100000C), the file's type,
+  // how many commands follow and how many bytes they take
+  static Header<wide, little> := class (
+    cpu: Field<4, little>, subtype: Field<4, little>, type: Field<4, little>,
+    count: Field<4, little>, size: Field<4, little>, flags: Field<4, little>,
+    (Field<4, little>) if wide
+  )
+  // `load_command`: what it is and its size, the rest as it lies
+  static Command<little> := class (cmd: Field<4, little>, size: Field<4, little>, body: Byte[]{length == size - 8})
+  // `segment_command_64` (LC_SEGMENT_64, 0x19) / `segment_command` (LC_SEGMENT, 0x1), and the sections in it
+  static Segment<wide, little> := class (
+    name: Byte[]{length == 16}, vmaddr: Address<wide, little>, vmsize: Address<wide, little>,
+    fileoff: Address<wide, little>, filesize: Address<wide, little>,
+    maxprot: Field<4, little>, initprot: Field<4, little>, count: Field<4, little>, flags: Field<4, little>,
+    sections: Section<wide, little>[]{length == count}
+  )
+  static Section<wide, little> := class (
+    name: Byte[]{length == 16}, segment: Byte[]{length == 16}, addr: Address<wide, little>, size: Address<wide, little>,
+    offset: Field<4, little>, align: Field<4, little>, reloff: Field<4, little>, nreloc: Field<4, little>, flags: Field<4, little>,
+    reserved: Field<4, little>[]{length == (wide ? 3 : 2)}
+  )
+  // `entry_point_command` (LC_MAIN, 0x80000028): where in the file the program begins, and its stack size
+  static Main<little> := class (entryoff: Field<8, little>, stacksize: Field<8, little>)
+
+  bytes => this as Byte[]
+  segments => commands{.cmd == (wide ? 0x19 : 0x1)}.map(.body as Segment<wide, little>)
+  main => commands{.cmd == 0x80000028}.first.body as Main<little>
+  // A segment by its name, padded with zeros to sixteen bytes
+  named (name: String) => segments{.name == [name as Byte[], [0] * (16 - name.count)].flatten}.first
+  // The code the program begins with: from the entry to the end of the section holding it in the file
+  code => segments.sections.flatten{.offset <= main.entryoff < .offset + .size}.first -- (section => bytes[main.entryoff ..< section.offset + section.size])
+
+  static level := {
+    {macho: MachO} => macho
+  }
+}
+// A 64-bit Mach-O for x86-64, `xor eax, eax; ret` as `main`: the header, a `__TEXT` segment holding the whole file with one
+// section, `__text`, and LC_MAIN saying where the program begins; 212 bytes, written by hand (macOS asks for more before it
+// runs one: `__PAGEZERO`, the dynamic linker, a signature, which are more load commands of the same shape)
+assert {
+  file := [0xcf, 0xfa, 0xed, 0xfe, 0x07, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+    0xb0, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19, 0x00, 0x00, 0x00, 0x98, 0x00, 0x00, 0x00, 0x5f, 0x5f,
+    0x54, 0x45, 0x58, 0x54, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+    0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xd4, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x5f, 0x74, 0x65,
+    0x78, 0x74, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x5f, 0x54, 0x45, 0x58, 0x54, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xd0, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xd0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x80, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x80, 0x18, 0x00, 0x00, 0x00, 0xd0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x31, 0xc0, 0xc3, 0x00]
+  macho := MachO.read(file)
+  assert macho.wide && macho.little && macho.header.cpu == 0x01000007  // MCH1 the file is not read as 64-bit x86-64, least significant byte first
+  assert macho.commands.count == 2 && macho.segments.count == 1  // MCH2 the commands are not a segment and one more
+  assert macho.named("__TEXT").(vmaddr == 0x100000000 && sections.count == 1)  // MCH3 the segment is not __TEXT at 100000000 with one section
+  assert macho.main.entryoff == 0xd0 && macho.code == [0x31, 0xc0, 0xc3]  // MCH4 the program does not begin at d0 with xor eax, eax; ret
+  assert macho as Byte[] == file  // MCH5 the file is not written back as it was read
+}
+assert $.macho === MachO  // MCH6 $.macho is not MachO

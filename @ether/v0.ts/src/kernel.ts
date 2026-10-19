@@ -51,7 +51,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // which reads on a value)
   // (LEFT, wanted of a reading only: it is a left side, a word nothing reads before what is read on it is declared there)
   // (TYPE_READER, refused only: a READER of a node other than the language's)
-  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, VALUE_OWN = 8192, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, GROWN_AT = 508;
+  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, VALUE_OWN = 8192, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMERAL_AT2 = 316, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, GROWN_AT = 508;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 32;
   // (a body: [count, ...steps: [kind, start, end, a, c, d]])
@@ -59,7 +59,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (what is said: [at, kind, a, c])
   // (what the host is told, with --debug: a statement read and done, a rule applied and done, one defined, memory out)
   const D_STATEMENT = 1, D_STATEMENT_END = 2, D_APPLY = 3, D_APPLY_END = 4, D_DEFINE = 5, D_OOM = 6, D_BLOCK = 7, D_BLOCK_END = 8, D_TEST = 9, D_TEST_END = 10, D_FAULT = 11, D_SAID = 12, D_TYPE = 13, D_TYPE_END = 14, D_RESULT = 22, D_SETTLED = 18, D_READING = 20, D_KEY = 30, D_FREE = 32;
-  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, HELD = 4096, DEPTH = 2000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
+  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
   const SCRATCH = 1024;
 
   // ---- memory
@@ -933,12 +933,14 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return holes === 1 ? 1 : 0;
   }
   // (whether rule r's next text from part k is an infix operator's, `-`, `==`, `plus`: not one that gives (`=`, `:=`, `+=`,
-  // `=>`), a member's `.`, a list's `,` or a choice's)
+  // `=>`), a member's `.`, a list's `,`, a choice's, or one that composes)
   function operator_next(r: number, k: number): number {
     for (let n = w(r + R_PARTS); k < n; k++) {
       const q = r + R_PART + PART * k, kind = w(q) & 15; if (kind === SPACE) continue; if (kind !== LITERAL) return 0;
       const a = w(q + 4), len = w(q + 8), last = b(a + len - 1);
       if (b(a) === 46 || b(a) === 44 || b(a) === 63 || b(a) === 58) return 0;
+      // (nor one that composes, `|` or `&`: either way the same, and read nearest it is not read again for each)
+      if (len === 1 && (b(a) === 124 || b(a) === 38)) return 0;
       if (last === 62 && len >= 2 && b(a + len - 2) === 61) return 0;
       if (last === 61 && !(len >= 2 && (b(a + len - 2) === 61 || b(a + len - 2) === 33 || b(a + len - 2) === 60 || b(a + len - 2) === 62))) return 0;
       // (and a hole after it: infix, not `{type}[]`)
@@ -1359,9 +1361,20 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   }
   function numeral_of(a: number, z: number): number {
     a = skip(a, z); while (z > a && b(z - 1) <= 32) z--;
+    // (in sixteen, `0x0C`: below 2^31)
+    if (z - a >= 3 && b(a) === 48 && (b(a + 1) === 120 || b(a + 1) === 88)) {
+      if (z - a > 10 || (z - a === 10 && b(a + 2) > 55)) return -1;
+      let h = 0; for (let i = a + 2; i < z; i++) { const c = b(i), d = c >= 48 && c <= 57 ? c - 48 : c >= 97 && c <= 102 ? c - 87 : c >= 65 && c <= 70 ? c - 55 : -1; if (d < 0) return -1; h = h * 16 + d; }
+      return h;
+    }
     if (a >= z || z - a > 9) return -1;
     let c = 0; for (let i = a; i < z; i++) { const d = b(i) - 48; if (d < 0 || d > 9) return -1; c = c * 10 + d; }
     return c;
+  }
+  // (a head the kernel's map names as a numeral's, `numeral `{head}``: one of two)
+  function numeral_head(hs: number, hn: number): number {
+    if (w(NUMERAL_AT) && hn === w(NUMERAL_AT + 4) && same(hs, w(NUMERAL_AT), hn)) return 1;
+    const second = w(NUMERAL_AT2); return second && hn === w(second + 4) && same(hs, w(second), hn) ? 1 : 0;
   }
   // (rule r, Number's own, one of those the kernel's map names (`number succ == < + …`): the name's first character (`succ`:
   // `s`, `==`: `=`); else 0)
@@ -2541,7 +2554,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (mapped(a, m, M_SUPERPOSED)) { set(SUPER_NODE, w(f + F_THIS)); return 0; }
       if (mapped(a, m, M_TRUTH)) { let q = rest; while (q < z && b(q) > 32) q++; set(TRUE_, block(t, rest, q, names, f, self, 0, 1, 0, self, 0)); set(FALSE_, block(t, skip(q, z), z, names, f, self, 0, 1, 0, self, 0)); return 0; }
       // (`numeral `{head}``: that rule, a numeral: the count its hole's digits (in ten) write, the same as its body answers)
-      if (mapped(a, m, M_NUMERAL)) { let q = rest, y = z; if (b(q) === 96 && b(y - 1) === 96 && y - q > 1) { q++; y--; } for (let o = latest(w(GLOBAL)), k = 0; o && k < 1 << 20; o = w(o), k++) { const hd = w(o + R_HEAD); if (hd && w(hd + N_B) - w(hd + N_A) === y - q && same(q, w(hd + N_A), y - q)) set(o + R_FLAGS, w(o + R_FLAGS) | NUMERAL); } set(NUMERAL_AT, q); set(NUMERAL_AT + 4, y - q); return 0; }
+      if (mapped(a, m, M_NUMERAL)) { let q = rest, y = z; if (b(q) === 96 && b(y - 1) === 96 && y - q > 1) { q++; y--; } for (let o = latest(w(GLOBAL)), k = 0; o && k < 1 << 20; o = w(o), k++) { const hd = w(o + R_HEAD); if (hd && w(hd + N_B) - w(hd + N_A) === y - q && same(q, w(hd + N_A), y - q)) set(o + R_FLAGS, w(o + R_FLAGS) | NUMERAL); } if (w(NUMERAL_AT) && !(y - q === w(NUMERAL_AT + 4) && same(q, w(NUMERAL_AT), y - q))) { const second = alloc(8); set(second, q); set(second + 4, y - q); set(NUMERAL_AT2, second); } else { set(NUMERAL_AT, q); set(NUMERAL_AT + 4, y - q); } return 0; }
       // (`number op a b`: of two counts (or Numbers written one after another down to zero), what op answers, as the language's
       // rules do; of anything else, nothing (the language's rule then))
       if (mapped(a, m, M_NUMBER)) { let o = rest; while (o < z && b(o) > 32) o++; if (o - rest === 4 && same(rest, w(w(WORDS) + 8 * W_NEXT), 4)) { const x = block(t, skip(o, z), z, names, f, self, 0, 1, 0, self, 0), c = stopped(t) ? -1 : count_of(t, x, names, f); return c > 0 ? counted(c - 1) : w(NOTHING); } set(NUMBERS, w(f + F_THIS)); set(NUMBER_OPS, rest); set(NUMBER_OPS + 4, z - rest); return 0; }
@@ -2691,7 +2704,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (the map's `cuts`: of a list of types and a text, the kernel's cut where it can tell; else the language's loop)
     if ((w(rule + R_FLAGS) & CUTS) && !w(t + T_DECL) && w(rule + R_HOLES) === 2) { const l = valued(t, applied + F_TAKES), x = valued(t, applied + F_TAKES + TAKE); if (stopped(t)) return 0; const c = cut_of(t, l, x); if (c) return c; }
     // (a numeral the map names whose head was made again, its type read later: named by its head as written)
-    if (w(NUMERAL_AT) && !(w(rule + R_FLAGS) & NUMERAL)) { const hd = w(rule + R_HEAD); if (hd && w(hd + N_B) - w(hd + N_A) === w(NUMERAL_AT + 4) && same(w(hd + N_A), w(NUMERAL_AT), w(NUMERAL_AT + 4))) set(rule + R_FLAGS, w(rule + R_FLAGS) | NUMERAL); }
+    if (w(NUMERAL_AT) && !(w(rule + R_FLAGS) & NUMERAL)) { const hd = w(rule + R_HEAD); if (hd && numeral_head(w(hd + N_A), w(hd + N_B) - w(hd + N_A))) set(rule + R_FLAGS, w(rule + R_FLAGS) | NUMERAL); }
     if (w(SUPER_NODE) && w(rule + R_OWNER) === w(SUPER_NODE) && !w(rule + R_HOLES)) { const hd = w(rule + R_HEAD); if (hd && w(hd + N_B) - w(hd + N_A) === 10 && same(w(hd + N_A), w(w(MAPPED) + 8 * M_SUPERPOSED), 10)) return superposed_node(self, 0) ? w(TRUE_) : w(FALSE_); }
     if ((w(rule + R_FLAGS) & NUMERAL) && w(COUNTED)) { const c = numeral_of(w(caps), w(caps + 4)); if (c >= 0) return counted(c); }
     // (Number's `succ`, on a count: the one after it)
@@ -3470,7 +3483,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const head_ = node(IS_HEAD, s, e, w(GLOBAL) || (vis ? owner(vis) : 0), 0); set(w(head_ + N_BASE) + R_CLOSURE, vis ? owner(vis) : 0);
     set(rule + R_HEAD, head_);
     // (a numeral, as the kernel's map names it (`numeral `{head}``, read before the rule is): flagged when it is defined)
-    if (w(NUMERAL_AT) && e - s === w(NUMERAL_AT + 4) && same(s, w(NUMERAL_AT), e - s)) set(rule + R_FLAGS, w(rule + R_FLAGS) | NUMERAL);
+    if (numeral_head(s, e - s)) set(rule + R_FLAGS, w(rule + R_FLAGS) | NUMERAL);
     // (one superposing, as the map names it (`superposing `{head}``, read before the library defines it): flagged so too)
     if ((w(SUPERPOSING_AT) && e - s === w(SUPERPOSING_AT + 4) && same(s, w(SUPERPOSING_AT), e - s)) || (w(SUPERPOSING_AT + 8) && e - s === w(SUPERPOSING_AT + 12) && same(s, w(SUPERPOSING_AT + 8), e - s))) set(rule + R_FLAGS, w(rule + R_FLAGS) | SUPERPOSING);
     // (a method, named first, whose parameters have types, `as (base: Number.Base)`: those are part of its pattern, asked once, of what it is

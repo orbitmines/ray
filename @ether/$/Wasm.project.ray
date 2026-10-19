@@ -62,7 +62,7 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   static VectorType := enum v128 (code: 0x7B)
   static AbsoluteHeapType := enum exn (code: 0x69) | array (code: 0x6A) | struct (code: 0x6B) | i31 (code: 0x6C) | eq (code: 0x6D) | any (code: 0x6E)
     | extern (code: 0x6F) | func (code: 0x70) | none (code: 0x71) | noextern (code: 0x72) | nofunc (code: 0x73) | noexn (code: 0x74)
-  static HeapType := AbsoluteHeapType | (type: S33{value >= 0})
+  static HeapType := AbsoluteHeapType | (index: S33{value >= 0})
   // (0x63 `ref null ht`, 0x64 `ref ht`, an absolute heap type alone `ref null` of it: `funcref` 0x70, `externref` 0x6F)
   static ReferenceType := (0x63, heap: HeapType) | (0x64, heap: HeapType) | (heap: AbsoluteHeapType)
   static ValueType := NumberType | VectorType | ReferenceType
@@ -70,23 +70,23 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   // (composite types: an array of a field, a struct of fields, a function; a field a value or a packed type, mutable 0x01)
   static PackedType := enum i16 (code: 0x77) | i8 (code: 0x78)
   static StorageType := ValueType | PackedType
-  static FieldType := (type: StorageType, mutable: 0x00 | 0x01)
+  static FieldType := (storage: StorageType, mutable: 0x00 | 0x01)
   static ArrayType := (0x5E, field: FieldType)
   static StructType := (0x5F, fields: vec(FieldType))
   static FunctionType := (0x60, parameters: ResultType, results: ResultType)
   static CompositeType := ArrayType | StructType | FunctionType
   // (0x4F `sub final`, 0x50 `sub` (open to subtypes), the supertypes type indices; a composite type alone `sub final` of none)
-  static SubType := (0x4F, supertypes: vec(U32), type: CompositeType) | (0x50, supertypes: vec(U32), type: CompositeType) | (type: CompositeType)
+  static SubType := (0x4F, supertypes: vec(U32), composite: CompositeType) | (0x50, supertypes: vec(U32), composite: CompositeType) | (composite: CompositeType)
   // (0x4E a group of mutually recursive types, a sub type alone a group of one)
-  static RecursiveType := (0x4E, types: vec(SubType)) | (type: SubType)
+  static RecursiveType := (0x4E, types: vec(SubType)) | (sub: SubType)
   // (the flags' bit 0: a maximum follows; bit 1: shared (threads; only with a maximum); bit 2: 64-bit addresses (i64), else
   // i32 and both below 2 ^ 32)
   static Limits := (flags: 0x00 | 0x04, min: U64) | (flags: 0x01 | 0x03 | 0x05 | 0x07, min: U64, max: U64)
   static MemoryType := Limits
   static TableType := (element: ReferenceType, limits: Limits)
-  static GlobalType := (type: ValueType, mutable: 0x00 | 0x01)
+  static GlobalType := (value: ValueType, mutable: 0x00 | 0x01)
   // (a tag: the index of its function type)
-  static TagType := (0x00, type: U32)
+  static TagType := (0x00, index: U32)
   static ExternalType := (0x00, function: U32) | (0x01, table: TableType) | (0x02, memory: MemoryType) | (0x03, global: GlobalType) | (0x04, tag: TagType)
   static ExternalIndex := (0x00, function: U32) | (0x01, table: U32) | (0x02, memory: U32) | (0x03, global: U32) | (0x04, tag: U32)
 
@@ -94,8 +94,8 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   static Import := (module: Name, name: Name, ExternalType)
   static Export := (name: Name, ExternalIndex)
   // (a table of a type's null references, or 0x40 0x00 and the expression of its initial value)
-  static Table := (type: TableType) | (0x40, 0x00, type: TableType, value: Expression)
-  static Global := (type: GlobalType, value: Expression)
+  static Table := (table: TableType) | (0x40, 0x00, table: TableType, value: Expression)
+  static Global := (global: GlobalType, value: Expression)
   // (an element segment, its leading U32 a bit field: bit 0 passive or declarative, else active; bit 1 a table index (active),
   // else declarative (not active); bit 2 a reference type and expressions, else an element kind (0x00, `ref func`) and function
   // indices. Active ones without a table index: table 0, `ref func` (0) or `ref null func` (4))
@@ -104,12 +104,12 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
     | (0x02, table: U32, at: Expression, kind: 0x00, functions: vec(U32))
     | (0x03, kind: 0x00, functions: vec(U32))
     | (0x04, at: Expression, values: vec(Expression))
-    | (0x05, type: ReferenceType, values: vec(Expression))
-    | (0x06, table: U32, at: Expression, type: ReferenceType, values: vec(Expression))
-    | (0x07, type: ReferenceType, values: vec(Expression))
+    | (0x05, reference: ReferenceType, values: vec(Expression))
+    | (0x06, table: U32, at: Expression, reference: ReferenceType, values: vec(Expression))
+    | (0x07, reference: ReferenceType, values: vec(Expression))
   // (a data segment, its leading U32 bit 0 passive, bit 1 a memory index; active without one: memory 0)
   static DataSegment := (0x00, at: Expression, bytes: vec(Byte)) | (0x01, bytes: vec(Byte)) | (0x02, memory: U32, at: Expression, bytes: vec(Byte))
-  static Code := (size: U32 = function.bytes.count, function: (locals: vec((count: U32, type: ValueType)), body: Expression))
+  static Code := (size: U32 = function.bytes.count, function: (locals: vec((count: U32, value: ValueType)), body: Expression))
 
   // Instructions (5.4): an op, then what it takes. An expression is instructions until `end`.
   // (each op named as WAT writes it: `prefix.name` the enum `prefix`'s member `name`, the dots after the first `_`
@@ -129,11 +129,11 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   static Lane := Byte
   // Control (5.4.1) and parametric (5.4.2) instructions, the ones WAT writes without a prefix
   static Op := enum unreachable (code: 0x00) | nop (code: 0x01) | block (code: 0x02, takes: BlockType = 0x40)
-    | loop (code: 0x03, takes: BlockType = 0x40) | if (code: 0x04, takes: BlockType = 0x40) | else (code: 0x05) | throw (code: 0x08, takes: U32)
+    | `loop` (code: 0x03, takes: BlockType = 0x40) | `if` (code: 0x04, takes: BlockType = 0x40) | `else` (code: 0x05) | throw (code: 0x08, takes: U32)
     | throw_ref (code: 0x0A) | end (code: 0x0B) | br (code: 0x0C, takes: U32) | br_if (code: 0x0D, takes: U32)
-    | br_table (code: 0x0E, takes: (vec(U32), U32)) | return (code: 0x0F) | call (code: 0x10, takes: U32)
-    | call_indirect (code: 0x11, takes: (type: U32, table: U32)) | return_call (code: 0x12, takes: U32)
-    | return_call_indirect (code: 0x13, takes: (type: U32, table: U32)) | call_ref (code: 0x14, takes: U32) | return_call_ref (code: 0x15, takes: U32)
+    | br_table (code: 0x0E, takes: (vec(U32), U32)) | `return` (code: 0x0F) | call (code: 0x10, takes: U32)
+    | call_indirect (code: 0x11, takes: (index: U32, table: U32)) | return_call (code: 0x12, takes: U32)
+    | return_call_indirect (code: 0x13, takes: (index: U32, table: U32)) | call_ref (code: 0x14, takes: U32) | return_call_ref (code: 0x15, takes: U32)
     | drop (code: 0x1A) | select (code: 0x1B) | select_t (code: 0x1C, takes: vec(ValueType)) | try_table (code: 0x1F, takes: (BlockType, vec(Catch)))
     | br_on_null (code: 0xD5, takes: U32) | br_on_non_null (code: 0xD6, takes: U32)
     | br_on_cast (code: (0xFB, 24), takes: (CastOp, label: U32, from: HeapType, to: HeapType))
@@ -157,14 +157,14 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
     | cast (code: (0xFB, 22), takes: HeapType) | cast_null (code: (0xFB, 23), takes: HeapType) | i31 (code: (0xFB, 28))
   // Aggregate instructions (5.4.7), 0xFB
   static struct := enum new (code: (0xFB, 0), takes: U32) | new_default (code: (0xFB, 1), takes: U32)
-    | get (code: (0xFB, 2), takes: (type: U32, field: U32)) | get_s (code: (0xFB, 3), takes: (type: U32, field: U32))
-    | get_u (code: (0xFB, 4), takes: (type: U32, field: U32)) | set (code: (0xFB, 5), takes: (type: U32, field: U32))
+    | get (code: (0xFB, 2), takes: (index: U32, field: U32)) | get_s (code: (0xFB, 3), takes: (index: U32, field: U32))
+    | get_u (code: (0xFB, 4), takes: (index: U32, field: U32)) | set (code: (0xFB, 5), takes: (index: U32, field: U32))
   static array := enum new (code: (0xFB, 6), takes: U32) | new_default (code: (0xFB, 7), takes: U32)
-    | new_fixed (code: (0xFB, 8), takes: (type: U32, count: U32)) | new_data (code: (0xFB, 9), takes: (type: U32, data: U32))
-    | new_elem (code: (0xFB, 10), takes: (type: U32, elem: U32)) | get (code: (0xFB, 11), takes: U32) | get_s (code: (0xFB, 12), takes: U32)
+    | new_fixed (code: (0xFB, 8), takes: (index: U32, count: U32)) | new_data (code: (0xFB, 9), takes: (index: U32, data: U32))
+    | new_elem (code: (0xFB, 10), takes: (index: U32, elem: U32)) | get (code: (0xFB, 11), takes: U32) | get_s (code: (0xFB, 12), takes: U32)
     | get_u (code: (0xFB, 13), takes: U32) | set (code: (0xFB, 14), takes: U32) | len (code: (0xFB, 15)) | fill (code: (0xFB, 16), takes: U32)
-    | copy (code: (0xFB, 17), takes: (to: U32, from: U32)) | init_data (code: (0xFB, 18), takes: (type: U32, data: U32))
-    | init_elem (code: (0xFB, 19), takes: (type: U32, elem: U32))
+    | copy (code: (0xFB, 17), takes: (to: U32, from: U32)) | init_data (code: (0xFB, 18), takes: (index: U32, data: U32))
+    | init_elem (code: (0xFB, 19), takes: (index: U32, elem: U32))
   static i31 := enum get_s (code: (0xFB, 29)) | get_u (code: (0xFB, 30))
   static any := enum convert_extern (code: (0xFB, 26))
   static extern := enum convert_any (code: (0xFB, 27))
@@ -324,12 +324,12 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
       (id: 1, data: [(parameters: [i32], results: [i32])]),
       (id: 2, data: [(module: "m", name: "memory", memory: (flags: 0x03, min: program.pages, max: program.pages))]),
       (id: 3, data: program.rules.map(0)),
-      (id: 6, data: [(type: (i32, mutable: 0x01), value: [i32.const, program.image.count])]),
+      (id: 6, data: [(global: (value: i32, mutable: 0x01), value: [i32.const, program.image.count])]),
       (id: 7, data: program.rules.map((name: .name, function: .index))),
       (id: 10, data: program.rules),
       (id: 11, data: [(at: [i32.const, 0], bytes: program.image)])
     ])
-    {rule: Expression.Rule} => (locals: [(count: 2, type: i32)], body: [
+    {rule: Expression.Rule} => (locals: [(count: 2, value: i32)], body: [
       loop, rule.statements.reduce(cases = [local.get, 1, br_table, rule.statements.index#, 0] => [block, cases, end, .]), end, local.get, 2
     ])
     {jump: `external goto`} => jump.condition ?? (i32.const, 1), if, i32.const, jump.label.index, local.set, 1, br, jump.rule.statements.count - jump.index, end

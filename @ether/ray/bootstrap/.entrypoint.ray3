@@ -671,13 +671,6 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
   }
   true
 }
-{name} := lazily {default} ^keyword => {
-  {name} => {
-    kept := ({default})
-    {name} = kept
-    kept
-  }
-}
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses.
 {method}(.{section}) ^punctuation => .{method}((it) => it.(.{section}))
@@ -1423,6 +1416,14 @@ dynamics := None
 {name} := {value} ^punctuation => {
   value
   ({name} => value) given (value)
+}
+// (one given lazily, `x := lazily v`: v read when x is first asked for, then kept; after `:=`, which would read it first)
+{name} := lazily {default} ^keyword => {
+  {name} => {
+    kept := ({default})
+    {name} = kept
+    kept
+  }
 }
 // (one place in brackets, `(x: T) := v`: given the value, a text read by T as a field's is (on a left side it is no record,
 // `(x: 1)`))

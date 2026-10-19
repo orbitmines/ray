@@ -514,6 +514,7 @@ export async function main() {
         return lines;
       })();
 
+      (Program.frontend as unknown as { allocs?: () => void }).allocs?.();
       console.error(
         `#${language.files.count || 1} @ ${(loc / 1000).toFixed(1)}k LOC ` +
         `(--threads ${language.workers.length || 1}, ${String(kwargs.target ?? env.target)}) ` +
@@ -2435,7 +2436,7 @@ export class Ray extends Language<FileStore> {
     this.heap = heap; this.i32 = new Int32Array(heap.buffer); this.u8 = new Uint8Array(heap.buffer);
     const first = Atomics.compareExchange(this.i32, HEAP >> 2, 0, START) === 0;
     // (this thread's words; the kernel compiled for it)
-    this.t = this.alloc(1024); this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
+    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
     this.hosts.debug = (kind, a, b, c) => this.debugged(kind, a, b, c);
     this.hosts.compiled = (fn, t, f, from) => this.compiled_[fn - 1](t, f, from);
     this.hosts.told = (at, kind, a, c) => { this.tell(at, kind, a, c); return 0; };
@@ -2614,6 +2615,21 @@ export class Ray extends Language<FileStore> {
   listen(): [number, string, string?][] {
     if (this.w(108) && !this.heard.has('oom')) { this.heard.add('oom'); this.emit(0, `out of memory (${this.u8.length} bytes): what is said after this may be garbage`); }
     return this.said;
+  }
+  // (`RAY_ALLOCS`: the rules whose applications allocated the most themselves, with how many applications)
+  allocs() {
+    if (!(typeof process !== 'undefined' && process.env.RAY_ALLOCS) || !this.t) return;
+    const table = this.w(this.t + 544); if (!table) return;
+    const rows: [number, number, number, number][] = [];
+    for (let h = 0; h < 4096; h++) { const m = table + 16 * h, rule = this.w(m); if (rule) rows.push([rule, this.w(m + 4) >>> 0, this.w(m + 8), this.w(m + 12)]); }
+    if (process.env.RAY_ALLOCS_BY === 'escapes') rows.sort((x, y) => y[3] - x[3]); else rows.sort((x, y) => y[1] - x[1]);
+    say(`ALLOCS escapes: heap ${this.w(this.t + 596)}; by thread slot ${Array.from({ length: 64 }, (_, i) => [i * 4, this.w(this.t + 600 + 4 * i)]).filter(([, n]) => n > 1000).map(([o, n]) => `${o}:${n}`).join(' ')}`);
+    say(`ALLOCS total ${((this.w(this.t + 540) >>> 0) / 1048576).toFixed(1)} MB allocated (${((this.w(this.t + 552) >>> 0) / 1048576).toFixed(1)} MB quietly, in checks), ${(rows.reduce((n, r) => n + r[1], 0) / 1048576).toFixed(1)} MB in applications`);
+    for (const [rule, bytes, count, escapes] of rows.slice(0, Number(process.env.RAY_ALLOCS) > 1 ? Number(process.env.RAY_ALLOCS) : 40)) {
+      const hd = this.w(rule + 32), bs = this.w(rule + 16), be = this.w(rule + 20), head = hd ? this.text(this.w(hd + 12), this.w(hd + 16)).replace(/\s+/g, ' ').slice(0, 70) : '';
+      const body = bs && be > bs ? this.text(bs, Math.min(be, bs + 70)).replace(/\s+/g, ' ') : '';
+      say(`ALLOCS ${(bytes / 1048576).toFixed(1)} MB ${count}× ${escapes} escaping \`${head}\` => \`${body}\` (${bs ? this.where(bs) : hd ? this.where(this.w(hd + 12)) : '?'})`);
+    }
   }
   tell(said_at: number, kind: number, a: number, c: number) {
     // (about text the reader made, in a test: said where the test is)

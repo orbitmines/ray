@@ -1272,6 +1272,20 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     for (let r = latest(nd), k = 0; r && r !== w(nd + N_BASE) && k < 1 << 16; r = w(r), k++) { const hd = w(r + R_HEAD); if (!w(r + R_HOLES) && hd && trimmed(w(hd + N_A), w(hd + N_B) - w(hd + N_A), s, e)) return 1; }
     return 0;
   }
+  // (the value a name was given in a node before its place p was made there: a value, not a place; none, 0)
+  function given_already(nd: number, s: number, e: number, p: number): number {
+    if (!nd || (w(nd + N_IS) !== IS_NODE && w(nd + N_IS) !== IS_FRAME)) return 0;
+    let past = 0;
+    for (let r = latest(nd), k = 0; r && r !== w(nd + N_BASE) && k < 1 << 16; r = w(r), k++) {
+      const hd = w(r + R_HEAD); if (w(r + R_HOLES) || !hd || !trimmed(w(hd + N_A), w(hd + N_B) - w(hd + N_A), s, e)) continue;
+      if (w(r + R_KIND) !== VALUE) return 0;
+      const bs = w(r + R_BS);
+      if (bs === p) { past = 1; continue; }
+      if (!past) continue;
+      return bs && w(bs + N_IS) !== IS_PLACE ? bs : 0;
+    }
+    return 0;
+  }
   // (what a place's name was given where it was named, a value (`x: T` given its type); none, 0)
   function place_value(t: number, p: number): number {
     const sc = place_in(p); if (!sc) return 0;
@@ -2564,6 +2578,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         if (q >= z) return v && w(v + N_IS) === IS_PLACE ? w(TRUE_) : w(FALSE_);
         if (v && w(v + N_IS) === IS_PLACE) {
           const given = block(t, skip(q, z), z, names, f, self, 0, 1, 0, self, 0);
+          // (one given a value there before, `x: T` read again where x was given (a header read again in what it was read
+          // into): that value kept, the type on its place)
+          const kept_ = w(v + N_A) < w(v + N_B) ? given_already(place_in(v) || self, w(v + N_A), w(v + N_B), v) : 0;
+          if (kept_) { bound(w(v + N_A), w(v + N_B), place_in(v) || self, kept_); if (given) type_written_on(t, v, names, skip(q, z), z); return kept_; }
           if (given && w(v + N_A) < w(v + N_B)) bound(w(v + N_A), w(v + N_B), place_in(v) || self, given);
           if (given) type_written_on(t, v, names, skip(q, z), z);
           return given;

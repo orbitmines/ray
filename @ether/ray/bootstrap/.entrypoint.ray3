@@ -1644,22 +1644,28 @@ link_named (at) => at ? ((at.written_name !== None) || link_named(at.next)) : fa
 {each_type_of} read_each {each_text_of} ^keyword => {
   each_type := (each_type_of).each
   each_read := Array.new
-  each_after := Array.new.append(each_type).append(each_type_of)
   each_rest := each_text_of
   while (each_rest !== None) && !(each_rest.empty) {
-    each_cut := ((each_after.head) first_cut_in (each_rest))
+    each_cut := ordered_cut(each_type, each_type_of, each_rest)
     each_piece := (each_cut === None) ? each_rest : each_rest.until(each_cut)
     each_alternative := ((each_type) alternative_of (each_piece))
     each_value := ((((each_alternative === None) ? each_type : each_alternative.value)) read_span (each_piece))
     each_read.append(each_value)
     if (each_alternative !== None) && (each_alternative.written_name !== None) {
-      each_was := member_named(each_read, each_alternative.written_name)
-      member_given(each_read, each_alternative.written_name, ((each_was === None) ? each_value : (each_was | each_value)))
+      // (named on the list itself: a list given to a function among other arguments is spread into them)
+      each_name := each_alternative.written_name
+      each_was := external member (each_read) (each_name)
+      external member (each_read) (each_name) (((each_was === None) ? each_value : (each_was | each_value)))
     }
     each_rest = (each_cut === None) ? None : each_cut
   }
   each_read
 }
+// (an element that is alternatives, read in their order: the cut of the first that reads a span before what the rest of the
+// list reads (`(LHS: `{LHS}` | String)[]`, `{LHS}` before a character of String); else the element's)
+ordered_cut (ordered_type, ordered_list, ordered_text) => ((ordered_type).superposes === true) ? alternative_cut((ordered_type).components.head, ordered_list, ordered_text) : ((Array.new.append(ordered_type).append(ordered_list).head) first_cut_in (ordered_text))
+// (one that reads all that is left: nothing left after it)
+alternative_cut (cut_alternative, cut_list, cut_from) => cut_alternative ? (((Array.new.append(cut_alternative.value).append(cut_list).head) first_cut_in (cut_from)) ?? ((((cut_alternative.value) fits_span (cut_from)) ? cut_from.past(cut_from) : None) ?? alternative_cut(cut_alternative.next, cut_list, cut_from))) : None
 // (of a superposition, the component a span is, as a link of its components; none, None)
 {alternative_type_of} alternative_of {alternative_text_of} ^keyword => ((alternative_type_of).superposes === true) ? alternative_at((alternative_type_of).components.head, alternative_text_of) : None
 alternative_at (at, span) => at ? ((((at.value) fits_span (span))) ? at : alternative_at(at.next, span)) : None

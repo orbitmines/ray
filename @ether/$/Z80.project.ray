@@ -1,0 +1,37 @@
+@sleigh
+
+// The Zilog Z80 (Z80 CPU User Manual, UM0080), made from Ghidra's own description of it at a pinned version and written
+// by hand nowhere: its registers, memory and instructions are what `z80.slaspec` says
+Z80 := class: Language (instructions: Instruction[], rest: Byte[]) {
+  static Description := @https://raw.githubusercontent.com/NationalSecurityAgency/ghidra/c427352/Ghidra/Processors/Z80/data/languages/z80.slaspec as SLEIGH
+  static Machine := Description.machine
+  static Instruction := Description.table()
+
+  // A step: the instruction in memory at PC, run there, PC where it goes next
+  static step (machine: Machine) => machine ~~ .(PC = (ram[PC..] as (instruction: Instruction, *)).instruction(PC))
+
+  // Registers laid over each other (UM0080, "CPU Registers"): HL is H above L, two bytes of the register space
+  assert {
+    cpu := Z80.Machine()
+    cpu.(H = 0x12; L = 0x34)
+    assert cpu.HL == 0x1234 && cpu.HL.count == 2  // ZED1 HL is not two bytes, H above L
+  }
+  assert Z80.Description.fields{.name == "op6_2"}.first.(low == 6 && high == 7)  // ZED2 op6_2 is not bits 6 and 7
+  assert (Z80.Description.table("cc").constructors.first as String) == "\"NZ\""  // ZED3 cc's first condition is not NZ
+  // Loads (UM0080, "8-Bit Load Group"): LD A,B; LD A,n; LD A,(IX+d); and DD 76 is not one, `bits3_3 != 0x6` leaving it out
+  assert ([0x78] as Z80.Instruction).(mnemonic == "LD" && reg3_3 == 7)  // ZED4 78 is not LD A,B
+  assert ([0x3e, 0x42] as Z80.Instruction).(mnemonic == "LD" && imm8 == 0x42)  // ZED5 3e 42 is not LD A,42
+  assert ([0xdd, 0x7e, 0x05] as Z80.Instruction).(mnemonic == "LD" && ixMem8.simm8 == 5)  // ZED6 dd 7e 05 is not LD A,(IX+5)
+  assert !(([0xdd, 0x76, 0x05] as Z80.Instruction).mnemonic == "LD")  // ZED7 dd 76 is read as LD
+  // Jumps (UM0080, "Jump Group"): JP nn; JR NZ,e; JP Z,nn
+  assert ([0xc3, 0x34, 0x12] as Z80.Instruction).(mnemonic == "JP" && imm16 == 0x1234)  // ZED8 c3 34 12 is not JP 1234
+  assert ([0x20, 0xfe] as Z80.Instruction).(mnemonic == "JR" && (cc as String) == "\"NZ\"")  // ZED9 20 fe is not JR NZ
+  assert ([0xca, 0x34, 0x12] as Z80.Instruction).(mnemonic == "JP" && (cc as String) == "\"Z\"")  // ZED10 ca 34 12 is not JP Z
+  assert [[0x3e, 0x42], [0xdd, 0x7e, 0x05], [0xca, 0x34, 0x12]].every(. as Z80.Instruction as Byte[] == .)  // ZED11 an instruction is not written back as the bytes it was read from
+  assert {
+    cpu := Z80.Machine()
+    cpu.ram[0 ..< 2] = [0x3e, 0x42]
+    step(cpu)
+    assert cpu.A == 0x42 && cpu.PC == 2  // ZED12 LD A,42 does not load 42 and go on
+  }
+}

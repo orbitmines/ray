@@ -1,0 +1,67 @@
+@xed
+@sleigh
+@elf
+
+// x86-64 (Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 2), made from descriptions at pinned
+// versions and written by hand nowhere: how an instruction is spelled from Intel's XED datafiles, what it does from
+// Ghidra's description of it. One instruction has many spellings (`add eax, 1` is 05 01 00 00 00, 83 c0 01 and 81 c0 01
+// 00 00 00; prefixes come in any order, repeat, or say nothing), and what was read is kept as it was spelled
+X86 := class: Language (instructions: Instruction[], rest: Byte[]) {
+  // (the datafiles read as one, in the order their `files.cfg` lists them; the decoder in 64-bit mode, MODE=2, from the
+  // root nonterminal: the prefixes as `PREFIXES()` reads them, then `INSTRUCTIONS()`)
+  static Datafiles := @https://github.com/intelxed/xed/tree/0bcb623/datafiles as XED
+  static Description := @https://raw.githubusercontent.com/NationalSecurityAgency/ghidra/c427352/Ghidra/Processors/x86/data/languages/x86-64.slaspec as SLEIGH
+  static Machine := Description.machine
+  // An instruction: its spelling, and as `()` what the description's constructor for the same bytes does, at RIP
+  static Instruction := Datafiles.table("ISA"){MODE == 2}.map(form => form + { () => (RIP = (this as Byte[] as Description.table())(RIP)) })
+  // The same instruction spelled in another form: the form `like` was read with, solved for the fields that spell the
+  // instruction's operands, as a header writes what it is given
+  static spelled (instruction: Instruction, like: Instruction) => Datafiles.table("ISA"){.iform == like.iform}(operands: instruction.operands)
+
+  // Real code, in order (`objdump -d /bin/true`, GNU coreutils, x86-64): call; cs nopw 0x0(%rax,%rax,1); nop
+  assert {
+    code := X86.read([0xe8, 0xdb, 0xfd, 0xff, 0xff, 0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x90])
+    assert code.instructions.iclass == ["CALL_NEAR", "NOP", "NOP"] && code.rest.empty  // XA1 the bytes are not read as call, nopw, nop
+    assert code.instructions[1].(PREFIXES as Byte[] == [0x66, 0x2e] && BASE != None && (DISP as Byte[]).count == 4)  // XA2 nopw does not keep its prefixes in order, its SIB byte and four bytes of displacement
+    assert code as Byte[] == [0xe8, 0xdb, 0xfd, 0xff, 0xff, 0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x90]  // XA3 the code is not written back byte for byte
+  }
+  // A prologue and an epilogue: push rbp; mov rbp, rsp; push r14; push r13; push r12; push rbx; sub rsp, 0x90;
+  // mov rax, fs:0x28; mov [rbp-0x28], rax; xor eax, eax; cmp edi, 2; je; and jne rel32; pop rbx; pop r12; pop r13; pop r14;
+  // pop rbp; ret
+  assert {
+    prologue := [0x55, 0x48, 0x89, 0xe5, 0x41, 0x56, 0x41, 0x55, 0x41, 0x54, 0x53, 0x48, 0x81, 0xec, 0x90, 0x00, 0x00, 0x00,
+      0x64, 0x48, 0x8b, 0x04, 0x25, 0x28, 0x00, 0x00, 0x00, 0x48, 0x89, 0x45, 0xd8, 0x31, 0xc0, 0x83, 0xff, 0x02, 0x74, 0x25]
+    assert X86.read(prologue).instructions.iclass == ["PUSH", "MOV", "PUSH", "PUSH", "PUSH", "PUSH", "SUB", "MOV", "MOV", "XOR", "CMP", "JZ"]  // XA4 the prologue is not read as objdump reads it
+    assert X86.read(prologue) as Byte[] == prologue  // XA5 the prologue is not written back as it was read
+    epilogue := X86.read([0x0f, 0x85, 0xe9, 0x01, 0x00, 0x00, 0x5b, 0x41, 0x5c, 0x41, 0x5d, 0x41, 0x5e, 0x5d, 0xc3])
+    assert epilogue.instructions.iclass == ["JNZ", "POP", "POP", "POP", "POP", "POP", "RET_NEAR"]  // XA6 the epilogue is not jnz, five pops and ret
+    assert epilogue.instructions[2] as Byte[] == [0x41, 0x5c] && (epilogue.instructions[0].DISP as Byte[]).count == 4  // XA7 pop r12 does not keep its REX, or jnz its four bytes of displacement
+  }
+  // One instruction, three spellings: add eax, 1
+  assert {
+    five := [0x05, 0x01, 0x00, 0x00, 0x00] as X86.Instruction
+    eighty_three := [0x83, 0xc0, 0x01] as X86.Instruction
+    eighty_one := [0x81, 0xc0, 0x01, 0x00, 0x00, 0x00] as X86.Instruction
+    assert [five, eighty_three, eighty_one].every(.iclass == "ADD")  // XA8 not all three are ADD
+    assert [five, eighty_three, eighty_one].every(. as X86.Instruction as Byte[] == . as Byte[]) && five.operands == eighty_three.operands  // XA9 a spelling is not written back as itself, or the three do not mean the same
+    assert X86.spelled(eighty_three, like: five) as Byte[] == [0x05, 0x01, 0x00, 0x00, 0x00]  // XA10 83 c0 01 spelled in the form 05 was read with is not 05 01 00 00 00
+  }
+  // What does nothing is kept: a REX of no bits, prefixes in the other order
+  assert [0x40, 0x55] as X86.Instruction as Byte[] == [0x40, 0x55] && ([0x40, 0x55] as X86.Instruction).iclass == "PUSH"  // XA11 40 55 is not push rbp with its empty REX
+  assert [0x2e, 0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00] as X86.Instruction as Byte[] == [0x2e, 0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00]  // XA12 2e 66 0f 1f … is not written back in its own order
+  // An executable read off the disk end to end: ELF's smallest x86-64 Linux program, `mov al, 60; syscall`
+  assert {
+    file := [0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x3e, 0x00,
+      0x01, 0x00, 0x00, 0x00, 0x78, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x38, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x01, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0, 0x3c, 0x0f, 0x05]
+    code := X86.read(ELF.read(file).code)
+    assert code.instructions.iclass == ["MOV", "SYSCALL"] && code as Byte[] == [0xb0, 0x3c, 0x0f, 0x05]  // XA13 the entry's code is not mov al, 60; syscall, written back as it was
+    cpu := X86.Machine()
+    cpu.RIP = 0x400078
+    cpu.(code.instructions[0]())
+    assert cpu.AL == 60 && cpu.RIP == 0x40007a  // XA14 mov al, 60 does not load 60 and go on
+  }
+}

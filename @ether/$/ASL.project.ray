@@ -1,0 +1,133 @@
+// ASL, Arm's Architecture Specification Language (https://developer.arm.com/Architectures/Architecture%20Specification%20Language),
+// the pseudocode Arm's machine-readable release writes what each instruction does in: declarations, functions and
+// accessors (shared_pseudocode), and the `decode` and `execute` statements of an instruction. Read here as Ray: a bit
+// vector a Binary of its width, an integer a Number, a function a Ray function, a statement a Ray program by the rules of
+// `statements` where ASL writes it otherwise than Ray
+ASL := class: Language (definitions: (Blank, Definition)[], Blank) {
+  static extensions := ".asl"
+  static Blank := (" " | \t | \r | \n | Comment)[]
+  static Space := (" " | \t)[]
+  static Comment := ("//", (!\n)[]) | ("/*", (!"*/")[], "*/")
+  static Identifier := (Char.Letter | "_", (Char.Word | ".")[])
+  // Types: `bits(N)`, `bit`, `integer`, `boolean`, `real`, an enumeration or record by its name, a tuple
+  static Type := ("bits", Space, "(", width: Expression, ")") | "bit" | "integer" | "boolean" | "real" | "string"
+    | ("(", elements: Type.join(Space, ",", Space), ")") | name: Identifier
+  static typed (type: Type) => type.width ? Binary{length == type.width} : type == "bit" ? Binary₁ : type == "integer" ? Number.Signed
+    : type == "boolean" ? boolean : type == "real" ? Decimal.Real.Signed : type == "string" ? String : `type.name`
+  // Literals: `'0101'` a bit vector as written, `'1x0'` a pattern with x any bit, `0x3F`, `TRUE`
+  static Bits := ("'", digits: ("0" | "1" | " ")[], "'") as Binary{length == digits{!= " "}.count}
+  static Mask := ("'", digits: ("0" | "1" | "x" | " ")[], "'") as Binary{length == digits{!= " "}.count}{. ~= digits{!= " "}.map(. == "x" ? ("0" | "1") : .)}
+
+  // Definitions: a function, `(bits(N), bits(4)) AddWithCarry(bits(N) x, bits(N) y, bit carry_in)` and its indented body;
+  // an accessor, `bits(width) X[integer n, integer width]` read and `X[integer n, integer width] = bits(width) value`
+  // written; a variable of the machine, `array bits(64) _R[0..30];`, `ProcState PSTATE;`; an enumeration; a record
+  static Definition := Function | Getter | Setter | Variable | Constant | Enumeration | Record | Abbreviation
+  static Parameter := (type: Type, Space, name: Identifier)
+  static Function := class (returns: (Type, Space)?, name: Identifier, "(", parameters: Parameter.join(Space, ",", Space), ")", body: Block)
+  static Getter := class (returns: Type, Space, name: Identifier, "[", parameters: Parameter.join(Space, ",", Space), "]", body: Block)
+  static Setter := class (name: Identifier, "[", parameters: Parameter.join(Space, ",", Space), "]", Space, "=", Space, value: Parameter, body: Block)
+  static Variable := class (("array", Space)?, type: Type, Space, name: Identifier, ("[", low: Expression, "..", high: Expression, "]")?, ";")
+  static Constant := class ("constant", Space, type: Type, Space, name: Identifier, Space, "=", Space, value: Expression, ";")
+  static Enumeration := class ("enumeration", Space, name: Identifier, Space, "{", members: (Blank, Identifier).join(","), Blank, "}", ";")
+  static Record := class ("type", Space, name: Identifier, Space, "is", Space, "(", fields: (Blank, Parameter).join(","), Blank, ")")
+  static Abbreviation := class ("type", Space, name: Identifier, Space, "=", Space, type: Type, ";")
+  // A block: the statements on the rest of the line, or on the lines indented under it
+  static Block := (Space, statements: Statement[]) | (\n, statements: (Indent, Statement, \n)[])
+  static Indent := (" " | \t)[]{length > 0}
+  static Statement := Expression
+
+  // Statements and expressions (ASL reference, "Statements", "Expressions") where they are written otherwise than Ray
+  static Expression := Program{O: statements}
+  static statements := Compiler.none + {
+    // Declarations and assignments: `bits(datasize) result;`, `constant integer d = UInt(Rd);`, `(result, nzcv) = …;`
+    {type: Type} {name: Identifier}; => name: typed(type)
+    {type: Type} {name: Identifier} = {value}; => name: typed(type) = value
+    constant {type: Type} {name: Identifier} = {value}; => name: typed(type) = value
+    {place} = {value}; => place = value
+    // An accessor written to, `X[d, datasize] = result;`: its setter, given the value
+    {accessor}[{arguments}] = {value}; => `accessor`(arguments, value)
+    // `PSTATE.<N,Z,C,V> = nzcv;`: the fields, the value's bits from the highest
+    {record}.<{fields: Identifier.join(",")}> = {value}; => fields.enumerate.map(record.`.value` = value[fields.count - 1 - .index])
+    {record}.<{fields: Identifier.join(",")}> => fields.map(record.`.`) as Binary
+    // Control: `if … then … elsif … else …`, `case … of when … otherwise …`, `for i = a to b`, `while … do`, `return`
+    if {condition} then {then: Block} {elsifs: (elsif {c} then {b: Block})[]} else {otherwise: Block} => if condition { then } else { elsifs.first{.c}.b ?? otherwise }
+    if {condition} then {then: Block} => if condition { then }
+    if {condition} then {a} else {b} => condition ? a : b
+    case {value} of {cases: (Blank, when {patterns: Expression.join(",")} {body: Block})[]} {otherwise: (Blank, otherwise {body: Block})?} => cases.first{value is .patterns#}.body ?? otherwise.body
+    for {i} = {first} to {last} {body: Block} => (first..last) for i => body
+    for {i} = {first} downto {last} {body: Block} => (last..first).reverse for i => body
+    while {condition} do {body: Block} => while condition { body }
+    return {value}; => return value
+    return; => return
+    assert {condition}; => assert condition
+    UNDEFINED; => ERROR@ASL `an undefined encoding`
+    UNPREDICTABLE; => ERROR@ASL `an unpredictable encoding`
+    // Bit vectors: concatenation `a:b`, slices `x<7:0>`, `x<n>`, and their arithmetic wrapping at their width
+    {a: Binary}:{b: Binary} => (a, b) as Binary{length == a.length + b.length}
+    {x}<{high}:{low}> => (x >> low) % 2 ^ (high - low + 1) as Binary{length == high - low + 1}
+    {x}<{at}> => (x >> at) % 2 as Binary₁
+    {a: Binary} + {b} => ((a + b) % 2 ^ a.length) as Binary{length == a.length}
+    {a: Binary} - {b} => ((a - b) % 2 ^ a.length) as Binary{length == a.length}
+    {a} AND {b} => a ~&& b
+    {a} OR {b} => a ~|| b
+    {a} EOR {b} => a ~^^ b
+    NOT({a}) => 2 ^ a.length - 1 - a
+    {a} DIV {b} => (a / b).floor
+    {a} MOD {b} => a % b
+    {a} IN {set} => a is set#
+    TRUE => true
+    FALSE => false
+    // The primitives every release uses (shared_pseudocode, "Functions")
+    UInt({x}) => x as Number
+    SInt({x}) => x.Signed as Number
+    ZeroExtend({x}, {width}) => x as Binary{length == width}
+    SignExtend({x}, {width}) => x.Signed as Binary{length == width}.Signed
+    Zeros({width}) => 0 as Binary{length == width}
+    Ones({width}) => 2 ^ width - 1 as Binary{length == width}
+    IsZero({x}) => x == 0
+    IsZeroBit({x}) => x == 0 ? ₂1 : ₂0
+    Replicate({x}, {n}) => [x] * n as Binary
+    LSL({x}, {shift}) => (x << shift) % 2 ^ x.length as Binary{length == x.length}
+  }
+
+  // What a body of definitions answers: a machine, its variables its fields and its functions and accessors its methods
+  machine => class (definitions{is Variable}.map((`.name`: typed(.type)[]{length == (.high ?? 0) - (.low ?? 0) + 1}))) &+ definitions{is Function | Getter | Setter | Constant | Enumeration}.map(definition =>
+    definition is Setter ? { `definition.name` (definition.parameters, definition.value) => definition.body }
+    : definition is Constant | Enumeration ? { `definition.name` := definition }
+    : { `definition.name` (definition.parameters) => definition.body })
+
+  static level := {
+    {definitions: ASL} => definitions
+  }
+}
+assert {
+  shared := ASL.read(`array bits(64) _R[0..30];
+
+bits(width) X[integer n, integer width]
+    return _R[n]<width-1:0>;
+
+X[integer n, integer width] = bits(width) value
+    _R[n] = ZeroExtend(value, 64);
+
+(bits(N), bits(4)) AddWithCarry(bits(N) x, bits(N) y, bit carry_in)
+    integer unsigned_sum = UInt(x) + UInt(y) + UInt(carry_in);
+    integer signed_sum = SInt(x) + SInt(y) + UInt(carry_in);
+    bits(N) result = unsigned_sum<N-1:0>;
+    bit n = result<N-1>;
+    bit z = if IsZero(result) then '1' else '0';
+    bit c = if UInt(result) == unsigned_sum then '0' else '1';
+    bit v = if SInt(result) == signed_sum then '0' else '1';
+    return (result, n:z:c:v);`)
+  assert shared.definitions.count == 4 && shared.definitions[3].name == "AddWithCarry"  // ASL1 a variable, an accessor read and written, and a function are not read
+  machine := shared.machine()
+  machine.(X[1, 64] = 0x29)
+  assert machine.(X[1, 32]) == 0x29 && machine._R[1] == 0x29  // ASL2 an accessor is not written and read through _R
+  assert machine.(AddWithCarry(0x0000000000000001, 0xFFFFFFFFFFFFFFFE, ₂1)) == (0, ₂0110)  // ASL3 1 - 1 by AddWithCarry is not 0 with Z and C set
+  assert machine.(AddWithCarry(0x7FFFFFFF as Binary₃₂, 0x00000001 as Binary₃₂, ₂0)) == (0x80000000, ₂1001)  // ASL4 a signed overflow does not set N and V
+}
+assert ASL.Expression.read(`'1010':'01'`) == ₂101001 && ASL.Expression.read(`0xF0<7:4>`) == ₂1111  // ASL5 bits are not joined or sliced as ASL writes them
+assert ASL.Expression.read(`'1010' + '0111'`) == ₂0001 && ASL.Expression.read(`UInt('1111') + 1`) == 16  // ASL6 bits do not wrap at their width, or an integer does
+assert ASL.Expression.read(`case '01' of
+    when '00' return 1;
+    when '01' return 2;`) == 2  // ASL7 a case is not read as its when that holds
+assert $.asl === ASL  // ASL8 $.asl is not ASL

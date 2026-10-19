@@ -1,0 +1,84 @@
+@sleigh
+
+// The MOS 6502 (MCS6500 Microcomputer Family Programming Manual, 1976), made from Ghidra's own description of it at a
+// pinned version and written by hand nowhere: its registers, memory and instructions are what `6502.slaspec` says
+MOS6502 := class: Language (instructions: Instruction[], rest: Byte[]) {
+  static Description := @https://raw.githubusercontent.com/NationalSecurityAgency/ghidra/c427352/Ghidra/Processors/6502/data/languages/6502.slaspec as SLEIGH
+  static Machine := Description.machine
+  static Instruction := Description.table()
+
+  // A step: the instruction in memory at PC, run there, PC where it goes next; a run, steps until PC is `until`
+  static step (machine: Machine) => machine ~~ .(PC = (RAM[PC..] as (instruction: Instruction, *)).instruction(PC))
+  static run (machine: Machine, until: Number, steps: Number = ∞) => machine ~~ (
+    taken := 0
+    while taken < steps && .PC != until { step(.); taken += 1 }
+  )
+
+  assert MOS6502.Description.order == "little" && MOS6502.Machine().PC.count == 2  // MOS1 the description is not little endian, or PC is not two bytes
+  // Decoding, and writing back as read: BCC rel, LDA #imm8, LDA abs (Programming Manual, Appendix B); an operand read by a
+  // subtable is that subtable's (`REL`, `OP1`)
+  assert ([0x90, 0xfe] as MOS6502.Instruction).(mnemonic == "BCC" && REL.rel == -2)  // MOS2 90 fe is not BCC -2
+  assert ([0xa9, 0x05] as MOS6502.Instruction).(mnemonic == "LDA" && OP1.imm8 == 5) && ([0xad, 0x34, 0x12] as MOS6502.Instruction).(mnemonic == "LDA" && OP1.imm16 == 0x1234)  // MOS3 a9 05 is not LDA #5, or ad 34 12 is not LDA $1234
+  assert [[0x90, 0xfe], [0xa9, 0x05], [0xad, 0x34, 0x12]].every(. as MOS6502.Instruction as Byte[] == .)  // MOS4 an instruction is not written back as the bytes it was read from
+  assert ([0xea] as MOS6502.Instruction).mnemonic == "NOP"  // MOS5 ea is not NOP
+  // A copying loop: LDX #$00; LDA $0200,X; STA $0300,X; INX; BNE (back to LDA); RTS
+  assert {
+    code := MOS6502.read([0xa2, 0x00, 0xbd, 0x00, 0x02, 0x9d, 0x00, 0x03, 0xe8, 0xd0, 0xf7, 0x60])
+    assert code.instructions.mnemonic == ["LDX", "LDA", "STA", "INX", "BNE", "RTS"] && code.rest.empty  // MOS6 the loop is not read one instruction after another
+    assert code.instructions[1].OP1.imm16 == 0x0200 && code.instructions[4].REL.rel == -9  // MOS7 LDA does not read from 0200, or BNE does not go back nine
+    assert code as Byte[] == [0xa2, 0x00, 0xbd, 0x00, 0x02, 0x9d, 0x00, 0x03, 0xe8, 0xd0, 0xf7, 0x60]  // MOS8 the loop is not written back as it was read
+  }
+
+  // Each instruction run on its own, as the description's p-code says
+  assert {
+    cpu := MOS6502.Machine()
+    at (address: Number, bytes: Byte[]) => (cpu.RAM[address ..< address + bytes.count] = bytes; cpu.PC = address; step(cpu))
+    cpu.C = 1
+    at(0x0600, [0x18])
+    assert cpu.C == 0 && cpu.PC == 0x0601  // MOS9 CLC does not clear C and go on
+    at(0x0601, [0x38])
+    assert cpu.C == 1  // MOS10 SEC does not set C
+    cpu.X = 0x41
+    at(0x0602, [0xe8])
+    assert cpu.X == 0x42 && cpu.Z == 0 && cpu.N == 0  // MOS11 INX of 41 is not 42 with Z and N clear
+    cpu.X = 0xff
+    at(0x0603, [0xe8])
+    assert cpu.X == 0 && cpu.Z == 1  // MOS12 INX of ff does not wrap to 00 and set Z
+    at(0x0604, [0xa9, 0x80])
+    at(0x0606, [0xaa])
+    assert cpu.A == 0x80 && cpu.N == 1 && cpu.X == 0x80  // MOS13 LDA #$80 does not load 80 and set N, or TAX does not copy it
+    cpu.C = 0
+    at(0x0607, [0x90, 0xfa])
+    assert cpu.PC == 0x0603  // MOS14 BCC -6 with C clear does not go back to 0603
+    cpu.C = 1
+    at(0x0607, [0x90, 0xfa])
+    assert cpu.PC == 0x0609  // MOS15 BCC with C set does not go on
+    at(0x0609, [0x8d, 0x00, 0x03])
+    assert cpu.RAM[0x0300] == 0x80  // MOS16 STA $0300 does not store 80
+    cpu.RAM[0x0205] = 0x5a
+    cpu.X = 5
+    at(0x060c, [0xbd, 0x00, 0x02])
+    assert cpu.A == 0x5a  // MOS17 LDA $0200,X does not load 5a
+    cpu.SP = 0x01ff
+    at(0x060f, [0x48])
+    assert cpu.RAM[0x01ff] == 0x5a && cpu.SP == 0x01fe  // MOS18 PHA does not push 5a and move SP down
+    cpu.A = 0
+    at(0x0610, [0x68])
+    assert cpu.A == 0x5a && cpu.SP == 0x01ff  // MOS19 PLA does not pull 5a and move SP up
+    at(0x0600, [0x20, 0x00, 0x07])
+    assert cpu.PC == 0x0700 && cpu.SP == 0x01fd && cpu.RAM[0x01fe] == 0x03 && cpu.RAM[0x01ff] == 0x06  // MOS20 JSR $0700 does not go there with 0603 pushed, low byte first
+    at(0x0700, [0x60])
+    assert cpu.PC == 0x0603 && cpu.SP == 0x01ff  // MOS21 RTS does not return to 0603
+  }
+  // A call to the copying loop, counting from fc so it copies four bytes, run from memory until it is back at 0603:
+  // 0600 JSR $0700; 0700 LDX #$fc; LDA $0200,X; STA $0300,X; INX; BNE $0702; RTS
+  assert {
+    cpu := MOS6502.Machine()
+    cpu.RAM[0x0600 ..< 0x0603] = [0x20, 0x00, 0x07]
+    cpu.RAM[0x0700 ..< 0x070c] = [0xa2, 0xfc, 0xbd, 0x00, 0x02, 0x9d, 0x00, 0x03, 0xe8, 0xd0, 0xf7, 0x60]
+    cpu.RAM[0x02fc ..< 0x0300] = [0x11, 0x22, 0x33, 0x44]
+    cpu.(SP = 0x01ff; PC = 0x0600)
+    run(cpu, until: 0x0603, steps: 30)
+    assert cpu.RAM[0x03fc ..< 0x0400] == [0x11, 0x22, 0x33, 0x44] && cpu.X == 0 && cpu.A == 0x44 && cpu.SP == 0x01ff  // MOS22 the call does not copy four bytes and come back
+  }
+}

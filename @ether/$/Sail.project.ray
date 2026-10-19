@@ -1,0 +1,147 @@
+// Sail, the language of instruction-set semantics (https://github.com/rems-project/sail/blob/sail2/manual), in which the
+// official RISC-V model is written: a file is definitions, each read as the Ray value it is. A union is a class of
+// constructors, a mapping a conversion both ways, a function a Ray function, a register a field of the machine; an
+// expression is a Ray program, by the rules of `expressions` where Sail writes it otherwise than Ray
+Sail := class: Language (definitions: (Blank, Definition)[], Blank) {
+  static extensions := ".sail"
+  static Blank := (" " | \t | \n | \r | Comment)[]
+  static Comment := ("//", (!\n)[]) | ("/*", (Comment | !"*/")[], "*/")
+  static Identifier := (Char.Letter | "_", (Char.Word | "'" | "#")[]){!is Keyword}
+  static Keyword := "let" | "in" | "if" | "then" | "else" | "match" | "function" | "clause" | "mapping" | "union" | "val" | "register"
+    | "type" | "enum" | "struct" | "bitfield" | "foreach" | "while" | "do" | "return" | "when" | "with" | "and" | "end" | "scattered"
+  // Types (manual, Types): `bits(12)`, `regidx`, `(bits(12), regidx)`, `option(xlenbits)`, `{8, 16}`
+  static Type := (name: Identifier, ("(", arguments: (Type | Expression).join(Blank, ",", Blank), ")")?)
+    | ("(", elements: Type.join(Blank, ",", Blank), ")") | ("{", (!"}")[], "}")
+  // Literals: `0b0010011` a bit vector as written, `0x000` four bits a digit, `true`, `()`, decimal integers, strings
+  static Bits := ("0b", digits: ("0" | "1" | "_")[]) as Binary{length == digits{!= "_"}.count} | ("0x", digits: (Hexadecimal.Digit | "_")[]) as Binary{length == 4 * digits{!= "_"}.count}
+
+  // Definitions (manual, Language)
+  static Definition := Union | UnionClause | Enum | Struct | Abbreviation | Mapping | MappingClause | Function | Val | Register
+    | Let | Overload | Fixity | Attribute | Directive | Scattered | End | ("default", Blank, "Order", Blank, ("dec" | "inc"))
+  // `union clause instruction = ITYPE : (bits(12), regidx, regidx, iop)`: the union gains a constructor of those parts
+  static Union := class ("union", Blank, name: Identifier, Blank, ("(", (!")")[], ")")?, "=", Blank, "{", constructors: Constructor.join(",", Blank), Blank, "}")
+  static UnionClause := class ("union", Blank, "clause", Blank, union: Identifier, Blank, "=", Blank, constructor: Constructor)
+  static Constructor := class (Blank, name: Identifier, Blank, ":", Blank, parts: Type) {
+    defined => { `name` := class (parts.elements ?? [parts]) }
+  }
+  // (an enumeration's members, each the name it is written as)
+  static Enum := class ("enum", Blank, name: Identifier, Blank, "=", Blank, (("{", members: Identifier.join(Blank, ",", Blank), "}") | members: Identifier.join(Blank, "|", Blank))) {
+    defined => members.map(member => { `member` := member })
+  }
+  static Struct := class ("struct", Blank, name: Identifier, Blank, "=", Blank, "{", fields: (Blank, field: Identifier, Blank, ":", Blank, type: Type).join(","), Blank, "}")
+  static Abbreviation := class ("type", Blank, name: Identifier, (!"=")[], "=", Blank, type: Type)
+  // `mapping encdec_iop : iop <-> bits(3) = { ADDI <-> 0b000, … }`, `mapping clause encdec = ITYPE(imm, rs1, rd, op) <-> imm @ …`:
+  // each pair one equivalence, a value of the left read from the right and the right written from the left
+  static Mapping := class ("mapping", Blank, name: Identifier, Blank, (":", Blank, left: Type, Blank, "<->", Blank, right: Type, Blank)?,
+    ("=", Blank, "{", pairs: (Blank, Pair).join(","), ","?, Blank, "}")?)
+  static MappingClause := class ("mapping", Blank, "clause", Blank, mapping: Identifier, Blank, "=", Blank, pair: Pair)
+  static Pair := class (left: Expression, Blank, "<->", Blank, right: Expression, (Blank, "when", Blank, guard: Expression)?)
+  // `function clause execute ITYPE(imm, rs1, rd, op) = { … }`: a clause of a function, chosen by its parameters' pattern
+  static Function := class ("function", Blank, ("clause", Blank)?, name: Identifier, Blank, parameters: Expression, Blank, ("->", Blank, Type, Blank)?, "=", Blank, body: Expression) {
+    defined => { `name` (parameters) &=> body }
+  }
+  // `val sign_extend : forall 'n 'm, 'm >= 'n. (implicit('m), bits('n)) -> bits('m)`, `val f = pure {c: "…"} : …`: a
+  // declaration; one given an implementation outside Sail (`extern`) is one of `primitives`
+  static Val := class ("val", Blank, name: Identifier, Blank, ("=", Blank, (!":")[])?, ":", (!\n)[])
+  static Register := class ("register", Blank, name: Identifier, Blank, ":", Blank, type: Type, (Blank, "=", Blank, initial: Expression)?)
+  static Let := class ("let", Blank, name: Identifier, Blank, (":", Blank, type: Type, Blank)?, "=", Blank, value: Expression) {
+    defined => { `name` := value }
+  }
+  // `overload X = {rX_bits, wX_bits}`: one name for several functions, the call choosing by what it is given
+  static Overload := class ("overload", Blank, name: Identifier, Blank, "=", Blank, "{", names: Identifier.join(Blank, ",", Blank), Blank, "}") {
+    defined => { `name` := names.map(`.`)# }
+  }
+  static Fixity := class (("infix" | "infixl" | "infixr"), Blank, Decimal, Blank, operator: (!\n)[])
+  // `$[split op]`, `$include <prelude.sail>`, `scattered union instruction`, `end execute`
+  static Attribute := class ("$[", text: (!"]")[], "]")
+  static Directive := class ("$", (!\n)[])
+  static Scattered := class ("scattered", Blank, ("union" | "function" | "mapping"), Blank, name: Identifier, (!\n)[])
+  static End := class ("end", Blank, name: Identifier)
+
+  // An expression is read as Ray reads it, with these rules where Sail writes it otherwise (manual, Expressions)
+  static Expression := Program{O: expressions}
+  static expressions := Compiler.none + {
+    // A bit vector's arithmetic wraps at its width; comparisons ask how its bits are read
+    {a: Binary} + {b: Binary} => ((a + b) % 2 ^ a.length) as Binary{length == a.length}
+    {a: Binary} - {b: Binary} => ((a - b) % 2 ^ a.length) as Binary{length == a.length}
+    {a} <_s {b} => a.Signed < b.Signed
+    {a} <_u {b} => a < b
+    {a} >=_s {b} => a.Signed >= b.Signed
+    {a} >=_u {b} => a >= b
+    {a: Binary} & {b: Binary} => a ~&& b
+    {a: Binary} | {b: Binary} => a ~|| b
+    {a: Binary} ^ {b: Binary} => a ~^^ b
+    {a: String} ^ {b: String} => (a, b) as String
+    // `a @ b`: a above b, the bits of both
+    {a} @ {b} => (a, b) as Binary{length == a.length + b.length}
+    // Slices, `imm[11..5]`, and a vector with one bit set, `[x with 0 = 0b0]`
+    {x}[{high} .. {low}] => x.reverse[low..high].reverse
+    [{x} with {at} = {bit}] => x ~~ (.reverse[at] = bit)
+    // `let x : T = e;` and `let x = e in body`: a local
+    let {name} : {type} = {value} => name: type = value
+    let {name} = {value} => name := value
+    let {name} = {value} in {body} => (name := value; body)
+    if {condition} then {then} else {otherwise} => if condition { then } else { otherwise }
+    // `match e { P => a, Q => b }`: Ray's `if` with case lines, a pattern with parts binding them
+    match {value} \{{arms: (Blank, pattern: Expression, Blank, "=>", Blank, body: Expression).join(",")}, ","?, Blank{`}`} => arms.first{value is .pattern}.body
+    foreach ({i} from {first} to {last}) {body} => (first..last) for i => body
+    while {condition} do {body} => while condition { body }
+    // `X(rd) = v`: assigning to a function is calling the one of its overloads that takes the value too
+    {function}({arguments}) = {value} => function(arguments, value)
+    // `{ a; b; c }`: a block, its last expression its value
+    \{{statements: Expression.join(Blank, ";", Blank)}, ";"?, Blank{`}`} => statements.last
+  }
+  // Sail's library (`lib/*.sail`): what the model declares `val … = "extern"`, given here in Ray
+  static primitives := {
+    // (the width extended to is the declared type's: `let immext : xlenbits = sign_extend(imm)` writes imm's signed
+    // value in xlen bits)
+    sign_extend (x: Binary) => x.Signed
+    zero_extend (x: Binary) => x
+    bool_to_bit (b: boolean) => b ? ₂1 : ₂0
+    shift_bits_right_arith (x: Binary, n: Binary) => (x.Signed >> n) as Binary{length == x.length}
+    not (b: boolean) => !b
+    // Memory (`lib/regfp.sail`'s `read_ram`, `write_ram`, which a platform gives): bytes by address, least significant first
+    read_ram (address_size, count, hex_ram, address: Binary) => (<-memory[address ..< address + count]) as Binary{length == 8 * count}
+    write_ram (address_size, count, hex_ram, address: Binary, data: Binary) => (memory[address ..< address + count] = <-(data as Byte[]); true)
+  }
+
+  // What a model answers: a machine, the registers its fields and the functions its methods (each clause one more
+  // implementation, chosen by its parameters' pattern), and an instruction decoded from a word by `encdec`
+  machine => class (definitions{is Register}.map((`.name`: .type = .initial ?? 0)), memory: Byte[] = []) &+ primitives
+    &+ [definitions{is Union}.constructors.flatten, definitions{is UnionClause}.constructor].flatten.map(.defined) &+ definitions{is Enum | Function | Let | Overload}.map(.defined)
+  mapping (name: String) => [definitions{is Mapping && .name == name}.pairs, definitions{is MappingClause && .mapping == name}.pair].flatten
+  // (`is` binds the names the right side reads, and the left is made of them: a word read from right to left)
+  decoded (word: Binary) => mapping("encdec").map(word is .right ? .left : None).first{!= None}
+
+  static level := {
+    {model: Sail} => model
+  }
+}
+assert {
+  model := Sail.read(`union clause instruction = ITYPE : (bits(12), regidx, regidx, iop)
+enum iop = {ADDI, SLTI}
+mapping encdec_reg : regidx <-> bits(5) = { r <-> r }
+mapping encdec_iop : iop <-> bits(3) = {
+  ADDI  <-> 0b000,
+  SLTI  <-> 0b010
+}
+mapping clause encdec = ITYPE(imm, rs1, rd, op)
+  <-> imm @ encdec_reg(rs1) @ encdec_iop(op) @ encdec_reg(rd) @ 0b0010011
+function clause execute ITYPE(imm, rs1, rd, op) = {
+  let immext : xlenbits = sign_extend(imm);
+  X(rd) = match op {
+    ADDI  => X(rs1) + immext,
+    SLTI  => zero_extend(bool_to_bit(X(rs1) <_s immext))
+  };
+  RETIRE_SUCCESS
+}`)
+  assert model.definitions.count == 6 && model.definitions[0].constructor.name == "ITYPE"  // SAIL1 a union clause is not read as ITYPE's constructor
+  assert model.mapping("encdec_iop").count == 2 && model.mapping("encdec_iop")[1].right == ₂010  // SAIL2 a mapping is not read as its pairs
+  // addi x1, x0, 5 (00500093): the word read from right to left by encdec, its arguments the parts it names
+  assert model.decoded(0x00500093 as Binary₃₂).(imm == 5 && rs1 == 0 && rd == 1 && op == model.machine.ADDI)  // SAIL3 00500093 is not ITYPE(5, x0, x1, ADDI)
+  assert model.definitions[5].name == "execute" && model.definitions[5].body.count == 3  // SAIL4 an execute clause is not read as its three statements
+}
+assert (Sail.Expression.read(`0b0010 @ 0x1`) == ₂00100001) && (Sail.Expression.read(`0xff[7 .. 4]`) == ₂1111)  // SAIL5 bits are not joined or sliced as Sail writes them
+assert Sail.Expression.read(`0xffffffff + 0x00000001`) == 0 && Sail.Expression.read(`0xffffffff <_s 0x00000000`)  // SAIL6 a bit vector's sum does not wrap, or a signed comparison reads unsigned
+assert Sail.Expression.read(`match 0b01 { 0b00 => 1, 0b01 => 2 }`) == 2 && Sail.Expression.read(`let x = 3 in x + x`) == 6  // SAIL7 match or let is not read as Sail means it
+assert $.sail === Sail  // SAIL8 $.sail is not Sail

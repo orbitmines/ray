@@ -1,0 +1,65 @@
+@riscvopcodes
+@sail
+
+// RISC-V, the unprivileged instructions (https://docs.riscv.org/reference/isa/unpriv/), made from the RISC-V project's
+// own descriptions at pinned versions and written by hand nowhere: what an instruction is spelled as from riscv-opcodes,
+// what it does from the Sail model
+RISCV := class: Language (instructions: (<-Byte₄ as Instruction)[], rest: Byte[]) {
+  // (an instruction is 32 bits, its bytes least significant first (Volume I, 1.5); bytes that spell none are kept as they are)
+  static Encodings := @https://raw.githubusercontent.com/riscv/riscv-opcodes/5783cf3/extensions/rv_i as RISCVOpcodes
+  // (the model's files read as one, in the order its own `riscv.sail_project` lists them)
+  static Model := @https://github.com/riscv/sail-riscv/tree/0c82ecf/model as Sail
+  // The machine: the model's registers (`x1` to `x31`, read and written through its `X(r)`, x0 always zero; `PC`) at a
+  // width (`xlen`, 32 or 64), and memory its bytes by address
+  static Machine := Model.machine
+  // An instruction: its encoding, and as `()` what the model's `execute` does with the same word decoded by its `encdec`,
+  // in the machine, PC moved on as the model's step does (`set_next_pc`, `tick_pc`) unless it jumps
+  static Instruction := Encodings.map(encoding => encoding + { () => (set_next_pc(PC + 4); execute(Model.decoded(this as Binary₃₂)); tick_pc()) })#
+
+  // Running code placed at `base`: the instruction at PC does what it does, until PC leaves the code or `steps` have run
+  run (machine: Machine, base: Number = 0, steps: Number = ∞) => machine ~~ .(
+    taken := 0
+    while taken < steps && base <= PC < base + 4 * instructions.count {
+      instructions[(PC - base) / 4]()
+      taken += 1
+    }
+  )
+
+  assert RISCV.Encodings.first.mnemonic == "lui"  // RSV1 rv_i is not read from its first line
+  // Words as llvm-mc writes them (The RISC-V Instruction Set Manual, Volume I, 2.4–2.6)
+  assert (0x00500093 as Binary₃₂ as RISCV.Instruction).(mnemonic == "addi" && rd == 1 && rs1 == 0 && imm12 == 5)  // RSV2 00500093 is not addi x1, x0, 5
+  assert (0x12345037 as Binary₃₂ as RISCV.Instruction).(mnemonic == "lui" && imm20 == 0x12345)  // RSV3 12345037 is not lui x0, 0x12345
+  assert (0x00208463 as Binary₃₂ as RISCV.Instruction).(mnemonic == "beq" && rs2 == 2 && bimm12lo == 8)  // RSV4 00208463 is not beq x1, x2, 8
+  assert (0x008000ef as Binary₃₂ as RISCV.Instruction).(mnemonic == "jal" && jimm20 == 0x00800)  // RSV5 008000ef is not jal x1, 8
+  assert [0x00500093, 0x12345037, 0x00208463, 0x008000ef].every(. as Binary₃₂ as RISCV.Instruction as Binary₃₂ == .)  // RSV6 an instruction is not written back as the word it was read from
+  assert !(0x00000000 as Binary₃₂ is RISCV.Instruction)  // RSV7 the word of zeros is read as an instruction
+  // addi x1, x0, 5; lui x0, 0x12345; and four bytes that spell nothing
+  assert {
+    code := RISCV.read([0x93, 0x00, 0x50, 0x00, 0x37, 0x50, 0x34, 0x12, 0xff, 0xff, 0xff, 0xff])
+    assert code.instructions.mnemonic == ["addi", "lui"] && code.rest == [0xff, 0xff, 0xff, 0xff]  // RSV8 the bytes that spell nothing are not kept as they are
+    assert code as Byte[] == [0x93, 0x00, 0x50, 0x00, 0x37, 0x50, 0x34, 0x12, 0xff, 0xff, 0xff, 0xff]  // RSV9 code is not written back as the bytes it was
+  }
+
+  // Run by the model: addi x1, x0, 5; add x2, x1, x1; lui x3, 0x12345; beq x1, x2, 8; beq x2, x2, -8
+  assert {
+    hart := RISCV.read([0x93, 0x00, 0x50, 0x00, 0x33, 0x81, 0x10, 0x00, 0xb7, 0x51, 0x34, 0x12, 0x63, 0x84, 0x20, 0x00, 0xe3, 0x0c, 0x21, 0xfe]).run(RISCV.Machine(xlen: 32), steps: 5)
+    assert hart.x1 == 5 && hart.x2 == 10 && hart.x3 == 0x12345000  // RSV10 addi, add and lui do not do what the model says
+    assert hart.PC == 8 && hart.(X(0)) == 0  // RSV11 the branches do not come back to 8, or x0 holds something
+  }
+  // addi x1, x0, 0; addi x2, x0, 5; loop: add x1, x1, x2; addi x2, x2, -1; bne x2, x0, loop
+  assert {
+    hart := RISCV.read([0x93, 0x00, 0x00, 0x00, 0x13, 0x01, 0x50, 0x00, 0xb3, 0x80, 0x20, 0x00, 0x13, 0x01, 0xf1, 0xff, 0xe3, 0x1c, 0x01, 0xfe]).run(RISCV.Machine(xlen: 32))
+    assert hart.x1 == 1 + 2 + 3 + 4 + 5 && hart.x2 == 0 && hart.PC == 0x14  // RSV12 the loop does not sum five down to nothing
+  }
+  // jal x5, 8; addi x6, x0, 1; jalr x0, 0(x5)
+  assert {
+    hart := RISCV.read([0xef, 0x02, 0x80, 0x00, 0x13, 0x03, 0x10, 0x00, 0x67, 0x80, 0x02, 0x00]).run(RISCV.Machine(xlen: 32), steps: 2)
+    assert hart.x5 == 4 && hart.PC == 4 && hart.x6 == 0  // RSV13 jal does not link 4 into x5, or jalr does not come back to the addi it jumped over
+  }
+  // addi x1, x0, -2; sw x1, 64(x0); lw x3, 64(x0); lbu x4, 64(x0); lb x7, 64(x0)
+  assert {
+    hart := RISCV.read([0x93, 0x00, 0xe0, 0xff, 0x23, 0x20, 0x10, 0x04, 0x83, 0x21, 0x00, 0x04, 0x03, 0x42, 0x00, 0x04, 0x83, 0x03, 0x00, 0x04]).run(RISCV.Machine(xlen: 32))
+    assert hart.memory[64..<68] == [0xfe, 0xff, 0xff, 0xff]  // RSV14 a word is not stored least significant byte first
+    assert hart.x3 == 0xfffffffe && hart.x4 == 0xfe && hart.x7 == 0xfffffffe  // RSV15 a word, a byte zero-extended and a byte sign-extended do not load back
+  }
+}

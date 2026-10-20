@@ -4,7 +4,8 @@ import { Jmp, jmp_of, module_bytes } from '../src/language.ts';
 
 // The kernel's module written by Ray (`src/wasm.ray`, SH4) from the JMP `jmp_of` writes for `kernel.ts` (or `--source <file>`
 // written as the kernel is): `--ray <file>` writes the Ray program giving the writer that JMP, a line a call, and `--bytes
-// <file>` the module `module_bytes` writes for it, a byte a number; `--check <file>` holds what Ray wrote against it.
+// <file>` the module `module_bytes` writes for it, a byte a number; `--check <file>` holds what Ray wrote against it (run as
+// `--write=<file>.wasm --value=wasm.module_written ../ray/bootstrap/.entrypoint.ray3 <a file including src/wasm.ray, then that>`).
 const arg = (name: string) => { const at = process.argv.indexOf(name); return at < 0 ? undefined : process.argv[at + 1]; };
 const file = arg('--source') ?? new URL('../src/kernel.ts', import.meta.url);
 const pages = Number(arg('--pages') ?? 16);
@@ -40,7 +41,8 @@ if (bytes || check) {
   const reference = [...module_bytes(p, pages)];
   if (bytes) writeFileSync(bytes, reference.join(' ') + '\n');
   if (check) {
-    const written = readFileSync(check, 'utf8').split(/\s+/).filter(x => x.length).map(Number);
+    // (a `.wasm` as its bytes, what `--write --value=wasm.module_written` writes; else a byte a number)
+    const written = check.endsWith('.wasm') ? [...readFileSync(check)] : readFileSync(check, 'utf8').split(/\s+/).filter(x => x.length).map(Number);
     const at = reference.findIndex((v, i) => written[i] !== v);
     if (at < 0 && written.length === reference.length) console.log(`the same: ${reference.length} bytes`);
     else { const k = at < 0 ? reference.length : at; console.log(`differs at byte ${k} of ${reference.length} (Ray wrote ${written.length}):\n  module_bytes: ${reference.slice(Math.max(0, k - 8), k + 16).join(' ')}\n  wasm.ray:     ${written.slice(Math.max(0, k - 8), k + 16).join(' ')}`); process.exit(1); }

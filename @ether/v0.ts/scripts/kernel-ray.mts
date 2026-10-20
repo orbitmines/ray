@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 // The kernel's JMP, written by Ray reading `kernel.ts` (`kernel.ray`): its functions in ranges of about `--lines` lines (250),
 // each range read by a run of its own (every run reads the kernel's constants, then writes its range's functions), `--jobs`
 // of them at once; their lines one after another, as one run reading it all writes them. `scripts/kernel-jmp.mts --check`
-// holds them against `jmp_of`'s. `--wasm <file>`: the kernel's module instead, written by `module.ray` (each range its
+// holds them against `jmp_of`'s. `--wasm <file>`: the kernel's module instead, written by `wasm.ray` (each range its
 // functions' bodies, as bytes; a run writing none, the sections around them, of `--pages` pages of memory), one after
 // another into that file; `scripts/kernel-wasm.mts --check` holds it against `module_bytes`'.
 const option = (name: string, otherwise: number) => { const at = process.argv.indexOf(name); return at < 0 ? otherwise : Number(process.argv[at + 1]); };
@@ -30,7 +30,7 @@ const dir = mkdtempSync(join(tmpdir(), 'kernel-ray-'));
 const run_of = (name: string, from: number, until: number) => {
   writeFileSync(join(dir, `range-${name}.ray`), `kjs.from = ${from}\nkjs.until = ${until}\n${wasm ? 'kjs.writing = true\n' : ''}`);
   const run = join(dir, `run-${name}.ray`);
-  writeFileSync(run, [...(wasm ? [join(src, 'module.ray')] : []), join(src, 'kernel.ray'), join(dir, `range-${name}.ray`), join(src, 'kernel.read.ray')].map(f => `include @${f}`).join('\n') + '\n');
+  writeFileSync(run, [...(wasm ? [join(src, 'wasm.ray')] : []), join(src, 'kernel.ray'), join(dir, `range-${name}.ray`), join(src, 'kernel.read.ray')].map(f => `include @${f}`).join('\n') + '\n');
   return run;
 };
 const runs = ranges.map(([from, until], k) => run_of(`${k}`, from, until));
@@ -41,7 +41,7 @@ const written = (text: string) => {
   const out: string[] = [], said: string[] = [];
   let carry = '';
   for (const raw of text.replace(/\x1b\[[0-9;]*m/g, '').split('\n')) {
-    if ((raw.includes('src/kernel.ts:') || raw.includes('src/module.ray:') || raw.includes('(made')) && raw.startsWith('ERROR')) said.push(raw);
+    if ((raw.includes('src/kernel.ts:') || raw.includes('src/wasm.ray:') || raw.includes('(made')) && raw.startsWith('ERROR')) said.push(raw);
     if (!carry && (/^\s/.test(raw) || raw === '')) continue;
     const at = raw.search(log);
     if (at === 0) continue;

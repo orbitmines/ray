@@ -1,8 +1,10 @@
-// The module writer (Selfhosting.md §7, step 5): a program's JMP, as `kernel.ray` reads it from `kernel.ts`, written as a
-// WebAssembly module, byte for byte what `module_bytes` writes for it. Bytes are texts of bytes (`Int32.byte`), joined by `+`;
-// how many, `Int32.bytes_in`. It is given every context in order (`wasm_context`) and, of those it writes, each begun
-// (`wasm_begin`), its labels and statements (`wasm_label`, `wasm_statement`: a cell by its name, a constant an Int32) and
-// ended (`wasm_end`); then the module's sections around what the bodies came to (`wasm_head`, `wasm_tail`).
+// The module writer (Selfhosting.md §7, step 5, SH4): a program's JMP written as a WebAssembly module, byte for byte what
+// `module_bytes` writes for it; given by `scripts/kernel-wasm.mts --ray` (a call a line) or by `kernel.ray` reading
+// `kernel.ts`. Bytes are texts of bytes (`Int32.byte`), joined by `+`; how many, `Int32.bytes_in`. It is given the contexts
+// in order (`wj_context`, `wj_begin`), each one's labels and statements (`wj_label`, `wj_statement`: a cell by its name, a
+// constant `=n` or an Int32); then the bodies and the sections around them (`wj_module`, or `wj_bodies` and `wasm_head`,
+// `wasm_tail` written apart). (The format's own types, `$/Wasm.project.ray`, write these sections once a header writes a
+// module that large in the memory there is.)
 
 // (a node of named parts, each made by a function of them; a table, read and written by `external member`, each key with
 // `k_` before it: a key named as an operator or a word of the language's (`+`, `read`) would be read as one)
@@ -75,6 +77,9 @@ global["wasm"] := {
   names := None
   count := None
   bodies := ""
+  given := None
+  given_n := None
+  module_written := None
   written := None
   called := None
   cells := None
@@ -105,6 +110,8 @@ wasm.contexts = wasm_table(0)
 wasm.names = wasm_table(0)
 wasm.count = 0.int32
 wasm.written = 0.int32
+wasm.given = wasm_table(0)
+wasm.given_n = 0.int32
 
 // Bytes: one, a number as LEB128 (unsigned, then signed), a text as its size then its bytes, a section as its id, its size,
 // then it.
@@ -207,17 +214,15 @@ wasm_native(`thread`, 0, wasm_byte(35) + wasm_byte(0), true)
 // (the 16 bytes at a compared with b's, a bit for each: `v128.load`, `i8x16.splat`, the test, `i8x16.bitmask`)
 wasm_sixteen (a, b, test) => ((((((((((a + wasm_byte(253)) + wasm_byte(0)) + wasm_byte(0)) + wasm_byte(0)) + b) + wasm_byte(253)) + wasm_byte(15)) + wasm_byte(253)) + test) + wasm_byte(253)) + wasm_byte(100)
 
-// Given: a context, its name and its parameters (a list, `car` and `cdr`), in the order they are in the program.
-wasm_context (called, taken) => {
-  taken_n := 0.int32
-  at := taken
-  while at !== None {
-    taken_n = taken_n + 1
-    at = at.cdr
+// Given: the contexts in the order they are in the program (`wj_context`: a name, how many it takes; `wj_begin` gives one
+// too), and of those written, each begun, its labels and statements. Their bodies are written once all are given
+// (`wj_module`, `wj_bodies`): a call names a context by where it is, one given later too.
+wj_context (called, arity) => {
+  if !(wasm_found(wasm.contexts, called)) {
+    wasm_put(wasm.contexts, called, (wasm_context_of(wasm.count, arity.int32)))
+    wasm_put(wasm.names, (wasm_key(wasm.count)), called)
+    wasm.count = wasm.count + 1
   }
-  wasm_put(wasm.contexts, called, (wasm_context_of(wasm.count, taken_n)))
-  wasm_put(wasm.names, (wasm_key(wasm.count)), called)
-  wasm.count = wasm.count + 1
 }
 // (a cell by its name, given its place the first time it is named)
 wasm_cell (name) => {
@@ -226,13 +231,48 @@ wasm_cell (name) => {
     wasm.cells_n = wasm.cells_n + 1
   }
 }
-wasm_begin (called, params) => {
+// (the context being given, kept with what it was given when the next one begins)
+wasm_kept_of (made_called, made_cells, made_cells_n, made_params, made_statements, made_statements_n, made_labels) => Wasm_item &+ {
+  called := made_called
+  cells := made_cells
+  cells_n := made_cells_n
+  params := made_params
+  statements := made_statements
+  statements_n := made_statements_n
+  labels := made_labels
+  here := true
+}
+wasm_close (unused) => {
+  if wasm.called !== None {
+    wasm_put(wasm.given, (wasm_key(wasm.given_n)), (wasm_kept_of(wasm.called, wasm.cells, wasm.cells_n, wasm.params, wasm.statements, wasm.statements_n, wasm.labels)))
+    wasm.given_n = wasm.given_n + 1
+    wasm.called = None
+  }
+}
+wasm_open (called) => {
+  wasm_close(0)
   wasm.called = called
   wasm.cells = wasm_table(0)
   wasm.cells_n = 0.int32
   wasm.statements = wasm_table(0)
   wasm.statements_n = 0.int32
   wasm.labels = wasm_table(0)
+}
+// (its parameters a list: a cell each, then `&.value`)
+wj_begin (called, params) => {
+  wj_context(called, params.count)
+  wasm_open(called)
+  at := params.head
+  while at !== None {
+    wasm_cell(at.value)
+    at = at.next
+  }
+  wasm.params = wasm.cells_n
+  wasm_cell(`&.value`)
+}
+// (and as `kernel.ray` gives them: `car` and `cdr`)
+wj_begin_linked (called, params) => {
+  wasm_open(called)
   at := params
   while at !== None {
     wasm_cell(at.car)
@@ -241,21 +281,52 @@ wasm_begin (called, params) => {
   wasm.params = wasm.cells_n
   wasm_cell(`&.value`)
 }
-wasm_label (name) => {
+wj_label (name) => {
   wasm_put(wasm.labels, name, (wasm_index(wasm.statements_n + 1)))
+}
+// (an operand as a JMP line writes it, a cell by its name, `-` none, `=n` a constant: the constant an Int32)
+wasm_operand (x) => {
+  if x.bits !== None { return x }
+  if !(x.first == "="[0]) { return x }
+  digits := x.rest
+  if digits.first == "-"[0] { return 0.int32 - Int32.numeral(digits.rest) }
+  Int32.numeral(digits)
 }
 // (its cells named, as `Jmp.jmpIf` names them: its condition, what it answers into, then its two values)
 wasm_named (x) => {
   if x.bits !== None { return false }
   x != `-`
 }
-wasm_statement (aim, condition, into, a, b) => {
+wj_statement (given_aim, given_condition, given_into, given_a, given_b) => {
+  condition := wasm_operand(given_condition)
+  into := wasm_operand(given_into)
+  a := wasm_operand(given_a)
+  b := wasm_operand(given_b)
   if wasm_named(condition) { wasm_cell(condition) }
   if wasm_named(into) { wasm_cell(into) }
   if wasm_named(a) { wasm_cell(a) }
   if wasm_named(b) { wasm_cell(b) }
   wasm.statements_n = wasm.statements_n + 1
-  wasm_put(wasm.statements, (wasm_key(wasm.statements_n)), (wasm_statement_of(aim, condition, into, a, b)))
+  wasm_put(wasm.statements, (wasm_key(wasm.statements_n)), (wasm_statement_of(given_aim, condition, into, a, b)))
+}
+// (each context given, its body written, in the order given)
+wj_bodies (unused) => {
+  wasm_close(0)
+  k := 0.int32
+  while k < wasm.given_n {
+    kept := wasm_get(wasm.given, (wasm_key(k)))
+    wasm.called = kept.called
+    wasm.cells = kept.cells
+    wasm.cells_n = kept.cells_n
+    wasm.params = kept.params
+    wasm.statements = kept.statements
+    wasm.statements_n = kept.statements_n
+    wasm.labels = kept.labels
+    wasm_end(0)
+    k = k + 1
+  }
+  wasm.called = None
+  wasm.bodies
 }
 
 // A value given: a cell's (`local.get`), or a constant's (`i32.const`).
@@ -715,13 +786,16 @@ wasm_tail (unused) => {
   }
   wasm_section(0, (wasm_sized(`name`) + wasm_byte(1)) + wasm_sized(names))
 }
-// (the whole module, its bodies written here)
-wasm_module (pages) => (wasm_head(pages, Int32.bytes_in(wasm.bodies)) + wasm.bodies) + wasm_tail(0)
+// (the whole module, its bodies written here, kept for `--write --value=wasm.module_written`)
+wj_module (pages) => {
+  bodies := wj_bodies(0)
+  wasm.module_written = (wasm_head(pages, Int32.bytes_in(bodies)) + bodies) + wasm_tail(0)
+}
 
 // (what `--write --value=...` writes, read after all of it: the whole module; its sections around bodies written apart)
 wasm &+= {
-  module (pages) => wasm_module(pages)
+  module (pages) => wj_module(pages)
   head (pages, bytes) => wasm_head(pages, bytes)
   tail (unused) => wasm_tail(0)
-  written_bodies (unused) => wasm.bodies
+  written_bodies (unused) => wj_bodies(0)
 }

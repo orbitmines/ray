@@ -1567,9 +1567,9 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   Mirrors and caches may hold single files of fetched repositories.
 - **Layout.** `@ether/` is the Ether project: the standard `@` names (`Ether.ray`), `World.ray`, `Messaging.ray` and the
   instance entrypoints (`entrypoint.server.ray`, `entrypoint.npc.ray`, `entrypoint.player.ray`). `@ether/ray/` is the core
-  (`!language`): Node, Ray, Number, String, Unicode, Encoding, Program, Control, Compiler, Language, Project, Location,
-  Character, Format, Reporting, Time, Unit, UUID, IP, MAC, Roman, Access, Feature, OS, with its claims in `ray/tests/`.
-  Subprojects of `@ether`: `security`, `network`, `filesystem`, `timezone`, `fonts`, `device`, `geometry`, `ui`,
+  (`!language`): Node, Ray, Number, String, Encoding, Program, Control, Compiler, Language, Project, Location,
+  Character, Format, Reporting, Unit, Access, Feature, OS, with its claims in `ray/tests/`.
+  Subprojects of `@ether`: `security`, `network`, `filesystem`, `time`, `timezone`, `fonts`, `device`, `geometry`, `ui`,
   `version-control`, `os`, `game`, `library`, `avatar`, and the outside languages under `$/`. Folders of projects are
   lowercase. `.ether/` is what Ether keeps locally for a project (fetched externals, caches, `.%` working state), laid out
   as `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0`.

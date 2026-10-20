@@ -1,6 +1,6 @@
 // The operating system a device runs: one of these. As a boolean, whether it is the one the device runs (`@me/device/os`):
 // what differs between them is written where it belongs (`if OS.Windows { … } elsif OS.Browser { … }`), in the package
-// it is about (files and streams here, time zones in Time.ray, sockets in network, font folders in opentype).
+// it is about (files and streams here, time zones in @ether/timezone, sockets in network, font folders in opentype).
 OS := enum Linux (platform: "linux") | Windows (platform: "win32") | Macos (platform: "darwin") | Browser (platform: "browser") | Ether (platform: "ether") {
   as (=== boolean) => this === @me/device/os
   // what the host says of itself (`os["PATH"]`, `os.env.PATH`); the language as the operating system says only what it is

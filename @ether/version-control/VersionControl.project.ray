@@ -1,4 +1,6 @@
 @ether/filesystem
+@uuid
+@ether/time
 
 History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
   static Label := UUID | Char.Word[]

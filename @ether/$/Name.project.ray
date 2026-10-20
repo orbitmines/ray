@@ -1,0 +1,39 @@
+@unicode
+
+// A person's full name as it is written, in any script (https://www.w3.org/International/questions/qa-personal-names): name
+// parts of letters and marks, separated by spaces or a script's name separator (列奥纳多·达·芬奇, レオナルド・ダ・ヴィンチ), joined
+// inside by hyphens, apostrophes or zero-width (non-)joiners (Smith-Jones, O'Brien, Persian half-spaces), or an initial with a
+// period (J. R. R. Tolkien). Casing is not asked: most scripts have none (محمد بن سلمان, Нгуен, Þórunn Guðmundsdóttir).
+// Which part is given and which family differs by culture — family first in Chinese, Japanese, Korean, Vietnamese, Hungarian;
+// two family names in Spanish; patronymics in Icelandic; none at all for many — so a full name is kept as its parts, not split.
+// One part alone is a full name only in scripts that write names without spaces (毛泽东, 김민준, やまだたろう); a single word in
+// other scripts is a plain name, as one-word names (mononyms) cannot be told apart from handles.
+FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[]{length > 0}) | FullName.Unspaced[]{length > 0}) => {
+  static Letter := Unicode.GeneralCategory.(Letter | Mark)
+  assert "a"[0] is Unicode.GeneralCategory.Letter  // W14 a is not a letter
+  static Joiner := "-" | "‐" | "'" | "’" | "ʼ" | "‌" | "‍"
+  static Part := (FullName.Letter[]{length > 0}, (FullName.Joiner, FullName.Letter[]{length > 0})[]) | (FullName.Letter, ".")
+  assert "Jane Smith" is FullName  // CHR9 a first and a family name are not a full name
+  assert "Jane Smith-Jones" is FullName  // CHR10 a hyphenated name part is not a full name part
+  assert "Patrick O'Brien" is FullName  // CHR11 an apostrophe inside a name part is not allowed
+  assert "J. R. R. Tolkien" is FullName  // CHR12 initials with periods are not a full name (https://www.w3.org/International/questions/qa-personal-names)
+  assert "Þórunn Guðmundsdóttir" is FullName & "محمد بن سلمان" is FullName  // CHR13 a name in another script is not a full name
+  assert !("Madonna" is FullName)  // CHR14 a single word in a script with spaces is a full name (one-word names cannot be told from handles)
+  assert !("Jane Smith3" is FullName)  // CHR15 digits are part of a full name
+  assert !("Jane @ Smith" is FullName)  // CHR16 text with a symbol is a full name
+  static Separator := Unicode.GeneralCategory.Space_Separator | "·" | "・" | "･"
+  static Unspaced := Char.Han | Char.Hiragana | Char.Katakana | Char.Hangul | Char.Yi | Unicode.GeneralCategory.Mark
+  assert "毛泽东" is FullName & "김민준" is FullName & "やまだたろう" is FullName  // CHR17 one part alone in a script that writes names without spaces is not a full name
+  assert "列奥纳多·达·芬奇" is FullName  // CHR18 a name with the middle dot separator is not a full name
+  parts => written.split(FullName.Separator)
+  assert ("Jane Smith" as FullName).parts == ["Jane", "Smith"]  // CHR19 the parts of a full name are not split at its separators
+  assert ("Jane Smith-Jones" as FullName).parts == ["Jane", "Smith-Jones"]  // CHR20 a hyphenated part is split
+  assert ("レオナルド・ダ・ヴィンチ" as FullName).parts == ["レオナルド", "ダ", "ヴィンチ"]  // CHR21 the parts of a name separated by the Japanese middle dot are not split there
+}
+
+// Kinds of name, told apart by what is written: a name is any of them that matches.
+Character &+= {
+  full_name => name{is FullName}
+  assert Character().named("Jane Smith").full_name == "Jane Smith"  // CHR50 a character named with a full name has no full name
+  assert Character().named("jane@orbitmines.com").full_name == None  // CHR51 a character named with an email has a full name
+}

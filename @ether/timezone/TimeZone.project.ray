@@ -1,4 +1,6 @@
 @tzif
+@ether/time
+@unicode
 
 // Time zones and leap seconds: IANA's tz data (https://data.iana.org/time-zones/tz-link.html), read from where the
 // operating system keeps it, else downloaded (@tzif/zoneinfo).

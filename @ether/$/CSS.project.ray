@@ -1,3 +1,5 @@
+@unicode
+
 // CSS Snapshot (https://www.w3.org/TR/css-2023/)
 // The headers read CSS and write it; written inline, a Ray value in braces is a hole in a selector or a value, and a declaration whose value is None is left out
 CSS := class: Language {

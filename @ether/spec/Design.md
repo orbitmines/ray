@@ -2079,10 +2079,10 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - The language's core is its own project, `@ether/ray/bootstrap`: the entrypoint and the files it needs (Number, Ray,
   String), depending on nothing else, so that it can bootstrap Expression.ray to self-host. What needs the rest of
   the library (Unicode tables, units, randomness, IO, languages, the compiler's levels, access) lives in the file of what
-  it needs (`Char &+= { … }` in Unicode.ray, `Iterable &+= { random … }` in Feature.ray). It is rebuilt a line at a
+  it needs (`Char &+= { … }` in $/Unicode.project.ray, `Iterable &+= { random … }` in Feature.ray). It is rebuilt a line at a
   time, essentials first, each line's tests passing before the next.
   The entrypoint holds only what the bootstrap uses (2026-10-16): programs as quests, `$` and diagnostics carried by
-  values, case-folded uniqueness and where a class is written are tested in Program.ray, Reporting.ray, Unicode.ray and
+  values, case-folded uniqueness and where a class is written are tested in Program.ray, Reporting.ray, $/Unicode.project.ray and
   Location.ray; the entrypoint keeps the stubs (`Program`, `Diagnostic`) its own rules name.
 
 - The host (the TypeScript interpreter in `@ether/v0.ts`, used the same way by the CLI, the daemon and the LSP) knows no
@@ -2286,7 +2286,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
       part of Unicode into the bootstrap.
     - A String is of characters, not of code points; by default a character is a grapheme cluster. For now a character
       is the scalar a UTF-8 unit decodes to: `String.Scalars`, a String whose characters are those, the library using it
-      until then. UTF-8 is a type (Unicode.ray's), moved into String.ray under `Unicode` while the bootstrap needs it;
+      until then. UTF-8 is a type ($/Unicode.project.ray's), moved into String.ray under `Unicode` while the bootstrap needs it;
       `.next` follows from it.
     - What counts as splitting is what the methods read: any piece of text can be used for anything.
     - A 32-bit integer is `Binary₃₂.Signed`, the language's own (not the kernel's `external int32`).

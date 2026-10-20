@@ -1001,6 +1001,15 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   }
   seq_type := field_type_of(seq_at)
   seq_name := seq_at.written_name
+  if (seq_name !== None) && (reading_chain !== None) {
+    seq_named := external member (reading_chain.chain_held) (seq_name)
+    if (seq_named !== None) && !((external unset seq_named) === true) {
+      seq_type = seq_named
+    }
+  }
+  if read_by_parts((seq_type).whole) && (((seq_type) times_read) >= 2) {
+    seq_type = global.String
+  }
   if literal_text(seq_type) && (seq_name === None) {
     return (text_begins(seq_text, seq_type) ? seq_read(seq_at.next, text_past(seq_text, seq_type), seq_whole, seq_stops, seq_into) : None)
   }
@@ -1052,6 +1061,8 @@ one_character (one_type) => !literal_text(one_type) && ((external admits (`ab`) 
   while named_value_at {
     named_held.append(named_value_at.value)
     if named_name_at.value !== None {
+      // (the list says its name: its link's, a place it holds)
+      external member (named_held.tail) (`written_name`) (named_name_at.value)
       named_was := external member (named_held) (named_name_at.value)
       external member (named_held) (named_name_at.value) (((named_was === None) ? named_value_at.value : (named_was | named_value_at.value)))
     }
@@ -1059,6 +1070,48 @@ one_character (one_type) => !literal_text(one_type) && ((external admits (`ab`) 
     named_name_at = named_name_at.next
   }
   named_held
+}
+// (a list made of another position by position, `xs.map{p}(v)`: the names the other says, each at its position)
+{names_source} names_onto {names_target} ^keyword => {
+  onto_from := (names_source).head
+  onto_to := (names_target).head
+  while onto_from && onto_to {
+    if onto_from.written_name !== None {
+      external member (onto_to) (`written_name`) (onto_from.written_name)
+      external member (names_target) (onto_from.written_name) (onto_to.value)
+    }
+    onto_from = onto_from.next
+    onto_to = onto_to.next
+  }
+  names_target
+}
+// (what a list being read names: its own name of a position, what that position is read as now (`(LHS | RHS) = String`);
+// the lists being read, one inside another)
+reading_chain := None
+{link_held} chained_onto {link_up} ^keyword => chain_node_of(link_up) chain_holding (link_held)
+chain_node_of (chain_up_of) => {
+  chain_node := Node &+ { }
+  external member (chain_node) (`chain_up`) (chain_up_of)
+  chain_node
+}
+{chain_at} chain_holding {chain_value} ^keyword => {
+  chain_made := chain_at
+  external member (chain_made) (`chain_held`) (chain_value)
+  chain_made
+}
+// (how often a list is being read, one inside another: a list read inside itself a second time reads as text (recursion
+// once, `GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF`))
+{counted_list} times_read ^keyword => {
+  counted_held := counted_list
+  counted_at := reading_chain
+  counted_n := 0
+  while counted_at !== None {
+    if (counted_at.chain_held) === counted_held {
+      counted_n = counted_n + 1
+    }
+    counted_at = counted_at.chain_up
+  }
+  counted_n
 }
 // (what a way read: of positions, the text they read, each named one its member (`CAPTURE: (String+, \s, String+)` of `{ }`
 // is `{ }`, its characters its parts); of a repeat, a list of its first count of them)
@@ -1111,10 +1164,11 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
   if ((ways_by).superposes === true) {
     ways_alternative := (ways_by).components.head
     while ways_alternative && !(ways_only && !(ways_found.empty)) {
+      // (named, `LHS: T` (a place given only a type); `String` alone is no name of what it reads)
       ways_alternative_type := alternative_type(ways_alternative.value)
       ways_alternative_at := ((ways_alternative_type) ways_in (ways_from) into (ways_into) first (ways_only)).head
       while ways_alternative_at {
-        ways_found.append(((ways_alternative_at.value).reading_left) left_after (way_value(ways_alternative_at.value)) named (ways_alternative.written_name))
+        ways_found.append(((ways_alternative_at.value).reading_left) left_after (way_value(ways_alternative_at.value)) named (((external unset (ways_alternative.value)) === true) ? ways_alternative.written_name : None))
         ways_alternative_at = ways_alternative_at.next
       }
       ways_alternative = ways_alternative.next
@@ -1156,7 +1210,10 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
     return ways_found
   }
   if ((ways_by).listing === true) && !((ways_by).is_range === true) {
+    chain_was := reading_chain
+    reading_chain = (ways_by) chained_onto (chain_was)
     ways_through := seq_read((ways_by).head, ways_from, false, false, ways_into)
+    reading_chain = chain_was
     if ways_through !== None {
       external member (ways_through) (`reading_parts`) (true)
       external member (ways_through) (`reading_from`) (ways_from)
@@ -1946,6 +2003,49 @@ alternative_type (alternative_written) => ((external unset alternative_written) 
   value
   (place) := value
 }
+// (`x.(a | b) = v`: each place named there in x given v)
+// (a text with another in it)
+mentions (mention_text, mention_word) => !(mention_text.empty) && (text_begins(mention_text, mention_word) || mentions(mention_text.rest, mention_word))
+{named_in}.({first_name} | {other_names}) = {value} ^punctuation => (named_in) names_given (`{first_name}`) also (`{other_names}`) as (value)
+{named_on_of} names_given {first_given} also {others_given} as {named_value_of} ^keyword => {
+  named_value := named_value_of
+  named_on := named_on_of
+  external member (named_on) (trimmed_text(first_given)) (named_value)
+  rest_given := others_given
+  while mentions(rest_given, `|`) {
+    rest_bar := rest_given
+    while !text_begins(rest_bar, `|`) {
+      rest_bar = rest_bar.rest
+    }
+    external member (named_on) (trimmed_text(rest_given.until(rest_bar))) (named_value)
+    rest_given = rest_bar.rest
+  }
+  external member (named_on) (trimmed_text(rest_given)) (named_value)
+  named_value
+}
+// (a text with the `)` it ends with left off)
+closed_off (closed_text) => {
+  closed_last := closed_text
+  while !(closed_last.empty) && !(closed_last.rest.empty) {
+    closed_last = closed_last.rest
+  }
+  (!(closed_last.empty) && ((closed_last.first) == 41)) ? closed_text.until(closed_last) : closed_text
+}
+trimmed_text (trim_text) => {
+  trim_start := trim_text
+  while !(trim_start.empty) && ((trim_start.first) == 32) {
+    trim_start = trim_start.rest
+  }
+  trim_end := trim_start
+  trim_last := trim_start
+  while !(trim_end.empty) {
+    trim_end = trim_end.rest
+    if !(trim_end.empty) && !((trim_end.first) == 32) {
+      trim_last = trim_end
+    }
+  }
+  (trim_start.empty) ? trim_start : trim_start.until(trim_last.rest)
+}
 // (`x[k] = v`, after it: what x holds under k, not a name)
 {on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : ((key is String) ? member_given(on, key, value) : (on).holding(key, value))
 // (and composing, after giving: `,` binds loosest of all, `(a, b = 0)` is `a, (b = 0)`)
@@ -1967,6 +2067,12 @@ alternative_type (alternative_written) => ((external unset alternative_written) 
     {rest}
   }
   value
+}
+// (`x ~~ .(a | b) = v`: x, each place named in it given v)
+{named_value_in} ~~ .({first_name} | {other_names}) = {value} ^operator => {
+  named_holder := named_value_in
+  (named_holder) names_given (`{first_name}`) also (`{other_names}`) as (value)
+  named_holder
 }
 // (a function's parameters, one of two named as a visible name, after `,` is defined, where a call reads it)
 assert {

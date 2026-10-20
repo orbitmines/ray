@@ -2716,7 +2716,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (word(a, m, W_MEMBER) && rest < z) {
         let mq = rest; while (mq < z && b(mq) > 32) mq++;
         let mr = skip(mq, z); while (mr < z && b(mr) > 32) mr++;
-        const mx = block(t, rest, mq, names, f, self, 0, 1, 0, self, 0), mk = mq < z ? block(t, skip(mq, z), mr, names, f, self, 0, 1, 0, self, 0) : 0;
+        let mx = block(t, rest, mq, names, f, self, 0, 1, 0, self, 0); const mk = mq < z ? block(t, skip(mq, z), mr, names, f, self, 0, 1, 0, self, 0) : 0;
+        // (a name's head, what `y := x` answers: what the name gives, read where this is)
+        if (mx && w(mx + N_IS) === IS_HEAD && w(mx + N_A) < w(mx + N_B) && self) { const hr = rule_seen(t, self, w(mx + N_A), w(mx + N_B) - w(mx + N_A), 0); if (hr && !w(hr + R_HOLES)) { const hv = apply(t, hr, 0, frame(0, 0, self, 0, 0, 0, 0, self, self), 0, self, w(mx + N_A), w(mx + N_B), self, self); if (hv && w(hv + N_IS) === IS_NODE) mx = hv; } }
         if (!mx || !mk || w(mk + N_IS) !== IS_TEXT || w(mk + N_A) >= w(mk + N_B)) return w(NOTHING);
         if (skip(mr, z) < z) {
           const mv = block(t, skip(mr, z), z, names, f, self, 0, 1, 0, self, 0);

@@ -712,13 +712,12 @@ one_or_more => {
 // (by the name a text holds: the kernel's)
 member_named (holder, name) => external member holder name
 member_given (holder, name, value) => external member holder name value
-{on}[{key}] ^punctuation => ((((on).listing === true) || ((on).textual === true)) && (key is Number)) ? (on).indexed(key) : ((key is String) ? (member_named(on, key) ?? (on).{key}) : (on).held_under(key))
+{on}[{key}] ^punctuation => ((((on).listing === true) || ((on).textual === true)) && (key is Number)) ? (on).indexed(key) : ((((key).listing === true) && (((on) entry_for (key)) !== None)) ? ((on) held_for (key)) : ((key is String) ? (member_named(on, key) ?? (on).{key}) : ((on) held_for (key))))
 assert {
   xs := [0, 0, 0]
   xs[1] = 5
   assert xs[1] == 5  // IX1 placing a value in a list at a number leaves the list as it was
 }
-{on}[{key}] := {value} ^punctuation => (key is String) ? member_given(on, key, value) : (on).holding(key, value)
 assert {
   Keyed := { }
   Keyed["inner"] := true
@@ -818,7 +817,18 @@ assert {
 }
 {x}? ^operator => None | x
 // What a value can be, `x#` (`#x`): an enumeration's members, a superposition's components, else itself alone.
-possible => (.members) ? .members : (((.superposes) === true) ? .components : [.])
+possible => (.members) ? .members : (((.superposes) === true) ? .components : ((((.narrows).superposes) === true) ? narrowed_possible(.) : [.]))
+// (a narrowing of a superposition: those of its values it holds for, `(1 | 2 | 3){. > 1}#` 2 and 3)
+narrowed_possible (narrowing) => {
+  narrowing_kept := Array.new
+  narrowing_at := ((narrowing).narrows)#.head
+  while narrowing_at {
+    narrowing_one := narrowing_at.value
+    (narrowing_kept.append(narrowing_one) if holds_any((narrowing).holds(narrowing_one)))
+    narrowing_at = narrowing_at.next
+  }
+  narrowing_kept
+}
 # => .possible
 #({value}) ^punctuation => (value).possible
 
@@ -1405,6 +1415,12 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
       ({{fields}}) taking {arguments}
     })
     {this}() => this(declared)
+    // (called with a block, `Node({ … })`: one made with nothing given, the block read in it (its names the instance's))
+    {this}({`{`}{extension}{`}`}) => {
+      extended := this(declared)
+      extended.({extension})
+      extended
+    }
   }
   made
 })()
@@ -1664,25 +1680,57 @@ converted_to (type) => {
 
 // What a value holds under a key: its entries (`keyed`), none until one is given.
 keyed := None
-Holding := class (key, value) => { }
-// (under a name of its own too, `held_under`, for what an Iterable's own `held` (what a step holds) would answer first)
-held_under (key) => {
-  holder := this
-  found := (holder.keyed) ? holder.keyed.find((entry) => entry.key === key) : None
-  found ? found.value : None
+// (an entry made with its key alone; what it keeps given after)
+Holding := class (key) => {
+  kept := None
 }
-held (key) => held_under(key)
-// (what holds it named: `.` in a block, `unless … { }`, is the block's)
-holding (key, value) => {
-  holder := this
-  (holder.keyed := []) unless holder.keyed
-  found := holder.keyed.find((entry) => entry.key === key)
-  if found {
-    found.value = value
-  } else {
-    holder.keyed.append(Holding(key, value))
+// (found and given by rules, their holes named apart: a list given to a method is taken as its arguments, not as one value)
+// (a key the same one, or a number as much: each `5` written is one of its own)
+{entry_holder} entry_for {entry_key} ^keyword => {
+  entry_on := entry_holder
+  entry_wanted := entry_key
+  // (its own entries, asked of it alone: a value without them is not read through what it converts to)
+  entry_keyed := external member (entry_on) (`keyed`)
+  (entry_keyed === None) ? None : entry_keyed.find((entry) => (entry.key === entry_wanted) || ((entry_wanted is Number) && (entry.key is Number) && (entry.key == entry_wanted)))
+}
+{entry_holder} held_for {entry_key} ^keyword => {
+  found_entry := ((entry_holder) entry_for (entry_key))
+  (found_entry === None) ? None : found_entry.kept
+}
+{entry_holder} keeping {entry_key} as {entry_value} ^keyword => {
+  keeping_on := entry_holder
+  keeping_key := entry_key
+  keeping_value := entry_value
+  (keeping_on.keyed := []) if (keeping_on.keyed === None)
+  keeping_entry := ((keeping_on) entry_for (keeping_key))
+  if keeping_entry === None {
+    keeping_entry = Holding(keeping_key)
+    keeping_on.keyed.append(keeping_entry)
   }
-  value
+  keeping_entry.kept = keeping_value
+  keeping_value
+}
+// (under a name of its own too, `held_under`, for what an Iterable's own `held` (what a step holds) would answer first)
+held_under (key) => (this) held_for (key)
+held (key) => held_under(key)
+// (the keys it holds under: any of them, superposed (`rules.keys{text ~= .}#`, and as a type, `x: rules.keys`); a list a
+// key, a text a member's name; none, None)
+// (one alone superposed with itself: a key that is a list, narrowed, would be read as a list (`{p}` keeps its elements))
+keys => {
+  keys_on := this
+  keys_first := None
+  keys_made := None
+  keys_at := (keys_on.keyed === None) ? None : keys_on.keyed.head
+  while keys_at {
+    keys_one := keys_at.value.key
+    if keys_first === None {
+      keys_first = keys_one
+    } else {
+      keys_made = (keys_made === None) ? (keys_first | keys_one) : (keys_made | keys_one)
+    }
+    keys_at = keys_at.next
+  }
+  (keys_made !== None) ? keys_made : ((keys_first !== None) ? (keys_first | keys_first) : None)
 }
 assert {
   kept_under := { }
@@ -1814,6 +1862,10 @@ dynamics := None
   value
   ({name} => value) given (value)
 }
+// (one under a key, `x[k] := v`: after it, so a key is not read as a name to define (`x[k] => v`))
+{on}[{key}] := {value} ^punctuation => ((key is String) && !((key).listing === true)) ? member_given(on, key, value) : ((on) keeping (key) as (value))
+// (and in what it is read in, `[k] := v` (a block's: `rules := { [rule: GRAMMAR_RULE] := … }`), under the list itself)
+[{bracketed_key}] := {bracketed_value} ^punctuation => (.) keeping ([{bracketed_key}]) as (bracketed_value)
 // (one given lazily, `x := lazily v`: v read when x is first asked for, then kept; after `:=`, which would read it first)
 {name} := lazily {default} ^keyword => {
   {name} => {
@@ -2077,7 +2129,7 @@ trimmed_text (trim_text) => {
   (trim_start.empty) ? trim_start : trim_start.until(trim_last.rest)
 }
 // (`x[k] = v`, after it: what x holds under k, not a name)
-{on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : ((key is String) ? member_given(on, key, value) : (on).holding(key, value))
+{on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : (((key is String) && !((key).listing === true)) ? member_given(on, key, value) : ((on) keeping (key) as (value)))
 // (and composing, after giving: `,` binds loosest of all, `(a, b = 0)` is `a, (b = 0)`)
 // A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
 // (what follows, a list a `,` made (still spreading): the value put in front of a copy of it (the list may be held elsewhere,

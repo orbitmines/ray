@@ -56,7 +56,7 @@ Expression := class (
 ) => {
 
 }
-assert `!language   { }   {LHS} => {RHS}\n\n` as Expression -- .(
+assert "!language   { }   {LHS} => {RHS}\n\n" as Expression -- .(
   .BOOTSTRAPPER.CAPTURE == `{ }`
   & .BOOTSTRAPPER.CAPTURES.LHS == `{LHS}`
   & .BOOTSTRAPPER.CAPTURES.RHS == `{RHS}`

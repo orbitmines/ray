@@ -28,7 +28,7 @@ static UTF-8 := class (sequence: (
 )[]) => {}
 ```
 
-A self-modifying type:
+A self-modifying type (something with `dynamically`):
 
 ```ray
 static Ray := class (

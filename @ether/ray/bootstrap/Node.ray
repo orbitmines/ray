@@ -393,12 +393,30 @@ Node &+= {
 
 assert 5#.count == 1  // HS3 a single value has other than one possible value
 
-
-
-
-
-
-
-
-
-
+// A value written as its class reads it (TODO(explicit): goes when a header writes by being read backwards, solved for its
+// fields): its header given what writes it, `({{fields}}) := Writing(value, literals)`, answers its positions in order, a field
+// what the value holds under its name, a text or number written among them itself (what the header read in the value answers
+// there, the class's `written_as`)
+Writing := class (written_value, written_literals) => {
+  writes := true
+}
+written_parts (parts_at, parts_on, parts_literals) => {
+  parts := Array.new
+  each_at := parts_at
+  each_literal := parts_literals.head
+  while each_at {
+    each_name := each_at.written_name
+    parts.append((each_name === None) ? each_literal.value : (external member (parts_on) (each_name)))
+    each_at = each_at.next
+    each_literal = each_literal ? each_literal.next : None
+  }
+  parts
+}
+assert {
+  Positioned := class (id: Node, 44, data: Node) => { }
+  written_parts_of := Positioned(1, 2).written
+  assert (written_parts_of[2] == 2) && !(written_parts_of[2] == 1)  // WR4 the last field is not what the value holds
+  assert written_parts_of.count == 3  // WR1 a value is not written as its header's three positions
+  assert (written_parts_of[0] == 1) && !(written_parts_of[0] == 2)  // WR2 a field is not written as what the value holds
+  assert (written_parts_of[1] == 44) && !(written_parts_of[1] == 1)  // WR3 a number written among the fields is not itself
+}

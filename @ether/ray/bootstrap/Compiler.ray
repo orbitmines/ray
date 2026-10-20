@@ -1,3 +1,6 @@
+// Optimizations of any program, before any back end: levels of rules from a Program to a Program, each answering what the
+// program answers, each removable by name (Design §20.1: a level is a scope of rules). A back end's level comes after them
+// (`$/Wasm.project.ray`: `Compiler.default + Wasm.none`).
 Compiler := class {
   none := {
     {value} => value
@@ -18,7 +21,7 @@ Compiler := class {
   assert 5 + 2 == 7  // CO14 five and two is not seven
   assert 5 + 0 == 5  // CO18 five and a name holding nothing is not five
 
-  default := folding + {
+  default := folding + staged + lowered + inlined + pruned + {
     {a} - 0 => a
     {a} * 0 => 0
     0 * {a} => 0
@@ -46,9 +49,35 @@ Compiler := class {
   // A pure application is remembered by its arguments; the level is removable
   assert Compiler.memoised  // CO33 there is no memoising level
 
+  // Staging: what is known at build is worked out there. A statement whose text is known is the rule that reads it,
+  // applied; an operator on two known values, what it answers; a branch on a known condition, the branch taken.
+  staged := {
+    {statement: Expression.Statement{.written}} => statement.statement
+    {literal a} {operator} {literal b} => a operator b
+    if true {then} else {otherwise} => then
+    if false {then} else {otherwise} => otherwise
+    if false {then} => None
+  }
+  assert (@ray 2 + 3) as Program{O: Compiler.staged} == (@ray 5)  // CS1 two known values added are not worked out at build
+  assert (@ray if true { f() } else { g() }) as Program{O: Compiler.staged} == (@ray f())  // CS3 a known branch is not the branch taken
+  // Control flow written by other control flow, so a back end has fewer to write
+  lowered := {
+    unless {condition} {then} => if !condition {then}
+  }
+  assert (@ray unless c { f() }) as Program{O: Compiler.lowered} == (@ray if !c { f() })  // CS2 unless is not written as if
+  // A rule of one statement, applied where it is known: its statement, its parameters what it is given
+  inlined := {
+    {function: Expression.Rule{.statements.count == 1}}({arguments}) => function.statements.first.with(function.parameters, arguments)
+  }
+  // What is never reached: after a return; a statement whose value nothing reads and that does nothing
+  pruned := {
+    return {value}, {unreached} => return value
+    {unread: Pure{!.read}} => []
+  }
+
   minimising := default + logic
 
-  levels => [none, default, folding, logic, minimising, memoised]
+  levels => [none, default, folding, logic, minimising, memoised, staged, lowered, inlined, pruned]
   assert Compiler.levels.count == 10  // CO32 there are other than ten levels
   assert Compiler.levels.contains(Compiler.memoised)  // CO34 the memoising level is not one of the levels
 

@@ -76,6 +76,6 @@ if (!wasm) { process.stdout.write(results.flat().join('\n') + '\n'); process.exi
 // (the bodies, one range after another; the sections before them, given how many bytes they are, and after them)
 const bodies = Buffer.concat(ranges.map((_, k) => readFileSync(join(dir, `range-${k}.bin`))));
 const none = run_of('around', starts.length, starts.length);
-const [head, tail] = await Promise.all([[join(dir, 'head.bin'), `wasm.head(${pages}, ${bodies.length})`], [join(dir, 'tail.bin'), 'wasm.tail(0)']].map(async ([file, value]) => { await read(none, bytes_of(file, value)); return readFileSync(file); }));
+const [head, tail] = await Promise.all([[join(dir, 'head.bin'), `wasm.before_bodies(${pages}, ${bodies.length})`], [join(dir, 'tail.bin'), 'wasm.after_bodies(0)']].map(async ([file, value]) => { await read(none, bytes_of(file, value)); return readFileSync(file); }));
 writeFileSync(wasm, Buffer.concat([head, bodies, tail]));
 process.stderr.write(`wrote ${wasm}: ${head.length + bodies.length + tail.length} bytes\n`);

@@ -80,6 +80,9 @@ global["wasm"] := {
   given := None
   given_n := None
   module_written := None
+  constants := None
+  equals := None
+  minus := None
   written := None
   called := None
   cells := None
@@ -112,6 +115,9 @@ wasm.count = 0.int32
 wasm.written = 0.int32
 wasm.given = wasm_table(0)
 wasm.given_n = 0.int32
+wasm.constants = wasm_table(0)
+wasm.equals = "="[0]
+wasm.minus = "-"[0]
 
 // Bytes: one, a number as LEB128 (unsigned, then signed), a text as its size then its bytes, a section as its id, its size,
 // then it.
@@ -287,10 +293,13 @@ wj_label (name) => {
 // (an operand as a JMP line writes it, a cell by its name, `-` none, `=n` a constant: the constant an Int32)
 wasm_operand (x) => {
   if x.bits !== None { return x }
-  if !(x.first == "="[0]) { return x }
+  if !(x.first == wasm.equals) { return x }
+  if wasm_found(wasm.constants, x) { return wasm_slot(wasm.constants, x) }
   digits := x.rest
-  if digits.first == "-"[0] { return 0.int32 - Int32.numeral(digits.rest) }
-  Int32.numeral(digits)
+  made := Int32.numeral(digits)
+  if digits.first == wasm.minus { made = 0.int32 - Int32.numeral(digits.rest) }
+  wasm_put(wasm.constants, x, (wasm_index(made)))
+  made
 }
 // (its cells named, as `Jmp.jmpIf` names them: its condition, what it answers into, then its two values)
 wasm_named (x) => {
@@ -795,7 +804,7 @@ wj_module (pages) => {
 // (what `--write --value=...` writes, read after all of it: the whole module; its sections around bodies written apart)
 wasm &+= {
   module (pages) => wj_module(pages)
-  head (pages, bytes) => wasm_head(pages, bytes)
-  tail (unused) => wasm_tail(0)
+  before_bodies (pages, bytes) => wasm_head(pages, bytes)
+  after_bodies (unused) => wasm_tail(0)
   written_bodies (unused) => wj_bodies(0)
 }

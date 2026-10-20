@@ -42,7 +42,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (the kernel's map: a slot for each of its words (0 to 23), the span a parameter is given at M_SPAN (24) and the count each
   // rule is stamped with in the slot after it (25), then the classes it finds, Node at 26 and String at 27, then the
   // program's arguments, 28 (ARGV_SLOT; language.ts writes them there): past all of those)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_TYPE_WRITTEN = 45, W_SPREAD = 46, W_IS_RANGE = 47, ARGV_SLOT = 28, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_LINKED = 21, M_JOINED = 22, M_KEPT = 23, M_SPAN = 24;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_TYPE_WRITTEN = 45, W_SPREAD = 46, W_IS_RANGE = 47, W_MAPPED_BY = 48, W_MAPPED = 49, W_DYNAMIC_IN = 50, W_DYNAMIC_OUT = 51, W_ORIGIN_OF = 52, ARGV_SLOT = 28, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_LINKED = 21, M_JOINED = 22, M_KEPT = 23, M_SPAN = 24;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 32;
@@ -681,6 +681,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (!fr || w(fr + N_IS) !== IS_FRAME || !w(fr + F_RULE) || e <= s) return 0;
     const h = named(w(fr + F_RULE), s, e); if (h < 0) return 0;
     const o = follow(fr + F_TAKES + TAKE * h, 1); let cs = skip(w(o), w(o + 4)), ce = w(o + 4); while (ce > cs && b(ce - 1) <= 32) ce--;
+    // (`{x: f}`, braced: x)
+    if (ce - cs > 2 && b(cs) === 123) { const be = past(cs, ce), p0 = skip(cs + 1, be - 1); let wb = p0; while (wb < be - 1 && b(w(CLASSES) + b(wb)) === 1) wb++; let c = wb; while (c < be - 1 && b(c) <= 32) c++; if (wb > p0 && b(c) === 58 && b(c + 1) !== 58 && b(c + 1) !== 61) return node(IS_TEXT, p0, wb, w(TEXTS) || w(GLOBAL), 0); }
     let we = cs; while (we < ce && b(w(CLASSES) + b(we)) === 1) we++;
     if (we === cs || (b(cs) >= 48 && b(cs) <= 57)) return 0;
     let after = we; while (after < ce && b(after) <= 32) after++;
@@ -1971,6 +1973,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (`next` of `is_zero => next === None`, made `Number()`): None (§5, a missing member reads as None))
     // (a word nothing reads where it was written, read as a value: what it names on what it is read on, if that names it (a
     // header's field, read by a type after it: `(a: T, b: a.count)`))
+    // (code nothing reads, while a type made `dynamically` reads: what reads it with the names of the frame that type was
+    // made in, on what it is read on)
+    if (k === K_UNREAD && w(t + 952) && !w(t + 1016) && !w(t + T_DECL) && skip(s, e) < trim_end(s, e)) { put(t + 1016, 1); let dv = 0; for (let di = w(t + 952) - 1; di >= 0 && !dv; di--) for (let df = w(t + 956 + 4 * di), up = 0; df && w(df + N_IS) === IS_FRAME && up < 4 && !dv; df = w(df + F_CALLER), up++) { if (df !== names) { const dt = w(df + F_THIS), dm = dt && w(dt + N_IS) === IS_NODE ? node(IS_NODE, 0, 0, dt, dt) : 0; if (dm && self) { const wd = w(w(WORDS) + 8 * W_DOT); bound(wd, wd + w(w(WORDS) + 8 * W_DOT + 4), dm, self); } const v1 = block(t, skip(s, e), trim_end(s, e), df, df, dm || self, 0, 1, 0, dm || self, 0); if (v1 && v1 !== w(NOTHING)) dv = v1; } } put(t + 1016, 0); if (dv) return dv; }
     // (a word in code a body inlined, `{{fields}}`, nothing reads here: what reads it where that code was written (a closure's
     // parameter or local, `Glyphs` of a class made in `Number.Named.for`))
     if (k === K_UNREAD && worded(s, e) && names && w(names + N_IS) === IS_FRAME) {
@@ -2622,14 +2627,34 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (`external unset v t`: v a name given no value yet, a place: given t, where it is named)
       // (`external unset x T`, `x: T`: a name given nothing yet given T where it was named; a name that answers something visible
       // elsewhere (`rest`, `name`) and is no member of what it is read in, given T there all the same, its own (GN1))
+      // (`external dynamic_in f`, `external dynamic_out`: while a type made `dynamically` reads, the frame it was made in, what
+      // a word nothing else reads is read in (`context` of `Statements (context: Node) => dynamically Statement[] …`))
+      if (word(a, m, W_DYNAMIC_IN) && rest < z) { const df = block(t, rest, z, names, f, self, 0, 1, 0, self, 0), dn = w(t + 952); if (df && w(df + N_IS) === IS_FRAME && dn < 16) { put(t + 956 + 4 * dn, df); put(t + 952, dn + 1); } return w(TRUE_); }
+      // (`external origin_of x`: the frame where the code a hole x took was written)
+      if (word(a, m, W_ORIGIN_OF) && rest < z) { const ox = names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? named(w(names + F_RULE), rest, trim_end(rest, z)) : -1; if (ox < 0) return w(NOTHING); const otk = follow(names + F_TAKES + TAKE * ox, 1), of_ = w(otk + T_ORIGIN); return of_ || w(NOTHING); }
+      if (word(a, m, W_DYNAMIC_OUT)) { const dn = w(t + 952); if (dn > 0) put(t + 952, dn - 1); return w(TRUE_); }
+      // (`external mapped p v`: what the place p (written `{x: f}`) makes of v: f read where it was written, `.` v; else v)
+      if (word(a, m, W_MAPPED) && rest < z) {
+        let mq = rest; while (mq < z && b(mq) > 32) mq++;
+        const mp = block(t, rest, mq, names, f, self, 0, 1, 0, self, 0), mv = mq < z ? block(t, skip(mq, z), z, names, f, self, 0, 1, 0, self, 0) : 0;
+        if (!mp || w(mp + N_IS) !== IS_PLACE) return mv;
+        const mn = member(t, mp, w(w(WORDS) + 8 * W_MAPPED_BY), w(w(WORDS) + 8 * W_MAPPED_BY + 4));
+        if (!mn || w(mn + N_IS) !== IS_TEXT || !w(mn + N_PARENT) || w(w(mn + N_PARENT) + N_IS) !== IS_FRAME) return mv;
+        const mo = w(mn + N_PARENT), mr = block(t, w(mn + N_A), w(mn + N_B), mo, mo, mv, 0, 1, 0, mv, 0);
+        return mr || mv;
+      }
       if (word(a, m, W_UNSET) && rest < z) {
         let q = rest; while (q < z && b(q) > 32) q++;
         if (q >= z) { const v1 = block(t, rest, q, names, f, self, 0, 1, 0, self, 0); return v1 && w(v1 + N_IS) === IS_PLACE ? w(TRUE_) : w(FALSE_); }
         // (`x: T` written in what a node is made of, T one hole's code: read when it is first asked for (what x is, or its type),
         // then kept; else T read first (what reads it may go elsewhere, `break: return`), then x, as a left side)
         const ta = skip(q, z), thx_ = names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? named(w(names + F_RULE), ta, z) : -1;
+        // (`{x: f}: T`, x's code in braces: x a place, f kept on it (what x is made of what T reads, `.` that))
+        const hxb = names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? named(w(names + F_RULE), rest, q) : -1, tkb = hxb >= 0 ? follow(names + F_TAKES + TAKE * hxb, 1) : 0;
+        let mb_s = 0, mb_e = 0, mb_ns = 0, mb_ne = 0;
+        if (tkb) { const cs = skip(w(tkb), w(tkb + 4)), ce = trim_end(w(tkb), w(tkb + 4)); if (ce - cs > 2 && b(cs) === 123 && b(ce - 1) === 125) { const p0 = skip(cs + 1, ce - 1); let we = p0; while (we < ce - 1 && b(w(CLASSES) + b(we)) === 1) we++; let c = we; while (c < ce - 1 && b(c) <= 32) c++; if (we > p0 && b(c) === 58 && b(c + 1) !== 58 && b(c + 1) !== 61) { mb_ns = p0; mb_ne = we; mb_s = skip(c + 1, ce - 1); mb_e = trim_end(c + 1, ce - 1); } } }
         const decl_was = w(t + T_DECL); put(t + T_DECL, 1); set(t + 948, 1);
-        const v0 = block(t, rest, q, names, f, self, 0, 1, 0, self, 0);
+        const v0 = mb_ns ? placed(t, mb_ns, mb_ne, self) : block(t, rest, q, names, f, self, 0, 1, 0, self, 0);
         put(t + T_DECL, decl_was); set(t + 948, 0);
         // (a name that goes elsewhere when read, `break` of `break: return`: its type read instead, first, as it is written)
         if (w(t + T_JUMP_N)) { put(t + T_JUMP_N, 0); return thx_ >= 0 ? valued(t, names + F_TAKES + TAKE * thx_) : block(t, ta, z, names, f, self, 0, 1, 0, self, 0); }
@@ -2648,6 +2673,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
           const given = tkc && w(lthis + N_IS) === IS_NODE ? node(IS_LAZY, tkc, 0, lthis, 0) : lazyable ? valued(t, names + F_TAKES + TAKE * thx_) : pre;
           // (and on its place, its type)
           if (given) { const wt = w(w(WORDS) + 8 * W_TYPE); bound(wt, wt + w(w(WORDS) + 8 * W_TYPE + 4), v, given); }
+          if (mb_ns && mb_e > mb_s) { const wm = w(w(WORDS) + 8 * W_MAPPED_BY); bound(wm, wm + w(w(WORDS) + 8 * W_MAPPED_BY + 4), v, node(IS_TEXT, mb_s, mb_e, w(tkb + T_ORIGIN) || names, 0)); }
           // (one given a value there before, `x: T` read again where x was given (a header read again in what it was read
           // into): that value kept, the type on its place)
           const kept_ = w(v + N_A) < w(v + N_B) ? given_already(place_in(v) || self, w(v + N_A), w(v + N_B), v) : 0;

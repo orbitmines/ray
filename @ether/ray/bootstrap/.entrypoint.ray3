@@ -977,7 +977,7 @@ fresh_reading (fresh_left) => {
   reading
 }
 // (what is read by its parts: positions (a list of types), alternatives, Ts one after another; anything else, by what it is)
-read_by_parts (parts_type) => (!literal_text(parts_type)) && (((((parts_type).listing === true) && !((parts_type).is_range === true))) || ((parts_type).superposes === true) || repeat_type(parts_type))
+read_by_parts (parts_type) => (!literal_text(parts_type)) && (((parts_type).conjoins === true) || ((((parts_type).listing === true) && !((parts_type).is_range === true))) || ((parts_type).superposes === true) || repeat_type(parts_type))
 // (a repeat's own T: `T[]`'s, `T[]+`'s)
 repeat_each (each_of) => ((((each_of).repeats === true) && !((each_of).textual === true))) ? (each_of).each : repeat_each((each_of).nonempty_of)
 // (a name given where it is read, as it is read: what is written after it sees it, `CAPTURES: CAPTURE.map{…}`)
@@ -1001,6 +1001,8 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   }
   seq_type := field_type_of(seq_at)
   seq_name := seq_at.written_name
+  // (a position `{x: f}: T`: named x, what f makes of what T read, `.` that (the kernel keeps f on x's place))
+  seq_place := ((external unset (seq_at.value)) === true) ? seq_at.value : None
   if (seq_name !== None) && (reading_chain !== None) {
     seq_named := external member (reading_chain.chain_held) (seq_name)
     if (seq_named !== None) && !((external unset seq_named) === true) {
@@ -1016,7 +1018,8 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   if read_by_parts((seq_type).whole) {
     seq_way_at := ((seq_type) ways_in (seq_text) into (seq_into) first (false)).head
     while seq_way_at {
-      seq_way_value := way_value(seq_way_at.value)
+      seq_way_read := way_value(seq_way_at.value)
+      seq_way_value := (seq_place === None) ? seq_way_read : (external mapped (seq_place) (seq_way_read))
       (seq_way_value) given_to (seq_into) as (seq_name)
       seq_after := seq_read(seq_at.next, (seq_way_at.value).reading_left, seq_whole, seq_stops, seq_into)
       if seq_after !== None {
@@ -1033,7 +1036,8 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   while seq_cut !== None {
     seq_span := seq_text.until(seq_cut)
     if (seq_type) fits_read (seq_span) {
-      seq_value := (seq_type) leaf_read (seq_span)
+      seq_leaf_read := (seq_type) leaf_read (seq_span)
+      seq_value := (seq_place === None) ? seq_leaf_read : (external mapped (seq_place) (seq_leaf_read))
       (seq_value) given_to (seq_into) as (seq_name)
       seq_rest := seq_read(seq_at.next, seq_cut, seq_whole, seq_stops, seq_into)
       if seq_rest !== None {
@@ -1150,7 +1154,15 @@ way_value (way) => ((way).reading_count !== None) ? ((((way).reading_value) firs
 {ways_type} ways_in {ways_text} into {ways_into} first {ways_first} ^keyword => {
   ways_box := Node &+ { }
   external member (ways_box) (`boxed`) (ways_type)
-  ways_of(ways_box, ways_text, ways_into, ways_first)
+  ways_dynamic := (ways_type).dynamic_frame
+  if ways_dynamic !== None {
+    external dynamic_in ways_dynamic
+  }
+  ways_answer := ways_of(ways_box, ways_text, ways_into, ways_first)
+  if ways_dynamic !== None {
+    external dynamic_out
+  }
+  ways_answer
 }
 ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
   ways_by := ways_boxed.boxed
@@ -1208,6 +1220,19 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
       ways_left_at = ways_left_at.next
     }
     return ways_found
+  }
+  // (a conjunction with what calls it, `Statement[] & (caller) => …`: read as the part of it that reads (Ts, a list, a
+  // class))
+  if ((ways_by).conjoins === true) {
+    ways_part_at := ((ways_by).conjoined).head
+    while ways_part_at && (((ways_part_at.value) === ways_by) || !(repeat_type((ways_part_at.value).whole) || (((ways_part_at.value).listing) === true) || (((ways_part_at.value).of) === (ways_part_at.value)))) {
+      ways_part_at = ways_part_at.next
+    }
+    if ways_part_at === None {
+      return ways_found
+    }
+    ways_part := ways_part_at.value
+    return ((ways_part) ways_in (ways_from) into (ways_into) first (ways_only))
   }
   if ((ways_by).listing === true) && !((ways_by).is_range === true) {
     chain_was := reading_chain
@@ -1741,7 +1766,12 @@ dynamically {code} ^keyword => {
   (external &).caller dynamic {
     {code}
   }
-  {code}
+  // (and what it reads, while a text is read by it, read where it was made: `Statements (context: Node) => dynamically
+  // Statement[] …`, Statement's `context` that call's)
+  dynamic_value := {code}
+  dynamic_caller := external origin_of code
+  external member (dynamic_value) (`dynamic_frame`) (dynamic_caller)
+  dynamic_value
 }
 dynamically {name} := {value} ^keyword => {
   {name} := {value}

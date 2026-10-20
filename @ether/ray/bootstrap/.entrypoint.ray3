@@ -1191,10 +1191,12 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
 }
 // (a text read into one, by its positions in order (from its first position's link): read up to its end, the rest left unset;
 // one that does not read, None)
-// (positions read as the text is: each read, given, then the positions read again in the one read (what a definition among
+// (all of them at once, each the way it prefers that the ones after it read after; else read as the text is: each read,
+// given, then the positions read again in the one read (what a definition among
 // them says of a field before it is that field as read, `GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES…`); one read by its parts
 // the first way it reads; any other, with the ones after it)
-fields_read (fields_into, fields_first, fields_text) => {
+fields_read (fields_into, fields_first, fields_text) => (fields_given(fields_into, seq_read(fields_first, fields_text, true, true, fields_into)) ?? fields_in_turn(fields_into, fields_first, fields_text))
+fields_in_turn (fields_into, fields_first, fields_text) => {
   fields_at := fields_first
   fields_rest := fields_text
   fields_index := 0

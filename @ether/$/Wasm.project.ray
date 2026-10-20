@@ -1,0 +1,364 @@
+// WebAssembly Core 2.0, binary format (https://webassembly.github.io/spec/core/binary/), with threads' shared memory
+// (https://webassembly.github.io/threads/core/binary/). The header reads and writes a module. `none` and `default` are its
+// levels: rules from a Program to instructions, each right side the ops and their values as a module writes them, read
+// again by the level until only ops are left.
+Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section[]) {
+  static extensions := lazily ".wasm"
+  // (in the order `Order` gives their ids, a custom one anywhere (5.5); function i typed by the function section's i, coded by the code section's)
+  static Order := lazily [1, 2, 3, 4, 5, 13, 6, 7, 8, 9, 12, 10, 11]
+  dynamically assert sections.id{!= 0}.map(Order.index_of(.)).sorted
+
+  // Integers (5.2.2): LEB128, seven bits a byte from the least significant, the high bit set while more follow; signed, the
+  // last group's high bit its sign
+  static LEB := lazily class (more: (₂1, Binary₇)[], (₂0, last: Binary₇)) {
+    value => <-(more.map(.1), last).flatten as Binary
+    // TODO(explicit): goes when a header writes by solving itself for its fields (`value` given, the groups that read as it)
+    static (value: Binary) as (=== LEB) => <-value.chunk(7, from: ⊣) -- (LEB(more: .[..-1], last: .last))
+  }
+  static Signed := lazily LEB {
+    value => <-(more.map(.1), last).flatten as Binary.Signed
+    // TODO(explicit): goes with LEB's (the groups until what is left is the sign alone)
+    static (value: Binary.Signed) as (=== Signed) => <-value.chunk(7, from: ⊣, until: rest => rest.sign_extends) -- (Signed(more: .[..-1], last: .last))
+  }
+  static U32 := lazily LEB{value < 2 ^ 32}
+  static S32 := lazily Signed{-(2 ^ 31) <= value < 2 ^ 31}
+  // (each at most ceil(N / 7) bytes; a byte's bits past N 0, or the sign's)
+  static U64 := lazily LEB{value < 2 ^ 64}
+  static S33 := lazily Signed{-(2 ^ 32) <= value < 2 ^ 32}
+  static S64 := lazily Signed{-(2 ^ 63) <= value < 2 ^ 63}
+  // (an uninterpreted integer, `i32.const`'s, `i64.const`'s, is written as its signed one: S32, S64)
+  // Floating-point (5.2.3): the IEEE 754 bits, little endian
+  static F32 := lazily (bytes: Byte[]{length == 4})
+  static F64 := lazily (bytes: Byte[]{length == 8})
+  // Vectors (5.1.3), names (5.2.4)
+  static vec (T) => (count: U32 = elements.count, elements: T[]{length == count})
+  static Name := lazily (size: U32 = text.bytes.count, text: Unicode.UTF-8{bytes.count == size})
+  assert (624485 as Wasm.U32 as Byte[]) == [0xE5, 0x8E, 0x26] && ([0xE5, 0x8E, 0x26] as Wasm.U32).value == 624485  // WA1 LEB128's example is not e5 8e 26
+  assert (-123456 as Wasm.S32 as Byte[]) == [0xC0, 0xBB, 0x78]  // WA2 a negative number is not its signed LEB128
+  assert ("add" as Wasm.Name as Byte[]) == [3, 0x61, 0x64, 0x64]  // WA3 a name is not its length and its UTF-8 bytes
+
+  // Sections (5.5): an id, a size, the contents as that id's reads them
+  static Section := lazily class (id: Byte, size: U32 = data.bytes.count, data: Byte[]{length == size} as Data[id])
+  // (the contents of the section of each id: 0 custom, 1 type, 2 import, 3 function, 4 table, 5 memory, 6 global, 7 export,
+  // 8 start, 9 element, 10 code, 11 data, 12 data count, 13 tag)
+  static Data := lazily [
+    (name: Name, Byte[]), vec(RecursiveType), vec(Import), vec(U32), vec(Table), vec(MemoryType), vec(Global),
+    vec(Export), U32, vec(Element), vec(Code), vec(DataSegment), U32, vec(TagType)
+  ]
+  // (the custom section `name` (Appendix, custom sections), so a trace says where it was: subsections in the order of their
+  // ids, each an id, a size, its contents; a name map index/name pairs by increasing index, an indirect one a name map an index)
+  static Names := lazily (name: Name{text == "name"}, subsections: NameSubsection[])
+  static NameMap := lazily vec((index: U32, name: Name))
+  static IndirectNameMap := lazily vec((index: U32, names: NameMap))
+  static NameSubsection := lazily (0x00, size: U32 = module.bytes.count, module: Name)
+    | (0x01, size: U32 = functions.bytes.count, functions: NameMap)
+    | (0x02, size: U32 = locals.bytes.count, locals: IndirectNameMap)
+    | (0x04, size: U32 = types.bytes.count, types: NameMap)
+    | (0x0A, size: U32 = fields.bytes.count, fields: IndirectNameMap)
+    | (0x0B, size: U32 = tags.bytes.count, tags: NameMap)
+
+  // Types (5.3): a type constructor is the single byte of a small negative S33, so it can stand where a type index does
+  static NumberType := lazily enum i32 (code: 0x7F) | i64 (code: 0x7E) | f32 (code: 0x7D) | f64 (code: 0x7C)
+  static VectorType := lazily enum v128 (code: 0x7B)
+  static AbsoluteHeapType := lazily enum exn (code: 0x69) | array (code: 0x6A) | struct (code: 0x6B) | i31 (code: 0x6C) | eq (code: 0x6D) | any (code: 0x6E)
+    | extern (code: 0x6F) | func (code: 0x70) | none (code: 0x71) | noextern (code: 0x72) | nofunc (code: 0x73) | noexn (code: 0x74)
+  static HeapType := lazily AbsoluteHeapType | (index: S33{value >= 0})
+  // (0x63 `ref null ht`, 0x64 `ref ht`, an absolute heap type alone `ref null` of it: `funcref` 0x70, `externref` 0x6F)
+  static ReferenceType := lazily (0x63, heap: HeapType) | (0x64, heap: HeapType) | (heap: AbsoluteHeapType)
+  static ValueType := lazily NumberType | VectorType | ReferenceType
+  static ResultType := lazily vec(ValueType)
+  // (composite types: an array of a field, a struct of fields, a function; a field a value or a packed type, mutable 0x01)
+  static PackedType := lazily enum i16 (code: 0x77) | i8 (code: 0x78)
+  static StorageType := lazily ValueType | PackedType
+  static FieldType := lazily (storage: StorageType, mutable: 0x00 | 0x01)
+  static ArrayType := lazily (0x5E, field: FieldType)
+  static StructType := lazily (0x5F, fields: vec(FieldType))
+  static FunctionType := lazily (0x60, parameters: ResultType, results: ResultType)
+  static CompositeType := lazily ArrayType | StructType | FunctionType
+  // (0x4F `sub final`, 0x50 `sub` (open to subtypes), the supertypes type indices; a composite type alone `sub final` of none)
+  static SubType := lazily (0x4F, supertypes: vec(U32), composite: CompositeType) | (0x50, supertypes: vec(U32), composite: CompositeType) | (composite: CompositeType)
+  // (0x4E a group of mutually recursive types, a sub type alone a group of one)
+  static RecursiveType := lazily (0x4E, types: vec(SubType)) | (sub: SubType)
+  // (the flags' bit 0: a maximum follows; bit 1: shared (threads; only with a maximum); bit 2: 64-bit addresses (i64), else
+  // i32 and both below 2 ^ 32)
+  static Limits := lazily (flags: 0x00 | 0x04, min: U64) | (flags: 0x01 | 0x03 | 0x05 | 0x07, min: U64, max: U64)
+  static MemoryType := lazily Limits
+  static TableType := lazily (element: ReferenceType, limits: Limits)
+  static GlobalType := lazily (value: ValueType, mutable: 0x00 | 0x01)
+  // (a tag: the index of its function type)
+  static TagType := lazily (0x00, index: U32)
+  static ExternalType := lazily (0x00, function: U32) | (0x01, table: TableType) | (0x02, memory: MemoryType) | (0x03, global: GlobalType) | (0x04, tag: TagType)
+  static ExternalIndex := lazily (0x00, function: U32) | (0x01, table: U32) | (0x02, memory: U32) | (0x03, global: U32) | (0x04, tag: U32)
+
+  // Modules (5.5)
+  static Import := lazily (module: Name, name: Name, ExternalType)
+  static Export := lazily (name: Name, ExternalIndex)
+  // (a table of a type's null references, or 0x40 0x00 and the expression of its initial value)
+  static Table := lazily (table: TableType) | (0x40, 0x00, table: TableType, value: Expression)
+  static Global := lazily (global: GlobalType, value: Expression)
+  // (an element segment, its leading U32 a bit field: bit 0 passive or declarative, else active; bit 1 a table index (active),
+  // else declarative (not active); bit 2 a reference type and expressions, else an element kind (0x00, `ref func`) and function
+  // indices. Active ones without a table index: table 0, `ref func` (0) or `ref null func` (4))
+  static Element := lazily (0x00, at: Expression, functions: vec(U32))
+    | (0x01, kind: 0x00, functions: vec(U32))
+    | (0x02, table: U32, at: Expression, kind: 0x00, functions: vec(U32))
+    | (0x03, kind: 0x00, functions: vec(U32))
+    | (0x04, at: Expression, values: vec(Expression))
+    | (0x05, reference: ReferenceType, values: vec(Expression))
+    | (0x06, table: U32, at: Expression, reference: ReferenceType, values: vec(Expression))
+    | (0x07, reference: ReferenceType, values: vec(Expression))
+  // (a data segment, its leading U32 bit 0 passive, bit 1 a memory index; active without one: memory 0)
+  static DataSegment := lazily (0x00, at: Expression, bytes: vec(Byte)) | (0x01, bytes: vec(Byte)) | (0x02, memory: U32, at: Expression, bytes: vec(Byte))
+  static Code := lazily (size: U32 = function.bytes.count, function: (locals: vec((count: U32, value: ValueType)), body: Expression))
+
+  // Instructions (5.4): an op, then what it takes. An expression is instructions until `end`.
+  // (each op named as WAT writes it: `prefix.name` the enum `prefix`'s member `name`, the dots after the first `_`
+  // (`i32.atomic.rmw8.add_u` i32's `atomic_rmw8_add_u`); without a prefix, Op's. Two ops of one WAT name: `select` with types
+  // `select_t`, `ref.test`/`ref.cast` of `(ref null ht)` `test_null`/`cast_null`. A prefixed op's code: the prefix, its U32)
+  static Expression := lazily (Instruction[], end)
+  static Instruction := lazily (op: Op | local | global | table | elem | memory | data | ref | struct | array | i31 | any | extern
+    | i32 | i64 | f32 | f64 | v128 | i8x16 | i16x8 | i32x4 | i64x2 | f32x4 | f64x2 | atomic, op.takes)
+  static BlockType := lazily 0x40 | ValueType | S33{value >= 0}
+  // (try_table's catches: a tag and a label; `catch_ref` also the exception's reference; `catch_all` any exception)
+  static Catch := lazily (0x00, tag: U32, label: U32) | (0x01, tag: U32, label: U32) | (0x02, label: U32) | (0x03, label: U32)
+  // (br_on_cast's: bit 0 the first type nullable, bit 1 the second)
+  static CastOp := lazily 0x00 | 0x01 | 0x02 | 0x03
+  // (alignment as an exponent of 2, its default the access's natural one; bit 6 of it set: a memory index follows (multi-memory),
+  // the alignment the rest; else memory 0)
+  static MemArg := lazily (align: U32{value < 2 ^ 6} = 2, offset: U64 = 0) | (align: U32{2 ^ 6 <= value < 2 ^ 7} = 2 + 2 ^ 6, memory: U32, offset: U64 = 0)
+  static Lane := lazily Byte
+  // Control (5.4.1) and parametric (5.4.2) instructions, the ones WAT writes without a prefix
+  static Op := lazily enum unreachable (code: 0x00) | nop (code: 0x01) | block (code: 0x02, takes: BlockType = 0x40)
+    | `loop` (code: 0x03, takes: BlockType = 0x40) | `if` (code: 0x04, takes: BlockType = 0x40) | `else` (code: 0x05) | throw (code: 0x08, takes: U32)
+    | throw_ref (code: 0x0A) | end (code: 0x0B) | br (code: 0x0C, takes: U32) | br_if (code: 0x0D, takes: U32)
+    | br_table (code: 0x0E, takes: (vec(U32), U32)) | `return` (code: 0x0F) | call (code: 0x10, takes: U32)
+    | call_indirect (code: 0x11, takes: (index: U32, table: U32)) | return_call (code: 0x12, takes: U32)
+    | return_call_indirect (code: 0x13, takes: (index: U32, table: U32)) | call_ref (code: 0x14, takes: U32) | return_call_ref (code: 0x15, takes: U32)
+    | drop (code: 0x1A) | select (code: 0x1B) | select_t (code: 0x1C, takes: vec(ValueType)) | try_table (code: 0x1F, takes: (BlockType, vec(Catch)))
+    | br_on_null (code: 0xD5, takes: U32) | br_on_non_null (code: 0xD6, takes: U32)
+    | br_on_cast (code: (0xFB, 24), takes: (CastOp, label: U32, from: HeapType, to: HeapType))
+    | br_on_cast_fail (code: (0xFB, 25), takes: (CastOp, label: U32, from: HeapType, to: HeapType))
+  // Variable instructions (5.4.3)
+  static local := lazily enum get (code: 0x20, takes: U32) | set (code: 0x21, takes: U32) | tee (code: 0x22, takes: U32)
+  static global := lazily enum get (code: 0x23, takes: U32) | set (code: 0x24, takes: U32)
+  // Table instructions (5.4.4)
+  static table := lazily enum get (code: 0x25, takes: U32) | set (code: 0x26, takes: U32) | init (code: (0xFC, 12), takes: (elem: U32, table: U32))
+    | copy (code: (0xFC, 14), takes: (to: U32, from: U32)) | grow (code: (0xFC, 15), takes: U32) | size (code: (0xFC, 16), takes: U32)
+    | fill (code: (0xFC, 17), takes: U32)
+  static elem := lazily enum drop (code: (0xFC, 13), takes: U32)
+  // Memory instructions (5.4.5): `memory.size`/`grow` take a memory index (a 0x00 byte before multi-memory); the atomic ones are threads'
+  static memory := lazily enum size (code: 0x3F, takes: U32) | grow (code: 0x40, takes: U32) | init (code: (0xFC, 8), takes: (data: U32, memory: U32))
+    | copy (code: (0xFC, 10), takes: (to: U32, from: U32)) | fill (code: (0xFC, 11), takes: U32) | atomic_notify (code: (0xFE, 0), takes: MemArg)
+    | atomic_wait32 (code: (0xFE, 1), takes: MemArg) | atomic_wait64 (code: (0xFE, 2), takes: MemArg{align = 3})
+  static data := lazily enum drop (code: (0xFC, 9), takes: U32)
+  // Reference instructions (5.4.6); `test_null`/`cast_null`: of `(ref null ht)`
+  static ref := lazily enum null (code: 0xD0, takes: HeapType) | is_null (code: 0xD1) | func (code: 0xD2, takes: U32) | eq (code: 0xD3)
+    | as_non_null (code: 0xD4) | test (code: (0xFB, 20), takes: HeapType) | test_null (code: (0xFB, 21), takes: HeapType)
+    | cast (code: (0xFB, 22), takes: HeapType) | cast_null (code: (0xFB, 23), takes: HeapType) | i31 (code: (0xFB, 28))
+  // Aggregate instructions (5.4.7), 0xFB
+  static struct := lazily enum new (code: (0xFB, 0), takes: U32) | new_default (code: (0xFB, 1), takes: U32)
+    | get (code: (0xFB, 2), takes: (index: U32, field: U32)) | get_s (code: (0xFB, 3), takes: (index: U32, field: U32))
+    | get_u (code: (0xFB, 4), takes: (index: U32, field: U32)) | set (code: (0xFB, 5), takes: (index: U32, field: U32))
+  static array := lazily enum new (code: (0xFB, 6), takes: U32) | new_default (code: (0xFB, 7), takes: U32)
+    | new_fixed (code: (0xFB, 8), takes: (index: U32, count: U32)) | new_data (code: (0xFB, 9), takes: (index: U32, data: U32))
+    | new_elem (code: (0xFB, 10), takes: (index: U32, elem: U32)) | get (code: (0xFB, 11), takes: U32) | get_s (code: (0xFB, 12), takes: U32)
+    | get_u (code: (0xFB, 13), takes: U32) | set (code: (0xFB, 14), takes: U32) | len (code: (0xFB, 15)) | fill (code: (0xFB, 16), takes: U32)
+    | copy (code: (0xFB, 17), takes: (to: U32, from: U32)) | init_data (code: (0xFB, 18), takes: (index: U32, data: U32))
+    | init_elem (code: (0xFB, 19), takes: (index: U32, elem: U32))
+  static i31 := lazily enum get_s (code: (0xFB, 29)) | get_u (code: (0xFB, 30))
+  static any := lazily enum convert_extern (code: (0xFB, 26))
+  static extern := lazily enum convert_any (code: (0xFB, 27))
+  // Numeric instructions (5.4.8); `ray`: what `Binary₃₂.Signed`'s (`Binary₆₄.Signed`'s) rule of that name answers;
+  // 0xFC 0–7 the saturating truncations; 0xFE the threads' atomics
+  static i32 := lazily enum load (code: 0x28, takes: MemArg) | load8_s (code: 0x2C, takes: MemArg{align = 0})
+    | load8_u (code: 0x2D, takes: MemArg{align = 0}) | load16_s (code: 0x2E, takes: MemArg{align = 1})
+    | load16_u (code: 0x2F, takes: MemArg{align = 1}) | store (code: 0x36, takes: MemArg) | store8 (code: 0x3A, takes: MemArg{align = 0})
+    | store16 (code: 0x3B, takes: MemArg{align = 1}) | const (code: 0x41, takes: S32) | eqz (code: 0x45) | eq (code: 0x46, ray: "==")
+    | ne (code: 0x47, ray: "!=") | lt_s (code: 0x48, ray: "<") | lt_u (code: 0x49) | gt_s (code: 0x4A, ray: ">") | gt_u (code: 0x4B)
+    | le_s (code: 0x4C, ray: "<=") | le_u (code: 0x4D) | ge_s (code: 0x4E, ray: ">=") | ge_u (code: 0x4F) | clz (code: 0x67) | ctz (code: 0x68)
+    | popcnt (code: 0x69) | add (code: 0x6A, ray: "+") | sub (code: 0x6B, ray: "-") | mul (code: 0x6C, ray: "*") | div_s (code: 0x6D, ray: "/")
+    | div_u (code: 0x6E) | rem_s (code: 0x6F, ray: "%") | rem_u (code: 0x70) | and (code: 0x71, ray: "~&&") | or (code: 0x72, ray: "~||")
+    | xor (code: 0x73, ray: "~^^") | shl (code: 0x74, ray: "<<") | shr_s (code: 0x75, ray: ">>") | shr_u (code: 0x76, ray: ">>>") | rotl (code: 0x77)
+    | rotr (code: 0x78) | wrap_i64 (code: 0xA7) | trunc_f32_s (code: 0xA8) | trunc_f32_u (code: 0xA9) | trunc_f64_s (code: 0xAA)
+    | trunc_f64_u (code: 0xAB) | reinterpret_f32 (code: 0xBC) | extend8_s (code: 0xC0) | extend16_s (code: 0xC1) | trunc_sat_f32_s (code: (0xFC, 0))
+    | trunc_sat_f32_u (code: (0xFC, 1)) | trunc_sat_f64_s (code: (0xFC, 2)) | trunc_sat_f64_u (code: (0xFC, 3))
+    | atomic_load (code: (0xFE, 16), takes: MemArg) | atomic_load8_u (code: (0xFE, 18), takes: MemArg{align = 0})
+    | atomic_load16_u (code: (0xFE, 19), takes: MemArg{align = 1}) | atomic_store (code: (0xFE, 23), takes: MemArg)
+    | atomic_store8 (code: (0xFE, 25), takes: MemArg{align = 0}) | atomic_store16 (code: (0xFE, 26), takes: MemArg{align = 1})
+    | atomic_rmw_add (code: (0xFE, 30), takes: MemArg) | atomic_rmw8_add_u (code: (0xFE, 32), takes: MemArg{align = 0})
+    | atomic_rmw16_add_u (code: (0xFE, 33), takes: MemArg{align = 1}) | atomic_rmw_sub (code: (0xFE, 37), takes: MemArg)
+    | atomic_rmw8_sub_u (code: (0xFE, 39), takes: MemArg{align = 0}) | atomic_rmw16_sub_u (code: (0xFE, 40), takes: MemArg{align = 1})
+    | atomic_rmw_and (code: (0xFE, 44), takes: MemArg) | atomic_rmw8_and_u (code: (0xFE, 46), takes: MemArg{align = 0})
+    | atomic_rmw16_and_u (code: (0xFE, 47), takes: MemArg{align = 1}) | atomic_rmw_or (code: (0xFE, 51), takes: MemArg)
+    | atomic_rmw8_or_u (code: (0xFE, 53), takes: MemArg{align = 0}) | atomic_rmw16_or_u (code: (0xFE, 54), takes: MemArg{align = 1})
+    | atomic_rmw_xor (code: (0xFE, 58), takes: MemArg) | atomic_rmw8_xor_u (code: (0xFE, 60), takes: MemArg{align = 0})
+    | atomic_rmw16_xor_u (code: (0xFE, 61), takes: MemArg{align = 1}) | atomic_rmw_xchg (code: (0xFE, 65), takes: MemArg)
+    | atomic_rmw8_xchg_u (code: (0xFE, 67), takes: MemArg{align = 0}) | atomic_rmw16_xchg_u (code: (0xFE, 68), takes: MemArg{align = 1})
+    | atomic_rmw_cmpxchg (code: (0xFE, 72), takes: MemArg) | atomic_rmw8_cmpxchg_u (code: (0xFE, 74), takes: MemArg{align = 0})
+    | atomic_rmw16_cmpxchg_u (code: (0xFE, 75), takes: MemArg{align = 1})
+  static i64 := lazily enum load (code: 0x29, takes: MemArg{align = 3}) | load8_s (code: 0x30, takes: MemArg{align = 0})
+    | load8_u (code: 0x31, takes: MemArg{align = 0}) | load16_s (code: 0x32, takes: MemArg{align = 1})
+    | load16_u (code: 0x33, takes: MemArg{align = 1}) | load32_s (code: 0x34, takes: MemArg) | load32_u (code: 0x35, takes: MemArg)
+    | store (code: 0x37, takes: MemArg{align = 3}) | store8 (code: 0x3C, takes: MemArg{align = 0}) | store16 (code: 0x3D, takes: MemArg{align = 1})
+    | store32 (code: 0x3E, takes: MemArg) | const (code: 0x42, takes: S64) | eqz (code: 0x50) | eq (code: 0x51, ray: "==")
+    | ne (code: 0x52, ray: "!=") | lt_s (code: 0x53, ray: "<") | lt_u (code: 0x54) | gt_s (code: 0x55, ray: ">") | gt_u (code: 0x56)
+    | le_s (code: 0x57, ray: "<=") | le_u (code: 0x58) | ge_s (code: 0x59, ray: ">=") | ge_u (code: 0x5A) | clz (code: 0x79) | ctz (code: 0x7A)
+    | popcnt (code: 0x7B) | add (code: 0x7C, ray: "+") | sub (code: 0x7D, ray: "-") | mul (code: 0x7E, ray: "*") | div_s (code: 0x7F, ray: "/")
+    | div_u (code: 0x80) | rem_s (code: 0x81, ray: "%") | rem_u (code: 0x82) | and (code: 0x83, ray: "~&&") | or (code: 0x84, ray: "~||")
+    | xor (code: 0x85, ray: "~^^") | shl (code: 0x86, ray: "<<") | shr_s (code: 0x87, ray: ">>") | shr_u (code: 0x88, ray: ">>>") | rotl (code: 0x89)
+    | rotr (code: 0x8A) | extend_i32_s (code: 0xAC) | extend_i32_u (code: 0xAD) | trunc_f32_s (code: 0xAE) | trunc_f32_u (code: 0xAF)
+    | trunc_f64_s (code: 0xB0) | trunc_f64_u (code: 0xB1) | reinterpret_f64 (code: 0xBD) | extend8_s (code: 0xC2) | extend16_s (code: 0xC3)
+    | extend32_s (code: 0xC4) | trunc_sat_f32_s (code: (0xFC, 4)) | trunc_sat_f32_u (code: (0xFC, 5)) | trunc_sat_f64_s (code: (0xFC, 6))
+    | trunc_sat_f64_u (code: (0xFC, 7)) | atomic_load (code: (0xFE, 17), takes: MemArg{align = 3})
+    | atomic_load8_u (code: (0xFE, 20), takes: MemArg{align = 0}) | atomic_load16_u (code: (0xFE, 21), takes: MemArg{align = 1})
+    | atomic_load32_u (code: (0xFE, 22), takes: MemArg) | atomic_store (code: (0xFE, 24), takes: MemArg{align = 3})
+    | atomic_store8 (code: (0xFE, 27), takes: MemArg{align = 0}) | atomic_store16 (code: (0xFE, 28), takes: MemArg{align = 1})
+    | atomic_store32 (code: (0xFE, 29), takes: MemArg) | atomic_rmw_add (code: (0xFE, 31), takes: MemArg{align = 3})
+    | atomic_rmw8_add_u (code: (0xFE, 34), takes: MemArg{align = 0}) | atomic_rmw16_add_u (code: (0xFE, 35), takes: MemArg{align = 1})
+    | atomic_rmw32_add_u (code: (0xFE, 36), takes: MemArg) | atomic_rmw_sub (code: (0xFE, 38), takes: MemArg{align = 3})
+    | atomic_rmw8_sub_u (code: (0xFE, 41), takes: MemArg{align = 0}) | atomic_rmw16_sub_u (code: (0xFE, 42), takes: MemArg{align = 1})
+    | atomic_rmw32_sub_u (code: (0xFE, 43), takes: MemArg) | atomic_rmw_and (code: (0xFE, 45), takes: MemArg{align = 3})
+    | atomic_rmw8_and_u (code: (0xFE, 48), takes: MemArg{align = 0}) | atomic_rmw16_and_u (code: (0xFE, 49), takes: MemArg{align = 1})
+    | atomic_rmw32_and_u (code: (0xFE, 50), takes: MemArg) | atomic_rmw_or (code: (0xFE, 52), takes: MemArg{align = 3})
+    | atomic_rmw8_or_u (code: (0xFE, 55), takes: MemArg{align = 0}) | atomic_rmw16_or_u (code: (0xFE, 56), takes: MemArg{align = 1})
+    | atomic_rmw32_or_u (code: (0xFE, 57), takes: MemArg) | atomic_rmw_xor (code: (0xFE, 59), takes: MemArg{align = 3})
+    | atomic_rmw8_xor_u (code: (0xFE, 62), takes: MemArg{align = 0}) | atomic_rmw16_xor_u (code: (0xFE, 63), takes: MemArg{align = 1})
+    | atomic_rmw32_xor_u (code: (0xFE, 64), takes: MemArg) | atomic_rmw_xchg (code: (0xFE, 66), takes: MemArg{align = 3})
+    | atomic_rmw8_xchg_u (code: (0xFE, 69), takes: MemArg{align = 0}) | atomic_rmw16_xchg_u (code: (0xFE, 70), takes: MemArg{align = 1})
+    | atomic_rmw32_xchg_u (code: (0xFE, 71), takes: MemArg) | atomic_rmw_cmpxchg (code: (0xFE, 73), takes: MemArg{align = 3})
+    | atomic_rmw8_cmpxchg_u (code: (0xFE, 76), takes: MemArg{align = 0}) | atomic_rmw16_cmpxchg_u (code: (0xFE, 77), takes: MemArg{align = 1})
+    | atomic_rmw32_cmpxchg_u (code: (0xFE, 78), takes: MemArg)
+  static f32 := lazily enum load (code: 0x2A, takes: MemArg) | store (code: 0x38, takes: MemArg) | const (code: 0x43, takes: F32) | eq (code: 0x5B)
+    | ne (code: 0x5C) | lt (code: 0x5D) | gt (code: 0x5E) | le (code: 0x5F) | ge (code: 0x60) | abs (code: 0x8B) | neg (code: 0x8C)
+    | ceil (code: 0x8D) | floor (code: 0x8E) | trunc (code: 0x8F) | nearest (code: 0x90) | sqrt (code: 0x91) | add (code: 0x92) | sub (code: 0x93)
+    | mul (code: 0x94) | div (code: 0x95) | min (code: 0x96) | max (code: 0x97) | copysign (code: 0x98) | convert_i32_s (code: 0xB2)
+    | convert_i32_u (code: 0xB3) | convert_i64_s (code: 0xB4) | convert_i64_u (code: 0xB5) | demote_f64 (code: 0xB6) | reinterpret_i32 (code: 0xBE)
+  static f64 := lazily enum load (code: 0x2B, takes: MemArg{align = 3}) | store (code: 0x39, takes: MemArg{align = 3}) | const (code: 0x44, takes: F64)
+    | eq (code: 0x61) | ne (code: 0x62) | lt (code: 0x63) | gt (code: 0x64) | le (code: 0x65) | ge (code: 0x66) | abs (code: 0x99) | neg (code: 0x9A)
+    | ceil (code: 0x9B) | floor (code: 0x9C) | trunc (code: 0x9D) | nearest (code: 0x9E) | sqrt (code: 0x9F) | add (code: 0xA0) | sub (code: 0xA1)
+    | mul (code: 0xA2) | div (code: 0xA3) | min (code: 0xA4) | max (code: 0xA5) | copysign (code: 0xA6) | convert_i32_s (code: 0xB7)
+    | convert_i32_u (code: 0xB8) | convert_i64_s (code: 0xB9) | convert_i64_u (code: 0xBA) | promote_f32 (code: 0xBB) | reinterpret_i64 (code: 0xBF)
+  // Vector instructions (5.4.9), 0xFD, with relaxed SIMD (256–275)
+  static v128 := lazily enum load (code: (0xFD, 0), takes: MemArg{align = 4}) | load8x8_s (code: (0xFD, 1), takes: MemArg{align = 3})
+    | load8x8_u (code: (0xFD, 2), takes: MemArg{align = 3}) | load16x4_s (code: (0xFD, 3), takes: MemArg{align = 3})
+    | load16x4_u (code: (0xFD, 4), takes: MemArg{align = 3}) | load32x2_s (code: (0xFD, 5), takes: MemArg{align = 3})
+    | load32x2_u (code: (0xFD, 6), takes: MemArg{align = 3}) | load8_splat (code: (0xFD, 7), takes: MemArg{align = 0})
+    | load16_splat (code: (0xFD, 8), takes: MemArg{align = 1}) | load32_splat (code: (0xFD, 9), takes: MemArg)
+    | load64_splat (code: (0xFD, 10), takes: MemArg{align = 3}) | store (code: (0xFD, 11), takes: MemArg{align = 4})
+    | const (code: (0xFD, 12), takes: Byte[]{length == 16}) | not (code: (0xFD, 77)) | and (code: (0xFD, 78)) | andnot (code: (0xFD, 79))
+    | or (code: (0xFD, 80)) | xor (code: (0xFD, 81)) | bitselect (code: (0xFD, 82)) | any_true (code: (0xFD, 83))
+    | load8_lane (code: (0xFD, 84), takes: (MemArg{align = 0}, Lane)) | load16_lane (code: (0xFD, 85), takes: (MemArg{align = 1}, Lane))
+    | load32_lane (code: (0xFD, 86), takes: (MemArg, Lane)) | load64_lane (code: (0xFD, 87), takes: (MemArg{align = 3}, Lane))
+    | store8_lane (code: (0xFD, 88), takes: (MemArg{align = 0}, Lane)) | store16_lane (code: (0xFD, 89), takes: (MemArg{align = 1}, Lane))
+    | store32_lane (code: (0xFD, 90), takes: (MemArg, Lane)) | store64_lane (code: (0xFD, 91), takes: (MemArg{align = 3}, Lane))
+    | load32_zero (code: (0xFD, 92), takes: MemArg) | load64_zero (code: (0xFD, 93), takes: MemArg{align = 3})
+  static i8x16 := lazily enum shuffle (code: (0xFD, 13), takes: Lane[]{length == 16}) | swizzle (code: (0xFD, 14)) | splat (code: (0xFD, 15))
+    | extract_lane_s (code: (0xFD, 21), takes: Lane) | extract_lane_u (code: (0xFD, 22), takes: Lane) | replace_lane (code: (0xFD, 23), takes: Lane)
+    | eq (code: (0xFD, 35)) | ne (code: (0xFD, 36)) | lt_s (code: (0xFD, 37)) | lt_u (code: (0xFD, 38)) | gt_s (code: (0xFD, 39))
+    | gt_u (code: (0xFD, 40)) | le_s (code: (0xFD, 41)) | le_u (code: (0xFD, 42)) | ge_s (code: (0xFD, 43)) | ge_u (code: (0xFD, 44))
+    | abs (code: (0xFD, 96)) | neg (code: (0xFD, 97)) | popcnt (code: (0xFD, 98)) | all_true (code: (0xFD, 99)) | bitmask (code: (0xFD, 100))
+    | narrow_i16x8_s (code: (0xFD, 101)) | narrow_i16x8_u (code: (0xFD, 102)) | shl (code: (0xFD, 107)) | shr_s (code: (0xFD, 108))
+    | shr_u (code: (0xFD, 109)) | add (code: (0xFD, 110)) | add_sat_s (code: (0xFD, 111)) | add_sat_u (code: (0xFD, 112)) | sub (code: (0xFD, 113))
+    | sub_sat_s (code: (0xFD, 114)) | sub_sat_u (code: (0xFD, 115)) | min_s (code: (0xFD, 118)) | min_u (code: (0xFD, 119))
+    | max_s (code: (0xFD, 120)) | max_u (code: (0xFD, 121)) | avgr_u (code: (0xFD, 123)) | relaxed_swizzle (code: (0xFD, 256))
+    | relaxed_laneselect (code: (0xFD, 265))
+  static i16x8 := lazily enum splat (code: (0xFD, 16)) | extract_lane_s (code: (0xFD, 24), takes: Lane) | extract_lane_u (code: (0xFD, 25), takes: Lane)
+    | replace_lane (code: (0xFD, 26), takes: Lane) | eq (code: (0xFD, 45)) | ne (code: (0xFD, 46)) | lt_s (code: (0xFD, 47)) | lt_u (code: (0xFD, 48))
+    | gt_s (code: (0xFD, 49)) | gt_u (code: (0xFD, 50)) | le_s (code: (0xFD, 51)) | le_u (code: (0xFD, 52)) | ge_s (code: (0xFD, 53))
+    | ge_u (code: (0xFD, 54)) | extadd_pairwise_i8x16_s (code: (0xFD, 124)) | extadd_pairwise_i8x16_u (code: (0xFD, 125)) | abs (code: (0xFD, 128))
+    | neg (code: (0xFD, 129)) | q15mulr_sat_s (code: (0xFD, 130)) | all_true (code: (0xFD, 131)) | bitmask (code: (0xFD, 132))
+    | narrow_i32x4_s (code: (0xFD, 133)) | narrow_i32x4_u (code: (0xFD, 134)) | extend_low_i8x16_s (code: (0xFD, 135))
+    | extend_high_i8x16_s (code: (0xFD, 136)) | extend_low_i8x16_u (code: (0xFD, 137)) | extend_high_i8x16_u (code: (0xFD, 138))
+    | shl (code: (0xFD, 139)) | shr_s (code: (0xFD, 140)) | shr_u (code: (0xFD, 141)) | add (code: (0xFD, 142)) | add_sat_s (code: (0xFD, 143))
+    | add_sat_u (code: (0xFD, 144)) | sub (code: (0xFD, 145)) | sub_sat_s (code: (0xFD, 146)) | sub_sat_u (code: (0xFD, 147))
+    | mul (code: (0xFD, 149)) | min_s (code: (0xFD, 150)) | min_u (code: (0xFD, 151)) | max_s (code: (0xFD, 152)) | max_u (code: (0xFD, 153))
+    | avgr_u (code: (0xFD, 155)) | extmul_low_i8x16_s (code: (0xFD, 156)) | extmul_high_i8x16_s (code: (0xFD, 157))
+    | extmul_low_i8x16_u (code: (0xFD, 158)) | extmul_high_i8x16_u (code: (0xFD, 159)) | relaxed_laneselect (code: (0xFD, 266))
+    | relaxed_q15mulr_s (code: (0xFD, 273)) | relaxed_dot_i8x16_i7x16_s (code: (0xFD, 274))
+  static i32x4 := lazily enum splat (code: (0xFD, 17)) | extract_lane (code: (0xFD, 27), takes: Lane) | replace_lane (code: (0xFD, 28), takes: Lane)
+    | eq (code: (0xFD, 55)) | ne (code: (0xFD, 56)) | lt_s (code: (0xFD, 57)) | lt_u (code: (0xFD, 58)) | gt_s (code: (0xFD, 59))
+    | gt_u (code: (0xFD, 60)) | le_s (code: (0xFD, 61)) | le_u (code: (0xFD, 62)) | ge_s (code: (0xFD, 63)) | ge_u (code: (0xFD, 64))
+    | extadd_pairwise_i16x8_s (code: (0xFD, 126)) | extadd_pairwise_i16x8_u (code: (0xFD, 127)) | abs (code: (0xFD, 160)) | neg (code: (0xFD, 161))
+    | all_true (code: (0xFD, 163)) | bitmask (code: (0xFD, 164)) | extend_low_i16x8_s (code: (0xFD, 167)) | extend_high_i16x8_s (code: (0xFD, 168))
+    | extend_low_i16x8_u (code: (0xFD, 169)) | extend_high_i16x8_u (code: (0xFD, 170)) | shl (code: (0xFD, 171)) | shr_s (code: (0xFD, 172))
+    | shr_u (code: (0xFD, 173)) | add (code: (0xFD, 174)) | sub (code: (0xFD, 177)) | mul (code: (0xFD, 181)) | min_s (code: (0xFD, 182))
+    | min_u (code: (0xFD, 183)) | max_s (code: (0xFD, 184)) | max_u (code: (0xFD, 185)) | dot_i16x8_s (code: (0xFD, 186))
+    | extmul_low_i16x8_s (code: (0xFD, 188)) | extmul_high_i16x8_s (code: (0xFD, 189)) | extmul_low_i16x8_u (code: (0xFD, 190))
+    | extmul_high_i16x8_u (code: (0xFD, 191)) | trunc_sat_f32x4_s (code: (0xFD, 248)) | trunc_sat_f32x4_u (code: (0xFD, 249))
+    | trunc_sat_f64x2_s_zero (code: (0xFD, 252)) | trunc_sat_f64x2_u_zero (code: (0xFD, 253)) | relaxed_trunc_f32x4_s (code: (0xFD, 257))
+    | relaxed_trunc_f32x4_u (code: (0xFD, 258)) | relaxed_trunc_f64x2_s_zero (code: (0xFD, 259)) | relaxed_trunc_f64x2_u_zero (code: (0xFD, 260))
+    | relaxed_laneselect (code: (0xFD, 267)) | relaxed_dot_i8x16_i7x16_add_s (code: (0xFD, 275))
+  static i64x2 := lazily enum splat (code: (0xFD, 18)) | extract_lane (code: (0xFD, 29), takes: Lane) | replace_lane (code: (0xFD, 30), takes: Lane)
+    | abs (code: (0xFD, 192)) | neg (code: (0xFD, 193)) | all_true (code: (0xFD, 195)) | bitmask (code: (0xFD, 196))
+    | extend_low_i32x4_s (code: (0xFD, 199)) | extend_high_i32x4_s (code: (0xFD, 200)) | extend_low_i32x4_u (code: (0xFD, 201))
+    | extend_high_i32x4_u (code: (0xFD, 202)) | shl (code: (0xFD, 203)) | shr_s (code: (0xFD, 204)) | shr_u (code: (0xFD, 205))
+    | add (code: (0xFD, 206)) | sub (code: (0xFD, 209)) | mul (code: (0xFD, 213)) | eq (code: (0xFD, 214)) | ne (code: (0xFD, 215))
+    | lt_s (code: (0xFD, 216)) | gt_s (code: (0xFD, 217)) | le_s (code: (0xFD, 218)) | ge_s (code: (0xFD, 219))
+    | extmul_low_i32x4_s (code: (0xFD, 220)) | extmul_high_i32x4_s (code: (0xFD, 221)) | extmul_low_i32x4_u (code: (0xFD, 222))
+    | extmul_high_i32x4_u (code: (0xFD, 223)) | relaxed_laneselect (code: (0xFD, 268))
+  static f32x4 := lazily enum splat (code: (0xFD, 19)) | extract_lane (code: (0xFD, 31), takes: Lane) | replace_lane (code: (0xFD, 32), takes: Lane)
+    | eq (code: (0xFD, 65)) | ne (code: (0xFD, 66)) | lt (code: (0xFD, 67)) | gt (code: (0xFD, 68)) | le (code: (0xFD, 69)) | ge (code: (0xFD, 70))
+    | demote_f64x2_zero (code: (0xFD, 94)) | ceil (code: (0xFD, 103)) | floor (code: (0xFD, 104)) | trunc (code: (0xFD, 105))
+    | nearest (code: (0xFD, 106)) | abs (code: (0xFD, 224)) | neg (code: (0xFD, 225)) | sqrt (code: (0xFD, 227)) | add (code: (0xFD, 228))
+    | sub (code: (0xFD, 229)) | mul (code: (0xFD, 230)) | div (code: (0xFD, 231)) | min (code: (0xFD, 232)) | max (code: (0xFD, 233))
+    | pmin (code: (0xFD, 234)) | pmax (code: (0xFD, 235)) | convert_i32x4_s (code: (0xFD, 250)) | convert_i32x4_u (code: (0xFD, 251))
+    | relaxed_madd (code: (0xFD, 261)) | relaxed_nmadd (code: (0xFD, 262)) | relaxed_min (code: (0xFD, 269)) | relaxed_max (code: (0xFD, 270))
+  static f64x2 := lazily enum splat (code: (0xFD, 20)) | extract_lane (code: (0xFD, 33), takes: Lane) | replace_lane (code: (0xFD, 34), takes: Lane)
+    | eq (code: (0xFD, 71)) | ne (code: (0xFD, 72)) | lt (code: (0xFD, 73)) | gt (code: (0xFD, 74)) | le (code: (0xFD, 75)) | ge (code: (0xFD, 76))
+    | promote_low_f32x4 (code: (0xFD, 95)) | ceil (code: (0xFD, 116)) | floor (code: (0xFD, 117)) | trunc (code: (0xFD, 122))
+    | nearest (code: (0xFD, 148)) | abs (code: (0xFD, 236)) | neg (code: (0xFD, 237)) | sqrt (code: (0xFD, 239)) | add (code: (0xFD, 240))
+    | sub (code: (0xFD, 241)) | mul (code: (0xFD, 242)) | div (code: (0xFD, 243)) | min (code: (0xFD, 244)) | max (code: (0xFD, 245))
+    | pmin (code: (0xFD, 246)) | pmax (code: (0xFD, 247)) | convert_low_i32x4_s (code: (0xFD, 254)) | convert_low_i32x4_u (code: (0xFD, 255))
+    | relaxed_madd (code: (0xFD, 263)) | relaxed_nmadd (code: (0xFD, 264)) | relaxed_min (code: (0xFD, 271)) | relaxed_max (code: (0xFD, 272))
+  // (threads: 0xFE 3 0x00)
+  static atomic := lazily enum fence (code: (0xFE, 3), takes: 0x00)
+  // (a node in memory: what it is in, then its members)
+  static node := lazily 16
+
+  // `@wasm.none`, complete (Expression.ray's sketch): a program a module, a rule a function given what applies it (local 0),
+  // where it is (1) and its value so far (2), its statements cases of a `br_table` in a loop, the innermost first, each
+  // statement where its block ends. Only Expression's four given things are left, so every program is written this way, a
+  // text read at run time too (read by Expression, itself written so).
+  static none := lazily {
+    {program: Program} => Wasm(sections: [
+      (id: 1, data: [(parameters: [i32], results: [i32])]),
+      (id: 2, data: [(module: "m", name: "memory", memory: (flags: 0x03, min: program.pages, max: program.pages))]),
+      (id: 3, data: program.rules.map(0)),
+      (id: 6, data: [(global: (value: i32, mutable: 0x01), value: [i32.const, program.image.count])]),
+      (id: 7, data: program.rules.map((name: .name, function: .index))),
+      (id: 10, data: program.rules),
+      (id: 11, data: [(at: [i32.const, 0], bytes: program.image)])
+    ])
+    {rule: Expression.Rule} => (locals: [(count: 2, value: i32)], body: [
+      loop, rule.statements.reduce(cases = [local.get, 1, br_table, rule.statements.index#, 0] => [block, cases, end, .]), end, local.get, 2
+    ])
+    {jump: `external goto`} => jump.condition ?? (i32.const, 1), if, i32.const, jump.label.index, local.set, 1, br, jump.rule.statements.count - jump.index, end
+    {place: `external label`} => []
+    {caller: `external &`} => local.get, 0, local.set, 2
+    {node: `external .`} => global.get, 0, local.tee, 2, local.get, 0, i32.store, global.get, 0, i32.const, node, i32.add, global.set, 0
+    {applied: Expression.Statement} => local.get, 0, call, applied.statement.index, local.set, 2
+  }
+
+  // `@wasm` (`@wasm.default`): the language's optimizations (Compiler.ray), then the same, then WebAssembly's own, each a
+  // rule that can be left out by name; each answers what `none` answers
+  static default := lazily Compiler.default + none &+ {
+    // Representations: a 32-bit integer an i32, its operators i32's
+    {literal value: Binary₃₂.Signed} => i32.const, value
+    {a: Binary₃₂.Signed} {operator: i32{.ray}} {b: Binary₃₂.Signed} => a, b, operator
+    !{a: Binary₃₂.Signed} => a, i32.eqz
+    // Control flow is classes, written as WebAssembly's own
+    if {condition} {then} else {otherwise} => condition, if, then, else, otherwise, end
+    if {condition} {then} => condition, if, then, end
+    while {condition} {body} => block, loop, condition, i32.eqz, br_if, 1, body, br, 0, end, end
+    // A rule of known parameters: a function taking them, each read as its local; called where it is known, directly
+    {rule: Expression.Rule{.parameters}} => (locals: [], body: rule.body as Program{O: default &+ rule.parameters.map((parameter, index) => { {== parameter} => local.get, index })})
+    {function: Expression.Rule}({arguments}) => arguments, call, function.index
+  } + {
+    local.set, {x}, local.get, {x} => local.tee, x
+  }
+
+  assert ((@ray (a: Binary₃₂.Signed, b: Binary₃₂.Signed) => a + b) as Program{O: Wasm.default}).function.body == [local.get, 0, local.get, 1, i32.add]  // WA4 a sum of two i32s is not i32.add of its parameters
+  assert ((@ray while x < 10 { x = x + 1 }) as Program{O: Wasm.default}).first == Wasm.Op.block  // WA5 a while is not a block around a loop
+  assert ([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00] as Wasm).sections.empty  // WA6 the empty module does not read
+  assert $.wasm === Wasm  // WA7 $.wasm is not Wasm
+}

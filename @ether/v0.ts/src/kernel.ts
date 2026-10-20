@@ -565,7 +565,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // whose body is that hole (`{value: a} => value`), what each type is; anything else, no set)
   function glyph_set(t: number, x: number, mask: number, depth: number): number {
     if (depth > BEGUN) return 0;
-    if (w(x + N_IS) === IS_TEXT) { const a = w(x + N_A), z = w(x + N_B); if (z - a !== 1 || b(a) <= 32) return 0; put(mask + 4 * (b(a) >> 5), w(mask + 4 * (b(a) >> 5)) | (1 << (b(a) & 31))); return 1; }
+    // (one character of more than one byte, `₂`: each of its bytes, a run of them its characters)
+    if (w(x + N_IS) === IS_TEXT) { const a = w(x + N_A), z = w(x + N_B); if (z - a < 1 || b(a) <= 32 || (z - a > 1 && (b(a) < 192 || z - a !== (b(a) >= 240 ? 4 : b(a) >= 224 ? 3 : 2)))) return 0; for (let p = a; p < z; p++) put(mask + 4 * (b(p) >> 5), w(mask + 4 * (b(p) >> 5)) | (1 << (b(p) & 31))); return 1; }
     // (a character, or a number counted as one: its code point, one byte)
     { const gc = code_of(t, x); if (gc > 32 && gc < 256) { put(mask + 4 * (gc >> 5), w(mask + 4 * (gc >> 5)) | (1 << (gc & 31))); return 1; } }
     // (a list of characters, `"0".."9"`: each of them)

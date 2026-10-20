@@ -1878,14 +1878,14 @@ text_reads (at, text) => {
 }
 // (a text read as one type again and again, `(ab | c)[]`: each the way it prefers, to the end)
 {repeats_kind} repeats_through {repeats_text} ^keyword => {
-  kind := repeats_kind
-  text := repeats_text
+  repeats_each_kind := repeats_kind
+  repeats_all := repeats_text
   repeats_strictly_was := reading_strictly
   reading_strictly = true
-  repeats_left := text
-  repeats_going := !(text.empty)
+  repeats_left := repeats_all
+  repeats_going := !(repeats_all.empty)
   while repeats_going && !(repeats_left.empty) {
-    repeats_one := ((kind) ways_in (repeats_left) into (None) first (true)).head
+    repeats_one := ((repeats_each_kind) ways_in (repeats_left) into (None) first (true)).head
     if (repeats_one === None) || (((repeats_one.value).reading_left).count == (repeats_left).count) {
       repeats_going = false
     } else {
@@ -2271,10 +2271,12 @@ Array &+= {
     }
     at ? true : false
   }
-  // (a range of characters as a type, `"0".."9"`: a text of one character one of its values, by its characters)
+  // (a range of characters as a type, `"0".."9"`: a text of one character one of its values, by its characters (a value
+  // not a text, a code point: that character's))
   one_same (text) => {
     at := .head
-    while at && !((((at.value).textual === true) && ((at.value).same_characters(text) !== None)) || (!((at.value).textual === true) && (at.value == text))) {
+    one_char := (text).first
+    while at && !((((at.value).textual === true) && ((at.value).same_characters(text) !== None)) || (!((at.value).textual === true) && (at.value == one_char))) {
       at = at.next
     }
     at ? true : false

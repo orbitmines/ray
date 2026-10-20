@@ -991,8 +991,9 @@ repeat_each (each_of) => ((((each_of).repeats === true) && !((each_of).textual =
 // (positions from a link on, read from the start of a text: the first way through all of them, a reading of their values (a
 // written text among them passed over); none, None. `seq_whole`: all of the text read; `seq_stops`: the text may end before
 // them (those after its end left unset); `seq_into`: where each name is given as it is read)
+reading_stop := None
 seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
-  if (seq_at === None) || ((seq_at.value) === fields_end) {
+  if (seq_at === None) || ((seq_at.value) === fields_end) || (seq_at === reading_stop) {
     return (((!seq_whole) || seq_text.empty) ? ((seq_text) left_after (Array.new) named (Array.new)) : None)
   }
   if seq_stops && seq_text.empty {
@@ -1190,19 +1191,58 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
 }
 // (a text read into one, by its positions in order (from its first position's link): read up to its end, the rest left unset;
 // one that does not read, None)
+// (positions read as the text is: each read, given, then the positions read again in the one read (what a definition among
+// them says of a field before it is that field as read, `GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES…`); one read by its parts
+// the first way it reads; any other, with the ones after it)
 fields_read (fields_into, fields_first, fields_text) => {
-  fields_got := seq_read(fields_first, fields_text, true, true, fields_into)
-  if fields_got === None {
+  fields_at := fields_first
+  fields_rest := fields_text
+  fields_index := 0
+  while fields_at && !((fields_at.value) === fields_end) && !(fields_rest.empty) {
+    fields_type := field_type_of(fields_at)
+    fields_name := fields_at.written_name
+    if literal_text(fields_type) && (fields_name === None) {
+      if !text_begins(fields_rest, fields_type) {
+        return None
+      }
+      fields_rest = text_past(fields_rest, fields_type)
+    } else {
+      if read_by_parts((fields_type).whole) {
+        fields_way := ((fields_type) ways_in (fields_rest) into (fields_into) first (true)).head
+        if fields_way === None {
+          return None
+        }
+        (way_value(fields_way.value)) given_to (fields_into) as (fields_name)
+        fields_rest = (fields_way.value).reading_left
+      } else {
+        return fields_given(fields_into, seq_read(fields_at, fields_rest, true, true, fields_into))
+      }
+    }
+    fields_index = fields_index + 1
+    fields_at = fields_at.next
+    if fields_at && !((fields_at.value) === fields_end) && !(fields_rest.empty) {
+      fields_at = (fields_into).fields_now.head
+      fields_left := fields_index
+      while fields_left > 0 {
+        fields_at = fields_at.next
+        fields_left = fields_left - 1
+      }
+    }
+  }
+  (fields_rest.empty || (fields_at && !((fields_at.value) === fields_end))) ? fields_into : None
+}
+fields_given (given_into, given_reading) => {
+  if given_reading === None {
     return None
   }
-  fields_value_at := (fields_got.reading_value).head
-  fields_name_at := (fields_got.reading_name).head
-  while fields_value_at {
-    (fields_value_at.value) given_to (fields_into) as (fields_name_at.value)
-    fields_value_at = fields_value_at.next
-    fields_name_at = fields_name_at.next
+  given_value_at := (given_reading.reading_value).head
+  given_name_at := (given_reading.reading_name).head
+  while given_value_at {
+    (given_value_at.value) given_to (given_into) as (given_name_at.value)
+    given_value_at = given_value_at.next
+    given_name_at = given_name_at.next
   }
-  fields_into
+  given_into
 }
 // (a text read into one, its positions as they are in it (a type written after a field sees what that one read))
 read_into (into_instance, into_text) => fields_read(into_instance, (into_instance).fields_now.head, into_text)

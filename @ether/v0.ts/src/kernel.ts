@@ -1306,7 +1306,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       const bs = w(r + R_BS);
       if (bs === p) { past = 1; continue; }
       if (!past) continue;
-      return bs && w(bs + N_IS) !== IS_PLACE ? bs : 0;
+      // (a type given lazily, the same declaration read before: no value given)
+      return bs && w(bs + N_IS) !== IS_PLACE && w(bs + N_IS) !== IS_LAZY ? bs : 0;
     }
     return 0;
   }
@@ -2633,7 +2634,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         // (a name that goes elsewhere when read, `break` of `break: return`: its type read instead, first, as it is written)
         if (w(t + T_JUMP_N)) { put(t + T_JUMP_N, 0); return thx_ >= 0 ? valued(t, names + F_TAKES + TAKE * thx_) : block(t, ta, z, names, f, self, 0, 1, 0, self, 0); }
         // (one given lazily already (the same declaration read again): declared again here, its place)
-        const v = v0 && w(v0 + N_IS) === IS_LAZY ? placed(t, rest, q, self) : v0;
+        // (declared again where the code the hole x took is, its name (not the word `x` written here))
+        const hxr = v0 && w(v0 + N_IS) === IS_LAZY && names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? named(w(names + F_RULE), rest, q) : -1, tkr = hxr >= 0 ? follow(names + F_TAKES + TAKE * hxr, 1) : 0;
+        const v = v0 && w(v0 + N_IS) === IS_LAZY ? (tkr ? placed(t, skip(w(tkr), w(tkr + 4)), trim_end(w(tkr), w(tkr + 4)), self) : placed(t, rest, q, self)) : v0;
         const lazyable = thx_ >= 0 && v && w(v + N_IS) === IS_PLACE && place_in(v) && w(place_in(v) + N_IS) === IS_NODE && place_in(v) !== w(GLOBAL) && !w(t + T_HOLE);
         let pre = 0;
         if (!lazyable) { pre = thx_ >= 0 ? valued(t, names + F_TAKES + TAKE * thx_) : block(t, ta, z, names, f, self, 0, 1, 0, self, 0); if (w(t + T_JUMP_N) || stopped(t)) return pre; }
@@ -3220,6 +3223,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (DEBUG) debug(D_DEFINE, hs, he, self);
     const inl_s = w(THREAD + T_INL_S), inl_e = w(THREAD + T_INL_E), inl_f = w(THREAD + T_INL_F), in2_s = w(THREAD + T_IN2_S), in2_e = w(THREAD + T_IN2_E), in2_f = w(THREAD + T_IN2_F), all_s = w(THREAD + T_ALL_S), all_e = w(THREAD + T_ALL_E);
     const r = rule_(t, self, hs, he, w(THREAD + T_A), w(THREAD + T_B), w(bd + T_ORIGIN), w(hd + T_ORIGIN));
+    // (defined in code a body inlined, a header's block (`GRAMMAR_RULE_DEF := …` read in an instance): read bare there, as `x: T`)
+    { const ho = w(hd + T_ORIGIN), hr = ho && w(ho + N_IS) === IS_FRAME ? w(ho + F_RULE) : 0; if (hr && ((w(hr + R_INL_F) && w(hd) >= w(hr + R_INL_S) && w(hd + 4) <= w(hr + R_INL_E)) || (w(hr + R_IN2_F) && w(hd) >= w(hr + R_IN2_S) && w(hd + 4) <= w(hr + R_IN2_E)))) put(r + R_FLAGS, w(r + R_FLAGS) | STATIC); }
     put(r + R_INL_S, inl_s); put(r + R_INL_E, inl_e); put(r + R_INL_F, inl_f); put(r + R_IN2_S, in2_s); put(r + R_IN2_E, in2_e); put(r + R_IN2_F, in2_f); put(r + R_ALL_S, all_s); put(r + R_ALL_E, all_e);
     if (w(FAIL_FAST) & 2) log(w(hd), L_DEFINED, w(hd), w(hd + 4));
     put(t + T_NAMED, w(t + T_NAMED) + 1);

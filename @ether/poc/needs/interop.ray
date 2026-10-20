@@ -12,7 +12,7 @@ NeedsSum := {
 }
 assert (NeedsSum reads_text `a + b`) == `a`  // NE24 a block of rules does not read a text by its patterns
 
-NeedsCall := class (name, ` ( `, argument, ` )`) => { }
+NeedsCall := class (name: String, ` ( `, argument: String, ` )`) => { }
 assert (`f ( x )` as NeedsCall).argument == `x`  // NE25 a class written as a pattern does not read a text into its fields
 
 assert (0 - 3) + 5 == 2  // NE26 a number below zero is not kept

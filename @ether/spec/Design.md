@@ -2132,6 +2132,14 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 ### 21.3 Frames, names and members
 
+- Decided 2026-10-20 (the user): **a class's body is its constructor, read for each instance** (as the Almanac says: "the
+  entire body of the class is the default constructor"). `rules := { … }` in a class's body is each instance's own;
+  a method reads it bare, as a local of the body it is written in (the instance's run of it). What is given by name
+  when it is made (`Hierarchy(parent: root)`) is not given the body's default (`parent: Hierarchy? = None`).
+  - **Reading what does not depend on the instance once per class is a compiler optimization**, not the meaning: a
+    method, a rule, `static …`, a class or enum named in it, an `assert`, names given together (`a | b : T`). The
+    kernel does it for now (`external hoisted { … }` in the entrypoint's class rule: the class reads its whole block
+    once, as before, and each instance reads it again without those); it belongs in `Compiler.ray` as a level.
 - Decided 2026-10-17, being built:
   - **A bare name never reads a member.** Inside a method, `count` is not `.count`. A bare name sees the method's
     parameters, its own locals, the locals of the bodies it is written in, and the file and global scope. A member of

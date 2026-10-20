@@ -1970,6 +1970,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (`next` of `is_zero => next === None`, made `Number()`): None (§5, a missing member reads as None))
     // (a word nothing reads where it was written, read as a value: what it names on what it is read on, if that names it (a
     // header's field, read by a type after it: `(a: T, b: a.count)`))
+    // (a word in code a body inlined, `{{fields}}`, nothing reads here: what reads it where that code was written (a closure's
+    // parameter or local, `Glyphs` of a class made in `Number.Named.for`))
+    if (k === K_UNREAD && worded(s, e) && names && w(names + N_IS) === IS_FRAME) {
+      const nr = w(names + F_RULE), fo = nr && w(nr + R_IN2_F) && s >= w(nr + R_IN2_S) && e <= w(nr + R_IN2_E) ? w(nr + R_IN2_F) : 0;
+      if (fo && fo !== names && w(fo + N_IS) === IS_FRAME) { const fv = block(t, s, e, fo, fo, w(fo + F_THIS), 0, 1, 0, w(fo + F_THIS), 0); if (fv && fv !== w(NOTHING)) return fv; }
+    }
     if (k === K_UNREAD && value && !w(t + T_DECL) && !w(t + T_HOLE) && !w(t + T_LE) && worded(s, e) && on && on !== self && on !== w(GLOBAL) && w(on + N_IS) === IS_NODE && own_named(on, s, e)) { const mv = member_seen(t, on, s, e - s, on, 0); if (mv) return mv; }
     if (k === K_UNREAD && !w(t + T_DECL) && !w(t + T_HOLE) && !w(t + T_LE) && worded(s, e)) { const th = (self && self !== w(GLOBAL) && !making(self) && (w(self + N_IS) === IS_NODE || w(self + N_IS) === IS_TEXT) && w(names + N_IS) === IS_FRAME && w(names + F_RULE) && w(w(names + F_RULE) + R_HOLES) ? self : 0) || held_this(names) || (names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? w(names + F_THIS) : 0); if (th && th !== w(GLOBAL) && (w(th + N_IS) === IS_NODE || w(th + N_IS) === IS_TEXT)) return w(NOTHING); }
     // (an operator missing a side, as a value nothing reads (Node.ray: a section, `xs.map(+ 1)`, `.some(== 8)`, `reduce(+)`):
@@ -3352,7 +3358,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const s = w(bd), e = w(bd + 4), o = w(bd + T_ORIGIN), open = w(OPEN_LENGTH), close = w(CLOSE_LENGTH), hole = 5 + 8 * open;
     put(THREAD + T_A, s); put(THREAD + T_B, e); put(THREAD + T_INL_S, 0); put(THREAD + T_INL_E, 0); put(THREAD + T_INL_F, 0); put(THREAD + T_IN2_S, 0); put(THREAD + T_IN2_E, 0); put(THREAD + T_IN2_F, 0); put(THREAD + T_ALL_S, 0); put(THREAD + T_ALL_E, 0);
     if (!o || !w(o + F_RULE)) return;
-    let n = 0, any = 0;
+    let n = 0, any = 0, inl_read = 0;
     for (let pass = 0, out = 0; pass < 2; pass++) {
       for (let at = s; at < e;) {
         // (`{{x}}`: a hole's brackets around `{x}`, a hole of it)
@@ -3384,7 +3390,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
           // its own (`({{parameters}}) …{{body}}`, a closure's parameters and its body))
           if (pass) {
             const fo = written_from(tk, ca, cz);
-            if (!w(THREAD + T_INL_F)) { put(THREAD + T_INL_S, from); put(THREAD + T_INL_E, out + n); put(THREAD + T_INL_F, fo); }
+            if (!w(THREAD + T_INL_F)) { put(THREAD + T_INL_S, from); put(THREAD + T_INL_E, out + n); put(THREAD + T_INL_F, fo); inl_read = w(tk + T_ORIGIN); }
             else if (!w(THREAD + T_IN2_F)) { put(THREAD + T_IN2_S, from); put(THREAD + T_IN2_E, out + n); put(THREAD + T_IN2_F, fo); }
           }
           if (pass) { if (!w(THREAD + T_ALL_S)) put(THREAD + T_ALL_S, from); put(THREAD + T_ALL_E, out + n); }
@@ -3398,6 +3404,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (!pass) { out = alloc(n); n = 0; }
       else { put(THREAD + T_A, out); put(THREAD + T_B, out + n); }
     }
+    // (one inlined, a second not: the same, as read where it was taken (a closure's call, its parameters and locals), for what
+    // nothing reads in it where it was written)
+    if (inl_read && inl_read !== w(THREAD + T_INL_F) && !w(THREAD + T_IN2_F)) { put(THREAD + T_IN2_S, w(THREAD + T_INL_S)); put(THREAD + T_IN2_E, w(THREAD + T_INL_E)); put(THREAD + T_IN2_F, inl_read); }
   }
   // (a head written in a body, its holes named as that body's: what they took in their place, `{operator} {rest}` the text
   // they took; at T_A, T_B)

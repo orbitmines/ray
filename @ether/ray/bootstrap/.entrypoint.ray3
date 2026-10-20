@@ -1016,9 +1016,10 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
     }
     return None
   }
-  // (the last, all of the text read: the rest of it; else from one character on)
+  // (the last, all of the text read: the rest of it; else from one character on; a character, that one only)
   seq_last := (seq_at.next === None) || ((seq_at.next.value) === fields_end)
-  seq_cut := seq_text.empty ? None : ((seq_last && seq_whole) ? seq_text.past(seq_text) : seq_text.rest)
+  seq_one := one_character(seq_type)
+  seq_cut := seq_text.empty ? None : ((seq_last && seq_whole && !seq_one) ? seq_text.past(seq_text) : seq_text.rest)
   while seq_cut !== None {
     seq_span := seq_text.until(seq_cut)
     if (seq_type) fits_read (seq_span) {
@@ -1029,10 +1030,12 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
         return ((seq_value) taken_before (seq_rest) named (seq_name))
       }
     }
-    seq_cut = seq_cut.empty ? None : seq_cut.rest
+    seq_cut = (seq_one || seq_cut.empty) ? None : seq_cut.rest
   }
   None
 }
+// (a type that is one character, as the kernel knows it: a text of one character it is or is not, and never one of two)
+one_character (one_type) => !literal_text(one_type) && ((external admits (`ab`) one_type) === false) && ((external admits (`a`) one_type) !== None)
 {taken_value} taken_before {taken_reading} named {taken_name} ^keyword => {
   taken_kept := taken_value
   taken_at := taken_reading
@@ -1160,13 +1163,14 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
     }
     return ways_found
   }
+  ways_one := one_character(ways_by)
   ways_cut := ways_from.empty ? None : ways_from.rest
   while (ways_cut !== None) && !(ways_only && !(ways_found.empty)) {
     ways_span := ways_from.until(ways_cut)
     if (ways_by) fits_read (ways_span) {
       ways_found.append((ways_cut) left_after ((ways_by) leaf_read (ways_span)) named (None))
     }
-    ways_cut = ways_cut.empty ? None : ways_cut.rest
+    ways_cut = (ways_one || ways_cut.empty) ? None : ways_cut.rest
   }
   ways_found
 }

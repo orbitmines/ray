@@ -49,9 +49,9 @@ this => .
 // A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole). Given no
 // value, its value is the type: all it may be, superposed (`named: "p"` reads "p").
 {x}: {type} => {
-  x.type = type
+  // (its type kept on it: read when it is first asked for, a name of what a node is made of; else now, then the name (as a
+  // left side), and while unset the type is what it is (`external unset`))
   external unset x type
-  x
 }
 // `x ^style`: x, shown in that style (highlighting only). A head written with a style after it: its text shown so.
 {x} ^{style} => {
@@ -692,7 +692,7 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
     // (a text: read as Ts one after another, `abc` as `(ab | c)[]`; anything else, each of it a T)
     holds (it) => {
       kind := each
-      literal_text(it) ? text_repeats(kind, it) : (((it).listing === true) ? it.every((item) => item is kind) : false)
+      literal_text(it) ? ((kind) repeats_through (it)) : (((it).listing === true) ? it.every((item) => item is kind) : false)
     }
   }) &+ { }
   made &+= {
@@ -854,9 +854,10 @@ satisfies (keeping) => holds_any(.({keeping}))
 as {target} ^keyword => {
   converting := .
   wanted := target
-  // (a text read as a class written as a structure: destructured into one, though it already is one)
-  ((((wanted).of === wanted) && literal_text(converting)) ? structure_reads(wanted, converting) : false) ? wanted.destructured(converting) : (converting is wanted) ? converting : (((converting).textual === true) && ((wanted).of === wanted)) ? ((converting is (wanted as String)) ? wanted.destructured(converting) : None) : (wanted.from(converting) ?? ((((converting).listing === true) && ((wanted).of === wanted)) ? wanted.destructured(converting) : None))
+  // (a text read as a class written as a structure, its header: read forward into one (none, when it does not read))
+  ((((wanted).of === wanted) && ((converting).textual === true) && ((wanted).header_quoted !== None)) ? read_as(wanted, converting) : (((((wanted).of === wanted) && literal_text(converting)) ? structure_reads(wanted, converting) : false) ? wanted.destructured(converting) : (converting is wanted) ? converting : (((converting).textual === true) && ((wanted).of === wanted)) ? ((converting is (wanted as String)) ? wanted.destructured(converting) : None) : (wanted.from(converting) ?? ((((converting).listing === true) && ((wanted).of === wanted)) ? wanted.destructured(converting) : None))))
 }
+read_as (read_as_class, read_as_text) => read_into(((read_as_class) &+ { }), read_as_text)
 from (x) => None
 // (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
 ({parameter}) as (=== {type}) {`=>`} {body} => ({type}).from := (({parameter}) => {body})
@@ -952,81 +953,256 @@ extended () => .interior
 {on} reads ({name}: {type}) as {made} ^keyword => on &+= {
   {value: type} => made(value)
 }
-// (a text read into one, by its positions in order (from its first position's link: a list given among other arguments
-// would be spread into them)): all of it read, that one; else None
-fields_read (fields_into, fields_first, fields_text) => (fields_in(fields_into, fields_into, fields_first, fields_text, None, false) === None) ? None : fields_into
-// (positions from a link on, each in turn: a written text passed over; a structure of named positions read the same way, in
-// order, into one of its own; any other the shortest span after which the next position reads, given its name (on what
-// it is read into too, where a type written over it sees it). What is left; read up to its end, the rest are left unset;
-// one that does not read, None)
-// (`fields_path`: where its positions are, read again in the one read into: a type written over a field before it,
-// `CAPTURES: CAPTURE.map{…}`, read again there once that one is given)
-// (`fields_open`: whether more is read after these, by the positions around them)
-fields_in (fields_into, fields_holder, fields_from, fields_text, fields_path, fields_open) => {
-  fields_at := fields_from
-  fields_rest := fields_text
-  fields_index := 0
-  while fields_at && !((fields_at.value) === fields_end) && (fields_rest !== None) && !(fields_rest.empty) {
-    // (a field's type as written on its place (a structure's names with it), else what it is)
-    field_type := field_type_of(fields_at)
-    field_name := fields_at.written_name
-    if literal_text(field_type) && (field_name === None) {
-      fields_rest = text_past(fields_rest, field_type)
-    } else {
-      if named_list(field_type) {
-        field_held := Node &+ { }
-        field_path := Node &+ { }
-        external member (field_path) (`up`) (fields_path)
-        external member (field_path) (`index`) (fields_index)
-        fields_rest = fields_in(fields_into, field_held, (field_type).head, fields_rest, field_path, fields_open || !(((fields_at.next) === None) || ((fields_at.next.value) === fields_end)))
-        if (field_name !== None) && (fields_rest !== None) {
-          external member (fields_holder) (field_name) (field_held)
-        }
-      } else {
-        // (one written over a field before it, `CAPTURES: CAPTURE.map{…}`: its type as it is now, read again in what is read
-        // into, where that one is given)
-        field_from := written_before(fields_at.type_written, fields_at.previous) ? nth_link(fields_list_at(fields_into, fields_path), fields_index) : fields_at
-        field_type = field_type_of(field_from)
-        field_cut := ((field_next_types(field_from, fields_open).head) first_cut_in (fields_rest))
-        if (field_name !== None) && (field_cut !== None) {
-          field_read := ((field_type) read_span (fields_rest.until(field_cut)))
-          external member (fields_holder) (field_name) (field_read)
-          external member (fields_into) (field_name) (field_read)
-        }
-        fields_rest = field_cut
+// Reading forward: a text read by a type from its start, what the type reads where it ends (no cut guessed, then checked
+// whole). Positions in turn, each from where the one before ended: a written text where it is; one made of parts (positions,
+// alternatives, Ts one after another) each way it reads, in the order it prefers them; any other the shortest span it is,
+// a longer one only when what follows does not read after it.
+// (a reading: what is left of the text, `reading_left`; what was read, `reading_value`, and its name, `reading_name` (of
+// positions: each value and the name it was written with, in order); of a repeat, `reading_count` of its values taken)
+// (a list given to a function among other arguments is spread into them: what was read given in a hole, whole)
+// (a node of its own each time: `Node &+ { }` written in a rule is read once)
+fresh_reading (fresh_left) => {
+  fresh := Node &+ { }
+  external member (fresh) (`reading_left`) (fresh_left)
+  fresh
+}
+{left_of} left_after {value_of} named {name_of} ^keyword => {
+  // (each read now, where it is written: a hole's code read later would be read as things are then)
+  reading_left_now := left_of
+  reading_value_now := value_of
+  reading_name_now := name_of
+  reading := fresh_reading(reading_left_now)
+  external member (reading) (`reading_value`) (reading_value_now)
+  external member (reading) (`reading_name`) (reading_name_now)
+  reading
+}
+// (what is read by its parts: positions (a list of types), alternatives, Ts one after another; anything else, by what it is)
+read_by_parts (parts_type) => (!literal_text(parts_type)) && (((((parts_type).listing === true) && !((parts_type).is_range === true))) || ((parts_type).superposes === true) || repeat_type(parts_type))
+// (a repeat's own T: `T[]`'s, `T[]+`'s)
+repeat_each (each_of) => ((((each_of).repeats === true) && !((each_of).textual === true))) ? (each_of).each : repeat_each((each_of).nonempty_of)
+// (a name given where it is read, as it is read: what is written after it sees it, `CAPTURES: CAPTURE.map{…}`)
+{given_value} given_to {given_into} as {given_name} ^keyword => {
+  given_kept := given_value
+  if (given_into !== None) && (given_name !== None) {
+    external member (given_into) (given_name) (given_kept)
+  }
+  true
+}
+// (positions from a link on, read from the start of a text: the first way through all of them, a reading of their values (a
+// written text among them passed over); none, None. `seq_whole`: all of the text read; `seq_stops`: the text may end before
+// them (those after its end left unset); `seq_into`: where each name is given as it is read)
+seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
+  if (seq_at === None) || ((seq_at.value) === fields_end) {
+    return (((!seq_whole) || seq_text.empty) ? ((seq_text) left_after (Array.new) named (Array.new)) : None)
+  }
+  if seq_stops && seq_text.empty {
+    return ((seq_text) left_after (Array.new) named (Array.new))
+  }
+  seq_type := field_type_of(seq_at)
+  seq_name := seq_at.written_name
+  if literal_text(seq_type) && (seq_name === None) {
+    return (text_begins(seq_text, seq_type) ? seq_read(seq_at.next, text_past(seq_text, seq_type), seq_whole, seq_stops, seq_into) : None)
+  }
+  if read_by_parts((seq_type).whole) {
+    seq_way_at := ((seq_type) ways_in (seq_text) into (seq_into) first (false)).head
+    while seq_way_at {
+      seq_way_value := way_value(seq_way_at.value)
+      (seq_way_value) given_to (seq_into) as (seq_name)
+      seq_after := seq_read(seq_at.next, (seq_way_at.value).reading_left, seq_whole, seq_stops, seq_into)
+      if seq_after !== None {
+        return ((seq_way_value) taken_before (seq_after) named (seq_name))
+      }
+      seq_way_at = seq_way_at.next
+    }
+    return None
+  }
+  // (the last, all of the text read: the rest of it; else from one character on)
+  seq_last := (seq_at.next === None) || ((seq_at.next.value) === fields_end)
+  seq_cut := seq_text.empty ? None : ((seq_last && seq_whole) ? seq_text.past(seq_text) : seq_text.rest)
+  while seq_cut !== None {
+    seq_span := seq_text.until(seq_cut)
+    if (seq_type) fits_read (seq_span) {
+      seq_value := (seq_type) leaf_read (seq_span)
+      (seq_value) given_to (seq_into) as (seq_name)
+      seq_rest := seq_read(seq_at.next, seq_cut, seq_whole, seq_stops, seq_into)
+      if seq_rest !== None {
+        return ((seq_value) taken_before (seq_rest) named (seq_name))
       }
     }
-    fields_at = fields_at.next
-    fields_index = fields_index + 1
+    seq_cut = seq_cut.empty ? None : seq_cut.rest
   }
-  fields_rest
+  None
 }
-// (a type's text written over a field before a link: one's name in it)
-written_before (before_text, before_at) => (before_text !== None) && (before_at !== None) && ((((before_at.written_name !== None) && mentions(before_text, before_at.written_name))) || written_before(before_text, before_at.previous))
-mentions (mention_text, mention_word) => !(mention_text.empty) && (text_begins(mention_text, mention_word) || mentions(mention_text.rest, mention_word))
-// (the positions a path leads to, read now in what is read into: its own, else the structure at a position of those above)
-fields_list_at (list_into, list_path) => (list_path === None) ? (list_into).fields_now.head : (field_type_of(nth_link(fields_list_at(list_into, list_path.up), list_path.index))).head
-nth_link (nth_at, nth_left) => (nth_left == 0) ? nth_at : nth_link(nth_at.next, nth_left - 1)
-field_type_of (type_at) => ((type_at.value).listing === true) ? (((((type_at.value).type).listing) === true) ? (type_at.value).type : type_at.value) : (((type_at.written_name !== None) && (((type_at.value).type) !== None) && !(((type_at.value).type) === Node)) ? (type_at.value).type : type_at.value)
-// (a position's type, the next one's (none, anything) and anything after it: each one value, a structure not spread into
-// the list (a list given as an argument would be))
-// (a position's type; the next one's, when there is one; and anything after them (String), when more is read after)
-field_next_types (next_from, next_open) => {
-  next_types := Array.new
-  next_types.append((field_type_of(next_from)).whole)
-  next_at := next_from.next
-  if (next_at !== None) && !((next_at.value) === fields_end) {
-    next_types.append((field_type_of(next_at)).whole)
-    if next_open || ((next_at.next !== None) && !((next_at.next.value) === fields_end)) {
-      next_types.append(String)
+{taken_value} taken_before {taken_reading} named {taken_name} ^keyword => {
+  taken_kept := taken_value
+  taken_at := taken_reading
+  (taken_at.reading_value).prepend(taken_kept)
+  (taken_at.reading_name).prepend(taken_name)
+  taken_at
+}
+// (the values of positions read, a list, each named one its member too (a name read again, superposed))
+{named_values} named_by {named_names} ^keyword => {
+  named_held := Array.new
+  named_value_at := (named_values).head
+  named_name_at := (named_names).head
+  while named_value_at {
+    named_held.append(named_value_at.value)
+    if named_name_at.value !== None {
+      named_was := external member (named_held) (named_name_at.value)
+      external member (named_held) (named_name_at.value) (((named_was === None) ? named_value_at.value : (named_was | named_value_at.value)))
     }
-  } else {
-    if next_open {
-      next_types.append(String)
-    }
+    named_value_at = named_value_at.next
+    named_name_at = named_name_at.next
   }
-  next_types
+  named_held
 }
+// (what a way read: of positions, the text they read, each named one its member (`CAPTURE: (String+, \s, String+)` of `{ }`
+// is `{ }`, its characters its parts); of a repeat, a list of its first count of them)
+parts_span (parts_way) => {
+  parts_span_read := ((parts_way).reading_from).until((parts_way).reading_left)
+  // (made of the text: it is the text, its parts members of its own)
+  parts_text := (parts_span_read) &+ { }
+  parts_value_at := ((parts_way).reading_value).head
+  parts_name_at := ((parts_way).reading_name).head
+  while parts_value_at {
+    if parts_name_at.value !== None {
+      external member (parts_text) (parts_name_at.value) (parts_value_at.value)
+    }
+    parts_value_at = parts_value_at.next
+    parts_name_at = parts_name_at.next
+  }
+  parts_text
+}
+way_value (way) => ((way).reading_count !== None) ? ((((way).reading_value) first_count ((way).reading_count)) named_by (((way).reading_name) first_count ((way).reading_count))) : (((way).reading_parts === true) ? parts_span(way) : (way).reading_value)
+{first_list} first_count {first_count} ^keyword => {
+  first_taken := Array.new
+  first_at := (first_list).head
+  first_left := first_count
+  while first_at && (first_left > 0) {
+    first_taken.append(first_at.value)
+    first_at = first_at.next
+    first_left = first_left - 1
+  }
+  first_taken
+}
+// (each way a type reads at the start of a text, in the order it prefers them: positions, the first way through them; one
+// of alternatives, each one's, in their order (named, its name); Ts one after another, as many as read first (each T the way it
+// prefers), then fewer; a written text, itself; any other, each span it is, the shortest first. `ways_first`: the first only)
+// (as a rule: a type that is a list, given among other arguments, would be spread into them; its body a call, where `return`
+// leaves it)
+{ways_type} ways_in {ways_text} into {ways_into} first {ways_first} ^keyword => {
+  ways_box := Node &+ { }
+  external member (ways_box) (`boxed`) (ways_type)
+  ways_of(ways_box, ways_text, ways_into, ways_first)
+}
+ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
+  ways_by := ways_boxed.boxed
+  ways_found := Array.new
+  if literal_text(ways_by) {
+    if text_begins(ways_from, ways_by) {
+      ways_found.append((text_past(ways_from, ways_by)) left_after (ways_by) named (None))
+    }
+    return ways_found
+  }
+  if ((ways_by).superposes === true) {
+    ways_alternative := (ways_by).components.head
+    while ways_alternative && !(ways_only && !(ways_found.empty)) {
+      ways_alternative_type := alternative_type(ways_alternative.value)
+      ways_alternative_at := ((ways_alternative_type) ways_in (ways_from) into (ways_into) first (ways_only)).head
+      while ways_alternative_at {
+        ways_found.append(((ways_alternative_at.value).reading_left) left_after (way_value(ways_alternative_at.value)) named (ways_alternative.written_name))
+        ways_alternative_at = ways_alternative_at.next
+      }
+      ways_alternative = ways_alternative.next
+    }
+    return ways_found
+  }
+  if repeat_type((ways_by).whole) {
+    ways_each := repeat_each((ways_by).whole)
+    ways_values := Array.new
+    ways_names := Array.new
+    ways_lefts := Array.new.append(ways_from)
+    ways_left := ways_from
+    ways_going := true
+    while ways_going && !(ways_left.empty) {
+      ways_one := ((ways_each) ways_in (ways_left) into (ways_into) first (true)).head
+      if (ways_one === None) || (((ways_one.value).reading_left).count == (ways_left).count) {
+        ways_going = false
+      } else {
+        ways_values.append(way_value(ways_one.value))
+        ways_names.append((ways_one.value).reading_name)
+        ways_left = (ways_one.value).reading_left
+        ways_lefts.prepend(ways_left)
+      }
+    }
+    // (as many as read first, then fewer; one at least, `T[]+`)
+    ways_count := ways_values.count
+    ways_least := ((ways_by).nonempty_of !== None) ? 1 : 0
+    ways_left_at := ways_lefts.head
+    while ways_left_at && (ways_count >= ways_least) && !(ways_only && !(ways_found.empty)) {
+      ways_way := Node &+ { }
+      external member (ways_way) (`reading_left`) (ways_left_at.value)
+      external member (ways_way) (`reading_value`) (ways_values)
+      external member (ways_way) (`reading_name`) (ways_names)
+      external member (ways_way) (`reading_count`) (ways_count)
+      ways_found.append(ways_way)
+      ways_count = ways_count - 1
+      ways_left_at = ways_left_at.next
+    }
+    return ways_found
+  }
+  if ((ways_by).listing === true) && !((ways_by).is_range === true) {
+    ways_through := seq_read((ways_by).head, ways_from, false, false, ways_into)
+    if ways_through !== None {
+      external member (ways_through) (`reading_parts`) (true)
+      external member (ways_through) (`reading_from`) (ways_from)
+      ways_found.append(ways_through)
+    }
+    return ways_found
+  }
+  ways_cut := ways_from.empty ? None : ways_from.rest
+  while (ways_cut !== None) && !(ways_only && !(ways_found.empty)) {
+    ways_span := ways_from.until(ways_cut)
+    if (ways_by) fits_read (ways_span) {
+      ways_found.append((ways_cut) left_after ((ways_by) leaf_read (ways_span)) named (None))
+    }
+    ways_cut = ways_cut.empty ? None : ways_cut.rest
+  }
+  ways_found
+}
+// (a span a type reads, as the kernel knows it (a written text, a character: by its characters, nothing it converts to); else
+// what it is, or (not answering `is`) what it converts to)
+{fits_type_of} fits_read {fits_text_of} ^keyword => {
+  fits_by := fits_type_of
+  fits_span_of := fits_text_of
+  ((external admits fits_span_of fits_by) ?? (reading_strictly ? ((fits_span_of) is (fits_by)) : ((fits_by) fits_span (fits_span_of)))) === true
+}
+// (a span read by a type that is not read by its parts: what the type makes of it (a class of it, the one it is; a text, the
+// span))
+{leaf_type_of} leaf_read {leaf_text_of} ^keyword => {
+  leaf_by := leaf_type_of
+  leaf_span := leaf_text_of
+  ((leaf_by === global.String) || (leaf_by === Node)) ? leaf_span : ((((leaf_by).of === leaf_by) && !((leaf_by).textual === true)) ? ((leaf_span as leaf_by) ?? leaf_span) : ((leaf_span is leaf_by) ? leaf_span : ((leaf_span as leaf_by) ?? leaf_span)))
+}
+// (a text read into one, by its positions in order (from its first position's link): read up to its end, the rest left unset;
+// one that does not read, None)
+fields_read (fields_into, fields_first, fields_text) => {
+  fields_got := seq_read(fields_first, fields_text, true, true, fields_into)
+  if fields_got === None {
+    return None
+  }
+  fields_value_at := (fields_got.reading_value).head
+  fields_name_at := (fields_got.reading_name).head
+  while fields_value_at {
+    (fields_value_at.value) given_to (fields_into) as (fields_name_at.value)
+    fields_value_at = fields_value_at.next
+    fields_name_at = fields_name_at.next
+  }
+  fields_into
+}
+// (a text read into one, its positions as they are in it (a type written after a field sees what that one read))
+read_into (into_instance, into_text) => fields_read(into_instance, (into_instance).fields_now.head, into_text)
+field_type_of (type_at) => ((external unset (type_at.value)) === true) ? (type_at.value).type : (((type_at.written_name !== None) && !((type_at.value).listing === true) && (((type_at.value).type) !== None) && !(((type_at.value).type) === Node)) ? (type_at.value).type : type_at.value)
 // (one read as a class made of it with no header of its own: made of that class too)
 made_as (instance, wanted, written_made) => (wanted === written_made) ? instance : (instance &+= wanted)
 // (a structure, `(a: T, `-`, b: U)`: a text it reads is destructured into one made of it, each field the span it takes)
@@ -1046,7 +1222,7 @@ made_as (instance, wanted, written_made) => (wanted === written_made) ? instance
   // adds), made of that class too)
   // (a text: its positions read in order (a block among them, `(x := …, f: T)`, its definitions made in the one read, its
   // fields positions too), each field the span its type reads, a written text passed over; anything else, given to them)
-  destructured({given}) => made_as(((((given).textual === true) ? fields_read((made &+ { }), (this).fields_now.head, given) : None) ?? (made &+ {
+  destructured({given}) => made_as(((((given).textual === true) ? read_into(((this) &+ { }), given) : None) ?? (made &+ {
     ({{fields}}) := given
   })), this, made)
   // (its fields as they are where it is read: each a type (or what it was given), a text written among them itself)
@@ -1060,6 +1236,8 @@ made_as (instance, wanted, written_made) => (wanted === written_made) ? instance
       written_field := written_at.value
       // (a field's value, written in the class, is its type (`x: T`, T when x is unset); none written, anything; a structure,
       // the text it is written as (`Inner as String`))
+      // (a name given only a type, `x: T`: T)
+      written_field = (((written_field) === None) || ((written_field) === declared)) ? written_field : alternative_type((written_field).whole)
       written_types.append((((written_field) === None) || ((written_field) === declared)) ? Node : (structured(written_field) ? ((written_field) as global.String) : written_field))
       written_at = written_at.next
     }
@@ -1286,7 +1464,8 @@ narrows := None
 members := None
 caller := None
 // (no count of how far: a class's parents end; one that would not, the kernel stops as too deep)
-descends (type) => (. === type) || ((.superclass === None) ? false : .superclass.descends(type)) || ((.conjoins === true) ? .conjoined.some((conjoined_part) => conjoined_part.descends(type)) : false) || ((.made_of === None) ? false : .made_of.some((made_part) => made_part.descends(type)))
+// (a part that is itself passed over: a type written of itself, `T.LHS = T`, made of itself)
+descends (type) => (. === type) || ((.superclass === None) ? false : .superclass.descends(type)) || ((.conjoins === true) ? .conjoined.some((conjoined_part) => conjoined_part.descends(type)) : false) || ((.made_of === None) ? false : .made_of.some((made_part) => !(made_part === this) && made_part.descends(type)))
 // (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
 // (followed lazily, and not again while it is being followed: what a conversion asks is what the value itself is)
 following_conversions := false
@@ -1294,7 +1473,8 @@ is {type} ^keyword => .admitted_by(type)
 // (what a type admits by structure, the core of `is` (Node.ray's `is (type) => this.admitted_by(type)`))
 admitted_by (type) => {
   value := .
-  value.is_itself(type) || ((!following_conversions) && value.followed_is(type))
+  // (a text against a written text or a range of characters: by its characters, nothing it converts to asked)
+  value.is_itself(type) || ((!following_conversions) && !(((value).textual === true) && (literal_text(type) || ((type).is_range === true))) && value.followed_is(type))
 }
 followed_is (type) => {
   following_conversions = true
@@ -1305,7 +1485,8 @@ followed_is (type) => {
 is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
-  (type === Node) || (value === type) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && (value == type)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range === true) && (value.textual === true)) ? ((value).rest.empty && ((value)[0] is type)) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
+  // (a text is a String: what it is made of, characters, not asked again)
+  (type === Node) || (value === type) || ((type === global.String) && (value.textual === true)) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && ((type).same_characters(value) !== None)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range === true) && (value.textual === true)) ? ((value).rest.empty && type.one_same(value)) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
 }
 // (a text is a class written as a structure (`class (a: T, `-`, b: U)`, a text among its places; or one typed place alone,
 // `class (x: T)`) when it reads as it is written)
@@ -1639,34 +1820,34 @@ repeat_type (repeated) => ((((repeated).repeats === true) && !((repeated).textua
 types_read (at, text) => at ? ((literal_text(at.value) ? (text_begins(text, at.value) && types_read(at.next, text_past(text, at.value))) : (((at) first_cut_in (text)) !== None))) : text.empty
 // (what is a text: a String; anything else is not)
 textual := false
-// (a text read by a list of types, `(String+, \s, String+)`: each written text where it is, each type the span before what
-// the rest reads)
-text_reads (at, text) => at ? (literal_text(at.value) ? (text_begins(text, at.value) && text_reads(at.next, text_past(text, at.value))) : ((!text.empty) && text_reads_span(at, text, text.rest))) : text.empty
-text_reads_span (at, text, first_cut) => {
-  cut := first_cut
-  found := false
-  while (!found) && (cut !== None) {
-    if (text.until(cut) is at.value) && text_reads(at.next, cut) {
-      found = true
-    } else {
-      cut = cut.empty ? None : cut.rest
-    }
-  }
-  found
+// (a text read by a list of types, `(String+, \s, String+)`: all of it, forward, a written text where it is; each span what
+// its type is (`is`, nothing it converts to))
+reading_strictly := false
+text_reads (at, text) => {
+  strictly_was := reading_strictly
+  reading_strictly = true
+  strictly_read := seq_read(at, text, true, false, None) !== None
+  reading_strictly = strictly_was
+  strictly_read
 }
-// (a text read as one type again and again, `(ab | c)[]`: a span of it, then the rest the same, to the end)
-text_repeats (kind, text) => (!text.empty) && text_repeats_span(kind, text, text.rest)
-text_repeats_span (kind, text, first_cut) => {
-  cut := first_cut
-  found := false
-  while (!found) && (cut !== None) {
-    if (text.until(cut) is kind) && (cut.empty || text_repeats(kind, cut)) {
-      found = true
+// (a text read as one type again and again, `(ab | c)[]`: each the way it prefers, to the end)
+{repeats_kind} repeats_through {repeats_text} ^keyword => {
+  kind := repeats_kind
+  text := repeats_text
+  repeats_strictly_was := reading_strictly
+  reading_strictly = true
+  repeats_left := text
+  repeats_going := !(text.empty)
+  while repeats_going && !(repeats_left.empty) {
+    repeats_one := ((kind) ways_in (repeats_left) into (None) first (true)).head
+    if (repeats_one === None) || (((repeats_one.value).reading_left).count == (repeats_left).count) {
+      repeats_going = false
     } else {
-      cut = cut.empty ? None : cut.rest
+      repeats_left = (repeats_one.value).reading_left
     }
   }
-  found
+  reading_strictly = repeats_strictly_was
+  repeats_going
 }
 assert `abc` is (`ab` | `c`)[]  // TL1 a text of Ts several characters long is not Ts
 assert !(`abd` is (`ab` | `c`)[])  // TL2 a text that is not Ts throughout is Ts
@@ -1695,63 +1876,23 @@ text_given (place, span) => {
   ((place) alone takes (converted)) unless positioned_type(place)
   true
 }
-// (a span read by a type: a list of positions with names, a node of them, each its span read by its type; Ts one after
-// another (`T[]`), a list of each read by T, a named alternative's spans its member, superposed; else what the type makes of
-// it)
+// (a span read by a type: by its parts, all of it, the first way (positions, a list of their values, each named one its member
+// too; Ts one after another, a list of each; a named alternative, its value); else what the type makes of it)
 // (as rules, not functions: a type that is a list, given among other arguments, would be spread into them)
 {read_type_of} read_span {read_text_of} ^keyword => {
   by := read_type_of
   span := read_text_of
-  (by === None) ? span : (literal_text(by) ? span : (named_list(by) ? ((by) read_named (span)) : ((((by).repeats === true) && !((by).textual === true) && !(span.empty)) ? ((by) read_each (span)) : ((((by).of === by) && !((by).textual === true)) ? ((span as by) ?? span) : ((span is by) ? span : (span as by))))))
+  (by === None) ? span : (literal_text(by) ? span : (read_by_parts((by).whole) ? (whole_way(((by) ways_in (span) into (None) first (false)).head) ?? span) : ((by) leaf_read (span))))
+}
+whole_way (whole_first) => {
+  whole_at := whole_first
+  while whole_at && !(((whole_at.value).reading_left).empty) {
+    whole_at = whole_at.next
+  }
+  whole_at ? way_value(whole_at.value) : None
 }
 named_list (by) => ((by).listing === true) && link_named((by).head)
 link_named (at) => at ? ((at.written_name !== None) || link_named(at.next)) : false
-{named_type_of} read_named {named_text_of} ^keyword => {
-  read_into := Node &+ { }
-  read_at := (named_type_of).head
-  read_rest := named_text_of
-  while read_at && (read_rest !== None) {
-    read_type := read_at.value
-    // (a text written among them, its name none: passed over; a field (named, `HEADER: `!l``), its span given it)
-    if literal_text(read_type) && (read_at.written_name === None) {
-      read_rest = text_past(read_rest, read_type)
-    } else {
-      read_cut := ((read_at) first_cut_in (read_rest))
-      if (read_at.written_name !== None) && (read_cut !== None) { member_given(read_into, read_at.written_name, ((read_type) read_span (read_rest.until(read_cut)))) }
-      read_rest = read_cut
-    }
-    read_at = read_at.next
-  }
-  read_into
-}
-{each_type_of} read_each {each_text_of} ^keyword => {
-  each_type := (each_type_of).each
-  each_read := Array.new
-  each_rest := each_text_of
-  while (each_rest !== None) && !(each_rest.empty) {
-    each_cut := ordered_cut(each_type, each_type_of, each_rest)
-    each_piece := (each_cut === None) ? each_rest : each_rest.until(each_cut)
-    each_alternative := ((each_type) alternative_of (each_piece))
-    each_value := ((((each_alternative === None) ? each_type : alternative_type(each_alternative.value))) read_span (each_piece))
-    each_read.append(each_value)
-    if (each_alternative !== None) && (each_alternative.written_name !== None) {
-      // (named on the list itself: a list given to a function among other arguments is spread into them)
-      each_name := each_alternative.written_name
-      each_was := external member (each_read) (each_name)
-      external member (each_read) (each_name) (((each_was === None) ? each_value : (each_was | each_value)))
-    }
-    each_rest = (each_cut === None) ? None : each_cut
-  }
-  each_read
-}
-// (an element that is alternatives, read in their order: the cut of the first that reads a span before what the rest of the
-// list reads (`(LHS: `{LHS}` | String)[]`, `{LHS}` before a character of String); else the element's)
-ordered_cut (ordered_type, ordered_list, ordered_text) => ((ordered_type).superposes === true) ? alternative_cut((ordered_type).components.head, ordered_list, ordered_text) : ((Array.new.append((ordered_type).whole).append((ordered_list).whole).head) first_cut_in (ordered_text))
-// (one that reads all that is left: nothing left after it)
-alternative_cut (cut_alternative, cut_list, cut_from) => cut_alternative ? (((Array.new.append((alternative_type(cut_alternative.value)).whole).append((cut_list).whole).head) first_cut_in (cut_from)) ?? ((((alternative_type(cut_alternative.value)) fits_span (cut_from)) ? cut_from.past(cut_from) : None) ?? alternative_cut(cut_alternative.next, cut_list, cut_from))) : None
-// (of a superposition, the component a span is, as a link of its components; none, None)
-{alternative_type_of} alternative_of {alternative_text_of} ^keyword => ((alternative_type_of).superposes === true) ? alternative_at((alternative_type_of).components.head, alternative_text_of) : None
-alternative_at (at, span) => at ? ((((alternative_type(at.value)) fits_span (span))) ? at : alternative_at(at.next, span)) : None
 // (an alternative written with a name, `LHS: T`: its place, unset, T its type)
 alternative_type (alternative_written) => ((external unset alternative_written) === true) ? (alternative_written).type : alternative_written
 {place} = {value} => {
@@ -2080,6 +2221,14 @@ Array &+= {
   one_held (value) => {
     at := .head
     while at && !(at.value == value) {
+      at = at.next
+    }
+    at ? true : false
+  }
+  // (a range of characters as a type, `"0".."9"`: a text of one character one of its values, by its characters)
+  one_same (text) => {
+    at := .head
+    while at && !((((at.value).textual === true) && ((at.value).same_characters(text) !== None)) || (!((at.value).textual === true) && (at.value == text))) {
       at = at.next
     }
     at ? true : false

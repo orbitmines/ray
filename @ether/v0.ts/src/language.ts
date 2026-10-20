@@ -2482,8 +2482,9 @@ export class Ray extends Language<FileStore> {
     // every rule applied while it is read, nested, the text each reads and what it answers (`RAY_TRACE_DEPTH`, `RAY_TRACE_MAX`,
     // `RAY_TRACE_NONE`, `RAY_TRACE_HIDE`))
     const explain = typeof process !== 'undefined' ? process.env.RAY_EXPLAIN ?? process.env.RAY_TRACE : undefined;
-    if (explain && typeof id === 'number') { const [name, line] = [explain.slice(0, explain.lastIndexOf(':')), Number(explain.slice(explain.lastIndexOf(':') + 1))], path = this.files_?.getPath(id) ?? '';
-      if (path.endsWith(name)) { let at = 0; for (let n = 1; n < line && at >= 0; n++) at = bytes.indexOf(10, at) + 1; while (at < bytes.length && (bytes[at] === 32 || bytes[at] === 9)) at++; this.set(292, s + at); } }
+    // (`file:line:column`: the reading that begins at that column instead)
+    if (explain && typeof id === 'number') { const parts = /^(.*?):(\d+)(?::(\d+))?$/.exec(explain), name = parts ? parts[1] : '', line = parts ? Number(parts[2]) : 0, column = parts && parts[3] ? Number(parts[3]) : 0, path = this.files_?.getPath(id) ?? '';
+      if (parts && path.endsWith(name)) { let at = 0; for (let n = 1; n < line && at >= 0; n++) at = bytes.indexOf(10, at) + 1; if (column) at += column - 1; else while (at < bytes.length && (bytes[at] === 32 || bytes[at] === 9)) at++; this.set(292, s + at); } }
     const first = bytes.indexOf(10);
     if (new TextDecoder().decode(bytes.subarray(0, first < 0 ? bytes.length : first)).startsWith('!language ')) {
       this.boot(s, e, id);
@@ -2661,7 +2662,7 @@ export class Ray extends Language<FileStore> {
       if (this.trace_hidden >= 0) { if (depth > this.trace_hidden) return; if (kind === L.TRACE_DONE && depth === this.trace_hidden) { this.trace_hidden = -1; return; } this.trace_hidden = -1; }
       if (hide && kind === L.TRACE && hide.test(text(a, c))) { this.trace_hidden = depth; return; }
       if (kind === L.TRACE_DONE) { this.trace_said(`TRACE ${deep}  ${ansi.darkGray}= ${answer(said_at)}${ansi.reset}`); return; }
-      this.trace_said(kind === L.TRACE ? `TRACE ${deep}\`${short(text(a, c))}\` on \`${short(this.text(said_at, this.w(this.t + 908)))}\` ${ansi.darkGray}on #${this.w(this.t + 932)}${this.w(this.t + 936) !== this.w(this.t + 932) ? ` (self #${this.w(this.t + 936)})` : ''} ${this.where(said_at)}${ansi.reset}` : `TRACE ${deep}${ansi.orange}nothing reads${ansi.reset} \`${short(this.text(a, c))}\` ${ansi.darkGray}${this.where(said_at)}${ansi.reset}`);
+      this.trace_said(kind === L.TRACE ? `TRACE ${deep}\`${short(text(a, c))}\` on \`${short(this.text(said_at, this.w(this.t + 908)))}\` ${ansi.darkGray}on #${this.w(this.t + 932)}${this.w(this.t + 936) !== this.w(this.t + 932) ? ` (self #${this.w(this.t + 936)})` : ''} ${this.where(said_at)}${ansi.reset}` : `TRACE ${deep}${ansi.orange}nothing reads${ansi.reset} \`${short(this.text(a, c))}\` ${ansi.darkGray}in #${this.w(this.t + 932)} ${this.where(said_at)}${ansi.reset}`);
       return;
     }
     if (kind === L.OUTPUT) { const out = this.text(a, c); if (env.nodejs) process.stdout.write(out); else console.log(out); return; }

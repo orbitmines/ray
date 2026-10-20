@@ -139,6 +139,9 @@ assert "_"[0] is \w  // SE13 an underscore is not a word escape
 \W = !\w
 assert "-"[0] is \W  // SE14 a dash is not a non-word escape
 \s = Char.Blank
+// TODO(explicit): goes when `Escape.for` defines the escapes (it defines none yet); `\n\n` is `\n, \n`
+\n = "\n"
+\n\n => (\n, \n)
 assert " "[0] is \s  // SE30 a space is not a blank escape
 assert !("a"[0] is \s)  // SE31 a letter is a blank escape
 

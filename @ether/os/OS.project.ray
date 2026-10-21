@@ -40,7 +40,7 @@ assert {
   with (@me/device as OS) = OS.Ether {
     @me/instance = "a"
     @me/instance = "b"
-    assert @me/device/storage["instance/sent"] == "b" && @me/device/storage["instance/sent"].previous == "a"  // ETH9 what is sent to an instance on ether is not kept in order
+    assert (@me/device as Storage)["instance/sent"] == "b" && (@me/device as Storage)["instance/sent"].previous == "a"  // ETH9 what is sent to an instance on ether is not kept in order
     assert [Random.bit, Time.now, ("a" as Location).held()].every(.erred)  // ETH8 what the language as the operating system has not written yet does not err
   }
 }

@@ -1,5 +1,4 @@
 @ether/os
-@ether/device
 @ether/time
 
 // A keyboard: its keys, each pressed or not. What a key toggles flips each time it is pressed and what it cycles through

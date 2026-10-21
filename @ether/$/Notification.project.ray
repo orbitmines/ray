@@ -1,5 +1,4 @@
 @ether/os
-@ether/device
 
 // A notification shown to whoever uses the device: shown when given a title
 Notification := class (title: String?, body: String?) => {
@@ -7,8 +6,8 @@ Notification := class (title: String?, body: String?) => {
   // (https://specifications.freedesktop.org/notification-spec/), as a toast on Windows
   // (https://learn.microsoft.com/windows/apps/design/shell/tiles-and-notifications/), through UserNotifications on macOS
   // (https://developer.apple.com/documentation/usernotifications), the Notifications API in a browser
-  // (https://notifications.spec.whatwg.org); on ether kept for the player's device
-  shown => if OS.Ether { @me/device/storage["notification"] = (title: .title, body: .body) }
+  // (https://notifications.spec.whatwg.org); on ether it is what the player's device is given
+  shown => if OS.Ether { this }
     elsif OS.Browser { @js new Notification({.title}, \{body: {.body}}) }
     else { external os `notify` (.title, .body) }
 }

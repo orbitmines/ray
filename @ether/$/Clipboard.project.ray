@@ -1,13 +1,12 @@
 @ether/os
-@ether/device
 
 // The clipboard: the text or location last copied; copying writes it, pasting reads it
 Clipboard := class {
   // what is on it, as the operating system keeps it: the Wayland or X11 selection on Linux (wl_data_device,
   // https://wayland.freedesktop.org/docs/html/ch04.html#sect-Protocol-data-sharing; the CLIPBOARD selection), the Win32
   // clipboard on Windows (GetClipboardData, https://learn.microsoft.com/windows/win32/dataxchg/clipboard), NSPasteboard on
-  // macOS, the Clipboard API in a browser (https://www.w3.org/TR/clipboard-apis/); on ether what the player's device shares
-  content: String | Location = if OS.Ether { @me/device/storage["clipboard"] ?? "" } else { (external os `clipboard`) ?? "" }
+  // macOS, the Clipboard API in a browser (https://www.w3.org/TR/clipboard-apis/); on ether its own, empty until copied to
+  content: String | Location = if OS.Ether { "" } else { (external os `clipboard`) ?? "" }
 }
 assert {
   with (@me/device as OS) = OS.Ether {

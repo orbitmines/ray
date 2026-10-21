@@ -1,5 +1,4 @@
 @ether/os
-@ether/device
 
 // Game controllers: numbered on the device as they connect, a disconnected one taking its number back (F-I1); a controller
 // nobody plays is a guest
@@ -16,8 +15,8 @@ Controllers := class: Location {
   // (`/dev/input/event*` with BTN_GAMEPAD, https://www.kernel.org/doc/html/latest/input/gamepad.html), GameInput's on
   // Windows (https://learn.microsoft.com/gaming/gdk/_content/gc/input/overviews/input-overview), Game Controller's on macOS
   // (GCController.controllers, https://developer.apple.com/documentation/gamecontroller), the Gamepad API's in a browser
-  // (navigator.getGamepads, https://www.w3.org/TR/gamepad/); on ether those the player's device shares
-  static made => Controllers() ~~ ((if OS.Ether { @me/device/storage["controllers"] ?? [] } else { (external os `controllers`) ?? [] }).for(this.connected(.)))
+  // (navigator.getGamepads, https://www.w3.org/TR/gamepad/); on ether those connected to it as they connect
+  static made => Controllers() ~~ ((if OS.Ether { [] } else { (external os `controllers`) ?? [] }).for(this.connected(.)))
 }
 
 // Controllers are numbered on the device and take back their number (F-I1)

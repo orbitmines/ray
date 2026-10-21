@@ -1,5 +1,4 @@
 @ether/os
-@ether/device
 
 // A printer: what it is given, printed
 Printer := class: Location {

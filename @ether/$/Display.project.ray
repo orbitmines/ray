@@ -1,5 +1,4 @@
 @ether/os
-@ether/device
 
 // A display: full screen or not, kept awake or not, and how its user prefers to see it
 Display := class: Location {

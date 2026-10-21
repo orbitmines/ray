@@ -1,0 +1,17 @@
+@ether/os
+
+// Storage: what a device keeps, by name, whatever holds its files (a browser its origin's Web Storage, the language as the
+// operating system the player's device); `storage: Storage = @me/device`, `storage["name"]`
+Storage := class: Location {
+  [name: String] => .fields{.name == name}.last.value
+  { }[{name: String}] = {value} ^punctuation => this[name] := value
+  // every storage the device has: on ether and in a browser its own one; elsewhere the host's files hold what it keeps
+  static connected => [Storage(path: "storage")]#
+}
+assert {
+  kept := Storage(path: "kept")
+  kept["ray:a/b"] = "x"
+  assert kept["ray:a/b"] == "x" & kept.fields.name == ["ray:a/b"]  // STO1 what storage keeps under a name is not read back, or not listed
+  kept["ray:a/b"] = None
+  assert !(kept.fields{.value !== None}.nonempty)  // STO2 what storage removed is still listed
+}

@@ -15,6 +15,7 @@
 @speech
 @printer
 @display
+@storage
 
 // A device: the machine that runs the language, superposed with the devices it has (each its own project in `$/`: a
 // keyboard, a pointer, controllers, a camera, …). What a device can do is a path under it, granted like anything else (`@me.execute { (@me/device as Camera) }`); a
@@ -24,8 +25,6 @@ Device := class {
   opened: Location?
   share: Location?
   memory: Store = Store(at: @"memory")
-  storage: Location = @"storage"
-  assert @me/device/storage is Location  // IO11 the device has no storage location
   quests => Program#{who: this}{.running}
   // its files: this device's are the file space (`@/`), another's are at its instance (held by @ether/network)
   disk => Instance#{.device === this}.first -- (. && . !== @local ? (. as String + "/") as Location : @/)
@@ -34,7 +33,7 @@ Device := class {
   // (`here: Geolocation = @me/device`)
   // (the operating system it runs among them: the one the host reports, else the language as the operating system)
   static made => Device() | OS.host | Keyboard.connected | Pointer.connected | Controllers.made | Camera.connected | Microphone.connected
-    | Clipboard() | Geolocation() | Motion() | Speech() | Printer.connected | Display.connected
+    | Clipboard() | Geolocation() | Motion() | Speech() | Printer.connected | Display.connected | Storage.connected
   assert {
     made := Device.made
     keys: Keyboard = made

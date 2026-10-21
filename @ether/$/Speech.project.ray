@@ -1,5 +1,4 @@
 @ether/os
-@ether/device
 
 // What the device says aloud, and what it hears said
 Speech := class {

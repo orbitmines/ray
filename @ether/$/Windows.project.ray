@@ -1,0 +1,5 @@
+// Windows (https://learn.microsoft.com/windows): an operating system a host may run. It is the one the device runs when the host reports the platform
+// "win32" (Node.js's `process.platform`, https://nodejs.org/api/process.html#processplatform).
+OS.Windows := OS(platform: "win32")
+assert OS.Windows.platform == "win32"  // WIN1 Windows is not named by the platform "win32"
+assert OS.Windows is OS  // WIN2 Windows is not an operating system

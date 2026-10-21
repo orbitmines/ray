@@ -10,6 +10,8 @@ HTTP := class {
     written => name.uppercase
     // Safe methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.1)
     safe => this is (get | head | options | trace | propfind)
+    assert HTTP.Method.propfind.safe  // IO14 listing a remote collection is not safe
+    assert HTTP.Method.propfind.written == "PROPFIND"  // IO13 WebDAV's listing method is not written PROPFIND
     assert HTTP.Method.get.safe && !HTTP.Method.post.safe  // HT11 GET is not safe or POST is
     // Idempotent methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)
     idempotent => safe || this is (put | delete)
@@ -30,11 +32,11 @@ HTTP := class {
       500: "Internal Server Error", 501: "Not Implemented", 502: "Bad Gateway", 503: "Service Unavailable" }
   }
 
-  static Fields := class: Document {
+  static Fields := class (entries: (name: String, value: *)[] = []) => {
     // Field names are case-insensitive; repeated lines combine with ", " (https://www.rfc-editor.org/rfc/rfc9110#section-5.3)
-    [name: String] => entries{.name.fold_case == name.fold_case}.value -- (.nonempty ? .join(", ") : None)
-    has (name: String) => entries.some(.name.fold_case == name.fold_case)
-    with (name: String, value) => Fields(entries: [entries{.name.fold_case != name.fold_case}, (name: name, value: value as String) if value != None].flatten)
+    [name: String] => .entries{.name.fold_case == name.fold_case}.value -- (.nonempty ? .join(", ") : None)
+    has (name: String) => .entries.some(.name.fold_case == name.fold_case)
+    with (name: String, value) => Fields(entries: [.entries{.name.fold_case != name.fold_case}, (name: name, value: value as String) if value != None].flatten)
   }
 
   static Message := class {
@@ -210,7 +212,7 @@ HTTP := class {
       // One decoding context per connection, field blocks in the order they arrive (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
       decoded => HPACK.Connection(blocks.map(.fragment.flatten as HPACK.Block)).fields
       // Pseudo-header fields (https://www.rfc-editor.org/rfc/rfc9113#section-8.3)
-      message (stream: Number) => Document(entries: blocks.enumerate{.value.first.stream == stream}.map(decoded[.index]).flatten(1)) -- (fields =>
+      message (stream: Number) => Fields(entries: blocks.enumerate{.value.first.stream == stream}.map(decoded[.index]).flatten(1)) -- (fields =>
         Fields(entries: fields.entries{!(.name ~= ⊢":")}) -- (plain => frames{.stream == stream && .type == Frame.Type.data}.fragment.flatten -- (body => fields[":status"]
           ? Response(status: Status(fields[":status"] as Decimal), fields: plain, body: body)
           : Request(method: fields[":method"] as Method, target: (fields[":scheme"] + "://" + fields[":authority"] + fields[":path"]) as Location, fields: plain, body: body))))

@@ -1,3 +1,5 @@
+@ether/os
+@ether/random
 @unicode
 @ether/device
 

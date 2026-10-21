@@ -9,17 +9,17 @@ Access := class (who: *?, method: `=` | `()` | * = *, filter: Program?, target: 
   // allowed (`@bob.read history{from Time.now}`, L§9.2), so this is `!Effecting`, not `Pure`.
   static checkable (expression) => !(expression is Program) || !(expression is Effecting) && expression is Terminating
   assert Access.checkable(Program(code: { 1 + 1 }))  // AC30 a program with no effects that terminates cannot be checked
-  assert !Access.checkable(Program(code: { IO().output("x") }))  // AC31 a program with an effect can be checked
+  assert !Access.checkable(Program(code: { @me/instance = "x" }))  // AC31 a program with an effect can be checked
   assert Access.checkable(5)  // AC32 a value that is not a program cannot be checked
 
   allowed: *?
 
-  allows (called) => called is method#
+  allows (called) => called is .method#
   assert Access(method: `=`).allows(`=`)  // AC33 a grant of writing does not allow writing
   assert !Access(method: `=`).allows(`()`)  // AC34 a grant of writing allows executing
-  reads => allows(`read`)
-  writes => allows(`=`)
-  executes => allows(`()`)
+  reads => .allows(`read`)
+  writes => .allows(`=`)
+  executes => .allows(`()`)
   assert Access(method: Access.Reading).reads  // AC35 a grant of reading does not allow reading
   assert !Access(method: Access.Reading).writes  // AC36 a grant of reading allows writing
   assert Access(method: `=`).writes  // AC37 a grant of writing does not allow writing
@@ -28,7 +28,7 @@ Access := class (who: *?, method: `=` | `()` | * = *, filter: Program?, target: 
   assert !Access(method: `()`).writes  // AC40 a grant of executing allows writing
   // Who is compared as a principal (`answers_for`): identity in the core, verified roots with @ether/security.
   // A grant placed somewhere (its own location) holds only there; one placed nowhere holds everywhere (W2.27).
-  covers (who, called, at = None) => who.answers_for(this.who) && allows(called) && (!location || !at || at is location#) && (!filter || checkable(filter) && filter.entered(this, None))
+  covers (who, called, at = None) => who.answers_for(this.who) && .allows(called) && (!.location || !at || at is .location#) && (!.filter || Access.checkable(.filter) && .filter.entered(this, None))
   assert {
     alice := Character(name: "alice")
     grant := Access(alice, method: `=`)
@@ -39,7 +39,7 @@ Access := class (who: *?, method: `=` | `()` | * = *, filter: Program?, target: 
 
   // A grant is an Access on what it names: on what the expression answers when that is held somewhere (a value, a
   // field), on the expression itself when it derives something (`@ether.read x.count`, L§8.2.2).
-  { }{literal target} ^punctuation => Program(code: target**) -- (named => checkable(named) && checkable(filter)
+  { }{literal target} ^punctuation => Program(code: target**) -- (named => Access.checkable(named) && Access.checkable(this.filter)
     ? named() -- (value => value is Node && value.parent ? value : named) -- (held => held ~~ .access |= (this ~~ .target = held))
     : ERROR@Access `a grant names an expression that changes nothing and terminates`)
 }
@@ -72,13 +72,13 @@ Node &+= {
   static policy: * = none
   assert Node.policy === none  // AC50 the policy nobody has changed is not the permission nobody has
 
-  visibility => access ?? (parent ? parent.visibility : None) ?? Access(Node.policy, method: Access.Reading, target: this)
+  visibility => .access ?? (.parent ? .parent.visibility : None) ?? Access(Node.policy, method: Access.Reading, target: this)
   assert (count: 1).visibility.who === Node.policy  // AC51 a value granted nothing is not visible to the policy
   // Grants on a derivative sit on the expression that names it, found by what that expression answers (L§8.2.2).
-  granted => [visibility#, Program#{.access && .names(this)}.access#].flatten
-  allows (who, called, at = None) => granted.find(.covers(who, called, at)) ~~ (.allowed = this if .)
+  granted => [.visibility#, Program#{.access && .names(this)}.access#].flatten
+  allows (who, called, at = None) => .granted.find(.covers(who, called, at)) ~~ (.allowed = this if .)
   // A secret is a node no one may read (`none.read`, W5.6): stores skip it and logging out drops it.
-  unreadable => access#.some(.who === none && .reads)
+  unreadable => .access#.some(.who === none && .reads)
   assert (const (count: 1)).unreadable == false  // AC52 a constant is unreadable 
   assert (count: 1).unreadable == false  // AC53 a value nobody restricted is unreadable
 }
@@ -115,7 +115,7 @@ Program &+= {
     assert gx_whole.allows(gx_reader, `size`)  // GX6 a grant naming a value does not cover that value
     assert gx_whole.access#.some(.who === gx_reader)  // GACC1 a grant naming a value is not on that value
   }
-  assert !(Program(code: { IO().output("leak") }).names("leak"))  // PURG4 checking a grant runs an expression with effects
+  assert !(Program(code: { @me/instance = "leak" }).names("leak"))  // PURG4 checking a grant runs an expression with effects
 
   caller: Program?
   // Who runs a program is its chain of callers, the origin first; a prompt names them all.
@@ -125,13 +125,13 @@ Program &+= {
     assert hop_run.hops.first === hop_origin.who && hop_run.hops.last === hop_run.who  // HOP1 a run's chain is not its origin first and its runner last
     assert hop_run.prompt == "@company wants to run this, originating from @me"  // HOP2 a prompt does not name the whole chain
   }
-  hops | chain => [caller.hops ?? [], who].flatten.unique
+  hops | chain => [.caller.hops ?? [], .who].flatten.unique
   assert Program(who: Character(name: "solo")).hops.count == 1  // AC56 a program with no caller has more than itself in its chain
   assert Program(who: Character(name: "solo")).prompt == "@solo wants to run this"  // AC57 a prompt for a lone program names more than its runner
-  may (method, target) => hops.every(target.allows(., method))
-  ask (method, target) => may(method, target) || ERROR@Access `not granted`
+  may (method, target) => .hops.every(target.allows(., method))
+  ask (method, target) => .may(method, target) || ERROR@Access `not granted`
   assert &@.ask(`()`, @me/device/camera).erred  // AC26 a capability nobody granted does not err
-  prompt => hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
+  prompt => .hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
     + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
 
   // What a run may do is the runner's setting (L§8.1): `with (Program.speculated |= x)`, `with (Program.refused |= x)`, or a `.cfg.ray`.
@@ -140,32 +140,32 @@ Program &+= {
   assert Program.speculated.count == 0  // AC58 nothing is speculated unless asked
   assert Program.refused.count == 0  // AC59 nothing is refused unless asked
 
-  continuations => calls{!.is_external}.map(.**)
-  effects => reachable.map(.calls{.is_external}.external_name).flatten.unique
-  assert Program(code: { IO().output("x") }).effects.contains("io")  // AC60 writing out is not an effect named io
+  continuations => .calls{!.is_external}.map(.**)
+  effects => .reachable.map(.calls{.is_external}.external_name).flatten.unique
+  assert Program(code: { @me/instance = "x" }).effects.contains("io")  // AC60 writing out is not an effect named io
 }
 // What a program does is what its externals are: io and os are effects, the time is not deterministic.
 assert Program(code: { 1 + 1 }) is Pure  // EFF1 adding numbers is not pure
-assert Program(code: { IO().output("x") }) is Effecting  // EFF2 writing out is not an effect
+assert Program(code: { @me/instance = "x" }) is Effecting  // EFF2 writing out is not an effect
 assert {
-  with (Program.refused |= Program(code: { IO().output("x") })) {
-    assert Program(code: { IO().output("x") }) is Refused  // EFF4 a refused program is not refused
+  with (Program.refused |= Program(code: { @me/instance = "x" })) {
+    assert Program(code: { @me/instance = "x" }) is Refused  // EFF4 a refused program is not refused
   }
 }
-assert Program(code: { IO().output("x") }) is Abstracted  // EFF5 an effect nobody speculated runs in full
+assert Program(code: { @me/instance = "x" }) is Abstracted  // EFF5 an effect nobody speculated runs in full
 
 &@ ^keyword => &.caller as Program
 
-Pure := Program{effects.empty}
+Pure := Program{.effects.empty}
 assert Program(code: { 1 + 1 }) is Deterministic  // AC61 adding numbers is not deterministic
 assert !(Program(code: { 1 + 1 }) is Effecting)  // AC62 adding numbers is an effect
 assert !(Program(code: { 1 + 1 }) is Nondeterministic)  // AC64 adding numbers is nondeterministic
-Deterministic := Program{!effects.some(. is ("random" | "time" | "io"))}
+Deterministic := Program{!.effects.some(. is ("random" | "time" | "io"))}
 Nondeterministic := Program{!(. is Deterministic)}
-Effecting := Program{effects.some(. is ("io" | "os"))}
+Effecting := Program{.effects.some(. is ("io" | "os"))}
 Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
 assert Program(code: { x := 1 }) is Initializer  // AC65 a program that only declares is not an initializer
-assert !(Program(code: { IO().output("x") }) is Initializer)  // AC66 a program that writes out is an initializer
+assert !(Program(code: { @me/instance = "x" }) is Initializer)  // AC66 a program that writes out is an initializer
 Refused := Program{. is Program.refused#}
 Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
 
@@ -181,7 +181,7 @@ Node &+= {
 assert {
   purg_reader := Character(name: "purg-reader")
   purg_lamp := (lamp: 1)
-  assert (purg_reader.read IO().output("leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
-  assert (purg_reader{IO().output("leak")}.read purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
+  assert (purg_reader.read @me/instance = "leak") is Diagnostic  // PURG1 a grant naming an expression with effects is granted
+  assert (purg_reader{@me/instance = "leak"}.read purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
   assert !(purg_lamp.access)  // PURG3 a refused grant is kept
 }

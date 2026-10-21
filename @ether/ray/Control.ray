@@ -58,8 +58,6 @@ assert {
   assert semi_counted == 2  // CF16 two bracketed statements on one line did not both run
 }
 
-assert 7 $ 5 == 7  // ER2 a default replaced what did not fail
-
 // (what the bootstrap leaves to this file: it needs what is here)
 assert {
   Panel := class: Component {
@@ -72,4 +70,51 @@ assert {
   assert Panel().shown == 0  // CMP2 constructing a component runs past its first label
   assert Panel~opened().shown == 1  // CMP3 entering a component at a label runs past the next label
   assert Panel~closed().shown == 2  // CMP4 entering a component at its last label does not run what follows it
+}
+
+// Rules that circularly prevent each other from existing: each one's only definition sits inside a region another one
+// reads away (a comment), so none of them can be the first. Each is an error. (What says an error is expected in a test is
+// not written yet: until it is, these fail with the error they expect.)
+// PV1 two rules, each defined in the other's comment, did not err as preventing each other
+assert {
+  /*
+  {`/$`}{comment}{`$/`} =>
+  */
+
+  /$
+  {`/*`}{comment}{`*/`} =>
+  $/
+}
+// PV2 three rules in a cycle, each defined in the comment of the one before, did not err as preventing each other
+assert {
+  /*
+  {`/$`}{comment}{`$/`} =>
+  */
+
+  /$
+  {`/#`}{comment}{`#/`} =>
+  $/
+
+  /#
+  {`/*`}{comment}{`*/`} =>
+  #/
+}
+// PV3 four rules in a cycle did not err: an even cycle has readings (every other rule existing), but which one depends on
+// the order it is read in, so it errs like any other
+assert {
+  /*
+  {`/$`}{comment}{`$/`} =>
+  */
+
+  /$
+  {`/#`}{comment}{`#/`} =>
+  $/
+
+  /#
+  {`/%`}{comment}{`%/`} =>
+  #/
+
+  /%
+  {`/*`}{comment}{`*/`} =>
+  %/
 }

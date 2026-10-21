@@ -1529,14 +1529,18 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
 ### 14.5 Operating systems
 
-- `OS := enum Linux | Windows | Macos | Browser | Ether`, in `@ether/ray/OS.ray`, each member with its `platform`. A member
+- `OS := class (platform: String)`, in `@ether/ray/OS.ray`; each operating system is a project of its own that makes one:
+  `OS.Linux`, `OS.Windows`, `OS.Macos`, `OS.Browser` in `$/Linux`, `$/Windows`, `$/MacOS`, `$/Browser` (`@linux`, …), and
+  `OS.Ether` in `@ether/os`, which depends on all the others. A project using what differs between them depends on
+  `@ether/os` (filesystem, network, time, timezone, random, device, ui, `$/Font`, `$/MAC`). An operating system
   as a boolean is whether the device runs it, so per-OS code is a branch in the project it is about:
   `if OS.Windows { … } elsif OS.Browser { … } else { … }`. `OS.host` is the member the host reports, else `OS.Ether`;
   `with @me/device/os = OS.Windows { … }` runs code as another OS.
 - Every external keeps an `OS.Ether` branch: pure Ray where it can be, else an error until it is written. `@ether/os` is
   the Ether OS project: the language as the operating system, writing in Ray what the host's externals answer elsewhere.
 - OS-specific functionality (TLS, sockets) is an OS-specific external in its project, with an Ether OS implementation.
-- The core keeps primitives only: `Time.now`, `Random.bit` and `IO`.
+- The primitives are `Time.now` (@ether/time) and `Random.bit` (@ether/random); input and output are locations
+  (`@me/instance = x`, `@x`), so there is no `IO`.
 - **Planned:** other systems are reached by inspecting their binaries (`$/elf`, `$/pe`, `$/macho`, `$/wasm`; code in
   `$/x86-64`, `$/aarch64`, wasm bytecode). Inspecting is reading (symbols, imports, strings, version), and a binary's
   imports are a project's dependencies. Using a binary lifts its code into a Ray Program whose syscalls and imports are
@@ -1568,10 +1572,13 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - **Layout.** `@ether/` is the Ether project: the standard `@` names (`Ether.ray`), `World.ray`, `Messaging.ray` and the
   instance entrypoints (`entrypoint.server.ray`, `entrypoint.npc.ray`, `entrypoint.player.ray`). `@ether/ray/` is the core
   (`!language`): Node, Ray, Number, String, Encoding, Program, Control, Compiler, Language, Project, Location,
-  Character, Format, Reporting, Unit, Access, Feature, OS, with its claims in `ray/tests/`.
-  Subprojects of `@ether`: `security`, `network`, `filesystem`, `time`, `timezone`, `fonts`, `device`, `geometry`, `ui`,
-  `version-control`, `os`, `game`, `library`, `avatar`, and the outside languages under `$/`. Folders of projects are
-  lowercase. `.ether/` is what Ether keeps locally for a project (fetched externals, caches, `.%` working state), laid out
+  Character, Choice, Diagnostics, Unit, Access, OS, each with its claims as asserts in it (rules preventing each other in Control). A map is a block, `{ a: 1, b: 2 }`
+  (no Document class); there is no IO class: a location does the input and output (`@me/instance = x` writes out, `@x`
+  reads). Subprojects of `@ether`: `os` (the Ether OS), `game`, `library`, `avatar`, the outside languages and operating
+  systems under `$/` (`$/Font` the fonts a device has), and the optional ones, each one file in `optional/`
+  (`optional/Network.project.ray`) still named as a subproject (`@ether/network`): `security`, `network`, `filesystem`
+  (FileSystem, what holds a location), `random` (Random, and drawing from what a value may be), `proof`, `time`,
+  `timezone`, `device`, `geometry`, `ui`, `version-control`. Folders of projects are lowercase. `.ether/` is what Ether keeps locally for a project (fetched externals, caches, `.%` working state), laid out
   as `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0`.
 
 ### 15.2 Languages
@@ -2082,7 +2089,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   it needs (`Char &+= { … }` in $/Unicode.project.ray, `Iterable &+= { random … }` in Feature.ray). It is rebuilt a line at a
   time, essentials first, each line's tests passing before the next.
   The entrypoint holds only what the bootstrap uses (2026-10-16): programs as quests, `$` and diagnostics carried by
-  values, case-folded uniqueness and where a class is written are tested in Program.ray, Reporting.ray, $/Unicode.project.ray and
+  values, case-folded uniqueness and where a class is written are tested in Program.ray, Diagnostics.ray, $/Unicode.project.ray and
   Location.ray; the entrypoint keeps the stubs (`Program`, `Diagnostic`) its own rules name.
 
 - The host (the TypeScript interpreter in `@ether/v0.ts`, used the same way by the CLI, the daemon and the LSP) knows no

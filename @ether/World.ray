@@ -147,7 +147,7 @@ Item := class: Nameable {
     errand := Program(name: "fetch", goal: wi)
     assert !(errand.done)  // QU1 a new quest is already done
     assert errand.abstract.count == 1  // QU2 a quest given only a name is not one step its runner does
-    assert errand.complete.done  // QU4 completing a quest does not
+    assert errand.stop.done  // QU4 completing a quest does not
     assert errand.goal == wi  // QU5 a quest forgot what it is for
     // Posting answers the quest, the way spawning answers the character.
     assert wg.add(errand) == errand  // QU6 posting a quest does not answer it
@@ -539,7 +539,7 @@ Character &+= {
     assert dlt_erased.since(None).id == dlt_ids  // DLT2 an erased history lost its commits' labels
     assert dlt_erased.ordered.stamp == dlt_c.history.ordered.stamp  // DLT3 an erased history lost its stamps
     assert !(dlt_erased.value !== None)  // DLT4 an erased history still holds a value
-    assert dlt.cancel.done  // DLT6 a cancelled deletion is still pending
+    assert dlt.stop.done  // DLT6 a cancelled deletion is still pending
   }
 
   avatars => name{is Location && .segments.some(.starts_with("@"))}

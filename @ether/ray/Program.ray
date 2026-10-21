@@ -49,11 +49,11 @@ Program &+= {
   abstract => .written{!.defined}
 
   & => .results
-  is_initial | waiting => !.started
+  is_initial => !.started
   assert Program(code: { 1 }).is_initial  // PG39 a program that was never stepped is not initial
   assert !Program(code: { 1 }).is_terminal  // PG40 a program that was never stepped is terminal
   assert !Program(code: { 1 }).intermediate  // PG41 a program that was never stepped is intermediate
-  is_terminal | final => .started && !.at
+  is_terminal => .started && !.at
   intermediate => .started && !.is_terminal
   holds => !.is_terminal && !.stopped
   assert Program(code: { 1 }).holds  // PG42 a program that was never stepped does not hold
@@ -114,7 +114,7 @@ Program &+= {
   assert Program(code: { 1 }, goal: Number).reached(5)  // PG57 a value of the goal's type does not reach the goal
   assert !Program(code: { 1 }, goal: Number).reached("five")  // PG58 a value not of the goal's type reaches the goal
   assert !Program(code: { 1 }).reached(5)  // PG59 a program with no goal is reached
-  attempt (value): static => this ~~ (.tried = value) ~~ (.complete if this.reached(value))
+  attempt (value): static => this ~~ (.tried = value) ~~ (.stop if this.reached(value))
   running => .started && !.done
   assert {
     program := Program(code: {
@@ -133,7 +133,7 @@ Program &+= {
   done => .stopped || .is_terminal
   continuable => .done && !(.tried**.is_terminal ?? true)
   path => [.tried, .tried.previous**].flatten
-  solution | best => .path{this.reached(.)}.first
+  solution => .path{this.reached(.)}.first
   solved_by => .solution.who
   progress => .started ? .written.index_of(.at) ?? .written.count : 0
   difficulty => .written.count
@@ -150,7 +150,7 @@ Program &+= {
     2
   }).finished.progress == 2
 
-  stop | cancel | complete: static => this ~~ (.stopped = true)
+  stop: static => this ~~ (.stopped = true)
   // (entered into a value: a closure of it, applied to it; `element`, what `.` is in it, not yet)
   entered (entered_into, entered_element) => entered_into -- this
 }
@@ -299,7 +299,7 @@ Program &+= {
   }) == [1, 2]
   right-to-left race => .written
     -- (.map(.stepped) while .every(.holds))
-    -- .{holds}.map(.cancel)
+    -- .{holds}.map(.stop)
     -- .{is_terminal}.first.results.last
   // CR2 race is not won by the first to finish
   assert (race {
@@ -325,10 +325,10 @@ assert Program(code: {
   1
   2
 }).(
-  .waiting  // RU1 a program nobody stepped is not waiting
+  .is_initial  // RU1 a program nobody stepped is not waiting
   & .next.intermediate  // RU2 one step in is not intermediate
-  & .waiting  // RU3 stepping a copy moved the original
-  & .finished.final  // RU4 a program run to its end is not final
+  & .is_initial  // RU3 stepping a copy moved the original
+  & .finished.is_terminal  // RU4 a program run to its end is not final
   & .finished.results.last == 2  // RU5 a program run to its end did not keep what its last step answered
 )
 assert {

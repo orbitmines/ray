@@ -8,6 +8,8 @@ Notification := class (title: String?, body: String?) => {
   // (https://learn.microsoft.com/windows/apps/design/shell/tiles-and-notifications/), through UserNotifications on macOS
   // (https://developer.apple.com/documentation/usernotifications), the Notifications API in a browser
   // (https://notifications.spec.whatwg.org); on ether kept for the player's device
-  shown => if OS.Ether { @me/device/storage["notification"] = (title: .title, body: .body) } else { external os `notify` (.title, .body) }
+  shown => if OS.Ether { @me/device/storage["notification"] = (title: .title, body: .body) }
+    elsif OS.Browser { @js new Notification({.title}, \{body: {.body}}) }
+    else { external os `notify` (.title, .body) }
 }
 assert Notification(title: "t", body: "b").(.title == "t" & .body == "b")  // NTF1 a notification does not keep its title and body

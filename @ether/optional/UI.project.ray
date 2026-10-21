@@ -770,6 +770,14 @@ Device &+= {
 }
 
 // The web renderer: a scene written as HTML, a document with its CSS stylesheet and JS script
+// The devices the page writes, each selected from what `@me/device` superposes
+UI &+= {
+  static device: Device = @me/device
+  static clipboard: Clipboard = @me/device
+  static display: Display = @me/device
+  static motion: Motion = @me/device
+}
+
 UI.HTML := class {
   static space := Geometry.Space.screen
   Geometry.Shape &+= {
@@ -1076,36 +1084,36 @@ UI.HTML := class {
     // The device's files (`@me/device/storage`) kept in the origin's Web Storage as `ray:<path>`: localStorage, and the storage
     // event other documents of the origin fire (https://html.spec.whatwg.org/multipage/webstorage.html#the-localstorage-attribute, https://html.spec.whatwg.org/multipage/webstorage.html#the-storageevent-interface)
     storage := @js {
-      Object.keys(localStorage).filter((key) => key.startsWith("ray:")).forEach((key) => ray.set("@me/device/storage/" + key.slice(4), localStorage.getItem(key)))
+      Object.keys(localStorage).filter((key) => key.startsWith("ray:")).forEach((key) => ray.set("UI.device.storage/" + key.slice(4), localStorage.getItem(key)))
       window.addEventListener("storage", (event) => event.key === null
-        ? ray.get("@me/device/storage.fields.name").forEach((key) => ray.set("@me/device/storage/" + key, null))
-        : event.key.startsWith("ray:") && ray.set("@me/device/storage/" + event.key.slice(4), event.newValue))
-      effect(["@me/device/storage"], () => {
-        const kept = ray.get("@me/device/storage.fields")
+        ? ray.get("UI.device.storage.fields.name").forEach((key) => ray.set("UI.device.storage/" + key, null))
+        : event.key.startsWith("ray:") && ray.set("UI.device.storage/" + event.key.slice(4), event.newValue))
+      effect(["UI.device.storage"], () => {
+        const kept = ray.get("UI.device.storage.fields")
         Object.keys(localStorage).filter((key) => key.startsWith("ray:") && !kept.some((field) => "ray:" + field.name === key)).forEach((key) => localStorage.removeItem(key))
         kept.forEach((field) => localStorage.getItem("ray:" + field.name) === String(field.value) || localStorage.setItem("ray:" + field.name, field.value))
       })
     }
     // UI Events (https://www.w3.org/TR/uievents/), Pointer Events (https://www.w3.org/TR/pointerevents3/), the History API (https://html.spec.whatwg.org/multipage/nav-history-apis.html)
     devices := @js {
-      ray.set("@me/device/handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+      ray.set("UI.device.handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
       {["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"].map(name => @js window.addEventListener({name}, (event) => ray.point(event)))}
       {["keydown", "keyup"].map(name => @js window.addEventListener({name}, (event) => ray.key(event)))}
       window.addEventListener("focusin", (event) => ray.set("UI.focus", event.target.id))
       window.addEventListener("resize", (event) => ray.set("UI.scene.size", ray.size()))
-      window.addEventListener("popstate", (event) => ray.set("@me/device/location", location.href))
-      ray.set("@me/device/location", location.href)
-      window.addEventListener("paste", (event) => ray.set("@me/device/clipboard", event.clipboardData.getData("text")))
+      window.addEventListener("popstate", (event) => ray.set("UI.device.location", location.href))
+      ray.set("UI.device.location", location.href)
+      window.addEventListener("paste", (event) => ray.set("UI.clipboard.content", event.clipboardData.getData("text")))
       window.addEventListener("dragstart", (event) => ray.set(event.target.id + ".dragged", true))
       window.addEventListener("dragend", (event) => ray.set(event.target.id + ".dragged", false))
       window.addEventListener("drop", (event) => ray.set(event.target.id + ".dropped", event.dataTransfer.files))
       window.addEventListener("compositionupdate", (event) => ray.call("UI.focus.content.composed", event.data))
-      window.addEventListener("deviceorientation", (event) => ray.set("@me/device/orientation", ray.orientation(event)))
-      window.addEventListener("devicemotion", (event) => ray.set("@me/device/motion", ray.motion(event)))
+      window.addEventListener("deviceorientation", (event) => ray.set("UI.motion.orientation", ray.orientation(event)))
+      window.addEventListener("devicemotion", (event) => ray.set("UI.motion.acceleration", ray.motion(event)))
       window.addEventListener("gamepadconnected", (event) => ray.poll_gamepads())
-      window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("@me/device/preferences.reduced_motion", event.matches))
-      window.matchMedia("(prefers-color-scheme:dark)").addEventListener("change", (event) => ray.set("@me/device/preferences.dark", event.matches))
-      effect(["@me/device/location"], () => location.href === ray.get("@me/device/location") || history.pushState(null, "", ray.get("@me/device/location")))
+      window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("UI.display.preferences.reduced_motion", event.matches))
+      window.matchMedia("(prefers-color-scheme:dark)").addEventListener("change", (event) => ray.set("UI.display.preferences.dark", event.matches))
+      effect(["UI.device.location"], () => location.href === ray.get("UI.device.location") || history.pushState(null, "", ray.get("UI.device.location")))
       effect(["UI.page.title"], () => document.title = ray.get("UI.page.title"))
       window.addEventListener("scroll", (event) => ray.set("UI.scene.scrolled.y", window.scrollY))
       effect(["UI.scene.scrolled"], () => {
@@ -1128,11 +1136,9 @@ UI.HTML := class {
         }
       }))
       effect(["UI.locked"], () => document.documentElement.classList.toggle("locked", ray.get("UI.locked")))
-      effect(["@me/device/notification"], () => new Notification(ray.get("@me/device/notification.title"), \{body: ray.get("@me/device/notification.body")}))
-      effect(["@me/device/fullscreen"], () => document.documentElement.requestFullscreen())
-      effect(["@me/device/printing"], () => window.print())
-      effect(["@me/device/clipboard"], () => navigator.clipboard.writeText(ray.get("@me/device/clipboard")))
-      effect(["@me/device/opened"], () => open(ray.get("@me/device/opened"), "_blank", "noopener"))
+      effect(["UI.display.fullscreen"], () => document.documentElement.requestFullscreen())
+      effect(["UI.clipboard.content"], () => navigator.clipboard.writeText(ray.get("UI.clipboard.content")))
+      effect(["UI.device.opened"], () => open(ray.get("UI.device.opened"), "_blank", "noopener"))
     }
     assert (UI.HTML.Script.devices as JS).(
       . ~= (*, "window.addEventListener(\"scroll\"", *)  // UI161 the web does not report the page scroll

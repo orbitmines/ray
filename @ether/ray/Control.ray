@@ -1,11 +1,4 @@
 
-Quantity.Temporal &+= {
-  right-to-left sleep => Time.now -- (start => await dynamically (Time.now >= start + this))
-  assert {
-    sleep (1 ms)
-  }
-}
-
 Component := class {
   {literal label ^label}\ ^punctuation => return this
 }

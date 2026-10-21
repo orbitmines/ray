@@ -1,6 +1,7 @@
 @http
 @base64
 @sha1
+@unicode
 
 // The WebSocket protocol (https://www.rfc-editor.org/rfc/rfc6455)
 // A client masks every frame it sends, a server none (https://www.rfc-editor.org/rfc/rfc6455#section-5.1)

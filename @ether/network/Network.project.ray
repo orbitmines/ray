@@ -4,6 +4,8 @@
 @hpack
 @ether/security
 @ether/device
+@ip
+@unicode
 
 // The network holds the locations with a scheme (`@https://…`: `FileSystem.Remote`, below) and the local names.
 @localhost => @`127.0.0.1` | @::1
@@ -65,9 +67,8 @@ Location &+= {
 }
 
 Device &+= {
-  // the host's MAC address and whether it is on a network; a browser and ether say neither (a random locally administered MAC)
-  network: (mac: MAC, connected: boolean) = (OS.Browser || OS.Ether) ? (mac: MAC.random ~~ .[7] = 1, connected: false)
-    : (mac: (external os `mac_address`) ?? (MAC.random ~~ .[7] = 1), connected: (external network `connected`) ?? false)
+  // whether the host is on a network; a browser and ether say it is not
+  network: (connected: boolean) = (OS.Browser || OS.Ether) ? (connected: false) : (connected: (external network `connected`) ?? false)
 }
 
 Instance &+= {

@@ -1,0 +1,29 @@
+// A phone number as people write it (https://www.itu.int/rec/T-REC-E.123): international with "+" or national, 3 to 15 digits
+// (https://www.itu.int/rec/T-REC-E.164) grouped by spaces, dashes or dots, groups possibly parenthesised (+1 (555) 123-4567,
+// +31 (0)6 1234 5678, (020) 123 4567), and an extension after (https://www.rfc-editor.org/rfc/rfc3966#section-5.1.5).
+Phone := class (
+  international: "+"?,
+  grouped: (Phone.Separator?, Char.Digit | ("(", Char.Digit[]{length == 1..5}, ")"))[]{length == 3..15},
+  (Phone.Separator?, ("ext." | "ext" | "x" | ";ext="), Phone.Separator?, extension: Char.Digit[]{length == 1..6})?
+) => {
+  static Separator := " " | "-" | "."
+  assert "+1 (555) 123-4567" is Phone  // CHR34 an international number with groups (RFC 3966, E.123) is not a phone number
+  assert "555 1234 x12" is Phone  // CHR35 a number with an extension is not a phone number (RFC 3966 section 5.1.5)
+  assert "+44.20.7946.0958" is Phone  // CHR36 dotted groups are not a phone number
+  assert !("12" is Phone)  // CHR37 two digits are a phone number (E.164 asks for at least 3)
+  assert !("call me" is Phone)  // CHR38 letters are a phone number
+  assert !("+1234567890123456" is Phone)  // CHR39 more than 15 digits are a phone number (E.164)
+  // What is dialled: the digits alone, "+" first when written internationally (a global number, RFC 3966). A trunk prefix
+  // written "(0)" is dialled only nationally, so it is left out of an international number (E.123: +31 (0)6 … is +316 …).
+  digits => (international ?? "") + grouped.map(.last){!international || != "(0)"}.join{is Char.Digit}
+  assert ("+44 20 7946 0958" as Phone).digits == "+442079460958"  // CHR40 the digits dialled of an international number are not "+" and its digits
+  assert ("+1 555-123-4567" as Phone).digits == "+15551234567"  // CHR41 grouping characters are dialled
+  assert ("+31 (0)6 1234 5678" as Phone).digits == "+31612345678"  // CHR42 the trunk prefix "(0)" is dialled in an international number (E.123: +31 (0)6 1234 5678 is +316 1234 5678)
+  assert ("555 1234" as Phone).digits == "5551234"  // CHR43 a national number is dialled with "+"
+}
+
+Character &+= {
+  phone => name{is Phone}
+  assert Character().named("+1 555 123 4567").phone == "+1 555 123 4567"  // CHR53 a character named with a phone number has no phone
+  assert Character().named("Jane Smith").phone == None  // CHR54 a character named with a full name has a phone
+}

@@ -24,7 +24,7 @@ Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?
   static project (name: String) => Project#{.name == name}.first
     ?? Project.known(ray.bundled("$/" + name)) -- (found => found ~~ (.name = name) ~~ .load if found)
   assert Language.project("web").loaded  // PJ2 a language in a mutual dependency is not loaded
-  static found (name: String) => name.lower_case -- (lowered => lowered == "ray" ? ray
+  static found (name: String) => (name#.map("A" <= . <= "Z" ? . - "A" + "a" : .) as String) -- (lowered => lowered == "ray" ? ray
     : (project(lowered) ? Language#{.names("." + lowered)}.last : named("." + lowered)) ?? ERROR@Language `no language by that name`)
 
   static Lossless := Language{forall value is *#: read(write(value)) == value}

@@ -9,9 +9,9 @@ Quantity := class (quantities, Base = Number) => {
   assert 1d 10h 10m 30s as s == 123030 s  // U52 a juxtaposed quantity is not the sum of its parts
 
   // (in units one after another, `x as days hours minutes seconds`: as many of each as fit, the rest in the next)
-  as (order: Quantity{.quantities.every(.quantity == 1)}) => order.quantities.unit.reduce((held = (left: this, parts: [])) =>
-    (. === order.quantities.unit.last ? held.left.in(.) : held.left.in(.).floor) -- (count => (left: held.left - count .,
-      parts: [held.parts, [(quantity: count, unit: .)]].flatten))).parts -- (parts => Quantity(quantities: parts))
+  as (order: Quantity{.quantities.every(.quantity == 1)}) => Quantity(quantities: Quantity.split(this, order.quantities.unit))
+  static split (left: Quantity, units) => units.empty ? [] : (units.count == 1 ? left.in(units.first) : left.in(units.first).floor) -- (count =>
+    [[(quantity: count, unit: units.first)], Quantity.split(left - Quantity(quantities: [(quantity: count, unit: units.first)]), units.rest)].flatten)
   assert 10000000 s as days hours minutes seconds == 115d 17h 46m 40s  // U53 a quantity is not normalized into days hours minutes seconds
 
   unit => .quantities.last.unit

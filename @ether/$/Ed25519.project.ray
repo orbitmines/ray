@@ -13,38 +13,38 @@ Ed25519 := class: Language {
 
   // A point of -x^2 + y^2 = 1 + d x^2 y^2, added by the complete twisted Edwards formula (RFC 8032 §5.1.4)
   static Point := class x: Number, y: Number {
-    static neutral := Point(x: 0, y: 1)
+    static neutral := Ed25519.Point(x: 0, y: 1)
     assert Ed25519.B * Ed25519.L == Ed25519.Point.neutral  // EDS7 the base point times its order is not the neutral point
-    + (other: Point) => d * x * other.x * y * other.y % X25519.p -- (t => Point(
-      x: (x * other.y + other.x * y) * X25519.inverse(1 + t) % X25519.p,
-      y: (y * other.y + x * other.x) * X25519.inverse(X25519.p + 1 - t) % X25519.p))
+    + (other: Ed25519.Point) => Ed25519.d * .x * other.x * .y * other.y % X25519.p -- (t => Ed25519.Point(
+      x: (this.x * other.y + other.x * this.y) * X25519.inverse(1 + t) % X25519.p,
+      y: (this.y * other.y + this.x * other.x) * X25519.inverse(X25519.p + 1 - t) % X25519.p))
     * (n: Number) => n.digits(2).reduce(held = neutral => held + held + (. == 1 ? this : neutral))
-    == (other: Point) => x == other.x && y == other.y
+    == (other: Ed25519.Point) => .x == other.x && .y == other.y
 
     // Encoding: y in 255 bits little-endian, the low bit of x in the top bit (RFC 8032 §5.1.2)
-    as (=== Byte[]) => (y + x % 2 * 2 ^ 255).little(32)
+    as (=== Byte[]) => (.y + .x % 2 * 2 ^ 255).little(32)
     // Decoding: y, then x from x^2 = (y^2 - 1) / (d y^2 + 1) by the square root of §5.1.1, its sign from the top bit (RFC 8032 §5.1.3)
-    static (bytes: Byte₃₂) as (=== Point) => {
+    static (bytes: Byte₃₂) as (=== Ed25519.Point) => {
       y = bytes.little % 2 ^ 255
       sign = (bytes.little / 2 ^ 255).floor
-      u = (y * y + X25519.p - 1) * X25519.inverse(d * y * y + 1) % X25519.p
-      root = X25519.power(u, (X25519.p + 3) / 8) -- (. * . % X25519.p == u ? . : . * I % X25519.p)
+      u = (y * y + X25519.p - 1) * X25519.inverse(Ed25519.d * y * y + 1) % X25519.p
+      root = X25519.power(u, (X25519.p + 3) / 8) -- (. * . % X25519.p == u ? . : . * Ed25519.I % X25519.p)
       return ERROR `the bytes are not a point of Ed25519` if y >= X25519.p || root * root % X25519.p != u || root == 0 && sign == 1
       Point(x: root % 2 == sign ? root : (X25519.p - root) % X25519.p, y)
     }
   }
 
   // The base point: y = 4/5 and x even (RFC 8032 §5.1)
-  static B := (4 * X25519.inverse(5) % X25519.p).little(32) as Point
+  static B := (4 * X25519.inverse(5) % X25519.p).little(32) as Ed25519.Point
   // The base point decodes to y = 4/5 and encodes back; L B is the neutral point (RFC 8032 §5.1)
   assert (Ed25519.B as Byte[]) as Ed25519.Point == Ed25519.B  // EDS6 the base point does not read back as itself
 
   // The secret's SHA-512, its first half pruned as X25519's scalar (RFC 8032 §5.1.5, RFC 7748 §5)
   static expanded (secret: Byte₃₂) => SHA512.write(secret).bytes -- (h => (scalar: X25519.clamped(h[..<32]), prefix: h[32..]))
-  static reduced (bytes: Byte[]) => (SHA512.write(bytes).bytes).little % L
+  static reduced (bytes: Byte[]) => (SHA512.write(bytes).bytes).little % Ed25519.L
 
   // The public key: the base point times the pruned scalar (RFC 8032 §5.1.5)
-  static public (secret: Byte₃₂) => (B * expanded(secret).scalar) as Byte[]
+  static public (secret: Byte₃₂) => (Ed25519.B * Ed25519.expanded(secret).scalar) as Byte[]
   // TEST 1: the secret key, its public key, and the signature of the empty message (RFC 8032 §7.1)
   assert {
     ed_secret := "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60" as Hexadecimal₆₄ as Byte₃₂
@@ -75,10 +75,10 @@ Ed25519 := class: Language {
   }
 
   // Signing: r from the prefix and the message, R = rB, S = r + H(R, A, M) s mod L (RFC 8032 §5.1.6)
-  static sign (secret: Byte₃₂, message: Byte[]) => expanded(secret) -- (key => reduced([key.prefix, message].flatten) -- (r => (B * r) as Byte[] -- (R =>
-    [R, ((r + reduced([R, public(secret), message].flatten) * key.scalar) % L).little(32)].flatten)))
+  static sign (secret: Byte₃₂, message: Byte[]) => Ed25519.expanded(secret) -- (key => Ed25519.reduced([key.prefix, message].flatten) -- (r => (Ed25519.B * r) as Byte[] -- (R =>
+    [R, ((r + Ed25519.reduced([R, Ed25519.public(secret), message].flatten) * key.scalar) % Ed25519.L).little(32)].flatten)))
 
   // Verifying: S < L and SB = R + H(R, A, M) A, the equation without the cofactor, which §5.1.7 allows
   static verify (public: Byte₃₂, message: Byte[], signature: Byte₆₄) => (signature[32..]).little -- (s =>
-    s < L && B * s == (signature[..<32] as Point) + (public as Point) * reduced([signature[..<32], public, message].flatten))
+    s < Ed25519.L && Ed25519.B * s == (signature[..<32] as Ed25519.Point) + (public as Ed25519.Point) * Ed25519.reduced([signature[..<32], public, message].flatten))
 }

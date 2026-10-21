@@ -29,12 +29,12 @@ Gzip := class: Language (
 ) {
   static extensions := ".gz" | ".gzip"
 
-  inflated: Byte[] => deflated.bytes
-  dynamically assert crc == inflated as CRC32 as Binary₃₂ && isize == inflated.count % 2 ^ 32
+  inflated: Byte[] => .deflated.bytes
+  dynamically assert .crc == .inflated as CRC32 as Binary₃₂ && .isize == .inflated.count % 2 ^ 32
 
   // A file is one or more members, read as their data joined (https://www.rfc-editor.org/rfc/rfc1952#section-2.2)
   static level := {
-    {members: Gzip[]{length > 0}} => members.inflated.flatten
+    {members: Gzip[]{.length > 0}} => members.inflated.flatten
   }
   static written := {
     {writing: Language.Writing} => Gzip(deflated: Deflate.write(writing.value as Byte[]))

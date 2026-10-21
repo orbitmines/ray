@@ -9,7 +9,7 @@ C := class: Language {
   static extensions := ".c" | ".h"
   static Identifier := (Char.Letter | "_", (Char.Word | "_")[])
   // A type: a name, qualified, pointed to, or a pointer to a function of it, as declarators read (6.7.2, 6.7.7)
-  static Type := (("const" | "unsigned" | "struct"), " ")[], Identifier, (" "[], "*")[], (" "[], "(*)(", (!")")[], ")")?
+  static Type := (("const" | "unsigned" | "struct"), " ")[], C.Identifier, (" "[], "*")[], (" "[], "(*)(", (!")")[], ")")?
 
   level := {
     {code} => Program(code: code)
@@ -21,9 +21,9 @@ C := class: Language {
     // Comments (6.4.10)
     /*{text}*/ => "/*", text, "*/"
     // Declarations (6.7): a type, then a name, an array's size, a value it starts as
-    {type: Type} {name: Identifier}[{size}] => type, " ", name, "[", size, "]"
-    {type: Type} {name: Identifier} = {value} => type, " ", name, "=", value
-    {type: Type} {name: Identifier} => type, " ", name
+    {type: C.Type} {name: C.Identifier}[{size}] => type, " ", name, "[", size, "]"
+    {type: C.Type} {name: C.Identifier} = {value} => type, " ", name, "=", value
+    {type: C.Type} {name: C.Identifier} => type, " ", name
     // Selection and iteration statements (6.8.5, 6.8.6), return (6.8.7.5)
     if ({condition}) {then} else {otherwise} => "if(", condition, "){", then, "}else{", otherwise, "}"
     if ({condition}) {then} => "if(", condition, "){", then, "}"
@@ -39,19 +39,19 @@ C := class: Language {
     ^({parameters}) {body} => "^(", parameters, "){", body, "}"
     __block {declaration} => "__block ", declaration
     // A cast (6.5.5), sizeof (6.5.4.4)
-    ({type: Type}){operand} => "((", type, ")", operand, ")"
+    ({type: C.Type}){operand} => "((", type, ")", operand, ")"
     sizeof({operand}) => "sizeof(", operand, ")"
     // Calls, members, through a pointer, an element (6.5.3)
     {function}({arguments: *[]}) => function, "(", arguments.map(("," if .index > 0), .), ")"
-    {object}->{member: Identifier} => object, "->", member
-    {object}.{member: Identifier} => object, ".", member
+    {object}->{member: C.Identifier} => object, "->", member
+    {object}.{member: C.Identifier} => object, ".", member
     {array}[{index}] => array, "[", index, "]"
     // An initializer (6.7.11), a string literal, a wide one (6.4.5), the null pointer constant (6.4.4.6)
     \{{entries: *[]}{`}`} => "{", entries.map(("," if .index > 0), .), "}"
     L{text: String} => "L", Language.Writing(text)
     {text: String} => Language.Writing(text)
     nullptr => "nullptr"
-    {name: Identifier} => name
+    {name: C.Identifier} => name
   }
 
 }

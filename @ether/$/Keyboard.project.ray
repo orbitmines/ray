@@ -48,7 +48,7 @@ Keyboard := class: Location {
   assert Keyboard.Key(name: "a").press as boolean & !(Keyboard.Key(name: 6) as boolean)  // KB16 a key is not true while pressed, or is while not
 
   keys => .children{is Keyboard.Key}
-  [name] => .keys{.name == name}.first ?? .add(Keyboard.Key(name))
+  [name] => .keys{.name == .name}.first ?? .add(Keyboard.Key(name))
   coded (code: Number) => .keys{.code == code}.first ?? .add(Keyboard.Key(name: code as Char as String, code))
   pressed (name, modifier: Keyboard.Modifier? = None) => this[name] -- (key => key.pressed && (!modifier || modifier#.some(. is key.modifiers)))
   .{name: String ^property} ^punctuation => this[name]

@@ -4,9 +4,9 @@ JSON := class: Language (Blank, root: Value, Blank) => {
   static extensions := ".json"
 
   static Blank := (" " | \t | \n | \r)[]
-  static Value := Object | Array | Text | Numeral | Literal
-  static valued (held) => held is Value ? held.value : held
-  static Object := class ("{", Blank, (members: (Blank, name: Text, Blank, ":", Blank, value: Value, Blank)[]).join(","), Blank, "}") => {
+  static Value := JSON.Object | JSON.Array | JSON.Text | JSON.Numeral | JSON.Literal
+  static valued (held) => held is JSON.Value ? held.value : held
+  static Object := class ("{", JSON.Blank, (members: (JSON.Blank, name: JSON.Text, JSON.Blank, ":", JSON.Blank, value: JSON.Value, JSON.Blank)[]).join(","), JSON.Blank, "}") => {
     // (a block holding each member under its name, `{ "a": 1 }`)
     value => {
       held := { }
@@ -14,30 +14,30 @@ JSON := class: Language (Blank, root: Value, Blank) => {
       held
     }
   }
-  static Array := class ("[", Blank, (elements: (Blank, element: Value, Blank)[]).join(","), Blank, "]") => {
-    value => elements.map(valued(.element))
+  static Array := class ("[", JSON.Blank, (elements: (JSON.Blank, element: JSON.Value, JSON.Blank)[]).join(","), JSON.Blank, "]") => {
+    value => .elements.map(JSON.valued(.element))
   }
   static Escaped := class ("\\", (character: "\"" | "\\" | "/") | (control: "b" | "f" | "n" | "r" | "t") | ("u", unit: Hexadecimal₄)) => {
-    value => character ?? (unit ? unit as Char : { "b": \b, "f": \f, "n": \n, "r": \r, "t": \t }[control])
+    value => .character ?? (.unit ? .unit as Char : { "b": \b, "f": \f, "n": \n, "r": \r, "t": \t }[.control])
   }
-  static Text := class ("\"", characters: (Escaped | Char{!= "\"" && != "\\" && . >= \x20})[], "\"") => {
-    value => characters.map(. is Escaped ? .value : .).join("") as String
+  static Text := class ("\"", characters: (JSON.Escaped | Char{!= "\"" && != "\\" && . >= \x20})[], "\"") => {
+    value => .characters.map(. is JSON.Escaped ? .value : .).join("") as String
   }
-  static Numeral := class (written: ("-"?, ("0" | (Char.Digit{!= "0"}, Char.Digit[])), (".", Char.Digit[]{length > 0})?, (("e" | "E"), ("+" | "-")?, Char.Digit[]{length > 0})?)) => {
-    value => written as Number
+  static Numeral := class (written: ("-"?, ("0" | (Char.Digit{!= "0"}, Char.Digit[])), (".", Char.Digit[]{.length > 0})?, (("e" | "E"), ("+" | "-")?, Char.Digit[]{.length > 0})?)) => {
+    value => .written as Number
   }
   static Literal := class (word: "true" | "false" | "null") => {
-    value => { "true": true, "false": false, "null": None }[word]
+    value => { "true": true, "false": false, "null": None }[.word]
   }
-  value => valued(root)
+  value => JSON.valued(this.root)
 
   static escaped (text: String) => #text.map({ "\"": "\\\"", "\\": "\\\\", "<": "\\u003c", \n: "\\n", \r: "\\r", \t: "\\t" }[.] ?? .) as String
   static written := {
-    {writing: Language.Writing{value === None}} => "null"
-    {writing: Language.Writing{value is boolean}} => writing.value ? "true" : "false"
-    {writing: Language.Writing{value is Number}} => writing.value as 10 as String
-    {writing: Language.Writing{value is String | Location}} => "\"", escaped(writing.value as String), "\""
-    {writing: Language.Writing{value is Iterable}} => "[", writing.value.map((", " if .index > 0), Language.Writing(.)), "]"
+    {writing: Language.Writing{this.value === None}} => "null"
+    {writing: Language.Writing{this.value is .boolean}} => writing.value ? "true" : "false"
+    {writing: Language.Writing{this.value is Number}} => writing.value as 10 as String
+    {writing: Language.Writing{this.value is String | Location}} => "\"", JSON.escaped(writing.value as String), "\""
+    {writing: Language.Writing{this.value is Iterable}} => "[", writing.value.map((", " if .index > 0), Language.Writing(.)), "]"
     {writing: Language.Writing} => "{", writing.value.fields.map((", " if .index > 0), Language.Writing(.name), ": ", Language.Writing(.value)), "}"
   }
   static level := {

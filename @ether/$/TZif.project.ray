@@ -31,22 +31,22 @@ TZif := class: Language (
 
   // 3.3 TZif Footer: a TZ string (POSIX.1-2024 XBD 8.3, extended by RFC 8536 3.3.1)
   static Rule := class (standard: Abbreviation, offset: Offset, (daylight: Abbreviation, saving: Offset?, (",", start: Change, ",", end: Change))?)
-  static Abbreviation := Char.Letter[]{length >= 3} | ("<", (Char.Word | "+" | "-")[]{length >= 3}, ">")
+  static Abbreviation := Char.Letter[]{.length >= 3} | ("<", (Char.Word | "+" | "-")[]{.length >= 3}, ">")
   static Offset := class (sign: ("+" | "-")?, hours: Decimal, (":", minutes: Decimal₂)?, (":", seconds: Decimal₂)?) {
-    seconds_west => (sign == "-" ? -1 : 1) * (hours * 3600 + (minutes ?? 0) * 60 + (seconds ?? 0))
+    seconds_west => (.sign == "-" ? -1 : 1) * (.hours * 3600 + (.minutes ?? 0) * 60 + (.seconds ?? 0))
     // A TZ string footer (RFC 8536 3.3, POSIX.1-2024 XBD 8.3)
     assert ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).start.month == 3 && ("CET-1CEST,M3.5.0,M10.5.0/3" as TZif.Rule).offset.seconds_west == -3600  // TZIF3 a footer's TZ string is not read
   }
   static Change := class ((("J", julian: Decimal) | day: Decimal | ("M", month: Decimal, ".", week: Decimal, ".", weekday: Decimal)), ("/", time: Offset)?)
 
-  data => v2 ?? v1
-  at (time: Time) => (time as s).floor -- (seconds => data.type_at(seconds) -- (type => (offset: type.offset seconds, daylight: type.daylight == 1, abbreviation: data.named(type), rule: footer if data.after_last(seconds))))
+  data => .v2 ?? .v1
+  at (time: Time) => (time as s).floor -- (seconds => this.data.type_at(seconds) -- (type => (offset: type.offset seconds, daylight: type.daylight == 1, abbreviation: this.data.named(type), rule: this.footer if this.data.after_last(seconds))))
 
   static level := {
     {zone: TZif} => zone
   }
   static written := {
-    {writing: Language.Writing{value is TZif}} => writing.value as Byte[]
+    {writing: Language.Writing{.value is TZif}} => writing.value as Byte[]
   }
 }
 assert TZif.read(tzif_utc) -- (.v1.leap_count == 27 && .v1.type_count == 1 && .v1.transition_count == 0 && .v2 === None)  // TZIF5 the file of RFC 8536 B.1 does not read as one version 1 block of one type and 27 leap seconds

@@ -4,7 +4,7 @@
 // ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
 ANSI := class: Language {
   static extensions := ".ansi"
-  Cell := class (glyph: Char = " ", foreground: Geometry.Color? = None, background: Geometry.Color? = None, styles: Attribute# = [], link: Location? = None) => { }
+  Cell := class (glyph: Char = " ", foreground: Geometry.Color? = None, background: Geometry.Color? = None, styles: ANSI.Attribute# = [], link: Location? = None) => { }
   assert ANSI.Cell("x", foreground: Geometry.Color(255, 0, 0), styles: ANSI.Attribute.italic).(
     (. as ANSI.Style as String) == "\e[0;3;38;2;255;0;0m"  // UI296 a cell's style is not written as one SGR sequence
     & ((. as ANSI.Style as String) as ANSI.Style).cell("x") == .  // UI297 a written style does not read back as the same cell
@@ -14,7 +14,7 @@ ANSI := class: Language {
   // CUP, Cursor Position (ECMA-48 8.3.21)
   // (header: ("\e[", (row: Decimal, ";", column: Decimal)?, "H"), not read into the class yet: written by UI.TUI.written)
   Move := class (row: Decimal? = None, column: Decimal? = None) => {
-    at => Geometry.Vector((column ?? 1) - 1, (row ?? 1) - 1)
+    at => Geometry.Vector((this.column ?? 1) - 1, (this.row ?? 1) - 1)
     assert {
       moved := @ansi \e[2;3H
       assert moved.first is ANSI.Move && moved.first.at == Geometry.Vector(2, 1)  // UI293 a cursor position written inline is not a move to that cell
@@ -26,22 +26,22 @@ ANSI := class: Language {
   // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
   // (header: ("\e[?", number: Decimal, state: "h" | "l"))
   Mode := class (number: Decimal, state: "h" | "l") => {
-    flipped => Mode(number, state == "h" ? "l" : "h")
+    flipped => ANSI.Mode(this.number, this.state == "h" ? "l" : "h")
   }
 
   // SGR, Select Graphic Rendition (ECMA-48 8.3.117): 1 bold, 2 faint, 3 italic, 4 underlined, 7 negative, 9 crossed-out
   Attribute := enum bold (code: "1") | faint (code: "2") | italic (code: "3") | underlined (code: "4") | negative (code: "7") | crossed_out (code: "9") {
-    static (code: "1" | "2" | "3" | "4" | "7" | "9") as (=== Attribute) => Attribute#{.code == code}.first
+    static (code: "1" | "2" | "3" | "4" | "7" | "9") as (=== ANSI.Attribute) => ANSI.Attribute#{.code == code}.first
   }
   // SGR 38 and 48, direct colour (";2;r;g;b") or an indexed one (";5;n") (ITU-T T.416 13.1.8; xterm, "Character Attributes")
   // (header: (layer: "38" | "48", ((";2;", red: Decimal, ";", green: Decimal, ";", blue: Decimal) | (";5;", index: Decimal))))
   Colored := class (layer: "38" | "48", red: Decimal? = None, green: Decimal? = None, blue: Decimal? = None, index: Decimal? = None) => {
-    color => index == None ? Geometry.Color(red, green, blue) : Palette[index]
+    color => .index == None ? Geometry.Color(this.red, this.green, this.blue) : ANSI.Palette[.index]
   }
   // (header: ("\e[0", parameters: (";", parameter: Colored | ("1" | "2" | "3" | "4" | "7" | "9") as Attribute)[], "m"))
   Style := class (parameters: * = []) => {
-    colored (layer: String) => parameters.parameter{. is Colored && .layer == layer}.last.color
-    cell (glyph: Char = " ") => Cell(glyph, foreground: colored("38"), background: colored("48"), styles: parameters.parameter{. is Attribute}#)
+    colored (layer: String) => .parameters.parameter{. is ANSI.Colored && .layer == layer}.last.color
+    cell (glyph: Char = " ") => ANSI.Cell(glyph, foreground: this.colored("38"), background: this.colored("48"), styles: this.parameters.parameter{. is ANSI.Attribute}#)
     assert {
       ansi_block := @ansi {
         \e]0;{"Ray"}\a
@@ -51,9 +51,9 @@ ANSI := class: Language {
       styled := ansi_block{. is ANSI.Style}.first.cell("R")
       assert ANSI.Attribute.bold is styled.styles && styled.foreground == Geometry.Color(255, 0, 0)  // UI295 an SGR sequence is not read into a cell's style
     }
-    static (cell: Cell) as (=== Style) => Style(parameters: [
+    static (cell: ANSI.Cell) as (=== ANSI.Style) => ANSI.Style(parameters: [
       Attribute#{. is cell.styles},
-      [[["38", cell.foreground]], ["48", cell.background]]{pair => pair[1]}.map(pair => Colored(pair[0], red: pair[1].red, green: pair[1].green, blue: pair[1].blue))
+      [[["38", cell.foreground]], ["48", cell.background]]{pair => pair[1]}.map(pair => ANSI.Colored(pair[0], red: pair[1].red, green: pair[1].green, blue: pair[1].blue))
     ].flatten.map(it => (parameter: it)))
   }
   // The xterm 256-colour palette: the 16 system colours, a 6x6x6 cube and 24 greys (xterm 256colres.pl)
@@ -61,7 +61,7 @@ ANSI := class: Language {
   static Palette := [
     [(0, 0, 0), (205, 0, 0), (0, 205, 0), (205, 205, 0), (0, 0, 238), (205, 0, 205), (0, 205, 205), (229, 229, 229),
       (127, 127, 127), (255, 0, 0), (0, 255, 0), (255, 255, 0), (92, 92, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255)].map(Geometry.Color(.0, .1, .2)),
-    (0..<216).map(Geometry.Color(Levels[(. / 36).floor], Levels[(. / 6).floor % 6], Levels[. % 6])),
+    (0..<216).map(Geometry.Color(ANSI.Levels[(. / 36).floor], ANSI.Levels[(. / 6).floor % 6], ANSI.Levels[. % 6])),
     (0..<24).map(8 + 10 * . -- Geometry.Color(., ., .))
   ].flatten
 
@@ -71,19 +71,19 @@ ANSI := class: Language {
   // OSC 8, hyperlinks (https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda)
   // (header: ("\e]8;", parameters: (!";")[] = "", ";", target: (!"\e" && !"\a")[], ("\e\\" | "\a")))
   Hyperlink := class (parameters: String = "", target: String = "") => {
-    link => target.empty ? None : target as Location
+    link => .target.empty ? None : .target as Location
   }
   // OSC 52, the clipboard (xterm, "Manipulate Selection Data")
   Copy := class ("\e]52;", selection: Char.Letter[] = "c", ";", encoded: Base64, ("\a" | "\e\\")) {
-    text => encoded.bytes as String
-    static (text: String) as (=== Copy) => Copy(encoded: text.bytes as Base64)
+    text => .encoded.bytes as String
+    static (text: String) as (=== ANSI.Copy) => ANSI.Copy(encoded: text.bytes as Base64)
   }
 
   // Input: PC-style function keys and modifiers, SGR mouse reports (1006), bracketed paste (2004) and focus events (1004) (xterm, "PC-Style Function Keys", "Mouse Tracking")
   Key := class ("\e[", (modifiers: "1;", modifier: Decimal)?, code: "A" | "B" | "C" | "D" | "H" | "F" | "Z") | ("\eO", code: "P" | "Q" | "R" | "S") | ("\e[", page: "5" | "6", "~") | ("\e", alt: Char) | (code: Char) => {
-    lettered => code && (code as Number) < 27 && !(code is ("\r" | "\t"))
-    shift => modifier && (modifier - 1) % 2 == 1
-    control => modifier && (modifier - 1) / 4 % 2 == 1 || lettered
+    lettered => .code && (.code as Number) < 27 && !(.code is ("\r" | "\t"))
+    shift => .modifier && (.modifier - 1) % 2 == 1
+    control => .modifier && (.modifier - 1) / 4 % 2 == 1 || .lettered
     assert "\e[1;5A" as ANSI.Key .control  // UI35 ctrl+up is not read as control
   }
   assert ("\ef" as ANSI.Key).alt == "f"  // UI167 alt+f in the terminal is not read
@@ -93,22 +93,22 @@ ANSI := class: Language {
   }
   assert ((6 as Char as String) as ANSI.Key).control && ((6 as Char as String) as ANSI.Key).name.name == "f"  // UI166 ctrl+f in the terminal is not f with control
   Mouse := class ("\e[<", button: Decimal, ";", x: Decimal, ";", y: Decimal, state: "M" | "m") => {
-    cell => Geometry.Vector(x - 1, y - 1)
+    cell => Geometry.Vector(this.x - 1, this.y - 1)
   }
   assert ("\e[<0;3;4M" as ANSI.Mouse).x == 3  // UI36 a mouse report is not read
   Paste := class ("\e[200~", text: *, "\e[201~")
   FocusChange := class ("\e[", state: "I" | "O")
 
-  Sequence := Move | Erase | Mode | Style | Title | Hyperlink | Copy
-  Input := Key | Mouse | Paste | FocusChange
+  Sequence := ANSI.Move | ANSI.Erase | ANSI.Mode | ANSI.Style | ANSI.Title | ANSI.Hyperlink | ANSI.Copy
+  Input := ANSI.Key | ANSI.Mouse | ANSI.Paste | ANSI.FocusChange
 
   level := {
-    {text: String} => (text ~= (pieces: (Sequence | Char)[])).pieces
+    {text: String} => (text ~= (pieces: (ANSI.Sequence | Char)[])).pieces
   }
 
   // Terminals without direct colour: the nearest entry of the xterm colour cube
   XTerm256 := {
-    {colored: Colored{index == None}} => Colored(colored.layer, index: 16 + 36 * (colored.red * 5 / 255).floor + 6 * (colored.green * 5 / 255).floor + (colored.blue * 5 / 255).floor)
+    {colored: ANSI.Colored{.index == None}} => ANSI.Colored(colored.layer, index: 16 + 36 * (colored.red * 5 / 255).floor + 6 * (colored.green * 5 / 255).floor + (colored.blue * 5 / 255).floor)
   }
   TrueColor := { }
 }

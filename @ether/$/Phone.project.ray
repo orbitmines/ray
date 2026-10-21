@@ -15,7 +15,7 @@ Phone := class (
   assert !("+1234567890123456" is Phone)  // CHR39 more than 15 digits are a phone number (E.164)
   // What is dialled: the digits alone, "+" first when written internationally (a global number, RFC 3966). A trunk prefix
   // written "(0)" is dialled only nationally, so it is left out of an international number (E.123: +31 (0)6 … is +316 …).
-  digits => (international ?? "") + grouped.map(.last){!international || != "(0)"}.join{is Char.Digit}
+  digits => (.international ?? "") + .grouped.map(.last){!.international || != "(0)"}.join{is Char.Digit}
   assert ("+44 20 7946 0958" as Phone).digits == "+442079460958"  // CHR40 the digits dialled of an international number are not "+" and its digits
   assert ("+1 555-123-4567" as Phone).digits == "+15551234567"  // CHR41 grouping characters are dialled
   assert ("+31 (0)6 1234 5678" as Phone).digits == "+31612345678"  // CHR42 the trunk prefix "(0)" is dialled in an international number (E.123: +31 (0)6 1234 5678 is +316 1234 5678)

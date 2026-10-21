@@ -2140,6 +2140,15 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     method, a rule, `static …`, a class or enum named in it, an `assert`, names given together (`a | b : T`). The
     kernel does it for now (`external hoisted { … }` in the entrypoint's class rule: the class reads its whole block
     once, as before, and each instance reads it again without those); it belongs in `Compiler.ray` as a level.
+- Decided 2026-10-21 (the user), Expression's `.statement#.for .(caller)`:
+  - **A field read on a list of instances is each one's, in order.** `.statement` of the `Statement[]` read is each
+    statement's `statement` field, one after another (superposed in order; `#` lists them, one alone too). The kernel
+    asks a list's own `missing` (Array's, in the entrypoint) when a member is not there and every value in it, one a
+    class made, holds it as its own (a field it was given; a method is its class's, and is not mapped).
+  - **In `.for`, `.` is the closure's value, and `.( )` calls it** when what it is has a method `(…)` of its own (a
+    key kept with `[k] := (caller) => …` has one: called, it calls what it keeps). Otherwise `.( … )` stays code read in
+    `.`. A `.` after a name or a closing bracket (`it.({constraint})`), or code led by a `.` (`it.(.length)`), is that
+    reading, never a call. In a closure called `.on(v)`, `.name` written alone is a member of v.
 - Decided 2026-10-17, being built:
   - **A bare name never reads a member.** Inside a method, `count` is not `.count`. A bare name sees the method's
     parameters, its own locals, the locals of the bodies it is written in, and the file and global scope. A member of

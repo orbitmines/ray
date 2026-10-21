@@ -4,6 +4,7 @@
 @browser
 @ether/time
 @ether/random
+@c
 
 // Ether: the language as the operating system. What the host's externals answer elsewhere is written here in Ray; what
 // differs per operating system otherwise lives in the package it is about (`if OS.Ether { … }`: storage and streams in
@@ -15,6 +16,48 @@ OS.Ether &+= {
   [property: String] => { "platform": "ether", "architecture": "ray" }[property]
   // a character's Unicode scalar, a bit at a time, most significant first: on ether a character already is its scalar
   bits (character: Char, take) => (character as Binary).integer.for(take)
+}
+  // the clipboard: one place in the storage, copied to and pasted from
+  clipboard => (@me/device as Storage)["clipboard"]
+  // a notification: kept for whoever plays the device; its display shows the latest
+  shown (notification) => ((@me/device as Storage)["notifications"] = notification) -- notification
+  // a file executed: read as the Ray program it is, run with the arguments
+  executed (location: Location, args) => (location.held as Program)(args)
+  // sockets: TCP, UDP and TLS in Ray over the network device's frames (Ethernet, IP; RFC 9293, RFC 768, RFC 8446)
+  sent (address, bytes: Byte[], transport: "tcp" | "udp" | "tls") => TODO `{transport} in Ray over the network device's frames`
+}
+
+// How ether reaches the machine: its physical memory is a location space (`@/memory/0xFEE00000`), held by the machine
+// itself: a byte read is a load, a byte written a store, each `volatile` so none is reordered or left out, compiled for the
+// machine with the rest. Every device is reached through it (memory-mapped I/O): PCI Express's functions in the
+// configuration space at the base ACPI's MCFG table gives (https://uefi.org/specs/ACPI/6.5/05_ACPI_Software_Programming_Model.html;
+// PCI Express Base 6.0, 7.2.2), each its registers at what its base address registers say. (What is kept for whoever plays
+// the device, how a key repeats, what was copied, is a member of OS.Ether like any value's: `OS.Ether.clipboard`.)
+Machine := class: Language {
+  [location: Location] => (@c { unsigned char value = *(volatile unsigned char*){location.name as Number} })().value
+  { }[{location: Location}] = {value} ^punctuation => (@c { *(volatile unsigned char*){location.name as Number} = {value} })()
+  // a little-endian number of `bytes` bytes at an address
+  static number (address: Number, bytes: Number = 4) => (0..<bytes).reduce(held = 0 => held + (@/memory / (address + .) as String).held * 256 ^ .)
+  static text (address: Number, bytes: Number) => (0..<bytes).map((@/memory / (address + .) as String).held as Char).join("")
+
+  // ACPI: the root pointer in the BIOS area on a 16-byte boundary (UEFI hands it over instead), its extended table of
+  // tables, the one of a signature
+  static root => (0..<0x2000).map(0xE0000 + . * 16).find(Machine.text(., 8) == "RSD PTR ")
+  static table (signature: String) => Machine.number(Machine.root + 24, 8) -- (tables =>
+    (0..<(Machine.number(tables + 4) - 36) / 8).map(Machine.number(tables + 36 + . * 8, 8)).find(Machine.text(., 4) == signature))
+  // PCI Express: every function present (its vendor not 0xFFFF), 4 KiB each at bus << 20 | device << 15 | function << 12
+  static functions => Machine.number(Machine.table("MCFG") + 44, 8) -- (base => (0..<256 * 32 * 8).map(base + . * 4096){Machine.number(., 2) != 0xFFFF})
+  // where a function's registers are: its base address register `n`, a 64-bit one's high half after it
+  static registers (function: Number, n: Number = 0) => Machine.number(function + 0x10 + n * 4) -- (bar => (bar - bar % 16) + ((bar / 2).floor % 4 == 2 ? Machine.number(function + 0x14 + n * 4) * 2 ^ 32 : 0))
+
+  // The drivers (each its own project in os/drivers/, adding itself): a class over a function it takes
+  // (`Machine.driver(0x02).mac`, 0x02 a network controller, 0x0C03 a USB one)
+  static drivers := []
+  static driver (class: Number) => Machine.functions{Machine.number(. + (class > 0xFF ? 0x0A : 0x0B), class > 0xFF ? 2 : 1) == class}
+    .map(function => Machine.drivers.find(.takes(function)) -- (driver => driver ? driver(registers: Machine.registers(function)) : None)).compact.first
+}
+Holders = Holders + {
+  {location: Location{OS.Ether && .segments.first == "memory"}} => Machine()
 }
 
 assert OS.Ether["platform"] == "ether"  // ETH4 the language as the operating system does not name its platform ether

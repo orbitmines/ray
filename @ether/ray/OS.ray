@@ -5,6 +5,11 @@
 // the language as the operating system in @ether/os, which depends on all of them; a project using what differs between
 // them depends on @ether/os.
 OS := class (platform: String) => {
+  // what a program run on it calls it with (`@c`): the headers its interface is declared in, the libraries it is defined
+  // in, and how they are called (its ABI)
+  headers: String[] = []
+  libraries: String[] = []
+  abi: String?
   as (=== boolean) => this === (@me/device as OS)
   // what the host says of itself (`os["PATH"]`, `os.env.PATH`)
   [property: String] => OS.reported(property) as String

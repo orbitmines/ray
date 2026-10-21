@@ -1,13 +1,41 @@
 @ether/os
+@c
+@js
 
 // A printer: what it is given, printed
-Printer := class: Location {
+Printer := class {
   printing: boolean = false
-  // printed as the operating system prints: CUPS on Linux and macOS (https://www.cups.org), the print spooler on Windows
-  // (EnumPrinters, https://learn.microsoft.com/windows/win32/printdocs/enumprinters), window.print in a browser; on ether
-  // not written yet
-  print (content) => if OS.Ether { ERROR@OS `printing on ether is not written yet` }
-    elsif OS.Browser { (.printing = true) -- @js window.print() }
-    else { (.printing = true) -- (external os `print` (this as String, content)) }
+  // printed as the operating system prints, on its default printer: a CUPS job on Linux and macOS (cupsCreateJob,
+  // https://www.cups.org/doc/cupspm.html), the print spooler on Windows (raw, through WritePrinter,
+  // https://learn.microsoft.com/windows/win32/printdocs/sending-data-directly-to-a-printer), window.print in a browser;
+  // on ether an IPP job over the network, not written yet
+  print (content) => (content as String as Byte[]) -- (bytes => if OS.Linux || OS.Macos {
+      (this.printing = true) -- (@c {
+        const char* printer = cupsGetDefault()
+        int job = cupsCreateJob(CUPS_HTTP_DEFAULT, printer, "ray", 0, nullptr)
+        cupsStartDocument(CUPS_HTTP_DEFAULT, printer, job, "ray", CUPS_FORMAT_AUTO, 1)
+        cupsWriteRequestData(CUPS_HTTP_DEFAULT, {bytes}, {bytes.count})
+        cupsFinishDocument(CUPS_HTTP_DEFAULT, printer)
+      })()
+    }
+    elsif OS.Windows {
+      (this.printing = true) -- (@c {
+        wchar_t name[256]
+        unsigned size = 256
+        GetDefaultPrinterW(name, &size)
+        HANDLE printer = nullptr
+        OpenPrinterW(name, &printer, nullptr)
+        DOC_INFO_1W document = \{L"ray", nullptr, L"RAW"}
+        StartDocPrinterW(printer, 1, &document)
+        StartPagePrinter(printer)
+        unsigned written = 0
+        WritePrinter(printer, {bytes}, {bytes.count}, &written)
+        EndPagePrinter(printer)
+        EndDocPrinter(printer)
+        ClosePrinter(printer)
+      })()
+    }
+    elsif OS.Browser { (this.printing = true) -- (@js window.print())() }
+    else { TODO `printing on ether: an IPP job (RFC 8011) to the printer over the network's sockets` })
 }
 assert !(Printer().printing)  // PRN1 a printer given nothing is printing

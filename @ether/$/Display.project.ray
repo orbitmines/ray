@@ -1,10 +1,58 @@
 @ether/os
+@c
+@js
 
 // A display: full screen or not, kept awake or not, and how its user prefers to see it
-Display := class: Location {
+Display := class {
   fullscreen: boolean = false
   awake: boolean = false
-  // as its user prefers (the operating system's settings): reduced motion, dark, contrast, whether focused
-  preferences: (reduced_motion: boolean, dark: boolean, contrast: "more" | "less" | "normal", focused: boolean) = (external os `display_preferences`) ?? (false, false, "normal", true)
+  // as its user prefers (the operating system's settings): reduced motion, dark, contrast, whether focused. GNOME's
+  // settings on Linux (org.gnome.desktop.interface's enable-animations and color-scheme, the a11y interface's
+  // high-contrast; https://docs.gtk.org/gio/class.Settings.html), SystemParametersInfo's client area animation and high
+  // contrast and the personalized theme's AppsUseLightTheme on Windows
+  // (https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-systemparametersinfow), NSWorkspace's accessibility
+  // display options and the AppleInterfaceStyle default on macOS, the media queries in a browser
+  // (https://www.w3.org/TR/mediaqueries-5/#mf-user-preferences); on ether as the player set them
+  // (`OS.Ether.display_preferences`)
+  preferences: (reduced_motion: boolean, dark: boolean, contrast: "more" | "less" | "normal", focused: boolean) = if OS.Linux {
+      (@c {
+        GSettings* interface = g_settings_new("org.gnome.desktop.interface")
+        int reduced = !g_settings_get_boolean(interface, "enable-animations")
+        int dark = g_settings_get_enum(interface, "color-scheme") == 1
+        int more = g_settings_get_boolean(g_settings_new("org.gnome.desktop.a11y.interface"), "high-contrast")
+      })() -- (got => (got.reduced == 1, got.dark == 1, got.more == 1 ? "more" : "normal", true))
+    }
+    elsif OS.Windows {
+      (@c {
+        int animated = 1
+        SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animated, 0)
+        HIGHCONTRASTW contrast = \{sizeof(HIGHCONTRASTW)}
+        SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(HIGHCONTRASTW), &contrast, 0)
+        int more = (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0
+        unsigned light = 1
+        unsigned size = sizeof(light)
+        RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size)
+      })() -- (got => (got.animated == 0, got.light == 0, got.more == 1 ? "more" : "normal", true))
+    }
+    elsif OS.Macos {
+      (@c {
+        id workspace = objc_msgSend(objc_getClass("NSWorkspace"), sel_registerName("sharedWorkspace"))
+        int reduced = objc_msgSend(workspace, sel_registerName("accessibilityDisplayShouldReduceMotion"))
+        int more = objc_msgSend(workspace, sel_registerName("accessibilityDisplayShouldIncreaseContrast"))
+        id defaults = objc_msgSend(objc_getClass("NSUserDefaults"), sel_registerName("standardUserDefaults"))
+        int dark = objc_msgSend(defaults, sel_registerName("stringForKey:"), CFStringCreateWithCString(nullptr, "AppleInterfaceStyle", kCFStringEncodingUTF8)) != nullptr
+      })() -- (got => (got.reduced == 1, got.dark == 1, got.more == 1 ? "more" : "normal", true))
+    }
+    elsif OS.Browser {
+      (@js [matchMedia("(prefers-reduced-motion: reduce)").matches, matchMedia("(prefers-color-scheme: dark)").matches,
+        matchMedia("(prefers-contrast: more)").matches ? "more" : matchMedia("(prefers-contrast: less)").matches ? "less" : "normal",
+        document.hasFocus()])() -- (got => (got[0], got[1], got[2], got[3]))
+    }
+    else { OS.Ether.display_preferences ?? (false, false, "normal", true) }
 }
 assert !(Display().fullscreen) & !(Display().awake)  // DSP1 a display is full screen or kept awake unasked
+assert {
+  with (@me/device as OS) = OS.Ether {
+    assert Display().preferences == (false, false, "normal", true)  // DSP2 a display on ether prefers something nobody set
+  }
+}

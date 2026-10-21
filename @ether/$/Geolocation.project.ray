@@ -1,13 +1,57 @@
 @ether/os
 @ether/geometry
+@c
+@js
 
 // Where the device is on the earth, and how sure of it (https://www.w3.org/TR/geolocation/)
 Geolocation := class {
-  // as the operating system locates it: GeoClue on Linux (https://gitlab.freedesktop.org/geoclue/geoclue), Windows.Devices.
-  // Geolocation on Windows (https://learn.microsoft.com/uwp/api/windows.devices.geolocation), Core Location on macOS
-  // (https://developer.apple.com/documentation/corelocation), the Geolocation API in a browser; on ether none until
-  // told
-  at: (latitude: Number, longitude: Number, accuracy: Geometry.Length)? = if OS.Ether { None } else { external os `geolocation` }
+  // as the operating system locates it: GeoClue on Linux (gclue_simple_new_sync,
+  // https://www.freedesktop.org/software/geoclue/docs/libgeoclue/GClueSimple.html), the Location API on Windows
+  // (ILocation's latitude and longitude report, https://learn.microsoft.com/windows/win32/locationapi/), Core Location
+  // on macOS (CLLocationManager's last location, https://developer.apple.com/documentation/corelocation), the
+  // Geolocation API in a browser; on ether what it was told (`OS.Ether.location`), none until
+  // then
+  at: (latitude: Number, longitude: Number, accuracy: Geometry.Length)? = if OS.Linux {
+      (@c {
+        GClueSimple* located = gclue_simple_new_sync("ray", GCLUE_ACCURACY_LEVEL_EXACT, nullptr, nullptr)
+        GClueLocation* here = gclue_simple_get_location(located)
+        double latitude = gclue_location_get_latitude(here)
+        double longitude = gclue_location_get_longitude(here)
+        double accuracy = gclue_location_get_accuracy(here)
+      })() -- (got => (got.latitude, got.longitude, accuracy: got.accuracy * 1 m))
+    }
+    elsif OS.Windows {
+      (@c {
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED)
+        ILocation* locating = nullptr
+        CoCreateInstance(&CLSID_Location, nullptr, CLSCTX_INPROC_SERVER, &IID_ILocation, (void**)&locating)
+        ILocationReport* report = nullptr
+        locating->lpVtbl->GetReport(locating, &IID_ILatLongReport, &report)
+        ILatLongReport* here = (ILatLongReport*)report
+        double latitude = 0
+        double longitude = 0
+        double accuracy = 0
+        here->lpVtbl->GetLatitude(here, &latitude)
+        here->lpVtbl->GetLongitude(here, &longitude)
+        here->lpVtbl->GetErrorRadius(here, &accuracy)
+      })() -- (got => (got.latitude, got.longitude, accuracy: got.accuracy * 1 m))
+    }
+    elsif OS.Macos {
+      (@c {
+        id manager = objc_msgSend(objc_msgSend(objc_getClass("CLLocationManager"), sel_registerName("alloc")), sel_registerName("init"))
+        objc_msgSend(manager, sel_registerName("requestWhenInUseAuthorization"))
+        id last = objc_msgSend(manager, sel_registerName("location"))
+        CLLocationCoordinate2D here = ((CLLocationCoordinate2D (*)(id, SEL))objc_msgSend)(last, sel_registerName("coordinate"))
+        double latitude = here.latitude
+        double longitude = here.longitude
+        double accuracy = ((double (*)(id, SEL))objc_msgSend)(last, sel_registerName("horizontalAccuracy"))
+      })() -- (got => (got.latitude, got.longitude, accuracy: got.accuracy * 1 m))
+    }
+    elsif OS.Browser {
+      (@js await new Promise((answer) => navigator.geolocation.getCurrentPosition((here) => answer([here.coords.latitude, here.coords.longitude, here.coords.accuracy]))))()
+        -- (got => (got[0], got[1], accuracy: got[2] * 1 m))
+    }
+    else { OS.Ether.location }
   latitude => .at?.latitude
   longitude => .at?.longitude
 }

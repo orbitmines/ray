@@ -1,5 +1,6 @@
 @ether/os
 @ether/time
+@c
 
 // A keyboard: its keys, each pressed or not. What a key toggles flips each time it is pressed and what it cycles through
 // steps each time, both kept as they change (`dynamically`); pulsed, it holds as it is pressed, then while held as often
@@ -60,17 +61,39 @@ Keyboard := class: Location {
     assert !(keyboard.pressed("f"))  // UI164 a released key stays pressed
   }
 
-  // How a held key repeats, as the operating system sets it: X's or the compositor's on Linux (`xset q`, Wayland's
-  // wl_keyboard.repeat_info; X's default 660 ms, then 25 a second, https://www.x.org/releases/current/doc/man/man1/xset.1.xhtml),
+  // How a held key repeats, as the operating system sets it: X's on Linux (XkbGetAutoRepeatRate, XWayland's under Wayland;
+  // https://www.x.org/releases/current/doc/libX11/XKB/xkblib.html; X's default 660 ms, then 25 a second, https://www.x.org/releases/current/doc/man/man1/xset.1.xhtml),
   // SystemParametersInfo's SPI_GETKEYBOARDDELAY and SPI_GETKEYBOARDSPEED on Windows (500 ms, about 30 a second,
   // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-systemparametersinfow), the global defaults
-  // InitialKeyRepeat and KeyRepeat on macOS (375 ms, then every 90 ms); a browser repeats keydown itself
-  // (`KeyboardEvent.repeat`); on ether once, then after a second twenty times a second
-  static repeat: (delay: Quantity.Temporal, rate: Quantity) => if OS.Linux { (external os `key_repeat`) ?? (delay: 660 ms, rate: 25 / s) }
-    elsif OS.Windows { (external os `key_repeat`) ?? (delay: 500 ms, rate: 30 / s) }
-    elsif OS.Macos { (external os `key_repeat`) ?? (delay: 375 ms, rate: 1 / 90 ms) }
+  // InitialKeyRepeat and KeyRepeat on macOS (CFPreferences, 375 ms, then every 90 ms); a browser repeats keydown itself
+  // (`KeyboardEvent.repeat`); on ether as the player set it (`OS.Ether.key_repeat`), else once, then after a second twenty
+  // times a second
+  static repeat: (delay: Quantity.Temporal, rate: Quantity) => if OS.Linux {
+      (@c {
+        unsigned delay = 660
+        unsigned interval = 40
+        XkbGetAutoRepeatRate(XOpenDisplay(nullptr), XkbUseCoreKbd, &delay, &interval)
+      })() -- (got => (delay: got.delay * 1 ms, rate: 1 / (got.interval * 1 ms)))
+    }
+    // (the delay 0 to 3 is a quarter of a second to one; the speed 0 to 31 about 2.5 to 30 a second)
+    elsif OS.Windows {
+      (@c {
+        int delay = 1
+        unsigned speed = 31
+        SystemParametersInfoW(SPI_GETKEYBOARDDELAY, 0, &delay, 0)
+        SystemParametersInfoW(SPI_GETKEYBOARDSPEED, 0, &speed, 0)
+      })() -- (got => (delay: (got.delay + 1) * 250 ms, rate: (2.5 + got.speed * 27.5 / 31) / s))
+    }
+    // (both in ticks of 15 ms, unset on a Mac nobody changed)
+    elsif OS.Macos {
+      (@c {
+        unsigned char set = 0
+        long initial = CFPreferencesGetAppIntegerValue(CFStringCreateWithCString(nullptr, "InitialKeyRepeat", kCFStringEncodingUTF8), kCFPreferencesAnyApplication, &set)
+        long repeat = CFPreferencesGetAppIntegerValue(CFStringCreateWithCString(nullptr, "KeyRepeat", kCFStringEncodingUTF8), kCFPreferencesAnyApplication, &set)
+      })() -- (got => (delay: (got.initial > 0 ? got.initial : 25) * 15 ms, rate: 1 / ((got.repeat > 0 ? got.repeat : 6) * 15 ms)))
+    }
     elsif OS.Browser { (delay: 500 ms, rate: 30 / s) }
-    else { (delay: 1 s, rate: 20 / s) }
+    else { OS.Ether.key_repeat ?? (delay: 1 s, rate: 20 / s) }
   assert {
     with (@me/device as OS) = OS.Ether {
       assert Keyboard.repeat == (delay: 1 s, rate: 20 / s)  // KB21 a key on ether does not repeat after a second, twenty times a second

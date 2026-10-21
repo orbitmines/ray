@@ -1,0 +1,70 @@
+// The C programming language (ISO/IEC 9899:2024, https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3220.pdf). A
+// fragment (`@c f({x})`) reads as the Ray program it is, kept as code, as `@js` does: calls, members, operators are Ray's
+// own, and a hole in braces is its value (a string a C string literal, `L{x}` a wide one, a list of bytes a pointer to
+// them, a list of strings an array of them ended by a null pointer). Run (`(@c { … })()`), it answers what it declared,
+// as a block, each value as Ray reads its type (an integer a Number, a `char *` or a `wchar_t *` a String, an array its
+// elements): `(@c { int n; f(&n); })().n`. A name it does not declare is what it runs on defines: an operating system
+// its headers, its libraries and how they are called (`os.headers`, `os.libraries`, `os.abi`, each in its own project).
+C := class: Language {
+  static extensions := ".c" | ".h"
+  static Identifier := (Char.Letter | "_", (Char.Word | "_")[])
+  // A type: a name, qualified, pointed to, or a pointer to a function of it, as declarators read (6.7.2, 6.7.7)
+  static Type := (("const" | "unsigned" | "struct"), " ")[], Identifier, (" "[], "*")[], (" "[], "(*)(", (!")")[], ")")?
+
+  level := {
+    {code} => Program(code: code)
+  }
+
+  written := {
+    // Statements, each ended by ";" (6.8), a compound statement in braces (6.8.3)
+    {program: Program} => program.steps.map(., ";")
+    // Comments (6.4.10)
+    /*{text}*/ => "/*", text, "*/"
+    // Declarations (6.7): a type, then a name, an array's size, a value it starts as
+    {type: Type} {name: Identifier}[{size}] => type, " ", name, "[", size, "]"
+    {type: Type} {name: Identifier} = {value} => type, " ", name, "=", value
+    {type: Type} {name: Identifier} => type, " ", name
+    // Selection and iteration statements (6.8.5, 6.8.6), return (6.8.7.5)
+    if ({condition}) {then} else {otherwise} => "if(", condition, "){", then, "}else{", otherwise, "}"
+    if ({condition}) {then} => "if(", condition, "){", then, "}"
+    while ({condition}) {body} => "while(", condition, "){", body, "}"
+    return {value} => "return ", value
+    // Assignment, conditional, binary and unary operators (6.5); Ray's == is C's
+    {target} = {value} => target, "=", value
+    {condition} ? {then} : {otherwise} => "(", condition, "?", then, ":", otherwise, ")"
+    {a} {operator: "||" | "&&" | "==" | "!=" | "<=" | ">=" | "<<" | ">>" | "<" | ">" | "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^"} {b} => "(", a, operator, b, ")"
+    {operator: "!" | "-" | "~" | "&" | "*"}{operand} => "(", operator, operand, ")"
+    // A block, as clang and Apple's frameworks take one: a function literal over what it is written in, `__block` what
+    // it may change (https://clang.llvm.org/docs/BlockLanguageSpec.html)
+    ^({parameters}) {body} => "^(", parameters, "){", body, "}"
+    __block {declaration} => "__block ", declaration
+    // A cast (6.5.5), sizeof (6.5.4.4)
+    ({type: Type}){operand} => "((", type, ")", operand, ")"
+    sizeof({operand}) => "sizeof(", operand, ")"
+    // Calls, members, through a pointer, an element (6.5.3)
+    {function}({arguments: *[]}) => function, "(", arguments.map(("," if .index > 0), .), ")"
+    {object}->{member: Identifier} => object, "->", member
+    {object}.{member: Identifier} => object, ".", member
+    {array}[{index}] => array, "[", index, "]"
+    // An initializer (6.7.11), a string literal, a wide one (6.4.5), the null pointer constant (6.4.4.6)
+    \{{entries: *[]}{`}`} => "{", entries.map(("," if .index > 0), .), "}"
+    L{text: String} => "L", Language.Writing(text)
+    {text: String} => Language.Writing(text)
+    nullptr => "nullptr"
+    {name: Identifier} => name
+  }
+
+}
+assert {
+  who := "Ray"
+  assert ((@c f({who})) as C) == "f(\"Ray\")"  // CC1 a string hole in c is not a string literal
+  assert ((@c MessageBoxW(nullptr, L{who}, L{who}, 0)) as C) == "MessageBoxW(nullptr,L\"Ray\",L\"Ray\",0)"  // CC2 a wide hole is not a wide string literal
+  assert ((@c write(1, {who}, 3)) as C) == "write(1,\"Ray\",3)"  // CC3 a call's arguments are not written in order
+  c_block := @c {
+    int n = 0
+    f(&n)
+  }
+  assert c_block.count == 2 && (c_block as C) == "int n=0;f((&n));"  // CC4 a c block is not its statements
+  assert ((@c a == 1 + 2 * 3) as C) == "(a==(1+(2*3)))"  // CC5 c operators do not keep their precedence
+  assert ((@c display->screen) as C) == "display->screen"  // CC6 a member through a pointer is not written with ->
+}

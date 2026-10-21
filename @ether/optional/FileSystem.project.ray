@@ -1,4 +1,5 @@
 @ether/os
+@c
 @storage
 
 // The device's files: the host's (sandboxed: what the host answers for a directory is its entries); a browser and the
@@ -9,12 +10,91 @@ FileSystem := class: Language {
   [location: Location] => if OS.Browser || OS.Ether {
       (@me/device as Storage) -- (storage => storage[location.normalised] ?? (storage.fields.name{~= ⊢(location.normalised + "/")}
         .map(.after(location.normalised + "/").before("/")).unique.map(location / .) -- (.nonempty ? . : None)))
-    } else { external io location.sandboxed None }
+    } else { FileSystem.read(location.sandboxed) -- (. is String[] ? .map(location / .) : .) }
   { }[{location: Location}] = {value} ^punctuation => if OS.Browser || OS.Ether { (@me/device as Storage)[location.normalised] = value }
-    elsif value === None { external os `remove` location.sandboxed }
-    else { external io location.sandboxed value }
+    elsif value === None { FileSystem.removed(location.sandboxed) }
+    else { FileSystem.written(location.sandboxed, value as Byte[]) }
   // executed: what the host opens it with, given the code between the brackets
-  ({location: Location}, {args}) => if OS.Ether || OS.Browser { ERROR@OS `executing a location is not written in Ray yet` } else { external os `open` (location.@ as String, args) }
+  ({location: Location}, {args}) => if OS.Ether { (location.held as Program)(args) }
+    elsif OS.Browser { ERROR@OS `a browser does not execute a file` }
+    else { FileSystem.opened(location.@ as String, args) }
+
+  // What the host's files are, through its interface: POSIX's on Linux and macOS (open, read, opendir, unlink,
+  // posix_spawnp; https://pubs.opengroup.org/onlinepubs/9799919799/), Win32's on Windows (CreateFileW, ReadFile,
+  // FindFirstFileW, DeleteFileW, ShellExecuteW; https://learn.microsoft.com/windows/win32/fileio/file-management-functions).
+  // A file reads as its bytes, a directory as the names in it, nothing there as None.
+  static read (path: String) => if OS.Windows {
+      (@c {
+        WIN32_FILE_ATTRIBUTE_DATA about
+        int found = GetFileAttributesExW(L{path}, GetFileExInfoStandard, &about)
+        int directory = found && (about.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+        unsigned size = found && !directory ? about.nFileSizeLow : 0
+        unsigned char content[size]
+        HANDLE file = found && !directory ? CreateFileW(L{path}, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr) : INVALID_HANDLE_VALUE
+        unsigned count = 0
+        if (file != INVALID_HANDLE_VALUE) { ReadFile(file, content, size, &count, nullptr) }
+        CloseHandle(file)
+      })() -- (got => !got.found ? None : got.directory ? FileSystem.listed(path) : got.content[..<got.count])
+    } else {
+      (@c {
+        struct stat about
+        int found = stat({path}, &about) == 0
+        int directory = found && S_ISDIR(about.st_mode)
+        long size = found && !directory ? about.st_size : 0
+        unsigned char content[size]
+        int file = found && !directory ? open({path}, O_RDONLY) : -1
+        long count = file >= 0 ? read(file, content, size) : 0
+        close(file)
+      })() -- (got => !got.found ? None : got.directory ? FileSystem.listed(path) : got.content[..<got.count])
+    }
+  // the names in a directory, but `.` and `..`
+  static listed (path: String) => if OS.Windows {
+      (@c {
+        WIN32_FIND_DATAW entry
+        wchar_t names[65536] = L""
+        HANDLE found = FindFirstFileW(L{path + "\\*"}, &entry)
+        while (found != INVALID_HANDLE_VALUE && wcscat(wcscat(names, entry.cFileName), L"\n") && FindNextFileW(found, &entry)) { }
+        FindClose(found)
+      })().names.lines{. != "." && . != ".." && . != ""}
+    } else {
+      (@c {
+        DIR* directory = opendir({path})
+        char names[65536] = ""
+        struct dirent* entry = nullptr
+        while (directory && (entry = readdir(directory))) { strcat(strcat(names, entry->d_name), "\n") }
+        closedir(directory)
+      })().names.lines{. != "." && . != ".." && . != ""}
+    }
+  static written (path: String, bytes: Byte[]) => if OS.Windows {
+      (@c {
+        HANDLE file = CreateFileW(L{path}, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)
+        unsigned count = 0
+        WriteFile(file, {bytes}, {bytes.count}, &count, nullptr)
+        CloseHandle(file)
+      })().count == bytes.count
+    } else {
+      (@c {
+        int file = open({path}, O_WRONLY | O_CREAT | O_TRUNC, 0644)
+        long count = write(file, {bytes}, {bytes.count})
+        close(file)
+      })().count == bytes.count
+    }
+  static removed (path: String) => if OS.Windows {
+      (@c { int removed = DeleteFileW(L{path}) || RemoveDirectoryW(L{path}) })().removed != 0
+    } else {
+      (@c { int removed = unlink({path}) == 0 || rmdir({path}) == 0 })().removed != 0
+    }
+  // opened as the desktop opens it: xdg-open on Linux (https://portland.freedesktop.org/doc/xdg-open.html), open on macOS,
+  // the shell's verb "open" on Windows; waited for, answering how it exited
+  static opened (path: String, args) => if OS.Windows {
+      (@c { long opened = (long)ShellExecuteW(nullptr, L"open", L{path}, L{args as String}, nullptr, SW_SHOWNORMAL) })().opened > 32
+    } else {
+      (OS.Macos ? "open" : "xdg-open") -- (opener => (@c {
+        pid_t child = 0
+        int status = -1
+        if (posix_spawnp(&child, {opener}, nullptr, nullptr, {[opener, path, args as String]}, environ) == 0) { waitpid(child, &status, 0) }
+      })().status == 0)
+    }
 }
 Location &+= {
   sandboxed => "instance/" + .normalised
@@ -24,8 +104,26 @@ Location &+= {
 // page and on ether the player, through two places on the device (what is sent waits in `instance/sent`, what comes in
 // arrives in `instance/received`, each keeping its history).
 Terminal := class: Language {
-  [location: Location] => if OS.Browser || OS.Ether { (@me/device as Storage)["instance/received"] } else { external io "stdin" None }
-  { }[{location: Location}] = {value} ^punctuation => if OS.Browser || OS.Ether { (@me/device as Storage)["instance/sent"] = value } else { external io "stdout" value }
+  [location: Location] => if OS.Browser || OS.Ether { (@me/device as Storage)["instance/received"] }
+    elsif OS.Windows {
+      (@c {
+        unsigned char received[65536]
+        unsigned count = 0
+        ReadFile(GetStdHandle(STD_INPUT_HANDLE), received, sizeof(received), &count, nullptr)
+      })() -- (got => got.received[..<got.count] as String)
+    } else {
+      (@c {
+        unsigned char received[65536]
+        long count = read(0, received, sizeof(received))
+      })() -- (got => got.received[..<got.count] as String)
+    }
+  { }[{location: Location}] = {value} ^punctuation => (value as String as Byte[]) -- (bytes => if OS.Browser || OS.Ether { (@me/device as Storage)["instance/sent"] = value }
+    elsif OS.Windows {
+      (@c {
+        unsigned count = 0
+        WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), {bytes}, {bytes.count}, &count, nullptr)
+      })()
+    } else { (@c write(1, {bytes}, {bytes.count}))() })
   ({location: Location}, {args}) => ERROR@FileSystem `an instance is not executed: it is sent to`
 }
 

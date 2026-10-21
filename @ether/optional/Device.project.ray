@@ -1,4 +1,5 @@
 @ether/os
+@ether/os/drivers/intel8254x
 @ether/random
 @ether/version-control
 @ether/time

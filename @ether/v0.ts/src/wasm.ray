@@ -91,6 +91,8 @@ global["wasm"] := {
   statements := None
   statements_n := None
   labels := None
+  slice_from := None
+  slice_to := None
   natives := None
   hosts := None
   minus_one := None
@@ -287,6 +289,21 @@ wj_begin_linked (called, params) => {
   wasm.params = wasm.cells_n
   wasm_cell(`&.value`)
 }
+// (a context written in slices, each a run of its own: its cells given at once, as the JMP has them, and where the slice this
+// run writes begins and ends; the rest of the context given only as what its blocks and jumps need)
+wj_cells (given_cells) => {
+  at := given_cells.head
+  while at !== None {
+    wasm_cell(at.value)
+    at = at.next
+  }
+}
+wj_slice_begins (unused) => {
+  wasm.slice_from = wasm.statements_n
+}
+wj_slice_ends (unused) => {
+  wasm.slice_to = wasm.statements_n
+}
 wj_label (name) => {
   wasm_put(wasm.labels, name, (wasm_index(wasm.statements_n + 1)))
 }
@@ -417,6 +434,12 @@ wasm_code (s, fixed) => {
 // parameters) then that code.
 wasm_end (unused) => {
   last := wasm.statements_n
+  from_k := 0.int32
+  to_k := last
+  if wasm.slice_from !== None {
+    from_k = wasm.slice_from
+    to_k = wasm.slice_to
+  }
   starts := wasm_table(0)
   wasm_put(starts, `1`, (wasm_index(0.int32)))
   k := 1.int32
@@ -466,22 +489,38 @@ wasm_end (unused) => {
     }
     if !skipped && wasm_found(wasm.labels, s.aim) {
       test := None
-      if !fixed {
+      if !fixed && ((k > from_k) && (k <= to_k)) {
         test = wasm_got(s.condition)
       }
       wasm_put(jumps, (wasm_pair(current, jumps_given)), (wasm_jump_of(test, wasm_slot(block_of, wasm_key(wasm_slot(wasm.labels, s.aim))))))
       jumps_given = jumps_given + 1
     }
-    if !skipped && !(wasm_found(wasm.labels, s.aim)) {
+    if (!skipped && !(wasm_found(wasm.labels, s.aim))) && ((k > from_k) && (k <= to_k)) {
       code = code + wasm_code(s, fixed)
     }
     k = k + 1
   }
   wasm_put(codes, (wasm_key(current)), code)
   wasm_put(jumps_n, (wasm_key(current)), (wasm_index(jumps_given)))
-  body := ((wasm_byte(1) + wasm_uleb(wasm.cells_n - wasm.params)) + wasm.i32_type) + wasm_structure(blocks, codes, jumps, jumps_n)
-  body = (body + wasm_byte(0)) + wasm.end_op
-  wasm.bodies = wasm.bodies + wasm_sized(body)
+  block_from := 0.int32
+  block_to := blocks
+  if from_k > 0 {
+    block_from = wasm_slot(block_of, wasm_key(from_k + 1))
+  }
+  if to_k < last {
+    block_to = wasm_slot(block_of, wasm_key(to_k + 1))
+  }
+  body := wasm_structure(blocks, codes, jumps, jumps_n, block_from, block_to)
+  if from_k == 0 {
+    body = ((wasm_byte(1) + wasm_uleb(wasm.cells_n - wasm.params)) + wasm.i32_type) + body
+  }
+  if to_k == last {
+    body = (body + wasm_byte(0)) + wasm.end_op
+  }
+  if wasm.slice_from === None {
+    body = wasm_sized(body)
+  }
+  wasm.bodies = wasm.bodies + body
   wasm.written = wasm.written + 1
 }
 
@@ -515,7 +554,7 @@ wasm_after (a, b) => {
 // first jump forward to a block until it; a block that crosses another begins where the one it crosses begins. (Worked out by
 // where each ends, in order: one begins where the outermost of those ending before it that holds its beginning begins; the
 // same as moving beginnings until none crosses another, which compares each with each.)
-wasm_structure (blocks, codes, jumps, jumps_n) => {
+wasm_structure (blocks, codes, jumps, jumps_n, block_from, block_to) => {
   back := wasm_table(0)
   forward := wasm_table(0)
   k := 0.int32
@@ -656,15 +695,17 @@ wasm_structure (blocks, codes, jumps, jumps_n) => {
   depth_of := wasm_table(0)
   k = 0.int32
   while k < blocks {
+    shown := (k >= block_from) && (k < block_to)
+    piece := ""
     if wasm_found(opening_n, wasm_key(k)) {
       on := wasm_slot(opening_n, wasm_key(k))
       o := 0.int32
       while o < on {
         scope := wasm_get(scopes, (wasm_key(wasm_slot(opening, wasm_pair(k, o)))))
         if scope.looped {
-          out = (out + wasm.loop_op) + wasm.void_type
+          piece = (piece + wasm.loop_op) + wasm.void_type
         } else {
-          out = (out + wasm.block_op) + wasm.void_type
+          piece = (piece + wasm.block_op) + wasm.void_type
         }
         wasm_put(open, (wasm_key(open_n)), scope)
         wasm_put(depth_of, (wasm_scope_key(scope.looped, scope.aim)), (wasm_index(open_n)))
@@ -672,9 +713,12 @@ wasm_structure (blocks, codes, jumps, jumps_n) => {
         o = o + 1
       }
     }
-    out = out + (wasm_get(codes, (wasm_key(k))))
+    piece = piece + (wasm_get(codes, (wasm_key(k))))
     j := 0.int32
-    jn := wasm_slot(jumps_n, wasm_key(k))
+    jn := 0.int32
+    if shown {
+      jn = wasm_slot(jumps_n, wasm_key(k))
+    }
     while j < jn {
       jump := wasm_get(jumps, (wasm_pair(k, j)))
       if jump.ends != (k + 1) {
@@ -684,11 +728,11 @@ wasm_structure (blocks, codes, jumps, jumps_n) => {
           at = wasm_slot(depth_of, key)
         }
         if jump.test === None {
-          out = out + wasm.br_op
+          piece = piece + wasm.br_op
         } else {
-          out = (out + jump.test) + wasm.br_if_op
+          piece = (piece + jump.test) + wasm.br_if_op
         }
-        out = out + wasm_uleb((open_n - 1) - at)
+        piece = piece + wasm_uleb((open_n - 1) - at)
       }
       j = j + 1
     }
@@ -698,11 +742,14 @@ wasm_structure (blocks, codes, jumps, jumps_n) => {
       if top.ends == (k + 1) {
         open_n = open_n - 1
         wasm_put(depth_of, (wasm_scope_key(top.looped, top.aim)), (wasm_index(wasm.minus_one)))
-        out = out + wasm.end_op
+        piece = piece + wasm.end_op
         closing = open_n > 0
       } else {
         closing = false
       }
+    }
+    if shown {
+      out = out + piece
     }
     k = k + 1
   }
@@ -807,4 +854,5 @@ wasm &+= {
   before_bodies (pages, bytes) => wasm_head(pages, bytes)
   after_bodies (unused) => wasm_tail(0)
   written_bodies (unused) => wj_bodies(0)
+  sized_as (bytes_n) => wasm_uleb(bytes_n)
 }

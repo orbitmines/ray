@@ -8,3 +8,6 @@
 @name
 @email
 @phone
+@ether/random
+@ether/proof
+@ether/os

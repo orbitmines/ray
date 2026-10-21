@@ -1,3 +1,4 @@
+@ether/os
 @unicode
 
 {hh: Decimal.String}:{mm: Decimal.String{length == 2}}: Quantity.Temporal => hh hours mm minutes

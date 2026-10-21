@@ -1,3 +1,4 @@
+@ether/os
 @ether/geometry
 @ether/version-control
 @html
@@ -8,7 +9,7 @@
 @opentype
 @png
 @ether/network
-@ether/fonts
+@font
 @ether/timezone
 @ether/device
 @ether
@@ -1289,9 +1290,16 @@ Device &+= {
 // JSON-LD 1.1: a Ray value as linked data, written with $.json (https://www.w3.org/TR/json-ld11/)
 // Its fields are properties and its type is @type (https://www.w3.org/TR/json-ld11/#specifying-the-type), under the vocabulary its @context names (https://www.w3.org/TR/json-ld11/#the-context)
 UI.Linked := class (value: *, context: String?) => {
-  document => value === None || value is (String | Number | boolean | Location) ? value
-    : value is Iterable ? value.map(UI.Linked(.).document)
-    : Document(entries: [(name: "@context", value: context) if context, value.fields{.value != None}.map((name: .name == "type" ? "@type" : .name, value: UI.Linked(.value).document))].flatten)
+  document => .value === None || .value is (String | Number | boolean | Location) ? .value
+    : .value is Iterable ? .value.map(UI.Linked(.).document)
+    : .linked
+  // (a block: its context under "@context", each field set under its name, `type` as "@type")
+  linked => {
+    held := { }
+    (held["@context"] = .context) if .context
+    .value.fields{.value != None}.for(held[.name == "type" ? "@type" : .name] = UI.Linked(.value).document)
+    held
+  }
 }
 
 // The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences

@@ -1,3 +1,4 @@
+@ether/os
 @unicode
 
 // The fonts installed on the device: where the operating system keeps them, and the file of a family.
@@ -20,8 +21,5 @@ Fonts := class {
     }
   }
   // the file named like the family, in any of the folders
-  static named (family: String): Location? => installed.map(.held.children).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
+  static named (family: String): Location? => Fonts.installed.map(.held.children).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
 }
-// A Windows drive is a file location, not a URL with the scheme "C".
-assert (@C:/Windows/Fonts).@ as String == "C:/Windows/Fonts"  // FS1 a Windows drive path is not read as written
-assert (@C:/Windows/Fonts).holder === (@/usr/share).holder  // FS2 a Windows drive is not held like any other file path

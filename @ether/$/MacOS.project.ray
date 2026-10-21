@@ -1,0 +1,5 @@
+// macOS (https://developer.apple.com/macos): an operating system a host may run. It is the one the device runs when the host reports the platform
+// "darwin" (Node.js's `process.platform`, https://nodejs.org/api/process.html#processplatform).
+OS.Macos := OS(platform: "darwin")
+assert OS.Macos.platform == "darwin"  // MOS1 macOS is not named by the platform "darwin"
+assert OS.Macos is OS  // MOS2 macOS is not an operating system

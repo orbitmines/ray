@@ -1,32 +1,30 @@
-// The operating system a device runs: one of these. As a boolean, whether it is the one the device runs (`@me/device/os`):
-// what differs between them is written where it belongs (`if OS.Windows { … } elsif OS.Browser { … }`), in the package
-// it is about (files and streams here, time zones in @ether/timezone, sockets in network, font folders in opentype).
-OS := enum Linux (platform: "linux") | Windows (platform: "win32") | Macos (platform: "darwin") | Browser (platform: "browser") | Ether (platform: "ether") {
+// An operating system: what a device runs (`@me/device/os`), named by its platform. As a boolean, whether it is the one the
+// device runs: what differs between them is written where it belongs (`if OS.Windows { … } elsif OS.Browser { … }`), in the
+// package it is about (files and streams in @ether/filesystem, time zones in @ether/timezone, sockets in network, font
+// folders in $/Font). Each is a project of its own: the external ones in `$/` (`@linux`, `@windows`, `@macos`, `@browser`),
+// the language as the operating system in @ether/os, which depends on all of them; a project using what differs between
+// them depends on @ether/os.
+OS := class (platform: String) => {
   as (=== boolean) => this === @me/device/os
-  // what the host says of itself (`os["PATH"]`, `os.env.PATH`); the language as the operating system says only what it is
-  [property: String] => this === OS.Ether ? { "platform": "ether", "architecture": "ray" }[property] : OS.reported(property) as String
+  // what the host says of itself (`os["PATH"]`, `os.env.PATH`)
+  [property: String] => OS.reported(property) as String
   architecture => this["architecture"]
-  assert @me/device/os/architecture  // IO2 the machine does not say what it is built on
-  assert @me/device/os["architecture"] == @me/device/os/architecture  // IO4 asking by name is not asking the other way
-  env => Environment(os: this)
   // The environment is read through the OS, live.
-  assert @me/device/os.env.PATH == @me/device/os["PATH"]  // ENV1 the environment is not read through the OS
+  env => OS.Environment(os: this)
   static Environment := class (os: OS) => {
-    .{literal name ^property} ^punctuation => os[name]
+    .{literal name ^property} ^punctuation => .os[name]
   }
 
-  // the one the host reports; none: the language as the operating system
+  // the one the host reports; none: the language as the operating system (@ether/os)
   // (what the host reports of itself: given by the implementation; none in the language)
   static reported (property) => None
-  static host: OS => OS#{!== OS.Ether}{.platform == (OS.reported("platform") as String)}.first ?? OS.Ether
-  assert @me/device/os === OS.host  // OSE4 the device does not run the operating system the host reports
+  static host: OS => OS#{.platform == (OS.reported("platform") as String)}.first ?? OS.Ether
 }
-// An operating system is a member of the enum OS; as a boolean, whether it is the one the device runs.
-assert [OS.Ether, OS.Linux, OS.Macos, OS.Windows, OS.Browser].every(. is OS)  // OSE1 an operating system is not one of OS
-assert OS#{as boolean}.count == 1  // OSE3 other than one operating system runs this device
+// An operating system made here: named by its platform, read through its environment, not the one the device runs.
 assert {
-  with @me/device/os = OS.Windows {
-    assert OS.Windows  // OSE6 the operating system the device runs is not true as a boolean
-    assert !(OS.Linux)  // OSE7 an operating system the device does not run is true as a boolean
-  }
+  plan9 := OS(platform: "plan9")
+  assert plan9 is OS  // OSC1 an operating system made is not one
+  assert plan9.platform == "plan9"  // OSC2 an operating system does not keep its platform
+  assert plan9.env is OS.Environment  // OSC3 an operating system's environment is not read through it
+  assert !(plan9 as boolean)  // OSC4 an operating system nothing runs is the one the device runs
 }

@@ -1,10 +1,7 @@
-// The character running and where it runs, as everything reads them: `@me`, who called (none: the one this instance
-// plays), and `@local`, where what runs is (`Location.current`; World makes it this instance)
-@me ^string => (&.caller as Character) ?? Character.played
-@local ^string => Location.current
-Character &+= {
-  static played := @"me"
-}
+// The character running, `@me`, and where it runs, `@local`: what runs the language gives them (World: this instance and
+// the character playing it)
+@me := @"me"
+@local := Location(path: ".")
 // (a path under the character running: each name a member of what is before it, `@me/device/keyboard`)
 @me/{path} ^string => Character.walked(@me, "{path}".split("/"))
 // Running as another character: only with their grant

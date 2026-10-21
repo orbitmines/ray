@@ -1,4 +1,4 @@
-{f}@{location: Location}({args}) ^punctuation => with (Location.current = location) Program(code: { f(args) }, from: location)()
+{f}@{location: Location}({args}) ^punctuation => with (@local = location) Program(code: { f(args) }, from: location)()
 
 Program &+= {
   serves (at: Location) => !done && from is at
@@ -732,8 +732,8 @@ assert {
   assert Base64.read(4 as Base64) == 4  // EN24 a packed value does not come back
 }
 
-// the current instance (not `@localhost`: anything on the host machine): `@local`
-Location.current = Instance()
+// the current instance (not `@localhost`: anything on the host machine)
+@local = Instance()
 
 Online := Character{presence.device.network.connected}
 Offline := Character{!(. is Online)}

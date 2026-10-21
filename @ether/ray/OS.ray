@@ -1,13 +1,11 @@
-// An operating system: what a device runs, named by its platform. As a boolean, whether it is the one the
+// An operating system: what a device runs (`@me/device/os`), named by its platform. As a boolean, whether it is the one the
 // device runs: what differs between them is written where it belongs (`if OS.Windows { … } elsif OS.Browser { … }`), in the
 // package it is about (files and streams in @ether/filesystem, time zones in @ether/timezone, sockets in network, font
 // folders in $/Font). Each is a project of its own: the external ones in `$/` (`@linux`, `@windows`, `@macos`, `@browser`),
 // the language as the operating system in @ether/os, which depends on all of them; a project using what differs between
 // them depends on @ether/os.
 OS := class (platform: String) => {
-  // (the one the device runs: what runs the language says; here, the one the host reports)
-  static current => OS.host
-  as (=== boolean) => this === OS.current
+  as (=== boolean) => this === @me/device/os
   // what the host says of itself (`os["PATH"]`, `os.env.PATH`)
   [property: String] => OS.reported(property) as String
   architecture => this["architecture"]

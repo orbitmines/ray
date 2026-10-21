@@ -43,7 +43,7 @@ Network &+= {
       // connection, and the protocol of `offered` the two sides agreed on.
       tls (offered: String[]) => if OS.Browser { ERROR@OS `a browser has no TLS` } elsif OS.Ether { ERROR@OS `TLS 1.3 is not written in Ray yet` } else { external network `tls` (this as String, offered) as (connection: *, protocol: String?) }
       assert {
-        with OS.current = OS.Ether {
+        with @me/device/os = OS.Ether {
           assert ("ether.orbitmines.com:443" as Network.Socket.Address).tls(["h2"]).erred  // TLS2 TLS in the language does not err while it is unwritten
           assert !(@me/device.network.connected)  // ETH5 the language as the operating system is on a network
         }

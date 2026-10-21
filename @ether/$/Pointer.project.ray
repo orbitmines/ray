@@ -26,6 +26,3 @@ Pointer := class: Location {
   [kind: "mouse" | "pen" | "touch" = "mouse", number: Number = 0] => .contacts{.name == kind && .number == number}.first ?? .add(Pointer.Contact(name: kind, number))
 }
 
-Device &+= {
-  pointer: Pointer = Pointer()
-}

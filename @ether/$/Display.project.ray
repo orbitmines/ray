@@ -1,8 +1,8 @@
 @ether/device
 
 // The display: full screen or not, kept awake or not, and how its user prefers to see it
-Device &+= {
+Display := class {
   fullscreen: boolean = false
-  wake_lock: boolean = false
+  awake: boolean = false
   preferences: (reduced_motion: boolean, dark: boolean, contrast: "more" | "less" | "normal", focused: boolean) = (false, false, "normal", true)
 }

@@ -124,7 +124,7 @@ Geometry := class {
     to => this
     assert {
       swipe_start := Time.now
-      mouse := @me/device/pointer["mouse"]
+      mouse := (@me/device as Pointer)["mouse"]
       mouse.to(Geometry.Vector(200px, 0px), pressing: [0], time: swipe_start)
       mouse.to(Geometry.Vector(180px, 0px), time: swipe_start + 10 ms)
       assert mouse.velocity.x == -2px  // UI168 pointer velocity is not distance over time

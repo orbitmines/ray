@@ -2,6 +2,8 @@
 @ether/geometry
 
 // Where the device is on the earth, and how sure of it (https://www.w3.org/TR/geolocation/)
-Device &+= {
-  geolocation: (latitude: Number, longitude: Number, accuracy: Geometry.Length)?
+Geolocation := class {
+  latitude: Number?
+  longitude: Number?
+  accuracy: Geometry.Length?
 }

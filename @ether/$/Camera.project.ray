@@ -1,6 +1,6 @@
 @ether/device
 
-// A camera: what it sees, when granted (`@me.execute { @me/device/camera }`)
-Device &+= {
-  camera: *?
+// A camera: what it sees, when granted (`@me.execute { @me/device }`, a place typed `Camera` selecting it)
+Camera := class {
+  image: *?
 }

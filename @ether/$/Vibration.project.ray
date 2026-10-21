@@ -1,7 +1,7 @@
 @ether/device
 @ether/time
 
-// A vibration pattern, on for each duration and off for the next (https://www.w3.org/TR/vibration/)
-Device &+= {
-  vibration: Quantity.Temporal[]?
+// A vibration: on for each duration of its pattern, off for the next (https://www.w3.org/TR/vibration/)
+Vibration := class {
+  pattern: Quantity.Temporal[] = []
 }

@@ -1,6 +1,6 @@
 @ether/device
 
 // A microphone: what it hears, when granted
-Device &+= {
-  microphone: *?
+Microphone := class {
+  sound: *?
 }

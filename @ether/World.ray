@@ -655,7 +655,8 @@ assert {
 Instance := class: Location {
   // (its own key, a secret: what is encrypted for this instance is read with it)
   none.read key: Key?
-  device: Device = Device()
+  // (the machine and the devices it has, superposed)
+  device: * = Device.made
   registry: Character?
   // (who runs here when no one has logged in: the instance's own)
   own_character: Character = Character()

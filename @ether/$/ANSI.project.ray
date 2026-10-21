@@ -88,7 +88,7 @@ ANSI := class: Language {
   }
   assert ("\ef" as ANSI.Key).alt == "f"  // UI167 alt+f in the terminal is not read
   assert {
-    keyboard := @me/device/keyboard
+    keyboard := (@me/device as Keyboard)
     assert ("\t" as ANSI.Key).name === keyboard["Tab"] && ("\r" as ANSI.Key).name === keyboard["Enter"]  // UI165 a key the UI names is not Feature's key
   }
   assert ((6 as Char as String) as ANSI.Key).control && ((6 as Char as String) as ANSI.Key).name.name == "f"  // UI166 ctrl+f in the terminal is not f with control

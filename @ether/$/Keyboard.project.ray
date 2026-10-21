@@ -51,7 +51,7 @@ Keyboard := class: Location {
       & !(.release.pressed)  // KB17 a released key holds as a condition
     )
     assert {
-      keyboard := @me/device/keyboard
+      keyboard: Keyboard = @me/device
       keyboard["f"].press(Keyboard.Modifier.control)
       assert keyboard.pressed("f", modifier: Keyboard.Modifier.control | Keyboard.Modifier.meta)  // UI162 ctrl+f is not read as ctrl or cmd + f
       assert !(keyboard.pressed("f", modifier: Keyboard.Modifier.alt))  // UI163 ctrl+f is read as alt+f
@@ -77,6 +77,3 @@ Keyboard := class: Location {
   .{name: String ^property} ^punctuation => this[name]
 }
 
-Device &+= {
-  keyboard: Keyboard = Keyboard()
-}

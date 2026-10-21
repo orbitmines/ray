@@ -27,7 +27,7 @@ UI := class {
   Input := class {
     Id = Char{!= " "}[]
     Pointer := class (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
-      contact => @me/device/pointer[device ?? "mouse", number ?? 0]
+      contact => (@me/device as Pointer)[device ?? "mouse", number ?? 0]
       position => Geometry.Space.screen.seen(Geometry.Vector(x * 1px, y * 1px), UI.scene.size)
       assert ("\e[<0;3;4M" as ANSI.Mouse).position == Geometry.Vector(16px, UI.scene.size.y - 64px)  // UI170 a mouse report is not a position on the page
       time => stamp ? stamp * 1 ms : Time.now
@@ -38,8 +38,8 @@ UI := class {
       {pointer: Pointer{kind == "pointerdown"}} => pointer.contact.to(pointer.position, pressing: [0], time: pointer.time)
       {pointer: Pointer{kind == "pointermove"}} => pointer.contact.to(pointer.position, time: pointer.time)
       {pointer: Pointer} => pointer.contact.to(pointer.position, pressing: [], time: pointer.time)
-      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- @me/device/keyboard[keystroke.key].press((Keyboard.Modifier.shift if .contains("shift")) | (Keyboard.Modifier.control if .contains("control")) | (Keyboard.Modifier.alt if .contains("alt")) | (Keyboard.Modifier.meta if .contains("meta")))
-      {keystroke: Keystroke} => @me/device/keyboard[keystroke.key].release
+      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- (@me/device as Keyboard)[keystroke.key].press((Keyboard.Modifier.shift if .contains("shift")) | (Keyboard.Modifier.control if .contains("control")) | (Keyboard.Modifier.alt if .contains("alt")) | (Keyboard.Modifier.meta if .contains("meta")))
+      {keystroke: Keystroke} => (@me/device as Keyboard)[keystroke.key].release
     }
     static dispatched (line: String?) => line.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
     assert {
@@ -235,8 +235,8 @@ UI := class {
   skip (direction: Geometry.Side) => selection = step(step(current, Geometry.top), direction)
   expand (direction: Geometry.Side) => selection |= step(current, direction)
 
-  pulsed (names: String[]) => names.some(@me/device/keyboard[.].pulsed)
-  held (names: String[], modifier: Keyboard.Modifier) => names.some(@me/device/keyboard.pressed(., modifier))
+  pulsed (names: String[]) => names.some((@me/device as Keyboard)[.].pulsed)
+  held (names: String[], modifier: Keyboard.Modifier) => names.some((@me/device as Keyboard).pressed(., modifier))
 
   locked => scene{. is Drawer && open}.nonempty
   back => @me/device/location = @me/device/location.previous
@@ -364,14 +364,14 @@ UI := class {
     case: Section? = parent.case
     truncate: (clip | ellipsis)? = parent.truncate
     direction: (left-to-right | right-to-left)? = parent.direction
-    hovered => visible && @me/device/pointer.contacts.some(contains(.position - at))
-    pressed => visible && @me/device/pointer.contacts.some(.pressed && contains(.position - at))
-    assert @me/device/keyboard["q"].pressed  // UI284 a key pressed on the web is not pressed on the device keyboard
-    assert !(@me/device/keyboard["q"].pressed)  // UI285 a key released on the web stays pressed
-    activated => focused && @me/device/keyboard/Enter.pulsed || hovered && @me/device/pointer.contacts.some(.released)
+    hovered => visible && (@me/device as Pointer).contacts.some(contains(.position - at))
+    pressed => visible && (@me/device as Pointer).contacts.some(.pressed && contains(.position - at))
+    assert (@me/device as Keyboard)["q"].pressed  // UI284 a key pressed on the web is not pressed on the device keyboard
+    assert !((@me/device as Keyboard)["q"].pressed)  // UI285 a key released on the web stays pressed
+    activated => focused && (@me/device as Keyboard)/Enter.pulsed || hovered && (@me/device as Pointer).contacts.some(.released)
     focusable => this is (UI.Linked | UI.Chosen | UI.Overlay)
     activate => None
-    submitted => dynamically children{.content is Choice}.every(.content.solution) && @me/device/keyboard/Enter.pulsed
+    submitted => dynamically children{.content is Choice}.every(.content.solution) && (@me/device as Keyboard)/Enter.pulsed
     text: String => content is String ? content : texts.content.join("")
     select (from: Number = 0, to: Number = text.length) => (selected = true) -- ((content = content.marked("selected", from, to)) if content is String) -- this
     scroll (by: Geometry.Length) => (scrolled = Geometry.Vector(scrolled.x, (scrolled.y + by) min (content_height - size.y) max 0px)) unless this === UI.scene && UI.locked
@@ -380,7 +380,7 @@ UI := class {
         end => size.y - shape.size.y
       } else {
         0px
-      })) max 0px -- (to => ((transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !@me/device/preferences.reduced_motion)
+      })) max 0px -- (to => ((transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !(@me/device as Display).preferences.reduced_motion)
         -- (scrolled = Geometry.Vector(scrolled.x, to)))
     label => children{.content is String}.content.join(" ")
     styled (name: String) => (styles &= name) -- (narrowed(UI.Theme.member(name).narrowing) if UI.Theme.member(name)) -- (color = UI.Theme.painted(name, palette ?? UI.Theme.palette) ?? color) -- this
@@ -533,7 +533,7 @@ UI := class {
     assert Compiler.reduced(Geometry.Box(content: choose boolean), UI.Lowered).children.first.content == "[ ]"  // UA4 a choice is not lowered to a box showing its face
     static kinds := { }
     static palettes := DARK{dark: true}
-    static palette => palettes{dark == @me/device/preferences.dark} ?? palettes
+    static palette => palettes{dark == (@me/device as Display).preferences.dark} ?? palettes
     static styles => fields{.value.narrowing}.name
     static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last.1
     assert UI.Theme.painted("keyword") == "#6C6783" as Geometry.Color  // UI146 a highlighting style has no colour in the default palette
@@ -675,7 +675,7 @@ Node &+= {
 { (UI.focus.first ?? UI.current).activate } when UI.pulsed(["Enter"])
 { UI.scene.scroll(-UI.scene.size.y) } when UI.pulsed(["PageUp"])
 { UI.scene.scroll(UI.scene.size.y) } when UI.pulsed(["PageDown"])
-{ UI.scene.scroll(-@me/device/pointer["mouse"].wheel.y * 3em) } when @me/device/pointer["mouse"].wheel changes
+{ UI.scene.scroll(-(@me/device as Pointer)["mouse"].wheel.y * 3em) } when (@me/device as Pointer)["mouse"].wheel changes
 { UI.program.stop } when UI.pulsed(["q"]) && !UI.typing
 
 
@@ -1231,7 +1231,7 @@ UI.HTML := class {
     static dispatched (line: String?) => line.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
 
     start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
-      -- ({ send(line(["clipboard", (@me/device/clipboard as String).escaped_line])) } when @me/device/clipboard changes)
+      -- ({ send(line(["clipboard", ((@me/device as Clipboard).content as String).escaped_line])) } when (@me/device as Clipboard).content changes)
       -- ({ send(line(["open", (@me/device/opened as String).escaped_line])) } when @me/device/opened changes)
     stop => None
     write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as CSS])) if package.sheet)
@@ -1425,7 +1425,7 @@ UI.TUI := class {
     start =>
       UI.scene.size = Geometry.Vector(Quantity(quantities: [(quantity: size.x, unit: Unit.column)]), Quantity(quantities: [(quantity: size.y, unit: Unit.row)]))
       emitted(Start())
-        -- ({ emitted(@me/device/clipboard as ANSI.Copy) } when @me/device/clipboard changes)
+        -- ({ emitted((@me/device as Clipboard).content as ANSI.Copy) } when (@me/device as Clipboard).content changes)
         -- ({ (@me/device/opened).held() } when @me/device/opened changes)
     stop => emitted(Stop())
     write (frame: Grid) =>
@@ -1449,29 +1449,29 @@ UI.TUI := class {
   Resize := class
 
   named := {
-    {key: ANSI.Key{page == "5"}} => @me/device/keyboard/PageUp
-    {key: ANSI.Key{page == "6"}} => @me/device/keyboard/PageDown
-    {key: ANSI.Key{alt}} => @me/device/keyboard[key.alt as String]
-    {key: ANSI.Key{lettered}} => @me/device/keyboard[((key.code as Number) + 96) as Char as String]
-    {key: ANSI.Key{code == "A"}} => @me/device/keyboard/ArrowUp
-    {key: ANSI.Key{code == "B"}} => @me/device/keyboard/ArrowDown
-    {key: ANSI.Key{code == "C"}} => @me/device/keyboard/ArrowRight
-    {key: ANSI.Key{code == "D"}} => @me/device/keyboard/ArrowLeft
-    {key: ANSI.Key{code == "Q"}} => @me/device/keyboard/F2
-    {key: ANSI.Key{code == "\r"}} => @me/device/keyboard/Enter
-    {key: ANSI.Key{code is ("\t" | "Z")}} => @me/device/keyboard/Tab
-    {key: ANSI.Key} => @me/device/keyboard.coded(key.code as Number)
+    {key: ANSI.Key{page == "5"}} => (@me/device as Keyboard)/PageUp
+    {key: ANSI.Key{page == "6"}} => (@me/device as Keyboard)/PageDown
+    {key: ANSI.Key{alt}} => (@me/device as Keyboard)[key.alt as String]
+    {key: ANSI.Key{lettered}} => (@me/device as Keyboard)[((key.code as Number) + 96) as Char as String]
+    {key: ANSI.Key{code == "A"}} => (@me/device as Keyboard)/ArrowUp
+    {key: ANSI.Key{code == "B"}} => (@me/device as Keyboard)/ArrowDown
+    {key: ANSI.Key{code == "C"}} => (@me/device as Keyboard)/ArrowRight
+    {key: ANSI.Key{code == "D"}} => (@me/device as Keyboard)/ArrowLeft
+    {key: ANSI.Key{code == "Q"}} => (@me/device as Keyboard)/F2
+    {key: ANSI.Key{code == "\r"}} => (@me/device as Keyboard)/Enter
+    {key: ANSI.Key{code is ("\t" | "Z")}} => (@me/device as Keyboard)/Tab
+    {key: ANSI.Key} => (@me/device as Keyboard).coded(key.code as Number)
   }
 
   // A terminal reports no key release: a key read is pressed and released
   applied := {
     {key: ANSI.Key} => key.name.press((Keyboard.Modifier.shift if key.shift || key.code == "Z") | (Keyboard.Modifier.control if key.control) | (Keyboard.Modifier.alt if key.alt != None)).release
-    {mouse: ANSI.Mouse{button >= 64}} => @me/device/pointer["mouse"].wheel = Geometry.Vector(y: mouse.button == 64 ? 1 : -1)
-    {mouse: ANSI.Mouse{state == "m"}} => @me/device/pointer["mouse"].to(mouse.position, pressing: [])
-    {mouse: ANSI.Mouse{button >= 32}} => @me/device/pointer["mouse"].to(mouse.position)
-    {mouse: ANSI.Mouse} => @me/device/pointer["mouse"].to(mouse.position, pressing: [mouse.button])
-    {paste: ANSI.Paste} => (@me/device/clipboard = paste.text) -- UI.focus.content.typed(paste.text)
-    {focus: ANSI.FocusChange} => @me/device/preferences.focused = focus.state == "I"
+    {mouse: ANSI.Mouse{button >= 64}} => (@me/device as Pointer)["mouse"].wheel = Geometry.Vector(y: mouse.button == 64 ? 1 : -1)
+    {mouse: ANSI.Mouse{state == "m"}} => (@me/device as Pointer)["mouse"].to(mouse.position, pressing: [])
+    {mouse: ANSI.Mouse{button >= 32}} => (@me/device as Pointer)["mouse"].to(mouse.position)
+    {mouse: ANSI.Mouse} => (@me/device as Pointer)["mouse"].to(mouse.position, pressing: [mouse.button])
+    {paste: ANSI.Paste} => ((@me/device as Clipboard).content = paste.text) -- UI.focus.content.typed(paste.text)
+    {focus: ANSI.FocusChange} => (@me/device as Display).preferences.focused = focus.state == "I"
     {resize: Resize} => UI.scene.size = Geometry.Vector(@me/instance.size.x * px_per_cell.x, @me/instance.size.y * px_per_cell.y)
   }
 }

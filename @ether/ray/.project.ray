@@ -2,7 +2,7 @@
 // the character playing it)
 @me := @"me"
 @local := Location(path: ".")
-// (a path under the character running: each name a member of what is before it, `@me/device/keyboard`)
+// (a path under the character running: each name a member of what is before it, `@me/device/os`)
 @me/{path} ^string => Character.walked(@me, "{path}".split("/"))
 // Running as another character: only with their grant
 @me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`

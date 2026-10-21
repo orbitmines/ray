@@ -10,7 +10,7 @@
 @uuid
 @ether/time
 
-Identity := class (keys: Key[], next: Byte[][] = [], digest: Language = algorithms.digest, signing: Language = algorithms.signing, agreement: Language = algorithms.agreement, handshake: Language = algorithms.handshake, wrapping: Language = algorithms.wrapping, cipher: Language = algorithms.cipher, printed_key: Key?, guardians: *[] = [@ether], certificates: Identity.Certificate[] = [], vetoed: Byte[][] = [], revoke: Identity.Threshold = 1 of keys, add: Identity.Threshold = (2 min keys.count) of keys, rotate: Identity.Threshold = (2 min keys.count) of [keys, next].flatten, recover: Identity.Threshold = 2 of [printed_key, guardians].flatten.compact after 7 days vetoable by 1 of keys) => {
+Identity := class (keys: Key[], next: Byte[][] = [], digest: Language = Identity.algorithms.digest, signing: Language = Identity.algorithms.signing, agreement: Language = Identity.algorithms.agreement, handshake: Language = Identity.algorithms.handshake, wrapping: Language = Identity.algorithms.wrapping, cipher: Language = Identity.algorithms.cipher, printed_key: Key?, guardians: *[] = [@ether], certificates: Identity.Certificate[] = [], vetoed: Byte[][] = [], revoke: Identity.Threshold = 1 of keys, add: Identity.Threshold = (2 min keys.count) of keys, rotate: Identity.Threshold = (2 min keys.count) of [keys, next].flatten, recover: Identity.Threshold = 2 of [printed_key, guardians].flatten.compact after 7 days vetoable by 1 of keys) => {
 
   static algorithms := (signing: Ed25519, agreement: X25519, handshake: Noise, digest: SHA256, wrapping: HPKE, cipher: ChaCha20Poly1305)
 
@@ -22,36 +22,36 @@ Identity := class (keys: Key[], next: Byte[][] = [], digest: Language = algorith
     expiring (at: Time = Time.now) => at + 1 day >= until
   }
 
-  rules => (next, digest, signing, agreement, handshake, wrapping, cipher, printed_key, guardians, revoke, add, rotate, recover)
+  rules => (.next, .digest, .signing, .agreement, .handshake, .wrapping, .cipher, .printed_key, .guardians, .revoke, .add, .rotate, .recover)
   counts (by: Key, signers: *[], at: Stamp) => signers.some(signer => signer is Key ? signer == by
-    : signer is Byte[] ? signer == digest.write(by.public).bytes
+    : signer is Byte[] ? signer == .digest.write(by.public).bytes
     : signer.certified(by, at))
 
   // What a key event needs: only removing is a revocation, only adding an addition; anything else is a rotation.
-  threshold (after: Identity) => after.rules != rules ? rotate
-    : after.keys.every(keys.contains(.)) && after.certificates.every(certificates.contains(.)) ? revoke
-    : keys.every(after.keys.contains(.)) && certificates.every(after.certificates.contains(.)) ? add
-    : rotate
+  threshold (after: Identity) => after.rules != .rules ? .rotate
+    : after.keys.every(this.keys.contains(.)) && after.certificates.every(this.certificates.contains(.)) ? .revoke
+    : .keys.every(after.keys.contains(.)) && .certificates.every(after.certificates.contains(.)) ? .add
+    : .rotate
 
-  vetoes (event: History.Commit, log: History, at: Stamp?) => recover.veto && log.ordered{event.stamp < .stamp && (at === None || .stamp < at)}
-    .some(veto => recover.veto.met(veto, this) && (copy -- veto.change).vetoed.contains(event.hash))
+  vetoes (event: History.Commit, log: History, at: Stamp?) => .recover.veto && log.ordered{event.stamp < .stamp && (at === None || .stamp < at)}
+    .some(veto => this.recover.veto.met(veto, this) && (this.copy -- veto.change).vetoed.contains(event.hash))
     assert {
       with Program.kept = 0 seconds {
         assert !(Program.recent.some(=== Program.runs.head))  // HG5 a run older than the configured window is kept for replay
       }
     }
-  recovered (event: History.Commit, log: History, at: Stamp?) => recover.met(event, this)
-    && (at.when ?? World.ether.clock.now.when) >= event.when + recover.wait && !vetoes(event, log, at)
-  allows (event: History.Commit, log: History, at: Stamp? = None) => threshold(copy -- event.change) -- (needed =>
-    needed.met(event, this) || needed === rotate && recovered(event, log, at))
+  recovered (event: History.Commit, log: History, at: Stamp?) => .recover.met(event, this)
+    && (at.when ?? World.ether.clock.now.when) >= event.when + .recover.wait && !.vetoes(event, log, at)
+  allows (event: History.Commit, log: History, at: Stamp? = None) => .threshold(this.copy -- event.change) -- (needed =>
+    needed.met(event, this) || needed === .rotate && .recovered(event, log, at))
 
   static logged (log: History, at: Stamp? = None) => log.ordered{at === None || .stamp < at}.reduce(held = None => . -- (event =>
     held === None ? (None -- event.change) -- (genesis => genesis.add.met(event, genesis) ? genesis : None)
     : held.allows(event, log, at) ? held.copy -- event.change : held))
 
-  certifies (by: Key, at: Stamp, scope = *, world: World? = None) => by.algorithm === signing
-    && certificates{.key == by && at.when < .until && scope is .scope && .world === world}.nonempty
-  receives (key: Key, at: Stamp) => key.algorithm === agreement && certificates{.key == key && at.when < .until && .world === None}.nonempty
+  certifies (by: Key, at: Stamp, scope = *, world: World? = None) => by.algorithm === .signing
+    && .certificates{.key == by && at.when < .until && scope is .scope && .world === world}.nonempty
+  receives (key: Key, at: Stamp) => key.algorithm === .agreement && .certificates{.key == key && at.when < .until && .world === None}.nonempty
 }
 
 {count: Number} of {signers: *[]} ^keyword => Identity.Threshold(count, signers)

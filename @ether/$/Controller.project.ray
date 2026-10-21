@@ -12,9 +12,6 @@ Controllers := class: Location {
   reclaimed (held) => [.children, .children.previous**].flatten{.held == held && !this[.name]}.first.name
 }
 
-Device &+= {
-  controllers: Controllers = Controllers()
-}
 // Controllers are numbered on the device and take back their number (F-I1)
 assert {
   pad_device := Device()

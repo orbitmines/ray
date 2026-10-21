@@ -1,6 +1,6 @@
 @ether/device
 
 // The clipboard: the text or location last copied
-Device &+= {
-  clipboard: String | Location = ""
+Clipboard := class {
+  content: String | Location = ""
 }

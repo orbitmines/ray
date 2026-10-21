@@ -2,7 +2,7 @@
 @ether/geometry
 
 // How the device is held and moved: its orientation and its acceleration (https://www.w3.org/TR/orientation-event/)
-Device &+= {
+Motion := class {
   orientation: Geometry.Vector?
-  motion: Geometry.Vector?
+  acceleration: Geometry.Vector?
 }

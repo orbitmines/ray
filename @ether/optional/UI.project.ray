@@ -87,7 +87,7 @@ UI := class {
   assert Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}().content == @https://orbitmines.com && Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}().children.first.content == "Ray"  // UI230 a value placed at a location is not a link to it
   assert Program(code: { "Ray" ^h1 }){O: UI.Scene}().content == "Ray" && Program(code: { "Ray" ^h1 }){O: UI.Scene}().content.every(Program(code: { "Ray" ^h1 }){O: UI.Scene}().styles.contains("h1"))  // UI232 a style is not kept on the string it marks
   assert {
-    with @me = Character(name: "player") {
+    with @me = @"player" {
       assert Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice  // UI239 a superposition is not a chooser for a player
     }
   }

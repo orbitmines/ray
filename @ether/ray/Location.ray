@@ -133,12 +133,10 @@ Location := class: Hierarchy (
 Directory := Location{.held is Location[]}
 assert !("/no/such/place/anywhere" as Location is Directory)  // LOC58 a location nothing holds is a directory
 
-// Written in code: `@scheme://…`, `@"…"`, `@/…`, `@./…`, `@../…`, `@C:/…` (a Windows drive,
+// Written in code (`@"…"` is a character's name, Character.ray): `@scheme://…`, `@/…`, `@./…`, `@../…`, `@C:/…` (a Windows drive,
 // https://url.spec.whatwg.org/#windows-drive-letter), `@name/…`
 @{scheme: Char.Word[]}://{rest: Path} ^string => (scheme + "://" + rest) as Location
 assert @https://orbitmines.com/a as String == "https://orbitmines.com/a"  // LOC63 `@scheme://rest` is not the location written out
-@"{text: (!"\"")[]}" ^string => text as Location
-assert @"/a b/c" as String == "/a b/c"  // LOC64 `@"text"` is not the location written inside the quotes
 @{start: ("." | "..")?}/{path: Path} ^string => (start + "/" + path) as Location
 assert @/etc/hosts as String == "/etc/hosts"  // LOC65 `@/path` is not the absolute location
 assert @./a/b as String == "./a/b"  // LOC66 `@./path` is not the location relative to here

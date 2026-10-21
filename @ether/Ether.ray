@@ -24,7 +24,7 @@ assert confidential  // AC3 there is no confidential permission
 assert {
   with Node.policy = @public {
     assert confidential is @private.managed  // CK1 confidential widens with a public policy
-    assert !(Character(name: "stranger") is confidential)  // CK2 confidential reaches a stranger under a public policy
+    assert !(@"stranger" is confidential)  // CK2 confidential reaches a stranger under a public policy
   }
 }
 assert {
@@ -45,7 +45,7 @@ Node &+= {
     assert !(idy_pre.counts(Ed25519.generated().published, idy_pre.rotate.signers, World.ether.clock.now))  // IDY12 a key nobody committed to counts for a rotation
   }
   assert {
-    lgo := Instance.local.login(Character(name: "leaving-inbox"))
+    lgo := Instance.local.login(@"leaving-inbox")
     Instance.local.certified(lgo, World(name: "lgo-world"))
     lgo_inbox := lgo.inbox
     lgo_world_key := lgo.world_keys.first.key
@@ -55,7 +55,7 @@ Node &+= {
   }
   // Sealed sender: a who narrower than the history moves who and the signature into the ciphertext; the line shows a per-history pseudonymous key.
   assert {
-    sel_writer := Instance.local.login(Character(name: "sel-writer"))
+    sel_writer := Instance.local.login(@"sel-writer")
     sel := History(repository: Repository()) ~~ (.sender = none)
     sel.commit(sel_writer, 1)
     sel.commit(sel_writer, 2)
@@ -78,11 +78,11 @@ Node &+= {
   }
   // What a new reader can decrypt is what their read grant covers: the whole history by default, or any narrowing of it; a rotation follows the grants that reach the head.
   assert {
-    grk_owner := Instance.local.login(Character(name: "grk-owner"))
-    grk_all := Instance.local.login(Character(name: "grk-all"))
-    grk_now := Instance.local.login(Character(name: "grk-now"))
-    grk_from := Instance.local.login(Character(name: "grk-from"))
-    grk_past := Instance.local.login(Character(name: "grk-past"))
+    grk_owner := Instance.local.login(@"grk-owner")
+    grk_all := Instance.local.login(@"grk-all")
+    grk_now := Instance.local.login(@"grk-now")
+    grk_from := Instance.local.login(@"grk-from")
+    grk_past := Instance.local.login(@"grk-past")
     grk := none.read History(repository: Repository())
     grk.commit(grk_owner, 1)
     grk_first := grk.current_key
@@ -119,7 +119,7 @@ Node &+= {
   }
   // End-to-end encryption: a history that is not public is stored as ciphertext for its readers; its lines keep label, parents, stamp, key and signature in plaintext (L§9.2).
   assert {
-    ada := Instance.local.login(Character(name: "ada"))
+    ada := Instance.local.login(@"ada")
     crypt := History(repository: Repository())
     crypt.commit(ada, Program(code: { .secret = "kept" }))
     crypt.commit(ada, Program(code: { .secret = "kept twice" }))
@@ -160,7 +160,7 @@ Node &+= {
   assert Access(who: public).who === public  // AC5 an access forgot who it is for
   publish: static => this ~~ .access |= Access(public, method: Access.Reading, target: this)
   assert {
-    ada := Instance.local.login(Character(name: "ada"))
+    ada := Instance.local.login(@"ada")
     // A commit is any Ray, run on the value before it (`.`).
     vh := History(repository: Repository()).publish
     vh.commit(ada, Program(code: { .greet = "hello" }))
@@ -256,7 +256,7 @@ Node &+= {
     assert ((hr_text as Program) as History).roots.count == 2  // HB14 a history read back has other than its two roots
     assert (hr + hr_apart).value.b == 2  // HB15 a rebase onto an unrelated history lost its commits
     // Forking is a copy, whose history is a fork of the original's.
-    hx := Character(name: "forked")
+    hx := @"forked"
     hx.history.commit(ada, 1)
     hx_copy := hx.copy
     hx_copy.history.commit(ada, 2)

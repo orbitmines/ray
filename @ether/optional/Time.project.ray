@@ -356,6 +356,6 @@ Quantity.Temporal &+= {
 assert !(Program(code: { Time.now }) is Deterministic)  // EFF3 reading the time is deterministic
 assert Program(code: { Time.now }) is Nondeterministic  // AC63 reading the time is not nondeterministic
 assert {
-  purg_reader := Character(name: "purg-reader")
+  purg_reader := @"purg-reader"
   assert !((purg_reader.read Time.now) is Diagnostic)  // PURG5 a grant reading the time is refused
 }

@@ -215,7 +215,7 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
 
   commit (who, change, id: Label = UUID.v1(), when: Time = Time.now, message: String? = None, versions: Label[] = []): static =>
     this ~~ .head = committed(Commit(id, who, stamp: clock.now, change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this))
-  assert !(History(repository: Repository()).commit(Character(name: "keyless"), 1).head.authentic)  // SGN6 a commit by a claimed character is authentic
+  assert !(History(repository: Repository()).commit(@"keyless", 1).head.authentic)  // SGN6 a commit by a claimed character is authentic
   // What a commit becomes before it is this line's head: what the storage levels in scope store. Security overrides it (keys, signatures).
   committed (made: Commit) => made.stored
   // Whether this line's values can be read here; security answers by the content keys held here.

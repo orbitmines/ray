@@ -1464,7 +1464,8 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 ### 14.1 Writing a location
 
 - Location syntax is always the core's, usable anywhere in code: `@./x`, `@../x`, `@/abs/path`, `@C:/…` (a one-letter
-  scheme is a drive, never a URL), `@https://…` (no spaces), `@"a location with spaces"`, `@name/…`.
+  scheme is a drive, never a URL), `@https://…` (no spaces), `@name/…`. `@"…"` is a name (2026-10-21): in the core a
+  character's, `@"ada"`, `@"{name}"` (no `Character(name: …)`); a path with spaces is `("/a b/c" as Location)`.
   `@"orbitmines.com"` is reserved for that domain, on port 37839. `@{instance}` is an instance's canonical location, and
   `(@ | #){: UUID}` addresses anything by UUID.
 - `Location := Ray`: it sits in a hierarchy (`.parent`, `.children`) and is hosted by an instance.

@@ -89,7 +89,7 @@ Character &+= {
   chainable == (other) => this === other || other is Character && (proof.root ?? root) -- (mine => mine !== None && mine == (other.proof.root ?? other.root))
   as (=== boolean) => (this is Verified ? this : @local.verified(this)) == @me
   acting => this is Verified ? this : @local.verified(this) ?? ERROR@Access `a character acts only as verified by a handshake or a key held here`
-  assert Character(name: "nowhere").acting is Diagnostic  // VER7 a character nobody holds here acts
+  assert @"nowhere".acting is Diagnostic  // VER7 a character nobody holds here acts
   sealed (commit: History.Commit) => commit.who is Key ? commit ~~ (.signature = pseudonym(commit.line.id ?? commit.id).signed(.hash))
     : key_in(commit.line.repository.world) -- (pair => commit ~~ (.relies = identity.history.head.hash) ~~ (.signature = pair.signed(.hash) if pair))
   delegate (to, scope: Access = Access(), until: Time = Time.now + 1 day) => Delegation(from: this, to, scope, until) -- (made => made ~~ .signature = key.signed(made.hash))
@@ -108,7 +108,7 @@ Character &+= {
   vouching (session: Noise.Session, message: Byte[]) => session.received(message) -- (hash =>
     Program(name: "verify the person recovering", who: this, goal: hash, code: { key.signed([hash, session.binding].flatten) }))
 }
-assert !((Character(name: "a") == Character(name: "a")) is Diagnostic)  // VER9 comparing characters errs with @ether/security imported
+assert !((@"a" == @"a") is Diagnostic)  // VER9 comparing characters errs with @ether/security imported
 
 Program &+= {
   countersigned (signed: Signed): static => this ~~ (goal.signature |= signed

@@ -129,7 +129,7 @@ Keyboard := class: Location {
 }
 
 // `choose n` chooses n distinct by identity: the same value at two locations is two.
-assert Character(name: "chosen").(
+assert @"chosen".(
   Device().choose((., ., "5"), 2).count == 2  // CQ1 choosing two did not give two
   & (0..<20).map(i => Device().choose((., ., "5"), 2)).some(.every(=== .))  // CQ3 one value written twice is never chosen twice
 )

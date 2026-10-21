@@ -91,7 +91,7 @@ Name := {
   ({name}.type = type) unless value === None
 }
 // An optional one, `x?: T`: nothing unless it is given (`x: T = None`).
-{name}?: {type} ^operator => {name}: {type} = None
+{name}?: {type} ^operator => {name}: ({type})? = None
 assert {
   Linked := class (in?: Linked) => { }
   outer := Linked()
@@ -297,7 +297,30 @@ conjoined := None
   conjoins := true
   conjoined := (((a).conjoins === true) ? (a).conjoined.listed() : Array.new.append(a)).joined(((b).conjoins === true) ? (b).conjoined : Array.new.append(b))
   contains (x) => conjoined.some((y) => y == x)
+  // (called, a type of what it reads and a function of it, `Statements(global)(Program())`: a type that reads as it does, then
+  // calls that function on what it read, `.` that, with what it is called with)
+  {this}({conjunction_given}) => (.) applied_with (conjunction_given)
 })
+// (what a conjunction was called with, `applied_args`: none until it is)
+applied_args := None
+{applied_conj} applied_with {applied_given} ^keyword => {
+  applied_from := applied_conj
+  applied_made := ({
+    conjoins := true
+  })
+  external member (applied_made) (`conjoined`) (applied_from.conjoined)
+  external member (applied_made) (`applied_args`) (applied_given)
+  applied_dynamic := (applied_from).dynamic_frame
+  external member (applied_made) (`dynamic_frame`) (applied_dynamic)
+  applied_made
+}
+// (what a type read, called: by a conjunction that was called, its function (the last of it) on that, with what it was called
+// with; else what was read)
+{applied_type_of} applying_to {applied_value_of} ^keyword => {
+  applying_type := applied_type_of
+  applying_value := applied_value_of
+  ((applying_type).applied_args === None) ? applying_value : (((applying_type).conjoined.last).on(applying_value) after ((applying_type).applied_args))
+}
 assert (true & true)  // BB17 true and true is not true
 assert !(true & false)  // BB18 true and false is true
 assert (1 & 2).contains(2)  // TY68 what holds both does not hold the second
@@ -712,13 +735,12 @@ one_or_more => {
 // (by the name a text holds: the kernel's)
 member_named (holder, name) => external member holder name
 member_given (holder, name, value) => external member holder name value
-{on}[{key}] ^punctuation => ((((on).listing === true) || ((on).textual === true)) && (key is Number)) ? (on).indexed(key) : ((key is String) ? (member_named(on, key) ?? (on).{key}) : (on).held_under(key))
+{on}[{key}] ^punctuation => ((((on).listing === true) || ((on).textual === true)) && (key is Number)) ? (on).indexed(key) : ((((key).listing === true) && (((on) entry_for (key)) !== None)) ? ((on) held_for (key)) : ((key is String) ? (member_named(on, key) ?? (on).{key}) : ((on) held_for (key))))
 assert {
   xs := [0, 0, 0]
   xs[1] = 5
   assert xs[1] == 5  // IX1 placing a value in a list at a number leaves the list as it was
 }
-{on}[{key}] := {value} ^punctuation => (key is String) ? member_given(on, key, value) : (on).holding(key, value)
 assert {
   Keyed := { }
   Keyed["inner"] := true
@@ -817,20 +839,34 @@ assert {
   assert result{chosen == 2} == 12  // SP12 fixing a source does not refine what depends on it
 }
 {x}? ^operator => None | x
+// (and a member of one, `in?.reading(text)`: of x, which is None's when x is (a member of None is None), not of each)
+{x}?.{member} ^operator => (x).{member}
 // What a value can be, `x#` (`#x`): an enumeration's members, a superposition's components, else itself alone.
-possible => (.members) ? .members : (((.superposes) === true) ? .components : [.])
+possible => (.members) ? .members : (((.superposes) === true) ? .components : ((((.narrows).superposes) === true) ? narrowed_possible(.) : [.]))
+// (a narrowing of a superposition: those of its values it holds for, `(1 | 2 | 3){. > 1}#` 2 and 3)
+narrowed_possible (narrowing) => {
+  narrowing_kept := Array.new
+  narrowing_at := ((narrowing).narrows)#.head
+  while narrowing_at {
+    narrowing_one := narrowing_at.value
+    (narrowing_kept.append(narrowing_one) if holds_any((narrowing).holds(narrowing_one)))
+    narrowing_at = narrowing_at.next
+  }
+  narrowing_kept
+}
 # => .possible
 #({value}) ^punctuation => (value).possible
 
 // A narrowing, `T{constraint}`: a T the constraint (read with `.` the value) holds for.
 // (of a list: the values it holds that the constraint holds for, `.` each one, in order)
+// (of nothing, nothing: `rules.keys{p}` of a node with no rules)
 // (a condition that is many, `x{== \s}` (`(x == " ") | (x == …)`): it holds when one of them does)
 // (a condition that answers true: itself, or a superposition one of which is (an answer that is a value, a section read as one, `.(== \s)` of a type answering `\s`, is no truth))
 answers_true (answered) => ((answered) === true) || (((answered).superposes === true) && (answered).components.some((each_answered) => answers_true(each_answered)))
 holds_any (held_condition) => ((held_condition).superposes === true) ? (held_condition).components.some((each_held) => holds_any(each_held)) : ((held_condition) ? true : false)
 // (what a step holds keeps it, `xs[{p}]`'s `Filtered`: the condition read on it, holding when one of what it is does)
 satisfies (keeping) => holds_any(.({keeping}))
-{narrowed}{`{`}{constraint}{`}`} ^punctuation => ((narrowed).listing === true) ? (
+{narrowed}{`{`}{constraint}{`}`} ^punctuation => ((narrowed) === None) ? None : ((narrowed).listing === true) ? (
   narrowed_kept := Array.new
   narrowed_at := (narrowed).head
   while narrowed_at {
@@ -977,7 +1013,7 @@ fresh_reading (fresh_left) => {
   reading
 }
 // (what is read by its parts: positions (a list of types), alternatives, Ts one after another; anything else, by what it is)
-read_by_parts (parts_type) => (!literal_text(parts_type)) && (((((parts_type).listing === true) && !((parts_type).is_range === true))) || ((parts_type).superposes === true) || repeat_type(parts_type))
+read_by_parts (parts_type) => (!literal_text(parts_type)) && (((parts_type).conjoins === true) || ((((parts_type).listing === true) && !((parts_type).is_range === true))) || ((parts_type).superposes === true) || repeat_type(parts_type))
 // (a repeat's own T: `T[]`'s, `T[]+`'s)
 repeat_each (each_of) => ((((each_of).repeats === true) && !((each_of).textual === true))) ? (each_of).each : repeat_each((each_of).nonempty_of)
 // (a name given where it is read, as it is read: what is written after it sees it, `CAPTURES: CAPTURE.map{…}`)
@@ -1001,13 +1037,39 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   }
   seq_type := field_type_of(seq_at)
   seq_name := seq_at.written_name
+  // (a position `{x: f}: T`: named x, what f makes of what T read, `.` that (the kernel keeps f on x's place))
+  // (a position `{x: f}: T`: named x, what f makes of what T read, `.` that (the kernel keeps f on x's place, and on its link,
+  // which holds it where the place is given already))
+  seq_place := ((external unset (seq_at.value)) === true) ? seq_at.value : (((external member (seq_at) (`mapped_by`)) !== None) ? seq_at : None)
+  seq_maps := (seq_place !== None) && (((external member (seq_place) (`mapped_by`)) !== None) || ((external member (seq_at) (`mapped_by`)) !== None))
+  if (seq_name !== None) && (reading_chain !== None) {
+    seq_named := external member (reading_chain.chain_held) (seq_name)
+    if (seq_named !== None) && !((external unset seq_named) === true) {
+      seq_type = seq_named
+    }
+  }
+  // (where the text has ended: one that may be nothing, `x?: T`, nothing; a repeat, `T[]`, none of it)
+  if seq_text.empty && (optional_type(seq_type) || (repeat_type(seq_type) && !(((seq_type).nonempty_of) !== None))) {
+    seq_none := optional_type(seq_type) ? None : []
+    (seq_none) given_to (seq_into) as (seq_name)
+    seq_after_none := seq_read(seq_at.next, seq_text, seq_whole, seq_stops, seq_into)
+    if seq_after_none !== None {
+      return ((seq_none) taken_before (seq_after_none) named (seq_name))
+    }
+  }
+  if read_by_parts((seq_type).whole) && (((seq_type) times_read) >= 2) {
+    seq_type = global.String
+  }
   if literal_text(seq_type) && (seq_name === None) {
     return (text_begins(seq_text, seq_type) ? seq_read(seq_at.next, text_past(seq_text, seq_type), seq_whole, seq_stops, seq_into) : None)
   }
   if read_by_parts((seq_type).whole) {
     seq_way_at := ((seq_type) ways_in (seq_text) into (seq_into) first (false)).head
     while seq_way_at {
-      seq_way_value := way_value(seq_way_at.value)
+      seq_way_read := (seq_type) applying_to (way_value(seq_way_at.value))
+      // (mapped, what f is given is the text it matched, `.`: `{statement: context.reading(.)}`)
+      seq_way_text := seq_text.until((seq_way_at.value).reading_left)
+      seq_way_value := seq_maps ? (external mapped (seq_place) (seq_way_text)) : seq_way_read
       (seq_way_value) given_to (seq_into) as (seq_name)
       seq_after := seq_read(seq_at.next, (seq_way_at.value).reading_left, seq_whole, seq_stops, seq_into)
       if seq_after !== None {
@@ -1024,7 +1086,8 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   while seq_cut !== None {
     seq_span := seq_text.until(seq_cut)
     if (seq_type) fits_read (seq_span) {
-      seq_value := (seq_type) leaf_read (seq_span)
+      seq_leaf_read := (seq_type) leaf_read (seq_span)
+      seq_value := seq_maps ? (external mapped (seq_place) (seq_span)) : seq_leaf_read
       (seq_value) given_to (seq_into) as (seq_name)
       seq_rest := seq_read(seq_at.next, seq_cut, seq_whole, seq_stops, seq_into)
       if seq_rest !== None {
@@ -1035,6 +1098,8 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   }
   None
 }
+// (a type that may be nothing, `T?` (`None | T`))
+optional_type (optional_of) => ((optional_of).superposes === true) && (optional_of).components.some((optional_one) => optional_one === None)
 // (a type that is one character, as the kernel knows it: a text of one character it is or is not, and never one of two)
 one_character (one_type) => !literal_text(one_type) && ((external admits (`ab`) one_type) === false) && ((external admits (`a`) one_type) !== None)
 {taken_value} taken_before {taken_reading} named {taken_name} ^keyword => {
@@ -1052,6 +1117,8 @@ one_character (one_type) => !literal_text(one_type) && ((external admits (`ab`) 
   while named_value_at {
     named_held.append(named_value_at.value)
     if named_name_at.value !== None {
+      // (the list says its name: its link's, a place it holds)
+      external member (named_held.tail) (`written_name`) (named_name_at.value)
       named_was := external member (named_held) (named_name_at.value)
       external member (named_held) (named_name_at.value) (((named_was === None) ? named_value_at.value : (named_was | named_value_at.value)))
     }
@@ -1059,6 +1126,48 @@ one_character (one_type) => !literal_text(one_type) && ((external admits (`ab`) 
     named_name_at = named_name_at.next
   }
   named_held
+}
+// (a list made of another position by position, `xs.map{p}(v)`: the names the other says, each at its position)
+{names_source} names_onto {names_target} ^keyword => {
+  onto_from := (names_source).head
+  onto_to := (names_target).head
+  while onto_from && onto_to {
+    if onto_from.written_name !== None {
+      external member (onto_to) (`written_name`) (onto_from.written_name)
+      external member (names_target) (onto_from.written_name) (onto_to.value)
+    }
+    onto_from = onto_from.next
+    onto_to = onto_to.next
+  }
+  names_target
+}
+// (what a list being read names: its own name of a position, what that position is read as now (`(LHS | RHS) = String`);
+// the lists being read, one inside another)
+reading_chain := None
+{link_held} chained_onto {link_up} ^keyword => chain_node_of(link_up) chain_holding (link_held)
+chain_node_of (chain_up_of) => {
+  chain_node := Node &+ { }
+  external member (chain_node) (`chain_up`) (chain_up_of)
+  chain_node
+}
+{chain_at} chain_holding {chain_value} ^keyword => {
+  chain_made := chain_at
+  external member (chain_made) (`chain_held`) (chain_value)
+  chain_made
+}
+// (how often a list is being read, one inside another: a list read inside itself a second time reads as text (recursion
+// once, `GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF`))
+{counted_list} times_read ^keyword => {
+  counted_held := counted_list
+  counted_at := reading_chain
+  counted_n := 0
+  while counted_at !== None {
+    if (counted_at.chain_held) === counted_held {
+      counted_n = counted_n + 1
+    }
+    counted_at = counted_at.chain_up
+  }
+  counted_n
 }
 // (what a way read: of positions, the text they read, each named one its member (`CAPTURE: (String+, \s, String+)` of `{ }`
 // is `{ }`, its characters its parts); of a repeat, a list of its first count of them)
@@ -1097,7 +1206,15 @@ way_value (way) => ((way).reading_count !== None) ? ((((way).reading_value) firs
 {ways_type} ways_in {ways_text} into {ways_into} first {ways_first} ^keyword => {
   ways_box := Node &+ { }
   external member (ways_box) (`boxed`) (ways_type)
-  ways_of(ways_box, ways_text, ways_into, ways_first)
+  ways_dynamic := (ways_type).dynamic_frame
+  if ways_dynamic !== None {
+    external dynamic_in ways_dynamic
+  }
+  ways_answer := ways_of(ways_box, ways_text, ways_into, ways_first)
+  if ways_dynamic !== None {
+    external dynamic_out
+  }
+  ways_answer
 }
 ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
   ways_by := ways_boxed.boxed
@@ -1111,10 +1228,11 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
   if ((ways_by).superposes === true) {
     ways_alternative := (ways_by).components.head
     while ways_alternative && !(ways_only && !(ways_found.empty)) {
+      // (named, `LHS: T` (a place given only a type); `String` alone is no name of what it reads)
       ways_alternative_type := alternative_type(ways_alternative.value)
       ways_alternative_at := ((ways_alternative_type) ways_in (ways_from) into (ways_into) first (ways_only)).head
       while ways_alternative_at {
-        ways_found.append(((ways_alternative_at.value).reading_left) left_after (way_value(ways_alternative_at.value)) named (ways_alternative.written_name))
+        ways_found.append(((ways_alternative_at.value).reading_left) left_after (way_value(ways_alternative_at.value)) named (((external unset (ways_alternative.value)) === true) ? ways_alternative.written_name : None))
         ways_alternative_at = ways_alternative_at.next
       }
       ways_alternative = ways_alternative.next
@@ -1155,8 +1273,24 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
     }
     return ways_found
   }
+  // (a conjunction with what calls it, `Statement[] & (caller) => …`: read as the part of it that reads (Ts, a list, a
+  // class))
+  if ((ways_by).conjoins === true) {
+    ways_part_at := ((ways_by).conjoined).head
+    while ways_part_at && (((ways_part_at.value) === ways_by) || !(repeat_type((ways_part_at.value).whole) || (((ways_part_at.value).listing) === true) || (((ways_part_at.value).of) === (ways_part_at.value)))) {
+      ways_part_at = ways_part_at.next
+    }
+    if ways_part_at === None {
+      return ways_found
+    }
+    ways_part := ways_part_at.value
+    return ((ways_part) ways_in (ways_from) into (ways_into) first (ways_only))
+  }
   if ((ways_by).listing === true) && !((ways_by).is_range === true) {
+    chain_was := reading_chain
+    reading_chain = (ways_by) chained_onto (chain_was)
     ways_through := seq_read((ways_by).head, ways_from, false, false, ways_into)
+    reading_chain = chain_was
     if ways_through !== None {
       external member (ways_through) (`reading_parts`) (true)
       external member (ways_through) (`reading_from`) (ways_from)
@@ -1321,17 +1455,32 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
     of := .
     {this}({arguments: Arguments}) => (this &+ {
       ({{fields}}) taking {arguments}
+      // (its block, the constructor: read in each one made (what does not depend on it, the class's, once: `hoisted`); a name
+      // given by name is not given its default there (`Hierarchy(parent: root)`, `parent: Hierarchy? = None`))
+      external hoisted {
+        {{block}}
+      }
     })
     {this}() => this(declared)
+    // (called with a block, `Node({ … })`: one made with nothing given, the block read in it (its names the instance's))
+    {this}({`{`}{extension}{`}`}) => (this(declared)) extended_by {
+      {extension}
+    }
   }
   made
 })()
+// (a value, a block read in it (its names the value's), the value)
+{extending} extended_by {`{`}{extension_code}{`}`} ^keyword => {
+  (extending).({extension_code})
+  extending
+}
 // (with no block, an empty one; before the forms with one, which read what it does and more)
 class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
 // others, which read the rest of what it reads: `class: P { … }`)
 class: {parent} {`{`}{block}{`}`} ^keyword => (class: {parent} (nothing_given = None) => { {block} })
 class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (class: Node ({fields}) => { {block} })
+class ({fields}) {`=>`} {`{}`} ^keyword => (class: Node ({fields}) => { })
 class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (what ends a class's fields read as a list (`written_as`; after `class { }` is read: one class, not one each time it is read))
 fields_end := class { }
@@ -1340,6 +1489,8 @@ fields_end := class { }
 class: <{generics}>({parameters}): {result} {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (written with its fields and `=>`, a definition: read as one)
 {name} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class ({fields}) => { {block} })
+// (its block empty, written `{}`: no block for a hole to take)
+{name} := class ({fields}) {`=>`} {`{}`} ^class => {name} := (class ({fields}) => { })
 {name} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class: {parent} ({fields}) => { {block} })
 // (a member of an instance, then an operator: the operator read on the member's value, not on the instance)
 assert {
@@ -1582,25 +1733,65 @@ converted_to (type) => {
 
 // What a value holds under a key: its entries (`keyed`), none until one is given.
 keyed := None
-Holding := class (key, value) => { }
-// (under a name of its own too, `held_under`, for what an Iterable's own `held` (what a step holds) would answer first)
-held_under (key) => {
-  holder := this
-  found := (holder.keyed) ? holder.keyed.find((entry) => entry.key === key) : None
-  found ? found.value : None
+// (an entry made with its key alone; what it keeps given after)
+Holding := class (key) => {
+  kept := None
 }
-held (key) => held_under(key)
-// (what holds it named: `.` in a block, `unless … { }`, is the block's)
-holding (key, value) => {
-  holder := this
-  (holder.keyed := []) unless holder.keyed
-  found := holder.keyed.find((entry) => entry.key === key)
-  if found {
-    found.value = value
-  } else {
-    holder.keyed.append(Holding(key, value))
+// (found and given by rules, their holes named apart: a list given to a method is taken as its arguments, not as one value)
+// (a key the same one, or a number as much: each `5` written is one of its own)
+{entry_holder} entry_for {entry_key} ^keyword => {
+  entry_on := entry_holder
+  entry_wanted := entry_key
+  // (its own entries, asked of it alone: a value without them is not read through what it converts to)
+  entry_keyed := external member (entry_on) (`keyed`)
+  (entry_keyed === None) ? None : entry_keyed.find((entry) => (entry.key === entry_wanted) || ((entry_wanted is Number) && (entry.key is Number) && (entry.key == entry_wanted)))
+}
+{entry_holder} held_for {entry_key} ^keyword => {
+  found_entry := ((entry_holder) entry_for (entry_key))
+  (found_entry === None) ? None : found_entry.kept
+}
+{entry_holder} keeping {entry_key} as {entry_value} ^keyword => {
+  keeping_on := entry_holder
+  keeping_key := entry_key
+  keeping_value := entry_value
+  (keeping_on.keyed := []) if (keeping_on.keyed === None)
+  keeping_entry := ((keeping_on) entry_for (keeping_key))
+  if keeping_entry === None {
+    keeping_entry = Holding(keeping_key)
+    keeping_on.keyed.append(keeping_entry)
+    // (a key that is a list, a pattern (`rules[[rule: GRAMMAR_RULE]] := (caller) => …`): called, what it is kept under is
+    // called (a statement read by it, `.statement(caller)`))
+    if (keeping_key).listing === true {
+      external member (keeping_key) (`entry_called`) (keeping_entry)
+      (keeping_key) &+= {
+        {this}({entry_argument}) => (this.entry_called).kept(entry_argument)
+      }
+    }
   }
-  value
+  keeping_entry.kept = keeping_value
+  keeping_value
+}
+// (under a name of its own too, `held_under`, for what an Iterable's own `held` (what a step holds) would answer first)
+held_under (key) => (this) held_for (key)
+held (key) => held_under(key)
+// (the keys it holds under: any of them, superposed (`rules.keys{text ~= .}#`, and as a type, `x: rules.keys`); a list a
+// key, a text a member's name; none, None)
+// (one alone superposed with itself: a key that is a list, narrowed, would be read as a list (`{p}` keeps its elements))
+keys => {
+  keys_on := this
+  keys_first := None
+  keys_made := None
+  keys_at := (keys_on.keyed === None) ? None : keys_on.keyed.head
+  while keys_at {
+    keys_one := keys_at.value.key
+    if keys_first === None {
+      keys_first = keys_one
+    } else {
+      keys_made = (keys_made === None) ? (keys_first | keys_one) : (keys_made | keys_one)
+    }
+    keys_at = keys_at.next
+  }
+  (keys_made !== None) ? keys_made : ((keys_first !== None) ? (keys_first | keys_first) : None)
 }
 assert {
   kept_under := { }
@@ -1684,8 +1875,16 @@ dynamically {code} ^keyword => {
   (external &).caller dynamic {
     {code}
   }
-  {code}
+  // (and what it reads, while a text is read by it, read where it was made: `Statements (context: Node) => dynamically
+  // Statement[] …`, Statement's `context` that call's)
+  dynamic_value := {code}
+  dynamic_caller := external origin_of code
+  external member (dynamic_value) (`dynamic_frame`) (dynamic_caller)
+  dynamic_value
 }
+// (a type made dynamically with a function of what it reads, `dynamically Statement[] & (caller: Program) => …`: that function a
+// closure (read alone, `(caller) => …` would define a rule))
+dynamically {dyn_type} & ({dyn_parameters}) {`=>`} {dyn_body} ^keyword => dynamically ((dyn_type) & (({dyn_parameters}) => {dyn_body}))
 dynamically {name} := {value} ^keyword => {
   {name} := {value}
   (external &).caller dynamic {
@@ -1727,6 +1926,13 @@ dynamics := None
   value
   ({name} => value) given (value)
 }
+// (one under a key, `x[k] := v`: after it, so a key is not read as a name to define (`x[k] => v`))
+{on}[{key}] := {value} ^punctuation => ((key is String) && !((key).listing === true)) ? member_given(on, key, value) : ((on) keeping (key) as (value))
+// (and in what it is read in, `[k] := v` (a block's: `rules := { [rule: GRAMMAR_RULE] := … }`), under the list itself)
+[{bracketed_key}] := {bracketed_value} ^punctuation => (.) keeping ([{bracketed_key}]) as (bracketed_value)
+// (and one under a key, `rules[k] := (caller) => …`, `[k] := (caller) => …` in a block: a closure kept there, not a rule defined)
+{on}[{key}] := ({parameters}) {`=>`} {body} ^function => {on}[{key}] := (({parameters}) => {body})
+[{bracketed_key}] := ({parameters}) {`=>`} {body} ^function => [{bracketed_key}] := (({parameters}) => {body})
 // (one given lazily, `x := lazily v`: v read when x is first asked for, then kept; after `:=`, which would read it first)
 {name} := lazily {default} ^keyword => {
   {name} => {
@@ -1946,8 +2152,51 @@ alternative_type (alternative_written) => ((external unset alternative_written) 
   value
   (place) := value
 }
+// (`x.(a | b) = v`: each place named there in x given v)
+// (a text with another in it)
+mentions (mention_text, mention_word) => !(mention_text.empty) && (text_begins(mention_text, mention_word) || mentions(mention_text.rest, mention_word))
+{named_in}.({first_name} | {other_names}) = {value} ^punctuation => (named_in) names_given (`{first_name}`) also (`{other_names}`) as (value)
+{named_on_of} names_given {first_given} also {others_given} as {named_value_of} ^keyword => {
+  named_value := named_value_of
+  named_on := named_on_of
+  external member (named_on) (trimmed_text(first_given)) (named_value)
+  rest_given := others_given
+  while mentions(rest_given, `|`) {
+    rest_bar := rest_given
+    while !text_begins(rest_bar, `|`) {
+      rest_bar = rest_bar.rest
+    }
+    external member (named_on) (trimmed_text(rest_given.until(rest_bar))) (named_value)
+    rest_given = rest_bar.rest
+  }
+  external member (named_on) (trimmed_text(rest_given)) (named_value)
+  named_value
+}
+// (a text with the `)` it ends with left off)
+closed_off (closed_text) => {
+  closed_last := closed_text
+  while !(closed_last.empty) && !(closed_last.rest.empty) {
+    closed_last = closed_last.rest
+  }
+  (!(closed_last.empty) && ((closed_last.first) == 41)) ? closed_text.until(closed_last) : closed_text
+}
+trimmed_text (trim_text) => {
+  trim_start := trim_text
+  while !(trim_start.empty) && ((trim_start.first) == 32) {
+    trim_start = trim_start.rest
+  }
+  trim_end := trim_start
+  trim_last := trim_start
+  while !(trim_end.empty) {
+    trim_end = trim_end.rest
+    if !(trim_end.empty) && !((trim_end.first) == 32) {
+      trim_last = trim_end
+    }
+  }
+  (trim_start.empty) ? trim_start : trim_start.until(trim_last.rest)
+}
 // (`x[k] = v`, after it: what x holds under k, not a name)
-{on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : ((key is String) ? member_given(on, key, value) : (on).holding(key, value))
+{on}[{key}] = {value} ^punctuation => (((on).listing === true) && (key is Number)) ? (on).placed(key, value) : (((key is String) && !((key).listing === true)) ? member_given(on, key, value) : ((on) keeping (key) as (value)))
 // (and composing, after giving: `,` binds loosest of all, `(a, b = 0)` is `a, (b = 0)`)
 // A list: `a, b` a Ray of both (a side that only declared is no value in it), the loosest of all.
 // (what follows, a list a `,` made (still spreading): the value put in front of a copy of it (the list may be held elsewhere,
@@ -1967,6 +2216,12 @@ alternative_type (alternative_written) => ((external unset alternative_written) 
     {rest}
   }
   value
+}
+// (`x ~~ .(a | b) = v`: x, each place named in it given v)
+{named_value_in} ~~ .({first_name} | {other_names}) = {value} ^operator => {
+  named_holder := named_value_in
+  (named_holder) names_given (`{first_name}`) also (`{other_names}`) as (value)
+  named_holder
 }
 // (a function's parameters, one of two named as a visible name, after `,` is defined, where a call reads it)
 assert {

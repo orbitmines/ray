@@ -1,4 +1,6 @@
 @ether/version-control
+@ether/time
+@unicode
 
 Elementwise := (Number | Quantity | Elementwise)[] + {
   compounds + (other: Elementwise) => zip(other).map(+)

@@ -1,5 +1,7 @@
 @ether/network
 @http
+@ip
+@unicode
 
 // Domain names, implementation and specification (https://www.rfc-editor.org/rfc/rfc1035)
 DNS := class: Language {

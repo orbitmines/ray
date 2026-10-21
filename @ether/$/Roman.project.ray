@@ -1,3 +1,5 @@
+@unicode
+
 // Roman Numeral notation (https://en.wikipedia.org/wiki/Roman_numerals)
 Roman := class: Digit+ (
   thousands: "M"[],

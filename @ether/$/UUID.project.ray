@@ -1,3 +1,6 @@
+@ether/time
+@mac
+
 // A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
 UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₄, "-", Hexadecimal₁₂) => {
   version: Hexadecimal₁ => this[12]
@@ -39,7 +42,7 @@ UUID := class: Hexadecimal₃₂ (Hexadecimal₈, "-", Hexadecimal₄, "-", Hexa
       version = 1
       variant = ₂10
       (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random + stamp.logical
-      node = @me/device/network/mac ?? (Hexadecimal₁₂.random ~~ .[1] |= 1)
+      node = @me/device/mac ?? (Hexadecimal₁₂.random ~~ .[1] |= 1)
   }
   assert UUID.v1  // UU21 the version built from a time is not there
   assert {

@@ -1,3 +1,6 @@
+@unicode
+@ether/device
+
 // A MAC address (EUI-48): six octets. Its canonical text is IEEE 802's: the octets in uppercase hexadecimal, separated by
 // hyphens (AC-DE-48-00-00-80; https://standards.ieee.org/wp-content/uploads/import/documents/tutorials/eui.pdf,
 // https://www.rfc-editor.org/rfc/rfc7042#section-2.1). It is read as written elsewhere too: with colons, as most systems
@@ -17,3 +20,8 @@ MAC := class: Binary₄₈ (
 assert ("04:7c:16:4e:3a:42" as MAC) as String == "04-7C-16-4E-3A-42"  // MAC1 a colon-separated address is not written canonically
 assert "04-7C-16-4E-3A-42" as MAC == "047c.164e.3a42" as MAC  // MAC2 one address in two notations is not one address
 assert !("04:7c:16:4e:3a" is MAC || "04:7c:16:4e:3a:4g" is MAC)  // MAC3 five octets or a non-hexadecimal digit was taken for an address
+
+Device &+= {
+  // the host's MAC address; a browser and ether say none (a random locally administered one)
+  mac: MAC = (OS.Browser || OS.Ether) ? (MAC.random ~~ .[7] = 1) : ((external os `mac_address`) ?? (MAC.random ~~ .[7] = 1))
+}

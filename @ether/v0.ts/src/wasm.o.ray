@@ -133,8 +133,8 @@ Array &+= {
     }
     None
   }
-  // (`xs.map{p}(v)`: v in place of each value p holds of (a function, v of it), the others kept)
-  map {kept} (mapping) => .empty ? Array.new : (.rest.map{ {kept} }(mapping)).prepend(answers_true((.first).({kept})) ? (((mapping).closure === true) ? mapping(this.first) : mapping) : this.first)
+  // (`xs.map{p}(v)`: v in place of each value p holds of (a function, v of it), the others kept; their names too)
+  map {kept} (mapping) => (this) names_onto (.empty ? Array.new : (.rest.map{ {kept} }(mapping)).prepend(answers_true((.first).({kept})) ? (((mapping).closure === true) ? mapping(this.first) : mapping) : this.first))
   flatten => .flattened(64)
   flattened (levels) => {
     made := Array.new

@@ -1,5 +1,6 @@
 @ether/geometry
 @ether/version-control
+@ether/time
 
 // What a device can do is a path under it, granted like anything else (`@me.execute { @me/device/camera }`); a
 // capability nobody granted is asked for (`&@.ask`).

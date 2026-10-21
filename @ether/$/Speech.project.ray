@@ -1,6 +1,13 @@
+@ether/os
 @ether/device
 
-// What the device says aloud
+// What the device says aloud, and what it hears said
 Speech := class {
-  said: String?
+  // said aloud as the operating system speaks: speech-dispatcher on Linux (https://freebsoft.org/speechd), SAPI on Windows
+  // (https://learn.microsoft.com/previous-versions/windows/desktop/ms723627(v=vs.85)), AVSpeechSynthesizer on macOS, the Web
+  // Speech API in a browser (https://webaudio.github.io/web-speech-api/); on ether a voice is a neural network not written
+  // yet
+  said (text: String) => if OS.Ether { TODO `speech synthesis in Ray: a neural network (text to speech)` } else { external os `speak` text }
+  // what it hears said, the same way the other way round
+  heard (sound) => if OS.Ether { TODO `speech recognition in Ray: a neural network (speech to text)` } else { external os `recognize` sound }
 }

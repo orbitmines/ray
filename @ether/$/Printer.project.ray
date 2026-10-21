@@ -1,6 +1,14 @@
+@ether/os
 @ether/device
 
-// A printer: whether it is printing what the device shows
-Printer := class {
+// A printer: what it is given, printed
+Printer := class: Location {
   printing: boolean = false
+  // printed as the operating system prints: CUPS on Linux and macOS (https://www.cups.org), the print spooler on Windows
+  // (EnumPrinters, https://learn.microsoft.com/windows/win32/printdocs/enumprinters), window.print in a browser; on ether
+  // not written yet
+  print (content) => if OS.Ether { ERROR@OS `printing on ether is not written yet` } else { (.printing = true) -- (external os `print` (this as String, content)) }
+  // every printer the operating system knows
+  static connected => (if OS.Browser { [Printer(path: "print")] } elsif OS.Ether { [] } else { (external os `printers`) ?? [] }.map(Printer(path: .)))#
 }
+assert !(Printer().printing)  // PRN1 a printer given nothing is printing

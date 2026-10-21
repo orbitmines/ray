@@ -1,6 +1,13 @@
+@ether/os
 @ether/device
 
-// A microphone: what it hears, when granted
-Microphone := class {
+// A microphone: what it hears, when its user grants it
+Microphone := class: Location {
   sound: *?
+
+  // Every microphone the operating system has connected, superposed: PipeWire's sources on Linux (https://docs.pipewire.org),
+  // WASAPI's capture endpoints on Windows (https://learn.microsoft.com/windows/win32/coreaudio/wasapi), AVFoundation's audio
+  // capture devices on macOS, enumerateDevices' audio inputs in a browser; on ether those the player's device shares
+  static connected => (if OS.Ether { @me/device/storage["microphones"] ?? [] } else { (external os `microphones`) ?? [] }).map(Microphone(path: .))#
 }
+assert !(Microphone().sound)  // MIC1 a microphone nothing granted hears something

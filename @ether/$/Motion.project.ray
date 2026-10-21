@@ -1,8 +1,17 @@
+@ether/os
 @ether/device
 @ether/geometry
 
 // How the device is held and moved: its orientation and its acceleration (https://www.w3.org/TR/orientation-event/)
 Motion := class {
-  orientation: Geometry.Vector?
-  acceleration: Geometry.Vector?
+  // as the operating system's sensors read it: iio-sensor-proxy on Linux (https://gitlab.freedesktop.org/hadess/iio-sensor-proxy),
+  // the Sensor API on Windows (https://learn.microsoft.com/windows/win32/sensorsapi/), the deviceorientation and
+  // devicemotion events in a browser; a Mac has none; on ether what the player's device shares
+  orientation: Geometry.Vector? = if OS.Ether { @me/device/storage["orientation"] } elsif OS.Macos { None } else { external os `orientation` }
+  acceleration: Geometry.Vector? = if OS.Ether { @me/device/storage["motion"] } elsif OS.Macos { None } else { external os `motion` }
+}
+assert {
+  with (@me/device as OS) = OS.Macos {
+    assert Motion().orientation == None  // MOT1 a Mac says how it is held
+  }
 }

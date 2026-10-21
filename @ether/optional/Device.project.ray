@@ -33,8 +33,8 @@ Device := class {
   // What `@me/device` answers: the machine and each device it has, superposed; a place typed by one selects it
   // (`here: Geolocation = @me/device`)
   // (the operating system it runs among them: the one the host reports, else the language as the operating system)
-  static made => Device() | OS.host | Keyboard() | Pointer() | Controllers() | Camera() | Microphone() | Clipboard() | Geolocation()
-    | Motion() | Notification() | Vibration() | Speech() | Printer() | Display()
+  static made => Device() | OS.host | Keyboard.connected | Pointer.connected | Controllers.made | Camera.connected | Microphone.connected
+    | Clipboard() | Geolocation() | Motion() | Speech() | Printer.connected | Display.connected
   assert {
     made := Device.made
     keys: Keyboard = made

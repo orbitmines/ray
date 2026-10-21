@@ -1,3 +1,4 @@
+@ether/os
 @ether/device
 @ether/geometry
 @ether/time
@@ -24,5 +25,18 @@ Pointer := class: Location {
 
   contacts => .children{is Pointer.Contact}
   [kind: "mouse" | "pen" | "touch" = "mouse", number: Number = 0] => .contacts{.name == kind && .number == number}.first ?? .add(Pointer.Contact(name: kind, number))
-}
 
+  // Every pointer the operating system has connected, superposed: evdev's on Linux (`/dev/input/event*` that move,
+  // https://www.kernel.org/doc/html/latest/input/input.html), Raw Input's on Windows (RIM_TYPEMOUSE, and pens and touch
+  // screens through WM_POINTER, https://learn.microsoft.com/windows/win32/inputmsg/wm-pointerupdate), the IOKit HID manager's
+  // on macOS (kHIDUsage_GD_Mouse); a page has one, its Pointer Events naming the kind of each contact
+  // (https://www.w3.org/TR/pointerevents3/); on ether the player's
+  static connected => (if OS.Browser || OS.Ether { [Pointer(path: "pointer")] } else { ((external os `pointers`) ?? []).map(Pointer(path: .)) })#
+  assert {
+    with (@me/device as OS) = OS.Ether {
+      pointers: Pointer = Pointer.connected
+      assert pointers is Pointer  // PT2 the player's pointer is not a pointer
+      assert pointers["mouse"].name == "mouse" & !(pointers["mouse"].pressed)  // PT3 a pointer's mouse is not one, or is pressed untouched
+    }
+  }
+}

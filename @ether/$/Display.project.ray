@@ -1,8 +1,17 @@
+@ether/os
 @ether/device
 
-// The display: full screen or not, kept awake or not, and how its user prefers to see it
-Display := class {
+// A display: full screen or not, kept awake or not, and how its user prefers to see it
+Display := class: Location {
   fullscreen: boolean = false
   awake: boolean = false
-  preferences: (reduced_motion: boolean, dark: boolean, contrast: "more" | "less" | "normal", focused: boolean) = (false, false, "normal", true)
+  // as its user prefers (the operating system's settings): reduced motion, dark, contrast, whether focused
+  preferences: (reduced_motion: boolean, dark: boolean, contrast: "more" | "less" | "normal", focused: boolean) = (external os `display_preferences`) ?? (false, false, "normal", true)
+
+  // Every display the operating system has connected, superposed: DRM/KMS's on Linux (https://www.kernel.org/doc/html/latest/gpu/drm-kms.html),
+  // EnumDisplayMonitors' on Windows (https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-enumdisplaymonitors),
+  // NSScreen's on macOS, the Window Management API's screens in a browser (https://www.w3.org/TR/window-management/); on
+  // ether the player's
+  static connected => (if OS.Ether { [Display(path: "display")] } else { ((external os `displays`) ?? []).map(Display(path: .)) })#
 }
+assert !(Display().fullscreen) & !(Display().awake)  // DSP1 a display is full screen or kept awake unasked

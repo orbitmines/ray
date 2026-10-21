@@ -1,9 +1,19 @@
+@ether/os
 @ether/device
 @ether/geometry
 
 // Where the device is on the earth, and how sure of it (https://www.w3.org/TR/geolocation/)
 Geolocation := class {
-  latitude: Number?
-  longitude: Number?
-  accuracy: Geometry.Length?
+  // as the operating system locates it: GeoClue on Linux (https://gitlab.freedesktop.org/geoclue/geoclue), Windows.Devices.
+  // Geolocation on Windows (https://learn.microsoft.com/uwp/api/windows.devices.geolocation), Core Location on macOS
+  // (https://developer.apple.com/documentation/corelocation), the Geolocation API in a browser; on ether where the player's
+  // device says it is, if it says
+  at: (latitude: Number, longitude: Number, accuracy: Geometry.Length)? = if OS.Ether { @me/device/storage["geolocation"] } else { external os `geolocation` }
+  latitude => .at?.latitude
+  longitude => .at?.longitude
+}
+assert {
+  with (@me/device as OS) = OS.Ether {
+    assert Geolocation().at == None  // GEO1 a device on ether that says nothing of where it is is somewhere
+  }
 }

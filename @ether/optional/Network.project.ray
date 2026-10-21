@@ -1,3 +1,5 @@
+@ether/os
+@ether/filesystem
 @http
 @dns
 @websocket
@@ -78,6 +80,8 @@ Instance &+= {
 }
 
 {address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => (address as String) as Instance
+
+assert ("https://orbitmines.com/a" as Held).holder is FileSystem.Remote  // IO12 an http location is not reached over the network
 
 FileSystem &+= {
   static Remote := class: FileSystem {

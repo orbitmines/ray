@@ -1,0 +1,5 @@
+// A web browser (https://html.spec.whatwg.org): an operating system a host may run, the page the language runs in. It is
+// the one the device runs when the host reports the platform "browser".
+OS.Browser := OS(platform: "browser")
+assert OS.Browser.platform == "browser"  // BRW1 a browser is not named by the platform "browser"
+assert OS.Browser is OS  // BRW2 a browser is not an operating system

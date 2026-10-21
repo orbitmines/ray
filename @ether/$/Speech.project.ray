@@ -1,0 +1,6 @@
+@ether/device
+
+// What the device says aloud
+Device &+= {
+  speech: String?
+}

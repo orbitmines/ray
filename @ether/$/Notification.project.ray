@@ -1,0 +1,6 @@
+@ether/device
+
+// A notification shown to whoever uses the device
+Device &+= {
+  notification: (title: String, body: String)?
+}

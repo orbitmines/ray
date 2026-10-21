@@ -1,0 +1,6 @@
+@ether/device
+
+// Whether the device is printing what it shows
+Device &+= {
+  printing: boolean = false
+}

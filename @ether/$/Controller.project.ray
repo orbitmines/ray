@@ -1,0 +1,25 @@
+@ether/device
+
+// Game controllers: numbered on the device as they connect, a disconnected one taking its number back (F-I1); a controller
+// nobody plays is a guest
+Controllers := class: Location {
+  static Controller := class: Nameable (held: *, character: Character?) => {
+    guest => .character === None
+  }
+  [id: Number.Nat] => .children{.name == id}.first
+  connected (held) => .children{.held == held}.first ?? .add(Controllers.Controller(name: .reclaimed(held) ?? (0..).find(!this[.]), held))
+  disconnected (held) => .children = .children{.held != held}
+  reclaimed (held) => [.children, .children.previous**].flatten{.held == held && !this[.name]}.first.name
+}
+
+Device &+= {
+  controllers: Controllers = Controllers()
+}
+// Controllers are numbered on the device and take back their number (F-I1)
+assert {
+  pad_device := Device()
+  assert pad_device.controllers.connected("pad A").name == 0 && pad_device.controllers.connected("pad A").guest  // FWU1 a new controller is not a guest with the first free id
+  assert pad_device.controllers.connected("pad B").name == 1  // FWU2 a second controller does not take the next id
+  pad_device.controllers.disconnected("pad A")
+  assert pad_device.controllers.connected("pad A").name == 0  // FWU3 a reconnecting controller does not take back its id
+}

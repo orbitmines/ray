@@ -1,0 +1,6 @@
+@ether/device
+
+// A camera: what it sees, when granted (`@me.execute { @me/device/camera }`)
+Device &+= {
+  camera: *?
+}

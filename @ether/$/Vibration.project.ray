@@ -1,0 +1,7 @@
+@ether/device
+@ether/time
+
+// A vibration pattern, on for each duration and off for the next (https://www.w3.org/TR/vibration/)
+Device &+= {
+  vibration: Quantity.Temporal[]?
+}

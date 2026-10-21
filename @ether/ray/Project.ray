@@ -28,16 +28,10 @@ Project := class: Location {
   name: String?
   description: String?
   dependencies: Dependency[] = []
-  carried: *[] = []
-  overrides: *[] = []
-  readings: Program = {
-    {name: String} => Language.for_file(name)
-  }
   loading := false
   loaded := false
 
   shadowing => (.parent, .dependencies.project)#
-  language_of (name: String) => Compiler.reduced(name, .readings)
   sources => .held.children**{!(. is Directory) && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !((.parent / ".project.ray") as boolean))}
   load: static => .loaded || .loading ? this : this ~~ (.loading = true) ~~ .sources.for(Language.ray.read(. as String)) ~~ (.loaded = true) ~~ .loading = false
 }

@@ -39,6 +39,8 @@ Location := class: Hierarchy (
     & .host == None  // LOC13 a relative path has a host
     & .path == "a/b"  // LOC14 a relative path is not its own path
   )
+  // (where what runs is: what runs the language says, the local instance; none, nowhere)
+  static current: Location?
   content: *?
   location => this
   holder => Compiler.reduced(this, Holders) -- (. === this || . is Location ? None : .)

@@ -34,7 +34,7 @@ function thread(role: string, data: object): import('worker_threads').Worker {
 // What is painted, as language.ts's `paints` reads it (each statement's literal text in its rule's style, each hole's take in
 // the hole's, a frame given a style), its style only a name: a style member that is no text spans whatever memory its two ends
 // do, at worst hundreds of MB. (The kernel's layout, as language.ts has it.)
-const F = { RULE: 28, START: 40, END: 44, TAKES: 56 }, TAKE = 36, R = { HOLES: 12, PARTS: 28, HEAD: 32, PART: 96 }, PART = 24, N = { A: 12, B: 16 }, HOLE = 2;
+const STYLED = 10, F = { RULE: 28, START: 40, END: 44, TAKES: 56 }, TAKE = 36, R = { HOLES: 12, PARTS: 28, HEAD: 32, PART: 96 }, PART = 24, N = { A: 12, B: 16 }, HOLE = 2;
 const STYLE = /^[\w.-]{1,64}$/;
 const styler = (ray: Ray) => (node: number): string => {
   const v = node ? ray.member(node, 'style') : 0; if (!v) return '';
@@ -127,14 +127,18 @@ async function reader(job: { language: string, file: string, text: string, entry
   // (its tests only once every document is painted: told so)
   await new Promise<void>(resolve => { parent.ref(); parent.once('message', (m: string) => { if (m === 'test') { parent.unref(); resolve(); } }); });
   // (its tests, on their own threads, in this memory; painted again while they run)
-  const testers = Array.from({ length: THREADS }, () => thread('tester', { heap }));
+  const testers = Array.from({ length: THREADS }, () => thread('tester', { heap, s, e }));
   const done = Promise.all(testers.map(t => new Promise<void>(resolve => {
-    t.on('message', (m: Said) => said.push(...m));
+    t.on('message', (m: { said?: Said, paints?: Paint[] }) => {
+      if (m.said) said.push(...m.said);
+      for (const p of m.paints ?? []) found.set(`${p.begin}:${p.end}`, p);
+      if (m.paints) repaint();
+    });
     t.on('error', (x: Error) => { said.push([0, `a test thread crashed: ${x.message}`]); resolve(); });
     t.on('exit', () => resolve());
   })));
   // (each test as it is done: its frame's style read again and again, sent as it changes)
-  const tests = tests_in(ray, s, e), style = styler(ray), found = new Map<number, Paint>();
+  const tests = tests_in(ray, s, e), style = styler(ray), found = new Map<number | string, Paint>();
   let last = '';
   const repaint = () => {
     for (const t of tests) if (!found.has(t.frame)) { const now = style(t.frame); if (now === 'passed' || now === 'failed') found.set(t.frame, { begin: t.begin, end: t.end, style: now }); }
@@ -147,19 +151,29 @@ async function reader(job: { language: string, file: string, text: string, entry
 }
 
 // A test thread: what was put off, taken while there are any; what it said sent back.
-function tester(job: { heap: WebAssembly.Memory }) {
-  const ray = new Ray();
+function tester(job: { heap: WebAssembly.Memory, s: number, e: number }) {
+  const ray = new Ray(), parent = env.worker_threads.parentPort!;
+  // (a frame given what its test found, as the kernel tells of it (L.STYLED): a test inside a test too, whose frame is gone
+  // once its test is done; sent at once)
+  const tell = ray.tell.bind(ray);
+  ray.tell = (said_at: number, kind: number, a: number, c: number) => {
+    if (kind === STYLED && a) {
+      const style = styler(ray)(a), fs = ray.w(a + F.START), fe = ray.w(a + F.END);
+      if ((style === 'passed' || style === 'failed') && fs >= job.s && fe <= job.e) parent.postMessage({ paints: [{ begin: fs - job.s, end: fe - 1 - job.s, style }] });
+    }
+    return tell(said_at, kind, a, c);
+  };
   const trace = (what: string) => { if (process.env.RAY_LSP_TRACE) env.fs.writeSync(2, `LSP tester ${what} at ${Math.round(performance.now())} ms, ${Math.round(process.memoryUsage().heapUsed / 1048576)} MB\n`); };
   Ray.printing = false; ray.init(job.heap); trace('init');
   ray.tests(); trace(`tested (${ray.listen().length} said)`);
-  env.worker_threads.parentPort!.postMessage([...ray.listen()]);
+  parent.postMessage({ said: [...ray.listen()] });
 }
 
 // (the port held open by what language.ts waits on as a kernel thread: not what keeps this thread alive)
 // (and what it waits for, the kernel's buffers, never sent: not listened for, so a message to this thread is this file's)
 if (ROLE) { env.worker_threads.parentPort!.removeAllListeners('message'); env.worker_threads.parentPort!.unref(); }
 if (ROLE === 'reader') reader(env.worker_threads.workerData).catch((x: Error) => env.worker_threads.parentPort!.postMessage({ kind: 'failed', error: x.stack ?? String(x) }));
-else if (ROLE === 'tester') { try { tester(env.worker_threads.workerData); } catch (x) { env.worker_threads.parentPort!.postMessage([[0, `a test thread failed: ${(x as Error).stack ?? x}`]]); } }
+else if (ROLE === 'tester') { try { tester(env.worker_threads.workerData); } catch (x) { env.worker_threads.parentPort!.postMessage({ said: [[0, `a test thread failed: ${(x as Error).stack ?? x}`]] }); } }
 
 // The language as read, kept on disk (`~/.cache/ray/lsp`) for the next server: while the kernel and every file it read are as
 // they were then (their hashes), read back instead of reading the language again.

@@ -91,7 +91,7 @@ Name := {
   ({name}.type = type) unless value === None
 }
 // An optional one, `x?: T`: nothing unless it is given (`x: T = None`).
-{name}?: {type} ^operator => {name}: {type} = None
+{name}?: {type} ^operator => {name}: ({type})? = None
 assert {
   Linked := class (in?: Linked) => { }
   outer := Linked()
@@ -297,7 +297,30 @@ conjoined := None
   conjoins := true
   conjoined := (((a).conjoins === true) ? (a).conjoined.listed() : Array.new.append(a)).joined(((b).conjoins === true) ? (b).conjoined : Array.new.append(b))
   contains (x) => conjoined.some((y) => y == x)
+  // (called, a type of what it reads and a function of it, `Statements(global)(Program())`: a type that reads as it does, then
+  // calls that function on what it read, `.` that, with what it is called with)
+  {this}({conjunction_given}) => (.) applied_with (conjunction_given)
 })
+// (what a conjunction was called with, `applied_args`: none until it is)
+applied_args := None
+{applied_conj} applied_with {applied_given} ^keyword => {
+  applied_from := applied_conj
+  applied_made := ({
+    conjoins := true
+  })
+  external member (applied_made) (`conjoined`) (applied_from.conjoined)
+  external member (applied_made) (`applied_args`) (applied_given)
+  applied_dynamic := (applied_from).dynamic_frame
+  external member (applied_made) (`dynamic_frame`) (applied_dynamic)
+  applied_made
+}
+// (what a type read, called: by a conjunction that was called, its function (the last of it) on that, with what it was called
+// with; else what was read)
+{applied_type_of} applying_to {applied_value_of} ^keyword => {
+  applying_type := applied_type_of
+  applying_value := applied_value_of
+  ((applying_type).applied_args === None) ? applying_value : (((applying_type).conjoined.last).on(applying_value) after ((applying_type).applied_args))
+}
 assert (true & true)  // BB17 true and true is not true
 assert !(true & false)  // BB18 true and false is true
 assert (1 & 2).contains(2)  // TY68 what holds both does not hold the second
@@ -1018,10 +1041,20 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   // (a position `{x: f}: T`: named x, what f makes of what T read, `.` that (the kernel keeps f on x's place, and on its link,
   // which holds it where the place is given already))
   seq_place := ((external unset (seq_at.value)) === true) ? seq_at.value : (((external member (seq_at) (`mapped_by`)) !== None) ? seq_at : None)
+  seq_maps := (seq_place !== None) && (((external member (seq_place) (`mapped_by`)) !== None) || ((external member (seq_at) (`mapped_by`)) !== None))
   if (seq_name !== None) && (reading_chain !== None) {
     seq_named := external member (reading_chain.chain_held) (seq_name)
     if (seq_named !== None) && !((external unset seq_named) === true) {
       seq_type = seq_named
+    }
+  }
+  // (where the text has ended: one that may be nothing, `x?: T`, nothing; a repeat, `T[]`, none of it)
+  if seq_text.empty && (optional_type(seq_type) || (repeat_type(seq_type) && !(((seq_type).nonempty_of) !== None))) {
+    seq_none := optional_type(seq_type) ? None : []
+    (seq_none) given_to (seq_into) as (seq_name)
+    seq_after_none := seq_read(seq_at.next, seq_text, seq_whole, seq_stops, seq_into)
+    if seq_after_none !== None {
+      return ((seq_none) taken_before (seq_after_none) named (seq_name))
     }
   }
   if read_by_parts((seq_type).whole) && (((seq_type) times_read) >= 2) {
@@ -1033,8 +1066,10 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   if read_by_parts((seq_type).whole) {
     seq_way_at := ((seq_type) ways_in (seq_text) into (seq_into) first (false)).head
     while seq_way_at {
-      seq_way_read := way_value(seq_way_at.value)
-      seq_way_value := (seq_place === None) ? seq_way_read : (external mapped (seq_place) (seq_way_read))
+      seq_way_read := (seq_type) applying_to (way_value(seq_way_at.value))
+      // (mapped, what f is given is the text it matched, `.`: `{statement: context.reading(.)}`)
+      seq_way_text := seq_text.until((seq_way_at.value).reading_left)
+      seq_way_value := seq_maps ? (external mapped (seq_place) (seq_way_text)) : seq_way_read
       (seq_way_value) given_to (seq_into) as (seq_name)
       seq_after := seq_read(seq_at.next, (seq_way_at.value).reading_left, seq_whole, seq_stops, seq_into)
       if seq_after !== None {
@@ -1052,7 +1087,7 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
     seq_span := seq_text.until(seq_cut)
     if (seq_type) fits_read (seq_span) {
       seq_leaf_read := (seq_type) leaf_read (seq_span)
-      seq_value := (seq_place === None) ? seq_leaf_read : (external mapped (seq_place) (seq_leaf_read))
+      seq_value := seq_maps ? (external mapped (seq_place) (seq_span)) : seq_leaf_read
       (seq_value) given_to (seq_into) as (seq_name)
       seq_rest := seq_read(seq_at.next, seq_cut, seq_whole, seq_stops, seq_into)
       if seq_rest !== None {
@@ -1063,6 +1098,8 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   }
   None
 }
+// (a type that may be nothing, `T?` (`None | T`))
+optional_type (optional_of) => ((optional_of).superposes === true) && (optional_of).components.some((optional_one) => optional_one === None)
 // (a type that is one character, as the kernel knows it: a text of one character it is or is not, and never one of two)
 one_character (one_type) => !literal_text(one_type) && ((external admits (`ab`) one_type) === false) && ((external admits (`a`) one_type) !== None)
 {taken_value} taken_before {taken_reading} named {taken_name} ^keyword => {

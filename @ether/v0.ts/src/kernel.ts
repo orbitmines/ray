@@ -630,8 +630,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function text_admits(t: number, s: number, e: number, ty: number, depth: number): number {
     if (depth > 12 || stopped(t)) return -1;
     // (a place a list holds, `name: T` in it: by what was given that name (its type, written in what holds members, where a
-    // bare name never reads it))
-    if (w(ty + N_IS) === IS_PLACE) { const pv = place_value(t, ty); return pv ? text_admits(t, s, e, pv, depth + 1) : -1; }
+    // bare name never reads it); given nothing, `x?: T`'s default: by its type)
+    if (w(ty + N_IS) === IS_PLACE) { let pv = place_value(t, ty); if (pv === w(NOTHING)) { const pt = member(t, ty, w(w(WORDS) + 8 * W_TYPE), w(w(WORDS) + 8 * W_TYPE + 4)); pv = pt && pt !== ty && w(pt + N_IS) !== IS_PLACE ? pt : pv; } return pv ? text_admits(t, s, e, pv, depth + 1) : -1; }
     // (a character the kernel holds: that one character)
     if (w(ty + N_IS) === IS_NODE && w(CHARS) && w(ty + N_PARENT) === w(CHARS) && w(ty + N_A) > 0 && !w(ty + N_B)) return span_char(s, e) === w(ty + N_A) - 1 ? 1 : 0;
     if (w(ty + N_IS) === IS_TEXT) { const n = w(ty + N_B) - w(ty + N_A); return e - s === n && same(s, w(ty + N_A), n) ? 1 : 0; }
@@ -641,11 +641,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const sup = member(t, ty, w(w(WORDS) + 8 * W_SUPERPOSES), w(w(WORDS) + 8 * W_SUPERPOSES + 4)) === w(TRUE_);
     // (`T+`: not empty, a T)
     const base = sup ? 0 : held(t, ty, W_NONEMPTY, 0); if (base) return e === s ? 0 : text_admits(t, s, e, base, depth + 1);
-    // (`T[]` of characters: each one of them, at least one)
-    const gl = sup ? 0 : glyphs_of(ty); if (gl) { if (e === s) return 0; for (let p = s; p < e; p++) { const c = b(p); if (!((w(gl + 4 * (c >> 5)) >>> (c & 31)) & 1)) return 0; } return 1; }
-    // (`T[]`: Ts one after another, at least one)
+    // (`T[]` of characters: each one of them, or none (`T[]+`, at least one))
+    const gl = sup ? 0 : glyphs_of(ty); if (gl) { if (e === s) return 1; for (let p = s; p < e; p++) { const c = b(p); if (!((w(gl + 4 * (c >> 5)) >>> (c & 31)) & 1)) return 0; } return 1; }
+    // (`T[]`: Ts one after another, or none)
     // (what `T[]` made keeps its T in the block it was made of, marked `repeats`: its parent)
-    const made_in = w(ty + N_PARENT), each = sup ? 0 : held(t, ty, W_EACH, 0) || (made_in && held(t, made_in, W_REPEATS, 0) === w(TRUE_) ? held(t, made_in, W_EACH, 0) : 0); if (each && each !== w(NOTHING)) return e === s ? 0 : text_steps(t, s, e, each, 0, depth);
+    const made_in = w(ty + N_PARENT), each = sup ? 0 : held(t, ty, W_EACH, 0) || (made_in && held(t, made_in, W_REPEATS, 0) === w(TRUE_) ? held(t, made_in, W_EACH, 0) : 0); if (each && each !== w(NOTHING)) return e === s ? 1 : text_steps(t, s, e, each, 0, depth);
     // (a range, `"0".."9"`: one of its values, which the language walks (its values made as they are asked))
     if (!sup && held(t, ty, W_IS_RANGE, 0) === w(TRUE_)) return -1;
     // (a list of types: each in its turn, a written text where it is, any other a span of at least one character)
@@ -653,7 +653,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (one of a superposition's components)
     // (a superposition `a | b` keeps its components in the block it was made of, marked `superposes`: its parent)
     const cs0 = held(t, ty, W_COMPONENTS, 0) || (made_in && held(t, made_in, W_SUPERPOSES, 0) === w(TRUE_) ? held(t, made_in, W_COMPONENTS, 0) : 0), cs = cs0 === w(NOTHING) ? 0 : cs0;
-    if (cs) { let unknown = 0; for (let at = held(t, cs, W_HEAD, 0), k = 0; at && at !== w(NOTHING) && k < 256; at = held(t, at, W_NEXT, 0), k++) { const cv = held(t, at, W_VALUE, 0); if (!cv || cv === w(NOTHING)) continue; const ch = chars_hold(t, cv, s, e); const r = ch >= 0 ? ch : text_admits(t, s, e, cv, depth + 1); if (r === 1) return 1; if (r < 0) unknown = 1; } return unknown ? -1 : 0; }
+    if (cs) { let unknown = 0; for (let at = held(t, cs, W_HEAD, 0), k = 0; at && at !== w(NOTHING) && k < 256; at = held(t, at, W_NEXT, 0), k++) { const cv = held(t, at, W_VALUE, 0); if (cv === w(NOTHING) && e === s) return 1; if (!cv || cv === w(NOTHING)) continue; const ch = chars_hold(t, cv, s, e); const r = ch >= 0 ? ch : text_admits(t, s, e, cv, depth + 1); if (r === 1) return 1; if (r < 0) unknown = 1; } return unknown ? -1 : 0; }
     return -1;
   }
   // (a span read as one type again and again (each), or as a list of types in turn (from its first link): which ends it can
@@ -666,12 +666,15 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       const ty = each ? each : (link && link !== w(NOTHING) ? held(t, link, W_VALUE, 0) : 0);
       if (!each && !(link && link !== w(NOTHING))) break;
       if (!ty) return -1;
+      // (a position given nothing, `x?: T` in a list (its default what the list holds): it takes nothing)
+      if (!each && ty === w(NOTHING)) { link = held(t, link, W_NEXT, 0); continue; }
       const next = alloc(n + 1); for (let i = 0; i <= n; i++) setb(next + i, 0);
       let any = 0;
       for (let i = 0; i <= n; i++) {
         if (!b(reach + i)) continue;
         if (!each && w(ty + N_IS) === IS_TEXT) { const m = w(ty + N_B) - w(ty + N_A); if (i + m <= n && same(s + i, w(ty + N_A), m)) { setb(next + i + m, 1); any = 1; } continue; }
-        for (let j = i + 1; j <= n; j++) { const r = text_admits(t, s + i, s + j, ty, depth + 1); if (r === 1) { setb(next + j, 1); any = 1; } else if (r < 0) unknown = 1; }
+        // (a position in a list that may take nothing, `\s[]`, `x?: T`: none of the text too)
+        for (let j = each ? i + 1 : i; j <= n; j++) { const r = text_admits(t, s + i, s + j, ty, depth + 1); if (r === 1) { setb(next + j, 1); any = 1; } else if (r < 0) unknown = 1; }
       }
       if (each) { if (b(next + n)) return 1; if (!any) return unknown ? -1 : 0; let grew = 0; for (let i = 0; i <= n; i++) if (b(next + i) && !b(reach + i)) { setb(reach + i, 1); grew = 1; } if (!grew) return unknown ? -1 : 0; continue; }
       reach = next; link = held(t, link, W_NEXT, 0);

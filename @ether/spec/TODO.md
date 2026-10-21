@@ -25,14 +25,31 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   assert { e := Ex(); assert e.same(e) } }`: `nothing reads same(e)`). Many library tests are written in class bodies.
 - **A field's default that reads a field given at construction sees it unset**: `severity: .Severity = .fatal ? … : …`
   (Diagnostics.ray), `Diagnostic(message: "stop", fatal: true).severity` is not fatal (DG2).
-- **A method's return type is not read**: `named (name): static => …` (Character.ray `Nameable.named`, Program.ray
-  `attempt`, `stop | cancel | complete`, Project.ray `load`); the call answers nothing.
+- **A method with parameters and a return type is not read**: `tip (n: Number): static => …`, `Key().tip(2)` is unread;
+  `press: static => …` (no parameters) and `tap (n) => …` (no return type) read. Character.ray `named`, Program.ray
+  `attempt`, Keyboard's `press (modifiers …): static`, Project.ray `load`, History's `commit`/`reset`/`extended`.
+- **A method whose parameters all have defaults is not applied when named bare**: `tap (n: Number = 1) => …`,
+  `Key().tap.pressed` fails (`Key().tap(2)` reads): Keyboard's `key.press.pressed`, `Device().choose`.
 - **A member added to a class with `Base &+= { static f … }` is not read on a subclass** (`class: Language` classes):
   `Language &+= { static generated … }` in @ether/encryption, `ChaCha20Poly1305.generated()` unread.
 - **A hole typed by a named pattern or class does not read**: `{segment: Written}` (Location.ray), `{version: Version}`;
-  an inline pattern does (`{name: (Char.Word | "-")[]}`).
+  an inline pattern matches (`{name: (Char.Word | "-")[]}`), but see below.
+- **A rule `@word` then a literal then a hole does not match** when the literal is `/` or a space: `@yo/{p: Char.Word[]} =>
+  p`, `(@yo/x)` and `@ye {p} => p`, `(@ye x)` are unread (`nothing reads @yo/x`); `@yd:{p}` and `qq/{p}` match. Every
+  location literal (`@a/b`, `@/etc/hosts`, `@./a`, `@https://…`, Location.ray 141–150) and `@me/{path}` (`@me/quests`,
+  `@me/device`, `@me/policy`) are unread for it.
+- **A matched hole typed by an inline pattern is still read as code**: with `@yd:{p: Char.Word[]} => p`, `(@yd:x)` reports
+  `nothing reads x`.
+- **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
+  ray/.project.ray) is nothing outside a World and every test asking `@me.…` fails (`nothing reads me`).
 - **Reading a text as a class by its header** (`"v0.1.4-E2027.0A.4" as Version`, `Language.part_written` of a header
   class) fails; writing one by its header works (`Version(index: 1) as String == "v0.0.1-.1"`).
+
+- **No written form of a label or a jump**: Program.ray's programs write `past\` (a label, one space less indented) and
+  `goto past` / `goto past if c` (PG13–PG33, XB1–XB4); the bootstrap has only `external label {x}` / `external goto {x}`,
+  whose hole is a value, so a label's name cannot be taken as written until a hole reads text (above).
+- **`external io` is gone from the kernel**: the effect tests now use `external read` (Program.ray AC60, EFF2–EFF5); what
+  an `@c` / `@js` fragment calls should be an effect too (`os`) once a fragment runs.
 
 ## Node.ray
 

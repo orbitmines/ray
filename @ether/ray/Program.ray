@@ -360,33 +360,33 @@ assert Program(code: { 1 }).stop.done  // FWQ4 a stopped program is not done
 Program &+= {
   continuations => .calls{!.is_external}.map(.**)
   effects => .reachable.map(.calls{.is_external}.external_name).flatten.unique
-  assert Program(code: { external io "stdout" "x" }).effects.contains("io")  // AC60 writing out is not an effect named io
+  assert Program(code: { external read "x" }).effects.contains("read")  // AC60 reading a location is not an effect named read
   // What a run may do is the runner's setting (L§8.1): `with (Program.speculated |= x)`, `with (Program.refused |= x)`, or a `.cfg.ray`.
   static speculated: *[] = []
   static refused: *[] = []
   assert Program.speculated.count == 0  // AC58 nothing is speculated unless asked
   assert Program.refused.count == 0  // AC59 nothing is refused unless asked
 }
-// io and os are effects; the time is not deterministic
+// reading a location and calling the operating system are effects; the time is not deterministic
 assert Program(code: { 1 + 1 }) is Pure  // EFF1 adding numbers is not pure
-assert Program(code: { external io "stdout" "x" }) is Effecting  // EFF2 writing out is not an effect
+assert Program(code: { external read "x" }) is Effecting  // EFF2 reading a location is not an effect
 assert {
-  with (Program.refused |= Program(code: { external io "stdout" "x" })) {
-    assert Program(code: { external io "stdout" "x" }) is Refused  // EFF4 a refused program is not refused
+  with (Program.refused |= Program(code: { external read "x" })) {
+    assert Program(code: { external read "x" }) is Refused  // EFF4 a refused program is not refused
   }
 }
-assert Program(code: { external io "stdout" "x" }) is Abstracted  // EFF5 an effect nobody speculated runs in full
+assert Program(code: { external read "x" }) is Abstracted  // EFF5 an effect nobody speculated runs in full
 
 Pure := Program{.effects.empty}
 assert Program(code: { 1 + 1 }) is Deterministic  // AC61 adding numbers is not deterministic
 assert !(Program(code: { 1 + 1 }) is Effecting)  // AC62 adding numbers is an effect
 assert !(Program(code: { 1 + 1 }) is Nondeterministic)  // AC64 adding numbers is nondeterministic
-Deterministic := Program{!.effects.some(. is ("random" | "time" | "io"))}
+Deterministic := Program{!.effects.some(. is ("random" | "time" | "read"))}
 Nondeterministic := Program{!(. is Deterministic)}
-Effecting := Program{.effects.some(. is ("io" | "os"))}
+Effecting := Program{.effects.some(. is ("read" | "os"))}
 Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
 assert Program(code: { x := 1 }) is Initializer  // AC65 a program that only declares is not an initializer
-assert !(Program(code: { external io "stdout" "x" }) is Initializer)  // AC66 a program that writes out is an initializer
+assert !(Program(code: { external read "x" }) is Initializer)  // AC66 a program that reads a location is an initializer
 Refused := Program{. is Program.refused#}
 Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
 
@@ -400,11 +400,11 @@ Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
 Program &+= {
   checkable => !(this is Effecting) && this is Terminating
   assert Program(code: { 1 + 1 }).checkable  // AC30 a program with no effects that terminates cannot be checked
-  assert !Program(code: { external io "stdout" "x" }).checkable  // AC31 a program with an effect can be checked
+  assert !Program(code: { external read "x" }).checkable  // AC31 a program with an effect can be checked
   names (value) => this === value || this == value || .checkable && this() === value
   assert Program(code: { 1 + 1 }).names(2)  // AC54 a checkable program does not name what it answers
   assert !Program(code: { 1 + 1 }).names(3)  // AC55 a program names what it does not answer
-  assert !(Program(code: { external io "stdout" "leak" }).names("leak"))  // PURG4 checking a grant runs an expression with effects
+  assert !(Program(code: { external read "leak" }).names("leak"))  // PURG4 checking a grant runs an expression with effects
 
   caller: Program?
   // Who runs a program is its chain of callers, the origin first; a prompt names them all.
@@ -455,7 +455,7 @@ assert {
 assert {
   purg_reader := (name: "purg-reader")
   purg_lamp := (lamp: 1)
-  assert (Access(purg_reader, method: Access.Reading) (external io "stdout" "leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
-  assert (Access(purg_reader, method: Access.Reading, filter: Program(code: { external io "stdout" "leak" })) purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
+  assert (Access(purg_reader, method: Access.Reading) (external read "leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
+  assert (Access(purg_reader, method: Access.Reading, filter: Program(code: { external read "leak" })) purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
   assert !(purg_lamp.access)  // PURG3 a refused grant is kept
 }

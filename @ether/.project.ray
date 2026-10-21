@@ -2,3 +2,9 @@
 @ether/version-control
 @ether/device
 @ether/game
+@ether/time
+@unicode
+@uuid
+@name
+@email
+@phone

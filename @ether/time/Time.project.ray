@@ -1,3 +1,5 @@
+@unicode
+
 {hh: Decimal.String}:{mm: Decimal.String{length == 2}}: Quantity.Temporal => hh hours mm minutes
 assert 12:00 == 12 hours  // TI82 12:00 is not twelve hours
 {hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{length == 2}}: Quantity.Temporal => hh_mm ss seconds
@@ -342,8 +344,17 @@ HybridClock := class (node: *, wall: Decimal = 0, logical: Decimal = 0) => {
   }
 }
 
+Quantity.Temporal &+= {
+  right-to-left sleep => Time.now -- (start => await dynamically (Time.now >= start + this))
+  assert {
+    sleep (1 ms)
+  }
+}
 
-
-
-
-
+// Reading the time is not deterministic, and a grant may read it (Access.ray)
+assert !(Program(code: { Time.now }) is Deterministic)  // EFF3 reading the time is deterministic
+assert Program(code: { Time.now }) is Nondeterministic  // AC63 reading the time is not nondeterministic
+assert {
+  purg_reader := Character(name: "purg-reader")
+  assert !((purg_reader.read Time.now) is Diagnostic)  // PURG5 a grant reading the time is refused
+}

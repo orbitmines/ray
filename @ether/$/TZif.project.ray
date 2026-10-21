@@ -1,3 +1,5 @@
+@ether/time
+
 // Time Zone Information Format (https://datatracker.ietf.org/doc/html/rfc8536)
 TZif := class: Language (
   v1: Block<Binary₃₂>,

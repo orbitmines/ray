@@ -147,7 +147,6 @@ Program &+= {
 // What a program does is what its externals are: io and os are effects, the time is not deterministic.
 assert Program(code: { 1 + 1 }) is Pure  // EFF1 adding numbers is not pure
 assert Program(code: { IO().output("x") }) is Effecting  // EFF2 writing out is not an effect
-assert !(Program(code: { Time.now }) is Deterministic)  // EFF3 reading the time is deterministic
 assert {
   with (Program.refused |= Program(code: { IO().output("x") })) {
     assert Program(code: { IO().output("x") }) is Refused  // EFF4 a refused program is not refused
@@ -160,7 +159,6 @@ assert Program(code: { IO().output("x") }) is Abstracted  // EFF5 an effect nobo
 Pure := Program{effects.empty}
 assert Program(code: { 1 + 1 }) is Deterministic  // AC61 adding numbers is not deterministic
 assert !(Program(code: { 1 + 1 }) is Effecting)  // AC62 adding numbers is an effect
-assert Program(code: { Time.now }) is Nondeterministic  // AC63 reading the time is not nondeterministic
 assert !(Program(code: { 1 + 1 }) is Nondeterministic)  // AC64 adding numbers is nondeterministic
 Deterministic := Program{!effects.some(. is ("random" | "time" | "io"))}
 Nondeterministic := Program{!(. is Deterministic)}
@@ -186,5 +184,4 @@ assert {
   assert (purg_reader.read IO().output("leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
   assert (purg_reader{IO().output("leak")}.read purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
   assert !(purg_lamp.access)  // PURG3 a refused grant is kept
-  assert !((purg_reader.read Time.now) is Diagnostic)  // PURG5 a grant reading the time is refused
 }

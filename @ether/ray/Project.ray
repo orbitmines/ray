@@ -92,7 +92,7 @@ Version := class: Ray ("%", number: Decimal, ("'", revision: Decimal)?) => {
   assert %3'1.resolved([%3'1, %3'4]) == %3'1  // PRJ36 a version with a revision is resolved to another
   assert !(%3.resolved([%4'9]) == %4'9)  // PRJ37 resolving picks a revision of another number
 
-  static Pin := class ("%[", label: UUID | Char.Word[], "]") => { }
+  static Pin := class ("%[", label: (Char.Word | "-")[], "]") => { }
   assert "%[stable]" is Version.Pin  // PRJ38 a word between "%[" and "]" is not a pin
   assert !("%[stable" is Version.Pin)  // PRJ39 a pin without its closing bracket is a pin
 }

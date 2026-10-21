@@ -26,22 +26,22 @@ UI := class {
   // Pointer Events (https://www.w3.org/TR/pointerevents3/), UI Events (https://www.w3.org/TR/uievents/), as a window reports them
   Input := class {
     Id = Char{!= " "}[]
-    Pointer := class (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
-      contact => (@me/device as Pointer)[device ?? "mouse", number ?? 0]
-      position => Geometry.Space.screen.seen(Geometry.Vector(x * 1px, y * 1px), UI.scene.size)
+    Pointer := class (id: UI.Input.Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
+      contact => (@me/device as Pointer)[.device ?? "mouse", .number ?? 0]
+      position => Geometry.Space.screen.seen(Geometry.Vector(.x * 1px, .y * 1px), UI.scene.size)
       assert ("\e[<0;3;4M" as ANSI.Mouse).position == Geometry.Vector(16px, UI.scene.size.y - 64px)  // UI170 a mouse report is not a position on the page
-      time => stamp ? stamp * 1 ms : Time.now
+      time => .stamp ? .stamp * 1 ms : Time.now
     }
-    Keystroke := class (id: Id, " ", kind: "keydown" | "keyup", " ", key: Id, modifiers: (" ", held: "shift" | "control" | "alt" | "meta")[])
-    Inbound := Pointer | Keystroke
+    Keystroke := class (id: UI.Input.Id, " ", kind: "keydown" | "keyup", " ", key: UI.Input.Id, modifiers: (" ", held: "shift" | "control" | "alt" | "meta")[])
+    Inbound := UI.Input.Pointer | UI.Input.Keystroke
     applied := {
-      {pointer: Pointer{kind == "pointerdown"}} => pointer.contact.to(pointer.position, pressing: [0], time: pointer.time)
-      {pointer: Pointer{kind == "pointermove"}} => pointer.contact.to(pointer.position, time: pointer.time)
-      {pointer: Pointer} => pointer.contact.to(pointer.position, pressing: [], time: pointer.time)
-      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- (@me/device as Keyboard)[keystroke.key].press((Keyboard.Modifier.shift if .contains("shift")) | (Keyboard.Modifier.control if .contains("control")) | (Keyboard.Modifier.alt if .contains("alt")) | (Keyboard.Modifier.meta if .contains("meta")))
-      {keystroke: Keystroke} => (@me/device as Keyboard)[keystroke.key].release
+      {pointer: UI.Input.Pointer{.kind == "pointerdown"}} => pointer.contact.to(pointer.position, pressing: [0], time: pointer.time)
+      {pointer: UI.Input.Pointer{.kind == "pointermove"}} => pointer.contact.to(pointer.position, time: pointer.time)
+      {pointer: UI.Input.Pointer} => pointer.contact.to(pointer.position, pressing: [], time: pointer.time)
+      {keystroke: UI.Input.Keystroke{.kind == "keydown"}} => keystroke.modifiers.held -- (@me/device as Keyboard)[keystroke.key].press((Keyboard.Modifier.shift if .contains("shift")) | (Keyboard.Modifier.control if .contains("control")) | (Keyboard.Modifier.alt if .contains("alt")) | (Keyboard.Modifier.meta if .contains("meta")))
+      {keystroke: UI.Input.Keystroke} => (@me/device as Keyboard)[keystroke.key].release
     }
-    static dispatched (line: String?) => line.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
+    static dispatched (line: String?) => line.trimmed ~= (event: UI.Input.Inbound) -- Compiler.reduced(.event, UI.Input.applied) if .
     assert {
       UI.HTML.DOM.dispatched("window keydown q")
     }
@@ -62,21 +62,21 @@ UI := class {
     {aligned_as: Alignment} * {aligned} => Geometry.Box(align: aligned_as, children: [aligned])
     // (`*` reads one operand on each side: a share of an aligned `x`, `100% * center * x`, written as one)
     {share Numeral}% * {share_aligned: Alignment} * {shared} => Geometry.Box(width: share / 100, children: [Geometry.Box(align: share_aligned, children: [shared])])
-    {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
+    {superposed: |} => Compiler.reduced(@me.choose(superposed), UI.Scene)
     {text: String} => Geometry.Box(content: text)
-    {styled: String | Geometry.Shape | Choice}{ }{`^`}{{expression}} => Compiler.reduced(styled, Scene).styled_by(Program(code: expression**))
+    {styled: String | Geometry.Shape | Choice}{ }{`^`}{{expression}} => Compiler.reduced(styled, UI.Scene).styled_by(Program(code: expression**))
     // (the whole text marked: its shape styled; a character holds no styles yet (`.value ~~ .styles ,= style` is not read))
-    {styled: String}{ }{`^`}{style} => Compiler.reduced(styled, Scene).styled(style)
-    {styled: Geometry.Shape | Choice}{ }{`^`}{style} => Compiler.reduced(styled, Scene).styled(style)
-    {{narrowing}} {narrowed} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: narrowing**))
+    {styled: String}{ }{`^`}{style} => Compiler.reduced(styled, UI.Scene).styled(style)
+    {styled: Geometry.Shape | Choice}{ }{`^`}{style} => Compiler.reduced(styled, UI.Scene).styled(style)
+    {{narrowing}} {narrowed} => Compiler.reduced(narrowed, UI.Scene).narrowed(Program(code: narrowing**))
     {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as String)])
       -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
-    {placed: *{(location is Location) && location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), Scene)])
+    {placed: *{(.location is Location) && .location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), UI.Scene)])
     {chosen: Choice} => Geometry.Box(content: chosen)
     {lines: \n} => Geometry.Box(flow: block, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
     // (what a path shows, an entry point (`{*}: Index`) run: its answer)
-    {site: *{fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering){O: Scene}(), Scene)
+    {site: *{.fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering){O: UI.Scene}(), UI.Scene)
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
   }
   assert Program(code: { "a", "b" }){O: UI.Scene}().flow == inline  // UI5 a comma does not flow inline
@@ -172,7 +172,7 @@ UI := class {
     icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
     assert Program(code: { icon }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span"  // UI149 a filled SVG is not a masked element on the web
     assert css_rules(icon).first.declarations.some(.0 == "mask")  // UI150 a filled SVG has no mask
-    bounded := Geometry.Box(){width <= 50%, height >= 30px}
+    bounded := Geometry.Box(){.width <= 50%, .height >= 30px}
     assert css_rules(bounded).first.declarations.contains(("max-width", 50, "%"))  // UI278 a share bound is not a CSS percentage
     assert css_rules(bounded).first.declarations.contains(("min-height", 30, "px"))  // UI279 a length bound is not a CSS length
     assert css_rules(Geometry.Box(radius: [50%])).first.declarations.some(.0 == "border-radius" && .[1..].join("") == "50%")  // UI280 a share radius is not border-radius: 50%
@@ -188,57 +188,57 @@ UI := class {
   }
 
   Lowered := {
-    {field: Geometry.Shape{content is Choice}} => field.face -- (face => field ~~ (.content = None) ~~ (.children = [face]))
-    {frame: Geometry.Shape{content is Location && content.video_site && children.empty}} => frame ~~ (.content = frame.content ~~ .window = new) ~~ (.fill = Geometry.Color(17, 20, 24)) ~~ (.stroke = Geometry.Stroke(Geometry.Color(128, 128, 128))) ~~ (.children = [
+    {field: Geometry.Shape{.content is Choice}} => field.face -- (face => field ~~ (.content = None) ~~ (.children = [face]))
+    {frame: Geometry.Shape{.content is Location && .content.video_site && .children.empty}} => frame ~~ (.content = frame.content ~~ .window = new) ~~ (.fill = Geometry.Color(17, 20, 24)) ~~ (.stroke = Geometry.Stroke(Geometry.Color(128, 128, 128))) ~~ (.children = [
       Geometry.Box(content: "▶ " + (frame.content.alt ?? frame.content.@ as String), origin: frame.size * (1 / 4), size: frame.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
     ])
-    {image: Geometry.Shape{content is Location && content.language === Language.Image}} => image.content.pixels -- (pixels => image ~~ (.content = None) ~~ (.fill = image.fill
+    {image: Geometry.Shape{.content is Location && .content.language === Language.Image}} => image.content.pixels -- (pixels => image ~~ (.content = None) ~~ (.fill = image.fill
       ? (point => (image.painted(image.fill) as Geometry.Color) ~~ .alpha *= pixels.sampled(Geometry.Vector(point.x / image.size.x, point.y / image.size.y)).alpha)
       : (point => pixels.sampled(Geometry.Vector(point.x / image.size.x, point.y / image.size.y)))))
   }
 
   Choice &+= {
     disabled => !&@.may(`=`, this)
-    placeholder => [tried, tried.previous**].flatten.last
-    options => goal#
-    listed => !(goal is (boolean | String | Number | Time | Geometry.Color | Location | Language))
-    empty => tried === None || tried === placeholder && !done || (tried as String).empty
-    typed (text: String) => attempt((tried, text)) -- this
-    composed (text: String) => (tried as String ?? "") -- (now => attempt((now{!.styles.contains("composing")}, text.marked("composing")))) -- this
-    erased => attempt(tried[..<-1]) -- this
-    activate => goal is boolean ? attempt(!tried) : listed ? attempt(options[(options.index_of(tried) + 1) % options.count]) : None
-    shown => Compiler.reduced(this, Showing)
+    placeholder => [.tried, .tried.previous**].flatten.last
+    options => .goal#
+    listed => !(.goal is (boolean | String | Number | Time | Geometry.Color | Location | Language))
+    empty => .tried === None || .tried === .placeholder && !.done || (.tried as String).empty
+    typed (text: String) => .attempt((this.tried, text)) -- this
+    composed (text: String) => (.tried as String ?? "") -- (now => this.attempt((now{!.styles.contains("composing")}, text.marked("composing")))) -- this
+    erased => .attempt(this.tried[..<-1]) -- this
+    activate => .goal is boolean ? .attempt(!this.tried) : .listed ? .attempt(this.options[(this.options.index_of(this.tried) + 1) % this.options.count]) : None
+    shown => Compiler.reduced(this, Choice.Showing)
     static Showing := {
-      {chosen: Choice{goal is boolean}} => chosen.tried ? "[x]" : "[ ]"
-      {chosen: Choice{goal is Number{least, most}}} => (chosen.tried - chosen.goal.least) / (chosen.goal.most - chosen.goal.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
-      {chosen: Choice{goal is String{secret}}} => "•" * (chosen.tried as String).length
-      {chosen: Choice{listed}} => "‹ ", chosen.tried as String, " ›"
-      {chosen: Choice{empty}} => (chosen.placeholder as String) ?? ""
-      {chosen: Choice{goal is Language}} => (chosen.tried as String).highlighted(chosen.goal)
+      {chosen: Choice{.goal is boolean}} => chosen.tried ? "[x]" : "[ ]"
+      {chosen: Choice{.goal is Number{least, most}}} => (chosen.tried - chosen.goal.least) / (chosen.goal.most - chosen.goal.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
+      {chosen: Choice{.goal is String{.secret}}} => "•" * (chosen.tried as String).length
+      {chosen: Choice{.listed}} => "‹ ", chosen.tried as String, " ›"
+      {chosen: Choice{.empty}} => (chosen.placeholder as String) ?? ""
+      {chosen: Choice{.goal is Language}} => (chosen.tried as String).highlighted(chosen.goal)
       {chosen: Choice} => chosen.tried as String
     }
   }
 
-  focus: Geometry.Shape{focused}[]{length <= 1} => scene{focused}
-  tab (step: next | previous = next) => focus = scene{focusable}.loop{focused}.`step` ?? scene{focusable}.first
-  typing => focus.some(.content is Choice)
+  focus: Geometry.Shape{.focused}[]{.length <= 1} => .scene{.focused}
+  tab (step: next | previous = next) => .focus = .scene{.focusable}.loop{.focused}.`step` ?? .scene{.focusable}.first
+  typing => .focus.some(.content is Choice)
 
-  selection: Geometry.Shape{selected}[] => scene{selected}
-  current => selection.last ?? scene
+  selection: Geometry.Shape{.selected}[] => .scene{.selected}
+  current => .selection.last ?? .scene
   step (from: Geometry.Shape, direction: Geometry.Side) => (if direction {
       Geometry.bottom => from.children.first
       Geometry.top => from.parent
       Geometry.right => from.parent.children{=== from}.next
       Geometry.left => from.parent.children{=== from}.previous
     }) ?? from
-  move (direction: Geometry.Side) => selection = step(current, direction)
-  skip (direction: Geometry.Side) => selection = step(step(current, Geometry.top), direction)
-  expand (direction: Geometry.Side) => selection |= step(current, direction)
+  move (direction: Geometry.Side) => .selection = .step(this.current, direction)
+  skip (direction: Geometry.Side) => .selection = .step(this.step(this.current, Geometry.top), direction)
+  expand (direction: Geometry.Side) => .selection |= .step(this.current, direction)
 
   pulsed (names: String[]) => names.some((@me/device as Keyboard)[.].pulsed)
   held (names: String[], modifier: Keyboard.Modifier) => names.some((@me/device as Keyboard).pressed(., modifier))
 
-  locked => scene{. is Drawer && open}.nonempty
+  locked => .scene{. is UI.Drawer && .open}.nonempty
   back => @me/device/location = @me/device/location.previous
   assert {
     UI.back
@@ -247,7 +247,7 @@ UI := class {
   Location &+= {
     window: same | new = same
     assert (@https://orbitmines.com).window == same  // UI81 a location opens a new window by default
-    assert (@https://orbitmines.com{window == new}).(
+    assert (@https://orbitmines.com{.window == new}).(
       (Program(code: { . }).rendered(UI.HTML.Markup.level)).(
         .body.children.first.attributes{.name == "target"}.first?.value == "_blank"  // UI82 a link to a new window has no target=_blank
         & .body.children.first.attributes{.name == "rel"}.first?.value == "noopener noreferrer"  // UI83 a link to a new window does not drop the opener
@@ -281,11 +281,11 @@ UI := class {
     assert Program(code: { (choose String) ^muted }){O: UI.Scene}().styles.contains("muted")  // UI270 a styled choice is not a styled box holding it
     looping: boolean = false
     narrowing: Program?
-    extension => (path ~= (*, ".", last: Char.Word[]) ⊣).last
+    extension => (.path ~= (*, ".", last: Char.Word[]) ⊣).last
     assert (@https://orbitmines.com/a.png?v=2).extension == "png"  // UI225 a query is read as part of the extension
-    language => extension ? Language.named("." + extension) : None
-    media => language === Language.Image || language === Language.Video || language === Language.Audio
-    pixels => language.read(content)
+    language => .extension ? Language.named("." + this.extension) : None
+    media => .language === Language.Image || .language === Language.Video || .language === Language.Audio
+    pixels => .language.read(this.content)
     static VideoId := (!"&" && !"?" && !"#")[]
     static Rest := (("&" | "?" | "#"), *)?
     static Embedding := {
@@ -302,10 +302,10 @@ UI := class {
       {pair: (name: "v", value: *)} => None
       {pair} => pair
     }
-    embedded => Compiler.reduced(this, Embedding) -- (embed => embed === this ? this
-      : ((embed.origin as String) + embed.path + "?" + .query.fields.map(Compiler.reduced(., Embedded)).compact.map(.name + "=" + .value).join("&")
+    embedded => Compiler.reduced(this, Location.Embedding) -- (embed => embed === this ? this
+      : ((embed.origin as String) + embed.path + "?" + .query.fields.map(Compiler.reduced(., Location.Embedded)).compact.map(.name + "=" + .value).join("&")
         + (.fragment ? "#" + .fragment : "")) as Location)
-    video_site => embedded !== this
+    video_site => .embedded !== this
     {this}{{narrowing}} ^punctuation => Program(code: narrowing**) -- (narrowing => (this ~~ .narrowing = narrowing)
       -- (copy => [narrowing{O: Geometry.Settings}()].flatten.for(write => write.entered(copy, None) if write.writes.every(copy.declaring(.))) -- copy))
   }
@@ -313,23 +313,23 @@ UI := class {
     static (value) as (=== Site) => Site(index: value)
     // (F-A4) what a path shows: the fields located at it (several: a choice), else the field named `{*}` (every path no field
     // claims), else the index itself
-    at (path: String) => index.fields{.value.location ~= path}.map(.value) -- (claimed => claimed.nonempty ? claimed.all
-      : index.fields{.name == "{*}"}.first.value ?? index)
+    at (path: String) => .index.fields{.value.location ~= path}.map(.value) -- (claimed => claimed.nonempty ? claimed.all
+      : this.index.fields{.name == "{*}"}.first.value ?? this.index)
     assert (6/12).md.at == 768px  // UI53 md is not the 768px breakpoint
     assert ((6/12).md -> (12/12).xs).at(768px) == 6/12  // UI54 an interpolated share is not its breakpoint's at the breakpoint
     assert ((9/12).xs -> (6/12).md).at(384px) == 5/8  // UI110 -> does not interpolate between breakpoints
     assert ((12/12).xs -> (10/12).sm -> (8/12).md).at(576px) == 10/12  // UI111 a chain of -> does not pass through its middle breakpoint
     assert UI.Site(index: (first: (name: "a") @ @/x/a, second: (name: "a") @ @/x/a)).at("/x/a")#.count == 2  // UI189 two matches are not a chooser
-    rendering => at((@me/device/location ?? @/).path as String)
+    rendering => .at((@me/device/location ?? @/).path as String)
   }
   assert UI.Site(index: (home: "home", fadi: (name: "fadi") @ @/@fadi, ether: (name: "ether") @ @/@ether)).(
     .at("/@nobody") === .index  // UI187 a path nothing matches is not the index
     & .at("/@fadi").name == "fadi"  // UI188 a path matching one value is not that value
   )
 
-  Popover := Geometry.Box{position is Geometry.Anchored, layer == 20, visible == (position.anchor.hovered | position.anchor.focused | hovered)}
-  Overlay := Geometry.Box{closes: None, position == Geometry.Fixed(), spacing == [Geometry.Spacing(Geometry.Edges(), itself)], layer == 19, fill: Geometry.Color(0, 0, 0, 0.5)} + {
-    activate => closes.open = false
+  Popover := Geometry.Box{.position is Geometry.Anchored, .layer == 20, .visible == (.position.anchor.hovered | .position.anchor.focused | .hovered)}
+  Overlay := Geometry.Box{closes: None, .position == Geometry.Fixed(), .spacing == [Geometry.Spacing(Geometry.Edges(), itself)], .layer == 19, fill: Geometry.Color(0, 0, 0, 0.5)} + {
+    activate => .closes.open = false
     assert {
       drawer := UI.Drawer(open: true)
       with UI.scene = Geometry.Box(children: [drawer]) {
@@ -341,9 +341,9 @@ UI := class {
       assert !(drawer.open)  // UI120 activating a drawer's overlay does not close it
     }
   }
-  Drawer := Geometry.Box{open: false, side: Geometry.left, extent: 75vw, layer == 20, overflow == scroll, visible == open, transition == Geometry.Transition(0.3 s),
-    position == Geometry.Fixed(), spacing == [Geometry.Spacing(Geometry.Edges() ~~ .(side.opposite) = None, itself)],
-    width == (extent if side is Geometry.horizontal), height == (extent if side is Geometry.vertical), children: [Overlay(closes: this){visible == closes.open}, children].flatten}
+  Drawer := Geometry.Box{open: false, side: Geometry.left, extent: 75vw, .layer == 20, .overflow == scroll, .visible == .open, .transition == Geometry.Transition(0.3 s),
+    .position == Geometry.Fixed(), .spacing == [Geometry.Spacing(Geometry.Edges() ~~ .(this.side.opposite) = None, itself)],
+    .width == (.extent if .side is Geometry.horizontal), .height == (.extent if .side is Geometry.vertical), children: [UI.Overlay(closes: this){.visible == .closes.open}, .children].flatten}
 
   Geometry.Shape &+= {
     focused: boolean = false
@@ -360,51 +360,51 @@ UI := class {
       assert timer_fired  // UI178 after fires late
       assert ({ timer_fired = true } after 6 s) is Dynamic  // UI181 x after 6 s is not a trigger
     }
-    palette: *? = parent.palette
-    case: Section? = parent.case
-    truncate: (clip | ellipsis)? = parent.truncate
-    direction: (left-to-right | right-to-left)? = parent.direction
-    hovered => visible && (@me/device as Pointer).contacts.some(contains(.position - at))
-    pressed => visible && (@me/device as Pointer).contacts.some(.pressed && contains(.position - at))
+    palette: *? = .parent.palette
+    case: Section? = .parent.case
+    truncate: (clip | ellipsis)? = .parent.truncate
+    direction: (left-to-right | right-to-left)? = .parent.direction
+    hovered => .visible && (@me/device as Pointer).contacts.some(this.contains(.position - this.at))
+    pressed => .visible && (@me/device as Pointer).contacts.some(.pressed && this.contains(.position - this.at))
     assert (@me/device as Keyboard)["q"].pressed  // UI284 a key pressed on the web is not pressed on the device keyboard
     assert !((@me/device as Keyboard)["q"].pressed)  // UI285 a key released on the web stays pressed
-    activated => focused && (@me/device as Keyboard)/Enter.pulsed || hovered && (@me/device as Pointer).contacts.some(.released)
+    activated => .focused && (@me/device as Keyboard)/Enter.pulsed || .hovered && (@me/device as Pointer).contacts.some(.released)
     focusable => this is (UI.Linked | UI.Chosen | UI.Overlay)
     activate => None
-    submitted => dynamically children{.content is Choice}.every(.content.solution) && (@me/device as Keyboard)/Enter.pulsed
-    text: String => content is String ? content : texts.content.join("")
-    select (from: Number = 0, to: Number = text.length) => (selected = true) -- ((content = content.marked("selected", from, to)) if content is String) -- this
-    scroll (by: Geometry.Length) => (scrolled = Geometry.Vector(scrolled.x, (scrolled.y + by) min (content_height - size.y) max 0px)) unless this === UI.scene && UI.locked
-    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && ((at.y + size.y) - (shape.at.y + shape.size.y) + scrolled.y + offset - (if align {
-        center => (size.y - shape.size.y) / 2
-        end => size.y - shape.size.y
+    submitted => dynamically .children{.content is Choice}.every(.content.solution) && (@me/device as Keyboard)/Enter.pulsed
+    text: String => .content is String ? .content : .texts.content.join("")
+    select (from: Number = 0, to: Number = .text.length) => (.selected = true) -- ((this.content = this.content.marked("selected", from, to)) if this.content is String) -- this
+    scroll (by: Geometry.Length) => (.scrolled = Geometry.Vector(this.scrolled.x, (this.scrolled.y + by) min (this.content_height - this.size.y) max 0px)) unless this === UI.scene && UI.locked
+    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px) => shape && ((.at.y + .size.y) - (shape.at.y + shape.size.y) + .scrolled.y + offset - (if align {
+        center => (this.size.y - shape.size.y) / 2
+        end => this.size.y - shape.size.y
       } else {
         0px
-      })) max 0px -- (to => ((transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !(@me/device as Display).preferences.reduced_motion)
+      })) max 0px -- (to => ((this.transition = Geometry.Transition(300 ms, Geometry.ease_out)) if smooth && !(@me/device as Display).preferences.reduced_motion)
         -- (scrolled = Geometry.Vector(scrolled.x, to)))
-    label => children{.content is String}.content.join(" ")
-    styled (name: String) => (styles &= name) -- (narrowed(UI.Theme.member(name).narrowing) if UI.Theme.member(name)) -- (color = UI.Theme.painted(name, palette ?? UI.Theme.palette) ?? color) -- this
-    styled_by (expression: Program) => styled(expression() as String) -- (styles = Dynamic(expression)) -- this
-    themed => styles -- (own => (styles = []) -- Compiler.reduced(this, Theme.kinds) -- (styles.nonempty ? own.for(styled(.)) : (styles = own)))
-      -- ((content.shared_styles{!styles.contains(.)}.for(styled(.))) if content is String) -- children.for(.themed) -- this
+    label => .children{.content is String}.content.join(" ")
+    styled (name: String) => (.styles &= name) -- (this.narrowed(UI.Theme.member(name).narrowing) if UI.Theme.member(name)) -- (this.color = UI.Theme.painted(name, this.palette ?? UI.Theme.palette) ?? this.color) -- this
+    styled_by (expression: Program) => .styled(expression() as String) -- (this.styles = Dynamic(expression)) -- this
+    themed => .styles -- (own => (this.styles = []) -- Compiler.reduced(this, Theme.kinds) -- (this.styles.nonempty ? own.for(this.styled(.)) : (this.styles = own)))
+      -- ((this.content.shared_styles{!this.styles.contains(.)}.for(this.styled(.))) if this.content is String) -- this.children.for(.themed) -- this
   }
-  Located := Geometry.Shape{content is Location} + {
-    label => content.alt ?? content.name
+  Located := Geometry.Shape{.content is Location} + {
+    label => .content.alt ?? .content.name
   }
-  Linked := Located{!content.media && !content.video_site} + {
-    activate => content.window == new ? (@me/device/opened = content) : (@me/device/location = content)
+  Linked := UI.Located{!.content.media && !.content.video_site} + {
+    activate => .content.window == new ? (@me/device/opened = .content) : (@me/device/location = .content)
   }
-  Chosen := Geometry.Shape{content is Choice} + {
-    activate => content.activate
-    text => content.empty ? "" : content.tried as String
-    select (from: Number = 0, to: Number = text.length) => (selected = true) -- content.attempt(text.marked("selected", from, to)) -- this
-    face => Geometry.Box(content: content.shown, origin: inside.start, size: size - inside.total, font: font, color: color, palette: palette,
-      white_space: content.goal is (String{multiline} | Language) ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap) -- (shown => content.empty ? shown.styled("placeholder") : shown)
+  Chosen := Geometry.Shape{.content is Choice} + {
+    activate => .content.activate
+    text => .content.empty ? "" : .content.tried as String
+    select (from: Number = 0, to: Number = .text.length) => (.selected = true) -- this.content.attempt(this.text.marked("selected", from, to)) -- this
+    face => Geometry.Box(content: this.content.shown, origin: this.inside.start, size: this.size - this.inside.total, font: this.font, color: this.color, palette: this.palette,
+      white_space: this.content.goal is (String{.multiline} | Language) ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap) -- (shown => this.content.empty ? shown.styled("placeholder") : shown)
   }
 
   Theme := class {
     static spacing: Geometry.Length = 0.125rem
-    static scaled (amount: Number | Geometry.Length) => amount is Number ? spacing * amount : amount
+    static scaled (amount: Number | Geometry.Length) => amount is Number ? .spacing * amount : amount
     assert {
       dot := Geometry.Box(width: 2px, height: 2px, fill: Geometry.Color(255, 0, 0))
       with UI.scene.size = Geometry.Vector(4px, 4px) {
@@ -415,7 +415,7 @@ UI := class {
     }
     assert {
       styled_link := Geometry.Box(content: @/x)
-      muting := { {x: Geometry.Shape{content is Location}} => x ^muted }
+      muting := { {x: Geometry.Shape{.content is Location}} => x ^muted }
       with UI.Theme.kinds = muting {
         Geometry.Box(children: [styled_link]).themed
         assert styled_link.styles.contains("muted") && styled_link.color == Geometry.Color(128, 128, 128)  // UI139 a kind's default style is not applied
@@ -423,7 +423,7 @@ UI := class {
     }
     assert {
       search_field := Geometry.Box(content: choose? String ?? "Search")
-      with UI.Theme.placeholder = Geometry.Shape{color == Geometry.Color(1, 2, 3)} {
+      with UI.Theme.placeholder = Geometry.Shape{.color == Geometry.Color(1, 2, 3)} {
         assert search_field.face.content == "Search" && search_field.face.color == Geometry.Color(1, 2, 3)  // UI140 an empty field does not show its placeholder in its colour
       }
     }
@@ -452,7 +452,7 @@ UI := class {
     }
     assert UI.Theme.face(Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)), Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)).content[1]).font.style == italic && UI.Theme.face(Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)), Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px)).content[0]).font.style == normal  // UI235 a string's styles are not read per character
     assert {
-      with UI.Theme.tall = Geometry.Shape{height >= 30px} {
+      with UI.Theme.tall = Geometry.Shape{.height >= 30px} {
         assert Geometry.Box().styled("tall").fields["height"].type.least == 30px  // UI266 a theme style does not carry its bound
       }
     }
@@ -533,9 +533,9 @@ UI := class {
     assert Compiler.reduced(Geometry.Box(content: choose boolean), UI.Lowered).children.first.content == "[ ]"  // UA4 a choice is not lowered to a box showing its face
     static kinds := { }
     static palettes := DARK{dark: true}
-    static palette => palettes{dark == (@me/device as Display).preferences.dark} ?? palettes
-    static styles => fields{.value.narrowing}.name
-    static painted (style: String, palette = Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last.1
+    static palette => .palettes{.dark == (@me/device as Display).preferences.dark} ?? .palettes
+    static styles => .fields{.value.narrowing}.name
+    static painted (style: String, palette = UI.Theme.palette) => palette.map((name, paint) => (name, paint as Geometry.Color)){style == .0 || style.starts_with(.0 + ".")}.last.1
     assert UI.Theme.painted("keyword") == "#6C6783" as Geometry.Color  // UI146 a highlighting style has no colour in the default palette
     static face (shape: Geometry.Shape, character: Char?) => (character.styles ?? []).reduce((acc = Geometry.Box(font: shape.font, color: shape.color, fill: shape.fill, palette: shape.palette)) => acc.styled(.))
   }
@@ -546,16 +546,16 @@ UI := class {
   }
 }
 
-UI.Theme.italic := Geometry.Shape{font.style == italic}
-UI.Theme.bold := Geometry.Shape{font.weight == 700}
-UI.Theme.muted := Geometry.Shape{color == Geometry.Color(128, 128, 128)}
-UI.Theme.placeholder := Geometry.Shape{color == Geometry.Color(128, 128, 128)}
-UI.Theme.disabled := Geometry.Shape{color == Geometry.Color(160, 160, 160)}
-UI.Theme.selected := Geometry.Shape{fill == Geometry.Color(51, 144, 255, 0.4)}
-UI.Theme.h1 := Geometry.Shape{font.size == 2em, font.weight == 700}
-UI.Theme.h2 := Geometry.Shape{font.size == 1.5em, font.weight == 700}
-UI.Theme.h3 := Geometry.Shape{font.size == 1.17em, font.weight == 700}
-UI.Theme.code := Geometry.Shape{white_space == Geometry.WhiteSpace.pre}
+UI.Theme.italic := Geometry.Shape{.font.style == italic}
+UI.Theme.bold := Geometry.Shape{.font.weight == 700}
+UI.Theme.muted := Geometry.Shape{.color == Geometry.Color(128, 128, 128)}
+UI.Theme.placeholder := Geometry.Shape{.color == Geometry.Color(128, 128, 128)}
+UI.Theme.disabled := Geometry.Shape{.color == Geometry.Color(160, 160, 160)}
+UI.Theme.selected := Geometry.Shape{.fill == Geometry.Color(51, 144, 255, 0.4)}
+UI.Theme.h1 := Geometry.Shape{.font.size == 2em, .font.weight == 700}
+UI.Theme.h2 := Geometry.Shape{.font.size == 1.5em, .font.weight == 700}
+UI.Theme.h3 := Geometry.Shape{.font.size == 1.17em, .font.weight == 700}
+UI.Theme.code := Geometry.Shape{.white_space == Geometry.WhiteSpace.pre}
 
 currentColor := .color
 assert currentColor is Section  // UI148 currentColor is not an inherited paint
@@ -564,10 +564,10 @@ Char &+= {
   styles: String[] = []
 }
 String &+= {
-  marked (style: String, from: Number = 0, to: Number = length) => enumerate.map(((from <= .index) && (.index < to)) ? (.value ~~ .styles ,= style) : .value) as String
-  shared_styles => first.styles{style => every(.styles.contains(style))} ?? []
-  pieces => [this{.index == 0 || .styles != .previous.styles}.map(.index), [length]].flatten -- .zip(.rest).map((from, to) => this[from..<to])
-  highlighted (language: Language | String) => (language is String ? Language.named(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = marked("code") => acc.marked(.style, .from, .to))
+  marked (style: String, from: Number = 0, to: Number = .length) => .enumerate.map(((from <= .index) && (.index < to)) ? (.value ~~ .styles ,= style) : .value) as String
+  shared_styles => .first.styles{style => this.every(.styles.contains(style))} ?? []
+  pieces => [this{.index == 0 || .styles != .previous.styles}.map(.index), [this.length]].flatten -- .zip(.rest).map((from, to) => this[from..<to])
+  highlighted (language: Language | String) => (language is String ? Language.named(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = this.marked("code") => acc.marked(.style, .from, .to))
   assert ("x := 1".highlighted(".ray")) == "x := 1" && ("x := 1".highlighted(".ray")).pieces.count > 1  // UI233 a highlighted string is not the same string with marks
   assert (choose String{search}).attempt("ray").shown == "ray"  // UI267 a search field is not a text field in the terminal
   assert (@https://youtu.be/abc?si=xyz&t=1m5s).embedded as String == "https://www.youtube.com/embed/abc?si=xyz&start=65"  // UI268 an embedding drops the query
@@ -623,8 +623,8 @@ Program &+= {
   drawn (before: Geometry.Shape = UI.scene) =>
     UI.page = this()
     Geometry.Box(size: before.size, scrolled: before.scrolled, overflow: scroll, transition: before.transition, children: [this{O: UI.Scene}().themed])
-  rendered (level) => Compiler.reduced(drawn(), level)
-  run (on: UI.Interface) => (UI.program = this) ~~ on.start ~~ ((on.write(Compiler.reduced((UI.scene = drawn()), on.level)) -- on.read) while !done) ~~ on.stop
+  rendered (level) => Compiler.reduced(this.drawn(), level)
+  run (on: UI.Interface) => (UI.program = this) ~~ on.start ~~ ((on.write(Compiler.reduced((UI.scene = this.drawn()), on.level)) -- on.read) while !this.done) ~~ on.stop
 }
 assert Program(code: {
   "Ray" ^h1
@@ -662,8 +662,8 @@ assert Program(code: {
 )
 
 Node &+= {
-  right-to-left changes ^keyword => this !== previous
-  right-to-left becomes {target} ^keyword => this == target && previous != target
+  right-to-left changes ^keyword => this !== .previous
+  right-to-left becomes {target} ^keyword => this == target && .previous != target
 }
 {action} when {condition} ^keyword => dynamically if (condition) { action }
 {action} after {delay: Quantity.Temporal} ^keyword => (Time.now + delay) -- (due => { action } when Time.now >= due)
@@ -696,9 +696,9 @@ Language.Direct := class: Language {
   static outer: Geometry.Transform = Geometry.Transform.identity
 
   Geometry.Shape &+= {
-    placed => Language.Direct.outer * Geometry.Transform.translate(at) * displayed("transform")
-    pixels_inside => Language.Direct.space(size).positions -- (area => rectangular ? area : area{boundary.winding(.) != 0})
-    opacity => effects{. is Geometry.Opacity}.amount.product ?? 1
+    placed => Language.Direct.outer * Geometry.Transform.translate(this.at) * .displayed("transform")
+    pixels_inside => Language.Direct.space(this.size).positions -- (area => this.rectangular ? area : area{this.boundary.winding(.) != 0})
+    opacity => .effects{. is Geometry.Opacity}.amount.product ?? 1
     drawn_writes => Compiler.reduced(this, UI.Lowered) -- (shape => [
       Language.Direct.painted(shape.pixels_inside.map(point => (at: shape.placed.applied(point), sample: point)), shape.painted(shape.fill), shape.opacity) if shape.fill,
       Language.Direct.stroked(shape.boundary, shape.placed, shape.stroke.width, shape.painted(shape.stroke.paint)) if shape.stroke,
@@ -708,60 +708,60 @@ Language.Direct := class: Language {
     ])
   }
   Screen := class (raster: Geometry.Raster) => {
-    seen (at: Geometry.Vector) => Geometry.Space.screen.seen(at, Geometry.Vector(raster.width, raster.height), Geometry.Vector(1, 1))
-    at (point: Geometry.Vector) => seen(point) -- (cell => raster.at(cell.x, cell.y))
-    put (point: Geometry.Vector, color: Geometry.Color) => seen(point) -- (cell => raster.put(cell.x, cell.y, color))
-    blurred (area: Geometry.Vector[], radius: Number) => raster.blurred(area.map(seen(.)), radius)
+    seen (at: Geometry.Vector) => Geometry.Space.screen.seen(at, Geometry.Vector(this.raster.width, this.raster.height), Geometry.Vector(1, 1))
+    at (point: Geometry.Vector) => .seen(point) -- (cell => this.raster.at(cell.x, cell.y))
+    put (point: Geometry.Vector, color: Geometry.Color) => .seen(point) -- (cell => this.raster.put(cell.x, cell.y, color))
+    blurred (area: Geometry.Vector[], radius: Number) => .raster.blurred(area.map(this.seen(.)), radius)
   }
 
   rules := {
-    {root: Geometry.Shape{solved && !parent}} => (Screen(Geometry.Raster.blank(root.size.x as px, root.size.y as px)) ~~ [root, root.lifted].flatten.map(.drawn_writes).flatten).raster
+    {root: Geometry.Shape{.solved && !.parent}} => (Language.Direct.Screen(Geometry.Raster.blank(root.size.x as px, root.size.y as px)) ~~ [root, root.lifted].flatten.map(.drawn_writes).flatten).raster
   }
   shown := {
-    {text: Geometry.Shape{content is String}} => with Geometry.Font.inherited = text.em {
+    {text: Geometry.Shape{.content is String}} => with Geometry.Font.inherited = text.em {
       text.lines(text.size.x).enumerate.map(row => row.value.reduce(placed = (pen: 0px, ops: []) => {
         look = UI.Theme.face(text, .)
         size = look.font.size as px
         height = size * look.font.line_height
         top = text.size.y - row.index * height
-        glyph = Font(look.font).glyph(text.case ? text.case(.) : .)
+        glyph = Language.Direct.Font(look.font).glyph(text.case ? text.case(.) : .)
         (pen: placed.pen + glyph.advance * size / glyph.units, ops: [placed.ops,
-          painted(Geometry.Space.grid(Geometry.Vector(size * 0.6, height)).positions.map(point => (at: text.placed.applied(point + Geometry.Vector(placed.pen, top - height)), sample: point)), look.fill) if look.styles.contains("selected"),
-          outlined(glyph.outlines, text.placed * Geometry.Transform.translate(Geometry.Vector(placed.pen, top - glyph.ascender * size / glyph.units)) * Geometry.Transform.scale(Geometry.Vector(size / glyph.units, size / glyph.units)), text.painted(look.color) ?? Geometry.Color(0, 0, 0))
+          Language.Direct.painted(Geometry.Space.grid(Geometry.Vector(size * 0.6, height)).positions.map(point => (at: text.placed.applied(point + Geometry.Vector(placed.pen, top - height)), sample: point)), look.fill) if look.styles.contains("selected"),
+          Language.Direct.outlined(glyph.outlines, text.placed * Geometry.Transform.translate(Geometry.Vector(placed.pen, top - glyph.ascender * size / glyph.units)) * Geometry.Transform.scale(Geometry.Vector(size / glyph.units, size / glyph.units)), text.painted(look.color) ?? Geometry.Color(0, 0, 0))
         ].flatten)
       }).ops).flatten
     }
-    {canvas: Geometry.Shape{content is Program && !(content is Choice)}} => with Language.Direct.outer = canvas.placed { canvas.content().map(.drawn_writes) }
+    {canvas: Geometry.Shape{.content is Program && !(.content is Choice)}} => with Language.Direct.outer = canvas.placed { canvas.content().map(.drawn_writes) }
     {shape: Geometry.Shape} => []
   }
   painting (points: (at: Geometry.Vector, sample: Geometry.Vector)[], alpha: Probability) => {
     {color: Geometry.Color} => (color ~~ .alpha *= alpha) -- (faded => points.map(point => { .put(point.at, faded) }))
     {gradient: Geometry.Gradient} => points.map(point => { .put(point.at, gradient.at(point.sample.x) ~~ .alpha *= alpha) })
-    {pattern: Geometry.Pattern} => (Screen(Geometry.Raster.blank(pattern.repeat.x as px, pattern.repeat.y as px)) ~~ pattern.shape.drawn_writes).raster -- (tile =>
-      points.map(point => { .put(point.at, Screen(tile).at(Geometry.Vector(point.sample.x % pattern.repeat.x, point.sample.y % pattern.repeat.y)) ~~ .alpha *= alpha) }))
+    {pattern: Geometry.Pattern} => (Language.Direct.Screen(Geometry.Raster.blank(pattern.repeat.x as px, pattern.repeat.y as px)) ~~ pattern.shape.drawn_writes).raster -- (tile =>
+      points.map(point => { .put(point.at, Language.Direct.Screen(tile).at(Geometry.Vector(point.sample.x % pattern.repeat.x, point.sample.y % pattern.repeat.y)) ~~ .alpha *= alpha) }))
     {sampled: Geometry.Pointwise} => points.map(point => { .put(point.at, sampled(point.sample) ~~ .alpha *= alpha) })
     {paint} => []
   }
-  painted (points: (at: Geometry.Vector, sample: Geometry.Vector)[], paint: Geometry.Paint?, alpha: Probability = 1) => Compiler.reduced(paint, painting(points, alpha))
-  outlined (outlines: Geometry.Curve[], transform: Geometry.Transform, paint: Geometry.Paint?) => outlines.map(.edges.map((a, b) => (transform.applied(a), transform.applied(b)))).flatten(1) -- (edges => edges.map(.0.y) -- (ys => painted((ys.min..<ys.max).map(y =>
+  painted (points: (at: Geometry.Vector, sample: Geometry.Vector)[], paint: Geometry.Paint?, alpha: Probability = 1) => Compiler.reduced(paint, Language.Direct.painting(points, alpha))
+  outlined (outlines: Geometry.Curve[], transform: Geometry.Transform, paint: Geometry.Paint?) => outlines.map(.edges.map((a, b) => (transform.applied(a), transform.applied(b)))).flatten(1) -- (edges => edges.map(.0.y) -- (ys => Language.Direct.painted((ys.min..<ys.max).map(y =>
     edges{(.0.y <= y) != (.1.y <= y)}.map(.0.x + (y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)).sort.chunk(2).map((a, b) => (a..<b).map(x => (at: Geometry.Vector(x, y), sample: Geometry.Vector(x, y))))
   ).flatten, paint)))
-  stroked (outline: Geometry.Shape, transform: Geometry.Transform, width: Geometry.Length, paint: Geometry.Paint?) => painted(outline.edges.map((a, b) => (transform.applied(a), transform.applied(b))).map((a, b) =>
+  stroked (outline: Geometry.Shape, transform: Geometry.Transform, width: Geometry.Length, paint: Geometry.Paint?) => Language.Direct.painted(outline.edges.map((a, b) => (transform.applied(a), transform.applied(b))).map((a, b) =>
     (0..<a.distance(b) as px).map(step => a.mix(b, step / a.distance(b)) -- (point => (-(width / 2) .. width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
   ).flatten, paint)
-  level := Geometry.Preparing(1px) + rules
+  level := Geometry.Preparing(1px) + Language.Direct.rules
 
   Font := class (font: Geometry.Font) => {
-    file => font.family.map(Fonts.named).first
-    glyph (character: Char) => OpenType.read(file.held as Byte[])[character]
+    file => .font.family.map(Fonts.named).first
+    glyph (character: Char) => OpenType.read(this.file.held as Byte[])[character]
   }
 
   Display := class: UI.Interface (target: Location, title: String = "") => {
     dynamically event: @me/instance
     start => { (@me/device/opened).held() } when @me/device/opened changes
     stop => None
-    write (raster: Geometry.Raster) => (title = UI.page.title ?? "") -- (target.held = raster)
-    read => UI.Input.dispatched(event)
+    write (raster: Geometry.Raster) => (.title = UI.page.title ?? "") -- (this.target.held = raster)
+    read => UI.Input.dispatched(.event)
   }
 }
 
@@ -782,21 +782,21 @@ UI &+= {
 UI.HTML := class {
   static space := Geometry.Space.screen
   Geometry.Shape &+= {
-    dom => id.segments.join("-")
-    dom_named => [("id", dom), ("class", styles.join(" ")) if styles.nonempty]
+    dom => .id.segments.join("-")
+    dom_named => [("id", .dom), ("class", .styles.join(" ")) if .styles.nonempty]
     // WAI-ARIA aria-label (https://www.w3.org/TR/wai-aria-1.2/#aria-label), the popover attribute (https://html.spec.whatwg.org/multipage/popover.html)
-    dom_described => [("aria-label", label) if label, ("popover", "manual") if position is Geometry.Anchored]
-    dom_entry => content -- (chosen => [("placeholder", chosen.placeholder as String) if chosen.placeholder, ("disabled", "") if chosen.disabled,
+    dom_described => [("aria-label", .label) if .label, ("popover", "manual") if .position is Geometry.Anchored]
+    dom_entry => .content -- (chosen => [("placeholder", chosen.placeholder as String) if chosen.placeholder, ("disabled", "") if chosen.disabled,
       ("min", chosen.goal.least as String) if chosen.goal is Number{least, most}, ("max", chosen.goal.most as String) if chosen.goal is Number{least, most}])
-    dom_spans => content.shared_styles -- (shared => content.pieces.map(piece => piece.first.styles{!shared.contains(.)} -- (own => own.empty ? HTML.Text(piece)
-      : @html <span class={own.join(" ")} style={dom_inline(UI.Theme.face(this, piece.first))}>{piece}</span>)))
+    dom_spans => .content.shared_styles -- (shared => this.content.pieces.map(piece => piece.first.styles{!shared.contains(.)} -- (own => own.empty ? HTML.Text(piece)
+      : @html <span class={own.join(" ")} style={this.dom_inline(UI.Theme.face(this, piece.first))}>{piece}</span>)))
     dom_inline (face: Geometry.Shape) => [
-      ("color:", face.color, ";") if face.color && face.color != color,
-      ("background:", face.fill, ";") if face.fill && face.fill != fill,
-      ("font-weight:", face.font.weight, ";") if face.font.weight != font.weight,
-      ("font-style:", face.font.style as String, ";") if face.font.style != font.style
+      ("color:", face.color, ";") if face.color && face.color != .color,
+      ("background:", face.fill, ";") if face.fill && face.fill != .fill,
+      ("font-weight:", face.font.weight, ";") if face.font.weight != .font.weight,
+      ("font-style:", face.font.style as String, ";") if face.font.style != .font.style
     ]
-    selected_range => text.enumerate{.value.styles.contains("selected")}.index -- (from: .first, to: .last + 1)
+    selected_range => .text.enumerate{.value.styles.contains("selected")}.index -- (from: .first, to: .last + 1)
   }
 
   Markup := class {
@@ -807,8 +807,8 @@ UI.HTML := class {
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>{page.title ?? ""}</title>
       <meta name="description" content={page.description ?? ""} />
-      {tags(page).map(Compiler.reduced(., meta))}
-      {Compiler.reduced((name: "theme-color", content: Compiler.reduced(page.theme, Style.values)), meta) if page.theme}
+      {UI.HTML.Markup.tags(page).map(Compiler.reduced(., UI.HTML.Markup.meta))}
+      {Compiler.reduced((name: "theme-color", content: Compiler.reduced(page.theme, UI.HTML.Style.values)), UI.HTML.Markup.meta) if page.theme}
       {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
       {(page.structured ?? []).map(entry => HTML.Element("script", [("type", "application/ld+json")], [HTML.Raw(JSON.write(UI.Linked(entry, context: "https://schema.org").document))]))}
       <link rel="stylesheet" href="style.css" />
@@ -816,7 +816,7 @@ UI.HTML := class {
     }
     meta := {
       // The Open Graph protocol (https://ogp.me/#metadata)
-      {entry: *{name ~= ("og:" | "article:" | "fb:", *)}} => @html <meta property={entry.name} content={entry.content} />
+      {entry: *{.name ~= ("og:" | "article:" | "fb:", *)}} => @html <meta property={entry.name} content={entry.content} />
       {entry} => @html <meta name={entry.name} content={entry.content} />
     }
     assert {
@@ -839,61 +839,61 @@ UI.HTML := class {
       {segment: Geometry.Quadratic} => " Q", segment.control.x, " ", segment.control.y, " ", segment.to.x, " ", segment.to.y
       {segment: Geometry.Cubic} => " C", segment.first.x, " ", segment.first.y, " ", segment.second.x, " ", segment.second.y, " ", segment.to.x, " ", segment.to.y
       {segment: Geometry.Arc} => " A", segment.radius.x, " ", segment.radius.y, " ", segment.rotation.in(degree), " ", segment.large ? 1 : 0, " ", segment.sweep ? 1 : 0, " ", segment.to.x, " ", segment.to.y
-      {segment: Geometry.Vector{index == 0}} => "M", segment.x, " ", segment.y
+      {segment: Geometry.Vector{.index == 0}} => "M", segment.x, " ", segment.y
       {segment: Geometry.Vector} => " L", segment.x, " ", segment.y
     }
 
     rules := {
-      {page: Geometry.Shape{solved && !parent}} => HTML.Document(head: [head(UI.page)], body: @html <body {page.dom_named}>{page.children}</body>)
-      {image: Geometry.Shape{content is Location && content.language === Language.Image && fill}} => @html <span {image.dom_named} role="img" aria-label={image.label} />
-      {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @html <img {image.dom_named} src={image.content.@ as String} alt={image.label} loading="lazy" />
-      {video: Geometry.Shape{content is Location && content.language === Language.Video}} => @html <video {video.dom_named} src={video.content.@ as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
-      {audio: Geometry.Shape{content is Location && content.language === Language.Audio}} => @html <audio {audio.dom_named} src={audio.content.@ as String} controls />
-      {frame: Geometry.Shape{content is Location && content.video_site}} => @html <iframe {frame.dom_named} src={frame.content.embedded.@ as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
-      {link: Geometry.Shape{content is Location}} => @html <a {link.dom_named} href={link.content.@ as String} target={"_blank" if link.content.window == new} rel={"noopener noreferrer" if link.content.window == new}>{link.children}</a>
-      {text: Geometry.Shape{content is String && font.weight >= 600 && font.size >= 2em}} => @html <h1 {text.dom_named}>{text.dom_spans}</h1>
-      {text: Geometry.Shape{content is String && font.weight >= 600 && font.size >= 1.5em}} => @html <h2 {text.dom_named}>{text.dom_spans}</h2>
-      {text: Geometry.Shape{content is String && font.weight >= 600}} => @html <h3 {text.dom_named}>{text.dom_spans}</h3>
-      {text: Geometry.Shape{content is String && !white_space.wraps}} => @html <span {text.dom_named} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{text.dom_spans}</span>
-      {text: Geometry.Shape{content is String}} => @html <p {text.dom_named} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{text.dom_spans}</p>
+      {page: Geometry.Shape{.solved && !.parent}} => HTML.Document(head: [UI.HTML.Markup.head(UI.page)], body: @html <body {page.dom_named}>{page.children}</body>)
+      {image: Geometry.Shape{.content is Location && .content.language === Language.Image && .fill}} => @html <span {image.dom_named} role="img" aria-label={image.label} />
+      {image: Geometry.Shape{.content is Location && .content.language === Language.Image}} => @html <img {image.dom_named} src={image.content.@ as String} alt={image.label} loading="lazy" />
+      {video: Geometry.Shape{.content is Location && .content.language === Language.Video}} => @html <video {video.dom_named} src={video.content.@ as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
+      {audio: Geometry.Shape{.content is Location && .content.language === Language.Audio}} => @html <audio {audio.dom_named} src={audio.content.@ as String} controls />
+      {frame: Geometry.Shape{.content is Location && .content.video_site}} => @html <iframe {frame.dom_named} src={frame.content.embedded.@ as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
+      {link: Geometry.Shape{.content is Location}} => @html <a {link.dom_named} href={link.content.@ as String} target={"_blank" if link.content.window == new} rel={"noopener noreferrer" if link.content.window == new}>{link.children}</a>
+      {text: Geometry.Shape{.content is String && .font.weight >= 600 && .font.size >= 2em}} => @html <h1 {text.dom_named}>{text.dom_spans}</h1>
+      {text: Geometry.Shape{.content is String && .font.weight >= 600 && .font.size >= 1.5em}} => @html <h2 {text.dom_named}>{text.dom_spans}</h2>
+      {text: Geometry.Shape{.content is String && .font.weight >= 600}} => @html <h3 {text.dom_named}>{text.dom_spans}</h3>
+      {text: Geometry.Shape{.content is String && !.white_space.wraps}} => @html <span {text.dom_named} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{text.dom_spans}</span>
+      {text: Geometry.Shape{.content is String}} => @html <p {text.dom_named} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{text.dom_spans}</p>
 
-      {form: Geometry.Shape{children.some(.content is Choice)}} => @html <form {form.dom_named}>{form.children}</form>
-      {field: Geometry.Shape{content is Choice{goal is Language}}} => @html <div id={field.dom} class={["painted", field.styles].flatten.join(" ")}>
+      {form: Geometry.Shape{.children.some(.content is Choice)}} => @html <form {form.dom_named}>{form.children}</form>
+      {field: Geometry.Shape{.content is Choice{.goal is Language}}} => @html <div id={field.dom} class={["painted", field.styles].flatten.join(" ")}>
         <pre id="{field.dom}-paint" aria-hidden="true">{field.face.dom_spans}</pre>
         <textarea id="{field.dom}-text" placeholder={field.content.placeholder as String} spellcheck="false">{field.content.empty ? "" : field.content.tried as String}</textarea>
       </div>
-      {field: Geometry.Shape{content is Choice{goal is String{multiline}}}} => @html <textarea {field.dom_named} {field.dom_entry}>{field.content.empty ? "" : field.content.tried as String}</textarea>
-      {field: Geometry.Shape{content is Choice{listed}}} => @html <select {field.dom_named}>{field.content.options.map(@html <option value={. as String}>{. as String}</option>)}</select>
-      {field: Geometry.Shape{content is Choice}} => @html <input {field.dom_named} type={Compiler.reduced(field.content, kinds)} {field.dom_entry} />
-      {canvas: Geometry.Shape{content is Program}} => @html <canvas {canvas.dom_named} width={canvas.size.x as px} height={canvas.size.y as px} />
+      {field: Geometry.Shape{.content is Choice{.goal is String{.multiline}}}} => @html <textarea {field.dom_named} {field.dom_entry}>{field.content.empty ? "" : field.content.tried as String}</textarea>
+      {field: Geometry.Shape{.content is Choice{.listed}}} => @html <select {field.dom_named}>{field.content.options.map(@html <option value={. as String}>{. as String}</option>)}</select>
+      {field: Geometry.Shape{.content is Choice}} => @html <input {field.dom_named} type={Compiler.reduced(field.content, UI.HTML.Markup.kinds)} {field.dom_entry} />
+      {canvas: Geometry.Shape{.content is Program}} => @html <canvas {canvas.dom_named} width={canvas.size.x as px} height={canvas.size.y as px} />
 
       {ball: Geometry.Ball} => @html <span {ball.dom_named} {ball.dom_described} role="presentation" />
-      {polygon: Geometry.Polygon{!rectangular}} => @html <svg {polygon.dom_named} viewBox="0 0 {polygon.size.x as px} {polygon.size.y as px}">
+      {polygon: Geometry.Polygon{!.rectangular}} => @html <svg {polygon.dom_named} viewBox="0 0 {polygon.size.x as px} {polygon.size.y as px}">
         <polygon points={polygon.boundary.points.map(UI.HTML.space.seen(., polygon.size)).map(.x as px, ",", .y as px).join(" ")} />
       </svg>
-      {outlined: Geometry.Shape{!rectangular && boundary is Geometry.Curve}} => @html <svg {outlined.dom_named} viewBox="0 0 {outlined.size.x as px} {outlined.size.y as px}">
+      {outlined: Geometry.Shape{!.rectangular && .boundary is Geometry.Curve}} => @html <svg {outlined.dom_named} viewBox="0 0 {outlined.size.x as px} {outlined.size.y as px}">
         <path transform="matrix(1,0,0,-1,0,{outlined.size.y as px})" d="{outlined.boundary.segments.map(Compiler.reduced(., path))}{" Z" if outlined.boundary.segments is Loop}" />
       </svg>
 
-      {box: Geometry.Shape{focusable}} => @html <button {box.dom_named} {box.dom_described}>{box.children}</button>
-      {box: Geometry.Shape{flow == grid}} => @html <table {box.dom_named} {box.dom_described}>{box.children}</table>
+      {box: Geometry.Shape{.focusable}} => @html <button {box.dom_named} {box.dom_described}>{box.children}</button>
+      {box: Geometry.Shape{.flow == grid}} => @html <table {box.dom_named} {box.dom_described}>{box.children}</table>
       {box: Geometry.Shape} => @html <section {box.dom_named} {box.dom_described}>{box.children}</section>
     }
 
     // The input element's type attribute (https://html.spec.whatwg.org/multipage/input.html#attr-input-type)
     kinds := {
-      {chosen: Choice{goal is String{secret}}} => "password"
-      {chosen: Choice{goal is String{search}}} => "search"
-      {chosen: Choice{goal is boolean}} => "checkbox"
-      {chosen: Choice{goal is Number{least, most}}} => "range"
-      {chosen: Choice{goal is Number}} => "number"
-      {chosen: Choice{goal is Time}} => "datetime-local"
-      {chosen: Choice{goal is Geometry.Color}} => "color"
-      {chosen: Choice{goal is Location}} => "file"
+      {chosen: Choice{.goal is String{.secret}}} => "password"
+      {chosen: Choice{.goal is String{search}}} => "search"
+      {chosen: Choice{.goal is boolean}} => "checkbox"
+      {chosen: Choice{.goal is Number{least, most}}} => "range"
+      {chosen: Choice{.goal is Number}} => "number"
+      {chosen: Choice{.goal is Time}} => "datetime-local"
+      {chosen: Choice{.goal is Geometry.Color}} => "color"
+      {chosen: Choice{.goal is Location}} => "file"
       {chosen: Choice} => "text"
     }
 
-    level := Geometry.Preparing(1px) + rules
+    level := Geometry.Preparing(1px) + UI.HTML.Markup.rules
     assert (UI.HTML.Markup.level + UI.HTML.Style.level) is Program  // UI23 two levels do not compose into one
     assert {
       chosen_input := (choice) => Program(code: { choice }).rendered(UI.HTML.Markup.level).body.children.first
@@ -918,9 +918,9 @@ UI.HTML := class {
       // <color> (https://www.w3.org/TR/css-color-4/#color-syntax), <gradient> (https://www.w3.org/TR/css-images-3/#gradients)
       {paint: Section{=== currentColor}} => "currentColor"
       {color: Geometry.Color} => "rgba(", color.red, ",", color.green, ",", color.blue, ",", color.alpha, ")"
-      {gradient: Geometry.Radial} => "radial-gradient(", stops(gradient), ")"
-      {gradient: Geometry.Conic} => "conic-gradient(", stops(gradient), ")"
-      {gradient: Geometry.Gradient} => "linear-gradient(", gradient.angle.in(turn), "turn,", stops(gradient), ")"
+      {gradient: Geometry.Radial} => "radial-gradient(", UI.HTML.Style.stops(gradient), ")"
+      {gradient: Geometry.Conic} => "conic-gradient(", UI.HTML.Style.stops(gradient), ")"
+      {gradient: Geometry.Gradient} => "linear-gradient(", gradient.angle.in(turn), "turn,", UI.HTML.Style.stops(gradient), ")"
       {pattern: Geometry.Pattern} => "url(#", pattern.shape.dom, ")"
       // <length> and calc() (https://www.w3.org/TR/css-values-4/#lengths, https://www.w3.org/TR/css-values-4/#calc-func)
       {length: Geometry.Length{quantities.count > 1}} => "calc(", length.quantities.map(.quantity, .unit.symbol).join(" + "), ")"
@@ -950,21 +950,21 @@ UI.HTML := class {
 
     // Flexible box layout (https://www.w3.org/TR/css-flexbox-1/), grid layout (https://www.w3.org/TR/css-grid-2/)
     layout := {
-      {shape: Geometry.Shape{flow == inline}} => @css { display: flex; flex-wrap: {shape.wrap ? "wrap" : "nowrap"}; }
-      {shape: Geometry.Shape{flow == grid}} => @css { display: grid; grid-template-columns: repeat({shape.columns},1fr); }
-      {shape: Geometry.Shape{flow == layered}} => @css { display: grid; grid-template-areas: "layer"; }
+      {shape: Geometry.Shape{.flow == inline}} => @css { display: flex; flex-wrap: {shape.wrap ? "wrap" : "nowrap"}; }
+      {shape: Geometry.Shape{.flow == grid}} => @css { display: grid; grid-template-columns: repeat({shape.columns},1fr); }
+      {shape: Geometry.Shape{.flow == layered}} => @css { display: grid; grid-template-areas: "layer"; }
       {shape: Geometry.Shape} => @css { display: flex; flex-direction: column; }
     }
     // Box alignment (https://www.w3.org/TR/css-align-3/)
     aligned := {
-      {shape: Geometry.Shape{align == center}} => @css { align-items: center; text-align: center; }
-      {shape: Geometry.Shape{align == end}} => @css { align-items: flex-end; text-align: end; }
-      {shape: Geometry.Shape{align == between}} => @css { justify-content: space-between; }
-      {shape: Geometry.Shape{align == around}} => @css { justify-content: space-around; }
-      {shape: Geometry.Shape{align == stretch}} => @css { align-items: stretch; }
-      {shape: Geometry.Shape{align == justify}} => @css { text-align: justify; }
-      {shape: Geometry.Shape{align == middle && flow == inline}} => @css { align-items: center; }
-      {shape: Geometry.Shape{align == middle}} => @css { justify-content: center; }
+      {shape: Geometry.Shape{.align == center}} => @css { align-items: center; text-align: center; }
+      {shape: Geometry.Shape{.align == end}} => @css { align-items: flex-end; text-align: end; }
+      {shape: Geometry.Shape{.align == between}} => @css { justify-content: space-between; }
+      {shape: Geometry.Shape{.align == around}} => @css { justify-content: space-around; }
+      {shape: Geometry.Shape{.align == stretch}} => @css { align-items: stretch; }
+      {shape: Geometry.Shape{.align == justify}} => @css { text-align: justify; }
+      {shape: Geometry.Shape{.align == middle && .flow == inline}} => @css { align-items: center; }
+      {shape: Geometry.Shape{.align == middle}} => @css { justify-content: center; }
       {shape: Geometry.Shape} => []
     }
     // Positioned layout (https://www.w3.org/TR/css-position-3/)
@@ -977,21 +977,21 @@ UI.HTML := class {
     specific := {
       {shape: Geometry.Ball} => @css { display: inline-block; border-radius: 50%; }
       // CSS Masking (https://www.w3.org/TR/css-masking-1/)
-      {image: Geometry.Shape{content is Location && content.language === Language.Image && fill}} => @css {
-        object-fit: {image.content.fit as String}; display: inline-block; mask: {mask(image)}; -webkit-mask: {mask(image)};
+      {image: Geometry.Shape{.content is Location && .content.language === Language.Image && .fill}} => @css {
+        object-fit: {image.content.fit as String}; display: inline-block; mask: {UI.HTML.Style.mask(image)}; -webkit-mask: {UI.HTML.Style.mask(image)};
       }
-      {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @css { object-fit: {image.content.fit as String}; }
-      {frame: Geometry.Shape{content is Location && content.video_site}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
+      {image: Geometry.Shape{.content is Location && .content.language === Language.Image}} => @css { object-fit: {image.content.fit as String}; }
+      {frame: Geometry.Shape{.content is Location && .content.video_site}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
       {shape: Geometry.Shape} => []
     }
     mask (image: Geometry.Shape) => "url(\"", image.content.@ as String, "\") center/", image.content.fit == fill ? "100% 100%" : image.content.fit as String, " no-repeat"
 
     sized (shape: Geometry.Shape, along: "width" | "height") => (shape.`along`, shape.fields[along].type) -- ((given, bounds) => @css {
-      {along}: {percent(given) if given is Number};
-      {along}: {percent(given.sorted.first.value) if given is Geometry.Stops};
+      {along}: {UI.HTML.Style.percent(given) if given is Number};
+      {along}: {UI.HTML.Style.percent(given.sorted.first.value) if given is Geometry.Stops};
       {along}: {given if given is Geometry.Length};
-      max-{along}: {(bounds.most is Number ? percent(bounds.most) : bounds.most) if bounds.most != None};
-      min-{along}: {(bounds.least is Number ? percent(bounds.least) : bounds.least) if bounds.least != None};
+      max-{along}: {(bounds.most is Number ? UI.HTML.Style.percent(bounds.most) : bounds.most) if bounds.most != None};
+      min-{along}: {(bounds.least is Number ? UI.HTML.Style.percent(bounds.least) : bounds.least) if bounds.least != None};
     })
     spaced (prefix: String, edges: Geometry.Edges) => [("top", edges.top), ("right", edges.right), ("bottom", edges.bottom), ("left", edges.left)]{.1 != None}.map((prefix + .0, .1))
     bordered (stroke: Geometry.Stroke?) => stroke ? (stroke.sides == Geometry.all ? [""] : stroke.sides#.map("-" + (. as String))).map(side =>
@@ -1005,12 +1005,12 @@ UI.HTML := class {
       line-height: {font.line_height if font.line_height != inherited.line_height};
       letter-spacing: {font.tracking if font.tracking != inherited.tracking};
     })
-    styling (name: String) => Compiler.reduced(declared(Geometry.Box()), values).first.declarations -- (plain => Compiler.reduced(declared(Geometry.Box().styled(name)), values).first.declarations{!plain.contains(.)})
+    styling (name: String) => Compiler.reduced(UI.HTML.Style.declared(Geometry.Box()), UI.HTML.Style.values).first.declarations -- (plain => Compiler.reduced(UI.HTML.Style.declared(Geometry.Box().styled(name)), UI.HTML.Style.values).first.declarations{!plain.contains(.)})
     // Container queries (https://www.w3.org/TR/css-contain-3/#container-queries)
-    responsive (shape: Geometry.Shape) => shape.width.sorted -- (sorted => sorted.zip([sorted.rest, None]).map((at, next) => @css @container (min-width:{Compiler.reduced(at.at, values) as String}) {
+    responsive (shape: Geometry.Shape) => shape.width.sorted -- (sorted => sorted.zip([sorted.rest, None]).map((at, next) => @css @container (min-width:{Compiler.reduced(at.at, UI.HTML.Style.values) as String}) {
       #{shape.dom} { width: {!(shape.width is Geometry.Steps) && next
         ? ("calc(", at.value * (at.at as px), "px + (100cqw - ", at.at as px, "px) * ", (next.value * (next.at as px) - at.value * (at.at as px)) / ((next.at - at.at) as px), ")")
-        : percent(at.value)}; }
+        : UI.HTML.Style.percent(at.value)}; }
     }))
     // CSS Anchor Positioning (https://www.w3.org/TR/css-anchor-position-1/)
     anchoring (shape: Geometry.Shape) => (shape.position.anchor ?? shape.parent) -- (anchor => @css {
@@ -1020,21 +1020,21 @@ UI.HTML := class {
 
     declared (shape: Geometry.Shape) => [
       @css #{shape.dom} {
-        {Compiler.reduced(shape, layout)}
+        {Compiler.reduced(shape, UI.HTML.Style.layout)}
         gap: {shape.gap.y} {shape.gap.x};
-        {sized(shape, "width")}
-        {sized(shape, "height")}
+        {UI.HTML.Style.sized(shape, "width")}
+        {UI.HTML.Style.sized(shape, "height")}
         aspect-ratio: {shape.aspect if shape.aspect};
         container-type: {"inline-size" if shape.children.some(.width is Geometry.Stops)};
-        {Compiler.reduced(shape, aligned)}
-        {spaced("padding-", shape.spaced(border))}
-        {spaced("margin-", shape.spaced(itself)) if shape.position is Geometry.Flow}
-        position: {Compiler.reduced(shape.position, placement)};
+        {Compiler.reduced(shape, UI.HTML.Style.aligned)}
+        {UI.HTML.Style.spaced("padding-", shape.spaced(border))}
+        {UI.HTML.Style.spaced("margin-", shape.spaced(itself)) if shape.position is Geometry.Flow}
+        position: {Compiler.reduced(shape.position, UI.HTML.Style.placement)};
         position: {"relative" if shape.position is Geometry.Flow && shape.children.some(.position is Geometry.Absolute)};
-        {spaced("", shape.spaced(itself)) unless shape.position is (Geometry.Flow | Geometry.Anchored)}
+        {UI.HTML.Style.spaced("", shape.spaced(itself)) unless shape.position is (Geometry.Flow | Geometry.Anchored)}
         background: {shape.fill if shape.fill};
-        {bordered(shape.stroke)}
-        border-radius: {shape.radius.map(. is Number ? percent(.) : .).join(" ") if shape.radius != [0px]};
+        {UI.HTML.Style.bordered(shape.stroke)}
+        border-radius: {shape.radius.map(. is Number ? UI.HTML.Style.percent(.) : .).join(" ") if shape.radius != [0px]};
         transform: {(Geometry.Transform.scale(Geometry.Vector(1, -1, 1)) -- (. * shape.transform * .)) if shape.transform != Geometry.Transform.identity};
         overflow: {shape.overflow == scroll ? "auto" : shape.overflow as String};
         z-index: {shape.layer if shape.layer != 0};
@@ -1042,25 +1042,25 @@ UI.HTML := class {
         filter: {shape.effects{. is (Geometry.Blur | Geometry.Filter)} -- (.join(" ") if .nonempty)};
         box-shadow: {shape.effects{. is Geometry.Shadow} -- (.join(",") if .nonempty)};
         color: {shape.color if shape.color && shape.color != shape.parent.color};
-        {typeface(shape)}
+        {UI.HTML.Style.typeface(shape)}
         text-transform: {Cases{.0 == shape.case}.first.1 if shape.case != shape.parent.case};
         text-overflow: {(shape.truncate as String) if shape.truncate};
         white-space: {WhiteSpace{shape.white_space is .0}.first.1 if shape.content is String || shape.white_space != shape.parent.white_space};
         overflow-wrap: {"anywhere" if shape.white_space.wraps == anywhere};
-        {Compiler.reduced(shape, specific)}
+        {Compiler.reduced(shape, UI.HTML.Style.specific)}
         transition: {("all ", shape.transition.duration.in(ms), "ms ", shape.transition.easing) if shape.transition};
         cursor: {(shape.cursor ?? "pointer") as String if shape.cursor || shape.focusable};
         touch-action: {(shape.touch as String).replace("_", "-") if shape.touch};
         scrollbar-width: {"none" unless shape.scrollbar};
       },
       @css #{shape.dom}::placeholder { color: {Geometry.Box().styled("placeholder").color}; } if shape.content is Choice && shape.content.placeholder,
-      UI.Theme.styles.map(name => @css #{shape.dom}.{name} { {styling(name)} }) if shape.styles is Dynamic,
+      UI.Theme.styles.map(name => @css #{shape.dom}.{name} { {UI.HTML.Style.styling(name)} }) if shape.styles is Dynamic,
       @css #{shape.dom}:focus-visible { outline: 2px solid currentColor; } if shape.focusable,
-      responsive(shape) if shape.width is Geometry.Stops
+      UI.HTML.Style.responsive(shape) if shape.width is Geometry.Stops
     ]
 
-    rules := values + {
-      {page: Geometry.Shape{solved && !parent}} => CSS.Sheet(@css {
+    rules := UI.HTML.Style.values + {
+      {page: Geometry.Shape{.solved && !.parent}} => CSS.Sheet(@css {
         * { box-sizing: border-box; margin: 0; }
         body { font-family: sans-serif; line-height: 1.2; }
         .painted { display: grid; }
@@ -1068,12 +1068,12 @@ UI.HTML := class {
         .painted>textarea { color: transparent; caret-color: currentColor; background: transparent; resize: none; outline: none; }
         @media (prefers-reduced-motion:reduce) { * { animation: none; transition: none; } }
         html.locked { overflow: hidden; }
-        {page.reachable.map(declared(.))}
-        {page.reachable{.position is Geometry.Anchored}.map(anchoring(.))}
+        {page.reachable.map(UI.HTML.Style.declared(.))}
+        {page.reachable{.position is Geometry.Anchored}.map(UI.HTML.Style.anchoring(.))}
       })
     }
 
-    level := Geometry.Preparing(1px) + rules
+    level := Geometry.Preparing(1px) + UI.HTML.Style.rules
   }
 
   Script := class {
@@ -1148,103 +1148,103 @@ UI.HTML := class {
 
     Geometry.Shape &+= {
       scripted => [
-        fields{.value is Dynamic}.map(field => field.name == "styles"
-          ? @js effect({field.value.program.reads}, () => document.getElementById({dom}).className = {field.value.program{O: UI.HTML.Script.state}})
-          : @js effect({field.value.program.reads}, () => ray.set({dom + "." + field.name}, {field.value.program{O: UI.HTML.Script.state}}))),
-        @js document.getElementById({dom}).addEventListener("click", (event) => ray.activate({dom})) if focusable,
-        @js document.getElementById("{dom}-text").addEventListener("input", (event) => document.getElementById("{dom}-paint").textContent = event.target.value) if content is Choice && content.goal is Language,
-        @js document.getElementById({dom}).addEventListener("input", (event) => ray.set({dom}, event.target.value)) if content is Choice,
-        @js effect({content.reads}, () => ray.draw({dom}, {content.rendered(Language.Direct.level)})) if content is Program && !(content is Choice),
-        (position.anchor ?? parent).dom -- (anchor => [
-          ["pointerenter", "focusin"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({dom}).showPopover())),
-          ["pointerleave", "focusout"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({dom}).hidePopover()))
+        .fields{.value is Dynamic}.map(field => field.name == "styles"
+          ? @js effect({field.value.program.reads}, () => document.getElementById({this.dom}).className = {field.value.program{O: UI.HTML.Script.state}})
+          : @js effect({field.value.program.reads}, () => ray.set({this.dom + "." + field.name}, {field.value.program{O: UI.HTML.Script.state}}))),
+        @js document.getElementById({this.dom}).addEventListener("click", (event) => ray.activate({this.dom})) if .focusable,
+        @js document.getElementById("{this.dom}-text").addEventListener("input", (event) => document.getElementById("{this.dom}-paint").textContent = event.target.value) if .content is Choice && .content.goal is Language,
+        @js document.getElementById({this.dom}).addEventListener("input", (event) => ray.set({this.dom}, event.target.value)) if .content is Choice,
+        @js effect({this.content.reads}, () => ray.draw({this.dom}, {this.content.rendered(Language.Direct.level)})) if .content is Program && !(.content is Choice),
+        (.position.anchor ?? .parent).dom -- (anchor => [
+          ["pointerenter", "focusin"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({this.dom}).showPopover())),
+          ["pointerleave", "focusout"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({this.dom}).hidePopover()))
         ]) if this is UI.Popover,
-        @js document.getElementById({dom}).showPopover() if position is Geometry.Anchored && visible && !(this is UI.Popover),
-        @js effect([{dom + ".scrolled"}], () => document.getElementById({dom}).scrollTo(\{top: ray.get({dom + ".scrolled.y"}), behavior: ray.get({dom + ".transition"}) ? "smooth" : "auto"})) if overflow == scroll
+        @js document.getElementById({this.dom}).showPopover() if this.position is Geometry.Anchored && this.visible && !(this is UI.Popover),
+        @js effect([{this.dom + ".scrolled"}], () => document.getElementById({this.dom}).scrollTo(\{top: ray.get({this.dom + ".scrolled.y"}), behavior: ray.get({this.dom + ".transition"}) ? "smooth" : "auto"})) if this.overflow == this.scroll
       ]
     }
 
     rules := {
-      {page: Geometry.Shape{solved && !parent}} => [
-        prelude,
-        devices,
-        storage,
+      {page: Geometry.Shape{.solved && !.parent}} => [
+        UI.HTML.Script.prelude,
+        UI.HTML.Script.devices,
+        UI.HTML.Script.storage,
         TimeZone.Intl.script,
-        Dynamic#{!page.reachable.map(.fields.value).flatten.contains(.)}.map(dynamic => @js effect({dynamic.program.reads}, () => { {dynamic.program{O: state}} })),
+        Dynamic#{!page.reachable.map(.fields.value).flatten.contains(.)}.map(dynamic => @js effect({dynamic.program.reads}, () => { {dynamic.program{O: UI.HTML.Script.state}} })),
         page.reachable.map(.scripted)
       ].flatten
     }
 
-    level := Geometry.Preparing(1px) + rules
+    level := Geometry.Preparing(1px) + UI.HTML.Script.rules
   }
 
   Package := class (files: (path: String, content: *)[]) => {
-    write (to: Location) => files.for((to / .path).held = .content)
-    document => files{.path == "index.html"}.first.content
-    sheet => files{.path == "style.css"}.first.content
+    write (to: Location) => .files.for((to / .path).held = .content)
+    document => .files{.path == "index.html"}.first.content
+    sheet => .files{.path == "style.css"}.first.content
   }
   packaged := {
-    {root: Geometry.Shape{solved && !parent}} => Package([
-      (path: "index.html", content: Compiler.reduced(root, Markup.rules)),
-      (path: "style.css", content: Compiler.reduced(root, Style.rules)),
-      (path: "app.js", content: Compiler.reduced(root, Script.rules)),
+    {root: Geometry.Shape{.solved && !.parent}} => UI.HTML.Package([
+      (path: "index.html", content: Compiler.reduced(root, UI.HTML.Markup.rules)),
+      (path: "style.css", content: Compiler.reduced(root, UI.HTML.Style.rules)),
+      (path: "app.js", content: Compiler.reduced(root, UI.HTML.Script.rules)),
       root.reachable{.content is Location && .content.media}.map((path: .content.name, content: .content)),
       [UI.page.icon, UI.page.apple_icon, UI.page.manifest]{!= None}.map((path: .name, content: .))
     ].flatten)
   }
-  level := Geometry.Preparing(1px) + packaged
+  level := Geometry.Preparing(1px) + UI.HTML.packaged
 
   DOM := class: UI.Interface {
     send (message) => @me/instance = message
     dynamically event: @me/instance
-    line (parts: String[]) => parts.join(" "), \n
+    static line (parts: String[]) => parts.join(" "), \n
 
     static made := 0
-    Mount := class (node: HTML.Element | HTML.Text | HTML.Raw | HTML.Comment, parent: String?, id: String = (node is HTML.Element ? node.id : None) ?? ("e" + ((DOM.made += 1) as String))) => { }
-    Listening := class (mount: Mount) => { }
+    Mount := class (node: HTML.Element | HTML.Text | HTML.Raw | HTML.Comment, parent: String?, id: String = (node is HTML.Element ? node.id : None) ?? ("e" + ((UI.HTML.DOM.made += 1) as String))) => { }
+    Listening := class (mount: UI.HTML.DOM.Mount) => { }
     protocol := {
-      {mount: Mount{node is HTML.Element}} => mount.node -- (element => [
-        line(["create", mount.id, element.tag]),
-        element.attributes.map(line(["attribute", mount.id, .name, (.value as String).escaped_line])),
-        Listening(mount),
-        element.children.map(Mount(., mount.id)),
-        line(["append", mount.parent, mount.id]) if mount.parent
+      {mount: UI.HTML.DOM.Mount{.node is HTML.Element}} => mount.node -- (element => [
+        UI.HTML.DOM.line(["create", mount.id, element.tag]),
+        element.attributes.map(UI.HTML.DOM.line(["attribute", mount.id, .name, (.value as String).escaped_line])),
+        UI.HTML.DOM.Listening(mount),
+        element.children.map(UI.HTML.DOM.Mount(., mount.id)),
+        UI.HTML.DOM.line(["append", mount.parent, mount.id]) if mount.parent
       ])
-      {mount: Mount{node is HTML.Comment}} => []
-      {mount: Mount} => line(["text", mount.parent, mount.node.text.escaped_line])
-      {listening: Listening{mount.node.tag is ("a" | "button")}} => [line(["listen", listening.mount.id, "click"])]
-      {listening: Listening{mount.node.tag is ("input" | "select" | "textarea")}} => [line(["listen", listening.mount.id, "input"]), line(["listen", listening.mount.id, "focus"])]
-      {listening: Listening} => []
+      {mount: UI.HTML.DOM.Mount{.node is HTML.Comment}} => []
+      {mount: UI.HTML.DOM.Mount} => UI.HTML.DOM.line(["text", mount.parent, mount.node.text.escaped_line])
+      {listening: UI.HTML.DOM.Listening{.mount.node.tag is ("a" | "button")}} => [UI.HTML.DOM.line(["listen", listening.mount.id, "click"])]
+      {listening: UI.HTML.DOM.Listening{.mount.node.tag is ("input" | "select" | "textarea")}} => [UI.HTML.DOM.line(["listen", listening.mount.id, "input"]), UI.HTML.DOM.line(["listen", listening.mount.id, "focus"])]
+      {listening: UI.HTML.DOM.Listening} => []
     }
-    mounted (element: HTML.Element) => Compiler.reduced(Mount(element), protocol) as String
+    mounted (element: HTML.Element) => Compiler.reduced(UI.HTML.DOM.Mount(element), this.protocol) as String
 
     Event := class (id: String) => {
-      shape => UI.scene.reachable{.dom == id}.first
+      shape => UI.scene.reachable{.dom == this.id}.first
     }
-    Click := class: Event (id: UI.Input.Id, " click")
-    Input := class: Event (id: UI.Input.Id, " input ", value: *)
-    Focus := class: Event (id: UI.Input.Id, " focus")
-    Scroll := class: Event (id: UI.Input.Id, " scroll ", y: Decimal)
-    Size := class: Event (id: UI.Input.Id, " size ", width: Decimal, " ", height: Decimal)
-    Inbound := Click | Input | Focus | Scroll | Size | UI.Input.Inbound
+    Click := class: UI.HTML.DOM.Event (id: UI.Input.Id, " click")
+    Input := class: UI.HTML.DOM.Event (id: UI.Input.Id, " input ", value: *)
+    Focus := class: UI.HTML.DOM.Event (id: UI.Input.Id, " focus")
+    Scroll := class: UI.HTML.DOM.Event (id: UI.Input.Id, " scroll ", y: Decimal)
+    Size := class: UI.HTML.DOM.Event (id: UI.Input.Id, " size ", width: Decimal, " ", height: Decimal)
+    Inbound := UI.HTML.DOM.Click | UI.HTML.DOM.Input | UI.HTML.DOM.Focus | UI.HTML.DOM.Scroll | UI.HTML.DOM.Size | UI.Input.Inbound
     applied := UI.Input.applied + {
-      {click: Click} => click.shape.activate
-      {input: Input} => input.shape.content.attempt(input.value)
-      {focus: Focus} => UI.focus = focus.shape
-      {scroll: Scroll} => UI.scene.scrolled = Geometry.Vector(0, scroll.y * 1px)
-      {size: Size{shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
-      {size: Size} => None
+      {click: UI.HTML.DOM.Click} => click.shape.activate
+      {input: UI.HTML.DOM.Input} => input.shape.content.attempt(input.value)
+      {focus: UI.HTML.DOM.Focus} => UI.focus = focus.shape
+      {scroll: UI.HTML.DOM.Scroll} => UI.scene.scrolled = Geometry.Vector(0, scroll.y * 1px)
+      {size: UI.HTML.DOM.Size{.shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
+      {size: UI.HTML.DOM.Size} => None
     }
-    static dispatched (line: String?) => line.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
+    static dispatched (line: String?) => line.trimmed ~= (event: UI.HTML.DOM.Inbound) -- Compiler.reduced(.event, UI.HTML.DOM.applied) if .
 
-    start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
-      -- ({ send(line(["clipboard", ((@me/device as Clipboard).content as String).escaped_line])) } when (@me/device as Clipboard).content changes)
-      -- ({ send(line(["open", (@me/device/opened as String).escaped_line])) } when @me/device/opened changes)
+    start => .send(UI.HTML.DOM.line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(this.send(UI.HTML.DOM.line(["listen", "window", .])))
+      -- ({ this.send(UI.HTML.DOM.line(["clipboard", ((@me/device as Clipboard).content as String).escaped_line])) } when (@me/device as Clipboard).content changes)
+      -- ({ this.send(UI.HTML.DOM.line(["open", (@me/device/opened as String).escaped_line])) } when @me/device/opened changes)
     stop => None
-    write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as CSS])) if package.sheet)
-      -- send(line(["lock", UI.locked as String]))
-      -- send(line(["scroll", "window", (UI.scene.scrolled.y as px) as String, (UI.scene.transition != None) as String]))
-    read => dispatched(event)
+    write (package: UI.HTML.Package) => .send(UI.HTML.DOM.line(["clear"])) -- this.send(this.mounted(package.document.body)) -- (this.send(UI.HTML.DOM.line(["style", package.sheet as CSS])) if package.sheet)
+      -- this.send(UI.HTML.DOM.line(["lock", UI.locked as String]))
+      -- this.send(UI.HTML.DOM.line(["scroll", "window", (UI.scene.scrolled.y as px) as String, (UI.scene.transition != None) as String]))
+    read => UI.HTML.DOM.dispatched(.event)
   }
 
   Chromium := { }
@@ -1252,7 +1252,7 @@ UI.HTML := class {
   Extension := { }
   Safari := {
     // backdrop-filter, which Safari reads only prefixed (https://www.w3.org/TR/filter-effects-2/#BackdropFilterProperty)
-    {rule: CSS.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => CSS.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
+    {rule: CSS.Rule{.declarations.some(.0 == "backdrop-filter") && !.declarations.some(.0 == "-webkit-backdrop-filter")}} => CSS.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
   }
 }
 
@@ -1278,21 +1278,21 @@ UI.Linked := class (value: *, context: String?) => {
 // The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
 UI.TUI := class {
   Grid := class (width: Number, height: Number, cells: ANSI.Cell[][] = (0 ..< height).map(grid_row => (0 ..< width).map(grid_column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page.title) => {
-    space => Geometry.Space.grid(Geometry.Vector(width, height))
-    inside (at: Geometry.Vector) => space.holds(at)
-    put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
-    cell (at: Geometry.Vector) => inside(at) ? cells[at.y][at.x] : ANSI.Cell()
-    background (at: Geometry.Vector, color: Geometry.Color?) => put(at, cell(at) ~~ .background = color)
-    underlined (at: Geometry.Vector) => put(at, cell(at) ~~ .styles |= ANSI.Attribute.underlined)
-    linked (at: Geometry.Vector, to: Location) => put(at, cell(at) ~~ .link = to)
-    faded (at: Geometry.Vector, amount: Probability) => cell(at) -- (cell => put(at, cell ~~ .foreground = cell.foreground.mix(cell.background, 1 - amount)))
-    shaded (at: Geometry.Vector) => cell(at) -- (cell => put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
-    graphic (at: Geometry.Vector, bytes) => graphics.push (at: at, bytes: bytes)
-    changes (before: Grid?) => (0..<height).map(y => (0..<width){!before || cells[y][.] != before.cells[y][.]}.map(x => [[Geometry.Vector(x, y)], cells[y][x]])).flatten(1)
+    space => Geometry.Space.grid(Geometry.Vector(this.width, this.height))
+    inside (at: Geometry.Vector) => .space.holds(at)
+    put (at: Geometry.Vector, cell: ANSI.Cell) => .cells[at.y][at.x] = cell if .inside(at)
+    cell (at: Geometry.Vector) => .inside(at) ? .cells[at.y][at.x] : ANSI.Cell()
+    background (at: Geometry.Vector, color: Geometry.Color?) => .put(at, this.cell(at) ~~ .background = color)
+    underlined (at: Geometry.Vector) => .put(at, this.cell(at) ~~ .styles |= ANSI.Attribute.underlined)
+    linked (at: Geometry.Vector, to: Location) => .put(at, this.cell(at) ~~ .link = to)
+    faded (at: Geometry.Vector, amount: Probability) => .cell(at) -- (cell => this.put(at, cell ~~ .foreground = cell.foreground.mix(cell.background, 1 - amount)))
+    shaded (at: Geometry.Vector) => .cell(at) -- (cell => this.put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
+    graphic (at: Geometry.Vector, bytes) => .graphics.push (at: at, bytes: bytes)
+    changes (before: UI.TUI.Grid?) => (0..<.height).map(y => (0..<this.width){!before || this.cells[y][.] != before.cells[y][.]}.map(x => [[Geometry.Vector(x, y)], this.cells[y][x]])).flatten(1)
     assert {
       watched_value := 1
       fired_count := 0
-      { fired_count = fired_count + 1 } when watched_value changes
+      { fired_count = fired_count + 1 } when watched_value .changes
       assert fired_count == 0  // UI174 when … changes fires before anything changed
       watched_value = 2
       assert fired_count == 1  // UI175 when … changes does not fire on a change
@@ -1304,10 +1304,10 @@ UI.TUI := class {
       watched_value = 3
       assert became_count == 1  // UI177 when … becomes fires on another value
     }
-    framed (previous: Grid? = None) => [
-      ANSI.Title(title) if title && title != previous.title,
-      changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: (cell.link === None ? "" : (cell.link as String))), cell.glyph]),
-      graphics{!(previous.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
+    framed (previous: UI.TUI.Grid? = None) => [
+      ANSI.Title(.title) if .title && .title != previous.title,
+      this.changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: (cell.link === None ? "" : (cell.link as String))), cell.glyph]),
+      this.graphics{!(previous.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
       ANSI.Style()
     ]
     assert {
@@ -1322,9 +1322,9 @@ UI.TUI := class {
   static covered (length: Geometry.Vector) => Geometry.Vector((length.x as Unit.column).amount.ceil, (length.y as Unit.row).amount.ceil)
 
   Geometry.Shape &+= {
-    cell_at => UI.TUI.gridded(Geometry.Space.screen.seen(at, root.size, size))
-    cell_size => UI.TUI.covered(size)
-    cell_area => Geometry.Space.grid(cell_size).positions.map(offset => offset + cell_at){cell => contains(Geometry.Space.screen.seen((cell - cell_at) * UI.TUI.px_per_cell, size, UI.TUI.px_per_cell))}
+    cell_at => UI.TUI.gridded(Geometry.Space.screen.seen(this.at, this.root.size, this.size))
+    cell_size => UI.TUI.covered(this.size)
+    cell_area => Geometry.Space.grid(this.cell_size).positions.map(offset => offset + this.cell_at){cell => this.contains(Geometry.Space.screen.seen((cell - this.cell_at) * UI.TUI.px_per_cell, this.size, UI.TUI.px_per_cell))}
     cell_writes => Compiler.reduced(this, UI.Lowered) -- (shape => [
       Compiler.reduced(shape.painted(shape.fill), UI.TUI.filled(shape)) if shape.fill,
       shape.cell_border if shape.stroke,
@@ -1336,11 +1336,11 @@ UI.TUI := class {
       shape.cell_area.map(at => (written_grid => written_grid.linked(at, shape.content))) if (shape.content is Location)
     ])
     cell_border => {
-      corners = radius != [0] ? "╭╮╰╯" : "┌┐└┘"
-      from = cell_at
-      to = from + cell_size - Geometry.Vector(1, 1)
-      ink = painted(stroke.paint) as Geometry.Color
-      sides = stroke.sides#
+      corners = .radius != [0] ? "╭╮╰╯" : "┌┐└┘"
+      from = .cell_at
+      to = from + .cell_size - Geometry.Vector(1, 1)
+      ink = .painted(this.stroke.paint) as Geometry.Color
+      sides = .stroke.sides#
       [
         (from.x..to.x).map(x => (written_grid => written_grid.underlined(Geometry.Vector(x, to.y)))) if sides == [Geometry.bottom],
         (from.x + 1..<to.x).map(x => (written_grid => written_grid.put(Geometry.Vector(x, from.y), ANSI.Cell("─", foreground: ink)))) if sides.contains(Geometry.top),
@@ -1352,57 +1352,57 @@ UI.TUI := class {
     }
     // (the thumb: the row as far down the cells as what is scrolled is down the content)
     cell_scrollbar =>
-      scrolled_down := (scrolled.y is Number) ? scrolled.y : (scrolled.y as pixel).amount
-      thumb := (scrolled_down / (content_height as pixel).amount * cell_size.y).floor
-      (0 ..< cell_size.y).map(y => (written_grid => written_grid.put(cell_at + Geometry.Vector(cell_size.x - 1, y), ANSI.Cell((y == thumb) ? "┃" : "│"))))
+      scrolled_down := (.scrolled.y is Number) ? .scrolled.y : (.scrolled.y as pixel).amount
+      thumb := (scrolled_down / (.content_height as pixel).amount * .cell_size.y).floor
+      (0 ..< .cell_size.y).map(y => (written_grid => written_grid.put(this.cell_at + Geometry.Vector(this.cell_size.x - 1, y), ANSI.Cell((y == thumb) ? "┃" : "│"))))
   }
 
   drawn := {
     // (the root, then what is lifted above it: built by appending, a Shape being a Ray `[root, …]` would read its elements)
-    {root: Geometry.Shape{solved && !parent}} =>
+    {root: Geometry.Shape{.solved && !.parent}} =>
       drawn_shapes := [root]
       root.lifted.for(lifted_shape => drawn_shapes.append(lifted_shape))
-      Grid((root.size.x as Unit.column).amount, (root.size.y as Unit.row).amount) ~~ (grid => drawn_shapes.map(drawn_shape => drawn_shape.cell_writes).flatten.for(write => grid ~~ write))
+      UI.TUI.Grid((root.size.x as Unit.column).amount, (root.size.y as Unit.row).amount) ~~ (grid => drawn_shapes.map(drawn_shape => drawn_shape.cell_writes).flatten.for(write => grid ~~ write))
   }
   filled (shape: Geometry.Shape) => {
     {color: Geometry.Color} => shape.cell_area.map(at => (written_grid => written_grid.background(at, color)))
     {gradient: Geometry.Gradient} => shape.cell_area.map(at => (written_grid => written_grid.background(at, gradient.at((at.x - shape.cell_at.x) / shape.cell_size.x))))
-    {sampled: Geometry.Pointwise} => shape.cell_area.map(at => sampled(Geometry.Space.screen.seen((at - shape.cell_at) * px_per_cell, shape.size, px_per_cell)) -- (color =>
-      (written_grid => written_grid.put(at, ANSI.Cell(ramp[color.alpha * color.luminance * (ramp.length - 1) / 255], foreground: color)))))
+    {sampled: Geometry.Pointwise} => shape.cell_area.map(at => sampled(Geometry.Space.screen.seen((at - shape.cell_at) * UI.TUI.px_per_cell, shape.size, UI.TUI.px_per_cell)) -- (color =>
+      (written_grid => written_grid.put(at, ANSI.Cell(UI.TUI.ramp[color.alpha * color.luminance * (UI.TUI.ramp.length - 1) / 255], foreground: color)))))
     {paint} => []
   }
   shaded (shape: Geometry.Shape) => {
     {filter: Geometry.Opacity} => shape.cell_area.map(at => (written_grid => written_grid.faded(at, filter.amount)))
-    {shadow: Geometry.Shadow} => shape.cell_area.map(at => (written_grid => written_grid.shaded(at + gridded(Geometry.Space.screen.seen(shadow.offset)))))
+    {shadow: Geometry.Shadow} => shape.cell_area.map(at => (written_grid => written_grid.shaded(at + UI.TUI.gridded(Geometry.Space.screen.seen(shadow.offset)))))
     {effect} => []
   }
   shown := {
-    {text: Geometry.Shape{content is String}} => text.lines(text.size.x).enumerate.map(row => row.value.enumerate.map(glyph =>
+    {text: Geometry.Shape{.content is String}} => text.lines(text.size.x).enumerate.map(row => row.value.enumerate.map(glyph =>
       (UI.Theme.face(text, glyph.value), text.cell_at + Geometry.Vector(row.value.sliced(0, glyph.index - 1).map(.columns).sum, row.index)) -- ((look, at) => ANSI.Cell(text.case ? text.case(glyph.value) : glyph.value,
         foreground: text.painted(look.color) as Geometry.Color, background: text.painted(look.fill) as Geometry.Color,
         styles: (ANSI.Attribute.bold if (look.font.weight is Number) && look.font.weight >= 600) | (ANSI.Attribute.italic if look.font.style === italic) | (ANSI.Attribute.negative if look.styles.contains("selected"))) -- (written => (written_grid => written_grid.put(at, written))))
     )).flatten
-    {canvas: Geometry.Shape{content is Program && !(content is Choice)}} => canvas.content.rendered(Language.Direct.level) -- (rows => canvas.cell_area.map(at => (at - canvas.cell_at) -- (dot =>
-      ANSI.Cell(braille(rows[dot.y * 4 ..< dot.y * 4 + 4].map(.[dot.x * 2 ..< dot.x * 2 + 2].map(.alpha > 0)))) -- (written => (written_grid => written_grid.put(at, written)))
+    {canvas: Geometry.Shape{.content is Program && !(.content is Choice)}} => canvas.content.rendered(Language.Direct.level) -- (rows => canvas.cell_area.map(at => (at - canvas.cell_at) -- (dot =>
+      ANSI.Cell(UI.TUI.braille(rows[dot.y * 4 ..< dot.y * 4 + 4].map(.[dot.x * 2 ..< dot.x * 2 + 2].map(.alpha > 0)))) -- (written => (written_grid => written_grid.put(at, written)))
     )))
     {shape: Geometry.Shape} => []
   }
-  Cells := Geometry.Preparing(px_per_cell.x min px_per_cell.y) + drawn
-  level := Cells
+  Cells := Geometry.Preparing(UI.TUI.px_per_cell.x min UI.TUI.px_per_cell.y) + UI.TUI.drawn
+  level := UI.TUI.Cells
 
   static braille (dots: boolean[][]) => (0x2800 + [[0, 3], [1, 4], [2, 5], [6, 7]].zip(dots).map((bits, row) => row.zip(bits).map((on, bit) => on ? 2 ^ bit : 0).sum).sum) as Char
   static ramp := " .:-=+*#%@"
 
   // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
   Start := class (modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]) => { }
-  Stop := class (start: Start = Start()) => { }
+  Stop := class (start: UI.TUI.Start = UI.TUI.Start()) => { }
   written := {
     {text: String} => text
     {glyph: Char} => glyph as String
-    {started: Start} => Compiler.reduced(started.modes, written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], written)
-    {stop: Stop} => Compiler.reduced(stop.start.modes.map(.flipped).reverse, written)
+    {started: UI.TUI.Start} => Compiler.reduced(started.modes, UI.TUI.written) + Compiler.reduced([ANSI.Erase(2), ANSI.Move()], UI.TUI.written)
+    {stop: UI.TUI.Stop} => Compiler.reduced(stop.start.modes.map(.flipped).reverse, UI.TUI.written)
     // (SGR: each parameter after a `;`, as the header `("\e[0", parameters: (";", parameter: …)[], "m")` writes it)
-    {style: ANSI.Style} => "\e[0" + (style.parameters ?? []).map(written_parameter => ";" + Compiler.reduced(written_parameter.parameter, written)).join("") + "m"
+    {style: ANSI.Style} => "\e[0" + (style.parameters ?? []).map(written_parameter => ";" + Compiler.reduced(written_parameter.parameter, UI.TUI.written)).join("") + "m"
     {attribute: ANSI.Attribute} => attribute.code
     // (its header's choice of groups is not read into the header yet (A3): written here as the header says)
     {colored: ANSI.Colored} => colored.layer + ((colored.index === None) ? (";2;" + colored.red + ";" + colored.green + ";" + colored.blue) : (";5;" + colored.index))
@@ -1417,69 +1417,69 @@ UI.TUI := class {
   }
   // Windows Terminal's win32-input-mode, DECSET 9001 (https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
   WindowsTerminal := {
-    {start: Start{!modes.contains(ANSI.Mode(9001, "h"))}} => Start([start.modes, [ANSI.Mode(9001, "h")]].flatten)
+    {start: UI.TUI.Start{!.modes.contains(ANSI.Mode(9001, "h"))}} => UI.TUI.Start([start.modes, [ANSI.Mode(9001, "h")]].flatten)
   }
 
-  Terminal := class: UI.Interface (written: Compiler = UI.TUI.written, grid: Grid? = None) => {
+  Terminal := class: UI.Interface (written: Compiler = UI.TUI.written, grid: UI.TUI.Grid? = None) => {
     emit (bytes) => @me/instance = bytes
     dynamically typed = @me/instance
     size =>
-      columns := (OS.host.env.COLUMNS) as Number
-      lines := (OS.host.env.LINES) as Number
+      columns := ((@me/device as OS).env.COLUMNS) as Number
+      lines := ((@me/device as OS).env.LINES) as Number
       Geometry.Vector(columns, lines)
-    emitted (value) => emit(Compiler.reduced(value, written))
+    emitted (value) => .emit(Compiler.reduced(value, this.written))
     // (the scene is as large as the terminal: its columns and rows)
     start =>
-      UI.scene.size = Geometry.Vector(Quantity(quantities: [(quantity: size.x, unit: Unit.column)]), Quantity(quantities: [(quantity: size.y, unit: Unit.row)]))
-      emitted(Start())
-        -- ({ emitted((@me/device as Clipboard).content as ANSI.Copy) } when (@me/device as Clipboard).content changes)
+      UI.scene.size = Geometry.Vector(Quantity(quantities: [(quantity: this.size.x, unit: Unit.column)]), Quantity(quantities: [(quantity: this.size.y, unit: Unit.row)]))
+      this.emitted(UI.TUI.Start())
+        -- ({ this.emitted((@me/device as Clipboard).content as ANSI.Copy) } when (@me/device as Clipboard).content changes)
         -- ({ (@me/device/opened).held() } when @me/device/opened changes)
-    stop => emitted(Stop())
-    write (frame: Grid) =>
-      emitted(frame.framed(grid))
-      grid = frame
+    stop => .emitted(UI.TUI.Stop())
+    write (frame: UI.TUI.Grid) =>
+      this.emitted(frame.framed(this.grid))
+      this.grid = frame
     // (input that has ended reads as nothing: the program is done, so a run with nothing to read writes one frame and returns)
-    read => typed ? ((typed ~= (events: Event[])) -- .events.for(Compiler.reduced(., applied))) : (UI.program ? UI.program.stop : None)
+    read => .typed ? ((this.typed ~= (events: UI.TUI.Event[])) -- .events.for(Compiler.reduced(., UI.TUI.applied))) : (UI.program ? UI.program.stop : None)
   }
 
   Browser := {
-    {grid: Grid} => UI.HTML.Package([(path: "index.html", content: HTML.Document(head: [], body: HTML.Element("body", [], [HTML.Element("pre", [], [HTML.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
+    {grid: UI.TUI.Grid} => UI.HTML.Package([(path: "index.html", content: HTML.Document(head: [], body: HTML.Element("body", [], [HTML.Element("pre", [], [HTML.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
   }
 
-  Event := ANSI.Input | Resize
+  Event := ANSI.Input | UI.TUI.Resize
   ANSI.Key &+= {
     name => Compiler.reduced(this, UI.TUI.named)
   }
   ANSI.Mouse &+= {
-    position => Geometry.Space.screen.seen(Geometry.Vector(cell.x * px_per_cell.x, cell.y * px_per_cell.y), UI.scene.size, px_per_cell)
+    position => Geometry.Space.screen.seen(Geometry.Vector(.cell.x * UI.TUI.px_per_cell.x, .cell.y * UI.TUI.px_per_cell.y), UI.scene.size, UI.TUI.px_per_cell)
   }
   Resize := class
 
   named := {
-    {key: ANSI.Key{page == "5"}} => (@me/device as Keyboard)/PageUp
-    {key: ANSI.Key{page == "6"}} => (@me/device as Keyboard)/PageDown
-    {key: ANSI.Key{alt}} => (@me/device as Keyboard)[key.alt as String]
-    {key: ANSI.Key{lettered}} => (@me/device as Keyboard)[((key.code as Number) + 96) as Char as String]
-    {key: ANSI.Key{code == "A"}} => (@me/device as Keyboard)/ArrowUp
-    {key: ANSI.Key{code == "B"}} => (@me/device as Keyboard)/ArrowDown
-    {key: ANSI.Key{code == "C"}} => (@me/device as Keyboard)/ArrowRight
-    {key: ANSI.Key{code == "D"}} => (@me/device as Keyboard)/ArrowLeft
-    {key: ANSI.Key{code == "Q"}} => (@me/device as Keyboard)/F2
-    {key: ANSI.Key{code == "\r"}} => (@me/device as Keyboard)/Enter
-    {key: ANSI.Key{code is ("\t" | "Z")}} => (@me/device as Keyboard)/Tab
+    {key: ANSI.Key{.page == "5"}} => (@me/device as Keyboard)/PageUp
+    {key: ANSI.Key{.page == "6"}} => (@me/device as Keyboard)/PageDown
+    {key: ANSI.Key{.alt}} => (@me/device as Keyboard)[key.alt as String]
+    {key: ANSI.Key{.lettered}} => (@me/device as Keyboard)[((key.code as Number) + 96) as Char as String]
+    {key: ANSI.Key{.code == "A"}} => (@me/device as Keyboard)/ArrowUp
+    {key: ANSI.Key{.code == "B"}} => (@me/device as Keyboard)/ArrowDown
+    {key: ANSI.Key{.code == "C"}} => (@me/device as Keyboard)/ArrowRight
+    {key: ANSI.Key{.code == "D"}} => (@me/device as Keyboard)/ArrowLeft
+    {key: ANSI.Key{.code == "Q"}} => (@me/device as Keyboard)/F2
+    {key: ANSI.Key{.code == "\r"}} => (@me/device as Keyboard)/Enter
+    {key: ANSI.Key{.code is ("\t" | "Z")}} => (@me/device as Keyboard)/Tab
     {key: ANSI.Key} => (@me/device as Keyboard).coded(key.code as Number)
   }
 
   // A terminal reports no key release: a key read is pressed and released
   applied := {
     {key: ANSI.Key} => key.name.press((Keyboard.Modifier.shift if key.shift || key.code == "Z") | (Keyboard.Modifier.control if key.control) | (Keyboard.Modifier.alt if key.alt != None)).release
-    {mouse: ANSI.Mouse{button >= 64}} => (@me/device as Pointer)["mouse"].wheel = Geometry.Vector(y: mouse.button == 64 ? 1 : -1)
-    {mouse: ANSI.Mouse{state == "m"}} => (@me/device as Pointer)["mouse"].to(mouse.position, pressing: [])
-    {mouse: ANSI.Mouse{button >= 32}} => (@me/device as Pointer)["mouse"].to(mouse.position)
+    {mouse: ANSI.Mouse{.button >= 64}} => (@me/device as Pointer)["mouse"].wheel = Geometry.Vector(y: mouse.button == 64 ? 1 : -1)
+    {mouse: ANSI.Mouse{.state == "m"}} => (@me/device as Pointer)["mouse"].to(mouse.position, pressing: [])
+    {mouse: ANSI.Mouse{.button >= 32}} => (@me/device as Pointer)["mouse"].to(mouse.position)
     {mouse: ANSI.Mouse} => (@me/device as Pointer)["mouse"].to(mouse.position, pressing: [mouse.button])
     {paste: ANSI.Paste} => ((@me/device as Clipboard).content = paste.text) -- UI.focus.content.typed(paste.text)
     {focus: ANSI.FocusChange} => (@me/device as Display).preferences.focused = focus.state == "I"
-    {resize: Resize} => UI.scene.size = Geometry.Vector(@me/instance.size.x * px_per_cell.x, @me/instance.size.y * px_per_cell.y)
+    {resize: UI.TUI.Resize} => UI.scene.size = Geometry.Vector(@me/instance.size.x * UI.TUI.px_per_cell.x, @me/instance.size.y * UI.TUI.px_per_cell.y)
   }
 }
 

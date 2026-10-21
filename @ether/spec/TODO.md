@@ -56,3 +56,9 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 
 - **Control.ray's tests of the language's own forms** (operator sections OP1–OP5, `if` with cases IC3, `?`/`?=` QM1–QM2,
   `is` with `#` IS4–IS6): they test what the bootstrap defines, and belong there.
+
+## Reading programs by structure
+
+- **Program.ray reads statements by their text** (`is_jump => .code ~= ⊢"goto "`, `is_label`, `jump`, `head`, `assigns`,
+  `writes`, `declares`, `precedence`): a parser written beside the language. What a statement is should be what the reader
+  read it as (Expression.ray's statements: a jump, a label, a declaration and its head), asked of the statement.

@@ -1015,7 +1015,9 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   seq_type := field_type_of(seq_at)
   seq_name := seq_at.written_name
   // (a position `{x: f}: T`: named x, what f makes of what T read, `.` that (the kernel keeps f on x's place))
-  seq_place := ((external unset (seq_at.value)) === true) ? seq_at.value : None
+  // (a position `{x: f}: T`: named x, what f makes of what T read, `.` that (the kernel keeps f on x's place, and on its link,
+  // which holds it where the place is given already))
+  seq_place := ((external unset (seq_at.value)) === true) ? seq_at.value : (((external member (seq_at) (`mapped_by`)) !== None) ? seq_at : None)
   if (seq_name !== None) && (reading_chain !== None) {
     seq_named := external member (reading_chain.chain_held) (seq_name)
     if (seq_named !== None) && !((external unset seq_named) === true) {
@@ -1441,6 +1443,7 @@ class: {parent} ^keyword => class: {parent} { }
 // others, which read the rest of what it reads: `class: P { … }`)
 class: {parent} {`{`}{block}{`}`} ^keyword => (class: {parent} (nothing_given = None) => { {block} })
 class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (class: Node ({fields}) => { {block} })
+class ({fields}) {`=>`} {`{}`} ^keyword => (class: Node ({fields}) => { })
 class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (what ends a class's fields read as a list (`written_as`; after `class { }` is read: one class, not one each time it is read))
 fields_end := class { }
@@ -1449,6 +1452,8 @@ fields_end := class { }
 class: <{generics}>({parameters}): {result} {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (written with its fields and `=>`, a definition: read as one)
 {name} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class ({fields}) => { {block} })
+// (its block empty, written `{}`: no block for a hole to take)
+{name} := class ({fields}) {`=>`} {`{}`} ^class => {name} := (class ({fields}) => { })
 {name} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class: {parent} ({fields}) => { {block} })
 // (a member of an instance, then an operator: the operator read on the member's value, not on the instance)
 assert {
@@ -1717,6 +1722,14 @@ Holding := class (key) => {
   if keeping_entry === None {
     keeping_entry = Holding(keeping_key)
     keeping_on.keyed.append(keeping_entry)
+    // (a key that is a list, a pattern (`rules[[rule: GRAMMAR_RULE]] := (caller) => …`): called, what it is kept under is
+    // called (a statement read by it, `.statement(caller)`))
+    if (keeping_key).listing === true {
+      external member (keeping_key) (`entry_called`) (keeping_entry)
+      (keeping_key) &+= {
+        {this}({entry_argument}) => (this.entry_called).kept(entry_argument)
+      }
+    }
   }
   keeping_entry.kept = keeping_value
   keeping_value
@@ -1877,6 +1890,9 @@ dynamics := None
 {on}[{key}] := {value} ^punctuation => ((key is String) && !((key).listing === true)) ? member_given(on, key, value) : ((on) keeping (key) as (value))
 // (and in what it is read in, `[k] := v` (a block's: `rules := { [rule: GRAMMAR_RULE] := … }`), under the list itself)
 [{bracketed_key}] := {bracketed_value} ^punctuation => (.) keeping ([{bracketed_key}]) as (bracketed_value)
+// (and one under a key, `rules[k] := (caller) => …`, `[k] := (caller) => …` in a block: a closure kept there, not a rule defined)
+{on}[{key}] := ({parameters}) {`=>`} {body} ^function => {on}[{key}] := (({parameters}) => {body})
+[{bracketed_key}] := ({parameters}) {`=>`} {body} ^function => [{bracketed_key}] := (({parameters}) => {body})
 // (one given lazily, `x := lazily v`: v read when x is first asked for, then kept; after `:=`, which would read it first)
 {name} := lazily {default} ^keyword => {
   {name} => {

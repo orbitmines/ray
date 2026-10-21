@@ -680,6 +680,17 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return b(reach + n) ? 1 : (unknown ? -1 : 0);
   }
   // (the name a hole of the frame's rule (the text from s to e) is written as: `a`, `a: T`, `a = v`; else 0)
+  // (`{x: f}`, braced: f, a text read where it was written (its node's parent that frame); else 0)
+  function hole_mapping(fr: number, s: number, e: number): number {
+    if (!fr || w(fr + N_IS) !== IS_FRAME || !w(fr + F_RULE) || e <= s) return 0;
+    const h = named(w(fr + F_RULE), s, e); if (h < 0) return 0;
+    const o = follow(fr + F_TAKES + TAKE * h, 1); let cs = skip(w(o), w(o + 4)), ce = w(o + 4); while (ce > cs && b(ce - 1) <= 32) ce--;
+    if (ce - cs <= 2 || b(cs) !== 123) return 0;
+    const be = past(cs, ce), p0 = skip(cs + 1, be - 1); let wb = p0; while (wb < be - 1 && b(w(CLASSES) + b(wb)) === 1) wb++; let c = wb; while (c < be - 1 && b(c) <= 32) c++;
+    if (wb === p0 || b(c) !== 58 || b(c + 1) === 58 || b(c + 1) === 61) return 0;
+    const fs = skip(c + 1, be - 1); let fe = be - 1; while (fe > fs && b(fe - 1) <= 32) fe--;
+    return fe > fs ? node(IS_TEXT, fs, fe, w(o + T_ORIGIN) || fr, 0) : 0;
+  }
   function hole_name(fr: number, s: number, e: number): number {
     if (!fr || w(fr + N_IS) !== IS_FRAME || !w(fr + F_RULE) || e <= s) return 0;
     const h = named(w(fr + F_RULE), s, e); if (h < 0) return 0;
@@ -2676,8 +2687,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (word(a, m, W_MAPPED) && rest < z) {
         let mq = rest; while (mq < z && b(mq) > 32) mq++;
         const mp = block(t, rest, mq, names, f, self, 0, 1, 0, self, 0), mv = mq < z ? block(t, skip(mq, z), z, names, f, self, 0, 1, 0, self, 0) : 0;
-        if (!mp || w(mp + N_IS) !== IS_PLACE) return mv;
-        const mn = member(t, mp, w(w(WORDS) + 8 * W_MAPPED_BY), w(w(WORDS) + 8 * W_MAPPED_BY + 4));
+        if (!mp || (w(mp + N_IS) !== IS_PLACE && w(mp + N_IS) !== IS_LAZY && w(mp + N_IS) !== IS_NODE)) return mv;
+        // (a link of positions read: its own, else its value's (a place, a value given lazily))
+        let mn = member(t, mp, w(w(WORDS) + 8 * W_MAPPED_BY), w(w(WORDS) + 8 * W_MAPPED_BY + 4));
+        if ((!mn || w(mn + N_IS) !== IS_TEXT) && w(mp + N_IS) === IS_NODE) { const lv = held(t, mp, W_VALUE, 0); mn = lv && lv !== w(NOTHING) && (w(lv + N_IS) === IS_PLACE || w(lv + N_IS) === IS_LAZY) ? member(t, lv, w(w(WORDS) + 8 * W_MAPPED_BY), w(w(WORDS) + 8 * W_MAPPED_BY + 4)) : 0; }
         if (!mn || w(mn + N_IS) !== IS_TEXT || !w(mn + N_PARENT) || w(w(mn + N_PARENT) + N_IS) !== IS_FRAME) return mv;
         const mo = w(mn + N_PARENT), mr = block(t, w(mn + N_A), w(mn + N_B), mo, mo, mv, 0, 1, 0, mv, 0);
         return mr || mv;
@@ -2700,7 +2713,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         // (one given lazily already (the same declaration read again): declared again here, its place)
         // (declared again where the code the hole x took is, its name (not the word `x` written here))
         const hxr = v0 && w(v0 + N_IS) === IS_LAZY && names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? named(w(names + F_RULE), rest, q) : -1, tkr = hxr >= 0 ? follow(names + F_TAKES + TAKE * hxr, 1) : 0;
-        const v = v0 && w(v0 + N_IS) === IS_LAZY ? (tkr ? placed(t, skip(w(tkr), w(tkr + 4)), trim_end(w(tkr), w(tkr + 4)), self) : placed(t, rest, q, self)) : v0;
+        const v = v0 && w(v0 + N_IS) === IS_LAZY ? (mb_ns ? placed(t, mb_ns, mb_ne, self) : tkr ? placed(t, skip(w(tkr), w(tkr + 4)), trim_end(w(tkr), w(tkr + 4)), self) : placed(t, rest, q, self)) : v0;
         const lazyable = thx_ >= 0 && v && w(v + N_IS) === IS_PLACE && place_in(v) && w(place_in(v) + N_IS) === IS_NODE && place_in(v) !== w(GLOBAL) && !w(t + T_HOLE);
         let pre = 0;
         if (!lazyable) { pre = thx_ >= 0 ? valued(t, names + F_TAKES + TAKE * thx_) : block(t, ta, z, names, f, self, 0, 1, 0, self, 0); if (w(t + T_JUMP_N) || stopped(t)) return pre; }
@@ -2712,7 +2725,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
           const given = tkc && w(lthis + N_IS) === IS_NODE ? node(IS_LAZY, tkc, 0, lthis, 0) : lazyable ? valued(t, names + F_TAKES + TAKE * thx_) : pre;
           // (and on its place, its type)
           if (given) { const wt = w(w(WORDS) + 8 * W_TYPE); bound(wt, wt + w(w(WORDS) + 8 * W_TYPE + 4), v, given); }
-          if (mb_ns && mb_e > mb_s) { const wm = w(w(WORDS) + 8 * W_MAPPED_BY); bound(wm, wm + w(w(WORDS) + 8 * W_MAPPED_BY + 4), v, node(IS_TEXT, mb_s, mb_e, w(tkb + T_ORIGIN) || names, 0)); }
+          if (mb_ns && mb_e > mb_s) { const wm = w(w(WORDS) + 8 * W_MAPPED_BY), mf = node(IS_TEXT, mb_s, mb_e, w(tkb + T_ORIGIN) || names, 0); bound(wm, wm + w(w(WORDS) + 8 * W_MAPPED_BY + 4), v, mf); if (given && w(given + N_IS) === IS_LAZY) bound(wm, wm + w(w(WORDS) + 8 * W_MAPPED_BY + 4), given, mf); }
           // (one given a value there before, `x: T` read again where x was given (a header read again in what it was read
           // into): that value kept, the type on its place)
           const kept_ = w(v + N_A) < w(v + N_B) ? given_already(place_in(v) || self, w(v + N_A), w(v + N_B), v) : 0;
@@ -2772,8 +2785,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         const first = hole_name(names, q2, e2), last_ = hole_name(names, q3, e3);
         // (and the type each is written with, `a: T`: T's text, `type_written`)
         const tw = w(w(WORDS) + 8 * W_TYPE_WRITTEN), twz = tw + w(w(WORDS) + 8 * W_TYPE_WRITTEN + 4), ty1 = first ? hole_type(names, q2, e2) : 0, ty2 = last_ ? hole_type(names, q3, e3) : 0;
-        if (first) { const l1 = held(t, list, W_HEAD, 0); if (l1 && l1 !== w(NOTHING)) { bound(wn, wz, l1, first); if (ty1) bound(tw, twz, l1, ty1); } }
-        if (last_) { const l2 = held(t, list, W_TAIL, 0); if (l2 && l2 !== w(NOTHING)) { bound(wn, wz, l2, last_); if (ty2) bound(tw, twz, l2, ty2); } }
+        // (and what a position `{x: f}: T` maps what it reads by, f)
+        const wm = w(w(WORDS) + 8 * W_MAPPED_BY), wmz = wm + w(w(WORDS) + 8 * W_MAPPED_BY + 4), mf1 = first ? hole_mapping(names, q2, e2) : 0, mf2 = last_ ? hole_mapping(names, q3, e3) : 0;
+        if (first) { const l1 = held(t, list, W_HEAD, 0); if (l1 && l1 !== w(NOTHING)) { bound(wn, wz, l1, first); if (ty1) bound(tw, twz, l1, ty1); if (mf1) bound(wm, wmz, l1, mf1); } }
+        if (last_) { const l2 = held(t, list, W_TAIL, 0); if (l2 && l2 !== w(NOTHING)) { bound(wn, wz, l2, last_); if (ty2) bound(tw, twz, l2, ty2); if (mf2) bound(wm, wmz, l2, mf2); } }
         return list;
       }
       // (`external admits v t`: whether v is a t, where the kernel can tell (as `is` answers it); not known, nothing)

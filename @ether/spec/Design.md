@@ -2156,6 +2156,16 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     key kept with `[k] := (caller) => …` has one: called, it calls what it keeps). Otherwise `.( … )` stays code read in
     `.`. A `.` after a name or a closing bracket (`it.({constraint})`), or code led by a `.` (`it.(.length)`), is that
     reading, never a call. In a closure called `.on(v)`, `.name` written alone is a member of v.
+  - **A value given to a parameter typed as a function is the function answering it** (`mapping: (x: T): *` given
+    `\s[]`): `map{p}(v)`, v in place of each one p holds of. A function is a value with a call of its own,
+    `{this}(…)`. Open: through Ray.ray's `map {selection}` itself the value is lost once `this[{selection}]` has made
+    its `Filtered`, so Expression writes `.map{is \s}((space) => \s[])` (the user's choice, with `is` for `== \s`:
+    `vertex == \s` has no case for a superposition on the right; `[x]` operator holes stay open).
+  - **A header that defines what its positions are read by** (`GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES…` among
+    them) is read in turn first: each position as it is once the ones before it are given. All at once, the positions
+    are made before any is read, so the definition is made of BOOTSTRAPPER's type.
+  - `D := x ~~ .(a | b) = v` is `D := (x ~~ .(a | b) = v)`; of a list of positions, the positions named a and b are
+    given v too.
 - Decided 2026-10-17, being built:
   - **A bare name never reads a member.** Inside a method, `count` is not `.count`. A bare name sees the method's
     parameters, its own locals, the locals of the bodies it is written in, and the file and global scope. A member of

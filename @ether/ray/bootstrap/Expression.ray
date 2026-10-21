@@ -19,7 +19,7 @@ Expression := class (
   (
     // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
     // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
-    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{== \s}(\s[]) ~~ .(LHS | RHS) = String
+    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{is \s}((space) => \s[]) ~~ .(LHS | RHS) = String
     GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
     statements: (

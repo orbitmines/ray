@@ -589,9 +589,13 @@ assert {
 // in its body (`passed`))
 // (what is not an argument given by name: anything but a Named, below)
 named_argument := false
+// (the function answering a value, whatever it is given)
+answering (answered) => (anything) => answered
 ({written_parameters}) taking {arguments_given} ^keyword => {
   // (given nothing, `declared`: the parameters as written, their defaults given (none, what they had))
+  // (one typed as a function given a value that is none: the function answering it, `xs.map{p}(v)` (v in place of each))
   if arguments_given === declared { ({written_parameters}) } else { ({written_parameters}) := arguments_given }
+  if (external function_given (arguments_given) (`{written_parameters}`)) === true { ({written_parameters}) := answering(arguments_given) }
   // (then what is given by name: after the defaults, which run as the parameters are written)
   (.) given_names (arguments_given)
 }
@@ -1363,7 +1367,7 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
 // given, then the positions read again in the one read (what a definition among
 // them says of a field before it is that field as read, `GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES…`); one read by its parts
 // the first way it reads; any other, with the ones after it)
-fields_read (fields_into, fields_first, fields_text) => (fields_given(fields_into, seq_read(fields_first, fields_text, true, true, fields_into)) ?? fields_in_turn(fields_into, fields_first, fields_text))
+fields_read (fields_into, fields_first, fields_text) => ((fields_into).header_defines === true) ? (fields_in_turn(fields_into, fields_first, fields_text) ?? fields_given(fields_into, seq_read(fields_first, fields_text, true, true, fields_into))) : (fields_given(fields_into, seq_read(fields_first, fields_text, true, true, fields_into)) ?? fields_in_turn(fields_into, fields_first, fields_text))
 fields_in_turn (fields_into, fields_first, fields_text) => {
   fields_at := fields_first
   fields_rest := fields_text
@@ -1382,7 +1386,8 @@ fields_in_turn (fields_into, fields_first, fields_text) => {
         if fields_way === None {
           return None
         }
-        (way_value(fields_way.value)) given_to (fields_into) as (fields_name)
+        // (a conjunction called, `Statements(global)(Program())`: its function called on what it read, as seq_read does)
+        ((fields_type) applying_to (way_value(fields_way.value))) given_to (fields_into) as (fields_name)
         fields_rest = (fields_way.value).reading_left
       } else {
         return fields_given(fields_into, seq_read(fields_at, fields_rest, true, true, fields_into))
@@ -1484,6 +1489,9 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   // (a text written in its header: the class kept as the one it is written in (one with no header of its own, made of it, has
   // it too: it reads as that one is written))
   (member_given(made, "header_quoted", made)) if external quoted `{fields}`
+  // (a header that defines what its positions are read by, from what one before them read (`GRAMMAR_RULE_DEF :=
+  // BOOTSTRAPPER.CAPTURES…`): read in turn first, each position as it is once the ones before it are given)
+  (member_given(made, "header_defines", true)) if (external defines_text `{fields}`) === true
   (parent reads ({fields}) as made) unless (parent === Node) || inherits_structure(`{fields}`, parent)
   made &+= {
     of := .
@@ -1724,6 +1732,7 @@ is_itself (type) => {
 // (what a class written as a structure is written as, kept when it is defined (`class:`); any other, none)
 structure_as := None
 header_quoted := None
+header_defines := false
 // (a class with no header (`class: P { … }`) of one written as a structure)
 inherits_structure (header_text, parent_class) => (header_text.same_characters(`nothing_given = None`) !== None) && ((parent_class).header_quoted !== None)
 // (a text is a class written as a structure when it reads as the class is written, the kernel reading it (by every type in it);
@@ -2190,10 +2199,26 @@ alternative_type (alternative_written) => ((external unset alternative_written) 
 // (a text with another in it)
 mentions (mention_text, mention_word) => !(mention_text.empty) && (text_begins(mention_text, mention_word) || mentions(mention_text.rest, mention_word))
 {named_in}.({first_name} | {other_names}) = {value} ^punctuation => (named_in) names_given (`{first_name}`) also (`{other_names}`) as (value)
+// (of a list of positions, the positions named so too: their values, `[LHS: …, …] ~~ .(LHS | RHS) = String` typed String)
+// (a rule, its holes named apart: a list given to a function of more than one parameter is spread into them)
+{links_on_of} named_links {links_name_of} as {links_value_of} ^keyword => {
+  links_on := links_on_of
+  links_name := links_name_of
+  links_value := links_value_of
+  links_at := ((links_on).listing === true) ? (links_on).head : None
+  while links_at {
+    if ((links_at.written_name) !== None) && ((links_at.written_name) == links_name) {
+      external member (links_at) (`value`) (links_value)
+    }
+    links_at = links_at.next
+  }
+  true
+}
 {named_on_of} names_given {first_given} also {others_given} as {named_value_of} ^keyword => {
   named_value := named_value_of
   named_on := named_on_of
   external member (named_on) (trimmed_text(first_given)) (named_value)
+  (named_on) named_links (trimmed_text(first_given)) as (named_value)
   rest_given := others_given
   while mentions(rest_given, `|`) {
     rest_bar := rest_given
@@ -2201,9 +2226,11 @@ mentions (mention_text, mention_word) => !(mention_text.empty) && (text_begins(m
       rest_bar = rest_bar.rest
     }
     external member (named_on) (trimmed_text(rest_given.until(rest_bar))) (named_value)
+    (named_on) named_links (trimmed_text(rest_given.until(rest_bar))) as (named_value)
     rest_given = rest_bar.rest
   }
   external member (named_on) (trimmed_text(rest_given)) (named_value)
+  (named_on) named_links (trimmed_text(rest_given)) as (named_value)
   named_value
 }
 // (a text with the `)` it ends with left off)
@@ -2253,10 +2280,13 @@ trimmed_text (trim_text) => {
 }
 // (`x ~~ .(a | b) = v`: x, each place named in it given v)
 {named_value_in} ~~ .({first_name} | {other_names}) = {value} ^operator => {
-  named_holder := named_value_in
+  // (one value: a list `,` made (`.map(…)`'s) gathered, not taken apart by the name given it)
+  named_holder := (named_value_in).whole
   (named_holder) names_given (`{first_name}`) also (`{other_names}`) as (value)
   named_holder
 }
+// (and declared so, `D := x ~~ .(a | b) = v`: D the x named, not x the declaration)
+{named_declared} := {named_declared_in} ~~ .({first_declared} | {other_declared}) = {declared_value} ^operator => {named_declared} := (({named_declared_in}) ~~ .({first_declared} | {other_declared}) = {declared_value})
 // (a function's parameters, one of two named as a visible name, after `,` is defined, where a call reads it)
 assert {
   listed_shadow := false

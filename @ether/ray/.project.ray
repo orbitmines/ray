@@ -1,7 +1,7 @@
 // The character running, `@me`, and where it runs, `@local`: what runs the language gives them (World: this instance and
 // the character playing it)
-@me := @"me"
-@local := Location(path: ".")
+@me ^string => &.caller as Character
+@local ^string => Location(path: ".")
 // (a path under the character running: each name a member of what is before it, `@me/device/os`)
 @me/{path} ^string => Character.walked(@me, "{path}".split("/"))
 // Running as another character: only with their grant

@@ -446,17 +446,17 @@ wasm_end (unused) => {
   jumps_n := wasm_table(0)
   current := wasm.minus_one
   code := ""
-  count := 0.int32
+  jumps_given := 0.int32
   k = 1.int32
   while k <= last {
     if wasm_found(block_of, wasm_key(k)) {
       if current >= 0 {
         wasm_put(codes, (wasm_key(current)), code)
-        wasm_put(jumps_n, (wasm_key(current)), (wasm_index(count)))
+        wasm_put(jumps_n, (wasm_key(current)), (wasm_index(jumps_given)))
       }
       current = current + 1
       code = ""
-      count = 0.int32
+      jumps_given = 0.int32
     }
     s := wasm_get(wasm.statements, (wasm_key(k)))
     fixed := s.condition.bits !== None
@@ -469,8 +469,8 @@ wasm_end (unused) => {
       if !fixed {
         test = wasm_got(s.condition)
       }
-      wasm_put(jumps, (wasm_pair(current, count)), (wasm_jump_of(test, wasm_slot(block_of, wasm_key(wasm_slot(wasm.labels, s.aim))))))
-      count = count + 1
+      wasm_put(jumps, (wasm_pair(current, jumps_given)), (wasm_jump_of(test, wasm_slot(block_of, wasm_key(wasm_slot(wasm.labels, s.aim))))))
+      jumps_given = jumps_given + 1
     }
     if !skipped && !(wasm_found(wasm.labels, s.aim)) {
       code = code + wasm_code(s, fixed)
@@ -478,7 +478,7 @@ wasm_end (unused) => {
     k = k + 1
   }
   wasm_put(codes, (wasm_key(current)), code)
-  wasm_put(jumps_n, (wasm_key(current)), (wasm_index(count)))
+  wasm_put(jumps_n, (wasm_key(current)), (wasm_index(jumps_given)))
   body := ((wasm_byte(1) + wasm_uleb(wasm.cells_n - wasm.params)) + wasm.i32_type) + wasm_structure(blocks, codes, jumps, jumps_n)
   body = (body + wasm_byte(0)) + wasm.end_op
   wasm.bodies = wasm.bodies + wasm_sized(body)
@@ -747,20 +747,20 @@ wasm_head (pages, bytes) => {
   k := 0.int32
   while k < types_n {
     arity := wasm_slot(types, `#` + wasm_key(k))
-    params := wasm_uleb(arity)
+    param_types := wasm_uleb(arity)
     i := 0.int32
     while i < arity {
-      params = params + wasm.i32_type
+      param_types = param_types + wasm.i32_type
       i = i + 1
     }
-    type_section = (((type_section + wasm_byte(96)) + params) + wasm_byte(1)) + wasm.i32_type
+    type_section = (((type_section + wasm_byte(96)) + param_types) + wasm_byte(1)) + wasm.i32_type
     k = k + 1
   }
-  hosts := wasm_host_names(0)
+  host_names := wasm_host_names(0)
   imports := wasm_uleb(5)
   k = 0.int32
   while k < 3 {
-    imports = (((imports + wasm_sized(`h`)) + wasm_sized(wasm_get(hosts, (wasm_key(k))))) + wasm_byte(0)) + wasm_uleb(wasm_type_of(types, 4.int32))
+    imports = (((imports + wasm_sized(`h`)) + wasm_sized(wasm_get(host_names, (wasm_key(k))))) + wasm_byte(0)) + wasm_uleb(wasm_type_of(types, 4.int32))
     k = k + 1
   }
   imports = (((((imports + wasm_sized(`m`)) + wasm_sized(`memory`)) + wasm_byte(2)) + wasm_byte(3)) + wasm_uleb(pages)) + wasm_uleb(pages)
@@ -781,24 +781,24 @@ wasm_head (pages, bytes) => {
   ((((magic + wasm_section(1, type_section)) + wasm_section(2, imports)) + wasm_section(3, functions)) + wasm_section(7, exports)) + code
 }
 wasm_tail (unused) => {
-  hosts := wasm_host_names(0)
-  names := wasm_uleb(wasm.count + 3)
+  host_names := wasm_host_names(0)
+  listed := wasm_uleb(wasm.count + 3)
   k := 0.int32
   while k < 3 {
-    names = (names + wasm_uleb(k)) + wasm_sized(wasm_get(hosts, (wasm_key(k))))
+    listed = (listed + wasm_uleb(k)) + wasm_sized(wasm_get(host_names, (wasm_key(k))))
     k = k + 1
   }
   k = 0.int32
   while k < wasm.count {
-    names = (names + wasm_uleb(k + 3)) + wasm_sized(wasm_get(wasm.names, (wasm_key(k))))
+    listed = (listed + wasm_uleb(k + 3)) + wasm_sized(wasm_get(wasm.names, (wasm_key(k))))
     k = k + 1
   }
-  wasm_section(0, (wasm_sized(`name`) + wasm_byte(1)) + wasm_sized(names))
+  wasm_section(0, (wasm_sized(`name`) + wasm_byte(1)) + wasm_sized(listed))
 }
 // (the whole module, its bodies written here, kept for `--write --value=wasm.module_written`)
 wj_module (pages) => {
-  bodies := wj_bodies(0)
-  wasm.module_written = (wasm_head(pages, Int32.bytes_in(bodies)) + bodies) + wasm_tail(0)
+  all_bodies := wj_bodies(0)
+  wasm.module_written = (wasm_head(pages, Int32.bytes_in(all_bodies)) + all_bodies) + wasm_tail(0)
 }
 
 // (what `--write --value=...` writes, read after all of it: the whole module; its sections around bodies written apart)

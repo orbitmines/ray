@@ -1,0 +1,4 @@
+@macos
+
+// Ray run on macOS: the device runs it (`os: OS = @me/device` is OS.Macos)
+@me/device &= OS.Macos

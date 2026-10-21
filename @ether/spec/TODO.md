@@ -20,6 +20,7 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   (Character.ray `named`), `Program.refused |= p`.
 - **An instance kept as a class's member loses its field values**: after `C.A := C(p: "a")`, `C.A.p == "a"` is false
   (also `C &+= { static D := C(p: "d") }`). The OS projects (`OS.Linux := OS(platform: "linux")`) and `Unit.None` need it.
+- **`5 is Node{false}` loops** (6000 deep): a narrowing whose condition is `false`, asked of a value (Control.ray NV1).
 - **An assert in a class body cannot call the class's methods** on an instance made there (`Ex := class { same (o) => …;
   assert { e := Ex(); assert e.same(e) } }`: `nothing reads same(e)`). Many library tests are written in class bodies.
 - **A field's default that reads a field given at construction sees it unset**: `severity: .Severity = .fatal ? … : …`

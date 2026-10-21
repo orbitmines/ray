@@ -63,9 +63,9 @@ assert {
   Panel := class: Component {
     shown := 0
    opened\
-    shown = 1
+    .shown = 1
    closed\
-    shown = 2
+    .shown = 2
   }
   assert Panel().shown == 0  // CMP2 constructing a component runs past its first label
   assert Panel~opened().shown == 1  // CMP3 entering a component at a label runs past the next label
@@ -124,7 +124,7 @@ assert {
   Entered := class {
     steps := 0
    later\
-    steps = 7
+    .steps = 7
   }
   assert Entered~later().steps == 7  // EP1 ~label does not enter the class at that label
   assert Entered~default == Entered  // EP2 ~default is not the class itself

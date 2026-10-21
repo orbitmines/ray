@@ -24,7 +24,7 @@ Device := class {
   handheld: boolean = false
   opened: Location?
   share: Location?
-  memory: Store = Store(at: @"memory")
+  memory: Store = Store(at: Location(path: "memory"))
   quests => Program#{who: this}{.running}
   // its files: this device's are the file space (`@/`), another's are at its instance (held by @ether/network)
   disk => Instance#{.device === this}.first -- (. && . !== @local ? (. as String + "/") as Location : @/)

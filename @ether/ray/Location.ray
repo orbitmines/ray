@@ -147,7 +147,7 @@ assert @../a as String == "../a"  // LOC67 `@../path` is not the location relati
 @{drive: Char.Letter}:/{path: Path} ^string => (drive + ":/" + path) as Location
 assert @C:/Windows/System32 as String == "C:/Windows/System32"  // LOC68 `@C:/path` is not a Windows drive location
 @{name: Char.Word[]}/{path: Path} ^string => (name + "/" + path) as Location
-assert @me/instance as String == "me/instance"  // LOC69 `@name/path` is not the location under that name
+assert @a/b as String == "a/b"  // LOC69 `@name/path` is not the location under that name
 
 // Reading a location answers what is there and leaves it as it was: the file the library is declared in is read twice.
 // (Writing a location is not claimed here: a test that writes a file leaves one behind.)
@@ -159,6 +159,3 @@ assert {
   // A location computed as a string reaches the machine as the bits it is written with.
   assert ("@ether/.project.ray".bits as Location).held as String == read_once  // IO7 a location given as a string's bits is read as another place
 }
-// `print(x)`: x written out to this instance, answering x (Almanac §0.3)
-print (x) => (@me/instance = x as String) -- x
-assert print(3) == 3  // PT1 print does not answer what it printed

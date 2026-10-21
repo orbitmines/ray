@@ -1,6 +1,6 @@
 Program &+= {
-  who: * = @me
-  assert Program(code: { 1 }).who == @me  // PG35 a program does not run as the character who made it by default
+  // (who runs it; Ether's: the character running, `@me`)
+  who: *?
   name: String?
   goal: *?
   from: *?
@@ -287,7 +287,7 @@ Program &+= {
     c := b + 1
   }).depends("c").contains("a")
 
-  schedule (on = @me) => on.quests |= this
+  schedule (on) => on.quests |= this
 
   right-to-left branch => .copy.stepped
   assert await (branch { 3 }) == 3  // CR3 awaiting a branch does not answer what it did
@@ -352,13 +352,6 @@ assert Program(code: { 1 }).(
   & .finished.done  // FWQ3 a finished program is not a done quest
 )
 assert Program(code: { 1 }).stop.done  // FWQ4 a stopped program is not done
-assert {
-  started := Program(code: "1")
-  @me/quests |= started
-  assert started is @me/quests  // JB1 a program given to @me/quests is not among them
-  assert started.who === @me  // JB11 a started program is not run by whoever started it
-  assert started.stop.done  // JB5 stopping a program does not end it
-}
 
 // The running program: what called what is read here
 &@ ^keyword => &.caller as Program
@@ -367,7 +360,7 @@ assert {
 Program &+= {
   continuations => .calls{!.is_external}.map(.**)
   effects => .reachable.map(.calls{.is_external}.external_name).flatten.unique
-  assert Program(code: { @me/instance = "x" }).effects.contains("io")  // AC60 writing out is not an effect named io
+  assert Program(code: { external io "stdout" "x" }).effects.contains("io")  // AC60 writing out is not an effect named io
   // What a run may do is the runner's setting (L§8.1): `with (Program.speculated |= x)`, `with (Program.refused |= x)`, or a `.cfg.ray`.
   static speculated: *[] = []
   static refused: *[] = []
@@ -376,13 +369,13 @@ Program &+= {
 }
 // io and os are effects; the time is not deterministic
 assert Program(code: { 1 + 1 }) is Pure  // EFF1 adding numbers is not pure
-assert Program(code: { @me/instance = "x" }) is Effecting  // EFF2 writing out is not an effect
+assert Program(code: { external io "stdout" "x" }) is Effecting  // EFF2 writing out is not an effect
 assert {
-  with (Program.refused |= Program(code: { @me/instance = "x" })) {
-    assert Program(code: { @me/instance = "x" }) is Refused  // EFF4 a refused program is not refused
+  with (Program.refused |= Program(code: { external io "stdout" "x" })) {
+    assert Program(code: { external io "stdout" "x" }) is Refused  // EFF4 a refused program is not refused
   }
 }
-assert Program(code: { @me/instance = "x" }) is Abstracted  // EFF5 an effect nobody speculated runs in full
+assert Program(code: { external io "stdout" "x" }) is Abstracted  // EFF5 an effect nobody speculated runs in full
 
 Pure := Program{.effects.empty}
 assert Program(code: { 1 + 1 }) is Deterministic  // AC61 adding numbers is not deterministic
@@ -393,7 +386,7 @@ Nondeterministic := Program{!(. is Deterministic)}
 Effecting := Program{.effects.some(. is ("io" | "os"))}
 Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
 assert Program(code: { x := 1 }) is Initializer  // AC65 a program that only declares is not an initializer
-assert !(Program(code: { @me/instance = "x" }) is Initializer)  // AC66 a program that writes out is an initializer
+assert !(Program(code: { external io "stdout" "x" }) is Initializer)  // AC66 a program that writes out is an initializer
 Refused := Program{. is Program.refused#}
 Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
 
@@ -407,11 +400,11 @@ Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
 Program &+= {
   checkable => !(this is Effecting) && this is Terminating
   assert Program(code: { 1 + 1 }).checkable  // AC30 a program with no effects that terminates cannot be checked
-  assert !Program(code: { @me/instance = "x" }).checkable  // AC31 a program with an effect can be checked
+  assert !Program(code: { external io "stdout" "x" }).checkable  // AC31 a program with an effect can be checked
   names (value) => this === value || this == value || .checkable && this() === value
   assert Program(code: { 1 + 1 }).names(2)  // AC54 a checkable program does not name what it answers
   assert !Program(code: { 1 + 1 }).names(3)  // AC55 a program names what it does not answer
-  assert !(Program(code: { @me/instance = "leak" }).names("leak"))  // PURG4 checking a grant runs an expression with effects
+  assert !(Program(code: { external io "stdout" "leak" }).names("leak"))  // PURG4 checking a grant runs an expression with effects
 
   caller: Program?
   // Who runs a program is its chain of callers, the origin first; a prompt names them all.
@@ -426,7 +419,6 @@ Program &+= {
   assert Program(who: @"solo").prompt == "@solo wants to run this"  // AC57 a prompt for a lone program names more than its runner
   may (method, target) => .hops.every(target.allows(., method))
   ask (method, target) => .may(method, target) || ERROR@Access `not granted`
-  assert &@.ask(`()`, @me/device/camera).erred  // AC26 a capability nobody granted does not err
   prompt => .hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
     + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
 }
@@ -463,7 +455,7 @@ assert {
 assert {
   purg_reader := (name: "purg-reader")
   purg_lamp := (lamp: 1)
-  assert (Access(purg_reader, method: Access.Reading) @me/instance = "leak") is Diagnostic  // PURG1 a grant naming an expression with effects is granted
-  assert (Access(purg_reader, method: Access.Reading, filter: Program(code: { @me/instance = "leak" })) purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
+  assert (Access(purg_reader, method: Access.Reading) (external io "stdout" "leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
+  assert (Access(purg_reader, method: Access.Reading, filter: Program(code: { external io "stdout" "leak" })) purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
   assert !(purg_lamp.access)  // PURG3 a refused grant is kept
 }

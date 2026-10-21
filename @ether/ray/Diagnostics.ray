@@ -2,7 +2,7 @@
 // over (its cause); a fatal one stops what raised it.
 Diagnostic &+= {
   message: String?
-  fatal = false
+  fatal: boolean = false
   origin: *?
   type: *?
   cause: Diagnostic?

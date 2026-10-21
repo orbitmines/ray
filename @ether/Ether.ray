@@ -45,17 +45,17 @@ Node &+= {
     assert !(idy_pre.counts(Ed25519.generated().published, idy_pre.rotate.signers, World.ether.clock.now))  // IDY12 a key nobody committed to counts for a rotation
   }
   assert {
-    lgo := Instance.local.login(@"leaving-inbox")
-    Instance.local.certified(lgo, World(name: "lgo-world"))
+    lgo := @local.login(@"leaving-inbox")
+    @local.certified(lgo, World(name: "lgo-world"))
     lgo_inbox := lgo.inbox
     lgo_world_key := lgo.world_keys.first.key
-    Instance.local.logout(lgo)
+    @local.logout(lgo)
     assert !(lgo_inbox.agreed(X25519.generated().public) is Byte[])  // LGO1 an agreement key outlives logging out
     assert !(lgo_world_key.signed([1]).valid == true)  // LGO2 a per-world key outlives logging out
   }
   // Sealed sender: a who narrower than the history moves who and the signature into the ciphertext; the line shows a per-history pseudonymous key.
   assert {
-    sel_writer := Instance.local.login(@"sel-writer")
+    sel_writer := @local.login(@"sel-writer")
     sel := History(repository: Repository()) ~~ (.sender = none)
     sel.commit(sel_writer, 1)
     sel.commit(sel_writer, 2)
@@ -78,11 +78,11 @@ Node &+= {
   }
   // What a new reader can decrypt is what their read grant covers: the whole history by default, or any narrowing of it; a rotation follows the grants that reach the head.
   assert {
-    grk_owner := Instance.local.login(@"grk-owner")
-    grk_all := Instance.local.login(@"grk-all")
-    grk_now := Instance.local.login(@"grk-now")
-    grk_from := Instance.local.login(@"grk-from")
-    grk_past := Instance.local.login(@"grk-past")
+    grk_owner := @local.login(@"grk-owner")
+    grk_all := @local.login(@"grk-all")
+    grk_now := @local.login(@"grk-now")
+    grk_from := @local.login(@"grk-from")
+    grk_past := @local.login(@"grk-past")
     grk := none.read History(repository: Repository())
     grk.commit(grk_owner, 1)
     grk_first := grk.current_key
@@ -119,7 +119,7 @@ Node &+= {
   }
   // End-to-end encryption: a history that is not public is stored as ciphertext for its readers; its lines keep label, parents, stamp, key and signature in plaintext (L§9.2).
   assert {
-    ada := Instance.local.login(@"ada")
+    ada := @local.login(@"ada")
     crypt := History(repository: Repository())
     crypt.commit(ada, Program(code: { .secret = "kept" }))
     crypt.commit(ada, Program(code: { .secret = "kept twice" }))
@@ -160,7 +160,7 @@ Node &+= {
   assert Access(who: public).who === public  // AC5 an access forgot who it is for
   publish: static => this ~~ .access |= Access(public, method: Access.Reading, target: this)
   assert {
-    ada := Instance.local.login(@"ada")
+    ada := @local.login(@"ada")
     // A commit is any Ray, run on the value before it (`.`).
     vh := History(repository: Repository()).publish
     vh.commit(ada, Program(code: { .greet = "hello" }))
@@ -317,3 +317,32 @@ assert HTTP.v1_1.read("HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\ncontent-ty
 assert ([1, 2, 3]).random  // RN8 a collection does not answer one of itself
 
 assert ([1, 2, 3]).contains((([1, 2, 3]).random))  // RN11 what was chosen is not one of them
+
+// (a path under the character running: each name a member of what is before it, `@me/device/keyboard`)
+@me/{path} ^string => Character.walked(@me, "{path}".split("/"))
+// Running as another character: only with their grant
+@me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
+Character &+= {
+  // as a boolean, whether it is the one running (without @ether/security a character is only itself)
+  as (=== boolean) => this === @me
+}
+assert @me.acting == @me  // CHR49 a character is not the character it acts as
+assert @me/quests == @me.quests  // JB7 @me/quests is not the character's selection of its programs
+Program &+= {
+  who: * = @me
+}
+assert Program(code: { 1 }).who == @me  // PG35 a program does not run as the character who made it by default
+assert &@.ask(`()`, @me/device/camera).erred  // AC26 a capability nobody granted does not err
+assert {
+  started := Program(code: "1")
+  @me/quests |= started
+  assert started is @me/quests  // JB1 a program given to @me/quests is not among them
+  assert started.who === @me  // JB11 a started program is not run by whoever started it
+  assert started.stop.done  // JB5 stopping a program does not end it
+}
+OS &+= {
+  static current => @me/device/os
+}
+// `print(x)`: x written out to this instance, answering x (Almanac §0.3)
+print (x) => (@me/instance = x as String) -- x
+assert print(3) == 3  // PT1 print does not answer what it printed

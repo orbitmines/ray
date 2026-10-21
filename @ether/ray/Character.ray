@@ -7,12 +7,8 @@ Nameable := class {
   assert !(Nameable.named("Bob").name == "Alice")  // CHR8 naming gives another name
 }
 
-// The character running: who called; none, the one this instance plays (World.ray: the local instance's)
-@me ^string => (&.caller as Character) ?? Character.played
 // A character by its name, `@"ada"` (`@"{name}"`): one claimed, made from what it is called
 @"{name: (!"\"")[]}" ^string => Character(name: name)
-// (a path under the character running: each name a member of what is before it, `@me/device/keyboard`)
-@me/{path} ^string => Character.walked(@me, "{path}".split("/"))
 
 Character := class: Hierarchy &+ Nameable {
   // The same principal as `other`: here, the same value; @ether/security compares verified roots instead. (Whom a
@@ -25,17 +21,12 @@ Character := class: Hierarchy &+ Nameable {
     assert c is Character{.name == "c"} & !(c is Character{.name == "d"})  // CHR5 a character is not of a narrowing it satisfies, or is of one it does not
   }
   static PREFIX := "@"
-  static played := @"me"
   static walked (at, names) => names.empty ? at : Character.walked(at[names.first], names.rest)
   assert Character.walked({ a: 1 }, []).a == 1  // CHR46 walking no names does not stay at the start
   assert Character.walked({ a: { b: 7 } }, ["a", "b"]) == 7  // CHR47 walking names does not enter each member in turn
   assert Character.walked({ a: 1 }, ["b"]) == None  // CHR48 walking into a name that is not there finds something
 
   quests => Program#{who: this}{.running}
-  assert @me.acting == @me  // CHR49 a character is not the character it acts as
-  assert @me/quests == @me.quests  // JB7 @me/quests is not the character's selection of its programs
-  // Without @ether/security a character is only itself; security replaces this with the verified comparison.
-  as (=== boolean) => this === @me
   acting => this
 }
 
@@ -51,5 +42,3 @@ assert {
   assert !zed.write.reads  // AC48 `.write` allows reading
   assert zed.execute.executes  // AC49 `.execute` does not allow executing
 }
-// Running as another character: only with their grant
-@me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`

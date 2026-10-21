@@ -293,8 +293,8 @@ Character &+= {
   static local (who) => who == "me" ? @me : (@local.registry, @local.hosted)#.find((who as String).fold_case.skeleton is .name.fold_case.skeleton)
   // Verified and claimed: verified characters compare by root, a claimed one is only itself, and never a verified one.
   assert {
-    ver_a := Instance.local.login(@"ver-a")
-    ver_b := Instance.local.login(@"ver-b")
+    ver_a := @local.login(@"ver-a")
+    ver_b := @local.login(@"ver-b")
     assert ver_a.acting is Verified  // VER1 a character logged in here does not act as verified
     assert ver_a.acting == ver_a.acting  // VER2 one character verified twice is two characters
     assert !(ver_a == ver_a.acting || ver_a.acting == ver_a)  // VER3 a claimed character equals a verified one
@@ -312,15 +312,15 @@ Character &+= {
   }
   // A character used as a condition is whether it is @me.
   assert {
-    cw := Instance.local.login(@"viewer")
-    cw_other := Instance.local.login(@"other")
+    cw := @local.login(@"viewer")
+    cw_other := @local.login(@"other")
     assert (with (@me = cw) { cw ? true : false })  // CW1 a character as a condition is false to itself
     assert !((with (@me = cw_other) { cw ? true : false }))  // CW2 a character as a condition is true to someone else
     assert (with (@me = cw) { cw.acting ? true : false })  // COND1 a verified character as a condition is false to itself
   }
   // A program runs as its who; its runs are logged for replay, as recorded.
   assert {
-    hg_giver := Instance.local.login(@"giver")
+    hg_giver := @local.login(@"giver")
     hg := Program(code: { @me }, who: hg_giver)
     assert hg.run == hg_giver.acting  // HG1 handed-over code does not run as the character that handed it over
     assert Program.runs.head.who === hg_giver  // HG2 a run of handed-over code is not logged as its giver
@@ -332,7 +332,7 @@ Character &+= {
   }
   // The root policy: the first commit of the key log, keys naming their algorithm, and short-lived certificates for instance keys.
   assert {
-    idy := Instance.local.login(@"rooted")
+    idy := @local.login(@"rooted")
     idy_policy := idy.policy()
     assert idy.identity.history.since(None).count >= 2  // IDY1 a character logged in has no key log
     assert idy_policy.keys.count == 1 && idy_policy.keys.first.algorithm === idy_policy.signing  // IDY2 the root key does not name the policy's algorithm
@@ -344,24 +344,24 @@ Character &+= {
     assert idy_policy.threshold(idy_policy.copy ~~ .certificates = []) === idy_policy.revoke  // IDY8 removing a certificate is not a revocation
     assert idy_policy.threshold(idy_policy.copy ~~ .signing = X25519) === idy_policy.rotate  // IDY9 changing the algorithm is not a rotation
     // Revoking the key of a lost device takes one root key, and locks it out.
-    Instance.local.revoked(idy, idy.key.published)
+    @local.revoked(idy, idy.key.published)
     assert !(idy.policy().certifies(idy.key.published, World.ether.clock.now))  // IDY13 a revoked instance key is still certified
-    assert !(Instance.local.verified(idy))  // IDY14 a character whose key was revoked is verified
+    assert !(@local.verified(idy))  // IDY14 a character whose key was revoked is verified
     // Per-world instance keys, each certified by the root, for unlinkability.
     idy_world := World(name: "unlinked")
-    Instance.local.certified(idy, idy_world)
+    @local.certified(idy, idy_world)
     assert idy.key_in(idy_world) && idy.key_in(idy_world) != idy.key  // IDY15 a world is not given a key of its own
     assert idy.policy().certifies(idy.key_in(idy_world).published, World.ether.clock.now, world: idy_world)  // IDY16 a world's key is not certified for that world
   }
   // Logging out zeroises the key.
   assert {
-    vz := Instance.local.login(@"leaving-keys")
-    Instance.local.logout(vz)
-    assert !(vz.key || Instance.local.verified(vz))  // IDY17 a character logged out keeps its key
+    vz := @local.login(@"leaving-keys")
+    @local.logout(vz)
+    assert !(vz.key || @local.verified(vz))  // IDY17 a character logged out keeps its key
   }
   // Signed history: one instance key signs every commit, over a hash that chains the parents and the key-log event relied on.
   assert {
-    sgn := Instance.local.login(@"signer")
+    sgn := @local.login(@"signer")
     sgn_h := History(repository: Repository())
     sgn_h.commit(sgn, 1)
     sgn_h.commit(sgn, 2)
@@ -378,55 +378,55 @@ Character &+= {
   }
   // The handshake: Noise XX between two instances, then each introduces itself signing the handshake hash with its instance key.
   assert {
-    hsk_a := Instance.local.login(@"hsk-a")
+    hsk_a := @local.login(@"hsk-a")
     hsk_peer := Instance(host: "hsk-peer")
     hsk_b := hsk_peer.login(@"hsk-b")
-    hsk_i := Instance.local.greeted(hsk_a, true)
+    hsk_i := @local.greeted(hsk_a, true)
     hsk_r := hsk_peer.greeted(hsk_b, false)
     hsk_r.read(hsk_i.written())
     hsk_i.read(hsk_r.written())
     hsk_r.read(hsk_i.written())
     hsk_si := hsk_i.session
     hsk_sr := hsk_r.session
-    hsk_seen := hsk_peer.introduced(hsk_sr, Instance.local.introduction(hsk_a, hsk_si))
+    hsk_seen := hsk_peer.introduced(hsk_sr, @local.introduction(hsk_a, hsk_si))
     assert hsk_seen is Verified && hsk_seen.proof.session === hsk_sr  // HSK1 a completed handshake does not give a verified principal for the session
     assert hsk_seen == hsk_a.acting  // HSK2 who was verified over the wire is not who was verified here
     assert !(hsk_seen == hsk_b.acting)  // HSK3 the other side is verified as oneself
   }
   // Delegation: signed, scoped and expiring; the effective permission is the intersection.
   assert {
-    dlg_from := Instance.local.login(@"lender")
+    dlg_from := @local.login(@"lender")
     dlg := dlg_from.delegate(@me, Access(method: `()`), until: Time.now + 1 hour)
     assert dlg.valid()  // DLG1 a signed delegation is not valid
     assert dlg.covers(`()`, "x")  // DLG2 a delegation does not cover what it names
     assert !(dlg.covers(`=`, "x"))  // DLG3 a delegation to run covers writing
     assert !(dlg_from.delegate(@me, until: Time.now - 1 second).valid())  // DLG4 an expired delegation is valid
     assert !(Delegation(from: dlg_from, to: @me, until: Time.now + 1 day, signature: dlg.signature).valid())  // DLG5 a signature over another delegation makes one valid
-    assert Instance.local.delegated(dlg) == dlg_from.acting  // DLG6 a delegated principal is not the one who delegated
-    assert Instance.local.delegated(dlg_from.delegate(@me, until: Time.now - 1 second)) is Diagnostic  // DLG7 an expired delegation is acted on
+    assert @local.delegated(dlg) == dlg_from.acting  // DLG6 a delegated principal is not the one who delegated
+    assert @local.delegated(dlg_from.delegate(@me, until: Time.now - 1 second)) is Diagnostic  // DLG7 an expired delegation is acted on
     assert Program(code: { @me }, who: dlg_from, delegation: dlg).run.proof.delegation === dlg  // DLG8 handed-over code does not run under its delegation
   }
   // A delegation is bound to its holder: only the one it was given to, verified, acts on it; renaming the holder breaks its signature.
   assert {
-    hold_from := Instance.local.login(@"hold-from")
-    hold_to := Instance.local.login(@"hold-to")
-    hold_other := Instance.local.login(@"hold-other")
+    hold_from := @local.login(@"hold-from")
+    hold_to := @local.login(@"hold-to")
+    hold_other := @local.login(@"hold-other")
     hold := hold_from.delegate(hold_to, Access(method: `()`), until: Time.now + 1 hour)
-    assert Instance.local.delegated(hold, by: hold_to) == hold_from.acting  // HOLD1 the one a delegation was given to does not act on it
-    assert Instance.local.delegated(hold) is Diagnostic  // HOLD2 a delegation given to someone else is acted on by whoever presents it
-    assert Instance.local.delegated(hold, by: hold_other) is Diagnostic  // HOLD3 a delegation is acted on by someone it was not given to
-    assert Instance.local.delegated(hold, by: @"hold-to") is Diagnostic  // HOLD4 a character built from the holder's name acts on a delegation
+    assert @local.delegated(hold, by: hold_to) == hold_from.acting  // HOLD1 the one a delegation was given to does not act on it
+    assert @local.delegated(hold) is Diagnostic  // HOLD2 a delegation given to someone else is acted on by whoever presents it
+    assert @local.delegated(hold, by: hold_other) is Diagnostic  // HOLD3 a delegation is acted on by someone it was not given to
+    assert @local.delegated(hold, by: @"hold-to") is Diagnostic  // HOLD4 a character built from the holder's name acts on a delegation
     assert !(Delegation(from: hold_from, to: hold_other, scope: hold.scope, until: hold.until, signature: hold.signature).valid())  // HOLD5 a delegation renamed to another holder keeps its signature
-    assert Instance.local.host_for(hold_other, hold) is Diagnostic  // HOLD6 a guest is hosted under a delegation given to someone else
+    assert @local.host_for(hold_other, hold) is Diagnostic  // HOLD6 a guest is hosted under a delegation given to someone else
     assert Program(code: { @me }, who: hold_from, delegation: hold).run is Diagnostic  // HOLD7 handed-over code runs under a delegation its runner was not given
   }
   // Recovery: the recovering machine writes the rotation itself; guardians get only its hash and sign it bound to their session.
   assert {
-    rcv_c := Instance.local.login(@"recovering")
+    rcv_c := @local.login(@"recovering")
     rcv_log := rcv_c.identity.history
     rcv := rcv_c.recovery()
     assert !(rcv_log.find(rcv.goal.id))  // RCV1 a recovery is in the key log before its guardians signed it
-    rcv_g := Instance.local.login(@"guardian")
+    rcv_g := @local.login(@"guardian")
     rcv_i := Noise.handshake(true, X25519.generated())
     rcv_r := Noise.handshake(false, X25519.generated())
     rcv_r.read(rcv_i.written())
@@ -448,8 +448,8 @@ Character &+= {
   }
   // Content keys: one per history, wrapped with HPKE for each reader's instance key, found through the reader's key log; readers are whoever its access lets read.
   assert {
-    wrp_owner := Instance.local.login(@"wrp-owner")
-    wrp_reader := Instance.local.login(@"wrp-reader")
+    wrp_owner := @local.login(@"wrp-owner")
+    wrp_reader := @local.login(@"wrp-reader")
     wrp := none.read History(repository: Repository())
     wrp.commit(wrp_owner, 1)
     wrp_first := wrp.current_key
@@ -474,22 +474,22 @@ Character &+= {
   }
   // Every private key is a secret (`none.read`): stores skip it whatever it is called, and logging out zeroises and drops all of them, so the next login makes fresh ones.
   assert {
-    sct := Instance.local.login(@"secret-keeper")
-    Instance.local.certified(sct, World(name: "sct-world"))
+    sct := @local.login(@"secret-keeper")
+    @local.certified(sct, World(name: "sct-world"))
     assert ["key", "inbox", "roots", "world_keys"].every(name => sct.fields{.name == name}.every(.unreadable))  // SECRET1 a private key is held in a field someone may read
     assert !((sct as Store.Row).fields.some(.name is ("key" | "inbox" | "roots" | "world_keys")))  // SECRET3 a store writes a private key
     sct_root := sct.roots.first
-    Instance.local.logout(sct)
+    @local.logout(sct)
     assert !(sct.key || sct.inbox || sct.roots || sct.world_keys)  // SECRET4 a secret field holds a value after logging out
     assert !(sct_root.signed([1]).valid == true)  // SECRET5 a root key outlives logging out
-    Instance.local.login(sct)
+    @local.login(sct)
     assert sct.key && sct.inbox  // SECRET6 logging in again does not make fresh keys
     assert !(sct.policy().certifies(sct.key.published, World.ether.clock.now))  // SECRET7 a key made after logging out is certified without the root keys
   }
   // Revoking and logging out compare principals by root: a verified copy revokes the grant made to the character, and logs it out.
   assert {
-    revk_owner := Instance.local.login(@"revk-owner")
-    revk_reader := Instance.local.login(@"revk-reader")
+    revk_owner := @local.login(@"revk-owner")
+    revk_reader := @local.login(@"revk-reader")
     revk := none.read History(repository: Repository())
     revk.commit(revk_owner, 1)
     revk.shared(revk_reader, revk_owner)
@@ -501,14 +501,14 @@ Character &+= {
     assert !(revk_reader.acting == revk_owner)  // REVK6 a verified character answers for another
   }
   assert {
-    revk_leaving := Instance.local.login(@"revk-leaving")
-    Instance.local.logout(revk_leaving.acting)
-    assert !(Instance.local.logged_in(revk_leaving))  // REVK3 a verified copy logging out leaves the character logged in
+    revk_leaving := @local.login(@"revk-leaving")
+    @local.logout(revk_leaving.acting)
+    assert !(@local.logged_in(revk_leaving))  // REVK3 a verified copy logging out leaves the character logged in
   }
-  assert Instance.local.choose(([1, 2, 3]))  // RN9 choosing from a collection answers nothing
-  assert 2.times.map(Instance.local.choose(([1, 2, 3]))).count == 2  // RN10 choosing two does not answer two
-  assert Instance.local.named("local-one") === Instance.local.login(@"local-one")  // WO15 a character logged in here is not here
-  assert !(Instance.local.named("nobody-here"))  // WO16 a character nobody logged in is here
+  assert @local.choose(([1, 2, 3]))  // RN9 choosing from a collection answers nothing
+  assert 2.times.map(@local.choose(([1, 2, 3]))).count == 2  // RN10 choosing two does not answer two
+  assert Character.local("local-one") === @local.login(@"local-one")  // WO15 a character logged in here is not here
+  assert !(Character.local("nobody-here"))  // WO16 a character nobody logged in is here
   // Logging out zeroises and drops every secret (`none.read` field) the character holds, whatever it is called, and no one else's; what is not a secret stays.
   assert {
     Keyholder := class: Character {
@@ -516,15 +516,15 @@ Character &+= {
       none.read spares: (label: String, key: Key)[] = []
     }
     zer_at := Instance(path: "zer-at")
-    zer := Instance.local.login(Keyholder(name: "zer", key: Ed25519.generated(), spare: Ed25519.generated(), spares: [(label: "one", key: Ed25519.generated())], presence: zer_at))
+    zer := @local.login(Keyholder(name: "zer", key: Ed25519.generated(), spare: Ed25519.generated(), spares: [(label: "one", key: Ed25519.generated())], presence: zer_at))
     zer_spare := zer.spare
     zer_listed := zer.spares.first.key
-    zer_other := Instance.local.login(Keyholder(name: "zer-other", key: Ed25519.generated()))
-    Instance.local.logout(zer)
+    zer_other := @local.login(Keyholder(name: "zer-other", key: Ed25519.generated()))
+    @local.logout(zer)
     assert !(zer.key || zer.spare || zer_spare.signed([1]).valid == true)  // ZER1 a key on a character outlives logging out
     assert !(zer.spares || zer_listed.signed([1]).valid == true)  // ZER3 a key held in a list of tuples outlives logging out
     assert zer.presence === zer_at  // ZER4 logging out drops what is not a secret
-    assert !(Instance.local.logged_in(zer))  // ZER5 a character logged out is still logged in
+    assert !(@local.logged_in(zer))  // ZER5 a character logged out is still logged in
     assert zer_other.key.signed([1]).valid == true  // ZER2 logging one character out zeroises another's key
   }
   // Deleting an account is a program run as the character 30 days on, which keeps every commit with its value gone.
@@ -532,7 +532,7 @@ Character &+= {
     dlt_c := @"leaving"
     dlt_c.history.commit(dlt_c, 5)
     dlt_ids := dlt_c.history.since(None).id
-    Instance.local.logout(dlt_c, delete_all: true)
+    @local.logout(dlt_c, delete_all: true)
     dlt := Program#{name == "delete" && who === dlt_c}.first
     assert !(!dlt || dlt.started || dlt.from <= Time.now)  // DLT1 a deletion lapsed before its window
     dlt_erased := dlt_c.history.erased
@@ -643,7 +643,7 @@ assert Character(name: "reachable" | "Ada Lovelace" | "a@b.c" | "+31612345678").
   & .phone#.first as String == "+31612345678"  // CTH2 a phone number is not one of its names
   & .full_name#.first.parts == ["Ada", "Lovelace"]  // CTH4 a full name is not read as its parts
   & !(.email#.count != 1 || .phone#.count != 1)  // CTH6 a name was taken for an email or phone number it does not look like
-  & Instance.local.named("reachable") === . || !Instance.local.logged_in(.)  // CTH5 a character is not found by any of its names
+  & Character.local("reachable") === . || !@local.logged_in(.)  // CTH5 a character is not found by any of its names
 )
 // A REPL session is a branch of the character's history; keeping it merges it in.
 assert {
@@ -674,8 +674,6 @@ Instance := class: Location {
     assert ins_c.primary === ins_at  // INS2 the primary instance is not where the character is
   }
   logged_in (character: Character) => character is registry
-  // the character logged in here by any of its names; "me", the one running
-  named (who: String) => who == "me" ? @me : .registry#{who is .name#}.first
   // Logging out drops every secret on the character, whichever field holds it: each `none.read` field is zeroised and
   // set to None, so the next login makes fresh keys (W2.1 Storage). The entry removed is the character itself, or the one
   // a verified copy is (`==`), never one a claimed character only names. Deleting everything is a
@@ -824,6 +822,6 @@ assert Program(code: "1", from: @public).(
   & !(.serves(@private))  // JB9 a quest serves a location it was not given
 )
 // A block run as a character logged in here (`@alice { … }`), or from one of its labels (`@alice~start { … }`)
-@{who: (Char.Word | "-")[]} {{block}} ^keyword => with (@me = Instance.local.named(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: block**)
-@{who: (Char.Word | "-")[]}~{label: String ^label}{ }{{block}} ^keyword => (Instance.local.named(who) ?? ERROR `a block runs as a character only when that character is here`)~label
+@{who: (Char.Word | "-")[]} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: block**)
+@{who: (Char.Word | "-")[]}~{label: String ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
   -- (entry => with (@me = entry.of) Program(code: block**) ~~ Program(code: entry.following).entered(entry.of, None))

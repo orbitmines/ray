@@ -17,23 +17,24 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 @host.read { @guests }
 
 // Whatever the policy, `confidential` is never wider than `@private.managed` (W5.5).
-confidential => Node.policy & @private.managed
+confidential => @me/policy & @private.managed
 // Who may see what.
 assert confidential  // AC3 there is no confidential permission
 // confidential follows the policy, but never past @private.managed.
 assert {
-  with Node.policy = @public {
+  with @me/policy = @public {
     assert confidential is @private.managed  // CK1 confidential widens with a public policy
     assert !(@"stranger" is confidential)  // CK2 confidential reaches a stranger under a public policy
   }
 }
 assert {
-  with Node.policy = @local {
+  with @me/policy = @local {
     assert confidential is @local  // CK3 confidential is wider than a narrower policy
   }
 }
 assert none is @local  // CST3 the permission nobody has is not the narrowest
-Node.policy = @local
+// On ether, what nobody granted is visible to this instance's characters
+Character &+= { policy: * = @local }
 
 Node &+= {
   public => visibility#.some(.reads && @public is .who)

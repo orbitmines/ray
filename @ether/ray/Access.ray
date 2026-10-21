@@ -50,13 +50,10 @@ assert none.read.reads & none.read.who === none  // CST4 `none.read` is not read
 const {target} ^keyword => target ~~ .access |= Access(none, method: `=`, target: target)
 assert (const (count: 1)).access#.some(.who === none && .writes)  // CST1 const is not the permission nobody has
 
-// What a value is visible to: its own grants, else what holds it's, else the policy's (nobody's, unless a world sets one)
+// What a value is visible to: its own grants, else what holds it's, else the policy of whoever runs (`@me/policy`)
 Node &+= {
-  static policy: * = none
-  assert Node.policy === none  // AC50 the policy nobody has changed is not the permission nobody has
-
-  visibility => .access ?? (.parent ? .parent.visibility : None) ?? Access(Node.policy, method: Access.Reading, target: this)
-  assert (count: 1).visibility.who === Node.policy  // AC51 a value granted nothing is not visible to the policy
+  visibility => .access ?? (.parent ? .parent.visibility : None) ?? Access(@me/policy, method: Access.Reading, target: this)
+  assert (count: 1).visibility.who === @me/policy  // AC51 a value granted nothing is not visible to the policy
   granted => .visibility#
   allows (who, called, at = None) => .granted.some(.covers(who, called, at))
   // A secret is a node no one may read (`none.read`, W5.6): stores skip it and logging out drops it.

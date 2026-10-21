@@ -289,7 +289,6 @@ assert {
 }
 
 Character &+= {
-  static local (who) => who == "me" ? @me : (@local.registry, @local.hosted)#.find((who as String).fold_case.skeleton is .name.fold_case.skeleton)
   // Verified and claimed: verified characters compare by root, a claimed one is only itself, and never a verified one.
   assert {
     ver_a := @local.login(@"ver-a")
@@ -506,8 +505,6 @@ Character &+= {
   }
   assert @local.choose(([1, 2, 3]))  // RN9 choosing from a collection answers nothing
   assert 2.times.map(@local.choose(([1, 2, 3]))).count == 2  // RN10 choosing two does not answer two
-  assert Character.local("local-one") === @local.login(@"local-one")  // WO15 a character logged in here is not here
-  assert !(Character.local("nobody-here"))  // WO16 a character nobody logged in is here
   // Logging out zeroises and drops every secret (`none.read` field) the character holds, whatever it is called, and no one else's; what is not a secret stays.
   assert {
     Keyholder := class: Character {
@@ -642,7 +639,6 @@ assert Character(name: "reachable" | "Ada Lovelace" | "a@b.c" | "+31612345678").
   & .phone#.first as String == "+31612345678"  // CTH2 a phone number is not one of its names
   & .full_name#.first.parts == ["Ada", "Lovelace"]  // CTH4 a full name is not read as its parts
   & !(.email#.count != 1 || .phone#.count != 1)  // CTH6 a name was taken for an email or phone number it does not look like
-  & Character.local("reachable") === . || !@local.logged_in(.)  // CTH5 a character is not found by any of its names
 )
 // A REPL session is a branch of the character's history; keeping it merges it in.
 assert {
@@ -821,7 +817,8 @@ assert Program(code: "1", from: @public).(
   .serves(@public)  // JB8 a quest serving a location does not serve it
   & !(.serves(@private))  // JB9 a quest serves a location it was not given
 )
-// A block run as a character logged in here (`@alice { … }`), or from one of its labels (`@alice~start { … }`)
-@{who: (Char.Word | "-")[]} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: block**)
-@{who: (Char.Word | "-")[]}~{label: String ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
+// A block run as a character (`@alice { … }`), or from one of its labels (`@alice~start { … }`); what it may do is what
+// that character was granted
+@{who: (Char.Word | "-")[]} {{block}} ^keyword => with (@me = @"{who}") Program(code: block**)
+@{who: (Char.Word | "-")[]}~{label: String ^label}{ }{{block}} ^keyword => @"{who}"~label
   -- (entry => with (@me = entry.of) Program(code: block**) ~~ Program(code: entry.following).entered(entry.of, None))

@@ -11,6 +11,9 @@ Nameable := class {
 @"{name: (!"\"")[]}" ^string => Character(name: name)
 
 Character := class: Hierarchy &+ Nameable {
+  // what a value nobody granted is visible to, as this character runs (`@me/policy`): nobody, unless it is set
+  policy: * = none
+  assert @"plc".policy === none  // AC50 the policy nobody has changed is not the permission nobody has
   // The same principal as `other`: here, the same value; @ether/security compares verified roots instead. (Whom a
   // principal answers for, a grant's, a delegation's: `==` it, or `is` it when that is a narrowing of principals.)
   chainable == (other) => this === other

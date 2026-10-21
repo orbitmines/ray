@@ -1,5 +1,5 @@
 Program &+= {
-  // (who runs it; Ether's: the character running, `@me`)
+  // (who runs it: what runs the language says)
   who: *?
   name: String?
   goal: *?

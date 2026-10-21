@@ -21,12 +21,13 @@ Expression := class (
     // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
     GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{is \s}((space) => \s[]) ~~ .(LHS | RHS) = String
     GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
+    
     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
     statements: (
       // A node: its rules by their heads; what it does not read, what it is in reads.
       Node := class (in?: Node) => {
         rules := {
-          [rule: GRAMMAR_RULE] := (caller) =>
+          [rule: GRAMMAR_RULE.LHS] := (caller) =>
             rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] :=
               (caller) => (rhs: Statements(Node(in: this)) = rule.RHS)(Program(caller: caller))
         }

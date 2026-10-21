@@ -1093,17 +1093,44 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   }
   if read_by_parts((seq_type).whole) {
     seq_way_at := ((seq_type) ways_in (seq_text) into (seq_into) first (false)).head
+    seq_first_way := seq_way_at
     while seq_way_at {
       seq_way_read := (seq_type) applying_to (way_value(seq_way_at.value))
       // (mapped, what f is given is the text it matched, `.`: `{statement: context.reading(.)}`)
       seq_way_text := seq_text.until((seq_way_at.value).reading_left)
       seq_way_value := seq_maps ? (external mapped (seq_place) (seq_way_text)) : seq_way_read
+      // (what it read keeps what it was read by, a position's: written as a type after it, that type)
+      (external member (seq_way_value) (`read_as`) (seq_type)) if (seq_way_value !== None) && (seq_name !== None) && (seq_into !== None) && ((seq_into).header_defines === true) && ((seq_type).listing === true) && !((seq_type).is_range === true)
       (seq_way_value) given_to (seq_into) as (seq_name)
       seq_after := seq_read(seq_at.next, (seq_way_at.value).reading_left, seq_whole, seq_stops, seq_into)
       if seq_after !== None {
         return ((seq_way_value) taken_before (seq_after) named (seq_name))
       }
       seq_way_at = seq_way_at.next
+    }
+    // (positions, a list, read for more than their first way: each longer span they read whole, shortest first, until what
+    // follows reads (a right side of more than one character, `{b}` of `{a} => {b} => x`); asked for only then)
+    if ((seq_type).listing === true) && !((seq_type).is_range === true) && (seq_first_way !== None) {
+      seq_longer := (seq_first_way.value).reading_left
+      while !(seq_longer.empty) {
+        seq_longer = seq_longer.rest
+        seq_chain_was := reading_chain
+        reading_chain = (seq_type) chained_onto (seq_chain_was)
+        seq_whole_way := seq_read((seq_type).head, seq_text.until(seq_longer), true, false, seq_into)
+        reading_chain = seq_chain_was
+        if seq_whole_way !== None {
+          external member (seq_whole_way) (`reading_left`) (seq_longer)
+          external member (seq_whole_way) (`reading_parts`) (true)
+          external member (seq_whole_way) (`reading_from`) (seq_text)
+          seq_longer_value := seq_maps ? (external mapped (seq_place) (seq_text.until(seq_longer))) : ((seq_type) applying_to (way_value(seq_whole_way)))
+          (external member (seq_longer_value) (`read_as`) (seq_type)) if (seq_longer_value !== None) && (seq_name !== None) && (seq_into !== None) && ((seq_into).header_defines === true)
+          (seq_longer_value) given_to (seq_into) as (seq_name)
+          seq_longer_after := seq_read(seq_at.next, seq_longer, seq_whole, seq_stops, seq_into)
+          if seq_longer_after !== None {
+            return ((seq_longer_value) taken_before (seq_longer_after) named (seq_name))
+          }
+        }
+      }
     }
     return None
   }
@@ -1387,7 +1414,11 @@ fields_in_turn (fields_into, fields_first, fields_text) => {
           return None
         }
         // (a conjunction called, `Statements(global)(Program())`: its function called on what it read, as seq_read does)
-        ((fields_type) applying_to (way_value(fields_way.value))) given_to (fields_into) as (fields_name)
+        fields_value := (fields_type) applying_to (way_value(fields_way.value))
+        // (what it read keeps what it was read by: written as a type, `rule: GRAMMAR_RULE` in the header after it, that type, any
+        // rule's shape, not the text this one read)
+        (external member (fields_value) (`read_as`) (fields_type)) if (fields_value !== None) && (fields_name !== None) && ((fields_type).listing === true) && !((fields_type).is_range === true)
+        (fields_value) given_to (fields_into) as (fields_name)
         fields_rest = (fields_way.value).reading_left
       } else {
         return fields_given(fields_into, seq_read(fields_at, fields_rest, true, true, fields_into))
@@ -1421,7 +1452,16 @@ fields_given (given_into, given_reading) => {
 }
 // (a text read into one, its positions as they are in it (a type written after a field sees what that one read))
 read_into (into_instance, into_text) => fields_read(into_instance, (into_instance).fields_now.head, into_text)
-field_type_of (type_at) => ((external unset (type_at.value)) === true) ? (type_at.value).type : (((type_at.written_name !== None) && !((type_at.value).listing === true) && (((type_at.value).type) !== None) && !(((type_at.value).type) === Node)) ? (type_at.value).type : type_at.value)
+field_type_of (type_at) => as_read_by(((external unset (type_at.value)) === true) ? (type_at.value).type : (((type_at.written_name !== None) && !((type_at.value).listing === true) && (((type_at.value).type) !== None) && !(((type_at.value).type) === Node)) ? (type_at.value).type : type_at.value))
+// (a type written as what a header's position read: what that was read by; of positions, a copy of them, as they are
+// written (not what was said of them after, the first rule's `GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF`))
+read_as := None
+// (a rule: a list given to a function as its argument is spread into its parameters)
+{shape_type_of} as_shape ^keyword => {
+  shape_type := shape_type_of
+  (((shape_type).listing === true) && !((shape_type).is_range === true)) ? (shape_type).listed() : shape_type
+}
+as_read_by (read_type) => ((read_type !== None) && ((external member (read_type) (`read_as`)) !== None)) ? ((external member (read_type) (`read_as`)) as_shape) : read_type
 // (one read as a class made of it with no header of its own: made of that class too)
 made_as (instance, wanted, written_made) => (wanted === written_made) ? instance : (instance &+= wanted)
 // (a structure, `(a: T, `-`, b: U)`: a text it reads is destructured into one made of it, each field the span it takes)
@@ -1725,7 +1765,7 @@ is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
   // (a text is a String: what it is made of, characters, not asked again)
-  (type === Node) || (value === type) || ((type === global.String) && (value.textual === true)) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && ((type).same_characters(value) !== None)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range === true) && (value.textual === true)) ? ((value).rest.empty && type.one_same(value)) : ((type.listing === true) && (value.textual === true)) ? text_reads(type.head, value) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
+  (type === Node) || (value === type) || ((type === global.String) && (value.textual === true)) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && ((type).same_characters(value) !== None)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range === true) && (value.textual === true)) ? ((value).rest.empty && type.one_same(value)) : ((type.listing === true) && (value.textual === true)) ? (((external admits value type) ?? text_reads(type.head, value)) === true) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
 }
 // (a text is a class written as a structure (`class (a: T, `-`, b: U)`, a text among its places; or one typed place alone,
 // `class (x: T)`) when it reads as it is written)

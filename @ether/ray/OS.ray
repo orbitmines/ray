@@ -5,7 +5,7 @@
 // the language as the operating system in @ether/os, which depends on all of them; a project using what differs between
 // them depends on @ether/os.
 OS := class (platform: String) => {
-  // (the one the device runs: Ether's, `@me/device/os`; here, the one the host reports)
+  // (the one the device runs: what runs the language says; here, the one the host reports)
   static current => OS.host
   as (=== boolean) => this === OS.current
   // what the host says of itself (`os["PATH"]`, `os.env.PATH`)

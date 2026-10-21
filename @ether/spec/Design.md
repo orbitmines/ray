@@ -1567,9 +1567,9 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   Mirrors and caches may hold single files of fetched repositories.
 - **Layout.** `@ether/` is the Ether project: the standard `@` names (`Ether.ray`), `World.ray`, `Messaging.ray` and the
   instance entrypoints (`entrypoint.server.ray`, `entrypoint.npc.ray`, `entrypoint.player.ray`). `@ether/ray/` is the core
-  (`!language`): Node, Ray, Number, String, Unicode, Encoding, Program, Control, Compiler, Language, Project, Location,
-  Character, Format, Reporting, Time, Unit, UUID, IP, MAC, Roman, Access, Feature, OS, with its claims in `ray/tests/`.
-  Subprojects of `@ether`: `security`, `network`, `filesystem`, `timezone`, `fonts`, `device`, `geometry`, `ui`,
+  (`!language`): Node, Ray, Number, String, Encoding, Program, Control, Compiler, Language, Project, Location,
+  Character, Format, Reporting, Unit, Access, Feature, OS, with its claims in `ray/tests/`.
+  Subprojects of `@ether`: `security`, `network`, `filesystem`, `time`, `timezone`, `fonts`, `device`, `geometry`, `ui`,
   `version-control`, `os`, `game`, `library`, `avatar`, and the outside languages under `$/`. Folders of projects are
   lowercase. `.ether/` is what Ether keeps locally for a project (fetched externals, caches, `.%` working state), laid out
   as `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0`.
@@ -2079,10 +2079,10 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - The language's core is its own project, `@ether/ray/bootstrap`: the entrypoint and the files it needs (Number, Ray,
   String), depending on nothing else, so that it can bootstrap Expression.ray to self-host. What needs the rest of
   the library (Unicode tables, units, randomness, IO, languages, the compiler's levels, access) lives in the file of what
-  it needs (`Char &+= { … }` in Unicode.ray, `Iterable &+= { random … }` in Feature.ray). It is rebuilt a line at a
+  it needs (`Char &+= { … }` in $/Unicode.project.ray, `Iterable &+= { random … }` in Feature.ray). It is rebuilt a line at a
   time, essentials first, each line's tests passing before the next.
   The entrypoint holds only what the bootstrap uses (2026-10-16): programs as quests, `$` and diagnostics carried by
-  values, case-folded uniqueness and where a class is written are tested in Program.ray, Reporting.ray, Unicode.ray and
+  values, case-folded uniqueness and where a class is written are tested in Program.ray, Reporting.ray, $/Unicode.project.ray and
   Location.ray; the entrypoint keeps the stubs (`Program`, `Diagnostic`) its own rules name.
 
 - The host (the TypeScript interpreter in `@ether/v0.ts`, used the same way by the CLI, the daemon and the LSP) knows no
@@ -2132,6 +2132,14 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 ### 21.3 Frames, names and members
 
+- Decided 2026-10-20 (the user): **a class's body is its constructor, read for each instance** (as the Almanac says: "the
+  entire body of the class is the default constructor"). `rules := { … }` in a class's body is each instance's own;
+  a method reads it bare, as a local of the body it is written in (the instance's run of it). What is given by name
+  when it is made (`Hierarchy(parent: root)`) is not given the body's default (`parent: Hierarchy? = None`).
+  - **Reading what does not depend on the instance once per class is a compiler optimization**, not the meaning: a
+    method, a rule, `static …`, a class or enum named in it, an `assert`, names given together (`a | b : T`). The
+    kernel does it for now (`external hoisted { … }` in the entrypoint's class rule: the class reads its whole block
+    once, as before, and each instance reads it again without those); it belongs in `Compiler.ray` as a level.
 - Decided 2026-10-17, being built:
   - **A bare name never reads a member.** Inside a method, `count` is not `.count`. A bare name sees the method's
     parameters, its own locals, the locals of the bodies it is written in, and the file and global scope. A member of
@@ -2286,7 +2294,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
       part of Unicode into the bootstrap.
     - A String is of characters, not of code points; by default a character is a grapheme cluster. For now a character
       is the scalar a UTF-8 unit decodes to: `String.Scalars`, a String whose characters are those, the library using it
-      until then. UTF-8 is a type (Unicode.ray's), moved into String.ray under `Unicode` while the bootstrap needs it;
+      until then. UTF-8 is a type ($/Unicode.project.ray's), moved into String.ray under `Unicode` while the bootstrap needs it;
       `.next` follows from it.
     - What counts as splitting is what the methods read: any piece of text can be used for anything.
     - A 32-bit integer is `Binary₃₂.Signed`, the language's own (not the kernel's `external int32`).

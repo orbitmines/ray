@@ -4,6 +4,9 @@
 @crc32
 @ether/version-control
 @ether
+@ether/time
+@unicode
+@name
 
 // Git's formats (https://git-scm.com/docs/gitformat-pack, https://git-scm.com/docs/gitformat-index, https://git-scm.com/docs/gitprotocol-http)
 // The object format is part of the type: Git reads and writes SHA-1 repositories, Git<SHA256> SHA-256 ones (https://git-scm.com/docs/hash-function-transition)

@@ -1,3 +1,5 @@
+@unicode
+
 // The fonts installed on the device: where the operating system keeps them, and the file of a family.
 Fonts := class {
   // where the host keeps its fonts; a browser gives none to read, and on ether they are not written yet

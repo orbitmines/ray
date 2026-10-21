@@ -1,0 +1,31 @@
+@ip
+
+// An email address (https://www.rfc-editor.org/rfc/rfc5322#section-3.4.1), UTF-8 allowed in both parts (https://www.rfc-editor.org/rfc/rfc6531#section-3.3):
+// a dot-atom or a quoted local part of at most 64 characters, "@", then a domain of at least two labels or an address literal
+// (https://www.rfc-editor.org/rfc/rfc5321#section-4.1.3, https://www.rfc-editor.org/rfc/rfc5321#section-4.5.3.1).
+Email := class (local: Email.Local{length <= 64}, "@", domain: Email.Domain{length <= 253}) => {
+  // atext: any visible character but the specials, or any non-ASCII one.
+  static Atom := Char{!is_ascii || "!" <= this <= "~" && !"()<>[]:;@\\,.\"".contains(this)}[]{length > 0}
+  static Local := (Email.Atom, (".", Email.Atom)[]) | ("\"", (Char{" " <= this <= "~" && != "\"" && != "\\"} | ("\\", Char{" " <= this <= "~"}))[], "\"")
+  // A label: letters and digits, hyphens only inside, at most 63 (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.1, https://www.rfc-editor.org/rfc/rfc5890).
+  static Alphanumeric := Char.Letter | Char.Digit | Char{!is_ascii}
+  static Label := (Email.Alphanumeric, ((Email.Alphanumeric | "-")[], Email.Alphanumeric)?){length <= 63}
+  static Domain := (Email.Label, (".", Email.Label)[]{length > 0}) | ("[", IPv4 | ("IPv6:", IPv6), "]")
+  assert "fadi@orbitmines.com" is Email  // CHR22 a plain address (RFC 5322) is not an email
+  assert "first.last@mail.orbitmines.com" is Email  // CHR23 a dotted local part is not an email
+  assert "\"john doe\"@orbitmines.com" is Email  // CHR24 a quoted local part with a space is not an email (RFC 5322 section 3.4.1)
+  assert "user@[192.168.0.1]" is Email  // CHR25 an address literal domain is not an email (RFC 5321 section 4.1.3)
+  assert "用户@例子.广告" is Email  // CHR26 UTF-8 in the local part is not an email (RFC 6531)
+  assert !("plainaddress" is Email)  // CHR27 text without "@" is an email
+  assert !("@orbitmines.com" is Email)  // CHR28 an address without a local part is an email
+  assert !("user@localhost" is Email)  // CHR29 a domain of one label is an email
+  assert !("a..b@orbitmines.com" is Email)  // CHR30 two dots in a row in the local part are an email
+  assert !(".a@orbitmines.com" is Email)  // CHR31 a leading dot in the local part is an email
+  assert !("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@orbitmines.com" is Email)  // CHR32 a local part over 64 characters is an email (RFC 5321 section 4.5.3.1.1)
+  assert !("a@-orbitmines.com" is Email)  // CHR33 a label starting with a hyphen is an email
+}
+
+Character &+= {
+  email => name{is Email}
+  assert Character().named("jane@orbitmines.com").email == "jane@orbitmines.com"  // CHR52 a character named with an email has no email
+}

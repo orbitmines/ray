@@ -2188,7 +2188,7 @@ const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 7
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
-const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted', 'type_written', 'spread', 'is_range'];
+const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted', 'type_written', 'spread', 'is_range', 'mapped_by', 'mapped', 'dynamic_in', 'dynamic_out', 'origin_of', 'hoisted'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
@@ -2198,7 +2198,7 @@ const L = { EXPLAIN: 19, TRACE: 20, TRACE_NONE: 21, TRACE_DONE: 22, TRACE_CHECK:
 // (what the kernel tells the host with --debug: D_… in it)
 const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20, RESULT: 22, FREE: 32 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
-const F = { RULE: 28, CALLER: 32, THIS: 36, START: 40, END: 44, CLOSURE: 48, RECEIVER: 52, TAKES: 56 }, TAKE = 32;
+const F = { RULE: 28, CALLER: 32, THIS: 36, START: 40, END: 44, CLOSURE: 48, RECEIVER: 52, TAKES: 56 }, TAKE = 36;
 const T = { START: 0, END: 4, VIS: 8, ORIGIN: 12, THIS: 16, VALUE: 20, STATE: 24 };
 const R = { PREV: 0, KIND: 4, MASK: 8, HOLES: 12, BS: 16, BE: 20, CLOSURE: 24, PARTS: 28, HEAD: 32, FLAGS: 36, OWNER: 40, BODY: 44, SKIP: 48, INL_S: 52, INL_E: 56, INL_F: 60, BODY_: 44, FN: 88, PART: 96 }, PART = 24;
 const enum Kind { RULE, DEFINE, EXTERNAL, VALUE }

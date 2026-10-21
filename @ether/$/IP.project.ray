@@ -1,3 +1,5 @@
+@unicode
+
 IP := class: Location &+ (-1 <- . -> +1) {
   static NUMBER_OF_SEGMENTS: Decimal
   static SEGMENT_LENGTH: Decimal

@@ -1,3 +1,5 @@
+@unicode
+
 // HTML Living Standard (https://html.spec.whatwg.org/multipage/)
 // The headers read HTML and write it; written inline, a Ray value in braces is a hole, taken at its position: text as Text, an element or a list of them as children, and a boolean as an attribute present or not
 HTML := class: Language {

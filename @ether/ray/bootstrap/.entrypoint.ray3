@@ -804,9 +804,11 @@ whole => (((.).listing === true) ? (.).gathered : (.))
 // (the same object as what it superposes, their methods its own, superposed as it is: made of each, its own rules first)
 {a} | {b} ^operator => (({ }) &+ {
   superposes := true
-  // (what it is itself, not what each of them is: one of them, not a list or a text of them)
+  // (what it is itself, not what each of them is: one of them, not a list or a text of them, nor a repeat (`\s+` of
+  // `" " | "\t".."\r"`, one of those not empty))
   listing := false
   textual := false
+  repeats := false
   // (one superposed with a superposition: its components, each one; `1 | 2 | 3` three)
   // (each written as a name, `LHS: T | RHS: U`: by that name)
   components := (((a).superposes === true) ? (a).components.listed() : (external names (Array.new.append(a)) a _)).joined(((b).superposes === true) ? (b).components : (external names (Array.new.append(b)) b _))
@@ -1048,7 +1050,15 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
       seq_type = seq_named
     }
   }
-  // (where the text has ended: one that may be nothing, `x?: T`, nothing; a repeat, `T[]`, none of it)
+  // (where the text has ended: one that may be nothing, `x?: T`, nothing (a default of nothing keeps no type: its type
+  // nothing too, `args?: Node[]` of a key); a repeat, `T[]`, none of it)
+  if seq_text.empty && (seq_type === None) {
+    (None) given_to (seq_into) as (seq_name)
+    seq_after_nothing := seq_read(seq_at.next, seq_text, seq_whole, seq_stops, seq_into)
+    if seq_after_nothing !== None {
+      return ((None) taken_before (seq_after_nothing) named (seq_name))
+    }
+  }
   if seq_text.empty && (optional_type(seq_type) || (repeat_type(seq_type) && !(((seq_type).nonempty_of) !== None))) {
     seq_none := optional_type(seq_type) ? None : []
     (seq_none) given_to (seq_into) as (seq_name)
@@ -1295,6 +1305,16 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
       external member (ways_through) (`reading_parts`) (true)
       external member (ways_through) (`reading_from`) (ways_from)
       ways_found.append(ways_through)
+    }
+    return ways_found
+  }
+  // (one way of a class with a header, `class (a: T, b: U)`, the first: read by its positions in order, as a list is, into
+  // one made of it (not each span from the shortest read whole, every way: what `T[]` asks of each T))
+  if ways_only && (((ways_by).of) === ways_by) && !((ways_by).textual === true) && ((ways_by).fields_now !== None) {
+    ways_made := (ways_by) &+ { }
+    ways_structure := seq_read(((ways_made).fields_now).head, ways_from, false, false, ways_made)
+    if ways_structure !== None {
+      ways_found.append(((ways_structure).reading_left) left_after (made_as(fields_given(ways_made, ways_structure), ways_by, ways_by)) named (None))
     }
     return ways_found
   }

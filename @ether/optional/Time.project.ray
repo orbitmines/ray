@@ -1,9 +1,9 @@
 @ether/os
 @unicode
 
-{hh: Decimal.String}:{mm: Decimal.String{length == 2}}: Quantity.Temporal => hh hours mm minutes
+{hh: Decimal.String}:{mm: Decimal.String{.length == 2}}: Quantity.Temporal => hh hours mm minutes
 assert 12:00 == 12 hours  // TI82 12:00 is not twelve hours
-{hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{length == 2}}: Quantity.Temporal => hh_mm ss seconds
+{hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{.length == 2}}: Quantity.Temporal => hh_mm ss seconds
 assert 12:00:30 == 12 hours 30 seconds  // TI83 12:00:30 is not twelve hours and thirty seconds
 
 Calendar := class {
@@ -19,10 +19,10 @@ Calendar := class {
 
   static segments := static*{. is Calendar.Segment}
   internal static TimeDefinition = Time{(-> .epoch).every(.calendar == calendar)}
-  static equivalence (from: TimeDefinition) -> (to: TimeDefinition{calendar == this}) => {
+  static equivalence (from: TimeDefinition) -> (to: TimeDefinition{.calendar == this}) => {
     within_same_calendar_system = from.calendar.static == to.calendar.static
 
-    Time{calendar == from.calendar} &+= {
+    Time{.calendar == from.calendar} &+= {
       as (=== to.calendar) => {
         if epoch != 0 {
           Time(to.calendar, epoch: epoch as to.calendar) = this (as <= Unit.Temporal if !within_same_calendar_system)
@@ -224,30 +224,30 @@ ISO_8601 := class: Time{.calendar is UTC.static} (
     year: Decimal,
     semicolons: "-"?,
     (
-      month = Month#[1 - month_of_year: Decimal{length == 2}{1 <= . <= Month#.count}],
+      month = Month#[1 - month_of_year: Decimal{.length == 2}{1 <= . <= Month#.count}],
       semicolons: "-"?,
-      day_of_month: Decimal{length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month},
+      day_of_month: Decimal{.length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month},
       day_of_year = in_year.days_before(month) + day_of_month
     ) | (
       day_of_year: Decimal{1 <= . <= (year as days ~= (days_in_year: *) days).days_in_year}
     ) | (
       // ISO 8601-1:2019 §5.2.4: a week date, YYYY-Www-D or YYYYWwwD; week 01 is the week holding the year's first Thursday (4 January), so its days may fall in the year before or after
       "W",
-      week_of_year: Decimal{length == 2}{1 <= . <= in_year.weeks_in_year},
+      week_of_year: Decimal{.length == 2}{1 <= . <= in_year.weeks_in_year},
       (
         semicolons: "-"?,
-        weekday: Weekday#[1 - day_of_week: Decimal{length == 1}{1 <= . <= Weekday#.count}]
+        weekday: Weekday#[1 - day_of_week: Decimal{.length == 1}{1 <= . <= Weekday#.count}]
       )?,
       day_of_year = week_of_year * 7 + Weekday#.index_of(weekday ?? Monday) + 1 - (Weekday#.index_of(in_year.weekday_of(4)) + 4)
     )
   )?,
   time: (
     "T" if date || !semicolons,
-    hour_of_day: Decimal{length == 2}{< calendar.day.hours},
+    hour_of_day: Decimal{.length == 2}{< calendar.day.hours},
     semicolons: ":"?,
-    minute_of_hour: Decimal{length == 2}{< calendar.hour.minutes},
+    minute_of_hour: Decimal{.length == 2}{< calendar.hour.minutes},
     semicolons: ":"?,
-    second_of_minute: Decimal{length == 2}{< calendar.minute.seconds},
+    second_of_minute: Decimal{.length == 2}{< calendar.minute.seconds},
     "Z" | offset: (
       offset_operator: "+" | "-",
       offset_hours: Decimal,
@@ -266,7 +266,7 @@ ISO_8601 := class: Time{.calendar is UTC.static} (
       critical: "!"?,
       key: ("a".."z" | "_", ("a".."z" | "_" | Char.Digit | "-")[]),
       "=",
-      value: (Char.Letter | Char.Digit)[]{length > 0}[].join("-"),
+      value: (Char.Letter | Char.Digit)[]{.length > 0}[].join("-"),
       "]"
     )[]
   )?

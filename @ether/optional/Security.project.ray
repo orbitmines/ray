@@ -66,8 +66,8 @@ Delegation := class (from: Character, to: *, scope: Access = Access(), until: Ti
   covers (method, target) => .valid() && .scope.allows(method) && (!.scope.filter || .scope.filter.entered(target, None))
 }
 
-Verified := Character{proof}
-Live := Verified{!proof.at && (!proof.delegation || proof.delegation.valid())}
+Verified := Character{.proof}
+Live := Verified{!.proof.at && (!.proof.delegation || .proof.delegation.valid())}
 
 Character &+= {
   local.write proof: (root: Byte[]?, by: Key?, at: Stamp?, session: *?, delegation: Delegation?)?

@@ -1,0 +1,32 @@
+// A choice: a program run by whoever is asked (`@me` by default), its goal what is chosen from. Asked of a type, it is answered
+// with one of it; asked of n, with n of them; `choose?` may be left unanswered (its placeholder, given with `??`, answers).
+choose {type} ^keyword => Program(who: @me, name: "choose", goal: type)
+choose {n: Number} {type} ^keyword => Program(who: @me, name: "choose", goal: n type)
+choose? {type} ^keyword => Program(who: @me, name: "choose", goal: type?)
+choose? {type} ?? {placeholder} ^keyword => Program(who: @me, name: "choose", goal: type?, tried: placeholder)
+Choice := Program{.name == "choose"}
+
+assert choose boolean is boolean  // CN3 what is chosen from a type is not of it
+assert (choose boolean) is Choice  // CN8 a choice is not a Choice
+assert (choose 3 boolean).count == 3  // CN4 choosing three booleans does not choose three
+assert Number{choose 5}.count == 5  // CN6 a narrowing by a choice of five is not five
+assert [1, 2, 3].map{choose 1}(*10).zip([1, 2, 3]).filter((a, b) => a != b).count == 1  // CN7 a filtered map changes other than the one it chose
+assert (choose 2 ("A" | "B" | "C")).count == 2  // CQ4 choose 2 does not choose two
+// The default of a choose is its placeholder; `choosing` while it is open.
+assert {
+  cq_open := choose? Number ?? 5
+  assert cq_open.choosing  // CQ5 an unanswered choice is not being chosen
+  assert cq_open.placeholder == 5  // CQ6 the default of a choose is not its placeholder
+  assert cq_open.answer == 5  // CQ7 an unanswered choice does not answer its placeholder
+  cq_open.value = 7
+  assert !(cq_open.choosing)  // CQ8 an answered choice is still being chosen
+  assert cq_open.answer == 7  // CQ9 an answered choice answers its placeholder
+  assert !(5.choosing)  // CQ10 a plain value is being chosen
+}
+assert {
+  chs := choose? Number ?? 5
+  chs.told(3)
+  assert chs.value.weight == 1/2  // CHS2 a player's answer is taken as a certainty
+  chs.told(4)
+  assert chs.value#.count == 2  // CHS3 a second answer replaced the first instead of joining it
+}

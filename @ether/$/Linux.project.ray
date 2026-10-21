@@ -1,0 +1,5 @@
+// Linux (https://www.kernel.org): an operating system a host may run. It is the one the device runs when the host reports the platform
+// "linux" (Node.js's `process.platform`, https://nodejs.org/api/process.html#processplatform).
+OS.Linux := OS(platform: "linux")
+assert OS.Linux.platform == "linux"  // LIN1 Linux is not named by the platform "linux"
+assert OS.Linux is OS  // LIN2 Linux is not an operating system

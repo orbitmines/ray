@@ -1,7 +1,9 @@
+@ether/random
+
 Encoding := class {
   Digest := class: Language {
     read (encoded) => ERROR `a digest is written and never read back`
-    write (value) => Hash(value, algorithm: this)
+    write (value) => Encoding.Hash(value, algorithm: this)
     // EN21 writing a value with a digest does not give a hash made with that digest
     assert $.sha256.write(5).(
       . is Encoding.Hash  // EN22 a digest does not write a hash
@@ -11,7 +13,7 @@ Encoding := class {
   }
   Packing := class: Language {
     read (encoded) => encoded.value
-    write (value) => Packed(value, algorithm: this)
+    write (value) => Encoding.Packed(value, algorithm: this)
     // EN25 writing a value with a packing does not give a packed value made with that packing
     assert $.gzip.write(5).(
       . is Encoding.Packed  // EN26 a packing does not write a packed value
@@ -22,7 +24,7 @@ Encoding := class {
   }
 
   Asymmetric := class: Language {
-    pair (secret: Byte[] = secure Byte₃₂.random) => Key(algorithm: this, public: public(secret), secret)
+    pair (secret: Byte[] = secure Byte₃₂.random) => Encoding.Key(algorithm: this, public: .public(secret), secret: secret)
     // EN30 a pair of keys is not made with the algorithm, a 32-byte public key and its secret (RFC 8032 section 5.1.5)
     assert $.ed25519.pair().(
       .algorithm === $.ed25519  // EN31 the key does not remember its algorithm
@@ -43,7 +45,7 @@ Encoding := class {
   }
   Agreement := class: Asymmetric
   Symmetric := class: Language {
-    generated (secret: Byte[] = secure Byte₃₂.random) => Key(algorithm: this, public: [], secret)
+    generated (secret: Byte[] = secure Byte₃₂.random) => Encoding.Key(algorithm: this, public: [], secret: secret)
     // EN39 a symmetric key made without a secret has a public part, or a secret that is not 32 bytes
     assert $.chacha20poly1305.generated().(
       .public.count == 0  // EN40 a symmetric key has a public part
@@ -52,13 +54,13 @@ Encoding := class {
   }
 
   Key := class (algorithm: Asymmetric | Symmetric, public: Byte[], none.read secret: Byte[]?) => {
-    published => Key(algorithm, public)
+    published => Encoding.Key(.algorithm, .public)
     // EN42 the published form of a key keeps its secret
     assert $.ed25519.pair().published.(
       .secret == None  // EN43 the published key still holds the secret
       & .public.count == 32  // EN44 the published key lost its public part
     )
-    signed (value) => Signed(value, by: published, signature: algorithm.sign(secret, value as Byte[]))
+    signed (value) => Encoding.Signed(value, by: .published, signature: .algorithm.sign(.secret, value as Byte[]))
     // EN45 a signed value does not hold the value, the signer's published key and a signature that holds
     assert {
       key := $.ed25519.pair()
@@ -68,7 +70,7 @@ Encoding := class {
       assert signed.valid  // EN48 a signature made by a key does not hold
       assert signed.signature.count == 64  // EN49 a signature is 64 bytes for Ed25519 (RFC 8032 section 5.1.6)
     }
-    agreed (other: Byte[]) => algorithm.agreed(secret, other)
+    agreed (other: Byte[]) => .algorithm.agreed(.secret, other)
     // EN50 two parties do not reach the same shared secret (RFC 7748 section 6.1)
     assert {
       alice := $.x25519.pair()
@@ -79,7 +81,7 @@ Encoding := class {
     zeroised: static => this ~~ .secret = None
     assert $.ed25519.pair().zeroised.secret == None  // EN53 a zeroised key keeps its secret
     assert $.ed25519.pair().zeroised.public.count == 32  // EN54 a zeroised key lost its public part
-    chainable == (other: Key) => algorithm === other.algorithm && public == other.public
+    chainable == (other: Key) => .algorithm === other.algorithm && .public == other.public
     // EN55 a key is not equal to itself
     assert {
       key := $.ed25519.pair()
@@ -89,7 +91,7 @@ Encoding := class {
     }
   }
   Signed := class (value: *, by: Key, signature: Byte[]) => {
-    valid => by.algorithm.verify(by.public, value as Byte[], signature)
+    valid => .by.algorithm.verify(.by.public, .value as Byte[], .signature)
     // EN59 a signature does not fail for a changed value
     assert {
       key := $.ed25519.pair()
@@ -108,12 +110,12 @@ Encoding := class {
   assert Encoding.little_number(Encoding.little(48879, 4)) == 48879  // EN67 reading a number written little endian does not give it back
 
   Packed := class (value: *, algorithm: Packing) => {
-    as (target) => algorithm.read(this)
+    as (target) => .algorithm.read(this)
     assert (Encoding.Packed(7, algorithm: $.gzip) as Number) == 7  // EN68 a packed value read as its value is not the value
   }
 
   Hash := class (value: *, algorithm: Digest) => {
-    bytes: Byte[] => Compiler.reduced(Language.Writing(value, language: algorithm), algorithm.written)
+    bytes: Byte[] => Compiler.reduced(Language.Writing(.value, language: .algorithm), .algorithm.written)
     // the bytes of a hash are as long as the algorithm's output (FIPS 180-4, RFC 3174, RFC 1321)
     assert {
       assert Encoding.Hash(value: 5, algorithm: $.sha256).bytes.count == 32  // EN69 the bytes of a SHA-256 hash are not 32
@@ -122,7 +124,7 @@ Encoding := class {
       assert Encoding.Hash(value: 5, algorithm: $.md5).bytes.count == 16  // EN78 the bytes of an MD5 hash are not 16
     }
     assert !(Encoding.Hash(value: 5, algorithm: $.sha256).bytes == Encoding.Hash(value: 4, algorithm: $.sha256).bytes)  // EN70 the bytes of a hash of one value are the bytes of a hash of another
-    chainable == (other: Hash) => algorithm == other.algorithm && value == other.value
+    chainable == (other: Hash) => .algorithm == other.algorithm && .value == other.value
   }
   assert Encoding.Hash(value: 5, algorithm: $.sha256).(
     . == Encoding.Hash(value: 5, algorithm: $.sha256)  // EN5 two like digests are not the same
@@ -133,7 +135,7 @@ Encoding := class {
   )
 
   Encrypted := class (T, value: T, key: Key?) => {
-    opened (holder) => key && holder.key == key ? value : ERROR@Key `find the key`
+    opened (holder) => .key && holder.key == .key ? .value : ERROR@Key `find the key`
     // something encrypted for a key opened by a holder of that key
     assert {
       key := $.chacha20poly1305.generated()
@@ -141,13 +143,13 @@ Encoding := class {
     }
   }
 
-  static common (a: Byte[], b: Byte[]) => a.empty || b.empty || a.first != b.first ? 0 : 1 + common(a.rest, b.rest)
+  static common (a: Byte[], b: Byte[]) => a.empty || b.empty || a.first != b.first ? 0 : 1 + Encoding.common(a.rest, b.rest)
   assert Encoding.common([1, 2, 3] as Byte[], [1, 2, 4] as Byte[]) == 2  // EN72 the common start of two byte lists is not counted
   assert Encoding.common([5] as Byte[], [6] as Byte[]) == 0  // EN73 lists that differ at once have a common start
   assert Encoding.common([] as Byte[], [1] as Byte[]) == 0  // EN74 an empty list has a common start with another
   assert Encoding.common([1, 2, 3] as Byte[], [1, 2, 3] as Byte[]) == 3  // EN75 a list does not share its whole length with itself
-  static runs (source: Byte[], target: Byte[]) => target.empty ? [] : (0..<source.count).map(at => (from: at, count: common(source[at..], target))).max_by(.count)#.first -- (best =>
-    best && best.count >= 4 ? [(from: best.from, count: best.count)], runs(source, target[best.count..]) : runs(source, target[1..]) -- (rest =>
+  static runs (source: Byte[], target: Byte[]) => target.empty ? [] : (0..<source.count).map(at => (from: at, count: Encoding.common(source[at..], target))).max_by(.count)#.first -- (best =>
+    best && best.count >= 4 ? [(from: best.from, count: best.count)], Encoding.runs(source, target[best.count..]) : Encoding.runs(source, target[1..]) -- (rest =>
       rest.first.bytes ? [(bytes: (target[..0], rest.first.bytes).flatten)], rest.rest : [(bytes: target[..0])], rest))
 }
 

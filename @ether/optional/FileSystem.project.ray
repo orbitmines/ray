@@ -1,3 +1,5 @@
+@ether/os
+
 // The device's file system. It reserves the file space (Language §6.1: `@/` and `@./` are reserved for path names);
 // without it, such a location holds nothing to read.
 @/ => FileSystem.Host()
@@ -7,8 +9,17 @@
 @{drive: Char.Letter}:/ => FileSystem.Host()
 
 Location &+= {
-  sandboxed => "instance/" + normalised
+  sandboxed => "instance/" + .normalised
 }
+
+// What holds the locations of a space: `holder[location]` is what is held there, `holder[location] = value` writes it.
+// This one holds nothing: what a space is reserved to adds its own (`Host` below the file space, @ether/network the URLs).
+FileSystem := class: Language {
+  [location: Location] => ERROR@FileSystem `nothing loaded holds the location (a file needs @ether/filesystem, a URL @ether/network)`
+  { }[{location: Location}] = {value} ^punctuation => ERROR@FileSystem `nothing loaded holds the location to write it`
+  ({location: Location}, {args}) => ERROR@FileSystem `nothing loaded holds the location to execute it`
+}
+assert ("/a/b" as Held).holder is FileSystem  // LOC49 a location with no scheme is not held by the file system
 
 FileSystem &+= {
   // The device's own files: the host's (sandboxed: what the host answers for a directory is its entries); a browser and
@@ -58,3 +69,6 @@ assert {
     assert (@./ethertest/a).@ as String == "./ethertest/a"  // FS4 a location's own location is not where it was written
   }
 }
+// A Windows drive is a file location, not a URL with the scheme "C".
+assert (@C:/Windows/System32).@ as String == "C:/Windows/System32"  // FS1 a Windows drive path is not read as written
+assert (@C:/Windows/System32).holder === (@/usr/share).holder  // FS2 a Windows drive is not held like any other file path

@@ -30,13 +30,13 @@ TimeZone := class (name: String) {
     assert {
       winter := "2024-01-15T12:00:00Z" as ISO_8601 as Time
       // Where the zones are read, per operating system.
-      with @me/device/os = OS.Linux {
+      with (@me/device as OS) = OS.Linux {
         assert TimeZone.source is TimeZone.Zoneinfo  // TZ1 linux does not read the host's zoneinfo
         assert !(TimeZone.source.directory == @tzif/zoneinfo)  // TZ3 linux downloads the data instead of reading the host's
         assert !(TimeZone.source.directory ~= ⊢"tzif")  // TZ18 a host refers to @tzif for its zone data
         assert TimeZone.source.at("UTC", winter).offset == 0 seconds  // TZ15 UTC is off zero on linux
       }
-      with @me/device/os = OS.Ether {
+      with (@me/device as OS) = OS.Ether {
         assert TimeZone.source is TimeZone.Zoneinfo  // ETH7 the language as the operating system does not read TZif
         assert TimeZone.source.directory == @tzif/zoneinfo  // TZ17 the language as the operating system does not take its zone data from @tzif/zoneinfo
         amsterdam := TimeZone("Europe/Amsterdam")
@@ -54,22 +54,22 @@ TimeZone := class (name: String) {
 
   // Where the zones are read: the host's zoneinfo (tzfile(5): $TZDIR, else /usr/share/zoneinfo,
   // https://man7.org/linux/man-pages/man5/tzfile.5.html), Windows' ICU, the browser's Intl, on ether the downloaded @tzif.
-  static source => if OS.Linux || OS.Macos { TimeZone.Zoneinfo(directory: (@me/device/os.env.TZDIR ?? "/usr/share/zoneinfo") as Location) }
+  static source => if OS.Linux || OS.Macos { TimeZone.Zoneinfo(directory: ((@me/device as OS).env.TZDIR ?? "/usr/share/zoneinfo") as Location) }
     elsif OS.Windows { TimeZone.ICU() }
     elsif OS.Browser { TimeZone.Intl() }
     else { TimeZone.Zoneinfo(directory: @tzif/zoneinfo) }
   assert {
-    with @me/device/os = OS.Macos {
+    with (@me/device as OS) = OS.Macos {
       assert TimeZone.source is TimeZone.Zoneinfo  // TZ2 macos does not read the host's zoneinfo
     }
   }
   assert {
-    with @me/device/os = OS.Windows {
+    with (@me/device as OS) = OS.Windows {
       assert TimeZone.source is TimeZone.ICU  // TZ4 windows does not ask the OS's ICU
     }
   }
   assert {
-    with @me/device/os = OS.Browser {
+    with (@me/device as OS) = OS.Browser {
       assert TimeZone.source is TimeZone.Intl  // TZ5 the browser does not ask Intl
     }
   }

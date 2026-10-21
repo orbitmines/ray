@@ -20,8 +20,6 @@
 // keyboard, a pointer, controllers, a camera, …). What a device can do is a path under it, granted like anything else (`@me.execute { (@me/device as Camera) }`); a
 // capability nobody granted is asked for (`&@.ask`).
 Device := class {
-  // The operating system it runs: the one the host reports, else the language as the operating system (`OS.Ether`).
-  os: OS = OS.host
   handheld: boolean = false
   opened: Location?
   share: Location?
@@ -34,7 +32,8 @@ Device := class {
 
   // What `@me/device` answers: the machine and each device it has, superposed; a place typed by one selects it
   // (`here: Geolocation = @me/device`)
-  static made => Device() | Keyboard() | Pointer() | Controllers() | Camera() | Microphone() | Clipboard() | Geolocation()
+  // (the operating system it runs among them: the one the host reports, else the language as the operating system)
+  static made => Device() | OS.host | Keyboard() | Pointer() | Controllers() | Camera() | Microphone() | Clipboard() | Geolocation()
     | Motion() | Notification() | Vibration() | Speech() | Printer() | Display()
   assert {
     made := Device.made

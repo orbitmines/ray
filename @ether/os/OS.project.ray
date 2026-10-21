@@ -23,21 +23,21 @@ assert OS.Ether.architecture == "ray"  // ETH10 the language as the operating sy
 // An operating system is one of those loaded; as a boolean, whether it is the one the device runs.
 assert [OS.Ether, OS.Linux, OS.Macos, OS.Windows, OS.Browser].every(. is OS)  // OSE1 an operating system is not one of OS
 assert OS#{as boolean}.count == 1  // OSE3 other than one operating system runs this device
-assert @me/device/os === OS.host  // OSE4 the device does not run the operating system the host reports
+assert (@me/device as OS) === OS.host  // OSE4 the device does not run the operating system the host reports
 assert {
-  with @me/device/os = OS.Windows {
+  with (@me/device as OS) = OS.Windows {
     assert OS.Windows  // OSE6 the operating system the device runs is not true as a boolean
     assert !(OS.Linux)  // OSE7 an operating system the device does not run is true as a boolean
   }
 }
 // What the machine says about itself.
-assert @me/device/os/platform  // IO1 the machine does not say what it is
-assert @me/device/os/architecture  // IO2 the machine does not say what it is built on
-assert @me/device/os["architecture"] == @me/device/os/architecture  // IO4 asking by name is not asking the other way
-assert @me/device/os.env.PATH == @me/device/os["PATH"]  // ENV1 the environment is not read through the OS
+assert (@me/device as OS).platform  // IO1 the machine does not say what it is
+assert (@me/device as OS).architecture  // IO2 the machine does not say what it is built on
+assert (@me/device as OS)["architecture"] == (@me/device as OS).architecture  // IO4 asking by name is not asking the other way
+assert (@me/device as OS).env.PATH == (@me/device as OS)["PATH"]  // ENV1 the environment is not read through the OS
 
 assert {
-  with @me/device/os = OS.Ether {
+  with (@me/device as OS) = OS.Ether {
     @me/instance = "a"
     @me/instance = "b"
     assert @me/device/storage["instance/sent"] == "b" && @me/device/storage["instance/sent"].previous == "a"  // ETH9 what is sent to an instance on ether is not kept in order

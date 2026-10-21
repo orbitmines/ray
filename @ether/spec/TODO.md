@@ -63,3 +63,5 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **Program.ray reads statements by their text** (`is_jump => .code ~= ⊢"goto "`, `is_label`, `jump`, `head`, `assigns`,
   `writes`, `declares`, `precedence`): a parser written beside the language. What a statement is should be what the reader
   read it as (Expression.ray's statements: a jump, a label, a declaration and its head), asked of the statement.
+- **`@me/device/os` in the bootstrap** (Node.ray IO3, Ether.entrypoint.ray's `threads` default): the OS is one of the
+  devices `@me/device` superposes, selected by its type, `(@me/device as OS)`.

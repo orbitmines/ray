@@ -40,7 +40,7 @@ assert (@C:/Windows/System32).holder is FileSystem  // FS2 a Windows drive is no
 // What is at a location: `.held` read, `@x = value` written, `@x = None` removed, `@new = @x` copied, a directory's children
 // what is under it
 assert {
-  with @me/device/os = OS.Ether {
+  with (@me/device as OS) = OS.Ether {
     @./ethertest/a = "x"
     assert (@./ethertest/a).held == "x"  // ETH1 what is written on ether is not read back
     assert (@./ethertest).children == [@./ethertest/a]  // ETH2 a location on ether does not list what was written under it

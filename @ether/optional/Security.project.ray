@@ -15,11 +15,11 @@ Identity := class (keys: Key[], next: Byte[][] = [], digest: Language = Identity
   static algorithms := (signing: Ed25519, agreement: X25519, handshake: Noise, digest: SHA256, wrapping: HPKE, cipher: ChaCha20Poly1305)
 
   static Threshold := class (count: Number, signers: *[], wait: Quantity.Temporal = 0 seconds, veto: Identity.Threshold?) => {
-    met (event: History.Commit, identity: Identity) => event.signature#{event.covers(.) && identity.counts(.by, signers, event.stamp)}.map(.by).unique.count >= count
+    met (event: History.Commit, identity: Identity) => event.signature#{event.covers(.) && identity.counts(.by, this.signers, event.stamp)}.map(.by).unique.count >= .count
   }
 
   static Certificate := class (key: Key, until: Time = Time.now + 30 days, scope: * = *, world: World?) => {
-    expiring (at: Time = Time.now) => at + 1 day >= until
+    expiring (at: Time = Time.now) => at + 1 day >= .until
   }
 
   rules => (.next, .digest, .signing, .agreement, .handshake, .wrapping, .cipher, .printed_key, .guardians, .revoke, .add, .rotate, .recover)
@@ -61,9 +61,9 @@ Identity := class (keys: Key[], next: Byte[][] = [], digest: Language = Identity
 // A delegation is bound to its holder: it names who may act on it (`to`, a character by its root, or any narrowing),
 // and only that one, verified, acts on it (`Instance.delegated`); the signature covers `to`, so it cannot be renamed.
 Delegation := class (from: Character, to: *, scope: Access = Access(), until: Time = Time.now + 1 day, signature: Signed?) => {
-  hash => from.policy().digest.write(Language.ray.write((from.root, to is Character ? to.root : to, scope, until)) as Byte[]).bytes
-  valid (at: Time = Time.now) => at < until && signature.valid && signature.value == hash && from.certified(signature.by, World.ether.clock.now)
-  covers (method, target) => valid() && scope.allows(method) && (!scope.filter || scope.filter.entered(target, None))
+  hash => .from.policy().digest.write(Language.ray.write((this.from.root, this.to is Character ? this.to.root : this.to, this.scope, this.until)) as Byte[]).bytes
+  valid (at: Time = Time.now) => at < .until && .signature.valid && .signature.value == .hash && .from.certified(this.signature.by, World.ether.clock.now)
+  covers (method, target) => .valid() && .scope.allows(method) && (!.scope.filter || .scope.filter.entered(target, None))
 }
 
 Verified := Character{proof}
@@ -77,27 +77,27 @@ Character &+= {
   none.read roots: Key[] = []
   none.read world_keys: (world: World, key: Key)[] = []
 
-  root => identity.history.roots.first.hash
-  policy (at: Stamp? = None) => identity ? Identity.logged(identity.history, at) : None
-  certified (by: Key, at: Stamp, world: World? = None) => policy(at).certifies(by, at, world: world) ?? false
-  key_in (world: World?) => (world_keys ?? []){.world === world}.last.key ?? key
+  root => .identity.history.roots.first.hash
+  policy (at: Stamp? = None) => .identity ? Identity.logged(this.identity.history, at) : None
+  certified (by: Key, at: Stamp, world: World? = None) => .policy(at).certifies(by, at, world: world) ?? false
+  key_in (world: World?) => (.world_keys ?? []){.world === world}.last.key ?? .key
   inboxes (at: Stamp = World.ether.clock.now) => policy(at) -- (policy => policy ? policy.certificates{policy.receives(.key, at)}.map(.key) : [])
-  pseudonym (root: History.Label) => policy() -- (policy => policy.signing.generated(policy.digest.write([key.secret, (root as String).bytes].flatten).bytes))
+  pseudonym (root: History.Label) => .policy() -- (policy => policy.signing.generated(policy.digest.write([this.key.secret, (root as String).bytes].flatten).bytes))
 
   // The same principal: by root, the one a proof carries when verified, else the key log's of one held here (named by a
   // grant, a delegation or a registry); never evidence on its own: only a verified one acts for it (`Verified`).
-  chainable == (other) => this === other || other is Character && (proof.root ?? root) -- (mine => mine !== None && mine == (other.proof.root ?? other.root))
+  chainable == (other) => this === other || other is Character && (.proof.root ?? .root) -- (mine => mine !== None && mine == (other.proof.root ?? other.root))
   as (=== boolean) => (this is Verified ? this : @local.verified(this)) == @me
   acting => this is Verified ? this : @local.verified(this) ?? ERROR@Access `a character acts only as verified by a handshake or a key held here`
   assert @"nowhere".acting is Diagnostic  // VER7 a character nobody holds here acts
-  sealed (commit: History.Commit) => commit.who is Key ? commit ~~ (.signature = pseudonym(commit.line.id ?? commit.id).signed(.hash))
-    : key_in(commit.line.repository.world) -- (pair => commit ~~ (.relies = identity.history.head.hash) ~~ (.signature = pair.signed(.hash) if pair))
-  delegate (to, scope: Access = Access(), until: Time = Time.now + 1 day) => Delegation(from: this, to, scope, until) -- (made => made ~~ .signature = key.signed(made.hash))
+  sealed (commit: History.Commit) => commit.who is Key ? commit ~~ (.signature = this.pseudonym(commit.line.id ?? commit.id).signed(.hash))
+    : .key_in(commit.line.repository.world) -- (pair => commit ~~ (.relies = this.identity.history.head.hash) ~~ (.signature = pair.signed(.hash) if pair))
+  delegate (to, scope: Access = Access(), until: Time = Time.now + 1 day) => Delegation(from: this, to, scope, until) -- (made => made ~~ .signature = this.key.signed(made.hash))
 
   // Recovering a lost root is a program run as the character (W2.1 Recovery handshake): its new root keys are made here,
   // each guardian is sent only the rotation event's hash, and the event is appended once the `recover` threshold of
   // their signatures, each bound to a session it was asked on, is met.
-  recovery (sessions: Noise.Session[] = []) => (roots = [policy().signing.generated(), policy().signing.generated()]) -- (made => identity.history -- (log =>
+  recovery (sessions: Noise.Session[] = []) => (.roots = [.policy().signing.generated(), .policy().signing.generated()]) -- (made => this.identity.history -- (log =>
     History.Commit(who: this, stamp: log.clock.now, change: Program(code: { .keys = made.map(.published) }), previous: log.head, line: log) -- (event =>
       Program(name: "recover", who: this, goal: event, from: sessions, code: {
         sessions.for(.sent(event.hash))
@@ -106,7 +106,7 @@ Character &+= {
       }))))
   // A guardian signs the hash only after verifying the person, by its own means.
   vouching (session: Noise.Session, message: Byte[]) => session.received(message) -- (hash =>
-    Program(name: "verify the person recovering", who: this, goal: hash, code: { key.signed([hash, session.binding].flatten) }))
+    Program(name: "verify the person recovering", who: this, goal: hash, code: { this.key.signed([hash, session.binding].flatten) }))
 }
 assert !((@"a" == @"a") is Diagnostic)  // VER9 comparing characters errs with @ether/security imported
 
@@ -124,37 +124,37 @@ History.Commit &+= {
   wraps: *[] = []
   sealed: Byte[]?
 
-  more_attributes => [(name: "relies", text: Language.ray.write(relies)) if relies, (name: "key", text: Language.ray.write(key)) if key,
-    (name: "wraps", text: Language.ray.write(wraps)) if wraps.nonempty]
-  more_settings => [(name: "signature", text: Language.ray.write(signature)) if signature]
-  text => sealed ? Language.ray.write(sealed) : change as String
+  more_attributes => [(name: "relies", text: Language.ray.write(this.relies)) if .relies, (name: "key", text: Language.ray.write(this.key)) if .key,
+    (name: "wraps", text: Language.ray.write(this.wraps)) if .wraps.nonempty]
+  more_settings => [(name: "signature", text: Language.ray.write(this.signature)) if .signature]
+  text => .sealed ? Language.ray.write(this.sealed) : .change as String
   given (set, written: String) => this ~~ (.relies = set.relies) ~~ (.signature = set.signature) ~~ (.key = set.key) ~~ (.wraps = set.wraps ?? [])
     ~~ (set.key ? . ~~ (.sealed = Language.ray.read(written)) ~~ (.change = None) : .)
-  rewritten (change: Program?) => copy ~~ (.change = change) ~~ (.sealed = None unless change === this.change)
+  rewritten (change: Program?) => .copy ~~ (.change = change) ~~ (.sealed = None unless change === this.change)
 
   covers (signed: Signed) => signed.valid && (signed.value as Byte[])[..<hash.count] == hash
-  authentic => who is Key ? signature#.some(covers(.) && .by == who)
-    : who is Character && who.identity.history.since(None).some(.hash == relies && !(stamp < .stamp))
-    && signature#.some(covers(.) && who.certified(.by, stamp))
-  signer => who is Key ? (sealed ? opened.signer : who)
-    : authentic ? who.copy ~~ .proof = (root: who.root, by: signature#.find(covers(.)).by, at: stamp, session: None, delegation: None) : who
+  authentic => .who is Key ? .signature#.some(this.covers(.) && .by == this.who)
+    : .who is Character && .who.identity.history.since(None).some(.hash == this.relies && !(this.stamp < .stamp))
+    && .signature#.some(this.covers(.) && this.who.certified(.by, this.stamp))
+  signer => .who is Key ? (.sealed ? .opened.signer : .who)
+    : .authentic ? .who.copy ~~ .proof = (root: .who.root, by: .signature#.find(this.covers(.)).by, at: .stamp, session: None, delegation: None) : .who
   // Who the runtime verified signed this line, as of its stamp (so never `Live`); None for a line nobody verifiably signed.
-  attested => signer -- (by => by is Verified && by.proof.at ? by : None)
+  attested => .signer -- (by => by is Verified && by.proof.at ? by : None)
   // History is attribution, not authority (W2.1): a line runs as its who only when attested, otherwise as whoever replays it.
-  applied (held) => opened -- (plain => attested -- (by => held -- (by ? with (@me = by) plain.change : plain.change)))
+  applied (held) => .opened -- (plain => this.attested -- (by => held -- (by ? with (@me = by) plain.change : plain.change)))
 
-  label_hash => SHA256.write((id, change as String).join("") as Byte[]).bytes
-  payload => Language.ray.write(line.sealed_sender ? (hash: label_hash, change: change as String, who: who, relies: relies, signature: signature) : (hash: label_hash, change: change as String)) as Byte[]
-  content_key (holders: Character[] = line.holders) => line.content_key(key, holders, [wraps{.key == key}, line.wraps_of(key)].flatten)
-  enciphered => content_key([[who], line.holders].flatten) -- (content => content is Key
-    ? rewritten(change) ~~ (.sealed = content.write(payload))
-      ~~ (line.sealed_sender ? . ~~ (.who = who.pseudonym(line.id ?? id).published) ~~ (.relies = None) ~~ (.signature = None) : .))
+  label_hash => SHA256.write((this.id, this.change as String).join("") as Byte[]).bytes
+  payload => Language.ray.write(this.line.sealed_sender ? (hash: this.label_hash, change: this.change as String, who: this.who, relies: this.relies, signature: this.signature) : (hash: this.label_hash, change: this.change as String)) as Byte[]
+  content_key (holders: Character[] = this.line.holders) => .line.content_key(this.key, holders, [this.wraps{.key == this.key}, this.line.wraps_of(this.key)].flatten)
+  enciphered => .content_key([[this.who], this.line.holders].flatten) -- (content => content is Key
+    ? this.rewritten(this.change) ~~ (.sealed = content.write(this.payload))
+      ~~ (this.line.sealed_sender ? . ~~ (.who = this.who.pseudonym(this.line.id ?? this.id).published) ~~ (.relies = None) ~~ (.signature = None) : .))
     : ERROR@Access `only a reader of a history writes to it`)
-  deciphered => content_key() -- (content => content is Key
-    ? Language.ray.read(content.read(sealed) as String) -- (inner =>
-        rewritten(inner.change as Program) ~~ (inner.who ? . ~~ (.who = inner.who) ~~ (.relies = inner.relies) ~~ (.signature = inner.signature) : .)
+  deciphered => .content_key() -- (content => content is Key
+    ? Language.ray.read(content.read(this.sealed) as String) -- (inner =>
+        this.rewritten(inner.change as Program) ~~ (inner.who ? . ~~ (.who = inner.who) ~~ (.relies = inner.relies) ~~ (.signature = inner.signature) : .)
           -- (plain => plain.label_hash == inner.hash ? plain : ERROR@Access `a line's ciphertext belongs to another line`))
-    : rewritten(content))
+    : this.rewritten(content))
 }
 
 History &+= {

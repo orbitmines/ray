@@ -700,6 +700,10 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
 // (an argument using `.` on its own, `xs.every(candidate is .)`: a closure (every argument is one), `.` in it what it is
 // called with; its code read on that)
 {method}({code: Dotted}) ^punctuation => .{method}((it) => it.({code}))
+// (a section calling each, `xs.for(.(caller))`: each one called with caller (`.( )` of one called by brackets); and given
+// without brackets, `.statement#.for .(caller)`)
+{method}(.({called_with})) ^punctuation => .{method}((it) => it.(.({called_with})))
+{calling_on}.{method: Name} .({called_with}) ^punctuation => (calling_on).{method}((it) => it.(.({called_with})))
 // `code**`: what is written, as a program.
 {code}** ^operator => Program(code: {code})
 
@@ -804,9 +808,11 @@ whole => (((.).listing === true) ? (.).gathered : (.))
 // (the same object as what it superposes, their methods its own, superposed as it is: made of each, its own rules first)
 {a} | {b} ^operator => (({ }) &+ {
   superposes := true
-  // (what it is itself, not what each of them is: one of them, not a list or a text of them)
+  // (what it is itself, not what each of them is: one of them, not a list or a text of them, nor a repeat (`\s+` of
+  // `" " | "\t".."\r"`, one of those not empty))
   listing := false
   textual := false
+  repeats := false
   // (one superposed with a superposition: its components, each one; `1 | 2 | 3` three)
   // (each written as a name, `LHS: T | RHS: U`: by that name)
   components := (((a).superposes === true) ? (a).components.listed() : (external names (Array.new.append(a)) a _)).joined(((b).superposes === true) ? (b).components : (external names (Array.new.append(b)) b _))
@@ -816,6 +822,16 @@ whole => (((.).listing === true) ? (.).gathered : (.))
   // among them, its components)
   members := (((a).is_range === true) || ((b).is_range === true) || (((a).superposes === true) && ((a).members !== None))) ? possible_values(a).joined(possible_values(b)) : None
 }) ~~ (. &+= a) ~~ (. &+= b)
+// (values superposed, in order: of one alone, that one its only component)
+superposed_of (superposed_values) => {
+  superposed_first := superposed_values.first
+  superposed_made := superposed_values.reduce((either) => either | .)
+  if superposed_values.count == 1 {
+    superposed_made = superposed_first | superposed_first
+    external member (superposed_made) (`components`) (Array.new.append(superposed_first))
+  }
+  superposed_made
+}
 // (what one of a superposition can be: a superposition's (its members, else its components), a range's values, else itself)
 possible_values (one) => ((one).superposes === true) ? (((one).members !== None) ? (one).members.listed() : (one).components.listed()) : (((one).is_range === true) ? (one).members.listed() : Array.new.append(one))
 assert (1 | +2 | +3) == (1 | 3 | 6)  // CL2 a section after | is not applied to the value before it
@@ -1048,7 +1064,15 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
       seq_type = seq_named
     }
   }
-  // (where the text has ended: one that may be nothing, `x?: T`, nothing; a repeat, `T[]`, none of it)
+  // (where the text has ended: one that may be nothing, `x?: T`, nothing (a default of nothing keeps no type: its type
+  // nothing too, `args?: Node[]` of a key); a repeat, `T[]`, none of it)
+  if seq_text.empty && (seq_type === None) {
+    (None) given_to (seq_into) as (seq_name)
+    seq_after_nothing := seq_read(seq_at.next, seq_text, seq_whole, seq_stops, seq_into)
+    if seq_after_nothing !== None {
+      return ((None) taken_before (seq_after_nothing) named (seq_name))
+    }
+  }
   if seq_text.empty && (optional_type(seq_type) || (repeat_type(seq_type) && !(((seq_type).nonempty_of) !== None))) {
     seq_none := optional_type(seq_type) ? None : []
     (seq_none) given_to (seq_into) as (seq_name)
@@ -1295,6 +1319,16 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
       external member (ways_through) (`reading_parts`) (true)
       external member (ways_through) (`reading_from`) (ways_from)
       ways_found.append(ways_through)
+    }
+    return ways_found
+  }
+  // (one way of a class with a header, `class (a: T, b: U)`, the first: read by its positions in order, as a list is, into
+  // one made of it (not each span from the shortest read whole, every way: what `T[]` asks of each T))
+  if ways_only && (((ways_by).of) === ways_by) && !((ways_by).textual === true) && ((ways_by).fields_now !== None) {
+    ways_made := (ways_by) &+ { }
+    ways_structure := seq_read(((ways_made).fields_now).head, ways_from, false, false, ways_made)
+    if ways_structure !== None {
+      ways_found.append(((ways_structure).reading_left) left_after (made_as(fields_given(ways_made, ways_structure), ways_by, ways_by)) named (None))
     }
     return ways_found
   }
@@ -2513,6 +2547,26 @@ Array &+= {
   }
   // (where it is entered, Iterable's `entry`: its first vertex)
   entry => .head
+  // (a member it does not have (`missing_name`, the kernel's, which asks only when each of its values, one a class made, has it
+  // as its own): each of its values' own, superposed in order (`.statement` of the Statements read, each statement: `.statement#.for .(caller)` runs them in
+  // turn); one alone, a superposition of it alone; else None)
+  missing => {
+    missing_of := .missing_name
+    missing_at := .head
+    missing_values := Array.new
+    missing_all := missing_at !== None
+    while missing_at && missing_all {
+      missing_value := missing_at.value
+      missing_one := external member (missing_value) (missing_of)
+      if missing_one === None {
+        missing_all = false
+      } else {
+        missing_values.append(missing_one)
+      }
+      missing_at = missing_at.next
+    }
+    missing_all ? superposed_of(missing_values) : None
+  }
   // (a range, what it can be (`#`): its values)
   members => ((.is_range) === true) ? this : None
   // (none, empty: as a text is, by what it holds, not by counting it (Iterable's `count == 0`, counted by `reduce`, which
@@ -2738,6 +2792,8 @@ String := class: Array {
   closure := false
   // (a `.` in it on its own, not after a name or what closes, nor before a name: code of what it is read on)
   bare_dot => dot_alone(` `, this)
+  // (a `.` it begins with: a member read in what it is read on, `.length`)
+  dot_led => .empty ? false : ((.first) == 46)
   // (a class as a text, `Decimal as String` (`Decimal.String`): any class is one, the texts its fields are written as, in
   // order (a list of types reads a text in order); anything else, none)
   from (given) => (((given).of === given) && ((given).written_as !== None)) ? global.String{. is (given).written_as} : None
@@ -2747,6 +2803,8 @@ not_named := ` ()[]{},;:=!&|<>+-*/%?^#~@`
 one_of (character, among) => among.empty ? false : (((character).same_characters(among.first) !== None) ? true : one_of(character, among.rest))
 dot_alone (before, text) => text.empty ? false : ((((text.first).same_characters(`.`) !== None) && one_of(before, not_named) && (text.rest.empty || one_of(text.rest.first, not_named))) ? true : dot_alone(text.first, text.rest))
 Dotted := String{.bare_dot}
+// (code not led by a `.`: what is given, not a member read in what it is given to)
+Undotted := String{!(.empty) && !(.dot_led)}
 assert `candidate is .`.bare_dot  // DT1 a `.` alone in an argument is not found
 assert !(`x.y`.bare_dot)  // DT2 a member is a `.` alone
 assert !(`(it) => it.({code})`.bare_dot)  // DT3 a member read on a value is a `.` alone

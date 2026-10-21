@@ -1,0 +1,39 @@
+// A proof: a proposition and the argument that it holds. What is proved is true; what is not is what there is to do.
+Proof := class (proposition: *, argument: *) => {
+  static Proposition := class: Program {
+    holds => this() as boolean
+    negated => {
+      negated_of := this
+      Proof.Proposition(code: { !(negated_of.holds) })
+    }
+    verify (actual) => .attempt(actual)
+    rolled_back => .solution === None
+  }
+
+  holds => .argument.holds
+
+  static theorem | lemma | example (proposition, proof) => proof.holds ? true : ERROR@Proof `the proposition is not proven`
+  static by_contradiction | contradiction (proposition, proof_of_negation) => !proof_of_negation.holds
+  static rfl (proposition) => proposition.holds
+}
+// A proposition holds or it does not, and what says so is a proof.
+assert {
+  yes := Proof.Proposition(code: { true })
+  no := Proof.Proposition(code: { false })
+  assert yes.holds  // PF1 a proposition written as holding does not hold
+  assert !(no.holds)  // PF2 a proposition written as not holding holds
+  assert !(yes.negated.holds)  // PF3 the negation of one that holds holds
+  assert no.negated.holds  // PF4 the negation of one that does not hold does not hold
+  assert Proof.rfl(yes)  // PF5 a proposition is not proof of itself
+  assert !(Proof.rfl(no))  // PF6 one that does not hold proves itself
+  assert (assume { yes }).holds  // PF7 what is assumed is not what was assumed
+  assert Proof.by_contradiction(yes, no)  // PF8 a proof of the negation failing does not prove it
+  assert !(Proof.by_contradiction(no, yes))  // PF9 a proof of the negation holding proves it anyway
+  assert Proof(proposition: yes, argument: yes).holds  // PF10 a proof holds only if its argument does
+  assert Proof.theorem(yes, yes)  // PF11 a theorem with a proof that holds is not true
+  assert Proof.theorem(yes, no).erred  // PF12 a theorem without a proof does not err
+  assert Proof.theorem(yes, yes) == true  // PF13 a proven theorem does not hold
+  assert Proof.lemma(yes, yes) & Proof.example(yes, yes)  // PF14 a lemma or an example is not a theorem by another name
+}
+assert Proof.rfl(Proof.Proposition(code: { true }))  // FE7 what holds is not proved by itself
+assert !(Proof.rfl(Proof.Proposition(code: { false })))  // FE8 what does not hold is proved by itself

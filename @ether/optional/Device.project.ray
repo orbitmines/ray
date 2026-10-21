@@ -1,3 +1,5 @@
+@ether/os
+@ether/random
 @ether/geometry
 @ether/version-control
 @ether/time
@@ -26,6 +28,7 @@ Device := class {
   wake_lock = false
   memory: Store = Store(at: @"memory")
   storage: Location = @"storage"
+  assert @me/device/storage is Location  // IO11 the device has no storage location
   quests => Program#{who: this}{running}
   // its files: this device's are the file space (`@/`), another's are at its instance (held by @ether/network)
   disk => Instance#{.device === this}.first -- (. && . !== Instance.local ? (. as String + "/") as Held : @/)

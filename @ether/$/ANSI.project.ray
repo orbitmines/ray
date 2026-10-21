@@ -112,7 +112,7 @@ ANSI := class: Language {
   }
   TrueColor := { }
 }
-assert Language.named(".ansi") == ANSI && $.ansi === ANSI  // UI66 the terminal's language is not registered
+assert Language.named(".ansi") == ANSI && ANSI === ANSI  // UI66 the terminal's language is not registered
 
 assert {
   who := "Ray"

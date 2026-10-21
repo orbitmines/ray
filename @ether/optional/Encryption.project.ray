@@ -1,0 +1,40 @@
+@ether/random
+
+// Keys. An algorithm is a language, and so is a key of one: what it writes only its secret reads back. A value written in
+// it stays where it is, of its type (`field: String = Encrypted("…")` is a String there, sealed), and only the key reads it
+// back (`key.read(field)`). How it is sealed is the algorithm's (`sealed_for`, `opened_with`): this project knows none.
+Key := class: Language (algorithm: Language, none.read secret: Byte[]?, public: Byte[] = (secret && algorithm.public ? algorithm.public(secret) : [])) => {
+  published => Key(.algorithm, None, .public)
+  write (value) => .algorithm.sealed_for(this, value as Byte[]) ~~ (.of = value.of)
+  read (sealed) => .secret ? .algorithm.opened_with(this, sealed) as sealed.of : ERROR@Key `find the key`
+  signed (value) => Signed(value, by: .published, signature: .algorithm.sign(.secret, value as Byte[]))
+  agreed (other: Byte[]) => .algorithm.agreed(.secret, other)
+  zeroised: static => this ~~ .secret = None
+  chainable == (other: Key) => .algorithm === other.algorithm && .public == other.public
+}
+Language &+= {
+  // a key of it: the secret given, else drawn
+  static generated (secret: Byte[] = secure Byte₃₂.random) => Key(this, secret)
+}
+// A value encrypted where it is written: for the reader of the character writing it, unless another key is given.
+Encrypted (value, key: Key = @me.inbox) => value as key
+// What a key signed: the value, the key's published part, and the signature, which holds for that value under it.
+Signed := class (value: *, by: Key, signature: Byte[]) => {
+  valid => .by.algorithm.verify(.by.public, .value as Byte[], .signature)
+}
+// Numbers as bytes, least significant first (what the algorithms write)
+Number &+= {
+  little (count: Number) => <-(this as Binary{.length == 8 * count} as Byte[])
+}
+Byte[] &+= {
+  little => (<-this) as Binary
+}
+// A private key is a secret: readable by no one (W2.1 Storage), so no store, history or cache level writes it, and logging
+// out drops it. An entity's own key, and its reader (`inbox`): the agreement key what is encrypted for it is sealed to.
+Entity &+= {
+  none.read key: Key?
+  none.read inbox: Key?
+}
+
+assert (1).little(4) == [0x01, 0x00, 0x00, 0x00] as Byte[] & (0x0102).little(2) == [0x02, 0x01] as Byte[]  // LE1 a number is not written least significant byte first in the count of bytes asked
+assert ([0x00, 0x01] as Byte[]).little == 256 & (48879).little(4).little == 48879  // LE2 bytes least significant first are not read back as the number

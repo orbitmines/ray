@@ -51,7 +51,6 @@ LSP &+= {
     ))) as Unicode.UTF-8 as Byte[])
   }
 }
-assert $.lsp === LSP  // DG14 $.lsp is not LSP
 LSP.components.hierarchy &= Language
 
 assert Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)}).(

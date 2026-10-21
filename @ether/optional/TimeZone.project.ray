@@ -20,14 +20,14 @@ TimeZone := class (name: String) {
 
   // IANA tz database compiled to TZif (RFC 8536), one file per zone, read only when that zone is asked for (https://data.iana.org/time-zones/tz-link.html)
   static Zoneinfo := class: Source (directory: Location) {
-    data (zone: String) => $.tzif.read((directory / zone).held as Byte[])
+    data (zone: String) => TZif.read((directory / zone).held as Byte[])
     at (zone: String, time: Time) => data(zone).at(time)
     assert {
       summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
       assert TimeZone("UTC").at(summer).offset == 0 seconds  // TZ14 UTC is off zero on this host
       Counting := class: TimeZone.Zoneinfo {
         asked: String[] = []
-        data (zone: String) => (asked.push zone) -- $.tzif.read((directory / zone).bytes)
+        data (zone: String) => (asked.push zone) -- TZif.read((directory / zone).bytes)
       }
       counting := Counting(directory: @tzif/zoneinfo)
       counting.at("Europe/Amsterdam", summer)

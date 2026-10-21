@@ -6,7 +6,7 @@ Base64 := class: Language (sextets: (Binary₆ as Alphabet)[], "="[]{length == (
   bytes: Byte[] => sextets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))
   assert "Man".bytes as Base64 as String == "TWFu"  // UI71 Man is not TWFu in Base64
   assert "Ma".bytes as Base64 as String == "TWE="  // UI72 Ma is not padded to TWE=
-  assert Base64.read("TWFu") == "Man".bytes && $.base64 === Base64  // BASE1 Base64 text does not read back as its bytes, or $.base64 is not Base64
+  assert Base64.read("TWFu") == "Man".bytes && Base64 === Base64  // BASE1 Base64 text does not read back as its bytes, or Base64 is not Base64
   assert ([] as Base64) is Base64 && [] as Base64 as String == ""  // BASE2 no bytes are not the empty text in Base64 as RFC 4648 §10 gives it
   assert "f".bytes as Base64 as String == "Zg=="  // BASE3 "f" is not "Zg==" in Base64 as RFC 4648 §10 gives it
   assert "fo".bytes as Base64 as String == "Zm8="  // BASE4 "fo" is not "Zm8=" in Base64 as RFC 4648 §10 gives it

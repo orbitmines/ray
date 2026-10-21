@@ -455,7 +455,7 @@ UI := class {
         assert Geometry.Box().styled("tall").fields["height"].type.least == 30px  // UI266 a theme style does not carry its bound
       }
     }
-    assert Program(code: { Geometry.Box(content: (choose $.ray).attempt("x := 1")) }).rendered(UI.HTML.Markup.level).body.children.first.children.first.tag == "pre"  // UI143 a painted text area has no painted layer under it
+    assert Program(code: { Geometry.Box(content: (choose Language.ray).attempt("x := 1")) }).rendered(UI.HTML.Markup.level).body.children.first.children.first.tag == "pre"  // UI143 a painted text area has no painted layer under it
     assert {
       red := Geometry.Color(255, 0, 0)
       runs_text := Geometry.Box(content: "ab".marked("red", 0, 1), size: Geometry.Vector(16px, 16px))
@@ -718,7 +718,7 @@ Device &+= {
 Language.Image := class: Language {
   static extensions := ".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif"
   level := {
-    {encoded} => $.png.read(encoded)
+    {encoded} => PNG.read(encoded)
   }
 }
 Language.Video := class: Language { static extensions = ".mp4" | ".webm" | ".ogv" }
@@ -787,7 +787,7 @@ Language.Direct := class: Language {
 
   Font := class (font: Geometry.Font) => {
     file => font.family.map(Fonts.named).first
-    glyph (character: Char) => $.opentype.read(file.held as Byte[])[character]
+    glyph (character: Char) => OpenType.read(file.held as Byte[])[character]
   }
 
   Display := class: UI.Interface (target: Location, title: String = "") => {
@@ -813,7 +813,7 @@ UI.HTML := class {
     dom_described => [("aria-label", label) if label, ("popover", "manual") if position is Geometry.Anchored]
     dom_entry => content -- (chosen => [("placeholder", chosen.placeholder as String) if chosen.placeholder, ("disabled", "") if chosen.disabled,
       ("min", chosen.goal.least as String) if chosen.goal is Number{least, most}, ("max", chosen.goal.most as String) if chosen.goal is Number{least, most}])
-    dom_spans => content.shared_styles -- (shared => content.pieces.map(piece => piece.first.styles{!shared.contains(.)} -- (own => own.empty ? $.html.Text(piece)
+    dom_spans => content.shared_styles -- (shared => content.pieces.map(piece => piece.first.styles{!shared.contains(.)} -- (own => own.empty ? HTML.Text(piece)
       : @html <span class={own.join(" ")} style={dom_inline(UI.Theme.face(this, piece.first))}>{piece}</span>)))
     dom_inline (face: Geometry.Shape) => [
       ("color:", face.color, ";") if face.color && face.color != color,
@@ -835,7 +835,7 @@ UI.HTML := class {
       {tags(page).map(Compiler.reduced(., meta))}
       {Compiler.reduced((name: "theme-color", content: Compiler.reduced(page.theme, Style.values)), meta) if page.theme}
       {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
-      {(page.structured ?? []).map(entry => $.html.Element("script", [("type", "application/ld+json")], [$.html.Raw($.json.write(UI.Linked(entry, context: "https://schema.org").document))]))}
+      {(page.structured ?? []).map(entry => HTML.Element("script", [("type", "application/ld+json")], [HTML.Raw(JSON.write(UI.Linked(entry, context: "https://schema.org").document))]))}
       <link rel="stylesheet" href="style.css" />
       <script src="app.js" defer />
     }
@@ -869,7 +869,7 @@ UI.HTML := class {
     }
 
     rules := {
-      {page: Geometry.Shape{solved && !parent}} => $.html.Document(head: [head(UI.page)], body: @html <body {page.dom_named}>{page.children}</body>)
+      {page: Geometry.Shape{solved && !parent}} => HTML.Document(head: [head(UI.page)], body: @html <body {page.dom_named}>{page.children}</body>)
       {image: Geometry.Shape{content is Location && content.language === Language.Image && fill}} => @html <span {image.dom_named} role="img" aria-label={image.label} />
       {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @html <img {image.dom_named} src={image.content.@ as String} alt={image.label} loading="lazy" />
       {video: Geometry.Shape{content is Location && content.language === Language.Video}} => @html <video {video.dom_named} src={video.content.@ as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
@@ -1085,7 +1085,7 @@ UI.HTML := class {
     ]
 
     rules := values + {
-      {page: Geometry.Shape{solved && !parent}} => $.css.Sheet(@css {
+      {page: Geometry.Shape{solved && !parent}} => CSS.Sheet(@css {
         * { box-sizing: border-box; margin: 0; }
         body { font-family: sans-serif; line-height: 1.2; }
         .painted { display: grid; }
@@ -1227,23 +1227,23 @@ UI.HTML := class {
     line (parts: String[]) => parts.join(" "), \n
 
     static made := 0
-    Mount := class (node: $.html.Element | $.html.Text | $.html.Raw | $.html.Comment, parent: String?, id: String = (node is $.html.Element ? node.id : None) ?? ("e" + ((DOM.made += 1) as String))) => { }
+    Mount := class (node: HTML.Element | HTML.Text | HTML.Raw | HTML.Comment, parent: String?, id: String = (node is HTML.Element ? node.id : None) ?? ("e" + ((DOM.made += 1) as String))) => { }
     Listening := class (mount: Mount) => { }
     protocol := {
-      {mount: Mount{node is $.html.Element}} => mount.node -- (element => [
+      {mount: Mount{node is HTML.Element}} => mount.node -- (element => [
         line(["create", mount.id, element.tag]),
         element.attributes.map(line(["attribute", mount.id, .name, (.value as String).escaped_line])),
         Listening(mount),
         element.children.map(Mount(., mount.id)),
         line(["append", mount.parent, mount.id]) if mount.parent
       ])
-      {mount: Mount{node is $.html.Comment}} => []
+      {mount: Mount{node is HTML.Comment}} => []
       {mount: Mount} => line(["text", mount.parent, mount.node.text.escaped_line])
       {listening: Listening{mount.node.tag is ("a" | "button")}} => [line(["listen", listening.mount.id, "click"])]
       {listening: Listening{mount.node.tag is ("input" | "select" | "textarea")}} => [line(["listen", listening.mount.id, "input"]), line(["listen", listening.mount.id, "focus"])]
       {listening: Listening} => []
     }
-    mounted (element: $.html.Element) => Compiler.reduced(Mount(element), protocol) as String
+    mounted (element: HTML.Element) => Compiler.reduced(Mount(element), protocol) as String
 
     Event := class (id: String) => {
       shape => UI.scene.reachable{.dom == id}.first
@@ -1268,7 +1268,7 @@ UI.HTML := class {
       -- ({ send(line(["clipboard", (@me/device/clipboard as String).escaped_line])) } when @me/device/clipboard changes)
       -- ({ send(line(["open", (@me/device/opened as String).escaped_line])) } when @me/device/opened changes)
     stop => None
-    write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as $.css])) if package.sheet)
+    write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as CSS])) if package.sheet)
       -- send(line(["lock", UI.locked as String]))
       -- send(line(["scroll", "window", (UI.scene.scrolled.y as px) as String, (UI.scene.transition != None) as String]))
     read => dispatched(event)
@@ -1279,7 +1279,7 @@ UI.HTML := class {
   Extension := { }
   Safari := {
     // backdrop-filter, which Safari reads only prefixed (https://www.w3.org/TR/filter-effects-2/#BackdropFilterProperty)
-    {rule: $.css.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => $.css.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
+    {rule: CSS.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => CSS.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
   }
 }
 
@@ -1287,7 +1287,7 @@ Device &+= {
   document: UI.HTML.DOM = UI.HTML.DOM(level: UI.HTML.level)
 }
 
-// JSON-LD 1.1: a Ray value as linked data, written with $.json (https://www.w3.org/TR/json-ld11/)
+// JSON-LD 1.1: a Ray value as linked data, written with JSON (https://www.w3.org/TR/json-ld11/)
 // Its fields are properties and its type is @type (https://www.w3.org/TR/json-ld11/#specifying-the-type), under the vocabulary its @context names (https://www.w3.org/TR/json-ld11/#the-context)
 UI.Linked := class (value: *, context: String?) => {
   document => .value === None || .value is (String | Number | boolean | Location) ? .value
@@ -1470,7 +1470,7 @@ UI.TUI := class {
   }
 
   Browser := {
-    {grid: Grid} => UI.HTML.Package([(path: "index.html", content: $.html.Document(head: [], body: $.html.Element("body", [], [$.html.Element("pre", [], [$.html.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
+    {grid: Grid} => UI.HTML.Package([(path: "index.html", content: HTML.Document(head: [], body: HTML.Element("body", [], [HTML.Element("pre", [], [HTML.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
   }
 
   Event := ANSI.Input | Resize

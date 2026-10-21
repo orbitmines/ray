@@ -64,7 +64,7 @@ Effecting |= Program{effects.some(. is "network")}
 Location &+= {
   static canonical := Location{!port || port != protocol.port}
   protocol => Network.Protocol#{as String == scheme}.first
-  resolved => Network.Hosts.resolved(host) -- (. == host ? $.dns.resolve(host) ?? . : .)
+  resolved => Network.Hosts.resolved(host) -- (. == host ? DNS.resolve(host) ?? . : .)
   socket => Network.Socket.Address(host: host, port: port ?? protocol.port)
 }
 
@@ -88,18 +88,18 @@ FileSystem &+= {
     at (location: Location) => location.scheme ? location.origin : @remote
     inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
     over_http (location: Location) => location.scheme ~= ⊢"http"
-    sent (method: $.http.Method, location: Location, content = None, fields = $.http.Fields()) => $.http.send($.http.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
+    sent (method: HTTP.Method, location: Location, content = None, fields = HTTP.Fields()) => HTTP.send(HTTP.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
     // over HTTP: GET's body, else (a collection) its members: WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming
     // the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2);
     // an instance: what is held there, asked on it
     [location: Location] => over_http(location)
-      ? sent($.http.Method.get, location) -- (.ok ? .text : members(location))
+      ? sent(HTTP.Method.get, location) -- (.ok ? .text : members(location))
       : { inner(location).held as * }@(at(location))()
-    members (location: Location) => sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")) -- (.status == 207 ? (.text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
+    members (location: Location) => sent(HTTP.Method.propfind, location, fields: HTTP.Fields().with("Depth", "1")) -- (.status == 207 ? (.text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
       .map(href => href ~= ⊢"/" ? location.origin + href : href as Location) : None)
     // PUT writes it, DELETE removes it (`= None`)
     { }[{location: Location}] = {value} ^punctuation => over_http(location)
-      ? sent(value === None ? $.http.Method.delete : $.http.Method.put, location, value).ok
+      ? sent(value === None ? HTTP.Method.delete : HTTP.Method.put, location, value).ok
       : { inner(location).held = value }@(at(location))()
     // executed: a page is opened by what the host opens it with; on an instance, executed there
     ({location: Location}, {args}) => over_http(location)

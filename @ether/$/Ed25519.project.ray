@@ -1,8 +1,9 @@
+@ether/encryption
 @x25519
 @sha512
 
 // Edwards-Curve Digital Signature Algorithm, Ed25519 (https://www.rfc-editor.org/rfc/rfc8032)
-Ed25519 := class: Encoding.Signing {
+Ed25519 := class: Language {
   static extensions := ".ed25519"
 
   // The field GF(2^255 - 19) is X25519's (RFC 7748 §4.1); the curve constant d = -121665/121666 and the order L of the base point (RFC 8032 §5.1)
@@ -21,11 +22,11 @@ Ed25519 := class: Encoding.Signing {
     == (other: Point) => x == other.x && y == other.y
 
     // Encoding: y in 255 bits little-endian, the low bit of x in the top bit (RFC 8032 §5.1.2)
-    as (=== Byte[]) => Encoding.little(y + x % 2 * 2 ^ 255, 32)
+    as (=== Byte[]) => (y + x % 2 * 2 ^ 255).little(32)
     // Decoding: y, then x from x^2 = (y^2 - 1) / (d y^2 + 1) by the square root of §5.1.1, its sign from the top bit (RFC 8032 §5.1.3)
     static (bytes: Byte₃₂) as (=== Point) => {
-      y = Encoding.little_number(bytes) % 2 ^ 255
-      sign = (Encoding.little_number(bytes) / 2 ^ 255).floor
+      y = bytes.little % 2 ^ 255
+      sign = (bytes.little / 2 ^ 255).floor
       u = (y * y + X25519.p - 1) * X25519.inverse(d * y * y + 1) % X25519.p
       root = X25519.power(u, (X25519.p + 3) / 8) -- (. * . % X25519.p == u ? . : . * I % X25519.p)
       return ERROR `the bytes are not a point of Ed25519` if y >= X25519.p || root * root % X25519.p != u || root == 0 && sign == 1
@@ -34,13 +35,13 @@ Ed25519 := class: Encoding.Signing {
   }
 
   // The base point: y = 4/5 and x even (RFC 8032 §5.1)
-  static B := Encoding.little(4 * X25519.inverse(5) % X25519.p, 32) as Point
+  static B := (4 * X25519.inverse(5) % X25519.p).little(32) as Point
   // The base point decodes to y = 4/5 and encodes back; L B is the neutral point (RFC 8032 §5.1)
   assert (Ed25519.B as Byte[]) as Ed25519.Point == Ed25519.B  // EDS6 the base point does not read back as itself
 
   // The secret's SHA-512, its first half pruned as X25519's scalar (RFC 8032 §5.1.5, RFC 7748 §5)
   static expanded (secret: Byte₃₂) => SHA512.write(secret).bytes -- (h => (scalar: X25519.clamped(h[..<32]), prefix: h[32..]))
-  static reduced (bytes: Byte[]) => Encoding.little_number(SHA512.write(bytes).bytes) % L
+  static reduced (bytes: Byte[]) => (SHA512.write(bytes).bytes).little % L
 
   // The public key: the base point times the pruned scalar (RFC 8032 §5.1.5)
   static public (secret: Byte₃₂) => (B * expanded(secret).scalar) as Byte[]
@@ -54,11 +55,14 @@ Ed25519 := class: Encoding.Signing {
     assert Ed25519.verify(ed_public, [], ed_signature)  // EDS3 the signature of RFC 8032's test 1 does not verify
     assert !(Ed25519.verify(ed_public, [0x72], ed_signature))  // EDS4 a signature verifies for another message
     assert !(Ed25519.verify(ed_public, [], [ed_signature[..<63], ed_signature[63] ~x|| 0x01].flatten))  // EDS5 a changed signature verifies
-    // A key pair names its algorithm, and what it signs is read back only where the signature holds
-    ed_pair := Ed25519.pair(ed_secret)
+    // A key names its algorithm, and what it signs holds only for that value
+    ed_pair := Ed25519.generated(ed_secret)
     assert ed_pair.algorithm === Ed25519 && ed_pair.public == ed_public  // EDS8 a key pair forgot its algorithm or its public half
-    assert Ed25519.read(ed_pair.signed("abc".bytes)) == "abc".bytes  // EDS9 what a key signed does not read back
-    assert Ed25519.read(ed_pair.signed("abc".bytes) ~~ .value = "abd".bytes) is Diagnostic  // EDS10 a signed value that was changed reads back
+    assert ed_pair.signed("abc".bytes).(.valid & .value == "abc".bytes)  // EDS9 what a key signed does not hold for it
+    assert !(ed_pair.signed("abc".bytes) ~~ .value = "abd".bytes).valid  // EDS10 a signed value that was changed still holds
+    assert ed_pair.secret == ed_secret & !(Ed25519.generated() == Ed25519.generated())  // EDS20 a key does not keep its secret, or two keys drawn are the same
+    assert ed_pair.signed("abc".bytes).(.by == ed_pair.published & .signature.count == 64)  // EDS21 a signature is not by the key's published part, or is not 64 bytes (RFC 8032 section 5.1.6)
+    assert !Signed("abc".bytes, by: Ed25519.generated().published, signature: ed_pair.signed("abc".bytes).signature).valid  // EDS22 a signature holds under another key
     assert Ed25519.public(ed_secret_2) as Hexadecimal₆₄ == "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"  // EDS11 the public key of RFC 8032's test 2 is not 3d4017c3…
     assert Ed25519.sign(ed_secret_2, ed_message_2) as Hexadecimal₁₂₈ == "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"  // EDS12 the message of RFC 8032's test 2 does not sign as 92a009a9…
     assert Ed25519.verify("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c" as Hexadecimal₆₄ as Byte₃₂, ed_message_2, "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00" as Hexadecimal₁₂₈ as Byte₆₄) && !Ed25519.verify("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c" as Hexadecimal₆₄ as Byte₃₂, [ed_message_2, [0]].flatten, "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00" as Hexadecimal₁₂₈ as Byte₆₄)  // EDS13 the signature of RFC 8032's test 2 does not verify, or verifies a longer message
@@ -72,9 +76,9 @@ Ed25519 := class: Encoding.Signing {
 
   // Signing: r from the prefix and the message, R = rB, S = r + H(R, A, M) s mod L (RFC 8032 §5.1.6)
   static sign (secret: Byte₃₂, message: Byte[]) => expanded(secret) -- (key => reduced([key.prefix, message].flatten) -- (r => (B * r) as Byte[] -- (R =>
-    [R, Encoding.little((r + reduced([R, public(secret), message].flatten) * key.scalar) % L, 32)].flatten)))
+    [R, ((r + reduced([R, public(secret), message].flatten) * key.scalar) % L).little(32)].flatten)))
 
   // Verifying: S < L and SB = R + H(R, A, M) A, the equation without the cofactor, which §5.1.7 allows
-  static verify (public: Byte₃₂, message: Byte[], signature: Byte₆₄) => Encoding.little_number(signature[32..]) -- (s =>
+  static verify (public: Byte₃₂, message: Byte[], signature: Byte₆₄) => (signature[32..]).little -- (s =>
     s < L && B * s == (signature[..<32] as Point) + (public as Point) * reduced([signature[..<32], public, message].flatten))
 }

@@ -1,7 +1,4 @@
 Entity := class {
-  // A private key is a secret: readable by no one (W2.1 Storage), so no store, history or cache level writes it, and logging out drops it.
-  none.read key: Encoding.Key?
-
   // The same principal as `other`: here, the same value; @ether/security compares verified roots instead.
   same (other) => this === other
   // an entity compared with itself and with another

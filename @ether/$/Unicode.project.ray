@@ -1,23 +1,13 @@
 // (what the bootstrap needs of Unicode, a character written as UTF-8, is in String.ray; this is the rest of it)
 Unicode &+= {
-  static version: Version = %17
-  assert Unicode.version == 17  // UN40 the Unicode version is not seventeen
-  static spelled => "{version.number}.{version.revision ?? 0}"
   static Public := @https://www.unicode.org/Public
-  // one directory per version: `<version>/ucd/` from 4.1.0, `<version>-Update/` with versioned file names before it (https://www.unicode.org/Public/, https://www.unicode.org/reports/tr44/)
-  static UCD => version >= %4'1 ? Public / "{spelled}.0" / "ucd" : Public / "{spelled}-Update"
+  // the tables as they are now, `latest/ucd/` (https://www.unicode.org/Public/, https://www.unicode.org/reports/tr44/); an
+  // older version of them is for version control to give
+  static UCD => Public / "UCD" / "latest" / "ucd"
   assert (Unicode.UCD as String).starts_with("https://www.unicode.org/Public/")  // UN36 the tables are not read from unicode.org
-  // The Unicode version is selectable; its tables follow it (X3.2)
-  assert (Unicode.UCD as String) ~= "17.0.0"  // UV1 the tables are not those of version seventeen
-  assert {
-    Unicode.version = %3'2
-    assert (Unicode.UCD as String) ~= "3.2-Update"  // UV5 an old version is not read from its update directory
-    assert (Unicode.file("Blocks") as String).ends_with("Blocks-3.2.0.txt")  // UV6 an old table is not named with its version
-    assert !(U+1F600.assigned)  // UV7 an emoji from 6.1 is assigned in 3.2
-    Unicode.version = %17
-  }
-  static file (name: String) => version >= %4'1 ? UCD / "{name}.txt" : UCD / "{name}-{spelled}.0.txt"
-  assert (Unicode.file("Blocks") as String).ends_with("/ucd/Blocks.txt")  // UV2 a table of a current version is not in its ucd directory
+  assert (Unicode.UCD as String) ~= "latest"  // UV1 the tables are not the latest
+  static file (name: String) => Unicode.UCD / "{name}.txt"
+  assert (Unicode.file("Blocks") as String).ends_with("/ucd/Blocks.txt")  // UV2 a table is not in the ucd directory
 
   static Table := class (Row, (("#", *) | (row: Row, (" "[], "#", *)?) | "")[].join("\n")) => {
     rows => this.row{!= None}
@@ -35,8 +25,8 @@ Unicode &+= {
 
   static Blocks => file("Blocks") as Table<(range: Range, "; ", value: *)>
   static Scripts => file("Scripts") as Table<(range: Range, " "[], "; ", value: *)>
-  // UTS #39 §4: each confusable character and the prototype it maps to, from the security data of the same version (https://www.unicode.org/reports/tr39/#Confusable_Detection, https://www.unicode.org/Public/security/)
-  static confusables => (Public / "security" / "{spelled}.0" / "confusables.txt") as Table<(range: Range, " "[], ";", "\t"[], prototype: Scalar[].join(" "), " "[], ";", "\t"[], type: Char.Word[], *)>
+  // UTS #39 §4: each confusable character and the prototype it maps to, from the latest security data (https://www.unicode.org/reports/tr39/#Confusable_Detection, https://www.unicode.org/Public/security/)
+  static confusables => (Unicode.Public / "security" / "latest" / "confusables.txt") as Table<(range: Range, " "[], ";", "\t"[], prototype: Scalar[].join(" "), " "[], ";", "\t"[], type: Char.Word[], *)>
   static EastAsianWidth => file("EastAsianWidth") as Table<(range: Range, " "[], "; ", value: *)>
   static CaseFolding => file("CaseFolding") as Table<(range: Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
   assert Unicode.CaseFolding[U+0041] == U+0061  // UN60 A does not fold to a
@@ -183,10 +173,11 @@ Char &+= {
   block => Unicode.Blocks[this].value ?? "No_Block"
   assert U+0061.block == "Basic Latin"  // UN57 a is not in Basic Latin
   assert U+00E9.block == "Latin-1 Supplement"  // UN58 é is not in Latin-1 Supplement
-  age => Unicode.Age[this] -- . ? Version(number: .number, revision: .revision) : None
-  assert U+0061.age == %1'1  // UV3 a is not from Unicode 1.1
-  assigned => age && age <= Unicode.version
-  assert U+0061.assigned  // UV4 a is not assigned in the selected version
+  // (the version of Unicode it was first assigned in, as the table writes it: its number and revision)
+  age => Unicode.Age[this]
+  assert U+0061.age.(.number == 1 & .revision == 1)  // UV3 a is not from Unicode 1.1
+  assigned => .age !== None
+  assert U+0061.assigned  // UV4 a is not assigned
 }
 assert "-"[0] is Char.Symbol  // S101 a dash is not a symbol
 assert !("a"[0] is Char.Symbol)  // S102 a is a symbol

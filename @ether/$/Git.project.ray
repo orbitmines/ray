@@ -1,3 +1,4 @@
+@deflate
 @sha1
 @sha256
 @zlib
@@ -136,7 +137,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
 
     applied (base: Byte[]) => instructions.map(. is Copy ? base[.from..<.from + .length] : .bytes).flatten
     size => (this as Byte[]).count
-    static between (base: Byte[], target: Byte[]) => Delta(source: base.count, target: target.count, instructions: Encoding.runs(base, target).map(run => run.bytes
+    static between (base: Byte[], target: Byte[]) => Delta(source: base.count, target: target.count, instructions: target.runs(base).map(run => run.bytes
       ? run.bytes.chunk(127).map(Insert(length: .count, bytes: .))
       : [Copy(from: run.from, length: run.count)]).flatten)
   }
@@ -294,4 +295,3 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
 }
 assert !(Git is Language.Lossless)  // VC19 git does not keep snapshots
 assert Git is Language  // VC23 a backend is not a language
-assert $.git === Git  // VC44 $.git is not the git language

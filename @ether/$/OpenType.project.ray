@@ -119,4 +119,4 @@ OpenType := class: Language (sfnt_version: U32, count: U16, U16, U16, U16, recor
 }
 // A table directory with no tables: sfntVersion 0x00010000 for TrueType outlines, numTables 0 (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
 assert OpenType.read([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).sfnt_version == 0x00010000 && OpenType.read([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).records.empty  // OTF1 an empty table directory is not read
-assert $.opentype === OpenType && Language.named(".ttf") === OpenType  // OTF4 $.opentype is not OpenType
+assert OpenType === OpenType && Language.named(".ttf") === OpenType  // OTF4 OpenType is not OpenType

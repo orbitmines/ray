@@ -35,4 +35,3 @@ assert Zlib.read(([0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0
 assert Zlib.read([([0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15])[..<9], [0x06, 0x2c, 0x02, 0x16]].flatten) is Diagnostic  // ZL5 a stream whose Adler-32 does not match its data reads
 assert Zlib.read(Zlib.write(("ray " * 32).bytes) as Byte[]) == ("ray " * 32).bytes  // ZL3 written bytes do not read back
 assert (Zlib.write("hello".bytes) as Byte[])[..<2] -- ((.0 * 256 + .1) % 31 == 0)  // ZL4 a written header is not a multiple of 31
-assert $.zlib === Zlib  // ZL6 $.zlib is not Zlib

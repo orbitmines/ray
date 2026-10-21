@@ -342,7 +342,7 @@ Character &+= {
     assert !(idy_policy.certificates.first.until > Time.now + 30 days)  // IDY6 an instance certificate lasts beyond thirty days
     assert idy_policy.revoke.count == 1 && idy_policy.recover.wait == 7 days && idy_policy.recover.veto  // IDY7 the default thresholds are not revoke 1, recover after 7 days with a veto
     assert idy_policy.threshold(idy_policy.copy ~~ .certificates = []) === idy_policy.revoke  // IDY8 removing a certificate is not a revocation
-    assert idy_policy.threshold(idy_policy.copy ~~ .signing = $.x25519) === idy_policy.rotate  // IDY9 changing the algorithm is not a rotation
+    assert idy_policy.threshold(idy_policy.copy ~~ .signing = X25519) === idy_policy.rotate  // IDY9 changing the algorithm is not a rotation
     // Revoking the key of a lost device takes one root key, and locks it out.
     Instance.local.revoked(idy, idy.key.published)
     assert !(idy.policy().certifies(idy.key.published, World.ether.clock.now))  // IDY13 a revoked instance key is still certified
@@ -427,8 +427,8 @@ Character &+= {
     rcv := rcv_c.recovery()
     assert !(rcv_log.find(rcv.goal.id))  // RCV1 a recovery is in the key log before its guardians signed it
     rcv_g := Instance.local.login(Character(name: "guardian"))
-    rcv_i := Noise.handshake(true, $.x25519.pair())
-    rcv_r := Noise.handshake(false, $.x25519.pair())
+    rcv_i := Noise.handshake(true, X25519.generated())
+    rcv_r := Noise.handshake(false, X25519.generated())
     rcv_r.read(rcv_i.written())
     rcv_i.read(rcv_r.written())
     rcv_r.read(rcv_i.written())
@@ -457,18 +457,18 @@ Character &+= {
     assert wrp_owner.inboxes().contains(wrp_owner.inbox.published)  // WRAP2 an instance's agreement key is not certified in the key log
     assert !(wrp_owner.policy().certifies(wrp_owner.inbox.published, World.ether.clock.now))  // WRAP3 an agreement key is certified to sign
     assert wrp.wraps_of(wrp_first).every(.by is HPKE && .by.kem === wrp_owner.policy().agreement && .cipher === wrp_owner.policy().cipher)  // WRAP4 a content key is not wrapped with the algorithms the keys and policy name
-    assert wrp.content_key(wrp_first, [wrp_owner]) is Encoding.Key  // WRAP5 the writer does not hold the content key
+    assert wrp.content_key(wrp_first, [wrp_owner]) is Key  // WRAP5 the writer does not hold the content key
     assert wrp.content_key(wrp_first, [wrp_reader]).erred  // WRAP6 someone not let read holds the content key
     wrp.shared(wrp_reader, wrp_owner)
     assert wrp.readers.some(=== wrp_reader)  // WRAP7 a character given read is not a reader
     assert wrp.current_key == wrp_first  // WRAP8 adding a reader rotated the key
     assert wrp.head.wraps.some(w => w.by.recognised(wrp_reader.inbox, (wrp_first as String).bytes, w.tag, w.sealed)) && wrp.head.wraps.every(.key == wrp_first)  // WRAP9 adding a reader is not a commit wrapping the current key for them
-    assert wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key  // WRAP10 an added reader does not hold the current key
+    assert wrp.content_key(wrp_first, [wrp_reader]) is Key  // WRAP10 an added reader does not hold the current key
     wrp.unshared(wrp_reader, wrp_owner)
     assert wrp.current_key != wrp_first && wrp.current_key == wrp.head.id  // WRAP11 removing a reader does not rotate to a new key
     assert wrp.content_key(wrp.current_key, [wrp_reader]).erred  // WRAP12 a removed reader holds the new key
-    assert wrp.content_key(wrp_first, [wrp_reader]) is Encoding.Key  // WRAP13 a removed reader lost what they already saw
-    assert wrp.content_key(wrp.current_key, [wrp_owner]) is Encoding.Key  // WRAP14 the rest do not hold the new key
+    assert wrp.content_key(wrp_first, [wrp_reader]) is Key  // WRAP13 a removed reader lost what they already saw
+    assert wrp.content_key(wrp.current_key, [wrp_owner]) is Key  // WRAP14 the rest do not hold the new key
     wrp.commit(wrp_owner, 2)
     assert wrp.head.key == wrp.current_key && wrp.value == 2  // WRAP15 a commit after a rotation does not use the new key
   }
@@ -512,14 +512,14 @@ Character &+= {
   // Logging out zeroises and drops every secret (`none.read` field) the character holds, whatever it is called, and no one else's; what is not a secret stays.
   assert {
     Keyholder := class: Character {
-      none.read spare: Encoding.Key?
-      none.read spares: (label: String, key: Encoding.Key)[] = []
+      none.read spare: Key?
+      none.read spares: (label: String, key: Key)[] = []
     }
     zer_at := Instance(path: "zer-at")
-    zer := Instance.local.login(Keyholder(name: "zer", key: $.ed25519.pair(), spare: $.ed25519.pair(), spares: [(label: "one", key: $.ed25519.pair())], presence: zer_at))
+    zer := Instance.local.login(Keyholder(name: "zer", key: Ed25519.generated(), spare: Ed25519.generated(), spares: [(label: "one", key: Ed25519.generated())], presence: zer_at))
     zer_spare := zer.spare
     zer_listed := zer.spares.first.key
-    zer_other := Instance.local.login(Keyholder(name: "zer-other", key: $.ed25519.pair()))
+    zer_other := Instance.local.login(Keyholder(name: "zer-other", key: Ed25519.generated()))
     Instance.local.logout(zer)
     assert !(zer.key || zer.spare || zer_spare.signed([1]).valid == true)  // ZER1 a key on a character outlives logging out
     assert !(zer.spares || zer_listed.signed([1]).valid == true)  // ZER3 a key held in a list of tuples outlives logging out
@@ -687,8 +687,8 @@ Instance := class: Location + Entity {
     character
   }
   // The keys a secret holds: a key, or a list of keys or of tuples holding keys (`world_keys`); never what else a tuple names.
-  static keys_in (value) => value is Encoding.Key ? [value]
-    : value is *[] ? value.map(. is Encoding.Key ? [.] : .fields.value{is Encoding.Key}).flatten(1)
+  static keys_in (value) => value is Key ? [value]
+    : value is *[] ? value.map(. is Key ? [.] : .fields.value{is Key}).flatten(1)
     : []
   swap (from: Character, to: Character) => {
     logout(from)
@@ -716,39 +716,19 @@ assert {
   assert nrw_target.allows(nrw_near, `size`)  // NRW1 a grant to a narrowing refuses who satisfies it
   assert !(nrw_target.allows(nrw_far, `size`))  // NRW2 a grant to a narrowing allows who does not satisfy it
 }
+// What is encrypted for an instance's key is read back where that key is, and nowhere else (a key is the language it is
+// written in: `Encrypted` in @ether/security)
 assert {
-  one := Instance(key: $.x25519.pair())
-  open_to_none := Encoding.Encrypted(value: 5, key: None)
-  assert open_to_none.opened(Instance()).erred  // EN21 a value held under nothing comes back at nothing
-  assert open_to_none.opened(one).erred  // EN22 a value held under nothing comes back anywhere
-  anywhere := 4 as $.base64
-  assert anywhere as one == 4  // EN23 a packed value does not come back at a target
-  assert anywhere as Number == 4  // EN24 a packed value does not come back at nothing
-}
-assert {
-  two := Instance(key: $.x25519.pair())
-  locked := Encoding.Encrypted(value: 5, key: one.key)
-  assert locked.opened(one) == 5  // EN1 what is locked does not open with its key
-  assert locked.opened(two).erred  // EN2 it opens with the wrong key
-  kept := Encoding.Encrypted(value: 5, key: three.key)
-  assert !(kept.opened(three).erred)  // EN8 what is held is not read back where the key is
-  assert kept.opened(two).erred  // EN9 it is read back where the key is not
-  assert kept.opened(three) == 5  // EN10 what is read back is not what was put in
-  nested := Encoding.Encrypted(value: 5 as $.gzip, key: one.key)
-  assert nested.opened(one) as Number == 5  // EN15 what is packed inside what is locked does not come back
-  assert nested.opened(two).erred  // EN16 what is locked around a packed value opens with the wrong key
-}
-assert {
-  three := Instance(key: $.x25519.pair())
-}
-assert {
-  seven := $.x25519.pair()
-  held_there := Encoding.Encrypted(value: 5, key: seven)
-  assert held_there.opened(Instance(key: seven)) == 5  // EN30 a value does not open at an instance holding its key
-  assert held_there.opened(Instance(key: $.x25519.pair())).erred  // EN31 a value opens at an instance holding another key
-  assert held_there.opened(Instance()).erred  // EN32 a value opened without its key does not raise that its key is missing
-  assert held_there.opened(Character(name: "k", key: seven)) == 5  // EN33 a value does not open for a character holding its key
-  assert held_there.opened(Instance(key: seven)) == 5  // EN34 a value opened with its key is not what was put in
+  one := Instance(key: X25519.generated())
+  two := Instance(key: X25519.generated())
+  locked := Encrypted(5, one.key)
+  assert one.key.read(locked) == 5  // EN1 what is locked does not open with its key
+  assert two.key.read(locked).erred  // EN2 it opens with the wrong key
+  assert Character(name: "k", key: one.key).key.read(locked) == 5  // EN33 a value does not open for a character holding its key
+  packed := Encrypted(5 as Gzip, one.key)
+  assert one.key.read(packed) == 5 as Gzip  // EN15 what is packed inside what is locked does not come back
+  assert two.key.read(packed).erred  // EN16 what is locked around a packed value opens with the wrong key
+  assert Base64.read(4 as Base64) == 4  // EN24 a packed value does not come back
 }
 
 // the current instance (not `@localhost`: anything on the host machine)

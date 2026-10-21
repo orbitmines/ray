@@ -115,7 +115,7 @@ Deflate := class: Language {
 
   // LZ77: at each position the longest earlier match of at least 3 bytes, at most 258 long and 32768 back (https://www.rfc-editor.org/rfc/rfc1951#section-4)
   static parsed (bytes: Byte[], at: Number = 0) => at >= bytes.count ? []
-    : ((0 max at - 32768)..<at).map(from => (length: Encoding.common(bytes[from..], bytes[at..<(at + 258 min bytes.count)]), distance: at - from)).max_by(.length)#.first -- (best =>
+    : ((0 max at - 32768)..<at).map(from => (length: (bytes[from..]).common(bytes[at..<(at + 258 min bytes.count)]), distance: at - from)).max_by(.length)#.first -- (best =>
       best && best.length >= 3 ? [Copy(best.length, best.distance), parsed(bytes, at + best.length)] : [Literal(bytes[at]), parsed(bytes, at + 1)])
 
   static fixed (values: (Literal | Copy)[]) => Data<fixed_literals, fixed_distances>(elements: values.map(coded(.)))
@@ -145,4 +145,17 @@ assert Deflate.read([0x03, 0x00]).empty  // DF4 an empty fixed block is not empt
 assert Deflate.read([0x4b, 0x04, 0x00]) as String == "a"  // DF5 a literal with the fixed codes is not read
 assert Deflate.read([0x4b, 0x84, 0x03, 0x00]) as String == "aaaaaaaaaa"  // DF6 a back-reference overlapping what it writes is not copied
 
-assert $.zlib.read([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62]) as String == "a"  // DF9 a zlib stream does not inflate and check its Adler-32
+assert Zlib.read([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62]) as String == "a"  // DF9 a zlib stream does not inflate and check its Adler-32
+
+// Matching bytes, what LZ77 is made of (and a delta, `Git`, and an edit, `History.edit`): how long two lists start the same,
+// and a list as runs of another (`(from, count)` where at least 4 bytes are found in it) and the bytes that are not
+Byte[] &+= {
+  common (other: Byte[]) => .empty || other.empty || .first != other.first ? 0 : 1 + .rest.common(other.rest)
+  runs (source: Byte[]) => .empty ? [] : (0..<source.count).map(at => (from: at, count: source[at..].common(this))).max_by(.count)#.first -- (best =>
+    best && best.count >= 4 ? [(from: best.from, count: best.count)], this[best.count..].runs(source) : this[1..].runs(source) -- (rest =>
+      rest.first.bytes ? [(bytes: (this[..0], rest.first.bytes).flatten)], rest.rest : [(bytes: this[..0])], rest))
+}
+assert ([1, 2, 3] as Byte[]).common([1, 2, 4] as Byte[]) == 2  // DF20 the common start of two byte lists is not counted
+assert ([5] as Byte[]).common([6] as Byte[]) == 0 & ([] as Byte[]).common([1] as Byte[]) == 0  // DF21 lists that differ at once, or an empty one, have a common start
+assert ([1, 2, 3] as Byte[]).common([1, 2, 3] as Byte[]) == 3  // DF22 a list does not share its whole length with itself
+assert ("abcdefgh" as Byte[]).runs("xxabcdefgh" as Byte[]).first == (from: 2, count: 8)  // DF23 bytes found in another are not one run of it

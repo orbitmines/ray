@@ -1,6 +1,109 @@
-@ether/filesystem
+@deflate
 @uuid
 @ether/time
+
+// Versions: a project or a language at a version, and what leads from one version to another. The core knows none of it
+// (a dependency is `@path`; at a version, `@path %v0.1.4-E2027.0A.4`, it needs this project).
+//
+// A version is written as Ether writes its own (language.ts): `v0.1.4-E2027.0A.4`, semver first (major, minor, index),
+// then after `-E` the year it was made, the years since the release and the month of that year as a letter (`0A`: the
+// first), and the index again. The minor is the months since the release, so a version is given by its pieces
+// (`Version(major: 0, year: 2027, month: "A", index: 4)`). Its revision, after `'`, is version control on the version
+// itself: a version again, with revisions of its own; `'1` is the version `v0.0.1-.1`, and none written is `'0`.
+Version := class: Ray (
+  "v", major: Decimal = 0, ".", minor: Decimal = 0, ".", index: Decimal = 0,
+  "-", ("E", year: Decimal, ".", since_release: Decimal = 0, month: Char{"A" <= . <= "L"} = "A")?, ".", index,
+  ("'", revision: Version | Decimal)?
+) => {
+  // (the minor, when the year is there: the months since the release, `0A` the first)
+  (this.minor = this.since_release * 12 + "ABCDEFGHIJKL".index_of(this.month) + 1) if this.year
+  // (its revision as a version: `'1` is `v0.0.1-.1`; none, `'0`)
+  revised => .revision is Decimal ? Version(index: .revision) : .revision ?? Version()
+  revision_zero => .revision === None || .revision == 0 || .revision is Version && .revision.zero
+  zero => .major == 0 && .minor == 0 && .index == 0 && .year === None && .revision_zero
+  latest => .revision_zero
+  breaks_freely => .major == 0
+
+  same_release (other: Version) => .major == other.major && .minor == other.minor && .index == other.index && .year == other.year && .since_release == other.since_release && .month == other.month
+  chainable == (other: Version) => .same_release(other) && (.revision_zero ? other.revision_zero : !other.revision_zero && .revised == other.revised)
+  chainable < (other: Version) => .major < other.major || .major == other.major && (.minor < other.minor || .minor == other.minor
+    && (.index < other.index || .index == other.index && !other.revision_zero && (.revision_zero || .revised < other.revised)))
+
+  next => Version(major: .major, minor: .minor, index: .index + 1, year: .year, since_release: .since_release, month: .month)
+  previous => Version(major: .major, minor: .minor, index: .index - 1, year: .year, since_release: .since_release, month: .month)
+  continuations => Migration.leaving(this).to
+  // (none written: the newest revision of the same release among those given)
+  resolved (revisions: Version[]) => .latest ? revisions{.same_release(this)}.max(.revised) ?? this : this
+
+  static Pin := class ("%[", label: (Char.Word | "-")[], "]") => { }
+  assert "%[stable]" is Version.Pin  // PRJ38 a word between "%[" and "]" is not a pin
+  assert !("%[stable" is Version.Pin)  // PRJ39 a pin without its closing bracket is a pin
+}
+// `%` and a version, `%v0.1.4-E2027.0A.4` (a member of it after brackets, `(%v0.1.4-E2027.0A.4).next`); a range of them,
+// `%[v0.1.0-.0..v0.2.0-.0]`
+%{written: (Char.Word | "." | "-" | "'")[]{. ~= ⊢"v"}} ^number => written as Version
+%[{span: (!"]")[]{. ~= (*, "..", *)}}] ^number => Version{(span.before("..") as Version) <= . && . <= (span.after("..") as Version)}
+
+// read from what it is written as, and written from its pieces
+assert ("v0.1.4-E2027.0A.4" as Version).(.major == 0 & .minor == 1 & .index == 4 & .year == 2027 & .since_release == 0 & .month == "A")  // VER1 a version is not read as its major, minor, index, year, years since the release and month
+assert Version(major: 0, year: 2027, month: "A", index: 4) as String == "v0.1.4-E2027.0A.4"  // VER2 a version given its pieces is not written whole
+assert Version(major: 1, year: 2028, since_release: 1, month: "C", index: 2).minor == 15  // VER3 the minor is not the months since the release
+assert Version(index: 1) as String == "v0.0.1-.1"  // VER4 a version of an index alone is not written `v0.0.N-.N`
+assert %v0.1.4-E2027.0A.4 == ("v0.1.4-E2027.0A.4" as Version)  // VER5 `%` before a version is not that version
+// a revision is version control on the version: a version again, `'1` the version `v0.0.1-.1`, none written `'0`
+assert (%v0.1.4-E2027.0A.4'1).revised == Version(index: 1)  // VER6 a revision written as a number is not the version `v0.0.1-.1`
+assert %v0.1.4-E2027.0A.4 == %v0.1.4-E2027.0A.4'0  // VER7 no revision written is not revision 0
+assert !(%v0.1.4-E2027.0A.4'1 == %v0.1.4-E2027.0A.4)  // VER8 a revision is the version itself
+assert (%v0.1.4-E2027.0A.4'v0.0.2-.2'1).revised.revised == Version(index: 1)  // VER9 a revision's own revision is not read
+assert (%v0.1.4-E2027.0A.4).latest & !(%v0.1.4-E2027.0A.4'1).latest  // PRJ12 a version written without a revision is not the latest, or one with a revision is
+assert (%v0.1.4-E2027.0A.4).breaks_freely & !(%v1.1.4-E2027.0A.4).breaks_freely  // PRJ14 major version 0 does not break freely, or a later one does
+// in order: release by release, then revision by revision
+assert %v0.1.4-E2027.0A.4 < %v0.1.5-E2027.0A.5 & %v0.1.9-E2027.0A.9 < %v0.2.0-E2027.0B.0  // PRJ24 a lower index or minor is not less than a higher one
+assert !(%v0.1.5-E2027.0A.5 < %v0.1.4-E2027.0A.4) & !(%v0.1.4-E2027.0A.4 < %v0.1.4-E2027.0A.4)  // PRJ25 a higher version, or the same one, is less
+assert %v0.1.4-E2027.0A.4 < %v0.1.4-E2027.0A.4'1 & %v0.1.4-E2027.0A.4'1 < %v0.1.4-E2027.0A.4'2  // PRJ27 within one release, a lower revision is not less than a higher one
+assert %v0.1.4-E2027.0A.4'5 < %v0.1.5-E2027.0A.5  // PRJ30 a revision of a release is not less than the next release
+assert (%v0.1.4-E2027.0A.4).next == %v0.1.5-E2027.0A.5 & (%v0.1.4-E2027.0A.4).previous == %v0.1.3-E2027.0A.3  // PRJ31 the release after or before is not the next or previous index
+assert (%v0.1.4-E2027.0A.4).resolved([%v0.1.4-E2027.0A.4'1, %v0.1.4-E2027.0A.4'4, %v0.1.5-E2027.0A.5'9]) == %v0.1.4-E2027.0A.4'4  // PRJ34 a release is not resolved to its newest revision among those given
+assert (%v0.1.4-E2027.0A.4'1).resolved([%v0.1.4-E2027.0A.4'4]) == %v0.1.4-E2027.0A.4'1  // PRJ36 a version with a revision is resolved to another
+assert %v0.1.5-E2027.0A.5 is %[v0.1.4-E2027.0A.4..v0.1.6-E2027.0A.6] & !(%v0.1.7-E2027.0A.7 is %[v0.1.4-E2027.0A.4..v0.1.6-E2027.0A.6])  // PRJ9 a version inside a range is not of it, or one outside is
+
+Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
+  .of["#"] := .of["#"] ?? []
+  .of["#"].push(this)
+
+  backward: Migration => Migration(from: .to, to: .from, body: .body⁻¹ ?? ERROR@Migration `the migration has no inverse`)
+
+  static leaving (version: Version) => Migration#{.from == version}, Migration#{.to == version}.backward
+  static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path.erred
+    ? ERROR@Migration `no migration leads from that version to the other`
+    : path.zip(path.rest).map((a, b) => Migration.leaving(a){.to == b}.first).reduce(held = old => .body(held)))
+}
+
+Project &+= {
+  // (at a version, `@ether/time %v0.1.4-E2027.0A.4`: the project read where that version of it is, its location with the version after it)
+  static Versioned := class: Project.Dependency ("@", path: (!" ")[], " %", version: Version | (!\n)[]) => {
+    project: Project? => {
+      wanted := "%" + (.version as String)
+      (Program(code: ("@", .path)){O: {
+        @ether/{bundled_path: Written} => Project.known((@ether / (bundled_path + wanted)).held as Project)
+        @{scheme: Char.Word[]}://{remainder: Written} => Project.known((scheme + "://" + remainder + wanted) as Held as Project)
+      }}()).load
+    }
+  }
+  assert ("@ether/time %v0.1.4-E2027.0A.4" as Project.Versioned).(.name == "time" & .version == %v0.1.4-E2027.0A.4)  // VC59 a dependency at a version does not keep its name and version
+  dependencies: (Project.Dependency | Project.Versioned)[] = []
+  version: Version?
+  written_against: Version?
+  carries (host_versions: Version[]) => .written_against && !host_versions.contains(.written_against)
+  assert Project(written_against: %v0.1.4-E2027.0A.4).carries([%v0.1.5-E2027.0A.5])  // PRJ6 a project written against a version the host does not run is not carried
+  assert !Project(written_against: %v0.1.4-E2027.0A.4).carries([%v0.1.3-E2027.0A.3, %v0.1.4-E2027.0A.4])  // PRJ7 a project written against a version the host runs is carried
+  assert !Project().carries([%v0.1.4-E2027.0A.4])  // PRJ8 a project written against nothing is carried
+}
+Language &+= {
+  version: Version?
+  backwards_compatible => .previous**.every(.targeting(this))
+  forwards_compatible => .next**.every(.targeting(this))
+}
 
 History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
   static Label := UUID | Char.Word[]
@@ -83,7 +186,7 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
       assert History.change(vt1, vs2).erred  // VC31 a rename two files could have made is not raised
     }
     given (set, written: String) => this
-    hash: Byte[] => $.sha256.write([parents.map(.hash), (id, attributed, text).join("") as Byte[]].flatten).bytes
+    hash: Byte[] => SHA256.write([parents.map(.hash), (id, attributed, text).join("") as Byte[]].flatten).bytes
     written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, text, \n).join("")
     static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
       ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from,
@@ -189,7 +292,7 @@ History &+= {
   written_as (change_of = .change) => since(None) -- (commits => commits.map(c => c.rewritten(change_of(c)).stored.written(above: commits[c.index - 1] if c.index > 0)).join("") as Program)
 
   static edit (before, after) => (Language.ray.write(before) as Byte[]) -- (old => (Language.ray.write(after) as Byte[]) -- (new =>
-    Encoding.common(old, new) -- (prefix => Encoding.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
+    old.common(new) -- (prefix => (old[prefix..].reverse).common(new[prefix..].reverse) -- (suffix =>
       (". edited(", prefix, ", ", old.count - suffix, ", ", Language.ray.write(new[prefix..<new.count - suffix] as String), ")") as String as Program))))
   assert History.edit("abcdef", "abXdef") as String == ". edited(3, 4, \"X\")"  // VC41 a small change is not written as an edit
 
@@ -249,7 +352,7 @@ History &+= {
     : language.written_to(copy ~~ (.base = head.previous), location)
 }
 
-History{location is @me}$ = $.ray | $.git
+History{location is @me}$ = Language.ray | Git
 
 Program &+= {
   as (=== History) => written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last.code = .last.code + .))
@@ -341,7 +444,6 @@ Language &+= {
 assert !Language.cfg.admits(Program(code: { while true { } }))  // VC57 a line's settings may run forever
 // What the Ray language keeps.
 assert Language.ray is Language.Lossless  // VC17 the .% history is not lossless
-assert $.ray === Language.ray  // VC43 $.ray is not the Ray language
 
 Language.ray &+= {
   level &+= History.level
@@ -359,15 +461,14 @@ Layout := class (root: Location = @./.ether/external/@) => {
   changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)
 }
 
-FileSystem &+= {
-  static Mirrored := class: FileSystem {
-    [location: Location] => ERROR@FileSystem `reading a project not held here from a mirror or a shard of it is not written yet`
-  }
+// What holds a project's data that nothing else holds (whatever space its location is in, which version control does not
+// know): a mirror of it, or a shard of one. Asked last, after what holds the location's space.
+Mirrored := class {
+  [location: Location] => ERROR@Mirrored `reading a project not held here from a mirror or a shard of it is not written yet`
 }
-
-FileOptimizations = {
-  {location: Location{Project.data(.) && FileSystem.Host()[.] === None}} => FileSystem.Mirrored()
-} + FileOptimizations
+FileOptimizations = FileOptimizations + {
+  {location: Location{Project.data(.)}} => Mirrored()
+}
 
 Store := class: Hierarchy (at: Location = @local, format: Format?) => {
   static Route := class (type: *, places: Program) => {

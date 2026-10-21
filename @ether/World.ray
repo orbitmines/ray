@@ -287,7 +287,6 @@ assert {
   assert here is plc.location# && there is plc.location#  // PLC1 a value placed twice is not at both places
   assert (Item(name: "plc2") @ here).location == here  // PLC2 a value placed once is not where it was placed
 }
-Location.current = @local
 
 Character &+= {
   static local (who) => who == "me" ? @me : (@local.registry, @local.hosted)#.find((who as String).fold_case.skeleton is .name.fold_case.skeleton)
@@ -733,8 +732,8 @@ assert {
   assert Base64.read(4 as Base64) == 4  // EN24 a packed value does not come back
 }
 
-// the current instance (not `@localhost`: anything on the host machine)
-@local = Instance()
+// the current instance (not `@localhost`: anything on the host machine): `@local`
+Location.current = Instance()
 
 Online := Character{presence.device.network.connected}
 Offline := Character{!(. is Online)}

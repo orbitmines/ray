@@ -507,8 +507,8 @@ Character &+= {
   }
   assert Instance.local.choose(([1, 2, 3]))  // RN9 choosing from a collection answers nothing
   assert 2.times.map(Instance.local.choose(([1, 2, 3]))).count == 2  // RN10 choosing two does not answer two
-  assert Character.local("local-one") === Instance.local.login(Character(name: "local-one"))  // WO15 a character logged in here is not here
-  assert !(Character.local("nobody-here"))  // WO16 a character nobody logged in is here
+  assert Instance.local.named("local-one") === Instance.local.login(Character(name: "local-one"))  // WO15 a character logged in here is not here
+  assert !(Instance.local.named("nobody-here"))  // WO16 a character nobody logged in is here
   // Logging out zeroises and drops every secret (`none.read` field) the character holds, whatever it is called, and no one else's; what is not a secret stays.
   assert {
     Keyholder := class: Character {
@@ -643,7 +643,7 @@ assert Character(name: "reachable" | "Ada Lovelace" | "a@b.c" | "+31612345678").
   & .phone#.first as String == "+31612345678"  // CTH2 a phone number is not one of its names
   & .full_name#.first.parts == ["Ada", "Lovelace"]  // CTH4 a full name is not read as its parts
   & !(.email#.count != 1 || .phone#.count != 1)  // CTH6 a name was taken for an email or phone number it does not look like
-  & Character.local("reachable") === . || !Instance.local.logged_in(.)  // CTH5 a character is not found by any of its names
+  & Instance.local.named("reachable") === . || !Instance.local.logged_in(.)  // CTH5 a character is not found by any of its names
 )
 // A REPL session is a branch of the character's history; keeping it merges it in.
 assert {
@@ -674,6 +674,8 @@ Instance := class: Location {
     assert ins_c.primary === ins_at  // INS2 the primary instance is not where the character is
   }
   logged_in (character: Character) => character is registry
+  // the character logged in here by any of its names; "me", the one running
+  named (who: String) => who == "me" ? @me : .registry#{who is .name#}.first
   // Logging out drops every secret on the character, whichever field holds it: each `none.read` field is zeroised and
   // set to None, so the next login makes fresh keys (W2.1 Storage). The entry removed is the character itself, or the one
   // a verified copy is (`==`), never one a claimed character only names. Deleting everything is a
@@ -821,3 +823,7 @@ assert Program(code: "1", from: @public).(
   .serves(@public)  // JB8 a quest serving a location does not serve it
   & !(.serves(@private))  // JB9 a quest serves a location it was not given
 )
+// A block run as a character logged in here (`@alice { … }`), or from one of its labels (`@alice~start { … }`)
+@{who: (Char.Word | "-")[]} {{block}} ^keyword => with (@me = Instance.local.named(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: block**)
+@{who: (Char.Word | "-")[]}~{label: String ^label}{ }{{block}} ^keyword => (Instance.local.named(who) ?? ERROR `a block runs as a character only when that character is here`)~label
+  -- (entry => with (@me = entry.of) Program(code: block**) ~~ Program(code: entry.following).entered(entry.of, None))

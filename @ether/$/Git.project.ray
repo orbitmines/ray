@@ -226,7 +226,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
     recorded => reference(noted_at) -- (tip => tip ? tree(commit(tip).tree).files.map((target: .path.replace("/", ""), line: .content as String)) : [])
     reachable (ids: Id[]) => ids.map(id => (reachable(commit(id).parents), id)).flatten.unique
     read_commit (id: Id, made, repository: Repository) => commit(id) -- (made_by => (recorded.find(.target == id).line -- (noted => noted ? (noted as Program as History).head : None) ?? History.Commit(
-      stamp: repository.clock.receive(Stamp.at(made_by.author.when, node: made_by.author.name)), who: Character.local(made_by.author.name) ?? made_by.author.name,
+      stamp: repository.clock.receive(Stamp.at(made_by.author.when, node: made_by.author.name)), who: Character(name: made_by.author.name) ?? made_by.author.name,
       change: History.change(made_by.parents.first ? tree(commit(made_by.parents.first).tree) : Location(), tree(made_by.tree)),
       when: made_by.author.when, message: made_by.message)) ~~ (.previous = made_by.parents.map(made[.])#))
 

@@ -145,7 +145,7 @@ assert !(UTC().leap_seconds)  // TI41 UTC counts leap seconds
 assert !(UTC(leap_seconds: true) is GMT)  // GML1 UTC counting leap seconds is GMT
 assert UTC(leap_seconds: true).leap_seconds  // GML2 UTC asked to count leap seconds does not
 assert (UTC(offset: 3 seconds) = 0) - (UTC() = 0) == 3 seconds  // TI79 three seconds past the agreed point is not three seconds past the other
-GMT := UTC{leap_seconds == false}
+GMT := UTC{.leap_seconds == false}
 assert !(GMT().leap_seconds)  // TI78 the zone without leap seconds has them
 
 Time := class: Quantity.Temporal (calendar: Calendar? UTC) => {
@@ -219,7 +219,7 @@ Quantity.Temporal &+= {
 Unit(name: "month" ("s" + plural: true)?, symbol: "mo")
   .convert(((x: Number) => x * (Time.YEAR || Time.MONTH ? (Time.MONTH ?? January).days_in(Gregorian(year: Time.YEAR ?? 1)) : 30)), day)
 
-ISO_8601 := class: Time{calendar is UTC.static} (
+ISO_8601 := class: Time{.calendar is UTC.static} (
   date: (
     year: Decimal,
     semicolons: "-"?,
@@ -275,19 +275,19 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   static Long := class: ISO_8601 (month: Month, " ", day_of_month: Decimal, ", ", year: Decimal) => { }
   long: String => this as Long as String
 
-  in_year => Gregorian(year: year)
+  in_year => Gregorian(year: .year)
   // RFC 9557 §3: an elective annotation that is not understood is ignored, and a critical one must be acted on or the timestamp refused; of the registered keys only the calendar (u-ca, BCP 47) is read (https://www.rfc-editor.org/rfc/rfc9557#section-3)
-  understood => !tags.some(.critical && !(.key == "u-ca" && .value is ("gregory" | "iso8601")))
-  date_known => date != ?
-  of_day: Quantity.Temporal => (hour_of_day ?? 0) hours + (minute_of_hour ?? 0) minutes + (second_of_minute ?? 0) seconds
-  as (=== Time) => Time(calendar) = (in_year.days_before_year + day_of_year - 1) days + of_day
-  chainable == (other: ISO_8601) => date_known && other.date_known ? this as Time == other as Time : of_day == other.of_day
-  chainable < (other: ISO_8601) => date_known && other.date_known ? this as Time < other as Time : of_day < other.of_day
+  understood => !.tags.some(.critical && !(.key == "u-ca" && .value is ("gregory" | "iso8601")))
+  date_known => .date != ?
+  of_day: Quantity.Temporal => (.hour_of_day ?? 0) hours + (.minute_of_hour ?? 0) minutes + (.second_of_minute ?? 0) seconds
+  as (=== Time) => Time(.calendar) = (.in_year.days_before_year + .day_of_year - 1) days + .of_day
+  chainable == (other: ISO_8601) => .date_known && other.date_known ? this as Time == other as Time : .of_day == other.of_day
+  chainable < (other: ISO_8601) => .date_known && other.date_known ? this as Time < other as Time : .of_day < other.of_day
 
-  dynamically assert semicolons if offset
-  dynamically assert date | time
-  dynamically assert understood
-  date ?= ?
+  dynamically assert .semicolons if .offset
+  dynamically assert .date | .time
+  dynamically assert .understood
+  .date ?= ?
 }
 assert "2024-01-01" as ISO_8601 .day_of_year == 1  // TI42 the first of january is not the first day of the year
 assert "2024-02-01" as ISO_8601 .day_of_year == 32  // TI43 the first of february is not the thirty-second day

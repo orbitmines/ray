@@ -100,6 +100,8 @@ Project &+= {
   assert !Project().carries([%v0.1.4-E2027.0A.4])  // PRJ8 a project written against nothing is carried
 }
 Language &+= {
+  // (what a file in it holds at a label of its history, as a tree)
+  tree_at (location: Location, label) => .read(location).at(label).tree
   version: Version?
   backwards_compatible => .previous**.every(.targeting(this))
   forwards_compatible => .next**.every(.targeting(this))

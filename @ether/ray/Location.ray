@@ -8,14 +8,15 @@ assert !("a)" is Path)  // LOC62 a lone closing parenthesis is in a path
 // the URLs), each answering a holder; none, nothing holds it
 Holders := { }
 
-// A location (RFC 3986 section 3): a scheme, then the authority only when "//" follows, a path, a query and a fragment.
+// A location (RFC 3986 section 3): a scheme, then the authority only when "//" follows, a path, a query (read as its
+// parameters, `?a=1&b=x%20y` is `{ a: "1", b: "x y" }`: `.query.a`) and a fragment.
 // What is there is what holds it answers: read, `.held`; written, `@x = value` (`@x = None` removes it, `@new = @x` copies
 // what is held); executed, `@x(…)`; as a boolean, whether anything is there. A location made in memory holds its `content`
 // and its `children` itself (a tree of files).
 Location := class: Hierarchy (
   (scheme: Char.Word[], ":", ("//", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?)?,
   path: Char{!= "?" && != "#"}[],
-  ("?", query: Char{!= "#"}[])?,
+  ("?", {query: Location.parameters(.)}: Char{!= "#"}[])?,
   ("#", fragment: Char[])?
 ) => {
   // LOC1 a url read as a location does not split into its scheme, host, port, path, query and fragment (RFC 3986 section 3)
@@ -49,16 +50,15 @@ Location := class: Hierarchy (
   assert ("/no/such/place/anywhere" as Location)(1, 2) == None  // LOC53 executing what nothing holds gives something
   assert Location(path: "t", content: "hi").held == "hi"  // LOC48 a location made in memory does not hold its content
 
-  // its query's parameters, decoded (`?a=1&b=x%20y`: `{ a: "1", b: "x y" }`; a name given twice, the last; RFC 3986 section
-  // 2.1, "+" a space)
-  parameters => {
+  // (a query as its parameters, each decoded: a name given twice, the last; RFC 3986 section 2.1, "+" a space)
+  static parameters (text: String) => {
     given := { }
-    (.query ?? "").split("&"){.nonempty}.for(given[Location.decoded(.before("=") ?? .)] = Location.decoded(.after("=") ?? ""))
+    text.split("&"){.nonempty}.for(given[Location.decoded(.before("=") ?? .)] = Location.decoded(.after("=") ?? ""))
     given
   }
-  assert ("?a=1&b=2" as Location).parameters.b == "2"  // LOC21 a query's value is not found by its name
-  assert ("?a=1&a=2" as Location).parameters.a == "2"  // LOC22 with a repeated name, the last value is not the one found
-  assert ("?a=1" as Location).parameters.b == None  // LOC23 a name that is not there has a value
+  assert ("?a=1&b=2" as Location).query.b == "2"  // LOC21 a query's value is not found by its name
+  assert ("?a=1&a=2" as Location).query.a == "2"  // LOC22 with a repeated name, the last value is not the one found
+  assert ("?a=1" as Location).query.b == None  // LOC23 a name that is not there has a value
   static decoded (text: String) => (text.split("+").join(" ") as Byte[]) -- (bytes => Location.unescaped(bytes) as String)
   static unescaped (bytes: Byte[]) => bytes.empty ? [] : bytes.first == "%" as Byte
     ? [(bytes[1..<3] as String as Hexadecimal₂) as Byte, Location.unescaped(bytes[3..])].flatten
@@ -67,11 +67,11 @@ Location := class: Hierarchy (
   assert Location.decoded("a+b") == "a b"  // LOC16 "+" in a query is not a space
   assert Location.decoded("%C3%A9") == "é"  // LOC17 a multi-byte percent sequence is not decoded as UTF-8 ("%C3%A9" is U+00E9)
   // the same location, its query's parameters changed (None removes one)
-  with (changes) => Location(.scheme, .host, .port, .path, query: [.parameters.fields{!changes.fields.name.contains(.name)}, changes.fields{.value != None}]
-    .flatten.map(.name + "=" + (.value as String)).join("&"), .fragment)
+  with (changes) => ((this.origin as String) + .path + "?" + [.query.fields{!changes.fields.name.contains(.name)}, changes.fields{.value != None}]
+    .flatten.map(.name + "=" + (.value as String)).join("&") + (.fragment ? "#" + .fragment : "")) as Location
   assert ("https://orbitmines.com/p?a=1" as Location).with(a: 2) as String == "https://orbitmines.com/p?a=2"  // LOC25 a location changed in its query is not the same location with that query
-  assert ("?a=1&b=2" as Location).with(a: None).query == "b=2"  // LOC20 a parameter changed to None is not removed
-  assert ("?a=1&b=2" as Location).with(b: 3, c: 4).parameters.(.a == "1" & .b == "3" & .c == "4")  // LOC19 changing parameters drops, keeps or misses one
+  assert ("?a=1&b=2" as Location).with(a: None).query.(.a == None & .b == "2")  // LOC20 a parameter changed to None is not removed
+  assert ("?a=1&b=2" as Location).with(b: 3, c: 4).query.(.a == "1" & .b == "3" & .c == "4")  // LOC19 changing parameters drops, keeps or misses one
 
   segments => .path.split("/"){.nonempty}
   assert ("/a//b/c/" as Location).segments == ["a", "b", "c"]  // LOC24 a path's segments are not its non-empty parts between "/"
@@ -107,6 +107,11 @@ Location := class: Hierarchy (
     kept["ray:a/b"] = None
     assert !(kept.fields{.value !== None}.nonempty)  // IO10 a field removed by name is still listed
   }
+
+  // a span of it, from a line and column to another (`@/t.ray{.from == (4, 1)}`); `file`, the whole of it
+  from: (line: Decimal, column: Decimal)?
+  to: (line: Decimal, column: Decimal)? = .from
+  file => this ~~ (.from = None) ~~ (.to = None)
 
   // a tree of files in memory: placed at relative paths, found again, each leaf a file
   files => .children.nonempty ? .children.map(.files).flatten : [this]

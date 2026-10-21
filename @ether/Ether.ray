@@ -20,6 +20,19 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 confidential => Node.policy & @private.managed
 // Who may see what.
 assert confidential  // AC3 there is no confidential permission
+// confidential follows the policy, but never past @private.managed.
+assert {
+  with Node.policy = @public {
+    assert confidential is @private.managed  // CK1 confidential widens with a public policy
+    assert !(Character(name: "stranger") is confidential)  // CK2 confidential reaches a stranger under a public policy
+  }
+}
+assert {
+  with Node.policy = @local {
+    assert confidential is @local  // CK3 confidential is wider than a narrower policy
+  }
+}
+assert none is @local  // CST3 the permission nobody has is not the narrowest
 Node.policy = @local
 
 Node &+= {

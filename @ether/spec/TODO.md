@@ -49,3 +49,8 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 
 - **A project's dependency lines are read by nothing** (`@ether/random`, `@x25519` at the top of a `.project.ray`): a file
   given directly reports them unread, and nothing loads the projects they name.
+
+## Tests to take in
+
+- **Control.ray's tests of the language's own forms** (operator sections OP1–OP5, `if` with cases IC3, `?`/`?=` QM1–QM2,
+  `is` with `#` IS4–IS6): they test what the bootstrap defines, and belong there.

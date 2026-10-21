@@ -1,4 +1,4 @@
-Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?, stored: Compiler?, of: Language?, implementations: .Implementation[] = [], targets: Language[] = []) => {
+Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?, stored: Compiler?, of: Language?, targets: Language[] = []) => {
   static loaded_named (extension: String) => Language#{.names(extension)} -- (all => all{!.of}.first ?? all.first)
   static named (extension: String) => Language.loaded_named(extension) ?? (Project.declared.find(.project && Language.loaded_named(extension)) && Language.loaded_named(extension))
   static over (outer: Language, base: Language) => Language(outer.extensions, level: base.level + outer.level, written: base.written + outer.written, of: base) @ outer.location
@@ -97,24 +97,15 @@ Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?
     ? (Compiler.reduced(Language.Writing(value, language: this), Language.unwrapped + .written + (.stored ?? Compiler.none)) -- (result => result is Location ? result : Language.joined(result)))
     : ERROR@Language `the language has no writer`
   written_to (value, location: Location) => .write(value) -- (. is Location ? .files.for(file => (location / file.path).held = file.content) : location.held = .) -- location
-  converted (location, from: Language) => .write(from.read(location))
-  tree_at (location: Location, label) => .read(location).at(label).tree
 
   targeting (language: Language) => language is .targets#
   assert Language(".x", targets: [Language.ray]).targeting(Language.ray)  // LNG35 a language does not target the languages it lists
   assert !Language(".y").targeting(Language.ray)  // LNG36 a language targets a language it does not list
 
-  static Implementation := class (language: Language, written_in: Language) => {
-    level => .written_in.read(.location.held as String)
-    setup => .language ~~ .implementations.push this ~~ .level ??= this.level
-  }
-
   static ray: .Lossless = (Language(".ray", level: Compiler.default, written: Language.ray_written) @ (@ether/ray | @ether))
   static cfg := Language(".cfg", level: Language.ray.level, written: Language.ray.written, of: Language.ray){admits Program{Pure & Terminating}}
   assert Language.cfg.of === Language.ray  // LNG37 the configuration language is not over Ray
   assert Language.cfg.extensions == ".cfg"  // LNG38 the configuration language does not use the extension ".cfg"
-  static regex := Language(".regex")
-  assert Language.regex.extensions == ".regex"  // LNG39 the regular expression language does not use the extension ".regex"
 }
 
 Node &+= {

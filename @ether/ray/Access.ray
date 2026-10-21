@@ -12,8 +12,7 @@ Access := class (who: *?, method: `=` | `()` | * = *, filter: Program?, target: 
   assert !Access.checkable(Program(code: { @me/instance = "x" }))  // AC31 a program with an effect can be checked
   assert Access.checkable(5)  // AC32 a value that is not a program cannot be checked
 
-  allowed: *?
-
+  static method_of (verb) => verb == "read" ? Access.Reading : verb == "write" ? `=` : `()`
   allows (called) => called is .method#
   assert Access(method: `=`).allows(`=`)  // AC33 a grant of writing does not allow writing
   assert !Access(method: `=`).allows(`()`)  // AC34 a grant of writing allows executing
@@ -47,9 +46,10 @@ Access := class (who: *?, method: `=` | `()` | * = *, filter: Program?, target: 
 
 none := Character{false}
 assert !(Character(name: "anyone") is none)  // CST2 the permission nobody has reaches someone
-assert none is local  // CST3 the permission nobody has is not the narrowest
 
-{who: Character}.read ^keyword => Access(who, method: Access.Reading)
+// `who.read`, `who.write`, `who.execute`: a grant to who of that method; `who{filter}.read`: only where the filter holds
+{who: Character}.{verb: "read" | "write" | "execute"} ^keyword => Access(who, method: Access.method_of(verb))
+{who}{{filter}}.{verb: "read" | "write" | "execute"} ^keyword => Access(who, method: Access.method_of(verb), filter: Program(code: (filter**)))
 assert {
   zed := Character(name: "zed")
   assert zed.read.who == zed  // AC44 `.read` is not a grant to that character
@@ -59,15 +59,9 @@ assert {
   assert !zed.write.reads  // AC48 `.write` allows reading
   assert zed.execute.executes  // AC49 `.execute` does not allow executing
 }
-{who: Character}.write ^keyword => Access(who, method: `=`)
-{who: Character}.execute ^keyword => Access(who, method: `()`)
-{who}{{filter}}.read ^keyword => Access(who, method: Access.Reading, filter: Program(code: (filter**)))
-{who}{{filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (filter**)))
-{who}{{filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (filter**)))
 const {target} ^keyword => target ~~ .access |= Access(none, method: `=`, target: target)
 // const is none.write: nobody may write it, and what it holds inherits that.
 assert (const (count: 1)).access#(const (count: 1)).some((const (count: 1)).who === none && (const (count: 1)).writes)  // CST1 const is not the permission nobody has
-confidential = => Node.policy
 
 Node &+= {
   static policy: * = none
@@ -77,23 +71,11 @@ Node &+= {
   assert (count: 1).visibility.who === Node.policy  // AC51 a value granted nothing is not visible to the policy
   // Grants on a derivative sit on the expression that names it, found by what that expression answers (L§8.2.2).
   granted => [.visibility#, Program#{.access && .names(this)}.access#].flatten
-  allows (who, called, at = None) => .granted.find(.covers(who, called, at)) ~~ (.allowed = this if .)
+  allows (who, called, at = None) => .granted.some(.covers(who, called, at))
   // A secret is a node no one may read (`none.read`, W5.6): stores skip it and logging out drops it.
   unreadable => .access#.some(.who === none && .reads)
   assert (const (count: 1)).unreadable == false  // AC52 a constant is unreadable 
   assert (count: 1).unreadable == false  // AC53 a value nobody restricted is unreadable
-}
-// confidential follows the policy, but never past @private.managed.
-assert {
-  with Node.policy = public {
-    assert confidential is @private.managed  // CK1 confidential widens with a public policy
-    assert !(Character(name: "stranger") is confidential)  // CK2 confidential reaches a stranger under a public policy
-  }
-}
-assert {
-  with Node.policy = local {
-    assert confidential is local  // CK3 confidential is wider than a narrower policy
-  }
 }
 
 Program &+= {
@@ -126,7 +108,7 @@ Program &+= {
     assert hop_run.hops.first === hop_origin.who && hop_run.hops.last === hop_run.who  // HOP1 a run's chain is not its origin first and its runner last
     assert hop_run.prompt == "@company wants to run this, originating from @me"  // HOP2 a prompt does not name the whole chain
   }
-  hops | chain => [.caller.hops ?? [], .who].flatten.unique
+  hops => [.caller.hops ?? [], .who].flatten.unique
   assert Program(who: Character(name: "solo")).hops.count == 1  // AC56 a program with no caller has more than itself in its chain
   assert Program(who: Character(name: "solo")).prompt == "@solo wants to run this"  // AC57 a prompt for a lone program names more than its runner
   may (method, target) => .hops.every(target.allows(., method))
@@ -134,7 +116,6 @@ Program &+= {
   assert &@.ask(`()`, @me/device/camera).erred  // AC26 a capability nobody granted does not err
   prompt => .hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
     + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
-
 }
 
 // (what the bootstrap leaves to this file: it needs what is here)
@@ -150,7 +131,7 @@ assert {
   assert !(purg_lamp.access)  // PURG3 a refused grant is kept
 }
 // A location one may execute: one granted the execute method
-Executable := Location{.access is Access(method: `()`)}
+Executable := Location{.access#.some(.executes)}
 assert !("/no/such/place/anywhere" as Location is Executable)  // LOC59 a location without execute access is an executable
 // Running as another character: only with their grant
 @me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`

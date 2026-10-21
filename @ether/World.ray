@@ -816,3 +816,8 @@ assert !("alice" is FullName || "Suharto" is FullName)  // CTH13 one word in a s
 assert "\"a b\"@x.org" is Email && "a.b+tag@sub.example.org" is Email && "a@[192.0.2.1]" is Email  // CTH10 a valid email address is not an Email
 
 assert !("a..b@x.org" is Email || ".a@x.org" is Email || "a@-x.org" is Email || "a@x" is Email || "12" is Phone || "+1234567890123456" is Phone)  // CTH11 an invalid email or phone number was accepted
+// A quest serves the location it was given
+assert Program(code: "1", from: @public).(
+  .serves(@public)  // JB8 a quest serving a location does not serve it
+  & !(.serves(@private))  // JB9 a quest serves a location it was not given
+)

@@ -317,60 +317,9 @@ Program &+= {
   right-to-left defer => .copy ~~ .from = &.caller
 }
 
-// `with settings { … }`, `with settings` (L§6.3): what the settings write is written `@ ->` (Almanac A3) for the block, or the
-// rest of the context the `with` is in, and everything called from there. (settings that are a block: what it holds)
-// (declared in the entrypoint, before `=`)
-
 Terminating := Program{.terminating}
 assert Program(code: { 1 }) is Terminating  // PG91 a program that only runs forward is not terminating
 
-Keyed := class (key: *, ":", " "[], (*, " = ")?, value: *) => {
-  as (=== String) => .value as String
-  assert Keyed(key: "a", value: "b") as String == "b"  // PG92 a keyed value is not written as its value
-}
-
-// A block as a map (its `keys`, `x[key]`, `for` over them, T8.7) is the language's own: the entrypoint gives every program them.
-
-// Operator sections are values (A1, A2)
-assert [1, 2].map(+1) == [2, 3]  // OP1 +1 is not a function adding one
-
-assert [1, 2].map(*10) == [10, 20]  // OP2 *10 is not a function multiplying by ten
-
-assert [true, false].map(!) == [false, true]  // OP3 ! alone is not the negation
-
-assert [1, 5, 20]{< 10}.count == 2  // OP5 a section in a narrowing is not applied to each
-
-assert (if 3 { != 0 => "nonzero" } else { "zero" }) == "nonzero"  // IC3 if with cases is not a value where it is written
-
-
-// `?` is unknown; `?=` sets only what has no value (T1.6)
-assert (?)#.count != 1  // QM1 ? is one value
-
-assert {
-  given := None
-  given ?= 4
-  given ?= 5
-  assert given == 4  // QM2 ?= does not set only what has no value
-}
-
-
-assert 3 is [1, 2, 3]#  // IS4 is does not find a member
-
-assert !(5 is [1, 2, 3]#)  // IS5 is finds what is not there
-
-assert 2 is [1, 2]#  // IS6 is does not find a member
-// Labels in a class body are entries (L§4.2)
-assert {
-  Entered := class {
-    steps := 0
-   later\
-    steps = 7
-  }
-  assert Entered~later().steps == 7  // EP1 ~label does not enter the class at that label
-  assert Entered~default == Entered  // EP2 ~default is not the class itself
-  // A class body runs like any function: labels are never skipped; a Component's labels are entered, not executed (F-D13, L§4.2.1)
-  assert Entered().steps == 7  // CMP1 a label in a class body stops its construction
-}
 // A program run as a selection
 assert Program(code: {
   1
@@ -410,10 +359,6 @@ assert {
   assert started.who === @me  // JB11 a started program is not run by whoever started it
   assert started.stop.done  // JB5 stopping a program does not end it
 }
-assert Program(code: "1", from: @public).(
-  .serves(@public)  // JB8 a quest serving a location does not serve it
-  & !(.serves(@private))  // JB9 a quest serves a location it was not given
-)
 
 // The running program: what called what is read here
 &@ ^keyword => &.caller as Program

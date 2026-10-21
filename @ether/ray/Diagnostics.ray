@@ -1,9 +1,3 @@
-Location &+= {
-  from: (line: Decimal, column: Decimal)?
-  to: (line: Decimal, column: Decimal)? = .from
-  file => this ~~ (.from = None) ~~ (.to = None)
-}
-
 // A diagnostic: what was said (its message) of what (its origin), of which type (`ERROR@Type …`), and what it was raised
 // over (its cause); a fatal one stops what raised it.
 Diagnostic &+= {
@@ -45,9 +39,10 @@ Report := class (name: String = "ray", claims: .Claim[] = []) => {
   passed => .claims.every(.passed)
   failures => .claims{!.passed}
 
-  static Written := ("INFO@mark `", id: (Char.Letter | Char.Digit)[]{.length > 0}, " ", message: (!"`")[], "`")
+  // (a claim as a test marks it in what it says: `INFO@mark ` + its id and message)
+  static Mark := ("INFO@mark `", id: (Char.Letter | Char.Digit)[]{.length > 0}, " ", message: (!"`")[], "`")
   static (file: Location) as (=== Report) => file.held as String -- (text => Program(code: text)().reports -- (reports => Report(name: file.@ as String,
-    claims: text.split(\n).enumerate.map(line => (line.value ~= (*, Report.Written, *)) -- (found => Report.Claim(found.id, found.message,
+    claims: text.split(\n).enumerate.map(line => (line.value ~= (*, Report.Mark, *)) -- (found => Report.Claim(found.id, found.message,
       passed: !reports.some(.level == INFO && .comment ~= ⊢(found.id + " ")),
       at: file{.from == (line.index + 1, 1)}) if found)).compact)))
 }

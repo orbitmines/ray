@@ -303,7 +303,8 @@ UI := class {
       {pair} => pair
     }
     embedded => Compiler.reduced(this, Embedding) -- (embed => embed === this ? this
-      : Location(embed.scheme, embed.host, embed.port, embed.path, query: .parameters.fields.map(Compiler.reduced(., Embedded)).compact.map(.name + "=" + .value).join("&"), fragment: fragment))
+      : ((embed.origin as String) + embed.path + "?" + .query.fields.map(Compiler.reduced(., Embedded)).compact.map(.name + "=" + .value).join("&")
+        + (.fragment ? "#" + .fragment : "")) as Location)
     video_site => embedded !== this
     {this}{{narrowing}} ^punctuation => Program(code: narrowing**) -- (narrowing => (this ~~ .narrowing = narrowing)
       -- (copy => [narrowing{O: Geometry.Settings}()].flatten.for(write => write.entered(copy, None) if write.writes.every(copy.declaring(.))) -- copy))
@@ -629,7 +630,7 @@ assert Program(code: {
   "Ray" ^h1
   @https://orbitmines.com
 }).(
-  (@https://orbitmines.com/archive?.=2).parameters.search == None  // UI275 a missing query parameter is not None
+  (@https://orbitmines.com/archive?.=2).query.search == None  // UI275 a missing query parameter is not None
   & (.{O: UI.Scene}()).(
     .children.first.content is String  // UI1 a string does not become text
     & UI.Theme.face(.children.first, .children.first.content[0]).font.weight >= 600  // UI2 a heading style does not give a heading
@@ -637,10 +638,10 @@ assert Program(code: {
     & .flow == block  // UI4 lines do not stack
   )
   & (@https://orbitmines.com/archive?search=ray&.=2).(
-    .parameters.search == "ray" && .parameters.page == "2"  // UI86 a query parameter is not read
+    .query.search == "ray" && .query.page == "2"  // UI86 a query parameter is not read
     & .path == "https://orbitmines.com/archive"  // UI87 a location's path keeps its query
-    & .with(search: "orbit").parameters.search == "orbit" && .with(search: "orbit").parameters.page == "2"  // UI88 with does not replace one parameter and keep the rest
-    & !(.with(search: None).parameters.search)  // UI89 with None does not remove a parameter
+    & .with(search: "orbit").query.search == "orbit" && .with(search: "orbit").query.page == "2"  // UI88 with does not replace one parameter and keep the rest
+    & !(.with(search: None).query.search)  // UI89 with None does not remove a parameter
   )
 )
 assert Program(code: {
@@ -1529,7 +1530,7 @@ assert @me/device/location != @https://orbitmines.com/profiles  // UI64 going ba
 
 assert !(@me/device/handheld)  // UI67 a platform is handheld before any level says so
 
-assert (@https://orbitmines.com/archive?q=a%20b).parameters.q == "a b"  // UI90 a query parameter is not decoded
+assert (@https://orbitmines.com/archive?q=a%20b).query.q == "a b"  // UI90 a query parameter is not decoded
 
 assert (@https://orbitmines.com/archive/on-orbits).segments.last == "on-orbits"  // UI91 a location's last segment is not its name
 
@@ -1541,6 +1542,6 @@ assert {
 
 assert (@ray 1 + 2) == 3  // UI212 @ray does not read the rest of the line as Ray
 
-assert (@https://orbitmines.com/archive?search=).parameters.search == None  // UI274 an empty query parameter is not None
+assert (@https://orbitmines.com/archive?search=).query.search == None  // UI274 an empty query parameter is not None
 
-assert ((@https://orbitmines.com/archive).parameters.search ?? "all") == "all"  // UI276 a location without a query has no parameter to default
+assert ((@https://orbitmines.com/archive).query.search ?? "all") == "all"  // UI276 a location without a query has no parameter to default

@@ -193,7 +193,7 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
         versions: set.version# ?? []).given(set, line.change as String))
       : Commit(id: label, change: code))
 
-    .{literal name ^property} ^punctuation => external get value name
+    .{name: String ^property} ^punctuation => external get value name
   }
 
   name: String?
@@ -230,8 +230,8 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
     ? (reached(end.entered(., None), .) ? (closed: [acc.closed, [[acc.open, [.]].flatten(1)]].flatten(1), open: None) : (closed: acc.closed, open: [acc.open, [.]].flatten(1)))
     : reached(start.entered(., None), .) ? (closed: acc.closed, open: [.]) : acc
   ) -- [.closed, [.open] if .open].flatten(1)
-  {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: start**), Program(code: end**))
-  {this}{from {literal start}} ^punctuation => Program(code: start**) -- (holds => stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
+  {this}{from {start} to {end}} ^punctuation => stretches(Program(code: start**), Program(code: end**))
+  {this}{from {start}} ^punctuation => Program(code: start**) -- (holds => stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
   value => ordered.reduce(held = None => .applied(held))
   pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last.id ?? label
   checkout (label, as_of: Stamp? = None) => this[pinned(label, as_of)].value
@@ -499,7 +499,7 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
   static Row := class (type: String, id: String, fields: (name: String, value: String)[]) => {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
     static (instance) as (=== Row) => Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
-      fields: instance.fields{!.unreadable}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.name{is UUID}#.first : .value))))
+      fields: instance.fields{!.unreadable}.map((name: .name, value: Language.ray.write(.value is Character ? .value.name{is UUID}#.first : .value))))
     instance => Language.ray.read((type, "(name: ", Language.ray.write(id as UUID), fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String)
     // The store: routed by type, read back as a narrowing.
     assert {
@@ -596,8 +596,8 @@ Node &+= {
 
 // `T$ @ L`: every `T` held under the location `L`, each routed by its path below `L` (`profiles: Profile$ @ /@`)
 {type}$ @ {under} ^keyword => type${(.location as String).starts_with(under as String)} @ under
-{type}$ = {literal places} ^keyword => Store.rerouted(type, Program(code: places**))
-{type}$ |= {literal places} ^keyword => Store.route(type, Program(code: places**))
+{type}$ = {places} ^keyword => Store.rerouted(type, Program(code: places**))
+{type}$ |= {places} ^keyword => Store.route(type, Program(code: places**))
 
 StoreOptimizations := {
   {store: Store{at === @local || at.path ~= ⊢"memory"}} => Store.memory

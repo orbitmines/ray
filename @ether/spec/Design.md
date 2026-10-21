@@ -1862,9 +1862,10 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - **Verified versus claimed.** Character equality is the whole of security in the language, so it never rests on data
   anyone can claim. A character is *verified* only when the runtime made it, from a completed handshake or from holding a
   local instance key. Anything built from data (`Character(name: …)`, a name, a told public key, a commit's `who`) is
-  *claimed*, and a claimed character is never `==` a verified one. `&caller` and `@me` only ever hold verified
-  principals, and access checks see only `&caller`. Names, UUIDs included, are for addressing, never evidence. Grants
-  match principals with `a.same(b)` (roots compared) and `a.answers_for(who)`, never `===`.
+  *claimed*: it is `==` the principal of the same root, but only a `Verified` one acts for it. `&caller` and `@me` only
+  ever hold verified principals, and access checks see only `&caller`. Names, UUIDs included, are for addressing, never
+  evidence. Grants match principals with `==` (roots compared; identity in the core, without @ether/security) or `is` a
+  narrowing of principals, never `===`. (No `Entity`, `same` or `answers_for`: removed 2026-10-21, user.)
 - **Keys.** Each instance hosting a character has its own key pair, whose private half never leaves it, certified by the
   character's root authority for a time and scopes. The root is a policy, not one key: the character's first commit
   declares an identity with its current root keys, the digest of the next ones, and a threshold per kind of key event

@@ -1,10 +1,10 @@
 
 Component := class {
-  {literal label ^label}\ ^punctuation => return this
+  {label: String ^label}\ ^punctuation => return this
 }
 
 never := Node{false}
-assert !(never.admits(5))  // NV1 something is of the type that never returns
+assert !(5 is never)  // NV1 something is of the type that never returns
 
 // Only the branch that is taken runs
 assert {

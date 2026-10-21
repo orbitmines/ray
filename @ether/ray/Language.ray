@@ -1,4 +1,4 @@
-Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?, stored: Compiler?, of: Language?, implementations: Implementation[] = [], targets: Language[] = []) => {
+Language := class: Ray (extensions: String, level: Compiler?, written: Compiler?, stored: Compiler?, of: Language?, implementations: .Implementation[] = [], targets: Language[] = []) => {
   static loaded_named (extension: String) => Language#{.names(extension)} -- (all => all{!.of}.first ?? all.first)
   static named (extension: String) => Language.loaded_named(extension) ?? (Project.declared.find(.project && Language.loaded_named(extension)) && Language.loaded_named(extension))
   static over (outer: Language, base: Language) => Language(outer.extensions, level: base.level + outer.level, written: base.written + outer.written, of: base) @ outer.location
@@ -128,6 +128,6 @@ Node &+= {
   as (=== String) => (this.of && this.of.header && Language.patterned(this.of.header.head)) ? Language.part_written(this) : (Language.for_file(&.caller.location.name) ?? Language.ray).write(this)
 }
 LanguageName := String{Language.named("." + .) != None}
-@{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
+@{extension: LanguageName}`{code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
 @{extension: LanguageName} {code} => Compiler.reduced(code, Language.named("." + extension).level)
 assert @ray`1 + 2` == 3  // TL1 a literal tagged ray is not read as Ray

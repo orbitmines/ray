@@ -44,7 +44,7 @@ Location := class: Hierarchy (
       & !(.b == "2")  // LOC74 the old value of a changed pair is still there
     )
     assert ("?a=1&b=2" as Location).query.merged(a: None) as String == "b=2"  // LOC20 a pair changed to None is not removed
-    .{literal name ^property} ^punctuation => .pairs{.name == name && .value.nonempty}.last.value
+    .{name: .pairs.name ^property} ^punctuation => .pairs{.name == name && .value.nonempty}.last.value
     assert ("?a=1&b=2" as Location).query.b == "2"  // LOC21 a query's value is not found by its name
     assert ("?a=1&a=2" as Location).query.a == "2"  // LOC22 with a repeated name, the last value is not the one found
     assert ("?a=1" as Location).query.b == None  // LOC23 a name that is not there has a value
@@ -140,8 +140,6 @@ Held := class: Location {
 {held: Held} = {value} ^punctuation => held.holder ? (held.holder[held.location] = (value is Held ? (value.holder ? value.holder[value.location] : None) : value)) : ERROR@Location `nothing loaded holds the location to write it`
 Directory := Held{.holder && .holder[.location] is Location[]}
 assert !("/no/such/place/anywhere" as Held is Directory)  // LOC58 a location nothing holds is a directory
-Executable := Location{.access is Access(method: `()`)}
-assert !("/no/such/place/anywhere" as Location is Executable)  // LOC59 a location without execute access is an executable
 
 @{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Held
 assert @https://orbitmines.com/a as String == "https://orbitmines.com/a"  // LOC63 `@scheme://rest` is not the held location written out

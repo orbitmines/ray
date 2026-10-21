@@ -14,8 +14,8 @@ JS := class: Language {
     // Statements, each ended by ";" (https://tc39.es/ecma262/#sec-statements)
     {program: Program} => program.steps.map(., ";")
     // Comments (https://tc39.es/ecma262/#sec-comments)
-    //{literal text: (!\n)[]} => "/*", text, "*/"
-    /*{literal text}*/ => "/*", text, "*/"
+    //{text: (!\n)[]} => "/*", text, "*/"
+    /*{text}*/ => "/*", text, "*/"
     // Let, const and var declarations (https://tc39.es/ecma262/#sec-let-and-const-declarations, https://tc39.es/ecma262/#sec-variable-statement)
     {binding: "const" | "let" | "var"} {name: Identifier} = {value} => binding, " ", name, "=", value
     // The return statement (https://tc39.es/ecma262/#sec-return-statement), the if statement (https://tc39.es/ecma262/#sec-if-statement)
@@ -47,8 +47,8 @@ JS := class: Language {
     \{{entries: *[]}{`}`} => "{", entries.map(("," if .index > 0), .), "}"
     {name: Identifier}: {value} => name, ":", value
     // Regular expression literals (https://tc39.es/ecma262/#sec-literals-regular-expression-literals), strings in single quotes (https://tc39.es/ecma262/#sec-literals-string-literals), null and undefined
-    /{literal pattern}/{flags: Char.Letter[]} => "/", pattern, "/", flags
-    '{literal text}' => Language.Writing(text)
+    /{pattern}/{flags: Char.Letter[]} => "/", pattern, "/", flags
+    '{text}' => Language.Writing(text)
     null => "null"
     undefined => "undefined"
     {name: Identifier} => name

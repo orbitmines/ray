@@ -84,12 +84,9 @@ Character &+= {
   inboxes (at: Stamp = World.ether.clock.now) => policy(at) -- (policy => policy ? policy.certificates{policy.receives(.key, at)}.map(.key) : [])
   pseudonym (root: History.Label) => policy() -- (policy => policy.signing.generated(policy.digest.write([key.secret, (root as String).bytes].flatten).bytes))
 
-  chainable == (other) => proof && other.proof ? proof.root !== None && proof.root == other.proof.root : !proof && !other.proof && this === other
   // The same principal: by root, the one a proof carries when verified, else the key log's of one held here (named by a
-  // grant, a delegation or a registry). Finds a principal's grants and entries; never evidence on its own.
-  same (other) => other is Character && (proof.root ?? root) -- (mine => mine !== None && mine == (other.proof.root ?? other.root))
-  // Only a verified principal answers for anyone: a claimed one answers for nothing, whatever it names or copies.
-  answers_for (who) => this is Verified && (same(who) || this is who)
+  // grant, a delegation or a registry); never evidence on its own: only a verified one acts for it (`Verified`).
+  chainable == (other) => this === other || other is Character && (proof.root ?? root) -- (mine => mine !== None && mine == (other.proof.root ?? other.root))
   as (=== boolean) => (this is Verified ? this : @local.verified(this)) == @me
   acting => this is Verified ? this : @local.verified(this) ?? ERROR@Access `a character acts only as verified by a handshake or a key held here`
   assert Character(name: "nowhere").acting is Diagnostic  // VER7 a character nobody holds here acts
@@ -172,12 +169,12 @@ History &+= {
   reaches (grant: Access) => grant.target === this || covered(grant).some(=== head)
   read_grants => granted{.reads && (reaches(.) || covered(.).nonempty)}
   readers => [read_grants.who#, @everyone{reader => read_grants.some(reader is .who)}].flatten{is Character}.unique
-  following => readers{reader => read_grants{reader.same(.who)} -- (granted => granted.empty || granted.some(reaches(.)))}
+  following => readers{reader => read_grants{(reader == .who)} -- (granted => granted.empty || granted.some(reaches(.)))}
   holders => [[@me], (@local.registry, @local.hosted)#].flatten{is Character && .inbox}
   rotations => ordered{c => c.wraps.some(.key == c.id)}
   current_key => public ? None : rotations.last.id
   readable => !current_key || content_key(current_key) is Key
-  keys_for (reader: Character) => read_grants{reader.same(.who)}.map(covered(.)).flatten(1).map(.key).compact.unique
+  keys_for (reader: Character) => read_grants{(reader == .who)}.map(covered(.)).flatten(1).map(.key).compact.unique
 
   wrapped (content: Key, label, reader: Key, policy: Identity) => policy.wrapping(kem: reader.algorithm, kdf: policy.digest, aead: content.algorithm) -- (by =>
     by.tagged(reader, (label as String).bytes, [], content.secret) -- (held => (key: label, cipher: content.algorithm, by: by, tag: held.tag, sealed: held.sealed)))
@@ -194,18 +191,18 @@ History &+= {
   // before and after the storage levels, so the signature covers the ciphertext (L§9.2).
   committed (made: History.Commit) => (made.wraps.empty && !public && !current_key && made.who is Character && made.who.inbox ? rekeying(made.who, made.id) : made.wraps)
     -- (keyed => made ~~ (.wraps = keyed) ~~ (.key = keyed.some(.key == made.id) ? made.id : current_key))
-    -- (keyed => keyed.who is Entity ? keyed.who.sealed(keyed.who.sealed(keyed).stored) : keyed.stored)
+    -- (keyed => keyed.who is Character ? keyed.who.sealed(keyed.who.sealed(keyed).stored) : keyed.stored)
   // A commit that only carries wraps of content keys (a reader added, a key rotated).
   wrapping (who, wraps: *[], id: History.Label = UUID.v1()) =>
     this ~~ .head = committed(History.Commit(id, who, stamp: clock.now, change: Program(code: { . }), wraps: wraps, previous: head, line: this))
   // A cache line carries the wraps of its key, so it opens without the line it caches.
   cached_at (commit: History.Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program) ~~ (.wraps = wraps_of(commit.key) if commit.key)
-  shared (reader: Character, who: Character = @me) => (reader.read this unless read_grants.some(reader.same(.who)))
+  shared (reader: Character, who: Character = @me) => (reader.read this unless read_grants.some((reader == .who)))
     -- keys_for(reader) -- (keys => keys.empty ? this
       : wrapping(who, keys.map(label => reader.inboxes().map(wrapped(content_key(label), label, ., who.policy()))).flatten(1).shuffled))
   // Revoking compares principals by root (`same`), so a verified copy of the reader revokes the grant made to them.
-  unshared (reader: Character, who: Character = @me) => read_grants{reader.same(.who) && (.target === this || .target is Program)}.for(.target.access -= .)
-    -- rekeyed(who, following{!.same(reader)})
+  unshared (reader: Character, who: Character = @me) => read_grants{(reader == .who) && (.target === this || .target is Program)}.for(.target.access -= .)
+    -- rekeyed(who, following{!(. == reader)})
 }
 
 History &+= {
@@ -259,7 +256,7 @@ Instance &+= {
   // Acting on a delegation takes its signature, scope and expiry, and that whoever presents it (`by`, verified) is the one
   // it was given to: a delegation seen elsewhere (it travels with handed-over code) is not a bearer token.
   delegated (delegation: Delegation, by = @me) => !delegation.valid() ? ERROR@Access `the delegation is unsigned, expired or not certified`
-    : !(by is Character ? by.acting : by).answers_for(delegation.to) ? ERROR@Access `a delegation is acted on only by the one it was given to`
+    : !((by is Character ? by.acting : by) -- (acting => acting is Verified && (acting == delegation.to || acting is delegation.to))) ? ERROR@Access `a delegation is acted on only by the one it was given to`
     : delegation.from.copy ~~ .proof = (root: delegation.from.root, by: delegation.signature.by, at: None, session: None, delegation)
   host_for (character: Character, delegation: Delegation? = None) => (delegation ? delegated(delegation, by: character) : character) ~~ (hosted |= .) ~~ .presence = this
 
@@ -288,8 +285,8 @@ Program &+= {
   may (method, target) => hops.every(. is Live && target.allows(., method) && (.proof.delegation.covers(method, target) ?? true))
 }
 
-// A commit is signed by an entity's key, when one is held here.
-Entity &+= {
+// A commit is signed by a character's key, when one is held here.
+Character &+= {
   sealed (commit: History.Commit) => commit ~~ (.signature = key.signed(.hash) if key)
 }
 

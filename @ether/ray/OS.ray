@@ -12,7 +12,7 @@ OS := class (platform: String) => {
   // The environment is read through the OS, live.
   env => OS.Environment(os: this)
   static Environment := class (os: OS) => {
-    .{literal name ^property} ^punctuation => .os[name]
+    .{name: String ^property} ^punctuation => .os[name]
   }
 
   // the one the host reports; none: the language as the operating system (@ether/os)

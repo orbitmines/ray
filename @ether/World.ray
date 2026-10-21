@@ -327,7 +327,7 @@ Character &+= {
     assert Program.replay(Program.runs.head) == hg_giver.acting  // HG3 a logged run does not replay as its character
     // A line runs as its who only when the runtime verified who signed it, and never with their live permissions.
     auth_ran := History.Commit(who: hg_giver, stamp: World.ether.clock.now, change: Program(code: { @me })).applied(None)
-    assert !(auth_ran is Verified && auth_ran.same(hg_giver))  // AUTH4 an unsigned line replays as the character it names
+    assert !(auth_ran is Verified && auth_ran == hg_giver)  // AUTH4 an unsigned line replays as the character it names
     assert !(auth_ran is Live)  // AUTH5 a replayed line is given live permissions
   }
   // The root policy: the first commit of the key log, keys naming their algorithm, and short-lived certificates for instance keys.
@@ -496,9 +496,9 @@ Character &+= {
     revk.unshared(revk_reader.acting, revk_owner)
     assert !(revk.access#.some(.who === revk_reader))  // REVK1 a reader revoked by a verified copy keeps the grant
     assert revk.content_key(revk.current_key, [revk_reader]).erred  // REVK2 a reader revoked by a verified copy holds the new key
-    assert !(revk_reader.answers_for(revk_reader) || Character(name: "revk-reader").answers_for(revk_reader))  // REVK4 a claimed character answers for a principal
-    assert revk_reader.acting.answers_for(revk_reader)  // REVK5 a verified character does not answer for itself
-    assert !(revk_reader.acting.answers_for(revk_owner))  // REVK6 a verified character answers for another
+    assert !(revk_reader is Verified || Character(name: "revk-reader") is Verified)  // REVK4 a claimed character answers for a principal
+    assert revk_reader.acting is Verified & revk_reader.acting == revk_reader  // REVK5 a verified character does not answer for itself
+    assert !(revk_reader.acting == revk_owner)  // REVK6 a verified character answers for another
   }
   assert {
     revk_leaving := Instance.local.login(Character(name: "revk-leaving"))
@@ -653,7 +653,9 @@ assert {
   assert rpl.keep(rpl_session).value == 9  // BRN5 keeping a session does not merge it into the character
 }
 
-Instance := class: Location + Entity {
+Instance := class: Location {
+  // (its own key, a secret: what is encrypted for this instance is read with it)
+  none.read key: Key?
   device: Device = Device()
   registry: Character?
   // (who runs here when no one has logged in: the instance's own)
@@ -674,10 +676,10 @@ Instance := class: Location + Entity {
   logged_in (character: Character) => character is registry
   // Logging out drops every secret on the character, whichever field holds it: each `none.read` field is zeroised and
   // set to None, so the next login makes fresh keys (W2.1 Storage). The entry removed is the character itself, or the one
-  // a verified copy answers for (`answers_for`), never one a claimed character only names. Deleting everything is a
+  // a verified copy is (`==`), never one a claimed character only names. Deleting everything is a
   // program run as the character once 30 days have passed; stopping it within them cancels it (W2.4).
   logout (character: Character, delete_all = false) => {
-    registry = registry#{!(. === character || character.answers_for(.))}
+    registry = registry#{!(. === character || character is Verified && character == .)}
     character.fields{.unreadable}.for(field => {
       Instance.keys_in(field.value).for(.zeroised)
       character[field.name] = None
@@ -737,7 +739,7 @@ assert {
 Online := Character{presence.device.network.connected}
 Offline := Character{!(. is Online)}
 Broadcasting := Character{quests{serves @public}.nonempty}
-Hosting := Character{presence.hosted#.some(!.same(this))}
+Hosting := Character{.presence.hosted#.some(!(. == this))}
 Proxying := Character{quests{goal is Network.Proxy && !done}.nonempty}
 Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.since(None){.value == true}.last.when >= Time.now - 5 minutes)}
 assert !(Idle === Busy)  // CS2 idle and busy are the same

@@ -30,8 +30,8 @@ Byte[] &+= {
   little => (<-this) as Binary
 }
 // A private key is a secret: readable by no one (W2.1 Storage), so no store, history or cache level writes it, and logging
-// out drops it. An entity's own key, and its reader (`inbox`): the agreement key what is encrypted for it is sealed to.
-Entity &+= {
+// out drops it. A character's own key, and its reader (`inbox`): the agreement key what is encrypted for it is sealed to.
+Character &+= {
   none.read key: Key?
   none.read inbox: Key?
 }

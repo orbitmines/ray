@@ -343,7 +343,7 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   // rule that can be left out by name; each answers what `none` answers
   static default := lazily Compiler.default + none &+ {
     // Representations: a 32-bit integer an i32, its operators i32's
-    {literal value: Binary₃₂.Signed} => i32.const, value
+    {value: Binary₃₂.Signed} => i32.const, value
     {a: Binary₃₂.Signed} {operator: i32{.ray}} {b: Binary₃₂.Signed} => a, b, operator
     !{a: Binary₃₂.Signed} => a, i32.eqz
     // Control flow is classes, written as WebAssembly's own

@@ -1,6 +1,6 @@
 Program &+= {
   who: * = @me
-  assert Program(code: { 1 }).who.same(@me)  // PG35 a program does not run as the character who made it by default
+  assert Program(code: { 1 }).who == @me  // PG35 a program does not run as the character who made it by default
   name: String?
   goal: *?
   from: *?
@@ -13,7 +13,7 @@ Program &+= {
   assert Program(code: { 1 }).results.count == 0  // PG38 a program that was never stepped has results
   tried: *?
 
-  written => .code ? super.written : [Program(code: ((.name ?? "reach"), "(", Language.ray.write(.goal), ")") as String)]
+  written => .code ? super.written : [Program(code: ((.name ?? "reach"), "(", .goal as String, ")") as String)]
   assert Program(code: { 5 }).written.count == 1  // PG11 a program of one statement counts other than one
   // A statement read back as what it is written as
   assert {
@@ -414,3 +414,44 @@ assert Program(code: "1", from: @public).(
   .serves(@public)  // JB8 a quest serving a location does not serve it
   & !(.serves(@private))  // JB9 a quest serves a location it was not given
 )
+
+// The running program: what called what is read here
+&@ ^keyword => &.caller as Program
+
+// What a program does is what its externals are (L§8.1): what it calls past itself, and what it reaches of the machine
+Program &+= {
+  continuations => .calls{!.is_external}.map(.**)
+  effects => .reachable.map(.calls{.is_external}.external_name).flatten.unique
+  assert Program(code: { @me/instance = "x" }).effects.contains("io")  // AC60 writing out is not an effect named io
+  // What a run may do is the runner's setting (L§8.1): `with (Program.speculated |= x)`, `with (Program.refused |= x)`, or a `.cfg.ray`.
+  static speculated: *[] = []
+  static refused: *[] = []
+  assert Program.speculated.count == 0  // AC58 nothing is speculated unless asked
+  assert Program.refused.count == 0  // AC59 nothing is refused unless asked
+}
+// io and os are effects; the time is not deterministic
+assert Program(code: { 1 + 1 }) is Pure  // EFF1 adding numbers is not pure
+assert Program(code: { @me/instance = "x" }) is Effecting  // EFF2 writing out is not an effect
+assert {
+  with (Program.refused |= Program(code: { @me/instance = "x" })) {
+    assert Program(code: { @me/instance = "x" }) is Refused  // EFF4 a refused program is not refused
+  }
+}
+assert Program(code: { @me/instance = "x" }) is Abstracted  // EFF5 an effect nobody speculated runs in full
+
+Pure := Program{.effects.empty}
+assert Program(code: { 1 + 1 }) is Deterministic  // AC61 adding numbers is not deterministic
+assert !(Program(code: { 1 + 1 }) is Effecting)  // AC62 adding numbers is an effect
+assert !(Program(code: { 1 + 1 }) is Nondeterministic)  // AC64 adding numbers is nondeterministic
+Deterministic := Program{!.effects.some(. is ("random" | "time" | "io"))}
+Nondeterministic := Program{!(. is Deterministic)}
+Effecting := Program{.effects.some(. is ("io" | "os"))}
+Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
+assert Program(code: { x := 1 }) is Initializer  // AC65 a program that only declares is not an initializer
+assert !(Program(code: { @me/instance = "x" }) is Initializer)  // AC66 a program that writes out is an initializer
+Refused := Program{. is Program.refused#}
+Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
+
+[(`pure`, Pure), (`deterministic`, Deterministic), (`nondeterministic`, Nondeterministic)].for (word, claim) => {
+  right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
+}

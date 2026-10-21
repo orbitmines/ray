@@ -428,7 +428,7 @@ Geometry := class {
     compounds - (hole: Shape) => (holes ,= hole) -- this
     smoothed (radius: Length) => (smoothing = radius) -- this
     narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? (writes.for(.entered(this, None)) -- this) : reachable.filter(narrowing.entered(., None)))
-    {this: Shape}{{literal narrowing}} ^punctuation => narrowed(Program(code: narrowing**))
+    {this: Shape}{{narrowing}} ^punctuation => narrowed(Program(code: narrowing**))
 
     share (of: (Length | Number | Stops)?, room: Length) => of is Stops ? of.at(room) * room : of is Number ? of * room : of
     radii => radius.map(. is Number ? size * . : Vector(., .))
@@ -542,10 +542,10 @@ Geometry := class {
     {a}, {b} => (a, b)
     // (each a write on the shape it is entered into: the field named as written given the value; a bound, the shape as it is (a
     // field's type narrowed by it is not written yet))
-    {literal path} == {value} => value -- (written => (setting => setting.set(path, written)))
-    {literal path}: {value} => value -- (written => (setting => setting.set(path, written)))
-    {literal path} <= {most} => most -- (written => (setting => setting))
-    {literal path} >= {least} => least -- (written => (setting => setting))
+    {path} == {value} => value -- (written => (setting => setting.set(path, written)))
+    {path}: {value} => value -- (written => (setting => setting.set(path, written)))
+    {path} <= {most} => most -- (written => (setting => setting))
+    {path} >= {least} => least -- (written => (setting => setting))
   }
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t

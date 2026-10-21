@@ -1,22 +1,3 @@
-Entity := class {
-  // The same principal as `other`: here, the same value; @ether/security compares verified roots instead.
-  same (other) => this === other
-  // an entity compared with itself and with another
-  assert {
-    e := Entity()
-    assert e.same(e)  // CHR2 an entity is not the same as itself
-    assert !e.same(Entity())  // CHR3 two different entities are the same
-  }
-  // Whether this principal answers for `who`, a principal named by a grant, a delegation or a registry, or any narrowing of principals.
-  answers_for (who) => .same(who) || this is who
-  // an entity asked whether it answers for itself and for another
-  assert {
-    e := Entity()
-    assert e.answers_for(e)  // CHR5 an entity does not answer for itself
-    assert !e.answers_for(Entity())  // CHR6 an entity answers for another entity
-  }
-}
-
 Nameable := class {
   static PREFIX: String?
   name: *?
@@ -26,28 +7,38 @@ Nameable := class {
   assert !(Nameable.named("Bob").name == "Alice")  // CHR8 naming gives another name
 }
 
-@me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
+// The character running: who called; none, the one this instance plays (World.ray: the local instance's)
+@me ^string => (&.caller as Character) ?? Character.played
 // (a path under the character running: each name a member of what is before it, `@me/device/keyboard`)
 @me/{path} ^string => Character.walked(@me, "{path}".split("/"))
 @{who: (Char.Word | "-")[]} {{block}} ^keyword => with (@me = Character.local(who) ?? ERROR `a block runs as a character only when that character is here`) Program(code: block**)
-@{who: (Char.Word | "-")[]}~{literal label ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
+@{who: (Char.Word | "-")[]}~{label: String ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
   -- (entry => with (@me = entry.of) Program(code: block**) ~~ Program(code: entry.following).entered(entry.of, None))
 
-Character := class: Hierarchy &+ Entity &+ Nameable {
+Character := class: Hierarchy &+ Nameable {
+  // The same principal as `other`: here, the same value; @ether/security compares verified roots instead. (Whom a
+  // principal answers for, a grant's, a delegation's: `==` it, or `is` it when that is a narrowing of principals.)
+  chainable == (other) => this === other
+  assert {
+    c := Character(name: "c")
+    assert c == c  // CHR2 a character is not the same as itself
+    assert !(c == Character(name: "c"))  // CHR3 two different characters of one name are the same
+    assert c is Character{.name == "c"} & !(c is Character{.name == "d"})  // CHR5 a character is not of a narrowing it satisfies, or is of one it does not
+  }
   static PREFIX := "@"
+  static played := Character(name: "me")
   static local (who) => who == "me" ? @me : None
   static walked (at, names) => names.empty ? at : Character.walked(at[names.first], names.rest)
-  assert Character.local("me").same(@me)  // CHR44 `@me` is not the local character "me"
+  assert Character.local("me") == @me  // CHR44 `@me` is not the local character "me"
   assert Character.local("nobody-here") == None  // CHR45 a character that is not here is local
   assert Character.walked({ a: 1 }, []).a == 1  // CHR46 walking no names does not stay at the start
   assert Character.walked({ a: { b: 7 } }, ["a", "b"]) == 7  // CHR47 walking names does not enter each member in turn
   assert Character.walked({ a: 1 }, ["b"]) == None  // CHR48 walking into a name that is not there finds something
 
   quests => Program#{who: this}{.running}
-  assert @me.acting.same(@me)  // CHR49 a character is not the character it acts as
+  assert @me.acting == @me  // CHR49 a character is not the character it acts as
   assert @me/quests == @me.quests  // JB7 @me/quests is not the character's selection of its programs
   // Without @ether/security a character is only itself; security replaces this with the verified comparison.
   as (=== boolean) => this === @me
   acting => this
-  chainable == (other) => ERROR@Security `comparing characters needs @ether/security (or @ether/network)`
 }

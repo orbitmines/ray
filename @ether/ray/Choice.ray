@@ -5,6 +5,18 @@ choose {n: Number} {type} ^keyword => Program(who: @me, name: "choose", goal: n 
 choose? {type} ^keyword => Program(who: @me, name: "choose", goal: type?)
 choose? {type} ?? {placeholder} ^keyword => Program(who: @me, name: "choose", goal: type?, tried: placeholder)
 Choice := Program{.name == "choose"}
+// What is chosen so far: nothing until it is answered (`value`), its placeholder standing in; what a player tells joins it,
+// one possibility more, never a certainty
+Program &+= {
+  value: *?
+  placeholder => .tried
+  choosing => .name == "choose" && .value === None
+  answer => .value ?? .placeholder
+  told (answered) => .value = ((answered ~~ .weight = 1/2) -- (held => this.value === None ? held : (this.value | held)))
+}
+Node &+= {
+  choosing => false
+}
 
 assert choose boolean is boolean  // CN3 what is chosen from a type is not of it
 assert (choose boolean) is Choice  // CN8 a choice is not a Choice

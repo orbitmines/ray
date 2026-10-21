@@ -3,13 +3,5 @@
 // A camera: what it sees, when its user grants it (`(@me/device as Camera).image`)
 Camera := class: Location {
   image: *?
-
-  // Every camera the operating system has connected, superposed: V4L2's on Linux (`/dev/video*`,
-  // https://www.kernel.org/doc/html/latest/userspace-api/media/v4l/v4l2.html), Media Foundation's on Windows
-  // (MFEnumDeviceSources, https://learn.microsoft.com/windows/win32/medfound/), AVFoundation's on macOS
-  // (AVCaptureDevice.DiscoverySession, https://developer.apple.com/documentation/avfoundation), enumerateDevices' video
-  // inputs in a browser (https://www.w3.org/TR/mediacapture-streams/#dom-mediadevices-enumeratedevices); on ether the
-  // player's
-  static connected => (if OS.Ether { ["camera"] } else { (external os `cameras`) ?? [] }).map(Camera(path: .))#
 }
 assert !(Camera().image)  // CAM1 a camera nothing granted sees something

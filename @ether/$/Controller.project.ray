@@ -10,13 +10,6 @@ Controllers := class: Location {
   connected (held) => .children{.held == held}.first ?? .add(Controllers.Controller(name: .reclaimed(held) ?? (0..).find(!this[.]), held))
   disconnected (held) => .children = .children{.held != held}
   reclaimed (held) => [.children, .children.previous**].flatten{.held == held && !this[.name]}.first.name
-
-  // The controllers the operating system has connected, each numbered as it came: evdev's joysticks and gamepads on Linux
-  // (`/dev/input/event*` with BTN_GAMEPAD, https://www.kernel.org/doc/html/latest/input/gamepad.html), GameInput's on
-  // Windows (https://learn.microsoft.com/gaming/gdk/_content/gc/input/overviews/input-overview), Game Controller's on macOS
-  // (GCController.controllers, https://developer.apple.com/documentation/gamecontroller), the Gamepad API's in a browser
-  // (navigator.getGamepads, https://www.w3.org/TR/gamepad/); on ether those connected to it as they connect
-  static made => Controllers() ~~ ((if OS.Ether { [] } else { (external os `controllers`) ?? [] }).for(this.connected(.)))
 }
 
 // Controllers are numbered on the device and take back their number (F-I1)

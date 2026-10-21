@@ -3,8 +3,8 @@
 
 // A keyboard: its keys, each pressed or not. What a key toggles flips each time it is pressed and what it cycles through
 // steps each time, both kept as they change (`dynamically`); pulsed, it holds as it is pressed, then while held as often
-// as the operating system repeats a key. Every keyboard the operating system has connected is one, all of them superposed
-// in `@me/device` (`keyboards: Keyboard = @me/device`, one of them `keyboards#0`).
+// as the operating system repeats a key. Every keyboard connected is one, all of them
+// superposed in `@me/device` (`keyboards: Keyboard = @me/device`, one of them `keyboards#0`).
 Keyboard := class: Location {
   static Modifier := enum shift | control | alt | meta
 
@@ -74,19 +74,6 @@ Keyboard := class: Location {
   assert {
     with (@me/device as OS) = OS.Ether {
       assert Keyboard.repeat == (delay: 1 s, rate: 20 / s)  // KB21 a key on ether does not repeat after a second, twenty times a second
-    }
-  }
-
-  // Every keyboard the operating system has connected, superposed: evdev's on Linux (`/dev/input/event*` with keys,
-  // https://www.kernel.org/doc/html/latest/input/input.html), Raw Input's on Windows (GetRawInputDeviceList's
-  // RIM_TYPEKEYBOARD, https://learn.microsoft.com/windows/win32/inputdev/raw-input), the IOKit HID manager's on macOS
-  // (kHIDUsage_GD_Keyboard, https://developer.apple.com/documentation/iokit); a page has one, its events naming no device;
-  // on ether the player's
-  static connected => (if OS.Browser || OS.Ether { [Keyboard(path: "keyboard")] } else { ((external os `keyboards`) ?? []).map(Keyboard(path: .)) })#
-  assert {
-    with (@me/device as OS) = OS.Ether {
-      keyboards: Keyboard = Keyboard.connected
-      assert keyboards is Keyboard & Keyboard.connected#.count == 1  // KB22 ether has other than the player's keyboard
     }
   }
 }

@@ -124,7 +124,11 @@ HPACK := class: Language {
   }
 
   level := {
-    {block: Block} => Document(entries: block.decoded().fields)
+    {block: Block} => {
+      held := { }
+      block.decoded().fields.for(held[.name] = .value)
+      held
+    }
   }
   written := Optimizations + {
     {writing: Language.Writing} => Block(representations: writing.value.map(. as Representation))

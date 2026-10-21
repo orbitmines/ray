@@ -11,7 +11,7 @@ Entity := class {
     assert !e.same(Entity())  // CHR3 two different entities are the same
   }
   // Whether this principal answers for `who`, a principal named by a grant, a delegation or a registry, or any narrowing of principals.
-  answers_for (who) => same(who) || this is who
+  answers_for (who) => .same(who) || this is who
   // an entity asked whether it answers for itself and for another
   assert {
     e := Entity()
@@ -36,17 +36,17 @@ Nameable := class {
 @{who: (Char.Word | "-")[]}~{literal label ^label}{ }{{block}} ^keyword => (Character.local(who) ?? ERROR `a block runs as a character only when that character is here`)~label
   -- (entry => with (@me = entry.of) Program(code: block**) ~~ Program(code: entry.following).entered(entry.of, None))
 
-Character := class: Hierarchy + Entity + Nameable {
+Character := class: Hierarchy &+ Entity &+ Nameable {
   static PREFIX := "@"
   static local (who) => who == "me" ? @me : None
   static walked (at, names) => names.empty ? at : Character.walked(at[names.first], names.rest)
   assert Character.local("me").same(@me)  // CHR44 `@me` is not the local character "me"
   assert Character.local("nobody-here") == None  // CHR45 a character that is not here is local
-  assert Character.walked(Document(entries: [(name: "a", value: 1)]), []).a == 1  // CHR46 walking no names does not stay at the start
-  assert Character.walked(Document(entries: [(name: "a", value: Document(entries: [(name: "b", value: 7)]))]), ["a", "b"]) == 7  // CHR47 walking names does not enter each member in turn
-  assert Character.walked(Document(entries: [(name: "a", value: 1)]), ["b"]) == None  // CHR48 walking into a name that is not there finds something
+  assert Character.walked({ a: 1 }, []).a == 1  // CHR46 walking no names does not stay at the start
+  assert Character.walked({ a: { b: 7 } }, ["a", "b"]) == 7  // CHR47 walking names does not enter each member in turn
+  assert Character.walked({ a: 1 }, ["b"]) == None  // CHR48 walking into a name that is not there finds something
 
-  quests => Program#{who: this}{running}
+  quests => Program#{who: this}{.running}
   assert @me.acting.same(@me)  // CHR49 a character is not the character it acts as
   assert @me/quests == @me.quests  // JB7 @me/quests is not the character's selection of its programs
   // Without @ether/security a character is only itself; security replaces this with the verified comparison.

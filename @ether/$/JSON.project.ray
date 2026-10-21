@@ -7,7 +7,12 @@ JSON := class: Language (Blank, root: Value, Blank) => {
   static Value := Object | Array | Text | Numeral | Literal
   static valued (held) => held is Value ? held.value : held
   static Object := class ("{", Blank, (members: (Blank, name: Text, Blank, ":", Blank, value: Value, Blank)[]).join(","), Blank, "}") => {
-    value => Document(entries: members.map((name: .name.value, value: valued(.value))))
+    // (a block holding each member under its name, `{ "a": 1 }`)
+    value => {
+      held := { }
+      .members.for(held[.name.value] = JSON.valued(.value))
+      held
+    }
   }
   static Array := class ("[", Blank, (elements: (Blank, element: Value, Blank)[]).join(","), Blank, "]") => {
     value => elements.map(valued(.element))

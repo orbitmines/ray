@@ -42,7 +42,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (the kernel's map: a slot for each of its words (0 to 23), the span a parameter is given at M_SPAN (24) and the count each
   // rule is stamped with in the slot after it (25), then the classes it finds, Node at 26 and String at 27, then the
   // program's arguments, 28 (ARGV_SLOT; language.ts writes them there): past all of those)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_TYPE_WRITTEN = 45, W_SPREAD = 46, W_IS_RANGE = 47, W_MAPPED_BY = 48, W_MAPPED = 49, W_DYNAMIC_IN = 50, W_DYNAMIC_OUT = 51, W_ORIGIN_OF = 52, W_HOISTED = 53, ARGV_SLOT = 28, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_LINKED = 21, M_JOINED = 22, M_KEPT = 23, M_SPAN = 24;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_TYPE_WRITTEN = 45, W_SPREAD = 46, W_IS_RANGE = 47, W_MAPPED_BY = 48, W_MAPPED = 49, W_DYNAMIC_IN = 50, W_DYNAMIC_OUT = 51, W_ORIGIN_OF = 52, W_HOISTED = 53, W_MISSING = 54, W_MISSING_NAME = 55, W_CALLABLE = 56, W_MADE_OF = 57, ARGV_SLOT = 28, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_LINKED = 21, M_JOINED = 22, M_KEPT = 23, M_SPAN = 24;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 36;
@@ -1311,6 +1311,30 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return 0;
   }
   // (whether a node has a rule of its own by a name, from s to e)
+  // (whether v has a rule of its own led by itself and brackets, `{this}({argument})`, among its latest: what calls it)
+  // (its own, or of what it was made of after, `x &+= { … }`: its `made_of`)
+  function callable_(t: number, v: number): number {
+    // (a list called so, a key (a class's own call is what makes one: `C.( … )` reads in it))
+    if (!v || w(v + N_IS) !== IS_NODE || v === w(GLOBAL) || !listed(t, v)) return 0;
+    if (calls_itself(v)) return 1;
+    const mo = member(t, v, w(w(WORDS) + 8 * W_MADE_OF), w(w(WORDS) + 8 * W_MADE_OF + 4));
+    for (let lk = mo && mo !== w(NOTHING) ? held(t, mo, W_HEAD, 0) : 0, n = 0; lk && lk !== w(NOTHING) && n < 16; lk = held(t, lk, W_NEXT, 0), n++) { const mv = held(t, lk, W_VALUE, 0); if (mv && mv !== v && calls_itself(mv)) return 1; }
+    return 0;
+  }
+  function calls_itself(v: number): number {
+    if (!v || w(v + N_IS) !== IS_NODE || v === w(GLOBAL)) return 0;
+    // (led by itself, `{this}`, kept as what follows it: its first part the bracket)
+    for (let r = latest(v), k = 0; r && r !== w(v + N_BASE) && k < 64; r = w(r), k++) { if (w(r + R_FLAGS) & DEAD) continue; const hd = w(r + R_HEAD); if (hd && w(r + R_PARTS) >= 2 && (w(r + R_PART) & 15) === LITERAL && b(w(r + R_PART + 4)) === 40 && b(w(hd + N_A)) === b(w(OPEN)) && w(hd + N_B) - w(hd + N_A) > w(OPEN_LENGTH) + 4 && word(w(hd + N_A) + w(OPEN_LENGTH), w(hd + N_A) + w(OPEN_LENGTH) + 4, W_THIS)) return 1; }
+    return 0;
+  }
+  // (the language's `.{member}`: a literal `.`, a hole, its own)
+  function dot_member(r: number): number {
+    return w(r + R_OWNER) === w(GLOBAL) && w(r + R_PARTS) === 2 && (w(r + R_PART) & 15) === LITERAL && w(r + R_PART + 8) === 1 && b(w(r + R_PART + 4)) === 46 && (w(r + R_PART + PART) & 15) === HOLE ? 1 : 0;
+  }
+  // (the language's `.({member})`: a literal `.(`, a hole, a literal `)`, its own)
+  function dot_paren(r: number): number {
+    return w(r + R_OWNER) === w(GLOBAL) && w(r + R_PARTS) === 3 && (w(r + R_PART) & 15) === LITERAL && w(r + R_PART + 8) === 2 && b(w(r + R_PART + 4)) === 46 && b(w(r + R_PART + 4) + 1) === 40 && (w(r + R_PART + PART) & 15) === HOLE && (w(r + R_PART + 2 * PART) & 15) === LITERAL ? 1 : 0;
+  }
   function own_named(nd: number, s: number, e: number): number {
     for (let r = latest(nd), k = 0; r && r !== w(nd + N_BASE) && k < 1 << 16; r = w(r), k++) { const hd = w(r + R_HEAD); if (!w(r + R_HOLES) && hd && trimmed(w(hd + N_A), w(hd + N_B) - w(hd + N_A), s, e)) return 1; }
     return 0;
@@ -1344,6 +1368,32 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return pt && pt !== p && w(pt + N_IS) !== IS_PLACE ? pt : 0;
   }
   // (what a node answers under a name, read on another (on): that rule, applied; none, 0)
+  // (a member a value does not have, s to e its name: what the value's own `missing` answers, given the name (`missing_name`,
+  // a list's: each of its values' own, `.statement` of the Statements read); none, None) TODO(explicit)
+  function missed(t: number, on: number, s: number, e: number): number {
+    const wm = w(w(WORDS) + 8 * W_MISSING), wl = w(w(WORDS) + 8 * W_MISSING + 4);
+    // (not while one is read: what `missing` reads is not asked of it again)
+    // (of a place, `.` a closure is given (`.on(xs)`): what it holds)
+    if (on && w(on + N_IS) === IS_PLACE) { const pv = place_value(t, on); on = pv && pv !== w(NOTHING) ? pv : 0; }
+    if (!on || w(on + N_IS) !== IS_NODE || e <= s || w(t + 944) || !rule_seen(t, on, wm, wl, 0)) return w(NOTHING);
+    // (asked only of a list each of whose values a class made holds it as its own, a field it was given; a method is its class's)
+    let lk = held(t, on, W_HEAD, 0), lk_n = 0;
+    for (; lk && lk !== w(NOTHING) && lk_n < 1 << 16; lk = held(t, lk, W_NEXT, 0), lk_n++) { const lv = held(t, lk, W_VALUE, 0); if (!lv || w(lv + N_IS) !== IS_NODE || !own_named(lv, s, e) || !rule_seen(t, lv, w(w(WORDS) + 8 * W_OF), w(w(WORDS) + 8 * W_OF + 4), 0)) return w(NOTHING); }
+    if (!lk_n) return w(NOTHING);
+    // (the name on one made of it, not on it: what it holds is not changed while it may be read)
+    const wn = w(w(WORDS) + 8 * W_MISSING_NAME), asked = node(IS_NODE, 0, 0, on, on);
+    bound(wn, wn + w(w(WORDS) + 8 * W_MISSING_NAME + 4), asked, node(IS_TEXT, s, e, w(TEXTS) || w(GLOBAL), 0));
+    // (read apart from what asked it: what it reads in turn leaves the reading it is in as it was)
+    const fault = w(t + T_FAULT), jn = w(t + T_JUMP_N), js = w(t + T_JUMP_S), jv = w(t + T_JUMP_V), on0 = w(t + T_ON), dc0 = w(t + T_DECL), ho0 = w(t + T_HOLE);
+    const mw = w(t + T_MEMBER), ms = w(t + T_MEMBER_S), me = w(t + T_MEMBER_E), sc0 = w(t + T_SCRATCH), wr0 = w(t + T_WRITER), ws0 = w(t + T_WRITER_SELF), wa0 = w(t + T_WRITER_S), we0 = w(t + T_WRITER_E);
+    put(t + 944, 1); put(t + T_JUMP_N, 0); put(t + T_DECL, 0); put(t + T_HOLE, 0); put(t + T_MEMBER, 0); put(t + T_WRITER, 0);
+    const v = member_seen(t, on, wm, wl, asked, 0); put(t + 944, 0);
+    const ok = !w(t + T_FAULT) && !w(t + T_JUMP_N);
+    put(t + T_FAULT, fault || (w(t + T_FAULT) === L_DEEP || w(t + T_FAULT) === L_MEMORY || w(t + T_FAULT) === L_FULL ? w(t + T_FAULT) : 0)); put(t + T_JUMP_N, jn); put(t + T_JUMP_S, js); put(t + T_JUMP_V, jv); put(t + T_ON, on0); put(t + T_DECL, dc0); put(t + T_HOLE, ho0);
+    put(t + T_MEMBER, mw); put(t + T_MEMBER_S, ms); put(t + T_MEMBER_E, me); put(t + T_SCRATCH, sc0); put(t + T_WRITER, wr0); put(t + T_WRITER_SELF, ws0); put(t + T_WRITER_S, wa0); put(t + T_WRITER_E, we0);
+    if (!ok) return w(NOTHING);
+    return v || w(NOTHING);
+  }
   function member_seen(t: number, nd: number, s: number, n: number, on: number, depth: number): number {
     const r = rule_seen(t, nd, s, n, depth), hd = r ? w(r + R_HEAD) : 0;
     return r ? apply(t, r, 0, frame(0, 0, on, 0, 0, 0, 0, on, on), 0, on, w(hd + N_A), w(hd + N_B), on, on) : 0;
@@ -2015,6 +2065,20 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       const v2 = ev_(t, w(r + 28), names, f, self, value, written, on);
       put(t + T_GIVEN_N, g0); return v2;
     }
+    // (`.name` written alone, in what gives `.` a value of its own (a closure called `.on(value)`): that value's member, not one
+    // of what it is read in) TODO(explicit)
+    if (k === K_RULE && !w(r + 24) && self && w(self + N_IS) === IS_NODE && b(w(r + 4)) === 46 && b(w(CLASSES) + b(w(r + 4) - 1)) !== 1 && b(w(r + 4) - 1) !== 41 && b(w(r + 4) - 1) !== 93 && dot_member(w(r + 12)) && own_named(self, w(r + 4), w(r + 4) + 1)) {
+      const dv = member_seen(t, self, w(r + 4), 1, self, 0);
+      if (dv && dv !== self && dv !== w(NOTHING)) return apply(t, w(r + 12), w(r + 16), names, f, dv, w(r + 4), w(r + 8), written, dv);
+    }
+    // (`.(x)`, `.` one called by brackets (a method `(…)` its own, a statement's key: `.statement#.for .(caller)`): `(x)` read on
+    // it, that call; else the language's, x read in it (and a `.` after a name or what closes, `it.({constraint})`, or x led by a `.`,
+    // a member a section reads, `it.(.length)`)) TODO(explicit)
+    if (k === K_RULE && !w(r + 24) && dot_paren(w(r + 12)) && b(w(r + 4)) === 46 && b(skip(w(r + 4) + 2, w(r + 8))) !== 46 && b(w(CLASSES) + b(w(r + 4) - 1)) !== 1 && b(w(r + 4) - 1) !== 41 && b(w(r + 4) - 1) !== 93) {
+      // (`.` what it is read in, what the language's would read x in)
+      const ds = w(r + 4);
+      if (callable_(t, self)) { const dr = reading(t, ds, ds + 1, w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0), r2 = alloc(READ); put(r2, K_ON); put(r2 + 4, ds); put(r2 + 8, w(r + 8)); put(r2 + 12, dr); put(r2 + 16, ds + 1); put(r2 + 20, w(r + 8)); return onto(t, r2, names, f, self, value, written); }
+    }
     if (k === K_RULE) { set(t + T_LEXV, w(r + 20)); const via = w(r + 24); return apply(t, w(r + 12), w(r + 16), names, f, via || self, w(r + 4), w(r + 8), written, via || on); }
     if (k === K_ON) return onto(t, r, names, f, self, value, written);
     const s = w(r + 4), e = w(r + 8);
@@ -2041,7 +2105,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (fo && fo !== names && w(fo + N_IS) === IS_FRAME) { const fv = block(t, s, e, fo, fo, w(fo + F_THIS), 0, 1, 0, w(fo + F_THIS), 0); if (fv && fv !== w(NOTHING)) return fv; }
     }
     if (k === K_UNREAD && value && !w(t + T_DECL) && !w(t + T_HOLE) && !w(t + T_LE) && worded(s, e) && on && on !== self && on !== w(GLOBAL) && w(on + N_IS) === IS_NODE && own_named(on, s, e)) { const mv = member_seen(t, on, s, e - s, on, 0); if (mv) return mv; }
-    if (k === K_UNREAD && !w(t + T_DECL) && !w(t + T_HOLE) && !w(t + T_LE) && worded(s, e)) { const th = (self && self !== w(GLOBAL) && !making(self) && (w(self + N_IS) === IS_NODE || w(self + N_IS) === IS_TEXT) && w(names + N_IS) === IS_FRAME && w(names + F_RULE) && w(w(names + F_RULE) + R_HOLES) ? self : 0) || held_this(names) || (names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? w(names + F_THIS) : 0); if (th && th !== w(GLOBAL) && (w(th + N_IS) === IS_NODE || w(th + N_IS) === IS_TEXT)) return w(NOTHING); }
+    if (k === K_UNREAD && !w(t + T_DECL) && !w(t + T_HOLE) && !w(t + T_LE) && worded(s, e)) { const th = (self && self !== w(GLOBAL) && !making(self) && (w(self + N_IS) === IS_NODE || w(self + N_IS) === IS_TEXT) && w(names + N_IS) === IS_FRAME && w(names + F_RULE) && w(w(names + F_RULE) + R_HOLES) ? self : 0) || held_this(names) || (names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? w(names + F_THIS) : 0); if (th && th !== w(GLOBAL) && (w(th + N_IS) === IS_NODE || w(th + N_IS) === IS_TEXT)) return th === self ? missed(t, th, skip(s, e), trim_end(s, e)) : w(NOTHING); }
     // (an operator missing a side, as a value nothing reads (Node.ray: a section, `xs.map(+ 1)`, `.some(== 8)`, `reduce(+)`):
     // the function of what it misses, `(left) => left + 1`; the operator alone, of both, `(left, right) => left + right`
     // (`!` alone, of one); not `-` written against a digit, a number)
@@ -2373,8 +2437,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       put(t + T_FALLBACK, fb); put(t + T_ON, on); put(t + T_DECL, decl_in);
       return v;
     }
-    // (a member that is not there, of a value: None (§5, a missing member reads as None))
-    if (on !== w(GLOBAL) && (w(on + N_IS) === IS_NODE || w(on + N_IS) === IS_TEXT) && worded(skip(rs2, re2), trim_end(rs2, re2)) && !w(t + T_DECL) && b(skip(rs2, re2) - 1) === 46) { put(t + T_ON, on); put(t + T_DECL, decl_in); return w(NOTHING); }
+    // (a member that is not there, of a value: None (§5, a missing member reads as None); what its own `missing` answers,
+    // when it has one)
+    if (on !== w(GLOBAL) && (w(on + N_IS) === IS_NODE || w(on + N_IS) === IS_TEXT) && worded(skip(rs2, re2), trim_end(rs2, re2)) && !w(t + T_DECL) && b(skip(rs2, re2) - 1) === 46) { put(t + T_ON, on); put(t + T_DECL, decl_in); return missed(t, on, skip(rs2, re2), trim_end(rs2, re2)); }
     // (an operator written against what follows it, `-other` in a method (`-` bare, a member of `this`): read right-to-left,
     // that value's own operator, `(other).-`)
     // (through a hole's code, `{this}{rest}`: the operator written before where it was taken)
@@ -2416,7 +2481,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (code read in a value it was not written in, `x.( … )`: what x does not read, read where it was written)
       if (w(r) === K_UNREAD && writer && writer !== self) r = reading(t, at, ln, w(names + F_RULE), w(names + F_CLOSURE), latest(writer), writer, 0, 0, 0, 0);
       // (a member that is not there, read as one, `x.missing`: nothing (§5))
-      if (w(r) === K_UNREAD && w(t + T_MEMBER) && at >= w(t + T_MEMBER_S) && at < w(t + T_MEMBER_E) && worded(at, ln) && !w(t + T_DECL) && self !== w(GLOBAL)) { answer = w(NOTHING); at = ln; continue; }
+      if (w(r) === K_UNREAD && w(t + T_MEMBER) && at >= w(t + T_MEMBER_S) && at < w(t + T_MEMBER_E) && worded(at, ln) && !w(t + T_DECL) && self !== w(GLOBAL)) { answer = missed(t, self, skip(at, ln), trim_end(at, ln)); at = ln; continue; }
       // (a rule never reads itself: code written in a rule's own body that reads as that rule (`String => this as String`,
       // its `String`), read with the rules before it)
       // (only while that rule is what is read: a closure it made, called later, reads it again (recursion))
@@ -2711,6 +2776,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         const mo = w(mn + N_PARENT), mr = block(t, w(mn + N_A), w(mn + N_B), mo, mo, mv, 0, 1, 0, mv, 0);
         return mr || mv;
       }
+      // (`external callable v`: whether v has a rule of its own led by itself and brackets, `{this}({argument})` (what calls it:
+      // `.(caller)` of a statement's key), among its latest) TODO(explicit)
+      if (word(a, m, W_CALLABLE) && rest < z) { const cv = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); return callable_(t, cv) ? w(TRUE_) : w(FALSE_); }
       if (word(a, m, W_UNSET) && rest < z) {
         let q = rest; while (q < z && b(q) > 32) q++;
         if (q >= z) { const v1 = block(t, rest, q, names, f, self, 0, 1, 0, self, 0); return v1 && w(v1 + N_IS) === IS_PLACE ? w(TRUE_) : w(FALSE_); }

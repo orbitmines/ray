@@ -1022,6 +1022,83 @@ fresh_reading (fresh_left) => {
   external member (fresh) (`reading_left`) (fresh_left)
   fresh
 }
+// (the repeat a type is, or the part of a conjunction that is one: `Statement[]` of `Statement[] & (caller) => …`)
+repeat_part_of (repeat_of) => repeat_type((repeat_of).whole) ? repeat_of : (((repeat_of).conjoins === true) ? ((repeat_of).conjoined.find((repeat_part) => repeat_type((repeat_part).whole))) : None)
+// (Ts one after another, all of a text: the first T the shortest span it reads whole after which the rest reads so too; a
+// list of their values, none when it does not read)
+repeated_through (through_each, through_text, through_into) => {
+  through_found := None
+  if through_text.empty {
+    through_found = Array.new
+  } else {
+    // (its first way, the shortest; then each longer span it reads whole: first those that end a line (what follows them
+    // begins one, or nothing does), then any other)
+    through_first := ((through_each) ways_in (through_text) into (through_into) first (true)).head
+    through_start := (through_first === None) ? None : (through_first.value).reading_left
+    if (through_first !== None) && !((through_start).count == (through_text).count) {
+      through_rest := repeated_through(through_each, through_start, through_into)
+      through_found = (through_rest !== None) ? through_rest.prepend(way_value(through_first.value)) : None
+    }
+    through_pass := 0
+    while (through_found === None) && (through_pass < 2) && (through_start !== None) {
+      through_cut := through_start
+      while (through_found === None) && !(through_cut.empty) {
+        through_cut = through_cut.rest
+        through_ends := through_cut.empty || ((through_cut.first) == 10)
+        if (through_pass == 0) ? through_ends : !through_ends {
+          through_one := (through_each) whole_read (through_cut.empty ? through_text : through_text.until(through_cut)) into (through_into)
+          if through_one !== None {
+            through_more := repeated_through(through_each, through_cut, through_into)
+            through_found = (through_more !== None) ? through_more.prepend(through_one) : None
+          }
+        }
+      }
+      through_pass = through_pass + 1
+    }
+  }
+  through_found
+}
+// (a span read whole by a type: of a class with a header, by its positions into one made of it; else by the first of its
+// ways that reads all of it)
+// (a rule: a type that is a list, given to a function among other arguments, would be spread into them)
+{whole_by_of} whole_read {whole_span_of} into {whole_into_of} ^keyword => {
+  whole_by := whole_by_of
+  whole_span := whole_span_of
+  whole_into := whole_into_of
+  whole_value := None
+  if (((whole_by).of) === whole_by) && !((whole_by).textual === true) && ((whole_by).fields_now !== None) {
+    whole_made := (whole_by) &+ { }
+    whole_reading := seq_read(((whole_made).fields_now).head, whole_span, true, true, whole_made)
+    whole_value = (whole_reading !== None) ? made_as(fields_given(whole_made, whole_reading), whole_by, whole_by) : None
+  } else {
+    if ((whole_by).superposes === true) {
+      // (one of them, the first that reads all of it)
+      whole_at := (whole_by).components.head
+      while whole_at && (whole_value === None) {
+        whole_value = (alternative_type(whole_at.value)) whole_read (whole_span) into (whole_into)
+        whole_at = whole_at.next
+      }
+    } else {
+      if ((whole_by).listing === true) && !((whole_by).is_range === true) {
+        // (positions: all of it, their last one the rest)
+        whole_chain_was := reading_chain
+        reading_chain = (whole_by) chained_onto (whole_chain_was)
+        whole_positions := seq_read((whole_by).head, whole_span, true, false, whole_into)
+        reading_chain = whole_chain_was
+        if whole_positions !== None {
+          external member (whole_positions) (`reading_parts`) (true)
+          external member (whole_positions) (`reading_from`) (whole_span)
+          external member (whole_positions) (`reading_left`) (whole_span.past(whole_span))
+          whole_value = way_value(whole_positions)
+        }
+      } else {
+        whole_way := ((whole_by) ways_in (whole_span) into (whole_into) first (false)).find((whole_one) => (whole_one).reading_left.empty)
+        whole_value = (whole_way !== None) ? way_value(whole_way) : None
+      }
+    }
+  }
+  whole_value
+}
 {left_of} left_after {value_of} named {name_of} ^keyword => {
   // (each read now, where it is written: a hole's code read later would be read as things are then)
   reading_left_now := left_of
@@ -1090,6 +1167,31 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   }
   if literal_text(seq_type) && (seq_name === None) {
     return (text_begins(seq_text, seq_type) ? seq_read(seq_at.next, text_past(seq_text, seq_type), seq_whole, seq_stops, seq_into) : None)
+  }
+  // (Ts one after another read to the end of the text, the last position (`Statement[]`, and what calls them,
+  // `Statement[] & (caller) => …`): each T the shortest span after which the rest reads as more of them, not each T's first
+  // way (a statement's right side of more than one character, `external .` of `hello => external .`))
+  seq_repeat := (seq_whole && ((seq_at.next === None) || ((seq_at.next.value) === fields_end))) ? repeat_part_of(seq_type) : None
+  if seq_repeat !== None {
+    seq_dynamic := (seq_type).dynamic_frame
+    (external dynamic_in seq_dynamic) if seq_dynamic !== None
+    seq_repeated := repeated_through(repeat_each((seq_repeat).whole), seq_text, seq_into)
+    (external dynamic_out) if seq_dynamic !== None
+    if seq_repeated !== None {
+      seq_repeated_value := (seq_type) applying_to (seq_repeated)
+      (seq_repeated_value) given_to (seq_into) as (seq_name)
+      return ((seq_repeated_value) taken_before (seq_read(seq_at.next, seq_text.past(seq_text), seq_whole, seq_stops, seq_into)) named (seq_name))
+    }
+  }
+  // (the last position of a reading of all the text, read by parts: all of what is left, at once, not each way of a beginning
+  // of it)
+  if read_by_parts((seq_type).whole) && seq_whole && ((seq_at.next === None) || ((seq_at.next.value) === fields_end)) && !(((seq_type).conjoins === true) || repeat_type((seq_type).whole)) {
+    seq_all := (seq_type) whole_read (seq_text) into (seq_into)
+    if seq_all !== None {
+      seq_all_value := seq_maps ? (external mapped (seq_place) (seq_text)) : seq_all
+      (seq_all_value) given_to (seq_into) as (seq_name)
+      return ((seq_all_value) taken_before (seq_read(seq_at.next, seq_text.past(seq_text), seq_whole, seq_stops, seq_into)) named (seq_name))
+    }
   }
   if read_by_parts((seq_type).whole) {
     seq_way_at := ((seq_type) ways_in (seq_text) into (seq_into) first (false)).head
@@ -1408,6 +1510,10 @@ fields_in_turn (fields_into, fields_first, fields_text) => {
       }
       fields_rest = text_past(fields_rest, fields_type)
     } else {
+      // (the last one: all of what is left, read by it as seq_read reads it)
+      if (fields_at.next === None) || ((fields_at.next.value) === fields_end) {
+        return fields_given(fields_into, seq_read(fields_at, fields_rest, true, true, fields_into))
+      }
       if read_by_parts((fields_type).whole) {
         fields_way := ((fields_type) ways_in (fields_rest) into (fields_into) first (true)).head
         if fields_way === None {

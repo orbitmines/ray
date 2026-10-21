@@ -14,9 +14,6 @@ Program &+= {
   answer => .value ?? .placeholder
   told (answered) => .value = ((answered ~~ .weight = 1/2) -- (held => this.value === None ? held : (this.value | held)))
 }
-Node &+= {
-  choosing => false
-}
 
 assert choose boolean is boolean  // CN3 what is chosen from a type is not of it
 assert (choose boolean) is Choice  // CN8 a choice is not a Choice

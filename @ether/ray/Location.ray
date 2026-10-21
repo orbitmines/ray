@@ -129,6 +129,9 @@ Location := class: Hierarchy (
     assert tree.at("a").name == "a"  // LOC47 the placed file is not under the directory of the first segment
   }
 }
+// A location one may execute: one granted the execute method
+Executable := Location{.access#.some(.executes)}
+assert !("/no/such/place/anywhere" as Location is Executable)  // LOC59 a location without execute access is an executable
 // A directory: a location holding locations
 Directory := Location{.held is Location[]}
 assert !("/no/such/place/anywhere" as Location is Directory)  // LOC58 a location nothing holds is a directory

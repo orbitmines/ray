@@ -38,3 +38,18 @@ Character := class: Hierarchy &+ Nameable {
   as (=== boolean) => this === @me
   acting => this
 }
+
+// `who.read`, `who.write`, `who.execute`: a grant to who of that method; `who{filter}.read`: only where the filter holds
+{who: Character}.{verb: "read" | "write" | "execute"} ^keyword => Access(who, method: Access.method_of(verb))
+{who}{{filter}}.{verb: "read" | "write" | "execute"} ^keyword => Access(who, method: Access.method_of(verb), filter: Program(code: (filter**)))
+assert {
+  zed := @"zed"
+  assert zed.read.who == zed  // AC44 `.read` is not a grant to that character
+  assert zed.read.reads  // AC45 `.read` does not allow reading
+  assert !zed.read.writes  // AC46 `.read` allows writing
+  assert zed.write.writes  // AC47 `.write` does not allow writing
+  assert !zed.write.reads  // AC48 `.write` allows reading
+  assert zed.execute.executes  // AC49 `.execute` does not allow executing
+}
+// Running as another character: only with their grant
+@me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`

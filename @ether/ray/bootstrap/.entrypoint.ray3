@@ -1882,6 +1882,9 @@ dynamically {code} ^keyword => {
   external member (dynamic_value) (`dynamic_frame`) (dynamic_caller)
   dynamic_value
 }
+// (a type made dynamically with a function of what it reads, `dynamically Statement[] & (caller: Program) => …`: that function a
+// closure (read alone, `(caller) => …` would define a rule))
+dynamically {dyn_type} & ({dyn_parameters}) {`=>`} {dyn_body} ^keyword => dynamically ((dyn_type) & (({dyn_parameters}) => {dyn_body}))
 dynamically {name} := {value} ^keyword => {
   {name} := {value}
   (external &).caller dynamic {

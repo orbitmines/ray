@@ -1115,7 +1115,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
             // (and on a text of other characters each one byte, none: its digits are `"0".."9"`)
             if ((w(x + R_FLAGS) & NUMERAL) && numeral_of(at, end) >= 0) { put(s, at); put(s + 4, end); e = end; } else if ((w(x + R_FLAGS) & NUMERAL) && ascii(at, end)) e = -1; else e = match(x, 0, at, end, s);
             // (a bare name, not read on a value: never a member's (a word-led rule of a node holding members))
-            if (e >= 0 && (refuse & MEMBER) && (f & LED) && !(f & STATIC) && b(w(CLASSES) + b(w(x + R_PART + 4))) === 1 && w(x + R_OWNER) && w(w(w(x + R_OWNER) + N_BASE) + R_KIND) === MEMBERS_MARK) { refused = 1; e = -1; }
+            if (e >= 0 && (refuse & MEMBER) && (f & LED) && !(f & STATIC) && b(w(CLASSES) + b(w(x + R_PART + 4))) === 1 && w(x + R_OWNER) && w(w(w(x + R_OWNER) + N_BASE) + R_KIND) === MEMBERS_MARK && !same_block(w(x + R_HEAD), at)) { refused = 1; e = -1; }
             if (e >= 0) {
               while (e < end && b(e) <= 32) e++;
               // (a definition first, then one led by text, then a method led by a hole (`{this}{argument}`, after `{this}(…)`))
@@ -1609,6 +1609,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let v = s; while (v < e && b(w(CLASSES) + b(v)) === 1) v++;
     if (v === s || v >= e || !(b(v) === 58 || (b(v) === 32 && v + 2 < e && b(v + 1) === 58 && b(v + 2) === 61))) return 0;
     for (let fr = latest(self), k = 0; fr && fr !== w(self + N_BASE) && !(w(fr + R_FLAGS) & DEAD) && k < 256; fr = w(fr), k++) { const fh = w(fr + R_HEAD); if (!w(fr + R_HOLES) && fh && trimmed(w(fh + N_A), w(fh + N_B) - w(fh + N_A), s, v)) return 1; }
+    return 0;
+  }
+  // (TODO(explicit): a definition read bare in the block it is written in, a position's type, `r: (f (x) => …, f(1))` (its
+  // locals, the body it is written in): the `( … )` after a `:` around its head, which holds where it is read)
+  function same_block(hd: number, at: number) {
+    if (!hd || w(hd + N_IS) !== IS_HEAD && w(hd + N_IS) !== IS_TEXT) return 0;
+    const h = w(hd + N_A); if (!h || at <= h) return 0;
+    let depth = 0, open = 0;
+    for (let p = h - 1, k = 0; p > 0 && k < 65536; p--, k++) { const c = b(p); if (c === 41 || c === 93 || c === 125) depth++; else if (c === 40 || c === 91 || c === 123) { if (depth === 0) { open = c === 40 ? p : 0; break; } depth--; } }
+    if (!open) return 0;
+    { let q = open - 1; while (q > 0 && b(q) <= 32) q--; if (b(q) !== 58) return 0; }
+    depth = 0;
+    for (let p = open, k = 0; k < 65536; p++, k++) { const c = b(p); if (c === 40 || c === 91 || c === 123) depth++; else if (c === 41 || c === 93 || c === 125) { depth--; if (depth === 0) return at < p ? 1 : 0; } }
     return 0;
   }
   // (a word of up to six letters (0 after the last) at s, then a space or the end)

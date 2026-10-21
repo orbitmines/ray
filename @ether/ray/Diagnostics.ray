@@ -11,9 +11,10 @@ Diagnostic &+= {
 
   static Severity := enum trace | debug | info | warn | error | fatal
 
-  severity => .fatal ? Diagnostic.Severity.fatal : Diagnostic.Severity.error
+  severity: .Severity = .fatal ? Diagnostic.Severity.fatal : Diagnostic.Severity.error
   assert Diagnostic(message: "stop", fatal: true).severity == Diagnostic.Severity.fatal  // DG2 a fatal error is not of fatal severity
-  at: Location? = .origin ? .origin.location{.from == (this.origin.start.line, this.origin.start.column), .to == (this.origin.end.line, this.origin.end.column)} : None
+  // (where it is about: where what raised it is)
+  at => .origin ? .origin.location : None
   code => .type && .type !== * ? .type.name : None
   // (what it was raised over, nearest first)
   related => .cause ? [[.cause], .cause.related].flatten : []
@@ -26,14 +27,14 @@ assert Diagnostic(message: "no").severity == Diagnostic.Severity.error  // DG1 a
 
 Report := class (name: String = "ray", claims: .Claim[] = []) => {
   static Claim := class (id: String, message: String, passed = true, at: Location?, duration: *?) => { }
-  // RT1 a run with a failing claim passed
-  assert !(Report(name: "suite", claims: [
-    Report.Claim(id: "A1", message: "one holds"),
-    Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{.from == (4, 1)})
-  ])).passed && (Report(name: "suite", claims: [
-    Report.Claim(id: "A1", message: "one holds"),
-    Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{.from == (4, 1)})
-  ])).failures.count == 1
+  // RT1 a run with a failing claim passed, or did not have one failure
+  assert {
+    run := Report(name: "suite", claims: [
+      Report.Claim(id: "A1", message: "one holds"),
+      Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{.from == (4, 1)})
+    ])
+    assert !run.passed & run.failures.count == 1
+  }
   assert Report(claims: [Report.Claim(id: "A4", message: "fine")]).passed  // RT14 a run of holding claims did not pass
 
   passed => .claims.every(.passed)

@@ -22,6 +22,8 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   (also `C &+= { static D := C(p: "d") }`). The OS projects (`OS.Linux := OS(platform: "linux")`) and `Unit.None` need it.
 - **An assert in a class body cannot call the class's methods** on an instance made there (`Ex := class { same (o) => …;
   assert { e := Ex(); assert e.same(e) } }`: `nothing reads same(e)`). Many library tests are written in class bodies.
+- **A field's default that reads a field given at construction sees it unset**: `severity: .Severity = .fatal ? … : …`
+  (Diagnostics.ray), `Diagnostic(message: "stop", fatal: true).severity` is not fatal (DG2).
 - **A method's return type is not read**: `named (name): static => …` (Character.ray `Nameable.named`, Program.ray
   `attempt`, `stop | cancel | complete`, Project.ray `load`); the call answers nothing.
 - **A member added to a class with `Base &+= { static f … }` is not read on a subclass** (`class: Language` classes):

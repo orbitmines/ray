@@ -19,7 +19,7 @@ FileSystem := class: Language {
   { }[{location: Location}] = {value} ^punctuation => ERROR@FileSystem `nothing loaded holds the location to write it`
   ({location: Location}, {args}) => ERROR@FileSystem `nothing loaded holds the location to execute it`
 }
-assert ("/a/b" as Held).holder is FileSystem  // LOC49 a location with no scheme is not held by the file system
+assert ("/a/b" as Location).holder is FileSystem  // LOC49 a location with no scheme is not held by the file system
 
 FileSystem &+= {
   // The device's own files: the host's (sandboxed: what the host answers for a directory is its entries); a browser and
@@ -49,7 +49,7 @@ FileSystem &+= {
   }
 }
 
-FileOptimizations = FileOptimizations + {
+Holders = Holders + {
   {instance: Instance{=== @local}} => FileSystem.Terminal()
   // a scheme of one letter is a Windows drive (https://url.spec.whatwg.org/#windows-drive-letter)
   {location: Location{!scheme || scheme == "file" || scheme.length == 1}} => @/

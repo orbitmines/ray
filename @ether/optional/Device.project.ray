@@ -31,7 +31,7 @@ Device := class {
   assert @me/device/storage is Location  // IO11 the device has no storage location
   quests => Program#{who: this}{running}
   // its files: this device's are the file space (`@/`), another's are at its instance (held by @ether/network)
-  disk => Instance#{.device === this}.first -- (. && . !== Instance.local ? (. as String + "/") as Held : @/)
+  disk => Instance#{.device === this}.first -- (. && . !== Instance.local ? (. as String + "/") as Location : @/)
 
   static chooser: Program?
   choose (s, n: Number = 1) => Device.chooser ? Device.chooser(s, n) : s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : n == 1 ? s#.random : s#.subsets(n).random

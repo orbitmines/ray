@@ -81,7 +81,7 @@ Instance &+= {
 
 {address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => (address as String) as Instance
 
-assert ("https://orbitmines.com/a" as Held).holder is FileSystem.Remote  // IO12 an http location is not reached over the network
+assert ("https://orbitmines.com/a" as Location).holder is FileSystem.Remote  // IO12 an http location is not reached over the network
 
 FileSystem &+= {
   static Remote := class: FileSystem {
@@ -108,10 +108,10 @@ FileSystem &+= {
   }
 }
 
-FileOptimizations = {
+Holders = {
   // not a scheme of one letter: that is a Windows drive (`@C:/`, https://url.spec.whatwg.org/#windows-drive-letter)
   {location: Location{scheme && scheme != "file" && scheme.length > 1}} => FileSystem.Remote()
   {location: Location{segments.first == "remote"}} => FileSystem.Remote()
   // another instance: reached over its socket
   {instance: Instance{!== @local}} => FileSystem.Remote()
-} + FileOptimizations
+} + Holders

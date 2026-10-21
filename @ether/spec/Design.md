@@ -1490,12 +1490,13 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
   There are no `read`, `write`, `listing`, `exists`, `remove`, `content` or `launch` members. A directory's `children` are
   what is under it.
-- `.@` is the location method of any value (`x.@` is `x.location`); `(@./x).@` is the location itself. A location value
-  held in a variable is mentioned with `location.held`.
-- What holds a location is what its space is reserved to. A project holds a space by adding to `FileOptimizations`
+- `.@` is the location method of any value (`x.@` is `x.location`); `(@./x).@` is the location itself. There is one
+  class, `Location` (no `Held`, 2026-10-21): what is there is read `.held`, written `@x = value`, executed `@x(…)`; a
+  location made in memory holds its `content` and `children` itself. A path as written after `@` is a `Path`.
+- What holds a location is what its space is reserved to. A project holds a space by adding to `Holders`
   (`@ether/filesystem` reserves `@/ => FileSystem.Host()`, and `@./`, `@../` and drives; `@ether/network` the locations
   with a scheme and `@localhost`). A holder answers `holder[location]`, `holder[location] = value` and
-  `holder(location, args)`. A location nothing loaded holds is an error when read (`ERROR@FileSystem`). Code that only
+  `holder(location, args)`. A location nothing loaded holds holds nothing (`.held` is None); writing it is `ERROR@Location`. Code that only
   names locations doesn't depend on what holds them; what runs (an app, a device's entrypoint) loads the holders.
 - A node's location is the superposition of every place it is (`Node.location`). `value @ place` adds one and answers the
   value; `(value @ place) = v` writes v there. Where a value was written (what diagnostics point at) is one of its places.

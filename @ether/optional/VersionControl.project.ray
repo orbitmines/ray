@@ -85,8 +85,8 @@ Project &+= {
     project: Project? => {
       wanted := "%" + (.version as String)
       (Program(code: ("@", .path)){O: {
-        @ether/{bundled_path: Written} => Project.known((@ether / (bundled_path + wanted)).held as Project)
-        @{scheme: Char.Word[]}://{remainder: Written} => Project.known((scheme + "://" + remainder + wanted) as Held as Project)
+        @ether/{bundled_path: Path} => Project.known((@ether / (bundled_path + wanted)).held as Project)
+        @{scheme: Char.Word[]}://{remainder: Path} => Project.known(((scheme + "://" + remainder + wanted) as Location).held as Project)
       }}()).load
     }
   }
@@ -466,7 +466,7 @@ Layout := class (root: Location = @./.ether/external/@) => {
 Mirrored := class {
   [location: Location] => ERROR@Mirrored `reading a project not held here from a mirror or a shard of it is not written yet`
 }
-FileOptimizations = FileOptimizations + {
+Holders = Holders + {
   {location: Location{Project.data(.)}} => Mirrored()
 }
 

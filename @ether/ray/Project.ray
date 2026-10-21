@@ -11,10 +11,10 @@ Project := class: Location {
     // (where it is: bundled with the language, at a URL, a language's own project, or a path; at a version, `@x %v0.1.4-E2027.0A.4`, only
     // with @ether/version-control)
     project: Project? => (Program(code: ("@", .path)){O: {
-      @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? (@ether / bundled_path).held as Project)
-      @{scheme: Char.Word[]}://{remainder: Written} => Project.known((scheme + "://" + remainder) as Held as Project)
+      @ether/{bundled_path: Path} => Project.known(Language.ray.bundled(bundled_path) ?? (@ether / bundled_path).held as Project)
+      @{scheme: Char.Word[]}://{remainder: Path} => Project.known(((scheme + "://" + remainder) as Location).held as Project)
       @{name: (Char.Word | "-" | "+")[]{Language.project(.) != None}} => Language.project(name)
-      @{local_path: Written} => Project.known(local_path as Held as Project)
+      @{local_path: Path} => Project.known((local_path as Location).held as Project)
     }}()).load
   }
 
@@ -43,4 +43,4 @@ Project := class: Location {
 }
 
 @{name: (Char.Word | "-" | "+")[]{Project.declares(.)}} ^string => Project.declares(name).project
-@{name: (Char.Word | "-" | "+")[]{Project.declares(.)}}/{path: Written} ^string => Project.declares(name).project / path
+@{name: (Char.Word | "-" | "+")[]{Project.declares(.)}}/{path: Path} ^string => Project.declares(name).project / path

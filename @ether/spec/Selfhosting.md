@@ -54,8 +54,8 @@ they decided, it says so (*proposed*).
 - For now a character is the scalar one UTF-8 unit decodes to. `String.Scalars` is that String: a String like the
   other, its methods not repeated, only what its characters are differs. The library uses it until the default is
   grapheme clusters.
-- What a UTF-8 unit is, is a type (Unicode.ray's `UTF-8`, a structure over bits). It is in String.ray, under
-  `Unicode`, while the bootstrap needs it; Unicode.ray adds the rest (its tables) to the same class.
+- What a UTF-8 unit is, is a type ($/Unicode.project.ray's `UTF-8`, a structure over bits). It is in String.ray, under
+  `Unicode`, while the bootstrap needs it; $/Unicode.project.ray (`@unicode`) adds the rest (its tables) to the same class.
 - `.next` follows from that definition: a String's next character is the next unit that type reads. It is not
   written by hand.
 

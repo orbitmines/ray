@@ -1,4 +1,5 @@
 @ether/version-control
+@ether/time
 
 Skill := class: Nameable quests: *, baseline = 0 {
   solved: Program?

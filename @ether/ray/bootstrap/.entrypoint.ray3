@@ -58,7 +58,7 @@ this => .
 }
 // A head written with a style after it: its text shown so.
 {lhs} ^{style} {`=>`} {rhs} => external style style ({lhs} => {rhs}).style = style
-`{text ^string}` ^string => (external &).text
+`{text ^string}` ^string.punctuation => (external &).text
 ({grouped}) ^punctuation => grouped
 // (a rule declared before a head could carry a style, shown in one: found by its head as it is written)
 (external rule `.{member ^property}`) ^punctuation
@@ -85,7 +85,7 @@ this => .
 // A name declared here, given a value. (`x: T = v`: the value checked against T first, the name keeping its type.)
 {name ^variable} := {value} ^punctuation => {
   value
-  ({name} => value) ^variable
+  ({name} => value) ^(external shown value variable)
 }
 // A name: a word (a head that is one hole takes one). A member's is one: `x.f(y)` is `f` read in x, then `(y)` read on it,
 // with x as `this`.
@@ -112,6 +112,7 @@ assert {
 
 // Text: what is written between quotes, each escape in it (`\e`) what it stands for (`.unescaped`, the library's).
 "{text ^string}" ^string => ((external &).text).unescaped
+(external rule `"{text ^string}"`) ^string.punctuation
 // (nothing written between them: the text of no characters)
 "" ^string => `"`.rest
 unescaped => .
@@ -567,26 +568,26 @@ assert {
 {this}() ^punctuation => this(declared)
 // A method: `name (parameters) =>` (a space before them) gives the name a closure, as `name := (parameters) =>` does (so its locals are its own);
 // `x.name (…) =>` is a member.
-{name} := ({parameters}) {`=>`} {body} ^function => {name} := (({parameters}) => {body})
+{name ^function} := ({parameters}) {`=>`} {body} ^keyword => ({name} := (({parameters}) => {body})) ^function
 // (a method with type parameters, `== <up_to = None>(other: T) => …`: those its first locals, their defaults given; read as
 // a head, `chainable == <…>(…)`, the method of what it takes)
-{name} <{generics}>({parameters}) {`=>`} {body} ^function => {name} ({parameters}) => {
+{name ^function} <{generics}>({parameters}) {`=>`} {body} ^keyword => {name} ({parameters}) => {
   ({generics})
   {body}
 }
-{name} <{generics}>({parameters}) ^function => {name} ({parameters})
+{name ^function} <{generics}>({parameters}) ^keyword => ({name} ({parameters})) ^function
 // (a method with a condition written before its parameters, `map {selection} (mapping) => …`, called `x.map{p}(v)`: the
 // condition a hole (its code read where the body uses it, `this[{selection}]`), the parameters given the arguments)
-{name: Name} {`{`}{selection: Name}{`}`} ({parameters}) {`=>`} {body} ^function => {
+{name: Name} {`{`}{selection: Name}{`}`} ({parameters}) {`=>`} {body} ^keyword => {
   {this}.{name}{`{`}{{{selection}}}{`}`}({arguments}) => {
     external .
     ({{parameters}}) taking {arguments}
     {{body}}
   }
 }
-{on}.{name} := ({parameters}) {`=>`} {body} ^function => {on}.{name} := (({parameters}) => {body})
-{name} := () {`=>`} {body} ^function => {name} := (() => {body})
-{on}.{name} := () {`=>`} {body} ^function => {on}.{name} := (() => {body})
+{on}.{name ^function} := ({parameters}) {`=>`} {body} ^keyword => ({on}.{name} := (({parameters}) => {body})) ^function
+{name ^function} := () {`=>`} {body} ^keyword => ({name} := (() => {body})) ^function
+{on}.{name ^function} := () {`=>`} {body} ^keyword => ({on}.{name} := (() => {body})) ^function
 // Partial arguments: `f<a: 5>` is f with those given first.
 {function}<{given}> ^punctuation => { (also) => {function}({given}, also) }
 
@@ -772,7 +773,7 @@ assert {
   assert member_named(Flagged(), "beside") === None  // IX9 a name x does not hold, asked by name, is not nothing
 }
 // A record: names given values in parentheses, a node holding them.
-({name}: {value}) ^operator => {
+({name ^property}: {value}) ^punctuation => {
   {
     {name} := {value}
   }
@@ -1637,6 +1638,8 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   (held).class_made := made
   (held).outer_block := outer
   (made).class_held := held
+  // (shown as a class, and so is a name given it)
+  made ^class
   // (one with no header, `class: P { … }`; of a class written as a structure, read as that structure (made of it, what it
   // reads, it reads), P not taught to read it)
   // (no locals: what this closure declares is declared where the class is written, shared by every class written there)
@@ -1685,10 +1688,10 @@ fields_end := class { }
 // class of its block (what they take and answer not yet checked))
 class: <{generics}>({parameters}): {result} {`{`}{block}{`}`} ^keyword => class: Node { {block} }
 // (written with its fields and `=>`, a definition: read as one)
-{name} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class ({fields}) => { {block} })
+{name ^class} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => ({name} := (class ({fields}) => { {block} })) ^class
 // (its block empty, written `{}`: no block for a hole to take)
-{name} := class ({fields}) {`=>`} {`{}`} ^class => {name} := (class ({fields}) => { })
-{name} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^class => {name} := (class: {parent} ({fields}) => { {block} })
+{name ^class} := class ({fields}) {`=>`} {`{}`} ^keyword => ({name} := (class ({fields}) => { })) ^class
+{name ^class} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => ({name} := (class: {parent} ({fields}) => { {block} })) ^class
 // (a member of an instance, then an operator: the operator read on the member's value, not on the instance)
 assert {
   Carrying := class (carried) => {
@@ -2016,7 +2019,7 @@ assert {
 
 // An enumeration: `enum A | B | C`, a node its names are read in: each a member, a place there (a name a node being made is
 // given, it has), and `members` what they compose.
-enum {names} ^keyword => {
+enum {names ^enumMember} ^keyword => {
   external .
   // (a member written with fields, `circle (radius: Number)`: one holding them)
   // (given nothing, each field its type, `Shape.circle.radius === Number`)
@@ -2040,6 +2043,8 @@ enum {names} ^keyword => {
       at = at.next
     }
   }
+  // (shown as an enum, and so is a name given it)
+  (.) ^enum
   .
 }
 // (written with a block: each member reads it too, `ranked => rank` its own)
@@ -2122,15 +2127,16 @@ dynamics := None
 // (giving a name a value, defined again after the last operator: it binds looser than any, `x := a | b` is `x := (a | b)`)
 {name ^variable} := {value} ^punctuation => {
   value
-  (({name} => value) ^variable) given (value)
+  // (shown as what it is given is, a class, an enum; else as a variable)
+  (({name} => value) ^(external shown value variable)) given (value)
 }
 // (one under a key, `x[k] := v`: after it, so a key is not read as a name to define (`x[k] => v`))
 {on}[{key}] := {value} ^punctuation => ((key is String) && !((key).listing === true)) ? member_given(on, key, value) : ((on) keeping (key) as (value))
 // (and in what it is read in, `[k] := v` (a block's: `rules := { [rule: GRAMMAR_RULE] := … }`), under the list itself)
 [{bracketed_key}] := {bracketed_value} ^punctuation => (.) keeping ([{bracketed_key}]) as (bracketed_value)
 // (and one under a key, `rules[k] := (caller) => …`, `[k] := (caller) => …` in a block: a closure kept there, not a rule defined)
-{on}[{key}] := ({parameters}) {`=>`} {body} ^function => {on}[{key}] := (({parameters}) => {body})
-[{bracketed_key}] := ({parameters}) {`=>`} {body} ^function => [{bracketed_key}] := (({parameters}) => {body})
+{on}[{key}] := ({parameters}) {`=>`} {body} ^keyword => ({on}[{key}] := (({parameters}) => {body})) ^function
+[{bracketed_key}] := ({parameters}) {`=>`} {body} ^keyword => ([{bracketed_key}] := (({parameters}) => {body})) ^function
 // (one given lazily, `x := lazily v`: v read when x is first asked for, then kept; after `:=`, which would read it first)
 {name} := lazily {default} ^keyword => {
   {name} => {
@@ -2458,8 +2464,8 @@ Header := {
 // (with no block, an empty one: `class only: Number`; before the forms with one)
 class {fields: Header} ^keyword => class {fields} { }
 class {fields: Header} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
-{name} := class {header: Header} ^class => {name} := (class ({header}) => { })
-{name} := class {header: Header} {`{`}{block}{`}`} ^class => {name} := (class ({header}) => { {block} })
+{name ^class} := class {header: Header} ^keyword => ({name} := (class ({header}) => { })) ^class
+{name ^class} := class {header: Header} {`{`}{block}{`}`} ^keyword => ({name} := (class ({header}) => { {block} })) ^class
 // Statements on one line: `a ; b` (declared after everything else here: the loosest of all, `x = 1 ; y = 2` two).
 {first} ; {rest} ^punctuation => {
   {first}

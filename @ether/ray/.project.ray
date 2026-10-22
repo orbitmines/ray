@@ -2,7 +2,8 @@
 // the character playing it)
 // (with no character on the chain, the machine: the character its instance runs as)
 @me ^string => (&.caller as Character) ?? @local.character
-@local ^string => Location.local
+// (here, `.`, unless what runs it as an instance made that its own: World, `Instance.local`)
+@local ^string => Location.local ?? Location(path: ".")
 // (a path under the character running: each name a member of what is before it, `@me/device/opened`)
 @me/{path} ^string => Character.walked(@me, `{path}`)
 // Running as another character: only with their grant

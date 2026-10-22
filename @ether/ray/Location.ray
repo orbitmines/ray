@@ -129,8 +129,6 @@ Location := class: Hierarchy (
     assert tree.at("a").name == "a"  // LOC47 the placed file is not under the directory of the first segment
   }
 }
-// where the language runs (`@local`): here, `.`; what runs it as an instance makes that its own (World: `Instance.local`)
-Location.local := Location(path: ".")
 // A location one may execute: one granted the execute method
 Executable := Location{.access#.some(.executes)}
 assert !("/no/such/place/anywhere" as Location is Executable)  // LOC59 a location without execute access is an executable

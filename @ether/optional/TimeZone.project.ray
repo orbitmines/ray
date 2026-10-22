@@ -100,8 +100,8 @@ TimeZone := class (name: String) {
     static script := @js {
       ray.awaited("@me/device/zones", (path) => {
         const [zone, at] = [path.split("/").slice(0, -1).join("/"), Number(path.split("/").at(-1))]
-        const part = (style) => new Intl.DateTimeFormat("en-US", \{timeZone: zone, timeZoneName: style}).formatToParts(at).find((part) => part.type === "timeZoneName").value
-        ray.set("@me/device/zones/" + path, \{offset: part("longOffset"), abbreviation: part("short")})
+        const part = (style) => new Intl.DateTimeFormat("en-US", \{timeZone: zone, timeZoneName: style\}).formatToParts(at).find((part) => part.type === "timeZoneName").value
+        ray.set("@me/device/zones/" + path, \{offset: part("longOffset"), abbreviation: part("short")\})
       })
     }
   }

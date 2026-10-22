@@ -313,3 +313,4 @@ Angle &+= {
   sin => .in(radian).sin
 }
 assert (33% ("A" | "B" | "C")) is Diagnostic  // HS12 a share that is not a whole number of a discrete structure's possibilities is not a type error
+assert 1/3 ("A" | "B" | "C")

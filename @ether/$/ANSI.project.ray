@@ -35,7 +35,7 @@ ANSI := class: Language {
   }
   // SGR 38 and 48, direct colour (";2;r;g;b") or an indexed one (";5;n") (ITU-T T.416 13.1.8; xterm, "Character Attributes")
   // (header: (layer: "38" | "48", ((";2;", red: Decimal, ";", green: Decimal, ";", blue: Decimal) | (";5;", index: Decimal))))
-  Colored := class (layer: "38" | "48", red: Decimal? = None, green: Decimal? = None, blue: Decimal? = None, index: Decimal? = None) => {
+  Colored := class (layer: "38" | "48", red ^#CD5C5C: Decimal? = None, green ^#5CCD5C: Decimal? = None, blue ^#5C5CCD: Decimal? = None, index: Decimal? = None) => {
     color => .index == None ? Geometry.Color(this.red, this.green, this.blue) : ANSI.Palette[.index]
   }
   // (header: ("\e[0", parameters: (";", parameter: Colored | ("1" | "2" | "3" | "4" | "7" | "9") as Attribute)[], "m"))

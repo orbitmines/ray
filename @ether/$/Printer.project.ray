@@ -25,7 +25,7 @@ Printer := class {
         GetDefaultPrinterW(name, &size)
         HANDLE printer = nullptr
         OpenPrinterW(name, &printer, nullptr)
-        DOC_INFO_1W document = \{L"ray", nullptr, L"RAW"}
+        DOC_INFO_1W document = \{L"ray", nullptr, L"RAW"\}
         StartDocPrinterW(printer, 1, &document)
         StartPagePrinter(printer)
         unsigned written = 0

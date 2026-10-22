@@ -16,7 +16,12 @@ OS.Ether &+= {
   [property: String] => { "platform": "ether", "architecture": "ray" }[property]
   // a character's Unicode scalar, a bit at a time, most significant first: on ether a character already is its scalar
   bits (character: Char, take) => (character as Binary).integer.for(take)
-}
+  // the terminal the instance is played through: what is written to it waits in the storage for the player (`instance/sent`,
+  // keeping its history), what the player types arrives there (`instance/received`); as large as the player's view, else
+  // 80 by 24
+  written (text: String) => ((@me/device as Storage)["instance/sent"] = text) -- text
+  typed => (@me/device as Storage)["instance/received"]
+  terminal_size => (@me/device as Storage)["instance/size"] ?? (80, 24)
   // the clipboard: one place in the storage, copied to and pasted from
   clipboard => (@me/device as Storage)["clipboard"]
   // a notification: kept for whoever plays the device; its display shows the latest

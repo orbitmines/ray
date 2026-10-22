@@ -34,10 +34,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `Language &+= { static generated … }` in @ether/encryption, `ChaCha20Poly1305.generated()` unread.
 - **A hole typed by a named pattern or class does not read**: `{segment: Written}` (Location.ray), `{version: Version}`;
   an inline pattern matches (`{name: (Char.Word | "-")[]}`), but see below.
-- **A rule `@word` then a literal then a hole does not match** when the literal is `/` or a space: `@yo/{p: Char.Word[]} =>
-  p`, `(@yo/x)` and `@ye {p} => p`, `(@ye x)` are unread (`nothing reads @yo/x`); `@yd:{p}` and `qq/{p}` match. Every
-  location literal (`@a/b`, `@/etc/hosts`, `@./a`, `@https://…`, Location.ray 141–150) and `@me/{path}` (`@me/quests`,
-  `@me/device`, `@me/policy`) are unread for it.
 - **A matched hole typed by an inline pattern is still read as code**: with `@yd:{p: Char.Word[]} => p`, `(@yd:x)` reports
   `nothing reads x`.
 - **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
@@ -70,6 +66,11 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A project's dependency lines are read by nothing** (`@ether/random`, `@x25519` at the top of a `.project.ray`): a file
   given directly reports them unread, and nothing loads the projects they name.
 
+- **Every project at once does not fit**: the 84 files of optional/, `$/` and os/ (with ray/) given to one run fill the
+  2 GB wasm memory (`out of memory (2147483648 bytes)`, then `RangeError: Invalid file ID` in `FileStore.getRecord`), so
+  for now each project is tested with only what it depends on. (Each file read took a 16 MB chunk more, every pending hole
+  type tried again in each settle: now once per text, what a failed try made let go of. A small file is ~0 MB again.)
+
 ## Tests to take in
 
 - **Control.ray's tests of the language's own forms** (operator sections OP1–OP5, `if` with cases IC3, `?`/`?=` QM1–QM2,
@@ -82,3 +83,29 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   read it as (Expression.ray's statements: a jump, a label, a declaration and its head), asked of the statement.
 - **`@me/device/os` in the bootstrap** (Node.ray IO3, Ether.entrypoint.ray's `threads` default): the OS is one of the
   devices `@me/device` superposes, selected by its type, `(@me/device as OS)`.
+
+## Painting
+
+- **A hole's style breaks reading** (`{name ^variable} := …`, `.{member ^property}`, `{word ^variable}` in Name): the kernel
+  crashes now and then (memory access out of bounds in refer ← follow ← valued, ~1 run in 3 at 26 threads) and some enum
+  tests are lost. The style is a member on the hole's node, which is `this` when the hole's code is read: probably why.
+  Until it holds, member names, declared and bare names, and method heads (`allows (called) =>`) are not painted.
+- **A body no test runs is never painted** (a method's, e.g. Access.ray's `covers`): it is read only when it runs.
+
+## Running a program (found getting `(@me/device as Terminal) = x` to run from the CLI)
+
+- **A free infix rule from a file after the entrypoint takes `:=`'s statement**: with `{a} %% {b} => …` in a file,
+  `x := 1 %% 2` reads `(x := 1) %% 2`. Operators written as methods (`Node &+= { @ (location) => … }`, like `==`) do not;
+  Node.ray's `@` is one now (`x := @name` read `(x :=) @ name` before).
+- **An unset optional field reads as its type**, so `x ?? y` never falls back (`registry: Character?`); written `= None`.
+  `a | b: T = v` (two names and a default) does not keep the default either (World.ray's `presence` is one name now).
+- **A selection between backslashes does not read**: `\x\` (U-C2, `instance`'s primary) is read as an escape (`\s…`)
+  and a label (`name\`), and `\(` as an escaped bracket whose `)` still closes (it ended `Character &+= {` early). A
+  backslash inside backticks in a comment escapes the closing backtick and opens a quote to the next one: comments are
+  scanned for brackets and quotes too.
+- **`"{hole}"` in a rule's body reads the hole's code**; its written text is `` `{hole}` ``. `String.split` answers
+  nothing usable (its own tests fail): `Character.walked` walks a path with `until` instead.
+- **A ternary continued on lines led by `:`** in a static method's body goes round forever; written on one line it reads.
+- **A rule whose head another rule reads cannot be redefined**: `@local ^string => …` in World.ray after
+  ray/.project.ray's is read as an expression head (`@local` answering a Location); `@local` answers `Location.local`,
+  which World sets.

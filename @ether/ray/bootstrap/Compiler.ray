@@ -162,8 +162,8 @@ assert {
   assert other == "other"  // NOD56 a case with no matching arm does not take the else
 }
 if &+= {
-  { }{subject} {{cases: Cases}} else {{otherwise}} ^class => Compiler.reduced(subject, (Program(code: cases**) as Compiler) + Program(code: otherwise**).otherwise)
-  { }{subject} {{cases: Cases}} ^class => Compiler.reduced(subject, Program(code: cases**) as Compiler)
+  { }{subject} {{cases: Cases}} else {{otherwise}} ^keyword => Compiler.reduced(subject, (Program(code: cases**) as Compiler) + Program(code: otherwise**).otherwise)
+  { }{subject} {{cases: Cases}} ^keyword => Compiler.reduced(subject, Program(code: cases**) as Compiler)
 }
 Program &+= {
   as (=== Compiler) => Program(code: written.map**(.code ~= (case: *, " => ", value: *) -- (arm => "{subject_of_case: ", (arm.case ~= ("is ", type: *)).type

@@ -35,12 +35,7 @@ function thread(role: string, data: object): import('worker_threads').Worker {
 // the hole's, a frame given a style), its style only a name: a style member that is no text spans whatever memory its two ends
 // do, at worst hundreds of MB. (The kernel's layout, as language.ts has it.)
 const STYLED = 10, F = { RULE: 28, START: 40, END: 44, TAKES: 56 }, TAKE = 36, R = { HOLES: 12, PARTS: 28, HEAD: 32, PART: 96 }, PART = 24, N = { A: 12, B: 16 }, HOLE = 2;
-const STYLE = /^[\w.-]{1,64}$/;
-const styler = (ray: Ray) => (node: number): string => {
-  const v = node ? ray.member(node, 'style') : 0; if (!v) return '';
-  const a = ray.w(v + N.A), b = ray.w(v + N.B); if (b <= a || b - a > 64) return '';
-  const t = ray.text(a, b).trim(); return STYLE.test(t) ? t : '';
-};
+const styler = (ray: Ray) => (node: number): string => ray.style_of(node);
 function painted(ray: Ray, s: number, e: number): Paint[] {
   const out: Paint[] = [], style = styler(ray), u8 = new Uint8Array(ray.heap.buffer), w = (at: number) => ray.w(at);
   const part = (rule: number, hole: number) => { for (let k = 0, q = rule + R.PART; k < w(rule + R.PARTS); k++, q += PART) if ((w(q) & 15) === HOLE && w(q + 12) === hole) return q; return 0; };
@@ -300,7 +295,9 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
         if (result) w.style = result.style;
       }
       const muted = (p: Paint) => words.some(w => w.end < p.begin && p.end <= w.rest);
-      const out = [...words.map(w => ({ begin: w.begin, end: w.end, style: w.style })), ...read.map(chars).map(p => muted(p) ? { ...p, style: 'muted:' + p.style } : p)];
+      // (the word itself only what its test found)
+      const on_word = (p: Paint) => words.some(w => p.begin <= w.end && w.begin <= p.end && p.end - p.begin <= w.end - w.begin);
+      const out = [...words.map(w => ({ begin: w.begin, end: w.end, style: w.style })), ...read.map(chars).filter(p => !on_word(p)).map(p => muted(p) ? { ...p, style: 'muted:' + p.style } : p)];
       checked.set(uri, { version, text, paints: out }); painted(uri);
     };
     // (and what is said of no place, out of memory: at the document's start, so no reading fails unseen)

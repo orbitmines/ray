@@ -3,6 +3,9 @@
 {lhs} => {rhs} => {
   {lhs} => {rhs}
 }
+// `x ^style`: x, shown in that style (highlighting only: what it is shown as is kept apart, not one of x's members). Read from
+// here on, so a hole of any rule after can be written with its style.
+{x} ^{style} => external style style x
 // {comment} => { }
 // The first statement is the rule creator: a rule written `{head} => {body}` is defined where it is read. Its body is what
 // `body` took (code, read once, with the rules before it: a rule never reads itself); its head is read with the rules there:
@@ -20,7 +23,7 @@
 // `(y)` read on it where it is written); `x.( … )`, the code read in x. (In a method, a node made sees what it is read on
 // first, then where it was written: `.name` is that one's.)
 . => (external &).this
-.{member} => {member}
+.{member ^property} => {member}
 .({member}) => {member}
 this => .
 // Text as written: between backticks.
@@ -42,7 +45,7 @@ this => .
   on
 }
 // A name given a value: the value read, then the name a rule answering it, here. A member given one, given in what it is on.
-{name} = {value} => {
+{name ^variable} = {value} => {
   value
   {name} => value
 }
@@ -53,22 +56,20 @@ this => .
   // left side), and while unset the type is what it is (`external unset`))
   external unset x type
 }
-// `x ^style`: x, shown in that style (highlighting only). A head written with a style after it: its text shown so.
-{x} ^{style} => {
-  x.style = style
-  x
-}
+// A head written with a style after it: its text shown so.
 {lhs} ^{style} {`=>`} {rhs} => ({lhs} => {rhs}).style = style
 `{text}` ^string => (external &).text
 ({grouped}) ^punctuation => grouped
 // (a rule declared before a head could carry a style, shown in one: found by its head as it is written)
-(external rule `.{member}`).style = `punctuation`
-(external rule `.({member})`).style = `punctuation`
-(external rule `{name} = {value}`).style = `punctuation`
-(external rule `{x}: {type}`).style = `punctuation`
-(external rule `{on} &+= {value}`).style = `punctuation`
-(external rule `{on} &+= {`{`}{code}{`}`}`).style = `punctuation`
-(external rule `{lhs} => {rhs}`).style = `keyword`
+(external rule `.{member ^property}`) ^punctuation
+(external rule `.({member})`) ^punctuation
+(external rule `{name ^variable} = {value}`) ^punctuation
+(external rule `{x}: {type}`) ^punctuation
+(external rule `{on} &+= {value}`) ^punctuation
+(external rule `{on} &+= {`{`}{code}{`}`}`) ^punctuation
+(external rule `.`) ^keyword
+(external rule `this`) ^keyword
+(external rule `{lhs} => {rhs}`) ^keyword
 {statement} // {comment} ^comment => {statement}
 // {comment} ^comment => { }
 // (and a block of one, `/* … */`, nested: nothing)
@@ -82,15 +83,15 @@ this => .
   .
 }
 // A name declared here, given a value. (`x: T = v`: the value checked against T first, the name keeping its type.)
-{name} := {value} ^punctuation => {
+{name ^variable} := {value} ^punctuation => {
   value
-  {name} => value
+  ({name} => value) ^variable
 }
 // A name: a word (a head that is one hole takes one). A member's is one: `x.f(y)` is `f` read in x, then `(y)` read on it,
 // with x as `this`.
 Name := {
   // (the word as written: what it names need not be there, `circle (radius: Number)`)
-  {word} => `{word}`
+  {word ^variable} => `{word}`
 }
 {name}: {type} = {value} ^operator => {
   (value) checked (type)
@@ -2082,7 +2083,7 @@ dynamically {code} ^keyword => {
 // (a type made dynamically with a function of what it reads, `dynamically Statement[] & (caller: Program) => …`: that function a
 // closure (read alone, `(caller) => …` would define a rule))
 dynamically {dyn_type} & ({dyn_parameters}) {`=>`} {dyn_body} ^keyword => dynamically ((dyn_type) & (({dyn_parameters}) => {dyn_body}))
-dynamically {name} := {value} ^keyword => {
+dynamically {name ^variable} := {value} ^keyword => {
   {name} := {value}
   (external &).caller dynamic {
     {name} = {value}
@@ -2119,9 +2120,9 @@ dynamics := None
   })
 }
 // (giving a name a value, defined again after the last operator: it binds looser than any, `x := a | b` is `x := (a | b)`)
-{name} := {value} ^punctuation => {
+{name ^variable} := {value} ^punctuation => {
   value
-  ({name} => value) given (value)
+  (({name} => value) ^variable) given (value)
 }
 // (one under a key, `x[k] := v`: after it, so a key is not read as a name to define (`x[k] => v`))
 {on}[{key}] := {value} ^punctuation => ((key is String) && !((key).listing === true)) ? member_given(on, key, value) : ((on) keeping (key) as (value))

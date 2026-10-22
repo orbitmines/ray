@@ -27,7 +27,7 @@
 .({member}) => {member}
 this => .
 // Text as written: between backticks.
-`{text}` => (external &).text
+`{text ^string}` => (external &).text
 // Code read in a value (`x &+= { … }` defines in x), the value.
 // A value made of another too, `X &+= Y`: Y one of its components (§3.2: its rules seen after X's own, the last added first).
 {on} &+= {value} => {
@@ -57,8 +57,8 @@ this => .
   external unset x type
 }
 // A head written with a style after it: its text shown so.
-{lhs} ^{style} {`=>`} {rhs} => ({lhs} => {rhs}).style = style
-`{text}` ^string => (external &).text
+{lhs} ^{style} {`=>`} {rhs} => external style style ({lhs} => {rhs}).style = style
+`{text ^string}` ^string => (external &).text
 ({grouped}) ^punctuation => grouped
 // (a rule declared before a head could carry a style, shown in one: found by its head as it is written)
 (external rule `.{member ^property}`) ^punctuation
@@ -70,7 +70,7 @@ this => .
 (external rule `.`) ^keyword
 (external rule `this`) ^keyword
 (external rule `{lhs} => {rhs}`) ^keyword
-{statement} // {comment} ^comment => {statement}
+{statement} // {comment ^comment} ^comment => {statement}
 // {comment} ^comment => { }
 // (and a block of one, `/* … */`, nested: nothing)
 /* {comment} */ ^comment => { }
@@ -111,7 +111,7 @@ assert {
 }
 
 // Text: what is written between quotes, each escape in it (`\e`) what it stands for (`.unescaped`, the library's).
-"{text}" ^string => ((external &).text).unescaped
+"{text ^string}" ^string => ((external &).text).unescaped
 // (nothing written between them: the text of no characters)
 "" ^string => `"`.rest
 unescaped => .
@@ -3152,7 +3152,7 @@ DARK := theme `Ether.ray - Dark` {
 }
 
 // (a comment after a statement, defined again last: what is declared last binds loosest, so it is read before anything else)
-{statement} // {comment} ^comment => {statement}
+{statement} // {comment ^comment} ^comment => {statement}
 
 // (what a class is made of is its own: one made of it that is given another part, `Chain &+= Array` (Chain made of Iterable,
 // Array too), does not give it to the class (where Array would be made of itself))

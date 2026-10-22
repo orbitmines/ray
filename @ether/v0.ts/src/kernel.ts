@@ -4392,8 +4392,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         if (scoped && !holds && w(at_ + 4) >= start && now > start && w(t + T_CHUNK_END) === cend) {
           for (let k = slot0; k < w(t + T_SLOT) && k < w(LIST_CAP); k++) { const pv = w(w(LIST) + 4 * k); if (pv >= start && pv < now) set(w(LIST) + 4 * k, 0); }
           const wk = w(t + T_WEAK); let kept_n = w(at_ + 20);
-          for (let i = w(at_ + 20); i < w(t + T_WEAK_N); i++) {
-            const en = w(wk + 4 * i);
+          for (let weak_i = w(at_ + 20); weak_i < w(t + T_WEAK_N); weak_i++) {
+            const en = w(wk + 4 * weak_i);
             if (en & 1) { const sl = en & -2; if (memo_holds(sl, start, now)) astore(sl, 0); else { set(wk + 4 * kept_n, en); kept_n++; } continue; }
             const tv = w(en + T_VALUE); if (tv >= start && tv < now && aload(en + T_STATE) === 2) { set(en + T_VALUE, 0); astore(en + T_STATE, 0); } else { set(wk + 4 * kept_n, en); kept_n++; }
           }

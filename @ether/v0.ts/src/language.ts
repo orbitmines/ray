@@ -2697,7 +2697,11 @@ export class Ray extends Language<FileStore> {
     const global = this.w(GLOBAL), seen = new Set<number>(), style = (node: number) => this.style_of(node);
     let read_in = global; const self_of = (_vis: number) => read_in;
     const statements = (a: number, z: number, vis: number, depth: number) => {
-      for (let at = this.x.skip(a, z), k = 0; at < z && k < 4096; k++) { const ln = this.x.line(at, z); statement(at, ln, vis, depth); at = this.x.skip(Math.max(ln, at + 1), z); }
+      for (let from = a, at = this.x.skip(a, z), k = 0; at < z && k < 4096; k++) { comments(from, at); const ln = this.x.line(at, z); statement(at, ln, vis, depth); from = Math.max(ln, at + 1); at = this.x.skip(from, z); if (at >= z) comments(from, z); }
+    };
+    // (the comments between statements, each line from `//`: as the language shows a comment)
+    const comments = (a: number, z: number) => {
+      for (let i = a; i + 1 < z; i++) if (this.u8[i] === 47 && this.u8[i + 1] === 47) { let j = i; while (j < z && this.u8[j] !== 10) j++; const shown = method('//'); if (shown) out.push({ begin: i - s, end: j - 1 - s, style: shown }); i = j; }
     };
     const statement = (a: number, z: number, vis: number, depth: number) => {
       if (depth > 48 || z <= a || seen.has(a * 4099 + z)) return; seen.add(a * 4099 + z);

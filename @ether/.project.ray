@@ -11,3 +11,4 @@
 @ether/random
 @ether/proof
 @ether/os
+@ether/encryption

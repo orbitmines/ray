@@ -10,11 +10,11 @@ CSS := class: Language {
   static Comment := class ("/*", text: (!"*/")[], "*/")
   // Declarations; property names are ASCII case-insensitive, custom properties ("--") case-sensitive (https://www.w3.org/TR/css-syntax-3/#declaration, https://www.w3.org/TR/css-variables-1/#defining-variables, https://www.w3.org/TR/CSS2/syndata.html#characters)
   static Property := ("--", (Char.Word | "-")[]) | ((Char.Letter | "-"), (Char.Word | "-")[]).lower_case
-  static Declaration := (Blank, property: Property, Blank, ":", Blank, value: (!";" && !"}")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, ";")
-  static Declarations := (Declaration | (Blank, Comment))[]
+  static Declaration := (CSS.Blank, property: CSS.Property, CSS.Blank, ":", CSS.Blank, value: (!";" && !"}")[]{!(. ~= (" " | \t | \n) ⊣)}, CSS.Blank, ";")
+  static Declarations := (CSS.Declaration | (CSS.Blank, CSS.Comment))[]
 
   // Style rules, and the at-rules holding declarations, @font-face and @page, by their lower-case name (https://www.w3.org/TR/css-syntax-3/#style-rules, https://www.w3.org/TR/css-fonts-4/#font-face-rule, https://www.w3.org/TR/css-page-3/#at-page-rule)
-  static Rule := class (selector: ("@", ("font-face" | "page").lower_case) | (!"{" && !"}" && !";" && !"@")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, "{", declarations: Declarations, Blank, "}") {
+  static Rule := class (selector: ("@", ("font-face" | "page").lower_case) | (!"{" && !"}" && !";" && !"@")[]{!(. ~= (" " | \t | \n) ⊣)}, CSS.Blank, "{", declarations: CSS.Declarations, CSS.Blank, "}") {
     within: String?
     assert (@css @media print { p { display: none; } }).within == "@media print"  // UI203 a css at-rule does not hold its rule
   }
@@ -31,23 +31,23 @@ CSS := class: Language {
     assert (CSS.read(css_rule as CSS) as CSS) == (css_rule as CSS)  // UI290 a written css rule does not read back as the same rule
   }
   // Keyframes; the at-rule name and the selectors from and to in any case (https://www.w3.org/TR/css-animations-1/#keyframes, https://www.w3.org/TR/css-syntax-3/#at-rule, https://www.w3.org/TR/css-values-4/#keywords)
-  static Keyframes := class ("@", "keyframes".ignore_case, Blank, name: (!"{" && !" ")[], Blank, "{",
-    frames: (Blank, at: ("from".ignore_case as 0) | ("to".ignore_case as 1) | ((percent: Decimal, "%") as percent / 100), Blank, "{", declarations: Declarations, Blank, "}")[], Blank, "}")
+  static Keyframes := class ("@", "keyframes".ignore_case, CSS.Blank, name: (!"{" && !" ")[], CSS.Blank, "{",
+    frames: (CSS.Blank, at: ("from".ignore_case as 0) | ("to".ignore_case as 1) | ((percent: Decimal, "%") as percent / 100), CSS.Blank, "{", declarations: CSS.Declarations, CSS.Blank, "}")[], CSS.Blank, "}")
   // Conditional group rules: @media, @supports, @container, each style rule within it (https://www.w3.org/TR/css-conditional-3/#contents-of, https://www.w3.org/TR/css-contain-3/#container-rule)
-  static Group := class ("@", prelude: (!"{")[]{!(. ~= (" " | \t | \n) ⊣)}, Blank, "{", rules: (Blank, Rule)[], Blank, "}") {
-    held => rules.map(Rule(.selector, .declarations, within: "@" + prelude)) -- (.count == 1 ? .first : .)
+  static Group := class ("@", prelude: (!"{")[]{!(. ~= (" " | \t | \n) ⊣)}, CSS.Blank, "{", rules: (CSS.Blank, CSS.Rule)[], CSS.Blank, "}") {
+    held => .rules.map(CSS.Rule(.selector, .declarations, within: "@" + this.prelude)) -- (.count == 1 ? .first : .)
   }
-  static Sheet := class (rules: (Blank, Rule | Keyframes | Comment)[] = [], Blank)
+  static Sheet := class (rules: (CSS.Blank, CSS.Rule | CSS.Keyframes | CSS.Comment)[] = [], CSS.Blank)
 
   level := {
-    {group: Group} => group.held
-    {rule: Rule | Keyframes | Comment} => rule
-    {sheet: Sheet} => sheet.rules
-    {declarations: Declarations} => declarations
+    {group: CSS.Group} => group.held
+    {rule: CSS.Rule | CSS.Keyframes | CSS.Comment} => rule
+    {sheet: CSS.Sheet} => sheet.rules
+    {declarations: CSS.Declarations} => declarations
   }
   written := {
-    {rule: Rule{within}} => rule.within, "{", Rule(rule.selector, rule.declarations), "}"
-    {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations, "}"), "}"
+    {rule: CSS.Rule{.within}} => rule.within, "{", CSS.Rule(rule.selector, rule.declarations), "}"
+    {keyframes: CSS.Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations, "}"), "}"
   }
 }
 assert ((@css p { /* note */ display: grid; }) as CSS) == "p{/* note */display:grid;}"  // UI237 a css comment is not written into the css

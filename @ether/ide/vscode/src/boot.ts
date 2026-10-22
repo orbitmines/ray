@@ -31,6 +31,8 @@ export interface Boot {
 const LANGUAGE_DIRECTORY = path.join('@ether', 'ray');
 
 function isLanguage(dir: string): boolean {
+  // (a language's directory: its entrypoint in it, or a project saying `!language`)
+  if (fs.existsSync(path.join(dir, 'bootstrap', '.entrypoint.ray3'))) return true;
   try { return fs.readFileSync(path.join(dir, '.project.ray'), 'utf-8').split('\n')[0].includes('!language'); } catch { return false; }
 }
 

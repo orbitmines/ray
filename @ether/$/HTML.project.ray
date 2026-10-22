@@ -10,37 +10,37 @@ HTML := class: Language {
   static Name := (Char.Letter, (Char.Word | "-" | ":" | ".")[]).lower_case
   // Escaping a string (https://html.spec.whatwg.org/multipage/parsing.html#escapingString)
   static Escapes := { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
-  static escaped (text: String) => #text.map(Escapes[.] ?? .) as String
+  static escaped (text: String) => #text.map(HTML.Escapes[.] ?? .) as String
   assert HTML.escaped("<a & b>") == "&lt;a &amp; b&gt;"  // UI14 text is not escaped
 
   // Character references: "&#x" or "&#X" with hex digits of either case, decimal, or named, which are case-sensitive (https://html.spec.whatwg.org/multipage/syntax.html#character-references, https://html.spec.whatwg.org/multipage/named-characters.html)
   static Entities := { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
   static Reference := class (("&#", "x".ignore_case, code: Hexadecimal, ";") | ("&#", code: Decimal, ";") | ("&", name: Char.Letter[], ";")) {
-    text => name ? Entities[name] ?? "&" + name + ";" : code as Char
+    text => .name ? HTML.Entities[.name] ?? "&" + .name + ";" : .code as Char
     assert (@html <p>a \{b}</p>).children.first.text == "a {b}"  // UI195 a backslashed brace is not a literal brace
     assert (@html <p>&#65;&#x42;&amp;</p>).children.map(.text).join("") == "AB&"  // UI288 a numeric character reference is not its character
     // The DOCTYPE in any case (https://html.spec.whatwg.org/multipage/syntax.html#the-doctype); &#X as &#x (https://html.spec.whatwg.org/multipage/syntax.html#character-references)
     assert HTML.read("<!DocType HTML><HTML lang=\"en\"><Head><title>Ray</title></Head><body></body></HTML>") is HTML.Document && (@html <p>&#X42;&#x6a;</p>).children.map(.text).join("") == "Bj"  // UI302 a mixed-case doctype or &#X reference is not read
   }
-  static Text := class (characters: (Reference | Char{!= "<"})[]{length > 0}) {
-    text => characters.map(. is Reference ? .text : .).join("") as String
-    static (value: String | Number) as (=== Text) => Text(characters: value as String)
+  static Text := class (characters: (HTML.Reference | Char{!= "<"})[]{.length > 0}) {
+    text => .characters.map(. is HTML.Reference ? .text : .).join("") as String
+    static (value: String | Number) as (=== HTML.Text) => HTML.Text(characters: value as String)
   }
   // Text of raw text elements, as it is (https://html.spec.whatwg.org/multipage/syntax.html#raw-text-elements)
-  static Raw := class (text: (!"</")[]{length > 0})
+  static Raw := class (text: (!"</")[]{.length > 0})
   assert HTML.read("<script>if (a) { f() }</script>").children.first is HTML.Raw  // UI289 the text of a script is not kept raw
   assert HTML.read("<Script>if (a) { f() }</SCRIPT>").children.first is HTML.Raw  // UI301 a raw text element closed in another case is not kept raw
   // Comments (https://html.spec.whatwg.org/multipage/syntax.html#comments)
   static Comment := class ("<!--", text: (!"-->")[], "-->")
 
   // Attributes, quoted or bare; a boolean attribute is its name alone when present, and absent when false (https://html.spec.whatwg.org/multipage/syntax.html#attributes-2, https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#boolean-attributes)
-  static Attribute := class (Blank, name: Name, ("=", ("\"", value: (Reference | Char{!= "\""})[], "\"") | value: (!" " && !">" && !"\"" && !"/")[]{length > 0})?) {
-    static (pair: (name: String, value)) as (=== Attribute?) => pair.value === None || pair.value == false ? None : Attribute(pair.name, pair.value == true ? "" : pair.value as String)
+  static Attribute := class (HTML.Blank, name: HTML.Name, ("=", ("\"", value: (HTML.Reference | Char{!= "\""})[], "\"") | value: (!" " && !">" && !"\"" && !"/")[]{.length > 0})?) {
+    static (pair: (name: String, value)) as (=== HTML.Attribute?) => pair.value === None || pair.value == false ? None : HTML.Attribute(pair.name, pair.value == true ? "" : pair.value as String)
   }
 
   // Elements: an end tag closes its start tag in any case, and "/>" closes an element written without children (https://html.spec.whatwg.org/multipage/syntax.html#elements-2, https://html.spec.whatwg.org/multipage/syntax.html#start-tags)
-  static Element := class ("<", tag: Name, attributes: Attribute[] = [], Blank, (">", children: Content[] = [], "</", tag.ignore_case, ">") | "/>") {
-    id => attributes{.name == "id"}.last.value
+  static Element := class ("<", tag: HTML.Name, attributes: HTML.Attribute[] = [], HTML.Blank, (">", children: HTML.Content[] = [], "</", tag.ignore_case, ">") | "/>") {
+    id => .attributes{.name == "id"}.last.value
     assert {
       who := "Ray"
       holed := @html <p id={who}>{who}</p>
@@ -57,7 +57,7 @@ HTML := class: Language {
       written_document := HTML.Document(head: [@html <title>Ray</title>], body: @html <body><p>{who}</p></body>)
       assert (HTML.read(written_document as HTML) as HTML) == (written_document as HTML)  // UI287 a written document does not read back as the same document
     }
-    void => tag is Voids
+    void => .tag is HTML.Voids
   }
   assert {
     by_hand := HTML.Element("p", [("class", "note")], [HTML.Text("hi")])
@@ -68,34 +68,34 @@ HTML := class: Language {
   }
   // Void elements: no children and no end tag (https://html.spec.whatwg.org/multipage/syntax.html#void-elements)
   static Voids := "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta" | "source" | "track" | "wbr"
-  static Void := class: Element ("<", tag: Name{is Voids}, attributes: Attribute[] = [], Blank, "/"?, ">")
+  static Void := class: HTML.Element ("<", tag: HTML.Name{is HTML.Voids}, attributes: HTML.Attribute[] = [], HTML.Blank, "/"?, ">")
   // Raw text elements: script and style (https://html.spec.whatwg.org/multipage/syntax.html#raw-text-elements)
   static RawTexts := "script" | "style"
-  static RawText := class: Element ("<", tag: Name{is RawTexts}, attributes: Attribute[] = [], Blank, ">", children: Raw[] = [], "</", tag.ignore_case, ">")
-  static Content := Comment | Void | RawText | Element | Text
+  static RawText := class: HTML.Element ("<", tag: HTML.Name{is HTML.RawTexts}, attributes: HTML.Attribute[] = [], HTML.Blank, ">", children: HTML.Raw[] = [], "</", tag.ignore_case, ">")
+  static Content := HTML.Comment | HTML.Void | HTML.RawText | HTML.Element | HTML.Text
 
   // The DOCTYPE, in any case, then the html element with its language, head and body (https://html.spec.whatwg.org/multipage/syntax.html#the-doctype, https://html.spec.whatwg.org/multipage/syntax.html#writing)
   static Document := class (
     "<!", "doctype".ignore_case, " ", "html".ignore_case, ">",
     "<", "html".ignore_case, " lang=\"", language: (!"\"")[] = "en", "\">",
-    "<", "head".ignore_case, ">", head: Content[] = [], "</", "head".ignore_case, ">",
-    body: Element,
+    "<", "head".ignore_case, ">", head: HTML.Content[] = [], "</", "head".ignore_case, ">",
+    body: HTML.Element,
     "</", "html".ignore_case, ">"
   )
 
   level := {
-    {document: Document} => document
-    {content: Content} => content
-    {contents: (Blank, content: Content, Blank)[]} => contents.content
+    {document: HTML.Document} => document
+    {content: HTML.Content} => content
+    {contents: (HTML.Blank, content: HTML.Content, HTML.Blank)[]} => contents.content
   }
   // Text and attribute values are written escaped (https://html.spec.whatwg.org/multipage/parsing.html#escapingString)
   written := {
-    {text: Text} => escaped(text.text)
-    {attribute: Attribute} => " ", attribute.name, "=\"", escaped(attribute.value as String), "\""
+    {text: HTML.Text} => HTML.escaped(text.text)
+    {attribute: HTML.Attribute} => " ", attribute.name, "=\"", HTML.escaped(attribute.value as String), "\""
   }
 }
 assert ((@html <br>) as HTML) == "<br>" && HTML.read("<p>a<br>b</p>").children.count == 3  // UI286 a void element written without a slash is not read back
-assert Language.named(".html") == HTML && $.html === HTML  // UI65 html is not a registered language
+assert Language.named(".html") == HTML && HTML === HTML  // UI65 html is not a registered language
 // Tag and attribute names are ASCII case-insensitive, written in lower case (https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name, https://html.spec.whatwg.org/multipage/syntax.html#attributes-2)
 assert HTML.read("<P ID=\"x\">a<BR>b</p>").tag == "p" && HTML.read("<P ID=\"x\">a<BR>b</p>").id == "x" && HTML.read("<P ID=\"x\">a<BR>b</p>").children[1].tag == "br" && (HTML.read("<P ID=\"x\">a<BR>b</p>") as HTML) == "<p id=\"x\">a<br>b</p>"  // UI300 upper- and mixed-case tag and attribute names do not read as the lower-case element
 

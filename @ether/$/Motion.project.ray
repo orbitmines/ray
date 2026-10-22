@@ -1,0 +1,56 @@
+@ether/os
+@ether/geometry
+@c
+@js
+
+// How the device is held and moved: its orientation and its acceleration (https://www.w3.org/TR/orientation-event/)
+Motion := class {
+  // as the operating system's sensors read it: the industrial I/O subsystem's on Linux (each channel's raw value times
+  // its scale, https://www.kernel.org/doc/html/latest/driver-api/iio/core.html), the Sensor API's on Windows
+  // (https://learn.microsoft.com/windows/win32/sensorsapi/), the deviceorientation and devicemotion events in a browser;
+  // a Mac has none; on ether what it was told (`OS.Ether.orientation`,
+  // `OS.Ether.acceleration`), none until then
+  orientation: Geometry.Vector? = if OS.Linux { Motion.iio("incli") }
+    elsif OS.Windows { Motion.sensed(@c SENSOR_TYPE_INCLINOMETER_3D, @c SENSOR_DATA_TYPE_TILT_X_DEGREES, @c SENSOR_DATA_TYPE_TILT_Y_DEGREES, @c SENSOR_DATA_TYPE_TILT_Z_DEGREES) }
+    elsif OS.Browser { (@js await new Promise((answer) => addEventListener("deviceorientation", (event) => answer([event.beta, event.gamma, event.alpha]), \{once: true})))() as Geometry.Vector }
+    elsif OS.Macos { None }
+    else { OS.Ether.orientation }
+  acceleration: Geometry.Vector? = if OS.Linux { Motion.iio("accel") }
+    elsif OS.Windows { Motion.sensed(@c SENSOR_TYPE_ACCELEROMETER_3D, @c SENSOR_DATA_TYPE_ACCELERATION_X_G, @c SENSOR_DATA_TYPE_ACCELERATION_Y_G, @c SENSOR_DATA_TYPE_ACCELERATION_Z_G) }
+    elsif OS.Browser {
+      (@js await new Promise((answer) => addEventListener("devicemotion", (event) => answer([event.accelerationIncludingGravity.x, event.accelerationIncludingGravity.y, event.accelerationIncludingGravity.z]), \{once: true})))() as Geometry.Vector
+    }
+    elsif OS.Macos { None }
+    else { OS.Ether.acceleration }
+
+  // the first Linux sensor with the channel: `/sys/bus/iio/devices/iio:device*/in_{channel}_{x,y,z}_raw` times `in_{channel}_scale`
+  static iio (channel: String) => (@/sys/bus/iio/devices).held{(. / ("in_" + channel + "_x_raw")).held}.first -- (sensor => sensor
+    ? ["x", "y", "z"].map(axis => ((sensor / ("in_" + channel + "_" + axis + "_raw")).held as String as Decimal) * ((sensor / ("in_" + channel + "_scale")).held as String as Decimal)) as Geometry.Vector
+    : None)
+  // the first Windows sensor of the type: its latest report's three values
+  static sensed (type: Program, x: Program, y: Program, z: Program) => (@c {
+    CoInitializeEx(nullptr, COINIT_MULTITHREADED)
+    ISensorManager* manager = nullptr
+    CoCreateInstance(&CLSID_SensorManager, nullptr, CLSCTX_INPROC_SERVER, &IID_ISensorManager, (void**)&manager)
+    ISensorCollection* found = nullptr
+    ISensor* sensor = nullptr
+    ISensorDataReport* report = nullptr
+    PROPVARIANT value
+    double at[3] = \{0, 0, 0}
+    int sensed = manager->lpVtbl->GetSensorsByType(manager, &{type}, &found) == S_OK
+      && found->lpVtbl->GetAt(found, 0, &sensor) == S_OK && sensor->lpVtbl->GetData(sensor, &report) == S_OK
+    if (sensed) {
+      report->lpVtbl->GetSensorValue(report, &{x}, &value)
+      at[0] = value.dblVal
+      report->lpVtbl->GetSensorValue(report, &{y}, &value)
+      at[1] = value.dblVal
+      report->lpVtbl->GetSensorValue(report, &{z}, &value)
+      at[2] = value.dblVal
+    }
+  })() -- (got => got.sensed == 1 ? got.at as Geometry.Vector : None)
+}
+assert {
+  with (@me/device as OS) = OS.Macos {
+    assert Motion().orientation == None  // MOT1 a Mac says how it is held
+  }
+}

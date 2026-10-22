@@ -1,6 +1,6 @@
 Program &+= {
-  who: * = @me
-  assert Program(code: { 1 }).who.same(@me)  // PG35 a program does not run as the character who made it by default
+  // (who runs it: what runs the language says)
+  who: *?
   name: String?
   goal: *?
   from: *?
@@ -13,7 +13,7 @@ Program &+= {
   assert Program(code: { 1 }).results.count == 0  // PG38 a program that was never stepped has results
   tried: *?
 
-  written => .code ? super.written : [Program(code: ((.name ?? "reach"), "(", Language.ray.write(.goal), ")") as String)]
+  written => .code ? super.written : [Program(code: ((.name ?? "reach"), "(", .goal as String, ")") as String)]
   assert Program(code: { 5 }).written.count == 1  // PG11 a program of one statement counts other than one
   // A statement read back as what it is written as
   assert {
@@ -49,11 +49,11 @@ Program &+= {
   abstract => .written{!.defined}
 
   & => .results
-  is_initial | waiting => !.started
+  is_initial => !.started
   assert Program(code: { 1 }).is_initial  // PG39 a program that was never stepped is not initial
   assert !Program(code: { 1 }).is_terminal  // PG40 a program that was never stepped is terminal
   assert !Program(code: { 1 }).intermediate  // PG41 a program that was never stepped is intermediate
-  is_terminal | final => .started && !.at
+  is_terminal => .started && !.at
   intermediate => .started && !.is_terminal
   holds => !.is_terminal && !.stopped
   assert Program(code: { 1 }).holds  // PG42 a program that was never stepped does not hold
@@ -114,7 +114,7 @@ Program &+= {
   assert Program(code: { 1 }, goal: Number).reached(5)  // PG57 a value of the goal's type does not reach the goal
   assert !Program(code: { 1 }, goal: Number).reached("five")  // PG58 a value not of the goal's type reaches the goal
   assert !Program(code: { 1 }).reached(5)  // PG59 a program with no goal is reached
-  attempt (value): static => this ~~ (.tried = value) ~~ (.complete if this.reached(value))
+  attempt (value): static => this ~~ (.tried = value) ~~ (.stop if this.reached(value))
   running => .started && !.done
   assert {
     program := Program(code: {
@@ -133,7 +133,7 @@ Program &+= {
   done => .stopped || .is_terminal
   continuable => .done && !(.tried**.is_terminal ?? true)
   path => [.tried, .tried.previous**].flatten
-  solution | best => .path{this.reached(.)}.first
+  solution => .path{this.reached(.)}.first
   solved_by => .solution.who
   progress => .started ? .written.index_of(.at) ?? .written.count : 0
   difficulty => .written.count
@@ -150,7 +150,7 @@ Program &+= {
     2
   }).finished.progress == 2
 
-  stop | cancel | complete: static => this ~~ (.stopped = true)
+  stop: static => this ~~ (.stopped = true)
   // (entered into a value: a closure of it, applied to it; `element`, what `.` is in it, not yet)
   entered (entered_into, entered_element) => entered_into -- this
 }
@@ -287,7 +287,7 @@ Program &+= {
     c := b + 1
   }).depends("c").contains("a")
 
-  schedule (on = @me) => on.quests |= this
+  schedule (on) => on.quests |= this
 
   right-to-left branch => .copy.stepped
   assert await (branch { 3 }) == 3  // CR3 awaiting a branch does not answer what it did
@@ -299,7 +299,7 @@ Program &+= {
   }) == [1, 2]
   right-to-left race => .written
     -- (.map(.stepped) while .every(.holds))
-    -- .{holds}.map(.cancel)
+    -- .{holds}.map(.stop)
     -- .{is_terminal}.first.results.last
   // CR2 race is not won by the first to finish
   assert (race {
@@ -317,69 +317,18 @@ Program &+= {
   right-to-left defer => .copy ~~ .from = &.caller
 }
 
-// `with settings { … }`, `with settings` (L§6.3): what the settings write is written `@ ->` (Almanac A3) for the block, or the
-// rest of the context the `with` is in, and everything called from there. (settings that are a block: what it holds)
-// (declared in the entrypoint, before `=`)
-
 Terminating := Program{.terminating}
 assert Program(code: { 1 }) is Terminating  // PG91 a program that only runs forward is not terminating
 
-Keyed := class (key: *, ":", " "[], (*, " = ")?, value: *) => {
-  as (=== String) => .value as String
-  assert Keyed(key: "a", value: "b") as String == "b"  // PG92 a keyed value is not written as its value
-}
-
-// A block as a map (its `keys`, `x[key]`, `for` over them, T8.7) is the language's own: the entrypoint gives every program them.
-
-// Operator sections are values (A1, A2)
-assert [1, 2].map(+1) == [2, 3]  // OP1 +1 is not a function adding one
-
-assert [1, 2].map(*10) == [10, 20]  // OP2 *10 is not a function multiplying by ten
-
-assert [true, false].map(!) == [false, true]  // OP3 ! alone is not the negation
-
-assert [1, 5, 20]{< 10}.count == 2  // OP5 a section in a narrowing is not applied to each
-
-assert (if 3 { != 0 => "nonzero" } else { "zero" }) == "nonzero"  // IC3 if with cases is not a value where it is written
-
-
-// `?` is unknown; `?=` sets only what has no value (T1.6)
-assert (?)#.count != 1  // QM1 ? is one value
-
-assert {
-  given := None
-  given ?= 4
-  given ?= 5
-  assert given == 4  // QM2 ?= does not set only what has no value
-}
-
-
-assert 3 is [1, 2, 3]#  // IS4 is does not find a member
-
-assert !(5 is [1, 2, 3]#)  // IS5 is finds what is not there
-
-assert 2 is [1, 2]#  // IS6 is does not find a member
-// Labels in a class body are entries (L§4.2)
-assert {
-  Entered := class {
-    steps := 0
-   later\
-    steps = 7
-  }
-  assert Entered~later().steps == 7  // EP1 ~label does not enter the class at that label
-  assert Entered~default == Entered  // EP2 ~default is not the class itself
-  // A class body runs like any function: labels are never skipped; a Component's labels are entered, not executed (F-D13, L§4.2.1)
-  assert Entered().steps == 7  // CMP1 a label in a class body stops its construction
-}
 // A program run as a selection
 assert Program(code: {
   1
   2
 }).(
-  .waiting  // RU1 a program nobody stepped is not waiting
+  .is_initial  // RU1 a program nobody stepped is not waiting
   & .next.intermediate  // RU2 one step in is not intermediate
-  & .waiting  // RU3 stepping a copy moved the original
-  & .finished.final  // RU4 a program run to its end is not final
+  & .is_initial  // RU3 stepping a copy moved the original
+  & .finished.is_terminal  // RU4 a program run to its end is not final
   & .finished.results.last == 2  // RU5 a program run to its end did not keep what its last step answered
 )
 assert {
@@ -403,14 +352,110 @@ assert Program(code: { 1 }).(
   & .finished.done  // FWQ3 a finished program is not a done quest
 )
 assert Program(code: { 1 }).stop.done  // FWQ4 a stopped program is not done
-assert {
-  started := Program(code: "1")
-  @me/quests |= started
-  assert started is @me/quests  // JB1 a program given to @me/quests is not among them
-  assert started.who === @me  // JB11 a started program is not run by whoever started it
-  assert started.stop.done  // JB5 stopping a program does not end it
+
+// The running program: what called what is read here
+&@ ^keyword => &.caller as Program
+
+// What a program does is what its externals are (L§8.1): what it calls past itself, and what it reaches of the machine
+Program &+= {
+  continuations => .calls{!.is_external}.map(.**)
+  effects => .reachable.map(.calls{.is_external}.external_name).flatten.unique
+  assert Program(code: { external read "x" }).effects.contains("read")  // AC60 reading a location is not an effect named read
+  // What a run may do is the runner's setting (L§8.1): `with (Program.speculated |= x)`, `with (Program.refused |= x)`, or a `.cfg.ray`.
+  static speculated: *[] = []
+  static refused: *[] = []
+  assert Program.speculated.count == 0  // AC58 nothing is speculated unless asked
+  assert Program.refused.count == 0  // AC59 nothing is refused unless asked
 }
-assert Program(code: "1", from: @public).(
-  .serves(@public)  // JB8 a quest serving a location does not serve it
-  & !(.serves(@private))  // JB9 a quest serves a location it was not given
-)
+// reading a location and calling the operating system are effects; the time is not deterministic
+assert Program(code: { 1 + 1 }) is Pure  // EFF1 adding numbers is not pure
+assert Program(code: { external read "x" }) is Effecting  // EFF2 reading a location is not an effect
+assert {
+  with (Program.refused |= Program(code: { external read "x" })) {
+    assert Program(code: { external read "x" }) is Refused  // EFF4 a refused program is not refused
+  }
+}
+assert Program(code: { external read "x" }) is Abstracted  // EFF5 an effect nobody speculated runs in full
+
+Pure := Program{.effects.empty}
+assert Program(code: { 1 + 1 }) is Deterministic  // AC61 adding numbers is not deterministic
+assert !(Program(code: { 1 + 1 }) is Effecting)  // AC62 adding numbers is an effect
+assert !(Program(code: { 1 + 1 }) is Nondeterministic)  // AC64 adding numbers is nondeterministic
+Deterministic := Program{!.effects.some(. is ("random" | "time" | "read"))}
+Nondeterministic := Program{!(. is Deterministic)}
+Effecting := Program{.effects.some(. is ("read" | "os"))}
+Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
+assert Program(code: { x := 1 }) is Initializer  // AC65 a program that only declares is not an initializer
+assert !(Program(code: { external read "x" }) is Initializer)  // AC66 a program that reads a location is an initializer
+Refused := Program{. is Program.refused#}
+Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
+
+[(`pure`, Pure), (`deterministic`, Deterministic), (`nondeterministic`, Nondeterministic)].for (word, claim) => {
+  right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
+}
+
+// What a program is to a grant (Access.ray): checkable when it changes nothing outside itself and terminates (reading the
+// time stays allowed, `@bob.read history{from Time.now}`, L§9.2: this is `!Effecting`, not `Pure`), so checking a
+// permission runs no one's code; and who runs it, its chain of callers
+Program &+= {
+  checkable => !(this is Effecting) && this is Terminating
+  assert Program(code: { 1 + 1 }).checkable  // AC30 a program with no effects that terminates cannot be checked
+  assert !Program(code: { external read "x" }).checkable  // AC31 a program with an effect can be checked
+  names (value) => this === value || this == value || .checkable && this() === value
+  assert Program(code: { 1 + 1 }).names(2)  // AC54 a checkable program does not name what it answers
+  assert !Program(code: { 1 + 1 }).names(3)  // AC55 a program names what it does not answer
+  assert !(Program(code: { external read "leak" }).names("leak"))  // PURG4 checking a grant runs an expression with effects
+
+  caller: Program?
+  // Who runs a program is its chain of callers, the origin first; a prompt names them all.
+  assert {
+    hop_origin := Program(who: @"company")
+    hop_run := Program(who: @"me", caller: hop_origin)
+    assert hop_run.hops.first === hop_origin.who && hop_run.hops.last === hop_run.who  // HOP1 a run's chain is not its origin first and its runner last
+    assert hop_run.prompt == "@company wants to run this, originating from @me"  // HOP2 a prompt does not name the whole chain
+  }
+  hops => [.caller.hops ?? [], .who].flatten.unique
+  assert Program(who: @"solo").hops.count == 1  // AC56 a program with no caller has more than itself in its chain
+  assert Program(who: @"solo").prompt == "@solo wants to run this"  // AC57 a prompt for a lone program names more than its runner
+  may (method, target) => .hops.every(target.allows(., method))
+  ask (method, target) => .may(method, target) || ERROR@Access `not granted`
+  prompt => .hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
+    + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
+}
+
+// A grant is an Access on what it names: on what the expression answers when that is held somewhere (a value, a field),
+// on the expression itself when it derives something (`@ether.read x.count`, L§8.2.2); grants on a derivative sit on the
+// expression that names it, found by what it answers
+Access &+= {
+  { }{target} ^punctuation => Program(code: target**) -- (named => Access.checkable(named) && Access.checkable(this.filter)
+    ? named() -- (value => value is Node && value.parent ? value : named) -- (held => held ~~ .access |= (this ~~ .target = held))
+    : ERROR@Access `a grant names an expression that changes nothing and terminates`)
+}
+Node &+= {
+  granted => [.visibility#, Program#{.access && .names(this)}.access#].flatten
+}
+// A grant names an expression: a derivative may be granted where the value it derives from is not
+assert {
+  gx_reader := (name: "reader")
+  gx := (count: 3, secret: "s")
+  Access(gx_reader, method: Access.Reading) gx.count
+  gx_grant := Program#{.access#.some(.who === gx_reader)}.first?.access
+  assert gx_grant.target is Program  // GX1 a grant took the value of what it names instead of the expression
+  assert gx_grant.target.names(Program(code: { gx.count }))  // GX2 a grant does not name the expression it was given
+  assert !(gx_grant.target.names(Program(code: { gx.secret })))  // GX3 a grant on one derivative names another
+  assert Program(code: { gx.count }).allows(gx_reader, `count`)  // GX4 a granted derivative is refused
+  assert !(Program(code: { gx.secret }).allows(gx_reader, `secret`))  // GX5 a grant on a count lets another field leave
+  gx_whole := (count: 1)
+  Access(gx_reader, method: Access.Reading) gx_whole
+  assert gx_whole.allows(gx_reader, `size`)  // GX6 a grant naming a value does not cover that value
+  assert gx_whole.access#.some(.who === gx_reader)  // GACC1 a grant naming a value is not on that value
+}
+// Checking a permission runs no one's code: a grant whose expression or filter has effects is refused when granted, and
+// never run
+assert {
+  purg_reader := (name: "purg-reader")
+  purg_lamp := (lamp: 1)
+  assert (Access(purg_reader, method: Access.Reading) (external read "leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
+  assert (Access(purg_reader, method: Access.Reading, filter: Program(code: { external read "leak" })) purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
+  assert !(purg_lamp.access)  // PURG3 a refused grant is kept
+}

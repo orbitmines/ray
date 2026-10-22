@@ -1,0 +1,38 @@
+@ether/os
+@c
+@js
+
+// What the device says aloud, and what it hears said
+Speech := class {
+  // said aloud as the operating system speaks: speech-dispatcher on Linux (spd_say, https://freebsoft.org/doc/speechd/speech-dispatcher.html),
+  // SAPI's voice on Windows (ISpVoice::Speak, https://learn.microsoft.com/previous-versions/windows/desktop/ee431843(v=vs.85)),
+  // NSSpeechSynthesizer on macOS (https://developer.apple.com/documentation/appkit/nsspeechsynthesizer), the Web Speech
+  // API in a browser (https://webaudio.github.io/web-speech-api/); on ether a voice is a neural network not written yet
+  said (text: String) => if OS.Linux {
+      (@c {
+        SPDConnection* speaking = spd_open("ray", nullptr, nullptr, SPD_MODE_SINGLE)
+        spd_say(speaking, SPD_TEXT, {text})
+        spd_close(speaking)
+      })() -- text
+    }
+    elsif OS.Windows {
+      (@c {
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED)
+        ISpVoice* voice = nullptr
+        CoCreateInstance(&CLSID_SpVoice, nullptr, CLSCTX_ALL, &IID_ISpVoice, (void**)&voice)
+        voice->lpVtbl->Speak(voice, L{text}, SPF_DEFAULT, nullptr)
+        voice->lpVtbl->Release(voice)
+      })() -- text
+    }
+    elsif OS.Macos {
+      (@c {
+        id voice = objc_msgSend(objc_msgSend(objc_getClass("NSSpeechSynthesizer"), sel_registerName("alloc")), sel_registerName("init"))
+        objc_msgSend(voice, sel_registerName("startSpeakingString:"), CFStringCreateWithCString(nullptr, {text}, kCFStringEncodingUTF8))
+      })() -- text
+    }
+    elsif OS.Browser { (@js speechSynthesis.speak(new SpeechSynthesisUtterance({text})))() -- text }
+    else { TODO `speech synthesis in Ray: a neural network (text to speech)` }
+  // what it hears said in a sound: the operating systems' recognizers listen to their own microphone, not to a sound
+  // given them, so everywhere a neural network not written yet
+  heard (sound) => TODO `speech recognition in Ray: a neural network (speech to text)`
+}

@@ -1,5 +1,13 @@
 // Linux (https://www.kernel.org): an operating system a host may run. It is the one the device runs when the host reports the platform
 // "linux" (Node.js's `process.platform`, https://nodejs.org/api/process.html#processplatform).
-OS.Linux := OS(platform: "linux")
+// Its interface: the kernel's system calls through libc (https://man7.org/linux/man-pages/man2/syscalls.2.html) and the
+// desktop's libraries over it (X11, GTK and GIO, libnotify, speech-dispatcher, GeoClue, CUPS, OpenSSL), called as the
+// System V ABI calls them (https://gitlab.com/x86-psABIs/x86-64-ABI; AAPCS64 on arm64, https://github.com/ARM-software/abi-aa).
+OS.Linux := OS(platform: "linux",
+  headers: ["unistd.h", "fcntl.h", "dirent.h", "spawn.h", "sys/stat.h", "sys/wait.h", "sys/ioctl.h", "sys/socket.h", "netdb.h", "ifaddrs.h", "net/if.h", "linux/input.h",
+    "X11/XKBlib.h", "gtk/gtk.h", "libnotify/notify.h", "libspeechd.h", "libgeoclue-2.0/gclue-simple.h", "cups/cups.h", "openssl/ssl.h"],
+  libraries: ["c", "X11", "gtk-3", "gio-2.0", "notify", "speechd", "geoclue-2", "cups", "ssl", "crypto"],
+  abi: "System V")
 assert OS.Linux.platform == "linux"  // LIN1 Linux is not named by the platform "linux"
 assert OS.Linux is OS  // LIN2 Linux is not an operating system
+assert OS.Linux.libraries.contains("c") & OS.Linux.abi == "System V"  // LIN3 Linux is not called through libc as System V calls it

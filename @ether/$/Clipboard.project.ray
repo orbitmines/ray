@@ -1,0 +1,39 @@
+@ether/os
+@c
+@js
+
+// The clipboard: the text or location last copied; copying writes it, pasting reads it
+Clipboard := class {
+  // what is on it, as the operating system keeps it: GTK's CLIPBOARD selection on Linux (the X11 or Wayland one,
+  // https://docs.gtk.org/gtk3/class.Clipboard.html), the Win32 clipboard on Windows (GetClipboardData,
+  // https://learn.microsoft.com/windows/win32/dataxchg/clipboard), the general NSPasteboard on macOS
+  // (https://developer.apple.com/documentation/appkit/nspasteboard), the Clipboard API in a browser
+  // (https://www.w3.org/TR/clipboard-apis/); on ether what was copied (`OS.Ether.clipboard`), empty until something is
+  content: String | Location = if OS.Linux {
+      (@c {
+        gtk_init(nullptr, nullptr)
+        char* text = gtk_clipboard_wait_for_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD))
+      })().text ?? ""
+    }
+    elsif OS.Windows {
+      (@c {
+        OpenClipboard(nullptr)
+        wchar_t* text = _wcsdup(GlobalLock(GetClipboardData(CF_UNICODETEXT)))
+        GlobalUnlock(GetClipboardData(CF_UNICODETEXT))
+        CloseClipboard()
+      })().text ?? ""
+    }
+    elsif OS.Macos {
+      (@c {
+        id board = objc_msgSend(objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard"))
+        const char* text = objc_msgSend(objc_msgSend(board, sel_registerName("stringForType:"), NSPasteboardTypeString), sel_registerName("UTF8String"))
+      })().text ?? ""
+    }
+    elsif OS.Browser { (@js await navigator.clipboard.readText())() }
+    else { OS.Ether.clipboard ?? "" }
+}
+assert {
+  with (@me/device as OS) = OS.Ether {
+    assert Clipboard().content == ""  // CLP1 an empty clipboard on ether holds something
+  }
+}

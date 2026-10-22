@@ -815,7 +815,7 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - `equivalence a -> (b | c)` is one equivalence to a superposition. From a type it applies to its instances; to relate
   the type itself, write `static`.
 - Every class gets `as String` automatically: a class declared by a pattern (UUID, IP) prints by running its reader
-  backwards, others print their fields. A value prints in the language of the file it is written in (`$.ext`).
+  backwards, others print their fields. A value prints in the language of the file it is written in (by its extension).
 - A value renders through the first rendering found along its equivalence graph (`@fadi as Author`, §22).
 
 ---
@@ -1221,7 +1221,7 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   they can't be read.
 - An error that fails a program becomes a quest down the line. Library code raises the error; it never answers a
   `Program(name: …)` in its place. Tests check `.erred`.
-- `$` is told apart by position: after a call it handles errors; `$.ext` / `$name` is a language (§15.2); `Class$` is the
+- `$` is told apart by position: after a call it handles errors; `Class$` is the
   store of a class's instances (§16.6).
 
 ### 10.9 Proofs and assumptions
@@ -1423,8 +1423,11 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   formats (`.%`, `.columns`, `.kv`).
 - The algorithms the security and version-control projects need are their own `$/…` projects (`$/sha256`, `$/ed25519`,
   `$/x25519`, `$/hmac`, `$/hkdf`, …), with pieces shared between languages as separate projects.
-- Encrypted values: an `Encrypted<T>` is readable only at a location holding the key, and is never decrypted where it is
-  stored, only when read off to such a location; without the key, `opened` raises `ERROR@Key`. Homomorphic values are not
+- Encrypted values, without a wrapper (2026-10-21): an algorithm is a language, and so is a key of one (`Key`, in
+  @ether/encryption, which @ether/security depends on; `X25519.generated()`). `Encrypted(value, key = @me.inbox)` is `value as key`: the bytes the key
+  writes, still of the value's type where they are written (`field: String = Encrypted("…")` is a String there), and
+  read back only by the key (`key.read(field)`; without its secret, `ERROR@Key`). Hashes and compression are languages
+  the same way (`SHA256.write(x)`, `x as Gzip`); there are no Hash or Packed values. Homomorphic values are not
   decoded. Each instance and each character has a public key.
 - Storage encodings (dictionary, RLE, delta, bit-packing, FSST, ALP, …) are chosen by the store from statistics, as
   optimizations. Deferred.
@@ -1461,7 +1464,8 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 ### 14.1 Writing a location
 
 - Location syntax is always the core's, usable anywhere in code: `@./x`, `@../x`, `@/abs/path`, `@C:/…` (a one-letter
-  scheme is a drive, never a URL), `@https://…` (no spaces), `@"a location with spaces"`, `@name/…`.
+  scheme is a drive, never a URL), `@https://…` (no spaces), `@name/…`. `@"…"` is a name (2026-10-21): in the core a
+  character's, `@"ada"`, `@"{name}"` (no `Character(name: …)`); a path with spaces is `("/a b/c" as Location)`.
   `@"orbitmines.com"` is reserved for that domain, on port 37839. `@{instance}` is an instance's canonical location, and
   `(@ | #){: UUID}` addresses anything by UUID.
 - `Location := Ray`: it sits in a hierarchy (`.parent`, `.children`) and is hosted by an instance.
@@ -1477,7 +1481,7 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
   ```ray
   @/etc/hosts as String       // the file's text
-  logo := @./logo.png         // an Image, because $.png reads it
+  logo := @./logo.png         // an Image, because PNG reads it
   @x = value                  // writes it
   @x = None                   // removes it
   @new = @x                   // copies it
@@ -1487,12 +1491,13 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
   There are no `read`, `write`, `listing`, `exists`, `remove`, `content` or `launch` members. A directory's `children` are
   what is under it.
-- `.@` is the location method of any value (`x.@` is `x.location`); `(@./x).@` is the location itself. A location value
-  held in a variable is mentioned with `location.held`.
-- What holds a location is what its space is reserved to. A project holds a space by adding to `FileOptimizations`
+- `.@` is the location method of any value (`x.@` is `x.location`); `(@./x).@` is the location itself. There is one
+  class, `Location` (no `Held`, 2026-10-21): what is there is read `.held`, written `@x = value`, executed `@x(…)`; a
+  location made in memory holds its `content` and `children` itself. A path as written after `@` is a `Path`.
+- What holds a location is what its space is reserved to. A project holds a space by adding to `Holders`
   (`@ether/filesystem` reserves `@/ => FileSystem.Host()`, and `@./`, `@../` and drives; `@ether/network` the locations
   with a scheme and `@localhost`). A holder answers `holder[location]`, `holder[location] = value` and
-  `holder(location, args)`. A location nothing loaded holds is an error when read (`ERROR@FileSystem`). Code that only
+  `holder(location, args)`. A location nothing loaded holds holds nothing (`.held` is None); writing it is `ERROR@Location`. Code that only
   names locations doesn't depend on what holds them; what runs (an app, a device's entrypoint) loads the holders.
 - A node's location is the superposition of every place it is (`Node.location`). `value @ place` adds one and answers the
   value; `(value @ place) = v` writes v there. Where a value was written (what diagnostics point at) is one of its places.
@@ -1511,7 +1516,7 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   whose holder is its protocol.
 - What used to be a process is a typed read or write of a location: the browser's storage is `@me/device/storage/<key>`
   (kept in `localStorage`), its time zones are `@me/device/os/zones` (answered from `Intl`), and a remote file system over
-  HTTP is `$.http` (GET reads, PUT writes, DELETE removes, WebDAV's PROPFIND lists).
+  HTTP is `HTTP` (GET reads, PUT writes, DELETE removes, WebDAV's PROPFIND lists).
 
 ### 14.4 Devices
 
@@ -1557,7 +1562,17 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - Dependencies are `@…` locations only. `@X` resolves to the project in `@ether/$/X` for now, and later to the repository
   named X. `@name` in code is the dependency a loaded project declares as `@name`, and `@name/path` a location inside it;
   where none declares it, `@name` keeps its other meanings (`@me`, a character, a relative location).
-- Dependencies resolve lazily: a dependency is read the first time it is referenced (through `$.name`, `@name`, a name
+- Nothing in `@ether/ray` depends on version control (2026-10-21): a core dependency is `@path`. `Version`, `Migration`, a dependency at a version
+  (`@path %v0.1.4-E2027.0A.4`, `Project.Versioned`), a project's `version` and
+  `written_against`, and a language's `version` and `backwards_compatible` are @ether/version-control's. Version control
+  works on locations, whatever holds them: it does not depend on @ether/filesystem (a project's data nothing holds is read
+  from a mirror, `Mirrored`, a holder like any other). Unicode reads its
+  latest tables; an older version of them is for version control to add.
+- A `Version` is written as Ether writes its own (language.ts), in its class header: `v0.1.4-E2027.0A.4`, semver (major,
+  minor, index) then `-E`, the year, the years since the release, the month letter and the index again; the minor is the
+  months since the release, so a version is given by its pieces. A revision, `'…`, is version control on the version: a
+  `Version` again, recursively (`'1` is `v0.0.1-.1`, none written `'0`): `v0.1.4-E2027.0A.4'1`. `%` writes one in code.
+- Dependencies resolve lazily: a dependency is read the first time it is referenced (through `@name`, a name
   the project doesn't define, or a file in its language). Mutual dependencies are tolerated: a project is marked as loading
   before its dependencies load.
 - Only `@ether/ray` is implicit; every other project, OS and Ether included, is declared in `.project.ray`.
@@ -1571,13 +1586,13 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   Mirrors and caches may hold single files of fetched repositories.
 - **Layout.** `@ether/` is the Ether project: the standard `@` names (`Ether.ray`), `World.ray`, `Messaging.ray` and the
   instance entrypoints (`entrypoint.server.ray`, `entrypoint.npc.ray`, `entrypoint.player.ray`). `@ether/ray/` is the core
-  (`!language`): Node, Ray, Number, String, Encoding, Program, Control, Compiler, Language, Project, Location,
+  (`!language`): Node, Ray, Number, String, Program, Control, Compiler, Language, Project, Location,
   Character, Choice, Diagnostics, Unit, Access, OS, each with its claims as asserts in it (rules preventing each other in Control). A map is a block, `{ a: 1, b: 2 }`
   (no Document class); there is no IO class: a location does the input and output (`@me/instance = x` writes out, `@x`
   reads). Subprojects of `@ether`: `os` (the Ether OS), `game`, `library`, `avatar`, the outside languages and operating
   systems under `$/` (`$/Font` the fonts a device has), and the optional ones, each one file in `optional/`
-  (`optional/Network.project.ray`) still named as a subproject (`@ether/network`): `security`, `network`, `filesystem`
-  (FileSystem, what holds a location), `random` (Random, and drawing from what a value may be), `proof`, `time`,
+  (`optional/Network.project.ray`) still named as a subproject (`@ether/network`): `encryption` (Key, `Encrypted`), `security`, `network`,
+  `filesystem` (FileSystem, what holds a location), `random` (Random, and drawing from what a value may be), `proof`, `time`,
   `timezone`, `device`, `geometry`, `ui`, `version-control`. Folders of projects are lowercase. `.ether/` is what Ether keeps locally for a project (fetched externals, caches, `.%` working state), laid out
   as `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0`.
 
@@ -1586,26 +1601,25 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - Every Program is a Language, defining abstractions when `!language` is selected. Which language a program reads with is
   `global`: `global = …` sets it, and it is version-controlled (`global = @remote%[version]` takes someone else's setup or
   another version as the defaults).
-- A language `$.x` is a mapping from text in that format to Ray values and back: a Program level whose rules read `.x`.
+- A language is a mapping from text in that format to Ray values and back: a Program level whose rules read `.x`.
   A language states its own assumptions ("a newline is a new statement") as rules in its level. Each file extension is
-  its own language (`$.uc`, `$.uci`). When a mapping counts as a language is a research question for the Library Project.
-- `$.name` answers the language called `name`, loading it once when it isn't loaded: `$.ray` is Ray itself; any other name
-  is the project `@ether/$/<name>` (the language's name in lower case), answering the language in it whose extensions
-  include `.name`.
+  its own language (`.uc`, `.uci`). When a mapping counts as a language is a research question for the Library Project.
+- A language is named by its class (`JSON`, `Git`, `Language.ray` for Ray itself), reached through the dependency on its
+  project (`@json` is `$/JSON.project.ray`). There is no `$.name` (removed 2026-10-21, user).
 - A language is declared one way: its class is `class: Language`, with its header when the format has one
-  (`JSON := class: Language (Blank, root: Value, Blank)`), so `$.json === JSON`. Reading is `Name.read`, writing
+  (`JSON := class: Language (Blank, root: Value, Blank)`). Reading is `Name.read`, writing
   `Name.write` or `x as Name`. A language that writes several files answers a tree of Locations with content.
   `Language.Lossless` is the narrowing of languages that read back what they write; `.ray` is one.
 - A format reads straight into Ray values with one grammar, its headers, which also write it. There is no record
   vocabulary between a format and Ray: a `@js` fragment is a Ray program, and writing JS is one Compiler level over
   Ray's program shapes. Kinds of a value (an HTTP status class, a DNS record type) are narrowings.
 - A `$/<name>` project holds only the outside language: its syntax, levels, API values and tests. What is specific to Ray
-  stays in Ray's library (the renderers are in `@ether/ui`). Nothing in the core depends on an outside language; the core
-  reaches them only through `$.name`, lazily.
-- A language keeps its identity across renames: old names are equivalences (`$.coq` ≡ `$.rocq`), as are its several
+  stays in Ray's library (the renderers are in `@ether/ui`). Nothing in the core depends on an outside language; a project
+  reaches them only through its dependencies (`@json`), lazily.
+- A language keeps its identity across renames: old names are equivalences (Coq ≡ Rocq), as are its several
   extensions; dialects are its children. Content read by every loaded language answers the superposition of the readings
   that accept it, each with its version.
-- `FILE.ext.ray` is one mechanism: the file is read with `$.ext` over Ray (`script.js.ray` is JS over Ray primitives).
+- `FILE.ext.ray` is one mechanism: the file is read with the language of `.ext` over Ray (`script.js.ray` is JS over Ray primitives).
 - Sublanguages permit only certain code. A sublanguage is a Program level without the IO externals and unbounded loops.
   Configuration is `.cfg.ray`, the sublanguage whose code provably halts and has no side effects
   (`Program{Pure & Terminating}`), instead of `.yml`/`.json`. A `!language` project configures which files are read in
@@ -1678,16 +1692,16 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
 ### 16.3 Backends and storage levels
 
-- A backend is a Language. Its level reads into a `History`, and writing goes out of one: `$.git`, and on the
-  `version-control` branch `$.mercurial`, `$.fossil`, `$.pijul`, `$.subversion`; and Ray itself (`$.ray`, the `.%` form).
-  Git is one compile target: cloning is `$.git.read(@https://…)`, pushing is `history as $.git`, and converting is
+- A backend is a Language. Its level reads into a `History`, and writing goes out of one: `Git`, and on the
+  `version-control` branch `Mercurial`, `Fossil`, `Pijul`, `Subversion`; and Ray itself (`Language.ray`, the `.%` form).
+  Git is one compile target: cloning is `Git.read(@https://…)`, pushing is `history as Git`, and converting is
   reading as one language and writing as another.
 - Each backend is lossless (Ray, Pijul) or a snapshot backend (Git, Mercurial, Fossil, Subversion). Writing to a snapshot
   backend writes the commit's tree (each definition a `.ray` file), the parents, `who` and `when`, and keeps the commit's
   `.%` line beside it (git notes under `refs/notes/ray`), so reading our own repository back is exact. A foreign
   repository is read by writing each commit's change against its first parent as Ray (`History.change`); a rename comes
   from the backend's own record, else from line similarity of at least 50%, and a tie raises `ERROR@Rename`.
-- Routing uses the store syntax (§16.6): `History{location is @me}$ = $.ray | $.git` stores in both.
+- Routing uses the store syntax (§16.6): `History{location is @me}$ = Language.ray | Git` stores in both.
 - The backend, the storage granularity and the caches are Compiler levels (`Compiler.stored`): a choice of format, never a
   fixed layout. No layout is canonical; per object or per project, splitting (past 1 MiB, one file per object) and caches
   (every 64th commit and at the head) are optimizations. `delta` writes a commit as `. edited(from, to, "text")` when
@@ -1850,9 +1864,10 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - **Verified versus claimed.** Character equality is the whole of security in the language, so it never rests on data
   anyone can claim. A character is *verified* only when the runtime made it, from a completed handshake or from holding a
   local instance key. Anything built from data (`Character(name: …)`, a name, a told public key, a commit's `who`) is
-  *claimed*, and a claimed character is never `==` a verified one. `&caller` and `@me` only ever hold verified
-  principals, and access checks see only `&caller`. Names, UUIDs included, are for addressing, never evidence. Grants
-  match principals with `a.same(b)` (roots compared) and `a.answers_for(who)`, never `===`.
+  *claimed*: it is `==` the principal of the same root, but only a `Verified` one acts for it. `&caller` and `@me` only
+  ever hold verified principals, and access checks see only `&caller`. Names, UUIDs included, are for addressing, never
+  evidence. Grants match principals with `==` (roots compared; identity in the core, without @ether/security) or `is` a
+  narrowing of principals, never `===`. (No `Entity`, `same` or `answers_for`: removed 2026-10-21, user.)
 - **Keys.** Each instance hosting a character has its own key pair, whose private half never leaves it, certified by the
   character's root authority for a time and scopes. The root is a policy, not one key: the character's first commit
   declares an identity with its current root keys, the digest of the next ones, and a threshold per kind of key event
@@ -2030,7 +2045,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   functions beside them.
 - The compiler's recorded graph is a `Program` value: statements as vertices, sequence and conditional gotos as edges.
   There is no separate instruction vocabulary. Guards are conditional gotos; passes are rewrites; a back end is a Language
-  level that writes the Program (`$.js`). An applied rewrite is a commit in the program's history labelled with its rule,
+  level that writes the Program (`JS`). An applied rewrite is a commit in the program's history labelled with its rule,
   so a failed guard and a revoked equivalence are one mechanism: run on from the last commit that didn't rely on it.
 - Code between statements (timers, hooks) is a rewrite applied as a level, with no syntax of its own:
   `with O = Compiler.default + Debug.timed`, where `Debug.timed := { {s: Statement} => s; timer.tick }`.
@@ -2156,6 +2171,16 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
     key kept with `[k] := (caller) => …` has one: called, it calls what it keeps). Otherwise `.( … )` stays code read in
     `.`. A `.` after a name or a closing bracket (`it.({constraint})`), or code led by a `.` (`it.(.length)`), is that
     reading, never a call. In a closure called `.on(v)`, `.name` written alone is a member of v.
+  - **A value given to a parameter typed as a function is the function answering it** (`mapping: (x: T): *` given
+    `\s[]`): `map{p}(v)`, v in place of each one p holds of. A function is a value with a call of its own,
+    `{this}(…)`. Open: through Ray.ray's `map {selection}` itself the value is lost once `this[{selection}]` has made
+    its `Filtered`, so Expression writes `.map{is \s}((space) => \s[])` (the user's choice, with `is` for `== \s`:
+    `vertex == \s` has no case for a superposition on the right; `[x]` operator holes stay open).
+  - **A header that defines what its positions are read by** (`GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES…` among
+    them) is read in turn first: each position as it is once the ones before it are given. All at once, the positions
+    are made before any is read, so the definition is made of BOOTSTRAPPER's type.
+  - `D := x ~~ .(a | b) = v` is `D := (x ~~ .(a | b) = v)`; of a list of positions, the positions named a and b are
+    given v too.
 - Decided 2026-10-17, being built:
   - **A bare name never reads a member.** Inside a method, `count` is not `.count`. A bare name sees the method's
     parameters, its own locals, the locals of the bodies it is written in, and the file and global scope. A member of
@@ -2840,7 +2865,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   its dark variant are the language's (the entrypoint).
 - A link is a shape whose content is a Location: `"Ray" @ loc`. Any location renders as a link by default; there is no
   `Link` component (`@orbitmines.avatars` is already the list of locations to render).
-- A location's extension names its format (`$.png`), and the format declares the class it reads to (`Image`).
+- A location's extension names its format (`PNG`), and the format declares the class it reads to (`Image`).
 - Articles, the Almanac and profiles are pure Ray: every paragraph, heading and reference is a Ray value. Long texts are
   multiline strings; page text interpolates `{…}` like strings.
 - A website can be built from any class: fields are canonical (`profiles: Profile$ @ /profiles/`), and `@` only gives
@@ -2869,11 +2894,11 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - HTML: static HTML+CSS+JS for production (plain JS for now; React as a level that composes, `.JS + .React`), and the
   TypeScript interpreter bundled for the browser in development. Both must work. The browser reaches the DOM over the same
   byte channel through a protocol written in Ray, with a small fixed host shim. A browser extension is another HTML
-  platform level; the page's URL is `@me/device/location`; direct JS access is `$.js` code sent through the DOM protocol.
+  platform level; the page's URL is `@me/device/location`; direct JS access is `JS` code sent through the DOM protocol.
 - `UI.HTML` (`@ether/ui/HTML.ray`) renders a scene into an HTML document with its stylesheet and script and writes
-  `$.html`, `$.css`, `$.js` and `$.json`. `UI.TUI` (`@ether/ui/TUI.ray`) draws a scene into cells and writes `$.ansi`.
-  `Language.Direct`, Ray's own raster drawing, stays in the core UI, reading fonts through `$.opentype` and images through
-  `$.png`. `@ether/ui` bundles the languages its renderers write.
+  `HTML`, `CSS`, `JS` and `JSON`. `UI.TUI` (`@ether/ui/TUI.ray`) draws a scene into cells and writes `ANSI`.
+  `Language.Direct`, Ray's own raster drawing, stays in the core UI, reading fonts through `OpenType` and images through
+  `PNG`. `@ether/ui` bundles the languages its renderers write.
 - Platforms are levels composed per target, and platform code doesn't appear in the default code. Supported:
   Linux/macOS terminals (xterm-256color, truecolor), Windows Terminal, the major browsers (Chromium and Firefox first),
   and the TUI running in a browser. Capabilities degrade.
@@ -2881,7 +2906,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   levels. Output goes to `@me/instance`.
 - Components such as download and login buttons come from the orbitmines.com library, not from UI. orbitmines.com
   hardcodes its players and organizations for now; a database comes later. Port order: index, profiles, archive, Almanac.
-- Long-term rendering notes: shaders as parallel iterators (a GPU level); a `$.glsl` level writing a shape as its signed
+- Long-term rendering notes: shaders as parallel iterators (a GPU level); a `GLSL` level writing a shape as its signed
   distance function (exact as `force`, a bound as `approx`).
 
 ---
@@ -2934,7 +2959,7 @@ Mostly proposals; the decided points are marked.
   (typing as a probability over keys, sticks for `.expand`/`.collapse`, a trigger switching the rendering level); LaTeX-
   like symbol input as a `force` equivalence in a style; stepping through a run one `. = .next` at a time and browsing what
   a text was read as, both renderings of the Program value; a REPL whose session is a history branch. Ray as the shell is
-  planned: the REPL over quests and locations, with `$.sh` reading existing scripts.
+  planned: the REPL over quests and locations, with `Sh` reading existing scripts.
 - **The Ether Library Project (2028)** reads and lifts foreign software into Ray: extracting features, APIs, accounts and
   version diffs (none of it needing a record format: a feature is a narrowing over behaviour, an API a set of
   equivalences, a diff is history); comparing languages with Ray as the reference frame; a decentralised index of
@@ -3106,9 +3131,9 @@ Each question gives the recommendation recorded when it was raised, where there 
 **Numbers and time**
 - `ℕ`, `ℤ`, `ℚ`, `ℝ` as aliases once non-ASCII names read.
 - Floating point as a Ray narrowed to representable points, rounding being the superposition of neighbours collapsed by
-  the rounding mode, read by a `$.ieee754` project.
+  the rounding mode, read by a `IEEE754` project.
 - Relativistic time: a Time carrying the frame it is proper time of. Clock sources: `now` read at the precision asked;
-  on Ether OS, `$.ntp`.
+  on Ether OS, `NTP`.
 - A segment name before a number (`day 5`, `sol 3`) as the time at the start of that segment.
 - Tests for superposed weekdays and times through arithmetic. The Darian calendar for Mars.
 - The negative SI prefixes need a ratio that isn't a natural number; `1B` (a billion) against `1 B` (a byte).

@@ -20,7 +20,7 @@ WebSocket := class: Language client: boolean = true {
   static Frame := class (
     fin: Binary₁ as boolean = true,
     rsv: Binary₃ = 0,
-    opcode: Binary₄ as Opcode,
+    opcode: Binary₄ as WebSocket.Opcode,
     masked: Binary₁ as boolean = false,
     // Payload length in the minimal number of bytes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2)
     short: Binary₇ = payload.count < 126 ? payload.count : payload.count < 2 ^ 16 ? 126 : 127,
@@ -29,13 +29,13 @@ WebSocket := class: Language client: boolean = true {
     (key: Byte₄ = Byte₄.random) if masked,
     data: Byte[]{length == size} = masked ? masking(payload) : payload
   ) {
-    size => short == 127 ? long : short == 126 ? medium : short
+    size => .short == 127 ? .long : .short == 126 ? .medium : .short
     // Client-to-server masking (https://www.rfc-editor.org/rfc/rfc6455#section-5.3)
-    masking (bytes: Byte[]) => bytes.enumerate.map(.value ~x|| key[.index % 4])
-    payload = masked ? masking(data) : data
+    masking (bytes: Byte[]) => bytes.enumerate.map(.value ~x|| this.key[.index % 4])
+    payload = .masked ? .masking(data) : data
 
     // Control frames are not fragmented and carry at most 125 bytes (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
-    dynamically assert fin && payload.count <= 125 if opcode.control
+    dynamically assert .fin && .payload.count <= 125 if .opcode.control
   }
   assert ([0x81, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58] as WebSocket.Frame).payload as String == "Hello"  // WS2 a masked frame does not unmask
   assert WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 256).short == 126 && WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 256).medium == 256  // WS4 a 256 byte payload does not take the 16 bit length
@@ -48,28 +48,28 @@ WebSocket := class: Language client: boolean = true {
   assert (WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 65536) as Byte[])[..<10] == [0x82, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00]  // WS17 a 64 KiB binary frame does not start 82 7f and a 64-bit length as in RFC 6455 section 5.7
 
   static Message := class data: String | Byte[] {
-    text => data is String
-    bytes => text ? data as Unicode.UTF-8 as Byte[] : data
+    text => .data is String
+    bytes => .text ? .data as Unicode.UTF-8 as Byte[] : .data
   }
   assert Compiler.reduced(Language.Writing(WebSocket.Message("hi")), WebSocket.written).masked  // WS7 a client's frame is not masked
   assert !(Compiler.reduced(Language.Writing(WebSocket.Message("hi")), WebSocket(client: false).written).masked)  // WS8 a server's frame is masked
   // Control frames: ping, pong, and close with its status code and reason (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
-  static Control := class opcode: Opcode{control} = Opcode.ping, data: Byte[] = []
+  static Control := class opcode: WebSocket.Opcode{.control} = WebSocket.Opcode.ping, data: Byte[] = []
   // Closing (https://www.rfc-editor.org/rfc/rfc6455#section-5.5.1), status codes (https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1)
-  static Close := class: Control code: Binary₁₆ = 1000, reason: String = "" {
-    opcode = Opcode.close
-    data => [code as Byte[], reason as Unicode.UTF-8 as Byte[]].flatten
+  static Close := class: WebSocket.Control code: Binary₁₆ = 1000, reason: String = "" {
+    opcode = WebSocket.Opcode.close
+    data => [.code as Byte[], .reason as Unicode.UTF-8 as Byte[]].flatten
   }
 
   // Fragmentation: a message is its first frame and its continuations; control frames may come between them (https://www.rfc-editor.org/rfc/rfc6455#section-5.4)
-  static Stream := class (frames: Frame[]) {
-    fragmented => (frames{!.opcode.control} ~= (messages: (first: Frame{opcode != Opcode.continuation}, rest: Frame{opcode == Opcode.continuation}[])[])).messages.map([.first, .rest].flatten)
-    messages => fragmented.map(fragments => fragments.first.opcode == Opcode.text
-      ? Message(fragments.payload.flatten as Unicode.UTF-8 as String)
-      : Message(fragments.payload.flatten))
-    controls => frames{.opcode.control}.map(frame => frame.opcode == Opcode.close
-      ? Close(code: frame.payload[..<2] as Binary₁₆, reason: frame.payload[2..] as Unicode.UTF-8 as String)
-      : Control(frame.opcode, frame.payload))
+  static Stream := class (frames: WebSocket.Frame[]) {
+    fragmented => (.frames{!.opcode.control} ~= (messages: (first: WebSocket.Frame{.opcode != WebSocket.Opcode.continuation}, rest: WebSocket.Frame{.opcode == WebSocket.Opcode.continuation}[])[])).messages.map([.first, .rest].flatten)
+    messages => .fragmented.map(fragments => fragments.first.opcode == WebSocket.Opcode.text
+      ? WebSocket.Message(fragments.payload.flatten as Unicode.UTF-8 as String)
+      : WebSocket.Message(fragments.payload.flatten))
+    controls => .frames{.opcode.control}.map(frame => frame.opcode == WebSocket.Opcode.close
+      ? WebSocket.Close(code: frame.payload[..<2] as Binary₁₆, reason: frame.payload[2..] as Unicode.UTF-8 as String)
+      : WebSocket.Control(frame.opcode, frame.payload))
   }
   assert WebSocket.Stream(frames: [
     WebSocket.Frame(fin: false, opcode: WebSocket.Opcode.text, payload: "Hel" as Byte[]),
@@ -81,11 +81,11 @@ WebSocket := class: Language client: boolean = true {
   )
 
   level := {
-    {stream: Stream} => stream.messages
+    {stream: WebSocket.Stream} => stream.messages
   }
   written := {
-    {writing: Language.Writing{value is Message}} => Frame(opcode: writing.value.text ? Opcode.text : Opcode.binary, masked: client, payload: writing.value.bytes)
-    {writing: Language.Writing{value is Control}} => Frame(opcode: writing.value.opcode, masked: client, payload: writing.value.data)
+    {writing: Language.Writing{.value is WebSocket.Message}} => WebSocket.Frame(opcode: writing.value.text ? WebSocket.Opcode.text : WebSocket.Opcode.binary, masked: this.client, payload: writing.value.bytes)
+    {writing: Language.Writing{.value is WebSocket.Control}} => WebSocket.Frame(opcode: writing.value.opcode, masked: this.client, payload: writing.value.data)
   }
 
   // Opening handshake (https://www.rfc-editor.org/rfc/rfc6455#section-4.1)
@@ -99,12 +99,12 @@ WebSocket := class: Language client: boolean = true {
     & WebSocket.opened(., WebSocket.accepting(.))  // WS10 an accepted opening is not open
   )
   // Sec-WebSocket-Accept is the base64 SHA-1 of the key and the GUID (https://www.rfc-editor.org/rfc/rfc6455#section-4.2.2)
-  static accept (key: String) => ((key + GUID) as SHA1 as Byte[]) as Base64 as String
+  static accept (key: String) => ((key + WebSocket.GUID) as SHA1 as Byte[]) as Base64 as String
   assert WebSocket.accept("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="  // WS3 the accept key is not the one in RFC 6455 section 1.3
   static accepting (request: HTTP.Request) => HTTP.Response(status: HTTP.Status(101), fields: HTTP.Fields(entries: [
     (name: "Upgrade", value: "websocket"), (name: "Connection", value: "Upgrade"),
-    (name: "Sec-WebSocket-Accept", value: accept(request.fields["Sec-WebSocket-Key"]))
+    (name: "Sec-WebSocket-Accept", value: WebSocket.accept(request.fields["Sec-WebSocket-Key"]))
   ]))
   static opened (request: HTTP.Request, response: HTTP.Response) => response.status.code == 101
-    && response.fields["Upgrade"].fold_case == "websocket" && response.fields["Sec-WebSocket-Accept"] == accept(request.fields["Sec-WebSocket-Key"])
+    && response.fields["Upgrade"].fold_case == "websocket" && response.fields["Sec-WebSocket-Accept"] == WebSocket.accept(request.fields["Sec-WebSocket-Key"])
 }

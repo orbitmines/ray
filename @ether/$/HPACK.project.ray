@@ -35,9 +35,9 @@ HPACK := class: Language {
     assert "private" as HPACK.Coded as Byte[] == [0xae, 0xc3, 0x77, 0x1a, 0x4b]  // HP20 private is not Huffman coded as in C.6.1
     assert "Mon, 21 Oct 2013 20:13:21 GMT" as HPACK.Coded as Byte[] == [0xd0, 0x7a, 0xbe, 0x94, 0x10, 0x54, 0xd4, 0x44, 0xa8, 0x20, 0x05, 0x95, 0x04, 0x0b, 0x81, 0x66, 0xe0, 0x82, 0xa6, 0x2d, 0x1b, 0xff]  // HP21 the date of C.6.1 is not Huffman coded as there
     assert "https://www.example.com" as HPACK.Coded as Byte[] == [0x9d, 0x29, 0xad, 0x17, 0x18, 0x63, 0xc7, 0x8f, 0x0b, 0x97, 0xc8, 0xe9, 0xae, 0x82, 0xae, 0x43, 0xd3]  // HP22 the location of C.6.1 is not Huffman coded as there
-    as (=== Decimal) => value
-    static (value: Decimal) as (=== Integer) => value < 2 ^ prefix - 1 ? Integer<prefix>(small: value)
-      : <-((value - 2 ^ prefix + 1).digits(128)) -- (digits => Integer<prefix>(groups: digits[..<-1].map((group: .)), last: digits.last))
+    as (=== Decimal) => .value
+    static (value: Decimal) as (=== HPACK.Integer) => value < 2 ^ prefix - 1 ? HPACK.Integer<prefix>(small: value)
+      : <-((value - 2 ^ prefix + 1).digits(128)) -- (digits => HPACK.Integer<prefix>(groups: digits[..<-1].map((group: .)), last: digits.last))
   }
   assert (10 as HPACK.Integer<5>) as Binary == 0b01010  // HP1 10 is not written in a 5-bit prefix as in C.1.1
   assert (1337 as HPACK.Integer<5>) as Binary == 0b111111001101000001010  // HP2 1337 is not written with continuation octets as in C.1.2
@@ -58,53 +58,53 @@ HPACK := class: Language {
     (28, [2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 127, 220, 249]),
     (30, [10, 13, 22, 256])
   ]
-  static code := Deflate.Huffman((0..256).map(symbol => Lengths{symbol is (.1 is String ? .1.bytes : .1)#}.first.0))
+  static code := Deflate.Huffman((0..256).map(symbol => HPACK.Lengths{symbol is (.1 is String ? .1.bytes : .1)#}.first.0))
 
   // Huffman-coded octets: codes most significant bit first, padded to the octet with the high bits of EOS (https://www.rfc-editor.org/rfc/rfc7541#section-5.2)
-  static Coded := class (symbols: code.Symbol{< 256}[], padding: Binary{length < 8 && every(. == 1)} = [1] * ((8 - symbols.map(code.bits(.).length).sum % 8) % 8)) {
-    text => symbols as Byte[] as String
-    static (text: String) as (=== Coded) => Coded(symbols: text as Byte[])
+  static Coded := class (symbols: HPACK.code.Symbol{< 256}[], padding: Binary{.length < 8 && .every(. == 1)} = [1] * ((8 - symbols.map(HPACK.code.bits(.).length).sum % 8) % 8)) {
+    text => .symbols as Byte[] as String
+    static (text: String) as (=== HPACK.Coded) => HPACK.Coded(symbols: text as Byte[])
   }
   assert "www.example.com" as HPACK.Coded as Byte[] == [0xf1, 0xe3, 0xc2, 0xe5, 0xf2, 0x3a, 0x6b, 0xa0, 0xab, 0x90, 0xf4, 0xff]  // HP10 www.example.com is not Huffman coded as in C.4.1
 
   // String literal: H, the length, then the octets, Huffman coded when H is set (https://www.rfc-editor.org/rfc/rfc7541#section-5.2)
-  static Text := class (huffman: Binary₁ as boolean = false, size: Integer<7> = octets.count as Integer<7>, octets: Byte[]{length == size.value}) {
-    value => huffman ? (octets as Coded).text : octets as String
-    static (text: String) as (=== Text) => Text(octets: text as Byte[])
+  static Text := class (huffman: Binary₁ as boolean = false, size: HPACK.Integer<7> = octets.count as HPACK.Integer<7>, octets: Byte[]{.length == size.value}) {
+    value => .huffman ? (.octets as HPACK.Coded).text : .octets as String
+    static (text: String) as (=== HPACK.Text) => HPACK.Text(octets: text as Byte[])
   }
 
   // Field representations (https://www.rfc-editor.org/rfc/rfc7541#section-6)
   static Representation := class (
     // Indexed field (https://www.rfc-editor.org/rfc/rfc7541#section-6.1)
-    (Binary₁{== 1}, index: Integer<7>{value > 0})
+    (Binary₁{== 1}, index: HPACK.Integer<7>{value > 0})
     // Literal with incremental indexing, without indexing, never indexed (https://www.rfc-editor.org/rfc/rfc7541#section-6.2)
-    | (((kind: ₂01, at: Integer<6>) | (kind: ₂0000, at: Integer<4>) | (kind: ₂0001, at: Integer<4>)), (name: Text) if at.value == 0, value: Text)
+    | (((kind: ₂01, at: HPACK.Integer<6>) | (kind: ₂0000, at: HPACK.Integer<4>) | (kind: ₂0001, at: HPACK.Integer<4>)), (name: HPACK.Text) if at.value == 0, value: HPACK.Text)
     // Dynamic table size update (https://www.rfc-editor.org/rfc/rfc7541#section-6.3)
-    | (₂001, size: Integer<5>)
+    | (₂001, size: HPACK.Integer<5>)
   ) {
-    inserting => kind == ₂01
-    field (table: Table) => index ? table[index.value] : (name: name.value ?? table[at.value].name, value: value.value)
-    static (field: (name: String, value: String)) as (=== Representation) => Representation(kind: ₂0000, at: 0 as Integer<4>, name: field.name as Text, value: field.value as Text)
+    inserting => .kind == ₂01
+    field (table: HPACK.Table) => .index ? table[.index.value] : (name: .name.value ?? table[.at.value].name, value: .value.value)
+    static (field: (name: String, value: String)) as (=== HPACK.Representation) => HPACK.Representation(kind: ₂0000, at: 0 as HPACK.Integer<4>, name: field.name as HPACK.Text, value: field.value as HPACK.Text)
   }
 
   // The dynamic table: newest first after the static entries, each costing its octets plus 32, the oldest evicted to fit (https://www.rfc-editor.org/rfc/rfc7541#section-2.3, https://www.rfc-editor.org/rfc/rfc7541#section-4)
   static Table := class entries: (name: String, value: String)[] = [], limit: Number = 4096 {
-    size => entries.map(.name.bytes.count + .value.bytes.count + 32).sum
-    fitted => size <= limit ? this : Table(entries[..<-1], limit).fitted
-    inserted (entry: (name: String, value: String)) => Table([[entry], entries].flatten(1), limit).fitted
-    resized (limit: Number) => Table(entries, limit).fitted
-    [index: Number] => [Static, entries].flatten(1)[index - 1]
+    size => .entries.map(.name.bytes.count + .value.bytes.count + 32).sum
+    fitted => .size <= .limit ? this : HPACK.Table(this.entries[..<-1], this.limit).fitted
+    inserted (entry: (name: String, value: String)) => HPACK.Table([[entry], this.entries].flatten(1), this.limit).fitted
+    resized (limit: Number) => HPACK.Table(this.entries, limit).fitted
+    [index: Number] => [HPACK.Static, .entries].flatten(1)[index - 1]
   }
 
   // A field block: its representations in order, each seeing the table left by those before it (https://www.rfc-editor.org/rfc/rfc7541#section-3.2)
-  static Block := class (representations: Representation[]) {
-    decoded (table: Table = Table()) => representations.reduce(held = (table: table, fields: []) => .field(held.table) -- (field =>
+  static Block := class (representations: HPACK.Representation[]) {
+    decoded (table: HPACK.Table = HPACK.Table()) => .representations.reduce(held = (table: table, fields: []) => .field(held.table) -- (field =>
       .size ? (table: held.table.resized(.size.value), fields: held.fields)
       : (table: .inserting ? held.table.inserted(field) : held.table, fields: [held.fields, field])))
   }
   // The blocks of one connection share its dynamic table, in the order they are decoded (https://www.rfc-editor.org/rfc/rfc7541#section-2.2)
-  static Connection := class blocks: Block[] {
-    fields => blocks.reduce(held = (table: Table(), fields: []) => .decoded(held.table) -- (decoded => (table: decoded.table, fields: [held.fields, [decoded.fields]].flatten(1)))).fields
+  static Connection := class blocks: HPACK.Block[] {
+    fields => .blocks.reduce(held = (table: HPACK.Table(), fields: []) => .decoded(held.table) -- (decoded => (table: decoded.table, fields: [held.fields, [decoded.fields]].flatten(1)))).fields
     assert {
       first := [0x82, 0x86, 0x84, 0x41, 0x0f, "www.example.com".bytes].flatten
       assert HPACK.read(first)[":authority"] == "www.example.com"  // HP8 the first request of C.3.1 does not read its authority
@@ -116,22 +116,22 @@ HPACK := class: Language {
 
   // The encoder's choices: an index for what the static table holds, and Huffman coding when it is shorter (https://www.rfc-editor.org/rfc/rfc7541#section-7.1)
   static Optimizations := {
-    {r: Representation{kind == ₂0000 && name && (name: name.value, value: value.value) is Static#}} =>
-      Representation(index: (Static.index_of((name: r.name.value, value: r.value.value)) + 1) as Integer<7>)
-    {r: Representation{kind == ₂0000 && name && name.value is Static.name#}} =>
-      Representation(kind: r.kind, at: (Static.name.index_of(r.name.value) + 1) as Integer<4>, value: r.value)
-    {text: Text{!huffman && (value as Coded as Byte[]).count < octets.count}} => Text(huffman: true, octets: text.value as Coded as Byte[])
+    {r: HPACK.Representation{.kind == ₂0000 && name && (name: name.value, value: value.value) is HPACK.Static#}} =>
+      Representation(index: (HPACK.Static.index_of((name: r.name.value, value: r.value.value)) + 1) as HPACK.Integer<7>)
+    {r: HPACK.Representation{.kind == ₂0000 && .name && .name.value is HPACK.Static.name#}} =>
+      Representation(kind: r.kind, at: (HPACK.Static.name.index_of(r.name.value) + 1) as HPACK.Integer<4>, value: r.value)
+    {text: HPACK.Text{!huffman && (.value as HPACK.Coded as Byte[]).count < octets.count}} => HPACK.Text(huffman: true, octets: text.value as HPACK.Coded as Byte[])
   }
 
   level := {
-    {block: Block} => {
+    {block: HPACK.Block} => {
       held := { }
       block.decoded().fields.for(held[.name] = .value)
       held
     }
   }
-  written := Optimizations + {
-    {writing: Language.Writing} => Block(representations: writing.value.map(. as Representation))
+  written := HPACK.Optimizations + {
+    {writing: Language.Writing} => HPACK.Block(representations: writing.value.map(. as HPACK.Representation))
   }
 }
 assert HPACK.read([0x82])[":method"] == "GET"  // HP7 index 2 is not :method GET as in C.2.4

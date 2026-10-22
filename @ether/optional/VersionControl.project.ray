@@ -1,30 +1,135 @@
-@ether/filesystem
+@deflate
 @uuid
 @ether/time
 
-History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
+// Versions: a project or a language at a version, and what leads from one version to another. The core knows none of it
+// (a dependency is `@path`; at a version, `@path %v0.1.4-E2027.0A.4`, it needs this project).
+//
+// A version is written as Ether writes its own (language.ts): `v0.1.4-E2027.0A.4`, semver first (major, minor, index),
+// then after `-E` the year it was made, the years since the release and the month of that year as a letter (`0A`: the
+// first), and the index again. The minor is the months since the release, so a version is given by its pieces
+// (`Version(major: 0, year: 2027, month: "A", index: 4)`). Its revision, after `'`, is version control on the version
+// itself: a version again, with revisions of its own; `'1` is the version `v0.0.1-.1`, and none written is `'0`.
+Version := class: Ray (
+  "v", major: Decimal = 0, ".", minor: Decimal = 0, ".", index: Decimal = 0,
+  "-", ("E", year: Decimal, ".", since_release: Decimal = 0, month: Char{"A" <= . <= "L"} = "A")?, ".", index,
+  ("'", revision: Version | Decimal)?
+) => {
+  // (the minor, when the year is there: the months since the release, `0A` the first)
+  (this.minor = this.since_release * 12 + "ABCDEFGHIJKL".index_of(this.month) + 1) if this.year
+  // (its revision as a version: `'1` is `v0.0.1-.1`; none, `'0`)
+  revised => .revision is Decimal ? Version(index: .revision) : .revision ?? Version()
+  revision_zero => .revision === None || .revision == 0 || .revision is Version && .revision.zero
+  zero => .major == 0 && .minor == 0 && .index == 0 && .year === None && .revision_zero
+  latest => .revision_zero
+  breaks_freely => .major == 0
+
+  same_release (other: Version) => .major == other.major && .minor == other.minor && .index == other.index && .year == other.year && .since_release == other.since_release && .month == other.month
+  chainable == (other: Version) => .same_release(other) && (.revision_zero ? other.revision_zero : !other.revision_zero && .revised == other.revised)
+  chainable < (other: Version) => .major < other.major || .major == other.major && (.minor < other.minor || .minor == other.minor
+    && (.index < other.index || .index == other.index && !other.revision_zero && (.revision_zero || .revised < other.revised)))
+
+  next => Version(major: .major, minor: .minor, index: .index + 1, year: .year, since_release: .since_release, month: .month)
+  previous => Version(major: .major, minor: .minor, index: .index - 1, year: .year, since_release: .since_release, month: .month)
+  continuations => Migration.leaving(this).to
+  // (none written: the newest revision of the same release among those given)
+  resolved (revisions: Version[]) => .latest ? revisions{.same_release(this)}.max(.revised) ?? this : this
+
+  static Pin := class ("%[", label: (Char.Word | "-")[], "]") => { }
+  assert "%[stable]" is Version.Pin  // PRJ38 a word between "%[" and "]" is not a pin
+  assert !("%[stable" is Version.Pin)  // PRJ39 a pin without its closing bracket is a pin
+}
+// `%` and a version, `%v0.1.4-E2027.0A.4` (a member of it after brackets, `(%v0.1.4-E2027.0A.4).next`); a range of them,
+// `%[v0.1.0-.0..v0.2.0-.0]`
+%{written: (Char.Word | "." | "-" | "'")[]{. ~= ⊢"v"}} ^number => written as Version
+%[{span: (!"]")[]{. ~= (*, "..", *)}}] ^number => Version{(span.before("..") as Version) <= . && . <= (span.after("..") as Version)}
+
+// read from what it is written as, and written from its pieces
+assert ("v0.1.4-E2027.0A.4" as Version).(.major == 0 & .minor == 1 & .index == 4 & .year == 2027 & .since_release == 0 & .month == "A")  // VER1 a version is not read as its major, minor, index, year, years since the release and month
+assert Version(major: 0, year: 2027, month: "A", index: 4) as String == "v0.1.4-E2027.0A.4"  // VER2 a version given its pieces is not written whole
+assert Version(major: 1, year: 2028, since_release: 1, month: "C", index: 2).minor == 15  // VER3 the minor is not the months since the release
+assert Version(index: 1) as String == "v0.0.1-.1"  // VER4 a version of an index alone is not written `v0.0.N-.N`
+assert %v0.1.4-E2027.0A.4 == ("v0.1.4-E2027.0A.4" as Version)  // VER5 `%` before a version is not that version
+// a revision is version control on the version: a version again, `'1` the version `v0.0.1-.1`, none written `'0`
+assert (%v0.1.4-E2027.0A.4'1).revised == Version(index: 1)  // VER6 a revision written as a number is not the version `v0.0.1-.1`
+assert %v0.1.4-E2027.0A.4 == %v0.1.4-E2027.0A.4'0  // VER7 no revision written is not revision 0
+assert !(%v0.1.4-E2027.0A.4'1 == %v0.1.4-E2027.0A.4)  // VER8 a revision is the version itself
+assert (%v0.1.4-E2027.0A.4'v0.0.2-.2'1).revised.revised == Version(index: 1)  // VER9 a revision's own revision is not read
+assert (%v0.1.4-E2027.0A.4).latest & !(%v0.1.4-E2027.0A.4'1).latest  // PRJ12 a version written without a revision is not the latest, or one with a revision is
+assert (%v0.1.4-E2027.0A.4).breaks_freely & !(%v1.1.4-E2027.0A.4).breaks_freely  // PRJ14 major version 0 does not break freely, or a later one does
+// in order: release by release, then revision by revision
+assert %v0.1.4-E2027.0A.4 < %v0.1.5-E2027.0A.5 & %v0.1.9-E2027.0A.9 < %v0.2.0-E2027.0B.0  // PRJ24 a lower index or minor is not less than a higher one
+assert !(%v0.1.5-E2027.0A.5 < %v0.1.4-E2027.0A.4) & !(%v0.1.4-E2027.0A.4 < %v0.1.4-E2027.0A.4)  // PRJ25 a higher version, or the same one, is less
+assert %v0.1.4-E2027.0A.4 < %v0.1.4-E2027.0A.4'1 & %v0.1.4-E2027.0A.4'1 < %v0.1.4-E2027.0A.4'2  // PRJ27 within one release, a lower revision is not less than a higher one
+assert %v0.1.4-E2027.0A.4'5 < %v0.1.5-E2027.0A.5  // PRJ30 a revision of a release is not less than the next release
+assert (%v0.1.4-E2027.0A.4).next == %v0.1.5-E2027.0A.5 & (%v0.1.4-E2027.0A.4).previous == %v0.1.3-E2027.0A.3  // PRJ31 the release after or before is not the next or previous index
+assert (%v0.1.4-E2027.0A.4).resolved([%v0.1.4-E2027.0A.4'1, %v0.1.4-E2027.0A.4'4, %v0.1.5-E2027.0A.5'9]) == %v0.1.4-E2027.0A.4'4  // PRJ34 a release is not resolved to its newest revision among those given
+assert (%v0.1.4-E2027.0A.4'1).resolved([%v0.1.4-E2027.0A.4'4]) == %v0.1.4-E2027.0A.4'1  // PRJ36 a version with a revision is resolved to another
+assert %v0.1.5-E2027.0A.5 is %[v0.1.4-E2027.0A.4..v0.1.6-E2027.0A.6] & !(%v0.1.7-E2027.0A.7 is %[v0.1.4-E2027.0A.4..v0.1.6-E2027.0A.6])  // PRJ9 a version inside a range is not of it, or one outside is
+
+Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => {
+  .of["#"] := .of["#"] ?? []
+  .of["#"].push(this)
+
+  backward: Migration => Migration(from: .to, to: .from, body: .body⁻¹ ?? ERROR@Migration `the migration has no inverse`)
+
+  static leaving (version: Version) => Migration#{.from == version}, Migration#{.to == version}.backward
+  static migrate (old, from: Version, to: Version) => from.shortest_path_to(to) -- (path => path.erred
+    ? ERROR@Migration `no migration leads from that version to the other`
+    : path.zip(path.rest).map((a, b) => Migration.leaving(a){.to == b}.first).reduce(held = old => .body(held)))
+}
+
+Project &+= {
+  // (at a version, `@ether/time %v0.1.4-E2027.0A.4`: the project read where that version of it is, its location with the version after it)
+  static Versioned := class: Project.Dependency ("@", path: (!" ")[], " %", version: Version | (!\n)[]) => {
+    project: Project? => {
+      wanted := "%" + (.version as String)
+      (Program(code: ("@", .path)){O: {
+        @ether/{bundled_path: Path} => Project.known((@ether / (bundled_path + wanted)).held as Project)
+        @{scheme: Char.Word[]}://{remainder: Path} => Project.known(((scheme + "://" + remainder + wanted) as Location).held as Project)
+      }}()).load
+    }
+  }
+  assert ("@ether/time %v0.1.4-E2027.0A.4" as Project.Versioned).(.name == "time" & .version == %v0.1.4-E2027.0A.4)  // VC59 a dependency at a version does not keep its name and version
+  dependencies: (Project.Dependency | Project.Versioned)[] = []
+  version: Version?
+  written_against: Version?
+  carries (host_versions: Version[]) => .written_against && !host_versions.contains(.written_against)
+  assert Project(written_against: %v0.1.4-E2027.0A.4).carries([%v0.1.5-E2027.0A.5])  // PRJ6 a project written against a version the host does not run is not carried
+  assert !Project(written_against: %v0.1.4-E2027.0A.4).carries([%v0.1.3-E2027.0A.3, %v0.1.4-E2027.0A.4])  // PRJ7 a project written against a version the host runs is carried
+  assert !Project().carries([%v0.1.4-E2027.0A.4])  // PRJ8 a project written against nothing is carried
+}
+Language &+= {
+  // (what a file in it holds at a label of its history, as a tree)
+  tree_at (location: Location, label) => .read(location).at(label).tree
+  version: Version?
+  backwards_compatible => .previous**.every(.targeting(this))
+  forwards_compatible => .next**.every(.targeting(this))
+}
+
+History := class: Iterable (repository: *?, base: History.Commit?, head: History.Commit?) => {
   static Label := UUID | Char.Word[]
 
   // A commit is who changed what, when, after what. Signatures, content keys and ciphertext are @ether/security's
   // (it adds them to commits); version control does not import it.
-  static Commit := class: Ray (id: Label = UUID.v1(), who: * = @me, stamp: Stamp?, change: Program?, from: Label[]?, versions: Label[] = []) => {
-    when: Time = stamp.when ?? Time.now
+  static Commit := class: Ray (id: History.Label = UUID.v1(), who: * = @me, stamp: Stamp?, change: Program?, from: History.Label[]?, versions: History.Label[] = []) => {
+    when: Time = .stamp.when ?? Time.now
     message: String?
-    previous: Commit?
+    previous: History.Commit?
     line: History?
 
-    parents => previous#
-    next => line.since(None){.parents.first === this}.first
-    ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
-    merged => parents.count > 1
+    parents => .previous#
+    next => .line.since(None){.parents.first === this}.first
+    ancestry => (.previous#.map(.ancestry).flatten, this).unique(===)
+    merged => .parents.count > 1
     stored => this
     opened => this
     // A line runs on the value before it as whoever replays it: its `who` is attribution, not authority (W2.1).
-    applied (held) => opened -- (plain => held -- plain.change)
+    applied (held) => .opened -- (plain => held -- plain.change)
     rewritten (change: Program?) => copy ~~ (.change = change)
-    expand => opened.change**
-    successors => line.since(None){.parents.some(=== this)} ?? []
-    branching => successors.count > 1
+    expand => .opened.change**
+    successors => .line.since(None){.parents.some(=== this)} ?? []
+    branching => .successors.count > 1
     // A branch is named by its nearest label; a blank history has no commits; a commit expands into its run.
     assert {
       brn := History(repository: Repository())
@@ -36,19 +141,19 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
       assert !(brn.find("v1").branching)  // BRN3 a commit with one child in its line branches
       assert brn.head.expand  // BRN4 a commit does not expand into the run that made it
     }
-    value => line?[this].value ?? applied(None)
+    value => .line?[this].value ?? .applied(None)
     // A transaction happens as a whole or not at all.
     assert {
       Account := class balance: Number
       from := Account(20)
       to := Account(0)
       transaction {
-        from.balance -= 10
+        .from.balance -= 10
         to.balance += 10
       }
       assert from.balance == 10 && to.balance == 10  // TX1 a transaction that holds did not happen
       transaction {
-        from.balance -= 10
+        .from.balance -= 10
         to.balance += 10
         ERROR `refused`
       }
@@ -62,16 +167,16 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
       assert bnd{from bnd_middle}.first.value == [2, 3]  // BND3 a stretch from a commit does not start at that commit
       assert History.reached(bnd_middle.when, bnd_middle) && !History.reached(bnd.head.when, bnd_middle)  // BND4 a time is not reached at the commit current then
     }
-    mentions (label) => id == label || versions.contains(label)
+    mentions (label) => .id == label || .versions.contains(label)
     // A line's settings, written `name = text` in its `with (…)`: those its hash covers, then the rest. A project that adds
     // fields to commits adds their settings (`more_attributes`, `more_settings`) and how it reads them back (`given`).
-    attributes => [[(name: "@me", text: Language.ray.write(who)), (name: "now", text: stamp as String) if stamp,
-      (name: "version", text: versions.join(" | ")) if versions.nonempty], more_attributes].flatten(1)
+    attributes => [[(name: "@me", text: Language.ray.write(this.who)), (name: "now", text: .stamp as String) if .stamp,
+      (name: "version", text: .versions.join(" | ")) if .versions.nonempty], .more_attributes].flatten(1)
     more_attributes => []
     more_settings => []
-    attributed => attributes.map(.name + " = " + .text).join("; ")
-    settings => [attributes, more_settings].flatten(1).map(.name + " = " + .text).join("; ")
-    text => change as String
+    attributed => .attributes.map(.name + " = " + .text).join("; ")
+    settings => [.attributes, .more_settings].flatten(1).map(.name + " = " + .text).join("; ")
+    text => .change as String
     // A foreign snapshot: the change between two trees, written as Ray.
     assert {
       text := "x := 1\ny := 2\nz := 3" as Byte[]
@@ -83,93 +188,93 @@ History := class: Iterable (repository: *?, base: Commit?, head: Commit?) => {
       assert History.change(vt1, vs2).erred  // VC31 a rename two files could have made is not raised
     }
     given (set, written: String) => this
-    hash: Byte[] => $.sha256.write([parents.map(.hash), (id, attributed, text).join("") as Byte[]].flatten).bytes
-    written (above: Commit? = None) => (id, "\\ with (", settings, ") ", (". = ", parents.empty ? "None" : parents.id.join(" & "), "; ") unless parents == [above] || parents.empty && !above, text, \n).join("")
+    hash: Byte[] => SHA256.write([this.parents.map(.hash), (this.id, this.attributed, this.text).join("") as Byte[]].flatten).bytes
+    written (above: Commit? = None) => (.id, "\\ with (", .settings, ") ", (". = ", .parents.empty ? "None" : .parents.id.join(" & "), "; ") unless .parents == [above] || .parents.empty && !above, .text, \n).join("")
     static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
       ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from,
         versions: set.version# ?? []).given(set, line.change as String))
       : Commit(id: label, change: code))
 
-    .{literal name ^property} ^punctuation => external get value name
+    .{name: String ^property} ^punctuation => external get .value name
   }
 
   name: String?
-  id => since(None).first.id
-  label => name ?? since(None){!(.id is UUID)}.last.id
-  blank => copy ~~ (.base = None) ~~ (.head = None) ~~ (.written_last = None)
-  location => repository.location
-  clock => repository.clock ?? World.ether.clock
-  written_last: Commit?
+  id => .since(None).first.id
+  label => .name ?? .since(None){!(.id is UUID)}.last.id
+  blank => .copy ~~ (.base = None) ~~ (.head = None) ~~ (.written_last = None)
+  location => .repository.location
+  clock => .repository.clock ?? World.ether.clock
+  written_last: History.Commit?
   caches: History[] = []
 
-  since (commit: Commit?) => head ? head.ancestry.filter(c => !(commit.ancestry ?? []).some(=== c)) : []
-  commits => since(base)
-  entry => commits.entry
-  find (label) => since(None).find(.id == label)
-  [commit: Commit | Label] => copy ~~ (.head = commit is Commit ? commit : find(commit))
+  since (commit: History.Commit?) => .head ? .head.ancestry.filter(c => !(commit.ancestry ?? []).some(=== c)) : []
+  commits => .since(this.base)
+  entry => .commits.entry
+  find (label) => .since(None).find(.id == label)
+  [commit: History.Commit | History.Label] => .copy ~~ (.head = commit is History.Commit ? commit : this.find(commit))
 
-  commit (who, change, id: Label = UUID.v1(), when: Time = Time.now, message: String? = None, versions: Label[] = []): static =>
-    this ~~ .head = committed(Commit(id, who, stamp: clock.now, change: change is Program ? change : Program(code: { change }), versions, when, message, previous: head, line: this))
-  assert !(History(repository: Repository()).commit(Character(name: "keyless"), 1).head.authentic)  // SGN6 a commit by a claimed character is authentic
+  commit (who, change, id: History.Label = UUID.v1(), when: Time = Time.now, message: String? = None, versions: History.Label[] = []): static =>
+    this ~~ .head = this.committed(History.Commit(id, who, stamp: this.clock.now, change: change is Program ? change : Program(code: { change }), versions, when, message, previous: this.head, line: this))
+  assert !(History(repository: Repository()).commit(@"keyless", 1).head.authentic)  // SGN6 a commit by a claimed character is authentic
   // What a commit becomes before it is this line's head: what the storage levels in scope store. Security overrides it (keys, signatures).
-  committed (made: Commit) => made.stored
+  committed (made: History.Commit) => made.stored
   // Whether this line's values can be read here; security answers by the content keys held here.
   readable => true
-  |= (change): static => commit(@me, change)
-  extended (commit: Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(find(.))# : head) ~~ .line = this
+  |= (change): static => .commit(@me, change)
+  extended (commit: History.Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(this.find(.))# : this.head) ~~ .line = this
 
-  ordered => since(None).sort_by(.stamp)
-  static reached (bound, commit: Commit) => bound is Time ? !commit.next || commit.next.when > bound
-    : bound is Commit ? commit.ancestry.some(=== bound)
-    : bound is Label ? commit.ancestry.some(.mentions(bound))
+  ordered => .since(None).sort_by(.stamp)
+  static reached (bound, commit: History.Commit) => bound is Time ? !commit.next || commit.next.when > bound
+    : bound is History.Commit ? commit.ancestry.some(=== bound)
+    : bound is History.Label ? commit.ancestry.some(.mentions(bound))
     : bound
-  stretches (start: Program, end: Program) => ordered.reduce(acc = (closed: [], open: None) => acc.open
+  stretches (start: Program, end: Program) => .ordered.reduce(acc = (closed: [], open: None) => acc.open
     ? (reached(end.entered(., None), .) ? (closed: [acc.closed, [[acc.open, [.]].flatten(1)]].flatten(1), open: None) : (closed: acc.closed, open: [acc.open, [.]].flatten(1)))
     : reached(start.entered(., None), .) ? (closed: acc.closed, open: [.]) : acc
   ) -- [.closed, [.open] if .open].flatten(1)
-  {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: start**), Program(code: end**))
-  {this}{from {literal start}} ^punctuation => Program(code: start**) -- (holds => stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
-  value => ordered.reduce(held = None => .applied(held))
-  pinned (label, as_of: Stamp? = None) => ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last.id ?? label
-  checkout (label, as_of: Stamp? = None) => this[pinned(label, as_of)].value
-  fix (who, label: Label, change) => commit(who, change, versions: [label])
-  tree => History.placed(public ? value.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])) : files)
+  {this}{from {start} to {end}} ^punctuation => .stretches(Program(code: start**), Program(code: end**))
+  {this}{from {start}} ^punctuation => Program(code: start**) -- (holds => this.stretches(holds, Program(code: { !History.reached(holds.entered(this, None), this) })))
+  value => .ordered.reduce(held = None => .applied(held))
+  pinned (label, as_of: Stamp? = None) => .ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last.id ?? label
+  checkout (label, as_of: Stamp? = None) => this[.pinned(label, as_of)].value
+  fix (who, label: History.Label, change) => .commit(who, change, versions: [label])
+  tree => History.placed(.public ? this.value.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])) : this.files)
   static placed (files) => files.reduce(held = Location(path: "") => held.placed(.path, .content))
 
-  fork => copy ~~ (.base = head)
-  drop: static => reset(base)
-  reset (to: Commit?): static => this ~~ .head = to
-  back: static => reset(head.previous ?? head)
+  fork => .copy ~~ (.base = this.head)
+  drop: static => .reset(this.base)
+  reset (to: History.Commit?): static => this ~~ .head = to
+  back: static => .reset(this.head.previous ?? this.head)
 
-  roots => since(None){.parents.empty}
-  common (other: History) => since(None).filter(c => other.since(None).some(=== c)).last
+  roots => .since(None){.parents.empty}
+  common (other: History) => .since(None).filter(c => other.since(None).some(=== c)).last
   static clashes (base, ours, theirs) => ours == theirs || ours == base || theirs == base ? []
-    : ours.fields.nonempty && theirs.fields.nonempty ? (ours.fields.name, theirs.fields.name).flatten.unique.map(name => clashes(base?[name], ours[name], theirs[name])).flatten
+    : ours.fields.nonempty && theirs.fields.nonempty ? (ours.fields.name, theirs.fields.name).flatten.unique.map(name => this.clashes(base?[name], ours[name], theirs[name])).flatten
     : [(ours, theirs)]
-  merge (other: History, who = @me) => !readable ? (this ~~ .head = head | other.head) : common(other) -- (base => {
-    return ERROR@Merge `merge` if clashes(this[base].value, value, other.value).nonempty
-    this.head = (since(base).empty ? other.head : other.since(base).empty ? head : Commit(who, stamp: clock.now, change: Program(code: { . }), previous: head | other.head, line: this))
+  merge (other: History, who = @me) => !.readable ? (this ~~ .head = this.head | other.head) : .common(other) -- (base => {
+    return ERROR@Merge `merge` if this.clashes(this[base].value, this.value, other.value).nonempty
+    this.head = (this.since(base).empty ? other.head : other.since(base).empty ? this.head : History.Commit(who, stamp: this.clock.now, change: Program(code: { . }), previous: this.head | other.head, line: this))
     this
   })
-  + (other: History) => other.since(common(other)).sort_by(.stamp).reduce(held = this[head] => .opened -- (plain => held.commit(plain.who, plain.change, message: plain.message, versions: plain.versions)))
-  | (other: History) => this[head].merge(other)
-  &+ (other: History) => common(other) -- (base => (since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = this[base] => held.extended(.rewritten(.change) ~~ .from = None)))
+  + (other: History) => other.since(this.common(other)).sort_by(.stamp).reduce(held = this[this.head] => .opened -- (plain => held.commit(plain.who, plain.change, message: plain.message, versions: plain.versions)))
+  | (other: History) => this[.head].merge(other)
+  &+ (other: History) => .common(other) -- (base => (this.since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = this[base] => held.extended(.rewritten(.change) ~~ .from = None)))
   static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
-  squash (who) => copy ~~ (.head = Commit(who, stamp: clock.now, change: commits.sort_by(.stamp).reduce(held = Program() => held + .opened.change), previous: base))
-  cherry_pick (picked: Commit): static => picked.opened -- (plain => commit(plain.who, plain.change, message: plain.message))
-  erased => ordered.reduce(held = blank ~~ (.caches = []) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
-  revert (reverted: Commit) => reverted.opened -- (plain => plain.change⁻¹ ? commit(plain.who, plain.change⁻¹) : ERROR@Revert `revert`)
+  squash (who) => .copy ~~ (.head = History.Commit(who, stamp: this.clock.now, change: this.commits.sort_by(.stamp).reduce(held = Program() => held + .opened.change), previous: this.base))
+  cherry_pick (picked: History.Commit): static => picked.opened -- (plain => this.commit(plain.who, plain.change, message: plain.message))
+  erased => .ordered.reduce(held = this.blank ~~ (.caches = []) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
+  revert (reverted: History.Commit) => reverted.opened -- (plain => plain.change⁻¹ ? this.commit(plain.who, plain.change⁻¹) : ERROR@Revert `revert`)
 
-  received (stamp: Stamp) => clock.receive(stamp)
+  received (stamp: Stamp) => .clock.receive(stamp)
 }
 assert !(History(repository: Repository()).sealed_sender)  // SEAL2 a who whose visibility is inherited is sealed
 
 Repository := class (world: World?, histories: History[] = []) => {
   id: UUID = UUID.v4()
-  clock: HybridClock = HybridClock(node: id)
+  clock: HybridClock = HybridClock(node: this.id)
 
-  branch (name: String) => histories.find(.label == name)
-  global => History.global(histories)
+  branch (name: String) => .histories.find(.label == name)
+  global => History.global(this.histories)
 }
 
 Node &+= {
@@ -177,35 +282,35 @@ Node &+= {
 }
 
 Character &+= {
-  session => history.fork
-  keep (session: History) => history.merge(session)
+  session => .history.fork
+  keep (session: History) => .history.merge(session)
 }
 
 {value}%{pin: Version.Pin} ^punctuation => value.history.checkout(pin.label, as_of: &caller.history.last.stamp)
 {at: Location}%{pin: Version.Pin} ^punctuation => (at.held as Program as History).checkout(pin.label, as_of: &caller.history.last.stamp)
 
 History &+= {
-  as (=== Program) => written_as()
-  written_as (change_of = .change) => since(None) -- (commits => commits.map(c => c.rewritten(change_of(c)).stored.written(above: commits[c.index - 1] if c.index > 0)).join("") as Program)
+  as (=== Program) => .written_as()
+  written_as (change_of = .change) => .since(None) -- (commits => commits.map(c => c.rewritten(change_of(c)).stored.written(above: commits[c.index - 1] if c.index > 0)).join("") as Program)
 
   static edit (before, after) => (Language.ray.write(before) as Byte[]) -- (old => (Language.ray.write(after) as Byte[]) -- (new =>
-    Encoding.common(old, new) -- (prefix => Encoding.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
+    old.common(new) -- (prefix => (old[prefix..].reverse).common(new[prefix..].reverse) -- (suffix =>
       (". edited(", prefix, ", ", old.count - suffix, ", ", Language.ray.write(new[prefix..<new.count - suffix] as String), ")") as String as Program))))
   assert History.edit("abcdef", "abXdef") as String == ". edited(3, 4, \"X\")"  // VC41 a small change is not written as an edit
 
-  file => (path: id as String + ".ray", content: written_as() as String as Byte[])
-  stored_file => file
+  file => (path: .id as String + ".ray", content: .written_as() as String as Byte[])
+  stored_file => .file
   object_files => []
   cache_files => []
-  files => [[stored_file], object_files, cache_files].flatten(1)
+  files => [[.stored_file], .object_files, .cache_files].flatten(1)
 
-  of (name) => since(None){this[.].value?[name] != this[.previous].value?[name]}.reduce(held = History() => held.extended(.rewritten(Language.ray.write(this[.].value?[name]) as Program)))
-  object_path (name) => id as String + "/" + name + ".ray"
-  objects => value.fields.name.map(name => (path: object_path(name), content: of(name).written_as() as String as Byte[]))
-  pins (commit: Commit) => value.fields.name{of(.).find(commit.id)}.map(name => ".[" + Language.ray.write(name) + "] = @./" + object_path(name) + "%[" + commit.id + "]").join("; ") as Program
-  cached => since(None){.index % 64 == 63 || . === head}
+  of (name) => .since(None){this[.].value?[name] != this[.previous].value?[name]}.reduce(held = History() => held.extended(.rewritten(Language.ray.write(this[.].value?[name]) as Program)))
+  object_path (name) => .id as String + "/" + name + ".ray"
+  objects => .value.fields.name.map(name => (path: this.object_path(name), content: this.of(name).written_as() as String as Byte[]))
+  pins (commit: History.Commit) => .value.fields.name{this.of(.).find(commit.id)}.map(name => ".[" + Language.ray.write(name) + "] = @./" + this.object_path(name) + "%[" + commit.id + "]").join("; ") as Program
+  cached => .since(None){.index % 64 == 63 || . === this.head}
   // A cache line: the value at a commit, written as that commit's change.
-  cached_at (commit: Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program)
+  cached_at (commit: History.Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program)
 
   static level := {
     {at: Location{segments.last == ".%"}} => at.held.children -- (files => History.global(files{.name ~= ".ray" ⊣}.map(. as Program as History))
@@ -213,7 +318,7 @@ History &+= {
   }
 
   static written := {
-    {writing: Language.Writing{value is History}} => History.placed(writing.value.files)
+    {writing: Language.Writing{.value is History}} => History.placed(writing.value.files)
   }
 
   static similar: Probability = 50%
@@ -221,38 +326,38 @@ History &+= {
   static similarity (a: Byte[], b: Byte[]) => (a as String).lines -- (left => (b as String).lines -- (right =>
     left.count + right.count == 0 ? 1 : 2 * left{right.contains(.)}.count / (left.count + right.count)))
 
-  static renamed_from (file: Location, gone: Location[]) => gone{similarity(.content, file.content) >= similar} -- (close =>
-    close{similarity(.content, file.content) == close.map(similarity(.content, file.content)).max} -- (best =>
+  static renamed_from (file: Location, gone: Location[]) => gone{this.similarity(.content, file.content) >= this.similar} -- (close =>
+    close{this.similarity(.content, file.content) == close.map(this.similarity(.content, file.content)).max} -- (best =>
       best.count > 1 ? best ~~ ERROR@Rename `rename` : best.first))
 
   static read_file (file: Location) => Language.for_file(file.name).read(file.content as String)
-  static valued (tree: Location) => tree.files.reduce(held = {} => held, {(.path): read_file(.)})
+  static valued (tree: Location) => tree.files.reduce(held = {} => held, {(.path): this.read_file(.)})
 
   static assigned (path: String, to: String) => ".[" + Language.ray.write(path) + "] = " + to
   static change (before: Location, after: Location) => before.files{!after.at(.path)} -- (gone =>
-    after.files{!before.at(.path)}.map(file => (file, from: renamed_from(file, gone))) -- (added => added.find(.from.erred).from ?? [
-      added{.from}.map(assigned(.file.path, ".[" + Language.ray.write(.from.path) + "]")),
-      gone.map(assigned(.path, "None")),
-      after.files{before.at(.path).content != .content && !added.some(a => a.file === . && a.from.content == .content)}.map(assigned(.path, Language.ray.write(read_file(.))))
+    after.files{!before.at(.path)}.map(file => (file, from: this.renamed_from(file, gone))) -- (added => added.find(.from.erred).from ?? [
+      added{.from}.map(this.assigned(.file.path, ".[" + Language.ray.write(.from.path) + "]")),
+      gone.map(this.assigned(.path, "None")),
+      after.files{before.at(.path).content != .content && !added.some(a => a.file === . && a.from.content == .content)}.map(this.assigned(.path, Language.ray.write(this.read_file(.))))
     ].flatten.join("; ") as Program))
 
   stored => Store.routed(this).map(.kept_in.language).compact
-  lossless => stored.find(. is Language.Lossless)
+  lossless => .stored.find(. is Language.Lossless)
 
-  append (location: Location) => head -- (commit => {
-    location / (id as String + ".ray") += commit.written(above: written_last)
-    written_last = commit
+  append (location: Location) => .head -- (commit => {
+    location / (this.id as String + ".ray") += commit.written(above: this.written_last)
+    this.written_last = commit
     location
   })
   appended (location: Location, language: Language = Language.ray) => language === Language.ray
-    ? append(location)
-    : language.written_to(copy ~~ (.base = head.previous), location)
+    ? .append(location)
+    : language.written_to(.copy ~~ (.base = this.head.previous), location)
 }
 
-History{location is @me}$ = $.ray | $.git
+History{.location is @me}$ = Language.ray | Git
 
 Program &+= {
-  as (=== History) => written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last.code = .last.code + .))
+  as (=== History) => .written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last.code = .last.code + .))
     .reduce(held = History() => held.extended(History.Commit.read(.label, .code)))
 }
 // A labelled program is a history of its labels.
@@ -274,20 +379,20 @@ Program &+= {
   // runs one as a verified giver (W2.1).
   static runs: History = History()
   static kept: Quantity.Temporal = 30 days
-  static recent => runs.since(None){.when >= Time.now - kept}
-  static replay (logged: History.Commit) => logged.opened.change if recent.some(=== logged)
+  static recent => Program.runs.since(None){.when >= Time.now - Program.kept}
+  static replay (logged: History.Commit) => logged.opened.change if Program.recent.some(=== logged)
 
-  run => Program.runs.commit(who, this).head.opened.change
-  rewrites => history.since(None){.who is Program}
+  run => Program.runs.commit(.who, this).head.opened.change
+  rewrites => .history.since(None){.who is Program}
   // A rewrite is a commit by its rule; revoking a rule runs on from before it was used (P8.21)
   assert Program(code: { 1 }).rewrites.empty  // FWC1 a program nothing rewrote has rewrites
-  revoked (rule: Program) => rewrites{.who === rule}.first -- (used => used ? (history[used.previous].value ?? this){O: O - rule} : this)
+  revoked (rule: Program) => .rewrites{.who === rule}.first -- (used => used ? (this.history[used.previous].value ?? this){O: O - rule} : this)
   assert Program(code: { 1 }).revoked(Compiler.folding)  // FWC2 revoking a rule nothing used loses the program
 
   // A transaction runs on a fork of the history and is merged as a whole, or not at all.
   right-to-left transaction => {
     branch = &caller.history.fork
-    result = Program(code: code, history: branch)()
+    result = Program(code: this.code, history: branch)()
     return result ~~ &caller.history.merge(branch) unless result.erred
     ERROR `a transaction was undone`
     result
@@ -295,32 +400,32 @@ Program &+= {
 }
 
 Access &+= {
-  uses => allowed ? [allowed, allowed.previous**].flatten.count : 0
-  once => uses == 0
+  uses => .allowed ? [.allowed, .allowed.previous**].flatten.count : 0
+  once => .uses == 0
 }
 
 Compiler &+= {
   formats := {
     ({kept: Language.Lossless} | {other: Language}).read({source}) => kept.read(source)
-    {history: History{location && stored.some(!(. is Language.Lossless))}}.checkout({label}) => history.pinned(label) -- (pinned =>
+    {history: History{.location && .stored.some(!(. is Language.Lossless))}}.checkout({label}) => history.pinned(label) -- (pinned =>
       history.stored.find(!(. is Language.Lossless)).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history[pinned].value))
   }
 
   per_object := {
-    {history: History{public && (written_as() as String).count > 2^20 && value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
-    {history: History{public && (written_as() as String).count > 2^20 && value.fields.count > 1}}.object_files => history.objects
+    {history: History{.public && (.written_as() as String).count > 2^20 && .value.fields.count > 1}}.stored_file => (path: history.file.path, content: history.written_as(history.pins(.)) as String as Byte[])
+    {history: History{.public && (.written_as() as String).count > 2^20 && .value.fields.count > 1}}.object_files => history.objects
   }
 
   cached := {
-    {history: History{readable}}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => history.cached_at(c).stored) -- (kept =>
+    {history: History{.readable}}.cache_files => [(path: history.id as String + ".ray.txt", content: (history.cached.map(c => history.cached_at(c).stored) -- (kept =>
       kept.map(.written(above: kept[.index - 1] if .index > 0)).join(""))) as Byte[])]
-    {history: History{caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned).ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
+    {history: History{.caches.nonempty}}.checkout({label}) => history.pinned(label) -- (pinned => history.find(pinned).ancestry.reverse.find(c => history.caches.some(.find(c.id))) -- (hit => hit
       ? history[pinned].ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.caches.find(.find(hit.id))[hit.id].value => .applied(held))
       : history[pinned].value))
   }
 
   delta := {
-    {commit: History.Commit{previous && (History.edit(previous.value, value) as String).count < (change as String).count}}.change => History.edit(commit.previous.value, commit.value)
+    {commit: History.Commit{.previous && (History.edit(.previous.value, .value) as String).count < (.change as String).count}}.change => History.edit(commit.previous.value, commit.value)
   }
 
   stored := formats + per_object + cached + delta
@@ -341,7 +446,6 @@ Language &+= {
 assert !Language.cfg.admits(Program(code: { while true { } }))  // VC57 a line's settings may run forever
 // What the Ray language keeps.
 assert Language.ray is Language.Lossless  // VC17 the .% history is not lossless
-assert $.ray === Language.ray  // VC43 $.ray is not the Ray language
 
 Language.ray &+= {
   level &+= History.level
@@ -349,70 +453,69 @@ Language.ray &+= {
 }
 
 Consistency := class (replicas: *[] = []) => {
-  read (value) => replicas.every(.synced) ? value : ERROR@Consistency `wait for the replicas`
+  read (value) => .replicas.every(.synced) ? value : ERROR@Consistency `wait for the replicas`
 }
 
 Layout := class (root: Location = @./.ether/external/@) => {
-  checked_out (name: String) => root / ("@" + name)
-  path (name: String, locations: String[], version) => locations.reduce(held = checked_out(name) / "$" => held / ("@" + .)) / "%" / ((version as String) -- (. ~= ⊢"%" ? .[1..] as String : .))
+  checked_out (name: String) => .root / ("@" + name)
+  path (name: String, locations: String[], version) => locations.reduce(held = this.checked_out(name) / "$" => held / ("@" + .)) / "%" / ((version as String) -- (. ~= ⊢"%" ? .[1..] as String : .))
   assert Layout().path("clang", ["windows", "x86-64"], "0.16.0") as String ~= "@clang/$/@windows/@x86-64/%/0.16.0" ⊣  // PK29 an install is not under the decided layout
-  changed (name: String, user: String, branch: String) => checked_out(name) / "$" / ("@" + user) + ("%" + branch)
+  changed (name: String, user: String, branch: String) => .checked_out(name) / "$" / ("@" + user) + ("%" + branch)
 }
 
-FileSystem &+= {
-  static Mirrored := class: FileSystem {
-    [location: Location] => ERROR@FileSystem `reading a project not held here from a mirror or a shard of it is not written yet`
-  }
+// What holds a project's data that nothing else holds (whatever space its location is in, which version control does not
+// know): a mirror of it, or a shard of one. Asked last, after what holds the location's space.
+Mirrored := class {
+  [location: Location] => ERROR@Mirrored `reading a project not held here from a mirror or a shard of it is not written yet`
+}
+Holders = Holders + {
+  {location: Location{Project.data(.)}} => Mirrored()
 }
 
-FileOptimizations = {
-  {location: Location{Project.data(.) && FileSystem.Host()[.] === None}} => FileSystem.Mirrored()
-} + FileOptimizations
-
-Store := class: Hierarchy (at: Location = @local, format: Format?) => {
+Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
   static Route := class (type: *, places: Program) => {
     resolved: Store[]?
-    stores => resolved ??= places()#.map(Store.stored(.))
-    takes (instance) => instance is type
+    stores => .resolved ??= .places()#.map(Store.stored(.))
+    takes (instance) => instance is .type
   }
-  static routes: Route[] = []
+  static routes: Store.Route[] = []
   static materialised: *?
   static default := Store()
 
-  static stored (place) => place is Store ? place : place is Language ? Store(format: Format(language: place)) : Store(at: place)
-  static route (type, places: Program) => routes.push Route(type, places) -- places
-  static rerouted (type, places: Program) => (routes = routes{.type !== type}) -- route(type, places)
-  static routed (instance) => routes{.takes(instance)}.stores.flatten.unique -- (.empty ? [default] : .)
-  static keep (instance) => routed(instance).map(.kept(instance)) -- instance
-  static constructed (instance) => instance -- keep(.) if instance is materialised
+  static stored (place) => place is Store ? place : place is Language ? Store(format: Store.Format(language: place)) : Store(at: place)
+  static route (type, places: Program) => .routes.push Store.Route(type, places) -- places
+  static rerouted (type, places: Program) => (.routes = .routes{.type !== type}) -- this.route(type, places)
+  static routed (instance) => .routes{.takes(instance)}.stores.flatten.unique -- (.empty ? [this.default] : .)
+  static keep (instance) => .routed(instance).map(.kept(instance)) -- instance
+  static constructed (instance) => instance -- this.keep(.) if instance is this.materialised
 
-  static View (type) => (materialised |= type) -- (routes{.type === type || type is .type}.stores.flatten, default).unique.map(.instances(type)).flatten.unique{is type}
+  static View (type) => (.materialised |= type) -- (this.routes{.type === type || type is .type}.stores.flatten, this.default).unique.map(.instances(type)).flatten.unique{is type}
   static as_of (instance, field: String, when: Time) => (external get instance field).history.commits{.when <= when}.last.value
-  static conflicts (type, key: Program) => View(type) -- (all => all.map(key).unique.map(k => all{key(.) == k}){.count > 1}.map(duplicates => duplicates ~~ ERROR@Key `resolve the duplicates`))
+  static conflicts (type, key: Program) => Store.View(type) -- (all => all.map(key).unique.map(k => all{key(.) == k}){.count > 1}.map(duplicates => duplicates ~~ ERROR@Key `resolve the duplicates`))
 
-  kept_in: Format? => format ?? Compiler.reduced(this, StoreOptimizations)
-  assert Store(at: @"kept.%").kept_in == Store.native  // DB10 a .% location is not kept natively
-  instances (type) => (children{is type}, kept_in.read(this, type) ?? []).flatten.unique
-  kept (instance): static => this ~~ add(instance) ~~ kept_in.kept(this, instance)
+  kept_in: Store.Format? => .format ?? Compiler.reduced(this, StoreOptimizations)
+  assert Store(at: Location(path: "kept.%")).kept_in == Store.native  // DB10 a .% location is not kept natively
+  instances (type) => (.children{is type}, .kept_in.read(this, type) ?? []).flatten.unique
+  kept (instance): static => this ~~ .add(instance) ~~ this.kept_in.kept(this, instance)
 
   static Row := class (type: String, id: String, fields: (name: String, value: String)[]) => {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
-    static (instance) as (=== Row) => Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
-      fields: instance.fields{!.unreadable}.map((name: .name, value: Language.ray.write(.value is Entity ? .value.name{is UUID}#.first : .value))))
-    instance => Language.ray.read((type, "(name: ", Language.ray.write(id as UUID), fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String)
+    static (instance) as (=== Store.Row) => Store.Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
+      fields: instance.fields{!.unreadable}.map((name: .name, value: Language.ray.write(.value is Character ? .value.name{is UUID}#.first : .value))))
+    instance => Language.ray.read((this.type, "(name: ", Language.ray.write(this.id as UUID), this.fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String)
     // The store: routed by type, read back as a narrowing.
     assert {
       Kept := class key: *, size: Number
-      memory_store := Store(at: @"memory/kept")
+      memory_store := Store(at: Location(path: "memory/kept"))
       Kept$ = memory_store
       small := Kept(key: 1, size: 2).persistent
       large := Kept(key: 2, size: 9).persistent
       assert memory_store.kept_in == None  // DB1 a store in memory is given a format
       assert Kept$.count == 2  // DB2 what was kept is not two
-      assert Kept{size > 5}$.count == 1  // DB3 a narrowed view is not one
-      assert Kept{size > 5}$.first == large  // DB4 a narrowed view answers the other one
+      assert Kept{.size > 5}$.count == 1  // DB3 a narrowed view is not one
+      assert Kept{.size > 5}$.first == large  // DB4 a narrowed view answers the other one
       assert Store.routed(small).contains(memory_store)  // DB5 an instance is not routed where its type was sent
-      Kept$ |= Store(at: @"memory/copy")
+      Kept$ |= Store(at: Location(path: "memory/copy"))
       assert Store.routed(small).count == 2  // DB6 a type sent to two stores is routed to other than two
       assert (small as Store.Row).type == "Kept"  // DB11 a row forgot its type
       assert (small as Store.Row).instance.size == 2  // DB12 a row read back is another instance
@@ -420,36 +523,36 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
   }
 
   static Format := class (language: Language, file = true, versioned = false) => {
-    read (store: Store, type) => (versioned ? language.read(store.at).value : file ? language.read(store.at.held) : language.read(store.at)[type.name].map(row => Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
-    kept (store: Store, instance) => versioned ? store.history.appended(store.at, language)
-      : file ? (store.at.held = language.write(store.children))
-      : language.read(store.at).executed(language.write([instance as Row]))
-    assert Store(at: @./kept.kv).kept_in == Store.keyed  // DB9 a .kv location is not kept as keys
+    read (store: Store, type) => (.versioned ? .language.read(store.at).value : .file ? .language.read(store.at.held) : .language.read(store.at)[type.name].map(row => Store.Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
+    kept (store: Store, instance) => .versioned ? store.history.appended(store.at, this.language)
+      : .file ? (store.at.held = .language.write(store.children))
+      : .language.read(store.at).executed(this.language.write([instance as Store.Row]))
+    assert Store(at: Location(path: "kept.kv")).kept_in == Store.keyed  // DB9 a .kv location is not kept as keys
   }
 
-  static memory: Format? = None
-  static native := Format(language: Language.ray, versioned: true)
-  static rows := Format(language: Language.ray)
-  static columnar := Format(language: Columns.language)
-  static keyed := Format(language: KeyValue.language)
+  static memory: Store.Format? = None
+  static native := Store.Format(language: Language.ray, versioned: true)
+  static rows := Store.Format(language: Language.ray)
+  static columnar := Store.Format(language: Columns.language)
+  static keyed := Store.Format(language: KeyValue.language)
 
   static Column := class (name: String, values: *[]) => {
-    distinct => values.unique.count
-    runs => values.squeeze.count
-    integral => values.every(. is Integer)
-    ascending => integral && values == values.sort
-    width => values.map((. as Binary).length).max ?? 1
-    places => values.map((. as String).after(".").length).max ?? 0
-    decimal => values.every(. is Number) && !integral && places < 16
-    characters => values.map(.unique).flatten.unique
-    grouped => values.reduce(held = [] => held.nonempty && held.last.value == . ? (held[..<-1], (value: ., count: held.last.count + 1)) : (held, (value: ., count: 1)))
+    distinct => .values.unique.count
+    runs => .values.squeeze.count
+    integral => .values.every(. is Integer)
+    ascending => .integral && .values == .values.sort
+    width => .values.map((. as Binary).length).max ?? 1
+    places => .values.map((. as String).after(".").length).max ?? 0
+    decimal => .values.every(. is Number) && !.integral && .places < 16
+    characters => .values.map(.unique).flatten.unique
+    grouped => .values.reduce(held = [] => held.nonempty && held.last.value == . ? (held[..<-1], (value: ., count: held.last.count + 1)) : (held, (value: ., count: 1)))
     encoded => Compiler.reduced(this, EncodingOptimizations)
   }
 
-  static Encoded := Plain | Dictionary | RunLength | Delta | BitPacked | ALP | FSST
+  static Encoded := Store.Plain | Store.Dictionary | Store.RunLength | Store.Delta | Store.BitPacked | Store.ALP | Store.FSST
   static Plain := class (values: *[]) => { }
   static Dictionary := class (keys: *[], codes: Integer[]) => {
-    values => codes.map(keys[.])
+    values => .codes.map(this.keys[.])
     // Column encodings: chosen by what the column holds, and read back the same.
     assert Store.Column(name: "a", values: [1, 1, 1, 1, 2, 2, 2, 2]).(
       .encoded is Store.RunLength  // DB15 a column of runs is not run-length encoded
@@ -465,26 +568,26 @@ Store := class: Hierarchy (at: Location = @local, format: Format?) => {
     )
   }
   static RunLength := class (runs: (value: *, count: Integer)[]) => {
-    values => runs.map([.value] * .count).flatten(1)
+    values => .runs.map([.value] * .count).flatten(1)
   }
   static Delta := class (start: Integer, steps: Integer[]) => {
-    values => steps.reduce(held = [start] => held, held.last + .)
+    values => .steps.reduce(held = [this.start] => held, held.last + .)
   }
   static BitPacked := class (width: Integer, bits: (0 | 1)[]) => {
-    values => bits.chunk(width).map(Binary(integer: .))
+    values => .bits.chunk(this.width).map(Binary(integer: .))
   }
   // Adaptive lossless floating point: decimals kept as integers scaled by one exponent (https://dl.acm.org/doi/10.1145/3626717)
   static ALP := class (exponent: Integer, integers: Integer[]) => {
-    values => integers.map(. / 10 ^ exponent)
+    values => .integers.map(. / 10 ^ this.exponent)
     assert Store.ALP(exponent: 1, integers: [15, 25]).values == [1.5, 2.5]  // DB21 scaled integers do not read back as decimals
   }
   // Fast static symbol table: frequent substrings replaced by one-byte codes (https://www.vldb.org/pvldb/vol13/p2649-boncz.pdf)
   static FSST := class (symbols: String[], codes: Integer[][]) => {
-    values => codes.map(.map(symbols[.]).join("") as String)
+    values => .codes.map(.map(this.symbols[.]).join("") as String)
     static table (strings: String[]) => strings.map(.unique).flatten.unique.map(. as String) -- (singles =>
       singles, strings.map(s => (0..<s.count - 1).map(s[. .. . + 1] as String)).flatten.unique.sort_by(pair => -strings.map(.find_all(pair).count).sum)[..<255 - singles.count])
     static coded (text: String, symbols: String[]) => text.empty ? [] : symbols.index_of(text[..1] as String) -- (pair =>
-      pair != None ? [pair, coded(text[2..] as String, symbols)].flatten : [symbols.index_of(text[..<1] as String), coded(text[1..] as String, symbols)].flatten)
+      pair != None ? [pair, this.coded(text[2..] as String, symbols)].flatten : [symbols.index_of(text[..<1] as String), this.coded(text[1..] as String, symbols)].flatten)
   }
 }
 
@@ -495,48 +598,48 @@ Node &+= {
 
 // `T$ @ L`: every `T` held under the location `L`, each routed by its path below `L` (`profiles: Profile$ @ /@`)
 {type}$ @ {under} ^keyword => type${(.location as String).starts_with(under as String)} @ under
-{type}$ = {literal places} ^keyword => Store.rerouted(type, Program(code: places**))
-{type}$ |= {literal places} ^keyword => Store.route(type, Program(code: places**))
+{type}$ = {places} ^keyword => Store.rerouted(type, Program(code: places**))
+{type}$ |= {places} ^keyword => Store.route(type, Program(code: places**))
 
 StoreOptimizations := {
-  {store: Store{at === @local || at.path ~= ⊢"memory"}} => Store.memory
-  {store: Store{at.path ~= ".kv" ⊣}} => Store.keyed
-  {store: Store{at.path ~= ".columns" ⊣}} => Store.columnar
-  {store: Store{at.path ~= ".ray" ⊣}} => Store.rows
-  {store: Store{children.count > 1000 && children.map(.static).unique.count * 100 < children.count}} => Store.columnar
+  {store: Store{.at === @local || .at.path ~= ⊢"memory"}} => Store.memory
+  {store: Store{.at.path ~= ".kv" ⊣}} => Store.keyed
+  {store: Store{.at.path ~= ".columns" ⊣}} => Store.columnar
+  {store: Store{.at.path ~= ".ray" ⊣}} => Store.rows
+  {store: Store{.children.count > 1000 && .children.map(.static).unique.count * 100 < .children.count}} => Store.columnar
   {store: Store} => Store.native
 }
 
 EncodingOptimizations := {
-  {column: Store.Column{runs * 2 < values.count}} => Store.RunLength(runs: column.grouped)
-  {column: Store.Column{ascending && values.count > 1}} => Store.Delta(start: column.values.first, steps: column.values.zip(column.values.rest).map((a, b) => b - a))
-  {column: Store.Column{integral && values.every(. >= 0) && width < 32}} => Store.BitPacked(width: column.width, bits: column.values.map((. as Binary).padded(column.width)).flatten)
-  {column: Store.Column{decimal}} => Store.ALP(exponent: column.places, integers: column.values.map((. * 10 ^ column.places).round))
-  {column: Store.Column{distinct * 4 <= values.count}} => column.values.unique -- (keys => Store.Dictionary(keys, codes: column.values.map(keys.index_of(.))))
-  {column: Store.Column{values.every(. is String) && values.count > 255 && characters.count < 255}} => Store.FSST.table(column.values) -- (symbols => Store.FSST(symbols, codes: column.values.map(Store.FSST.coded(., symbols))))
+  {column: Store.Column{.runs * 2 < .values.count}} => Store.RunLength(runs: column.grouped)
+  {column: Store.Column{.ascending && .values.count > 1}} => Store.Delta(start: column.values.first, steps: column.values.zip(column.values.rest).map((a, b) => b - a))
+  {column: Store.Column{.integral && .values.every(. >= 0) && .width < 32}} => Store.BitPacked(width: column.width, bits: column.values.map((. as Binary).padded(column.width)).flatten)
+  {column: Store.Column{.decimal}} => Store.ALP(exponent: column.places, integers: column.values.map((. * 10 ^ column.places).round))
+  {column: Store.Column{.distinct * 4 <= .values.count}} => column.values.unique -- (keys => Store.Dictionary(keys, codes: column.values.map(keys.index_of(.))))
+  {column: Store.Column{.values.every(. is String) && .values.count > 255 && .characters.count < 255}} => Store.FSST.table(column.values) -- (symbols => Store.FSST(symbols, codes: column.values.map(Store.FSST.coded(., symbols))))
   {column: Store.Column} => Store.Plain(values: column.values)
 }
 
 CacheOptimizations := {
-  {store: Store{children.nonempty}}.instances({type}) => store.children.unique{is type}
+  {store: Store{.children.nonempty}}.instances({type}) => store.children.unique{is type}
 }
 
 Columns := class (tables: (type: String, ids: String[], columns: (name: String, encoded: Store.Encoded)[])[]) => {
   static (rows: Store.Row[]) as (=== Columns) => Columns(tables: rows.map(.type).unique.map(type => rows{.type == type} -- (held =>
     (type, ids: held.map(.id), columns: held.first.fields.map(.name).map(name => (name, encoded: Store.Column(name, values: held.map(.fields{.name == name}.first.value)).encoded))))))
-  rows => tables.map(table => table.ids.enumerate.map(entry => Store.Row(type: table.type, id: entry.value, fields: table.columns.map((name: .name, value: .encoded.values[entry.index]))))).flatten
+  rows => .tables.map(table => table.ids.enumerate.map(entry => Store.Row(type: table.type, id: entry.value, fields: table.columns.map((name: .name, value: .encoded.values[entry.index]))))).flatten
 
   static language := Language(".columns",
     level: Language.ray.level + { {columns: Columns} => columns.rows.map(.instance) },
     written: {
-      {writing: Language.Writing{value is Iterable && !(value is Columns)}} => Language.Writing(writing.value.map(. as Store.Row) as Columns)
-      {writing: Language.Writing{value is Columns}} => "Columns(", Language.Writing(writing.value.tables), ")"
-      {writing: Language.Writing{value is Store.Encoded}} => "Store.", writing.value.static.name, "(", writing.value.fields.map((", " if .index > 0), .name, ": ", Language.Writing(.value)), ")"
+      {writing: Language.Writing{.value is Iterable && !(.value is Columns)}} => Language.Writing(writing.value.map(. as Store.Row) as Columns)
+      {writing: Language.Writing{.value is Columns}} => "Columns(", Language.Writing(writing.value.tables), ")"
+      {writing: Language.Writing{.value is Store.Encoded}} => "Store.", writing.value.static.name, "(", writing.value.fields.map((", " if .index > 0), .name, ": ", Language.Writing(.value)), ")"
     } + Language.ray_written)
 }
 
 KeyValue := class (entries: (key: (type: (!"/" && !\t)[], "/", id: (!"/" && !\t)[], "/", field: (!\t)[]), \t, value: (!\n)[])[].join(\n), \n?) => {
-  rows => entries.map((type: .key.type, id: .key.id)).unique.map(held => Store.Row(type: held.type, id: held.id, fields: entries{.key.type == held.type && .key.id == held.id}.map((name: .key.field, value: .value.replace("\\n", \n)))))
+  rows => .entries.map((type: .key.type, id: .key.id)).unique.map(held => Store.Row(type: held.type, id: held.id, fields: this.entries{.key.type == held.type && .key.id == held.id}.map((name: .key.field, value: .value.replace("\\n", \n)))))
 
   static language := Language(".kv",
     level: { {text: String} => (text as KeyValue).rows.map(.instance) },

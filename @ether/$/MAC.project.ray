@@ -2,6 +2,7 @@
 @ether/random
 @unicode
 @ether/device
+@c
 
 // A MAC address (EUI-48): six octets. Its canonical text is IEEE 802's: the octets in uppercase hexadecimal, separated by
 // hyphens (AC-DE-48-00-00-80; https://standards.ieee.org/wp-content/uploads/import/documents/tutorials/eui.pdf,
@@ -24,6 +25,38 @@ assert "04-7C-16-4E-3A-42" as MAC == "047c.164e.3a42" as MAC  // MAC2 one addres
 assert !("04:7c:16:4e:3a" is MAC || "04:7c:16:4e:3a:4g" is MAC)  // MAC3 five octets or a non-hexadecimal digit was taken for an address
 
 Device &+= {
-  // the host's MAC address; a browser and ether say none (a random locally administered one)
-  mac: MAC = (OS.Browser || OS.Ether) ? (MAC.random ~~ .[7] = 1) : ((external os `mac_address`) ?? (MAC.random ~~ .[7] = 1))
+  // the host's MAC address: the first interface's that is not the loopback, as the operating system lists them (each
+  // `/sys/class/net/*/address` on Linux, https://www.kernel.org/doc/html/latest/admin-guide/abi-testing.html#abi-sys-class-net;
+  // GetAdaptersAddresses on Windows, https://learn.microsoft.com/windows/win32/api/iphlpapi/nf-iphlpapi-getadaptersaddresses;
+  // getifaddrs' link-layer addresses on macOS, https://man.freebsd.org/getifaddrs); on ether its network controller's
+  // (memory-mapped, through Machine);
+  // a browser says none (a random locally administered one)
+  mac: MAC = (if OS.Linux {
+      (@/sys/class/net).held{!(. as String ~= "/lo" ⊣)}.map(((. / "address").held as String).lines.first){!= "00:00:00:00:00:00"}.first as MAC
+    }
+    elsif OS.Windows {
+      (@c {
+        unsigned size = 15000
+        IP_ADAPTER_ADDRESSES* all = malloc(size)
+        GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, all, &size)
+        IP_ADAPTER_ADDRESSES* at = all
+        while (at && (at->IfType == IF_TYPE_SOFTWARE_LOOPBACK || at->PhysicalAddressLength != 6)) { at = at->Next }
+        unsigned char octets[6] = \{0}
+        if (at) { memcpy(octets, at->PhysicalAddress, 6) }
+        free(all)
+      })().octets as MAC
+    }
+    elsif OS.Macos {
+      (@c {
+        struct ifaddrs* all = nullptr
+        getifaddrs(&all)
+        struct ifaddrs* at = all
+        while (at && (at->ifa_addr->sa_family != AF_LINK || (at->ifa_flags & IFF_LOOPBACK) || ((struct sockaddr_dl*)at->ifa_addr)->sdl_alen != 6)) { at = at->ifa_next }
+        unsigned char octets[6] = \{0}
+        if (at) { memcpy(octets, LLADDR((struct sockaddr_dl*)at->ifa_addr), 6) }
+        freeifaddrs(all)
+      })().octets as MAC
+    }
+    elsif OS.Ether { Machine.driver(0x02)?.mac as MAC }
+    else { None }) -- (. && . != ("00-00-00-00-00-00" as MAC) ? . : MAC.random ~~ .[7] = 1)
 }

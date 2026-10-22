@@ -17,38 +17,52 @@ reservable_names := String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 @host.read { @guests }
 
 // Whatever the policy, `confidential` is never wider than `@private.managed` (W5.5).
-confidential => Node.policy & @private.managed
+confidential => @me/policy & @private.managed
 // Who may see what.
 assert confidential  // AC3 there is no confidential permission
-Node.policy = @local
+// confidential follows the policy, but never past @private.managed.
+assert {
+  with @me/policy = @public {
+    assert confidential is @private.managed  // CK1 confidential widens with a public policy
+    assert !(@"stranger" is confidential)  // CK2 confidential reaches a stranger under a public policy
+  }
+}
+assert {
+  with @me/policy = @local {
+    assert confidential is @local  // CK3 confidential is wider than a narrower policy
+  }
+}
+assert none is @local  // CST3 the permission nobody has is not the narrowest
+// On ether, what nobody granted is visible to this instance's characters
+Character &+= { policy: * = @local }
 
 Node &+= {
   public => visibility#.some(.reads && @public is .who)
   // Pre-rotation: the next keys are known by their digests only, and count for a rotation once revealed.
   assert {
-    idy_next := $.ed25519.pair()
-    idy_pre := Identity(keys: [$.ed25519.pair().published], next: [$.sha256.write(idy_next.public).bytes])
+    idy_next := Ed25519.generated()
+    idy_pre := Identity(keys: [Ed25519.generated().published], next: [SHA256.write(idy_next.public).bytes])
     assert idy_pre.counts(idy_next.published, idy_pre.rotate.signers, World.ether.clock.now)  // IDY11 a revealed next key does not count for a rotation
-    assert !(idy_pre.counts($.ed25519.pair().published, idy_pre.rotate.signers, World.ether.clock.now))  // IDY12 a key nobody committed to counts for a rotation
+    assert !(idy_pre.counts(Ed25519.generated().published, idy_pre.rotate.signers, World.ether.clock.now))  // IDY12 a key nobody committed to counts for a rotation
   }
   assert {
-    lgo := Instance.local.login(Character(name: "leaving-inbox"))
-    Instance.local.certified(lgo, World(name: "lgo-world"))
+    lgo := @local.login(@"leaving-inbox")
+    @local.certified(lgo, World(name: "lgo-world"))
     lgo_inbox := lgo.inbox
     lgo_world_key := lgo.world_keys.first.key
-    Instance.local.logout(lgo)
-    assert !(lgo_inbox.agreed($.x25519.pair().public) is Byte[])  // LGO1 an agreement key outlives logging out
+    @local.logout(lgo)
+    assert !(lgo_inbox.agreed(X25519.generated().public) is Byte[])  // LGO1 an agreement key outlives logging out
     assert !(lgo_world_key.signed([1]).valid == true)  // LGO2 a per-world key outlives logging out
   }
   // Sealed sender: a who narrower than the history moves who and the signature into the ciphertext; the line shows a per-history pseudonymous key.
   assert {
-    sel_writer := Instance.local.login(Character(name: "sel-writer"))
+    sel_writer := @local.login(@"sel-writer")
     sel := History(repository: Repository()) ~~ (.sender = none)
     sel.commit(sel_writer, 1)
     sel.commit(sel_writer, 2)
     sel_line := sel.head.written(above: sel.head.previous)
     assert sel.sealed_sender  // SEAL1 a who narrower than its history does not seal the sender
-    assert sel.head.who is Encoding.Key && sel.head.who == sel.head.previous.who  // SEAL3 a sealed history's lines do not show one pseudonymous key
+    assert sel.head.who is Key && sel.head.who == sel.head.previous.who  // SEAL3 a sealed history's lines do not show one pseudonymous key
     assert !(sel_line ~= "@sel-writer" || sel.head.relies)  // SEAL4 a sealed sender is named in plaintext
     assert sel.head.authentic  // SEAL5 a line is not signed by the pseudonymous key it shows
     assert sel.head.opened.who.name == "sel-writer" && sel.head.opened.signature  // SEAL6 a reader does not find who wrote the line and their signature
@@ -60,16 +74,16 @@ Node &+= {
     frk := sel.fork
     assert frk.sealed_sender && frk.current_key == sel.current_key && sel[sel.head.previous].sealed_sender  // FRK1 a copy of a sealed history loses its sender or its key
     frk.commit(sel_writer, 3)
-    assert frk.head.who is Encoding.Key && frk.value == 3  // FRK2 a commit on a fork of a sealed history names its sender
+    assert frk.head.who is Key && frk.value == 3  // FRK2 a commit on a fork of a sealed history names its sender
     assert !(Language.ray.write(sel.since(None).map(.wraps)) ~= Language.ray.write(sel_writer.inbox.published.public))  // ANW5 a sealed history's wraps name its writer
   }
   // What a new reader can decrypt is what their read grant covers: the whole history by default, or any narrowing of it; a rotation follows the grants that reach the head.
   assert {
-    grk_owner := Instance.local.login(Character(name: "grk-owner"))
-    grk_all := Instance.local.login(Character(name: "grk-all"))
-    grk_now := Instance.local.login(Character(name: "grk-now"))
-    grk_from := Instance.local.login(Character(name: "grk-from"))
-    grk_past := Instance.local.login(Character(name: "grk-past"))
+    grk_owner := @local.login(@"grk-owner")
+    grk_all := @local.login(@"grk-all")
+    grk_now := @local.login(@"grk-now")
+    grk_from := @local.login(@"grk-from")
+    grk_past := @local.login(@"grk-past")
     grk := none.read History(repository: Repository())
     grk.commit(grk_owner, 1)
     grk_first := grk.current_key
@@ -84,17 +98,17 @@ Node &+= {
     grk_from.read grk{from grk_label}
     grk_past.read grk{from value == 1 to value == 2}
     grk.shared(grk_all, grk_owner)
-    assert [grk_first, grk_second, grk_third].every(grk.content_key(., [grk_all]) is Encoding.Key)  // GRK1 a reader of the whole history does not hold every key
+    assert [grk_first, grk_second, grk_third].every(grk.content_key(., [grk_all]) is Key)  // GRK1 a reader of the whole history does not hold every key
     grk.shared(grk_now, grk_owner)
     assert grk.head.wraps.every(.key == grk_third)  // GRK2 sharing from now wraps a key from before now
-    assert grk.content_key(grk_third, [grk_now]) is Encoding.Key && [grk_first, grk_second].every(grk.content_key(., [grk_now]).erred)  // GRK3 a reader from now does not hold exactly the current key
+    assert grk.content_key(grk_third, [grk_now]) is Key && [grk_first, grk_second].every(grk.content_key(., [grk_now]).erred)  // GRK3 a reader from now does not hold exactly the current key
     grk.shared(grk_from, grk_owner)
-    assert [grk_second, grk_third].every(grk.content_key(., [grk_from]) is Encoding.Key) && grk.content_key(grk_first, [grk_from]).erred  // GRK4 a reader from a label does not hold exactly the keys from that commit on
+    assert [grk_second, grk_third].every(grk.content_key(., [grk_from]) is Key) && grk.content_key(grk_first, [grk_from]).erred  // GRK4 a reader from a label does not hold exactly the keys from that commit on
     grk.shared(grk_past, grk_owner)
-    assert [grk_first, grk_second].every(grk.content_key(., [grk_past]) is Encoding.Key) && grk.content_key(grk_third, [grk_past]).erred  // GRK5 a reader of a closed stretch does not hold exactly its keys
+    assert [grk_first, grk_second].every(grk.content_key(., [grk_past]) is Key) && grk.content_key(grk_third, [grk_past]).erred  // GRK5 a reader of a closed stretch does not hold exactly its keys
     assert grk.readers.some(=== grk_past) && !grk.following.some(=== grk_past)  // GRK6 a reader of a closed stretch follows the head
     grk.rekeyed(grk_owner)
-    assert [grk_owner, grk_all, grk_now, grk_from].every(grk.content_key(grk.current_key, [.]) is Encoding.Key)  // GRK7 a rotation is not wrapped for a reader whose grant reaches the head
+    assert [grk_owner, grk_all, grk_now, grk_from].every(grk.content_key(grk.current_key, [.]) is Key)  // GRK7 a rotation is not wrapped for a reader whose grant reaches the head
     assert grk.content_key(grk.current_key, [grk_past]).erred  // GRK8 a rotation is wrapped for a reader whose grant ended
     // Wraps are anonymous: no recipient key in plaintext, a tag only the recipient recomputes, the writer's own wrap like any other.
     anw := grk.head.wraps
@@ -106,7 +120,7 @@ Node &+= {
   }
   // End-to-end encryption: a history that is not public is stored as ciphertext for its readers; its lines keep label, parents, stamp, key and signature in plaintext (L§9.2).
   assert {
-    ada := Instance.local.login(Character(name: "ada"))
+    ada := @local.login(@"ada")
     crypt := History(repository: Repository())
     crypt.commit(ada, Program(code: { .secret = "kept" }))
     crypt.commit(ada, Program(code: { .secret = "kept twice" }))
@@ -147,7 +161,7 @@ Node &+= {
   assert Access(who: public).who === public  // AC5 an access forgot who it is for
   publish: static => this ~~ .access |= Access(public, method: Access.Reading, target: this)
   assert {
-    ada := Instance.local.login(Character(name: "ada"))
+    ada := @local.login(@"ada")
     // A commit is any Ray, run on the value before it (`.`).
     vh := History(repository: Repository()).publish
     vh.commit(ada, Program(code: { .greet = "hello" }))
@@ -243,7 +257,7 @@ Node &+= {
     assert ((hr_text as Program) as History).roots.count == 2  // HB14 a history read back has other than its two roots
     assert (hr + hr_apart).value.b == 2  // HB15 a rebase onto an unrelated history lost its commits
     // Forking is a copy, whose history is a fork of the original's.
-    hx := Character(name: "forked")
+    hx := @"forked"
     hx.history.commit(ada, 1)
     hx_copy := hx.copy
     hx_copy.history.commit(ada, 2)
@@ -304,3 +318,8 @@ assert HTTP.v1_1.read("HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\ncontent-ty
 assert ([1, 2, 3]).random  // RN8 a collection does not answer one of itself
 
 assert ([1, 2, 3]).contains((([1, 2, 3]).random))  // RN11 what was chosen is not one of them
+
+assert &@.ask(`()`, (@me/device as Camera)).erred  // AC26 a capability nobody granted does not err
+// `print(x)`: x written out to this instance, answering x (Almanac §0.3)
+print (x) => (@me/instance = x as String) -- x
+assert print(3) == 3  // PT1 print does not answer what it printed

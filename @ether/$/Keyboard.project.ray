@@ -1,0 +1,102 @@
+@ether/os
+@ether/time
+@c
+
+// A keyboard: its keys, each pressed or not. What a key toggles flips each time it is pressed and what it cycles through
+// steps each time, both kept as they change (`dynamically`); pulsed, it holds as it is pressed, then while held as often
+// as the operating system repeats a key. Every keyboard connected is one, all of them
+// superposed in `@me/device` (`keyboards: Keyboard = @me/device`, one of them `keyboards#0`).
+Keyboard := class: Location {
+  static Modifier := enum shift | control | alt | meta
+
+  static Key := class: Nameable (code: Number?) => {
+    pressed: boolean = false
+    modifiers: Keyboard.Modifier?
+    pressed_at: Time?
+    // a key is true while it is pressed
+    as (=== boolean) => .pressed
+
+    toggled = false dynamically .next if this
+    cycle (iterable: Iterable) => iterable.first.loop dynamically .next if this
+    // pressed, then after the delay as often as the rate while it is held (by default the operating system's key repeat)
+    held => .pressed ? Time.now - .pressed_at : 0 s
+    pulsed (max: Quantity = Keyboard.repeat.rate, delay: Quantity.Temporal = Keyboard.repeat.delay) =>
+      .pressed && (.held < 1 / max || .held >= delay && ((.held - delay) * max).fraction < 1 / 2)
+
+    press (modifiers: Keyboard.Modifier? = None): static => this ~~ (.modifiers = modifiers) ~~ (.pressed_at = Time.now) ~~ (.pressed = true)
+    release: static => this ~~ .pressed = false
+  }
+  // A key is pressed and released; what it toggles stays, what it cycles through steps.
+  assert {
+    key := Keyboard.Key(name: 1)
+    assert !(key.pressed) & !(key.toggled)  // KB1 a new key is already pressed or toggled
+    assert key.press.pressed & key.toggled  // KB3 pressing a key does not press it, or does not toggle it
+    assert !(key.release.pressed) & key.toggled  // KB5 releasing a key does not release it, or untoggled it
+    assert !(key.press.toggled)  // KB7 pressing again does not toggle back
+    assert (Keyboard() ~~ .add(key)).keys.count == 1  // KB8 a board with one key added does not hold one
+  }
+  assert {
+    options := [10, 20, 30]
+    stepping := Keyboard.Key(name: 3)
+    assert stepping.cycle(options) == 10  // KB12 a key never pressed does not answer the first entry
+    assert stepping.press.release.cycle(options) == 20  // KB13 one press does not answer the second entry
+    assert stepping.press.release.cycle(options) == 30  // KB14 two presses do not answer the third entry
+    assert stepping.press.release.cycle(options) == 10  // KB15 three presses do not come back to the first entry
+  }
+  assert Keyboard.Key(name: "p").press.pulsed(max: 20 / s, delay: 1 s)  // KB19 a key just pressed is not pulsed
+  assert !(Keyboard.Key(name: "q").pulsed(max: 20 / s, delay: 1 s))  // KB20 a key nobody pressed is pulsed
+  assert Keyboard.Key(name: "a").press as boolean & !(Keyboard.Key(name: 6) as boolean)  // KB16 a key is not true while pressed, or is while not
+
+  keys => .children{is Keyboard.Key}
+  [name] => .keys{.name == .name}.first ?? .add(Keyboard.Key(name))
+  coded (code: Number) => .keys{.code == code}.first ?? .add(Keyboard.Key(name: code as Char as String, code))
+  pressed (name, modifier: Keyboard.Modifier? = None) => this[name] -- (key => key.pressed && (!modifier || modifier#.some(. is key.modifiers)))
+  .{name: String ^property} ^punctuation => this[name]
+  assert {
+    keyboard := Keyboard()
+    keyboard["f"].press(Keyboard.Modifier.control)
+    assert keyboard.pressed("f", modifier: Keyboard.Modifier.control | Keyboard.Modifier.meta)  // UI162 ctrl+f is not read as ctrl or cmd + f
+    assert !(keyboard.pressed("f", modifier: Keyboard.Modifier.alt))  // UI163 ctrl+f is read as alt+f
+    keyboard["f"].release
+    assert !(keyboard.pressed("f"))  // UI164 a released key stays pressed
+  }
+
+  // How a held key repeats, as the operating system sets it: X's on Linux (XkbGetAutoRepeatRate, XWayland's under Wayland;
+  // https://www.x.org/releases/current/doc/libX11/XKB/xkblib.html; X's default 660 ms, then 25 a second, https://www.x.org/releases/current/doc/man/man1/xset.1.xhtml),
+  // SystemParametersInfo's SPI_GETKEYBOARDDELAY and SPI_GETKEYBOARDSPEED on Windows (500 ms, about 30 a second,
+  // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-systemparametersinfow), the global defaults
+  // InitialKeyRepeat and KeyRepeat on macOS (CFPreferences, 375 ms, then every 90 ms); a browser repeats keydown itself
+  // (`KeyboardEvent.repeat`); on ether as the player set it (`OS.Ether.key_repeat`), else once, then after a second twenty
+  // times a second
+  static repeat: (delay: Quantity.Temporal, rate: Quantity) => if OS.Linux {
+      (@c {
+        unsigned delay = 660
+        unsigned interval = 40
+        XkbGetAutoRepeatRate(XOpenDisplay(nullptr), XkbUseCoreKbd, &delay, &interval)
+      })() -- (got => (delay: got.delay * 1 ms, rate: 1 / (got.interval * 1 ms)))
+    }
+    // (the delay 0 to 3 is a quarter of a second to one; the speed 0 to 31 about 2.5 to 30 a second)
+    elsif OS.Windows {
+      (@c {
+        int delay = 1
+        unsigned speed = 31
+        SystemParametersInfoW(SPI_GETKEYBOARDDELAY, 0, &delay, 0)
+        SystemParametersInfoW(SPI_GETKEYBOARDSPEED, 0, &speed, 0)
+      })() -- (got => (delay: (got.delay + 1) * 250 ms, rate: (2.5 + got.speed * 27.5 / 31) / s))
+    }
+    // (both in ticks of 15 ms, unset on a Mac nobody changed)
+    elsif OS.Macos {
+      (@c {
+        unsigned char set = 0
+        long initial = CFPreferencesGetAppIntegerValue(CFStringCreateWithCString(nullptr, "InitialKeyRepeat", kCFStringEncodingUTF8), kCFPreferencesAnyApplication, &set)
+        long repeat = CFPreferencesGetAppIntegerValue(CFStringCreateWithCString(nullptr, "KeyRepeat", kCFStringEncodingUTF8), kCFPreferencesAnyApplication, &set)
+      })() -- (got => (delay: (got.initial > 0 ? got.initial : 25) * 15 ms, rate: 1 / ((got.repeat > 0 ? got.repeat : 6) * 15 ms)))
+    }
+    elsif OS.Browser { (delay: 500 ms, rate: 30 / s) }
+    else { OS.Ether.key_repeat ?? (delay: 1 s, rate: 20 / s) }
+  assert {
+    with (@me/device as OS) = OS.Ether {
+      assert Keyboard.repeat == (delay: 1 s, rate: 20 / s)  // KB21 a key on ether does not repeat after a second, twenty times a second
+    }
+  }
+}

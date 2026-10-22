@@ -1,0 +1,4 @@
+@windows
+
+// Ray run on Windows: the device runs it (`os: OS = @me/device` is OS.Windows)
+@me/device &= OS.Windows

@@ -1,9 +1,9 @@
 @ether/os
 @unicode
 
-{hh: Decimal.String}:{mm: Decimal.String{length == 2}}: Quantity.Temporal => hh hours mm minutes
+{hh: Decimal.String}:{mm: Decimal.String{.length == 2}}: Quantity.Temporal => hh hours mm minutes
 assert 12:00 == 12 hours  // TI82 12:00 is not twelve hours
-{hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{length == 2}}: Quantity.Temporal => hh_mm ss seconds
+{hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{.length == 2}}: Quantity.Temporal => hh_mm ss seconds
 assert 12:00:30 == 12 hours 30 seconds  // TI83 12:00:30 is not twelve hours and thirty seconds
 
 Calendar := class {
@@ -17,12 +17,12 @@ Calendar := class {
     dynamically assert #.every(. is Quantity.Temporal)
   }
 
-  static segments := static*{. is Segment}
+  static segments := static*{. is Calendar.Segment}
   internal static TimeDefinition = Time{(-> .epoch).every(.calendar == calendar)}
-  static equivalence (from: TimeDefinition) -> (to: TimeDefinition{calendar == this}) => {
+  static equivalence (from: TimeDefinition) -> (to: TimeDefinition{.calendar == this}) => {
     within_same_calendar_system = from.calendar.static == to.calendar.static
 
-    Time{calendar == from.calendar} &+= {
+    Time{.calendar == from.calendar} &+= {
       as (=== to.calendar) => {
         if epoch != 0 {
           Time(to.calendar, epoch: epoch as to.calendar) = this (as <= Unit.Temporal if !within_same_calendar_system)
@@ -110,15 +110,15 @@ Julian := class: Calendar {
   static minute := Calendar.Segment(global.minute, 60 seconds)
   assert 1 minute == 60 seconds  // TI7 a minute is not sixty seconds
 
-  is_leap_year => year % 4 == 0
+  is_leap_year => .year % 4 == 0
 
-  days_in (month: Month) => static.month.length[month.index] in day
-  days_in_year => is_leap_year ? 366 : 365
+  days_in (month: Month) => static.month.length[month.index] in .day
+  days_in_year => .is_leap_year ? 366 : 365
   // ISO 8601-1:2019, week-numbering year: a year has 53 weeks when it begins on a Thursday, or is a leap year that begins on a Wednesday
-  weeks_in_year => weekday_of(1) == Thursday || is_leap_year && weekday_of(1) == Wednesday ? 53 : 52
-  days_before (month: Month) => Month#[..<Month#.index_of(month)].map(days_in).sum
-  days_before_year => 365 * (year - 1) + (year - 1) / 4
-  weekday_of (day_of_year: Number) => Weekday#.loop + (days_before_year + day_of_year - 1)
+  weeks_in_year => .weekday_of(1) == Thursday || .is_leap_year && .weekday_of(1) == Wednesday ? 53 : 52
+  days_before (month: Month) => Month#[..<Month#.index_of(month)].map(this.days_in).sum
+  days_before_year => 365 * (.year - 1) + (.year - 1) / 4
+  weekday_of (day_of_year: Number) => Weekday#.loop + (.days_before_year + day_of_year - 1)
 }
 
 Gregorian := class: Julian {
@@ -137,7 +137,7 @@ Gregorian := class: Julian {
 
 // whether a minute had a leap second is IANA's data (@ether/timezone adds it); without it every minute is 60 seconds
 UTC := class: Gregorian (offset: Quantity.Temporal 0, leap_seconds: boolean = false) => {
-  equivalence 0 -> offset
+  equivalence 0 -> .offset
 }
 assert UTC().offset == 0  // TI19 UTC is at some offset
 assert UTC() is GMT  // TI40 UTC without leap seconds is not GMT
@@ -145,11 +145,11 @@ assert !(UTC().leap_seconds)  // TI41 UTC counts leap seconds
 assert !(UTC(leap_seconds: true) is GMT)  // GML1 UTC counting leap seconds is GMT
 assert UTC(leap_seconds: true).leap_seconds  // GML2 UTC asked to count leap seconds does not
 assert (UTC(offset: 3 seconds) = 0) - (UTC() = 0) == 3 seconds  // TI79 three seconds past the agreed point is not three seconds past the other
-GMT := UTC{leap_seconds == false}
+GMT := UTC{.leap_seconds == false}
 assert !(GMT().leap_seconds)  // TI78 the zone without leap seconds has them
 
 Time := class: Quantity.Temporal (calendar: Calendar? UTC) => {
-  epoch: Time{== calendar} = 0
+  epoch: Time{== this.calendar} = 0
   assert {
     five := Time(calendar: Julian) = 5 seconds
     eight := Time(calendar: Julian) = 8 seconds
@@ -172,21 +172,21 @@ Time := class: Quantity.Temporal (calendar: Calendar? UTC) => {
   }
   dynamically assert (this -> .epoch).length != ∞
 
-  since_calendar_epoch: Time => (this -> .epoch as calendar if .epoch != 0).sum
+  since_calendar_epoch: Time => (this -> .epoch as .calendar if .epoch != 0).sum
 
-  as (=== calendar) => this
+  as (=== this.calendar) => this
 
-  chainable == (other: Time) => since_calendar_epoch in second == other.since_calendar_epoch in second
-  chainable < (other: Time) => since_calendar_epoch in second < other.since_calendar_epoch in second
-  time_of_day: Quantity.Temporal => ((since_calendar_epoch in second) % (Quantity(quantities: [(1, day)]) in second)) seconds
-  chainable == (other: Quantity.Temporal) => time_of_day == other
-  chainable < (other: Quantity.Temporal) => time_of_day < other
-  chainable > (other: Quantity.Temporal) => other < time_of_day
+  chainable == (other: Time) => .since_calendar_epoch in second == other.since_calendar_epoch in second
+  chainable < (other: Time) => .since_calendar_epoch in second < other.since_calendar_epoch in second
+  time_of_day: Quantity.Temporal => ((.since_calendar_epoch in second) % (Quantity(quantities: [(1, day)]) in second)) seconds
+  chainable == (other: Quantity.Temporal) => .time_of_day == other
+  chainable < (other: Quantity.Temporal) => .time_of_day < other
+  chainable > (other: Quantity.Temporal) => other < .time_of_day
 
-  calendar.segments.for segment => dynamically Time.`segment.name.upper_case` = since_calendar_epoch.`segment.name`
-  calendar.segments.for segment => `segment.name` => segment.is_recurring ? recur(epoch) : since_calendar_epoch as segment
+  .calendar.segments.for segment => dynamically Time.`segment.name.upper_case` = .since_calendar_epoch.`segment.name`
+  .calendar.segments.for segment => `segment.name` => segment.is_recurring ? recur(this.epoch) : .since_calendar_epoch as segment
 
-  round (unit: Unit.Temporal) => Time(calendar, epoch: epoch) = (((this as unit).amount.round unit) as finer(Quantity(quantities: [(1, unit)])))
+  round (unit: Unit.Temporal) => Time(this.calendar, epoch: this.epoch) = (((this as unit).amount.round unit) as finer(Quantity(quantities: [(1, unit)])))
   assert (Time(calendar: Julian) = 120 seconds).round(minute) == 2 minutes  // TI85 two minutes rounded to minutes moved
   assert (Time(calendar: Julian) = 95 seconds).round(minute) == (Time(calendar: Julian) = 120 seconds)  // TRO2 ninety-five seconds do not round up to two minutes
   assert (Time(calendar: Julian) = 120 seconds).round(minute) == (Time(calendar: Julian) = 120 seconds)  // TRO5 a whole multiple moved when rounded
@@ -197,7 +197,7 @@ Time := class: Quantity.Temporal (calendar: Calendar? UTC) => {
   )
 
   uncertainty: Quantity.Temporal?
-  corrected (by: Quantity.Temporal, within: Quantity.Temporal) => Time(calendar, epoch: epoch, uncertainty: within) = this + by
+  corrected (by: Quantity.Temporal, within: Quantity.Temporal) => Time(this.calendar, epoch: this.epoch, uncertainty: within) = this + by
   // the host's clock (with its resolution as the uncertainty); on ether the clock kept by NTP, not written yet
   static now => if OS.Ether { ERROR@OS `the clock kept by NTP is not written in Ray yet` } else { nondeterministic @time ns ± @time_resolution ns }
   assert Time.now >= Time.now + 1 ms  // FWQ5 sleeping did not wait
@@ -207,7 +207,7 @@ Time := class: Quantity.Temporal (calendar: Calendar? UTC) => {
   assert Time.now.instance_of(Time)  // TM10 the clock is not a time
   dynamically {
     .calendar.segments.for segment => `segment.name.upper_case` = `segment.name`
-  } = now
+  } = Time.now
 }
 now => Time.now
 Quantity.Temporal &+= {
@@ -219,35 +219,35 @@ Quantity.Temporal &+= {
 Unit(name: "month" ("s" + plural: true)?, symbol: "mo")
   .convert(((x: Number) => x * (Time.YEAR || Time.MONTH ? (Time.MONTH ?? January).days_in(Gregorian(year: Time.YEAR ?? 1)) : 30)), day)
 
-ISO_8601 := class: Time{calendar is UTC.static} (
+ISO_8601 := class: Time{.calendar is UTC.static} (
   date: (
     year: Decimal,
     semicolons: "-"?,
     (
-      month = Month#[1 - month_of_year: Decimal{length == 2}{1 <= . <= Month#.count}],
+      month = Month#[1 - month_of_year: Decimal{.length == 2}{1 <= . <= Month#.count}],
       semicolons: "-"?,
-      day_of_month: Decimal{length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month},
+      day_of_month: Decimal{.length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month},
       day_of_year = in_year.days_before(month) + day_of_month
     ) | (
       day_of_year: Decimal{1 <= . <= (year as days ~= (days_in_year: *) days).days_in_year}
     ) | (
       // ISO 8601-1:2019 §5.2.4: a week date, YYYY-Www-D or YYYYWwwD; week 01 is the week holding the year's first Thursday (4 January), so its days may fall in the year before or after
       "W",
-      week_of_year: Decimal{length == 2}{1 <= . <= in_year.weeks_in_year},
+      week_of_year: Decimal{.length == 2}{1 <= . <= in_year.weeks_in_year},
       (
         semicolons: "-"?,
-        weekday: Weekday#[1 - day_of_week: Decimal{length == 1}{1 <= . <= Weekday#.count}]
+        weekday: Weekday#[1 - day_of_week: Decimal{.length == 1}{1 <= . <= Weekday#.count}]
       )?,
       day_of_year = week_of_year * 7 + Weekday#.index_of(weekday ?? Monday) + 1 - (Weekday#.index_of(in_year.weekday_of(4)) + 4)
     )
   )?,
   time: (
     "T" if date || !semicolons,
-    hour_of_day: Decimal{length == 2}{< calendar.day.hours},
+    hour_of_day: Decimal{.length == 2}{< calendar.day.hours},
     semicolons: ":"?,
-    minute_of_hour: Decimal{length == 2}{< calendar.hour.minutes},
+    minute_of_hour: Decimal{.length == 2}{< calendar.hour.minutes},
     semicolons: ":"?,
-    second_of_minute: Decimal{length == 2}{< calendar.minute.seconds},
+    second_of_minute: Decimal{.length == 2}{< calendar.minute.seconds},
     "Z" | offset: (
       offset_operator: "+" | "-",
       offset_hours: Decimal,
@@ -266,7 +266,7 @@ ISO_8601 := class: Time{calendar is UTC.static} (
       critical: "!"?,
       key: ("a".."z" | "_", ("a".."z" | "_" | Char.Digit | "-")[]),
       "=",
-      value: (Char.Letter | Char.Digit)[]{length > 0}[].join("-"),
+      value: (Char.Letter | Char.Digit)[]{.length > 0}[].join("-"),
       "]"
     )[]
   )?
@@ -275,19 +275,19 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   static Long := class: ISO_8601 (month: Month, " ", day_of_month: Decimal, ", ", year: Decimal) => { }
   long: String => this as Long as String
 
-  in_year => Gregorian(year: year)
+  in_year => Gregorian(year: .year)
   // RFC 9557 §3: an elective annotation that is not understood is ignored, and a critical one must be acted on or the timestamp refused; of the registered keys only the calendar (u-ca, BCP 47) is read (https://www.rfc-editor.org/rfc/rfc9557#section-3)
-  understood => !tags.some(.critical && !(.key == "u-ca" && .value is ("gregory" | "iso8601")))
-  date_known => date != ?
-  of_day: Quantity.Temporal => (hour_of_day ?? 0) hours + (minute_of_hour ?? 0) minutes + (second_of_minute ?? 0) seconds
-  as (=== Time) => Time(calendar) = (in_year.days_before_year + day_of_year - 1) days + of_day
-  chainable == (other: ISO_8601) => date_known && other.date_known ? this as Time == other as Time : of_day == other.of_day
-  chainable < (other: ISO_8601) => date_known && other.date_known ? this as Time < other as Time : of_day < other.of_day
+  understood => !.tags.some(.critical && !(.key == "u-ca" && .value is ("gregory" | "iso8601")))
+  date_known => .date != ?
+  of_day: Quantity.Temporal => (.hour_of_day ?? 0) hours + (.minute_of_hour ?? 0) minutes + (.second_of_minute ?? 0) seconds
+  as (=== Time) => Time(.calendar) = (.in_year.days_before_year + .day_of_year - 1) days + .of_day
+  chainable == (other: ISO_8601) => .date_known && other.date_known ? this as Time == other as Time : .of_day == other.of_day
+  chainable < (other: ISO_8601) => .date_known && other.date_known ? this as Time < other as Time : .of_day < other.of_day
 
-  dynamically assert semicolons if offset
-  dynamically assert date | time
-  dynamically assert understood
-  date ?= ?
+  dynamically assert .semicolons if .offset
+  dynamically assert .date | .time
+  dynamically assert .understood
+  .date ?= ?
 }
 assert "2024-01-01" as ISO_8601 .day_of_year == 1  // TI42 the first of january is not the first day of the year
 assert "2024-02-01" as ISO_8601 .day_of_year == 32  // TI43 the first of february is not the thirty-second day
@@ -319,8 +319,8 @@ assert "0004-03-01" as ISO_8601 .day_of_year == 61  // TM8 4-03-01 is not day 61
 assert "00:01:05" as ISO_8601 == 65 seconds  // TM9 00:01:05 is not 65 seconds
 
 Stamp := class (wall: Decimal, ".", logical: Decimal = 0, "@", node: *) => {
-  chainable < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)
-  when: Time => ((wall * 100) ns) as Time
+  chainable < (other: Stamp) => (.wall, .logical, .node as String) < (other.wall, other.logical, other.node as String)
+  when: Time => ((.wall * 100) ns) as Time
   static at (time: Time, node) => Stamp(wall: (time as ns / 100).floor, node)
 }
 
@@ -328,20 +328,20 @@ HybridClock := class (node: *, wall: Decimal = 0, logical: Decimal = 0) => {
   measured => (Time.now as ns / 100).floor
 
   now: Stamp => {
-    at = measured
-    logical = wall < at ? 0 : logical + 1
-    wall = wall max at
-    Stamp(wall, logical, node)
+    at := .measured
+    .logical = .wall < at ? 0 : .logical + 1
+    .wall = .wall max at
+    Stamp(this.wall, this.logical, this.node)
   }
 
   receive (remote: Stamp): Stamp => {
-    highest = measured max wall max remote.wall
-    logical = if highest == wall == remote.wall { (logical max remote.logical) + 1 }
-      elsif highest == wall { logical + 1 }
+    highest := .measured max .wall max remote.wall
+    .logical = if highest == .wall == remote.wall { (this.logical max remote.logical) + 1 }
+      elsif highest == .wall { this.logical + 1 }
       elsif highest == remote.wall { remote.logical + 1 }
       else { 0 }
-    wall = highest
-    Stamp(wall, logical, node)
+    .wall = highest
+    Stamp(this.wall, this.logical, this.node)
   }
 }
 
@@ -356,6 +356,6 @@ Quantity.Temporal &+= {
 assert !(Program(code: { Time.now }) is Deterministic)  // EFF3 reading the time is deterministic
 assert Program(code: { Time.now }) is Nondeterministic  // AC63 reading the time is not nondeterministic
 assert {
-  purg_reader := Character(name: "purg-reader")
+  purg_reader := @"purg-reader"
   assert !((purg_reader.read Time.now) is Diagnostic)  // PURG5 a grant reading the time is refused
 }

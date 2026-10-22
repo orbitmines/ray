@@ -1,0 +1,7 @@
+@ether/os
+
+// A camera: what it sees, when its user grants it (`(@me/device as Camera).image`)
+Camera := class: Location {
+  image: *?
+}
+assert !(Camera().image)  // CAM1 a camera nothing granted sees something

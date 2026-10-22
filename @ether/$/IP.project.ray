@@ -3,11 +3,11 @@
 IP := class: Location &+ (-1 <- . -> +1) {
   static NUMBER_OF_SEGMENTS: Decimal
   static SEGMENT_LENGTH: Decimal
-  static NUMBER_OF_BITS := NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
+  static NUMBER_OF_BITS := IP.NUMBER_OF_SEGMENTS * IP.SEGMENT_LENGTH
   assert IPv4.NUMBER_OF_BITS == 32  // IP2 the address is not thirty-two bits
 
   static Segment := class {
-    static Binary := Binary{length == SEGMENT_LENGTH}
+    static Binary := IP.Segment.Binary{.length == IP.SEGMENT_LENGTH}
     assert true as Binary == ₂1  // BOR7 true is not the bit one
     assert false as Binary == ₂0  // BOR8 false is not the bit zero
     assert ("a" as Unicode.UTF-8 as Binary).length == 8  // T1 a is not eight bits in UTF-8
@@ -15,13 +15,13 @@ IP := class: Location &+ (-1 <- . -> +1) {
     assert ("a" as Unicode.UTF-16 as Binary).length == 16  // W12 UTF16 of a is not sixteen bits
     assert (0.5 b as Binary).erred  // FWB3 half a bit is Binary
   }
-  segments: Segment[]{length == NUMBER_OF_SEGMENTS}
+  segments: IP.Segment[]{length == IP.NUMBER_OF_SEGMENTS}
 
   static canonical := static
   // Lowercase hexadecimal (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
   // CIDR notation where the low bits are superposed (https://datatracker.ietf.org/doc/html/rfc4632#section-3.1)
-  as (=== String) => NUMBER_OF_BITS - (as Binary ~= Superposed[]⊣ -- .length) -- (prefix_length => prefix_length == NUMBER_OF_BITS
-    ? (this as canonical).written_out.lowercase
+  as (=== String) => IP.NUMBER_OF_BITS - (as Binary ~= Superposed[]⊣ -- .length) -- (prefix_length => prefix_length == IP.NUMBER_OF_BITS
+    ? (this as IP.canonical).written_out.lowercase
     : ((as Binary ~~ .[prefix_length..] = 0) as static as String, "/", prefix_length))
   full: String => written_out
   chainable == (other: IP) => as Binary == other as Binary
@@ -33,12 +33,12 @@ IP := class: Location &+ (-1 <- . -> +1) {
   assert 10 - 2 == 8  // PR11 one less on its own stopped working
   assert 10 - 4 * 2 == 2  // PR27 ten less four times two is not two
 
-  compounds / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => as Binary ~~ .[prefix_length..] = 0 | 1
+  compounds / (prefix_length: Number{0 <= . <= IP.NUMBER_OF_BITS}): static => as Binary ~~ .[prefix_length..] = 0 | 1
   assert 5 / 1 == 5  // CO8 five shared once is not five
   assert 6 / 2 == 3  // CO16 six shared in two is not three
   assert 10 / 2 / 5 == 1  // PR25 ten shared twice is not one
 
-  static v4 := class: IP ({segments.join(".")}) => {
+  static v4 := class: IP ({.segments.join(".")}) => {
     static NUMBER_OF_SEGMENTS := 4
     static SEGMENT_LENGTH := 8
     assert IPv4.SEGMENT_LENGTH == 8  // IP25 a segment of the first kind is other than eight bits
@@ -48,9 +48,9 @@ IP := class: Location &+ (-1 <- . -> +1) {
   }
 
   static v6 := class: IP (
-    (left: Segment[]).join(":")?,
+    (left: IP.Segment[]).join(":")?,
     zero_compression: "::" (? if !defined_segments.empty),
-    (right: Segment[]).join(":")?,
+    (right: IP.Segment[]).join(":")?,
     (":", embedded_ipv4: IPv4)?
   ) => {
     static NUMBER_OF_SEGMENTS := 8
@@ -58,18 +58,18 @@ IP := class: Location &+ (-1 <- . -> +1) {
 
     static Segment: Hexadecimal{length <= 4}
 
-    segments => left, 0[]{length == number_of_compressed_segments}(), right, embedded_ipv4 as Binary
-    defined_segments: Segment[] => left, right, embedded_ipv4 as Binary
-    number_of_compressed_segments => NUMBER_OF_SEGMENTS - defined_segments.length
+    segments => left, 0[]{.length == .number_of_compressed_segments}(), right, embedded_ipv4 as Binary
+    defined_segments: IP.Segment[] => left, right, embedded_ipv4 as Binary
+    number_of_compressed_segments => IP.NUMBER_OF_SEGMENTS - defined_segments.length
 
     // The symbol "::" MUST NOT be used to shorten just one 16-bit 0 field. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.2)
-    dynamically assert defined_segments.length (zero_compression ? < NUMBER_OF_SEGMENTS - 1 : == NUMBER_OF_SEGMENTS)
+    dynamically assert defined_segments.length (zero_compression ? < IP.NUMBER_OF_SEGMENTS - 1 : == IP.NUMBER_OF_SEGMENTS)
     // The longest run of consecutive 16-bit 0 fields MUST be shortened (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
     dynamically assert left & right ~= 0[] -- .length <= number_of_compressed_segments if zero_compression
     // When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
     dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
 
-    static canonical := v6{
+    static canonical := IP.v6{
       // The longest run of two or more zero fields, the leftmost of equal ones (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
       // Prefer compressed zeros representation when possible (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
       zero_compression if segments ~= 0[]{length >= 2}
@@ -77,7 +77,7 @@ IP := class: Location &+ (-1 <- . -> +1) {
       // Mixed notation for NAT64 (https://datatracker.ietf.org/doc/html/rfc6052#section-2.1)
       embedded_ipv4 if . is "::ffff:0.0.0.0/96" | "64:ff9b::/96"
     }
-    full: String => (this as v6{!zero_compression && !embedded_ipv4}).written_out
+    full: String => (this as IP.v6{!.zero_compression && !.embedded_ipv4}).written_out
   }
 
 }

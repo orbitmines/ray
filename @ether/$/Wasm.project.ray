@@ -343,7 +343,7 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   // rule that can be left out by name; each answers what `none` answers
   static default := lazily Compiler.default + none &+ {
     // Representations: a 32-bit integer an i32, its operators i32's
-    {literal value: Binary₃₂.Signed} => i32.const, value
+    {value: Binary₃₂.Signed} => i32.const, value
     {a: Binary₃₂.Signed} {operator: i32{.ray}} {b: Binary₃₂.Signed} => a, b, operator
     !{a: Binary₃₂.Signed} => a, i32.eqz
     // Control flow is classes, written as WebAssembly's own
@@ -360,5 +360,4 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   assert ((@ray (a: Binary₃₂.Signed, b: Binary₃₂.Signed) => a + b) as Program{O: Wasm.default}).function.body == [local.get, 0, local.get, 1, i32.add]  // WA4 a sum of two i32s is not i32.add of its parameters
   assert ((@ray while x < 10 { x = x + 1 }) as Program{O: Wasm.default}).first == Wasm.Op.block  // WA5 a while is not a block around a loop
   assert ([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00] as Wasm).sections.empty  // WA6 the empty module does not read
-  assert $.wasm === Wasm  // WA7 $.wasm is not Wasm
 }

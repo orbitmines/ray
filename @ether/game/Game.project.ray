@@ -21,7 +21,7 @@ Character &+= {
 }
 
 Mana := class resource: String, capacity: *, held: Spell? {
-  static measured (resource: String) => Mana(resource, capacity: @me/device/os[resource])
+  static measured (resource: String) => Mana(resource, capacity: (@me/device as OS)[resource])
 
   cast (spell: Spell) => held = spell
   free: static => this ~~ .held = None

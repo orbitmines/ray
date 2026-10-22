@@ -1,4 +1,6 @@
 @ether/os
+@c
+@js
 @ether/filesystem
 @http
 @dns
@@ -9,7 +11,7 @@
 @ip
 @unicode
 
-// The network holds the locations with a scheme (`@https://…`: `FileSystem.Remote`, below) and the local names.
+// The network holds the locations with a scheme (`@https://…`: `Remote`, below) and the local names.
 @localhost => @`127.0.0.1` | @::1
 @localnetwork =>
   // https://datatracker.ietf.org/doc/html/rfc1918#section-3
@@ -22,28 +24,136 @@ Network &+= {
   static Port := Decimal{< 2^16}
 
   static DomainName := class (text: (Char.Letter | Char.Digit | "-" | ".")[]) => {
-    valid => 0 < text.count < 2^8
-    static canonical := DomainName{text == text.fold_case}
+    valid => 0 < .text.count < 2^8
+    static canonical := Network.DomainName{.text == .text.fold_case}
   }
 
   static Proxy := class (through: Character, admits: *?) => {
-    carries (traffic) => !admits || traffic is admits
+    carries (traffic) => !.admits || traffic is .admits
   }
 
   static Protocol := enum ether (port: @ether.port) | https (port: 443) | http (port: 80) | ssh (port: 22) | wss (port: 443) | ws (port: 80) | dns (port: 53)
 
-  static URL := Location{scheme}
+  static URL := Location{.scheme}
 
   static Socket := class {
-    static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => {
-      // the host's sockets; a browser has none, and on ether they are not written yet
-      send (bytes: Byte[]) => if OS.Browser { ERROR@OS `a browser has no TCP` } elsif OS.Ether { ERROR@OS `TCP is not written in Ray yet` } else { external network `tcp` (this as String, bytes) }
-      datagram (bytes: Byte[]) => if OS.Browser { ERROR@OS `a browser has no UDP` } elsif OS.Ether { ERROR@OS `UDP is not written in Ray yet` } else { external network `udp` (this as String, bytes) }
+    static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: Network.DomainName, ":", port: Network.Port) => {
+      // the host's sockets, through its interface: BSD sockets on Linux and macOS (getaddrinfo, socket, connect,
+      // https://pubs.opengroup.org/onlinepubs/9799919799/functions/socket.html), Winsock on Windows (the same, after
+      // WSAStartup, https://learn.microsoft.com/windows/win32/winsock/); sent, and what comes back until the other side
+      // closes (TCP) or the one datagram that answers (UDP). A browser has none; on ether they are Ray's own over the
+      // network controller, not written yet.
+      send (bytes: Byte[]) => if OS.Browser { ERROR@OS `a browser has no TCP` } elsif OS.Ether { TODO `TCP (RFC 9293) in Ray over the network controller's descriptor rings` } else { this.exchanged(bytes, @c SOCK_STREAM) }
+      datagram (bytes: Byte[]) => if OS.Browser { ERROR@OS `a browser has no UDP` } elsif OS.Ether { TODO `UDP (RFC 768) in Ray over the network controller's descriptor rings` } else { this.exchanged(bytes, @c SOCK_DGRAM) }
+      exchanged (bytes: Byte[], kind: Program) => ((@c {
+        WSADATA started
+        WSAStartup(0x0202, &started)
+      })() if OS.Windows) -- (@c {
+        struct addrinfo* found = nullptr
+        getaddrinfo({this.host as String}, {this.port as String}, nullptr, &found)
+        int connection = socket(found->ai_family, {kind}, 0)
+        connect(connection, found->ai_addr, found->ai_addrlen)
+        send(connection, {bytes}, {bytes.count}, 0)
+        if ({kind} == SOCK_STREAM) { shutdown(connection, 1) }
+        unsigned char received[65536]
+        long count = recv(connection, received, sizeof(received), {kind} == SOCK_STREAM ? MSG_WAITALL : 0)
+        {OS.Windows ? @c closesocket(connection) : @c close(connection)}
+        freeaddrinfo(found)
+      })() -- (got => got.count >= 0 ? got.received[..<got.count] : ERROR@Network `nothing came back`)
       // TLS 1.3 (https://www.rfc-editor.org/rfc/rfc8446) with ALPN (https://www.rfc-editor.org/rfc/rfc7301): the
-      // connection, and the protocol of `offered` the two sides agreed on.
-      tls (offered: String[]) => if OS.Browser { ERROR@OS `a browser has no TLS` } elsif OS.Ether { ERROR@OS `TLS 1.3 is not written in Ray yet` } else { external network `tls` (this as String, offered) as (connection: *, protocol: String?) }
+      // connection, and the protocol of `offered` the two sides agreed on. Through OpenSSL on Linux
+      // (https://docs.openssl.org/3.0/man3/SSL_connect/), Schannel on Windows (InitializeSecurityContextW with the
+      // application protocols, https://learn.microsoft.com/windows/win32/secauthn/schannel), Network.framework on macOS
+      // (https://developer.apple.com/documentation/network); a browser has none; on ether Ray's own, not written yet.
+      tls (offered: String[]) => offered.map(p => [p.count, p as Byte[]]).flatten -- (alpn => if OS.Browser { ERROR@OS `a browser has no TLS` }
+        elsif OS.Ether { TODO `TLS 1.3 in Ray (RFC 8446) over its TCP, with $/X25519, $/ChaCha20Poly1305, $/HKDF` }
+        elsif OS.Linux {
+          (@c {
+            SSL_CTX* context = SSL_CTX_new(TLS_client_method())
+            SSL_CTX_set_min_proto_version(context, TLS1_3_VERSION)
+            SSL_CTX_set_default_verify_paths(context)
+            SSL_CTX_set_verify(context, SSL_VERIFY_PEER, nullptr)
+            SSL* connection = SSL_new(context)
+            SSL_set_tlsext_host_name(connection, {this.host as String})
+            SSL_set1_host(connection, {this.host as String})
+            SSL_set_alpn_protos(connection, {alpn}, {alpn.count})
+            BIO* carried = BIO_new_connect({this as String})
+            SSL_set_bio(connection, carried, carried)
+            int connected = SSL_connect(connection) == 1
+            const unsigned char* agreed = nullptr
+            unsigned agreed_length = 0
+            SSL_get0_alpn_selected(connection, &agreed, &agreed_length)
+            char protocol[256] = ""
+            memcpy(protocol, agreed, agreed_length)
+          })() -- (got => got.connected == 1 ? (connection: got.connection, protocol: got.protocol != "" ? got.protocol : None) : ERROR@Network `the TLS handshake failed`)
+        }
+        elsif OS.Windows {
+          (@c {
+            WSADATA started
+            WSAStartup(0x0202, &started)
+            struct addrinfo* found = nullptr
+            getaddrinfo({this.host as String}, {this.port as String}, nullptr, &found)
+            SOCKET carried = socket(found->ai_family, SOCK_STREAM, 0)
+            connect(carried, found->ai_addr, found->ai_addrlen)
+            SCH_CREDENTIALS credentials = \{SCH_CREDENTIALS_VERSION}
+            credentials.dwFlags = SCH_USE_STRONG_CRYPTO
+            CredHandle credential
+            AcquireCredentialsHandleW(nullptr, UNISP_NAME_W, SECPKG_CRED_OUTBOUND, nullptr, &credentials, nullptr, nullptr, &credential, nullptr)
+            unsigned char protocols[512]
+            SEC_APPLICATION_PROTOCOLS* listed = (SEC_APPLICATION_PROTOCOLS*)protocols
+            listed->ProtocolListsSize = sizeof(SEC_APPLICATION_PROTOCOL_LIST) + {alpn.count} - 4
+            listed->ProtocolLists[0].ProtoNegoExt = SecApplicationProtocolNegotiationExt_ALPN
+            listed->ProtocolLists[0].ProtocolListSize = {alpn.count}
+            memcpy(listed->ProtocolLists[0].ProtocolList, {alpn}, {alpn.count})
+            SecBuffer offering = \{sizeof(unsigned long) * 2 + listed->ProtocolListsSize, SECBUFFER_APPLICATION_PROTOCOLS, protocols}
+            SecBufferDesc input = \{SECBUFFER_VERSION, 1, &offering}
+            unsigned char token[16384]
+            unsigned char incoming[16384]
+            SecBuffer outgoing = \{sizeof(token), SECBUFFER_TOKEN, token}
+            SecBufferDesc output = \{SECBUFFER_VERSION, 1, &outgoing}
+            CtxtHandle connection
+            unsigned long attributes = 0
+            long status = InitializeSecurityContextW(&credential, nullptr, L{this.host as String}, ISC_REQ_CONFIDENTIALITY | ISC_REQ_STREAM, 0, 0, &input, 0, &connection, &output, &attributes, nullptr)
+            long held = 0
+            while (status == SEC_I_CONTINUE_NEEDED || status == SEC_E_INCOMPLETE_MESSAGE) {
+              if (outgoing.cbBuffer > 0) { send(carried, token, outgoing.cbBuffer, 0) }
+              held = held + recv(carried, incoming + held, sizeof(incoming) - held, 0)
+              SecBuffer reply[2] = \{\{held, SECBUFFER_TOKEN, incoming}, \{0, SECBUFFER_EMPTY, nullptr}}
+              SecBufferDesc replied = \{SECBUFFER_VERSION, 2, reply}
+              outgoing.cbBuffer = sizeof(token)
+              status = InitializeSecurityContextW(&credential, &connection, nullptr, ISC_REQ_CONFIDENTIALITY | ISC_REQ_STREAM, 0, 0, &replied, 0, nullptr, &output, &attributes, nullptr)
+              if (status != SEC_E_INCOMPLETE_MESSAGE) { held = 0 }
+            }
+            if (outgoing.cbBuffer > 0) { send(carried, token, outgoing.cbBuffer, 0) }
+            int connected = status == SEC_E_OK
+            SecPkgContext_ApplicationProtocol agreed
+            QueryContextAttributesW(&connection, SECPKG_ATTR_APPLICATION_PROTOCOL, &agreed)
+            char protocol[256] = ""
+            if (agreed.ProtoNegoStatus == SecApplicationProtocolNegotiationStatus_Success) { memcpy(protocol, agreed.ProtocolId, agreed.ProtocolIdSize) }
+          })() -- (got => got.connected == 1 ? (connection: got.connection, protocol: got.protocol != "" ? got.protocol : None) : ERROR@Network `the TLS handshake failed`)
+        }
+        else {
+          (@c {
+            nw_parameters_t parameters = nw_parameters_create_secure_tcp(^(nw_protocol_options_t secured) {
+              sec_protocol_options_set_min_tls_protocol_version(nw_tls_copy_sec_protocol_options(secured), tls_protocol_version_TLSv13)
+              {offered.map(p => @c sec_protocol_options_add_tls_application_protocol(nw_tls_copy_sec_protocol_options(secured), {p}))}
+            }, NW_PARAMETERS_DEFAULT_CONFIGURATION)
+            nw_connection_t connection = nw_connection_create(nw_endpoint_create_host({this.host as String}, {this.port as String}), parameters)
+            dispatch_semaphore_t settled = dispatch_semaphore_create(0)
+            __block int connected = 0
+            nw_connection_set_queue(connection, dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0))
+            nw_connection_set_state_changed_handler(connection, ^(nw_connection_state_t state, nw_error_t error) {
+              if (state == nw_connection_state_ready || state == nw_connection_state_failed) { connected = state == nw_connection_state_ready
+                dispatch_semaphore_signal(settled) }
+            })
+            nw_connection_start(connection)
+            dispatch_semaphore_wait(settled, DISPATCH_TIME_FOREVER)
+            sec_protocol_metadata_t metadata = nw_tls_copy_sec_protocol_metadata(nw_connection_copy_protocol_metadata(connection, nw_protocol_copy_tls_definition()))
+            const char* protocol = connected ? sec_protocol_metadata_get_negotiated_protocol(metadata) : nullptr
+          })() -- (got => got.connected == 1 ? (connection: got.connection, protocol: got.protocol) : ERROR@Network `the TLS handshake failed`)
+        })
       assert {
-        with @me/device/os = OS.Ether {
+        with (@me/device as OS) = OS.Ether {
           assert ("ether.orbitmines.com:443" as Network.Socket.Address).tls(["h2"]).erred  // TLS2 TLS in the language does not err while it is unwritten
           assert !(@me/device.network.connected)  // ETH5 the language as the operating system is on a network
         }
@@ -55,22 +165,55 @@ Network &+= {
     static equivalences => @/etc/hosts as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
     // A redirect is a world name (W1.9, `@name = holder`), so it passes the world's write check like any name.
     static resolved (name: String) => World.current["@", name] -- (held => held is Location ? held
-      : DomainName(equivalences.rows{name.fold_case is .names.fold_case#}.last.address ?? name))
+      : Network.DomainName(Network.Hosts.equivalences.rows{name.fold_case is .names.fold_case#}.last.address ?? name))
   }
 }
 
-Effecting |= Program{effects.some(. is "network")}
+Effecting |= Program{.effects.some(. is "network")}
 
 Location &+= {
-  static canonical := Location{!port || port != protocol.port}
-  protocol => Network.Protocol#{as String == scheme}.first
-  resolved => Network.Hosts.resolved(host) -- (. == host ? $.dns.resolve(host) ?? . : .)
-  socket => Network.Socket.Address(host: host, port: port ?? protocol.port)
+  static canonical := Location{!.port || .port != .protocol.port}
+  protocol => Network.Protocol#{as String == this.scheme}.first
+  resolved => Network.Hosts.resolved(.host) -- (. == this.host ? DNS.resolve(this.host) ?? . : .)
+  socket => Network.Socket.Address(host: .host, port: .port ?? .protocol.port)
 }
 
 Device &+= {
-  // whether the host is on a network; a browser and ether say it is not
-  network: (connected: boolean) = (OS.Browser || OS.Ether) ? (connected: false) : (connected: (external network `connected`) ?? false)
+  // whether the host is on a network: an interface but the loopback is up (each `/sys/class/net/*/operstate` on Linux;
+  // getifaddrs' IFF_UP and IFF_RUNNING on macOS; GetAdaptersAddresses' IfOperStatusUp on Windows); on ether as its
+  // network controller reports; in a browser navigator.onLine
+  network: (connected: boolean) = (connected: if OS.Linux {
+      (@/sys/class/net).held{!(. as String ~= "/lo" ⊣)}.some(((. / "operstate").held as String).lines.first == "up")
+    }
+    elsif OS.Macos {
+      (@c {
+        struct ifaddrs* all = nullptr
+        getifaddrs(&all)
+        int up = 0
+        struct ifaddrs* at = all
+        while (at) {
+          if (!(at->ifa_flags & IFF_LOOPBACK) && (at->ifa_flags & IFF_UP) && (at->ifa_flags & IFF_RUNNING)) { up = 1 }
+          at = at->ifa_next
+        }
+        freeifaddrs(all)
+      })().up == 1
+    }
+    elsif OS.Windows {
+      (@c {
+        unsigned size = 15000
+        IP_ADAPTER_ADDRESSES* all = malloc(size)
+        GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, all, &size)
+        int up = 0
+        IP_ADAPTER_ADDRESSES* at = all
+        while (at) {
+          if (at->IfType != IF_TYPE_SOFTWARE_LOOPBACK && at->OperStatus == IfOperStatusUp) { up = 1 }
+          at = at->Next
+        }
+        free(all)
+      })().up == 1
+    }
+    elsif OS.Browser { (@js navigator.onLine)() }
+    else { Machine.driver(0x02)?.linked ?? false })
 }
 
 Instance &+= {
@@ -81,37 +224,36 @@ Instance &+= {
 
 {address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => (address as String) as Instance
 
-assert ("https://orbitmines.com/a" as Held).holder is FileSystem.Remote  // IO12 an http location is not reached over the network
+assert ("https://orbitmines.com/a" as Location).holder is Remote  // IO12 an http location is not reached over the network
 
-FileSystem &+= {
-  static Remote := class: FileSystem {
-    at (location: Location) => location.scheme ? location.origin : @remote
-    inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
-    over_http (location: Location) => location.scheme ~= ⊢"http"
-    sent (method: $.http.Method, location: Location, content = None, fields = $.http.Fields()) => $.http.send($.http.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
-    // over HTTP: GET's body, else (a collection) its members: WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming
-    // the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2);
-    // an instance: what is held there, asked on it
-    [location: Location] => over_http(location)
-      ? sent($.http.Method.get, location) -- (.ok ? .text : members(location))
-      : { inner(location).held as * }@(at(location))()
-    members (location: Location) => sent($.http.Method.propfind, location, fields: $.http.Fields().with("Depth", "1")) -- (.status == 207 ? (.text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
-      .map(href => href ~= ⊢"/" ? location.origin + href : href as Location) : None)
-    // PUT writes it, DELETE removes it (`= None`)
-    { }[{location: Location}] = {value} ^punctuation => over_http(location)
-      ? sent(value === None ? $.http.Method.delete : $.http.Method.put, location, value).ok
-      : { inner(location).held = value }@(at(location))()
-    // executed: a page is opened by what the host opens it with; on an instance, executed there
-    ({location: Location}, {args}) => over_http(location)
-      ? (OS.Ether || OS.Browser ? ERROR@OS `opening a page is not written in Ray yet` : external os `open` (location.@ as String, args))
-      : { inner(location).held(args) }@(at(location))()
-  }
+// What holds a location with a scheme, one under `@remote`, or another instance: reached over the network
+Remote := class: Language {
+  at (location: Location) => location.scheme ? location.origin : @remote
+  inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
+  over_http (location: Location) => location.scheme ~= ⊢"http"
+  sent (method: HTTP.Method, location: Location, content = None, fields = HTTP.Fields()) => HTTP.send(HTTP.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
+  // over HTTP: GET's body, else (a collection) its members: WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming
+  // the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2);
+  // an instance: what is held there, asked on it
+  [location: Location] => this.over_http(location)
+    ? this.sent(HTTP.Method.get, location) -- (.ok ? .text : this.members(location))
+    : { this.inner(location).held as * }@(this.at(location))()
+  members (location: Location) => this.sent(HTTP.Method.propfind, location, fields: HTTP.Fields().with("Depth", "1")) -- (.status == 207 ? (.text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
+    .map(href => href ~= ⊢"/" ? location.origin + href : href as Location) : None)
+  // PUT writes it, DELETE removes it (`= None`)
+  { }[{location: Location}] = {value} ^punctuation => this.over_http(location)
+    ? this.sent(value === None ? HTTP.Method.delete : HTTP.Method.put, location, value).ok
+    : { this.inner(location).held = value }@(this.at(location))()
+  // executed: a page is opened by what the host opens it with; on an instance, executed there
+  ({location: Location}, {args}) => this.over_http(location)
+    ? (OS.Browser ? (@js window.open({location as String}))() : OS.Ether ? (location.held as Program)(args) : FileSystem.opened(location as String, args))
+    : { this.inner(location).held(args) }@(this.at(location))()
 }
 
-FileOptimizations = {
+Holders = {
   // not a scheme of one letter: that is a Windows drive (`@C:/`, https://url.spec.whatwg.org/#windows-drive-letter)
-  {location: Location{scheme && scheme != "file" && scheme.length > 1}} => FileSystem.Remote()
-  {location: Location{segments.first == "remote"}} => FileSystem.Remote()
+  {location: Location{.scheme && .scheme != "file" && .scheme.length > 1}} => Remote()
+  {location: Location{.segments.first == "remote"}} => Remote()
   // another instance: reached over its socket
-  {instance: Instance{!== @local}} => FileSystem.Remote()
-} + FileOptimizations
+  {location: Location{!== @local && . is Instance}} => Remote()
+} + Holders

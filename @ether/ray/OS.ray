@@ -1,30 +1,31 @@
-// An operating system: what a device runs (`@me/device/os`), named by its platform. As a boolean, whether it is the one the
+// An operating system: what a device runs (`os: OS = @me/device`), named by its platform. As a boolean, whether it is the one the
 // device runs: what differs between them is written where it belongs (`if OS.Windows { … } elsif OS.Browser { … }`), in the
 // package it is about (files and streams in @ether/filesystem, time zones in @ether/timezone, sockets in network, font
 // folders in $/Font). Each is a project of its own: the external ones in `$/` (`@linux`, `@windows`, `@macos`, `@browser`),
 // the language as the operating system in @ether/os, which depends on all of them; a project using what differs between
 // them depends on @ether/os.
 OS := class (platform: String) => {
-  as (=== boolean) => this === @me/device/os
+  // what a program run on it calls it with (`@c`): the headers its interface is declared in, the libraries it is defined
+  // in, and how they are called (its ABI)
+  headers: String[] = []
+  libraries: String[] = []
+  abi: String?
+  as (=== boolean) => this === (@me/device as OS)
   // what the host says of itself (`os["PATH"]`, `os.env.PATH`)
   [property: String] => OS.reported(property) as String
   architecture => this["architecture"]
-  // The environment is read through the OS, live.
-  env => OS.Environment(os: this)
-  static Environment := class (os: OS) => {
-    .{literal name ^property} ^punctuation => .os[name]
-  }
+  // its environment, as the host reports it now (`env.PATH`)
+  env => OS.reported("env")
 
   // the one the host reports; none: the language as the operating system (@ether/os)
   // (what the host reports of itself: given by the implementation; none in the language)
   static reported (property) => None
   static host: OS => OS#{.platform == (OS.reported("platform") as String)}.first ?? OS.Ether
 }
-// An operating system made here: named by its platform, read through its environment, not the one the device runs.
+// An operating system made here: named by its platform, not the one the device runs.
 assert {
   plan9 := OS(platform: "plan9")
   assert plan9 is OS  // OSC1 an operating system made is not one
   assert plan9.platform == "plan9"  // OSC2 an operating system does not keep its platform
-  assert plan9.env is OS.Environment  // OSC3 an operating system's environment is not read through it
   assert !(plan9 as boolean)  // OSC4 an operating system nothing runs is the one the device runs
 }

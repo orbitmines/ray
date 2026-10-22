@@ -6,7 +6,7 @@ What this tends to mean in practice, is that we want to minimize the number of l
 
 The Ray Programming Language differentiates concepts into 3 buckets: Languages, Optimizations, Look.
 
-- **Languages**: The following concepts are all reduced to the concept of language: [Type](https://en.wikipedia.org/wiki/Type_system), pattern, grammar, [dataformat](https://en.wikipedia.org/wiki/Data_type), configs, frontend, backend, [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree), [IR](https://en.wikipedia.org/wiki/Intermediate_representation).
+- **Languages**: The following concepts are all reduced to the concept of language: [Type](https://en.wikipedia.org/wiki/Type_system), pattern, grammar, [dataformat](https://en.wikipedia.org/wiki/Data_type), configs, frontend, backend, [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree), [IR](https://en.wikipedia.org/wiki/Intermediate_representation), [Driver](https://en.wikipedia.org/wiki/Device_driver).
 - **Optimizations**: [Databases](https://en.wikipedia.org/wiki/Database), [Compilers](https://en.wikipedia.org/wiki/Compiler), [Memory management](https://en.wikipedia.org/wiki/Memory_management)
 - **Look**: The style in which a language is represented.
 

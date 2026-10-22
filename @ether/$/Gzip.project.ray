@@ -29,12 +29,12 @@ Gzip := class: Language (
 ) {
   static extensions := ".gz" | ".gzip"
 
-  inflated: Byte[] => deflated.bytes
-  dynamically assert crc == inflated as CRC32 as Binary₃₂ && isize == inflated.count % 2 ^ 32
+  inflated: Byte[] => .deflated.bytes
+  dynamically assert .crc == .inflated as CRC32 as Binary₃₂ && .isize == .inflated.count % 2 ^ 32
 
   // A file is one or more members, read as their data joined (https://www.rfc-editor.org/rfc/rfc1952#section-2.2)
   static level := {
-    {members: Gzip[]{length > 0}} => members.inflated.flatten
+    {members: Gzip[]{.length > 0}} => members.inflated.flatten
   }
   static written := {
     {writing: Language.Writing} => Gzip(deflated: Deflate.write(writing.value as Byte[]))
@@ -46,4 +46,4 @@ assert Gzip.read([([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 
 assert Gzip.read([([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x86, 0xa6, 0x10, 0x36, 0x05, 0x00, 0x00, 0x00])[..<17], [0x00, 0xa6, 0x10, 0x36], ([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x86, 0xa6, 0x10, 0x36, 0x05, 0x00, 0x00, 0x00])[21..]].flatten) is Diagnostic  // GZ5 a member whose CRC-32 does not match its data reads
 assert Gzip.read(Gzip.write(("ray " * 32).bytes) as Byte[]) == ("ray " * 32).bytes  // GZ3 written bytes do not read back
 assert (Gzip.write("hello".bytes) as Byte[])[..<3] == [0x1f, 0x8b, 0x08] && (Gzip.write("hello".bytes) as Byte[])[-8..<-4] == [0x86, 0xa6, 0x10, 0x36]  // GZ4 a written member does not start with ID1 ID2 CM or end with its CRC-32, least significant byte first
-assert $.gzip === Gzip && Language.named(".gz") === Gzip  // GZ6 $.gzip is not Gzip
+assert Gzip === Gzip && Language.named(".gz") === Gzip  // GZ6 Gzip is not Gzip

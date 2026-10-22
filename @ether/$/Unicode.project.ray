@@ -1,77 +1,67 @@
 // (what the bootstrap needs of Unicode, a character written as UTF-8, is in String.ray; this is the rest of it)
 Unicode &+= {
-  static version: Version = %17
-  assert Unicode.version == 17  // UN40 the Unicode version is not seventeen
-  static spelled => "{version.number}.{version.revision ?? 0}"
   static Public := @https://www.unicode.org/Public
-  // one directory per version: `<version>/ucd/` from 4.1.0, `<version>-Update/` with versioned file names before it (https://www.unicode.org/Public/, https://www.unicode.org/reports/tr44/)
-  static UCD => version >= %4'1 ? Public / "{spelled}.0" / "ucd" : Public / "{spelled}-Update"
+  // the tables as they are now, `latest/ucd/` (https://www.unicode.org/Public/, https://www.unicode.org/reports/tr44/); an
+  // older version of them is for version control to give
+  static UCD => Unicode.Public / "UCD" / "latest" / "ucd"
   assert (Unicode.UCD as String).starts_with("https://www.unicode.org/Public/")  // UN36 the tables are not read from unicode.org
-  // The Unicode version is selectable; its tables follow it (X3.2)
-  assert (Unicode.UCD as String) ~= "17.0.0"  // UV1 the tables are not those of version seventeen
-  assert {
-    Unicode.version = %3'2
-    assert (Unicode.UCD as String) ~= "3.2-Update"  // UV5 an old version is not read from its update directory
-    assert (Unicode.file("Blocks") as String).ends_with("Blocks-3.2.0.txt")  // UV6 an old table is not named with its version
-    assert !(U+1F600.assigned)  // UV7 an emoji from 6.1 is assigned in 3.2
-    Unicode.version = %17
-  }
-  static file (name: String) => version >= %4'1 ? UCD / "{name}.txt" : UCD / "{name}-{spelled}.0.txt"
-  assert (Unicode.file("Blocks") as String).ends_with("/ucd/Blocks.txt")  // UV2 a table of a current version is not in its ucd directory
+  assert (Unicode.UCD as String) ~= "latest"  // UV1 the tables are not the latest
+  static file (name: String) => Unicode.UCD / "{name}.txt"
+  assert (Unicode.file("Blocks") as String).ends_with("/ucd/Blocks.txt")  // UV2 a table is not in the ucd directory
 
   static Table := class (Row, (("#", *) | (row: Row, (" "[], "#", *)?) | "")[].join("\n")) => {
     rows => this.row{!= None}
-    [codepoint: Scalar] => rows{.range.in(codepoint)}.first
+    [codepoint: Scalar] => .rows{.range.in(codepoint)}.first
   }
   static Range := class (from: Scalar, ("..", to: Scalar)?) => {
-    in (codepoint: Scalar) => from <= codepoint <= to ?? from
+    in (codepoint: Scalar) => .from <= codepoint <= .to ?? .from
   }
 
   // (what a scalar is, by the tables)
   Scalar &+= {
-    category => GeneralCategory.rows{Data[this].general_category ~= ⊢.short_name}.first
+    category => Unicode.GeneralCategory.rows{Unicode.Data[this].general_category ~= ⊢.short_name}.first
   }
 
 
-  static Blocks => file("Blocks") as Table<(range: Range, "; ", value: *)>
-  static Scripts => file("Scripts") as Table<(range: Range, " "[], "; ", value: *)>
-  // UTS #39 §4: each confusable character and the prototype it maps to, from the security data of the same version (https://www.unicode.org/reports/tr39/#Confusable_Detection, https://www.unicode.org/Public/security/)
-  static confusables => (Public / "security" / "{spelled}.0" / "confusables.txt") as Table<(range: Range, " "[], ";", "\t"[], prototype: Scalar[].join(" "), " "[], ";", "\t"[], type: Char.Word[], *)>
-  static EastAsianWidth => file("EastAsianWidth") as Table<(range: Range, " "[], "; ", value: *)>
-  static CaseFolding => file("CaseFolding") as Table<(range: Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
+  static Blocks => Unicode.file("Blocks") as Unicode.Table<(range: Unicode.Range, "; ", value: *)>
+  static Scripts => Unicode.file("Scripts") as Unicode.Table<(range: Unicode.Range, " "[], "; ", value: *)>
+  // UTS #39 §4: each confusable character and the prototype it maps to, from the latest security data (https://www.unicode.org/reports/tr39/#Confusable_Detection, https://www.unicode.org/Public/security/)
+  static confusables => (Unicode.Public / "security" / "latest" / "confusables.txt") as Unicode.Table<(range: Unicode.Range, " "[], ";", "\t"[], prototype: Scalar[].join(" "), " "[], ";", "\t"[], type: Char.Word[], *)>
+  static EastAsianWidth => Unicode.file("EastAsianWidth") as Unicode.Table<(range: Unicode.Range, " "[], "; ", value: *)>
+  static CaseFolding => Unicode.file("CaseFolding") as Unicode.Table<(range: Unicode.Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
   assert Unicode.CaseFolding[U+0041] == U+0061  // UN60 A does not fold to a
-  static SpecialCasing => file("SpecialCasing") as Table<(
-    range: Range, "; ", lower: Scalar[].join(" "), "; ", title: Scalar[].join(" "), "; ", upper: Scalar[].join(" "), ";", (" ", condition: Char.Word[].join(" "), ";")?
+  static SpecialCasing => Unicode.file("SpecialCasing") as Unicode.Table<(
+    range: Unicode.Range, "; ", lower: Scalar[].join(" "), "; ", title: Scalar[].join(" "), "; ", upper: Scalar[].join(" "), ";", (" ", condition: Char.Word[].join(" "), ";")?
   )>
-  static BidiMirroring => file("BidiMirroring") as Table<(range: Range, "; ", value: Scalar)>
+  static BidiMirroring => Unicode.file("BidiMirroring") as Unicode.Table<(range: Unicode.Range, "; ", value: Scalar)>
   assert Unicode.BidiMirroring[U+0028] == U+0029  // UN63 the mirror of ( is not )
-  static Age => file("DerivedAge") as Table<(range: Range, " "[], "; ", number: Decimal, ".", revision: Decimal)>
+  static Age => Unicode.file("DerivedAge") as Unicode.Table<(range: Unicode.Range, " "[], "; ", number: Decimal, ".", revision: Decimal)>
 
-  static Data => file("UnicodeData") as Table<(
-    range: Range, ";", name: *, ";", general_category: *, ";", canonical_combining_class: *, ";",
+  static Data => Unicode.file("UnicodeData") as Unicode.Table<(
+    range: Unicode.Range, ";", name: *, ";", general_category: *, ";", canonical_combining_class: *, ";",
     bidi_class: *, ";", decomposition_mapping: *, ";", decimal_digit_value: Decimal?, ";", digit_value: Decimal?, ";",
     numeric_value: (minus: "-"?, numerator: Decimal, ("/", denominator: Decimal)?)?, ";", bidi_mirrored: "Y" | "N", ";", unicode1_name: *, ";", ISO_10646_comment: *, ";",
     upper_case: Scalar?, ";", lower_case: Scalar?, ";", title_case: Scalar?
   )>
-  static UpperCase => Data.rows{.upper_case}.map(.range.from: .upper_case)
+  static UpperCase => Unicode.Data.rows{.upper_case}.map(.range.from: .upper_case)
   assert Unicode.UpperCase[U+0061] == U+0041  // UN61 the upper case of a is not A
-  static LowerCase => Data.rows{.lower_case}.map(.range.from: .lower_case)
+  static LowerCase => Unicode.Data.rows{.lower_case}.map(.range.from: .lower_case)
   assert Unicode.LowerCase[U+0041] == U+0061  // UN62 the lower case of A is not a
-  static TitleCase => Data.rows{.title_case}.map(.range.from: .title_case)
-  static DecimalDigitValue => Data.rows{.decimal_digit_value != None}.map(.range.from: .decimal_digit_value)
-  static DigitValue => Data.rows{.digit_value != None}.map(.range.from: .digit_value)
-  static NumericValue => Data.rows{.numeric_value}.map(.range.from: .numeric_value -- (.minus ? -1 : 1) * .numerator / (.denominator ?? 1))
-  static Superscript => decomposed("<super>")
+  static TitleCase => Unicode.Data.rows{.title_case}.map(.range.from: .title_case)
+  static DecimalDigitValue => Unicode.Data.rows{.decimal_digit_value != None}.map(.range.from: .decimal_digit_value)
+  static DigitValue => Unicode.Data.rows{.digit_value != None}.map(.range.from: .digit_value)
+  static NumericValue => Unicode.Data.rows{.numeric_value}.map(.range.from: .numeric_value -- (.minus ? -1 : 1) * .numerator / (.denominator ?? 1))
+  static Superscript => Unicode.decomposed("<super>")
   assert Unicode.Superscript[U+00B2] == U+0032  // UD18 ² is not a superscript 2
   assert !(Unicode.Superscript[U+0032])  // UD20 2 is a superscript
-  static Subscript => decomposed("<sub>")
+  static Subscript => Unicode.decomposed("<sub>")
   assert Unicode.Subscript[U+2082] == U+0032  // UD19 ₂ is not a subscript 2
-  static decomposed (tag: String) => Data.rows{.decomposition_mapping ~= ⊢(tag, " ")}.map(.range.from: .decomposition_mapping.after(tag + " ") as Scalar)
+  static decomposed (tag: String) => Unicode.Data.rows{.decomposition_mapping ~= ⊢(tag, " ")}.map(.range.from: .decomposition_mapping.after(tag + " ") as Scalar)
 
-  Scripts.rows.value.unique.for script => static Char.`script` = Char{.script == script}
+  Unicode.Scripts.rows.value.unique.for script => static Char.`script` = Char{.script == script}
 
-  static GeneralCategory := class (file("PropertyValueAliases") as Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)>) => {
-    rows.for category => static `category.name` = Scalar{Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
+  static GeneralCategory := class (Unicode.file("PropertyValueAliases") as Unicode.Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)>) => {
+    rows.for category => static `category.name` = Scalar{Unicode.Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
   }
   assert "1"[0] is Unicode.GeneralCategory.Number  // UN6 a digit is not a number
   assert "1"[0] is Unicode.GeneralCategory.Decimal_Number  // UN5 a digit is not a decimal number
@@ -104,7 +94,7 @@ Char &+= {
   assert ("é" as Unicode.UTF-8).bytes.length == 2  // S8 é is not two bytes wide
 
   special_casing => Unicode.SpecialCasing.rows{.range.in(this) && !.condition}.first
-  upper_case | uppercase => special_casing.upper ?? Unicode.UpperCase[this] ?? this
+  upper_case | uppercase => .special_casing.upper ?? Unicode.UpperCase[this] ?? this
   assert "ab".upper_case == "AB"  // W3 upper_case failed
   assert "a"[0].upper_case == "A"[0]  // S80 a in upper case is not A
   assert "7"[0].upper_case == "7"[0]  // S83 a digit in upper case is not itself
@@ -112,27 +102,27 @@ Char &+= {
   assert "é".upper_case == "É"  // SC9 é in upper case is not É
   // Case and scripts from the Unicode data (X3.10)
   assert "Straße".upper_case == "STRASSE"  // UD1 sharp s does not upper-case to SS
-  lower_case | lowercase => special_casing.lower ?? Unicode.LowerCase[this] ?? this
+  lower_case | lowercase => .special_casing.lower ?? Unicode.LowerCase[this] ?? this
   assert "Z"[0].lower_case == "z"[0]  // S81 Z in lower case is not z
   assert "a"[0].lower_case == "a"[0]  // S82 a already in lower case is not itself
   assert "Ab".lowercase == "ab"  // S116 lowercase is not lower_case
-  title_case | titlecase => special_casing.title ?? Unicode.TitleCase[this] ?? upper_case
+  title_case | titlecase => .special_casing.title ?? Unicode.TitleCase[this] ?? .upper_case
   assert "ab".title_case == "Ab"  // S49 title_case does not capitalise
   assert "ab cd".titlecase == "Ab Cd"  // S119 titlecase is not title_case
   assert "AB cd".title_case == "Ab Cd"  // S153 the words titled are not Ab Cd
   assert U+01C6.title_case == U+01C5  // UD2 dž does not title-case to Dž
   assert "ǆemal".title_case == "ǅemal"  // UD3 a word does not start with its title case
-  is_upper => lower_case != this
+  is_upper => .lower_case != this
   assert "AB".is_upper  // SC1 AB is not upper case
   assert !("a"[0].is_upper)  // SC3 the character a is upper case
-  is_lower => upper_case != this
+  is_lower => .upper_case != this
   assert "ab".is_lower  // SC2 ab is not lower case
   assert !("1"[0].is_lower)  // SC4 the character 1 is lower case
   mirrored => Unicode.BidiMirroring[this].value ?? this
   assert "ab".mirrored == "ba"  // W5 mirrored failed
   assert "abc".mirrored == "cba"  // S54 abc reversed is not cba
   assert "a".mirrored == "a"  // S55 one character reversed is not itself
-  swap_case | swapcase => is_lower ? upper_case : lower_case
+  swap_case | swapcase => .is_lower ? .upper_case : .lower_case
   assert "Ab".swap_case == "aB"  // W4 swap_case failed
   assert "a"[0].swap_case == "A"[0]  // S84 a swapped is not A
   assert "A"[0].swap_case == "a"[0]  // S85 A swapped is not a
@@ -174,7 +164,7 @@ Char &+= {
   east_asian_width => Unicode.EastAsianWidth[this].value ?? "N"
   assert U+4E00.east_asian_width == "W"  // UN51 a Han character is not wide
   assert U+0061.east_asian_width == "Na"  // UN52 a is not narrow
-  columns => (east_asian_width is ("W" | "F")) ? 2 : 1
+  columns => (.east_asian_width is ("W" | "F")) ? 2 : 1
   assert U+4E00.columns == 2  // UN41 a Han character does not take two columns
   assert U+0061.columns == 1  // UN42 a Latin letter does not take one column
   script => Unicode.Scripts[this].value ?? "Unknown"
@@ -183,10 +173,11 @@ Char &+= {
   block => Unicode.Blocks[this].value ?? "No_Block"
   assert U+0061.block == "Basic Latin"  // UN57 a is not in Basic Latin
   assert U+00E9.block == "Latin-1 Supplement"  // UN58 é is not in Latin-1 Supplement
-  age => Unicode.Age[this] -- . ? Version(number: .number, revision: .revision) : None
-  assert U+0061.age == %1'1  // UV3 a is not from Unicode 1.1
-  assigned => age && age <= Unicode.version
-  assert U+0061.assigned  // UV4 a is not assigned in the selected version
+  // (the version of Unicode it was first assigned in, as the table writes it: its number and revision)
+  age => Unicode.Age[this]
+  assert U+0061.age.(.number == 1 & .revision == 1)  // UV3 a is not from Unicode 1.1
+  assigned => .age !== None
+  assert U+0061.assigned  // UV4 a is not assigned
 }
 assert "-"[0] is Char.Symbol  // S101 a dash is not a symbol
 assert !("a"[0] is Char.Symbol)  // S102 a is a symbol
@@ -239,11 +230,11 @@ String &+= {
   nfd => (#.decomposed.flatten as String).ordered
   // Confusable names compare by their UTS #39 skeleton.
   assert "\u00E9".nfd == "e\u0301"  // SKL4 a precomposed letter does not decompose to its base and mark
-  ordered => empty ? "" : first.combining_class == 0 ? first, rest.ordered : marks.sort_by(.combining_class), this[marks.count..].ordered
+  ordered => empty ? "" : first.combining_class == 0 ? first, rest.ordered : .marks.sort_by(.combining_class), this[.marks.count..].ordered
   marks => empty || first.combining_class == 0 ? [] : first, rest.marks
   // UTS #39 §4: skeleton(X) is NFD(X) with each character replaced by its prototype, then NFD again; X and Y are confusable when their skeletons are equal (https://www.unicode.org/reports/tr39/#def-skeleton)
-  skeleton => (nfd#.map(Unicode.confusables[.].prototype ?? [.]).flatten as String).nfd
-  confusable (other: String) => skeleton == other.skeleton
+  skeleton => (.nfd#.map(Unicode.confusables[.].prototype ?? [.]).flatten as String).nfd
+  confusable (other: String) => .skeleton == other.skeleton
   assert "dаwn".confusable("dawn")  // SKL1 a Cyrillic a is not confusable with a Latin a
   // UTS #39 §5.1: Common and Inherited characters go with any script, so a string of one other script is single-script (https://www.unicode.org/reports/tr39/#Mixed_Script_Detection)
   mixed_script => #.script{!= "Common" && != "Inherited"}.unique.count > 1

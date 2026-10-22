@@ -1,0 +1,25 @@
+// The character running, `@me`, and where it runs, `@local`: what runs the language gives them (World: this instance and
+// the character playing it)
+@me ^string => &.caller as Character
+@local ^string => Location(path: ".")
+// (a path under the character running: each name a member of what is before it, `@me/device/opened`)
+@me/{path} ^string => Character.walked(@me, "{path}".split("/"))
+// Running as another character: only with their grant
+@me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
+Character &+= {
+  // as a boolean, whether it is the one running (without @ether/security a character is only itself)
+  as (=== boolean) => this === @me
+}
+assert @me.acting == @me  // CHR49 a character is not the character it acts as
+assert @me/quests == @me.quests  // JB7 @me/quests is not the character's selection of its programs
+Program &+= {
+  who: * = @me
+}
+assert Program(code: { 1 }).who == @me  // PG35 a program does not run as the character who made it by default
+assert {
+  started := Program(code: "1")
+  @me/quests |= started
+  assert started is @me/quests  // JB1 a program given to @me/quests is not among them
+  assert started.who === @me  // JB11 a started program is not run by whoever started it
+  assert started.stop.done  // JB5 stopping a program does not end it
+}

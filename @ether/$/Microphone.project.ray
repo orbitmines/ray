@@ -1,0 +1,7 @@
+@ether/os
+
+// A microphone: what it hears, when its user grants it
+Microphone := class: Location {
+  sound: *?
+}
+assert !(Microphone().sound)  // MIC1 a microphone nothing granted hears something

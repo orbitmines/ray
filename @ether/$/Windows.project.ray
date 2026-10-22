@@ -1,5 +1,11 @@
 // Windows (https://learn.microsoft.com/windows): an operating system a host may run. It is the one the device runs when the host reports the platform
 // "win32" (Node.js's `process.platform`, https://nodejs.org/api/process.html#processplatform).
-OS.Windows := OS(platform: "win32")
+// Its interface: the Win32 API's DLLs (https://learn.microsoft.com/windows/win32/apiindex/windows-api-list), called as
+// Microsoft's x64 calling convention calls them (https://learn.microsoft.com/cpp/build/x64-calling-convention).
+OS.Windows := OS(platform: "win32",
+  headers: ["windows.h", "winsock2.h", "ws2tcpip.h", "iphlpapi.h", "shellapi.h", "sapi.h", "xinput.h", "sensorsapi.h", "sensors.h", "locationapi.h", "winspool.h", "schannel.h", "security.h"],
+  libraries: ["kernel32", "user32", "shell32", "ole32", "advapi32", "ws2_32", "iphlpapi", "winspool", "xinput1_4", "secur32"],
+  abi: "Microsoft x64")
 assert OS.Windows.platform == "win32"  // WIN1 Windows is not named by the platform "win32"
 assert OS.Windows is OS  // WIN2 Windows is not an operating system
+assert OS.Windows.libraries.contains("kernel32") & OS.Windows.headers.contains("windows.h")  // WIN3 Windows is not called through kernel32, declared in windows.h

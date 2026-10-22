@@ -1,0 +1,4 @@
+@ether/os
+
+// Ray run as the operating system itself: the device runs ether (`os: OS = @me/device` is OS.Ether)
+@me/device &= OS.Ether

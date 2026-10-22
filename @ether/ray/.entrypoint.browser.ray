@@ -1,0 +1,4 @@
+@browser
+
+// Ray run on a web browser: the device runs it (`os: OS = @me/device` is OS.Browser)
+@me/device &= OS.Browser

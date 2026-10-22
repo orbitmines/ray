@@ -8,11 +8,11 @@
 // two family names in Spanish; patronymics in Icelandic; none at all for many — so a full name is kept as its parts, not split.
 // One part alone is a full name only in scripts that write names without spaces (毛泽东, 김민준, やまだたろう); a single word in
 // other scripts is a plain name, as one-word names (mononyms) cannot be told apart from handles.
-FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[]{length > 0}) | FullName.Unspaced[]{length > 0}) => {
-  static Letter := Unicode.GeneralCategory.(Letter | Mark)
+FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[]{.length > 0}) | FullName.Unspaced[]{.length > 0}) => {
+  static Letter := Unicode.GeneralCategory.(FullName.Letter | Mark)
   assert "a"[0] is Unicode.GeneralCategory.Letter  // W14 a is not a letter
   static Joiner := "-" | "‐" | "'" | "’" | "ʼ" | "‌" | "‍"
-  static Part := (FullName.Letter[]{length > 0}, (FullName.Joiner, FullName.Letter[]{length > 0})[]) | (FullName.Letter, ".")
+  static Part := (FullName.Letter[]{.length > 0}, (FullName.Joiner, FullName.Letter[]{.length > 0})[]) | (FullName.Letter, ".")
   assert "Jane Smith" is FullName  // CHR9 a first and a family name are not a full name
   assert "Jane Smith-Jones" is FullName  // CHR10 a hyphenated name part is not a full name part
   assert "Patrick O'Brien" is FullName  // CHR11 an apostrophe inside a name part is not allowed
@@ -25,7 +25,7 @@ FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[
   static Unspaced := Char.Han | Char.Hiragana | Char.Katakana | Char.Hangul | Char.Yi | Unicode.GeneralCategory.Mark
   assert "毛泽东" is FullName & "김민준" is FullName & "やまだたろう" is FullName  // CHR17 one part alone in a script that writes names without spaces is not a full name
   assert "列奥纳多·达·芬奇" is FullName  // CHR18 a name with the middle dot separator is not a full name
-  parts => written.split(FullName.Separator)
+  parts => .written.split(FullName.Separator)
   assert ("Jane Smith" as FullName).parts == ["Jane", "Smith"]  // CHR19 the parts of a full name are not split at its separators
   assert ("Jane Smith-Jones" as FullName).parts == ["Jane", "Smith-Jones"]  // CHR20 a hyphenated part is split
   assert ("レオナルド・ダ・ヴィンチ" as FullName).parts == ["レオナルド", "ダ", "ヴィンチ"]  // CHR21 the parts of a name separated by the Japanese middle dot are not split there

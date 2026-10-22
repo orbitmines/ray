@@ -10,13 +10,13 @@ Fonts := class {
     elsif OS.Browser { [] }
     else { ERROR@OS `fonts are not written in Ray yet` }
   assert {
-    with @me/device/os = OS.Browser {
+    with (@me/device as OS) = OS.Browser {
       assert Fonts.installed == []  // OSE8 a browser gives fonts to read
     }
   }
-  assert [OS.Linux, OS.Macos, OS.Windows].every(os => with @me/device/os = os { Fonts.installed is Location[] && Fonts.installed.nonempty })  // OSE5 an operating system does not say where its fonts are
+  assert [OS.Linux, OS.Macos, OS.Windows].every(os => with (@me/device as OS) = os { Fonts.installed is Location[] && Fonts.installed.nonempty })  // OSE5 an operating system does not say where its fonts are
   assert {
-    with @me/device/os = OS.Ether {
+    with (@me/device as OS) = OS.Ether {
       assert Fonts.installed.erred  // FON1 fonts on ether do not err while they are unwritten
     }
   }

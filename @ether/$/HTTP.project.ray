@@ -9,22 +9,22 @@ HTTP := class {
     // Method names are case-sensitive, the standard ones uppercase (https://www.rfc-editor.org/rfc/rfc9110#section-9.1)
     written => name.uppercase
     // Safe methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.1)
-    safe => this is (get | head | options | trace | propfind)
+    safe => this is (HTTP.Method.get | HTTP.Method.head | HTTP.Method.options | HTTP.Method.trace | HTTP.Method.propfind)
     assert HTTP.Method.propfind.safe  // IO14 listing a remote collection is not safe
     assert HTTP.Method.propfind.written == "PROPFIND"  // IO13 WebDAV's listing method is not written PROPFIND
     assert HTTP.Method.get.safe && !HTTP.Method.post.safe  // HT11 GET is not safe or POST is
     // Idempotent methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)
     idempotent => safe || this is (put | delete)
-    static (token: String) as (=== Method) => Method#{.written == token}.first
+    static (token: String) as (=== HTTP.Method) => HTTP.Method#{.written == token}.first
   }
 
   static Status := class code: Decimal{100 <= . <= 599}, reason: String = Reasons[code] ?? "" {
     // Status codes by their first digit (https://www.rfc-editor.org/rfc/rfc9110#section-15)
-    static Informational := Status{100 <= code < 200}
-    static Successful := Status{200 <= code < 300}
-    static Redirection := Status{300 <= code < 400}
-    static ClientError := Status{400 <= code < 500}
-    static ServerError := Status{500 <= code < 600}
+    static Informational := HTTP.Status{100 <= .code < 200}
+    static Successful := HTTP.Status{200 <= .code < 300}
+    static Redirection := HTTP.Status{300 <= .code < 400}
+    static ClientError := HTTP.Status{400 <= .code < 500}
+    static ServerError := HTTP.Status{500 <= .code < 600}
     // Reason phrases (https://www.rfc-editor.org/rfc/rfc9110#section-15)
     static Reasons := { 100: "Continue", 101: "Switching Protocols", 200: "OK", 201: "Created", 204: "No Content", 206: "Partial Content",
       301: "Moved Permanently", 302: "Found", 304: "Not Modified", 307: "Temporary Redirect", 308: "Permanent Redirect",
@@ -36,24 +36,24 @@ HTTP := class {
     // Field names are case-insensitive; repeated lines combine with ", " (https://www.rfc-editor.org/rfc/rfc9110#section-5.3)
     [name: String] => .entries{.name.fold_case == name.fold_case}.value -- (.nonempty ? .join(", ") : None)
     has (name: String) => .entries.some(.name.fold_case == name.fold_case)
-    with (name: String, value) => Fields(entries: [.entries{.name.fold_case != name.fold_case}, (name: name, value: value as String) if value != None].flatten)
+    with (name: String, value) => HTTP.Fields(entries: [.entries{.name.fold_case != name.fold_case}, (name: name, value: value as String) if value != None].flatten)
   }
 
   static Message := class {
-    fields: Fields = Fields()
+    fields: HTTP.Fields = HTTP.Fields()
     body: Byte[] = []
     assert HTTP.v1_1.read("HTTP/1.1 204 No Content\r\n\r\n").body.empty  // HT13 a 204 response is read with a body
 
-    text => body as String
-    framed => framing(fields)
+    text => .body as String
+    framed => .framing(this.fields)
     // Framing: a body of unknown length is chunked, any other carries its length (https://www.rfc-editor.org/rfc/rfc9112#section-6.1, https://www.rfc-editor.org/rfc/rfc9112#section-6.2)
-    framing (given: Fields) => given.has("Transfer-Encoding") || given.has("Content-Length") ? given
-      : body.count is ∞ ? given.with("Transfer-Encoding", "chunked")
-      : given.with("Content-Length", body.count if body.nonempty)
+    framing (given: HTTP.Fields) => given.has("Transfer-Encoding") || given.has("Content-Length") ? given
+      : .body.count is ∞ ? given.with("Transfer-Encoding", "chunked")
+      : given.with("Content-Length", this.body.count if this.body.nonempty)
   }
 
-  static Request := class: Message {
-    method: Method = Method.get
+  static Request := class: HTTP.Message {
+    method: HTTP.Method = HTTP.Method.get
     assert HTTP.Request(method: HTTP.Method.post, target: @http://example.com/, body: "hi" as Byte[]).(
       . as HTTP.v1_1 == "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 2\r\n\r\nhi"  // HT3 a body is not framed by its length
       & Compiler.reduced(HTTP.Exchange(.), HTTP.Optimizations).format === HTTP.v1_1  // HT14 a plain http exchange left HTTP/1.1
@@ -69,13 +69,13 @@ HTTP := class {
     )
 
     // Host is sent with every request (https://www.rfc-editor.org/rfc/rfc9112#section-3.2)
-    framed => framing(fields.has("Host") ? fields : fields.with("Host", target.host + (target.port ? ":" + target.port as String : "")))
+    framed => .framing(this.fields.has("Host") ? this.fields : this.fields.with("Host", this.target.host + (this.target.port ? ":" + this.target.port as String : "")))
   }
 
-  static Response := class: Message {
-    status: Status = Status(200)
+  static Response := class: HTTP.Message {
+    status: HTTP.Status = HTTP.Status(200)
 
-    ok => status is Status.Successful
+    ok => .status is HTTP.Status.Successful
   }
 
   // The target URI is rebuilt from origin-form and Host (https://www.rfc-editor.org/rfc/rfc9112#section-3.3)
@@ -83,7 +83,7 @@ HTTP := class {
     : target ~= ⊢"/" && host ? ("http://" + host + target) as Location : target as Location
 
   // tchar (https://www.rfc-editor.org/rfc/rfc9110#section-5.6.2)
-  static Token := (Char.Letter | Char.Digit | "!" | "#" | "$" | "%" | "&" | "'" | "*" | "+" | "-" | "." | "^" | "_" | "`" | "|" | "~")[]{length > 0}
+  static Token := (Char.Letter | Char.Digit | "!" | "#" | "$" | "%" | "&" | "'" | "*" | "+" | "-" | "." | "^" | "_" | "`" | "|" | "~")[]{.length > 0}
   // OWS (https://www.rfc-editor.org/rfc/rfc9110#section-5.6.3)
   static OWS := (" " | "\t")[]
   // quoted-string (https://www.rfc-editor.org/rfc/rfc9110#section-5.6.4)
@@ -92,9 +92,9 @@ HTTP := class {
   static Value := (!"\r" && !\n)[]{!(. ~= ⊢(" " | "\t")) && !(. ~= (" " | "\t") ⊣)}
   static CRLF := "\r\n"
   // A line ends in CRLF; a bare LF is recognised too, so a message also reads written inline, its last line ending with the text (https://www.rfc-editor.org/rfc/rfc9112#section-2.2)
-  static End := CRLF | \n | ⊣
+  static End := HTTP.CRLF | \n | ⊣
   // field-line (https://www.rfc-editor.org/rfc/rfc9112#section-5)
-  static Line := (name: Token, ":", OWS, value: Value, OWS, End)
+  static Line := (name: HTTP.Token, ":", HTTP.OWS, value: HTTP.Value, HTTP.OWS, HTTP.End)
 
   // HTTP/1.1 (https://www.rfc-editor.org/rfc/rfc9112)
   static v1_1 := class: Language {
@@ -103,12 +103,12 @@ HTTP := class {
     // HTTP-message (https://www.rfc-editor.org/rfc/rfc9112#section-2.1)
     static Wire := class (
       // request-line (https://www.rfc-editor.org/rfc/rfc9112#section-3)
-      (method: Token, " ", target: (!" " && !"\r")[]{length > 0}, " ", version: Name)
+      (method: HTTP.Token, " ", target: (!" " && !"\r")[]{length > 0}, " ", version: Name)
       // status-line (https://www.rfc-editor.org/rfc/rfc9112#section-4)
       | (version: Name, " ", code: Decimal{length == 3}, " ", reason: (!"\r" && !\n)[]),
-      end: End,
-      lines: Line[],
-      End,
+      end: HTTP.End,
+      lines: HTTP.Line[],
+      HTTP.End,
       // Message body length; a request has none without a length, unless written inline, where it is the rest of the text (https://www.rfc-editor.org/rfc/rfc9112#section-6.3)
       (body: Chunked) if chunked,
       (body: Byte[]{length == content_length}) if !chunked && content_length != None,
@@ -117,38 +117,38 @@ HTTP := class {
       // HTTP-version (https://www.rfc-editor.org/rfc/rfc9112#section-2.3)
       static Name := ("HTTP/", Char.Digit, ".", Char.Digit)
 
-      fields => Fields(entries: lines.map((name: .name, value: .value)))
+      fields => HTTP.Fields(entries: this.lines.map((name: .name, value: .value)))
       // chunked is the final transfer coding when present (https://www.rfc-editor.org/rfc/rfc9112#section-6.1)
-      chunked => fields["Transfer-Encoding"].split(",").last.trimmed.fold_case == "chunked"
+      chunked => .fields["Transfer-Encoding"].split(",").last.trimmed.fold_case == "chunked"
       assert {
         chunked := HTTP.v1_1.read("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n1;x=y\r\n!\r\n0\r\n\r\n")
         assert chunked.text == "hi!"  // HT8 chunks are not joined into the body
       }
-      content_length => fields["Content-Length"] -- (. ? . as Decimal : None)
-      bytes => body is Chunked ? body.bytes : body ?? []
+      content_length => .fields["Content-Length"] -- (. ? . as Decimal : None)
+      bytes => .body is Chunked ? .body.bytes : .body ?? []
 
-      value => code ? Response(status: Status(code, reason), fields, body: bytes)
-        : Request(method: method as Method, target: located(target, fields["Host"]), fields, body: bytes)
+      value => .code ? HTTP.Response(status: HTTP.Status(this.code, this.reason), this.fields, body: this.bytes)
+        : HTTP.Request(method: this.method as HTTP.Method, target: HTTP.located(this.target, this.fields["Host"]), this.fields, body: this.bytes)
       assert HTTP.Fields(entries: [(name: "A", value: "1"), (name: "a", value: "2")])["A"] == "1, 2"  // HT10 repeated fields do not combine
 
-      static (request: Request) as (=== Wire) => request.framed -- (framed => Wire(method: request.method.written, target: request.target.origin_form, version: "HTTP/1.1",
+      static (request: HTTP.Request) as (=== Wire) => request.framed -- (framed => Wire(method: request.method.written, target: request.target.origin_form, version: "HTTP/1.1",
         lines: framed.entries, body: Wire(lines: framed.entries).chunked ? request.body as Chunked : request.body))
-      static (response: Response) as (=== Wire) => response.framed -- (framed => Wire(version: "HTTP/1.1", code: response.status.code, reason: response.status.reason,
+      static (response: HTTP.Response) as (=== Wire) => response.framed -- (framed => Wire(version: "HTTP/1.1", code: response.status.code, reason: response.status.reason,
         lines: framed.entries, body: Wire(lines: framed.entries).chunked ? response.body as Chunked : response.body))
     }
 
     // chunked-body (https://www.rfc-editor.org/rfc/rfc9112#section-7.1)
     static Chunked := class (
-      chunks: (size: Hexadecimal{> 0}, Extension[], CRLF, data: Byte[]{length == size}, CRLF)[],
-      "0"[]{length > 0}, Extension[], CRLF,
+      chunks: (size: Hexadecimal{> 0}, Extension[], HTTP.CRLF, data: Byte[]{length == size}, HTTP.CRLF)[],
+      "0"[]{length > 0}, Extension[], HTTP.CRLF,
       // trailer-section (https://www.rfc-editor.org/rfc/rfc9112#section-7.1.2)
-      trailers: Line[],
-      CRLF
+      trailers: HTTP.Line[],
+      HTTP.CRLF
     ) {
       // chunk-ext (https://www.rfc-editor.org/rfc/rfc9112#section-7.1.1)
-      static Extension := (OWS, ";", OWS, Token, (OWS, "=", OWS, Token | Quoted)?)
+      static Extension := (HTTP.OWS, ";", HTTP.OWS, HTTP.Token, (HTTP.OWS, "=", HTTP.OWS, HTTP.Token | HTTP.Quoted)?)
 
-      bytes => chunks.data.flatten
+      bytes => .chunks.data.flatten
       static (bytes: Byte[]) as (=== Chunked) => Chunked(chunks: bytes.chunk(2 ^ 14).map((size: .count as Hexadecimal, data: .)), trailers: [])
     }
 
@@ -156,7 +156,7 @@ HTTP := class {
       {wire: Wire} => wire.value
     }
     written := {
-      {writing: Language.Writing{value is (Request | Response)}} => writing.value as Wire
+      {writing: Language.Writing{.value is (HTTP.Request | HTTP.Response)}} => writing.value as Wire
     }
   }
 
@@ -167,7 +167,7 @@ HTTP := class {
     static preface := "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
     // Frame format (https://www.rfc-editor.org/rfc/rfc9113#section-4.1)
-    static Frame := class (size: Binary₂₄ = payload.count, type: Byte as Type, flags: Byte = 0, Binary₁{== 0}, stream: Binary₃₁, payload: Byte[]{length == size}) {
+    static Frame := class (size: Binary₂₄ = payload.count, type: Byte as Type, flags: Byte = 0, Binary₁{== 0}, stream: Binary₃₁, payload: Byte[]{.length == size}) {
       // Frame definitions (https://www.rfc-editor.org/rfc/rfc9113#section-6)
       static Type := enum data | headers | priority | rst_stream | settings | push_promise | ping | goaway | window_update | continuation
       // HT17 a request block does not read its fields, its Host hole and its body
@@ -197,27 +197,27 @@ HTTP := class {
         hi
       }).text == "hi"
       // END_STREAM, END_HEADERS, PADDED and PRIORITY (https://www.rfc-editor.org/rfc/rfc9113#section-6.1, https://www.rfc-editor.org/rfc/rfc9113#section-6.2)
-      ends_stream => (flags ~&& 0x1) != 0
-      ends_headers => (flags ~&& 0x4) != 0
-      padded => (flags ~&& 0x8) != 0
-      prioritised => type == Type.headers && (flags ~&& 0x20) != 0
+      ends_stream => (.flags ~&& 0x1) != 0
+      ends_headers => (.flags ~&& 0x4) != 0
+      padded => (.flags ~&& 0x8) != 0
+      prioritised => .type == HTTP.Frame.Type.headers && (.flags ~&& 0x20) != 0
       // What a DATA or HEADERS frame carries, without its Pad Length, priority fields and Padding (https://www.rfc-editor.org/rfc/rfc9113#section-6.1, https://www.rfc-editor.org/rfc/rfc9113#section-6.2)
-      fragment => payload[(padded ? 1 : 0) + (prioritised ? 5 : 0)..<payload.count - (padded ? payload[0] : 0)]
+      fragment => .payload[(.padded ? 1 : 0) + (.prioritised ? 5 : 0)..<payload.count - (.padded ? .payload[0] : 0)]
     }
 
     static Wire := class (preface?, frames: Frame[]) {
-      streams => frames{.stream > 0}.stream.unique
+      streams => .frames{.stream > 0}.stream.unique
       // A field block is a HEADERS frame and the CONTINUATION frames after it (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
-      blocks => (frames{.type is (Frame.Type.headers | Frame.Type.continuation)} ~= (blocks: (first: Frame{type == Frame.Type.headers}, rest: Frame{type == Frame.Type.continuation}[])[])).blocks.map([.first, .rest].flatten)
+      blocks => (.frames{.type is (Frame.Type.headers | Frame.Type.continuation)} ~= (blocks: (first: Frame{.type == Frame.Type.headers}, rest: Frame{.type == Frame.Type.continuation}[])[])).blocks.map([.first, .rest].flatten)
       // One decoding context per connection, field blocks in the order they arrive (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
-      decoded => HPACK.Connection(blocks.map(.fragment.flatten as HPACK.Block)).fields
+      decoded => HPACK.Connection(this.blocks.map(.fragment.flatten as HPACK.Block)).fields
       // Pseudo-header fields (https://www.rfc-editor.org/rfc/rfc9113#section-8.3)
-      message (stream: Number) => Fields(entries: blocks.enumerate{.value.first.stream == stream}.map(decoded[.index]).flatten(1)) -- (fields =>
-        Fields(entries: fields.entries{!(.name ~= ⊢":")}) -- (plain => frames{.stream == stream && .type == Frame.Type.data}.fragment.flatten -- (body => fields[":status"]
-          ? Response(status: Status(fields[":status"] as Decimal), fields: plain, body: body)
-          : Request(method: fields[":method"] as Method, target: (fields[":scheme"] + "://" + fields[":authority"] + fields[":path"]) as Location, fields: plain, body: body))))
+      message (stream: Number) => HTTP.Fields(entries: this.blocks.enumerate{.value.first.stream == stream}.map(this.decoded[.index]).flatten(1)) -- (fields =>
+        HTTP.Fields(entries: fields.entries{!(.name ~= ⊢":")}) -- (plain => this.frames{.stream == .stream && .type == Frame.Type.data}.fragment.flatten -- (body => fields[":status"]
+          ? HTTP.Response(status: HTTP.Status(fields[":status"] as Decimal), fields: plain, body: body)
+          : HTTP.Request(method: fields[":method"] as HTTP.Method, target: (fields[":scheme"] + "://" + fields[":authority"] + fields[":path"]) as Location, fields: plain, body: body))))
       // Connection-specific fields are not sent (https://www.rfc-editor.org/rfc/rfc9113#section-8.2.2)
-      static (request: Request) as (=== Wire) => Wire(frames: [
+      static (request: HTTP.Request) as (=== Wire) => Wire(frames: [
         Frame(type: Frame.Type.headers, flags: 4 + (request.body.empty ? 1 : 0), stream: 1, payload: HPACK.write([
           (name: ":method", value: request.method.written), (name: ":scheme", value: request.target.scheme),
           (name: ":authority", value: request.target.host), (name: ":path", value: request.target.origin_form),
@@ -230,20 +230,20 @@ HTTP := class {
       {wire: Wire} => wire.streams.map(wire.message(.))
     }
     written := {
-      {writing: Language.Writing{value is Request}} => preface, writing.value as Wire
+      {writing: Language.Writing{.value is Request}} => preface, writing.value as Wire
     }
   }
 
   static Exchange := class request: Request, format: Language = v1_1 {
-    response => request.target.socket.send(format.write(request)) -- format.read(.)
+    response => .request.target.socket.send(this.format.write(this.request)) -- this.format.read(.)
   }
   // Protocol negotiation (https://www.rfc-editor.org/rfc/rfc7301) picks the newest format both ends speak
   static Optimizations := {
-    {exchange: Exchange{format === v1_1 && request.target.scheme == "https" && request.target.offers("h2")}} => Exchange(exchange.request, format: v2)
+    {exchange: Exchange{format === .v1_1 && .request.target.scheme == "https" && .request.target.offers("h2")}} => Exchange(exchange.request, format: v2)
   }
 
-  static send (request: Request) => Compiler.reduced(Exchange(request), Optimizations).response
-  static get (url: Location) => send(Request(target: url))
+  static send (request: Request) => Compiler.reduced(HTTP.Exchange(request), HTTP.Optimizations).response
+  static get (url: Location) => HTTP.send(HTTP.Request(target: url))
 }
 
 Location &+= {

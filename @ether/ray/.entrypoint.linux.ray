@@ -1,0 +1,4 @@
+@linux
+
+// Ray run on Linux: the device runs it (`os: OS = @me/device` is OS.Linux)
+@me/device &= OS.Linux

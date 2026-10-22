@@ -733,7 +733,9 @@ export async function entrypoint() {
 // The language server over stdio (lsp/server.ts): a document read on a thread of its own, painted as soon as it is read, its
 // tests painted as they pass or fail.
 export async function lsp(io: { input: NodeJS.ReadableStream, output: NodeJS.WritableStream } = { input: process.stdin, output: process.stdout }): Promise<void> {
-  const language = args[0] && env.fs.existsSync(env.path.join(args[0], `.entrypoint${EXTENSION}3`)) ? env.path.join(args[0], `.entrypoint${EXTENSION}3`) : env.url.fileURLToPath(new URL(ENTRYPOINT, import.meta.url));
+  // (the language given: its entrypoint in it, or in its bootstrap/ (`--lsp @ether/ray`, as the editor gives it))
+  const given = args[0] ? [env.path.join(args[0], `.entrypoint${EXTENSION}3`), env.path.join(args[0], 'bootstrap', `.entrypoint${EXTENSION}3`)].find(f => env.fs.existsSync(f)) : undefined;
+  const language = given ?? env.url.fileURLToPath(new URL(ENTRYPOINT, import.meta.url));
   const { serve } = await import('./lsp/server.ts');
   return serve(language, io);
 }

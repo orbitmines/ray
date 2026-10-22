@@ -1,0 +1,79 @@
+@ether/os
+@c
+@js
+
+// A terminal: what an instance run in one is played through, its standard input and output (a console on Windows, a text
+// terminal elsewhere; in a browser the page's, on ether the player's). One of what `@me/device` superposes, selected by its
+// type (`terminal: Terminal = @me/device`); given a value it shows it, `(@me/device as Terminal) = x`. It holds the instance
+// it plays (`@me/instance = x` writes it).
+Terminal := class {
+  // what is typed: what standard input holds now (POSIX read(2) of file descriptor 0,
+  // https://pubs.opengroup.org/onlinepubs/9799919799/functions/read.html; ReadFile of the console's standard input on Windows,
+  // https://learn.microsoft.com/windows/console/console-handles); in a browser what the page put in its storage, on ether what
+  // the player typed into the instance (`OS.Ether.typed`)
+  typed => if OS.Browser { (@me/device as Storage)["instance/received"] }
+    elsif OS.Windows {
+      (@c {
+        unsigned char received[65536]
+        unsigned count = 0
+        ReadFile(GetStdHandle(STD_INPUT_HANDLE), received, sizeof(received), &count, nullptr)
+      })() -- (got => got.received[..<got.count] as String)
+    }
+    elsif OS.Linux || OS.Macos {
+      (@c {
+        unsigned char received[65536]
+        long count = read(0, received, sizeof(received))
+      })() -- (got => got.received[..<got.count] as String)
+    }
+    else { OS.Ether.typed }
+  // what is written shown, as text: POSIX write(2) to file descriptor 1
+  // (https://pubs.opengroup.org/onlinepubs/9799919799/functions/write.html), WriteFile to the console's standard output on
+  // Windows; in a browser kept in the page's storage for the page to show, on ether kept for the player (`OS.Ether.written`)
+  = (value) ^punctuation => (value as String as Byte[]) -- (bytes => if OS.Browser { (@me/device as Storage)["instance/sent"] = value as String }
+    elsif OS.Windows {
+      (@c {
+        unsigned count = 0
+        WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), {bytes}, {bytes.count}, &count, nullptr)
+      })()
+    }
+    elsif OS.Linux || OS.Macos { (@c write(1, {bytes}, {bytes.count}))() }
+    else { OS.Ether.written(value as String) }) -- this
+  // how large it is, in columns and rows: TIOCGWINSZ on standard output (https://man7.org/linux/man-pages/man2/TIOCGWINSZ.2const.html),
+  // the console screen buffer's window on Windows (GetConsoleScreenBufferInfo,
+  // https://learn.microsoft.com/windows/console/getconsolescreenbufferinfo), the page's cells (8 by 16 pixels) in a browser;
+  // on ether the player's (`OS.Ether.terminal_size`)
+  columns => .size.0
+  rows => .size.1
+  size: (Number, Number) => if OS.Browser { (@js [Math.floor(innerWidth / 8), Math.floor(innerHeight / 16)])() -- (got => (got[0], got[1])) }
+    elsif OS.Windows {
+      (@c {
+        CONSOLE_SCREEN_BUFFER_INFO info
+        GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info)
+        int columns = info.srWindow.Right - info.srWindow.Left + 1
+        int rows = info.srWindow.Bottom - info.srWindow.Top + 1
+      })() -- (got => (got.columns, got.rows))
+    }
+    elsif OS.Linux || OS.Macos {
+      (@c {
+        struct winsize window
+        ioctl(1, TIOCGWINSZ, &window)
+        int columns = window.ws_col
+        int rows = window.ws_row
+      })() -- (got => (got.columns, got.rows))
+    }
+    else { OS.Ether.terminal_size }
+
+  // As what holds the instance it plays: reading it is what was typed, writing it shows what was written; it is not
+  // executed.
+  [location: Location] => .typed
+  { }[{location: Location}] = {value} ^punctuation => (this as Terminal) = value
+  ({location: Location}, {args}) => ERROR@Terminal `an instance is not executed: it is sent to`
+}
+assert {
+  with (@me/device as OS) = OS.Ether {
+    terminal: Terminal = @me/device
+    (terminal as Terminal) = "a"
+    assert OS.Ether.typed == None  // TRM1 a terminal on ether has something typed before anything was
+    assert terminal.size == (80, 24)  // TRM2 a terminal on ether is not 80 by 24 until the player says otherwise
+  }
+}

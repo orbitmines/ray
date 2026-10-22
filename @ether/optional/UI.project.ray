@@ -12,6 +12,7 @@
 @font
 @ether/timezone
 @ether/device
+@terminal
 @ether
 @ether/time
 @unicode
@@ -1119,7 +1120,7 @@ UI.HTML := class {
       window.addEventListener("scroll", (event) => ray.set("UI.scene.scrolled.y", window.scrollY))
       effect(["UI.scene.scrolled"], () => {
         const y = ray.get("UI.scene.scrolled.y")
-        if (Math.abs(scrollY - y) > 1) scrollTo(\{top: y, behavior: ray.get("UI.scene.transition") ? "smooth" : "auto"})
+        if (Math.abs(scrollY - y) > 1) scrollTo(\{top: y, behavior: ray.get("UI.scene.transition") ? "smooth" : "auto"\})
       })
       effect(["UI.selection"], () => ray.get("UI.selection").forEach((s) => {
         const r = s.selected_range
@@ -1160,7 +1161,7 @@ UI.HTML := class {
           ["pointerleave", "focusout"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({this.dom}).hidePopover()))
         ]) if this is UI.Popover,
         @js document.getElementById({this.dom}).showPopover() if this.position is Geometry.Anchored && this.visible && !(this is UI.Popover),
-        @js effect([{this.dom + ".scrolled"}], () => document.getElementById({this.dom}).scrollTo(\{top: ray.get({this.dom + ".scrolled.y"}), behavior: ray.get({this.dom + ".transition"}) ? "smooth" : "auto"})) if this.overflow == this.scroll
+        @js effect([{this.dom + ".scrolled"}], () => document.getElementById({this.dom}).scrollTo(\{top: ray.get({this.dom + ".scrolled.y"}), behavior: ray.get({this.dom + ".transition"}) ? "smooth" : "auto"\})) if this.overflow == this.scroll
       ]
     }
 
@@ -1420,13 +1421,12 @@ UI.TUI := class {
     {start: UI.TUI.Start{!.modes.contains(ANSI.Mode(9001, "h"))}} => UI.TUI.Start([start.modes, [ANSI.Mode(9001, "h")]].flatten)
   }
 
+  // A run on the terminal the instance is played through (`(@me/device as Terminal)`, one of its devices): what is drawn
+  // written to it, what is typed on it read
   Terminal := class: UI.Interface (written: Compiler = UI.TUI.written, grid: UI.TUI.Grid? = None) => {
-    emit (bytes) => @me/instance = bytes
-    dynamically typed = @me/instance
-    size =>
-      columns := ((@me/device as OS).env.COLUMNS) as Number
-      lines := ((@me/device as OS).env.LINES) as Number
-      Geometry.Vector(columns, lines)
+    emit (bytes) => (@me/device as Terminal).write(bytes)
+    dynamically typed = (@me/device as Terminal).typed
+    size => (@me/device as Terminal).size -- (Geometry.Vector(.0, .1))
     emitted (value) => .emit(Compiler.reduced(value, this.written))
     // (the scene is as large as the terminal: its columns and rows)
     start =>
@@ -1479,7 +1479,7 @@ UI.TUI := class {
     {mouse: ANSI.Mouse} => (@me/device as Pointer)["mouse"].to(mouse.position, pressing: [mouse.button])
     {paste: ANSI.Paste} => ((@me/device as Clipboard).content = paste.text) -- UI.focus.content.typed(paste.text)
     {focus: ANSI.FocusChange} => (@me/device as Display).preferences.focused = focus.state == "I"
-    {resize: UI.TUI.Resize} => UI.scene.size = Geometry.Vector(@me/instance.size.x * UI.TUI.px_per_cell.x, @me/instance.size.y * UI.TUI.px_per_cell.y)
+    {resize: UI.TUI.Resize} => UI.scene.size = (@me/device as Terminal).size -- (Geometry.Vector(.0 * UI.TUI.px_per_cell.x, .1 * UI.TUI.px_per_cell.y))
   }
 }
 
@@ -1487,10 +1487,6 @@ Unit(name: "column")
   .convert(((x: Number) => x * (UI.TUI.px_per_cell.x as pixel).amount), pixel)
 Unit(name: "row")
   .convert(((x: Number) => x * (UI.TUI.px_per_cell.y as pixel).amount), pixel)
-
-Device &+= {
-  terminal: UI.TUI.Terminal = UI.TUI.Terminal(level: UI.TUI.level)
-}
 
 assert {
   @me/device/location = @https://orbitmines.com/profiles

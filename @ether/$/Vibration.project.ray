@@ -13,13 +13,13 @@ Vibration := class (pattern: Quantity.Temporal[] = []) => {
   felt => if OS.Linux {
       ((@/dev/input/by-id).held{. as String ~= "-event-joystick" ⊣}.first as String) -- (controller => this.pattern.enumerate.for(step => (@c {
         int felt = open({controller}, O_RDWR)
-        struct ff_effect effect = \{0}
+        struct ff_effect effect = \{0\}
         effect.type = FF_RUMBLE
         effect.id = -1
         effect.u.rumble.strong_magnitude = {step.index % 2 == 0 ? 65535 : 0}
         effect.replay.length = {step.value / (1 ms)}
         ioctl(felt, EVIOCSFF, &effect)
-        struct input_event play = \{0}
+        struct input_event play = \{0\}
         play.type = EV_FF
         play.code = effect.id
         play.value = 1
@@ -30,11 +30,11 @@ Vibration := class (pattern: Quantity.Temporal[] = []) => {
     }
     elsif OS.Windows {
       this.pattern.enumerate.for(step => (@c {
-        XINPUT_VIBRATION motors = \{{step.index % 2 == 0 ? 65535 : 0}, {step.index % 2 == 0 ? 65535 : 0}}
+        XINPUT_VIBRATION motors = \{{step.index % 2 == 0 ? 65535 : 0}, {step.index % 2 == 0 ? 65535 : 0}\}
         XInputSetState(0, &motors)
         Sleep({step.value / (1 ms)})
       })()) -- (@c {
-        XINPUT_VIBRATION still = \{0, 0}
+        XINPUT_VIBRATION still = \{0, 0\}
         XInputSetState(0, &still)
       })() -- this
     }

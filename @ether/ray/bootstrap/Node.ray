@@ -104,7 +104,7 @@ Node &+= {
   assert (1 | 2)#.count == 2  // NOD25 two possible values do not count two
   assert (1 | 2)#.first == 1  // NOD26 the first possible value is not the first written
   assert (1 | 2)#.last == 2  // NOD27 the last possible value is not the last written
-  assert @me/device/os["platform"].nonempty  // IO3 the machine does not name its platform
+  assert (@me/device as OS)["platform"].nonempty  // IO3 the machine does not name its platform
   assert (1 | 2)#.contains(2)  // NOD28 a possible value is not contained
   assert !(1 | 2)#.contains(3)  // NOD29 a value that is not possible is contained
   assert ("a", "b", "c").join("-") == "a-b-c"  // SJ2 joining a, b and c with a dash is not a-b-c
@@ -221,9 +221,26 @@ Node &+= {
   location: *?
   // where it is (`@x.@`, `value.@`)
   .@ ^punctuation => .location
+  // placed there too, `value @ place` (a method of the value: `x := @name` is no value placed)
+  @ (location) ^keyword => this ~~ (.location |= location)
 }
-{value} @ {location} ^keyword => value ~~ (.location |= location)
 {value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)
+// A value as another given a value, `(x as T) = v`: what it is as T, given it by its own `=` (`(@me/device as Terminal) = x`
+// shows x on the terminal); a conversion is no place, so nothing is named
+({converted} as {target}) = {written} ^punctuation => {
+  given_to := (converted) as (target)
+  writes := external member (given_to) (`=`)
+  writes(written)
+}
+assert {
+  Written := class {
+    kept: *?
+    = (value) ^punctuation => (.kept = value) -- this
+  }
+  written_to := Written()
+  (written_to as Written) = 5
+  assert written_to.kept == 5  // NOD90 a value as another given a value is not given it by its own =
+}
 
 // What possibilities measure: an unbounded run of them, one after another, its span; else how many of them hold.
 Iterable &+= {

@@ -547,7 +547,7 @@ class Cache {
   static hash(bytes: Uint8Array | string) { return (env.import('crypto') as typeof import('crypto')).createHash('sha1').update(bytes).digest('hex'); }
   static of(args: string[]) {
     const me = env.url.fileURLToPath(import.meta.url), map = env.url.fileURLToPath(new URL('./wasm.o.ray', import.meta.url)), own = env.url.fileURLToPath(new URL('./kernel.ts', import.meta.url));
-    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(own) ? Cache.hash(env.fs.readFileSync(own)) : '') + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '');
+    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(own) ? Cache.hash(env.fs.readFileSync(own)) : '') + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '') + env.fs.readdirSync(env.path.dirname(map)).filter(f => f.endsWith('.o.ray')).sort().map(f => Cache.hash(env.fs.readFileSync(env.path.join(env.path.dirname(map), f)))).join('');
     const read_with = Object.fromEntries(Object.entries(kwargs).filter(([k]) => k !== 'threads' && k !== 'verbose'));
     // (one entry: of another command or kernel, its steps not kept (their files written over))
     const cache = new Cache(env.path.join(env.os.homedir(), '.cache', 'ray'), Cache.hash(JSON.stringify([process.cwd(), args, read_with, kernel])));
@@ -733,7 +733,9 @@ export async function entrypoint() {
 // The language server over stdio (lsp/server.ts): a document read on a thread of its own, painted as soon as it is read, its
 // tests painted as they pass or fail.
 export async function lsp(io: { input: NodeJS.ReadableStream, output: NodeJS.WritableStream } = { input: process.stdin, output: process.stdout }): Promise<void> {
-  const language = args[0] && env.fs.existsSync(env.path.join(args[0], `.entrypoint${EXTENSION}3`)) ? env.path.join(args[0], `.entrypoint${EXTENSION}3`) : env.url.fileURLToPath(new URL(ENTRYPOINT, import.meta.url));
+  // (the language given: its entrypoint in it, or in its bootstrap/ (`--lsp @ether/ray`, as the editor gives it))
+  const given = args[0] ? [env.path.join(args[0], `.entrypoint${EXTENSION}3`), env.path.join(args[0], 'bootstrap', `.entrypoint${EXTENSION}3`)].find(f => env.fs.existsSync(f)) : undefined;
+  const language = given ?? env.url.fileURLToPath(new URL(ENTRYPOINT, import.meta.url));
   const { serve } = await import('./lsp/server.ts');
   return serve(language, io);
 }
@@ -2090,13 +2092,14 @@ const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 7
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
-const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted', 'type_written', 'spread', 'is_range', 'mapped_by', 'mapped', 'dynamic_in', 'dynamic_out', 'origin_of', 'hoisted', 'missing', 'missing_name', 'callable', 'made_of', 'function_given', 'named_argument', 'defines_text', 'read_as'];
+const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted', 'type_written', 'spread', 'is_range', 'mapped_by', 'mapped', 'dynamic_in', 'dynamic_out', 'origin_of', 'hoisted', 'missing', 'missing_name', 'callable', 'made_of', 'function_given', 'named_argument', 'defines_text', 'read_as', 'rule', 'style', 'shown'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
+const MEMREP = typeof process !== "undefined" && !!process.env.RAY_MEMREP;
 const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs', 'count', 'truth', 'number', 'numeral', 'character', 'superposed', 'superposing', 'dotted', 'past', 'cuts', 'unescaped', 'int32', 'linked', 'joined', 'kept'];
 // (what the kernel says: `L_…`)
-const L = { EXPLAIN: 19, TRACE: 20, TRACE_NONE: 21, TRACE_DONE: 22, TRACE_CHECK: 23, TRACE_CHECKED: 24, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
+const L = { EXPLAIN: 19, TRACE: 20, TRACE_NONE: 21, TRACE_DONE: 22, TRACE_CHECK: 23, TRACE_CHECKED: 24, STYLE_Q: 25, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
 // (what the kernel tells the host with --debug: D_… in it)
 const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20, RESULT: 22, FREE: 32 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
@@ -2338,10 +2341,10 @@ export class Ray extends Language<FileStore> {
     this.heap = heap; this.i32 = new Int32Array(heap.buffer); this.u8 = new Uint8Array(heap.buffer);
     const first = Atomics.compareExchange(this.i32, HEAP >> 2, 0, START) === 0;
     // (this thread's words; the kernel compiled for it)
-    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
+    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (!(typeof process !== 'undefined' && process.env.RAY_NOEVAC)) { this.set(this.t + 592, 1); const ev = this.alloc(64), N = 1 << 18; this.set(ev + 4, this.alloc(4 * N)); this.set(ev + 12, N); this.set(ev + 16, this.alloc(4 * 6000)); this.set(ev + 20, this.alloc(4 * N)); this.set(ev + 24, N); this.set(ev + 28, this.alloc(4 * N)); this.set(ev + 32, N); this.set(ev + 36, this.alloc(4 * N)); this.set(ev + 44, env.worker ? 1 : 0); this.set(ev, 1); this.set(this.t + 940, ev); } if (typeof process !== 'undefined' && process.env.RAY_PAINTS) this.set(this.t + 944, 1); if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
     this.hosts.debug = (kind, a, b, c) => this.debugged(kind, a, b, c);
     this.hosts.compiled = (fn, t, f, from) => this.compiled_[fn - 1](t, f, from);
-    this.hosts.told = (at, kind, a, c) => { this.tell(at, kind, a, c); return 0; };
+    this.hosts.told = (at, kind, a, c) => { if (kind === L.STYLE_Q) return this.rule_styled(a) ? 1 : 0; this.tell(at, kind, a, c); return 0; };
     this.x = (this.prebuilt ? instance(this.prebuilt, this.heap as WebAssembly.Memory, this.hosts, this.t) : this.backend.compile(this)) as Exports;
     // (`--debug`: a crash says what the kernel was reading)
     if (this.debugging) this.x = Object.fromEntries(Object.entries(this.x).map(([name, f]) => [name, typeof f !== 'function' ? f : (...args: number[]) => {
@@ -2350,7 +2353,7 @@ export class Ray extends Language<FileStore> {
     if (first) {
       this.set(LIMIT, this.u8.length - (1 << 22)); this.set(TRASH, this.u8.length - (1 << 22)); this.set(BUDGET, Ray.BUDGET); if (typeof process !== "undefined" && process.env.RAY_STATEMENT_MB) this.set(GROWN_AT, Number(process.env.RAY_STATEMENT_MB) << 20); this.set(FAIL_FAST, (typeof process !== 'undefined' && process.env.RAY_FAIL_FAST === '0' ? 0 : 1) | (kwargs.debug && kwargs.debug !== "tests" ? 2 : 0) | (process.env.RAY_OLDONE ? 8 : 0) | (process.env.RAY_MEMO_CHECK ? 4 : 0) | (process.env.RAY_NOSHARE ? 16 : 0) | (process.env.RAY_NOCOULD ? 32 : 0) | (process.env.RAY_CHAIN ? 64 : 0) | (process.env.RAY_NOOWNS ? 128 : 0) | (process.env.RAY_NOGLYPHS ? 256 : 0) | (process.env.RAY_NOPREC ? 2048 : 0) | (process.env.RAY_NOPARTS ? 4096 : 0) | (process.env.RAY_NOTOOK ? 8192 : 0) | (process.env.RAY_NOEACH ? 512 : 0) | (process.env.RAY_NOCAP ? 1024 : 0));
       const area = (at: number, capacity: number, cap: number, size: number) => { this.set(at, this.alloc(cap * size)); this.set(capacity, cap); };
-      area(RULES, RULES_CAP, 1 << 18, 4); this.set(344, this.alloc(8 * (1 << 15))); this.set(OWN, this.alloc(4 * (this.u8.length >>> 16))); area(AFTER, AFTER_CAP, 1 << 16, 28); area(LIST, LIST_CAP, 1 << 21, 4); this.set(FILES, this.alloc(12 * 4096)); this.set(PEND, this.alloc(20 * 4096)); area(READS, READS_CAP, 4096, 16); this.set(INCL, this.alloc(8 * 4096)); area(LAZY, LAZY_CAP, 1 << 14, 24); this.set(BEGINS, this.alloc(44 * 4096)); this.set(288, this.alloc(16 * 4096)); this.set(216, this.alloc(4 * 64)); if (this.debugging) { this.set(240, this.alloc(8 * 4096)); this.set(244, this.alloc(8 * 4096)); this.set(248, this.alloc(8 * 4096)); } this.set(220, this.alloc(12 * 4096));
+      area(RULES, RULES_CAP, 1 << 18, 4); this.set(344, this.alloc(8 * (1 << 15))); this.set(OWN, this.alloc(4 * (this.u8.length >>> 16))); area(AFTER, AFTER_CAP, 1 << 16, 28); area(LIST, LIST_CAP, 1 << 21, 4); this.set(FILES, this.alloc(12 * 4096)); this.set(PEND, this.alloc(20 * 4096)); area(READS, READS_CAP, 4096, 16); this.set(INCL, this.alloc(8 * 4096)); area(LAZY, LAZY_CAP, 1 << 14, 24); this.set(BEGINS, this.alloc(44 * 4096)); this.set(288, this.alloc(16 * 4096)); this.set(216, this.alloc(4 * 64)); if (this.debugging) { this.set(240, this.alloc(8 * 4096)); this.set(244, this.alloc(8 * 4096)); this.set(248, this.alloc(8 * 4096)); } this.set(220, this.alloc(12 * 4096)); this.set(332, this.alloc(4 + 12 * (1 << 20)));
       if (!(typeof process !== 'undefined' && process.env.RAY_MEMO === '0')) { this.set(MEMO, this.alloc(60 << 20)); this.set(MEMO_MASK, (1 << 20) - 1); if (process.env.RAY_TMEMO !== '0') { this.set(TMEMO, this.alloc(40 << 21)); this.set(TMEMO_MASK, (1 << 21) - 1); } }
       this.set(PAIRS, this.alloc(256));
       // (a character's kind: 0 a space, 1 of a word, 2 of an operator, 3 one on its own)
@@ -2446,6 +2449,13 @@ export class Ray extends Language<FileStore> {
     }
     return out;
   }
+  // (this interpreter's own map of a file `<name>.ray`, `<name>.o.ray` beside `wasm.o.ray` (`Terminal.project.o.ray`): how this
+  // host answers what the file leaves to the operating system; read in the file's scope once the file is settled)
+  static map_of(path: string): string | undefined {
+    if (!env.nodejs || !path.endsWith('.ray') || path.endsWith('.o.ray')) return undefined;
+    const map = env.url.fileURLToPath(new URL(`./${env.path.basename(path).slice(0, -'.ray'.length)}.o.ray`, import.meta.url));
+    return env.fs.existsSync(map) ? map : undefined;
+  }
   // (a location, `@./*.ray`, beside the file it is written in: the files it names, in order; `*` names no hidden one)
   static located(text: string, from: string): string[] {
     const path = env.path.resolve(env.path.dirname(from), text.replace(/^@/, '')), dir = env.path.dirname(path), name = env.path.basename(path);
@@ -2475,6 +2485,8 @@ export class Ray extends Language<FileStore> {
         for (const [path, bytes] of list) if (!done.has(path)) { done.add(path); spans.set(path, this.file(bytes, path, kind, scope)); }
         this.x.settle(this.t, 0);
         for (const at of [PHASE, NEXT, DONE, ANY]) this.set(at, 0);
+        // (the maps of what was read, read in turn where it was, once it is settled)
+        for (const [path] of list) { const map = Ray.map_of(path); if (map && !done.has(map)) { done.add(map); this.file(env.fs.readFileSync(map), map, kind, scope); this.x.settle(this.t, 0); for (const at of [PHASE, NEXT, DONE, ANY]) this.set(at, 0); } }
       }
     }
   }
@@ -2541,7 +2553,9 @@ export class Ray extends Language<FileStore> {
     const t = this.t, test = this.w(t + 20) && this.w(t + 100) ? this.w(this.w(t + 100) + 40) : 0;
     const made = this.where(said_at).startsWith('(made'), at = made && test ? test : said_at;
     const text = (s: number, e: number) => this.text(s, e).trim();
-    if (kind === L.STYLED) { const style = this.member(a, 'style'); if (style) this.styled = [at, this.text(this.w(style + 12), this.w(style + 16)).trim()]; return; }
+    // (a frame of a rule shown in a style, made in a test, told at once (`T_PAINTS`): for a host that paints, nothing here)
+    if (kind === L.STYLED && c === 1) return;
+    if (kind === L.STYLED) { const style = this.style_of(a); if (style) this.styled = [at, style]; return; }
     if (kind === L.DEFINED) { if (kwargs.debug) say(`${ansi.darkGray}DEFINED ${text(a, c)} (${this.where(a)})${ansi.reset}`); return; }
     if (kind === L.PASSED) return this.emit(at, this.snippet(a, c, 100), 'pass');
     if (kind === L.EXPLAIN) { say(`EXPLAIN ${this.where(said_at)}: ${a ? `read by \`${text(a, c)}\` (${this.where(a)})` : 'read by nothing'}`); return; }
@@ -2567,7 +2581,8 @@ export class Ray extends Language<FileStore> {
       this.trace_said(kind === L.TRACE ? `TRACE ${deep}\`${short(text(a, c))}\` on \`${short(this.text(said_at, this.w(this.t + 908)))}\` ${ansi.darkGray}on #${this.w(this.t + 932)}${this.w(this.t + 936) !== this.w(this.t + 932) ? ` (self #${this.w(this.t + 936)})` : ''} ${this.where(said_at)}${ansi.reset}` : `TRACE ${deep}${ansi.orange}nothing reads${ansi.reset} \`${short(this.text(a, c))}\` ${ansi.darkGray}in #${this.w(this.t + 932)} ${this.where(said_at)}${ansi.reset}`);
       return;
     }
-    if (kind === L.OUTPUT) { const out = this.text(a, c); if (env.nodejs) process.stdout.write(out); else console.log(out); return; }
+    // (written out at once, not queued: a worker's own standard output is sent on later, and lost when the run ends first)
+    if (kind === L.OUTPUT) { const out = this.text(a, c); if (env.nodejs) env.fs.writeSync(1, out); else console.log(out); return; }
     const message = kind === L.UNREAD ? `nothing reads \`${text(a, c)}\`` : kind === L.UNLABELLED ? `nothing is labelled \`${text(a, a + c)}\`` : kind === L.BUDGET ? `ran past ${Ray.BUDGET} rules (reading this)`
       : kind === L.OOM ? `out of memory (${this.u8.length} bytes)` : kind === L.REPORT ? (a ? text(a, c) : 'error') : kind === L.CYCLE ? 'what this is read as needs itself'
       : kind === L.NOT_ON ? `nothing in what it is read on reads \`${text(a, c)}\`` : kind === L.EXTERNAL ? `\`external ${text(a, c)}\` is no external` : kind === L.DEEP ? this.deep(a) : kind === L.VALUED ? `a left side answers a value, not a place: \`${text(a, c)}\` (a name in it is a value there: a hole of the rule reading it?)` : kind === L.FULL ? `stopped: almost all the memory there is is in use (what the threads' tests took): this test was not given more` : kind === L.MEMORY ? `took more than ${test ? 128 : 320} MB of new memory ${test ? 'in this test' : 'reading this'} (what it reads makes more and more): stopped` : kind === L.SILENT ? `this test failed and nothing said why (the kernel stopped it without saying what it could not read)` : kind === L.HELD ? `a test put off 4096 tests (each putting off more: a class whose block makes one of it, or a test in what a test makes)` : undefined;
@@ -2609,6 +2624,21 @@ export class Ray extends Language<FileStore> {
     return Uint8Array.from(out);
   }
   // What a node holds under a name.
+  // (a style a node is shown in: its `style` when that spans a name (`keyword`, `string.punctuation`); anything else, none)
+  // (what a node is shown as: the style given it (`external style`, the latest), else its own `style` (a test's frame))
+  private shown: { n: number, at: Map<number, number> } = { n: 0, at: new Map() };
+  style_of(node: number): string {
+    if (!node) return '';
+    // (the table read on from where it was last: each node's latest)
+    const table = this.w(332), n = table ? Math.min(this.w(table), 1 << 20) : 0;
+    if (n < this.shown.n) this.shown = { n: 0, at: new Map() };
+    for (let k = this.shown.n; k < n; k++) this.shown.at.set(this.w(table + 4 + 12 * k), table + 8 + 12 * k);
+    this.shown.n = n;
+    const given = this.shown.at.get(node);
+    if (given) { const a = this.w(given), b = this.w(given + 4); if (b <= a || b - a > 64) return ''; const t = this.text(a, b).trim().replace(/^`|`$/g, ''); return /^[\w.-]{1,64}$/.test(t) ? t : ''; }
+    return this.style_text(this.member(node, 'style'));
+  }
+  style_text(v: number): string { if (!v) return ''; const a = this.w(v + N.A), b = this.w(v + N.B); if (b <= a || b - a > 64) return ''; const t = this.text(a, b).trim(); return /^[\w.-]{1,64}$/.test(t) ? t : ''; }
   member(node: number, name: string): number { const [s, e] = this.string(name); return node ? this.x.member(this.t, node, s, e - s) : 0; }
   // The language's theme: what `Theme.current` is (a name, and each style what it is shown as: another style, or a colour).
   theme(): { name: string, colors: Record<string, string> } | undefined {
@@ -2629,17 +2659,243 @@ export class Ray extends Language<FileStore> {
   // What is painted: each statement's literal text in its rule's style, each hole's take in the hole's, a frame given a style
   // (`& ^style`), all of it.
   paints(s: number, e: number): { begin: number, end: number, style: string }[] {
-    const out: { begin: number, end: number, style: string }[] = [], style = (node: number) => { const v = node ? this.member(node, 'style') : 0; return v ? this.text(this.w(v + N.A), this.w(v + N.B)).trim() : ''; };
-    const part = (rule: number, hole: number) => { for (let k = 0, q = rule + R.PART; k < this.w(rule + R.PARTS); k++, q += PART) if ((this.w(q) & 15) === Part.HOLE && this.w(q + 12) === hole) return q; return 0; };
-    for (const frame of this.frames) {
-      const [fs, fe] = [this.w(frame + F.START), this.w(frame + F.END)], rule = this.w(frame + F.RULE);
-      if (fs < s || fe > e || !rule) continue;
-      const whole = style(frame), head = style(this.w(rule + R.HEAD)), takes = Array.from({ length: this.w(rule + R.HOLES) }, (_, i) => frame + F.TAKES + TAKE * i);
-      if (whole) out.push({ begin: fs - s, end: fe - 1 - s, style: whole });
-      if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => this.w(t) <= at && at < this.w(t + 4)); if (!inside && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head }); }
-      takes.forEach((t, i) => { const q = part(rule, i), hole = q ? style(this.w(q + 20)) : ''; if (hole && this.w(t) >= s && this.w(t + 4) <= e) out.push({ begin: this.w(t) - s, end: this.w(t + 4) - 1 - s, style: hole }); });
-    }
+    const out: { begin: number, end: number, style: string }[] = [];
+    for (const frame of this.frames) this.frame_paints(frame, s, e, out);
     return out;
+  }
+  // (what one frame paints between s and e: its own style over all of it, its rule's head style on its literal text, each
+  // hole's style on what that hole took)
+  frame_paints(frame: number, s: number, e: number, out: { begin: number, end: number, style: string }[] = []): { begin: number, end: number, style: string }[] {
+    const style = (node: number) => this.style_of(node);
+    const [fs, fe] = [this.w(frame + F.START), this.w(frame + F.END)], rule = this.w(frame + F.RULE);
+    if (fs < s || fe > e || !rule) return out;
+    const whole = style(frame), head = this.rule_style(rule), takes = Array.from({ length: this.w(rule + R.HOLES) }, (_, i) => frame + F.TAKES + TAKE * i);
+    if (whole) out.push({ begin: fs - s, end: fe - 1 - s, style: whole });
+    // (a head of holes alone, `{digits: Decimal.String}`: its style over all it read)
+    if (head && !whole && this.w(rule + R.PARTS) === this.w(rule + R.HOLES)) out.push({ begin: fs - s, end: fe - 1 - s, style: head });
+    else if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => this.w(t) <= at && at < this.w(t + 4)); if (!inside && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: this.bracketed(at, head) }); }
+    takes.forEach((t, i) => { const q = this.hole_part(rule, i), hole = q ? style(this.w(q + 20)) : ''; if (hole && this.w(t) >= s && this.w(t + 4) <= e) { out.push({ begin: this.w(t) - s, end: this.w(t + 4) - 1 - s, style: this.w(t + 4) - this.w(t) === 1 ? this.bracketed(this.w(t), hole) : hole }); if (hole === 'string') this.escapes(this.w(t), this.w(t + 4), s, out); } });
+    return out;
+  }
+  // (what a rule is shown as: a value it names shown in a style (a class, an enum), else its head's)
+  rule_style(rule: number): string {
+    if (this.w(rule + R.KIND) === 3) { const v = this.w(rule + R.BS); if (v && this.w(v + N.IS) !== 8) { const shown = this.style_of(v); if (shown) return shown; } }
+    const head = this.w(rule + R.HEAD), own = this.style_of(head);
+    // (a name led by `@`, `@host`, given no style of its own: as the language shows what it reads after `@`, `@{name}`)
+    return own || (head && this.u8[this.w(head + N.A)] === 64 ? this.at_style() : '');
+  }
+  // (a bracket in a head's text, `if {c} { … }`'s braces: as the language shows what it reads in brackets, a group, `({grouped})`,
+  // a block)
+  private brackets = new Map<number, string>();
+  bracketed(at: number, head: string): string { const c = this.u8[at]; return c === 40 || c === 41 || c === 91 || c === 93 || c === 123 || c === 125 ? this.bracket_style(c) || head : head; }
+  bracket_style(c: number): string {
+    const open = c === 41 ? 40 : c === 93 ? 91 : c === 125 ? 123 : c;
+    if (this.brackets.has(open)) return this.brackets.get(open)!;
+    let found = '';
+    const list = this.w(256), n = Math.min(this.w(260), this.w(264));
+    for (let k = n - 1; k >= 0 && !found; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; const a = this.w(hd + N.A); if ((open !== 123 && this.u8[a] === open) || (this.u8[a] === 123 && this.u8[a + 1] === 96 && this.u8[a + 2] === open)) found = this.style_of(hd); }
+    this.brackets.set(open, found); return found;
+  }
+  private at_shown?: string;
+  at_style(): string {
+    if (this.at_shown !== undefined) return this.at_shown;
+    this.at_shown = '';
+    const list = this.w(256), n = Math.min(this.w(260), this.w(264));
+    for (let k = n - 1; k >= 0 && !this.at_shown; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (hd && this.u8[this.w(hd + N.A)] === 64 && this.u8[this.w(hd + N.A) + 1] === 123) this.at_shown = this.style_of(hd); }
+    return this.at_shown;
+  }
+  // What is painted where nothing ran (a body no test reaches, what follows an assert that failed): each statement read as it
+  // would be (the rule that reads it, what its holes take), nothing applied, painted as its frame would be; what a hole of no
+  // style of its own took, read so in turn, with the rules that hole reads by (its type's), else the statement's.
+  dry_paints(s: number, e: number, out: { begin: number, end: number, style: string }[] = []): { begin: number, end: number, style: string }[] {
+    const global = this.w(GLOBAL), seen = new Set<number>(), style = (node: number) => this.style_of(node);
+    let read_in = global; const self_of = (_vis: number) => read_in;
+    const statements = (a: number, z: number, vis: number, depth: number) => {
+      for (let from = a, at = this.x.skip(a, z), k = 0; at < z && k < 4096; k++) { comments(from, at); const ln = this.x.line(at, z); statement(at, ln, vis, depth); from = Math.max(ln, at + 1); at = this.x.skip(from, z); if (at >= z) comments(from, z); }
+    };
+    // (the comments between statements, each line from `//`: as the language shows a comment)
+    const comments = (a: number, z: number) => {
+      for (let i = a; i + 1 < z; i++) if (this.u8[i] === 47 && this.u8[i + 1] === 47) { let j = i; while (j < z && this.u8[j] !== 10) j++; const shown = method('//'); if (shown) out.push({ begin: i - s, end: j - 1 - s, style: shown }); i = j; }
+    };
+    const statement = (a: number, z: number, vis: number, depth: number) => {
+      if (depth > 48 || z <= a || seen.has(a * 4099 + z)) return; seen.add(a * 4099 + z);
+      const r = this.x.reading(this.t, a, z, 0, 0, vis, self_of(vis), 0, 0, 0, 0);
+      // (`RAY_DRY_TRACE=1`: each statement, and what reads it)
+      if (process.env.RAY_DRY_TRACE) { const k = r ? this.w(r) : -1, ru = k === 3 ? this.w(r + 12) : 0, hd = ru ? this.w(ru + R.HEAD) : 0; env.fs.writeSync(2, `DRY ${'  '.repeat(depth)}${JSON.stringify(this.text(a, z).slice(0, 50))} ${['empty', 'unread', 'later', 'rule', 'ref', 'name', 'held', 'on'][k] ?? k}${hd ? ' ' + JSON.stringify(this.text(this.w(hd + N.A), this.w(hd + N.B)).slice(0, 60)) + ' ' + JSON.stringify(style(hd)) : ''}\n`); }
+      read(r, vis, depth);
+    };
+    // (a word nothing reads: a name, as Name reads it)
+    const name_node = this.member(global, 'Name');
+    const read = (r: number, vis: number, depth: number) => {
+      if (!r) return;
+      // (read on what it follows (`x.( … )`): what it follows, then the rest)
+      if (this.w(r) === 7) { read(this.w(r + 12), vis, depth + 1); statement(this.w(r + 16), this.w(r + 20), vis, depth + 1); return; }
+      if (this.w(r) === 1 && /^@[\p{L}_][\p{L}\p{N}_]*$/u.test(this.text(this.w(r + 4), this.w(r + 8)))) { const shown = this.at_style(); if (shown) out.push({ begin: this.w(r + 4) - s, end: this.w(r + 8) - 1 - s, style: shown }); return; }
+      if (this.w(r) === 1 && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(this.text(this.w(r + 4), this.w(r + 8)))) {
+        const shown = parameter(this.text(this.w(r + 4), this.w(r + 8))) || name_style(); if (shown) out.push({ begin: this.w(r + 4) - s, end: this.w(r + 8) - 1 - s, style: shown }); return;
+      }
+      // (what nothing reads as written, as it is when it runs: the value, then an operator after it read as one of the value's
+      // methods (`x == y`, `a as T`: the method named so, shown as its head is), then what follows it)
+      if (this.w(r) === 1) { split(this.w(r + 4), this.w(r + 8), vis, depth); return; }
+      if (this.w(r) !== 3) return;
+      const rule = this.w(r + 12), caps = this.w(r + 16), rs = this.w(r + 4), re = this.w(r + 8), holes = this.w(rule + R.HOLES);
+      if (!rule || rs < s || re > e) return;
+      const take = (i: number): [number, number] => [this.w(caps + 8 * i), this.w(caps + 8 * i + 4)];
+      const inside = (at: number) => { for (let i = 0; i < holes; i++) { const [ha, hz] = take(i); if (ha <= at && at < hz) return true; } return false; };
+      // (a rule that is only a name, shown in no style of its own (a method's name, `==`, `contains`): an operator as the
+      // language shows its operators, a word as Name shows a name)
+      let head = this.rule_style(rule);
+      if (!holes && parameter(this.text(rs, re))) head = parameter(this.text(rs, re));
+      else if (!head && !holes && this.u8[rs] > 32) { const named = this.text(rs, re); head = kind(this.u8[rs]) === 2 ? method(named) : /^[\p{L}_][\p{L}\p{N}_]*$/u.test(named) ? name_style() : ''; }
+      if (head && this.w(rule + R.PARTS) === holes) out.push({ begin: rs - s, end: re - 1 - s, style: head });
+      else if (head) for (let at = rs; at < re; at++) if (!inside(at) && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: this.bracketed(at, head) });
+      // (a definition, `head => body` (its `=>` outside brackets): what is before it a head, painted as one (its parameters,
+      // and what they are read as); what follows read knowing them)
+      const arrow = this.w(rule + R.FLAGS) & 1 || /=>/.test(this.text(this.w(this.w(rule + R.HEAD) + N.A), this.w(this.w(rule + R.HEAD) + N.B))) ? arrow_in(rs, re) : -1;
+      const named = arrow > rs ? head_paints(rs, arrow, vis, depth) : [];
+      if (arrow > rs) { const shown = method('=>'); if (shown) out.push({ begin: arrow - s, end: arrow + 1 - s, style: shown }); }
+      if (named.length) params.push(new Set(named));
+      for (let i = 0; i < holes; i++) {
+        const [ha, hz] = take(i), q = this.hole_part(rule, i), hole = q ? style(this.w(q + 20)) : '';
+        if (ha >= hz || ha < s || hz > e || (arrow > rs && hz <= arrow)) continue;
+        if (hole) { out.push({ begin: ha - s, end: hz - 1 - s, style: hz - ha === 1 ? this.bracketed(ha, hole) : hole }); if (hole === 'string') this.escapes(ha, hz, s, out); }
+        else if (!(ha === rs && hz === re)) statements(ha, hz, (q && this.w(q + 16)) || vis, depth + 1);
+      }
+      if (named.length) params.pop();
+    };
+    const kind = (c: number) => this.u8[this.w(CLASSES) + c];
+    // (the names a head declares (its holes, `{x}`, and what its brackets list, `f (x, y: T = 1)`), as a definition reads them)
+    const params: Set<string>[] = [], parameter = (word: string) => params.some(p => p.has(word)) ? 'parameter' : '';
+    // (where a definition's `=>` is: outside brackets, quotes; -1 if none)
+    const arrow_in = (a: number, z: number): number => {
+      let d = 0, q = 0;
+      for (let i = a; i + 1 < z; i++) {
+        const c = this.u8[i];
+        if (q) { if (c === 92) i++; else if (c === q) q = 0; continue; }
+        if (c === 34 || c === 96) q = c; else if (c === 40 || c === 91 || c === 123) d++; else if (c === 41 || c === 93 || c === 125) d--;
+        else if (!d && c === 61 && this.u8[i + 1] === 62 && (i === a || this.u8[i - 1] <= 32)) return i;
+      }
+      return -1;
+    };
+    const head_paints = (a: number, z: number, vis: number, depth: number): string[] => {
+      const names: string[] = [], word = (i: number) => { let j = i; while (j < z && kind(this.u8[j]) === 1) j++; return j; };
+      const declared = (i: number, j: number) => { names.push(this.text(i, j)); out.push({ begin: i - s, end: j - 1 - s, style: 'parameter' }); };
+      // (what is in a hole or a bracket, item by item: the name, then what follows it (`: T`, `= v`) read as code)
+      const items = (i: number, j: number) => {
+        for (let at = i; at < j;) {
+          let d = 0, end = at; while (end < j && !(d === 0 && this.u8[end] === 44)) { const c = this.u8[end]; if (c === 40 || c === 91 || c === 123) d++; else if (c === 41 || c === 93 || c === 125) d--; end++; }
+          const n0 = this.x.skip(at, end); let n1 = word(n0);
+          if (n1 > n0) {
+            declared(n0, n1);
+            // (`: T`, then `= v`: each read as code, its mark punctuation)
+            let rest = this.x.skip(n1, end);
+            if (rest < end && this.u8[rest] === 58) { let d = 0, eq = rest + 1; while (eq < end && !(d === 0 && this.u8[eq] === 61 && this.u8[eq + 1] !== 62 && this.u8[eq - 1] !== 61 && this.u8[eq + 1] !== 61)) { const c = this.u8[eq]; if (c === 40 || c === 91 || c === 123) d++; else if (c === 41 || c === 93 || c === 125) d--; eq++; } out.push({ begin: rest - s, end: rest - s, style: 'punctuation' }); statement(this.x.skip(rest + 1, eq), eq, vis, depth + 1); rest = eq; }
+            if (rest < end && this.u8[rest] === 61) { out.push({ begin: rest - s, end: rest - s, style: 'punctuation' }); statement(this.x.skip(rest + 1, end), end, vis, depth + 1); }
+          }
+          else statement(n0, end, vis, depth + 1);
+          if (end < j) out.push({ begin: end - s, end: end - s, style: 'punctuation' });
+          at = end + 1;
+        }
+      };
+      // (a head written with its style, `@here ^string`: its words shown so)
+      const tail = /\s\^([\w.-]+)\s*$/.exec(this.text(a, z)), own = tail ? tail[1] : '';
+      for (let i = this.x.skip(a, z); i < z;) {
+        const c = this.u8[i];
+        if (c === 123 || c === 40) {
+          let d = 0, j = i; do { const x = this.u8[j]; if (x === 40 || x === 91 || x === 123) d++; else if (x === 41 || x === 93 || x === 125) d--; j++; } while (j < z && d > 0);
+          out.push({ begin: i - s, end: i - s, style: 'punctuation' }); out.push({ begin: j - 1 - s, end: j - 1 - s, style: 'punctuation' });
+          // (`{x ^style}`: the hole and the style it is shown in)
+          const inner = this.text(i + 1, j - 1), caret = inner.indexOf(' ^');
+          items(i + 1, caret >= 0 ? i + 1 + Buffer.byteLength(inner.slice(0, caret)) : j - 1);
+          if (caret >= 0) out.push({ begin: i + 1 + Buffer.byteLength(inner.slice(0, caret)) + 1 - s, end: j - 2 - s, style: 'modifier' });
+          i = this.x.skip(j, z);
+        } else if (c === 64 && kind(this.u8[i + 1]) === 1) { const j = word(i + 1), shown = own || this.at_style(); if (shown) out.push({ begin: i - s, end: j - 1 - s, style: shown }); i = this.x.skip(j, z); }
+        else if (c === 94) { let j = i + 1; while (j < z && this.u8[j] > 32) j++; out.push({ begin: i - s, end: j - 1 - s, style: 'modifier' }); i = this.x.skip(j, z); }
+        else { let j = kind(c) === 1 ? word(i) : i + 1; if (kind(c) === 2) while (j < z && kind(this.u8[j]) === 2) j++; else if (kind(c) !== 1) while (j < z && this.u8[j] > 32 && kind(this.u8[j]) !== 1 && this.u8[j] !== 40 && this.u8[j] !== 123) j++; const shown = own || (kind(c) === 1 ? (name_style() || '') : kind(c) === 2 ? method(this.text(i, j)) : 'punctuation'); if (shown) out.push({ begin: i - s, end: j - 1 - s, style: shown }); i = this.x.skip(j, z); }
+      }
+      return names;
+    };
+    let named_as: string | undefined;
+    const name_style = (): string => {
+      if (named_as !== undefined) return named_as;
+      named_as = '';
+      for (let r = name_node ? this.w(name_node) : 0, k = 0; r && k < 64 && !named_as; r = this.w(r), k++) { const q = this.hole_part(r, 0); if (q && this.w(r + R.HOLES) === 1 && this.w(r + R.PARTS) === 1) named_as = style(this.w(q + 20)); }
+      return named_as;
+    };
+    const methods = new Map<string, string>();
+    const method = (op: string): string => {
+      if (methods.has(op)) return methods.get(op)!;
+      let found = '';
+      const list = this.w(256), n = Math.min(this.w(260), this.w(264));
+      // (the method named so, else how the language shows that text written in a head of its own: `==` as `{a} === {b}`'s
+      // `===` is, an operator; `as` as in `{on} declares {key} as {value}`)
+      const operated = (hd: number) => this.text(this.w(hd + N.A), this.w(hd + N.B)).replace(/\{[^{}]*\}/g, ' ').split(/\s+/);
+      for (let k = n - 1; k >= 0 && !found; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; const ht = this.text(this.w(hd + N.A), this.w(hd + N.B)).replace(/^(chainable|compounds|static|right-to-left)\s+/, ''); if (ht === op || ht.startsWith(op + ' ') || ht.startsWith(op + '(')) { const st = style(hd); if (st !== 'punctuation') found = st; } }
+      const symbolic = [...op].every(c => kind(c.charCodeAt(0)) === kind(op.charCodeAt(0)));
+      for (const wanted of ['operator', 'keyword']) for (let k = n - 1; k >= 0 && !found && symbolic; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; const tokens = operated(hd); if (tokens.includes(op)) { const st = style(hd); if (st && (!wanted || st === wanted)) found = st; } }
+      if (!found && kind(op.charCodeAt(0)) === 2) for (let k = n - 1; k >= 0 && !found; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; if (operated(hd).some(x => x.length > 1 && [...x].every(c => kind(c.charCodeAt(0)) === 2))) { const st = style(hd); if (st === 'operator') found = st; } }
+      for (let k = n - 1; k >= 0 && !found && symbolic; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; if (operated(hd).includes(op)) found = style(hd); }
+      methods.set(op, found); return found;
+    };
+    const split = (a: number, z: number, vis: number, depth: number) => {
+      // (led by a name after `@`, `@guests.read …`: the name as the language shows those, then what follows it)
+      if (this.u8[a] === 64 && kind(this.u8[a + 1]) === 1) {
+        let j = a + 1; while (j < z && kind(this.u8[j]) === 1) j++;
+        const shown = this.at_style(); if (shown) out.push({ begin: a - s, end: j - 1 - s, style: shown });
+        if (j < z) statement(j, z, vis, depth + 1); return;
+      }
+      // (an operator first, what it is read on before it: the operator, then what follows it)
+      if (kind(this.u8[a]) === 2) {
+        let oe = a; while (oe < z && kind(this.u8[oe]) === 2) oe++;
+        const shown = method(this.text(a, oe)); if (!shown) return;
+        out.push({ begin: a - s, end: oe - 1 - s, style: shown });
+        statement(this.x.skip(oe, z), z, vis, depth + 1); return;
+      }
+      // (past what the value is: a word, or what a bracket or a quote opens, closed)
+      let p = a, d = 0, q = 0;
+      for (; p < z; p++) {
+        const c = this.u8[p];
+        if (q) { if (c === 92) p++; else if (c === q) q = 0; continue; }
+        if (c === 34 || c === 96) { q = c; continue; }
+        if (c === 40 || c === 91 || c === 123) d++; else if (c === 41 || c === 93 || c === 125) d--;
+        else if (!d && c <= 32) break;
+      }
+      const o = this.x.skip(p, z);
+      // (no operator after it: a name, then what is read on it, `x.y.z`, `f(x)`)
+      if (o >= z || p === a) {
+        let j = a; while (j < z && kind(this.u8[j]) === 1) j++;
+        if (j === a || j >= z || !(this.u8[j] === 46 || this.u8[j] === 40 || this.u8[j] === 91)) return;
+        const named = this.text(a, j), shown = parameter(named) || name_style(); if (shown) out.push({ begin: a - s, end: j - 1 - s, style: shown });
+        statement(j, z, vis, depth + 1); return;
+      }
+      let oe = o; while (oe < z && this.u8[oe] > 32 && (kind(this.u8[oe]) === kind(this.u8[o]))) oe++;
+      const op = this.text(o, oe), shown = method(op);
+      if (!shown) return;
+      statement(a, p, vis, depth + 1);
+      out.push({ begin: o - s, end: oe - 1 - s, style: shown });
+      statement(this.x.skip(oe, z), z, vis, depth + 1);
+    };
+    // (read where the document was read: what its own statements were read in, its names first)
+    const own = this.frames.find(f => this.w(f + F.START) >= s && this.w(f + F.END) <= e && this.w(f + F.THIS)), scope = own ? this.w(own + F.THIS) : global;
+    read_in = scope; statements(s, e, this.w(scope) || this.w(global), 0);
+    return out;
+  }
+  // (text shown as a string: what escapes in it, `\n`, `\"`, shown as punctuation, so where text is and where an escape is
+  // can be told apart)
+  escapes(begin: number, end: number, s: number, out: { begin: number, end: number, style: string }[]) {
+    for (let i = begin; i < end; i++) if (this.u8[i] === 92 && i + 1 < end) { let j = i + 2; if (this.u8[i + 1] === 117 && this.u8[i + 2] === 123) { while (j < end && this.u8[j] !== 125) j++; j++; } out.push({ begin: i - s, end: j - 1 - s, style: 'punctuation' }); i = j - 1; }
+  }
+  // (a rule's part that is its hole i)
+  hole_part(rule: number, hole: number): number { for (let k = 0, q = rule + R.PART; k < this.w(rule + R.PARTS); k++, q += PART) if ((this.w(q) & 15) === Part.HOLE && this.w(q + 12) === hole) return q; return 0; }
+  // (what tests paint told as they run, each frame of a rule shown in a style (L.STYLED, its frame, c = 1): for a host that paints
+  // them, after init)
+  paint_tests(on = true) { this.set(this.t + 944, on ? 1 : 0); }
+  // (whether a rule is shown in a style: its head, or one of its holes)
+  rule_styled(rule: number): boolean {
+    const style = (node: number) => this.style_of(node);
+    if (style(this.w(rule + R.HEAD))) return true;
+    for (let i = 0; i < this.w(rule + R.HOLES); i++) { const q = this.hole_part(rule, i); if (q && style(this.w(q + 20))) return true; }
+    return false;
   }
 
   // ---- Debugging: `--debug` (or RAY_DEBUG=1). What the kernel is doing, kept as a stack: on a crash, out of memory, or a
@@ -3063,29 +3319,44 @@ export class Program {
     before?.();
     for (let handled = start; ;) {
       const asked = Ray.requests(heap, handled);
-      if (!asked.length) return;
+      if (!asked.length) return await this.entered(heap);
       for (const { kind, text, at, scope } of asked) {
         handled++;
         const sources: Text.Source[] = [];
         if (text === 'given') { for (const g of given) { if ((await env.fs_promises.stat(env.path.resolve(process.cwd(), g))).isDirectory()) { for await (const src of Text.Source.all(g)) sources.push(src); } else sources.push(new Text.Source(g)); } }
         else { const from = (() => { for (let k = 0; k < Atomics.load(i32, FILES_N >> 2); k++) { const entry = i32[FILES >> 2] + 12 * k; if (i32[entry >> 2] <= at && at <= i32[(entry + 4) >> 2]) return this.files.getPath(i32[(entry + 8) >> 2]); } return ''; })(); for (const path of Ray.located(text, from)) sources.push(new Text.Source(path)); }
-        const ids: number[] = [];
-        for (const src of sources) {
-          if (this.files.getFileId(src.location) !== undefined) continue;
-          await src.load();
-          if (this.files.getFileId(src.location) !== undefined) continue;
-          const id = this.files.add(src.location, src.value);
-          i32[(i32[INCL >> 2] + 8 * id) >> 2] = kind; i32[(i32[INCL >> 2] + 8 * id + 4) >> 2] = scope;
-          if (!!kwargs.verbose) say(`${ansi.darkGray}LOADING${ansi.reset} ${ansi.darkGray}${src.location}${ansi.reset}`);
-          ids.push(id);
-        }
-        await this.queue.submit(ids); await this.queue.join();
-        Ray.ordered(this.files);
-        await this.queue.submit(Array(Math.max(1, this.workers.length)).fill(SETTLE)); await this.queue.join();
-        for (const g of [PHASE, NEXT, DONE, ANY]) Atomics.store(i32, g >> 2, 0);
+        // (what was given, one after another in the order given, each read and settled before the next: until projects are
+        // loaded by their dependencies, a file sees what the files before it define; anything else, read together)
+        if (text === 'given') for (const src of sources) await this.group([src], kind, scope);
+        else await this.group(sources, kind, scope);
         after?.(handled);
       }
     }
+  }
+
+  // Files read together (each in what it was asked for in, `kind` and `scope`), then settled: what each wrote given to what it was
+  // read in, what is left unread read again; then their maps (`map_of`), read where they were, settled too.
+  private async group(sources: Text.Source[], kind: number, scope: number, maps = true): Promise<void> {
+    const i32 = new Int32Array(this.files.buffer.values.heap.buffer), ids: number[] = [];
+    for (const src of sources) {
+      if (this.files.getFileId(src.location) !== undefined) continue;
+      if (!src.loaded) await src.load();
+      if (this.files.getFileId(src.location) !== undefined) continue;
+      const id = this.files.add(src.location, src.value);
+      i32[(i32[INCL >> 2] + 8 * id) >> 2] = kind; i32[(i32[INCL >> 2] + 8 * id + 4) >> 2] = scope;
+      if (!!kwargs.verbose) say(`${ansi.darkGray}LOADING${ansi.reset} ${ansi.darkGray}${src.location}${ansi.reset}`);
+      ids.push(id);
+    }
+    if (!ids.length) return;
+    await this.queue.submit(ids); await this.queue.join();
+    Ray.ordered(this.files);
+    await this.queue.submit(Array(Math.max(1, this.workers.length)).fill(SETTLE)); await this.queue.join();
+    for (const g of [PHASE, NEXT, DONE, ANY]) Atomics.store(i32, g >> 2, 0);
+    // (`RAY_MEM`: the memory used once these are read)
+    if (process.env.RAY_MEM) say(`${ansi.darkGray}MEMORY ${(Atomics.load(i32, HEAP >> 2) / 1048576).toFixed(0)} MB used when ${sources.map(src => env.path.basename(src.location)).join(', ')} read${ansi.reset}`);
+    if (!maps) return;
+    const mapped = sources.map(src => Ray.map_of(src.location)).filter((m): m is string => !!m).map(m => new Text.Source(m));
+    if (mapped.length) await this.group(mapped, kind, scope, false);
   }
 
   async ".entrypoint"() {
@@ -3094,8 +3365,19 @@ export class Program {
     if (src && !src.loaded && src.location && !(await src.is_directory())) await src.load();
     // (given a language's entrypoint, that one; else Ray's)
     if (!src?.is_language_entrypoint) await this.add(new Text.Source(env.nodejs ? env.path.relative(process.cwd(), env.url.fileURLToPath(new URL(ENTRYPOINT, import.meta.url))) : ENTRYPOINT));
-    if (src) await this.add(src.is_language_entrypoint ? src : src.location);
+    // (a program's own file, its entrypoint: read last, once what it was given is (`entered`))
+    if (src && !src.is_language_entrypoint && src.loaded) this.entry = src;
+    else if (src) await this.add(src.is_language_entrypoint ? src : src.location);
   }
+  // The program's entrypoint, read after the files it was given (and their maps) are read and settled, included where they
+  // are: what it runs sees what they define. It is the program: never kept in the cache (what it does is done each run).
+  private entry?: Text.Source;
+  private async entered(heap: { buffer: ArrayBufferLike }) {
+    const src = this.entry; if (!src) return; this.entry = undefined;
+    const given = Ray.requests(heap, 0).find(q => q.text === 'given');
+    await this.group([src], given?.kind ?? 0, given?.scope ?? 0);
+  }
+
 
   // get entrypoint(): pointer {
   //   // TODO: Return the entrypoint's file pointer.

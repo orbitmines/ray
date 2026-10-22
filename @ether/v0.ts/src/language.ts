@@ -2099,7 +2099,7 @@ const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;
 const MEMREP = typeof process !== "undefined" && !!process.env.RAY_MEMREP;
 const MAPPED_KNOWN = ['text', 'first', 'rest', 'nothing', 'given', 'taking', 'same', 'until', 'glyphs', 'count', 'truth', 'number', 'numeral', 'character', 'superposed', 'superposing', 'dotted', 'past', 'cuts', 'unescaped', 'int32', 'linked', 'joined', 'kept'];
 // (what the kernel says: `L_…`)
-const L = { EXPLAIN: 19, TRACE: 20, TRACE_NONE: 21, TRACE_DONE: 22, TRACE_CHECK: 23, TRACE_CHECKED: 24, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
+const L = { EXPLAIN: 19, TRACE: 20, TRACE_NONE: 21, TRACE_DONE: 22, TRACE_CHECK: 23, TRACE_CHECKED: 24, STYLE_Q: 25, UNREAD: 1, UNLABELLED: 2, BUDGET: 3, OOM: 4, REPORT: 5, CYCLE: 6, NOT_ON: 7, EXTERNAL: 8, DEEP: 9, STYLED: 10, HELD: 11, DEFINED: 12, VALUED: 13, SILENT: 14, PASSED: 15, MEMORY: 16, FULL: 17, OUTPUT: 18 };
 // (what the kernel tells the host with --debug: D_… in it)
 const Debug = { STATEMENT: 1, STATEMENT_END: 2, APPLY: 3, APPLY_END: 4, DEFINE: 5, OOM: 6, BLOCK: 7, BLOCK_END: 8, TEST: 9, TEST_END: 10, FAULT: 11, SAID: 12, TYPE: 13, TYPE_END: 14, LOOP: 16, SETTLED: 18, READING: 20, RESULT: 22, FREE: 32 };
 const N = { LAST: 0, BASE: 4, IS: 8, A: 12, B: 16, PARENT: 20, ALSO: 24 }, NODE = 28;
@@ -2341,10 +2341,10 @@ export class Ray extends Language<FileStore> {
     this.heap = heap; this.i32 = new Int32Array(heap.buffer); this.u8 = new Uint8Array(heap.buffer);
     const first = Atomics.compareExchange(this.i32, HEAP >> 2, 0, START) === 0;
     // (this thread's words; the kernel compiled for it)
-    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (!(typeof process !== 'undefined' && process.env.RAY_NOEVAC)) { this.set(this.t + 592, 1); const ev = this.alloc(64), N = 1 << 18; this.set(ev + 4, this.alloc(4 * N)); this.set(ev + 12, N); this.set(ev + 16, this.alloc(4 * 6000)); this.set(ev + 20, this.alloc(4 * N)); this.set(ev + 24, N); this.set(ev + 28, this.alloc(4 * N)); this.set(ev + 32, N); this.set(ev + 36, this.alloc(4 * N)); this.set(ev + 44, env.worker ? 1 : 0); this.set(ev, 1); this.set(this.t + 940, ev); } if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
+    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (!(typeof process !== 'undefined' && process.env.RAY_NOEVAC)) { this.set(this.t + 592, 1); const ev = this.alloc(64), N = 1 << 18; this.set(ev + 4, this.alloc(4 * N)); this.set(ev + 12, N); this.set(ev + 16, this.alloc(4 * 6000)); this.set(ev + 20, this.alloc(4 * N)); this.set(ev + 24, N); this.set(ev + 28, this.alloc(4 * N)); this.set(ev + 32, N); this.set(ev + 36, this.alloc(4 * N)); this.set(ev + 44, env.worker ? 1 : 0); this.set(ev, 1); this.set(this.t + 940, ev); } if (typeof process !== 'undefined' && process.env.RAY_PAINTS) this.set(this.t + 944, 1); if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
     this.hosts.debug = (kind, a, b, c) => this.debugged(kind, a, b, c);
     this.hosts.compiled = (fn, t, f, from) => this.compiled_[fn - 1](t, f, from);
-    this.hosts.told = (at, kind, a, c) => { this.tell(at, kind, a, c); return 0; };
+    this.hosts.told = (at, kind, a, c) => { if (kind === L.STYLE_Q) return this.rule_styled(a) ? 1 : 0; this.tell(at, kind, a, c); return 0; };
     this.x = (this.prebuilt ? instance(this.prebuilt, this.heap as WebAssembly.Memory, this.hosts, this.t) : this.backend.compile(this)) as Exports;
     // (`--debug`: a crash says what the kernel was reading)
     if (this.debugging) this.x = Object.fromEntries(Object.entries(this.x).map(([name, f]) => [name, typeof f !== 'function' ? f : (...args: number[]) => {
@@ -2544,6 +2544,8 @@ export class Ray extends Language<FileStore> {
     const t = this.t, test = this.w(t + 20) && this.w(t + 100) ? this.w(this.w(t + 100) + 40) : 0;
     const made = this.where(said_at).startsWith('(made'), at = made && test ? test : said_at;
     const text = (s: number, e: number) => this.text(s, e).trim();
+    // (a frame of a rule shown in a style, made in a test, told at once (`T_PAINTS`): for a host that paints, nothing here)
+    if (kind === L.STYLED && c === 1) return;
     if (kind === L.STYLED) { const style = this.style_text(this.member(a, 'style')); if (style) this.styled = [at, style]; return; }
     if (kind === L.DEFINED) { if (kwargs.debug) say(`${ansi.darkGray}DEFINED ${text(a, c)} (${this.where(a)})${ansi.reset}`); return; }
     if (kind === L.PASSED) return this.emit(at, this.snippet(a, c, 100), 'pass');
@@ -2632,17 +2634,33 @@ export class Ray extends Language<FileStore> {
   // What is painted: each statement's literal text in its rule's style, each hole's take in the hole's, a frame given a style
   // (`& ^style`), all of it.
   paints(s: number, e: number): { begin: number, end: number, style: string }[] {
-    const out: { begin: number, end: number, style: string }[] = [], style = (node: number) => { const v = node ? this.member(node, 'style') : 0; return this.style_text(v); };
-    const part = (rule: number, hole: number) => { for (let k = 0, q = rule + R.PART; k < this.w(rule + R.PARTS); k++, q += PART) if ((this.w(q) & 15) === Part.HOLE && this.w(q + 12) === hole) return q; return 0; };
-    for (const frame of this.frames) {
-      const [fs, fe] = [this.w(frame + F.START), this.w(frame + F.END)], rule = this.w(frame + F.RULE);
-      if (fs < s || fe > e || !rule) continue;
-      const whole = style(frame), head = style(this.w(rule + R.HEAD)), takes = Array.from({ length: this.w(rule + R.HOLES) }, (_, i) => frame + F.TAKES + TAKE * i);
-      if (whole) out.push({ begin: fs - s, end: fe - 1 - s, style: whole });
-      if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => this.w(t) <= at && at < this.w(t + 4)); if (!inside && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head }); }
-      takes.forEach((t, i) => { const q = part(rule, i), hole = q ? style(this.w(q + 20)) : ''; if (hole && this.w(t) >= s && this.w(t + 4) <= e) out.push({ begin: this.w(t) - s, end: this.w(t + 4) - 1 - s, style: hole }); });
-    }
+    const out: { begin: number, end: number, style: string }[] = [];
+    for (const frame of this.frames) this.frame_paints(frame, s, e, out);
     return out;
+  }
+  // (what one frame paints between s and e: its own style over all of it, its rule's head style on its literal text, each
+  // hole's style on what that hole took)
+  frame_paints(frame: number, s: number, e: number, out: { begin: number, end: number, style: string }[] = []): { begin: number, end: number, style: string }[] {
+    const style = (node: number) => { const v = node ? this.member(node, 'style') : 0; return this.style_text(v); };
+    const [fs, fe] = [this.w(frame + F.START), this.w(frame + F.END)], rule = this.w(frame + F.RULE);
+    if (fs < s || fe > e || !rule) return out;
+    const whole = style(frame), head = style(this.w(rule + R.HEAD)), takes = Array.from({ length: this.w(rule + R.HOLES) }, (_, i) => frame + F.TAKES + TAKE * i);
+    if (whole) out.push({ begin: fs - s, end: fe - 1 - s, style: whole });
+    if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => this.w(t) <= at && at < this.w(t + 4)); if (!inside && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head }); }
+    takes.forEach((t, i) => { const q = this.hole_part(rule, i), hole = q ? style(this.w(q + 20)) : ''; if (hole && this.w(t) >= s && this.w(t + 4) <= e) out.push({ begin: this.w(t) - s, end: this.w(t + 4) - 1 - s, style: hole }); });
+    return out;
+  }
+  // (a rule's part that is its hole i)
+  hole_part(rule: number, hole: number): number { for (let k = 0, q = rule + R.PART; k < this.w(rule + R.PARTS); k++, q += PART) if ((this.w(q) & 15) === Part.HOLE && this.w(q + 12) === hole) return q; return 0; }
+  // (what tests paint told as they run, each frame of a rule shown in a style (L.STYLED, its frame, c = 1): for a host that paints
+  // them, after init)
+  paint_tests(on = true) { this.set(this.t + 944, on ? 1 : 0); }
+  // (whether a rule is shown in a style: its head, or one of its holes)
+  rule_styled(rule: number): boolean {
+    const style = (node: number) => node ? this.style_text(this.member(node, 'style')) : '';
+    if (style(this.w(rule + R.HEAD))) return true;
+    for (let i = 0; i < this.w(rule + R.HOLES); i++) { const q = this.hole_part(rule, i); if (q && style(this.w(q + 20))) return true; }
+    return false;
   }
 
   // ---- Debugging: `--debug` (or RAY_DEBUG=1). What the kernel is doing, kept as a stack: on a crash, out of memory, or a

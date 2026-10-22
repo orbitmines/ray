@@ -67,7 +67,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // which reads on a value)
   // (LEFT, wanted of a reading only: it is a left side, a word nothing reads before what is read on it is declared there)
   // (TYPE_READER, refused only: a READER of a node other than the language's)
-  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, VALUE_OWN = 8192, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMERAL_AT2 = 316, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, GROWN_AT = 508;
+  const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, VALUE_OWN = 8192, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, STYLE_ASKED = 4194304, STYLED_RULE = 8388608, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMERAL_AT2 = 316, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, GROWN_AT = 508;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 32;
   // (a body: [count, ...steps: [kind, start, end, a, c, d]])
@@ -75,7 +75,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (what is said: [at, kind, a, c])
   // (what the host is told, with --debug: a statement read and done, a rule applied and done, one defined, memory out)
   const D_STATEMENT = 1, D_STATEMENT_END = 2, D_APPLY = 3, D_APPLY_END = 4, D_DEFINE = 5, D_OOM = 6, D_BLOCK = 7, D_BLOCK_END = 8, D_TEST = 9, D_TEST_END = 10, D_FAULT = 11, D_SAID = 12, D_TYPE = 13, D_TYPE_END = 14, D_RESULT = 22, D_SETTLED = 18, D_READING = 20, D_KEY = 30, D_FREE = 32;
-  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, L_EXPLAIN = 19, L_TRACE = 20, L_TRACE_NONE = 21, L_TRACE_DONE = 22, L_TRACE_CHECK = 23, L_TRACE_CHECKED = 24, EXPLAIN_AT = 292, T_TRACE_ARM = 900, T_TRACE_E = 908, T_TRACE_N = 912, T_TRACE_MAX = 916, T_TRACE_DEPTH = 920, T_TRACE_ON = 924, T_TRACE_D = 928, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
+  const L_UNREAD = 1, L_UNLABELLED = 2, L_BUDGET = 3, L_OOM = 4, L_REPORT = 5, L_CYCLE = 6, L_NOT_ON = 7, L_EXTERNAL = 8, L_DEEP = 9, L_STYLED = 10, L_HELD = 11, L_DEFINED = 12, L_VALUED = 13, L_SILENT = 14, L_PASSED = 15, L_MEMORY = 16, L_FULL = 17, L_OUTPUT = 18, L_EXPLAIN = 19, L_TRACE = 20, L_TRACE_NONE = 21, L_TRACE_DONE = 22, L_TRACE_CHECK = 23, L_TRACE_CHECKED = 24, L_STYLE_Q = 25, T_PAINTS = 944, T_CRULE = 948, EXPLAIN_AT = 292, T_TRACE_ARM = 900, T_TRACE_E = 908, T_TRACE_N = 912, T_TRACE_MAX = 916, T_TRACE_DEPTH = 920, T_TRACE_ON = 924, T_TRACE_D = 928, HELD = 4096, DEPTH = 6000, REGION = 4096, WROTE = 1 << 16, BODIES = 1024;
   const SCRATCH = 1024;
 
   // ---- memory
@@ -249,6 +249,13 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (`T_LEAD`), what it does not read read where the line was written; the rest of what the rule took, where the line was)
       const mb = !i && (w(rule + R_PART) & 15) === HOLE && !(w(rule + R_FLAGS) & METHOD) ? w(THREAD + T_MEMBER) : 0, leads = mb && mb !== written && w(mb + N_IS) === IS_NODE && w(caps + 8 * i) < w(caps + 8 * i + 4) && skip(w(caps + 8 * i), w(caps + 8 * i + 4)) === skip(w(THREAD + T_MEMBER_S), w(THREAD + T_MEMBER_E)) && w(caps + 8 * i + 4) <= w(THREAD + T_MEMBER_E);
       put(tk + T_START, w(caps + 8 * i)); put(tk + T_END, w(caps + 8 * i + 4)); put(tk + T_VIS, vis); put(tk + T_ORIGIN, names); put(tk + T_THIS, written); put(tk + T_LEX, w(THREAD + T_LEXV)); put(tk + T_LEAD, leads ? mb : 0);
+    }
+    // (in a test, when the host asks for what is painted there (`T_PAINTS`): one of a rule shown in a style told at once, gone
+    // when the test is done; whether a rule is, asked of the host once) TODO(explicit)
+    if (rule && w(THREAD + T_REG_AT) && w(THREAD + T_PAINTS)) {
+      let fl = w(rule + R_FLAGS);
+      if (!(fl & STYLE_ASKED)) { fl = fl | STYLE_ASKED | (told(0, L_STYLE_Q, rule, 0) ? STYLED_RULE : 0); set(rule + R_FLAGS, fl); }
+      if (fl & STYLED_RULE) log(s, L_STYLED, f, 1);
     }
     // (listed, for what is painted; not a test's own, forgotten when it is done)
     if (rule && !w(THREAD + T_REG_AT)) {
@@ -449,12 +456,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (!(p + 1 < end && b(p) === 47 && b(p + 1) === 47)) return 1;
     }
   }
-  // (and a comment that ends its line before more: a list going on past it, its next part)
+  // (and a comment on a line of its own: nothing (one that says `{x} => …` defines nothing), a list going on past it, its
+  // next part; what it is painted as, `comments_read`)
   function skip(at: number, end: number) {
     for (;;) {
       while (at < end && b(at) <= 32) at++;
       if (at + 1 >= end || b(at) !== 47 || b(at + 1) !== 47) return at;
-      if (!coded_after(at, end)) return at;
       let q = at; while (q < end && b(q) !== 10) q++;
       at = q;
     }
@@ -2480,6 +2487,23 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return 0;
   }
   // Code read (in `self`; in brackets, what is inside them): each statement, the last one's value.
+  // (the comments on lines of their own from s to e, for what is painted: each a frame of the language's comment after a
+  // statement (the latest `{statement} // {comment}`), what it took nothing, so the line is shown as that rule is; not read (a
+  // comment that says `{x} => …` would define it)) TODO(explicit)
+  function comments_read(t: number, s: number, e: number, scope: number) {
+    // (the language's, the latest: of those defined since the one found before, else that one)
+    let rule = w(t + T_CRULE);
+    for (let r = latest(w(GLOBAL)), k = 0; r && r !== w(t + T_CRULE) && k < 1 << 16; r = w(r), k++) { const lit = r + R_PART + 2 * PART; if (!(w(r + R_FLAGS) & DEAD) && w(r + R_PARTS) === 5 && (w(r + R_PART) & 15) === HOLE && (w(lit) & 15) === LITERAL && w(lit + 8) === 2 && b(w(lit + 4)) === 47 && b(w(lit + 4) + 1) === 47 && (w(r + R_PART + 4 * PART) & 15) === HOLE) { rule = r; break; } }
+    if (!rule) return;
+    set(t + T_CRULE, rule);
+    let at = s;
+    while (at < e) {
+      while (at < e && b(at) <= 32) at++;
+      let q = at; while (q < e && b(q) !== 10) q++;
+      if (q > at + 1 && b(at) === 47 && b(at + 1) === 47) { const caps = alloc(16); set(caps, at); set(caps + 4, at); set(caps + 8, q); set(caps + 12, q); frame(rule, 0, scope, at, q, caps, 0, scope, scope); }
+      at = q;
+    }
+  }
   function block(t: number, s: number, e: number, names: number, f: number, self: number, vis: number, value: number, brackets: number, written: number, lex: number): number {
     if (brackets) { code(t, s, e); s = w(t + T_A); e = w(t + T_B); }
     // (read in what it reads, too deep: a hole whose code is read as itself)
@@ -2493,8 +2517,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (DEBUG) debug(D_BLOCK, s, e, self);
     let answer = 0;
     const hoisting = w(t + 1020) === depth + 1;
+    let pv = s;
     for (let at = skip(s, e); at < e; at = skip(at, e)) {
       const ln = line(at, e), last = skip(ln, e) >= e ? 1 : 0;
+      // (painted (`T_PAINTS`): each comment on a line of its own before it, read as what it is, `// …`) TODO(explicit)
+      if (w(t + T_PAINTS) && pv < at) comments_read(t, pv, at, self);
+      pv = ln;
       if (hoisting && (hoisted(at, ln) || given_here(self, at, ln))) { at = ln; continue; }
       // (a typed hole's code: read by its type's own rules; what none of them reads (a value of it, by its name), where it was written)
       // (the member a `.{member}` reads, `x.name`: read as x's (VALUE_OWN))
@@ -2522,6 +2550,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (stopped(t)) { set(t + T_DEPTH, depth); if (DEBUG) debug(D_BLOCK_END, s, e, 0); return 0; }
       at = ln;
     }
+    if (w(t + T_PAINTS) && pv < e) comments_read(t, pv, e, self);
     set(t + T_DEPTH, depth);
     if (DEBUG) debug(D_BLOCK_END, s, e, answer);
     return answer;
@@ -2715,17 +2744,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const i = ev_find(x, start, now, idx, n); if (i < 0) return x;
     return (w(w(idx + 4 * i)) & EV_MARK) ? x + w(dl + 4 * i) : x;
   }
-  // (what an application made may be moved: only one thread runs; or, in a test, what was given it is all in the test's own
-  // memory (one in what threads share may be read by another at once, where it was))
-  function ev_private(t: number, at: number, lvl: number): number {
-    const b0 = w(t + EV); if (!w(b0 + 44)) return 1;
-    if (!w(t + T_REG_AT)) return 0;
-    const lg = w(b0 + 4), ln = w(b0 + 8);
-    for (let i = w(w(b0 + 16) + 4 * lvl); i < ln; i++) if (!in_region(w(lg + 4 * i))) return 0;
-    const wkk = w(t + T_WEAK);
-    for (let i = w(at + 20); i < w(t + T_WEAK_N); i++) if (!in_region(w(wkk + 4 * i) & -2)) return 0;
-    return 1;
-  }
+  // (what an application made may be moved: only when one thread runs (one in what threads share may be read by another at
+  // once, where it was; in a test too, now and then, not yet found why)) TODO(explicit)
+  function ev_private(t: number): number { return w(w(t + EV) + 44) ? 0 : 1; }
   // (a thread's word that may hold a place it made: not where its memory is, how much it took, where a test's memory begins)
   function ev_word(k: number): number {
     return k === T_CHUNK || k === T_CHUNK_END || k === T_SLOT || k === T_SLOT_END || k === T_SCRATCH || k === T_SCRATCH_END || k === EV || k === T_REG_AT || k === T_MARK || k === T_MARK_LO || k === T_MARK_HI || k === T_ALLOCATED || k === T_ALLOC_QUIET || k === T_GREW || k === T_FREE_TAKEN || k === T_TOKEN || k === T_BUDGET || k === T_QBUDGET || k === T_SHGEN || k === T_LVL || k === T_LVL_N || k === T_WEAK || k === T_WEAK_N || k === T_DEPTH || k >= 900 ? 0 : 1;
@@ -2828,7 +2849,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (w(t + T_WRITTEN_IN) >= start && w(t + T_WRITTEN_IN) < now) set(t + T_WRITTEN_IN, 0);
     } else {
       // (kept: what still holds what it made moved together where its memory began, the rest let go of) TODO(explicit)
-      if (ev0 && w(ev0) && !w(ev0 + 40) && lowest >= 0 && now - start > 1 << 18 && w(t + T_CHUNK_END) === cend && n < 6000) { if (ev_private(t, at, n)) v = evacuate(t, start, now, at, n, v, slot0); }
+      if (ev0 && w(ev0) && !w(ev0 + 40) && lowest >= 0 && now - start > 1 << 18 && w(t + T_CHUNK_END) === cend && n < 6000) { if (ev_private(t)) v = evacuate(t, start, now, at, n, v, slot0); }
       if (below && lowest < w(below + 4)) set(below + 4, lowest);
     }
     return v;
@@ -4250,11 +4271,16 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const scope = w(top + F_THIS);
     let lines = 1; for (let i = s; i < e; i++) if (b(i) === 10) lines++;
     const unread = alloc(4 + 8 * lines);
+    let pv = s;
     for (let at = skip(s, e); at < e; at = skip(at, e)) {
       const ln = line(at, e);
+      // (painted (`T_PAINTS`): each comment on a line of its own before it, read as what it is, `// …`) TODO(explicit)
+      if (w(t + T_PAINTS) && pv < at) comments_read(t, pv, at, scope);
+      pv = ln;
       if (!statement(t, at, ln, top, scope, unread)) { const n = w(unread); put(unread + 4 + 8 * n, at); put(unread + 8 + 8 * n, ln); put(unread, n + 1); }
       at = ln;
     }
+    if (w(t + T_PAINTS) && pv < e) comments_read(t, pv, e, scope);
     if (k < 0) { said(t, unread); return; }
     const p = w(PEND) + 20 * k;
     put(p, order); put(p + 4, top); put(p + 8, unread);

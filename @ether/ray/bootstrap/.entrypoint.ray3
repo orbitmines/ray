@@ -68,6 +68,7 @@ this => .
 (external rule `{x}: {type}`).style = `punctuation`
 (external rule `{on} &+= {value}`).style = `punctuation`
 (external rule `{on} &+= {`{`}{code}{`}`}`).style = `punctuation`
+(external rule `{lhs} => {rhs}`).style = `keyword`
 {statement} // {comment} ^comment => {statement}
 // {comment} ^comment => { }
 // (and a block of one, `/* … */`, nested: nothing)

@@ -95,7 +95,7 @@ Network &+= {
             getaddrinfo({this.host as String}, {this.port as String}, nullptr, &found)
             SOCKET carried = socket(found->ai_family, SOCK_STREAM, 0)
             connect(carried, found->ai_addr, found->ai_addrlen)
-            SCH_CREDENTIALS credentials = \{SCH_CREDENTIALS_VERSION}
+            SCH_CREDENTIALS credentials = \{SCH_CREDENTIALS_VERSION\}
             credentials.dwFlags = SCH_USE_STRONG_CRYPTO
             CredHandle credential
             AcquireCredentialsHandleW(nullptr, UNISP_NAME_W, SECPKG_CRED_OUTBOUND, nullptr, &credentials, nullptr, nullptr, &credential, nullptr)
@@ -105,12 +105,12 @@ Network &+= {
             listed->ProtocolLists[0].ProtoNegoExt = SecApplicationProtocolNegotiationExt_ALPN
             listed->ProtocolLists[0].ProtocolListSize = {alpn.count}
             memcpy(listed->ProtocolLists[0].ProtocolList, {alpn}, {alpn.count})
-            SecBuffer offering = \{sizeof(unsigned long) * 2 + listed->ProtocolListsSize, SECBUFFER_APPLICATION_PROTOCOLS, protocols}
-            SecBufferDesc input = \{SECBUFFER_VERSION, 1, &offering}
+            SecBuffer offering = \{sizeof(unsigned long) * 2 + listed->ProtocolListsSize, SECBUFFER_APPLICATION_PROTOCOLS, protocols\}
+            SecBufferDesc input = \{SECBUFFER_VERSION, 1, &offering\}
             unsigned char token[16384]
             unsigned char incoming[16384]
-            SecBuffer outgoing = \{sizeof(token), SECBUFFER_TOKEN, token}
-            SecBufferDesc output = \{SECBUFFER_VERSION, 1, &outgoing}
+            SecBuffer outgoing = \{sizeof(token), SECBUFFER_TOKEN, token\}
+            SecBufferDesc output = \{SECBUFFER_VERSION, 1, &outgoing\}
             CtxtHandle connection
             unsigned long attributes = 0
             long status = InitializeSecurityContextW(&credential, nullptr, L{this.host as String}, ISC_REQ_CONFIDENTIALITY | ISC_REQ_STREAM, 0, 0, &input, 0, &connection, &output, &attributes, nullptr)
@@ -118,8 +118,8 @@ Network &+= {
             while (status == SEC_I_CONTINUE_NEEDED || status == SEC_E_INCOMPLETE_MESSAGE) {
               if (outgoing.cbBuffer > 0) { send(carried, token, outgoing.cbBuffer, 0) }
               held = held + recv(carried, incoming + held, sizeof(incoming) - held, 0)
-              SecBuffer reply[2] = \{\{held, SECBUFFER_TOKEN, incoming}, \{0, SECBUFFER_EMPTY, nullptr}}
-              SecBufferDesc replied = \{SECBUFFER_VERSION, 2, reply}
+              SecBuffer reply[2] = \{\{held, SECBUFFER_TOKEN, incoming\}, \{0, SECBUFFER_EMPTY, nullptr\}\}
+              SecBufferDesc replied = \{SECBUFFER_VERSION, 2, reply\}
               outgoing.cbBuffer = sizeof(token)
               status = InitializeSecurityContextW(&credential, &connection, nullptr, ISC_REQ_CONFIDENTIALITY | ISC_REQ_STREAM, 0, 0, &replied, 0, nullptr, &output, &attributes, nullptr)
               if (status != SEC_E_INCOMPLETE_MESSAGE) { held = 0 }

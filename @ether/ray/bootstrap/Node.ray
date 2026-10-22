@@ -224,6 +224,22 @@ Node &+= {
 }
 {value} @ {location} ^keyword => value ~~ (.location |= location)
 {value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)
+// A value as another given a value, `(x as T) = v`: what it is as T, given it by its own `=` (`(@me/device as Terminal) = x`
+// shows x on the terminal); a conversion is no place, so nothing is named
+({converted} as {target}) = {written} ^punctuation => {
+  given_to := (converted) as (target)
+  writes := external member (given_to) (`=`)
+  writes(written)
+}
+assert {
+  Written := class {
+    kept: *?
+    = (value) ^punctuation => (.kept = value) -- this
+  }
+  written_to := Written()
+  (written_to as Written) = 5
+  assert written_to.kept == 5  // NOD90 a value as another given a value is not given it by its own =
+}
 
 // What possibilities measure: an unbounded run of them, one after another, its span; else how many of them hold.
 Iterable &+= {

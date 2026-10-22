@@ -16,7 +16,7 @@ Holders := { }
 Location := class: Hierarchy (
   (scheme: Char.Word[], ":", ("//", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?)?,
   path: Char{!= "?" && != "#"}[],
-  ("?", {query: Location.parameters(.)}: Char{!= "#"}[])?,
+  ("?", query_text: Char{!= "#"}[])?,
   ("#", fragment: Char[])?
 ) => {
   // LOC1 a url read as a location does not split into its scheme, host, port, path, query and fragment (RFC 3986 section 3)
@@ -50,6 +50,9 @@ Location := class: Hierarchy (
   assert ("/no/such/place/anywhere" as Location)(1, 2) == None  // LOC53 executing what nothing holds gives something
   assert Location(path: "t", content: "hi").held == "hi"  // LOC48 a location made in memory does not hold its content
 
+  // (its query, as its parameters: read when asked, not each time one is made (a header is read as a rule's head, its braces
+  // holes: a hole reading the query would run on what is being made))
+  query => (.query_text === None) ? None : Location.parameters(.query_text)
   // (a query as its parameters, each decoded: a name given twice, the last; RFC 3986 section 2.1, "+" a space)
   static parameters (text: String) => {
     given := { }
@@ -91,6 +94,8 @@ Location := class: Hierarchy (
   assert (("https://orbitmines.com" as Location) / "a") as String == "https://orbitmines.com/a"  // LOC28 joining a segment does not add "/" and the segment
   assert (("https://orbitmines.com" as Location) / "..") as String == "https://orbitmines.com/.."  // LOC29 joining a segment with ".." does not still join it
   == (other) => (this as String) == (other as String)
+  // (written out, its parts in order, as its header writes them: not as any value with fields is)
+  as (=== String) => ((.scheme === None) ? "" : .scheme + ":") + ((.host === None) ? "" : "//" + .host + ((.port === None) ? "" : ":" + (.port as String))) + .path + ((.query_text === None) ? "" : "?" + .query_text) + ((.fragment === None) ? "" : "#" + .fragment)
   assert ("https://orbitmines.com/a" as Location) == "https://orbitmines.com/a"  // LOC33 a location is not equal to the text it is written as
   assert ("https://orbitmines.com/a" as Location) == ("https://orbitmines.com/a" as Location)  // LOC34 a location is not equal to an identical location
   assert !(("https://orbitmines.com/a" as Location) == "https://orbitmines.com/b")  // LOC35 two different locations are equal

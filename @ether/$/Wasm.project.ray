@@ -8,17 +8,47 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   static Order := lazily [1, 2, 3, 4, 5, 13, 6, 7, 8, 9, 12, 10, 11]
   dynamically assert sections.id{!= 0}.map(Order.index_of(.)).sorted
 
-  // Integers (5.2.2): LEB128, seven bits a byte from the least significant, the high bit set while more follow; signed, the
-  // last group's high bit its sign
-  static LEB := lazily class (more: (₂1, Binary₇)[], (₂0, last: Binary₇)) {
-    value => <-(more.map(.1), last).flatten as Binary
+  // Integers (5.2.2): LEB128, seven bits a byte from the least significant, the high bit set while more follow (`more`, each
+  // 128 or above), the last below it; signed, the last group's second bit (64) its sign
+  static Continued := Byte{. >= 128}
+  static Final := Byte{. < 128}
+  static LEB := class (more: Continued[], last: Final) => {
+    // (what the groups before the last weigh, least significant first, each without its high bit; 128 to the n)
+    static weight (groups) => groups.empty ? 0 : (groups.first - 128) + 128 * Wasm.LEB.weight(groups.rest)
+    static power (n) => n == 0 ? 1 : 128 * Wasm.LEB.power(n - 1)
+    value => {
+      value_more := .more
+      value_last := .last
+      Wasm.LEB.weight(value_more) + value_last * Wasm.LEB.power(value_more.count)
+    }
+    // (the bytes it is written as)
+    bytes => .written.flatten
+    // (a number's groups: seven bits each but the last, least significant first, the high bit set; the last what is left)
+    static groups (v) => (v < 128) ? [] : [v % 128 + 128].joined(Wasm.LEB.groups(v / 128))
+    static top (v) => v < 128 ? v : Wasm.LEB.top(v / 128)
     // TODO(explicit): goes when a header writes by solving itself for its fields (`value` given, the groups that read as it)
-    static (value: Binary) as (=== LEB) => <-value.chunk(7, from: ⊣) -- (LEB(more: .[..-1], last: .last))
+    static encoded (v) => {
+      enc_more := Wasm.LEB.groups(v)
+      enc_last := Wasm.LEB.top(v)
+      Wasm.LEB(more: enc_more, last: enc_last)
+    }
   }
-  static Signed := lazily LEB {
-    value => <-(more.map(.1), last).flatten as Binary.Signed
-    // TODO(explicit): goes with LEB's (the groups until what is left is the sign alone)
-    static (value: Binary.Signed) as (=== Signed) => <-value.chunk(7, from: ⊣, until: rest => rest.sign_extends) -- (Signed(more: .[..-1], last: .last))
+  static Signed := class (more: Continued[], last: Final) => {
+    value => {
+      value_more := .more
+      value_last := .last
+      Wasm.LEB.weight(value_more) + value_last * Wasm.LEB.power(value_more.count)
+    }
+    bytes => .written.flatten
+    // (the last group below 64: its sign bit clear) TODO(explicit): a value below zero, its groups until what is left is the
+    // sign alone
+    static groups (v) => (v < 64) ? [] : [v % 128 + 128].joined(Wasm.Signed.groups(v / 128))
+    static top (v) => v < 64 ? v : Wasm.Signed.top(v / 128)
+    static encoded (v) => {
+      enc_more := Wasm.Signed.groups(v)
+      enc_last := Wasm.Signed.top(v)
+      Wasm.Signed(more: enc_more, last: enc_last)
+    }
   }
   static U32 := lazily LEB{value < 2 ^ 32}
   static S32 := lazily Signed{-(2 ^ 31) <= value < 2 ^ 31}
@@ -32,13 +62,39 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   static F64 := lazily (bytes: Byte[]{length == 8})
   // Vectors (5.1.3), names (5.2.4)
   static vec (T) => (count: U32 = elements.count, elements: T[]{length == count})
-  static Name := lazily (size: U32 = text.bytes.count, text: Unicode.UTF-8{bytes.count == size})
-  assert (624485 as Wasm.U32 as Byte[]) == [0xE5, 0x8E, 0x26] && ([0xE5, 0x8E, 0x26] as Wasm.U32).value == 624485  // WA1 LEB128's example is not e5 8e 26
-  assert (-123456 as Wasm.S32 as Byte[]) == [0xC0, 0xBB, 0x78]  // WA2 a negative number is not its signed LEB128
-  assert ("add" as Wasm.Name as Byte[]) == [3, 0x61, 0x64, 0x64]  // WA3 a name is not its length and its UTF-8 bytes
+  // (one written: its count, then each element as it is written) TODO(explicit): goes when `vec(T)` writes as it reads
+  static Vec := class (elements: Node) => {
+    bytes => {
+      vec_elements := .elements
+      vec_bytes := Wasm.bytes_all(vec_elements)
+      Wasm.LEB.encoded(vec_elements.count).bytes.joined(vec_bytes)
+    }
+  }
+  // (what anything is written as: a number a byte; a list each of it, in turn; anything else, its own bytes)
+  static bytes_of (x) => (x is Number) ? [x] : (((x).listing === true) ? Wasm.bytes_all(x) : x.bytes)
+  static bytes_all (xs) => xs.empty ? [] : Wasm.bytes_of(xs.first).joined(Wasm.bytes_all(xs.rest))
+  static Name := class (size: U32 = text.count, text: String) => {
+    // (the codes of its characters, in order) TODO(explicit): above 127, their UTF-8 bytes
+    static codes (t) => t.empty ? [] : [t[0]].joined(Wasm.Name.codes(t.rest))
+    bytes => {
+      name_text := .text
+      name_codes := Wasm.Name.codes(name_text)
+      name_size := Wasm.LEB.encoded(name_codes.count)
+      name_size.bytes.joined(name_codes)
+    }
+  }
 
   // Sections (5.5): an id, a size, the contents as that id's reads them
   static Section := lazily class (id: Byte, size: U32 = data.bytes.count, data: Byte[]{length == size} as Data[id])
+  // (one written: its id, its size, its contents) TODO(explicit): goes when `Section` writes as it reads
+  static Written_section := class (id: Node, data: Node) => {
+    bytes => {
+      section_id := .id
+      section_held := .data
+      section_data := Wasm.bytes_of(section_held)
+      [section_id].joined(Wasm.LEB.encoded(section_data.count).bytes).joined(section_data)
+    }
+  }
   // (the contents of the section of each id: 0 custom, 1 type, 2 import, 3 function, 4 table, 5 memory, 6 global, 7 export,
   // 8 start, 9 element, 10 code, 11 data, 12 data count, 13 tag)
   static Data := lazily [
@@ -110,6 +166,16 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   // (a data segment, its leading U32 bit 0 passive, bit 1 a memory index; active without one: memory 0)
   static DataSegment := lazily (0x00, at: Expression, bytes: vec(Byte)) | (0x01, bytes: vec(Byte)) | (0x02, memory: U32, at: Expression, bytes: vec(Byte))
   static Code := lazily (size: U32 = function.bytes.count, function: (locals: vec((count: U32, value: ValueType)), body: Expression))
+  // (one written: its size, then the function) TODO(explicit): goes when `Code` writes as it reads
+  static Written_code := class (function: Node) => {
+    bytes => {
+      code_held := .function
+      code_bytes := Wasm.bytes_of(code_held)
+      Wasm.LEB.encoded(code_bytes.count).bytes.joined(code_bytes)
+    }
+  }
+  // (a module written: the header, then its sections)
+  static module_bytes (sections) => [0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00].joined(Wasm.bytes_all(sections))
 
   // Instructions (5.4): an op, then what it takes. An expression is instructions until `end`.
   // (each op named as WAT writes it: `prefix.name` the enum `prefix`'s member `name`, the dots after the first `_`
@@ -361,3 +427,11 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   assert ((@ray while x < 10 { x = x + 1 }) as Program{O: Wasm.default}).first == Wasm.Op.block  // WA5 a while is not a block around a loop
   assert ([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00] as Wasm).sections.empty  // WA6 the empty module does not read
 }
+// (its integers, read and written, outside the class: its own asserts ask of a module)
+assert Wasm.LEB.encoded(624485).bytes == [0xE5, 0x8E, 0x26] && Wasm.LEB(more: [0xE5, 0x8E], last: 0x26).value == 624485  // WA1 LEB128's example is not e5 8e 26
+assert Wasm.Signed.encoded(100).bytes == [0xE4, 0x00]  // WA2 a hundred is not two groups when signed (its sign bit would be set)
+assert Wasm.Name(text: "add").bytes == [3, 97, 100, 100]  // WA3 a name is not its length and its UTF-8 bytes
+assert Wasm.module_bytes([]) == [0, 97, 115, 109, 1, 0, 0, 0]  // WA7 the empty module is not its header alone
+assert Wasm.Written_section(id: 1, data: Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F]), Wasm.Vec(elements: [0x7F])]])).bytes == [1, 6, 1, 96, 1, 127, 1, 127]  // WA8 a type section of i32 to i32 is not these bytes
+assert Wasm.Written_section(id: 7, data: Wasm.Vec(elements: [[Wasm.Name(text: "f"), 0x00, 0]])).bytes == [7, 5, 1, 1, 102, 0, 0]  // WA9 an export of function 0 as f is not these bytes
+assert Wasm.Written_section(id: 10, data: Wasm.Vec(elements: [Wasm.Written_code(function: [Wasm.Vec(elements: []), 0x20, 0, 0x0B])])).bytes == [10, 6, 1, 4, 0, 32, 0, 11]  // WA10 a body answering its parameter is not these bytes

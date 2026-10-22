@@ -131,6 +131,18 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   writes the Location as text through Language.ray's header writer. With `== (other) => true` it costs nothing; naming
   the narrowed types outside the header, or a Location `as (=== String)` of its own, did not help. World's `static ether`
   and every `Instance` pay it. `@local` makes one only when asked (`Location.local ?? Location(path: ".")`).
+  Taking the header's defaults instead when everything is given by name (`taking`: `all_named(arguments_given)` beside
+  `declared`, then `given_names`) makes `Location(path: ".")` cost nothing and keep its path, but Number.ray +225 MB and
+  the other bootstrap files more (their named constructions read the header as code for its defaults): not kept.
 - **A typed parameter rejects an interpolated text** (`static walked (at, path: String)` given `"{path}"`/`` `{path}` ``:
   "a value is not of the type it is given to"); untyped it reads.
 - **Time.project.ray runs out of the 2 GB** when read after Unicode (the whole 85-file closure of the site does not fit).
+- **`x as String` answers a String of characters, not the kernel's text**: `external output (5 as String)` writes nothing,
+  and `(5 as String) == "5"` is false in a ternary though `assert 5 as String == "5"` holds (assert's comparison is
+  structural). Terminal's map (`external output (value as String)`) so writes only literal texts: a frame built by joining
+  would not show.
+- **With Language.ray read, `5 as String` costs ~512 MB** at read time (and `Location() as String`, so Location's `==`):
+  Language.ray gives every Node `as (=== String) => … Language.ray.write(this)`, and the Ray writer writes a Number as
+  `writing.value as String`. Without Language.ray it costs nothing.
+- **Language.ray's header writer reads `.of.header.head`, which no class has** (the entrypoint keeps a header as
+  `header_quoted`): no structured value is written through its header; a Location (a Ray) falls to the list writer.

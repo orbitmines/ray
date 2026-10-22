@@ -221,8 +221,9 @@ Node &+= {
   location: *?
   // where it is (`@x.@`, `value.@`)
   .@ ^punctuation => .location
+  // placed there too, `value @ place` (a method of the value: `x := @name` is no value placed)
+  @ (location) ^keyword => this ~~ (.location |= location)
 }
-{value} @ {location} ^keyword => value ~~ (.location |= location)
 {value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)
 // A value as another given a value, `(x as T) = v`: what it is as T, given it by its own `=` (`(@me/device as Terminal) = x`
 // shows x on the terminal); a conversion is no place, so nothing is named

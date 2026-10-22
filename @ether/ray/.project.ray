@@ -1,9 +1,10 @@
 // The character running, `@me`, and where it runs, `@local`: what runs the language gives them (World: this instance and
 // the character playing it)
-@me ^string => &.caller as Character
-@local ^string => Location(path: ".")
+// (with no character on the chain, the machine: the character its instance runs as)
+@me ^string => (&.caller as Character) ?? @local.character
+@local ^string => Location.local
 // (a path under the character running: each name a member of what is before it, `@me/device/opened`)
-@me/{path} ^string => Character.walked(@me, "{path}".split("/"))
+@me/{path} ^string => Character.walked(@me, `{path}`)
 // Running as another character: only with their grant
 @me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
 Character &+= {

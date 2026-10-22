@@ -45,7 +45,7 @@ World := class: Location + Nameable {
 
   clock: HybridClock = HybridClock(node: this)
   dynamics: Program?
-  tick: static => this ~~ dynamics?(this)
+  tick: static => this ~~ this.dynamics?(this)
 
   // UTS #39: a name is held by the skeleton of its case fold, so a name confusable with a reserved one finds that one (§4), and a name that mixes scripts and is confusable is refused (§5) (https://www.unicode.org/reports/tr39/#Confusable_Detection, https://www.unicode.org/reports/tr39/#Mixed_Script_Detection)
   class{>.instance_of Nameable}#.for class => {
@@ -259,13 +259,12 @@ Reference := class {
   publisher: *?
   note: String?
 
-  year => date.year
+  year => .date.year
   claim (who: Character = @me) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location.world ?? World.ether)
-  notes => [note, note.previous**].flatten
+  notes => [.note, .note.previous**].flatten
 }
 
-// (the character running, else the local instance's)
-@me ^string => (&.caller as Character) ?? @local.character
+// (a name reserved in the current world; `@me`, the character running else the local instance's, is ray/.project.ray's)
 @{name: reservable_names} ^string => World.current["@", name]
 @{name: reservable_names} = {holder} ^punctuation => World.current["@", name] = holder
 
@@ -539,7 +538,8 @@ Character &+= {
   }
 
   avatars => name{is Location && .segments.some(.starts_with("@"))}
-  presence | primary: Instance?
+  presence: Instance? = None
+  primary => .presence
   constraint: *?
   focus: Program?
   assert {
@@ -550,7 +550,8 @@ Character &+= {
   }
 
   instances => Instance#{. === presence || .logged_in(this) || this is .hosted}
-  device => (presence ?? @local).device
+  // (the devices of the instance selected in `instance`, the one it is at)
+  device => (.primary ?? @local).device
   assert {
     somewhere := Instance(path: "somewhere")
     present := Character(name: "present", presence: somewhere)
@@ -578,10 +579,10 @@ Character &+= {
     assert (with (@me = hidden) { (hidden is Online) == (hidden.presence.device.network.connected ?? false) })  // CS17 an invisible character is not as it is to itself
   }
   // The standard location of all communication with it: every instance it runs on, superposed, with the one its focus is on
-  // selected (`\…\`, U-C2). `@me/instance = x` sends to the selected one, `dynamically event: @me/instance` follows what
+  // selected (written between backslashes, U-C2). `@me/instance = x` sends to the selected one, `dynamically event: @me/instance` follows what
   // comes from it; what holds an instance decides the protocol (a host's terminal, a page, another instance over the network).
-  // (the primary named first: `\(…)\` would read `\(` as an escaped bracket)
-  instance => (primary ?? @local) -- (selected => instances{!== primary} | \selected\)
+  // (selected: first of them, until a selection reads (between backslashes it is read as an escape and a label, spec/TODO.md))
+  instance => (.primary ?? @local) -- (selected => selected | this.instances{!== selected})
   status => Status#{this is .}
   assert HTTP.Response(status: HTTP.Status(200), body: "ok" as Byte[]) as HTTP.v1_1 == "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"  // HT15 a response is not written as its status line
   // An NPC runs until its quests are resolved, waits for more, or stops: what it was told to do, like any said status; a player is any other character.
@@ -599,8 +600,8 @@ Character &+= {
   assert !(@"s".status.contains(Online))  // CS4 a character nowhere reads as online
   // Saying a status constrains what may run (W2.15); one read off what runs (`Online`, `Broadcasting`) that does not
   // hold yet is a quest to make it hold, run by the character.
-  .status = {wanted} ^punctuation => (constraint = wanted) -- (Program(name: "become", who: this, goal: wanted).schedule(this) unless this is wanted)
-  is (wanted) => .instance_of(wanted) && !(constraint && constraint is !wanted)
+  .status = {wanted} ^punctuation => (.constraint = wanted) -- (Program(name: "become", who: this, goal: wanted).schedule(this) unless this is wanted)
+  is (wanted) => .instance_of(wanted) && !(.constraint && .constraint is !wanted)
 }
 // An avatar is one of a character's names: its name on a platform, written with `@` (`@github.com/package` is a package of github).
 assert Character(name: "alice" | @github.com/@alice | "alice@a.b").(
@@ -654,13 +655,13 @@ Instance := class: Location {
   none.read key: Key?
   // (the machine and the devices it has, superposed)
   device: * = Device.made
-  registry: Character?
+  registry: Character? = None
   // (who runs here when no one has logged in: the instance's own)
   own_character: Character = Character()
-  character => registry ?? own_character
+  character => .registry ?? .own_character
   hosted: Character?
 
-  login (character: Character) => (registry |= character) -- character
+  login (character: Character) => (.registry |= character) -- character
   // A character on several instances is on all of them; the one it is at is the primary.
   assert {
     ins_at := Instance(path: "ins-at")
@@ -670,7 +671,7 @@ Instance := class: Location {
     assert ins_at is ins_c.instances && ins_other is ins_c.instances  // INS1 a character is not on every instance running it
     assert ins_c.primary === ins_at  // INS2 the primary instance is not where the character is
   }
-  logged_in (character: Character) => character is registry
+  logged_in (character: Character) => character is .registry
   // Logging out drops every secret on the character, whichever field holds it: each `none.read` field is zeroised and
   // set to None, so the next login makes fresh keys (W2.1 Storage). The entry removed is the character itself, or the one
   // a verified copy is (`==`), never one a claimed character only names. Deleting everything is a
@@ -690,12 +691,12 @@ Instance := class: Location {
     : value is *[] ? value.map(. is Key ? [.] : .fields.value{is Key}).flatten(1)
     : []
   swap (from: Character, to: Character) => {
-    logout(from)
-    login(to)
+    .logout(from)
+    .login(to)
   }
 
-  host_for (character: Character) => character ~~ (hosted |= .) ~~ .presence = this
-  mirror (value, depth = 1) => (value.children.for(child => mirror(child, depth - 1)) if depth > 1) -- (value @ this)
+  host_for (character: Character) => character ~~ (this.hosted |= .) ~~ .presence = this
+  mirror (value, depth = 1) => (value.children.for(child => this.mirror(child, depth - 1)) if depth > 1) -- (value @ this)
   assert {
     mir_peer := Instance(host: "mir-peer")
     mir_value := Item(name: "mirrored")
@@ -703,7 +704,7 @@ Instance := class: Location {
     assert mir_peer is mir_value.location#  // MIR1 a mirrored value is not at the mirroring instance
     assert !(mir_peer.synced)  // MIR2 an instance nobody is logged into is synced
   }
-  synced => registry#.nonempty
+  synced => .registry#.nonempty
 }
 // A permission's who is any narrowing: a policy by situation is a grant to it.
 assert {
@@ -730,12 +731,11 @@ assert {
   assert Base64.read(4 as Base64) == 4  // EN24 a packed value does not come back
 }
 
-// the current instance (not `@localhost`: anything on the host machine): `Instance.local`, its location `@local`
-// (answered, not written: `@local = x` writes what is at the location)
+// the current instance (not `@localhost`: anything on the host machine): `Instance.local`, what `@local` answers
 Instance &+= {
   static local := Instance()
 }
-@local ^string => Instance.local
+Location.local := Instance.local
 
 Online := Character{presence.device.network.connected}
 Offline := Character{!(. is Online)}

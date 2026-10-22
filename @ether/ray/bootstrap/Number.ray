@@ -470,14 +470,14 @@ assert ₂10 == 2  // SS1 a subscript in front is not the base the digits are re
 assert 2³ == 8  // SS2 a superscript on a number is not its power
 {type}{length: Subscript.String} ^number => type[]{.length == Subscript(integer: length)}
 
-{digits: Decimal.String} => Decimal(integer: digits)
+{digits: Decimal.String} ^number => Decimal(integer: digits)
 assert 007 == 7  // N136 007 is not seven
 assert 00 == 0  // N137 00 is not zero
 -{number: Decimal} => Decimal.Signed(sign: "-", integer: number)
-0x{digits: Hexadecimal.String} | 0X{digits: Hexadecimal.String} => Hexadecimal(integer: digits)
+0x{digits: Hexadecimal.String} | 0X{digits: Hexadecimal.String} ^number => Hexadecimal(integer: digits)
 assert 0x1F == 31  // N43 0x1F is not thirty-one
 assert 0x00ff == 0xff  // N138 0x00ff is not 0xff
-0b{digits: Binary.String} | 0B{digits: Binary.String} => Binary(integer: digits)
+0b{digits: Binary.String} | 0B{digits: Binary.String} ^number => Binary(integer: digits)
 assert 0b101 == 5  // N44 0b101 is not five
 {number: Decimal}.{fraction: Decimal.String} => Decimal.Real(integer: number, fraction: fraction)
 

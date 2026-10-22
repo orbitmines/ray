@@ -1,6 +1,7 @@
 @ether/os
 @c
 @storage
+@terminal
 
 // The device's files: the host's (sandboxed: what the host answers for a directory is its entries); a browser and the
 // language as the operating system keep them in the device's storage (`storage: Storage = @me/device`, a page's its Web Storage),
@@ -100,35 +101,9 @@ Location &+= {
   sandboxed => "instance/" + .normalised
 }
 
-// This instance, as whoever plays it reaches it: the host's terminal (its standard input and output); in a browser the
-// page and on ether the player, through two places on the device (what is sent waits in `instance/sent`, what comes in
-// arrives in `instance/received`, each keeping its history).
-Terminal := class: Language {
-  [location: Location] => if OS.Browser || OS.Ether { (@me/device as Storage)["instance/received"] }
-    elsif OS.Windows {
-      (@c {
-        unsigned char received[65536]
-        unsigned count = 0
-        ReadFile(GetStdHandle(STD_INPUT_HANDLE), received, sizeof(received), &count, nullptr)
-      })() -- (got => got.received[..<got.count] as String)
-    } else {
-      (@c {
-        unsigned char received[65536]
-        long count = read(0, received, sizeof(received))
-      })() -- (got => got.received[..<got.count] as String)
-    }
-  { }[{location: Location}] = {value} ^punctuation => (value as String as Byte[]) -- (bytes => if OS.Browser || OS.Ether { (@me/device as Storage)["instance/sent"] = value }
-    elsif OS.Windows {
-      (@c {
-        unsigned count = 0
-        WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), {bytes}, {bytes.count}, &count, nullptr)
-      })()
-    } else { (@c write(1, {bytes}, {bytes.count}))() })
-  ({location: Location}, {args}) => ERROR@FileSystem `an instance is not executed: it is sent to`
-}
-
 Holders = Holders + {
-  {location: Location{=== @local}} => Terminal()
+  // (this instance, as whoever plays it reaches it: the terminal it is played through, one of its devices)
+  {location: Location{=== @local}} => (@me/device as Terminal)
   {location: Location{!.scheme || .scheme == "file" || .scheme.length == 1}} => FileSystem()
 }
 assert ("/a/b" as Location).holder is FileSystem  // LOC49 a location with no scheme is not held by the file system

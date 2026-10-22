@@ -2671,8 +2671,8 @@ export class Ray extends Language<FileStore> {
     if (whole) out.push({ begin: fs - s, end: fe - 1 - s, style: whole });
     // (a head of holes alone, `{digits: Decimal.String}`: its style over all it read)
     if (head && !whole && this.w(rule + R.PARTS) === this.w(rule + R.HOLES)) out.push({ begin: fs - s, end: fe - 1 - s, style: head });
-    else if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => this.w(t) <= at && at < this.w(t + 4)); if (!inside && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head }); }
-    takes.forEach((t, i) => { const q = this.hole_part(rule, i), hole = q ? style(this.w(q + 20)) : ''; if (hole && this.w(t) >= s && this.w(t + 4) <= e) { out.push({ begin: this.w(t) - s, end: this.w(t + 4) - 1 - s, style: hole }); if (hole === 'string') this.escapes(this.w(t), this.w(t + 4), s, out); } });
+    else if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => this.w(t) <= at && at < this.w(t + 4)); if (!inside && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: this.bracketed(at, head) }); }
+    takes.forEach((t, i) => { const q = this.hole_part(rule, i), hole = q ? style(this.w(q + 20)) : ''; if (hole && this.w(t) >= s && this.w(t + 4) <= e) { out.push({ begin: this.w(t) - s, end: this.w(t + 4) - 1 - s, style: this.w(t + 4) - this.w(t) === 1 ? this.bracketed(this.w(t), hole) : hole }); if (hole === 'string') this.escapes(this.w(t), this.w(t + 4), s, out); } });
     return out;
   }
   // (what a rule is shown as: a value it names shown in a style (a class, an enum), else its head's)
@@ -2681,6 +2681,18 @@ export class Ray extends Language<FileStore> {
     const head = this.w(rule + R.HEAD), own = this.style_of(head);
     // (a name led by `@`, `@host`, given no style of its own: as the language shows what it reads after `@`, `@{name}`)
     return own || (head && this.u8[this.w(head + N.A)] === 64 ? this.at_style() : '');
+  }
+  // (a bracket in a head's text, `if {c} { … }`'s braces: as the language shows what it reads in brackets, a group, `({grouped})`,
+  // a block)
+  private brackets = new Map<number, string>();
+  bracketed(at: number, head: string): string { const c = this.u8[at]; return c === 40 || c === 41 || c === 91 || c === 93 || c === 123 || c === 125 ? this.bracket_style(c) || head : head; }
+  bracket_style(c: number): string {
+    const open = c === 41 ? 40 : c === 93 ? 91 : c === 125 ? 123 : c;
+    if (this.brackets.has(open)) return this.brackets.get(open)!;
+    let found = '';
+    const list = this.w(256), n = Math.min(this.w(260), this.w(264));
+    for (let k = n - 1; k >= 0 && !found; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; const a = this.w(hd + N.A); if ((open !== 123 && this.u8[a] === open) || (this.u8[a] === 123 && this.u8[a + 1] === 96 && this.u8[a + 2] === open)) found = this.style_of(hd); }
+    this.brackets.set(open, found); return found;
   }
   private at_shown?: string;
   at_style(): string {
@@ -2697,7 +2709,11 @@ export class Ray extends Language<FileStore> {
     const global = this.w(GLOBAL), seen = new Set<number>(), style = (node: number) => this.style_of(node);
     let read_in = global; const self_of = (_vis: number) => read_in;
     const statements = (a: number, z: number, vis: number, depth: number) => {
-      for (let at = this.x.skip(a, z), k = 0; at < z && k < 4096; k++) { const ln = this.x.line(at, z); statement(at, ln, vis, depth); at = this.x.skip(Math.max(ln, at + 1), z); }
+      for (let from = a, at = this.x.skip(a, z), k = 0; at < z && k < 4096; k++) { comments(from, at); const ln = this.x.line(at, z); statement(at, ln, vis, depth); from = Math.max(ln, at + 1); at = this.x.skip(from, z); if (at >= z) comments(from, z); }
+    };
+    // (the comments between statements, each line from `//`: as the language shows a comment)
+    const comments = (a: number, z: number) => {
+      for (let i = a; i + 1 < z; i++) if (this.u8[i] === 47 && this.u8[i + 1] === 47) { let j = i; while (j < z && this.u8[j] !== 10) j++; const shown = method('//'); if (shown) out.push({ begin: i - s, end: j - 1 - s, style: shown }); i = j; }
     };
     const statement = (a: number, z: number, vis: number, depth: number) => {
       if (depth > 48 || z <= a || seen.has(a * 4099 + z)) return; seen.add(a * 4099 + z);
@@ -2730,7 +2746,7 @@ export class Ray extends Language<FileStore> {
       if (!holes && parameter(this.text(rs, re))) head = parameter(this.text(rs, re));
       else if (!head && !holes && this.u8[rs] > 32) { const named = this.text(rs, re); head = kind(this.u8[rs]) === 2 ? method(named) : /^[\p{L}_][\p{L}\p{N}_]*$/u.test(named) ? name_style() : ''; }
       if (head && this.w(rule + R.PARTS) === holes) out.push({ begin: rs - s, end: re - 1 - s, style: head });
-      else if (head) for (let at = rs; at < re; at++) if (!inside(at) && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head });
+      else if (head) for (let at = rs; at < re; at++) if (!inside(at) && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: this.bracketed(at, head) });
       // (a definition, `head => body` (its `=>` outside brackets): what is before it a head, painted as one (its parameters,
       // and what they are read as); what follows read knowing them)
       const arrow = this.w(rule + R.FLAGS) & 1 || /=>/.test(this.text(this.w(this.w(rule + R.HEAD) + N.A), this.w(this.w(rule + R.HEAD) + N.B))) ? arrow_in(rs, re) : -1;
@@ -2740,7 +2756,7 @@ export class Ray extends Language<FileStore> {
       for (let i = 0; i < holes; i++) {
         const [ha, hz] = take(i), q = this.hole_part(rule, i), hole = q ? style(this.w(q + 20)) : '';
         if (ha >= hz || ha < s || hz > e || (arrow > rs && hz <= arrow)) continue;
-        if (hole) { out.push({ begin: ha - s, end: hz - 1 - s, style: hole }); if (hole === 'string') this.escapes(ha, hz, s, out); }
+        if (hole) { out.push({ begin: ha - s, end: hz - 1 - s, style: hz - ha === 1 ? this.bracketed(ha, hole) : hole }); if (hole === 'string') this.escapes(ha, hz, s, out); }
         else if (!(ha === rs && hz === re)) statements(ha, hz, (q && this.w(q + 16)) || vis, depth + 1);
       }
       if (named.length) params.pop();

@@ -34,21 +34,10 @@ function thread(role: string, data: object): import('worker_threads').Worker {
 // What is painted, as language.ts's `paints` reads it (each statement's literal text in its rule's style, each hole's take in
 // the hole's, a frame given a style), its style only a name: a style member that is no text spans whatever memory its two ends
 // do, at worst hundreds of MB. (The kernel's layout, as language.ts has it.)
-const STYLED = 10, F = { RULE: 28, START: 40, END: 44, TAKES: 56 }, TAKE = 36, R = { HOLES: 12, PARTS: 28, HEAD: 32, PART: 96 }, PART = 24, N = { A: 12, B: 16 }, HOLE = 2;
+const STYLED = 10, F = { RULE: 28, START: 40, END: 44 }, R = { HEAD: 32 };
 const styler = (ray: Ray) => (node: number): string => ray.style_of(node);
-function painted(ray: Ray, s: number, e: number): Paint[] {
-  const out: Paint[] = [], style = styler(ray), u8 = new Uint8Array(ray.heap.buffer), w = (at: number) => ray.w(at);
-  const part = (rule: number, hole: number) => { for (let k = 0, q = rule + R.PART; k < w(rule + R.PARTS); k++, q += PART) if ((w(q) & 15) === HOLE && w(q + 12) === hole) return q; return 0; };
-  for (const frame of ray.frames) {
-    const fs = w(frame + F.START), fe = w(frame + F.END), rule = w(frame + F.RULE);
-    if (fs < s || fe > e || !rule) continue;
-    const whole = style(frame), head = style(w(rule + R.HEAD)), takes = Array.from({ length: w(rule + R.HOLES) }, (_, i) => frame + F.TAKES + TAKE * i);
-    if (whole) out.push({ begin: fs - s, end: fe - 1 - s, style: whole });
-    if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => w(t) <= at && at < w(t + 4)); if (!inside && u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head }); }
-    takes.forEach((t, i) => { const q = part(rule, i), hole = q ? style(w(q + 20)) : ''; if (hole && w(t) >= s && w(t + 4) <= e) out.push({ begin: w(t) - s, end: w(t + 4) - 1 - s, style: hole }); });
-  }
-  return out;
-}
+// (what the kernel's frames paint, as the language paints a frame)
+function painted(ray: Ray, s: number, e: number): Paint[] { return ray.paints(s, e); }
 // (the tests among what is painted: each frame whose rule's head is `untested`, a test written there; as each is run, its frame
 // is given what it found)
 function tests_in(ray: Ray, s: number, e: number): { frame: number, begin: number, end: number }[] {

@@ -361,7 +361,7 @@ assert false ? false : true  // BT5 c ? a : b does not take b for a named c
 // A branch: the block taken read where the branch is (labels named apart from a loop's, which `break` and `continue` go to
 // through it); not taken, what follows its block (`else { … }`, `elsif c { … } …`: code, read there), else None. (A block is
 // written in brackets, so a condition is all that is before it: `if x > 3 { … }`.)
-if {condition} {`{`}{taken}{`}`} ^keyword => {
+if {condition} {`{`}{taken}{`}`} ^class => {
   {condition} ? (external goto taken) : (external goto passed)
   external label taken
   {taken}
@@ -370,7 +370,7 @@ if {condition} {`{`}{taken}{`}`} ^keyword => {
   None
   external label branched
 }
-if {condition} {`{`}{taken}{`}`} {chain} ^keyword => {
+if {condition} {`{`}{taken}{`}`} {chain} ^class => {
   {condition} ? (external goto taken) : (external goto passed)
   external label taken
   {taken}
@@ -379,11 +379,11 @@ if {condition} {`{`}{taken}{`}`} {chain} ^keyword => {
   {chain}
   external label branched
 }
-else {`{`}{otherwise}{`}`} ^keyword => {otherwise}
-elsif {condition} {`{`}{taken}{`}`} ^keyword => if {condition} { {taken} }
-elsif {condition} {`{`}{taken}{`}`} {chain} ^keyword => if {condition} { {taken} } {chain}
-unless {condition} {`{`}{taken}{`}`} ^keyword => if !(condition) { {taken} }
-unless {condition} {`{`}{taken}{`}`} {chain} ^keyword => if !(condition) { {taken} } {chain}
+else {`{`}{otherwise}{`}`} ^class => {otherwise}
+elsif {condition} {`{`}{taken}{`}`} ^class => if {condition} { {taken} }
+elsif {condition} {`{`}{taken}{`}`} {chain} ^class => if {condition} { {taken} } {chain}
+unless {condition} {`{`}{taken}{`}`} ^class => if !(condition) { {taken} }
+unless {condition} {`{`}{taken}{`}`} {chain} ^class => if !(condition) { {taken} } {chain}
 assert !((if 0 { "taken" }))  // IC4 an if whose block holds no cases is read as cases
 assert !((if false { true }))  // CC6 a bare if with a false predicate is not None-like
 assert (unless false { true })  // CC7 unless did not fire
@@ -406,7 +406,7 @@ assert (if 1 { true } else { false })  // CF7 a number that is there does not ho
 assert !((if None { true } else { false }))  // CF8 nothing holds
 
 // Loops: `break` goes to the loop's end, `continue` to its start.
-while {condition} {`{`}{body}{`}`} ^keyword => {
+while {condition} {`{`}{body}{`}`} ^class => {
   external label again
   {condition} ? (external goto looping) : (external goto done)
   external label looping
@@ -426,7 +426,7 @@ assert {
 }
 loop {`{`}{body}{`}`} ^keyword => while true { {body} }
 {body} while {condition} ^keyword => while {condition} { {body} }
-do {`{`}{body}{`}`} while {condition} ^keyword => {
+do {`{`}{body}{`}`} while {condition} ^class => {
   {body}
   while {condition} { {body} }
 }
@@ -809,7 +809,7 @@ assert (1, 2 ~~ .map(+1)) == (1, 2)  // DD6 ~~ does not answer the whole line be
 {on} with {code} ^keyword => on reading {code}
 // `with` code: what it sets, set for where it is read (the caller) and what runs from there, gone when that ends.
 with {code} ^keyword => (external &).caller reading {code}
-assume {code} ^keyword => (external &).caller reading {code}
+assume {code} ^class => (external &).caller reading {code}
 // Guards: `x if c`, `x unless c` (not taken: None).
 // (read where they are, not in a block of their own: `.` in them is what it is there, `x -- . + 1 if . > 3`)
 {guarded} if {condition} ^keyword => (condition) ? (guarded) : None

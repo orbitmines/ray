@@ -3225,7 +3225,8 @@ assert {
 
 // Files: `include` one in what this is where it is written (the language's own, in the language), `read` one in a scope of
 // its own. A location, `@./*.ray`, is beside the file it is written in; `given` is what the host was given. The language's
-// own project first, its `.project.ray` before the rest; then what it was given.
+// own project first, its `.project.ray` before the rest; then what it was given, included (until projects are loaded by
+// their dependencies, the files given are one program: each sees what the others define).
 include {location} ^keyword => external include {location}
 read {location} ^keyword => external read {location}
 include @./.project.ray
@@ -3237,4 +3238,4 @@ include @./String.ray
 include @./CLI.ray
 include @./Expression.ray
 include @./Compiler.ray
-read given
+include given

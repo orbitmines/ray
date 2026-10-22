@@ -547,7 +547,7 @@ class Cache {
   static hash(bytes: Uint8Array | string) { return (env.import('crypto') as typeof import('crypto')).createHash('sha1').update(bytes).digest('hex'); }
   static of(args: string[]) {
     const me = env.url.fileURLToPath(import.meta.url), map = env.url.fileURLToPath(new URL('./wasm.o.ray', import.meta.url)), own = env.url.fileURLToPath(new URL('./kernel.ts', import.meta.url));
-    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(own) ? Cache.hash(env.fs.readFileSync(own)) : '') + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '');
+    const kernel = Cache.hash(env.fs.readFileSync(me)) + (env.fs.existsSync(own) ? Cache.hash(env.fs.readFileSync(own)) : '') + (env.fs.existsSync(map) ? Cache.hash(env.fs.readFileSync(map)) : '') + env.fs.readdirSync(env.path.dirname(map)).filter(f => f.endsWith('.o.ray')).sort().map(f => Cache.hash(env.fs.readFileSync(env.path.join(env.path.dirname(map), f)))).join('');
     const read_with = Object.fromEntries(Object.entries(kwargs).filter(([k]) => k !== 'threads' && k !== 'verbose'));
     // (one entry: of another command or kernel, its steps not kept (their files written over))
     const cache = new Cache(env.path.join(env.os.homedir(), '.cache', 'ray'), Cache.hash(JSON.stringify([process.cwd(), args, read_with, kernel])));
@@ -2449,6 +2449,13 @@ export class Ray extends Language<FileStore> {
     }
     return out;
   }
+  // (this interpreter's own map of a file `<name>.ray`, `<name>.o.ray` beside `wasm.o.ray` (`Terminal.project.o.ray`): how this
+  // host answers what the file leaves to the operating system; read in the file's scope once the file is settled)
+  static map_of(path: string): string | undefined {
+    if (!env.nodejs || !path.endsWith('.ray') || path.endsWith('.o.ray')) return undefined;
+    const map = env.url.fileURLToPath(new URL(`./${env.path.basename(path).slice(0, -'.ray'.length)}.o.ray`, import.meta.url));
+    return env.fs.existsSync(map) ? map : undefined;
+  }
   // (a location, `@./*.ray`, beside the file it is written in: the files it names, in order; `*` names no hidden one)
   static located(text: string, from: string): string[] {
     const path = env.path.resolve(env.path.dirname(from), text.replace(/^@/, '')), dir = env.path.dirname(path), name = env.path.basename(path);
@@ -2478,6 +2485,8 @@ export class Ray extends Language<FileStore> {
         for (const [path, bytes] of list) if (!done.has(path)) { done.add(path); spans.set(path, this.file(bytes, path, kind, scope)); }
         this.x.settle(this.t, 0);
         for (const at of [PHASE, NEXT, DONE, ANY]) this.set(at, 0);
+        // (the maps of what was read, read in turn where it was, once it is settled)
+        for (const [path] of list) { const map = Ray.map_of(path); if (map && !done.has(map)) { done.add(map); this.file(env.fs.readFileSync(map), map, kind, scope); this.x.settle(this.t, 0); for (const at of [PHASE, NEXT, DONE, ANY]) this.set(at, 0); } }
       }
     }
   }
@@ -2572,7 +2581,8 @@ export class Ray extends Language<FileStore> {
       this.trace_said(kind === L.TRACE ? `TRACE ${deep}\`${short(text(a, c))}\` on \`${short(this.text(said_at, this.w(this.t + 908)))}\` ${ansi.darkGray}on #${this.w(this.t + 932)}${this.w(this.t + 936) !== this.w(this.t + 932) ? ` (self #${this.w(this.t + 936)})` : ''} ${this.where(said_at)}${ansi.reset}` : `TRACE ${deep}${ansi.orange}nothing reads${ansi.reset} \`${short(this.text(a, c))}\` ${ansi.darkGray}in #${this.w(this.t + 932)} ${this.where(said_at)}${ansi.reset}`);
       return;
     }
-    if (kind === L.OUTPUT) { const out = this.text(a, c); if (env.nodejs) process.stdout.write(out); else console.log(out); return; }
+    // (written out at once, not queued: a worker's own standard output is sent on later, and lost when the run ends first)
+    if (kind === L.OUTPUT) { const out = this.text(a, c); if (env.nodejs) env.fs.writeSync(1, out); else console.log(out); return; }
     const message = kind === L.UNREAD ? `nothing reads \`${text(a, c)}\`` : kind === L.UNLABELLED ? `nothing is labelled \`${text(a, a + c)}\`` : kind === L.BUDGET ? `ran past ${Ray.BUDGET} rules (reading this)`
       : kind === L.OOM ? `out of memory (${this.u8.length} bytes)` : kind === L.REPORT ? (a ? text(a, c) : 'error') : kind === L.CYCLE ? 'what this is read as needs itself'
       : kind === L.NOT_ON ? `nothing in what it is read on reads \`${text(a, c)}\`` : kind === L.EXTERNAL ? `\`external ${text(a, c)}\` is no external` : kind === L.DEEP ? this.deep(a) : kind === L.VALUED ? `a left side answers a value, not a place: \`${text(a, c)}\` (a name in it is a value there: a hole of the rule reading it?)` : kind === L.FULL ? `stopped: almost all the memory there is is in use (what the threads' tests took): this test was not given more` : kind === L.MEMORY ? `took more than ${test ? 128 : 320} MB of new memory ${test ? 'in this test' : 'reading this'} (what it reads makes more and more): stopped` : kind === L.SILENT ? `this test failed and nothing said why (the kernel stopped it without saying what it could not read)` : kind === L.HELD ? `a test put off 4096 tests (each putting off more: a class whose block makes one of it, or a test in what a test makes)` : undefined;
@@ -3097,29 +3107,44 @@ export class Program {
     before?.();
     for (let handled = start; ;) {
       const asked = Ray.requests(heap, handled);
-      if (!asked.length) return;
+      if (!asked.length) return await this.entered(heap);
       for (const { kind, text, at, scope } of asked) {
         handled++;
         const sources: Text.Source[] = [];
         if (text === 'given') { for (const g of given) { if ((await env.fs_promises.stat(env.path.resolve(process.cwd(), g))).isDirectory()) { for await (const src of Text.Source.all(g)) sources.push(src); } else sources.push(new Text.Source(g)); } }
         else { const from = (() => { for (let k = 0; k < Atomics.load(i32, FILES_N >> 2); k++) { const entry = i32[FILES >> 2] + 12 * k; if (i32[entry >> 2] <= at && at <= i32[(entry + 4) >> 2]) return this.files.getPath(i32[(entry + 8) >> 2]); } return ''; })(); for (const path of Ray.located(text, from)) sources.push(new Text.Source(path)); }
-        const ids: number[] = [];
-        for (const src of sources) {
-          if (this.files.getFileId(src.location) !== undefined) continue;
-          await src.load();
-          if (this.files.getFileId(src.location) !== undefined) continue;
-          const id = this.files.add(src.location, src.value);
-          i32[(i32[INCL >> 2] + 8 * id) >> 2] = kind; i32[(i32[INCL >> 2] + 8 * id + 4) >> 2] = scope;
-          if (!!kwargs.verbose) say(`${ansi.darkGray}LOADING${ansi.reset} ${ansi.darkGray}${src.location}${ansi.reset}`);
-          ids.push(id);
-        }
-        await this.queue.submit(ids); await this.queue.join();
-        Ray.ordered(this.files);
-        await this.queue.submit(Array(Math.max(1, this.workers.length)).fill(SETTLE)); await this.queue.join();
-        for (const g of [PHASE, NEXT, DONE, ANY]) Atomics.store(i32, g >> 2, 0);
+        // (what was given, one after another in the order given, each read and settled before the next: until projects are
+        // loaded by their dependencies, a file sees what the files before it define; anything else, read together)
+        if (text === 'given') for (const src of sources) await this.group([src], kind, scope);
+        else await this.group(sources, kind, scope);
         after?.(handled);
       }
     }
+  }
+
+  // Files read together (each in what it was asked for in, `kind` and `scope`), then settled: what each wrote given to what it was
+  // read in, what is left unread read again; then their maps (`map_of`), read where they were, settled too.
+  private async group(sources: Text.Source[], kind: number, scope: number, maps = true): Promise<void> {
+    const i32 = new Int32Array(this.files.buffer.values.heap.buffer), ids: number[] = [];
+    for (const src of sources) {
+      if (this.files.getFileId(src.location) !== undefined) continue;
+      if (!src.loaded) await src.load();
+      if (this.files.getFileId(src.location) !== undefined) continue;
+      const id = this.files.add(src.location, src.value);
+      i32[(i32[INCL >> 2] + 8 * id) >> 2] = kind; i32[(i32[INCL >> 2] + 8 * id + 4) >> 2] = scope;
+      if (!!kwargs.verbose) say(`${ansi.darkGray}LOADING${ansi.reset} ${ansi.darkGray}${src.location}${ansi.reset}`);
+      ids.push(id);
+    }
+    if (!ids.length) return;
+    await this.queue.submit(ids); await this.queue.join();
+    Ray.ordered(this.files);
+    await this.queue.submit(Array(Math.max(1, this.workers.length)).fill(SETTLE)); await this.queue.join();
+    for (const g of [PHASE, NEXT, DONE, ANY]) Atomics.store(i32, g >> 2, 0);
+    // (`RAY_MEM`: the memory used once these are read)
+    if (process.env.RAY_MEM) say(`${ansi.darkGray}MEMORY ${(Atomics.load(i32, HEAP >> 2) / 1048576).toFixed(0)} MB used when ${sources.map(src => env.path.basename(src.location)).join(', ')} read${ansi.reset}`);
+    if (!maps) return;
+    const mapped = sources.map(src => Ray.map_of(src.location)).filter((m): m is string => !!m).map(m => new Text.Source(m));
+    if (mapped.length) await this.group(mapped, kind, scope, false);
   }
 
   async ".entrypoint"() {
@@ -3128,8 +3153,19 @@ export class Program {
     if (src && !src.loaded && src.location && !(await src.is_directory())) await src.load();
     // (given a language's entrypoint, that one; else Ray's)
     if (!src?.is_language_entrypoint) await this.add(new Text.Source(env.nodejs ? env.path.relative(process.cwd(), env.url.fileURLToPath(new URL(ENTRYPOINT, import.meta.url))) : ENTRYPOINT));
-    if (src) await this.add(src.is_language_entrypoint ? src : src.location);
+    // (a program's own file, its entrypoint: read last, once what it was given is (`entered`))
+    if (src && !src.is_language_entrypoint && src.loaded) this.entry = src;
+    else if (src) await this.add(src.is_language_entrypoint ? src : src.location);
   }
+  // The program's entrypoint, read after the files it was given (and their maps) are read and settled, included where they
+  // are: what it runs sees what they define. It is the program: never kept in the cache (what it does is done each run).
+  private entry?: Text.Source;
+  private async entered(heap: { buffer: ArrayBufferLike }) {
+    const src = this.entry; if (!src) return; this.entry = undefined;
+    const given = Ray.requests(heap, 0).find(q => q.text === 'given');
+    await this.group([src], given?.kind ?? 0, given?.scope ?? 0);
+  }
+
 
   // get entrypoint(): pointer {
   //   // TODO: Return the entrypoint's file pointer.

@@ -1100,7 +1100,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let commented = 0;
     for (let p = at + 1; p + 1 < end;) { const c = b(p); if (c === 47 && b(p + 1) === 47 && b(p - 1) <= 32) { commented = 1; if (coded_after(p, end)) commented = 2; break; } if (c === 40 || c === 91 || c === 123 || c === 34 || c === 96 || c === 39) { const q = past(p, end); p = q > p ? q : p + 1; } else p++; }
     // (one with lines after it, a list going on past a comment: not read as a comment, which ends its line)
-    let lo = 0, hi = 0, kinds = 0, refused = 0, best_fit = 0;
+    let lo = 0, hi = 0, kinds = 0, refused = 0, best_fit = 0, best_lit = 0;
     // (a name defined more than once, with parameters and without (`min (b) =>`, `min =>`): by what is given, brackets after it
     // or none)
     let calling = 0; { let q = end; while (b(q) === 32) q++; calling = b(q) === 40 ? 1 : 0; }
@@ -1159,8 +1159,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
               // (and on a line with a comment after it, a rule with `//` in its head first: no other's hole takes the comment)
               const over = best && e >= end ? (commented && comments(x) && !comments(best) ? 1 : commented && comments(best) && !comments(x) ? -1 : guards(x, best) ? 1 : guards(best, x) ? -1 : 0) : 0;
               const fit = ((f & CALLS) ? 1 : 0) === calling ? 1 : 0;
-              if (e >= end && over >= 0 && (over > 0 || score > longest || (score === longest && ((weak && !placed_) || (found_in === group && (fit !== best_fit ? fit > best_fit : seq > found_seq)))))) {
-                best = x; longest = score; ends = e; weak = placed_; found_in = group; found_seq = seq; best_fit = fit;
+              // (of two led by text that read it all, the one with more of its text written (`@me/{path}` over `@{name}/{path}`,
+              // §4.3 the longest declared word), then the one declared later)
+              let lit = 0; for (let k = 0; k < w(x + R_PARTS); k++) { const q = x + R_PART + PART * k; if ((w(q) & 15) === LITERAL) lit += w(q + 8); }
+              if (e >= end && over >= 0 && (over > 0 || score > longest || (score === longest && ((weak && !placed_) || (found_in === group && (fit !== best_fit ? fit > best_fit : (f & LED) && (w(best + R_FLAGS) & LED) && lit !== best_lit ? lit > best_lit : seq > found_seq)))))) {
+                best = x; longest = score; ends = e; weak = placed_; found_in = group; found_seq = seq; best_fit = fit; best_lit = lit;
                 const h = w(x + R_HOLES) * 12;
                 for (let i = 0; i < h; i += 4) put(out + 4 + i, w(s + i));
               }

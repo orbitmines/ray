@@ -580,7 +580,8 @@ Character &+= {
   // The standard location of all communication with it: every instance it runs on, superposed, with the one its focus is on
   // selected (`\…\`, U-C2). `@me/instance = x` sends to the selected one, `dynamically event: @me/instance` follows what
   // comes from it; what holds an instance decides the protocol (a host's terminal, a page, another instance over the network).
-  instance => instances{!== primary} | \(primary ?? @local)\
+  // (the primary named first: `\(…)\` would read `\(` as an escaped bracket)
+  instance => (primary ?? @local) -- (selected => instances{!== primary} | \selected\)
   status => Status#{this is .}
   assert HTTP.Response(status: HTTP.Status(200), body: "ok" as Byte[]) as HTTP.v1_1 == "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"  // HT15 a response is not written as its status line
   // An NPC runs until its quests are resolved, waits for more, or stops: what it was told to do, like any said status; a player is any other character.
@@ -729,8 +730,12 @@ assert {
   assert Base64.read(4 as Base64) == 4  // EN24 a packed value does not come back
 }
 
-// the current instance (not `@localhost`: anything on the host machine)
-@local = Instance()
+// the current instance (not `@localhost`: anything on the host machine): `Instance.local`, its location `@local`
+// (answered, not written: `@local = x` writes what is at the location)
+Instance &+= {
+  static local := Instance()
+}
+@local ^string => Instance.local
 
 Online := Character{presence.device.network.connected}
 Offline := Character{!(. is Online)}

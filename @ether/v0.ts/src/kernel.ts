@@ -2935,7 +2935,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (word(a, m, W_SHOWN) && rest < z) {
         let shown_q = rest; while (shown_q < z && b(shown_q) > 32) shown_q++;
         const shown_v = block(t, rest, shown_q, names, f, self, 0, 1, 0, self, 0), shown_n = w(STYLES) ? (aload(w(STYLES)) < STYLES_CAP ? aload(w(STYLES)) : STYLES_CAP) : 0;
-        for (let shown_k = shown_n - 1; shown_v && shown_k >= 0 && shown_k >= shown_n - 65536; shown_k--) { const shown_at = w(STYLES) + 4 + 12 * shown_k; if (w(shown_at) === shown_v) return node(IS_TEXT, w(shown_at + 4), w(shown_at + 8), w(GLOBAL), 0); }
+        // (unpainted (no `T_PAINTS`): what it is shown as is asked of nothing, the table not searched) TODO(explicit)
+        for (let shown_k = shown_n - 1; w(t + T_PAINTS) && shown_v && shown_k >= 0 && shown_k >= shown_n - 65536; shown_k--) { const shown_at = w(STYLES) + 4 + 12 * shown_k; if (w(shown_at) === shown_v) return node(IS_TEXT, w(shown_at + 4), w(shown_at + 8), w(GLOBAL), 0); }
         return shown_q < z ? block(t, skip(shown_q, z), z, names, f, self, 0, 1, 0, self, 0) : w(NOTHING);
       }
       // (`external style s x`: x shown in the style s, kept where what is painted is looked up (its count, then x and where s is

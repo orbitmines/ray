@@ -90,6 +90,8 @@ function mixed(from: string | undefined, to: string | undefined, share: number):
 // The reading thread: the language, then the document (another document: what the language includes read, open documents as
 // the editor has them, the document among them where it is one, else after them on its own; the language's own tests not run).
 type Snapshot = { key: string, memory: SharedArrayBuffer, handled: number, files: string[] };
+// (painting on for this thread: what tests make, and each whole-line comment, painted too)
+const paint_all = (ray: Ray) => (ray as { paint_tests?: () => void }).paint_tests?.();
 async function reader(job: { language: string, file: string, text: string, entry: string, texts: [string, string][], key: string, snapshot?: Snapshot }) {
   const parent = env.worker_threads.parentPort!, post = (report: Report) => parent.postMessage(report);
   const heap = memory(Ray.LSP_MEMORY), ray = new Ray(), encoder = new TextEncoder();
@@ -100,10 +102,10 @@ async function reader(job: { language: string, file: string, text: string, entry
   // the document)
   if (job.snapshot) {
     new Uint8Array(heap.buffer).set(new Uint8Array(job.snapshot.memory));
-    ray.init(heap); (ray as unknown as { handled: number }).handled = job.snapshot.handled; trace('language as it was read');
+    ray.init(heap); paint_all(ray); (ray as unknown as { handled: number }).handled = job.snapshot.handled; trace('language as it was read');
     ray.untested(); [s, e] = ray.alone(encoder.encode(job.text), job.file);
   } else {
-    ray.init(heap); trace('init');
+    ray.init(heap); paint_all(ray); trace('init');
     [s, e] = ray.file(encoder.encode(job.file === job.language ? job.text : job.entry), job.language);
     trace('entry read');
     if (job.file !== job.language) {
@@ -189,7 +191,7 @@ function tester(job: { heap: WebAssembly.Memory, s: number, e: number }) {
     return tell(said_at, kind, a, c);
   };
   const trace = (what: string) => { if (process.env.RAY_LSP_TRACE) env.fs.writeSync(2, `LSP tester ${what} at ${Math.round(performance.now())} ms, ${Math.round(process.memoryUsage().heapUsed / 1048576)} MB\n`); };
-  Ray.printing = false; ray.init(job.heap); (ray as { paint_tests?: () => void }).paint_tests?.(); trace('init');
+  Ray.printing = false; ray.init(job.heap); paint_all(ray); trace('init');
   ray.tests(); trace(`tested (${ray.listen().length} said)`);
   clearInterval(every); flush();
   parent.postMessage({ said: [...ray.listen()] });

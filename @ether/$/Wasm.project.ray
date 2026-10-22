@@ -10,6 +10,11 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
 
   // Integers (5.2.2): LEB128, seven bits a byte from the least significant, the high bit set while more follow (`more`, each
   // 128 or above), the last below it; signed, the last group's second bit (64) its sign
+  // (was, before 2026-10-22, read by its bits: LEB and Signed as headers of bit groups, their values and conversions by
+  // chunks of 7 bits; the text is in commit 5c50a9d3, this file, lines 11 to 24. The way back, once subscript numerals read in
+  // a header and a header writes by being read backwards: those lines again, and the `Continued` and `Final` types,
+  // `weight`, `power`, `groups`, `top` and `encoded` below gone; WA1 and WA2 as noted at the end of the file)
+  // (a class written with `=>` before its block: without it, the block is the class, its methods see no field)
   static Continued := Byte{. >= 128}
   static Final := Byte{. < 128}
   static LEB := class (more: Continued[], last: Final) => {
@@ -73,6 +78,9 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   // (what anything is written as: a number a byte; a list each of it, in turn; anything else, its own bytes)
   static bytes_of (x) => (x is Number) ? [x] : (((x).listing === true) ? Wasm.bytes_all(x) : x.bytes)
   static bytes_all (xs) => xs.empty ? [] : Wasm.bytes_of(xs.first).joined(Wasm.bytes_all(xs.rest))
+  // (was, before 2026-10-22: `static Name := lazily (size: U32 = text.bytes.count, text: Unicode.UTF-8{bytes.count == size})`;
+  // the way back once a text written `as Byte[]` is its UTF-8 bytes and a header writes itself; then `codes` and `bytes` go
+  // and WA3 goes back to its form noted at the end of the file)
   static Name := class (size: U32 = text.count, text: String) => {
     // (the codes of its characters, in order) TODO(explicit): above 127, their UTF-8 bytes
     static codes (t) => t.empty ? [] : [t[0]].joined(Wasm.Name.codes(t.rest))
@@ -427,6 +435,12 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
   assert ((@ray while x < 10 { x = x + 1 }) as Program{O: Wasm.default}).first == Wasm.Op.block  // WA5 a while is not a block around a loop
   assert ([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00] as Wasm).sections.empty  // WA6 the empty module does not read
 }
+// (WA1–WA3 were inside the class before 2026-10-22, written as conversions; inside the class the class's own
+// `dynamically assert sections.id…` asks of a module, so they are out here; the way back, with the forms noted above:
+//   assert (624485 as Wasm.U32 as Byte[]) == [0xE5, 0x8E, 0x26] && ([0xE5, 0x8E, 0x26] as Wasm.U32).value == 624485
+//   assert (-123456 as Wasm.S32 as Byte[]) == [0xC0, 0xBB, 0x78]
+//   assert ("add" as Wasm.Name as Byte[]) == [3, 0x61, 0x64, 0x64]
+// WA2 tests 100 for now: a signed value below zero is not written yet, the TODO in `Signed`)
 // (its integers, read and written, outside the class: its own asserts ask of a module)
 assert Wasm.LEB.encoded(624485).bytes == [0xE5, 0x8E, 0x26] && Wasm.LEB(more: [0xE5, 0x8E], last: 0x26).value == 624485  // WA1 LEB128's example is not e5 8e 26
 assert Wasm.Signed.encoded(100).bytes == [0xE4, 0x00]  // WA2 a hundred is not two groups when signed (its sign bit would be set)

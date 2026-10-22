@@ -114,8 +114,9 @@ assert ([1, 2] as Language.ray) == "[1, 2]"  // LNG45 a list is not written in t
 
 // (what the bootstrap leaves to this file: it needs what is here)
 Node &+= {
-  // (written by its class's header when it has one, else in the language of the file asking)
-  as (=== String) => Language.headed(this) ? Language.part_written(this) : (Language.for_file(&.caller.location.name) ?? Language.ray).write(this)
+  // (written by its class's header when it has one, else in the language of the file asking: a method, not one more of
+  // the conversions every value has (a second on Node, beside its `as (=== boolean)`, makes them read themselves))
+  as String => Language.headed(this) ? Language.part_written(this) : (Language.for_file(&.caller.location.name) ?? Language.ray).write(this)
 }
 LanguageName := String{Language.named("." + .) != None}
 @{extension: LanguageName}`{code ^string}` ^string.punctuation => Language.named("." + extension).read(code)

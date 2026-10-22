@@ -87,8 +87,9 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
       Wasm.LEB.encoded(vec_elements.count).bytes.joined(vec_bytes)
     }
   }
-  // (what anything is written as: a number a byte; a list each of it, in turn; anything else, its own bytes)
-  static bytes_of (x) => (x is Number) ? [x] : (((x).listing === true) ? Wasm.bytes_all(x) : x.bytes)
+  // (what anything is written as: a number a byte; a list each of it, in turn; an op its code; anything else, its own bytes)
+  // (an op, its code: one byte, or a prefix and a number)
+  static bytes_of (x) => (x is Number) ? [x] : (((x).listing === true) ? Wasm.bytes_all(x) : (((x).code !== None) ? Wasm.bytes_of((x).code) : x.bytes))
   static bytes_all (xs) => xs.empty ? [] : Wasm.bytes_of(xs.first).joined(Wasm.bytes_all(xs.rest))
   // (was, before 2026-10-22: `static Name := lazily (size: U32 = text.bytes.count, text: Unicode.UTF-8{bytes.count == size})`;
   // the way back once a text written `as Byte[]` is its UTF-8 bytes and a header writes itself; then `codes` and `bytes` go
@@ -462,3 +463,4 @@ assert Wasm.module_bytes([]) == [0, 97, 115, 109, 1, 0, 0, 0]  // WA7 the empty 
 assert Wasm.Written_section(id: 1, data: Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F]), Wasm.Vec(elements: [0x7F])]])).bytes == [1, 6, 1, 96, 1, 127, 1, 127]  // WA8 a type section of i32 to i32 is not these bytes
 assert Wasm.Written_section(id: 7, data: Wasm.Vec(elements: [[Wasm.Name(text: "f"), 0x00, 0]])).bytes == [7, 5, 1, 1, 102, 0, 0]  // WA9 an export of function 0 as f is not these bytes
 assert Wasm.Written_section(id: 10, data: Wasm.Vec(elements: [Wasm.Written_code(function: [Wasm.Vec(elements: []), 0x20, 0, 0x0B])])).bytes == [10, 6, 1, 4, 0, 32, 0, 11]  // WA10 a body answering its parameter is not these bytes
+assert Wasm.Written_code(function: [Wasm.Vec(elements: []), Wasm.local.get, 0, Wasm.local.get, 1, Wasm.i32.add, Wasm.Op.end]).bytes == [7, 0, 0x20, 0, 0x20, 1, 0x6A, 0x0B]  // WA11 a body adding its two parameters is not these bytes

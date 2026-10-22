@@ -10,7 +10,7 @@ type Paint = { begin: number, end: number, style: string };
 type Said = [at: number, message: string, style?: string][];
 // (what a reading thread sends: read, still being tested, tested; or it could not be read)
 type Report =
-  | { kind: 'language', key: string, memory: SharedArrayBuffer, handled: number, files: string[] }
+  | { kind: 'language', key: string, memory: SharedArrayBuffer, handled: number, files: string[], theme?: Theme }
   | { kind: 'read', s: number, e: number, paints: Paint[], said: Said, theme?: { name: string, colors: Record<string, string> } }
   | { kind: 'testing', paints: Paint[] }
   | { kind: 'tested', paints: Paint[], said: Said }
@@ -73,7 +73,8 @@ function mixed(from: string | undefined, to: string | undefined, share: number):
 
 // The reading thread: the language, then the document (another document: what the language includes read, open documents as
 // the editor has them, the document among them where it is one, else after them on its own; the language's own tests not run).
-type Snapshot = { key: string, memory: SharedArrayBuffer, handled: number, files: string[] };
+type Theme = { name: string, colors: Record<string, string> };
+type Snapshot = { key: string, memory: SharedArrayBuffer, handled: number, files: string[], theme?: Theme };
 // (painting on for this thread: what tests make, and each whole-line comment, painted too)
 const paint_all = (ray: Ray) => (ray as { paint_tests?: () => void }).paint_tests?.();
 async function reader(job: { language: string, file: string, text: string, entry: string, texts: [string, string][], key: string, snapshot?: Snapshot }) {
@@ -88,6 +89,15 @@ async function reader(job: { language: string, file: string, text: string, entry
     new Uint8Array(heap.buffer).set(new Uint8Array(job.snapshot.memory));
     ray.init(heap); paint_all(ray); (ray as unknown as { handled: number }).handled = job.snapshot.handled; trace('language as it was read');
     ray.untested(); [s, e] = ray.alone(encoder.encode(job.text), job.file);
+  } else if (!job.file) {
+    // (the language alone, read before any document: kept, its theme with it)
+    ray.init(heap); paint_all(ray);
+    ray.file(encoder.encode(job.entry), job.language); ray.untested();
+    const spans = ray.included([], false, new Map(job.texts));
+    const end = Atomics.load(new Int32Array(heap.buffer), 0), memory = new SharedArrayBuffer(end);
+    new Uint8Array(memory).set(new Uint8Array(heap.buffer, 0, end));
+    post({ kind: 'language', key: job.key, memory, handled: (ray as unknown as { handled: number }).handled, files: [...spans.keys()], theme: ray.theme() }); trace(`language read and kept (${Math.round(end / 1048576)} MB)`);
+    return;
   } else {
     ray.init(heap); paint_all(ray); trace('init');
     [s, e] = ray.file(encoder.encode(job.file === job.language ? job.text : job.entry), job.language);
@@ -200,16 +210,17 @@ function keep(language: string, snapshot: Snapshot) {
     const dir = cached(language); env.fs.mkdirSync(dir, { recursive: true });
     env.fs.writeFileSync(env.path.join(dir, 'memory'), new Uint8Array(snapshot.memory));
     const read = [language, ...KERNEL, ...snapshot.files];
-    env.fs.writeFileSync(env.path.join(dir, 'kept.json'), JSON.stringify({ handled: snapshot.handled, files: snapshot.files, read, hashes: hashes(read) }));
+    env.fs.writeFileSync(env.path.join(dir, 'kept.json'), JSON.stringify({ handled: snapshot.handled, files: snapshot.files, theme: snapshot.theme, read, hashes: hashes(read) }));
   } catch { /* (not kept: read again next time) */ }
 }
 function kept(language: string): Snapshot | undefined {
   try {
     const dir = cached(language), meta = JSON.parse(env.fs.readFileSync(env.path.join(dir, 'kept.json'), 'utf-8'));
-    if (hashes(meta.read).join() !== meta.hashes.join()) return undefined;
+    // (kept as it was read, with its theme: else read again)
+    if (hashes(meta.read).join() !== meta.hashes.join() || !meta.theme) return undefined;
     const bytes = env.fs.readFileSync(env.path.join(dir, 'memory')), memory = new SharedArrayBuffer(bytes.length);
     new Uint8Array(memory).set(bytes);
-    return { key: '', memory, handled: meta.handled, files: meta.files };
+    return { key: '', memory, handled: meta.handled, files: meta.files, theme: meta.theme };
   } catch { return undefined; }
 }
 
@@ -252,8 +263,30 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
   const painted = (uri: string) => { if (refreshes) send({ id: `refresh${++asked}`, method: 'workspace/semanticTokens/refresh' }); notify('ether/theme', payload([uri])); };
 
   // Read a document again: the reading of it under way stopped, a new one begun.
+  // The language first, before any document (unless it is kept): read on its own thread, kept, its theme sent; a document
+  // opened meanwhile read on it once it is there.
+  let preparing: import('worker_threads').Worker | undefined;
+  const waiting = new Set<string>();
+  if (snapshot?.theme) shown = snapshot.theme;
+  const prepare = () => {
+    preparing?.terminate();
+    const key = language_key(), entry = [...documents].find(([u]) => file_of(u) === language)?.[1].text ?? env.fs.readFileSync(language, 'utf-8');
+    const worker = thread('reader', { language, file: '', text: '', entry, texts: [...documents].map(([u, d]) => [file_of(u), d.text]), key });
+    preparing = worker;
+    const done = () => { if (preparing === worker) preparing = undefined; for (const uri of waiting) dirty.add(uri); waiting.clear(); if (dirty.size) schedule(); };
+    worker.on('message', (report: Report) => {
+      if (report.kind !== 'language' || preparing !== worker) return;
+      shown = report.theme ?? shown;
+      if (report.key === language_key()) { snapshot = report; if (report.key === '') keep(language, report); }
+      notify('ether/theme', payload([...checked.keys()]));
+      log(`language read and kept`); done();
+    });
+    worker.on('error', (x: Error) => { log(`reading the language failed: ${x.stack ?? x}`); snapshot = undefined; done(); });
+  };
   const check = (uri: string) => {
     const doc = documents.get(uri); if (!doc) return;
+    // (not before the language: it is read first)
+    if (file_of(uri) !== language && !(snapshot && snapshot.key === language_key())) { waiting.add(uri); if (!preparing) prepare(); return; }
     reading.get(uri)?.worker.terminate();
     const t0 = performance.now(), file = file_of(uri), version = doc.version, text = doc.text;
     const entry = [...documents].find(([u]) => file_of(u) === language)?.[1].text ?? env.fs.readFileSync(language, 'utf-8');
@@ -324,14 +357,14 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
 
   // (an edit waits a little for the next, then the document is read again; the language changed: every document is)
   let scheduled: ReturnType<typeof setTimeout> | undefined;
+  const schedule = () => { if (scheduled !== undefined) clearTimeout(scheduled); scheduled = setTimeout(work, Number(process.env.RAY_LSP_DELAY ?? 100)); };
   const work = () => { scheduled = undefined; for (const uri of [...dirty]) { dirty.delete(uri); try { check(uri); } catch (x) { log(`reading ${uri} failed: ${(x as Error).stack ?? x}`); } } };
   const open = (uri: string, text: string, version: number) => {
     // (a file the language read, changed: the language read again)
     if (snapshot?.files.includes(file_of(uri)) && (documents.get(uri)?.text ?? (() => { try { return env.fs.readFileSync(file_of(uri), 'utf-8'); } catch { return undefined; } })()) !== text) snapshot = undefined;
     documents.set(uri, { text, version }); dirty.add(uri);
     if (file_of(uri) === language) for (const other of documents.keys()) dirty.add(other);
-    if (scheduled !== undefined) clearTimeout(scheduled);
-    scheduled = setTimeout(work, Number(process.env.RAY_LSP_DELAY ?? 100));
+    schedule();
   };
   const tokens = (uri: string, range?: [number, number]) => { const c = checked.get(uri); return { data: c ? encode(documents.get(uri)?.text ?? c.text, c.paints, TOKEN_TYPES, range) : [] }; };
   type Params = Record<string, any>;
@@ -351,6 +384,8 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
   };
   const notifications: Record<string, (params: Params) => void> = {
     'exit': () => process.exit(0),
+    // (the theme as soon as there is one: the language's, kept or read first)
+    'initialized': () => { if (shown) notify('ether/theme', payload([])); else if (!preparing && !snapshot) prepare(); },
     'textDocument/didOpen': ({ textDocument: d }) => open(d.uri, d.text, d.version),
     'textDocument/didChange': ({ textDocument: d, contentChanges }) => open(d.uri, contentChanges[contentChanges.length - 1].text, d.version),
     'textDocument/didClose': ({ textDocument: d }) => { reading.get(d.uri)?.worker.terminate(); reading.delete(d.uri); documents.delete(d.uri); checked.delete(d.uri); },

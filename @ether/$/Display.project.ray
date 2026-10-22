@@ -26,7 +26,7 @@ Display := class {
       (@c {
         int animated = 1
         SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animated, 0)
-        HIGHCONTRASTW contrast = \{sizeof(HIGHCONTRASTW)}
+        HIGHCONTRASTW contrast = \{sizeof(HIGHCONTRASTW)\}
         SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(HIGHCONTRASTW), &contrast, 0)
         int more = (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0
         unsigned light = 1

@@ -24,10 +24,12 @@ Character := class: Hierarchy &+ Nameable {
     assert c is Character{.name == "c"} & !(c is Character{.name == "d"})  // CHR5 a character is not of a narrowing it satisfies, or is of one it does not
   }
   static PREFIX := "@"
-  static walked (at, names) => names.empty ? at : Character.walked(at[names.first], names.rest)
-  assert Character.walked({ a: 1 }, []).a == 1  // CHR46 walking no names does not stay at the start
-  assert Character.walked({ a: { b: 7 } }, ["a", "b"]) == 7  // CHR47 walking names does not enter each member in turn
-  assert Character.walked({ a: 1 }, ["b"]) == None  // CHR48 walking into a name that is not there finds something
+  // (a path, `device/os`: each name a member of what is before it; from where the next `/` is)
+  static walked (at, path) => path.empty ? at : Character.walked_at(at, path, path)
+  static walked_at (at, path, from) => from.empty ? at[path] : (from.first == "/") ? Character.walked(at[path.until(from)], from.rest) : Character.walked_at(at, path, from.rest)
+  assert Character.walked({ a: 1 }, "").a == 1  // CHR46 walking no names does not stay at the start
+  assert Character.walked({ a: { b: 7 } }, "a/b") == 7  // CHR47 walking names does not enter each member in turn
+  assert Character.walked({ a: 1 }, "b") == None  // CHR48 walking into a name that is not there finds something
 
   quests => Program#{who: this}{.running}
   acting => this

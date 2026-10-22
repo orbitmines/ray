@@ -18,7 +18,7 @@ Notification := class (title: String?, body: String?) => {
     }
     elsif OS.Windows {
       (@c {
-        NOTIFYICONDATAW icon = \{sizeof(NOTIFYICONDATAW)}
+        NOTIFYICONDATAW icon = \{sizeof(NOTIFYICONDATAW)\}
         icon.uFlags = NIF_INFO
         icon.dwInfoFlags = NIIF_INFO
         wcscpy(icon.szInfoTitle, L{this.title})
@@ -34,7 +34,7 @@ Notification := class (title: String?, body: String?) => {
         objc_msgSend(objc_msgSend(objc_getClass("NSUserNotificationCenter"), sel_registerName("defaultUserNotificationCenter")), sel_registerName("deliverNotification:"), shown)
       })() -- this
     }
-    elsif OS.Browser { (@js new Notification({this.title}, \{body: {this.body}}))() -- this }
+    elsif OS.Browser { (@js new Notification({this.title}, \{body: {this.body}\}))() -- this }
     else { (OS.Ether.notification = this) -- this }
 }
 assert Notification(title: "t", body: "b").(.title == "t" & .body == "b")  // NTF1 a notification does not keep its title and body

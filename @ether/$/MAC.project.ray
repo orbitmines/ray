@@ -41,7 +41,7 @@ Device &+= {
         GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, all, &size)
         IP_ADAPTER_ADDRESSES* at = all
         while (at && (at->IfType == IF_TYPE_SOFTWARE_LOOPBACK || at->PhysicalAddressLength != 6)) { at = at->Next }
-        unsigned char octets[6] = \{0}
+        unsigned char octets[6] = \{0\}
         if (at) { memcpy(octets, at->PhysicalAddress, 6) }
         free(all)
       })().octets as MAC
@@ -52,7 +52,7 @@ Device &+= {
         getifaddrs(&all)
         struct ifaddrs* at = all
         while (at && (at->ifa_addr->sa_family != AF_LINK || (at->ifa_flags & IFF_LOOPBACK) || ((struct sockaddr_dl*)at->ifa_addr)->sdl_alen != 6)) { at = at->ifa_next }
-        unsigned char octets[6] = \{0}
+        unsigned char octets[6] = \{0\}
         if (at) { memcpy(octets, LLADDR((struct sockaddr_dl*)at->ifa_addr), 6) }
         freeifaddrs(all)
       })().octets as MAC

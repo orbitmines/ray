@@ -12,13 +12,13 @@ Motion := class {
   // `OS.Ether.acceleration`), none until then
   orientation: Geometry.Vector? = if OS.Linux { Motion.iio("incli") }
     elsif OS.Windows { Motion.sensed(@c SENSOR_TYPE_INCLINOMETER_3D, @c SENSOR_DATA_TYPE_TILT_X_DEGREES, @c SENSOR_DATA_TYPE_TILT_Y_DEGREES, @c SENSOR_DATA_TYPE_TILT_Z_DEGREES) }
-    elsif OS.Browser { (@js await new Promise((answer) => addEventListener("deviceorientation", (event) => answer([event.beta, event.gamma, event.alpha]), \{once: true})))() as Geometry.Vector }
+    elsif OS.Browser { (@js await new Promise((answer) => addEventListener("deviceorientation", (event) => answer([event.beta, event.gamma, event.alpha]), \{once: true\})))() as Geometry.Vector }
     elsif OS.Macos { None }
     else { OS.Ether.orientation }
   acceleration: Geometry.Vector? = if OS.Linux { Motion.iio("accel") }
     elsif OS.Windows { Motion.sensed(@c SENSOR_TYPE_ACCELEROMETER_3D, @c SENSOR_DATA_TYPE_ACCELERATION_X_G, @c SENSOR_DATA_TYPE_ACCELERATION_Y_G, @c SENSOR_DATA_TYPE_ACCELERATION_Z_G) }
     elsif OS.Browser {
-      (@js await new Promise((answer) => addEventListener("devicemotion", (event) => answer([event.accelerationIncludingGravity.x, event.accelerationIncludingGravity.y, event.accelerationIncludingGravity.z]), \{once: true})))() as Geometry.Vector
+      (@js await new Promise((answer) => addEventListener("devicemotion", (event) => answer([event.accelerationIncludingGravity.x, event.accelerationIncludingGravity.y, event.accelerationIncludingGravity.z]), \{once: true\})))() as Geometry.Vector
     }
     elsif OS.Macos { None }
     else { OS.Ether.acceleration }
@@ -36,7 +36,7 @@ Motion := class {
     ISensor* sensor = nullptr
     ISensorDataReport* report = nullptr
     PROPVARIANT value
-    double at[3] = \{0, 0, 0}
+    double at[3] = \{0, 0, 0\}
     int sensed = manager->lpVtbl->GetSensorsByType(manager, &{type}, &found) == S_OK
       && found->lpVtbl->GetAt(found, 0, &sensor) == S_OK && sensor->lpVtbl->GetData(sensor, &report) == S_OK
     if (sensed) {

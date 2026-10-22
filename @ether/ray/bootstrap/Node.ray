@@ -104,7 +104,7 @@ Node &+= {
   assert (1 | 2)#.count == 2  // NOD25 two possible values do not count two
   assert (1 | 2)#.first == 1  // NOD26 the first possible value is not the first written
   assert (1 | 2)#.last == 2  // NOD27 the last possible value is not the last written
-  assert @me/device/os["platform"].nonempty  // IO3 the machine does not name its platform
+  assert (@me/device as OS)["platform"].nonempty  // IO3 the machine does not name its platform
   assert (1 | 2)#.contains(2)  // NOD28 a possible value is not contained
   assert !(1 | 2)#.contains(3)  // NOD29 a value that is not possible is contained
   assert ("a", "b", "c").join("-") == "a-b-c"  // SJ2 joining a, b and c with a dash is not a-b-c

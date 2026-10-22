@@ -289,15 +289,9 @@ wj_begin_linked (called, params) => {
   wasm.params = wasm.cells_n
   wasm_cell(`&.value`)
 }
-// (a context written in slices, each a run of its own: its cells given at once, as the JMP has them, and where the slice this
-// run writes begins and ends; the rest of the context given only as what its blocks and jumps need)
-wj_cells (given_cells) => {
-  at := given_cells.head
-  while at !== None {
-    wasm_cell(at.value)
-    at = at.next
-  }
-}
+// (a context written in slices, each a run of its own: its cells given first, in the order the JMP has them, and where the
+// slice this run writes begins and ends; the rest of the context given only as what its blocks and jumps need)
+wj_cell (name) => wasm_cell(name)
 wj_slice_begins (unused) => {
   wasm.slice_from = wasm.statements_n
 }

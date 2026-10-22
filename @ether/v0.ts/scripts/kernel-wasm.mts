@@ -40,14 +40,14 @@ if (ray) writeFileSync(ray, calls.join('\n') + `\nwj_module(${pages})\n`);
 
 // (`--parts <dir> --module <file>`: the same, in parts each read by a run of its own (`--jobs` at once), as no run holds the
 // whole kernel: every part given each context by name and how many it takes, then its own contexts, about `--statements`
-// lines of them (1500), its bodies written; a context of more than `--slice` statements (1500) written in slices, each a run
+// lines of them (1200), its bodies written; a context of more than `--slice` statements (1000) written in slices, each a run
 // given its cells, its own statements and, of the rest, what its blocks and jumps need (its labels, jumps and returns, and one
 // statement skipped for each run of the others), its body's size written after them; a part of none, the sections around them)
 const parts = arg('--parts');
 if (parts) {
   const { spawn } = await import('node:child_process'), { mkdirSync } = await import('node:fs'), { join } = await import('node:path'), { cpus } = await import('node:os');
   const src = new URL('../src/', import.meta.url).pathname, root = new URL('../', import.meta.url).pathname;
-  const size = Number(arg('--statements') ?? 1500), slice = Number(arg('--slice') ?? 1500), jobs = Number(arg('--jobs') ?? Math.min(8, Math.max(1, cpus().length >> 1)));
+  const size = Number(arg('--statements') ?? 1200), slice = Number(arg('--slice') ?? 1000), jobs = Number(arg('--jobs') ?? Math.min(8, Math.max(1, cpus().length >> 1)));
   mkdirSync(parts, { recursive: true });
   const begun = calls.flatMap((c, k) => c.startsWith('wj_begin(') ? [k] : []);
   const announced = begun.map(k => calls[k].replace(/^wj_begin\((`[^`]*`), \[(.*)\]\)$/, (_, name, params) => `wj_context(${name}, ${params ? params.split(', ').length : 0})`));
@@ -79,7 +79,7 @@ if (parts) {
   // (a slice of the context from s to e: the lines from a to b, the others what its blocks need)
   const sliced = (s: number, e: number, a: number, b: number) => {
     const labels = new Set(calls.slice(s, e).flatMap(c => c.startsWith('wj_label(') ? [c.slice(10, -2)] : []));
-    const lines = [calls[s], `wj_cells([${cells_at.get(s)!.map(quoted).join(', ')}])`];
+    const lines = [calls[s], ...cells_at.get(s)!.map(c => `wj_cell(${quoted(c)})`)];
     for (let k = s + 1, left = false; k < e; k++) {
       if (k === a) lines.push('wj_slice_begins(0)');
       const x = aim(calls[k]);
@@ -91,7 +91,7 @@ if (parts) {
   };
   const program = (name: string, lines: string[]) => { const file = join(parts, `${name}.ray`), run = join(parts, `run-${name}.ray`); writeFileSync(file, [...announced, ...lines].join('\n') + '\n'); writeFileSync(run, `include @${join(src, 'wasm.ray')}\ninclude @${file}\n`); return run; };
   const read = (run: string, out: string, value: string) => new Promise<string>(done => {
-    const child = spawn(process.execPath, ['--import', 'tsx', 'src/language.ts', '--threads', '1', `--write=${out}`, `--value=${value}`, '../ray/bootstrap/.entrypoint.ray3', run], { cwd: root, env: { ...process.env, RAY_NOTESTS: '1', RAY_NOCACHE: '1' } });
+    const child = spawn(process.execPath, ['--import', 'tsx', 'src/language.ts', '--threads', '1', `--write=${out}`, `--value=${value}`, '../ray/bootstrap/.entrypoint.ray3', run], { cwd: root, env: { ...process.env, RAY_NOTESTS: '1', RAY_NOCACHE: '1', RAY_STATEMENT_MB: '1900' } });
     let text = ''; child.stdout.on('data', d => { text += d; }); child.stderr.on('data', d => { text += d; }); child.on('close', () => done(text));
   });
   const runs = groups.flatMap(({ s, e, slices }, k) => slices ? slices.map(([a, b], i) => ({ name: `part-${k}-${i}`, lines: b - a, run: program(`part-${k}-${i}`, sliced(s, e, a, b)) })) : [{ name: `part-${k}`, lines: e - s, run: program(`part-${k}`, calls.slice(s, e)) }]);

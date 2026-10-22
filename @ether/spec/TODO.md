@@ -70,6 +70,10 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A project's dependency lines are read by nothing** (`@ether/random`, `@x25519` at the top of a `.project.ray`): a file
   given directly reports them unread, and nothing loads the projects they name.
 
+- **Every project at once does not fit**: the 84 files of optional/, `$/` and os/ (with ray/) given to one run fill the
+  2 GB wasm memory (`out of memory (2147483648 bytes)`, then `RangeError: Invalid file ID` in `FileStore.getRecord`), so
+  for now each project is tested with only what it depends on.
+
 ## Tests to take in
 
 - **Control.ray's tests of the language's own forms** (operator sections OP1–OP5, `if` with cases IC3, `?`/`?=` QM1–QM2,

@@ -1161,7 +1161,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
               const fit = ((f & CALLS) ? 1 : 0) === calling ? 1 : 0;
               // (of two led by text that read it all, the one with more of its text written (`@me/{path}` over `@{name}/{path}`,
               // §4.3 the longest declared word), then the one declared later)
-              let lit = 0; for (let k = 0; k < w(x + R_PARTS); k++) { const q = x + R_PART + PART * k; if ((w(q) & 15) === LITERAL) lit += w(q + 8); }
+              let lit = 0; for (let lit_k = 0; lit_k < w(x + R_PARTS); lit_k++) { const lit_q = x + R_PART + PART * lit_k; if ((w(lit_q) & 15) === LITERAL) lit += w(lit_q + 8); }
               if (e >= end && over >= 0 && (over > 0 || score > longest || (score === longest && ((weak && !placed_) || (found_in === group && (fit !== best_fit ? fit > best_fit : (f & LED) && (w(best + R_FLAGS) & LED) && lit !== best_lit ? lit > best_lit : seq > found_seq)))))) {
                 best = x; longest = score; ends = e; weak = placed_; found_in = group; found_seq = seq; best_fit = fit; best_lit = lit;
                 const h = w(x + R_HOLES) * 12;

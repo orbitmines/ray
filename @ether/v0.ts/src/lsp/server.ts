@@ -131,7 +131,7 @@ async function reader(job: { language: string, file: string, text: string, entry
   const done = Promise.all(testers.map(t => new Promise<void>(resolve => {
     t.on('message', (m: { said?: Said, paints?: Paint[] }) => {
       if (m.said) said.push(...m.said);
-      for (const p of m.paints ?? []) found.set(`${p.begin}:${p.end}`, p);
+      for (const p of m.paints ?? []) found.set(`${p.begin}:${p.end}:${p.style}`, p);
       if (m.paints) repaint();
     });
     t.on('error', (x: Error) => { said.push([0, `a test thread crashed: ${x.message}`]); resolve(); });
@@ -172,8 +172,16 @@ function tester(job: { heap: WebAssembly.Memory, s: number, e: number }) {
   const ray = new Ray(), parent = env.worker_threads.parentPort!;
   // (a frame given what its test found, as the kernel tells of it (L.STYLED): a test inside a test too, whose frame is gone
   // once its test is done; sent at once)
-  const tell = ray.tell.bind(ray);
+  // (and each frame a test makes of a rule shown in a style (c = 1): its paints, gathered and sent every so often)
+  const tell = ray.tell.bind(ray), sent = new Set<string>();
+  let gathered: Paint[] = [];
+  const flush = () => { if (gathered.length) { parent.postMessage({ paints: gathered }); gathered = []; } };
+  const every = setInterval(flush, EVERY);
   ray.tell = (said_at: number, kind: number, a: number, c: number) => {
+    if (kind === STYLED && c === 1) {
+      for (const p of ray.frame_paints(a, job.s, job.e)) { const k = `${p.begin}:${p.end}:${p.style}`; if (!sent.has(k)) { sent.add(k); gathered.push(p); } }
+      return 0;
+    }
     if (kind === STYLED && a) {
       const style = styler(ray)(a), fs = ray.w(a + F.START), fe = ray.w(a + F.END);
       if ((style === 'passed' || style === 'failed') && fs >= job.s && fe <= job.e) parent.postMessage({ paints: [{ begin: fs - job.s, end: fe - 1 - job.s, style }] });
@@ -181,8 +189,9 @@ function tester(job: { heap: WebAssembly.Memory, s: number, e: number }) {
     return tell(said_at, kind, a, c);
   };
   const trace = (what: string) => { if (process.env.RAY_LSP_TRACE) env.fs.writeSync(2, `LSP tester ${what} at ${Math.round(performance.now())} ms, ${Math.round(process.memoryUsage().heapUsed / 1048576)} MB\n`); };
-  Ray.printing = false; ray.init(job.heap); trace('init');
+  Ray.printing = false; ray.init(job.heap); (ray as { paint_tests?: () => void }).paint_tests?.(); trace('init');
   ray.tests(); trace(`tested (${ray.listen().length} said)`);
+  clearInterval(every); flush();
   parent.postMessage({ said: [...ray.listen()] });
 }
 
@@ -270,9 +279,11 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
     // A test as the theme shows it: `assert` itself as what it found (`untested` until it is run, then `passed` or `failed`),
     // what is written after it in its own colours, muted. (The frames painted are refilled while the tests run: what was read
     // keeps its paints; a test's result is the style its whole frame is given, kept once given.)
-    const TESTED = new Set(['untested', 'passed', 'failed']), read: Paint[] = [], heads: Paint[] = [], results = new Map<string, Paint>();
+    const TESTED = new Set(['untested', 'passed', 'failed']), read: Paint[] = [], once = new Set<string>(), heads: Paint[] = [], results = new Map<string, Paint>();
     const paint = (paints: Paint[], first = false) => {
-      if (first) { read.push(...paints.filter(p => !TESTED.has(p.style))); heads.push(...paints.filter(p => p.style === 'untested')); }
+      if (first) heads.push(...paints.filter(p => p.style === 'untested'));
+      // (what was read, and what the tests read as they run: kept, each once)
+      for (const p of paints) if (!TESTED.has(p.style)) { const k = `${p.begin}:${p.end}:${p.style}`; if (!once.has(k)) { once.add(k); read.push(p); } }
       for (const p of paints) if (p.style === 'passed' || p.style === 'failed') results.set(`${p.begin}:${p.end}`, p);
       const chars = (p: Paint) => ({ begin: char(p.begin), end: char(p.end), style: p.style });
       // (`assert`, a character at a time: the words they make, each to the end of its statement)

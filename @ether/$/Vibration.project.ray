@@ -1,0 +1,45 @@
+@ether/os
+@ether/time
+@c
+@js
+
+// A vibration: on for each duration of its pattern, off for the next (https://www.w3.org/TR/vibration/)
+Vibration := class (pattern: Quantity.Temporal[] = []) => {
+  // as the device vibrates: the first game controller's rumble, through evdev's force feedback on Linux (a rumble effect
+  // uploaded with EVIOCSFF and played with an EV_FF event, https://www.kernel.org/doc/html/latest/input/ff.html) and
+  // XInputSetState on Windows (https://learn.microsoft.com/windows/win32/api/xinput/nf-xinput-xinputsetstate),
+  // navigator.vibrate in a browser; a Mac does not vibrate; on ether a USB controller's
+  // HID output report (xHCI), not written yet
+  felt => if OS.Linux {
+      ((@/dev/input/by-id).held{. as String ~= "-event-joystick" ⊣}.first as String) -- (controller => this.pattern.enumerate.for(step => (@c {
+        int felt = open({controller}, O_RDWR)
+        struct ff_effect effect = \{0}
+        effect.type = FF_RUMBLE
+        effect.id = -1
+        effect.u.rumble.strong_magnitude = {step.index % 2 == 0 ? 65535 : 0}
+        effect.replay.length = {step.value / (1 ms)}
+        ioctl(felt, EVIOCSFF, &effect)
+        struct input_event play = \{0}
+        play.type = EV_FF
+        play.code = effect.id
+        play.value = 1
+        write(felt, &play, sizeof(play))
+        usleep({step.value / (1 ms)} * 1000)
+        close(felt)
+      })())) -- this
+    }
+    elsif OS.Windows {
+      this.pattern.enumerate.for(step => (@c {
+        XINPUT_VIBRATION motors = \{{step.index % 2 == 0 ? 65535 : 0}, {step.index % 2 == 0 ? 65535 : 0}}
+        XInputSetState(0, &motors)
+        Sleep({step.value / (1 ms)})
+      })()) -- (@c {
+        XINPUT_VIBRATION still = \{0, 0}
+        XInputSetState(0, &still)
+      })() -- this
+    }
+    elsif OS.Browser { (@js navigator.vibrate({this.pattern.map(. / (1 ms))}))() -- this }
+    elsif OS.Macos { None }
+    else { TODO `a controller's rumble on ether: its HID output report, through the USB controller (an xHCI driver in @ether/os, Machine.driver(0x0C03))` }
+}
+assert Vibration(pattern: [200 ms, 100 ms]).pattern.count == 2  // VIB1 a vibration does not keep its pattern

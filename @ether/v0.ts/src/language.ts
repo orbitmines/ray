@@ -730,110 +730,12 @@ export async function entrypoint() {
     void main();
   }
 }
-// The language server over stdio: JSON-RPC, each message after a `Content-Length` header. A document, as it changes, is read
-// (with the language read first: from the editor when it is open there), its tests run; what was said is sent as diagnostics,
-// what was painted as semantic tokens and on the theme channel (`ether/theme`), with the language's theme.
+// The language server over stdio (lsp/server.ts): a document read on a thread of its own, painted as soon as it is read, its
+// tests painted as they pass or fail.
 export async function lsp(io: { input: NodeJS.ReadableStream, output: NodeJS.WritableStream } = { input: process.stdin, output: process.stdout }): Promise<void> {
-  const send = (message: object) => { const body = Buffer.from(JSON.stringify({ jsonrpc: '2.0', ...message }), 'utf8'); io.output.write(`Content-Length: ${body.length}\r\n\r\n`); io.output.write(body); };
-  const notify = (method: string, params: unknown) => send({ method, params });
-  const log = (message: string) => notify('window/logMessage', { type: 4, message });
   const language = args[0] && env.fs.existsSync(env.path.join(args[0], `.entrypoint${EXTENSION}3`)) ? env.path.join(args[0], `.entrypoint${EXTENSION}3`) : env.url.fileURLToPath(new URL(ENTRYPOINT, import.meta.url));
-  const file_of = (uri: string): string => { try { return env.url.fileURLToPath(uri); } catch { return uri; } };
-  const documents = new Map<string, { text: string, version: number }>();
-  const checked = new Map<string, { version: number, text: string, paints: Paint[] }>();
-  let shown: { name: string, colors: Record<string, string> } | undefined, refreshes = false, asked = 0, scheduled: ReturnType<typeof setTimeout> | undefined;
-  const dirty = new Set<string>();
-  const check = (uri: string) => {
-    const doc = documents.get(uri); if (!doc) return;
-    const t0 = performance.now(), file = file_of(uri), ray = new Ray(), encoder = new TextEncoder();
-    // (as much memory as a run of the library on one thread needs, with room: 1 GB)
-    Ray.printing = false; ray.init(env.target === 'wasm' ? memory(Ray.LSP_MEMORY) : new Parallel.Memory(Ray.LSP_MEMORY, false, Ray.LSP_MEMORY));
-    const entry = [...documents].find(([u]) => file_of(u) === language)?.[1].text ?? env.fs.readFileSync(language, 'utf-8');
-    let [s, e] = ray.file(encoder.encode(file === language ? doc.text : entry), language);
-    // (another document: the language's own tests not run; what the language includes read (open documents as the editor has
-    // them), the document among them where it is one, else after them, on its own)
-    if (file !== language) {
-      ray.untested();
-      const texts = new Map([...documents].map(([u, d]) => [file_of(u), d.text] as [string, string]));
-      const spans = ray.included([], false, texts);
-      [s, e] = spans.get(file) ?? ray.alone(encoder.encode(doc.text), file);
-    } else ray.included();
-    ray.tests();
-    // (offsets in the text the editor has: bytes to characters)
-    const bytes = encoder.encode(doc.text), at = new Int32Array(bytes.length + 1);
-    for (let i = 0, c = 0; i <= bytes.length; i++) { at[i] = c; if (i < bytes.length && (bytes[i] & 0xC0) !== 0x80) c += bytes[i] >= 0xF0 ? 2 : 1; }
-    const char = (b: number) => at[Math.max(0, Math.min(bytes.length, b))];
-    const paints = ray.paints(s, e).map(p => ({ begin: char(p.begin), end: char(p.end), style: p.style }));
-    // (and what is said of no place, out of memory: at the document's start, so no reading fails unseen)
-    const outside = (x: number, message: string) => !(x >= s && x <= e) && (x === 0 || message.startsWith('out of memory') || message.startsWith('the kernel said more'));
-    const diagnostics = ray.listen().filter(([x, message]) => (x >= s && x <= e) || outside(x, message)).map(([x, message]) => { const o = outside(x, message) ? 0 : char(x - s); return { severity: 1, range: { start: position_of(doc.text, o), end: position_of(doc.text, o + 1) }, message, source: 'ray' }; });
-    shown = ray.theme() ?? shown;
-    checked.set(uri, { version: doc.version, text: doc.text, paints });
-    notify('textDocument/publishDiagnostics', { uri, version: doc.version, diagnostics });
-    if (refreshes) send({ id: `refresh${++asked}`, method: 'workspace/semanticTokens/refresh' });
-    notify('ether/theme', payload([uri]));
-    log(`read ${env.path.basename(file)} v${doc.version} in ${Math.round(performance.now() - t0)} ms: ${diagnostics.length} said`);
-  };
-  const work = () => { scheduled = undefined; for (const uri of [...dirty]) { dirty.delete(uri); try { check(uri); } catch (x) { log(`reading ${uri} failed: ${(x as Error).stack ?? x}`); } } };
-  const payload = (uris: string[]) => {
-    const docs = uris.flatMap(uri => { const c = checked.get(uri); return c ? [{ uri, version: c.version, ranges: runs(c.text, c.paints) }] : []; });
-    const styles: Record<string, { color: string }> = {};
-    if (shown) {
-      const table = new Map(Object.entries(shown.colors));
-      for (const [name] of table) { const color = shown_as(table, name); if (color) styles[name] = { color }; }
-      for (const doc of docs) for (const { style } of doc.ranges) if (!styles[style]) { const color = shown_as(table, style); if (color) styles[style] = { color }; }
-    }
-    return { styles, documents: docs };
-  };
-  const open = (uri: string, text: string, version: number) => {
-    documents.set(uri, { text, version }); dirty.add(uri);
-    // (the language changed: every document is read again)
-    if (file_of(uri) === language) for (const other of documents.keys()) dirty.add(other);
-    if (scheduled === undefined) scheduled = setTimeout(work, Number(process.env.RAY_LSP_DELAY ?? 100));
-  };
-  const tokens = (uri: string, range?: [number, number]) => { const c = checked.get(uri); return { data: c ? encode(documents.get(uri)?.text ?? c.text, c.paints, TOKEN_TYPES, range) : [] }; };
-  type Params = Record<string, any>;
-  const requests: Record<string, (params: Params) => unknown> = {
-    'initialize': params => {
-      refreshes = !!params?.capabilities?.workspace?.semanticTokens?.refreshSupport;
-      return { capabilities: { textDocumentSync: 1, semanticTokensProvider: { legend: { tokenTypes: TOKEN_TYPES, tokenModifiers: MODIFIERS }, full: true, range: true } }, serverInfo: { name: 'ray-language-server', version: env.version.toString() } };
-    },
-    'shutdown': () => null,
-    'textDocument/semanticTokens/full': params => tokens(params.textDocument.uri),
-    'textDocument/semanticTokens/range': params => {
-      const doc = documents.get(params.textDocument.uri), { start, end } = params.range;
-      return doc ? tokens(params.textDocument.uri, [offset_at(doc.text, start.line, start.character), offset_at(doc.text, end.line, end.character)]) : tokens(params.textDocument.uri);
-    },
-    'ether/theme': params => payload(params?.uris ?? []),
-    'ether/initialFiles': () => null,
-  };
-  const notifications: Record<string, (params: Params) => void> = {
-    'exit': () => process.exit(0),
-    'textDocument/didOpen': ({ textDocument: d }) => open(d.uri, d.text, d.version),
-    'textDocument/didChange': ({ textDocument: d, contentChanges }) => open(d.uri, contentChanges[contentChanges.length - 1].text, d.version),
-    'textDocument/didClose': ({ textDocument: d }) => { documents.delete(d.uri); checked.delete(d.uri); },
-  };
-  const received = (m: { id?: number | string, method?: string, params?: Params }) => {
-    if (m.method === undefined) return;   // (an answer to what was asked: nothing waits for it)
-    if (m.id === undefined) { try { notifications[m.method]?.(m.params ?? {}); } catch (e) { log(`${m.method} failed: ${(e as Error).stack ?? e}`); } return; }
-    const handle = requests[m.method];
-    if (!handle) return send({ id: m.id, error: { code: -32601, message: `no method '${m.method}'` } });
-    try { send({ id: m.id, result: handle(m.params ?? {}) ?? null }); }
-    catch (e) { send({ id: m.id, error: { code: -32603, message: String((e as Error).message ?? e) } }); }
-  };
-  let pending = Buffer.alloc(0);
-  io.input.on('data', (chunk: Buffer) => {
-    pending = Buffer.concat([pending, chunk]);
-    for (;;) {
-      const header = pending.indexOf('\r\n\r\n');
-      if (header < 0) return;
-      const length = Number(/Content-Length: *(\d+)/i.exec(pending.subarray(0, header).toString('ascii'))?.[1]);
-      if (pending.length < header + 4 + length) return;
-      const body = pending.subarray(header + 4, header + 4 + length).toString('utf8');
-      pending = pending.subarray(header + 4 + length);
-      try { received(JSON.parse(body)); } catch (e) { log(`a message could not be read: ${(e as Error).message}`); }
-    }
-  });
+  const { serve } = await import('./lsp/server.ts');
+  return serve(language, io);
 }
 
 // What a document is painted as, for the editor: each span's style (`begin`/`end` inclusive), as semantic tokens (delta-encoded,
@@ -2188,7 +2090,7 @@ const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 7
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
-const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted', 'type_written', 'spread', 'is_range', 'mapped_by', 'mapped', 'dynamic_in', 'dynamic_out', 'origin_of', 'hoisted', 'missing', 'missing_name', 'callable', 'made_of'];
+const WORDS_KNOWN = ['caller', 'this', 'afterwards', 'report', 'erred', 'goto', 'label', '.', '&', 'type', 'include', 'read', 'next', 'members', 'static', 'undefined', 'unset', 'operated', 'admits', 'head', 'value', 'narrows', 'components', 'each', 'nonempty_of', 'listing', 'Node', 'String', 'of', 'written_as', 'named', 'written_name', 'names', 'tail', 'named_like', 'member', 'structure_as', 'output', 'arguments', 'quoted', 'repeats', 'superposes', 'readable', 'typed_name', 'header_quoted', 'type_written', 'spread', 'is_range', 'mapped_by', 'mapped', 'dynamic_in', 'dynamic_out', 'origin_of', 'hoisted', 'missing', 'missing_name', 'callable', 'made_of', 'function_given', 'named_argument', 'defines_text', 'read_as'];
 // The kernel's own map, apart from the externals: what its kinds of value are in the language (`external text` in `wasm.o.ray`).
 const NOVIA = typeof process !== "undefined" && !!process.env.RAY_NOVIA;
 const NOGIVEN = typeof process !== "undefined" && !!process.env.RAY_NOGIVEN;

@@ -1,5 +1,14 @@
 // macOS (https://developer.apple.com/macos): an operating system a host may run. It is the one the device runs when the host reports the platform
 // "darwin" (Node.js's `process.platform`, https://nodejs.org/api/process.html#processplatform).
-OS.Macos := OS(platform: "darwin")
+// Its interface: libSystem, the Objective-C runtime the frameworks are reached through (`objc_msgSend`,
+// https://developer.apple.com/documentation/objectivec/objective-c_runtime) and the frameworks, called as Apple's arm64
+// variant of AAPCS64 calls them (https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms;
+// System V on x86-64).
+OS.Macos := OS(platform: "darwin",
+  headers: ["unistd.h", "fcntl.h", "dirent.h", "spawn.h", "sys/stat.h", "sys/wait.h", "sys/socket.h", "netdb.h", "ifaddrs.h", "net/if.h", "net/if_dl.h",
+    "objc/runtime.h", "objc/message.h", "CoreFoundation/CoreFoundation.h", "cups/cups.h", "Network/Network.h"],
+  libraries: ["System", "objc", "CoreFoundation", "AppKit", "CoreLocation", "cups", "Network"],
+  abi: "Apple arm64")
 assert OS.Macos.platform == "darwin"  // MOS1 macOS is not named by the platform "darwin"
 assert OS.Macos is OS  // MOS2 macOS is not an operating system
+assert OS.Macos.libraries.contains("objc")  // MOS3 macOS is not called through the Objective-C runtime

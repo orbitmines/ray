@@ -2,10 +2,10 @@
 @sha256
 
 // HMAC: Keyed-Hashing for Message Authentication, over any digest (https://www.rfc-editor.org/rfc/rfc2104)
-HMAC := class: Encoding.Digest hash: Encoding.Digest, key: Byte[] {
+HMAC := class: Language hash: Language, key: Byte[] {
   static extensions := ".hmac"
-  size => hash.size
-  block => hash.block
+  size => .hash.size
+  block => .hash.block
   assert SHA1.block == 64 && SHA256.block == 64 && SHA1.size == 20 && SHA256.size == 32  // HMAC4 a digest does not give its block and output sizes in bytes
   assert HMAC(SHA256, key: [0x0b] * 20).write("Hi There".bytes).bytes as Hexadecimal₆₄ == "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"  // HMAC5 HMAC-SHA-256 of RFC 4231's test case 1 is not b0344c61…
   assert HMAC(SHA512, key: [0x0b] * 20).write("Hi There".bytes).bytes as Hexadecimal₁₂₈ == "87aa7cdea5ef619d4ff0b4241a1d6cb02379f4e2ce4ec2787ad0b30545e17cdedaa833b7d6b8a702038b274eaea3f4e4be9d914eeb61f1702e696c203a126854"  // HMAC6 HMAC-SHA-512 of RFC 4231's test case 1 is not 87aa7cde…
@@ -27,13 +27,13 @@ HMAC := class: Encoding.Digest hash: Encoding.Digest, key: Byte[] {
   assert HMAC(SHA1, key: [0xaa] * 80).write("Test Using Larger Than Block-Size Key and Larger Than One Block-Size Data".bytes).bytes as Hexadecimal₄₀ == "e8e99d0f45237d786d6bbaa7965c7808bbff1a91"  // HMAC22 HMAC-SHA-1 of RFC 2202's test case 7 is not e8e99d0f…
 
   // K: a key longer than B bytes hashed first, then zeros to B bytes (RFC 2104 §2, §3)
-  padded => (key.count > block ? hash.write(key).bytes : key) -- (k => [k, [0] * (block - k.count)].flatten)
+  padded => (.key.count > .block ? .hash.write(this.key).bytes : .key) -- (k => [k, [0] * (this.block - k.count)].flatten)
   // A key longer than the block is hashed first (RFC 2104 §3)
   assert HMAC(SHA256, key: [0xaa] * 131).padded == [SHA256.write([0xaa] * 131).bytes, [0] * 32].flatten  // HMAC3 a key longer than the block is not hashed and padded
 
   // H(K XOR opad, H(K XOR ipad, text)), ipad 0x36 and opad 0x5C repeated B times (RFC 2104 §2)
   written := {
-    {writing: Language.Writing} => hash.write([padded.map(. ~x|| 0x5c), hash.write([padded.map(. ~x|| 0x36), writing.value as Byte[]].flatten).bytes].flatten).bytes
+    {writing: Language.Writing} => this.hash.write([this.padded.map(. ~x|| 0x5c), this.hash.write([this.padded.map(. ~x|| 0x36), writing.value as Byte[]].flatten).bytes].flatten).bytes
   }
 }
 // Test case 2: key "Jefe", data "what do ya want for nothing?" (RFC 2202 §3, RFC 4231 §4.3)

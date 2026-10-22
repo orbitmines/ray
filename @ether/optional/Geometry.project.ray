@@ -25,20 +25,20 @@ SpacedFrom := enum border | itself
 (border, itself) := SpacedFrom
 
 Geometry := class {
-  Length := Quantity{unit is (Unit.px | Unit.pt | Unit.em | Unit.rem | Unit.vw | Unit.vh | Unit.column | Unit.row | Unit.m)}
+  Length := Quantity{.unit is (Unit.px | Unit.pt | Unit.em | Unit.rem | Unit.vw | Unit.vh | Unit.column | Unit.row | Unit.m)}
 
   Metric := (a: Vector, b: Vector): Length
   euclidean: Metric = (a, b) => √(Space.current.between(a, b).map(. ^ 2).sum)
   graph: Metric = (a, b) => Place(a).path_to(Place(b)) -- (.erred ? . : .map(path => path.zip(path.rest).map(Space.current.edge_length(.0.at, .1.at)).sum).min)
 
   Axis := class: Ray (continuous: boolean = true, loop: boolean = false, extent: Length?, orientation: -1 | +1 = +1) => {
-    coordinate => continuous ? Number : Integer
-    seen (at: Length, frame: Length = 0, size: Length = 0) => orientation > 0 ? at : frame - at - size
+    coordinate => .continuous ? Number : Integer
+    seen (at: Length, frame: Length = 0, size: Length = 0) => .orientation > 0 ? at : frame - at - size
     // (`member("loop")`: the word `loop` reads as the `loop { }` statement)
-    holds (at: Length) => member("loop") || extent === None || ((0 <= at) && (at < extent))
-    wrapped (at: Length) => loop && extent != None ? at % extent : at
-    between (difference: Length) => loop && extent != None ? (difference % extent) -- (. min (extent - .)) : difference
-    positions => continuous ? coordinate{holds(.)} : 0..<extent
+    holds (at: Length) => member("loop") || .extent === None || ((0 <= at) && (at < .extent))
+    wrapped (at: Length) => .loop && .extent != None ? at % .extent : at
+    between (difference: Length) => .loop && .extent != None ? (difference % .extent) -- (. min (this.extent - .)) : difference
+    positions => .continuous ? .coordinate{this.holds(.)} : 0..<.extent
   }
   Space := class (axes: Axis[], metric: Metric = euclidean, projection: Projection?, vertices: Graph?) => {
     static plane := Space([Axis(), Axis()])
@@ -51,7 +51,7 @@ Geometry := class {
     assert Geometry.Space.screen.seen(Geometry.Vector(3px, 10px), Geometry.Vector(100px, 100px)) == Geometry.Vector(3px, 90px)  // YU5 a point is not flipped onto a screen
     assert Geometry.Space.screen.seen(Geometry.Vector(0px, 80px), Geometry.Vector(100px, 100px), Geometry.Vector(10px, 20px)) == Geometry.Vector(0px, 0px)  // YU6 a box at the top is not at the top of a screen
     assert Geometry.Space.screen.seen(Geometry.Vector(2px, 3px)) == Geometry.Vector(2px, -3px)  // YU7 a displacement up is not one up a screen
-    static current: Space = plane
+    static current: Space = Space.plane
     // (`grid_extent`: a parameter named as the Axis field it gives, `extent: …`, is read as that parameter declared again)
     static grid (grid_extent: Vector, loop: boolean | boolean[] = false) => Space(axes: grid_extent.enumerate.map(axis_entry => Axis(continuous: false, loop: ((loop is (boolean)) ? loop : (loop[axis_entry.index] ?? false)), extent: axis_entry.value)), metric: graph)
     assert {
@@ -73,22 +73,22 @@ Geometry := class {
     assert Geometry.Space.grid(Geometry.Vector(4, 4), [true, false]) is Geometry.Space.Cylinder  // FWG1 a grid with one looped axis is not a cylinder
     assert Geometry.Space.grid(Geometry.Vector(4, 4), true) is Geometry.Space.Torus  // FWG2 a grid looped both ways is not a torus
     static (structure: Graph) as (=== Space) => Space([], graph, Projection.embedding(structure), structure)
-    static Plane := Space{dimension == 2 && axes.every(.extent == None && !.loop)}
-    static Grid := Space{discrete && vertices == None}
-    static Cylinder := Space{axes{loop}.count == 1}
-    static Torus := Space{dimension == 2 && axes.every(.loop)}
-    static LocallyConnected := Space{positions.every(p => neighbours(p).every(q => neighbours(q).contains(p)))}
-    dimension => axes.count
-    discrete => vertices != None || !axes.some(.continuous)
-    sides => Side{axis < dimension}
-    holds (at) => vertices ? vertices.vertices.contains(at) : axes.enumerate.every(axis_entry => axis_entry.value.holds(at[axis_entry.index] ?? 0))
-    wrapped (at: Vector) => Vector(axes.zip(at).map(.0.wrapped(.1)))
-    between (a: Vector, b: Vector) => Vector(axes.zip(b - a).map(.0.between(.1)))
-    seen (at: Vector, frame: Vector = Vector(), size: Vector = Vector()) => Vector(axes.enumerate.map(axis => axis.value.seen(at[axis.index] ?? 0, frame[axis.index] ?? 0, size[axis.index] ?? 0)))
-    neighbours (at) => vertices ? vertices.outgoing(at) : sides#.map(wrapped(at + .vector(dimension))){holds(.)}
-    edge_length (from, to) => vertices.edges.find(.from == from && .to == to).measured ?? 1
+    static Plane := Space{.dimension == 2 && .axes.every(.extent == None && !.loop)}
+    static Grid := Space{.discrete && .vertices == None}
+    static Cylinder := Space{.axes{.loop}.count == 1}
+    static Torus := Space{.dimension == 2 && .axes.every(.loop)}
+    static LocallyConnected := Space{space => space.positions.every(p => space.neighbours(p).every(q => space.neighbours(q).contains(p)))}
+    dimension => .axes.count
+    discrete => .vertices != None || !.axes.some(.continuous)
+    sides => Side{.axis < this.dimension}
+    holds (at) => .vertices ? .vertices.vertices.contains(at) : .axes.enumerate.every(axis_entry => axis_entry.value.holds(at[axis_entry.index] ?? 0))
+    wrapped (at: Vector) => Vector(this.axes.zip(at).map(.0.wrapped(.1)))
+    between (a: Vector, b: Vector) => Vector(this.axes.zip(b - a).map(.0.between(.1)))
+    seen (at: Vector, frame: Vector = Vector(), size: Vector = Vector()) => Vector(this.axes.enumerate.map(axis => axis.value.seen(at[axis.index] ?? 0, frame[axis.index] ?? 0, size[axis.index] ?? 0)))
+    neighbours (at) => .vertices ? .vertices.outgoing(at) : .sides#.map(this.wrapped(at + .vector(this.dimension))){this.holds(.)}
+    edge_length (from, to) => .vertices.edges.find(.from == from && .to == to).measured ?? 1
     // (each place: one coordinate from each axis, in a plane until the product of the axes reads: `reduce` over `pairs` with `.0`, `.1`)
-    positions => vertices ? vertices.vertices : Space.planar(axes)
+    positions => .vertices ? .vertices.vertices : Space.planar(this.axes)
     static planar (planar_axes) =>
       planar_found := []
       planar_xs := planar_axes[0].positions
@@ -98,11 +98,11 @@ Geometry := class {
   }
   assert (Graph.Simple().connect(1, 2) as Geometry.Space).projection.erred  // UI261 a graph is embedded before embedding is implemented
   Place := class: Ray (at: *, space: Space = Space.current) => {
-    continuations => space.neighbours(at).map(Place(., space))
-    == (other) => at == (other is Place ? other.at : other)
+    continuations => .space.neighbours(this.at).map(Place(., this.space))
+    == (other) => .at == (other is Place ? other.at : other)
   }
 
-  Vector := Elementwise{every(. is Length | Number)}{length == Space.current.dimension} + {
+  Vector := Elementwise{.every(. is Length | Number)}{.length == Space.current.dimension} + {
     static () => Vector(0, 0)
     static (x: Length | Number = 0, y: Length | Number = 0, z: Length | Number = 0) => (z == 0 ? [x, y] : [x, y, z]) -- (made => (@also made Vector) -- made)
     x => this[0] ?? 0
@@ -124,7 +124,7 @@ Geometry := class {
     to => this
     assert {
       swipe_start := Time.now
-      mouse := @me/device/pointer["mouse"]
+      mouse := (@me/device as Pointer)["mouse"]
       mouse.to(Geometry.Vector(200px, 0px), pressing: [0], time: swipe_start)
       mouse.to(Geometry.Vector(180px, 0px), time: swipe_start + 10 ms)
       assert mouse.velocity.x == -2px  // UI168 pointer velocity is not distance over time
@@ -135,7 +135,7 @@ Geometry := class {
     distance (other: Vector) => Space.current.metric(this, other)
   }
 
-  Transform := Matrix{count == Space.current.dimension + 1}{every(.count == Space.current.dimension + 1)} + {
+  Transform := Matrix{.count == Space.current.dimension + 1}{.every(.count == Space.current.dimension + 1)} + {
     static n => Space.current.dimension
     static identity => (0..n).map(i => (0..n).map(j => i == j ? 1 : 0))
     assert {
@@ -147,11 +147,11 @@ Geometry := class {
     }
     static translate (by: Vector) => (0..n).map(i => (0..n).map(j => i == j ? 1 : j == n ? by[i] : 0))
     assert (Geometry.Transform.translate(Geometry.Vector(1, 2)) * Geometry.Transform.scale(Geometry.Vector(2, 2))).applied(Geometry.Vector(1, 1)) == Geometry.Vector(3, 4)  // UI52 transforms do not compose
-    assert Geometry.Box(){transform == Geometry.Transform.translate(Geometry.Vector(10px))}.transform == Geometry.Transform.translate(Geometry.Vector(10px))  // UI133 transform == translate(…) does not move the shape
+    assert Geometry.Box(){.transform == Geometry.Transform.translate(Geometry.Vector(10px))}.transform == Geometry.Transform.translate(Geometry.Vector(10px))  // UI133 transform == translate(…) does not move the shape
     static scale (by: Number | Vector) => (by is Number ? Vector((0..<n).map(by)) : by) -- (factors => (0..n).map(i => (0..n).map(j => i != j ? 0 : i == n ? 1 : factors[i])))
     assert Geometry.Ball(size: Geometry.Vector(10px, 10px)).contains(Geometry.Vector(5px, 5px))  // UI50 a ball does not contain its centre
     assert !(Geometry.Ball(size: Geometry.Vector(10px, 10px)).contains(Geometry.Vector(0px, 0px)))  // UI51 a ball contains its corner
-    assert Geometry.Box(){gap == Geometry.Vector(6px, 6px)}.gap == Geometry.Vector(6px, 6px)  // UI130 gap is not narrowed
+    assert Geometry.Box(){.gap == Geometry.Vector(6px, 6px)}.gap == Geometry.Vector(6px, 6px)  // UI130 gap is not narrowed
     assert Geometry.euclidean(Geometry.Vector(0, 0), Geometry.Vector(3, 4)) == 5  // UI248 the plane's distance is not euclidean
     assert Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(5, 6))  // UI255 a triangle does not wind around its centre
     assert !(Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(1, 9)))  // UI256 a triangle winds around a point outside it
@@ -163,7 +163,7 @@ Geometry := class {
       }
     }
     // A share in a length is a share of the parent; a theme style narrows; a location literal takes a narrowing
-    assert (Geometry.Box(size: Geometry.Vector(1000px, 800px), children: [Geometry.Box(){width <= 50%}]).solve).children.first.size.x == 500px  // UI264 a share bound is not a share of the parent's width
+    assert (Geometry.Box(size: Geometry.Vector(1000px, 800px), children: [Geometry.Box(){.width <= 50%}]).solve).children.first.size.x == 500px  // UI264 a share bound is not a share of the parent's width
     assert Geometry.Box(size: Geometry.Vector(10px, 20px), radius: [50%]).radii.first == Geometry.Vector(5px, 10px)  // UI265 a share radius is not half the shape's size
     assert Geometry.Box(size: Geometry.Vector(4px, 4px)) - Geometry.Box(size: Geometry.Vector(2px, 2px), transform: Geometry.Transform.translate(Geometry.Vector(1px, 1px))).(
       !(.contains(Geometry.Vector(2px, 2px)))  // FWG4 a point in a hole is inside the shape
@@ -190,13 +190,13 @@ Geometry := class {
     static orthographic (n: Integer = Space.current.dimension) => Projection((0..2).map(i => (0..n).map(j => i < 2 ? (i == j ? 1 : 0) : j == n ? 1 : 0)))
     static perspective (distance: Length, n: Integer = Space.current.dimension) => Projection((0..2).map(i => (0..n).map(j => i < 2 ? (i == j ? 1 : 0) : j == n ? 1 : j == 2 ? 1 / distance : 0)))
     static embedding (structure: Graph) => ERROR@Type `a graph embedding (force or tree layout) is not implemented yet`
-    applied (point: Vector) => matrix.map(row => row.zip([point, [1]].flatten).map(*).sum) -- (h => with Space.current = Space.plane { Vector(h[0] / h[2], h[1] / h[2]) })
-    depth (point: Vector) => point[depth_axis] ?? 0
+    applied (point: Vector) => .matrix.map(row => row.zip([point, [1]].flatten).map(*).sum) -- (h => with Space.current = Space.plane { Vector(h[0] / h[2], h[1] / h[2]) })
+    depth (point: Vector) => point[.depth_axis] ?? 0
   }
 
   Color := class: Elementwise ("#", red: Hexadecimal₂, green: Hexadecimal₂, blue: Hexadecimal₂, (alpha: Probability 1) = (Hexadecimal₂ / 255)?) {
-    luminance => (red * 299 + green * 587 + blue * 114) / 1000
-    over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
+    luminance => (.red * 299 + .green * 587 + .blue * 114) / 1000
+    over (top: Color) => .mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = this.alpha + top.alpha * (1 - this.alpha)
     assert Geometry.Color(0, 0, 0).over(Geometry.Color(255, 255, 255, 0.5)) == Geometry.Color(128, 128, 128)  // UI42 half white over black is not grey
   }
   Paint := Color | Gradient | Pattern | Section | Pointwise
@@ -206,14 +206,14 @@ Geometry := class {
   }
   Stops := class (stops: Stop<K, V>[], easing: Easing = linear, K = Length, V = Number) => {
     static (stops: Stop[]) as (=== Stops) => Stops(stops, step)
-    -> (other: Stop) => Stops([stops, [other]].flatten(1), easing)
-    sorted => stops.sort_by(.at)
-    at (position: K) => sorted -- (position <= .first.at ? .first.value
+    -> (other: Stop) => Stops([.stops, [other]].flatten(1), .easing)
+    sorted => .stops.sort_by(.at)
+    at (position: K) => .sorted -- (position <= .first.at ? .first.value
       : .last.at <= position ? .last.value
-      : .zip(.rest){.0.at <= position <= .1.at}.first -- .0.value.mix(.1.value, easing((position - .0.at) / (.1.at - .0.at))))
+      : .zip(.rest){.0.at <= position <= .1.at}.first -- .0.value.mix(.1.value, this.easing((position - .0.at) / (.1.at - .0.at))))
     assert Geometry.Steps([(9/12).xs, (6/12).md]).at(700px) == 9/12 && Geometry.Steps([(9/12).xs, (6/12).md]).at(800px) == 6/12  // UI109 breakpoints written as a list do not jump
   }
-  Steps := Stops{easing == step}
+  Steps := Stops{.easing == step}
   Animated<V> := class: Stops<Time, V> {
     value => at(Time.now)
   }
@@ -245,22 +245,22 @@ Geometry := class {
     static normal := WhiteSpace(false, false, true)
     static nowrap := WhiteSpace(false, false, false)
     static pre := WhiteSpace(true, true, false)
-    assert Geometry.Box(content: "a  b").lines() == ["a b"] && Geometry.Box(content: "a  b"){white_space == Geometry.WhiteSpace.pre}.lines() == ["a  b"]  // UI131 white_space does not decide whether spaces collapse
+    assert Geometry.Box(content: "a  b").lines() == ["a b"] && Geometry.Box(content: "a  b"){.white_space == Geometry.WhiteSpace.pre}.lines() == ["a  b"]  // UI131 white_space does not decide whether spaces collapse
     static pre_wrap := WhiteSpace(true, true, true)
     static pre_line := WhiteSpace(false, true, true)
     // (the same when each of its fields is)
-    == (other) => (other is WhiteSpace) && spaces === other.spaces && lines === other.lines && wraps === other.wraps
+    == (other) => (other is WhiteSpace) && .spaces === other.spaces && .lines === other.lines && .wraps === other.wraps
   }
   Raster := Color[][] + {
     static blank (width: Number, height: Number) => (0..<height).map((0..<width).map(Color(0, 0, 0, 0)))
     width => first.count ?? 0
     assert Geometry.Box(width: [(12/12).xs, (6/12).md]).measured("width", 800px) == 400px  // UI112 a breakpoint list is not a width share
-    assert (Geometry.Box(){width <= 1240px & height == 120px, overflow == clip}).(
+    assert (Geometry.Box(){.width <= 1240px & .height == 120px, .overflow == clip}).(
       .fields["width"].type.most == 1240px && .height == 120px  // UI126 a narrowing on a shape is not its constraints
       & .overflow == clip  // UI127 a narrowing does not set a shape's field
     )
     height => count
-    assert Geometry.Box(){height >= 22px}.fields["height"].type.least == 22px  // UI132 min_height is not a least height
+    assert Geometry.Box(){.height >= 22px}.fields["height"].type.least == 22px  // UI132 min_height is not a least height
     space => Space.grid(Vector(width, height))
     at (x: Number, y: Number) => this[y][x]
     sampled (at: Vector) => Space.screen.seen(Vector(at.x * width, at.y * height), Vector(width, height), Vector(1, 1)) -- (cell => this.at(cell.x.floor max 0 min width - 1, cell.y.floor max 0 min height - 1))
@@ -273,11 +273,11 @@ Geometry := class {
   }
 
   Side := class (axis: Integer{. >= 0}, toward: -1 | +1) => {
-    opposite => Side(axis, -toward)
-    ordinal => 2 * axis + (toward + 1) / 2
-    label => [["left", "right"], ["bottom", "top"], ["front", "back"]][axis]?[ordinal % 2]
-    vector (dimension: Integer = Space.current.dimension) => Vector((0..<dimension).map(. == axis ? toward : 0))
-    as (=== String) => label ?? (axis as String) + (toward > 0 ? "+" : "-")
+    opposite => Side(this.axis, -this.toward)
+    ordinal => 2 * .axis + (.toward + 1) / 2
+    label => [["left", "right"], ["bottom", "top"], ["front", "back"]][.axis]?[.ordinal % 2]
+    vector (dimension: Integer = Space.current.dimension) => Vector((0..<dimension).map(. == this.axis ? this.toward : 0))
+    as (=== String) => .label ?? (.axis as String) + (.toward > 0 ? "+" : "-")
   }
   left := Side(0, -1)
   right := Side(0, +1)
@@ -287,7 +287,7 @@ Geometry := class {
   back := Side(2, +1)
   horizontal := left | right
   vertical := top | bottom
-  all := Side{axis < Space.current.dimension}#
+  all := Side{.axis < Space.current.dimension}#
   assert Geometry.all.count == 4 && Geometry.horizontal#.count == 2  // UI242 a plane does not have four sides
   Edges := (Length?)[] + {
     static (top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px, front: Length? = 0px, back: Length? = 0px) as (=== Edges) => [left, right, bottom, top, front, back][..<2 * Space.current.dimension]
@@ -329,16 +329,16 @@ Geometry := class {
   Bezier := (points: Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a.mix(b, t)), t)
 
   Facet := class (corners: Vector[], orientation: -1 | +1 = +1) => {
-    crossing (point: Vector) => corners.map(.[1..]) -- (low => low.rest.map(. - low.first).transposed) -- (span => span.determinant == 0 ? 0
-      : ((span.inverse * [point[1..] - corners.first[1..]].transposed).flatten -- [1 - .sum, .].flatten) -- (λ =>
-        λ.first > 0 && λ.rest.every(. >= 0) && λ.zip(corners).map(.0 * .1.x).sum > point.x ? orientation * (span.determinant > 0 ? 1 : -1) : 0))
+    crossing (point: Vector) => .corners.map(.[1..]) -- (low => low.rest.map(. - low.first).transposed) -- (span => span.determinant == 0 ? 0
+      : ((span.inverse * [point[1..] - this.corners.first[1..]].transposed).flatten -- [1 - .sum, .].flatten) -- (λ =>
+        λ.first > 0 && λ.rest.every(. >= 0) && λ.zip(this.corners).map(.0 * .1.x).sum > point.x ? this.orientation * (span.determinant > 0 ? 1 : -1) : 0))
   }
   Cell := class: Hierarchy (at: *, along: Integer[] = [], coefficient: Integer = 1) => {
-    rank => along.count
-    key => (at, along)
-    children | ∂ => along.enumerate.map(axis => [
-      Cell(at, along{!= axis.value}, coefficient * (axis.index.even ? -1 : 1)),
-      Cell(at + Side(axis.value, +1).vector, along{!= axis.value}, coefficient * (axis.index.even ? 1 : -1))
+    rank => .along.count
+    key => (.at, .along)
+    children | ∂ => .along.enumerate.map(axis => [
+      Cell(this.at, this.along{!= axis.value}, this.coefficient * (axis.index.even ? -1 : 1)),
+      Cell(this.at + Side(axis.value, +1).vector, this.along{!= axis.value}, this.coefficient * (axis.index.even ? 1 : -1))
     ]).flatten
   }
   Chain := (Cell | Edge)[] + {
@@ -368,123 +368,123 @@ Geometry := class {
     transition: Transition?, content: * = None, white_space: WhiteSpace = parent.white_space ?? WhiteSpace.pre_line, solved: boolean = false,
     space: Space = parent.space ?? Space.current, rank: Integer = space.dimension,
     cells: Chain = space.discrete ? space.positions.filter(p => (0..<space.dimension).every(origin[.] <= p[.] < origin[.] + size[.])).map(Cell(., 0..<space.dimension)) : []) => {
-    id: Location => parent ? parent.id / (parent.children.enumerate{.value === this}.first.index as String) : @scene
-    root => parent.root ?? this
-    em => parent.font_size ?? Font.base.size
-    font_size => with Font.inherited = em { font.size as pixel }
+    id: Location => .parent ? .parent.id / (.parent.children.enumerate{.value === this}.first.index as String) : @scene
+    root => .parent.root ?? this
+    em => .parent.font_size ?? Font.base.size
+    font_size => with Font.inherited = .em { .font.size as pixel }
     // (the cases of `if position { is Fixed => …; is Anchored => …; is Sticky => … } else { … }` (P2.11), as comparisons until a case reads)
-    at: Vector => (position is Fixed) ? origin
-      : ((position is Anchored) ? ((position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0)))
-      : ((position is Sticky) ? ((parent.at + origin + Vector(parent.scrolled.x.negated, parent.scrolled.y)) -- Vector(.x, .y min (root.size.y - (spaced(itself).top ?? 0px) - size.y) max parent.at.y))
-      : (parent ? parent.at + origin + Vector(parent.scrolled.x.negated, parent.scrolled.y) : origin)))
-    spaced (from: border | itself) => (0 ..< 2 * space.dimension).map(i => spacing{.from == from}.map(.[i]){!= None} -- (kept => kept.empty ? None : kept.sum))
-    inside => spaced(border).map(. ?? 0px) -- (made => (@also made Edges) -- made)
-    outside => spaced(itself).map(. ?? 0px) -- (made => (@also made Edges) -- made)
-    outer => size + outside.total
-    content_height => children.map(size.y - .origin.y + .outside.bottom).max ?? size.y
-    texts => reachable{.content is String}
-    in_place => children{.position is (Flowing | Absolute)}
+    at: Vector => (.position is Fixed) ? .origin
+      : ((.position is Anchored) ? ((.position.anchor ?? .parent) -- (.at + .size * this.position.side.vector(this.space.dimension).map(. max 0) + this.size * this.position.side.vector(this.space.dimension).map(. min 0)))
+      : ((.position is Sticky) ? ((.parent.at + .origin + Vector(this.parent.scrolled.x.negated, this.parent.scrolled.y)) -- Vector(.x, .y min (this.root.size.y - (this.spaced(itself).top ?? 0px) - this.size.y) max this.parent.at.y))
+      : (.parent ? .parent.at + .origin + Vector(this.parent.scrolled.x.negated, this.parent.scrolled.y) : .origin)))
+    spaced (from: border | itself) => (0 ..< 2 * .space.dimension).map(i => this.spacing{.from == from}.map(.[i]){!= None} -- (kept => kept.empty ? None : kept.sum))
+    inside => .spaced(border).map(. ?? 0px) -- (made => (@also made Edges) -- made)
+    outside => .spaced(itself).map(. ?? 0px) -- (made => (@also made Edges) -- made)
+    outer => .size + .outside.total
+    content_height => .children.map(this.size.y - .origin.y + .outside.bottom).max ?? .size.y
+    texts => .reachable{.content is String}
+    in_place => .children{.position is (Flowing | Absolute)}
     // (itself and every shape inside it, by identity: Ray's `reachable` compares with `!=`, and a shape's `==` walks it)
     reachable =>
       found := [this]
-      children.for(child => child.reachable.for(shape => found.append(shape)))
+      .children.for(child => child.reachable.for(shape => found.append(shape)))
       found
-    lifted => reachable{.position is (Fixed | Anchored) && .visible}.sort_by(.layer)
-    rectangular => boundary == box(size)
-    scale => transform.scaling * (parent.scale ?? 1)
-    facets => children.map(.facets).flatten
-    edges => children.map(.edges).flatten(1)
-    winding (point: Vector) => facets.map(.crossing(point)).sum
-    contains (point: Vector) => holes.some(.contains(point)) ? false : (transform.inverse.applied(point) -- (p => space.vertices ? cells.some(.at == p)
-      : space.discrete ? cells.some(cell => (0..<space.dimension).every(cell.at[.] <= p[.] < cell.at[.] + 1))
-      : rectangular ? (0..<space.dimension).every(0 <= p[.] < size[.])
-      : boundary.winding(p) != 0))
+    lifted => .reachable{.position is (Fixed | Anchored) && .visible}.sort_by(.layer)
+    rectangular => .boundary == box(this.size)
+    scale => .transform.scaling * (.parent.scale ?? 1)
+    facets => .children.map(.facets).flatten
+    edges => .children.map(.edges).flatten(1)
+    winding (point: Vector) => .facets.map(.crossing(point)).sum
+    contains (point: Vector) => .holes.some(.contains(point)) ? false : (.transform.inverse.applied(point) -- (p => this.space.vertices ? this.cells.some(.at == p)
+      : this.space.discrete ? this.cells.some(cell => (0..<this.space.dimension).every(cell.at[.] <= p[.] < cell.at[.] + 1))
+      : this.rectangular ? (0..<this.space.dimension).every(0 <= p[.] < this.size[.])
+      : this.boundary.winding(p) != 0))
     assert {
       selected_field := Geometry.Box(content: (choose String).attempt("hello"))
       selected_field.select
       assert selected_field.text{.styles.contains("selected")}.count == 5 && selected_field.text == "hello"  // UI171 selecting a field whole does not select its text
     }
-    discretized (resolution: Length) => Space.grid(size.map((. / resolution).ceil)) -- (grid => Shape(space: grid, size: Vector(grid.axes.map(.extent)), fill: fill, stroke: stroke,
-      cells: grid.positions{cell => contains((cell + Vector(cell.map(1 / 2))) * resolution)}.map(Cell(., 0..<grid.dimension))))
+    discretized (resolution: Length) => Space.grid(this.size.map((. / resolution).ceil)) -- (grid => Shape(space: grid, size: Vector(grid.axes.map(.extent)), fill: this.fill, stroke: this.stroke,
+      cells: grid.positions{cell => this.contains((cell + Vector(cell.map(1 / 2))) * resolution)}.map(Cell(., 0..<grid.dimension))))
     dimension => ERROR@Type `fractal dimension is not implemented yet`
     painted (paint: Paint?) => paint is Section ? paint(this) : paint
-    sampled (paint: Paint?, point: Vector) => paint is Pointwise ? paint(point) : painted(paint)
+    sampled (paint: Paint?, point: Vector) => paint is Pointwise ? paint(point) : .painted(paint)
     displayed (name: String) => this.`name` is Animated ? this.`name`.value
-      : transition ? this.`name`.history.last -- (now => now.previous ? now.previous.value.mix(now.value, transition.easing(((Time.now - now.when) / transition.duration) min 1)) : now.value) : this.`name`
-    projected (by: Projection) => with Space.current = space {
-      reachable.map(shape => shape.boundary.facets.map(facet => facet.corners.map(. + shape.at) -- (corners =>
+      : .transition ? this.`name`.history.last -- (now => now.previous ? now.previous.value.mix(now.value, this.transition.easing(((Time.now - now.when) / this.transition.duration) min 1)) : now.value) : this.`name`
+    projected (by: Projection) => with Space.current = .space {
+      .reachable.map(shape => shape.boundary.facets.map(facet => facet.corners.map(. + shape.at) -- (corners =>
         (depth: corners.map(by.depth(.)).sum / corners.count, corners: corners.map(by.applied(.)), shape: shape)))).flatten(1)
     } -- (faces => with Space.current = Space.plane {
-      Box(space: Space.plane, size: by.applied(size), solved: true, children: faces.sort_by(-.depth).map(Polygon(boundary: Curve(.corners.loop), fill: .shape.fill, stroke: .shape.stroke)))
+      Box(space: Space.plane, size: by.applied(this.size), solved: true, children: faces.sort_by(-.depth).map(Polygon(boundary: Curve(.corners.loop), fill: .shape.fill, stroke: .shape.stroke)))
     })
 
-    lines (width: Length = ∞) => (content as String) -- (text => (white_space.lines ? text.split(\n) : [text]).map(paragraph =>
-      white_space.wraps ? (paragraph ~= (line: ((!Char.Blank)[]{length > 0}, Char.Blank[])[]{.width(font) <= width})[]).line : [paragraph]
-    ).flatten.map(line => white_space.spaces ? line : line{char => !((char is Char.Blank) && (char.previous is Char.Blank))}))
-    intrinsic (width: Length) => content is String ? font.size * font.line_height * lines(width).count : 0px
+    lines (width: Length = ∞) => (.content as String) -- (text => (this.white_space.lines ? text.split(\n) : [text]).map(paragraph =>
+      this.white_space.wraps ? (paragraph ~= (line: ((!Char.Blank)[]{.length > 0}, Char.Blank[])[]{.width(this.font) <= width})[]).line : [paragraph]
+    ).flatten.map(line => this.white_space.spaces ? line : line{char => !((char is Char.Blank) && (char.previous is Char.Blank))}))
+    intrinsic (width: Length) => .content is String ? .font.size * .font.line_height * .lines(width).count : 0px
 
-    compounds + (effect: Effect) => (effects ,= effect) -- this
+    compounds + (effect: Effect) => (.effects ,= effect) -- this
     compounds + (spacing: Spacing) => (this.spacing ,= spacing) -- this
-    compounds - (hole: Shape) => (holes ,= hole) -- this
-    smoothed (radius: Length) => (smoothing = radius) -- this
-    narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? (writes.for(.entered(this, None)) -- this) : reachable.filter(narrowing.entered(., None)))
-    {this: Shape}{{literal narrowing}} ^punctuation => narrowed(Program(code: narrowing**))
+    compounds - (hole: Shape) => (.holes ,= hole) -- this
+    smoothed (radius: Length) => (.smoothing = radius) -- this
+    narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? (writes.for(.entered(this, None)) -- this) : this.reachable.filter(narrowing.entered(., None)))
+    {this: Shape}{{narrowing}} ^punctuation => .narrowed(Program(code: narrowing**))
 
     share (of: (Length | Number | Stops)?, room: Length) => of is Stops ? of.at(room) * room : of is Number ? of * room : of
-    radii => radius.map(. is Number ? size * . : Vector(., .))
-    measured (along: "width" | "height", room: Length, content: Length = room) => (share(member(along), room) ?? content) -- (length =>
-      fields[along].type -- (length max (share(.least, room) ?? length) min (share(.most, room) ?? length)))
-    solve => arranged -- (solved = true) -- this
-    laid (room: Length) => with Font.inherited = em {
-      size = Vector(measured("width", room - outside.left - outside.right), size.y)
-      arranged
+    radii => .radius.map(. is Number ? this.size * . : Vector(., .))
+    measured (along: "width" | "height", room: Length, content: Length = room) => (.share(member(along), room) ?? content) -- (length =>
+      fields[along].type -- (length max (this.share(.least, room) ?? length) min (this.share(.most, room) ?? length)))
+    solve => .arranged -- (this.solved = true) -- this
+    laid (room: Length) => with Font.inherited = .em {
+      .size = Vector(this.measured("width", room - this.outside.left - this.outside.right), this.size.y)
+      .arranged
       this
     }
-    arranged => with Font.inherited = em {
-      inner = size.x - inside.left - inside.right
-      flowing = children{.position is Flowing}
+    arranged => with Font.inherited = .em {
+      inner := .size.x - .inside.left - .inside.right
+      flowing := .children{.position is Flowing}
       corner = (edges: Edges) => Vector(edges.left, edges.top)
       // (the cases of `if flow { grid => …; layered => … } else { … }` (P2.11), written as comparisons until a case reads)
-      bottom = flow === grid ? (flowing.chunk(columns).reduce((acc = inside.top) => .enumerate.for(cell =>
-            cell.value.laid(inner / columns - gap.x) -- (cell.value.origin = Vector(inside.left + cell.index * (inner / columns + gap.x), acc) + corner(cell.value.outside))
-          ) -- acc + .map(.outer.y).max + gap.y))
-        : (flow === layered ? (flowing.for(.laid(inner) -- (.origin = corner(inside) + corner(.outside))) -- inside.top + flowing.map(.outer.y).max) : (
-        flowing.reduce((acc = (at: corner(inside), row: 0px)) => {
+      bottom := this.flow === grid ? (flowing.chunk(this.columns).reduce((acc = this.inside.top) => .enumerate.for(cell =>
+            cell.value.laid(inner / this.columns - this.gap.x) -- (cell.value.origin = Vector(this.inside.left + cell.index * (inner / this.columns + this.gap.x), acc) + corner(cell.value.outside))
+          ) -- acc + .map(.outer.y).max + this.gap.y))
+        : (this.flow === layered ? (flowing.for(.laid(inner) -- (.origin = corner(this.inside) + corner(.outside))) -- this.inside.top + flowing.map(.outer.y).max) : (
+        flowing.reduce((acc = (at: corner(this.inside), row: 0px)) => {
           .laid(inner)
-          continues = flow == inline && (!wrap || acc.at.x + .outer.x <= inside.left + inner)
-          y = continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0px ? gap.y : 0px)
-          x = continues ? acc.at.x : inside.left + ((align && align === center) ? (inner - .outer.x) / 2 : ((align && align === end) ? inner - .outer.x : 0px))
+          continues := this.flow == inline && (!this.wrap || acc.at.x + .outer.x <= this.inside.left + inner)
+          y := continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0px ? this.gap.y : 0px)
+          x := continues ? acc.at.x : this.inside.left + ((this.align && this.align === center) ? (inner - .outer.x) / 2 : ((this.align && this.align === end) ? inner - .outer.x : 0px))
           .origin = Vector(x, y) + corner(.outside)
-          (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
+          (at: Vector(x + .outer.x + this.gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
         }) -- (.at.y + .row)))
       assert Geometry.left.vector(2) == Geometry.Vector(-1, 0) && Geometry.bottom.vector(2) == Geometry.Vector(0, -1)  // UI241 a side is not its axis and direction
       assert Geometry.top.label == "top" && Geometry.bottom.label == "bottom"  // YU4 a side is not called what it is
-      (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? inside.top + intrinsic(inner) : bottom) + inside.bottom))) if parent
-      flowing.for(.origin = Vector(.origin.x, size.y - .origin.y - .size.y))
-      children{!(.position is Flowing)}.for(.positioned)
+      (this.size = Vector(this.size.x, this.aspect ? this.size.x / this.aspect : this.measured("height", this.parent.size.y, (flowing.empty ? this.inside.top + this.intrinsic(inner) : bottom) + this.inside.bottom))) if this.parent
+      flowing.for(.origin = Vector(.origin.x, this.size.y - .origin.y - .size.y))
+      this.children{!(.position is Flowing)}.for(.positioned)
       this
     }
-    positioned => (position is Fixed ? root.size : parent.size) -- (frame => spaced(itself) -- (inset => {
-      laid(inset.left != None && inset.right != None ? frame.x - inset.left - inset.right : frame.x)
-      (size = Vector(size.x, frame.y - inset.top - inset.bottom)) if inset.top != None && inset.bottom != None
-      origin = Vector(inset.left ?? (inset.right != None ? frame.x - inset.right - size.x : 0px), inset.bottom ?? frame.y - (inset.top ?? 0px) - size.y)
+    positioned => (.position is Fixed ? .root.size : .parent.size) -- (frame => this.spaced(itself) -- (inset => {
+      this.laid(inset.left != None && inset.right != None ? frame.x - inset.left - inset.right : frame.x)
+      (this.size = Vector(this.size.x, frame.y - inset.top - inset.bottom)) if inset.top != None && inset.bottom != None
+      this.origin = Vector(inset.left ?? (inset.right != None ? frame.x - inset.right - this.size.x : 0px), inset.bottom ?? frame.y - (inset.top ?? 0px) - this.size.y)
     })) -- this
   }
-  Box := Shape{boundary == box(size)}
+  Box := Shape{.boundary == box(.size)}
   assert {
-    away := @https://orbitmines.com{window == new}
+    away := @https://orbitmines.com{.window == new}
     assert away.window == new  // UI80 a location narrowed to a new window does not open one
     Geometry.Box(content: away).activate
     assert @me/device/opened == away  // UI84 activating a new-window link does not open it
     assert !(@me/device/location == away)  // UI85 activating a new-window link navigates the page itself
   }
-  assert Geometry.Box(content: "a"){font.size == 18px}.font.size == 18px  // UI128 font_size does not size the text
-  assert Geometry.Box(){transition == Geometry.Transition(0.4 s, Geometry.ease)}.transition.duration == 0.4 s  // UI134 animated does not give the shape a transition
-  assert Geometry.Box(){position == Geometry.Fixed()}.position is Geometry.Fixed  // UI135 position == fixed is not narrowed
-  assert Geometry.Box(content: (choose $.ray).attempt("x := 1")).face.content.some(Geometry.Box(content: (choose $.ray).attempt("x := 1")).styles.nonempty) && Geometry.Box(content: (choose $.ray).attempt("x := 1")).face.content == "x := 1"  // UI142 a text area in a language is not painted
-  Ball := Shape{boundary == ellipse(size)}
+  assert Geometry.Box(content: "a"){.font.size == 18px}.font.size == 18px  // UI128 font_size does not size the text
+  assert Geometry.Box(){.transition == Geometry.Transition(0.4 s, Geometry.ease)}.transition.duration == 0.4 s  // UI134 animated does not give the shape a transition
+  assert Geometry.Box(){.position == Geometry.Fixed()}.position is Geometry.Fixed  // UI135 position == fixed is not narrowed
+  assert Geometry.Box(content: (choose Language.ray).attempt("x := 1")).face.content.some(Geometry.Box(content: (choose Language.ray).attempt("x := 1")).styles.nonempty) && Geometry.Box(content: (choose Language.ray).attempt("x := 1")).face.content == "x := 1"  // UI142 a text area in a language is not painted
+  Ball := Shape{.boundary == ellipse(.size)}
   Curve := class: Shape (segments: Segment[], rank: Integer = 1, boundary: Shape = segments is Loop ? Shape(rank: 0) : Shape(rank: 0, cells: [Cell(points.first, [], -1), Cell(points.last, [], 1)])) => {
-    points => segments.map(segment => if segment {
+    points => .segments.map(segment => if segment {
       is Quadratic => (1..16).map(t => Bezier([segment.previous.to, segment.control, segment.to], t / 16))
       is Cubic => (1..16).map(t => Bezier([segment.previous.to, segment.first, segment.second, segment.to], t / 16))
       is Arc => segment.points(segment.previous.to)
@@ -492,15 +492,15 @@ Geometry := class {
       [segment.to]
     }
     ).flatten
-    edges => points -- .zip([.rest, (.first if segments is Loop)].flatten)
-    facets => edges.map(Facet([.0, .1]))
+    edges => .points -- .zip([.rest, (.first if this.segments is Loop)].flatten)
+    facets => .edges.map(Facet([.0, .1]))
   }
-  Straight := Curve{points -- (p => p.every(((p.last - p.first).x * (. - p.first).y - (p.last - p.first).y * (. - p.first).x) == 0))}
+  Straight := Curve{.points -- (p => p.every(((p.last - p.first).x * (. - p.first).y - (p.last - p.first).y * (. - p.first).x) == 0))}
   Mesh := class: Shape (facets: Facet[]) => { }
-  Polygon := Shape{boundary is Curve{segments.every(. is Vector)}}
+  Polygon := Shape{.boundary is Curve{.segments.every(. is Vector)}}
 
   Fractal := class: Shape (copies: Transform[] = [], initiator: Shape = box(size)) => {
-    children => copies.map(copy => this ~~ (.transform = copy) ~~ (.origin = Vector()) ~~ (.parent = this))
+    children => .copies.map(copy => this ~~ (.transform = copy) ~~ (.origin = Vector()) ~~ (.parent = this))
     assert {
       first_box := Geometry.Box()
       second_box := Geometry.Box()
@@ -511,25 +511,25 @@ Geometry := class {
     }
     assert {
       inner_text := Geometry.Box(content: "a")
-      Geometry.Box(children: [inner_text]){font.size == 18px}
+      Geometry.Box(children: [inner_text]){this.font.size == 18px}
       assert inner_text.font.size == 18px  // UI129 a box's font_size does not reach the text it holds
     }
-    extent => size.map(. max -.).max * scale
-    contains (point: Vector) => transform.inverse.applied(point) -- (p => initiator.winding(p) != 0 && children.some(.contains(p)))
-    approximated (resolution: Length) => extent < resolution
-      ? Shape(origin: origin, size: size, transform: transform, boundary: initiator, fill: fill, stroke: stroke)
-      : Shape(origin: origin, size: size, transform: transform, children: children.map(.approximated(resolution)))
+    extent => .size.map(. max -.).max * .scale
+    contains (point: Vector) => .transform.inverse.applied(point) -- (p => this.initiator.winding(p) != 0 && this.children.some(.contains(p)))
+    approximated (resolution: Length) => .extent < resolution
+      ? Shape(origin: this.origin, size: this.size, transform: this.transform, boundary: this.initiator, fill: this.fill, stroke: this.stroke)
+      : Shape(origin: this.origin, size: this.size, transform: this.transform, children: this.children.map(.approximated(resolution)))
   }
-  Sierpinski := Fractal{initiator == triangle(size), copies == [Vector(1 / 4, 1 / 2), Vector(), Vector(1 / 2, 0)].map(Transform.translate(. * size) * Transform.scale(1 / 2))}
-  Koch := Fractal{rank == 1, initiator == Curve([Vector(), Vector(size.x, 0)]),
-    copies == [(Vector(), 0 turn), (Vector(1 / 3, 0), (1 / 6) turn), (Vector(1 / 2, (√3) / 6), (-1 / 6) turn), (Vector(2 / 3, 0), 0 turn)].map((at, angle) =>
-      Transform.translate(at * size.x) * Transform.rotate(angle) * Transform.scale(1 / 3))}
+  Sierpinski := Fractal{f => f.initiator == triangle(f.size), f.copies == [Vector(1 / 4, 1 / 2), Vector(), Vector(1 / 2, 0)].map(Transform.translate(. * f.size) * Transform.scale(1 / 2))}
+  Koch := Fractal{f => f.rank == 1, f.initiator == Curve([Vector(), Vector(f.size.x, 0)]),
+    f.copies == [(Vector(), 0 turn), (Vector(1 / 3, 0), (1 / 6) turn), (Vector(1 / 2, (√3) / 6), (-1 / 6) turn), (Vector(2 / 3, 0), 0 turn)].map((at, angle) =>
+      Transform.translate(at * f.size.x) * Transform.rotate(angle) * Transform.scale(1 / 3))}
 
   Solving := {
-    {shape: Shape{!parent && !solved}} => shape.solve
+    {shape: Shape{!.parent && !.solved}} => shape.solve
   }
   Projecting := {
-    {scene: Shape{!parent && solved && space.dimension > 2}} => scene.projected(scene.space.projection ?? Projection.orthographic(scene.space.dimension))
+    {scene: Shape{!.parent && .solved && .space.dimension > 2}} => scene.projected(scene.space.projection ?? Projection.orthographic(scene.space.dimension))
   }
   Approximating := (resolution: Length) => {
     {fractal: Fractal} => fractal.approximated(resolution)
@@ -542,10 +542,10 @@ Geometry := class {
     {a}, {b} => (a, b)
     // (each a write on the shape it is entered into: the field named as written given the value; a bound, the shape as it is (a
     // field's type narrowed by it is not written yet))
-    {literal path} == {value} => value -- (written => (setting => setting.set(path, written)))
-    {literal path}: {value} => value -- (written => (setting => setting.set(path, written)))
-    {literal path} <= {most} => most -- (written => (setting => setting))
-    {literal path} >= {least} => least -- (written => (setting => setting))
+    {path} == {value} => value -- (written => (setting => setting.set(path, written)))
+    {path}: {value} => value -- (written => (setting => setting.set(path, written)))
+    {path} <= {most} => most -- (written => (setting => setting))
+    {path} >= {least} => least -- (written => (setting => setting))
   }
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t
@@ -557,7 +557,7 @@ Geometry := class {
 
 Edge &+= {
   measured: Number | Geometry.Length = 1
-  ∂ => [Geometry.Cell(from, [], -1), Geometry.Cell(to, [], 1)]
+  ∂ => [Geometry.Cell(.from, [], -1), Geometry.Cell(.to, [], 1)]
 }
 
 {from} -> {to} over {during: Quantity.Temporal[]} ^keyword => Time.now -- (start => Geometry.Animated([Geometry.Stop(start + during.first, from), Geometry.Stop(start + during.last, to)], Geometry.linear))
@@ -585,7 +585,7 @@ Number &+= {
 }
 
 String &+= {
-  width (font: Geometry.Font) => map(.columns).sum * font.size / 2
+  width (font: Geometry.Font) => .map(.columns).sum * font.size / 2
 }
 
 // (a share of the parent, F-B3: `100%`, `1` and `1.0` the same share)
@@ -611,22 +611,22 @@ Mars := Planet(years: martian year, days: sol)
 
 Geometry &+= {
   static specialised := {
-    {v: Geometry.Vector{length == 2}}.map({f}) => Geometry.Vector(f(v.x), f(v.y))
-    {v: Geometry.Vector{length == 3}}.map({f}) => Geometry.Vector(f(v.x), f(v.y), f(v.z))
-    {a: Geometry.Vector{length == 2}} + {b: Geometry.Vector} => Geometry.Vector(a.x + b.x, a.y + b.y)
-    {a: Geometry.Vector{length == 2}} - {b: Geometry.Vector} => Geometry.Vector(a.x - b.x, a.y - b.y)
-    {a: Geometry.Vector{length == 2}} * {factor: Number} => Geometry.Vector(a.x * factor, a.y * factor)
-    Geometry.euclidean({a: Geometry.Vector{length == 2 && !Geometry.Space.current.axes.some(.loop)}}, {b}) => √((b.x - a.x) ^ 2 + (b.y - a.y) ^ 2)
-    Geometry.graph({a: Geometry.Vector{length == 2 && Geometry.Space.current.vertices == None && !Geometry.Space.current.axes.some(.loop)}}, {b}) => ((b.x - a.x) max (a.x - b.x)) + ((b.y - a.y) max (a.y - b.y))
+    {v: Geometry.Vector{.length == 2}}.map({f}) => Geometry.Vector(f(v.x), f(v.y))
+    {v: Geometry.Vector{.length == 3}}.map({f}) => Geometry.Vector(f(v.x), f(v.y), f(v.z))
+    {a: Geometry.Vector{.length == 2}} + {b: Geometry.Vector} => Geometry.Vector(a.x + b.x, a.y + b.y)
+    {a: Geometry.Vector{.length == 2}} - {b: Geometry.Vector} => Geometry.Vector(a.x - b.x, a.y - b.y)
+    {a: Geometry.Vector{.length == 2}} * {factor: Number} => Geometry.Vector(a.x * factor, a.y * factor)
+    Geometry.euclidean({a: Geometry.Vector{.length == 2 && !Geometry.Space.current.axes.some(.loop)}}, {b}) => √((b.x - a.x) ^ 2 + (b.y - a.y) ^ 2)
+    Geometry.graph({a: Geometry.Vector{.length == 2 && Geometry.Space.current.vertices == None && !Geometry.Space.current.axes.some(.loop)}}, {b}) => ((b.x - a.x) max (a.x - b.x)) + ((b.y - a.y) max (a.y - b.y))
     Geometry.Transform{Geometry.Space.current.dimension == 2}.identity => [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-    {t: Geometry.Transform{count == 3}}.applied({p}) => Geometry.Vector(t[0][0] * p.x + t[0][1] * p.y + t[0][2], t[1][0] * p.x + t[1][1] * p.y + t[1][2])
-    {facet: Geometry.Facet{corners.count == 2}}.crossing({p}) => facet.corners -- ((a, b) =>
+    {t: Geometry.Transform{.count == 3}}.applied({p}) => Geometry.Vector(t[0][0] * p.x + t[0][1] * p.y + t[0][2], t[1][0] * p.x + t[1][1] * p.y + t[1][2])
+    {facet: Geometry.Facet{.corners.count == 2}}.crossing({p}) => facet.corners -- ((a, b) =>
       (a.y <= p.y) != (b.y <= p.y) && p.x < a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y) ? facet.orientation * (b.y > a.y ? 1 : -1) : 0)
     {shape: Geometry.Shape{space.dimension == 2 && !space.discrete && rectangular && holes.empty}}.contains({p}) => shape.transform.inverse.applied(p) -- (q =>
       0 <= q.x < shape.size.x && 0 <= q.y < shape.size.y)
     {shape: Geometry.Shape{space.dimension == 2 && space.discrete && space.vertices == None && holes.empty}}.contains({p}) => shape.transform.inverse.applied(p) -- (q =>
       shape.origin.x <= q.x < shape.origin.x + shape.size.x && shape.origin.y <= q.y < shape.origin.y + shape.size.y)
-    {edges: Geometry.Edges}[{side: Geometry.Side{label}}] => edges.`side.label`
+    {edges: Geometry.Edges}[{side: Geometry.Side{.label}}] => edges.`side.label`
     {edges: Geometry.Edges{Geometry.Space.current.dimension == 2}}.total => Geometry.Vector(edges.left + edges.right, edges.top + edges.bottom)
     {edges: Geometry.Edges{Geometry.Space.current.dimension == 2}}.start => Geometry.Vector(edges.left, edges.bottom)
     {side: Geometry.Side}.vector(2) => side.axis == 0 ? Geometry.Vector(side.toward, 0) : Geometry.Vector(0, side.toward)

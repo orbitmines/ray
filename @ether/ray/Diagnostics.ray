@@ -1,14 +1,8 @@
-Location &+= {
-  from: (line: Decimal, column: Decimal)?
-  to: (line: Decimal, column: Decimal)? = .from
-  file => this ~~ (.from = None) ~~ (.to = None)
-}
-
 // A diagnostic: what was said (its message) of what (its origin), of which type (`ERROR@Type …`), and what it was raised
 // over (its cause); a fatal one stops what raised it.
 Diagnostic &+= {
   message: String?
-  fatal = false
+  fatal: boolean = false
   origin: *?
   type: *?
   cause: Diagnostic?
@@ -19,38 +13,45 @@ Diagnostic &+= {
 
   severity: .Severity = .fatal ? Diagnostic.Severity.fatal : Diagnostic.Severity.error
   assert Diagnostic(message: "stop", fatal: true).severity == Diagnostic.Severity.fatal  // DG2 a fatal error is not of fatal severity
-  at: Location? = .origin ? .origin.location{.from == (this.origin.start.line, this.origin.start.column), .to == (this.origin.end.line, this.origin.end.column)} : None
+  // (where it is about: where what raised it is)
+  at => .origin ? .origin.location : None
   code => .type && .type !== * ? .type.name : None
-  // (it and what it was raised over, nearest first)
-  causes => [this, .cause ? .cause.causes : []].flatten
-  related => .causes[1..]
+  // (what it was raised over, nearest first)
+  related => .cause ? [[.cause], .cause.related].flatten : []
+  // caught by a handler written `$X`: X the type it was raised as, or the function it came from
+  caught_by (catcher) => .type === catcher || .origin === catcher
   assert Diagnostic(message: "no").code == None  // DG5 a diagnostic of no type has a code
   assert Diagnostic(message: "outer", cause: Diagnostic(message: "inner")).related.first.message == "inner"  // DG6 a diagnostic's related ones are not what it was raised over
 }
 assert Diagnostic(message: "no").severity == Diagnostic.Severity.error  // DG1 an error is not of error severity
 
-Report := class (name: String = "ray", claims: Claim[] = []) => {
-  static Claim := class (id: String, message: String, passed = true, at: Location?, duration: Quantity.Temporal?) => { }
-  // RT1 a run with a failing claim passed
-  assert !(Report(name: "suite", claims: [
-    Report.Claim(id: "A1", message: "one holds"),
-    Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{.from == (4, 1)})
-  ])).passed && (Report(name: "suite", claims: [
-    Report.Claim(id: "A1", message: "one holds"),
-    Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{.from == (4, 1)})
-  ])).failures.count == 1
+Report := class (name: String = "ray", claims: .Claim[] = []) => {
+  static Claim := class (id: String, message: String, passed = true, at: Location?, duration: *?) => { }
+  // RT1 a run with a failing claim passed, or did not have one failure
+  assert {
+    run := Report(name: "suite", claims: [
+      Report.Claim(id: "A1", message: "one holds"),
+      Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{.from == (4, 1)})
+    ])
+    assert !run.passed & run.failures.count == 1
+  }
   assert Report(claims: [Report.Claim(id: "A4", message: "fine")]).passed  // RT14 a run of holding claims did not pass
 
   passed => .claims.every(.passed)
   failures => .claims{!.passed}
 
-  static Written := ("INFO@mark `", id: (Char.Letter | Char.Digit)[]{.length > 0}, " ", message: (!"`")[], "`")
+  // (a claim as a test marks it in what it says: `INFO@mark ` + its id and message)
+  static Mark := ("INFO@mark `", id: (Char.Letter | Char.Digit)[]{.length > 0}, " ", message: (!"`")[], "`")
   static (file: Location) as (=== Report) => file.held as String -- (text => Program(code: text)().reports -- (reports => Report(name: file.@ as String,
-    claims: text.split(\n).enumerate.map(line => (line.value ~= (*, Report.Written, *)) -- (found => Report.Claim(found.id, found.message,
+    claims: text.split(\n).enumerate.map(line => (line.value ~= (*, Report.Mark, *)) -- (found => Report.Claim(found.id, found.message,
       passed: !reports.some(.level == INFO && .comment ~= ⊢(found.id + " ")),
       at: file{.from == (line.index + 1, 1)}) if found)).compact)))
 }
 // Errors: a value carries its diagnostics, and its type does not see them
+Node &+= {
+  // the value, carrying one diagnostic more
+  diagnosed (diagnostic: Diagnostic) => this ~~ (.diagnostics = [this.diagnostics, [diagnostic]].flatten)
+}
 assert 7 $ 5 == 7  // ER2 a default replaced what did not fail
 assert {
   failing := (0).diagnosed(Diagnostic(message: "no"))

@@ -4,9 +4,9 @@ JSON := class: Language (Blank, root: Value, Blank) => {
   static extensions := ".json"
 
   static Blank := (" " | \t | \n | \r)[]
-  static Value := Object | Array | Text | Numeral | Literal
-  static valued (held) => held is Value ? held.value : held
-  static Object := class ("{", Blank, (members: (Blank, name: Text, Blank, ":", Blank, value: Value, Blank)[]).join(","), Blank, "}") => {
+  static Value := JSON.Object | JSON.Array | JSON.Text | JSON.Numeral | JSON.Literal
+  static valued (held) => held is JSON.Value ? held.value : held
+  static Object := class ("{", JSON.Blank, (members: (JSON.Blank, name: JSON.Text, JSON.Blank, ":", JSON.Blank, value: JSON.Value, JSON.Blank)[]).join(","), JSON.Blank, "}") => {
     // (a block holding each member under its name, `{ "a": 1 }`)
     value => {
       held := { }
@@ -14,30 +14,30 @@ JSON := class: Language (Blank, root: Value, Blank) => {
       held
     }
   }
-  static Array := class ("[", Blank, (elements: (Blank, element: Value, Blank)[]).join(","), Blank, "]") => {
-    value => elements.map(valued(.element))
+  static Array := class ("[", JSON.Blank, (elements: (JSON.Blank, element: JSON.Value, JSON.Blank)[]).join(","), JSON.Blank, "]") => {
+    value => .elements.map(JSON.valued(.element))
   }
   static Escaped := class ("\\", (character: "\"" | "\\" | "/") | (control: "b" | "f" | "n" | "r" | "t") | ("u", unit: Hexadecimal₄)) => {
-    value => character ?? (unit ? unit as Char : { "b": \b, "f": \f, "n": \n, "r": \r, "t": \t }[control])
+    value => .character ?? (.unit ? .unit as Char : { "b": \b, "f": \f, "n": \n, "r": \r, "t": \t }[.control])
   }
-  static Text := class ("\"", characters: (Escaped | Char{!= "\"" && != "\\" && . >= \x20})[], "\"") => {
-    value => characters.map(. is Escaped ? .value : .).join("") as String
+  static Text := class ("\"", characters: (JSON.Escaped | Char{!= "\"" && != "\\" && . >= \x20})[], "\"") => {
+    value => .characters.map(. is JSON.Escaped ? .value : .).join("") as String
   }
-  static Numeral := class (written: ("-"?, ("0" | (Char.Digit{!= "0"}, Char.Digit[])), (".", Char.Digit[]{length > 0})?, (("e" | "E"), ("+" | "-")?, Char.Digit[]{length > 0})?)) => {
-    value => written as Number
+  static Numeral := class (written: ("-"?, ("0" | (Char.Digit{!= "0"}, Char.Digit[])), (".", Char.Digit[]{.length > 0})?, (("e" | "E"), ("+" | "-")?, Char.Digit[]{.length > 0})?)) => {
+    value => .written as Number
   }
   static Literal := class (word: "true" | "false" | "null") => {
-    value => { "true": true, "false": false, "null": None }[word]
+    value => { "true": true, "false": false, "null": None }[.word]
   }
-  value => valued(root)
+  value => JSON.valued(this.root)
 
   static escaped (text: String) => #text.map({ "\"": "\\\"", "\\": "\\\\", "<": "\\u003c", \n: "\\n", \r: "\\r", \t: "\\t" }[.] ?? .) as String
   static written := {
-    {writing: Language.Writing{value === None}} => "null"
-    {writing: Language.Writing{value is boolean}} => writing.value ? "true" : "false"
-    {writing: Language.Writing{value is Number}} => writing.value as 10 as String
-    {writing: Language.Writing{value is String | Location | Version}} => "\"", escaped(writing.value as String), "\""
-    {writing: Language.Writing{value is Iterable}} => "[", writing.value.map((", " if .index > 0), Language.Writing(.)), "]"
+    {writing: Language.Writing{this.value === None}} => "null"
+    {writing: Language.Writing{this.value is .boolean}} => writing.value ? "true" : "false"
+    {writing: Language.Writing{this.value is Number}} => writing.value as 10 as String
+    {writing: Language.Writing{this.value is String | Location}} => "\"", JSON.escaped(writing.value as String), "\""
+    {writing: Language.Writing{this.value is Iterable}} => "[", writing.value.map((", " if .index > 0), Language.Writing(.)), "]"
     {writing: Language.Writing} => "{", writing.value.fields.map((", " if .index > 0), Language.Writing(.name), ": ", Language.Writing(.value)), "}"
   }
   static level := {
@@ -49,7 +49,7 @@ assert JSON.read("{\"name\": \"x\", \"list\": [1, true, null], \"inner\": {\"a\"
   & .list.count == 3  // JN2 a JSON array is not three
   & .list[1] == true  // JN3 JSON true is not true
   & .inner.a == "b" + \n  // JN4 a JSON escape is not read
-  & JSON.read($.json.write(.)).inner.a == .inner.a  // JN6 written JSON does not read back
+  & JSON.read(JSON.write(.)).inner.a == .inner.a  // JN6 written JSON does not read back
   & (@. {"list": [1, {"Ray"}]}).list == JSON.read("{\"list\": [1, \"Ray\"]}").list  // One grammar: what the header reads, written inline, is the same document (ECMA-404 §5–§8); JN10 an inline json fragment and the same text read are other documents
   & (@. {"name": {"Ray"}, "tags": ["a", {"Ray"}], "none": null}).(
     .name == "Ray" && .tags.last == "Ray" && .none === None  // JN8 a single-line json fragment is not its document with the holes' values
@@ -57,13 +57,12 @@ assert JSON.read("{\"name\": \"x\", \"list\": [1, true, null], \"inner\": {\"a\"
   & (@. {
   {"name": {"Ray"}, "list": [1, true, null], "inner": {"a": {"Ray"}}}
 }).(
-    .name == "Ray" && .list.count == 3 && .inner.a == "Ray" && JSON.read($.json.write(.)).inner.a == "Ray"  // JN9 a json block is not its document with the holes' values
+    .name == "Ray" && .list.count == 3 && .inner.a == "Ray" && JSON.read(JSON.write(.)).inner.a == "Ray"  // JN9 a json block is not its document with the holes' values
   )
 )
-assert $.json === JSON  // JN7 $.json is not the JSON language
 assert JSON.write("</script>") == "\"\\u003c/script>\""  // UI98 JSON text can close the script it is in
 
-assert $.json.write([1, "a"]) == "[1, \"a\"]"  // JN5 a list is not written as JSON
+assert JSON.write([1, "a"]) == "[1, \"a\"]"  // JN5 a list is not written as JSON
 // The examples of RFC 8259 §13, each written on one line (https://www.rfc-editor.org/rfc/rfc8259#section-13)
 assert JSON.read("{\"Image\": {\"Width\": 800, \"Height\": 600, \"Title\": \"View from 15th Floor\", \"Thumbnail\": {\"Url\": \"http://www.example.com/image/481989943\", \"Height\": 125, \"Width\": 100}, \"Animated\": false, \"IDs\": [116, 943, 234, 38793]}}").(.Image.Width == 800 && .Image.Thumbnail.Url == "http://www.example.com/image/481989943" && .Image.Animated == false && .Image.IDs[3] == 38793)  // JN11 the object of RFC 8259 §13 does not read its members
 assert JSON.read("[{\"precision\": \"zip\", \"Latitude\": 37.7668, \"Longitude\": -122.3959, \"Address\": \"\", \"City\": \"SAN FRANCISCO\", \"State\": \"CA\", \"Zip\": \"94107\", \"Country\": \"US\"}, {\"precision\": \"zip\", \"Latitude\": 37.371991, \"Longitude\": -122.026020, \"Address\": \"\", \"City\": \"SUNNYVALE\", \"State\": \"CA\", \"Zip\": \"94085\", \"Country\": \"US\"}]").(.count == 2 && .[0].Longitude == -122.3959 && .[1].City == "SUNNYVALE" && .[1].Address == "")  // JN12 the array of two objects of RFC 8259 §13 does not read its members

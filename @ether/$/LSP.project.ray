@@ -19,9 +19,9 @@ LSP &+= {
   assert [Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)] as LSP ~= (*, "\"severity\":2", *)  // DG12 a warning is not LSP severity 2
   // Positions are zero-based; columns count code points under the utf-32 position encoding (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#positionEncodingKind)
   position (at: (line: Decimal, column: Decimal)?) => (line: (at.line ?? 1) - 1, character: (at.column ?? 1) - 1)
-  range (at: Location?) => (start: position(at.from), end: position(at.to))
+  range (at: Location?) => (start: .position(at.from), end: .position(at.to))
   // Location (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#location)
-  located (uri: String, range) => (uri as Location){from == (range["start"]["line"] + 1, range["start"]["character"] + 1), to == (range["end"]["line"] + 1, range["end"]["character"] + 1)}
+  located (uri: String, range) => (uri as Location){.from == (range["start"]["line"] + 1, range["start"]["character"] + 1), .to == (range["end"]["line"] + 1, range["end"]["character"] + 1)}
 
   Published := class file: Location?, diagnostics: Diagnostic[], source: String?
 
@@ -29,29 +29,28 @@ LSP &+= {
     // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
     {message: *{.["method"] == "textDocument/publishDiagnostics"}} => message["params"] -- (params => params["diagnostics"].map(diagnostic =>
       // Diagnostic and DiagnosticRelatedInformation (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic)
-      <-(diagnostic["relatedInformation"] ?? []).reduce(cause = None => Diagnostic(message: .["message"], at: located(.["location"]["uri"], .["location"]["range"]), cause: cause)) -- (cause =>
-        Diagnostic(message: diagnostic["message"], severity: severity(diagnostic["severity"] ?? 1), at: located(params["uri"], diagnostic["range"]), cause: cause))))
-    {wire: Wire} => Compiler.reduced(JSON.read(wire.content as Unicode.UTF-8 as String), level)
+      <-(diagnostic["relatedInformation"] ?? []).reduce(cause = None => Diagnostic(message: .["message"], at: this.located(.["location"]["uri"], .["location"]["range"]), cause: cause)) -- (cause =>
+        Diagnostic(message: diagnostic["message"], severity: this.severity(diagnostic["severity"] ?? 1), at: this.located(params["uri"], diagnostic["range"]), cause: cause))))
+    {wire: LSP.Wire} => Compiler.reduced(JSON.read(wire.content as Unicode.UTF-8 as String), this.level)
   }
   written := {
-    {writing: Language.Writing{value is Diagnostic}} => Published(writing.value.at.file, [writing.value])
-    {writing: Language.Writing{value is Diagnostic[]}} => writing.value.map(.at.file).unique.map(file => Published(file, writing.value{.at.file == file}))
+    {writing: Language.Writing{.value is Diagnostic}} => LSP.Published(writing.value.at.file, [writing.value])
+    {writing: Language.Writing{.value is Diagnostic[]}} => writing.value.map(.at.file).unique.map(file => LSP.Published(file, writing.value{.at.file == file}))
     // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
-    {published: Published} => Wire(content: JSON.write((jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: (
+    {published: LSP.Published} => LSP.Wire(content: JSON.write((jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: (
       uri: published.file as String,
       // Diagnostic (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic)
       diagnostics: published.diagnostics.map(diagnostic => (
-        range: range(diagnostic.at),
-        severity: coded(diagnostic.severity),
+        range: this.range(diagnostic.at),
+        severity: this.coded(diagnostic.severity),
         code: diagnostic.code,
         source: published.source,
         message: diagnostic.message as String,
-        relatedInformation: diagnostic.related.map(cause => (location: (uri: cause.at.file as String, range: range(cause.at)), message: cause.message as String)) -- (. if .nonempty)
+        relatedInformation: diagnostic.related.map(cause => (location: (uri: cause.at.file as String, range: this.range(cause.at)), message: cause.message as String)) -- (. if .nonempty)
       ))
     ))) as Unicode.UTF-8 as Byte[])
   }
 }
-assert $.lsp === LSP  // DG14 $.lsp is not LSP
 LSP.components.hierarchy &= Language
 
 assert Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)}).(

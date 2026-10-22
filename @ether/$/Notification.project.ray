@@ -1,0 +1,40 @@
+@ether/os
+@c
+@js
+
+// A notification shown to whoever uses the device: shown when given a title
+Notification := class (title: String?, body: String?) => {
+  // shown as the operating system shows one: libnotify's (org.freedesktop.Notifications) on Linux
+  // (https://specifications.freedesktop.org/notification-spec/, https://gnome.pages.gitlab.gnome.org/libnotify/), a
+  // balloon from the notification area on Windows (Shell_NotifyIconW with NIF_INFO,
+  // https://learn.microsoft.com/windows/win32/api/shellapi/nf-shellapi-shell_notifyiconw), the user notification center
+  // on macOS (NSUserNotificationCenter), the Notifications API in a browser (https://notifications.spec.whatwg.org); on
+  // ether kept for the player, the display showing the latest (`OS.Ether.notification`)
+  shown => if OS.Linux {
+      (@c {
+        notify_init("ray")
+        notify_notification_show(notify_notification_new({this.title}, {this.body}, nullptr), nullptr)
+      })() -- this
+    }
+    elsif OS.Windows {
+      (@c {
+        NOTIFYICONDATAW icon = \{sizeof(NOTIFYICONDATAW)}
+        icon.uFlags = NIF_INFO
+        icon.dwInfoFlags = NIIF_INFO
+        wcscpy(icon.szInfoTitle, L{this.title})
+        wcscpy(icon.szInfo, L{this.body})
+        Shell_NotifyIconW(NIM_ADD, &icon)
+      })() -- this
+    }
+    elsif OS.Macos {
+      (@c {
+        id shown = objc_msgSend(objc_msgSend(objc_getClass("NSUserNotification"), sel_registerName("alloc")), sel_registerName("init"))
+        objc_msgSend(shown, sel_registerName("setTitle:"), CFStringCreateWithCString(nullptr, {this.title}, kCFStringEncodingUTF8))
+        objc_msgSend(shown, sel_registerName("setInformativeText:"), CFStringCreateWithCString(nullptr, {this.body}, kCFStringEncodingUTF8))
+        objc_msgSend(objc_msgSend(objc_getClass("NSUserNotificationCenter"), sel_registerName("defaultUserNotificationCenter")), sel_registerName("deliverNotification:"), shown)
+      })() -- this
+    }
+    elsif OS.Browser { (@js new Notification({this.title}, \{body: {this.body}}))() -- this }
+    else { (OS.Ether.notification = this) -- this }
+}
+assert Notification(title: "t", body: "b").(.title == "t" & .body == "b")  // NTF1 a notification does not keep its title and body

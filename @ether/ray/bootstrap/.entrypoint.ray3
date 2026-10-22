@@ -486,7 +486,7 @@ assert {
 // text.)
 ({parameters}) {`=>`} {body} ^punctuation => {
   external .
-  {this}({arguments}) => {
+  {this}({arguments}) ^punctuation => {
     external .
     ({{parameters}}) taking {arguments}
     external label recurring

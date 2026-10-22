@@ -120,6 +120,8 @@ async function reader(job: { language: string, file: string, text: string, entry
   trace(`document read (${e - s} bytes)`);
   const paints = painted(ray, s, e); trace(`painted (${paints.length} paints${process.env.RAY_LSP_TRACE ? `, the kernel paints ${ray.paints(s, e).length}` : ""})`);
   const said = [...ray.listen()]; trace(`said (${said.length})`);
+  // (and what nothing ran, read without running: under what was)
+  const unrun = ray.dry_paints(s, e); ray.listen(); paints.unshift(...unrun); trace(`read without running (${unrun.length} paints)`);
   post({ kind: 'read', s, e, paints, said, theme: ray.theme() }); trace('posted');
   // (its tests only once every document is painted: told so)
   await new Promise<void>(resolve => { parent.ref(); parent.once('message', (m: string) => { if (m === 'test') { parent.unref(); resolve(); } }); });
@@ -139,12 +141,12 @@ async function reader(job: { language: string, file: string, text: string, entry
   let last = '';
   const repaint = () => {
     for (const t of tests) if (!found.has(t.frame)) { const now = style(t.frame); if (now === 'passed' || now === 'failed') found.set(t.frame, { begin: t.begin, end: t.end, style: now }); }
-    const paints = [...painted(ray, s, e), ...found.values()], now = JSON.stringify(paints);
+    const paints = [...unrun, ...painted(ray, s, e), ...found.values()], now = JSON.stringify(paints);
     if (now !== last) { last = now; post({ kind: 'testing', paints }); }
   };
   const timer = setInterval(repaint, EVERY);
   await done; clearInterval(timer); repaint();
-  post({ kind: 'tested', paints: [...painted(ray, s, e), ...found.values()], said });
+  post({ kind: 'tested', paints: [...unrun, ...painted(ray, s, e), ...found.values()], said });
 }
 
 // (of what was put off, only what was put off in [s, e]: a file of the language puts off its tests among the language's own;
@@ -242,7 +244,8 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
   // is open and changed)
   let snapshot: Snapshot | undefined = kept(language);
   const language_key = () => [...documents].find(([u]) => file_of(u) === language)?.[1].text ?? '';
-  const usable = (file: string) => snapshot && snapshot.key === language_key() && file !== language && !snapshot.files.includes(file) ? snapshot : undefined;
+  // (a file the language includes too: read again on it, as any other document)
+  const usable = (file: string) => snapshot && snapshot.key === language_key() && file !== language ? snapshot : undefined;
 
   const payload = (uris: string[]) => {
     const docs = uris.flatMap(uri => { const c = checked.get(uri); return c ? [{ uri, version: c.version, ranges: runs(c.text, c.paints) }] : []; });

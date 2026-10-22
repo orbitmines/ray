@@ -2927,12 +2927,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (word(a, m, W_DYNAMIC_IN) && rest < z) { const df = block(t, rest, z, names, f, self, 0, 1, 0, self, 0), dn = w(t + 952); if (df && w(df + N_IS) === IS_FRAME && dn < 16) { put(t + 956 + 4 * dn, df); put(t + 952, dn + 1); } return w(TRUE_); }
       // (`external style s x`: x shown in the style s, kept where what is painted is looked up (its count, then x and where s is
       // written, one after another), not among x's members: a member of a hole's node would be read (it is `this` when the
-      // hole's code is); s kept as the text it is written as, which stays where it is)
+      // hole's code is). s as it is written (a hole of the rule it is in: the text it took, `^class` not the class))
       if (word(a, m, W_STYLE) && rest < z) {
-        let sq = rest; while (sq < z && b(sq) > 32) sq++;
-        const sv = block(t, rest, sq, names, f, self, 0, 1, 0, self, 0), sx = sq < z ? block(t, skip(sq, z), z, names, f, self, 0, 1, 0, self, 0) : 0;
-        if (sx && sv && w(STYLES) && w(sv + N_A) < w(sv + N_B)) { const k = xadd(w(STYLES), 1); if (k < STYLES_CAP) { const e = w(STYLES) + 4 + 12 * k; aput(e, sx); put(e + 4, w(sv + N_A)); put(e + 8, w(sv + N_B)); } }
-        return sx || w(NOTHING);
+        let style_q = rest; while (style_q < z && b(style_q) > 32) style_q++;
+        const style_hole = names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? named(w(names + F_RULE), rest, style_q) : -1;
+        let style_a = 0, style_b = 0;
+        // (a word as it is written; anything else read, what it answers (`^((ensure c) ? `passed` : `failed`)`, a test's))
+        if (style_hole >= 0) { const style_take = follow(names + F_TAKES + TAKE * style_hole, 1); style_a = skip(w(style_take + T_START), w(style_take + T_END)); style_b = trim_end(style_a, w(style_take + T_END)); let style_i = style_a; while (style_i < style_b && b(w(CLASSES) + b(style_i)) === 1) style_i++; if (style_i < style_b || style_a >= style_b) style_a = style_b = 0; }
+        if (style_a >= style_b) { const style_v = block(t, rest, style_q, names, f, self, 0, 1, 0, self, 0); if (style_v) { style_a = w(style_v + N_A); style_b = w(style_v + N_B); } }
+        // (x read; a rule it defined where it is read (`external style s (… => …).style = s`) is what is styled, x's value what is answered)
+        const style_before = latest(self), style_x = style_q < z ? block(t, skip(style_q, z), z, names, f, self, 0, 1, 0, self, 0) : 0, style_after = latest(self);
+        const styled_x = style_after && style_after !== style_before ? w(style_after + R_HEAD) : style_x;
+        if (styled_x && style_a < style_b && w(STYLES)) { const style_k = xadd(w(STYLES), 1); if (style_k < STYLES_CAP) { const style_at = w(STYLES) + 4 + 12 * style_k; aput(style_at, styled_x); put(style_at + 4, style_a); put(style_at + 8, style_b); } }
+        return style_x || w(NOTHING);
       }
       // (`external rule h`: the latest rule of the language whose head is written as the text h, its head (what it is shown as,
       // `.style`, given to a rule declared before a head could carry a style); none, nothing)

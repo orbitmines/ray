@@ -2669,8 +2669,103 @@ export class Ray extends Language<FileStore> {
     if (fs < s || fe > e || !rule) return out;
     const whole = style(frame), head = style(this.w(rule + R.HEAD)), takes = Array.from({ length: this.w(rule + R.HOLES) }, (_, i) => frame + F.TAKES + TAKE * i);
     if (whole) out.push({ begin: fs - s, end: fe - 1 - s, style: whole });
-    if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => this.w(t) <= at && at < this.w(t + 4)); if (!inside && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head }); }
+    // (a head of holes alone, `{digits: Decimal.String}`: its style over all it read)
+    if (head && !whole && this.w(rule + R.PARTS) === this.w(rule + R.HOLES)) out.push({ begin: fs - s, end: fe - 1 - s, style: head });
+    else if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => this.w(t) <= at && at < this.w(t + 4)); if (!inside && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head }); }
     takes.forEach((t, i) => { const q = this.hole_part(rule, i), hole = q ? style(this.w(q + 20)) : ''; if (hole && this.w(t) >= s && this.w(t + 4) <= e) out.push({ begin: this.w(t) - s, end: this.w(t + 4) - 1 - s, style: hole }); });
+    return out;
+  }
+  // What is painted where nothing ran (a body no test reaches, what follows an assert that failed): each statement read as it
+  // would be (the rule that reads it, what its holes take), nothing applied, painted as its frame would be; what a hole of no
+  // style of its own took, read so in turn, with the rules that hole reads by (its type's), else the statement's.
+  dry_paints(s: number, e: number, out: { begin: number, end: number, style: string }[] = []): { begin: number, end: number, style: string }[] {
+    const global = this.w(GLOBAL), seen = new Set<number>(), style = (node: number) => this.style_of(node);
+    const statements = (a: number, z: number, vis: number, depth: number) => {
+      for (let at = this.x.skip(a, z), k = 0; at < z && k < 4096; k++) { const ln = this.x.line(at, z); statement(at, ln, vis, depth); at = this.x.skip(Math.max(ln, at + 1), z); }
+    };
+    const statement = (a: number, z: number, vis: number, depth: number) => {
+      if (depth > 48 || z <= a || seen.has(a * 4099 + z)) return; seen.add(a * 4099 + z);
+      const r = this.x.reading(this.t, a, z, 0, 0, vis, global, 0, 0, 0, 0);
+      read(r, vis, depth);
+    };
+    // (a word nothing reads: a name, as Name reads it)
+    const name_node = this.member(global, 'Name');
+    const read = (r: number, vis: number, depth: number) => {
+      if (!r) return;
+      // (read on what it follows (`x.( … )`): what it follows, then the rest)
+      if (this.w(r) === 7) { read(this.w(r + 12), vis, depth + 1); statement(this.w(r + 16), this.w(r + 20), vis, depth + 1); return; }
+      if (this.w(r) === 1 && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(this.text(this.w(r + 4), this.w(r + 8)))) {
+        const shown = name_style(); if (shown) out.push({ begin: this.w(r + 4) - s, end: this.w(r + 8) - 1 - s, style: shown }); return;
+      }
+      // (what nothing reads as written, as it is when it runs: the value, then an operator after it read as one of the value's
+      // methods (`x == y`, `a as T`: the method named so, shown as its head is), then what follows it)
+      if (this.w(r) === 1) { split(this.w(r + 4), this.w(r + 8), vis, depth); return; }
+      if (this.w(r) !== 3) return;
+      const rule = this.w(r + 12), caps = this.w(r + 16), rs = this.w(r + 4), re = this.w(r + 8), holes = this.w(rule + R.HOLES);
+      if (!rule || rs < s || re > e) return;
+      const take = (i: number): [number, number] => [this.w(caps + 8 * i), this.w(caps + 8 * i + 4)];
+      const inside = (at: number) => { for (let i = 0; i < holes; i++) { const [ha, hz] = take(i); if (ha <= at && at < hz) return true; } return false; };
+      // (a rule that is only a name, shown in no style of its own (a method's name, `==`, `contains`): an operator as the
+      // language shows its operators, a word as Name shows a name)
+      let head = style(this.w(rule + R.HEAD));
+      if (!head && !holes && this.u8[rs] > 32) { const named = this.text(rs, re); head = kind(this.u8[rs]) === 2 ? method(named) : /^[\p{L}_][\p{L}\p{N}_]*$/u.test(named) ? name_style() : ''; }
+      if (head && this.w(rule + R.PARTS) === holes) out.push({ begin: rs - s, end: re - 1 - s, style: head });
+      else if (head) for (let at = rs; at < re; at++) if (!inside(at) && this.u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head });
+      for (let i = 0; i < holes; i++) {
+        const [ha, hz] = take(i), q = this.hole_part(rule, i), hole = q ? style(this.w(q + 20)) : '';
+        if (ha >= hz || ha < s || hz > e) continue;
+        if (hole) out.push({ begin: ha - s, end: hz - 1 - s, style: hole });
+        else if (!(ha === rs && hz === re)) statements(ha, hz, (q && this.w(q + 16)) || vis, depth + 1);
+      }
+    };
+    const kind = (c: number) => this.u8[this.w(CLASSES) + c];
+    let named_as: string | undefined;
+    const name_style = (): string => {
+      if (named_as !== undefined) return named_as;
+      named_as = '';
+      for (let r = name_node ? this.w(name_node) : 0, k = 0; r && k < 64 && !named_as; r = this.w(r), k++) { const q = this.hole_part(r, 0); if (q && this.w(r + R.HOLES) === 1 && this.w(r + R.PARTS) === 1) named_as = style(this.w(q + 20)); }
+      return named_as;
+    };
+    const methods = new Map<string, string>();
+    const method = (op: string): string => {
+      if (methods.has(op)) return methods.get(op)!;
+      let found = '';
+      const list = this.w(256), n = Math.min(this.w(260), this.w(264));
+      // (the method named so, else how the language shows that text written in a head of its own: `==` as `{a} === {b}`'s
+      // `===` is, an operator; `as` as in `{on} declares {key} as {value}`)
+      const operated = (hd: number) => this.text(this.w(hd + N.A), this.w(hd + N.B)).replace(/\{[^{}]*\}/g, ' ').split(/\s+/);
+      for (let k = n - 1; k >= 0 && !found; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; const ht = this.text(this.w(hd + N.A), this.w(hd + N.B)).replace(/^(chainable|compounds|static|right-to-left)\s+/, ''); if (ht === op || ht.startsWith(op + ' ') || ht.startsWith(op + '(')) found = style(hd); }
+      const symbolic = [...op].every(c => kind(c.charCodeAt(0)) === kind(op.charCodeAt(0)));
+      for (let k = n - 1; k >= 0 && !found && symbolic; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; const tokens = operated(hd); if (tokens.includes(op)) found = style(hd); }
+      if (!found && kind(op.charCodeAt(0)) === 2) for (let k = n - 1; k >= 0 && !found; k--) { const r = this.w(list + 4 * k), hd = r ? this.w(r + R.HEAD) : 0; if (!hd) continue; if (operated(hd).some(x => x.length > 1 && [...x].every(c => kind(c.charCodeAt(0)) === 2))) { const st = style(hd); if (st === 'operator') found = st; } }
+      methods.set(op, found); return found;
+    };
+    const split = (a: number, z: number, vis: number, depth: number) => {
+      // (an operator first, what it is read on before it: the operator, then what follows it)
+      if (kind(this.u8[a]) === 2) {
+        let oe = a; while (oe < z && kind(this.u8[oe]) === 2) oe++;
+        const shown = method(this.text(a, oe)); if (!shown) return;
+        out.push({ begin: a - s, end: oe - 1 - s, style: shown });
+        statement(this.x.skip(oe, z), z, vis, depth + 1); return;
+      }
+      // (past what the value is: a word, or what a bracket or a quote opens, closed)
+      let p = a, d = 0, q = 0;
+      for (; p < z; p++) {
+        const c = this.u8[p];
+        if (q) { if (c === 92) p++; else if (c === q) q = 0; continue; }
+        if (c === 34 || c === 96) { q = c; continue; }
+        if (c === 40 || c === 91 || c === 123) d++; else if (c === 41 || c === 93 || c === 125) d--;
+        else if (!d && c <= 32) break;
+      }
+      const o = this.x.skip(p, z); if (o >= z || p === a) return;
+      let oe = o; while (oe < z && this.u8[oe] > 32 && (kind(this.u8[oe]) === kind(this.u8[o]))) oe++;
+      const op = this.text(o, oe), shown = method(op);
+      if (!shown) return;
+      statement(a, p, vis, depth + 1);
+      out.push({ begin: o - s, end: oe - 1 - s, style: shown });
+      statement(this.x.skip(oe, z), z, vis, depth + 1);
+    };
+    statements(s, e, this.w(global), 0);
     return out;
   }
   // (a rule's part that is its hole i)

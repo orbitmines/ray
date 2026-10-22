@@ -61,6 +61,13 @@ this => .
 {lhs} ^{style} {`=>`} {rhs} => ({lhs} => {rhs}).style = style
 `{text}` ^string => (external &).text
 ({grouped}) ^punctuation => grouped
+// (a rule declared before a head could carry a style, shown in one: found by its head as it is written)
+(external rule `.{member}`).style = `punctuation`
+(external rule `.({member})`).style = `punctuation`
+(external rule `{name} = {value}`).style = `punctuation`
+(external rule `{x}: {type}`).style = `punctuation`
+(external rule `{on} &+= {value}`).style = `punctuation`
+(external rule `{on} &+= {`{`}{code}{`}`}`).style = `punctuation`
 {statement} // {comment} ^comment => {statement}
 // {comment} ^comment => { }
 // (and a block of one, `/* … */`, nested: nothing)

@@ -908,12 +908,6 @@ satisfies (keeping) => holds_any(.({keeping}))
 ) : Narrowing &+ {
   narrows := narrowed
   holds (it) => it.({constraint})
-  // (of a text type, `{length: Subscript.String}`: what the hole took as written, not what that code answers)
-  {value: narrowed} => {
-    asked := ((.narrows).textual === true) ? `{value}` : value
-    // (one of what it narrows first: the condition is asked of those alone (`2 <= .` is not asked of a class))
-    (((asked is .narrows) === true) && (.holds(asked) === true)) ? asked : (ERROR not one of what it narrows to)
-  }
 }
 // `x as T`: x, when it is a T; a text written as a T is (`"89" as Decimal`: the class as a text, `Decimal as String`, holds it),
 // what T reads it as; another text, none; anything else, what T makes of it (`T.from(x)`; none, by default).
